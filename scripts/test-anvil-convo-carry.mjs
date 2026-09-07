@@ -22,9 +22,19 @@ const anvil = await readFile(new URL('../apps/anvil/index.html', import.meta.url
 // shape, not signature: carryForward now also takes the recorder, so the lossy carry is LOGGED
 assert.match(anvil, /t\.convo = await carryForward\(foldTranscript\(recEvents, rec\.resolve\)/,
   'runTask carries the CANONICAL transcript (the fold) forward into t.convo — paired by construction');
-// F4: and the carry records its own replacement, so foldSurface can reproduce what was sent
+// F4: and the carry records its own replacement, so foldSurface can reproduce what was sent.
+// BOTH halves are needed: the recording lives inside carryForward, so asserting only that it
+// exists left `carryForward(fold)` — the recorder argument dropped at the CALL — passing
+// (mutation-tested by a cross-family review).
 assert.match(anvil, /rec\.compacted\(\{ method:'carry-forward'/,
   'a lossy carry is put ON THE CHAIN, not just stored — otherwise the record and the surface drift');
+assert.match(anvil, /await carryForward\(foldTranscript\(recEvents, rec\.resolve\), rec\)/,
+  'and the CALL SITE actually hands carryForward the recorder — without it the recording is dead code');
+{
+  const sig = anvil.match(/async function carryForward\(([^)]*)\)/);
+  assert.ok(sig, 'carryForward is declared');
+  assert.match(sig[1], /,\s*rec\b/, `carryForward takes the recorder: (${sig[1]})`);
+}
 assert.ok(!/if\(finalAssistant\) convo\.push\(\{role:'assistant', content:finalAssistant\.text\}\);\n      \/\/ #5/.test(anvil),
   'the prose-only convo append is no longer the primary path');
 

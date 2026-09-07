@@ -145,6 +145,24 @@ await test('a move OUT is refused too — a move deletes what it takes (fs.copy 
   assert(await read(c.fs, 'copy.md'), 'and the copy landed');
 });
 
+await test('an ANCESTOR of the fence cannot be removed or moved either — a subtree goes with its parent', async () => {
+  // Protecting `.anvil/skills` while allowing `rm -rf .anvil` protects nothing. Found by a
+  // cross-family review of the first version of this fence, which checked descendants only.
+  for (const cmd of ['rm -rf .anvil', 'mv .anvil moved', 'rm -rf .', 'mv . elsewhere']) {
+    const s = await shell();
+    const r = await s.run(cmd);
+    assert(r.code !== 0, `an ancestor operation destroyed the fence: ${cmd} → ${r.out}`);
+    assert(/read-only under this grant/.test(r.out), `refused for the wrong reason: ${cmd} → ${r.out}`);
+    assert(await read(s.fs, SKILLS_DIR + '/demo/SKILL.md'), `the skill is gone after: ${cmd}`);
+  }
+  // the CONTROL: a sibling directory with no skills under it is still removable
+  const s = await shell();
+  await s.run('mkdir junk');
+  await s.run('echo x > junk/a.txt');
+  const ok = await s.run('rm -rf junk');
+  eq(ok.code, 0, `an unrelated directory was wrongly protected: ${ok.out}`);
+});
+
 if (failures.length) {
   console.error(`skills-fence: ${passed} passed, ${failures.length} FAILED`);
   for (const f of failures) console.error(`  FAIL ${f.n}: ${f.message}`);

@@ -185,11 +185,16 @@ export function createRunRecorder({ app = 'anvil', principal = 'local', grant_id
     // true: `foldSurface` below reproduces the surface from the chain alone. The `summarize` path
     // calls a model and is not otherwise reproducible, which is precisely why the OUTPUT is logged
     // rather than the operation. Originals stay on the chain, shadowed rather than deleted.
+    // A compaction, as a surface replacement. `replacement` MUST be an array of messages;
+    // anything else is recorded as null on purpose — that is the orphan a caller leaves when
+    // it decided to compact and then could not produce the replacement (the crash-mid-
+    // compaction case). Coercing it to [] instead would delete the span and read as a clean
+    // compaction, which is the failure this verb exists to make visible.
     compacted({ method, from, to, replacement }) {
       const s = step;
       return enqueue('run.compacted', () => ({
         input: { method: String(method || 'shake'), from: Number(from) || 0, to: Number(to) || 0, step: s },
-        output: { replacement: Array.isArray(replacement) ? replacement : [] },
+        output: { replacement: Array.isArray(replacement) ? replacement : null },
       }));
     },
     checkpoint(handoff) { const s = step; return enqueue('run.checkpoint', () => ({ input: { step: s }, output: { handoff: String(handoff ?? '') } })); },
@@ -930,8 +935,11 @@ export function stagnationNudge(stag) {
 export function reconstructionCheck(sent, events, resolve) {
   const want = foldSurface(events, resolve);
   const got = (Array.isArray(sent) ? sent : []).filter((m) => m && m.role !== 'system');
+  // The key compares tool calls by id AND by what they actually ask for. Comparing ids alone
+  // let a request through whose `command` had been changed from `pwd` to `rm -rf src` — the
+  // exact tampering this invariant exists to catch (found by a cross-family review).
   const key = (m) => JSON.stringify([m?.role ?? null, m?.content ?? null, m?.tool_call_id ?? null,
-                                     (m?.tool_calls || []).map((c) => c?.id ?? null)]);
+                                     (m?.tool_calls || []).map((c) => [c?.id ?? null, c?.function?.name ?? null, c?.function?.arguments ?? null])]);
   if (got.length !== want.length) {
     return { ok: false, at: Math.min(got.length, want.length),
              why: `length: sending ${got.length}, the record reconstructs ${want.length}` };
@@ -957,7 +965,10 @@ export function foldSurface(events, resolve) {
   for (const e of joined(events, resolve)) {
     if (e.tool !== 'run.compacted') continue;
     const { from = 0, to = 0 } = e.input || {};
-    const replacement = (e.output && Array.isArray(e.output.replacement)) ? e.output.replacement : [];
+    // An orphan (no replacement recorded) is SKIPPED, not applied as an empty span: a
+    // compaction that never finished must leave the surface alone rather than delete it.
+    if (!e.output || !Array.isArray(e.output.replacement)) continue;
+    const replacement = e.output.replacement;
     if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < from || to > surface.length) continue;
     surface = [...surface.slice(0, from), ...replacement, ...surface.slice(to)];
   }

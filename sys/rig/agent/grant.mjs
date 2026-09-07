@@ -45,12 +45,23 @@ export function createGrant({ prefixes = [], scopes = [], readOnlyPrefixes = [] 
     return norm.some((prefix) => prefix === '' || r.path === prefix || r.path.startsWith(prefix + '/'));
   }
 
-  // Is this path inside a read-only region? A path that does not normalise is reported as
-  // read-only too: allowsPath already denies it, and the two edges must not disagree.
+  // Is this path inside a read-only region — or an ANCESTOR of one? A path that does not
+  // normalise is reported as read-only too: allowsPath already denies it, and the two edges
+  // must not disagree.
+  //
+  // The ancestor half is not an extra: protecting `.anvil/skills` while allowing
+  // `rm -rf .anvil` or `mv .anvil elsewhere` protects nothing (found by a cross-family review
+  // of the first version, which checked descendants only). Removing or moving a directory
+  // takes its whole subtree with it, so a region is only read-only if the path to it is too.
   function isReadOnly(input) {
     const r = normalizeMountPath(input);
     if (!r.ok) return true;
-    return readOnly.some((prefix) => prefix === '' || r.path === prefix || r.path.startsWith(prefix + '/'));
+    return readOnly.some((prefix) =>
+      prefix === '' ||
+      r.path === prefix ||
+      r.path.startsWith(prefix + '/') ||          // inside the region
+      prefix.startsWith(r.path + '/') ||          // an ancestor of it
+      r.path === '');                             // the mount root itself
   }
 
   return {

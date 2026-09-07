@@ -13,6 +13,9 @@ assert.match(anvil, /async function loadTaskRecords\(scope/, 'a helper loads the
 // its task rather than inheriting whatever the UI has selected.
 assert.match(anvil, /if\(p!==proj\) continue;/, 'project scope no longer reads every project');
 assert.match(anvil, /const callerTask = runCtx && runCtx\.t && runCtx\.t\.id;/, 'the ASKING task is named once, not inherited from the UI selection');
+// the DEFAULT scope is 'task': defaulting to 'run' would silently hide every earlier run of
+// the caller's own task, and every other anchor here would still match (mutation-tested).
+assert.match(anvil, /\['run','task','project'\]\.includes\(ar&&ar\.scope\)\?ar\.scope:'task'/, "an omitted scope means the whole TASK, not just the latest run");
 assert.match(anvil, /loadTaskRecords\(scope, callerTask\)/, 'history asks for the calling task\'s records');
 assert.match(anvil, /getDirectoryHandle\('anvil'\)\)\.getDirectoryHandle\('runs'\)/, 'it reads the persisted OPFS records');
 assert.match(anvil, /if\(nm==='history'\)\{/, 'a history handler exists');

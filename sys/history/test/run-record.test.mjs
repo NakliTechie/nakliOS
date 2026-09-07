@@ -812,6 +812,30 @@ await test('F1: the request-reconstruction invariant detects drift, and never th
      true, 'after a logged compaction, the COMPACTED surface is what reconstructs');
   eq(reconstructionCheck(msgs, rec.events(), rec.resolve).ok, false, 'and the pre-compaction transcript no longer does');
 
+  // The subtlest drift of all: the same call id, a DIFFERENT thing being asked for. Comparing
+  // ids alone let `pwd` become `rm -rf src` and reported ok (found by a cross-family review).
+  {
+    const r2 = createRunRecorder({ app: 'anvil', principal: 'p' });
+    const call = (args) => ({ id: 'c', type: 'function', function: { name: 'shell', arguments: args } });
+    await r2.start({ messages: [{ role: 'user', content: 'go' }] });
+    await r2.onEvent({ type: 'turn-start', step: 0 });
+    const inf = r2.wrapInfer(async () => ({ content: '', toolCalls: [call('{"command":"pwd"}')] }));
+    await inf({ messages: [{ role: 'user', content: 'go' }], tools: [] });
+    // the paired reply, so foldTranscript flushes the assistant tool-call turn into the surface
+    r2.onEvent({ type: 'tool-call', name: 'shell', id: 'c', args: { command: 'pwd' }, step: 0 });
+    r2.onEvent({ type: 'tool-result', name: 'shell', id: 'c', result: '/', step: 0 });
+    await r2.settled();
+    const surface = foldSurface(r2.events(), r2.resolve);
+    eq(reconstructionCheck(surface, r2.events(), r2.resolve).ok, true, 'sanity: the recorded surface reconstructs');
+    const tampered = surface.map((m) => (m.tool_calls ? { ...m, tool_calls: [call('{"command":"rm -rf src"}')] } : m));
+    const bad = reconstructionCheck(tampered, r2.events(), r2.resolve);
+    eq(bad.ok, false, 'a tool call whose ARGUMENTS changed under the same id is caught');
+    assert(/rm -rf src/.test(bad.why), `and the why names what changed: ${bad.why}`);
+    // and the tool NAME too — same id, same arguments, a different tool
+    const renamed = surface.map((m) => (m.tool_calls ? { ...m, tool_calls: [{ id: 'c', type: 'function', function: { name: 'write', arguments: '{"command":"pwd"}' } }] } : m));
+    eq(reconstructionCheck(renamed, r2.events(), r2.resolve).ok, false, 'a tool call whose NAME changed under the same id is caught');
+  }
+
   // the hook fires on a real request, and does NOT throw
   const seen = [];
   const rec2 = createRunRecorder({ app: 'anvil', principal: 'p' });
@@ -923,6 +947,41 @@ await test('F4: compaction is a LOGGED surface replace — the sent transcript i
   await bad.settled();
   eq(foldSurface(bad.events(), bad.resolve).length, 1, 'an impossible span leaves the surface alone');
   eq(compactionOrphaned(bad.events(), bad.resolve), false, 'a completed compaction is not an orphan');
+
+  // A cross-family review mutation-tested this fold and three defects survived. Each one below
+  // kills a mutation the fixture above could not see.
+
+  // (1) an INTERIOR span: the fixture replaced through the end, so deleting `surface.slice(to)`
+  // from the fold left every assertion green while the tail silently vanished.
+  const mid = createRunRecorder({ app: 'anvil', principal: 'p' });
+  await mid.start({ messages: [{ role: 'user', content: 'a' }, { role: 'user', content: 'b' },
+                               { role: 'user', content: 'c' }, { role: 'user', content: 'd' }] });
+  await mid.compacted({ method: 'shake', from: 1, to: 3, replacement: [{ role: 'user', content: 'BC' }] });
+  await mid.settled();
+  deepEq(foldSurface(mid.events(), mid.resolve).map((m) => m.content), ['a', 'BC', 'd'],
+    'an interior replacement keeps BOTH the head and the tail around it');
+
+  // (2) TWO compactions: with only one on the chain, a `break` after the first replacement
+  // was indistinguishable from applying them all.
+  const twice = createRunRecorder({ app: 'anvil', principal: 'p' });
+  await twice.start({ messages: [{ role: 'user', content: 'a' }, { role: 'user', content: 'b' },
+                                 { role: 'user', content: 'c' }, { role: 'user', content: 'd' }] });
+  await twice.compacted({ method: 'shake', from: 0, to: 2, replacement: [{ role: 'user', content: 'AB' }] });
+  await twice.compacted({ method: 'shake', from: 1, to: 3, replacement: [{ role: 'user', content: 'CD' }] });
+  await twice.settled();
+  deepEq(foldSurface(twice.events(), twice.resolve).map((m) => m.content), ['AB', 'CD'],
+    'every recorded compaction is applied, in order — not just the first');
+
+  // (3) a REAL orphan: the fixture only ever asserted `false`, so a fold that always returned
+  // false passed. A compaction whose replacement never landed is the crash-mid-compaction case
+  // the verb exists to detect.
+  const orphan = createRunRecorder({ app: 'anvil', principal: 'p' });
+  await orphan.start({ messages: [{ role: 'user', content: 'x' }] });
+  await orphan.compacted({ method: 'shake', from: 0, to: 1, replacement: null });
+  await orphan.settled();
+  eq(compactionOrphaned(orphan.events(), orphan.resolve), true,
+    'a compaction with no recorded replacement IS an orphan — a crash mid-compaction must not read as finished');
+  eq(compactionOrphaned(rec.events(), rec.resolve), false, 'and a completed one still is not');
 });
 
 if (failures.length) { console.error(`history/run-record: ${passed} passed, ${failures.length} FAILED`); for (const f of failures) console.error(`  FAIL ${f.n}: ${f.message}`); process.exit(1); }
