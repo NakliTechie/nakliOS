@@ -72,8 +72,10 @@ function globToRegExp(glob) {
  * @param {boolean} [opts.index=false]   build a trigram index to skip non-candidate files
  * @param {number}  [opts.indexMaxBytes] per-file size ceiling for indexing (default 4 MiB)
  * @param {boolean} [opts.exclusive]   nothing outside this fileops writes to the backend
+ * @param {number}  [opts.reconcileMs] EXPERIMENT: re-stat at most this often rather than every
+ *                                     search. 0 (default) keeps the per-query sweep.
  */
-export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 1000, onSearch = null, index = false, indexMaxBytes = 4 * 1024 * 1024, exclusive = false }) {
+export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 1000, onSearch = null, index = false, indexMaxBytes = 4 * 1024 * 1024, exclusive = false, reconcileMs = 0 }) {
   if (!backend) throw new Error('createFileops requires a backend');
   const rootPrefix = String(root || '').replace(/\/+$/, '');
 
@@ -208,6 +210,17 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
   };
 
   const exclusiveOk = () => exclusive;
+
+  // EXPERIMENT (plan/anvil-indexed-search.md, folder-mount question, option b).
+  // A non-exclusive mount pays one stat per file per query, which is what makes a
+  // picked folder ~1.2x instead of ~10x. reconcileMs sweeps on a timer instead:
+  // between sweeps the index is trusted, exactly as tgrep trusts its watched tree
+  // between hourly reconciles. The cost is a window in which an edit made OUTSIDE
+  // this fileops is invisible. Zero — the default — keeps the per-query sweep and
+  // therefore keeps the guarantee. The walk still runs every query either way, so
+  // files added or deleted are always seen; only content changes are deferred.
+  let lastSweepAt = 0;
+  const sweepDue = () => !reconcileMs || (Date.now() - lastSweepAt >= reconcileMs);
 
   // Every invalidation bumps a sequence for its path. A read that began before an
   // invalidation must not be allowed to install its result afterwards: the bytes
@@ -514,17 +527,21 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     let candidates = null;
     let indexUsed = false;
     let filesStatted = 0;
+    let sweeping = false;
     if (lit) {
       // Refresh the index against the filesystem: new and changed files are
       // re-read, vanished ones dropped. One stat per file, which `read` was
       // paying anyway.
+      sweeping = sweepDue();
+      if (sweeping) lastSweepAt = Date.now();
       const seen = new Set();
       for (const p of globbed.matches) {
         seen.add(p);
         const e = idx.files.get(p);
         // Exclusive mode: a file we already hold is current by construction —
-        // every write through this fileops dropped it from the index.
-        if (e && exclusiveOk()) continue;
+        // every write through this fileops dropped it from the index. Timed mode:
+        // trusted until the next sweep falls due.
+        if (e && (exclusiveOk() || !sweeping)) continue;
         const st = await stat(p);
         if (!st.ok) { indexDrop(p); continue; }
         filesStatted++;
@@ -611,6 +628,7 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
       cwd: opts.cwd || '',
       glob: opts.glob || '**',
       indexUsed,
+      swept: lit ? sweeping : null,
       literal: lit || null,
       filesStatted,
       candidates: candidates ? candidates.length : null,

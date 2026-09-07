@@ -464,6 +464,45 @@ await test('REGRESSION: a binary file is not re-read on every search', async () 
   eq((await fs.grep('parseFact')).matches.map((m) => m.path).join(), 'code.js', 'binary still excluded from results');
 });
 
+await test('EXPERIMENT: reconcileMs trusts the index between sweeps, and says so', async () => {
+  // Option (b) for folder mounts. Default 0 keeps the per-query sweep; a non-zero
+  // window skips the per-file stat until the timer falls due. This test pins BOTH
+  // halves — the saving and the exposure — so the trade cannot be adopted by
+  // accident.
+  const backend = new MemoryBackend();
+  const fs = createFileops({ backend, index: true, reconcileMs: 60000 });
+  await fs.write('a.txt', 'alpha\n', { createParents: true });
+  for (let i = 0; i < 10; i++) await fs.write(`f${i}.txt`, `filler ${i}\n`, { createParents: true });
+  await new Promise((r) => setTimeout(r, 4));
+  await fs.grep('alpha');                         // first query sweeps and indexes
+  fs.searchStats({ reset: true });
+  await fs.grep('alpha');                         // inside the window
+  const rec = fs.searchStats().recent[0];
+  eq(rec.swept, false, 'no sweep inside the window');
+  eq(rec.filesStatted, 0, 'and therefore no per-file stat');
+
+  // The cost, stated: a change made outside this fileops is invisible until the
+  // window closes. A change made THROUGH it is still exact.
+  await backend.write('a.txt', new TextEncoder().encode('omega\n'));
+  eq((await fs.grep('omega')).matches.length, 0, 'outside edit deferred, as the contract says');
+  await fs.write('b.txt', 'omega\n', { createParents: true });
+  eq((await fs.grep('omega')).matches.length, 1, 'a write THROUGH fileops is still seen at once');
+
+  // A new file is found regardless: the walk always runs.
+  await backend.write('c.txt', new TextEncoder().encode('brandnew\n'));
+  eq((await fs.grep('brandnew')).matches.length, 1, 'new files are never deferred');
+});
+
+await test('EXPERIMENT: reconcileMs default keeps the guarantee', async () => {
+  const backend = new MemoryBackend();
+  const fs = createFileops({ backend, index: true });   // reconcileMs defaults to 0
+  await fs.write('a.txt', 'alpha\n', { createParents: true });
+  await new Promise((r) => setTimeout(r, 4));
+  await fs.grep('alpha');
+  await backend.write('a.txt', new TextEncoder().encode('omega\n'));
+  eq((await fs.grep('omega')).matches.length, 1, 'per-query sweep still catches an outside edit');
+});
+
 // A randomised differential sweep: the fixed battery above encodes what I
 // thought to check, which is exactly the set most likely to miss something.
 await test('DIFFERENTIAL: randomised patterns, 400 cases', async () => {
