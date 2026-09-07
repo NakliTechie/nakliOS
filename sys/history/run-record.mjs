@@ -381,7 +381,7 @@ export function replayInfer(record, { strict = true, live = null, model = null }
     responses.get(h).push(e.output);
   }
   const cursor = new Map();
-  return async (args) => {
+  const infer = async (args) => {
     const h = await requestHash({ messages: args.messages, tools: args.tools, model });
     const list = responses.get(h) || [];
     const i = cursor.get(h) || 0;
@@ -389,6 +389,31 @@ export function replayInfer(record, { strict = true, live = null, model = null }
     if (strict || typeof live !== 'function') throw new ReplayMiss('model request not in record', { request_hash: h });
     return live(args);
   };
+  // F2: what a strict replay CANNOT see on its own. A scenario that drives FEWER calls than
+  // were recorded passes every assertion — it just stops early, and the un-served responses
+  // sit there unnoticed. That is the failure mode a replay lane exists to catch, so the
+  // leftovers are countable and `assertConsumed()` is what the gate calls at teardown.
+  infer.remaining = () => {
+    const left = [];
+    for (const [h, list] of responses) {
+      const used = cursor.get(h) || 0;
+      if (used < list.length) left.push({ request_hash: h, recorded: list.length, served: used });
+    }
+    return left;
+  };
+  infer.assertConsumed = () => assertConsumed(infer, 'model requests');
+  return infer;
+}
+
+// Throws unless every recorded response was served. Shared by the infer and executeTool
+// replayers; `what` names them in the message so a failure says which side came up short.
+export function assertConsumed(replayer, what = 'recorded responses') {
+  const left = typeof replayer?.remaining === 'function' ? replayer.remaining() : [];
+  if (!left.length) return true;
+  const total = left.reduce((n, x) => n + (x.recorded - x.served), 0);
+  throw new ReplayMiss(
+    `${total} recorded ${what} were never served — the replay drove FEWER calls than the run did`,
+    { left });
 }
 
 // An executeTool that serves recorded results by (name, args) — no side effects.
@@ -401,7 +426,7 @@ export function replayExecuteTool(record, { strict = true, live = null } = {}) {
     results.get(k).push(e.output?.result ?? '');
   }
   const cursor = new Map();
-  return async (name, args, call) => {
+  const exec = async (name, args, call) => {
     const k = `${name}:${await contentHash(args ?? {})}`;
     const list = results.get(k) || [];
     const i = cursor.get(k) || 0;
@@ -409,6 +434,16 @@ export function replayExecuteTool(record, { strict = true, live = null } = {}) {
     if (strict || typeof live !== 'function') throw new ReplayMiss('tool call not in record', { name, args });
     return live(name, args, call);
   };
+  exec.remaining = () => {
+    const left = [];
+    for (const [k, list] of results) {
+      const used = cursor.get(k) || 0;
+      if (used < list.length) left.push({ key: k, recorded: list.length, served: used });
+    }
+    return left;
+  };
+  exec.assertConsumed = () => assertConsumed(exec, 'tool results');
+  return exec;
 }
 
 // Compare two records event by event — verb, input hash, output hash. Timestamps
