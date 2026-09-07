@@ -579,12 +579,19 @@ input{font:inherit; color:inherit;}
 .nw-fs-blurb{
   font-size:11px; color:var(--muted); line-height:1.4; margin-top:6px;
 }
+/* minmax(0,1fr), not the default `auto`. A grid column defaults to
+   minmax(auto, max-content) and so refuses to shrink below its content, which is
+   why this form measured 389px of column inside a 279px box and the whole
+   Settings panel scrolled sideways — worst with a long API key, but true even
+   without one. Every nested grid here needs the same, or the innermost content
+   sets the width for all of them. */
 .nw-ai-form{
-  display:grid; gap:8px; padding:9px 10px; margin:7px 0;
-  border:1px solid var(--line); border-radius:8px; background:var(--row);
+  display:grid; grid-template-columns:minmax(0,1fr); gap:8px; padding:9px 10px; margin:7px 0;
+  min-width:0; border:1px solid var(--line); border-radius:8px; background:var(--row);
 }
 .nw-ai-form label{
-  display:grid; gap:4px; font-size:10px; color:var(--muted);
+  display:grid; grid-template-columns:minmax(0,1fr); gap:4px; min-width:0;
+  font-size:10px; color:var(--muted);
 }
 .nw-ai-form input,
 .nw-ai-form select{
@@ -598,7 +605,7 @@ input{font:inherit; color:inherit;}
    columns of labelled inputs overflow the panel (the Base URL / API key column
    ran off the right edge → horizontal scroll, key field half-clipped). Stack it
    vertically always — the drawer scrolls down, never sideways. */
-.nw-ai-endpoint-grid{display:grid; grid-template-columns:1fr; gap:8px; min-width:0;}
+.nw-ai-endpoint-grid{display:grid; grid-template-columns:minmax(0,1fr); gap:8px; min-width:0;}
 /* A grid child is min-width:auto by default, so a long API key widened the column
    and put a horizontal scrollbar across the whole settings panel. Let the field
    scroll inside itself instead. */
@@ -606,7 +613,7 @@ input{font:inherit; color:inherit;}
 .nw-ai-endpoint-grid input, .nw-ai-endpoint-grid select{min-width:0; max-width:100%; box-sizing:border-box;}
 .nw-ai-vault{min-width:0; overflow-wrap:anywhere;}
 .nw-ai-vault-row{min-width:0;}
-.nw-ai-key-row{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:end;}
+.nw-ai-key-row{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:end; min-width:0;}
 .nw-ai-result{min-height:16px; font-size:10px; color:var(--muted);}
 @media (max-width:600px){
   .nw-ai-key-row{grid-template-columns:1fr;}
