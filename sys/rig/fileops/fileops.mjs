@@ -251,7 +251,7 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     for (const [p, e] of [...idx.files]) if (e.safe === safe) indexDrop(p);
   }
 
-  function indexAdd(path, text, st, safe, readStartedAt, seenSeq) {
+  function indexAdd(path, text, st, safe, readStartedAt, seenSeq, binary = false) {
     // Discard a read that raced a write to the same path.
     if (seenSeq !== undefined && seqOf(path) !== seenSeq) return;
     indexDrop(path);
@@ -272,7 +272,7 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     // Storing when we read it lets us distrust exactly that overlap.
     // indexedAt is when the read STARTED, not when it finished: a write landing
     // mid-read would otherwise be stamped as already-captured and stay invisible.
-    idx.files.set(path, { mtimeMs: st.mtimeMs, size: st.size, indexedAt: readStartedAt, safe, hashes });
+    idx.files.set(path, { mtimeMs: st.mtimeMs, size: st.size, indexedAt: readStartedAt, safe, binary, hashes });
   }
 
   async function walkAll(safeDir) {
@@ -544,8 +544,12 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
         if (!rd.ok) { indexDrop(p); continue; }
         filesRead++;
         bytesRead += rd.data.length;
-        if (rd.data.includes('\u0000')) { indexDrop(p); continue; } // binaries are not searched
-        indexAdd(p, rd.data, st.stat, rr.ok ? rr.safe : null, readStartedAt, seenSeq);
+        // Binaries are never searched, but REMEMBER that: dropping them meant the
+        // refresh re-read every binary on every search just to rediscover what it
+        // already knew. On one real folder that was 4.29 MB per query — exactly
+        // cancelling the bytes the index saved.
+        const isBinary = rd.data.includes('\u0000');
+        indexAdd(p, isBinary ? '' : rd.data, st.stat, rr.ok ? rr.safe : null, readStartedAt, seenSeq, isBinary);
       }
       // Snapshot the keys: indexDrop mutates idx.files, so iterating it live
       // would skip entries. (oxlint flags the spread as useless; it is not.)
@@ -560,7 +564,14 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
         acc = acc === null ? new Set(s) : new Set([...acc].filter((x) => s.has(x)));
         if (!acc.size) break;
       }
-      // Oversized files are not in the index, so they must stay candidates.
+      // A file we hold no postings for must stay a candidate, because we cannot
+      // know whether it matches — that is oversized files, which are never read
+      // here. A file we know to be BINARY is not a candidate: binaries are not
+      // searched at all, so there is nothing to verify.
+      // Anything we hold no entry for must stay a candidate, because we cannot know
+      // whether it matches — that is oversized files, which are never read here.
+      // Binaries DO have an entry (with no postings), so they fall out of both the
+      // intersection and this list without being re-read.
       const over = globbed.matches.filter((p) => !idx.files.has(p));
       // Sort by path: postings iterate in insertion order, and today's callers
       // see glob's sorted order. Candidate order must not change which results

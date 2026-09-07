@@ -446,6 +446,24 @@ await test('REGRESSION: symlink aliases invalidate through a wrapper backend', a
   eq(JSON.stringify(hits), JSON.stringify(['alias.txt', 'target.txt']), 'both alias and target updated');
 });
 
+await test('REGRESSION: a binary file is not re-read on every search', async () => {
+  // Dropping binaries from the index meant the refresh re-read each one on every
+  // query to rediscover it was binary. Measured at 4.29 MB per search on a real
+  // folder — exactly cancelling the bytes the index saved.
+  const backend = new MemoryBackend();
+  const fs = createFileops({ backend, index: true });
+  await fs.write('code.js', 'function parseFact(){}\n', { createParents: true });
+  const blob = new Uint8Array(4096); blob[10] = 0; blob.set([0x70, 0x61, 0x72, 0x73, 0x65], 20);
+  await backend.write('blob.bin', blob);
+  await new Promise((r) => setTimeout(r, 4));
+  await fs.grep('parseFact');                    // cold: reads both
+  fs.searchStats({ reset: true });
+  await fs.grep('parseFact');                    // warm
+  const rec = fs.searchStats().recent[0];
+  eq(rec.filesRead, 1, 'only the one real candidate is read; the binary is remembered');
+  eq((await fs.grep('parseFact')).matches.map((m) => m.path).join(), 'code.js', 'binary still excluded from results');
+});
+
 // A randomised differential sweep: the fixed battery above encodes what I
 // thought to check, which is exactly the set most likely to miss something.
 await test('DIFFERENTIAL: randomised patterns, 400 cases', async () => {
