@@ -164,6 +164,9 @@ jobs:
       - name: Verify agent loop over the Rig shell
         run: node sys/ai/test/agent-loop.test.mjs
 
+      - name: Verify transcript compaction (turn-boundary cut, and no impossible retrieval)
+        run: node sys/ai/test/compaction.test.mjs
+
       - name: Verify copy-on-write overlay backend (subagent isolation)
         run: node sys/rig/fileops/test/overlay-backend.test.mjs
 
