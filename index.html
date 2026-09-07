@@ -598,7 +598,14 @@ input{font:inherit; color:inherit;}
    columns of labelled inputs overflow the panel (the Base URL / API key column
    ran off the right edge → horizontal scroll, key field half-clipped). Stack it
    vertically always — the drawer scrolls down, never sideways. */
-.nw-ai-endpoint-grid{display:grid; grid-template-columns:1fr; gap:8px;}
+.nw-ai-endpoint-grid{display:grid; grid-template-columns:1fr; gap:8px; min-width:0;}
+/* A grid child is min-width:auto by default, so a long API key widened the column
+   and put a horizontal scrollbar across the whole settings panel. Let the field
+   scroll inside itself instead. */
+.nw-ai-endpoint-grid > label, .nw-ai-endpoint-grid > div{min-width:0;}
+.nw-ai-endpoint-grid input, .nw-ai-endpoint-grid select{min-width:0; max-width:100%; box-sizing:border-box;}
+.nw-ai-vault{min-width:0; overflow-wrap:anywhere;}
+.nw-ai-vault-row{min-width:0;}
 .nw-ai-key-row{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:end;}
 .nw-ai-result{min-height:16px; font-size:10px; color:var(--muted);}
 @media (max-width:600px){
@@ -5230,13 +5237,11 @@ const AI_ENDPOINT_PRESETS = Object.freeze({
     baseUrl:'https://api.groq.com/openai/v1',
     keyRequired:true,
   }),
-  agentrouter: Object.freeze({
-    // Aggregator (OpenAI-compatible). Model e.g. `gpt-5.6-sol`. NOTE: AgentRouter's
-    // client gate blocks *browser* requests (401 "unauthorized client detected") —
-    // it wants a non-browser UA the browser can't set. Works from a server-side
-    // proxy (nakli-cf-worker), not directly from here. Key entered in Settings → AI.
-    label:'AgentRouter',
-    baseUrl:'https://agentrouter.org/v1',
+  nvidia: Object.freeze({
+    // NVIDIA build (OpenAI-compatible). Models are namespaced, e.g.
+    // `nvidia/llama-3.3-nemotron-super-49b-v1`. Key from build.nvidia.com.
+    label:'NVIDIA build',
+    baseUrl:'https://integrate.api.nvidia.com/v1',
     keyRequired:true,
   }),
   deepseek: Object.freeze({
@@ -9383,8 +9388,22 @@ function openSettings(section){
         aiEndpointKey.value = '';
         aiDraftPreset = aiEndpointPreset?.value || 'custom';
         paintEndpointKeyState();
-        aiSettingsResult.textContent =
-          `Now using "${entry.name}". Save settings to keep it as the active endpoint.`;
+        // Apply it, rather than filling the fields and waiting for a second
+        // click on Save settings. "Use" that does not switch anything is why
+        // switching keys looked broken.
+        aiPersistSettings({
+          ...aiSettings,
+          modelKey:'endpoint',
+          endpoint:{
+            preset: entry.preset,
+            baseUrl: entry.baseUrl,
+            model: entry.model,
+            rememberKey: true,
+          },
+        }, entry.key);
+        if (aiModelSelect) aiModelSelect.value = 'endpoint';
+        paintVault();
+        aiSettingsResult.textContent = `Now using "${entry.name}" — switched.`;
       }
     } catch (error){
       aiSettingsResult.textContent = error?.message || String(error);
