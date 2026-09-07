@@ -137,14 +137,17 @@ export function boundedText(text, { maxLines = 200, maxBytes = 4000, tailLines =
     const tn = Math.min(tailLines, Math.max(1, Math.floor(maxLines / 2)));
     const headN = Math.max(1, maxLines - tn);
     const head = lines.slice(0, headN), tail = lines.slice(-tn);
-    out = `${head.join('\n')}\n… (${lines.length - head.length - tail.length} lines elided) …\n${tail.join('\n')}`;
+    // the marker names BOTH dimensions of what went missing — a line count alone does not tell
+    // the model how much text it is not seeing
+    const keptChars = head.join('\n').length + tail.join('\n').length;
+    out = `${head.join('\n')}\n… (${lines.length - head.length - tail.length} lines / ${s.length - keptChars} bytes elided) …\n${tail.join('\n')}`;
     truncated = true;
   }
   const cp = [...out];
   if (cp.length > maxBytes) {
     const tb = Math.min(tailBytes, Math.max(1, Math.floor(maxBytes / 2)));
     const headN = Math.max(1, maxBytes - tb);
-    out = `${cp.slice(0, headN).join('')}\n… (${cp.length - headN - tb} chars elided) …\n${cp.slice(-tb).join('')}`;
+    out = `${cp.slice(0, headN).join('')}\n… (${cp.length - headN - tb} bytes elided) …\n${cp.slice(-tb).join('')}`;
     truncated = true;
   }
   return truncated ? out + `\n… (output truncated: ${lines.length} lines / ${s.length} bytes)` : out;
