@@ -31,8 +31,8 @@ await test('extracts a plain literal', () => {
 
 await test('takes the longest certain run', () => {
   eq(requiredLiteral('ab.cdefg'), 'cdefg');
-  eq(requiredLiteral('hi\\sworldwide'), 'worldwide'); // \s breaks; the longer side wins
-  eq(requiredLiteral('alpha.be'), 'alpha');             // ties are impossible here; longest wins
+  eq(requiredLiteral('alpha.be'), 'alpha');             // '.' breaks the run; the longer side wins
+  eq(requiredLiteral('worldwide.x'), 'worldwide');
 });
 
 await test('a required-but-repeating atom ends the run', () => {
@@ -145,6 +145,10 @@ await test('DIFFERENTIAL: a file changed behind the index is not missed', async 
 
 await test('the index actually skips files', async () => {
   const indexed = await build({ index: true });
+  // Let the corpus age past the coherency window first: a file indexed in the
+  // same millisecond it was written is deliberately distrusted, so warming
+  // straight after a write burst costs one extra read per file.
+  await new Promise((r) => setTimeout(r, 4));
   await indexed.grep('parseFact');              // warm
   indexed.searchStats({ reset: true });
   const r = await indexed.grep('deepThing');
@@ -232,6 +236,111 @@ await test('exclusive mode trades away outside-write detection, by contract', as
   await backend.write('a.txt', new TextEncoder().encode('omega\n')); // behind our back
   const r = await fs.grep('omega');
   eq(r.matches.length, 0, 'exclusive mode does NOT see a write it was promised would not happen');
+});
+
+// ── regressions found by an external review (codex/gpt-6-astra, 2026-09-07) ──
+// Every one of these was a FALSE NEGATIVE that the 400-pattern randomised sweep
+// missed, because its alphabet never produced them. They are pinned by hand.
+
+await test('REGRESSION: an unknown escape refuses, it does not leak its tail', () => {
+  // /\123abc/ is an octal escape for 'S'. Consuming '\1' and folding '23abc' into
+  // the next run claimed '23abc' was required — "Sabc" matches without it.
+  eq(requiredLiteral('\\123abc'), null);
+  eq(requiredLiteral('a\\d+b'), null);
+  eq(requiredLiteral('hello\\sworld'), null);
+  eq(requiredLiteral('\\x41BCDEF'), null);
+  eq(requiredLiteral('\\u0041BCDEF'), null);
+});
+
+await test('REGRESSION: astral characters are one atom, not two units', () => {
+  // /ab\u{1F600}?cd/u matches "abcd"; reporting 'ab\uD83D' as required excluded it.
+  eq(requiredLiteral('ab\u{1F600}?cd'), null);
+  eq(requiredLiteral('\u{1F600}?abcdef'), 'abcdef');
+});
+
+await test('REGRESSION: every extracted literal is a real substring of every match', async () => {
+  // The guarantee itself, asserted directly over the cases that broke it.
+  const cases = [
+    ['\\123abc', 'Sabc'], ['ab\u{1F600}?cd', 'abcd'], ['a\\d+b', 'a7b'],
+    ['hello\\sworld', 'hello world'], ['colou?r', 'color'], ['ab+cdef', 'abbcdef'],
+  ];
+  for (const [pat, subject] of cases) {
+    const lit = requiredLiteral(pat);
+    const re = new RegExp(pat, /\\u\{|\u{1F600}/u.test(pat) ? 'u' : '');
+    assert(re.test(subject), `fixture broken: ${pat} should match ${subject}`);
+    if (lit !== null) {
+      assert(subject.includes(lit),
+        `GUARANTEE VIOLATED: /${pat}/ matches ${JSON.stringify(subject)} which lacks ${JSON.stringify(lit)}`);
+    }
+  }
+});
+
+await test('REGRESSION: case-sensitive search is not answered from a folded index', async () => {
+  // 'ABΣ'.toLowerCase() ends in a final sigma; 'ABΣX'.toLowerCase() does not.
+  // Folding both sides therefore lost a literal that WAS present.
+  const fs = createFileops({ backend: new MemoryBackend(), index: true });
+  await fs.write('g.txt', 'ABΣX marks it\n', { createParents: true });
+  const r = await fs.grep('ABΣ');
+  eq(r.matches.length, 1, 'final-sigma literal still found');
+});
+
+await test('REGRESSION: an ignoreCase regex falls back instead of using the index', async () => {
+  const fs = createFileops({ backend: new MemoryBackend(), index: true });
+  await fs.write('h.txt', 'Needle here\n', { createParents: true });
+  const r = await fs.grep(/needle/i);
+  eq(r.matches.length, 1, 'case-insensitive still matches');
+  assert(!fs.searchStats().recent.at(-1).indexUsed, 'took the full scan');
+});
+
+await test('REGRESSION: removing the mount root drops the whole index', async () => {
+  // indexDropSubtree('') built the prefix '/', which matches no mount-relative
+  // key, so every posting survived a root wipe and a recreated path served stale.
+  const fs = createFileops({ backend: new MemoryBackend(), index: true, exclusive: true });
+  await fs.write('hit.txt', 'alpha\n', { createParents: true });
+  await fs.grep('alpha');
+  await fs.remove('', { recursive: true });
+  await fs.write('source.txt', 'omega\n', { createParents: true });
+  await fs.copy('source.txt', 'hit.txt');
+  eq((await fs.grep('omega')).matches.length, 2, 'both source and the recreated path found');
+  eq((await fs.grep('alpha')).matches.length, 0, 'nothing stale survives');
+});
+
+await test('REGRESSION: copy into a path the index once held is not stale', async () => {
+  const fs = createFileops({ backend: new MemoryBackend(), index: true, exclusive: true });
+  await fs.write('a.txt', 'alpha\n', { createParents: true });
+  await fs.write('b.txt', 'omega\n', { createParents: true });
+  await fs.grep('alpha');
+  await fs.remove('a.txt');
+  await fs.copy('b.txt', 'a.txt');
+  eq((await fs.grep('omega')).matches.length, 2, 'copied content visible at the reused path');
+});
+
+await test('REGRESSION: a symlink-capable backend keeps the stat sweep', async () => {
+  // Two mount paths can alias one file; the index is keyed by path, so exact
+  // invalidation cannot see the alias. The sweep can, because stat follows.
+  const backend = new MemoryBackend();
+  const fs = createFileops({ backend, index: true, exclusive: true });
+  await fs.write('target.txt', 'alpha\n', { createParents: true });
+  if (typeof backend.symlink === 'function') backend.symlink('alias.txt', 'target.txt');
+  else backend.symlinks.set('alias.txt', { target: 'target.txt', mtimeMs: Date.now() });
+  await fs.grep('alpha');
+  await fs.write('target.txt', 'omega\n');
+  const viaAlias = await fs.grep('omega');
+  eq(viaAlias.matches.length, 2, 'both the target and its alias report the new content');
+});
+
+await test('REGRESSION: a same-size rewrite in the same millisecond is not missed', async () => {
+  // mtime+size compare equal when a file is rewritten at the same size within the
+  // millisecond it was indexed. Found by the symlink case failing only inside the
+  // full suite, where the writes land close enough together to collide.
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const backend = new MemoryBackend();
+    const fs = createFileops({ backend, index: true });   // sweep mode
+    await fs.write('x.txt', 'alpha\n', { createParents: true });
+    await fs.grep('alpha');
+    await backend.write('x.txt', new TextEncoder().encode('omega\n')); // same size, outside fileops
+    eq((await fs.grep('omega')).matches.length, 1, `same-ms rewrite missed on attempt ${attempt}`);
+  }
 });
 
 // A randomised differential sweep: the fixed battery above encodes what I

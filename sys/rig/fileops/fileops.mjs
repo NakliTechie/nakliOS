@@ -207,6 +207,16 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     files: new Map(),           // path -> { mtimeMs, size, hashes }
   };
 
+  // Two mount paths can alias one file through a symlink, and the index is keyed
+  // by mount path — so writing through one leaves the other stale. Exact
+  // invalidation cannot see that, but the stat sweep can (stat follows the link
+  // and reports the target's moved mtime). So a symlink-capable backend keeps the
+  // sweep regardless of what the caller declared. No production backend exposes
+  // symlinks — FsaBackend, OPFS and Crate have none — so this costs nothing real.
+  // Evaluated per search, not once: a backend that merely *supports* symlinks is
+  // fine until one actually exists.
+  const exclusiveOk = () => exclusive && !(backend.symlinks && backend.symlinks.size > 0);
+
   function indexDrop(path) {
     const e = idx.files.get(path);
     if (!e) return;
@@ -219,6 +229,11 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
 
   // Drop a path and everything beneath it (a recursive remove takes a subtree).
   function indexDropSubtree(path) {
+    // Removing the mount root ('') must drop EVERYTHING. The prefix form gave
+    // '/', which matches no key (keys are mount-relative, unrooted), so a
+    // recursive remove of the root left every posting in place — and a path
+    // later recreated at the same name was then served from stale postings.
+    if (path === '') { idx.postings.clear(); idx.files.clear(); return; }
     indexDrop(path);
     const prefix = path + '/';
     for (const p of [...idx.files.keys()]) if (p.startsWith(prefix)) indexDrop(p);
@@ -226,13 +241,22 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
 
   function indexAdd(path, text, st) {
     indexDrop(path);
-    const hashes = trigrams(text.toLowerCase());
+    // Index the RAW text. Lowercasing both sides looked symmetric but is not
+    // substring-preserving in Unicode: 'AB\u03a3'.toLowerCase() ends in a final
+    // sigma while 'AB\u03a3X'.toLowerCase() does not, so a literal that IS present
+    // stopped matching its own file. Case-insensitive patterns are refused below
+    // instead of being folded.
+    const hashes = trigrams(text);
     for (const h of hashes) {
       let s = idx.postings.get(h);
       if (!s) { s = new Set(); idx.postings.set(h, s); }
       s.add(path);
     }
-    idx.files.set(path, { mtimeMs: st.mtimeMs, size: st.size, hashes });
+    // `indexedAt` closes a coherency window mtime alone cannot: if a file is
+    // rewritten in the SAME millisecond we indexed it, at the same size, its
+    // mtime and size both compare equal and the sweep skips a changed file.
+    // Storing when we read it lets us distrust exactly that overlap.
+    idx.files.set(path, { mtimeMs: st.mtimeMs, size: st.size, indexedAt: Date.now(), hashes });
   }
 
   async function walkAll(safeDir) {
@@ -382,10 +406,15 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
         const bytes = await backend.readBinary(f);
         await backend.write(joinRoot(tr.safe, rel), bytes);
       }
+      indexDropSubtree(tr.path);
       return { ok: true, from: fr.path, to: tr.path };
     }
     const bytes = await backend.readBinary(fr.safe);
     await backend.write(tr.safe, bytes);
+    // The EEXIST guard above says the destination is new, so in principle nothing
+    // stale can be held for it. Invalidate anyway: that argument depended on every
+    // other invalidation path being perfect, and one of them was not.
+    indexDrop(tr.path);
     return { ok: true, from: fr.path, to: tr.path };
   }
 
@@ -442,7 +471,9 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     // Candidate narrowing. `lit` is null whenever the pattern is anything the
     // extractor does not fully understand, and null means "scan everything" —
     // the same work as before the index existed.
-    const lit = index ? requiredLiteral(re.source) : null;
+    // `i` (and the Unicode case-folding it implies) cannot be answered from a
+    // case-sensitive index, so those searches take the full scan.
+    const lit = (index && !re.ignoreCase) ? requiredLiteral(re.source) : null;
     let candidates = null;
     let indexUsed = false;
     let filesStatted = 0;
@@ -456,11 +487,15 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
         const e = idx.files.get(p);
         // Exclusive mode: a file we already hold is current by construction —
         // every write through this fileops dropped it from the index.
-        if (e && exclusive) continue;
+        if (e && exclusiveOk()) continue;
         const st = await stat(p);
         if (!st.ok) { indexDrop(p); continue; }
         filesStatted++;
-        if (e && e.mtimeMs === st.stat.mtimeMs && e.size === st.stat.size) continue;
+        // Trust an unchanged mtime+size only when the file was already at least a
+        // millisecond old when we indexed it. Inside that window the pair cannot
+        // distinguish "unchanged" from "rewritten at the same size".
+        const settled = e && e.indexedAt > st.stat.mtimeMs;
+        if (e && settled && e.mtimeMs === st.stat.mtimeMs && e.size === st.stat.size) continue;
         if (st.stat.size > indexMaxBytes) { indexDrop(p); continue; } // stays a full-read candidate
         const rd = await read(p, { encoding: 'utf-8' });
         if (!rd.ok) { indexDrop(p); continue; }
@@ -473,7 +508,7 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
       for (const p of [...idx.files.keys()]) if (!seen.has(p)) indexDrop(p);
 
       // Intersect the postings of every trigram in the required literal.
-      const want = trigrams(lit.toLowerCase());
+      const want = trigrams(lit);
       let acc = null;
       for (const h of want) {
         const s = idx.postings.get(h);

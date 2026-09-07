@@ -37,25 +37,25 @@ export function trigrams(text) {
 }
 
 // Quantifiers that make the atom before them optional, so it cannot be required.
-function optionalQuantAt(src, i) {
-  const c = src[i];
+function optionalQuantAt(chars, i) {
+  const c = chars[i];
   if (c === '*' || c === '?') return true;
   if (c === '{') {
-    const close = src.indexOf('}', i);
+    const close = chars.indexOf('}', i);
     if (close === -1) return false;
-    const body = src.slice(i + 1, close);
+    const body = chars.slice(i + 1, close).join('');
     if (!/^\d*(,\d*)?$/.test(body)) return false;
     return /^0*(,|$)/.test(body); // {0}, {0,}, {0,3} → optional
   }
   return false;
 }
 
-function quantLenAt(src, i) {
-  const c = src[i];
+function quantLenAt(chars, i) {
+  const c = chars[i];
   if (c === '*' || c === '?' || c === '+') return 1;
   if (c === '{') {
-    const close = src.indexOf('}', i);
-    if (close !== -1 && /^\d*(,\d*)?$/.test(src.slice(i + 1, close))) return close - i + 1;
+    const close = chars.indexOf('}', i);
+    if (close !== -1 && /^\d*(,\d*)?$/.test(chars.slice(i + 1, close).join(''))) return close - i + 1;
   }
   return 0;
 }
@@ -79,20 +79,29 @@ export function requiredLiteral(source, { min = 3 } = {}) {
   // than reason about nesting, refuse. Lookaround/backreference likewise.
   if (/[|([]/.test(src.replace(/\\./g, ''))) return null;
 
+  // Iterate by CODE POINT, not code unit. An astral character is two units, and
+  // treating them separately let /ab(emoji)?cd/u report 'ab\uD83D' as required — a
+  // lone surrogate that "abcd", a real match, does not contain.
+  const chars = [...src];
   let best = '';
   let run = '';
   // A run ends whenever something uncertain follows it. Bank it before clearing,
   // or a pattern like /alpha.be/ throws away the perfectly good 'alpha'.
   const endRun = () => { if (run.length > best.length) best = run; run = ''; };
-  for (let i = 0; i < src.length; i++) {
-    const c = src[i];
+  for (let i = 0; i < chars.length; i++) {
+    const c = chars[i];
     let lit = null;
 
     if (c === '\\') {
-      const n = src[i + 1];
+      const n = chars[i + 1];
       if (n === undefined) return null;
-      if (ESCAPED_LITERAL.has(n)) { lit = n; i++; }
-      else { i++; endRun(); continue; } // \d \w \s \b \n … → not a literal char
+      // ONLY escapes standing for exactly one literal character are usable.
+      // Everything else is refused outright rather than skipped: skipping consumed
+      // two characters and folded the REST into the next run, so /\123abc/ (octal
+      // for 'S') claimed '23abc' was required — and "Sabc" matches without it.
+      // Classes, backreferences and \x / \u / \c / octal all land here.
+      if (!ESCAPED_LITERAL.has(n)) return null;
+      lit = n; i++;
     } else if (c === '.' || c === '^' || c === '$') {
       endRun();
       continue;
@@ -106,9 +115,9 @@ export function requiredLiteral(source, { min = 3 } = {}) {
     }
 
     // Look at what follows this literal.
-    const qLen = quantLenAt(src, i + 1);
+    const qLen = quantLenAt(chars, i + 1);
     if (qLen > 0) {
-      if (optionalQuantAt(src, i + 1)) {
+      if (optionalQuantAt(chars, i + 1)) {
         // This character may not appear. It cannot join the run, and it breaks it.
         endRun();
       } else {
