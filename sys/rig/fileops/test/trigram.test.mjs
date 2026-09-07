@@ -10,7 +10,7 @@
 // Everything else here exists to make that test's failures diagnosable.
 
 import { createFileops, MemoryBackend } from '../index.mjs';
-import { requiredLiteral, trigrams, triHash, planQuery, evaluateQuery, foldCase } from '../trigram.mjs';
+import { requiredLiteral, trigrams, triHash, planQuery, evaluateQuery, evaluateQueryIds, foldCase } from '../trigram.mjs';
 
 let passed = 0;
 const failures = [];
@@ -813,6 +813,70 @@ await test('DIFFERENTIAL: randomised patterns, 400 cases', async () => {
     if (JSON.stringify(a) !== JSON.stringify(b)) diffs.push(`${JSON.stringify(pat)} diverged`);
   }
   assert(diffs.length === 0, `${diffs.length} divergence(s):\n  ${diffs.slice(0, 8).join('\n  ')}`);
+});
+
+// ── evaluateQueryIds agrees with evaluateQuery ───────────────────────────
+// The Set version is the one three review passes hardened, so it is the oracle.
+// The id version only changes WHERE postings live; if the two ever disagree, the
+// id version is the wrong one.
+await test('evaluateQueryIds agrees with evaluateQuery on random plans', () => {
+  const PATTERNS = [
+    'parseFact', 'TODO|FIXME', '\\w+Error', 'import \\{ (helper1|helper2) \\}',
+    'const', 'ab', 'deepThing', 'export const', '\\bconst\\b', 'x(y|z)w',
+    'notPresentAnywhere', '(alpha|beta|gamma)Delta', 'a.c', '[A-Z]{2,}',
+  ];
+  // 40 synthetic files, each a random pick of words, so postings are non-trivial.
+  const WORDS = ['parseFact','TODO','FIXME','helper1','helper2','deepThing','const',
+                 'export','import','alphaDelta','betaDelta','xyw','xzw','Error','value'];
+  let rnd = 12345;
+  const next = () => (rnd = (rnd * 1103515245 + 12345) & 0x7fffffff);
+  const docs = [];
+  for (let i = 0; i < 40; i++) {
+    let t = '';
+    for (let k = 0; k < 12; k++) t += WORDS[next() % WORDS.length] + ' ';
+    docs.push(t);
+  }
+  // Build both shapes from the same source.
+  const byPath = new Map();      // hash -> Set<path>
+  const byId = new Map();        // hash -> number[]
+  docs.forEach((t, i) => {
+    for (const h of trigrams(foldCase(t))) {
+      let s = byPath.get(h); if (!s) { s = new Set(); byPath.set(h, s); } s.add('f' + i);
+      let a = byId.get(h); if (!a) { a = []; byId.set(h, a); } a.push(i);
+    }
+  });
+  const ids = new Map();
+  for (const [h, a] of byId) ids.set(h, Uint32Array.from(a));   // already ascending
+
+  const diffs = [];
+  for (const src of PATTERNS) {
+    const plan = planQuery(src, '');
+    const a = evaluateQuery(plan, byPath);
+    const b = evaluateQueryIds(plan, ids);
+    if ((a === null) !== (b === null)) { diffs.push(`${src}: null-ness differs`); continue; }
+    if (a === null) continue;
+    const A = [...a].sort().join(',');
+    const B = [...b].map((i) => 'f' + i).sort().join(',');
+    if (A !== B) diffs.push(`${src}: ${A} !== ${B}`);
+  }
+  assert(diffs.length === 0, `${diffs.length} divergence(s): ${diffs.slice(0, 5).join(' | ')}`);
+});
+
+// A sorted-merge intersection is easy to get subtly wrong at the boundaries.
+await test('evaluateQueryIds handles empty, disjoint and identical posting lists', () => {
+  const P = new Map();
+  const tri = (s) => [...trigrams(foldCase(s))];
+  const H = tri('abcd');
+  P.set(H[0], Uint32Array.from([1, 3, 5, 7]));
+  P.set(H[1], Uint32Array.from([3, 7, 9]));
+  const plan = planQuery('abcd', '');
+  eq([...evaluateQueryIds(plan, P)].join(), '3,7', 'intersection is the merge');
+  const P2 = new Map(P); P2.set(H[1], Uint32Array.from([2, 4]));
+  eq([...evaluateQueryIds(plan, P2)].length, 0, 'disjoint lists intersect empty');
+  const P3 = new Map(); for (const h of H) P3.set(h, Uint32Array.from([2, 4]));
+  eq([...evaluateQueryIds(plan, P3)].join(), '2,4', 'identical lists survive');
+  eq(evaluateQueryIds(plan, new Map()), (function(){ const m = new Map(); return evaluateQueryIds(plan, m); })(), 'missing trigram is empty, not null');
+  eq(evaluateQueryIds(plan, new Map()).length, 0, 'a trigram nothing holds means no file can match');
 });
 
 console.log(`trigram: ${passed} passed, ${failures.length} failed`);
