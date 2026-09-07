@@ -767,6 +767,33 @@ await test('REGRESSION: three more planner false negatives from re-review', asyn
   }
 });
 
+await test('REGRESSION: two more from a third review pass', async () => {
+  //  - /abᾀ/iu vs "abᾈ": both characters uppercase to TWO code points, so the
+  //    "only fold 1:1" rule left both unfolded and distinct — while /i equates
+  //    them. A character that cannot fold 1:1 is now opaque in a pattern.
+  //  - /[]?([]?ab)/u vs "ab": '[]' is a VALID EMPTY class in JS. Skipping the ']'
+  //    immediately after '[' is a POSIX rule; here it ran the class past the
+  //    group boundary and read "ab)" as required text.
+  const cases = [
+    ['abᾀ', 'abᾈ', 'iu'],
+    ['[]?([]?ab)', 'ab', 'u'],
+    ['[]?([]?ab)', 'ab', ''],
+  ];
+  for (const [src, subject, flags] of cases) {
+    const mk = async (index) => {
+      const fs = createFileops({ backend: new MemoryBackend(), index });
+      await fs.write('hit.txt', subject + '\n', { createParents: true });
+      return fs;
+    };
+    const plain = await mk(false); const idx = await mk(true);
+    await new Promise((r) => setTimeout(r, 3));
+    const re = new RegExp(src, flags);
+    const a = (await plain.grep(re)).matches.map((m) => m.path);
+    const b = (await idx.grep(re)).matches.map((m) => m.path);
+    eq(JSON.stringify(b), JSON.stringify(a), `/${src}/${flags} on ${JSON.stringify(subject)}`);
+  }
+});
+
 // A randomised differential sweep: the fixed battery above encodes what I
 // thought to check, which is exactly the set most likely to miss something.
 await test('DIFFERENTIAL: randomised patterns, 400 cases', async () => {

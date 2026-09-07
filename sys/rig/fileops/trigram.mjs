@@ -271,9 +271,13 @@ function matchParen(chars, i) {
 }
 
 function classEnd(chars, i) {
+  // The first unescaped ']' closes it. '[]' is a VALID EMPTY class in JS — the
+  // 'a ] right after [ is literal' rule is POSIX, not JavaScript, and skipping
+  // that ']' ran the class on past a group boundary: /[]?([]?ab)/u swallowed the
+  // '(' and then read 'ab)' as required text, excluding "ab".
   for (let j = i + 1; j < chars.length; j++) {
     if (chars[j] === '\\') { j++; continue; }
-    if (chars[j] === ']' && j > i + 1) return j;
+    if (chars[j] === ']') return j;
   }
   return -1;
 }
@@ -282,6 +286,15 @@ function classEnd(chars, i) {
 // recurse; everything else contributes nothing but does not poison its siblings —
 // which is the difference from the old extractor, where a single \w made the
 // whole pattern unusable even though a neighbouring literal was still required.
+// A character whose uppercase is not a single code point cannot be folded 1:1,
+// and Unicode case-insensitive matching may still equate it with a DIFFERENT
+// character that folds elsewhere: /ab\u1f80/iu matches "ab\u1f88" — both uppercase to
+// two characters, so both stay unfolded and stay distinct. Such a character is
+// therefore opaque in a pattern: it breaks the literal run instead of joining it.
+function foldsOneToOne(ch) {
+  return [...ch.toUpperCase()].length === 1;
+}
+
 function planSequence(chars) {
   const parts = [];
   let run = '';
@@ -334,7 +347,7 @@ function planSequence(chars) {
     if (qLen > 0) end += qLen;
 
     if (optional) { flushRun(); i = end; continue; }
-    if (atom && atom.literal !== undefined && atom.literal !== null) {
+    if (atom && atom.literal !== undefined && atom.literal !== null && foldsOneToOne(atom.literal)) {
       run += atom.literal;
       if (repeats) flushRun();  // it may repeat, so text either side is not contiguous
     } else {
