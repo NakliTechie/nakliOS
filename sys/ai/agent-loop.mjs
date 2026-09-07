@@ -71,6 +71,39 @@ export function taskDoneTool() {
 // Rough token estimate (~4 chars/token) over a string or a message transcript.
 // Deliberately cheap and dependency-free — the budget ladder and compaction only
 // need a monotonic proxy, not a real tokenizer.
+// ── usage-anchored token accounting (F6) ──
+//
+// estimateTokens is chars/4. That is fine for a log line and wrong for a budget that ENDS
+// runs: it ignores the system prompt's real tokenisation, tool schemas, images, and every
+// provider's own accounting. When the provider tells us what a request actually cost, that
+// number is the truth and the estimate is only used for the delta since.
+//
+// The two provider shapes, and why they are NOT added together:
+//   Anthropic: input_tokens EXCLUDES cache reads/writes, which are reported separately —
+//              so the real input is the sum of the three.
+//   OpenAI:    prompt_tokens INCLUDES the cached part, and prompt_tokens_details.cached_tokens
+//              is a SUBSET of it — adding it would double-count the cache on every turn.
+// Returns null when the object carries no usable input count, so the caller falls back to
+// the estimate rather than silently anchoring on zero.
+export function usageInputTokens(usage) {
+  if (!usage || typeof usage !== 'object') return null;
+  const num = (v) => (Number.isFinite(v) && v >= 0 ? v : null);
+  const anthropic = num(usage.input_tokens);
+  if (anthropic !== null) {
+    return anthropic + (num(usage.cache_read_input_tokens) || 0) + (num(usage.cache_creation_input_tokens) || 0);
+  }
+  const openai = num(usage.prompt_tokens);
+  if (openai !== null) return openai; // cached_tokens is already inside this
+  return null;
+}
+
+// What the provider says the reply itself cost, or null.
+export function usageOutputTokens(usage) {
+  if (!usage || typeof usage !== 'object') return null;
+  const num = (v) => (Number.isFinite(v) && v >= 0 ? v : null);
+  return num(usage.output_tokens) ?? num(usage.completion_tokens);
+}
+
 export function estimateTokens(input) {
   if (typeof input === 'string') return Math.ceil(input.length / 4);
   if (Array.isArray(input)) {
@@ -167,10 +200,74 @@ function callId(call, step, index) {
 
 // A signature of the tool calls in a step, to detect a stuck loop (the model
 // repeating the identical call with no new information).
-function stepSignature(toolCalls) {
+// The CANONICAL form of a tool call's arguments: same object, same string, whatever
+// order the model happened to emit the keys in. Detection keys on this — a model that
+// re-issues `{a:1,b:2}` then `{b:2,a:1}` is repeating itself, and a raw-string compare
+// would call that progress. Unparseable arguments fall back to the raw string.
+function stableArgs(raw) {
+  const text = String(raw == null ? '' : raw);
+  let v; try { v = JSON.parse(text); } catch { return text; }
+  const canon = (x) => {
+    if (Array.isArray(x)) return x.map(canon);
+    if (x && typeof x === 'object') {
+      const out = {};
+      for (const k of Object.keys(x).sort()) out[k] = canon(x[k]);
+      return out;
+    }
+    return x;
+  };
+  try { return JSON.stringify(canon(v)); } catch { return text; }
+}
+
+export function stepSignature(toolCalls) {
   return (toolCalls || [])
-    .map(c => `${c.function?.name}(${c.function?.arguments || ''})`)
+    .map(c => `${c.function?.name}(${stableArgs(c.function?.arguments)})`)
     .join('|');
+}
+
+// The repeat counts at which the loop speaks up. Escalating, and it NEVER stops the
+// run: the old guard returned stop:'no-progress' at the second identical call, throwing
+// away a run that one sentence might have saved — and the model never learned why. The
+// budget ladder (turns / tokens / wall-clock) is what ends a run; this only interrupts.
+export const REPEAT_NUDGE_AT = Object.freeze([3, 5, 8]);
+
+// What a refused result looks like coming back from a tool. Deliberately narrow: an
+// ordinary empty result or a "no matches" is NOT a denial, and calling it one would put
+// the harsher wording in front of a model that is merely searching.
+const DENIED_RE = /^\s*(Refused\b|Error:|Denied\b|Permission denied\b|Blocked by )/i;
+
+// What the model is SHOWN of the repeated call. Bounded, because a repeated 40 KB
+// write would otherwise be pasted back into the transcript at every escalation — while
+// DETECTION still keys on the full canonical string, so two long calls that differ only
+// past the cap are not mistaken for each other.
+const REPEAT_PREVIEW = 200;
+function repeatPreview(toolCalls) {
+  return (toolCalls || []).map((c) => {
+    const name = c.function?.name || '?';
+    const args = stableArgs(c.function?.arguments);
+    return `${name}(${args.length > REPEAT_PREVIEW ? args.slice(0, REPEAT_PREVIEW) + `… +${args.length - REPEAT_PREVIEW} chars` : args})`;
+  }).join(' , ');
+}
+
+// The escalating reminder. Tagged [coordination] so foldRecovery and the model both read
+// it as the machine talking, never as the owner's instruction. `denied` says the repeated
+// call was REFUSED every time — a model hammering a denied call is the loop most worth
+// breaking, and the honest thing to tell it is that repeating will not change the answer.
+export function repeatNudge(times, toolCalls, { denied = false } = {}) {
+  const what = repeatPreview(toolCalls);
+  if (times >= 8) {
+    return `[coordination] That is ${times} identical calls: ${what}. ` +
+      (denied ? 'Every one was refused, and repeating it will not change that. ' : 'Nothing about the result will change. ') +
+      'Stop repeating it. Either take a different route to the same goal, or say plainly what is blocking you and what you would need — an honest stop is a better outcome than another identical call.';
+  }
+  if (times >= 5) {
+    return `[coordination] You have now issued the same call ${times} times: ${what}. ` +
+      (denied ? 'It was refused each time. ' : 'The result has been the same each time. ') +
+      'Change something concrete: a different tool, a smaller step, a different path, or re-read the goal. Do not issue it again unchanged.';
+  }
+  return `[coordination] You have issued the same call ${times} times in a row: ${what}. ` +
+    (denied ? 'It was refused each time, so repeating it will not succeed. ' : 'Repeating it will not produce a different result. ') +
+    'Step back: what were you trying to achieve, and what else could get you there?';
 }
 
 export async function runAgentLoop({
@@ -192,8 +289,16 @@ export async function runAgentLoop({
   if (typeof executeTool !== 'function') throw new Error('runAgentLoop needs an executeTool function');
   const convo = messages.slice();
   let lastText = '';
-  let repeats = 0;
+  let repeats = 0;           // consecutive turns whose canonical tool-call set was identical
   let prevSignature = null;
+  let repeatDenied = false;  // was every result of the repeated call a refusal?
+  let nudgedAt = -1;         // the repeat count the last nudge was issued for (never twice for one count)
+  let pendingNudge = null;   // a nudge waiting for this turn's tool results to be appended
+  // The user messages the LOOP wrote (gate feedback, repeat nudges). Identity, not text:
+  // a model that echoes a nudge back verbatim must not be mistaken for the owner speaking.
+  const loopAuthored = new WeakSet();
+  let scannedTo = 0;         // how much of convo has been checked for an owner interjection
+  let requestLen = 0;        // convo length at the moment the in-flight request was sent (F6)
   let verifyRounds = 0;
   const startedAt = now();
 
@@ -227,10 +332,20 @@ export async function runAgentLoop({
 
   // The budget ladder: turns / tokens / wall-clock. Any tripped axis stops the
   // loop with stop:'budget' and names the axis. Checked at the top of each turn.
+  // The run's token count. Anchored on what the provider actually charged for the last
+  // request it reported, plus an estimate of only what has been appended since — so the
+  // estimator's error is bounded by one turn's tail instead of accumulating over the whole
+  // transcript. With no usage ever reported it degrades to exactly the old behaviour.
+  let anchor = null; // { len, input } — input tokens the provider charged for convo[0..len)
+  function tokensUsed() {
+    if (!anchor) return estimateTokens(convo);
+    return anchor.input + estimateTokens(convo.slice(anchor.len));
+  }
+
   function budgetTripped(step) {
     if (!budget) return null;
     if (Number.isFinite(budget.turns) && step >= budget.turns) return 'turns';
-    if (Number.isFinite(budget.tokens) && estimateTokens(convo) > budget.tokens) return 'tokens';
+    if (Number.isFinite(budget.tokens) && tokensUsed() > budget.tokens) return 'tokens';
     if (Number.isFinite(budget.wallClockMs) && now() - startedAt >= budget.wallClockMs) return 'wall-clock';
     return null;
   }
@@ -253,6 +368,7 @@ export async function runAgentLoop({
       // Without it Stop only takes effect BETWEEN turns, so a hung inference
       // ignores both the abort and the wall-clock budget (which is also only
       // checked between turns) — the run becomes uninterruptible.
+      requestLen = convo.length;
       reply = await infer({ messages: convo, tools, signal });
     } catch (e) {
       // A cancelled inference throws — that is the Stop button working, not a
@@ -261,6 +377,19 @@ export async function runAgentLoop({
       if (aborted()) return abortReturn(step);
       onEvent({ type: 'error', error: String(e?.message || e), step });
       return { messages: convo, steps: step, stop: 'error', text: lastText, error: String(e?.message || e) };
+    }
+
+    // F6: anchor on the provider's own count when it gave one for THIS request envelope.
+    // A count that arrives for a request we did not just make (a cached or replayed reply
+    // with stale usage) would anchor on the wrong prefix, so the length is captured at the
+    // call and the anchor only ever moves forward.
+    {
+      const input = usageInputTokens(reply?.usage);
+      if (input !== null && requestLen >= (anchor ? anchor.len : 0)) {
+        anchor = { len: requestLen, input };
+        const out = usageOutputTokens(reply?.usage);
+        onEvent({ type: 'usage', step, input, output: out ?? null, at: requestLen });
+      }
     }
 
     if (aborted()) return abortReturn(step);
@@ -286,31 +415,51 @@ export async function runAgentLoop({
           onEvent({ type: 'done', reason: 'unverified', step });
           return { messages: convo, steps: step + 1, stop: 'unverified', verified: false, text: lastText, verdict };
         }
-        convo.push({ role: 'user', content:
-          gateFeedback(verdict, gateOutputCap) + '\nFix the problem and continue.' });
+        const fb = { role: 'user', content: gateFeedback(verdict, gateOutputCap) + '\nFix the problem and continue.' };
+        loopAuthored.add(fb);
+        convo.push(fb);
         continue;
       }
       onEvent({ type: 'done', reason: reply?.finishReason || 'stop', step });
       return { messages: convo, steps: step + 1, stop: 'done', text: lastText };
     }
 
-    // No-progress guard: the identical tool-call set two steps running means the
-    // model is stuck — stop rather than burn the budget.
+    // Repeat guard (F7). The identical canonical tool-call set, turn after turn, means the
+    // model is going in a circle. This used to STOP the run at the second occurrence, which
+    // threw away every run a single sentence would have saved and never told the model what
+    // was wrong. It now NUDGES, escalating at REPEAT_NUDGE_AT, and never stops: the budget
+    // ladder ends runs, this only interrupts one.
+    //
+    // A user message the loop did not author resets the chain — a person who says something
+    // new has changed the situation, and the count should not carry across that. (Anvil's own
+    // interjection is a fresh runAgentLoop, which resets by construction; this covers a caller
+    // that seeds the conversation with a later owner turn.)
+    for (let i = scannedTo; i < convo.length; i++) {
+      const m = convo[i];
+      if (m && m.role === 'user' && !loopAuthored.has(m)) { repeats = 0; prevSignature = null; nudgedAt = -1; break; }
+    }
+    scannedTo = convo.length;
+
     const signature = stepSignature(toolCalls);
     repeats = signature === prevSignature ? repeats + 1 : 0;
     prevSignature = signature;
-    if (repeats >= 2) {
-      convo.push(assistantTurn(content, toolCalls));
-      onEvent({ type: 'no-progress', step, signature });
-      return { messages: convo, steps: step + 1, stop: 'no-progress', text: lastText };
-    }
 
     convo.push(assistantTurn(content, toolCalls));
+
+    const times = repeats + 1; // occurrences of this call in a row, counting the first
+    if (REPEAT_NUDGE_AT.includes(times) && times !== nudgedAt) {
+      nudgedAt = times;
+      // The wording is decided AFTER this turn's tools have run, so "it was refused each
+      // time" is a statement about the results the model has actually seen, including this
+      // turn's. Only the decision to nudge is made here.
+      pendingNudge = { times, signature, toolCalls };
+    }
 
     // Execute each tool call and feed the result back as a tool message. A
     // `task_done` call is intercepted here (not passed to executeTool): the loop
     // owns completion, so it runs the gate and either accepts or rejects.
     let gateGreen = false;
+    const stepResults = [];
     for (let i = 0; i < toolCalls.length; i++) {
       if (aborted()) return abortReturn(step + 1);
       const call = toolCalls[i];
@@ -357,6 +506,28 @@ export async function runAgentLoop({
         onEvent({ type: 'tool-result', name, id, result: resultText, step });
       }
       convo.push({ role: 'tool', tool_call_id: id, content: String(resultText ?? '') });
+      stepResults.push(String(resultText ?? ''));
+    }
+
+    // Did this turn's calls all come back refused? A refusal is a guard speaking (the skills
+    // fence, a grant, a hook block) or a hard error — repeating it cannot succeed, and the
+    // nudge says so in stronger terms. `false` when the turn ran no tools at all: silence is
+    // not a denial.
+    repeatDenied = stepResults.length > 0 && stepResults.every((r) => DENIED_RE.test(r));
+
+    // The nudge lands AFTER the tool results, so every assistant tool_call still has its
+    // paired tool message immediately following it — inserting a user turn between them
+    // breaks the provider contract on strict endpoints.
+    if (pendingNudge) {
+      const { times, signature, toolCalls: repeated } = pendingNudge;
+      const note = { role: 'user', content: repeatNudge(times, repeated, { denied: repeatDenied }) };
+      loopAuthored.add(note);
+      convo.push(note);
+      // The CONTENT rides on the event: the recorder stores the exact words that were sent,
+      // so foldTranscript reproduces THIS run rather than this version's wording — and the
+      // event fires at the push, so the record's order is the transcript's order (F1).
+      onEvent({ type: 'repeat-nudge', step, times, signature, denied: repeatDenied, content: note.content });
+      pendingNudge = null;
     }
 
     if (gateGreen) {

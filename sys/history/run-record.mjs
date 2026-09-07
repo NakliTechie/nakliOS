@@ -43,6 +43,7 @@ export const RUN_EVENTS = Object.freeze([
   'run.stopped',      // input: { steps }                      output: { stop, reason, verified, axis, error }
   'run.checkpoint',   // input: { step }                        output: { handoff }  (B4: a rollover landmark)
   'run.compacted',    // input: { method, from, to, step }      output: { replacement }  (F4: a logged surface replace)
+  'run.nudged',       // input: { step, times, denied }         output: { content }  (F7: the loop's own escalating reminder)
 ]);
 
 // The loop's onEvent types this recorder understands. 'done' and the pre-stop
@@ -57,6 +58,7 @@ const LOOP_TO_VERB = Object.freeze({
   'tool-call': 'tool.called',
   'tool-result': 'tool.responded',
   'tool-error': 'tool.failed',
+  'repeat-nudge': 'run.nudged',
   'verify-pass': 'verify.passed',
   'verify-fail': 'verify.failed',
 });
@@ -122,6 +124,10 @@ export function createRunRecorder({ app = 'anvil', principal = 'local', grant_id
         case 'tool.failed': enqueue(verb, () => ({ input: { id: e.id, name: e.name, step: s }, output: { error: String(e.error ?? '') } })); break;
         case 'verify.passed': enqueue(verb, () => ({ input: { step: s }, output: { verdict: e.verdict ?? null } })); break;
         case 'verify.failed': enqueue(verb, () => ({ input: { step: s, round: e.round ?? null, ran: e.ran ?? null }, output: { verdict: e.verdict ?? null } })); break;
+        // F7: the loop's escalating repeat reminder. It is a user turn the LOOP wrote, so it
+        // must be on the chain or foldTranscript cannot reproduce what was sent — which is
+        // precisely the divergence F1 checks for.
+        case 'run.nudged': enqueue(verb, () => ({ input: { step: s, times: e.times ?? null, denied: !!e.denied }, output: { content: String(e.content ?? '') } })); break;
       }
     },
 
@@ -314,6 +320,9 @@ export function foldTranscript(events, resolve) {
       // Coordination, not the owner: a carried gate verdict must never read as the owner's
       // instruction (B3). The tag survives into the next run's transcript.
       case 'verify.failed': out.push({ role: 'user', content: `[coordination] Gate failed (exit ${o.verdict?.exit ?? '?'}). Fix the problem and continue.` }); break;
+      // F7: the reminder is replayed verbatim from the record, not regenerated — the wording
+      // may change between versions, and the surface must be what THAT run actually sent.
+      case 'run.nudged': if (o.content) out.push({ role: 'user', content: String(o.content) }); break;
     }
   }
   // An assistant turn whose tool replies never arrived is malformed as the next

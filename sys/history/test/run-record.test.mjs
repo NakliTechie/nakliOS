@@ -825,6 +825,38 @@ await test('F1: the request-reconstruction invariant detects drift, and never th
   eq(reply2.content, 'ok', 'and the run CONTINUES — detection must not kill it');
 });
 
+await test('F7 x F1: a NUDGED run still reconstructs from its chain — the loop\'s own user turn is recorded', async () => {
+  const rec = createRunRecorder({ app: 'anvil', principal: 'p' });
+  const msgs = [{ role: 'system', content: 'sys' }, { role: 'user', content: 'go' }];
+  await rec.start({ messages: msgs });
+  const seen = [];
+  let sent = null;
+  const infer = rec.wrapInfer(async ({ messages }) => { sent = messages; return { content: '', toolCalls: [{ id: 'c', function: { name: 'shell', arguments: '{"command":"pwd"}' } }] }; },
+    { onDivergence: (d) => seen.push(d) });
+  const r = await runAgentLoop({
+    messages: msgs, tools: [shellTool()], infer,
+    executeTool: async () => 'Refused: nope',
+    onEvent: rec.onEvent, maxSteps: 4,
+  });
+  await rec.finish(r); await rec.settled();
+
+  // the nudge really happened, and it is ON THE CHAIN
+  const nudges = rec.events().filter((e) => e.tool === 'run.nudged');
+  eq(nudges.length, 1, 'the repeat nudge was recorded as an event, not only pushed into the array');
+  const folded = foldTranscript(rec.events(), rec.resolve);
+  const note = folded.filter((m) => m.role === 'user' && /^\[coordination\] You have issued/.test(m.content));
+  eq(note.length, 1, `the fold reproduces the nudge: ${JSON.stringify(folded.map(m => m.role))}`);
+  assert(/refused/i.test(note[0].content), 'a run whose every result was a refusal is nudged in the denied wording');
+
+  // and the invariant F1 exists to protect holds across it
+  eq(seen.length, 0, `no divergence was raised on a nudged run: ${JSON.stringify(seen)}`);
+  const chk = reconstructionCheck(sent, rec.events(), rec.resolve);
+  eq(chk.ok, true, `the LAST request sent still equals the fold: ${chk.why} at ${chk.at}`);
+  // the control: drop the nudge event and the same request no longer reconstructs
+  const without = rec.events().filter((e) => e.tool !== 'run.nudged');
+  eq(reconstructionCheck(sent, without, rec.resolve).ok, false, 'without the recorded nudge the request does NOT reconstruct — which is why it must be recorded');
+});
+
 await test('F4: compaction is a LOGGED surface replace — the sent transcript is derivable', async () => {
   const rec = createRunRecorder({ app: 'anvil', principal: 'p' });
   // the system message is stripped by foldTranscript; three user turns survive

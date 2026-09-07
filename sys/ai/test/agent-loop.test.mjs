@@ -13,13 +13,18 @@ import { buildRigRegistry } from '../../rig/registry/index.mjs';
 import { createGrant, createOpLog, createAgentFace } from '../../rig/agent/index.mjs';
 import { createShell } from '../../rig/cli/shell.mjs';
 import { runAgentLoop, shellTool, makeShellExecutor, taskDoneTool,
-  estimateTokens, boundedText, interceptBashCommand } from '../agent-loop.mjs';
+  estimateTokens, boundedText, interceptBashCommand,
+  REPEAT_NUDGE_AT, repeatNudge, stepSignature,
+  usageInputTokens, usageOutputTokens } from '../agent-loop.mjs';
 
 let passed = 0;
 const failures = [];
 async function test(name, fn) {
   try { await fn(); passed++; }
   catch (e) { failures.push({ name, message: e.message }); }
+}
+function deepEq(a, b, msg) {
+  if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${msg || 'not equal'}: ${JSON.stringify(a)} !== ${JSON.stringify(b)}`);
 }
 function eq(a, b, msg) {
   if (a !== b) throw new Error(`${msg || 'not equal'}: ${JSON.stringify(a)} !== ${JSON.stringify(b)}`);
@@ -154,17 +159,110 @@ await test('assistant tool-call turns carry null content + tool_calls, paired by
   eq(toolMsg.tool_call_id, 'x1', 'tool result references the call id');
 });
 
-await test('no-progress guard stops a model repeating the identical call', async () => {
+await test('a repeating model is NUDGED, escalating, and the run is never killed for it (F7)', async () => {
   const shell = freshShell();
+  const events = [];
   const result = await runAgentLoop({
     messages: [{ role: 'user', content: 'go' }],
     tools: [shellTool()],
     infer: scriptedInfer([{ content: '', toolCalls: [call('shell', { command: 'pwd' }, 'r')] }]), // same forever
     executeTool: makeShellExecutor(shell),
-    maxSteps: 50,
+    onEvent: (e) => events.push(e),
+    maxSteps: 10,
   });
-  eq(result.stop, 'no-progress', 'stuck loop caught');
-  assert(result.steps < 10, `bailed early, not at maxSteps: ${result.steps}`);
+  // the old behaviour — killing the run at the second identical call — is gone
+  assert(result.stop !== 'no-progress', `the run was killed for repeating: ${result.stop}`);
+  eq(result.stop, 'max-steps', 'the run ran to its own bound instead');
+  eq(result.steps, 10, 'every step was used — the nudge never stops the loop');
+
+  const nudges = events.filter((e) => e.type === 'repeat-nudge');
+  deepEq(nudges.map((n) => n.times), REPEAT_NUDGE_AT.slice(), `nudged at ${REPEAT_NUDGE_AT.join('/')}, once each: ${JSON.stringify(nudges.map(n => n.times))}`);
+  assert(!events.some((e) => e.type === 'no-progress'), 'the no-progress event is gone with the stop');
+
+  const notes = result.messages.filter((m) => m.role === 'user' && /^\[coordination\]/.test(m.content));
+  eq(notes.length, 3, `three nudges reached the transcript: ${notes.length}`);
+  for (const n of notes) assert(/pwd/.test(n.content), `the nudge names the repeated call: ${n.content}`);
+  // escalation is real: the last one asks for a stop, the first only asks to step back
+  assert(/Step back/.test(notes[0].content), `first nudge is gentle: ${notes[0].content}`);
+  assert(/Stop repeating it/.test(notes[2].content), `last nudge is blunt: ${notes[2].content}`);
+  assert(notes[0].content !== notes[1].content && notes[1].content !== notes[2].content, 'the three nudges differ — escalation, not repetition');
+  // every assistant tool-call turn is still immediately followed by its tool result
+  for (let i = 0; i < result.messages.length; i++) {
+    const m = result.messages[i];
+    if (m.role === 'assistant' && m.tool_calls?.length) {
+      eq(result.messages[i + 1]?.role, 'tool', `a nudge was inserted between a tool call and its result at ${i}`);
+    }
+  }
+});
+
+await test('the repeat chain keys on the CANONICAL call, and a denied call is nudged in stronger terms (F7)', async () => {
+  // same call, keys emitted in a different order each turn — a raw-string compare calls this progress
+  const flip = [
+    { content: '', toolCalls: [{ id: 'a', function: { name: 'shell', arguments: '{"command":"pwd","cwd":"/"}' } }] },
+    { content: '', toolCalls: [{ id: 'a', function: { name: 'shell', arguments: '{"cwd":"/","command":"pwd"}' } }] },
+  ];
+  let i = 0;
+  const events = [];
+  await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }],
+    tools: [shellTool()],
+    infer: async () => flip[i++ % 2],
+    executeTool: async () => 'Refused: the skills directory is managed by skill_manage.',
+    onEvent: (e) => events.push(e),
+    maxSteps: 4,
+  });
+  const n = events.find((e) => e.type === 'repeat-nudge');
+  assert(n, 'reordered arguments are recognised as the same call');
+  eq(n.times, 3, 'the chain counted through the reordering');
+  assert(n.denied === true, 'a turn whose every result was a refusal is marked denied');
+  const note = repeatNudge(3, flip[0].toolCalls, { denied: true });
+  assert(/refused/i.test(note), `the denied nudge says so: ${note}`);
+  assert(!/refused/i.test(repeatNudge(3, flip[0].toolCalls, { denied: false })), 'an undenied nudge does not claim a refusal');
+});
+
+await test('a user interjection resets the repeat chain, and a nudge never counts as one (F7)', async () => {
+  const events = [];
+  let step = 0;
+  await runAgentLoop({
+    // the caller appends an owner turn after two identical calls; the count restarts from it
+    messages: [{ role: 'user', content: 'go' }],
+    tools: [shellTool()],
+    infer: async ({ messages }) => {
+      step++;
+      // after the 3rd identical call the OWNER speaks — simulated by appending to the array
+      // the loop is building, which is exactly what a host interjection would do. Without it
+      // the 4 steps below would reach an unbroken run of 3 and nudge (the control proves it).
+      if (step === 3) messages.push({ role: 'user', content: 'actually, do it the other way' });
+      return { content: '', toolCalls: [call('shell', { command: 'pwd' }, 'r')] };
+    },
+    executeTool: async () => 'ok',
+    onEvent: (e) => events.push(e),
+    maxSteps: 4,
+  });
+  const nudges = events.filter((e) => e.type === 'repeat-nudge');
+  eq(nudges.length, 0, `the interjection reset the chain, so 4 identical calls did not reach 3 unbroken: ${JSON.stringify(nudges)}`);
+  // and the control: the SAME run with no interjection does nudge
+  const ctlEvents = [];
+  await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }],
+    tools: [shellTool()],
+    infer: async () => ({ content: '', toolCalls: [call('shell', { command: 'pwd' }, 'r')] }),
+    executeTool: async () => 'ok',
+    onEvent: (e) => ctlEvents.push(e),
+    maxSteps: 4,
+  });
+  eq(ctlEvents.filter((e) => e.type === 'repeat-nudge').length, 1, 'control: without the interjection the chain reaches 3 and nudges');
+});
+
+await test('the nudge preview is bounded, but detection is not (F7)', () => {
+  const long = 'x'.repeat(5000);
+  const c = [{ function: { name: 'write', arguments: JSON.stringify({ path: 'a', text: long }) } }];
+  const note = repeatNudge(3, c);
+  assert(note.length < 700, `the model-visible preview is capped: ${note.length} chars`);
+  assert(/\+\d+ chars/.test(note), `the elision is honest about how much it dropped: ${note}`);
+  // two calls that differ only PAST the cap are still different calls to the detector
+  const d = [{ function: { name: 'write', arguments: JSON.stringify({ path: 'a', text: long + 'DIFFERENT' }) } }];
+  assert(stepSignature(c) !== stepSignature(d), 'detection keys on the full string, not the preview');
 });
 
 await test('max-steps bounds a model that keeps calling distinct tools', async () => {
@@ -490,6 +588,81 @@ await test('aborting mid-run stops at the next turn boundary', async () => {
   });
   eq(result.stop, 'aborted', 'stopped after the aborting turn');
   assert(inferCalls <= 2, 'did not keep looping after abort');
+});
+
+// ─────────────────────────── usage-anchored token accounting (F6) ──
+
+await test('usageInputTokens reads both provider shapes, and never double-counts the cache (F6)', () => {
+  // Anthropic: input_tokens EXCLUDES the cache, so the three add up
+  eq(usageInputTokens({ input_tokens: 100, cache_read_input_tokens: 900, cache_creation_input_tokens: 50 }), 1050, 'anthropic sums');
+  eq(usageInputTokens({ input_tokens: 100 }), 100, 'anthropic without cache fields');
+  // OpenAI: prompt_tokens INCLUDES the cached part — adding cached_tokens would double it
+  eq(usageInputTokens({ prompt_tokens: 1000, prompt_tokens_details: { cached_tokens: 900 } }), 1000, 'openai does not add its cached subset');
+  eq(usageOutputTokens({ output_tokens: 12 }), 12, 'anthropic output');
+  eq(usageOutputTokens({ completion_tokens: 12 }), 12, 'openai output');
+  // absent / malformed → null, so the caller falls back to the estimate instead of anchoring on 0
+  for (const bad of [null, undefined, {}, { input_tokens: -1 }, { prompt_tokens: 'lots' }, 'usage']) {
+    eq(usageInputTokens(bad), null, `no usable count: ${JSON.stringify(bad)}`);
+  }
+  eq(usageOutputTokens({}), null, 'no output count');
+});
+
+await test('the token budget trips on the PROVIDER count, not chars/4 (F6)', async () => {
+  // A short transcript the estimator scores at ~10 tokens, which the provider says cost 5000
+  // (a big system prompt and tool schemas the estimator never sees). Anchored, the budget trips.
+  const events = [];
+  const withUsage = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }],
+    tools: [shellTool()],
+    infer: async () => ({ content: 'thinking', toolCalls: [call('shell', { command: 'pwd' }, 'u')], usage: { input_tokens: 5000, output_tokens: 10 } }),
+    executeTool: async () => 'ok',
+    onEvent: (e) => events.push(e),
+    budget: { tokens: 1000 },
+    maxSteps: 6,
+  });
+  eq(withUsage.stop, 'budget', 'the run stopped on the budget');
+  eq(withUsage.budgetAxis, 'tokens', 'on the tokens axis');
+  assert(withUsage.steps <= 2, `it stopped as soon as the provider count was known: ${withUsage.steps} steps`);
+  const u = events.find((e) => e.type === 'usage');
+  assert(u && u.input === 5000, `the anchor is surfaced: ${JSON.stringify(u)}`);
+
+  // the CONTROL: the identical run with no usage reported never trips — proving the stop
+  // came from the provider's number and not from the transcript's size
+  const noUsage = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }],
+    tools: [shellTool()],
+    infer: async () => ({ content: 'thinking', toolCalls: [call('shell', { command: 'pwd' }, 'u')] }),
+    executeTool: async () => 'ok',
+    budget: { tokens: 1000 },
+    maxSteps: 6,
+  });
+  assert(noUsage.stop !== 'budget', `without usage the same run does not trip: ${noUsage.stop}`);
+});
+
+await test('the anchor counts only the delta since the reported request (F6)', async () => {
+  // provider says 400; the loop then appends a large tool result. The count must be
+  // 400 + (the tail), not 400 alone and not the whole transcript re-estimated.
+  const big = 'y'.repeat(4000); // ~1000 estimated tokens
+  const r = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }],
+    tools: [shellTool()],
+    infer: async () => ({ content: '', toolCalls: [call('shell', { command: 'pwd' }, 'u')], usage: { prompt_tokens: 400 } }),
+    executeTool: async () => big,
+    budget: { tokens: 1200 },   // 400 anchor + ~1000 tail trips; 400 alone would not
+    maxSteps: 6,
+  });
+  eq(r.stop, 'budget', `the tail is counted on top of the anchor: ${r.stop}`);
+  eq(r.budgetAxis, 'tokens', 'tokens axis');
+  // and the anchor does not double the prefix: a generous budget survives its steps
+  const survives = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }],
+    tools: [shellTool()],
+    infer: async () => ({ content: '', toolCalls: [call('shell', { command: 'pwd' }, 'u')], usage: { prompt_tokens: 400 } }),
+    executeTool: async () => big,
+    budget: { tokens: 100000 },
+    maxSteps: 3,
+  });
+  eq(survives.stop, 'max-steps', `a generous budget is not tripped by re-counting the prefix: ${survives.stop}`);
 });
 
 if (failures.length) {
