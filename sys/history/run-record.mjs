@@ -45,6 +45,7 @@ export const RUN_EVENTS = Object.freeze([
   'run.compacted',    // input: { method, from, to, step }      output: { replacement }  (F4: a logged surface replace)
   'run.nudged',       // input: { step, times, denied }         output: { content }  (F7: the loop's own escalating reminder)
   'tool.spilled',     // input: { id, name, step, chars }       output: { sent }  (F5: the capped form the model actually saw)
+  'subagent.ran',     // input: { kind, label, step, tool_call_id } output: { record, stop, steps, text }
 ]);
 
 // The loop's onEvent types this recorder understands. 'done' and the pre-stop
@@ -198,6 +199,34 @@ export function createRunRecorder({ app = 'anvil', principal = 'local', grant_id
       }));
     },
     checkpoint(handoff) { const s = step; return enqueue('run.checkpoint', () => ({ input: { step: s }, output: { handoff: String(handoff ?? '') } })); },
+
+    // A subagent's whole run, on the parent's chain (crib #1, 2026-09-07).
+    //
+    // Before this, `task` / `dispatch` / `review` called runAgentLoop with no recorder at all:
+    // a dispatch of two workers left the parent chain holding two llm.responded (the
+    // supervisor's) and one tool.called, with the workers' model calls and writes ABSENT.
+    // Every invariant built on "a run is a fold over the ledger" — F1's reconstruction, F2's
+    // keyless replay, the tamper-evident chain — therefore covered the supervisor only, and
+    // stopped holding the moment Anvil fanned out.
+    //
+    // The child gets its OWN chain, referenced here, rather than interleaving into this one.
+    // Two reasons, both load-bearing: interleaving would put turns the parent never saw into
+    // foldTranscript and break F1 immediately; and `dispatch` runs up to four workers
+    // concurrently, so interleaved appends would order nondeterministically and break replay.
+    // One event per subagent, appended in task order after the fan-in, keeps the parent chain
+    // deterministic and each child independently verifiable.
+    subagent({ kind, label, dump, stop, steps, text, tool_call_id }) {
+      const s = step;
+      return enqueue('subagent.ran', () => ({
+        input: { kind: String(kind || 'task'), label: String(label || ''), step: s, tool_call_id: tool_call_id ?? null },
+        output: {
+          record: dump ?? null,
+          stop: String(stop || 'unknown'),
+          steps: Number(steps) || 0,
+          text: String(text ?? ''),
+        },
+      }));
+    },
     async settled() { await queue; },
     events() { return events.slice(); },
     head() { return head; },
@@ -444,6 +473,47 @@ export function replayExecuteTool(record, { strict = true, live = null } = {}) {
   };
   exec.assertConsumed = () => assertConsumed(exec, 'tool results');
   return exec;
+}
+
+// The subagent runs on this chain, each as a loadable record (crib #1).
+// `record` is a child's own export dump, so `loadRecord(entry.dump)` gives a full recorder-shaped
+// object: its own events, its own folds, its own verifiable chain. That is what makes a
+// multi-agent run auditable — the supervisor's digest is a claim, and this is the evidence.
+export function foldSubagents(events, resolve) {
+  const out = [];
+  for (const e of joined(events, resolve)) {
+    if (e.tool !== 'subagent.ran') continue;
+    const inp = e.input || {}, o = e.output || {};
+    out.push({
+      kind: inp.kind || 'task',
+      label: inp.label || '',
+      step: inp.step ?? null,
+      tool_call_id: inp.tool_call_id ?? null,
+      stop: o.stop || 'unknown',
+      steps: Number(o.steps) || 0,
+      text: String(o.text ?? ''),
+      dump: o.record ?? null,
+      record: o.record ? loadRecord(o.record) : null,
+    });
+  }
+  return out;
+}
+
+// Every subagent chain on this record verifies, and each one's own stop matches what the parent
+// recorded about it. Returns { ok, checked, bad:[{label, why}] }. A child chain that does not
+// verify is exactly as serious as a parent one that does not.
+export async function verifySubagents(events, resolve) {
+  const kids = foldSubagents(events, resolve);
+  const bad = [];
+  for (const k of kids) {
+    if (!k.record) { bad.push({ label: k.label, why: 'no record stored' }); continue; }
+    const v = await verifyChain(k.record.events());
+    if (!v.ok) { bad.push({ label: k.label, why: `chain broken at ${v.brokenAt}` }); continue; }
+    const stopped = joined(k.record.events(), k.record.resolve).find((e) => e.tool === 'run.stopped');
+    const childStop = stopped?.output?.stop ?? null;
+    if (childStop && childStop !== k.stop) bad.push({ label: k.label, why: `parent recorded stop '${k.stop}', the child's own record says '${childStop}'` });
+  }
+  return { ok: bad.length === 0, checked: kids.length, bad };
 }
 
 // A `verify` that serves the recorded verdicts in order — no gate command is ever run (F2).

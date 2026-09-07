@@ -1597,7 +1597,13 @@
         },
       };
     }
-    const baseExec = makeToolExecutor({ shell, face, mode, infer: inferViaHost, spawnIsolated });
+    // Crib #1: a subagent's whole run lands on THIS run's chain, as one `subagent.ran` event
+    // carrying the child's own record. Without it a dispatch left the chain holding the
+    // supervisor's turns and a digest, with the workers' model calls and writes absent — so the
+    // substrate's own guarantees stopped at the fan-out. `runCtx.rec` is this run's recorder; a
+    // tool call made outside a run (there are none today) simply records nothing.
+    const baseExec = makeToolExecutor({ shell, face, mode, infer: inferViaHost, spawnIsolated,
+      recordSubagent: async (sub)=>{ try{ if(runCtx && runCtx.rec) await runCtx.rec.subagent(sub); }catch(_){} } });
     const skillMap = {};
     const skillStatus={}; // name -> lifecycle status: a staged/quarantined skill is never served or listed // skill name -> SKILL.md path, populated below
     const factMap = {};  // memory-fact name -> .md path, populated below

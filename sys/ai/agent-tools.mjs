@@ -24,6 +24,7 @@ import {
   SUBAGENT_SYSTEM, REVIEW_SYSTEM, SUBAGENT_MAX_STEPS,
 } from './subagents.mjs';
 import { renderHashline, applyHashlineBlock, parseHashlineEdit } from './hashline.mjs';
+import { createRunRecorder } from '../history/run-record.mjs';
 
 const READ_MAX_LINES = 2000;
 const READ_MAX_BYTES = 50_000;
@@ -396,10 +397,45 @@ export function parseApplyPatch(patch) {
 }
 
 // ── the executor ────────────────────────────────────────────────────────
-export function makeToolExecutor({ shell, face, mode = 'code', infer = null, subagentDepth = 0, spawnIsolated = null }) {
+// `recordSubagent` is the seam that puts a subagent's whole run on the parent's chain (crib #1,
+// 2026-09-07). Without it, `task` / `dispatch` / `review` ran a full agent loop that the
+// substrate never saw: the parent chain held the supervisor's turns and a tool result, and the
+// workers' model calls and file writes were absent — so F1's reconstruction, F2's keyless replay
+// and the tamper-evident chain all covered the supervisor only. It is OPTIONAL: absent, the
+// behaviour is exactly as before, because a subagent must still run where no recorder exists
+// (the ablation harness, the conformance fixtures, a caller that only wants the text).
+export function makeToolExecutor({ shell, face, mode = 'code', infer = null, subagentDepth = 0, spawnIsolated = null, recordSubagent = null }) {
   if (!face) throw new Error('makeToolExecutor requires a Rig agent face');
   const modeAllow = MODE_TOOLS[mode] || null; // null = all tools
   const subagentsOn = typeof infer === 'function' && subagentDepth < 1; // depth cap 1 (no recursion)
+
+  // Run one subagent loop on its OWN chain and hand the dump to the parent. The child gets a
+  // separate recorder rather than the parent's onEvent for two load-bearing reasons: interleaved
+  // turns would enter the parent's foldTranscript — turns the parent never saw — and break F1;
+  // and `dispatch` runs up to four workers concurrently, so interleaved appends would order
+  // nondeterministically and break replay. Recording is best-effort: a recorder that throws must
+  // not fail a subagent that did its work.
+  async function runRecorded({ kind, label, tool_call_id, messages, tools, executeTool, maxSteps }) {
+    if (!recordSubagent) return runAgentLoop({ messages, tools, infer, executeTool, maxSteps });
+    let rec = null;
+    try {
+      rec = createRunRecorder({ app: 'anvil', principal: `subagent:${kind}` });
+      await rec.start({ messages, tools });
+    } catch (_) { rec = null; }
+    const res = await runAgentLoop({
+      messages, tools, maxSteps, executeTool,
+      infer: rec ? rec.wrapInfer(infer) : infer,
+      onEvent: rec ? rec.onEvent : undefined,
+    });
+    if (rec) {
+      try {
+        await rec.finish(res);
+        await rec.settled();
+        await recordSubagent({ kind, label, tool_call_id, dump: rec.export(), stop: res.stop, steps: res.steps, text: res.text || '' });
+      } catch (_) { /* the work happened; failing to record it must not undo it */ }
+    }
+    return res;
+  }
   // The supervisor tools (dispatch/review) need an isolation factory from the app
   // (a fresh executor over a copy-on-write overlay). Only at the top level — a
   // subagent can't itself fan out (depth cap 1).
@@ -449,7 +485,10 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
     return head + `\n… (${label} truncated: ${lines.length} lines / ${s.length} bytes. Full output saved to ${path} — read it with offset/limit.)`;
   }
 
-  return async function executeTool(name, args) {
+  // `call` is the raw tool-call object the loop pairs results to — agent-loop.mjs passes it as a
+  // third argument (`executeTool(name, parsed.value, call)`), and Anvil forwards it too. It is
+  // taken here so a recorded subagent can name the tool call that spawned it.
+  return async function executeTool(name, args, call = null) {
     try {
       // Mode gate (defense-in-depth even if the model calls a hidden tool).
       if (modeAllow && !modeAllow.has(name)) {
@@ -586,13 +625,15 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
       if (name === 'task') {
         if (!subagentsOn) return 'Error: subagents are not available here.';
         const child = makeToolExecutor({ shell, face, mode: 'code', infer, subagentDepth: subagentDepth + 1 });
-        const res = await runAgentLoop({
+        const res = await runRecorded({
+          kind: 'task',
+          label: String(args?.description || args?.prompt || '').slice(0, 60),
+          tool_call_id: call?.id ?? null,
           messages: [
             { role: 'system', content: 'You are a subagent with tools: read, write, edit, apply_patch, todowrite, shell. Do the task over the shared workspace, then return a concise result (what you found or changed).' },
             { role: 'user', content: String(args?.prompt ?? '') },
           ],
           tools: codingToolset('code'), // subagents don't nest (depth cap)
-          infer,
           executeTool: child,
           maxSteps: 16,
         });
@@ -612,13 +653,15 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
           try { iso = await spawnIsolated(); }
           catch (e) { return { label: t.label, ok: false, stop: 'spawn-failed', text: `Failed to start subagent: ${String(e && e.message || e)}`, changes: { written: [], deleted: [] }, iso: null }; }
           try {
-            const res = await runAgentLoop({
+            const res = await runRecorded({
+              kind: 'dispatch',
+              label: t.label || t.prompt.slice(0, 60),
+              tool_call_id: call?.id ?? null,
               messages: [
                 { role: 'system', content: SUBAGENT_SYSTEM },
                 { role: 'user', content: t.prompt },
               ],
               tools: codingToolset('code'), // full tools, isolated; no nesting (depth cap)
-              infer,
               executeTool: iso.executor,
               maxSteps: SUBAGENT_MAX_STEPS,
             });
@@ -649,13 +692,15 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
         catch (e) { return `Failed to start reviewer: ${String(e && e.message || e)}`; }
         // Reviewer is inspect-only (read/read_lines/shell/todo). It runs in an
         // isolated overlay and its changeset is DISCARDED — a reviewer never writes.
-        const res = await runAgentLoop({
+        const res = await runRecorded({
+          kind: 'review',
+          label: prompt.slice(0, 60),
+          tool_call_id: call?.id ?? null,
           messages: [
             { role: 'system', content: REVIEW_SYSTEM },
             { role: 'user', content: prompt },
           ],
           tools: [readTool(), readLinesTool(), shellTool(), todoTool()],
-          infer,
           executeTool: iso.executor,
           maxSteps: SUBAGENT_MAX_STEPS,
         });

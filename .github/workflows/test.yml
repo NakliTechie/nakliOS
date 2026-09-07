@@ -81,6 +81,12 @@ jobs:
       - name: Replay the recorded-run corpus keyless (real runs, zero model calls)
         run: node sys/history/test/replay-corpus.test.mjs
 
+      - name: Verify a subagent's run lands on the parent's chain (multi-agent auditability)
+        run: node sys/history/test/subagent-chain.test.mjs
+
+      - name: Verify search-cost instrumentation changes no search result
+        run: node sys/rig/fileops/test/search-cost.test.mjs
+
       - name: Verify .anvil/skills is readable and UNWRITABLE from every agent route (grant-enforced)
         run: node sys/ai/test/skills-fence.test.mjs
 
