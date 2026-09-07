@@ -293,7 +293,7 @@ export function foldLog(events, resolve) {
 // The OpenAI-shaped transcript after the system prefix — what the next run is
 // handed. Derived, so it can never drift from what happened: every tool reply is
 // paired with the assistant turn that called it, by construction.
-export function foldTranscript(events, resolve) {
+export function foldTranscript(events, resolve, { applyCompaction = false } = {}) {
   const out = [];
   let pendingCalls = null;
   const flushAssistant = () => {
@@ -345,6 +345,21 @@ export function foldTranscript(events, resolve) {
       // F7: the reminder is replayed verbatim from the record, not regenerated — the wording
       // may change between versions, and the surface must be what THAT run actually sent.
       case 'run.nudged': if (o.content) out.push({ role: 'user', content: String(o.content) }); break;
+      // F4, and only for foldSurface: a compaction replaces a span of the surface AS IT STOOD
+      // AT THIS POINT in the run. Applying every compaction after the whole transcript was
+      // folded gave the wrong answer whenever one was interleaved with later turns — the span
+      // then indexed a surface that did not exist yet (found by a cross-family review, which
+      // reproduced a duplicated message and a replacement overwriting a future reply).
+      // foldTranscript itself ignores this verb: the RAW transcript still shows the originals.
+      case 'run.compacted': {
+        if (!applyCompaction) break;
+        if (!o || !Array.isArray(o.replacement)) break; // an orphan leaves the surface alone
+        flushAssistant();
+        const { from = 0, to = 0 } = inp;
+        if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < from || to > out.length) break;
+        out.splice(from, to - from, ...o.replacement);
+        break;
+      }
     }
   }
   // An assistant turn whose tool replies never arrived is malformed as the next
@@ -961,18 +976,7 @@ export function reconstructionCheck(sent, events, resolve) {
 // out-of-range span is ignored rather than throwing, because a fold must never be the thing that
 // breaks a run.
 export function foldSurface(events, resolve) {
-  let surface = foldTranscript(events, resolve);
-  for (const e of joined(events, resolve)) {
-    if (e.tool !== 'run.compacted') continue;
-    const { from = 0, to = 0 } = e.input || {};
-    // An orphan (no replacement recorded) is SKIPPED, not applied as an empty span: a
-    // compaction that never finished must leave the surface alone rather than delete it.
-    if (!e.output || !Array.isArray(e.output.replacement)) continue;
-    const replacement = e.output.replacement;
-    if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < from || to > surface.length) continue;
-    surface = [...surface.slice(0, from), ...replacement, ...surface.slice(to)];
-  }
-  return surface;
+  return foldTranscript(events, resolve, { applyCompaction: true });
 }
 
 // Was a compaction started and never finished? A crash mid-compaction leaves the surface

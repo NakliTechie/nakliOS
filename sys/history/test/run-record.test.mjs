@@ -982,6 +982,32 @@ await test('F4: compaction is a LOGGED surface replace — the sent transcript i
   eq(compactionOrphaned(orphan.events(), orphan.resolve), true,
     'a compaction with no recorded replacement IS an orphan — a crash mid-compaction must not read as finished');
   eq(compactionOrphaned(rec.events(), rec.resolve), false, 'and a completed one still is not');
+
+  // (4) INTERLEAVED with later turns. A compaction's span indexes the surface AS IT STOOD when
+  // that compaction ran. Applying every compaction after the whole transcript was folded gave
+  // the wrong answer here — the checker reproduced ["summary","summary","next"] for this exact
+  // shape, and a second case where an out-of-range span later overwrote a future reply.
+  const inter = createRunRecorder({ app: 'anvil', principal: 'p' });
+  await inter.start({ messages: [{ role: 'user', content: 'one' }, { role: 'user', content: 'two' }] });
+  await inter.compacted({ method: 'summarize', from: 0, to: 2, replacement: [{ role: 'user', content: 'summary' }] });
+  await inter.start({ messages: [{ role: 'user', content: 'summary' }, { role: 'user', content: 'next' }] });
+  await inter.settled();
+  deepEq(foldSurface(inter.events(), inter.resolve).map((m) => m.content), ['summary', 'next'],
+    'a compaction followed by more turns replays to the surface that was actually sent');
+  // the raw transcript is unchanged by any of it — foldTranscript ignores the verb by design
+  deepEq(foldTranscript(inter.events(), inter.resolve).map((m) => m.content), ['one', 'two', 'summary', 'next'],
+    'the originals stay readable: the compaction SHADOWS, it does not rewrite');
+
+  // and a span that was valid when recorded but points past a LATER surface is still ignored,
+  // never applied to messages that did not exist when the compaction ran
+  const stale = createRunRecorder({ app: 'anvil', principal: 'p' });
+  await stale.start({ messages: [{ role: 'user', content: 'only' }] });
+  await stale.compacted({ method: 'shake', from: 1, to: 2, replacement: [{ role: 'user', content: 'GHOST' }] });
+  await stale.start({ messages: [{ role: 'user', content: 'only' }, { role: 'assistant', content: 'later reply' }] });
+  await stale.settled();
+  const staleSurface = foldSurface(stale.events(), stale.resolve).map((m) => m.content);
+  assert(!staleSurface.includes('GHOST'), `an impossible span overwrote a later message: ${JSON.stringify(staleSurface)}`);
+  deepEq(staleSurface, ['only', 'later reply'], 'the later turn survives untouched');
 });
 
 if (failures.length) { console.error(`history/run-record: ${passed} passed, ${failures.length} FAILED`); for (const f of failures) console.error(`  FAIL ${f.n}: ${f.message}`); process.exit(1); }
