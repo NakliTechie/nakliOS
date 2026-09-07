@@ -6224,12 +6224,26 @@ async function aiGenerateEndpoint(request){
         max_tokens:request.maxTokens,
         stream:true,
       };
-  const response = await fetch(aiEndpointChatUrl(request.model.baseUrl), {
+  // Ask the provider to report what the request actually cost. Without this a streamed
+  // response carries no usage at all, and the agent's own chars/4 estimate stands in for it —
+  // measured live on 2026-09-07 at 1,319 estimated vs 3,903 real tokens against a 4,096
+  // window, i.e. a run at 95% of its context believing it was a third full.
+  // `stream_options` is OpenAI-standard, but not every local server accepts an unknown field,
+  // so a rejected request is retried once WITHOUT it rather than turning a working endpoint
+  // into a broken one.
+  const wantsUsage = body.stream === true;
+  if (wantsUsage) body.stream_options = { include_usage:true };
+  const post = (b) => fetch(aiEndpointChatUrl(request.model.baseUrl), {
     method:'POST',
     headers:aiEndpointHeaders(request.model),
     signal:controller.signal,
-    body:JSON.stringify(body),
+    body:JSON.stringify(b),
   });
+  let response = await post(body);
+  if (!response.ok && wantsUsage && (response.status === 400 || response.status === 422)) {
+    const { stream_options, ...withoutUsage } = body;
+    response = await post(withoutUsage);
+  }
   if (!response.ok) throw new Error(await aiReadEndpointError(response));
 
   const contentType = response.headers.get('content-type') || '';
@@ -6243,6 +6257,7 @@ async function aiGenerateEndpoint(request){
     }
     if (typeof text === 'string' && text) aiEmit(request, { event:'token', token:text });
     if (toolAcc) request.toolCalls = toolAcc.finalize();
+    if (data?.usage) request.usage = data.usage;
     return data?.choices?.[0]?.finish_reason ||
       (request.toolCalls?.length ? 'tool_calls' : 'stop');
   }
@@ -6271,6 +6286,8 @@ async function aiGenerateEndpoint(request){
       }
       if (toolAcc) toolAcc.absorbDelta(choice?.delta);
       if (choice?.finish_reason) finishReason = choice.finish_reason;
+      // the usage chunk carries no choice at all — read it off the frame, not off `choice`
+      if (data?.usage) request.usage = data.usage;
     }
   }
   if (toolAcc) request.toolCalls = toolAcc.finalize();
@@ -6375,6 +6392,9 @@ async function aiProcessQueue(){
         event:'done',
         finishReason:request.cancelled ? 'cancelled' : finishReason,
         ...(request.toolCalls?.length ? { toolCalls:request.toolCalls } : {}),
+        // The provider's own token count. The app's budget ends runs on this number; the
+        // estimate it replaces is a character count that cannot see tool schemas at all.
+        ...(request.usage ? { usage:request.usage } : {}),
       });
     }
   } catch (error){

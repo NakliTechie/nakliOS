@@ -133,7 +133,12 @@ assert.match(anvil, /t\.recovery = recoveryNote\(foldRecovery\(recEvents, rec\.r
 assert.match(anvil, /const recoveryPreface = \(t\.recovery/, 'the next run is prefaced with the recovery note');
 // F3 moved it out of the system prefix (which is the cache boundary) into the change-gated
 // context message that rides at the END of the conversation — still additive, never a replace.
-assert.match(anvil, /const volatileCtx = \(projectContext\+memoryIndex\+skillsIndex\+recoveryPreface\)\.trim\(\)/, 'the recovery note rides with the other volatile context');
+// The indexes are change-gated; the recovery note is per-run, so it rides as its own message —
+// bundling it into the gated block made the digest differ every run and the gate never engaged
+// (live check 2026-09-07).
+assert.match(anvil, /const volatileCtx = \(projectContext\+memoryIndex\+skillsIndex\)\.trim\(\)/, 'only the indexes are change-gated');
+assert.ok(!/volatileCtx = \([^)]*recoveryPreface/.test(anvil), 'the per-run recovery note is NOT inside the gated block');
+assert.match(anvil, /const recoveryMsg = recoveryPreface\.trim\(\);\s*\n\s*if\(recoveryMsg\) convo\.push\(\{role:'user', content:'\[coordination\] '\+recoveryMsg\}\)/, 'the recovery note is still delivered, as its own tagged message');
 assert.match(anvil, /firstMessages=\[sysMsg\(gateNote\), \.\.\.convo\]/, 'the carried transcript is still what follows the system message');
 assert.ok(!/sysMsg\(gateNote\+recoveryPreface\)/.test(anvil), 'the volatile note is OUT of the cache prefix');
 // and the prefix itself carries only stable text — one volatile index in it invalidates everything

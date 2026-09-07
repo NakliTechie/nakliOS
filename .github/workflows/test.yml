@@ -75,6 +75,9 @@ jobs:
       - name: Verify the prompt's cache prefix is stable and the tool list does not depend on the store
         run: node scripts/test-anvil-prompt-cache.mjs
 
+      - name: Verify the provider's token count survives endpoint to host to SDK to app
+        run: node scripts/test-host-usage.mjs
+
       - name: Verify .anvil/skills is readable and UNWRITABLE from every agent route (grant-enforced)
         run: node sys/ai/test/skills-fence.test.mjs
 
