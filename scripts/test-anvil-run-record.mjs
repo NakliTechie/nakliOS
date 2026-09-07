@@ -131,7 +131,16 @@ assert.match(anvil, /t\.log stays a written array/, 'the code is honest: t.log i
 // record (foldRecovery), and it rides beside the carried transcript — additive, not a replace.
 assert.match(anvil, /t\.recovery = recoveryNote\(foldRecovery\(recEvents, rec\.resolve\)\)/, 'the recovery note is a pure fold of this run\'s record, stashed for the next run');
 assert.match(anvil, /const recoveryPreface = \(t\.recovery/, 'the next run is prefaced with the recovery note');
-assert.match(anvil, /firstMessages=\[sysMsg\(gateNote\+recoveryPreface\), \.\.\.convo\]/, 'the note rides in the system preface beside the carried transcript, not replacing it');
+// F3 moved it out of the system prefix (which is the cache boundary) into the change-gated
+// context message that rides at the END of the conversation — still additive, never a replace.
+assert.match(anvil, /const volatileCtx = \(projectContext\+memoryIndex\+skillsIndex\+recoveryPreface\)\.trim\(\)/, 'the recovery note rides with the other volatile context');
+assert.match(anvil, /firstMessages=\[sysMsg\(gateNote\), \.\.\.convo\]/, 'the carried transcript is still what follows the system message');
+assert.ok(!/sysMsg\(gateNote\+recoveryPreface\)/.test(anvil), 'the volatile note is OUT of the cache prefix');
+// and the prefix itself carries only stable text — one volatile index in it invalidates everything
+assert.match(anvil, /const sysMsg=\(extra\)=>\(\{role:'system',content:SYSTEM\+\(MODE_NOTE\[mode\]\|\|''\)\+\(mode==='code'\?LESSON_NOTE:''\)\+\(extra\|\|''\)\}\)/, 'the system message is stable text only');
+for (const volatile of ['projectContext', 'memoryIndex', 'skillsIndex']) {
+  assert.ok(!new RegExp(`content:SYSTEM\\+[^}]*${volatile}`).test(anvil), `${volatile} is back in the cache prefix`);
+}
 
 // D2 supervisor: after a loop, a record-fold (foldStagnation) catches spinning the loop's own
 // consecutive-identical guard misses, and injects ONE capped redirect — fired at most once per

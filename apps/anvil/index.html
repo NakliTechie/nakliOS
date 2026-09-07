@@ -1354,6 +1354,14 @@
   // `remember` exists) — the first remember of a project happens with an EMPTY memory index,
   // so the index header alone could never carry it. Same constant as the tool description.
   const LESSON_NOTE = ' Memory: ' + LESSON_CONTRACT;
+  // A short, stable digest of the volatile context block (F3). Only used to answer "has this
+  // changed since the last run of this task?", so it is stored on the task instead of the text
+  // itself — a 20 KB index has no business living in the saved task state. FNV-1a.
+  function ctxDigest(s){
+    let h=0x811c9dc5; const str=String(s==null?'':s);
+    for(let i=0;i<str.length;i++){ h^=str.charCodeAt(i); h=Math.imul(h,0x01000193)>>>0; }
+    return str.length+':'+(h>>>0).toString(36);
+  }
   const MODE_NOTE = { code:'', plan:' PLAN mode: read and think only — no writes/edits/shell; produce a concise plan.', ask:' ASK mode: read-only; answer the question, do not modify anything.' };
 
   let running=false;
@@ -1937,12 +1945,22 @@
     tools.push(historyTool()); // read-only: search/read past runs, every mode
     tools.push(contextRemainingTool()); // read-only: the honest budget, every mode
     if(mode==='code'){ tools.push(checkpointTool()); tools.push(learnReviewTool()); }
-    if(skillsIndex) tools.push(skillTool());
-    if(memoryIndex) tools.push(recallTool());
-    if(mode==='code' && memoryIndex) tools.push(reviseTool()); // belief revision over existing facts
+    // F3: UNCONDITIONAL. These were gated on whether the workspace already had skills or
+    // facts, so the first `remember` in a fresh workspace changed the tool SCHEMA block —
+    // the most expensive thing in the prompt to invalidate. The tools answer honestly when
+    // there is nothing yet; the schema no longer depends on the store's contents.
+    tools.push(skillTool());
+    tools.push(recallTool());
+    if(mode==='code') tools.push(reviseTool()); // belief revision over existing facts
     try{
       let toolCalls=0;
-      const sysMsg=(extra)=>({role:'system',content:SYSTEM+(MODE_NOTE[mode]||'')+(mode==='code'?LESSON_NOTE:'')+projectContext+memoryIndex+skillsIndex+(extra||'')});
+      // F3 — the system message is the CACHE PREFIX, so only stable text lives in it.
+      // It used to concatenate SYSTEM + MODE_NOTE + LESSON_NOTE + projectContext +
+      // memoryIndex + skillsIndex and be rebuilt every run, so one `remember` write or one
+      // skill status flip invalidated the whole prefix — real money on BYOK, real latency on
+      // a local model. The volatile indexes now ride in a context message placed AFTER the
+      // retained history (see contextMsg below), where a change costs only the tail.
+      const sysMsg=(extra)=>({role:'system',content:SYSTEM+(MODE_NOTE[mode]||'')+(mode==='code'?LESSON_NOTE:'')+(extra||'')});
       // A turn in flight is the longest silence in a run — on a local model it can
       // be minutes. Show a placeholder so a working agent and a wedged one are
       // distinguishable; it is replaced by whatever the turn actually produces.
@@ -1974,7 +1992,20 @@
       runCtx = { t, rec };
       const gateNote = verify?(' A verify gate is set: `'+verifyCmd+'`. You are not done until it exits 0 — call task_done when you believe the work is complete and it will run.'):'';
       const recoveryPreface = (t.recovery && String(t.recovery).trim()) ? ('\n\n'+t.recovery) : '';
-      const firstMessages=[sysMsg(gateNote+recoveryPreface), ...convo];
+      // The volatile half, change-gated: it is appended to the conversation only when it
+      // DIFFERS from what this task was last sent. Unchanged, it is already in the carried
+      // transcript, so re-sending it would buy nothing and move the cache boundary every run.
+      // Tagged [coordination] for the same reason gate feedback is: it is the machine's
+      // context, not the owner's instruction, and foldRecovery must not read it as a steer.
+      const volatileCtx = (projectContext+memoryIndex+skillsIndex+recoveryPreface).trim();
+      if(volatileCtx){
+        const key = ctxDigest(volatileCtx);
+        if(key !== t.ctxSent){
+          convo.push({role:'user', content:'[coordination] Working context for this run — project notes, the memory index, and the skills available. Not an instruction from the owner.\n\n'+volatileCtx});
+          t.ctxSent = key;
+        }
+      }
+      const firstMessages=[sysMsg(gateNote), ...convo];
       liveSystemText = firstMessages[0].content; // so the budget counts the prompt actually sent
       // F1: if what we are about to send cannot be reconstructed from the chain, SAY SO in the
       // log. It does not stop the run — a divergence is diagnostic, and killing a live run over
