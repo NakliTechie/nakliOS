@@ -1,10 +1,20 @@
-// trigram — regex → required literal → trigram hashes.
+// trigram — regex → a boolean query over trigram sets.
 //
-// The candidate-generation half of indexed search (plan/anvil-indexed-search.md §2).
-// Two functions, both pure, both deliberately conservative:
+// The candidate-generation half of indexed search (plan/anvil-indexed-search.md §2):
 //
-//   requiredLiteral(source)  the longest substring EVERY match must contain, or null
 //   trigrams(text)           every overlapping 3-char hash in a string
+//   requiredLiteral(source)  the longest substring EVERY match must contain, or null
+//   planQuery(source)        a tree of AND / OR / TRI / ALL over trigram sets
+//
+// planQuery is what the index actually uses. requiredLiteral is the older,
+// single-run form, kept because it is the clearest statement of the guarantee and
+// the tests assert it directly.
+//
+// Why a tree and not one literal: /TODO|FIXME/ has NO substring common to every
+// match, so a single-literal extractor must give up and scan everything. A tree
+// says OR(TRI{TODO}, TRI{FIXME}) and touches two small candidate sets instead.
+// Measured on realistic agent queries, single-literal covered 72%; the misses were
+// every alternation, group, class and \w-style escape.
 //
 // The safety argument, which is the whole design:
 //
@@ -134,4 +144,219 @@ export function requiredLiteral(source, { min = 3 } = {}) {
   }
   endRun();
   return best.length >= min ? best : null;
+}
+
+
+// ── query planning ──────────────────────────────────────────────────────────
+// A node is one of:
+//   { op:'ALL' }                 nothing can be excluded — scan everything
+//   { op:'TRI', tris:Set<hash> }  files holding ALL of these trigrams
+//   { op:'AND', subs:[...] }      files satisfying every sub
+//   { op:'OR',  subs:[...] }      files satisfying any sub
+//
+// The invariant every branch below must preserve: if a string matches the regex,
+// the file holding it satisfies the query. Over-matching is free (the real regex
+// rejects it); under-matching is a silent false negative, so anything not fully
+// understood becomes ALL rather than a guess.
+export const ALL = Object.freeze({ op: 'ALL' });
+const isAll = (q) => !q || q.op === 'ALL';
+
+function andOf(subs) {
+  const real = subs.filter((s) => !isAll(s));
+  if (!real.length) return ALL;
+  return real.length === 1 ? real[0] : { op: 'AND', subs: real };
+}
+
+// An OR is only as good as its WEAKEST branch: if any branch can match anything,
+// the whole alternation can, so the union constrains nothing.
+function orOf(subs) {
+  if (!subs.length) return ALL;
+  if (subs.some(isAll)) return ALL;
+  return subs.length === 1 ? subs[0] : { op: 'OR', subs };
+}
+
+function triOf(literal) {
+  if (literal.length < 3) return ALL;
+  return { op: 'TRI', tris: trigrams(literal) };
+}
+
+// Split a pattern body on TOP-LEVEL '|' only — alternation inside a group belongs
+// to that group.
+function splitAlternatives(chars) {
+  const out = []; let cur = []; let depth = 0; let inClass = false;
+  for (let i = 0; i < chars.length; i++) {
+    const c = chars[i];
+    if (c === '\\') { cur.push(c, chars[i + 1] ?? ''); i++; continue; }
+    if (inClass) { cur.push(c); if (c === ']') inClass = false; continue; }
+    if (c === '[') { inClass = true; cur.push(c); continue; }
+    if (c === '(') { depth++; cur.push(c); continue; }
+    if (c === ')') { depth--; cur.push(c); continue; }
+    if (c === '|' && depth === 0) { out.push(cur); cur = []; continue; }
+    cur.push(c);
+  }
+  out.push(cur);
+  return out;
+}
+
+// Consume one escape and report what it is. Getting the LENGTH right is the whole
+// point: mis-consuming '\123' (octal for 'S') once left '23abc' looking required,
+// and "Sabc" matches without containing it.
+function readEscape(chars, i) {
+  const n = chars[i + 1];
+  if (n === undefined) return null;
+  if (ESCAPED_LITERAL.has(n)) return { len: 2, literal: n };
+  if (n === 'n') return { len: 2, literal: '\n' };
+  if (n === 't') return { len: 2, literal: '\t' };
+  if (n === 'r') return { len: 2, literal: '\r' };
+  if (n === 'x') return { len: 4, literal: null };                 // \xNN
+  if (n === 'u') {
+    if (chars[i + 2] === '{') { const c = chars.indexOf('}', i + 2); return { len: c < 0 ? 2 : c - i + 1, literal: null }; }
+    return { len: 6, literal: null };                              // \uNNNN
+  }
+  if (n === 'c') return { len: 3, literal: null };                 // \cX
+  if (/[0-9]/.test(n)) { let j = i + 1; while (j < chars.length && /[0-9]/.test(chars[j])) j++; return { len: j - i, literal: null }; }
+  return { len: 2, literal: null };                                // \d \w \s \b \B \p{...} …
+}
+
+// Find the ')' matching the '(' at `i`.
+function matchParen(chars, i) {
+  let depth = 0; let inClass = false;
+  for (let j = i; j < chars.length; j++) {
+    const c = chars[j];
+    if (c === '\\') { j++; continue; }
+    if (inClass) { if (c === ']') inClass = false; continue; }
+    if (c === '[') { inClass = true; continue; }
+    if (c === '(') depth++;
+    else if (c === ')') { depth--; if (!depth) return j; }
+  }
+  return -1;
+}
+
+function classEnd(chars, i) {
+  for (let j = i + 1; j < chars.length; j++) {
+    if (chars[j] === '\\') { j++; continue; }
+    if (chars[j] === ']' && j > i + 1) return j;
+  }
+  return -1;
+}
+
+// One alternative: a sequence of atoms. Literal runs become TRI nodes; groups
+// recurse; everything else contributes nothing but does not poison its siblings —
+// which is the difference from the old extractor, where a single \w made the
+// whole pattern unusable even though a neighbouring literal was still required.
+function planSequence(chars) {
+  const parts = [];
+  let run = '';
+  const flushRun = () => { if (run) { parts.push(triOf(run)); run = ''; } };
+
+  for (let i = 0; i < chars.length; i++) {
+    const c = chars[i];
+    let atom = null;          // { literal } | { query } | null (opaque)
+    let end = i;
+
+    if (c === '\\') {
+      const esc = readEscape(chars, i);
+      if (!esc) return ALL;
+      end = i + esc.len - 1;
+      atom = esc.literal !== null ? { literal: esc.literal } : null;
+    } else if (c === '(') {
+      const close = matchParen(chars, i);
+      if (close < 0) return ALL;
+      const head = chars.slice(i + 1, i + 4).join('');
+      if (head.startsWith('?:')) {
+        atom = { query: planAlternation(chars.slice(i + 3, close)) };
+      } else if (head.startsWith('?')) {
+        atom = null;          // lookaround, named group, flags — treat as opaque
+      } else {
+        atom = { query: planAlternation(chars.slice(i + 1, close)) };
+      }
+      end = close;
+    } else if (c === '[') {
+      const close = classEnd(chars, i);
+      if (close < 0) return ALL;
+      atom = null;
+      end = close;
+    } else if (c === '.' || c === '^' || c === '$') {
+      atom = null;
+    } else if (c === '*' || c === '+' || c === '?') {
+      return ALL;             // a quantifier with no atom before it
+    } else if (c === '{' && quantLenAt(chars, i) === 0) {
+      atom = { literal: '{' }; // '{' that is not a valid quantifier is a literal
+                               // brace, as JS reads it — /import {/ is a real query
+    } else if (c === '{') {
+      return ALL;             // a quantifier with no atom before it
+    } else {
+      atom = { literal: c };
+    }
+
+    // What follows decides whether this atom is required at all.
+    const qLen = quantLenAt(chars, end + 1);
+    const optional = qLen > 0 && optionalQuantAt(chars, end + 1);
+    const repeats = qLen > 0 && !optional;
+    if (qLen > 0) end += qLen;
+
+    if (optional) { flushRun(); i = end; continue; }
+    if (atom && atom.literal !== undefined && atom.literal !== null) {
+      run += atom.literal;
+      if (repeats) flushRun();  // it may repeat, so text either side is not contiguous
+    } else {
+      flushRun();
+      if (atom && atom.query) parts.push(atom.query);
+    }
+    i = end;
+  }
+  flushRun();
+  return andOf(parts);
+}
+
+function planAlternation(chars) {
+  return orOf(splitAlternatives(chars).map(planSequence));
+}
+
+/**
+ * A boolean trigram query for `source`, or ALL when nothing can be excluded.
+ * Never under-matches: an unrecognised construct contributes ALL, which widens
+ * the candidate set rather than narrowing it wrongly.
+ */
+export function planQuery(source) {
+  try { return planAlternation([...String(source)]); }
+  catch (_) { return ALL; }   // a malformed pattern is the caller's problem, not ours
+}
+
+/**
+ * Evaluate a query against a postings map (triHash -> Set<path>).
+ * Returns a Set of candidate paths, or null meaning "no constraint — scan all".
+ */
+export function evaluateQuery(node, postings) {
+  if (isAll(node)) return null;
+  if (node.op === 'TRI') {
+    let acc = null;
+    for (const h of node.tris) {
+      const s = postings.get(h);
+      if (!s) return new Set();                 // a trigram nothing holds ⇒ no file can match
+      acc = acc === null ? new Set(s) : new Set([...acc].filter((x) => s.has(x)));
+      if (!acc.size) return acc;
+    }
+    return acc === null ? null : acc;
+  }
+  if (node.op === 'AND') {
+    let acc = null;
+    for (const sub of node.subs) {
+      const s = evaluateQuery(sub, postings);
+      if (s === null) continue;                 // an unconstrained sub adds nothing
+      acc = acc === null ? s : new Set([...acc].filter((x) => s.has(x)));
+      if (!acc.size) return acc;
+    }
+    return acc;
+  }
+  if (node.op === 'OR') {
+    const acc = new Set();
+    for (const sub of node.subs) {
+      const s = evaluateQuery(sub, postings);
+      if (s === null) return null;              // one unconstrained branch ⇒ no constraint
+      for (const x of s) acc.add(x);
+    }
+    return acc;
+  }
+  return null;
 }

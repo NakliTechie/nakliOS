@@ -10,7 +10,7 @@
 // Everything else here exists to make that test's failures diagnosable.
 
 import { createFileops, MemoryBackend } from '../index.mjs';
-import { requiredLiteral, trigrams, triHash } from '../trigram.mjs';
+import { requiredLiteral, trigrams, triHash, planQuery, evaluateQuery } from '../trigram.mjs';
 
 let passed = 0;
 const failures = [];
@@ -156,18 +156,29 @@ await test('the index actually skips files', async () => {
   const s = indexed.searchStats();
   const rec = s.recent[0];
   assert(rec.indexUsed, 'index was used');
-  eq(rec.literal, 'deepThing', 'literal extracted');
+  eq(rec.plan, 'TRI', 'a plain literal plans to a single TRI node');
   assert(rec.candidates < Object.keys(CORPUS).length,
     `narrowed to ${rec.candidates} of ${Object.keys(CORPUS).length}`);
   eq(rec.filesRead, rec.candidates, 'read only the candidates on a warm index');
 });
 
-await test('an unindexable pattern falls back and still answers', async () => {
+await test('a pattern with NO usable literal falls back and still answers', async () => {
   const indexed = await build({ index: true });
-  const r = await indexed.grep('[a-z]+Fact');
+  const r = await indexed.grep('[a-z]+');            // nothing is required anywhere
   const s = indexed.searchStats();
   assert(!s.recent[0].indexUsed, 'fell back');
   assert(r.matches.length > 0, 'still found matches on the fallback path');
+});
+
+await test('a class or escape no longer disqualifies its literal neighbours', async () => {
+  // The old extractor refused the whole pattern on seeing [ or \\w, even though a
+  // neighbouring literal was still required by every match.
+  const indexed = await build({ index: true });
+  const r = await indexed.grep('[a-z]+Fact');
+  const rec = indexed.searchStats().recent.at(-1);
+  assert(rec.indexUsed, 'the index is used now');
+  eq(rec.plan, 'TRI', 'planned down to the required literal');
+  assert(r.matches.length > 0, 'and still finds the matches');
 });
 
 // ── exclusive mode ────────────────────────────────────────────────────────
@@ -501,6 +512,80 @@ await test('EXPERIMENT: reconcileMs default keeps the guarantee', async () => {
   await fs.grep('alpha');
   await backend.write('a.txt', new TextEncoder().encode('omega\n'));
   eq((await fs.grep('omega')).matches.length, 1, 'per-query sweep still catches an outside edit');
+});
+
+// ── the query planner ───────────────────────────────────────────────────────
+// The guarantee, restated for a tree: if a string matches the regex, the file
+// holding it must satisfy the plan. Under-matching is a silent false negative.
+// This helper checks it directly by building a one-file postings map.
+function planAdmits(pattern, subject) {
+  const plan = planQuery(pattern);
+  if (plan.op === 'ALL') return true;                 // no constraint, admits everything
+  const postings = new Map();
+  for (const h of trigrams(subject)) {
+    if (!postings.has(h)) postings.set(h, new Set());
+    postings.get(h).add('f');
+  }
+  const got = evaluateQuery(plan, postings);
+  return got === null || got.has('f');
+}
+
+await test('planner: alternation becomes an OR instead of giving up', () => {
+  const p = planQuery('TODO|FIXME');
+  eq(p.op, 'OR', 'top-level alternation plans to OR');
+  eq(p.subs.length, 2, 'one branch each');
+  assert(planAdmits('TODO|FIXME', 'a TODO here'), 'admits the first branch');
+  assert(planAdmits('TODO|FIXME', 'a FIXME here'), 'admits the second');
+});
+
+await test('planner: a group under a literal becomes AND(TRI, OR(...))', () => {
+  const p = planQuery('def (solve|main)');
+  eq(p.op, 'AND', 'sequence of literal + group');
+  assert(planAdmits('def (solve|main)', 'def solve(x)'), 'admits solve');
+  assert(planAdmits('def (solve|main)', 'def main()'), 'admits main');
+});
+
+await test('planner: a class or escape no longer poisons the sequence', () => {
+  eq(planQuery('\\w+Error').op, 'TRI', 'the literal survives the escape');
+  eq(planQuery('[A-Z][a-z]+Service').op, 'TRI', 'the literal survives the class');
+  eq(planQuery('\\bconst\\b').op, 'TRI', 'zero-width escapes are transparent');
+  assert(planAdmits('\\w+Error', 'TypeError'), 'admits a real match');
+  assert(planAdmits('[A-Z][a-z]+Service', 'UserService'), 'admits a real match');
+});
+
+await test('planner: an OR is only as strong as its weakest branch', () => {
+  // /TODO|./ can match anything, so the union must not constrain.
+  eq(planQuery('TODO|.').op, 'ALL', 'an unconstrained branch makes the whole OR ALL');
+  eq(planQuery('TODO|ab').op, 'ALL', 'a branch too short to have a trigram, likewise');
+});
+
+await test('planner: optional and lookaround constructs stay opaque', () => {
+  eq(planQuery('(abc)?def').op, 'TRI', 'an optional group drops out, def survives');
+  assert(planAdmits('(abc)?def', 'def'), 'admits a match without the optional group');
+  assert(planAdmits('(?=abc)abcdef', 'abcdef'), 'lookahead treated as opaque, not required');
+  assert(planAdmits('(?!abc)defghi', 'defghi'), 'negative lookahead never contributes');
+});
+
+await test('PLANNER GUARANTEE: randomised, 6000 patterns × real subjects', () => {
+  let seed = 20260908; const rnd = () => ((seed = (seed*1103515245+12345) & 0x7fffffff) / 0x7fffffff);
+  const atoms = ['a','b','c','ab','abc','def','Fact','.','?','*','+','|','(',')','[a-z]','[A-Z]',
+    '\\w','\\d','\\s','\\b','\\.','\\\\','{0,2}','{2,}','(?:','(?=','(?!','^','$','-','ß','\u{1F600}'];
+  const subjects = ['', 'a', 'ab', 'abc', 'abcdef', 'def', 'Fact', 'TypeError', 'UserService',
+    'def solve(x)', 'TODO here', 'FIXME here', 'aaa', 'zzz', 'a.c', 'ßß', 'x\u{1F600}y'];
+  let checked = 0; const bad = [];
+  for (let n = 0; n < 6000; n++) {
+    let pat = ''; const len = 1 + Math.floor(rnd()*5);
+    for (let k = 0; k < len; k++) pat += atoms[Math.floor(rnd()*atoms.length)];
+    let re; try { re = new RegExp(pat, 'u'); } catch(_) { try { re = new RegExp(pat); } catch(__) { continue; } }
+    for (const s of subjects) {
+      let m; try { m = re.test(s); } catch(_) { continue; }
+      if (!m) continue;
+      checked++;
+      if (!planAdmits(pat, s)) bad.push(`/${pat}/ matches ${JSON.stringify(s)} but the plan excludes it`);
+    }
+  }
+  assert(checked > 500, `enough matching pairs exercised: ${checked}`);
+  assert(bad.length === 0, `${bad.length} guarantee violation(s):\n  ${bad.slice(0,6).join('\n  ')}`);
 });
 
 // A randomised differential sweep: the fixed battery above encodes what I

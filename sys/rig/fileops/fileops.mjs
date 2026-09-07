@@ -23,7 +23,7 @@
 
 import { normalizeMountPath, joinRoot } from './pathguard.mjs';
 import { applyPatch, reversePatch } from './patch.mjs';
-import { requiredLiteral, trigrams } from './trigram.mjs';
+import { planQuery, evaluateQuery, trigrams } from './trigram.mjs';
 
 const enc = new TextEncoder();
 
@@ -259,6 +259,14 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
   // writing through one used to leave the other stale. Sniffing the backend for
   // symlink support missed wrappers (OverlayBackend has no `.symlinks` of its
   // own); resolving is what actually knows.
+  // A short, readable shape for the meter — "AND(TRI,OR(TRI,TRI))" — so a slow
+  // query can be explained without re-deriving the plan by hand.
+  function describePlan(node) {
+    if (!node || node.op === 'ALL') return 'ALL';
+    if (node.op === 'TRI') return 'TRI';
+    return `${node.op}(${node.subs.map(describePlan).join(',')})`;
+  }
+
   function indexDropBySafe(safe) {
     if (!safe) return;
     for (const [p, e] of [...idx.files]) if (e.safe === safe) indexDrop(p);
@@ -523,7 +531,12 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     // the same work as before the index existed.
     // `i` (and the Unicode case-folding it implies) cannot be answered from a
     // case-sensitive index, so those searches take the full scan.
-    const lit = (index && !re.ignoreCase) ? requiredLiteral(re.source) : null;
+    // planQuery returns ALL when it cannot constrain, which is the same fallback
+    // the single-literal extractor used to reach far more often: an alternation,
+    // a group, a class or a \w escape used to disqualify the whole pattern even
+    // when a neighbouring literal was still required by every match.
+    const plan = (index && !re.ignoreCase) ? planQuery(re.source) : null;
+    const lit = plan && plan.op !== 'ALL' ? plan : null;
     let candidates = null;
     let indexUsed = false;
     let filesStatted = 0;
@@ -572,15 +585,8 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
       // would skip entries. (oxlint flags the spread as useless; it is not.)
       for (const p of [...idx.files.keys()]) if (!seen.has(p)) indexDrop(p);
 
-      // Intersect the postings of every trigram in the required literal.
-      const want = trigrams(lit);
-      let acc = null;
-      for (const h of want) {
-        const s = idx.postings.get(h);
-        if (!s) { acc = new Set(); break; }
-        acc = acc === null ? new Set(s) : new Set([...acc].filter((x) => s.has(x)));
-        if (!acc.size) break;
-      }
+      // Evaluate the plan: AND intersects, OR unions, TRI intersects postings.
+      const acc = evaluateQuery(plan, idx.postings);
       // A file we hold no postings for must stay a candidate, because we cannot
       // know whether it matches — that is oversized files, which are never read
       // here. A file we know to be BINARY is not a candidate: binaries are not
@@ -629,7 +635,7 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
       glob: opts.glob || '**',
       indexUsed,
       swept: lit ? sweeping : null,
-      literal: lit || null,
+      plan: lit ? describePlan(plan) : null,
       filesStatted,
       candidates: candidates ? candidates.length : null,
       filesWalked: globbed.matches.length,
