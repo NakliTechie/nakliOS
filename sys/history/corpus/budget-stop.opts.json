@@ -1,0 +1,6 @@
+{
+  "budget": {
+    "turns": 2
+  },
+  "expect": "budget"
+}

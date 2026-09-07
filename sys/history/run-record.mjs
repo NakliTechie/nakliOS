@@ -446,6 +446,27 @@ export function replayExecuteTool(record, { strict = true, live = null } = {}) {
   return exec;
 }
 
+// A `verify` that serves the recorded verdicts in order — no gate command is ever run (F2).
+// A failing-gate run is one of the three conditions Chunk 0 could only close with a live run;
+// replaying it needs the verdicts back, and they are already on the chain as verify.passed /
+// verify.failed. Same contract as the other two replayers: remaining() + assertConsumed().
+export function replayVerify(record) {
+  const verdicts = [];
+  for (const e of joined(record.events(), record.resolve)) {
+    if (e.tool === 'verify.passed') verdicts.push(e.output?.verdict ?? { ok: true, exit: 0 });
+    else if (e.tool === 'verify.failed') verdicts.push(e.output?.verdict ?? { ok: false, exit: 1 });
+  }
+  let i = 0;
+  const verify = async () => {
+    if (i < verdicts.length) return verdicts[i++];
+    throw new ReplayMiss('gate run not in record', { served: i });
+  };
+  verify.remaining = () => (i < verdicts.length ? [{ recorded: verdicts.length, served: i }] : []);
+  verify.assertConsumed = () => assertConsumed(verify, 'gate verdicts');
+  verify.count = () => verdicts.length;
+  return verify;
+}
+
 // Compare two records event by event — verb, input hash, output hash. Timestamps
 // and chain links are deliberately excluded: they differ by construction. Returns
 // the FIRST divergence, which is the whole point ("a green strict replay is a
