@@ -87,6 +87,9 @@ jobs:
       - name: Verify search-cost instrumentation changes no search result
         run: node sys/rig/fileops/test/search-cost.test.mjs
 
+      - name: Verify the trigram index under fs.grep
+        run: node sys/rig/fileops/test/trigram.test.mjs
+
       - name: Verify Rig fileops conformance (the 8-method backend contract)
         run: node sys/rig/fileops/test/conformance.test.mjs
 
