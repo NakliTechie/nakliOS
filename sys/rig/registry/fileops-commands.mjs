@@ -137,6 +137,9 @@ export function buildFileopsCommands(fs) {
         required: ['from', 'to'], additionalProperties: false,
       },
       returnSchema: RESULT_OK, destructive: false, scope: 'fs:write', annotations: RW,
+      // `from` is READ, not written: copying a file OUT of a read-only region is a read.
+      // (fs.move deliberately declares none — a move deletes its source.)
+      sourceParams: ['from'],
       run: (i) => fs.copy(i.from, i.to),
     },
     {

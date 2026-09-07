@@ -25,7 +25,10 @@ function scriptedInfer(plan, reviewText) {
   return async ({ messages }) => {
     const sys = String(messages[0]?.content || '');
     if (/read-only access|reviewer/i.test(sys)) return { content: reviewText || 'No issues found.', toolCalls: [] };
-    const user = [...messages].reverse().find(m => m.role === 'user');
+    // The OWNER's prompt — skipping [coordination] lines the loop itself wrote (a repeat
+    // nudge, a gate verdict). A host that scans back for "the last user message" without
+    // this picks up the machine's own voice and answers the wrong question (F7).
+    const user = [...messages].reverse().find(m => m.role === 'user' && !/^\[coordination\]/.test(String(m.content || '')));
     const prompt = String(user?.content || '');
     const priorTools = messages.filter(m => m.role === 'tool').length;
     // The last tool result (so a reader can report what it saw).

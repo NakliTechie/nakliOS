@@ -7,7 +7,8 @@
 // exist, a filter whose condition is inverted. This file extracts the actual functions and calls
 // them, so those failures are loud.
 import assert from 'node:assert/strict';
-import { inlineModule, extractFunction, instantiate, memFs, failingFs } from './anvil-harness.mjs';
+import { inlineModule, extractFunction, extractRegion, evaluate, instantiate, memFs, failingFs } from './anvil-harness.mjs';
+import { searchRecords, scopeEntries, readEvent, createRunRecorder } from '../sys/history/run-record.mjs';
 
 const src = await inlineModule();
 let passed = 0; const failures = [];
@@ -63,6 +64,55 @@ await test('NAF-07: history binds to the CALLING task, not the selected UI task'
   const got = await fn('task', 'a1');           // the CALLER names its own task
   assert.equal(got.length, 1, 'one task');
   assert.equal(got[0].record.mine, 'a1', `history followed the SELECTED task (a2) instead of the calling task (a1) — got ${got[0].record.mine}`);
+});
+
+// ── S-1 — the history HANDLER, driven, not grepped ────────────────────────────────────
+// A cross-family review mutation-tested the seam and two mutations survived every grep anchor:
+// wrapping the branch in `if(false)`, and re-widening `scoped` back to every entry after it was
+// narrowed. Both are invisible to a regex and loud here.
+async function historyHandler(entriesByScope, callerTaskId) {
+  const region = extractRegion(src, "if(nm==='history'){", '// context_remaining (B4)');
+  const body = `async function handle(nm, ar){ ${region}\n return '(fell through)'; }\n;handle`;
+  return evaluate(body, {
+    loadTaskRecords: async (scope) => entriesByScope(scope),
+    scopeEntries, searchRecords, readEvent,
+    runCtx: { t: { id: callerTaskId } },
+  });
+}
+
+await test('S-1: the history handler actually runs, and a task-scoped search cannot see a sibling task', async () => {
+  // two real records: one belongs to the asking task, one to a sibling
+  const mk = async (marker) => {
+    const rec = createRunRecorder({ app: 'anvil', principal: 'p' });
+    await rec.start({ messages: [{ role: 'user', content: `investigate ${marker}` }] });
+    await rec.settled();
+    return rec;
+  };
+  const mine = { runId: 'mine-1', taskId: 'task-A', record: await mk('MARKER-MINE') };
+  const sibling = { runId: 'other-1', taskId: 'task-B', record: await mk('MARKER-SIBLING') };
+  // the loader is deliberately WIDE here: it hands back both records whatever the scope, so the
+  // narrowing under test is the module's, exactly as the mutation assumed.
+  const handle = await historyHandler(() => [mine, sibling], 'task-A');
+
+  const own = await handle('history', { op: 'search', query: 'MARKER-MINE', scope: 'task' });
+  assert.match(own, /mine-1/, `the handler did not run, or found nothing: ${own}`);
+
+  const cross = await handle('history', { op: 'search', query: 'MARKER-SIBLING', scope: 'task' });
+  assert.ok(!/other-1/.test(cross), `a task-scoped search reached a SIBLING task's record: ${cross}`);
+  assert.match(cross, /No history matches/, `and it should say so plainly: ${cross}`);
+
+  // project scope is the control: the same query, the same loader, a different answer
+  const wide = await handle('history', { op: 'search', query: 'MARKER-SIBLING', scope: 'project' });
+  assert.match(wide, /other-1/, `project scope must still reach it: ${wide}`);
+
+  // and a READ cannot cross what the search could not
+  const readCross = await handle('history', { op: 'read', id: 'other-1#0' });
+  assert.match(readCross, /history read: no record other-1/, `a task-scoped read reached the sibling: ${readCross}`);
+  const readOwn = await handle('history', { op: 'read', id: 'mine-1#0' });
+  assert.match(readOwn, /MARKER-MINE/, `the caller cannot read its OWN record: ${readOwn}`);
+
+  // an unknown op is answered, not silently dropped
+  assert.match(await handle('history', { op: 'nonsense' }), /op must be/, 'an unknown op is answered');
 });
 
 // ── NAF-05 / NAF-09 / NAF-11 — the review sink ────────────────────────────────────────

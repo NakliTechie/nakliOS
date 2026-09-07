@@ -69,6 +69,18 @@ jobs:
       - name: Verify project memory store (facts, index, recall)
         run: node sys/ai/test/memory-store.test.mjs
 
+      - name: Verify skills parsing, the description index, and the shell half of the skills fence
+        run: node sys/ai/test/skills.test.mjs
+
+      - name: Verify the prompt's cache prefix is stable and the tool list does not depend on the store
+        run: node scripts/test-anvil-prompt-cache.mjs
+
+      - name: Verify .anvil/skills is readable and UNWRITABLE from every agent route (grant-enforced)
+        run: node sys/ai/test/skills-fence.test.mjs
+
+      - name: Verify the Rig agent face C4 conformance (escape classes, grant edges, staging, op-log replay)
+        run: node sys/rig/agent/test/conformance.test.mjs
+
       - name: Verify project memory integration (remember/recall over fs)
         run: node sys/ai/test/memory-store-integration.test.mjs
 

@@ -43,6 +43,10 @@ export const KNOWN_SCOPES = new Set([
 const META_FIELDS = [
   'name', 'summary', 'description', 'inputSchema', 'returnSchema',
   'destructive', 'scope', 'annotations',
+  // Path arguments the command only READS (fs.copy's `from`). The grant edge uses this to
+  // let a file be copied OUT of a read-only region while refusing a write INTO it. Absent
+  // means every path argument is treated as written, which is the safe reading.
+  'sourceParams',
 ];
 
 function project(command) {

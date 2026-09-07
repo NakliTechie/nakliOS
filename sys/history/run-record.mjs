@@ -36,12 +36,15 @@ export const RUN_EVENTS = Object.freeze([
   'llm.responded',    // input: { request_hash, step }         output: { content, toolCalls, finishReason }
   'assistant.said',   // input: { step }                       output: { content }
   'tool.called',      // input: { id, name, args, step }       output: {}
-  'tool.responded',   // input: { id, name, args_hash, step }  output: { result }
+  'tool.responded',   // input: { id, name, args_hash, step }  output: { result, sent }  (F5: `sent` is the capped surface form when it differs)
   'tool.failed',      // input: { id, name, step }             output: { error }
   'verify.passed',    // input: { step }                       output: { verdict }
   'verify.failed',    // input: { step, round, ran }           output: { verdict }
   'run.stopped',      // input: { steps }                      output: { stop, reason, verified, axis, error }
   'run.checkpoint',   // input: { step }                        output: { handoff }  (B4: a rollover landmark)
+  'run.compacted',    // input: { method, from, to, step }      output: { replacement }  (F4: a logged surface replace)
+  'run.nudged',       // input: { step, times, denied }         output: { content }  (F7: the loop's own escalating reminder)
+  'tool.spilled',     // input: { id, name, step, chars }       output: { sent }  (F5: the capped form the model actually saw)
 ]);
 
 // The loop's onEvent types this recorder understands. 'done' and the pre-stop
@@ -55,7 +58,9 @@ const LOOP_TO_VERB = Object.freeze({
   'assistant': 'assistant.said',
   'tool-call': 'tool.called',
   'tool-result': 'tool.responded',
+  'tool-spilled': 'tool.spilled',
   'tool-error': 'tool.failed',
+  'repeat-nudge': 'run.nudged',
   'verify-pass': 'verify.passed',
   'verify-fail': 'verify.failed',
 });
@@ -118,17 +123,36 @@ export function createRunRecorder({ app = 'anvil', principal = 'local', grant_id
         case 'tool.responded':
           enqueue(verb, () => ({ input: { id: e.id, name: e.name, args_hash: argsHashes.get(e.id) ?? null, step: s }, output: { result: String(e.result ?? '') } }));
           break;
+        // F5: the loop capped this result before it entered the surface. The FULL text is
+        // already on the chain from tool.responded; this records only what was SENT, so
+        // foldTranscript reproduces the request and `history` still serves the whole thing.
+        case 'tool.spilled':
+          enqueue(verb, () => ({ input: { id: e.id, name: e.name, step: s, chars: e.chars ?? null }, output: { sent: String(e.sent ?? '') } }));
+          break;
         case 'tool.failed': enqueue(verb, () => ({ input: { id: e.id, name: e.name, step: s }, output: { error: String(e.error ?? '') } })); break;
         case 'verify.passed': enqueue(verb, () => ({ input: { step: s }, output: { verdict: e.verdict ?? null } })); break;
         case 'verify.failed': enqueue(verb, () => ({ input: { step: s, round: e.round ?? null, ran: e.ran ?? null }, output: { verdict: e.verdict ?? null } })); break;
+        // F7: the loop's escalating repeat reminder. It is a user turn the LOOP wrote, so it
+        // must be on the chain or foldTranscript cannot reproduce what was sent — which is
+        // precisely the divergence F1 checks for.
+        case 'run.nudged': enqueue(verb, () => ({ input: { step: s, times: e.times ?? null, denied: !!e.denied }, output: { content: String(e.content ?? '') } })); break;
       }
     },
 
     // Wrap the loop's infer so every model exchange is recorded, content-addressed.
-    wrapInfer(infer, { model = null } = {}) {
+    // `onDivergence` receives { at, why } when the outgoing request cannot be reconstructed from
+    // the chain (F1). It is called, never thrown — see reconstructionCheck.
+    wrapInfer(infer, { model = null, onDivergence = null } = {}) {
       return async (args) => {
         const request_hash = await requestHash({ messages: args.messages, tools: args.tools, model });
         const s = step;
+        if (typeof onDivergence === 'function') {
+          try {
+            await queue; // the chain must be settled before it can be compared against
+            const chk = reconstructionCheck(args.messages, events, (e) => ({ input: blobs.get(e.input_hash), output: blobs.get(e.output_hash) }));
+            if (!chk.ok) onDivergence(chk);
+          } catch (_) { /* the check must never be what breaks a run */ }
+        }
         await enqueue('llm.requested', () => ({ input: { request_hash, step: s }, output: {} }));
         const reply = await infer(args);
         const response = { content: reply?.content ?? '', toolCalls: reply?.toolCalls ?? [], finishReason: reply?.finishReason ?? 'stop' };
@@ -155,6 +179,24 @@ export function createRunRecorder({ app = 'anvil', principal = 'local', grant_id
     // `step` is snapshotted at CALL time, like every other handler's `s = e.step ?? step`. The
     // thunk runs when the queue drains, and a turn.started arriving in between would otherwise
     // file the handoff under a later step than the one that asked for it (forward-pass L-6).
+    // F4. Compaction used to REWRITE the carried transcript and store the result, so the record
+    // and the live surface could disagree and nothing noticed — while run-record's own header
+    // claimed the carried transcript was a projection. Recording the replacement makes that claim
+    // true: `foldSurface` below reproduces the surface from the chain alone. The `summarize` path
+    // calls a model and is not otherwise reproducible, which is precisely why the OUTPUT is logged
+    // rather than the operation. Originals stay on the chain, shadowed rather than deleted.
+    // A compaction, as a surface replacement. `replacement` MUST be an array of messages;
+    // anything else is recorded as null on purpose — that is the orphan a caller leaves when
+    // it decided to compact and then could not produce the replacement (the crash-mid-
+    // compaction case). Coercing it to [] instead would delete the span and read as a clean
+    // compaction, which is the failure this verb exists to make visible.
+    compacted({ method, from, to, replacement }) {
+      const s = step;
+      return enqueue('run.compacted', () => ({
+        input: { method: String(method || 'shake'), from: Number(from) || 0, to: Number(to) || 0, step: s },
+        output: { replacement: Array.isArray(replacement) ? replacement : null },
+      }));
+    },
     checkpoint(handoff) { const s = step; return enqueue('run.checkpoint', () => ({ input: { step: s }, output: { handoff: String(handoff ?? '') } })); },
     async settled() { await queue; },
     events() { return events.slice(); },
@@ -251,7 +293,7 @@ export function foldLog(events, resolve) {
 // The OpenAI-shaped transcript after the system prefix — what the next run is
 // handed. Derived, so it can never drift from what happened: every tool reply is
 // paired with the assistant turn that called it, by construction.
-export function foldTranscript(events, resolve) {
+export function foldTranscript(events, resolve, { applyCompaction = false } = {}) {
   const out = [];
   let pendingCalls = null;
   const flushAssistant = () => {
@@ -287,10 +329,37 @@ export function foldTranscript(events, resolve) {
         break;
       }
       case 'tool.responded': flushAssistant(); out.push({ role: 'tool', tool_call_id: inp.id, content: String(o.result ?? '') }); break;
+      // F5: the surface carried the capped form. The full result stays on the chain (and in
+      // `history`); the transcript is patched to what was actually sent, so a replay of this
+      // run sends the same bytes it sent the first time.
+      case 'tool.spilled': {
+        for (let i = out.length - 1; i >= 0; i--) {
+          if (out[i].role === 'tool' && out[i].tool_call_id === inp.id) { out[i] = { ...out[i], content: String(o.sent ?? '') }; break; }
+        }
+        break;
+      }
       case 'tool.failed': flushAssistant(); out.push({ role: 'tool', tool_call_id: inp.id, content: `Error: ${o.error ?? ''}` }); break;
       // Coordination, not the owner: a carried gate verdict must never read as the owner's
       // instruction (B3). The tag survives into the next run's transcript.
       case 'verify.failed': out.push({ role: 'user', content: `[coordination] Gate failed (exit ${o.verdict?.exit ?? '?'}). Fix the problem and continue.` }); break;
+      // F7: the reminder is replayed verbatim from the record, not regenerated — the wording
+      // may change between versions, and the surface must be what THAT run actually sent.
+      case 'run.nudged': if (o.content) out.push({ role: 'user', content: String(o.content) }); break;
+      // F4, and only for foldSurface: a compaction replaces a span of the surface AS IT STOOD
+      // AT THIS POINT in the run. Applying every compaction after the whole transcript was
+      // folded gave the wrong answer whenever one was interleaved with later turns — the span
+      // then indexed a surface that did not exist yet (found by a cross-family review, which
+      // reproduced a duplicated message and a replacement overwriting a future reply).
+      // foldTranscript itself ignores this verb: the RAW transcript still shows the originals.
+      case 'run.compacted': {
+        if (!applyCompaction) break;
+        if (!o || !Array.isArray(o.replacement)) break; // an orphan leaves the surface alone
+        flushAssistant();
+        const { from = 0, to = 0 } = inp;
+        if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < from || to > out.length) break;
+        out.splice(from, to - from, ...o.replacement);
+        break;
+      }
     }
   }
   // An assistant turn whose tool replies never arrived is malformed as the next
@@ -650,13 +719,29 @@ function centredExcerpt(text, at, span = 120) {
   return (start > 0 ? '…' : '') + text.slice(start, end).replace(/\s+/g, ' ').trim() + (end < text.length ? '…' : '');
 }
 
+// The scope the tool advertises, applied HERE rather than only at the call site (S-1).
+// A caller may hand over more records than the scope allows — the app narrows at load time
+// for cost, but that is an optimisation, not the guarantee. Entries carry `taskId` when the
+// loader knows it; an entry without one is never dropped, so a caller that does not tag its
+// entries keeps the old behaviour instead of silently searching nothing.
+//   project — every entry
+//   task    — entries whose taskId matches the asking task
+//   run     — the newest single entry within that task (entries arrive oldest-first)
+export function scopeEntries(entries, scope = 'project', taskId = null) {
+  const all = Array.isArray(entries) ? entries : [];
+  if (scope !== 'task' && scope !== 'run') return all;
+  const tid = taskId == null ? null : String(taskId);
+  const mine = tid === null ? all : all.filter((e) => e.taskId === undefined || e.taskId === null || String(e.taskId) === tid);
+  return scope === 'run' ? mine.slice(-1) : mine;
+}
+
 // Search across records, newest event first. Returns hits [{ id, runId, tool, ts, excerpt }].
-export function searchRecords(entries, { query, role = 'default', limit = 20 } = {}) {
+export function searchRecords(entries, { query, role = 'default', limit = 20, scope = 'project', taskId = null } = {}) {
   const q = String(query ?? '').toLowerCase();
   if (!q) return [];
   const slice = HISTORY_ROLES[role] || HISTORY_ROLES.default;
   const hits = [];
-  for (const { runId, record } of (entries || [])) {
+  for (const { runId, record } of scopeEntries(entries, scope, taskId)) {
     if (!record || typeof record.events !== 'function') continue;
     const evs = joined(record.events(), record.resolve);
     for (let i = 0; i < evs.length; i++) {
@@ -850,6 +935,55 @@ export function foldStagnation(events, resolve, { repeatN = 3, noToolTurns = 1 }
 export function stagnationNudge(stag) {
   if (!stag || !stag.stalled) return '';
   return `[coordination] You appear to be stuck: ${stag.detail}. Step back and try a different approach — a different tool, a smaller step, or re-reading the goal — rather than repeating what has not worked.`;
+}
+
+// F1 — the invariant that makes this file's opening claim checkable.
+//
+// The header says the carried transcript IS a projection of the log. Until now nothing enforced
+// it, and it was quietly FALSE: compaction rewrote the surface and stored the result outside the
+// record. This compares what is about to be SENT against what the chain can reproduce, and names
+// the first message that differs.
+//
+// It DETECTS; it does not throw. A divergence is diagnostic, not dangerous, and killing a live
+// run over one would do more damage than the drift it found. The caller decides what to do.
+// System messages are excluded because foldTranscript deliberately drops them.
+export function reconstructionCheck(sent, events, resolve) {
+  const want = foldSurface(events, resolve);
+  const got = (Array.isArray(sent) ? sent : []).filter((m) => m && m.role !== 'system');
+  // The key compares tool calls by id AND by what they actually ask for. Comparing ids alone
+  // let a request through whose `command` had been changed from `pwd` to `rm -rf src` — the
+  // exact tampering this invariant exists to catch (found by a cross-family review).
+  const key = (m) => JSON.stringify([m?.role ?? null, m?.content ?? null, m?.tool_call_id ?? null,
+                                     (m?.tool_calls || []).map((c) => [c?.id ?? null, c?.function?.name ?? null, c?.function?.arguments ?? null])]);
+  if (got.length !== want.length) {
+    return { ok: false, at: Math.min(got.length, want.length),
+             why: `length: sending ${got.length}, the record reconstructs ${want.length}` };
+  }
+  for (let i = 0; i < got.length; i++) {
+    if (key(got[i]) !== key(want[i])) {
+      return { ok: false, at: i, why: `message ${i} differs: sending ${key(got[i]).slice(0, 120)}, record has ${key(want[i]).slice(0, 120)}` };
+    }
+  }
+  return { ok: true, at: -1, why: '' };
+}
+
+// The transcript as it was actually SENT: foldTranscript, then every recorded compaction applied
+// in order. This is the function F1's invariant compares against — the claim at the top of this
+// file ("the carried transcript is a projection") is only checkable because this exists.
+//
+// The shadowed span is a POSITION range, not a numeric interval: `from`/`to` index the surface as
+// it stood when that compaction ran, so replacements must be applied in recorded order. An
+// out-of-range span is ignored rather than throwing, because a fold must never be the thing that
+// breaks a run.
+export function foldSurface(events, resolve) {
+  return foldTranscript(events, resolve, { applyCompaction: true });
+}
+
+// Was a compaction started and never finished? A crash mid-compaction leaves the surface
+// unresolvable; saying so is better than silently serving a half-applied transcript.
+export function compactionOrphaned(events, resolve) {
+  const ev = joined(events, resolve).filter((e) => e.tool === 'run.compacted');
+  return ev.some((e) => !(e.output && Array.isArray(e.output.replacement)));
 }
 
 // ─────────────────────────────────── session context + decisions (C2) ──

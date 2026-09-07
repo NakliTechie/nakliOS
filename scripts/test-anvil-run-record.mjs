@@ -34,14 +34,18 @@ for (const m of runTask.matchAll(/runAgentLoop\(\{[\s\S]*?\}\);/g)) {
 }
 assert.match(runTask, /const recEvent = ?\(e\)=>\{ onLoopEvent\(e\); rec\.onEvent\(e\); \}/,
   'the live-UI handler runs for in-run feedback AND the recorder sees every event (the record is the durable copy)');
-assert.match(runTask, /rec\.wrapInfer\(inferViaHost\)/, 'the model exchange is content-addressed through wrapInfer');
+// shape, not signature: wrapInfer now also takes the F1 divergence hook
+assert.match(runTask, /rec\.wrapInfer\(inferViaHost/, 'the model exchange is content-addressed through wrapInfer');
+assert.match(runTask, /onDivergence/, 'F1: a request that cannot be reconstructed from the chain is surfaced');
 
 // The record is read only after it settles, and the folds are checked against the live state.
 assert.match(runTask, /await rec\.settled\(\);/, 'the record is settled before it is read');
 // Layer 2b: status and the carried transcript are DERIVED from the record's folds, not written
 // in parallel — so there is no dual-write to self-check. The two ⚠ lines are gone.
 assert.match(runTask, /t\.status = foldStatus\(recEvents, rec\.resolve, \{ gated \}\)\.status/, 'status IS the fold, not a parallel computation');
-assert.match(runTask, /t\.convo = await carryForward\(foldTranscript\(recEvents, rec\.resolve\)\)/, 'the carried transcript IS the fold, paired by construction');
+// shape, not signature: F4 hands the recorder to carryForward so the lossy carry is logged
+assert.match(runTask, /t\.convo = await carryForward\(foldTranscript\(recEvents, rec\.resolve\)/, 'the carried transcript IS the fold, paired by construction');
+assert.match(anvil, /rec\.compacted\(\{ method:'carry-forward'/, 'F4: the carry records its replacement on the chain, so foldSurface reproduces what was sent');
 assert.ok(!/run record disagrees/.test(anvil), 'the dual-write self-check is deleted (the record is the source of truth, nothing to disagree with)');
 assert.ok(!/logStart/.test(anvil), 'the self-check\'s logStart bookkeeping is gone with it');
 
@@ -127,7 +131,16 @@ assert.match(anvil, /t\.log stays a written array/, 'the code is honest: t.log i
 // record (foldRecovery), and it rides beside the carried transcript — additive, not a replace.
 assert.match(anvil, /t\.recovery = recoveryNote\(foldRecovery\(recEvents, rec\.resolve\)\)/, 'the recovery note is a pure fold of this run\'s record, stashed for the next run');
 assert.match(anvil, /const recoveryPreface = \(t\.recovery/, 'the next run is prefaced with the recovery note');
-assert.match(anvil, /firstMessages=\[sysMsg\(gateNote\+recoveryPreface\), \.\.\.convo\]/, 'the note rides in the system preface beside the carried transcript, not replacing it');
+// F3 moved it out of the system prefix (which is the cache boundary) into the change-gated
+// context message that rides at the END of the conversation — still additive, never a replace.
+assert.match(anvil, /const volatileCtx = \(projectContext\+memoryIndex\+skillsIndex\+recoveryPreface\)\.trim\(\)/, 'the recovery note rides with the other volatile context');
+assert.match(anvil, /firstMessages=\[sysMsg\(gateNote\), \.\.\.convo\]/, 'the carried transcript is still what follows the system message');
+assert.ok(!/sysMsg\(gateNote\+recoveryPreface\)/.test(anvil), 'the volatile note is OUT of the cache prefix');
+// and the prefix itself carries only stable text — one volatile index in it invalidates everything
+assert.match(anvil, /const sysMsg=\(extra\)=>\(\{role:'system',content:SYSTEM\+\(MODE_NOTE\[mode\]\|\|''\)\+\(mode==='code'\?LESSON_NOTE:''\)\+\(extra\|\|''\)\}\)/, 'the system message is stable text only');
+for (const volatile of ['projectContext', 'memoryIndex', 'skillsIndex']) {
+  assert.ok(!new RegExp(`content:SYSTEM\\+[^}]*${volatile}`).test(anvil), `${volatile} is back in the cache prefix`);
+}
 
 // D2 supervisor: after a loop, a record-fold (foldStagnation) catches spinning the loop's own
 // consecutive-identical guard misses, and injects ONE capped redirect — fired at most once per

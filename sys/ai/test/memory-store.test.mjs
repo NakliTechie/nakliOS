@@ -243,6 +243,84 @@ await test('rules: weight round-trips (1–10, default 5 omitted); the cap error
   assert(/lessons, not logs/i.test(LESSON_CONTRACT) && /next time/.test(LESSON_CONTRACT), 'the contract says the two load-bearing things');
 });
 
+// ───────────────────────────── created: the slot's recency signal (S-3) ──
+
+await test('created: round-trips, and an unparseable one degrades to absent', () => {
+  const f = parseFact('---\nname: a\ndescription: d\ntype: project\ncreated: 2026-09-07T10:00:00.000Z\n---\nbody');
+  eq(f.created, '2026-09-07T10:00:00.000Z', 'parsed');
+  assert(/^created: 2026-09-07T10:00:00\.000Z$/m.test(serializeFact(f)), 'serialized on its own line:\n' + serializeFact(f));
+  eq(parseFact(serializeFact(f)).created, f.created, 'round-trip');
+  eq(parseFact('---\nname: a\ndescription: d\ntype: project\ncreated: last tuesday\n---\nb').created, null, 'garbage → absent, not an error');
+  eq(parseFact('---\nname: a\ndescription: d\ntype: project\n---\nb').created, null, 'absent stays absent');
+  assert(!/created:/.test(serializeFact({ name: 'a', description: 'd', type: 'project', body: 'b' })), 'an untimed fact writes no created line');
+});
+
+await test('noteToFact stamps created, and honours an injected one', () => {
+  const fixed = noteToFact('The db is postgres', 'project', null, { created: '2020-01-02T03:04:05Z' });
+  eq(fixed.created, '2020-01-02T03:04:05.000Z', 'injected time is used verbatim (normalised)');
+  eq(parseFact(fixed.file).created, fixed.created, 'it reaches the file');
+  const now = noteToFact('The db is mysql', 'project');
+  assert(Math.abs(Date.parse(now.created) - Date.now()) < 60000, `stamped from the clock: ${now.created}`);
+});
+
+await test('created: is STRICT — Date.parse alone accepts three things that are not instants', () => {
+  const P = (v) => parseFact(`---\nname: a\ndescription: d\ntype: project\ncreated: ${v}\n---\nb`).created;
+  // each of these was accepted by the first version and is a real ordering hazard
+  eq(P('1'), null, 'a bare number is not a date (Date.parse makes it 2001-01-01)');
+  eq(P('2026-02-30'), null, 'a day that does not exist must not roll into one that does');
+  eq(P('2026-09-07T10:00:00'), null, 'a datetime with no timezone orders differently on two machines');
+  eq(P('2026-13-01'), null, 'a month that does not exist');
+  eq(P('last tuesday'), null, 'prose');
+  // and the forms that ARE instants still work
+  eq(P('2026-09-07T10:00:00Z'), '2026-09-07T10:00:00.000Z', 'UTC');
+  eq(P('2026-09-07T10:00:00+05:30'), '2026-09-07T04:30:00.000Z', 'an explicit offset is normalised');
+  eq(P('2026-09-07'), '2026-09-07T00:00:00.000Z', 'a bare date is UTC midnight');
+  eq(P('2026-09-07T10:00:00.250Z'), '2026-09-07T10:00:00.250Z', 'milliseconds');
+});
+
+await test('a supersede CYCLE is broken by recorded time, not by array order', () => {
+  const F = (name, created, supersedes) => ({ name, description: name, type: 'project', status: null, slot: 'phase',
+    supersedes, derived_from: [], contradicts: [], created, body: name });
+  const young = F('young', '2026-01-01T00:00:00Z', ['old']);
+  const old = F('old', '2001-01-01T00:00:00Z', ['young']);
+  eq(slotHolder([young, old], 'phase'), 'young', 'the newer member of the cycle wins');
+  eq(slotHolder([old, young], 'phase'), 'young', 'and reversing the array does not change it');
+  // untimed members still fall back to disk order, which is all the information there is
+  const a = F('a', null, ['b']), b = F('b', null, ['a']);
+  eq(slotHolder([a, b], 'phase'), 'b', 'untimed: the last written wins');
+  eq(slotHolder([b, a], 'phase'), 'a', 'and that IS order-dependent — honestly so, with nothing else to go on');
+});
+
+await test('slotHolder prefers the recorded time over array order, and degrades to disk order', () => {
+  const F = (name, created) => ({ name, description: name, type: 'project', status: null, slot: 'phase',
+    supersedes: [], derived_from: [], contradicts: [], created, body: name });
+  // ALPHABETICALLY sorted — the array order says `c-old` is last, the clock says `a-new` is newest.
+  const sorted = [F('a-new', '2026-09-07T10:00:00Z'), F('b-mid', '2026-05-01T00:00:00Z'), F('c-old', '2020-01-01T00:00:00Z')];
+  eq(slotHolder(sorted, 'phase'), 'a-new', 'the chronologically newest holds the slot, not the last in the array');
+  // reversing the array must not change the answer — that is the whole point of the field
+  eq(slotHolder([...sorted].reverse(), 'phase'), 'a-new', 'the answer is order-independent once times exist');
+  // no times at all → exactly the old behaviour, disk order
+  const untimed = [F('first', null), F('second', null), F('third', null)];
+  eq(slotHolder(untimed, 'phase'), 'third', 'an all-untimed store still answers by disk order');
+  // mixed: a timed fact beats an untimed one wherever it sits in the array
+  eq(slotHolder([F('timed', '2001-01-01T00:00:00Z'), F('untimed', null)], 'phase'), 'timed',
+    'a fact that recorded when it was written beats one that never did, even when it comes first');
+  // supersedes still wins over time: an older fact that supersedes the newer one holds
+  const superseding = [F('young', '2026-09-07T10:00:00Z'), { ...F('elder', '2001-01-01T00:00:00Z'), supersedes: ['young'] }];
+  eq(slotHolder(superseding, 'phase'), 'elder', 'the supersedes graph is consulted before the clock');
+  // retracted is never a holder, however new
+  eq(slotHolder([F('live', '2001-01-01T00:00:00Z'), { ...F('dead', '2026-09-07T10:00:00Z'), status: 'retracted' }], 'phase'),
+    'live', 'a retracted fact does not hold the slot no matter how recent');
+  // a PRE-EPOCH timed fact still beats an untimed one: the untimed sort key must be -Infinity,
+  // not 0, or every fact written before 1970 loses to one that recorded nothing at all
+  eq(slotHolder([F('old-but-dated', '1960-01-01T00:00:00Z'), F('undated', null)], 'phase'), 'old-but-dated',
+    'a 1960 timestamp beats no timestamp — the untimed key is -Infinity, not the epoch');
+  // EQUAL timestamps fall back to disk order, last written wins (the tie-break direction)
+  const same = '2026-05-05T00:00:00Z';
+  eq(slotHolder([F('first', same), F('second', same)], 'phase'), 'second', 'a tie keeps the last-in-array winner');
+  eq(slotHolder([F('second', same), F('first', same)], 'phase'), 'first', 'and the tie really is decided by order');
+});
+
 if (failures.length){
   console.error(`memory-store: ${passed} passed, ${failures.length} FAILED`);
   for (const f of failures) console.error(`  FAIL ${f.n}: ${f.message}`);

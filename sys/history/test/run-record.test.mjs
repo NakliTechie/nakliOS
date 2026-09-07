@@ -13,13 +13,15 @@ import { verifyChain } from '../ledger.mjs';
 import { RUN_EVENTS, createRunRecorder, loadRecord, foldStatus, foldLog, foldTranscript,
          replayInfer, replayExecuteTool, compareRuns, requestHash, ReplayMiss,
          OUTCOME_SIGNALS, foldOutcome, foldReuse, foldStopReasons, stopReasonsLine,
-         searchRecords, readEvent, historyTool, HISTORY_ROLES, foldRecovery, recoveryNote,
-         foldStagnation, stagnationNudge, foldSessionContext, foldDecisions } from '../run-record.mjs';
+         searchRecords, scopeEntries, readEvent, historyTool, HISTORY_ROLES, foldRecovery, recoveryNote,
+         foldStagnation, stagnationNudge, foldSessionContext, foldDecisions,
+         foldSurface, compactionOrphaned, reconstructionCheck, joined } from '../run-record.mjs';
 
 let passed = 0; const failures = [];
 async function test(n, fn) { try { await fn(); passed++; } catch (e) { failures.push({ n, message: e.message }); } }
 function assert(c, m) { if (!c) throw new Error(m || 'assertion failed'); }
 function eq(a, b, m) { if (a !== b) throw new Error(`${m || 'ne'}: ${JSON.stringify(a)} !== ${JSON.stringify(b)}`); }
+function deepEq(a, b, m) { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${m || 'ne'}: ${JSON.stringify(a)} !== ${JSON.stringify(b)}`); }
 
 function freshShell() {
   const fs = createFileops({ backend: new MemoryBackend() });
@@ -225,6 +227,31 @@ async function recordFinding(marker) {
   await rec.finish(r); await rec.settled();
   return rec;
 }
+
+await test('HISTORY scope: run / task / project return DIFFERENT sets — the advertised parameter is implemented (S-1)', async () => {
+  // three records: two belong to the asking task, one to a sibling task in the same project
+  const entries = [
+    { runId: 'mine-1',    taskId: 'task-A', record: await recordFinding('SCOPE-OLD') },
+    { runId: 'other-1',   taskId: 'task-B', record: await recordFinding('SCOPE-SIBLING') },
+    { runId: 'mine-2',    taskId: 'task-A', record: await recordFinding('SCOPE-NEW') },
+  ];
+  const ids = (scope) => searchRecords(entries, { query: 'scope-', scope, taskId: 'task-A', limit: 20 })
+    .map((h) => h.runId).filter((v, i, a) => a.indexOf(v) === i).sort();
+
+  deepEq(ids('project'), ['mine-1', 'mine-2', 'other-1'], 'project sees every entry');
+  deepEq(ids('task'), ['mine-1', 'mine-2'], 'task excludes the sibling task');
+  deepEq(ids('run'), ['mine-2'], 'run is the newest entry of the asking task alone');
+  assert(ids('project').length !== ids('task').length, 'project and task are DIFFERENT sets, not the same call twice');
+  assert(!ids('task').includes('other-1'), "the sibling task's record is not reachable at task scope");
+
+  // an unknown scope is not a silent narrowing — it behaves as project
+  deepEq(scopeEntries(entries, 'nonsense', 'task-A').map((e) => e.runId), ['mine-1', 'other-1', 'mine-2'], 'an unrecognised scope does not filter');
+  // entries the loader did not tag keep working: an untagged entry is never dropped
+  const untagged = [{ runId: 'legacy', record: entries[0].record }];
+  eq(scopeEntries(untagged, 'task', 'task-A').length, 1, 'an untagged entry survives a task-scoped search');
+  // and with no taskId the filter cannot narrow, so it does not pretend to
+  eq(scopeEntries(entries, 'task', null).length, 3, 'no asking task → nothing to match against, nothing filtered');
+});
 
 await test('HISTORY search: from "run 3" a query finds a tool result recorded in run 1, newest first, with a readable id', async () => {
   const entries = [
@@ -760,6 +787,237 @@ await test('STOP REASONS: a histogram over records — by stop, by derived statu
   assert(/^5 runs · /.test(line) && /budget: turns 1/.test(line), line);
   eq(stopReasonsLine(foldStopReasons([])), 'no runs recorded', 'empty');
   eq(JSON.stringify(pass.events()), JSON.stringify(pass.events()), 'read-only: events untouched');
+});
+
+await test('F1: the request-reconstruction invariant detects drift, and never throws', async () => {
+  const rec = createRunRecorder({ app: 'anvil', principal: 'p' });
+  const msgs = [{ role: 'system', content: 'sys' }, { role: 'user', content: 'go' }];
+  await rec.start({ messages: msgs });
+  await rec.settled();
+  // the honest case: what we would send IS what the record reconstructs
+  const ok = reconstructionCheck(msgs, rec.events(), rec.resolve);
+  eq(ok.ok, true, `a faithful request reconstructs: ${ok.why}`);
+  // drift: a message the record has never seen
+  const drifted = reconstructionCheck([...msgs, { role: 'user', content: 'smuggled' }], rec.events(), rec.resolve);
+  eq(drifted.ok, false, 'an extra message is caught');
+  assert(/length/.test(drifted.why), `and named: ${drifted.why}`);
+  // drift: same length, different content — the subtler case
+  const swapped = reconstructionCheck([{ role: 'system', content: 'sys' }, { role: 'user', content: 'CHANGED' }], rec.events(), rec.resolve);
+  eq(swapped.ok, false, 'a mutated message is caught');
+  eq(swapped.at, 0, 'and located');
+  // it must see through a recorded compaction, because that is the case it exists for
+  await rec.compacted({ method: 'summarize', from: 0, to: 1, replacement: [{ role: 'user', content: 'summary' }] });
+  await rec.settled();
+  eq(reconstructionCheck([{ role: 'system', content: 'sys' }, { role: 'user', content: 'summary' }], rec.events(), rec.resolve).ok,
+     true, 'after a logged compaction, the COMPACTED surface is what reconstructs');
+  eq(reconstructionCheck(msgs, rec.events(), rec.resolve).ok, false, 'and the pre-compaction transcript no longer does');
+
+  // The subtlest drift of all: the same call id, a DIFFERENT thing being asked for. Comparing
+  // ids alone let `pwd` become `rm -rf src` and reported ok (found by a cross-family review).
+  {
+    const r2 = createRunRecorder({ app: 'anvil', principal: 'p' });
+    const call = (args) => ({ id: 'c', type: 'function', function: { name: 'shell', arguments: args } });
+    await r2.start({ messages: [{ role: 'user', content: 'go' }] });
+    await r2.onEvent({ type: 'turn-start', step: 0 });
+    const inf = r2.wrapInfer(async () => ({ content: '', toolCalls: [call('{"command":"pwd"}')] }));
+    await inf({ messages: [{ role: 'user', content: 'go' }], tools: [] });
+    // the paired reply, so foldTranscript flushes the assistant tool-call turn into the surface
+    r2.onEvent({ type: 'tool-call', name: 'shell', id: 'c', args: { command: 'pwd' }, step: 0 });
+    r2.onEvent({ type: 'tool-result', name: 'shell', id: 'c', result: '/', step: 0 });
+    await r2.settled();
+    const surface = foldSurface(r2.events(), r2.resolve);
+    eq(reconstructionCheck(surface, r2.events(), r2.resolve).ok, true, 'sanity: the recorded surface reconstructs');
+    const tampered = surface.map((m) => (m.tool_calls ? { ...m, tool_calls: [call('{"command":"rm -rf src"}')] } : m));
+    const bad = reconstructionCheck(tampered, r2.events(), r2.resolve);
+    eq(bad.ok, false, 'a tool call whose ARGUMENTS changed under the same id is caught');
+    assert(/rm -rf src/.test(bad.why), `and the why names what changed: ${bad.why}`);
+    // and the tool NAME too — same id, same arguments, a different tool
+    const renamed = surface.map((m) => (m.tool_calls ? { ...m, tool_calls: [{ id: 'c', type: 'function', function: { name: 'write', arguments: '{"command":"pwd"}' } }] } : m));
+    eq(reconstructionCheck(renamed, r2.events(), r2.resolve).ok, false, 'a tool call whose NAME changed under the same id is caught');
+  }
+
+  // the hook fires on a real request, and does NOT throw
+  const seen = [];
+  const rec2 = createRunRecorder({ app: 'anvil', principal: 'p' });
+  await rec2.start({ messages: [{ role: 'user', content: 'a' }] });
+  const infer = rec2.wrapInfer(async () => ({ content: 'ok', toolCalls: [] }), { onDivergence: (d) => seen.push(d) });
+  const reply = await infer({ messages: [{ role: 'user', content: 'a' }], tools: [] });
+  eq(seen.length, 0, 'a faithful request raises nothing');
+  eq(reply.content, 'ok', 'and the reply passes through');
+  const reply2 = await infer({ messages: [{ role: 'user', content: 'TAMPERED' }], tools: [] });
+  eq(seen.length, 1, 'a drifted request is reported');
+  eq(reply2.content, 'ok', 'and the run CONTINUES — detection must not kill it');
+});
+
+await test('F7 x F1: a NUDGED run still reconstructs from its chain — the loop\'s own user turn is recorded', async () => {
+  const rec = createRunRecorder({ app: 'anvil', principal: 'p' });
+  const msgs = [{ role: 'system', content: 'sys' }, { role: 'user', content: 'go' }];
+  await rec.start({ messages: msgs });
+  const seen = [];
+  let sent = null;
+  const infer = rec.wrapInfer(async ({ messages }) => { sent = messages; return { content: '', toolCalls: [{ id: 'c', function: { name: 'shell', arguments: '{"command":"pwd"}' } }] }; },
+    { onDivergence: (d) => seen.push(d) });
+  const r = await runAgentLoop({
+    messages: msgs, tools: [shellTool()], infer,
+    executeTool: async () => 'Refused: nope',
+    onEvent: rec.onEvent, maxSteps: 4,
+  });
+  await rec.finish(r); await rec.settled();
+
+  // the nudge really happened, and it is ON THE CHAIN
+  const nudges = joined(rec.events(), rec.resolve).filter((e) => e.tool === 'run.nudged');
+  eq(nudges.length, 1, 'the repeat nudge was recorded as an event, not only pushed into the array');
+  // the METADATA is the run's, not a placeholder: a stagnation review reads these
+  const folded = foldTranscript(rec.events(), rec.resolve);
+  const note = folded.filter((m) => m.role === 'user' && /^\[coordination\] You have issued/.test(m.content));
+  eq(note.length, 1, `the fold reproduces the nudge: ${JSON.stringify(folded.map(m => m.role))}`);
+  assert(/refused/i.test(note[0].content), 'a run whose every result was a refusal is nudged in the denied wording');
+  // the recorded METADATA is the run's, not a placeholder: a stagnation review reads these
+  eq(nudges[0].input.times, 3, `the recorded count is the real one: ${JSON.stringify(nudges[0].input)}`);
+  eq(nudges[0].input.denied, true, 'and a run whose every result was refused is recorded as denied');
+  eq(nudges[0].output.content, note[0].content, 'the recorded text is the text that was sent');
+
+  // and the invariant F1 exists to protect holds across it
+  eq(seen.length, 0, `no divergence was raised on a nudged run: ${JSON.stringify(seen)}`);
+  const chk = reconstructionCheck(sent, rec.events(), rec.resolve);
+  eq(chk.ok, true, `the LAST request sent still equals the fold: ${chk.why} at ${chk.at}`);
+  // the control: drop the nudge event and the same request no longer reconstructs
+  const without = rec.events().filter((e) => e.tool !== 'run.nudged');
+  eq(reconstructionCheck(sent, without, rec.resolve).ok, false, 'without the recorded nudge the request does NOT reconstruct — which is why it must be recorded');
+});
+
+await test('F5 x F1: a SPILLED result reconstructs — the fold sends the capped form, history keeps the whole', async () => {
+  const rec = createRunRecorder({ app: 'anvil', principal: 'p' });
+  const msgs = [{ role: 'system', content: 'sys' }, { role: 'user', content: 'go' }];
+  await rec.start({ messages: msgs });
+  // NOT base64-shaped: a 30k unbroken alnum blob is reported as binary by eventText, and
+  // this test is about a long TEXT result.
+  const huge = 'START\n' + 'needle line qqqq\n'.repeat(2000) + 'END';
+  const seen = [];
+  let sent = null;
+  let turn = 0;
+  const infer = rec.wrapInfer(async ({ messages }) => {
+    sent = messages;
+    return turn++ === 0
+      ? { content: '', toolCalls: [{ id: 'b', function: { name: 'shell', arguments: '{"command":"cat big"}' } }] }
+      : { content: 'done', toolCalls: [] };
+  }, { onDivergence: (d) => seen.push(d) });
+  const r = await runAgentLoop({
+    messages: msgs, tools: [shellTool()], infer,
+    executeTool: async () => huge,
+    onEvent: rec.onEvent, toolOutputCap: 1000, maxSteps: 3,
+  });
+  await rec.finish(r); await rec.settled();
+
+  const folded = foldTranscript(rec.events(), rec.resolve);
+  const toolMsg = folded.find((m) => m.role === 'tool');
+  assert(toolMsg.content.length <= 1000, `the fold reproduces the CAPPED form: ${toolMsg.content.length} chars`);
+  eq(toolMsg.content, r.messages.find((m) => m.role === 'tool').content, 'byte-identical to what the loop actually sent');
+  eq(seen.length, 0, `no divergence on a spilled run: ${JSON.stringify(seen)}`);
+  eq(reconstructionCheck(sent, rec.events(), rec.resolve).ok, true, 'the second request still equals the fold');
+
+  // and the WHOLE result is still retrievable — that is what makes the locator honest
+  const hits = searchRecords([{ runId: 'r1', record: rec }], { query: 'needle line' });
+  assert(hits.length > 0, 'the elided body is findable through history');
+  const ev = joined(rec.events(), rec.resolve).find((e) => e.tool === 'tool.responded');
+  eq(String(ev.output.result), huge, 'the record holds the complete result, not the preview');
+});
+
+await test('F4: compaction is a LOGGED surface replace — the sent transcript is derivable', async () => {
+  const rec = createRunRecorder({ app: 'anvil', principal: 'p' });
+  // the system message is stripped by foldTranscript; three user turns survive
+  await rec.start({ messages: [{ role: 'system', content: 's' }, { role: 'user', content: 'one' },
+                               { role: 'user', content: 'two' }, { role: 'user', content: 'three' }] });
+  await rec.settled();
+  const before = foldSurface(rec.events(), rec.resolve);
+  eq(before.length, 3, 'three carried turns');
+  // compact the two assistant turns into one summary — the model-written part, hence logged
+  await rec.compacted({ method: 'summarize', from: 1, to: 3, replacement: [{ role: 'user', content: '[summary of 2 turns]' }] });
+  await rec.settled();
+  const after = foldSurface(rec.events(), rec.resolve);
+  eq(after.length, 2, 'the span collapsed to the replacement');
+  eq(after[1].content, '[summary of 2 turns]', 'the recorded replacement is what the surface carries');
+  eq(after[0].content, 'one', 'the head of the surface is untouched');
+  // the ORIGINALS are shadowed, not deleted — still on the chain and still foldable
+  eq(foldTranscript(rec.events(), rec.resolve).length, 3, 'the raw transcript still holds both turns');
+  assert(rec.events().some((e) => e.tool === 'run.compacted'), 'the compaction is on the chain');
+  eq((await verifyChain(rec.events())).ok, true, 'and the chain still verifies');
+  // a replay from the exported record reproduces the same surface
+  const reloaded = loadRecord(rec.export());
+  eq(JSON.stringify(foldSurface(reloaded.events(), reloaded.resolve)), JSON.stringify(after), 'reproducible from the export alone');
+  // an out-of-range span is ignored, never thrown — a fold must not break a run
+  const bad = createRunRecorder({ app: 'anvil', principal: 'p' });
+  await bad.start({ messages: [{ role: 'user', content: 'x' }] });
+  await bad.compacted({ method: 'shake', from: 5, to: 99, replacement: [{ role: 'user', content: 'nope' }] });
+  await bad.settled();
+  eq(foldSurface(bad.events(), bad.resolve).length, 1, 'an impossible span leaves the surface alone');
+  eq(compactionOrphaned(bad.events(), bad.resolve), false, 'a completed compaction is not an orphan');
+
+  // A cross-family review mutation-tested this fold and three defects survived. Each one below
+  // kills a mutation the fixture above could not see.
+
+  // (1) an INTERIOR span: the fixture replaced through the end, so deleting `surface.slice(to)`
+  // from the fold left every assertion green while the tail silently vanished.
+  const mid = createRunRecorder({ app: 'anvil', principal: 'p' });
+  await mid.start({ messages: [{ role: 'user', content: 'a' }, { role: 'user', content: 'b' },
+                               { role: 'user', content: 'c' }, { role: 'user', content: 'd' }] });
+  await mid.compacted({ method: 'shake', from: 1, to: 3, replacement: [{ role: 'user', content: 'BC' }] });
+  await mid.settled();
+  deepEq(foldSurface(mid.events(), mid.resolve).map((m) => m.content), ['a', 'BC', 'd'],
+    'an interior replacement keeps BOTH the head and the tail around it');
+
+  // (2) TWO compactions: with only one on the chain, a `break` after the first replacement
+  // was indistinguishable from applying them all.
+  const twice = createRunRecorder({ app: 'anvil', principal: 'p' });
+  await twice.start({ messages: [{ role: 'user', content: 'a' }, { role: 'user', content: 'b' },
+                                 { role: 'user', content: 'c' }, { role: 'user', content: 'd' }] });
+  await twice.compacted({ method: 'shake', from: 0, to: 2, replacement: [{ role: 'user', content: 'AB' }] });
+  await twice.compacted({ method: 'shake', from: 1, to: 3, replacement: [{ role: 'user', content: 'CD' }] });
+  await twice.settled();
+  deepEq(foldSurface(twice.events(), twice.resolve).map((m) => m.content), ['AB', 'CD'],
+    'every recorded compaction is applied, in order — not just the first');
+
+  // (3) a REAL orphan: the fixture only ever asserted `false`, so a fold that always returned
+  // false passed. A compaction whose replacement never landed is the crash-mid-compaction case
+  // the verb exists to detect.
+  const orphan = createRunRecorder({ app: 'anvil', principal: 'p' });
+  await orphan.start({ messages: [{ role: 'user', content: 'x' }] });
+  await orphan.compacted({ method: 'shake', from: 0, to: 1, replacement: null });
+  await orphan.settled();
+  eq(compactionOrphaned(orphan.events(), orphan.resolve), true,
+    'a compaction with no recorded replacement IS an orphan — a crash mid-compaction must not read as finished');
+  eq(compactionOrphaned(rec.events(), rec.resolve), false, 'and a completed one still is not');
+  // and the ORPHAN must leave the surface ALONE. Treating a missing replacement as an empty
+  // one deletes the span — the half-applied transcript this verb exists to prevent, and it
+  // passes every assertion above (mutation-tested).
+  deepEq(foldSurface(orphan.events(), orphan.resolve).map((m) => m.content), ['x'],
+    'an orphaned compaction does not delete the span it claimed');
+
+  // (4) INTERLEAVED with later turns. A compaction's span indexes the surface AS IT STOOD when
+  // that compaction ran. Applying every compaction after the whole transcript was folded gave
+  // the wrong answer here — the checker reproduced ["summary","summary","next"] for this exact
+  // shape, and a second case where an out-of-range span later overwrote a future reply.
+  const inter = createRunRecorder({ app: 'anvil', principal: 'p' });
+  await inter.start({ messages: [{ role: 'user', content: 'one' }, { role: 'user', content: 'two' }] });
+  await inter.compacted({ method: 'summarize', from: 0, to: 2, replacement: [{ role: 'user', content: 'summary' }] });
+  await inter.start({ messages: [{ role: 'user', content: 'summary' }, { role: 'user', content: 'next' }] });
+  await inter.settled();
+  deepEq(foldSurface(inter.events(), inter.resolve).map((m) => m.content), ['summary', 'next'],
+    'a compaction followed by more turns replays to the surface that was actually sent');
+  // the raw transcript is unchanged by any of it — foldTranscript ignores the verb by design
+  deepEq(foldTranscript(inter.events(), inter.resolve).map((m) => m.content), ['one', 'two', 'summary', 'next'],
+    'the originals stay readable: the compaction SHADOWS, it does not rewrite');
+
+  // and a span that was valid when recorded but points past a LATER surface is still ignored,
+  // never applied to messages that did not exist when the compaction ran
+  const stale = createRunRecorder({ app: 'anvil', principal: 'p' });
+  await stale.start({ messages: [{ role: 'user', content: 'only' }] });
+  await stale.compacted({ method: 'shake', from: 1, to: 2, replacement: [{ role: 'user', content: 'GHOST' }] });
+  await stale.start({ messages: [{ role: 'user', content: 'only' }, { role: 'assistant', content: 'later reply' }] });
+  await stale.settled();
+  const staleSurface = foldSurface(stale.events(), stale.resolve).map((m) => m.content);
+  assert(!staleSurface.includes('GHOST'), `an impossible span overwrote a later message: ${JSON.stringify(staleSurface)}`);
+  deepEq(staleSurface, ['only', 'later reply'], 'the later turn survives untouched');
 });
 
 if (failures.length) { console.error(`history/run-record: ${passed} passed, ${failures.length} FAILED`); for (const f of failures) console.error(`  FAIL ${f.n}: ${f.message}`); process.exit(1); }

@@ -34,7 +34,7 @@ export function createAgentFace({ registry, grant, opLog, actor = 'agent', calle
   // the closure is injected, not imported.
   async function capabilityCheck(command, input, name) {
     if (!capability || typeof capability.verify !== 'function') return null;
-    const pathArgs = pathArgsOf(command, input);
+    const pathArgs = pathArgsOf(command, input).map((a) => a.path);
     let res;
     try { res = await capability.verify({ tool: name, command, input, target: pathArgs[0] || (command && command.scope) || '' }); }
     catch (e) { res = { ok: false, reason: String(e && e.message || e) }; }
@@ -46,7 +46,7 @@ export function createAgentFace({ registry, grant, opLog, actor = 'agent', calle
     const keys = Array.isArray(command.pathParams)
       ? command.pathParams
       : [...PATH_KEYS].filter((k) => input && k in input);
-    return keys.filter((k) => input && typeof input[k] === 'string').map((k) => input[k]);
+    return keys.filter((k) => input && typeof input[k] === 'string').map((k) => ({ key: k, path: input[k] }));
   }
 
   // Returns a denial result, or null when allowed.
@@ -54,9 +54,19 @@ export function createAgentFace({ registry, grant, opLog, actor = 'agent', calle
     if (!grant.allowsScope(command.scope)) {
       return { ok: false, code: 'EGRANT', message: `scope not granted: ${command.scope}` };
     }
-    for (const p of pathArgsOf(command, input)) {
+    // A mutating scope is anything that writes or removes; a read never trips the read-only
+    // regions below, so a granted directory stays readable while staying unwritable. A
+    // command may declare `sourceParams` — path arguments it only READS (fs.copy's `from`),
+    // so copying a file OUT of a read-only region works while writing INTO it does not.
+    // fs.move declares none on purpose: a move deletes its source.
+    const mutating = /:(write|remove)$/.test(String(command.scope || ''));
+    const sources = new Set(Array.isArray(command.sourceParams) ? command.sourceParams : []);
+    for (const { key, path: p } of pathArgsOf(command, input)) {
       if (!grant.allowsPath(p)) {
         return { ok: false, code: 'EGRANT', message: `path outside grant: ${p}` };
+      }
+      if (mutating && !sources.has(key) && typeof grant.isReadOnly === 'function' && grant.isReadOnly(p)) {
+        return { ok: false, code: 'EGRANT', message: `path is read-only under this grant: ${p}` };
       }
     }
     return null;

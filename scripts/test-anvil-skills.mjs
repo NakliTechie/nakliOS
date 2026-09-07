@@ -4,7 +4,7 @@
 // Grep-based, like the other app-contract tests. Pins the seam, not the shape.
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { buildSkillsIndex, parseSkill } from '../sys/ai/skills.mjs';
+import { buildSkillsIndex, parseSkill, explainSkillsRefusal } from '../sys/ai/skills.mjs';
 
 const anvil = await readFile(new URL('../apps/anvil/index.html', import.meta.url), 'utf8');
 
@@ -35,5 +35,32 @@ const idx = buildSkillsIndex([staged, quarantined, active]);
 assert.ok(!/\*\*s\*\*/.test(idx) && !/\*\*q\*\*/.test(idx) && /\*\*a\*\*/.test(idx), 'only the active skill is injected');
 // The regression: dropping status re-admits a staged skill.
 assert.ok(/\*\*s\*\*/.test(buildSkillsIndex([{ name: staged.name, description: staged.description }])), 'sanity: without status the filter cannot engage — which is why the app must pass it');
+
+
+// ── the write fence, both halves (NAF-01) ──
+// The structured file tools were fenced; the shell was not, so a redirect landed a skill on
+// disk with only the load-path sentinel behind it. Both guards must sit BEFORE the executor.
+const fileGuard = anvil.indexOf("['write','edit','apply_patch','edit_lines','remove','move'].includes(nm)");
+const exec = anvil.indexOf('const raw = await baseExec(nm, ar, callObj)');
+assert.ok(fileGuard > 0, 'the file tools are fenced out of the skills dir');
+assert.ok(exec > 0, 'the tool executor is where the guard must precede');
+assert.ok(fileGuard < exec, 'the file fence runs BEFORE the write reaches the executor');
+// the shell is fenced by the GRANT, not by matching its command line
+assert.match(anvil, /const res = \(nm==='shell' && typeof raw==='string'\) \? explainSkillsRefusal\(raw\) : raw;/, 'a shell refusal is explained, and the explanation cannot itself refuse');
+assert.match(anvil, /import \{[^}]*explainSkillsRefusal[^}]*\} from '\.\.\/\.\.\/sys\/ai\/skills\.mjs'/, 'the wording comes from the module, not a copy in the app');
+assert.ok(/skill_manage/.test(explainSkillsRefusal('fs.write: EGRANT: path is read-only under this grant: .anvil/skills/y/SKILL.md')), 'the explanation names the door');
+assert.equal(explainSkillsRefusal('ok'), 'ok', 'an ordinary result is untouched');
+
+// The boundary itself: the grant, not the string match. Both the top-level agent and every
+// subagent get .anvil/skills as a read-only region, so every shell spelling of a write is
+// refused on the NORMALISED path (sys/ai/test/skills-fence.test.mjs drives the real shell).
+assert.equal((anvil.match(/readOnlyPrefixes:\[SKILLS_DIR\]/g) || []).length, 2,
+  'both the agent grant and the subagent grant fence the skills dir read-only');
+assert.match(anvil, /createGrant\(\{ prefixes:\[''\][^}]*readOnlyPrefixes:\[SKILLS_DIR\] \}\)/, 'the fence is on the grant the agent face enforces');
+// and the one door stays open: skill_manage writes through the UNGRANTED `fs`, never the
+// granted face — if it ever moved to face.invoke, the fence would lock out its own door.
+assert.match(anvil, /const w = await fs\.write\(dir\+'\/'\+SKILL_FILE, plan\.skillText\)/, 'skill_manage writes through the ungranted fs');
+assert.ok(!/face\.invoke\('fs\.(write|remove|move|copy)'[^)]*SKILL/.test(anvil), 'skill_manage does not write skills through the granted face');
+
 
 console.log('anvil-skills: skill writes are planned, scanned, staged through P0, and never injected until activated');

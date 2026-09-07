@@ -87,3 +87,44 @@ export function skillTool(){
     },
   };
 }
+
+// ── the write side of the skills fence (forward-pass NAF-01, second half) ──
+//
+// A file under SKILLS_DIR decides what instructions bind, and skill_manage — which scans a
+// skill through the sentinel first — is the one door. The app refused the structured file
+// tools by matching the path; the shell was not covered, so `echo x > .anvil/skills/y/SKILL.md`
+// landed on disk with only the load-path sentinel behind it.
+//
+// The BOUNDARY is not here. It is the grant: the app gives the agent face SKILLS_DIR as a
+// readOnlyPrefix, so the check runs on the NORMALISED path, after the shell has resolved `..`,
+// expanded variables, applied `cd`, and mapped `rm` onto `fs.remove`. A first attempt at this
+// matched the raw command line instead, and a cross-family review found it both leaky (a
+// dotted `fs.write`, a path in a variable, a different cwd) and over-eager (it refused
+// `echo "…"` quoting the path, a `#` comment mentioning it, and `cp` copying a skill OUT).
+// String-matching a shell command is the wrong instrument; it was removed rather than patched.
+//
+// What remains here is the EXPLANATION. The grant's refusal is correct but says only
+// "path is read-only under this grant" — true, unhelpful. This turns that into a sentence
+// that names the door, and it fires only on a refusal that already happened, so it can
+// never itself refuse legitimate work.
+export function underSkillsDir(path) {
+  const p = String(path == null ? '' : path).trim().replace(/^["']|["']$/g, '');
+  if (!p) return false;
+  const norm = p.replace(/\\/g, '/').replace(/^\.?\//, '').replace(/\/+$/, '');
+  const want = SKILLS_DIR.split('/');
+  const got = norm.split('/');
+  if (got.length < want.length) return false;
+  return want.every((seg, i) => got[i] === seg);
+}
+
+// The grant's read-only refusal, as the face words it.
+const READ_ONLY_RE = /path is read-only under this grant:\s*(\S+)/;
+
+// Given a tool result, return it with the skills-fence explanation appended — or unchanged
+// when the result is not a skills-dir read-only refusal. Pure, and never changes a success.
+export function explainSkillsRefusal(result) {
+  const text = String(result == null ? '' : result);
+  const m = text.match(READ_ONLY_RE);
+  if (!m || !underSkillsDir(m[1])) return text;
+  return text + `\n\n${SKILLS_DIR}/ is readable but not writable: a file there decides what instructions bind, so it goes through \`skill_manage\` (create/patch), which scans a skill before it can bind. Only the owner can set status: active.`;
+}

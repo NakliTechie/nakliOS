@@ -13,13 +13,19 @@ import { buildRigRegistry } from '../../rig/registry/index.mjs';
 import { createGrant, createOpLog, createAgentFace } from '../../rig/agent/index.mjs';
 import { createShell } from '../../rig/cli/shell.mjs';
 import { runAgentLoop, shellTool, makeShellExecutor, taskDoneTool,
-  estimateTokens, boundedText, interceptBashCommand } from '../agent-loop.mjs';
+  estimateTokens, boundedText, interceptBashCommand,
+  REPEAT_NUDGE_AT, repeatNudge, stepSignature,
+  usageInputTokens, usageOutputTokens,
+  spillToolOutput } from '../agent-loop.mjs';
 
 let passed = 0;
 const failures = [];
 async function test(name, fn) {
   try { await fn(); passed++; }
   catch (e) { failures.push({ name, message: e.message }); }
+}
+function deepEq(a, b, msg) {
+  if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${msg || 'not equal'}: ${JSON.stringify(a)} !== ${JSON.stringify(b)}`);
 }
 function eq(a, b, msg) {
   if (a !== b) throw new Error(`${msg || 'not equal'}: ${JSON.stringify(a)} !== ${JSON.stringify(b)}`);
@@ -154,17 +160,140 @@ await test('assistant tool-call turns carry null content + tool_calls, paired by
   eq(toolMsg.tool_call_id, 'x1', 'tool result references the call id');
 });
 
-await test('no-progress guard stops a model repeating the identical call', async () => {
+await test('a repeating model is NUDGED, escalating, and the run is never killed for it (F7)', async () => {
   const shell = freshShell();
+  const events = [];
   const result = await runAgentLoop({
     messages: [{ role: 'user', content: 'go' }],
     tools: [shellTool()],
     infer: scriptedInfer([{ content: '', toolCalls: [call('shell', { command: 'pwd' }, 'r')] }]), // same forever
     executeTool: makeShellExecutor(shell),
-    maxSteps: 50,
+    onEvent: (e) => events.push(e),
+    maxSteps: 10,
   });
-  eq(result.stop, 'no-progress', 'stuck loop caught');
-  assert(result.steps < 10, `bailed early, not at maxSteps: ${result.steps}`);
+  // the old behaviour — killing the run at the second identical call — is gone
+  assert(result.stop !== 'no-progress', `the run was killed for repeating: ${result.stop}`);
+  eq(result.stop, 'max-steps', 'the run ran to its own bound instead');
+  eq(result.steps, 10, 'every step was used — the nudge never stops the loop');
+
+  const nudges = events.filter((e) => e.type === 'repeat-nudge');
+  deepEq(nudges.map((n) => n.times), REPEAT_NUDGE_AT.slice(), `nudged at ${REPEAT_NUDGE_AT.join('/')}, once each: ${JSON.stringify(nudges.map(n => n.times))}`);
+  assert(!events.some((e) => e.type === 'no-progress'), 'the no-progress event is gone with the stop');
+
+  const notes = result.messages.filter((m) => m.role === 'user' && /^\[coordination\]/.test(m.content));
+  eq(notes.length, 3, `three nudges reached the transcript: ${notes.length}`);
+  for (const n of notes) assert(/pwd/.test(n.content), `the nudge names the repeated call: ${n.content}`);
+  // escalation is real: the last one asks for a stop, the first only asks to step back
+  assert(/Step back/.test(notes[0].content), `first nudge is gentle: ${notes[0].content}`);
+  assert(/Stop repeating it/.test(notes[2].content), `last nudge is blunt: ${notes[2].content}`);
+  assert(notes[0].content !== notes[1].content && notes[1].content !== notes[2].content, 'the three nudges differ — escalation, not repetition');
+  // every assistant tool-call turn is still immediately followed by its tool result
+  for (let i = 0; i < result.messages.length; i++) {
+    const m = result.messages[i];
+    if (m.role === 'assistant' && m.tool_calls?.length) {
+      eq(result.messages[i + 1]?.role, 'tool', `a nudge was inserted between a tool call and its result at ${i}`);
+    }
+  }
+});
+
+await test('a nudge lands after EVERY tool result of a multi-call turn, not between them (F7)', async () => {
+  // With one call per turn, flushing the nudge inside the tool loop is indistinguishable from
+  // flushing it after — a checker moved the flush and the suite stayed green. Three calls in
+  // one turn tell the two apart: a user turn between a tool_call and any of its replies is
+  // malformed on a strict endpoint, and the provider rejects the NEXT request.
+  const three = [
+    call('shell', { command: 'a' }, 'c1'),
+    call('shell', { command: 'b' }, 'c2'),
+    call('shell', { command: 'c' }, 'c3'),
+  ];
+  const r = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }],
+    tools: [shellTool()],
+    infer: async () => ({ content: '', toolCalls: three }),
+    executeTool: async () => 'ok',
+    maxSteps: 4,
+  });
+  const notes = r.messages.filter((m) => m.role === 'user' && /^\[coordination\]/.test(m.content));
+  assert(notes.length >= 1, 'the run did nudge, so the ordering below is actually exercised');
+  for (let i = 0; i < r.messages.length; i++) {
+    if (r.messages[i].role !== 'assistant' || !r.messages[i].tool_calls?.length) continue;
+    const ids = r.messages[i].tool_calls.map((c) => c.id);
+    // the next `ids.length` messages must be exactly this turn's tool replies, in order
+    const replies = r.messages.slice(i + 1, i + 1 + ids.length);
+    deepEq(replies.map((m) => m.role), ids.map(() => 'tool'),
+      `a non-tool message interrupts a 3-call turn's replies at ${i}: ${JSON.stringify(r.messages.slice(i, i + 5).map((m) => m.role))}`);
+    deepEq(replies.map((m) => m.tool_call_id), ids, 'every call is answered, in the order it was made');
+  }
+});
+
+await test('the repeat chain keys on the CANONICAL call, and a denied call is nudged in stronger terms (F7)', async () => {
+  // same call, keys emitted in a different order each turn — a raw-string compare calls this progress
+  const flip = [
+    { content: '', toolCalls: [{ id: 'a', function: { name: 'shell', arguments: '{"command":"pwd","cwd":"/"}' } }] },
+    { content: '', toolCalls: [{ id: 'a', function: { name: 'shell', arguments: '{"cwd":"/","command":"pwd"}' } }] },
+  ];
+  let i = 0;
+  const events = [];
+  await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }],
+    tools: [shellTool()],
+    infer: async () => flip[i++ % 2],
+    executeTool: async () => 'Refused: the skills directory is managed by skill_manage.',
+    onEvent: (e) => events.push(e),
+    maxSteps: 4,
+  });
+  const n = events.find((e) => e.type === 'repeat-nudge');
+  assert(n, 'reordered arguments are recognised as the same call');
+  eq(n.times, 3, 'the chain counted through the reordering');
+  assert(n.denied === true, 'a turn whose every result was a refusal is marked denied');
+  const note = repeatNudge(3, flip[0].toolCalls, { denied: true });
+  assert(/refused/i.test(note), `the denied nudge says so: ${note}`);
+  assert(!/refused/i.test(repeatNudge(3, flip[0].toolCalls, { denied: false })), 'an undenied nudge does not claim a refusal');
+});
+
+await test('a user interjection resets the repeat chain, and a nudge never counts as one (F7)', async () => {
+  const events = [];
+  let step = 0;
+  await runAgentLoop({
+    // the caller appends an owner turn after two identical calls; the count restarts from it
+    messages: [{ role: 'user', content: 'go' }],
+    tools: [shellTool()],
+    infer: async ({ messages }) => {
+      step++;
+      // after the 3rd identical call the OWNER speaks — simulated by appending to the array
+      // the loop is building, which is exactly what a host interjection would do. Without it
+      // the 4 steps below would reach an unbroken run of 3 and nudge (the control proves it).
+      if (step === 3) messages.push({ role: 'user', content: 'actually, do it the other way' });
+      return { content: '', toolCalls: [call('shell', { command: 'pwd' }, 'r')] };
+    },
+    executeTool: async () => 'ok',
+    onEvent: (e) => events.push(e),
+    maxSteps: 4,
+  });
+  const nudges = events.filter((e) => e.type === 'repeat-nudge');
+  eq(nudges.length, 0, `the interjection reset the chain, so 4 identical calls did not reach 3 unbroken: ${JSON.stringify(nudges)}`);
+  // and the control: the SAME run with no interjection does nudge
+  const ctlEvents = [];
+  await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }],
+    tools: [shellTool()],
+    infer: async () => ({ content: '', toolCalls: [call('shell', { command: 'pwd' }, 'r')] }),
+    executeTool: async () => 'ok',
+    onEvent: (e) => ctlEvents.push(e),
+    maxSteps: 4,
+  });
+  eq(ctlEvents.filter((e) => e.type === 'repeat-nudge').length, 1, 'control: without the interjection the chain reaches 3 and nudges');
+});
+
+await test('the nudge preview is bounded, but detection is not (F7)', () => {
+  const long = 'x'.repeat(5000);
+  const c = [{ function: { name: 'write', arguments: JSON.stringify({ path: 'a', text: long }) } }];
+  const note = repeatNudge(3, c);
+  assert(note.length < 700, `the model-visible preview is capped: ${note.length} chars`);
+  assert(/\+\d+ chars/.test(note), `the elision is honest about how much it dropped: ${note}`);
+  // two calls that differ only PAST the cap are still different calls to the detector
+  const d = [{ function: { name: 'write', arguments: JSON.stringify({ path: 'a', text: long + 'DIFFERENT' }) } }];
+  assert(stepSignature(c) !== stepSignature(d), 'detection keys on the full string, not the preview');
 });
 
 await test('max-steps bounds a model that keeps calling distinct tools', async () => {
@@ -490,6 +619,261 @@ await test('aborting mid-run stops at the next turn boundary', async () => {
   });
   eq(result.stop, 'aborted', 'stopped after the aborting turn');
   assert(inferCalls <= 2, 'did not keep looping after abort');
+});
+
+// ─────────────────────────── usage-anchored token accounting (F6) ──
+
+await test('usageInputTokens reads both provider shapes, and never double-counts the cache (F6)', () => {
+  // Anthropic: input_tokens EXCLUDES the cache, so the three add up
+  eq(usageInputTokens({ input_tokens: 100, cache_read_input_tokens: 900, cache_creation_input_tokens: 50 }), 1050, 'anthropic sums');
+  eq(usageInputTokens({ input_tokens: 100 }), 100, 'anthropic without cache fields');
+  // OpenAI: prompt_tokens INCLUDES the cached part — adding cached_tokens would double it
+  eq(usageInputTokens({ prompt_tokens: 1000, prompt_tokens_details: { cached_tokens: 900 } }), 1000, 'openai does not add its cached subset');
+  eq(usageOutputTokens({ output_tokens: 12 }), 12, 'anthropic output');
+  eq(usageOutputTokens({ completion_tokens: 12 }), 12, 'openai output');
+  // absent / malformed → null, so the caller falls back to the estimate instead of anchoring on 0
+  for (const bad of [null, undefined, {}, { input_tokens: -1 }, { prompt_tokens: 'lots' }, 'usage']) {
+    eq(usageInputTokens(bad), null, `no usable count: ${JSON.stringify(bad)}`);
+  }
+  eq(usageOutputTokens({}), null, 'no output count');
+});
+
+await test('the token budget trips on the PROVIDER count, not chars/4 (F6)', async () => {
+  // A short transcript the estimator scores at ~10 tokens, which the provider says cost 5000
+  // (a big system prompt and tool schemas the estimator never sees). Anchored, the budget trips.
+  const events = [];
+  const withUsage = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }],
+    tools: [shellTool()],
+    infer: async () => ({ content: 'thinking', toolCalls: [call('shell', { command: 'pwd' }, 'u')], usage: { input_tokens: 5000, output_tokens: 10 } }),
+    executeTool: async () => 'ok',
+    onEvent: (e) => events.push(e),
+    budget: { tokens: 1000 },
+    maxSteps: 6,
+  });
+  eq(withUsage.stop, 'budget', 'the run stopped on the budget');
+  eq(withUsage.budgetAxis, 'tokens', 'on the tokens axis');
+  assert(withUsage.steps <= 2, `it stopped as soon as the provider count was known: ${withUsage.steps} steps`);
+  const u = events.find((e) => e.type === 'usage');
+  assert(u && u.input === 5000, `the anchor is surfaced: ${JSON.stringify(u)}`);
+
+  // the CONTROL: the identical run with no usage reported never trips — proving the stop
+  // came from the provider's number and not from the transcript's size
+  const noUsage = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }],
+    tools: [shellTool()],
+    infer: async () => ({ content: 'thinking', toolCalls: [call('shell', { command: 'pwd' }, 'u')] }),
+    executeTool: async () => 'ok',
+    budget: { tokens: 1000 },
+    maxSteps: 6,
+  });
+  assert(noUsage.stop !== 'budget', `without usage the same run does not trip: ${noUsage.stop}`);
+});
+
+await test('the anchor counts only the delta since the reported request (F6)', async () => {
+  // provider says 400; the loop then appends a large tool result. The count must be
+  // 400 + (the tail), not 400 alone and not the whole transcript re-estimated.
+  const big = 'y'.repeat(4000); // ~1000 estimated tokens
+  const r = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }],
+    tools: [shellTool()],
+    infer: async () => ({ content: '', toolCalls: [call('shell', { command: 'pwd' }, 'u')], usage: { prompt_tokens: 400 } }),
+    executeTool: async () => big,
+    budget: { tokens: 1200 },   // 400 anchor + ~1000 tail trips; 400 alone would not
+    maxSteps: 6,
+  });
+  eq(r.stop, 'budget', `the tail is counted on top of the anchor: ${r.stop}`);
+  eq(r.budgetAxis, 'tokens', 'tokens axis');
+  // and the anchor does not double the prefix: a generous budget survives its steps
+  const survives = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }],
+    tools: [shellTool()],
+    infer: async () => ({ content: '', toolCalls: [call('shell', { command: 'pwd' }, 'u')], usage: { prompt_tokens: 400 } }),
+    executeTool: async () => big,
+    budget: { tokens: 100000 },
+    maxSteps: 3,
+  });
+  eq(survives.stop, 'max-steps', `a generous budget is not tripped by re-counting the prefix: ${survives.stop}`);
+});
+
+// ─────────────────────────────── spill at produce-time (F5) ──
+
+await test('spillToolOutput caps at produce time, reserving the notice inside the cap (F5)', () => {
+  const body = 'HEADMARK' + 'z'.repeat(50000) + 'TAILMARK';
+  const r = spillToolOutput(body, { name: 'shell', cap: 2000 });
+  assert(r.spilled, 'an oversized result is spilled');
+  eq(r.chars, body.length, 'it reports the original size');
+  assert(r.sent.length <= 2000, `the replacement fits INSIDE the cap it enforces: ${r.sent.length} > 2000`);
+  assert(r.sent.startsWith('HEADMARK'), 'the head survives');
+  assert(r.sent.endsWith('TAILMARK'), 'the tail survives');
+  assert(/history/.test(r.sent), `the locator names a tool that can actually retrieve it: ${r.sent.slice(0, 300)}`);
+  assert(/shell/.test(r.sent), 'and names the call it came from');
+  assert(/\d+ chars elided/.test(r.sent), 'it is honest about how much it dropped');
+  // under the cap nothing happens at all — byte-identical, not merely similar
+  const small = 'x'.repeat(100);
+  const u = spillToolOutput(small, { cap: 2000 });
+  eq(u.sent, small, 'a small result passes through unchanged');
+  eq(u.spilled, false, 'and is not marked spilled');
+  eq(spillToolOutput('x'.repeat(2000), { cap: 2000 }).spilled, false, 'exactly at the cap is not spilled');
+  eq(spillToolOutput('x'.repeat(2001), { cap: 2000 }).spilled, true, 'one over is');
+  // a cap of 0 / nonsense disables it rather than eliding everything
+  eq(spillToolOutput(body, { cap: 0 }).spilled, false, 'cap 0 disables the spill');
+  eq(spillToolOutput(null, { cap: 10 }).sent, '', 'a null result is a string, not a crash');
+});
+
+await test('an oversized result never enters the transcript, and the record keeps the whole thing (F5)', async () => {
+  const huge = 'START' + 'q'.repeat(30000) + 'END';
+  const events = [];
+  const r = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }],
+    tools: [shellTool()],
+    infer: scriptedInfer([{ content: '', toolCalls: [call('shell', { command: 'cat big' }, 'b')] }, { content: 'done', toolCalls: [] }]),
+    executeTool: async () => huge,
+    onEvent: (e) => events.push(e),
+    toolOutputCap: 1000,
+    maxSteps: 3,
+  });
+  const toolMsg = r.messages.find((m) => m.role === 'tool');
+  assert(toolMsg.content.length <= 1000, `the surface carried ${toolMsg.content.length} chars past a 1000 cap`);
+  assert(!toolMsg.content.includes('q'.repeat(2000)), 'the bulk never reached the transcript');
+  // the FULL text is still reported to the recorder, so history can serve it
+  const full = events.find((e) => e.type === 'tool-result');
+  eq(full.result, huge, 'the recorder was given the complete result');
+  const spill = events.find((e) => e.type === 'tool-spilled');
+  assert(spill && spill.chars === huge.length, `the spill is announced with its true size: ${JSON.stringify(spill && spill.chars)}`);
+});
+
+await test('a recorder that REFUSES the spill leaves the original inline — a success is not turned into a loss (F5)', async () => {
+  const huge = 'START' + 'q'.repeat(30000) + 'END';
+  const r = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }],
+    tools: [shellTool()],
+    infer: scriptedInfer([{ content: '', toolCalls: [call('shell', { command: 'cat big' }, 'b')] }, { content: 'done', toolCalls: [] }]),
+    executeTool: async () => huge,
+    // the storage seam fails exactly for the spill, and only for it
+    onEvent: (e) => { if (e.type === 'tool-spilled') throw new Error('record unavailable'); },
+    toolOutputCap: 1000,
+    maxSteps: 3,
+  });
+  const toolMsg = r.messages.find((m) => m.role === 'tool');
+  eq(toolMsg.content, huge, 'the whole result stayed inline because the elision had nowhere to point');
+  eq(r.stop, 'done', 'and the run finished normally rather than erroring');
+});
+
+// ── the survivors of a cross-family mutation pass (F6/F7/F5) ──
+
+await test('the repeat chain nudges again after an owner interjection resets it (F7)', async () => {
+  const events = [];
+  let n = 0;
+  await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }],
+    tools: [shellTool()],
+    infer: async ({ messages }) => {
+      n++;
+      // the owner speaks once, after the chain has already nudged at 3
+      if (n === 4) messages.push({ role: 'user', content: 'try it another way' });
+      return { content: '', toolCalls: [call('shell', { command: 'pwd' }, 'r')] };
+    },
+    executeTool: async () => 'ok',
+    onEvent: (e) => events.push(e),
+    maxSteps: 8,
+  });
+  const times = events.filter((e) => e.type === 'repeat-nudge').map((e) => e.times);
+  // 3 before the interjection; the chain restarts and reaches 3 again by step 7
+  deepEq(times, [3, 3, 5], `the nudge is silenced after a reset: ${JSON.stringify(times)}`);
+  eq(times.filter((t) => t === 3).length, 2, 'the count 3 is reached twice — once per chain — and nudged both times');
+});
+
+await test('the canonical signature is DEEP — a nested key reorder is still the same call (F7)', () => {
+  const a = [{ function: { name: 'write', arguments: JSON.stringify({ opts: { b: 2, a: 1 }, path: 'p' }) } }];
+  const b = [{ function: { name: 'write', arguments: JSON.stringify({ path: 'p', opts: { a: 1, b: 2 } }) } }];
+  eq(stepSignature(a), stepSignature(b), 'a reorder nested inside an object is not progress');
+  // and a genuinely different nested VALUE is still a different call
+  const c = [{ function: { name: 'write', arguments: JSON.stringify({ path: 'p', opts: { a: 9, b: 2 } }) } }];
+  assert(stepSignature(a) !== stepSignature(c), 'a changed nested value is a different call');
+  // arrays keep their order — [1,2] is not [2,1]
+  const d = [{ function: { name: 'write', arguments: JSON.stringify({ xs: [1, 2] }) } }];
+  const e = [{ function: { name: 'write', arguments: JSON.stringify({ xs: [2, 1] }) } }];
+  assert(stepSignature(d) !== stepSignature(e), 'array order is meaningful and is preserved');
+});
+
+await test('the anchor REPLACES the prefix estimate, it does not add to it (F6)', async () => {
+  // A large opening message the estimator scores high and the provider scores low. Counting
+  // `anchor.input + estimate(whole convo)` re-counts that prefix on top of the provider's own
+  // number. The budget below sits BETWEEN the two readings, so only the wrong one trips.
+  const bigOpen = 'w '.repeat(20000);
+  const opening = [{ role: 'user', content: bigOpen }];
+  const est = estimateTokens(opening);
+  assert(est > 5000, `the opening is estimator-heavy on purpose: ${est}`);
+  const budget = { tokens: est + 200 };   // above the pre-anchor estimate, below est + 400
+  const r = await runAgentLoop({
+    messages: opening,
+    tools: [shellTool()],
+    infer: async () => ({ content: '', toolCalls: [call('shell', { command: 'pwd' }, 'u')], usage: { prompt_tokens: 400 } }),
+    executeTool: async () => 'ok',
+    budget,
+    maxSteps: 3,
+  });
+  eq(r.stop, 'max-steps',
+    `once anchored the count is 400 + the tail, not ${est} + 400: stopped ${r.stop}/${r.budgetAxis} after ${r.steps}`);
+  // and the budget still trips when the PROVIDER's number is genuinely over it
+  const over = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }],
+    tools: [shellTool()],
+    infer: async () => ({ content: '', toolCalls: [call('shell', { command: 'pwd' }, 'u')], usage: { prompt_tokens: 5000 } }),
+    executeTool: async () => 'ok',
+    budget: { tokens: 1000 },
+    maxSteps: 3,
+  });
+  eq(over.stop, 'budget', 'a budget under the provider count still trips');
+});
+
+await test('the anchor MOVES to the latest reported request (F6)', async () => {
+  // Anchoring only once leaves every later turn measured as a delta from the first request —
+  // the count drifts further from the truth with every turn, silently.
+  const events = [];
+  let turn = 0;
+  await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }],
+    tools: [shellTool()],
+    infer: async () => ({ content: '', toolCalls: [call('shell', { command: 'pwd' }, 'u')], usage: { prompt_tokens: 100 * (++turn) } }),
+    executeTool: async () => 'ok',
+    onEvent: (e) => events.push(e),
+    maxSteps: 3,
+  });
+  const anchors = events.filter((e) => e.type === 'usage');
+  eq(anchors.length, 3, `every reported request re-anchors: ${anchors.length}`);
+  deepEq(anchors.map((a) => a.input), [100, 200, 300], 'the anchor follows the latest count');
+  const ats = anchors.map((a) => a.at);
+  assert(ats[1] > ats[0] && ats[2] > ats[1], `the anchor position moves forward: ${JSON.stringify(ats)}`);
+  deepEq(anchors.map((a) => a.output), [null, null, null], 'no output count was reported, and none is invented');
+});
+
+await test('the usage event carries the OUTPUT count when the provider gives one (F6)', async () => {
+  const events = [];
+  await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }],
+    tools: [shellTool()],
+    infer: async () => ({ content: 'done', toolCalls: [], usage: { input_tokens: 50, output_tokens: 17 } }),
+    executeTool: async () => 'ok',
+    onEvent: (e) => events.push(e),
+    maxSteps: 2,
+  });
+  const u = events.find((e) => e.type === 'usage');
+  eq(u.input, 50, 'input');
+  eq(u.output, 17, 'the completion count is reported, not dropped');
+});
+
+await test('the spill notice states the TRUE elided count (F5)', () => {
+  const body = 'x'.repeat(9000);
+  const r = spillToolOutput(body, { name: 'shell', cap: 1200 });
+  const m = r.sent.match(/\((\d+) chars elided/);
+  assert(m, `the notice names a count: ${r.sent.slice(0, 200)}`);
+  const elided = Number(m[1]);
+  const kept = r.sent.length - (r.sent.length - r.sent.indexOf('…')); // not exact; check by reconstruction
+  eq(elided, body.length - (r.sent.split('\n… (')[0].length + r.sent.split(') …\n')[1].length),
+    `the count must be head+tail subtracted from the original, not a placeholder: said ${elided}`);
+  assert(elided > 0, 'and it is not zero for a result that really was elided');
 });
 
 if (failures.length) {

@@ -1,6 +1,6 @@
 // Conformance — progressive-disclosure skills (pure).
 //   node sys/ai/test/skills.test.mjs
-import { parseSkill, buildSkillsIndex, skillTool, SKILLS_DIR } from '../skills.mjs';
+import { parseSkill, buildSkillsIndex, skillTool, SKILLS_DIR, explainSkillsRefusal, underSkillsDir } from '../skills.mjs';
 
 let passed = 0;
 const failures = [];
@@ -67,6 +67,42 @@ await test('skillTool: well-formed schema', () => {
 
 await test('SKILLS_DIR is the workspace convention', () => {
   eq(SKILLS_DIR, '.anvil/skills', 'dir');
+});
+
+// ───────────────────────── the shell half of the skills fence (NAF-01) ──
+
+await test('explainSkillsRefusal names the door on a skills-dir refusal, and touches nothing else', () => {
+  const refusal = 'fs.write: EGRANT: path is read-only under this grant: .anvil/skills/y/SKILL.md';
+  const out = explainSkillsRefusal(refusal);
+  assert(out.startsWith(refusal), 'the original refusal is preserved verbatim');
+  assert(/skill_manage/.test(out), `it names the door: ${out}`);
+  assert(/status: active/.test(out), 'and says who may activate');
+  // it ANNOTATES, never refuses: anything that is not that refusal comes back unchanged
+  for (const other of [
+    'ok',
+    '',
+    'fs.write: EGRANT: path outside grant: ../../etc/passwd',
+    'fs.write: EGRANT: path is read-only under this grant: .anvil/skills-backup/y.md',
+    'fs.write: EGRANT: path is read-only under this grant: vendor/lib.js',
+    'grep: no matches',
+  ]) {
+    eq(explainSkillsRefusal(other), other, `wrongly annotated: ${JSON.stringify(other)}`);
+  }
+  eq(explainSkillsRefusal(null), '', 'a null result is a string, not a crash');
+  // a SUCCESS that merely mentions the path is untouched — the trigger is the refusal wording
+  const catOut = 'name: demo\ndescription: reads .anvil/skills/y/SKILL.md';
+  eq(explainSkillsRefusal(catOut), catOut, 'reading a skill is not annotated as a refusal');
+});
+
+await test('underSkillsDir matches on path segments, not substrings', () => {
+  assert(underSkillsDir('.anvil/skills/a/SKILL.md'), 'a file inside');
+  assert(underSkillsDir('.anvil/skills'), 'the dir itself');
+  assert(underSkillsDir('./.anvil/skills/a'), 'a leading ./');
+  assert(underSkillsDir('/.anvil/skills/a'), 'a leading /');
+  assert(!underSkillsDir('.anvil/skills-backup/a'), 'a sibling with a longer name is NOT inside');
+  assert(!underSkillsDir('.anvil'), 'the parent is not inside');
+  assert(!underSkillsDir('src/.anvil/skills/a'), 'a nested lookalike is not the project skills dir');
+  assert(!underSkillsDir(''), 'empty');
 });
 
 if (failures.length){
