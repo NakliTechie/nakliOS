@@ -339,8 +339,9 @@ export function createShell({ registry, face, cwd = '', kiln = null } = {}) {
       if (flags.some((f) => !f.startsWith('--') && f.slice(1).includes('r'))) {
         return { text: 'grep: -r is not implemented here — use `rg <pattern>` for a recursive search', code: 2 };
       }
-      const bad = unsupportedFlag('grep', flags, ['n', 'v', 'i', 'c', 'E', 'F', 'h', 'H']);
-      if (bad) return flagErr('grep', bad);
+      const GREP_FLAGS = ['n', 'v', 'i', 'c', 'E', 'F', 'h', 'H'];
+      const bad = unsupportedFlag('grep', flags, GREP_FLAGS);
+      if (bad) return flagErr('grep', bad, GREP_FLAGS);
       const has = (ch) => flags.some((f) => !f.startsWith('--') && f.slice(1).includes(ch));
       const nline = has('n'), invert = has('v'), icase = has('i'), count = has('c');
       const pattern = positionals[0] || '';
@@ -366,7 +367,7 @@ export function createShell({ registry, face, cwd = '', kiln = null } = {}) {
     },
     async head(argv, stdin) {
       const { flags, positionals } = splitArgs(argv, { valueFlags: ['-n'] });
-      const bad = unsupportedFlag('head', flags, ['n']); if (bad) return flagErr('head', bad);
+      const bad = unsupportedFlag('head', flags, ['n']); if (bad) return flagErr('head', bad, ['n']);
       const n = flagNum(argv, 10);
       if (n && typeof n === 'object' && n.bad !== undefined) return { text: `head: invalid line count: ${n.bad}`, code: 2 };
       const inp = await textInput('head', positionals, stdin); if (inp.failed) return inp;
@@ -374,7 +375,7 @@ export function createShell({ registry, face, cwd = '', kiln = null } = {}) {
     },
     async tail(argv, stdin) {
       const { flags, positionals } = splitArgs(argv, { valueFlags: ['-n'] });
-      const bad = unsupportedFlag('tail', flags, ['n']); if (bad) return flagErr('tail', bad);
+      const bad = unsupportedFlag('tail', flags, ['n']); if (bad) return flagErr('tail', bad, ['n']);
       const n = flagNum(argv, 10);
       if (n && typeof n === 'object' && n.bad !== undefined) return { text: `tail: invalid line count: ${n.bad}`, code: 2 };
       const inp = await textInput('tail', positionals, stdin); if (inp.failed) return inp;
@@ -383,7 +384,7 @@ export function createShell({ registry, face, cwd = '', kiln = null } = {}) {
     },
     async wc(argv, stdin) {
       const { flags, positionals } = splitArgs(argv);
-      const bad = unsupportedFlag('wc', flags, ['l', 'w', 'c', 'm']); if (bad) return flagErr('wc', bad);
+      const bad = unsupportedFlag('wc', flags, ['l', 'w', 'c', 'm']); if (bad) return flagErr('wc', bad, ['l', 'w', 'c', 'm']);
       const inp = await textInput('wc', positionals, stdin); if (inp.failed) return inp;
       const text = inp.text;
       // LINES, not newlines: a pipeline's last line usually has no trailing newline, so counting
@@ -398,7 +399,7 @@ export function createShell({ registry, face, cwd = '', kiln = null } = {}) {
     },
     async sort(argv, stdin) {
       const { flags, positionals } = splitArgs(argv);
-      const bad = unsupportedFlag('sort', flags, ['r', 'n', 'u', 'f']); if (bad) return flagErr('sort', bad);
+      const bad = unsupportedFlag('sort', flags, ['r', 'n', 'u', 'f']); if (bad) return flagErr('sort', bad, ['r', 'n', 'u', 'f']);
       const inp = await textInput('sort', positionals, stdin); if (inp.failed) return inp;
       const has = (ch) => flags.some((f) => f.slice(1).includes(ch));
       let lines = linesOf(inp.text);
@@ -411,7 +412,7 @@ export function createShell({ registry, face, cwd = '', kiln = null } = {}) {
     },
     async uniq(argv, stdin) {
       const { flags, positionals } = splitArgs(argv);
-      const bad = unsupportedFlag('uniq', flags, ['c', 'd', 'u']); if (bad) return flagErr('uniq', bad);
+      const bad = unsupportedFlag('uniq', flags, ['c', 'd', 'u']); if (bad) return flagErr('uniq', bad, ['c', 'd', 'u']);
       const inp = await textInput('uniq', positionals, stdin); if (inp.failed) return inp;
       const has = (ch) => flags.some((f) => f.slice(1).includes(ch));
       const runs = [];
@@ -435,7 +436,7 @@ export function createShell({ registry, face, cwd = '', kiln = null } = {}) {
     // path routed every `ls X` through fs.list, so `ls afile` threw ENOTDIR and
     // misled callers into thinking a file was a directory.
     async ls(argv) {
-      { const bad = unsupportedFlag('ls', argv.filter((a) => a.startsWith('-')), ['R', 'a', 'l']); if (bad) return flagErr('ls', bad); }
+      { const bad = unsupportedFlag('ls', argv.filter((a) => a.startsWith('-')), ['R', 'a', 'l']); if (bad) return flagErr('ls', bad, ['R', 'a', 'l']); }
       const long = argv.some((a) => /^-\w*l/.test(a));
       const positionals = argv.filter((a) => !a.startsWith('-'));
       const targets = positionals.length ? positionals : [null];
@@ -493,7 +494,7 @@ export function createShell({ registry, face, cwd = '', kiln = null } = {}) {
       if (argv.some((a) => a === '-i' || a.startsWith('-i'))) {
         return { text: 'sed: -i (in-place) is not implemented — use the `edit` tool, which is checked and reversible', code: 2 };
       }
-      { const bad = unsupportedFlag('sed', argv.filter((a) => a.startsWith('-')), ['n', 'E', 'r']); if (bad) return flagErr('sed', bad); }
+      { const bad = unsupportedFlag('sed', argv.filter((a) => a.startsWith('-')), ['n', 'E', 'r']); if (bad) return flagErr('sed', bad, ['n', 'E', 'r']); }
       const pos = argv.filter((a) => !a.startsWith('-'));
       const script = pos[0] || '';
       // a file argument used to be IGNORED, so `sed 's/a/b/' f.txt` returned "" exit 0 (R2a)
@@ -519,9 +520,23 @@ export function createShell({ registry, face, cwd = '', kiln = null } = {}) {
     // implements -i/-l/-n/-c/--files/-t/--type/-g/--glob and REFUSES the rest,
     // like every other builtin here.
     async rg(argv) {
+      const RG_FLAGS = ['i', 'l', 'n', 'c', 't', 'g', '--files', '--type', '--glob'];
       const rawFlags = argv.filter((a) => a.startsWith('-'));
-      const bad = unsupportedFlag('rg', rawFlags, ['i', 'l', 'n', 'c', '--files', '--type', '--glob', 't', 'g']);
-      if (bad) return flagErr('rg', bad);
+      if (rawFlags.includes('--help') || rawFlags.includes('-h')) {
+        return { text: [
+          'rg PATTERN [paths...] — recursive content search over the workspace.',
+          '  -i            ignore case',
+          '  -l            list matching files only',
+          '  -c            count matches per file',
+          '  -n            line numbers (on by default)',
+          '  -t, --type T  restrict to a file type: ' + Object.keys(RG_TYPES).sort().join(' '),
+          '  -g, --glob G  restrict to paths matching a glob, e.g. -g "*.py"',
+          '  --files       list the files that would be searched, do not match',
+          'Any other flag is refused rather than ignored.',
+        ].join('\n'), code: 0 };
+      }
+      const bad = unsupportedFlag('rg', rawFlags, RG_FLAGS);
+      if (bad) return flagErr('rg', bad, RG_FLAGS);
 
       // -t/--type and -g/--glob take a value, which must not be read as a path.
       const positionals = []; const types = []; const globs = [];
@@ -634,7 +649,7 @@ export function createShell({ registry, face, cwd = '', kiln = null } = {}) {
     },
     // awk — the common one-liner subset: `awk [-F sep] '{print $N}'` / `'{print}'`.
     async awk(argv, stdin) {
-      { const bad = unsupportedFlag('awk', argv.filter((a) => a.startsWith('-') && !a.startsWith('-F')), ['F']); if (bad) return flagErr('awk', bad); }
+      { const bad = unsupportedFlag('awk', argv.filter((a) => a.startsWith('-') && !a.startsWith('-F')), ['F']); if (bad) return flagErr('awk', bad, ['F']); }
       let sep = null; const parts = [];
       for (let i = 0; i < argv.length; i++) {
         if (argv[i] === '-F') { sep = argv[++i]; }
@@ -717,7 +732,7 @@ export function createShell({ registry, face, cwd = '', kiln = null } = {}) {
     },
     async tr(argv, stdin) {
       const { flags, positionals } = splitArgs(argv);
-      const bad = unsupportedFlag('tr', flags, ['d', 's']); if (bad) return flagErr('tr', bad);
+      const bad = unsupportedFlag('tr', flags, ['d', 's']); if (bad) return flagErr('tr', bad, ['d', 's']);
       const del = flags.some((f) => f.slice(1).includes('d'));
       // a-z used to be taken LITERALLY (three characters), so `tr a-z A-Z` mapped almost nothing
       const expandRange = (spec) => {
@@ -833,7 +848,13 @@ export function createShell({ registry, face, cwd = '', kiln = null } = {}) {
     }
     return null;
   }
-  const flagErr = (name, f) => ({ text: `${name}: unsupported flag ${f} — this shell implements a subset; run \`help\` for what each builtin supports`, code: 2 });
+  // A refusal that only says "run `help`" costs the agent another turn — and it
+  // spent several of them guessing (`rg --help`, `--type-all`, `--all-files`).
+  // Name the supported flags inline so one refusal is enough.
+  const flagErr = (name, f, supported) => ({
+    text: `${name}: unsupported flag ${f} — ${name} supports ${supported ? supported.map((s) => (s.startsWith('--') ? s : '-' + s)).join(' ') : 'a documented subset'}; run \`help\` for the full list`,
+    code: 2,
+  });
 
   // Text in: the named files if any, otherwise stdin. Reading is what makes a file argument mean
   // something instead of being dropped on the floor.
