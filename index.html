@@ -5185,6 +5185,12 @@ const AI_IMAGE_PROTOCOL = 'localmind.image.v1';
 const AI_SETTINGS_KEY = 'nakliOS.aiSettings.v1';
 const AI_SESSION_KEY = 'nakliOS.aiEndpointKey.session.v1';
 const AI_REMEMBERED_KEY = 'nakliOS.aiEndpointKey.remembered.v1';
+// Saved credentials — a NAMED inventory, deliberately separate from the
+// origin-keyed active credential above, which holds exactly one key per origin
+// and cannot tell two OpenRouter keys apart or say when either was added.
+// Nothing here is ever selected automatically: a key that runs out is a decision
+// for the person, not a silent failover to a provider they did not choose.
+const AI_KEY_VAULT = 'nakliOS.aiKeyVault.v1';
 const AI_MAX_QUEUE = 12;
 const AI_MAX_QUEUE_PER_APP = 3;
 const AI_MAX_INPUT_CHARS = 24000;
@@ -5492,6 +5498,62 @@ function aiReadCredentialStore(storage, key){
 function aiWriteCredentialStore(storage, key, value){
   if (Object.keys(value).length) storage.setItem(key, JSON.stringify(value));
   else storage.removeItem(key);
+}
+
+// ── saved credentials ────────────────────────────────────────────────────────
+// An entry carries the endpoint it belongs to, not just the secret: a Groq key
+// pointed at DeepSeek's URL is a 401, so restoring one has to restore the whole
+// working combination in a single click. That is the entire point when the key
+// you were using has just hit its daily cap.
+function aiVaultRead(){
+  try {
+    const raw = JSON.parse(localStorage.getItem(AI_KEY_VAULT) || '[]');
+    return Array.isArray(raw) ? raw.filter(e => e && typeof e === 'object' && e.id) : [];
+  } catch(_) { return []; }
+}
+
+function aiVaultWrite(entries){
+  if (entries.length) localStorage.setItem(AI_KEY_VAULT, JSON.stringify(entries));
+  else localStorage.removeItem(AI_KEY_VAULT);
+}
+
+function aiVaultSave({ name, preset, baseUrl, model, key }){
+  const clean = String(key || '').trim();
+  if (!clean) throw new Error('Enter the API key before saving it.');
+  const label = String(name || '').trim() || (AI_ENDPOINT_PRESETS[preset]?.label || 'Saved key');
+  const entries = aiVaultRead();
+  entries.unshift({
+    id: 'k' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    name: label,
+    savedAt: new Date().toISOString(),
+    preset: String(preset || 'custom'),
+    baseUrl: String(baseUrl || ''),
+    model: String(model || ''),
+    key: clean,
+  });
+  aiVaultWrite(entries);
+  return entries[0];
+}
+
+function aiVaultDelete(id){
+  aiVaultWrite(aiVaultRead().filter(e => e.id !== id));
+}
+
+// Only ever called from an explicit click. Installs the entry as the active
+// credential for its own origin and hands the endpoint fields back to the caller.
+function aiVaultUse(id){
+  const entry = aiVaultRead().find(e => e.id === id);
+  if (!entry) throw new Error('That saved key is no longer here.');
+  aiPersistCredential(entry.baseUrl, true, entry.key);
+  return entry;
+}
+
+function aiVaultWhen(iso){
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString(undefined, { day:'numeric', month:'short' }) + ' ' +
+      d.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' });
+  } catch(_) { return ''; }
 }
 
 function aiEndpointApiKey(baseUrl = aiSettings.endpoint.baseUrl){
@@ -8947,6 +9009,23 @@ function openSettings(section){
           <button class="nw-fs-btn-secondary" id="ai-forget-key" type="button"
             ${endpointKeySaved ? '' : 'disabled'}>Forget key</button>
         </div>
+        <div class="nw-ai-vault" style="margin-top:14px; border-top:1px solid var(--nw-line,#2a2a33); padding-top:10px;">
+          <div class="nw-fs-blurb" style="margin:0 0 6px;">
+            <b>Saved keys.</b> Keep several and switch by hand — nothing is picked for you.
+            Each one remembers its provider, address and model, so using it restores the whole set.
+          </div>
+          <div class="nw-ai-endpoint-grid">
+            <label>
+              Name this key
+              <input id="ai-vault-name" autocomplete="off" placeholder="e.g. OpenRouter free · Groq trial">
+            </label>
+            <div style="display:flex; align-items:flex-end;">
+              <button class="nw-fs-btn-secondary" id="ai-vault-save" type="button"
+                style="width:100%;">Save the key above</button>
+            </div>
+          </div>
+          <div id="ai-vault-list" style="margin-top:8px;"></div>
+        </div>
       </div>
       <div class="nw-fs-connect-actions">
         <button class="nw-fs-btn-primary" id="ai-apply-model" type="button">Use this model</button>
@@ -9252,27 +9331,105 @@ function openSettings(section){
     wrap.querySelector('#ai-image-forget-key').disabled = !hasKey;
   };
 
+  // ── saved credentials: list, use, delete, save ─────────────────────────────
+  const aiVaultList = wrap.querySelector('#ai-vault-list');
+  const aiVaultName = wrap.querySelector('#ai-vault-name');
+
+  function paintVault(){
+    if (!aiVaultList) return;
+    const entries = aiVaultRead();
+    if (!entries.length){
+      aiVaultList.innerHTML =
+        '<div class="nw-fs-blurb" style="margin:0; opacity:.7;">No saved keys yet. ' +
+        'Enter a key above, name it, and save.</div>';
+      return;
+    }
+    aiVaultList.innerHTML = entries.map(e => {
+      const provider = AI_ENDPOINT_PRESETS[e.preset]?.label || e.preset || 'custom';
+      const bits = [provider, e.model, aiVaultWhen(e.savedAt)].filter(Boolean);
+      return `
+        <div class="nw-ai-vault-row" data-id="${_dlgEscape(e.id)}"
+          style="display:flex; gap:8px; align-items:center; padding:5px 0;
+                 border-top:1px solid var(--nw-line,#2a2a33);">
+          <div style="flex:1; min-width:0;">
+            <div style="font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+              ${_dlgEscape(e.name)}</div>
+            <div class="nw-fs-blurb" style="margin:0; opacity:.75;">${_dlgEscape(bits.join(' · '))}</div>
+          </div>
+          <button class="nw-fs-btn-secondary nw-vault-use" type="button">Use</button>
+          <button class="nw-fs-btn-secondary nw-vault-del" type="button" title="Delete">Delete</button>
+        </div>`;
+    }).join('');
+  }
+  paintVault();
+
+  aiVaultList?.addEventListener('click', (event) => {
+    const row = event.target.closest('.nw-ai-vault-row');
+    if (!row) return;
+    const id = row.dataset.id;
+    try {
+      if (event.target.classList.contains('nw-vault-del')){
+        aiVaultDelete(id);
+        paintVault();
+        aiSettingsResult.textContent = 'Saved key deleted.';
+        return;
+      }
+      if (event.target.classList.contains('nw-vault-use')){
+        const entry = aiVaultUse(id);
+        // Restore the whole combination, not just the secret.
+        if (aiEndpointPreset && AI_ENDPOINT_PRESETS[entry.preset]) aiEndpointPreset.value = entry.preset;
+        if (entry.baseUrl) aiEndpointUrl.value = entry.baseUrl;
+        if (entry.model) aiEndpointModel.value = entry.model;
+        aiEndpointKey.value = '';
+        aiDraftPreset = aiEndpointPreset?.value || 'custom';
+        paintEndpointKeyState();
+        aiSettingsResult.textContent =
+          `Now using "${entry.name}". Save settings to keep it as the active endpoint.`;
+      }
+    } catch (error){
+      aiSettingsResult.textContent = error?.message || String(error);
+    }
+  });
+
+  wrap.querySelector('#ai-vault-save')?.addEventListener('click', () => {
+    try {
+      // Fall back to the key already held for this endpoint, so a key saved
+      // earlier can be named and kept without being retyped.
+      const typed = aiEndpointKey.value.trim();
+      const entry = aiVaultSave({
+        name: aiVaultName?.value,
+        preset: aiEndpointPreset?.value || 'custom',
+        baseUrl: aiEndpointUrl.value.trim(),
+        model: aiEndpointModel.value.trim(),
+        key: typed || aiEndpointApiKey(aiEndpointUrl.value),
+      });
+      if (aiVaultName) aiVaultName.value = '';
+      paintVault();
+      aiSettingsResult.textContent = `Saved "${entry.name}".`;
+    } catch (error){
+      aiSettingsResult.textContent = error?.message || String(error);
+    }
+  });
+
   aiEndpointPreset?.addEventListener('change', () => {
-    const previous = AI_ENDPOINT_PRESETS[aiDraftPreset];
     const next = AI_ENDPOINT_PRESETS[aiEndpointPreset.value] || AI_ENDPOINT_PRESETS.custom;
-    const currentUrl = aiEndpointUrl.value.trim();
-    if (!currentUrl || currentUrl === previous?.baseUrl) aiEndpointUrl.value = next.baseUrl;
+    // Picking a preset is an explicit choice, so it SETS the address. This used to
+    // replace the URL only when it was empty or still exactly the previous
+    // preset's default, so once a real URL had been saved, choosing a new provider
+    // silently changed nothing — you picked Groq and stayed pointed at DeepSeek.
+    // 'OpenAI-compatible' is the exception: it has no address of its own, so it
+    // leaves whatever you typed alone. That is what it means.
+    if (next.baseUrl) aiEndpointUrl.value = next.baseUrl;
     aiDraftPreset = aiEndpointPreset.value;
     paintEndpointKeyState();
   });
   aiEndpointUrl?.addEventListener('input', paintEndpointKeyState);
   aiImageEndpointPreset?.addEventListener('change', () => {
-    const previous = AI_IMAGE_ENDPOINT_PRESETS[aiImageDraftPreset];
     const next = AI_IMAGE_ENDPOINT_PRESETS[aiImageEndpointPreset.value] ||
       AI_IMAGE_ENDPOINT_PRESETS.custom;
-    const currentUrl = aiImageEndpointUrl.value.trim();
-    const currentModel = aiImageEndpointModel.value.trim();
-    if (!currentUrl || currentUrl === previous?.baseUrl) {
-      aiImageEndpointUrl.value = next.baseUrl;
-    }
-    if (!currentModel || currentModel === previous?.model) {
-      aiImageEndpointModel.value = next.model;
-    }
+    // Same rule as the text endpoint above: an explicit pick sets the address.
+    if (next.baseUrl) aiImageEndpointUrl.value = next.baseUrl;
+    if (next.model) aiImageEndpointModel.value = next.model;
     aiImageDraftPreset = aiImageEndpointPreset.value;
     paintImageEndpointKeyState();
   });
