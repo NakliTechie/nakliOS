@@ -343,6 +343,20 @@ await test('REGRESSION: a same-size rewrite in the same millisecond is not misse
   }
 });
 
+await test('REGRESSION: fs.grep skips binary files, and agrees with shell rg', async () => {
+  // Pre-dated the index: the comment said binaries were skipped, nothing checked,
+  // so fs.grep matched inside binaries while the rg builtin skipped them.
+  const backend = new MemoryBackend();
+  const fs = createFileops({ backend, index: true, exclusive: true });
+  await fs.write('code.js', 'function parseFact(){}\n', { createParents: true });
+  await backend.write('blob.bin', new Uint8Array([0x50, 0x4b, 0x00, 0x70, 0x61, 0x72, 0x73, 0x65, 0x46, 0x61, 0x63, 0x74]));
+  const hits = (await fs.grep('parseFact')).matches.map((m) => m.path);
+  eq(JSON.stringify(hits), JSON.stringify(['code.js']), 'binary excluded');
+  const plain = createFileops({ backend, index: false });
+  eq(JSON.stringify((await plain.grep('parseFact')).matches.map((m) => m.path)),
+     JSON.stringify(hits), 'indexed and unindexed agree');
+});
+
 // A randomised differential sweep: the fixed battery above encodes what I
 // thought to check, which is exactly the set most likely to miss something.
 await test('DIFFERENTIAL: randomised patterns, 400 cases', async () => {

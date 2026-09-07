@@ -501,6 +501,7 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
         if (!rd.ok) { indexDrop(p); continue; }
         filesRead++;
         bytesRead += rd.data.length;
+        if (rd.data.includes('\u0000')) { indexDrop(p); continue; } // binaries are not searched
         indexAdd(p, rd.data, st.stat);
       }
       // Snapshot the keys: indexDrop mutates idx.files, so iterating it live
@@ -527,7 +528,13 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
 
     outer: for (const p of (candidates || globbed.matches)) {
       const rd = await read(p, { encoding: 'utf-8' });
-      if (!rd.ok) continue; // skip unreadable/binary silently
+      if (!rd.ok) continue; // unreadable → skip silently
+      // Binary detection by NUL byte, as grep, ripgrep and the shell's own rg do.
+      // This comment used to claim binaries were skipped while nothing checked,
+      // so fs.grep reported matches from inside binary files and disagreed with
+      // the rg builtin over the same tree. Pre-dates the index; surfaced by it,
+      // because fs.grep is now the path everything else is built on.
+      if (rd.data.includes('\u0000')) continue;
       filesRead++;
       bytesRead += rd.data.length;
       const lines = rd.data.split('\n');
