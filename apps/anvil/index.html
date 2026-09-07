@@ -230,7 +230,7 @@
   import { runAgentLoop } from '../../sys/ai/agent-loop.mjs';
   import { codingToolset, makeToolExecutor, makeShellVerifier } from '../../sys/ai/agent-tools.mjs';
   import { buildProjectContext, rememberTool } from '../../sys/ai/project-context.mjs';
-  import { SKILLS_DIR, parseSkill, buildSkillsIndex, skillTool, INJECTED_STATUSES, skillsShellRefusal } from '../../sys/ai/skills.mjs';
+  import { SKILLS_DIR, parseSkill, buildSkillsIndex, skillTool, INJECTED_STATUSES, explainSkillsRefusal } from '../../sys/ai/skills.mjs';
   import { skillManageTool, planSkillWrite, createSkillSession, SKILL_FILE } from '../../sys/ai/skill-manage.mjs';
   import { createProposalLedger } from '../../sys/ai/proposal-fingerprint.mjs';
   import { skillLifecycle, applySkillStatus, reviveOnUse } from '../../sys/ai/skill-lifecycle.mjs';
@@ -282,7 +282,12 @@
       : null;
     git = createGitCore({ fs, dir:'/', transport: gitTransport });
     registry = buildRigRegistry({ fs, git });
-    grant = createGrant({ prefixes:[''], scopes:['fs:read','fs:write','fs:remove','git:read','git:write'] });
+    // .anvil/skills is AUTHORITY, not content: a file there decides what instructions bind,
+    // and skill_manage (which scans first) is the one door. The grant makes it readable and
+    // unwritable for EVERY agent route at once — the shell's redirects and dotted fs.* verbs
+    // included — because the check runs on the normalised path the fileops edge resolves.
+    // skill_manage writes through `fs` directly, outside this grant, so the door still opens.
+    grant = createGrant({ prefixes:[''], scopes:['fs:read','fs:write','fs:remove','git:read','git:write'], readOnlyPrefixes:[SKILLS_DIR] });
     opLog = createOpLog({ fs: createFileops({ backend:new MemoryBackend() }) });
     face = createAgentFace({ registry, grant, opLog, actor:'agent' });
     // Kiln (Pyodide) — same wiring as Forge. Requires cross-origin isolation
@@ -1539,7 +1544,7 @@
       const ofs = createFileops({ backend: overlay, root: wsRoot });
       const ogit = createGitCore({ fs: ofs, dir:'/' });
       const oregistry = buildRigRegistry({ fs: ofs, git: ogit });
-      const ograph = createGrant({ prefixes:[''], scopes:['fs:read','fs:write','fs:remove','git:read','git:write'] });
+      const ograph = createGrant({ prefixes:[''], scopes:['fs:read','fs:write','fs:remove','git:read','git:write'], readOnlyPrefixes:[SKILLS_DIR] });
       const oopLog = createOpLog({ fs: createFileops({ backend:new MemoryBackend() }) });
       const oface = createAgentFace({ registry: oregistry, grant: ograph, opLog: oopLog, actor:'agent' });
       const oshell = createShell({ registry: oregistry, face: oface }); // no kiln in subagents
@@ -1801,14 +1806,6 @@
       // The skills directory is authority, not ordinary content: a file there decides what
       // instructions bind. The general file tools must not reach it, or the sentinel and the
       // person-only activation are advisory (forward-pass NAF-01). skill_manage is the one door.
-      // The same fence on the SHELL side: the guard below covers the structured file
-      // tools, but a redirect (`echo x > .anvil/skills/y/SKILL.md`) reached the disk and
-      // only the load-path sentinel stood between it and the model. Mutation is refused;
-      // reading a skill from the shell stays allowed.
-      if(nm==='shell' && ar && ar.command){
-        const ref = skillsShellRefusal(String(ar.command));
-        if(ref) return ref;
-      }
       if(['write','edit','apply_patch','edit_lines','remove','move'].includes(nm) && ar){
         const blob = String(ar.path||ar.file||'')+'\n'+String(ar.patch||'')+'\n'+String(ar.edit||'')+'\n'+String(ar.to||'');
         if(blob.includes(SKILLS_DIR))
@@ -1818,7 +1815,13 @@
         const p=ar.path||ar.file;
         try{ const r=await fs.read(p,{encoding:'utf-8'}); preImages[p]= (r&&r.ok)? r.data : ''; }catch(_){ preImages[p]=''; }
       }
-      const res = await baseExec(nm, ar, callObj);
+      // The shell's own fence lives in the GRANT (readOnlyPrefixes above), which refuses on
+      // the normalised path — every spelling, `..` and dotted fs.* verbs included. Its message
+      // is correct but bare, so a refusal that names the skills dir gets the sentence that
+      // says where to go instead. This only ever ANNOTATES a refusal; it cannot cause one,
+      // and it runs before the post-tool hooks so their output still rides along.
+      const raw = await baseExec(nm, ar, callObj);
+      const res = (nm==='shell' && typeof raw==='string') ? explainSkillsRefusal(raw) : raw;
       // Post-tool hooks: run configured commands (auto-format / lint / verify)
       // after the tool succeeds; their bounded output is fed back to the agent.
       try{

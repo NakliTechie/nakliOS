@@ -15,8 +15,15 @@ import { normalizeMountPath } from '../fileops/pathguard.mjs';
  * @param {object}   opts
  * @param {string[]} [opts.prefixes]  mount-relative path prefixes ('' = whole mount)
  * @param {string[]} [opts.scopes]    capability scopes, e.g. 'fs:read', 'git:write'
+ * @param {string[]} [opts.readOnlyPrefixes]  regions inside the grant that may be READ but
+ *   never written or removed. This is where a directory that is AUTHORITY rather than content
+ *   belongs (.anvil/skills — a file there decides what instructions bind, and one door,
+ *   skill_manage, scans before binding). Enforced on the normalised path, so every route the
+ *   shell offers — a redirect, `rm`, a dotted `fs.write`, a relative path from another cwd,
+ *   `..` traversal — collapses to the same check. A string match on the command line cannot
+ *   do that, which is why the boundary lives here and not there.
  */
-export function createGrant({ prefixes = [], scopes = [] } = {}) {
+export function createGrant({ prefixes = [], scopes = [], readOnlyPrefixes = [] } = {}) {
   let active = true;
   // Normalise prefixes through the same validator; drop any that don't validate.
   const norm = [];
@@ -25,6 +32,11 @@ export function createGrant({ prefixes = [], scopes = [] } = {}) {
     if (r.ok) norm.push(r.path);
   }
   const scopeSet = new Set(scopes);
+  const readOnly = [];
+  for (const p of readOnlyPrefixes) {
+    const r = normalizeMountPath(p);
+    if (r.ok) readOnly.push(r.path);
+  }
 
   function allowsPath(input) {
     if (!active) return false;
@@ -33,8 +45,18 @@ export function createGrant({ prefixes = [], scopes = [] } = {}) {
     return norm.some((prefix) => prefix === '' || r.path === prefix || r.path.startsWith(prefix + '/'));
   }
 
+  // Is this path inside a read-only region? A path that does not normalise is reported as
+  // read-only too: allowsPath already denies it, and the two edges must not disagree.
+  function isReadOnly(input) {
+    const r = normalizeMountPath(input);
+    if (!r.ok) return true;
+    return readOnly.some((prefix) => prefix === '' || r.path === prefix || r.path.startsWith(prefix + '/'));
+  }
+
   return {
     get active() { return active; },
+    get readOnlyPrefixes() { return readOnly.slice(); },
+    isReadOnly,
     revoke() { active = false; },
     get prefixes() { return norm.slice(); },
     get scopes() { return [...scopeSet]; },
@@ -43,7 +65,7 @@ export function createGrant({ prefixes = [], scopes = [] } = {}) {
     // A single object describing what is active — for a "grant visible while
     // active" surface (C5) and for the Kiln mount derivation.
     describe() {
-      return { active, prefixes: norm.slice(), scopes: [...scopeSet] };
+      return { active, prefixes: norm.slice(), scopes: [...scopeSet], readOnlyPrefixes: readOnly.slice() };
     },
   };
 }

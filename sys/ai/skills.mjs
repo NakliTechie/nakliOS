@@ -90,30 +90,23 @@ export function skillTool(){
 
 // ── the write side of the skills fence (forward-pass NAF-01, second half) ──
 //
-// The general file tools are refused against SKILLS_DIR by the app, because a file
-// there decides what instructions bind and `skill_manage` is the door that scans
-// before binding. The shell was NOT covered, so `echo x > .anvil/skills/y/SKILL.md`
-// still landed and the load-path sentinel was the only thing left between a
-// hand-written skill and the model. This closes the write side.
+// A file under SKILLS_DIR decides what instructions bind, and skill_manage — which scans a
+// skill through the sentinel first — is the one door. The app refused the structured file
+// tools by matching the path; the shell was not covered, so `echo x > .anvil/skills/y/SKILL.md`
+// landed on disk with only the load-path sentinel behind it.
 //
-// It refuses MUTATION, not the directory: reading a skill from the shell
-// (`cat`, `ls`, `grep`, `rg`, `head`, `wc`) is legitimate and stays allowed. It
-// refuses a redirect whose TARGET is under the skills dir, and the mutating
-// commands when the dir appears among their arguments.
-const SHELL_MUTATORS = /^(rm|mv|cp|mkdir|rmdir|touch|tee|ln|chmod|truncate|install|dd)$/;
-
-// Every redirect target in a command line, in source order (`>`, `>>`, `2>`, `&>`).
-function redirectTargets(cmd) {
-  const out = [];
-  const re = /(?:\d*|&)>{1,2}\s*("[^"]*"|'[^']*'|[^\s;|&()]+)/g;
-  let m;
-  while ((m = re.exec(cmd))) out.push(m[1].replace(/^["']|["']$/g, ''));
-  return out;
-}
-
-// Does this path (as written) fall inside the skills directory? Compares on
-// segments so `.anvil/skills-backup` is NOT inside `.anvil/skills`, and tolerates
-// a leading `./` or `/` the way the fileops layer does.
+// The BOUNDARY is not here. It is the grant: the app gives the agent face SKILLS_DIR as a
+// readOnlyPrefix, so the check runs on the NORMALISED path, after the shell has resolved `..`,
+// expanded variables, applied `cd`, and mapped `rm` onto `fs.remove`. A first attempt at this
+// matched the raw command line instead, and a cross-family review found it both leaky (a
+// dotted `fs.write`, a path in a variable, a different cwd) and over-eager (it refused
+// `echo "…"` quoting the path, a `#` comment mentioning it, and `cp` copying a skill OUT).
+// String-matching a shell command is the wrong instrument; it was removed rather than patched.
+//
+// What remains here is the EXPLANATION. The grant's refusal is correct but says only
+// "path is read-only under this grant" — true, unhelpful. This turns that into a sentence
+// that names the door, and it fires only on a refusal that already happened, so it can
+// never itself refuse legitimate work.
 export function underSkillsDir(path) {
   const p = String(path == null ? '' : path).trim().replace(/^["']|["']$/g, '');
   if (!p) return false;
@@ -124,24 +117,14 @@ export function underSkillsDir(path) {
   return want.every((seg, i) => got[i] === seg);
 }
 
-// Returns a refusal string when a shell command would WRITE into the skills dir,
-// or null when the command may run. Split on the shell's own separators first, so
-// `ls . && echo x > .anvil/skills/a` is judged segment by segment.
-export function skillsShellRefusal(command) {
-  const cmd = String(command == null ? '' : command);
-  if (!cmd.trim()) return null;
-  const refusal = `Refused: ${SKILLS_DIR}/ is managed by \`skill_manage\`, which scans a skill before it can bind. Writing there from the shell would bypass that check. Use skill_manage (create/patch); reading the directory from the shell is still allowed.`;
-  for (const seg of cmd.split(/(?:\|\||&&|[;|\n])/)) {
-    const s = seg.trim();
-    if (!s) continue;
-    if (redirectTargets(s).some(underSkillsDir)) return refusal;
-    const words = s.split(/\s+/).filter(Boolean);
-    // skip NAME=value prefixes the shell allows before the verb
-    let i = 0;
-    while (i < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i])) i++;
-    const verb = (words[i] || '').replace(/^.*\//, '');
-    if (!SHELL_MUTATORS.test(verb)) continue;
-    if (words.slice(i + 1).some(underSkillsDir)) return refusal;
-  }
-  return null;
+// The grant's read-only refusal, as the face words it.
+const READ_ONLY_RE = /path is read-only under this grant:\s*(\S+)/;
+
+// Given a tool result, return it with the skills-fence explanation appended — or unchanged
+// when the result is not a skills-dir read-only refusal. Pure, and never changes a success.
+export function explainSkillsRefusal(result) {
+  const text = String(result == null ? '' : result);
+  const m = text.match(READ_ONLY_RE);
+  if (!m || !underSkillsDir(m[1])) return text;
+  return text + `\n\n${SKILLS_DIR}/ is readable but not writable: a file there decides what instructions bind, so it goes through \`skill_manage\` (create/patch), which scans a skill before it can bind. Only the owner can set status: active.`;
 }

@@ -1,6 +1,6 @@
 // Conformance — progressive-disclosure skills (pure).
 //   node sys/ai/test/skills.test.mjs
-import { parseSkill, buildSkillsIndex, skillTool, SKILLS_DIR, skillsShellRefusal, underSkillsDir } from '../skills.mjs';
+import { parseSkill, buildSkillsIndex, skillTool, SKILLS_DIR, explainSkillsRefusal, underSkillsDir } from '../skills.mjs';
 
 let passed = 0;
 const failures = [];
@@ -71,50 +71,27 @@ await test('SKILLS_DIR is the workspace convention', () => {
 
 // ───────────────────────── the shell half of the skills fence (NAF-01) ──
 
-await test('skillsShellRefusal: a write into the skills dir is refused, whatever shape it takes', () => {
-  const refused = [
-    'echo x > .anvil/skills/y/SKILL.md',
-    'echo x >> .anvil/skills/y/SKILL.md',
-    'echo x > ./.anvil/skills/y/SKILL.md',
-    'cat a.md > "/.anvil/skills/y/SKILL.md"',
-    "printf x > '.anvil/skills/y/SKILL.md'",
-    'ls . && echo x > .anvil/skills/y/SKILL.md',
-    'true; touch .anvil/skills/y/SKILL.md',
-    'rm .anvil/skills/y/SKILL.md',
-    'rm -rf .anvil/skills',
-    'mv evil.md .anvil/skills/y/SKILL.md',
-    'cp evil.md .anvil/skills/y/SKILL.md',
-    'mkdir -p .anvil/skills/newskill',
-    'tee .anvil/skills/y/SKILL.md',
-    'echo x 2> .anvil/skills/y/log',
-    'ENV=1 touch .anvil/skills/y/SKILL.md',
-    '/bin/rm .anvil/skills/y/SKILL.md',
-  ];
-  for (const cmd of refused){
-    const r = skillsShellRefusal(cmd);
-    assert(typeof r === 'string' && /Refused/.test(r), `NOT refused: ${cmd}`);
-    assert(r.includes(SKILLS_DIR) && /skill_manage/.test(r), `the refusal does not say where to go instead: ${cmd}`);
-  }
-});
-
-await test('skillsShellRefusal: reading a skill, and every write elsewhere, still runs', () => {
-  const allowed = [
-    'cat .anvil/skills/y/SKILL.md',
-    'ls .anvil/skills',
-    'grep name .anvil/skills/y/SKILL.md',
-    'head -5 .anvil/skills/y/SKILL.md | wc -l',
-    'echo x > notes.md',
-    'echo x > .anvil/hooks.json',
-    'rm build.log',
-    'mkdir -p src/deep/dir',
-    'mv a.md b.md',
-    // adjacent names are NOT inside the dir — the check is on segments, not substrings
-    'echo x > .anvil/skills-backup/y.md',
-    'echo x > .anvilskills/y.md',
-    'rm .anvil/skillsets/y.md',
+await test('explainSkillsRefusal names the door on a skills-dir refusal, and touches nothing else', () => {
+  const refusal = 'fs.write: EGRANT: path is read-only under this grant: .anvil/skills/y/SKILL.md';
+  const out = explainSkillsRefusal(refusal);
+  assert(out.startsWith(refusal), 'the original refusal is preserved verbatim');
+  assert(/skill_manage/.test(out), `it names the door: ${out}`);
+  assert(/status: active/.test(out), 'and says who may activate');
+  // it ANNOTATES, never refuses: anything that is not that refusal comes back unchanged
+  for (const other of [
+    'ok',
     '',
-  ];
-  for (const cmd of allowed) assert(skillsShellRefusal(cmd) === null, `wrongly refused: ${JSON.stringify(cmd)} → ${skillsShellRefusal(cmd)}`);
+    'fs.write: EGRANT: path outside grant: ../../etc/passwd',
+    'fs.write: EGRANT: path is read-only under this grant: .anvil/skills-backup/y.md',
+    'fs.write: EGRANT: path is read-only under this grant: vendor/lib.js',
+    'grep: no matches',
+  ]) {
+    eq(explainSkillsRefusal(other), other, `wrongly annotated: ${JSON.stringify(other)}`);
+  }
+  eq(explainSkillsRefusal(null), '', 'a null result is a string, not a crash');
+  // a SUCCESS that merely mentions the path is untouched — the trigger is the refusal wording
+  const catOut = 'name: demo\ndescription: reads .anvil/skills/y/SKILL.md';
+  eq(explainSkillsRefusal(catOut), catOut, 'reading a skill is not annotated as a refusal');
 });
 
 await test('underSkillsDir matches on path segments, not substrings', () => {
