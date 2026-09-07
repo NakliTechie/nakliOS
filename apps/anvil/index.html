@@ -276,7 +276,15 @@
   // own editor, Finder or the Files app can write behind us.
   function mountWorkspace(newBackend, label, root='', opts={}){
     backend = newBackend; workspaceLabel = label; wsRoot = root;
-    fs = createFileops({ backend, root, index: true, exclusive: !!opts.exclusive });
+    // The search index persists inside the workspace itself — OPFS for a Browser
+    // project, the real folder for a picked one — so a reload does not pay a cold
+    // build (3.7 s on 105 files, 6.6 s on 800). It is DERIVED: every loaded entry
+    // is re-checked against the file's own mtime and size before it is trusted,
+    // so a stale index costs a read, never a wrong answer.
+    fs = createFileops({ backend, root, index: true, exclusive: !!opts.exclusive,
+      indexPath: '.anvil/search-index.json' });
+    // Load in the background — a miss just means the next search builds it.
+    Promise.resolve().then(() => fs.indexLoad()).catch(() => {});
     // Remote git (clone/fetch/push) routes ALL network through the sovereign egress
     // (naklios.net → nakli-egress / local bridge). Only wired when a host egress
     // backend is present; else git.clone/push report "needs a Transport". Public

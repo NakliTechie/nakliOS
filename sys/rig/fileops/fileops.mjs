@@ -74,8 +74,10 @@ function globToRegExp(glob) {
  * @param {boolean} [opts.exclusive]   nothing outside this fileops writes to the backend
  * @param {number}  [opts.reconcileMs] EXPERIMENT: re-stat at most this often rather than every
  *                                     search. 0 (default) keeps the per-query sweep.
+ * @param {string}  [opts.indexPath]   persist the index here, through this same fileops, so it
+ *                                     survives a reload. Omit to keep it in memory only.
  */
-export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 1000, onSearch = null, index = false, indexMaxBytes = 4 * 1024 * 1024, exclusive = false, reconcileMs = 0 }) {
+export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 1000, onSearch = null, index = false, indexMaxBytes = 4 * 1024 * 1024, exclusive = false, reconcileMs = 0, indexPath = '' }) {
   if (!backend) throw new Error('createFileops requires a backend');
   const rootPrefix = String(root || '').replace(/\/+$/, '');
 
@@ -209,6 +211,70 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     files: new Map(),           // path -> { mtimeMs, size, hashes }
   };
 
+  // ── persistence ───────────────────────────────────────────────────────────
+  // The index is written through this same fileops, so it lands wherever the
+  // workspace lives — OPFS for a Browser project, the real folder for a picked
+  // one. No new storage tier and no separate eviction story.
+  //
+  // It is DERIVED and never authoritative. On load, every entry is checked
+  // against the filesystem's own mtime and size before it is trusted, and a file
+  // that disagrees is simply re-read. So a stale or truncated index costs a read,
+  // never a wrong answer — which is why it can be written without a fsync story.
+  const INDEX_FORMAT = 1;
+  const INDEX_SAVE_DEBOUNCE_MS = 5000;
+  let indexDirty = false;
+  let lastIndexSaveAt = 0;
+
+  // Write at most once every few seconds, and only after something changed.
+  // Fire-and-forget: a failed save costs a cold build next time, nothing more,
+  // so a search must never wait on it or fail because of it.
+  function indexSaveSoon(){
+    if (!indexPath || !indexDirty) return;
+    if (Date.now() - lastIndexSaveAt < INDEX_SAVE_DEBOUNCE_MS) return;
+    lastIndexSaveAt = Date.now();
+    indexDirty = false;
+    Promise.resolve().then(() => indexSave()).catch(() => { indexDirty = true; });
+  }
+
+  async function indexSave(){
+    if (!indexPath) return { ok: false, code: 'ENOPATH' };
+    const files = [];
+    for (const [path, e] of idx.files) {
+      files.push({ p: path, m: e.mtimeMs, s: e.size, b: e.binary ? 1 : 0, h: [...e.hashes] });
+    }
+    const blob = JSON.stringify({ v: INDEX_FORMAT, savedAt: Date.now(), files });
+    return write(indexPath, blob, { createParents: true });
+  }
+
+  async function indexLoad(){
+    if (!indexPath) return { ok: false, code: 'ENOPATH' };
+    const rd = await read(indexPath, { encoding: 'utf-8' });
+    if (!rd.ok) return rd;
+    let parsed;
+    try { parsed = JSON.parse(rd.data); } catch (_) { return err('EBADINDEX', 'index is not readable JSON'); }
+    if (!parsed || parsed.v !== INDEX_FORMAT || !Array.isArray(parsed.files)) {
+      return err('EBADINDEX', 'index format is not this version');
+    }
+    idx.postings.clear();
+    idx.files.clear();
+    let loaded = 0;
+    for (const f of parsed.files) {
+      if (!f || typeof f.p !== 'string' || !Array.isArray(f.h)) continue;
+      const hashes = new Set(f.h.filter((h) => Number.isInteger(h)));
+      for (const h of hashes) {
+        let s = idx.postings.get(h);
+        if (!s) { s = new Set(); idx.postings.set(h, s); }
+        s.add(f.p);
+      }
+      // indexedAt is deliberately 0: nothing loaded from disk is trusted as
+      // settled, so the first search re-stats every entry and re-reads anything
+      // whose mtime or size has moved. A wrong index cannot survive one query.
+      idx.files.set(f.p, { mtimeMs: f.m || 0, size: f.s || 0, indexedAt: 0, safe: null, binary: f.b === 1, hashes });
+      loaded++;
+    }
+    return { ok: true, loaded };
+  }
+
   const exclusiveOk = () => exclusive;
 
   // EXPERIMENT (plan/anvil-indexed-search.md, folder-mount question, option b).
@@ -294,6 +360,7 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     // indexedAt is when the read STARTED, not when it finished: a write landing
     // mid-read would otherwise be stamped as already-captured and stay invisible.
     idx.files.set(path, { mtimeMs: st.mtimeMs, size: st.size, indexedAt: readStartedAt, safe, binary, hashes });
+    indexDirty = true;
   }
 
   async function walkAll(safeDir) {
@@ -549,6 +616,7 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
       if (sweeping) lastSweepAt = Date.now();
       const seen = new Set();
       for (const p of globbed.matches) {
+        if (indexPath && p === indexPath) continue;   // the index does not index itself
         seen.add(p);
         const e = idx.files.get(p);
         // Exclusive mode: a file we already hold is current by construction —
@@ -595,7 +663,7 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
       // whether it matches — that is oversized files, which are never read here.
       // Binaries DO have an entry (with no postings), so they fall out of both the
       // intersection and this list without being re-read.
-      const over = globbed.matches.filter((p) => !idx.files.has(p));
+      const over = globbed.matches.filter((p) => !idx.files.has(p) && !(indexPath && p === indexPath));
       // Sort by path: postings iterate in insertion order, and today's callers
       // see glob's sorted order. Candidate order must not change which results
       // the maxResults cap keeps.
@@ -628,6 +696,7 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
         }
       }
     }
+    indexSaveSoon();
     recordSearch({
       via: 'fs.grep',
       pattern: String(pattern),
@@ -653,6 +722,8 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     read, write, list, stat, mkdir, remove, move, copy, patch, glob, grep,
     // measurement surface (plan/anvil-indexed-search.md §6); changes no result
     searchStats, recordSearch,
+    // index persistence — derived, never authoritative (see indexLoad)
+    indexSave, indexLoad,
     // exposed for the git adapter (C2) and grant layer (C4)
     _resolve: resolve,
     root: rootPrefix,

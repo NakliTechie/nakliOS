@@ -588,6 +588,80 @@ await test('PLANNER GUARANTEE: randomised, 6000 patterns × real subjects', () =
   assert(bad.length === 0, `${bad.length} guarantee violation(s):\n  ${bad.slice(0,6).join('\n  ')}`);
 });
 
+// ── persistence ─────────────────────────────────────────────────────────────
+// The index is written through the same fileops, so it lands wherever the
+// workspace lives. It is DERIVED: every loaded entry is re-checked against the
+// filesystem before it is trusted, so a stale or corrupt index costs a read,
+// never a wrong answer. These tests pin that, not just the round trip.
+
+async function seeded(opts) {
+  const fs = createFileops({ backend: new MemoryBackend(), ...opts });
+  for (const [p, body] of Object.entries(CORPUS)) await fs.write(p, body, { createParents: true });
+  return fs;
+}
+
+await test('persistence: save and load round-trips, and results stay identical', async () => {
+  const backend = new MemoryBackend();
+  const a = createFileops({ backend, index: true, exclusive: true, indexPath: '.anvil/index.json' });
+  for (const [p, body] of Object.entries(CORPUS)) await a.write(p, body, { createParents: true });
+  await new Promise((r) => setTimeout(r, 4));
+  await a.grep('parseFact');
+  const saved = await a.indexSave();
+  assert(saved.ok, 'index saved');
+
+  const b = createFileops({ backend, index: true, exclusive: true, indexPath: '.anvil/index.json' });
+  const loaded = await b.indexLoad();
+  assert(loaded.ok && loaded.loaded > 0, `index loaded (${loaded.loaded} files)`);
+
+  const plain = createFileops({ backend, index: false });
+  for (const pat of ['parseFact', 'deepThing', 'notPresentAnywhereXYZ', 'COLOR']) {
+    const x = await plain.grep(pat);
+    const y = await b.grep(pat);
+    eq(JSON.stringify(y), JSON.stringify(x), `loaded index agrees on ${pat}`);
+  }
+});
+
+await test('persistence: the index file never indexes itself', async () => {
+  const backend = new MemoryBackend();
+  const fs = createFileops({ backend, index: true, exclusive: true, indexPath: 'idx.json' });
+  await fs.write('a.txt', 'parseFact here\n', { createParents: true });
+  await new Promise((r) => setTimeout(r, 4));
+  await fs.grep('parseFact');
+  await fs.indexSave();
+  const r = await fs.grep('parseFact');
+  eq(r.matches.map((m) => m.path).join(), 'a.txt', 'the saved index is not itself a result');
+});
+
+await test('persistence: a file changed while the index was on disk is not missed', async () => {
+  const backend = new MemoryBackend();
+  const a = createFileops({ backend, index: true, indexPath: 'idx.json' });
+  await a.write('x.txt', 'alpha\n', { createParents: true });
+  await new Promise((r) => setTimeout(r, 4));
+  await a.grep('alpha');
+  await a.indexSave();
+  // The workspace moves on without any fileops watching it.
+  await backend.write('x.txt', new TextEncoder().encode('omega\n'));
+  const b = createFileops({ backend, index: true, indexPath: 'idx.json' });
+  await b.indexLoad();
+  eq((await b.grep('omega')).matches.length, 1, 'the new content is found');
+  eq((await b.grep('alpha')).matches.length, 0, 'the stale content is gone');
+});
+
+await test('persistence: a corrupt or foreign index is refused, not trusted', async () => {
+  const backend = new MemoryBackend();
+  const fs = createFileops({ backend, index: true, indexPath: 'idx.json' });
+  await fs.write('a.txt', 'parseFact\n', { createParents: true });
+
+  await fs.write('idx.json', 'this is not json at all', { createParents: true });
+  eq((await fs.indexLoad()).code, 'EBADINDEX', 'garbage refused');
+
+  await fs.write('idx.json', JSON.stringify({ v: 999, files: [] }));
+  eq((await fs.indexLoad()).code, 'EBADINDEX', 'a future format refused');
+
+  // And after a refusal the search still answers correctly from a cold build.
+  eq((await fs.grep('parseFact')).matches.length, 1, 'refusing the index costs a read, not an answer');
+});
+
 // A randomised differential sweep: the fixed battery above encodes what I
 // thought to check, which is exactly the set most likely to miss something.
 await test('DIFFERENTIAL: randomised patterns, 400 cases', async () => {
