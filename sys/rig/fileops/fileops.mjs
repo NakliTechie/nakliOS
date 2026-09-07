@@ -23,6 +23,7 @@
 
 import { normalizeMountPath, joinRoot } from './pathguard.mjs';
 import { applyPatch, reversePatch } from './patch.mjs';
+import { requiredLiteral, trigrams } from './trigram.mjs';
 
 const enc = new TextEncoder();
 
@@ -68,8 +69,10 @@ function globToRegExp(glob) {
  * @param {number}  [opts.symlinkDepth] max symlink hops before ELOOP
  * @param {number}  [opts.grepCap]      default grep maxResults
  * @param {Function} [opts.onSearch]    called with one SearchStat per grep (measurement only)
+ * @param {boolean} [opts.index=false]   build a trigram index to skip non-candidate files
+ * @param {number}  [opts.indexMaxBytes] per-file size ceiling for indexing (default 4 MiB)
  */
-export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 1000, onSearch = null }) {
+export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 1000, onSearch = null, index = false, indexMaxBytes = 4 * 1024 * 1024 }) {
   if (!backend) throw new Error('createFileops requires a backend');
   const rootPrefix = String(root || '').replace(/\/+$/, '');
 
@@ -175,6 +178,42 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
       for (const k of Object.keys(searchTotals)) searchTotals[k] = 0;
     }
     return out;
+  }
+
+  // ── trigram index (plan/anvil-indexed-search.md §2) ───────────────────────
+  // Opt-in. Decides which files to OPEN; never which lines match — the caller
+  // always verifies with the real regex, so the index cannot invent a result.
+  //
+  // Staleness is handled by re-stat'ing on every search rather than by trusting
+  // a watcher or an ownership assumption. `read` is stat + readBinary, so a
+  // grep already paid one stat per file; the index adds nothing there and skips
+  // the readBinary for non-candidates. That is the half that costs bytes, and
+  // it makes an externally edited host-fs file impossible to miss — the case
+  // the provisional decision in §8.3 left open.
+  const idx = {
+    postings: new Map(),        // triHash -> Set<path>
+    files: new Map(),           // path -> { mtimeMs, size, hashes }
+  };
+
+  function indexDrop(path) {
+    const e = idx.files.get(path);
+    if (!e) return;
+    for (const h of e.hashes) {
+      const s = idx.postings.get(h);
+      if (s) { s.delete(path); if (!s.size) idx.postings.delete(h); }
+    }
+    idx.files.delete(path);
+  }
+
+  function indexAdd(path, text, st) {
+    indexDrop(path);
+    const hashes = trigrams(text.toLowerCase());
+    for (const h of hashes) {
+      let s = idx.postings.get(h);
+      if (!s) { s = new Set(); idx.postings.set(h, s); }
+      s.add(path);
+    }
+    idx.files.set(path, { mtimeMs: st.mtimeMs, size: st.size, hashes });
   }
 
   async function walkAll(safeDir) {
@@ -377,7 +416,55 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     const re = pattern instanceof RegExp ? pattern : new RegExp(pattern);
     const matches = [];
     let truncated = false;
-    outer: for (const p of globbed.matches) {
+    // Candidate narrowing. `lit` is null whenever the pattern is anything the
+    // extractor does not fully understand, and null means "scan everything" —
+    // the same work as before the index existed.
+    const lit = index ? requiredLiteral(re.source) : null;
+    let candidates = null;
+    let indexUsed = false;
+    let filesStatted = 0;
+    if (lit) {
+      // Refresh the index against the filesystem: new and changed files are
+      // re-read, vanished ones dropped. One stat per file, which `read` was
+      // paying anyway.
+      const seen = new Set();
+      for (const p of globbed.matches) {
+        seen.add(p);
+        const st = await stat(p);
+        if (!st.ok) { indexDrop(p); continue; }
+        filesStatted++;
+        const e = idx.files.get(p);
+        if (e && e.mtimeMs === st.stat.mtimeMs && e.size === st.stat.size) continue;
+        if (st.stat.size > indexMaxBytes) { indexDrop(p); continue; } // stays a full-read candidate
+        const rd = await read(p, { encoding: 'utf-8' });
+        if (!rd.ok) { indexDrop(p); continue; }
+        filesRead++;
+        bytesRead += rd.data.length;
+        indexAdd(p, rd.data, st.stat);
+      }
+      // Snapshot the keys: indexDrop mutates idx.files, so iterating it live
+      // would skip entries. (oxlint flags the spread as useless; it is not.)
+      for (const p of [...idx.files.keys()]) if (!seen.has(p)) indexDrop(p);
+
+      // Intersect the postings of every trigram in the required literal.
+      const want = trigrams(lit.toLowerCase());
+      let acc = null;
+      for (const h of want) {
+        const s = idx.postings.get(h);
+        if (!s) { acc = new Set(); break; }
+        acc = acc === null ? new Set(s) : new Set([...acc].filter((x) => s.has(x)));
+        if (!acc.size) break;
+      }
+      // Oversized files are not in the index, so they must stay candidates.
+      const over = globbed.matches.filter((p) => !idx.files.has(p));
+      // Sort by path: postings iterate in insertion order, and today's callers
+      // see glob's sorted order. Candidate order must not change which results
+      // the maxResults cap keeps.
+      candidates = [...new Set([...(acc || []), ...over])].sort();
+      indexUsed = true;
+    }
+
+    outer: for (const p of (candidates || globbed.matches)) {
       const rd = await read(p, { encoding: 'utf-8' });
       if (!rd.ok) continue; // skip unreadable/binary silently
       filesRead++;
@@ -395,6 +482,10 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
       pattern: String(pattern),
       cwd: opts.cwd || '',
       glob: opts.glob || '**',
+      indexUsed,
+      literal: lit || null,
+      filesStatted,
+      candidates: candidates ? candidates.length : null,
       filesWalked: globbed.matches.length,
       filesRead,
       bytesRead,

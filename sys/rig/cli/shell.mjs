@@ -511,7 +511,11 @@ export function createShell({ registry, face, cwd = '', kiln = null } = {}) {
         const r = await face.invoke('fs.read', { path, encoding: 'utf-8' });
         if (!r.ok) continue;
         const text = decodeData(r.data);
-        if (typeof text !== 'string' || text.startsWith('<')) continue;
+        // Binary detection: a NUL byte, as grep and ripgrep both do. This used to
+        // be `text.startsWith('<')`, which silently discarded every HTML, XML and
+        // SVG file in the workspace — a wrong answer with exit 0, and the reason
+        // the matcher had to be fixed before anything was built on top of it.
+        if (typeof text !== 'string' || text.includes('\u0000')) continue;
         filesRead++;
         bytesRead += text.length;
         const hits = linesOf(text).map((l, i) => ({ l, i })).filter(({ l }) => re.test(l));
