@@ -13,7 +13,7 @@ import { verifyChain } from '../ledger.mjs';
 import { RUN_EVENTS, createRunRecorder, loadRecord, foldStatus, foldLog, foldTranscript,
          replayInfer, replayExecuteTool, compareRuns, requestHash, ReplayMiss,
          OUTCOME_SIGNALS, foldOutcome, foldReuse, foldStopReasons, stopReasonsLine,
-         searchRecords, readEvent, historyTool, HISTORY_ROLES, foldRecovery, recoveryNote,
+         searchRecords, scopeEntries, readEvent, historyTool, HISTORY_ROLES, foldRecovery, recoveryNote,
          foldStagnation, stagnationNudge, foldSessionContext, foldDecisions,
          foldSurface, compactionOrphaned, reconstructionCheck } from '../run-record.mjs';
 
@@ -21,6 +21,7 @@ let passed = 0; const failures = [];
 async function test(n, fn) { try { await fn(); passed++; } catch (e) { failures.push({ n, message: e.message }); } }
 function assert(c, m) { if (!c) throw new Error(m || 'assertion failed'); }
 function eq(a, b, m) { if (a !== b) throw new Error(`${m || 'ne'}: ${JSON.stringify(a)} !== ${JSON.stringify(b)}`); }
+function deepEq(a, b, m) { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${m || 'ne'}: ${JSON.stringify(a)} !== ${JSON.stringify(b)}`); }
 
 function freshShell() {
   const fs = createFileops({ backend: new MemoryBackend() });
@@ -226,6 +227,31 @@ async function recordFinding(marker) {
   await rec.finish(r); await rec.settled();
   return rec;
 }
+
+await test('HISTORY scope: run / task / project return DIFFERENT sets — the advertised parameter is implemented (S-1)', async () => {
+  // three records: two belong to the asking task, one to a sibling task in the same project
+  const entries = [
+    { runId: 'mine-1',    taskId: 'task-A', record: await recordFinding('SCOPE-OLD') },
+    { runId: 'other-1',   taskId: 'task-B', record: await recordFinding('SCOPE-SIBLING') },
+    { runId: 'mine-2',    taskId: 'task-A', record: await recordFinding('SCOPE-NEW') },
+  ];
+  const ids = (scope) => searchRecords(entries, { query: 'scope-', scope, taskId: 'task-A', limit: 20 })
+    .map((h) => h.runId).filter((v, i, a) => a.indexOf(v) === i).sort();
+
+  deepEq(ids('project'), ['mine-1', 'mine-2', 'other-1'], 'project sees every entry');
+  deepEq(ids('task'), ['mine-1', 'mine-2'], 'task excludes the sibling task');
+  deepEq(ids('run'), ['mine-2'], 'run is the newest entry of the asking task alone');
+  assert(ids('project').length !== ids('task').length, 'project and task are DIFFERENT sets, not the same call twice');
+  assert(!ids('task').includes('other-1'), "the sibling task's record is not reachable at task scope");
+
+  // an unknown scope is not a silent narrowing — it behaves as project
+  deepEq(scopeEntries(entries, 'nonsense', 'task-A').map((e) => e.runId), ['mine-1', 'other-1', 'mine-2'], 'an unrecognised scope does not filter');
+  // entries the loader did not tag keep working: an untagged entry is never dropped
+  const untagged = [{ runId: 'legacy', record: entries[0].record }];
+  eq(scopeEntries(untagged, 'task', 'task-A').length, 1, 'an untagged entry survives a task-scoped search');
+  // and with no taskId the filter cannot narrow, so it does not pretend to
+  eq(scopeEntries(entries, 'task', null).length, 3, 'no asking task → nothing to match against, nothing filtered');
+});
 
 await test('HISTORY search: from "run 3" a query finds a tool result recorded in run 1, newest first, with a readable id', async () => {
   const entries = [

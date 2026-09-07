@@ -673,13 +673,29 @@ function centredExcerpt(text, at, span = 120) {
   return (start > 0 ? '…' : '') + text.slice(start, end).replace(/\s+/g, ' ').trim() + (end < text.length ? '…' : '');
 }
 
+// The scope the tool advertises, applied HERE rather than only at the call site (S-1).
+// A caller may hand over more records than the scope allows — the app narrows at load time
+// for cost, but that is an optimisation, not the guarantee. Entries carry `taskId` when the
+// loader knows it; an entry without one is never dropped, so a caller that does not tag its
+// entries keeps the old behaviour instead of silently searching nothing.
+//   project — every entry
+//   task    — entries whose taskId matches the asking task
+//   run     — the newest single entry within that task (entries arrive oldest-first)
+export function scopeEntries(entries, scope = 'project', taskId = null) {
+  const all = Array.isArray(entries) ? entries : [];
+  if (scope !== 'task' && scope !== 'run') return all;
+  const tid = taskId == null ? null : String(taskId);
+  const mine = tid === null ? all : all.filter((e) => e.taskId === undefined || e.taskId === null || String(e.taskId) === tid);
+  return scope === 'run' ? mine.slice(-1) : mine;
+}
+
 // Search across records, newest event first. Returns hits [{ id, runId, tool, ts, excerpt }].
-export function searchRecords(entries, { query, role = 'default', limit = 20 } = {}) {
+export function searchRecords(entries, { query, role = 'default', limit = 20, scope = 'project', taskId = null } = {}) {
   const q = String(query ?? '').toLowerCase();
   if (!q) return [];
   const slice = HISTORY_ROLES[role] || HISTORY_ROLES.default;
   const hits = [];
-  for (const { runId, record } of (entries || [])) {
+  for (const { runId, record } of scopeEntries(entries, scope, taskId)) {
     if (!record || typeof record.events !== 'function') continue;
     const evs = joined(record.events(), record.resolve);
     for (let i = 0; i < evs.length; i++) {

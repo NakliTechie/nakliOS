@@ -243,6 +243,48 @@ await test('rules: weight round-trips (1–10, default 5 omitted); the cap error
   assert(/lessons, not logs/i.test(LESSON_CONTRACT) && /next time/.test(LESSON_CONTRACT), 'the contract says the two load-bearing things');
 });
 
+// ───────────────────────────── created: the slot's recency signal (S-3) ──
+
+await test('created: round-trips, and an unparseable one degrades to absent', () => {
+  const f = parseFact('---\nname: a\ndescription: d\ntype: project\ncreated: 2026-09-07T10:00:00.000Z\n---\nbody');
+  eq(f.created, '2026-09-07T10:00:00.000Z', 'parsed');
+  assert(/^created: 2026-09-07T10:00:00\.000Z$/m.test(serializeFact(f)), 'serialized on its own line:\n' + serializeFact(f));
+  eq(parseFact(serializeFact(f)).created, f.created, 'round-trip');
+  eq(parseFact('---\nname: a\ndescription: d\ntype: project\ncreated: last tuesday\n---\nb').created, null, 'garbage → absent, not an error');
+  eq(parseFact('---\nname: a\ndescription: d\ntype: project\n---\nb').created, null, 'absent stays absent');
+  assert(!/created:/.test(serializeFact({ name: 'a', description: 'd', type: 'project', body: 'b' })), 'an untimed fact writes no created line');
+});
+
+await test('noteToFact stamps created, and honours an injected one', () => {
+  const fixed = noteToFact('The db is postgres', 'project', null, { created: '2020-01-02T03:04:05Z' });
+  eq(fixed.created, '2020-01-02T03:04:05.000Z', 'injected time is used verbatim (normalised)');
+  eq(parseFact(fixed.file).created, fixed.created, 'it reaches the file');
+  const now = noteToFact('The db is mysql', 'project');
+  assert(Math.abs(Date.parse(now.created) - Date.now()) < 60000, `stamped from the clock: ${now.created}`);
+});
+
+await test('slotHolder prefers the recorded time over array order, and degrades to disk order', () => {
+  const F = (name, created) => ({ name, description: name, type: 'project', status: null, slot: 'phase',
+    supersedes: [], derived_from: [], contradicts: [], created, body: name });
+  // ALPHABETICALLY sorted — the array order says `c-old` is last, the clock says `a-new` is newest.
+  const sorted = [F('a-new', '2026-09-07T10:00:00Z'), F('b-mid', '2026-05-01T00:00:00Z'), F('c-old', '2020-01-01T00:00:00Z')];
+  eq(slotHolder(sorted, 'phase'), 'a-new', 'the chronologically newest holds the slot, not the last in the array');
+  // reversing the array must not change the answer — that is the whole point of the field
+  eq(slotHolder([...sorted].reverse(), 'phase'), 'a-new', 'the answer is order-independent once times exist');
+  // no times at all → exactly the old behaviour, disk order
+  const untimed = [F('first', null), F('second', null), F('third', null)];
+  eq(slotHolder(untimed, 'phase'), 'third', 'an all-untimed store still answers by disk order');
+  // mixed: a timed fact beats an untimed one wherever it sits in the array
+  eq(slotHolder([F('timed', '2001-01-01T00:00:00Z'), F('untimed', null)], 'phase'), 'timed',
+    'a fact that recorded when it was written beats one that never did, even when it comes first');
+  // supersedes still wins over time: an older fact that supersedes the newer one holds
+  const superseding = [F('young', '2026-09-07T10:00:00Z'), { ...F('elder', '2001-01-01T00:00:00Z'), supersedes: ['young'] }];
+  eq(slotHolder(superseding, 'phase'), 'elder', 'the supersedes graph is consulted before the clock');
+  // retracted is never a holder, however new
+  eq(slotHolder([F('live', '2001-01-01T00:00:00Z'), { ...F('dead', '2026-09-07T10:00:00Z'), status: 'retracted' }], 'phase'),
+    'live', 'a retracted fact does not hold the slot no matter how recent');
+});
+
 if (failures.length){
   console.error(`memory-store: ${passed} passed, ${failures.length} FAILED`);
   for (const f of failures) console.error(`  FAIL ${f.n}: ${f.message}`);

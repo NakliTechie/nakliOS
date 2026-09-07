@@ -71,7 +71,16 @@ function safeSlug(s){ return String(s == null ? '' : s).trim().toLowerCase().rep
 // weight 1–10 (rules order by it, highest first); anything else → the default.
 function clampWeight(v){ const n = Number(v); return Number.isFinite(n) && n >= 1 && n <= 10 ? Math.round(n) : DEFAULT_WEIGHT; }
 
-// Parse a fact file → { name, description, type, status, cause, slot, supersedes,
+// An ISO-8601 instant, or null. Anything unparseable is treated as ABSENT rather than
+// as an error: a hand-edited fact with a garbled date must still load and still bind.
+function parseCreated(v){
+  const s = String(v == null ? '' : v).trim().replace(/^["']|["']$/g, '');
+  if (!s) return null;
+  const t = Date.parse(s);
+  return Number.isFinite(t) ? new Date(t).toISOString() : null;
+}
+
+// Parse a fact file → { name, description, type, status, cause, slot, created, supersedes,
 // derived_from, contradicts, body }. Unknown/absent type falls back to 'project';
 // unknown/absent status → null (a plain fact); relations → [] when absent.
 export function parseFact(text){
@@ -83,6 +92,7 @@ export function parseFact(text){
     status: MEMORY_STATUSES.includes((meta.status || '').toLowerCase()) ? meta.status.toLowerCase() : null,
     cause: REVISION_CAUSES.includes((meta.cause || '').toLowerCase()) ? meta.cause.toLowerCase() : null,
     slot: meta.slot ? safeSlug(meta.slot) || null : null,
+    created: parseCreated(meta.created),
     weight: clampWeight(meta.weight),
     supersedes: parseList(meta.supersedes),
     derived_from: parseList(meta.derived_from),
@@ -102,6 +112,7 @@ export function serializeFact(f){
   if (MEMORY_STATUSES.includes(f.status)) lines.push(`status: ${f.status}`);
   if (REVISION_CAUSES.includes(f.cause)) lines.push(`cause: ${f.cause}`);
   if (f.slot) lines.push(`slot: ${safeSlug(f.slot)}`);
+  const created = parseCreated(f.created); if (created) lines.push(`created: ${created}`);
   const w = clampWeight(f.weight); if (w !== DEFAULT_WEIGHT) lines.push(`weight: ${w}`);
   for (const rel of MEMORY_RELATIONS){
     const list = Array.isArray(f[rel]) ? f[rel].map(safeSlug).filter(Boolean) : [];
@@ -123,18 +134,26 @@ function shortDigest(s){
 // Which fact currently holds a single-valued slot: the newest live holder — not retracted, not
 // superseded by another fact. Null when the slot is free.
 //
-// ORDERING CONTRACT (forward-pass S-3): "newest" is the LAST live holder in `facts`, so the
-// caller must pass facts in disk order. A fact carries no timestamp, so array order is the only
-// recency signal this module has — sorting the array before calling (alphabetically, say) makes
-// the answer wrong, silently. The supersedes graph is used first and does not depend on order:
-// any holder another fact supersedes is already excluded, and a supersede CYCLE resolves to a
-// single live winner rather than none. Order decides only between holders with no relation
-// between them, which is a genuinely ambiguous store.
+// ORDERING CONTRACT (forward-pass S-3): "newest" now means the newest RECORDED time, and
+// falls back to array order only for facts that carry none. Facts written before `created:`
+// existed have no timestamp, so they keep the old behaviour exactly: untimed holders sort
+// among themselves in disk order, and any timed holder is newer than all of them — a fact
+// that recorded when it was written beats one that never did. That is the deliberate reading
+// of an ambiguous store, not an accident of sort stability.
+//
+// The supersedes graph is used FIRST and does not depend on order at all: any holder another
+// fact supersedes is already excluded, and a supersede CYCLE resolves to a single live winner
+// rather than none. Time decides only between holders with no relation between them.
 export function slotHolder(facts, slot){
   const key = safeSlug(slot); if (!key) return null;
   const superseded = supersededSet(facts);
-  const live = (facts || []).filter(f => f && f.slot === key && f.status !== 'retracted' && !superseded.has(f.name));
-  return live.length ? live[live.length - 1].name : null;
+  const live = (facts || [])
+    .map((f, i) => ({ f, i }))
+    .filter(({ f }) => f && f.slot === key && f.status !== 'retracted' && !superseded.has(f.name));
+  if (!live.length) return null;
+  const at = ({ f }) => { const c = parseCreated(f.created); return c ? Date.parse(c) : -Infinity; };
+  live.sort((a, b) => (at(a) - at(b)) || (a.i - b.i));
+  return live[live.length - 1].f.name;
 }
 // Live rules, highest weight first (ties keep disk order). Retracted and superseded never bind.
 function liveRules(live, stale){
@@ -265,6 +284,10 @@ export function noteToFact(note, type, status, rel = {}){
   const fact = {
     name: slug, description, type: t, status: st, cause: null,
     slot: rel && rel.slot ? safeSlug(rel.slot) || null : null,
+    // The recency signal slotHolder needs. Deterministic when the caller supplies
+    // `rel.created` (the tests and any replay do); otherwise stamped from the clock,
+    // which is the ONE non-deterministic field in this function.
+    created: parseCreated(rel && rel.created) || new Date().toISOString(),
     weight: clampWeight(rel && rel.weight),
     supersedes: parseList(Array.isArray(rel?.supersedes) ? rel.supersedes.join(',') : rel?.supersedes),
     derived_from: parseList(Array.isArray(rel?.derived_from) ? rel.derived_from.join(',') : rel?.derived_from),

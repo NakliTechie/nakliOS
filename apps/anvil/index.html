@@ -230,7 +230,7 @@
   import { runAgentLoop } from '../../sys/ai/agent-loop.mjs';
   import { codingToolset, makeToolExecutor, makeShellVerifier } from '../../sys/ai/agent-tools.mjs';
   import { buildProjectContext, rememberTool } from '../../sys/ai/project-context.mjs';
-  import { SKILLS_DIR, parseSkill, buildSkillsIndex, skillTool, INJECTED_STATUSES } from '../../sys/ai/skills.mjs';
+  import { SKILLS_DIR, parseSkill, buildSkillsIndex, skillTool, INJECTED_STATUSES, skillsShellRefusal } from '../../sys/ai/skills.mjs';
   import { skillManageTool, planSkillWrite, createSkillSession, SKILL_FILE } from '../../sys/ai/skill-manage.mjs';
   import { createProposalLedger } from '../../sys/ai/proposal-fingerprint.mjs';
   import { skillLifecycle, applySkillStatus, reviveOnUse } from '../../sys/ai/skill-lifecycle.mjs';
@@ -260,7 +260,7 @@
   import { runCampaign } from '../../sys/assay/runmode.mjs';
   import { makeCampaignExecutors } from '../../sys/assay/executors.mjs';
   import { verifyWall, verifyTests, replay as replayLineage } from '../../sys/assay/verify.mjs';
-  import { createRunRecorder, foldStatus, foldLog, foldTranscript, loadRecord, foldStopReasons, stopReasonsLine, searchRecords, readEvent, historyTool, foldRecovery, recoveryNote, foldStagnation, stagnationNudge, foldOutcome, foldSkillUsage } from '../../sys/history/run-record.mjs';
+  import { createRunRecorder, foldStatus, foldLog, foldTranscript, loadRecord, foldStopReasons, stopReasonsLine, searchRecords, scopeEntries, readEvent, historyTool, foldRecovery, recoveryNote, foldStagnation, stagnationNudge, foldOutcome, foldSkillUsage } from '../../sys/history/run-record.mjs';
 
   const $ = (id) => document.getElementById(id);
   const nak = window.naklios || null;
@@ -1478,7 +1478,7 @@
           const pick = scope==='run' ? files.slice(-1) : files;
           for(const [name,fh] of pick){ try{ const dump=JSON.parse(await (await fh.getFile()).text());
             const rid=(p===proj&&tk===task)?name.replace(/\.json$/,''):(tk+'/'+name.replace(/\.json$/,''));
-            entries.push({ runId:rid, record:loadRecord(dump) }); }catch(_){}}
+            entries.push({ runId:rid, taskId:tk, record:loadRecord(dump) }); }catch(_){}}
         } }
     }catch(_){}
     return entries;
@@ -1650,14 +1650,19 @@
       if(nm==='history'){
         const op=String((ar&&ar.op)||'');
         const scope=['run','task','project'].includes(ar&&ar.scope)?ar.scope:'task';
-        const entries=await loadTaskRecords(scope, runCtx && runCtx.t && runCtx.t.id);
+        const callerTask = runCtx && runCtx.t && runCtx.t.id;
+        // The loader narrows for COST (it should not read a hundred task folders to answer a
+        // task-scoped search) and fences the project for SAFETY. searchRecords narrows again
+        // for CORRECTNESS: the scope is the module's guarantee, not this call site's habit (S-1).
+        const entries=await loadTaskRecords(scope, callerTask);
+        const scoped=scopeEntries(entries, scope, callerTask);
         if(op==='search'){
           const role=['reviewer','supervisor'].includes(ar&&ar.role)?ar.role:'default';
-          const hits=searchRecords(entries,{ query:String((ar&&ar.query)||''), role, limit:20 });
+          const hits=searchRecords(entries,{ query:String((ar&&ar.query)||''), role, limit:20, scope, taskId:callerTask });
           return hits.length ? hits.map(h=>h.id+'  ['+h.tool+']  '+h.excerpt).join('\n') : ('No history matches "'+String((ar&&ar.query)||'')+'" in scope '+scope+(entries.length?'':' (no saved runs yet).'));
         }
         if(op==='read'){
-          const r=readEvent(entries,String((ar&&ar.id)||''),{ offset:Number(ar&&ar.offset)||0, limit:4000 });
+          const r=readEvent(scoped,String((ar&&ar.id)||''),{ offset:Number(ar&&ar.offset)||0, limit:4000 });
           if(r.error) return 'history read: '+r.error;
           return r.text + (r.nextOffset!=null ? ('\n[more — history read id "'+r.id+'" offset '+r.nextOffset+']') : '');
         }
@@ -1796,6 +1801,14 @@
       // The skills directory is authority, not ordinary content: a file there decides what
       // instructions bind. The general file tools must not reach it, or the sentinel and the
       // person-only activation are advisory (forward-pass NAF-01). skill_manage is the one door.
+      // The same fence on the SHELL side: the guard below covers the structured file
+      // tools, but a redirect (`echo x > .anvil/skills/y/SKILL.md`) reached the disk and
+      // only the load-path sentinel stood between it and the model. Mutation is refused;
+      // reading a skill from the shell stays allowed.
+      if(nm==='shell' && ar && ar.command){
+        const ref = skillsShellRefusal(String(ar.command));
+        if(ref) return ref;
+      }
       if(['write','edit','apply_patch','edit_lines','remove','move'].includes(nm) && ar){
         const blob = String(ar.path||ar.file||'')+'\n'+String(ar.patch||'')+'\n'+String(ar.edit||'')+'\n'+String(ar.to||'');
         if(blob.includes(SKILLS_DIR))

@@ -4,7 +4,7 @@
 // Grep-based, like the other app-contract tests. Pins the seam, not the shape.
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { buildSkillsIndex, parseSkill } from '../sys/ai/skills.mjs';
+import { buildSkillsIndex, parseSkill, skillsShellRefusal } from '../sys/ai/skills.mjs';
 
 const anvil = await readFile(new URL('../apps/anvil/index.html', import.meta.url), 'utf8');
 
@@ -35,5 +35,22 @@ const idx = buildSkillsIndex([staged, quarantined, active]);
 assert.ok(!/\*\*s\*\*/.test(idx) && !/\*\*q\*\*/.test(idx) && /\*\*a\*\*/.test(idx), 'only the active skill is injected');
 // The regression: dropping status re-admits a staged skill.
 assert.ok(/\*\*s\*\*/.test(buildSkillsIndex([{ name: staged.name, description: staged.description }])), 'sanity: without status the filter cannot engage — which is why the app must pass it');
+
+
+// ── the write fence, both halves (NAF-01) ──
+// The structured file tools were fenced; the shell was not, so a redirect landed a skill on
+// disk with only the load-path sentinel behind it. Both guards must sit BEFORE the executor.
+const shellGuard = anvil.indexOf('skillsShellRefusal(String(ar.command))');
+const fileGuard = anvil.indexOf("['write','edit','apply_patch','edit_lines','remove','move'].includes(nm)");
+const exec = anvil.indexOf('const res = await baseExec(nm, ar, callObj)');
+assert.ok(shellGuard > 0, 'the shell path is fenced out of the skills dir');
+assert.ok(fileGuard > 0, 'the file tools are fenced out of the skills dir');
+assert.ok(exec > 0, 'the tool executor is where both guards must precede');
+assert.ok(shellGuard < exec, 'the shell fence runs BEFORE the shell command reaches the executor');
+assert.ok(fileGuard < exec, 'the file fence runs BEFORE the write reaches the executor');
+assert.match(anvil, /import \{[^}]*skillsShellRefusal[^}]*\} from '\.\.\/\.\.\/sys\/ai\/skills\.mjs'/, 'the refusal comes from the module, not a copy of the rule in the app');
+// and the module actually refuses the shape the app was open to
+assert.ok(skillsShellRefusal('echo x > .anvil/skills/y/SKILL.md'), 'the exact bypass NAF-01 left open is now refused');
+assert.equal(skillsShellRefusal('cat .anvil/skills/y/SKILL.md'), null, 'reading a skill from the shell still runs');
 
 console.log('anvil-skills: skill writes are planned, scanned, staged through P0, and never injected until activated');
