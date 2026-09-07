@@ -196,6 +196,36 @@ await test('a repeating model is NUDGED, escalating, and the run is never killed
   }
 });
 
+await test('a nudge lands after EVERY tool result of a multi-call turn, not between them (F7)', async () => {
+  // With one call per turn, flushing the nudge inside the tool loop is indistinguishable from
+  // flushing it after — a checker moved the flush and the suite stayed green. Three calls in
+  // one turn tell the two apart: a user turn between a tool_call and any of its replies is
+  // malformed on a strict endpoint, and the provider rejects the NEXT request.
+  const three = [
+    call('shell', { command: 'a' }, 'c1'),
+    call('shell', { command: 'b' }, 'c2'),
+    call('shell', { command: 'c' }, 'c3'),
+  ];
+  const r = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }],
+    tools: [shellTool()],
+    infer: async () => ({ content: '', toolCalls: three }),
+    executeTool: async () => 'ok',
+    maxSteps: 4,
+  });
+  const notes = r.messages.filter((m) => m.role === 'user' && /^\[coordination\]/.test(m.content));
+  assert(notes.length >= 1, 'the run did nudge, so the ordering below is actually exercised');
+  for (let i = 0; i < r.messages.length; i++) {
+    if (r.messages[i].role !== 'assistant' || !r.messages[i].tool_calls?.length) continue;
+    const ids = r.messages[i].tool_calls.map((c) => c.id);
+    // the next `ids.length` messages must be exactly this turn's tool replies, in order
+    const replies = r.messages.slice(i + 1, i + 1 + ids.length);
+    deepEq(replies.map((m) => m.role), ids.map(() => 'tool'),
+      `a non-tool message interrupts a 3-call turn's replies at ${i}: ${JSON.stringify(r.messages.slice(i, i + 5).map((m) => m.role))}`);
+    deepEq(replies.map((m) => m.tool_call_id), ids, 'every call is answered, in the order it was made');
+  }
+});
+
 await test('the repeat chain keys on the CANONICAL call, and a denied call is nudged in stronger terms (F7)', async () => {
   // same call, keys emitted in a different order each turn — a raw-string compare calls this progress
   const flip = [
@@ -728,6 +758,122 @@ await test('a recorder that REFUSES the spill leaves the original inline — a s
   const toolMsg = r.messages.find((m) => m.role === 'tool');
   eq(toolMsg.content, huge, 'the whole result stayed inline because the elision had nowhere to point');
   eq(r.stop, 'done', 'and the run finished normally rather than erroring');
+});
+
+// ── the survivors of a cross-family mutation pass (F6/F7/F5) ──
+
+await test('the repeat chain nudges again after an owner interjection resets it (F7)', async () => {
+  const events = [];
+  let n = 0;
+  await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }],
+    tools: [shellTool()],
+    infer: async ({ messages }) => {
+      n++;
+      // the owner speaks once, after the chain has already nudged at 3
+      if (n === 4) messages.push({ role: 'user', content: 'try it another way' });
+      return { content: '', toolCalls: [call('shell', { command: 'pwd' }, 'r')] };
+    },
+    executeTool: async () => 'ok',
+    onEvent: (e) => events.push(e),
+    maxSteps: 8,
+  });
+  const times = events.filter((e) => e.type === 'repeat-nudge').map((e) => e.times);
+  // 3 before the interjection; the chain restarts and reaches 3 again by step 7
+  deepEq(times, [3, 3, 5], `the nudge is silenced after a reset: ${JSON.stringify(times)}`);
+  eq(times.filter((t) => t === 3).length, 2, 'the count 3 is reached twice — once per chain — and nudged both times');
+});
+
+await test('the canonical signature is DEEP — a nested key reorder is still the same call (F7)', () => {
+  const a = [{ function: { name: 'write', arguments: JSON.stringify({ opts: { b: 2, a: 1 }, path: 'p' }) } }];
+  const b = [{ function: { name: 'write', arguments: JSON.stringify({ path: 'p', opts: { a: 1, b: 2 } }) } }];
+  eq(stepSignature(a), stepSignature(b), 'a reorder nested inside an object is not progress');
+  // and a genuinely different nested VALUE is still a different call
+  const c = [{ function: { name: 'write', arguments: JSON.stringify({ path: 'p', opts: { a: 9, b: 2 } }) } }];
+  assert(stepSignature(a) !== stepSignature(c), 'a changed nested value is a different call');
+  // arrays keep their order — [1,2] is not [2,1]
+  const d = [{ function: { name: 'write', arguments: JSON.stringify({ xs: [1, 2] }) } }];
+  const e = [{ function: { name: 'write', arguments: JSON.stringify({ xs: [2, 1] }) } }];
+  assert(stepSignature(d) !== stepSignature(e), 'array order is meaningful and is preserved');
+});
+
+await test('the anchor REPLACES the prefix estimate, it does not add to it (F6)', async () => {
+  // A large opening message the estimator scores high and the provider scores low. Counting
+  // `anchor.input + estimate(whole convo)` re-counts that prefix on top of the provider's own
+  // number. The budget below sits BETWEEN the two readings, so only the wrong one trips.
+  const bigOpen = 'w '.repeat(20000);
+  const opening = [{ role: 'user', content: bigOpen }];
+  const est = estimateTokens(opening);
+  assert(est > 5000, `the opening is estimator-heavy on purpose: ${est}`);
+  const budget = { tokens: est + 200 };   // above the pre-anchor estimate, below est + 400
+  const r = await runAgentLoop({
+    messages: opening,
+    tools: [shellTool()],
+    infer: async () => ({ content: '', toolCalls: [call('shell', { command: 'pwd' }, 'u')], usage: { prompt_tokens: 400 } }),
+    executeTool: async () => 'ok',
+    budget,
+    maxSteps: 3,
+  });
+  eq(r.stop, 'max-steps',
+    `once anchored the count is 400 + the tail, not ${est} + 400: stopped ${r.stop}/${r.budgetAxis} after ${r.steps}`);
+  // and the budget still trips when the PROVIDER's number is genuinely over it
+  const over = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }],
+    tools: [shellTool()],
+    infer: async () => ({ content: '', toolCalls: [call('shell', { command: 'pwd' }, 'u')], usage: { prompt_tokens: 5000 } }),
+    executeTool: async () => 'ok',
+    budget: { tokens: 1000 },
+    maxSteps: 3,
+  });
+  eq(over.stop, 'budget', 'a budget under the provider count still trips');
+});
+
+await test('the anchor MOVES to the latest reported request (F6)', async () => {
+  // Anchoring only once leaves every later turn measured as a delta from the first request —
+  // the count drifts further from the truth with every turn, silently.
+  const events = [];
+  let turn = 0;
+  await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }],
+    tools: [shellTool()],
+    infer: async () => ({ content: '', toolCalls: [call('shell', { command: 'pwd' }, 'u')], usage: { prompt_tokens: 100 * (++turn) } }),
+    executeTool: async () => 'ok',
+    onEvent: (e) => events.push(e),
+    maxSteps: 3,
+  });
+  const anchors = events.filter((e) => e.type === 'usage');
+  eq(anchors.length, 3, `every reported request re-anchors: ${anchors.length}`);
+  deepEq(anchors.map((a) => a.input), [100, 200, 300], 'the anchor follows the latest count');
+  const ats = anchors.map((a) => a.at);
+  assert(ats[1] > ats[0] && ats[2] > ats[1], `the anchor position moves forward: ${JSON.stringify(ats)}`);
+  deepEq(anchors.map((a) => a.output), [null, null, null], 'no output count was reported, and none is invented');
+});
+
+await test('the usage event carries the OUTPUT count when the provider gives one (F6)', async () => {
+  const events = [];
+  await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }],
+    tools: [shellTool()],
+    infer: async () => ({ content: 'done', toolCalls: [], usage: { input_tokens: 50, output_tokens: 17 } }),
+    executeTool: async () => 'ok',
+    onEvent: (e) => events.push(e),
+    maxSteps: 2,
+  });
+  const u = events.find((e) => e.type === 'usage');
+  eq(u.input, 50, 'input');
+  eq(u.output, 17, 'the completion count is reported, not dropped');
+});
+
+await test('the spill notice states the TRUE elided count (F5)', () => {
+  const body = 'x'.repeat(9000);
+  const r = spillToolOutput(body, { name: 'shell', cap: 1200 });
+  const m = r.sent.match(/\((\d+) chars elided/);
+  assert(m, `the notice names a count: ${r.sent.slice(0, 200)}`);
+  const elided = Number(m[1]);
+  const kept = r.sent.length - (r.sent.length - r.sent.indexOf('…')); // not exact; check by reconstruction
+  eq(elided, body.length - (r.sent.split('\n… (')[0].length + r.sent.split(') …\n')[1].length),
+    `the count must be head+tail subtracted from the original, not a placeholder: said ${elided}`);
+  assert(elided > 0, 'and it is not zero for a result that really was elided');
 });
 
 if (failures.length) {

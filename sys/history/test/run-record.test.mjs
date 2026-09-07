@@ -865,12 +865,17 @@ await test('F7 x F1: a NUDGED run still reconstructs from its chain — the loop
   await rec.finish(r); await rec.settled();
 
   // the nudge really happened, and it is ON THE CHAIN
-  const nudges = rec.events().filter((e) => e.tool === 'run.nudged');
+  const nudges = joined(rec.events(), rec.resolve).filter((e) => e.tool === 'run.nudged');
   eq(nudges.length, 1, 'the repeat nudge was recorded as an event, not only pushed into the array');
+  // the METADATA is the run's, not a placeholder: a stagnation review reads these
   const folded = foldTranscript(rec.events(), rec.resolve);
   const note = folded.filter((m) => m.role === 'user' && /^\[coordination\] You have issued/.test(m.content));
   eq(note.length, 1, `the fold reproduces the nudge: ${JSON.stringify(folded.map(m => m.role))}`);
   assert(/refused/i.test(note[0].content), 'a run whose every result was a refusal is nudged in the denied wording');
+  // the recorded METADATA is the run's, not a placeholder: a stagnation review reads these
+  eq(nudges[0].input.times, 3, `the recorded count is the real one: ${JSON.stringify(nudges[0].input)}`);
+  eq(nudges[0].input.denied, true, 'and a run whose every result was refused is recorded as denied');
+  eq(nudges[0].output.content, note[0].content, 'the recorded text is the text that was sent');
 
   // and the invariant F1 exists to protect holds across it
   eq(seen.length, 0, `no divergence was raised on a nudged run: ${JSON.stringify(seen)}`);
@@ -982,6 +987,11 @@ await test('F4: compaction is a LOGGED surface replace — the sent transcript i
   eq(compactionOrphaned(orphan.events(), orphan.resolve), true,
     'a compaction with no recorded replacement IS an orphan — a crash mid-compaction must not read as finished');
   eq(compactionOrphaned(rec.events(), rec.resolve), false, 'and a completed one still is not');
+  // and the ORPHAN must leave the surface ALONE. Treating a missing replacement as an empty
+  // one deletes the span — the half-applied transcript this verb exists to prevent, and it
+  // passes every assertion above (mutation-tested).
+  deepEq(foldSurface(orphan.events(), orphan.resolve).map((m) => m.content), ['x'],
+    'an orphaned compaction does not delete the span it claimed');
 
   // (4) INTERLEAVED with later turns. A compaction's span indexes the surface AS IT STOOD when
   // that compaction ran. Applying every compaction after the whole transcript was folded gave

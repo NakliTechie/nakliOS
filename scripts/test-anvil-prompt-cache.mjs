@@ -15,6 +15,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { buildMemoryIndex } from '../sys/ai/memory-store.mjs';
 import { buildSkillsIndex } from '../sys/ai/skills.mjs';
+import { inlineModule, extractFunction, extractRegion, evaluate } from './anvil-harness.mjs';
 
 const anvil = await readFile(new URL('../apps/anvil/index.html', import.meta.url), 'utf8');
 
@@ -60,6 +61,16 @@ assert.ok(!/if\(skillsIndex\) tools\.push/.test(anvil), 'no tool is gated on the
 assert.ok(!/if\(memoryIndex\) tools\.push/.test(anvil), 'no tool is gated on the memory index');
 assert.ok(!/mode==='code' && memoryIndex\) tools\.push/.test(anvil), 'revise is gated on the MODE, not on whether facts exist');
 
+// The re-entered loops (act-or-nudge, the D2 supervisor) must carry the SAME conversation the
+// first loop built. Filtering the context message out of either one drops the memory and skills
+// index mid-run, and makes the second `run.started` disagree with the first — foldTranscript's
+// overlap dedup then re-appends turns instead of recognising them (mutation-tested).
+for (const [name, re] of [['act-or-nudge', /const nudgeMessages=\[sysMsg\(''\), \.\.\.convo\];/],
+                          ['D2 supervisor', /const superMessages=\[sysMsg\(''\), \.\.\.convo\];/]]) {
+  assert.match(anvil, re, `the ${name} re-loop must send the whole carried conversation, unfiltered`);
+}
+assert.ok(!/\.\.\.convo\.filter\(/.test(anvil), 'no re-loop filters the carried conversation');
+
 // And the context message is change-gated: sent when it differs, skipped when it does not.
 assert.match(anvil, /const key = ctxDigest\(volatileCtx\);/, 'the volatile block is digested');
 assert.match(anvil, /if\(key !== t\.ctxSent\)\{/, 'and only re-sent when it CHANGED');
@@ -68,5 +79,44 @@ assert.match(anvil, /t\.ctxSent = key;/, 'the digest is remembered on the task')
 const digest = new Function('return ' + anvil.match(/function ctxDigest\(s\)\{[\s\S]*?\n  \}/)[0].replace(/^function /, 'function ') + '; ctxDigest')();
 assert.notEqual(digest('a'), digest('b'), 'the digest distinguishes different context');
 assert.equal(digest('same'), digest('same'), 'and is stable for the same context');
+
+// ── the change-gate, DRIVEN ──
+// `t.ctxSent = key` is what makes the gate a gate. Neutralising it (assigning and then
+// clearing) re-sends the whole index every run while every anchor above still matches — the
+// mutation a cross-family review used to prove this needed driving, not grepping.
+{
+  const mod = await inlineModule();
+  const region = extractRegion(mod, 'const volatileCtx =', 'const firstMessages=');
+  const digestFn = extractFunction(mod, 'ctxDigest');
+  const run = (ctx, task, convo) => evaluate(
+    `${digestFn}\n;(function(){ ${region} return convo; })()`,
+    { ...ctx, t: task, convo, recoveryPreface: ctx.recoveryPreface || '' });
+
+  const ctx = { projectContext: 'PROJECT NOTES', memoryIndex: '\n## memory\n- a fact', skillsIndex: '', recoveryPreface: '' };
+  const t = {};
+  const convo = [{ role: 'user', content: 'do the thing' }];
+
+  run(ctx, t, convo);
+  assert.equal(convo.filter((m) => /Working context/.test(String(m.content))).length, 1,
+    'the first run sends the context');
+  assert.ok(t.ctxSent, 'and remembers what it sent');
+
+  // run 2, IDENTICAL context: nothing new is appended
+  run(ctx, t, convo);
+  assert.equal(convo.filter((m) => /Working context/.test(String(m.content))).length, 1,
+    'unchanged context is NOT re-sent — it is already in the carried transcript');
+
+  // run 3, the context CHANGED: it is sent again
+  run({ ...ctx, memoryIndex: '\n## memory\n- a fact\n- a second fact' }, t, convo);
+  assert.equal(convo.filter((m) => /Working context/.test(String(m.content))).length, 2,
+    'changed context IS re-sent');
+  assert.match(convo[convo.length - 1].content, /a second fact/, 'and it carries the new fact');
+  assert.match(convo[convo.length - 1].content, /^\[coordination\]/, 'tagged as the machine speaking, not the owner');
+
+  // an EMPTY context appends nothing at all
+  const t2 = {}, convo2 = [{ role: 'user', content: 'go' }];
+  run({ projectContext: '', memoryIndex: '', skillsIndex: '', recoveryPreface: '' }, t2, convo2);
+  assert.equal(convo2.length, 1, 'a workspace with no context sends no context message');
+}
 
 console.log('anvil-prompt-cache: the system prefix is stable, the volatile context is change-gated, and the tool list does not depend on the store');
