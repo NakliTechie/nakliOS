@@ -14,7 +14,8 @@ import { RUN_EVENTS, createRunRecorder, loadRecord, foldStatus, foldLog, foldTra
          replayInfer, replayExecuteTool, compareRuns, requestHash, ReplayMiss,
          OUTCOME_SIGNALS, foldOutcome, foldReuse, foldStopReasons, stopReasonsLine,
          searchRecords, readEvent, historyTool, HISTORY_ROLES, foldRecovery, recoveryNote,
-         foldStagnation, stagnationNudge, foldSessionContext, foldDecisions } from '../run-record.mjs';
+         foldStagnation, stagnationNudge, foldSessionContext, foldDecisions,
+         foldSurface, compactionOrphaned, reconstructionCheck } from '../run-record.mjs';
 
 let passed = 0; const failures = [];
 async function test(n, fn) { try { await fn(); passed++; } catch (e) { failures.push({ n, message: e.message }); } }
@@ -760,6 +761,73 @@ await test('STOP REASONS: a histogram over records — by stop, by derived statu
   assert(/^5 runs · /.test(line) && /budget: turns 1/.test(line), line);
   eq(stopReasonsLine(foldStopReasons([])), 'no runs recorded', 'empty');
   eq(JSON.stringify(pass.events()), JSON.stringify(pass.events()), 'read-only: events untouched');
+});
+
+await test('F1: the request-reconstruction invariant detects drift, and never throws', async () => {
+  const rec = createRunRecorder({ app: 'anvil', principal: 'p' });
+  const msgs = [{ role: 'system', content: 'sys' }, { role: 'user', content: 'go' }];
+  await rec.start({ messages: msgs });
+  await rec.settled();
+  // the honest case: what we would send IS what the record reconstructs
+  const ok = reconstructionCheck(msgs, rec.events(), rec.resolve);
+  eq(ok.ok, true, `a faithful request reconstructs: ${ok.why}`);
+  // drift: a message the record has never seen
+  const drifted = reconstructionCheck([...msgs, { role: 'user', content: 'smuggled' }], rec.events(), rec.resolve);
+  eq(drifted.ok, false, 'an extra message is caught');
+  assert(/length/.test(drifted.why), `and named: ${drifted.why}`);
+  // drift: same length, different content — the subtler case
+  const swapped = reconstructionCheck([{ role: 'system', content: 'sys' }, { role: 'user', content: 'CHANGED' }], rec.events(), rec.resolve);
+  eq(swapped.ok, false, 'a mutated message is caught');
+  eq(swapped.at, 0, 'and located');
+  // it must see through a recorded compaction, because that is the case it exists for
+  await rec.compacted({ method: 'summarize', from: 0, to: 1, replacement: [{ role: 'user', content: 'summary' }] });
+  await rec.settled();
+  eq(reconstructionCheck([{ role: 'system', content: 'sys' }, { role: 'user', content: 'summary' }], rec.events(), rec.resolve).ok,
+     true, 'after a logged compaction, the COMPACTED surface is what reconstructs');
+  eq(reconstructionCheck(msgs, rec.events(), rec.resolve).ok, false, 'and the pre-compaction transcript no longer does');
+
+  // the hook fires on a real request, and does NOT throw
+  const seen = [];
+  const rec2 = createRunRecorder({ app: 'anvil', principal: 'p' });
+  await rec2.start({ messages: [{ role: 'user', content: 'a' }] });
+  const infer = rec2.wrapInfer(async () => ({ content: 'ok', toolCalls: [] }), { onDivergence: (d) => seen.push(d) });
+  const reply = await infer({ messages: [{ role: 'user', content: 'a' }], tools: [] });
+  eq(seen.length, 0, 'a faithful request raises nothing');
+  eq(reply.content, 'ok', 'and the reply passes through');
+  const reply2 = await infer({ messages: [{ role: 'user', content: 'TAMPERED' }], tools: [] });
+  eq(seen.length, 1, 'a drifted request is reported');
+  eq(reply2.content, 'ok', 'and the run CONTINUES — detection must not kill it');
+});
+
+await test('F4: compaction is a LOGGED surface replace — the sent transcript is derivable', async () => {
+  const rec = createRunRecorder({ app: 'anvil', principal: 'p' });
+  // the system message is stripped by foldTranscript; three user turns survive
+  await rec.start({ messages: [{ role: 'system', content: 's' }, { role: 'user', content: 'one' },
+                               { role: 'user', content: 'two' }, { role: 'user', content: 'three' }] });
+  await rec.settled();
+  const before = foldSurface(rec.events(), rec.resolve);
+  eq(before.length, 3, 'three carried turns');
+  // compact the two assistant turns into one summary — the model-written part, hence logged
+  await rec.compacted({ method: 'summarize', from: 1, to: 3, replacement: [{ role: 'user', content: '[summary of 2 turns]' }] });
+  await rec.settled();
+  const after = foldSurface(rec.events(), rec.resolve);
+  eq(after.length, 2, 'the span collapsed to the replacement');
+  eq(after[1].content, '[summary of 2 turns]', 'the recorded replacement is what the surface carries');
+  eq(after[0].content, 'one', 'the head of the surface is untouched');
+  // the ORIGINALS are shadowed, not deleted — still on the chain and still foldable
+  eq(foldTranscript(rec.events(), rec.resolve).length, 3, 'the raw transcript still holds both turns');
+  assert(rec.events().some((e) => e.tool === 'run.compacted'), 'the compaction is on the chain');
+  eq((await verifyChain(rec.events())).ok, true, 'and the chain still verifies');
+  // a replay from the exported record reproduces the same surface
+  const reloaded = loadRecord(rec.export());
+  eq(JSON.stringify(foldSurface(reloaded.events(), reloaded.resolve)), JSON.stringify(after), 'reproducible from the export alone');
+  // an out-of-range span is ignored, never thrown — a fold must not break a run
+  const bad = createRunRecorder({ app: 'anvil', principal: 'p' });
+  await bad.start({ messages: [{ role: 'user', content: 'x' }] });
+  await bad.compacted({ method: 'shake', from: 5, to: 99, replacement: [{ role: 'user', content: 'nope' }] });
+  await bad.settled();
+  eq(foldSurface(bad.events(), bad.resolve).length, 1, 'an impossible span leaves the surface alone');
+  eq(compactionOrphaned(bad.events(), bad.resolve), false, 'a completed compaction is not an orphan');
 });
 
 if (failures.length) { console.error(`history/run-record: ${passed} passed, ${failures.length} FAILED`); for (const f of failures) console.error(`  FAIL ${f.n}: ${f.message}`); process.exit(1); }

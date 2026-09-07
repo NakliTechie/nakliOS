@@ -42,6 +42,7 @@ export const RUN_EVENTS = Object.freeze([
   'verify.failed',    // input: { step, round, ran }           output: { verdict }
   'run.stopped',      // input: { steps }                      output: { stop, reason, verified, axis, error }
   'run.checkpoint',   // input: { step }                        output: { handoff }  (B4: a rollover landmark)
+  'run.compacted',    // input: { method, from, to, step }      output: { replacement }  (F4: a logged surface replace)
 ]);
 
 // The loop's onEvent types this recorder understands. 'done' and the pre-stop
@@ -125,10 +126,19 @@ export function createRunRecorder({ app = 'anvil', principal = 'local', grant_id
     },
 
     // Wrap the loop's infer so every model exchange is recorded, content-addressed.
-    wrapInfer(infer, { model = null } = {}) {
+    // `onDivergence` receives { at, why } when the outgoing request cannot be reconstructed from
+    // the chain (F1). It is called, never thrown — see reconstructionCheck.
+    wrapInfer(infer, { model = null, onDivergence = null } = {}) {
       return async (args) => {
         const request_hash = await requestHash({ messages: args.messages, tools: args.tools, model });
         const s = step;
+        if (typeof onDivergence === 'function') {
+          try {
+            await queue; // the chain must be settled before it can be compared against
+            const chk = reconstructionCheck(args.messages, events, (e) => ({ input: blobs.get(e.input_hash), output: blobs.get(e.output_hash) }));
+            if (!chk.ok) onDivergence(chk);
+          } catch (_) { /* the check must never be what breaks a run */ }
+        }
         await enqueue('llm.requested', () => ({ input: { request_hash, step: s }, output: {} }));
         const reply = await infer(args);
         const response = { content: reply?.content ?? '', toolCalls: reply?.toolCalls ?? [], finishReason: reply?.finishReason ?? 'stop' };
@@ -155,6 +165,19 @@ export function createRunRecorder({ app = 'anvil', principal = 'local', grant_id
     // `step` is snapshotted at CALL time, like every other handler's `s = e.step ?? step`. The
     // thunk runs when the queue drains, and a turn.started arriving in between would otherwise
     // file the handoff under a later step than the one that asked for it (forward-pass L-6).
+    // F4. Compaction used to REWRITE the carried transcript and store the result, so the record
+    // and the live surface could disagree and nothing noticed — while run-record's own header
+    // claimed the carried transcript was a projection. Recording the replacement makes that claim
+    // true: `foldSurface` below reproduces the surface from the chain alone. The `summarize` path
+    // calls a model and is not otherwise reproducible, which is precisely why the OUTPUT is logged
+    // rather than the operation. Originals stay on the chain, shadowed rather than deleted.
+    compacted({ method, from, to, replacement }) {
+      const s = step;
+      return enqueue('run.compacted', () => ({
+        input: { method: String(method || 'shake'), from: Number(from) || 0, to: Number(to) || 0, step: s },
+        output: { replacement: Array.isArray(replacement) ? replacement : [] },
+      }));
+    },
     checkpoint(handoff) { const s = step; return enqueue('run.checkpoint', () => ({ input: { step: s }, output: { handoff: String(handoff ?? '') } })); },
     async settled() { await queue; },
     events() { return events.slice(); },
@@ -850,6 +873,60 @@ export function foldStagnation(events, resolve, { repeatN = 3, noToolTurns = 1 }
 export function stagnationNudge(stag) {
   if (!stag || !stag.stalled) return '';
   return `[coordination] You appear to be stuck: ${stag.detail}. Step back and try a different approach — a different tool, a smaller step, or re-reading the goal — rather than repeating what has not worked.`;
+}
+
+// F1 — the invariant that makes this file's opening claim checkable.
+//
+// The header says the carried transcript IS a projection of the log. Until now nothing enforced
+// it, and it was quietly FALSE: compaction rewrote the surface and stored the result outside the
+// record. This compares what is about to be SENT against what the chain can reproduce, and names
+// the first message that differs.
+//
+// It DETECTS; it does not throw. A divergence is diagnostic, not dangerous, and killing a live
+// run over one would do more damage than the drift it found. The caller decides what to do.
+// System messages are excluded because foldTranscript deliberately drops them.
+export function reconstructionCheck(sent, events, resolve) {
+  const want = foldSurface(events, resolve);
+  const got = (Array.isArray(sent) ? sent : []).filter((m) => m && m.role !== 'system');
+  const key = (m) => JSON.stringify([m?.role ?? null, m?.content ?? null, m?.tool_call_id ?? null,
+                                     (m?.tool_calls || []).map((c) => c?.id ?? null)]);
+  if (got.length !== want.length) {
+    return { ok: false, at: Math.min(got.length, want.length),
+             why: `length: sending ${got.length}, the record reconstructs ${want.length}` };
+  }
+  for (let i = 0; i < got.length; i++) {
+    if (key(got[i]) !== key(want[i])) {
+      return { ok: false, at: i, why: `message ${i} differs: sending ${key(got[i]).slice(0, 120)}, record has ${key(want[i]).slice(0, 120)}` };
+    }
+  }
+  return { ok: true, at: -1, why: '' };
+}
+
+// The transcript as it was actually SENT: foldTranscript, then every recorded compaction applied
+// in order. This is the function F1's invariant compares against — the claim at the top of this
+// file ("the carried transcript is a projection") is only checkable because this exists.
+//
+// The shadowed span is a POSITION range, not a numeric interval: `from`/`to` index the surface as
+// it stood when that compaction ran, so replacements must be applied in recorded order. An
+// out-of-range span is ignored rather than throwing, because a fold must never be the thing that
+// breaks a run.
+export function foldSurface(events, resolve) {
+  let surface = foldTranscript(events, resolve);
+  for (const e of joined(events, resolve)) {
+    if (e.tool !== 'run.compacted') continue;
+    const { from = 0, to = 0 } = e.input || {};
+    const replacement = (e.output && Array.isArray(e.output.replacement)) ? e.output.replacement : [];
+    if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < from || to > surface.length) continue;
+    surface = [...surface.slice(0, from), ...replacement, ...surface.slice(to)];
+  }
+  return surface;
+}
+
+// Was a compaction started and never finished? A crash mid-compaction leaves the surface
+// unresolvable; saying so is better than silently serving a half-applied transcript.
+export function compactionOrphaned(events, resolve) {
+  const ev = joined(events, resolve).filter((e) => e.tool === 'run.compacted');
+  return ev.some((e) => !(e.output && Array.isArray(e.output.replacement)));
 }
 
 // ─────────────────────────────────── session context + decisions (C2) ──

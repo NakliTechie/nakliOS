@@ -1288,7 +1288,13 @@
   //    tasks included. Hard-cap by serialized size, trimming whole turns.
   const CONVO_MAX_CHARS = 120000;
   const startsATurn = (m) => m && m.role !== 'tool';
-  async function carryForward(messages){
+  // `rec` is optional but load-bearing when present: carryForward is LOSSY three times over
+  // (a compaction that may call a model, dropping a dangling tool-call turn, and a size trim),
+  // and its result used to be stored outside the record — so the chain and the transcript the
+  // model actually saw could disagree, while run-record's header claimed the transcript was a
+  // projection. Recording the net replacement makes `foldSurface` reproduce it (F4), which is
+  // what F1's invariant then checks.
+  async function carryForward(messages, rec){
     const msgs = Array.isArray(messages) ? messages.slice() : [];
     let i = 0; while (i < msgs.length && msgs[i] && msgs[i].role === 'system') i++;
     let out = msgs.slice(i);
@@ -1305,6 +1311,15 @@
       out.shift();
       while (out.length && !startsATurn(out[0])) out.shift(); // never begin on an orphan tool reply
     }
+    // If anything above changed the surface, put the result ON THE CHAIN so it is derivable.
+    // The summary half calls a model and the trim half depends on a byte budget, so neither is
+    // reproducible from parameters — the replacement itself is the only honest record.
+    try{
+      const src = msgs.slice(i);
+      if(rec && rec.compacted && JSON.stringify(src) !== JSON.stringify(out)){
+        await rec.compacted({ method:'carry-forward', from:0, to:src.length, replacement:out });
+      }
+    }catch(_){ /* recording is best-effort; it must never break the carry */ }
     return out;
   }
 
@@ -1945,7 +1960,12 @@
       const recoveryPreface = (t.recovery && String(t.recovery).trim()) ? ('\n\n'+t.recovery) : '';
       const firstMessages=[sysMsg(gateNote+recoveryPreface), ...convo];
       liveSystemText = firstMessages[0].content; // so the budget counts the prompt actually sent
-      const recInfer = rec.wrapInfer(inferViaHost);
+      // F1: if what we are about to send cannot be reconstructed from the chain, SAY SO in the
+      // log. It does not stop the run — a divergence is diagnostic, and killing a live run over
+      // one would cost more than the drift it found.
+      const recInfer = rec.wrapInfer(inferViaHost, { onDivergence: (d)=>{
+        try{ (t.log=t.log||[]).push({ k:'system', text:'⚠ the request could not be reconstructed from this run\'s record — '+d.why }); renderLog(); }catch(_){}
+      } });
       const recEvent = (e)=>{ onLoopEvent(e); rec.onEvent(e); };
       await rec.start({ messages: firstMessages, tools });
       let result = await runAgentLoop({
@@ -1999,7 +2019,7 @@
       // so a follow-up send resumes instead of restarting blind.
       await rec.settled();
       const recEvents = rec.events();
-      try{ t.convo = await carryForward(foldTranscript(recEvents, rec.resolve)); }
+      try{ t.convo = await carryForward(foldTranscript(recEvents, rec.resolve), rec); }
       catch(_){ if(finalAssistant) convo.push({role:'assistant', content:finalAssistant.text}); }
       // B3: the recovery note the NEXT run is prefaced with — a pure fold of THIS run's record,
       // so it never re-applies a steer a gate already verified and never reads coordination as

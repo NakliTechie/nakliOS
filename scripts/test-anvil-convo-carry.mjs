@@ -19,8 +19,12 @@ const anvil = await readFile(new URL('../apps/anvil/index.html', import.meta.url
 // The CALL SITE, first. A correct helper the app never calls is exactly the
 // defect that made belief revision dead code — the pure module passed its own
 // tests while the app dropped the field. Pin the wiring, not just the function.
-assert.match(anvil, /t\.convo = await carryForward\(foldTranscript\(recEvents, rec\.resolve\)\)/,
+// shape, not signature: carryForward now also takes the recorder, so the lossy carry is LOGGED
+assert.match(anvil, /t\.convo = await carryForward\(foldTranscript\(recEvents, rec\.resolve\)/,
   'runTask carries the CANONICAL transcript (the fold) forward into t.convo — paired by construction');
+// F4: and the carry records its own replacement, so foldSurface can reproduce what was sent
+assert.match(anvil, /rec\.compacted\(\{ method:'carry-forward'/,
+  'a lossy carry is put ON THE CHAIN, not just stored — otherwise the record and the surface drift');
 assert.ok(!/if\(finalAssistant\) convo\.push\(\{role:'assistant', content:finalAssistant\.text\}\);\n      \/\/ #5/.test(anvil),
   'the prose-only convo append is no longer the primary path');
 
