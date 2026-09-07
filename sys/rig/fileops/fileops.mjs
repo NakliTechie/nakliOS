@@ -23,7 +23,7 @@
 
 import { normalizeMountPath, joinRoot } from './pathguard.mjs';
 import { applyPatch, reversePatch } from './patch.mjs';
-import { planQuery, evaluateQuery, trigrams } from './trigram.mjs';
+import { planQuery, evaluateQuery, trigrams, foldCase } from './trigram.mjs';
 
 const enc = new TextEncoder();
 
@@ -342,12 +342,12 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     // Discard a read that raced a write to the same path.
     if (seenSeq !== undefined && seqOf(path) !== seenSeq) return;
     indexDrop(path);
-    // Index the RAW text. Lowercasing both sides looked symmetric but is not
-    // substring-preserving in Unicode: 'AB\u03a3'.toLowerCase() ends in a final
-    // sigma while 'AB\u03a3X'.toLowerCase() does not, so a literal that IS present
-    // stopped matching its own file. Case-insensitive patterns are refused below
-    // instead of being folded.
-    const hashes = trigrams(text);
+    // Index the CASE-FOLDED text, folded per character (see foldCase — whole-string
+    // lowercasing is not substring-preserving in Unicode and silently lost matches).
+    // A folded index over-matches a case-sensitive query, which is free: the real
+    // regex rejects the extra candidates. In exchange, `-i` can use the index at
+    // all, where it used to scan everything.
+    const hashes = trigrams(foldCase(text));
     for (const h of hashes) {
       let s = idx.postings.get(h);
       if (!s) { s = new Set(); idx.postings.set(h, s); }
@@ -596,13 +596,13 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     // Candidate narrowing. `lit` is null whenever the pattern is anything the
     // extractor does not fully understand, and null means "scan everything" —
     // the same work as before the index existed.
-    // `i` (and the Unicode case-folding it implies) cannot be answered from a
-    // case-sensitive index, so those searches take the full scan.
     // planQuery returns ALL when it cannot constrain, which is the same fallback
     // the single-literal extractor used to reach far more often: an alternation,
     // a group, a class or a \w escape used to disqualify the whole pattern even
     // when a neighbouring literal was still required by every match.
-    const plan = (index && !re.ignoreCase) ? planQuery(re.source) : null;
+    // `i` is no longer excluded: the index is case-folded, so an ignoreCase query
+    // is answered from it directly and a case-sensitive one merely over-matches.
+    const plan = index ? planQuery(re.source) : null;
     const lit = plan && plan.op !== 'ALL' ? plan : null;
     let candidates = null;
     let indexUsed = false;

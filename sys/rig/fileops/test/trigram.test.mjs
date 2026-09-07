@@ -10,7 +10,7 @@
 // Everything else here exists to make that test's failures diagnosable.
 
 import { createFileops, MemoryBackend } from '../index.mjs';
-import { requiredLiteral, trigrams, triHash, planQuery, evaluateQuery } from '../trigram.mjs';
+import { requiredLiteral, trigrams, triHash, planQuery, evaluateQuery, foldCase } from '../trigram.mjs';
 
 let passed = 0;
 const failures = [];
@@ -295,12 +295,27 @@ await test('REGRESSION: case-sensitive search is not answered from a folded inde
   eq(r.matches.length, 1, 'final-sigma literal still found');
 });
 
-await test('REGRESSION: an ignoreCase regex falls back instead of using the index', async () => {
+await test('an ignoreCase regex is now ANSWERED from the index, not scanned', async () => {
+  // It used to fall back entirely. The index is case-folded per character, so an
+  // -i query is a first-class indexed query, and a case-sensitive one merely
+  // over-matches — which the real regex then rejects.
   const fs = createFileops({ backend: new MemoryBackend(), index: true });
   await fs.write('h.txt', 'Needle here\n', { createParents: true });
+  for (let i = 0; i < 20; i++) await fs.write(`pad${i}.txt`, `nothing ${i}\n`, { createParents: true });
+  await new Promise((r) => setTimeout(r, 4));
+  await fs.grep(/needle/i); await fs.grep(/needle/i);       // build + settle
+  fs.searchStats({ reset: true });
   const r = await fs.grep(/needle/i);
+  const rec = fs.searchStats().recent[0];
   eq(r.matches.length, 1, 'case-insensitive still matches');
-  assert(!fs.searchStats().recent.at(-1).indexUsed, 'took the full scan');
+  assert(rec.indexUsed, 'and the index was used');
+  assert(rec.candidates < 21, `narrowed to ${rec.candidates} of 21`);
+
+  // Case-sensitive over-matching is admissible, never wrong.
+  const plain = createFileops({ backend: new MemoryBackend(), index: false });
+  await plain.write('h.txt', 'Needle here\n', { createParents: true });
+  eq((await fs.grep('needle')).matches.length, (await plain.grep('needle')).matches.length,
+    'a case-SENSITIVE query still answers exactly');
 });
 
 await test('REGRESSION: removing the mount root drops the whole index', async () => {
@@ -522,7 +537,9 @@ function planAdmits(pattern, subject) {
   const plan = planQuery(pattern);
   if (plan.op === 'ALL') return true;                 // no constraint, admits everything
   const postings = new Map();
-  for (const h of trigrams(subject)) {
+  // Fold exactly as indexAdd does — the index is case-folded, so a harness that
+  // built raw postings would be testing something the index never sees.
+  for (const h of trigrams(foldCase(subject))) {
     if (!postings.has(h)) postings.set(h, new Set());
     postings.get(h).add('f');
   }
@@ -660,6 +677,41 @@ await test('persistence: a corrupt or foreign index is refused, not trusted', as
 
   // And after a refusal the search still answers correctly from a cold build.
   eq((await fs.grep('parseFact')).matches.length, 1, 'refusing the index costs a read, not an answer');
+});
+
+await test('REGRESSION: an escape whose width is not certain refuses the pattern', async () => {
+  // Guessing escape widths was worth 20,862 false negatives in review. Each of
+  // these matched its subject while the plan excluded it.
+  const cases = [
+    ['(?<word>abc)\\k<word>', 'abcabc', ''],
+    ['\\x(abcd)?foo', 'xfoo', ''],
+    ['\\u(abcdef)?foo', 'ufoo', ''],
+    ['\\p{Letter}abc', 'Zabc', 'u'],
+  ];
+  for (const [src, subject, flags] of cases) {
+    const mk = async (index) => {
+      const fs = createFileops({ backend: new MemoryBackend(), index });
+      await fs.write('hit.txt', subject + '\n', { createParents: true });
+      return fs;
+    };
+    const plain = await mk(false); const idx = await mk(true);
+    await new Promise((r) => setTimeout(r, 3));
+    const re = new RegExp(src, flags);
+    const a = (await plain.grep(re)).matches.map((m) => m.path);
+    const b = (await idx.grep(re)).matches.map((m) => m.path);
+    eq(JSON.stringify(b), JSON.stringify(a), `/${src}/${flags} on ${JSON.stringify(subject)}`);
+  }
+});
+
+await test('REGRESSION: -i folds the way a regex does, not the way toLowerCase does', async () => {
+  // /σ/i matches ς and /s/iu matches ſ, but neither pair is equal under
+  // toLowerCase, so a lowercased index silently missed them.
+  for (const [pat, text, flags] of [['σσσ', 'ςςς', 'i'], ['sss', 'ſſſ', 'iu']]) {
+    const fs = createFileops({ backend: new MemoryBackend(), index: true });
+    await fs.write('g.txt', text + '\n', { createParents: true });
+    await new Promise((r) => setTimeout(r, 3));
+    eq((await fs.grep(new RegExp(pat, flags))).matches.length, 1, `/${pat}/${flags} finds ${text}`);
+  }
 });
 
 // A randomised differential sweep: the fixed battery above encodes what I

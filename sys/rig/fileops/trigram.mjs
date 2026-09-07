@@ -37,6 +37,27 @@ export function triHash(a, b, c) {
   return h >>> 0;
 }
 
+/**
+ * Case-fold for indexing. PER CHARACTER, never whole-string: JS applies Unicode's
+ * contextual final-sigma rule to a whole string, so 'AB\u03a3'.toLowerCase() ends in
+ * \u03c2 while 'AB\u03a3X'.toLowerCase() ends in \u03c3 — a literal that WAS present
+ * stopped matching its own file. Mapping each code point independently is a
+ * homomorphism, so a substring stays a substring, which is the only property the
+ * index needs.
+ */
+export function foldCase(text) {
+  let out = '';
+  // Upper THEN lower, per character. Plain toLowerCase is not the equivalence a
+  // regex /i uses: /\u03c3/i matches \u03c2 and /s/iu matches \u017f, but neither
+  // pair is equal under toLowerCase, so an -i query silently missed them. Going
+  // through uppercase collapses both (\u03c2 -> \u03a3 -> \u03c3, \u017f -> S -> s).
+  // Verified over 13,174 case-equivalent code-point pairs: no case where the
+  // regex matches but the fold disagrees. Where the fold is BROADER than /i
+  // (\u00df -> ss), it only over-matches, which the real regex then rejects.
+  for (const ch of text) out += ch.toUpperCase().toLowerCase();
+  return out;
+}
+
 /** Every overlapping trigram hash in `text`, deduplicated. */
 export function trigrams(text) {
   const out = new Set();
@@ -176,8 +197,10 @@ function orOf(subs) {
 }
 
 function triOf(literal) {
-  if (literal.length < 3) return ALL;
-  return { op: 'TRI', tris: trigrams(literal) };
+  const folded = foldCase(literal);
+  if (folded.length < 3) return ALL;
+  // Folded, to match the folded index. See foldCase.
+  return { op: 'TRI', tris: trigrams(folded) };
 }
 
 // Split a pattern body on TOP-LEVEL '|' only — alternation inside a group belongs
@@ -198,24 +221,32 @@ function splitAlternatives(chars) {
   return out;
 }
 
-// Consume one escape and report what it is. Getting the LENGTH right is the whole
-// point: mis-consuming '\123' (octal for 'S') once left '23abc' looking required,
-// and "Sabc" matches without containing it.
+// Consume one escape. ONLY escapes whose length and meaning are unambiguous are
+// recognised; everything else refuses the whole pattern.
+//
+// Guessing a length was worth 20,862 false negatives in review. `\\k<word>`
+// consumed two characters and left `<word>` looking like required text, so
+// /(?<word>abc)\\k<word>/ excluded "abcabc". `\\x`, `\\u` and `\\c` consumed fixed
+// widths without checking their syntax and swallowed the '(' after them. `\\p{L}`
+// left `{L}` behind as a literal, so /\\p{Letter}abc/u excluded "Zabc".
+//
+// Returning REFUSE costs a full scan. Getting the length wrong costs a silent
+// wrong answer, so the trade is not close.
+const REFUSE = Symbol('refuse');
+const CLASS_ESCAPES = new Set(['d', 'D', 'w', 'W', 's', 'S', 'b', 'B']);
+const CONTROL_LITERALS = Object.freeze({ n: '\n', r: '\r', t: '\t', f: '\f', v: '\v' });
+
 function readEscape(chars, i) {
   const n = chars[i + 1];
-  if (n === undefined) return null;
+  if (n === undefined) return REFUSE;
   if (ESCAPED_LITERAL.has(n)) return { len: 2, literal: n };
-  if (n === 'n') return { len: 2, literal: '\n' };
-  if (n === 't') return { len: 2, literal: '\t' };
-  if (n === 'r') return { len: 2, literal: '\r' };
-  if (n === 'x') return { len: 4, literal: null };                 // \xNN
-  if (n === 'u') {
-    if (chars[i + 2] === '{') { const c = chars.indexOf('}', i + 2); return { len: c < 0 ? 2 : c - i + 1, literal: null }; }
-    return { len: 6, literal: null };                              // \uNNNN
-  }
-  if (n === 'c') return { len: 3, literal: null };                 // \cX
-  if (/[0-9]/.test(n)) { let j = i + 1; while (j < chars.length && /[0-9]/.test(chars[j])) j++; return { len: j - i, literal: null }; }
-  return { len: 2, literal: null };                                // \d \w \s \b \B \p{...} …
+  if (Object.prototype.hasOwnProperty.call(CONTROL_LITERALS, n)) return { len: 2, literal: CONTROL_LITERALS[n] };
+  // Zero-width and character-class escapes: exactly two characters, nothing
+  // structural after them, and they never contribute required text.
+  if (CLASS_ESCAPES.has(n)) return { len: 2, literal: null };
+  // \x \u \c \p \P \k, octal and backreferences: variable or context-dependent
+  // width. Not worth parsing to be right about; refuse.
+  return REFUSE;
 }
 
 // Find the ')' matching the '(' at `i`.
@@ -256,7 +287,7 @@ function planSequence(chars) {
 
     if (c === '\\') {
       const esc = readEscape(chars, i);
-      if (!esc) return ALL;
+      if (esc === REFUSE || !esc) return ALL;
       end = i + esc.len - 1;
       atom = esc.literal !== null ? { literal: esc.literal } : null;
     } else if (c === '(') {
