@@ -20,14 +20,23 @@
 // prompt that was sent. What a record cannot express is the two failure modes that never
 // produce a settled transcript, and those come from the sidecar below.
 
-import { loadRecord, createRunRecorder, replayInfer, replayExecuteTool, compareRuns, joined, ReplayMiss } from './run-record.mjs';
+import { loadRecord, createRunRecorder, replayInfer, replayExecuteTool, replayVerify, compareRuns, joined, ReplayMiss } from './run-record.mjs';
 import { runAgentLoop } from '../ai/agent-loop.mjs';
 
 // A record's own opening request — what the run was actually handed.
 export function openingOf(record) {
-  const started = joined(record.events(), record.resolve).find((e) => e.tool === 'run.started');
-  if (!started) throw new Error('corpus entry has no run.started — not a replayable run');
-  return { messages: started.input?.messages || [], tools: started.input?.tools || [] };
+  return openingsOf(record)[0];
+}
+
+// EVERY opening in the record, in order. A record with two `run.started` events is a run whose
+// loop was re-entered — Anvil's act-or-nudge and its D2 supervisor both do this, and it is one
+// of the three conditions Chunk 0 could previously only close with a live run. The shape is
+// derivable from the record itself: one loop per run.started, each replayed against its own
+// recorded messages. No sidecar needed to express it.
+export function openingsOf(record) {
+  const starts = joined(record.events(), record.resolve).filter((e) => e.tool === 'run.started');
+  if (!starts.length) throw new Error('corpus entry has no run.started — not a replayable run');
+  return starts.map((e) => ({ messages: e.input?.messages || [], tools: e.input?.tools || [] }));
 }
 
 // The two failure modes a settled transcript cannot express, declared per entry in a sidecar
@@ -65,21 +74,32 @@ export function applyOverride(infer, override) {
 
 // Replay one corpus entry. Returns { ok, why, steps, stop, consumed }.
 // `expectConsumed:false` is for an entry whose override deliberately cuts the run short.
-export async function replayEntry(dump, { override = null, expectConsumed = true, maxSteps = 24 } = {}) {
+export async function replayEntry(dump, { override = null, expectConsumed = true, maxSteps = 24, opts = {} } = {}) {
   const recorded = loadRecord(dump);
-  const { messages, tools } = openingOf(recorded);
+  const openings = openingsOf(recorded);
 
   const live = createRunRecorder({ app: 'anvil', principal: 'replay' });
   const baseInfer = replayInfer(recorded, { strict: true });
   const infer = applyOverride(baseInfer, override);
   const exec = replayExecuteTool(recorded, { strict: true });
+  // A gate verdict is served from the chain — no command is ever run. A budget cannot be, so it
+  // comes from the entry's own capture-time options; only the WALL-CLOCK axis is unreplayable
+  // (a replay is instant), which is why the corpus uses turns.
+  const gate = replayVerify(recorded);
+  const verify = gate.count() ? gate : null;
 
-  await live.start({ messages, tools });
   let result, threw = null;
   try {
-    result = await runAgentLoop({ messages, tools, infer: live.wrapInfer(infer), executeTool: exec, onEvent: live.onEvent, maxSteps });
+    for (const { messages, tools } of openings) {
+      await live.start({ messages, tools });
+      result = await runAgentLoop({
+        messages, tools, infer: live.wrapInfer(infer), executeTool: exec, onEvent: live.onEvent,
+        maxSteps, verify, ...(opts.budget ? { budget: opts.budget } : {}),
+        ...(opts.maxVerifyRounds ? { maxVerifyRounds: opts.maxVerifyRounds } : {}),
+      });
+      await live.finish(result);
+    }
   } catch (e) { threw = e; }
-  if (result) await live.finish(result);
   await live.settled();
 
   if (threw && !override) return { ok: false, why: `replay threw: ${threw.message}`, threw };
@@ -98,7 +118,7 @@ export async function replayEntry(dump, { override = null, expectConsumed = true
 
   // 3 — nothing recorded went unused
   let consumed = true, consumeWhy = '';
-  try { baseInfer.assertConsumed(); exec.assertConsumed(); }
+  try { baseInfer.assertConsumed(); exec.assertConsumed(); gate.assertConsumed(); }
   catch (e) { consumed = false; consumeWhy = e.message; }
   if (expectConsumed && !consumed) return { ok: false, why: consumeWhy, stop: result.stop, steps: result.steps, consumed };
 

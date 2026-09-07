@@ -29,6 +29,32 @@ An entry replays against **its own opening** — the messages and tools out of i
 never today's app prompt. So rewording Anvil's system prompt does not stale the corpus. What
 the corpus pins is the LOOP, not the prompt.
 
+## Chunk 0's 2b gate conditions (S1)
+
+Three of these entries are the conditions Chunk 0 could previously only close by driving Anvil
+by hand and reading the result — which meant re-proving them cost another live run:
+
+| Entry | Condition | What it pins |
+|---|---|---|
+| `failing-gate` | 0.0 | the model calls `task_done`; the loop intercepts it before executeTool, runs the gate, refuses, and stops `unverified` at the rounds cap |
+| `gate-on-prose` | 0.0b | the OTHER route to the gate: the model stops calling tools, and the verdict comes back as a `[coordination]` USER turn |
+| `budget-stop` | 0.2 | the budget ends the run, on the **turns** axis |
+| `act-or-nudge` | 0.3 | two loops on ONE chain: a prose-only run is nudged and re-entered |
+
+Two of those needed something new:
+
+- **A budget is not in the record.** It sits in `<name>.opts.json`, written at capture. The axis
+  is **turns** on purpose — turns and tokens are functions of the transcript and trip at the same
+  point under replay; **wall-clock never will**, because a replay is instant. That axis stays a
+  live-only check and the corpus does not pretend otherwise.
+- **A gate verdict is** in the record, as `verify.passed` / `verify.failed`. `replayVerify` serves
+  them in order, so no gate command is ever run.
+
+`gate-on-prose` exists because a mutation found the gap: deleting the loop's `convo.push(fb)` —
+feeding a failing verdict back on a no-tool-call turn — survived the whole suite, because
+`failing-gate` reaches the gate through the `task_done` interception, which pushes a TOOL message
+instead. Two routes into the same refusal, two entries.
+
 ## The two failure modes a record cannot hold
 
 A settled transcript can only show a run that produced responses. Two paths never do, and they
