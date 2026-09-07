@@ -87,6 +87,81 @@ jobs:
       - name: Verify search-cost instrumentation changes no search result
         run: node sys/rig/fileops/test/search-cost.test.mjs
 
+      - name: Verify Rig fileops conformance (the 8-method backend contract)
+        run: node sys/rig/fileops/test/conformance.test.mjs
+
+      - name: Verify the OPFS backend
+        run: node sys/rig/fileops/test/opfs.test.mjs
+
+      - name: Verify the File System Access backend
+        run: node sys/rig/fileops/test/fsa-backend.test.mjs
+
+      - name: Verify the Crate backend
+        run: node sys/rig/fileops/test/crate-backend.test.mjs
+
+      - name: Verify the Rig command registry conformance
+        run: node sys/rig/registry/test/conformance.test.mjs
+
+      - name: Verify vendored git conformance
+        run: node sys/rig/git/test/conformance.test.mjs
+
+      - name: Verify the git transport
+        run: node sys/rig/git/test/transport.test.mjs
+
+      - name: Verify the goals module conformance
+        run: node sys/rig/goals/test/conformance.test.mjs
+
+      - name: Verify the shell completer
+        run: node sys/rig/cli/test/completer.test.mjs
+
+      - name: Verify the shell line editor
+        run: node sys/rig/cli/test/lineeditor.test.mjs
+
+      - name: Verify Kiln conformance (the Python kernel contract)
+        run: node sys/kiln/test/conformance.test.mjs
+
+      - name: Verify the Kiln filesystem bridge
+        run: node sys/kiln/test/fs-bridge.test.mjs
+
+      - name: Verify Kiln to Rig bindings
+        run: node sys/kiln/test/rig-bindings.test.mjs
+
+      - name: Verify the Kiln verifier
+        run: node sys/kiln/test/verifier.test.mjs
+
+      - name: Verify the Kiln worker runtime
+        run: node sys/kiln/test/worker-runtime.test.mjs
+
+      - name: Verify the agent toolset (tool schemas, handlers, guards)
+        run: node sys/ai/test/agent-tools.test.mjs
+
+      - name: Verify project hooks (pre/post-tool commands)
+        run: node sys/ai/test/hooks.test.mjs
+
+      - name: Verify project hooks end to end over fileops
+        run: node sys/ai/test/hooks-integration.test.mjs
+
+      - name: Verify hashline rendering and edits
+        run: node sys/ai/test/hashline.test.mjs
+
+      - name: Verify project context assembly
+        run: node sys/ai/test/project-context.test.mjs
+
+      - name: Verify skills end to end over fileops
+        run: node sys/ai/test/skills-integration.test.mjs
+
+      - name: Verify the on-device tier split (agent work never routes to Nano)
+        run: node scripts/test-nano-routing.mjs
+
+      - name: Verify the onboarding and UI regression levers
+        run: node scripts/test-onboarding-and-ui-fixes.mjs
+
+      - name: Verify the semantic-search regression levers
+        run: node scripts/test-semantic-search-fixes.mjs
+
+      - name: Verify every test file is actually run by this gate (no orphaned coverage)
+        run: node scripts/check-gate-coverage.mjs
+
       - name: Verify .anvil/skills is readable and UNWRITABLE from every agent route (grant-enforced)
         run: node sys/ai/test/skills-fence.test.mjs
 
