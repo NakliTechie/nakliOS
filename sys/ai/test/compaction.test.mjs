@@ -201,6 +201,38 @@ await test('the ref\'s query retrieves the full body from a real run record', as
   assert(read.text.includes(body), 'the FULL elided body comes back out of the record');
 });
 
+await test('an elided body the record would CLIP promises nothing — the hole a slice of base64 left open', async () => {
+  // eventText clips a data: URI or a long unbroken base64-ish run to a placeholder, so a search
+  // for a slice of one returns ZERO hits. Promising that search is exactly the defect this
+  // module exists to remove, and `retrievable:true` alone is not enough to make it true.
+  const { createRunRecorder, searchRecords } = await import('../../history/run-record.mjs');
+  const cases = [
+    ['unbroken base64-ish blob', 'A'.repeat(3000)],
+    ['data: URI', 'data:image/png;base64,' + 'Q'.repeat(2500)],
+  ];
+  for (const [what, body] of cases) {
+    const rec = createRunRecorder({ app: 'anvil', principal: 'p' });
+    await rec.start({ messages: [{ role: 'user', content: 'go' }] });
+    rec.onEvent({ type: 'tool-call', name: 'shell', id: 'c1', args: {}, step: 0 });
+    rec.onEvent({ type: 'tool-result', name: 'shell', id: 'c1', result: body, step: 0 });
+    await rec.settled();
+
+    const ref = shake([{ role: 'tool', tool_call_id: 'c1', content: body }], { retrievable: true }).messages[0].content;
+    assert(!/"op":"search"/.test(ref), `${what}: the ref promises a search the record cannot serve:\n${ref.slice(0, 200)}`);
+    assert(/GONE/.test(ref), `${what}: it must say the content is gone instead: ${ref.slice(0, 200)}`);
+
+    // and the reason, demonstrated: a query built from that body finds nothing
+    const q = body.slice(0, 24);
+    eq(searchRecords([{ runId: 'r', record: rec }], { query: q, scope: 'project' }).length, 0,
+      `${what}: sanity — the record really does not hold that text verbatim`);
+  }
+
+  // the CONTROL: ordinary text with the same shape of content still gets a working promise
+  const prose = 'REPORT-HEADER line one\n' + Array.from({ length: 300 }, (_, i) => `row ${i} value`).join('\n');
+  const okRef = shake([{ role: 'tool', tool_call_id: 'c2', content: prose }], { retrievable: true }).messages[0].content;
+  assert(/"op":"search"/.test(okRef), `prose must still get the retrieval promise: ${okRef.slice(0, 160)}`);
+});
+
 if (failures.length) {
   console.error(`compaction: ${passed} passed, ${failures.length} FAILED`);
   for (const f of failures) console.error(`  FAIL ${f.name}: ${f.message}`);

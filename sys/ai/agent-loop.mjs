@@ -137,20 +137,24 @@ export function boundedText(text, { maxLines = 200, maxBytes = 4000, tailLines =
     const tn = Math.min(tailLines, Math.max(1, Math.floor(maxLines / 2)));
     const headN = Math.max(1, maxLines - tn);
     const head = lines.slice(0, headN), tail = lines.slice(-tn);
-    // the marker names BOTH dimensions of what went missing — a line count alone does not tell
-    // the model how much text it is not seeing
-    const keptChars = head.join('\n').length + tail.join('\n').length;
-    out = `${head.join('\n')}\n… (${lines.length - head.length - tail.length} lines / ${s.length - keptChars} bytes elided) …\n${tail.join('\n')}`;
+    // The marker names BOTH dimensions of what went missing — a line count alone does not tell
+    // the model how much text it is not seeing. CHARS, not bytes: `s.length` is UTF-16 code
+    // units, and the byte path below counts code points; calling either "bytes" is false for
+    // anything non-ASCII (3,000 emoji are 3,000 code points and 12,000 UTF-8 bytes). The count
+    // is the elided lines and the newlines that joined them — exactly what is no longer there.
+    const elided = lines.slice(head.length, lines.length - tail.length);
+    const elidedChars = elided.reduce((n, l) => n + l.length, 0) + elided.length;
+    out = `${head.join('\n')}\n… (${elided.length} lines / ${elidedChars} chars elided) …\n${tail.join('\n')}`;
     truncated = true;
   }
   const cp = [...out];
   if (cp.length > maxBytes) {
     const tb = Math.min(tailBytes, Math.max(1, Math.floor(maxBytes / 2)));
     const headN = Math.max(1, maxBytes - tb);
-    out = `${cp.slice(0, headN).join('')}\n… (${cp.length - headN - tb} bytes elided) …\n${cp.slice(-tb).join('')}`;
+    out = `${cp.slice(0, headN).join('')}\n… (${cp.length - headN - tb} chars elided) …\n${cp.slice(-tb).join('')}`;
     truncated = true;
   }
-  return truncated ? out + `\n… (output truncated: ${lines.length} lines / ${s.length} bytes)` : out;
+  return truncated ? out + `\n… (output truncated: ${lines.length} lines / ${s.length} chars)` : out;
 }
 
 // ── spill at produce-time (F5) ──

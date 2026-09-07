@@ -579,7 +579,7 @@ await test('estimateTokens and boundedText behave as monotonic, capping primitiv
   assert(/line 0/.test(both), 'the head survives too');
   assert(/elided/.test(both), 'the pruned middle is marked');
   // the marker names BOTH dimensions removed, so the model knows the output is not contiguous
-  assert(/… \(\d+ lines \/ \d+ bytes elided\) …/.test(both), `marker names lines and bytes: ${both.slice(0, 400)}`);
+  assert(/… \(\d+ lines \/ \d+ chars elided\) …/.test(both), `marker names lines and chars: ${both.slice(0, 400)}`);
   assert(/line 300/.test(both) === false, 'the middle is actually gone, not just annotated');
   // a single over-long line has no newlines at all: only the byte cap can fire, and the END
   // of that line — where a traceback's last frame lives — must still arrive
@@ -587,7 +587,21 @@ await test('estimateTokens and boundedText behave as monotonic, capping primitiv
   const capped1 = boundedText(oneLine, { maxLines: 200, maxBytes: 400 });
   assert(/^START/.test(capped1), 'the head of the single line survives');
   assert(/ASSERT-FAILED-HERE/.test(capped1), 'the tail of the single line survives');
-  assert(/bytes elided/.test(capped1), 'the byte-path marker names the bytes removed');
+  assert(/chars elided/.test(capped1), 'the character-path marker names what it removed');
+  // the counts must be TRUE, not decorative: what the marker claims to have removed is what is
+  // actually missing. "bytes" would be a lie here — s.length is UTF-16 units and the path below
+  // counts code points, so 3,000 emoji are 3,000 of these and 12,000 real UTF-8 bytes.
+  {
+    const src = Array.from({ length: 600 }, (_, i) => `line ${i} ${'y'.repeat(20)}`).join('\n');
+    const capped = boundedText(src, { maxLines: 200, maxBytes: 999999 });
+    const m = capped.match(/… \((\d+) lines \/ (\d+) chars elided\) …/);
+    assert(m, `the marker is there: ${capped.slice(0, 200)}`);
+    const keptLines = capped.split('\n').filter((l) => /^line \d+ /.test(l)).length;
+    eq(Number(m[1]), 600 - keptLines, 'the line count is the number of lines really removed');
+    const trueChars = src.length - capped.split('\n').filter((l) => /^line \d+ /.test(l)).join('\n').length - 1;
+    assert(Math.abs(Number(m[2]) - trueChars) <= 2, `the char count matches what is missing: said ${m[2]}, really ${trueChars}`);
+    assert(!/bytes elided/.test(capped), 'and it does not call code units bytes');
+  }
   // sliced by code point, so a surrogate pair is never split
   const wide = boundedText('\u{1F600}'.repeat(3000), { maxLines: 10, maxBytes: 100 });
   // isWellFormed is the real check: a lone surrogate is not U+FFFD, so the old assertion

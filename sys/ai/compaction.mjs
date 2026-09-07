@@ -51,12 +51,26 @@ function findCut(messages, keepRecentTokens, estimate, sysEnd) {
   return cut;
 }
 
+// A body the RECORD will not store verbatim. `eventText` in sys/history/run-record.mjs clips a
+// data: URI or a long unbroken base64-ish run to a "[N bytes binary/base64 …]" placeholder — so
+// a search for any slice of one returns zero hits, and a ref promising that search would be the
+// very defect this module exists to remove. These two patterns MIRROR that module; the test
+// `an elided body the record would clip promises nothing` pins them together, so a change there
+// that is not made here fails the gate rather than silently re-opening the hole.
+const RECORD_CLIPS_DATA_URI = /^data:[^;,]*;base64,/;
+const RECORD_CLIPS_BLOB = /^[A-Za-z0-9+/]{2000,}={0,2}$/;
+function recordWouldClip(content) {
+  const t = String(content).trim();
+  return RECORD_CLIPS_DATA_URI.test(t) || RECORD_CLIPS_BLOB.test(t);
+}
+
 // A search handle for an elided body: a contiguous, verbatim slice of the content that a
 // `history` search can actually match. Substring-only transforms (picking a line, trimming,
 // slicing) — anything else would produce a query that does not occur in the record.
 // Returns '' when nothing usable is there, which is how the caller knows not to promise a
 // retrieval.
 function searchHandle(content, max = 48) {
+  if (recordWouldClip(content)) return '';   // the record keeps a placeholder, not this text
   const head = content.slice(0, 400);
   let best = '';
   for (const line of head.split('\n')) {
