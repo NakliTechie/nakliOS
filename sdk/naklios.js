@@ -247,11 +247,13 @@
     var content = '';
     var finishReason = 'stop';
     var toolCalls = null;
+    var usage = null;
     for await (var chunk of stream) {
       var choice = chunk.choices && chunk.choices[0];
       if (choice && choice.delta && choice.delta.content) content += choice.delta.content;
       if (choice && choice.delta && choice.delta.tool_calls) toolCalls = choice.delta.tool_calls;
       if (choice && choice.finish_reason) finishReason = choice.finish_reason;
+      if (chunk.usage) usage = chunk.usage;
     }
     var message = { role: 'assistant', content: content };
     if (toolCalls) message.tool_calls = toolCalls;
@@ -264,6 +266,8 @@
         message: message,
         finish_reason: finishReason,
       }],
+      // top level, as the OpenAI completion shape has it; null when the provider said nothing
+      usage: usage,
     };
   }
 
@@ -403,6 +407,9 @@
             delta: msg.toolCalls && msg.toolCalls.length ? { tool_calls: msg.toolCalls } : {},
             finish_reason: msg.finishReason || 'stop',
           }],
+          // The provider's token count, where the OpenAI shape puts it. An app that budgets
+          // on estimated characters cannot see tool schemas or the host's own preamble.
+          usage: msg.usage || null,
         });
         aiRequests.delete(msg.requestId);
         aiRequest.finish();
