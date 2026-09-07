@@ -78,6 +78,9 @@ jobs:
       - name: Verify the provider's token count survives endpoint to host to SDK to app
         run: node scripts/test-host-usage.mjs
 
+      - name: Replay the recorded-run corpus keyless (real runs, zero model calls)
+        run: node sys/history/test/replay-corpus.test.mjs
+
       - name: Verify .anvil/skills is readable and UNWRITABLE from every agent route (grant-enforced)
         run: node sys/ai/test/skills-fence.test.mjs
 
