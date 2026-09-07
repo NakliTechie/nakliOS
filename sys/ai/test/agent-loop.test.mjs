@@ -578,6 +578,16 @@ await test('estimateTokens and boundedText behave as monotonic, capping primitiv
   assert(/AssertionError: expected 3 to equal 4/.test(both), 'the TAIL survives — the diagnosis is the last line');
   assert(/line 0/.test(both), 'the head survives too');
   assert(/elided/.test(both), 'the pruned middle is marked');
+  // the marker names BOTH dimensions removed, so the model knows the output is not contiguous
+  assert(/… \(\d+ lines \/ \d+ bytes elided\) …/.test(both), `marker names lines and bytes: ${both.slice(0, 400)}`);
+  assert(/line 300/.test(both) === false, 'the middle is actually gone, not just annotated');
+  // a single over-long line has no newlines at all: only the byte cap can fire, and the END
+  // of that line — where a traceback's last frame lives — must still arrive
+  const oneLine = 'START' + 'x'.repeat(9000) + 'ASSERT-FAILED-HERE';
+  const capped1 = boundedText(oneLine, { maxLines: 200, maxBytes: 400 });
+  assert(/^START/.test(capped1), 'the head of the single line survives');
+  assert(/ASSERT-FAILED-HERE/.test(capped1), 'the tail of the single line survives');
+  assert(/bytes elided/.test(capped1), 'the byte-path marker names the bytes removed');
   // sliced by code point, so a surrogate pair is never split
   const wide = boundedText('\u{1F600}'.repeat(3000), { maxLines: 10, maxBytes: 100 });
   // isWellFormed is the real check: a lone surrogate is not U+FFFD, so the old assertion
