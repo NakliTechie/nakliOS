@@ -357,6 +357,95 @@ await test('REGRESSION: fs.grep skips binary files, and agrees with shell rg', a
      JSON.stringify(hits), 'indexed and unindexed agree');
 });
 
+await test('REGRESSION: a /g or /y regex gives the same answer indexed or not', async () => {
+  // lastIndex carried between test() calls, so which lines had been tested
+  // changed the verdict — and an indexed run tests fewer files.
+  for (const flags of ['g', 'y', 'gu']) {
+    const plain = createFileops({ backend: new MemoryBackend(), index: false });
+    const idx = createFileops({ backend: new MemoryBackend(), index: true, exclusive: true });
+    for (const fs of [plain, idx]) {
+      await fs.write('a.txt', 'alpha\n', { createParents: true });
+      await fs.write('b.txt', 'xxxxx\n', { createParents: true });
+      await fs.write('c.txt', 'alpha\n', { createParents: true });
+    }
+    const a = await plain.grep(new RegExp('alpha', flags));
+    const b = await idx.grep(new RegExp('alpha', flags));
+    eq(JSON.stringify(b), JSON.stringify(a), `/${flags} indexed matches unindexed`);
+    eq(a.matches.length, 2, `/${flags} finds BOTH files, not every other one`);
+  }
+});
+
+await test('REGRESSION: a backend that reports no mtime never settles', async () => {
+  // CrateBackend falls back to mtimeMs 0 when the host supplies no stat. Treating
+  // that as a valid timestamp made every file look permanently unchanged, so a
+  // same-size external rewrite was invisible.
+  class NoMtimeBackend extends MemoryBackend {
+    async stat(p) { const s = await super.stat(p); return s ? { ...s, mtimeMs: 0 } : s; }
+  }
+  const backend = new NoMtimeBackend();
+  const fs = createFileops({ backend, index: true });   // sweep mode
+  await fs.write('x.txt', 'alpha\n', { createParents: true });
+  await fs.grep('alpha');
+  await backend.write('x.txt', new TextEncoder().encode('omega\n')); // same size, outside fileops
+  eq((await fs.grep('omega')).matches.length, 1, 'rewrite seen despite no usable mtime');
+});
+
+await test('REGRESSION: a mutation that throws still invalidates', async () => {
+  // A backend that writes and THEN throws changed the bytes anyway. Invalidating
+  // only on the success path left the index serving content that no longer exists.
+  class ThrowAfterWrite extends MemoryBackend {
+    async write(p, bytes) { await super.write(p, bytes); if (this.armed) { this.armed = false; throw new Error('backend exploded after committing'); } }
+  }
+  const backend = new ThrowAfterWrite();
+  const fs = createFileops({ backend, index: true, exclusive: true });
+  await fs.write('hit.txt', 'alpha\n', { createParents: true });
+  await fs.grep('alpha');
+  backend.armed = true;
+  await fs.write('hit.txt', 'omega\n').catch(() => {});   // commits, then throws
+  eq((await fs.grep('omega')).matches.length, 1, 'the committed bytes are visible');
+  eq((await fs.grep('alpha')).matches.length, 0, 'the replaced bytes are gone');
+});
+
+await test('REGRESSION: a write racing the index read is not installed stale', async () => {
+  // The refresh read a file, a write landed mid-read, and the read then installed
+  // its older bytes on top of the invalidation. In exclusive mode, which never
+  // re-stats a file it believes it knows, that entry would never be revisited.
+  class SlowRead extends MemoryBackend {
+    async readBinary(p) { if (this.stall) { const s = this.stall; this.stall = null; await s; } return super.readBinary(p); }
+  }
+  const backend = new SlowRead();
+  const fs = createFileops({ backend, index: true, exclusive: true });
+  await fs.write('hit.txt', 'alpha\n', { createParents: true });
+  let release;
+  backend.stall = new Promise((r) => { release = r; });
+  const searching = fs.grep('alpha');                 // begins reading hit.txt, then stalls
+  await new Promise((r) => setTimeout(r, 5));
+  const writing = fs.write('hit.txt', 'omega\n');     // lands mid-read
+  release();
+  await Promise.all([searching, writing]);
+  eq((await fs.grep('omega')).matches.length, 1, 'the newer bytes win the race');
+  eq((await fs.grep('alpha')).matches.length, 0, 'the raced-over bytes are gone');
+});
+
+await test('REGRESSION: symlink aliases invalidate through a wrapper backend', async () => {
+  // The old guard sniffed backend.symlinks, which a wrapper does not expose.
+  // Invalidation now goes by RESOLVED path, so it works through any wrapper.
+  const inner = new MemoryBackend();
+  const wrapper = {
+    readBinary: (p) => inner.readBinary(p), write: (p, b) => inner.write(p, b),
+    delete: (p) => inner.delete(p), exists: (p) => inner.exists(p),
+    stat: (p) => inner.stat(p), mkdir: (p) => inner.mkdir && inner.mkdir(p),
+    list: (p) => inner.list(p),
+  };
+  const fs = createFileops({ backend: wrapper, index: true, exclusive: true });
+  await fs.write('target.txt', 'alpha\n', { createParents: true });
+  inner.symlink('alias.txt', 'target.txt');
+  await fs.grep('alpha');
+  await fs.write('target.txt', 'omega\n');
+  const hits = (await fs.grep('omega')).matches.map((m) => m.path).sort();
+  eq(JSON.stringify(hits), JSON.stringify(['alias.txt', 'target.txt']), 'both alias and target updated');
+});
+
 // A randomised differential sweep: the fixed battery above encodes what I
 // thought to check, which is exactly the set most likely to miss something.
 await test('DIFFERENTIAL: randomised patterns, 400 cases', async () => {

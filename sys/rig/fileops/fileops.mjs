@@ -207,17 +207,19 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     files: new Map(),           // path -> { mtimeMs, size, hashes }
   };
 
-  // Two mount paths can alias one file through a symlink, and the index is keyed
-  // by mount path — so writing through one leaves the other stale. Exact
-  // invalidation cannot see that, but the stat sweep can (stat follows the link
-  // and reports the target's moved mtime). So a symlink-capable backend keeps the
-  // sweep regardless of what the caller declared. No production backend exposes
-  // symlinks — FsaBackend, OPFS and Crate have none — so this costs nothing real.
-  // Evaluated per search, not once: a backend that merely *supports* symlinks is
-  // fine until one actually exists.
-  const exclusiveOk = () => exclusive && !(backend.symlinks && backend.symlinks.size > 0);
+  const exclusiveOk = () => exclusive;
+
+  // Every invalidation bumps a sequence for its path. A read that began before an
+  // invalidation must not be allowed to install its result afterwards: the bytes
+  // it holds are older than the write that just landed, and in exclusive mode —
+  // which never re-stats a file it believes it knows — that stale entry would
+  // never be revisited.
+  let dropSeq = 0;
+  const dropSeqByPath = new Map();
+  function seqOf(path) { return dropSeqByPath.get(path) || 0; }
 
   function indexDrop(path) {
+    dropSeqByPath.set(path, ++dropSeq);
     const e = idx.files.get(path);
     if (!e) return;
     for (const h of e.hashes) {
@@ -239,7 +241,19 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     for (const p of [...idx.files.keys()]) if (p.startsWith(prefix)) indexDrop(p);
   }
 
-  function indexAdd(path, text, st) {
+  // Drop every mount path that resolves to the same backend file. Two paths can
+  // alias one file through a symlink, and the index is keyed by mount path, so
+  // writing through one used to leave the other stale. Sniffing the backend for
+  // symlink support missed wrappers (OverlayBackend has no `.symlinks` of its
+  // own); resolving is what actually knows.
+  function indexDropBySafe(safe) {
+    if (!safe) return;
+    for (const [p, e] of [...idx.files]) if (e.safe === safe) indexDrop(p);
+  }
+
+  function indexAdd(path, text, st, safe, readStartedAt, seenSeq) {
+    // Discard a read that raced a write to the same path.
+    if (seenSeq !== undefined && seqOf(path) !== seenSeq) return;
     indexDrop(path);
     // Index the RAW text. Lowercasing both sides looked symmetric but is not
     // substring-preserving in Unicode: 'AB\u03a3'.toLowerCase() ends in a final
@@ -256,7 +270,9 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     // rewritten in the SAME millisecond we indexed it, at the same size, its
     // mtime and size both compare equal and the sweep skips a changed file.
     // Storing when we read it lets us distrust exactly that overlap.
-    idx.files.set(path, { mtimeMs: st.mtimeMs, size: st.size, indexedAt: Date.now(), hashes });
+    // indexedAt is when the read STARTED, not when it finished: a write landing
+    // mid-read would otherwise be stamped as already-captured and stay invisible.
+    idx.files.set(path, { mtimeMs: st.mtimeMs, size: st.size, indexedAt: readStartedAt, safe, hashes });
   }
 
   async function walkAll(safeDir) {
@@ -303,8 +319,15 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     const st = await backend.stat(r.safe);
     if (st && st.type === 'dir') return err('EISDIR', `is a directory: ${r.path}`, { path: r.path });
     if (opts.createParents) await ensureParents(r.path);
-    await backend.write(r.safe, bytes);
-    indexDrop(r.path); // exact invalidation — the whole basis of exclusive mode
+    // Invalidate in a finally: a backend that writes and THEN throws (or commits
+    // and reports failure) still changed the bytes, and an invalidation only on
+    // the success path left the index holding content that no longer exists.
+    try {
+      await backend.write(r.safe, bytes);
+    } finally {
+      indexDrop(r.path);
+      indexDropBySafe(r.safe);
+    }
     return { ok: true, path: r.path };
   }
 
@@ -375,16 +398,21 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
       if ((files.length || dirs.length) && !opts.recursive) {
         return err('ENOTEMPTY', `directory not empty: ${r.path}`, { path: r.path });
       }
-      for (const f of files) { const e = await deleteFile(f); if (e) return e; }
-      // deepest-first so a backend that tracks explicit dir markers stays consistent
-      for (const d of dirs.sort((a, b) => b.split('/').length - a.split('/').length)) await deleteDir(d);
-      await deleteDir(r.safe);
-      indexDropSubtree(r.path);
+      try {
+        for (const f of files) { const e = await deleteFile(f); if (e) return e; }
+        // deepest-first so a backend that tracks explicit dir markers stays consistent
+        for (const d of dirs.sort((a, b) => b.split('/').length - a.split('/').length)) await deleteDir(d);
+        await deleteDir(r.safe);
+      } finally {
+        // Even a removal that stopped partway deleted something.
+        indexDropSubtree(r.path);
+      }
       return { ok: true, path: r.path };
     }
     const e = await deleteFile(r.safe);
-    if (e) return e;
     indexDrop(r.path);
+    indexDropBySafe(r.safe);
+    if (e) return e;
     return { ok: true, path: r.path };
   }
 
@@ -401,20 +429,25 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
       const { files } = await walkAll(fr.safe);
       const fromBase = fr.safe === '' ? '' : fr.safe + '/';
       if (backend.mkdir) await backend.mkdir(tr.safe);
-      for (const f of files) {
-        const rel = f.startsWith(fromBase) ? f.slice(fromBase.length) : f;
-        const bytes = await backend.readBinary(f);
-        await backend.write(joinRoot(tr.safe, rel), bytes);
+      try {
+        for (const f of files) {
+          const rel = f.startsWith(fromBase) ? f.slice(fromBase.length) : f;
+          const bytes = await backend.readBinary(f);
+          await backend.write(joinRoot(tr.safe, rel), bytes);
+        }
+      } finally {
+        // An interrupted copy still wrote whatever it got through.
+        indexDropSubtree(tr.path);
       }
-      indexDropSubtree(tr.path);
       return { ok: true, from: fr.path, to: tr.path };
     }
     const bytes = await backend.readBinary(fr.safe);
-    await backend.write(tr.safe, bytes);
-    // The EEXIST guard above says the destination is new, so in principle nothing
-    // stale can be held for it. Invalidate anyway: that argument depended on every
-    // other invalidation path being perfect, and one of them was not.
-    indexDrop(tr.path);
+    try {
+      await backend.write(tr.safe, bytes);
+    } finally {
+      indexDrop(tr.path);
+      indexDropBySafe(tr.safe);
+    }
     return { ok: true, from: fr.path, to: tr.path };
   }
 
@@ -436,8 +469,12 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     const text = new TextDecoder('utf-8').decode(bytes);
     const applied = applyPatch(text, unifiedDiff);
     if (!applied.ok) return applied; // EPATCH names the hunk; nothing written (atomic)
-    await backend.write(r.safe, enc.encode(applied.result));
-    indexDrop(r.path);
+    try {
+      await backend.write(r.safe, enc.encode(applied.result));
+    } finally {
+      indexDrop(r.path);
+      indexDropBySafe(r.safe);
+    }
     return { ok: true, path: r.path, revert: reversePatch(unifiedDiff) };
   }
 
@@ -494,15 +531,21 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
         // Trust an unchanged mtime+size only when the file was already at least a
         // millisecond old when we indexed it. Inside that window the pair cannot
         // distinguish "unchanged" from "rewritten at the same size".
-        const settled = e && e.indexedAt > st.stat.mtimeMs;
+        // mtime 0 means the backend does not report one (the Crate fallback), which
+        // is the absence of evidence, not evidence of freshness. Without it, size
+        // alone decides, and a same-size rewrite is invisible — so never settle.
+        const settled = e && st.stat.mtimeMs > 0 && e.indexedAt > st.stat.mtimeMs;
         if (e && settled && e.mtimeMs === st.stat.mtimeMs && e.size === st.stat.size) continue;
         if (st.stat.size > indexMaxBytes) { indexDrop(p); continue; } // stays a full-read candidate
+        const readStartedAt = Date.now();
+        const seenSeq = seqOf(p);
+        const rr = await resolve(p);
         const rd = await read(p, { encoding: 'utf-8' });
         if (!rd.ok) { indexDrop(p); continue; }
         filesRead++;
         bytesRead += rd.data.length;
         if (rd.data.includes('\u0000')) { indexDrop(p); continue; } // binaries are not searched
-        indexAdd(p, rd.data, st.stat);
+        indexAdd(p, rd.data, st.stat, rr.ok ? rr.safe : null, readStartedAt, seenSeq);
       }
       // Snapshot the keys: indexDrop mutates idx.files, so iterating it live
       // would skip entries. (oxlint flags the spread as useless; it is not.)
@@ -539,6 +582,12 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
       bytesRead += rd.data.length;
       const lines = rd.data.split('\n');
       for (let i = 0; i < lines.length; i++) {
+        // A /g or /y regex carries lastIndex between calls, so `test` skips every
+        // other match and the result depends on which lines were tested before.
+        // That made grep order-dependent on its own, and made an indexed run —
+        // which tests fewer files — disagree with an unindexed one. Reset per
+        // line so each line is judged on its own, both paths alike.
+        re.lastIndex = 0;
         if (re.test(lines[i])) {
           if (matches.length >= max) { truncated = true; break outer; }
           matches.push({ path: p, line: i + 1, text: lines[i] });
