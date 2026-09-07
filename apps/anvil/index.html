@@ -1304,8 +1304,17 @@
     let i = 0; while (i < msgs.length && msgs[i] && msgs[i].role === 'system') i++;
     let out = msgs.slice(i);
     try {
-      const r = await compactConversation(out, { threshold: 24000, keepRecentTokens: 10000 });
+      // `retrievable` decides what an elided tool body TELLS the model. Compaction cannot keep
+      // the bytes — its whole job is to shed them, and the carried transcript lives in
+      // localStorage, the one store this function is capped to protect. The run record already
+      // holds every tool result and the `history` tool searches it, so that is the only true
+      // retrieval path — and it is only true when a record is actually being written. `rec` is
+      // that condition. Without it the ref says the content is gone rather than sending the
+      // agent after something nothing kept (forward-pass R1a).
+      const r = await compactConversation(out, { threshold: 24000, keepRecentTokens: 10000, retrievable: !!(rec && rec.compacted) });
       if (Array.isArray(r.messages)) out = r.messages;
+      // r.artifacts is deliberately not kept: persisting the elided bodies here would push them
+      // straight back into the localStorage budget the trim below exists to defend.
     } catch(_) { /* compaction is best-effort; an uncompacted transcript still works */ }
     // A trailing assistant turn whose tool replies never arrived (an aborted run)
     // is malformed as the START of the next request — drop it.

@@ -114,4 +114,47 @@ const turn = (i) => ([
   }
 }
 
-console.log('anvil-convo-carry: the next run sees tool calls, tool results and the gate verdict');
+// 7. R1a — an elided tool body never promises a retrieval the caller cannot serve.
+//    carryForward is the ONLY caller of compaction, and it keeps only r.messages: the artifacts
+//    map dies here, and `artifact://tool-N` was never a path the `read` tool could resolve. So
+//    what the ref TELLS the model must depend on whether a run record is being written, since
+//    the record is the only thing that still holds the body.
+{
+  const bulky = () => ([
+    sys, { role: 'user', content: 'run the gate' },
+    { role: 'assistant', content: null, tool_calls: [{ id: 'b1', type: 'function', function: { name: 'shell', arguments: '{}' } }] },
+    { role: 'tool', tool_call_id: 'b1', content: 'grant scope check failed on revoke\n' + 'x'.repeat(120000) },
+    { role: 'user', content: 'now fix it' },
+    { role: 'assistant', content: 'ok' },
+  ]);
+
+  // No recorder ⇒ nothing retains the body ⇒ say so, plainly.
+  const bare = await carryForward(bulky());
+  const bareRef = bare.map(m => String(m.content || '')).find(c => /elided/.test(c));
+  assert.ok(bareRef, 'the bulky tool body was elided');
+  assert.ok(!/artifact:\/\//.test(bareRef), 'no artifact:// id reaches the model — nothing can resolve it');
+  assert.ok(!/read tool/.test(bareRef), 'the `read` tool cannot serve an elided body; it must not be named');
+  assert.ok(!/history/.test(bareRef), 'with no record being written, `history` must not be promised either');
+  assert.match(bareRef, /GONE/, 'it states plainly that the content is gone');
+
+  // With a recorder ⇒ the body is on the chain and `history` searches it ⇒ name the exact calls.
+  const calls = [];
+  const rec = { compacted: async (e) => { calls.push(e); } };
+  const kept = await carryForward(bulky(), rec);
+  const keptRef = kept.map(m => String(m.content || '')).find(c => /elided/.test(c));
+  assert.ok(keptRef, 'the bulky tool body was elided');
+  assert.match(keptRef, /history \{"op":"search"/, 'the ref names the tool that CAN retrieve it, and the op');
+  assert.ok(!/artifact:\/\//.test(keptRef), 'still no unresolvable id');
+  // The query must be text that occurs in the recorded result — a handle the model cannot match
+  // is the same defect wearing a different tool name.
+  const q = JSON.parse(keptRef.match(/"query":("(?:[^"\\]|\\.)*")/)[1]);
+  assert.ok(bulky()[3].content.includes(q), `the handed query is a verbatim substring of the elided body: ${JSON.stringify(q)}`);
+  assert.ok(calls.length, 'and the lossy carry is still recorded on the chain');
+}
+
+// 8. The call site actually passes the condition — a correct default the app overrides blindly
+//    would put the promise back.
+assert.match(anvil, /compactConversation\(out, \{[^}]*retrievable: !!\(rec && rec\.compacted\)/,
+  'carryForward gates the retrieval promise on a recorder actually being present');
+
+console.log('anvil-convo-carry: the next run sees tool calls, tool results, the gate verdict, and no impossible retrieval');

@@ -3,10 +3,11 @@
 //
 // Two moves, cheapest first:
 //   1. shake (LLM-free): swap the bodies of OLD, bulky tool results for a
-//      recoverable artifact reference. Costs nothing but a Map insert — in a
-//      browser, where an extra model call is expensive, this is the first line of
-//      defence. The full text is preserved in the returned `artifacts` map so the
-//      model can re-read it on demand.
+//      reference. Costs nothing but a Map insert — in a browser, where an extra
+//      model call is expensive, this is the first line of defence. What the ref
+//      TELLS the model depends on `retrievable`: with a run record behind it, the
+//      exact `history` calls plus a verbatim phrase to search by; without one, that
+//      the content is gone. It never names a retrieval the caller cannot serve.
 //   2. summarize (LLM, optional): only if shaking did not get under budget, fold
 //      the older region into one summary system message via an injected async
 //      summarize(olderMessages) -> string. No summarizer wired ⇒ the older region
@@ -50,26 +51,64 @@ function findCut(messages, keepRecentTokens, estimate, sysEnd) {
   return cut;
 }
 
-// LLM-free reduction: replace the bodies of bulky tool results in `region` with a
-// recoverable artifact reference. Returns { messages, artifacts, saved } where
-// artifacts maps ref id -> original content. `protect` keeps the newest N tokens
-// of the region untouched.
-export function shake(region, { estimate = estimateTokens, minChars = 200, artifactPrefix = 'artifact://tool-' } = {}) {
+// A search handle for an elided body: a contiguous, verbatim slice of the content that a
+// `history` search can actually match. Substring-only transforms (picking a line, trimming,
+// slicing) — anything else would produce a query that does not occur in the record.
+// Returns '' when nothing usable is there, which is how the caller knows not to promise a
+// retrieval.
+function searchHandle(content, max = 48) {
+  const head = content.slice(0, 400);
+  let best = '';
+  for (const line of head.split('\n')) {
+    const t = line.trim();
+    if (t.length > best.length) best = t;
+  }
+  best = best.slice(0, max).trim();
+  return best.length >= 8 ? best : '';
+}
+
+// LLM-free reduction: replace the bodies of bulky tool results in `region` with a reference
+// the model can act on. Returns { messages, artifacts, saved } where artifacts maps ref id ->
+// original content. `protect` keeps the newest N tokens of the region untouched.
+//
+// `retrievable` is the whole honesty question. The ref text used to say "read it with the read
+// tool" against an `artifact://` id — but `read` reads workspace files, cannot resolve that id,
+// and no caller keeps the artifacts map, so the content was simply gone and the model was
+// instructed to perform an impossible retrieval (forward-pass R1a). Pointing at the `history`
+// tool instead is only true when the caller is writing a run record AND the model is given
+// something to search FOR: the body it would query by is the very thing that was elided.
+// So the ref carries a verbatim handle, and a caller that keeps no record gets the plain
+// statement that the content is gone.
+export function shake(region, { estimate = estimateTokens, minChars = 200, artifactPrefix = 'artifact://tool-', retrievable = false } = {}) {
   const artifacts = new Map();
   let saved = 0;
   let counter = 0;
+  // tool_call_id -> the tool's name, so the ref can say WHICH tool produced the body.
+  const names = new Map();
+  for (const m of region) {
+    if (!Array.isArray(m?.tool_calls)) continue;
+    for (const c of m.tool_calls) if (c?.id) names.set(c.id, c.function?.name || '');
+  }
   const out = region.map((m) => {
     if (m?.role === 'tool' && typeof m.content === 'string' && m.content.length >= minChars) {
       const id = `${artifactPrefix}${++counter}`;
       artifacts.set(id, m.content);
       saved += estimate([m]);
-      // The model-facing text must name a retrieval path that EXISTS. It used to say "read it
-      // with the read tool", but `read` reads workspace files and cannot resolve an
-      // artifact:// id — and no caller keeps the artifacts map, so the content was simply gone
-      // (forward-pass R1a). The run record DOES retain every tool result, and the `history` tool
-      // searches it, so that is what the agent is pointed at. `artifacts` is still returned for a
-      // caller that wants to resolve ids itself; today none does.
-      const ref = `[tool output elided — ${m.content.length} chars. The full result is in this run's record: find it with the \`history\` tool.]`;
+      const name = m.name || names.get(m.tool_call_id) || '';
+      const from = name ? ` from \`${name}\`` : '';
+      const handle = retrievable ? searchHandle(m.content) : '';
+      const ref = handle
+        // The record keeps every tool result and `history` searches it, so name the exact two
+        // calls and hand over a phrase that occurs in the stored text. The last clause is not a
+        // hedge: the carry happens before the record is written, so a failed save is a real
+        // outcome the model must be able to recognise rather than retry forever.
+        ? `[tool output elided — ${m.content.length} chars${from}. The full result is in this task's run history: `
+          + `history {"op":"search","query":${JSON.stringify(handle)}} then history {"op":"read","id":"<the hit's id>"}. `
+          + `If that search returns no hits, the record was not saved and this content is gone.]`
+        // Nothing retains it. Say so, and say what to do instead — an agent told only that
+        // output is "elided" will burn turns hunting for it.
+        : `[tool output elided — ${m.content.length} chars${from}. This content is GONE: it was not preserved anywhere you can read. `
+          + `Do not try to retrieve it. Work from what remains, or make the tool call again if you need the output.]`;
       saved -= estimate([{ role: 'tool', content: ref }]);
       return { ...m, content: ref, _artifact: id };
     }
@@ -87,6 +126,9 @@ export async function compactConversation(messages, {
   estimate = estimateTokens,
   summarize = null,          // optional async (olderMessages) => string
   shakeMinChars = 200,
+  // True only when the caller persists a run record of THIS transcript — that record is what
+  // an elided body is recoverable from. Default false: promise nothing by default.
+  retrievable = false,
 } = {}) {
   const before = estimate(messages);
   if (before <= threshold) return { messages, compacted: false, method: 'none', artifacts: new Map(), droppedTokens: 0 };
@@ -102,7 +144,7 @@ export async function compactConversation(messages, {
   }
 
   // 1. shake the older region.
-  const shaken = shake(older, { estimate, minChars: shakeMinChars });
+  const shaken = shake(older, { estimate, minChars: shakeMinChars, retrievable });
   let next = [...system, ...shaken.messages, ...kept];
   if (estimate(next) <= threshold) {
     return { messages: next, compacted: true, method: 'shake', artifacts: shaken.artifacts, droppedTokens: shaken.saved };

@@ -119,16 +119,86 @@ await test('compaction drops the older region (with a marker) when no summarizer
   assert(r.droppedTokens > 0, 'reported dropped tokens');
 });
 
-await test('R1a: the elision names a retrieval path that EXISTS', () => {
-  // It used to say "read it with the read tool" — but `read` reads workspace files and cannot
-  // resolve an artifact:// id, and no caller keeps the artifacts map, so the content was gone.
+await test('R1a: with no record behind it, the elision says the content is GONE', () => {
+  // It used to say "read it with the read tool" against an `artifact://` id — `read` reads
+  // workspace files, cannot resolve that id, and no caller keeps the artifacts map. Default is
+  // now the honest statement, not a softer impossible pointer.
   const region = [{ role: 'tool', content: 'x'.repeat(4000) }];
   const r = shake(region);
   const ref = r.messages[0].content;
-  assert(!/read tool/.test(ref), `the ref must not point at a tool that cannot resolve it: ${ref}`);
-  assert(/history/.test(ref), `the ref names the tool that CAN retrieve it from the record: ${ref}`);
+  assert(!/read tool/.test(ref), `must not point at a tool that cannot resolve it: ${ref}`);
   assert(!/artifact:\/\//.test(ref), 'no unresolvable id is shown to the model');
+  assert(!/history/.test(ref), 'no record is being kept, so history must not be promised either');
+  assert(/GONE/.test(ref), `it states plainly that the content is gone: ${ref}`);
   assert(r.artifacts.size === 1, 'the map is still returned for a caller that wants to resolve ids');
+});
+
+await test('retrievable: the ref names the tool, the exact calls, and a query that is a real substring', () => {
+  const body = ['npm test -- grant.spec.js', '17 passing', '1 failing: scope leak on revoke'].join('\n') + '\n' + 'x'.repeat(4000);
+  const region = [
+    { role: 'assistant', content: null, tool_calls: [{ id: 'c1', type: 'function', function: { name: 'shell', arguments: '{}' } }] },
+    { role: 'tool', tool_call_id: 'c1', content: body },
+  ];
+  const ref = shake(region, { retrievable: true }).messages[1].content;
+  assert(/history/.test(ref), `names the tool that can retrieve it: ${ref}`);
+  assert(/"op":"search"/.test(ref) && /"op":"read"/.test(ref), `names both ops: ${ref}`);
+  assert(/`shell`/.test(ref), `names the tool that produced the body: ${ref}`);
+  assert(!/artifact:\/\//.test(ref), 'still no unresolvable id');
+  // The load-bearing property: the query is text that OCCURS in the stored result. A handle the
+  // model cannot match would be the same defect wearing a different tool name.
+  const q = JSON.parse(ref.match(/"query":("(?:[^"\\]|\\.)*")/)[1]);
+  assert(q.length >= 8, `handle is substantial: ${JSON.stringify(q)}`);
+  assert(body.includes(q), `the handed query is a verbatim substring of the elided body: ${JSON.stringify(q)}`);
+});
+
+await test('retrievable: a body with no usable handle falls back to the GONE wording', () => {
+  // Nothing to search by ⇒ nothing to promise, even with a record behind it.
+  const r = shake([{ role: 'tool', content: 'ab\n'.repeat(1000) }], { retrievable: true });
+  assert(/GONE/.test(r.messages[0].content), `no handle ⇒ no promise: ${r.messages[0].content}`);
+});
+
+await test('compactConversation threads retrievable through to the shaken refs', async () => {
+  const msgs = () => ([
+    { role: 'system', content: 'sys' },
+    { role: 'user', content: 'do a big search' },
+    { role: 'assistant', content: null, tool_calls: [{ id: 'c1', type: 'function', function: { name: 'shell', arguments: '{}' } }] },
+    { role: 'tool', tool_call_id: 'c1', content: 'grant scope check failed\n' + big(60_000) },
+    { role: 'user', content: 'now do a small thing' },
+    { role: 'assistant', content: 'ok done' },
+  ]);
+  const off = await compactConversation(msgs(), { threshold: 5_000, keepRecentTokens: 500 });
+  assert(off.messages.some((m) => /GONE/.test(m.content || '')), 'default promises nothing');
+  const on = await compactConversation(msgs(), { threshold: 5_000, keepRecentTokens: 500, retrievable: true });
+  assert(on.messages.some((m) => /"op":"search"/.test(m.content || '')), 'retrievable reaches the ref text');
+});
+
+// ── end to end: the query the ref hands the model actually retrieves the body ──
+await test('the ref\'s query retrieves the full body from a real run record', async () => {
+  const { createRunRecorder, searchRecords, readEvent, loadRecord } = await import('../../history/run-record.mjs');
+  const body = 'grant scope check failed on revoke\n' + 'y'.repeat(6000);
+
+  // A real record of the run whose transcript is about to be compacted.
+  const rec = createRunRecorder({ app: 'anvil', principal: 'anvil:test' });
+  await rec.start({ messages: [{ role: 'user', content: 'run the gate' }] });
+  rec.onEvent({ type: 'tool-call', id: 'c1', name: 'shell', args: { command: 'npm test' }, step: 1 });
+  rec.onEvent({ type: 'tool-result', id: 'c1', name: 'shell', result: body, step: 1 });
+  await rec.settled();
+  const entries = [{ runId: 'run-1', taskId: 't1', record: loadRecord(rec.export()) }];
+
+  // Now compact that same transcript, with the record behind it.
+  const r = shake([
+    { role: 'assistant', content: null, tool_calls: [{ id: 'c1', type: 'function', function: { name: 'shell', arguments: '{}' } }] },
+    { role: 'tool', tool_call_id: 'c1', content: body },
+  ], { retrievable: true });
+  const ref = r.messages[1].content;
+
+  // Follow the ref exactly as the model would: search by the handed query, then read the hit.
+  const query = JSON.parse(ref.match(/"query":("(?:[^"\\]|\\.)*")/)[1]);
+  const hits = searchRecords(entries, { query, scope: 'task', taskId: 't1' });
+  assert(hits.length >= 1, `the handed query finds the event: ${JSON.stringify(query)}`);
+  const read = readEvent(entries, hits[0].id, { limit: 100_000 });
+  assert(!read.error, `read resolves the hit id: ${read.error}`);
+  assert(read.text.includes(body), 'the FULL elided body comes back out of the record');
 });
 
 if (failures.length) {
