@@ -714,6 +714,31 @@ await test('REGRESSION: -i folds the way a regex does, not the way toLowerCase d
   }
 });
 
+await test('walk cache: reused when nothing changed, dropped when anything does', async () => {
+  // The walk is 56% of a warm query's floor. Caching it is only safe where this
+  // fileops is the sole writer, so file creation goes through the same
+  // invalidation as content changes.
+  const backend = new MemoryBackend();
+  const fs = createFileops({ backend, index: true, exclusive: true });
+  for (let i = 0; i < 20; i++) await fs.write(`f${i}.txt`, `alpha ${i}\n`, { createParents: true });
+  await new Promise((r) => setTimeout(r, 4));
+  await fs.grep('alpha'); await fs.grep('alpha');
+
+  // A file created afterwards must still be found — the write invalidates the walk.
+  await fs.write('late.txt', 'brandnew here\n', { createParents: true });
+  eq((await fs.grep('brandnew')).matches.length, 1, 'a file added after the cache is still found');
+
+  // And one removed must stop being found.
+  await fs.remove('late.txt');
+  eq((await fs.grep('brandnew')).matches.length, 0, 'a file removed after the cache is gone');
+
+  // The cache must never be used on a shared mount, where creation can bypass us.
+  const shared = createFileops({ backend, index: true });      // not exclusive
+  await shared.grep('alpha');
+  await backend.write('outside.txt', new TextEncoder().encode('brandnew outside\n'));
+  eq((await shared.grep('brandnew')).matches.length, 1, 'a shared mount re-walks and sees it');
+});
+
 // A randomised differential sweep: the fixed battery above encodes what I
 // thought to check, which is exactly the set most likely to miss something.
 await test('DIFFERENTIAL: randomised patterns, 400 cases', async () => {

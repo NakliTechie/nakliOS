@@ -70,14 +70,17 @@ function globToRegExp(glob) {
  * @param {number}  [opts.grepCap]      default grep maxResults
  * @param {Function} [opts.onSearch]    called with one SearchStat per grep (measurement only)
  * @param {boolean} [opts.index=false]   build a trigram index to skip non-candidate files
- * @param {number}  [opts.indexMaxBytes] per-file size ceiling for indexing (default 4 MiB)
+ * @param {number}  [opts.indexMaxBytes] per-file size ceiling for indexing (default 16 MiB).
+ *                                     Above it a file holds no postings, so it stays a candidate
+ *                                     and is re-read on every query — raise it rather than lower
+ *                                     it if large text files are being searched often.
  * @param {boolean} [opts.exclusive]   nothing outside this fileops writes to the backend
  * @param {number}  [opts.reconcileMs] EXPERIMENT: re-stat at most this often rather than every
  *                                     search. 0 (default) keeps the per-query sweep.
  * @param {string}  [opts.indexPath]   persist the index here, through this same fileops, so it
  *                                     survives a reload. Omit to keep it in memory only.
  */
-export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 1000, onSearch = null, index = false, indexMaxBytes = 4 * 1024 * 1024, exclusive = false, reconcileMs = 0, indexPath = '' }) {
+export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 1000, onSearch = null, index = false, indexMaxBytes = 16 * 1024 * 1024, exclusive = false, reconcileMs = 0, indexPath = '' }) {
   if (!backend) throw new Error('createFileops requires a backend');
   const rootPrefix = String(root || '').replace(/\/+$/, '');
 
@@ -293,11 +296,20 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
   // it holds are older than the write that just landed, and in exclusive mode —
   // which never re-stats a file it believes it knows — that stale entry would
   // never be revisited.
+  // The directory walk runs on every search: measured at 16.7 ms of a 29.7 ms
+  // zero-candidate query — 56% of the floor, and the reason a small workspace
+  // barely benefits. In exclusive mode it can be cached exactly, because file
+  // CREATION and deletion also go through this fileops, so the same invalidation
+  // that drops an index entry can drop the walk. Never cached otherwise.
+  let walkCache = null;
+  const invalidateWalk = () => { walkCache = null; };
+
   let dropSeq = 0;
   const dropSeqByPath = new Map();
   function seqOf(path) { return dropSeqByPath.get(path) || 0; }
 
   function indexDrop(path) {
+    invalidateWalk();
     dropSeqByPath.set(path, ++dropSeq);
     const e = idx.files.get(path);
     if (!e) return;
@@ -314,6 +326,7 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     // '/', which matches no key (keys are mount-relative, unrooted), so a
     // recursive remove of the root left every posting in place — and a path
     // later recreated at the same name was then served from stale postings.
+    invalidateWalk();
     if (path === '') { idx.postings.clear(); idx.files.clear(); return; }
     indexDrop(path);
     const prefix = path + '/';
@@ -588,7 +601,17 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     let bytesRead = 0;
     const cr = await resolve(opts.cwd || '');
     if (!cr.ok) return cr;
-    const globbed = await glob(opts.glob || '**', { cwd: opts.cwd || '' });
+    // Reuse the previous walk when this fileops is the only writer and nothing has
+    // been mutated since. Keyed by the glob and cwd actually asked for.
+    const walkKey = `${opts.cwd || ''}\u0000${opts.glob || '**'}`;
+    let globbed;
+    if (index && exclusiveOk() && walkCache && walkCache.key === walkKey) {
+      globbed = { ok: true, matches: walkCache.matches };
+    } else {
+      globbed = await glob(opts.glob || '**', { cwd: opts.cwd || '' });
+      if (!globbed.ok) return globbed;
+      if (index && exclusiveOk()) walkCache = { key: walkKey, matches: globbed.matches };
+    }
     if (!globbed.ok) return globbed;
     const re = pattern instanceof RegExp ? pattern : new RegExp(pattern);
     const matches = [];
