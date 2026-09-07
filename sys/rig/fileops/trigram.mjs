@@ -54,7 +54,14 @@ export function foldCase(text) {
   // Verified over 13,174 case-equivalent code-point pairs: no case where the
   // regex matches but the fold disagrees. Where the fold is BROADER than /i
   // (\u00df -> ss), it only over-matches, which the real regex then rejects.
-  for (const ch of text) out += ch.toUpperCase().toLowerCase();
+  for (const ch of text) {
+    const f = ch.toUpperCase().toLowerCase();
+    // Only fold when the result is still ONE code point. \u00df uppercases to SS
+    // and folds to "ss", while \u1e9e folds to \u00df — so /ab\u00df/iu matched
+    // "ab\u1e9e" while the two sides folded differently and the plan excluded it.
+    // A fold that changes length is not a per-character map and cannot be trusted.
+    out += [...f].length === 1 ? f : ch;
+  }
   return out;
 }
 
@@ -349,8 +356,20 @@ function planAlternation(chars) {
  * Never under-matches: an unrecognised construct contributes ALL, which widens
  * the candidate set rather than narrowing it wrongly.
  */
-export function planQuery(source) {
-  try { return planAlternation([...String(source)]); }
+export function planQuery(source, flags = '') {
+  const src = String(source);
+  // The `v` flag rewrites character-class syntax — classes nest, so scanning for
+  // the first ']' finds the wrong end and the remainder is read as required text.
+  // /[[a]bc]def/v excluded "adef" that way. Not worth a second class parser.
+  if (String(flags).includes('v')) return ALL;
+  // An UNPAIRED surrogate in the pattern means the regex is matching UTF-16 code
+  // units, not code points, so /\uDC00ab/ matches the tail half of an astral
+  // character that this code-point-wise planner cannot see.
+  for (const ch of src) {
+    const cp = ch.codePointAt(0);
+    if (cp >= 0xD800 && cp <= 0xDFFF) return ALL;
+  }
+  try { return planAlternation([...src]); }
   catch (_) { return ALL; }   // a malformed pattern is the caller's problem, not ours
 }
 

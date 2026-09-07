@@ -625,7 +625,7 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     // when a neighbouring literal was still required by every match.
     // `i` is no longer excluded: the index is case-folded, so an ignoreCase query
     // is answered from it directly and a case-sensitive one merely over-matches.
-    const plan = index ? planQuery(re.source) : null;
+    const plan = index ? planQuery(re.source, re.flags) : null;
     const lit = plan && plan.op !== 'ALL' ? plan : null;
     let candidates = null;
     let indexUsed = false;

@@ -739,6 +739,34 @@ await test('walk cache: reused when nothing changed, dropped when anything does'
   eq((await shared.grep('brandnew')).matches.length, 1, 'a shared mount re-walks and sees it');
 });
 
+await test('REGRESSION: three more planner false negatives from re-review', async () => {
+  // Each matched its subject while the plan excluded it.
+  //  - /abß/iu vs "abẞ": ß folds to "ss" (two chars), ẞ folds to "ß" — a fold that
+  //    changes length is not a per-character map and the two sides diverged.
+  //  - /[[a]bc]def/v vs "adef": the v flag nests character classes, so scanning to
+  //    the first ']' found the wrong end and read the rest as required text.
+  //  - /\uDC00ab/ vs "𐐀ab": an unpaired surrogate means the regex is matching UTF-16
+  //    code units, which a code-point-wise planner cannot model.
+  const cases = [
+    ['abß', 'abẞ', 'iu'],
+    ['[[a]bc]def', 'adef', 'v'],
+    ['𐀀ab'.slice(1), '𐐀ab', ''],
+  ];
+  for (const [src, subject, flags] of cases) {
+    let re; try { re = new RegExp(src, flags); } catch (_) { continue; }
+    const mk = async (index) => {
+      const fs = createFileops({ backend: new MemoryBackend(), index });
+      await fs.write('hit.txt', subject + '\n', { createParents: true });
+      return fs;
+    };
+    const plain = await mk(false); const idx = await mk(true);
+    await new Promise((r) => setTimeout(r, 3));
+    const a = (await plain.grep(re)).matches.map((m) => m.path);
+    const b = (await idx.grep(re)).matches.map((m) => m.path);
+    eq(JSON.stringify(b), JSON.stringify(a), `/${src}/${flags} on ${JSON.stringify(subject)}`);
+  }
+});
+
 // A randomised differential sweep: the fixed battery above encodes what I
 // thought to check, which is exactly the set most likely to miss something.
 await test('DIFFERENTIAL: randomised patterns, 400 cases', async () => {
