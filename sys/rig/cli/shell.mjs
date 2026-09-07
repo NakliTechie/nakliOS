@@ -556,13 +556,17 @@ export function createShell({ registry, face, cwd = '', kiln = null } = {}) {
       // Collect candidate files from every path argument: a file is itself, a
       // directory is everything under it. Previously only the FIRST extra
       // positional was honoured, and only ever as a directory.
-      const seen = new Set(); const files = [];
-      const missing = [];
+      // Each path argument becomes a (cwd, glob) pair for fs.grep: a file is
+      // itself, a directory is everything under it. Only the FIRST extra
+      // positional used to be honoured, and only ever as a directory.
+      const roots = []; const missing = []; const files = [];
       for (const raw of paths) {
         const norm = normalizePath(state.cwd, raw);
         const st = await face.invoke('fs.stat', { path: norm });
         if (st && st.ok && st.stat && st.stat.type === 'file') {
-          if (!seen.has(norm)) { seen.add(norm); files.push(norm); }
+          const slash = norm.lastIndexOf('/');
+          roots.push({ cwd: slash < 0 ? '' : norm.slice(0, slash), glob: slash < 0 ? norm : norm.slice(slash + 1) });
+          files.push(norm);
           continue;
         }
         const g = await face.invoke('fs.glob', { pattern: (norm ? norm + '/' : '') + '**', cwd: '' });
@@ -572,9 +576,10 @@ export function createShell({ registry, face, cwd = '', kiln = null } = {}) {
         // "py" was read as a path — indistinguishable from "no matches", which
         // is how an agent ends up asking the same question four times.
         if (!g.matches.length && !(st && st.ok)) { missing.push(raw); continue; }
-        for (const f of g.matches) if (!seen.has(f)) { seen.add(f); files.push(f); }
+        roots.push({ cwd: norm, glob: '**' });
+        files.push(...g.matches);
       }
-      if (missing.length && !files.length) {
+      if (missing.length && !roots.length) {
         return { text: missing.map((m) => `rg: ${m}: no such file or directory`).join('\n'), code: 2 };
       }
 
@@ -585,36 +590,43 @@ export function createShell({ registry, face, cwd = '', kiln = null } = {}) {
         if (globRes.length && !globRes.some((re) => re.test(rel(p)) || re.test(p.split('/').pop()))) return false;
         return true;
       };
-      const chosen = files.filter(keep);
+      if (listFiles) { const chosen = files.filter(keep); return { text: chosen.map(rel).join('\n'), code: chosen.length ? 0 : 1 }; }
 
-      if (listFiles) return { text: chosen.map(rel).join('\n'), code: chosen.length ? 0 : 1 };
-
+      // Delegate the actual search to fs.grep. That is where the trigram index
+      // lives, and where binary detection and the per-line lastIndex reset live.
+      // rg used to glob + read every file itself, which meant the builtin the
+      // agent is told to use was the one path that never touched the index.
       const t0 = Date.now();
-      let filesRead = 0, bytesRead = 0;
-      const re = new RegExp(pattern, ignoreCase ? 'i' : '');
-      const out = [];
-      for (const path of chosen) {
-        const r = await face.invoke('fs.read', { path, encoding: 'utf-8' });
-        if (!r.ok) continue;
-        const text = decodeData(r.data);
-        // Binary detection by NUL byte, as grep and ripgrep do. This was
-        // `text.startsWith('<')`, which silently discarded every HTML, XML and
-        // SVG file in the workspace.
-        if (typeof text !== 'string' || text.includes('\u0000')) continue;
-        filesRead++;
-        bytesRead += text.length;
-        const hits = [];
-        linesOf(text).forEach((l, i) => { re.lastIndex = 0; if (re.test(l)) hits.push({ l, i }); });
-        if (!hits.length) continue;
-        if (filesOnly) { out.push(rel(path)); continue; }
-        if (countOnly) { out.push(`${rel(path)}:${hits.length}`); continue; }
-        for (const { l, i } of hits) out.push(`${rel(path)}:${i + 1}:${l}`);
+      const rows = [];
+      const seenRow = new Set();
+      for (const root of roots) {
+        const res = await face.invoke('fs.grep', { pattern, cwd: root.cwd, glob: root.glob, maxResults: 10000 });
+        if (!res.ok) return { text: `rg: ${res.message || 'search failed'}`, code: 1 };
+        for (const m of res.matches) {
+          const key = `${m.path}:${m.line}`;
+          if (seenRow.has(key)) continue;
+          seenRow.add(key);
+          rows.push(m);
+        }
       }
-      // Measurement only (plan/anvil-indexed-search.md §6); never fails the search.
+      const kept = rows.filter((m) => keep(m.path)).sort((a, b) => (a.path === b.path ? a.line - b.line : (a.path < b.path ? -1 : 1)));
+
+      const out = [];
+      if (filesOnly) {
+        for (const p of [...new Set(kept.map((m) => m.path))]) out.push(rel(p));
+      } else if (countOnly) {
+        const counts = new Map();
+        for (const m of kept) counts.set(m.path, (counts.get(m.path) || 0) + 1);
+        for (const [p, n] of counts) out.push(`${rel(p)}:${n}`);
+      } else {
+        for (const m of kept) out.push(`${rel(m.path)}:${m.line}:${m.text}`);
+      }
+      // Measurement only. fs.grep records the bytes and files itself, so this
+      // entry exists to show WHICH path the agent took, not to re-count the work.
       try {
         await face.invoke('fs.recordSearch', {
           via: 'shell.rg', pattern: String(pattern), cwd: state.cwd || '', glob: '**',
-          filesWalked: files.length, filesRead, bytesRead,
+          filesWalked: 0, filesRead: 0, bytesRead: 0,
           matches: out.length, truncated: false, ms: Date.now() - t0,
         });
       } catch (_) { /* a meter never breaks a search */ }

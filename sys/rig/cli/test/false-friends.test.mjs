@@ -250,6 +250,29 @@ await test('R2f: rg implements its flags or refuses them, and never answers empt
   assert(badFlag.code !== 0, 'and is a non-zero exit');
 });
 
+// ── R2g — rg reimplemented the scan, so it never touched the trigram index ────
+// The index lives under fs.grep. rg globbed and read files itself, which meant
+// the ONE search path the agent is told to use was the one that never used it.
+await test('R2g: rg delegates to fs.grep, so the agent path gets the index', async () => {
+  const fs = createFileops({ backend: new MemoryBackend(), index: true, exclusive: true });
+  for (let i = 0; i < 60; i++) await fs.write(`src/m${i}.mjs`, `const v = ${i};\n`, { createParents: true });
+  await fs.write('src/needle.mjs', 'export const rareSymbolXYZ = 1;\n', { createParents: true });
+  const registry = buildRigRegistry({ fs });
+  const grant = createGrant({ prefixes: [''], scopes: ['fs:read', 'fs:write', 'fs:remove'] });
+  const face = createAgentFace({ registry, grant, opLog: createOpLog({ fs: createFileops({ backend: new MemoryBackend() }) }), actor: 'a' });
+  const sh = createShell({ registry, face });
+  await new Promise((r) => setTimeout(r, 4));
+  await sh.feed('rg rareSymbolXYZ');            // builds the index
+  await sh.feed('rg rareSymbolXYZ');            // settles it
+  fs.searchStats({ reset: true });
+  const out = await sh.feed('rg rareSymbolXYZ');
+  assert(String(out.output || '').includes('needle.mjs'), 'still finds the symbol');
+  const viaGrep = fs.searchStats().recent.find((r) => r.via === 'fs.grep');
+  assert(viaGrep, 'rg went through fs.grep rather than scanning by itself');
+  assert(viaGrep.indexUsed, 'and fs.grep used the index');
+  assert(viaGrep.filesRead < 10, `and read few files, not all 61: read ${viaGrep.filesRead}`);
+});
+
 await test('R3a: help describes a curated subset and says flags are refused', async () => {
   const { run } = await shell();
   const h = (await run('help')).out;
