@@ -150,6 +150,39 @@ export function boundedText(text, { maxLines = 200, maxBytes = 4000, tailLines =
   return truncated ? out + `\n… (output truncated: ${lines.length} lines / ${s.length} bytes)` : out;
 }
 
+// ── spill at produce-time (F5) ──
+//
+// An oversized tool result used to enter the transcript whole and only get elided later, by
+// compaction, once the WHOLE transcript was already over budget — which means the run paid
+// for it at least once, and on a small local window a single 200 KB result could blow the
+// context before anything had a chance to shrink it. Capping here, where the result is
+// produced, keeps it out of the surface entirely.
+//
+// What the model sees is a head + tail preview and a locator that RESOLVES: the record keeps
+// the full result (the recorder stores what was produced alongside what was sent), and the
+// `history` tool searches it. The notice's own cost is reserved INSIDE the cap, so the
+// replacement is never bigger than the limit it enforces.
+export const DEFAULT_TOOL_OUTPUT_CAP = 20_000;
+
+export function spillToolOutput(result, { name = '', cap = DEFAULT_TOOL_OUTPUT_CAP } = {}) {
+  const text = String(result == null ? '' : result);
+  const limit = Number.isFinite(cap) && cap > 0 ? Math.floor(cap) : 0;
+  if (!limit || text.length <= limit) return { sent: text, spilled: false, chars: text.length };
+  const notice = (elided) =>
+    `\n… (${elided} chars elided — the FULL result of \`${name || 'this call'}\` is in this run's record; find it with the \`history\` tool, searching for a distinctive string from the head or tail above.) …\n`;
+  // Reserve the notice's own length before splitting, so head + notice + tail <= cap. The
+  // notice length depends on the elided count, which depends on the notice length; one
+  // iteration on an upper bound settles it without a fixed point.
+  const reserve = notice(text.length).length;
+  const room = Math.max(2, limit - reserve);
+  const headN = Math.ceil(room * 0.6);
+  const tailN = room - headN;
+  const head = text.slice(0, headN);
+  const tail = tailN > 0 ? text.slice(-tailN) : '';
+  const sent = head + notice(text.length - head.length - tail.length) + tail;
+  return { sent, spilled: true, chars: text.length };
+}
+
 // A capped, model-facing rendering of a verifier verdict — the exact text fed
 // back as the repair prompt / task_done rejection.
 function gateFeedback(verdict, cap) {
@@ -282,6 +315,7 @@ export async function runAgentLoop({
   workspaceHash = null,    // optional async () => string — gate memoization by workspace state
   budget = null,           // optional { turns, tokens, wallClockMs } — the completion budget ladder
   gateOutputCap = { maxLines: 200, maxBytes: 4000 }, // how much gate output is fed back
+  toolOutputCap = DEFAULT_TOOL_OUTPUT_CAP, // F5: chars of a single tool result that reach the surface
   now = () => Date.now(),  // injectable clock (wall-clock budget is testable headlessly)
   signal = null,           // optional AbortSignal — cooperative stop between turns/tools
 }) {
@@ -505,8 +539,19 @@ export async function runAgentLoop({
         }
         onEvent({ type: 'tool-result', name, id, result: resultText, step });
       }
-      convo.push({ role: 'tool', tool_call_id: id, content: String(resultText ?? '') });
-      stepResults.push(String(resultText ?? ''));
+      // F5: cap what enters the SURFACE; the record keeps what was produced. If the recorder
+      // refuses the event, the elision has nowhere to point, so the original stays inline —
+      // a storage failure must not turn a successful call into a lost result.
+      let sentText = String(resultText ?? '');
+      const spill = spillToolOutput(sentText, { name, cap: toolOutputCap });
+      if (spill.spilled) {
+        let stored = true;
+        try { onEvent({ type: 'tool-spilled', name, id, step, chars: spill.chars, sent: spill.sent }); }
+        catch { stored = false; }
+        if (stored) sentText = spill.sent;
+      }
+      convo.push({ role: 'tool', tool_call_id: id, content: sentText });
+      stepResults.push(sentText);
     }
 
     // Did this turn's calls all come back refused? A refusal is a guard speaking (the skills

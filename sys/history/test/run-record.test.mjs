@@ -15,7 +15,7 @@ import { RUN_EVENTS, createRunRecorder, loadRecord, foldStatus, foldLog, foldTra
          OUTCOME_SIGNALS, foldOutcome, foldReuse, foldStopReasons, stopReasonsLine,
          searchRecords, scopeEntries, readEvent, historyTool, HISTORY_ROLES, foldRecovery, recoveryNote,
          foldStagnation, stagnationNudge, foldSessionContext, foldDecisions,
-         foldSurface, compactionOrphaned, reconstructionCheck } from '../run-record.mjs';
+         foldSurface, compactionOrphaned, reconstructionCheck, joined } from '../run-record.mjs';
 
 let passed = 0; const failures = [];
 async function test(n, fn) { try { await fn(); passed++; } catch (e) { failures.push({ n, message: e.message }); } }
@@ -855,6 +855,43 @@ await test('F7 x F1: a NUDGED run still reconstructs from its chain — the loop
   // the control: drop the nudge event and the same request no longer reconstructs
   const without = rec.events().filter((e) => e.tool !== 'run.nudged');
   eq(reconstructionCheck(sent, without, rec.resolve).ok, false, 'without the recorded nudge the request does NOT reconstruct — which is why it must be recorded');
+});
+
+await test('F5 x F1: a SPILLED result reconstructs — the fold sends the capped form, history keeps the whole', async () => {
+  const rec = createRunRecorder({ app: 'anvil', principal: 'p' });
+  const msgs = [{ role: 'system', content: 'sys' }, { role: 'user', content: 'go' }];
+  await rec.start({ messages: msgs });
+  // NOT base64-shaped: a 30k unbroken alnum blob is reported as binary by eventText, and
+  // this test is about a long TEXT result.
+  const huge = 'START\n' + 'needle line qqqq\n'.repeat(2000) + 'END';
+  const seen = [];
+  let sent = null;
+  let turn = 0;
+  const infer = rec.wrapInfer(async ({ messages }) => {
+    sent = messages;
+    return turn++ === 0
+      ? { content: '', toolCalls: [{ id: 'b', function: { name: 'shell', arguments: '{"command":"cat big"}' } }] }
+      : { content: 'done', toolCalls: [] };
+  }, { onDivergence: (d) => seen.push(d) });
+  const r = await runAgentLoop({
+    messages: msgs, tools: [shellTool()], infer,
+    executeTool: async () => huge,
+    onEvent: rec.onEvent, toolOutputCap: 1000, maxSteps: 3,
+  });
+  await rec.finish(r); await rec.settled();
+
+  const folded = foldTranscript(rec.events(), rec.resolve);
+  const toolMsg = folded.find((m) => m.role === 'tool');
+  assert(toolMsg.content.length <= 1000, `the fold reproduces the CAPPED form: ${toolMsg.content.length} chars`);
+  eq(toolMsg.content, r.messages.find((m) => m.role === 'tool').content, 'byte-identical to what the loop actually sent');
+  eq(seen.length, 0, `no divergence on a spilled run: ${JSON.stringify(seen)}`);
+  eq(reconstructionCheck(sent, rec.events(), rec.resolve).ok, true, 'the second request still equals the fold');
+
+  // and the WHOLE result is still retrievable — that is what makes the locator honest
+  const hits = searchRecords([{ runId: 'r1', record: rec }], { query: 'needle line' });
+  assert(hits.length > 0, 'the elided body is findable through history');
+  const ev = joined(rec.events(), rec.resolve).find((e) => e.tool === 'tool.responded');
+  eq(String(ev.output.result), huge, 'the record holds the complete result, not the preview');
 });
 
 await test('F4: compaction is a LOGGED surface replace — the sent transcript is derivable', async () => {

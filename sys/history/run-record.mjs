@@ -36,7 +36,7 @@ export const RUN_EVENTS = Object.freeze([
   'llm.responded',    // input: { request_hash, step }         output: { content, toolCalls, finishReason }
   'assistant.said',   // input: { step }                       output: { content }
   'tool.called',      // input: { id, name, args, step }       output: {}
-  'tool.responded',   // input: { id, name, args_hash, step }  output: { result }
+  'tool.responded',   // input: { id, name, args_hash, step }  output: { result, sent }  (F5: `sent` is the capped surface form when it differs)
   'tool.failed',      // input: { id, name, step }             output: { error }
   'verify.passed',    // input: { step }                       output: { verdict }
   'verify.failed',    // input: { step, round, ran }           output: { verdict }
@@ -44,6 +44,7 @@ export const RUN_EVENTS = Object.freeze([
   'run.checkpoint',   // input: { step }                        output: { handoff }  (B4: a rollover landmark)
   'run.compacted',    // input: { method, from, to, step }      output: { replacement }  (F4: a logged surface replace)
   'run.nudged',       // input: { step, times, denied }         output: { content }  (F7: the loop's own escalating reminder)
+  'tool.spilled',     // input: { id, name, step, chars }       output: { sent }  (F5: the capped form the model actually saw)
 ]);
 
 // The loop's onEvent types this recorder understands. 'done' and the pre-stop
@@ -57,6 +58,7 @@ const LOOP_TO_VERB = Object.freeze({
   'assistant': 'assistant.said',
   'tool-call': 'tool.called',
   'tool-result': 'tool.responded',
+  'tool-spilled': 'tool.spilled',
   'tool-error': 'tool.failed',
   'repeat-nudge': 'run.nudged',
   'verify-pass': 'verify.passed',
@@ -120,6 +122,12 @@ export function createRunRecorder({ app = 'anvil', principal = 'local', grant_id
         }
         case 'tool.responded':
           enqueue(verb, () => ({ input: { id: e.id, name: e.name, args_hash: argsHashes.get(e.id) ?? null, step: s }, output: { result: String(e.result ?? '') } }));
+          break;
+        // F5: the loop capped this result before it entered the surface. The FULL text is
+        // already on the chain from tool.responded; this records only what was SENT, so
+        // foldTranscript reproduces the request and `history` still serves the whole thing.
+        case 'tool.spilled':
+          enqueue(verb, () => ({ input: { id: e.id, name: e.name, step: s, chars: e.chars ?? null }, output: { sent: String(e.sent ?? '') } }));
           break;
         case 'tool.failed': enqueue(verb, () => ({ input: { id: e.id, name: e.name, step: s }, output: { error: String(e.error ?? '') } })); break;
         case 'verify.passed': enqueue(verb, () => ({ input: { step: s }, output: { verdict: e.verdict ?? null } })); break;
@@ -316,6 +324,15 @@ export function foldTranscript(events, resolve) {
         break;
       }
       case 'tool.responded': flushAssistant(); out.push({ role: 'tool', tool_call_id: inp.id, content: String(o.result ?? '') }); break;
+      // F5: the surface carried the capped form. The full result stays on the chain (and in
+      // `history`); the transcript is patched to what was actually sent, so a replay of this
+      // run sends the same bytes it sent the first time.
+      case 'tool.spilled': {
+        for (let i = out.length - 1; i >= 0; i--) {
+          if (out[i].role === 'tool' && out[i].tool_call_id === inp.id) { out[i] = { ...out[i], content: String(o.sent ?? '') }; break; }
+        }
+        break;
+      }
       case 'tool.failed': flushAssistant(); out.push({ role: 'tool', tool_call_id: inp.id, content: `Error: ${o.error ?? ''}` }); break;
       // Coordination, not the owner: a carried gate verdict must never read as the owner's
       // instruction (B3). The tag survives into the next run's transcript.

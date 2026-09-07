@@ -15,7 +15,8 @@ import { createShell } from '../../rig/cli/shell.mjs';
 import { runAgentLoop, shellTool, makeShellExecutor, taskDoneTool,
   estimateTokens, boundedText, interceptBashCommand,
   REPEAT_NUDGE_AT, repeatNudge, stepSignature,
-  usageInputTokens, usageOutputTokens } from '../agent-loop.mjs';
+  usageInputTokens, usageOutputTokens,
+  spillToolOutput } from '../agent-loop.mjs';
 
 let passed = 0;
 const failures = [];
@@ -663,6 +664,70 @@ await test('the anchor counts only the delta since the reported request (F6)', a
     maxSteps: 3,
   });
   eq(survives.stop, 'max-steps', `a generous budget is not tripped by re-counting the prefix: ${survives.stop}`);
+});
+
+// ─────────────────────────────── spill at produce-time (F5) ──
+
+await test('spillToolOutput caps at produce time, reserving the notice inside the cap (F5)', () => {
+  const body = 'HEADMARK' + 'z'.repeat(50000) + 'TAILMARK';
+  const r = spillToolOutput(body, { name: 'shell', cap: 2000 });
+  assert(r.spilled, 'an oversized result is spilled');
+  eq(r.chars, body.length, 'it reports the original size');
+  assert(r.sent.length <= 2000, `the replacement fits INSIDE the cap it enforces: ${r.sent.length} > 2000`);
+  assert(r.sent.startsWith('HEADMARK'), 'the head survives');
+  assert(r.sent.endsWith('TAILMARK'), 'the tail survives');
+  assert(/history/.test(r.sent), `the locator names a tool that can actually retrieve it: ${r.sent.slice(0, 300)}`);
+  assert(/shell/.test(r.sent), 'and names the call it came from');
+  assert(/\d+ chars elided/.test(r.sent), 'it is honest about how much it dropped');
+  // under the cap nothing happens at all — byte-identical, not merely similar
+  const small = 'x'.repeat(100);
+  const u = spillToolOutput(small, { cap: 2000 });
+  eq(u.sent, small, 'a small result passes through unchanged');
+  eq(u.spilled, false, 'and is not marked spilled');
+  eq(spillToolOutput('x'.repeat(2000), { cap: 2000 }).spilled, false, 'exactly at the cap is not spilled');
+  eq(spillToolOutput('x'.repeat(2001), { cap: 2000 }).spilled, true, 'one over is');
+  // a cap of 0 / nonsense disables it rather than eliding everything
+  eq(spillToolOutput(body, { cap: 0 }).spilled, false, 'cap 0 disables the spill');
+  eq(spillToolOutput(null, { cap: 10 }).sent, '', 'a null result is a string, not a crash');
+});
+
+await test('an oversized result never enters the transcript, and the record keeps the whole thing (F5)', async () => {
+  const huge = 'START' + 'q'.repeat(30000) + 'END';
+  const events = [];
+  const r = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }],
+    tools: [shellTool()],
+    infer: scriptedInfer([{ content: '', toolCalls: [call('shell', { command: 'cat big' }, 'b')] }, { content: 'done', toolCalls: [] }]),
+    executeTool: async () => huge,
+    onEvent: (e) => events.push(e),
+    toolOutputCap: 1000,
+    maxSteps: 3,
+  });
+  const toolMsg = r.messages.find((m) => m.role === 'tool');
+  assert(toolMsg.content.length <= 1000, `the surface carried ${toolMsg.content.length} chars past a 1000 cap`);
+  assert(!toolMsg.content.includes('q'.repeat(2000)), 'the bulk never reached the transcript');
+  // the FULL text is still reported to the recorder, so history can serve it
+  const full = events.find((e) => e.type === 'tool-result');
+  eq(full.result, huge, 'the recorder was given the complete result');
+  const spill = events.find((e) => e.type === 'tool-spilled');
+  assert(spill && spill.chars === huge.length, `the spill is announced with its true size: ${JSON.stringify(spill && spill.chars)}`);
+});
+
+await test('a recorder that REFUSES the spill leaves the original inline — a success is not turned into a loss (F5)', async () => {
+  const huge = 'START' + 'q'.repeat(30000) + 'END';
+  const r = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }],
+    tools: [shellTool()],
+    infer: scriptedInfer([{ content: '', toolCalls: [call('shell', { command: 'cat big' }, 'b')] }, { content: 'done', toolCalls: [] }]),
+    executeTool: async () => huge,
+    // the storage seam fails exactly for the spill, and only for it
+    onEvent: (e) => { if (e.type === 'tool-spilled') throw new Error('record unavailable'); },
+    toolOutputCap: 1000,
+    maxSteps: 3,
+  });
+  const toolMsg = r.messages.find((m) => m.role === 'tool');
+  eq(toolMsg.content, huge, 'the whole result stayed inline because the elision had nowhere to point');
+  eq(r.stop, 'done', 'and the run finished normally rather than erroring');
 });
 
 if (failures.length) {
