@@ -23,10 +23,17 @@ const DEFAULT_READ_CAP = 8 << 20; // 8 MiB
  * @param {object} opts.backend            storage backend (MemoryBackend in tests)
  * @param {string} [opts.mount='']         mount prefix; the kernel is confined to it
  * @param {number} [opts.readCapBytes]     refuse reads larger than this
+ * @param {object} [opts.fs]               an existing createFileops to write THROUGH
+ *
+ * Pass `fs` when the caller already holds a fileops over this backend. Building a
+ * second one here would mean the kernel's writes land in the backend without the
+ * caller's instance knowing — which silently staleness-breaks a trigram index
+ * running in `exclusive` mode. When `fs` is given, `mount` must already be its
+ * root; it is not applied twice.
  */
-export function createFsBridge({ backend, mount = '', readCapBytes = DEFAULT_READ_CAP }) {
-  if (!backend) throw new Error('createFsBridge requires a backend');
-  const fs = createFileops({ backend, root: mount });
+export function createFsBridge({ backend, mount = '', readCapBytes = DEFAULT_READ_CAP, fs: sharedFs = null }) {
+  if (!backend && !sharedFs) throw new Error('createFsBridge requires a backend or an fs');
+  const fs = sharedFs || createFileops({ backend, root: mount });
 
   async function capGuard(path) {
     const st = await fs.stat(path);

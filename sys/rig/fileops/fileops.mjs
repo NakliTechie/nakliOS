@@ -71,8 +71,9 @@ function globToRegExp(glob) {
  * @param {Function} [opts.onSearch]    called with one SearchStat per grep (measurement only)
  * @param {boolean} [opts.index=false]   build a trigram index to skip non-candidate files
  * @param {number}  [opts.indexMaxBytes] per-file size ceiling for indexing (default 4 MiB)
+ * @param {boolean} [opts.exclusive]   nothing outside this fileops writes to the backend
  */
-export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 1000, onSearch = null, index = false, indexMaxBytes = 4 * 1024 * 1024 }) {
+export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 1000, onSearch = null, index = false, indexMaxBytes = 4 * 1024 * 1024, exclusive = false }) {
   if (!backend) throw new Error('createFileops requires a backend');
   const rootPrefix = String(root || '').replace(/\/+$/, '');
 
@@ -184,12 +185,23 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
   // Opt-in. Decides which files to OPEN; never which lines match — the caller
   // always verifies with the real regex, so the index cannot invent a result.
   //
-  // Staleness is handled by re-stat'ing on every search rather than by trusting
-  // a watcher or an ownership assumption. `read` is stat + readBinary, so a
-  // grep already paid one stat per file; the index adds nothing there and skips
-  // the readBinary for non-candidates. That is the half that costs bytes, and
-  // it makes an externally edited host-fs file impossible to miss — the case
-  // the provisional decision in §8.3 left open.
+  // Staleness has two modes, because the honest answer differs by backend.
+  //
+  //   exclusive: false (default) — anything may write behind us, so every search
+  //     re-stats every file. Correct against an external editor or a branch
+  //     switch. Costs one round trip per file: measured on 300 OPFS files, the
+  //     stat sweep IS the indexed grep (188 ms of 176 ms measured separately),
+  //     capping the win at ~1.9x since `read` is 1.92x `stat`.
+  //
+  //   exclusive: true — this fileops is the only writer, so the mutators below
+  //     invalidate exactly, and a search stats only files it has never seen.
+  //     The walk still runs (3 ms per 300 files) so new and deleted files are
+  //     found. This is the mode that actually pays: no per-file round trip at all
+  //     for an unchanged workspace.
+  //
+  // The caller declares it, because the caller is where the knowledge lives: an
+  // OPFS app workspace is exclusive, a user-picked disk folder is not. Guessing
+  // it from the backend class cannot work — OPFS *is* FsaBackend underneath.
   const idx = {
     postings: new Map(),        // triHash -> Set<path>
     files: new Map(),           // path -> { mtimeMs, size, hashes }
@@ -203,6 +215,13 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
       if (s) { s.delete(path); if (!s.size) idx.postings.delete(h); }
     }
     idx.files.delete(path);
+  }
+
+  // Drop a path and everything beneath it (a recursive remove takes a subtree).
+  function indexDropSubtree(path) {
+    indexDrop(path);
+    const prefix = path + '/';
+    for (const p of [...idx.files.keys()]) if (p.startsWith(prefix)) indexDrop(p);
   }
 
   function indexAdd(path, text, st) {
@@ -261,6 +280,7 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     if (st && st.type === 'dir') return err('EISDIR', `is a directory: ${r.path}`, { path: r.path });
     if (opts.createParents) await ensureParents(r.path);
     await backend.write(r.safe, bytes);
+    indexDrop(r.path); // exact invalidation — the whole basis of exclusive mode
     return { ok: true, path: r.path };
   }
 
@@ -335,10 +355,12 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
       // deepest-first so a backend that tracks explicit dir markers stays consistent
       for (const d of dirs.sort((a, b) => b.split('/').length - a.split('/').length)) await deleteDir(d);
       await deleteDir(r.safe);
+      indexDropSubtree(r.path);
       return { ok: true, path: r.path };
     }
     const e = await deleteFile(r.safe);
     if (e) return e;
+    indexDrop(r.path);
     return { ok: true, path: r.path };
   }
 
@@ -386,6 +408,7 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     const applied = applyPatch(text, unifiedDiff);
     if (!applied.ok) return applied; // EPATCH names the hunk; nothing written (atomic)
     await backend.write(r.safe, enc.encode(applied.result));
+    indexDrop(r.path);
     return { ok: true, path: r.path, revert: reversePatch(unifiedDiff) };
   }
 
@@ -430,10 +453,13 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
       const seen = new Set();
       for (const p of globbed.matches) {
         seen.add(p);
+        const e = idx.files.get(p);
+        // Exclusive mode: a file we already hold is current by construction —
+        // every write through this fileops dropped it from the index.
+        if (e && exclusive) continue;
         const st = await stat(p);
         if (!st.ok) { indexDrop(p); continue; }
         filesStatted++;
-        const e = idx.files.get(p);
         if (e && e.mtimeMs === st.stat.mtimeMs && e.size === st.stat.size) continue;
         if (st.stat.size > indexMaxBytes) { indexDrop(p); continue; } // stays a full-read candidate
         const rd = await read(p, { encoding: 'utf-8' });

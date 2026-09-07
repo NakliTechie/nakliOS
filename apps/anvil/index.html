@@ -269,9 +269,14 @@
   let backend, fs, git, registry, grant, opLog, face, shell, kilnRef=null;
   let workspaceLabel = 'memory · scratch';
   let wsRoot = ''; // fileops root for the active mount (subagent overlays match it)
-  function mountWorkspace(newBackend, label, root=''){
+  // `exclusive` says nothing outside this fileops writes to the backend, which
+  // lets the trigram index skip its per-file stat sweep and rely on exact
+  // invalidation from the mutators instead. True for OPFS and memory (private to
+  // this app); FALSE for a picked disk folder or the host Crate, where the user's
+  // own editor, Finder or the Files app can write behind us.
+  function mountWorkspace(newBackend, label, root='', opts={}){
     backend = newBackend; workspaceLabel = label; wsRoot = root;
-    fs = createFileops({ backend, root });
+    fs = createFileops({ backend, root, index: true, exclusive: !!opts.exclusive });
     // Remote git (clone/fetch/push) routes ALL network through the sovereign egress
     // (naklios.net → nakli-egress / local bridge). Only wired when a host egress
     // backend is present; else git.clone/push report "needs a Transport". Public
@@ -299,7 +304,9 @@
       // Isolated (standalone tab): the worker Kiln — non-blocking, interruptible.
       try {
         const rigModuleSource = generateRigModule(registry).source;
-        const fsBridge = createFsBridge({ backend, mount:'' });
+        // Share the mounted fileops rather than letting the bridge build its own:
+        // Python's writes must invalidate the search index the agent then greps.
+        const fsBridge = createFsBridge({ backend, mount:'', fs });
         kiln = createKiln({
           sizeBytes: 12 * 1024 * 1024,
           consent: () => true,
@@ -354,11 +361,11 @@
         await fs.remove('.anvil-probe').catch(()=>{});
         if(!(rd && rd.ok && rd.data==='ok')) throw new Error('host fs probe failed');
       } else {
-        mountWorkspace(await createOpfsBackend({ path:'anvil/ws/'+projectId }), 'Browser · '+name);
+        mountWorkspace(await createOpfsBackend({ path:'anvil/ws/'+projectId }), 'Browser · '+name, '', { exclusive:true });
       }
     }catch(_){
-      try{ mountWorkspace(await createOpfsBackend({ path:'anvil/ws/'+projectId }), 'Browser · '+name); }
-      catch(__){ mountWorkspace(new MemoryBackend(), 'memory · scratch'); }
+      try{ mountWorkspace(await createOpfsBackend({ path:'anvil/ws/'+projectId }), 'Browser · '+name, '', { exclusive:true }); }
+      catch(__){ mountWorkspace(new MemoryBackend(), 'memory · scratch', '', { exclusive:true }); }
     }
     mountedProject = projectId;
     await seedIfEmpty();

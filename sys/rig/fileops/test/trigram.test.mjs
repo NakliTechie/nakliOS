@@ -166,11 +166,79 @@ await test('an unindexable pattern falls back and still answers', async () => {
   assert(r.matches.length > 0, 'still found matches on the fallback path');
 });
 
+// ── exclusive mode ────────────────────────────────────────────────────────
+// Where a bug would be SILENT: no stat sweep, so correctness rests entirely on
+// the mutators invalidating exactly. The whole battery runs here too.
+
+await test('DIFFERENTIAL (exclusive): identical to unindexed, every pattern', async () => {
+  const plain = await build({ index: false });
+  const excl = await build({ index: true, exclusive: true });
+  const diffs = [];
+  for (const pat of PATTERNS) {
+    for (const maxResults of [1000, 2]) {
+      const a = await plain.grep(pat, { maxResults });
+      const b = await excl.grep(pat, { maxResults });
+      if (JSON.stringify(a) !== JSON.stringify(b)) diffs.push(`${pat} (cap ${maxResults})`);
+    }
+  }
+  assert(diffs.length === 0, `${diffs.length} divergence(s): ${diffs.join(', ')}`);
+});
+
+await test('DIFFERENTIAL (exclusive): every mutator invalidates exactly', async () => {
+  const plain = await build({ index: false });
+  const excl = await build({ index: true, exclusive: true });
+  for (const fs of [plain, excl]) {
+    await fs.grep('parseFact');                                   // warm
+    await fs.write('src/parse.js', 'nothing in here now\n');      // write over an indexed file
+    await fs.write('src/added.js', 'parseFact added later\n');    // brand new file
+    await fs.patch('src/added.js',
+      '--- a\n+++ b\n@@ -1 +1 @@\n-parseFact added later\n+patched parseFact line\n'); // patch
+    await fs.copy('src/util.ts', 'src/util-copy.ts');             // copy → new path
+    await fs.move('docs/readme.md', 'docs/moved.md');             // move → both paths
+    await fs.remove('deep', { recursive: true });                 // recursive subtree removal
+  }
+  for (const pat of ['parseFact', 'nothing in here', 'patched', 'deepThing', 'COLOR', 'Title', 'added later']) {
+    const a = await plain.grep(pat);
+    const b = await excl.grep(pat);
+    eq(JSON.stringify(b), JSON.stringify(a), `after mutations: ${pat}`);
+  }
+});
+
+await test('exclusive mode does no per-file stat on an unchanged workspace', async () => {
+  const excl = await build({ index: true, exclusive: true });
+  await excl.grep('parseFact');                 // cold: stats + reads everything
+  excl.searchStats({ reset: true });
+  await excl.grep('deepThing');                 // warm: should stat nothing
+  const rec = excl.searchStats().recent[0];
+  eq(rec.filesStatted, 0, 'no stats on a warm exclusive index');
+  eq(rec.filesRead, rec.candidates, 'read only the candidates');
+});
+
+await test('non-exclusive mode DOES stat, and that is what catches an outside write', async () => {
+  const shared = await build({ index: true });  // exclusive defaults to false
+  await shared.grep('parseFact');
+  shared.searchStats({ reset: true });
+  await shared.grep('deepThing');
+  assert(shared.searchStats().recent[0].filesStatted > 0, 'stats every file');
+});
+
+await test('exclusive mode trades away outside-write detection, by contract', async () => {
+  // Documented, not a bug: declaring `exclusive` asserts nothing else writes here.
+  // This test pins the consequence so nobody sets the flag by accident.
+  const backend = new MemoryBackend();
+  const fs = createFileops({ backend, index: true, exclusive: true });
+  await fs.write('a.txt', 'alpha\n', { createParents: true });
+  await fs.grep('alpha');
+  await backend.write('a.txt', new TextEncoder().encode('omega\n')); // behind our back
+  const r = await fs.grep('omega');
+  eq(r.matches.length, 0, 'exclusive mode does NOT see a write it was promised would not happen');
+});
+
 // A randomised differential sweep: the fixed battery above encodes what I
 // thought to check, which is exactly the set most likely to miss something.
 await test('DIFFERENTIAL: randomised patterns, 400 cases', async () => {
   const plain = await build({ index: false });
-  const indexed = await build({ index: true });
+  const indexed = await build({ index: true, exclusive: true });
   const alphabet = 'abcdefghijklmnopqrstuvwxyzFC.?+*|()[]\\^$ 123';
   let seed = 20260907;
   const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
