@@ -209,6 +209,47 @@ await test('R3b: git clone/fetch/push actually DISPATCH, not just print usage', 
 });
 
 // ── R3a — the advertised surface matches the built one ───────────────────────────────────
+// ── R2f — rg accepted ANY flag and quietly ignored it ────────────────────────
+// Observed live: an agent asked "which .py files define solve" four different
+// ways and got four empty answers with exit 0, then kept retrying. `--type py`
+// parsed "py" as the search PATH. Every case below must either work or say why.
+await test('R2f: rg implements its flags or refuses them, and never answers empty in silence', async () => {
+  const { run } = await shell();
+  await run("printf 'def solve(x):\n    return x\n' > a.py");
+  await run('mkdir sub');
+  await run("printf 'def solve(y):\n    return y\n' > sub/b.py");
+  await run("printf 'function solve(){}\n' > c.js");
+
+  const plain = await run('rg "def solve"');
+  assert(plain.out.split('\n').length === 2, `bare rg finds both: ${plain.out}`);
+
+  const typed = await run('rg "def solve" --type py');
+  assert(typed.out.split('\n').length === 2, `--type py finds both .py files, got: ${typed.out}`);
+  assert(!typed.out.includes('.js'), '--type py excludes the .js file');
+
+  const jsOnly = await run('rg "solve" -t js');
+  assert(jsOnly.out.includes('c.js') && !jsOnly.out.includes('.py'), `-t js selects only js: ${jsOnly.out}`);
+
+  const globbed = await run('rg "solve" -g "*.py"');
+  assert(globbed.out.split('\n').length === 2, `-g "*.py" finds both: ${globbed.out}`);
+
+  const listed = await run('rg --files -t py');
+  assert(listed.out.split('\n').length === 2, `--files -t py lists both: ${listed.out}`);
+
+  // The three ways it used to lie: a bad path, an unknown type, an unknown flag.
+  const badPath = await run('rg ".py$" --files');
+  assert(/no such file/.test(badPath.out), `a non-existent path is reported: ${badPath.out}`);
+  assert(badPath.code !== 0, 'and is a non-zero exit');
+
+  const badType = await run('rg "solve" --type cobol');
+  assert(/unknown type/.test(badType.out) && /py/.test(badType.out), `unknown type names the known ones: ${badType.out}`);
+  assert(badType.code !== 0, 'and is a non-zero exit');
+
+  const badFlag = await run('rg "solve" -A 3');
+  assert(/unsupported flag -A/.test(badFlag.out), `an unimplemented flag is refused: ${badFlag.out}`);
+  assert(badFlag.code !== 0, 'and is a non-zero exit');
+});
+
 await test('R3a: help describes a curated subset and says flags are refused', async () => {
   const { run } = await shell();
   const h = (await run('help')).out;

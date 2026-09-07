@@ -196,6 +196,28 @@ function renderGit(sub, res) {
   return 'ok';
 }
 
+// The file types `rg -t` knows. Small and explicit: an agent that asks for a
+// type we do not know gets told, with the list, rather than an empty result.
+const RG_TYPES = Object.freeze({
+  py: ['py'], js: ['js', 'mjs', 'cjs'], ts: ['ts', 'tsx'], jsx: ['jsx'],
+  html: ['html', 'htm'], css: ['css'], json: ['json'], md: ['md', 'markdown'],
+  rust: ['rs'], go: ['go'], java: ['java'], c: ['c', 'h'], cpp: ['cpp', 'cc', 'hpp'],
+  sh: ['sh', 'bash', 'zsh'], yaml: ['yml', 'yaml'], toml: ['toml'], xml: ['xml'],
+  sql: ['sql'], txt: ['txt'], svg: ['svg'],
+});
+
+function globToRe(glob) {
+  let re = '^';
+  for (let i = 0; i < glob.length; i++) {
+    const c = glob[i];
+    if (c === '*') { if (glob[i + 1] === '*') { re += '.*'; i++; } else re += '[^/]*'; }
+    else if (c === '?') re += '[^/]';
+    else if ('\\^$.|+()[]{}'.includes(c)) re += '\\' + c;
+    else re += c;
+  }
+  return new RegExp(re + '$');
+}
+
 export function createShell({ registry, face, cwd = '', kiln = null } = {}) {
   if (!registry || !face) throw new Error('createShell requires { registry, face }');
   const state = { cwd, history: [], vars: new Map([['HOME', '/']]) };
@@ -490,46 +512,109 @@ export function createShell({ registry, face, cwd = '', kiln = null } = {}) {
       return { text: `sed: unsupported script: ${script}`, code: 1 };
     },
     // rg — recursive content search (ripgrep-flavoured), the tool coding agents
-    // reach for by default. `rg PATTERN [dir]`; -i ignore-case, -l files-only,
-    // -n line numbers (on by default when printing matches).
+    // reach for by default, so its flag surface has to be honest. It used to
+    // accept ANY flag and quietly ignore it: `rg "def solve" --type py` parsed
+    // "py" as the search PATH, found nothing, and returned empty with no error —
+    // so an agent asked the same question four ways and got four blanks. Now it
+    // implements -i/-l/-n/-c/--files/-t/--type/-g/--glob and REFUSES the rest,
+    // like every other builtin here.
     async rg(argv) {
-      const flags = argv.filter((a) => a.startsWith('-'));
-      const rest = argv.filter((a) => !a.startsWith('-'));
-      const pattern = rest[0] || '';
-      const base = rest[1] ? normalizePath(state.cwd, rest[1]) : state.cwd;
-      const filesOnly = flags.some((f) => f.includes('l'));
-      const re = new RegExp(pattern, flags.some((f) => f.includes('i')) ? 'i' : '');
-      const t0 = Date.now();
-      let filesRead = 0;
-      let bytesRead = 0;
-      const g = await face.invoke('fs.glob', { pattern: (base ? base + '/' : '') + '**', cwd: '' });
-      if (!g.ok) return { text: `rg: ${g.message || 'search failed'}`, code: 1 };
+      const rawFlags = argv.filter((a) => a.startsWith('-'));
+      const bad = unsupportedFlag('rg', rawFlags, ['i', 'l', 'n', 'c', '--files', '--type', '--glob', 't', 'g']);
+      if (bad) return flagErr('rg', bad);
+
+      // -t/--type and -g/--glob take a value, which must not be read as a path.
+      const positionals = []; const types = []; const globs = [];
+      let ignoreCase = false, filesOnly = false, listFiles = false, countOnly = false;
+      for (let i = 0; i < argv.length; i++) {
+        const a = argv[i];
+        if (a === '--files') { listFiles = true; continue; }
+        if (a === '-t' || a === '--type') { types.push(argv[++i]); continue; }
+        if (a === '-g' || a === '--glob') { globs.push(argv[++i]); continue; }
+        if (a.startsWith('--type=')) { types.push(a.slice(7)); continue; }
+        if (a.startsWith('--glob=')) { globs.push(a.slice(7)); continue; }
+        if (a.startsWith('-') && a.length > 1) {
+          for (const ch of a.slice(1)) {
+            if (ch === 'i') ignoreCase = true;
+            else if (ch === 'l') filesOnly = true;
+            else if (ch === 'c') countOnly = true;
+          }
+          continue;
+        }
+        positionals.push(a);
+      }
+
+      const pattern = listFiles ? null : (positionals.shift() ?? '');
+      const paths = positionals.length ? positionals : [state.cwd || ''];
+      const extsFor = (ty) => (RG_TYPES[ty] || null);
+      for (const ty of types) if (!extsFor(ty)) {
+        return { text: `rg: unknown type ${ty} — known types: ${Object.keys(RG_TYPES).sort().join(' ')}`, code: 2 };
+      }
+      const wantExts = types.length ? new Set(types.flatMap(extsFor)) : null;
+      const globRes = globs.map((g) => globToRe(g));
+
+      // Collect candidate files from every path argument: a file is itself, a
+      // directory is everything under it. Previously only the FIRST extra
+      // positional was honoured, and only ever as a directory.
+      const seen = new Set(); const files = [];
+      const missing = [];
+      for (const raw of paths) {
+        const norm = normalizePath(state.cwd, raw);
+        const st = await face.invoke('fs.stat', { path: norm });
+        if (st && st.ok && st.stat && st.stat.type === 'file') {
+          if (!seen.has(norm)) { seen.add(norm); files.push(norm); }
+          continue;
+        }
+        const g = await face.invoke('fs.glob', { pattern: (norm ? norm + '/' : '') + '**', cwd: '' });
+        if (!g.ok) return { text: `rg: ${g.message || 'search failed'}`, code: 1 };
+        // A path that is neither a file nor a non-empty directory is a mistake
+        // worth reporting. Returning empty made `rg PATTERN --type py` — where
+        // "py" was read as a path — indistinguishable from "no matches", which
+        // is how an agent ends up asking the same question four times.
+        if (!g.matches.length && !(st && st.ok)) { missing.push(raw); continue; }
+        for (const f of g.matches) if (!seen.has(f)) { seen.add(f); files.push(f); }
+      }
+      if (missing.length && !files.length) {
+        return { text: missing.map((m) => `rg: ${m}: no such file or directory`).join('\n'), code: 2 };
+      }
+
       const prefix = state.cwd ? state.cwd + '/' : '';
       const rel = (p) => (p.startsWith(prefix) ? p.slice(prefix.length) : p);
+      const keep = (p) => {
+        if (wantExts) { const dot = p.lastIndexOf('.'); if (dot < 0 || !wantExts.has(p.slice(dot + 1))) return false; }
+        if (globRes.length && !globRes.some((re) => re.test(rel(p)) || re.test(p.split('/').pop()))) return false;
+        return true;
+      };
+      const chosen = files.filter(keep);
+
+      if (listFiles) return { text: chosen.map(rel).join('\n'), code: chosen.length ? 0 : 1 };
+
+      const t0 = Date.now();
+      let filesRead = 0, bytesRead = 0;
+      const re = new RegExp(pattern, ignoreCase ? 'i' : '');
       const out = [];
-      for (const path of g.matches) {
+      for (const path of chosen) {
         const r = await face.invoke('fs.read', { path, encoding: 'utf-8' });
         if (!r.ok) continue;
         const text = decodeData(r.data);
-        // Binary detection: a NUL byte, as grep and ripgrep both do. This used to
-        // be `text.startsWith('<')`, which silently discarded every HTML, XML and
-        // SVG file in the workspace — a wrong answer with exit 0, and the reason
-        // the matcher had to be fixed before anything was built on top of it.
+        // Binary detection by NUL byte, as grep and ripgrep do. This was
+        // `text.startsWith('<')`, which silently discarded every HTML, XML and
+        // SVG file in the workspace.
         if (typeof text !== 'string' || text.includes('\u0000')) continue;
         filesRead++;
         bytesRead += text.length;
-        const hits = linesOf(text).map((l, i) => ({ l, i })).filter(({ l }) => re.test(l));
+        const hits = [];
+        linesOf(text).forEach((l, i) => { re.lastIndex = 0; if (re.test(l)) hits.push({ l, i }); });
         if (!hits.length) continue;
         if (filesOnly) { out.push(rel(path)); continue; }
+        if (countOnly) { out.push(`${rel(path)}:${hits.length}`); continue; }
         for (const { l, i } of hits) out.push(`${rel(path)}:${i + 1}:${l}`);
       }
-      // Measurement only (plan/anvil-indexed-search.md §6). This path does NOT go
-      // through fs.grep, so without this the numbers would miss the builtin the
-      // agent is actually told to use. Best-effort: never fails the search.
+      // Measurement only (plan/anvil-indexed-search.md §6); never fails the search.
       try {
         await face.invoke('fs.recordSearch', {
           via: 'shell.rg', pattern: String(pattern), cwd: state.cwd || '', glob: '**',
-          filesWalked: g.matches.length, filesRead, bytesRead,
+          filesWalked: files.length, filesRead, bytesRead,
           matches: out.length, truncated: false, ms: Date.now() - t0,
         });
       } catch (_) { /* a meter never breaks a search */ }
@@ -689,6 +774,7 @@ export function createShell({ registry, face, cwd = '', kiln = null } = {}) {
         + '\nThis is a CURATED shell, not coreutils. Each builtin implements a documented subset and'
         + '\nREFUSES an unsupported flag (exit 2) rather than ignoring it. Notably:'
         + '\n  grep -n -v -i -c -E -F      (no -r; use `rg` for a recursive search)'
+        + '\n  rg -i -l -n -c -t/--type -g/--glob --files   (PATTERN [paths...])'
         + '\n  head/tail -n   wc -l -w -c   sort -r -n -u -f   uniq -c -d -u   cut -d -f -c   tr [-d], ranges'
         + '\n  find [dir] -name -type -maxdepth       sed s/// on stdin or a file (no -i; use the edit tool)'
         + '\n  awk -F with {print $N}      ls -R -a -l'
