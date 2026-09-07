@@ -184,5 +184,45 @@ export function buildFileopsCommands(fs) {
       returnSchema: RESULT_MATCHES, destructive: false, scope: 'fs:read', annotations: RO,
       run: (i) => fs.grep(i.pattern, { cwd: i.cwd, glob: i.glob, maxResults: i.maxResults }),
     },
+    // Measurement only (plan/anvil-indexed-search.md §6). Not advertised to the
+    // agent — these exist so a human can read what search costs on a real
+    // workspace before deciding whether an index earns its rung.
+    {
+      name: 'fs.searchStats',
+      summary: 'Read accumulated search cost counters.',
+      description: 'Return totals and the recent per-call log for fs.grep and shell rg: files walked, files opened, bytes decoded, ms. {reset} clears them.',
+      inputSchema: {
+        type: 'object',
+        properties: { reset: { type: 'boolean' } },
+        required: [], additionalProperties: false,
+      },
+      returnSchema: { type: 'object', properties: { totals: { type: 'object' }, recent: { type: 'array' } }, required: ['totals'] },
+      destructive: false, scope: 'fs:read', annotations: RO,
+      run: (i) => ({ ok: true, ...fs.searchStats({ reset: !!i.reset }) }),
+    },
+    {
+      name: 'fs.recordSearch',
+      summary: 'Record one search-cost sample.',
+      description: 'Append a search cost sample from a search path that does not go through fs.grep (the shell rg builtin). Measurement only; stores no file content.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          via: { type: 'string' }, pattern: { type: 'string' }, cwd: PATH, glob: { type: 'string' },
+          filesWalked: { type: 'number' }, filesRead: { type: 'number' }, bytesRead: { type: 'number' },
+          matches: { type: 'number' }, truncated: { type: 'boolean' }, ms: { type: 'number' },
+        },
+        required: ['via'], additionalProperties: false,
+      },
+      returnSchema: { type: 'object', properties: { ok: { const: true } }, required: ['ok'] },
+      destructive: false, scope: 'fs:read', annotations: RO,
+      run: (i) => {
+        fs.recordSearch({
+          via: i.via, pattern: i.pattern || '', cwd: i.cwd || '', glob: i.glob || '**',
+          filesWalked: i.filesWalked || 0, filesRead: i.filesRead || 0, bytesRead: i.bytesRead || 0,
+          matches: i.matches || 0, truncated: !!i.truncated, ms: i.ms || 0, at: Date.now(),
+        });
+        return { ok: true };
+      },
+    },
   ];
 }

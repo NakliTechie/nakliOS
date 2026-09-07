@@ -499,6 +499,9 @@ export function createShell({ registry, face, cwd = '', kiln = null } = {}) {
       const base = rest[1] ? normalizePath(state.cwd, rest[1]) : state.cwd;
       const filesOnly = flags.some((f) => f.includes('l'));
       const re = new RegExp(pattern, flags.some((f) => f.includes('i')) ? 'i' : '');
+      const t0 = Date.now();
+      let filesRead = 0;
+      let bytesRead = 0;
       const g = await face.invoke('fs.glob', { pattern: (base ? base + '/' : '') + '**', cwd: '' });
       if (!g.ok) return { text: `rg: ${g.message || 'search failed'}`, code: 1 };
       const prefix = state.cwd ? state.cwd + '/' : '';
@@ -509,11 +512,23 @@ export function createShell({ registry, face, cwd = '', kiln = null } = {}) {
         if (!r.ok) continue;
         const text = decodeData(r.data);
         if (typeof text !== 'string' || text.startsWith('<')) continue;
+        filesRead++;
+        bytesRead += text.length;
         const hits = linesOf(text).map((l, i) => ({ l, i })).filter(({ l }) => re.test(l));
         if (!hits.length) continue;
         if (filesOnly) { out.push(rel(path)); continue; }
         for (const { l, i } of hits) out.push(`${rel(path)}:${i + 1}:${l}`);
       }
+      // Measurement only (plan/anvil-indexed-search.md §6). This path does NOT go
+      // through fs.grep, so without this the numbers would miss the builtin the
+      // agent is actually told to use. Best-effort: never fails the search.
+      try {
+        await face.invoke('fs.recordSearch', {
+          via: 'shell.rg', pattern: String(pattern), cwd: state.cwd || '', glob: '**',
+          filesWalked: g.matches.length, filesRead, bytesRead,
+          matches: out.length, truncated: false, ms: Date.now() - t0,
+        });
+      } catch (_) { /* a meter never breaks a search */ }
       return { text: out.join('\n'), code: out.length ? 0 : 1 };
     },
     // awk — the common one-liner subset: `awk [-F sep] '{print $N}'` / `'{print}'`.

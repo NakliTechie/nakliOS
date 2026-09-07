@@ -67,8 +67,9 @@ function globToRegExp(glob) {
  * @param {string}  [opts.root='']      mount root; all paths resolve within it
  * @param {number}  [opts.symlinkDepth] max symlink hops before ELOOP
  * @param {number}  [opts.grepCap]      default grep maxResults
+ * @param {Function} [opts.onSearch]    called with one SearchStat per grep (measurement only)
  */
-export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 1000 }) {
+export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 1000, onSearch = null }) {
   if (!backend) throw new Error('createFileops requires a backend');
   const rootPrefix = String(root || '').replace(/\/+$/, '');
 
@@ -134,6 +135,48 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
   }
 
   // Depth-first walk. Returns { files:[safe], dirs:[safe] } for all descendants.
+  // ── search instrumentation (measurement only; changes no result) ──────────
+  // Why this exists: plan/anvil-indexed-search.md §6 — before an index is worth
+  // building we need to know what search actually costs on real workspaces.
+  // A grep is walk + (stat + readBinary) per file, so the interesting numbers
+  // are files opened and bytes decoded, not wall time alone.
+  // Never throws into the caller: a broken meter must not break a search.
+  const searchLog = [];
+  const searchTotals = { calls: 0, filesWalked: 0, filesRead: 0, bytesRead: 0, ms: 0, truncated: 0, empty: 0 };
+  const SEARCH_LOG_CAP = 200;
+
+  function recordSearch(stat) {
+    searchTotals.calls++;
+    searchTotals.filesWalked += stat.filesWalked;
+    searchTotals.filesRead += stat.filesRead;
+    searchTotals.bytesRead += stat.bytesRead;
+    searchTotals.ms += stat.ms;
+    if (stat.truncated) searchTotals.truncated++;
+    // The expensive class (§1): few-or-no matches means the cap never fired and
+    // the whole workspace was read. Counted separately because it is the one
+    // an agent hits most and the one an index would help most.
+    if (stat.matches === 0) searchTotals.empty++;
+    searchLog.push(stat);
+    if (searchLog.length > SEARCH_LOG_CAP) searchLog.shift();
+    if (onSearch) { try { onSearch(stat); } catch (_) { /* a meter never breaks a search */ } }
+  }
+
+  function searchStats({ reset = false } = {}) {
+    const out = {
+      totals: { ...searchTotals },
+      recent: searchLog.slice(),
+      // Derived, so a caller does not have to: the two ratios that decide §6.
+      avgFilesRead: searchTotals.calls ? searchTotals.filesRead / searchTotals.calls : 0,
+      avgBytesRead: searchTotals.calls ? searchTotals.bytesRead / searchTotals.calls : 0,
+      emptyShare: searchTotals.calls ? searchTotals.empty / searchTotals.calls : 0,
+    };
+    if (reset) {
+      searchLog.length = 0;
+      for (const k of Object.keys(searchTotals)) searchTotals[k] = 0;
+    }
+    return out;
+  }
+
   async function walkAll(safeDir) {
     const files = [];
     const dirs = [];
@@ -324,6 +367,9 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
 
   async function grep(pattern, opts = {}) {
     const max = opts.maxResults || grepCap;
+    const t0 = Date.now();
+    let filesRead = 0;
+    let bytesRead = 0;
     const cr = await resolve(opts.cwd || '');
     if (!cr.ok) return cr;
     const globbed = await glob(opts.glob || '**', { cwd: opts.cwd || '' });
@@ -334,6 +380,8 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     outer: for (const p of globbed.matches) {
       const rd = await read(p, { encoding: 'utf-8' });
       if (!rd.ok) continue; // skip unreadable/binary silently
+      filesRead++;
+      bytesRead += rd.data.length;
       const lines = rd.data.split('\n');
       for (let i = 0; i < lines.length; i++) {
         if (re.test(lines[i])) {
@@ -342,11 +390,26 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
         }
       }
     }
+    recordSearch({
+      via: 'fs.grep',
+      pattern: String(pattern),
+      cwd: opts.cwd || '',
+      glob: opts.glob || '**',
+      filesWalked: globbed.matches.length,
+      filesRead,
+      bytesRead,
+      matches: matches.length,
+      truncated,
+      ms: Date.now() - t0,
+      at: t0,
+    });
     return { ok: true, matches, truncated };
   }
 
   return {
     read, write, list, stat, mkdir, remove, move, copy, patch, glob, grep,
+    // measurement surface (plan/anvil-indexed-search.md §6); changes no result
+    searchStats, recordSearch,
     // exposed for the git adapter (C2) and grant layer (C4)
     _resolve: resolve,
     root: rootPrefix,
