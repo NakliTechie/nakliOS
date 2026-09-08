@@ -57,13 +57,13 @@ assert.match(
 );
 assert.match(
   html,
-  /const DEFAULT_DESKTOP_APP_IDS = Object\.freeze\(\[\s*'books',\s*'nakliposter',\s*'bofh',\s*'mod',\s*'naklidata',\s*'tijori',\s*'files',\s*'notes',\s*\]\)/,
-  'core apps and storage utilities are first-party desktop defaults',
+  /const DEFAULT_DESKTOP_APP_IDS = Object\.freeze\(\[\s*'books',\s*'nakliposter',\s*'bofh',\s*'mod',\s*'naklidata',\s*'tijori',\s*'files',\s*'notes',\s*'anvil',\s*\]\)/,
+  'core apps, storage utilities, and Anvil are first-party desktop defaults',
 );
 assert.match(
   html,
-  /const DESKTOP_DEFAULTS_VERSION = 2/,
-  'existing version-one desktops receive the expanded shortcut set once',
+  /const DESKTOP_DEFAULTS_VERSION = 3/,
+  'existing desktops receive each expanded shortcut set once',
 );
 assert.match(
   html,
