@@ -1,7 +1,6 @@
-// Load a real workspace into a MemoryBackend, for search benchmarking.
+// Load a real workspace's text files, for search benchmarking.
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { MemoryBackend } from '../../sys/rig/fileops/index.mjs';
 
 // The spike's own directory is excluded: it contains the query strings below, so
 // indexing it would turn the zero-match class into a one-match class and quietly
@@ -26,20 +25,3 @@ export function loadCorpus(root) {
   })(root);
   return files;
 }
-
-export async function seedBackend(files) {
-  const be = new MemoryBackend();
-  for (const f of files) await be.write(f.path, new Uint8Array(f.bytes));
-  return be;
-}
-
-export const QUERIES = [
-  // The maxResults cap makes the RARE query the worst case, not the common one.
-  ['zero',   'notPresentAnywhereXYZ123'],
-  ['zero',   'function thisDoesNotExist'],
-  ['few',    'requiredLiteral'],
-  ['few',    'MemoryBackend'],
-  ['few',    'TODO|FIXME'],
-  ['few',    '\\w+Error'],
-  ['common', 'const'],
-];
