@@ -879,6 +879,52 @@ await test('evaluateQueryIds handles empty, disjoint and identical posting lists
   eq(evaluateQueryIds(plan, new Map()).length, 0, 'a trigram nothing holds means no file can match');
 });
 
+// ── a persisted index is validated before it is trusted ──────────────────
+// The exclusive shortcut used to skip validation BEFORE anything inspected
+// indexedAt, so a saved index was trusted blindly: a file rewritten between save
+// and load stayed invisible. No external writer and no concurrency needed — an
+// ordinary reload was enough. Silent, and exit 0.
+await test('REGRESSION: a file rewritten between indexSave and indexLoad is found', async () => {
+  const be = new MemoryBackend();
+  const opts = { backend: be, index: true, exclusive: true, indexPath: '.rig-index.json' };
+  const a = createFileops(opts);
+  await a.write('x.txt', 'alpha\n');
+  await a.grep('alpha');
+  eq((await a.indexSave()).ok, true, 'index saved');
+  await a.write('x.txt', 'omega\n');            // through fileops, same instance
+
+  const b = createFileops(opts);
+  eq((await b.indexLoad()).loaded >= 1, true, 'index loaded');
+  const indexed = await b.grep('omega', { glob: '*.txt' });
+  const plain = await createFileops({ backend: be }).grep('omega', { glob: '*.txt' });
+  eq(indexed.matches.length, plain.matches.length, 'indexed agrees with the scan');
+  eq(indexed.matches.length, 1, 'the rewritten content is found');
+});
+
+// The fix must not cost the reads persistence exists to avoid: an UNCHANGED file
+// is stat'ed once to validate it, and must not be re-read.
+await test('a loaded index re-stats but does not re-read unchanged files', async () => {
+  const be = new MemoryBackend();
+  const opts = { backend: be, index: true, exclusive: true, indexPath: '.rig-index.json' };
+  const a = createFileops(opts);
+  for (let i = 0; i < 12; i++) await a.write(`f${i}.txt`, `deepThing body ${i}\n`);
+  // `settled` deliberately refuses to trust a file indexed in the SAME millisecond
+  // it was written — inside that window mtime+size cannot tell "unchanged" from
+  // "rewritten at the same size". Without this wait every file is legitimately
+  // re-read and the test measures the coherency window, not the load path.
+  await new Promise((r) => setTimeout(r, 5));
+  await a.grep('deepThing');
+  eq((await a.indexSave()).ok, true, 'index saved');
+
+  const rec = [];
+  const b = createFileops({ ...opts, onSearch: (s) => rec.push(s) });
+  await b.indexLoad();
+  await b.grep('nothingMatchesThisQQQ');
+  const s = rec[rec.length - 1];
+  eq(s.filesRead, 0, 'no unchanged file is re-read after a load');
+  assert(s.filesStatted >= 12, `every loaded entry is stat'ed once (got ${s.filesStatted})`);
+});
+
 console.log(`trigram: ${passed} passed, ${failures.length} failed`);
 for (const f of failures) console.log(`  FAIL ${f.name}: ${f.message}`);
 if (failures.length) process.exit(1);
