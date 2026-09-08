@@ -10,7 +10,7 @@
 // Everything else here exists to make that test's failures diagnosable.
 
 import { createFileops, MemoryBackend } from '../index.mjs';
-import { requiredLiteral, trigrams, triHash, planQuery, evaluateQuery, foldCase } from '../trigram.mjs';
+import { requiredLiteral, trigrams, triHash, planQuery, evaluateQuery, evaluateQueryIds, foldCase } from '../trigram.mjs';
 
 let passed = 0;
 const failures = [];
@@ -813,6 +813,187 @@ await test('DIFFERENTIAL: randomised patterns, 400 cases', async () => {
     if (JSON.stringify(a) !== JSON.stringify(b)) diffs.push(`${JSON.stringify(pat)} diverged`);
   }
   assert(diffs.length === 0, `${diffs.length} divergence(s):\n  ${diffs.slice(0, 8).join('\n  ')}`);
+});
+
+// ── evaluateQueryIds agrees with evaluateQuery ───────────────────────────
+// The Set version is the one three review passes hardened, so it is the oracle.
+// The id version only changes WHERE postings live; if the two ever disagree, the
+// id version is the wrong one.
+await test('evaluateQueryIds agrees with evaluateQuery on random plans', () => {
+  const PATTERNS = [
+    'parseFact', 'TODO|FIXME', '\\w+Error', 'import \\{ (helper1|helper2) \\}',
+    'const', 'ab', 'deepThing', 'export const', '\\bconst\\b', 'x(y|z)w',
+    'notPresentAnywhere', '(alpha|beta|gamma)Delta', 'a.c', '[A-Z]{2,}',
+  ];
+  // 40 synthetic files, each a random pick of words, so postings are non-trivial.
+  const WORDS = ['parseFact','TODO','FIXME','helper1','helper2','deepThing','const',
+                 'export','import','alphaDelta','betaDelta','xyw','xzw','Error','value'];
+  let rnd = 12345;
+  const next = () => (rnd = (rnd * 1103515245 + 12345) & 0x7fffffff);
+  const docs = [];
+  for (let i = 0; i < 40; i++) {
+    let t = '';
+    for (let k = 0; k < 12; k++) t += WORDS[next() % WORDS.length] + ' ';
+    docs.push(t);
+  }
+  // Build both shapes from the same source.
+  const byPath = new Map();      // hash -> Set<path>
+  const byId = new Map();        // hash -> number[]
+  docs.forEach((t, i) => {
+    for (const h of trigrams(foldCase(t))) {
+      let s = byPath.get(h); if (!s) { s = new Set(); byPath.set(h, s); } s.add('f' + i);
+      let a = byId.get(h); if (!a) { a = []; byId.set(h, a); } a.push(i);
+    }
+  });
+  const ids = new Map();
+  for (const [h, a] of byId) ids.set(h, Uint32Array.from(a));   // already ascending
+
+  const diffs = [];
+  for (const src of PATTERNS) {
+    const plan = planQuery(src, '');
+    const a = evaluateQuery(plan, byPath);
+    const b = evaluateQueryIds(plan, ids);
+    if ((a === null) !== (b === null)) { diffs.push(`${src}: null-ness differs`); continue; }
+    if (a === null) continue;
+    const A = [...a].sort().join(',');
+    const B = [...b].map((i) => 'f' + i).sort().join(',');
+    if (A !== B) diffs.push(`${src}: ${A} !== ${B}`);
+  }
+  assert(diffs.length === 0, `${diffs.length} divergence(s): ${diffs.slice(0, 5).join(' | ')}`);
+});
+
+// A sorted-merge intersection is easy to get subtly wrong at the boundaries.
+await test('evaluateQueryIds handles empty, disjoint and identical posting lists', () => {
+  const P = new Map();
+  const tri = (s) => [...trigrams(foldCase(s))];
+  const H = tri('abcd');
+  P.set(H[0], Uint32Array.from([1, 3, 5, 7]));
+  P.set(H[1], Uint32Array.from([3, 7, 9]));
+  const plan = planQuery('abcd', '');
+  eq([...evaluateQueryIds(plan, P)].join(), '3,7', 'intersection is the merge');
+  const P2 = new Map(P); P2.set(H[1], Uint32Array.from([2, 4]));
+  eq([...evaluateQueryIds(plan, P2)].length, 0, 'disjoint lists intersect empty');
+  const P3 = new Map(); for (const h of H) P3.set(h, Uint32Array.from([2, 4]));
+  eq([...evaluateQueryIds(plan, P3)].join(), '2,4', 'identical lists survive');
+  eq(evaluateQueryIds(plan, new Map()), (function(){ const m = new Map(); return evaluateQueryIds(plan, m); })(), 'missing trigram is empty, not null');
+  eq(evaluateQueryIds(plan, new Map()).length, 0, 'a trigram nothing holds means no file can match');
+});
+
+// ── a persisted index is validated before it is trusted ──────────────────
+// The exclusive shortcut used to skip validation BEFORE anything inspected
+// indexedAt, so a saved index was trusted blindly: a file rewritten between save
+// and load stayed invisible. No external writer and no concurrency needed — an
+// ordinary reload was enough. Silent, and exit 0.
+await test('REGRESSION: a file rewritten between indexSave and indexLoad is found', async () => {
+  const be = new MemoryBackend();
+  const opts = { backend: be, index: true, exclusive: true, indexPath: '.rig-index.json' };
+  const a = createFileops(opts);
+  await a.write('x.txt', 'alpha\n');
+  await a.grep('alpha');
+  eq((await a.indexSave()).ok, true, 'index saved');
+  await a.write('x.txt', 'omega\n');            // through fileops, same instance
+
+  const b = createFileops(opts);
+  eq((await b.indexLoad()).loaded >= 1, true, 'index loaded');
+  const indexed = await b.grep('omega', { glob: '*.txt' });
+  const plain = await createFileops({ backend: be }).grep('omega', { glob: '*.txt' });
+  eq(indexed.matches.length, plain.matches.length, 'indexed agrees with the scan');
+  eq(indexed.matches.length, 1, 'the rewritten content is found');
+});
+
+// The fix must not cost the reads persistence exists to avoid: an UNCHANGED file
+// is stat'ed once to validate it, and must not be re-read.
+await test('a loaded index re-stats but does not re-read unchanged files', async () => {
+  const be = new MemoryBackend();
+  const opts = { backend: be, index: true, exclusive: true, indexPath: '.rig-index.json' };
+  const a = createFileops(opts);
+  for (let i = 0; i < 12; i++) await a.write(`f${i}.txt`, `deepThing body ${i}\n`);
+  // `settled` deliberately refuses to trust a file indexed in the SAME millisecond
+  // it was written — inside that window mtime+size cannot tell "unchanged" from
+  // "rewritten at the same size". Without this wait every file is legitimately
+  // re-read and the test measures the coherency window, not the load path.
+  await new Promise((r) => setTimeout(r, 5));
+  await a.grep('deepThing');
+  eq((await a.indexSave()).ok, true, 'index saved');
+
+  const rec = [];
+  const b = createFileops({ ...opts, onSearch: (s) => rec.push(s) });
+  await b.indexLoad();
+  await b.grep('nothingMatchesThisQQQ');
+  const s = rec[rec.length - 1];
+  eq(s.filesRead, 0, 'no unchanged file is re-read after a load');
+  assert(s.filesStatted >= 12, `every loaded entry is stat'ed once (got ${s.filesStatted})`);
+});
+
+await test('REGRESSION: a walk finishing after a write does not reinstall its stale snapshot', async () => {
+  // Only an invalidation drops the walk cache, so a walk already in flight when a
+  // write landed used to install its pre-write snapshot AFTERWARDS — and nothing
+  // re-walks until the next invalidation, so one interleaving hid the new file
+  // from every later query for the rest of the session. fileops supplies the
+  // interleaving itself (the debounced indexSave is fire-and-forget), and so does
+  // any caller that starts a write without awaiting it — Anvil's post-run review
+  // is one (apps/anvil/index.html, learnThisRun).
+  const backend = new MemoryBackend();
+  const fs = createFileops({ backend, index: true, exclusive: true });
+  for (let i = 0; i < 20; i++) await fs.write(`f${i}.txt`, 'alpha\n', { createParents: true });
+  await fs.grep('alpha');
+
+  let release; const paused = new Promise((r) => { release = r; });
+  let reached; const atRoot = new Promise((r) => { reached = r; });
+  const list = backend.list.bind(backend);
+  let once = true;
+  backend.list = async (p) => {
+    const out = await list(p);
+    if (p === '' && once) { once = false; reached(); await paused; }
+    return out;
+  };
+  const walking = fs.grep('a');                     // suspended part-way through its walk
+  await atRoot;
+  await fs.write('new.txt', 'brandnew\n');          // lands before that walk finishes
+  release();
+  await walking;
+  backend.list = list;
+
+  // The raced walk itself may legitimately predate the file — an unindexed glob
+  // racing the same write misses it too. What must not survive is the SNAPSHOT.
+  const plain = createFileops({ backend, index: false });
+  eq((await fs.grep('brandnew')).matches.length, (await plain.grep('brandnew')).matches.length,
+     'the next query sees the file the raced walk missed');
+  eq((await fs.grep('brandnew')).matches.length, 1, 'and every query after it');
+});
+
+await test('REGRESSION: an in-flight alias read cannot install bytes older than a write', async () => {
+  // indexDropBySafe only visits aliases already installed in idx.files. A symlink
+  // whose read was still in flight had no entry, so nothing bumped its sequence,
+  // and it landed holding pre-write bytes — dropping the alias path out of every
+  // later grep. The sequence is now bumped by resolved path, unconditionally.
+  const backend = new MemoryBackend();
+  const fs = createFileops({ backend, index: true, exclusive: true });
+  await fs.write('z-target.txt', 'alpha\n', { createParents: true });
+  for (let i = 0; i < 20; i++) await fs.write(`f${i}.txt`, 'filler\n');
+  backend.symlink('a-alias.txt', 'z-target.txt');   // sorts first, so it is read first
+
+  let release; const paused = new Promise((r) => { release = r; });
+  let reached; const atTarget = new Promise((r) => { reached = r; });
+  const readBinary = backend.readBinary.bind(backend);
+  let once = true;
+  backend.readBinary = async (p) => {
+    const out = await readBinary(p);
+    if (p === 'z-target.txt' && once) { once = false; reached(); await paused; }
+    return out;
+  };
+  const searching = fs.grep('alpha');               // the alias read holds the old bytes
+  await atTarget;
+  await fs.write('z-target.txt', 'omega\n');        // the alias has no entry to invalidate
+  release();
+  await searching;
+  backend.readBinary = readBinary;
+
+  const plain = createFileops({ backend, index: false });
+  const expected = (await plain.grep('omega')).matches.length;
+  eq(expected, 2, 'the target and its alias both hold the new content');
+  eq((await fs.grep('omega')).matches.length, expected, 'the indexed grep finds both paths');
+  eq((await fs.grep('alpha')).matches.length, 0, 'and the raced-over bytes are gone');
 });
 
 console.log(`trigram: ${passed} passed, ${failures.length} failed`);

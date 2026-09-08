@@ -423,3 +423,85 @@ export function evaluateQuery(node, postings) {
   }
   return null;
 }
+
+// ── the same evaluation, over sorted file ids ─────────────────────────────
+//
+// evaluateQuery above works over Map<hash, Set<path>>. This works over
+// Map<hash, Uint32Array> of SORTED file ids, which is what the design asked for
+// (plan/anvil-indexed-search.md §2: "Sorted, so intersection is a merge, not a
+// Set rebuild"). The reason is memory, and it is not a small effect: a V8 Set
+// costs ~34 B per entry whether it holds a string or a small integer — measured
+// at 125 MiB either way on a 38 MiB corpus, against 43 MiB for the typed array.
+//
+// The semantics are IDENTICAL to evaluateQuery, deliberately and testably so:
+// null means "no constraint, scan everything", an empty result means "no file can
+// match", one unconstrained OR branch collapses the union, and an unconstrained
+// AND sub is skipped. trigram.test.mjs asserts the two agree on random plans over
+// random postings; if they ever diverge, this one is wrong, because the Set
+// version is the one three review passes hardened.
+//
+// The price of the typed array is that removing one id means rebuilding an array.
+// That is why fileops keeps a Set-based OVERLAY for files written since the base
+// was folded, and never mutates the base on a write.
+
+function intersectSorted(a, b) {
+  const out = new Uint32Array(Math.min(a.length, b.length));
+  let i = 0, j = 0, n = 0;
+  while (i < a.length && j < b.length) {
+    const x = a[i], y = b[j];
+    if (x === y) { out[n++] = x; i++; j++; }
+    else if (x < y) i++;
+    else j++;
+  }
+  return out.subarray(0, n);
+}
+
+function unionSorted(a, b) {
+  const out = new Uint32Array(a.length + b.length);
+  let i = 0, j = 0, n = 0;
+  while (i < a.length && j < b.length) {
+    const x = a[i], y = b[j];
+    if (x === y) { out[n++] = x; i++; j++; }
+    else if (x < y) { out[n++] = x; i++; }
+    else { out[n++] = y; j++; }
+  }
+  while (i < a.length) out[n++] = a[i++];
+  while (j < b.length) out[n++] = b[j++];
+  return out.subarray(0, n);
+}
+
+const EMPTY_IDS = new Uint32Array(0);
+
+export function evaluateQueryIds(node, postings) {
+  if (isAll(node)) return null;
+  if (node.op === 'TRI') {
+    let acc = null;
+    for (const h of node.tris) {
+      const s = postings.get(h);
+      if (!s) return EMPTY_IDS;                 // a trigram nothing holds ⇒ no file can match
+      acc = acc === null ? s : intersectSorted(acc, s);
+      if (!acc.length) return acc;
+    }
+    return acc;
+  }
+  if (node.op === 'AND') {
+    let acc = null;
+    for (const sub of node.subs) {
+      const s = evaluateQueryIds(sub, postings);
+      if (s === null) continue;                 // an unconstrained sub adds nothing
+      acc = acc === null ? s : intersectSorted(acc, s);
+      if (!acc.length) return acc;
+    }
+    return acc;
+  }
+  if (node.op === 'OR') {
+    let acc = EMPTY_IDS;
+    for (const sub of node.subs) {
+      const s = evaluateQueryIds(sub, postings);
+      if (s === null) return null;              // one unconstrained branch ⇒ no constraint
+      acc = unionSorted(acc, s);
+    }
+    return acc;
+  }
+  return null;
+}

@@ -23,7 +23,7 @@
 
 import { normalizeMountPath, joinRoot } from './pathguard.mjs';
 import { applyPatch, reversePatch } from './patch.mjs';
-import { planQuery, evaluateQuery, trigrams, foldCase } from './trigram.mjs';
+import { planQuery, evaluateQuery, evaluateQueryIds, trigrams, foldCase } from './trigram.mjs';
 
 const enc = new TextEncoder();
 
@@ -209,10 +209,67 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
   // The caller declares it, because the caller is where the knowledge lives: an
   // OPFS app workspace is exclusive, a user-picked disk folder is not. Guessing
   // it from the backend class cannot work — OPFS *is* FsaBackend underneath.
+  // Two posting stores, which is tgrep's HybridIndex split and the reason the
+  // typed array is affordable at all.
+  //
+  // `postings` is the BASE: triHash -> Uint32Array of sorted file ids. A V8 Set
+  // costs ~34 B per entry whether it holds a string or a small integer — measured
+  // 125 MiB either way on a 38 MiB corpus, against 43 MiB for the typed array. So
+  // dropping the path strings buys nothing; only the typed array does.
+  //
+  // The price is that removing one id from a Uint32Array means rebuilding it, and
+  // a write touches thousands of trigrams. So the base is NEVER mutated on a write.
+  // Instead `overlay` — the old Set shape, small — holds every file (re)indexed
+  // since the last fold, and a query unions the two.
+  //
+  // Why that is correct, which is the whole argument: a file is either in the
+  // overlay (written since the fold, so the overlay holds its CURRENT trigrams) or
+  // it is not (unchanged since the fold, so the base holds its current trigrams).
+  // Every file is covered by exactly one of them, so no candidate is ever missed.
+  // The base may still list a file whose content has since changed — that is an
+  // EXTRA candidate, which costs a read and can never produce a wrong answer,
+  // because the caller verifies every candidate with the real regex.
   const idx = {
-    postings: new Map(),        // triHash -> Set<path>
-    files: new Map(),           // path -> { mtimeMs, size, hashes }
+    postings: new Map(),        // triHash -> Uint32Array of sorted file ids (base)
+    overlay: new Map(),         // triHash -> Set<path>  (written since the fold)
+    overlayFiles: new Set(),    // paths the overlay speaks for
+    files: new Map(),           // path -> { mtimeMs, size, hashes: Uint32Array }
+    paths: [],                  // file id -> path
   };
+
+  // Fold the overlay into the base: reassign ids, rebuild every posting list as a
+  // typed array, drop the Sets. O(total postings), so it must not run per write —
+  // indexFoldDue() keeps it to the cold build and to bursts.
+  function indexFold() {
+    const byHash = new Map();
+    idx.paths.length = 0;
+    for (const [p, e] of idx.files) {
+      const id = idx.paths.length;
+      idx.paths.push(p);
+      // Ascending by construction, because ids are handed out in this same loop.
+      // evaluateQueryIds is a sorted merge and silently returns nonsense on
+      // unsorted input, so this ordering is load-bearing, not incidental.
+      for (const h of e.hashes) {
+        let a = byHash.get(h);
+        if (!a) { a = []; byHash.set(h, a); }
+        a.push(id);
+      }
+    }
+    idx.postings.clear();
+    for (const [h, a] of byHash) idx.postings.set(h, Uint32Array.from(a));
+    idx.overlay.clear();
+    idx.overlayFiles.clear();
+  }
+
+  // Fold after the cold build (where every file lands in the overlay, so without
+  // this the base would stay empty and nothing would be saved), and once a burst
+  // of writes has made the overlay a material fraction of the workspace. A single
+  // write must never trigger it.
+  function indexFoldDue() {
+    const n = idx.overlayFiles.size;
+    if (!n) return false;
+    return n >= Math.max(32, idx.files.size * 0.1);
+  }
 
   // ── persistence ───────────────────────────────────────────────────────────
   // The index is written through this same fileops, so it lands wherever the
@@ -243,7 +300,11 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     if (!indexPath) return { ok: false, code: 'ENOPATH' };
     const files = [];
     for (const [path, e] of idx.files) {
-      files.push({ p: path, m: e.mtimeMs, s: e.size, b: e.binary ? 1 : 0, h: [...e.hashes] });
+      // `a` is indexedAt. Without it a loaded entry can never satisfy the
+      // `settled` test below, so every file is re-read on the first search and
+      // persistence buys nothing — measured at 6,028 ms against 57 ms warm on a
+      // 38 MiB workspace.
+      files.push({ p: path, m: e.mtimeMs, s: e.size, b: e.binary ? 1 : 0, a: e.indexedAt, h: [...e.hashes] });
     }
     const blob = JSON.stringify({ v: INDEX_FORMAT, savedAt: Date.now(), files });
     return write(indexPath, blob, { createParents: true });
@@ -259,22 +320,30 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
       return err('EBADINDEX', 'index format is not this version');
     }
     idx.postings.clear();
+    idx.overlay.clear();
+    idx.overlayFiles.clear();
     idx.files.clear();
     let loaded = 0;
     for (const f of parsed.files) {
       if (!f || typeof f.p !== 'string' || !Array.isArray(f.h)) continue;
-      const hashes = new Set(f.h.filter((h) => Number.isInteger(h)));
-      for (const h of hashes) {
-        let s = idx.postings.get(h);
-        if (!s) { s = new Set(); idx.postings.set(h, s); }
-        s.add(f.p);
-      }
-      // indexedAt is deliberately 0: nothing loaded from disk is trusted as
-      // settled, so the first search re-stats every entry and re-reads anything
-      // whose mtime or size has moved. A wrong index cannot survive one query.
-      idx.files.set(f.p, { mtimeMs: f.m || 0, size: f.s || 0, indexedAt: 0, safe: null, binary: f.b === 1, hashes });
+      const hashes = Uint32Array.from(new Set(f.h.filter((h) => Number.isInteger(h))));
+      // Nothing loaded from disk is trusted until it has been checked against the
+      // filesystem once: `validated: false` forces a stat on the first search even
+      // in exclusive mode, which is where this guarantee used to be lost. The
+      // exclusive shortcut skipped validation BEFORE anything inspected indexedAt,
+      // so a saved index was trusted blindly and a file rewritten between save and
+      // load was invisible — a silent false negative on an ordinary reload.
+      //
+      // indexedAt is the real timestamp from the indexing session, not 0. It is what
+      // lets an unchanged file pass `settled` and skip its re-READ; the stat still
+      // happens. An index written before this field existed has no `a`, falls back
+      // to 0, and is simply re-read once — slower, never wrong.
+      idx.files.set(f.p, { mtimeMs: f.m || 0, size: f.s || 0, indexedAt: f.a || 0, validated: false, safe: null, binary: f.b === 1, hashes });
       loaded++;
     }
+    // Build the base from what was loaded, rather than routing it through the
+    // overlay: a loaded index is by definition not "recently written".
+    indexFold();
     return { ok: true, loaded };
   }
 
@@ -301,21 +370,41 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
   // barely benefits. In exclusive mode it can be cached exactly, because file
   // CREATION and deletion also go through this fileops, so the same invalidation
   // that drops an index entry can drop the walk. Never cached otherwise.
+  // `walkSeq` versions the cache the way dropSeq versions a file's bytes. A walk
+  // that STARTED before an invalidation must not install its snapshot after it:
+  // the snapshot predates the write, so a file that write created is missing from
+  // it, and nothing re-walks until the next invalidation — one interleaving hides
+  // that file from every later query for the rest of the session. fileops supplies
+  // the interleaving itself: grep ends in indexSaveSoon(), whose indexSave() is
+  // fire-and-forget and writes through write(), which invalidates.
   let walkCache = null;
-  const invalidateWalk = () => { walkCache = null; };
+  let walkSeq = 0;
+  const invalidateWalk = () => { walkCache = null; walkSeq++; };
 
   let dropSeq = 0;
   const dropSeqByPath = new Map();
+  const dropSeqBySafe = new Map();
   function seqOf(path) { return dropSeqByPath.get(path) || 0; }
+  // The same sequence, keyed by the resolved path. Two mount paths can name one
+  // backend file through a symlink, and the per-mount-path sequence only guards
+  // the spelling the write actually used.
+  function seqOfSafe(safe) { return safe ? (dropSeqBySafe.get(safe) || 0) : 0; }
 
   function indexDrop(path) {
     invalidateWalk();
     dropSeqByPath.set(path, ++dropSeq);
     const e = idx.files.get(path);
     if (!e) return;
-    for (const h of e.hashes) {
-      const s = idx.postings.get(h);
-      if (s) { s.delete(path); if (!s.size) idx.postings.delete(h); }
+    // Only the overlay is edited. The base keeps this file's id under its old
+    // trigrams until the next fold, which costs an extra candidate and a read —
+    // never a wrong answer, because the caller re-runs the real regex. Rebuilding
+    // a Uint32Array per trigram per write is what this trade exists to avoid.
+    if (idx.overlayFiles.has(path)) {
+      for (const h of e.hashes) {
+        const s = idx.overlay.get(h);
+        if (s) { s.delete(path); if (!s.size) idx.overlay.delete(h); }
+      }
+      idx.overlayFiles.delete(path);
     }
     idx.files.delete(path);
   }
@@ -327,7 +416,11 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     // recursive remove of the root left every posting in place — and a path
     // later recreated at the same name was then served from stale postings.
     invalidateWalk();
-    if (path === '') { idx.postings.clear(); idx.files.clear(); return; }
+    if (path === '') {
+      idx.postings.clear(); idx.overlay.clear(); idx.overlayFiles.clear();
+      idx.files.clear(); idx.paths.length = 0;
+      return;
+    }
     indexDrop(path);
     const prefix = path + '/';
     for (const p of [...idx.files.keys()]) if (p.startsWith(prefix)) indexDrop(p);
@@ -348,31 +441,41 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
 
   function indexDropBySafe(safe) {
     if (!safe) return;
+    // Bump BEFORE the sweep, and unconditionally. The sweep only reaches aliases
+    // already installed in idx.files; an alias whose read is still in flight has no
+    // entry to visit, so without this its stale bytes land after the write and that
+    // alias path drops out of every later grep.
+    dropSeqBySafe.set(safe, ++dropSeq);
     for (const [p, e] of [...idx.files]) if (e.safe === safe) indexDrop(p);
   }
 
-  function indexAdd(path, text, st, safe, readStartedAt, seenSeq, binary = false) {
-    // Discard a read that raced a write to the same path.
+  function indexAdd(path, text, st, safe, readStartedAt, seenSeq, seenSafeSeq, binary = false) {
+    // Discard a read that raced a write to the same path, under EITHER name.
     if (seenSeq !== undefined && seqOf(path) !== seenSeq) return;
+    if (seenSafeSeq !== undefined && safe && seqOfSafe(safe) !== seenSafeSeq) return;
     indexDrop(path);
     // Index the CASE-FOLDED text, folded per character (see foldCase — whole-string
     // lowercasing is not substring-preserving in Unicode and silently lost matches).
     // A folded index over-matches a case-sensitive query, which is free: the real
     // regex rejects the extra candidates. In exchange, `-i` can use the index at
     // all, where it used to scan everything.
-    const hashes = trigrams(foldCase(text));
-    for (const h of hashes) {
-      let s = idx.postings.get(h);
-      if (!s) { s = new Set(); idx.postings.set(h, s); }
+    const hashSet = trigrams(foldCase(text));
+    // Sorted, because indexFold hands out ids in idx.files order and evaluateQueryIds
+    // merges on the assumption that every posting list ascends.
+    const hashes = Uint32Array.from(hashSet).sort();
+    for (const h of hashSet) {
+      let s = idx.overlay.get(h);
+      if (!s) { s = new Set(); idx.overlay.set(h, s); }
       s.add(path);
     }
+    idx.overlayFiles.add(path);
     // `indexedAt` closes a coherency window mtime alone cannot: if a file is
     // rewritten in the SAME millisecond we indexed it, at the same size, its
     // mtime and size both compare equal and the sweep skips a changed file.
     // Storing when we read it lets us distrust exactly that overlap.
     // indexedAt is when the read STARTED, not when it finished: a write landing
     // mid-read would otherwise be stamped as already-captured and stay invisible.
-    idx.files.set(path, { mtimeMs: st.mtimeMs, size: st.size, indexedAt: readStartedAt, safe, binary, hashes });
+    idx.files.set(path, { mtimeMs: st.mtimeMs, size: st.size, indexedAt: readStartedAt, validated: true, safe, binary, hashes });
     indexDirty = true;
   }
 
@@ -608,9 +711,11 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     if (index && exclusiveOk() && walkCache && walkCache.key === walkKey) {
       globbed = { ok: true, matches: walkCache.matches };
     } else {
+      const walkedFrom = walkSeq;
       globbed = await glob(opts.glob || '**', { cwd: opts.cwd || '' });
       if (!globbed.ok) return globbed;
-      if (index && exclusiveOk()) walkCache = { key: walkKey, matches: globbed.matches };
+      // Only cache a snapshot that nothing invalidated while it was being taken.
+      if (index && exclusiveOk() && walkSeq === walkedFrom) walkCache = { key: walkKey, matches: globbed.matches };
     }
     if (!globbed.ok) return globbed;
     const re = pattern instanceof RegExp ? pattern : new RegExp(pattern);
@@ -645,9 +750,18 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
         // Exclusive mode: a file we already hold is current by construction —
         // every write through this fileops dropped it from the index. Timed mode:
         // trusted until the next sweep falls due.
-        if (e && (exclusiveOk() || !sweeping)) continue;
-        const st = await stat(p);
-        if (!st.ok) { indexDrop(p); continue; }
+        // `e.validated` is the load guard: an entry read from disk has never been
+        // checked against this session's filesystem, so it does not get the
+        // exclusive shortcut until it has been.
+        if (e && e.validated && (exclusiveOk() || !sweeping)) continue;
+        // Resolve and stat as two steps rather than through `stat`, which discards
+        // the resolved path. `safe` is what alias invalidation matches on, and an
+        // entry validated without a re-read has no other way to learn it.
+        const rr = await resolve(p);
+        if (!rr.ok) { indexDrop(p); continue; }
+        const raw = await backend.stat(rr.safe);
+        if (!raw) { indexDrop(p); continue; }
+        const st = { stat: { type: raw.type, size: raw.size ?? 0, mtimeMs: raw.mtimeMs ?? 0 } };
         filesStatted++;
         // Trust an unchanged mtime+size only when the file was already at least a
         // millisecond old when we indexed it. Inside that window the pair cannot
@@ -656,11 +770,19 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
         // is the absence of evidence, not evidence of freshness. Without it, size
         // alone decides, and a same-size rewrite is invisible — so never settle.
         const settled = e && st.stat.mtimeMs > 0 && e.indexedAt > st.stat.mtimeMs;
-        if (e && settled && e.mtimeMs === st.stat.mtimeMs && e.size === st.stat.size) continue;
+        // Unchanged since it was indexed — including in a previous session, which
+        // is the case this validates. Mark it so later searches take the shortcut;
+        // the file is NOT re-read.
+        if (e && settled && e.mtimeMs === st.stat.mtimeMs && e.size === st.stat.size) {
+          // Checked against the file, and it learns its resolved path without a read.
+          e.validated = true;
+          e.safe = rr.safe;
+          continue;
+        }
         if (st.stat.size > indexMaxBytes) { indexDrop(p); continue; } // stays a full-read candidate
         const readStartedAt = Date.now();
         const seenSeq = seqOf(p);
-        const rr = await resolve(p);
+        const seenSafeSeq = seqOfSafe(rr.safe);
         const rd = await read(p, { encoding: 'utf-8' });
         if (!rd.ok) { indexDrop(p); continue; }
         filesRead++;
@@ -670,14 +792,36 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
         // already knew. On one real folder that was 4.29 MB per query — exactly
         // cancelling the bytes the index saved.
         const isBinary = rd.data.includes('\u0000');
-        indexAdd(p, isBinary ? '' : rd.data, st.stat, rr.ok ? rr.safe : null, readStartedAt, seenSeq, isBinary);
+        indexAdd(p, isBinary ? '' : rd.data, st.stat, rr.safe, readStartedAt, seenSeq, seenSafeSeq, isBinary);
       }
       // Snapshot the keys: indexDrop mutates idx.files, so iterating it live
       // would skip entries. (oxlint flags the spread as useless; it is not.)
       for (const p of [...idx.files.keys()]) if (!seen.has(p)) indexDrop(p);
 
-      // Evaluate the plan: AND intersects, OR unions, TRI intersects postings.
-      const acc = evaluateQuery(plan, idx.postings);
+      // Everything the refresh just read went into the overlay. Fold it into the
+      // base before evaluating, so the cold build does not leave the whole index
+      // sitting in Sets — which is the shape this change exists to get rid of.
+      if (indexFoldDue()) indexFold();
+
+      // Evaluate the plan against BOTH stores and union the two. Same plan, same
+      // semantics; only the storage differs. evaluateQueryIds is asserted against
+      // evaluateQuery in trigram.test.mjs, which is why they can be mixed here.
+      const baseIds = evaluateQueryIds(plan, idx.postings);
+      const overlayHits = evaluateQuery(plan, idx.overlay);
+      // null from either side means "no constraint". Today's code read null as an
+      // EMPTY candidate set, which would drop every result; treat it as the full
+      // scan it is meant to be.
+      let acc = null;
+      if (baseIds !== null && overlayHits !== null) {
+        acc = new Set();
+        for (const p of overlayHits) if (idx.files.has(p)) acc.add(p);
+        for (const id of baseIds) {
+          const p = idx.paths[id];
+          // A path the base still lists but that no longer exists, or that has been
+          // rewritten into the overlay, is dropped here rather than at read time.
+          if (p !== undefined && idx.files.has(p)) acc.add(p);
+        }
+      }
       // A file we hold no postings for must stay a candidate, because we cannot
       // know whether it matches — that is oversized files, which are never read
       // here. A file we know to be BINARY is not a candidate: binaries are not
@@ -687,11 +831,15 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
       // Binaries DO have an entry (with no postings), so they fall out of both the
       // intersection and this list without being re-read.
       const over = globbed.matches.filter((p) => !idx.files.has(p) && !(indexPath && p === indexPath));
-      // Sort by path: postings iterate in insertion order, and today's callers
-      // see glob's sorted order. Candidate order must not change which results
-      // the maxResults cap keeps.
-      candidates = [...new Set([...(acc || []), ...over])].sort();
-      indexUsed = true;
+      // Sort by path: postings iterate in id order, and today's callers see glob's
+      // sorted order. Candidate order must not change which results the maxResults
+      // cap keeps.
+      if (acc === null) {
+        candidates = null;                       // unconstrained ⇒ scan, as before
+      } else {
+        candidates = [...new Set([...acc, ...over])].sort();
+        indexUsed = true;
+      }
     }
 
     outer: for (const p of (candidates || globbed.matches)) {
