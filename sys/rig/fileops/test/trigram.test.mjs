@@ -996,6 +996,46 @@ await test('REGRESSION: an in-flight alias read cannot install bytes older than 
   eq((await fs.grep('alpha')).matches.length, 0, 'and the raced-over bytes are gone');
 });
 
+// ── the index outlives the glob ───────────────────────────────────────────
+// The eviction sweep drops files that have vanished. "Absent from THIS glob's
+// matches" is not that, and reading it that way threw the rest of the index away
+// on every narrowed search: a grep over *.js evicted every .md entry, so
+// alternating globs never warmed and each search re-read its whole corpus.
+// Bounding the sweep by the glob means postings can now name files outside it,
+// so the candidate set has to be bounded by the glob instead. Both halves are
+// asserted here, because either one alone is wrong.
+await test('a narrowed grep does not evict the rest of the index', async () => {
+  const backend = new MemoryBackend();
+  const stats = [];
+  const fs = createFileops({ backend, index: true, onSearch: (s) => stats.push(s) });
+  for (let i = 0; i < 8; i++) {
+    await fs.write(`a${i}.js`, `const needleXYZ${i} = 1;\n`);
+    await fs.write(`b${i}.md`, `# doc needleXYZ${i}\n`);
+  }
+  // The index refuses to trust a file indexed in the same millisecond it was
+  // written, so let the clock move before the first search settles the entries.
+  await new Promise((r) => setTimeout(r, 5));
+  const grep = async (glob) => { const r = await fs.grep('needleXYZ3', { glob }); await new Promise((x) => setTimeout(x, 2)); return r; };
+
+  await grep('**/*.js');                            // cold: reads the .js files
+  await grep('**/*.md');                            // cold: reads the .md files
+  const warm = await grep('**/*.js');               // must NOT re-read the .js files
+  eq(stats[2].filesRead, 1, 'the third search re-read the corpus: the .md grep evicted the .js entries');
+  eq(warm.matches.length, 1, 'and it still finds the one .js match');
+
+  // The other half: a glob must never return a file it does not cover, even
+  // though the index now holds files from every glob searched before it.
+  const jsOnly = await grep('**/*.js');
+  eq(jsOnly.matches.every((m) => m.path.endsWith('.js')), true, 'a *.js grep returned a non-js file from the index');
+  const mdOnly = await grep('**/*.md');
+  eq(mdOnly.matches.length, 1, 'the .md grep finds its one match');
+  eq(mdOnly.matches.every((m) => m.path.endsWith('.md')), true, 'a *.md grep returned a non-md file from the index');
+
+  // And a file that really did vanish is still dropped.
+  await fs.remove('a3.js');
+  eq((await grep('**/*.js')).matches.length, 0, 'a deleted file still leaves the candidate set');
+});
+
 console.log(`trigram: ${passed} passed, ${failures.length} failed`);
 for (const f of failures) console.log(`  FAIL ${f.name}: ${f.message}`);
 if (failures.length) process.exit(1);

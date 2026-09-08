@@ -697,6 +697,22 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     return { ok: true, matches };
   }
 
+  // Whether a search with these options WOULD have listed `path` — the same scope
+  // test and the same regex `glob` applies, run backwards against a path it already
+  // produced. The index's eviction sweep needs it: "absent from this glob's matches"
+  // is not "vanished from the filesystem", and reading it that way threw the rest of
+  // the index away on every narrowed search, so alternating globs never warmed.
+  async function globCovers(pattern, opts = {}) {
+    const cr = await resolve(opts.cwd || '');
+    if (!cr.ok) return () => false;
+    const re = globToRegExp(pattern);
+    const prefix = cr.path ? cr.path + '/' : '';
+    return (path) => {
+      if (prefix && !path.startsWith(prefix)) return false;
+      return re.test(prefix ? path.slice(prefix.length) : path);
+    };
+  }
+
   async function grep(pattern, opts = {}) {
     const max = opts.maxResults || grepCap;
     const t0 = Date.now();
@@ -796,7 +812,10 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
       }
       // Snapshot the keys: indexDrop mutates idx.files, so iterating it live
       // would skip entries. (oxlint flags the spread as useless; it is not.)
-      for (const p of [...idx.files.keys()]) if (!seen.has(p)) indexDrop(p);
+      // Drop only what this glob COVERS: a path outside it was never looked for,
+      // so its absence from `seen` says nothing about whether it still exists.
+      const covers = await globCovers(opts.glob || '**', { cwd: opts.cwd || '' });
+      for (const p of [...idx.files.keys()]) if (!seen.has(p) && covers(p)) indexDrop(p);
 
       // Everything the refresh just read went into the overlay. Fold it into the
       // base before evaluating, so the cold build does not leave the whole index
@@ -837,7 +856,11 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
       if (acc === null) {
         candidates = null;                       // unconstrained ⇒ scan, as before
       } else {
-        candidates = [...new Set([...acc, ...over])].sort();
+        // The index spans every glob ever searched, so postings can name files
+        // outside this one. `over` is already glob-bounded; `acc` is not, and
+        // was only ever bounded by the sweep that used to empty it.
+        const inGlob = new Set(globbed.matches);
+        candidates = [...new Set([...[...acc].filter((p) => inGlob.has(p)), ...over])].sort();
         indexUsed = true;
       }
     }
