@@ -28,6 +28,8 @@
 
 import { appendEvent, contentHash, verifyChain, toNDJSON, fromNDJSON } from './ledger.mjs';
 import { parseExpect, gradeExpect, stripExpect, EXPECT_MARKER } from '../ai/expect.mjs';
+import { runUnit, createProjector } from './projection.mjs';
+export { runUnit, createProjector };
 
 export const RUN_EVENTS = Object.freeze([
   'run.started',      // input: { messages, tools }            output: {}
@@ -81,6 +83,10 @@ export async function requestHash({ messages, tools, model = null }) {
 export function createRunRecorder({ app = 'anvil', principal = 'local', grant_id = null, now = () => Date.now() } = {}) {
   const events = [];
   const blobs = new Map();      // hash -> payload (input or output)
+  // F1's invariant compares every outgoing request against the surface the chain
+  // reconstructs. Held, not recomputed: `events` only ever grows, so the projector
+  // applies the new tail and nothing else (projection.mjs).
+  const surface = createProjector(transcriptUnit({ applyCompaction: true }));
   const argsHashes = new Map(); // tool-call id -> args_hash (so tool.responded can be keyed for replay)
   let head = null;
   let queue = Promise.resolve();
@@ -150,7 +156,13 @@ export function createRunRecorder({ app = 'anvil', principal = 'local', grant_id
         if (typeof onDivergence === 'function') {
           try {
             await queue; // the chain must be settled before it can be compared against
-            const chk = reconstructionCheck(args.messages, events, (e) => ({ input: blobs.get(e.input_hash), output: blobs.get(e.output_hash) }));
+            // The surface is maintained incrementally across the run: this check runs on
+            // every request, and refolding the whole chain each time made it quadratic in
+            // the number of turns. The projector applies only the events appended since
+            // the last request, and rebuilds itself if the chain is ever not an extension
+            // of what it already consumed.
+            const want = surface.advance(events, (e) => ({ input: blobs.get(e.input_hash), output: blobs.get(e.output_hash) })).value;
+            const chk = compareSurface(args.messages, want);
             if (!chk.ok) onDivergence(chk);
           } catch (_) { /* the check must never be what breaks a run */ }
         }
@@ -256,12 +268,21 @@ export function loadRecord({ events, blobs }) {
 // task_done returns verified:true from the loop (agent-loop.mjs:290-295), so
 // "done" is derived from gate ∧ verified, never from verified alone. This is
 // Anvil's 139c381 rule, now a pure function of the record.
-export function foldStatus(events, resolve, { gated = false } = {}) {
-  const stopEv = [...events].reverse().find((e) => e.tool === 'run.stopped');
-  const steps = events.filter((e) => e.tool === 'turn.started').length;
-  if (!stopEv) return { phase: 'running', status: 'running', stop: null, verified: false, steps };
-  return { phase: 'stopped', steps, ...statusOf(resolve(stopEv)?.output || {}, gated) };
+export function statusUnit({ gated = false } = {}) {
+  return {
+    init: () => ({ steps: 0, stopOut: null }),
+    apply(s, e) {
+      if (e.tool === 'turn.started') return { steps: s.steps + 1, stopOut: s.stopOut };
+      // The LAST run.stopped wins, which a reverse-find did and an overwrite does.
+      if (e.tool === 'run.stopped') return { steps: s.steps, stopOut: e.output || {} };
+      return s;
+    },
+    value: (s) => (s.stopOut === null
+      ? { phase: 'running', status: 'running', stop: null, verified: false, steps: s.steps }
+      : { phase: 'stopped', steps: s.steps, ...statusOf(s.stopOut, gated) }),
+  };
 }
+export function foldStatus(events, resolve, opts = {}) { return runUnit(statusUnit(opts), events, resolve); }
 function statusOf(out, gated) {
   const stop = out.stop ?? 'unknown';
   const verified = out.verified === true;
@@ -278,123 +299,148 @@ export function joined(events, resolve) {
 }
 
 // Anvil's log pane rows, derived. Same shapes renderLog already draws.
-export function foldLog(events, resolve) {
-  const rows = [];
-  const open = new Map(); // tool-call id -> row
-  for (const e of joined(events, resolve)) {
-    const inp = e.input || {}, out = e.output || {};
-    switch (e.tool) {
-      case 'run.started':
-        for (const m of (inp.messages || [])) if (m.role === 'user') rows.push({ k: 'user', text: String(m.content ?? '') });
-        break;
-      case 'assistant.said': rows.push({ k: 'assistant', text: out.content ?? '' }); break;
-      case 'tool.called': {
-        const a = inp.args || {};
-        const detail = a.command || a.path || a.file || a.old_string || (a.patch ? 'patch' : '') || '';
-        const row = { k: 'tool', name: inp.name, detail: String(detail).split('\n')[0].slice(0, 120), result: null, error: null, args: a };
-        open.set(inp.id, row); rows.push(row); break;
+export function logUnit() {
+  return {
+    // `rows` and `open` are mutated in place; the STATE OBJECT is what carries the
+    // changed/unchanged signal (see projection.mjs). A tool result patches a row
+    // already drawn, so the array reference cannot report it.
+    init: () => ({ rows: [], open: new Map() }),
+    value: (s) => s.rows,
+    apply(s, e) {
+      const inp = e.input || {}, out = e.output || {};
+      const { rows, open } = s;
+      switch (e.tool) {
+        case 'run.started': {
+          let any = false;
+          for (const m of (inp.messages || [])) if (m.role === 'user') { rows.push({ k: 'user', text: String(m.content ?? '') }); any = true; }
+          return any ? { rows, open } : s;
+        }
+        case 'assistant.said': rows.push({ k: 'assistant', text: out.content ?? '' }); return { rows, open };
+        case 'tool.called': {
+          const a = inp.args || {};
+          const detail = a.command || a.path || a.file || a.old_string || (a.patch ? 'patch' : '') || '';
+          const row = { k: 'tool', name: inp.name, detail: String(detail).split('\n')[0].slice(0, 120), result: null, error: null, args: a };
+          open.set(inp.id, row); rows.push(row); return { rows, open };
+        }
+        case 'tool.responded': {
+          const row = open.get(inp.id);
+          if (row) { row.result = String(out.result ?? '').slice(0, 8000); open.delete(inp.id); }
+          else rows.push({ k: 'tool', name: inp.name || '(tool)', detail: '', result: String(out.result ?? '').slice(0, 8000), error: null });
+          return { rows, open };
+        }
+        case 'tool.failed': {
+          const row = open.get(inp.id);
+          if (row) { row.error = String(out.error ?? ''); open.delete(inp.id); }
+          else rows.push({ k: 'tool', name: inp.name || '(tool)', detail: '(arguments rejected)', result: null, error: String(out.error ?? '') });
+          return { rows, open };
+        }
+        case 'verify.passed': rows.push({ k: 'system', text: '✓ gate passed — exit 0' }); return { rows, open };
+        case 'verify.failed': rows.push({ k: 'system', text: `✗ gate failed (round ${inp.round ?? 1}) — exit ${out.verdict?.exit ?? '?'}; agent retrying` }); return { rows, open };
+        case 'run.stopped': {
+          const st = out.stop;
+          const label = st === 'aborted' ? 'stopped' : st === 'budget' ? `hit budget (${out.axis || ''})` : st === 'unverified' ? 'gate never passed' : st === 'error' ? `error: ${out.error || ''}` : st;
+          rows.push({ k: 'system', text: `agent ${label} · ${inp.steps ?? '?'} steps` });
+          return { rows, open };
+        }
+        default: return s;
       }
-      case 'tool.responded': {
-        const row = open.get(inp.id);
-        if (row) { row.result = String(out.result ?? '').slice(0, 8000); open.delete(inp.id); }
-        else rows.push({ k: 'tool', name: inp.name || '(tool)', detail: '', result: String(out.result ?? '').slice(0, 8000), error: null });
-        break;
-      }
-      case 'tool.failed': {
-        const row = open.get(inp.id);
-        if (row) { row.error = String(out.error ?? ''); open.delete(inp.id); }
-        else rows.push({ k: 'tool', name: inp.name || '(tool)', detail: '(arguments rejected)', result: null, error: String(out.error ?? '') });
-        break;
-      }
-      case 'verify.passed': rows.push({ k: 'system', text: '✓ gate passed — exit 0' }); break;
-      case 'verify.failed': rows.push({ k: 'system', text: `✗ gate failed (round ${inp.round ?? 1}) — exit ${out.verdict?.exit ?? '?'}; agent retrying` }); break;
-      case 'run.stopped': {
-        const s = out.stop;
-        const label = s === 'aborted' ? 'stopped' : s === 'budget' ? `hit budget (${out.axis || ''})` : s === 'unverified' ? 'gate never passed' : s === 'error' ? `error: ${out.error || ''}` : s;
-        rows.push({ k: 'system', text: `agent ${label} · ${inp.steps ?? '?'} steps` });
-        break;
-      }
-    }
-  }
-  return rows;
+    },
+  };
 }
+export function foldLog(events, resolve) { return runUnit(logUnit(), events, resolve); }
 
 // The OpenAI-shaped transcript after the system prefix — what the next run is
 // handed. Derived, so it can never drift from what happened: every tool reply is
 // paired with the assistant turn that called it, by construction.
-export function foldTranscript(events, resolve, { applyCompaction = false } = {}) {
-  const out = [];
-  let pendingCalls = null;
-  const flushAssistant = () => {
-    if (pendingCalls) { out.push({ role: 'assistant', content: null, tool_calls: pendingCalls }); pendingCalls = null; }
+export function transcriptUnit({ applyCompaction = false } = {}) {
+  return {
+    // `out` is mutated in place (push, splice, index assign); the state object is
+    // what reports change. See projection.mjs.
+    init: () => ({ out: [], pendingCalls: null, started: 0 }),
+    value: (s) => s.out,
+    apply(s, e) {
+      const out = s.out;
+      const inp = e.input || {}, o = e.output || {};
+      const flushed = (pc) => { if (pc) out.push({ role: 'assistant', content: null, tool_calls: pc }); return null; };
+      switch (e.tool) {
+        case 'run.started': {
+          const msgs = (inp.messages || []).filter((m) => m.role !== 'system');
+          if (s.started === 0) { for (const m of msgs) out.push(m); }
+          else {
+            // A re-entered loop (Anvil's act-or-nudge records a second run.started). Its messages
+            // REPEAT everything the transcript already holds, then add the new turns (the nudge).
+            // Emit only that new tail: skip the longest leading run of `msgs` that already sits as a
+            // contiguous tail of `out` (compared by content), then push the remainder.
+            const key = (m) => JSON.stringify([m.role, m.content ?? null, m.tool_call_id ?? null, (m.tool_calls || []).map((c) => c.id)]);
+            // Largest k where out's last k messages equal msgs' first k — that overlap is the repeat;
+            // msgs.slice(k) is the new tail (the nudge's assistant prose + user turn).
+            let k = Math.min(out.length, msgs.length);
+            for (; k > 0; k--) { let ok = true; for (let i = 0; i < k; i++) if (key(out[out.length - k + i]) !== key(msgs[i])) { ok = false; break; } if (ok) break; }
+            for (const m of msgs.slice(k)) out.push(m);
+          }
+          return { out, pendingCalls: s.pendingCalls, started: s.started + 1 };
+        }
+        case 'llm.responded': {
+          let pc = flushed(s.pendingCalls);
+          const calls = Array.isArray(o.toolCalls) ? o.toolCalls : [];
+          if (calls.length) pc = calls.map((c) => ({ id: c.id, type: 'function', function: { name: c.function?.name, arguments: c.function?.arguments } }));
+          else if (o.content) out.push({ role: 'assistant', content: o.content });
+          return { out, pendingCalls: pc, started: s.started };
+        }
+        case 'tool.responded': {
+          const pc = flushed(s.pendingCalls);
+          out.push({ role: 'tool', tool_call_id: inp.id, content: String(o.result ?? '') });
+          return { out, pendingCalls: pc, started: s.started };
+        }
+        // F5: the surface carried the capped form. The full result stays on the chain (and in
+        // `history`); the transcript is patched to what was actually sent, so a replay of this
+        // run sends the same bytes it sent the first time.
+        case 'tool.spilled': {
+          for (let i = out.length - 1; i >= 0; i--) {
+            if (out[i].role === 'tool' && out[i].tool_call_id === inp.id) { out[i] = { ...out[i], content: String(o.sent ?? '') }; return { out, pendingCalls: s.pendingCalls, started: s.started }; }
+          }
+          return s;
+        }
+        case 'tool.failed': {
+          const pc = flushed(s.pendingCalls);
+          out.push({ role: 'tool', tool_call_id: inp.id, content: `Error: ${o.error ?? ''}` });
+          return { out, pendingCalls: pc, started: s.started };
+        }
+        // Coordination, not the owner: a carried gate verdict must never read as the owner's
+        // instruction (B3). The tag survives into the next run's transcript.
+        case 'verify.failed':
+          out.push({ role: 'user', content: `[coordination] Gate failed (exit ${o.verdict?.exit ?? '?'}). Fix the problem and continue.` });
+          return { out, pendingCalls: s.pendingCalls, started: s.started };
+        // F7: the reminder is replayed verbatim from the record, not regenerated — the wording
+        // may change between versions, and the surface must be what THAT run actually sent.
+        case 'run.nudged':
+          if (!o.content) return s;
+          out.push({ role: 'user', content: String(o.content) });
+          return { out, pendingCalls: s.pendingCalls, started: s.started };
+        // F4, and only for foldSurface: a compaction replaces a span of the surface AS IT STOOD
+        // AT THIS POINT in the run. Applying every compaction after the whole transcript was
+        // folded gave the wrong answer whenever one was interleaved with later turns — the span
+        // then indexed a surface that did not exist yet (found by a cross-family review, which
+        // reproduced a duplicated message and a replacement overwriting a future reply).
+        // foldTranscript itself ignores this verb: the RAW transcript still shows the originals.
+        case 'run.compacted': {
+          if (!applyCompaction) return s;
+          if (!o || !Array.isArray(o.replacement)) return s; // an orphan leaves the surface alone
+          const pc = flushed(s.pendingCalls);
+          const { from = 0, to = 0 } = inp;
+          if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < from || to > out.length) return { out, pendingCalls: pc, started: s.started };
+          out.splice(from, to - from, ...o.replacement);
+          return { out, pendingCalls: pc, started: s.started };
+        }
+        default: return s;
+      }
+    },
   };
-  let started = 0;
-  for (const e of joined(events, resolve)) {
-    const inp = e.input || {}, o = e.output || {};
-    switch (e.tool) {
-      case 'run.started': {
-        const msgs = (inp.messages || []).filter((m) => m.role !== 'system');
-        if (started === 0) { for (const m of msgs) out.push(m); }
-        else {
-          // A re-entered loop (Anvil's act-or-nudge records a second run.started). Its messages
-          // REPEAT everything the transcript already holds, then add the new turns (the nudge).
-          // Emit only that new tail: skip the longest leading run of `msgs` that already sits as a
-          // contiguous tail of `out` (compared by content), then push the remainder.
-          const key = (m) => JSON.stringify([m.role, m.content ?? null, m.tool_call_id ?? null, (m.tool_calls || []).map((c) => c.id)]);
-          // Largest k where out's last k messages equal msgs' first k — that overlap is the repeat;
-          // msgs.slice(k) is the new tail (the nudge's assistant prose + user turn).
-          let k = Math.min(out.length, msgs.length);
-          for (; k > 0; k--) { let ok = true; for (let i = 0; i < k; i++) if (key(out[out.length - k + i]) !== key(msgs[i])) { ok = false; break; } if (ok) break; }
-          for (const m of msgs.slice(k)) out.push(m);
-        }
-        started++;
-        break;
-      }
-      case 'llm.responded': {
-        flushAssistant();
-        const calls = Array.isArray(o.toolCalls) ? o.toolCalls : [];
-        if (calls.length) pendingCalls = calls.map((c) => ({ id: c.id, type: 'function', function: { name: c.function?.name, arguments: c.function?.arguments } }));
-        else if (o.content) out.push({ role: 'assistant', content: o.content });
-        break;
-      }
-      case 'tool.responded': flushAssistant(); out.push({ role: 'tool', tool_call_id: inp.id, content: String(o.result ?? '') }); break;
-      // F5: the surface carried the capped form. The full result stays on the chain (and in
-      // `history`); the transcript is patched to what was actually sent, so a replay of this
-      // run sends the same bytes it sent the first time.
-      case 'tool.spilled': {
-        for (let i = out.length - 1; i >= 0; i--) {
-          if (out[i].role === 'tool' && out[i].tool_call_id === inp.id) { out[i] = { ...out[i], content: String(o.sent ?? '') }; break; }
-        }
-        break;
-      }
-      case 'tool.failed': flushAssistant(); out.push({ role: 'tool', tool_call_id: inp.id, content: `Error: ${o.error ?? ''}` }); break;
-      // Coordination, not the owner: a carried gate verdict must never read as the owner's
-      // instruction (B3). The tag survives into the next run's transcript.
-      case 'verify.failed': out.push({ role: 'user', content: `[coordination] Gate failed (exit ${o.verdict?.exit ?? '?'}). Fix the problem and continue.` }); break;
-      // F7: the reminder is replayed verbatim from the record, not regenerated — the wording
-      // may change between versions, and the surface must be what THAT run actually sent.
-      case 'run.nudged': if (o.content) out.push({ role: 'user', content: String(o.content) }); break;
-      // F4, and only for foldSurface: a compaction replaces a span of the surface AS IT STOOD
-      // AT THIS POINT in the run. Applying every compaction after the whole transcript was
-      // folded gave the wrong answer whenever one was interleaved with later turns — the span
-      // then indexed a surface that did not exist yet (found by a cross-family review, which
-      // reproduced a duplicated message and a replacement overwriting a future reply).
-      // foldTranscript itself ignores this verb: the RAW transcript still shows the originals.
-      case 'run.compacted': {
-        if (!applyCompaction) break;
-        if (!o || !Array.isArray(o.replacement)) break; // an orphan leaves the surface alone
-        flushAssistant();
-        const { from = 0, to = 0 } = inp;
-        if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < from || to > out.length) break;
-        out.splice(from, to - from, ...o.replacement);
-        break;
-      }
-    }
-  }
-  // An assistant turn whose tool replies never arrived is malformed as the next
-  // request's tail — the run died there. Drop it; the record still shows it.
-  return out;
 }
+// An assistant turn whose tool replies never arrived is malformed as the next
+// request's tail — the run died there. Dropped by never flushing it; the record
+// still shows it.
+export function foldTranscript(events, resolve, opts = {}) { return runUnit(transcriptUnit(opts), events, resolve); }
 
 // ─────────────────────────────────────────────────────────────── replay ───
 
@@ -1074,7 +1120,13 @@ export function stagnationNudge(stag) {
 // run over one would do more damage than the drift it found. The caller decides what to do.
 // System messages are excluded because foldTranscript deliberately drops them.
 export function reconstructionCheck(sent, events, resolve) {
-  const want = foldSurface(events, resolve);
+  return compareSurface(sent, foldSurface(events, resolve));
+}
+
+// The comparison half, split out so a caller holding an incrementally maintained
+// surface (createProjector, below) does not refold the whole chain to use it —
+// which wrapInfer did on every single model request, once per event per request.
+export function compareSurface(sent, want) {
   const got = (Array.isArray(sent) ? sent : []).filter((m) => m && m.role !== 'system');
   // The key compares tool calls by id AND by what they actually ask for. Comparing ids alone
   // let a request through whose `command` had been changed from `pwd` to `rm -rf src` — the
