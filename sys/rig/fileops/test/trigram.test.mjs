@@ -925,6 +925,77 @@ await test('a loaded index re-stats but does not re-read unchanged files', async
   assert(s.filesStatted >= 12, `every loaded entry is stat'ed once (got ${s.filesStatted})`);
 });
 
+await test('REGRESSION: a walk finishing after a write does not reinstall its stale snapshot', async () => {
+  // Only an invalidation drops the walk cache, so a walk already in flight when a
+  // write landed used to install its pre-write snapshot AFTERWARDS — and nothing
+  // re-walks until the next invalidation, so one interleaving hid the new file
+  // from every later query for the rest of the session. fileops supplies the
+  // interleaving itself (the debounced indexSave is fire-and-forget), and so does
+  // any caller that starts a write without awaiting it — Anvil's post-run review
+  // is one (apps/anvil/index.html, learnThisRun).
+  const backend = new MemoryBackend();
+  const fs = createFileops({ backend, index: true, exclusive: true });
+  for (let i = 0; i < 20; i++) await fs.write(`f${i}.txt`, 'alpha\n', { createParents: true });
+  await fs.grep('alpha');
+
+  let release; const paused = new Promise((r) => { release = r; });
+  let reached; const atRoot = new Promise((r) => { reached = r; });
+  const list = backend.list.bind(backend);
+  let once = true;
+  backend.list = async (p) => {
+    const out = await list(p);
+    if (p === '' && once) { once = false; reached(); await paused; }
+    return out;
+  };
+  const walking = fs.grep('a');                     // suspended part-way through its walk
+  await atRoot;
+  await fs.write('new.txt', 'brandnew\n');          // lands before that walk finishes
+  release();
+  await walking;
+  backend.list = list;
+
+  // The raced walk itself may legitimately predate the file — an unindexed glob
+  // racing the same write misses it too. What must not survive is the SNAPSHOT.
+  const plain = createFileops({ backend, index: false });
+  eq((await fs.grep('brandnew')).matches.length, (await plain.grep('brandnew')).matches.length,
+     'the next query sees the file the raced walk missed');
+  eq((await fs.grep('brandnew')).matches.length, 1, 'and every query after it');
+});
+
+await test('REGRESSION: an in-flight alias read cannot install bytes older than a write', async () => {
+  // indexDropBySafe only visits aliases already installed in idx.files. A symlink
+  // whose read was still in flight had no entry, so nothing bumped its sequence,
+  // and it landed holding pre-write bytes — dropping the alias path out of every
+  // later grep. The sequence is now bumped by resolved path, unconditionally.
+  const backend = new MemoryBackend();
+  const fs = createFileops({ backend, index: true, exclusive: true });
+  await fs.write('z-target.txt', 'alpha\n', { createParents: true });
+  for (let i = 0; i < 20; i++) await fs.write(`f${i}.txt`, 'filler\n');
+  backend.symlink('a-alias.txt', 'z-target.txt');   // sorts first, so it is read first
+
+  let release; const paused = new Promise((r) => { release = r; });
+  let reached; const atTarget = new Promise((r) => { reached = r; });
+  const readBinary = backend.readBinary.bind(backend);
+  let once = true;
+  backend.readBinary = async (p) => {
+    const out = await readBinary(p);
+    if (p === 'z-target.txt' && once) { once = false; reached(); await paused; }
+    return out;
+  };
+  const searching = fs.grep('alpha');               // the alias read holds the old bytes
+  await atTarget;
+  await fs.write('z-target.txt', 'omega\n');        // the alias has no entry to invalidate
+  release();
+  await searching;
+  backend.readBinary = readBinary;
+
+  const plain = createFileops({ backend, index: false });
+  const expected = (await plain.grep('omega')).matches.length;
+  eq(expected, 2, 'the target and its alias both hold the new content');
+  eq((await fs.grep('omega')).matches.length, expected, 'the indexed grep finds both paths');
+  eq((await fs.grep('alpha')).matches.length, 0, 'and the raced-over bytes are gone');
+});
+
 console.log(`trigram: ${passed} passed, ${failures.length} failed`);
 for (const f of failures) console.log(`  FAIL ${f.name}: ${f.message}`);
 if (failures.length) process.exit(1);
