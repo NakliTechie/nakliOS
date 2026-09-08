@@ -118,4 +118,25 @@ assert.match(anvil, /wallClockMs: 900000/, 'the task budget allows a slow local 
 assert.match(anvil, /const executor = makeToolExecutor\(\{ shell: oshell, face: oface, mode:'code', infer: inferViaHost, subagentDepth: 1 \}\)/, 'a subagent executor is a raw makeToolExecutor over its overlay');
 assert.ok(!/nm==='remember'/.test(anvil.slice(anvil.indexOf('async function spawnIsolated'), anvil.indexOf('const baseExec'))), 'the subagent factory adds no remember handler');
 
+// ── the boot error net ────────────────────────────────────────────────────
+// The whole app is one module script with a long static import list, and the
+// markup is already painted before it runs. A failed import or a throw during
+// boot therefore leaves a UI that looks alive and answers nothing. The net must
+// be a CLASSIC script placed BEFORE the module, or it is not installed when the
+// module is the thing that fails.
+{
+  const netAt = anvil.indexOf('window.__anvilBoot');
+  const moduleAt = anvil.indexOf('<script type="module">');
+  assert.ok(netAt > 0, 'the boot error net exists');
+  assert.ok(moduleAt > 0 && netAt < moduleAt, 'the net is installed before the module script it guards');
+  const net = anvil.slice(netAt, moduleAt);
+  // Capture phase: a script that fails to LOAD fires a non-bubbling error event on
+  // the element, which a plain window listener never sees.
+  assert.match(net, /addEventListener\('error',[\s\S]*?,\s*true\)/, 'the error listener runs in the capture phase');
+  assert.match(net, /addEventListener\('unhandledrejection'/, 'a rejected boot is caught too');
+  assert.match(net, /setTimeout\(/, 'a boot that neither finishes nor throws is still reported');
+  assert.match(anvil, /window\.__anvilBoot\.ok = true/, 'a completed boot stands the net down');
+  assert.ok(anvil.indexOf('window.__anvilBoot.ok = true') > moduleAt, 'the stand-down is inside the module, not beside it');
+}
+
 console.log('anvil-guards: honesty, reachability, hook coverage, single-writer state, bounded inference and run visibility all hold');

@@ -218,6 +218,50 @@
      exists when the app boots. -->
 <script src="../../sdk/naklios.js"></script>
 
+<!-- Boot error net. The whole app is ONE module script with a long static import
+     list; the markup above is already painted, so a failed import or a throw during
+     boot leaves a UI that looks alive and answers nothing — a silent failure with no
+     console anyone reads. Classic script, before the module, so it is installed even
+     if the module never parses. Capture phase, because a script that fails to LOAD
+     fires a non-bubbling error event on the element, not on window. -->
+<script>
+  window.__anvilBoot = { ok: false, shown: false };
+  (function () {
+    function show(what, detail) {
+      if (window.__anvilBoot.ok || window.__anvilBoot.shown) return;
+      window.__anvilBoot.shown = true;
+      var d = document.createElement('div');
+      d.setAttribute('role', 'alert');
+      d.style.cssText = 'position:fixed;inset:0;z-index:99999;overflow:auto;padding:28px;'
+        + 'background:#1b1210;color:#f4d9d2;font:13px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace';
+      d.textContent = 'Anvil did not start.\n\n' + what + '\n\n' + (detail || '')
+        + '\n\nThe interface behind this notice is painted but not wired — nothing in it works.'
+        + '\nReload after fixing, or open the console for the full trace.';
+      d.style.whiteSpace = 'pre-wrap';
+      document.documentElement.appendChild(d);
+    }
+    window.addEventListener('error', function (e) {
+      if (e && e.target && e.target !== window && e.target.tagName) {
+        var src = e.target.src || e.target.href || '';
+        // A module script whose IMPORT 404s fires a bare error on the script element
+        // with no src and no message — the browser deliberately hands JS nothing. The
+        // network log is the only place the failing URL exists, so say that.
+        show(src ? 'A required file failed to load.' : 'A module import failed to load.',
+             src || 'The failing URL is in the Network tab, as a 404 for a .mjs file.');
+        return;
+      }
+      show('A script error stopped the boot.', e && (e.message + (e.filename ? '\n' + e.filename + ':' + e.lineno : '')));
+    }, true);
+    window.addEventListener('unhandledrejection', function (e) {
+      var r = e && e.reason;
+      show('An unhandled rejection stopped the boot.', r && (r.stack || r.message || String(r)));
+    });
+    // A boot that neither finishes nor throws is still a failure, and the one the
+    // listeners above cannot see. Ten seconds is well past a cold module fetch.
+    setTimeout(function () { show('Boot did not finish within 10 seconds.', 'No error was reported.'); }, 10000);
+  })();
+</script>
+
 <script type="module">
   import { createFileops, MemoryBackend } from '../../sys/rig/fileops/index.mjs';
   import { OverlayBackend } from '../../sys/rig/fileops/overlay-backend.mjs';
@@ -2295,6 +2339,7 @@
   try{ if((await runsCount())===0){ const r=await rebuildRunIndex(); if(r&&r.indexed) console.info('[anvil] run index rebuilt: '+r.indexed+' record(s)'+(r.broken?(', '+r.broken+' broken chain(s)'):'')+' — '+r.stopsLine); } }catch(_){}
   if(!folderMode) await mountProject(state.activeProject);
   renderAll(); syncMode();
+  window.__anvilBoot.ok = true;   // the net above stands down
 
   // Seamlessly follow the host storage backend: when the user switches
   // browser/folder/crate elsewhere, remount this project's workspace on the new
