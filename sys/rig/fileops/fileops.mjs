@@ -370,12 +370,25 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
   // barely benefits. In exclusive mode it can be cached exactly, because file
   // CREATION and deletion also go through this fileops, so the same invalidation
   // that drops an index entry can drop the walk. Never cached otherwise.
+  // `walkSeq` versions the cache the way dropSeq versions a file's bytes. A walk
+  // that STARTED before an invalidation must not install its snapshot after it:
+  // the snapshot predates the write, so a file that write created is missing from
+  // it, and nothing re-walks until the next invalidation — one interleaving hides
+  // that file from every later query for the rest of the session. fileops supplies
+  // the interleaving itself: grep ends in indexSaveSoon(), whose indexSave() is
+  // fire-and-forget and writes through write(), which invalidates.
   let walkCache = null;
-  const invalidateWalk = () => { walkCache = null; };
+  let walkSeq = 0;
+  const invalidateWalk = () => { walkCache = null; walkSeq++; };
 
   let dropSeq = 0;
   const dropSeqByPath = new Map();
+  const dropSeqBySafe = new Map();
   function seqOf(path) { return dropSeqByPath.get(path) || 0; }
+  // The same sequence, keyed by the resolved path. Two mount paths can name one
+  // backend file through a symlink, and the per-mount-path sequence only guards
+  // the spelling the write actually used.
+  function seqOfSafe(safe) { return safe ? (dropSeqBySafe.get(safe) || 0) : 0; }
 
   function indexDrop(path) {
     invalidateWalk();
@@ -428,12 +441,18 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
 
   function indexDropBySafe(safe) {
     if (!safe) return;
+    // Bump BEFORE the sweep, and unconditionally. The sweep only reaches aliases
+    // already installed in idx.files; an alias whose read is still in flight has no
+    // entry to visit, so without this its stale bytes land after the write and that
+    // alias path drops out of every later grep.
+    dropSeqBySafe.set(safe, ++dropSeq);
     for (const [p, e] of [...idx.files]) if (e.safe === safe) indexDrop(p);
   }
 
-  function indexAdd(path, text, st, safe, readStartedAt, seenSeq, binary = false) {
-    // Discard a read that raced a write to the same path.
+  function indexAdd(path, text, st, safe, readStartedAt, seenSeq, seenSafeSeq, binary = false) {
+    // Discard a read that raced a write to the same path, under EITHER name.
     if (seenSeq !== undefined && seqOf(path) !== seenSeq) return;
+    if (seenSafeSeq !== undefined && safe && seqOfSafe(safe) !== seenSafeSeq) return;
     indexDrop(path);
     // Index the CASE-FOLDED text, folded per character (see foldCase — whole-string
     // lowercasing is not substring-preserving in Unicode and silently lost matches).
@@ -692,9 +711,11 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     if (index && exclusiveOk() && walkCache && walkCache.key === walkKey) {
       globbed = { ok: true, matches: walkCache.matches };
     } else {
+      const walkedFrom = walkSeq;
       globbed = await glob(opts.glob || '**', { cwd: opts.cwd || '' });
       if (!globbed.ok) return globbed;
-      if (index && exclusiveOk()) walkCache = { key: walkKey, matches: globbed.matches };
+      // Only cache a snapshot that nothing invalidated while it was being taken.
+      if (index && exclusiveOk() && walkSeq === walkedFrom) walkCache = { key: walkKey, matches: globbed.matches };
     }
     if (!globbed.ok) return globbed;
     const re = pattern instanceof RegExp ? pattern : new RegExp(pattern);
@@ -733,8 +754,14 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
         // checked against this session's filesystem, so it does not get the
         // exclusive shortcut until it has been.
         if (e && e.validated && (exclusiveOk() || !sweeping)) continue;
-        const st = await stat(p);
-        if (!st.ok) { indexDrop(p); continue; }
+        // Resolve and stat as two steps rather than through `stat`, which discards
+        // the resolved path. `safe` is what alias invalidation matches on, and an
+        // entry validated without a re-read has no other way to learn it.
+        const rr = await resolve(p);
+        if (!rr.ok) { indexDrop(p); continue; }
+        const raw = await backend.stat(rr.safe);
+        if (!raw) { indexDrop(p); continue; }
+        const st = { stat: { type: raw.type, size: raw.size ?? 0, mtimeMs: raw.mtimeMs ?? 0 } };
         filesStatted++;
         // Trust an unchanged mtime+size only when the file was already at least a
         // millisecond old when we indexed it. Inside that window the pair cannot
@@ -746,11 +773,16 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
         // Unchanged since it was indexed — including in a previous session, which
         // is the case this validates. Mark it so later searches take the shortcut;
         // the file is NOT re-read.
-        if (e && settled && e.mtimeMs === st.stat.mtimeMs && e.size === st.stat.size) { e.validated = true; continue; }
+        if (e && settled && e.mtimeMs === st.stat.mtimeMs && e.size === st.stat.size) {
+          // Checked against the file, and it learns its resolved path without a read.
+          e.validated = true;
+          e.safe = rr.safe;
+          continue;
+        }
         if (st.stat.size > indexMaxBytes) { indexDrop(p); continue; } // stays a full-read candidate
         const readStartedAt = Date.now();
         const seenSeq = seqOf(p);
-        const rr = await resolve(p);
+        const seenSafeSeq = seqOfSafe(rr.safe);
         const rd = await read(p, { encoding: 'utf-8' });
         if (!rd.ok) { indexDrop(p); continue; }
         filesRead++;
@@ -760,7 +792,7 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
         // already knew. On one real folder that was 4.29 MB per query — exactly
         // cancelling the bytes the index saved.
         const isBinary = rd.data.includes('\u0000');
-        indexAdd(p, isBinary ? '' : rd.data, st.stat, rr.ok ? rr.safe : null, readStartedAt, seenSeq, isBinary);
+        indexAdd(p, isBinary ? '' : rd.data, st.stat, rr.safe, readStartedAt, seenSeq, seenSafeSeq, isBinary);
       }
       // Snapshot the keys: indexDrop mutates idx.files, so iterating it live
       // would skip entries. (oxlint flags the spread as useless; it is not.)
