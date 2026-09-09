@@ -5,6 +5,8 @@ plan/
 !LICENSE
 !llms.txt
 !sitemap.xml
+!marketing/
+!marketing/**
 !.gitignore
 !.assetsignore
 !wrangler.jsonc

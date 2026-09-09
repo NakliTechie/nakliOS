@@ -1,5 +1,7 @@
 # NakliOS
 
+![NakliOS — a private browser desktop](marketing/hero-x.png)
+
 A private, browser-native desktop for single-file tools. Apps stay standalone; NakliOS gives them a home — a spotlight (⌘K), themed wallpapers, task-based folders, an Essentials dock, sticky notes, and windowed apps that feel native inside the OS.
 
 **Try it: [naklios.dev](https://naklios.dev/)**
