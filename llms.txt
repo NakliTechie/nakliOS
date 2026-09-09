@@ -1,0 +1,26 @@
+# NakliOS
+
+A private browser desktop: single-file, privacy-first, browser-native tools. No server, no account, no tracking. Data stays on the device (OPFS, a picked folder, or a Crate). Live: https://naklios.dev — Source: https://github.com/NakliTechie/nakliOS (MIT).
+
+## What it is
+A launcher (one HTML file at the root) that hosts standalone apps. Each app is its own single-file HTML page under /apps/<id>/ and also runs standalone. Two modes: Basic (opens app URLs in a tab), Immersive (apps run as iframe windows over a postMessage protocol).
+
+## Apps (/apps/<id>/)
+- anvil — on-device coding agent (read/write/edit/shell tools; workspace in the browser, a disk folder, or a Crate)
+- forge — shell/desktop over Rig + Kiln
+- reckon — spreadsheet; draft — word processor; editor; notes; files
+- reel — media player; nakliamp — music; sheaf — PDF editor; tijori — vault; calendar
+
+## Runtime surface
+- Host bridge: window.naklios (+ .ai) over postMessage; SDK at /sdk/naklios.js. Methods no-op when standalone (window.parent === window). Events: naklios:ready, :title, :close, :beforeclose, :theme.
+- Storage: OPFS by default; File System Access for a picked folder; Crate (host store) roams across devices.
+- AI: apps reach a model through the host (naklios.ai) — a BYOK endpoint set in Settings → AI. No model ships in the page; AI is removable.
+- Egress: naklios.net.fetch routes one cross-origin request through the user's own signed Cloudflare Worker (nakli-egress) — HMAC envelope, destination allowlist, SSRF guard. naklios never proxies traffic.
+
+## Coding agents
+- Rig (sys/rig): fileops, git, registry, agent-face, curated shell, goal records.
+- Kiln (sys/kiln): a persistent Pyodide-in-Worker kernel — the only tool the model gets; a separate verifier kernel gates "done".
+- Anvil (apps/anvil): the coding agent on Rig + Kiln; mobile + foldable.
+
+## Constraints
+No build step (vanilla ESM, vendored + pinned). Chromium/WebKit. Removable AI: pull the model, the tools still stand.

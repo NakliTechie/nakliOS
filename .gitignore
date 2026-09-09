@@ -3,6 +3,8 @@ plan/
 !index.html
 !README.md
 !LICENSE
+!llms.txt
+!sitemap.xml
 !.gitignore
 !.assetsignore
 !wrangler.jsonc
