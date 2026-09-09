@@ -1,0 +1,19 @@
+{
+  "id": "/apps/anvil/",
+  "name": "Anvil — on-device coding agent",
+  "short_name": "Anvil",
+  "description": "A coding agent that runs on your device — reads, writes, edits and runs code in a workspace you choose, no companion machine.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#0E1012",
+  "theme_color": "#15181B",
+  "categories": ["developer", "productivity", "utilities"],
+  "icons": [
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
