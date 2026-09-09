@@ -18,12 +18,16 @@ const textDecoder = new TextDecoder();
 
 // Worker-global names that reach the network. Pyodide's `js` module resolves
 // these to the Worker globals, and its urllib / pyfetch shims route through
-// `js.fetch`, so replacing them with throwing stubs is the single chokepoint
-// that denies model-authored Python any egress (C-K1). `postMessage` is
-// deliberately NOT here — the Rig back-channel depends on it.
+// `js.fetch`, so replacing them with throwing stubs closes the standard egress
+// APIs from model-authored Python (C-K1). This is NOT a complete sandbox: it
+// cannot stub the syntactic `import()` operator, and stubbing `eval`/`Function`
+// would break Pyodide itself — so `js.eval("import('…')")` remains reachable.
+// A CSP `connect-src` on the Kiln-hosting document is the network-layer backstop
+// (see sys/kiln README). `postMessage` is deliberately NOT here — the Rig
+// back-channel depends on it.
 export const NETWORK_EGRESS_GLOBALS = [
   'fetch', 'XMLHttpRequest', 'WebSocket', 'EventSource',
-  'Request', 'importScripts', 'Worker', 'SharedWorker',
+  'Request', 'importScripts', 'Worker', 'SharedWorker', 'WebTransport',
 ];
 
 // Replace every network-egress global on `target` with a stub that throws a
@@ -49,6 +53,14 @@ export function neuterNetworkEgress(target = globalThis) {
   if (nav && typeof nav.sendBeacon === 'function') {
     try { nav.sendBeacon = deny('navigator.sendBeacon'); } catch (_) {}
   }
+  // CacheStorage: Cache.add/addAll fetch over the network without touching the
+  // `fetch` global, so stub the whole caches accessor (M-K1 completeness).
+  const cachesStub = {
+    open: deny('caches.open'), match: deny('caches.match'), has: deny('caches.has'),
+    delete: deny('caches.delete'), keys: deny('caches.keys'),
+  };
+  try { Object.defineProperty(target, 'caches', { value: cachesStub, configurable: true, writable: true }); }
+  catch (_) { try { target.caches = cachesStub; } catch (_) {} }
   return target;
 }
 

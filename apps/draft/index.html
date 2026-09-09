@@ -4441,6 +4441,12 @@ function createAdapter(mount) {
       // the address as linked text — never a silent no-op (forward-pass fix,
       // Batch D). Returns false only when there is truly nothing to do.
       setLink(href) {
+        // Enforce the same protocol allowlist the ingress guards apply
+        // (schema getAttrs L1845, sanitizeMarks UNSAFE_URL L1936): a
+        // javascript:/data:/vbscript: target must never become a live link.
+        // An unsafe href is treated as removal — it strips an existing link
+        // and never applies a new one, matching how ingress drops it.
+        if (typeof href === "string" && UNSAFE_URL.test(href)) href = null;
         const { empty, from, to, $from } = view.state.selection;
         const range = empty ? linkRangeAt($from) : { from, to };
         if (!range || range.from === range.to) {

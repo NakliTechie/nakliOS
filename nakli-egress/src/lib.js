@@ -85,9 +85,18 @@ export function isPrivateHost(host) {
   if (h.startsWith('[') && h.endsWith(']')) h = h.slice(1, -1);  // unwrap IPv6 literal
   if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.internal') || h.endsWith('.local')) return true;
   if (h === '169.254.169.254') return true; // cloud metadata
-  // IPv4-mapped IPv6 (::ffff:127.0.0.1) → evaluate the embedded IPv4.
-  const mapped = h.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i);
-  if (mapped) h = mapped[1];
+  // IPv4-mapped / IPv4-compatible IPv6 → evaluate the embedded IPv4. The WHATWG URL
+  // parser serializes these in COMPRESSED HEX (e.g. new URL('http://[::ffff:169.254.169.254]/')
+  // .hostname === '[::ffff:a9fe:a9fe]'), never the dotted form, so match hex hextets too.
+  const dotted = h.match(/^::(?:ffff:)?(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i);
+  if (dotted) { h = dotted[1]; }
+  else {
+    const hx = h.match(/^::(?:ffff:)?([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+    if (hx) {
+      const hi = parseInt(hx[1], 16), lo = parseInt(hx[2], 16);
+      h = `${(hi >> 8) & 255}.${hi & 255}.${(lo >> 8) & 255}.${lo & 255}`;
+    }
+  }
   // IPv4 literal ranges
   const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
   if (m) {

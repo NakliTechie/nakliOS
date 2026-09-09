@@ -118,7 +118,7 @@ export function buildFileopsCommands(fs) {
     {
       name: 'fs.move',
       summary: 'Move (rename) a file or directory.',
-      description: 'Move a path to a new location within the mount. EEXIST if the destination exists. An out-of-root move is staged by C4.',
+      description: 'Move (rename) a path within the mount, DELETING the source `from`. EEXIST if the destination exists. Executes immediately — it is NOT staged.',
       inputSchema: {
         type: 'object',
         properties: { from: PATH, to: PATH },

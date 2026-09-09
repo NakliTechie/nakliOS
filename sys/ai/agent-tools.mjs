@@ -133,12 +133,29 @@ export const MODE_TOOLS = {
   harden: new Set(['read', 'edit', 'apply_patch', 'todowrite', 'dispatch', 'review']),
 };
 
+// `shellTool()` (from agent-loop) advertises "destructive commands stage for
+// confirmation" — true for agent-loop's own executor, which returns the staged
+// [y/N] and waits. THIS module's executor does not wait: it auto-answers the
+// prompt (see the YOLO block in executeTool), so that description would misstate
+// this surface. Present an honest one here — no gate; git history + the verifier
+// are the safety net. Only the description is overridden; the parameter schema is
+// inherited so it tracks agent-loop.
+function forgeShellTool() {
+  const t = shellTool();
+  t.function.description =
+    'Run a command in the workspace shell (bash-style: fileops, git, pipes, ' +
+    'redirects, globs). Returns combined stdout/stderr as text. Destructive ' +
+    'commands (rm, git commit) are NOT gated: this executor auto-answers the ' +
+    '[y/N], so git history and the verifier are the safety net.';
+  return t;
+}
+
 // The coding tool set for a mode. `shell` stays the escape hatch (code mode only).
 // Opt-in extras keep the default surface minimal (pi's lesson): `subagents` adds
 // `task`, `supervisor` adds `dispatch`/`review` (parallel isolated subagents),
 // `hashline` adds read_lines/edit_lines, `completion` adds task_done.
 export function codingToolset(mode = 'code', { subagents = false, supervisor = false, hashline = false, completion = false } = {}) {
-  const all = [readTool(), editTool(), writeTool(), applyPatchTool(), todoTool(), shellTool()];
+  const all = [readTool(), editTool(), writeTool(), applyPatchTool(), todoTool(), forgeShellTool()];
   if (subagents) all.push(taskTool());
   if (supervisor) all.push(dispatchTool(), reviewTool());
   if (hashline) all.push(readLinesTool(), editLinesTool());
@@ -700,7 +717,7 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
             { role: 'system', content: REVIEW_SYSTEM },
             { role: 'user', content: prompt },
           ],
-          tools: [readTool(), readLinesTool(), shellTool(), todoTool()],
+          tools: [readTool(), readLinesTool(), forgeShellTool(), todoTool()],
           executeTool: iso.executor,
           maxSteps: SUBAGENT_MAX_STEPS,
         });

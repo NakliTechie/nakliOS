@@ -19,6 +19,10 @@ function iso(clock) { return new Date(clock()).toISOString(); }
 export function createGoalStore({ fs, dir = 'goals', clock = () => Date.now() } = {}) {
   if (!fs) throw new Error('createGoalStore requires a fileops instance (fs)');
   const pathFor = (id) => `${dir}/${id}.json`;
+  // Serialize budget/status read-modify-writes: two concurrent spends would both
+  // read the same `spent` and one would be lost, letting an agent exceed its cap (Low9).
+  let _goalChain = Promise.resolve();
+  const _serial = (fn) => { const p = _goalChain.then(fn); _goalChain = p.catch(() => {}); return p; };
 
   async function persist(record) {
     record.revision += 1;
@@ -80,7 +84,8 @@ export function createGoalStore({ fs, dir = 'goals', clock = () => Date.now() } 
     return { ok: true, revision: record.revision, record };
   }
 
-  async function spend(id, amount) {
+  function spend(id, amount) { return _serial(() => _spendRaw(id, amount)); }
+  async function _spendRaw(id, amount) {
     const record = await read(id);
     if (!record) throw new Error(`goal ${id} not found`);
     record.spent += Number(amount) || 0;
@@ -91,7 +96,8 @@ export function createGoalStore({ fs, dir = 'goals', clock = () => Date.now() } 
 
   // The one privileged transition. Requires a verifier verdict with exit 0 —
   // the working agent has no path to this (see K3).
-  async function markDone(id, verdict) {
+  function markDone(id, verdict) { return _serial(() => _markDoneRaw(id, verdict)); }
+  async function _markDoneRaw(id, verdict) {
     const record = await read(id);
     if (!record) throw new Error(`goal ${id} not found`);
     if (!verdict || verdict.exit !== 0) {

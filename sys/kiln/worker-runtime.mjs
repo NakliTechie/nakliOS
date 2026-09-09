@@ -154,6 +154,35 @@ export async function syncWorkerSnapshot({ before, after, face, fsBridge, allowU
   return result;
 }
 
+// A request id doubles as the response-channel authentication tag (Low11). The
+// Worker echoes it verbatim in every `{type:'response', id, ...}`, and the main
+// thread settles the matching pending request by id. Because the Rig
+// back-channel needs `postMessage` un-neutered, model-authored Python shares the
+// Worker's `postMessage` and can forge a `response`. A guessable id (the old
+// `++counter`) let a forged response with the in-flight id settle a running
+// runCode with an attacker-chosen snapshot/namespace. A cryptographically
+// random id is a per-request nonce the forger cannot predict; it lives only in
+// this module's `pending` map on the main thread — never on any Worker global
+// that `js.<x>` from Python can read. The counter prefix keeps ids unique even
+// across an astronomically unlikely RNG collision.
+// Residual (cannot be closed from this file alone): a session that plants its
+// own `self` 'message' listener inside the Worker can read the id off the
+// incoming request message. Closing that needs the trusted Worker `reply` in
+// worker.mjs to carry a Worker-closure session nonce Python never observes —
+// out of this cluster's file scope; see the handback.
+function randomRequestId(counter) {
+  const c = globalThis.crypto;
+  let rand;
+  if (c && typeof c.randomUUID === 'function') {
+    rand = c.randomUUID();
+  } else if (c && typeof c.getRandomValues === 'function') {
+    rand = Array.from(c.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
+  } else {
+    rand = `${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`;
+  }
+  return `${counter}.${rand}`;
+}
+
 /**
  * Create a runtime matching `createKernelCore`'s injected runtime contract.
  */
@@ -208,9 +237,15 @@ export async function createWorkerRuntime({
     const target = new Uint8Array(message.payloadBuffer);
     try {
       if (!face) throw new Error('Rig is unavailable in this Kiln session');
-      if (allowlist.size > 0 && !allowlist.has(message.name)) {
+      if (!allowlist.has(message.name)) {
         // Forged rig-call: a name with no generated Python binding. Return a
         // typed miss instead of letting it reach an ungoverned command (M-K2).
+        // Fail closed on an EMPTY allowlist too (Low12): an empty set means the
+        // generated module exposes no `_rig_invoke` binding, so no legitimate
+        // Python-origin rig-call name can exist — every name is therefore
+        // forged. The governed face stays as defense-in-depth, but the binding
+        // allowlist is the primary gate and rejects unknown names regardless of
+        // its size.
         const denial = enc.encode(JSON.stringify(toRigJsonValue({
           ok: false, code: 'ENOCMD',
           message: `rig-call denied: '${message.name}' is not an exposed Kiln binding`,
@@ -246,6 +281,10 @@ export async function createWorkerRuntime({
       return;
     }
     if (message.type !== 'response') return;
+    // The id is the response-channel auth tag: only an unguessable id minted by
+    // request() below is in `pending`, so a forged response with a wrong/absent
+    // id finds no match and is dropped (Low11). Guard the lookup key shape too.
+    if (typeof message.id !== 'string' && typeof message.id !== 'number') return;
     const request = pending.get(message.id);
     if (!request) return;
     pending.delete(message.id);
@@ -267,7 +306,7 @@ export async function createWorkerRuntime({
 
   function request(op, payload = {}, timeoutMs = 0) {
     if (closed) return Promise.reject(new Error('Kiln Worker is closed'));
-    const id = ++requestId;
+    const id = randomRequestId(++requestId);
     return new Promise((resolve, reject) => {
       let timer = null;
       pending.set(id, {

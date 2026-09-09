@@ -4,7 +4,7 @@ import { createReviewQueue } from '../review-queue.mjs';
 import { registerAppDiffTypes } from '../diff-types.mjs';
 import { clearRegistry } from '../envelope.mjs';
 import { createProposalLedger } from '../../ai/proposal-fingerprint.mjs';
-import { issueGrant, caveat, newRootKey } from '../../identity/grant.mjs';
+import { issueGrant, caveat, newRootKey, verifyGrant } from '../../identity/grant.mjs';
 
 let passed = 0; const failures = [];
 async function test(n, fn) { try { await fn(); passed++; } catch (e) { failures.push({ n, message: e.message }); } }
@@ -49,12 +49,26 @@ await test('an agent WITHOUT an auto-commit grant is refused and the proposal st
 });
 
 await test('an agent WITH a reversible auto-commit grant commits a reversible op, but not an irreversible one', async () => {
-  const grant = await issueGrant(newRootKey(), { caveats: [caveat.tools(['setCells']), caveat.autoCommit(true)] });
-  let applied = 0; const q = createReviewQueue({ onApply: () => applied++ });
+  // The enforcement point retains the issuer root key and injects an authenticity
+  // verifier (Med14): decideCommit only SCOPES the grant; the queue must VERIFY its
+  // signature before auto-committing.
+  const rootKey = newRootKey();
+  const grant = await issueGrant(rootKey, { caveats: [caveat.tools(['setCells']), caveat.autoCommit(true)] });
+  let applied = 0; const q = createReviewQueue({ onApply: () => applied++, verifyGrant: (g, ctx) => verifyGrant(g, rootKey, ctx) });
   const revId = q.stage({ app: 'reckon', tool: 'setCells', diff: RECKON_DIFF, reversible: true }).proposal_id;
   eq((await q.commit(revId, { actor: 'agent', grant })).mode, 'auto', 'reversible → auto-commit'); eq(applied, 1, 'applied');
   const irrId = q.stage({ app: 'reckon', tool: 'setCells', diff: RECKON_DIFF, reversible: false }).proposal_id;
   eq((await q.commit(irrId, { actor: 'agent', grant })).ok, false, 'irreversible still person-only under a reversible grant'); eq(q.size(), 1, 'left queued');
+});
+
+await test('a FORGED auto-commit grant (bad signature) is refused, not auto-committed (Med14)', async () => {
+  const rootKey = newRootKey();
+  const good = await issueGrant(rootKey, { caveats: [caveat.tools(['setCells']), caveat.autoCommit(true)] });
+  const forged = { ...good, sig: 'AAAA' + String(good.sig || '').slice(4) }; // tamper the signature
+  let applied = 0; const q = createReviewQueue({ onApply: () => applied++, verifyGrant: (g, ctx) => verifyGrant(g, rootKey, ctx) });
+  const id = q.stage({ app: 'reckon', tool: 'setCells', diff: RECKON_DIFF, reversible: true }).proposal_id;
+  const r = await q.commit(id, { actor: 'agent', grant: forged });
+  eq(r.ok, false, 'forged grant refused'); eq(applied, 0, 'not applied'); eq(q.size(), 1, 'left queued');
 });
 
 await test('an expired proposal is refused even for a person, and stays queued', async () => {

@@ -13963,7 +13963,8 @@ export function createApp({ client, params = new URLSearchParams() }) {
         const row = document.createElement('button');
         row.type = 'button';
         row.className = 'rk-find-hit';
-        row.innerHTML = `<span class="rk-find-addr">${m.sheet}!${m.a1}</span><span class="rk-find-raw"></span>`;
+        row.innerHTML = `<span class="rk-find-addr"></span><span class="rk-find-raw"></span>`;
+        row.querySelector('.rk-find-addr').textContent = `${m.sheet}!${m.a1}`;
         row.querySelector('.rk-find-raw').textContent = m.raw;
         row.addEventListener('click', () => jumpTo(i));
         list.appendChild(row);

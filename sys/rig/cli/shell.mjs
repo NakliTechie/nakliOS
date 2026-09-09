@@ -347,7 +347,7 @@ export function createShell({ registry, face, cwd = '', kiln = null } = {}) {
       const pattern = positionals[0] || '';
       const files = positionals.slice(1);
       const fixed = has('F');
-      const re = new RegExp(fixed ? pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : pattern, icase ? 'i' : '');
+      let re; try { re = new RegExp(fixed ? pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : pattern, icase ? 'i' : ''); } catch (e) { return { text: `grep: invalid pattern: ${e.message}`, code: 2 }; }
       const filter = (text, prefix) => linesOf(text)
         .map((l, i) => ({ l, i }))
         .filter(({ l }) => re.test(l) !== invert)
@@ -502,7 +502,7 @@ export function createShell({ registry, face, cwd = '', kiln = null } = {}) {
       const lines = linesOf(inp.text);
       let m = /^s\/((?:[^/\\]|\\.)*)\/((?:[^/\\]|\\.)*)\/([gips]*)$/.exec(script);
       if (m) {
-        const re = new RegExp(m[1], m[3].includes('g') ? 'g' : '');
+        let re; try { re = new RegExp(m[1], m[3].includes('g') ? 'g' : ''); } catch (e) { return { text: `sed: invalid pattern: ${e.message}`, code: 2 }; }
         const rep = m[2].replace(/\\\//g, '/');
         return { text: lines.map((l) => l.replace(re, rep)).join('\n'), code: 0 };
       }

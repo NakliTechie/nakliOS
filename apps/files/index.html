@@ -536,22 +536,22 @@ function selectRow(row){
 async function previewFile(path){
   const pv = $('preview');
   pv.hidden = false;
-  pv.innerHTML = `<h3>Preview · ${basename(path)}</h3><div class="meta">Loading…</div>`;
+  pv.innerHTML = `<h3>Preview · ${escapeHtml(basename(path))}</h3><div class="meta">Loading…</div>`;
   try {
     const bytes = asBytes(await fs.readBinary(path));
     const meta = `<div class="meta">
       <span>${fmtSize(bytes.byteLength)}</span>
-      <span>${fmtPath(path)}</span>
+      <span>${escapeHtml(fmtPath(path))}</span>
     </div>`;
 
     // Choose preview by extension/type
     if (bytes.byteLength > 1024 * 1024) {
-      pv.innerHTML = `<h3>Preview · ${basename(path)}</h3>${meta}<div class="meta" style="margin-top:8px;">File is over 1 MB — preview skipped.</div>`;
+      pv.innerHTML = `<h3>Preview · ${escapeHtml(basename(path))}</h3>${meta}<div class="meta" style="margin-top:8px;">File is over 1 MB — preview skipped.</div>`;
       return;
     }
     if (/\.(png|jpe?g|gif|webp|svg)$/i.test(path)) {
       const url = URL.createObjectURL(new Blob([bytes], { type: previewMime(path) }));
-      pv.innerHTML = `<h3>Preview · ${basename(path)}</h3>${meta}<img src="${url}" alt="">`;
+      pv.innerHTML = `<h3>Preview · ${escapeHtml(basename(path))}</h3>${meta}<img src="${url}" alt="">`;
       return;
     }
     const text = new TextDecoder().decode(bytes);
@@ -559,9 +559,9 @@ async function previewFile(path){
     if (path.endsWith('.json')) {
       try { formatted = JSON.stringify(JSON.parse(text), null, 2); } catch(_){}
     }
-    pv.innerHTML = `<h3>Preview · ${basename(path)}</h3>${meta}<pre>${escapeHtml(formatted)}</pre>`;
+    pv.innerHTML = `<h3>Preview · ${escapeHtml(basename(path))}</h3>${meta}<pre>${escapeHtml(formatted)}</pre>`;
   } catch (e){
-    pv.innerHTML = `<h3>Preview · ${basename(path)}</h3><div class="meta">Error: ${e.message}</div>`;
+    pv.innerHTML = `<h3>Preview · ${escapeHtml(basename(path))}</h3><div class="meta">Error: ${escapeHtml(e.message)}</div>`;
   }
 }
 

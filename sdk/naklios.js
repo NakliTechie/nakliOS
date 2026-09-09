@@ -98,7 +98,7 @@
     // a real host handshake, so the adapter still self-corrects with no channel.
     hosted: inNakliOS || naklFlag,
     flagged: naklFlag,
-    version: 1,
+    version: 2,
     fs: false,
     fsBackends: [],
     fsBackend: null,
@@ -322,9 +322,13 @@
     if (inNakliOS && e.source !== window.parent) return;
     var msg = e.data;
     if (!msg || typeof msg !== 'object') return;
-    // Lock the trusted parent origin on the first naklios:* message, then verify
-    // every later message against it (no-referrer-safe; see the detection note).
-    if (inNakliOS && typeof msg.type === 'string' && msg.type.indexOf('naklios:') === 0) {
+    // Lock the trusted origin on the first naklios:* message, then verify every
+    // later message against it (no-referrer-safe; see the detection note). This
+    // runs standalone too: a bare/?naklios top-level tab has no window.parent to
+    // pin the source against, so learn-on-contact origin is the only check it can
+    // make — without it the handler would mutate capabilities and fire listeners
+    // for naklios:* messages from ANY origin (opener, child frame, injected page).
+    if (typeof msg.type === 'string' && msg.type.indexOf('naklios:') === 0) {
       if (!trustedParentOrigin) trustedParentOrigin = e.origin;
       else if (e.origin !== trustedParentOrigin) return;
     }
@@ -486,7 +490,7 @@
   });
 
   window.naklios = {
-    version: 1,
+    version: 2,
     capabilities: capabilities,   // mutated in place; read fields directly
     ready: function () {
       send('naklios:ready', {

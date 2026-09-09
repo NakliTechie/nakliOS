@@ -10,6 +10,15 @@
 // caveat; reversible ops unless the caveat is 'any'; expiry outranks authority). A discarded
 // proposal is poisoned (proposal-fingerprint.mjs) so the same mutation is not re-proposed.
 //
+// AUTHORITY is not AUTHENTICITY (forward-pass Med14): decideCommit SCOPES a grant (does its
+// auto-commit caveat permit this op?) but reads the grant's caveats WITHOUT checking its HMAC
+// signature — a forged { caveats, sig } scopes as 'auto' just as a real one does. So an agent
+// auto-commit is additionally gated here on a verifier: an injected async
+// `verifyGrant(grant, { tool, now, reversible, actor }) -> { ok, reason? }` that the enforcement
+// point binds to the issuer root key + identity-bound principal + revocation list from its FIF
+// (grant.mjs verifyGrant). No verifier, a throw, or a non-ok verdict ⇒ auto-commit is REFUSED
+// (fail closed). A person commit never carries a grant and is untouched.
+//
 // Two deliberate shape choices, documented:
 //   - stage() is SYNCHRONOUS and never consults the ledger. Poison-checking needs an async
 //     fingerprint, so it is a separate `isPoisoned(stageArgs)` the caller awaits BEFORE staging.
@@ -58,7 +67,7 @@ function snapshot(v) {
   catch (_) { try { return JSON.parse(JSON.stringify(v)); } catch (_2) { return v; } }
 }
 
-export function createReviewQueue({ now = () => Date.now(), ledger = null, onApply = null, onReject = null } = {}) {
+export function createReviewQueue({ now = () => Date.now(), ledger = null, onApply = null, onReject = null, verifyGrant = null } = {}) {
   const pending = new Map(); // proposal_id -> { envelope, reversible }
 
   return {
@@ -93,6 +102,18 @@ export function createReviewQueue({ now = () => Date.now(), ledger = null, onApp
       if (isExpired(entry.envelope, t)) return { ok: false, reason: 'expired' };
       const decision = decideCommit({ actor: ctx.actor, tool: entry.envelope.tool, reversible: ctx.reversible ?? entry.reversible, grant: ctx.grant });
       if (!decision.allowed) return { ok: false, reason: decision.reason };
+      // Authority is not authenticity. An 'auto' decision trusted the grant's auto-commit
+      // caveats, but decideCommit never verified the grant's signature (Med14) — a forged
+      // { caveats, sig } reaches here. Authenticate before applying: require the injected
+      // verifier (issuer root key + revocation list live in the enforcement point's FIF, not
+      // in this pure reducer). No verifier, a throw, or a non-ok verdict ⇒ refuse (fail closed).
+      if (decision.mode === 'auto') {
+        if (typeof verifyGrant !== 'function') return { ok: false, reason: 'auto-commit refused: grant unverifiable (no verifier configured)' };
+        let verdict;
+        try { verdict = await verifyGrant(ctx.grant, { tool: entry.envelope.tool, now: t, reversible: ctx.reversible ?? entry.reversible, actor: ctx.actor }); }
+        catch (e) { return { ok: false, reason: 'auto-commit refused: grant verification error: ' + String((e && e.message) || e) }; }
+        if (!verdict || verdict.ok !== true) return { ok: false, reason: 'auto-commit refused: grant not verified' + (verdict && verdict.reason ? ' (' + verdict.reason + ')' : '') };
+      }
       if (typeof onApply === 'function') {
         try { await onApply(entry.envelope); }
         catch (e) { return { ok: false, reason: 'apply failed: ' + String((e && e.message) || e) }; }

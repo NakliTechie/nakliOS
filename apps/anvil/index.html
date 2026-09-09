@@ -247,8 +247,21 @@
   }
   @media (prefers-reduced-motion:reduce){
     .swtab,#sheet .sheet-panel,main[data-mode="tablet"] #left{transition:none;animation:none}
+    .ask-panel{animation:none}
   }
-
+  /* In-app text-input modal (askText) — replaces native prompt(); no-native-dialog rule. */
+  .ask-scrim{position:fixed;inset:0;z-index:120;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:20px}
+  .ask-panel{background:var(--bg-1);border:1px solid var(--rule);border-radius:12px;padding:16px;width:min(460px,100%);box-shadow:0 14px 44px rgba(0,0,0,.5);animation:askpop var(--dur) var(--ease)}
+  @keyframes askpop{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+  .ask-title{font-size:13px;font-weight:600;color:var(--fg-0);margin-bottom:8px}
+  .ask-label{font-size:12px;color:var(--fg-1);margin-bottom:9px;white-space:pre-wrap;line-height:1.45}
+  .ask-field{width:100%;box-sizing:border-box;background:var(--bg-0);color:var(--fg-0);border:1px solid var(--rule);border-radius:6px;padding:8px 10px;font-family:var(--mono);font-size:12.5px}
+  .ask-field:focus{outline:none;border-color:var(--accent)}
+  textarea.ask-field{resize:vertical;min-height:66px}
+  .ask-row{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+  .ask-btn{min-height:36px;padding:6px 14px}
+  .ask-btn.primary{background:var(--accent);color:var(--bg-0);border-color:var(--accent)}
+  .ask-btn.primary:hover{color:var(--bg-0);filter:brightness(1.08)}
 </style>
 
 <header>
@@ -760,7 +773,7 @@
     renderAll();
   }
 
-  $('new-project').onclick=async ()=>{ const n=prompt('Project name:','project'); if(!n) return; const p={id:id(),name:n,open:true,tasks:[]}; state.projects.push(p); state.activeProject=p.id; save(); if(!folderMode) await mountProject(p.id); renderAll(); };
+  $('new-project').onclick=async ()=>{ const n=await askText({ title:'New project', label:'Project name', value:'project' }); if(!n) return; const p={id:id(),name:n,open:true,tasks:[]}; state.projects.push(p); state.activeProject=p.id; save(); if(!folderMode) await mountProject(p.id); renderAll(); };
   $('new-task').onclick=()=>{ const p=activeProject(); if(!p) return; const t={id:id(),title:'Untitled task',status:'idle',mode:'code',convo:[],log:[],preview:null}; p.tasks.push(t); p.open=true; selectTask(t.id); $('prompt').focus(); };
 
   // ── File explorer: the active workspace's tree (whatever backend), so files
@@ -1334,6 +1347,44 @@
   }
 
   function esc(s){ return String(s==null?'':s).replace(/[&<>]/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+  // In-app text-input modal — replaces native prompt() (no-native-dialog rule). Resolves to the
+  // entered string, or null if cancelled (Escape / Cancel / backdrop). `multiline` renders a
+  // textarea (Enter = newline, Cmd/Ctrl+Enter submits); single-line submits on Enter. An empty
+  // OK resolves to '' (distinct from null) so callers can tell "cleared" from "cancelled".
+  function askText({ title='', label='', value='', placeholder='', okLabel='OK', multiline=false }={}){
+    return new Promise((resolve)=>{
+      const prev=document.activeElement;
+      const scrim=document.createElement('div'); scrim.className='ask-scrim';
+      const panel=document.createElement('div'); panel.className='ask-panel';
+      panel.setAttribute('role','dialog'); panel.setAttribute('aria-modal','true');
+      if(title) panel.setAttribute('aria-label', title);
+      if(title){ const h=document.createElement('div'); h.className='ask-title'; h.textContent=title; panel.appendChild(h); }
+      if(label){ const l=document.createElement('div'); l.className='ask-label'; l.textContent=label; panel.appendChild(l); }
+      const field = document.createElement(multiline?'textarea':'input');
+      if(!multiline) field.type='text';
+      field.className='ask-field'; field.value=value==null?'':String(value);
+      if(placeholder) field.placeholder=placeholder;
+      field.setAttribute('aria-label', label||title||'Input');
+      if(multiline) field.rows=3;
+      panel.appendChild(field);
+      const row=document.createElement('div'); row.className='ask-row';
+      const cancel=document.createElement('button'); cancel.className='ask-btn'; cancel.type='button'; cancel.textContent='Cancel';
+      const ok=document.createElement('button'); ok.className='ask-btn primary'; ok.type='button'; ok.textContent=okLabel;
+      row.append(cancel, ok); panel.appendChild(row);
+      scrim.appendChild(panel); document.body.appendChild(scrim);
+      let done=false;
+      function close(val){ if(done) return; done=true; document.removeEventListener('keydown', onKey, true); scrim.remove(); try{ if(prev&&prev.focus) prev.focus(); }catch(_){} resolve(val); }
+      function onKey(e){
+        if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); close(null); }
+        else if(e.key==='Enter' && (!multiline || e.metaKey || e.ctrlKey)){ e.preventDefault(); e.stopPropagation(); close(field.value); }
+      }
+      cancel.onclick=()=>close(null);
+      ok.onclick=()=>close(field.value);
+      scrim.addEventListener('mousedown',(e)=>{ if(e.target===scrim) close(null); });
+      document.addEventListener('keydown', onKey, true);
+      requestAnimationFrame(()=>{ field.focus(); try{ field.select(); }catch(_){} });
+    });
+  }
   function diffHtml(s){ return String(s).split('\n').map(l=>{ const c=l[0]; const cls=c==='+'?'add':c==='-'?'del':(c==='@'?'hd':''); return cls?`<span class="${cls}">${esc(l)}</span>`:esc(l); }).join('\n'); }
   // Line-level diff (LCS): ' ' context, '-' removed, '+' added — rendered by diffHtml.
   function lineDiff(a, b){
@@ -2381,13 +2432,15 @@
     expandedDirs.clear();
     renderFiles();
   };
-  $('gate-btn').onclick=()=>{
+  $('gate-btn').onclick=async ()=>{
     const t=activeTask(); if(!t) return;
     // Examples MUST be runnable in the Forge browser shell. The previous copy
     // suggested "python -m pytest" (no pytest — Kiln is stdlib + a pinned
     // allowlist) and "sh check.sh" (`sh` is not a builtin → command not found,
     // exit 127): two of three examples could never pass.
-    const v=prompt('Gate command — runs after the agent finishes; the task isn\'t "done" until it exits 0 (e.g. "python test_fib.py", "python -c \'import fib; assert fib.fib(10)==55\'", "grep -q TODO src/main.py"). Empty to clear:', t.verifyCmd||'');
+    const v=await askText({ title:'Gate command',
+      label:'Runs after the agent finishes; the task isn\'t "done" until it exits 0.\nExamples:  python test_fib.py  ·  python -c \'import fib; assert fib.fib(10)==55\'  ·  grep -q TODO src/main.py\nLeave empty to clear.',
+      value:t.verifyCmd||'', placeholder:'python test_fib.py' });
     if(v===null) return; t.verifyCmd=v.trim(); save(); renderTaskbar();
   };
   const MODES=['code','plan','ask'];
@@ -2401,12 +2454,27 @@
   $('campaign-btn').onclick=async ()=>{
     $('adv-menu').hidden=true; $('adv-btn').setAttribute('aria-expanded','false');
     const canLive=!!(nak && nak.ai);
-    const g=prompt(canLive
-      ? 'Proof build (beta) — what should the agents build? A Checker writes the test/standard first, a Builder writes the code without seeing it, a Lead referees:'
-      : 'Proof build (beta) — demo run. Open Anvil inside NakliOS with an AI endpoint set for a live build:', 'add a hello() function to hello.js that returns "hello"');
+    const g=await askText({ title:'Proof build (beta)',
+      label: canLive
+        ? 'What should the agents build? A Checker writes the test/standard first, a Builder writes the code without seeing it, a Lead referees.'
+        : 'Demo run. Open Anvil inside NakliOS with an AI endpoint set for a live build.',
+      value:'add a hello() function to hello.js that returns "hello"', multiline:true });
     if(g) await startCampaign(g,{live:canLive});
   };
   // Test hooks: a deterministic demo (offline) and a live run (needs a host endpoint).
+  // These expose REAL capabilities on `window` — campaign runs plus git egress probes
+  // (clone / ls-remote / an isolated push to an arbitrary URL over the sovereign transport).
+  // The public build must NOT ship them: attach ONLY on explicit opt-in — `anviltest` in the
+  // URL query, or an `anvil-test` key in localStorage. A browser test harness satisfies the
+  // gate by loading the app with `?anviltest` (or setting localStorage['anvil-test'] first);
+  // the Node harness (scripts/anvil-harness.mjs) evaluates extracted functions in a vm realm
+  // and never touches window.__anvil, so this gate does not affect it.
+  const __anvilTestOptIn = (()=>{
+    try{ if(String(location.search||'').includes('anviltest')) return true; }catch(_){}
+    try{ if(localStorage.getItem('anvil-test')!=null) return true; }catch(_){}
+    return false;
+  })();
+  if(__anvilTestOptIn){
   window.__anvil = Object.assign(window.__anvil||{}, { test: Object.assign((window.__anvil&&window.__anvil.test)||{}, {
     demoCampaign:(g)=>startCampaign(g||'samtools view parity',{live:false}),
     liveCampaign:(g,maxIters)=>startCampaign(g||'samtools view parity',{live:true, maxIters:maxIters||8}),
@@ -2432,6 +2500,7 @@
       return { ok: (p&&p.ok!==false), oid: c&&c.oid, marker: stamp, pushErr: (p&&p.error)||null };
     }catch(e){ return { ok:false, error:String(e&&e.message||e) }; } },
   }) });
+  }
 
 
   // ── Mobile / foldable layout ─────────────────────────────────────────────────

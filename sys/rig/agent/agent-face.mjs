@@ -108,16 +108,20 @@ export function createAgentFace({ registry, grant, opLog, actor = 'agent', calle
 
   // Operator-only: execute a staged destructive proposal. Grant is re-checked at
   // accept time in case it was revoked or narrowed after staging.
-  async function accept(proposalId, { by = 'operator' } = {}) {
+  async function accept(proposalId) {
+    // Attribution is the FACE's authenticated principal, NOT a caller-supplied 'by':
+    // an agent face can never self-accept as the operator (was Med6 — forged provenance
+    // and, combined with commit actor-binding, forged operator commits). Execution is
+    // unchanged; only the honest actor label changes.
     const p = staged.get(proposalId);
     if (!p) return { ok: false, code: 'ENOPROPOSAL', message: `no staged proposal: ${proposalId}` };
     staged.delete(proposalId);
     const command = registry.describeCommand(p.name);
     const capDenied = await capabilityCheck(command, p.input, p.name);
-    if (capDenied) { await logAnd(p.name, p.input, capDenied.code, by); return capDenied; }
+    if (capDenied) { await logAnd(p.name, p.input, capDenied.code, actor); return capDenied; }
     const denied = grantCheck(command, p.input);
-    if (denied) { await logAnd(p.name, p.input, denied.code, by); return denied; }
-    return runThroughRegistry(p.name, p.input, by);
+    if (denied) { await logAnd(p.name, p.input, denied.code, actor); return denied; }
+    return runThroughRegistry(p.name, p.input, actor);
   }
 
   function reject(proposalId) {

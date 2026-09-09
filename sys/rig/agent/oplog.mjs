@@ -50,7 +50,12 @@ export function digestArgs(args) {
 export function createOpLog({ fs, path = 'sys/rig/oplog.jsonl', now = () => Date.now() }) {
   if (!fs) throw new Error('createOpLog requires a fileops instance (fs)');
 
-  async function append({ actor, caller, command, args, status }) {
+  let _oplogChain = Promise.resolve();
+  // Serialize the read-modify-write: Crate/OPFS have no atomic append, so two
+  // concurrent appends would both read the same prior and one would silently
+  // overwrite the other (lost audit entry, Low8). Chain so they never interleave.
+  function append(input) { const p = _oplogChain.then(() => _appendRaw(input)); _oplogChain = p.catch(() => {}); return p; }
+  async function _appendRaw({ actor, caller, command, args, status }) {
     const entry = {
       ts: now(),
       actor: actor || 'unknown',

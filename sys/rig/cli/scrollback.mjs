@@ -6,7 +6,11 @@
 // Redact token substrings in place (unlike oplog.redactTokens which redacts a
 // whole value): a log line may embed a token amid other text.
 const TOKEN_PATTERNS = [
-  /\b(sk|pk|ghp|gho|xox[baprs])[-_][A-Za-z0-9]{16,}\b/g, // provider keys
+  /\b(sk|pk|ghp|gho|ghu|ghs|gsk|xox[baprs])[-_][A-Za-z0-9_-]{16,}/g, // provider keys (incl. sk-proj-/dashed)
+  /\bgithub_pat_[A-Za-z0-9_]{20,}/g, // GitHub fine-grained PAT
+  /\bxox[baprs]-[A-Za-z0-9-]{12,}/g,  // Slack (multi-dash segments)
+  /\bAKIA[0-9A-Z]{16}\b/g,           // AWS access key id
+  /\bAIza[A-Za-z0-9_-]{35}\b/g,      // Google API key
   /\bey[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}\b/g, // JWT
   /\b[A-Fa-f0-9]{64,}\b/g, // long hex (64+); leaves 40-char git oids visible
 ];

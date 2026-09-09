@@ -44,6 +44,14 @@ await (async () => {
   ok('IPv4-mapped IPv6 loopback blocked', isPrivateHost('::ffff:127.0.0.1'));
   ok('bracketed IPv4-mapped metadata blocked', isPrivateHost('[::ffff:169.254.169.254]'));
   ok('trailing-dot loopback literal blocked', isPrivateHost('127.0.0.1.'));
+  // The forms the WHATWG URL parser actually emits (compressed hex), i.e. what the
+  // real request pipeline feeds isPrivateHost — not the dotted form above.
+  ok('hex IPv4-mapped loopback blocked', isPrivateHost('::ffff:7f00:1'));
+  ok('hex IPv4-mapped metadata blocked', isPrivateHost('::ffff:a9fe:a9fe'));
+  ok('hex IPv4-mapped RFC1918 blocked', isPrivateHost('::ffff:a00:1'));
+  ok('hex IPv4-compat loopback blocked', isPrivateHost('::7f00:1'));
+  ok('parser-emitted hostname blocked', isPrivateHost(new URL('http://[::ffff:169.254.169.254]/').hostname.replace(/^\[|\]$/g,'')));
+  ok('SSRF guard beats a loose IPv6 allowlist rule', !hostAllowed('http://[::ffff:169.254.169.254]/', ['::ffff:a9fe:a9fe']));
   ok('ULA fd00 blocked', isPrivateHost('fd12:3456::1'));
   ok('link-local fe80 blocked', isPrivateHost('fe80::1'));
   ok('public IPv6 allowed', !isPrivateHost('2606:4700::1111'));

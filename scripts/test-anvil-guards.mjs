@@ -40,7 +40,11 @@ assert.equal(provenCode.length, 0, `no code reader is left behind for state.prov
 assert.match(anvil, /g\.hidden = false;/, 'the Must-pass gate is always visible');
 
 // ── the gate examples must be runnable in the Forge browser shell ───────
-const promptLine = anvil.match(/const v=prompt\('Gate command[^\n]*/)[0];
+// The gate command is collected through the in-app askText modal (native prompt() was
+// removed under the no-native-dialog rule); its example text now lives in the modal label.
+const gateIdx = anvil.indexOf("title:'Gate command'");
+assert.ok(gateIdx >= 0, 'the gate-command modal is present');
+const promptLine = anvil.slice(gateIdx, anvil.indexOf('});', gateIdx));
 assert.ok(!/pytest/.test(promptLine), 'no pytest example (Kiln is stdlib + a pinned allowlist)');
 assert.ok(!/"sh /.test(promptLine) && !/sh check\.sh/.test(promptLine),
   'no `sh` example (`sh` is not a shell builtin — exit 127)');

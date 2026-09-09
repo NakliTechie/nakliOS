@@ -28,6 +28,8 @@
 
 import { parseFrontmatter } from './skills.mjs';
 
+import { scanSkill } from './skill-sentinel.mjs';
+
 export const MEMORY_DIR = '.anvil/memory';
 export const MEMORY_TYPES = ['user', 'feedback', 'project', 'reference', 'rule'];
 // A RULE is the one fact type injected in full, first, every run (Caura's keystones: fetched
@@ -252,8 +254,19 @@ function supersededSet(facts){
 // none (caller concatenates blindly). Ordering rule (Caura): a superseded fact may
 // surface, but never above its own correction — it renders right after its
 // successor, tagged. Retracted facts are hidden and counted.
+// A recorded fact/rule is injected as a binding instruction, but nothing scanned it on
+// the way in (unlike a skill). Run the same prompt-injection sentinel at the injection
+// boundary so a poisoned memory (one-shot injection recorded as a "rule") cannot become
+// a persistent, owner-authority-level instruction. Prompt-injection only — other checks
+// (size, etc.) must not silently drop a long-but-legit rule.
+function injectionUnsafe(f){
+  try {
+    const scan = scanSkill({ name: String(f && f.name || ''), description: String(f && f.description || ''), body: String(f && f.body || '') });
+    return (scan.findings || []).some(x => x.check === 'prompt-injection');
+  } catch (_) { return false; }
+}
 export function buildMemoryIndex(facts){
-  const all = (facts || []).filter(f => f && (f.name || f.description));
+  const all = (facts || []).filter(f => f && (f.name || f.description) && !injectionUnsafe(f));
   const liveAll = all.filter(f => f.status !== 'retracted');
   const retracted = all.length - liveAll.length;
   if (!liveAll.length) return '';

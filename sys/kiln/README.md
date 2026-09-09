@@ -9,12 +9,16 @@ like a notebook that remembers.
 
 - **Keeps its state.** Assign a value or import a module in one run and it's
   available in the next. A stateless "evaluate and forget" would miss the point.
-- **Stays sandboxed.** The kernel has no network access and can't launch other
-  programs — and that is now *actively enforced*, not merely assumed: before the
-  first line of your code runs, the Worker replaces `fetch`, `XMLHttpRequest`,
+- **Stays sandboxed.** The kernel can't launch other programs, and the standard
+  network-egress APIs are actively denied, not merely assumed: before the first
+  line of your code runs, the Worker replaces `fetch`, `XMLHttpRequest`,
   `WebSocket`, `EventSource`, `Request`, `importScripts`, `Worker`,
-  `SharedWorker`, and `navigator.sendBeacon` with stubs that throw, so even
-  `import js; js.fetch(...)` fails closed. It can only touch the slice of your
+  `SharedWorker`, `WebTransport`, `navigator.sendBeacon`, and `caches` with stubs
+  that throw, so `import js; js.fetch(...)` fails closed. This is a strong denial,
+  not a complete sandbox: the syntactic `import()` operator can't be stubbed, and
+  stubbing `eval`/`Function` would break Pyodide, so a determined `js.eval("import(…)")`
+  is not blocked at the JS layer — a CSP `connect-src` on the hosting document is
+  the network-layer backstop (a hardening follow-up). It can only touch the slice of your
   files you explicitly grant it — and reaches those through the very same safety
   checks the rest of nakliOS uses. Calls into Rig from Python are locked to the
   exact commands the generated `rig` module exposes; a forged call to any other

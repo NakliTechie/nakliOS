@@ -37,12 +37,11 @@ export function buildGitCommands(git) {
     {
       name: 'git.commit',
       summary: 'Record a commit.',
-      description: 'Commit the staged tree. actor "operator" requires {identity:{name,email}}; actor "agent" is forced to agent@rig.local with a session trailer and can never borrow the operator identity.',
+      description: 'Commit the staged tree. The commit author is bound to the AUTHENTICATED caller (an operator face commits with its {identity}; every other principal is forced to agent@rig.local with a session trailer). A caller-supplied actor is ignored.',
       inputSchema: {
         type: 'object',
         properties: {
           message: { type: 'string' },
-          actor: { enum: ['operator', 'agent'] },
           identity: { type: 'object', properties: { name: { type: 'string' }, email: { type: 'string' } } },
           session: { type: 'object' },
           timestamp: { type: 'number' }, timezoneOffset: { type: 'number' },
@@ -51,7 +50,9 @@ export function buildGitCommands(git) {
       },
       returnSchema: { type: 'object', properties: { ok: { const: true }, oid: { type: 'string' }, actor: { type: 'string' } }, required: ['ok'] },
       destructive: true, scope: 'git:write', annotations: RW,
-      run: (i) => git.commit(i),
+      // Actor is bound to the AUTHENTICATED principal (ctx.actor), never caller input,
+      // so an agent can never forge an operator-authored commit (RIG §5).
+      run: (i, ctx) => git.commit({ ...i, actor: (ctx && ctx.actor === 'operator') ? 'operator' : 'agent' }),
     },
     {
       name: 'git.status',
@@ -156,7 +157,9 @@ export function buildGitCommands(git) {
       summary: 'Push a branch to a remote over HTTP.',
       description: 'Push refs/objects to a remote URL. Network goes through the sovereign egress; requires a configured backend and auth (a Personal Access Token, supplied host-side).',
       inputSchema: { type: 'object', properties: { url: { type: 'string' }, ref: { type: 'string' }, remoteRef: { type: 'string' }, force: { type: 'boolean' } }, required: ['url', 'ref'], additionalProperties: false },
-      returnSchema: OK, destructive: true, scope: 'git:write', annotations: RW,
+      // Push is operator-only (RIG §5: "not exposed to the kernel") — the reserved git:push
+      // scope, which the agent grant does not hold, so an agent cannot push over the face.
+      returnSchema: OK, destructive: true, scope: 'git:push', annotations: RW,
       run: (i) => git.push(i),
     },
   ];

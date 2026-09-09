@@ -302,7 +302,11 @@
           if (e.type === 'tool-call') {
             const a = e.args || {};
             const detail = a.command || a.path || a.old_string || (a.patch ? 'patch' : '') || e.name;
-            term.write(`${DIM}→ ${e.name === 'shell' ? '' : e.name + ' '}${String(detail).split('\n')[0].slice(0, 100)}${RESET}\r\n`);
+            // Both the tool name and the args detail are model-controlled — scrub
+            // C0/ESC controls (same toCRLF scrub as the other terminal writes) so
+            // the echo can't inject ANSI/OSC escape sequences into xterm.
+            const label = e.name === 'shell' ? '' : toCRLF(e.name) + ' ';
+            term.write(`${DIM}→ ${label}${toCRLF(String(detail).split('\n')[0].slice(0, 100))}${RESET}\r\n`);
           }
           else if (e.type === 'tool-result') { const s = toCRLF(e.result); if (s) term.write(`${s}\r\n`); }
           else if (e.type === 'tool-error') term.write(`${RED}${e.error}${RESET}\r\n`);
