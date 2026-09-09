@@ -12,9 +12,11 @@ const appScript = scripts.at(-1);
 new Function(sdk);
 new Function(appScript);
 
+// The product is spelled NakliOS. The GitHub repo is genuinely NakliTechie/nakliOS,
+// so a repo path is not a misspelling — exclude it rather than ban the token.
 assert.doesNotMatch(
   app,
-  /\b(?:naklOS|nakliOS|Naklios)\b/,
+  /(?<!NakliTechie\/)\b(?:naklOS|nakliOS|Naklios)\b/,
   'Tijori must use the NakliOS product spelling',
 );
 assert.match(app, /name="version" content="1\.3\.0"/);
