@@ -2,7 +2,7 @@
   "id": "/apps/anvil/",
   "name": "Anvil — on-device coding agent",
   "short_name": "Anvil",
-  "description": "A coding agent that runs on your device — reads, writes, edits and runs code in a workspace you choose, no companion machine.",
+  "description": "An on-device coding agent: your files, tools and shell run in the browser; connect a model endpoint to run tasks.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

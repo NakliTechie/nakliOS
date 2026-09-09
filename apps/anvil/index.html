@@ -171,11 +171,12 @@
   /* ── Mobile / foldable (phone <768 · tablet 768–1023 · desktop ≥1024) ── */
   /* Motion tokens (Forge §Motion) */
   :root{--dur:120ms;--ease:cubic-bezier(.2,0,0,1)}
+  header{padding-top:calc(7px + env(safe-area-inset-top))}  /* notch-safe at every width (0 on desktop) */
 
   /* Coarse pointers: honest touch targets. */
-  @media (pointer:coarse){
+  @media (pointer:coarse) and (max-width:1023px){
     button{min-height:34px}
-    #send,#mode-btn,.swtab,#more-btn,#drawer-btn,#mobilebar .mb-title,#mobilebar .mb-verify,.sheet-row{min-height:44px}
+    #send,#mode-btn,.swtab,#more-btn,#drawer-btn,#mobilebar .mb-title,#mobilebar .mb-verify,#mobilebar .mb-stop,.sheet-row{min-height:44px}
   }
 
   /* Persistent mobile chrome — off by default, switched on per mode below. */
@@ -189,7 +190,7 @@
   #mobilebar .mb-stop{color:var(--err);background:transparent;border:1px solid var(--err);border-radius:5px;font-size:11px;padding:3px 9px;cursor:pointer}
   #switcher{flex:0 0 auto;border-top:1px solid var(--rule);background:var(--bg-1);padding-bottom:env(safe-area-inset-bottom)}
   .swtab{flex:1;min-height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:transparent;border:0;color:var(--fg-2);font:inherit;cursor:pointer;transition:color var(--dur) var(--ease)}
-  .swtab[aria-selected="true"]{color:var(--accent)}
+  .swtab[aria-pressed="true"]{color:var(--accent)}
   .swtab .g{font-size:16px;line-height:1;position:relative}
   .swtab .l{font-family:var(--mono);font-size:10px;letter-spacing:.02em}
   .swtab.has-new .g::after{content:"";position:absolute;top:-3px;right:-7px;width:6px;height:6px;border-radius:999px;background:var(--accent)}
@@ -209,9 +210,9 @@
   /* Tablet 768–1023 (unfolded inner display): centre + preview rail, #left = drawer */
   @media (min-width:768px) and (max-width:1023px){
     #drawer-btn{display:inline-flex}
-    main[data-mode="tablet"]{grid-template-columns:1fr 0}
+    main[data-mode="tablet"]{grid-template-columns:1fr 0;position:relative}
     main[data-mode="tablet"].preview-open{grid-template-columns:1fr var(--pw,360px)}
-    main[data-mode="tablet"] #left{position:absolute;top:0;bottom:0;left:0;width:288px;z-index:60;transform:translateX(-100%);transition:transform var(--dur) var(--ease);box-shadow:8px 0 28px rgba(0,0,0,.5)}
+    main[data-mode="tablet"] #left{position:absolute;top:0;bottom:0;left:0;width:288px;z-index:90;transform:translateX(-100%);transition:transform var(--dur) var(--ease);box-shadow:8px 0 28px rgba(0,0,0,.5)}
     main[data-mode="tablet"].drawer-open #left{transform:translateX(0)}
   }
 
@@ -220,7 +221,6 @@
     #switcher,#mobilebar{display:flex}
     #more-btn{display:inline-flex}
     header .sub,#open-folder,#toggle-preview,#ws,#taskbar{display:none}
-    header{padding-top:calc(7px + env(safe-area-inset-top))}
     /* Pre-boot fallback (before JS sets data-mode): Chat only, no squished 3-col. */
     main:not([data-mode]){display:block;grid-template-columns:1fr}
     main:not([data-mode]) #left,main:not([data-mode]) #preview{display:none}
@@ -252,14 +252,14 @@
 </style>
 
 <header>
-  <button class="icon" id="drawer-btn" title="Projects & files" aria-label="Open projects and files">☰</button>
+  <button class="icon" id="drawer-btn" title="Projects & files" aria-label="Open projects and files" aria-controls="left" aria-expanded="false">☰</button>
   <span class="brand"><b>◆</b> Anvil</span>
   <span class="sub">agent workspace</span>
   <button class="ws" id="ws" title="Where this workspace is stored — click for what Browser / Folder / Crate mean">memory · scratch</button>
   <span class="spacer"></span>
   <button id="open-folder" title="Point the agent at a real folder">Open folder</button>
   <button class="icon" id="toggle-preview" title="Toggle preview">▢</button>
-  <button class="icon" id="more-btn" title="More" aria-label="More actions">⋯</button>
+  <button class="icon" id="more-btn" title="More" aria-label="More actions" aria-haspopup="dialog" aria-expanded="false">⋯</button>
 </header>
 
 <main id="main">
@@ -309,13 +309,13 @@
   <button class="mb-verify" aria-label="Set verify command">✓ Must-pass</button>
   <button class="mb-stop" style="display:none">◼ Stop</button>
 </div>
-<nav id="switcher" role="tablist" aria-label="Anvil surfaces">
-  <button class="swtab" data-surface="chat" role="tab" aria-selected="true"><span class="g">❯</span><span class="l">Chat</span></button>
-  <button class="swtab" data-surface="preview" role="tab" aria-selected="false"><span class="g">◫</span><span class="l">Preview</span></button>
-  <button class="swtab" data-surface="files" role="tab" aria-selected="false"><span class="g">▸</span><span class="l">Files</span></button>
+<nav id="switcher" role="toolbar" aria-label="Anvil surfaces">
+  <button class="swtab" data-surface="chat" aria-pressed="true"><span class="g">❯</span><span class="l">Chat</span></button>
+  <button class="swtab" data-surface="preview" aria-pressed="false"><span class="g">◫</span><span class="l">Preview</span></button>
+  <button class="swtab" data-surface="files" aria-pressed="false"><span class="g">▸</span><span class="l">Files</span></button>
 </nav>
 <div id="drawer-scrim"></div>
-<div id="sheet"><div class="sheet-panel" role="dialog" aria-label="More actions">
+<div id="sheet"><div class="sheet-panel" role="dialog" aria-modal="true" tabindex="-1" aria-label="More actions">
   <div class="sheet-grip"></div>
   <button class="sheet-row" data-act="open-folder"><span class="sr-ic">📁</span>Open folder…</button>
   <button class="sheet-row" data-act="storage"><span class="sr-ic">🗄</span>Storage<span class="sr-sub" id="sheet-store"></span></button>
@@ -2461,11 +2461,15 @@
   }
   // Plain surface switch — re-renders NOTHING (preserves #log scroll, the live preview
   // iframe, and the composer caret for free; the state-destroyers are the render* fns).
-  function setSurface(s){
+  function setSurface(s, consumePending){
     phoneSurface=s; const m=$('main'); if(m) m.dataset.surface=s;
-    document.querySelectorAll('.swtab').forEach(t=>t.setAttribute('aria-selected', String(t.dataset.surface===s)));
+    document.querySelectorAll('.swtab').forEach(t=>t.setAttribute('aria-pressed', String(t.dataset.surface===s)));
     if(s==='preview'){ const b=swtabOf('preview'); if(b){ b.classList.remove('has-new'); const g=b.querySelector('.g'); if(g) g.textContent='◫'; }
-      if(pendingDiff){ const d=pendingDiff; pendingDiff=null; openChange(d.file, d.pre); } }
+      // A bare tab tap on a badged Preview opens the newest autonomous write; a gesture that
+      // already opened its own file (raise) drops the now-stale pointer instead of racing it.
+      if(consumePending && pendingDiff){ const d=pendingDiff; pendingDiff=null; openChange(d.file, d.pre); } else pendingDiff=null;
+      // Keyboard-activated a file row that this switch just hid → focus fell to <body>; re-anchor.
+      if(phoneMode()){ const c=$('pv-close'); if(c && document.activeElement===document.body) c.focus(); } }
     if(s==='chat'){ const b=swtabOf('chat'); if(b){ b.classList.remove('has-new'); const g=b.querySelector('.g'); if(g) g.textContent='❯'; } }
   }
   function raise(surface){ if(phoneMode()) setSurface(surface); }   // user gesture → switch
@@ -2483,7 +2487,7 @@
     const w=lw(), next=computeMode(w,layoutMode), changed=next!==layoutMode;
     const ta=$('prompt'), focused=document.activeElement===ta;
     const selS=ta?ta.selectionStart:null, selE=ta?ta.selectionEnd:null;
-    const b=$('log'), pinned=logPinned(), top=b?b.scrollTop:0;
+    const b=$('log'), logLaid=!!(b&&b.clientHeight>0), pinned=logLaid&&logPinned(), top=logLaid?b.scrollTop:0;
     if(next==='phone' && changed){
       phoneSurface = focused ? 'chat'                                   // never yank a typing user off Chat
                    : (state.previewOpen && currentPv()) ? 'preview'     // else honour diff-priority
@@ -2491,11 +2495,11 @@
     }
     layoutMode=next;
     const m=$('main'); m.dataset.mode=next;
-    if(next==='phone'){ m.dataset.surface=phoneSurface; }
+    if(next==='phone'){ setSurface(phoneSurface); }
     else { m.removeAttribute('data-surface'); m.classList.remove('drawer-open'); const sc=$('drawer-scrim'); if(sc) sc.classList.remove('open'); }
-    const am=$('adv-menu'); if(am) am.hidden=true;
+    const am=$('adv-menu'); if(am && next!=='desktop') am.hidden=true;
     renderSwitcher(); if(typeof autoGrow==='function') autoGrow();
-    if(b) b.scrollTop = pinned ? b.scrollHeight : top;                  // preserve reading position
+    if(b && logLaid) b.scrollTop = pinned ? b.scrollHeight : top;       // preserve reading position
     if(focused && (next!=='phone' || phoneSurface==='chat')){ ta.focus({preventScroll:true}); if(selS!=null){ try{ ta.setSelectionRange(selS,selE); }catch(_){} } }
   }
   let _rq=false; const relayout=()=>{ if(_rq) return; _rq=true; requestAnimationFrame(()=>{ _rq=false; applyLayout(); }); };
@@ -2511,20 +2515,24 @@
     _vv.addEventListener('resize',onVV); _vv.addEventListener('scroll',onVV);
   }
   // Switcher + mobile-bar wiring
-  document.querySelectorAll('.swtab').forEach(tab=> tab.onclick=()=>setSurface(tab.dataset.surface));
+  document.querySelectorAll('.swtab').forEach(tab=> tab.onclick=()=>setSurface(tab.dataset.surface, true));
   { const t=document.querySelector('#mobilebar .mb-title'); if(t) t.onclick=()=>setSurface('tasks'); }
   { const v=document.querySelector('#mobilebar .mb-verify'); if(v) v.onclick=()=>{ const g=$('gate-btn'); if(g&&g.onclick) g.onclick(); }; }
   { const s=document.querySelector('#mobilebar .mb-stop'); if(s) s.onclick=stopRun; }
   // Tablet drawer (#left slides in over centre)
-  function closeDrawer(){ const m=$('main'); if(m) m.classList.remove('drawer-open'); const sc=$('drawer-scrim'); if(sc) sc.classList.remove('open'); }
-  { const db=$('drawer-btn'); if(db) db.onclick=()=>{ const m=$('main'); const open=!m.classList.contains('drawer-open'); m.classList.toggle('drawer-open',open); const sc=$('drawer-scrim'); if(sc) sc.classList.toggle('open',open); }; }
+  function closeDrawer(){ const m=$('main'); if(m) m.classList.remove('drawer-open'); const sc=$('drawer-scrim'); if(sc) sc.classList.remove('open'); const db=$('drawer-btn'); if(db) db.setAttribute('aria-expanded','false'); }
+  { const db=$('drawer-btn'); if(db) db.onclick=()=>{ const m=$('main'); const open=!m.classList.contains('drawer-open'); m.classList.toggle('drawer-open',open); const sc=$('drawer-scrim'); if(sc) sc.classList.toggle('open',open); db.setAttribute('aria-expanded',String(open)); if(open){ const l=$('left'); const f=l&&l.querySelector('.prow,.frow,button'); if(f) f.focus(); } }; }
   { const sc=$('drawer-scrim'); if(sc) sc.onclick=closeDrawer; }
   { const l=$('left'); if(l) l.addEventListener('click',(e)=>{ if(layoutMode==='tablet' && e.target.closest && e.target.closest('.frow,.task')) closeDrawer(); }); }
   // More sheet (the phone home for orphaned controls)
-  function openSheet(){ renderSwitcher(); const s=$('sheet'); if(s) s.classList.add('open'); }
-  function closeSheet(){ const s=$('sheet'); if(s) s.classList.remove('open'); }
+  function openSheet(){ renderSwitcher(); const s=$('sheet'); if(!s) return; s.classList.add('open');
+    const mb=$('more-btn'); if(mb) mb.setAttribute('aria-expanded','true');
+    const first=s.querySelector('.sheet-row'); if(first) first.focus(); }
+  function closeSheet(){ const s=$('sheet'); if(!s||!s.classList.contains('open')) return; s.classList.remove('open');
+    const mb=$('more-btn'); if(mb){ mb.setAttribute('aria-expanded','false'); mb.focus(); } }
   { const mb=$('more-btn'); if(mb) mb.onclick=openSheet; }
   { const s=$('sheet'); if(s) s.onclick=(e)=>{ if(e.target===s) closeSheet(); }; }
+  document.addEventListener('keydown',(e)=>{ if(e.key!=='Escape') return; const sh=$('sheet'); if(sh&&sh.classList.contains('open')){ closeSheet(); return; } const mn=$('main'); if(mn&&mn.classList.contains('drawer-open')) closeDrawer(); });
   document.querySelectorAll('#sheet .sheet-row').forEach(row=> row.onclick=()=>{
     const a=row.dataset.act; closeSheet();
     const call=(id)=>{ const el=$(id); if(el&&el.onclick) el.onclick(); };
@@ -2567,6 +2575,9 @@
   try{ if((await runsCount())===0){ const r=await rebuildRunIndex(); if(r&&r.indexed) console.info('[anvil] run index rebuilt: '+r.indexed+' record(s)'+(r.broken?(', '+r.broken+' broken chain(s)'):'')+' — '+r.stopsLine); } }catch(_){}
   if(!folderMode) await mountProject(state.activeProject);
   renderAll(); syncMode();
+  // Stale previewOpen can restore to an empty Preview pane; on a phone that would
+  // strand the user on a blank surface, so fall back to Chat when nothing rendered.
+  if(layoutMode==='phone' && phoneSurface==='preview' && document.querySelector('#pv-body .pempty')) setSurface('chat');
   window.__anvilBoot.ok = true;   // the net above stands down
 
   // Seamlessly follow the host storage backend: when the user switches
