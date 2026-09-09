@@ -26,3 +26,15 @@
 /apps/anvil/*
   Cross-Origin-Opener-Policy: same-origin
   Cross-Origin-Embedder-Policy: credentialless
+
+# Nothing embeds naklios.dev but naklios.dev itself (Immersive mode iframes the
+# same-origin mirrors under /apps/<id>/). Without this, any site could frame the
+# desktop (clickjacking of permission prompts and the git/AI credential forms)
+# or frame a mirrored app and impersonate the host: the vendored SDK trusts the
+# first parent origin that speaks `naklios:*`, so an attacker page answering
+# `capabilities {fs:true}` would receive everything that app writes through
+# naklios.fs. Found by the 2026-09-09 sweep; the deploy headers are the gate
+# because a <meta> CSP cannot carry frame-ancestors.
+/*
+  Content-Security-Policy: frame-ancestors 'self'
+  X-Frame-Options: SAMEORIGIN
