@@ -173,13 +173,13 @@
       "id": "menagerie",
       "repo": "NakliTechie/menagerie",
       "requestedRef": "main",
-      "resolvedCommit": "09fbfea911d7351d060d12977efec238cb94dd3d",
+      "resolvedCommit": "6013d1a6953c594afd1007933f67522a45cf4720",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "b5a58d63f7afe4004e5a5ba5f82c8d95cb4c6ba436736cbfc63198430ed32f65",
-          "bytes": 252163
+          "sha256": "9b3fd96cc01b4edd377c787b148e960d75f2b84c7a589f483c9d109a5389eb4f",
+          "bytes": 252679
         },
         {
           "source": "manifest.webmanifest",
