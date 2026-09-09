@@ -168,6 +168,50 @@
           "bytes": 111307
         }
       ]
+    },
+    {
+      "id": "menagerie",
+      "repo": "NakliTechie/menagerie",
+      "requestedRef": "main",
+      "resolvedCommit": "837a3ee5fcf92c71a84dfefce062e6a9cf9a2457",
+      "files": [
+        {
+          "source": "index.html",
+          "destination": "index.html",
+          "sha256": "b0dd455215f713235331d5ab6ac958a1842dee9d03a5f88ec0137472882e5607",
+          "bytes": 251422
+        },
+        {
+          "source": "manifest.webmanifest",
+          "destination": "manifest.webmanifest",
+          "sha256": "bbaf8518cc6d86ffb6759ef0a4162d73a926b08bb1e1326c3923a83a93abd0b7",
+          "bytes": 623
+        },
+        {
+          "source": "icon.svg",
+          "destination": "icon.svg",
+          "sha256": "f3a8feb9d13c71715cf52e2b17f7761c2b989a941e63896f2595dee31d293a95",
+          "bytes": 729
+        },
+        {
+          "source": "icon-180.png",
+          "destination": "icon-180.png",
+          "sha256": "2fb750755acbb61ddf5b68c92f9fb550c9ad069d3d9600e122cc6f2055f12d59",
+          "bytes": 1332
+        },
+        {
+          "source": "icon-192.png",
+          "destination": "icon-192.png",
+          "sha256": "116a9f70523c4b0a9225a1695d10ba17ff94f9c95455fce740e6061f7ac441c9",
+          "bytes": 1373
+        },
+        {
+          "source": "icon-512.png",
+          "destination": "icon-512.png",
+          "sha256": "fb4a379dc1011f0dc5a9c1c27a5d4e54836dd874ba9ca8a942394f0d7486a96c",
+          "bytes": 4310
+        }
+      ]
     }
   ]
 }

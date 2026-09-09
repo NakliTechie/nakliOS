@@ -8,7 +8,7 @@ A launcher (one HTML file at the root) that hosts standalone apps. Each app is i
 ## Apps (/apps/<id>/)
 - anvil — on-device coding agent (read/write/edit/shell tools; workspace in the browser, a disk folder, or a Crate)
 - forge — shell/desktop over Rig + Kiln
-- reckon — spreadsheet; draft — word processor; editor; notes; files
+- reckon — spreadsheet; draft — word processor; editor; notes; files; menagerie — a fleet of coding agents in one tab, over relays you run
 - reel — media player; nakliamp — music; sheaf — PDF editor; tijori — vault; calendar
 
 ## Runtime surface

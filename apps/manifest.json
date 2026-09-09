@@ -90,14 +90,69 @@
       "repo": "NakliTechie/sheaf",
       "ref": "main",
       "files": [
-        { "source": "index.html", "destination": "index.html" },
-        { "source": "engines/pdf-lib/2.9.1/pdf-lib.esm.js", "destination": "engines/pdf-lib/2.9.1/pdf-lib.esm.js" },
-        { "source": "engines/pdfjs/6.2.108/pdf.min.mjs", "destination": "engines/pdfjs/6.2.108/pdf.min.mjs" },
-        { "source": "engines/pdfjs/6.2.108/pdf.worker.min.mjs", "destination": "engines/pdfjs/6.2.108/pdf.worker.min.mjs" },
-        { "source": "engines/tesseract/7.0.0/eng.traineddata.gz", "destination": "engines/tesseract/7.0.0/eng.traineddata.gz" },
-        { "source": "engines/tesseract/7.0.0/tesseract-core-simd-lstm.wasm.js", "destination": "engines/tesseract/7.0.0/tesseract-core-simd-lstm.wasm.js" },
-        { "source": "engines/tesseract/7.0.0/tesseract.esm.min.js", "destination": "engines/tesseract/7.0.0/tesseract.esm.min.js" },
-        { "source": "engines/tesseract/7.0.0/worker.min.js", "destination": "engines/tesseract/7.0.0/worker.min.js" }
+        {
+          "source": "index.html",
+          "destination": "index.html"
+        },
+        {
+          "source": "engines/pdf-lib/2.9.1/pdf-lib.esm.js",
+          "destination": "engines/pdf-lib/2.9.1/pdf-lib.esm.js"
+        },
+        {
+          "source": "engines/pdfjs/6.2.108/pdf.min.mjs",
+          "destination": "engines/pdfjs/6.2.108/pdf.min.mjs"
+        },
+        {
+          "source": "engines/pdfjs/6.2.108/pdf.worker.min.mjs",
+          "destination": "engines/pdfjs/6.2.108/pdf.worker.min.mjs"
+        },
+        {
+          "source": "engines/tesseract/7.0.0/eng.traineddata.gz",
+          "destination": "engines/tesseract/7.0.0/eng.traineddata.gz"
+        },
+        {
+          "source": "engines/tesseract/7.0.0/tesseract-core-simd-lstm.wasm.js",
+          "destination": "engines/tesseract/7.0.0/tesseract-core-simd-lstm.wasm.js"
+        },
+        {
+          "source": "engines/tesseract/7.0.0/tesseract.esm.min.js",
+          "destination": "engines/tesseract/7.0.0/tesseract.esm.min.js"
+        },
+        {
+          "source": "engines/tesseract/7.0.0/worker.min.js",
+          "destination": "engines/tesseract/7.0.0/worker.min.js"
+        }
+      ]
+    },
+    {
+      "id": "menagerie",
+      "repo": "NakliTechie/menagerie",
+      "ref": "main",
+      "files": [
+        {
+          "source": "index.html",
+          "destination": "index.html"
+        },
+        {
+          "source": "manifest.webmanifest",
+          "destination": "manifest.webmanifest"
+        },
+        {
+          "source": "icon.svg",
+          "destination": "icon.svg"
+        },
+        {
+          "source": "icon-180.png",
+          "destination": "icon-180.png"
+        },
+        {
+          "source": "icon-192.png",
+          "destination": "icon-192.png"
+        },
+        {
+          "source": "icon-512.png",
+          "destination": "icon-512.png"
+        }
       ]
     }
   ]

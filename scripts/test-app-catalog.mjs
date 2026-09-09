@@ -112,7 +112,7 @@ assert.match(
 );
 assert.match(
   html,
-  /id:'fld-work'[\s\S]*?apps:\['editor','forge','anvil','kanzen','nakliposter','bofh','mod','naklidata','nemawashi'\]/,
+  /id:'fld-work'[\s\S]*?apps:\['editor','forge','anvil','kanzen','nakliposter','bofh','mod','naklidata','nemawashi','menagerie'\]/,
   'Editor, Forge, and Anvil have predictable homes in Work & Build',
 );
 assert.match(

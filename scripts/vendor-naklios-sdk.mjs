@@ -74,18 +74,30 @@ const END_MARKER = '/* naklios-sdk:end */';
 
 // Match the } that closes the { at openBraceIdx, skipping strings and comments.
 // Safe over SDK content: no regex literals; backticks appear only in // comments.
+// The three skippers return the index just past the token they consumed.
+function skipString(src, i) {
+  const q = src[i]; i++;
+  while (i < src.length && src[i] !== q) { if (src[i] === '\\') i++; i++; }
+  return i + 1;
+}
+function skipLineComment(src, i) {
+  i += 2;
+  while (i < src.length && src[i] !== '\n') i++;
+  return i;
+}
+function skipBlockComment(src, i) {
+  i += 2;
+  while (i < src.length && !(src[i] === '*' && src[i + 1] === '/')) i++;
+  return i + 2;
+}
 function matchBrace(src, openBraceIdx) {
   let depth = 0, i = openBraceIdx;
   const n = src.length;
   while (i < n) {
     const c = src[i], d = src[i + 1];
-    if (c === '"' || c === "'" || c === '`') {
-      const q = c; i++;
-      while (i < n && src[i] !== q) { if (src[i] === '\\') i++; i++; }
-      i++; continue;
-    }
-    if (c === '/' && d === '/') { i += 2; while (i < n && src[i] !== '\n') i++; continue; }
-    if (c === '/' && d === '*') { i += 2; while (i < n && !(src[i] === '*' && src[i + 1] === '/')) i++; i += 2; continue; }
+    if (c === '"' || c === "'" || c === '`') { i = skipString(src, i); continue; }
+    if (c === '/' && d === '/') { i = skipLineComment(src, i); continue; }
+    if (c === '/' && d === '*') { i = skipBlockComment(src, i); continue; }
     if (c === '{') depth++;
     else if (c === '}') { depth--; if (depth === 0) return i; }
     i++;
