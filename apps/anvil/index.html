@@ -407,6 +407,7 @@
   import { SKILLS_DIR, parseSkill, buildSkillsIndex, skillTool, INJECTED_STATUSES, explainSkillsRefusal } from '../../sys/ai/skills.mjs';
   import { GATE_DIR, explainGateRefusal, GATE_AUTHORING_HINT, planGate } from '../../sys/ai/gate.mjs';
   import { renderProcedural, loadProceduralGraph, PROCEDURAL_PATH } from '../../sys/ai/procedural.mjs';
+  import { rowKeys, planLogUpdate, isPinned } from '../../sys/ai/log-render-plan.mjs';
   import { migrateQueue, reconcileQueue, enqueue as qEnqueue, removeEntry as qRemove, moveEntry as qMove, editEntry as qEdit, nextDispatch, completeDispatch, releaseDispatch } from '../../sys/ai/followup-queue.mjs';
   import { skillManageTool, planSkillWrite, createSkillSession, SKILL_FILE } from '../../sys/ai/skill-manage.mjs';
   import { createProposalLedger } from '../../sys/ai/proposal-fingerprint.mjs';
@@ -1132,7 +1133,7 @@
   }
   function renderLog(){
     const box=$('log'); const t=activeTask();
-    if(!t){ box.innerHTML='<div class="empty"><h2>No task selected</h2>Pick a task on the left, or make a new one.</div>'; return; }
+    if(!t){ logCache={taskId:null,keys:null}; box.innerHTML='<div class="empty"><h2>No task selected</h2>Pick a task on the left, or make a new one.</div>'; return; }
     if(!t.log||!t.log.length){
       const aiReady = !!(nak && nak.capabilities && nak.capabilities.ai);
       const wl = esc((workspaceLabel||'').split(' · ')[0] || workspaceLabel);
@@ -1145,10 +1146,25 @@
         + '<div class="es-egs"><span>Try:</span>'+examples.map((x,i)=>'<button class="es-chip" data-i="'+i+'">'+esc(x)+'</button>').join('')+'</div>'
         + '</div>';
       box.querySelectorAll('.es-chip').forEach(b=>{ b.onclick=()=>{ const ta=$('prompt'); if(ta){ ta.value=examples[+b.dataset.i]; ta.focus(); autoGrow(); } }; });
+      logCache={taskId:null,keys:null};   // the wrapper is gone; never append onto an empty state
       return;
     }
-    const w=document.createElement('div'); w.className='wrap';
-    for(const e of t.log){
+    // AC-5: the transcript is APPEND-DOMINANT, so plan the update instead of rebuilding 2,417
+    // nodes for every event (measured: 48ms per render at 600 rows, and the reader yanked to the
+    // bottom each time). `logCache` holds the keys of what is currently on screen; a plan of
+    // `append` builds only the tail into the SAME wrapper, `noop` touches nothing.
+    const keys = rowKeys(t.log);
+    const cached = (logCache.taskId===t.id) ? logCache.keys : null;
+    const plan = planLogUpdate(cached, keys);
+    const existingWrap = box.querySelector('.wrap');
+    const pinned = isPinned({ scrollTop:box.scrollTop, scrollHeight:box.scrollHeight, clientHeight:box.clientHeight });
+    const prevTop = box.scrollTop;
+    // A queue chip is not a log row, so it is rebuilt on every pass; the log rows above it are not.
+    if(plan.mode!=='rebuild' && existingWrap){ for(const q of [...existingWrap.querySelectorAll('.msg.queued')]) q.remove(); }
+    const w = (plan.mode==='rebuild' || !existingWrap) ? document.createElement('div') : existingWrap;
+    if(plan.mode==='rebuild' || !existingWrap) w.className='wrap';
+    const rows = (plan.mode==='rebuild' || !existingWrap) ? t.log : t.log.slice(plan.from);
+    for(const e of rows){
       if(e.k==='user'||e.k==='system'){
         const d=document.createElement('div'); d.className='msg '+e.k;
         d.innerHTML=`<div class="who">${e.k==='user'?'you':'system'}</div><div class="body"></div>`;
@@ -1206,8 +1222,15 @@
       const body=document.createElement('div'); body.className='body'; body.textContent=q.text;
       d.appendChild(head); d.appendChild(body); w.appendChild(d);
     }
-    box.innerHTML=''; box.appendChild(w); box.scrollTop=box.scrollHeight;
+    if(plan.mode==='rebuild' || !existingWrap){ box.innerHTML=''; box.appendChild(w); }
+    logCache = { taskId:t.id, keys };
+    // The reader's position is theirs unless they were following along at the bottom. The rare
+    // resize path (applyLayout) has always done this; the hot path never did.
+    box.scrollTop = pinned ? box.scrollHeight : prevTop;
   }
+  // Keys of the log rows currently on screen, and whose task they belong to. A task switch
+  // invalidates it by id, so a switch can never append one task's rows under another's.
+  let logCache = { taskId:null, keys:null };
   // Preview not tied to a task (whole-store read-only views land here).
   let globalPreview = null;
   function renderPreview(){

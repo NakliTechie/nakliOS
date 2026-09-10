@@ -84,6 +84,9 @@ jobs:
       - name: Gate the system filesystem on same-origin system apps, and bind messages to the launch origin
         run: node scripts/test-host-origin-authority.mjs
 
+      - name: Verify the transcript render plans noop/append/rebuild and leaves the reader's scroll alone
+        run: node sys/ai/test/log-render-plan.test.mjs
+
       - name: Verify the follow-up queue survives a crash, holds on a bad ending, and migrates legacy strings
         run: node sys/ai/test/followup-queue.test.mjs
 
