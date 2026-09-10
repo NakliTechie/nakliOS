@@ -4646,6 +4646,19 @@ function spawnInlineWindow(app){
   builder(body, win);
 }
 
+// The origin an app's frame legitimately speaks from. Resolved from the SAME
+// string the iframe is given (embedUrl when mirrored same-origin, url otherwise),
+// so the gate and the frame can never disagree about who an app is. Third-party
+// apps run without allow-same-origin, so their document has an opaque origin and
+// this returns null — they are never a privileged peer.
+function appExpectedOrigin(app){
+  if (!app) return null;
+  if (app.thirdParty === true) return 'null';
+  const base = app.embedUrl || app.url;
+  if (typeof base !== 'string' || !base) return null;
+  try { return new URL(base, location.href).origin; } catch(_){ return null; }
+}
+
 function themedAppUrl(app, options = {}){
   // Pass current theme so cooperating apps can inherit OS color scheme.
   // Apps that don't read these params see them as ignored extras.
@@ -4718,6 +4731,12 @@ function spawnIframeWindow(app, options = {}){
   iframe.src = embedSrc;
   win._embedSrc = embedSrc;
   win._isSameOrigin = isSameOrigin && !forceOpaqueSandbox;
+  // Bind this window to the origin it was launched at. A frame that navigates
+  // itself elsewhere — an app with an open redirect, or a rendered document with
+  // a link that has no target=_blank — keeps the same contentWindow, so window
+  // identity alone would carry its grants to the new origin. Third-party apps run
+  // without allow-same-origin and therefore report the literal string 'null'.
+  win._expectedOrigin = forceOpaqueSandbox ? 'null' : appExpectedOrigin(app);
   body.appendChild(iframe);
   // Register synchronously so messages posted by the iframe's first scripts
   // (typically naklios.title / naklios.ready) aren't dropped by the host's
@@ -5028,7 +5047,7 @@ function fsSysCleanPath(path, { allowEmpty = false } = {}){
   return segs.join('/');
 }
 async function fsSysBackend(msg, appId){
-  if (!aiAppIsSystem(appId)) throw new Error('System filesystem is available to system apps only');
+  if (!aiAppOwnsSystemFs(appId)) throw new Error('System filesystem is available to same-origin system apps only');
   const backendId = await fsEnsurePermission(appId);
   if (!backendId) throw new Error('Permission denied');
   if (msg.backend && msg.backend !== backendId) {
@@ -6071,6 +6090,20 @@ async function aiAgentProto(){
 function aiAppIsSystem(appId){
   const app = APPS.find(item => item.id === appId);
   return !!app && !app.thirdParty;
+}
+// The system filesystem is the WHOLE user store — every app's apps/<id>/ tree,
+// not a namespace. `!thirdParty` is far too wide a key for it: it admits every
+// first-party CATALOG app, including cross-origin ones (Lorewell, MoD, Mehfil,
+// Bolo) that run on their own origins under allow-same-origin sandboxes. Such an
+// app could read and write every other app's data, which is the opposite of what
+// the per-app namespace and the privacy badge promise.
+// Two conditions, both required: declared a system app, AND served from this
+// origin (inline or a same-origin mirror). Lorewell is kind:'system' and
+// cross-origin, so it is refused here and stays clamped to its namespace.
+function aiAppOwnsSystemFs(appId){
+  const app = APPS.find(item => item.id === appId);
+  if (!app || app.kind !== 'system') return false;
+  return appExpectedOrigin(app) === location.origin;
 }
 
 function aiNormaliseMessages(messages){
@@ -7445,7 +7478,10 @@ function capabilitySnapshot(appId){
   const fsCap = available.length > 0 && !explicitlyDenied;
   const fsBackends = available.map(backendDescriptor).filter(Boolean);
   const fsBackend = appBoundBackend(appId);
-  const isSystem = aiAppIsSystem(appId);
+  // The AI tier keys on !thirdParty; the FILE tier keys on "system app served
+  // from this origin". They are different questions and were sharing one answer,
+  // which handed every first-party catalog app the whole store.
+  const isSystem = aiAppOwnsSystemFs(appId);
   // The host's agent-tier consumers (coding) report their configured model;
   // every other app runs the GP tier and reports the resolved GP model (Nano
   // when it's the zero-config default). Other apps with their own agent stacks
@@ -7456,8 +7492,8 @@ function capabilitySnapshot(appId){
     fs: fsCap,
     fsBackends,
     fsBackend,
-    // System apps (non-third-party) may browse the whole store, not just their
-    // own apps/<id>/ namespace — this is what powers the OS-level file manager.
+    // Same-origin system apps may browse the whole store, not just their own
+    // apps/<id>/ namespace — this is what powers the OS-level file manager.
     system: isSystem,
     sysFs: isSystem && fsCap,
     ai: aiCapabilityForApp(appId),
@@ -7842,6 +7878,16 @@ window.addEventListener('message', async e => {
   const findIframe = () => Array.from(document.querySelectorAll('.nw-window iframe'))
     .find(f => f.contentWindow === e.source);
   const findWin = () => { const f = findIframe(); return f ? f.closest('.nw-window') : null; };
+  // Window identity is not authorisation: resolve the window FIRST and refuse the
+  // message unless it also arrives from the origin that window was launched at.
+  // No window means the frame is gone or was never one of ours — nothing below
+  // does useful work without it, so drop rather than reply into the void.
+  const srcWin = findWin();
+  if (!srcWin) return;
+  if (srcWin._expectedOrigin && e.origin !== srcWin._expectedOrigin) return;
+  // An opaque origin cannot be a postMessage target, so third-party frames — which
+  // have no origin to impersonate in the first place — keep '*'.
+  const replyTo = (!srcWin._expectedOrigin || srcWin._expectedOrigin === 'null') ? '*' : srcWin._expectedOrigin;
   const getAppId = () => findWin()?.dataset.id || null;
   if (msg.type === 'naklios:ready'){
     const win = findWin();
@@ -7870,7 +7916,7 @@ window.addEventListener('message', async e => {
   } else if (msg.type === 'naklios:theme-request'){
     // App is asking for the current theme (e.g., late-loading app missed the load event)
     const t = THEMES.find(x => x.id === state.theme) || THEMES[0];
-    try { e.source.postMessage({ type:'naklios:theme', theme:t.id, colors:t.colors, mood:t.mood }, '*'); } catch(_){}
+    try { e.source.postMessage({ type:'naklios:theme', theme:t.id, colors:t.colors, mood:t.mood }, replyTo); } catch(_){}
   } else if (msg.type === 'naklios:capabilities-request'){
     const iframe = findIframe(); const appId = getAppId();
     if (iframe && appId) postCapabilities(iframe, appId);
@@ -7893,7 +7939,7 @@ window.addEventListener('message', async e => {
       reply.error = String(err?.message || err);
     }
     if (msg.requestId) {
-      try { e.source.postMessage(reply, '*'); } catch(_){}
+      try { e.source.postMessage(reply, replyTo); } catch(_){}
     }
   } else if (msg.type === 'naklios:ai:chat'){
     const appId = getAppId();
@@ -7907,7 +7953,7 @@ window.addEventListener('message', async e => {
     const reply = { type:'naklios:net:reply', requestId: msg.requestId };
     try { reply.result = egressConfigured() ? { backend: egressBackendLabel(), roams: egressBackendLabel()==='worker' } : null; }
     catch(err){ reply.error = String(err?.message || err); }
-    if (msg.requestId) { try { e.source.postMessage(reply, '*'); } catch(_){} }
+    if (msg.requestId) { try { e.source.postMessage(reply, replyTo); } catch(_){} }
   } else if (msg.type === 'naklios:net:fetch'){
     const reply = { type:'naklios:net:reply', requestId: msg.requestId };
     try {
@@ -7917,7 +7963,7 @@ window.addEventListener('message', async e => {
       if (!egressConfigured()) { const er = new Error('No egress backend configured'); er.code = 'ENOEGRESS'; throw er; }
       reply.result = await egressFetch({ url: msg.url, method: msg.method, headers: msg.headers, body: msg.body });
     } catch(err){ reply.error = String(err?.message || err); }
-    if (msg.requestId) { try { e.source.postMessage(reply, '*'); } catch(_){} }
+    if (msg.requestId) { try { e.source.postMessage(reply, replyTo); } catch(_){} }
   } else if (typeof msg.type === 'string' && msg.type.startsWith('naklios:fs:')){
     const reply = { type: 'naklios:fs:reply', requestId: msg.requestId };
     try {
@@ -7933,7 +7979,7 @@ window.addEventListener('message', async e => {
       reply.error = String(err?.message || err);
     }
     if (msg.requestId) {
-      try { e.source.postMessage(reply, '*'); } catch(_){}
+      try { e.source.postMessage(reply, replyTo); } catch(_){}
     }
   } else if (typeof msg.type === 'string' && msg.type.startsWith('naklios:sysfs:')){
     // System-scoped fs — whole-store access for same-origin system apps only.
@@ -7948,7 +7994,7 @@ window.addEventListener('message', async e => {
       reply.error = String(err?.message || err);
     }
     if (msg.requestId) {
-      try { e.source.postMessage(reply, '*'); } catch(_){}
+      try { e.source.postMessage(reply, replyTo); } catch(_){}
     }
   } else if (typeof msg.type === 'string' && msg.type.startsWith('naklios:rag:')){
     const reply = { type:'naklios:rag:reply', requestId:msg.requestId };
@@ -7963,7 +8009,7 @@ window.addEventListener('message', async e => {
       reply.error = String(err?.message || err);
     }
     if (msg.requestId) {
-      try { e.source.postMessage(reply, '*'); } catch(_){}
+      try { e.source.postMessage(reply, replyTo); } catch(_){}
     }
   }
 });
