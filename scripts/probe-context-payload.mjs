@@ -52,10 +52,11 @@ function inContext(systemText) {
 }
 
 // ── what FIRED ──
-// A skill fires when the `skill` tool is called by name — a clean, event-level attribution.
-// A fact has no per-fact usage event: `recall` is a QUERY, so the only evidence a specific fact
-// was used is its name appearing in a recall RESULT. That is text-matching, and it is reported
-// separately from the skill numbers rather than blended into them.
+// Both are attributed at the EVENT level, from the call's own arguments. An earlier version
+// text-matched fact names out of recall RESULTS, on the belief that `recall` was a free-text
+// query — it is not: `recallTool` (memory-store.mjs:500) takes `name`, "the fact name, exactly as
+// listed". So the call itself names the fact, and the result never needs parsing. Result text is
+// still scanned as a fallback, because a fact can also be named in a result the agent read.
 // A RULE is injected whole and is never called. It cannot be attributed at all, in principle, and
 // counting it as "never fired" would be the single most misleading number this probe could print.
 function fired(rec) {
@@ -63,6 +64,7 @@ function fired(rec) {
   const ev = joined(rec.events(), rec.resolve);
   for (const e of ev) {
     if (e.tool === 'tool.called' && e.input?.name === 'skill' && e.input?.args?.name) skills.add(String(e.input.args.name));
+    if (e.tool === 'tool.called' && e.input?.name === 'recall' && e.input?.args?.name) facts.add(String(e.input.args.name));
     if (e.tool === 'tool.responded' && e.input?.name === 'recall') {
       const text = typeof e.output?.result === 'string' ? e.output.result : JSON.stringify(e.output?.result ?? '');
       for (const m of text.matchAll(/\*\*(.+?)\*\*/g)) facts.add(m[1].trim());
