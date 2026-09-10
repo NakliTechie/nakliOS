@@ -32,7 +32,7 @@ import { runUnit, createProjector } from './projection.mjs';
 export { runUnit, createProjector };
 
 export const RUN_EVENTS = Object.freeze([
-  'run.started',      // input: { messages, tools }            output: {}
+  'run.started',      // input: { messages, tools, model }     output: {}  (`model` = {id,provider,label} or null — who answered this run)
   'turn.started',     // input: { step }                       output: {}
   'llm.requested',    // input: { request_hash, step }         output: {}
   'llm.responded',    // input: { request_hash, step }         output: { content, toolCalls, finishReason }
@@ -80,6 +80,17 @@ export async function requestHash({ messages, tools, model = null }) {
   return contentHash({ messages, tools: tools || [], model });
 }
 
+// The responder's identity, reduced to the three strings that survive being written down.
+// Anything absent stays null rather than becoming '' — a record must not claim to know a
+// provider it was never told. Returns null when nothing at all was supplied, so a caller
+// that does not know the model records that honestly instead of an empty shell.
+export function normaliseModelStamp(model) {
+  if (!model || typeof model !== 'object') return null;
+  const str = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+  const out = { id: str(model.id), provider: str(model.provider), label: str(model.label) };
+  return (out.id || out.provider || out.label) ? out : null;
+}
+
 export function createRunRecorder({ app = 'anvil', principal = 'local', grant_id = null, now = () => Date.now() } = {}) {
   const events = [];
   const blobs = new Map();      // hash -> payload (input or output)
@@ -111,7 +122,26 @@ export function createRunRecorder({ app = 'anvil', principal = 'local', grant_id
 
   return {
     // ---- recording ----
-    start({ messages, tools }) { return enqueue('run.started', () => ({ input: { messages, tools: tools || [] }, output: {} })); },
+    // `model` names who is about to answer: { id, provider, label }. It is recorded on the
+    // chain rather than left to the caller's memory because a record that cannot say which
+    // endpoint produced it is a record you cannot reason about after the fact — replay
+    // reproduces the bytes but not the responder, and foldOutcome's failure signals get
+    // attributed to whichever provider happens to be selected when you read the record.
+    // Deliberately NOT folded into `requestHash`: the hash keys the replay corpus, and
+    // adding a field to it would make every recorded run a replay miss.
+    // The key is OMITTED when there is no stamp, never written as `model: null`. Replay
+    // compares the recorded `run.started` input byte-for-byte, so an always-present key
+    // would make every run recorded before this existed a replay miss — and the corpus is
+    // real captured runs, which are never re-recorded just to make a lane green.
+    start({ messages, tools, model = null }) {
+      const stamp = normaliseModelStamp(model);
+      return enqueue('run.started', () => ({
+        input: stamp
+          ? { messages, tools: tools || [], model: stamp }
+          : { messages, tools: tools || [] },
+        output: {},
+      }));
+    },
 
     // Pass as runAgentLoop's onEvent. Synchronous by contract; the append is queued.
     onEvent(e) {
@@ -1168,6 +1198,24 @@ export function compactionOrphaned(events, resolve) {
 
 // The inputs the post-run review fork reasons over (Agno's SessionContext + DecisionLog),
 // derived from ONE run's record. Pure.
+
+// Who answered this run. A record can hold more than one `run.started` (Anvil's act-or-nudge
+// re-enters the loop), and in principle the owner could switch endpoints between them, so this
+// returns every DISTINCT stamp in order rather than pretending there was one. `null` entries —
+// loops recorded before the stamp existed, or by a caller that did not know — are dropped, and
+// an empty array means the record cannot say who answered. Pure.
+export function foldModels(events, resolve) {
+  const seen = new Set(); const out = [];
+  for (const e of joined(events, resolve)) {
+    if (e.tool !== 'run.started') continue;
+    const m = normaliseModelStamp(e.input?.model);
+    if (!m) continue;
+    const key = `${m.provider || ''} ${m.id || ''} ${m.label || ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key); out.push(m);
+  }
+  return out;
+}
 
 // {goal, lastCheckpoint, filesTouched, outcome} — what the run was for and how it went.
 export function foldSessionContext(events, resolve) {

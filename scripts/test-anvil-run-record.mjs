@@ -18,7 +18,20 @@ assert.ok(runTask.length > 1000, 'runTask found');
 // Every loop in runTask is recorded: started before, finished after, infer wrapped, events chained.
 const loops = [...runTask.matchAll(/runAgentLoop\(\{/g)].length;
 assert.equal(loops, 3, 'runTask runs the loop in exactly three places (main + act-or-nudge + D2 supervisor)');
-assert.equal([...runTask.matchAll(/await rec\.start\(\{ messages: \w+, tools \}\)/g)].length, 3, 'each loop is preceded by rec.start (main + act-or-nudge + D2 supervisor)');
+// Match the CALL, not its exact argument list — this anchor broke once when a field was
+// added to rec.start, reporting 0 of 3 call sites that were all still there.
+const startCalls = [...runTask.matchAll(/await rec\.start\(\{[^}]*\}\)/g)].map((m) => m[0]);
+assert.equal(startCalls.length, 3, 'each loop is preceded by rec.start (main + act-or-nudge + D2 supervisor)');
+for (const call of startCalls) {
+  assert.match(call, /messages: \w+/, `rec.start must carry the messages it started with: ${call}`);
+  assert.match(call, /\btools\b/, `rec.start must carry the toolset: ${call}`);
+  // Provider+model identity on the chain. Without it a replayed record reproduces the bytes
+  // but not the responder, and foldOutcome's failure signals land on whichever endpoint is
+  // selected when the record is read, not the one that actually answered.
+  assert.match(call, /model: runModel\(\)/, `rec.start must stamp who answered: ${call}`);
+}
+assert.match(runTask, /const runModel = \(\) => \{[\s\S]*?capabilities[\s\S]*?aiModel[\s\S]*?aiProvider[\s\S]*?\}/,
+  'the model stamp is read from the host capability broadcast at run time, not cached at boot');
 assert.equal([...runTask.matchAll(/await rec\.finish\(result\)/g)].length, 3, 'each loop is followed by rec.finish (main + act-or-nudge + D2 supervisor)');
 assert.equal([...runTask.matchAll(/infer: recInfer/g)].length, 3, 'each loop infers through the recorder (main + act-or-nudge + D2 supervisor)');
 assert.equal([...runTask.matchAll(/onEvent:recEvent/g)].length, 3, 'each loop reports through the recorder (main + act-or-nudge + D2 supervisor)');

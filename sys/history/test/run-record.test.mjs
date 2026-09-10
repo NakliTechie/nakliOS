@@ -15,7 +15,8 @@ import { RUN_EVENTS, createRunRecorder, loadRecord, foldStatus, foldLog, foldTra
          OUTCOME_SIGNALS, foldOutcome, foldReuse, foldStopReasons, stopReasonsLine,
          searchRecords, scopeEntries, readEvent, historyTool, HISTORY_ROLES, foldRecovery, recoveryNote,
          foldStagnation, stagnationNudge, foldSessionContext, foldDecisions,
-         foldSurface, compactionOrphaned, reconstructionCheck, joined } from '../run-record.mjs';
+         foldSurface, compactionOrphaned, reconstructionCheck, joined,
+         foldModels, normaliseModelStamp } from '../run-record.mjs';
 
 let passed = 0; const failures = [];
 async function test(n, fn) { try { await fn(); passed++; } catch (e) { failures.push({ n, message: e.message }); } }
@@ -1018,6 +1019,55 @@ await test('F4: compaction is a LOGGED surface replace — the sent transcript i
   const staleSurface = foldSurface(stale.events(), stale.resolve).map((m) => m.content);
   assert(!staleSurface.includes('GHOST'), `an impossible span overwrote a later message: ${JSON.stringify(staleSurface)}`);
   deepEq(staleSurface, ['only', 'later reply'], 'the later turn survives untouched');
+});
+
+
+
+// ── Who answered (provider+model identity on the chain) ───────────────────────
+await test('the record says which provider and model answered, and replay is unaffected', async () => {
+  const rec = createRunRecorder({ app: 'anvil', principal: 'p' });
+  const model = { id: 'qwen3:8b', provider: 'endpoint', label: 'Ollama · qwen3:8b' };
+  await rec.start({ messages: MESSAGES, tools: [shellTool()], model });
+  await rec.settled();
+  deepEq(foldModels(rec.events(), rec.resolve), [model],
+    'foldModels reports the stamp the run was started with');
+
+  // A re-entered loop on a DIFFERENT endpoint is two distinct responders, and the record
+  // says so rather than collapsing to whichever was last selected.
+  await rec.start({ messages: MESSAGES, tools: [shellTool()], model: { id: 'x:free', provider: 'endpoint', label: 'hermes · x' } });
+  await rec.start({ messages: MESSAGES, tools: [shellTool()], model });
+  await rec.settled();
+  deepEq(foldModels(rec.events(), rec.resolve).map((m) => m.id), ['qwen3:8b', 'x:free'],
+    'every distinct responder is listed once, in order — a repeat is not a new one');
+
+  // A caller that does not know must record that it does not know, not an empty shell.
+  const blank = createRunRecorder({ app: 'anvil', principal: 'p' });
+  await blank.start({ messages: MESSAGES, tools: [] });
+  await blank.settled();
+  deepEq(foldModels(blank.events(), blank.resolve), [],
+    'an unstamped run reports no responder rather than inventing one');
+  // and it writes no `model` key at all — a run.started carrying `model: null` would be a
+  // different input hash from every run recorded before the stamp existed, so the replay
+  // corpus (real captured runs) would go red on its first event.
+  const blankStart = blank.events().find((e) => e.tool === 'run.started');
+  assert(!('model' in blank.resolve(blankStart).input),
+    'an unstamped run.started must omit the key, not record a null');
+  assert(normaliseModelStamp({ id: '  ', provider: '', label: null }) === null,
+    'a stamp of nothing but blanks is null, not { id:null, provider:null, label:null }');
+  deepEq(normaliseModelStamp({ id: ' a ', provider: null, label: undefined }), { id: 'a', provider: null, label: null },
+    'partial identity is kept, trimmed, with the unknown halves explicitly null');
+
+  // The stamp must NOT enter requestHash: that hash keys the replay corpus, and every
+  // previously recorded run would become a replay miss if it did.
+  const stamped = createRunRecorder({ app: 'anvil', principal: 'p' });
+  await stamped.start({ messages: MESSAGES, tools: [shellTool()], model });
+  const wrapped = stamped.wrapInfer(async () => ({ content: 'hi', toolCalls: [], finishReason: 'stop' }));
+  await wrapped({ messages: MESSAGES, tools: [shellTool()] });
+  await stamped.settled();
+  const req = stamped.events().find((e) => e.tool === 'llm.requested');
+  const bare = await requestHash({ messages: MESSAGES, tools: [shellTool()] });
+  assert(stamped.resolve(req).input.request_hash === bare,
+    'the request hash is unchanged by the model stamp — the replay corpus still matches');
 });
 
 if (failures.length) { console.error(`history/run-record: ${passed} passed, ${failures.length} FAILED`); for (const f of failures) console.error(`  FAIL ${f.n}: ${f.message}`); process.exit(1); }

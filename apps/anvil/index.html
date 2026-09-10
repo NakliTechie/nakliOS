@@ -2239,6 +2239,14 @@
       // Hand the executor this run's identity: which task asked, and where to record. Without it
       // checkpoint silently never recorded and history followed the UI selection (NAF-07/NAF-08).
       runCtx = { t, rec };
+      // Who is answering, stamped onto every loop of this run. The host is the only thing
+      // that knows — it resolves the endpoint and the app never sees the URL or the key —
+      // so it is read from the capability broadcast at run time, not cached at boot: the
+      // owner can change the endpoint in Settings between two runs of the same task.
+      const runModel = () => {
+        const c = (nak && nak.capabilities) || {};
+        return { id: c.aiModel || null, provider: c.aiProvider || null, label: c.aiModelLabel || null };
+      };
       const gateNote = verify?(' A verify gate is set: `'+verifyCmd+'`. You are not done until it exits 0 — call task_done when you believe the work is complete and it will run.'):'';
       const recoveryPreface = (t.recovery && String(t.recovery).trim()) ? ('\n\n'+t.recovery) : '';
       // The volatile half, change-gated: it is appended to the conversation only when it
@@ -2271,7 +2279,7 @@
         try{ (t.log=t.log||[]).push({ k:'system', text:'⚠ the request could not be reconstructed from this run\'s record — '+d.why }); renderLog(); }catch(_){}
       } });
       const recEvent = (e)=>{ onLoopEvent(e); rec.onEvent(e); };
-      await rec.start({ messages: firstMessages, tools });
+      await rec.start({ messages: firstMessages, tools, model: runModel() });
       let result = await runAgentLoop({
         messages: firstMessages,
         tools, infer: recInfer, executeTool, maxSteps:24, signal: abortController.signal,
@@ -2293,7 +2301,7 @@
         if(prose) convo.push({role:'assistant', content:prose.text});
         convo.push({role:'user', content:'[coordination] You described the work but did not do it. Use the tools (write / edit / apply_patch / shell) to actually make and run the change in the workspace now, then give a one-line summary. Do not only explain.'});
         const nudgeMessages=[sysMsg(''), ...convo];
-        await rec.start({ messages: nudgeMessages, tools });
+        await rec.start({ messages: nudgeMessages, tools, model: runModel() });
         result = await runAgentLoop({ messages: nudgeMessages, tools, infer: recInfer, executeTool, maxSteps:16, signal: abortController.signal, budget:{tokens:120000, wallClockMs:240000}, verify, maxVerifyRounds:3, onEvent:recEvent });
         await rec.finish(result);
       }
@@ -2309,7 +2317,7 @@
             t.log.push({k:'system', text:'Supervisor: '+stag.detail+' — redirecting.'}); renderLog();
             convo.push({role:'user', content: stagnationNudge(stag)});
             const superMessages=[sysMsg(''), ...convo];
-            await rec.start({ messages: superMessages, tools });
+            await rec.start({ messages: superMessages, tools, model: runModel() });
             result = await runAgentLoop({ messages: superMessages, tools, infer: recInfer, executeTool, maxSteps:16, signal: abortController.signal, budget:{tokens:120000, wallClockMs:240000}, verify, maxVerifyRounds:3, onEvent:recEvent });
             await rec.finish(result);
           }
