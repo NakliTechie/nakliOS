@@ -162,6 +162,10 @@ const texts = (q) => q.map((e) => e.text);
     [{ lastStop: 'max-steps' }, /ended 'max-steps'/],
     [{ lastStop: 'unverified' }, /ended 'unverified'/],
     [{ lastStop: 'aborted' }, /ended 'aborted'/],
+    // 'interrupted' is produced by the startup reconciliation for a task left `running` by a tab
+    // that closed mid-run — a real value the app writes, so it is named here rather than left to
+    // the generic branch.
+    [{ lastStop: 'interrupted' }, /ended 'interrupted'/],
   ]) {
     const a = admitRun(state);
     assert.equal(a.admit, false, `${JSON.stringify(state)} holds the next run`);
@@ -204,6 +208,16 @@ assert.match(anvil, /if\(adm\.kind !== 'held'\)\{ t\.ackAfterBadRun = true; \$\(
 assert.match(anvil, /if\(result\.stop === 'done'\) t\.ackAfterBadRun = false;/, 'a clean run restores the speed bump');
 assert.match(anvil, /state\.runsHeld=true; state\.runsHeldReason=String\(why\|\|''\)\.trim\(\);/, 'the hold records its reason');
 assert.match(anvil, /⏸ HOLD — new runs blocked/, 'and a held session says so in the taskbar');
+
+// A task left `running` by a closed tab is reconciled on load. `running` is written when a run
+// starts and replaced only when it ends, so on a fresh load nothing owns it — the in-memory flag
+// is false, which is why it does not BLOCK a run, but the UI reads the persisted status and showed
+// a pulsing "running" dot beside a Send button with no Stop.
+assert.match(anvil, /if\(t\.status === 'running'\)\{/, 'an orphaned running status is reconciled on load');
+assert.match(anvil, /t\.status = 'idle'; t\.lastStop = 'interrupted'; t\.ackAfterBadRun = false;/,
+  'demoted, and routed through admitRun as the bad ending it is');
+assert.match(anvil, /still running when Anvil last closed/, 'and the task says what happened');
+assert.match(anvil, /if\(runsInterrupted\) pushSystem\(/, 'with a boot notice — a silent recovery is a defect too');
 assert.match(anvil, /Nothing already running is stopped/, 'the dialog is explicit that it is not a fuse');
 
 console.log('followup-queue: claim survives a crash, id-keyed edits, a bad ending holds the queue and the next SEND, legacy strings migrate');

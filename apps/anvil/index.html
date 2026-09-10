@@ -703,10 +703,25 @@
   // the claim and the run starting): it is demoted back to `pending` rather than lost, and
   // `queueRecovered` carries the count so startup can SAY so. A silent recovery is a defect
   // too — that is the whole lesson of the stale-`running` bug.
-  let queueRecovered = 0, queueDropped = 0;
+  let queueRecovered = 0, queueDropped = 0, runsInterrupted = 0;
   try{
     for(const p of (state.projects||[])){
       for(const t of (p.tasks||[])){
+        // A task left `running` belongs to a run that no longer exists: `running` is set when a run
+        // starts and is only ever replaced when it ends, so on a fresh load nothing owns it. The
+        // in-memory `running` flag is false here, so it does not BLOCK anything — but the UI reads
+        // the persisted status, which is how you get a pulsing "running" dot next to a Send button
+        // with no Stop, and no way to tell what happened.
+        //
+        // Demote it, and treat it as what it is: a run that ended badly. That routes it through
+        // admitRun, so the next Send holds once and says the workspace may be half-changed —
+        // which is the visible refusal this needed, arriving through machinery that already exists
+        // rather than a special case.
+        if(t.status === 'running'){
+          t.status = 'idle'; t.lastStop = 'interrupted'; t.ackAfterBadRun = false;
+          (t.log = t.log || []).push({ k:'system', text:'⚠︎ This task was still running when Anvil last closed. The run did not finish, and anything it was part-way through is unfinished in your workspace.' });
+          runsInterrupted++;
+        }
         if(!t.queued) continue;
         const m = migrateQueue(t.queued); queueDropped += m.dropped;
         const r = reconcileQueue(m.queue); queueRecovered += r.recovered.length;
@@ -3015,6 +3030,7 @@
   if(!folderMode) await mountProject(state.activeProject);
   renderAll(); syncMode();
   // AC-4: a queue entry recovered from a dead run is surfaced, never silently restored.
+  if(runsInterrupted) pushSystem('↩︎ '+runsInterrupted+' task'+(runsInterrupted===1?' was':'s were')+' still running when Anvil last closed. '+(runsInterrupted===1?'It has':'They have')+' been reset — check the workspace before running again.');
   if(queueRecovered) pushSystem('↩︎ Recovered '+queueRecovered+' queued follow-up'+(queueRecovered===1?'':'s')+' that a previous session had started but never ran. '+(queueRecovered===1?'It is':'They are')+' back in the queue below.');
   if(queueDropped) pushSystem('⚠︎ Dropped '+queueDropped+' unreadable queue entr'+(queueDropped===1?'y':'ies')+' while loading.');
   // Stale previewOpen can restore to an empty Preview pane; on a phone that would
