@@ -99,8 +99,57 @@ export function judgeLesson({ withDone, withN, withoutDone, withoutN, alpha = 0.
     return { verdict: 'harmed', admit: false, harmP, drop,
       reason: `with-lesson finished ${withDone}/${withN} against ${withoutDone}/${withoutN} without (one-sided p=${harmP.toFixed(3)})` };
   }
-  return { verdict: 'admitted', admit: true, harmP, drop,
-    reason: `no evidence of harm (p=${harmP.toFixed(3)}); a true regression up to ${(drop.notRuledOut * 100).toFixed(0)}% is not ruled out at this n` };
+  // What it would have taken to see a HALVING of the observed baseline. Reported on every
+  // admission because "no evidence of harm" at an n that could not have found any is not a finding.
+  const base = withoutDone / withoutN;
+  const needed = repsForPower({ baseRate: base, drop: base / 2, alpha });
+  return { verdict: 'admitted', admit: true, harmP, drop, repsUsed: Math.min(withN, withoutN), repsForHalving: needed,
+    reason: `no evidence of harm (p=${harmP.toFixed(3)}); a true regression up to ${(drop.notRuledOut * 100).toFixed(0)}% is not ruled out at this n`
+      + (needed ? `; seeing the baseline halve would take ${needed} reps/arm against the ${Math.min(withN, withoutN)} used` : '') };
+}
+
+// How many reps per arm would it take to SEE a drop of `drop` from `baseRate`? Exact power for the
+// one-sided Fisher used above — no simulation, so the answer is stable across calls.
+//
+// This exists because MIN_REPS_PER_ARM is a floor for seeing a TOTAL wipeout and nothing more.
+// Measured live (plan/bench-lesson-gate-2026-09-11.md): at 12 reps per arm the power to detect a
+// real 0.33 -> 0.08 collapse is 0.30. The gate duly admitted a lesson that was deliberately wrong.
+// A caller that does not know that number is not making a decision, it is being reassured.
+export function repsForPower({ baseRate, drop, alpha = 0.05, power = 0.8, max = 400 } = {}) {
+  const p2 = Math.min(1, Math.max(0, baseRate));
+  const p1 = Math.min(1, Math.max(0, baseRate - drop));
+  // INERT under mutation, deliberately kept: removing it does not change any answer, because a
+  // zero or negative drop makes the arms equal-or-better and the ladder then runs to `max` and
+  // returns null anyway. It is a fast path for a meaningless input, not a behaviour. Recorded here
+  // so a future mutation run does not read the survivor as a missing test.
+  if (!(drop > 0)) return null;
+  for (const n of ladder(max)) {
+    if (exactPower(n, p1, p2, alpha) >= power) return n;
+  }
+  return null; // more than `max` reps per arm — i.e. not a gate you can afford to run
+}
+function* ladder(max) { for (let n = 4; n <= max; n += (n < 40 ? 2 : n < 120 ? 5 : 20)) yield n; }
+
+function exactPower(n, p1, p2, alpha) {
+  // Precompute the decision for every (a, c) once, then weight by the two binomials.
+  const lb1 = binomLog(n, p1), lb2 = binomLog(n, p2);
+  let power = 0;
+  for (let a = 0; a <= n; a++) {
+    const wa = Math.exp(lb1[a]);
+    if (wa < 1e-12) continue;
+    for (let c = a; c <= n; c++) { // harm means the with-arm did worse; a > c can never be harm
+      const wc = Math.exp(lb2[c]);
+      if (wc < 1e-12) continue;
+      if (fisherHarmP({ withDone: a, withN: n, withoutDone: c, withoutN: n }) < alpha) power += wa * wc;
+    }
+  }
+  return power;
+}
+function binomLog(n, p) {
+  const out = new Array(n + 1);
+  const lp = Math.log(p || 1e-12), lq = Math.log(1 - p || 1e-12);
+  for (let k = 0; k <= n; k++) out[k] = lchoose(n, k) + k * lp + (n - k) * lq;
+  return out;
 }
 
 // A rejected candidate is NEGATIVE EVIDENCE, not just a non-event: without it the proposer

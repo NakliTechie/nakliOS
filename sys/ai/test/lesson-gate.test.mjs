@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { judgeLesson, fisherHarmP, worstCaseDrop, rejectionRecord, MIN_REPS_PER_ARM } from '../lesson-gate.mjs';
+import { judgeLesson, fisherHarmP, worstCaseDrop, rejectionRecord, repsForPower, MIN_REPS_PER_ARM } from '../lesson-gate.mjs';
 
 let n = 0;
 const t = (name, fn) => { fn(); n++; console.log(`  ok    ${name}`); };
@@ -100,6 +100,40 @@ t('every non-admitting verdict carries admit:false', () => {
     { withDone: 0, withN: 9, withoutDone: 9, withoutN: 9 }]) {
     assert.equal(judgeLesson(args).admit, false);
   }
+});
+
+// ── the power the live run proved was missing ─────────────────────────────────
+t('repsForPower needs MORE reps for a smaller effect', () => {
+  const big = repsForPower({ baseRate: 0.33, drop: 0.247 });
+  const small = repsForPower({ baseRate: 0.33, drop: 0.165 });
+  assert.ok(big && small, 'both must be answerable');
+  assert.ok(small > big, `a subtler drop must cost more reps, got ${small} vs ${big}`);
+});
+t('repsForPower reproduces the live n: ~40/arm for 0.33 -> 0.08', () => {
+  // Simulated at 3,000 draws during the live run: power 0.30 at n=12, 0.84 at n=40.
+  const n = repsForPower({ baseRate: 0.33, drop: 0.247 });
+  assert.ok(n >= 30 && n <= 50, `expected ~40, got ${n}`);
+});
+t('repsForPower refuses a non-drop rather than returning a number', () => {
+  assert.equal(repsForPower({ baseRate: 0.33, drop: 0 }), null);
+  assert.equal(repsForPower({ baseRate: 0.33, drop: -0.1 }), null);
+});
+t('repsForPower returns null when no affordable n suffices', () => {
+  assert.equal(repsForPower({ baseRate: 0.02, drop: 0.01, max: 40 }), null);
+});
+t('`max` is a real cap — the SAME effect answers under a high cap and refuses under a low one', () => {
+  // Without this the previous assertion passes even if `max` is ignored, because that effect is
+  // unreachable at any n. The cap has to bite on an effect that IS otherwise reachable.
+  assert.ok(repsForPower({ baseRate: 0.33, drop: 0.247, max: 400 }) > 20, 'reachable at a high cap');
+  assert.equal(repsForPower({ baseRate: 0.33, drop: 0.247, max: 20 }), null, 'refused at a low one');
+});
+t('an admission REPORTS the reps a real check would have needed', () => {
+  // The live failure in one assertion: 12 reps/arm admitted a deliberately wrong lesson.
+  const v = judgeLesson({ withDone: 1, withN: 12, withoutDone: 2, withoutN: 12 });
+  assert.equal(v.verdict, 'admitted');
+  assert.equal(v.repsUsed, 12);
+  assert.ok(v.repsForHalving > 12, 'an admission must say how far short the n fell');
+  assert.match(v.reason, /reps\/arm against the 12 used/);
 });
 
 // ── negative evidence ─────────────────────────────────────────────────────────
