@@ -248,8 +248,8 @@
           "destination": "index.html"
         },
         {
-          "source": "data/chapters-k5.js",
-          "destination": "data/chapters-k5.js"
+          "source": "data/chapters.js",
+          "destination": "data/chapters.js"
         },
         {
           "source": "sdk/naklios.js",

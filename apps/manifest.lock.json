@@ -339,19 +339,19 @@
       "id": "chapters",
       "repo": "NakliTechie/chapter-time",
       "requestedRef": "main",
-      "resolvedCommit": "9fe6911a287068034e6bd8fcc5cb96f3c2e2b4d5",
+      "resolvedCommit": "ebe8a2586970dd97d3c9ff3bf2f7b370b2e45916",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "743ee2689a904f2690e95add9515d8a00163d9bc1b1605a9a67ec474dee382b8",
-          "bytes": 21853
+          "sha256": "d888bccbf9a588a32774414973c05762f51f9821d9b621624a6f0d1491501212",
+          "bytes": 25426
         },
         {
-          "source": "data/chapters-k5.js",
-          "destination": "data/chapters-k5.js",
-          "sha256": "c8943fe102a2a13d5ebddb04ed4dbbc49cd7ba11a5e0b247a09f61e1e3872d11",
-          "bytes": 21513
+          "source": "data/chapters.js",
+          "destination": "data/chapters.js",
+          "sha256": "d4523dfcda4a223cc4f77ce1ea88012a4a606ffd1869ca47780db0b0e10cad04",
+          "bytes": 246712
         },
         {
           "source": "sdk/naklios.js",
