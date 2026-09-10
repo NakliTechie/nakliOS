@@ -160,10 +160,21 @@ assert.match(anvil, /const recoveryMsg = recoveryPreface\.trim\(\);\s*\n\s*if\(r
 assert.match(anvil, /firstMessages=\[sysMsg\(gateNote\), \.\.\.convo\]/, 'the carried transcript is still what follows the system message');
 assert.ok(!/sysMsg\(gateNote\+recoveryPreface\)/.test(anvil), 'the volatile note is OUT of the cache prefix');
 // and the prefix itself carries only stable text — one volatile index in it invalidates everything
-assert.match(anvil, /const sysMsg=\(extra\)=>\(\{role:'system',content:SYSTEM\+\(MODE_NOTE\[mode\]\|\|''\)\+\(mode==='code'\?LESSON_NOTE:''\)\+\(extra\|\|''\)\}\)/, 'the system message is stable text only');
+assert.match(anvil, /const sysMsg=\(extra\)=>\(\{role:'system',content:systemPrompt\(\)\+\(MODE_NOTE\[mode\]\|\|''\)\+\(mode==='code'\?LESSON_NOTE:''\)\+\(extra\|\|''\)\}\)/, 'the system message is stable text only');
 for (const volatile of ['projectContext', 'memoryIndex', 'skillsIndex']) {
-  assert.ok(!new RegExp(`content:SYSTEM\\+[^}]*${volatile}`).test(anvil), `${volatile} is back in the cache prefix`);
+  assert.ok(!new RegExp(`content:systemPrompt\\(\\)\\+[^}]*${volatile}`).test(anvil), `${volatile} is back in the cache prefix`);
 }
+// AC-3 made the prior a per-run value rather than a literal, so the "stable text only" claim above
+// now depends on WHAT systemPrompt() is allowed to read. It must be exactly the two constants plus
+// the procedural prior — nothing volatile may be smuggled in through the new seam.
+assert.match(anvil, /function systemPrompt\(\)\{ return SYSTEM_HEAD \+ proceduralPrior \+ SYSTEM_TAIL; \}/,
+  'systemPrompt is head + prior + tail, and nothing else');
+for (const volatile of ['projectContext', 'memoryIndex', 'skillsIndex', 'recoveryPreface']) {
+  assert.ok(!new RegExp(`proceduralPrior\\s*=\\s*[^;]*${volatile}`).test(anvil), `${volatile} must not reach the procedural prior`);
+}
+// The prior is stable in the sense the cache needs: it changes only when .anvil/procedural.json
+// changes, which is a deliberate project edit — not per run, and not per task.
+assert.match(anvil, /proceduralPrior = renderProcedural\(pg\.graph\)/, 'the prior comes from the loaded graph');
 
 // D2 supervisor: after a loop, a record-fold (foldStagnation) catches spinning the loop's own
 // consecutive-identical guard misses, and injects ONE capped redirect — fired at most once per

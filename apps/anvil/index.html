@@ -406,6 +406,7 @@
   import { buildProjectContext, rememberTool } from '../../sys/ai/project-context.mjs';
   import { SKILLS_DIR, parseSkill, buildSkillsIndex, skillTool, INJECTED_STATUSES, explainSkillsRefusal } from '../../sys/ai/skills.mjs';
   import { GATE_DIR, explainGateRefusal, GATE_AUTHORING_HINT, planGate } from '../../sys/ai/gate.mjs';
+  import { renderProcedural, loadProceduralGraph, PROCEDURAL_PATH } from '../../sys/ai/procedural.mjs';
   import { skillManageTool, planSkillWrite, createSkillSession, SKILL_FILE } from '../../sys/ai/skill-manage.mjs';
   import { createProposalLedger } from '../../sys/ai/proposal-fingerprint.mjs';
   import { skillLifecycle, applySkillStatus, reviveOnUse } from '../../sys/ai/skill-lifecycle.mjs';
@@ -1600,7 +1601,15 @@
     throw lastErr;
   }
 
-  const SYSTEM = 'You are a coding agent working over the user\'s files. Tools: read (line-numbered), write (whole file), edit (surgical old_string→new_string), apply_patch (add/update/delete files), todowrite (checklist), task (delegate one bounded sub-task to a subagent), dispatch (fan out INDEPENDENT sub-tasks to subagents that run in parallel, each in an isolated copy of the workspace — their changes merge back when they touch different files), review (an independent read-only reviewer subagent for a second opinion), shell (a CURATED bash-like shell, not coreutils: ls cat grep rg sed awk find head tail wc sort uniq cut tr test git python, with pipes, && || ; > >> < and globs. Each builtin implements a documented subset and REFUSES an unsupported flag rather than ignoring it — run `help` to see what each one supports. No loops, subshells, command substitution or heredocs; use python for scripting). Read a file before editing it. Prefer edit/apply_patch for changes, write for new files; use shell to explore and verify. For work that splits into independent parts, use dispatch to parallelise; after a significant change, consider review before finishing. For a task defined by input→output EXAMPLES (a puzzle), prefer the `synthesize` tool — it evolves and tests candidate solve() programs across generations and writes the best solver.py — over hand-writing one solver. Work in small, verifiable steps; end with a one-line summary.';
+  // AC-3: the six procedural transitions are no longer prose in this literal — they render from
+  // sys/ai/procedural.mjs so each edge can be ablated without editing code. `proceduralPrior` is
+  // set per run from the project's optional .anvil/procedural.json; the default render is
+  // byte-identical to the string this replaced (scripts/test-anvil-procedural.mjs).
+  let proceduralPrior = renderProcedural();
+  const SYSTEM_HEAD = 'You are a coding agent working over the user\'s files. Tools: read (line-numbered), write (whole file), edit (surgical old_string→new_string), apply_patch (add/update/delete files), todowrite (checklist), task (delegate one bounded sub-task to a subagent), dispatch (fan out INDEPENDENT sub-tasks to subagents that run in parallel, each in an isolated copy of the workspace — their changes merge back when they touch different files), review (an independent read-only reviewer subagent for a second opinion), shell (a CURATED bash-like shell, not coreutils: ls cat grep rg sed awk find head tail wc sort uniq cut tr test git python, with pipes, && || ; > >> < and globs. Each builtin implements a documented subset and REFUSES an unsupported flag rather than ignoring it — run `help` to see what each one supports. No loops, subshells, command substitution or heredocs; use python for scripting). ';
+  const SYSTEM_TAIL = ' Work in small, verifiable steps; end with a one-line summary.';
+  // Assembled at read time so a per-run graph change takes effect without a reload.
+  function systemPrompt(){ return SYSTEM_HEAD + proceduralPrior + SYSTEM_TAIL; }
   // The lesson-layer contract rides in the system prompt of every code-mode run (where
   // `remember` exists) — the first remember of a project happens with an EMPTY memory index,
   // so the index header alone could never carry it. Same constant as the tool description.
@@ -2139,6 +2148,14 @@
         memory: mem&&mem.ok? mem.data : null,
       });
     }catch(_){}
+    // AC-3: the procedural prior. A project may disable or reword an edge in
+    // .anvil/procedural.json; unknown ids are dropped and named in the log rather than honoured,
+    // because a prompt fragment arriving from the workspace is content the agent can write.
+    try{
+      const pg = await loadProceduralGraph(fs, { path: PROCEDURAL_PATH });
+      proceduralPrior = renderProcedural(pg.graph);
+      if(pg.note) pushSystem('⚠︎ ' + pg.note);
+    }catch(_){ proceduralPrior = renderProcedural(); }
     // Skills (progressive disclosure): inject only the DESCRIPTIONS of the skills
     // under .anvil/skills/<name>/SKILL.md; the agent loads a skill's full body on
     // demand via the `skill` tool. Cheap + cache-safe.
@@ -2234,7 +2251,7 @@
       // skill status flip invalidated the whole prefix — real money on BYOK, real latency on
       // a local model. The volatile indexes now ride in a context message placed AFTER the
       // retained history (see contextMsg below), where a change costs only the tail.
-      const sysMsg=(extra)=>({role:'system',content:SYSTEM+(MODE_NOTE[mode]||'')+(mode==='code'?LESSON_NOTE:'')+(extra||'')});
+      const sysMsg=(extra)=>({role:'system',content:systemPrompt()+(MODE_NOTE[mode]||'')+(mode==='code'?LESSON_NOTE:'')+(extra||'')});
       // A turn in flight is the longest silence in a run — on a local model it can
       // be minutes. Show a placeholder so a working agent and a wedged one are
       // distinguishable; it is replaced by whatever the turn actually produces.

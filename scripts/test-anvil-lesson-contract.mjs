@@ -30,7 +30,7 @@ assert.match(anvil, /import \{[^}]*\bLESSON_CONTRACT\b[^}]*\} from '\.\.\/\.\.\/
 assert.match(anvil, /LESSON_NOTE\s*=.*LESSON_CONTRACT/, 'the system-prompt note is built from LESSON_CONTRACT');
 // The contract is STABLE text, so it stays in the cache prefix; F3 moved the volatile indexes
 // (projectContext / memoryIndex / skillsIndex) out into a change-gated context message.
-assert.match(anvil, /content:SYSTEM\+\(MODE_NOTE\[mode\]\|\|''\)\+\(mode==='code'\?LESSON_NOTE:''\)/, 'the system message includes the note in code mode, where remember exists');
+assert.match(anvil, /content:systemPrompt\(\)\+\(MODE_NOTE\[mode\]\|\|''\)\+\(mode==='code'\?LESSON_NOTE:''\)/, 'the system message includes the note in code mode, where remember exists');
 assert.match(anvil, /const volatileCtx = \(projectContext\+memoryIndex\+skillsIndex/, 'and the memory index still reaches the model, in the context message');
 
 // Rules reach the prompt with their bodies: the prompt-time push spreads the parsed fact
