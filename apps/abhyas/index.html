@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Abhyas — Maths Practice</title>
-<meta name="description" content="Self-paced maths practice for Class 1–5. Browse concepts, drill the skills, take mock tests, and learn from your mistakes. Private by default — nothing leaves your device.">
+<title>Abhyas — Practice</title>
+<meta name="description" content="Self-paced practice across every subject, Class 1 to JEE/NEET. Browse concepts, drill the skills, take diagnostic quizzes and mock tests, and learn from your mistakes. Private by default — nothing leaves your device.">
 <meta name="author" content="Chirag Patnaik">
 <meta name="color-scheme" content="light">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23c8512a'/%3E%3Ctext x='32' y='45' font-family='-apple-system,system-ui,sans-serif' font-size='34' font-weight='700' fill='%23fbf4e6' text-anchor='middle'%3Ea%3C/text%3E%3C/svg%3E">
@@ -296,11 +296,11 @@ kbd{background:var(--panel);border:1px solid var(--line-strong);border-bottom-wi
 <body>
 <header class="top">
   <div class="top-inner">
-    <div class="brand" data-nav="home" title="Home">
+    <div class="brand" data-nav="library" title="All subjects">
       <div class="brand-mark">अ</div>
       <div>
         <div class="brand-name">Abhyas</div>
-        <div class="brand-sub">Maths practice · Class 1–5</div>
+        <div class="brand-sub" id="brandSub">Practice · Class 1 → JEE/NEET</div>
       </div>
     </div>
     <div class="top-spacer"></div>
@@ -321,46 +321,26 @@ kbd{background:var(--panel);border:1px solid var(--line-strong);border-bottom-wi
 
 <!-- naklios cooperative SDK (vendored, same-origin). No-op when standalone. -->
 <script src="sdk/naklios.js"></script>
-<script src="data/maths-k5.js"></script>
+<script src="data/catalog.js"></script>
 <script>
 "use strict";
 (function(){
-  const DATA = window.ABHYAS_DATA;
+  const CATALOG = window.ABHYAS_CATALOG;
   const $ = (s,r=document)=>r.querySelector(s);
   const app = $("#app");
   const NAK = (typeof window.naklios === "object" && window.naklios) ? window.naklios : null;
 
-  if(!DATA || !Array.isArray(DATA.concepts) || !DATA.concepts.length){
-    app.innerHTML = `<div class="empty"><div class="big">😕</div>Couldn't load the maths content.<br>Make sure <code>data/maths-k5.js</code> is present next to this page.</div>`;
+  if(!CATALOG || !Array.isArray(CATALOG.graphs) || !CATALOG.graphs.length){
+    app.innerHTML = `<div class="empty"><div class="big">😕</div>Couldn't load the content catalog.<br>Make sure <code>data/catalog.js</code> is present next to this page.</div>`;
     return;
   }
+  const GRAPHS = CATALOG.graphs;
+  const graphById = {}; GRAPHS.forEach(g=>graphById[g.id]=g);
+  const SUBJECT_SHORT_MAP = { "Mathematics":"Maths", "Environmental Studies":"EVS" };
 
-  /* ---------- subject / band (data-driven, so the same app serves any subject) ---------- */
-  const META = DATA.meta || {};
-  const SUBJECT = META.subject || "Maths";
-  const SUBJECT_SHORT = ({ "Mathematics":"Maths" })[SUBJECT] || SUBJECT;
-  const GR = (Array.isArray(META.grades) && META.grades.length) ? META.grades : [1,2,3,4,5];
-  const GLO = Math.min(...GR), GHI = Math.max(...GR);
-
-  /* ---------- data indexing ---------- */
-  const concepts = DATA.concepts;
-  const conceptById = {};
-  concepts.forEach(c=>conceptById[c.id]=c);
-  const drillsByConcept = {}, mcqsByConcept = {};
-  DATA.drills.forEach(d=>{ (drillsByConcept[d.concept_id] ||= []).push(d); });
-  DATA.mcqs.forEach(m=>{ (mcqsByConcept[m.concept_id] ||= []).push(m); });
-
-  const strandOrder = [];
-  const strandConcepts = {};
-  concepts.forEach(c=>{
-    if(!strandConcepts[c.strand]){ strandConcepts[c.strand]=[]; strandOrder.push(c.strand); }
-    strandConcepts[c.strand].push(c);
-  });
-  const strandColor = {};
-  strandOrder.forEach((s,i)=>{
-    const h = Math.round((i*360/strandOrder.length + 18) % 360);
-    strandColor[s] = { bg:`hsl(${h} 52% 92%)`, fg:`hsl(${h} 46% 32%)`, bar:`hsl(${h} 55% 55%)` };
-  });
+  /* ---------- active graph binding (rebuilt by activate() on subject select) ---------- */
+  let DATA=null, META={}, SUBJECT="Abhyas", SUBJECT_SHORT="Abhyas", GR=[1,2,3,4,5], GLO=1, GHI=5;
+  let concepts=[], conceptById={}, drillsByConcept={}, mcqsByConcept={}, strandOrder=[], strandConcepts={}, strandColor={};
 
   /* ---------- progress store (host fs when hosted, else localStorage) ---------- */
   const PKEY = "abhyas.progress.v1";
@@ -490,12 +470,51 @@ kbd{background:var(--panel);border:1px solid var(--line-strong);border-bottom-wi
   }
 
   /* ---------- navigation state ---------- */
-  const state = { view:"home", strand:null, cid:null };
+  const state = { view:"library", gid:null, strand:null, cid:null };
   function nav(view, opts={}){
     stopMockTimer();
     Object.assign(state,{view,strand:null,cid:null},opts);
     render();
     window.scrollTo({top:0,behavior:"instant"});
+  }
+
+  /* ---------- active graph: bind a loaded graph as THE current subject ---------- */
+  function hue(str){ let h=0; for(let i=0;i<str.length;i++) h=(h*31+str.charCodeAt(i))>>>0; return h%360; }
+  function subjColor(g){ const h=hue(g.subject+g.band); return {bg:`hsl(${h} 46% 92%)`,fg:`hsl(${h} 44% 32%)`,solid:`hsl(${h} 42% 52%)`}; }
+  function activate(graph){
+    DATA=graph; META=graph.meta||{};
+    const row=graphById[graph.id]||{};
+    SUBJECT=META.subject||row.subject||"Abhyas";
+    SUBJECT_SHORT=row.subjectShort||SUBJECT_SHORT_MAP[SUBJECT]||SUBJECT;
+    GR=(Array.isArray(row.grades)&&row.grades.length)?row.grades
+       :(Array.isArray(META.grades)&&META.grades.length)?META.grades:[1,2,3,4,5];
+    GLO=Math.min(...GR); GHI=Math.max(...GR);
+    concepts=graph.concepts||[];
+    conceptById={}; concepts.forEach(c=>conceptById[c.id]=c);
+    drillsByConcept={}; mcqsByConcept={};
+    (graph.drills||[]).forEach(d=>{ (drillsByConcept[d.concept_id] ||= []).push(d); });
+    (graph.mcqs||[]).forEach(m=>{ (mcqsByConcept[m.concept_id] ||= []).push(m); });
+    strandOrder=[]; strandConcepts={};
+    concepts.forEach(c=>{ if(!strandConcepts[c.strand]){ strandConcepts[c.strand]=[]; strandOrder.push(c.strand); } strandConcepts[c.strand].push(c); });
+    strandColor={};
+    strandOrder.forEach((s,i)=>{ const h=Math.round((i*360/strandOrder.length + hue(SUBJECT)) % 360);
+      strandColor[s]={ bg:`hsl(${h} 52% 92%)`, fg:`hsl(${h} 46% 32%)`, bar:`hsl(${h} 55% 55%)` }; });
+    // grade filter + mock config are graph-scoped; reset when they don't fit the new band
+    if(grade!=="all" && !GR.map(String).includes(String(grade))) grade="all";
+    mockCfg.grades.clear(); mockCfg.strands.clear(); mockCfg.diff="any";
+    mockCfg.length=Math.min(15, (graph.mcqs||[]).length)||15;
+  }
+  function openGraph(gid){
+    const row=graphById[gid]; if(!row) return;
+    window.ABHYAS_GRAPHS = window.ABHYAS_GRAPHS || {};
+    if(window.ABHYAS_GRAPHS[gid]){ activate(window.ABHYAS_GRAPHS[gid]); nav("home",{gid}); return; }
+    state.view="loading"; state.gid=gid; render(); window.scrollTo({top:0,behavior:"instant"});
+    const s=document.createElement("script"); s.src=row.file; s.async=true;
+    s.onload=()=>{ const g=(window.ABHYAS_GRAPHS||{})[gid];
+      if(!g){ app.innerHTML=emptyBlock("Couldn't read "+row.subject+" data."); return; }
+      activate(g); nav("home",{gid}); };
+    s.onerror=()=>{ app.innerHTML=emptyBlock("Couldn't load "+row.subject+" — check your connection and try again."); };
+    document.head.appendChild(s);
   }
 
   /* ---------- shared UI bits ---------- */
@@ -505,7 +524,8 @@ kbd{background:var(--panel);border:1px solid var(--line-strong);border-bottom-wi
     return `<div class="tabs">${t.map(([v,l])=>`<button class="tab${v===active?" on":""}" data-nav="${v}">${l}</button>`).join("")}</div>`;
   }
   function gradeBar(){
-    const pills = ["all",1,2,3,4,5].map(g=>{
+    if(GR.length<=1) return ""; // single-grade band (e.g. mixed): no filter needed
+    const pills = ["all",...GR].map(g=>{
       const lbl = g==="all"?"All classes":"Class "+g;
       return `<button class="gpill${String(g)===String(grade)?' on':''}" data-grade="${g}">${lbl}</button>`;
     }).join("");
@@ -515,11 +535,49 @@ kbd{background:var(--panel);border:1px solid var(--line-strong);border-bottom-wi
 
   /* ---------- render dispatch ---------- */
   function render(){
-    const map = { home:renderHome, strand:renderStrand, concept:renderConcept, drill:renderDrill,
-                  mcq:renderMcq, mock:renderMockSetup, mockrun:renderMockRun, mockresults:renderMockResults,
-                  dashboard:renderDashboard };
-    (map[state.view]||renderHome)();
+    const map = { library:renderLibrary, loading:renderLoading, home:renderHome, strand:renderStrand,
+                  concept:renderConcept, drill:renderDrill, mcq:renderMcq, mock:renderMockSetup,
+                  mockrun:renderMockRun, mockresults:renderMockResults, dashboard:renderDashboard };
+    let v = state.view;
+    if(v!=="library" && v!=="loading" && !DATA) v="library"; // a subject must be loaded first
+    (map[v]||renderLibrary)();
     setHostTitle();
+  }
+
+  /* ---------- library (subject picker across all graphs) ---------- */
+  function renderLibrary(){
+    const t=CATALOG.totals||{};
+    const byBand=[], seen={};
+    GRAPHS.forEach(g=>{ if(!seen[g.band]){ seen[g.band]=[]; byBand.push(g.band); } seen[g.band].push(g); });
+    const sections=byBand.map(b=>{
+      const gs=seen[b], label=gs[0].bandLabel||b;
+      const cards=gs.map(g=>{
+        const col=subjColor(g);
+        return `<button class="card strand-card" data-graph="${g.id}">
+          <span class="stripe" style="background:${col.solid}"></span>
+          <h3 style="color:${col.fg}">${esc(g.subjectShort||g.subject)}</h3>
+          <div class="meta">
+            <span class="chip chip-soft">${g.conceptCount} concept${g.conceptCount!==1?"s":""}</span>
+            <span class="chip chip-soft">${g.mcqCount.toLocaleString()} quiz Q</span>
+            ${g.drillCount?`<span class="chip chip-soft">${g.drillCount.toLocaleString()} drills</span>`:""}
+          </div>
+        </button>`;
+      }).join("");
+      return `<div class="section-h">${esc(label)}</div><div class="grid">${cards}</div>`;
+    }).join("");
+    app.innerHTML=`
+      <div class="hero">
+        <h1>What shall we practise today?</h1>
+        <p>Pick a subject. Drill the skills, take a quiz, build a mock test — and learn from every miss. ${GRAPHS.length} subjects · ${(t.mcqs||0).toLocaleString()} questions${t.drills?` · ${t.drills.toLocaleString()} drills`:""}. Your progress stays on this device.</p>
+      </div>
+      ${sections}`;
+  }
+  function renderLoading(){
+    const row=graphById[state.gid]||{};
+    app.innerHTML=`<div class="empty"><div class="big">⏳</div>Loading ${esc(row.subject||"subject")}…<br><span style="font-size:13px">${(row.mcqCount||0).toLocaleString()} questions</span></div>`;
+  }
+  function libCrumb(){
+    return `<div class="crumbs"><button data-nav="library">← All subjects</button><span class="sep">›</span><span style="color:var(--ink);font-weight:600">${esc(SUBJECT_SHORT)} · Class ${GLO}${GHI!==GLO?"–"+GHI:""}</span></div>`;
   }
 
   /* ---------- home (practice / browse) ---------- */
@@ -544,10 +602,11 @@ kbd{background:var(--panel);border:1px solid var(--line-strong);border-bottom-wi
       </button>`;
     }).join("");
     app.innerHTML = `
+      ${libCrumb()}
       ${tabsBar("home")}
       ${gradeBar()}
       <div class="hero">
-        <h1>Practise ${SUBJECT_SHORT.toLowerCase()}, one concept at a time</h1>
+        <h1>Practise ${esc(SUBJECT_SHORT.toLowerCase())}, one concept at a time</h1>
         <p>Pick a topic, drill the skill until it clicks, then take a short quiz. When you slip, Abhyas shows you <b>why</b> — the exact idea to fix — not just a red cross.</p>
       </div>
       <div class="section-h">Topics · ${totalConcepts} concepts${grade==="all"?"":" for Class "+grade} · ${practiced} started · ${masteredCount} mastered</div>
@@ -807,15 +866,16 @@ kbd{background:var(--panel);border:1px solid var(--line-strong);border-bottom-wi
     });
   }
   function renderMockSetup(){
-    const gradeChecks = [1,2,3,4,5].map(g=>`<button class="check${mockCfg.grades.has(String(g))?" on":""}" data-mgrade="${g}">Class ${g}</button>`).join("");
+    const gradeChecks = GR.map(g=>`<button class="check${mockCfg.grades.has(String(g))?" on":""}" data-mgrade="${g}">Class ${g}</button>`).join("");
     const strandChecks = strandOrder.map(s=>`<button class="check${mockCfg.strands.has(s)?" on":""}" data-mstrand="${esc(s)}">${esc(s)}</button>`).join("");
     const diffChecks = [["any","Any"],["easy","Easy"],["medium","Medium"],["hard","Hard"]].map(([v,l])=>`<button class="check${mockCfg.diff===v?" on":""}" data-mdiff="${v}">${l}</button>`).join("");
     const lenChecks = [10,15,20,30].map(n=>`<button class="check${mockCfg.length===n?" on":""}" data-mlen="${n}">${n}</button>`).join("");
     const avail = mockPool().length;
     const willBe = Math.min(mockCfg.length, avail);
     app.innerHTML = `
+      ${libCrumb()}
       ${tabsBar("mock")}
-      <div class="hero"><h1>Build a mock test</h1><p>Mix questions across topics and classes, answer them test-style, then get a scored report that names <b>which misconceptions</b> tripped you up.</p></div>
+      <div class="hero"><h1>Build a ${esc(SUBJECT_SHORT.toLowerCase())} mock test</h1><p>Mix questions across topics and classes, answer them test-style, then get a scored report that names <b>which misconceptions</b> tripped you up.</p></div>
       <div class="form-card">
         <div class="field"><label>Classes <span class="hint">none = all classes</span></label><div class="checks">${gradeChecks}</div></div>
         <div class="field"><label>Topics <span class="hint">none = all topics</span></label><div class="checks">${strandChecks}</div></div>
@@ -980,9 +1040,10 @@ kbd{background:var(--panel);border:1px solid var(--line-strong);border-bottom-wi
 
     const nothing = !started;
     app.innerHTML=`
+      ${libCrumb()}
       ${tabsBar("dashboard")}
       ${gradeBar()}
-      <div class="hero"><h1>Your progress</h1><p>Mastery grows as you practise and quiz. Everything here is worked out on this device from what you've done.</p></div>
+      <div class="hero"><h1>Your ${esc(SUBJECT_SHORT.toLowerCase())} progress</h1><p>Mastery grows as you practise and quiz. Everything here is worked out on this device from what you've done.</p></div>
       ${nothing? emptyBlock("Nothing yet — do a few drills or a quiz and your progress shows up here.") : `
       <div class="stat-grid">
         <div class="stat"><div class="n tnum">${started}</div><div class="l">Concepts started</div></div>
@@ -1000,7 +1061,7 @@ kbd{background:var(--panel);border:1px solid var(--line-strong);border-bottom-wi
 
   /* ---------- events ---------- */
   document.addEventListener("click", e=>{
-    const t=e.target.closest("[data-nav],[data-strand],[data-cid],[data-drill],[data-mcq],[data-opt],[data-grade],[data-mgrade],[data-mstrand],[data-mdiff],[data-mlen],[data-mockstart],[data-mopt]");
+    const t=e.target.closest("[data-nav],[data-graph],[data-strand],[data-cid],[data-drill],[data-mcq],[data-opt],[data-grade],[data-mgrade],[data-mstrand],[data-mdiff],[data-mlen],[data-mockstart],[data-mopt]");
     if(!t){
       const id=e.target.id || e.target.closest("button")?.id;
       if(id==="drillCheck") submitDrill();
@@ -1012,6 +1073,7 @@ kbd{background:var(--panel);border:1px solid var(--line-strong);border-bottom-wi
       return;
     }
     const d=t.dataset;
+    if(d.graph){ openGraph(d.graph); return; }
     if(d.grade!==undefined){ grade=d.grade; try{localStorage.setItem(GKEY,grade);}catch(_){}; render(); return; }
     if(d.nav!==undefined){ nav(d.nav); return; }
     if(d.opt!==undefined){ if(mcqS && mcqS.chosen===null) answerMcq(+d.opt); return; }
@@ -1059,17 +1121,18 @@ kbd{background:var(--panel);border:1px solid var(--line-strong);border-bottom-wi
       pill.innerHTML = `<span class="priv-dot"></span> Private · in NakliOS`;
     }
   }
-  const TITLES = { home:"Practice", strand:()=>state.strand, concept:()=>conceptById[state.cid]?.concept,
-    drill:"Drill", mcq:"Quiz", mock:"Mock test", mockrun:"Mock test", mockresults:"Mock report", dashboard:"Progress" };
+  const TITLES = { library:"Library", loading:"Loading", home:()=>SUBJECT_SHORT, strand:()=>state.strand,
+    concept:()=>conceptById[state.cid]?.concept, drill:"Drill", mcq:"Quiz", mock:"Mock test",
+    mockrun:"Mock test", mockresults:"Mock report", dashboard:()=>SUBJECT_SHORT+" progress" };
   function setHostTitle(){
+    const bs=$("#brandSub"); if(bs) bs.textContent = DATA ? `${SUBJECT_SHORT} · Class ${GLO}${GHI!==GLO?"–"+GHI:""}` : "Practice · Class 1 → JEE/NEET";
     if(!NAK) return;
     let t=TITLES[state.view]; if(typeof t==="function") t=t();
     try{ NAK.title("Abhyas" + (t?` — ${t}`:"")); }catch(_){}
   }
 
   /* ---------- boot ---------- */
-  { const bs=document.querySelector(".brand-sub"); if(bs) bs.textContent = `${SUBJECT_SHORT} practice · Class ${GLO}–${GHI}`; }
-  render();
+  render(); // opens the Library (subject picker); a subject's data lazy-loads on select
   if(NAK){
     try{
       NAK.onCapabilitiesChange(caps=>{ updateHostChrome(caps); if(caps.hosted && caps.fs) adoptHostStore(); });

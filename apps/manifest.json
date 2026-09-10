@@ -12,8 +12,72 @@
           "destination": "index.html"
         },
         {
-          "source": "data/maths-k5.js",
-          "destination": "data/maths-k5.js"
+          "source": "data/catalog.js",
+          "destination": "data/catalog.js"
+        },
+        {
+          "source": "data/graph-biology-11-testprep.js",
+          "destination": "data/graph-biology-11-testprep.js"
+        },
+        {
+          "source": "data/graph-biology-6-10.js",
+          "destination": "data/graph-biology-6-10.js"
+        },
+        {
+          "source": "data/graph-chemistry-11-testprep.js",
+          "destination": "data/graph-chemistry-11-testprep.js"
+        },
+        {
+          "source": "data/graph-chemistry-6-10.js",
+          "destination": "data/graph-chemistry-6-10.js"
+        },
+        {
+          "source": "data/graph-civics-6-10.js",
+          "destination": "data/graph-civics-6-10.js"
+        },
+        {
+          "source": "data/graph-economics-6-10.js",
+          "destination": "data/graph-economics-6-10.js"
+        },
+        {
+          "source": "data/graph-english-6-10.js",
+          "destination": "data/graph-english-6-10.js"
+        },
+        {
+          "source": "data/graph-english-k5.js",
+          "destination": "data/graph-english-k5.js"
+        },
+        {
+          "source": "data/graph-evs-k5.js",
+          "destination": "data/graph-evs-k5.js"
+        },
+        {
+          "source": "data/graph-geography-6-10.js",
+          "destination": "data/graph-geography-6-10.js"
+        },
+        {
+          "source": "data/graph-history-6-10.js",
+          "destination": "data/graph-history-6-10.js"
+        },
+        {
+          "source": "data/graph-maths-11-testprep.js",
+          "destination": "data/graph-maths-11-testprep.js"
+        },
+        {
+          "source": "data/graph-maths-6-10.js",
+          "destination": "data/graph-maths-6-10.js"
+        },
+        {
+          "source": "data/graph-maths-k5.js",
+          "destination": "data/graph-maths-k5.js"
+        },
+        {
+          "source": "data/graph-physics-11-testprep.js",
+          "destination": "data/graph-physics-11-testprep.js"
+        },
+        {
+          "source": "data/graph-physics-6-10.js",
+          "destination": "data/graph-physics-6-10.js"
         },
         {
           "source": "sdk/naklios.js",
