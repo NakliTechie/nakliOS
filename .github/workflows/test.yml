@@ -87,6 +87,9 @@ jobs:
       - name: Verify ordering metrics — anchored, never zero-for-null, refusing unlike comparisons
         run: node sys/history/test/ordering.test.mjs
 
+      - name: Verify the context-payload probe parses the REAL index format (a reword must go red)
+        run: node scripts/test-context-payload-probe.mjs
+
       - name: Replay the recorded-run corpus keyless (real runs, zero model calls)
         run: node sys/history/test/replay-corpus.test.mjs
 
