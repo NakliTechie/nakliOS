@@ -1040,25 +1040,9 @@ kbd{background:var(--panel);border:1px solid var(--line-strong);border-bottom-wi
   });
 
   /* ---------- naklios host integration ---------- */
-  function applyHostTheme(t){
-    if(!t || !t.colors) return;
-    const c=t.colors, r=document.documentElement.style;
-    const set=(k,v)=>{ if(v) r.setProperty(k,v); };
-    set("--paper", c.BODY); set("--panel", c.PANEL); set("--card", c.PANEL);
-    set("--ink", c.INK); set("--brand", c.BRAND); set("--act", c.ACT); set("--ok", c.OK); set("--row", c.ROW);
-    if(c.BRAND && c.INK){ r.setProperty("--brand-ink", `color-mix(in srgb, ${c.BRAND} 76%, ${c.INK})`); }
-    if(c.BRAND && c.PANEL){ r.setProperty("--brand-soft", `color-mix(in srgb, ${c.BRAND} 22%, ${c.PANEL})`); }
-    if(c.OK && c.PANEL){ r.setProperty("--ok-soft", `color-mix(in srgb, ${c.OK} 20%, ${c.PANEL})`); }
-    if(c.OK && c.INK){ r.setProperty("--ok-ink", `color-mix(in srgb, ${c.OK} 66%, ${c.INK})`); }
-    if(c.INK && c.BODY){
-      r.setProperty("--muted", `color-mix(in srgb, ${c.INK} 62%, ${c.BODY})`);
-      r.setProperty("--faint", `color-mix(in srgb, ${c.INK} 42%, ${c.BODY})`);
-    }
-    if(c.INK){
-      r.setProperty("--line", `color-mix(in srgb, ${c.INK} 14%, transparent)`);
-      r.setProperty("--line-strong", `color-mix(in srgb, ${c.INK} 26%, transparent)`);
-    }
-  }
+  // Abhyas keeps its own calm warm-paper palette in every context — it deliberately
+  // does NOT adopt the host theme (a kids maths app reads best on warm paper, not the
+  // desktop's dark chrome). Lifecycle, storage and title integration stay on.
   function updateHostChrome(caps){
     const pill=$("#privPill");
     if(caps.hosted && caps.fs){
@@ -1080,11 +1064,8 @@ kbd{background:var(--panel);border:1px solid var(--line-strong);border-bottom-wi
   render();
   if(NAK){
     try{
-      applyHostTheme(NAK.theme.current);
-      NAK.theme.onChange(applyHostTheme);
       NAK.onCapabilitiesChange(caps=>{ updateHostChrome(caps); if(caps.hosted && caps.fs) adoptHostStore(); });
       NAK.ready();
-      NAK.theme.request();
       NAK.requestCapabilities();
     }catch(e){ /* standalone-safe */ }
   }

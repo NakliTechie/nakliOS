@@ -154,6 +154,25 @@
           "destination": "icon-512.png"
         }
       ]
+    },
+    {
+      "id": "abhyas",
+      "repo": "NakliTechie/abhyas-app",
+      "ref": "main",
+      "files": [
+        {
+          "source": "index.html",
+          "destination": "index.html"
+        },
+        {
+          "source": "data/maths-k5.js",
+          "destination": "data/maths-k5.js"
+        },
+        {
+          "source": "sdk/naklios.js",
+          "destination": "sdk/naklios.js"
+        }
+      ]
     }
   ]
 }

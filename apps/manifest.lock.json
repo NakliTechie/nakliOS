@@ -212,6 +212,32 @@
           "bytes": 4310
         }
       ]
+    },
+    {
+      "id": "abhyas",
+      "repo": "NakliTechie/abhyas-app",
+      "requestedRef": "main",
+      "resolvedCommit": "db9432a980e3a4e0f37a71fc82a0f5889d30a69e",
+      "files": [
+        {
+          "source": "index.html",
+          "destination": "index.html",
+          "sha256": "4d1655da673c5d7fa8218762542318361e1facbef4996eed3b3bc2e8c3115235",
+          "bytes": 58067
+        },
+        {
+          "source": "data/maths-k5.js",
+          "destination": "data/maths-k5.js",
+          "sha256": "4bc12c8adb4c442d88c3f8859c706d98384b604c0a4698208cc84a2e13888c01",
+          "bytes": 2959337
+        },
+        {
+          "source": "sdk/naklios.js",
+          "destination": "sdk/naklios.js",
+          "sha256": "9390489a66446f7d78a72863ca8c2ed71cce1760b395d5d500e4c86a43a7fa52",
+          "bytes": 31778
+        }
+      ]
     }
   ]
 }
