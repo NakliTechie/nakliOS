@@ -407,6 +407,7 @@
   import { SKILLS_DIR, parseSkill, buildSkillsIndex, skillTool, INJECTED_STATUSES, explainSkillsRefusal } from '../../sys/ai/skills.mjs';
   import { GATE_DIR, explainGateRefusal, GATE_AUTHORING_HINT, planGate } from '../../sys/ai/gate.mjs';
   import { renderProcedural, loadProceduralGraph, PROCEDURAL_PATH } from '../../sys/ai/procedural.mjs';
+  import { migrateQueue, reconcileQueue, enqueue as qEnqueue, removeEntry as qRemove, moveEntry as qMove, editEntry as qEdit, nextDispatch, completeDispatch, releaseDispatch } from '../../sys/ai/followup-queue.mjs';
   import { skillManageTool, planSkillWrite, createSkillSession, SKILL_FILE } from '../../sys/ai/skill-manage.mjs';
   import { createProposalLedger } from '../../sys/ai/proposal-fingerprint.mjs';
   import { skillLifecycle, applySkillStatus, reviveOnUse } from '../../sys/ai/skill-lifecycle.mjs';
@@ -686,6 +687,24 @@
   // ── State: projects → tasks. Persisted to localStorage (minus the live stack) ──
   const LS='anvil-state-v1';
   let state = load() || seedState();
+  // AC-4: bring every task's follow-up queue forward, and recover anything a dead run had
+  // CLAIMED. A legacy queue is an array of bare strings and must survive — a migration that
+  // drops the owner's pending work to tidy a shape is worse than the shape. An entry still
+  // marked `dispatching` was claimed by a run that no longer exists (the tab closed between
+  // the claim and the run starting): it is demoted back to `pending` rather than lost, and
+  // `queueRecovered` carries the count so startup can SAY so. A silent recovery is a defect
+  // too — that is the whole lesson of the stale-`running` bug.
+  let queueRecovered = 0, queueDropped = 0;
+  try{
+    for(const p of (state.projects||[])){
+      for(const t of (p.tasks||[])){
+        if(!t.queued) continue;
+        const m = migrateQueue(t.queued); queueDropped += m.dropped;
+        const r = reconcileQueue(m.queue); queueRecovered += r.recovered.length;
+        t.queued = r.queue;
+      }
+    }
+  }catch(_){}
   // Clean start (UX decision 2026-08-29): one empty task, no cryptic demo work — the
   // empty-state (renderLog) carries the orientation + example prompts.
   function seedState(){
@@ -1171,15 +1190,20 @@
       }
     }
     // Queued follow-ups (Codex-style): prompts waiting for the current run to end.
-    for(let qi=0; qi<(t.queued||[]).length; qi++){
-      const q=t.queued[qi], idx=qi;
+    for(const q of (t.queued||[])){
       const d=document.createElement('div'); d.className='msg user queued';
       const head=document.createElement('div'); head.className='mhead';
-      head.innerHTML='<div class="who">queued</div>';
-      const x=document.createElement('button'); x.className='copybtn'; x.textContent='✕'; x.title='Remove from queue';
-      x.onclick=()=>{ (t.queued||[]).splice(idx,1); save(); renderLog(); };
-      head.appendChild(x);
-      const body=document.createElement('div'); body.className='body'; body.textContent=q;
+      // The state is shown, not just the text: a `dispatching` chip is a claim that outlived its
+      // run, and a user who cannot see that cannot know why nothing is happening.
+      head.innerHTML='<div class="who">'+(q.state==='dispatching'?'starting…':'queued')+'</div>';
+      const mk=(label,title,fn)=>{ const b=document.createElement('button'); b.className='copybtn'; b.textContent=label; b.title=title; b.onclick=fn; return b; };
+      // Every action is keyed on q.id. The old code captured a render-time INDEX, so a queue that
+      // drained between render and click removed a different item than the one clicked.
+      head.appendChild(mk('↑','Move earlier',()=>{ t.queued=qMove(t.queued,q.id,-1).queue; save(); renderLog(); }));
+      head.appendChild(mk('↓','Move later',()=>{ t.queued=qMove(t.queued,q.id,+1).queue; save(); renderLog(); }));
+      head.appendChild(mk('✎','Edit',()=>{ const v=prompt('Edit queued prompt',q.text); if(v!==null){ t.queued=qEdit(t.queued,q.id,v).queue; save(); renderLog(); } }));
+      head.appendChild(mk('✕','Remove from queue',()=>{ t.queued=qRemove(t.queued,q.id).queue; save(); renderLog(); }));
+      const body=document.createElement('div'); body.className='body'; body.textContent=q.text;
       d.appendChild(head); d.appendChild(body); w.appendChild(d);
     }
     box.innerHTML=''; box.appendChild(w); box.scrollTop=box.scrollHeight;
@@ -1633,7 +1657,7 @@
     const t=activeTask(); if(!t) return;
     const text=$('prompt').value.trim(); if(!text) return;
     $('prompt').value=''; autoGrow();
-    if(running){ (t.queued=t.queued||[]).push(text); save(); renderLog(); return; }
+    if(running){ t.queued=qEnqueue(t.queued, text).queue; save(); renderLog(); return; }
     runTask(t, text);
   }
   // Run records live in Anvil's OWN OPFS namespace (anvil/runs/<project>/<task>/),
@@ -2397,6 +2421,7 @@
       // else unclaimed; unverified/error → error) as a pure fold over the record's last
       // run.stopped. The app no longer computes status in parallel.
       t.status = foldStatus(recEvents, rec.resolve, { gated }).status;
+      t.lastStop = result.stop;   // AC-4: the queue holds unless this is a clean 'done'
       const stopLabel = result.stop==='aborted' ? 'stopped'
         : result.stop==='budget' ? ('hit budget ('+(result.budgetAxis||'')+')')
         : result.stop==='unverified' ? 'gate never passed'
@@ -2443,9 +2468,23 @@
       running=false; abortController=null; setSend(); save(); renderAll();
       if(phoneMode()){ const _st=(activeTask()||{}).status; badge('chat', _st==='error'?'✗':'✓'); }
       if(nak&&nak.title) nak.title('Anvil — '+t.title);
-      // Drain the queue — but a Stop aborts the whole chain (queued items stay as
-      // chips for the user to re-send or remove).
-      if(!wasAborted && t.queued && t.queued.length){ const next=t.queued.shift(); save(); renderLog(); setTimeout(()=>runTask(t, next), 0); }
+      // Drain the queue. Two things the old one-liner got wrong (AC-4):
+      //   · it SHIFTED and saved before the run existed, so a tab closed in that window lost the
+      //     prompt entirely — no queue, no log, no record. Now the entry is CLAIMED
+      //     (state:'dispatching') and persisted first, and only leaves the queue once the run has
+      //     genuinely started; a claim found on the next load is recovered, not lost.
+      //   · it drained on anything that was not an abort, so a run ending in `error` cascaded the
+      //     next follow-up into a workspace nobody had looked at.
+      const _out = { aborted: wasAborted, error: t.status==='error' ? (t.log&&t.log.length?t.log[t.log.length-1].text:'error') : null, stop: t.lastStop||null };
+      const _d = nextDispatch(t.queued, _out);
+      t.queued = _d.queue; save(); renderLog();
+      if(_d.paused && _d.reason) pushSystem('⏸ '+_d.reason+'. Send anything to continue, or edit the queue above.');
+      else if(_d.entry){
+        setTimeout(()=>{
+          try{ t.queued = completeDispatch(t.queued, _d.entry.id); save(); renderLog(); runTask(t, _d.entry.text); }
+          catch(e){ t.queued = releaseDispatch(t.queued, _d.entry.id); save(); renderLog(); pushSystem('queue: could not start the next follow-up — '+String(e&&e.message||e)); }
+        }, 0);
+      }
     }
   }
   // Never disabled — while running the button queues; label signals which. The
@@ -2717,6 +2756,9 @@
   try{ if((await runsCount())===0){ const r=await rebuildRunIndex(); if(r&&r.indexed) console.info('[anvil] run index rebuilt: '+r.indexed+' record(s)'+(r.broken?(', '+r.broken+' broken chain(s)'):'')+' — '+r.stopsLine); } }catch(_){}
   if(!folderMode) await mountProject(state.activeProject);
   renderAll(); syncMode();
+  // AC-4: a queue entry recovered from a dead run is surfaced, never silently restored.
+  if(queueRecovered) pushSystem('↩︎ Recovered '+queueRecovered+' queued follow-up'+(queueRecovered===1?'':'s')+' that a previous session had started but never ran. '+(queueRecovered===1?'It is':'They are')+' back in the queue below.');
+  if(queueDropped) pushSystem('⚠︎ Dropped '+queueDropped+' unreadable queue entr'+(queueDropped===1?'y':'ies')+' while loading.');
   // Stale previewOpen can restore to an empty Preview pane; on a phone that would
   // strand the user on a blank surface, so fall back to Chat when nothing rendered.
   if(layoutMode==='phone' && phoneSurface==='preview' && document.querySelector('#pv-body .pempty')) setSurface('chat');
