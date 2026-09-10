@@ -31,31 +31,127 @@
       "id": "nakliamp",
       "repo": "NakliTechie/nakliamp",
       "requestedRef": "main",
-      "resolvedCommit": "8bc461e9d78b5275a04a96e293ddffbf15711691",
+      "resolvedCommit": "f8d8db1ad08da66f762c4bfbd7d4b2daa7fd1eae",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "9be4a0bf4c180b23b82824a180a435b509644428cb743633d739cc5743cc6187",
-          "bytes": 20411
+          "sha256": "39d31e21c9101b39baa13cccaaba8a7bac7a6dd051bd8b57dfa121f40a6e844e",
+          "bytes": 65167
         },
         {
           "source": "VENDOR.md",
           "destination": "VENDOR.md",
-          "sha256": "29bc822fc79eff6172782917d63630967bb9379b1f9cf93d6dc1949d9318402d",
-          "bytes": 1169
+          "sha256": "5e7790bf7d0f4b01fbb04035e5ed80ef757c7ab6b6f9db5ddb65ca09e97d48f0",
+          "bytes": 4131
+        },
+        {
+          "source": "app/decode/libav.mjs",
+          "destination": "app/decode/libav.mjs",
+          "sha256": "05b717b2c8a2d870e4f602274fa9a1eed9a7316ab8640c55e273910abca93347",
+          "bytes": 12375
+        },
+        {
+          "source": "app/decode/pcm.mjs",
+          "destination": "app/decode/pcm.mjs",
+          "sha256": "bb8f7d2f9a28aec65d93812656288e4a338a453b4cf7eba625f87adc73fcb0d0",
+          "bytes": 15460
+        },
+        {
+          "source": "app/library/metadata.mjs",
+          "destination": "app/library/metadata.mjs",
+          "sha256": "49c3e5e7055b550dd6fe0b0f106999f6905c70c62bb406807fae88bca75ee15c",
+          "bytes": 23588
+        },
+        {
+          "source": "app/library/playlist.mjs",
+          "destination": "app/library/playlist.mjs",
+          "sha256": "3585d150139e09123c474815a6796e049e912c78b46ee85d707b12a5ddcac74f",
+          "bytes": 12006
+        },
+        {
+          "source": "app/library/scan-core.mjs",
+          "destination": "app/library/scan-core.mjs",
+          "sha256": "65bbdbfa074892274dd4e4b2277e31530271ba398ff73018009f3c37e2b4a287",
+          "bytes": 6955
+        },
+        {
+          "source": "app/library/scan-worker.mjs",
+          "destination": "app/library/scan-worker.mjs",
+          "sha256": "ad2febfb7cd3179eba23652db182bb5e15014d276c409d8be26ed127efc27ecd",
+          "bytes": 800
+        },
+        {
+          "source": "app/library/scan.mjs",
+          "destination": "app/library/scan.mjs",
+          "sha256": "f6d3d41c0c5a672066b6e39aaec4b6ef30bac1e6caa8281ffd6497cca2cc2234",
+          "bytes": 5422
+        },
+        {
+          "source": "app/library/search.mjs",
+          "destination": "app/library/search.mjs",
+          "sha256": "5dbf3ad92e575d5f7566345afb6f1954971f00516b33d2d78c0a9a4705e8d4e9",
+          "bytes": 2815
+        },
+        {
+          "source": "app/library/store.mjs",
+          "destination": "app/library/store.mjs",
+          "sha256": "9cdc40e017ef37043e553a06151ff0524f936ab51964cd5add63455c17ee7c4a",
+          "bytes": 16055
+        },
+        {
+          "source": "app/visualiser/driver.mjs",
+          "destination": "app/visualiser/driver.mjs",
+          "sha256": "dae89438001892b4aa790ed2d1376a5cdb5655ac0286d7e9c5bb484a2c915cf7",
+          "bytes": 5757
+        },
+        {
+          "source": "app/visualiser/modes.mjs",
+          "destination": "app/visualiser/modes.mjs",
+          "sha256": "27a7af90f235323876050da3f48722591c96267a1620f2715f4f21d45d5de7d9",
+          "bytes": 13128
         },
         {
           "source": "engine/nakliamp-engine.mjs",
           "destination": "engine/nakliamp-engine.mjs",
-          "sha256": "10cf13d9060d5563cdcbd87317de0f271592ce2f817c2e1e2081ac43978fcd8f",
-          "bytes": 14445
+          "sha256": "883274935eb58152c1e95a4a4661eab9028352d17dc8a1a9e8abc780d25fdd75",
+          "bytes": 36920
         },
         {
           "source": "engine/reel-engine.mjs",
           "destination": "engine/reel-engine.mjs",
-          "sha256": "56f5372eed1f15f024b17d3c24f39a6a9d60dab17aa0898900db97f23a044971",
-          "bytes": 78684
+          "sha256": "791a691fd8d0d95c9cf7fd27adf3bad2469c918f15e30ed9e57f05d0dad4c175",
+          "bytes": 79536
+        },
+        {
+          "source": "vendor/libav/LICENSE-LGPL-2.1.txt",
+          "destination": "vendor/libav/LICENSE-LGPL-2.1.txt",
+          "sha256": "20e50fe7aae3e56378ebf0417d9de904f55a0e61e4df315333e632a4d3555d95",
+          "bytes": 26419
+        },
+        {
+          "source": "vendor/libav/LICENSE-LGPL-NOTICE.md",
+          "destination": "vendor/libav/LICENSE-LGPL-NOTICE.md",
+          "sha256": "afb8d248e345d343a45f74a5666f850d1920fb5a0006621a5a45e570687933bf",
+          "bytes": 644
+        },
+        {
+          "source": "vendor/libav/libav-6.10.9.0-nakliamp.loader.mjs",
+          "destination": "vendor/libav/libav-6.10.9.0-nakliamp.loader.mjs",
+          "sha256": "272cef7c32705b2e70290cf4698350e2c888b00b789f11a97386195aa5d0b691",
+          "bytes": 28363
+        },
+        {
+          "source": "vendor/libav/libav-6.10.9.0-nakliamp.wasm.mjs",
+          "destination": "vendor/libav/libav-6.10.9.0-nakliamp.wasm.mjs",
+          "sha256": "4c679eab179d5f9307611fb349edca62cf264a511ebbf66aaa94ea795a6cd4b6",
+          "bytes": 282075
+        },
+        {
+          "source": "vendor/libav/libav-6.10.9.0-nakliamp.wasm.wasm",
+          "destination": "vendor/libav/libav-6.10.9.0-nakliamp.wasm.wasm",
+          "sha256": "e2a952132a942ee59f7d7624378e4f60568d120157e428e82a59e06b5ead7829",
+          "bytes": 1275128
         },
         {
           "source": "vendor/mediabunny/mediabunny-1.51.0.min.mjs",

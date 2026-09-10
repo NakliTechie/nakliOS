@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="nakliamp-version" content="0.1.0-m0">
+<meta name="nakliamp-version" content="0.3.0-m2">
 <meta name="description" content="Play music files privately in your browser. Your audio stays on your device.">
 <meta name="theme-color" content="#161310">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; media-src 'self' blob:; connect-src 'self'; img-src 'self' data: blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
@@ -12,7 +12,7 @@
 :root{
   color-scheme:dark;
   --bg:#161310;--panel:#1f1a15;--panel-2:#26201a;--line:#3a3026;
-  --text:#efe8da;--muted:#9d9180;--faint:#6f6558;--accent:#e0a24a;
+  --text:#efe8da;--muted:#9d9180;--faint:#8a8172;--accent:#e0a24a;
   --accent-ink:#1a1206;--good:#8fbf7f;--warn:#d98c5f;--refuse:#d27464;
   --display:"Arial Rounded MT Bold","Trebuchet MS",system-ui,sans-serif;
   --body:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -28,14 +28,14 @@ body{background:
 button,input{font:inherit}
 button{color:inherit}
 button:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
-.shell{min-height:100vh;display:grid;grid-template-rows:auto 1fr auto}
+.shell{min-height:100vh;display:grid;grid-template-rows:auto 1fr auto auto}
 .topbar{height:66px;padding:0 clamp(18px,4vw,54px);display:flex;align-items:center;gap:16px;border-bottom:1px solid var(--line);background:rgba(22,19,16,.78);backdrop-filter:blur(18px)}
 .brand{font-family:var(--display);font-size:20px;font-weight:900;letter-spacing:-.04em}.brand em{font-style:normal;color:var(--accent)}
 .version{font:10px var(--mono);color:var(--faint);border:1px solid var(--line);padding:3px 7px;border-radius:999px}
 .path-chip{margin-left:auto;font:10px var(--mono);letter-spacing:.04em;color:var(--good);border:1px solid color-mix(in srgb,var(--good) 36%,var(--line));padding:5px 9px;border-radius:999px}
 .path-chip:empty{display:none}
 main{min-height:0;display:grid;place-items:center;padding:clamp(24px,6vw,76px)}
-.screen{display:none;width:100%}.screen.on{display:block}
+.view{display:none;width:100%}.view.on{display:block}
 .empty{max-width:720px;margin:auto;text-align:center}
 .record-mark{width:92px;height:92px;margin:0 auto 25px;border-radius:50%;position:relative;border:1px solid #55442f;background:
   radial-gradient(circle,#161310 0 8%,#e0a24a 9% 14%,#17130f 15% 20%,#35291e 21% 23%,#17130f 24% 36%,#2f251c 37% 39%,#17130f 40% 55%,#2f251c 56% 58%,#17130f 59% 100%);
@@ -49,7 +49,7 @@ main{min-height:0;display:grid;place-items:center;padding:clamp(24px,6vw,76px)}
 .btn{min-height:42px;border:1px solid var(--line);border-radius:10px;padding:9px 16px;background:var(--panel-2);cursor:pointer}
 .btn:hover{border-color:#65513e}.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:750}
 .fine{margin-top:18px;color:var(--faint);font:10px/1.7 var(--mono);letter-spacing:.02em}
-.player{max-width:1040px;margin:auto}
+.now{max-width:1040px;margin:auto}
 .player-grid{display:grid;grid-template-columns:minmax(250px,390px) minmax(300px,1fr);gap:clamp(34px,7vw,86px);align-items:center}
 .art{aspect-ratio:1;border:1px solid var(--line);border-radius:24px;position:relative;overflow:hidden;background:
   linear-gradient(145deg,rgba(245,190,100,.86),rgba(140,75,34,.95) 45%,rgba(42,28,19,.98));box-shadow:0 35px 90px -38px rgba(224,162,74,.58)}
@@ -79,31 +79,137 @@ footer{min-height:48px;border-top:1px solid var(--line);display:flex;align-items
 .toast[hidden]{display:none}
 @media(max-width:760px){.topbar{padding:0 18px}.player-grid{grid-template-columns:1fr}.art{max-width:310px;width:74vw;margin:auto}.track{text-align:center}.honesty,.transport{justify-content:center}.open-another{margin-left:0}.volume-wrap{max-width:130px}main{padding:28px 18px 46px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important}}
+
+/* Library */
+.library{max-width:1080px;margin:auto}
+.lib-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+.lib-head h2{font-family:var(--display);font-size:22px;margin:0;letter-spacing:-.03em}
+.lib-search{flex:1;min-width:190px;min-height:42px;padding:9px 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--text)}
+.lib-search::placeholder{color:var(--faint)}
+.lib-count{font:10px var(--mono);color:var(--faint);border:1px solid var(--line);padding:5px 9px;border-radius:999px;white-space:nowrap}
+.lib-scan{margin:0 0 14px;font:11px var(--mono);color:var(--muted)}
+.lib-scan[hidden]{display:none}
+.lib-list{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:rgba(31,26,21,.6)}
+.lib-group{padding:9px 16px;font:10px var(--mono);letter-spacing:.06em;color:var(--faint);background:var(--panel-2);border-top:1px solid var(--line)}
+.lib-list>.lib-group:first-child{border-top:0}
+.lib-row{display:flex;align-items:center;gap:12px;width:100%;padding:9px 16px;border:0;border-top:1px solid rgba(58,48,38,.5);background:none;text-align:left;cursor:pointer}
+.lib-row:hover{background:var(--panel-2)}
+.lib-row[aria-current="true"]{background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.lib-row .no{width:26px;text-align:right;font:11px var(--mono);color:var(--faint);flex:none}
+.lib-row .cover{width:34px;height:34px;border-radius:7px;flex:none;object-fit:cover;background:var(--panel-2);border:1px solid var(--line)}
+.lib-row .who{min-width:0;flex:1}
+.lib-row .who b{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lib-row .who span{display:block;font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lib-row .dur{font:11px var(--mono);color:var(--faint);flex:none}
+.row-tools{display:flex;gap:4px;flex:none}
+.row-tools button{width:24px;height:24px;border:1px solid var(--line);border-radius:6px;background:var(--panel);cursor:pointer;font:11px var(--mono);line-height:1;padding:0}
+.row-tools button:hover{border-color:var(--accent);color:var(--accent)}
+.lib-empty{padding:28px 16px;text-align:center;color:var(--muted)}
+.lib-note{margin:14px 0 0;font-size:12px;color:var(--faint)}
+
+/* Visualiser */
+.vis-wrap{position:relative;flex:0 1 150px;min-width:90px;height:40px;border:1px solid var(--line);border-radius:8px;background:var(--panel);overflow:hidden}
+.vis-wrap[hidden]{display:none}
+#vis{display:block;width:100%;height:100%}
+.vis-bar{display:flex;align-items:center;gap:8px;padding:6px 9px;border-top:1px solid var(--line);background:var(--panel-2)}
+.vis-bar select{flex:1;min-height:32px;padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--text);font:11px var(--mono)}
+.vis-bar button{min-height:32px;padding:4px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);cursor:pointer;font:10px var(--mono)}
+.vis-wrap.full{position:fixed;inset:0;z-index:50;flex:none;height:100vh;border-radius:0;border:0}
+.vis-wrap.full #vis{height:100vh}
+.vis-pick{min-height:34px;max-width:120px;padding:4px 7px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--text);font:10px var(--mono)}
+.vis-wrap.full .vis-bar{position:absolute;left:0;right:0;bottom:0;background:rgba(31,26,21,.86)}
+
+/* View tabs */
+.views{display:flex;gap:6px;margin-left:8px}
+.view-tab{min-height:32px;padding:5px 13px;border:1px solid var(--line);border-radius:999px;background:transparent;cursor:pointer;font:11px var(--mono);letter-spacing:.03em;color:var(--muted)}
+.view-tab:hover{border-color:#65513e;color:var(--text)}
+.view-tab.on{background:var(--panel-2);border-color:var(--accent);color:var(--accent)}
+.view-tab[hidden]{display:none}
+
+/* The persistent player bar */
+.playerbar{display:flex;align-items:center;gap:14px;padding:10px clamp(14px,3vw,28px);border-top:1px solid var(--line);background:rgba(26,22,18,.94);backdrop-filter:blur(18px);position:sticky;bottom:0;z-index:20}
+.playerbar[hidden]{display:none}
+.pb-art{width:46px;height:46px;flex:none;border-radius:9px;border:1px solid var(--line);cursor:pointer;display:grid;place-items:center;padding:0;
+  background:linear-gradient(145deg,rgba(245,190,100,.8),rgba(140,75,34,.92) 50%,rgba(42,28,19,.98));
+  font-family:var(--display);font-weight:900;font-size:19px;color:rgba(255,245,225,.94)}
+.pb-art:hover{border-color:var(--accent)}
+.pb-track{min-width:0;flex:1 1 170px;max-width:290px}
+.pb-track b{display:block;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pb-track span{display:block;font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pb-transport{display:flex;align-items:center;gap:7px;flex:none}
+.pb-transport .round{width:36px;height:36px;font-size:12px}
+.pb-transport .round.play{width:46px;height:46px;font-size:16px}
+.pb-time{display:grid;grid-template-columns:42px 1fr 42px;gap:9px;align-items:center;flex:1 1 220px;color:var(--faint);font:10px var(--mono)}
+.playerbar .volume-wrap{margin-left:0;flex:0 1 130px}
+
+/* A refusal is a banner about one file, not a screen that replaces everything */
+.refusal-banner{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:13px clamp(14px,3vw,28px);
+  border-top:1px solid color-mix(in srgb,var(--refuse) 45%,var(--line));background:color-mix(in srgb,var(--refuse) 9%,var(--panel))}
+.refusal-banner[hidden]{display:none}
+.refusal-banner .code{font:10px var(--mono);letter-spacing:.09em;color:var(--refuse);text-transform:uppercase;flex:none}
+.refusal-body{min-width:0;flex:1 1 320px}
+.refusal-body strong{display:block;color:var(--refuse)}
+.refusal-body p{margin:3px 0 0;color:var(--muted);font-size:13px}
+.refusal-promise{display:block;margin-top:3px;font:10px var(--mono);color:var(--faint)}
+@media(max-width:760px){
+  .playerbar{flex-wrap:wrap;gap:9px}
+  .vis-wrap,.vis-pick{display:none}
+  .pb-time{order:5;flex-basis:100%}
+  .playerbar .volume-wrap{flex-basis:100px}
+  #open-another{display:none}
+}
 </style>
 </head>
 <body>
 <div class="shell">
   <header class="topbar">
     <div class="brand">Nakli<em>Amp</em></div>
-    <span class="version">v0.1.0-m0 · preview</span>
+    <span class="version">v0.3.0-m2</span>
+    <nav class="views" aria-label="Views">
+      <button class="view-tab on" id="tab-library" type="button" data-view="library">Library</button>
+      <button class="view-tab" id="tab-now" type="button" data-view="now" hidden>Now playing</button>
+    </nav>
     <span class="path-chip" id="path-chip"></span>
   </header>
 
   <main>
-    <section class="screen empty on" id="empty" aria-labelledby="empty-title">
+    <!-- Arrival. Shown only until there is a folder or a track. -->
+    <section class="view empty on" id="empty" aria-labelledby="empty-title">
       <div class="record-mark" aria-hidden="true"></div>
       <h1 id="empty-title" data-t="empty.title">Your music. Still yours.</h1>
-      <p class="lede" data-t="empty.body">Open one track from your device. NakliAmp plays it here without an upload, account, or analytics.</p>
+      <p class="lede" data-t="empty.body">Open one track, or point NakliAmp at your music folder. It plays here without an upload, account, or analytics.</p>
       <div class="drop" id="drop" tabindex="0" role="button" aria-describedby="drop-detail">
-        <p id="drop-detail" data-t="empty.drop">Drop an audio file here, or choose one from your device.</p>
+        <p id="drop-detail" data-t="empty.drop">Drop a folder or a file here, choose a folder from your device, or open a single track.</p>
         <div class="actions">
-          <button class="btn primary" id="open-file" type="button" data-t="action.open">Open audio file</button>
+          <button class="btn primary" id="open-folder" type="button" data-t="action.folder">Open a music folder</button>
+          <button class="btn" id="open-file" type="button" data-t="action.open">Open a single file</button>
         </div>
-        <div class="fine">MP3 · FLAC · AAC/M4A · OPUS · OGG/VORBIS · WAV · MKA</div>
+        <div class="fine">MP3 · FLAC · AAC/M4A · OPUS · OGG/VORBIS · WAV · MKA · AIFF · CAF · AU · and whatever else your browser can decode</div>
       </div>
     </section>
 
-    <section class="screen player" id="player" aria-labelledby="track-name">
+    <!-- The library. The default view once a folder exists; browsing never stops playback. -->
+    <section class="view library" id="library" aria-labelledby="library-title">
+      <div class="lib-head">
+        <h2 id="library-title">Library</h2>
+        <input class="lib-search" id="lib-search" type="search" placeholder="Search your library" aria-label="Search your library" autocomplete="off">
+        <span class="lib-count" id="lib-count"></span>
+        <select class="lib-search" id="lib-playlist" aria-label="Playlists" hidden></select>
+        <button class="btn primary" id="lib-open" type="button">Open a music folder</button>
+        <button class="btn primary" id="lib-reopen" type="button" hidden>Reopen folder</button>
+        <button class="btn" id="lib-save" type="button">Save as playlist</button>
+        <button class="btn" id="lib-rename" type="button" hidden>Rename</button>
+        <button class="btn" id="lib-delete" type="button" hidden>Delete</button>
+        <button class="btn" id="lib-rescan" type="button">Rescan</button>
+        <button class="btn" id="lib-forget" type="button">Forget folder</button>
+      </div>
+      <p class="lib-scan" id="lib-scan" hidden></p>
+      <ul class="lib-list" id="lib-list"></ul>
+      <p class="lib-note">Your folder is read on your device. Nothing is uploaded, and the index never leaves this browser.</p>
+    </section>
+
+    <!-- Now playing. A place you choose to go, not where you are dumped. -->
+    <section class="view now" id="now" aria-labelledby="track-name">
       <div class="player-grid">
         <div class="art" aria-hidden="true"><span class="art-letter" id="art-letter">N</span></div>
         <div class="track">
@@ -111,51 +217,84 @@ footer{min-height:48px;border-top:1px solid var(--line);display:flex;align-items
           <h1 class="track-name" id="track-name">Untitled track</h1>
           <p class="track-meta" id="track-meta">—</p>
           <div class="honesty" id="honesty" aria-label="Playback path"></div>
-          <div class="timeline">
-            <span id="elapsed">0:00</span>
-            <input id="seek" type="range" min="0" max="1" step="0.01" value="0" aria-label="Seek through track">
-            <span id="duration">0:00</span>
-          </div>
-          <div class="transport">
-            <button class="round" id="back" type="button" aria-label="Back 10 seconds">−10</button>
-            <button class="round play" id="play" type="button" aria-label="Play">▶</button>
-            <button class="round" id="forward" type="button" aria-label="Forward 10 seconds">+10</button>
-            <label class="volume-wrap"><span aria-hidden="true">◖</span><input id="volume" type="range" min="0" max="1" step="0.02" value="0.8" aria-label="Volume"></label>
-            <button class="btn open-another" id="open-another" type="button" data-t="action.another">Open another</button>
-          </div>
         </div>
       </div>
     </section>
-
-    <section class="screen refusal" id="refusal" aria-labelledby="refusal-title">
-      <div class="code" id="refusal-code">ERR_NAKLIAMP_UNKNOWN</div>
-      <h2 id="refusal-title" data-t="refusal.title">This track stays closed.</h2>
-      <p id="refusal-message">NakliAmp could not open this audio file.</p>
-      <div class="refusal-card">
-        <strong data-t="refusal.promise">Nothing was uploaded.</strong>
-        <span data-t="refusal.detail"> The refusal came from the local playback ladder.</span>
-      </div>
-      <button class="btn primary" id="refusal-open" type="button" data-t="action.different">Choose a different file</button>
-    </section>
   </main>
+
+  <!-- The player bar. Persistent: what is playing must never be hidden by
+       what you are browsing. This is the whole point of the restructure. -->
+  <div class="playerbar" id="playerbar" hidden>
+    <button class="pb-art" id="pb-art" type="button" title="Now playing"><span id="pb-letter">N</span></button>
+    <div class="pb-track">
+      <b id="pb-title">Untitled track</b>
+      <span id="pb-sub">—</span>
+    </div>
+    <div class="pb-transport">
+      <button class="round" id="prev" type="button" aria-label="Previous track" title="Previous (P)">⏮</button>
+      <button class="round" id="back" type="button" aria-label="Back 10 seconds" title="Back 10s">−10</button>
+      <button class="round play" id="play" type="button" aria-label="Play">▶</button>
+      <button class="round" id="forward" type="button" aria-label="Forward 10 seconds" title="Forward 10s">+10</button>
+      <button class="round" id="next" type="button" aria-label="Next track" title="Next (N)">⏭</button>
+    </div>
+    <div class="pb-time">
+      <span id="elapsed">0:00</span>
+      <input id="seek" type="range" min="0" max="1" step="0.01" value="0" aria-label="Seek through track">
+      <span id="duration">0:00</span>
+    </div>
+    <label class="volume-wrap"><span aria-hidden="true">◖</span><input id="volume" type="range" min="0" max="1" step="0.02" value="0.8" aria-label="Volume"></label>
+    <div class="vis-wrap" id="vis-wrap">
+      <canvas id="vis" aria-label="Spectrum visualiser" role="img"></canvas>
+    </div>
+    <select id="vis-mode" class="vis-pick" aria-label="Visualiser mode"></select>
+    <button class="btn" id="vis-full" type="button" title="Full window (V)">⤢</button>
+    <button class="btn" id="open-another" type="button" data-t="action.another">Open another</button>
+  </div>
+
+  <!-- A refusal is about one file. It must not destroy the library or stop playback. -->
+  <div class="refusal-banner" id="refusal" role="alert" hidden>
+    <div class="code" id="refusal-code">ERR_NAKLIAMP_UNKNOWN</div>
+    <div class="refusal-body">
+      <strong id="refusal-title" data-t="refusal.title">This track stays closed.</strong>
+      <p id="refusal-message">NakliAmp could not open this audio file.</p>
+      <span class="refusal-promise" data-t="refusal.promise">Nothing was uploaded.</span>
+    </div>
+    <button class="btn" id="refusal-open" type="button" data-t="action.different">Choose a different file</button>
+    <button class="btn" id="refusal-dismiss" type="button" aria-label="Dismiss">Dismiss</button>
+  </div>
 
   <footer data-t="privacy">Local playback only · no account · no cookies · no analytics</footer>
 </div>
 
-<input id="file-input" type="file" accept="audio/*,.mp3,.flac,.m4a,.aac,.ogg,.opus,.wav,.mka,.wma,.ape" hidden>
+<input id="file-input" type="file" accept="audio/*,.mp3,.flac,.m4a,.aac,.ogg,.opus,.wav,.mka,.aiff,.aif,.caf,.au,.wma,.ape" hidden>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
 <script type="module">
 import { createNakliAmpEngine } from './engine/nakliamp-engine.mjs';
+import { decodePcm, sniffPcm } from './app/decode/pcm.mjs';
+import { createVisualiser } from './app/visualiser/driver.mjs';
+import { allTracks, getArt, updateTrackState, compareAlbumOrder, clearLibrary } from './app/library/store.mjs';
+import { searchTracks } from './app/library/search.mjs';
+import { allPlaylists } from './app/library/store.mjs';
+import { toM3u8, safePlaylistFileName } from './app/library/playlist.mjs';
+import {
+  supportsFolderGrant, requestFolder, storedFolder, storedFolderName, grantState,
+  reclaimFolder, forgetFolder, startScan, adoptFolder, directoryFromDrop, persistStorage,
+} from './app/library/scan.mjs';
 
 const STRINGS = Object.freeze({
   en: Object.freeze({
     'empty.title': 'Your music. Still yours.',
-    'empty.body': 'Open one track from your device. NakliAmp plays it here without an upload, account, or analytics.',
-    'empty.drop': 'Drop an audio file here, or choose one from your device.',
+    'empty.body': 'Open one track, or point NakliAmp at your music folder. It plays here without an upload, account, or analytics.',
+    'empty.drop': 'Drop an audio file here, choose one from your device, or open a whole folder.',
     'action.open': 'Open audio file',
     'action.another': 'Open another',
     'action.different': 'Choose a different file',
+    'action.folder': 'Open a music folder',
+    'action.library': 'Library',
+    'library.none': 'No music folder yet. Open one and NakliAmp will index it here.',
+    'library.empty': 'No track matches that search.',
+    'library.nogrant': 'This browser cannot grant a folder. Open single tracks instead, or use a Chromium browser for the library.',
     'player.now': 'Now playing locally',
     'refusal.title': 'This track stays closed.',
     'refusal.promise': 'Nothing was uploaded.',
@@ -173,15 +312,41 @@ const t = key => STRINGS[locale]?.[key] ?? STRINGS.en[key] ?? key;
 document.querySelectorAll('[data-t]').forEach(element => { element.textContent = t(element.dataset.t); });
 
 const $ = selector => document.querySelector(selector);
-const screens = ['empty', 'player', 'refusal'];
-const engine = createNakliAmpEngine({ version: VERSION });
+const VIEWS = ['empty', 'library', 'now'];
+// R3 decoders. The lean build ships the in-house PCM tier, which closes the
+// AIFF, AIFC, CAF and AU gap at no download cost. The full build appends the
+// wasm tier for the compressed long tail.
+const SOFTWARE_DECODERS = [
+  { name: 'in-house PCM', sniff: sniffPcm, decode: decodePcm },
+];
+const engine = createNakliAmpEngine({ version: VERSION, softwareDecoders: SOFTWARE_DECODERS });
 let uiLoadId = 0;
 let toastTimer = 0;
 let frameId = 0;
 let seeking = false;
 
-function show(screen) {
-  for (const name of screens) $(`#${name}`).classList.toggle('on', name === screen);
+/**
+ * Switch the content view. The player bar and the library are no longer
+ * alternatives to each other: what is playing stays visible whatever you browse.
+ */
+function show(view) {
+  for (const name of VIEWS) $(`#${name}`).classList.toggle('on', name === view);
+  for (const tab of document.querySelectorAll('.view-tab')) {
+    tab.classList.toggle('on', tab.dataset.view === view);
+  }
+}
+
+/** Reveal the player bar and the Now-playing tab once there is something to play. */
+function revealPlayer() {
+  $('#playerbar').hidden = false;
+  $('#tab-now').hidden = false;
+}
+
+for (const tab of document.querySelectorAll('.view-tab')) {
+  tab.addEventListener('click', () => {
+    if (tab.dataset.view === 'library') openLibrary();
+    else show(tab.dataset.view);
+  });
 }
 
 function toast(message, timeoutMs = 2600) {
@@ -226,6 +391,7 @@ function honestyMarkup(state) {
     const token = document.createElement('span');
     token.textContent = part;
     if (index === 2) token.className = state.path === 'r1' ? 'active' : 'warning';
+    if (index === 2 && state.path === 'r3') token.className = 'active';
     host.appendChild(token);
   });
   if (state.honesty.gapless === false) {
@@ -248,33 +414,91 @@ function renderTrack(state) {
   ].filter(Boolean).join(' · ');
   $('#duration').textContent = formatTime(state.media.duration);
   $('#seek').max = String(Math.max(0.01, state.media.duration || 0.01));
-  $('#path-chip').textContent = state.path === 'r1' ? 'R1 · REEL ENGINE' : 'R2 · NATIVE FALLBACK';
+  $('#path-chip').textContent = { r1: 'R1 · REEL ENGINE', r2: 'R2 · NATIVE PASSTHROUGH', r3: 'R3 · SOFTWARE DECODE' }[state.path] ?? 'R2 · NATIVE PASSTHROUGH';
   honestyMarkup(state);
-  show('player');
+
+  $('#pb-title').textContent = stem(name);
+  $('#pb-sub').textContent = [state.track?.codec?.toUpperCase(), formatBytes(state.media.size)].filter(Boolean).join(' · ');
+  $('#pb-letter').textContent = stem(name).trim().slice(0, 1).toUpperCase() || 'N';
+  revealPlayer();
+  // Deliberately does not switch view: starting a track while browsing the
+  // library must not yank you out of the library.
+}
+
+/**
+ * A track that has reached its duration is finished, whatever the clock says.
+ * The engine keeps reporting `playing` after the last frame, which would leave
+ * a pause icon on a silent player forever.
+ */
+function hasEnded(state) {
+  const { positionS } = state.clock;
+  const { duration } = state.media;
+  return Boolean(duration) && Number.isFinite(duration) && positionS >= duration - 0.05;
 }
 
 function renderClock() {
   const state = engine.state();
   if (state.path) {
+    const ended = hasEnded(state);
+    const playing = state.clock.playing && !ended;
     $('#elapsed').textContent = formatTime(state.clock.positionS);
     if (!seeking) $('#seek').value = String(state.clock.positionS || 0);
-    $('#play').textContent = state.clock.playing ? 'Ⅱ' : '▶';
-    $('#play').setAttribute('aria-label', state.clock.playing ? 'Pause' : 'Play');
+    $('#play').textContent = playing ? 'Ⅱ' : '▶';
+    $('#play').setAttribute('aria-label', playing ? 'Pause' : 'Play');
+    $('#prev').disabled = queueIndex <= 0;
+    $('#next').disabled = queueIndex < 0 || queueIndex >= queue.length - 1;
+  }
+  const idle = !state.path || !state.clock.playing || hasEnded(state);
+  if (!idle && !visualiser.running) visualiser.start();
+  // Nothing is moving, so nothing needs repainting. Left running, it repainted
+  // at 60 fps for the life of the tab whatever the player was doing.
+  if (idle && visualiser.running) visualiser.stop();
+
+  // Auto-advance fires once per track that ends, not once per frame after it.
+  //
+  // `advancing` prevented two advances overlapping, not the same advance
+  // repeating: `advance` awaits `rememberPosition()` — an IndexedDB write —
+  // before it discovers there is no next track, so the last track of a queue
+  // wrote to the database every animation frame, forever. The latch is the
+  // track's own id, so it clears by itself when a different track loads.
+  //
+  // `status` rather than `clock.playing`: the R3 rung reports `playing: false`
+  // the instant its buffer ends, so a clock test would stop auto-advance for
+  // every software-decoded track. `status` still says `playing` unless the
+  // person actually paused.
+  if (state.path && hasEnded(state) && state.status === 'playing'
+    && !advancing && endedTrackKey !== currentTrackKey()) {
+    endedTrackKey = currentTrackKey();
+    advancing = true;
+    advance(1).finally(() => { advancing = false; });
   }
   frameId = requestAnimationFrame(renderClock);
+}
+let advancing = false;
+let endedTrackKey = null;
+
+/** What the end-of-track latch is held against. */
+function currentTrackKey() {
+  return playingTrack?.id ?? engine.state().media.fingerprint ?? engine.state().media.name ?? null;
 }
 
 function showRefusal(error) {
   const code = error?.code || 'ERR_NAKLIAMP_UNKNOWN';
   $('#refusal-code').textContent = code;
-  $('#refusal-message').textContent = error?.message || 'NakliAmp could not open this audio file.';
-  $('#path-chip').textContent = 'R3 · NAMED REFUSAL';
-  show('refusal');
+  // The engine's internal name means nothing to the person reading this.
+  $('#refusal-message').textContent = (error?.message || 'NakliAmp could not open this audio file.')
+    .replace(/\bReel\b/g, 'NakliAmp');
+  $('#refusal').hidden = false;
   toast(t('toast.error'));
+}
+
+function dismissRefusal() {
+  $('#refusal').hidden = true;
 }
 
 async function openMedia(input, { autoplay = true } = {}) {
   const loadId = ++uiLoadId;
+  dismissRefusal();
   toast(t('toast.open'), 10_000);
   try {
     await engine.load(input);
@@ -298,7 +522,7 @@ async function chooseFile() {
     try {
       const [handle] = await showOpenFilePicker({
         multiple: false,
-        types: [{ description: 'Audio files', accept: { 'audio/*': ['.mp3', '.flac', '.m4a', '.aac', '.ogg', '.opus', '.wav', '.mka', '.wma', '.ape'] } }],
+        types: [{ description: 'Audio files', accept: { 'audio/*': ['.mp3', '.flac', '.m4a', '.aac', '.ogg', '.opus', '.wav', '.mka', '.aiff', '.aif', '.caf', '.au', '.wma', '.ape'] } }],
       });
       if (handle) await openMedia(handle);
     } catch (error) {
@@ -322,8 +546,13 @@ async function togglePlay() {
 
 $('#open-file').addEventListener('click', chooseFile);
 $('#open-another').addEventListener('click', chooseFile);
-$('#refusal-open').addEventListener('click', chooseFile);
+$('#refusal-open').addEventListener('click', () => { dismissRefusal(); chooseFile(); });
+$('#refusal-dismiss').addEventListener('click', dismissRefusal);
 $('#play').addEventListener('click', togglePlay);
+$('#prev').addEventListener('click', () => advance(-1));
+$('#next').addEventListener('click', () => advance(1));
+$('#pb-art').addEventListener('click', () => show('now'));
+$('#lib-open').addEventListener('click', () => openLibrary({ prompt: true }));
 $('#back').addEventListener('click', () => engine.seek(engine.state().clock.positionS - 10));
 $('#forward').addEventListener('click', () => engine.seek(engine.state().clock.positionS + 10));
 $('#seek').addEventListener('pointerdown', () => { seeking = true; });
@@ -342,20 +571,61 @@ $('#file-input').addEventListener('change', async event => {
   event.target.value = '';
 });
 
-const savedVolume = Number(localStorage.getItem('nakliamp:volume'));
-if (Number.isFinite(savedVolume) && savedVolume >= 0 && savedVolume <= 1) $('#volume').value = String(savedVolume);
+// `getItem` returns null when nothing is stored, and `Number(null)` is 0 —
+// which passed the range check and set the slider to silent on every first run.
+// Absence must be distinguished from a stored zero before any coercion.
+const storedVolume = localStorage.getItem('nakliamp:volume');
+if (storedVolume !== null) {
+  const savedVolume = Number(storedVolume);
+  if (Number.isFinite(savedVolume) && savedVolume >= 0 && savedVolume <= 1) {
+    $('#volume').value = String(savedVolume);
+  }
+}
 
+/**
+ * Drops are handled at the window, not on the empty-state panel.
+ *
+ * The handlers used to live on `#drop`, which sits inside `#empty` and is
+ * `display:none` the moment a library exists — so for anyone past their first
+ * run, dropping a file anywhere did what an unhandled drop does: the browser
+ * navigated the tab to it, taking the player with it. The README says "drag it
+ * onto the window", so the window is where this belongs.
+ */
 const drop = $('#drop');
-for (const eventName of ['dragenter', 'dragover']) {
-  drop.addEventListener(eventName, event => { event.preventDefault(); drop.classList.add('drag'); });
-}
-for (const eventName of ['dragleave', 'drop']) {
-  drop.addEventListener(eventName, event => { event.preventDefault(); drop.classList.remove('drag'); });
-}
-drop.addEventListener('drop', event => {
-  const [file] = event.dataTransfer.files;
+
+async function acceptDrop(dataTransfer) {
+  // A dropped folder is the shortest path from "I have music" to "it plays",
+  // so it is treated exactly like the picker: remembered, then scanned.
+  const directory = await directoryFromDrop(dataTransfer);
+  if (directory) {
+    await adoptFolder(directory);
+    show('library');
+    await refreshLibrary();
+    await runScan(directory);
+    return;
+  }
+  const [file] = dataTransfer.files;
   if (file) openMedia(file).catch(() => {});
+}
+
+// `preventDefault` on every one of these, always: without it on dragover the
+// drop event never fires, and without it on drop the browser navigates away.
+for (const eventName of ['dragenter', 'dragover']) {
+  addEventListener(eventName, event => {
+    event.preventDefault();
+    if ($('#empty').classList.contains('on')) drop.classList.add('drag');
+  });
+}
+addEventListener('dragleave', event => {
+  event.preventDefault();
+  drop.classList.remove('drag');
 });
+addEventListener('drop', event => {
+  event.preventDefault();
+  drop.classList.remove('drag');
+  acceptDrop(event.dataTransfer).catch(error => toast(error.message, 5000));
+});
+
 drop.addEventListener('keydown', event => {
   if (event.key === 'Enter' || event.key === ' ') {
     event.preventDefault();
@@ -376,26 +646,769 @@ const KEYMAP = Object.freeze({
     $('#volume').value = String(next); engine.setVolume(next);
   },
   m: () => engine.setMuted(!engine.state().clock.muted),
+  v: () => { const id = visualiser.cycle(1); $('#vis-mode').value = id; localStorage.setItem('nakliamp:visualiser', id); },
+  V: () => toggleFullVisualiser(),
+  Escape: () => { if ($('#vis-wrap').classList.contains('full')) toggleFullVisualiser(); },
+  l: () => openLibrary(),
+  n: () => advance(1),
+  p: () => advance(-1),
 });
+// `Shift+V` is a binding of its own; every other letter answers to either
+// case. The README's table shows `M`, `N / P` and `L`, and only the lowercase
+// keys were mapped, so holding shift did nothing the table promised.
+const SHIFTED = new Set(['V']);
+
 addEventListener('keydown', event => {
   if (event.metaKey || event.ctrlKey || event.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName)) return;
-  const action = KEYMAP[event.key];
+  const action = KEYMAP[event.key]
+    ?? (SHIFTED.has(event.key) ? null : KEYMAP[event.key.toLowerCase()]);
   if (!action) return;
   event.preventDefault();
   action();
 });
 
-if (new URLSearchParams(location.search).get('harness') === '1') {
-  window.__nakliampHarness = Object.freeze({
-    open: input => openMedia(input, { autoplay: false }),
-    state: () => engine.state(),
-    play: () => engine.play(),
-    pause: () => engine.pause(),
+
+// ---------------------------------------------------------------- library ----
+
+let libraryTracks = [];
+let queue = [];
+let queueIndex = -1;
+/**
+ * The track the player is actually on, held as the record rather than as a
+ * position. `queue` is reassigned to the visible rows on every keystroke, so
+ * an index into it pointed at a different track the moment a search narrowed
+ * the list — which broke prev/next, the now-playing marker and auto-advance.
+ * `queueIndex` is derived from this after each render.
+ */
+let playingTrack = null;
+let scanning = null;
+const artUrls = new Map();
+
+function releaseArt() {
+  for (const url of artUrls.values()) URL.revokeObjectURL(url);
+  artUrls.clear();
+}
+
+async function artUrlFor(track) {
+  if (!track.artKey) return null;
+  if (artUrls.has(track.artKey)) return artUrls.get(track.artKey);
+  const blob = await getArt(track.artKey);
+  if (!blob) return null;
+  const url = URL.createObjectURL(blob);
+  artUrls.set(track.artKey, url);
+  return url;
+}
+
+function albumHeading(track) {
+  return [track.album || 'Unknown album', track.albumArtist || track.artist || 'Unknown artist']
+    .join(' \u00b7 ');
+}
+
+/** Render the visible rows. Grouping by album only applies to an unfiltered list. */
+async function renderLibrary() {
+  const query = $('#lib-search').value;
+  const playlist = activePlaylist ? playlistRows.find(row => row.path === activePlaylist) : null;
+  let source = libraryTracks;
+  let missing = 0;
+  if (playlist) ({ found: source, missing } = tracksForPlaylist(playlist));
+
+  const visible = searchTracks(source, query);
+  // A playlist has a deliberate order; only the whole library is re-sorted.
+  if (!query && !playlist) visible.sort((left, right) =>
+    String(left.albumKey).localeCompare(String(right.albumKey)) || compareAlbumOrder(left, right));
+
+  queue = visible;
+  // Derived, never carried across a render.
+  queueIndex = playingTrack ? queue.findIndex(track => track.id === playingTrack.id) : -1;
+  const list = $('#lib-list');
+  list.replaceChildren();
+  $('#lib-count').textContent = query
+    ? `${visible.length} of ${source.length}`
+    : `${source.length} track${source.length === 1 ? '' : 's'}`;
+  $('#lib-rename').hidden = !playlist;
+  $('#lib-delete').hidden = !playlist;
+  // Controls that cannot act yet are hidden rather than shown dead.
+  const hasFolder = libraryTracks.length > 0;
+  $('#lib-open').hidden = hasFolder;
+  for (const id of ['lib-save', 'lib-rescan', 'lib-forget']) $(`#${id}`).hidden = !hasFolder;
+  if (playlist && missing) {
+    reportScan(`${playlist.name}: ${missing} of ${playlist.entries.length} entries are not in this folder.`);
+  }
+
+  if (!visible.length) {
+    const empty = document.createElement('li');
+    empty.className = 'lib-empty';
+    empty.textContent = libraryTracks.length ? t('library.empty') : t('library.none');
+    if (!libraryTracks.length) reportScan('');
+    list.append(empty);
+    return;
+  }
+
+  const playingId = playingTrack?.id ?? null;
+  let heading = null;
+  const fragment = document.createDocumentFragment();
+
+  for (const [index, track] of visible.entries()) {
+    if (!query && !playlist && albumHeading(track) !== heading) {
+      heading = albumHeading(track);
+      const group = document.createElement('li');
+      group.className = 'lib-group';
+      group.textContent = heading;
+      fragment.append(group);
+    }
+
+    const item = document.createElement('li');
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'lib-row';
+    row.dataset.index = String(index);
+    if (track.id === playingId) row.setAttribute('aria-current', 'true');
+
+    const number = document.createElement('span');
+    number.className = 'no';
+    number.textContent = track.trackNo === null ? '' : String(track.trackNo);
+
+    const cover = document.createElement('img');
+    cover.className = 'cover';
+    cover.alt = '';
+    cover.loading = 'lazy';
+    artUrlFor(track).then(url => { if (url) cover.src = url; });
+
+    const who = document.createElement('span');
+    who.className = 'who';
+    const title = document.createElement('b');
+    title.textContent = track.title || track.name || 'Untitled track';
+    const under = document.createElement('span');
+    under.textContent = [track.artist, track.album].filter(Boolean).join(' \u00b7 ') || track.path;
+    who.append(title, under);
+
+    const duration = document.createElement('span');
+    duration.className = 'dur';
+    duration.textContent = track.durationS ? formatTime(track.durationS) : '';
+
+    row.append(number, cover, who, duration);
+    item.append(row);
+    if (playlist) {
+      const tools = document.createElement('span');
+      tools.className = 'row-tools';
+      for (const [label, action, title] of [
+        ['\u2191', 'up', 'Move up'], ['\u2193', 'down', 'Move down'], ['\u00d7', 'remove', 'Remove from playlist'],
+      ]) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.dataset.action = action;
+        // The entry this row came from, not its position in the rendered list:
+        // a search filters the rows, so an ordinal here acts on the wrong track.
+        button.dataset.entry = String(track.entryIndex);
+        button.title = title;
+        button.textContent = label;
+        tools.append(button);
+      }
+      row.append(tools);
+    }
+    fragment.append(item);
+  }
+  list.append(fragment);
+}
+
+async function refreshLibrary() {
+  releaseArt();
+  libraryTracks = await allTracks();
+  await refreshPlaylists();
+  await renderLibrary();
+}
+
+function reportScan(message) {
+  const line = $('#lib-scan');
+  line.hidden = !message;
+  line.textContent = message || '';
+}
+
+/**
+ * Scans are serialised, and a request made while one runs is queued rather
+ * than dropped.
+ *
+ * Every playlist edit ends in a rescan. Dropping one leaves `playlistRows`
+ * describing a file that has already changed on disk, and the next edit then
+ * writes that stale list back over the newer file.
+ *
+ * One waiting scan is enough however many requests arrive: a scan reads the
+ * folder as it stands when it starts, so a second queued run would see exactly
+ * what the first already will.
+ */
+let scanChain = Promise.resolve();
+let scansWaiting = 0;
+
+function runScan(handle) {
+  if (scansWaiting > 0) return scanChain;
+  if (scanning) scansWaiting += 1;
+  scanChain = scanChain.then(async () => {
+    if (scansWaiting > 0) scansWaiting -= 1;
+    await performScan(handle);
+  });
+  return scanChain;
+}
+
+/** Stop a scan in progress. A folder being forgotten must not keep reading it. */
+function cancelScan() {
+  scanning?.cancel();
+}
+
+async function performScan(handle) {
+  reportScan('Scanning your folder...');
+  try {
+    scanning = startScan(handle, {
+      onProgress: ({ scanned, updated }) => reportScan(`Scanned ${scanned} files, indexed ${updated}.`),
+      // No per-file logging: a scan of a large folder printed one line per
+      // unreadable file, each carrying the user's own path, to a console
+      // nobody reads. The count is in the summary line below instead.
+      onFileError: () => {},
+    });
+    const summary = await scanning.done;
+    reportScan(
+      `${summary.tracks} tracks indexed in ${(summary.durationMs / 1000).toFixed(1)}s`
+      + (summary.playlists ? `, ${summary.playlists} playlist${summary.playlists === 1 ? '' : 's'}` : '')
+      + (summary.failed ? `, ${summary.failed} unreadable` : '') + '.',
+    );
+    await refreshLibrary();
+  } catch (error) {
+    reportScan(`Scan stopped: ${error.message}`);
+  } finally {
+    scanning = null;
+  }
+}
+
+async function openLibrary({ prompt = false } = {}) {
+  show('library');
+  // Always render first, so the screen explains itself whatever happens next.
+  // Every early return below would otherwise leave an empty bordered box.
+  await refreshLibrary();
+  if (!supportsFolderGrant()) { reportScan(t('library.nogrant')); return; }
+
+  let handle = await storedFolder();
+  if (handle) {
+    // A grant revoked between sessions is expected, not an error. The index is
+    // still readable, so the library shows while the grant is reclaimed.
+    if (await grantState(handle) !== 'granted') {
+      if (!prompt) { reportScan('Reopen the folder to rescan. Your indexed tracks are still listed.'); return; }
+      if (await reclaimFolder(handle) !== 'granted') { reportScan('The folder grant was not restored.'); return; }
+    }
+  } else {
+    if (!prompt) { reportScan(t('library.none')); return; }
+    try {
+      handle = await requestFolder();
+    } catch (error) {
+      // `GrantError` is the named refusal this module raises for a browser
+      // that cannot hold a folder grant at all. It was thrown and never caught
+      // by name, so it surfaced as an unhandled rejection.
+      if (error?.name === 'GrantError') { reportScan(error.message); return; }
+      throw error;
+    }
+    if (!handle) { reportScan(t('library.none')); return; }
+  }
+
+  await runScan(handle);
+}
+
+/** Play the queue entry at `index`, remembering where the last track stopped. */
+async function playQueueAt(index) {
+  const track = queue[index];
+  if (!track) return;
+  const handle = await storedFolder();
+  if (!handle) { reportScan('Reopen your music folder to play from the library.'); return; }
+
+  // A lapsed grant and a deleted file fail identically at getFile(), so the
+  // permission is checked first. Reporting "no longer in the folder" for a
+  // permission problem sends people looking for the wrong thing.
+  if (await grantState(handle) !== 'granted') {
+    if (await reclaimFolder(handle) !== 'granted') {
+      reportScan('NakliAmp needs permission to read your folder again. Use Reopen folder.');
+      $('#lib-reopen').hidden = false;
+      return;
+    }
+  }
+
+  const file = await fileFromPath(handle, track.path);
+  if (!file) { reportScan(`${track.path} is no longer in the folder. Rescan to update the library.`); return; }
+
+  // Where the outgoing track stopped, before anything replaces it. Only
+  // auto-advance used to record this, so clicking straight to another track
+  // lost the position the library promises to remember.
+  await rememberPosition();
+
+  playingTrack = track;
+  queueIndex = index;
+  endedTrackKey = null;
+  // `openMedia` returns null when a newer selection superseded this one.
+  // Seeking and counting a play on that basis credited whichever load won.
+  const opened = await openMedia(file);
+  if (!opened) return;
+  // The engine's duration, not the index's: the scanner leaves `durationS`
+  // null for any container it cannot measure cheaply, and requiring it meant
+  // those tracks silently never resumed at all. An unknown duration is a
+  // reason to trust the stored position, not to discard it.
+  const duration = engine.state().media.duration;
+  const nearTheEnd = Number.isFinite(duration) ? duration - 2 : Infinity;
+  if (track.resumePositionS > 1 && track.resumePositionS < nearTheEnd) {
+    await engine.seek(track.resumePositionS);
+  }
+  await patchTrack(track.id, { playCount: track.playCount + 1, lastPlayedAt: Date.now() });
+  await renderLibrary();
+}
+
+/** Walk a relative path back to its file handle. */
+async function fileFromPath(rootHandle, path) {
+  try {
+    const segments = path.split('/');
+    const name = segments.pop();
+    let directory = rootHandle;
+    for (const segment of segments) directory = await directory.getDirectoryHandle(segment);
+    return await (await directory.getFileHandle(name)).getFile();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Update a track's mutable state on disk *and* in the loaded index.
+ *
+ * `libraryTracks` is only reloaded by a scan, so writing to IndexedDB alone
+ * left the objects the queue actually plays from holding whatever the last
+ * scan saw. Resuming a track within one session then used a position from
+ * before that session — the write was correct and the read was stale.
+ */
+async function patchTrack(id, patch) {
+  const local = libraryTracks.find(track => track.id === id);
+  if (local) Object.assign(local, patch);
+  await updateTrackState(id, patch);
+}
+
+// Counted so a gate can prove this is not being called once per frame.
+let positionWrites = 0;
+
+async function rememberPosition() {
+  const track = playingTrack;
+  if (!track) return;
+  const position = engine.state().clock.positionS;
+  if (!Number.isFinite(position)) return;
+  positionWrites += 1;
+  await patchTrack(track.id, { resumePositionS: position });
+}
+
+async function advance(step) {
+  if (queueIndex < 0) return;
+  const next = queueIndex + step;
+  // `playQueueAt` records the outgoing position itself.
+  if (next >= 0 && next < queue.length) { await playQueueAt(next); return; }
+  // The end of the queue. There is nothing to move to, but where this track
+  // stopped is still worth keeping.
+  await rememberPosition();
+}
+
+
+
+// -------------------------------------------------------- visualiser ----
+
+const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const visualiser = createVisualiser({
+  canvas: $('#vis'),
+  getAnalyser: () => engine.analyser(),
+  getChannelAnalysers: () => engine.analysers(),
+  reducedMotion,
+  onError: error => {
+    // A failing mode is not a reason to lose the player. The driver has
+    // already fallen back to None; this reflects that on screen and remembers
+    // it, so the mode that threw is not restored on the next visit.
+    $('#vis-mode').value = visualiser.mode();
+    localStorage.setItem('nakliamp:visualiser', visualiser.mode());
+    toast(`Visualiser stopped: ${error.message}`, 4000);
+  },
+});
+
+for (const { id, label } of visualiser.modes()) {
+  const option = document.createElement('option');
+  option.value = id;
+  option.textContent = label;
+  $('#vis-mode').append(option);
+}
+
+function applyVisualiserMode(id, { persist = true } = {}) {
+  const applied = visualiser.setMode(id);
+  $('#vis-mode').value = applied;
+  $('#vis-wrap').hidden = false;
+  if (persist) localStorage.setItem('nakliamp:visualiser', applied);
+  return applied;
+}
+
+applyVisualiserMode(localStorage.getItem('nakliamp:visualiser') || 'bars', { persist: false });
+
+$('#vis-mode').addEventListener('change', event => applyVisualiserMode(event.target.value));
+$('#vis-full').addEventListener('click', () => toggleFullVisualiser());
+
+function toggleFullVisualiser() {
+  const full = $('#vis-wrap').classList.toggle('full');
+  $('#vis-full').textContent = full ? 'Exit' : 'Full';
+  return full;
+}
+
+// --------------------------------------------------------- playlists ----
+
+let playlistRows = [];
+
+async function refreshPlaylists() {
+  playlistRows = await allPlaylists();
+  const select = $('#lib-playlist');
+  select.hidden = playlistRows.length === 0;
+  select.replaceChildren();
+  const all = document.createElement('option');
+  all.value = '';
+  all.textContent = `All tracks (${libraryTracks.length})`;
+  select.append(all);
+  for (const playlist of playlistRows) {
+    const option = document.createElement('option');
+    option.value = playlist.path;
+    option.textContent = `${playlist.name} (${playlist.entries.length})`;
+    select.append(option);
+  }
+  select.value = activePlaylist ?? '';
+}
+
+let activePlaylist = null;
+
+/**
+ * Resolve a playlist's entries against the index, keeping playlist order.
+ *
+ * **The parsed entry is the unit, not the matched track.** Every edit writes
+ * this playlist back over the user's file, so anything dropped here is deleted
+ * from disk: remote streams, files not yet scanned, and anything the index has
+ * not caught up with. Each entry is returned whether or not it matched, and the
+ * ones that did not are carried through the write verbatim.
+ *
+ * `found` holds the playable tracks in playlist order, each a shallow copy
+ * carrying the index of the entry it came from — a copy because the same track
+ * may legitimately appear twice in one playlist, and the row has to know which
+ * of the two it is.
+ */
+function tracksForPlaylist(playlist) {
+  const byPath = new Map(libraryTracks.map(track => [track.path, track]));
+  const found = [];
+  let missing = 0;
+  for (const [entryIndex, entry] of playlist.entries.entries()) {
+    const track = entry.path ? byPath.get(entry.path) : null;
+    if (track) found.push({ ...track, entryIndex });
+    else missing += 1;
+  }
+  return { found, missing };
+}
+
+/**
+ * The lines to write for `playlist` after applying `entries`.
+ * An entry keeps its own EXTINF where it has one and borrows the index's
+ * metadata where it does not, so a playlist written without durations gains
+ * them rather than losing what it had.
+ */
+function playlistLines(entries) {
+  const byPath = new Map(libraryTracks.map(track => [track.path, track]));
+  return entries.map(entry => {
+    const track = entry.path ? byPath.get(entry.path) : null;
+    return {
+      target: entry.target,
+      path: entry.path,
+      durationS: entry.durationS ?? track?.durationS ?? null,
+      artist: entry.artist ?? track?.artist ?? null,
+      title: entry.title ?? track?.title ?? track?.name ?? null,
+    };
   });
 }
 
+/** Walk to the directory holding `path`, creating nothing. */
+async function directoryFor(handle, segments) {
+  let directory = handle;
+  for (const segment of segments) directory = await directory.getDirectoryHandle(segment);
+  return directory;
+}
+
+/** True when a file already sits at `path`. Writing over one is a deletion. */
+async function playlistFileExists(path) {
+  const handle = await storedFolder();
+  if (!handle) return false;
+  const segments = path.split('/');
+  const fileName = segments.pop();
+  try {
+    await (await directoryFor(handle, segments)).getFileHandle(fileName);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function saveQueueAsPlaylist() {
+  if (!queue.length) { reportScan('There is nothing in the list to save.'); return; }
+  const name = prompt('Name this playlist', 'NakliAmp playlist');
+  if (!name) return;
+
+  const handle = await storedFolder();
+  if (!handle) { reportScan('Open your music folder before saving a playlist.'); return; }
+  if (await grantState(handle) !== 'granted' && await reclaimFolder(handle) !== 'granted') {
+    reportScan('Saving needs write access to your folder.');
+    return;
+  }
+
+  const fileName = `${safePlaylistFileName(name)}.m3u8`;
+  // Saving over an existing playlist destroys it. Ask first.
+  if (await playlistFileExists(fileName)
+    && !confirm(`${fileName} already exists in your music folder. Replace it?`)) return;
+  try {
+    const file = await handle.getFileHandle(fileName, { create: true });
+    const writable = await file.createWritable();
+    await writable.write(toM3u8(queue, { name }));
+    await writable.close();
+    reportScan(`Saved ${fileName} into your music folder.`);
+    await runScan(handle);
+  } catch (error) {
+    reportScan(`Could not save the playlist: ${error.message}`);
+  }
+}
+
+$('#lib-playlist').addEventListener('change', async event => {
+  activePlaylist = event.target.value || null;
+  $('#lib-search').value = '';
+  await renderLibrary();
+});
+$('#lib-save').addEventListener('click', () => saveQueueAsPlaylist());
+$('#lib-reopen').addEventListener('click', async () => {
+  const handle = await storedFolder();
+  if (!handle) { await openLibrary({ prompt: true }); return; }
+  if (await reclaimFolder(handle) !== 'granted') { reportScan('The folder grant was not restored.'); return; }
+  $('#lib-reopen').hidden = true;
+  await persistStorage();
+  await runScan(handle);
+});
+
+
+// ------------------------------------------------- playlist manager ----
+
+/** Write `tracks` to `path` as M3U8, reusing the folder grant. */
+async function writePlaylistFile(path, tracks, name) {
+  const handle = await storedFolder();
+  if (!handle) throw new Error('Open your music folder first.');
+  if (await grantState(handle) !== 'granted' && await reclaimFolder(handle) !== 'granted') {
+    throw new Error('Saving needs write access to your folder.');
+  }
+  const segments = path.split('/');
+  const fileName = segments.pop();
+  const directory = await directoryFor(handle, segments);
+  const file = await directory.getFileHandle(fileName, { create: true });
+  const writable = await file.createWritable();
+  await writable.write(toM3u8(tracks, { name, base: segments.join('/') }));
+  await writable.close();
+  return handle;
+}
+
+async function removeFromPlaylist(entryIndex) {
+  const playlist = playlistRows.find(row => row.path === activePlaylist);
+  if (!playlist || !playlist.entries[entryIndex]) return;
+  const next = playlist.entries.filter((_, position) => position !== entryIndex);
+  await persistPlaylist(playlist, next, `Removed 1 track from ${playlist.name}.`);
+}
+
+async function movePlaylistTrack(entryIndex, step) {
+  const playlist = playlistRows.find(row => row.path === activePlaylist);
+  if (!playlist || !playlist.entries[entryIndex]) return;
+  // Move past the neighbouring *visible* row, not the neighbouring entry.
+  // Unresolved entries sit between the rows on screen; swapping with one of
+  // those would look like the button did nothing.
+  const visible = tracksForPlaylist(playlist).found.map(track => track.entryIndex);
+  const position = visible.indexOf(entryIndex);
+  const target = visible[position + step];
+  if (position < 0 || target === undefined) return;
+  const next = [...playlist.entries];
+  [next[entryIndex], next[target]] = [next[target], next[entryIndex]];
+  await persistPlaylist(playlist, next, null);
+}
+
+/** Write the playlist back to disk, then rescan so the index matches the file. */
+async function persistPlaylist(playlist, entries, message) {
+  try {
+    const handle = await writePlaylistFile(playlist.path, playlistLines(entries), playlist.name);
+    if (message) reportScan(message);
+    await runScan(handle);
+  } catch (error) {
+    reportScan(`Could not update ${playlist.name}: ${error.message}`);
+  }
+}
+
+async function renamePlaylist() {
+  const playlist = playlistRows.find(row => row.path === activePlaylist);
+  if (!playlist) return;
+  const name = prompt('Rename playlist', playlist.name);
+  if (!name || name === playlist.name) return;
+
+  const directory = playlist.path.split('/').slice(0, -1).join('/');
+  const safe = safePlaylistFileName(name);
+  const nextPath = `${directory ? `${directory}/` : ''}${safe}.m3u8`;
+  const lines = playlistLines(playlist.entries);
+  // Two different display names can sanitise to one file name — `Mix` and
+  // `Mix ` among them. Writing then deleting in that case deletes what was
+  // just written, so the rename is a rewrite in place whenever the path is
+  // unchanged, and the delete only runs when the paths genuinely differ.
+  const renamingFile = nextPath !== playlist.path;
+  if (renamingFile && await playlistFileExists(nextPath)
+    && !confirm(`${nextPath} already exists. Replace it?`)) return;
+  try {
+    await writePlaylistFile(nextPath, lines, name);
+    if (renamingFile) await deletePlaylistFile(playlist.path);
+    activePlaylist = nextPath;
+    reportScan(`Renamed to ${safe}.m3u8.`);
+    const handle = await storedFolder();
+    if (handle) await runScan(handle);
+  } catch (error) {
+    reportScan(`Could not rename: ${error.message}`);
+  }
+}
+
+async function deletePlaylistFile(path) {
+  const handle = await storedFolder();
+  if (!handle) throw new Error('Open your music folder first.');
+  const segments = path.split('/');
+  const fileName = segments.pop();
+  await (await directoryFor(handle, segments)).removeEntry(fileName);
+}
+
+async function deleteActivePlaylist() {
+  const playlist = playlistRows.find(row => row.path === activePlaylist);
+  if (!playlist) return;
+  // A playlist is a file on disk, so removing it is a real deletion. Confirm.
+  if (!confirm(`Delete the playlist file ${playlist.path}? The tracks stay where they are.`)) return;
+  try {
+    await deletePlaylistFile(playlist.path);
+    activePlaylist = null;
+    reportScan(`Deleted ${playlist.name}.`);
+    const handle = await storedFolder();
+    if (handle) await runScan(handle);
+  } catch (error) {
+    reportScan(`Could not delete: ${error.message}`);
+  }
+}
+
+$('#lib-rename').addEventListener('click', () => renamePlaylist());
+$('#lib-delete').addEventListener('click', () => deleteActivePlaylist());
+
+$('#lib-list').addEventListener('click', event => {
+  const tool = event.target.closest('.row-tools button');
+  if (tool) {
+    event.stopPropagation();
+    const entryIndex = Number(tool.dataset.entry);
+    if (tool.dataset.action === 'remove') removeFromPlaylist(entryIndex);
+    else movePlaylistTrack(entryIndex, tool.dataset.action === 'up' ? -1 : 1);
+    return;
+  }
+  const row = event.target.closest('.lib-row');
+  if (row) playQueueAt(Number(row.dataset.index)).catch(error => toast(error.message, 5000));
+});
+$('#lib-search').addEventListener('input', () => { renderLibrary(); });
+$('#lib-rescan').addEventListener('click', () => openLibrary({ prompt: true }));
+
+$('#lib-forget').addEventListener('click', async () => {
+  // Stop reading a folder the moment it stops being ours to read.
+  cancelScan();
+  await forgetFolder();
+  await clearLibrary();
+  queue = [];
+  queueIndex = -1;
+  playingTrack = null;
+  await refreshLibrary();
+  reportScan(t('library.none'));
+});
+$('#open-folder').addEventListener('click', () => openLibrary({ prompt: true }));
+
+addEventListener('pagehide', () => { rememberPosition(); releaseArt(); cancelScan(); });
+// `pagehide` does not fire when a tab is merely switched away from or the phone
+// is locked, which is most of how listening actually ends.
+addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') rememberPosition(); });
+
+// nakliamp:harness-start
+//
+// The gate seam. Behind `?harness=1` in the source tree, and **removed
+// entirely** from both single-file artifacts at build time — a released player
+// should not carry a way to drive it. The release gate therefore drives the
+// artifact through the DOM alone, which is the point: what it tests is what
+// ships, byte for byte.
+if (new URLSearchParams(location.search).get('harness') === '1') {
+  window.__nakliampHarness = Object.freeze({
+    open: input => openMedia(input, { autoplay: false }),
+    openLibrary: () => openLibrary(),
+    // Test seam. A real folder grant needs a user gesture no harness can give,
+    // so the gate hands in an OPFS directory handle instead. Same code path
+    // from here on: adopt, scan, list, play.
+    adoptFolder: handle => adoptFolder(handle),
+    view: () => VIEWS.find(name => $(`#${name}`).classList.contains('on')) ?? null,
+    queue: () => ({ length: queue.length, index: queueIndex }),
+    libraryTracks: () => libraryTracks.length,
+    positionWrites: () => positionWrites,
+    playlists: () => playlistRows.length,
+    playlistEntries: path => playlistRows.find(row => row.path === path)?.entries.map(entry => ({ ...entry })) ?? null,
+    visualiser: () => ({ mode: visualiser.mode(), running: visualiser.running, modes: visualiser.modes().length }),
+    // Diagnostic seam: the peak the engine's own analyser reports right now.
+    // Distinguishes "the visualiser is broken" from "there is no signal".
+    setVolume: v => engine.setVolume(v),
+    spectrumPeak: () => {
+      const analyser = engine.analyser();
+      if (!analyser) return null;
+      const bins = new Uint8Array(analyser.frequencyBinCount);
+      analyser.getByteFrequencyData(bins);
+      let peak = 0;
+      for (const value of bins) if (value > peak) peak = value;
+      return peak;
+    },
+    setVisualiserMode: id => applyVisualiserMode(id),
+    toggleFullVisualiser: () => toggleFullVisualiser(),
+    state: () => engine.state(),
+    play: () => engine.play(),
+    pause: () => engine.pause(),
+    seek: positionS => engine.seek(positionS),
+  });
+}
+// nakliamp:harness-end
+
 engine.setVolume(Number($('#volume').value));
 renderClock();
+
+/**
+ * Reopen the last folder on launch.
+ * A remembered folder should mean the library is simply there. The browser may
+ * still require a gesture to re-grant read access, so a scan is only started
+ * when the grant is already live; otherwise the indexed library is shown with
+ * one button to restore it.
+ */
+async function restoreSession() {
+  if (!supportsFolderGrant()) return;
+  let handle;
+  try {
+    handle = await storedFolder();
+  } catch {
+    return; // a browser with no usable IndexedDB is still a working player
+  }
+  if (!handle) return;
+
+  await refreshLibrary();
+  show('library');
+  const name = await storedFolderName();
+  const state = await grantState(handle);
+  if (state === 'granted') {
+    await persistStorage();
+    await runScan(handle);
+    return;
+  }
+  reportScan(
+    `${libraryTracks.length} tracks indexed from ${name || 'your folder'}. `
+    + 'Reopen the folder to play from it.',
+  );
+  $('#lib-reopen').hidden = false;
+}
+
+restoreSession();
 </script>
 </body>
 </html>

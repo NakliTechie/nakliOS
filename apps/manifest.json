@@ -35,12 +35,76 @@
           "destination": "VENDOR.md"
         },
         {
+          "source": "app/decode/libav.mjs",
+          "destination": "app/decode/libav.mjs"
+        },
+        {
+          "source": "app/decode/pcm.mjs",
+          "destination": "app/decode/pcm.mjs"
+        },
+        {
+          "source": "app/library/metadata.mjs",
+          "destination": "app/library/metadata.mjs"
+        },
+        {
+          "source": "app/library/playlist.mjs",
+          "destination": "app/library/playlist.mjs"
+        },
+        {
+          "source": "app/library/scan-core.mjs",
+          "destination": "app/library/scan-core.mjs"
+        },
+        {
+          "source": "app/library/scan-worker.mjs",
+          "destination": "app/library/scan-worker.mjs"
+        },
+        {
+          "source": "app/library/scan.mjs",
+          "destination": "app/library/scan.mjs"
+        },
+        {
+          "source": "app/library/search.mjs",
+          "destination": "app/library/search.mjs"
+        },
+        {
+          "source": "app/library/store.mjs",
+          "destination": "app/library/store.mjs"
+        },
+        {
+          "source": "app/visualiser/driver.mjs",
+          "destination": "app/visualiser/driver.mjs"
+        },
+        {
+          "source": "app/visualiser/modes.mjs",
+          "destination": "app/visualiser/modes.mjs"
+        },
+        {
           "source": "engine/nakliamp-engine.mjs",
           "destination": "engine/nakliamp-engine.mjs"
         },
         {
           "source": "engine/reel-engine.mjs",
           "destination": "engine/reel-engine.mjs"
+        },
+        {
+          "source": "vendor/libav/LICENSE-LGPL-2.1.txt",
+          "destination": "vendor/libav/LICENSE-LGPL-2.1.txt"
+        },
+        {
+          "source": "vendor/libav/LICENSE-LGPL-NOTICE.md",
+          "destination": "vendor/libav/LICENSE-LGPL-NOTICE.md"
+        },
+        {
+          "source": "vendor/libav/libav-6.10.9.0-nakliamp.loader.mjs",
+          "destination": "vendor/libav/libav-6.10.9.0-nakliamp.loader.mjs"
+        },
+        {
+          "source": "vendor/libav/libav-6.10.9.0-nakliamp.wasm.mjs",
+          "destination": "vendor/libav/libav-6.10.9.0-nakliamp.wasm.mjs"
+        },
+        {
+          "source": "vendor/libav/libav-6.10.9.0-nakliamp.wasm.wasm",
+          "destination": "vendor/libav/libav-6.10.9.0-nakliamp.wasm.wasm"
         },
         {
           "source": "vendor/mediabunny/mediabunny-1.51.0.min.mjs",

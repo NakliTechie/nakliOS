@@ -1698,7 +1698,12 @@ registerProcessor('${PROCESSOR}', ReelPcmRingProcessor);
     };
   }
 
-  return { unlock, prepare, play, stop, current, setRate, setVolume, state };
+  /** The final gain stage and its context, for a host that wants to tap them. */
+  function audioGraph() {
+    return context && gain ? { context, output: gain } : null;
+  }
+
+  return { unlock, prepare, play, stop, current, setRate, setVolume, state, audioGraph };
 })();
 
 /* Layer 5 — monotonic clock with optional audio master. */
@@ -2033,7 +2038,11 @@ const Playback = (() => {
     if (!renderer) throw new Error('Attach a renderer before taking a snapshot.');
     return renderer.snapshot();
   }
-  return { load, attach, play, pause, seek, setRate, setVolume, setMuted, state, snapshot };
+  function audioGraph() {
+    return AudioOutput.audioGraph();
+  }
+
+  return { load, attach, play, pause, seek, setRate, setVolume, setMuted, state, snapshot, audioGraph };
 })();
 
 /* Layer 8 — the one mechanism the human UI and the headless harness both drive. */
@@ -2172,6 +2181,18 @@ const Engine = {
       } : null,
     });
   },
+  /**
+   * The audio output node and its context, or null when nothing is playing.
+   *
+   * Exposed so a host can insert its own node — an AnalyserNode for a
+   * visualiser, a filter chain for an equaliser — between the engine's output
+   * and the destination. Without it a consumer has to patch the engine to
+   * build anything on top of the audio it already produces.
+   *
+   * The node returned is the engine's final gain stage. A host that connects
+   * it elsewhere is responsible for reconnecting the destination.
+   */
+  audioGraph() { return Playback.audioGraph(); },
   snapshot() { return Playback.snapshot(); },
   subtitles: { export: exportSubtitles },
   _internals: { Storage, Demux, Decode, AudioOutput, Clock, Renderer, Playback, CONFIG }, // for the harness
