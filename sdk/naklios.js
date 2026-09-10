@@ -5,6 +5,12 @@
  * surface is a no-op when the app loads standalone (window.parent === window),
  * so the same source works in both contexts:
  *
+ * Vendoring: if your app needs a capability an iframe sandbox blocks — a folder
+ * picker above all — the supported route is a manifest-declared same-origin
+ * MIRROR under naklios.dev/apps/<id>/, not a hand-copied snapshot. See
+ * docs/app-loading.md. Your repo stays authoritative; the mirror is a pinned,
+ * hash-checked deployment artifact refreshed by CI.
+ *
  *   <script src="https://naklios.dev/sdk/naklios.js"></script>
  *   <script>
  *     naklios.ready();                          // signal "I'm loaded"
