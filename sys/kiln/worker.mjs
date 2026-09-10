@@ -87,8 +87,17 @@ async function importPyodideEntry(indexURL, expectedSha256) {
   }
 }
 
+// Low11: the session nonce. A module-scope binding, deliberately NOT a property of
+// `self` or any other global — model-authored Python reaches JS through `js.<name>`,
+// which resolves globals; it cannot read a module closure. Set once from `init`,
+// before Pyodide loads, and never read back out of the Worker.
+let sessionNonce = null;
+
 function reply(id, ok, value) {
-  self.postMessage({ type: 'response', id, ok, value });
+  // Stamped on every response. The main thread drops any response without it, so a
+  // forged `postMessage` from Python — which CAN read request ids via a planted
+  // 'message' listener — still cannot settle a pending request.
+  self.postMessage({ type: 'response', id, ok, value, nonce: sessionNonce });
 }
 
 function ensureDirectory(path) {
@@ -256,6 +265,11 @@ async function initialize(message) {
 async function handle(message) {
   try {
     if (message.op === 'init') {
+      // Captured BEFORE initialize() — that is what loads Pyodide, so the nonce is
+      // in the closure before any user code exists to look for it. Only the first
+      // init sets it: a second `init` carrying a different nonce must not be able
+      // to re-key the channel.
+      if (sessionNonce === null && typeof message.sessionNonce === 'string') sessionNonce = message.sessionNonce;
       reply(message.id, true, await initialize(message));
       return;
     }

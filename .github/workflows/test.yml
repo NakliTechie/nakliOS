@@ -210,6 +210,9 @@ jobs:
       - name: Verify the verifier gate's python runs on a RESET interpreter, and the agent's does not
         run: node sys/kiln/test/gate-isolation.test.mjs
 
+      - name: Verify the search index is read-only to the agent and clone/fetch need git:remote
+        run: node sys/rig/agent/test/sec-grant-fences.test.mjs
+
       - name: Verify the Rig agent face C4 conformance (escape classes, grant edges, staging, op-log replay)
         run: node sys/rig/agent/test/conformance.test.mjs
 

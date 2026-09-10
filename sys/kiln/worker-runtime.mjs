@@ -165,11 +165,21 @@ export async function syncWorkerSnapshot({ before, after, face, fsBridge, allowU
 // this module's `pending` map on the main thread — never on any Worker global
 // that `js.<x>` from Python can read. The counter prefix keeps ids unique even
 // across an astronomically unlikely RNG collision.
-// Residual (cannot be closed from this file alone): a session that plants its
-// own `self` 'message' listener inside the Worker can read the id off the
-// incoming request message. Closing that needs the trusted Worker `reply` in
-// worker.mjs to carry a Worker-closure session nonce Python never observes —
-// out of this cluster's file scope; see the handback.
+// CLOSED (Low11, 2026-09-10). The residual above was: a session that plants its
+// own `self` 'message' listener inside the Worker reads the id off the incoming
+// request message, and can then forge a response carrying it. The id cannot fix
+// that, because the id must ride on the request to be matched.
+//
+// So the auth tag is a SECOND value that never rides on a request at all. A
+// session nonce is minted here, delivered exactly once in `init` — before
+// Pyodide loads, so no user code has run yet — and held in a module closure in
+// worker.mjs, which `js.<x>` from Python cannot reach (it can read globals; a
+// module-scope binding is not one). Every `reply()` stamps it, and a response
+// without it is dropped.
+//
+// A planted listener therefore sees every request id and still cannot forge a
+// response: it never observes a message carrying the nonce, because after `init`
+// no message going INTO the Worker carries it.
 function randomRequestId(counter) {
   const c = globalThis.crypto;
   let rand;
@@ -224,6 +234,9 @@ export async function createWorkerRuntime({
   const interruptBuffer = new Uint8Array(new SharedArrayBuffer(1));
   const pending = new Map();
   let requestId = 0;
+  // Minted once per Worker. Never sent again after `init`, never stored on a
+  // Worker global, never included in a request.
+  const sessionNonce = randomRequestId(0);
   let namespace = {};
   let closed = false;
 
@@ -285,6 +298,10 @@ export async function createWorkerRuntime({
     // request() below is in `pending`, so a forged response with a wrong/absent
     // id finds no match and is dropped (Low11). Guard the lookup key shape too.
     if (typeof message.id !== 'string' && typeof message.id !== 'number') return;
+    // Low11: the nonce is the response-channel auth tag. A forged response from
+    // Python — which can read request ids off a planted listener — cannot carry
+    // it, because it never travels toward the Worker after init.
+    if (message.nonce !== sessionNonce) return;
     const request = pending.get(message.id);
     if (!request) return;
     pending.delete(message.id);
@@ -330,6 +347,7 @@ export async function createWorkerRuntime({
   }
 
   const ready = await request('init', {
+    sessionNonce,
     indexURL,
     interruptBuffer: interruptBuffer.buffer,
     mountPath,

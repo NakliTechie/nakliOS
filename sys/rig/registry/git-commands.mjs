@@ -141,7 +141,11 @@ export function buildGitCommands(git) {
       summary: 'Clone a remote repository over HTTP.',
       description: 'Clone a git repo from a URL into the worktree. Network goes through the sovereign egress (nakli-egress / local bridge); needs a configured backend, and auth for a private repo.',
       inputSchema: { type: 'object', properties: { url: { type: 'string' }, ref: { type: 'string' }, singleBranch: { type: 'boolean' }, depth: { type: 'number' } }, required: ['url'], additionalProperties: false },
-      returnSchema: OK, destructive: true, scope: 'git:write', annotations: RW,
+      // Med2/Med7: clone REACHES THE NETWORK, and `git:write` is the scope a purely local
+      // commit needs. Sharing one scope meant a grant could not withhold "may talk to a remote"
+      // without also withholding "may commit". `git:remote` separates them (it was already
+      // reserved in registry.mjs's scope list and unused).
+      returnSchema: OK, destructive: true, scope: 'git:remote', annotations: RW,
       run: (i) => git.clone(i),
     },
     {
@@ -149,7 +153,8 @@ export function buildGitCommands(git) {
       summary: 'Fetch refs/objects from a remote over HTTP.',
       description: 'Fetch from a remote URL without touching the worktree. Network goes through the sovereign egress.',
       inputSchema: { type: 'object', properties: { url: { type: 'string' }, ref: { type: 'string' } }, required: ['url'], additionalProperties: false },
-      returnSchema: OK, destructive: false, scope: 'git:read', annotations: RO,
+      // Same for fetch: read-only against the WORKTREE, but it is still a network call.
+      returnSchema: OK, destructive: false, scope: 'git:remote', annotations: RO,
       run: (i) => git.fetch(i),
     },
     {

@@ -410,6 +410,12 @@
   import { buildProjectContext, rememberTool } from '../../sys/ai/project-context.mjs';
   import { SKILLS_DIR, parseSkill, buildSkillsIndex, skillTool, INJECTED_STATUSES, explainSkillsRefusal } from '../../sys/ai/skills.mjs';
   import { GATE_DIR, explainGateRefusal, GATE_AUTHORING_HINT, planGate } from '../../sys/ai/gate.mjs';
+  // Med1: the trigram index is DERIVED from the workspace, so an agent that can write it can make
+  // search lie about the workspace it was built from — a poisoned index answers questions about
+  // files that do not say what it claims. It is read-only in the grant for the same reason
+  // .anvil/skills and .anvil/gate are: content the agent produces must not become authority.
+  // The persistence optimisation is untouched — the app still writes it, the AGENT cannot.
+  const SEARCH_INDEX_PATH = '.anvil/search-index.json';
   import { renderProcedural, loadProceduralGraph, PROCEDURAL_PATH } from '../../sys/ai/procedural.mjs';
   import { rowKeys, planLogUpdate, isPinned } from '../../sys/ai/log-render-plan.mjs';
   import { buildChangeRow, planRevert, prunePreimages, preimageBytes, MAX_PREIMAGE_BUDGET } from '../../sys/ai/change-preimages.mjs';
@@ -468,7 +474,7 @@
     // is re-checked against the file's own mtime and size before it is trusted,
     // so a stale index costs a read, never a wrong answer.
     fs = createFileops({ backend, root, index: true, exclusive: !!opts.exclusive,
-      indexPath: '.anvil/search-index.json' });
+      indexPath: SEARCH_INDEX_PATH });
     // Load in the background — a miss just means the next search builds it.
     Promise.resolve().then(() => fs.indexLoad()).catch(() => {});
     // Remote git (clone/fetch/push) routes ALL network through the sovereign egress
@@ -491,7 +497,7 @@
     // instead of meeting it, and the gate could then only ever report green. Readable (the
     // agent is aimed at it) and unwritable, with NO agent-facing door — the owner authors it
     // through the app's own ungranted `fs`.
-    grant = createGrant({ prefixes:[''], scopes:['fs:read','fs:write','fs:remove','git:read','git:write'], readOnlyPrefixes:[SKILLS_DIR, GATE_DIR] });
+    grant = createGrant({ prefixes:[''], scopes:['fs:read','fs:write','fs:remove','git:read','git:write','git:remote'], readOnlyPrefixes:[SKILLS_DIR, GATE_DIR, SEARCH_INDEX_PATH] });
     opLog = createOpLog({ fs: createFileops({ backend:new MemoryBackend() }) });
     face = createAgentFace({ registry, grant, opLog, actor:'agent' });
     // Kiln (Pyodide) — same wiring as Forge. Requires cross-origin isolation
@@ -2053,7 +2059,7 @@
       const oregistry = buildRigRegistry({ fs: ofs, git: ogit });
       // Same two fences as the top-level grant: a subagent working in a copy-on-write overlay
       // must not be the route by which the skills dir or the acceptance criterion gets rewritten.
-      const ograph = createGrant({ prefixes:[''], scopes:['fs:read','fs:write','fs:remove','git:read','git:write'], readOnlyPrefixes:[SKILLS_DIR, GATE_DIR] });
+      const ograph = createGrant({ prefixes:[''], scopes:['fs:read','fs:write','fs:remove','git:read','git:write','git:remote'], readOnlyPrefixes:[SKILLS_DIR, GATE_DIR, SEARCH_INDEX_PATH] });
       const oopLog = createOpLog({ fs: createFileops({ backend:new MemoryBackend() }) });
       const oface = createAgentFace({ registry: oregistry, grant: ograph, opLog: oopLog, actor:'agent' });
       const oshell = createShell({ registry: oregistry, face: oface }); // no kiln in subagents

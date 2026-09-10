@@ -34,7 +34,7 @@ async function bed() {
   const grant = createGrant({
     prefixes: [''],
     scopes: ['fs:read', 'fs:write', 'fs:remove', 'git:read', 'git:write'],
-    readOnlyPrefixes: [SKILLS_DIR, GATE_DIR],       // exactly what apps/anvil/index.html passes
+    readOnlyPrefixes: [SKILLS_DIR, GATE_DIR, '.anvil/search-index.json'],  // what apps/anvil/index.html passes
   });
   const face = createAgentFace({ registry, grant, opLog: createOpLog({ fs: createFileops({ backend: new MemoryBackend() }) }), actor: 'a' });
   const sh = createShell({ registry, face });
@@ -190,7 +190,8 @@ await test('underGateDir is exact about the boundary', async () => {
 await test('Anvil passes GATE_DIR to BOTH grants and annotates every route\'s refusal', async () => {
   const { readFile } = await import('node:fs/promises');
   const anvil = await readFile(new URL('../../../apps/anvil/index.html', import.meta.url), 'utf8');
-  const grants = anvil.match(/readOnlyPrefixes:\[SKILLS_DIR, GATE_DIR\]/g) || [];
+  // Contains, not equals — the list grew with the search index (Med1) and will grow again.
+  const grants = anvil.match(/readOnlyPrefixes:\[[^\]]*SKILLS_DIR[^\]]*GATE_DIR[^\]]*\]/g) || [];
   eq(grants.length, 2, 'the top-level agent grant AND the subagent overlay grant both fence the gate dir');
   // Pin the RELATIONSHIP, not the literal import line: an exact-text anchor here went stale the
   // first time a name was added to the import (2026-09-10). What must hold is that every gate

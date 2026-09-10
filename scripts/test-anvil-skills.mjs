@@ -54,9 +54,17 @@ assert.equal(explainSkillsRefusal('ok'), 'ok', 'an ordinary result is untouched'
 // The boundary itself: the grant, not the string match. Both the top-level agent and every
 // subagent get .anvil/skills as a read-only region, so every shell spelling of a write is
 // refused on the NORMALISED path (sys/ai/test/skills-fence.test.mjs drives the real shell).
-assert.equal((anvil.match(/readOnlyPrefixes:\[SKILLS_DIR, GATE_DIR\]/g) || []).length, 2,
-  'both the agent grant and the subagent grant fence the skills dir read-only');
-assert.match(anvil, /createGrant\(\{ prefixes:\[''\][^}]*readOnlyPrefixes:\[SKILLS_DIR, GATE_DIR\] \}\)/, 'the fence is on the grant the agent face enforces');
+// Asserted as "both grants CONTAIN these fences", not as an exact list — the list grew when the
+// search index joined it (SEC Med1) and pinning the literal made a strictly-safer change look
+// like a regression. What must hold is that neither grant loses a fence, not that nobody adds one.
+{
+  const grants = anvil.match(/createGrant\(\{ prefixes:\[''\][^)]*\)/g) || [];
+  assert.equal(grants.length, 2, 'both the agent grant and the subagent grant exist');
+  for (const g of grants) {
+    assert.match(g, /readOnlyPrefixes:\[[^\]]*SKILLS_DIR/, 'each fences the skills dir read-only');
+    assert.match(g, /readOnlyPrefixes:\[[^\]]*GATE_DIR/, 'and the gate dir');
+  }
+}
 // and the one door stays open: skill_manage writes through the UNGRANTED `fs`, never the
 // granted face — if it ever moved to face.invoke, the fence would lock out its own door.
 assert.match(anvil, /const w = await fs\.write\(dir\+'\/'\+SKILL_FILE, plan\.skillText\)/, 'skill_manage writes through the ungranted fs');

@@ -1,12 +1,14 @@
 // Kiln Worker-runtime headless seams. The actual Worker + Pyodide execution is
 // covered by test/kiln-worker-harness.html in a cross-origin-isolated browser.
 
+import { readFile } from 'node:fs/promises';
 import { MemoryBackend } from '../../rig/fileops/index.mjs';
 import { createGrant, createOpLog, createAgentFace } from '../../rig/agent/index.mjs';
 import { buildRigRegistry } from '../../rig/registry/index.mjs';
 import { createFsBridge } from '../fs-bridge.mjs';
 import { generateRigModule } from '../rig-bindings.mjs';
 import {
+  createWorkerRuntime,
   deriveRigAllowlist,
   fromRigJsonValue,
   snapshotBridge,
@@ -16,6 +18,42 @@ import {
 } from '../worker-runtime.mjs';
 import { neuterNetworkEgress, NETWORK_EGRESS_GLOBALS } from '../worker.mjs';
 
+// ── Low11: the response channel is authenticated by a nonce Python never sees ──
+//
+// The Rig back-channel needs `postMessage` un-neutered, so model-authored Python shares the
+// Worker's postMessage and can forge a `{type:'response'}`. Request ids were made unguessable
+// first, which was not enough: a session that plants its own `self` 'message' listener READS the
+// id off the incoming request. The id cannot fix that — it has to ride on the request to be
+// matched at all.
+//
+// So the auth tag is a second value that never travels toward the Worker after `init`: a session
+// nonce, held in a worker.mjs module closure (not a global — `js.<x>` from Python resolves
+// globals) and stamped on every reply. A forger holding every request id has nothing to stamp.
+//
+// This drives the REAL message loop through the injected WorkerClass seam. Before it, that loop
+// had no test at all — every other case in this file is a pure helper.
+class FakeWorker {
+  constructor() { this.sent = []; this.listeners = {}; FakeWorker.last = this; }
+  addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }
+  postMessage(msg) { this.sent.push(msg); }
+  terminate() {}
+  emit(data) { for (const fn of (this.listeners.message || [])) fn({ data }); }
+  get lastRequest() { return this.sent[this.sent.length - 1]; }
+}
+
+async function withFakeWorker(fn) {
+  const realSAB = globalThis.SharedArrayBuffer;
+  const realCreate = globalThis.URL.createObjectURL, realRevoke = globalThis.URL.revokeObjectURL;
+  if (typeof globalThis.SharedArrayBuffer !== 'function') globalThis.SharedArrayBuffer = ArrayBuffer;
+  globalThis.URL.createObjectURL = () => 'blob:fake';
+  globalThis.URL.revokeObjectURL = () => {};
+  try { return await fn(); }
+  finally {
+    globalThis.SharedArrayBuffer = realSAB;
+    globalThis.URL.createObjectURL = realCreate; globalThis.URL.revokeObjectURL = realRevoke;
+  }
+}
+
 let passed = 0;
 const failures = [];
 async function test(name, fn) {
@@ -24,6 +62,79 @@ async function test(name, fn) {
 function assert(condition, message) { if (!condition) throw new Error(message || 'assert'); }
 function eq(actual, expected, message) {
   if (actual !== expected) throw new Error(`${message || 'ne'}: ${JSON.stringify(actual)} !== ${JSON.stringify(expected)}`);
+}
+
+async function lowElevenCases() {
+  await test('Low11: a response with the right id but no nonce is dropped', async () => {
+    await withFakeWorker(async () => {
+      const started = createWorkerRuntime({ WorkerClass: FakeWorker, allowUngovernedWrites: true });
+      started.catch(() => {});
+      await new Promise((r) => setTimeout(r, 0));
+      const w = FakeWorker.last;
+      const init = w.lastRequest;
+      eq(init.op, 'init', 'the first request is init');
+      assert(typeof init.sessionNonce === 'string' && init.sessionNonce.length > 8, 'init carries a nonce');
+
+      let settled = false;
+      started.then(() => { settled = true; }, () => { settled = true; });
+      // What Python can build today: the correct id, read off a planted listener, and no nonce.
+      w.emit({ type: 'response', id: init.id, ok: true, value: { version: 'forged' } });
+      await new Promise((r) => setTimeout(r, 0));
+      assert(!settled, 'no nonce → dropped');
+      w.emit({ type: 'response', id: init.id, ok: true, nonce: 'not-the-nonce', value: { version: 'forged' } });
+      await new Promise((r) => setTimeout(r, 0));
+      assert(!settled, 'wrong nonce → dropped');
+      // The genuine reply carries both and settles it.
+      w.emit({ type: 'response', id: init.id, ok: true, nonce: init.sessionNonce, value: { version: 'real', mountPath: '/workspace' } });
+      await new Promise((r) => setTimeout(r, 0));
+      assert(settled, 'id AND nonce settles the request');
+    });
+  });
+
+  await test('Low11: no request after init carries the nonce', async () => {
+    await withFakeWorker(async () => {
+      const started = createWorkerRuntime({ WorkerClass: FakeWorker, allowUngovernedWrites: true });
+      started.catch(() => {});
+      await new Promise((r) => setTimeout(r, 0));
+      const w = FakeWorker.last;
+      const init = w.lastRequest;
+      w.emit({ type: 'response', id: init.id, ok: true, nonce: init.sessionNonce, value: { version: 'real', mountPath: '/workspace' } });
+      const rt = await started;
+      const before = w.sent.length;
+      try { const p = rt.runCode('1', {}); p.catch(() => {}); } catch (_) { /* fine */ }
+      await new Promise((r) => setTimeout(r, 0));
+      for (const msg of w.sent.slice(before)) {
+        assert(!('sessionNonce' in msg) && !('nonce' in msg),
+          'the nonce never travels toward the Worker again — that is why a planted listener cannot forge');
+      }
+    });
+  });
+
+  // The FakeWorker above simulates the Worker's replies — it never EXECUTES worker.mjs, and the
+  // real one needs a cross-origin-isolated browser (see this file's header). So the Worker half
+  // is checked at the source level. Weaker than behavioural, and said plainly rather than left to
+  // look like the same kind of check as the cases above: mutation testing showed all three of
+  // these survive every behavioural case in this file.
+  await test('Low11: worker.mjs stamps the nonce, keeps it off globals, and cannot be re-keyed', async () => {
+    const src = await readFile(new URL('../worker.mjs', import.meta.url), 'utf8');
+    assert(/self\.postMessage\(\{ type: 'response', id, ok, value, nonce: sessionNonce \}\)/.test(src),
+      'every reply carries the nonce');
+    assert(/^let sessionNonce = null;$/m.test(src), 'it is a module-scope binding');
+    assert(!/globalThis\.sessionNonce|self\.sessionNonce/.test(src),
+      'and never a global — js.<x> from Python resolves globals, not module closures');
+    assert(/if \(sessionNonce === null && typeof message\.sessionNonce === 'string'\)/.test(src),
+      'only the FIRST init sets it — a second init must not be able to re-key the channel');
+    // And it is captured before Pyodide loads, so no user code exists yet to look for it.
+    const initAt = src.indexOf('sessionNonce = message.sessionNonce');
+    const loadAt = src.indexOf('await initialize(message)');
+    assert(initAt > 0 && loadAt > initAt, 'the nonce is captured BEFORE initialize() loads Pyodide');
+  });
+
+  await test('Low11/Low12: an empty allowlist fails closed', () => {
+    const empty = deriveRigAllowlist('');
+    eq(empty.size, 0, 'no bindings means an empty allowlist');
+    assert(!empty.has('fs.read'), 'and an empty allowlist admits nothing');
+  });
 }
 
 function makeGovernedMount({ prefixes = [''] } = {}) {
@@ -138,6 +249,7 @@ await test('Rig error truncation cuts on a UTF-8 boundary (L-K7)', async () => {
   eq(whole.length, bytes.length, 'under-cap input is returned unchanged');
 });
 
+await lowElevenCases();
 const total = passed + failures.length;
 if (failures.length === 0) {
   console.log(`K0-K2/worker-runtime conformance: ${passed}/${total} passed`);
