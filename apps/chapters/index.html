@@ -125,6 +125,59 @@ header.top{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--p
 #toast.show{transform:translateX(-50%) translateY(0);}
 
 footer{max-width:var(--maxw);margin:40px auto 0;padding:20px;color:var(--faint);font-size:12.5px;text-align:center;border-top:1px solid var(--line);}
+/* ---------- AI tutor sidecar ---------- */
+#ai-fab{position:fixed;right:20px;bottom:24px;z-index:60;background:var(--brand);color:#fff;border-radius:999px;
+  padding:13px 20px;font-weight:750;font-size:15px;box-shadow:var(--shadow-lg);display:inline-flex;align-items:center;gap:8px;}
+#ai-fab:hover{filter:brightness(1.06);}
+#ai-fab .dot{width:7px;height:7px;border-radius:50%;background:#b6f0a0;box-shadow:0 0 0 3px rgba(182,240,160,.25);}
+#ai-scrim{position:fixed;inset:0;z-index:70;background:rgba(47,36,23,.34);backdrop-filter:blur(2px);opacity:0;transition:opacity .22s ease;}
+#ai-scrim.show{opacity:1;}
+#ai-drawer{position:fixed;top:0;right:0;bottom:0;z-index:71;width:min(440px,94vw);background:var(--panel);
+  border-left:1px solid var(--line-strong);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;
+  transform:translateX(102%);transition:transform .26s cubic-bezier(.2,.9,.3,1.15);}
+#ai-drawer.show{transform:translateX(0);}
+.ai-head{display:flex;align-items:center;gap:10px;padding:16px 18px;border-bottom:1px solid var(--line);}
+.ai-head .ai-mark{width:32px;height:32px;border-radius:9px;flex:none;background:linear-gradient(135deg,var(--brand),#a07bc0);
+  color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:var(--shadow);}
+.ai-head .ttl{font-weight:800;font-size:16px;flex:1;min-width:0;}
+.ai-head .ttl small{display:block;color:var(--muted);font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ai-x{width:32px;height:32px;border-radius:8px;font-size:19px;color:var(--muted);flex:none;display:flex;align-items:center;justify-content:center;}
+.ai-x:hover{background:var(--line);color:var(--ink);}
+.ai-scope{margin:12px 18px 0;font-size:12px;color:var(--muted);background:var(--card);border:1px solid var(--line);border-radius:999px;padding:6px 12px;display:inline-flex;align-items:center;gap:6px;align-self:flex-start;}
+.ai-body{flex:1;overflow-y:auto;padding:14px 18px;display:flex;flex-direction:column;gap:12px;}
+.ai-setup{background:var(--card);border:1px solid var(--line);border-radius:var(--radius-sm);padding:16px;}
+.ai-setup h4{margin:0 0 6px;font-size:15px;}
+.ai-setup p{margin:0 0 12px;color:var(--muted);font-size:13.5px;line-height:1.5;}
+.ai-setup .row{display:flex;flex-direction:column;gap:9px;}
+.ai-setup select{font:inherit;padding:9px 11px;border-radius:10px;border:1.5px solid var(--line-strong);background:var(--panel);color:var(--ink);}
+.ai-btn{border-radius:10px;padding:11px 15px;font-weight:700;font-size:14px;background:var(--brand);color:#fff;box-shadow:var(--shadow);display:inline-flex;align-items:center;justify-content:center;gap:7px;text-align:center;}
+.ai-btn:hover{filter:brightness(1.05);}
+.ai-btn.ghost{background:var(--panel);color:var(--ink);border:1.5px solid var(--line-strong);box-shadow:none;}
+.ai-btn.ghost:hover{border-color:var(--brand);color:var(--brand-ink);}
+.ai-btn:disabled{opacity:.55;cursor:default;filter:none;}
+.ai-prog{margin-top:12px;}
+.ai-prog .track{height:8px;border-radius:999px;background:var(--line);overflow:hidden;}
+.ai-prog .track > i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--brand),#a07bc0);transition:width .2s ease;}
+.ai-prog .lbl{font-size:12px;color:var(--muted);margin-top:6px;}
+.ai-note{font-size:11.5px;color:var(--faint);margin-top:10px;line-height:1.45;}
+.ai-msg{max-width:88%;padding:10px 13px;border-radius:14px;font-size:14.5px;line-height:1.5;white-space:pre-wrap;word-wrap:break-word;}
+.ai-msg.user{align-self:flex-end;background:var(--brand);color:#fff;border-bottom-right-radius:5px;}
+.ai-msg.bot{align-self:flex-start;background:var(--card);border:1px solid var(--line);color:var(--ink);border-bottom-left-radius:5px;}
+.ai-msg.bot.think{color:var(--muted);font-style:italic;}
+.ai-defer{align-self:flex-start;display:flex;gap:8px;flex-wrap:wrap;margin-top:-2px;}
+.ai-defer a{font-size:12.5px;font-weight:650;background:var(--panel);border:1.5px solid var(--line-strong);border-radius:999px;padding:6px 12px;color:var(--brand-ink);}
+.ai-defer a:hover{border-color:var(--brand);text-decoration:none;}
+.ai-foot{border-top:1px solid var(--line);padding:12px 14px;display:flex;flex-direction:column;gap:8px;}
+.ai-inrow{display:flex;gap:8px;align-items:flex-end;}
+.ai-inrow textarea{flex:1;font:inherit;font-size:14.5px;resize:none;max-height:120px;padding:10px 12px;border-radius:12px;border:1.5px solid var(--line-strong);background:var(--card);color:var(--ink);line-height:1.4;}
+.ai-inrow textarea:focus{outline:none;border-color:var(--brand);}
+.ai-send{flex:none;width:44px;height:44px;border-radius:12px;background:var(--brand);color:#fff;font-size:18px;box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;}
+.ai-send:disabled{opacity:.5;cursor:default;}
+.ai-hint{font-size:11px;color:var(--faint);text-align:center;}
+.ai-searchbar{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
+.ai-searchbar a{font-size:12px;font-weight:650;color:var(--muted);}
+.ai-searchbar a:hover{color:var(--brand-ink);}
+@media(max-width:520px){ #ai-drawer{width:100vw;} #ai-fab{right:14px;bottom:16px;} }
 @media(prefers-reduced-motion:reduce){*{transition:none!important;}}
 </style>
 </head>
@@ -151,6 +204,79 @@ footer{max-width:var(--maxw);margin:40px auto 0;padding:20px;color:var(--faint);
 </footer>
 
 <div id="toast"></div>
+
+<button id="ai-fab" hidden><span class="dot"></span>💬 Ask about this chapter</button>
+<div id="ai-scrim" hidden></div>
+<aside id="ai-drawer" hidden aria-label="Chapter helper">
+  <div class="ai-head">
+    <div class="ai-mark">💬</div>
+    <div class="ttl">Chapter helper<small id="ai-scopename">—</small></div>
+    <button class="ai-x" id="ai-close" title="Close">✕</button>
+  </div>
+  <div class="ai-body" id="ai-body"></div>
+  <div class="ai-foot" id="ai-foot" hidden>
+    <div class="ai-inrow">
+      <textarea id="ai-input" rows="1" placeholder="Ask a question about this chapter…" enterkeyhint="send"></textarea>
+      <button class="ai-send" id="ai-send" title="Send" disabled>➤</button>
+    </div>
+    <div class="ai-searchbar">
+      <span class="ai-hint">Runs on your device · </span>
+      <a id="ai-yt" target="_blank" rel="noopener">Search YouTube ↗</a>
+      <a id="ai-gg" target="_blank" rel="noopener">Search Google ↗</a>
+    </div>
+  </div>
+</aside>
+
+<script id="ai-worker-src" type="text/plain">
+let mod=null;
+const ready=(async()=>{
+  mod=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0/+esm');
+  const {env}=mod;
+  env.allowLocalModels=false; env.allowRemoteModels=true; env.useBrowserCache=true;
+})();
+let tokenizer=null, processor=null, model=null, mtype='causal', stopper=null;
+const post=(m)=>self.postMessage(m);
+self.onmessage=async(e)=>{
+  const d=e.data||{};
+  try{
+    await ready;
+    if(d.type==='load'){
+      const progress_callback=(p)=>post({type:'progress',data:p});
+      if(d.mtype==='multimodal'){
+        processor=await mod.AutoProcessor.from_pretrained(d.modelId,{progress_callback});
+        const Cls = d.modelClass==='qwen3_5'?mod.Qwen3_5ForConditionalGeneration:mod.Gemma4ForConditionalGeneration;
+        if(!Cls) throw new Error('This browser build cannot load '+d.modelId);
+        model=await Cls.from_pretrained(d.modelId,{dtype:d.dtype,device:'webgpu',progress_callback});
+        mtype='multimodal';
+      } else {
+        tokenizer=await mod.AutoTokenizer.from_pretrained(d.modelId,{progress_callback});
+        model=await mod.AutoModelForCausalLM.from_pretrained(d.modelId,{dtype:d.dtype,device:'webgpu',progress_callback});
+        mtype='causal';
+      }
+      post({type:'status',data:'warmup'});
+      const w = mtype==='multimodal' ? await processor('a',null,null,{add_special_tokens:false}) : tokenizer('a');
+      await model.generate({...w,max_new_tokens:1});
+      post({type:'ready'});
+    } else if(d.type==='generate'){
+      const messages=d.messages, cfg=d.genConfig||{};
+      stopper=new mod.InterruptableStoppingCriteria();
+      const tk = mtype==='multimodal'?processor.tokenizer:tokenizer;
+      let inputs;
+      // Gemma family: build the turn format manually. Gemma has no system role and its
+      // apply_chat_template rejects our system-folded turns ("roles must alternate"),
+      // so we format directly — identical for causal and multimodal Gemma.
+      let prompt='';
+      for(const m of messages){ prompt+='<start_of_turn>'+(m.role==='assistant'?'model':'user')+'\n'+m.content+'<end_of_turn>\n'; }
+      prompt+='<start_of_turn>model\n';
+      if(mtype==='multimodal'){ inputs=await processor(prompt,null,null,{add_special_tokens:false}); }
+      else { inputs=tokenizer(prompt,{add_special_tokens:false}); }
+      const streamer=new mod.TextStreamer(tk,{skip_prompt:true,skip_special_tokens:true,callback_function:(t)=>post({type:'token',token:t})});
+      await model.generate({...inputs,max_new_tokens:cfg.max_new_tokens||384,do_sample:true,temperature:cfg.temperature??0.7,top_k:cfg.top_k??40,top_p:cfg.top_p??0.95,repetition_penalty:cfg.repetition_penalty??1.1,streamer,stopping_criteria:stopper});
+      post({type:'complete'});
+    } else if(d.type==='stop'){ if(stopper) stopper.interrupt(); }
+  }catch(err){ post({type:'error',error:(err&&err.message)||String(err)}); }
+};
+</script>
 
 <script src="sdk/naklios.js"></script>
 <script src="data/chapters.js"></script>
@@ -232,6 +358,7 @@ footer{max-width:var(--maxw);margin:40px auto 0;padding:20px;color:var(--faint);
     const map={ library:renderLibrary, graph:renderGraph, strand:renderStrand, chapter:renderChapter };
     (map[state.view]||renderLibrary)();
     setHostTitle();
+    try{ aiSyncFab(); }catch(_){}
   }
 
   /* ---------- library (all subjects × bands) ---------- */
@@ -373,8 +500,236 @@ footer{max-width:var(--maxw);margin:40px auto 0;padding:20px;color:var(--faint);
     try{ NAK.title("Chapter Time" + (t?` — ${t}`:"")); }catch(_){}
   }
 
+  /* ---------- AI tutor sidecar (removable; on-device) ---------- */
+  const CHAT_MODELS = {
+    'gemma4-e4b': { id:'onnx-community/gemma-4-E4B-it-ONNX', label:'Gemma 4 E4B — smartest (~4.9 GB)', dtype:'q4f16', mtype:'multimodal', modelClass:'gemma4', gen:{temperature:0.7,top_k:40,top_p:0.95,max_new_tokens:512,repetition_penalty:1.1} },
+    'gemma4-e2b': { id:'onnx-community/gemma-4-E2B-it-ONNX', label:'Gemma 4 E2B — lighter (~1.5 GB)', dtype:'q4f16', mtype:'multimodal', modelClass:'gemma4', gen:{temperature:0.7,top_k:40,top_p:0.95,max_new_tokens:512,repetition_penalty:1.1} },
+    'gemma3-1b':  { id:'onnx-community/gemma-3-1b-it-ONNX-GQA', label:'Gemma 3 1B — quickest (~760 MB)', dtype:'q4f16', mtype:'causal', gen:{temperature:0.7,top_k:50,top_p:0.95,max_new_tokens:512} },
+  };
+  const AI = {
+    nano:false, engine:null, worker:null, ready:false, loading:false, streaming:false,
+    modelKey:'gemma4-e4b', history:[], chapter:null, curBubble:null, curText:"",
+  };
+  const aiEl = {
+    fab:$("#ai-fab"), scrim:$("#ai-scrim"), drawer:$("#ai-drawer"), body:$("#ai-body"),
+    foot:$("#ai-foot"), scope:$("#ai-scopename"), input:$("#ai-input"), send:$("#ai-send"),
+    close:$("#ai-close"), yt:$("#ai-yt"), gg:$("#ai-gg"),
+  };
+  try{ const mk=localStorage.getItem("chaptertime.ai.model"); if(mk&&CHAT_MODELS[mk]) AI.modelKey=mk; }catch(_){}
+
+  function aiSnapshot(){
+    const g=A.g, c=A.byId[state.cid];
+    const pre=(c.prereqs||[]).map(id=>A.byId[id]).filter(Boolean).map(x=>x.concept);
+    const next=(A.leadsTo[c.id]||[]).map(id=>A.byId[id]).filter(Boolean).map(x=>x.concept);
+    return { cid:c.id, concept:c.concept, subject:g.subject, band:g.bandLabel||g.band, strand:c.strand, grade:c.grade, pre, next };
+  }
+  function aiSystemPrompt(ch){
+    return [
+      `You are a friendly, patient tutor for a student in Class ${ch.grade}. You are helping with ONE chapter only.`,
+      ``,
+      `Subject: ${ch.subject} (${ch.band})`,
+      `Topic area: ${ch.strand}`,
+      `Chapter: ${ch.concept}`,
+      `This chapter builds on: ${ch.pre.length?ch.pre.join(", "):"— (an early idea)"}`,
+      `This chapter opens up: ${ch.next.length?ch.next.join(", "):"— (more to come)"}`,
+      ``,
+      `Rules:`,
+      `- Answer in simple, warm language a Class ${ch.grade} student understands. Keep it short — usually 2 to 4 sentences. Give one small example when it helps.`,
+      `- Stay on the topic of this chapter ("${ch.concept}") and its subject (${ch.subject}).`,
+      `- If the question is not about this chapter, or you are not sure of the answer, do NOT guess. Say briefly that it is outside this chapter (or that you are not sure), and suggest they use the "Search YouTube" or "Search Google" buttons to look it up.`,
+      `- Never make up facts. It is good to say "I'm not sure."`,
+      `- Always be kind and encouraging. Keep everything suitable for a child.`,
+    ].join("\n");
+  }
+  function aiScrollBottom(){ aiEl.body.scrollTop = aiEl.body.scrollHeight; }
+  function aiAddBubble(role, text){
+    const b=document.createElement("div"); b.className="ai-msg "+(role==="user"?"user":"bot"); b.textContent=text||"";
+    aiEl.body.appendChild(b); aiScrollBottom(); return b;
+  }
+  function aiSetSendEnabled(){ aiEl.send.disabled = !(AI.ready && !AI.streaming && aiEl.input.value.trim()); }
+
+  function aiRenderSetup(){
+    aiEl.body.innerHTML=""; aiEl.foot.hidden=true;
+    const hasGPU = !!navigator.gpu;
+    const wrap=document.createElement("div"); wrap.className="ai-setup";
+    if(!AI.nano && !hasGPU){
+      wrap.innerHTML=`<h4>AI helper needs a modern browser</h4>
+        <p>The on-device tutor runs in Chrome or Edge with WebGPU. You can still look this chapter up:</p>
+        <div class="row"><a class="ai-btn" id="ai-alt-yt" href="${esc(aiSearchHref('yt'))}" target="_blank" rel="noopener">Search YouTube ↗</a>
+        <a class="ai-btn ghost" id="ai-alt-gg" href="${esc(aiSearchHref('gg'))}" target="_blank" rel="noopener">Search Google ↗</a></div>`;
+      aiEl.body.appendChild(wrap); return;
+    }
+    const opts=Object.entries(CHAT_MODELS).map(([k,m])=>`<option value="${k}"${k===AI.modelKey?" selected":""}>${esc(m.label)}</option>`).join("");
+    wrap.innerHTML=`<h4>Turn on the chapter helper</h4>
+      <p>A little AI tutor that answers your questions about <b>${esc(AI.chapter.concept)}</b>. It runs privately on your device — nothing you type leaves this computer.</p>
+      <div class="row">
+        ${AI.nano?`<button class="ai-btn" id="ai-use-nano">✨ Use built-in AI — instant, no download</button>`:""}
+        <select id="ai-model">${opts}</select>
+        <button class="ai-btn ${AI.nano?"ghost":""}" id="ai-load">${AI.nano?"…or load a bigger tutor":"Load the tutor"}</button>
+      </div>
+      <div class="ai-prog" id="ai-prog" hidden><div class="track"><i id="ai-prog-fill"></i></div><div class="lbl" id="ai-prog-lbl">Starting…</div></div>
+      <div class="ai-note">Bigger models understand more but take longer to download the first time (then they're cached). The built-in AI is fastest if your browser has it.</div>`;
+    aiEl.body.appendChild(wrap);
+    const sel=$("#ai-model"); if(sel) sel.addEventListener("change",()=>{ AI.modelKey=sel.value; try{localStorage.setItem("chaptertime.ai.model",sel.value);}catch(_){}} );
+    const nb=$("#ai-use-nano"); if(nb) nb.addEventListener("click",aiLoadNano);
+    const lb=$("#ai-load"); if(lb) lb.addEventListener("click",()=>aiLoadWebGPU(AI.modelKey));
+  }
+  function aiProg(pct,label){
+    const p=$("#ai-prog"), f=$("#ai-prog-fill"), l=$("#ai-prog-lbl");
+    if(!p) return; p.hidden=false; if(f&&pct!=null) f.style.width=Math.max(2,Math.min(100,pct))+"%"; if(l&&label) l.textContent=label;
+  }
+  function aiDisableSetupButtons(){ ["ai-use-nano","ai-load","ai-model"].forEach(id=>{const el=$("#"+id); if(el) el.disabled=true;}); }
+
+  function aiReady(engineLabel){
+    AI.ready=true; AI.loading=false; AI.engine=(AI.engine||"webgpu");
+    aiEl.body.innerHTML="";
+    aiAddBubble("bot", `Hi! Ask me anything about "${AI.chapter.concept}". I'll keep it simple. If it's outside this chapter, I'll point you to the search buttons below.`);
+    aiEl.foot.hidden=false; aiEl.input.focus(); aiSetSendEnabled();
+  }
+
+  async function aiLoadNano(){
+    if(AI.loading) return; AI.loading=true; AI.engine="nano"; aiDisableSetupButtons(); aiProg(null,"Checking built-in AI…");
+    try{
+      let avail="unavailable";
+      try{ avail=await LanguageModel.availability(); }catch(_){}
+      if(avail==="unavailable"){ AI.loading=false; AI.engine=null; aiProg(2,"Built-in AI isn't available here — try loading a tutor instead."); return; }
+      if(avail==="downloadable"||avail==="downloading"){
+        aiProg(5,"Preparing built-in AI…");
+        const warm=await LanguageModel.create({ monitor(m){ m.addEventListener("downloadprogress",e=>{ const pct=Math.round((e.loaded||0)*100); aiProg(pct,"Downloading built-in AI — "+pct+"%"); }); } });
+        try{ warm.destroy(); }catch(_){}
+      }
+      aiReady("built-in AI");
+    }catch(err){ AI.loading=false; AI.engine=null; aiProg(2,"Couldn't start built-in AI: "+((err&&err.message)||err)); }
+  }
+
+  function aiLoadWebGPU(key){
+    if(AI.loading) return; const m=CHAT_MODELS[key]; if(!m) return;
+    if(!navigator.gpu){ aiProg(2,"This browser has no WebGPU — try Chrome or Edge."); return; }
+    AI.loading=true; AI.engine="webgpu"; aiDisableSetupButtons(); aiProg(3,"Starting… (first download can take a while)");
+    if(!AI.worker){
+      const src=$("#ai-worker-src").textContent;
+      AI.worker=new Worker(URL.createObjectURL(new Blob([src],{type:"application/javascript"})),{type:"module"});
+      AI.worker.addEventListener("error",e=>{ AI.loading=false; aiProg(2,"The tutor failed to start: "+(e.message||"worker error")); });
+      AI.worker.addEventListener("message",aiOnWorker);
+    }
+    AI.worker.postMessage({type:"load",modelId:m.id,dtype:m.dtype,mtype:m.mtype,modelClass:m.modelClass});
+  }
+
+  function aiOnWorker(e){
+    const d=e.data||{};
+    if(d.type==="progress"){
+      const p=d.data||{};
+      if(p.status==="progress"&&p.total){ aiProg(Math.round(p.loaded/p.total*100), "Downloading the tutor — "+(p.file? p.file.split("/").pop():"")+" "+Math.round(p.loaded/p.total*100)+"%"); }
+      else if(p.status==="download"||p.status==="initiate"){ aiProg(null,"Fetching model files…"); }
+    } else if(d.type==="status"&&d.data==="warmup"){ aiProg(99,"Warming up…"); }
+    else if(d.type==="ready"){ aiReady("on-device model"); }
+    else if(d.type==="token"){ aiStreamToken(d.token); }
+    else if(d.type==="complete"){ aiStreamDone(); }
+    else if(d.type==="error"){
+      AI.streaming=false; AI.loading=false;
+      if(!AI.ready){ aiProg(2,"Couldn't load the tutor: "+d.error+" — try a smaller model."); }
+      else { if(AI.curBubble){ AI.curBubble.classList.remove("think"); AI.curBubble.textContent=(AI.curText||"")+"\n\n(Sorry — something went wrong. Try the search buttons below.)"; } AI.curBubble=null; aiSetSendEnabled(); }
+    }
+  }
+
+  function aiBuildMessages(userText){
+    const sys=aiSystemPrompt(AI.chapter);
+    const arr=[...AI.history.slice(-6), {role:"user",content:userText}];
+    // Gemma/causal templates reject a system role — fold the system prompt into the first user turn.
+    const first=arr.findIndex(m=>m.role==="user");
+    if(first>=0) arr[first]={role:"user",content:sys+"\n\nQuestion: "+arr[first].content};
+    return arr;
+  }
+  async function aiSend(){
+    const text=aiEl.input.value.trim(); if(!text||!AI.ready||AI.streaming) return;
+    aiEl.input.value=""; aiEl.input.style.height="auto"; aiSetSendEnabled();
+    aiAddBubble("user",text);
+    AI.history.push({role:"user",content:text});
+    AI.streaming=true; AI.curText=""; AI.curBubble=aiAddBubble("bot",""); AI.curBubble.classList.add("think"); AI.curBubble.textContent="…";
+    const msgs=aiBuildMessages(text);
+    if(AI.engine==="nano") aiGenerateNano(msgs, text);
+    else AI.worker.postMessage({type:"generate",messages:msgs,genConfig:CHAT_MODELS[AI.modelKey].gen});
+  }
+  function aiStreamToken(t){
+    if(!AI.curBubble) return;
+    if(AI.curBubble.classList.contains("think")){ AI.curBubble.classList.remove("think"); AI.curBubble.textContent=""; }
+    AI.curText+=t; AI.curBubble.textContent=AI.curText; aiScrollBottom();
+  }
+  function aiStreamDone(){
+    AI.streaming=false;
+    const txt=(AI.curText||"").trim();
+    if(AI.curBubble){ if(!txt){ AI.curBubble.textContent="I'm not sure about that one — try the search buttons below."; } }
+    AI.history.push({role:"assistant",content:txt||"(no answer)"});
+    AI.curBubble=null; aiSetSendEnabled(); aiScrollBottom();
+  }
+  async function aiGenerateNano(msgs, lastUser){
+    try{
+      const sys=msgs.length&&msgs[0].role==="user"?null:null; // system folded into first user turn already
+      const initial=msgs.slice(0,-1).map(m=>({role:m.role,content:m.content}));
+      const opts={}; const gc={temperature:0.7,topK:3};
+      opts.temperature=gc.temperature; opts.topK=gc.topK; if(initial.length) opts.initialPrompts=initial;
+      const session=await LanguageModel.create(opts);
+      const stream=session.promptStreaming(lastUser);
+      let acc="";
+      for await(const chunk of stream){
+        const s=typeof chunk==="string"?chunk:String(chunk==null?"":chunk);
+        let delta; if(s.length>=acc.length&&s.startsWith(acc)){ delta=s.slice(acc.length); acc=s; } else { delta=s; acc+=s; }
+        if(delta) aiStreamToken(delta);
+      }
+      try{ session.destroy(); }catch(_){}
+      aiStreamDone();
+    }catch(err){
+      AI.streaming=false;
+      if(AI.curBubble){ AI.curBubble.classList.remove("think"); AI.curBubble.textContent="Sorry — I couldn't answer that. Try the search buttons below."; }
+      AI.curBubble=null; aiSetSendEnabled();
+    }
+  }
+
+  function aiSearchHref(kind){
+    const ch=AI.chapter; if(!ch) return "#";
+    const q=`Class ${ch.grade} ${ch.subject} ${ch.concept} for kids`;
+    return (kind==="gg"?"https://www.google.com/search?q=":"https://www.youtube.com/results?search_query=")+encodeURIComponent(q);
+  }
+  function aiOpen(){
+    if(state.view!=="chapter") return;
+    const snap=aiSnapshot();
+    if(!AI.chapter || AI.chapter.cid!==snap.cid){ AI.history=[]; AI.chapter=snap; }
+    aiEl.scope.textContent="About: "+snap.concept;
+    aiEl.yt.href=aiSearchHref("yt"); aiEl.gg.href=aiSearchHref("gg");
+    if(AI.ready){ if(!aiEl.body.querySelector(".ai-msg")) aiReady(); aiEl.foot.hidden=false; }
+    else aiRenderSetup();
+    aiEl.scrim.hidden=false; aiEl.drawer.hidden=false;
+    requestAnimationFrame(()=>{ aiEl.scrim.classList.add("show"); aiEl.drawer.classList.add("show"); });
+    if(AI.ready) aiEl.input.focus();
+  }
+  function aiClose(){
+    aiEl.scrim.classList.remove("show"); aiEl.drawer.classList.remove("show");
+    setTimeout(()=>{ aiEl.scrim.hidden=true; aiEl.drawer.hidden=true; },260);
+  }
+  function aiSyncFab(){
+    if(state.view==="chapter"){ aiEl.fab.hidden=false; }
+    else { aiEl.fab.hidden=true; if(!aiEl.drawer.hidden) aiClose(); }
+    // if drawer open and chapter changed underneath, refresh scope
+    if(state.view==="chapter" && !aiEl.drawer.hidden){ const s=aiSnapshot(); if(!AI.chapter||AI.chapter.cid!==s.cid) aiOpen(); }
+  }
+  function aiInit(){
+    aiEl.fab.addEventListener("click",aiOpen);
+    aiEl.close.addEventListener("click",aiClose);
+    aiEl.scrim.addEventListener("click",aiClose);
+    aiEl.input.addEventListener("input",()=>{ aiEl.input.style.height="auto"; aiEl.input.style.height=Math.min(120,aiEl.input.scrollHeight)+"px"; aiSetSendEnabled(); });
+    aiEl.input.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); aiSend(); } });
+    aiEl.send.addEventListener("click",aiSend);
+    document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&!aiEl.drawer.hidden) aiClose(); });
+    // rung 0 detection (desktop Chrome/Edge)
+    if(typeof self!=="undefined" && "LanguageModel" in self){
+      const uaMobile = navigator.userAgentData ? !!navigator.userAgentData.mobile : /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent||"");
+      if(!uaMobile){ AI.nano=true; Promise.race([LanguageModel.availability(),new Promise(r=>setTimeout(()=>r("timeout"),2500))]).then(a=>{ AI.nano=(a==="available"||a==="downloadable"||a==="downloading"); }).catch(()=>{}); }
+    }
+  }
+
   /* ---------- boot ---------- */
   $("#brandSub").textContent = "Read & watch · Classes 1–5 & 6–10";
+  aiInit();
   render();
   if(NAK){
     try{
