@@ -55,6 +55,12 @@ main{min-height:0;display:grid;place-items:center;padding:clamp(24px,6vw,76px)}
   linear-gradient(145deg,rgba(245,190,100,.86),rgba(140,75,34,.95) 45%,rgba(42,28,19,.98));box-shadow:0 35px 90px -38px rgba(224,162,74,.58)}
 .art:before{content:"";position:absolute;width:72%;height:72%;border-radius:50%;left:14%;top:14%;background:repeating-radial-gradient(circle,#15120f 0 3px,#282019 4px 6px);box-shadow:0 12px 40px rgba(0,0,0,.42)}
 .art:after{content:"";position:absolute;width:14%;height:14%;border-radius:50%;left:43%;top:43%;background:var(--accent);border:7px solid #1b1612}
+/* Artwork covers the generated vinyl when the track HAS art; the letter is the fallback. */
+#art-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:2}
+#art-img[hidden],#pb-img[hidden]{display:none}
+#pb-img{width:100%;height:100%;object-fit:cover;border-radius:8px}
+.pb-art:has(#pb-img:not([hidden])) #pb-letter{display:none}
+.art:has(#art-img:not([hidden])) .art-letter{display:none}
 .art-letter{position:absolute;inset:auto 20px 18px;z-index:1;font-family:var(--display);font-weight:900;font-size:clamp(34px,6vw,70px);line-height:.8;color:rgba(255,245,225,.92);text-shadow:0 3px 22px #2d180c}
 .eyebrow{font:10px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:12px}
 .track-name{font-family:var(--display);font-size:clamp(27px,4vw,45px);line-height:1.05;letter-spacing:-.045em;margin:0;overflow-wrap:anywhere}
@@ -115,6 +121,10 @@ footer{min-height:48px;border-top:1px solid var(--line);display:flex;align-items
 .vis-bar select{flex:1;min-height:32px;padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--text);font:11px var(--mono)}
 .vis-bar button{min-height:32px;padding:4px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);cursor:pointer;font:10px var(--mono)}
 .vis-wrap.full{position:fixed;inset:0;z-index:50;flex:none;height:100vh;border-radius:0;border:0}
+/* The exit button is a SIBLING of the overlay and sat at the playerbar's z-index (20),
+   i.e. underneath the opaque z-50 visualiser it is meant to dismiss: rendered, labelled
+   'Exit', and unclickable. Lift it above the overlay while full mode is on. */
+.vis-wrap.full ~ #vis-full{position:fixed;z-index:51;right:18px;top:18px;background:rgba(31,26,21,.92);border-color:var(--accent)}
 .vis-wrap.full #vis{height:100vh}
 .vis-pick{min-height:34px;max-width:120px;padding:4px 7px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--text);font:10px var(--mono)}
 .vis-wrap.full .vis-bar{position:absolute;left:0;right:0;bottom:0;background:rgba(31,26,21,.86)}
@@ -127,7 +137,7 @@ footer{min-height:48px;border-top:1px solid var(--line);display:flex;align-items
 .view-tab[hidden]{display:none}
 
 /* The persistent player bar */
-.playerbar{display:flex;align-items:center;gap:14px;padding:10px clamp(14px,3vw,28px);border-top:1px solid var(--line);background:rgba(26,22,18,.94);backdrop-filter:blur(18px);position:sticky;bottom:0;z-index:20}
+.playerbar{display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding:10px clamp(14px,3vw,28px);border-top:1px solid var(--line);background:rgba(26,22,18,.94);backdrop-filter:blur(18px);position:sticky;bottom:0;z-index:20}
 .playerbar[hidden]{display:none}
 .pb-art{width:46px;height:46px;flex:none;border-radius:9px;border:1px solid var(--line);cursor:pointer;display:grid;place-items:center;padding:0;
   background:linear-gradient(145deg,rgba(245,190,100,.8),rgba(140,75,34,.92) 50%,rgba(42,28,19,.98));
@@ -211,7 +221,7 @@ footer{min-height:48px;border-top:1px solid var(--line);display:flex;align-items
     <!-- Now playing. A place you choose to go, not where you are dumped. -->
     <section class="view now" id="now" aria-labelledby="track-name">
       <div class="player-grid">
-        <div class="art" aria-hidden="true"><span class="art-letter" id="art-letter">N</span></div>
+        <div class="art" aria-hidden="true"><img id="art-img" alt="" hidden><span class="art-letter" id="art-letter">N</span></div>
         <div class="track">
           <div class="eyebrow" data-t="player.now">Now playing locally</div>
           <h1 class="track-name" id="track-name">Untitled track</h1>
@@ -225,7 +235,7 @@ footer{min-height:48px;border-top:1px solid var(--line);display:flex;align-items
   <!-- The player bar. Persistent: what is playing must never be hidden by
        what you are browsing. This is the whole point of the restructure. -->
   <div class="playerbar" id="playerbar" hidden>
-    <button class="pb-art" id="pb-art" type="button" title="Now playing"><span id="pb-letter">N</span></button>
+    <button class="pb-art" id="pb-art" type="button" title="Now playing"><img id="pb-img" alt="" hidden><span id="pb-letter">N</span></button>
     <div class="pb-track">
       <b id="pb-title">Untitled track</b>
       <span id="pb-sub">—</span>
@@ -322,7 +332,6 @@ const SOFTWARE_DECODERS = [
 const engine = createNakliAmpEngine({ version: VERSION, softwareDecoders: SOFTWARE_DECODERS });
 let uiLoadId = 0;
 let toastTimer = 0;
-let frameId = 0;
 let seeking = false;
 
 /**
@@ -402,10 +411,35 @@ function honestyMarkup(state) {
   }
 }
 
+// The fallback initial. Taken from the tags when we have them, because a filename initial on a
+// numbered album is the track NUMBER: every file in "01 - ...", "02 - ..." rendered a giant "0".
+// Falling back to the filename, strip a leading track number and separator first.
+function initialFor(name) {
+  const tagged = (playingTrack?.artist || playingTrack?.title || '').trim();
+  const source = tagged || stem(name).trim().replace(/^\s*\d+\s*[-._)]*\s*/, '');
+  const letter = source.slice(0, 1).toUpperCase();
+  return /[A-Z0-9]/.test(letter) ? letter : 'N';
+}
+
+// The library already decodes embedded artwork and holds it as a blob (artUrlFor). Neither art
+// surface used it, so a track WITH a 600x600 cover still showed the generated vinyl placeholder.
+// Async by nature: the blob comes from IndexedDB, so guard against a track change mid-await.
+async function paintNowArt() {
+  const artImg = $('#art-img'), pbImg = $('#pb-img');
+  const track = playingTrack;
+  const url = track ? await artUrlFor(track).catch(() => null) : null;
+  if (track !== playingTrack) return;          // a different track started while we waited
+  for (const img of [artImg, pbImg]) {
+    if (!img) continue;
+    if (url) { img.src = url; img.hidden = false; }
+    else { img.removeAttribute('src'); img.hidden = true; }
+  }
+}
+
 function renderTrack(state) {
   const name = state.media.name || 'Untitled track';
   $('#track-name').textContent = stem(name);
-  $('#art-letter').textContent = stem(name).trim().slice(0, 1).toUpperCase() || 'N';
+  $('#art-letter').textContent = initialFor(name);
   $('#track-meta').textContent = [
     state.track?.codec?.toUpperCase(),
     state.track?.sampleRate ? `${(state.track.sampleRate / 1000).toFixed(1)} kHz` : null,
@@ -419,7 +453,8 @@ function renderTrack(state) {
 
   $('#pb-title').textContent = stem(name);
   $('#pb-sub').textContent = [state.track?.codec?.toUpperCase(), formatBytes(state.media.size)].filter(Boolean).join(' · ');
-  $('#pb-letter').textContent = stem(name).trim().slice(0, 1).toUpperCase() || 'N';
+  $('#pb-letter').textContent = initialFor(name);
+  paintNowArt();
   revealPlayer();
   // Deliberately does not switch view: starting a track while browsing the
   // library must not yank you out of the library.
@@ -436,43 +471,49 @@ function hasEnded(state) {
   return Boolean(duration) && Number.isFinite(duration) && positionS >= duration - 0.05;
 }
 
+/** The transport row: clock, seek position, play/pause glyph, prev/next availability. */
+function paintTransport(state) {
+  const ended = hasEnded(state);
+  const playing = state.clock.playing && !ended;
+  $('#elapsed').textContent = formatTime(state.clock.positionS);
+  if (!seeking) $('#seek').value = String(state.clock.positionS || 0);
+  $('#play').textContent = playing ? 'Ⅱ' : '▶';
+  $('#play').setAttribute('aria-label', playing ? 'Pause' : 'Play');
+  $('#prev').disabled = queueIndex <= 0;
+  $('#next').disabled = queueIndex < 0 || queueIndex >= queue.length - 1;
+}
+
+/**
+ * Auto-advance fires once per track that ends, not once per frame after it.
+ *
+ * `advancing` prevented two advances overlapping, not the same advance repeating: `advance`
+ * awaits `rememberPosition()` — an IndexedDB write — before it discovers there is no next
+ * track, so the last track of a queue wrote to the database every animation frame, forever.
+ * The latch is the track's own id, so it clears by itself when a different track loads.
+ *
+ * `status` rather than `clock.playing`: the R3 rung reports `playing: false` the instant its
+ * buffer ends, so a clock test would stop auto-advance for every software-decoded track.
+ * `status` still says `playing` unless the person actually paused.
+ */
+function maybeAdvance(state) {
+  if (!state.path || !hasEnded(state) || state.status !== 'playing') return;
+  if (advancing || endedTrackKey === currentTrackKey()) return;
+  endedTrackKey = currentTrackKey();
+  advancing = true;
+  advance(1).finally(() => { advancing = false; });
+}
+
 function renderClock() {
   const state = engine.state();
-  if (state.path) {
-    const ended = hasEnded(state);
-    const playing = state.clock.playing && !ended;
-    $('#elapsed').textContent = formatTime(state.clock.positionS);
-    if (!seeking) $('#seek').value = String(state.clock.positionS || 0);
-    $('#play').textContent = playing ? 'Ⅱ' : '▶';
-    $('#play').setAttribute('aria-label', playing ? 'Pause' : 'Play');
-    $('#prev').disabled = queueIndex <= 0;
-    $('#next').disabled = queueIndex < 0 || queueIndex >= queue.length - 1;
-  }
+  if (state.path) paintTransport(state);
   const idle = !state.path || !state.clock.playing || hasEnded(state);
   if (!idle && !visualiser.running) visualiser.start();
   // Nothing is moving, so nothing needs repainting. Left running, it repainted
   // at 60 fps for the life of the tab whatever the player was doing.
   if (idle && visualiser.running) visualiser.stop();
 
-  // Auto-advance fires once per track that ends, not once per frame after it.
-  //
-  // `advancing` prevented two advances overlapping, not the same advance
-  // repeating: `advance` awaits `rememberPosition()` — an IndexedDB write —
-  // before it discovers there is no next track, so the last track of a queue
-  // wrote to the database every animation frame, forever. The latch is the
-  // track's own id, so it clears by itself when a different track loads.
-  //
-  // `status` rather than `clock.playing`: the R3 rung reports `playing: false`
-  // the instant its buffer ends, so a clock test would stop auto-advance for
-  // every software-decoded track. `status` still says `playing` unless the
-  // person actually paused.
-  if (state.path && hasEnded(state) && state.status === 'playing'
-    && !advancing && endedTrackKey !== currentTrackKey()) {
-    endedTrackKey = currentTrackKey();
-    advancing = true;
-    advance(1).finally(() => { advancing = false; });
-  }
-  frameId = requestAnimationFrame(renderClock);
+  maybeAdvance(state);
+  requestAnimationFrame(renderClock);
 }
 let advancing = false;
 let endedTrackKey = null;
@@ -704,24 +745,31 @@ function albumHeading(track) {
     .join(' \u00b7 ');
 }
 
-/** Render the visible rows. Grouping by album only applies to an unfiltered list. */
-async function renderLibrary() {
-  const query = $('#lib-search').value;
-  const playlist = activePlaylist ? playlistRows.find(row => row.path === activePlaylist) : null;
+/** Which tracks the library should show: the playlist's, or the whole folder, filtered. */
+function visibleTracks(query, playlist) {
   let source = libraryTracks;
   let missing = 0;
   if (playlist) ({ found: source, missing } = tracksForPlaylist(playlist));
-
   const visible = searchTracks(source, query);
   // A playlist has a deliberate order; only the whole library is re-sorted.
-  if (!query && !playlist) visible.sort((left, right) =>
-    String(left.albumKey).localeCompare(String(right.albumKey)) || compareAlbumOrder(left, right));
+  if (!query && !playlist) {
+    visible.sort((left, right) =>
+      String(left.albumKey).localeCompare(String(right.albumKey)) || compareAlbumOrder(left, right));
+  }
+  return { source, missing, visible };
+}
 
-  queue = visible;
-  // Derived, never carried across a render.
-  queueIndex = playingTrack ? queue.findIndex(track => track.id === playingTrack.id) : -1;
-  const list = $('#lib-list');
-  list.replaceChildren();
+/** Nothing to list: say whether the folder is empty or the filter simply matched nothing. */
+function appendEmptyRow(list) {
+  const empty = document.createElement('li');
+  empty.className = 'lib-empty';
+  empty.textContent = libraryTracks.length ? t('library.empty') : t('library.none');
+  if (!libraryTracks.length) reportScan('');
+  list.append(empty);
+}
+
+/** The count, the playlist-only controls, and the controls that cannot act yet. */
+function paintLibraryHead({ query, visible, source, playlist, missing }) {
   $('#lib-count').textContent = query
     ? `${visible.length} of ${source.length}`
     : `${source.length} track${source.length === 1 ? '' : 's'}`;
@@ -734,79 +782,92 @@ async function renderLibrary() {
   if (playlist && missing) {
     reportScan(`${playlist.name}: ${missing} of ${playlist.entries.length} entries are not in this folder.`);
   }
+}
 
-  if (!visible.length) {
-    const empty = document.createElement('li');
-    empty.className = 'lib-empty';
-    empty.textContent = libraryTracks.length ? t('library.empty') : t('library.none');
-    if (!libraryTracks.length) reportScan('');
-    list.append(empty);
-    return;
+/** One library row: number, cover, title/artist, duration, and playlist tools. */
+function libraryRow(track, index, playingId, playlist) {
+  const item = document.createElement('li');
+  const row = document.createElement('button');
+  row.type = 'button';
+  row.className = 'lib-row';
+  row.dataset.index = String(index);
+  if (track.id === playingId) row.setAttribute('aria-current', 'true');
+
+  const number = document.createElement('span');
+  number.className = 'no';
+  number.textContent = track.trackNo === null ? '' : String(track.trackNo);
+
+  const cover = document.createElement('img');
+  cover.className = 'cover';
+  cover.alt = '';
+  cover.loading = 'lazy';
+  artUrlFor(track).then(url => { if (url) cover.src = url; });
+
+  const who = document.createElement('span');
+  who.className = 'who';
+  const title = document.createElement('b');
+  title.textContent = track.title || track.name || 'Untitled track';
+  const under = document.createElement('span');
+  under.textContent = [track.artist, track.album].filter(Boolean).join(' \u00b7 ') || track.path;
+  who.append(title, under);
+
+  const duration = document.createElement('span');
+  duration.className = 'dur';
+  duration.textContent = track.durationS ? formatTime(track.durationS) : '';
+
+  row.append(number, cover, who, duration);
+  item.append(row);
+  if (playlist) {
+    const tools = document.createElement('span');
+    tools.className = 'row-tools';
+    for (const [label, action, title] of [
+      ['\u2191', 'up', 'Move up'], ['\u2193', 'down', 'Move down'], ['\u00d7', 'remove', 'Remove from playlist'],
+    ]) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.action = action;
+      // The entry this row came from, not its position in the rendered list:
+      // a search filters the rows, so an ordinal here acts on the wrong track.
+      button.dataset.entry = String(track.entryIndex);
+      button.title = title;
+      button.textContent = label;
+      tools.append(button);
+    }
+    row.append(tools);
   }
+  return item;
+}
+
+/** Render the visible rows. Grouping by album only applies to an unfiltered list. */
+async function renderLibrary() {
+  const query = $('#lib-search').value;
+  const playlist = activePlaylist ? playlistRows.find(row => row.path === activePlaylist) : null;
+  const { source, missing, visible } = visibleTracks(query, playlist);
+
+  queue = visible;
+  // Derived, never carried across a render.
+  queueIndex = playingTrack ? queue.findIndex(track => track.id === playingTrack.id) : -1;
+  const list = $('#lib-list');
+  list.replaceChildren();
+  paintLibraryHead({ query, visible, source, playlist, missing });
+
+  if (!visible.length) { appendEmptyRow(list); return; }
 
   const playingId = playingTrack?.id ?? null;
   let heading = null;
   const fragment = document.createDocumentFragment();
+  // Album headings only make sense on an unfiltered, unordered-by-you list.
+  const grouped = !query && !playlist;
 
   for (const [index, track] of visible.entries()) {
-    if (!query && !playlist && albumHeading(track) !== heading) {
+    if (grouped && albumHeading(track) !== heading) {
       heading = albumHeading(track);
       const group = document.createElement('li');
       group.className = 'lib-group';
       group.textContent = heading;
       fragment.append(group);
     }
-
-    const item = document.createElement('li');
-    const row = document.createElement('button');
-    row.type = 'button';
-    row.className = 'lib-row';
-    row.dataset.index = String(index);
-    if (track.id === playingId) row.setAttribute('aria-current', 'true');
-
-    const number = document.createElement('span');
-    number.className = 'no';
-    number.textContent = track.trackNo === null ? '' : String(track.trackNo);
-
-    const cover = document.createElement('img');
-    cover.className = 'cover';
-    cover.alt = '';
-    cover.loading = 'lazy';
-    artUrlFor(track).then(url => { if (url) cover.src = url; });
-
-    const who = document.createElement('span');
-    who.className = 'who';
-    const title = document.createElement('b');
-    title.textContent = track.title || track.name || 'Untitled track';
-    const under = document.createElement('span');
-    under.textContent = [track.artist, track.album].filter(Boolean).join(' \u00b7 ') || track.path;
-    who.append(title, under);
-
-    const duration = document.createElement('span');
-    duration.className = 'dur';
-    duration.textContent = track.durationS ? formatTime(track.durationS) : '';
-
-    row.append(number, cover, who, duration);
-    item.append(row);
-    if (playlist) {
-      const tools = document.createElement('span');
-      tools.className = 'row-tools';
-      for (const [label, action, title] of [
-        ['\u2191', 'up', 'Move up'], ['\u2193', 'down', 'Move down'], ['\u00d7', 'remove', 'Remove from playlist'],
-      ]) {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.dataset.action = action;
-        // The entry this row came from, not its position in the rendered list:
-        // a search filters the rows, so an ordinal here acts on the wrong track.
-        button.dataset.entry = String(track.entryIndex);
-        button.title = title;
-        button.textContent = label;
-        tools.append(button);
-      }
-      row.append(tools);
-    }
-    fragment.append(item);
+    fragment.append(libraryRow(track, index, playingId, playlist));
   }
   list.append(fragment);
 }
@@ -878,6 +939,35 @@ async function performScan(handle) {
   }
 }
 
+/**
+ * The folder to scan, or null when we cannot get one. Reports its own reason either way, so a
+ * null return is a completed outcome, not a failure to handle.
+ */
+async function usableFolder(prompt) {
+  const stored = await storedFolder();
+  if (stored) {
+    // A grant revoked between sessions is expected, not an error. The index is
+    // still readable, so the library shows while the grant is reclaimed.
+    if (await grantState(stored) === 'granted') return stored;
+    if (!prompt) { reportScan('Reopen the folder to rescan. Your indexed tracks are still listed.'); return null; }
+    if (await reclaimFolder(stored) !== 'granted') { reportScan('The folder grant was not restored.'); return null; }
+    return stored;
+  }
+  if (!prompt) { reportScan(t('library.none')); return null; }
+  let picked = null;
+  try {
+    picked = await requestFolder();
+  } catch (error) {
+    // `GrantError` is the named refusal this module raises for a browser that cannot hold a
+    // folder grant at all. It was thrown and never caught by name, so it surfaced as an
+    // unhandled rejection.
+    if (error?.name === 'GrantError') { reportScan(error.message); return null; }
+    throw error;
+  }
+  if (!picked) { reportScan(t('library.none')); return null; }
+  return picked;
+}
+
 async function openLibrary({ prompt = false } = {}) {
   show('library');
   // Always render first, so the screen explains itself whatever happens next.
@@ -885,29 +975,8 @@ async function openLibrary({ prompt = false } = {}) {
   await refreshLibrary();
   if (!supportsFolderGrant()) { reportScan(t('library.nogrant')); return; }
 
-  let handle = await storedFolder();
-  if (handle) {
-    // A grant revoked between sessions is expected, not an error. The index is
-    // still readable, so the library shows while the grant is reclaimed.
-    if (await grantState(handle) !== 'granted') {
-      if (!prompt) { reportScan('Reopen the folder to rescan. Your indexed tracks are still listed.'); return; }
-      if (await reclaimFolder(handle) !== 'granted') { reportScan('The folder grant was not restored.'); return; }
-    }
-  } else {
-    if (!prompt) { reportScan(t('library.none')); return; }
-    try {
-      handle = await requestFolder();
-    } catch (error) {
-      // `GrantError` is the named refusal this module raises for a browser
-      // that cannot hold a folder grant at all. It was thrown and never caught
-      // by name, so it surfaced as an unhandled rejection.
-      if (error?.name === 'GrantError') { reportScan(error.message); return; }
-      throw error;
-    }
-    if (!handle) { reportScan(t('library.none')); return; }
-  }
-
-  await runScan(handle);
+  const handle = await usableFolder(prompt);
+  if (handle) await runScan(handle);
 }
 
 /** Play the queue entry at `index`, remembering where the last track stopped. */
@@ -1049,8 +1118,18 @@ $('#vis-full').addEventListener('click', () => toggleFullVisualiser());
 function toggleFullVisualiser() {
   const full = $('#vis-wrap').classList.toggle('full');
   $('#vis-full').textContent = full ? 'Exit' : 'Full';
+  $('#vis-full').title = full ? 'Exit full window (V or Esc)' : 'Full window (V)';
   return full;
 }
+
+// Escape leaves full mode. A full-window overlay with no visible way out is a trap, and the
+// keyboard shortcut is not discoverable from inside it; Escape is what people already try.
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape') return;
+  if (!$('#vis-wrap').classList.contains('full')) return;
+  event.preventDefault();
+  toggleFullVisualiser();
+});
 
 // --------------------------------------------------------- playlists ----
 
@@ -1090,6 +1169,17 @@ let activePlaylist = null;
  * may legitimately appear twice in one playlist, and the row has to know which
  * of the two it is.
  */
+/** An entry's own tags win; the indexed track fills the gaps. */
+function mergeEntry(entry, track) {
+  return {
+    target: entry.target,
+    path: entry.path,
+    durationS: entry.durationS ?? track?.durationS ?? null,
+    artist: entry.artist ?? track?.artist ?? null,
+    title: entry.title ?? track?.title ?? track?.name ?? null,
+  };
+}
+
 function tracksForPlaylist(playlist) {
   const byPath = new Map(libraryTracks.map(track => [track.path, track]));
   const found = [];
@@ -1110,16 +1200,7 @@ function tracksForPlaylist(playlist) {
  */
 function playlistLines(entries) {
   const byPath = new Map(libraryTracks.map(track => [track.path, track]));
-  return entries.map(entry => {
-    const track = entry.path ? byPath.get(entry.path) : null;
-    return {
-      target: entry.target,
-      path: entry.path,
-      durationS: entry.durationS ?? track?.durationS ?? null,
-      artist: entry.artist ?? track?.artist ?? null,
-      title: entry.title ?? track?.title ?? track?.name ?? null,
-    };
-  });
+  return entries.map(entry => mergeEntry(entry, entry.path ? byPath.get(entry.path) : null));
 }
 
 /** Walk to the directory holding `path`, creating nothing. */
