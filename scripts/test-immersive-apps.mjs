@@ -16,21 +16,38 @@ for (const id of ['bofh']){
   );
 }
 
-// Cross-origin File-System-Access apps must open TOP-LEVEL (maxMode:'basic') —
-// showDirectoryPicker() is blocked in a cross-origin iframe, so they cannot run
-// embedded. Decision 2026-08-27: FSA apps top-level, non-FSA apps stay embedded.
-// KanZen/NakliPoster-style apps that only need app-scoped storage work embedded;
-// these open the user's EXISTING arbitrary folder, which needs a top-level tab.
+// A File-System-Access app must open TOP-LEVEL (maxMode:'basic') *while it is cross-origin* —
+// showDirectoryPicker() is blocked in a cross-origin iframe, so it cannot run embedded
+// (decision 2026-08-27). The cap is a consequence of being cross-origin, never a goal: an app
+// MIRRORED same-origin under apps/<id>/ has no such block, and capping it there would cost the
+// Immersive window for nothing. Superseded in part 2026-09-10, when NakliPoster and VaultMind
+// were mirrored and verified embedded with showDirectoryPicker present.
+//
+// So the list is DERIVED from the manifest rather than frozen: mirrored → must not be capped,
+// unmirrored → must be capped. A future mirror flips its app automatically, and an app that
+// loses its mirror gets its cap demanded back.
+const manifest = JSON.parse(readFileSync(new URL('../apps/manifest.json', import.meta.url), 'utf8'));
+const mirrored = new Set(manifest.apps.map(app => app.id));
+
 for (const id of ['books', 'vaultmind', 'nakliposter', 'slate']){
   const start = html.indexOf(`{ id:'${id}'`);
   const end = html.indexOf('\n  { id:', start + 1);
   assert.ok(start >= 0 && end > start, `${id} app entry exists`);
   const entry = html.slice(start, end);
-  assert.match(
-    entry,
-    /maxMode:'basic'/,
-    `${id} is a cross-origin FSA app — it must open top-level (maxMode:'basic'), not embedded`,
-  );
+  if (mirrored.has(id)) {
+    assert.doesNotMatch(
+      entry,
+      /maxMode:'basic'/,
+      `${id} is mirrored same-origin, so FSA works embedded — the top-level cap is obsolete for it`,
+    );
+    assert.match(entry, /embedUrl:'\.\/apps\//, `${id} is mirrored, so it must embed relatively`);
+  } else {
+    assert.match(
+      entry,
+      /maxMode:'basic'/,
+      `${id} is a CROSS-ORIGIN FSA app — it must open top-level (maxMode:'basic'), not embedded`,
+    );
+  }
 }
 
 assert.match(
