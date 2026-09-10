@@ -147,6 +147,41 @@ export function releaseDispatch(queue, id) {
   return (queue || []).map((e) => (e.id === id ? { ...e, state: 'pending' } : e));
 }
 
+/**
+ * AC-8a — may a NEW run start at all?
+ *
+ * `nextDispatch` above already holds QUEUED work after a bad ending, which is admission control
+ * rather than a fuse: the fuses (budget, max-steps, no-progress) all stop a run already going, and
+ * none of them decides a run is not worth starting. But the hold covered only the queue — press
+ * Send after three failed runs and the fourth started regardless, into a workspace nobody had
+ * looked at. The gap was that the same question had two answers depending on where the prompt
+ * came from.
+ *
+ * Two ways to refuse, and neither kills anything in flight — that is the whole distinction a quota
+ * draws against a fuse (`hermes pause`: "halts NEW work only … in-flight work is never killed"):
+ *   · `held` — the owner switched holding on. Explicit, visible, and cleared by them.
+ *   · the last run ended badly and nothing has been acknowledged since.
+ *
+ * The SECOND is deliberately weak: it holds exactly once, and sending again goes through. It is a
+ * speed bump that makes you look at the workspace, not a lockout — a quota you cannot override by
+ * repeating yourself is a quota that gets switched off.
+ */
+export function admitRun({ held = false, heldReason = '', lastStop = null, lastWasError = false, acknowledged = false } = {}) {
+  if (held) {
+    return { admit: false, reason: heldReason ? `New runs are on hold: ${heldReason}` : 'New runs are on hold.', kind: 'held' };
+  }
+  if (acknowledged) return { admit: true, reason: '', kind: '' };
+  if (lastWasError) {
+    return { admit: false, kind: 'after-error',
+      reason: 'The last run ended in an error and nothing has been checked since. Send again to run anyway.' };
+  }
+  if (lastStop && lastStop !== 'done') {
+    return { admit: false, kind: 'after-' + lastStop,
+      reason: `The last run ended '${lastStop}' — the workspace may be half-changed. Send again to run anyway.` };
+  }
+  return { admit: true, reason: '', kind: '' };
+}
+
 export function pendingCount(queue) {
   return (queue || []).filter((e) => e.state === 'pending').length;
 }

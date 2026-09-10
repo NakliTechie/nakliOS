@@ -7,7 +7,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { migrateQueue, reconcileQueue, enqueue, removeEntry, moveEntry, editEntry,
-         nextDispatch, completeDispatch, releaseDispatch, pendingCount } from '../followup-queue.mjs';
+         nextDispatch, completeDispatch, releaseDispatch, pendingCount, admitRun } from '../followup-queue.mjs';
 
 const anvil = await readFile(new URL('../../../apps/anvil/index.html', import.meta.url), 'utf8');
 const texts = (q) => q.map((e) => e.text);
@@ -132,6 +132,49 @@ const texts = (q) => q.map((e) => e.text);
   assert.equal(enqueue(queue, '  ').entry, null);
 }
 
+// ── AC-8a: admission — may a NEW run start at all? ────────────────────────
+// The queue has held on a bad ending since AC-4. A fresh Send did not, so the same question had
+// two different answers depending only on where the prompt came from: press Send after three
+// failed runs and the fourth started, into a workspace nobody had looked at.
+//
+// Neither refusal kills anything in flight. That is the entire distinction a quota draws against a
+// fuse — budget, max-steps and no-progress all stop a run already going; none of them declines to
+// start one.
+{
+  assert.equal(admitRun({}).admit, true, 'nothing wrong, nothing to say');
+  assert.equal(admitRun({ lastStop: 'done' }).admit, true, 'a clean finish admits the next run');
+
+  // The explicit hold. Cleared only by the owner.
+  const held = admitRun({ held: true, heldReason: 'checking the diff' });
+  assert.equal(held.admit, false);
+  assert.equal(held.kind, 'held');
+  assert.match(held.reason, /on hold: checking the diff/, 'the reason the owner gave is shown back');
+  assert.match(admitRun({ held: true }).reason, /New runs are on hold\./, 'and it works without one');
+  // A hold outranks everything, including an acknowledgement — otherwise sending twice would
+  // walk straight through a switch the owner deliberately set.
+  assert.equal(admitRun({ held: true, acknowledged: true }).admit, false,
+    'acknowledging does not clear an explicit hold');
+
+  // After a bad ending: hold ONCE.
+  for (const [state, re] of [
+    [{ lastWasError: true }, /ended in an error/],
+    [{ lastStop: 'budget' }, /ended 'budget'/],
+    [{ lastStop: 'max-steps' }, /ended 'max-steps'/],
+    [{ lastStop: 'unverified' }, /ended 'unverified'/],
+    [{ lastStop: 'aborted' }, /ended 'aborted'/],
+  ]) {
+    const a = admitRun(state);
+    assert.equal(a.admit, false, `${JSON.stringify(state)} holds the next run`);
+    assert.match(a.reason, re);
+    assert.match(a.reason, /Send again to run anyway/, 'and says how to proceed — a dead end is not a speed bump');
+    // Sending again goes through. A quota you cannot override by repeating yourself is a quota
+    // that gets switched off.
+    assert.equal(admitRun({ ...state, acknowledged: true }).admit, true, 'the second send is admitted');
+  }
+  // An error outranks a stop reason when both are present — it is the more specific thing to say.
+  assert.equal(admitRun({ lastWasError: true, lastStop: 'budget' }).kind, 'after-error');
+}
+
 // ── the app actually uses all of it ────────────────────────────────────────
 assert.match(anvil, /t\.queued=qEnqueue\(t\.queued, text\)\.queue/, 'submit enqueues through the reducer');
 assert.match(anvil, /const _d = nextDispatch\(t\.queued, _out\)/, 'the drain goes through nextDispatch');
@@ -149,4 +192,18 @@ assert.match(anvil, /qEdit\(t\.queued,q\.id/, 'so is edit');
 // The old drain must not still be there.
 assert.ok(!/const next=t\.queued\.shift\(\)/.test(anvil), 'the shift-then-run drain is gone');
 
-console.log('followup-queue: claim survives a crash, id-keyed edits, a bad ending holds the queue, legacy strings migrate');
+// The app: a fresh Send is admitted through the same question the queue asks.
+assert.match(anvil, /const adm = admitRun\(\{ held: !!state\.runsHeld/, 'submit asks before starting a run');
+// …and ACTS on the answer. Asserting the call without the guard let a mutation turn the whole
+// feature off while every other assertion here still passed.
+assert.match(anvil, /if\(!adm\.admit\)\{/, 'and a refusal actually stops the run starting');
+assert.ok(anvil.indexOf('const adm = admitRun') < anvil.indexOf('runTask(t, text);'),
+  'the question is asked BEFORE the run starts, not after');
+assert.match(anvil, /if\(adm\.kind !== 'held'\)\{ t\.ackAfterBadRun = true; \$\('prompt'\)\.value = text; autoGrow\(\); \}/,
+  'a speed-bump refusal KEEPS the prompt — losing what the owner typed would be its own defect');
+assert.match(anvil, /if\(result\.stop === 'done'\) t\.ackAfterBadRun = false;/, 'a clean run restores the speed bump');
+assert.match(anvil, /state\.runsHeld=true; state\.runsHeldReason=String\(why\|\|''\)\.trim\(\);/, 'the hold records its reason');
+assert.match(anvil, /⏸ HOLD — new runs blocked/, 'and a held session says so in the taskbar');
+assert.match(anvil, /Nothing already running is stopped/, 'the dialog is explicit that it is not a fuse');
+
+console.log('followup-queue: claim survives a crash, id-keyed edits, a bad ending holds the queue and the next SEND, legacy strings migrate');

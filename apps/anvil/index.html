@@ -413,7 +413,7 @@
   import { renderProcedural, loadProceduralGraph, PROCEDURAL_PATH } from '../../sys/ai/procedural.mjs';
   import { rowKeys, planLogUpdate, isPinned } from '../../sys/ai/log-render-plan.mjs';
   import { buildChangeRow, planRevert, prunePreimages, preimageBytes, MAX_PREIMAGE_BUDGET } from '../../sys/ai/change-preimages.mjs';
-  import { migrateQueue, reconcileQueue, enqueue as qEnqueue, removeEntry as qRemove, moveEntry as qMove, editEntry as qEdit, nextDispatch, completeDispatch, releaseDispatch } from '../../sys/ai/followup-queue.mjs';
+  import { migrateQueue, reconcileQueue, enqueue as qEnqueue, removeEntry as qRemove, moveEntry as qMove, editEntry as qEdit, nextDispatch, completeDispatch, releaseDispatch, admitRun } from '../../sys/ai/followup-queue.mjs';
   import { skillManageTool, planSkillWrite, createSkillSession, SKILL_FILE } from '../../sys/ai/skill-manage.mjs';
   import { createProposalLedger } from '../../sys/ai/proposal-fingerprint.mjs';
   import { skillLifecycle, applySkillStatus, reviveOnUse } from '../../sys/ai/skill-lifecycle.mjs';
@@ -1139,8 +1139,11 @@
     $('tb-title').textContent=t?t.title:'No task';
     // A bypassed session must be obvious WITHOUT opening a panel — a permission mode you have to
     // go looking for is one you forget you left on.
-    $('tb-meta').textContent = modeIsLoud(state.permissionMode) ? '⚠ BYPASS — nothing is asked' : '';
-    $('tb-meta').className = modeIsLoud(state.permissionMode) ? 'meta bypass' : 'meta';
+    const loud=[];
+    if(state.runsHeld) loud.push('⏸ HOLD — new runs blocked');
+    if(modeIsLoud(state.permissionMode)) loud.push('⚠ BYPASS — nothing is asked');
+    $('tb-meta').textContent = loud.join('  ·  ');
+    $('tb-meta').className = loud.length ? 'meta bypass' : 'meta';
     const g=$('gate-btn'); if(g){ const vc=((t&&t.verifyCmd)||'').trim(); g.textContent=vc?('✓ '+vc):'✓ Must-pass'; g.classList.toggle('on', !!vc);
       // Always visible. The old progressive reveal keyed on `state.proven`, which
       // seedState() never set — so on a fresh install it was undefined and the gate
@@ -1311,6 +1314,7 @@
     globalPreview = { type:'text', file:'Policy',
       content:
         'Mode: ' + PERM_MODE_LABEL[mode] + '\n'
+      + (state.runsHeld ? '\n  ⏸ NEW RUNS ARE ON HOLD' + (state.runsHeldReason ? ' — ' + state.runsHeldReason : '') + '\n     Anything already running is untouched; this only stops new ones starting.\n' : '')
       + (modeIsLoud(mode) ? '\n  ⚠ BYPASS IS ON — nothing will be asked. Deny rules and the "never" row below still hold.\n' : '')
       + '\nYour rules — these win over everything below, and a deny rule survives bypass:\n'
       + '  deny\n' + ruleList('deny') + '\n'
@@ -1332,6 +1336,17 @@
       + 'allowed= proceeds silently until you revoke it.\n\n'
       + 'This lives in Anvil\'s own settings, not in your project files — so the agent cannot grant itself anything.',
       actions: [
+        // The inverse of bypass: bypass stops Anvil asking, hold stops it starting. Neither
+        // touches a run already in flight — that is what makes this a quota and not a fuse.
+        { label: state.runsHeld ? '▶ Resume new runs' : '⏸ Hold new runs', onClick: async ()=>{
+          if(state.runsHeld){ state.runsHeld=false; state.runsHeldReason=''; save(); pushSystem('▶ New runs resumed.'); openPolicy(); renderTaskbar(); return; }
+          const why = await askText({ title:'Hold new runs', okLabel:'Hold',
+            label:'Nothing already running is stopped — this only prevents new runs starting.\n\nReason (optional, shown wherever the hold appears):' });
+          if(why===null) return;
+          state.runsHeld=true; state.runsHeldReason=String(why||'').trim(); save();
+          pushSystem('⏸ New runs are on hold'+(state.runsHeldReason?' — '+state.runsHeldReason:'')+'.');
+          openPolicy(); renderTaskbar();
+        } },
         ...PERM_MODES.filter(m=>m!==mode).map(m=>({ label:'Mode: '+m, onClick:async ()=>{
           if(m==='bypass'){
             const ok = await askChoice({ title:'Turn on bypass?',
@@ -1349,7 +1364,7 @@
       ] };
     { const _t=activeTask(); if(_t) _t.preview=null; }   // a stale task preview would hide this global view
     state.previewOpen=true; save(); renderPreview();
-    const n=$('sheet-policy'); if(n) n.textContent = modeIsLoud(mode) ? 'BYPASS' : (granted.length ? granted.length+' allowed' : '');
+    const n=$('sheet-policy'); if(n) n.textContent = state.runsHeld ? 'ON HOLD' : (modeIsLoud(mode) ? 'BYPASS' : (granted.length ? granted.length+' allowed' : ''));
   }
   function renderAll(){ renderProjects(); renderTaskbar(); renderLog(); renderPreview(); renderFiles(); }
 
@@ -1829,6 +1844,20 @@
     const text=$('prompt').value.trim(); if(!text) return;
     $('prompt').value=''; autoGrow();
     if(running){ t.queued=qEnqueue(t.queued, text).queue; save(); renderLog(); return; }
+    // AC-8a: admission, not a fuse. The queue has held on a bad ending since AC-4; a fresh Send
+    // did not, so pressing it after three failed runs started a fourth into a workspace nobody had
+    // looked at. Same question, two answers, depending only on where the prompt came from.
+    const adm = admitRun({ held: !!state.runsHeld, heldReason: state.runsHeldReason || '',
+                           lastStop: t.lastStop || null, lastWasError: t.status === 'error',
+                           acknowledged: !!t.ackAfterBadRun });
+    if(!adm.admit){
+      // A held session must be cleared deliberately. Everything else is a speed bump: the prompt
+      // is kept, and sending it again goes through.
+      if(adm.kind !== 'held'){ t.ackAfterBadRun = true; $('prompt').value = text; autoGrow(); }
+      pushSystem('⏸ ' + adm.reason);
+      return;
+    }
+    t.ackAfterBadRun = false;
     runTask(t, text);
   }
   // Run records live in Anvil's OWN OPFS namespace (anvil/runs/<project>/<task>/),
@@ -2649,6 +2678,7 @@
       // run.stopped. The app no longer computes status in parallel.
       t.status = foldStatus(recEvents, rec.resolve, { gated }).status;
       t.lastStop = result.stop;   // AC-4: the queue holds unless this is a clean 'done'
+      if(result.stop === 'done') t.ackAfterBadRun = false;   // AC-8a: the speed bump returns after a clean run
       const stopLabel = result.stop==='aborted' ? 'stopped'
         : result.stop==='budget' ? ('hit budget ('+(result.budgetAxis||'')+')')
         : result.stop==='unverified' ? 'gate never passed'
