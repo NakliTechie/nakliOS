@@ -17,8 +17,14 @@ const headers = await readFile(path.join(root, '_headers'), 'utf8');
 assert(/^\/apps\/forge\/\*$/m.test(headers), '_headers must scope COOP/COEP to /apps/forge/*');
 assert(/Cross-Origin-Opener-Policy:\s*same-origin/i.test(headers), '_headers must set COOP: same-origin');
 assert(/Cross-Origin-Embedder-Policy:\s*credentialless/i.test(headers), '_headers must set COEP: credentialless');
-assert(!/^\/\*$/m.test(headers) && !/^\/\s*$/m.test(headers),
-  '_headers must not isolate the whole site (would break embedded cross-origin apps) — Phase 2 is a separate decision');
+// What must not happen is site-wide ISOLATION, not a site-wide section: `558fee0` added a
+// `/*` block carrying `frame-ancestors 'self'`, which is a different header doing a different
+// job, and this check failed it — the deploy gate went red for a security fix that was
+// correct. Read each section's own headers and object only if a catch-all carries COOP/COEP.
+for (const [, section, body] of headers.matchAll(/^(\/\*|\/)\s*$\n((?:^[ \t]+\S.*$\n?)*)/gm)) {
+  assert(!/Cross-Origin-(Opener|Embedder)-Policy/i.test(body),
+    `_headers must not isolate the whole site via "${section}" (would break embedded cross-origin apps) — Phase 2 is a separate decision`);
+}
 
 const config = JSON.parse(configSource);
 assert(config.name === 'nakli-dev', `Unexpected Worker name: ${config.name}`);
