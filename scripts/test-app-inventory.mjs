@@ -19,10 +19,14 @@ try {
   const errors = await auditAppInventory(fixture, html, manifest, lock);
   assert.ok(errors.some(error => error.includes('mirrored files differ')), 'extra mirror artifacts are rejected');
 
-  const brokenHtml = html.replace(
-    "embedUrl:'https://naklios.dev/apps/tijori/'",
-    "embedUrl:'https://naklios.dev/apps/not-tijori/'",
-  );
+  // Derive the mutation from what the catalog ACTUALLY says. Pinning the absolute spelling
+  // meant that when tijori moved to a relative embedUrl the replace() silently matched nothing,
+  // the drift under test never happened, and the assertion failed for the wrong reason — a
+  // mutation that no-ops is a test that proves nothing.
+  const tijoriEmbed = html.match(/id:'tijori'[\s\S]*?embedUrl:'([^']+)'/);
+  assert.ok(tijoriEmbed, 'the fixture catalog still carries a tijori embedUrl to mutate');
+  const brokenHtml = html.replace(tijoriEmbed[1], tijoriEmbed[1].replace('tijori', 'not-tijori'));
+  assert.notEqual(brokenHtml, html, 'the drift mutation actually changed the catalog');
   const catalogErrors = await auditAppInventory(rootDir, brokenHtml, manifest, lock);
   assert.ok(catalogErrors.some(error => error.includes('catalog embedUrl')), 'catalog/mirror path drift is rejected');
 

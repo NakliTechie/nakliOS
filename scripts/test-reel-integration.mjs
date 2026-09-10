@@ -12,11 +12,13 @@ const declared = manifest.apps.find(app => app.id === 'reel');
 assert.ok(declared, 'Reel mirror is declared');
 assert.equal(declared.repo, 'NakliTechie/reel', 'Reel mirror points to its authoritative repository');
 assert.equal(declared.files.length, 3, 'Reel mirror declares the app, decoder runtime, and decoder license');
-assert.match(
-  host,
-  /id:'reel'[\s\S]*?url:'https:\/\/reel\.naklitechie\.com\/'[\s\S]*?embedUrl:'https:\/\/naklios\.dev\/apps\/reel\/'/,
-  'NakliOS keeps Reel canonical standalone and same-origin in Immersive mode',
-);
+// Same-origin embed, either spelling: `./apps/<id>/` and `https://naklios.dev/apps/<id>/` both
+// resolve to /apps/<id>/. Relative is the house default because it is what makes a mirrored app
+// verifiable on a LOCAL serve before deploy (plan/history.md 2026-09-09, 2026-09-10).
+assert.match(host, /id:'reel'[\s\S]*?url:'https:\/\/reel\.naklitechie\.com\/'/, 'Reel keeps its canonical host');
+const reelEmbed = host.match(/id:'reel'[\s\S]*?embedUrl:'([^']+)'/);
+assert.ok(reelEmbed && ['./apps/reel/', 'https://naklios.dev/apps/reel/'].includes(reelEmbed[1]),
+  `Reel uses a same-origin Immersive mirror (got ${reelEmbed && reelEmbed[1]})`);
 assert.match(mirror, /script\.src = '\/sdk\/naklios\.js'/, 'Reel mirror loads the same-origin NakliOS SDK');
 assert.match(mirror, /const LIBRARY_PATH = 'library\.json'/, 'Reel scopes hosted writes to its metadata library');
 assert.match(mirror, /Media bytes never cross this boundary/, 'Reel documents the hosted media-byte boundary');

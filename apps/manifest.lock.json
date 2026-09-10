@@ -2,28 +2,126 @@
   "version": 1,
   "apps": [
     {
-      "id": "reel",
-      "repo": "NakliTechie/reel",
+      "id": "abhyas",
+      "repo": "NakliTechie/abhyas-app",
       "requestedRef": "main",
-      "resolvedCommit": "d16f7ef1d855aebcbb48b388d44dce2050dbad7e",
+      "resolvedCommit": "470fdf8af590782aeb565e079fc2126647d60ca4",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "e15cb557b1ac79c925b26352ff14275ac85c7cb0a549bd718fcc51b55748b045",
-          "bytes": 115788
+          "sha256": "22c72bdbaea162efae05f8c4e9b92c9355b2729f0108f3bb004de164a80fe83f",
+          "bytes": 58614
         },
         {
-          "source": "vendor/mediabunny/mediabunny-1.51.0.min.mjs",
-          "destination": "vendor/mediabunny/mediabunny-1.51.0.min.mjs",
-          "sha256": "1cd761e442a173c461b1a63cba29cb0816383f3b93b78d64b6e44c6dbce85d2b",
-          "bytes": 627244
+          "source": "data/maths-k5.js",
+          "destination": "data/maths-k5.js",
+          "sha256": "4bc12c8adb4c442d88c3f8859c706d98384b604c0a4698208cc84a2e13888c01",
+          "bytes": 2959337
         },
         {
-          "source": "vendor/mediabunny/LICENSE-MPL-2.0.txt",
-          "destination": "vendor/mediabunny/LICENSE-MPL-2.0.txt",
-          "sha256": "3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d04",
-          "bytes": 16726
+          "source": "sdk/naklios.js",
+          "destination": "sdk/naklios.js",
+          "sha256": "9390489a66446f7d78a72863ca8c2ed71cce1760b395d5d500e4c86a43a7fa52",
+          "bytes": 31778
+        }
+      ]
+    },
+    {
+      "id": "chapters",
+      "repo": "NakliTechie/chapter-time",
+      "requestedRef": "main",
+      "resolvedCommit": "9fe6911a287068034e6bd8fcc5cb96f3c2e2b4d5",
+      "files": [
+        {
+          "source": "index.html",
+          "destination": "index.html",
+          "sha256": "743ee2689a904f2690e95add9515d8a00163d9bc1b1605a9a67ec474dee382b8",
+          "bytes": 21853
+        },
+        {
+          "source": "data/chapters-k5.js",
+          "destination": "data/chapters-k5.js",
+          "sha256": "c8943fe102a2a13d5ebddb04ed4dbbc49cd7ba11a5e0b247a09f61e1e3872d11",
+          "bytes": 21513
+        },
+        {
+          "source": "sdk/naklios.js",
+          "destination": "sdk/naklios.js",
+          "sha256": "9390489a66446f7d78a72863ca8c2ed71cce1760b395d5d500e4c86a43a7fa52",
+          "bytes": 31778
+        }
+      ]
+    },
+    {
+      "id": "draft",
+      "repo": "NakliTechie/draft",
+      "requestedRef": "main",
+      "resolvedCommit": "f4a09f0d8c43f47b2e20d233cba6ba39446b55ae",
+      "files": [
+        {
+          "source": "draft.html",
+          "destination": "index.html",
+          "sha256": "14b7547dec95bc95126711aad66608b91c357423ca7af5a850ef71c66bdeb30a",
+          "bytes": 615965
+        }
+      ]
+    },
+    {
+      "id": "kanzen",
+      "repo": "NakliTechie/KanZen",
+      "requestedRef": "main",
+      "resolvedCommit": "232645d7f8bbf4bf981187390400a7170ac9d73d",
+      "files": [
+        {
+          "source": "index.html",
+          "destination": "index.html",
+          "sha256": "7a80c3d7f0620ebcbeffcafbd35cdfd0a5f4e9969c4d4604e73a284e1c52e3ec",
+          "bytes": 288620
+        }
+      ]
+    },
+    {
+      "id": "menagerie",
+      "repo": "NakliTechie/menagerie",
+      "requestedRef": "main",
+      "resolvedCommit": "6013d1a6953c594afd1007933f67522a45cf4720",
+      "files": [
+        {
+          "source": "index.html",
+          "destination": "index.html",
+          "sha256": "9b3fd96cc01b4edd377c787b148e960d75f2b84c7a589f483c9d109a5389eb4f",
+          "bytes": 252679
+        },
+        {
+          "source": "manifest.webmanifest",
+          "destination": "manifest.webmanifest",
+          "sha256": "bbaf8518cc6d86ffb6759ef0a4162d73a926b08bb1e1326c3923a83a93abd0b7",
+          "bytes": 623
+        },
+        {
+          "source": "icon.svg",
+          "destination": "icon.svg",
+          "sha256": "f3a8feb9d13c71715cf52e2b17f7761c2b989a941e63896f2595dee31d293a95",
+          "bytes": 729
+        },
+        {
+          "source": "icon-180.png",
+          "destination": "icon-180.png",
+          "sha256": "2fb750755acbb61ddf5b68c92f9fb550c9ad069d3d9600e122cc6f2055f12d59",
+          "bytes": 1332
+        },
+        {
+          "source": "icon-192.png",
+          "destination": "icon-192.png",
+          "sha256": "116a9f70523c4b0a9225a1695d10ba17ff94f9c95455fce740e6061f7ac441c9",
+          "bytes": 1373
+        },
+        {
+          "source": "icon-512.png",
+          "destination": "icon-512.png",
+          "sha256": "fb4a379dc1011f0dc5a9c1c27a5d4e54836dd874ba9ca8a942394f0d7486a96c",
+          "bytes": 4310
         }
       ]
     },
@@ -168,16 +266,22 @@
       ]
     },
     {
-      "id": "tijori",
-      "repo": "NakliTechie/Tijori",
+      "id": "nakliposter",
+      "repo": "NakliTechie/NakliPoster",
       "requestedRef": "main",
-      "resolvedCommit": "3c58d27ece3647ba5baf53fce623c5260756a589",
+      "resolvedCommit": "1fa1d4c2484ef90c2b5ed002d8694b229668a375",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "71a5602fd9bd19797a4b49bd8036036a98f6e9b7c097f43851c6097cb712aeb5",
-          "bytes": 455023
+          "sha256": "517b3dfa7e4b4d5a637a0cc607578ef7d3a71d487e90403152716f99acfe9a26",
+          "bytes": 309478
+        },
+        {
+          "source": "LICENSE",
+          "destination": "LICENSE",
+          "sha256": "8d5bf298355c136fb57eac95af829c4cc06a8e144cb3f08dc9f6aa5f8a7356ad",
+          "bytes": 1071
         }
       ]
     },
@@ -196,16 +300,28 @@
       ]
     },
     {
-      "id": "draft",
-      "repo": "NakliTechie/draft",
+      "id": "reel",
+      "repo": "NakliTechie/reel",
       "requestedRef": "main",
-      "resolvedCommit": "f4a09f0d8c43f47b2e20d233cba6ba39446b55ae",
+      "resolvedCommit": "d16f7ef1d855aebcbb48b388d44dce2050dbad7e",
       "files": [
         {
-          "source": "draft.html",
+          "source": "index.html",
           "destination": "index.html",
-          "sha256": "14b7547dec95bc95126711aad66608b91c357423ca7af5a850ef71c66bdeb30a",
-          "bytes": 615965
+          "sha256": "e15cb557b1ac79c925b26352ff14275ac85c7cb0a549bd718fcc51b55748b045",
+          "bytes": 115788
+        },
+        {
+          "source": "vendor/mediabunny/mediabunny-1.51.0.min.mjs",
+          "destination": "vendor/mediabunny/mediabunny-1.51.0.min.mjs",
+          "sha256": "1cd761e442a173c461b1a63cba29cb0816383f3b93b78d64b6e44c6dbce85d2b",
+          "bytes": 627244
+        },
+        {
+          "source": "vendor/mediabunny/LICENSE-MPL-2.0.txt",
+          "destination": "vendor/mediabunny/LICENSE-MPL-2.0.txt",
+          "sha256": "3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d04",
+          "bytes": 16726
         }
       ]
     },
@@ -266,98 +382,36 @@
       ]
     },
     {
-      "id": "menagerie",
-      "repo": "NakliTechie/menagerie",
+      "id": "tijori",
+      "repo": "NakliTechie/Tijori",
       "requestedRef": "main",
-      "resolvedCommit": "6013d1a6953c594afd1007933f67522a45cf4720",
+      "resolvedCommit": "3c58d27ece3647ba5baf53fce623c5260756a589",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "9b3fd96cc01b4edd377c787b148e960d75f2b84c7a589f483c9d109a5389eb4f",
-          "bytes": 252679
-        },
-        {
-          "source": "manifest.webmanifest",
-          "destination": "manifest.webmanifest",
-          "sha256": "bbaf8518cc6d86ffb6759ef0a4162d73a926b08bb1e1326c3923a83a93abd0b7",
-          "bytes": 623
-        },
-        {
-          "source": "icon.svg",
-          "destination": "icon.svg",
-          "sha256": "f3a8feb9d13c71715cf52e2b17f7761c2b989a941e63896f2595dee31d293a95",
-          "bytes": 729
-        },
-        {
-          "source": "icon-180.png",
-          "destination": "icon-180.png",
-          "sha256": "2fb750755acbb61ddf5b68c92f9fb550c9ad069d3d9600e122cc6f2055f12d59",
-          "bytes": 1332
-        },
-        {
-          "source": "icon-192.png",
-          "destination": "icon-192.png",
-          "sha256": "116a9f70523c4b0a9225a1695d10ba17ff94f9c95455fce740e6061f7ac441c9",
-          "bytes": 1373
-        },
-        {
-          "source": "icon-512.png",
-          "destination": "icon-512.png",
-          "sha256": "fb4a379dc1011f0dc5a9c1c27a5d4e54836dd874ba9ca8a942394f0d7486a96c",
-          "bytes": 4310
+          "sha256": "71a5602fd9bd19797a4b49bd8036036a98f6e9b7c097f43851c6097cb712aeb5",
+          "bytes": 455023
         }
       ]
     },
     {
-      "id": "abhyas",
-      "repo": "NakliTechie/abhyas-app",
+      "id": "vaultmind",
+      "repo": "NakliTechie/VaultMind",
       "requestedRef": "main",
-      "resolvedCommit": "470fdf8af590782aeb565e079fc2126647d60ca4",
+      "resolvedCommit": "5391b37b4916081022d6d9b907ff43667ff98f03",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "22c72bdbaea162efae05f8c4e9b92c9355b2729f0108f3bb004de164a80fe83f",
-          "bytes": 58614
+          "sha256": "3f252856d92d77f5acdb1b6cae3c192311ed1a72dc7a9fa79b30a1f8e4ccd341",
+          "bytes": 368732
         },
         {
-          "source": "data/maths-k5.js",
-          "destination": "data/maths-k5.js",
-          "sha256": "4bc12c8adb4c442d88c3f8859c706d98384b604c0a4698208cc84a2e13888c01",
-          "bytes": 2959337
-        },
-        {
-          "source": "sdk/naklios.js",
-          "destination": "sdk/naklios.js",
-          "sha256": "9390489a66446f7d78a72863ca8c2ed71cce1760b395d5d500e4c86a43a7fa52",
-          "bytes": 31778
-        }
-      ]
-    },
-    {
-      "id": "chapters",
-      "repo": "NakliTechie/chapter-time",
-      "requestedRef": "main",
-      "resolvedCommit": "9fe6911a287068034e6bd8fcc5cb96f3c2e2b4d5",
-      "files": [
-        {
-          "source": "index.html",
-          "destination": "index.html",
-          "sha256": "743ee2689a904f2690e95add9515d8a00163d9bc1b1605a9a67ec474dee382b8",
-          "bytes": 21853
-        },
-        {
-          "source": "data/chapters-k5.js",
-          "destination": "data/chapters-k5.js",
-          "sha256": "c8943fe102a2a13d5ebddb04ed4dbbc49cd7ba11a5e0b247a09f61e1e3872d11",
-          "bytes": 21513
-        },
-        {
-          "source": "sdk/naklios.js",
-          "destination": "sdk/naklios.js",
-          "sha256": "9390489a66446f7d78a72863ca8c2ed71cce1760b395d5d500e4c86a43a7fa52",
-          "bytes": 31778
+          "source": "LICENSE",
+          "destination": "LICENSE",
+          "sha256": "8d5bf298355c136fb57eac95af829c4cc06a8e144cb3f08dc9f6aa5f8a7356ad",
+          "bytes": 1071
         }
       ]
     }

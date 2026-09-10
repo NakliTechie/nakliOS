@@ -95,11 +95,13 @@ assert.match(
   /id:'editor'[\s\S]*?kind:'system'[\s\S]*?url:'\.\/apps\/editor\/'[\s\S]*?embedUrl:'\.\/apps\/editor\/'/,
   'Editor is a bundled system app',
 );
-assert.match(
-  html,
-  /id:'reel'[\s\S]*?url:'https:\/\/reel\.naklitechie\.com\/'[\s\S]*?embedUrl:'https:\/\/naklios\.dev\/apps\/reel\/'/,
-  'Reel keeps its canonical host and uses a same-origin Immersive mirror',
-);
+// Same-origin embed, either spelling: `./apps/<id>/` and `https://naklios.dev/apps/<id>/` both
+// resolve to /apps/<id>/. Relative is the house default because it is what makes a mirrored app
+// verifiable on a LOCAL serve before deploy (plan/history.md 2026-09-09, 2026-09-10).
+assert.match(html, /id:'reel'[\s\S]*?url:'https:\/\/reel\.naklitechie\.com\/'/, 'Reel keeps its canonical host');
+const reelEmbed = html.match(/id:'reel'[\s\S]*?embedUrl:'([^']+)'/);
+assert.ok(reelEmbed && ['./apps/reel/', 'https://naklios.dev/apps/reel/'].includes(reelEmbed[1]),
+  `Reel uses a same-origin Immersive mirror (got ${reelEmbed && reelEmbed[1]})`);
 // Same-origin embed, either spelling. `./apps/<id>/` and `https://naklios.dev/apps/<id>/` both
 // resolve to /apps/<id>/ for the inventory audit; the relative form additionally works on a
 // local serve, which is what makes a mirrored app verifiable before deploy (Menagerie set this

@@ -3,8 +3,8 @@
   "_comment": "Standalone repositories are authoritative. The sync workflow resolves each ref to an immutable commit, copies the declared release artifacts into apps/<id>/, and records commit + SHA-256 data in manifest.lock.json. Only mirror apps that need same-origin capabilities; keep other apps cross-origin and sandboxed.",
   "apps": [
     {
-      "id": "reel",
-      "repo": "NakliTechie/reel",
+      "id": "abhyas",
+      "repo": "NakliTechie/abhyas-app",
       "ref": "main",
       "files": [
         {
@@ -12,12 +12,84 @@
           "destination": "index.html"
         },
         {
-          "source": "vendor/mediabunny/mediabunny-1.51.0.min.mjs",
-          "destination": "vendor/mediabunny/mediabunny-1.51.0.min.mjs"
+          "source": "data/maths-k5.js",
+          "destination": "data/maths-k5.js"
         },
         {
-          "source": "vendor/mediabunny/LICENSE-MPL-2.0.txt",
-          "destination": "vendor/mediabunny/LICENSE-MPL-2.0.txt"
+          "source": "sdk/naklios.js",
+          "destination": "sdk/naklios.js"
+        }
+      ]
+    },
+    {
+      "id": "chapters",
+      "repo": "NakliTechie/chapter-time",
+      "ref": "main",
+      "files": [
+        {
+          "source": "index.html",
+          "destination": "index.html"
+        },
+        {
+          "source": "data/chapters-k5.js",
+          "destination": "data/chapters-k5.js"
+        },
+        {
+          "source": "sdk/naklios.js",
+          "destination": "sdk/naklios.js"
+        }
+      ]
+    },
+    {
+      "id": "draft",
+      "repo": "NakliTechie/draft",
+      "ref": "main",
+      "files": [
+        {
+          "source": "draft.html",
+          "destination": "index.html"
+        }
+      ]
+    },
+    {
+      "id": "kanzen",
+      "repo": "NakliTechie/KanZen",
+      "ref": "main",
+      "files": [
+        {
+          "source": "index.html",
+          "destination": "index.html"
+        }
+      ]
+    },
+    {
+      "id": "menagerie",
+      "repo": "NakliTechie/menagerie",
+      "ref": "main",
+      "files": [
+        {
+          "source": "index.html",
+          "destination": "index.html"
+        },
+        {
+          "source": "manifest.webmanifest",
+          "destination": "manifest.webmanifest"
+        },
+        {
+          "source": "icon.svg",
+          "destination": "icon.svg"
+        },
+        {
+          "source": "icon-180.png",
+          "destination": "icon-180.png"
+        },
+        {
+          "source": "icon-192.png",
+          "destination": "icon-192.png"
+        },
+        {
+          "source": "icon-512.png",
+          "destination": "icon-512.png"
         }
       ]
     },
@@ -117,13 +189,17 @@
       ]
     },
     {
-      "id": "tijori",
-      "repo": "NakliTechie/Tijori",
+      "id": "nakliposter",
+      "repo": "NakliTechie/NakliPoster",
       "ref": "main",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html"
+        },
+        {
+          "source": "LICENSE",
+          "destination": "LICENSE"
         }
       ]
     },
@@ -139,13 +215,21 @@
       ]
     },
     {
-      "id": "draft",
-      "repo": "NakliTechie/draft",
+      "id": "reel",
+      "repo": "NakliTechie/reel",
       "ref": "main",
       "files": [
         {
-          "source": "draft.html",
+          "source": "index.html",
           "destination": "index.html"
+        },
+        {
+          "source": "vendor/mediabunny/mediabunny-1.51.0.min.mjs",
+          "destination": "vendor/mediabunny/mediabunny-1.51.0.min.mjs"
+        },
+        {
+          "source": "vendor/mediabunny/LICENSE-MPL-2.0.txt",
+          "destination": "vendor/mediabunny/LICENSE-MPL-2.0.txt"
         }
       ]
     },
@@ -189,39 +273,19 @@
       ]
     },
     {
-      "id": "menagerie",
-      "repo": "NakliTechie/menagerie",
+      "id": "tijori",
+      "repo": "NakliTechie/Tijori",
       "ref": "main",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html"
-        },
-        {
-          "source": "manifest.webmanifest",
-          "destination": "manifest.webmanifest"
-        },
-        {
-          "source": "icon.svg",
-          "destination": "icon.svg"
-        },
-        {
-          "source": "icon-180.png",
-          "destination": "icon-180.png"
-        },
-        {
-          "source": "icon-192.png",
-          "destination": "icon-192.png"
-        },
-        {
-          "source": "icon-512.png",
-          "destination": "icon-512.png"
         }
       ]
     },
     {
-      "id": "abhyas",
-      "repo": "NakliTechie/abhyas-app",
+      "id": "vaultmind",
+      "repo": "NakliTechie/VaultMind",
       "ref": "main",
       "files": [
         {
@@ -229,31 +293,8 @@
           "destination": "index.html"
         },
         {
-          "source": "data/maths-k5.js",
-          "destination": "data/maths-k5.js"
-        },
-        {
-          "source": "sdk/naklios.js",
-          "destination": "sdk/naklios.js"
-        }
-      ]
-    },
-    {
-      "id": "chapters",
-      "repo": "NakliTechie/chapter-time",
-      "ref": "main",
-      "files": [
-        {
-          "source": "index.html",
-          "destination": "index.html"
-        },
-        {
-          "source": "data/chapters-k5.js",
-          "destination": "data/chapters-k5.js"
-        },
-        {
-          "source": "sdk/naklios.js",
-          "destination": "sdk/naklios.js"
+          "source": "LICENSE",
+          "destination": "LICENSE"
         }
       ]
     }
