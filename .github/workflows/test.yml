@@ -329,6 +329,9 @@ jobs:
       - name: Verify mirrored app artifacts match the immutable lock
         run: node scripts/validate-mirrors.mjs
 
+      - name: Verify a skipped mirror cannot be read as a successful sync
+        run: node scripts/test-mirror-skip-is-loud.mjs
+
       - name: Verify mirror manifest and lock validation behavior
         run: node scripts/test-mirror-lock.mjs
 

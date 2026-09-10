@@ -22,9 +22,15 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # MIRROR_SYNC_TOKEN is a PAT with READ access to the private source repos. Without it the
+      # default github.token is scoped to THIS repo, GitHub answers 404 for a private source,
+      # and that mirror is skipped — which is how nakliamp sat at 0.1.0-m0 from August to
+      # 2026-09-10 while every scheduled run reported success.
       - name: Sync mirrors
+        id: sync
         run: bash scripts/sync-mirrors.sh
         env:
+          MIRROR_SYNC_TOKEN: ${{ secrets.MIRROR_SYNC_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
 
       - name: Verify mirror lock and artifact hashes
@@ -46,3 +52,16 @@ jobs:
             each resolved upstream commit and artifact SHA-256 in
             `apps/manifest.lock.json` for deterministic review and rollback.
           delete-branch: true
+
+      # LAST, and `always()`, so a skipped mirror still fails the run without costing us the
+      # mirrors that did sync or the PR that carries them. A green run must mean every declared
+      # mirror was actually read: validate-mirrors cannot tell, because a skipped mirror keeps
+      # its lock entry and so the lock and the files still agree.
+      - name: Fail if any mirror was skipped
+        if: always() && steps.sync.outputs.skipped != ''
+        run: |
+          echo "::error::Mirrors not synced: ${{ steps.sync.outputs.skipped }}"
+          echo "Their source repositories were unreadable with the token this run had."
+          echo "Fix: add a MIRROR_SYNC_TOKEN secret (a PAT that can read them), or pass"
+          echo "--allow-skip=<ids> to declare the staleness deliberate."
+          exit 1
