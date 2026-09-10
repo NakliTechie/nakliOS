@@ -682,17 +682,20 @@ export function foldOutcome(events, resolve) {
   if (failedRounds) push('gate', 'failure', Math.min(0.5, 0.2 * failedRounds), `${failedRounds} failed gate round(s)`);
 
   // 2b. expectations (D3) — a shell call that carried an `expect` and MISSED it. A miss is a
-  //     small failure signal; a hit is neutral; an UNGRADABLE prediction is neither.
+  //     small failure signal; a hit is neutral; an UNGRADABLE prediction is neither. A VACUOUS
+  //     hit (`exit 0` predicted, met, on a command that printed nothing — expect.mjs) is counted
+  //     apart from the hits: it was not wrong, but it corroborated nothing, and a run that leans
+  //     on such predictions should not read as a run whose beliefs were tested.
   //
   //     The runner already grades every expectation live, with the true exit code in hand, and
-  //     records its verdict as the `[expect] MET|MISS` line. That verdict is authoritative, so
+  //     records its verdict as the `[expect] MET|MISS|VACUOUS` line. That verdict is authoritative, so
   //     prefer it over re-deriving one from the text (forward-pass L-2): re-parsing cannot tell
   //     a runner-appended `[exit N]` from the same characters a command printed itself, and a
   //     command whose last line happens to read "[exit 0]" would otherwise mint a false grade.
   //     Re-parsing stays as the fallback for records written before the live grade existed.
   //     Responses are queued PER ID and consumed in order, so a repeated tool-call id pairs each
   //     call with its own result rather than grading every one against the last (forward-pass L-1).
-  let expTotal = 0, expMissed = 0;
+  let expTotal = 0, expMissed = 0, expVacuous = 0;
   const respsById = new Map();
   for (const e of ev) if (e.tool === 'tool.responded' && e.input?.id) {
     if (!respsById.has(e.input.id)) respsById.set(e.input.id, []);
@@ -707,7 +710,7 @@ export function foldOutcome(events, resolve) {
     const resp = (respsById.get(id) || [])[nth]; if (!resp) continue; // no paired result — the run died there, not a miss
     takenById.set(id, nth + 1);
     const raw = String(resp?.output?.result ?? '');
-    let missed = null;
+    let missed = null, vacuous = false;
     // lastIndexOf, not indexOf: the runner APPENDS its verdict, so the last marker is the one it
     // wrote. Reading the first would let a command forge a verdict by printing the marker itself,
     // which is the very substitution this fix exists to prevent. (Located, never regex-matched:
@@ -717,6 +720,7 @@ export function foldOutcome(events, resolve) {
       const verdict = raw.slice(at + EXPECT_MARKER.length).trimStart();
       if (verdict.startsWith('MISS')) missed = true;
       else if (verdict.startsWith('MET')) missed = false;
+      else if (verdict.startsWith('VACUOUS')) { missed = false; vacuous = true; }
     }
     if (missed === null) {
       const result = stripExpect(raw);
@@ -724,11 +728,15 @@ export function foldOutcome(events, resolve) {
       // An `exit` prediction against a result carrying NO exit code is UNGRADED, not missed
       // (forward-pass L-3): the runner appends the suffix only when it HAS a code, so its
       // absence means "unknown". Grading it as a miss minted failure signals out of silence.
-      if (exp.kind !== 'exit' || exitCode != null) missed = !gradeExpect(exp, { exitCode, output: result }).ok;
+      // Grade the command's OUTPUT, not the runner's `[exit N]` suffix — the live grade runs
+      // before that suffix is appended, and a suffix-bearing "(no output)" is not blank.
+      const body = m ? result.slice(0, m.index) : result;
+      if (exp.kind !== 'exit' || exitCode != null) { const g = gradeExpect(exp, { exitCode, output: body }); missed = !g.ok; vacuous = !!g.vacuous; }
     }
     if (missed == null) continue; // ungradable — it counts neither for nor against the run
     expTotal++;
-    if (missed) { expMissed++; push('expectation', 'failure', 0.3, `predicted "${exp.kind} ${exp.value}" — missed`); }
+    if (vacuous) expVacuous++;
+    if (missed) { expMissed++; push('expectation', 'failure', 0.3, `predicted "${exp.value === '' ? exp.kind : `${exp.kind} ${exp.value}`}" — missed`); }
   }
 
   // 3. + 4. per-fact evidence from deliberate tool calls: repeat recall, and a fact
@@ -750,7 +758,7 @@ export function foldOutcome(events, resolve) {
 
   const score = Math.round(signals.reduce((t, s) => t + (s.polarity === 'success' ? s.weight : s.polarity === 'failure' ? -s.weight : 0), 0) * 100) / 100;
   const label = terminal?.polarity === 'success' ? 'success' : score < 0 ? 'failure' : 'unknown';
-  return { label, score, signals, facts, recalled, retracted, note, expectations: { total: expTotal, missed: expMissed } };
+  return { label, score, signals, facts, recalled, retracted, note, expectations: { total: expTotal, missed: expMissed, vacuous: expVacuous } };
 }
 
 // 5. reuse, across runs: a fact recalled in ≥ minRuns distinct runs is load-bearing

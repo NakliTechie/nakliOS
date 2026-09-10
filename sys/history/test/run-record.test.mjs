@@ -651,6 +651,37 @@ await test('OUTCOME expectation (D3): a shell call that missed its predicted exi
   await cont.finish(cr); await cont.settled();
   const co = foldOutcome(cont.events(), cont.resolve);
   eq(co.expectations.total, 1, 'a contains prediction needs no exit code'); eq(co.expectations.missed, 1, 'and it missed');
+  // VACUOUS (live-found 2026-09-10): the runner's `exit 0` hit on a silent command is counted
+  // apart from the hits and mints no signal either way — it was not wrong, it corroborated nothing.
+  const vac = createRunRecorder({ app: 'anvil', principal: 'p' });
+  await vac.start({ messages: MESSAGES, tools: [shellTool()] });
+  const vr = await runAgentLoop({ messages: MESSAGES, tools: [shellTool()],
+    infer: vac.wrapInfer(scripted([{ content: '', toolCalls: [call('shell', { command: 'rg needle', expect: 'exit 0' }, 'c0')] }, { content: 'done', toolCalls: [] }])),
+    executeTool: async () => '(no output)\n[exit 0]\n[expect] VACUOUS (exit 0) — exit 0, but the command printed nothing', onEvent: vac.onEvent });
+  await vac.finish(vr); await vac.settled();
+  const vo = foldOutcome(vac.events(), vac.resolve);
+  eq(vo.expectations.total, 1, 'graded'); eq(vo.expectations.missed, 0, 'not a miss'); eq(vo.expectations.vacuous, 1, 'counted as vacuous');
+  assert(!vo.signals.some((x) => x.kind === 'expectation'), 'a vacuous hit is neither failure nor success evidence');
+  eq(o.expectations.vacuous, 0, 'a plain miss is not vacuous'); eq(o2.expectations.vacuous, 0, 'a plain hit is not vacuous');
+  // the re-grade fallback (a record with no runner verdict) reaches the same accounting
+  const vac2 = createRunRecorder({ app: 'anvil', principal: 'p' });
+  await vac2.start({ messages: MESSAGES, tools: [shellTool()] });
+  const vr2 = await runAgentLoop({ messages: MESSAGES, tools: [shellTool()],
+    infer: vac2.wrapInfer(scripted([{ content: '', toolCalls: [call('shell', { command: 'rg needle', expect: 'exit 0' }, 'c0')] }, { content: 'done', toolCalls: [] }])),
+    executeTool: async () => '(no output)\n[exit 0]', onEvent: vac2.onEvent });
+  await vac2.finish(vr2); await vac2.settled();
+  const vo2 = foldOutcome(vac2.events(), vac2.resolve);
+  eq(vo2.expectations.vacuous, 1, 're-graded from the placeholder text'); eq(vo2.expectations.missed, 0, 'and not missed');
+  // an `output` prediction grades on the fold's re-parse too
+  const op = createRunRecorder({ app: 'anvil', principal: 'p' });
+  await op.start({ messages: MESSAGES, tools: [shellTool()] });
+  const orr = await runAgentLoop({ messages: MESSAGES, tools: [shellTool()],
+    infer: op.wrapInfer(scripted([{ content: '', toolCalls: [call('shell', { command: 'rg needle', expect: 'output' }, 'c0')] }, { content: 'done', toolCalls: [] }])),
+    executeTool: async () => '(no output)\n[exit 0]', onEvent: op.onEvent });
+  await op.finish(orr); await op.settled();
+  const oo = foldOutcome(op.events(), op.resolve);
+  eq(oo.expectations.missed, 1, 'a search that predicted output and found none is a MISS — the falsifiable form of the live-found case');
+  const os = oo.signals.find((x) => x.kind === 'expectation'); eq(os && os.detail, 'predicted "output" — missed', 'the signal names the valueless kind cleanly');
 });
 
 await test('OUTCOME per-fact: repeat recall and recall-then-retract are failure evidence on the FACT', async () => {

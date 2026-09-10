@@ -114,6 +114,21 @@ await test('shell reports the exit code, so a failure is not read as success', a
   eq(await exec('shell', { command: 'test -f missing.txt' }), '(no output)\n[exit 1]', 'silent failure is legible');
   assert(/\[exit 127\]$/.test(await exec('shell', { command: 'nosuchcommand' })), 'unknown command reports 127');
 });
+// D3 expect through the real runner. The live-found case (2026-09-10): a silent exit-0 command
+// predicted `exit 0` must not come back as a plain MET the agent reads as "found it".
+await test('expect: a silent exit-0 command graded `exit 0` is VACUOUS; `output` is falsifiable', async () => {
+  const { exec, shell } = fresh();
+  await shell.feed('printf "needle here\\n" > hay.txt');
+  const silent = await exec('shell', { command: 'echo', expect: 'exit 0' });
+  assert(/\[exit 0\]\n\[expect\] VACUOUS \(exit 0\) — /.test(silent), `vacuous, not MET: ${silent}`);
+  assert(/"output"/.test(silent), `the line tells the agent which predicate to use: ${silent}`);
+  const loud = await exec('shell', { command: 'grep needle hay.txt', expect: 'exit 0' });
+  assert(/\[expect\] MET \(exit 0\)/.test(loud), `exit 0 with output is a plain MET: ${loud}`);
+  assert(/\[expect\] MISS \(output\)/.test(await exec('shell', { command: 'echo', expect: 'output' })), 'output on silence misses');
+  assert(/\[expect\] MET \(output\)/.test(await exec('shell', { command: 'grep needle hay.txt', expect: 'output' })), 'output on a hit is met');
+  // a real search miss in this shell is exit 1 (grep semantics); predicting exit 1 on silence is a real hit
+  assert(/\[exit 1\]\n\[expect\] MET \(exit 1\)/.test(await exec('shell', { command: 'grep nomatch hay.txt', expect: 'exit 1' })), 'a met non-zero exit is not vacuous');
+});
 await test('an intercepted command reports NO exit code (lastCode would be stale)', async () => {
   const { exec } = fresh();
   // interceptBashCommand redirects this to the edit tool without ever calling

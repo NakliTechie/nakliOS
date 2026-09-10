@@ -18,6 +18,7 @@
 //   // result: { messages, steps, stop: 'done'|'max-steps'|'no-progress'|'error', text }
 
 import { parseToolArguments } from './agent-protocol.mjs';
+import { NO_OUTPUT } from './expect.mjs';
 
 // The single most powerful tool for a coding agent: a real shell. The Forge
 // shell already covers fileops, git, pipes, and globs, so one `shell` tool is a
@@ -35,7 +36,7 @@ export function shellTool() {
         type: 'object',
         properties: {
           command: { type: 'string', description: 'The command line to run.' },
-          expect: { type: 'string', description: 'Optional prediction, graded against the result: "exit <n>", "contains <text>", or "absent <text>". A miss is recorded — predict when you are testing a belief.' },
+          expect: { type: 'string', description: 'Optional prediction, graded against the result: "exit <n>", "contains <text>", "absent <text>", or "output" (the command prints something). A miss is recorded — predict when you are testing a belief. For a search or a listing predict "output" or "contains <text>", not "exit 0": a search that finds nothing also exits 0, and that grade is reported as VACUOUS.' },
         },
         required: ['command'],
       },
@@ -612,6 +613,6 @@ export function makeShellExecutor(shell) {
     if (hint) return hint; // omp interceptor: redirect to a structured tool, don't run
     const res = await shell.feed(command);
     const out = res?.output ?? '';
-    return out === '' ? '(no output)' : String(out);
+    return out === '' ? NO_OUTPUT : String(out);
   };
 }
