@@ -76,6 +76,32 @@ export function underGateDir(path) {
   return want.every((seg, i) => got[i] === seg);
 }
 
+// One call that arms a run, because arming it in two was the way to get it half-done: a
+// criterion written with no gate set is a file nobody runs, and a gate set with no criterion
+// written is a command that cannot pass. Both leave a run that LOOKS gated and grades itself.
+//
+// Returns a plan, not an effect — the caller owns the owner-door write and the task field, so
+// this stays pure and testable. Refuses a criterion outside GATE_DIR: a gate the agent can edit
+// is not a gate, and the fence only covers this directory.
+export function planGate({ file, source, command } = {}) {
+  const name = String(file == null ? '' : file).trim();
+  if (!name) return { ok: false, error: 'a criterion needs a file name' };
+  const path = name.includes('/') ? name.replace(/^\.?\//, '') : `${GATE_DIR}/${name}`;
+  if (!underGateDir(path)) {
+    return { ok: false, error: `a criterion must live under ${GATE_DIR}/ — the fence covers nothing else (got ${path})` };
+  }
+  if (typeof source !== 'string' || !source.trim()) {
+    return { ok: false, error: 'a criterion needs a body; an empty file exits 0 and passes everything' };
+  }
+  const cmd = String(command == null ? '' : command).trim() || `python ${path}`;
+  // The command has to actually mention the criterion, or the gate measures something else and
+  // the file is decoration. Checked on the normalised path, not the raw spelling.
+  if (!cmd.includes(path)) {
+    return { ok: false, error: `the gate command must run the criterion: ${cmd} does not mention ${path}` };
+  }
+  return { ok: true, path, source, command: cmd };
+}
+
 // The grant's read-only refusal, as the face words it.
 const READ_ONLY_RE = /path is read-only under this grant:\s*(\S+)/;
 

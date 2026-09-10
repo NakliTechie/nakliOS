@@ -52,14 +52,24 @@ function isolationPreamble(root) {
   return `
 import sys as _ks, builtins as _kb
 try:
-    vars(_kb).clear(); vars(_kb).update(_KILN_B0)
+    # Bind the dict FIRST: clearing builtins removes the vars builtin itself, so calling it a
+    # second time on the next statement raises NameError and the restore never ran.
+    _kd = vars(_kb)
+    _kd.clear()
+    _kd.update(_KILN_B0)
+    del _kd
 except NameError:
     pass
 _kroot = ${JSON.stringify(root)}
 for _kn in [n for n, m in list(_ks.modules.items())
             if getattr(m, '__file__', None) and str(m.__file__).startswith(_kroot)]:
     del _ks.modules[_kn]
-del _kn, _kroot
+# Names are cleaned up defensively: on the FIRST isolated run nothing has been imported from the
+# workspace yet, so the loop never binds _kn and a bare del of it raises NameError, which threw
+# the whole preamble and failed every first gate at exit 1 before the criterion ever ran.
+for _kname in ('_kn', '_kroot'):
+    globals().pop(_kname, None)
+del _kname
 `;
 }
 

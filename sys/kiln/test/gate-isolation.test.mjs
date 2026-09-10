@@ -56,7 +56,7 @@ const mkKiln = (py) => createMainThreadKiln({
   const py = makeFakePyodide();
   await mkKiln(py).exec('gate', 'print(1)', { isolate: true });
   const pre = py._seen.sync.join('\n');
-  ok('isolate restores builtins from the pre-agent snapshot', /vars\(_kb\)\.clear\(\)[\s\S]*_KILN_B0/.test(pre));
+  ok('isolate restores builtins from the pre-agent snapshot', /_kd = vars\(_kb\)[\s\S]*_kd\.clear\(\)[\s\S]*_kd\.update\(_KILN_B0\)/.test(pre));
   ok('isolate drops workspace modules from sys.modules', /del _ks\.modules\[_kn\]/.test(pre));
   ok('isolate scopes the purge to the workspace root', pre.includes('"/work"') || pre.includes("'/work'"));
   ok('isolate leaves stdlib alone (purge is guarded on __file__)', pre.includes("getattr(m, '__file__', None)"));
@@ -104,6 +104,48 @@ const mkKiln = (py) => createMainThreadKiln({
   py.runPythonAsync = async () => { ran = true; };
   const r = await mkKiln(py).exec('gate', 'print(1)', { isolate: true });
   ok('degrades to the shared namespace rather than failing the gate', ran && r.status === 'ok');
+}
+
+// The fake Pyodide never executes Python, so it accepted a preamble that THREW: a bare del of
+// a name the loop never bound raises NameError, and on the FIRST isolated run nothing has been
+// imported from the workspace, so that list is always empty. Every first gate failed at exit 1
+// before the criterion ran. Caught live 2026-09-10, not by this suite — hence this check.
+{
+  const { execFileSync } = await import('node:child_process');
+  const { readFile, writeFile, mkdtemp } = await import('node:fs/promises');
+  const nodePath = (await import('node:path')).default;
+  const { tmpdir } = await import('node:os');
+  const scratch = await mkdtemp(nodePath.join(tmpdir(), 'preamble-'));
+  const src = await readFile(new URL('../main-thread-runtime.mjs', import.meta.url), 'utf8');
+  const m = src.match(/return `\n(import sys as _ks[\s\S]*?)\n`;/);
+  ok('the isolation preamble is extractable', Boolean(m));
+  if (m) {
+    const body = m[1].replace('${JSON.stringify(root)}', '"/work"');
+    // Written to a file rather than squeezed into `python3 -c`: the preamble is multi-line
+    // Python and quoting it through an argv string is its own source of bugs.
+    const harness = [
+      'import builtins',
+      'class _S: modules = {}',
+      '_ks = _S()',
+      '_kb = builtins',
+      '_KILN_B0 = dict(vars(builtins))',
+      '',
+      body,
+      '',
+      'print("PREAMBLE OK")',
+    ].join('\n');
+    const file = nodePath.join(scratch, 'preamble_check.py');
+    await writeFile(file, harness);
+    let out = '', threw = null;
+    try { out = execFileSync('python3', [file], { encoding: 'utf8', timeout: 20000 }); }
+    catch (err) { threw = String((err && err.stderr) || (err && err.message) || err).slice(0, 240); }
+    if (threw && /ENOENT|not found/i.test(threw)) {
+      console.log('  (python3 unavailable — preamble execution not checked)');
+    } else {
+      ok('the preamble RUNS with an empty module set (the first-gate case)', /PREAMBLE OK/.test(out));
+      if (threw) console.error('    preamble raised:', threw.split('\n').slice(-3).join(' '));
+    }
+  }
 }
 
 console.log(`gate-isolation conformance: ${pass}/${pass + fail} passed`);

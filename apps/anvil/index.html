@@ -405,7 +405,7 @@
   import { codingToolset, makeToolExecutor, makeShellVerifier } from '../../sys/ai/agent-tools.mjs';
   import { buildProjectContext, rememberTool } from '../../sys/ai/project-context.mjs';
   import { SKILLS_DIR, parseSkill, buildSkillsIndex, skillTool, INJECTED_STATUSES, explainSkillsRefusal } from '../../sys/ai/skills.mjs';
-  import { GATE_DIR, explainGateRefusal, GATE_AUTHORING_HINT } from '../../sys/ai/gate.mjs';
+  import { GATE_DIR, explainGateRefusal, GATE_AUTHORING_HINT, planGate } from '../../sys/ai/gate.mjs';
   import { skillManageTool, planSkillWrite, createSkillSession, SKILL_FILE } from '../../sys/ai/skill-manage.mjs';
   import { createProposalLedger } from '../../sys/ai/proposal-fingerprint.mjs';
   import { skillLifecycle, applySkillStatus, reviveOnUse } from '../../sys/ai/skill-lifecycle.mjs';
@@ -2114,6 +2114,14 @@
     // `python` gates run); a failing gate feeds its bounded output back and the
     // agent retries. task_done is enabled so completion is explicit.
     const verifyCmd = ((t.verifyCmd)||'').trim();
+    // A test-bed run with no gate still COMPLETES — it just ends `unclaimed`, which is easy to
+    // read as success weeks later in a run record. Say so at the moment it happens, only under
+    // the test opt-in, so an ungated bed run is a choice rather than an oversight.
+    if(!verifyCmd && __anvilTestOptIn){
+      console.warn('[anvil testbed] this run is UNGATED — task_done will be accepted on the '
+        + 'agent\'s word and the record will read status:unclaimed, not done. '
+        + 'Arm it with __anvil.test.armGate({file,source}) before starting.');
+    }
     // kilnIsolate: the gate's python resets the interpreter first. The agent's own python
       // shares one memoized Pyodide, so without this the gate can import a module the agent
       // cached before editing its file, or one it pre-seeded outright.
@@ -2509,6 +2517,20 @@
     // Seed the per-task gate the way the ✓ Must-pass button does — the same t.verifyCmd
     // field, the same save(); no second code path decides whether a task is gated.
     setGate:(cmd)=>{ const t=activeTask(); if(!t) return { ok:false, error:'no active task' }; t.verifyCmd=String(cmd||'').trim(); save(); renderTaskbar(); return { ok:true, verifyCmd:t.verifyCmd }; },
+    // Arm a run in ONE call. Authoring a criterion and setting the gate are two writes, and a
+    // run with only one of them done still looks gated while grading itself: a criterion nobody
+    // runs, or a command with nothing to run. planGate refuses the half-states (outside the
+    // fence, empty body, a command that does not mention the criterion) BEFORE anything is
+    // written, so a failure here leaves the task exactly as it was.
+    armGate:async({ file, source, command }={})=>{
+      const t=activeTask(); if(!t) return { ok:false, error:'no active task' };
+      const plan=planGate({ file, source, command });
+      if(!plan.ok) return plan;
+      try{ await fs.write(plan.path, plan.source); }
+      catch(e){ return { ok:false, error:'could not author the criterion: '+String(e&&e.message||e) }; }
+      t.verifyCmd=plan.command; save(); renderTaskbar();
+      return { ok:true, path:plan.path, verifyCmd:t.verifyCmd, gated:true };
+    },
     taskState:()=>{ const t=activeTask(); return t? { id:t.id, title:t.title, status:t.status, verifyCmd:t.verifyCmd||'', mode:t.mode||'code' } : null; },
     demoCampaign:(g)=>startCampaign(g||'samtools view parity',{live:false}),
     liveCampaign:(g,maxIters)=>startCampaign(g||'samtools view parity',{live:true, maxIters:maxIters||8}),
