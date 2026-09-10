@@ -1134,6 +1134,17 @@ export function createShell({ registry, face, cwd = '', kiln = null } = {}) {
       last = await runStage(argv, stdin);
       if (last.staged) return last; // destructive: surface for confirm
       if (last.clear) return last;
+      // A stage that ERRORED must not have its message eaten as the next stage's input.
+      // This shell has no stderr, so `rg --bad-flag x | wc -l` used to pipe the refusal
+      // text into wc and report `1` with exit 0 — a refused command reporting success and
+      // a plausible number. Live-found 2026-09-10: an agent ran a four-stage pipeline whose
+      // first stage was refused, read exit 0, had its `expect` graded MET, and wrote the
+      // unexpanded command string into a file as though it were results.
+      //
+      // Exit 1 is NOT an error here: grep/rg use it for "no match", and `grep x f | wc -l`
+      // legitimately counts zero. Only >= 2 (usage/refusal) aborts, which is exactly the
+      // line the builtins already draw with flagErr's exit 2.
+      if (last.code >= 2) return last;
       stdin = last.text;
     }
     return last;

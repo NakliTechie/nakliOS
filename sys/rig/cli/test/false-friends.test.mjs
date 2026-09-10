@@ -283,6 +283,42 @@ await test('R3a: help describes a curated subset and says flags are refused', as
   assert(/No subshells, loops/.test(h), 'help names what the grammar lacks');
 });
 
+
+// ── a failing stage inside a PIPE was fed to the next stage as data ───────────────────────
+// The worst false friend found so far, because it manufactures a plausible answer rather
+// than an empty one. This shell has no stderr, so a refused stage's message went down the
+// pipe: `rg --bogus x | wc -l` answered `1` with exit 0 — the "1" being the refusal line
+// itself, counted. Live-found 2026-09-10 driving Anvil on qwen3:8b: a four-stage pipeline
+// whose FIRST stage was refused reported exit 0, had its `expect: exit 0` graded MET, and
+// the agent wrote the unexpanded command text into findings.md believing it had results.
+await test('R-pipe: a stage that errors surfaces instead of feeding the next stage', async () => {
+  const { run } = await shell();
+  const counted = await run('rg --bogus-flag x | wc -l');
+  assert(counted.code >= 2, `a refused stage must not report success: exit ${counted.code}`);
+  assert(/unsupported flag --bogus-flag/.test(counted.out), `the refusal itself must surface: ${counted.out}`);
+  assert(counted.out !== '1', 'the refusal line must never be counted as if it were output');
+
+  const missing = await run('nosuchcommand | wc -l');
+  eq(missing.code, 127, 'a missing command keeps its 127 through a pipe');
+  assert(/command not found/.test(missing.out), `and says so: ${missing.out}`);
+
+  // ...and the failure surfaces from any position, not just the first stage.
+  const later = await run('cat f.txt | rg --bogus-flag x');
+  assert(later.code >= 2, `a later stage's refusal also surfaces: exit ${later.code}`);
+});
+
+// The benign half: exit 1 is "no match", not an error, and must still flow through a pipe.
+// Aborting on it would break the most ordinary counting idiom there is.
+await test('R-pipe: "no match" (exit 1) still pipes, so counting zero keeps working', async () => {
+  const { run } = await shell();
+  const zero = await run('grep zzz f.txt | wc -l');
+  eq(zero.out, '0', 'grep with no match still counts zero through the pipe');
+  eq(zero.code, 0, 'and the pipeline succeeds — wc ran fine');
+  eq((await run('rg -n zzz | wc -l')).out, '0', 'same for rg');
+  eq((await run('cat f.txt | grep banana | wc -l')).out, '2', 'an ordinary matching pipeline is untouched');
+  eq((await run('cat f.txt | sort | uniq | wc -l')).out, '3', 'a three-stage pipeline is untouched');
+});
+
 if (failures.length) {
   console.error(`shell false-friends: ${passed} passed, ${failures.length} FAILED`);
   for (const f of failures) console.error(`  FAIL ${f.n}\n        ${f.message}`);

@@ -329,7 +329,13 @@ await test('a tool call with invalid JSON args yields an error result, loop cont
 await test('makeShellExecutor rejects unknown tools and empty commands', async () => {
   const exec = makeShellExecutor(freshShell());
   assert(/unknown tool/.test(await exec('frobnicate', {})), 'unknown tool');
-  assert(/non-empty/.test(await exec('shell', { command: '  ' })), 'empty command');
+  // The refusal must name where the command goes, not just that one is missing: a model
+  // that put it under the wrong key learns nothing from "requires a non-empty command".
+  const blank = await exec('shell', { command: '  ' });
+  assert(/"command"/.test(blank), `names the parameter: ${blank}`);
+  const wrongKey = await exec('shell', { cmd: 'echo hi' });
+  assert(/"command"/.test(wrongKey), `names the parameter: ${wrongKey}`);
+  assert(/"cmd"/.test(wrongKey), `names the key that was sent: ${wrongKey}`);
   eq(await exec('shell', { command: 'echo hi' }), 'hi', 'real output');
 });
 

@@ -513,6 +513,20 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
       }
       if (name === 'shell') {
         const command = String(args?.command || '');
+        // A call that named the parameter something else (`cmd`, `script`, …) used to fall
+        // through to the shell executor, come back "requires a non-empty command", and then
+        // get `[exit 0]` appended — because `lastCode` was stale from a call that never ran.
+        // Live-found 2026-09-10: qwen3:8b sent {"cmd": "rg …"} three times, read exit 0 as
+        // success each time, and the loop stopped `done` having executed nothing.
+        // So: refuse BEFORE the shell, name the parameter that works and the keys that were
+        // actually sent (054f7c6's rule — one refusal must be enough to self-correct), and
+        // return no exit code at all, because nothing ran.
+        if (!command.trim()) {
+          const sent = args && typeof args === 'object' ? Object.keys(args) : [];
+          const got = sent.length ? `received ${sent.map((k) => `"${k}"`).join(', ')}` : 'received no arguments';
+          return `Error: the shell tool takes the command in a "command" parameter (a string); ${got}. `
+            + 'Nothing was run. Retry as {"command": "<the command line>"}.';
+        }
         // An intercepted command never reaches the shell, so `lastCode` would be
         // stale from some earlier call — only ever report a code we caused.
         const reachedShell = !interceptBashCommand(command);

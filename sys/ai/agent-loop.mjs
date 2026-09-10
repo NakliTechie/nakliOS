@@ -599,7 +599,15 @@ export function makeShellExecutor(shell) {
   return async function executeTool(name, args) {
     if (name !== 'shell') return `Error: unknown tool "${name}"`;
     const command = typeof args?.command === 'string' ? args.command : '';
-    if (!command.trim()) return 'Error: shell tool requires a non-empty command';
+    // Name the parameter that works and the keys that were actually sent. The old text
+    // ("requires a non-empty command") did not say WHERE the command goes, so a model that
+    // had used the wrong key just sent the same wrong key again.
+    if (!command.trim()) {
+      const sent = args && typeof args === 'object' ? Object.keys(args) : [];
+      const got = sent.length ? `received ${sent.map((k) => `"${k}"`).join(', ')}` : 'received no arguments';
+      return `Error: the shell tool takes the command in a "command" parameter (a string); ${got}. `
+        + 'Nothing was run. Retry as {"command": "<the command line>"}.';
+    }
     const hint = interceptBashCommand(command);
     if (hint) return hint; // omp interceptor: redirect to a structured tool, don't run
     const res = await shell.feed(command);

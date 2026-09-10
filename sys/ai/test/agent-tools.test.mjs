@@ -266,6 +266,39 @@ await test('codingToolset advertises read/edit/write/apply_patch/shell', () => {
   for (const n of ['read', 'edit', 'write', 'apply_patch', 'todowrite', 'shell']) assert(names.includes(n), `has ${n}`);
 });
 
+
+// ── a shell call whose command went in the wrong parameter ─────────────
+// Live-found 2026-09-10 (Anvil on Ollama qwen3:8b): the model sent {"cmd": "rg …"}
+// three times. Each came back "requires a non-empty command" WITH "[exit 0]"
+// appended, because the exit code was read from a shell that had never run. The
+// model read exit 0 as success and the loop stopped `done` having executed nothing.
+await test('a shell call with the wrong parameter name is refused, names "command", and reports NO exit code', async () => {
+  const { exec, shell } = fresh();
+  await exec('shell', { command: 'echo priming' });   // make lastCode a real, stale 0
+  const out = await exec('shell', { cmd: 'rg -n "def solve" --type py' });
+  assert(!/\[exit \d+\]/.test(out), `a refusal that never reached the shell must carry no exit code: ${out}`);
+  assert(/"command"/.test(out), `the refusal must name the parameter that works: ${out}`);
+  assert(/"cmd"/.test(out), `the refusal must name the key that was actually sent: ${out}`);
+  assert(/Nothing was run/.test(out), `the refusal must say nothing ran: ${out}`);
+  eq(shell.lastCode, 0, 'the priming call is untouched');
+});
+
+await test('a shell call with no arguments at all is refused the same way', async () => {
+  const { exec } = fresh();
+  const out = await exec('shell', {});
+  assert(!/\[exit \d+\]/.test(out), `no exit code: ${out}`);
+  assert(/"command"/.test(out), `names the parameter: ${out}`);
+  assert(/no arguments/.test(out), `says what arrived: ${out}`);
+});
+
+await test('a real shell call still reports its exit code', async () => {
+  const { exec } = fresh();
+  const ok = await exec('shell', { command: 'echo hello' });
+  assert(/\[exit 0\]/.test(ok), `a command that ran keeps its exit code: ${ok}`);
+  const bad = await exec('shell', { command: 'definitely-not-a-command' });
+  assert(/\[exit [1-9]/.test(bad), `a failing command reports a non-zero code: ${bad}`);
+});
+
 if (failures.length) {
   console.error(`agent-tools: ${passed} passed, ${failures.length} FAILED`);
   for (const f of failures) console.error(`  FAIL ${f.name}: ${f.message}`);
