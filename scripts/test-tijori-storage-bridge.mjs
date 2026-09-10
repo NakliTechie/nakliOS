@@ -63,13 +63,25 @@ vm.runInNewContext(sdk, {
   clearTimeout: () => {},
 });
 
+// SDK v2 only honours messages whose source is window.parent and whose origin
+// matches the origin learned on first contact — deliver them the way a real host does.
+const HOST_ORIGIN = 'https://naklios.dev';
+const fromHost = (data) => messageListener({ source: childWindow.parent, origin: HOST_ORIGIN, data });
+
+// A message from anything other than the parent frame must be ignored.
 messageListener({
-  data: {
-    type: 'naklios:capabilities',
-    fs: true,
-    fsBackends: [{ id: 'crate', label: 'Crate', name: 'vault-bucket' }],
-    fsBackend: 'crate',
-  },
+  source: {},
+  origin: HOST_ORIGIN,
+  data: { type: 'naklios:capabilities', fs: true },
+});
+assert.notEqual(childWindow.naklios.capabilities.fs, true,
+  'SDK must ignore naklios:* messages whose source is not window.parent');
+
+fromHost({
+  type: 'naklios:capabilities',
+  fs: true,
+  fsBackends: [{ id: 'crate', label: 'Crate', name: 'vault-bucket' }],
+  fsBackend: 'crate',
 });
 assert.equal(childWindow.naklios.capabilities.fs, true);
 assert.equal(childWindow.naklios.capabilities.fsBackends[0].name, 'vault-bucket');
@@ -79,18 +91,14 @@ const selectPromise = childWindow.naklios.fs.useBackend('crate');
 const selectRequest = sent.at(-1);
 assert.equal(selectRequest.type, 'naklios:fs:selectBackend');
 assert.equal(selectRequest.backend, 'crate');
-messageListener({
-  data: { type: 'naklios:fs:reply', requestId: selectRequest.requestId, result: true },
-});
+fromHost({ type: 'naklios:fs:reply', requestId: selectRequest.requestId, result: true });
 assert.equal(await selectPromise, true);
 
 const requestPromise = childWindow.naklios.fs.exists('tijori-meta.json');
 const request = sent.at(-1);
 assert.equal(request.type, 'naklios:fs:exists');
 assert.equal(request.path, 'tijori-meta.json');
-messageListener({
-  data: { type: 'naklios:fs:reply', requestId: request.requestId, result: false },
-});
+fromHost({ type: 'naklios:fs:reply', requestId: request.requestId, result: false });
 assert.equal(await requestPromise, false);
 
 console.log('NakliOS ↔ Tijori storage bridge contract: PASS');
