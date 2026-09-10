@@ -46,7 +46,7 @@ assert.ok(fileGuard > 0, 'the file tools are fenced out of the skills dir');
 assert.ok(exec > 0, 'the tool executor is where the guard must precede');
 assert.ok(fileGuard < exec, 'the file fence runs BEFORE the write reaches the executor');
 // the shell is fenced by the GRANT, not by matching its command line
-assert.match(anvil, /const res = \(nm==='shell' && typeof raw==='string'\) \? explainSkillsRefusal\(raw\) : raw;/, 'a shell refusal is explained, and the explanation cannot itself refuse');
+assert.match(anvil, /\? explainGateRefusal\(nm==='shell' \? explainSkillsRefusal\(raw\) : raw\)/, 'a shell refusal is explained, and the explanation cannot itself refuse');
 assert.match(anvil, /import \{[^}]*explainSkillsRefusal[^}]*\} from '\.\.\/\.\.\/sys\/ai\/skills\.mjs'/, 'the wording comes from the module, not a copy in the app');
 assert.ok(/skill_manage/.test(explainSkillsRefusal('fs.write: EGRANT: path is read-only under this grant: .anvil/skills/y/SKILL.md')), 'the explanation names the door');
 assert.equal(explainSkillsRefusal('ok'), 'ok', 'an ordinary result is untouched');
@@ -54,9 +54,9 @@ assert.equal(explainSkillsRefusal('ok'), 'ok', 'an ordinary result is untouched'
 // The boundary itself: the grant, not the string match. Both the top-level agent and every
 // subagent get .anvil/skills as a read-only region, so every shell spelling of a write is
 // refused on the NORMALISED path (sys/ai/test/skills-fence.test.mjs drives the real shell).
-assert.equal((anvil.match(/readOnlyPrefixes:\[SKILLS_DIR\]/g) || []).length, 2,
+assert.equal((anvil.match(/readOnlyPrefixes:\[SKILLS_DIR, GATE_DIR\]/g) || []).length, 2,
   'both the agent grant and the subagent grant fence the skills dir read-only');
-assert.match(anvil, /createGrant\(\{ prefixes:\[''\][^}]*readOnlyPrefixes:\[SKILLS_DIR\] \}\)/, 'the fence is on the grant the agent face enforces');
+assert.match(anvil, /createGrant\(\{ prefixes:\[''\][^}]*readOnlyPrefixes:\[SKILLS_DIR, GATE_DIR\] \}\)/, 'the fence is on the grant the agent face enforces');
 // and the one door stays open: skill_manage writes through the UNGRANTED `fs`, never the
 // granted face — if it ever moved to face.invoke, the fence would lock out its own door.
 assert.match(anvil, /const w = await fs\.write\(dir\+'\/'\+SKILL_FILE, plan\.skillText\)/, 'skill_manage writes through the ungranted fs');

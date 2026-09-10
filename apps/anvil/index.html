@@ -405,6 +405,7 @@
   import { codingToolset, makeToolExecutor, makeShellVerifier } from '../../sys/ai/agent-tools.mjs';
   import { buildProjectContext, rememberTool } from '../../sys/ai/project-context.mjs';
   import { SKILLS_DIR, parseSkill, buildSkillsIndex, skillTool, INJECTED_STATUSES, explainSkillsRefusal } from '../../sys/ai/skills.mjs';
+  import { GATE_DIR, explainGateRefusal } from '../../sys/ai/gate.mjs';
   import { skillManageTool, planSkillWrite, createSkillSession, SKILL_FILE } from '../../sys/ai/skill-manage.mjs';
   import { createProposalLedger } from '../../sys/ai/proposal-fingerprint.mjs';
   import { skillLifecycle, applySkillStatus, reviveOnUse } from '../../sys/ai/skill-lifecycle.mjs';
@@ -474,7 +475,12 @@
     // unwritable for EVERY agent route at once — the shell's redirects and dotted fs.* verbs
     // included — because the check runs on the normalised path the fileops edge resolves.
     // skill_manage writes through `fs` directly, outside this grant, so the door still opens.
-    grant = createGrant({ prefixes:[''], scopes:['fs:read','fs:write','fs:remove','git:read','git:write'], readOnlyPrefixes:[SKILLS_DIR] });
+    // .anvil/gate is authority for the same reason and a stronger one: it holds the acceptance
+    // criterion the verify gate runs, so an agent that can edit it can weaken the standard
+    // instead of meeting it, and the gate could then only ever report green. Readable (the
+    // agent is aimed at it) and unwritable, with NO agent-facing door — the owner authors it
+    // through the app's own ungranted `fs`.
+    grant = createGrant({ prefixes:[''], scopes:['fs:read','fs:write','fs:remove','git:read','git:write'], readOnlyPrefixes:[SKILLS_DIR, GATE_DIR] });
     opLog = createOpLog({ fs: createFileops({ backend:new MemoryBackend() }) });
     face = createAgentFace({ registry, grant, opLog, actor:'agent' });
     // Kiln (Pyodide) — same wiring as Forge. Requires cross-origin isolation
@@ -1797,7 +1803,9 @@
       const ofs = createFileops({ backend: overlay, root: wsRoot });
       const ogit = createGitCore({ fs: ofs, dir:'/' });
       const oregistry = buildRigRegistry({ fs: ofs, git: ogit });
-      const ograph = createGrant({ prefixes:[''], scopes:['fs:read','fs:write','fs:remove','git:read','git:write'], readOnlyPrefixes:[SKILLS_DIR] });
+      // Same two fences as the top-level grant: a subagent working in a copy-on-write overlay
+      // must not be the route by which the skills dir or the acceptance criterion gets rewritten.
+      const ograph = createGrant({ prefixes:[''], scopes:['fs:read','fs:write','fs:remove','git:read','git:write'], readOnlyPrefixes:[SKILLS_DIR, GATE_DIR] });
       const oopLog = createOpLog({ fs: createFileops({ backend:new MemoryBackend() }) });
       const oface = createAgentFace({ registry: oregistry, grant: ograph, opLog: oopLog, actor:'agent' });
       const oshell = createShell({ registry: oregistry, face: oface }); // no kiln in subagents
@@ -2080,7 +2088,11 @@
       // says where to go instead. This only ever ANNOTATES a refusal; it cannot cause one,
       // and it runs before the post-tool hooks so their output still rides along.
       const raw = await baseExec(nm, ar, callObj);
-      const res = (nm==='shell' && typeof raw==='string') ? explainSkillsRefusal(raw) : raw;
+      // The gate fence annotation rides on EVERY string result, not just the shell's: write/edit
+      // reach fileops through the same granted face, so a refusal can arrive by either route.
+      const res = (typeof raw==='string')
+        ? explainGateRefusal(nm==='shell' ? explainSkillsRefusal(raw) : raw)
+        : raw;
       // Post-tool hooks: run configured commands (auto-format / lint / verify)
       // after the tool succeeds; their bounded output is fed back to the agent.
       try{
@@ -2449,7 +2461,7 @@
     // allowlist) and "sh check.sh" (`sh` is not a builtin → command not found,
     // exit 127): two of three examples could never pass.
     const v=await askText({ title:'Gate command',
-      label:'Runs after the agent finishes; the task isn\'t "done" until it exits 0.\nExamples:  python test_fib.py  ·  python -c \'import fib; assert fib.fib(10)==55\'  ·  grep -q TODO src/main.py\nLeave empty to clear.',
+      label:'Runs after the agent finishes; the task isn\'t "done" until it exits 0.\nExamples:  python test_fib.py  ·  python -c \'import fib; assert fib.fib(10)==55\'  ·  grep -c TODO src/main.py\nLeave empty to clear.',
       value:t.verifyCmd||'', placeholder:'python test_fib.py' });
     if(v===null) return; t.verifyCmd=v.trim(); save(); renderTaskbar();
   };
@@ -2486,6 +2498,15 @@
   })();
   if(__anvilTestOptIn){
   window.__anvil = Object.assign(window.__anvil||{}, { test: Object.assign((window.__anvil&&window.__anvil.test)||{}, {
+    // The OWNER's door onto the workspace, which is what authoring an acceptance criterion
+    // needs: `fs` is the ungranted fileops edge, so a write here lands inside .anvil/gate/
+    // while every agent route to the same path is refused by the grant. The owner has this
+    // door in the UI already; a browser test bed needs it programmatically.
+    fs: { read:(p)=>fs.read(p,{encoding:'utf-8'}), write:(p,d)=>fs.write(p,String(d)), list:(p)=>fs.list(p,{recursive:true}), remove:(p)=>fs.remove(p) },
+    // Seed the per-task gate the way the ✓ Must-pass button does — the same t.verifyCmd
+    // field, the same save(); no second code path decides whether a task is gated.
+    setGate:(cmd)=>{ const t=activeTask(); if(!t) return { ok:false, error:'no active task' }; t.verifyCmd=String(cmd||'').trim(); save(); renderTaskbar(); return { ok:true, verifyCmd:t.verifyCmd }; },
+    taskState:()=>{ const t=activeTask(); return t? { id:t.id, title:t.title, status:t.status, verifyCmd:t.verifyCmd||'', mode:t.mode||'code' } : null; },
     demoCampaign:(g)=>startCampaign(g||'samtools view parity',{live:false}),
     liveCampaign:(g,maxIters)=>startCampaign(g||'samtools view parity',{live:true, maxIters:maxIters||8}),
     synthesize:(goal, examples, popSize, maxGen)=>runSynthesize({goal, examples, popSize, maxGen}),

@@ -171,6 +171,9 @@ jobs:
       - name: Verify .anvil/skills is readable and UNWRITABLE from every agent route (grant-enforced)
         run: node sys/ai/test/skills-fence.test.mjs
 
+      - name: Verify .anvil/gate (the acceptance criterion) is readable and UNWRITABLE from every agent route
+        run: node sys/ai/test/gate-fence.test.mjs
+
       - name: Verify the Rig agent face C4 conformance (escape classes, grant edges, staging, op-log replay)
         run: node sys/rig/agent/test/conformance.test.mjs
 
