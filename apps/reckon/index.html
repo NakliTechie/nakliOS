@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="reckon-version" content="1.1.0">
+<meta name="reckon-version" content="1.2.0">
 <!-- CSP per handoff §10: NO unsafe-eval anywhere. unsafe-inline is required by
      the single-file shape (inline module script); it is not unsafe-eval. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src 'self' http://127.0.0.1:* https://cdn.jsdelivr.net https://huggingface.co https://*.hf.co https://api.openai.com https://api.anthropic.com https://openrouter.ai https://api.groq.com https://api.together.xyz https://api.mistral.ai https://generativelanguage.googleapis.com; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:">
@@ -40,7 +40,9 @@
   /* the formula bar is the instrument's cockpit — the chrome plane is toned
      (n1) so the white name box and formula field read as discrete, boxed
      controls, and the band separates firmly from the scrolling grid below. */
-  #rk-bar { display: flex; align-items: stretch; height: 30px; flex: none;
+  /* D2 (WCAG 2.2 AA 2.5.8): every control clears 24x24. The bars grew by
+     2px each to carry it; nothing else in the layout moved. */
+  #rk-bar { display: flex; align-items: stretch; height: 32px; flex: none;
     border-bottom: 1px solid var(--rk-n3); background: var(--rk-n1); padding: 3px 4px; gap: 4px; }
   #rk-namebox { width: 92px; flex: none; outline: none;
     border: 1px solid var(--rk-n2); background: var(--rk-n0);
@@ -76,7 +78,7 @@
     overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
   /* ---------------- in-cell editor + ref outlines ---------------- */
-  .rk-cell-editor { position: absolute; z-index: 20; display: flex;
+  .rk-cell-editor { position: absolute; z-index: 20; display: flex; pointer-events: auto;
     background: var(--rk-n0); border: 2px solid var(--rk-accent); }
   .rk-cell-editor[hidden] { display: none; }
   .rk-cell-editor input { border: none; outline: none; background: var(--rk-n0);
@@ -101,7 +103,7 @@
      shows the proposed formula (monospace), an arrow, and the PRE-EVALUATED
      value — or a loud error in danger-red. One accent for the primary action
      and focus; nothing decorative. Every proposal is honest before you accept. */
-  #rk-ai-hint { flex: none; width: 30px; align-self: stretch; cursor: pointer;
+  #rk-ai-hint { flex: none; width: 30px; min-height: 24px; align-self: stretch; cursor: pointer;
     border: 1px solid var(--rk-n2); background: var(--rk-n0); color: var(--rk-accent);
     font: 600 12px var(--rk-font); letter-spacing: -0.5px; }
   #rk-ai-hint:hover { border-color: var(--rk-accent); }
@@ -154,21 +156,38 @@
   /* ---------------- toolbar (Batch D) ---------------- */
   /* a dense instrument strip — toned chrome (n1), boxed controls, one accent
      for the active state. No decoration beyond what a control needs. */
+  /* D2 priority-overflow fold. `min-width: 0` is LOAD-BEARING: without it a
+     flex item's automatic minimum size is its min-content, and the bar widens
+     the whole app past the viewport instead of overflowing. `overflow: hidden`
+     is what makes controls fall off the edge invisibly rather than scroll — so
+     the fold, not the CSS, is what keeps every control reachable. scrollWidth
+     still reports true content width under it, which is what fit() measures.
+     Popovers are hosted on <body> (position: fixed) so this cannot clip them. */
   #rk-toolbar { display: flex; align-items: center; gap: 1px; flex: none;
-    height: 28px; padding: 0 var(--rk-s2); position: relative;
+    height: 30px; padding: 0 var(--rk-s2); position: relative; min-width: 0;
     border-bottom: 1px solid var(--rk-n3); background: var(--rk-n1);
-    overflow: visible; }
+    overflow: hidden; }
   .rk-tb-btn { border: 1px solid transparent; background: transparent;
-    color: var(--rk-n7); font: 12px var(--rk-font); height: 22px; min-width: 24px;
+    color: var(--rk-n7); font: 12px var(--rk-font); height: 24px; min-width: 24px;
     padding: 0 var(--rk-s2); cursor: pointer; display: inline-flex; align-items: center;
     justify-content: center; gap: 2px; white-space: nowrap; }
   .rk-tb-btn:hover { background: var(--rk-n0); border-color: var(--rk-n2); color: var(--rk-n9); }
+  /* D3: a disabled control states honestly that there is nothing to recover.
+     It keeps its footprint (the strip does not reflow as history changes),
+     stops responding to hover, and leaves the tab order. */
+  .rk-tb-btn:disabled { color: var(--rk-n4); cursor: default; }
+  .rk-tb-btn:disabled:hover { background: transparent; border-color: transparent; color: var(--rk-n4); }
+  .rk-tb-btn:disabled .rk-tb-ic { color: var(--rk-n4); }
   /* an ON toggle is a FILLED accent chip (not a hollow outline) so it never
      reads as the grid's hollow cell-selection box — see formats.critique.md */
   .rk-tb-btn.active { background: var(--rk-accent); border-color: var(--rk-accent);
     color: var(--rk-n0); }
   .rk-tb-btn.active .rk-tb-ic { color: var(--rk-n0); }
   .rk-tb-btn:focus-visible { outline: 2px solid var(--rk-accent); outline-offset: 1px; }
+  /* D1: the region that F6 just handed focus to. A ring on the REGION, not on
+     a control — it answers "where am I now", which is the question a keyboard
+     user has after leaving the grid. Inset so it never widens the layout. */
+  .rk-region-active { outline: 2px solid var(--rk-accent); outline-offset: -2px; }
   .rk-tb-caret { color: var(--rk-n5); font-size: 9px; }
   .rk-tb-sub { font-size: 9px; vertical-align: super; }
   .rk-tb-sep { width: 1px; align-self: center; height: 16px; background: var(--rk-n3); margin: 0 var(--rk-s2); }
@@ -182,9 +201,9 @@
   /* right-anchored context readout: the active format label on wide viewports */
   .rk-tb-readout { margin-left: auto; padding: 0 var(--rk-s3); color: var(--rk-n5);
     font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    max-width: 40%; }
+    max-width: 40%; min-width: 0; }
 
-  .rk-tb-pop { position: absolute; z-index: 61; background: var(--rk-n0);
+  .rk-tb-pop { position: fixed; z-index: 61; background: var(--rk-n0);
     border: 1px solid var(--rk-n3); box-shadow: 0 4px 12px rgba(23, 25, 29, 0.14);
     min-width: 168px; max-height: 320px; overflow-y: auto; padding: var(--rk-s1); }
   .rk-tb-pop-row { display: block; width: 100%; text-align: left; border: none;
@@ -192,8 +211,8 @@
     padding: var(--rk-s1) var(--rk-s3); cursor: pointer; white-space: pre; }
   .rk-tb-pop-row:hover { background: var(--rk-accent-soft); }
   .rk-tb-pop-row.active { color: var(--rk-accent); font-weight: 600; }
-  .rk-tb-pop-swatches { display: grid; grid-template-columns: repeat(4, 22px); gap: var(--rk-s2); min-width: 0; padding: var(--rk-s3); }
-  .rk-tb-swatch { width: 22px; height: 22px; border: 1px solid var(--rk-n3); cursor: pointer; padding: 0; }
+  .rk-tb-pop-swatches { display: grid; grid-template-columns: repeat(4, 24px); gap: var(--rk-s2); min-width: 0; padding: var(--rk-s3); }
+  .rk-tb-swatch { width: 24px; height: 24px; border: 1px solid var(--rk-n3); cursor: pointer; padding: 0; }
   .rk-tb-swatch:hover { outline: 2px solid var(--rk-accent); outline-offset: 1px; }
   .rk-tb-swatch-none { background: var(--rk-n0); position: relative; }
   .rk-tb-swatch-none::after { content: ""; position: absolute; left: 1px; right: 1px; top: 10px;
@@ -226,7 +245,7 @@
   .rk-dim { color: var(--rk-n5); font-style: italic; white-space: nowrap; opacity: 0.75; }
 
   /* ---------------- footer: tabs + status ---------------- */
-  #rk-foot { display: flex; align-items: stretch; height: 27px; flex: none;
+  #rk-foot { display: flex; align-items: stretch; height: 28px; flex: none;
     border-top: 1px solid var(--rk-n2); background: var(--rk-n1); }
   #rk-tabs { display: flex; align-items: stretch; overflow-x: auto; max-width: 60%; }
   .rk-tab { display: flex; align-items: center; gap: var(--rk-s2);
@@ -239,7 +258,7 @@
   .rk-tab-x:hover { color: var(--rk-danger); }
   .rk-tab-rename { width: 90px; font: 12px var(--rk-font); border: 1px solid var(--rk-accent); outline: none; padding: 0 var(--rk-s1); }
   #rk-tab-add { border: none; border-right: 1px solid var(--rk-n2); background: var(--rk-n1);
-    color: var(--rk-n6); width: 27px; font-size: 14px; cursor: pointer; }
+    color: var(--rk-n6); width: 28px; min-height: 24px; flex: none; font-size: 14px; cursor: pointer; }
   #rk-tab-add:hover, .rk-tab:hover { color: var(--rk-n9); }
   #rk-status { display: flex; align-items: center; gap: var(--rk-s5);
     margin-left: auto; padding: 0 var(--rk-s3); font-size: 11px; color: var(--rk-n6);
@@ -248,12 +267,12 @@
   #rk-status-left.error { color: var(--rk-danger); }
   #rk-status-stats { white-space: nowrap; color: var(--rk-n7); }
   #rk-status-version { color: var(--rk-n5); white-space: nowrap; }
-  #rk-help-btn { border: 1px solid var(--rk-n3); background: var(--rk-n0);
-    color: var(--rk-n6); width: 18px; height: 18px; line-height: 1; border-radius: 50%;
+  #rk-help-btn { border: 1px solid var(--rk-n3); background: var(--rk-n0); flex: none;
+    color: var(--rk-n6); width: 24px; height: 24px; line-height: 1; border-radius: 50%;
     cursor: pointer; font-size: 11px; padding: 0; }
   #rk-help-btn:hover { border-color: var(--rk-accent); color: var(--rk-accent); }
   #rk-settings-btn { border: none; background: none; color: var(--rk-n5); cursor: pointer;
-    font-size: 13px; line-height: 1; padding: 0; }
+    font-size: 13px; line-height: 1; padding: 0; width: 24px; height: 24px; flex: none; }
   #rk-settings-btn:hover { color: var(--rk-accent); }
   .rk-chip { border: 1px solid var(--rk-accent); color: var(--rk-accent);
     background: var(--rk-n0); font-size: 11px; padding: 0 var(--rk-s2); cursor: pointer; }
@@ -6985,6 +7004,71 @@ export function csvStringify(rows) {
   return Papa.unparse(rows.map((r) => r.map((c) => (c == null ? '' : c))), { newline: '\n' });
 }
 
+// ---------- artifact sniffing (single ingress, handoff §4) ----------
+// A filename extension and a MIME type are LABELS the caller supplies; the
+// bytes are the fact. A PNG handed to the CSV picker used to decode into
+// mojibake, parse into rows, and toast "Imported 3 rows into pic" — fabricated
+// success, which is strictly worse than a refusal. So the artifact is sniffed
+// before it is ingested, and the refusal names WHAT arrived.
+//
+// Two layers, because neither alone is enough:
+//   1. magic numbers, for the formats a user is actually likely to mis-pick —
+//      these give a specific, actionable name (and point .xlsx at the right menu);
+//   2. a text-plausibility scan, which catches every binary format we have no
+//      signature for. It is deliberately lossy-tolerant: a legitimate CSV saved
+//      in latin-1 decodes with a FEW U+FFFD, so the bar is a RATIO, not a count.
+const MAGIC = [
+  ['a PNG image', [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]],
+  ['a JPEG image', [0xff, 0xd8, 0xff]],
+  ['a GIF image', [0x47, 0x49, 0x46, 0x38]],
+  ['a PDF document', [0x25, 0x50, 0x44, 0x46, 0x2d]],
+  ['a ZIP archive — an .xlsx workbook is one, so use Import → Excel (.xlsx)', [0x50, 0x4b, 0x03, 0x04]],
+  ['a legacy Excel/Word file — use Import → Excel (.xlsx)', [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]],
+  ['a gzip archive', [0x1f, 0x8b, 0x08]],
+];
+
+// How binary a decoded string reads. Measured on NUL + C0 control characters,
+// NOT on U+FFFD replacement characters: a legitimate CSV saved in latin-1
+// decodes to ~12% replacement characters and a mis-decoded PNG to ~18%, so the
+// replacement ratio cannot tell them apart and using it refuses real files.
+// Control bytes DO separate them cleanly (that PNG: 20 NULs and 10% controls;
+// the latin-1 CSV: zero of both). Tab, newline and carriage return are
+// legitimate CSV structure and are never counted.
+export function controlRatio(text) {
+  const s = String(text ?? '');
+  if (!s.length) return 0;
+  let bad = 0;
+  for (let i = 0; i < s.length; i += 1) {
+    const c = s.charCodeAt(i);
+    if (c < 0x20 && c !== 9 && c !== 10 && c !== 13) bad += 1;
+  }
+  return bad / s.length;
+}
+export const CONTROL_RATIO_LIMIT = 0.01; // 1% — real text sits at 0
+
+// text already decoded (the agent-face / importCsvText path): null if it reads
+// as text, otherwise a phrase naming the problem.
+export function textNotCsv(text) {
+  const s = String(text ?? '');
+  // a text file never contains a NUL; one is proof on its own
+  if (s.indexOf(String.fromCharCode(0)) !== -1) return 'binary data (it contains NUL bytes), not text';
+  const r = controlRatio(s);
+  if (r > CONTROL_RATIO_LIMIT) return `binary data (${Math.round(r * 100) || 1}% of it is control bytes), not text`;
+  return null;
+}
+
+// raw bytes (the file-picker path): null if the artifact may be text, otherwise
+// a phrase naming what actually arrived.
+export function sniffNotText(bytes) {
+  const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes ?? []);
+  for (const [name, sig] of MAGIC) {
+    if (b.length >= sig.length && sig.every((v, i) => b[i] === v)) return name;
+  }
+  let text;
+  try { text = new TextDecoder('utf-8').decode(b); } catch { return 'binary data, not text'; }
+  return textNotCsv(text);
+}
+
 // ---------- Excel numFmt <-> Reckon format spec ----------
 const CUR_SYMBOL = { INR: '₹', USD: '$', EUR: '€', GBP: '£', JPY: '¥' };
 const DATE_NUMFMT = { dmy: 'dd/mm/yyyy', mdy: 'mm/dd/yyyy', iso: 'yyyy-mm-dd', dmonthy: 'd mmm yyyy', monthy: 'mmm yyyy' };
@@ -7230,7 +7314,7 @@ export function sanitizeSheetName(name) {
 
 // single-file composition: register on the shared namespace
 const NSio = (globalThis.Reckon ||= {});
-Object.assign(NSio, { csvParse, csvStringify, numFmtToSpec, specToNumFmt, xlsxImport, xlsxExport, sanitizeSheetName });
+Object.assign(NSio, { csvParse, csvStringify, sniffNotText, textNotCsv, controlRatio, numFmtToSpec, specToNumFmt, xlsxImport, xlsxExport, sanitizeSheetName });
 //__RK_INLINE_END io/io.mjs
 //__RK_INLINE_BEGIN core/chart-model.mjs
 // Reckon — chart model + scale/tick math + hand-rolled SVG renderer (Batch K).
@@ -8576,8 +8660,15 @@ const STR = {
   'empty.open':        { en: 'Open a folder to keep your workbooks on your disk', hi: 'अपनी वर्कबुक अपनी डिस्क पर रखने के लिए एक फ़ोल्डर खोलें' },
   'empty.browserOnly': { en: 'Workbooks stay in this browser — folder access is unavailable here', hi: 'वर्कबुक इसी ब्राउज़र में रहती हैं — यहाँ फ़ोल्डर पहुँच उपलब्ध नहीं है' },
   'a11y.help':         { en: 'Help', hi: 'मदद' },
+  'fsa.cancelled':     { en: 'No folder chosen — still saving in this browser', hi: 'कोई फ़ोल्डर नहीं चुना — अभी भी इसी ब्राउज़र में सहेजा जा रहा है' },
+  'fsa.unavailable':   { en: "This browser can't open folders; Reckon is saving in browser storage instead", hi: 'यह ब्राउज़र फ़ोल्डर नहीं खोल सकता; Reckon इसके बजाय ब्राउज़र स्टोरेज में सहेज रहा है' },
 
   // --- toolbar tooltips + labels ---
+  'tb.more':           { en: 'More tools', hi: 'और उपकरण' },
+  'tb.undo':           { en: 'Undo', hi: 'पूर्ववत करें' },
+  'tb.undoTip':        { en: 'Undo (⌘/Ctrl+Z)', hi: 'पूर्ववत करें (⌘/Ctrl+Z)' },
+  'tb.redo':           { en: 'Redo', hi: 'फिर से करें' },
+  'tb.redoTip':        { en: 'Redo (⌘/Ctrl+Shift+Z)', hi: 'फिर से करें (⌘/Ctrl+Shift+Z)' },
   'tb.numberFormat':   { en: 'Number format', hi: 'संख्या स्वरूप' },
   'tb.decDec':         { en: 'Decrease decimals', hi: 'दशमलव घटाएँ' },
   'tb.incDec':         { en: 'Increase decimals', hi: 'दशमलव बढ़ाएँ' },
@@ -8834,6 +8925,8 @@ const STR = {
   'help.noFolder':     { en: 'No folder', hi: 'कोई फ़ोल्डर नहीं' },
   'help.noFolderD':    { en: 'browser storage only (OPFS + IndexedDB) — cleared if you clear site data', hi: 'केवल ब्राउज़र स्टोरेज (OPFS + IndexedDB) — साइट डेटा साफ़ करने पर मिट जाता है' },
   'help.keyboard':     { en: 'Keyboard', hi: 'कीबोर्ड' },
+  'help.screen':       { en: 'Screen size', hi: 'स्क्रीन आकार' },
+  'help.screenD':      { en: 'Reckon\u2019s minimum comfortable viewport is 768 px wide \u2014 a cell grid is not a phone surface. That is about comfort, never a licence to hide a control: below that width the toolbar folds its lowest-priority controls into the \u22ef menu instead of letting them fall off the edge, and every control stays at least 24\u00d724 px.', hi: 'Reckon \u0915\u093e \u0928\u094d\u092f\u0942\u0928\u0924\u092e \u0906\u0930\u093e\u092e\u0926\u093e\u092f\u0915 \u0935\u094d\u092f\u0942\u092a\u094b\u0930\u094d\u091f 768 px \u091a\u094c\u0921\u093c\u093e \u0939\u0948 \u2014 \u0938\u0947\u0932 \u0917\u094d\u0930\u093f\u0921 \u092b\u093c\u094b\u0928 \u0915\u0940 \u0938\u0924\u0939 \u0928\u0939\u0940\u0902 \u0939\u0948\u0964 \u092f\u0939 \u0906\u0930\u093e\u092e \u0915\u0940 \u092c\u093e\u0924 \u0939\u0948, \u0915\u093f\u0938\u0940 \u0928\u093f\u092f\u0902\u0924\u094d\u0930\u0923 \u0915\u094b \u091b\u093f\u092a\u093e\u0928\u0947 \u0915\u0940 \u091b\u0942\u091f \u0928\u0939\u0940\u0902: \u0909\u0938\u0938\u0947 \u0938\u0902\u0915\u0930\u0940 \u091a\u094c\u0921\u093c\u093e\u0908 \u092a\u0930 \u091f\u0942\u0932\u092c\u093e\u0930 \u0905\u092a\u0928\u0947 \u0915\u092e-\u092a\u094d\u0930\u093e\u0925\u092e\u093f\u0915\u0924\u093e \u0935\u093e\u0932\u0947 \u0928\u093f\u092f\u0902\u0924\u094d\u0930\u0923 \u22ef \u092e\u0947\u0928\u0942 \u092e\u0947\u0902 \u092e\u094b\u0921\u093c \u0926\u0947\u0924\u093e \u0939\u0948, \u0914\u0930 \u0939\u0930 \u0928\u093f\u092f\u0902\u0924\u094d\u0930\u0923 \u0915\u092e \u0938\u0947 \u0915\u092e 24\u00d724 px \u0930\u0939\u0924\u093e \u0939\u0948\u0964' },
   'help.conflicts':    { en: 'Known conflicts: the browser owns ⌘/Ctrl+N/T/W; Ctrl+Space may collide with OS input switching — click the column header instead.', hi: 'ज्ञात टकराव: ⌘/Ctrl+N/T/W ब्राउज़र के अधीन हैं; Ctrl+Space OS इनपुट-स्विचिंग से टकरा सकता है — इसके बजाय कॉलम शीर्ष पर क्लिक करें।' },
   'help.privacyTitle': { en: 'Privacy — what leaves your device', hi: 'निजता — आपके डिवाइस से क्या बाहर जाता है' },
 
@@ -9255,7 +9348,48 @@ export function createGridView({ mount, hooks = {}, defaults = {} }) {
   const gridFocused = () => document.activeElement === catcher;
 
   // clicking anywhere in the grid returns focus to the catcher
-  sheet.overlayerEl.el.addEventListener('mousedown', () => { setTimeout(focusGrid, 0); }, true);
+  // A mousedown on the canvas overlay BLURS the catcher as its default action:
+  // focus lands on <body> until the deferred re-focus below runs. Every keystroke
+  // in that window is delivered to <body> and lost — under host load a
+  // setTimeout(0) can be starved for hundreds of ms, so the window is unbounded
+  // (this is the mechanism behind the intermittent "typed the first character and
+  // it vanished" grid/formats failures). preventDefault stops the blur from
+  // happening at all; focus is then moved explicitly, synchronously, here. The
+  // deferred call is kept as a belt-and-braces re-assert for renderer-internal
+  // focus moves.
+  //
+  // The `.rk-cell-editor` exemption below is a LIVE path. The editor box is
+  // appended to the vendored overlayer CONTENT layer, which carries
+  // pointer-events:none (x-data-spreadsheet 1.1.9 CSS), so for most of this
+  // product's life a click at the editor's own coordinates hit-tested to the
+  // overlayer and committed the session as a click-outside — the caret could
+  // not be placed with the mouse at all. `.rk-cell-editor` now sets
+  // pointer-events:auto (reckon.html), which is enough on its own: an `auto`
+  // descendant of a `none` ancestor is hittable, so the vendored layer is
+  // untouched. elementFromPoint over an open editor returns the INPUT, and this
+  // exemption is what keeps the click from being stolen back. Covered by
+  // grid.e2e "a click inside the open editor places the caret".
+  //
+  // The re-assert only RECOVERS focus, it never TAKES it. Between the click and
+  // the macrotask, something the click legitimately opened may have claimed
+  // focus — the cell editor (F2, type-to-edit) or a dialog such as the explain
+  // panel, which focuses its close button. An unconditional re-focus yanks the
+  // keyboard out of those and every subsequent key lands on the catcher: Escape
+  // then never reaches the editor session (the next click commits it as a
+  // spurious transaction, so ctrl+z undoes the wrong thing) and never reaches
+  // the panel (which stays open). So re-assert ONLY when focus has fallen to
+  // nothing — body/documentElement/null, the failure this deferral exists for.
+  const reassertGridFocus = () => {
+    const ae = document.activeElement;
+    if (ae && ae !== document.body && ae !== document.documentElement) return;
+    focusGrid();
+  };
+  sheet.overlayerEl.el.addEventListener('mousedown', (evt) => {
+    if (evt.target?.closest?.('.rk-cell-editor')) return;
+    evt.preventDefault();
+    focusGrid();
+    setTimeout(reassertGridFocus, 0);
+  }, true);
 
   // ---------- data-bar overlay (Batch L) ----------
   // Data bars are drawn as translucent rects in a pointer-eventless layer pinned
@@ -10169,11 +10303,13 @@ export function createToolbar({ mount, hooks = {} }) {
     pop.className = 'rk-tb-pop';
     pop.dataset.for = anchor.dataset.k;
     build(pop);
-    mount.appendChild(pop);
+    // D2: the bar itself is `overflow: hidden` (the fold's structural guard), so
+    // a popover parented to it would be clipped. It lives on <body> as a fixed
+    // layer and is positioned in VIEWPORT coordinates instead.
+    document.body.appendChild(pop);
     const r = anchor.getBoundingClientRect();
-    const m = mount.getBoundingClientRect();
-    pop.style.left = `${Math.max(2, r.left - m.left)}px`;
-    pop.style.top = `${r.bottom - m.top + 2}px`;
+    pop.style.left = `${Math.max(2, Math.min(r.left, document.documentElement.clientWidth - pop.offsetWidth - 2))}px`;
+    pop.style.top = `${r.bottom + 2}px`;
     openPop = pop;
     document.addEventListener('mousedown', outside, true);
   };
@@ -10195,6 +10331,8 @@ export function createToolbar({ mount, hooks = {} }) {
     alignC: svg('<g stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="2" y1="4" x2="14" y2="4"/><line x1="5" y1="8" x2="11" y2="8"/><line x1="4" y1="12" x2="12" y2="12"/></g>'),
     alignR: svg('<g stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="2" y1="4" x2="14" y2="4"/><line x1="6" y1="8" x2="14" y2="8"/><line x1="4" y1="12" x2="14" y2="12"/></g>'),
     fill: svg('<rect x="2.5" y="2.5" width="11" height="11" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="2.5" y="9.5" width="11" height="4" fill="currentColor"/>'),
+    undo: svg('<path d="M3.5 7.5h6a3 3 0 0 1 0 6H6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 4.5 3 7.5 6 10.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>'),
+    redo: svg('<path d="M12.5 7.5h-6a3 3 0 0 0 0 6H10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 4.5 13 7.5 10 10.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>'),
     border: svg('<rect x="2.5" y="2.5" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.6"/><line x1="8" y1="3" x2="8" y2="13" stroke="currentColor" stroke-width="0.8"/><line x1="3" y1="8" x2="13" y2="8" stroke="currentColor" stroke-width="0.8"/>'),
   };
   const sep = () => { const s = document.createElement('span'); s.className = 'rk-tb-sep'; return s; };
@@ -10207,6 +10345,28 @@ export function createToolbar({ mount, hooks = {} }) {
     row.addEventListener('click', () => { closePop(); onClick(); });
     pop.appendChild(row);
     return row;
+  };
+
+  // ---------- undo / redo (D3) ----------
+  // Every recovery path used to route through an invisible ⌘Z — including the
+  // delete-sheet dialog, which advertises it in TEXT. A sovereign tool aimed at
+  // people who are not power users has to SHOW its escape hatch. Disabled state
+  // is driven from real history depth (session.canUndo/canRedo), never guessed:
+  // a control that looks available and does nothing is the same lie as a silent
+  // failure.
+  const undoBtn = btn(ICON.undo, { title: RK.t('tb.undoTip'), k: 'undo' });
+  const redoBtn = btn(ICON.redo, { title: RK.t('tb.redoTip'), k: 'redo' });
+  undoBtn.setAttribute('aria-label', RK.t('tb.undo'));
+  redoBtn.setAttribute('aria-label', RK.t('tb.redo'));
+  undoBtn.disabled = true;
+  redoBtn.disabled = true;
+  undoBtn.addEventListener('click', () => hooks.undo?.());
+  redoBtn.addEventListener('click', () => hooks.redo?.());
+  const setHistory = ({ canUndo = false, canRedo = false } = {}) => {
+    undoBtn.disabled = !canUndo;
+    redoBtn.disabled = !canRedo;
+    // a disabled control must not stay the toolbar's tab stop
+    applyRoving();
   };
 
   // ---------- number-format menu ----------
@@ -10225,7 +10385,7 @@ export function createToolbar({ mount, hooks = {} }) {
     }
   };
   let curDef = { kind: 'general' };
-  fmtBtn.addEventListener('click', () => popover(fmtBtn, (pop) => {
+  const buildFmtPop = (pop) => {
     const dec = curDef.decimals ?? 2;
     const set = (spec) => hooks.setNumberFormat?.(spec);
     popRow(pop, RK.t('fmt.general'), () => hooks.clearNumberFormat?.(), { active: curDef.kind === 'general' });
@@ -10236,7 +10396,8 @@ export function createToolbar({ mount, hooks = {} }) {
     const patLabel = { dmy: 'dd/mm/yyyy', mdy: 'mm/dd/yyyy', iso: 'yyyy-mm-dd', dmonthy: 'd mmm yyyy', monthy: 'mmm yyyy' };
     for (const pat of Object.values(dp)) popRow(pop, `${RK.t('fmt.date')}      ${patLabel[pat] ?? pat}`, () => set({ kind: 'date', pattern: pat }), { active: curDef.kind === 'date' && curDef.pattern === pat });
     popRow(pop, RK.t('fmt.textPlain'), () => set({ kind: 'text' }), { active: curDef.kind === 'text' });
-  }));
+  };
+  fmtBtn.addEventListener('click', () => popover(fmtBtn, buildFmtPop));
 
   // decimals +/- and grouping
   const decMinus = btn('.0<span class="rk-tb-sub">−</span>', { title: RK.t('tb.decDec'), k: 'dm' });
@@ -10262,7 +10423,7 @@ export function createToolbar({ mount, hooks = {} }) {
   const fillBtn = btn(`${ICON.fill}<span class="rk-tb-caret">▾</span>`, { title: RK.t('tb.cellColour'), k: 'fill' });
   const RAMP = ['0', '1', '2', '3', '8', '9']; // curated light + dark neutrals
   const swHex = { 0: '#ffffff', 1: '#f6f7f8', 2: '#e3e5e8', 3: '#c9ccd1', 8: '#2a2d33', 9: '#17191d', a: '#1a5fb4' };
-  fillBtn.addEventListener('click', () => popover(fillBtn, (pop) => {
+  const buildFillPop = (pop) => {
     pop.classList.add('rk-tb-pop-swatches');
     const none = document.createElement('button');
     none.type = 'button'; none.className = 'rk-tb-swatch rk-tb-swatch-none'; none.title = RK.t('tb.noFill');
@@ -10278,15 +10439,17 @@ export function createToolbar({ mount, hooks = {} }) {
       sw.addEventListener('click', () => { closePop(); hooks.setBg?.(slot); });
       pop.appendChild(sw);
     }
-  }));
+  };
+  fillBtn.addEventListener('click', () => popover(fillBtn, buildFillPop));
 
   // ---------- borders ----------
   const bordBtn = btn(`${ICON.border}<span class="rk-tb-caret">▾</span>`, { title: RK.t('tb.borders'), k: 'bord' });
-  bordBtn.addEventListener('click', () => popover(bordBtn, (pop) => {
+  const buildBordPop = (pop) => {
     for (const [label, intent] of [[RK.t('bd.all'), 'all'], [RK.t('bd.outline'), 'outline'], [RK.t('bd.top'), 't'], [RK.t('bd.bottom'), 'b'], [RK.t('bd.left'), 'l'], [RK.t('bd.right'), 'r'], [RK.t('bd.none'), null]]) {
       popRow(pop, label, () => hooks.setBorder?.(intent));
     }
-  }));
+  };
+  bordBtn.addEventListener('click', () => popover(bordBtn, buildBordPop));
 
   // ---------- data: sort / filter ----------
   // opposing labels so direction reads without relying on one glyph
@@ -10318,22 +10481,25 @@ export function createToolbar({ mount, hooks = {} }) {
   // ---------- charts (Batch K): insert from the selection, a type menu ----------
   const chartBtn = btn(`${RK.t('tb.chart')}<span class="rk-tb-caret">▾</span>`, { title: RK.t('tb.chartTip'), k: 'ch' });
   const CHART_TYPES = ['column', 'bar', 'line', 'area', 'pie', 'scatter', 'combo'];
-  chartBtn.addEventListener('click', () => popover(chartBtn, (pop) => {
+  const buildChartPop = (pop) => {
     for (const ty of CHART_TYPES) popRow(pop, RK.t(`chart.type.${ty}`), () => hooks.insertChart?.(ty));
-  }));
+  };
+  chartBtn.addEventListener('click', () => popover(chartBtn, buildChartPop));
 
   // ---------- IO (Batch E): import / export menus, far right ----------
   const importBtn = btn(`${RK.t('tb.import')}<span class="rk-tb-caret">▾</span>`, { title: RK.t('tb.importTip'), k: 'imp' });
-  importBtn.addEventListener('click', () => popover(importBtn, (pop) => {
+  const buildImportPop = (pop) => {
     popRow(pop, RK.t('io.csvFile'), () => hooks.importCsv?.());
     popRow(pop, RK.t('io.xlsxImport'), () => hooks.importXlsx?.());
-  }));
+  };
+  importBtn.addEventListener('click', () => popover(importBtn, buildImportPop));
   const exportBtn = btn(`${RK.t('tb.export')}<span class="rk-tb-caret">▾</span>`, { title: RK.t('tb.exportTip'), k: 'exp' });
-  exportBtn.addEventListener('click', () => popover(exportBtn, (pop) => {
+  const buildExportPop = (pop) => {
     popRow(pop, RK.t('io.csvSheet'), () => hooks.exportCsv?.());
     popRow(pop, RK.t('io.xlsx'), () => hooks.exportXlsx?.());
     popRow(pop, RK.t('io.reckon'), () => hooks.exportJson?.());
-  }));
+  };
+  exportBtn.addEventListener('click', () => popover(exportBtn, buildExportPop));
 
   // right-anchored context readout (balance on wide viewports + instrument value)
   const readout = document.createElement('span');
@@ -10341,7 +10507,7 @@ export function createToolbar({ mount, hooks = {} }) {
 
   // ---------- assemble ----------
   const groups = [
-    [fmtBtn, decMinus, decPlus], [boldBtn, italBtn], [alL, alC, alR],
+    [undoBtn, redoBtn], [fmtBtn, decMinus, decPlus], [boldBtn, italBtn], [alL, alC, alR],
     [fillBtn, bordBtn], [sortA, sortD, filterBtn], [nameBtn, freezeBtn], [condBtn, dvBtn, chartBtn, pivotBtn],
   ];
   groups.forEach((g, i) => {
@@ -10349,9 +10515,157 @@ export function createToolbar({ mount, hooks = {} }) {
     for (const el of g) mount.appendChild(el);
   });
   mount.appendChild(readout);
-  mount.appendChild(sep());
+  const ioSep = sep();
+  mount.appendChild(ioSep);
   mount.appendChild(importBtn);
   mount.appendChild(exportBtn);
+
+  // ---------- priority-overflow fold (D2) ----------
+  // A stated 768px minimum viewport is a claim about COMFORT; it is never a
+  // licence to put a control out of reach. Below whatever width the bar needs,
+  // the lowest-priority controls fold into a "More" menu instead of falling off
+  // the edge. No breakpoints: the bar measures itself.
+  //
+  // What folds, and in what order: dialog/menu OPENERS first, because folding
+  // one costs nothing — it was already two clicks. Direct one-click actions
+  // fold only when nothing else is left, and undo/redo never fold at all: a
+  // recovery affordance that takes two clicks to reach is the thing D3 just
+  // finished fixing. Reachability outranks convenience — at 390px the openers
+  // alone are not enough room, and a control left off the edge would be worse
+  // than the same control one click deeper.
+  //
+  // The inline buttons keep their `title` attributes VERBATIM (a screenshot or
+  // guide harness may select by title); the nicer human labels go on the menu
+  // rows, which nothing selects by.
+  const moreBtn = btn('⋯', { title: RK.t('tb.more'), k: 'more' });
+  moreBtn.setAttribute('aria-label', RK.t('tb.more'));
+  moreBtn.setAttribute('aria-haspopup', 'menu');
+  mount.appendChild(moreBtn);
+
+  // highest priority first — fit() folds from the TAIL of this list
+  const FOLDABLE = [
+    // -- fold LAST: the controls a narrow-screen user reaches for most --
+    { el: fmtBtn, label: RK.t('tb.numberFormat'), open: (a) => popover(a, buildFmtPop) },
+    { el: boldBtn, label: RK.t('tb.bold'), open: () => hooks.toggle?.('bold') },
+    { el: italBtn, label: RK.t('tb.italic'), open: () => hooks.toggle?.('italic') },
+    { el: decMinus, label: RK.t('tb.decDec'), open: () => hooks.stepDecimals?.(-1) },
+    { el: decPlus, label: RK.t('tb.incDec'), open: () => hooks.stepDecimals?.(1) },
+    { el: alL, label: RK.t('tb.alignLeft'), open: () => hooks.setAlign?.('left') },
+    { el: alC, label: RK.t('tb.alignCenter'), open: () => hooks.setAlign?.('center') },
+    { el: alR, label: RK.t('tb.alignRight'), open: () => hooks.setAlign?.('right') },
+    { el: sortA, label: RK.t('tb.sortAsc'), open: () => hooks.sort?.('asc') },
+    { el: sortD, label: RK.t('tb.sortDesc'), open: () => hooks.sort?.('desc') },
+    { el: freezeBtn, label: RK.t('tb.freezeTip'), open: () => hooks.freeze?.() },
+    // -- fold FIRST: dialog and menu openers --
+    { el: importBtn, label: RK.t('tb.importTip'), open: (a) => popover(a, buildImportPop) },
+    { el: exportBtn, label: RK.t('tb.exportTip'), open: (a) => popover(a, buildExportPop) },
+    { el: fillBtn, label: RK.t('tb.cellColour'), open: (a) => popover(a, buildFillPop) },
+    { el: bordBtn, label: RK.t('tb.borders'), open: (a) => popover(a, buildBordPop) },
+    { el: filterBtn, label: RK.t('tb.filterTip'), open: () => hooks.filter?.() },
+    { el: nameBtn, label: RK.t('tb.namedRanges'), open: () => hooks.names?.() },
+    { el: chartBtn, label: RK.t('tb.chartTip'), open: (a) => popover(a, buildChartPop) },
+    { el: condBtn, label: RK.t('tb.condFormatTip'), open: () => hooks.condFormat?.() },
+    { el: dvBtn, label: RK.t('tb.dataValidTip'), open: () => hooks.dataValid?.() },
+    { el: pivotBtn, label: RK.t('tb.pivotTip'), open: () => hooks.pivot?.() },
+  ];
+  let folded = [];
+  moreBtn.addEventListener('click', () => popover(moreBtn, (pop) => {
+    for (const f of folded) popRow(pop, f.label, () => f.open(moreBtn));
+  }));
+
+  // a separator with no visible control between it and the next one is noise
+  const tidySeps = () => {
+    const kids = Array.from(mount.children).filter((el) => el !== readout && el !== moreBtn);
+    let seenBtn = false;
+    for (const el of kids) {
+      if (el.classList.contains('rk-tb-sep')) { el.style.display = seenBtn ? '' : 'none'; seenBtn = false; }
+      else if (el.classList.contains('rk-tb-btn') && el.style.display !== 'none') seenBtn = true;
+    }
+  };
+
+  const overflows = () => mount.scrollWidth > mount.clientWidth + 1;
+  const fit = () => {
+    // unfold everything first, so widening recovers controls as well as
+    // narrowing sheds them
+    for (const f of FOLDABLE) f.el.style.display = '';
+    readout.style.display = '';
+    moreBtn.style.display = 'none';
+    folded = [];
+    tidySeps();
+    if (!overflows()) { applyRoving(); return; }
+    // the readout is decoration; it goes before any control does
+    readout.style.display = 'none';
+    moreBtn.style.display = '';
+    // NOTE: fold via style.display, never `.hidden = true` — `.rk-tb-btn` sets
+    // `display: inline-flex`, which overrides the UA's `[hidden]` rule and would
+    // leave a "hidden" button fully visible.
+    for (let i = FOLDABLE.length - 1; i >= 0 && overflows(); i -= 1) {
+      FOLDABLE[i].el.style.display = 'none';
+      folded.unshift(FOLDABLE[i]);
+      tidySeps();
+    }
+    if (!folded.length) { moreBtn.style.display = 'none'; }
+    tidySeps();
+    applyRoving();
+  };
+
+  // Observe the BAR, not a child. Folding toggles children's display, which
+  // does not change the bar's own border-box, so this cannot re-trigger itself.
+  let rafId = 0;
+  if (typeof ResizeObserver === 'function') {
+    const ro = new ResizeObserver(() => {
+      if (rafId) return;
+      rafId = requestAnimationFrame(() => { rafId = 0; fit(); });
+    });
+    ro.observe(mount);
+  }
+
+  // ---------- roving tabindex (D1: F6 region cycling) ----------
+  // The toolbar is ONE tab stop, not 29. Arrows move within it; F6 leaves it.
+  // The control list is recomputed on every use so anything hidden (a folded
+  // overflow control) is skipped rather than becoming an invisible focus trap.
+  const controls = () => Array.from(mount.querySelectorAll('.rk-tb-btn')).filter((b) => b.offsetParent !== null && !b.disabled);
+  let roving = 0;
+  const applyRoving = () => {
+    const cs = controls();
+    // EVERY button is taken out of the tab order first — a control that is
+    // hidden or disabled right now can become visible or enabled later (the
+    // overflow fold, undo/redo), and a button never told otherwise keeps the
+    // UA default of tabIndex 0, quietly becoming an extra tab stop.
+    for (const b of mount.querySelectorAll('.rk-tb-btn')) b.tabIndex = -1;
+    if (!cs.length) return cs;
+    roving = Math.max(0, Math.min(roving, cs.length - 1));
+    cs[roving].tabIndex = 0;
+    return cs;
+  };
+  const focusRegion = () => {
+    const cs = applyRoving();
+    cs[roving]?.focus();
+    return !!cs.length;
+  };
+  mount.addEventListener('keydown', (e) => {
+    if (e.altKey || e.metaKey || e.ctrlKey) return;
+    const cs = controls();
+    const at = cs.indexOf(document.activeElement);
+    if (at < 0) return;
+    let next = null;
+    if (e.key === 'ArrowRight') next = (at + 1) % cs.length;
+    else if (e.key === 'ArrowLeft') next = (at - 1 + cs.length) % cs.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = cs.length - 1;
+    if (next === null) return;
+    e.preventDefault();
+    roving = next;
+    applyRoving();
+    cs[next].focus();
+  });
+  // a control reached by any means becomes the region's tab stop
+  mount.addEventListener('focusin', (e) => {
+    const at = controls().indexOf(e.target);
+    if (at >= 0) { roving = at; applyRoving(); }
+  });
+  applyRoving();
+  fit();
 
   // ---------- reflect active cell + view state ----------
   const setActive = (def, state = {}) => {
@@ -10370,7 +10684,7 @@ export function createToolbar({ mount, hooks = {} }) {
     readout.textContent = RK.formatLabel && curDef.kind !== 'general' ? RK.formatLabel(curDef) : '';
   };
 
-  return { setActive, closePop, el: mount };
+  return { setActive, setHistory, closePop, focusRegion, applyRoving, fit, el: mount };
 }
 
 // single-file composition: register on the shared namespace
@@ -12376,6 +12690,7 @@ export function createApp({ client, params = new URLSearchParams() }) {
     aiHint: $('rk-ai-hint'),
     sidecar: $('rk-sidecar'),
     toolbar: $('rk-toolbar'),
+    status: $('rk-status'),
     statusFilter: $('rk-status-filter'),
     grid: $('rk-grid'),
     tabs: $('rk-tabs'),
@@ -12518,6 +12833,19 @@ export function createApp({ client, params = new URLSearchParams() }) {
   // ---------- transactions ----------
   const idxToCol = (c) => { let s = ''; c += 1; while (c > 0) { const m = (c - 1) % 26; s = String.fromCharCode(65 + m) + s; c = (c - m - 1) / 26; } return s; };
   const a1Of = (r, c) => `${idxToCol(c)}${r + 1}`;
+  // validateRange() reports an ingress-agnostic path (`$[row][col]`); at the
+  // ingress we know where the block lands, so say the cell the user can see.
+  // Every other rejection in the app names the cell ("A2: \"NOPE\" rejected").
+  const rangeErrAt = (path, anchorR = 0, anchorC = 0) => {
+    const m = /^\$\[(\d+)\](?:\[(\d+)\])?$/.exec(String(path ?? ''));
+    if (!m) return null;
+    const r = anchorR + Number(m[1]);
+    return m[2] === undefined ? `row ${r + 1}` : a1Of(r, anchorC + Number(m[2]));
+  };
+  const rangeErrText = (err, anchorR = 0, anchorC = 0) => {
+    const at = rangeErrAt(err.path, anchorR, anchorC);
+    return at ? `${at}: ${err.msg}` : err.msg;
+  };
 
   const refreshSheets = async () => {
     sheets = await client.sheetNames();
@@ -12551,6 +12879,7 @@ export function createApp({ client, params = new URLSearchParams() }) {
   };
 
   const handleTxResult = async (res, { skipMeta = false } = {}) => {
+    refreshHistoryButtons(); // every branch below returns early somewhere
     const meta = res.meta ?? {};
     if (meta.names) definedNames = await client.getNames();
     if (meta.sheets) { await refreshSheets(); await loadActiveSheet(); return; } // loadActiveSheet refreshes charts
@@ -12617,6 +12946,15 @@ export function createApp({ client, params = new URLSearchParams() }) {
     return `${r.a1}: "${r.value}" ${t('dv.flaggedWord')}${r.help ? ` — ${r.help}` : ''}`;
   };
 
+  // D3: the toolbar's undo/redo state comes from REAL history depth, asked of
+  // the session (canUndo/canRedo), never inferred from what the UI last did.
+  const refreshHistoryButtons = async () => {
+    if (!toolbar?.setHistory) return;
+    try {
+      const [canUndo, canRedo] = await Promise.all([client.canUndo(), client.canRedo()]);
+      toolbar.setHistory({ canUndo, canRedo });
+    } catch { /* worker restarting */ }
+  };
   const doUndo = async () => { const res = await client.undo(); await handleTxResult(res); if (res.did) agentFace?.notify('change', { actor: 'owner', origin: 'undo' }); };
   const doRedo = async () => { const res = await client.redo(); await handleTxResult(res); if (res.did) agentFace?.notify('change', { actor: 'owner', origin: 'redo' }); };
 
@@ -12763,7 +13101,7 @@ export function createApp({ client, params = new URLSearchParams() }) {
     const values2d = grid2d.map((row) => row.map((v) => (v === '' ? null : RK.typedRaw(v))));
     const check = await client.validateRange(values2d);
     if (!check.ok) {
-      toast(`Paste rejected: ${check.errors[0].path} ${check.errors[0].msg}`, { kind: 'error', ms: 6000 });
+      toast(`Paste rejected: ${rangeErrText(check.errors[0], anchor.r, anchor.c)}`, { kind: 'error', ms: 6000 });
       return;
     }
     const cells = {};
@@ -12858,6 +13196,8 @@ export function createApp({ client, params = new URLSearchParams() }) {
       }
       return { ...cur, border: intent };
     }),
+    undo: () => doUndo(),
+    redo: () => doRedo(),
     sort: (dir) => sortRange(dir),
     filter: () => openFilter(),
     names: () => openNames(),
@@ -13322,11 +13662,16 @@ export function createApp({ client, params = new URLSearchParams() }) {
   let lastImportNotes = [];
   const importCsvText = async (text, fileName = 'import.csv') => {
     await loadIoLibs();
+    // sniff BEFORE parsing: a binary artifact parses into mojibake rows that
+    // pass validateRange, so the ingress gate alone cannot catch it and the
+    // import used to report a fabricated success (§4 single ingress).
+    const notText = RK.textNotCsv(text);
+    if (notText) { toast(`CSV rejected: ${cleanName(fileName)} is ${notText}`, { kind: 'error', ms: 7000 }); return null; }
     const rows = RK.csvParse(text);
     if (!rows.length || (rows.length === 1 && rows[0].every((c) => c === ''))) { toast('CSV is empty', { kind: 'info' }); return null; }
     const values2d = rows.map((row) => row.map((v) => (v === '' ? null : RK.typedRaw(v))));
     const check = await client.validateRange(values2d);
-    if (!check.ok) { toast(`CSV rejected: ${check.errors[0].path} ${check.errors[0].msg}`, { kind: 'error', ms: 6000 }); return null; }
+    if (!check.ok) { toast(`CSV rejected: ${rangeErrText(check.errors[0])}`, { kind: 'error', ms: 6000 }); return null; }
     const name = uniqueSheetName(baseFromFile(fileName));
     const id = newSheetId();
     const cells = {};
@@ -13487,8 +13832,14 @@ export function createApp({ client, params = new URLSearchParams() }) {
     if (!file) return;
     try {
       const lower = file.name.toLowerCase();
-      if (kind === 'csv' || (kind !== 'xlsx' && lower.endsWith('.csv'))) await importCsvText(await file.text(), file.name);
-      else await importXlsxBytes(new Uint8Array(await file.arrayBuffer()), file.name);
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      if (kind === 'csv' || (kind !== 'xlsx' && lower.endsWith('.csv'))) {
+        // content sniff, not extension trust — the picker's `accept` filter is
+        // advisory and the user can pick any file through "All Files"
+        const what = RK.sniffNotText(bytes);
+        if (what) { toast(`CSV rejected: ${cleanName(file.name)} is ${what}`, { kind: 'error', ms: 7000 }); return; }
+        await importCsvText(new TextDecoder('utf-8').decode(bytes), file.name);
+      } else await importXlsxBytes(bytes, file.name);
     } catch (e) { toast(`Import failed: ${e.message ?? e}`, { kind: 'error', ms: 6000 }); }
   });
   const pickFile = (kind, accept) => { fileInput.dataset.kind = kind; fileInput.accept = accept; fileInput.click(); };
@@ -14043,6 +14394,7 @@ export function createApp({ client, params = new URLSearchParams() }) {
       <h3>${RK.t('help.keyboard')}</h3>
       <table class="rk-help-table">
         <tr><td>Arrows · Tab · Enter</td><td>move (Shift reverses / extends)</td></tr>
+        <tr><td>F6 · Shift+F6</td><td>move between toolbar, grid and status line (arrows move within the toolbar)</td></tr>
         <tr><td>⌘/Ctrl+Arrow</td><td>jump to data edge; +Shift extends</td></tr>
         <tr><td>Type or F2</td><td>edit cell · Esc cancels · Enter/Tab commits</td></tr>
         <tr><td>⌘/Ctrl+Z / Y</td><td>undo / redo</td></tr>
@@ -14053,6 +14405,8 @@ export function createApp({ client, params = new URLSearchParams() }) {
         <tr><td>Drag row/column edge</td><td>resize (undoable) · drag fill handle to fill</td></tr>
       </table>
       <p class="rk-help-note">${RK.t('help.conflicts')}</p>
+      <h3>${RK.t('help.screen')}</h3>
+      <p class="rk-help-note">${RK.t('help.screenD')}</p>
       <h3>${RK.t('help.privacyTitle')}</h3>
       ${PRIVACY_STATEMENT_HTML}
       <p class="rk-help-note">Version ${VERSION} · AGPL-3.0 · engine: HyperFormula (GPLv3) · grid: x-spreadsheet (MIT) · AI: @huggingface/transformers (Apache-2.0)</p>`;
@@ -14140,12 +14494,23 @@ export function createApp({ client, params = new URLSearchParams() }) {
     }
   };
 
+  // A picker rejection is NOT one thing. `AbortError` is the user closing the
+  // dialog — nothing is wrong, and the only honest thing to say is where the
+  // workbook is still being saved. Anything else (no FSA at all, an insecure
+  // or cross-origin context, a denied permission, a policy block) means the
+  // affordance cannot work here, and saying nothing makes the app's headline
+  // sovereignty control indistinguishable from a dead button. Both surface
+  // through the app's toast idiom — never a native alert/confirm (§13).
   const openFolderFlow = async () => {
-    if (!fsaState.supported) { openHelp(); return; }
+    if (!fsaState.supported) { toast(RK.t('fsa.unavailable'), { kind: 'info', ms: 7000 }); openHelp(); return; }
     let dir;
     try {
       dir = await window.showDirectoryPicker({ mode: 'readwrite', id: 'reckon' });
-    } catch { return; /* user cancelled the picker */ }
+    } catch (e) {
+      if (e && e.name === 'AbortError') toast(RK.t('fsa.cancelled'), { kind: 'info' });
+      else toast(RK.t('fsa.unavailable'), { kind: 'error', ms: 8000 });
+      return;
+    }
     const files = [];
     try {
       for await (const entry of dir.values()) {
@@ -14422,6 +14787,55 @@ export function createApp({ client, params = new URLSearchParams() }) {
       if (editor.active()) editor.cancel();
       sidecar.request({ targetA1: a1Of(s.ri, s.ci), description: '' });
     });
+    // ---------- keyboard region cycling: F6 / Shift+F6 (D1) ----------
+    // Tab stays CELL navigation — that is correct spreadsheet behaviour and is
+    // what a user coming from Excel or Sheets expects. The defect was never
+    // that the grid owns Tab; it was that there was no way OUT of the grid, so
+    // focus pinned to #rk-grid-focus and Import/Export/Chart/Settings/Help were
+    // mouse-only. F6 cycles toolbar -> grid -> status line (Shift+F6 back), the
+    // established convention, and the region that receives focus shows a ring.
+    // Purely additive: no existing binding changes meaning.
+    const regions = () => [
+      { el: els.toolbar, label: 'Toolbar', focus: () => toolbar?.focusRegion?.() },
+      { el: els.grid, label: 'Grid', focus: () => { grid.focus(); return true; } },
+      { el: els.status, label: 'Status line', focus: () => { const b = els.settings ?? els.help; if (!b) return false; b.focus(); return true; } },
+    ];
+    let ringed = null;
+    const clearRing = () => { if (ringed) { ringed.classList.remove('rk-region-active'); ringed = null; } };
+    const currentRegionIndex = () => {
+      const a = document.activeElement;
+      const rs = regions();
+      const i = rs.findIndex((r) => r.el && a && r.el.contains(a));
+      return i < 0 ? 1 : i; // unknown focus is treated as the grid, the app's home region
+    };
+    const cycleRegion = (dir) => {
+      const rs = regions();
+      let i = currentRegionIndex();
+      // skip a region that has nothing focusable (the status line always has
+      // Settings/Help, but never assume a surface built at boot is there)
+      for (let n = 0; n < rs.length; n += 1) {
+        i = (i + dir + rs.length) % rs.length;
+        if (rs[i].focus() !== false) {
+          clearRing();
+          ringed = rs[i].el;
+          ringed?.classList.add('rk-region-active');
+          els.statusLeft.textContent = `${rs[i].label} — F6 for the next region`;
+          return;
+        }
+      }
+    };
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'F6' || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (openDialogClose || editor.active()) return; // a dialog / the cell editor owns focus
+      e.preventDefault();
+      e.stopPropagation();
+      cycleRegion(e.shiftKey ? -1 : 1);
+    }, true);
+    // the ring is a KEYBOARD affordance: it goes away the moment focus leaves
+    // the region it marks, or the user reaches for the mouse
+    document.addEventListener('focusin', (e) => { if (ringed && !ringed.contains(e.target)) clearRing(); });
+    document.addEventListener('mousedown', clearRing, true);
+
     // global sidecar shortcuts: Ctrl/Cmd+Shift+F draft, Ctrl/Cmd+Shift+E explain
     document.addEventListener('keydown', (e) => {
       const mod = e.metaKey || e.ctrlKey;
@@ -14471,6 +14885,7 @@ export function createApp({ client, params = new URLSearchParams() }) {
     renderTabs();
     await loadActiveSheet();
     renderEmptyState();
+    await refreshHistoryButtons();
 
     // e2e/test surface (read-state hooks; writes still go through the UI)
     window.__rk = {

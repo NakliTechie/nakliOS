@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-uCSyrR4STulGUEfkfaRwJNbdknn5UGUgM17HDP5pyBw=' 'sha256-em+Ql2a7cV6XRgWaXiINDN4TvKOAOXuNTbqxdVgA5b4=' https://cdn.jsdelivr.net; style-src 'sha256-6gx4dEs/h2kVOsJ6sJN1+SpSW2llPBGHRKSMP0wHaDo=' 'sha256-4mUr+xgx6BeB6CSG2fjR0yqfa76XTm7VpKLfHPcHmHA='; img-src 'self' data: blob:; connect-src 'self' http://127.0.0.1:* https://cdn.jsdelivr.net https://huggingface.co https://*.hf.co https://cdn-lfs.huggingface.co https://api.openai.com https://api.groq.com https://api.mistral.ai https://api.deepseek.com https://openrouter.ai; font-src 'self' data:; worker-src blob:; base-uri 'none'">
-<meta name="draft-version" content="1.0.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-uCSyrR4STulGUEfkfaRwJNbdknn5UGUgM17HDP5pyBw=' 'sha256-3JU06DgRR28pynfouAYlYNACaRNeqdccs6/iVDEktdE=' https://cdn.jsdelivr.net; style-src 'sha256-6gx4dEs/h2kVOsJ6sJN1+SpSW2llPBGHRKSMP0wHaDo=' 'sha256-KCyOLChDzeQmUw0bsRUQbX4zbQzpzoFdBW/gF2kA5vc='; img-src 'self' data: blob:; connect-src 'self' http://127.0.0.1:* https://cdn.jsdelivr.net https://huggingface.co https://*.hf.co https://cdn-lfs.huggingface.co https://api.openai.com https://api.groq.com https://api.mistral.ai https://api.deepseek.com https://openrouter.ai; font-src 'self' data:; worker-src blob:; base-uri 'none'">
+<meta name="draft-version" content="1.1.0">
 <title>Draft</title>
 <style>
 /* ==== begin fonts/fonts.css ==== */
@@ -319,17 +319,38 @@ a { color: var(--dr-accent); }
   left: 0;
   bottom: 0;
   width: var(--dr-rail-w);
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: hidden;
   background: var(--dr-rail-tint);
   padding: var(--dr-s3) 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
   transition: width var(--dr-ease);
   z-index: 4;
-  scrollbar-width: none;
 }
+/* Three zones. Documents and Settings are the two anchors a user reaches for
+   by muscle memory, so they are pinned at the two ends and are always on
+   screen; the formatting middle — the part that legitimately grows with the
+   selection — is the only thing that scrolls. The whole rail used to scroll,
+   with no scrollbar, fade or chevron to say so, which put Settings off-screen
+   at 1280x800 and below. */
+#rail .dr-rail-zone {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+#rail .dr-rail-top, #rail .dr-rail-bottom { flex: none; }
+#rail .dr-rail-mid {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding: var(--dr-s2) 0;
+  margin: var(--dr-s2) 0;
+  border-top: 1px solid var(--dr-n2);
+  border-bottom: 1px solid var(--dr-n2);
+}
+#rail .dr-rail-mid::-webkit-scrollbar { width: 0; height: 0; }
 #rail:hover, #rail:focus-within {
   width: var(--dr-rail-w-open);
 }
@@ -533,6 +554,14 @@ a { color: var(--dr-accent); }
   cursor: pointer;
 }
 .dr-docs-choose:hover, .dr-docs-new:hover, .dr-docs-openfile:hover { color: var(--dr-n9); background: var(--dr-n2); }
+/* The outcome of "Choose folder…", said where the user is already looking.
+   A dismissed picker and a browser that has none are different answers and
+   read differently; neither is silence. */
+.dr-docs-folder-note {
+  margin-top: 0;
+  margin-bottom: var(--dr-s3);
+}
+.dr-docs-folder-note.dr-docs-folder-problem { color: var(--dr-n7); }
 .dr-docs-actions { display: flex; gap: var(--dr-s2); margin-bottom: var(--dr-s4); }
 .dr-docs-heading {
   font: 500 11px/1 var(--dr-ui);
@@ -1876,6 +1905,34 @@ const UNSAFE_URL = /^\s*(javascript|data|vbscript):/i;
 const UNSAFE_IMAGE_URL = /^\s*(javascript|vbscript):/i;
 const DATA_URL = /^\s*data:/i;
 const DATA_IMAGE_URL = /^\s*data:image\//i;
+// An image src that would be fetched from another machine: any absolute URL
+// with an authority (`https://…`, `http://…`, protocol-relative `//…`,
+// `file://…`). NOT data:/blob: (Draft's own assets) and NOT a relative path.
+//
+// Draft's own CSP (`img-src 'self' data: blob:`) already refuses to LOAD one, so
+// a pasted tracking pixel never rendered — but it was kept verbatim in the
+// document and written into the html/md/json/docx exports, where no CSP
+// applies. An ad pixel or read-receipt beacon rode out of the sovereign
+// boundary inside a file the user believed was theirs. The answer is to strip
+// it and say so, not to widen img-src (which fixes the render and worsens the
+// privacy posture).
+const REMOTE_IMAGE_URL = /^\s*(?:[a-z][a-z0-9+.-]*:)?\/\//i;
+
+function isRemoteImageSrc(src) {
+  return typeof src === "string" && REMOTE_IMAGE_URL.test(src);
+}
+
+// One Import note for however many were removed, in the user's terms.
+function remoteImageNote(count) {
+  const n = Number(count) || 0;
+  return {
+    code: "remote-image",
+    message:
+      n === 1
+        ? "1 remote image was removed — it would have loaded from someone else's server"
+        : `${n} remote images were removed — they would have loaded from someone else's server`,
+  };
+}
 
 // Child context per node type, derived from the spec's content expression.
 function childContext(type) {
@@ -2012,6 +2069,11 @@ function sanitizeNode(node, context, parentType, notes) {
       notes.push({ code: "unsafe-image", message: "dropped image with unsafe or missing src" });
       return [];
     }
+    if (isRemoteImageSrc(attrs.src)) {
+      // Counted, then collapsed into ONE note in sanitizeDocJSON below.
+      notes.push({ code: "remote-image", message: "remote image removed" });
+      return [];
+    }
   }
   if (type === "task_item") attrs.checked = attrs.checked === true;
 
@@ -2099,7 +2161,17 @@ function sanitizeDocJSON(docJSON) {
   }
   flush();
   if (!content.length) content.push({ type: "paragraph" });
-  return { doc: { type: "doc", content }, notes };
+  return { doc: { type: "doc", content }, notes: collapseRemoteImageNotes(notes) };
+}
+
+// "3 remote images were removed" reads; three identical lines do not.
+function collapseRemoteImageNotes(notes) {
+  const first = notes.findIndex((n) => n.code === "remote-image");
+  if (first < 0) return notes;
+  const count = notes.filter((n) => n.code === "remote-image").length;
+  const out = notes.filter((n) => n.code !== "remote-image");
+  out.splice(first, 0, remoteImageNote(count));
+  return out;
 }
 // ==== end engine/sanitize-core.mjs ====
 
@@ -2732,8 +2804,17 @@ const DRAFT_EXT = ".draft.json";
 
 // A candidate filename: trimmed, path separators folded to a dash (the title
 // never re-derives the filename — §5 — so this only cleans a user-typed name).
+//
+// The result must be a name the façade's normalizePath() accepts, or the
+// document opens fine and then fails EVERY save: control characters and a
+// dots-only segment are exactly what normalizePath rejects, so they are folded
+// here rather than left to strand the user in an unsaveable document.
 function cleanDocName(raw) {
-  return String(raw || "").trim().replace(/[/\\]/g, "-");
+  return String(raw || "")
+    .replace(/[\u0000-\u001f\u007f]/g, "")
+    .replace(/[/\\]/g, "-")
+    .trim()
+    .replace(/^\.+$/, "");
 }
 
 // A unique "untitled-N" that no existing document already claims.
@@ -3234,6 +3315,24 @@ function htmlToDocJSON(html) {
   for (const c of comments) c.remove();
   upgradeWordLists(parsed.body);
   return PMDOMParser.fromSchema(schema).parse(parsed.body).toJSON();
+}
+
+// Clipboard/drop HTML → the same HTML with every remote-sourced <img> removed,
+// plus how many went. ProseMirror's own clipboard parser does NOT go through
+// sanitizeToSchema (it parses straight to the schema), so this is where the
+// live paste path meets the same rule the sanitiser applies to every other
+// ingress: an image that would be fetched from someone else's server does not
+// enter the document, and therefore cannot ride out in an export.
+function stripRemoteImages(html) {
+  if (!/<img/i.test(String(html || ""))) return { html, removed: 0 };
+  const parsed = new window.DOMParser().parseFromString(String(html), "text/html");
+  let removed = 0;
+  for (const img of [...parsed.querySelectorAll("img")]) {
+    if (!isRemoteImageSrc(img.getAttribute("src"))) continue;
+    img.remove();
+    removed++;
+  }
+  return removed ? { html: parsed.body.innerHTML, removed } : { html, removed: 0 };
 }
 
 // M0-era name, kept for the harness: HTML in, PM Node out.
@@ -3906,8 +4005,10 @@ function stagingDecorations(state) {
     }
     if (h.insText && h.decision !== "rejected") {
       // Proposed insertion: an accent-tinted widget at the hunk end. It carries
-      // no document positions of its own (it is not in the doc), so typing is
-      // disabled while staging is active (editable:false).
+      // no document positions of its own (it is not in the doc), so it is marked
+      // non-editable — the view STAYS editable during a review (a keystroke
+      // always wins, see stagingInputGuard) and the caret must not land inside
+      // text that is not in the document.
       const insText = h.insText;
       const idx = h.index;
       const block = s.mode === "continue" || s.mode === "summarise";
@@ -3919,6 +4020,7 @@ function stagingDecorations(state) {
             el.className = "dr-stage-ins" + (block ? " dr-stage-ins-block" : "") + (idx === s.cursor ? " dr-stage-active" : "");
             el.textContent = insText;
             el.setAttribute("aria-label", "proposed insertion");
+            el.contentEditable = "false";
             return el;
           },
           { side: 1, key: "ins-" + idx + "-" + (idx === s.cursor ? "a" : "n") + (h.decision || "") }
@@ -3964,7 +4066,9 @@ function createAdapter(mount) {
   // the link prompt, Mod-F to the find/replace panel — the Batch C deferral
   // of ⌘/Ctrl+F ends HERE, bound in the same commit that ships the feature —
   // and footnote editing to the footnote card).
-  const handlers = { requestLink: null, requestFind: null, requestFootnote: null, requestRewrite: null, requestContinue: null };
+  // `onImportNotes(notes, {source})` lets the paste path itemise what it removed
+  // in the same Import-notes card every other ingress reports through.
+  const handlers = { requestLink: null, requestFind: null, requestFootnote: null, requestRewrite: null, requestContinue: null, onImportNotes: null };
 
   // Sidecar staging review controls, late-bound after the view exists (like
   // `handlers`). The review keymap plugin and the public `staging` API both
@@ -4032,10 +4136,42 @@ function createAdapter(mount) {
     return keymap(m);
   }
 
-  // While a proposal is staged, these keys drive the review and nothing else
-  // reaches the editor (handoff §7): Enter accepts the current hunk, Backspace
-  // rejects it, ⌘/Ctrl+Enter accepts all, Esc discards. Highest precedence so
-  // they win over the base keymap; a no-op when nothing is staged.
+  // ---- a keystroke always wins --------------------------------------------
+  // The review's own keys, which stagingReviewPlugin binds: they are handled
+  // there, so the guard below must let them fall through untouched.
+  const REVIEW_KEYS = new Set(["Enter", "Backspace", "Escape"]);
+  // Keys that only move the caret or hold a modifier down. They change no text,
+  // so they do not reject the proposal.
+  const PASSIVE_KEYS = new Set([
+    "Shift", "Control", "Alt", "Meta", "CapsLock", "NumLock", "ScrollLock",
+    "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown",
+    "Home", "End", "PageUp", "PageDown", "ContextMenu",
+  ]);
+
+  // The writer's typing is an unambiguous rejection of the suggestion. The view
+  // used to be `editable: false` during a review, which meant ProseMirror never
+  // registered its keydown handler at all: typing produced NOTHING — not in the
+  // document, not in the DOM — and Escape did not discard either, while the
+  // bar's own hint read "Esc discard". A tool whose pitch is that your words are
+  // safe here must never silently swallow words; blocking input to protect an AI
+  // suggestion inverts the relationship between the writer and the sidecar.
+  //
+  // So: the view stays editable, the review keys keep their meaning, navigation
+  // is harmless, and ANY other key discards the proposal and then falls through
+  // (`return false`) so the very same keystroke lands in the document. Discard
+  // touches no document positions, so the key that follows it is not displaced.
+  function stagingInputGuard(event) {
+    if (!stagingCtl.active()) return false;
+    if (event && REVIEW_KEYS.has(event.key)) return false;
+    if (event && (PASSIVE_KEYS.has(event.key) || /^F\d{1,2}$/.test(event.key))) return false;
+    if (stagingCtl.discard) stagingCtl.discard();
+    return false;
+  }
+
+  // While a proposal is staged, these keys drive the review (handoff §7): Enter
+  // accepts the current hunk, Backspace rejects it, ⌘/Ctrl+Enter accepts all,
+  // Esc discards. Highest precedence so they win over the base keymap; a no-op
+  // when nothing is staged.
   function stagingReviewPlugin() {
     const guard = (fn) => () => {
       if (!stagingCtl.active()) return false;
@@ -4126,9 +4262,24 @@ function createAdapter(mount) {
     dispatchTransaction(tr) {
       dispatchTagged(tr);
     },
-    // Read-only while a sidecar proposal is staged: no keystroke may shift the
-    // positions the staged overlay is painted at (Batch H).
-    editable: () => !stagingCtl.active(),
+    // The view stays editable during a review. `editable: false` was what made
+    // a pending proposal swallow the writer's keystrokes AND their Escape:
+    // ProseMirror registers its keydown handler only on an editable view.
+    // Position safety comes from stagingInputGuard discarding the overlay
+    // BEFORE the keystroke lands, plus the staging plugin's own net (a staged
+    // review never survives a document change).
+    // Every paste and drop passes through here (ProseMirror routes both through
+    // parseFromClipboard). A remote image is stripped and the removal is said
+    // out loud — silence is how a tracker used to travel.
+    transformPastedHTML(html) {
+      const { html: clean, removed } = stripRemoteImages(html);
+      if (removed && handlers.onImportNotes) handlers.onImportNotes([remoteImageNote(removed)], { source: "clipboard" });
+      return clean;
+    },
+    handleKeyDown: (_v, event) => stagingInputGuard(event),
+    handleTextInput: () => stagingInputGuard(null),
+    handlePaste: () => stagingInputGuard(null),
+    handleDrop: () => stagingInputGuard(null),
     attributes: { role: "textbox", "aria-multiline": "true" },
   });
 
@@ -4442,10 +4593,10 @@ function createAdapter(mount) {
       // Batch D). Returns false only when there is truly nothing to do.
       setLink(href) {
         // Enforce the same protocol allowlist the ingress guards apply
-        // (schema getAttrs L1845, sanitizeMarks UNSAFE_URL L1936): a
-        // javascript:/data:/vbscript: target must never become a live link.
-        // An unsafe href is treated as removal — it strips an existing link
-        // and never applies a new one, matching how ingress drops it.
+        // (schema getAttrs, sanitizeMarks UNSAFE_URL): a javascript:/data:/vbscript:
+        // target must never become a live link. An unsafe href is treated as
+        // removal — it strips an existing link and never applies a new one,
+        // matching how ingress drops it.
         if (typeof href === "string" && UNSAFE_URL.test(href)) href = null;
         const { empty, from, to, $from } = view.state.selection;
         const range = empty ? linkRangeAt($from) : { from, to };
@@ -5382,11 +5533,36 @@ const MIME = {
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 };
 
+// The JSON export IS the `.draft.json` truth format (handoff §4), not a bare
+// doc body: schema version, app, timestamps, locale, title, page metadata and
+// the assets table travel with the content. A bare `{"type":"doc"}` carries no
+// schema version, so the open path (which admits `.draft.json` and nothing
+// else among JSON files) cannot take it back — the one export a user reaches
+// for to KEEP a document produced a file this app refused to open.
+// `envelope` is the live in-memory envelope; the doc body is always the caller's
+// current docJSON, and `modified` is stamped at export time exactly as a save
+// stamps it.
+function draftEnvelopeFor(docJSON, envelope, { now = () => new Date().toISOString() } = {}) {
+  const base = envelope && typeof envelope === "object" ? envelope : newDraftFile();
+  const out = JSON.parse(JSON.stringify(base));
+  out.doc = JSON.parse(JSON.stringify(docJSON));
+  if (!out.draft || typeof out.draft !== "object") out.draft = newDraftFile().draft;
+  out.draft.modified = now();
+  if (!out.assets || typeof out.assets !== "object") out.assets = {};
+  if (!out.history || typeof out.history !== "object") out.history = { head: 0 };
+  return out;
+}
+
+// The extension each kind writes. `json` is `.draft.json` — the whole point of
+// the envelope is that the file names itself as one Draft can open.
+const EXPORT_EXT = { md: "md", html: "html", json: "draft.json", docx: "docx" };
+
 // The one export surface. kind ∈ {md, html, json, docx}; returns a Blob.
-async function exportBlob(kind, docJSON) {
+async function exportBlob(kind, docJSON, { envelope = null } = {}) {
   switch (kind) {
     case "json":
-      return new Blob([JSON.stringify(docJSON, null, 2) + "\n"], { type: MIME.json });
+      // Indent 1, matching the bytes the autosaver writes for the truth file.
+      return new Blob([JSON.stringify(draftEnvelopeFor(docJSON, envelope), null, 1) + "\n"], { type: MIME.json });
     case "md":
       return new Blob([serializeMarkdown(docJSON)], { type: MIME.md });
     case "html":
@@ -5866,6 +6042,9 @@ const STRINGS = {
     "notes.note": "note",
     "notes.notes": "notes",
     "notes.defaultSource": "The document",
+    "notes.pasteSource": "Pasted content",
+    "notes.openedSource": "This document",
+    "notes.introOpened": "{source} was cleaned as it opened — {count} {noteWord}. Saving keeps the change.",
 
     // documents panel
     "docs.title": "Documents",
@@ -5882,6 +6061,9 @@ const STRINGS = {
     "docs.renameFailed": "could not rename",
     "docs.folder": "Folder: {name}",
     "docs.thisBrowser": "This browser",
+    "docs.folderGranted": "Saving to {name} on your disk.",
+    "docs.folderCancelled": "No folder chosen — still saving in this browser.",
+    "docs.folderUnsupported": "This browser can't open folders; Draft is saving in browser storage instead.",
 
     // find / replace panel
     "find.title": "Find & replace",
@@ -6039,6 +6221,9 @@ const STRINGS = {
     "notes.note": "टिप्पणी",
     "notes.notes": "टिप्पणियों",
     "notes.defaultSource": "दस्तावेज़",
+    "notes.pasteSource": "चिपकाई गई सामग्री",
+    "notes.openedSource": "यह दस्तावेज़",
+    "notes.introOpened": "{source} खुलते समय साफ़ किया गया — {count} {noteWord}। सहेजने पर यह बदलाव बना रहेगा।",
 
     // documents panel
     "docs.title": "दस्तावेज़",
@@ -6055,6 +6240,9 @@ const STRINGS = {
     "docs.renameFailed": "नाम नहीं बदल सका",
     "docs.folder": "फ़ोल्डर: {name}",
     "docs.thisBrowser": "यह ब्राउज़र",
+    "docs.folderGranted": "आपकी डिस्क पर {name} में सहेजा जा रहा है।",
+    "docs.folderCancelled": "कोई फ़ोल्डर नहीं चुना गया — अभी भी इसी ब्राउज़र में सहेजा जा रहा है।",
+    "docs.folderUnsupported": "यह ब्राउज़र फ़ोल्डर नहीं खोल सकता; Draft ब्राउज़र स्टोरेज में सहेज रहा है।",
 
     // find / replace
     "find.title": "खोजें और बदलें",
@@ -6334,13 +6522,18 @@ const SPARK_SVG =
 // `when` gates presence on the active states ("absent, not dimmed"):
 //   undefined → always shown · "in-table" → only inside a table ·
 //   "no-table" → only outside one.
+// `zone` places the item in one of the rail's three zones (see createRail):
+//   "top" → pinned at the top · "bottom" → pinned at the bottom ·
+//   undefined → the scrolling middle. The two navigation anchors a user reaches
+//   for by muscle memory — where my documents are, where my settings are — are
+//   the pinned ones; the formatting middle is what legitimately grows with the
+//   selection (the in-table group) and is the only part that scrolls.
 function railItems(isMac) {
   const mod = isMac ? "⌘" : "Ctrl+";
   const alt = isMac ? "⌥" : "Alt+";
   const shift = isMac ? "⇧" : "Shift+";
   return [
-    { id: "documents", label: t("rail.documents"), glyphHTML: DOCS_SVG },
-    { gap: true },
+    { id: "documents", label: t("rail.documents"), glyphHTML: DOCS_SVG, zone: "top" },
     { id: "bold", label: t("rail.bold"), kbd: `${mod}B`, glyphHTML: "<strong>B</strong>", state: "bold" },
     { id: "italic", label: t("rail.italic"), kbd: `${mod}I`, glyphHTML: "<em>I</em>", state: "italic" },
     { id: "underline", label: t("rail.underline"), kbd: `${mod}U`, glyphHTML: "<u>U</u>", state: "underline" },
@@ -6365,8 +6558,7 @@ function railItems(isMac) {
     { id: "delCol", label: t("rail.delCol"), glyphHTML: "−C", when: "in-table" },
     { id: "headerRow", label: t("rail.headerRow"), glyphHTML: "<strong>TH</strong>", when: "in-table" },
     { id: "delTable", label: t("rail.delTable"), glyphHTML: "×", when: "in-table" },
-    { gap: true },
-    { id: "settings", label: t("rail.settings"), glyphHTML: SETTINGS_SVG },
+    { id: "settings", label: t("rail.settings"), glyphHTML: SETTINGS_SVG, zone: "bottom" },
   ];
 }
 
@@ -6417,11 +6609,27 @@ function createRail(host, { commands, onLink, onFind, onFootnote, onDocuments, o
   const gated = []; // { el, when } (presence refresh)
   const allButtons = []; // every command button, in DOM order (roving tabindex)
   let sidecarBtn = null; // dimmed until a model is known available (ground floor)
+
+  // ---- three zones ---------------------------------------------------------
+  // The rail's content is taller than the primary viewport once the in-table
+  // group appears (814px, 994px in a table, against 800px of chrome-less
+  // height), and it scrolled with no scrollbar, fade or chevron to say so — so
+  // Settings simply was not there. Documents is pinned to the top and Settings
+  // to the bottom; only the middle scrolls. DOM order is unchanged
+  // (documents → formatting → settings), so the roving tabindex and the
+  // Arrow/Home/End order below read exactly as they did.
+  const zones = { top: document.createElement("div"), mid: document.createElement("div"), bottom: document.createElement("div") };
+  zones.top.className = "dr-rail-zone dr-rail-top";
+  zones.mid.className = "dr-rail-zone dr-rail-mid";
+  zones.bottom.className = "dr-rail-zone dr-rail-bottom";
+  host.append(zones.top, zones.mid, zones.bottom);
+  const zoneFor = (item) => zones[item.zone || "mid"];
+
   for (const item of railItems(isMac)) {
     if (item.gap) {
       const gap = document.createElement("div");
       gap.className = "dr-gap";
-      host.appendChild(gap);
+      zoneFor(item).appendChild(gap);
       if (item.when) gated.push({ el: gap, when: item.when });
       continue;
     }
@@ -6446,7 +6654,7 @@ function createRail(host, { commands, onLink, onFind, onFootnote, onDocuments, o
       btn.appendChild(kbd);
     }
     btn.addEventListener("click", () => actions[item.id]());
-    host.appendChild(btn);
+    zoneFor(item).appendChild(btn);
     allButtons.push(btn);
     if (item.state) buttons.set(item.state, btn);
     if (item.when) gated.push({ el: btn, when: item.when });
@@ -6757,11 +6965,14 @@ function createImportNotes(host, { onClose } = {}) {
 
   return {
     // notes: [{code, message}]; source: the file name / kind, for the intro.
-    show(notes, { source } = {}) {
+    // cleanedOnOpen: this is the user's OWN stored document being cleaned as it
+    // opens, not content they just brought in. The document on disk is about to
+    // change under them, so say that rather than calling it an import.
+    show(notes, { source, cleanedOnOpen = false } = {}) {
       list.textContent = "";
       const n = notes.length;
-      intro.textContent = t("notes.intro", {
-        source: source || t("notes.defaultSource"),
+      intro.textContent = t(cleanedOnOpen ? "notes.introOpened" : "notes.intro", {
+        source: source || t(cleanedOnOpen ? "notes.openedSource" : "notes.defaultSource"),
         count: n,
         noteWord: n === 1 ? t("notes.note") : t("notes.notes"),
       });
@@ -6826,9 +7037,46 @@ function createDocumentsPanel(host, cbs) {
   chooseBtn.type = "button";
   chooseBtn.className = "dr-docs-choose";
   chooseBtn.textContent = t("docs.choose");
-  chooseBtn.addEventListener("click", () => onChooseFolder && onChooseFolder());
   loc.append(locText);
   if (fsaSupported) loc.append(chooseBtn);
+
+  // "Choose folder…" is the headline sovereignty affordance, and it used to end
+  // in silence twice over: a dismissed picker returned with no dialog, no toast
+  // and no state change, and a browser that cannot open one said nothing either.
+  // Both read as a dead button. The outcome is now said inline, in the panel the
+  // user is already looking at — never a native dialog (house rule).
+  const folderNote = document.createElement("div");
+  folderNote.className = "dr-note dr-docs-folder-note";
+  folderNote.setAttribute("role", "status");
+  folderNote.setAttribute("aria-live", "polite");
+  folderNote.hidden = true;
+
+  function sayFolder(text, { problem = false } = {}) {
+    folderNote.textContent = text || "";
+    folderNote.classList.toggle("dr-docs-folder-problem", !!problem);
+    folderNote.hidden = !text;
+  }
+
+  chooseBtn.addEventListener("click", async () => {
+    if (!onChooseFolder) return;
+    sayFolder("");
+    let outcome;
+    try {
+      outcome = await onChooseFolder();
+    } catch (e) {
+      outcome = { ok: false, reason: "unavailable", message: e && e.message ? e.message : "" };
+    }
+    const reason = outcome && outcome.reason;
+    if (outcome && outcome.ok) {
+      sayFolder(t("docs.folderGranted", { name: outcome.name || "" }));
+      refresh();
+    } else if (reason === "cancelled") {
+      sayFolder(t("docs.folderCancelled"));
+    } else {
+      // Unsupported or denied: the honest version of "nothing happened".
+      sayFolder(t("docs.folderUnsupported"), { problem: true });
+    }
+  });
 
   // Actions: new document, open a file from disk.
   const actions = document.createElement("div");
@@ -6886,7 +7134,7 @@ function createDocumentsPanel(host, cbs) {
   done.textContent = t("settings.done");
   done.addEventListener("click", () => close());
 
-  card.append(title, loc, actions, recentLabel, list, empty, exportRow, done);
+  card.append(title, loc, folderNote, actions, recentLabel, list, empty, exportRow, done);
   host.appendChild(card);
 
   function renderList() {
@@ -6973,6 +7221,7 @@ function createDocumentsPanel(host, cbs) {
 
   return {
     open() {
+      sayFolder(""); // a stale outcome from a previous visit is not this visit's answer
       refresh();
       card.hidden = false;
       done.focus();
@@ -7687,6 +7936,12 @@ const linkPrompt = createLinkPrompt(document.body, {
 });
 ed.handlers.requestLink = () => linkPrompt.open(ed.commands.linkAtSelection());
 
+// Paste/drop losses are itemised in the SAME Import-notes card every other
+// ingress reports through — a removed tracking pixel is not a silent removal.
+ed.handlers.onImportNotes = (notes, { source } = {}) => {
+  if (notes && notes.length) importNotes.show(notes, { source: source === "clipboard" || !source ? t("notes.pasteSource") : source });
+};
+
 // Footnote card: inserts at the cursor, or edits the selected footnote
 // (Enter on a selected footnote routes here). Plain text at v1 — the card is
 // the editor, never nested contenteditable (L8).
@@ -7764,6 +8019,21 @@ function buildSaver() {
 
 // Switch the active document: flush any pending save, load the doc, reset the
 // per-document assets, and re-pin a fresh autosaver to the new filename.
+// Which document the user was last IN. The document list is ordered by mtime,
+// which is a proxy for "last edited" and NOT for "last opened": opening a
+// document from Recent does not modify it, so boot used to restore whichever
+// document was edited most recently — a different one than the user had on
+// screen when they refreshed. Every activate() records the real answer here;
+// boot prefers it and falls back to the mtime order. Per machine, like the
+// locale and developer settings.
+const LAST_DOC_KEY = "draft:lastDocument";
+function rememberActiveDocument(nm) {
+  try { localStorage.setItem(LAST_DOC_KEY, nm); } catch {}
+}
+function lastActiveDocument() {
+  try { return localStorage.getItem(LAST_DOC_KEY); } catch { return null; }
+}
+
 async function activate(newFile, newName, { saved, empty = false } = {}) {
   if (saver && (saver.pending || saver.saving)) {
     try { await saver.flush(); } catch {}
@@ -7777,6 +8047,7 @@ async function activate(newFile, newName, { saved, empty = false } = {}) {
   buildSaver();
   saver.pinName(newName);
   name = newName;
+  rememberActiveDocument(newName);
   docTitle = (file.draft.title || "").trim() || saver.name || "untitled";
   savedState = saved ? "saved" : "not saved";
   refreshUI();
@@ -7788,8 +8059,15 @@ async function openDoc(idOrPath) {
   if (!opened) throw new Error(`no document at ${path}`);
   const clean = sanitizeToSchema(opened.file.doc, { kind: "json" });
   opened.file.doc = clean.doc;
-  await activate(opened.file, path.replace(/\.draft\.json$/, ""), { saved: true });
+  const docName = path.replace(/\.draft\.json$/, "");
+  await activate(opened.file, docName, { saved: true });
   await refreshDocList();
+  // The single ingress cleans a stored document too (remote image sources, §L1
+  // sovereignty). That rewrites what is on disk once autosave runs, so it is
+  // never silent: the user is told, in the document's own name.
+  if (clean.notes && clean.notes.length) {
+    importNotes.show(clean.notes, { source: docName, cleanedOnOpen: true });
+  }
 }
 
 async function newDoc(rawName) {
@@ -7828,14 +8106,19 @@ async function renameDoc(oldName, newRaw) {
 // The one native dialog the sovereignty posture allows: the browser's own
 // folder picker. Planting the current document into the chosen folder makes
 // good on the empty-state promise — "your documents on your disk".
+// Returns the outcome so the Documents panel can SAY what happened inline:
+//   { ok: true, name }                 a folder was granted
+//   { ok: false, reason: "cancelled" } the user dismissed the picker
+//   { ok: false, reason: "unavailable", message }  no picker, or it was denied
+// Silence here is what made this read as a dead button.
 async function chooseFolder() {
   let newStore;
   try {
     newStore = await pickDirectoryStore({});
   } catch (e) {
-    if (e && e.name === "AbortError") return; // the user dismissed the picker
+    if (e && e.name === "AbortError") return { ok: false, reason: "cancelled" };
     statusLine.error(t("banner.folderUnavailable", { message: e.message }));
-    return;
+    return { ok: false, reason: "unavailable", message: e && e.message ? e.message : "" };
   }
   if (saver && (saver.pending || saver.saving)) {
     try { await saver.flush(); } catch {}
@@ -7849,6 +8132,7 @@ async function chooseFolder() {
   await refreshDocList();
   documentsPanel.refresh();
   statusLine.clearError();
+  return { ok: true, name: (store && store.label) || "" };
 }
 
 // Import operations (Batch E machinery). importDocx/importMarkdown REPLACE the
@@ -7925,21 +8209,35 @@ async function openFileFlow() {
     statusLine.error(t("banner.couldNotOpenFile", { message: e.message }));
     return;
   }
-  for (const f of files) await ingestFile(f);
+  // ingestFile throws with a precise reason for a corrupt, truncated or
+  // newer-schema file (JSON parse, migrate(), the envelope validator). The
+  // drop path already surfaces those through wireDropTarget's onError; the
+  // picker path must too, or "Open file…" on a bad file does nothing at all.
+  for (const f of files) {
+    try {
+      await ingestFile(f);
+    } catch (e) {
+      statusLine.error(t("banner.couldNotOpenFile", { message: e.message }));
+      return;
+    }
+  }
 }
 
 // Export the active document to disk: a user-initiated download of THEIR file
 // to THEIR disk — the product's purpose, not an external send.
-const DL_EXT = { md: "md", html: "html", json: "json", docx: "docx" };
 async function downloadExport(kind) {
   let blob;
   try {
-    blob = await exportBlob(kind, ed.getDocJSON());
+    blob = await exportBlob(kind, ed.getDocJSON(), { envelope: file });
   } catch (e) {
     statusLine.error(t("banner.exportFailed", { message: e.message }));
     return null;
   }
-  const filename = `${name || "untitled"}.${DL_EXT[kind] || kind}`;
+  // The json download is the truth file, so it is named as one: `<title>.draft.json`
+  // (the title when the user set one, otherwise the pinned filename), which is
+  // exactly what the open path admits.
+  const base = kind === "json" ? cleanDocName((file && file.draft && file.draft.title || "").trim() || name || "untitled") || "untitled" : (name || "untitled");
+  const filename = `${base}.${EXPORT_EXT[kind] || kind}`;
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -8010,7 +8308,7 @@ function agentFace() {
     applyTransaction: (steps) => ed.applyTransaction(steps, { actor: "api", origin: apiOrigin() }),
     replaceRange: (from, to, textOrJSON) => ed.replaceRange(from, to, textOrJSON, { actor: "api", origin: apiOrigin() }),
     find: (q, opts) => ed.findMatches(q, opts || {}),
-    export: (kind) => exportBlob(kind, ed.getDocJSON()),
+    export: (kind) => exportBlob(kind, ed.getDocJSON(), { envelope: file }),
     on: (event, fn) => {
       if (!apiListeners[event]) throw new Error(`draft.on: unknown event "${event}" (use "change" or "save")`);
       apiListeners[event].add(fn);
@@ -8361,12 +8659,14 @@ async function boot() {
   window.__bootDocs = docList.map((d) => d.path);
   let restored = false;
   if (docList.length) {
+    const wanted = lastActiveDocument();
+    const entry = (wanted && docList.find((d) => d.name === wanted)) || docList[0];
     try {
-      await openDoc(docList[0].path);
+      await openDoc(entry.path);
       restored = true;
     } catch (e) {
       window.__bootRestoreError = String((e && e.stack) || e);
-      statusLine.error(t("banner.couldNotOpen", { path: docList[0].path, message: e.message }));
+      statusLine.error(t("banner.couldNotOpen", { path: entry.path, message: e.message }));
     }
   }
   if (!restored) {
@@ -8440,7 +8740,7 @@ async function boot() {
     sanitize: (input, opts) => sanitizeToSchema(input, opts),
     // Export machinery (Batch E): every kind (md/html/json/docx) as a Blob
     // through one export(kind). Batch G's window.draft.export wraps this.
-    export: (kind) => exportBlob(kind, ed.getDocJSON()),
+    export: (kind) => exportBlob(kind, ed.getDocJSON(), { envelope: file }),
     // Markdown / DOCX ingress (Batch E machinery, wired to the file-open flow
     // in F). These REPLACE the active document's content; the folder-view
     // file-open path (ingestFile) wraps them to open as a fresh document.
