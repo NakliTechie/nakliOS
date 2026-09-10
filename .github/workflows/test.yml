@@ -114,6 +114,9 @@ jobs:
       - name: Verify --carry actually carries (an i.i.d. bed cannot answer AC-8's quota question)
         run: node scripts/test-carry-forward.mjs
 
+      - name: Verify the lesson gate judges harm and confesses what it could not have seen
+        run: node sys/ai/test/lesson-gate.test.mjs
+
       - name: Replay the recorded-run corpus keyless (real runs, zero model calls)
         run: node sys/history/test/replay-corpus.test.mjs
 
