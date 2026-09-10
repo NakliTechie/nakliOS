@@ -111,6 +111,9 @@ jobs:
       - name: Verify the context-payload probe parses the REAL index format (a reword must go red)
         run: node scripts/test-context-payload-probe.mjs
 
+      - name: Verify --carry actually carries (an i.i.d. bed cannot answer AC-8's quota question)
+        run: node scripts/test-carry-forward.mjs
+
       - name: Replay the recorded-run corpus keyless (real runs, zero model calls)
         run: node sys/history/test/replay-corpus.test.mjs
 

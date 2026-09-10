@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Capture run records that CARRY a skills/memory index, so AC-2 has something to measure.
 //   node scripts/capture-context-corpus.mjs --out /tmp/ctx-corpus [--base URL] [--model ID] [--n 2]
+//     [--ablate]  index vs no-index arms          [--carry]  reps reuse the previous workspace (AC-8)
 //
 // AC-2 asks whether the always-on index costs QUALITY, not just tokens. Its probe
 // (scripts/probe-context-payload.mjs) answers "no DATA": not one record in the repo carried an
@@ -56,6 +57,24 @@ const ABLATE = args.includes('--ablate');
 // same direction as the hypothesis is the most dangerous kind: it produces a confident wrong
 // answer. Pacing keeps both arms under the limit so the arms differ only in what is under test.
 const PACE = Number(opt('--pace', '2500'));
+// --carry makes reps 2..n reuse the PREVIOUS rep's workspace for the same (arm, task) instead of a
+// fresh one. Without it every rep calls freshWorkspace() and the reps are i.i.d. BY CONSTRUCTION —
+// which is fine for the AC-2 ablation (each rep is an independent draw) and useless for AC-8.
+//
+// AC-8 asks "after N failures on this task, is the next attempt worth starting?". Under i.i.d. that
+// question is already answered — no, a streak carries no information, provably, because nothing
+// connects one rep to the next. Measuring it on the i.i.d. bed produced a curve that LOOKED like a
+// clean N=2 (P(next finishes) 0.55 -> 0.20 after one failure) and was entirely Simpson's paradox:
+// within every task the after-failure rate equalled the base rate, and the pooled drop was task mix,
+// because the easy task rarely enters a streak and the hard one supplies most of them. Full
+// analysis: plan/bench-quota-2026-09-10.md.
+//
+// A real retry inherits the workspace and whatever partial progress is in it. That is the channel a
+// genuine "stuck" signal would travel down, and --carry is the only thing here that opens it.
+// It deliberately does NOT carry the transcript: a fresh Send starts a new conversation over the
+// same files, so workspace-only is the shape Anvil actually retries in, and carrying both would
+// move two variables at once.
+const CARRY = args.includes('--carry');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let lastCallAt = 0;
 
@@ -136,15 +155,21 @@ await mkdir(OUT, { recursive: true });
 const system = SYSTEM_HEAD + buildSkillsIndex(SKILLS) + buildMemoryIndex(FACTS);
 console.error(`capture: ${TASKS.length} task(s) x ${REPS} rep(s) = ${TASKS.length * REPS} records`);
 console.error(`  ${MODEL} @ ${BASE}`);
-console.error(`  system prompt: ${system.length} chars, ${SKILLS.length} skills + ${FACTS.length} facts in context\n`);
+console.error(`  system prompt: ${system.length} chars, ${SKILLS.length} skills + ${FACTS.length} facts in context`);
+console.error(`  reps: ${CARRY ? 'CARRY-FORWARD (rep k reuses rep k-1\'s workspace — a retry)' : 'i.i.d. (fresh workspace each rep — independent draws)'}\n`);
 
 let saved = 0, failed = 0;
+const carried = new Map(); // (arm/task) -> workspace, only populated under --carry
 const arms = ABLATE ? ['with-index', 'no-index'] : ['with-index'];
 const outcomes = {}, voids = {};
 for (let rep = 1; rep <= REPS; rep++) {
   for (const arm of arms) {
   for (const task of TASKS) {
-    const ws = freshWorkspace(task.seed);
+    // Under --carry the workspace persists across reps of the same (arm, task), so rep k sees
+    // whatever rep k-1 left behind. Rep 1 is always fresh.
+    const key = `${arm}/${task.id}`;
+    const ws = (CARRY && carried.has(key)) ? carried.get(key) : freshWorkspace(task.seed);
+    if (CARRY) carried.set(key, ws);
     await ws.ready;
     // The real skill/recall handlers: return the body for a listed name, refuse otherwise.
     const base = makeToolExecutor({ shell: ws.shell, face: ws.face, mode: 'code' });
@@ -225,5 +250,13 @@ if (ABLATE) {
     console.error('  shows voids, raise --pace and re-run before reading a single row above.');
   }
   console.error('\nn is small. Read only what repeats across every rep — a single flip is noise.');
+
+}
+if (!CARRY) {
+  // Applies to every run, not just an --ablate one: the caveat is about the BED, not the arms.
+  console.error('\nReps here are i.i.d. (fresh workspace each time). The per-task sequences');
+  console.error('CANNOT answer AC-8\'s "after N failures, stop offering to start" — a streak carries');
+  console.error('no information when nothing connects one rep to the next. Re-run with --carry for');
+  console.error('that question, and stratify by task: pooled, composition alone fakes a clean N.');
 }
 console.error(`\nNow: node scripts/probe-context-payload.mjs ${ABLATE ? join(OUT, 'with-index') : OUT}`);
