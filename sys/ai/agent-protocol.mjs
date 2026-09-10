@@ -231,3 +231,82 @@ export function parseToolArguments(call) {
   try { return { ok: true, value: JSON.parse(raw) }; }
   catch (e) { return { ok: false, error: String(e?.message || e), raw }; }
 }
+
+// ── Ordered model fallback ────────────────────────────────────────────
+// A free-tier endpoint can hand back a 500 for one model id while every other id
+// on the same server answers fine (observed while probing five `:free` ids — one
+// of them 500'd and the rest did not). Mid-run that kills the whole run, and an
+// agent run is expensive to lose: the transcript, the tool results, and the work
+// already done on disk all go with it.
+//
+// So the caller supplies an ORDER of model ids and this decides, per failure,
+// whether to advance. Two rules make the difference between a useful ladder and
+// one that silently corrupts a run:
+//
+//   1. Only TRANSPORT-class failures advance. A 5xx or a network throw says
+//      "this id is not answering"; a 400/401/403/404 says "your request or your
+//      credentials are wrong", and retrying that on four more ids just produces
+//      four more identical refusals while looking like resilience. 429 is the
+//      one rate-limit code worth stepping past — a different model is often a
+//      different bucket — but it is NOT retried on the same id, which is what
+//      the provider is asking for.
+//   2. Nothing may have been EMITTED yet. Once tokens or a tool-call delta have
+//      reached the caller, a second model's answer would be spliced onto the
+//      first one's prefix and the transcript would describe a turn that no model
+//      actually produced. After first emission the failure is terminal.
+//
+// Pure: it decides, it does not fetch. The broker does the I/O.
+
+// Status codes worth trying a DIFFERENT model id for.
+export function isRetryableEndpointStatus(status) {
+  const n = Number(status);
+  if (!Number.isFinite(n)) return false;
+  return n === 429 || (n >= 500 && n <= 599);
+}
+
+// The ids to try, in order, deduped, primary first. Blank entries are dropped so
+// a half-filled settings field cannot insert an empty model id into the ladder.
+export function modelLadder(primary, fallbacks = []) {
+  const seen = new Set(); const out = [];
+  for (const raw of [primary, ...(Array.isArray(fallbacks) ? fallbacks : [])]) {
+    const id = typeof raw === 'string' ? raw.trim() : '';
+    if (!id || seen.has(id)) continue;
+    seen.add(id); out.push(id);
+  }
+  return out;
+}
+
+// Run `attempt(modelId)` down the ladder. `attempt` either resolves (success) or
+// throws; a thrown error may carry `.status` (an HTTP response) or not (a network
+// failure, which is transport-class by definition). `hasEmitted()` reports whether
+// anything has already reached the caller for this request — once it has, the
+// first failure is final.
+//
+// Resolves { value, model, attempts:[{ model, status, error }] } so the caller can
+// record WHICH id actually answered: a run whose record names the configured model
+// when a fallback answered is a record that lies about its own provenance.
+export async function runModelLadder(ladder, attempt, { hasEmitted = () => false } = {}) {
+  const ids = modelLadder(ladder[0], ladder.slice(1));
+  if (!ids.length) throw new Error('runModelLadder: no model ids to try');
+  const attempts = [];
+  let last = null;
+  for (let i = 0; i < ids.length; i++) {
+    const model = ids[i];
+    try {
+      const value = await attempt(model);
+      attempts.push({ model, status: null, error: null });
+      return { value, model, attempts };
+    } catch (error) {
+      const status = error && error.status != null ? Number(error.status) : null;
+      attempts.push({ model, status, error: String((error && error.message) || error) });
+      last = error;
+      if (hasEmitted()) break;                                  // rule 2
+      if (status != null && !isRetryableEndpointStatus(status)) break; // rule 1
+      if (i === ids.length - 1) break;
+    }
+  }
+  // Every id failed. Surface the LAST error (the caller's existing message shape)
+  // with the trail attached, so a report can say which ids were tried.
+  if (last && typeof last === 'object') { try { last.attempts = attempts; } catch (_) {} }
+  throw last || new Error('runModelLadder: every model id failed');
+}

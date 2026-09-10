@@ -15,6 +15,9 @@ import {
   buildEndpointChatBody,
   createToolCallAccumulator,
   parseToolArguments,
+  isRetryableEndpointStatus,
+  modelLadder,
+  runModelLadder,
 } from '../agent-protocol.mjs';
 
 let passed = 0;
@@ -181,6 +184,80 @@ await test('parseToolArguments reports invalid JSON without throwing', () => {
   assert(typeof r.error === 'string', 'error string');
   deep(parseToolArguments({ function: { name: 'x', arguments: '' } }), { ok: true, value: {} }, 'empty → {}');
 });
+
+
+// ── Ordered model fallback ────────────────────────────────────────────
+await test('the ladder is ordered, deduped, and drops blanks', () => {
+  eq(modelLadder('a', ['b', 'a', '  ', null, 'c']).join(','), 'a,b,c');
+  eq(modelLadder('  ', ['', 'b']).join(','), 'b');
+  eq(modelLadder('', []).length, 0);
+});
+
+await test('only transport-class failures are worth a different model id', () => {
+  for (const s of [500, 502, 503, 529, 429]) assert(isRetryableEndpointStatus(s), `${s} should advance`);
+  for (const s of [200, 400, 401, 403, 404, 422]) assert(!isRetryableEndpointStatus(s), `${s} must not advance`);
+  assert(!isRetryableEndpointStatus(undefined), 'a missing status is not a status');
+});
+
+await test('a 500 on one id falls through to the next and reports who answered', async () => {
+  const seen = [];
+  const err = (status) => Object.assign(new Error('boom ' + status), { status });
+  const r = await runModelLadder(['x:free', 'y:free', 'z:free'], async (m) => {
+    seen.push(m);
+    if (m !== 'z:free') throw err(500);
+    return 'answer';
+  });
+  eq(r.value, 'answer');
+  eq(r.model, 'z:free', 'the ladder names the id that actually answered, not the configured one');
+  eq(seen.join(','), 'x:free,y:free,z:free');
+  eq(r.attempts.length, 3);
+  eq(r.attempts[0].status, 500);
+});
+
+await test('a network throw with no status still advances', async () => {
+  const r = await runModelLadder(['a', 'b'], async (m) => {
+    if (m === 'a') throw new TypeError('Failed to fetch');
+    return 'ok';
+  });
+  eq(r.model, 'b');
+});
+
+await test('a 401 stops the ladder instead of repeating itself down every id', async () => {
+  const seen = [];
+  let thrown = null;
+  try {
+    await runModelLadder(['a', 'b', 'c'], async (m) => {
+      seen.push(m); throw Object.assign(new Error('bad key'), { status: 401 });
+    });
+  } catch (e) { thrown = e; }
+  assert(thrown, 'a non-retryable failure still throws');
+  eq(seen.join(','), 'a', 'a credential error must not be retried on four more ids');
+});
+
+await test('once anything has been emitted the failure is terminal', async () => {
+  const seen = [];
+  let emitted = false;
+  let thrown = null;
+  try {
+    await runModelLadder(['a', 'b'], async (m) => {
+      seen.push(m); emitted = true;            // tokens reached the caller
+      throw Object.assign(new Error('died mid-stream'), { status: 500 });
+    }, { hasEmitted: () => emitted });
+  } catch (e) { thrown = e; }
+  assert(thrown, 'a mid-stream death is not swallowed');
+  eq(seen.join(','), 'a', 'switching after emission would splice two models into one turn');
+});
+
+await test('when every id fails the error carries the trail that was tried', async () => {
+  let thrown = null;
+  try {
+    await runModelLadder(['a', 'b'], async () => { throw Object.assign(new Error('down'), { status: 503 }); });
+  } catch (e) { thrown = e; }
+  assert(thrown, 'it throws');
+  eq(thrown.attempts.length, 2);
+  eq(thrown.attempts.map((a) => a.model).join(','), 'a,b');
+});
+
 
 if (failures.length) {
   console.error(`agent-protocol: ${passed} passed, ${failures.length} FAILED`);

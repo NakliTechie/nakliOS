@@ -24,9 +24,12 @@ assert.match(host, /if \(wantsUsage\) body\.stream_options = \{ include_usage:tr
 assert.match(host, /const wantsUsage = body\.stream === true;/,
   'and only when it is actually streaming — a non-streamed reply already carries usage');
 // A provider that rejects the unknown field must not become a broken endpoint.
-assert.match(host, /response\.status === 400 \|\| response\.status === 422/,
+// Matched on SHAPE, not on the variable that happens to hold the response: these two
+// anchors both broke when the request body gained a model-fallback ladder around it, and
+// reported the retry missing when it was still there.
+assert.match(host, /\w+\.status === 400 \|\| \w+\.status === 422/,
   'a rejected stream_options is retried without it');
-assert.match(host, /const \{ stream_options, \.\.\.withoutUsage \} = body;/,
+assert.match(host, /const \{ stream_options, \.\.\.withoutUsage \} = \w+;/,
   'the retry drops exactly that field and keeps the rest of the body');
 
 // ── seam 2: the host READS it, in both response shapes ──

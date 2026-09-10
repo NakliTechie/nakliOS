@@ -5290,6 +5290,10 @@ const AI_DEFAULT_SETTINGS = Object.freeze({
     preset:'ollama',
     baseUrl:AI_ENDPOINT_PRESETS.ollama.baseUrl,
     model:'',
+    // Model ids to try, in order, when the selected one is not answering (5xx / 429 /
+    // network). Empty by default: a fallback is a deliberate choice, never a silent
+    // substitution of a provider the person did not pick.
+    fallbacks:Object.freeze([]),
     rememberKey:false,
   }),
   imageModelKey:globalThis.LocalMindHostCatalog.defaultImageKey,
@@ -5322,6 +5326,9 @@ function aiReadSettings(){
       preset,
       baseUrl:String(saved.endpoint?.baseUrl || AI_ENDPOINT_PRESETS[preset].baseUrl || ''),
       model:String(saved.endpoint?.model || ''),
+      fallbacks:Array.isArray(saved.endpoint?.fallbacks)
+        ? saved.endpoint.fallbacks.filter(id => typeof id === 'string' && id.trim()).map(id => id.trim())
+        : [],
       rememberKey:saved.endpoint?.rememberKey === true,
     },
     imageModelKey:validImageModel
@@ -6317,12 +6324,36 @@ async function aiGenerateEndpoint(request){
     signal:controller.signal,
     body:JSON.stringify(b),
   });
-  let response = await post(body);
-  if (!response.ok && wantsUsage && (response.status === 400 || response.status === 422)) {
-    const { stream_options, ...withoutUsage } = body;
-    response = await post(withoutUsage);
+  // Ordered model fallback. A free tier can 500 for one model id while every other id on the
+  // same server answers — and mid-run that costs the whole agent run, not just one turn. The
+  // ladder is safe HERE and nowhere later: nothing has been emitted until the response is
+  // ok, so a retry cannot splice two models into one turn. The policy (which statuses are
+  // worth another id, ordering, dedupe) lives in agent-protocol.mjs and is tested headlessly.
+  const ladderProto = proto || await aiAgentProto();
+  const ladder = ladderProto.modelLadder(request.model.model, aiSettings.endpoint.fallbacks);
+  let response;
+  let answeredWith = request.model.model;
+  const attemptOn = async (modelId) => {
+    const withModel = { ...body, model:modelId };
+    let res = await post(withModel);
+    if (!res.ok && wantsUsage && (res.status === 400 || res.status === 422)) {
+      const { stream_options, ...withoutUsage } = withModel;
+      res = await post(withoutUsage);
+    }
+    // The ladder decides by status, so the status has to travel with the error.
+    if (!res.ok) throw Object.assign(new Error(await aiReadEndpointError(res)), { status:res.status });
+    return res;
+  };
+  if (ladder.length > 1){
+    const run = await ladderProto.runModelLadder(ladder, attemptOn);
+    response = run.value;
+    answeredWith = run.model;
+  } else {
+    response = await attemptOn(request.model.model);
   }
-  if (!response.ok) throw new Error(await aiReadEndpointError(response));
+  // Which id actually answered — not which was configured. A record that names the
+  // configured model when a fallback answered misattributes every signal folded from it.
+  request.answeredModel = answeredWith;
 
   const contentType = response.headers.get('content-type') || '';
   if (!response.body || !contentType.includes('text/event-stream')){
