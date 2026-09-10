@@ -109,6 +109,35 @@ export function probe(records) {
   return { rows, eligible, noIndex, total: records.length, unparsed: [...unparsed] };
 }
 
+/**
+ * AC-9's cheap first cut: which items were carried on runs that DIDN'T finish, and never fired
+ * anywhere at all?
+ *
+ * The full write-admission gate — does a remembered lesson improve later runs? — needs replay and
+ * a held-out comparison. This is the version that needs neither: an item present on failing runs,
+ * absent from every success, and never once loaded, is at best paying rent. It is a SUSPECT LIST,
+ * not a verdict; `carriedOnFailures` counts runs, and at small n that number is mostly noise.
+ *
+ * Rules are excluded here for the same reason they are excluded everywhere else in this file:
+ * injected whole, never called, unattributable in principle.
+ */
+export function suspects(rows) {
+  const by = new Map();
+  for (const r of rows) {
+    if (r.used === null) continue;
+    const k = `${r.kind}:${r.name}`;
+    const e = by.get(k) || { kind: r.kind, name: r.name, everFired: false, onFailures: 0, onSuccesses: 0, seen: 0 };
+    e.seen++;
+    if (r.used) e.everFired = true;
+    if (r.label === 'success') e.onSuccesses++;
+    else if (r.label === 'failure') e.onFailures++;
+    by.set(k, e);
+  }
+  return [...by.values()]
+    .filter((e) => !e.everFired && e.onFailures > 0 && e.onSuccesses === 0)
+    .sort((a, b) => b.onFailures - a.onFailures || a.name.localeCompare(b.name));
+}
+
 // Per class: of the items that sat in context, what share never fired, split by outcome. The
 // correlation AC-2 asks for is between "carried dead weight" and "did worse".
 export function summarise(rows) {
@@ -171,6 +200,15 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     for (const [label, v] of Object.entries(g.byLabel)) {
       console.log(`  ${label.padEnd(8)} in-context ${String(v.inContext).padStart(4)}  fired ${String(v.fired).padStart(4)}  never-fired share ${v.deadShare}`);
     }
+  }
+  const susp = suspects(r.rows);
+  if (susp.length) {
+    console.log('\nAC-9 suspects — carried on runs that did not finish, never fired anywhere:');
+    for (const e of susp) console.log(`  ${e.kind.padEnd(6)} ${e.name.padEnd(20)} on ${e.onFailures} unfinished run(s), 0 successes, 0 uses`);
+    console.log('  A suspect list, not a verdict: at this n, "never fired" is as likely to mean');
+    console.log('  "the tasks never needed it" as "it is dead weight". Read it as where to look.');
+  } else if (r.eligible) {
+    console.log('\nAC-9 suspects: none — every carried item either fired somewhere or appeared on a run that finished.');
   }
   const rules = r.rows.filter((x) => x.used === null).length;
   if (rules) console.log(`\n(${rules} rule entries excluded: injected whole, never called, unattributable by design.)`);
