@@ -32,6 +32,11 @@ for (const call of startCalls) {
 }
 assert.match(runTask, /const runModel = \(\) => \{[\s\S]*?capabilities[\s\S]*?aiModel[\s\S]*?aiProvider[\s\S]*?\}/,
   'the model stamp is read from the host capability broadcast at run time, not cached at boot');
+// run.started names the CONFIGURED model. The host's fallback ladder can answer from another id
+// mid-run, so each reply must carry who actually answered — the recorder stamps it on
+// llm.responded (sys/history/run-record.mjs wrapInfer) and foldSubstitutions reads it back.
+assert.match(anvil, /return \{ content: [^\n]*finishReason:[^\n]*model: \(r&&typeof r\.model==='string'&&r\.model\)\|\|null \};/,
+  'inferViaHost returns the answering model on the reply the recorder reads');
 assert.equal([...runTask.matchAll(/await rec\.finish\(result\)/g)].length, 3, 'each loop is followed by rec.finish (main + act-or-nudge + D2 supervisor)');
 assert.equal([...runTask.matchAll(/infer: recInfer/g)].length, 3, 'each loop infers through the recorder (main + act-or-nudge + D2 supervisor)');
 assert.equal([...runTask.matchAll(/onEvent:recEvent/g)].length, 3, 'each loop reports through the recorder (main + act-or-nudge + D2 supervisor)');
