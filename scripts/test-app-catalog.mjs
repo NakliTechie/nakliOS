@@ -100,11 +100,16 @@ assert.match(
   /id:'reel'[\s\S]*?url:'https:\/\/reel\.naklitechie\.com\/'[\s\S]*?embedUrl:'https:\/\/naklios\.dev\/apps\/reel\/'/,
   'Reel keeps its canonical host and uses a same-origin Immersive mirror',
 );
-assert.match(
-  html,
-  /id:'nakliamp'[\s\S]*?url:'https:\/\/nakliamp\.naklitechie\.com\/'[\s\S]*?embedUrl:'https:\/\/naklios\.dev\/apps\/nakliamp\/'/,
-  'NakliAmp keeps its canonical host and uses a same-origin Immersive mirror',
-);
+// Same-origin embed, either spelling. `./apps/<id>/` and `https://naklios.dev/apps/<id>/` both
+// resolve to /apps/<id>/ for the inventory audit; the relative form additionally works on a
+// local serve, which is what makes a mirrored app verifiable before deploy (Menagerie set this
+// precedent, plan/history.md 2026-09-09). Pinning the absolute spelling made this test fail on
+// a change that strictly improved the property it guards.
+assert.match(html, /id:'nakliamp'[\s\S]*?url:'https:\/\/nakliamp\.naklitechie\.com\/'/,
+  'NakliAmp keeps its canonical host');
+const ampEmbed = html.match(/id:'nakliamp'[\s\S]*?embedUrl:'([^']+)'/);
+assert.ok(ampEmbed && ['./apps/nakliamp/', 'https://naklios.dev/apps/nakliamp/'].includes(ampEmbed[1]),
+  `NakliAmp uses a same-origin Immersive mirror (got ${ampEmbed && ampEmbed[1]})`);
 assert.match(
   html,
   /id:'fld-games'[\s\S]*?apps:\['reel','nakliamp'/,
