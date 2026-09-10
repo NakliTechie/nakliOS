@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Chapter Time — Read &amp; Watch</title>
+<meta name="description" content="Read a chapter, then watch it come alive. A calm, self-paced reading-and-video companion for Class 1–5, keyed to the abhyas knowledge graph. Private by default.">
+<meta name="author" content="Chirag Patnaik">
+<meta name="color-scheme" content="light">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%237a5a96'/%3E%3Cpolygon points='26,22 44,32 26,42' fill='%23f6eedd'/%3E%3C/svg%3E">
+<style>
+:root{
+  --paper:#f6eeddff; --panel:#fffdf7; --card:#fffef9;
+  --ink:#2f2417; --muted:#7a6a55; --faint:#a2937d;
+  --brand:#7a5a96; --brand-ink:#5f4479; --brand-soft:#e6dced;
+  --act:#3a5a8a; --ok:#4f7a2a; --ok-soft:#e6efd2;
+  --line:#e8ddc7; --line-strong:#d8c7a8;
+  --radius:18px; --radius-sm:12px;
+  --shadow:0 6px 22px rgba(90,60,25,.10), 0 2px 6px rgba(90,60,25,.06);
+  --shadow-lg:0 14px 40px rgba(90,60,25,.16), 0 4px 12px rgba(90,60,25,.08);
+  --maxw:900px;
+}
+*{box-sizing:border-box;}
+*::-webkit-scrollbar{width:11px;height:11px;}
+*::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:999px;border:3px solid transparent;background-clip:padding-box;}
+html,body{margin:0;padding:0;min-height:100%;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:var(--paper);color:var(--ink);
+  font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0;}
+input{font:inherit;color:inherit;}
+a{color:var(--brand-ink);text-decoration:none;}
+a:hover{text-decoration:underline;}
+h1,h2,h3{margin:0;line-height:1.2;}
+.tnum{font-variant-numeric:tabular-nums;}
+
+#app{max-width:var(--maxw);margin:0 auto;padding:0 20px 80px;}
+header.top{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--paper) 88%,transparent);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--line);margin:0 -20px 22px;padding:12px 20px;}
+.top-inner{max-width:var(--maxw);margin:0 auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+.brand{display:flex;align-items:center;gap:11px;cursor:pointer;}
+.brand-mark{width:38px;height:38px;border-radius:11px;flex:none;background:linear-gradient(135deg,var(--brand),#a07bc0);
+  color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:19px;box-shadow:var(--shadow);}
+.brand-name{font-weight:800;font-size:19px;letter-spacing:.01em;}
+.brand-sub{color:var(--muted);font-size:12.5px;font-weight:500;margin-top:-2px;}
+.top-spacer{flex:1;}
+.priv-pill{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);background:var(--panel);
+  border:1px solid var(--line);border-radius:999px;padding:5px 11px;}
+.priv-dot{width:7px;height:7px;border-radius:50%;background:var(--ok);}
+
+.gradebar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;}
+.gradebar .lbl{color:var(--muted);font-size:13px;font-weight:600;margin-right:2px;}
+.gpill{padding:7px 15px;border-radius:999px;border:1.5px solid var(--line-strong);background:var(--panel);font-weight:650;font-size:14px;color:var(--muted);}
+.gpill:hover{border-color:var(--brand);color:var(--brand-ink);}
+.gpill.on{background:var(--brand);border-color:var(--brand);color:#fff;box-shadow:var(--shadow);}
+
+.crumbs{display:flex;align-items:center;gap:7px;font-size:13.5px;color:var(--muted);margin:2px 0 16px;flex-wrap:wrap;}
+.crumbs button{color:var(--brand-ink);font-weight:600;}
+.crumbs button:hover{text-decoration:underline;}
+.crumbs .sep{color:var(--faint);}
+
+.hero{margin:4px 0 22px;}
+.hero h1{font-size:27px;letter-spacing:-.01em;}
+.hero p{color:var(--muted);margin:8px 0 0;max-width:60ch;}
+.section-h{font-size:14px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;margin:26px 0 12px;}
+
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+  padding:16px 17px;text-align:left;position:relative;overflow:hidden;transition:transform .12s ease,box-shadow .12s ease,border-color .12s ease;display:block;width:100%;}
+.card:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg);border-color:var(--line-strong);}
+.card .stripe{position:absolute;left:0;top:0;bottom:0;width:6px;}
+.strand-card h3{font-size:16.5px;padding-left:6px;}
+.strand-card .meta{color:var(--muted);font-size:13px;margin-top:7px;padding-left:6px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
+.chip{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:650;}
+.chip-grade{background:var(--brand-soft);color:var(--brand-ink);}
+.chip-soft{background:var(--panel);border:1px solid var(--line);color:var(--muted);}
+.bar{height:7px;border-radius:999px;background:var(--line);overflow:hidden;margin-top:12px;}
+.bar > i{display:block;height:100%;background:linear-gradient(90deg,var(--brand),#a07bc0);border-radius:999px;}
+
+.clist{display:flex;flex-direction:column;gap:11px;}
+.crow{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+  padding:15px 17px;display:flex;align-items:center;gap:16px;text-align:left;width:100%;transition:transform .12s ease,box-shadow .12s ease,border-color .12s ease;}
+.crow:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg);border-color:var(--line-strong);}
+.crow .body{flex:1;min-width:0;}
+.crow h3{font-size:16px;}
+.crow .sub{color:var(--muted);font-size:13px;margin-top:5px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+.readmark{flex:none;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;
+  border:2px solid var(--line-strong);color:var(--faint);}
+.readmark.on{background:var(--ok);border-color:var(--ok);color:#fff;}
+
+.detail-head{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px;}
+.detail-head h1{font-size:23px;letter-spacing:-.01em;}
+.detail-head .tags{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 4px;}
+.lead{color:var(--muted);margin-top:14px;font-size:15.5px;line-height:1.6;}
+.map{display:flex;flex-direction:column;gap:14px;margin-top:16px;}
+.map .grp .section-h{margin:0 0 8px;}
+.pills{display:flex;gap:8px;flex-wrap:wrap;}
+.pill{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 13px;font-size:13px;color:var(--ink);}
+.pill:hover{border-color:var(--brand);color:var(--brand-ink);}
+
+.block{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px 22px;margin-top:16px;}
+.block h2{font-size:17px;display:flex;align-items:center;gap:9px;}
+.block p{color:var(--muted);margin:8px 0 0;}
+.videowrap{position:relative;width:100%;aspect-ratio:16/9;border-radius:var(--radius-sm);overflow:hidden;margin-top:14px;background:#000;border:1px solid var(--line);}
+.videowrap iframe{position:absolute;inset:0;width:100%;height:100%;border:0;}
+.video-empty{margin-top:14px;border:1.5px dashed var(--line-strong);border-radius:var(--radius-sm);padding:22px;text-align:center;color:var(--muted);}
+.video-empty .big{font-size:30px;margin-bottom:8px;}
+
+.btn{border-radius:var(--radius-sm);padding:13px 20px;font-weight:750;font-size:15px;background:var(--brand);color:#fff;box-shadow:var(--shadow);white-space:nowrap;display:inline-flex;align-items:center;gap:8px;}
+.btn:hover{filter:brightness(1.05);text-decoration:none;}
+.btn:active{transform:translateY(1px);}
+.btn.ghost{background:var(--panel);color:var(--ink);border:1.5px solid var(--line-strong);box-shadow:none;}
+.btn.ghost:hover{border-color:var(--brand);color:var(--brand-ink);}
+.btn.act{background:var(--act);}
+.btn.ok{background:var(--ok);}
+.actions-row{display:flex;gap:12px;flex-wrap:wrap;margin-top:18px;}
+
+.empty{text-align:center;color:var(--muted);padding:50px 20px;}
+.empty .big{font-size:34px;margin-bottom:10px;}
+
+#toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(140%);z-index:100;background:var(--ink);color:var(--paper);
+  padding:12px 20px;border-radius:999px;font-weight:600;font-size:14px;box-shadow:var(--shadow-lg);transition:transform .28s cubic-bezier(.2,.9,.3,1.2);max-width:90vw;}
+#toast.show{transform:translateX(-50%) translateY(0);}
+
+footer{max-width:var(--maxw);margin:40px auto 0;padding:20px;color:var(--faint);font-size:12.5px;text-align:center;border-top:1px solid var(--line);}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-inner">
+    <div class="brand" data-nav="home" title="Home">
+      <div class="brand-mark">▶</div>
+      <div>
+        <div class="brand-name">Chapter Time</div>
+        <div class="brand-sub" id="brandSub">Read &amp; watch</div>
+      </div>
+    </div>
+    <div class="top-spacer"></div>
+    <span class="priv-pill" id="privPill"><span class="priv-dot"></span> Private · on this device</span>
+  </div>
+</header>
+
+<main id="app"></main>
+
+<footer>
+  Chapter Time — read &amp; watch, a learning app for <a href="https://naklios.dev">naklios.dev</a>.
+  Chapter map from the <b>abhyas</b> knowledge-graph engine. No account, no tracking — what you've explored stays on this device.
+</footer>
+
+<div id="toast"></div>
+
+<script src="sdk/naklios.js"></script>
+<script src="data/chapters-k5.js"></script>
+<script>
+"use strict";
+(function(){
+  const DATA = window.CHAPTER_DATA;
+  const $ = (s,r=document)=>r.querySelector(s);
+  const app = $("#app");
+  const NAK = (typeof window.naklios === "object" && window.naklios) ? window.naklios : null;
+
+  if(!DATA || !Array.isArray(DATA.concepts) || !DATA.concepts.length){
+    app.innerHTML = `<div class="empty"><div class="big">😕</div>Couldn't load the chapters.<br>Make sure <code>data/chapters-k5.js</code> is present next to this page.</div>`;
+    return;
+  }
+
+  /* ---------- data ---------- */
+  const concepts = DATA.concepts;
+  const byId = {}; concepts.forEach(c=>byId[c.id]=c);
+  const videos = DATA.videos || {};
+  const subject = (DATA.meta && DATA.meta.subject) || "your subject";
+  const grades = (DATA.meta && DATA.meta.grades) || [1,2,3,4,5];
+  const gradeLo = Math.min(...grades), gradeHi = Math.max(...grades);
+
+  // strands + reverse-prereq (what each concept leads to)
+  const strandOrder=[], strandConcepts={}, leadsTo={};
+  concepts.forEach(c=>{ if(!strandConcepts[c.strand]){strandConcepts[c.strand]=[];strandOrder.push(c.strand);} strandConcepts[c.strand].push(c); });
+  concepts.forEach(c=>(c.prereqs||[]).forEach(p=>{ (leadsTo[p] ||= []).push(c.id); }));
+  const strandColor={};
+  strandOrder.forEach((s,i)=>{ const h=Math.round((i*360/strandOrder.length+280)%360); strandColor[s]={bg:`hsl(${h} 46% 92%)`,fg:`hsl(${h} 42% 34%)`,bar:`hsl(${h} 48% 56%)`}; });
+
+  /* ---------- progress store (host fs when hosted, else localStorage) ---------- */
+  const PKEY="chaptertime.progress.v1", GKEY="chaptertime.grade.v1";
+  let backend="local", progress={ read:{}, watched:{} };
+  try{ const p=JSON.parse(localStorage.getItem(PKEY)); if(p){ progress={read:p.read||{},watched:p.watched||{}}; } }catch(e){}
+  let saveT;
+  function persist(){ clearTimeout(saveT); saveT=setTimeout(doSave,250); }
+  async function doSave(){
+    const json=JSON.stringify(progress);
+    if(backend==="host" && NAK){ try{ await NAK.fs.write("progress.json",json); return; }catch(e){} }
+    try{ localStorage.setItem(PKEY,json); }catch(e){}
+  }
+  async function adoptHostStore(){
+    if(!NAK || backend==="host") return;
+    let host=null;
+    try{ if(await NAK.fs.exists("progress.json")){ host=JSON.parse(await NAK.fs.read("progress.json")); } }catch(e){ return; }
+    backend="host";
+    if(host && (Object.keys(host.read||{}).length||Object.keys(host.watched||{}).length)){ progress={read:host.read||{},watched:host.watched||{}}; }
+    else if(Object.keys(progress.read).length||Object.keys(progress.watched).length){ persist(); }
+    render();
+  }
+  function markRead(cid){ progress.read[cid]=true; persist(); }
+  function markWatched(cid){ progress.watched[cid]=true; persist(); }
+  function isRead(cid){ return !!progress.read[cid]; }
+
+  let grade="all"; try{ const g=localStorage.getItem(GKEY); if(g) grade=g; }catch(e){}
+
+  /* ---------- helpers ---------- */
+  function esc(s){ return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+  function conceptsInGrade(list){ return grade==="all"?list:list.filter(c=>String(c.grade)===String(grade)); }
+  function diffWord(d){ return ["","gentle","gentle","medium","challenging","challenging"][d]||"medium"; }
+
+  let toastT; function toast(m){ const t=$("#toast"); t.textContent=m; t.classList.add("show"); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove("show"),2000); }
+
+  /* ---------- nav ---------- */
+  const state={ view:"home", strand:null, cid:null };
+  function nav(view,opts={}){ Object.assign(state,{view,strand:null,cid:null},opts); render(); window.scrollTo({top:0,behavior:"instant"}); }
+
+  function gradeBar(){
+    return `<div class="gradebar"><span class="lbl">Show:</span>${["all",1,2,3,4,5].map(g=>`<button class="gpill${String(g)===String(grade)?' on':''}" data-grade="${g}">${g==="all"?"All classes":"Class "+g}</button>`).join("")}</div>`;
+  }
+  function emptyBlock(m){ return `<div class="empty"><div class="big">🍃</div>${esc(m)}</div>`; }
+
+  function render(){
+    const map={ home:renderHome, strand:renderStrand, chapter:renderChapter };
+    (map[state.view]||renderHome)();
+    setHostTitle();
+  }
+
+  /* ---------- home ---------- */
+  function renderHome(){
+    const list=conceptsInGrade(concepts);
+    const readCount=list.filter(c=>isRead(c.id)).length;
+    const cards=strandOrder.map(s=>{
+      const cs=conceptsInGrade(strandConcepts[s]); if(!cs.length) return "";
+      const col=strandColor[s], done=cs.filter(c=>isRead(c.id)).length;
+      return `<button class="card strand-card" data-strand="${esc(s)}">
+        <span class="stripe" style="background:${col.bar}"></span>
+        <h3 style="color:${col.fg}">${esc(s)}</h3>
+        <div class="meta"><span class="chip chip-soft">${cs.length} chapter${cs.length>1?"s":""}</span>${done?`<span class="chip chip-soft">${done} read</span>`:""}</div>
+        <div class="bar"><i style="width:${Math.round(done/cs.length*100)}%"></i></div>
+      </button>`;
+    }).join("");
+    app.innerHTML=`
+      ${gradeBar()}
+      <div class="hero">
+        <h1>Read the chapter, then watch it come alive</h1>
+        <p>Pick a topic and open a chapter. Each one shows what it's about and how it connects to what you already know — with a video lesson to watch alongside.</p>
+      </div>
+      <div class="section-h">${subject} · ${list.length} chapters${grade==="all"?"":" for Class "+grade} · ${readCount} explored</div>
+      <div class="grid">${cards||emptyBlock("No chapters for this class.")}</div>`;
+  }
+
+  function renderStrand(){
+    const s=state.strand, col=strandColor[s], list=conceptsInGrade(strandConcepts[s]);
+    const rows=list.map(c=>`<button class="crow" data-cid="${c.id}">
+        <span class="readmark${isRead(c.id)?" on":""}">${isRead(c.id)?"✓":"▶"}</span>
+        <div class="body"><h3>${esc(c.concept)}</h3>
+          <div class="sub"><span class="chip chip-grade">Class ${c.grade}</span><span>${diffWord(c.difficulty)}</span>${videos[c.id]?"<span>· video</span>":""}${isRead(c.id)?"<span>· read</span>":""}</div>
+        </div><span style="color:var(--faint);font-size:20px">›</span></button>`).join("");
+    app.innerHTML=`
+      ${gradeBar()}
+      <div class="crumbs"><button data-nav="home">Home</button><span class="sep">›</span><span style="color:${col.fg};font-weight:600">${esc(s)}</span></div>
+      <div class="section-h">${list.length} chapter${list.length!==1?"s":""}${grade==="all"?"":" · Class "+grade}</div>
+      <div class="clist">${rows||emptyBlock("No chapters here for this class. Try 'All classes'.")}</div>`;
+  }
+
+  /* ---------- chapter detail ---------- */
+  function abhyasHref(){
+    // co-hosted under /apps/chapters -> sibling /apps/abhyas ; else the public app
+    try{ if(location.pathname.includes("/apps/chapters")) return new URL("../abhyas/",location.href).href; }catch(e){}
+    return "https://naklios.dev/apps/abhyas/";
+  }
+  function ytSearchHref(c){
+    const q=`Class ${c.grade} ${subject} ${c.concept} for kids`;
+    return "https://www.youtube.com/results?search_query="+encodeURIComponent(q);
+  }
+  function renderChapter(){
+    const c=byId[state.cid], col=strandColor[c.strand];
+    const pre=(c.prereqs||[]).map(id=>byId[id]).filter(Boolean);
+    const next=(leadsTo[c.id]||[]).map(id=>byId[id]).filter(Boolean);
+    const vid=videos[c.id];
+    const lead = `This chapter is about <b>${esc(c.concept)}</b>${pre.length?`. It builds on ${pre.length} idea${pre.length>1?"s":""} you've met before`:", one of the first ideas in this topic"}${next.length?`, and it opens the door to ${next.length} more`:""}.`;
+    const watch = vid
+      ? `<div class="videowrap"><iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(vid.youtubeId)}" title="${esc(vid.title||c.concept)}" allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>`
+      : `<div class="video-empty"><div class="big">🎬</div>A hand-picked video lesson for this chapter is coming soon.<br>Until then, you can look one up yourself.</div>
+         <div class="actions-row"><a class="btn ghost" href="${esc(ytSearchHref(c))}" target="_blank" rel="noopener">Find a video on YouTube ↗</a></div>`;
+    app.innerHTML=`
+      <div class="crumbs"><button data-nav="home">Home</button><span class="sep">›</span><button data-strand="${esc(c.strand)}">${esc(c.strand)}</button><span class="sep">›</span><span style="color:var(--ink);font-weight:600">${esc(c.concept)}</span></div>
+      <div class="detail-head">
+        <h1>${esc(c.concept)}</h1>
+        <div class="tags"><span class="chip" style="background:${col.bg};color:${col.fg}">${esc(c.strand)}</span><span class="chip chip-grade">Class ${c.grade}</span><span class="chip chip-soft">${diffWord(c.difficulty)}</span>${isRead(c.id)?`<span class="chip" style="background:var(--ok-soft);color:var(--ok)">✓ read</span>`:""}</div>
+        <p class="lead">${lead}</p>
+        <div class="map">
+          ${pre.length?`<div class="grp"><div class="section-h">This builds on</div><div class="pills">${pre.map(p=>`<button class="pill" data-cid="${p.id}">${esc(p.concept)}</button>`).join("")}</div></div>`:""}
+          ${next.length?`<div class="grp"><div class="section-h">This opens up</div><div class="pills">${next.map(n=>`<button class="pill" data-cid="${n.id}">${esc(n.concept)}</button>`).join("")}</div></div>`:""}
+        </div>
+      </div>
+
+      <div class="block">
+        <h2>🎬 Watch</h2>
+        <p>See the idea explained. ${vid?"":"Curated lessons are on the way — see the note below."}</p>
+        ${watch}
+      </div>
+
+      <div class="block">
+        <h2>✏️ Now practise it</h2>
+        <p>Reading and watching plant the idea. Practising in Abhyas makes it stick — drills and a quick quiz for this exact chapter.</p>
+        <div class="actions-row">
+          <a class="btn" href="${esc(abhyasHref())}" target="_blank" rel="noopener">Practise this in Abhyas ↗</a>
+          <button class="btn ${isRead(c.id)?"ghost":"ok"}" id="markRead">${isRead(c.id)?"✓ Marked as read":"Mark chapter as read"}</button>
+        </div>
+      </div>`;
+  }
+
+  /* ---------- events ---------- */
+  document.addEventListener("click", e=>{
+    const t=e.target.closest("[data-nav],[data-strand],[data-cid],[data-grade]");
+    if(!t){
+      if(e.target.id==="markRead" || e.target.closest("#markRead")){
+        markRead(state.cid); if(videos[state.cid]) markWatched(state.cid); toast("Nice — chapter marked as read."); renderChapter();
+      }
+      return;
+    }
+    const d=t.dataset;
+    if(d.grade!==undefined){ grade=d.grade; try{localStorage.setItem(GKEY,grade);}catch(_){}; render(); return; }
+    if(d.nav!==undefined){ nav(d.nav); return; }
+    if(d.cid){ nav("chapter",{cid:d.cid}); return; }
+    if(d.strand){ nav("strand",{strand:d.strand}); return; }
+  });
+
+  /* ---------- naklios host integration (own warm-paper palette; theme not adopted) ---------- */
+  function updateHostChrome(caps){
+    const pill=$("#privPill");
+    if(caps.hosted && caps.fs){
+      const be=(caps.fsBackends||[]).find(b=>b.id===caps.fsBackend);
+      pill.innerHTML=`<span class="priv-dot"></span> Saved to your ${be?esc(be.label):"NakliOS storage"}`;
+    } else if(caps.hosted){
+      pill.innerHTML=`<span class="priv-dot"></span> Private · in NakliOS`;
+    }
+  }
+  function setHostTitle(){
+    if(!NAK) return;
+    let t = state.view==="chapter" ? (byId[state.cid]?.concept)
+          : state.view==="strand" ? state.strand : "Read & Watch";
+    try{ NAK.title("Chapter Time" + (t?` — ${t}`:"")); }catch(_){}
+  }
+
+  /* ---------- boot ---------- */
+  $("#brandSub").textContent = `${subject} · Class ${gradeLo}–${gradeHi}`;
+  render();
+  if(NAK){
+    try{
+      NAK.onCapabilitiesChange(caps=>{ updateHostChrome(caps); if(caps.hosted && caps.fs) adoptHostStore(); });
+      NAK.ready();
+      NAK.requestCapabilities();
+    }catch(e){}
+  }
+})();
+</script>
+</body>
+</html>
