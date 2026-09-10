@@ -160,6 +160,7 @@
   #preview .phead{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--rule);flex:0 0 auto}
   #preview .phead .pt{font-weight:600;font-size:12px} #preview .phead .pf{color:var(--fg-2);font-family:var(--mono);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
   .revertbtn{font-size:10px;color:var(--err);background:transparent;border:1px solid var(--err);border-radius:5px;padding:2px 8px;cursor:pointer;flex:0 0 auto}
+  .pv-note{font-size:11px;color:var(--muted);border-left:2px solid var(--muted);padding:4px 8px;margin:0 0 8px}
   .revertbtn:hover{background:var(--err);color:#fff}
   #preview .pbody{flex:1;min-height:0;overflow:auto}
   #preview iframe{width:100%;height:100%;border:0;background:#fff}
@@ -408,6 +409,7 @@
   import { GATE_DIR, explainGateRefusal, GATE_AUTHORING_HINT, planGate } from '../../sys/ai/gate.mjs';
   import { renderProcedural, loadProceduralGraph, PROCEDURAL_PATH } from '../../sys/ai/procedural.mjs';
   import { rowKeys, planLogUpdate, isPinned } from '../../sys/ai/log-render-plan.mjs';
+  import { buildChangeRow, planRevert, prunePreimages, preimageBytes, MAX_PREIMAGE_BUDGET } from '../../sys/ai/change-preimages.mjs';
   import { migrateQueue, reconcileQueue, enqueue as qEnqueue, removeEntry as qRemove, moveEntry as qMove, editEntry as qEdit, nextDispatch, completeDispatch, releaseDispatch } from '../../sys/ai/followup-queue.mjs';
   import { skillManageTool, planSkillWrite, createSkillSession, SKILL_FILE } from '../../sys/ai/skill-manage.mjs';
   import { createProposalLedger } from '../../sys/ai/proposal-fingerprint.mjs';
@@ -1201,7 +1203,7 @@
         // the preview, instead of auto-popping the pane.
         const c=document.createElement('div'); c.className='change'; c.title='View this file in the preview';
         c.innerHTML=`<span class="ci">✎</span><span class="cf">${esc(e.verb||'wrote')} ${esc(e.file)}</span><span class="cv">view →</span>`;
-        c.onclick=()=>{ openChange(e.file, e.pre); raise('preview'); };
+        c.onclick=()=>{ openChange(e); raise('preview'); };
         w.appendChild(c);
       }
     }
@@ -1251,7 +1253,12 @@
     const body=$('pv-body');
     if(pv.type==='html'){ body.innerHTML=''; const f=document.createElement('iframe'); f.setAttribute('sandbox','allow-scripts'); f.srcdoc=pv.content; body.appendChild(f); }
     else if(pv.type==='diff'){ body.innerHTML='<pre></pre>'; body.querySelector('pre').innerHTML=diffHtml(pv.content); }
-    else { body.innerHTML='<pre></pre>'; body.querySelector('pre').textContent=pv.content; }
+    else {
+      body.innerHTML='<pre></pre>'; body.querySelector('pre').textContent=pv.content;
+      // AC-6: a chip whose pre-image was dropped used to look exactly like one with nothing to
+      // show. Say which it is, and why — an unexplained blank is the defect.
+      if(pv.note){ const n=document.createElement('div'); n.className='pv-note'; n.textContent=pv.note; body.insertBefore(n, body.firstChild); }
+    }
   }
   function renderAll(){ renderProjects(); renderTaskbar(); renderLog(); renderPreview(); renderFiles(); }
 
@@ -1461,37 +1468,57 @@
   // ── Change capture (view-on-click): the agent applies writes/edits directly
   // (YOLO); we don't auto-pop the preview. Instead we drop a compact "✎ wrote X ·
   // view" chip in the chat — click it to open the file/diff in the preview. ──
-  function noteChange(t, name, args){
+  async function noteChange(t, name, args){
     try{
       const path = args && (args.path||args.file);
       if(!path || !(name==='write'||name==='edit')) return;
-      // Keep the pre-image with the change (capped, so state.json stays lean).
       const raw = (path in preImages) ? preImages[path] : null;
-      const pre = (raw!=null && String(raw).length < 20000) ? raw : null;
-      t.log.push({ k:'change', file:path, verb: name==='edit'?'edited':'wrote', pre });
-      pendingDiff={ file:path, pre }; badge('preview','◫');
+      // AC-6: read back what the agent just wrote. Its digest is what lets Revert later ask "does
+      // this file still look the way the agent left it?" — without it a Revert cannot tell a
+      // clean undo from destroying whatever touched the file since.
+      let post=null; try{ const r=await fs.read(path,{encoding:'utf-8'}); if(r&&r.ok) post=r.data; }catch(_){}
+      const row = buildChangeRow({ file:path, verb: name==='edit'?'edited':'wrote', pre:raw, post });
+      t.log.push(row);
+      // Bounded retention: without this every change row keeps a full copy of the file's previous
+      // contents forever, in localStorage AND in the roamed state.json.
+      const pr = prunePreimages(t.log); if(pr.dropped){ t.log = pr.log; }
+      pendingDiff={ file:path, pre:row.pre }; badge('preview','◫');
+      // This is async now (it reads the file back), so the caller's renderLog() has already run
+      // by the time the row exists. Render again here or the chip appears one event late.
+      save(); renderLog();
     }catch(_){}
   }
   // Clicking a change chip opens it in the preview: a real before→after DIFF when
   // we have the pre-image (with a Revert), else the current file.
-  async function openChange(file, pre){
+  async function openChange(row){
     const at=activeTask(); if(!at) return;
+    const file=row.file, pre=row.pre;
     globalPreview=null;
     let content='(could not read '+file+')';
     try{ const r=await fs.read(file,{encoding:'utf-8'}); if(r&&r.ok) content=r.data; }catch(_){}
     if(pre!=null && !/\.html?$/.test(file)){
-      at.preview={ type:'diff', file, content: lineDiff(pre, content), pre };
+      // postHash and preUnavailable ride along so Revert can refuse with a reason instead of
+      // silently overwriting whatever has touched the file since (AC-6).
+      at.preview={ type:'diff', file, content: lineDiff(pre, content), pre, postHash:row.postHash, preUnavailable:row.preUnavailable };
     } else {
-      at.preview={ type:/\.html?$/.test(file)?'html':'text', file, content:String(content).slice(0,50000) };
+      at.preview={ type:/\.html?$/.test(file)?'html':'text', file, content:String(content).slice(0,50000), postHash:row.postHash, preUnavailable:row.preUnavailable };
+      // A chip whose diff was dropped must SAY so — it used to render identically to one that
+      // simply had no changes worth showing.
+      if(row.preUnavailable) at.preview.note='No before/after diff: '+row.preUnavailable+'.';
     }
     state.previewOpen=true; save(); renderPreview();
   }
-  // Revert: write the pre-image back to the file, then show it plainly.
+  // Revert: only when the file still looks the way the agent left it. It used to write the
+  // pre-image back unconditionally, which silently destroyed anything that had touched the file
+  // since — your own edit, a later turn, a subagent merge, a second tab (AC-6).
   async function revertChange(pv){
-    if(!pv || pv.pre==null) return;
-    try{ await fs.write(pv.file, pv.pre); }catch(_){}
+    if(!pv) return;
+    let current=null; try{ const r=await fs.read(pv.file,{encoding:'utf-8'}); if(r&&r.ok) current=r.data; }catch(_){}
+    const plan = planRevert({ k:'change', file:pv.file, pre:pv.pre, postHash:pv.postHash, preUnavailable:pv.preUnavailable }, current);
+    if(!plan.ok){ pushSystem('↶ Not reverted — '+plan.message); return; }
+    try{ await fs.write(pv.file, plan.content); }catch(e){ pushSystem('↶ Not reverted — '+String(e&&e.message||e)); return; }
     pushSystem('Reverted '+pv.file+'.');
-    const at=activeTask(); if(at) at.preview={ type:'text', file:pv.file, content:pv.pre };
+    const at=activeTask(); if(at) at.preview={ type:'text', file:pv.file, content:plan.content };
     save(); renderAll();
   }
 
@@ -1881,7 +1908,13 @@
               // Write the EXACT bytes (fileops.toBytes takes a Uint8Array) — no
               // lossy UTF-8 round-trip, so binary artifacts survive the merge.
               await fs.write(rel, bytes);
-              if(t){ const preC=(pre!=null && String(pre).length<20000)?pre:null; (t.log=t.log||[]).push({ k:'change', file:rel, verb:'wrote', pre:preC }); pendingDiff={ file:rel, pre:preC }; badge('preview','◫'); }
+              if(t){
+                let post=null; try{ const rr=await fs.read(rel,{encoding:'utf-8'}); if(rr&&rr.ok) post=rr.data; }catch(_){}
+                const row = buildChangeRow({ file:rel, verb:'wrote', pre, post });
+                (t.log=t.log||[]).push(row);
+                const pr = prunePreimages(t.log); if(pr.dropped){ t.log = pr.log; }
+                pendingDiff={ file:rel, pre:row.pre }; badge('preview','◫');
+              }
             },
             remove: async (p)=>{
               const rel = toRel(p);
