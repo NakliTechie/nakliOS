@@ -162,6 +162,7 @@
   .revertbtn{font-size:10px;color:var(--err);background:transparent;border:1px solid var(--err);border-radius:5px;padding:2px 8px;cursor:pointer;flex:0 0 auto}
   .pv-note{font-size:11px;color:var(--muted);border-left:2px solid var(--muted);padding:4px 8px;margin:0 0 8px}
   .pv-actions{display:flex;gap:6px;flex-wrap:wrap;padding:10px 0 0;border-top:1px solid var(--line);margin-top:10px}
+  .meta.bypass{color:var(--err);font-weight:600}
   .revertbtn:hover{background:var(--err);color:#fff}
   #preview .pbody{flex:1;min-height:0;overflow:auto}
   #preview iframe{width:100%;height:100%;border:0;background:#fff}
@@ -427,6 +428,7 @@
   import { HOOKS_FILE, parseHooks, preToolDecision, postToolCommands } from '../../sys/ai/hooks.mjs';
   import { gateAction, gateEvent, actionClasses } from '../../sys/ai/action-gate.mjs';
   import { applyPolicy, grant as policyGrant, revoke as policyRevoke, policyRows, normalisePolicy, POLICY_HINT } from '../../sys/ai/action-policy.mjs';
+  import { decideByRules, applyMode, MODES as PERM_MODES, MODE_LABEL as PERM_MODE_LABEL, modeIsLoud } from '../../sys/ai/permission-rules.mjs';
   import { compactConversation } from '../../sys/ai/compaction.mjs';
   import { evolve } from '../../sys/ai/evolve.mjs';
   import { createKiln, createWorkerRuntime } from '../../sys/kiln/index.mjs';
@@ -1135,7 +1137,10 @@
     const t=activeTask();
     $('tb-dot').className='dot '+((t&&t.status)||'idle');
     $('tb-title').textContent=t?t.title:'No task';
-    $('tb-meta').textContent='';  // storage moved to the single header chip; taskbar stays uncluttered
+    // A bypassed session must be obvious WITHOUT opening a panel — a permission mode you have to
+    // go looking for is one you forget you left on.
+    $('tb-meta').textContent = modeIsLoud(state.permissionMode) ? '⚠ BYPASS — nothing is asked' : '';
+    $('tb-meta').className = modeIsLoud(state.permissionMode) ? 'meta bypass' : 'meta';
     const g=$('gate-btn'); if(g){ const vc=((t&&t.verifyCmd)||'').trim(); g.textContent=vc?('✓ '+vc):'✓ Must-pass'; g.classList.toggle('on', !!vc);
       // Always visible. The old progressive reveal keyed on `state.proven`, which
       // seedState() never set — so on a fresh install it was undefined and the gate
@@ -1300,9 +1305,22 @@
       (r.fixed ? '  never   ' : (r.granted ? '  allowed ' : '  ask     ')) + r.id.padEnd(13) + r.why
     ).join('\n');
     const granted = rows.filter(r=>r.granted);
+    const mode = PERM_MODES.includes(state.permissionMode) ? state.permissionMode : 'default';
+    const rules = state.permissionRules || {};
+    const ruleList = (k) => (Array.isArray(rules[k]) && rules[k].length) ? rules[k].map(r=>'    '+r).join('\n') : '    (none)';
     globalPreview = { type:'text', file:'Policy',
       content:
-        'What the agent may do without asking you first.\n\n'
+        'Mode: ' + PERM_MODE_LABEL[mode] + '\n'
+      + (modeIsLoud(mode) ? '\n  ⚠ BYPASS IS ON — nothing will be asked. Deny rules and the "never" row below still hold.\n' : '')
+      + '\nYour rules — these win over everything below, and a deny rule survives bypass:\n'
+      + '  deny\n' + ruleList('deny') + '\n'
+      + '  ask\n' + ruleList('ask') + '\n'
+      + '  allow\n' + ruleList('allow') + '\n'
+      + '\n  Written like Claude Code: Bash(npm test:*)  ·  Write(src/**)  ·  Read\n'
+      + '  A chain is split on && || ; and | — Bash(ls:*) will NOT allow "ls && rm -rf /",\n'
+      + '  and Bash(rm:*) in deny still catches the rm at the end of it.\n\n'
+      + '---\n\n'
+      + 'What the agent may do without asking you first.\n\n'
       + 'Anvil stops an action when it sends data off this device and nothing you said asked for it.\n'
       + 'Answer the prompt when it appears, or set a standing permission here.\n\n'
       + lines + '\n\n'
@@ -1313,14 +1331,25 @@
       + 'ask    = you will be prompted, and can choose "always allow" there.\n'
       + 'allowed= proceeds silently until you revoke it.\n\n'
       + 'This lives in Anvil\'s own settings, not in your project files — so the agent cannot grant itself anything.',
-      actions: granted.map(r=>({ label:'Revoke '+r.id, onClick:()=>{
-        state.policy = policyRevoke(state.policy, r.id); save();
-        pushSystem('Revoked the standing permission for "'+r.id+'" — it will ask again.');
-        openPolicy();
-      } })) };
+      actions: [
+        ...PERM_MODES.filter(m=>m!==mode).map(m=>({ label:'Mode: '+m, onClick:async ()=>{
+          if(m==='bypass'){
+            const ok = await askChoice({ title:'Turn on bypass?',
+              label:'Nothing will be asked for the rest of this session. Your deny rules still hold, and actions that cannot be undone are still refused.\n\nOnly do this while you are watching.',
+              choices:[{label:'Turn on bypass',value:'yes',primary:true},{label:'Cancel',value:'no'}] });
+            if(ok!=='yes') return;
+          }
+          state.permissionMode=m; save(); pushSystem('Permission mode: '+PERM_MODE_LABEL[m]); openPolicy(); renderTaskbar();
+        } })),
+        ...granted.map(r=>({ label:'Revoke '+r.id, onClick:()=>{
+          state.policy = policyRevoke(state.policy, r.id); save();
+          pushSystem('Revoked the standing permission for "'+r.id+'" — it will ask again.');
+          openPolicy();
+        } })),
+      ] };
     { const _t=activeTask(); if(_t) _t.preview=null; }   // a stale task preview would hide this global view
     state.previewOpen=true; save(); renderPreview();
-    const n=$('sheet-policy'); if(n) n.textContent = granted.length ? granted.length+' allowed' : '';
+    const n=$('sheet-policy'); if(n) n.textContent = modeIsLoud(mode) ? 'BYPASS' : (granted.length ? granted.length+' allowed' : '');
   }
   function renderAll(){ renderProjects(); renderTaskbar(); renderLog(); renderPreview(); renderFiles(); }
 
@@ -2053,7 +2082,25 @@
       // still the fence, and nothing here can permit what it refuses.
       try{
         const convoNow = (runCtx && runCtx.messages) || (t && t.convo) || [];
+        // AC-7c: the owner's own rules come first — they are the layer you can actually steer.
+        // A DENY rule is absolute and is checked before everything, including bypass mode: a rule
+        // that says "never do this" which a mode can ignore is not a rule.
+        const byRule = decideByRules(state.permissionRules, nm, ar);
+        if(byRule.decision === 'deny'){
+          if(t){ t.log.push({ k:'system', text:'⛔ Refused — '+byRule.why+'. '+POLICY_HINT }); renderLog(); }
+          return 'Refused: '+byRule.why+'. '+POLICY_HINT;
+        }
         let verdict = applyPolicy(gateAction(nm, ar, convoNow), state.policy);
+        // The mode's say. `bypass` waives the prompt but not a deny rule (already handled) and not
+        // the critical tier — the handful of things that cannot be undone.
+        const byMode = applyMode(state.permissionMode, nm, ar, { gateVerdict: verdict });
+        if(byMode.decision === 'deny'){
+          if(t){ t.log.push({ k:'system', text:'⛔ '+byMode.why }); renderLog(); }
+          return 'Refused: '+byMode.why+' '+POLICY_HINT;
+        }
+        if(byMode.decision === 'allow') verdict = { ...verdict, outcome:'allow', liftedBy:null };
+        else if(byRule.decision === 'allow') verdict = { ...verdict, outcome:'allow', liftedBy:null };
+        else if(byRule.decision === 'ask' && verdict.outcome === 'allow') verdict = { ...verdict, outcome:'deny', liftable:true, why:'is covered by one of your ask rules', evidence:byRule.why };
         // AC-7b: a liftable refusal is ASKED, not just reported. Without this the only way to
         // authorize was to abandon the run, retype the request with the right words, and start
         // again — which is why every gate anyone actually uses has a prompt.

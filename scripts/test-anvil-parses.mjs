@@ -10,9 +10,16 @@ import { execFileSync } from 'node:child_process';
 const html = await readFile(new URL('../apps/anvil/index.html', import.meta.url), 'utf8');
 const blocks = [...html.matchAll(/<script type="module">([\s\S]*?)<\/script>/g)].map((m) => m[1]);
 assert.ok(blocks.length >= 1, 'Anvil has an inline module');
-// Strip the import lines (their bare specifiers do not resolve under a bare node --check) and
-// parse the rest — a syntax error (unbalanced braces, a duplicated header) fails here.
-const body = blocks.join('\n').split('\n').filter((l) => !/^\s*import\s/.test(l)).join('\n');
+// KEEP the imports. They used to be stripped, on the belief that bare specifiers would not resolve
+// under `node --check` — but --check is syntax-only and never resolves anything, so the stripping
+// bought nothing and cost a real class of failure: an imported name colliding with a local one is
+// a SyntaxError, and removing the import makes the collision disappear.
+//
+// That is not hypothetical. On 2026-09-10 `import { MODES } from permission-rules.mjs` collided
+// with a long-standing `const MODES=['code','plan','ask']`. The whole module threw at load, Anvil
+// did not boot at all — and this test stayed GREEN, because the import it collided with had been
+// stripped before the check. Verified that keeping them turns that case red.
+const body = blocks.join('\n');
 const f = join(tmpdir(), 'anvil-module-parse-check.mjs');
 await writeFile(f, body);
 execFileSync(process.execPath, ['--check', f], { stdio: 'pipe' }); // throws on a syntax error

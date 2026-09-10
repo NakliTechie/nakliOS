@@ -84,6 +84,9 @@ jobs:
       - name: Gate the system filesystem on same-origin system apps, and bind messages to the launch origin
         run: node scripts/test-host-origin-authority.mjs
 
+      - name: Verify permission rules segment a shell chain, and that bypass cannot cover a deny rule
+        run: node sys/ai/test/permission-rules.test.mjs
+
       - name: Verify standing permissions lift only liftable refusals, and critical has no setting
         run: node sys/ai/test/action-policy.test.mjs
 
