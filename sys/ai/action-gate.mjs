@@ -50,30 +50,30 @@ const authRank = (a) => Math.max(0, AUTHORIZATION.indexOf(a));
 // `ask` is the sentence a refusal tells them to say.
 const PUSH_TOPICS = ['push', 'ship', 'deploy', 'publish', 'land', 'upload', 'send it', 'release', 'merge to main', 'to origin'];
 const RULES = [
-  { risk: 'critical', why: 'rewrites or destroys history that cannot be recovered from the workspace',
+  { id: 'destructive', risk: 'critical', why: 'rewrites or destroys history that cannot be recovered from the workspace',
     topic: ['force push', 'push --force', '--force', 'reset --hard', 'rm -rf'], ask: null,
     tool: /^(shell|bash|sh)$/i, cmd: /(^|[\s;&|(])(git\s+push\s+.*--force|git\s+reset\s+--hard|rm\s+-rf\s+\/(\s|$)|shutdown|mkfs)/ },
 
   // EGRESS — data leaves this device. A payload flag is what separates an upload from a read.
-  { risk: 'high', why: 'sends the contents of this workspace to a remote', topic: PUSH_TOPICS, ask: 'push it',
+  { id: 'git-push', risk: 'high', why: 'sends the contents of this workspace to a remote', topic: PUSH_TOPICS, ask: 'push it',
     tool: /^(shell|bash|sh)$/i, cmd: /(^|[\s;&|(])git\s+push\b/ },
-  { risk: 'high', why: 'uploads data from this device', topic: [...PUSH_TOPICS, 'post', 'upload'], ask: 'upload it',
+  { id: 'upload', risk: 'high', why: 'uploads data from this device', topic: [...PUSH_TOPICS, 'post', 'upload'], ask: 'upload it',
     tool: /^(shell|bash|sh)$/i, cmd: /(^|[\s;&|(])(curl|wget)\b[^|;&]*(\s-(d|F|T)\b|--data|--form|--upload-file|-X\s*(POST|PUT|PATCH))/i },
-  { risk: 'high', why: 'copies files to a remote machine', topic: [...PUSH_TOPICS, 'copy to', 'sync to'], ask: 'copy it there',
+  { id: 'copy-remote', risk: 'high', why: 'copies files to a remote machine', topic: [...PUSH_TOPICS, 'copy to', 'sync to'], ask: 'copy it there',
     tool: /^(shell|bash|sh)$/i, cmd: /(^|[\s;&|(])(scp|rsync|nc)\b/ },
-  { risk: 'high', why: 'opens a session on another machine', topic: ['ssh', 'log in to', 'connect to'], ask: 'ssh there',
+  { id: 'ssh', risk: 'high', why: 'opens a session on another machine', topic: ['ssh', 'log in to', 'connect to'], ask: 'ssh there',
     tool: /^(shell|bash|sh)$/i, cmd: /(^|[\s;&|(])ssh\b/ },
 
   // INGRESS — data arrives. Instrumental to authorized work, so medium: allowed without an
   // explicit ask, and still fenced by the egress allowlist and the grant.
-  { risk: 'medium', why: 'fetches something from the network', topic: ['fetch', 'download', 'clone', 'install'], ask: null,
+  { id: 'fetch', risk: 'medium', why: 'fetches something from the network', topic: ['fetch', 'download', 'clone', 'install'], ask: null,
     tool: /^(shell|bash|sh)$/i, cmd: /(^|[\s;&|(])(curl|wget|git\s+clone|npm\s+(i|install)|pip\s+install)\b/ },
-  { risk: 'medium', why: 'fetches something from the network', topic: ['fetch', 'download', 'http'], tool: /^(fetch|net|http|egress)$/i, ask: null },
+  { id: 'fetch', risk: 'medium', why: 'fetches something from the network', topic: ['fetch', 'download', 'http'], tool: /^(fetch|net|http|egress)$/i, ask: null },
 
-  { risk: 'medium', why: 'removes files from the workspace', topic: ['delete', 'remove', 'rm'], ask: null,
+  { id: 'remove', risk: 'medium', why: 'removes files from the workspace', topic: ['delete', 'remove', 'rm'], ask: null,
     tool: /^(shell|bash|sh)$/i, cmd: /(^|[\s;&|(])(rm|rmdir)\b/ },
-  { risk: 'medium', why: 'removes or moves files in the workspace', topic: ['delete', 'remove', 'move', 'rename'], ask: null, tool: /^(remove|move|delete)$/i },
-  { risk: 'medium', why: 'commits to the repository', topic: ['commit'], ask: null,
+  { id: 'remove', risk: 'medium', why: 'removes or moves files in the workspace', topic: ['delete', 'remove', 'move', 'rename'], ask: null, tool: /^(remove|move|delete)$/i },
+  { id: 'commit', risk: 'medium', why: 'commits to the repository', topic: ['commit'], ask: null,
     tool: /^(shell|bash|sh)$/i, cmd: /(^|[\s;&|(])git\s+commit\b/ },
 ];
 
@@ -88,9 +88,9 @@ export function classifyAction(toolName, args = {}, { rules = RULES } = {}) {
   for (const r of rules) {
     if (r.tool && !r.tool.test(name)) continue;
     if (r.cmd && !r.cmd.test(cmd)) continue;
-    return { risk: r.risk, why: r.why, topic: r.topic || [], ask: r.ask || null };
+    return { id: r.id, risk: r.risk, why: r.why, topic: r.topic || [], ask: r.ask || null };
   }
-  return { risk: 'low', why: '', topic: [], ask: null };
+  return { id: null, risk: 'low', why: '', topic: [], ask: null };
 }
 
 /**
@@ -137,10 +137,10 @@ export function authorizationFrom(messages, { topic = [] } = {}) {
  *
  * Pure in (risk, authorization). No history, no accretion, no precedent.
  */
-export function decideAction({ risk = 'low', authorization = 'unknown', why = '', evidence = '', ask = null } = {}) {
+export function decideAction({ id = null, risk = 'low', authorization = 'unknown', why = '', evidence = '', ask = null } = {}) {
   const r = RISK.includes(risk) ? risk : 'low';
   const a = AUTHORIZATION.includes(authorization) ? authorization : 'unknown';
-  const base = { risk: r, authorization: a, why, evidence };
+  const base = { id, risk: r, authorization: a, why, evidence };
   if (r === 'critical') {
     return { ...base, outcome: 'deny', liftable: false,
       rationale: `Refused: this ${why || 'action'} is not something an agent may do here, whatever it was asked. Do it yourself if you mean it.` };
@@ -160,18 +160,33 @@ export function decideAction({ risk = 'low', authorization = 'unknown', why = ''
 
 /** The whole gate for one planned action. This is the only entry point a caller needs. */
 export function gateAction(toolName, args, messages, opts = {}) {
-  const { risk, why, topic, ask } = classifyAction(toolName, args, opts);
+  const { id, risk, why, topic, ask } = classifyAction(toolName, args, opts);
   // Only ask about the owner's words when there is something to ask about. A `low` action is
   // allowed regardless, and scanning the transcript for it would be pure cost.
-  if (risk === 'low') return decideAction({ risk, why });
+  if (risk === 'low') return decideAction({ id, risk, why });
   const { level, evidence } = authorizationFrom(messages, { topic });
-  return decideAction({ risk, authorization: level, why, evidence, ask });
+  return decideAction({ id, risk, authorization: level, why, evidence, ask });
+}
+
+/**
+ * The classes a person can hold an opinion about, for the policy UI. `critical` is present so the
+ * list is honest about what exists, and carries `liftable:false` so nothing can offer a toggle for
+ * it — a policy screen that let you tick "always allow force-push" would undo the whole tier.
+ */
+export function actionClasses() {
+  const seen = new Map();
+  for (const r of RULES) {
+    if (!r.id || seen.has(r.id)) continue;
+    seen.set(r.id, { id: r.id, risk: r.risk, why: r.why, liftable: r.risk !== 'critical', ask: r.ask || null });
+  }
+  return [...seen.values()];
 }
 
 /** The event a decision writes to the ledger, so a refusal is replayable rather than a memory. */
 export function gateEvent(toolName, verdict) {
   return {
     tool: String(toolName || ''),
+    id: verdict.id || null,
     risk: verdict.risk,
     authorization: verdict.authorization,
     outcome: verdict.outcome,

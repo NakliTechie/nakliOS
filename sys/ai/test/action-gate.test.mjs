@@ -176,7 +176,8 @@ assert.equal(decideAction({ risk: 'high', authorization: 'unknown', why: 'w' }).
 {
   const v = gateAction('shell', { command: 'git push --force' }, owner('go'));
   const e = gateEvent('shell', v);
-  assert.deepEqual(Object.keys(e).sort(), ['authorization', 'outcome', 'rationale', 'risk', 'tool'].sort());
+  assert.deepEqual(Object.keys(e).sort(), ['authorization', 'id', 'outcome', 'rationale', 'risk', 'tool'].sort());
+  assert.equal(e.id, 'destructive', 'the class id is on the ledger event — it is what a policy grant is keyed on');
   assert.equal(e.outcome, 'deny');
   assert.equal(e.risk, 'critical');
 }
@@ -245,16 +246,17 @@ assert.equal(decideAction({ risk: 'high', authorization: 'unknown', why: 'w' }).
 }
 
 // ── the app wires it, above the grant and unable to weaken it ─────────────
-assert.match(anvil, /const verdict = gateAction\(nm, ar, convoNow\)/, 'every tool call is gated');
+assert.match(anvil, /let verdict = applyPolicy\(gateAction\(nm, ar, convoNow\), state\.policy\)/,
+  'every tool call is gated, and the owner\'s standing permissions are applied to the verdict');
 assert.match(anvil, /if\(verdict\.outcome === 'deny'\)/, 'and a denial stops the call');
-assert.match(anvil, /return verdict\.rationale;/, 'the model is told why, so it can self-correct');
+assert.match(anvil, /return verdict\.rationale\+' '\+POLICY_HINT;/, 'the model is told why, and where the setting is');
 assert.match(anvil, /gate:gateEvent\(nm, verdict\)/, 'the decision reaches the ledger');
 assert.match(anvil, /catch\(_\)\{ \/\* a gate that throws must never be the thing that stops a run \*\/ \}/,
   'a throwing gate fails open — it is not the fence, the grant is');
 // It must sit AFTER the project hook and BEFORE the tool bodies.
-assert.ok(anvil.indexOf('const dec0 = preToolDecision') < anvil.indexOf('const verdict = gateAction'),
+assert.ok(anvil.indexOf('const dec0 = preToolDecision') < anvil.indexOf('let verdict = applyPolicy'),
   'the project hook still runs first');
-assert.ok(anvil.indexOf('const verdict = gateAction') < anvil.indexOf("if(nm==='synthesize')"),
+assert.ok(anvil.indexOf('let verdict = applyPolicy') < anvil.indexOf("if(nm==='synthesize')"),
   'the gate runs before any tool body');
 
 console.log('action-gate: 16-cell table, critical never liftable, only the owner authorizes, no precedent');

@@ -161,6 +161,7 @@
   #preview .phead .pt{font-weight:600;font-size:12px} #preview .phead .pf{color:var(--fg-2);font-family:var(--mono);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
   .revertbtn{font-size:10px;color:var(--err);background:transparent;border:1px solid var(--err);border-radius:5px;padding:2px 8px;cursor:pointer;flex:0 0 auto}
   .pv-note{font-size:11px;color:var(--muted);border-left:2px solid var(--muted);padding:4px 8px;margin:0 0 8px}
+  .pv-actions{display:flex;gap:6px;flex-wrap:wrap;padding:10px 0 0;border-top:1px solid var(--line);margin-top:10px}
   .revertbtn:hover{background:var(--err);color:#fff}
   #preview .pbody{flex:1;min-height:0;overflow:auto}
   #preview iframe{width:100%;height:100%;border:0;background:#fff}
@@ -338,6 +339,7 @@
   <button class="sheet-row" data-act="memory"><span class="sr-ic">🧠</span>Project memory</button>
   <button class="sheet-row" data-act="skills"><span class="sr-ic">✨</span>Skills</button>
   <button class="sheet-row" data-act="hooks"><span class="sr-ic">⚓</span>Hooks</button>
+  <button class="sheet-row" data-act="policy"><span class="sr-ic">🛡</span>Policy<span class="sr-sub" id="sheet-policy"></span></button>
   <button class="sheet-row" data-act="learn"><span class="sr-ic">🎓</span>Learn from this project</button>
   <button class="sheet-row" data-act="home"><span class="sr-ic">🗄</span>Anvil home folder</button>
 </div></div>
@@ -423,7 +425,8 @@
   registerAppDiffTypes(['anvil']);
   import { MEMORY_DIR, parseFact, buildMemoryIndex, noteToFact, recallTool, applyRevision, applyDemotion, dependantsOf, slotHolder, reviseTool, findDuplicate, duplicateReply, createRememberBudget, budgetSpentReply, checkRulesCap, rulesCapReply, LESSON_CONTRACT } from '../../sys/ai/memory-store.mjs';
   import { HOOKS_FILE, parseHooks, preToolDecision, postToolCommands } from '../../sys/ai/hooks.mjs';
-  import { gateAction, gateEvent } from '../../sys/ai/action-gate.mjs';
+  import { gateAction, gateEvent, actionClasses } from '../../sys/ai/action-gate.mjs';
+  import { applyPolicy, grant as policyGrant, revoke as policyRevoke, policyRows, normalisePolicy, POLICY_HINT } from '../../sys/ai/action-policy.mjs';
   import { compactConversation } from '../../sys/ai/compaction.mjs';
   import { evolve } from '../../sys/ai/evolve.mjs';
   import { createKiln, createWorkerRuntime } from '../../sys/kiln/index.mjs';
@@ -851,6 +854,7 @@
     let content='(could not read '+fullPath+')';
     try{ const r=await sysFileops().read(fullPath,{encoding:'utf-8'}); if(r&&r.ok) content=r.data; }catch(_){}
     globalPreview = { type:/\.html?$/.test(fullPath)?'html':'text', file:fullPath, content:String(content).slice(0,50000) };
+    { const _t=activeTask(); if(_t) _t.preview=null; }   // a stale task preview would hide this global view
     state.previewOpen=true; save(); renderPreview();
   }
   function updateScopeBtn(){
@@ -1016,15 +1020,18 @@
       const mark=(s)=> s==='retracted' ? ' [RETRACTED — hidden from the agent]' : s==='hypothesis' ? ' [hypothesis]' : '';
       const body=facts.map(f=>'• '+f.name+' ('+(f.type||'project')+')'+mark(f.status)+(f.description?(' — '+f.description):'')).join('\n');
       globalPreview={ type:'text', file:'Project memory', content:'Facts the agent recorded (loaded on demand via recall):\n\n'+body };
+      { const _t=activeTask(); if(_t) _t.preview=null; }   // a stale task preview would hide this global view
       state.previewOpen=true; save(); renderPreview(); return;
     }
     for(const f of ['AGENTS.md','memory.md']){
       try{ const r=await fs.read(f,{encoding:'utf-8'}); if(r&&r.ok){
         globalPreview={ type:'text', file:f, content:String(r.data).slice(0,50000) };
+        { const _t=activeTask(); if(_t) _t.preview=null; }   // a stale task preview would hide this global view
         state.previewOpen=true; save(); renderPreview(); return;
       } }catch(_){}
     }
     globalPreview={ type:'text', file:'Project memory', content:'No memory yet.\n\nThe agent records durable facts to .anvil/memory/<slug>.md via the remember tool; add AGENTS.md for always-on project instructions.' };
+    { const _t=activeTask(); if(_t) _t.preview=null; }   // a stale task preview would hide this global view
     state.previewOpen=true; save(); renderPreview();
   }
   // Skills chip: visible when .anvil/skills/<name>/SKILL.md exists; clicking lists
@@ -1053,6 +1060,7 @@
       ? skills.map(s=>'• '+s.name+(s.description?(' — '+s.description):'')).join('\n')
       : 'No skills yet.\n\nAdd one at .anvil/skills/<name>/SKILL.md (frontmatter: name, description; then the instructions). The agent loads a skill on demand when a task matches it.';
     globalPreview={ type:'text', file:'Project skills', content: 'Skills the agent can load on demand:\n\n'+body };
+    { const _t=activeTask(); if(_t) _t.preview=null; }   // a stale task preview would hide this global view
     state.previewOpen=true; save(); renderPreview();
   }
   async function readHooks(){
@@ -1070,6 +1078,7 @@
       ? 'Project hooks (.anvil/hooks.json):\n\n'+String(h.raw).slice(0,50000)
       : 'No hooks yet.\n\nAdd .anvil/hooks.json to run commands around the agent\'s tool calls, e.g.:\n\n{\n  "postTool": [ { "on": "write|edit", "pathMatch": "*.py", "run": "python -m black {file}" } ],\n  "preTool":  [ { "on": "shell", "commandMatch": "rm -rf /", "block": "Refusing dangerous rm." } ]\n}';
     globalPreview={ type:'text', file:'Project hooks', content };
+    { const _t=activeTask(); if(_t) _t.preview=null; }   // a stale task preview would hide this global view
     state.previewOpen=true; save(); renderPreview();
   }
   // M4 — orient the newcomer on the three storage worlds. Opened from the header chip.
@@ -1084,6 +1093,7 @@
       '• Crate — the NakliOS host store (Folder or Crate). Files, tasks, and transcripts ROAM across your devices on the same Crate. Available when Anvil runs inside NakliOS.\n\n'+
       'Switch to a disk folder anytime with "Open folder" (top right).';
     globalPreview={ type:'text', file:'Storage', label:'Storage', content };
+    { const _t=activeTask(); if(_t) _t.preview=null; }   // a stale task preview would hide this global view
     state.previewOpen=true; save(); renderPreview();
   }
   async function renderFiles(){
@@ -1236,6 +1246,11 @@
   let logCache = { taskId:null, keys:null };
   // Preview not tied to a task (whole-store read-only views land here).
   let globalPreview = null;
+  // renderPreview prefers the ACTIVE TASK's preview over the global one, so a global screen opened
+  // while a task still held a stale preview simply did not appear — the ⋯ item looked dead. That
+  // affected every whole-store view (memory, skills, hooks, storage, files) and would have hit
+  // Policy too. Each global opener now clears the task preview on the line before it renders;
+  // openChange already does the mirror-image when it goes the other way.
   function renderPreview(){
     const t=activeTask(); const pv=(t&&t.preview)||globalPreview; const rev=$('pv-revert'); const ptype=$('pv-type');
     $('main').classList.toggle('preview-open', !!state.previewOpen && !!pv);
@@ -1259,7 +1274,53 @@
       // AC-6: a chip whose pre-image was dropped used to look exactly like one with nothing to
       // show. Say which it is, and why — an unexplained blank is the defect.
       if(pv.note){ const n=document.createElement('div'); n.className='pv-note'; n.textContent=pv.note; body.insertBefore(n, body.firstChild); }
+      // Buttons belong to the preview OBJECT, not to whoever opened it. Appended after the fact
+      // they were silently wiped by the next renderPreview — the same shape as appending outside
+      // a render function anywhere else.
+      if(Array.isArray(pv.actions) && pv.actions.length){
+        const wrap=document.createElement('div'); wrap.className='pv-actions';
+        for(const a of pv.actions){
+          const b=document.createElement('button'); b.className='revertbtn'; b.textContent=a.label;
+          b.onclick=a.onClick; wrap.appendChild(b);
+        }
+        body.appendChild(wrap);
+      }
     }
+  }
+  // AC-7b — the Policy screen. A gate whose settings are invisible is a gate people work around,
+  // so every class the agent can be stopped on is listed here with what it means, whether it is
+  // currently allowed without asking, and a way to take that back. `critical` is shown too, marked
+  // as never-allowed: the list has to be honest about what exists, and a toggle for it would undo
+  // the tier. Held in app state, never in the workspace — the agent must not be able to write its
+  // own authorization.
+  function openPolicy(){
+    const pol = normalisePolicy(state.policy);
+    const rows = policyRows(actionClasses(), pol);
+    const lines = rows.map(r =>
+      (r.fixed ? '  never   ' : (r.granted ? '  allowed ' : '  ask     ')) + r.id.padEnd(13) + r.why
+    ).join('\n');
+    const granted = rows.filter(r=>r.granted);
+    globalPreview = { type:'text', file:'Policy',
+      content:
+        'What the agent may do without asking you first.\n\n'
+      + 'Anvil stops an action when it sends data off this device and nothing you said asked for it.\n'
+      + 'Answer the prompt when it appears, or set a standing permission here.\n\n'
+      + lines + '\n\n'
+      + (granted.length
+          ? 'Standing permissions: ' + granted.map(r=>r.id).join(', ') + '\nUse the Revoke buttons below to take one back.\n'
+          : 'No standing permissions — every one of these will ask.\n')
+      + '\nnever  = refused however it is asked; there is no setting for it.\n'
+      + 'ask    = you will be prompted, and can choose "always allow" there.\n'
+      + 'allowed= proceeds silently until you revoke it.\n\n'
+      + 'This lives in Anvil\'s own settings, not in your project files — so the agent cannot grant itself anything.',
+      actions: granted.map(r=>({ label:'Revoke '+r.id, onClick:()=>{
+        state.policy = policyRevoke(state.policy, r.id); save();
+        pushSystem('Revoked the standing permission for "'+r.id+'" — it will ask again.');
+        openPolicy();
+      } })) };
+    { const _t=activeTask(); if(_t) _t.preview=null; }   // a stale task preview would hide this global view
+    state.previewOpen=true; save(); renderPreview();
+    const n=$('sheet-policy'); if(n) n.textContent = granted.length ? granted.length+' allowed' : '';
   }
   function renderAll(){ renderProjects(); renderTaskbar(); renderLog(); renderPreview(); renderFiles(); }
 
@@ -1351,6 +1412,7 @@
     const cs=campaignRun; if(!cs) return;
     const at=activeTask(); if(at) at.preview=null;
     globalPreview={ type:'html', file:'⚑ Proof build — '+cs.goal, content: campaignHtml(cs) };
+    { const _t=activeTask(); if(_t) _t.preview=null; }   // a stale task preview would hide this global view
     state.previewOpen=true; save(); renderPreview();
   }
   function campaignHtml(cs){
@@ -1445,6 +1507,35 @@
       scrim.addEventListener('mousedown',(e)=>{ if(e.target===scrim) close(null); });
       document.addEventListener('keydown', onKey, true);
       requestAnimationFrame(()=>{ field.focus(); try{ field.select(); }catch(_){} });
+    });
+  }
+  // A choice modal, same shape as askText (scrim, Escape, backdrop, focus restore). Used for the
+  // in-band approval so a refusal can be answered where it happens instead of by re-running.
+  // `timeoutMs` matters: a run that blocks forever on a dialog nobody is there to answer is a
+  // hang, so it resolves to the safe answer and says it timed out.
+  function askChoice({ title='', label='', choices=[], timeoutMs=0 }={}){
+    return new Promise((resolve)=>{
+      const prev=document.activeElement;
+      const scrim=document.createElement('div'); scrim.className='ask-scrim';
+      const panel=document.createElement('div'); panel.className='ask-panel';
+      panel.setAttribute('role','dialog'); panel.setAttribute('aria-modal','true');
+      if(title){ panel.setAttribute('aria-label', title); const h=document.createElement('div'); h.className='ask-title'; h.textContent=title; panel.appendChild(h); }
+      if(label){ const l=document.createElement('div'); l.className='ask-label'; l.textContent=label; panel.appendChild(l); }
+      const row=document.createElement('div'); row.className='ask-row';
+      let timer=null;
+      const close=(v)=>{ if(done) return; done=true; if(timer) clearTimeout(timer); document.removeEventListener('keydown', onKey, true); scrim.remove(); try{ if(prev&&prev.focus) prev.focus(); }catch(_){} resolve(v); };
+      let done=false;
+      for(const c of choices){
+        const b=document.createElement('button'); b.className='ask-btn'+(c.primary?' primary':''); b.type='button'; b.textContent=c.label;
+        if(c.title) b.title=c.title;
+        b.onclick=()=>close(c.value); row.appendChild(b);
+      }
+      panel.appendChild(row); scrim.appendChild(panel); document.body.appendChild(scrim);
+      function onKey(e){ if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); close(null); } }
+      scrim.addEventListener('mousedown',(e)=>{ if(e.target===scrim) close(null); });
+      document.addEventListener('keydown', onKey, true);
+      if(timeoutMs>0) timer=setTimeout(()=>close('__timeout__'), timeoutMs);
+      requestAnimationFrame(()=>{ const f=panel.querySelector('.ask-btn.primary')||panel.querySelector('.ask-btn'); if(f) f.focus(); });
     });
   }
   function diffHtml(s){ return String(s).split('\n').map(l=>{ const c=l[0]; const cls=c==='+'?'add':c==='-'?'del':(c==='@'?'hd':''); return cls?`<span class="${cls}">${esc(l)}</span>`:esc(l); }).join('\n'); }
@@ -1962,12 +2053,31 @@
       // still the fence, and nothing here can permit what it refuses.
       try{
         const convoNow = (runCtx && runCtx.messages) || (t && t.convo) || [];
-        const verdict = gateAction(nm, ar, convoNow);
-        if(verdict.outcome === 'deny'){
-          if(t){ t.log.push({ k:'system', text:'⛔ '+verdict.rationale }); renderLog(); }
-          try{ if(runCtx && runCtx.rec) runCtx.rec.onEvent({ type:'tool-error', id:(callObj&&callObj.id)||'gate', name:nm, error:'action-gate: '+verdict.outcome, gate:gateEvent(nm, verdict) }); }catch(_){}
-          return verdict.rationale;
+        let verdict = applyPolicy(gateAction(nm, ar, convoNow), state.policy);
+        // AC-7b: a liftable refusal is ASKED, not just reported. Without this the only way to
+        // authorize was to abandon the run, retype the request with the right words, and start
+        // again — which is why every gate anyone actually uses has a prompt.
+        if(verdict.outcome === 'deny' && verdict.liftable){
+          const answer = await askChoice({
+            title: 'Allow this?',
+            label: (ar && ar.command ? ar.command : nm) + '\n\nThis ' + verdict.why + '. ' + verdict.evidence + '.',
+            timeoutMs: 120000,
+            choices: [
+              { label:'Allow once', value:'once', primary:true, title:'Let this one call through' },
+              { label:'Always allow', value:'always', title:'Stop asking about "'+verdict.id+'" — revocable in ⋯ → Policy' },
+              { label:'No', value:'no', title:'Refuse, and tell the agent why' },
+            ],
+          });
+          if(answer==='always'){ state.policy = policyGrant(state.policy, verdict.id); save(); verdict = { ...verdict, outcome:'allow', authorization:'medium', liftedBy:'policy-new' }; }
+          else if(answer==='once'){ verdict = { ...verdict, outcome:'allow', authorization:'medium', liftedBy:'once' }; }
+          else if(answer==='__timeout__'){ verdict = { ...verdict, rationale: verdict.rationale+' (nobody answered the prompt within two minutes, so it was refused.)' }; }
         }
+        if(verdict.outcome === 'deny'){
+          if(t){ t.log.push({ k:'system', text:'⛔ '+verdict.rationale+' '+POLICY_HINT }); renderLog(); }
+          try{ if(runCtx && runCtx.rec) runCtx.rec.onEvent({ type:'tool-error', id:(callObj&&callObj.id)||'gate', name:nm, error:'action-gate: '+verdict.outcome, gate:gateEvent(nm, verdict) }); }catch(_){}
+          return verdict.rationale+' '+POLICY_HINT;
+        }
+        if(verdict.liftedBy && t){ t.log.push({ k:'system', text:'✓ Allowed '+(verdict.id||nm)+(verdict.liftedBy==='once'?' (this once)':' — standing permission, change it in ⋯ → Policy') }); renderLog(); }
       }catch(_){ /* a gate that throws must never be the thing that stops a run */ }
       // Defence in depth for the same five: they are only pushed into `tools`
       // when mode==='code', so reaching one from plan/ask means the model invented
@@ -2793,6 +2903,7 @@
     else if(a==='memory'){ openProjectMemory(); raise('preview'); }
     else if(a==='skills'){ openSkills(); raise('preview'); }
     else if(a==='hooks'){ openHooks(); raise('preview'); }
+    else if(a==='policy'){ openPolicy(); raise('preview'); }
     else if(a==='learn'){ if(typeof primeProject==='function') primeProject(); }
     else if(a==='home') call('home-chip');
   });
