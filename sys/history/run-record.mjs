@@ -1157,6 +1157,167 @@ export function stagnationNudge(stag) {
   return `[coordination] You appear to be stuck: ${stag.detail}. Step back and try a different approach — a different tool, a smaller step, or re-reading the goal — rather than repeating what has not worked.`;
 }
 
+// ───────────────────────────────────────────────────────── ordering ──
+
+// AC-1 — how many tool calls happened BEFORE the run's first real action, and how many
+// of them were wasted. The metric the procedural-graph work says actually tracks a harness
+// improvement, where call VOLUME does not: guidance cut one model 18.94 → 12.53 calls per
+// month while raising its score, and raised another 0.89 → 3.18 with survival improving.
+// Ordering moved in the same direction every time; volume did not.
+//
+// We saw the same shape here once, on 2026-09-07: a Groq run answered in ONE
+// `rg -n "def solve" --type py`, against a run that made 7 searches by step 8 and died at
+// max-steps 24. Nothing folded that, so it was an anecdote. This makes it a number.
+//
+// THE HONEST PART. "Correct action" is not knowable from a record in the general case, and
+// inventing an oracle for it would make every number here a guess wearing a decimal point.
+// So the fold names the ANCHOR it measured to, and a consumer that ignores the anchor gets
+// a value it cannot compare:
+//
+//   'gate'  — the first `verify.passed`. Ground truth, the same event foldOutcome trusts;
+//             only a gated run has it.
+//   'write' — the first call carrying a write payload: the "stopped searching, started
+//             doing" transition. A real signal about ordering, NOT a claim of correctness.
+//   'none'  — neither happened. `toFirstAction` is null, not 0. A run that never acted has
+//             no ordering to report, and reading 0 as "instant" is the one misreading that
+//             would make this fold worse than nothing.
+//
+// Same asymmetry as foldOutcome: strict about what earns the strong reading, lenient about
+// leaving a run unlabelled.
+// A shell command that MUTATES. Anvil's agent writes through `shell` far more often than
+// through the write tools (every corpus fixture does), so a payload-key test alone finds no
+// action in a shell-first run — measured: 7 of 7 corpus records anchored 'none' before this.
+//
+// Lenient by design, in the same direction as foldOutcome: a missed mutation leaves a run
+// unanchored (no claim), while a false positive would invent an action that never happened.
+// `>&` is excluded so `2>&1` is not read as a redirect — it is the single most common shell
+// idiom that looks like a write and is not.
+const SHELL_MUTATION = [
+  />\s*[^&\s]/,                                                   // > file and >> file
+  /(^|[\s;&|(])(rm|mv|cp|mkdir|rmdir|touch|tee|ln|chmod|truncate)\s/,
+  /(^|[\s;&|(])git\s+(commit|add|apply|checkout|reset|rm|mv|init)\b/,
+  /(^|[\s;&|(])sed\b[^|;&]*\s-i\b/,
+];
+
+export function orderingUnit() {
+  const isWrite = (a) => !!a && WRITE_PAYLOAD.some((k) => a[k] !== undefined);
+  const isShellWrite = (name, a) => {
+    if (!a || typeof a.command !== 'string') return false;
+    if (!/^(shell|bash|sh|run|exec)$/i.test(String(name))) return false;
+    return SHELL_MUTATION.some((re) => re.test(a.command));
+  };
+  return {
+    init: () => ({ calls: [], byId: new Map(), passAt: null }),
+    apply: (s, e) => {
+      if (e.tool === 'tool.called') {
+        const i = e.input || {};
+        const args = i.args ?? {};
+        const name = String(i.name ?? '');
+        s.calls.push({ name, sig: `${name}:${stableArgs(args)}`,
+                       write: isWrite(args), shellWrite: isShellWrite(name, args), ok: null });
+        if (i.id !== undefined && i.id !== null) s.byId.set(i.id, s.calls.length - 1);
+      } else if (e.tool === 'tool.responded') {
+        const i = s.byId.get(e.input?.id);
+        if (i !== undefined) s.calls[i].ok = true;
+      } else if (e.tool === 'tool.failed') {
+        const i = s.byId.get(e.input?.id);
+        if (i !== undefined) s.calls[i].ok = false;
+      } else if (e.tool === 'verify.passed') {
+        if (s.passAt === null) s.passAt = s.calls.length;
+      }
+      return s;
+    },
+    value: (s) => {
+      const calls = s.calls;
+      let anchor = 'none', at = null;
+      if (s.passAt !== null) { anchor = 'gate'; at = s.passAt; }
+      else {
+        const w = calls.findIndex((c) => c.write);
+        if (w >= 0) { anchor = 'write'; at = w; }
+        else {
+          const sw = calls.findIndex((c) => c.shellWrite);
+          if (sw >= 0) { anchor = 'shell-write'; at = sw; }
+        }
+      }
+      // Everything below is measured over the calls BEFORE the anchor. With no anchor there
+      // is no "before", so the counts stay null rather than silently describing the whole run.
+      const before = at === null ? null : calls.slice(0, at);
+      const distinct = before === null ? null : new Set(before.map((c) => c.sig)).size;
+
+      // Per tool: how many calls of that tool before the anchor. A flail shows up here even on
+      // a run that eventually passed — six greps then one good one reads as 6, and as nothing
+      // anywhere else in the record.
+      const perTool = {};
+      for (const c of calls) (perTool[c.name] ||= { calls: 0, beforeAnchor: 0 }).calls++;
+      for (const c of before || []) perTool[c.name].beforeAnchor++;
+
+      return {
+        anchor,
+        toFirstAction: at,
+        toolCalls: calls.length,
+        distinctBefore: distinct,
+        redundantBefore: before === null ? null : before.length - distinct,
+        failedBefore: before === null ? null : before.filter((c) => c.ok === false).length,
+        perTool,
+        note: anchor === 'gate' ? ''
+          : anchor === 'write' ? 'no gate in this record — measured to the first write, which is ordering evidence, not a correctness claim'
+          : anchor === 'shell-write' ? 'no gate and no write tool — measured to the first shell command that matched the mutation grammar, which is a HEURISTIC anchor; do not compare it against a gate-anchored number'
+          : 'the run never passed a gate and never mutated anything — no ordering to report',
+      };
+    },
+  };
+}
+
+export function foldOrdering(events, resolve) { return runUnit(orderingUnit(), events, resolve); }
+
+// Per task CLASS, across many records (PG-A4 asks for the number per class, and a mean over
+// unlike tasks is worse than no number). The record does not carry a class and this does not
+// invent a taxonomy: `classify` is the caller's, and the default is the run's own tool set —
+// record-derived, stable, and honest about being a proxy rather than a label.
+//
+// Runs with anchor 'none' are counted and reported SEPARATELY, never folded into the mean.
+// A harness change that makes runs fail earlier would otherwise show up as an improvement.
+export function groupOrdering(records, { classify = null } = {}) {
+  const byClass = new Map();
+  const defaultClassify = (rec) => {
+    const started = rec.events().find((e) => e.tool === 'run.started');
+    const tools = (rec.resolve(started)?.input?.tools) || [];
+    const names = tools.map((t) => t?.function?.name ?? t?.name).filter(Boolean).sort();
+    return names.length ? names.join('+') : 'no-tools';
+  };
+  const cls = classify || defaultClassify;
+  for (const rec of records) {
+    let key, o;
+    try { key = String(cls(rec)); o = foldOrdering(rec.events(), rec.resolve); } catch (_) { continue; }
+    const g = byClass.get(key) || { class: key, runs: 0, anchored: 0, unanchored: 0,
+                                    byAnchor: { gate: 0, write: 0, 'shell-write': 0, none: 0 },
+                                    toFirstAction: [], redundantBefore: [], toolCalls: [] };
+    g.runs++; g.byAnchor[o.anchor] = (g.byAnchor[o.anchor] || 0) + 1;
+    if (o.toFirstAction === null) g.unanchored++;
+    else {
+      g.anchored++;
+      g.toFirstAction.push(o.toFirstAction);
+      g.redundantBefore.push(o.redundantBefore);
+      g.toolCalls.push(o.toolCalls);
+    }
+    byClass.set(key, g);
+  }
+  const stat = (xs) => {
+    if (!xs.length) return null;
+    const s = [...xs].sort((a, b) => a - b);
+    return { n: s.length, min: s[0], max: s[s.length - 1],
+             median: s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2,
+             mean: Math.round((s.reduce((a, b) => a + b, 0) / s.length) * 100) / 100 };
+  };
+  return [...byClass.values()].map((g) => ({
+    class: g.class, runs: g.runs, anchored: g.anchored, unanchored: g.unanchored,
+    byAnchor: g.byAnchor,
+    toFirstAction: stat(g.toFirstAction),
+    redundantBefore: stat(g.redundantBefore),
+    toolCalls: stat(g.toolCalls),
+  })).sort((a, b) => b.runs - a.runs || a.class.localeCompare(b.class));
+}
+
 // F1 — the invariant that makes this file's opening claim checkable.
 //
 // The header says the carried transcript IS a projection of the log. Until now nothing enforced

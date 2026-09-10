@@ -84,6 +84,9 @@ jobs:
       - name: Gate the system filesystem on same-origin system apps, and bind messages to the launch origin
         run: node scripts/test-host-origin-authority.mjs
 
+      - name: Verify ordering metrics — anchored, never zero-for-null, refusing unlike comparisons
+        run: node sys/history/test/ordering.test.mjs
+
       - name: Replay the recorded-run corpus keyless (real runs, zero model calls)
         run: node sys/history/test/replay-corpus.test.mjs
 

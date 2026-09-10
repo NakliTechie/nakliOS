@@ -17,7 +17,7 @@
 // the record alone. Pure over the run record; nothing here touches disk or a host.
 
 import { runAgentLoop } from './agent-loop.mjs';
-import { createRunRecorder, loadRecord, foldOutcome, replayInfer } from '../history/run-record.mjs';
+import { createRunRecorder, loadRecord, foldOutcome, foldOrdering, replayInfer } from '../history/run-record.mjs';
 
 export function armsFor(capabilities) {
   const all = Object.fromEntries(capabilities.map((c) => [c, true]));
@@ -27,12 +27,19 @@ export function armsFor(capabilities) {
 export function metricsOf(rec) {
   const ev = rec.events();
   const o = foldOutcome(ev, rec.resolve);
+  // AC-1: ordering, not just volume. `toFirstAction` is null on a run that never acted —
+  // deltaOf skips nulls rather than reading them as zero, because a capability that makes
+  // runs die earlier must not be able to show up here as an improvement.
+  const ord = foldOrdering(ev, rec.resolve);
   return {
     label: o.label, score: o.score,
     steps: ev.filter((e) => e.tool === 'turn.started').length,
     toolCalls: ev.filter((e) => e.tool === 'tool.called').length,
     failedRounds: ev.filter((e) => e.tool === 'verify.failed').length,
     events: ev.length,
+    toFirstAction: ord.toFirstAction,
+    redundantBefore: ord.redundantBefore,
+    anchor: ord.anchor,
   };
 }
 
@@ -89,14 +96,29 @@ export function deltaOf(full, without) {
     steps: full.steps - without.steps,
     toolCalls: full.toolCalls - without.toolCalls,
     failedRounds: full.failedRounds - without.failedRounds,
+    // Ordering deltas are null unless BOTH arms actually acted, and unless they measured to
+    // the SAME anchor. A gate-anchored 4 and a write-anchored 4 are not the same quantity, and
+    // subtracting them would manufacture a number out of a category error.
+    toFirstAction: comparable(full, without) ? full.toFirstAction - without.toFirstAction : null,
+    redundantBefore: comparable(full, without) ? full.redundantBefore - without.redundantBefore : null,
+    anchor: full.anchor === without.anchor ? full.anchor : `${without.anchor}→${full.anchor}`,
   };
+}
+
+// Both arms anchored, and anchored the same way. Anything else is not a comparison.
+function comparable(a, b) {
+  return a.anchor === b.anchor && a.toFirstAction !== null && b.toFirstAction !== null;
 }
 
 // A plain-text table for a terminal or a log pane.
 export function renderTable(result) {
-  const head = ['task', 'capability', 'full', '-cap', 'Δlabel', 'Δscore', 'Δsteps', 'Δtools', 'Δrounds'];
+  const head = ['task', 'capability', 'full', '-cap', 'Δlabel', 'Δscore', 'Δsteps', 'Δtools', 'Δrounds', 'Δ1st', 'Δredun', 'anchor'];
+  // An incomparable ordering delta prints '·', never a number and never 0 — the whole point of
+  // AC-1 is that "we could not measure this" and "no change" are different findings.
+  const ord = (v) => (v === null || v === undefined ? '·' : sign(v));
   const rows = result.rows.map((r) => [r.task, r.capability, `${r.full.label} ${r.full.steps}s`, `${r.without.label} ${r.without.steps}s`,
-    sign(r.delta.label), sign(r.delta.score), sign(r.delta.steps), sign(r.delta.toolCalls), sign(r.delta.failedRounds)]);
+    sign(r.delta.label), sign(r.delta.score), sign(r.delta.steps), sign(r.delta.toolCalls), sign(r.delta.failedRounds),
+    ord(r.delta.toFirstAction), ord(r.delta.redundantBefore), r.delta.anchor]);
   const w = head.map((h, i) => Math.max(h.length, ...rows.map((r) => String(r[i]).length)));
   const line = (r) => r.map((c, i) => String(c).padEnd(w[i])).join('  ').trimEnd();
   return [line(head), line(w.map((n) => '-'.repeat(n))), ...rows.map(line),
