@@ -218,7 +218,9 @@ function globToRe(glob) {
   return new RegExp(re + '$');
 }
 
-export function createShell({ registry, face, cwd = '', kiln = null } = {}) {
+// `kilnIsolate` marks this shell as the VERIFIER's: its `python` runs on an interpreter
+// reset first, so a gate cannot measure state the agent left behind (main-thread-runtime.mjs).
+export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate = false } = {}) {
   if (!registry || !face) throw new Error('createShell requires { registry, face }');
   const state = { cwd, history: [], vars: new Map([['HOME', '/']]) };
 
@@ -979,7 +981,7 @@ export function createShell({ registry, face, cwd = '', kiln = null } = {}) {
         if (!rd.ok) return { text: `python: can't open file '${args[0]}': ${rd.code || 'error'}`, code: 2 };
         code = decodeData(rd.data);
       } else code = args.join(' ');
-      const r = await kiln.exec('shell', code);
+      const r = await kiln.exec('shell', code, { isolate: kilnIsolate });
       if (r.status === 'unavailable') return { text: 'python: ' + (r.message || 'kernel unavailable'), code: 1 };
       return { text: (r.stdout || '') + (r.stderr || ''), code: r.status === 'ok' ? 0 : 1 };
     }

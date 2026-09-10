@@ -405,7 +405,7 @@
   import { codingToolset, makeToolExecutor, makeShellVerifier } from '../../sys/ai/agent-tools.mjs';
   import { buildProjectContext, rememberTool } from '../../sys/ai/project-context.mjs';
   import { SKILLS_DIR, parseSkill, buildSkillsIndex, skillTool, INJECTED_STATUSES, explainSkillsRefusal } from '../../sys/ai/skills.mjs';
-  import { GATE_DIR, explainGateRefusal } from '../../sys/ai/gate.mjs';
+  import { GATE_DIR, explainGateRefusal, GATE_AUTHORING_HINT } from '../../sys/ai/gate.mjs';
   import { skillManageTool, planSkillWrite, createSkillSession, SKILL_FILE } from '../../sys/ai/skill-manage.mjs';
   import { createProposalLedger } from '../../sys/ai/proposal-fingerprint.mjs';
   import { skillLifecycle, applySkillStatus, reviveOnUse } from '../../sys/ai/skill-lifecycle.mjs';
@@ -2114,7 +2114,10 @@
     // `python` gates run); a failing gate feeds its bounded output back and the
     // agent retries. task_done is enabled so completion is explicit.
     const verifyCmd = ((t.verifyCmd)||'').trim();
-    const verify = verifyCmd ? makeShellVerifier({ createShell:(o)=>createShell({ ...o, kiln: kilnRef }), registry, face, command: verifyCmd }) : null;
+    // kilnIsolate: the gate's python resets the interpreter first. The agent's own python
+      // shares one memoized Pyodide, so without this the gate can import a module the agent
+      // cached before editing its file, or one it pre-seeded outright.
+      const verify = verifyCmd ? makeShellVerifier({ createShell:(o)=>createShell({ ...o, kiln: kilnRef, kilnIsolate:true }), registry, face, command: verifyCmd }) : null;
     // Per-project memory & skills: prepend AGENTS.md + memory.md (workspace root)
     // so the task starts with this project's conventions and past learnings.
     let projectContext='';
@@ -2461,7 +2464,7 @@
     // allowlist) and "sh check.sh" (`sh` is not a builtin → command not found,
     // exit 127): two of three examples could never pass.
     const v=await askText({ title:'Gate command',
-      label:'Runs after the agent finishes; the task isn\'t "done" until it exits 0.\nExamples:  python test_fib.py  ·  python -c \'import fib; assert fib.fib(10)==55\'  ·  grep -c TODO src/main.py\nLeave empty to clear.',
+      label:'Runs after the agent finishes; the task isn\'t "done" until it exits 0.\nExamples:  python '+GATE_DIR+'/test_fib.py  ·  python -c \'import fib; assert type(fib.fib(10)) is int and fib.fib(10)==55\'  ·  grep -c TODO src/main.py\n'+GATE_AUTHORING_HINT+'\nA criterion under '+GATE_DIR+'/ is fenced: the agent can read it, never edit it.\nLeave empty to clear.',
       value:t.verifyCmd||'', placeholder:'python test_fib.py' });
     if(v===null) return; t.verifyCmd=v.trim(); save(); renderTaskbar();
   };

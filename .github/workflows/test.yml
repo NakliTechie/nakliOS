@@ -174,6 +174,9 @@ jobs:
       - name: Verify .anvil/gate (the acceptance criterion) is readable and UNWRITABLE from every agent route
         run: node sys/ai/test/gate-fence.test.mjs
 
+      - name: Verify the verifier gate's python runs on a RESET interpreter, and the agent's does not
+        run: node sys/kiln/test/gate-isolation.test.mjs
+
       - name: Verify the Rig agent face C4 conformance (escape classes, grant edges, staging, op-log replay)
         run: node sys/rig/agent/test/conformance.test.mjs
 

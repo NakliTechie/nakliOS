@@ -192,8 +192,16 @@ await test('Anvil passes GATE_DIR to BOTH grants and annotates every route\'s re
   const anvil = await readFile(new URL('../../../apps/anvil/index.html', import.meta.url), 'utf8');
   const grants = anvil.match(/readOnlyPrefixes:\[SKILLS_DIR, GATE_DIR\]/g) || [];
   eq(grants.length, 2, 'the top-level agent grant AND the subagent overlay grant both fence the gate dir');
-  assert(/import \{ GATE_DIR, explainGateRefusal \} from '\.\.\/\.\.\/sys\/ai\/gate\.mjs';/.test(anvil),
-    'the constant and the wording come from the module, not a copy in the app');
+  // Pin the RELATIONSHIP, not the literal import line: an exact-text anchor here went stale the
+  // first time a name was added to the import (2026-09-10). What must hold is that every gate
+  // name the app uses is imported from the module rather than redefined locally.
+  const imp = anvil.match(/import \{([^}]*)\} from '\.\.\/\.\.\/sys\/ai\/gate\.mjs';/);
+  assert(imp, 'the app imports its gate names from sys/ai/gate.mjs');
+  const imported = imp[1].split(',').map((s) => s.trim()).filter(Boolean);
+  for (const name of ['GATE_DIR', 'explainGateRefusal']) {
+    assert(imported.includes(name), `${name} comes from the module, not a copy in the app`);
+    assert(!new RegExp(`(const|let|var)\\s+${name}\\s*=`).test(anvil), `${name} is not redefined in the app`);
+  }
   assert(/explainGateRefusal\(nm==='shell' \? explainSkillsRefusal\(raw\) : raw\)/.test(anvil),
     'the annotation rides on EVERY string tool result, not only the shell\'s');
   // the gate command examples the ✓ Must-pass prompt offers must be runnable in this shell

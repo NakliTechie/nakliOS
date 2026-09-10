@@ -36,6 +36,33 @@ async function defaultLoadPyodide() {
 //    python run from ever mutating the repo the shell manages.
 const SKIP_BACK = /(^|\/)(__pycache__|\.git)(\/|$)|\.pyc$/;
 
+// Taken once, before any agent code can run, and restored before a gate runs. Kept as a
+// module-level name inside the interpreter because there is nowhere better in a shared one —
+// see the RESIDUAL note on `exec`.
+const SNAPSHOT = `
+import builtins as _kb
+try: _KILN_B0
+except NameError: _KILN_B0 = dict(vars(_kb))
+`;
+
+// Restore builtins, then drop every module loaded FROM THE WORKSPACE so the gate imports the
+// agent's code off disk as it now stands. Stdlib and site-packages are left alone: reimporting
+// them costs time and they are not what the agent can edit.
+function isolationPreamble(root) {
+  return `
+import sys as _ks, builtins as _kb
+try:
+    vars(_kb).clear(); vars(_kb).update(_KILN_B0)
+except NameError:
+    pass
+_kroot = ${JSON.stringify(root)}
+for _kn in [n for n, m in list(_ks.modules.items())
+            if getattr(m, '__file__', None) and str(m.__file__).startswith(_kroot)]:
+    del _ks.modules[_kn]
+del _kn, _kroot
+`;
+}
+
 export function createMainThreadKiln({ fs, mount = 'work', loadPyodide = defaultLoadPyodide } = {}) {
   if (!fs) throw new Error('createMainThreadKiln requires a Rig fileops instance (fs)');
   const root = '/' + String(mount).replace(/^\/+|\/+$/g, '');
@@ -47,6 +74,7 @@ export function createMainThreadKiln({ fs, mount = 'work', loadPyodide = default
     if (!loading) {
       loading = (async () => {
         const p = await loadPyodide();
+        try { p.runPython(SNAPSHOT); } catch (_) {}
         try { p.FS.mkdirTree(root); } catch (_) {}
         py = p;
         return p;
@@ -99,7 +127,22 @@ export function createMainThreadKiln({ fs, mount = 'work', loadPyodide = default
   return {
     status: () => (py ? 'ready' : 'idle'),
     downloadSize: () => PYODIDE_VERSION && (12 * 1024 * 1024),
-    async exec(cellId, code) {
+    // `isolate` is for the VERIFIER GATE. The interpreter is memoized (one Pyodide for the
+    // life of the app), so by default the agent's `python` and the gate's `python` are the
+    // SAME interpreter: globals, `sys.modules` and `builtins` all carry over. Two consequences,
+    // and the dull one is the more likely:
+    //   - staleness: the agent imports `answer`, edits `answer.py`, and the gate's `import
+    //     answer` gets the CACHED module — a gate passing on code that no longer exists.
+    //   - poisoning: the agent pre-seeds `sys.modules['answer']` or rebinds a builtin, and the
+    //     gate measures the agent's fixture instead of the agent's work.
+    // Isolating drops every module whose file lives under the workspace, restores builtins from
+    // a snapshot taken before any agent code ran, and runs in a fresh globals namespace.
+    //
+    // RESIDUAL, stated plainly: this raises the bar, it does not close the door. An agent with
+    // arbitrary Python in the SAME interpreter can reach the snapshot itself. True isolation
+    // needs a separate interpreter (reload Pyodide, or run the gate in the worker runtime);
+    // that costs seconds per gate round and is a follow-on, not this change.
+    async exec(cellId, code, { isolate = false } = {}) {
       let p;
       try { p = await ensure(); }
       catch (e) { return { status: 'unavailable', message: 'Pyodide failed to load: ' + (e && e.message ? e.message : e) }; }
@@ -113,7 +156,14 @@ export function createMainThreadKiln({ fs, mount = 'work', loadPyodide = default
         seen = await syncIn();
         // Run from the workspace dir and make its modules importable.
         p.runPython(`import os, sys\nos.chdir(${JSON.stringify(root)})\nif ${JSON.stringify(root)} not in sys.path: sys.path.insert(0, ${JSON.stringify(root)})`);
-        await p.runPythonAsync(code);
+        if (isolate) p.runPython(isolationPreamble(root));
+        // A fresh globals namespace when isolating, so a name the agent left behind cannot
+        // stand in for one the gate expects to import. Degrades to the shared namespace where
+        // the runtime does not support the option rather than failing the gate outright.
+        let freshGlobals = null;
+        if (isolate) { try { freshGlobals = p.runPython('dict()'); } catch (_) { freshGlobals = null; } }
+        await (freshGlobals ? p.runPythonAsync(code, { globals: freshGlobals }) : p.runPythonAsync(code));
+        if (freshGlobals) { try { freshGlobals.destroy(); } catch (_) {} }
         await syncOut(seen);
         return { status: 'ok', stdout: out, stderr: err };
       } catch (e) {
