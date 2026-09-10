@@ -335,6 +335,13 @@ kbd{background:var(--panel);border:1px solid var(--line-strong);border-bottom-wi
     return;
   }
 
+  /* ---------- subject / band (data-driven, so the same app serves any subject) ---------- */
+  const META = DATA.meta || {};
+  const SUBJECT = META.subject || "Maths";
+  const SUBJECT_SHORT = ({ "Mathematics":"Maths" })[SUBJECT] || SUBJECT;
+  const GR = (Array.isArray(META.grades) && META.grades.length) ? META.grades : [1,2,3,4,5];
+  const GLO = Math.min(...GR), GHI = Math.max(...GR);
+
   /* ---------- data indexing ---------- */
   const concepts = DATA.concepts;
   const conceptById = {};
@@ -540,7 +547,7 @@ kbd{background:var(--panel);border:1px solid var(--line-strong);border-bottom-wi
       ${tabsBar("home")}
       ${gradeBar()}
       <div class="hero">
-        <h1>Practise maths, one concept at a time</h1>
+        <h1>Practise ${SUBJECT_SHORT.toLowerCase()}, one concept at a time</h1>
         <p>Pick a topic, drill the skill until it clicks, then take a short quiz. When you slip, Abhyas shows you <b>why</b> — the exact idea to fix — not just a red cross.</p>
       </div>
       <div class="section-h">Topics · ${totalConcepts} concepts${grade==="all"?"":" for Class "+grade} · ${practiced} started · ${masteredCount} mastered</div>
@@ -1061,6 +1068,7 @@ kbd{background:var(--panel);border:1px solid var(--line-strong);border-bottom-wi
   }
 
   /* ---------- boot ---------- */
+  { const bs=document.querySelector(".brand-sub"); if(bs) bs.textContent = `${SUBJECT_SHORT} practice · Class ${GLO}–${GHI}`; }
   render();
   if(NAK){
     try{

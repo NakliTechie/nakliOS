@@ -217,19 +217,45 @@
       "id": "abhyas",
       "repo": "NakliTechie/abhyas-app",
       "requestedRef": "main",
-      "resolvedCommit": "db9432a980e3a4e0f37a71fc82a0f5889d30a69e",
+      "resolvedCommit": "470fdf8af590782aeb565e079fc2126647d60ca4",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "4d1655da673c5d7fa8218762542318361e1facbef4996eed3b3bc2e8c3115235",
-          "bytes": 58067
+          "sha256": "22c72bdbaea162efae05f8c4e9b92c9355b2729f0108f3bb004de164a80fe83f",
+          "bytes": 58614
         },
         {
           "source": "data/maths-k5.js",
           "destination": "data/maths-k5.js",
           "sha256": "4bc12c8adb4c442d88c3f8859c706d98384b604c0a4698208cc84a2e13888c01",
           "bytes": 2959337
+        },
+        {
+          "source": "sdk/naklios.js",
+          "destination": "sdk/naklios.js",
+          "sha256": "9390489a66446f7d78a72863ca8c2ed71cce1760b395d5d500e4c86a43a7fa52",
+          "bytes": 31778
+        }
+      ]
+    },
+    {
+      "id": "chapters",
+      "repo": "NakliTechie/chapter-time",
+      "requestedRef": "main",
+      "resolvedCommit": "8eeaeaba76ba2940a7c8b8db1786e88c392c723d",
+      "files": [
+        {
+          "source": "index.html",
+          "destination": "index.html",
+          "sha256": "743ee2689a904f2690e95add9515d8a00163d9bc1b1605a9a67ec474dee382b8",
+          "bytes": 21853
+        },
+        {
+          "source": "data/chapters-k5.js",
+          "destination": "data/chapters-k5.js",
+          "sha256": "9320a160f4035a75d9dd5fed9db535913179bda1196aeede2fe6f893d4d78afd",
+          "bytes": 18105
         },
         {
           "source": "sdk/naklios.js",

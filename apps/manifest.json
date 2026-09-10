@@ -173,6 +173,25 @@
           "destination": "sdk/naklios.js"
         }
       ]
+    },
+    {
+      "id": "chapters",
+      "repo": "NakliTechie/chapter-time",
+      "ref": "main",
+      "files": [
+        {
+          "source": "index.html",
+          "destination": "index.html"
+        },
+        {
+          "source": "data/chapters-k5.js",
+          "destination": "data/chapters-k5.js"
+        },
+        {
+          "source": "sdk/naklios.js",
+          "destination": "sdk/naklios.js"
+        }
+      ]
     }
   ]
 }
