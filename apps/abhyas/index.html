@@ -340,7 +340,7 @@ kbd{background:var(--panel);border:1px solid var(--line-strong);border-bottom-wi
 
   /* ---------- active graph binding (rebuilt by activate() on subject select) ---------- */
   let DATA=null, META={}, SUBJECT="Abhyas", SUBJECT_SHORT="Abhyas", GR=[1,2,3,4,5], GLO=1, GHI=5;
-  let concepts=[], conceptById={}, drillsByConcept={}, mcqsByConcept={}, strandOrder=[], strandConcepts={}, strandColor={};
+  let concepts=[], conceptById={}, drillsByConcept={}, drillCounts={}, drillsLoaded=false, mcqsByConcept={}, strandOrder=[], strandConcepts={}, strandColor={};
 
   /* ---------- progress store (host fs when hosted, else localStorage) ---------- */
   const PKEY = "abhyas.progress.v1";
@@ -528,8 +528,8 @@ kbd{background:var(--panel);border:1px solid var(--line-strong);border-bottom-wi
     GLO=Math.min(...GR); GHI=Math.max(...GR);
     concepts=graph.concepts||[];
     conceptById={}; concepts.forEach(c=>conceptById[c.id]=c);
-    drillsByConcept={}; mcqsByConcept={};
-    (graph.drills||[]).forEach(d=>{ (drillsByConcept[d.concept_id] ||= []).push(d); });
+    drillsByConcept={}; drillsLoaded=false; drillCounts=graph.drillCounts||{}; // drills lazy-loaded on first use
+    mcqsByConcept={};
     (graph.mcqs||[]).forEach(m=>{ (mcqsByConcept[m.concept_id] ||= []).push(m); });
     strandOrder=[]; strandConcepts={};
     concepts.forEach(c=>{ if(!strandConcepts[c.strand]){ strandConcepts[c.strand]=[]; strandOrder.push(c.strand); } strandConcepts[c.strand].push(c); });
@@ -551,6 +551,22 @@ kbd{background:var(--panel);border:1px solid var(--line-strong);border-bottom-wi
       if(!g){ app.innerHTML=emptyBlock("Couldn't read "+row.subject+" data."); return; }
       activate(g); nav("home",{gid}); };
     s.onerror=()=>{ app.innerHTML=emptyBlock("Couldn't load "+row.subject+" — check your connection and try again."); };
+    document.head.appendChild(s);
+  }
+  // drills live in a separate lazy file (graph-<id>-drills.js) so quiz-only sessions stay light
+  function ensureDrills(cb){
+    if(drillsLoaded){ cb(); return; }
+    const gid=state.gid, row=graphById[gid]||{};
+    if(!row.drillCount){ drillsLoaded=true; cb(); return; }
+    window.ABHYAS_DRILLS = window.ABHYAS_DRILLS || {};
+    const bind=()=>{ const dd=((window.ABHYAS_DRILLS[gid])||{}).drills||[];
+      drillsByConcept={}; dd.forEach(d=>{ (drillsByConcept[d.concept_id] ||= []).push(d); });
+      drillsLoaded=true; cb(); };
+    if(window.ABHYAS_DRILLS[gid]){ bind(); return; }
+    toast("Loading drills…");
+    const s=document.createElement("script"); s.src=row.drillsFile||("data/graph-"+gid+"-drills.js"); s.async=true;
+    s.onload=bind;
+    s.onerror=()=>toast("Couldn't load drills — check your connection.");
     document.head.appendChild(s);
   }
 
@@ -627,7 +643,7 @@ kbd{background:var(--panel);border:1px solid var(--line-strong);border-bottom-wi
       if(!list.length) return "";
       const col = strandColor[s];
       const avg = list.reduce((a,c)=>a+mastery(c.id),0)/list.length;
-      const nDrill = list.reduce((a,c)=>a+(drillsByConcept[c.id]?.length||0),0);
+      const nDrill = list.reduce((a,c)=>a+(drillCounts[c.id]||0),0);
       return `<button class="card strand-card" data-strand="${esc(s)}">
         <span class="stripe" style="background:${col.bar}"></span>
         <h3 style="color:${col.fg}">${esc(s)}</h3>
@@ -655,7 +671,7 @@ kbd{background:var(--panel);border:1px solid var(--line-strong);border-bottom-wi
     const s = state.strand, col=strandColor[s];
     const list = conceptsInGrade(strandConcepts[s]);
     const rows = list.map(c=>{
-      const nD=drillsByConcept[c.id]?.length||0, nM=mcqsByConcept[c.id]?.length||0;
+      const nD=drillCounts[c.id]||0, nM=mcqsByConcept[c.id]?.length||0;
       const p=progress[c.id];
       return `<button class="crow" data-cid="${c.id}">
         ${ring(mastery(c.id))}
@@ -682,7 +698,7 @@ kbd{background:var(--panel);border:1px solid var(--line-strong);border-bottom-wi
 
   function renderConcept(){
     const c = conceptById[state.cid], col=strandColor[c.strand];
-    const nD=drillsByConcept[c.id]?.length||0, nM=mcqsByConcept[c.id]?.length||0;
+    const nD=drillCounts[c.id]||0, nM=mcqsByConcept[c.id]?.length||0;
     const p=progress[c.id];
     const prereqs = (c.prereqs||[]).map(id=>{
       const pc=conceptById[id]; if(!pc) return "";
@@ -732,10 +748,12 @@ kbd{background:var(--panel);border:1px solid var(--line-strong);border-bottom-wi
   /* ---------- drill runner ---------- */
   let drillS=null;
   function startDrill(cid){
-    const pool = drillsByConcept[cid]||[];
-    if(!pool.length){ toast("No drills for this concept."); return; }
-    drillS = { cid, queue:shuffle(pool.map((_,i)=>i)), qi:0, pool, attempted:0, correct:0, fb:null, cur:null };
-    nextDrill(true);
+    ensureDrills(()=>{
+      const pool = drillsByConcept[cid]||[];
+      if(!pool.length){ toast("No drills for this concept."); return; }
+      drillS = { cid, queue:shuffle(pool.map((_,i)=>i)), qi:0, pool, attempted:0, correct:0, fb:null, cur:null };
+      nextDrill(true);
+    });
   }
   function nextDrill(first){
     if(!first){ drillS.qi++; if(drillS.qi>=drillS.queue.length){ drillS.queue=shuffle(drillS.pool.map((_,i)=>i)); drillS.qi=0; } }

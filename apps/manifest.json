@@ -24,8 +24,16 @@
           "destination": "data/graph-biology-6-10.js"
         },
         {
+          "source": "data/graph-chemistry-11-testprep-drills.js",
+          "destination": "data/graph-chemistry-11-testprep-drills.js"
+        },
+        {
           "source": "data/graph-chemistry-11-testprep.js",
           "destination": "data/graph-chemistry-11-testprep.js"
+        },
+        {
+          "source": "data/graph-chemistry-6-10-drills.js",
+          "destination": "data/graph-chemistry-6-10-drills.js"
         },
         {
           "source": "data/graph-chemistry-6-10.js",
@@ -60,20 +68,40 @@
           "destination": "data/graph-history-6-10.js"
         },
         {
+          "source": "data/graph-maths-11-testprep-drills.js",
+          "destination": "data/graph-maths-11-testprep-drills.js"
+        },
+        {
           "source": "data/graph-maths-11-testprep.js",
           "destination": "data/graph-maths-11-testprep.js"
+        },
+        {
+          "source": "data/graph-maths-6-10-drills.js",
+          "destination": "data/graph-maths-6-10-drills.js"
         },
         {
           "source": "data/graph-maths-6-10.js",
           "destination": "data/graph-maths-6-10.js"
         },
         {
+          "source": "data/graph-maths-k5-drills.js",
+          "destination": "data/graph-maths-k5-drills.js"
+        },
+        {
           "source": "data/graph-maths-k5.js",
           "destination": "data/graph-maths-k5.js"
         },
         {
+          "source": "data/graph-physics-11-testprep-drills.js",
+          "destination": "data/graph-physics-11-testprep-drills.js"
+        },
+        {
           "source": "data/graph-physics-11-testprep.js",
           "destination": "data/graph-physics-11-testprep.js"
+        },
+        {
+          "source": "data/graph-physics-6-10-drills.js",
+          "destination": "data/graph-physics-6-10-drills.js"
         },
         {
           "source": "data/graph-physics-6-10.js",
