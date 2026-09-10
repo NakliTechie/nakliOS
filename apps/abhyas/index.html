@@ -424,6 +424,40 @@ kbd{background:var(--panel);border:1px solid var(--line-strong);border-bottom-wi
   /* ---------- answer checking (drills) ---------- */
   function nums(s){ return (String(s).match(/-?\d+(?:\.\d+)?/g)||[]).map(Number); }
   function lettersOnly(s){ return String(s).toLowerCase().replace(/[^a-z]/g,""); }
+  // normalise a symbolic/string answer for forgiving comparison (spaces, case, common symbol variants)
+  function normAns(s){
+    return String(s).toLowerCase()
+      .replace(/×/g,"*").replace(/·/g,"*").replace(/÷/g,"/")
+      .replace(/π/g,"pi").replace(/√/g,"sqrt")
+      .replace(/²/g,"^2").replace(/³/g,"^3")
+      .replace(/[₹$,\s]/g,"")
+      .replace(/\^1(?![0-9])/g,"")   // x^1 -> x
+      .replace(/%$/,"");
+  }
+  // parse a single leading number, incl. scientific "a × 10^b" / "aeb"; ignores trailing units
+  function parseNum(s){
+    let t=String(s).toLowerCase().replace(/,/g,"").replace(/[₹$%]/g,"").trim();
+    let m=t.match(/^([+-]?\d*\.?\d+)\s*(?:×|x|\*|·)\s*10\s*\^?\s*([+-]?\d+)/);
+    if(m) return parseFloat(m[1])*Math.pow(10,parseInt(m[2],10));
+    m=t.match(/^([+-]?\d*\.?\d+)e([+-]?\d+)$/);
+    if(m) return parseFloat(m[1])*Math.pow(10,parseInt(m[2],10));
+    m=t.match(/^[+-]?\d*\.?\d+/);
+    if(m) return parseFloat(m[0]);
+    return null;
+  }
+  // numeric-valued types: compare the leading value with a small rounding tolerance, units ignored
+  const NUMERIC_TYPES = new Set(["integer","decimal","numeric","percent","scientific","money",
+    "angle","area","perimeter","volume","length","speed","time"]);
+  // accept a value that rounds to the canonical answer at its displayed precision;
+  // add a 0.5% relative slack only for large magnitudes (forgives dropped decimals)
+  function numClose(u,e,expStr){
+    const diff=Math.abs(u-e); if(diff<=1e-9) return true;
+    const m=(expStr!=null)?String(expStr).match(/\d*\.(\d+)/):null;
+    const dp=m?m[1].length:0;
+    const rel=Math.abs(e)>=1000?Math.abs(e)*0.005:0;
+    return diff<=Math.max(0.5*Math.pow(10,-dp), rel)+1e-9;
+  }
+  function numOk(u,e){ return numClose(u,e,null); }
   function checkDrill(drill, raw){
     const expected = drill.answer;
     const user = raw.trim();
@@ -432,14 +466,9 @@ kbd{background:var(--panel);border:1px solid var(--line-strong);border-bottom-wi
     const u = user.toLowerCase();
     const e = String(expected).toLowerCase();
     if(u===e) return {ok:true,expected};
-    if(at==="integer"||at==="decimal"){
-      const un=nums(user), en=nums(expected);
-      return {ok: un.length===1 && en.length===1 && Math.abs(un[0]-en[0])<1e-9, expected};
-    }
-    if(at==="money"){
-      const un=nums(user.replace(/,/g,"")), en=nums(String(expected).replace(/,/g,""));
-      return {ok: un.length&&en.length && Math.abs(un[0]-en[0])<1e-9, expected};
-    }
+    // normalised exact match — covers formula/classification/monomial/expression*/complex/interval/pair when typed canonically
+    if(normAns(user)===normAns(expected)) return {ok:true,expected};
+
     if(at==="relation"){
       const map={"greater":">","more":">","less":"<","lesser":"<","equal":"=","gt":">","lt":"<","eq":"="};
       const uu = map[u]||user.replace(/\s/g,"");
@@ -463,8 +492,16 @@ kbd{background:var(--panel);border:1px solid var(--line-strong);border-bottom-wi
       if(un.length===1&&en.length===1) return {ok:Math.abs(un[0]-en[0])<1e-9,expected};
       return {ok:false,expected};
     }
+    if(NUMERIC_TYPES.has(at)){
+      const ue=parseNum(user), ee=parseNum(expected);
+      if(ue!=null && ee!=null){
+        if(at==="scientific") return {ok: ee===0?Math.abs(ue)<1e-12:Math.abs(ue-ee)<=Math.abs(ee)*0.02, expected};
+        return {ok: numClose(ue,ee,expected), expected};
+      }
+    }
+    // generic fallback: multi-number compare (pair, and anything with several values) + letters guard
     const un=nums(user), en=nums(expected);
-    const numsEq = un.length===en.length && un.every((v,i)=>Math.abs(v-en[i])<1e-9);
+    const numsEq = un.length>0 && un.length===en.length && un.every((v,i)=>numClose(v,en[i],null));
     const ul=lettersOnly(user), el=lettersOnly(expected);
     return {ok: numsEq && (ul===""||ul===el), expected};
   }
