@@ -16,7 +16,7 @@ import { RUN_EVENTS, createRunRecorder, loadRecord, foldStatus, foldLog, foldTra
          searchRecords, scopeEntries, readEvent, historyTool, HISTORY_ROLES, foldRecovery, recoveryNote,
          foldStagnation, stagnationNudge, foldSessionContext, foldDecisions,
          foldSurface, compactionOrphaned, reconstructionCheck, joined,
-         foldModels, normaliseModelStamp } from '../run-record.mjs';
+         foldModels, normaliseModelStamp, foldSubstitutions, substitutionsLine } from '../run-record.mjs';
 
 let passed = 0; const failures = [];
 async function test(n, fn) { try { await fn(); passed++; } catch (e) { failures.push({ n, message: e.message }); } }
@@ -1068,6 +1068,58 @@ await test('the record says which provider and model answered, and replay is una
   const bare = await requestHash({ messages: MESSAGES, tools: [shellTool()] });
   assert(stamped.resolve(req).input.request_hash === bare,
     'the request hash is unchanged by the model stamp — the replay corpus still matches');
+});
+
+// ── Who answered EACH TURN (the fallback ladder's substitution, on the chain) ──
+await test('a turn answered by a substituted model is recorded on llm.responded and folded distinctly', async () => {
+  const configured = { id: 'a:free', provider: 'endpoint', label: 'hermes · a' };
+  // turn 1 answered by the configured id, turns 2-3 by the ladder's fallback, turn 4 unnamed
+  const replies = [
+    { content: '', toolCalls: [call('shell', { command: 'mkdir -p src' }, 'c0')], model: 'a:free' },
+    { content: '', toolCalls: [call('shell', { command: 'echo hi > src/a.txt' }, 'c1')], model: 'b:free' },
+    { content: '', toolCalls: [call('shell', { command: 'cat src/a.txt' }, 'c2')], model: ' b:free ' },
+    { content: 'Done — src/a.txt contains "hi".', toolCalls: [] },
+  ];
+  const rec = createRunRecorder({ app: 'anvil', principal: 'p' });
+  await rec.start({ messages: MESSAGES, tools: [shellTool()], model: configured });
+  const result = await runAgentLoop({ messages: MESSAGES, tools: [shellTool()], infer: rec.wrapInfer(scripted(replies)),
+    executeTool: makeShellExecutor(freshShell()), onEvent: rec.onEvent, maxSteps: 8 });
+  await rec.finish(result); await rec.settled();
+  eq(result.stop, 'done', 'the scripted run completes');
+
+  const responded = joined(rec.events(), rec.resolve).filter((e) => e.tool === 'llm.responded');
+  eq(responded.length, 4, 'four model exchanges');
+  deepEq(responded.map((e) => e.output.model ?? '(absent)'), ['a:free', 'b:free', 'b:free', '(absent)'],
+    'each response names the id that produced it, trimmed; a reply that did not say writes no key');
+  assert(!('model' in responded[3].output), 'an unnamed responder omits the key rather than writing null');
+  assert(!('model' in responded[0].input), 'the answering id is on the OUTPUT, not the request side');
+
+  // the fold: only departures from the configured id, only where both sides are known
+  deepEq(foldSubstitutions(rec.events(), rec.resolve), [
+    { step: 1, configured: 'a:free', answered: 'b:free' },
+    { step: 2, configured: 'a:free', answered: 'b:free' },
+  ], 'two turns were answered by a model the run was not configured with');
+  eq(substitutionsLine(rec.events(), rec.resolve), 'a:free→b:free (2 turns: 1, 2)', 'the report line names both ids and the turns');
+  deepEq(foldModels(rec.events(), rec.resolve), [configured], 'foldModels still reports the CONFIGURED stamp — the substitution is reported beside it, not folded into it');
+
+  // replay stability: the stamped output is served back and re-recorded byte-for-byte
+  const again = createRunRecorder({ app: 'anvil', principal: 'p' });
+  await again.start({ messages: MESSAGES, tools: [shellTool()], model: configured });
+  const r2 = await runAgentLoop({ messages: MESSAGES, tools: [shellTool()], infer: again.wrapInfer(replayInfer(rec, { strict: true })),
+    executeTool: replayExecuteTool(rec, { strict: true }), onEvent: again.onEvent, maxSteps: 8 });
+  await again.finish(r2); await again.settled();
+  const cmp = compareRuns(rec, again);
+  assert(cmp.ok, `a record that names its responders must replay to the same chain: event ${cmp.at}: ${cmp.why}`);
+  deepEq(foldSubstitutions(again.events(), again.resolve).map((s) => s.step), [1, 2], 'the replayed chain carries the same substitutions');
+
+  // an unstamped run cannot call anything a substitution — what was configured is unknown
+  const blank = createRunRecorder({ app: 'anvil', principal: 'p' });
+  await blank.start({ messages: MESSAGES, tools: [shellTool()] });
+  const w = blank.wrapInfer(async () => ({ content: 'hi', toolCalls: [], finishReason: 'stop', model: 'b:free' }));
+  await w({ messages: MESSAGES, tools: [shellTool()] }); await blank.settled();
+  deepEq(foldSubstitutions(blank.events(), blank.resolve), [], 'no configured id, no substitution claim');
+  eq(joined(blank.events(), blank.resolve).find((e) => e.tool === 'llm.responded').output.model, 'b:free', 'but the responder is still on the chain');
+  eq(substitutionsLine(blank.events(), blank.resolve), '', 'and the report line is empty');
 });
 
 if (failures.length) { console.error(`history/run-record: ${passed} passed, ${failures.length} FAILED`); for (const f of failures) console.error(`  FAIL ${f.n}: ${f.message}`); process.exit(1); }

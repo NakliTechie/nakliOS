@@ -47,7 +47,8 @@ assert.match(sdk, /usage: msg\.usage \|\| null,/, 'the SDK puts usage on the don
 assert.match(sdk, /if \(chunk\.usage\) usage = chunk\.usage;/, 'and collects it while assembling a completion');
 assert.match(sdk, /\/\/ top level, as the OpenAI completion shape has it[\s\S]{0,80}usage: usage,/,
   'the assembled completion carries it at the top level, where the OpenAI shape puts it');
-assert.match(anvil, /usage: \(r&&r\.usage\)\|\|null \}/, 'inferViaHost returns it on the reply the loop reads');
+// the field, not its position — the reply gained `model` after it (test-host-answered-model.mjs)
+assert.match(anvil, /usage: \(r&&r\.usage\)\|\|null/, 'inferViaHost returns it on the reply the loop reads');
 
 // ── the accounting itself, on the shapes the providers really send ──
 // Ollama / OpenAI: prompt_tokens ALREADY includes the cached part.

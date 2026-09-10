@@ -6504,6 +6504,11 @@ async function aiProcessQueue(){
         // The provider's own token count. The app's budget ends runs on this number; the
         // estimate it replaces is a character count that cannot see tool schemas at all.
         ...(request.usage ? { usage:request.usage } : {}),
+        // The id that ACTUALLY answered. `model` on every event is the configured entry; the
+        // fallback ladder can answer from a different id, and a record stamped with the
+        // configured one would attribute every turn after the substitution to a model that
+        // never produced it. Absent when the runtime did not say (on-device paths).
+        ...(request.answeredModel ? { answeredModel:request.answeredModel } : {}),
       });
     }
   } catch (error){

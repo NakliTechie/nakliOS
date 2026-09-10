@@ -248,19 +248,22 @@
     var finishReason = 'stop';
     var toolCalls = null;
     var usage = null;
+    var model = null;
     for await (var chunk of stream) {
       var choice = chunk.choices && chunk.choices[0];
       if (choice && choice.delta && choice.delta.content) content += choice.delta.content;
       if (choice && choice.delta && choice.delta.tool_calls) toolCalls = choice.delta.tool_calls;
       if (choice && choice.finish_reason) finishReason = choice.finish_reason;
       if (chunk.usage) usage = chunk.usage;
+      // the last chunk is the done chunk, which names the id that actually answered
+      if (chunk.model) model = chunk.model;
     }
     var message = { role: 'assistant', content: content };
     if (toolCalls) message.tool_calls = toolCalls;
     return {
       id: 'naklios-local',
       object: 'chat.completion',
-      model: capabilities.aiModel || 'localmind',
+      model: model || capabilities.aiModel || 'localmind',
       choices: [{
         index: 0,
         message: message,
@@ -405,7 +408,11 @@
         aiRequest.deliver({
           id: msg.requestId,
           object: 'chat.completion.chunk',
-          model: msg.model || capabilities.aiModel || 'localmind',
+          // Who answered, where the OpenAI shape puts it. The host's fallback ladder can
+          // answer from an id other than the configured one; the done chunk is the only
+          // frame that knows, so it names the responder and the token chunks keep the
+          // configured entry.
+          model: msg.answeredModel || msg.model || capabilities.aiModel || 'localmind',
           choices: [{
             index: 0,
             delta: msg.toolCalls && msg.toolCalls.length ? { tool_calls: msg.toolCalls } : {},

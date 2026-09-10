@@ -35,7 +35,7 @@ export const RUN_EVENTS = Object.freeze([
   'run.started',      // input: { messages, tools, model }     output: {}  (`model` = {id,provider,label} or null — who answered this run)
   'turn.started',     // input: { step }                       output: {}
   'llm.requested',    // input: { request_hash, step }         output: {}
-  'llm.responded',    // input: { request_hash, step }         output: { content, toolCalls, finishReason }
+  'llm.responded',    // input: { request_hash, step }         output: { content, toolCalls, finishReason, model? }  (`model` = the id that ANSWERED, when the reply named one)
   'assistant.said',   // input: { step }                       output: { content }
   'tool.called',      // input: { id, name, args, step }       output: {}
   'tool.responded',   // input: { id, name, args_hash, step }  output: { result, sent }  (F5: `sent` is the capped surface form when it differs)
@@ -198,7 +198,17 @@ export function createRunRecorder({ app = 'anvil', principal = 'local', grant_id
         }
         await enqueue('llm.requested', () => ({ input: { request_hash, step: s }, output: {} }));
         const reply = await infer(args);
-        const response = { content: reply?.content ?? '', toolCalls: reply?.toolCalls ?? [], finishReason: reply?.finishReason ?? 'stop' };
+        // Who ANSWERED this turn — the id the reply names, not the id the run was configured
+        // with. The host's model ladder can fall through a 5xx to a different id mid-run, and
+        // run.started's stamp is the configured model, so without this every turn after the
+        // substitution would be attributed to a model that never produced it. It lives on the
+        // OUTPUT, beside the content it describes, for a replay-stability reason: replayInfer
+        // serves the recorded output back as the reply, so a re-recorded replay writes the
+        // same output (same hash) whether or not the key is present. On the input it would
+        // make every record captured with it a replay miss. Omitted, never null, when the
+        // reply does not say — the same rule as run.started's stamp.
+        const answered = typeof reply?.model === 'string' && reply.model.trim() ? reply.model.trim() : null;
+        const response = { content: reply?.content ?? '', toolCalls: reply?.toolCalls ?? [], finishReason: reply?.finishReason ?? 'stop', ...(answered ? { model: answered } : {}) };
         await enqueue('llm.responded', () => ({ input: { request_hash, step: s }, output: response }));
         return reply;
       };
@@ -1215,6 +1225,33 @@ export function foldModels(events, resolve) {
     seen.add(key); out.push(m);
   }
   return out;
+}
+
+// Where a turn was answered by a model OTHER than the one the run was configured with —
+// the host's fallback ladder substituting a different id after a 5xx. foldModels above reports
+// the configured stamp; this reports the departures from it, one per turn, so a reader can
+// tell "qwen3 answered this run" from "qwen3 was asked, x:free answered steps 3-7". A turn is
+// a substitution only when BOTH sides are known: an unstamped run cannot say what was
+// configured, and a reply that did not name its model cannot say who answered. Pure.
+export function foldSubstitutions(events, resolve) {
+  const out = []; let configured = null;
+  for (const e of joined(events, resolve)) {
+    if (e.tool === 'run.started') { configured = normaliseModelStamp(e.input?.model)?.id ?? null; continue; }
+    if (e.tool !== 'llm.responded') continue;
+    const answered = typeof e.output?.model === 'string' && e.output.model.trim() ? e.output.model.trim() : null;
+    if (!configured || !answered || answered === configured) continue;
+    out.push({ step: e.input?.step ?? null, configured, answered });
+  }
+  return out;
+}
+
+// One line for a report: "" when nothing was substituted, else which ids stood in for which.
+export function substitutionsLine(events, resolve) {
+  const subs = foldSubstitutions(events, resolve);
+  if (!subs.length) return '';
+  const by = new Map();
+  for (const s of subs) { const k = `${s.configured}→${s.answered}`; if (!by.has(k)) by.set(k, []); by.get(k).push(s.step); }
+  return [...by.entries()].map(([k, steps]) => `${k} (${steps.length} turn${steps.length === 1 ? '' : 's'}: ${steps.filter((x) => x != null).join(', ')})`).join('; ');
 }
 
 // {goal, lastCheckpoint, filesTouched, outcome} — what the run was for and how it went.
