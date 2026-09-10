@@ -423,6 +423,7 @@
   registerAppDiffTypes(['anvil']);
   import { MEMORY_DIR, parseFact, buildMemoryIndex, noteToFact, recallTool, applyRevision, applyDemotion, dependantsOf, slotHolder, reviseTool, findDuplicate, duplicateReply, createRememberBudget, budgetSpentReply, checkRulesCap, rulesCapReply, LESSON_CONTRACT } from '../../sys/ai/memory-store.mjs';
   import { HOOKS_FILE, parseHooks, preToolDecision, postToolCommands } from '../../sys/ai/hooks.mjs';
+  import { gateAction, gateEvent } from '../../sys/ai/action-gate.mjs';
   import { compactConversation } from '../../sys/ai/compaction.mjs';
   import { evolve } from '../../sys/ai/evolve.mjs';
   import { createKiln, createWorkerRuntime } from '../../sys/kiln/index.mjs';
@@ -1955,6 +1956,19 @@
       // names, so this is a pure reordering.
       const dec0 = preToolDecision(hooksCfg, nm, ar);
       if(dec0.blocked) return '[blocked by a project hook] '+dec0.message;
+      // AC-7: a typed verdict on THIS action, before it happens. Authorization is read only from
+      // the owner's own turns — `[coordination]` messages are the loop talking to itself and can
+      // never widen scope. This sits ABOVE the grant and can only ever ask for more: the grant is
+      // still the fence, and nothing here can permit what it refuses.
+      try{
+        const convoNow = (runCtx && runCtx.messages) || (t && t.convo) || [];
+        const verdict = gateAction(nm, ar, convoNow);
+        if(verdict.outcome === 'deny'){
+          if(t){ t.log.push({ k:'system', text:'⛔ '+verdict.rationale }); renderLog(); }
+          try{ if(runCtx && runCtx.rec) runCtx.rec.onEvent({ type:'tool-error', id:(callObj&&callObj.id)||'gate', name:nm, error:'action-gate: '+verdict.outcome, gate:gateEvent(nm, verdict) }); }catch(_){}
+          return verdict.rationale;
+        }
+      }catch(_){ /* a gate that throws must never be the thing that stops a run */ }
       // Defence in depth for the same five: they are only pushed into `tools`
       // when mode==='code', so reaching one from plan/ask means the model invented
       // a name it was never handed. A MODE_TOOLS lookup would be wrong here —
