@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const anvil = await readFile(new URL('../apps/anvil/index.html', import.meta.url), 'utf8');
+const assembly = await readFile(new URL('../sys/ai/run-assembly.mjs', import.meta.url), 'utf8');
 const runTask = anvil.slice(anvil.indexOf('async function runTask(t, text){'));
 assert.ok(runTask.length > 1000, 'runTask found');
 
@@ -16,20 +17,24 @@ assert.ok(runTask.length > 1000, 'runTask found');
   for (const n of ['createRunRecorder','foldStatus','foldLog','loadRecord']) assert.ok(imp[1].includes(n), `imports ${n}`); }
 
 // Every loop in runTask is recorded: started before, finished after, infer wrapped, events chained.
-const loops = [...runTask.matchAll(/runAgentLoop\(\{/g)].length;
-assert.equal(loops, 3, 'runTask runs the loop in exactly three places (main + act-or-nudge + D2 supervisor)');
-// Match the CALL, not its exact argument list — this anchor broke once when a field was
-// added to rec.start, reporting 0 of 3 call sites that were all still there.
-const startCalls = [...runTask.matchAll(/await rec\.start\(\{[^}]*\}\)/g)].map((m) => m[0]);
-assert.equal(startCalls.length, 3, 'each loop is preceded by rec.start (main + act-or-nudge + D2 supervisor)');
-for (const call of startCalls) {
-  assert.match(call, /messages: \w+/, `rec.start must carry the messages it started with: ${call}`);
-  assert.match(call, /\btools\b/, `rec.start must carry the toolset: ${call}`);
-  // Provider+model identity on the chain. Without it a replayed record reproduces the bytes
-  // but not the responder, and foldOutcome's failure signals land on whichever endpoint is
-  // selected when the record is read, not the one that actually answered.
-  assert.match(call, /model: runModel\(\)/, `rec.start must stamp who answered: ${call}`);
-}
+// N1 (2026-09-12): the three loops (main + act-or-nudge + D2 supervisor) are driveRun's in
+// sys/ai/run-assembly.mjs — scripts/test-run-assembly.mjs DRIVES it and counts the rec.start /
+// rec.finish per loop. What this file pins is the app's side of the seam: ONE driveRun call, handed
+// the recorder, the recording infer, the recording event tap and the model stamp — and no loop
+// call of its own left behind that could bypass them.
+assert.equal([...runTask.matchAll(/runAgentLoop\(\{/g)].length, 0, 'runTask no longer calls the loop itself');
+const drives = [...runTask.matchAll(/let result = await driveRun\(\{[\s\S]*?\n      \}\);/g)].map((m) => m[0]);
+assert.equal(drives.length, 1, 'runTask runs the loop through exactly one driveRun call');
+const drive = drives[0];
+assert.match(drive, /\brec\b/, 'driveRun is handed the recorder');
+assert.match(drive, /\btools\b/, 'driveRun is handed the toolset the record starts with');
+assert.match(drive, /infer: recInfer/, 'the driver infers through the recorder');
+assert.match(drive, /onEvent: recEvent/, 'the driver reports through the recorder');
+assert.ok(!/infer: inferViaHost|onEvent: ?onLoopEvent\b/.test(drive), 'the driver does not use the unrecorded seams');
+// Provider+model identity on the chain. Without it a replayed record reproduces the bytes
+// but not the responder, and foldOutcome's failure signals land on whichever endpoint is
+// selected when the record is read, not the one that actually answered.
+assert.match(drive, /model: runModel\b/, 'driveRun stamps who answered on every loop');
 assert.match(runTask, /const runModel = \(\) => \{[\s\S]*?capabilities[\s\S]*?aiModel[\s\S]*?aiProvider[\s\S]*?\}/,
   'the model stamp is read from the host capability broadcast at run time, not cached at boot');
 // run.started names the CONFIGURED model. The host's fallback ladder can answer from another id
@@ -37,19 +42,7 @@ assert.match(runTask, /const runModel = \(\) => \{[\s\S]*?capabilities[\s\S]*?ai
 // llm.responded (sys/history/run-record.mjs wrapInfer) and foldSubstitutions reads it back.
 assert.match(anvil, /return \{ content: [^\n]*finishReason:[^\n]*model: \(r&&typeof r\.model==='string'&&r\.model\)\|\|null \};/,
   'inferViaHost returns the answering model on the reply the recorder reads');
-assert.equal([...runTask.matchAll(/await rec\.finish\(result\)/g)].length, 3, 'each loop is followed by rec.finish (main + act-or-nudge + D2 supervisor)');
-assert.equal([...runTask.matchAll(/infer: recInfer/g)].length, 3, 'each loop infers through the recorder (main + act-or-nudge + D2 supervisor)');
-assert.equal([...runTask.matchAll(/onEvent:recEvent/g)].length, 3, 'each loop reports through the recorder (main + act-or-nudge + D2 supervisor)');
-// Check each runAgentLoop CALL SITE itself — the subagent executor
-// (makeToolExecutor({ infer: inferViaHost })) is deliberately unrecorded in this
-// layer (tree-scoped subagent records are a later move), so a file-wide grep for
-// `infer: inferViaHost` would be wrong.
-for (const m of runTask.matchAll(/runAgentLoop\(\{[\s\S]*?\}\);/g)) {
-  const site = m[0];
-  assert.match(site, /infer: recInfer/, `a loop bypasses the recorder for inference: ${site.slice(0, 80)}…`);
-  assert.match(site, /onEvent:recEvent/, `a loop bypasses the recorder for events: ${site.slice(0, 80)}…`);
-  assert.ok(!/infer: inferViaHost|onEvent:onLoopEvent\b/.test(site), `a loop still uses the unrecorded seams: ${site.slice(0, 80)}…`);
-}
+assert.ok(!/await rec\.start\(|await rec\.finish\(/.test(runTask), 'no stray rec.start/finish outside the driver — one writer per loop');
 assert.match(runTask, /const recEvent = ?\(e\)=>\{ onLoopEvent\(e\); rec\.onEvent\(e\); \}/,
   'the live-UI handler runs for in-run feedback AND the recorder sees every event (the record is the durable copy)');
 // shape, not signature: wrapInfer now also takes the F1 divergence hook
@@ -157,18 +150,19 @@ assert.match(anvil, /const recoveryPreface = \(t\.recovery/, 'the next run is pr
 assert.match(anvil, /const volatileCtx = \(projectContext\+memoryIndex\+skillsIndex\)\.trim\(\)/, 'only the indexes are change-gated');
 assert.ok(!/volatileCtx = \([^)]*recoveryPreface/.test(anvil), 'the per-run recovery note is NOT inside the gated block');
 assert.match(anvil, /const recoveryMsg = recoveryPreface\.trim\(\);\s*\n\s*if\(recoveryMsg\) convo\.push\(\{role:'user', content:'\[coordination\] '\+recoveryMsg\}\)/, 'the recovery note is still delivered, as its own tagged message');
-assert.match(anvil, /firstMessages=\[sysMsg\(gateNote\), \.\.\.convo\]/, 'the carried transcript is still what follows the system message');
+assert.match(drive, /\bconvo\b/, 'the carried transcript is what the driver sends after the system message (its order is pinned in test-run-assembly.mjs)');
+assert.match(drive, /\bgateNote\b/, 'the gate note reaches the driver as the first loop\'s extra');
 assert.ok(!/sysMsg\(gateNote\+recoveryPreface\)/.test(anvil), 'the volatile note is OUT of the cache prefix');
 // and the prefix itself carries only stable text — one volatile index in it invalidates everything
-assert.match(anvil, /const sysMsg=\(extra\)=>\(\{role:'system',content:systemPrompt\(\)\+\(MODE_NOTE\[mode\]\|\|''\)\+\(mode==='code'\?LESSON_NOTE:''\)\+\(extra\|\|''\)\}\)/, 'the system message is stable text only');
+assert.match(anvil, /const sysMsg=\(extra\)=>systemMessage\(\{ mode, proceduralPrior, extra \}\);/, 'the system message is stable text only — the assembly is handed the mode, the prior and the extra');
 for (const volatile of ['projectContext', 'memoryIndex', 'skillsIndex']) {
-  assert.ok(!new RegExp(`content:systemPrompt\\(\\)\\+[^}]*${volatile}`).test(anvil), `${volatile} is back in the cache prefix`);
+  assert.ok(!new RegExp(`systemMessage\\(\\{[^}]*${volatile}`).test(anvil), `${volatile} is back in the cache prefix`);
 }
 // AC-3 made the prior a per-run value rather than a literal, so the "stable text only" claim above
 // now depends on WHAT systemPrompt() is allowed to read. It must be exactly the two constants plus
 // the procedural prior — nothing volatile may be smuggled in through the new seam.
-assert.match(anvil, /function systemPrompt\(\)\{ return SYSTEM_HEAD \+ proceduralPrior \+ SYSTEM_TAIL; \}/,
-  'systemPrompt is head + prior + tail, and nothing else');
+assert.match(anvil, /function systemPrompt\(\)\{ return assembledSystemPrompt\(proceduralPrior\); \}/,
+  'systemPrompt hands the assembly the prior and nothing else (head + prior + tail is pinned in test-run-assembly.mjs)');
 for (const volatile of ['projectContext', 'memoryIndex', 'skillsIndex', 'recoveryPreface']) {
   assert.ok(!new RegExp(`proceduralPrior\\s*=\\s*[^;]*${volatile}`).test(anvil), `${volatile} must not reach the procedural prior`);
 }
@@ -179,10 +173,11 @@ assert.match(anvil, /proceduralPrior = renderProcedural\(pg\.graph\)/, 'the prio
 // D2 supervisor: after a loop, a record-fold (foldStagnation) catches spinning the loop's own
 // consecutive-identical guard misses, and injects ONE capped redirect — fired at most once per
 // run, never on a 'done' run, and not for no-tools (the act-or-nudge above owns that).
-assert.match(anvil, /const stag=foldStagnation\(rec\.events\(\), rec\.resolve\)/, 'the supervisor folds stagnation over the record');
-assert.match(anvil, /if\(stag\.stalled && stag\.signal!=='no-tools'\)/, 'it redirects on repeat/gate-stuck, not the act-or-nudge case');
-assert.match(anvil, /if\(mode==='code' && result\.stop!=='done' &&/, 'the supervisor never second-guesses a run that finished done');
-assert.match(anvil, /content: stagnationNudge\(stag\)/, 'the redirect message is the tagged coordination nudge');
+// N1: the supervisor is driveRun's; its predicate and its recorded re-loop are driven in
+// scripts/test-run-assembly.mjs. Pinned here: it still folds over the RECORD, not the UI log.
+assert.match(assembly, /const stag = foldStagnation\(rec\.events\(\), rec\.resolve\)/, 'the supervisor folds stagnation over the record');
+assert.match(assembly, /content: stagnationNudge\(stag\)/, 'the redirect message is the tagged coordination nudge');
+assert.ok(!/foldStagnation\(/.test(runTask), 'no second supervisor survives in the app');
 
 // C2/C5: the post-run review fork stages skills/facts (never active) and the automatic trigger is
 // guarded by the scheduler — a local model defers, an aborted run is skipped.

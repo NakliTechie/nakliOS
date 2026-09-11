@@ -17,6 +17,7 @@ await test('the matrix runs headlessly: 3 tasks × 4 arms, every arm recorded, e
   for (const t of Object.keys(first.records)) for (const a of first.arms) {
     const dump = first.records[t][a];
     assert(typeof dump.events === 'string' && dump.events.includes('run.stopped'), `${t}/${a} recorded to a stop`);
+    assert(dump.events.includes('run.started'), `${t}/${a} recorded from a start (the default driver starts the record before its loop)`);
   }
   assert(first.liveCalls > 0, 'the first pass hit the scripted model');
 });
@@ -36,6 +37,19 @@ await test('deltas are real and attributable: gate makes attest-lint a success; 
   const noop = row(first, 'flaky-fix', 'memory');
   eq(noop.delta.label, 0, 'a capability the task does not use shows zero delta — honest, not padded');
   eq(noop.delta.steps, 0, 'no step delta either');
+});
+
+await test('factory order: executeTool sets up the arm, then gate, then loopOptions read it', async () => {
+  const order = [];
+  const task = {
+    id: 'order', messages: () => [{ role: 'system', content: 's' }, { role: 'user', content: 'u' }], tools: () => [],
+    model: () => async () => ({ content: 'done', toolCalls: [] }),
+    executeTool: (_c, ctx) => { order.push('executeTool'); ctx.ws = 'ready'; return async () => ''; },
+    gate: (_c, ctx) => { order.push('gate:' + ctx.ws); return null; },
+    loopOptions: (_c, ctx) => { order.push('loopOptions:' + ctx.ws); return { maxSteps: 2 }; },
+  };
+  await runAblation({ tasks: [task], capabilities: [], now: () => 1_000 });
+  eq(order.join(' '), 'executeTool gate:ready loopOptions:ready', 'loopOptions and the gate see the workspace executeTool made');
 });
 
 await test('REPLAY: the same matrix from the records makes ZERO live model calls and reproduces every metric', async () => {

@@ -73,10 +73,16 @@ function fired(rec) {
   return { skills, facts };
 }
 
+// Where the index rides. Since F3 the app sends it as a tagged context message AFTER the prompt,
+// never in the system prefix — so a probe that read only the system message saw "no index" on
+// every real record (surfaced by N1, when the capture bed started sending it the app's way).
+// Both places are read: older records and hand-built beds put it in the system message.
+const CONTEXT_TAG = '[coordination] Working context for this run';
 function systemOf(rec) {
   const start = joined(rec.events(), rec.resolve).find((e) => e.tool === 'run.started');
   const msgs = start?.input?.messages || [];
-  return msgs.filter((m) => m?.role === 'system').map((m) => String(m.content || '')).join('\n');
+  return msgs.filter((m) => m?.role === 'system' || (m?.role === 'user' && String(m.content || '').startsWith(CONTEXT_TAG)))
+    .map((m) => String(m.content || '')).join('\n');
 }
 
 // Task class: the run's tool set. Record-derived and stable — the same proxy groupOrdering uses.
@@ -180,7 +186,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const r = probe(records);
   console.log(`records read: ${r.total}`);
   console.log(`  carried an index (eligible): ${r.eligible}`);
-  console.log(`  no index in the system prompt: ${r.noIndex}`);
+  console.log(`  no index in the system prompt or context message: ${r.noIndex}`);
   if (r.unparsed.length) console.log(`  block headings found but with no parseable entries: ${r.unparsed.join(', ')}`);
 
   if (!r.eligible) {

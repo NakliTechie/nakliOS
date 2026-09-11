@@ -14,6 +14,7 @@ import { createRunRecorder } from '../sys/history/run-record.mjs';
 import { buildSkillsIndex } from '../sys/ai/skills.mjs';
 import { buildMemoryIndex } from '../sys/ai/memory-store.mjs';
 import { probe, summarise } from './probe-context-payload.mjs';
+import { contextMessage } from '../sys/ai/run-assembly.mjs';
 
 const SKILLS = [
   { name: 'deploy-worker', description: 'Ship a Cloudflare Worker', status: 'active' },
@@ -25,11 +26,16 @@ const FACTS = [
   { name: 'stale-note', type: 'project', description: 'Nothing calls this one', status: 'verified' },
 ];
 
-async function run({ skills = SKILLS, facts = FACTS, callSkills = [], recallFacts = [], stop = 'done', verified = false }) {
-  const system = 'You are a coding agent.' + buildSkillsIndex(skills) + buildMemoryIndex(facts);
+async function run({ skills = SKILLS, facts = FACTS, callSkills = [], recallFacts = [], stop = 'done', verified = false, placement = 'system' }) {
+  const index = buildSkillsIndex(skills) + buildMemoryIndex(facts);
   const rec = createRunRecorder({ app: 'anvil', principal: 'probe-test' });
+  // 'system': the old bed shape. 'context': the app's shape (F3) — the index rides as the tagged
+  // context message after the prompt; the system message carries none of it.
+  const messages = placement === 'context'
+    ? [{ role: 'system', content: 'You are a coding agent.' }, { role: 'user', content: 'go' }, contextMessage(index.trim())]
+    : [{ role: 'system', content: 'You are a coding agent.' + index }, { role: 'user', content: 'go' }];
   await rec.start({
-    messages: [{ role: 'system', content: system }, { role: 'user', content: 'go' }],
+    messages,
     tools: [{ type: 'function', function: { name: 'shell' } }, { type: 'function', function: { name: 'skill' } }],
   });
   let n = 0;
@@ -57,6 +63,15 @@ async function run({ skills = SKILLS, facts = FACTS, callSkills = [], recallFact
   assert.equal(r.eligible, 1, 'a record carrying a real index is eligible');
   assert.equal(r.noIndex, 0);
   assert.deepEqual(r.unparsed, [], 'every block heading found had parseable entries');
+  // N1: the app's placement — the index in the context message, not the prefix — is read too.
+  const inCtx = await run({ callSkills: ['run-the-gate'], recallFacts: ['build-cmd'], verified: true, placement: 'context' });
+  const rc = probe([inCtx]);
+  assert.equal(rc.eligible, 1, 'a record with the index in the app\'s context message is eligible');
+  assert.equal(rc.noIndex, 0, 'it is not counted as "no index"');
+  assert.ok(rc.rows.length >= 4, 'the rows name the carried items');
+  assert.deepEqual(rc.rows, r.rows, 'the same index parses to the same rows from either place');
+  const bare = await run({ skills: [], facts: [], placement: 'context' });
+  assert.equal(probe([bare]).noIndex, 1, 'an empty context message is still no index');
 
   const skills = r.rows.filter((x) => x.kind === 'skill');
   assert.equal(skills.length, 3, 'all three skills were seen in context');

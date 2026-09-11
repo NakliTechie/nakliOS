@@ -21,6 +21,7 @@ const anvil = await readFile(new URL('../apps/anvil/index.html', import.meta.url
 assert.match(anvil, /t\.status = foldStatus\(recEvents, rec\.resolve, \{ gated \}\)\.status/,
   'the app derives status from the fold, not a parallel computation');
 import { readFile as _rf } from 'node:fs/promises';
+import { RUN_BUDGET } from '../sys/ai/run-assembly.mjs';
 const runRecord = await _rf(new URL('../sys/history/run-record.mjs', import.meta.url), 'utf8');
 assert.match(runRecord, /gated && verified\) \? 'done' : 'unclaimed'/,
   'the fold keeps the rule: a done stop without a green gate is unclaimed, not done');
@@ -53,13 +54,13 @@ assert.match(promptLine, /python /, 'at least one runnable python example remain
 // ── every tool passes the hook guard ────────────────────────────────────
 // The guard must sit above the first early-returning Anvil-layer tool.
 const execIdx = anvil.indexOf('const executeTool = async (nm, ar, callObj)=>{');
-const guardIdx = anvil.indexOf('preToolDecision(hooksCfg, nm, ar)', execIdx);
+const guardIdx = anvil.indexOf('preHookReply(hooksCfg, nm, ar)', execIdx);
 const firstToolIdx = anvil.indexOf("if(nm==='skill')", execIdx);
 assert.ok(execIdx >= 0 && guardIdx > execIdx, 'the hook guard is inside executeTool');
 assert.ok(guardIdx < firstToolIdx,
   'the hook guard runs BEFORE skill/recall/remember/revise/synthesize can return');
 // Exactly one guard site — the old one was removed, not duplicated.
-assert.equal((anvil.match(/preToolDecision\(hooksCfg/g) || []).length, 1,
+assert.equal((anvil.match(/preHookReply\(hooksCfg/g) || []).length, 1,
   'the hook guard is not evaluated twice per call');
 // Write-capable tools are refused outright outside code mode.
 assert.match(anvil, /mode!=='code' && \(nm==='remember'\|\|nm==='revise'\|\|nm==='synthesize'\|\|nm==='skill_manage'\)/,
@@ -113,7 +114,10 @@ for (const [evt, label] of [['tool-result', 'result'], ['tool-error', 'error']])
 }
 
 // ── the wall clock must fit a local model ───────────────────────────────
-assert.match(anvil, /wallClockMs: 900000/, 'the task budget allows a slow local endpoint to finish a turn');
+// N1: the budget is the assembly's (sys/ai/run-assembly.mjs RUN_BUDGET) and the app runs through
+// driveRun, so the number is asserted on the module and the wiring on the app.
+assert.equal(RUN_BUDGET.budget.wallClockMs, 900000, 'the task budget allows a slow local endpoint to finish a turn');
+assert.match(anvil, /let result = await driveRun\(\{/, 'the app runs on that budget through the shared driver');
 
 // B6: a dispatch/review subagent gets a RAW makeToolExecutor over its overlay (spawnIsolated),
 // not the app's executeTool wrapper — so remember / skill_manage / history / checkpoint (which

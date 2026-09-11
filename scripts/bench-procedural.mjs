@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 // AC-3's payoff: what is each procedural edge WORTH?
-//   node scripts/bench-procedural.mjs [--base URL] [--model ID] [--tasks a,b] [--record DIR] [--replay DIR]
+//   node scripts/bench-procedural.mjs [--base URL] [--model ID] [--key KEY] [--tasks a,b] [--record DIR] [--replay DIR] [--full-only]
+//
+// N1 (2026-09-12): the bed runs what the app runs — prompt, toolset, budgets (24 steps / 900 s,
+// then the re-loops), hooks, act-or-nudge and supervisor all come from sys/ai/run-assembly.mjs.
+// There is no --max-steps: a bed that caps the app's budget measures a different product.
 //
 // Six transitions have been in Anvil's system prompt since it was written. None was ever measured.
 // The procedural-graph work (arXiv:2609.09153) reports that a hand-crafted prior can be WORSE THAN
@@ -16,12 +20,13 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { runAblation, renderTable } from '../sys/ai/ablate.mjs';
-import { codingToolset, makeToolExecutor } from '../sys/ai/agent-tools.mjs';
+import { makeToolExecutor } from '../sys/ai/agent-tools.mjs';
 import { buildRigRegistry } from '../sys/rig/registry/index.mjs';
 import { createFileops, MemoryBackend } from '../sys/rig/fileops/index.mjs';
 import { createGrant, createOpLog, createAgentFace } from '../sys/rig/agent/index.mjs';
 import { createShell } from '../sys/rig/cli/shell.mjs';
 import { DEFAULT_GRAPH, renderProcedural, proceduralEdges } from '../sys/ai/procedural.mjs';
+import { systemMessage, gateNote, runToolset, driveRun, withHooks, withBedStubs, loadHooks, EMPTY_HOOKS } from '../sys/ai/run-assembly.mjs';
 
 const args = process.argv.slice(2);
 const opt = (f, d = null) => { const i = args.indexOf(f); return i < 0 ? d : args[i + 1]; };
@@ -30,8 +35,11 @@ const MODEL = opt('--model', 'qwen3-32k:8b');
 const KEY = opt('--key', 'local');
 const ONLY = (opt('--tasks') || '').split(',').filter(Boolean);
 const recordDir = opt('--record'), replayDir = opt('--replay');
-const MAX_STEPS = Number(opt('--max-steps', '10'));
+// --full-only: the `full` arm alone (one run per task) — a smoke or a paid proof, not an ablation.
+const FULL_ONLY = args.includes('--full-only');
 const CALL_TIMEOUT = Number(opt('--timeout', '180')) * 1000;
+// Who answers, stamped on every loop's run.started as the app stamps its configured endpoint.
+const MODEL_STAMP = () => ({ id: MODEL, provider: (() => { try { return new URL(BASE).host; } catch (_) { return null; } })(), label: MODEL });
 
 // Progress goes to stderr as it happens. The first version of this script had neither a timeout
 // nor progress, and a blocked fetch was indistinguishable from a slow model for several minutes —
@@ -42,20 +50,14 @@ const since = Date.now();
 const log = (m) => process.stderr.write(`  [${String(Math.round((Date.now() - since) / 1000)).padStart(4)}s] ${m}\n`);
 
 const EDGES = proceduralEdges();
-// The toolset must MATCH what the prior talks about. First run of this bench gave the agent
-// shell only, while the prior said "prefer edit/apply_patch" — and Anvil's curated shell refuses
-// `sed -i` with "use the `edit` tool", which did not exist in that arm. The agent read the file
-// (the prior working), tried sed -i, was refused, then flailed through cat -A, xxd, od, python
-// and finally called `edit` and `apply_patch`: "unknown tool". Every arm hit max-steps. That is a
-// prior being CONTRADICTED, not ablated, and it produced a table of zeroes.
-const HEAD = 'You are a coding agent working over the user\'s files. Tools: read (line-numbered), write (whole file), edit (surgical old_string→new_string), apply_patch (add/update/delete files), todowrite (checklist), shell (a CURATED bash-like shell, not coreutils: ls cat grep rg sed awk find head tail wc sort uniq cut tr test git python, with pipes, && || ; > >> < and globs. Each builtin implements a documented subset and REFUSES an unsupported flag rather than ignoring it). ';
-const TAIL = ' Work in small, verifiable steps; end with a one-line summary.';
-
-// The system prompt for one arm: every edge except the ones this arm turns off.
-function systemFor(caps) {
-  const disable = EDGES.filter((e) => !caps[e]);
-  const prior = renderProcedural(DEFAULT_GRAPH, { disable });
-  return HEAD + prior + TAIL;
+// N1 (2026-09-12): the prompt, the toolset, the budgets and the re-loops are the APP's — imported
+// from sys/ai/run-assembly.mjs, not transcribed here. The first version of this bench hand-wrote a
+// shorter prompt and a shell-only toolset, and the prior it was meant to ablate said "prefer
+// edit/apply_patch" about tools that did not exist in that arm: a prior CONTRADICTED, not ablated,
+// and a table of zeroes. The prior itself is still the variable: every edge except this arm's.
+function priorFor(caps) {
+  const disable = EDGES.filter((e) => caps[e] === false); // absent = on (--full-only names no edge)
+  return renderProcedural(DEFAULT_GRAPH, { disable });
 }
 
 function freshShell(seed = {}) {
@@ -145,21 +147,32 @@ const TASKS = {
 };
 
 function buildTask(id, spec) {
+  // The gate is a function over the workspace, not a shell command; the note names the bench.
+  const gate = gateNote('bench gate: ' + id);
   return {
     id,
-    messages: (caps) => [{ role: 'system', content: systemFor(caps) }, { role: 'user', content: spec.prompt }],
-    tools: () => codingToolset('code'),
-    model: (caps) => liveInfer(`${id}/${EDGES.filter((e) => !caps[e]).map((e) => '-' + e).join(',') || 'full'}`),
-    executeTool: (_caps, ctx) => {
+    // With a driver, `messages` is the CARRIED conversation — the driver builds the prefix itself.
+    messages: () => [{ role: 'user', content: spec.prompt }],
+    tools: () => runToolset('code', { verify: true }),
+    // The arm's model is also what a `task` subagent runs on (unrecorded in this layer, as in the app).
+    model: (caps, ctx) => (ctx.infer = liveInfer(`${id}/${EDGES.filter((e) => caps[e] === false).map((e) => '-' + e).join(',') || 'full'}`)),
+    executeTool: (caps, ctx) => {
       const s = freshShell();
-      ctx.fs = s.fs; ctx.shell = s.shell;
-      // Seed the workspace before the agent sees it.
-      ctx.ready = (async () => { for (const [p, c] of Object.entries(spec.seed)) await s.fs.write(p, c); })();
-      const exec = makeToolExecutor({ shell: s.shell, face: s.face, mode: 'code' });
+      ctx.fs = s.fs; ctx.shell = s.shell; ctx.hooks = EMPTY_HOOKS;
+      // Seed the workspace before the agent sees it; a seeded .anvil/hooks.json is honoured.
+      ctx.ready = (async () => { for (const [p, c] of Object.entries(spec.seed)) await s.fs.write(p, c); ctx.hooks = await loadHooks(s.fs); })();
+      // The app's executor layers the bed can have: hooks around the base executor (with `task`
+      // subagents on the same model); the store-backed tools answer with an honest bed stub.
+      const exec = withHooks(withBedStubs(makeToolExecutor({ shell: s.shell, face: s.face, mode: 'code', infer: ctx.infer })), { hooks: () => ctx.hooks, shellFor: () => s.shell });
       return async (...a) => { await ctx.ready; return exec(...a); };
     },
     gate: (_caps, ctx) => async () => { await ctx.ready; return spec.gate(ctx); },
-    loopOptions: () => ({ maxSteps: MAX_STEPS, maxVerifyRounds: 2 }),
+    // The app's driver: first loop on RUN_BUDGET, then act-or-nudge and the supervisor, every loop
+    // recorded on this arm's chain.
+    driver: (caps) => ({ messages, tools, infer, executeTool, verify, rec, onEvent }) => driveRun({
+      mode: 'code', convo: messages, sysMsg: (extra) => systemMessage({ mode: 'code', proceduralPrior: priorFor(caps), extra }),
+      tools, infer, executeTool, rec, verify, onEvent, gateNote: gate, model: MODEL_STAMP,
+    }),
   };
 }
 
@@ -169,12 +182,13 @@ if (!chosen.length) { console.error(`no such task. known: ${Object.keys(TASKS).j
 let records = null;
 if (replayDir) records = JSON.parse(await readFile(join(replayDir, 'procedural.json'), 'utf8'));
 
-console.error(`bench-procedural: ${chosen.length} task(s) x ${EDGES.length + 1} arms = ${chosen.length * (EDGES.length + 1)} runs`);
+const ARMS = FULL_ONLY ? [] : EDGES;
+console.error(`bench-procedural: ${chosen.length} task(s) x ${ARMS.length + 1} arms = ${chosen.length * (ARMS.length + 1)} runs${FULL_ONLY ? ' (--full-only)' : ''}`);
 console.error(`  model ${MODEL} @ ${BASE}${replayDir ? '  (REPLAY)' : ''}`);
 const t0 = Date.now();
 const result = await runAblation({
   tasks: chosen.map(([id, spec]) => buildTask(id, spec)),
-  capabilities: EDGES,
+  capabilities: ARMS,
   records,
   principal: 'bench-procedural',
 });
@@ -193,7 +207,9 @@ for (const r of result.rows) {
   if (isVoid(r.without)) voids.push(`${r.task}/-${r.capability}`);
 }
 const uniqueVoids = [...new Set(voids)];
-console.log(renderTable(result));
+// --full-only has no deltas to tabulate; say how the one arm ended, from the record.
+if (FULL_ONLY) for (const [task, arms] of Object.entries(result.byArm)) { const m = arms.full; console.log(`${task}/full: ${m.label} (score ${m.score}) — ${m.steps} step(s), ${m.toolCalls} tool call(s), ${m.failedRounds} failed gate round(s), ${m.liveCalls} live call(s)`); }
+else console.log(renderTable(result));
 if (uniqueVoids.length) {
   console.log(`\nVOID (provider returned nothing — not a task failure, and no delta involving one is real): ${uniqueVoids.length} arm(s)`);
   console.log(`  ${uniqueVoids.join(', ')}`);

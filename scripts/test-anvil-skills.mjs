@@ -5,6 +5,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { buildSkillsIndex, parseSkill, explainSkillsRefusal } from '../sys/ai/skills.mjs';
+import { runToolset } from '../sys/ai/run-assembly.mjs';
 
 const anvil = await readFile(new URL('../apps/anvil/index.html', import.meta.url), 'utf8');
 
@@ -14,7 +15,9 @@ assert.match(anvil, /const skillSession=createSkillSession\(\);/, 'one read-sess
 assert.match(anvil, /skillSession\.noteRead\(name\)/, 'the skill tool records a read');
 assert.match(anvil, /planSkillWrite\(ar\|\|\{\}, \{ existing, existingFiles, session: skillSession, now: new Date\(\)\.toISOString\(\) \}\)/, 'skill_manage plans with the session (read-before-write), the folder\'s support files, and a stamp');
 assert.match(anvil, /makeEnvelope\(\{ app:'anvil', tool:'skill_manage', diff: plan\.diff/, 'every skill write is a P0 envelope');
-assert.match(anvil, /if\(mode==='code'\) tools\.push\(skillManageTool\(\)\);/, 'skill_manage is offered in code mode');
+// N1: the toolset is the assembly's (sys/ai/run-assembly.mjs); the app sends it (test-run-assembly.mjs).
+assert.ok(runToolset('code').some((x) => x.function.name === 'skill_manage'), 'skill_manage is offered in code mode');
+assert.ok(!runToolset('plan').some((x) => x.function.name === 'skill_manage'), 'and not in plan mode');
 assert.match(anvil, /nm==='skill_manage'\)\)\{/, 'skill_manage is refused outside code mode');
 // shape, not signature: the push also carries the pinned/created/updated stamps the lifecycle reads
 assert.match(anvil, /metas\.push\(\{ name, description: sk\.description, status, pinned:/, 'the index push carries status (a staged skill must not bind)');

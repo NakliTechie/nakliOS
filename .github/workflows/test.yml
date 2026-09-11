@@ -105,6 +105,12 @@ jobs:
       - name: Verify the procedural prior renders byte-identically and every edge is removable
         run: node scripts/test-anvil-procedural.mjs
 
+      - name: Verify the run assembly — prompt bytes, tool list, budgets and re-loops equal the app (N1)
+        run: node scripts/test-run-assembly.mjs
+
+      - name: Verify the procedural bed runs the app's assembly end to end (stub model, zero spend)
+        run: node scripts/test-bench-procedural.mjs
+
       - name: Verify ordering metrics — anchored, never zero-for-null, refusing unlike comparisons
         run: node sys/history/test/ordering.test.mjs
 

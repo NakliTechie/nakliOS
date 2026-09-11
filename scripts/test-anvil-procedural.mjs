@@ -11,6 +11,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { DEFAULT_GRAPH, renderProcedural, proceduralEdges, mergeProceduralGraph, loadProceduralGraph, PROCEDURAL_PATH } from '../sys/ai/procedural.mjs';
+import { SYSTEM_HEAD, SYSTEM_TAIL, systemPrompt } from '../sys/ai/run-assembly.mjs';
 
 const anvil = await readFile(new URL('../apps/anvil/index.html', import.meta.url), 'utf8');
 
@@ -24,14 +25,14 @@ assert.ok(!anvil.includes(BEFORE), 'and the prose is no longer duplicated in the
 // The app assembles head + prior + tail, so check the SEAMS: a lost or doubled space between the
 // tool list and the prior would be invisible to the equality above and visible to every model.
 {
-  const head = anvil.match(/const SYSTEM_HEAD = '(.*?)';\n/s);
-  const tail = anvil.match(/const SYSTEM_TAIL = '(.*?)';\n/s);
-  assert.ok(head && tail, 'SYSTEM_HEAD and SYSTEM_TAIL are still the two halves');
-  const assembled = head[1] + BEFORE + tail[1];
+  // N1: the two halves live in the assembly (sys/ai/run-assembly.mjs), which the app imports.
+  const assembled = SYSTEM_HEAD + BEFORE + SYSTEM_TAIL;
+  assert.equal(systemPrompt(), assembled, 'the assembly renders head + default prior + tail');
   assert.match(assembled, /scripting\)\. Read a file before editing it\./, 'the head seam joins with exactly one space');
   assert.match(assembled, /one solver\. Work in small, verifiable steps/, 'the tail seam joins with exactly one space');
   assert.ok(!/ {2}/.test(assembled), 'no doubled space anywhere in the assembled prompt');
-  assert.match(anvil, /content:systemPrompt\(\)\+\(MODE_NOTE\[mode\]\|\|''\)/, 'the run actually sends the assembled prompt');
+  assert.match(anvil, /function systemPrompt\(\)\{ return assembledSystemPrompt\(proceduralPrior\); \}/, 'the app hands the assembly its per-run prior');
+  assert.match(anvil, /const sysMsg=\(extra\)=>systemMessage\(\{ mode, proceduralPrior, extra \}\);/, 'the run actually sends the assembled prompt');
 }
 
 // ── 2. one edge removable WITHOUT touching code — the point of the exercise ──
