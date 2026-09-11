@@ -198,6 +198,25 @@ export function boundedText(text, { maxLines = 200, maxBytes = 4000, tailLines =
 // replacement is never bigger than the limit it enforces.
 export const DEFAULT_TOOL_OUTPUT_CAP = 20_000;
 
+// F9 (N4, 2026-09-12): which tools may run concurrently within one step. A model that asks for
+// four reads in one turn used to get them one after another; the read-only tools now run as a
+// rolling pool (at most MAX_PARALLEL in flight) while anything that can change state — a write,
+// the shell (which also carries a cwd), a skill load (it revives a stale skill on disk), the
+// budget tools (they read the transcript as it stands, so a pending read changes their answer),
+// read_lines (an oversized one spills to a numbered artifact) — stays exclusive and waits for the
+// pool before it. The declaration lives here, not on the wire: a tool schema is what the provider
+// receives, and an extra key there is a provider's to reject. A caller's `concurrency` map
+// REPLACES this one (no merge); unknown and inherited names are exclusive; clarify and task_done
+// are the loop's own and never executed by a pool whatever the map says. Known and accepted:
+// a project post-hook configured on `read` runs beside sibling reads, and a read that needs a
+// permission prompt can raise it while another is pending — both are the hook/rule author's
+// declared choice on a read-only tool; the pool does not know about either. And an executor that
+// emits its OWN events (Anvil's action gate records a tool-error on a denied read) does so for a
+// member started ahead before that member's tool-call is on the chain — the loop's own events keep
+// the serial order and pairing; a denied pool member's gate event lands one call early.
+export const DEFAULT_TOOL_CONCURRENCY = Object.freeze({ read: 'parallel', history: 'parallel' });
+export const MAX_PARALLEL = 4;
+
 export function spillToolOutput(result, { name = '', cap = DEFAULT_TOOL_OUTPUT_CAP } = {}) {
   const text = String(result == null ? '' : result);
   const limit = Number.isFinite(cap) && cap > 0 ? Math.floor(cap) : 0;
@@ -350,6 +369,8 @@ export async function runAgentLoop({
   budget = null,           // optional { turns, tokens, wallClockMs } — the completion budget ladder
   gateOutputCap = { maxLines: 200, maxBytes: 4000 }, // how much gate output is fed back
   toolOutputCap = DEFAULT_TOOL_OUTPUT_CAP, // F5: chars of a single tool result that reach the surface
+  concurrency = DEFAULT_TOOL_CONCURRENCY, // F9: { toolName: 'parallel' | 'exclusive' }; unknown = exclusive
+  maxParallel = MAX_PARALLEL,             // F9: the pool's width
   now = () => Date.now(),  // injectable clock (wall-clock budget is testable headlessly)
   signal = null,           // optional AbortSignal — cooperative stop between turns/tools
 }) {
@@ -528,8 +549,37 @@ export async function runAgentLoop({
     // owns completion, so it runs the gate and either accepts or rejects.
     let gateGreen = false;
     const stepResults = [];
+    // F9: one execution, its outcome captured rather than thrown, so a batch member's failure
+    // is reported at its own place in the order and cannot take the batch down with it.
+    const runOne = async (n, args, c) => {
+      try { return { text: await executeTool(n, args, c), error: null }; }
+      catch (e) { const m = String(e?.message || e); return { text: `Error: ${m}`, error: m }; }
+    };
+    const parallelOk = (n) => !!concurrency && Object.hasOwn(concurrency, n) && concurrency[n] === 'parallel' && n !== 'clarify' && n !== 'task_done';
+    const inFlight = new Map(); // call index -> pending runOne, for the pool members started ahead
+    const started = new Set();  // call indexes ever started (ahead or inline)
+    let active = 0;             // members RUNNING right now — a settled member no one has consumed yet holds no slot
+    let poolStart = 0, poolEnd = 0; // the pool's eligible span [poolStart, poolEnd); members start in request order
+    const cap = Math.max(1, maxParallel | 0);
+    // Start pool members ahead, in request order, while a slot is free. The signal is checked before
+    // EACH launch, so a stop during one executor never starts the next. A settled member refills the
+    // pool itself (below), so a slow member at the front does not hold the members behind it.
+    const startNext = () => {
+      for (let k = poolStart; k < poolEnd && active < cap; k++) {
+        if (started.has(k)) continue;
+        if (aborted()) return;
+        const c = toolCalls[k];
+        started.add(k); active++;
+        const p = runOne(c.function?.name || '', parseToolArguments(c).value, c);
+        inFlight.set(k, p);
+        p.then(() => { active--; startNext(); });
+      }
+    };
     for (let i = 0; i < toolCalls.length; i++) {
-      if (aborted()) return abortReturn(step + 1);
+      // A stop is honoured at a BOUNDARY: a pool member already running is drained and its result
+      // recorded (it happened), and nothing new is started — the serial loop's own rule, "an
+      // in-flight call is not force-killed", extended to the members in flight.
+      if (aborted() && !inFlight.has(i)) return abortReturn(step + 1);
       const call = toolCalls[i];
       const id = callId(call, step, i);
       const name = call.function?.name || '';
@@ -594,11 +644,47 @@ export async function runAgentLoop({
         onEvent({ type: 'tool-result', name, id, result: resultText, kind: 'invalid_args', step });
       } else {
         onEvent({ type: 'tool-call', name, id, args: parsed.value, step });
-        try {
-          resultText = await executeTool(name, parsed.value, call);
-        } catch (e) {
-          resultText = `Error: ${String(e?.message || e)}`;
-          onEvent({ type: 'tool-error', name, id, error: String(e?.message || e), kind: 'execution_error', step });
+        if (parallelOk(name)) {
+          // F9: the run of consecutive parallel-class, parseable calls from here is the pool's
+          // eligible span; members start in request order, at most maxParallel in flight, and
+          // results are taken in request order — every event (tool-call, then tool-result) is
+          // emitted in the same order and pairing the serial loop produced, so the record, its
+          // folds and a replay against a serially recorded run are unchanged. The FIRST member
+          // starts after its own tool-call event, exactly as a serial call does; only later members
+          // are already running when their tool-call is emitted. An exclusive call is never started
+          // while the pool is in flight: the pool drains before the loop reaches it.
+          if (!started.has(i)) {
+            // Not started ahead (first of its span, or a slot never freed for it): this member runs
+            // INLINE on the serial path — its tool-call was just emitted and it always runs, and a
+            // synchronous throw reports in the same tick, as a serial call does — while the members
+            // behind it start beside it. A lone read is therefore byte-for-byte the serial loop.
+            // Starts are in request order, so an unstarted member means nothing after it has
+            // started either: the span begins here.
+            poolStart = i; poolEnd = i;
+            while (poolEnd < toolCalls.length && parallelOk(toolCalls[poolEnd].function?.name || '') && parseToolArguments(toolCalls[poolEnd]).ok) poolEnd++;
+            started.add(i); active++;
+            let pending, invoked = false;
+            const failed = (e) => { resultText = `Error: ${String(e?.message || e)}`; onEvent({ type: 'tool-error', name, id, error: String(e?.message || e), kind: 'execution_error', step }); };
+            // Invoked BEFORE the members behind it start, so starts stay in request order; a
+            // synchronous throw is reported here, in this tick.
+            try { pending = executeTool(name, parsed.value, call); invoked = true; } catch (e) { failed(e); }
+            startNext();
+            if (invoked) { try { resultText = await pending; } catch (e) { failed(e); } }
+            active--; startNext();
+          } else {
+            const ran = await inFlight.get(i);
+            inFlight.delete(i);
+            resultText = ran.text;
+            if (ran.error != null) onEvent({ type: 'tool-error', name, id, error: ran.error, kind: 'execution_error', step });
+          }
+        } else {
+          // Exclusive: the serial path, untouched — a synchronous throw is reported in the same tick.
+          try {
+            resultText = await executeTool(name, parsed.value, call);
+          } catch (e) {
+            resultText = `Error: ${String(e?.message || e)}`;
+            onEvent({ type: 'tool-error', name, id, error: String(e?.message || e), kind: 'execution_error', step });
+          }
         }
         // B1: the kind rides the event; the text the model sees is untouched.
         const kind = classifyToolResult(name, resultText);

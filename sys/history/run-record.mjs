@@ -582,13 +582,24 @@ export function replayExecuteTool(record, { strict = true, live = null } = {}) {
     results.get(k).push(e.output?.result ?? '');
   }
   const cursor = new Map();
-  const exec = async (name, args, call) => {
-    const k = `${name}:${await contentHash(args ?? {})}`;
-    const list = results.get(k) || [];
-    const i = cursor.get(k) || 0;
-    if (i < list.length) { cursor.set(k, i + 1); return list[i]; }
-    if (strict || typeof live !== 'function') throw new ReplayMiss('tool call not in record', { name, args });
-    return live(name, args, call);
+  // Reservations happen in CALL order: the loop may run reads concurrently (F9), and
+  // `contentHash` is async, so two identical calls could otherwise reserve their recorded
+  // results in whichever order the digests resolved (a cross-family review reproduced the swap).
+  let chain = Promise.resolve();
+  const exec = (name, args, call) => {
+    const turn = chain.then(async () => {
+      const k = `${name}:${await contentHash(args ?? {})}`;
+      const list = results.get(k) || [];
+      const i = cursor.get(k) || 0;
+      if (i < list.length) { cursor.set(k, i + 1); return { hit: true, value: list[i] }; }
+      return { hit: false, k };
+    });
+    chain = turn.then(() => {}, () => {});
+    return turn.then(({ hit, value }) => {
+      if (hit) return value;
+      if (strict || typeof live !== 'function') throw new ReplayMiss('tool call not in record', { name, args });
+      return live(name, args, call);
+    });
   };
   exec.remaining = () => {
     const left = [];

@@ -1239,6 +1239,29 @@ await test('F1: prose emitted beside a tool call survives the fold, and the chec
   eq(asst[1].content, null, 'a call with no prose still folds to null — the loop sends `content || null`, never ""');
 });
 
+await test('F9: replayExecuteTool serves two identical calls in CALL order even when called concurrently', async () => {
+  const rec = createRunRecorder({ app: 'anvil', principal: 'p' });
+  await rec.start({ messages: [{ role: 'user', content: 'x' }], tools: [] });
+  // two identical reads, recorded with DIFFERENT results (the file changed in between)
+  rec.onEvent({ type: 'tool-call', id: 'c1', name: 'read', args: { path: 'a' }, step: 0 });
+  rec.onEvent({ type: 'tool-result', id: 'c1', name: 'read', args: { path: 'a' }, result: 'first', step: 0 });
+  rec.onEvent({ type: 'tool-call', id: 'c2', name: 'read', args: { path: 'a' }, step: 1 });
+  rec.onEvent({ type: 'tool-result', id: 'c2', name: 'read', args: { path: 'a' }, result: 'second', step: 1 });
+  await rec.finish({ stop: 'done', steps: 2 }); await rec.settled();
+  const exec = replayExecuteTool(rec, { strict: true });
+  // fired together, not awaited in between — the pool does exactly this. The FIRST call's digest
+  // is made to resolve LAST: an implementation that reserved on digest completion would swap.
+  const subtle = globalThis.crypto.subtle, realDigest = subtle.digest.bind(subtle);
+  let n = 0;
+  subtle.digest = async (alg, data) => { const k = ++n; const h = await realDigest(alg, data); if (k === 1) await new Promise((res) => setTimeout(res, 20)); return h; };
+  try {
+    const [x, y] = await Promise.all([exec('read', { path: 'a' }), exec('read', { path: 'a' })]);
+    eq(x, 'first', 'the first call gets the first recorded result');
+    eq(y, 'second', 'the second gets the second');
+  } finally { delete subtle.digest; }
+  exec.assertConsumed();
+});
+
 if (failures.length) { console.error(`history/run-record: ${passed} passed, ${failures.length} FAILED`); for (const f of failures) console.error(`  FAIL ${f.n}: ${f.message}`); process.exit(1); }
 console.log(`history/run-record conformance: ${passed}/${passed} passed`);
 
