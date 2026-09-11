@@ -214,3 +214,36 @@ export function formatDispatchDigest({ results, status, conflicts, dropped }) {
   }
   return lines.join('\n');
 }
+
+// ── ESS-2: the live feed — what a parent sees WHILE a child runs ─────────────────────────
+// A child's loop events are tapped (agent-tools `onSubagentEvent`) and folded into ONE row per
+// child that the transcript renders in place. Pure: (row, event) → row, so the shape is
+// testable without a DOM and the app only ever calls this and re-renders. The dispatch digest
+// is still the tool result; this is the part that used to be silence until the digest arrived.
+export function subagentFeedRow(row, ev) {
+  const r = row ? { ...row } : { k: 'subagent', status: 'running', steps: 0, tools: 0, lastTool: '', lastDetail: '' };
+  const e = ev || {};
+  switch (e.type) {
+    case 'turn-start': r.steps = Math.max(r.steps, (Number(e.step) || 0) + 1); break;
+    case 'tool-call': {
+      const a = e.args || {};
+      r.tools += 1;
+      r.lastTool = String(e.name || '');
+      r.lastDetail = String(a.command || a.path || a.file || a.old_string || (a.patch ? 'patch' : '') || '').slice(0, 80);
+      break;
+    }
+    case 'tool-error': r.lastError = String(e.error || '').slice(0, 120); break;
+    case 'aborted': r.status = 'aborted'; break;
+    default: break;
+  }
+  return r;
+}
+
+// The row's one-line summary. `stop` is the child's final stop once it reported back; until
+// then the row says running and how far it got.
+export function subagentFeedLine(row) {
+  const r = row || {};
+  const where = r.lastTool ? ` · last: ${r.lastTool}${r.lastDetail ? '(' + r.lastDetail + ')' : ''}` : '';
+  if (r.status === 'running') return `${r.kind || 'task'} · ${r.label || ''} — running · step ${r.steps || 0} · ${r.tools || 0} tool call${r.tools === 1 ? '' : 's'}${where}`;
+  return `${r.kind || 'task'} · ${r.label || ''} — ${r.status} (${r.steps || 0} step${r.steps === 1 ? '' : 's'}, ${r.tools || 0} tool call${r.tools === 1 ? '' : 's'})`;
+}

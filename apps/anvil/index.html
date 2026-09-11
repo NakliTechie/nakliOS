@@ -419,6 +419,7 @@
   import { renderProcedural, loadProceduralGraph, PROCEDURAL_PATH } from '../../sys/ai/procedural.mjs';
   import { rowKeys, planLogUpdate, isPinned } from '../../sys/ai/log-render-plan.mjs';
   import { buildChangeRow, planRevert, prunePreimages, preimageBytes, MAX_PREIMAGE_BUDGET } from '../../sys/ai/change-preimages.mjs';
+  import { subagentFeedRow, subagentFeedLine } from '../../sys/ai/subagents.mjs'; // ESS-2: the live child feed
   import { migrateQueue, reconcileQueue, enqueue as qEnqueue, removeEntry as qRemove, moveEntry as qMove, editEntry as qEdit, nextDispatch, completeDispatch, releaseDispatch, admitRun } from '../../sys/ai/followup-queue.mjs';
   import { skillManageTool, planSkillWrite, createSkillSession, SKILL_FILE } from '../../sys/ai/skill-manage.mjs';
   import { createProposalLedger } from '../../sys/ai/proposal-fingerprint.mjs';
@@ -1241,6 +1242,11 @@
           sum.appendChild(cp);
         }
         w.appendChild(dt);
+      } else if(e.k==='subagent'){
+        // ESS-2: the child's live row — running with its last tool call, then its final stop.
+        const c=document.createElement('div'); c.className='change subagent'+(e.status==='running'?' live':'');
+        c.innerHTML=`<span class="ci">${e.status==='running'?'⇄':'⇆'}</span><span class="cf">${esc(subagentFeedLine(e))}</span>`;
+        w.appendChild(c);
       } else if(e.k==='change'){
         // "We made changes — view" (Claude Code / Codex style). The write/edit is
         // already applied (YOLO); clicking reads the current file and shows it in
@@ -2126,12 +2132,25 @@
     // substrate's own guarantees stopped at the fan-out. `runCtx.rec` is this run's recorder; a
     // tool call made outside a run (there are none today) simply records nothing.
     const baseExec = makeToolExecutor({ shell, face, mode, infer: inferViaHost, spawnIsolated,
-      recordSubagent: async (sub)=>{ try{ if(runCtx && runCtx.rec) await runCtx.rec.subagent(sub); }catch(_){} },
+      recordSubagent: async (sub)=>{
+        try{ const id=String(sub.tool_call_id||'')+'\u0000'+String(sub.label||''); const row=(t.log||[]).find(r=>r && r.k==='subagent' && r.id===id); if(row){ row.status=String(sub.stop||'done'); row.steps=Math.max(row.steps||0, Number(sub.steps)||0); renderLog(); } }catch(_){}
+        try{ if(runCtx && runCtx.rec) await runCtx.rec.subagent(sub); }catch(_){} },
       // ESS-1: children stop with the run (Stop button), carry their own wall clock, and write
       // their claim to the chain before they start — a child that never reports back is an orphan
       // the recovery note names, not a silent hole in the record.
       signal: abortController ? abortController.signal : null,
-      recordSubagentStart: async (sub)=>{ try{ if(runCtx && runCtx.rec) await runCtx.rec.subagentStarted(sub); }catch(_){} } });
+      recordSubagentStart: async (sub)=>{ try{ if(runCtx && runCtx.rec) await runCtx.rec.subagentStarted(sub); }catch(_){} },
+      // ESS-2: one live row per child, updated in place while it runs. Keyed on the parent's
+      // tool call id + label, since a dispatch launches several children under one call.
+      onSubagentEvent: ({ kind, label, tool_call_id, event })=>{
+        try{
+          const id = String(tool_call_id||'')+'\u0000'+String(label||'');
+          let row = (t.log||[]).find(r=>r && r.k==='subagent' && r.id===id);
+          if(!row){ row = { ...subagentFeedRow(null, {}), id, kind, label }; (t.log=t.log||[]).push(row); }
+          Object.assign(row, subagentFeedRow(row, event));
+          renderLog();
+        }catch(_){}
+      } });
     const skillMap = {};
     const skillStatus={}; // name -> lifecycle status: a staged/quarantined skill is never served or listed // skill name -> SKILL.md path, populated below
     const factMap = {};  // memory-fact name -> .md path, populated below

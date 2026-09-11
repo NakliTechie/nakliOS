@@ -432,7 +432,7 @@ export function parseApplyPatch(patch) {
 // shape as the queue's `dispatching` claim and the task's `running` status.
 export const SUBAGENT_WALL_CLOCK_MS = 240_000;
 export function makeToolExecutor({ shell, face, mode = 'code', infer = null, subagentDepth = 0, spawnIsolated = null, recordSubagent = null,
-                                   signal = null, subagentBudget = null, recordSubagentStart = null }) {
+                                   signal = null, subagentBudget = null, recordSubagentStart = null, onSubagentEvent = null }) {
   if (!face) throw new Error('makeToolExecutor requires a Rig agent face');
   const modeAllow = MODE_TOOLS[mode] || null; // null = all tools
   const subagentsOn = typeof infer === 'function' && subagentDepth < 1; // depth cap 1 (no recursion)
@@ -460,10 +460,19 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
     // ONE loop call for both the recorded and the unrecorded path. They used to be two calls with
     // the same argument list, which is how a signal or budget could be dropped from one of them
     // and no test notice — the mutation that removed them from the recorded path survived.
+    // ESS-2: the parent watches. Every child loop event is forwarded live, tagged with which
+    // child it belongs to, BEFORE it reaches the child's recorder — a tap, not a second store.
+    // It must never be what breaks a child: a throwing observer is swallowed. (Observer-before-
+    // recorder is a preference, not a guarantee: the recorder enqueues asynchronously, so the
+    // order is unobservable — a mutation that swapped them survived, and rightly.)
+    const tap = (ev) => {
+      if (onSubagentEvent) { try { onSubagentEvent({ kind, label, tool_call_id, event: ev }); } catch (_) {} }
+      if (rec) rec.onEvent(ev);
+    };
     const res = await runAgentLoop({
       messages, tools, maxSteps, executeTool, signal, budget,
       infer: rec ? rec.wrapInfer(infer) : infer,
-      onEvent: rec ? rec.onEvent : undefined,
+      onEvent: (rec || onSubagentEvent) ? tap : undefined,
     });
     if (rec) {
       try {

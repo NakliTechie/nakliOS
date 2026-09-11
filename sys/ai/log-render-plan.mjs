@@ -43,6 +43,10 @@ export function rowKey(e, i) {
       return `${i}:tool:${part(e.name)}:${part(e.detail)}:${e.open ? 1 : 0}:${part(e.error)}:${part(e.result)}`;
     case 'diff':
       return `${i}:diff:${part(e.path)}:${part(e.status)}:${part(e.text)}`;
+    // ESS-2: a child's live row changes in place as it runs — every field the line shows is in
+    // the key, so a step or a new tool call is a visible change and never a stale row.
+    case 'subagent':
+      return `${i}:subagent:${part(e.kind)}:${part(e.label)}:${part(e.status)}:${part(e.steps)}:${part(e.tools)}:${part(e.lastTool)}:${part(e.lastDetail)}:${part(e.lastError)}`;
     default:
       return `${i}:${k}:${part(e.text)}`;
   }

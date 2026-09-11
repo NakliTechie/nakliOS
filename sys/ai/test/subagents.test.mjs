@@ -3,6 +3,7 @@
 import {
   dispatchTool, reviewTool, normalizeTasks, detectConflicts, mergeDecision,
   planMerge, formatDispatchDigest, DISPATCH_MAX,
+  subagentFeedRow, subagentFeedLine,
 } from '../subagents.mjs';
 
 let passed = 0; const failures = [];
@@ -136,6 +137,30 @@ await test('formatDispatchDigest: a clean applied run reads "merged"', () => {
   const digest = formatDispatchDigest({ results, status: plan.status, conflicts: plan.conflicts, dropped: 0 });
   assert(/— merged/.test(digest), 'merged tag');
   assert(/applied: wrote q.js/.test(digest), 'applied changes listed');
+});
+
+// ESS-2: the live feed row is a pure fold over a child's loop events.
+await test('subagentFeedRow: a fresh row, steps from turn-start, tool calls with their detail, aborted', () => {
+  let r = subagentFeedRow(null, {});
+  eq(r.k, 'subagent'); eq(r.status, 'running'); eq(r.steps, 0); eq(r.tools, 0);
+  r = subagentFeedRow(r, { type: 'turn-start', step: 0 }); eq(r.steps, 1, 'step is 1-based');
+  r = subagentFeedRow(r, { type: 'tool-call', name: 'shell', args: { command: 'ls -la' } });
+  eq(r.tools, 1); eq(r.lastTool, 'shell'); eq(r.lastDetail, 'ls -la');
+  r = subagentFeedRow(r, { type: 'tool-call', name: 'write', args: { path: 'a.py', content: 'x' } });
+  eq(r.tools, 2); eq(r.lastTool, 'write'); eq(r.lastDetail, 'a.py', 'a path shows as the detail, never the content');
+  r = subagentFeedRow(r, { type: 'turn-start', step: 3 }); eq(r.steps, 4, 'steps only grow');
+  r = subagentFeedRow(r, { type: 'turn-start', step: 1 }); eq(r.steps, 4, 'never backwards');
+  r = subagentFeedRow(r, { type: 'tool-error', error: 'boom' }); eq(r.lastError, 'boom');
+  const before = { ...r }; r = subagentFeedRow(r, { type: 'assistant', content: 'hi' }); eq(JSON.stringify(r), JSON.stringify(before), 'an unrelated event changes nothing');
+  r = subagentFeedRow(r, { type: 'aborted' }); eq(r.status, 'aborted');
+  assert(subagentFeedRow(before, {}) !== before, 'pure — returns a new object');
+});
+await test('subagentFeedLine: running says where it is; a finished row says how it ended', () => {
+  const running = { kind: 'dispatch', label: 'split lexer', status: 'running', steps: 3, tools: 2, lastTool: 'read', lastDetail: 'lexer.py' };
+  const line = subagentFeedLine(running);
+  assert(/dispatch · split lexer — running · step 3 · 2 tool calls · last: read\(lexer\.py\)/.test(line), line);
+  const done = subagentFeedLine({ ...running, status: 'done', tools: 1 });
+  assert(/split lexer — done \(3 steps, 1 tool call\)/.test(done), done);
 });
 
 if (failures.length){

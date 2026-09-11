@@ -121,3 +121,19 @@ assert.equal((anvil.match(/logCache=\{taskId:null,keys:null\}/g) || []).length, 
   'both early returns in renderLog invalidate the cache');
 
 console.log('log-render-plan: noop/append/rebuild, keys cover what is drawn, verified≠claimed, scroll belongs to the reader');
+
+// ESS-2: a child's live row updates IN PLACE. Every field the line draws is in its key, so an
+// update is a visible change (a rebuild), never a stale row left on screen.
+{
+  const row = { k: 'subagent', kind: 'dispatch', label: 'A', status: 'running', steps: 1, tools: 0, lastTool: '', lastDetail: '' };
+  const k1 = rowKey(row, 3);
+  assert.equal(rowKey({ ...row }, 3), k1, 'same row, same key');
+  assert.notEqual(rowKey({ ...row, steps: 2 }, 3), k1, 'a step changes the key');
+  assert.notEqual(rowKey({ ...row, tools: 1, lastTool: 'shell', lastDetail: 'ls' }, 3), k1, 'a tool call changes the key');
+  assert.notEqual(rowKey({ ...row, status: 'done' }, 3), k1, 'the final stop changes the key');
+  const prev = [{ k: 'user', text: 'go' }, row, { k: 'system', text: 'thinking…' }];
+  const next = [prev[0], { ...row, steps: 2, tools: 1, lastTool: 'read', lastDetail: 'a.py' }, prev[2]];
+  const plan = planLogUpdate(rowKeys(prev), rowKeys(next));
+  assert.equal(plan.mode, 'rebuild', 'an in-place child update is never a noop or a plain append');
+  console.log('  ok    ESS-2: a subagent row that changes in place is re-drawn');
+}

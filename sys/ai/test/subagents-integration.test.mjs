@@ -225,6 +225,47 @@ await test('ESS-1: the executor writes the start claim BEFORE the child makes it
   eq(order[order.length - 1], 'ran:dispatch', 'and reports back last');
 });
 
+await test('ESS-2: the parent sees each child\'s tool calls live, tagged and BEFORE the child reports back', async () => {
+  const base = new MemoryBackend();
+  const order = [];
+  const fs = createFileops({ backend: base });
+  const registry = buildRigRegistry({ fs });
+  const grant = createGrant({ prefixes: [''], scopes: ['fs:read', 'fs:write', 'fs:remove'] });
+  const opLog = createOpLog({ fs: createFileops({ backend: new MemoryBackend() }) });
+  const face = createAgentFace({ registry, grant, opLog, actor: 'agent' });
+  const shell = createShell({ registry, face });
+  const infer = scriptedInfer((prompt) => (/^A:/.test(prompt) ? { write: { file: 'a.txt', content: 'A' } } : { write: { file: 'b.txt', content: 'B' } }));
+  const exec = makeToolExecutor({ shell, face, mode: 'code', infer, subagentDepth: 0, spawnIsolated: makeSpawnIsolated(base, infer),
+    onSubagentEvent: (m) => { order.push(`${m.kind}:${m.label}:${m.event.type}${m.event.type === 'tool-call' ? ':' + m.event.name + ':' + (m.event.args && m.event.args.path) : ''}`); },
+    recordSubagent: async (m) => { order.push('ran:' + m.label); } });
+  await exec('dispatch', { tasks: [{ label: 'A', prompt: 'A: write a.txt' }, { label: 'B', prompt: 'B: write b.txt' }] }, { id: 'd2' });
+  // the label a dispatch reports is the task's label or its prompt — match on the prefix
+  const aCall = order.findIndex((x) => /^dispatch:A[^>]*:tool-call:write:a\.txt$/.test(x));
+  const bCall = order.findIndex((x) => /^dispatch:B[^>]*:tool-call:write:b\.txt$/.test(x));
+  const aRan = order.findIndex((x) => /^ran:A/.test(x)), bRan = order.findIndex((x) => /^ran:B/.test(x));
+  assert(aCall >= 0 && bCall >= 0, `both children's writes were seen live, tagged by label: ${order.join(' > ')}`);
+  assert(aRan >= 0 && aCall < aRan, 'A\'s call was seen before A reported back');
+  assert(bRan >= 0 && bCall < bRan, 'B\'s call was seen before B reported back');
+  assert(order.some((x) => /^dispatch:A[^>]*:turn-start$/.test(x)), 'turn starts are forwarded too');
+});
+await test('ESS-2: a throwing observer never breaks the child, and the feed works with no recorder at all', async () => {
+  const base = new MemoryBackend();
+  let seen = 0;
+  const infer = scriptedInfer(() => ({ write: { file: 'c.txt', content: 'C' } }));
+  const fs = createFileops({ backend: base });
+  const registry = buildRigRegistry({ fs });
+  const grant = createGrant({ prefixes: [''], scopes: ['fs:read', 'fs:write', 'fs:remove'] });
+  const opLog = createOpLog({ fs: createFileops({ backend: new MemoryBackend() }) });
+  const face = createAgentFace({ registry, grant, opLog, actor: 'agent' });
+  const shell = createShell({ registry, face });
+  const exec = makeToolExecutor({ shell, face, mode: 'code', infer, subagentDepth: 0, spawnIsolated: makeSpawnIsolated(base, infer),
+    onSubagentEvent: () => { seen++; throw new Error('observer exploded'); } });
+  const out = await exec('dispatch', { tasks: [{ label: 'C', prompt: 'write c.txt' }] }, { id: 'd3' });
+  assert(/— merged$/m.test(out), `the child finished and merged despite the observer: ${out.slice(0, 160)}`);
+  eq(dec((await createFileops({ backend: base }).read('c.txt')).data), 'C', 'its write landed');
+  assert(seen > 0, 'the observer was called (no recorder wired, so the tap alone carried it)');
+});
+
 await test('ESS-1: a run already stopped does not start a child at all', async () => {
   const base = new MemoryBackend();
   const ac = new AbortController(); ac.abort();
