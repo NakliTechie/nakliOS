@@ -3,8 +3,9 @@
 //
 //   node sys/ai/test/agent-tools.test.mjs
 
-import { applyEdit, parseApplyPatch, makeToolExecutor, codingToolset, makeShellVerifier } from '../agent-tools.mjs';
+import { applyEdit, parseApplyPatch, makeToolExecutor, codingToolset, makeShellVerifier, contentToken } from '../agent-tools.mjs';
 import { createFileops, MemoryBackend } from '../../rig/fileops/index.mjs';
+import { OverlayBackend } from '../../rig/fileops/overlay-backend.mjs';
 import { buildRigRegistry } from '../../rig/registry/index.mjs';
 import { createGrant, createOpLog, createAgentFace } from '../../rig/agent/index.mjs';
 import { createShell } from '../../rig/cli/shell.mjs';
@@ -225,6 +226,123 @@ await test('read-before-edit ledger: edit refuses an unread file; read or cat un
   await shell.feed('printf "x = 1\\n" > other.txt');
   await exec('shell', { command: 'cat other.txt' });
   assert(/Edited/.test(await exec('edit', { path: 'other.txt', old_string: 'x = 1', new_string: 'x = 2' })), 'cat unlocks edit');
+});
+
+// F8 (N3): the ledger holds the VERSION last seen; an edit over a file that changed under it is
+// refused as stale, never applied — even when old_string still matches.
+await test('F8 version tokens: read, mutate via the shell, edit ⇒ refused as stale; re-read then edit ⇒ applied', async () => {
+  const { exec, shell, face } = fresh();
+  await exec('write', { path: 'cfg.js', content: 'const v = 1;\nconst w = 1;\n' });
+  await exec('read', { path: 'cfg.js' });
+  // the shell writes behind the tools: the model's picture of cfg.js is now wrong
+  await shell.feed('printf "const v = 1;\\nconst w = 2;\\n" > cfg.js');
+  const stale = await exec('edit', { path: 'cfg.js', old_string: 'const v = 1;', new_string: 'const v = 9;' });
+  assert(/is stale/.test(stale) && /Read it again/.test(stale), `refused as stale: ${stale}`);
+  assert(/version \S+ → \S+/.test(stale), `names both versions: ${stale}`);
+  const after = await face.invoke('fs.read', { path: 'cfg.js', encoding: 'utf-8' });
+  eq(after.data, 'const v = 1;\nconst w = 2;\n', 'the stale edit was NOT applied — the shell\'s write stands');
+  // the same edit twice is still refused: staleness does not wear off
+  assert(/is stale/.test(await exec('edit', { path: 'cfg.js', old_string: 'const v = 1;', new_string: 'const v = 9;' })), 'still stale until re-read');
+  await exec('read', { path: 'cfg.js' });
+  const ok = await exec('edit', { path: 'cfg.js', old_string: 'const v = 1;', new_string: 'const v = 9;' });
+  assert(/Edited/.test(ok), `re-read unlocks: ${ok}`);
+  eq((await face.invoke('fs.read', { path: 'cfg.js', encoding: 'utf-8' })).data, 'const v = 9;\nconst w = 2;\n', 'applied over the current content');
+  // an edit refreshes the version: a second edit right after is not stale
+  assert(/Edited/.test(await exec('edit', { path: 'cfg.js', old_string: 'const w = 2;', new_string: 'const w = 3;' })), 'the tools\' own write is a known version');
+});
+
+await test('F8: every way of seeing a file records its version — write, cat, read_lines, apply_patch', async () => {
+  const { exec, shell, face } = fresh();
+  // write → edit (no read in between): the written content IS the known version
+  await exec('write', { path: 'a.txt', content: 'one\n' });
+  assert(/Edited/.test(await exec('edit', { path: 'a.txt', old_string: 'one', new_string: 'uno' })), 'write establishes the version');
+  // cat → shell mutation → edit: stale (cat recorded the whole file's version)
+  await shell.feed('printf "x = 1\\n" > b.txt');
+  await exec('shell', { command: 'cat b.txt' });
+  await shell.feed('printf "x = 1\\ny = 2\\n" > b.txt');
+  assert(/is stale/.test(await exec('edit', { path: 'b.txt', old_string: 'x = 1', new_string: 'x = 3' })), 'a cat-then-shell-write is stale');
+  await exec('shell', { command: 'cat b.txt' });
+  assert(/Edited/.test(await exec('edit', { path: 'b.txt', old_string: 'x = 1', new_string: 'x = 3' })), 'cat again unlocks');
+  // apply_patch add + update leave the file at a known version
+  await exec('apply_patch', { patch: '*** Begin Patch\n*** Add File: c.txt\n+hello\n*** End Patch\n' });
+  assert(/Edited/.test(await exec('edit', { path: 'c.txt', old_string: 'hello', new_string: 'hullo' })), 'a patched-in file is a known version');
+  eq((await face.invoke('fs.read', { path: 'c.txt', encoding: 'utf-8' })).data, 'hullo', 'edited over the patched content (apply_patch adds without a trailing newline)');
+});
+
+await test('F8: a sibling overlay merging back makes the parent\'s picture stale', async () => {
+  // The case F8 exists for: a dispatch worker edits over a copy-on-write overlay of the live
+  // workspace; when its changes merge back, the parent — which read the file before the merge —
+  // must not edit around a change it never saw.
+  const backend = new MemoryBackend();
+  const fs = createFileops({ backend });
+  const registry = buildRigRegistry({ fs });
+  const grant = createGrant({ prefixes: [''], scopes: ['fs:read', 'fs:write', 'fs:remove'] });
+  const face = createAgentFace({ registry, grant, opLog: createOpLog({ fs: createFileops({ backend: new MemoryBackend() }) }), actor: 'agent' });
+  const shell = createShell({ registry, face });
+  const parent = makeToolExecutor({ shell, face });
+  await parent('write', { path: 'lib.js', content: 'export const a = 1;\nexport const b = 1;\n' });
+  await parent('read', { path: 'lib.js' });
+  // the worker, over an overlay of the same base
+  const ov = new OverlayBackend(backend);
+  const ovFs = createFileops({ backend: ov });
+  await ovFs.write('lib.js', 'export const a = 1;\nexport const b = 2;\n');
+  eq((await fs.read('lib.js', { encoding: 'utf-8' })).data, 'export const a = 1;\nexport const b = 1;\n', 'the overlay write is private until commit');
+  assert(/Edited/.test(await parent('edit', { path: 'lib.js', old_string: 'const a = 1', new_string: 'const a = 10' })), 'before the merge the parent\'s picture is current');
+  await parent('read', { path: 'lib.js' });
+  // the supervisor merges the worker's overlay back through the base
+  await ov.commit({ write: (p, bytes) => backend.write(p, bytes), remove: (p) => backend.delete(p) });
+  const stale = await parent('edit', { path: 'lib.js', old_string: 'const b', new_string: 'const c' });
+  assert(/is stale/.test(stale), `after the merge the parent is refused as stale: ${stale}`);
+  await parent('read', { path: 'lib.js' });
+  assert(/Edited/.test(await parent('edit', { path: 'lib.js', old_string: 'const b = 2', new_string: 'const c = 2' })), 're-read, then the edit sees the merged content');
+});
+
+await test('F8: edit_lines and apply_patch update are gated by the same version check as edit', async () => {
+  const { exec, shell, face } = fresh();
+  // edit_lines: the 16-bit tag is not the freshness guarantee any more — the ledger is
+  await exec('write', { path: 'h.js', content: 'x = 1\ny = 1\n' });
+  const r1 = await exec('read_lines', { path: 'h.js' });
+  const tag = /#([0-9A-F]{4})\]/.exec(r1)[1];
+  await shell.feed('printf "x = 1\\ny = 1488\\n" > h.js'); // a shell write behind the tools
+  const stale = await exec('edit_lines', { edit: `[h.js#${tag}]\nPUT 1.=1:\n+x = 9` });
+  assert(/is stale|stale tag/.test(stale), `refused: ${stale}`);
+  eq((await face.invoke('fs.read', { path: 'h.js', encoding: 'utf-8' })).data, 'x = 1\ny = 1488\n', 'not applied');
+  // never read → refused before any tag is even checked
+  await exec('write', { path: 'g.js', content: 'a = 1\n' });
+  const fresh2 = makeToolExecutor({ shell, face }); // a second executor that never saw g.js
+  assert(/has not been read yet/.test(await fresh2('edit_lines', { edit: '[g.js#0000]\nPUT 1.=1:\n+a = 2' })), 'edit_lines on an unread file is refused');
+  // apply_patch update: read-before-edit + version check
+  await exec('write', { path: 'p.txt', content: 'keep\nold\n' });
+  await shell.feed('printf "keep\\nold\\nnew\\n" > p.txt');
+  const patch = '*** Begin Patch\n*** Update File: p.txt\n@@\n keep\n-old\n+changed\n*** End Patch\n';
+  const ps = await exec('apply_patch', { patch });
+  assert(/is stale/.test(ps), `a patch over a changed file is refused: ${ps}`);
+  eq((await face.invoke('fs.read', { path: 'p.txt', encoding: 'utf-8' })).data, 'keep\nold\nnew\n', 'the hunk did not apply around the unseen change');
+  await exec('read', { path: 'p.txt' });
+  assert(/Applied patch/.test(await exec('apply_patch', { patch })), 're-read, then the patch applies');
+  assert(/has not been read yet/.test(await fresh2('apply_patch', { patch: '*** Begin Patch\n*** Update File: p.txt\n@@\n keep\n-changed\n+again\n*** End Patch\n' })), 'a patch update on an unread file is refused');
+});
+
+await test('F8: a write records what the store hands back — a BOM or a lone surrogate does not make the next edit stale', async () => {
+  const { exec } = fresh();
+  await exec('write', { path: 'bom.txt', content: '\uFEFFx = 1\n' });
+  const r = await exec('edit', { path: 'bom.txt', old_string: 'x = 1', new_string: 'x = 2' });
+  assert(/Edited/.test(r), `a BOM write then edit is not stale: ${r}`);
+  await exec('write', { path: 'sur.txt', content: 'a\uD800b\nc\n' });
+  assert(/Edited/.test(await exec('edit', { path: 'sur.txt', old_string: 'c', new_string: 'd' })), 'a lone surrogate round-trips to U+FFFD and is not stale');
+});
+
+await test('contentToken: same content same token, any change a different one, length-aware', () => {
+  eq(contentToken('abc'), contentToken('abc'));
+  assert(contentToken('abc') !== contentToken('abd'), 'one char');
+  assert(contentToken('abc') !== contentToken('abc\n'), 'a trailing newline');
+  assert(contentToken('') !== contentToken(' '), 'empty vs a space');
+  assert(contentToken('ab') !== contentToken('ba'), 'order');
+  assert(/^[0-9a-z]+:[0-9a-z]+$/.test(contentToken('x')), 'short and printable');
+  // length-aware: a NUL suffix leaves an FNV-1a xor-fold's hash where it was (h ^ 0 is h, then
+  // the multiply) only by accident of the prime; assert the two halves separately instead
+  const [lenA, hashA] = contentToken('ab').split(':'), [lenB] = contentToken('abc').split(':');
+  assert(lenA !== lenB && lenA === (2).toString(36) && hashA.length > 0, 'the length is the first half of the token');
 });
 
 await test('read: line-numbered slice with an offset + "showing lines" footer', async () => {
