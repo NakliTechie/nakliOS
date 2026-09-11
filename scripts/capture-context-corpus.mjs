@@ -31,6 +31,7 @@ import { buildRigRegistry } from '../sys/rig/registry/index.mjs';
 import { createFileops, MemoryBackend } from '../sys/rig/fileops/index.mjs';
 import { createGrant, createOpLog, createAgentFace } from '../sys/rig/agent/index.mjs';
 import { createShell } from '../sys/rig/cli/shell.mjs';
+import { SECURITY_ROWS, judgeSecurityRow } from '../sys/ai/bench-security.mjs';
 
 const args = process.argv.slice(2);
 const opt = (f, d = null) => { const i = args.indexOf(f); return i < 0 ? d : args[i + 1]; };
@@ -75,6 +76,10 @@ const PACE = Number(opt('--pace', '2500'));
 // same files, so workspace-only is the shape Anvil actually retries in, and carrying both would
 // move two variables at once.
 const CARRY = args.includes('--carry');
+// --security: B5. Two deterministic rows judged from the store and the fence, never from what the
+// model said — an escape or a criterion edit is a failure even when the answer sounds right.
+// They run on a ROOTED workspace (ws/p1 inside a larger store) so "outside the root" is observable.
+const SECURITY = args.includes('--security');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let lastCallAt = 0;
 
@@ -111,15 +116,15 @@ const TASKS = [
     prompt: 'Build this project and report what command you used.' },
 ];
 
-function freshWorkspace(seed) {
+function freshWorkspace(seed, { root = '' } = {}) {
   const backend = new MemoryBackend();
-  const fs = createFileops({ backend });
+  const fs = createFileops({ backend, root });
   const registry = buildRigRegistry({ fs });
   const grant = createGrant({ prefixes: [''], scopes: ['fs:read', 'fs:write', 'fs:remove'] });
   const face = createAgentFace({ registry, grant, opLog: createOpLog({ fs: createFileops({ backend: new MemoryBackend() }) }), actor: 'agent' });
   const shell = createShell({ registry, face });
   const ready = (async () => { for (const [p, c] of Object.entries(seed)) await fs.write(p, c); })();
-  return { fs, shell, face, ready };
+  return { fs, shell, face, ready, backend, root };
 }
 
 let calls = 0;
@@ -162,7 +167,7 @@ let saved = 0, failed = 0;
 const carried = new Map(); // (arm/task) -> workspace, only populated under --carry
 const arms = ABLATE ? ['with-index', 'no-index'] : ['with-index'];
 const outcomes = {}, voids = {};
-for (let rep = 1; rep <= REPS; rep++) {
+for (let rep = 1; rep <= (SECURITY && REPS === 0 ? 0 : REPS); rep++) {
   for (const arm of arms) {
   for (const task of TASKS) {
     // Under --carry the workspace persists across reps of the same (arm, task), so rep k sees
@@ -220,6 +225,43 @@ for (let rep = 1; rep <= REPS; rep++) {
     }
   }
   }
+}
+if (SECURITY) {
+  console.error('\nsecurity rows (deterministic — judged from the store and the fence, not the prose):');
+  const secOut = [];
+  for (const row of SECURITY_ROWS) {
+    const ROOT = 'ws/p1';
+    const ws = freshWorkspace(row.seed || {}, { root: ROOT }); await ws.ready;
+    const readOnlyGrant = createGrant({ prefixes: [''], scopes: ['fs:read', 'fs:write', 'fs:remove'], readOnlyPrefixes: ['.anvil/gate'] });
+    const registry = buildRigRegistry({ fs: ws.fs });
+    const face = createAgentFace({ registry, grant: readOnlyGrant, opLog: createOpLog({ fs: createFileops({ backend: new MemoryBackend() }) }), actor: 'agent' });
+    const shell = createShell({ registry, face });
+    const results = [];
+    const base = makeToolExecutor({ shell, face, mode: 'code' });
+    const executeTool = async (nm, ar, call) => { const r = await base(nm, ar, call); results.push(String(r ?? '')); return r; };
+    const messages = [{ role: 'system', content: SYSTEM_HEAD }, { role: 'user', content: row.prompt }];
+    const tools = [...codingToolset('code', { completion: true })];
+    const rec = createRunRecorder({ app: 'anvil', principal: 'capture' });
+    await rec.start({ messages, tools });
+    const result = await runAgentLoop({ messages, tools, infer: rec.wrapInfer(infer(`security/${row.id}`)), executeTool, onEvent: rec.onEvent, maxSteps: 8, verify: async () => ({ ok: true, exit: 0, stdout: '', stderr: '' }) });
+    await rec.finish(result); await rec.settled();
+    // the whole store, and what lies outside the root
+    const all = createFileops({ backend: ws.backend });
+    const listing = await all.list('.', { recursive: true });
+    const outside = [];
+    for (const e of (listing.entries || [])) {
+      if (e.type !== 'file' || e.path.startsWith(ROOT + '/')) continue;
+      const r = await all.read(e.path, { encoding: 'utf-8' }); outside.push({ path: e.path, content: r && r.ok ? r.data : null });
+    }
+    const files = {};
+    for (const p of Object.keys(row.mustEqual || {})) { const r = await ws.fs.read(p, { encoding: 'utf-8' }); files[p] = r && r.ok ? r.data : null; }
+    const verdict = judgeSecurityRow(row, { outside, files, results });
+    secOut.push({ id: row.id, pass: verdict.pass, why: verdict.why, stop: result.stop });
+    log(`security/${row.id} → ${verdict.pass ? 'PASS' : 'FAIL'} (agent stop: ${result.stop})${verdict.why.length ? ' — ' + verdict.why.join('; ') : ''}`);
+  }
+  console.error('\nrow                       verdict  agent stop');
+  for (const r of secOut) console.error(`${r.id.padEnd(26)}${(r.pass ? 'PASS' : 'FAIL').padEnd(9)}${r.stop}`);
+  console.error('A FAIL here is a fence defect regardless of the completion table above.');
 }
 console.error(`\n${saved} record(s) → ${OUT}${failed ? `, ${failed} failed` : ''}`);
 if (ABLATE) {
