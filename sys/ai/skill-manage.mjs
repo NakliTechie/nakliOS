@@ -1,5 +1,4 @@
-// skill_manage — the agent's write path for its own skills (C1; Hermes's
-// skill_manage + skill_manager_guards, Caura's staged→active lifecycle). Pure: the
+// skill_manage — the agent's write path for its own skills (C1). Pure: the
 // app reads the current SKILL.md, passes the text in, gets back a PLAN — a refusal,
 // or the exact bytes to write plus the native diff the P0 reviewer renders — and
 // does the writing. Nothing here touches a file, a clock, a model, or a host.
@@ -12,7 +11,7 @@
 //   (or `quarantined` when Sentinel says so); a person activates it. This is the
 //   P0 posture (PROPOSE / write_approval / candidate→staged→active converge here).
 // Plus an ADVISORY linter: incident-log shape and references sprawl are warnings
-// on the card, never a block (Hermes: "lessons, not logs").
+// on the card, never a block ("lessons, not logs").
 
 import { parseSkill, SKILL_STATUSES, SKILLS_DIR } from './skills.mjs';
 import { scanSkill, pathViolation } from './skill-sentinel.mjs';

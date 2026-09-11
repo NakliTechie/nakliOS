@@ -1,4 +1,4 @@
-// The post-run review fork (C2; Hermes's background review, Agno's SessionContext + DecisionLog).
+// The post-run review fork (C2).
 // After a run, a NARROW-toolset pass reads the run's record and asks "should any skill or fact
 // be saved or updated?" — and every output is STAGED, never applied. Nothing here writes: the
 // caller supplies a `propose` sink (which routes a skill through planSkillWrite → staged, a fact

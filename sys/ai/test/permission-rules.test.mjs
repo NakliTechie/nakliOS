@@ -1,8 +1,8 @@
-// AC-7c — Claude-shaped permission rules, and the modes.
+// AC-7c — Tool(pattern) permission rules, and the modes.
 //   node sys/ai/test/permission-rules.test.mjs
 //
-// Claude Code needs a small model to work out what a shell command really invokes, because in a
-// real shell substitution and nested quoting make prefix-matching unsound. Anvil's curated shell
+// A harness over a real shell needs a model to work out what a command really invokes, because
+// in a real shell substitution and nested quoting make prefix-matching unsound. Anvil's curated shell
 // REFUSES all of that (sys/rig/cli/shell.mjs:810), which is why these rules can be exact.
 //
 // The case that justifies the whole file is `ls && rm -rf /`: an allow rule for `ls` must not

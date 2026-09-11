@@ -31,10 +31,9 @@
 //     the result. The signal rides on the state OBJECT; the collections inside it
 //     may be, and are, mutated in place.
 //
-// Cribbed from deepseek-harness's session projections (plan/research-dsh-web-2026-09-08.md
-// §2). Deliberately NOT cribbed: the plugin registry, the host/wire audience split
-// and the schema layer. Anvil is one module with no wire and a closed set of folds,
-// so all three would be indirection with no consumer.
+// Deliberately absent: a plugin registry, a host/wire audience split and a schema
+// layer. Anvil is one module with no wire and a closed set of folds, so all three
+// would be indirection with no consumer.
 
 const identity = (s) => s;
 

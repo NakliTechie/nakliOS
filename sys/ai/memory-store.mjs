@@ -7,20 +7,19 @@
 // task start — cheap, and selective at scale, unlike a flat memory.md that dumps
 // everything up to a cap. The agent loads a fact's full body on demand via the
 // `recall` tool, and records a durable learning via `remember` (one file per
-// fact). Mirrors Claude's memory: file-per-fact + frontmatter + an index.
+// fact). Layout: file-per-fact + frontmatter + an index.
 //
-// Facts are RELATED, not just listed (A1, 2026-09-05; NOOA typed edges, Caura
-// supersedes_id + derivation, Hermes related_skills all converge here):
+// Facts are RELATED, not just listed (A1, 2026-09-05):
 //   supersedes: <names>    this fact replaces those — they stay on disk, render
 //                          AFTER their successor, tagged; never above their own
-//                          correction (Caura's rule)
+//                          correction
 //   derived_from: <names>  provenance — retract a basis and every dependant is
 //                          demoted to hypothesis (revalidation, transitive)
 //   contradicts: <names>   a retraction points at what retracted it
 //   slot: <key>            a single-valued key (build-tool, db, phase…): the
 //                          holder is found by `slotHolder`, and a new value
 //                          supersedes it deterministically — no model call
-// A revision carries a CAUSE from a closed set (Caura's diagnosis vocabulary),
+// A revision carries a CAUSE from a closed set,
 // so a retraction says WHY, not only that.
 //
 // Pure module (no fs, no browser, no clock): the app lists/reads/writes files
@@ -32,14 +31,13 @@ import { scanSkill } from './skill-sentinel.mjs';
 
 export const MEMORY_DIR = '.anvil/memory';
 export const MEMORY_TYPES = ['user', 'feedback', 'project', 'reference', 'rule'];
-// A RULE is the one fact type injected in full, first, every run (Caura's keystones: fetched
-// deterministically, no search, no gating) — ordered by weight, hard-capped so the agent has
-// to merge or retract before it can add. Rules bind the agent's own choices; the owner's
-// explicit instruction in a task outranks them (the inversion of Caura's fleet posture —
-// here the owner is the top of the trust ladder).
+// A RULE is the one fact type injected in full, first, every run (fetched deterministically,
+// no search, no gating) — ordered by weight, hard-capped so the agent has to merge or retract
+// before it can add. Rules bind the agent's own choices; the owner's explicit instruction in a
+// task outranks them (the owner is the top of the trust ladder).
 export const RULES_CAP_CHARS = 4000;
 export const DEFAULT_WEIGHT = 5;
-// The lesson-layer contract (Hermes, "lessons not logs"), quoted verbatim at every call
+// The lesson-layer contract ("lessons not logs"), quoted verbatim at every call
 // site that decides to write memory — the remember tool and the code-mode system prompt.
 export const LESSON_CONTRACT =
   'Record lessons, not logs: a fact is what to do differently next time and why — ' +
@@ -57,8 +55,8 @@ export const LESSON_CONTRACT =
 // A fact with no status is a plain durable fact (older files on disk).
 export const MEMORY_STATUSES = ['hypothesis', 'verified', 'retracted'];
 export const MEMORY_RELATIONS = ['supersedes', 'derived_from', 'contradicts'];
-// Why a fact's status changed. Caura's contradiction diagnoses, minus the ones that
-// need an entity model we do not have. `correction`: the old fact was wrong.
+// Why a fact's status changed. A closed set of contradiction diagnoses, limited to the
+// ones that need no entity model. `correction`: the old fact was wrong.
 // `temporal_change`: it was true, and the world moved. `scope_difference`: both hold
 // under different qualifiers. `entity_mismatch`: it was about something else.
 // `write_error`: the note itself was malformed or misfiled.
@@ -198,7 +196,7 @@ function renderRule(r){
 }
 const RULE_SEP = '\n\n';
 // Would adding `newBody` as a rule exceed the cap? The cap is what makes the agent choose:
-// over it, the tool errors and the agent must merge or retract a rule first (Hermes).
+// over it, the tool errors and the agent must merge or retract a rule first.
 // `name`/`status` describe the prospective rule so its heading is counted too.
 export function checkRulesCap(facts, newBody, { name = 'new-rule', status = null } = {}){
   const all = (facts || []).filter(f => f && f.name);
@@ -251,7 +249,7 @@ function supersededSet(facts){
 }
 
 // Build the injected index from parsed facts. One line per fact; '' when there are
-// none (caller concatenates blindly). Ordering rule (Caura): a superseded fact may
+// none (caller concatenates blindly). Ordering rule: a superseded fact may
 // surface, but never above its own correction — it renders right after its
 // successor, tagged. Retracted facts are hidden and counted.
 // A recorded fact/rule is injected as a binding instruction, but nothing scanned it on
@@ -431,7 +429,7 @@ function polarityFlip(aTokens, bTokens){
 }
 
 // Does this note already exist? Deterministic, no model. Returns null, or a structured
-// refusal the agent can act on (Caura's duplicate_memory: the reason IS the next move):
+// refusal the agent can act on (the reason IS the next move):
 //   exact      — same text (normalised) as a live fact          → recall / revise it
 //   near       — first line ≥ 0.8 Jaccard with a live fact's     → recall / revise it
 //   superseded — matches a fact that is retracted or superseded  → do not re-derive it;

@@ -1,6 +1,6 @@
 // Guards the lesson-layer contract and the rule-fact injection in Anvil (A3).
 //
-// Hermes's "lessons, not logs" contract is only useful if the model reads it where
+// The "lessons, not logs" contract is only useful if the model reads it where
 // it decides to write memory: the `remember` tool's own description, and the system
 // prompt of a code-mode run (the first `remember` of a project happens when the
 // memory index is still empty, so the index header alone cannot carry it). Both

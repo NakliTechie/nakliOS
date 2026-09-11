@@ -879,8 +879,8 @@ export function foldReuse(records, { minRuns = 3 } = {}) {
 
 // ──────────────────────────────────────────────── stop reasons (D1) ──
 
-// How runs end, across every record on disk — khiladi's Q3 ("instrument the
-// stop-reason distribution first") as a read-only fold. `records` are anything
+// How runs end, across every record on disk — the stop-reason distribution
+// (instrument this first) as a read-only fold. `records` are anything
 // with `events()` + `resolve()` (a recorder, a loadRecord, an index row's rec).
 // Counts by stop (the loop's own word), by derived status (the 139c381 rule), and
 // by budget axis; `unfinished` are records with no run.stopped at all. Nothing
@@ -1145,8 +1145,8 @@ export function recoveryNote(rec) {
 
 // ──────────────────────────────────────── supervisor / stagnation (D2) ──
 
-// A supervisor that REDIRECTS, as a pure fold over one run's record (AVO's stagnation
-// detector; khiladi item 4). It fires only on UNAMBIGUOUS spinning, never on legitimate
+// A supervisor that REDIRECTS, as a pure fold over one run's record: a stagnation
+// detector. It fires only on UNAMBIGUOUS spinning, never on legitimate
 // repetition (reading many different files is not a stall):
 //   repeat      the SAME tool signature (name + exact args) run ≥ repeatN times
 //   gate-stuck  ≥2 failed gate rounds with NO new file touched between the last two

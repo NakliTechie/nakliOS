@@ -1,5 +1,5 @@
-// Sentinel — the deterministic scan a skill passes BEFORE it can bind (C1; Caura's
-// Forge sentinel, our checks). A skill is executed instructions: the agent reads it
+// Sentinel — the deterministic scan a skill passes BEFORE it can bind (C1).
+// A skill is executed instructions: the agent reads it
 // and does what it says. A sovereign agent will eventually pull one from a repo, so
 // this is a security control, not hygiene. No model, no network, no clock —
 // regexes and byte counts; cacheable by content hash; p95 under 50 ms on a 40 KB

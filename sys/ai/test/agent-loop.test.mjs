@@ -504,7 +504,7 @@ await test('task_done with no gate wired is accepted as the explicit done signal
   eq(result.stop, 'done', 'done'); eq(result.verified, true, 'accepted');
 });
 
-// ── B2 (osaurus recce, 2026-09-11): a placeholder summary is bounced, never accepted, never gated ──
+// ── B2 (2026-09-11): a placeholder summary is bounced, never accepted, never gated ──
 await test('task_done: an empty or placeholder summary is refused and the gate does not run', async () => {
   let gateRuns = 0;
   const verify = async () => { gateRuns++; return { ok: true, exit: 0, stdout: 'PASS', stderr: '' }; };

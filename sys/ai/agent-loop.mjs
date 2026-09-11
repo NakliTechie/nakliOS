@@ -4,7 +4,7 @@
 // The loop is deliberately I/O-free: the two things that touch the world —
 // calling the model and running a tool — are injected. That keeps the control
 // flow (send → tool_calls → execute → feed results → repeat) headlessly
-// testable with mocks, exactly as an OpenCode/Codex loop is, before any live
+// testable with mocks before any live
 // endpoint or terminal is wired.
 //
 //   const result = await runAgentLoop({
@@ -45,12 +45,12 @@ export function shellTool() {
   };
 }
 
-// The explicit-completion tool (Prime Agent's goal.complete()). The model calls
+// The explicit-completion tool. The model calls
 // it to assert the task is done; the loop's handler runs the verifier gate
 // before accepting, and rejects with the gate's bounded output if it is red.
 // Stronger than "the assistant stopped talking = done" — completion is an
 // affirmative act the harness gets to veto.
-// B2 (2026-09-11, osaurus recce): a completion claim with no substance is bounced back for a
+// B2 (2026-09-11): a completion claim with no substance is bounced back for a
 // retry instead of ending the run. "done", "ok", "finished", an empty string, a few characters —
 // none of them say what was done or how it was checked, which is the only thing the summary is
 // for. Pure; the loop calls it before it runs the gate, so a placeholder never costs a gate run.
@@ -64,7 +64,7 @@ export function placeholderSummary(summary) {
   return null;
 }
 
-// B3 (2026-09-11, osaurus recce): a run that needs a decision can ask for one instead of guessing
+// B3 (2026-09-11): a run that needs a decision can ask for one instead of guessing
 // or dying. The loop intercepts `clarify`, pauses the run with stop:'clarify', and the owner's
 // next message resumes it — the same carried-conversation path every re-send already uses.
 export function clarifyTool() {
@@ -377,7 +377,7 @@ export async function runAgentLoop({
   const aborted = () => !!(signal && signal.aborted);
   const abortReturn = (step) => { onEvent({ type: 'aborted', step }); return { messages: convo, steps: step, stop: 'aborted', text: lastText }; };
 
-  // Gate memoization (Prime Agent): after a verifier failure, remember the
+  // Gate memoization: after a verifier failure, remember the
   // workspace hash and the failing verdict. If the next gate request arrives on
   // an identical hash, replay the cached failure instead of re-running the gate —
   // no burning gate runtime on an unchanged workspace. Returns { verdict, ran }.

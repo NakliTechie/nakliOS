@@ -1,13 +1,12 @@
 // Proposal fingerprints + poison memory (C3). A review fork will propose skills and
 // facts; the P0 reviewer will reject some. Without a memory of refusal the next run
-// re-proposes the same thing — Hermes has write-approval staging but no "don't ask
-// again"; Caura's Forge has it (a rejected candidate's fingerprint is written with a
-// cooloff, and a re-run never proposes that fingerprint). This is that, pure.
+// re-proposes the same thing. So a rejected candidate's fingerprint is written with a
+// cooloff, and a re-run never proposes that fingerprint. Pure.
 //
 // The fingerprint is a canonical identity for a PROPOSAL, not its wording:
 //   fp:v1:sha256( goal=<tokens sorted deduped> | steps=<skeleton|per|step, order kept>
 //                 | paths=<top-K sorted> )
-// with Caura's five stability properties, pinned by property tests:
+// with five stability properties, pinned by property tests:
 //   P1 determinism · P2 permutation invariance of goal tokens / casing / path order
 //   P3 step ORDER is significant, words within a step are order-preserved and
 //      stopword-stripped · P4 top-K stability (paths sorted, first K kept — a path

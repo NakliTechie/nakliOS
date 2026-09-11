@@ -1,4 +1,4 @@
-// B1 (2026-09-11, from the osaurus recce): a typed failure `kind` on every tool result the loop
+// B1 (2026-09-11): a typed failure `kind` on every tool result the loop
 // can route on. Anvil's tools speak prose — "Error: …", "cat: x: ENOENT", "[exit 2]" — and the
 // model, the record and the folds all had to guess what a failure WAS. Live T1 run 4 died on a
 // silent "(no output) [exit 2]" that nothing could name.

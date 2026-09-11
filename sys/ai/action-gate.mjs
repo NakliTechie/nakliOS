@@ -4,11 +4,9 @@
 // gate with its type implicit. What it cannot express is "this particular action needs an answer
 // before it may happen, and here is which answer".
 //
-// The shape is adopted rather than invented. AC-0 (plan/research-harness-state-2026-09-10.md) found
-// Codex, Claude Code and Hermes converging on the same one, and Codex's is the fullest: a guardian
-// judges ONE PLANNED ACTION and returns a typed verdict over two graded axes, resolved through a
-// published threshold table with a tier nothing lifts. Three properties came with it and all three
-// are load-bearing:
+// The shape (AC-0): a guardian judges ONE PLANNED ACTION and returns a typed verdict over two
+// graded axes, resolved through a published threshold table with a tier nothing lifts. Three
+// properties come with it and all three are load-bearing:
 //
 //   · THE VERDICT NAMES ITS AXES. "Denied" is not a verdict. `high` risk against `low`
 //     authorization is one, because a person can act on it.

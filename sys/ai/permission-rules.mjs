@@ -2,11 +2,11 @@
 //
 // The action gate (action-gate.mjs) decides risk from what an action DOES. That is the right
 // backstop, but it is not something an owner can steer: you cannot write down "npm test is always
-// fine here" or "never touch the deploy script". Claude Code's model is the one worth mirroring —
+// fine here" or "never touch the deploy script". So, alongside the gate:
 // Tool(specifier) rules in allow/deny/ask lists, plus a permission MODE.
 //
-// WHY WE MOSTLY DO NOT NEED A CLASSIFIER. Claude Code leans on a small model to work out what a
-// shell command really invokes, because in a real shell command substitution, backticks, nested
+// WHY WE MOSTLY DO NOT NEED A CLASSIFIER. A harness over a real shell needs a model to work out
+// what a command really invokes, because in a real shell command substitution, backticks, nested
 // quoting and heredocs make prefix-matching unsound — `ls $(rm -rf /)` starts with "ls". Anvil's
 // curated shell REFUSES all of those (sys/rig/cli/shell.mjs:810 — no subshells, loops, functions,
 // heredocs, background jobs or command substitution). What is left is a flat sequence of commands
@@ -14,7 +14,7 @@
 // probabilistic — and where a command still cannot be segmented with confidence, the answer is
 // `ask`, never `allow`.
 //
-// PRECEDENCE, mirroring Claude Code: deny beats ask beats allow. A deny rule is absolute; it is the
+// PRECEDENCE: deny beats ask beats allow. A deny rule is absolute; it is the
 // one thing that survives bypass mode, because writing "never do this" and having a mode ignore it
 // would make deny rules worthless.
 

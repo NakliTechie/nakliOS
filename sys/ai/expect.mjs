@@ -1,4 +1,4 @@
-// Predict-then-grade for a shell call (D3; khiladi's expect, NOOA's retrodiction). The agent
+// Predict-then-grade for a shell call (D3). The agent
 // states what it EXPECTS before running a command; the result is graded against it, and a MISS
 // is a small, honest failure signal on the run record. Pure and OPTIONAL — a shell call with no
 // `expect` behaves exactly as before.

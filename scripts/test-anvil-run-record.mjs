@@ -134,7 +134,7 @@ assert.match(doctor2, /prev\.tiers\.push\(tier\)/, 'a record found on several ru
 console.log('anvil-run-record: every loop is recorded, folds are self-checked, records persist outside the mount, the durability line is honest, and the index is derived, rebuildable and read');
 
 // D1: the doctor folds the stop-reason distribution over every record it read and
-// surfaces it — khiladi's Q3 answered from the record, never from a counter.
+// surfaces it — answered from the record, never from a counter.
 assert.match(anvil, /foldStopReasons\(\[\.\.\.found\.values\(\)\]\.map\(f=>f\.rec\)/, 'rebuildRunIndex folds stop reasons over the records it read');
 assert.match(anvil, /stopsLine: stopReasonsLine\(stops\)/, 'and returns the one-line histogram');
 assert.match(anvil, /run index rebuilt: .*r\.stopsLine/, 'the boot backfill surfaces it');

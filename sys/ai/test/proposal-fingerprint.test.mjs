@@ -1,4 +1,4 @@
-// Conformance — proposal fingerprints (Caura's five stability properties) + poison memory.
+// Conformance — proposal fingerprints (five stability properties) + poison memory.
 //   node sys/ai/test/proposal-fingerprint.test.mjs
 import { fingerprint, canonicalize, canonicalString, normToken, createProposalLedger, loadProposalLedger,
          isPoisoned, filterProposals, FINGERPRINT_VERSION, PROPOSAL_EVENTS, DEFAULT_COOLOFF_DAYS } from '../proposal-fingerprint.mjs';

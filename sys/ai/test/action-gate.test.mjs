@@ -1,9 +1,8 @@
 // AC-7 — a typed gate on one planned action, with authorization bound to trusted evidence.
 //   node sys/ai/test/action-gate.test.mjs
 //
-// The shape is adopted, not invented: AC-0 found Codex, Claude Code and Hermes converging on it,
-// and Codex's guardian is the fullest — a typed verdict over two graded axes through a published
-// threshold table with a tier nothing lifts.
+// The shape (AC-0): a guardian judges one planned action — a typed verdict over two graded axes
+// through a published threshold table with a tier nothing lifts.
 //
 // Most of this file guards the three properties that make it worth having, because each has an
 // obvious-looking "improvement" that destroys it:

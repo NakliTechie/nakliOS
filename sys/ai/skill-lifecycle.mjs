@@ -1,11 +1,11 @@
-// Skill lifecycle — the curator's deterministic half (C4; Hermes's curator, NOOA's
-// reflection pass, Agno's prune). Ages skills by DELIBERATE use (foldSkillUsage over the
+// Skill lifecycle — the curator's deterministic half (C4).
+// Ages skills by DELIBERATE use (foldSkillUsage over the
 // run records): active → stale after 30 days unused → archived after 90. Never deletes:
 // an archived skill stays on disk, out of the index, one status flip from active.
 // `pinned: true` exempts a skill; staged and quarantined skills are the reviewer's,
 // not the curator's, and are left alone. A skill that was never used ages from its
 // `created` stamp, and one with no stamp at all gets a grace floor of "now" — an
-// unknown age is not an old age (Hermes's never-used grace).
+// unknown age is not an old age.
 //
 // Pure: takes parsed skills + a usage map + a clock value; returns proposals. The
 // app applies them with `applySkillStatus` and writes the files.

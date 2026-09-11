@@ -2,15 +2,15 @@
 // tools (read / write / edit / apply_patch) alongside `shell`, backed by Rig
 // fileops through the agent face.
 //
-// Why not just `shell`? Claude Code, OpenCode, and Kilo all give the model
-// first-class file tools even though a shell exists — because models are trained
+// Why not just `shell`? The model gets first-class file tools even though a
+// shell exists — because models are trained
 // on exactly these names/signatures, and structured tools add line numbers,
 // truncation, uniqueness checks, and a diff surface a raw shell can't. A live run
 // against gpt-5.6-sol confirmed it: the model reached for `apply_patch` unprompted.
 //
-// `edit` uses OpenCode's replacer chain (exact → line-trimmed → block-anchor) so a
-// model that gets whitespace slightly wrong still lands the edit, plus Claude
-// Code's read-before-edit + uniqueness gates so it never edits the wrong place.
+// `edit` uses a replacer chain (exact → line-trimmed → block-anchor) so a
+// model that gets whitespace slightly wrong still lands the edit, plus
+// read-before-edit + uniqueness gates so it never edits the wrong place.
 //
 //   import { codingToolset, makeToolExecutor } from './agent-tools.mjs';
 //   const tools = codingToolset();                 // + shellTool()
@@ -120,7 +120,7 @@ export function taskTool() {
   } };
 }
 
-// Which tools each mode exposes (Kilo/Claude-Code-style gating). `code` = all;
+// Which tools each mode exposes (per-mode tool gating). `code` = all;
 // `plan` = read + think, no mutation; `ask` = read-only Q&A.
 export const MODE_TOOLS = {
   code: null, // all
@@ -166,7 +166,7 @@ export function codingToolset(mode = 'code', { subagents = false, supervisor = f
   return allow ? all.filter((t) => allow.has(t.function.name)) : all;
 }
 
-// ── the edit replacer chain (pure) — OpenCode's 9 strategies ─────────────
+// ── the edit replacer chain (pure) — 9 strategies ───────────────────────
 // Each strategy is a generator that yields candidate SUBSTRINGS of `content`.
 // The driver locates a candidate with indexOf, enforces GLOBAL uniqueness
 // (indexOf === lastIndexOf) so a fuzzy strategy can never silently pick the
@@ -492,7 +492,7 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
   const supervisorOn = typeof spawnIsolated === 'function' && typeof infer === 'function' && subagentDepth < 1;
   const runShell = makeShellExecutor(shell);
   const cwd = () => (shell && typeof shell.cwd === 'string' ? shell.cwd : '');
-  // Read-before-edit ledger (Claude Code): a file must be read (read tool, a
+  // Read-before-edit ledger: a file must be read (read tool, a
   // single-file cat, or just written) before `edit` will touch it — this stops
   // the model editing content it never saw. Paths are store-relative (resolved).
   const readLedger = new Set();

@@ -645,7 +645,7 @@
     } }catch(_){}
     let indexed=0, broken=0;
     for(const { row } of found.values()){ await runsPut(row); indexed++; if(row.chainOk===false) broken++; }
-    // D1: how runs end, over every record the doctor just read — khiladi's Q3, as a fold.
+    // D1: how runs end, over every record the doctor just read — the stop-reason distribution, as a fold.
     const stops=foldStopReasons([...found.values()].map(f=>f.rec), { gated:true });
     return { indexed, broken, stops, stopsLine: stopReasonsLine(stops) };
   }
@@ -1288,7 +1288,7 @@
         c.innerHTML=`<span class="ci">${e.status==='running'?'⇄':'⇆'}</span><span class="cf">${esc(subagentFeedLine(e))}</span>`;
         w.appendChild(c);
       } else if(e.k==='change'){
-        // "We made changes — view" (Claude Code / Codex style). The write/edit is
+        // "We made changes — view": a change line that opens the file. The write/edit is
         // already applied (YOLO); clicking reads the current file and shows it in
         // the preview, instead of auto-popping the pane.
         const c=document.createElement('div'); c.className='change'; c.title='View this file in the preview';
@@ -1947,7 +1947,7 @@
   }
   // Run records live in Anvil's OWN OPFS namespace (anvil/runs/<project>/<task>/),
   // never inside the mounted workspace: an agent will edit whatever it can reach
-  // (khiladi's driver "fixed" its own event log), and a ledger the agent can rewrite
+  // (a driver left in reach of its own event log will "fix" it), and a ledger the agent can rewrite
   // audits nothing. Same posture as the FIF. Returns the saved path, or null.
   // C2 — the post-run review fork (explicit or automatic). Reviews the finished run's record and
   // STAGES any proposed skill (planSkillWrite → status staged) or fact (recordFact → hypothesis).
@@ -2407,7 +2407,7 @@
       if(nm==='remember'){
         const note=String((ar&&ar.note)||'').trim();
         if(!note) return 'Nothing recorded (empty note).';
-        // Search before save (A2, Agno/Caura): a deterministic duplicate check against every
+        // Search before save (A2): a deterministic duplicate check against every
         // fact on disk — exact, near, or a match on a retracted/superseded fact — refuses the
         // write with the next move, so the store never grows a second copy.
         const all=await listFacts();

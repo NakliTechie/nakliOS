@@ -158,7 +158,7 @@ export function releaseDispatch(queue, id) {
  * came from.
  *
  * Two ways to refuse, and neither kills anything in flight — that is the whole distinction a quota
- * draws against a fuse (`hermes pause`: "halts NEW work only … in-flight work is never killed"):
+ * draws against a fuse (a quota halts NEW work only; in-flight work is never killed):
  *   · `held` — the owner switched holding on. Explicit, visible, and cleared by them.
  *   · the last run ended badly and nothing has been acknowledged since.
  *
