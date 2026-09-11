@@ -1153,5 +1153,35 @@ await test('a turn answered by a substituted model is recorded on llm.responded 
   eq(substitutionsLine(blank.events(), blank.resolve), '', 'and the report line is empty');
 });
 
+
+// F1 regression, found LIVE 2026-09-11 on ling-3.0-flash-sante through the real app: the loop
+// sends an assistant turn as { content: content || null, tool_calls } (agent-loop.mjs), but the
+// transcript fold emitted content:null whenever tool calls were present. Any model that talks
+// while it acts made every request "unreconstructable" — F1 fired on every turn — and a replay
+// would serve a transcript the model never saw. Pinned against the loop's own rule.
+await test('F1: prose emitted beside a tool call survives the fold, and the check stays clean', async () => {
+  const shell = freshShell();
+  const rec = createRunRecorder({ app: 'anvil', principal: 'p' });
+  const turns = [
+    { content: 'Let me look first.', toolCalls: [call('shell', { command: 'echo hi' }, 'c0')] },
+    { content: '', toolCalls: [call('shell', { command: 'echo again' }, 'c1')] },
+    { content: 'done', toolCalls: [] },
+  ];
+  const divergences = [];
+  await rec.start({ messages: MESSAGES, tools: [shellTool()] });
+  const result = await runAgentLoop({
+    messages: MESSAGES, tools: [shellTool()],
+    infer: rec.wrapInfer(scripted(turns), { onDivergence: (d) => divergences.push(d) }),
+    executeTool: makeShellExecutor(shell), onEvent: rec.onEvent, maxSteps: 6,
+  });
+  await rec.finish(result); await rec.settled();
+  deepEq(divergences, [], 'no request in a prose+call run may be flagged as unreconstructable');
+  const asst = foldTranscript(rec.events(), rec.resolve).filter((m) => m.role === 'assistant');
+  eq(asst[0].content, 'Let me look first.', 'the prose beside the first call is kept');
+  eq(asst[0].tool_calls[0].id, 'c0', 'and so is the call');
+  eq(asst[1].content, null, 'a call with no prose still folds to null — the loop sends `content || null`, never ""');
+});
+
 if (failures.length) { console.error(`history/run-record: ${passed} passed, ${failures.length} FAILED`); for (const f of failures) console.error(`  FAIL ${f.n}: ${f.message}`); process.exit(1); }
 console.log(`history/run-record conformance: ${passed}/${passed} passed`);
+

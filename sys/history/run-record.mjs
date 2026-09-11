@@ -401,7 +401,12 @@ export function transcriptUnit({ applyCompaction = false } = {}) {
     apply(s, e) {
       const out = s.out;
       const inp = e.input || {}, o = e.output || {};
-      const flushed = (pc) => { if (pc) out.push({ role: 'assistant', content: null, tool_calls: pc }); return null; };
+      // A pending assistant turn carries BOTH its tool calls and whatever prose the model emitted
+      // beside them. Found live 2026-09-11 on ling-3.0-flash-sante: the loop sends
+      // `content || null` (agent-loop.mjs), this fold sent `null` unconditionally, so on every
+      // turn the F1 check reported "message N differs" and the record could not reconstruct the
+      // request — a replay would hand the model a transcript it never saw.
+      const flushed = (pc) => { if (pc) out.push({ role: 'assistant', content: pc.content || null, tool_calls: pc.calls }); return null; };
       switch (e.tool) {
         case 'run.started': {
           const msgs = (inp.messages || []).filter((m) => m.role !== 'system');
@@ -423,7 +428,7 @@ export function transcriptUnit({ applyCompaction = false } = {}) {
         case 'llm.responded': {
           let pc = flushed(s.pendingCalls);
           const calls = Array.isArray(o.toolCalls) ? o.toolCalls : [];
-          if (calls.length) pc = calls.map((c) => ({ id: c.id, type: 'function', function: { name: c.function?.name, arguments: c.function?.arguments } }));
+          if (calls.length) pc = { content: typeof o.content === 'string' ? o.content : '', calls: calls.map((c) => ({ id: c.id, type: 'function', function: { name: c.function?.name, arguments: c.function?.arguments } })) };
           else if (o.content) out.push({ role: 'assistant', content: o.content });
           return { out, pendingCalls: pc, started: s.started };
         }
