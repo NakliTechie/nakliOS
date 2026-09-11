@@ -446,11 +446,13 @@ export function transcriptUnit({ applyCompaction = false } = {}) {
           }
           return s;
         }
-        case 'tool.failed': {
-          const pc = flushed(s.pendingCalls);
-          out.push({ role: 'tool', tool_call_id: inp.id, content: `Error: ${o.error ?? ''}` });
-          return { out, pendingCalls: pc, started: s.started };
-        }
+        // A failed call is followed by tool.responded carrying the text the loop actually sent —
+        // on the executor-throw path it always was, and on the argument-parse path it is since
+        // 2026-09-11. Pushing a row here too made a throw appear TWICE in the surface, and a parse
+        // failure appear with a different prefix than the loop used. The verb still lands on the
+        // chain for the log and the outcome folds; it just does not build the transcript.
+        case 'tool.failed':
+          return { out, pendingCalls: flushed(s.pendingCalls), started: s.started };
         // Coordination, not the owner: a carried gate verdict must never read as the owner's
         // instruction (B3). The tag survives into the next run's transcript.
         case 'verify.failed':

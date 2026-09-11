@@ -1159,6 +1159,32 @@ await test('a turn answered by a substituted model is recorded on llm.responded 
 // transcript fold emitted content:null whenever tool calls were present. Any model that talks
 // while it acts made every request "unreconstructable" — F1 fired on every turn — and a replay
 // would serve a transcript the model never saw. Pinned against the loop's own rule.
+await test('F1: a failed tool call folds to exactly the text the loop sent, once — both failure paths', async () => {
+  const shell = freshShell();
+  const rec = createRunRecorder({ app: 'anvil', principal: 'p' });
+  const badJson = { id: 'c0', type: 'function', function: { name: 'shell', arguments: '{"command": "echo unterminated' } };
+  const turns = [
+    { content: '', toolCalls: [badJson] },                                   // arguments cut off mid-JSON (live, DeepSeek)
+    { content: '', toolCalls: [call('boom', { x: 1 }, 'c1')] },              // executor throws
+    { content: 'done', toolCalls: [] },
+  ];
+  const divergences = [];
+  const exec = async (name, args, c) => { if (name === 'boom') throw new Error('kaboom'); return makeShellExecutor(shell)(name, args, c); };
+  await rec.start({ messages: MESSAGES, tools: [shellTool()] });
+  const result = await runAgentLoop({
+    messages: MESSAGES, tools: [shellTool()],
+    infer: rec.wrapInfer(scripted(turns), { onDivergence: (d) => divergences.push(d) }),
+    executeTool: exec, onEvent: rec.onEvent, maxSteps: 6,
+  });
+  await rec.finish(result); await rec.settled();
+  deepEq(divergences, [], 'neither failure path may make a request unreconstructable');
+  const tools = foldTranscript(rec.events(), rec.resolve).filter((m) => m.role === 'tool');
+  eq(tools.length, 2, 'one tool row per failed call, never two');
+  assert(/^Error: could not parse arguments as JSON: /.test(tools[0].content), `the parse failure carries the loop's wording: ${tools[0].content}`);
+  eq(tools[1].content, 'Error: kaboom', 'the throw carries the loop\'s wording');
+  assert(rec.events().some((e) => e.tool === 'tool.failed'), 'tool.failed still lands on the chain for the log and outcome folds');
+});
+
 await test('F1: prose emitted beside a tool call survives the fold, and the check stays clean', async () => {
   const shell = freshShell();
   const rec = createRunRecorder({ app: 'anvil', principal: 'p' });

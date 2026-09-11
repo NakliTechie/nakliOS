@@ -537,6 +537,11 @@ export async function runAgentLoop({
       if (!parsed.ok) {
         resultText = `Error: could not parse arguments as JSON: ${parsed.error}`;
         onEvent({ type: 'tool-error', name, id, error: parsed.error, step });
+        // The executed path emits tool-result after a throw; this path did not, so the record
+        // held only the raw parse error and the transcript fold had to invent the wording the
+        // model saw. Live 2026-09-11 on DeepSeek (a tool call cut off mid-JSON): every later
+        // request read as unreconstructable. Record exactly what is sent.
+        onEvent({ type: 'tool-result', name, id, result: resultText, step });
       } else {
         onEvent({ type: 'tool-call', name, id, args: parsed.value, step });
         try {
