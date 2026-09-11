@@ -65,6 +65,21 @@ await test('an uncaught exception returns a traceback as data', async () => {
   eq((await kiln.exec('after', 'ok = 1')).status, 'ok', 'kernel usable after an exception');
 });
 
+// `sys.exit(n)` from the worker runtime arrives as exitCode, never as a traceback — the kernel
+// maps 0 to ok and n>0 to error, and carries n on the result (live 2026-09-11).
+await test('an exitCode from the runtime is a status and a code, not a traceback', async () => {
+  const mk = (exitCode) => ({
+    async runCode() { return { stdout: 'ran\n', stderr: '', result: null, traceback: null, interrupted: false, truncated: false, exitCode }; },
+    interrupt() {}, reset() {},
+  });
+  const k0 = createKiln({ loadRuntime: async () => mk(0), consent: () => true }); const r0 = await k0.exec('c', 'sys.exit(0)');
+  eq(r0.status, 'ok', 'exit 0 is ok'); eq(r0.code, 0, 'and says 0'); assert(!r0.traceback, 'no traceback');
+  const k3 = createKiln({ loadRuntime: async () => mk(3), consent: () => true }); const r3 = await k3.exec('c', 'sys.exit(3)');
+  eq(r3.status, 'error', 'exit 3 is an error'); eq(r3.code, 3, 'and says 3'); assert(!r3.traceback, 'still no traceback — an exit is not a crash');
+  const kn = createKiln({ loadRuntime: async () => mk(null), consent: () => true }); const rn = await kn.exec('c', 'x = 1');
+  eq(rn.status, 'ok', 'no exitCode → ok as before'); assert(!('code' in rn), 'and no code key invented');
+});
+
 await test('a runtime that throws never leaks the throw across the boundary', async () => {
   const kiln = readyKiln();
   let threw = false, r;

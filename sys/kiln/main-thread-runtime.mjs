@@ -19,7 +19,7 @@
 // It implements the minimal contract the Rig shell calls (shell.mjs `python`):
 //   exec(cellId, code) -> { status:'ok'|'error'|'unavailable', stdout, stderr, message? }
 
-import { PYODIDE_VERSION, PYODIDE_INDEX_URL, sanitizeTraceback } from './pyodide-runtime.mjs';
+import { PYODIDE_VERSION, PYODIDE_INDEX_URL, sanitizeTraceback, systemExitCode } from './pyodide-runtime.mjs';
 
 async function defaultLoadPyodide() {
   const mod = await import(PYODIDE_INDEX_URL + 'pyodide.mjs');
@@ -178,7 +178,11 @@ export function createMainThreadKiln({ fs, mount = 'work', loadPyodide = default
         return { status: 'ok', stdout: out, stderr: err };
       } catch (e) {
         try { await syncOut(seen); } catch (_) {}
-        const msg = sanitizeTraceback(String(e && e.message ? e.message : e));
+        const raw = String(e && e.message ? e.message : e);
+        // `sys.exit(n)` is the program's exit code, not a failure — see systemExitCode.
+        const sx = systemExitCode(raw);
+        if (sx !== null) return { status: sx === 0 ? 'ok' : 'error', stdout: out, stderr: err, code: sx };
+        const msg = sanitizeTraceback(raw);
         return { status: 'error', stdout: out, stderr: err + (err && !err.endsWith('\n') ? '\n' : '') + msg };
       } finally {
         try { p.setStdout(); } catch (_) {}

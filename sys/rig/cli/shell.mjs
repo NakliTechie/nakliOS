@@ -997,7 +997,8 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
       } else code = args.join(' ');
       const r = await kiln.exec('shell', code, { isolate: kilnIsolate });
       if (r.status === 'unavailable') return { text: 'python: ' + (r.message || 'kernel unavailable'), code: 1 };
-      return { text: (r.stdout || '') + (r.stderr || ''), code: r.status === 'ok' ? 0 : 1 };
+      // A `sys.exit(n)` rides through as n; anything else that is not ok is 1.
+      return { text: (r.stdout || '') + (r.stderr || ''), code: r.status === 'ok' ? 0 : (Number.isInteger(r.code) && r.code > 0 ? r.code : 1) };
     }
     if (verb === 'find') {
       // -name / -type / -maxdepth were SILENTLY IGNORED, so `find . -name "*.txt"` returned every

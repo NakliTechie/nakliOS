@@ -3,6 +3,7 @@
 // shell `exec` contract, using a fake Pyodide (injected loader). No real Pyodide.
 
 import { createMainThreadKiln } from '../main-thread-runtime.mjs';
+import { systemExitCode } from '../pyodide-runtime.mjs';
 import { createFileops } from '../../rig/fileops/index.mjs';
 import { MemoryBackend } from '../../rig/fileops/memory-backend.mjs';
 
@@ -106,6 +107,36 @@ async function run() {
     ok('error → status error', r.status === 'error');
     ok('error message in stderr', /NameError/.test(r.stderr));
   }
+
+// `sys.exit(n)` is an exit code, not a failure (live 2026-09-11: a script ending
+// `sys.exit(main())` returned 0 and the kernel reported a traceback with exit 1).
+{
+  const PY = 'Traceback (most recent call last):\n  File "/lib/python312.zip/_pyodide/_base.py", line 597, in eval_code_async\n    await CodeRunner(\n  File "<exec>", line 35, in <module>\n';
+  ok('systemExitCode: "SystemExit: 0" → 0', systemExitCode(PY + 'SystemExit: 0') === 0);
+  ok('systemExitCode: bare "SystemExit" (None) → 0', systemExitCode(PY + 'SystemExit') === 0);
+  ok('systemExitCode: "SystemExit: 3" → 3', systemExitCode(PY + 'SystemExit: 3') === 3);
+  ok('systemExitCode: a message payload exits 1, as CPython does', systemExitCode(PY + 'SystemExit: usage: x') === 1);
+  ok('systemExitCode: a NameError is not a SystemExit', systemExitCode(PY + "NameError: name 'x' is not defined") === null);
+  ok('systemExitCode: SystemExit mentioned mid-traceback is not the exit', systemExitCode('SystemExit: 0\nValueError: boom') === null);
+
+  const fs = createFileops({ backend: new MemoryBackend() });
+  const fake = makeFakePyodide();
+  const kiln = createMainThreadKiln({ fs, loadPyodide: async () => fake });
+  fake._onRun = ({ out }) => { out('done\n'); throw new Error(PY + 'SystemExit: 0'); };
+  const r0 = await kiln.exec('shell', 'import sys; print("done"); sys.exit(0)');
+  ok('exit 0 → status ok', r0.status === 'ok');
+  ok('exit 0 → stdout kept', /done/.test(r0.stdout));
+  ok('exit 0 → no traceback in stderr', !/Traceback|SystemExit/.test(r0.stderr || ''));
+  ok('exit 0 → code 0', r0.code === 0);
+  fake._onRun = () => { throw new Error(PY + 'SystemExit: 3'); };
+  const r3 = await kiln.exec('shell', 'import sys; sys.exit(3)');
+  ok('exit 3 → status error', r3.status === 'error');
+  ok('exit 3 → code 3', r3.code === 3);
+  ok('exit 3 → no traceback (it is an exit, not a crash)', !/Traceback/.test(r3.stderr || ''));
+  fake._onRun = () => { throw new Error(PY + 'ValueError: boom'); };
+  const rv = await kiln.exec('shell', 'raise ValueError("boom")');
+  ok('a real exception is still status error with its traceback', rv.status === 'error' && /ValueError: boom/.test(rv.stderr));
+}
 
   // ── 6. loader failure → status:unavailable (graceful) ──
   {

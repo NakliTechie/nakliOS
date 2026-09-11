@@ -35,6 +35,20 @@ const TOKEN_PATTERNS = [
   /\bey[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}\b/g,
   /\b[A-Fa-f0-9]{64,}\b/g,
 ];
+// A Python `sys.exit(n)` surfaces from Pyodide as a thrown PythonError whose message ends in
+// "SystemExit: n" (or a bare "SystemExit" for None). It is not an error: it is the program's
+// exit code. Found live 2026-09-11 — a script ending `sys.exit(main())` returned 0 and Kiln
+// reported a traceback with exit 1, so a green gate read as red and the agent "learned" a fact
+// about a failure that never happened. Returns the exit code, or null when the message is not a
+// SystemExit at all. A non-integer payload (`sys.exit('msg')`) exits 1, as CPython does.
+export function systemExitCode(message) {
+  const m = /(?:^|\n)\s*SystemExit(?::[ \t]*(.*?))?[ \t]*$/.exec(String(message == null ? '' : message).trimEnd());
+  if (!m) return null;
+  const payload = (m[1] == null ? '' : m[1]).trim();
+  if (payload === '' || payload === 'None' || payload === '0') return 0;
+  return /^-?\d+$/.test(payload) ? Number(payload) : 1;
+}
+
 export function sanitizeTraceback(text) {
   let out = String(text);
   for (const re of TOKEN_PATTERNS) out = out.replace(re, '[redacted]');
@@ -77,19 +91,22 @@ export function createPyodideRuntime(pyodide, interruptBuffer) {
     let traceback = null;
     let result = null;
     let interrupted = false;
+    let exitCode = null;
     try {
       const r = await pyodide.runPythonAsync(code, { globals: ns });
       result = r == null ? null : (typeof r === 'object' && r.toString ? r.toString() : String(r));
       if (r && typeof r.destroy === 'function') r.destroy();
     } catch (e) {
       const msg = String((e && e.message) || e);
+      const sx = systemExitCode(msg);
       if (/KeyboardInterrupt/.test(msg)) interrupted = true;
+      else if (sx !== null) exitCode = sx;   // `sys.exit(n)`: the program's answer, not a failure
       else traceback = sanitizeTraceback(msg);
     } finally {
       pyodide.setStdout({});
       pyodide.setStderr({});
     }
-    return { stdout, stderr, result, traceback, interrupted, truncated };
+    return { stdout, stderr, result, traceback, interrupted, truncated, exitCode };
   }
 
   function interrupt() {

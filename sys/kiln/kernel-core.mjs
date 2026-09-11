@@ -68,6 +68,7 @@ export function createKernelCore({ runtime, now = () => Date.now() }) {
     if (timedOut) status = 'timeout';
     else if (out.interrupted) status = 'interrupted';
     else if (out.traceback) status = 'error';
+    else if (Number.isInteger(out.exitCode) && out.exitCode !== 0) status = 'error';
     else status = 'ok';
 
     cells.push({ cellId, provenance, status, ms, truncated: !!out.truncated });
@@ -82,6 +83,7 @@ export function createKernelCore({ runtime, now = () => Date.now() }) {
     };
     if (out.fsSync) result.fsSync = out.fsSync;
     if (out.traceback) result.traceback = out.traceback;
+    if (Number.isInteger(out.exitCode)) result.code = out.exitCode; // sys.exit(n), n as the program said it
     return result;
   }
 

@@ -338,6 +338,10 @@ await test('python dispatch: -c code, <file>, and the unavailable message', asyn
   await run(shell, 'echo import sys > s.py');
   eq((await run(shell, 'python s.py')), 'RAN:import sys', '<file> reads the file as code');
   eq((await run(shell, 'python -c "BROKEN"')), 'python: no kernel', 'unavailable surfaces the message');
+  // sys.exit(n) rides through as the exit code — a gate ending `sys.exit(main())` must be green on 0.
+  const exiting = createShell({ registry, face, kiln: { exec: async (_id, code) => (/exit3/.test(code) ? { status: 'error', code: 3, stdout: '', stderr: '' } : { status: 'ok', code: 0, stdout: 'fine\n', stderr: '' }) } });
+  await run(exiting, 'python -c "exit0"'); eq(exiting.lastCode, 0, 'sys.exit(0) → exit 0');
+  await run(exiting, 'python -c "exit3"'); eq(exiting.lastCode, 3, 'sys.exit(3) → exit 3, the number the program said');
   // No kiln → honest degrade.
   const { shell: bare } = freshShell();
   assert(/cross-origin isolation/.test(await run(bare, 'python -c "print(1)"')), 'no kiln → COI notice');
