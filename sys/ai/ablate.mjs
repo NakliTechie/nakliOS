@@ -5,9 +5,13 @@
 // number instead of a claim.
 //
 // Shape: a TASK is { id, messages, tools, model(caps, ctx) → infer, executeTool(caps, ctx),
-// gate(caps, ctx) → verify|null, loopOptions(caps, ctx) }; `ctx` is a fresh object per arm
+// gate(caps, ctx) → verify|null, loopOptions(caps, ctx), driver(caps, ctx) }; `ctx` is a fresh object per arm
 // that the factories share (a workspace made in executeTool is what the gate reads). A CAPABILITY is a name the task's
-// factories read from `caps`. Arms: `full` (every capability on) and `-<cap>` (all
+// factories read from `caps`. `driver` is optional: a task that must run what the APP runs (the
+// shared assembly's driveRun — re-loops, the app's budgets) hands back a function that owns the
+// record from rec.start to rec.finish, and then `messages` is the CARRIED conversation (the driver
+// builds the system prefix); without one, the arm is a single loop on `loopOptions` and
+// `messages` is the whole request, system message first. Arms: `full` (every capability on) and `-<cap>` (all
 // on but that one). Metrics come from the record: foldOutcome's label + score, steps,
 // tool calls, failed gate rounds. delta = full − (−cap), per task per capability.
 //
@@ -43,6 +47,16 @@ export function metricsOf(rec) {
   };
 }
 
+// The default driver: one recorded loop. A task's own driver replaces the whole of this.
+function singleLoop(loopOptions) {
+  return async ({ messages, tools, infer, executeTool, onEvent, verify, rec }) => {
+    await rec.start({ messages, tools });
+    const result = await runAgentLoop({ messages, tools, infer, executeTool, onEvent, verify, ...loopOptions });
+    await rec.finish(result);
+    return result;
+  };
+}
+
 async function runArm(task, arm, { prior, principal, now }) {
   const rec = createRunRecorder({ app: 'ablate', principal, now });
   // One context per ARM, handed to every factory: whatever a task's executeTool sets up
@@ -50,17 +64,17 @@ async function runArm(task, arm, { prior, principal, now }) {
   const ctx = { task: task.id, arm: arm.name };
   const messages = task.messages(arm.caps, ctx);
   const tools = task.tools ? task.tools(arm.caps, ctx) : [];
-  await rec.start({ messages, tools });
   let liveCalls = 0;
   const live = task.model(arm.caps, ctx);
   const counted = async (args) => { liveCalls++; return live(args); };
   const infer = prior ? replayInfer(prior, { strict: false, live: counted }) : counted;
-  const result = await runAgentLoop({
-    messages, tools, infer: rec.wrapInfer(infer), executeTool: task.executeTool(arm.caps, ctx),
-    onEvent: rec.onEvent, verify: task.gate ? task.gate(arm.caps, ctx) : null,
-    ...(task.loopOptions ? task.loopOptions(arm.caps, ctx) : {}),
-  });
-  await rec.finish(result); await rec.settled();
+  // Factory order is part of the contract: executeTool sets up the workspace the gate reads and
+  // loopOptions may read, so executeTool → gate → loopOptions/driver, as the single call was.
+  const executeTool = task.executeTool(arm.caps, ctx);
+  const verify = task.gate ? task.gate(arm.caps, ctx) : null;
+  const drive = task.driver ? task.driver(arm.caps, ctx) : singleLoop(task.loopOptions ? task.loopOptions(arm.caps, ctx) : {});
+  const result = await drive({ messages, tools, infer: rec.wrapInfer(infer), executeTool, onEvent: rec.onEvent, verify, rec });
+  await rec.settled();
   return { rec, liveCalls, metrics: metricsOf(rec) };
 }
 

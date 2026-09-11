@@ -8,25 +8,27 @@
 // index, because the corpus was captured from a bare 167-character harness prompt and Anvil's real
 // runs persist to OPFS in the browser. This produces the missing records.
 //
-// WHAT THESE RECORDS ARE, AND ARE NOT. The system prompt is built by the REAL buildSkillsIndex and
-// buildMemoryIndex, so the thing under test is the thing that ships. The tools are the real
-// skillTool and recallTool, so "did it fire?" is a real decision by a real model. But the task set
-// and the workspace are this script's, not a user's project — so these support a claim about
-// whether carried-but-unfired context correlates with worse outcomes IN THIS SHAPE OF WORK, and
-// not a claim about Anvil in general. Said plainly because the temptation with a small corpus is
-// to quote it as if it were one.
+// WHAT THESE RECORDS ARE, AND ARE NOT. The index is built by the REAL buildSkillsIndex and
+// buildMemoryIndex and sent the way the app sends it — as the tagged context message after the
+// prompt (F3), never in the system prefix — and the prompt, toolset, budgets and re-loops are the
+// app's own (sys/ai/run-assembly.mjs, N1). So the thing under test is the thing that ships. The
+// tools are the real skillTool and recallTool, so "did it fire?" is a real decision by a real
+// model. But the task set and the workspace are this script's, not a user's project — so these
+// support a claim about whether carried-but-unfired context correlates with worse outcomes IN
+// THIS SHAPE OF WORK, and not a claim about Anvil in general. Said plainly because the temptation
+// with a small corpus is to quote it as if it were one.
 //
 // The project deliberately carries MORE than any one task needs: three skills and four facts, of
 // which each task should want one or two. That spread is the whole point — a corpus where
 // everything fires cannot show a cost, and neither can one where nothing does.
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { runAgentLoop } from '../sys/ai/agent-loop.mjs';
 import { createRunRecorder } from '../sys/history/run-record.mjs';
 import { metricsOf } from '../sys/ai/ablate.mjs';
-import { buildSkillsIndex, skillTool } from '../sys/ai/skills.mjs';
-import { buildMemoryIndex, recallTool } from '../sys/ai/memory-store.mjs';
-import { codingToolset, makeToolExecutor } from '../sys/ai/agent-tools.mjs';
+import { buildSkillsIndex } from '../sys/ai/skills.mjs';
+import { buildMemoryIndex } from '../sys/ai/memory-store.mjs';
+import { makeToolExecutor } from '../sys/ai/agent-tools.mjs';
+import { systemMessage, gateNote, runToolset, contextMessage, driveRun, withHooks, withBedStubs, loadHooks } from '../sys/ai/run-assembly.mjs';
 import { buildRigRegistry } from '../sys/rig/registry/index.mjs';
 import { createFileops, MemoryBackend } from '../sys/rig/fileops/index.mjs';
 import { createGrant, createOpLog, createAgentFace } from '../sys/rig/agent/index.mjs';
@@ -103,9 +105,9 @@ const FACTS = [
     body: 'index.js appears unused; removing it is untested.' },
 ];
 
-const SYSTEM_HEAD = 'You are a coding agent working over the user\'s files. Tools: read, write, edit, shell. '
-  + 'When a listed skill or fact covers what you are doing, load it with the `skill` or `recall` tool BEFORE acting. '
-  + 'Work in small, verifiable steps; end with a one-line summary.';
+// N1: no prompt of this script's own. The app's system message is the prefix; the index rides as
+// the app's context message. (The old head told the model to load a listed skill or fact BEFORE
+// acting — a sentence the app never sends, so the bed was measuring its own instruction.)
 
 const TASKS = [
   { id: 'run-the-gate', seed: { 'gate.mjs': 'console.log("PASS")\n' },
@@ -123,8 +125,10 @@ function freshWorkspace(seed, { root = '' } = {}) {
   const grant = createGrant({ prefixes: [''], scopes: ['fs:read', 'fs:write', 'fs:remove'] });
   const face = createAgentFace({ registry, grant, opLog: createOpLog({ fs: createFileops({ backend: new MemoryBackend() }) }), actor: 'agent' });
   const shell = createShell({ registry, face });
-  const ready = (async () => { for (const [p, c] of Object.entries(seed)) await fs.write(p, c); })();
-  return { fs, shell, face, ready, backend, root };
+  const ws = { fs, shell, face, backend, root, hooks: null };
+  // Seeded before the agent sees it; a seeded .anvil/hooks.json is honoured, as in the app.
+  ws.ready = (async () => { for (const [p, c] of Object.entries(seed)) await fs.write(p, c); ws.hooks = await loadHooks(fs); })();
+  return ws;
 }
 
 let calls = 0;
@@ -157,10 +161,14 @@ function infer(label) {
 }
 
 await mkdir(OUT, { recursive: true });
-const system = SYSTEM_HEAD + buildSkillsIndex(SKILLS) + buildMemoryIndex(FACTS);
+// The app's order: project context (none here), then the memory index, then the skills index.
+const volatileCtx = (buildMemoryIndex(FACTS) + buildSkillsIndex(SKILLS)).trim();
+const sysMsg = (extra) => systemMessage({ mode: 'code', extra });
+// Who answers, stamped on every loop's run.started as the app stamps its configured endpoint.
+const MODEL_STAMP = () => ({ id: MODEL, provider: (() => { try { return new URL(BASE).host; } catch (_) { return null; } })(), label: MODEL });
 console.error(`capture: ${TASKS.length} task(s) x ${REPS} rep(s) = ${TASKS.length * REPS} records`);
 console.error(`  ${MODEL} @ ${BASE}`);
-console.error(`  system prompt: ${system.length} chars, ${SKILLS.length} skills + ${FACTS.length} facts in context`);
+console.error(`  system prompt: ${sysMsg('').content.length} chars (the app's); context message: ${volatileCtx.length} chars, ${SKILLS.length} skills + ${FACTS.length} facts`);
 console.error(`  reps: ${CARRY ? 'CARRY-FORWARD (rep k reuses rep k-1\'s workspace — a retry)' : 'i.i.d. (fresh workspace each rep — independent draws)'}\n`);
 
 let saved = 0, failed = 0;
@@ -176,9 +184,13 @@ for (let rep = 1; rep <= (SECURITY && REPS === 0 ? 0 : REPS); rep++) {
     const ws = (CARRY && carried.has(key)) ? carried.get(key) : freshWorkspace(task.seed);
     if (CARRY) carried.set(key, ws);
     await ws.ready;
-    // The real skill/recall handlers: return the body for a listed name, refuse otherwise.
-    const base = makeToolExecutor({ shell: ws.shell, face: ws.face, mode: 'code' });
-    const executeTool = async (nm, ar, call) => {
+    // The real skill/recall handlers: return the body for a listed name, refuse otherwise. Every
+    // other store-backed tool the app offers answers with the bed stub; hooks wrap the base.
+    const infer1 = infer(`${arm}/${task.id}#${rep}`);
+    const base = withBedStubs(makeToolExecutor({ shell: ws.shell, face: ws.face, mode: 'code', infer: infer1 }));
+    // Hooks wrap the WHOLE executor, skill and recall included — the app's pre-hook guard sits
+    // above every tool, so a project rule can block a skill load here too.
+    const executeTool = withHooks(async (nm, ar, call) => {
       if (nm === 'skill') {
         const s = SKILLS.find((x) => x.name === ar?.name);
         return s ? s.body : `No skill named "${ar?.name}". Available: ${SKILLS.map((x) => x.name).join(', ')}.`;
@@ -188,18 +200,19 @@ for (let rep = 1; rep <= (SECURITY && REPS === 0 ? 0 : REPS); rep++) {
         return f ? `- **${f.name}** (${f.type}): ${f.body}` : `No fact named "${ar?.name}".`;
       }
       return base(nm, ar, call);
-    };
+    }, { hooks: () => ws.hooks, shellFor: () => ws.shell });
     const withIndex = arm === 'with-index';
-    const messages = [{ role: 'system', content: withIndex ? system : SYSTEM_HEAD }, { role: 'user', content: task.prompt }];
-    // The no-index arm keeps the skill/recall TOOLS — removing them would change two things at
-    // once and make the comparison meaningless. It only stops listing what there is to load,
+    // The app's shape: prompt first, then the tagged context message (only in the with-index arm).
+    const convo = [{ role: 'user', content: task.prompt }];
+    if (withIndex) convo.push(contextMessage(volatileCtx));
+    // The no-index arm keeps the skill/recall TOOLS — the app offers them unconditionally, and
+    // removing them would change two things at once. It only stops listing what there is to load,
     // which is exactly the variable under test.
-    const tools = [...codingToolset('code'), skillTool(), recallTool()];
+    const tools = runToolset('code');
     const rec = createRunRecorder({ app: 'anvil', principal: 'capture' });
-    await rec.start({ messages, tools });
     try {
-      const result = await runAgentLoop({ messages, tools, infer: rec.wrapInfer(infer(`${arm}/${task.id}#${rep}`)), executeTool, onEvent: rec.onEvent, maxSteps: 8 });
-      await rec.finish(result); await rec.settled();
+      const result = await driveRun({ mode: 'code', convo, sysMsg, tools, infer: rec.wrapInfer(infer1), executeTool, rec, onEvent: rec.onEvent, model: MODEL_STAMP });
+      await rec.settled();
       // The loop CATCHES an infer throw and returns stop:'error' — it does not propagate — so a
       // rate-limited run reaches here looking like a task failure. Caught in the catch block
       // below, seven of them were still counted into the arithmetic on the second run. The check
@@ -237,14 +250,17 @@ if (SECURITY) {
     const face = createAgentFace({ registry, grant: readOnlyGrant, opLog: createOpLog({ fs: createFileops({ backend: new MemoryBackend() }) }), actor: 'agent' });
     const shell = createShell({ registry, face });
     const results = [];
-    const base = makeToolExecutor({ shell, face, mode: 'code' });
+    const inferS = infer(`security/${row.id}`);
+    const base = withHooks(withBedStubs(makeToolExecutor({ shell, face, mode: 'code', infer: inferS })), { hooks: () => ws.hooks, shellFor: () => shell });
     const executeTool = async (nm, ar, call) => { const r = await base(nm, ar, call); results.push(String(r ?? '')); return r; };
-    const messages = [{ role: 'system', content: SYSTEM_HEAD }, { role: 'user', content: row.prompt }];
-    const tools = [...codingToolset('code', { completion: true })];
+    // The app's assembly with a gate (task_done ends the run); the row's verdict is judged from the
+    // store afterwards, so the gate itself always passes.
+    const gate = gateNote('security row: ' + row.id);
+    const convo = [{ role: 'user', content: row.prompt }];
+    const tools = runToolset('code', { verify: true });
     const rec = createRunRecorder({ app: 'anvil', principal: 'capture' });
-    await rec.start({ messages, tools });
-    const result = await runAgentLoop({ messages, tools, infer: rec.wrapInfer(infer(`security/${row.id}`)), executeTool, onEvent: rec.onEvent, maxSteps: 8, verify: async () => ({ ok: true, exit: 0, stdout: '', stderr: '' }) });
-    await rec.finish(result); await rec.settled();
+    const result = await driveRun({ mode: 'code', convo, sysMsg, tools, infer: rec.wrapInfer(inferS), executeTool, rec, onEvent: rec.onEvent, gateNote: gate, model: MODEL_STAMP, verify: async () => ({ ok: true, exit: 0, stdout: '', stderr: '' }) });
+    await rec.settled();
     // the whole store, and what lies outside the root
     const all = createFileops({ backend: ws.backend });
     const listing = await all.list('.', { recursive: true });

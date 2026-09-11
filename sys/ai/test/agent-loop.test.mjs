@@ -12,7 +12,7 @@ import { createGitCore } from '../../rig/git/git-core.mjs';
 import { buildRigRegistry } from '../../rig/registry/index.mjs';
 import { createGrant, createOpLog, createAgentFace } from '../../rig/agent/index.mjs';
 import { createShell } from '../../rig/cli/shell.mjs';
-import { runAgentLoop, shellTool, makeShellExecutor, taskDoneTool,
+import { runAgentLoop, shellTool, makeShellExecutor, taskDoneTool, DEFAULT_TOOL_CONCURRENCY,
   estimateTokens, boundedText, interceptBashCommand,
   REPEAT_NUDGE_AT, repeatNudge, stepSignature,
   usageInputTokens, usageOutputTokens,
@@ -978,6 +978,258 @@ await test('the spill notice states the TRUE elided count (F5)', () => {
   eq(elided, body.length - (r.sent.split('\n… (')[0].length + r.sent.split(') …\n')[1].length),
     `the count must be head+tail subtracted from the original, not a placeholder: said ${elided}`);
   assert(elided > 0, 'and it is not zero for a result that really was elided');
+});
+
+// ── F9 (N4): parallel dispatch within a step ───────────────────────────────
+// A timed executor: every call records when it started and finished; reads take a set time,
+// writes too. Concurrency is visible in the overlap, order in the events and the transcript.
+function timedExecutor({ readMs = 40, writeMs = 40, log }) {
+  return async (name, args) => {
+    const t0 = Date.now();
+    log.push({ name, path: args.path, start: t0 });
+    await new Promise((r) => setTimeout(r, name === 'read' ? readMs : writeMs));
+    const row = log.find((x) => x.name === name && x.path === args.path && x.end == null);
+    row.end = Date.now();
+    return `${name} ${args.path} ok`;
+  };
+}
+const parallelDefault = (n) => DEFAULT_TOOL_CONCURRENCY[n] === 'parallel';
+const READ_TOOLS = [{ type: 'function', function: { name: 'read', parameters: { type: 'object', properties: { path: { type: 'string' } } } } },
+  { type: 'function', function: { name: 'write', parameters: { type: 'object', properties: { path: { type: 'string' } } } } }];
+
+await test('F9: four reads in one step run concurrently — all four are running before any has finished', async () => {
+  // deterministic: each read is held open until the test releases it, so "all four started while
+  // none finished" is a fact, not a wall-clock race
+  const holds = new Map(); const startedPaths = [];
+  const exec = (n, a) => new Promise((res) => { startedPaths.push(a.path); holds.set(a.path, () => res('read ' + a.path)); });
+  const run = runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }], tools: READ_TOOLS,
+    infer: scriptedInfer([{ content: '', toolCalls: ['a', 'b', 'c', 'd'].map((p, i) => call('read', { path: p }, 'c' + i)) }, { content: 'done', toolCalls: [] }]),
+    executeTool: exec, maxSteps: 3,
+  });
+  await new Promise((res) => setTimeout(res, 0));
+  eq(startedPaths.join(' '), 'a b c d', 'all four started before any finished — a serial loop would have started only a');
+  for (const p of ['d', 'c', 'b', 'a']) holds.get(p)();
+  const r = await run;
+  eq(r.stop, 'done');
+  eq(r.messages.filter((m) => m.role === 'tool').map((m) => m.tool_call_id).join(' '), 'c0 c1 c2 c3', 'released in reverse, recorded in request order');
+});
+
+await test('F9: the recorded order is the request order, deterministic, whatever order the reads finish in', async () => {
+  const ev = [];
+  const log = [];
+  // the SECOND read (a member started ahead, not the inline first one) is the slowest: a
+  // completion-ordered emitter, or an ahead slot paired with whichever settles first, would
+  // put its result after the third's (a checker's mutant did exactly that when index 0 was slow)
+  const exec = async (name, args) => { const ms = args.path === 'slow' ? 80 : 5; log.push(args.path); await new Promise((r) => setTimeout(r, ms)); return 'read ' + args.path; };
+  const r = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }], tools: READ_TOOLS,
+    infer: scriptedInfer([{ content: '', toolCalls: [call('read', { path: 'first' }, 'c0'), call('read', { path: 'slow' }, 'c1'), call('read', { path: 'fast' }, 'c2')] }, { content: 'done', toolCalls: [] }]),
+    executeTool: exec, onEvent: (e) => ev.push(e), maxSteps: 3,
+  });
+  const seq = ev.filter((e) => e.type === 'tool-call' || e.type === 'tool-result').map((e) => e.type[5] + ':' + e.id);
+  eq(seq.join(' '), 'c:c0 r:c0 c:c1 r:c1 c:c2 r:c2', 'tool-call then tool-result, per call, in request order — the serial shape');
+  const tools = r.messages.filter((m) => m.role === 'tool').map((m) => m.tool_call_id + '=' + m.content);
+  eq(tools.join(' '), 'c0=read first c1=read slow c2=read fast', 'the transcript pairs each result with its call, in request order — the slow ahead member is not swapped with the fast one');
+  eq(log.join(' '), 'first slow fast', 'and they were all started, in request order');
+});
+
+await test('F9: a write in the same step waits for the reads before it; reads after it wait for the write', async () => {
+  const log = [];
+  const r = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }], tools: READ_TOOLS,
+    infer: scriptedInfer([{ content: '', toolCalls: [call('read', { path: 'a' }, 'c0'), call('read', { path: 'b' }, 'c1'), call('write', { path: 'c' }, 'c2'), call('read', { path: 'd' }, 'c3'), call('read', { path: 'e' }, 'c4')] }, { content: 'done', toolCalls: [] }]),
+    executeTool: timedExecutor({ readMs: 30, writeMs: 30, log }), maxSteps: 3,
+  });
+  eq(r.stop, 'done');
+  const by = Object.fromEntries(log.map((x) => [x.path, x]));
+  assert(by.b.start < by.a.end, 'a and b overlapped (a batch)');
+  assert(by.c.start >= Math.max(by.a.end, by.b.end), `the write started at ${by.c.start} — after both reads ended (${by.a.end}, ${by.b.end})`);
+  assert(by.d.start >= by.c.end && by.e.start >= by.c.end, 'the reads after the write waited for it');
+  assert(by.e.start < by.d.end, 'and those two reads overlapped with each other');
+  const tools = r.messages.filter((m) => m.role === 'tool').map((m) => m.tool_call_id);
+  eq(tools.join(' '), 'c0 c1 c2 c3 c4', 'transcript order is request order');
+});
+
+await test('F9: the declaration is per tool and overridable; unknown names are exclusive; a batch member that throws fails alone', async () => {
+  const log = [];
+  // an unknown name (not in the map) is exclusive even between parallel reads
+  const r0 = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }], tools: READ_TOOLS,
+    infer: scriptedInfer([{ content: '', toolCalls: [call('read', { path: 'a' }, 'c0'), call('mystery', { path: 'm' }, 'c1'), call('read', { path: 'b' }, 'c2')] }, { content: 'done', toolCalls: [] }]),
+    executeTool: timedExecutor({ readMs: 30, writeMs: 30, log }), maxSteps: 3,
+  });
+  eq(r0.stop, 'done');
+  const by0 = Object.fromEntries(log.map((x) => [x.path, x]));
+  assert(by0.m.start >= by0.a.end && by0.b.start >= by0.m.end, 'an unknown tool ran alone, between the reads');
+  assert(!Object.hasOwn(DEFAULT_TOOL_CONCURRENCY, 'mystery') && !parallelDefault('write') && !parallelDefault('shell') && !parallelDefault('read_lines') && !parallelDefault('skill') && !parallelDefault('context_remaining') && !parallelDefault('recall'), 'the default set is read + history only — the rest touch state');
+  log.length = 0;
+  // default: read is parallel, write exclusive. Override: make write parallel too and read exclusive.
+  const r = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }], tools: READ_TOOLS,
+    infer: scriptedInfer([{ content: '', toolCalls: [call('write', { path: 'x' }, 'c0'), call('write', { path: 'y' }, 'c1'), call('read', { path: 'z' }, 'c2'), call('read', { path: 'w' }, 'c3')] }, { content: 'done', toolCalls: [] }]),
+    executeTool: timedExecutor({ readMs: 30, writeMs: 30, log }), maxSteps: 3,
+    concurrency: { write: 'parallel', read: 'exclusive' },
+  });
+  eq(r.stop, 'done');
+  const by = Object.fromEntries(log.map((x) => [x.path, x]));
+  assert(by.y.start < by.x.end, 'with the override the two writes overlapped');
+  // an INHERITED 'parallel' does not count: only the map's own entries declare
+  log.length = 0;
+  await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }], tools: READ_TOOLS,
+    infer: scriptedInfer([{ content: '', toolCalls: [call('write', { path: 'x2' }, 'c0'), call('write', { path: 'y2' }, 'c1')] }, { content: 'done', toolCalls: [] }]),
+    executeTool: timedExecutor({ readMs: 30, writeMs: 30, log }), maxSteps: 3,
+    concurrency: Object.create({ write: 'parallel' }),
+  });
+  const byI = Object.fromEntries(log.map((x) => [x.path, x]));
+  assert(byI.y2.start >= byI.x2.end, 'an inherited declaration is ignored — the writes ran in series');
+  assert(by.w.start >= by.z.end, 'and the two reads ran one after another');
+  // a throwing batch member: its own result is the error, its neighbours are untouched
+  const ev = [];
+  const r2 = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }], tools: READ_TOOLS,
+    infer: scriptedInfer([{ content: '', toolCalls: [call('read', { path: 'ok1' }, 'c0'), call('read', { path: 'boom' }, 'c1'), call('read', { path: 'ok2' }, 'c2')] }, { content: 'done', toolCalls: [] }]),
+    executeTool: async (n, a) => { await new Promise((r) => setTimeout(r, 5)); if (a.path === 'boom') throw new Error('disk on fire'); return 'read ' + a.path; },
+    onEvent: (e) => ev.push(e), maxSteps: 3,
+  });
+  const tools = r2.messages.filter((m) => m.role === 'tool').map((m) => m.tool_call_id + '=' + m.content);
+  eq(tools.join(' | '), 'c0=read ok1 | c1=Error: disk on fire | c2=read ok2', 'the throw is that call\'s result; the others completed');
+  const errs = ev.filter((e) => e.type === 'tool-error');
+  eq(errs.length, 1); eq(errs[0].id, 'c1'); eq(errs[0].kind, 'execution_error');
+  const seq = ev.filter((e) => /^tool-(call|result|error)$/.test(e.type)).map((e) => e.type.slice(5, 6) + ':' + e.id).join(' ');
+  eq(seq, 'c:c0 r:c0 c:c1 e:c1 r:c1 c:c2 r:c2', 'the error sits between its own call and result, in request order');
+});
+
+await test('F9: clarify and task_done are never batched with reads', async () => {
+  const log = [];
+  // clarify pauses the run: the read after it must not have been started
+  const r0 = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }], tools: [...READ_TOOLS, clarifyTool()],
+    infer: scriptedInfer([{ content: '', toolCalls: [call('read', { path: 'a' }, 'c0'), call('clarify', { question: 'which one?' }, 'c1'), call('read', { path: 'b' }, 'c2')] }]),
+    executeTool: timedExecutor({ readMs: 20, log }), maxSteps: 3,
+  });
+  eq(r0.stop, 'clarify');
+  eq(log.map((x) => x.path).join(' '), 'a', 'the read after clarify never started');
+  log.length = 0;
+  const r = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }], tools: [...READ_TOOLS, taskDoneTool()],
+    infer: scriptedInfer([{ content: '', toolCalls: [call('read', { path: 'a' }, 'c0'), call('task_done', { summary: 'wrote the thing carefully' }, 'c1'), call('read', { path: 'b' }, 'c2')] }]),
+    executeTool: timedExecutor({ readMs: 20, log }), maxSteps: 3,
+  });
+  eq(r.stop, 'done', 'task_done without a gate accepts');
+  eq(log.map((x) => x.path).join(' '), 'a b', 'both reads ran, task_done handled by the loop between them');
+  assert(log[1].start >= log[0].end, 'the read after task_done was not started with the read before it');
+});
+
+await test('F9: the pool is rolling — at most maxParallel running, started in request order, refilled when a member SETTLES', async () => {
+  // deterministic: every member is held until the test releases it; no wall clock
+  const holds = new Map(); const startedPaths = [];
+  const exec = (n, a) => new Promise((res) => { startedPaths.push(a.path); holds.set(a.path, () => res('read ' + a.path)); });
+  let done = null;
+  const run = runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }], tools: READ_TOOLS,
+    infer: scriptedInfer([{ content: '', toolCalls: Array.from({ length: 6 }, (_, i) => call('read', { path: 'p' + i }, 'c' + i)) }, { content: 'done', toolCalls: [] }]),
+    executeTool: exec, maxSteps: 3, maxParallel: 3,
+  }).then((r) => { done = r; return r; });
+  const tick = () => new Promise((res) => setTimeout(res, 0));
+  await tick();
+  eq(startedPaths.join(' '), 'p0 p1 p2', 'three started, in request order, and no more (the cap)');
+  holds.get('p1')(); await tick(); await tick();
+  eq(startedPaths.join(' '), 'p0 p1 p2 p3', 'p1 settled → p3 started, although p0 (the front) is still running — refill is on settlement, not consumption');
+  holds.get('p2')(); await tick(); await tick();
+  eq(startedPaths.join(' '), 'p0 p1 p2 p3 p4', 'p2 settled → p4 started');
+  holds.get('p0')(); await tick(); await tick();
+  eq(startedPaths.join(' '), 'p0 p1 p2 p3 p4 p5', 'p0 settled → p5 started; never more than three running');
+  holds.get('p3')(); holds.get('p4')(); holds.get('p5')();
+  const r = await run;
+  eq(r.stop, 'done');
+  eq(r.messages.filter((m) => m.role === 'tool').map((m) => m.tool_call_id + '=' + m.content).join(' '), 'c0=read p0 c1=read p1 c2=read p2 c3=read p3 c4=read p4 c5=read p5', 'transcript order is request order whatever the settlement order');
+  assert(done !== null);
+});
+
+await test('F9: a stop raised inside the first executor starts nothing else', async () => {
+  const ac = new AbortController();
+  const ev = [];
+  const log = [];
+  const exec = async (n, a) => { log.push('start:' + a.path); if (a.path === 'a') ac.abort(); await new Promise((r) => setTimeout(r, 20)); return 'read ' + a.path; };
+  const r = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }], tools: READ_TOOLS, signal: ac.signal,
+    infer: scriptedInfer([{ content: '', toolCalls: Array.from({ length: 6 }, (_, i) => call('read', { path: String.fromCharCode(97 + i) }, 'c' + i)) }, { content: 'done', toolCalls: [] }]),
+    executeTool: exec, onEvent: (e) => ev.push(e), maxSteps: 3, maxParallel: 3,
+  });
+  eq(r.stop, 'aborted');
+  eq(log.join(' '), 'start:a', 'the signal is checked before each launch — b was never started');
+  eq(ev.filter((e) => e.type === 'tool-result').map((e) => e.id).join(' '), 'c0', 'a ran (its tool-call was out) and is recorded');
+});
+
+await test('F9: a stop while three members are running drains them — recorded, not force-killed — and starts nothing new', async () => {
+  const ac = new AbortController();
+  const ev = [];
+  const log = [];
+  let entered = 0; let release; const gate = new Promise((res) => { release = res; });
+  const exec = async (n, a) => { log.push('start:' + a.path); if (++entered === 3) { ac.abort(); release(); } await gate; await new Promise((r) => setTimeout(r, 5)); log.push('end:' + a.path); return 'read ' + a.path; };
+  const r = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }], tools: READ_TOOLS, signal: ac.signal,
+    infer: scriptedInfer([{ content: '', toolCalls: Array.from({ length: 6 }, (_, i) => call('read', { path: String.fromCharCode(97 + i) }, 'c' + i)) }, { content: 'done', toolCalls: [] }]),
+    executeTool: exec, onEvent: (e) => ev.push(e), maxSteps: 3, maxParallel: 3,
+  });
+  eq(r.stop, 'aborted');
+  eq(ev.filter((e) => e.type === 'tool-result').map((e) => e.id).join(' '), 'c0 c1 c2', 'the three members running at the stop were drained and recorded');
+  assert(!log.includes('start:d'), 'nothing after the stop was started');
+  eq(r.messages.filter((m) => m.role === 'tool').length, 3, 'their results are in the transcript');
+  const n = ev.length;
+  await new Promise((res) => setTimeout(res, 40));
+  eq(ev.length, n, 'no event arrives after the loop returned');
+});
+
+await test('F9: an exclusive call\'s synchronous throw is reported in the same tick, as before', async () => {
+  const order = [];
+  const exec = (n) => { queueMicrotask(() => order.push('microtask')); throw new Error('sync boom'); };
+  const r = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }], tools: READ_TOOLS,
+    infer: scriptedInfer([{ content: '', toolCalls: [call('write', { path: 'x' }, 'c0')] }, { content: 'done', toolCalls: [] }]),
+    executeTool: exec, onEvent: (e) => { if (e.type === 'tool-error' || e.type === 'tool-result') order.push(e.type); }, maxSteps: 3,
+  });
+  eq(r.stop, 'done');
+  eq(order.join(' '), 'tool-error tool-result microtask', 'error and result are emitted before a microtask scheduled by the throw runs');
+});
+
+await test('F9: a synchronous executor returning null records null, as the serial loop did', async () => {
+  const ev = [];
+  await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }], tools: READ_TOOLS,
+    infer: scriptedInfer([{ content: '', toolCalls: [call('read', { path: 'a' }, 'c0')] }, { content: 'done', toolCalls: [] }]),
+    executeTool: () => null, onEvent: (e) => ev.push(e), maxSteps: 3,
+  });
+  const res = ev.find((e) => e.type === 'tool-result');
+  assert(res && res.result === null, `result is null, not undefined: ${JSON.stringify(res)}`);
+});
+
+await test('F9: a single parallel-class call keeps the serial shape — tool-call before the executor runs', async () => {
+  const order = [];
+  const r = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }], tools: READ_TOOLS,
+    infer: scriptedInfer([{ content: '', toolCalls: [call('read', { path: 'a' }, 'c0')] }, { content: 'done', toolCalls: [] }]),
+    executeTool: async () => { order.push('execute'); return 'x'; }, onEvent: (e) => { if (/^tool-/.test(e.type)) order.push(e.type); }, maxSteps: 3,
+  });
+  eq(r.stop, 'done');
+  eq(order.join(' '), 'tool-call execute tool-result');
+});
+
+await test('F9: a call whose arguments do not parse is never started, and a loop-owned call is never batched even if declared parallel', async () => {
+  const seen = [];
+  const bad = { id: 'c1', type: 'function', function: { name: 'read', arguments: '{"path": "b"' } }; // cut off mid-JSON
+  const r = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }], tools: [...READ_TOOLS, taskDoneTool()],
+    infer: scriptedInfer([{ content: '', toolCalls: [call('read', { path: 'a' }, 'c0'), bad, call('read', { path: 'c' }, 'c2'), call('task_done', { summary: 'wrote the thing carefully' }, 'c3'), call('read', { path: 'd' }, 'c4')] }]),
+    executeTool: async (n, a) => { seen.push(n + ':' + (a && a.path)); return 'ok'; }, maxSteps: 3,
+    concurrency: { read: 'parallel', task_done: 'parallel' }, // a caller cannot make the loop's own call executable
+  });
+  eq(r.stop, 'done');
+  eq(seen.join(' '), 'read:a read:c read:d', 'the unparseable call and task_done never reached the executor');
+  const tools = r.messages.filter((m) => m.role === 'tool').map((m) => m.tool_call_id + '=' + m.content.slice(0, 24));
+  eq(tools.join(' | '), 'c0=ok | c1=Error: could not parse a | c2=ok | c3=Task accepted (no verifi | c4=ok', 'every call answered, in request order');
 });
 
 if (failures.length) {

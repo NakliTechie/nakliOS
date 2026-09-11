@@ -53,7 +53,7 @@ export function writeTool() {
 export function editTool() {
   return { type: 'function', function: {
     name: 'edit',
-    description: 'Replace an exact string in a file. old_string must match uniquely (include surrounding context) unless replace_all is set. Whitespace-tolerant.',
+    description: 'Replace an exact string in a file. old_string must match uniquely (include surrounding context) unless replace_all is set. Whitespace-tolerant. Read the file first; if it changed since you last read it, the edit is refused as stale — read it again, then edit.',
     parameters: { type: 'object', properties: {
       path: { type: 'string' },
       old_string: { type: 'string', description: 'The existing text to replace (with enough context to be unique).' },
@@ -164,6 +164,18 @@ export function codingToolset(mode = 'code', { subagents = false, supervisor = f
   if (completion) all.push(taskDoneTool());
   const allow = MODE_TOOLS[mode];
   return allow ? all.filter((t) => allow.has(t.function.name)) : all;
+}
+
+// ── the version token (pure) ────────────────────────────────────────────
+// A short digest of a file's content — FNV-1a over the code units plus the length — that the
+// read-before-edit ledger stores as "the version the model last saw". Two contents with the
+// same token are the same content for every purpose an edit has; a differing token is the
+// stale refusal. Not a security hash: nothing here defends against an adversary forging one.
+export function contentToken(text) {
+  const s = String(text == null ? '' : text);
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  return s.length.toString(36) + ':' + (h >>> 0).toString(36);
 }
 
 // ── the edit replacer chain (pure) — 9 strategies ───────────────────────
@@ -495,8 +507,25 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
   // Read-before-edit ledger: a file must be read (read tool, a
   // single-file cat, or just written) before `edit` will touch it — this stops
   // the model editing content it never saw. Paths are store-relative (resolved).
-  const readLedger = new Set();
-  const noteRead = (p) => { if (p) readLedger.add(p); };
+  // F8 (N3, 2026-09-12): the ledger holds the VERSION the model last saw, not just the fact
+  // of a read. Subagents run over copy-on-write overlays and the shell writes behind the
+  // tools, so "read once" was no longer "knows the content": an edit whose file changed
+  // under it — the shell, a sibling overlay, a hook — is refused as stale, never applied.
+  // The token is held here rather than handed to the model to carry: `edit` re-reads the
+  // file anyway, so the check costs nothing and cannot be forgotten.
+  const readLedger = new Map(); // resolved path -> contentToken of the content last seen
+  const noteSeen = (p, content) => { if (p) readLedger.set(p, contentToken(content)); };
+  // What a write leaves behind is what a read will hand back: UTF-8 on disk, decoded — a leading
+  // BOM or a lone surrogate does not survive the round trip, and recording the string as handed
+  // in made the very next edit a false "stale" (checker, 2026-09-12).
+  const asStored = (s) => new TextDecoder('utf-8').decode(new TextEncoder().encode(String(s ?? '')));
+  // F8's check, shared by every editor: the version the model last saw must be the version on
+  // disk now. Null when current; the refusal text otherwise. `Refused:` — the closed failure-kind
+  // set reads this as `rejected` (understood and refused), not an execution error.
+  const staleReply = (label, p, data) => {
+    const now = contentToken(data), seen = readLedger.get(p);
+    return now === seen ? null : `Refused: ${label} is stale — it changed since you last read it (version ${seen} → ${now}; the shell, a hook or another agent wrote it). Read it again, then edit.`;
+  };
   let todos = []; // the agent's task checklist (todowrite)
 
   function resolve(path) {
@@ -530,7 +559,7 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
     if (lines.length <= READ_MAX_LINES && s.length <= READ_MAX_BYTES) return s;
     const path = `.forge/out-${++spillCounter}.txt`;
     await writeFile(path, s);
-    noteRead(resolve(path));
+    noteSeen(resolve(path), asStored(s));
     const head = lines.slice(0, READ_MAX_LINES).join('\n').slice(0, READ_MAX_BYTES);
     return head + `\n… (${label} truncated: ${lines.length} lines / ${s.length} bytes. Full output saved to ${path} — read it with offset/limit.)`;
   }
@@ -576,9 +605,11 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
           result = (out ? out + '\n' : '') + confirmed;
           code = shell.lastCode; // the confirmed run is the real outcome
         }
-        // A plain single-file display satisfies the read-before-edit ledger.
+        // A plain single-file display satisfies the read-before-edit ledger. The version it
+        // records is the file's whole content — head/tail showed a part, but the file it is
+        // a part of is what an edit will be checked against.
         const m = /^\s*(?:cat|less|more|head|tail)\s+(\S+)\s*$/.exec(command);
-        if (m && !/[|>]/.test(command)) noteRead(resolve(m[1]));
+        if (m && !/[|>]/.test(command)) { const seen = await readFile(m[1]); if (seen.ok) noteSeen(resolve(m[1]), seen.data); }
         // Without this the model reads a failing build's stdout with no verdict.
         // Appended AFTER capping so truncation can never eat the exit code.
         const capped = await capOutput(result, 'shell output');
@@ -593,7 +624,7 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
       if (name === 'read') {
         const r = await readFile(args?.path);
         if (!r.ok) return `Error reading ${args?.path}: ${r.error}`;
-        noteRead(resolve(args?.path));
+        noteSeen(resolve(args?.path), r.data);
         const allLines = r.data.split('\n');
         const total = allLines.length;
         const offset = Number.isInteger(args?.offset) ? Math.max(1, args.offset) : 1;
@@ -609,7 +640,7 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
 
       if (name === 'write') {
         const r = await writeFile(args?.path, args?.content);
-        if (r.ok) noteRead(resolve(args?.path)); // writing establishes known state
+        if (r.ok) noteSeen(resolve(args?.path), asStored(args?.content)); // writing establishes known state
         // Live 2026-09-11: a model wrote /workspace/inv/store.py, the leading slash was resolved
         // against the root, and the plain "Wrote workspace/inv/store.py" read to it as proof that
         // /workspace existed. Say what happened, once, on the line it is already reading.
@@ -624,17 +655,21 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
         if (!readLedger.has(p)) {
           return `${args?.path} has not been read yet. Use the read tool on it first, then edit — this prevents editing content you have not seen.`;
         }
+        // F8: refused, not applied — an old_string that still matches would silently edit around a
+        // change the model has never seen.
+        const stale = staleReply(args?.path, p, r.data);
+        if (stale) return stale;
         const ed = applyEdit(r.data, args?.old_string, args?.new_string, args?.replace_all === true);
         if (!ed.ok) return `Error editing ${args?.path}: ${ed.error}`;
         const w = await writeFile(args?.path, ed.content);
-        if (w.ok) noteRead(p); // the new state is now known
+        if (w.ok) noteSeen(p, asStored(ed.content)); // the new state is now known
         return w.ok ? `Edited ${resolve(args?.path)} (${ed.count} replacement${ed.count === 1 ? '' : 's'}, ${ed.strategy} match)` : `Error writing ${args?.path}: ${w.error}`;
       }
 
       if (name === 'read_lines') {
         const r = await readFile(args?.path);
         if (!r.ok) return `Error reading ${args?.path}: ${r.error}`;
-        noteRead(resolve(args?.path));
+        noteSeen(resolve(args?.path), r.data);
         return await capOutput(renderHashline(resolve(args?.path), r.data), 'read_lines output');
       }
 
@@ -645,12 +680,17 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
         const p = resolve(parsed.path);
         const r = await readFile(parsed.path);
         if (!r.ok) return `Error: cannot edit ${parsed.path}: ${r.error}`;
-        // The content-hash TAG is the freshness guarantee (stronger than the
-        // read-before-edit ledger), so a stale file is rejected here structurally.
+        // The line TAG is 16 bits: a checker (2026-09-12) crafted a same-tag rewrite in 1,488
+        // tries. The ledger's version is the freshness guarantee; the tag still places the edit.
+        if (!readLedger.has(p)) {
+          return `${parsed.path} has not been read yet. Use read_lines on it first, then edit_lines — this prevents editing content you have not seen.`;
+        }
+        const stale = staleReply(parsed.path, p, r.data);
+        if (stale) return stale;
         const res = applyHashlineBlock(r.data, block);
         if (!res.ok) return `Error editing ${parsed.path}: ${res.error}`;
         const w = await writeFile(parsed.path, res.content);
-        if (w.ok) noteRead(p);
+        if (w.ok) noteSeen(p, asStored(res.content));
         return w.ok ? `Edited ${p} by line ref (${res.applied} op${res.applied === 1 ? '' : 's'})` : `Error writing ${parsed.path}: ${w.error}`;
       }
 
@@ -662,6 +702,7 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
           if (op.kind === 'add') {
             const w = await writeFile(op.path, op.content);
             if (!w.ok) return `Error adding ${op.path}: ${w.error}`;
+            noteSeen(resolve(op.path), asStored(op.content));
             done.push(`add ${op.path}`);
           } else if (op.kind === 'delete') {
             const res = await face.invoke('fs.remove', { path: resolve(op.path) });
@@ -670,6 +711,12 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
           } else if (op.kind === 'update') {
             const r = await readFile(op.path);
             if (!r.ok) return `Error updating ${op.path}: ${r.error}`;
+            // An update is an edit: read-before-edit and F8's version check apply to it too. (A
+            // matching hunk applying around a change the model never saw is exactly what F8 refuses.)
+            const up = resolve(op.path);
+            if (!readLedger.has(up)) return `${op.path} has not been read yet. Use the read tool on it first, then patch — this prevents editing content you have not seen.`;
+            const stale = staleReply(op.path, up, r.data);
+            if (stale) return stale;
             let content = r.data;
             for (const h of op.hunks) {
               if (h.before === h.after) continue;
@@ -680,6 +727,7 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
             const target = op.moveTo || op.path;
             const w = await writeFile(target, content);
             if (!w.ok) return `Error writing ${target}: ${w.error}`;
+            noteSeen(resolve(target), asStored(content));
             if (op.moveTo && op.moveTo !== op.path) {
               const res = await face.invoke('fs.remove', { path: resolve(op.path) });
               if (res.staged) await face.accept(res.proposalId);

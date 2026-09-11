@@ -62,7 +62,70 @@
 // A short form of the rule above, for the one place a human actually authors a gate.
 export const GATE_AUTHORING_HINT =
   'Assert the type as well as the value — `assert type(v) is int and v == 42`, not `assert v == 42`. ' +
-  'A bare == is satisfied by any object whose __eq__ says so. Test more than one case.';
+  'A bare == is satisfied by any object whose __eq__ says so. Test more than one case. ' +
+  'A criterion that defines __eq__/__ne__/__bool__, patches builtins, or has fewer than two assertions is refused.';
+
+// ── The lint (N2, 2026-09-12) ──────────────────────────────────────────────────────────────
+// The hint above is advice; this is the part of it a machine can check before a criterion is
+// armed. It is a LINT — a criterion can still be weak — but it refuses the three shapes a
+// criterion file can carry that make its own verdict meaningless: an `__eq__`/`__ne__`/`__bool__`
+// defined in the criterion itself (so a comparison answers whatever the file says), `builtins`
+// monkeypatched (so `assert`, `isinstance`, `type` mean something else), and fewer than two
+// independent assertions (one assertion is one thing to special-case). Pure; returns every
+// problem, not the first, so an author fixes the file once.
+//
+// What it does NOT reach, said plainly: the 2026-09-10 incident put `__eq__` in the SOLVER, not
+// the criterion, and no lint over the criterion sees the solver. Against that the defence is the
+// authoring rule above — assert the type, not only the value — which a checker (2026-09-12)
+// confirmed the three rules here do not enforce. Syntactic evasions of a regex lint (an aliased
+// `import builtins as b`, `setattr(X, "__eq__", …)`, `exec` of a built string) get through and
+// are not worth chasing: an owner who writes those is not the population this guards.
+const DUNDER_RE = /(?:^|[^\w])(?:def\s+__(?:eq|ne|bool)__\s*\(|__(?:eq|ne|bool)__\s*=(?!=))/;
+const BUILTINS_RE = /(?:^|[^\w])(?:builtins\s*\.\s*(?:\w+\s*=(?!=)|__dict__\s*\[)|setattr\s*\(\s*(?:__builtins__|builtins)\b|__builtins__\s*(?:\.\s*\w+\s*=(?!=)|\[[^\]]*\]\s*=(?!=))|(?:sys\.modules\s*\[\s*['"]builtins['"]\s*\]))/;
+const ASSERT_RE = /(?:^|[^\w.])assert\b|\.\s*assert\w+\s*\(/;
+
+// A line without its trailing comment — cut at the first `#` that is outside a string, so a
+// `#` inside a string literal neither truncates the code after it nor hides it.
+function stripComment(line) {
+  let q = null;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (q) { if (c === '\\') i++; else if (c === q) q = null; }
+    else if (c === '"' || c === "'") q = c;
+    else if (c === '#') return line.slice(0, i);
+  }
+  return line;
+}
+
+export function lintGateCriterion(text) {
+  const src = String(text == null ? '' : text);
+  const problems = [];
+  // Neither comments nor docstrings count for or against: a docstring that DESCRIBES the
+  // `__eq__ = True` cheat is not the cheat, and two asserts quoted inside one are not assertions.
+  const lines = src.replace(/("""|''')[\s\S]*?\1/g, '').split('\n').map(stripComment);
+  const code = lines.join('\n');
+  if (DUNDER_RE.test(code)) problems.push('defines __eq__, __ne__ or __bool__ — a comparison in this criterion would answer whatever the file says');
+  if (BUILTINS_RE.test(code)) problems.push('monkeypatches builtins — assert, isinstance and type would mean something else');
+  // Independent = distinct STATEMENTS with all whitespace removed: the same assertion pasted
+  // twice, or spaced differently, is one thing to special-case. A statement continues across
+  // lines while its brackets are open, so a formatter's `assert (\n …\n)` is read whole.
+  // Two statements on one line (`assert a; assert b`) are two lines here; a `;` inside a
+  // string is left alone.
+  const stmts = lines.flatMap((l) => (/['"]/.test(l) ? [l] : l.split(';')));
+  const asserts = new Set();
+  for (let i = 0; i < stmts.length; i++) {
+    if (!ASSERT_RE.test(stmts[i])) continue;
+    let stmt = stmts[i], depth = 0;
+    for (let j = i; j < stmts.length; j++) {
+      if (j > i) stmt += '\n' + stmts[j];
+      for (const c of stmts[j]) { if (c === '(' || c === '[' || c === '{') depth++; else if (c === ')' || c === ']' || c === '}') depth--; }
+      if (depth <= 0) { i = j; break; }
+    }
+    asserts.add(stmt.replace(/\s+/g, ''));
+  }
+  if (asserts.size < 2) problems.push(`has ${asserts.size} independent assertion${asserts.size === 1 ? '' : 's'}; a criterion needs at least two (one assertion is one thing to special-case)`);
+  return { ok: problems.length === 0, problems };
+}
 
 export const GATE_DIR = '.anvil/gate';
 
@@ -92,6 +155,10 @@ export function planGate({ file, source, command } = {}) {
   }
   if (typeof source !== 'string' || !source.trim()) {
     return { ok: false, error: 'a criterion needs a body; an empty file exits 0 and passes everything' };
+  }
+  const lint = lintGateCriterion(source);
+  if (!lint.ok) {
+    return { ok: false, error: `the criterion did not pass the lint: ${lint.problems.join('; ')}`, problems: lint.problems };
   }
   const cmd = String(command == null ? '' : command).trim() || `python ${path}`;
   // The command has to actually mention the criterion, or the gate measures something else and

@@ -16,13 +16,18 @@ import { readFile } from 'node:fs/promises';
 import { buildMemoryIndex } from '../sys/ai/memory-store.mjs';
 import { buildSkillsIndex } from '../sys/ai/skills.mjs';
 import { inlineModule, extractFunction, extractRegion, evaluate } from './anvil-harness.mjs';
+import { systemMessage, runToolset, reloopMessages, contextMessage } from '../sys/ai/run-assembly.mjs';
 
 const anvil = await readFile(new URL('../apps/anvil/index.html', import.meta.url), 'utf8');
+const assembly = await readFile(new URL('../sys/ai/run-assembly.mjs', import.meta.url), 'utf8');
 
 // The prompt shape, read out of the app so this cannot pass on a stale copy of the rule.
-const sysMsgLine = anvil.match(/const sysMsg=\(extra\)=>\(\{role:'system',content:([^}]*)\}\)/);
+// N1: the message is assembled in sys/ai/run-assembly.mjs from what the app hands it — the
+// argument list IS the prefix's whole input, so nothing volatile may appear in it.
+const sysMsgLine = anvil.match(/const sysMsg=\(extra\)=>systemMessage\((\{[^}]*\})\);/);
 assert.ok(sysMsgLine, 'the system message is built in one place');
 const prefixExpr = sysMsgLine[1];
+assert.equal(prefixExpr, '{ mode, proceduralPrior, extra }', 'the assembly is handed the mode, the prior and the per-run extra — nothing else');
 for (const volatile of ['projectContext', 'memoryIndex', 'skillsIndex', 'recoveryPreface']) {
   assert.ok(!prefixExpr.includes(volatile), `${volatile} is in the cache prefix: ${prefixExpr}`);
 }
@@ -55,21 +60,29 @@ const old = (idx) => [{ role: 'system', content: SYSTEM + idx + skills }, { role
 assert.equal(shared(old(idx1), old(idx2)), 0, 'control: with the index in the system message the whole prefix is invalidated');
 
 // The tool list must not depend on the store's contents either.
-assert.match(anvil, /\n\s*tools\.push\(skillTool\(\)\);/, 'the skill tool is offered unconditionally');
-assert.match(anvil, /\n\s*tools\.push\(recallTool\(\)\);/, 'the recall tool is offered unconditionally');
-assert.ok(!/if\(skillsIndex\) tools\.push/.test(anvil), 'no tool is gated on the skills index');
-assert.ok(!/if\(memoryIndex\) tools\.push/.test(anvil), 'no tool is gated on the memory index');
-assert.ok(!/mode==='code' && memoryIndex\) tools\.push/.test(anvil), 'revise is gated on the MODE, not on whether facts exist');
+// N1: the toolset is runToolset(mode, { verify }) — it takes no store, so it CANNOT depend on one.
+assert.match(anvil, /const tools = runToolset\(mode, \{ verify: !!verify \}\);/, 'the app sends the assembly\'s toolset and nothing else reaches it');
+for (const mode of ['code', 'plan', 'ask']) {
+  const names = runToolset(mode).map((x) => x.function.name);
+  assert.ok(names.includes('skill'), `the skill tool is offered unconditionally (${mode})`);
+  assert.ok(names.includes('recall'), `the recall tool is offered unconditionally (${mode})`);
+}
+assert.ok(runToolset('code').some((x) => x.function.name === 'revise') && !runToolset('plan').some((x) => x.function.name === 'revise'), 'revise is gated on the MODE, not on whether facts exist');
+assert.ok(!/tools\.push\(/.test(anvil.slice(anvil.indexOf('const tools = runToolset('), anvil.indexOf('const sysMsg='))), 'no tool is gated on an index after the assembly built the list');
 
 // The re-entered loops (act-or-nudge, the D2 supervisor) must carry the SAME conversation the
 // first loop built. Filtering the context message out of either one drops the memory and skills
 // index mid-run, and makes the second `run.started` disagree with the first — foldTranscript's
 // overlap dedup then re-appends turns instead of recognising them (mutation-tested).
-for (const [name, re] of [['act-or-nudge', /const nudgeMessages=\[sysMsg\(''\), \.\.\.convo\];/],
-                          ['D2 supervisor', /const superMessages=\[sysMsg\(''\), \.\.\.convo\];/]]) {
-  assert.match(anvil, re, `the ${name} re-loop must send the whole carried conversation, unfiltered`);
+// N1: both re-loops are driveRun's (sys/ai/run-assembly.mjs); their shape is reloopMessages.
+{
+  const convo = [{ role: 'user', content: 'a' }, { role: 'user', content: '[coordination] Working context' }, { role: 'assistant', content: 'b' }];
+  assert.deepEqual(reloopMessages((x) => ({ role: 'system', content: 'S' + x }), convo), [{ role: 'system', content: 'S' }, ...convo], 'a re-loop sends the whole carried conversation, unfiltered');
+  assert.match(anvil, /let result = await driveRun\(\{[\s\S]*?\bconvo\b/, 'the app hands the driver the carried conversation');
+  // the driver's two re-loop call sites are DRIVEN in scripts/test-run-assembly.mjs: the second
+  // rec.start carries the prompt, the context message, the prose and the nudge, in order.
+  assert.ok(!/\.\.\.convo\.filter\(/.test(anvil) && !/convo\.filter\(/.test(assembly), 'no re-loop filters the carried conversation');
 }
-assert.ok(!/\.\.\.convo\.filter\(/.test(anvil), 'no re-loop filters the carried conversation');
 
 // And the context message is change-gated: sent when it differs, skipped when it does not.
 assert.match(anvil, /const key = ctxDigest\(volatileCtx\);/, 'the volatile block is digested');
@@ -86,11 +99,11 @@ assert.equal(digest('same'), digest('same'), 'and is stable for the same context
 // mutation a cross-family review used to prove this needed driving, not grepping.
 {
   const mod = await inlineModule();
-  const region = extractRegion(mod, 'const volatileCtx =', 'const firstMessages=');
+  const region = extractRegion(mod, 'const volatileCtx =', '// F1: if what we are about to send');
   const digestFn = extractFunction(mod, 'ctxDigest');
   const run = (ctx, task, convo) => evaluate(
     `${digestFn}\n;(function(){ ${region} return convo; })()`,
-    { ...ctx, t: task, convo, recoveryPreface: ctx.recoveryPreface || '' });
+    { ...ctx, t: task, convo, recoveryPreface: ctx.recoveryPreface || '', contextMessage });
 
   const ctx = { projectContext: 'PROJECT NOTES', memoryIndex: '\n## memory\n- a fact', skillsIndex: '', recoveryPreface: '' };
   const t = {};

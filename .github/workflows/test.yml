@@ -105,6 +105,12 @@ jobs:
       - name: Verify the procedural prior renders byte-identically and every edge is removable
         run: node scripts/test-anvil-procedural.mjs
 
+      - name: Verify the run assembly — prompt bytes, tool list, budgets and re-loops equal the app (N1)
+        run: node scripts/test-run-assembly.mjs
+
+      - name: Verify the procedural bed runs the app's assembly end to end (stub model, zero spend)
+        run: node scripts/test-bench-procedural.mjs
+
       - name: Verify ordering metrics — anchored, never zero-for-null, refusing unlike comparisons
         run: node sys/history/test/ordering.test.mjs
 
@@ -218,6 +224,9 @@ jobs:
 
       - name: Verify arming a run's gate is one call that refuses the half-states
         run: node sys/ai/test/gate-arming.test.mjs
+
+      - name: Verify the gate lint refuses dunder comparisons, patched builtins and single assertions before arming (N2)
+        run: node sys/ai/test/gate-lint.test.mjs
 
       - name: Verify the verifier gate's python runs on a RESET interpreter, and the agent's does not
         run: node sys/kiln/test/gate-isolation.test.mjs

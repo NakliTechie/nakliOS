@@ -4,10 +4,11 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { searchRecords, scopeEntries, readEvent, historyTool } from '../sys/history/run-record.mjs';
+import { runToolset } from '../sys/ai/run-assembly.mjs';
 
 const anvil = await readFile(new URL('../apps/anvil/index.html', import.meta.url), 'utf8');
 
-assert.match(anvil, /import \{[^}]*\bsearchRecords\b[^}]*\bhistoryTool\b[^}]*\} from '\.\.\/\.\.\/sys\/history\/run-record\.mjs'/, 'Anvil imports the history core');
+assert.match(anvil, /import \{[^}]*\bsearchRecords\b[^}]*\} from '\.\.\/\.\.\/sys\/history\/run-record\.mjs'/, 'Anvil imports the history core');
 assert.match(anvil, /async function loadTaskRecords\(scope/, 'a helper loads the task\'s records by scope');
 // forward-pass NAF-02/NAF-07: every scope stays inside the active project, and the CALLER names
 // its task rather than inheriting whatever the UI has selected.
@@ -27,7 +28,8 @@ assert.match(anvil, /searchRecords\(entries,\{[^}]*\bscope\b[^}]*taskId:callerTa
 assert.match(anvil, /const scoped=scopeEntries\(entries, scope, callerTask\)/, 'the entries are scoped in the module, not only by the loader');
 assert.match(anvil, /readEvent\(scoped,String\(\(ar&&ar\.id\)\|\|''\)/, 'read is served from the SCOPED set (a read must not reach what a search could not)');
 assert.match(anvil, /entries\.push\(\{ runId:rid, taskId:tk,/, 'the loader tags each entry with its task, or scoping has nothing to match on');
-assert.match(anvil, /tools\.push\(historyTool\(\)\);/, 'the history tool is offered');
+// N1: the toolset is the assembly's (sys/ai/run-assembly.mjs); the app sends it (test-run-assembly.mjs).
+for (const mode of ['code', 'plan', 'ask']) assert.ok(runToolset(mode).some((x) => x.function.name === 'history'), `the history tool is offered in ${mode} mode`);
 // history is NOT gated to code mode (read-only): it must not be in the mode!=='code' refusal list
 assert.ok(!/nm==='history'[^)]*\)\)\{\s*\n\s*return 'Error: the "'\+nm/.test(anvil), 'history is available in every mode');
 

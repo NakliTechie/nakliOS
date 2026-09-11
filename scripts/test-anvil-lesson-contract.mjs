@@ -12,6 +12,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { LESSON_CONTRACT, RULES_CAP_CHARS, MEMORY_TYPES, buildMemoryIndex, parseFact } from '../sys/ai/memory-store.mjs';
 import { rememberTool } from '../sys/ai/project-context.mjs';
+import { LESSON_NOTE, systemMessage } from '../sys/ai/run-assembly.mjs';
 
 const anvil = await readFile(new URL('../apps/anvil/index.html', import.meta.url), 'utf8');
 
@@ -26,11 +27,14 @@ assert.ok(desc.includes(LESSON_CONTRACT), 'the remember tool description carries
 assert.ok(rememberTool().function.parameters.properties.type.enum.includes('rule'), 'the remember tool can record a rule');
 
 // Call site 2: the code-mode system prompt is assembled with the constant, not a paraphrase.
-assert.match(anvil, /import \{[^}]*\bLESSON_CONTRACT\b[^}]*\} from '\.\.\/\.\.\/sys\/ai\/memory-store\.mjs'/, 'Anvil imports LESSON_CONTRACT');
-assert.match(anvil, /LESSON_NOTE\s*=.*LESSON_CONTRACT/, 'the system-prompt note is built from LESSON_CONTRACT');
+// N1: the note lives in the assembly (sys/ai/run-assembly.mjs), which Anvil imports and sends.
+assert.equal(LESSON_NOTE, ' Memory: ' + LESSON_CONTRACT, 'the system-prompt note is built from LESSON_CONTRACT');
+assert.match(anvil, /import \{[^}]*\bsystemMessage\b[^}]*\} from '\.\.\/\.\.\/sys\/ai\/run-assembly\.mjs'/, 'Anvil imports the assembly');
 // The contract is STABLE text, so it stays in the cache prefix; F3 moved the volatile indexes
 // (projectContext / memoryIndex / skillsIndex) out into a change-gated context message.
-assert.match(anvil, /content:systemPrompt\(\)\+\(MODE_NOTE\[mode\]\|\|''\)\+\(mode==='code'\?LESSON_NOTE:''\)/, 'the system message includes the note in code mode, where remember exists');
+assert.ok(systemMessage({ mode: 'code' }).content.endsWith(LESSON_NOTE), 'the system message includes the note in code mode, where remember exists');
+assert.ok(!systemMessage({ mode: 'plan' }).content.includes(LESSON_CONTRACT), 'and not in plan mode, where it does not');
+assert.match(anvil, /const sysMsg=\(extra\)=>systemMessage\(\{ mode, proceduralPrior, extra \}\);/, 'the app sends that message');
 assert.match(anvil, /const volatileCtx = \(projectContext\+memoryIndex\+skillsIndex/, 'and the memory index still reaches the model, in the context message');
 
 // Rules reach the prompt with their bodies: the prompt-time push spreads the parsed fact

@@ -20,6 +20,7 @@ import { spawn } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { systemMessage, runToolset, contextMessage } from '../sys/ai/run-assembly.mjs';
 
 const MARKER = 'carry-marker.txt';
 const BODY = 'written-by-rep-1';
@@ -34,6 +35,7 @@ function stub() {
     req.on('data', (c) => { raw += c; });
     req.on('end', () => {
       const body = JSON.parse(raw || '{}');
+      seen.push(body); // N1: what the bed actually sent, checked below against the assembly
       const priorTools = body.messages.filter((m) => m.role === 'tool').length;
       turn++;
       // Rep is decided by wall position: the harness sends 3 tasks per rep, so the first 3 runs are
@@ -61,10 +63,12 @@ function stub() {
 }
 let runsSeen = 0;
 let sawBodyInRep2 = false; // set by the stub when a rep-2 read returns rep 1's marker
+let seen = [];             // every request body the stub received in the current run
 
 async function run(extraArgs) {
   runsSeen = 0;
   sawBodyInRep2 = false;
+  seen = [];
   const srv = stub();
   await new Promise((r) => srv.listen(0, '127.0.0.1', r));
   const port = srv.address().port;
@@ -80,7 +84,7 @@ async function run(extraArgs) {
   });
   srv.close();
   await rm(out, { recursive: true, force: true });
-  return { stderr, sawBodyInRep2 };
+  return { stderr, sawBodyInRep2, seen };
 }
 
 let failed = 0;
@@ -101,6 +105,17 @@ check('--carry drops that warning', !/CANNOT answer AC-8/.test(withCarry.stderr)
 // If BOTH pass the read, --carry is a no-op and every quota number measured on it is void.
 check('--carry: rep 2 reads the file rep 1 wrote', withCarry.sawBodyInRep2 === true);
 check('no --carry: rep 2 does NOT see rep 1\'s file', noCarry.sawBodyInRep2 === false);
+
+// N1 (2026-09-12): the capture bed runs what the app runs. The system message is the assembly's
+// bytes, the tool list is the app's code-mode set, and the index rides as the app's tagged context
+// message after the prompt — never in the system prefix.
+const reqs = noCarry.seen;
+check('N1: every request opens with the app\'s system message, byte for byte', reqs.length > 0 && reqs.every((b) => b.messages[0].role === 'system' && b.messages[0].content === systemMessage({ mode: 'code' }).content));
+check('N1: the tool list is the app\'s code-mode set, in order', reqs.every((b) => JSON.stringify(b.tools.map((t) => t.function.name)) === JSON.stringify(runToolset('code').map((t) => t.function.name))));
+check('N1: the index rides as the context message after the prompt', reqs.every((b) => b.messages[1].role === 'user' && b.messages[2] && b.messages[2].content.startsWith(contextMessage('').content)));
+check('N1: and never in the system prefix', reqs.every((b) => !/## Skills|## Memory|\*\*build-command\*\*/i.test(b.messages[0].content)));
+check('N1: the context message carries the skills and the facts', reqs.every((b) => /build-command/.test(b.messages[2].content) && /run-the-gate|deploy|gate/.test(b.messages[2].content)));
+check('N1: in the app\'s order — the memory index before the skills index', reqs.every((b) => { const c = b.messages[2].content; return c.indexOf('build-command') < c.indexOf('run-the-gate'); }));
 
 console.log(failed ? `\n${failed} check(s) failed` : '\nall checks passed');
 process.exit(failed ? 1 : 0);

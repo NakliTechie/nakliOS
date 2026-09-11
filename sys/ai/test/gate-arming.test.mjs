@@ -16,18 +16,22 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { planGate, GATE_DIR, underGateDir } from '../gate.mjs';
 
+// N2 (2026-09-12): planGate also lints the criterion (gate-lint.test.mjs) — two independent
+// assertions is the floor, so every fixture that must arm carries two.
+const TWO = 'assert type(fib(10)) is int and fib(10) == 55\nassert type(fib(1)) is int and fib(1) == 1\n';
+
 let pass = 0, fail = 0;
 const ok = (name, cond) => { if (cond) { pass++; } else { fail++; console.error('FAIL:', name); } };
 
 // ── the happy path ──────────────────────────────────────────────────────────
 {
-  const p = planGate({ file: 'test_fib.py', source: 'assert type(fib(10)) is int\n' });
+  const p = planGate({ file: 'test_fib.py', source: TWO });
   ok('a bare filename lands under the fence', p.ok && p.path === `${GATE_DIR}/test_fib.py`);
   ok('the default command runs the criterion', p.ok && p.command === `python ${GATE_DIR}/test_fib.py`);
   ok('the planned path is inside the fence', underGateDir(p.path));
 
   const explicit = planGate({
-    file: `${GATE_DIR}/t.py`, source: 'assert 1\n',
+    file: `${GATE_DIR}/t.py`, source: TWO,
     command: `python ${GATE_DIR}/t.py --strict`,
   });
   ok('an explicit command is kept', explicit.ok && explicit.command.endsWith('--strict'));
@@ -39,17 +43,17 @@ const ok = (name, cond) => { if (cond) { pass++; } else { fail++; console.error(
   ok('a criterion outside the fence is refused', !outside.ok && /must live under/.test(outside.error));
   ok('the refusal says why the fence matters', !outside.ok && /fence covers nothing else/.test(outside.error));
 
-  const escape = planGate({ file: '../../etc/passwd', source: 'x\n' });
+  const escape = planGate({ file: '../../etc/passwd', source: TWO }); // TWO: so the fence, not the lint, is what refuses
   ok('a traversal out of the fence is refused', !escape.ok);
 
   const empty = planGate({ file: 'test_x.py', source: '   ' });
   ok('an empty criterion is refused', !empty.ok && /exits 0 and passes everything/.test(empty.error));
 
-  const noFile = planGate({ source: 'assert 1\n' });
+  const noFile = planGate({ source: TWO }); // TWO: so the missing name, not the lint, is what refuses
   ok('a gate with no criterion file is refused', !noFile.ok);
 
   const mismatched = planGate({
-    file: 'test_fib.py', source: 'assert 1\n', command: 'pytest tests/',
+    file: 'test_fib.py', source: TWO, command: 'pytest tests/',
   });
   ok('a command that does not run the criterion is refused',
     !mismatched.ok && /does not mention/.test(mismatched.error));
@@ -57,7 +61,7 @@ const ok = (name, cond) => { if (cond) { pass++; } else { fail++; console.error(
 
 // ── purity: planGate decides, the caller writes ─────────────────────────────
 {
-  const p = planGate({ file: 'a.py', source: 'assert 1\n' });
+  const p = planGate({ file: 'a.py', source: TWO });
   ok('planGate returns a plan, not an effect', p.ok && typeof p.source === 'string' && !('written' in p));
 }
 

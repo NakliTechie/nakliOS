@@ -408,7 +408,7 @@
   import { runAgentLoop } from '../../sys/ai/agent-loop.mjs';
   import { codingToolset, makeToolExecutor, makeShellVerifier, parseApplyPatch } from '../../sys/ai/agent-tools.mjs';
   import { buildProjectContext, rememberTool } from '../../sys/ai/project-context.mjs';
-  import { SKILLS_DIR, parseSkill, buildSkillsIndex, skillTool, INJECTED_STATUSES, explainSkillsRefusal } from '../../sys/ai/skills.mjs';
+  import { SKILLS_DIR, parseSkill, buildSkillsIndex, INJECTED_STATUSES, explainSkillsRefusal } from '../../sys/ai/skills.mjs';
   import { GATE_DIR, explainGateRefusal, GATE_AUTHORING_HINT, planGate } from '../../sys/ai/gate.mjs';
   // Med1: the trigram index is DERIVED from the workspace, so an agent that can write it can make
   // search lie about the workspace it was built from — a poisoned index answers questions about
@@ -421,18 +421,19 @@
   import { buildChangeRow, planRevert, prunePreimages, preimageBytes, MAX_PREIMAGE_BUDGET } from '../../sys/ai/change-preimages.mjs';
   import { subagentFeedRow, subagentFeedLine } from '../../sys/ai/subagents.mjs'; // ESS-2: the live child feed
   import { migrateQueue, reconcileQueue, enqueue as qEnqueue, removeEntry as qRemove, moveEntry as qMove, editEntry as qEdit, nextDispatch, completeDispatch, releaseDispatch, admitRun } from '../../sys/ai/followup-queue.mjs';
-  import { skillManageTool, planSkillWrite, createSkillSession, SKILL_FILE, SKILL_SHAPE, scaffoldSkill, starterSkillFile, renderSkillReader, lintSkill } from '../../sys/ai/skill-manage.mjs';
+  import { planSkillWrite, createSkillSession, SKILL_FILE, SKILL_SHAPE, scaffoldSkill, starterSkillFile, renderSkillReader, lintSkill } from '../../sys/ai/skill-manage.mjs';
   import { createProposalLedger } from '../../sys/ai/proposal-fingerprint.mjs';
   import { skillLifecycle, applySkillStatus, reviveOnUse } from '../../sys/ai/skill-lifecycle.mjs';
-  import { contextRemainingTool, checkpointTool, contextBudget, windowFromOllama, windowForPreset, capHandoff } from '../../sys/ai/context-budget.mjs';
-  import { runLearnReview, shouldAutoReview, learnReviewTool, AUTO_REVIEW_IDLE_MS } from '../../sys/ai/learn.mjs';
+  import { contextBudget, windowFromOllama, windowForPreset, capHandoff } from '../../sys/ai/context-budget.mjs';
+  import { runLearnReview, shouldAutoReview, AUTO_REVIEW_IDLE_MS } from '../../sys/ai/learn.mjs';
   import { sentinelLine, scanSkill } from '../../sys/ai/skill-sentinel.mjs';
   import { makeEnvelope } from '../../sys/staging/envelope.mjs';
   import { registerAppDiffTypes } from '../../sys/staging/diff-types.mjs';
   // A skill write is a P0 envelope (diff type 'anvil-skill') — the first agent-produced diff.
   registerAppDiffTypes(['anvil']);
-  import { MEMORY_DIR, parseFact, buildMemoryIndex, noteToFact, recallTool, applyRevision, applyDemotion, dependantsOf, slotHolder, reviseTool, findDuplicate, duplicateReply, createRememberBudget, budgetSpentReply, checkRulesCap, rulesCapReply, LESSON_CONTRACT } from '../../sys/ai/memory-store.mjs';
-  import { HOOKS_FILE, parseHooks, preToolDecision, postToolCommands } from '../../sys/ai/hooks.mjs';
+  import { MEMORY_DIR, parseFact, buildMemoryIndex, noteToFact, applyRevision, applyDemotion, dependantsOf, slotHolder, findDuplicate, duplicateReply, createRememberBudget, budgetSpentReply, checkRulesCap, rulesCapReply } from '../../sys/ai/memory-store.mjs';
+  import { HOOKS_FILE, parseHooks } from '../../sys/ai/hooks.mjs';
+  import { systemPrompt as assembledSystemPrompt, systemMessage, gateNote as assembledGateNote, runToolset, synthesizeTool, driveRun, loadHooks, preHookReply, postHookNotes, contextMessage } from '../../sys/ai/run-assembly.mjs';
   import { gateAction, gateEvent, actionClasses } from '../../sys/ai/action-gate.mjs';
   import { applyPolicy, grant as policyGrant, revoke as policyRevoke, policyRows, normalisePolicy, POLICY_HINT } from '../../sys/ai/action-policy.mjs';
   import { decideByRules, applyMode, MODES as PERM_MODES, MODE_LABEL as PERM_MODE_LABEL, modeIsLoud } from '../../sys/ai/permission-rules.mjs';
@@ -453,7 +454,7 @@
   import { runCampaign } from '../../sys/assay/runmode.mjs';
   import { makeCampaignExecutors } from '../../sys/assay/executors.mjs';
   import { verifyWall, verifyTests, replay as replayLineage } from '../../sys/assay/verify.mjs';
-  import { createRunRecorder, foldStatus, foldLog, foldTranscript, loadRecord, foldStopReasons, stopReasonsLine, searchRecords, scopeEntries, readEvent, historyTool, foldRecovery, recoveryNote, foldStagnation, stagnationNudge, foldOutcome, foldSkillUsage } from '../../sys/history/run-record.mjs';
+  import { createRunRecorder, foldStatus, foldLog, foldTranscript, loadRecord, foldStopReasons, stopReasonsLine, searchRecords, scopeEntries, readEvent, foldRecovery, recoveryNote, foldOutcome, foldSkillUsage } from '../../sys/history/run-record.mjs';
 
   const $ = (id) => document.getElementById(id);
   const nak = window.naklios || null;
@@ -990,16 +991,6 @@
       const ok=+m[1], total=+m[2]; let failed=[]; try{ failed=JSON.parse(m[3]); }catch(_){}
       return { score: total? ok/total : 0, detail:{ ok, total, failed } };
     }catch(e){ return { score:-1, detail:{ error:String(e&&e.message||e) } }; }
-  }
-  function synthesizeTool(){
-    return { type:'function', function:{ name:'synthesize',
-      description:'Evolve a Python solve(x) for an EXAMPLE-BASED task (a puzzle defined by input→output pairs). Runs several generations of candidate programs, scoring each by how many example pairs it reproduces and repairing the best — then writes solver.py and reports the best fitness. Prefer this over writing one solver by hand when the task is defined by examples.',
-      parameters:{ type:'object', properties:{
-        goal:{ type:'string', description:'One line describing the task.' },
-        examples:{ type:'array', description:'The input→output pairs: [{input, output}, …].', items:{ type:'object' } },
-        popSize:{ type:'integer', description:'Candidates per generation (default 3, max 4).' },
-        maxGen:{ type:'integer', description:'Max generations (default 3, max 4).' },
-      }, required:['goal','examples'] } } };
   }
   // The evolutionary synthesis run, shared by the `synthesize` tool + the test hook.
   async function runSynthesize({ goal, examples, popSize=3, maxGen=3, onGen=null }){
@@ -1897,18 +1888,10 @@
   // set per run from the project's optional .anvil/procedural.json; the default render is
   // byte-identical to the string this replaced (scripts/test-anvil-procedural.mjs).
   let proceduralPrior = renderProcedural();
-  const SYSTEM_HEAD = 'You are a coding agent working over the user\'s files. Tools: read (line-numbered), write (whole file), edit (surgical old_string→new_string), apply_patch (add/update/delete files), todowrite (checklist), task (delegate one bounded sub-task to a subagent), dispatch (fan out INDEPENDENT sub-tasks to subagents that run in parallel, each in an isolated copy of the workspace — their changes merge back when they touch different files), review (an independent read-only reviewer subagent for a second opinion), shell (a CURATED bash-like shell, not coreutils: ls cat grep rg sed awk find head tail wc sort uniq cut tr test git python, with pipes, && || ; > >> < and globs. Each builtin implements a documented subset and REFUSES an unsupported flag rather than ignoring it — run `help` to see what each one supports. No loops, subshells, command substitution or heredocs; use python for scripting). ';
-  // Live 2026-09-11: a model spent 24 steps under an invented /workspace prefix — the leading slash
-  // resolves against the root, so its writes landed in a folder literally named workspace/, and
-  // python's own cwd (/work, the Kiln mount) read as a third universe. One sentence, in the stable
-  // prefix, at the very end so both seams the procedural test pins stay byte-identical.
-  const SYSTEM_TAIL = ' Work in small, verifiable steps; end with a one-line summary. Paths are relative to the workspace root, which the shell shows as / and python as /work — there is no /workspace, /home or /tmp; do not invent a prefix and do not cd first.';
-  // Assembled at read time so a per-run graph change takes effect without a reload.
-  function systemPrompt(){ return SYSTEM_HEAD + proceduralPrior + SYSTEM_TAIL; }
-  // The lesson-layer contract rides in the system prompt of every code-mode run (where
-  // `remember` exists) — the first remember of a project happens with an EMPTY memory index,
-  // so the index header alone could never carry it. Same constant as the tool description.
-  const LESSON_NOTE = ' Memory: ' + LESSON_CONTRACT;
+  // The prompt's stable halves, the mode notes and the lesson note live in sys/ai/run-assembly.mjs —
+  // the beds import the same module, so what they measure is what this app sends. Assembled at
+  // read time so a per-run graph change takes effect without a reload.
+  function systemPrompt(){ return assembledSystemPrompt(proceduralPrior); }
   // A short, stable digest of the volatile context block (F3). Only used to answer "has this
   // changed since the last run of this task?", so it is stored on the task instead of the text
   // itself — a 20 KB index has no business living in the saved task state. FNV-1a.
@@ -1917,7 +1900,6 @@
     for(let i=0;i<str.length;i++){ h^=str.charCodeAt(i); h=Math.imul(h,0x01000193)>>>0; }
     return str.length+':'+(h>>>0).toString(36);
   }
-  const MODE_NOTE = { code:'', plan:' PLAN mode: read and think only — no writes/edits/shell; produce a concise plan.', ask:' ASK mode: read-only; answer the question, do not modify anything.' };
 
   let running=false;
   let autoReviewTimer=null; // the idle-deferred post-run review (C5)
@@ -2227,8 +2209,8 @@
       // preTool rule could never see — let alone block — any of them.
       // hooksCfg is loaded before any run and hookMatches takes arbitrary tool
       // names, so this is a pure reordering.
-      const dec0 = preToolDecision(hooksCfg, nm, ar);
-      if(dec0.blocked) return '[blocked by a project hook] '+dec0.message;
+      const hookReply = preHookReply(hooksCfg, nm, ar);
+      if(hookReply!=null) return hookReply;
       // AC-7: a typed verdict on THIS action, before it happens. Authorization is read only from
       // the owner's own turns — `[coordination]` messages are the loop talking to itself and can
       // never widen scope. This sits ABOVE the grant and can only ever ask for more: the grant is
@@ -2520,16 +2502,8 @@
       // Post-tool hooks: run configured commands (auto-format / lint / verify)
       // after the tool succeeds; their bounded output is fed back to the agent.
       try{
-        const cmds = postToolCommands(hooksCfg, nm, ar);
-        if(cmds.length){
-          let extra='';
-          const hsh = createShell({ registry, face, kiln: kilnRef });
-          for(const cmd of cmds){
-            try{ const o=await hsh.feed(cmd); const out=String((o&&o.output)||'').trim().slice(0,2000); extra += '\n[hook] '+cmd+(out?('\n'+out):' (ok)'); }
-            catch(e){ extra += '\n[hook] '+cmd+' — error: '+(e&&e.message||e); }
-          }
-          if(extra){ renderFiles(); return String(res==null?'':res)+extra; }
-        }
+        const extra = await postHookNotes(hooksCfg, nm, ar, ()=>createShell({ registry, face, kiln: kilnRef }));
+        if(extra){ renderFiles(); return String(res==null?'':res)+extra; }
       }catch(_){}
       return res;
     };
@@ -2645,33 +2619,16 @@
     }catch(_){}
     // Per-project tool hooks: pre-tool guards + post-tool commands from
     // .anvil/hooks.json (loaded once per run; executeTool reads hooksCfg).
-    try{ const r=await fs.read(HOOKS_FILE,{encoding:'utf-8'}); if(r&&r.ok) hooksCfg=parseHooks(r.data); }catch(_){}
-    // `remember` writes a fact file — code mode only (plan/ask are read-only).
-    // `skill` and `recall` are read-only, offered in every mode when there's
-    // something to load.
-    const tools = codingToolset(mode,{subagents:true, supervisor: mode==='code', completion: !!verify, clarify: true}); // B3: top level may ask
-    if(mode==='code') tools.push(rememberTool());
-    if(mode==='code') tools.push(skillManageTool());
-    if(mode==='code') tools.push(synthesizeTool());
-    tools.push(historyTool()); // read-only: search/read past runs, every mode
-    tools.push(contextRemainingTool()); // read-only: the honest budget, every mode
-    if(mode==='code'){ tools.push(checkpointTool()); tools.push(learnReviewTool()); }
-    // F3: UNCONDITIONAL. These were gated on whether the workspace already had skills or
-    // facts, so the first `remember` in a fresh workspace changed the tool SCHEMA block —
-    // the most expensive thing in the prompt to invalidate. The tools answer honestly when
-    // there is nothing yet; the schema no longer depends on the store's contents.
-    tools.push(skillTool());
-    tools.push(recallTool());
-    if(mode==='code') tools.push(reviseTool()); // belief revision over existing facts
+    hooksCfg = await loadHooks(fs, hooksCfg);
+    const tools = runToolset(mode, { verify: !!verify }); // the app's list, in the app's order — the beds get the same one
     try{
-      let toolCalls=0;
       // F3 — the system message is the CACHE PREFIX, so only stable text lives in it.
       // It used to concatenate SYSTEM + MODE_NOTE + LESSON_NOTE + projectContext +
       // memoryIndex + skillsIndex and be rebuilt every run, so one `remember` write or one
       // skill status flip invalidated the whole prefix — real money on BYOK, real latency on
       // a local model. The volatile indexes now ride in a context message placed AFTER the
       // retained history (see contextMsg below), where a change costs only the tail.
-      const sysMsg=(extra)=>({role:'system',content:systemPrompt()+(MODE_NOTE[mode]||'')+(mode==='code'?LESSON_NOTE:'')+(extra||'')});
+      const sysMsg=(extra)=>systemMessage({ mode, proceduralPrior, extra });
       // A turn in flight is the longest silence in a run — on a local model it can
       // be minutes. Show a placeholder so a working agent and a wedged one are
       // distinguishable; it is replaced by whatever the turn actually produces.
@@ -2679,7 +2636,7 @@
       const clearThinking=()=>{ if(thinking){ const i=t.log.indexOf(thinking); if(i>=0) t.log.splice(i,1); thinking=null; } };
       const onLoopEvent=(e)=>{
           if(e.type==='turn-start'){ clearThinking(); thinking={k:'system',text:'thinking… (step '+((e.step||0)+1)+')'}; t.log.push(thinking); renderLog(); }
-          else if(e.type==='tool-call'){ clearThinking(); toolCalls++; const a=e.args||{}; const detail=a.command||a.path||a.file||a.old_string||(a.patch?'patch':'')||''; liveTool={k:'tool',name:e.name,detail:String(detail).split('\n')[0].slice(0,120),result:null,error:null,args:a}; t.log.push(liveTool); renderLog(); }
+          else if(e.type==='tool-call'){ clearThinking(); const a=e.args||{}; const detail=a.command||a.path||a.file||a.old_string||(a.patch?'patch':'')||''; liveTool={k:'tool',name:e.name,detail:String(detail).split('\n')[0].slice(0,120),result:null,error:null,args:a}; t.log.push(liveTool); renderLog(); }
           // An orphan tool-result/tool-error (no preceding tool-call) is REAL:
           // task_done is intercepted before executeTool and emits only a result,
           // and unparseable arguments emit only an error. Dropping them made those
@@ -2710,7 +2667,7 @@
         const c = (nak && nak.capabilities) || {};
         return { id: c.aiModel || null, provider: c.aiProvider || null, label: c.aiModelLabel || null };
       };
-      const gateNote = verify?(' A verify gate is set: `'+verifyCmd+'`. You are not done until it exits 0 — call task_done when you believe the work is complete and it will run.'):'';
+      const gateNote = assembledGateNote(verifyCmd);
       const recoveryPreface = (t.recovery && String(t.recovery).trim()) ? ('\n\n'+t.recovery) : '';
       // The volatile half, change-gated: it is appended to the conversation only when it
       // DIFFERS from what this task was last sent. Unchanged, it is already in the carried
@@ -2726,15 +2683,13 @@
       if(volatileCtx){
         const key = ctxDigest(volatileCtx);
         if(key !== t.ctxSent){
-          convo.push({role:'user', content:'[coordination] Working context for this run — project notes, the memory index, and the skills available. Not an instruction from the owner.\n\n'+volatileCtx});
+          convo.push(contextMessage(volatileCtx));
           t.ctxSent = key;
         }
       }
       // Per-run, never gated: it is about THIS resumption and is worthless stale.
       const recoveryMsg = recoveryPreface.trim();
       if(recoveryMsg) convo.push({role:'user', content:'[coordination] '+recoveryMsg});
-      const firstMessages=[sysMsg(gateNote), ...convo];
-      liveSystemText = firstMessages[0].content; // so the budget counts the prompt actually sent
       // F1: if what we are about to send cannot be reconstructed from the chain, SAY SO in the
       // log. It does not stop the run — a divergence is diagnostic, and killing a live run over
       // one would cost more than the drift it found.
@@ -2742,52 +2697,16 @@
         try{ (t.log=t.log||[]).push({ k:'system', text:'⚠ the request could not be reconstructed from this run\'s record — '+d.why }); renderLog(); }catch(_){}
       } });
       const recEvent = (e)=>{ onLoopEvent(e); rec.onEvent(e); };
-      await rec.start({ messages: firstMessages, tools, model: runModel() });
-      let result = await runAgentLoop({
-        messages: firstMessages,
-        tools, infer: recInfer, executeTool, maxSteps:24, signal: abortController.signal,
-        // Wall clock, not step count, is what ends a run on a local model. Measured
-        // 2026-09-03 against Ollama qwen3:8b (thinking mode) through this loop: 3
-        // steps consumed the whole 240s budget, so the agent never saw its own gate
-        // failure and could not act on it — and a re-send does not help, because
-        // t.convo carries only prompts and the final text, never the gate output.
-        // 900s lets a slow local model actually reach the retry it needs.
-        budget: { tokens: 120000, wallClockMs: 900000 }, verify, maxVerifyRounds: 3, onEvent:recEvent,
+      // The run itself — first loop, act-or-nudge, D2 supervisor — is sys/ai/run-assembly.mjs's
+      // driveRun, the same driver the node beds call: every loop is recorded (rec.start before,
+      // rec.finish after) through the recording infer, on the app's budgets. This app owns only
+      // what the driver cannot: the model stamp, the budget probe's copy of the prompt, the log.
+      let result = await driveRun({
+        mode, convo, sysMsg, tools, infer: recInfer, executeTool, rec,
+        verify, signal: abortController.signal, onEvent: recEvent, model: runModel, gateNote,
+        note: (text)=>{ t.log.push({k:'system', text}); renderLog(); },
+        onSystemText: (s)=>{ liveSystemText = s; }, // so the budget counts the prompt actually sent
       });
-      await rec.finish(result);
-      // Act-or-nudge: a CODE-mode run that produced ONLY prose (0 tool calls) gets one
-      // firm nudge to actually use the tools — weak endpoints often "answer" instead of
-      // doing the work (this stalled ARC tasks 2–3 on the flash model). plan/ask untouched.
-      if(mode==='code' && toolCalls===0 && result.stop==='done' && !(abortController && abortController.signal.aborted)){
-        const prose=[...t.log].reverse().find(x=>x.k==='assistant');
-        t.log.push({k:'system',text:'No tools were used — nudging the agent to make the change, not just describe it.'}); renderLog();
-        if(prose) convo.push({role:'assistant', content:prose.text});
-        convo.push({role:'user', content:'[coordination] You described the work but did not do it. Use the tools (write / edit / apply_patch / shell) to actually make and run the change in the workspace now, then give a one-line summary. Do not only explain.'});
-        const nudgeMessages=[sysMsg(''), ...convo];
-        liveSystemText = nudgeMessages[0].content; // D2: the budget counts THIS loop's prompt
-        await rec.start({ messages: nudgeMessages, tools, model: runModel() });
-        result = await runAgentLoop({ messages: nudgeMessages, tools, infer: recInfer, executeTool, maxSteps:16, signal: abortController.signal, budget:{tokens:120000, wallClockMs:240000}, verify, maxVerifyRounds:3, onEvent:recEvent });
-        await rec.finish(result);
-      }
-      // D2 supervisor: after a loop, if the RECORD shows spinning the loop's own consecutive-
-      // identical guard misses — the SAME call repeated non-consecutively, or gate rounds with no
-      // new file — inject ONE capped redirect and re-loop. Fires at most once per run, and never
-      // on a run that finished 'done' (no-tools is already handled by the act-or-nudge above).
-      if(mode==='code' && result.stop!=='done' && !(abortController && abortController.signal.aborted)){
-        try{
-          await rec.settled();
-          const stag=foldStagnation(rec.events(), rec.resolve);
-          if(stag.stalled && stag.signal!=='no-tools'){
-            t.log.push({k:'system', text:'Supervisor: '+stag.detail+' — redirecting.'}); renderLog();
-            convo.push({role:'user', content: stagnationNudge(stag)});
-            const superMessages=[sysMsg(''), ...convo];
-        liveSystemText = superMessages[0].content; // D2: the budget counts THIS loop's prompt
-            await rec.start({ messages: superMessages, tools, model: runModel() });
-            result = await runAgentLoop({ messages: superMessages, tools, infer: recInfer, executeTool, maxSteps:16, signal: abortController.signal, budget:{tokens:120000, wallClockMs:240000}, verify, maxVerifyRounds:3, onEvent:recEvent });
-            await rec.finish(result);
-          }
-        }catch(_){}
-      }
       const finalAssistant=[...t.log].reverse().find(x=>x.k==='assistant');
       // Layer 2b: the run record is the source of truth. Settle it, then DERIVE the carried
       // transcript and the status from folds — there is no parallel durable writer left to
