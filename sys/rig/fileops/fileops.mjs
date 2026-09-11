@@ -510,7 +510,9 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     if (st.type === 'dir') return err('EISDIR', `is a directory: ${r.path}`, { path: r.path });
     const bytes = await backend.readBinary(r.safe);
     if (opts.encoding) {
-      return { ok: true, data: new TextDecoder(opts.encoding).decode(bytes) };
+      // `bytes` is the size on disk: a decoded string's .length counts UTF-16 code units, which
+      // undercounts every non-ASCII file (N6) — the meter below wants what was actually read.
+      return { ok: true, data: new TextDecoder(opts.encoding).decode(bytes), bytes: bytes.byteLength ?? bytes.length ?? 0 };
     }
     return { ok: true, data: bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes) };
   }
@@ -694,7 +696,9 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
       if (re.test(rel)) matches.push(cr.path ? cr.path + '/' + rel : rel);
     }
     matches.sort();
-    return { ok: true, matches };
+    // `walked` is what the walk COST — every file the tree held under cwd, before the pattern
+    // kept any. The match count is what the pattern kept, which is a different number (N6).
+    return { ok: true, matches, walked: files.length };
   }
 
   // Whether a search with these options WOULD have listed `path` — the same scope
@@ -716,7 +720,10 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
   async function grep(pattern, opts = {}) {
     const max = opts.maxResults || grepCap;
     const t0 = Date.now();
-    let filesRead = 0;
+    // What this search cost (N6): distinct files opened — the index refresh and the scan can both
+    // read the same file, and that is one file opened twice, not two files — and bytes as they
+    // were on disk, not UTF-16 code units.
+    const opened = new Set();
     let bytesRead = 0;
     const cr = await resolve(opts.cwd || '');
     if (!cr.ok) return cr;
@@ -725,13 +732,13 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     const walkKey = `${opts.cwd || ''}\u0000${opts.glob || '**'}`;
     let globbed;
     if (index && exclusiveOk() && walkCache && walkCache.key === walkKey) {
-      globbed = { ok: true, matches: walkCache.matches };
+      globbed = { ok: true, matches: walkCache.matches, walked: walkCache.walked };
     } else {
       const walkedFrom = walkSeq;
       globbed = await glob(opts.glob || '**', { cwd: opts.cwd || '' });
       if (!globbed.ok) return globbed;
       // Only cache a snapshot that nothing invalidated while it was being taken.
-      if (index && exclusiveOk() && walkSeq === walkedFrom) walkCache = { key: walkKey, matches: globbed.matches };
+      if (index && exclusiveOk() && walkSeq === walkedFrom) walkCache = { key: walkKey, matches: globbed.matches, walked: globbed.walked };
     }
     if (!globbed.ok) return globbed;
     const re = pattern instanceof RegExp ? pattern : new RegExp(pattern);
@@ -801,8 +808,8 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
         const seenSafeSeq = seqOfSafe(rr.safe);
         const rd = await read(p, { encoding: 'utf-8' });
         if (!rd.ok) { indexDrop(p); continue; }
-        filesRead++;
-        bytesRead += rd.data.length;
+        opened.add(p);
+        bytesRead += rd.bytes;
         // Binaries are never searched, but REMEMBER that: dropping them meant the
         // refresh re-read every binary on every search just to rediscover what it
         // already knew. On one real folder that was 4.29 MB per query — exactly
@@ -873,9 +880,11 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
       // so fs.grep reported matches from inside binary files and disagreed with
       // the rg builtin over the same tree. Pre-dates the index; surfaced by it,
       // because fs.grep is now the path everything else is built on.
+      // Counted before the binary check: the bytes were read and decoded whether or not they are
+      // searched, and the meter reports cost, not results.
+      opened.add(p);
+      bytesRead += rd.bytes;
       if (rd.data.includes('\u0000')) continue;
-      filesRead++;
-      bytesRead += rd.data.length;
       const lines = rd.data.split('\n');
       for (let i = 0; i < lines.length; i++) {
         // A /g or /y regex carries lastIndex between calls, so `test` skips every
@@ -901,8 +910,8 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
       plan: lit ? describePlan(plan) : null,
       filesStatted,
       candidates: candidates ? candidates.length : null,
-      filesWalked: globbed.matches.length,
-      filesRead,
+      filesWalked: globbed.walked,
+      filesRead: opened.size,
       bytesRead,
       matches: matches.length,
       truncated,
