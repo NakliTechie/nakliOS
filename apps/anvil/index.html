@@ -526,7 +526,11 @@
       try { kiln = createMainThreadKiln({ fs, mount:'work' }); } catch(_) { kiln = null; }
     }
     kilnRef = kiln;
-    shell = createShell({ registry, face, kiln });
+    // kilnIsolate: every `python` the agent runs starts from clean builtins, no workspace modules
+    // cached, and the baseline sys.path — the same isolation the verifier already gets. A real
+    // `python` invocation is a new process; a shared kernel let `sys.path.insert(0,'/workspace')`
+    // in one run poison `import inv` in the next (live 2026-09-11).
+    shell = createShell({ registry, face, kiln, kilnIsolate:true });
     $('ws').textContent = label;
   }
   async function seedIfEmpty(){
@@ -2012,6 +2016,9 @@
     (t.log=t.log||[]).push({k:'user',text});
     const mode=t.mode||'code';
     t.status='running'; running=true; abortController=new AbortController(); setSend(); save(); renderAll();
+    // A run is a fresh shell session. The shell is per project and outlives tasks, so a `cd` in
+    // the previous run used to decide where every relative path in this one landed.
+    try{ if(shell && typeof shell.reset==='function') shell.reset(); }catch(_){}
 
     const convo = (t.convo=t.convo||[]);
     // B4: the honest budget for this run — one best-effort endpoint probe, shared by

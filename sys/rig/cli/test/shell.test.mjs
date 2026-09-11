@@ -347,6 +347,21 @@ await test('python dispatch: -c code, <file>, and the unavailable message', asyn
   assert(/cross-origin isolation/.test(await run(bare, 'python -c "print(1)"')), 'no kiln → COI notice');
 });
 
+await test('reset(): a run starts at the root with no inherited cwd or vars', async () => {
+  const { shell } = freshShell();
+  await run(shell, 'mkdir -p sub/dir');
+  await run(shell, 'cd sub/dir'); eq(shell.cwd, 'sub/dir', 'cd moved the cwd');
+  await run(shell, 'X=leaked');  eq(await run(shell, 'echo $X'), 'leaked', 'a var is set');
+  await run(shell, 'false');
+  shell.reset();
+  eq(shell.cwd, '', 'reset returns to the root');
+  eq(await run(shell, 'echo [$X]'), '[]', 'and forgets the var');
+  eq(shell.lastCode, 0, 'and the last exit code');
+  await run(shell, 'echo hi > here.txt');
+  eq(await run(shell, 'cat here.txt'), 'hi', 'a relative write after reset lands at the root, not in sub/dir');
+  eq(await run(shell, 'cat sub/dir/here.txt'), 'cat: sub/dir/here.txt: ENOENT', 'not where the old cwd pointed');
+});
+
 await test('rm *.glob fans out to every match, one confirm', async () => {
   const { shell } = freshShell();
   await run(shell, 'echo a > a.txt');

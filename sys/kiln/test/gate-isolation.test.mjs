@@ -58,6 +58,8 @@ const mkKiln = (py) => createMainThreadKiln({
   const pre = py._seen.sync.join('\n');
   ok('isolate restores builtins from the pre-agent snapshot', /_kd = vars\(_kb\)[\s\S]*_kd\.clear\(\)[\s\S]*_kd\.update\(_KILN_B0\)/.test(pre));
   ok('isolate drops workspace modules from sys.modules', /del _ks\.modules\[_kn\]/.test(pre));
+  // sys.path is module state too (live 2026-09-11: one run's insert survived into the next).
+  ok('isolate restores sys.path from the baseline snapshot, root first', /_ks\.path\[:\] = list\(_KILN_P0\)[\s\S]*_ks\.path\.insert\(0, _kroot\)/.test(pre));
   ok('isolate scopes the purge to the workspace root', pre.includes('"/work"') || pre.includes("'/work'"));
   ok('isolate leaves stdlib alone (purge is guarded on __file__)', pre.includes("getattr(m, '__file__', None)"));
   ok('isolate runs the gate in a FRESH globals namespace', py._seen.globalsPassed.includes('fresh'));
@@ -74,6 +76,7 @@ const mkKiln = (py) => createMainThreadKiln({
   ok('the snapshot precedes the first agent statement', firstSnapshot >= 0 && firstAgentRun === 0);
   // Idempotent: a second exec must not overwrite the snapshot with poisoned builtins.
   ok('the snapshot is taken once, not re-taken per exec', /try: _KILN_B0\s*\nexcept NameError:/.test(py._seen.sync.join('\n')));
+  ok('the snapshot also captures the baseline sys.path once', /try: _KILN_P0\s*\nexcept NameError: _KILN_P0 = list\(_kbs\.path\)/.test(py._seen.sync.join('\n')));
 }
 
 // ── 4. the shell only isolates when it is the VERIFIER's shell ──────────────

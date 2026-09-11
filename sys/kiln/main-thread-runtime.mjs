@@ -40,9 +40,11 @@ const SKIP_BACK = /(^|\/)(__pycache__|\.git)(\/|$)|\.pyc$/;
 // module-level name inside the interpreter because there is nowhere better in a shared one —
 // see the RESIDUAL note on `exec`.
 const SNAPSHOT = `
-import builtins as _kb
+import builtins as _kb, sys as _kbs
 try: _KILN_B0
 except NameError: _KILN_B0 = dict(vars(_kb))
+try: _KILN_P0
+except NameError: _KILN_P0 = list(_kbs.path)
 `;
 
 // Restore builtins, then drop every module loaded FROM THE WORKSPACE so the gate imports the
@@ -61,6 +63,14 @@ try:
 except NameError:
     pass
 _kroot = ${JSON.stringify(root)}
+# sys.path is module state too: an insert in one run survived into the next and resolved
+# import inv to a stale namespace package (live 2026-09-11). Back to the baseline, root first.
+try:
+    _ks.path[:] = list(_KILN_P0)
+except NameError:
+    pass
+if _kroot not in _ks.path:
+    _ks.path.insert(0, _kroot)
 for _kn in [n for n, m in list(_ks.modules.items())
             if getattr(m, '__file__', None) and str(m.__file__).startswith(_kroot)]:
     del _ks.modules[_kn]

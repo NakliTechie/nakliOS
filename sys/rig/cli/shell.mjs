@@ -1234,6 +1234,10 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
 
   return {
     feed,
+    // Live 2026-09-11: a `cd /workspace` in one task left cwd='workspace' for the NEXT task in
+    // the project, so a relative `write inv/store.py` there landed in workspace/inv/ and the
+    // agent lost the run before its first real step. A run is a fresh session: root, no vars.
+    reset() { state.cwd = cwd; state.vars = new Map([['HOME', '/']]); lastCode = 0; pending = null; },
     get cwd() { return state.cwd; },
     get lastCode() { return lastCode; },
     get awaitingConfirm() { return pending ? pending.proposalId : null; },
