@@ -314,6 +314,22 @@ await test('a real shell call still reports its exit code', async () => {
   assert(/\[exit [1-9]/.test(bad), `a failing command reports a non-zero code: ${bad}`);
 });
 
+// Live 2026-09-11: a model wrote `/workspace/inv/store.py`; the leading slash resolves against the
+// root, the file landed in a folder literally named workspace/, and the bare "Wrote
+// workspace/inv/store.py" read to it as proof that /workspace existed — 24 steps lost. The result
+// line now says what happened when, and only when, the path was absolute.
+await test('write: an absolute path is resolved against the root AND the result says so', async () => {
+  const { exec, face } = fresh();
+  const abs = await exec('write', { path: '/workspace/inv/store.py', content: 'x = 1\n' });
+  assert(/^Wrote workspace\/inv\/store\.py \(6 bytes\)/.test(abs), `resolved against the root: ${abs}`);
+  assert(/absolute paths resolve against the workspace root/.test(abs), `and the line says so: ${abs}`);
+  assert(/there is no \/workspace/.test(abs), 'naming the prefix the model invented');
+  const r = await face.invoke('fs.read', { path: 'workspace/inv/store.py', encoding: 'utf-8' });
+  assert(r.ok, 'the file is where the line says it is');
+  const rel = await exec('write', { path: 'inv/store.py', content: 'x = 2\n' });
+  eq(rel, 'Wrote inv/store.py (6 bytes)', 'a relative path gets the plain line — the note is not noise on every write');
+});
+
 if (failures.length) {
   console.error(`agent-tools: ${passed} passed, ${failures.length} FAILED`);
   for (const f of failures) console.error(`  FAIL ${f.name}: ${f.message}`);

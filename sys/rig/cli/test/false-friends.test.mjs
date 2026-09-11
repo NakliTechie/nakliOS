@@ -319,6 +319,36 @@ await test('R-pipe: "no match" (exit 1) still pipes, so counting zero keeps work
   eq((await run('cat f.txt | sort | uniq | wc -l')).out, '3', 'a three-stage pipeline is untouched');
 });
 
+// `python --version` was RUN AS SOURCE — `NameError: name 'version' is not defined`, exit 1 —
+// three times in one live run (2026-09-11) while the agent tried to learn what interpreter it
+// had. A flag is not a program. The two version spellings answer; any other flag refuses with
+// exit 2 the way every builtin does, and never reaches the kernel.
+await test('python: --version answers, an unknown flag refuses, and neither is executed as source', async () => {
+  const fs = createFileops({ backend: new MemoryBackend() });
+  const registry = buildRigRegistry({ fs });
+  const grant = createGrant({ prefixes: [''], scopes: ['fs:read', 'fs:write', 'fs:remove'] });
+  const face = createAgentFace({ registry, grant, opLog: createOpLog({ fs: createFileops({ backend: new MemoryBackend() }) }), actor: 'a' });
+  const seen = [];
+  const kiln = { exec: async (_owner, code) => { seen.push(code); return { status: 'ok', stdout: /sys\.version/.test(code) ? 'Python 3.12.1\n' : 'ran\n', stderr: '' }; } };
+  const sh = createShell({ registry, face, kiln });
+  const run = async (c) => { const r = await sh.feed(c); return { out: String(r.output || '').trim(), code: sh.lastCode }; };
+  await fs.write('hello.py', 'print("hi")\n');
+
+  const v = await run('python --version');
+  eq(v.code, 0, '--version exits 0'); assert(/^Python 3\./.test(v.out), `--version prints the interpreter version, got ${JSON.stringify(v.out)}`);
+  assert(seen.length === 1 && /sys\.version/.test(seen[0]) && !/--version/.test(seen[0]), 'the version is asked of the kernel, the flag is never executed');
+  const V = await run('python -V'); eq(V.code, 0, '-V is the same question'); assert(/^Python 3\./.test(V.out), '-V prints the version');
+
+  const before = seen.length;
+  const x = await run('python -x');
+  eq(x.code, 2, 'an unknown flag refuses with exit 2, never exit 1 from a NameError');
+  assert(/unsupported option -x/.test(x.out), `and says which flag: ${JSON.stringify(x.out)}`);
+  eq(seen.length, before, 'the kernel never saw it');
+
+  const c = await run('python -c "print(1)"'); eq(c.code, 0, '-c still runs'); assert(/print\(1\)/.test(seen[seen.length - 1]), 'with its code');
+  const f = await run('python hello.py'); eq(f.code, 0, 'a file still runs'); assert(/print\("hi"\)/.test(seen[seen.length - 1]), 'with the file body');
+});
+
 if (failures.length) {
   console.error(`shell false-friends: ${passed} passed, ${failures.length} FAILED`);
   for (const f of failures) console.error(`  FAIL ${f.n}\n        ${f.message}`);

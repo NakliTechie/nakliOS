@@ -577,7 +577,11 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
       if (name === 'write') {
         const r = await writeFile(args?.path, args?.content);
         if (r.ok) noteRead(resolve(args?.path)); // writing establishes known state
-        return r.ok ? `Wrote ${resolve(args?.path)} (${String(args?.content ?? '').length} bytes)` : `Error writing ${args?.path}: ${r.error}`;
+        // Live 2026-09-11: a model wrote /workspace/inv/store.py, the leading slash was resolved
+        // against the root, and the plain "Wrote workspace/inv/store.py" read to it as proof that
+        // /workspace existed. Say what happened, once, on the line it is already reading.
+        const rebased = /^\s*\//.test(String(args?.path ?? '')) ? ' — note: absolute paths resolve against the workspace root; there is no /workspace' : '';
+        return r.ok ? `Wrote ${resolve(args?.path)} (${String(args?.content ?? '').length} bytes)${rebased}` : `Error writing ${args?.path}: ${r.error}`;
       }
 
       if (name === 'edit') {

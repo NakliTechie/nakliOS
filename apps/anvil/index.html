@@ -1838,7 +1838,11 @@
   // byte-identical to the string this replaced (scripts/test-anvil-procedural.mjs).
   let proceduralPrior = renderProcedural();
   const SYSTEM_HEAD = 'You are a coding agent working over the user\'s files. Tools: read (line-numbered), write (whole file), edit (surgical old_string→new_string), apply_patch (add/update/delete files), todowrite (checklist), task (delegate one bounded sub-task to a subagent), dispatch (fan out INDEPENDENT sub-tasks to subagents that run in parallel, each in an isolated copy of the workspace — their changes merge back when they touch different files), review (an independent read-only reviewer subagent for a second opinion), shell (a CURATED bash-like shell, not coreutils: ls cat grep rg sed awk find head tail wc sort uniq cut tr test git python, with pipes, && || ; > >> < and globs. Each builtin implements a documented subset and REFUSES an unsupported flag rather than ignoring it — run `help` to see what each one supports. No loops, subshells, command substitution or heredocs; use python for scripting). ';
-  const SYSTEM_TAIL = ' Work in small, verifiable steps; end with a one-line summary.';
+  // Live 2026-09-11: a model spent 24 steps under an invented /workspace prefix — the leading slash
+  // resolves against the root, so its writes landed in a folder literally named workspace/, and
+  // python's own cwd (/work, the Kiln mount) read as a third universe. One sentence, in the stable
+  // prefix, at the very end so both seams the procedural test pins stay byte-identical.
+  const SYSTEM_TAIL = ' Work in small, verifiable steps; end with a one-line summary. Paths are relative to the workspace root, which the shell shows as / and python as /work — there is no /workspace, /home or /tmp; do not invent a prefix and do not cd first.';
   // Assembled at read time so a per-run graph change takes effect without a reload.
   function systemPrompt(){ return SYSTEM_HEAD + proceduralPrior + SYSTEM_TAIL; }
   // The lesson-layer contract rides in the system prompt of every code-mode run (where

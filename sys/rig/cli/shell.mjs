@@ -975,7 +975,12 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
       // Resolve the code to run: `-c "<code>"`, a `<file.py>`, or bare text.
       let code;
       const ci = args.indexOf('-c');
-      if (ci >= 0 && args[ci + 1] != null) code = args[ci + 1];
+      // `python --version` used to be RUN AS SOURCE (NameError: name 'version' is not defined) —
+      // live 2026-09-11, three times in one run while the agent tried to find out what it had.
+      // Answer the two version spellings; refuse every other flag the way the builtins do.
+      if (ci < 0 && (args[0] === '--version' || args[0] === '-V')) code = 'import sys; print("Python " + sys.version.split()[0])';
+      else if (ci < 0 && args[0] && args[0].startsWith('-')) return { text: `python: unsupported option ${args[0]} — use \`python file.py\`, \`python -c "code"\` or \`python --version\``, code: 2 };
+      else if (ci >= 0 && args[ci + 1] != null) code = args[ci + 1];
       else if (args[0] && !args[0].startsWith('-')) {
         const rd = await face.invoke('fs.read', { path: normalizePath(state.cwd, args[0]), encoding: 'utf-8' });
         if (!rd.ok) return { text: `python: can't open file '${args[0]}': ${rd.code || 'error'}`, code: 2 };
