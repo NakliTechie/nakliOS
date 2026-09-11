@@ -349,6 +349,24 @@ await test('python: --version answers, an unknown flag refuses, and neither is e
   const f = await run('python hello.py'); eq(f.code, 0, 'a file still runs'); assert(/print\("hi"\)/.test(seen[seen.length - 1]), 'with the file body');
 });
 
+// `2>/dev/null` swallowed STDOUT and wrote it to a workspace file named dev/null — live
+// 2026-09-11, `find / -name test_inv.py 2>/dev/null` answered nothing with exit 0 while the file
+// existed, and the agent concluded the gate did not exist. This shell merges the streams, so the
+// only reading that never loses output is: `2>/dev/null` is a no-op, `>/dev/null` discards, and
+// neither ever creates a file.
+await test('/dev/null: 2> is a no-op, > discards, and no dev/null file is ever created', async () => {
+  const { run } = await shell();
+  await run('echo x > .anvil/gate/x.py');
+  const f = await run('find / -name x.py 2>/dev/null');
+  eq(f.out, '.anvil/gate/x.py', 'stdout survives a 2>/dev/null'); eq(f.code, 0, 'exit 0');
+  const l = await run('ls f.txt 2>/dev/null'); eq(l.out, 'f.txt', 'ordinary output survives too');
+  const d = await run('ls > /dev/null'); eq(d.out, '', '> /dev/null discards'); eq(d.code, 0, 'and succeeds');
+  const d2 = await run('ls >/dev/null'); eq(d2.out, '', 'with or without the space');
+  const a = await run('cat nope.txt 2>/dev/null; echo after'); assert(/after$/.test(a.out), 'the statement after still runs: ' + JSON.stringify(a.out));
+  const dev = await run('ls dev'); assert(dev.code !== 0, 'no dev/ directory was ever created: ' + JSON.stringify(dev.out));
+  const real = await run('ls > listing.txt; cat listing.txt'); assert(/f\.txt/.test(real.out), 'a real redirect still writes its file');
+});
+
 if (failures.length) {
   console.error(`shell false-friends: ${passed} passed, ${failures.length} FAILED`);
   for (const f of failures) console.error(`  FAIL ${f.n}\n        ${f.message}`);

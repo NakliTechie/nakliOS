@@ -99,6 +99,15 @@ function tokenizeOps(line) {
         if (s[j + 1] === '&' && /[12-]/.test(s[j + 2] || '')) {
           i = j + 2; continue;                           // N>&M / N>&- → strip
         }
+        // `2>/dev/null` — the single most common idiom an agent writes — used to collapse to
+        // `>/dev/null` of the MERGED stream: stdout vanished, a file literally named dev/null
+        // appeared in the workspace, and `find / -name test_inv.py 2>/dev/null` reported
+        // nothing with exit 0 while the file existed (live, 2026-09-11). In a shell that cannot
+        // separate the streams the least-wrong reading is a no-op: the agent sees stderr text
+        // it asked to hide, never loses the stdout it asked for.
+        if (c === '2' && /^\s*\/dev\/null(?=\s|$)/.test(s.slice(j + 1))) {
+          i = j + 1 + s.slice(j + 1).match(/^\s*\/dev\/null/)[0].length - 1; continue;
+        }
         out += ` ${op} `; i = j; continue;               // N>file → merged redirect
       }
     }
@@ -1197,7 +1206,9 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
         write(`${res.verb} is destructive. confirm? [y/N]`);
         return { output: out.join('\n'), awaitingConfirm: res.staged };
       }
-      if (stmt.redirect) {
+      if (stmt.redirect && /^\/?dev\/null$/.test(expand(stmt.redirect.path))) {
+        // `> /dev/null` discards. It used to WRITE the output to a workspace file dev/null.
+      } else if (stmt.redirect) {
         const path = normalizePath(state.cwd, expand(stmt.redirect.path));
         // printf writes its bytes verbatim; everything else gets a line-clean
         // trailing newline (echo semantics).
