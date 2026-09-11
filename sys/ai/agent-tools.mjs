@@ -21,8 +21,7 @@ import { shellTool, makeShellExecutor, runAgentLoop, taskDoneTool, interceptBash
 import { parseExpect, gradeExpect, expectLine } from './expect.mjs';
 import {
   dispatchTool, reviewTool, normalizeTasks, planMerge, formatDispatchDigest,
-  SUBAGENT_SYSTEM, REVIEW_SYSTEM, SUBAGENT_MAX_STEPS,
-} from './subagents.mjs';
+  SUBAGENT_SYSTEM, REVIEW_SYSTEM, SUBAGENT_MAX_STEPS, clampSubagentBudget, SUBAGENT_WALL_CLOCK_S, SUBAGENT_MIN_WALL_CLOCK_S } from './subagents.mjs';
 import { renderHashline, applyHashlineBlock, parseHashlineEdit } from './hashline.mjs';
 import { createRunRecorder } from '../history/run-record.mjs';
 
@@ -115,6 +114,8 @@ export function taskTool() {
     parameters: { type: 'object', properties: {
       description: { type: 'string', description: 'A 3–5 word label.' },
       prompt: { type: 'string', description: 'The full, self-contained task for the subagent.' },
+      max_steps: { type: 'integer', description: 'Optional step budget (1–' + SUBAGENT_MAX_STEPS + '; default 16).' },
+      wall_clock_s: { type: 'integer', description: 'Optional wall-clock budget in seconds (' + SUBAGENT_MIN_WALL_CLOCK_S + '–' + SUBAGENT_WALL_CLOCK_S + ').' },
     }, required: ['prompt'] },
   } };
 }
@@ -443,8 +444,9 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
   // and `dispatch` runs up to four workers concurrently, so interleaved appends would order
   // nondeterministically and break replay. Recording is best-effort: a recorder that throws must
   // not fail a subagent that did its work.
-  async function runRecorded({ kind, label, tool_call_id, messages, tools, executeTool, maxSteps }) {
-    const budget = subagentBudget || { wallClockMs: SUBAGENT_WALL_CLOCK_MS };
+  async function runRecorded({ kind, label, tool_call_id, messages, tools, executeTool, maxSteps, budget: callBudget = null }) {
+    // Precedence: the call's own budget (ESS-3) > the executor's configured budget > the default.
+    const budget = callBudget || subagentBudget || { wallClockMs: SUBAGENT_WALL_CLOCK_MS };
     // The claim first: on the chain before the child has done anything, so a child that dies
     // in flight (tab closed, page reloaded) leaves a `subagent.started` with no `subagent.ran`.
     if (recordSubagentStart) { try { await recordSubagentStart({ kind, label, tool_call_id }); } catch (_) {} }
@@ -702,7 +704,9 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
           ],
           tools: codingToolset('code'), // subagents don't nest (depth cap)
           executeTool: child,
-          maxSteps: 16,
+          // A budget the model did not name falls through to the executor's, then the default.
+          maxSteps: clampSubagentBudget(args || {}).explicit.steps ? Math.min(16, clampSubagentBudget(args || {}).maxSteps) : 16,
+          budget: clampSubagentBudget(args || {}).explicit.secs ? { wallClockMs: clampSubagentBudget(args || {}).wallClockMs } : null,
         });
         if (res.stop === 'aborted') return '(subagent stopped with the run — its work was not completed)';
         return res.text || `(subagent finished: ${res.stop})`;
@@ -712,6 +716,7 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
         if (!supervisorOn) return 'Error: dispatch (parallel subagents) is not available here.';
         const norm = normalizeTasks(args?.tasks);
         if (!norm.ok) return `Error: ${norm.error}`;
+        const budget = clampSubagentBudget(args || {}); // ESS-3: per call, clamped, stated in the digest
         // Launch every sub-task concurrently, each in its own isolated overlay.
         // `ok` is true ONLY when the subagent finished cleanly (stop 'done') — a
         // subagent that errored or ran out of steps is held, its partial writes
@@ -731,7 +736,8 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
               ],
               tools: codingToolset('code'), // full tools, isolated; no nesting (depth cap)
               executeTool: iso.executor,
-              maxSteps: SUBAGENT_MAX_STEPS,
+              maxSteps: budget.maxSteps,
+              budget: budget.explicit.secs ? { wallClockMs: budget.wallClockMs } : null,
             });
             return { label: t.label, ok: res.stop === 'done', stop: res.stop, text: res.text || `(stopped: ${res.stop})`, changes: iso.changes(), iso };
           } catch (e) {
@@ -742,7 +748,7 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
         // cleanly is still not merged: "stop" means nothing lands, not "keep whatever was
         // done by then" — the workspace after a stop must be the workspace before the dispatch.
         if (signal && signal.aborted) {
-          return formatDispatchDigest({ results: runs, status: runs.map(() => 'aborted'), conflicts: [], dropped: norm.dropped });
+          return formatDispatchDigest({ results: runs, status: runs.map(() => 'aborted'), conflicts: [], dropped: norm.dropped, budget });
         }
         // Merge plan: only cleanly-finished runs are eligible; a path clash holds
         // just the clashers (a disjoint clean sibling still merges).
@@ -754,7 +760,7 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
             catch (e) { r.text += `\n(merge failed: ${String(e && e.message || e)})`; plan.status[i] = 'merge-failed'; }
           }
         }
-        return formatDispatchDigest({ results: runs, status: plan.status, conflicts: plan.conflicts, dropped: norm.dropped });
+        return formatDispatchDigest({ results: runs, status: plan.status, conflicts: plan.conflicts, dropped: norm.dropped, budget });
       }
 
       if (name === 'review') {

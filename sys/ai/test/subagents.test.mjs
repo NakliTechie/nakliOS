@@ -3,7 +3,7 @@
 import {
   dispatchTool, reviewTool, normalizeTasks, detectConflicts, mergeDecision,
   planMerge, formatDispatchDigest, DISPATCH_MAX,
-  subagentFeedRow, subagentFeedLine,
+  subagentFeedRow, subagentFeedLine, clampSubagentBudget, SUBAGENT_MAX_STEPS, SUBAGENT_WALL_CLOCK_S,
 } from '../subagents.mjs';
 
 let passed = 0; const failures = [];
@@ -161,6 +161,21 @@ await test('subagentFeedLine: running says where it is; a finished row says how 
   assert(/dispatch · split lexer — running · step 3 · 2 tool calls · last: read\(lexer\.py\)/.test(line), line);
   const done = subagentFeedLine({ ...running, status: 'done', tools: 1 });
   assert(/split lexer — done \(3 steps, 1 tool call\)/.test(done), done);
+});
+
+// ESS-3: a launch budget decided per call — clamped to the ceilings, never above them, stated.
+await test('clampSubagentBudget: defaults, explicit values, ceilings, floors, junk', () => {
+  const d = clampSubagentBudget({});
+  eq(d.maxSteps, SUBAGENT_MAX_STEPS); eq(d.wallClockMs, SUBAGENT_WALL_CLOCK_S * 1000); eq(d.explicit.steps, false); eq(d.explicit.secs, false);
+  const e = clampSubagentBudget({ max_steps: 3, wall_clock_s: 30 });
+  eq(e.maxSteps, 3); eq(e.wallClockMs, 30000); eq(e.explicit.steps, true); eq(e.explicit.secs, true);
+  assert(/3 steps, 30 s/.test(e.line), e.line);
+  const c = clampSubagentBudget({ max_steps: 999, wall_clock_s: 99999 });
+  eq(c.maxSteps, SUBAGENT_MAX_STEPS, 'never above the step ceiling'); eq(c.wallClockMs, SUBAGENT_WALL_CLOCK_S * 1000, 'never above the wall-clock ceiling');
+  eq(clampSubagentBudget({ wall_clock_s: 1 }).wallClockMs, 5000, 'a wall clock has a floor');
+  const j = clampSubagentBudget({ max_steps: 'lots', wall_clock_s: -4 });
+  eq(j.maxSteps, SUBAGENT_MAX_STEPS); eq(j.explicit.steps, false); eq(j.explicit.secs, false, 'junk is not explicit');
+  eq(clampSubagentBudget({ max_steps: 2.9 }).maxSteps, 2, 'floors a fraction');
 });
 
 if (failures.length){

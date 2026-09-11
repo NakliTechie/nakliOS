@@ -15,7 +15,20 @@
 // conflicting-write resolution is deliberately left to the supervisor.
 
 export const DISPATCH_MAX = 4;        // max subagents per dispatch (bounds host-AI load)
-export const SUBAGENT_MAX_STEPS = 20; // per-subagent step budget
+export const SUBAGENT_MAX_STEPS = 20; // per-subagent step budget (also the per-call ceiling)
+export const SUBAGENT_WALL_CLOCK_S = 240;   // per-subagent wall clock, seconds (default and ceiling)
+export const SUBAGENT_MIN_WALL_CLOCK_S = 5;
+
+// ESS-3: a launch budget decided per call, not by two module constants. Both axes clamp to the
+// module ceilings — a subagent can be given LESS than the default, never more — and the digest
+// says what was used, so a run that ended on `max-steps` or `budget` reads as the budget the
+// supervisor chose, not a mystery. Non-numbers and blanks fall back to the defaults.
+export function clampSubagentBudget({ max_steps, wall_clock_s } = {}) {
+  const steps = Number.isFinite(Number(max_steps)) && Number(max_steps) > 0 ? Math.min(SUBAGENT_MAX_STEPS, Math.floor(Number(max_steps))) : SUBAGENT_MAX_STEPS;
+  const secs = Number.isFinite(Number(wall_clock_s)) && Number(wall_clock_s) > 0 ? Math.min(SUBAGENT_WALL_CLOCK_S, Math.max(SUBAGENT_MIN_WALL_CLOCK_S, Math.floor(Number(wall_clock_s)))) : SUBAGENT_WALL_CLOCK_S;
+  const explicit = { steps: Number.isFinite(Number(max_steps)) && Number(max_steps) > 0, secs: Number.isFinite(Number(wall_clock_s)) && Number(wall_clock_s) > 0 };
+  return { maxSteps: steps, wallClockMs: secs * 1000, explicit, line: `budget per subagent: ${steps} steps, ${secs} s` };
+}
 
 export const SUBAGENT_SYSTEM =
   'You are a subagent working in an ISOLATED copy of the shared workspace — your ' +
@@ -53,6 +66,8 @@ export function dispatchTool() {
           description: { type: 'string', description: 'A 3–5 word label.' },
           prompt: { type: 'string', description: 'The full, self-contained task for this subagent.' },
         }, required: ['prompt'] } },
+      max_steps: { type: 'integer', description: 'Optional step budget per subagent (1–' + SUBAGENT_MAX_STEPS + '; default ' + SUBAGENT_MAX_STEPS + ').' },
+      wall_clock_s: { type: 'integer', description: 'Optional wall-clock budget per subagent in seconds (' + SUBAGENT_MIN_WALL_CLOCK_S + '–' + SUBAGENT_WALL_CLOCK_S + '; default ' + SUBAGENT_WALL_CLOCK_S + ').' },
     }, required: ['tasks'] },
   } };
 }
@@ -184,10 +199,10 @@ const STATUS_TAG = {
   'merge-failed': 'merge FAILED (workspace unchanged for this one)',
   aborted: 'STOPPED — the owner ended the run while it worked; nothing merged',
 };
-export function formatDispatchDigest({ results, status, conflicts, dropped }) {
+export function formatDispatchDigest({ results, status, conflicts, dropped, budget }) {
   const st = (i) => (status && status[i]) || (results[i] && results[i].ok ? 'no-op' : 'incomplete');
   const lines = [];
-  lines.push(`Dispatched ${results.length} subagent${results.length === 1 ? '' : 's'} in parallel.`);
+  lines.push(`Dispatched ${results.length} subagent${results.length === 1 ? '' : 's'} in parallel.${budget && budget.line ? ' (' + budget.line + ')' : ''}`);
   if (dropped) lines.push(`(${dropped} sub-task${dropped === 1 ? '' : 's'} dropped: empty or over the ${DISPATCH_MAX}-at-once cap — re-dispatch the rest.)`);
   results.forEach((r, i) => {
     const ch = r.changes || { written: [], deleted: [] };

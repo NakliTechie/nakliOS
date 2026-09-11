@@ -266,6 +266,36 @@ await test('ESS-2: a throwing observer never breaks the child, and the feed work
   assert(seen > 0, 'the observer was called (no recorder wired, so the tap alone carried it)');
 });
 
+await test('ESS-3: a per-call budget ends a child sooner than the default, and the digest says what was used', async () => {
+  const base = new MemoryBackend();
+  let n = 0;
+  const endless = async () => { n++; return { content: '', toolCalls: [{ id: 'w' + n, function: { name: 'write', arguments: JSON.stringify({ path: `f${n}.txt`, content: 'x' }) } }] }; };
+  const exec = supervisedExecutor(base, endless);
+  const out = await exec('dispatch', { tasks: [{ label: 'E', prompt: 'keep writing' }], max_steps: 2 }, { id: 'd4' });
+  assert(/budget per subagent: 2 steps, 240 s/.test(out), `the digest states the budget: ${out.split('\n')[0]}`);
+  assert(/held — subagent did not finish cleanly \(max-steps\)/.test(out), `the child ended on the 2-step budget: ${out.slice(0, 240)}`);
+  assert(n <= 3, `at most a couple of model calls, got ${n}`);
+  n = 0;
+  const slow = async () => { n++; await new Promise(r => setTimeout(r, 30)); return { content: '', toolCalls: [{ id: 's' + n, function: { name: 'write', arguments: JSON.stringify({ path: `g${n}.txt`, content: 'x' }) } }] }; };
+  const exec2 = supervisedExecutor(base, slow);
+  const t0 = Date.now();
+  const out2 = await exec2('task', { prompt: 'keep writing', wall_clock_s: 1 }, { id: 't4' });
+  // wall_clock_s floors at 5 s — so this proves the FLOOR, not a 1 s clock: the child runs out its 16 steps first (16 × 30 ms ≈ 0.5 s < 5 s)
+  assert(/finished: max-steps/.test(out2) && Date.now() - t0 < 5000, `the floor held; the child hit its steps first: ${out2}`);
+});
+await test('ESS-3: an executor-level budget still applies when the call names none', async () => {
+  const base = new MemoryBackend();
+  let n = 0;
+  const slow = async () => { n++; await new Promise(r => setTimeout(r, 30)); return { content: '', toolCalls: [{ id: 'q' + n, function: { name: 'write', arguments: JSON.stringify({ path: `h${n}.txt`, content: 'x' }) } }] }; };
+  const exec = supervisedExecutor(base, slow, { subagentBudget: { wallClockMs: 70 } });
+  const out = await exec('task', { prompt: 'keep writing' }, { id: 't5' });
+  assert(/finished: budget/.test(out), `the configured wall clock ended it: ${out}`);
+  // and through dispatch — where a clamped default of 240 s would silently override 70 ms
+  n = 0;
+  const out2 = await exec('dispatch', { tasks: [{ label: 'S', prompt: 'keep writing' }] }, { id: 'd5' });
+  assert(/held — subagent did not finish cleanly \(budget\)/.test(out2), `dispatch honoured the executor's wall clock: ${out2.slice(0, 200)}`);
+});
+
 await test('ESS-1: a run already stopped does not start a child at all', async () => {
   const base = new MemoryBackend();
   const ac = new AbortController(); ac.abort();
