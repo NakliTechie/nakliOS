@@ -367,6 +367,18 @@ await test('/dev/null: 2> is a no-op, > discards, and no dev/null file is ever c
   const real = await run('ls > listing.txt; cat listing.txt'); assert(/f\.txt/.test(real.out), 'a real redirect still writes its file');
 });
 
+// `echo "exit: $?"` printed the literal `$?` while the unquoted form expanded — a quoted `?` is
+// marked literal for the glob pass and the mark landed between `$` and `?`. An agent read a
+// gate's exit code three ways and got `$?` back twice (live 2026-09-11).
+await test('$? expands inside double quotes exactly as it does outside them', async () => {
+  const { run } = await shell();
+  const bare = await run('cat nope.txt; echo EXIT: $?');   assert(/EXIT: 1$/.test(bare.out), `unquoted: ${JSON.stringify(bare.out)}`);
+  const quoted = await run('cat nope.txt; echo "EXIT: $?"'); assert(/EXIT: 1$/.test(quoted.out), `quoted: ${JSON.stringify(quoted.out)}`);
+  const ok0 = await run('true; echo "code=$?"');             assert(/code=0$/.test(ok0.out), `after success: ${JSON.stringify(ok0.out)}`);
+  const glob = await run('echo "a?b"');                      eq(glob.out, 'a?b', 'a quoted ? that is not $? is still a literal, not a glob');
+  const lit = await run("echo '$?'");                        eq(lit.out, '$?', 'single quotes still protect it');
+});
+
 if (failures.length) {
   console.error(`shell false-friends: ${passed} passed, ${failures.length} FAILED`);
   for (const f of failures) console.error(`  FAIL ${f.n}\n        ${f.message}`);

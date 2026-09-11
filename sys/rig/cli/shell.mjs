@@ -238,11 +238,15 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
   // known simplification tracked under the POSIX-later agenda.
   function expand(token) {
     // A `$` carrying LITERAL_MARK came from inside single quotes and is NOT a variable.
+    // `$?` inside double quotes arrived as `$\u0001?` — the tokenizer marks a quoted `?` so the
+    // glob pass leaves it alone, and the mark sat between the `$` and the `?`. So
+    // `echo "exit: $?"` printed the literal while `echo exit: $?` expanded (live 2026-09-11, an
+    // agent trying to read a gate's exit code three different ways and getting `$?` back twice).
     const out = String(token).replace(
-      /\u0001\$|\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)|\$\?/g,
+      /\u0001\$|\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)|\$\u0001?\?/g,
       (m, braced, bare) => {
         if (m.charCodeAt(0) === 1) return '$';
-        if (m === '$?') return String(lastCode);
+        if (/^\$\u0001?\?$/.test(m)) return String(lastCode);
         const name = braced || bare;
         if (name === 'PWD') return '/' + state.cwd;
         return state.vars.has(name) ? state.vars.get(name) : '';
