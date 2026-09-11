@@ -421,7 +421,7 @@
   import { buildChangeRow, planRevert, prunePreimages, preimageBytes, MAX_PREIMAGE_BUDGET } from '../../sys/ai/change-preimages.mjs';
   import { subagentFeedRow, subagentFeedLine } from '../../sys/ai/subagents.mjs'; // ESS-2: the live child feed
   import { migrateQueue, reconcileQueue, enqueue as qEnqueue, removeEntry as qRemove, moveEntry as qMove, editEntry as qEdit, nextDispatch, completeDispatch, releaseDispatch, admitRun } from '../../sys/ai/followup-queue.mjs';
-  import { skillManageTool, planSkillWrite, createSkillSession, SKILL_FILE } from '../../sys/ai/skill-manage.mjs';
+  import { skillManageTool, planSkillWrite, createSkillSession, SKILL_FILE, SKILL_SHAPE, scaffoldSkill, starterSkillFile, renderSkillReader, lintSkill } from '../../sys/ai/skill-manage.mjs';
   import { createProposalLedger } from '../../sys/ai/proposal-fingerprint.mjs';
   import { skillLifecycle, applySkillStatus, reviveOnUse } from '../../sys/ai/skill-lifecycle.mjs';
   import { contextRemainingTool, checkpointTool, contextBudget, windowFromOllama, windowForPreset, capHandoff } from '../../sys/ai/context-budget.mjs';
@@ -834,7 +834,11 @@
     renderAll();
   }
 
-  $('new-project').onclick=async ()=>{ const n=await askText({ title:'New project', label:'Project name', value:'project' }); if(!n) return; const p={id:id(),name:n,open:true,tasks:[]}; state.projects.push(p); state.activeProject=p.id; save(); if(!folderMode) await mountProject(p.id); renderAll(); };
+  $('new-project').onclick=async ()=>{ const n=await askText({ title:'New project', label:'Project name', value:'project' }); if(!n) return; const p={id:id(),name:n,open:true,tasks:[]}; state.projects.push(p); state.activeProject=p.id; save(); if(!folderMode) await mountProject(p.id);
+    // ESS-5: a project with no skills should not start empty — one short starter, owner-written
+    // so it is active at once. Browser-mounted projects only: a real folder is the owner's.
+    if(!folderMode){ try{ const f=starterSkillFile({ now:Date.now() }); const cur=await fs.read(f.path,{encoding:'utf-8'}); if(!(cur&&cur.ok)) await fs.write(f.path, f.text); }catch(_){} }
+    renderAll(); };
   $('new-task').onclick=()=>{ const p=activeProject(); if(!p) return; const t={id:id(),title:'Untitled task',status:'idle',mode:'code',convo:[],log:[],preview:null}; p.tasks.push(t); p.open=true; selectTask(t.id); $('prompt').focus(); };
 
   // ── File explorer: the active workspace's tree (whatever backend), so files
@@ -1071,7 +1075,7 @@
       if(dir && dir.ok){
         for(const e of (dir.entries||[])){
           if(e.type!=='dir') continue;
-          try{ const r=await fs.read(e.path+'/SKILL.md',{encoding:'utf-8'}); if(r&&r.ok){ const sk=parseSkill(r.data); out.push({ name:sk.name||e.name, description:sk.description }); } }catch(_){}
+          try{ const r=await fs.read(e.path+'/SKILL.md',{encoding:'utf-8'}); if(r&&r.ok){ const sk=parseSkill(r.data); out.push({ ...sk, name:sk.name||e.name, dir:e.path }); } }catch(_){}
         }
       }
     }catch(_){}
@@ -1082,14 +1086,47 @@
     const skills=await listSkills();
     b.classList.toggle('dim', skills.length===0);
   }
+  // ESS-4/5: skills are documents a person reads and writes, not only names in an index.
+  // The list opens each one in a reader; "New skill" scaffolds one from the authoring shape
+  // through the OWNER's fs (so it is active at once — the agent's route lands staged); a
+  // project with none can seed the starter. Both writes go through `fs`, the ungranted edge.
   async function openSkills(){
     const skills=await listSkills();
     const body = skills.length
-      ? skills.map(s=>'• '+s.name+(s.description?(' — '+s.description):'')).join('\n')
-      : 'No skills yet.\n\nAdd one at .anvil/skills/<name>/SKILL.md (frontmatter: name, description; then the instructions). The agent loads a skill on demand when a task matches it.';
-    globalPreview={ type:'text', file:'Project skills', content: 'Skills the agent can load on demand:\n\n'+body };
+      ? skills.map(s=>'• '+s.name+(s.status&&s.status!=='active'?' ['+s.status+']':'')+(s.description?(' — '+s.description):'')).join('\n')
+      : 'No skills yet.\n\n'+SKILL_SHAPE;
+    const actions = skills.map(s=>({ label:'open '+s.name, onClick:()=>openSkill(s.name) }));
+    actions.push({ label:'＋ New skill', onClick: newSkill });
+    if(!skills.length) actions.push({ label:'Add starter skill', onClick: seedStarterSkill });
+    globalPreview={ type:'text', file:'Project skills', content: 'Skills the agent can load on demand:\n\n'+body, actions };
     { const _t=activeTask(); if(_t) _t.preview=null; }   // a stale task preview would hide this global view
     state.previewOpen=true; save(); renderPreview();
+  }
+  async function openSkill(name){
+    const sk=(await listSkills()).find(s=>s.name===name);
+    if(!sk){ openSkills(); return; }
+    const warnings = lintSkill(sk);
+    globalPreview={ type:'md', label:'Skill', file:sk.dir+'/'+SKILL_FILE, content: renderSkillReader(sk),
+      note: warnings.length ? 'shape: '+warnings.join(' · ') : null,
+      actions:[{ label:'← Skills', onClick: openSkills }] };
+    { const _t=activeTask(); if(_t) _t.preview=null; }
+    state.previewOpen=true; save(); renderPreview();
+  }
+  async function newSkill(){
+    const name=await askText({ title:'New skill', label:'Name (kebab-case — the folder under .anvil/skills/)', value:'' });
+    if(!name) return;
+    const r=scaffoldSkill({ name:String(name).trim(), now:Date.now() });
+    if(!r.ok){ pushSystem('skill not created — '+r.error); return; }
+    try{ const w=await fs.write(r.path, r.text); if(!(w&&w.ok!==false)) throw new Error((w&&w.error)||'write failed'); }
+    catch(e){ pushSystem('skill not created — '+String(e&&e.message||e)); return; }
+    pushSystem('skill scaffolded at '+r.path+' — fill in When / Steps / Check');
+    await updateSkillsChip(); openSkill(String(name).trim());
+  }
+  async function seedStarterSkill(){
+    const f=starterSkillFile({ now:Date.now() });
+    try{ const cur=await fs.read(f.path,{encoding:'utf-8'}); if(cur&&cur.ok) { openSkill('working-in-anvil'); return; } }catch(_){}
+    try{ await fs.write(f.path, f.text); }catch(e){ pushSystem('starter skill not written — '+String(e&&e.message||e)); return; }
+    await updateSkillsChip(); openSkill('working-in-anvil');
   }
   async function readHooks(){
     try{ const r=await fs.read(HOOKS_FILE,{encoding:'utf-8'}); if(r&&r.ok) return { raw:r.data, cfg:parseHooks(r.data) }; }catch(_){}
@@ -1308,6 +1345,16 @@
     const body=$('pv-body');
     if(pv.type==='html'){ body.innerHTML=''; const f=document.createElement('iframe'); f.setAttribute('sandbox','allow-scripts'); f.srcdoc=pv.content; body.appendChild(f); }
     else if(pv.type==='diff'){ body.innerHTML='<pre></pre>'; body.querySelector('pre').innerHTML=diffHtml(pv.content); }
+    else if(pv.type==='md'){
+      // ESS-4: a document, rendered — the skill reader. Same note + actions contract as text.
+      body.innerHTML=''; const d=document.createElement('div'); d.className='pv-md'; renderMarkdown(d, pv.content); body.appendChild(d);
+      if(pv.note){ const n=document.createElement('div'); n.className='pv-note'; n.textContent=pv.note; body.insertBefore(n, body.firstChild); }
+      if(Array.isArray(pv.actions) && pv.actions.length){
+        const wrap=document.createElement('div'); wrap.className='pv-actions';
+        for(const a of pv.actions){ const b=document.createElement('button'); b.className='revertbtn'; b.textContent=a.label; b.onclick=a.onClick; wrap.appendChild(b); }
+        body.appendChild(wrap);
+      }
+    }
     else {
       body.innerHTML='<pre></pre>'; body.querySelector('pre').textContent=pv.content;
       // AC-6: a chip whose pre-image was dropped used to look exactly like one with nothing to

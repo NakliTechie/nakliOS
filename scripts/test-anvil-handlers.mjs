@@ -155,6 +155,15 @@ await test('LB-1: a shell call that IS the verify gate says so — exit 0 points
   assert.match(src, /const res = gateHint\(nm, ar, res0, \(\(t\.verifyCmd\)\|\|''\)\.trim\(\)\);/, 'the executor wires the hint in front of the post-tool hooks');
 });
 
+await test('ESS-4/5: the skill reader renders a document, a new project seeds the starter, and the empty list shows the shape', async () => {
+  assert.match(src, /globalPreview=\{ type:'md', label:'Skill', file:sk\.dir\+'\/'\+SKILL_FILE, content: renderSkillReader\(sk\)/, 'openSkill shows the reader as a rendered document');
+  assert.match(src, /else if\(pv\.type==='md'\)\{[\s\S]*renderMarkdown\(d, pv\.content\)/, 'the preview pane has a markdown branch');
+  assert.match(src, /const f=starterSkillFile\(\{ now:Date\.now\(\) \}\); const cur=await fs\.read\(f\.path/, 'a new project checks for the starter and seeds it through the owner fs');
+  assert.match(src, /: 'No skills yet\.\\n\\n'\+SKILL_SHAPE/, 'an empty skills list shows the authoring shape');
+  assert.match(src, /label:'＋ New skill', onClick: newSkill/, 'the list offers a scaffold');
+  assert.match(src, /const r=scaffoldSkill\(\{ name:String\(name\)\.trim\(\), now:Date\.now\(\) \}\);[\s\S]*await fs\.write\(r\.path, r\.text\)/, 'the scaffold is written through the owner fs (active at once), never the agent route');
+});
+
 await test('NAF-09: the rejection ledger is assigned, not permanently null', async () => {
   // The defect is structural: `let learnLedger = null` is declared and only ever READ, so every
   // review runs against an empty ledger and a rejected proposal is re-proposed forever.

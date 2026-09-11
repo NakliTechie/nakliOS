@@ -14,7 +14,7 @@
 // Plus an ADVISORY linter: incident-log shape and references sprawl are warnings
 // on the card, never a block (Hermes: "lessons, not logs").
 
-import { parseSkill, SKILL_STATUSES } from './skills.mjs';
+import { parseSkill, SKILL_STATUSES, SKILLS_DIR } from './skills.mjs';
 import { scanSkill, pathViolation } from './skill-sentinel.mjs';
 
 export const SKILL_FILE = 'SKILL.md';
@@ -39,9 +39,89 @@ export function serializeSkillFile(s) {
   return `---\n${lines.join('\n')}\n---\n${String(s.body || '').trimEnd()}\n`;
 }
 
-// Advisory linter — warnings, never blocks.
+// ESS-5 (2026-09-11): the authoring shape. Anvil could CONSUME a skill (index, load on demand,
+// sentinel, staging) but had nothing to say about what a good one looks like, so lintSkill had
+// nothing to lint against and a fresh project started with none. This is the shape, in prose the
+// reader shows and the scaffold follows: a description that fits on one index line, a body that
+// says WHEN it applies and WHAT to do, in the imperative, short.
+export const SKILL_SHAPE =
+  'A skill is a short instruction sheet the agent loads when a task matches its description.\n' +
+  '\n' +
+  '  name         kebab-case, the folder name: .anvil/skills/<name>/SKILL.md\n' +
+  '  description  ONE line, under 120 characters — it is the only thing in the prompt until the\n' +
+  '               skill is loaded, so it must say what the skill is FOR\n' +
+  '  body         "## When" (the situations it applies to), "## Steps" (imperative: Run…, Check…,\n' +
+  '               Never…), "## Check" (how the agent knows it worked). A lesson, not a log: no\n' +
+  '               dated entries, no link farms, no restating the code.\n' +
+  '\n' +
+  'A skill the agent writes lands STAGED and the owner activates it; a skill the owner writes here\n' +
+  'is active at once.';
+
+export const SKILL_NAME_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+// A new skill file from the shape. `name` must be kebab-case; the body carries the three
+// headings so the linter's shape checks pass on the day it is written and the author fills in
+// the blanks instead of inventing a format.
+export function scaffoldSkill({ name, description = '', now = null } = {}) {
+  const n = String(name || '').trim();
+  if (!SKILL_NAME_RE.test(n)) return { ok: false, error: `a skill name is kebab-case (letters, digits, hyphens): got "${n}"` };
+  const created = now ? new Date(now).toISOString().slice(0, 10) : null;
+  const text = serializeSkillFile({
+    name: n,
+    description: String(description || '').trim() || `What ${n} is for, in one line.`,
+    created,
+    body: [
+      '## When', `Describe the situations where ${n} applies.`, '',
+      '## Steps', '1. Run …', '2. Check …', '3. Never …', '',
+      '## Check', 'How the agent knows it worked.',
+    ].join('\n'),
+  });
+  return { ok: true, path: `${SKILLS_DIR}/${n}/${SKILL_FILE}`, text };
+}
+
+// The one skill a fresh project starts with: the things the live runs of 2026-09-11 showed a
+// model guessing at (paths, the gate, task_done). Short on purpose — it rides every prompt's
+// index line and is loaded only when the agent reaches for it.
+export const STARTER_SKILL = {
+  name: 'working-in-anvil',
+  description: 'How this workspace works: paths, the verify gate, task_done, and what not to do',
+  body: [
+    '## When', 'Any task in this workspace, especially before the first write or the first shell command.', '',
+    '## Steps',
+    '1. Paths are relative to the workspace root. There is no /workspace, /home or /tmp; do not cd.',
+    '2. If a verify gate is set, read its criterion under .anvil/gate/ before writing code — it is the spec.',
+    '3. Make the change with write/edit; keep edits small; run the code before claiming it works.',
+    '4. When the gate command exits 0 (or the task is plainly done), call task_done — do not keep probing.',
+    '5. Never edit .anvil/gate/ or .anvil/skills/ directly; they are read-only to you.', '',
+    '## Check', 'The gate exits 0, or task_done is accepted.',
+  ].join('\n'),
+};
+export function starterSkillFile({ now = null } = {}) {
+  return { path: `${SKILLS_DIR}/${STARTER_SKILL.name}/${SKILL_FILE}`,
+    text: serializeSkillFile({ ...STARTER_SKILL, created: now ? new Date(now).toISOString().slice(0, 10) : null }) };
+}
+
+// ESS-4: the reader. What a person sees when they open a skill — the frontmatter as a header
+// block, then the body as written. Pure, so the shape is tested without the preview pane.
+export function renderSkillReader(sk) {
+  const s = sk || {};
+  const flags = [s.status && s.status !== 'active' ? s.status : 'active', s.pinned ? 'pinned' : null].filter(Boolean).join(' · ');
+  const stamps = [s.created ? `created ${s.created}` : null, s.updated ? `updated ${s.updated}` : null].filter(Boolean).join(' · ');
+  const head = [`# ${s.name || '(unnamed)'}`, s.description ? `*${s.description}*` : '', `${flags}${stamps ? ' · ' + stamps : ''}`].filter(Boolean).join('\n\n');
+  return `${head}\n\n---\n\n${String(s.body || '').trim() || '(empty body)'}\n`;
+}
+
+// Advisory linter — warnings, never blocks. Checks against SKILL_SHAPE.
 export function lintSkill({ description = '', body = '' } = {}) {
   const warnings = [];
+  // ESS-5: the description is the index line — one line, short, or the index is the first thing to break.
+  const desc = String(description);
+  if (/\r?\n/.test(desc.trim())) warnings.push('description spans lines — it is a single index line');
+  if (desc.trim().length > 120) warnings.push(`description is ${desc.trim().length} characters — keep the index line under 120`);
+  // ESS-5: a body with no instruction in it is a note. The shape asks for imperatives.
+  if (String(body).trim().length >= 40 && !/^\s*(?:\d+\.|[-*])?\s*(?:Run|Check|Use|Do|Never|Always|Read|Write|Call|Keep|Prefer|Avoid|Make|If|When|Before|After)\b/im.test(String(body))) {
+    warnings.push('no instruction line — the shape wants imperatives (Run…, Check…, Never…), not description');
+  }
   if (!String(description).trim()) warnings.push('no description — the index line will be empty');
   const dated = (String(body).match(/^\s*[-*]?\s*(\d{4}-\d{2}-\d{2}|on \w+ \d{1,2})/gim) || []).length;
   if (dated >= 3) warnings.push(`incident-log shape: ${dated} dated entries — write the lesson, not the log`);

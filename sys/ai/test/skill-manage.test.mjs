@@ -1,6 +1,6 @@
 // Conformance — skill_manage (read-before-write, staged never active) + Sentinel (C1).
 //   node sys/ai/test/skill-manage.test.mjs
-import { planSkillWrite, createSkillSession, serializeSkillFile, lintSkill, skillManageTool, SKILL_STATUSES, SKILL_OPS } from '../skill-manage.mjs';
+import { planSkillWrite, createSkillSession, serializeSkillFile, lintSkill, skillManageTool, SKILL_STATUSES, SKILL_OPS, SKILL_SHAPE, scaffoldSkill, STARTER_SKILL, starterSkillFile, renderSkillReader, SKILL_NAME_RE } from '../skill-manage.mjs';
 import { parseSkill as parseSkillFile, buildSkillsIndex } from '../skills.mjs';
 import { scanSkill, sentinelLine, pathViolation, SENTINEL_CHECKS, BODY_MAX_BYTES, DESCRIPTION_MAX_BYTES, CITATION_MAX } from '../skill-sentinel.mjs';
 
@@ -146,6 +146,49 @@ await test('NAF-13: patch inserts its replacement LITERALLY, not as a replacemen
     const r = mk(lit);
     assert(r.ok && r.skillText.includes('alpha ' + lit + ' omega'), `${why} token "${lit}" must survive: ${/alpha[^\n]*/.exec(r.skillText)?.[0]}`);
   }
+});
+
+// ESS-5: the authoring shape, the scaffold that follows it, and the starter skill.
+await test('scaffoldSkill: kebab-case only; the file round-trips and passes the shape checks and the sentinel', () => {
+  eq(scaffoldSkill({ name: 'Bad Name' }).ok, false, 'spaces and capitals refused');
+  eq(scaffoldSkill({ name: '' }).ok, false, 'empty refused');
+  eq(scaffoldSkill({ name: 'run-the-gate-' }).ok, false, 'a trailing hyphen refused');
+  const r = scaffoldSkill({ name: 'release-checklist', description: 'The steps for cutting a release', now: Date.UTC(2026, 8, 11) });
+  assert(r.ok, r.error); eq(r.path, '.anvil/skills/release-checklist/SKILL.md');
+  const sk = parseSkillFile(r.text);
+  eq(sk.name, 'release-checklist'); eq(sk.description, 'The steps for cutting a release'); eq(sk.created, '2026-09-11');
+  assert(/## When[\s\S]*## Steps[\s\S]*## Check/.test(sk.body), 'the three headings, in order');
+  deepEqOrEmpty(lintSkill(sk), 'a scaffold lints clean');
+  eq(scanSkill(sk).state, 'clean', 'and the sentinel admits it');
+});
+function deepEqOrEmpty(warnings, m) { if (warnings.length) throw new Error(`${m}: ${JSON.stringify(warnings)}`); }
+await test('STARTER_SKILL: parses, lints clean, sentinel-clean, and says the four things the live runs guessed at', () => {
+  const f = starterSkillFile({ now: Date.UTC(2026, 8, 11) });
+  eq(f.path, '.anvil/skills/working-in-anvil/SKILL.md');
+  const sk = parseSkillFile(f.text);
+  eq(sk.name, STARTER_SKILL.name); eq(sk.status, 'active', 'an owner-written skill is active at once');
+  deepEqOrEmpty(lintSkill(sk), 'the starter lints clean');
+  eq(scanSkill(sk).state, 'clean', 'sentinel-clean');
+  for (const must of [/no \/workspace/, /\.anvil\/gate\//, /call task_done/, /do not cd/]) assert(must.test(sk.body), `says: ${must}`);
+  assert(/## Steps[\s\S]*call task_done[\s\S]*## Check/.test(sk.body), 'task_done is a STEP, not only the check');
+  assert(sk.description.length < 120, 'its index line is short');
+});
+await test('lintSkill checks against the shape: a multi-line or long description, a body with no instruction', () => {
+  assert(lintSkill({ description: 'one\ntwo', body: 'Run the thing and then check the other thing carefully.' }).some((w) => /spans lines/.test(w)), 'multi-line description');
+  assert(lintSkill({ description: 'x'.repeat(130), body: 'Run the thing and then check the other thing carefully.' }).some((w) => /under 120/.test(w)), 'long description');
+  assert(lintSkill({ description: 'ok', body: 'This project has a parser and a lexer and they live in src, which is nice to know.' }).some((w) => /no instruction line/.test(w)), 'a note, not a skill');
+  eq(lintSkill({ description: 'ok', body: '## Steps\n1. Run `node gate.mjs` and read the last line.\n2. Check it says PASS.' }).length, 0, 'imperatives pass');
+  eq(lintSkill({ description: 'ok', body: 'short' }).filter((w) => /no instruction/.test(w)).length, 0, 'the instruction check does not pile onto a body already flagged as too short');
+});
+await test('renderSkillReader: header block from the frontmatter, then the body as written', () => {
+  const out = renderSkillReader({ name: 'db-migrations', description: 'How migrations work here', status: 'staged', pinned: true, created: '2026-09-01', body: '## When\nA schema change.\n' });
+  assert(/^# db-migrations\n\n\*How migrations work here\*\n\nstaged · pinned · created 2026-09-01\n\n---\n\n## When\nA schema change\.\n$/.test(out), out);
+  assert(/active\n/.test(renderSkillReader({ name: 'x', body: 'b' })), 'an unmarked skill reads active');
+  assert(/\(empty body\)/.test(renderSkillReader({ name: 'x' })), 'an empty body says so');
+});
+await test('SKILL_SHAPE names the three parts and the staging rule', () => {
+  for (const must of [/name/, /description/, /120 characters/, /## When/, /## Steps/, /## Check/, /STAGED/]) assert(must.test(SKILL_SHAPE), `shape mentions ${must}`);
+  assert(SKILL_NAME_RE.test('a-b-2') && !SKILL_NAME_RE.test('A_b'), 'the name rule');
 });
 
 if (failures.length) { console.error(`skill-manage: ${passed} passed, ${failures.length} FAILED`); for (const f of failures) console.error(`  FAIL ${f.n}: ${f.message}`); process.exit(1); }
