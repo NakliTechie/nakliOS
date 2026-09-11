@@ -2010,6 +2010,18 @@
     return entries;
   }
 
+  // Live 2026-09-11 on naklios.dev (deepseek-flash): the agent ran the task's own gate command
+  // at step 10, saw "inv: OK [exit 0]", and then spent 30 more steps writing probe scripts and
+  // asking for reviews, never calling task_done — max-steps with a green gate. The result of a
+  // shell call that IS the gate now says what it means. Pure, so the handlers test can drive it.
+  function gateHint(nm, ar, res, verifyCmd){
+    if(nm!=='shell' || typeof res!=='string' || !verifyCmd) return res;
+    const cmd=String((ar&&ar.command)||''); if(!cmd.includes(verifyCmd)) return res;
+    const m=/\[exit (\d+)\]/.exec(res); if(!m) return res;
+    return res + (m[1]==='0'
+      ? '\n[gate] that command is this task\'s verify gate and it exited 0 — call task_done to finish; the gate runs once more on your behalf.'
+      : '\n[gate] that command is this task\'s verify gate and it exited '+m[1]+' — fix the cause and re-run; call task_done only when it exits 0.');
+  }
   async function runTask(t, text){
     if(!t||running) return;
     if(t.title==='Untitled task'){ t.title=text.slice(0,48); }
@@ -2411,9 +2423,10 @@
       const raw = await baseExec(nm, ar, callObj);
       // The gate fence annotation rides on EVERY string result, not just the shell's: write/edit
       // reach fileops through the same granted face, so a refusal can arrive by either route.
-      const res = (typeof raw==='string')
+      const res0 = (typeof raw==='string')
         ? explainGateRefusal(nm==='shell' ? explainSkillsRefusal(raw) : raw)
         : raw;
+      const res = gateHint(nm, ar, res0, ((t.verifyCmd)||'').trim());
       // Post-tool hooks: run configured commands (auto-format / lint / verify)
       // after the tool succeeds; their bounded output is fed back to the agent.
       try{

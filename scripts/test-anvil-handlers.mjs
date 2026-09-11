@@ -139,6 +139,22 @@ function learnCtx(over = {}) {
   };
 }
 
+await test('LB-1: a shell call that IS the verify gate says so — exit 0 points at task_done, non-zero at the fix', async () => {
+  const gateHint = instantiate(extractFunction(src, 'gateHint'), 'gateHint', {});
+  const cmd = 'python .anvil/gate/test_inv.py';
+  const green = gateHint('shell', { command: cmd }, 'inv: OK\n[exit 0]', cmd);
+  assert.match(green, /\[gate\] .*verify gate and it exited 0 — call task_done/, `green is pointed at task_done: ${green}`);
+  assert.ok(green.startsWith('inv: OK\n[exit 0]'), 'the original result is kept verbatim');
+  const red = gateHint('shell', { command: cmd + '; echo done' }, 'Traceback…\nAssertionError\n[exit 1]', cmd);
+  assert.match(red, /exited 1 — fix the cause/, `red is pointed at the fix: ${red}`);
+  assert.equal(gateHint('shell', { command: 'python other.py' }, 'ok\n[exit 0]', cmd), 'ok\n[exit 0]', 'a different command is untouched');
+  assert.equal(gateHint('write', { path: cmd }, 'Wrote x', cmd), 'Wrote x', 'only shell calls');
+  assert.equal(gateHint('shell', { command: cmd }, 'inv: OK\n[exit 0]', ''), 'inv: OK\n[exit 0]', 'an ungated task gets no hint');
+  assert.equal(gateHint('shell', { command: cmd }, { not: 'a string' }, cmd).not, 'a string', 'a non-string result passes through');
+  // The helper is only worth anything if the executor calls it on the result it returns.
+  assert.match(src, /const res = gateHint\(nm, ar, res0, \(\(t\.verifyCmd\)\|\|''\)\.trim\(\)\);/, 'the executor wires the hint in front of the post-tool hooks');
+});
+
 await test('NAF-09: the rejection ledger is assigned, not permanently null', async () => {
   // The defect is structural: `let learnLedger = null` is declared and only ever READ, so every
   // review runs against an empty ledger and a rejected proposal is re-proposed forever.
