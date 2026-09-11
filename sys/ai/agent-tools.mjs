@@ -17,7 +17,7 @@
 //   const exec  = makeToolExecutor({ shell, face });
 //   await runAgentLoop({ messages, tools, infer, executeTool: exec });
 
-import { shellTool, makeShellExecutor, runAgentLoop, taskDoneTool, interceptBashCommand } from './agent-loop.mjs';
+import { shellTool, makeShellExecutor, runAgentLoop, taskDoneTool, interceptBashCommand, clarifyTool } from './agent-loop.mjs';
 import { parseExpect, gradeExpect, expectLine } from './expect.mjs';
 import {
   dispatchTool, reviewTool, normalizeTasks, planMerge, formatDispatchDigest,
@@ -124,7 +124,7 @@ export function taskTool() {
 // `plan` = read + think, no mutation; `ask` = read-only Q&A.
 export const MODE_TOOLS = {
   code: null, // all
-  plan: new Set(['read', 'todowrite']),
+  plan: new Set(['read', 'todowrite', 'clarify']),
   ask: new Set(['read']),
   // harden (Rote handoff §4.6): author + hardens a .rote.js — read/surgical-edit,
   // fan-out to mine (dispatch) and critique (review), but NO shell (a script is
@@ -155,8 +155,9 @@ function forgeShellTool() {
 // Opt-in extras keep the default surface minimal (pi's lesson): `subagents` adds
 // `task`, `supervisor` adds `dispatch`/`review` (parallel isolated subagents),
 // `hashline` adds read_lines/edit_lines, `completion` adds task_done.
-export function codingToolset(mode = 'code', { subagents = false, supervisor = false, hashline = false, completion = false } = {}) {
+export function codingToolset(mode = 'code', { subagents = false, supervisor = false, hashline = false, completion = false, clarify = false } = {}) {
   const all = [readTool(), editTool(), writeTool(), applyPatchTool(), todoTool(), forgeShellTool()];
+  if (clarify) all.push(clarifyTool()); // B3: top level only — a subagent that asks pauses nobody
   if (subagents) all.push(taskTool());
   if (supervisor) all.push(dispatchTool(), reviewTool());
   if (hashline) all.push(readLinesTool(), editLinesTool());

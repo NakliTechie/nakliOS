@@ -1268,7 +1268,10 @@
       } else if(e.k==='tool'){
         const dt=document.createElement('details'); dt.className='tool'+(e.error?' err':''); if(e.open) dt.open=true;
         const sum=document.createElement('summary');
-        sum.innerHTML=`<span class="tn">${esc(e.name)}</span><span class="td">${esc(e.detail||'')}</span><span class="tg">${e.error?'error':(e.result!=null?'result':'…')}</span>`;
+        // B1: a failure says its KIND in the tag (not found · refused · invalid args …), not just "error".
+        const tag = e.kind ? String(e.kind).replace(/_/g,' ') : (e.error?'error':(e.result!=null?'result':'…'));
+        dt.className='tool'+((e.error||e.kind)?' err':''); if(e.open) dt.open=true;
+        sum.innerHTML=`<span class="tn">${esc(e.name)}</span><span class="td">${esc(e.detail||'')}</span><span class="tg">${esc(tag)}</span>`;
         dt.appendChild(sum);
         const out = e.error!=null?e.error:e.result;
         if(out!=null){
@@ -2625,7 +2628,7 @@
     // `remember` writes a fact file — code mode only (plan/ask are read-only).
     // `skill` and `recall` are read-only, offered in every mode when there's
     // something to load.
-    const tools = codingToolset(mode,{subagents:true, supervisor: mode==='code', completion: !!verify});
+    const tools = codingToolset(mode,{subagents:true, supervisor: mode==='code', completion: !!verify, clarify: true}); // B3: top level may ask
     if(mode==='code') tools.push(rememberTool());
     if(mode==='code') tools.push(skillManageTool());
     if(mode==='code') tools.push(synthesizeTool());
@@ -2660,7 +2663,8 @@
           // task_done is intercepted before executeTool and emits only a result,
           // and unparseable arguments emit only an error. Dropping them made those
           // paths invisible — the agent's own completion signal left no trace.
-          else if(e.type==='tool-result'){ clearThinking(); if(liveTool){ liveTool.result=String(e.result==null?'':e.result).slice(0,8000); noteChange(t,liveTool.name,liveTool.args); liveTool=null; } else { t.log.push({k:'tool',name:e.name||'(tool)',detail:'',result:String(e.result==null?'':e.result).slice(0,8000),error:null}); } renderLog(); }
+          else if(e.type==='tool-result'){ clearThinking(); if(liveTool){ liveTool.result=String(e.result==null?'':e.result).slice(0,8000); if(e.kind) liveTool.kind=e.kind; noteChange(t,liveTool.name,liveTool.args); liveTool=null; } else { t.log.push({k:'tool',name:e.name||'(tool)',detail:'',result:String(e.result==null?'':e.result).slice(0,8000),error:null,kind:e.kind||null}); } renderLog(); }
+          else if(e.type==='clarify'){ clearThinking(); liveTool=null; t.log.push({k:'system',text:'❓ '+String(e.question||'')+'\n(the run is paused — your next message is the answer)'}); renderLog(); }
           else if(e.type==='tool-error'){ clearThinking(); if(liveTool){ liveTool.error=String(e.error); liveTool=null; } else { t.log.push({k:'tool',name:e.name||'(tool)',detail:'(arguments rejected)',result:null,error:String(e.error)}); } renderLog(); }
           else if(e.type==='assistant' && e.content){ clearThinking(); t.log.push({k:'assistant',text:e.content}); renderLog(); }
           else if(e.type==='verify-pass'){ clearThinking(); liveTool=null; t.log.push({k:'system',text:'✓ gate passed — `'+verifyCmd+'` exit 0'}); renderLog(); }
@@ -2796,6 +2800,7 @@
       t.lastStop = result.stop;   // AC-4: the queue holds unless this is a clean 'done'
       if(result.stop === 'done') t.ackAfterBadRun = false;   // AC-8a: the speed bump returns after a clean run
       const stopLabel = result.stop==='aborted' ? 'stopped'
+        : result.stop==='clarify' ? 'paused — a question for you (answer it to continue)'
         : result.stop==='budget' ? ('hit budget ('+(result.budgetAxis||'')+')')
         : result.stop==='unverified' ? 'gate never passed'
         : (result.stop==='done' && !gated) ? 'finished — no gate, so this is the agent\'s own claim'

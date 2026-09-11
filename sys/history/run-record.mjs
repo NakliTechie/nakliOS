@@ -27,6 +27,7 @@
 // run with any loop, and replays through any loop, by wrapping infer/executeTool.
 
 import { appendEvent, contentHash, verifyChain, toNDJSON, fromNDJSON } from './ledger.mjs';
+import { classifyToolResult } from '../ai/tool-result-kind.mjs';
 import { parseExpect, gradeExpect, stripExpect, EXPECT_MARKER } from '../ai/expect.mjs';
 import { runUnit, createProjector } from './projection.mjs';
 export { runUnit, createProjector };
@@ -159,6 +160,9 @@ export function createRunRecorder({ app = 'anvil', principal = 'local', grant_id
           break;
         }
         case 'tool.responded':
+          // B1: the failure kind is NOT stored — it is a pure function of the text the model saw, so
+          // foldToolFailures classifies at read time. Storing it changed the hash of every real recorded
+          // run (the replay corpus went red) and would have made old records the only ones without it.
           enqueue(verb, () => ({ input: { id: e.id, name: e.name, args_hash: argsHashes.get(e.id) ?? null, step: s }, output: { result: String(e.result ?? '') } }));
           break;
         // F5: the loop capped this result before it entered the surface. The FULL text is
@@ -224,6 +228,7 @@ export function createRunRecorder({ app = 'anvil', principal = 'local', grant_id
         stop: result?.stop ?? 'unknown', reason: result?.reason ?? null,
         verified: result?.verified === true, axis: result?.budgetAxis ?? null,
         error: result?.error ?? null,
+        ...(result?.question ? { question: String(result.question) } : {}), // B3: what the run paused to ask
       } }));
     },
 
@@ -388,7 +393,7 @@ export function logUnit() {
         case 'verify.failed': rows.push({ k: 'system', text: `✗ gate failed (round ${inp.round ?? 1}) — exit ${out.verdict?.exit ?? '?'}; agent retrying` }); return { rows, open };
         case 'run.stopped': {
           const st = out.stop;
-          const label = st === 'aborted' ? 'stopped' : st === 'budget' ? `hit budget (${out.axis || ''})` : st === 'unverified' ? 'gate never passed' : st === 'error' ? `error: ${out.error || ''}` : st;
+          const label = st === 'aborted' ? 'stopped' : st === 'budget' ? `hit budget (${out.axis || ''})` : st === 'unverified' ? 'gate never passed' : st === 'error' ? `error: ${out.error || ''}` : st === 'clarify' ? `paused to ask: ${out.question || ''}` : st;
           rows.push({ k: 'system', text: `agent ${label} · ${inp.steps ?? '?'} steps` });
           return { rows, open };
         }
@@ -602,6 +607,19 @@ export function foldSubagents(events, resolve) {
   return out;
 }
 
+// B1: what went wrong, by kind, over one run. `by` counts each kind; `rows` names the calls.
+export function foldToolFailures(events, resolve) {
+  const by = {}; const rows = [];
+  for (const e of joined(events, resolve)) {
+    if (e.tool !== 'tool.responded') continue;
+    const kind = classifyToolResult((e.input && e.input.name) || '', e.output && e.output.result);
+    if (!kind) continue;
+    by[kind] = (by[kind] || 0) + 1;
+    rows.push({ kind, name: (e.input && e.input.name) || '', step: (e.input && e.input.step) ?? null, text: String(e.output.result || '').slice(0, 120) });
+  }
+  return { by, rows, total: rows.length };
+}
+
 // ESS-1: subagents that started and never reported back. A `subagent.started` is matched to the
 // next `subagent.ran` with the same kind + label + tool_call_id; what is left unmatched died in
 // flight — its overlay was discarded with the page, nothing it wrote reached the workspace, and
@@ -720,6 +738,7 @@ export function foldOutcome(events, resolve) {
     else if (stop === 'error') push('terminal', 'failure', 1.0, `error: ${o.error || ''}`);
     else if (stop === 'budget' || stop === 'max-steps' || stop === 'no-progress') push('terminal', 'failure', 0.8, `did not finish: ${stop}${o.axis ? ` (${o.axis})` : ''}`);
     else if (stop === 'aborted') { note = 'aborted by the owner — no evidence either way'; push('terminal', 'neutral', 0, 'aborted'); }
+    else if (stop === 'clarify') { note = 'paused to ask the owner — not an outcome'; push('terminal', 'neutral', 0, 'clarify'); }
     else push('terminal', 'neutral', 0, `unknown stop: ${stop}`);
   }
 

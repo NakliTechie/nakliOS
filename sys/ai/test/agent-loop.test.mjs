@@ -16,7 +16,7 @@ import { runAgentLoop, shellTool, makeShellExecutor, taskDoneTool,
   estimateTokens, boundedText, interceptBashCommand,
   REPEAT_NUDGE_AT, repeatNudge, stepSignature,
   usageInputTokens, usageOutputTokens,
-  spillToolOutput } from '../agent-loop.mjs';
+  spillToolOutput, placeholderSummary, clarifyTool } from '../agent-loop.mjs';
 
 let passed = 0;
 const failures = [];
@@ -498,11 +498,85 @@ await test('task_done with no gate wired is accepted as the explicit done signal
   const result = await runAgentLoop({
     messages: [{ role: 'user', content: 'go' }],
     tools: [shellTool(), taskDoneTool()],
-    infer: scriptedInfer([{ content: '', toolCalls: [call('task_done', {}, 'd')] }]),
+    infer: scriptedInfer([{ content: '', toolCalls: [call('task_done', { summary: 'Wrote the file and ran it; output matched.' }, 'd')] }]),
     executeTool: makeShellExecutor(freshShell()),
   });
   eq(result.stop, 'done', 'done'); eq(result.verified, true, 'accepted');
 });
+
+// ── B2 (osaurus recce, 2026-09-11): a placeholder summary is bounced, never accepted, never gated ──
+await test('task_done: an empty or placeholder summary is refused and the gate does not run', async () => {
+  let gateRuns = 0;
+  const verify = async () => { gateRuns++; return { ok: true, exit: 0, stdout: 'PASS', stderr: '' }; };
+  const result = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }],
+    tools: [shellTool(), taskDoneTool()],
+    infer: scriptedInfer([
+      { content: '', toolCalls: [call('task_done', {}, 'd1')] },
+      { content: '', toolCalls: [call('task_done', { summary: 'done' }, 'd2')] },
+      { content: '', toolCalls: [call('task_done', { summary: 'Task complete!' }, 'd3')] },
+      { content: '', toolCalls: [call('task_done', { summary: 'Fixed parse_amount to return Decimal; the gate passes.' }, 'd4')] },
+    ]),
+    executeTool: makeShellExecutor(freshShell()), verify,
+  });
+  eq(result.stop, 'done', 'the real summary was accepted');
+  eq(gateRuns, 1, 'the gate ran ONCE — never for a placeholder');
+  const bounced = result.messages.filter((m) => m.role === 'tool' && /invalid_args/.test(m.content));
+  eq(bounced.length, 3, 'three placeholders, three bounces');
+  assert(/what you did and how you verified it/.test(bounced[0].content), `the bounce says what a summary is: ${bounced[0].content}`);
+});
+await test('placeholderSummary: the closed list, blanks, and length', () => {
+  for (const bad of ['', '  ', 'done', 'Done.', 'ok', 'finished', 'Task complete', 'task is done!', 'success']) assert(placeholderSummary(bad), `refused: ${JSON.stringify(bad)}`);
+  for (const good of ['Wrote inv/store.py and ran the gate; it passed.', 'Renamed the flag; tests green.', 'tests green', 'think done']) eq(placeholderSummary(good), null, `accepted (no length rule): ${good}`);
+});
+
+// ── B3: clarify pauses the run with the question; an empty question is bounced ──
+await test('clarify: the run pauses with stop:clarify, the question rides the result, and the loop emits it', async () => {
+  const events = [];
+  const result = await runAgentLoop({
+    messages: [{ role: 'user', content: 'migrate the db' }],
+    tools: [shellTool(), clarifyTool()],
+    infer: scriptedInfer([{ content: '', toolCalls: [call('clarify', { question: 'Drop the legacy table, or keep it read-only?' }, 'q1')] }]),
+    executeTool: makeShellExecutor(freshShell()), onEvent: (e) => events.push(e),
+  });
+  eq(result.stop, 'clarify'); eq(result.question, 'Drop the legacy table, or keep it read-only?');
+  eq(result.steps, 1, 'it stopped on the step that asked');
+  assert(events.some((e) => e.type === 'clarify' && /legacy table/.test(e.question)), 'the clarify event carries the question');
+  const toolMsg = result.messages.find((m) => m.role === 'tool' && m.tool_call_id === 'q1');
+  assert(/pauses here/.test(toolMsg.content), 'the model was told the run pauses');
+});
+await test('clarify: an empty question is refused as invalid_args and the run continues', async () => {
+  const result = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }],
+    tools: [shellTool(), clarifyTool()],
+    infer: scriptedInfer([{ content: '', toolCalls: [call('clarify', { question: '   ' }, 'q0')] }, { content: 'fine, proceeding', toolCalls: [] }]),
+    executeTool: makeShellExecutor(freshShell()),
+  });
+  eq(result.stop, 'done', 'the run went on');
+  assert(result.messages.some((m) => m.role === 'tool' && /invalid_args.*clarify needs the question/.test(m.content)), 'bounced with a reason');
+});
+
+// ── B1: every failing tool result carries a typed kind on its event; successes carry none ──
+await test('tool results carry a failure kind the loop can route on', async () => {
+  const events = [];
+  const shell = freshShell();
+  await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }],
+    tools: [shellTool()],
+    infer: scriptedInfer([
+      { content: '', toolCalls: [call('shell', { command: 'cat nope.txt' }, 'c1')] },
+      { content: '', toolCalls: [call('shell', { command: 'echo hi' }, 'c2')] },
+      { content: '', toolCalls: [{ id: 'c3', type: 'function', function: { name: 'shell', arguments: '{"command": "unterminated' } }] },
+      { content: '', toolCalls: [call('nosuchtool', { x: 1 }, 'c4')] },
+      { content: 'done', toolCalls: [] },
+    ]),
+    executeTool: makeShellExecutor(shell), onEvent: (e) => events.push(e),
+  });
+  const kinds = Object.fromEntries(events.filter((e) => e.type === 'tool-result').map((e) => [e.id, e.kind || null]));
+  eq(kinds.c1, 'not_found', 'ENOENT is not_found'); eq(kinds.c2, null, 'a success has no kind');
+  eq(kinds.c3, 'invalid_args', 'unparseable arguments'); eq(kinds.c4, 'unavailable', 'an unknown tool');
+});
+
 
 // ── Batch 7: the budget ladder (turns / tokens / wall-clock) ────────────
 await test('budget ladder: the turns axis trips its stop reason', async () => {

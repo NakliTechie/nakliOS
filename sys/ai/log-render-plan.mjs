@@ -40,7 +40,7 @@ export function rowKey(e, i) {
   const part = (v) => (v == null ? '' : String(v));
   switch (k) {
     case 'tool':
-      return `${i}:tool:${part(e.name)}:${part(e.detail)}:${e.open ? 1 : 0}:${part(e.error)}:${part(e.result)}`;
+      return `${i}:tool:${part(e.name)}:${part(e.detail)}:${e.open ? 1 : 0}:${part(e.error)}:${part(e.result)}:${part(e.kind)}`;
     case 'diff':
       return `${i}:diff:${part(e.path)}:${part(e.status)}:${part(e.text)}`;
     // ESS-2: a child's live row changes in place as it runs — every field the line shows is in

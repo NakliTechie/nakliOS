@@ -18,6 +18,7 @@
 //   // result: { messages, steps, stop: 'done'|'max-steps'|'no-progress'|'error', text }
 
 import { parseToolArguments } from './agent-protocol.mjs';
+import { classifyToolResult } from './tool-result-kind.mjs';
 import { NO_OUTPUT } from './expect.mjs';
 
 // The single most powerful tool for a coding agent: a real shell. The Forge
@@ -49,6 +50,31 @@ export function shellTool() {
 // before accepting, and rejects with the gate's bounded output if it is red.
 // Stronger than "the assistant stopped talking = done" — completion is an
 // affirmative act the harness gets to veto.
+// B2 (2026-09-11, osaurus recce): a completion claim with no substance is bounced back for a
+// retry instead of ending the run. "done", "ok", "finished", an empty string, a few characters —
+// none of them say what was done or how it was checked, which is the only thing the summary is
+// for. Pure; the loop calls it before it runs the gate, so a placeholder never costs a gate run.
+export const PLACEHOLDER_SUMMARY_RE = /^(?:done|ok|okay|finished|complete|completed|task (?:is )?(?:done|complete|completed)|all done|success|✓|yes)[.! ]*$/i;
+export function placeholderSummary(summary) {
+  const t = String(summary ?? '').trim();
+  if (!t) return 'task_done needs a summary — what you did and how you verified it.';
+  if (PLACEHOLDER_SUMMARY_RE.test(t)) return `"${t}" is not a summary — say what you did and how you verified it.`;
+  // No length rule: a 12-character floor was a guessed number, and it refused real summaries
+  // ("tests green"). The bar is the closed list above and a blank; the model keeps its words.
+  return null;
+}
+
+// B3 (2026-09-11, osaurus recce): a run that needs a decision can ask for one instead of guessing
+// or dying. The loop intercepts `clarify`, pauses the run with stop:'clarify', and the owner's
+// next message resumes it — the same carried-conversation path every re-send already uses.
+export function clarifyTool() {
+  return { type: 'function', function: {
+    name: 'clarify',
+    description: 'Ask the owner ONE question you cannot answer from the workspace and that changes what you would do — a missing requirement, two conflicting instructions, a destructive choice. The run pauses; their answer arrives as the next message. Do not use it for things you can find out by reading or running.',
+    parameters: { type: 'object', properties: { question: { type: 'string', description: 'The one question, with the options if there are options.' } }, required: ['question'] },
+  } };
+}
+
 export function taskDoneTool() {
   return {
     type: 'function',
@@ -61,7 +87,7 @@ export function taskDoneTool() {
       parameters: {
         type: 'object',
         properties: {
-          summary: { type: 'string', description: 'A one-line summary of what you did (optional).' },
+          summary: { type: 'string', description: 'What you did AND how you verified it, in one or two sentences. Required — "done" is not a summary and is refused.' },
         },
         required: [],
       },
@@ -508,7 +534,31 @@ export async function runAgentLoop({
       const id = callId(call, step, i);
       const name = call.function?.name || '';
 
+      if (name === 'clarify') {
+        const q = String(parseToolArguments(call).value?.question ?? '').trim();
+        if (!q) {
+          const msg = 'Error (invalid_args): clarify needs the question.';
+          onEvent({ type: 'tool-error', name, id, error: msg, kind: 'invalid_args', step });
+          onEvent({ type: 'tool-result', name, id, result: msg, kind: 'invalid_args', step });
+          convo.push({ role: 'tool', tool_call_id: id, content: msg });
+          continue;
+        }
+        const msg = 'Question sent to the owner. The run pauses here; their answer arrives as the next message.';
+        onEvent({ type: 'tool-result', name, id, result: msg, step });
+        convo.push({ role: 'tool', tool_call_id: id, content: msg });
+        onEvent({ type: 'clarify', question: q, step });
+        return { messages: convo, steps: step + 1, stop: 'clarify', question: q, text: lastText };
+      }
+
       if (name === 'task_done') {
+        const problem = placeholderSummary(parseToolArguments(call).value?.summary);
+        if (problem) { // B2: no substance, no gate run — bounce it back
+          const msg = `Error (invalid_args): ${problem}`;
+          onEvent({ type: 'tool-error', name, id, error: msg, kind: 'invalid_args', step });
+          onEvent({ type: 'tool-result', name, id, result: msg, kind: 'invalid_args', step });
+          convo.push({ role: 'tool', tool_call_id: id, content: msg });
+          continue;
+        }
         if (!verify) { // no gate wired → the explicit signal is accepted as-is
           onEvent({ type: 'tool-result', name, id, result: 'accepted', step });
           convo.push({ role: 'tool', tool_call_id: id, content: 'Task accepted (no verification gate configured).' });
@@ -536,21 +586,23 @@ export async function runAgentLoop({
       let resultText;
       if (!parsed.ok) {
         resultText = `Error: could not parse arguments as JSON: ${parsed.error}`;
-        onEvent({ type: 'tool-error', name, id, error: parsed.error, step });
+        onEvent({ type: 'tool-error', name, id, error: parsed.error, kind: 'invalid_args', step });
         // The executed path emits tool-result after a throw; this path did not, so the record
         // held only the raw parse error and the transcript fold had to invent the wording the
         // model saw. Live 2026-09-11 on DeepSeek (a tool call cut off mid-JSON): every later
         // request read as unreconstructable. Record exactly what is sent.
-        onEvent({ type: 'tool-result', name, id, result: resultText, step });
+        onEvent({ type: 'tool-result', name, id, result: resultText, kind: 'invalid_args', step });
       } else {
         onEvent({ type: 'tool-call', name, id, args: parsed.value, step });
         try {
           resultText = await executeTool(name, parsed.value, call);
         } catch (e) {
           resultText = `Error: ${String(e?.message || e)}`;
-          onEvent({ type: 'tool-error', name, id, error: String(e?.message || e), step });
+          onEvent({ type: 'tool-error', name, id, error: String(e?.message || e), kind: 'execution_error', step });
         }
-        onEvent({ type: 'tool-result', name, id, result: resultText, step });
+        // B1: the kind rides the event; the text the model sees is untouched.
+        const kind = classifyToolResult(name, resultText);
+        onEvent({ type: 'tool-result', name, id, result: resultText, ...(kind ? { kind } : {}), step });
       }
       // F5: cap what enters the SURFACE; the record keeps what was produced. If the recorder
       // refuses the event, the elision has nowhere to point, so the original stays inline —

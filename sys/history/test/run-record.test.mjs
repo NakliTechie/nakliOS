@@ -10,7 +10,7 @@ import { createFileops, MemoryBackend } from '../../rig/fileops/index.mjs';
 import { createGrant, createOpLog, createAgentFace } from '../../rig/agent/index.mjs';
 import { createShell } from '../../rig/cli/shell.mjs';
 import { verifyChain } from '../ledger.mjs';
-import { RUN_EVENTS, createRunRecorder, loadRecord, foldStatus, foldLog, foldTranscript,
+import { RUN_EVENTS, createRunRecorder, loadRecord, foldStatus, foldLog, foldTranscript, foldToolFailures,
          replayInfer, replayExecuteTool, compareRuns, requestHash, ReplayMiss,
          OUTCOME_SIGNALS, foldOutcome, foldReuse, foldStopReasons, stopReasonsLine,
          searchRecords, scopeEntries, readEvent, historyTool, HISTORY_ROLES, foldRecovery, recoveryNote,
@@ -1183,6 +1183,37 @@ await test('F1: a failed tool call folds to exactly the text the loop sent, once
   assert(/^Error: could not parse arguments as JSON: /.test(tools[0].content), `the parse failure carries the loop's wording: ${tools[0].content}`);
   eq(tools[1].content, 'Error: kaboom', 'the throw carries the loop\'s wording');
   assert(rec.events().some((e) => e.tool === 'tool.failed'), 'tool.failed still lands on the chain for the log and outcome folds');
+});
+
+await test('B1: foldToolFailures classifies from the recorded text — nothing stored, old records count too', async () => {
+  const shell = freshShell();
+  const rec = createRunRecorder({ app: 'anvil', principal: 'p' });
+  const turns = [
+    { content: '', toolCalls: [call('shell', { command: 'cat nope.txt' }, 'c0')] },
+    { content: '', toolCalls: [call('shell', { command: 'echo fine' }, 'c1')] },
+    { content: '', toolCalls: [call('nosuch', { a: 1 }, 'c2')] },
+    { content: 'done', toolCalls: [] },
+  ];
+  await rec.start({ messages: MESSAGES, tools: [shellTool()] });
+  const result = await runAgentLoop({ messages: MESSAGES, tools: [shellTool()], infer: rec.wrapInfer(scripted(turns)), executeTool: makeShellExecutor(shell), onEvent: rec.onEvent, maxSteps: 6 });
+  await rec.finish(result); await rec.settled();
+  const responded = joined(rec.events(), rec.resolve).filter((e) => e.tool === 'tool.responded');
+  assert(responded.every((e) => !('kind' in (e.output || {}))), 'the record stores no kind — the hash of a real run must not change');
+  const f = foldToolFailures(rec.events(), rec.resolve);
+  eq(f.total, 2, 'two failures'); eq(f.by.not_found, 1, 'one not_found'); eq(f.by.unavailable, 1, 'one unavailable');
+  eq(f.rows[0].name, 'shell'); assert(/ENOENT/.test(f.rows[0].text), 'the row carries the text');
+});
+await test('B3: a clarify stop carries its question on run.stopped, labels as a pause, and is a neutral outcome', async () => {
+  const rec = createRunRecorder({ app: 'anvil', principal: 'p' });
+  await rec.start({ messages: MESSAGES, tools: [] });
+  await rec.finish({ stop: 'clarify', steps: 2, question: 'Keep the legacy table?' }); await rec.settled();
+  const stopped = joined(rec.events(), rec.resolve).find((e) => e.tool === 'run.stopped');
+  eq(stopped.output.question, 'Keep the legacy table?', 'the question is on the chain');
+  const rows = foldLog(rec.events(), rec.resolve);
+  assert(rows.some((r) => /paused to ask: Keep the legacy table\?/.test(r.text)), `the log says it paused: ${JSON.stringify(rows.map((r) => r.text))}`);
+  eq(foldStatus(rec.events(), rec.resolve).status, 'idle', 'a pause is idle, not an error');
+  const oc = foldOutcome(rec.events(), rec.resolve);
+  assert(oc.signals.some((s) => s.detail === 'clarify' && s.polarity === 'neutral'), `neutral, not a failure: ${JSON.stringify(oc.signals)}`);
 });
 
 await test('F1: prose emitted beside a tool call survives the fold, and the check stays clean', async () => {

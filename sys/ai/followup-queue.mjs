@@ -175,6 +175,8 @@ export function admitRun({ held = false, heldReason = '', lastStop = null, lastW
     return { admit: false, kind: 'after-error',
       reason: 'The last run ended in an error and nothing has been checked since. Send again to run anyway.' };
   }
+  // B3: a run that paused to ask is not a bad ending — the next Send IS the answer.
+  if (lastStop === 'clarify') return { admit: true, reason: '', kind: '' };
   if (lastStop && lastStop !== 'done') {
     return { admit: false, kind: 'after-' + lastStop,
       reason: `The last run ended '${lastStop}' — the workspace may be half-changed. Send again to run anyway.` };

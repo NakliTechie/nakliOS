@@ -143,6 +143,8 @@ const texts = (q) => q.map((e) => e.text);
 {
   assert.equal(admitRun({}).admit, true, 'nothing wrong, nothing to say');
   assert.equal(admitRun({ lastStop: 'done' }).admit, true, 'a clean finish admits the next run');
+  assert.equal(admitRun({ lastStop: 'clarify' }).admit, true, 'B3: a run that paused to ask admits the answer — it is not a bad ending');
+  assert.equal(admitRun({ lastStop: 'max-steps' }).admit, false, 'while a bad ending still holds');
 
   // The explicit hold. Cleared only by the owner.
   const held = admitRun({ held: true, heldReason: 'checking the diff' });
