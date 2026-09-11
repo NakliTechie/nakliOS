@@ -359,8 +359,7 @@ particular, a record claiming a clean close against a dirty tree is caught. A
     ref, and never with force.
 13. **Do not let a model write `status: done`** or read `verificationCommand`.
 14. **Do not skip, delete, or weaken a test to pass a checkpoint.**
-15. **Do not copy Rust from Codex or TypeScript from Prime Agent into the repo.** Port
-    semantics; write JS.
+15. **Do not copy third-party agent code into the repo.** Port semantics; write JS.
 16. **Do not defer mobile.**
 
 ---

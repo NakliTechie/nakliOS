@@ -1,7 +1,7 @@
 # Anvil
 
-A browser-native **coding-agent desktop** — a Claude-Code-desktop / Codex-style
-client for the naklios agent. Three panes:
+A browser-native **coding-agent desktop** — a chat-first client for the naklios
+agent. Three panes:
 
 - **Left** — projects → tasks (each task is an agent conversation over a workspace).
 - **Center** — the chat: your prompts, the agent's replies, and a live, collapsible

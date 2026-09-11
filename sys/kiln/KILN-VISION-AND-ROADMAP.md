@@ -55,16 +55,16 @@ model.** Two doors, one core.
 
 | Piece | Source | Posture |
 |---|---|---|
-| Kernel concept | Prime Agent's RLM (MIT, TypeScript) — persistent IPython as the model's only tool, context-as-variable, programmatic subagents | **Semantics adopted, code not.** Theirs is a daemon spawning real processes; ours is a Worker in a tab |
+| Kernel concept | The RLM shape — persistent IPython as the model's only tool, context-as-variable, programmatic subagents | Not a daemon spawning real processes; a Worker in a tab |
 | Runtime | Pyodide | Vendored loader, CDN payload, consent-gated download, cached |
 | FS bridge | Pyodide's mountable filesystem over `naklios.fs` | Scoped per session; never the whole Crate mount |
 
-**What we deliberately do not copy.** Prime Agent's own warning is that it runs
-model-generated Python with the user's permissions and that its worker/kernel split
-is not a security sandbox. Ours is a browser Worker: no network unless we grant it,
+**What the sandbox is.** A daemon that runs model-generated Python with the user's
+permissions is not a security sandbox, whatever its worker/kernel split. Ours is a
+browser Worker: no network unless we grant it,
 no filesystem except the mounted slice, no process spawning at all. The sandbox is
-structural, not procedural. That is the single biggest difference between the two
-designs and it is not negotiable.
+structural, not procedural. That is the load-bearing property of the design and it
+is not negotiable.
 
 ---
 

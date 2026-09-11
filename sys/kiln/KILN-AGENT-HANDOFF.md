@@ -196,7 +196,7 @@ raising an exception returns a result object and the parent continues.
 
 ## 8. K5 — Harness state
 
-Adopt the Continual Harness *shape*; depart on one point deliberately.
+The harness is a persisted, refinable record; one point below is deliberate.
 
 **Persisted in Crate** (`sys/kiln/harness/`): supplemental prompts, memories, skill
 descriptions, subagent specifications. Snapshotted on every accepted change.
@@ -350,7 +350,7 @@ than N cells reports what it dropped rather than replaying indefinitely.
 9. **Do not use a second Pyodide instance for subagents.**
 10. **Do not throw across the Worker boundary.** Typed results only.
 11. **Do not auto-download Pyodide.**
-12. **Do not copy TypeScript from Prime Agent into the repo.** Port semantics.
+12. **Do not copy third-party agent-harness code into the repo.** Port semantics.
 13. **Do not skip, delete, or weaken a test to make a checkpoint pass** — least of
     all the K3 adversarial test.
 

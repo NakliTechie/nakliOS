@@ -123,9 +123,8 @@ vision doc §2 and is not relitigated here.
 | Git engine | `isomorphic-git` (MIT) | Adapter to its interface. Never fork |
 | Terminal renderer | `xterm.js` (MIT, v6, zero-dep core) | Vendor the ESM build. A screen, not a shell — fed from the registry, never a PTY |
 | Python runtime | Pyodide, in a Worker | See Kiln |
-| Agent architecture | Prime Agent's RLM + Continual Harness (MIT, TS) | **Semantics adopted, code not.** Theirs is a daemon with user permissions and an explicit not-a-sandbox warning; ours is a Worker with no network and no process spawn |
-| Interaction model | Codex CLI (Apache-2.0, Rust) | Semantics ported: approval profiles, plan/step decomposition, core↔UI event stream, stale-update protection |
-| Desktop UX | Codex app (**closed**) | Rhythm only. We draw our own surfaces |
+| Agent architecture | The RLM shape + a persisted harness (see Kiln) | A Worker with no network and no process spawn — not a daemon running with user permissions |
+| Interaction model | Our own | Approval profiles, plan/step decomposition, core↔UI event stream, stale-update protection |
 
 ---
 
@@ -162,9 +161,9 @@ operator → external agent (developer toggle).
 
 ## 7. Goal records
 
-Codex's goal mode holds a persistent directive across turns, budget resets, and
+A goal mode holds a persistent directive across turns, budget resets, and
 pauses. A browser tab is the worst host for a long-lived *process* — throttling,
-suspension, GPU context loss. So we replicate the **record**, not the run.
+suspension, GPU context loss. So we keep the **record**, not the run.
 
 ```
 goal record (Crate)
