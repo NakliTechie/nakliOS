@@ -143,5 +143,56 @@ await test('NAF-17: fingerprints keep code punctuation — x=1 and x=-1 are diff
   assert(!(await q.isPoisoned({ app: 'reckon', tool: 'setCells', diff: mk('x==1') })), 'and so is x==1');
 });
 
+// Checker C1 (2026-09-11): a diff that cannot be snapshotted is refused, never aliased.
+await test('stage: a cyclic diff with a function property is REFUSED — the queue never holds the caller\'s object', () => {
+  const q = createReviewQueue();
+  const diff = { cells: [{ path: 'a', value: 2 }], fn() {} }; diff.self = diff; // structuredClone fails (function), JSON fails (cycle)
+  const r = q.stage({ app: 'reckon', tool: 'edit', diff });
+  assert(r.error && /cannot be snapshotted/.test(r.error), `refused with the reason: ${JSON.stringify(r)}`);
+  eq(q.list().length, 0, 'nothing pending');
+  // and an ordinary diff is still isolated: mutating the caller's object after staging changes nothing
+  const plain = { cells: [{ path: 'a', value: 2 }] };
+  const ok = q.stage({ app: 'reckon', tool: 'edit', diff: plain });
+  plain.cells[0].value = 999;
+  const listed = q.list().find((e) => e.proposal_id === ok.proposal_id);
+  eq(JSON.stringify(listed.preview).includes('999'), false, 'the preview is the value at stage time');
+});
+
+// Checker C2 (2026-09-11): one proposal, one apply — even when two commits overlap.
+await test('commit: overlapping commits apply ONCE, and a discard during the apply is refused', async () => {
+  let applied = 0; let release;
+  const gate = new Promise((r) => { release = r; });
+  const q = createReviewQueue({ onApply: async () => { applied++; await gate; } });
+  const { proposal_id } = q.stage({ app: 'reckon', tool: 'edit', diff: { cells: [{ path: 'a', value: 1 }] } });
+  const first = q.commit(proposal_id, { actor: 'person' });
+  await new Promise((r) => setTimeout(r, 5));
+  const second = await q.commit(proposal_id, { actor: 'person' });
+  eq(second.ok, false, 'the second commit is refused'); assert(/in progress/.test(second.reason), second.reason);
+  const dropped = await q.discard(proposal_id, { reason: 'changed my mind' });
+  eq(dropped.ok, false, 'a discard during the apply is refused'); assert(/in progress/.test(dropped.reason), dropped.reason);
+  release();
+  const r1 = await first;
+  eq(r1.ok, true, 'the first commit lands'); eq(applied, 1, 'applied exactly once');
+  eq(q.list().length, 0, 'and it is gone');
+});
+await test('commit: a failed apply releases the reservation so the proposal can be retried', async () => {
+  let calls = 0;
+  const q = createReviewQueue({ onApply: async () => { calls++; if (calls === 1) throw new Error('disk full'); } });
+  const { proposal_id } = q.stage({ app: 'reckon', tool: 'edit', diff: { cells: [{ path: 'a', value: 1 }] } });
+  const r1 = await q.commit(proposal_id, { actor: 'person' }); eq(r1.ok, false, 'first apply failed');
+  const r2 = await q.commit(proposal_id, { actor: 'person' }); eq(r2.ok, true, 'the retry is not blocked by a stale reservation');
+});
+// Two of the checker's "tests that cannot fail", pinned: the expiry is the envelope's, and the
+// snapshot keeps the inverse.
+await test('list: the listed expiry is the envelope\'s own, and a snapshotted diff keeps its inverse', () => {
+  const q = createReviewQueue({ now: () => 1000 });
+  const { proposal_id } = q.stage({ app: 'reckon', tool: 'edit', diff: RECKON_DIFF, expires: 5000 });
+  const e = q.list().find((x) => x.proposal_id === proposal_id);
+  eq(e.expires, 5000, 'expiry carried');
+  const row = e.preview.rows.find((r) => r.label === 'A1');
+  eq(row && row.before, '1', 'the BEFORE value (from the inverse) survives the snapshot');
+  eq(row && row.after, '2', 'and the after');
+});
+
 if (failures.length) { console.error(`review-queue: ${passed} passed, ${failures.length} FAILED`); for (const f of failures) console.error(`  FAIL ${f.n}: ${f.message}`); process.exit(1); }
 console.log(`review-queue conformance: ${passed}/${passed} passed — stage/commit/discard, authority via decideCommit, expiry, poison-on-discard, guards`);

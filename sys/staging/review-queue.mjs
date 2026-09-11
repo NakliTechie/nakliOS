@@ -62,9 +62,13 @@ function fpInputs({ app, tool, diff }) {
 // A staged proposal must be exactly what was reviewed. Keeping the caller's object let it be
 // mutated between the preview and the commit (forward-pass NAF-15) — a review queue whose
 // content can change after review is not a review queue. Snapshot on the way in.
+// Checker C1 (2026-09-11): the fallback used to RETURN THE CALLER'S OBJECT when both copies
+// failed (a cycle defeats JSON, a function defeats structuredClone), which is exactly the
+// aliasing the snapshot exists to prevent. A proposal that cannot be snapshotted cannot be
+// reviewed: refuse it at stage time instead.
 function snapshot(v) {
   try { return structuredClone(v); }
-  catch (_) { try { return JSON.parse(JSON.stringify(v)); } catch (_2) { return v; } }
+  catch (_) { try { return JSON.parse(JSON.stringify(v)); } catch (_2) { throw new Error('proposal cannot be snapshotted (cyclic or non-serialisable diff) — refused, not aliased'); } }
 }
 
 export function createReviewQueue({ now = () => Date.now(), ledger = null, onApply = null, onReject = null, verifyGrant = null } = {}) {
@@ -98,6 +102,9 @@ export function createReviewQueue({ now = () => Date.now(), ledger = null, onApp
     async commit(proposal_id, ctx = {}) {
       const entry = pending.get(proposal_id);
       if (!entry) return { ok: false, reason: 'no such proposal' };
+      // Checker C2 (2026-09-11): two commits before the first apply settled both reached
+      // onApply — the delete happens after the await. Reserve the entry for the duration.
+      if (entry.applying) return { ok: false, reason: 'apply in progress' };
       const t = now();
       if (isExpired(entry.envelope, t)) return { ok: false, reason: 'expired' };
       const decision = decideCommit({ actor: ctx.actor, tool: entry.envelope.tool, reversible: ctx.reversible ?? entry.reversible, grant: ctx.grant });
@@ -115,8 +122,9 @@ export function createReviewQueue({ now = () => Date.now(), ledger = null, onApp
         if (!verdict || verdict.ok !== true) return { ok: false, reason: 'auto-commit refused: grant not verified' + (verdict && verdict.reason ? ' (' + verdict.reason + ')' : '') };
       }
       if (typeof onApply === 'function') {
+        entry.applying = true;
         try { await onApply(entry.envelope); }
-        catch (e) { return { ok: false, reason: 'apply failed: ' + String((e && e.message) || e) }; }
+        catch (e) { entry.applying = false; return { ok: false, reason: 'apply failed: ' + String((e && e.message) || e) }; }
       }
       pending.delete(proposal_id);
       return { ok: true, applied: true, mode: decision.mode };
@@ -127,6 +135,7 @@ export function createReviewQueue({ now = () => Date.now(), ledger = null, onApp
     async discard(proposal_id, { reason = '', cooloffDays } = {}) {
       const entry = pending.get(proposal_id);
       if (!entry) return { ok: false, reason: 'no such proposal' };
+      if (entry.applying) return { ok: false, reason: 'apply in progress' }; // C2: not while an apply is outstanding
       pending.delete(proposal_id);
       if (typeof onReject === 'function') onReject(entry.envelope, reason);
       if (ledger) {

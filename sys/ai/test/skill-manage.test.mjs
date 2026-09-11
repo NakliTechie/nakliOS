@@ -191,5 +191,18 @@ await test('SKILL_SHAPE names the three parts and the staging rule', () => {
   assert(SKILL_NAME_RE.test('a-b-2') && !SKILL_NAME_RE.test('A_b'), 'the name rule');
 });
 
+// Checker A2 (2026-09-11): the recursive-delete pattern respects shell punctuation and root-anchored paths.
+await test('sentinel: rm -rf followed by punctuation, or a root-anchored path, quarantines; a relative build dir does not', () => {
+  const sh = (line) => scanSkill({ name: 'x', description: 'd', body: 'Run the script.', files: [{ path: 'a.sh', content: '#!/bin/sh\n' + line + '\n' }] }).state;
+  eq(sh('rm -rf -- /; echo done'), 'quarantined', 'punctuation after the target');
+  eq(sh('rm -rf /home/alice'), 'quarantined', 'a root-anchored path');
+  eq(sh('rm -rf ~/.cache | true'), 'quarantined', 'home with a pipe after it');
+  eq(sh('rm -rf $HOME/x'), 'quarantined', '$HOME with a subpath');
+  eq(sh('rm -rf ./build'), 'clean', 'a relative build dir is ordinary cleanup');
+  eq(sh('rm -rf *.log'), 'clean', 'a glob with a suffix is ordinary cleanup');
+  eq(sh('rm -rf *'), 'quarantined', 'a bare glob is not');
+  eq(sh('rm -f build.log'), 'clean', 'no recursive flag, no target of concern');
+});
+
 if (failures.length) { console.error(`skill-manage: ${passed} passed, ${failures.length} FAILED`); for (const f of failures) console.error(`  FAIL ${f.n}: ${f.message}`); process.exit(1); }
 console.log(`skill-manage conformance: ${passed}/${passed} passed — read-before-write, staged never active, Sentinel 7 checks with trip/no-trip fixtures, p95 timing, advisory lint`);

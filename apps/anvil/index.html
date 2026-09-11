@@ -406,7 +406,7 @@
   import { createGrant, createOpLog, createAgentFace } from '../../sys/rig/agent/index.mjs';
   import { createShell } from '../../sys/rig/cli/shell.mjs';
   import { runAgentLoop } from '../../sys/ai/agent-loop.mjs';
-  import { codingToolset, makeToolExecutor, makeShellVerifier } from '../../sys/ai/agent-tools.mjs';
+  import { codingToolset, makeToolExecutor, makeShellVerifier, parseApplyPatch } from '../../sys/ai/agent-tools.mjs';
   import { buildProjectContext, rememberTool } from '../../sys/ai/project-context.mjs';
   import { SKILLS_DIR, parseSkill, buildSkillsIndex, skillTool, INJECTED_STATUSES, explainSkillsRefusal } from '../../sys/ai/skills.mjs';
   import { GATE_DIR, explainGateRefusal, GATE_AUTHORING_HINT, planGate } from '../../sys/ai/gate.mjs';
@@ -1962,13 +1962,17 @@
     if(learnLedgerProject !== proj){ learnLedgerProject = proj; learnLedger = createProposalLedger({ app:'anvil', principal:'anvil:'+proj }); }
     return learnLedger;
   }
-  async function learnThisRun(t, rec){
+  async function learnThisRun(t, rec, projectId = null){
     if(!(nak && nak.capabilities && nak.capabilities.ai)) return null;
     // The review is async and `fs` follows whatever project is MOUNTED, so switching project
     // mid-review wrote this run's skills into the other project (forward-pass NAF-06). Pin it:
     // the review belongs to the project it started in, and abandons its writes if that changed.
-    const reviewProject = String(state.activeProject||'local');
+    // Checker D1 (2026-09-11): the pin is the project the RUN belonged to (passed in — a deferred
+    // review used to read whatever was selected when its timer fired), and it is re-checked
+    // after every await, not only before the first — the read is awaited and the write came after.
+    const reviewProject = String(projectId || state.activeProject || 'local');
     const sameProject = ()=> String(state.activeProject||'local') === reviewProject;
+    if(!sameProject()) return null; // scheduled for a project that is no longer on screen
     const propose = async (pr)=>{
       if(!sameProject()) return { ok:false, error:'project changed during the review — nothing written' };
       try{
@@ -1980,6 +1984,7 @@
           try{ const cur = await fs.read(dir+'/'+SKILL_FILE,{encoding:'utf-8'}); if(cur&&cur.ok) existing = parseSkill(cur.data); }catch(_){}
           const plan = planSkillWrite({ op:'create', name:pr.name, description:pr.description||'', content:pr.content||pr.description||pr.name }, { existing, session:createSkillSession(), now:new Date().toISOString() });
           if(!plan.ok) return { ok:false, error:plan.error||'refused' };
+          if(!sameProject()) return { ok:false, error:'project changed during the review — nothing written' }; // D1: after the awaited read
           // A write that failed is not a staged skill (NAF-11).
           const w = await fs.write(dir+'/'+SKILL_FILE, plan.skillText);
           if(!(w&&w.ok)) return { ok:false, error:(w&&w.error)||'write failed' };
@@ -2101,6 +2106,7 @@
       let counted = convo || [];
       try{
         if(runCtx && runCtx.rec){
+          await runCtx.rec.settled(); // D2: a 40k tool result still queued is not yet in the fold
           const live = foldTranscript(runCtx.rec.events(), runCtx.rec.resolve);
           if(live && live.length) counted = [{ role:'system', content: liveSystemText }, ...live];
         }
@@ -2298,7 +2304,11 @@
           // and served with its injection intact. Re-scan at the point of USE, BEFORE any
           // status branch: the sentinel's verdict decides what may be shown, never the file's
           // own claim about itself.
-          const guard = scanSkill({ name: sk.name||name, description: sk.description||'', body: sk.body||'' });
+          // Checker A1 (2026-09-11): scan the WHOLE folder, not only SKILL.md — a clean body
+          // beside a support script that pipes curl into sh passed here while skill_manage's
+          // scan of the same folder would have refused it.
+          const files=[]; try{ const dir=p.slice(0, p.lastIndexOf('/')); const ls=await fs.list(dir,{recursive:true}); for(const f of ((ls&&ls.entries)||[])){ if(f.type==='dir'||f.path===p) continue; const rr=await fs.read(f.path,{encoding:'utf-8'}); if(rr&&rr.ok) files.push({ path:String(f.path).slice(dir.length+1), content:rr.data }); } }catch(_){}
+          const guard = scanSkill({ name: sk.name||name, description: sk.description||'', body: sk.body||'', files });
           if(guard.state==='refused' || guard.state==='quarantined'){
             skillStatus[name]='quarantined';
             return 'Skill "'+name+'" did not pass the sentinel when loaded ('+sentinelLine(guard)+') and will not bind. Its status was edited outside `skill_manage`; re-create it there.';
@@ -2428,8 +2438,10 @@
         const plan=planSkillWrite(ar||{}, { existing, existingFiles, session: skillSession, now: new Date().toISOString() });
         if(!plan.ok) return plan.refusal;
         const env=makeEnvelope({ app:'anvil', tool:'skill_manage', diff: plan.diff, expires: null });
-        await fs.write(skillPath, plan.skillText);
-        if(plan.path!==SKILL_FILE) await fs.write(dir+'/'+plan.path, plan.after);
+        // Checker D3 (2026-09-11): a write that failed was reported as a staged skill.
+        const w1=await fs.write(skillPath, plan.skillText);
+        if(!(w1&&w1.ok!==false)) return 'Error: skill write failed ('+String((w1&&w1.error)||'unknown')+') — nothing staged.';
+        if(plan.path!==SKILL_FILE){ const w2=await fs.write(dir+'/'+plan.path, plan.after); if(!(w2&&w2.ok!==false)) return 'Error: support file write failed ('+String((w2&&w2.error)||'unknown')+') — SKILL.md was written, '+plan.path+' was not.'; }
         skillMap[name]=skillPath; skillStatus[name]=plan.status; renderFiles();
         // The envelope is not persisted as a staging record yet (Anvil has no reviewer pane);
         // its proposal id and this card ride the run's chain in the tool reply — the only
@@ -2481,7 +2493,11 @@
       // instructions bind. The general file tools must not reach it, or the sentinel and the
       // person-only activation are advisory (forward-pass NAF-01). skill_manage is the one door.
       if(['write','edit','apply_patch','edit_lines','remove','move'].includes(nm) && ar){
-        const blob = String(ar.path||ar.file||'')+'\n'+String(ar.patch||'')+'\n'+String(ar.edit||'')+'\n'+String(ar.to||'');
+        // Checker A3 (2026-09-11): this used to search the whole patch TEXT, so a README edit
+        // that merely mentioned .anvil/skills/ was refused. Judge the paths a call targets.
+        const targets = [ar.path, ar.file, ar.to];
+        if(nm==='apply_patch'){ try{ const pp=parseApplyPatch(String(ar.patch||'')); for(const op of ((pp&&pp.ops)||[])){ if(op&&op.path) targets.push(op.path); if(op&&op.moveTo) targets.push(op.moveTo); } }catch(_){ targets.push(String(ar.patch||'')); } }
+        const blob = targets.filter(Boolean).map(String).join('\n');
         if(blob.includes(SKILLS_DIR))
           return 'Refused: '+SKILLS_DIR+'/ is managed by `skill_manage`, which scans a skill before it can bind. Editing it with `'+nm+'` would bypass that check. Use skill_manage (create/patch), and remember only the owner can set status: active.';
       }
@@ -2571,8 +2587,13 @@
               // status rides along: buildSkillsIndex injects only active/stale — a staged or
               // quarantined skill must never bind (C1).
               const stamp=(k)=>{ const m=new RegExp('^'+k+':\\s*(.+)$','m').exec(r.data); return m?m[1].trim():null; };
-              metas.push({ name, description: sk.description, status: sk.status, pinned:/^(true|yes|1)$/i.test(String(stamp('pinned')||'')), created: stamp('created'), updated: stamp('updated') });
-              skillMap[name]=e.path+'/SKILL.md'; skillStatus[name]=sk.status; }
+              // Checker A1 (2026-09-11): the DESCRIPTION is what the index injects into every
+              // prompt, and it was never scanned — only the body, at load time. Scan it here; a
+              // description that fails is quarantined and never listed.
+              const dguard = scanSkill({ name, description: sk.description||'', body: '' });
+              const status = (dguard.state==='refused' || dguard.state==='quarantined') ? 'quarantined' : sk.status;
+              metas.push({ name, description: sk.description, status, pinned:/^(true|yes|1)$/i.test(String(stamp('pinned')||'')), created: stamp('created'), updated: stamp('updated') });
+              skillMap[name]=e.path+'/SKILL.md'; skillStatus[name]=status; }
           }catch(_){}
         }
         // C4 aging, actually applied. The module was imported and never called, so skills never
@@ -2743,6 +2764,7 @@
         if(prose) convo.push({role:'assistant', content:prose.text});
         convo.push({role:'user', content:'[coordination] You described the work but did not do it. Use the tools (write / edit / apply_patch / shell) to actually make and run the change in the workspace now, then give a one-line summary. Do not only explain.'});
         const nudgeMessages=[sysMsg(''), ...convo];
+        liveSystemText = nudgeMessages[0].content; // D2: the budget counts THIS loop's prompt
         await rec.start({ messages: nudgeMessages, tools, model: runModel() });
         result = await runAgentLoop({ messages: nudgeMessages, tools, infer: recInfer, executeTool, maxSteps:16, signal: abortController.signal, budget:{tokens:120000, wallClockMs:240000}, verify, maxVerifyRounds:3, onEvent:recEvent });
         await rec.finish(result);
@@ -2759,6 +2781,7 @@
             t.log.push({k:'system', text:'Supervisor: '+stag.detail+' — redirecting.'}); renderLog();
             convo.push({role:'user', content: stagnationNudge(stag)});
             const superMessages=[sysMsg(''), ...convo];
+        liveSystemText = superMessages[0].content; // D2: the budget counts THIS loop's prompt
             await rec.start({ messages: superMessages, tools, model: runModel() });
             result = await runAgentLoop({ messages: superMessages, tools, infer: recInfer, executeTool, maxSteps:16, signal: abortController.signal, budget:{tokens:120000, wallClockMs:240000}, verify, maxVerifyRounds:3, onEvent:recEvent });
             await rec.finish(result);
@@ -2830,10 +2853,11 @@
           // deferred (NAF-04). Defer for real: wait for quiet, and drop it if a new run began.
           const outcomeLabel = foldOutcome(ev, rec.resolve).label;
           const decide=(idleMs)=>shouldAutoReview({ outcome: outcomeLabel, stop: result.stop, idleMs, isLocalModel: isLocal });
-          if(decide(0).review) learnThisRun(t, rec).catch(()=>{});
+          const runProject = String(state.activeProject||'local'); // D1: the project this run belonged to
+          if(decide(0).review) learnThisRun(t, rec, runProject).catch(()=>{});
           else if(decide(AUTO_REVIEW_IDLE_MS).review){
             clearTimeout(autoReviewTimer);
-            autoReviewTimer=setTimeout(()=>{ if(!running) learnThisRun(t, rec).catch(()=>{}); }, AUTO_REVIEW_IDLE_MS);
+            autoReviewTimer=setTimeout(()=>{ if(!running) learnThisRun(t, rec, runProject).catch(()=>{}); }, AUTO_REVIEW_IDLE_MS);
           }
         }catch(_){}
       }catch(e){ t.log.push({k:'system',text:'record: could not persist — '+String(e&&e.message||e)}); }

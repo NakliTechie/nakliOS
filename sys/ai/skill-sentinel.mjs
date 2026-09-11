@@ -38,7 +38,11 @@ const SHELL = [
   /\b(curl|wget)\b[^\n|]*\|\s*(sudo\s+)?(\/\S*\/)?(sh|bash|zsh|python[0-9.]*|node)\b/i,
   // …and so is an end-of-options separator: `rm -rf -- /`. Require a recursive flag somewhere
   // on the line, then a dangerous target, with any number of flags or `--` in between.
-  /\brm\b[^\n]*?\s-[a-z]*r[a-z]*\b[^\n]*?\s(?:--\s+)?(\/|~|\$HOME|\*)(\s|$)/i,
+  // Checker A2 (2026-09-11): the target may be followed by shell punctuation (`rm -rf -- /;`) and
+  // may be a root-anchored path (`rm -rf /home/alice`), not only `/` itself — so the target is
+  // matched by its PREFIX (`/`, `~`, `$HOME`) with no end-boundary; only a bare `*` needs one,
+  // so `rm -rf *.log` stays ordinary cleanup.
+  /\brm\b[^\n]*?\s-[a-z]*r[a-z]*\b[^\n]*?\s(\/|~|\$HOME|\*(?=[\s;|&)]|$))/i,
   /\beval\s*\(?\s*\$\(/,
   /\bbase64\s+(-d|--decode)\b[^\n]*\|\s*(sh|bash)/i,
   /\bnc\b[^\n]*\s-e\s/,

@@ -17,7 +17,16 @@ assert.match(anvil, /makeEnvelope\(\{ app:'anvil', tool:'skill_manage', diff: pl
 assert.match(anvil, /if\(mode==='code'\) tools\.push\(skillManageTool\(\)\);/, 'skill_manage is offered in code mode');
 assert.match(anvil, /nm==='skill_manage'\)\)\{/, 'skill_manage is refused outside code mode');
 // shape, not signature: the push also carries the pinned/created/updated stamps the lifecycle reads
-assert.match(anvil, /metas\.push\(\{ name, description: sk\.description, status: sk\.status/, 'the index push carries status (a staged skill must not bind)');
+assert.match(anvil, /metas\.push\(\{ name, description: sk\.description, status, pinned:/, 'the index push carries status (a staged skill must not bind)');
+// Checker A1 (2026-09-11): the description is scanned BEFORE it can enter the index, and a
+// description that fails is quarantined rather than listed.
+assert.match(anvil, /const dguard = scanSkill\(\{ name, description: sk\.description\|\|'', body: '' \}\);\s*\n\s*const status = \(dguard\.state==='refused' \|\| dguard\.state==='quarantined'\) \? 'quarantined' : sk\.status;/, 'the index scans the description and quarantines a failing one');
+// Checker A1: the load-time scan sees the folder's support files, not only SKILL.md.
+assert.match(anvil, /const guard = scanSkill\(\{ name: sk\.name\|\|name, description: sk\.description\|\|'', body: sk\.body\|\|'', files \}\);/, 'the load-time scan includes support files');
+// Checker A3: the skills-dir fence judges target PATHS, not the whole patch text.
+assert.match(anvil, /const targets = \[ar\.path, ar\.file, ar\.to\];[\s\S]*?const blob = targets\.filter\(Boolean\)\.map\(String\)\.join\('\\n'\);/, 'the fence is judged on targets');
+// Checker D3: a failed skill write is an error, never a staged card.
+assert.match(anvil, /const w1=await fs\.write\(skillPath, plan\.skillText\);\s*\n\s*if\(!\(w1&&w1\.ok!==false\)\) return 'Error: skill write failed/, 'a failed write is reported');
 // A non-active skill must never BIND. Since forward-pass NAF-12 a STAGED draft may be shown for
 // revision — it was otherwise unrevisable (skill refused it as staged, skill_manage as unread) —
 // but only downstream of the sentinel re-scan, and labelled as not-instructions.
