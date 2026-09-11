@@ -325,7 +325,12 @@ export function loadRecord({ events, blobs }) {
 // Anvil's 139c381 rule, now a pure function of the record.
 export function statusUnit({ gated = false } = {}) {
   return {
+    version: 1,
     init: () => ({ steps: 0, stopOut: null }),
+    // C2+C3: the state is plain data already.
+    snapshot: (s) => ({ steps: s.steps, stopOut: s.stopOut }),
+    restore: (snap) => ({ steps: snap.steps, stopOut: snap.stopOut }),
+    validate: (snap) => !!snap && typeof snap === 'object' && Number.isInteger(snap.steps) && snap.steps >= 0 && (snap.stopOut === null || (typeof snap.stopOut === 'object')),
     apply(s, e) {
       if (e.tool === 'turn.started') return { steps: s.steps + 1, stopOut: s.stopOut };
       // The LAST run.stopped wins, which a reverse-find did and an overwrite does.
@@ -361,6 +366,13 @@ export function logUnit() {
     // already drawn, so the array reference cannot report it.
     init: () => ({ rows: [], open: new Map() }),
     value: (s) => s.rows,
+    // C2+C3: `open` holds row objects by IDENTITY (a later result patches the row in place), so
+    // the snapshot carries it as indexes into `rows` and restore re-links the same objects.
+    version: 1,
+    snapshot: (s) => ({ rows: s.rows.map((r) => ({ ...r })), open: [...s.open].map(([id, row]) => [id, s.rows.indexOf(row)]).filter(([, i]) => i >= 0) }),
+    restore: (snap) => { const rows = snap.rows.map((r) => ({ ...r })); return { rows, open: new Map(snap.open.map(([id, i]) => [id, rows[i]])) }; },
+    validate: (snap) => !!snap && typeof snap === 'object' && Array.isArray(snap.rows) && snap.rows.every((r) => r && typeof r === 'object' && typeof r.k === 'string')
+      && Array.isArray(snap.open) && snap.open.every((x) => Array.isArray(x) && x.length === 2 && Number.isInteger(x[1]) && x[1] >= 0 && x[1] < snap.rows.length && snap.rows[x[1]].k === 'tool'),
     apply(s, e) {
       const inp = e.input || {}, out = e.output || {};
       const { rows, open } = s;
@@ -413,6 +425,13 @@ export function transcriptUnit({ applyCompaction = false } = {}) {
     // what reports change. See projection.mjs.
     init: () => ({ out: [], pendingCalls: null, started: 0 }),
     value: (s) => s.out,
+    // C2+C3: plain data — messages, a pending assistant turn, a counter.
+    version: 1,
+    snapshot: (s) => JSON.parse(JSON.stringify({ out: s.out, pendingCalls: s.pendingCalls, started: s.started })),
+    restore: (snap) => ({ out: snap.out.map((m) => ({ ...m })), pendingCalls: snap.pendingCalls == null ? null : { content: snap.pendingCalls.content, calls: snap.pendingCalls.calls.map((c) => ({ ...c, function: { ...c.function } })) }, started: snap.started }),
+    validate: (snap) => !!snap && typeof snap === 'object' && Array.isArray(snap.out) && snap.out.every((m) => m && typeof m === 'object' && typeof m.role === 'string')
+      && (snap.pendingCalls === null || (snap.pendingCalls && typeof snap.pendingCalls === 'object' && Array.isArray(snap.pendingCalls.calls)))
+      && Number.isInteger(snap.started) && snap.started >= 0,
     apply(s, e) {
       const out = s.out;
       const inp = e.input || {}, o = e.output || {};
