@@ -225,6 +225,9 @@ jobs:
       - name: Verify arming a run's gate is one call that refuses the half-states
         run: node sys/ai/test/gate-arming.test.mjs
 
+      - name: Verify the gate lint refuses dunder comparisons, patched builtins and single assertions before arming (N2)
+        run: node sys/ai/test/gate-lint.test.mjs
+
       - name: Verify the verifier gate's python runs on a RESET interpreter, and the agent's does not
         run: node sys/kiln/test/gate-isolation.test.mjs
 
