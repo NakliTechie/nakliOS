@@ -999,7 +999,10 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
         if (!rd.ok) return { text: `python: can't open file '${args[0]}': ${rd.code || 'error'}`, code: 2 };
         code = decodeData(rd.data);
       } else code = args.join(' ');
-      const r = await kiln.exec('shell', code, { isolate: kilnIsolate });
+      // Defect 7 (live 2026-09-11): `cd sub && python x.py` read x.py relative to the shell's cwd
+      // but RAN with cwd = the mount root, so a relative open inside the script missed. The kernel
+      // now runs where the shell is.
+      const r = await kiln.exec('shell', code, { isolate: kilnIsolate, cwd: state.cwd });
       if (r.status === 'unavailable') return { text: 'python: ' + (r.message || 'kernel unavailable'), code: 1 };
       // A `sys.exit(n)` rides through as n; anything else that is not ok is 1.
       return { text: (r.stdout || '') + (r.stderr || ''), code: r.status === 'ok' ? 0 : (Number.isInteger(r.code) && r.code > 0 ? r.code : 1) };

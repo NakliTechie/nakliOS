@@ -68,7 +68,18 @@ export function createPyodideRuntime(pyodide, interruptBuffer) {
   // A dedicated namespace dict so reset() is clean and we never clobber builtins.
   let ns = pyodide.runPython('dict()');
 
-  async function runCode(code, { outputCapBytes } = {}) {
+  // Defect 7: run where the shell is. `cwd` is relative to the mount root (_KILN_ROOT, set by
+  // the filesystem guard); the guard refuses a chdir outside it, and without a guard there is
+  // no root to be relative to, so the prologue is a no-op. Reset to the root when no cwd is
+  // given, since a previous call may have moved.
+  function cwdPrologue(cwd) {
+    const c = String(cwd == null ? '' : cwd).replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+    const bad = c && c.split('/').some((seg) => seg === '' || seg === '.' || seg === '..');
+    const target = (c && !bad) ? `_kc.path.join(_KILN_ROOT, ${JSON.stringify(c)})` : '_KILN_ROOT';
+    return `import os as _kc\ntry:\n    _kc.chdir(${target})\nexcept NameError:\n    pass\n`;
+  }
+  async function runCode(code, { outputCapBytes, cwd = '' } = {}) {
+    try { pyodide.runPython(cwdPrologue(cwd)); } catch (_) { /* a cwd the guard refuses leaves the previous one; the run still happens */ }
     let stdout = '';
     let stderr = '';
     let truncated = false;

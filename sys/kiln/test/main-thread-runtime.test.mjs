@@ -2,7 +2,7 @@
 // Verifies the no-SAB main-thread Python runtime's workspace<->MEMFS sync and the
 // shell `exec` contract, using a fake Pyodide (injected loader). No real Pyodide.
 
-import { createMainThreadKiln } from '../main-thread-runtime.mjs';
+import { createMainThreadKiln, safeCwd } from '../main-thread-runtime.mjs';
 import { systemExitCode } from '../pyodide-runtime.mjs';
 import { createFileops } from '../../rig/fileops/index.mjs';
 import { MemoryBackend } from '../../rig/fileops/memory-backend.mjs';
@@ -176,3 +176,25 @@ async function run() {
 }
 
 run();
+
+// Defect 7: the kernel runs where the shell is; a cwd that would leave the root falls back to it.
+{
+  ok('safeCwd: empty → root', safeCwd('/work', '') === '/work');
+  ok('safeCwd: a clean relative path is joined', safeCwd('/work', 'sub/dir') === '/work/sub/dir');
+  ok('safeCwd: leading/trailing slashes are trimmed', safeCwd('/work', '/sub/') === '/work/sub');
+  ok('safeCwd: `..` falls back to the root', safeCwd('/work', '../x') === '/work');
+  ok('safeCwd: a bare `.` falls back to the root', safeCwd('/work', './x') === '/work');
+  ok('safeCwd: backslashes are not a way out', safeCwd('/work', '..\\x') === '/work');
+  const fs = createFileops({ backend: new MemoryBackend() });
+  const fake = makeFakePyodide();
+  const seen = [];
+  const origRun = fake.runPython; fake.runPython = (code) => { seen.push(String(code)); return origRun ? origRun.call(fake, code) : undefined; };
+  const kiln = createMainThreadKiln({ fs, loadPyodide: async () => fake });
+  fake._onRun = () => {};
+  await kiln.exec('shell', 'x = 1', { cwd: 'sub' });
+  ok('exec(cwd:"sub") chdirs the kernel to root/sub', seen.some((c) => /os\.chdir\("[^"]*\/sub"\)/.test(c)));
+  ok('and the ROOT, not the cwd, goes first on sys.path', seen.some((c) => /sys\.path\.insert\(0, "([^"]*)"\)/.test(c) && !/sys\.path\.insert\(0, "[^"]*\/sub"\)/.test(c)));
+  seen.length = 0;
+  await kiln.exec('shell', 'x = 2', { cwd: '../escape' });
+  ok('a cwd that would leave the root runs at the root', seen.some((c) => /os\.chdir\("([^"]*)"\)/.test(c)) && !seen.some((c) => /escape/.test(c)));
+}

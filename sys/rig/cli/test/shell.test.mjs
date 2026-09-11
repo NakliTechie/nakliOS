@@ -362,6 +362,25 @@ await test('reset(): a run starts at the root with no inherited cwd or vars', as
   eq(await run(shell, 'cat sub/dir/here.txt'), 'cat: sub/dir/here.txt: ENOENT', 'not where the old cwd pointed');
 });
 
+await test('defect 7: the kernel is asked to run where the shell is — cd moves python, reset brings it back', async () => {
+  const backend = new MemoryBackend();
+  const fs = createFileops({ backend });
+  const registry = buildRigRegistry({ fs });
+  const grant = createGrant({ prefixes: [''], scopes: ['fs:read', 'fs:write', 'fs:remove'] });
+  const opLog = createOpLog({ fs: createFileops({ backend: new MemoryBackend() }) });
+  const face = createAgentFace({ registry, grant, opLog, actor: 'agent' });
+  const cwds = [];
+  const kiln = { exec: async (_id, code, opts) => { cwds.push(opts && opts.cwd); return { status: 'ok', stdout: 'ran:' + code }; } };
+  const shell = createShell({ registry, face, kiln });
+  await fs.write('sub/x.py', 'print(1)');
+  await run(shell, 'python -c "a"');            eq(cwds[0], '', 'at the root, cwd is the root');
+  await run(shell, 'cd sub');
+  eq(await run(shell, 'python x.py'), 'ran:print(1)', 'the script is read relative to the shell cwd');
+  eq(cwds[1], 'sub', 'and the kernel is told to run there — the two agree');
+  shell.reset();
+  await run(shell, 'python -c "b"');            eq(cwds[2], '', 'a reset run is back at the root');
+});
+
 await test('rm *.glob fans out to every match, one confirm', async () => {
   const { shell } = freshShell();
   await run(shell, 'echo a > a.txt');

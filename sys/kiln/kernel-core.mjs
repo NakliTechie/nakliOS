@@ -48,7 +48,7 @@ export function createKernelCore({ runtime, now = () => Date.now() }) {
 
     let out;
     try {
-      out = await runtime.runCode(code, { outputCapBytes });
+      out = await runtime.runCode(code, { outputCapBytes, ...(opts.cwd ? { cwd: String(opts.cwd) } : {}) });
     } catch (e) {
       // The runtime should never throw; guard so the boundary stays typed.
       if (timer) clearTimeout(timer);

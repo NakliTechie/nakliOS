@@ -80,6 +80,14 @@ await test('an exitCode from the runtime is a status and a code, not a traceback
   eq(rn.status, 'ok', 'no exitCode → ok as before'); assert(!('code' in rn), 'and no code key invented');
 });
 
+await test('defect 7: exec({cwd}) reaches the runtime as runCode({cwd}); absent, it is not invented', async () => {
+  const seen = [];
+  const rt = { async runCode(code, opts) { seen.push(opts); return { stdout: '', stderr: '', result: null, traceback: null, interrupted: false, truncated: false }; }, interrupt() {}, reset() {} };
+  const k = createKiln({ loadRuntime: async () => rt, consent: () => true });
+  await k.exec('c', 'x', { cwd: 'sub/dir' }); eq(seen[0].cwd, 'sub/dir', 'passed through');
+  await k.exec('c', 'x', {});                 assert(!('cwd' in seen[1]), 'not invented when absent');
+});
+
 await test('a runtime that throws never leaks the throw across the boundary', async () => {
   const kiln = readyKiln();
   let threw = false, r;

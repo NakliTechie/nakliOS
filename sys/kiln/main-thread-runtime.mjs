@@ -50,6 +50,15 @@ except NameError: _KILN_P0 = list(_kbs.path)
 // Restore builtins, then drop every module loaded FROM THE WORKSPACE so the gate imports the
 // agent's code off disk as it now stands. Stdlib and site-packages are left alone: reimporting
 // them costs time and they are not what the agent can edit.
+// The directory the kernel runs in for a shell cwd: root, or root/cwd when cwd is a clean
+// relative path. Anything else (absolute, `..`, backslashes) falls back to the root.
+export function safeCwd(root, cwd) {
+  const c = String(cwd == null ? '' : cwd).replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+  if (!c) return root;
+  if (c.split('/').some((seg) => seg === '' || seg === '.' || seg === '..')) return root;
+  return `${root}/${c}`;
+}
+
 function isolationPreamble(root) {
   return `
 import sys as _ks, builtins as _kb
@@ -162,7 +171,10 @@ export function createMainThreadKiln({ fs, mount = 'work', loadPyodide = default
     // arbitrary Python in the SAME interpreter can reach the snapshot itself. True isolation
     // needs a separate interpreter (reload Pyodide, or run the gate in the worker runtime);
     // that costs seconds per gate round and is a follow-on, not this change.
-    async exec(cellId, code, { isolate = false } = {}) {
+    // `cwd` is the shell's working directory, relative to the workspace root. The kernel runs
+    // THERE, so a script's own relative opens agree with the shell that launched it. A cwd that
+    // would leave the root (`..`, absolute) is ignored: the root is the floor, as everywhere.
+    async exec(cellId, code, { isolate = false, cwd = '' } = {}) {
       let p;
       try { p = await ensure(); }
       catch (e) { return { status: 'unavailable', message: 'Pyodide failed to load: ' + (e && e.message ? e.message : e) }; }
@@ -175,7 +187,8 @@ export function createMainThreadKiln({ fs, mount = 'work', loadPyodide = default
       try {
         seen = await syncIn();
         // Run from the workspace dir and make its modules importable.
-        p.runPython(`import os, sys\nos.chdir(${JSON.stringify(root)})\nif ${JSON.stringify(root)} not in sys.path: sys.path.insert(0, ${JSON.stringify(root)})`);
+        const dir = safeCwd(root, cwd);
+        p.runPython(`import os, sys\nos.chdir(${JSON.stringify(dir)})\nif ${JSON.stringify(root)} not in sys.path: sys.path.insert(0, ${JSON.stringify(root)})`);
         if (isolate) p.runPython(isolationPreamble(root));
         // A fresh globals namespace when isolating, so a name the agent left behind cannot
         // stand in for one the gate expects to import. Degrades to the shared namespace where
