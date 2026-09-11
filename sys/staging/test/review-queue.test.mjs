@@ -34,10 +34,13 @@ await test('an unregistered app returns { error }, never throws', async () => {
 });
 
 await test('a person commit fires onApply exactly once and dequeues; a second commit is a no-op', async () => {
-  let applied = []; const q = createReviewQueue({ onApply: (env) => applied.push(env.proposal_id) });
+  let applied = []; const q = createReviewQueue({ onApply: (env) => applied.push(env) });
   const { proposal_id } = q.stage({ app: 'draft', tool: 'draft.commit', diff: DRAFT_DIFF, reversible: true });
   const r = await q.commit(proposal_id, { actor: 'person' });
   assert(r.ok && r.applied && r.mode === 'person', JSON.stringify(r)); eq(applied.length, 1, 'applied once'); eq(q.size(), 0, 'dequeued');
+  // the sink gets the ENVELOPE (id + app/tool + the reviewed diff), not a bare diff and not a diff-less envelope
+  eq(applied[0].proposal_id, proposal_id, 'the envelope carries its id'); eq(applied[0].app, 'draft', 'and its app');
+  eq(applied[0].diff && applied[0].diff.hunks && applied[0].diff.hunks[0].insText, 'new', 'and the reviewed diff');
   eq((await q.commit(proposal_id, { actor: 'person' })).ok, false, 'a second commit finds nothing'); eq(applied.length, 1, 'not applied twice');
 });
 
@@ -100,6 +103,7 @@ await test('isPoisoned is false with no ledger; unknown proposal_id on commit/di
   eq((await q.commit('prop_nope', { actor: 'person' })).ok, false, 'unknown commit');
   eq((await q.commit('prop_nope', { actor: 'person' })).reason, 'no such proposal', 'reason');
   eq((await q.discard('prop_nope', {})).ok, false, 'unknown discard, no throw');
+  eq((await q.discard('prop_nope', {})).reason, 'no such proposal', 'and it says why — not "expired"');
 });
 
 await test('NAF-15: the staged diff is a SNAPSHOT — mutating it after review cannot change what commits', async () => {
@@ -141,6 +145,7 @@ await test('NAF-17: fingerprints keep code punctuation — x=1 and x=-1 are diff
   assert(!(await q.isPoisoned({ app: 'reckon', tool: 'setCells', diff: mk('x=-1') })),
     'x=-1 is a DIFFERENT mutation — the prose tokenizer stripped the minus sign and poisoned it too');
   assert(!(await q.isPoisoned({ app: 'reckon', tool: 'setCells', diff: mk('x==1') })), 'and so is x==1');
+  assert(!(await q.isPoisoned({ app: 'reckon', tool: 'setCells', diff: mk('X=1') })), 'and so is X=1 — the digest is case-sensitive, code is');
 });
 
 // Checker C1 (2026-09-11): a diff that cannot be snapshotted is refused, never aliased.
@@ -192,6 +197,35 @@ await test('list: the listed expiry is the envelope\'s own, and a snapshotted di
   const row = e.preview.rows.find((r) => r.label === 'A1');
   eq(row && row.before, '1', 'the BEFORE value (from the inverse) survives the snapshot');
   eq(row && row.after, '2', 'and the after');
+});
+
+// Checker survivors (2026-09-11): each of these is one assertion the listed mutation escaped.
+await test('stage keeps earlier proposals — a second stage does not clear the queue', () => {
+  const q = createReviewQueue();
+  q.stage({ app: 'reckon', tool: 'setCells', diff: RECKON_DIFF });
+  q.stage({ app: 'draft', tool: 'draft.commit', diff: DRAFT_DIFF });
+  eq(q.size(), 2, 'both queued');
+});
+await test('auto-commit fails CLOSED: no verifier configured, or a verifier that says no, both refuse', async () => {
+  const rootKey = newRootKey();
+  const grant = await issueGrant(rootKey, { caveats: [caveat.tools(['setCells']), caveat.autoCommit(true)] });
+  let applied = 0;
+  const none = createReviewQueue({ onApply: () => applied++ }); // no verifyGrant at all
+  const id1 = none.stage({ app: 'reckon', tool: 'setCells', diff: RECKON_DIFF, reversible: true }).proposal_id;
+  const r1 = await none.commit(id1, { actor: 'agent', grant });
+  eq(r1.ok, false, 'no verifier → refused'); assert(/unverifiable/.test(r1.reason), r1.reason);
+  const no = createReviewQueue({ onApply: () => applied++, verifyGrant: async () => ({ ok: false, reason: 'revoked' }) });
+  const id2 = no.stage({ app: 'reckon', tool: 'setCells', diff: RECKON_DIFF, reversible: true }).proposal_id;
+  const r2 = await no.commit(id2, { actor: 'agent', grant });
+  eq(r2.ok, false, 'verifier says no → refused'); assert(/not verified/.test(r2.reason) && /revoked/.test(r2.reason), r2.reason);
+  eq(applied, 0, 'nothing applied either way');
+});
+await test('expiry is exact: one tick past `expires` refuses, `expires` itself still commits', async () => {
+  let t = 1000; let applied = 0; const q = createReviewQueue({ now: () => t, onApply: () => applied++ });
+  const a = q.stage({ app: 'draft', tool: 'draft.commit', diff: DRAFT_DIFF, expires: 2000 }).proposal_id;
+  t = 2001; eq((await q.commit(a, { actor: 'person' })).reason, 'expired', 'one past the deadline is expired');
+  const b = q.stage({ app: 'draft', tool: 'draft.commit', diff: DRAFT_DIFF, expires: 3000 }).proposal_id;
+  t = 3000; eq((await q.commit(b, { actor: 'person' })).ok, true, 'at the deadline is still valid'); eq(applied, 1, 'and applied');
 });
 
 if (failures.length) { console.error(`review-queue: ${passed} passed, ${failures.length} FAILED`); for (const f of failures) console.error(`  FAIL ${f.n}: ${f.message}`); process.exit(1); }

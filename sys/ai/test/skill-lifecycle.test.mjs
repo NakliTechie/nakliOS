@@ -85,6 +85,7 @@ await test('NAF-18: an automatic transition does not reset the clock that drives
   // never used, written on day 0. At day 31 the curator proposes stale and APPLIES it.
   const staled = applySkillStatus(file(t0), 'stale', { now: t0 + 31 * DAY, automatic: true });
   // at day 91 it must archive — the automatic stale must not have bought it another 30 days
+  eq(/status:\s*(\S+)/.exec(staled)?.[1], 'stale', 'the requested status is what got written');
   const parsed = { name: 'old', status: 'stale', updated: /updated:\s*(\S+)/.exec(staled)?.[1] || null, pinned: false };
   const props = skillLifecycle([parsed], new Map(), { now: t0 + 91 * DAY });
   const p = props.find((x) => x.name === 'old');

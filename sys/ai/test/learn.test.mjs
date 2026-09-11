@@ -93,17 +93,18 @@ await test('NAF-03: same-named proposals keep their OWN fingerprints and content
   const good = { kind: 'skill', name: 'same', goal: 'keep data',   steps: ['backup'], paths: [], content: 'SAFE' };
   const ledger = createProposalLedger();
   await ledger.reject({ fp: await fingerprint(bad), reason: 'destructive' });
-  const seen = [];
+  const seen = []; const fps = [];
   const rep = await runLearnReview({
     record: { events: () => [], resolve: () => ({}) },
     infer: async () => ({ content: JSON.stringify({ proposals: [bad, good] }) }),
     ledger,
-    propose: async (pr) => { seen.push(pr.content); return { ok: true, staged: pr.name }; },
+    propose: async (pr) => { seen.push(pr.content); fps.push(pr.fp); return { ok: true, staged: pr.name }; },
   });
   assert(!seen.includes('REJECTED DESTRUCTIVE'), `the rejected content was staged anyway: ${JSON.stringify(seen)}`);
   eq(rep.dropped.length, 1, 'the poisoned proposal was dropped');
   eq(seen.length, 1, 'exactly the clean proposal was staged');
   eq(seen[0], 'SAFE', `the surviving proposal must carry its OWN content, got: ${seen[0]}`);
+  eq(fps[0], await fingerprint(good), 'and its OWN fingerprint reaches the proposer — the reviewer keys on it');
 });
 
 if (failures.length) { console.error(`learn: ${passed} passed, ${failures.length} FAILED`); for (const f of failures) console.error(`  FAIL ${f.n}: ${f.message}`); process.exit(1); }
