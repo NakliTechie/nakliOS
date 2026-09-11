@@ -7,7 +7,7 @@
 // Everything built on "a run is a fold over the ledger" — F1's request-reconstruction, F2's
 // keyless replay, the tamper-evident chain — therefore covered the supervisor only, and stopped
 // holding the moment Anvil fanned out. That is what this file exists to prevent recurring.
-import { createRunRecorder, joined, foldSubagents, verifySubagents, foldTranscript, foldSurface,
+import { createRunRecorder, joined, foldSubagents, verifySubagents, foldTranscript, foldSurface, foldSubagentOrphans, foldRecovery, recoveryNote,
          reconstructionCheck, loadRecord } from '../run-record.mjs';
 import { verifyChain } from '../ledger.mjs';
 import { runAgentLoop } from '../../ai/agent-loop.mjs';
@@ -148,6 +148,39 @@ await test('recording a subagent does NOT disturb the parent transcript (F1 stil
   const want = foldSurface(ev.slice(0, cut), rec.resolve);
   eq(reconstructionCheck([{ role: 'system', content: 'supervisor' }, ...want], ev.slice(0, cut), rec.resolve).ok, true,
     'the request still equals a fold of the chain');
+});
+
+// ESS-1 (2026-09-11): the claim is on the chain BEFORE the child runs, so a child that never
+// reports back is an orphan the record can name — the same shape as the queue's `dispatching`.
+await test('ESS-1: subagent.started precedes subagent.ran, a finished child leaves no orphan, and the chain verifies', async () => {
+  const rec = createRunRecorder({ app: 'anvil', principal: 'p' });
+  await rec.start({ messages: [{ role: 'system', content: 's' }, { role: 'user', content: 'go' }], tools: [] });
+  await rec.subagentStarted({ kind: 'dispatch', label: 'A', tool_call_id: 'c1' });
+  await rec.subagent({ kind: 'dispatch', label: 'A', tool_call_id: 'c1', dump: null, stop: 'done', steps: 2, text: 'ok' });
+  await rec.finish({ stop: 'done', steps: 1 }); await rec.settled();
+  const tools = rec.events().map((e) => e.tool);
+  assert(tools.indexOf('subagent.started') < tools.indexOf('subagent.ran'), `started before ran: ${tools.join(',')}`);
+  eq(foldSubagentOrphans(rec.events(), rec.resolve).length, 0, 'a child that reported back is not an orphan');
+  eq((await verifyChain(rec.events())).ok, true, 'the new verb verifies on the chain');
+  eq(foldSubagents(rec.events(), rec.resolve).length, 1, 'foldSubagents still counts only ran');
+});
+
+await test('ESS-1: a child that started and never reported back is an orphan, named in the recovery note', async () => {
+  const rec = createRunRecorder({ app: 'anvil', principal: 'p' });
+  await rec.start({ messages: [{ role: 'system', content: 's' }, { role: 'user', content: 'refactor the parser' }], tools: [] });
+  await rec.subagentStarted({ kind: 'dispatch', label: 'split lexer', tool_call_id: 'c1' });
+  await rec.subagentStarted({ kind: 'dispatch', label: 'write tests', tool_call_id: 'c1' });
+  // only the second reports back — same call id, different label: the matcher must not pair them
+  await rec.subagent({ kind: 'dispatch', label: 'write tests', tool_call_id: 'c1', dump: null, stop: 'done', steps: 3, text: 'ok' });
+  await rec.finish({ stop: 'interrupted', steps: 1 }); await rec.settled();
+  const orphans = foldSubagentOrphans(rec.events(), rec.resolve);
+  eq(orphans.length, 1, 'exactly one orphan'); eq(orphans[0].label, 'split lexer', 'the one that never reported back');
+  const r = foldRecovery(rec.events(), rec.resolve);
+  eq(r.orphanedSubagents.length, 1, 'foldRecovery carries it');
+  const note = recoveryNote(r);
+  assert(/1 subagent was in flight when the run ended and never reported back/.test(note), `named in the note: ${note}`);
+  assert(/split lexer/.test(note), 'by label');
+  assert(/nothing they did reached the workspace/.test(note), 'and says what that means');
 });
 
 await test('a recorder that throws does not lose the subagent\'s work', async () => {

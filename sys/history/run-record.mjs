@@ -48,6 +48,7 @@ export const RUN_EVENTS = Object.freeze([
   'run.nudged',       // input: { step, times, denied }         output: { content }  (F7: the loop's own escalating reminder)
   'tool.spilled',     // input: { id, name, step, chars }       output: { sent }  (F5: the capped form the model actually saw)
   'subagent.ran',     // input: { kind, label, step, tool_call_id } output: { record, stop, steps, text }
+  'subagent.started', // input: { kind, label, step, tool_call_id } output: {}  (ESS-1: the claim, before the child runs)
 ]);
 
 // The loop's onEvent types this recorder understands. 'done' and the pre-stop
@@ -267,6 +268,15 @@ export function createRunRecorder({ app = 'anvil', principal = 'local', grant_id
     // concurrently, so interleaved appends would order nondeterministically and break replay.
     // One event per subagent, appended in task order after the fan-in, keeps the parent chain
     // deterministic and each child independently verifiable.
+    // ESS-1: the claim. Appended before the child runs, so a child that never reports back
+    // (tab closed mid-dispatch, page reloaded) is visible: a started with no ran is an orphan.
+    subagentStarted({ kind, label, tool_call_id }) {
+      const s = step;
+      return enqueue('subagent.started', () => ({
+        input: { kind: String(kind || 'task'), label: String(label || ''), step: s, tool_call_id: tool_call_id ?? null },
+        output: {},
+      }));
+    },
     subagent({ kind, label, dump, stop, steps, text, tool_call_id }) {
       const s = step;
       return enqueue('subagent.ran', () => ({
@@ -590,6 +600,26 @@ export function foldSubagents(events, resolve) {
     });
   }
   return out;
+}
+
+// ESS-1: subagents that started and never reported back. A `subagent.started` is matched to the
+// next `subagent.ran` with the same kind + label + tool_call_id; what is left unmatched died in
+// flight — its overlay was discarded with the page, nothing it wrote reached the workspace, and
+// the parent's tool call has no result. Returns [{ kind, label, step, tool_call_id }].
+export function foldSubagentOrphans(events, resolve) {
+  const started = [], ran = [];
+  for (const e of joined(events, resolve)) {
+    if (e.tool === 'subagent.started') started.push(e.input || {});
+    else if (e.tool === 'subagent.ran') ran.push(e.input || {});
+  }
+  const key = (i) => `${i.kind || 'task'}\u0000${i.label || ''}\u0000${i.tool_call_id ?? ''}`;
+  const pool = new Map();
+  for (const r of ran) pool.set(key(r), (pool.get(key(r)) || 0) + 1);
+  return started.filter((st) => {
+    const k = key(st); const n = pool.get(k) || 0;
+    if (n > 0) { pool.set(k, n - 1); return false; }
+    return true;
+  }).map((st) => ({ kind: st.kind || 'task', label: st.label || '', step: st.step ?? null, tool_call_id: st.tool_call_id ?? null }));
 }
 
 // Every subagent chain on this record verifies, and each one's own stop matches what the parent
@@ -1071,6 +1101,8 @@ export function foldRecovery(events, resolve) {
     ownerInputs: annotated,
     coordinationCount,
     checkpoint: lastCheckpoint ? String(resolve(lastCheckpoint)?.output?.handoff ?? '') : null,
+    // ESS-1: children that were in flight when the run ended and never reported back.
+    orphanedSubagents: foldSubagentOrphans(events, resolve),
   };
 }
 
@@ -1085,7 +1117,11 @@ export function recoveryNote(rec) {
   });
   const foot = rec.coordinationCount ? `\n(${rec.coordinationCount} gate-feedback line(s) in the transcript are marked [coordination] — they are not the owner's instructions.)` : '';
   const cp = rec.checkpoint ? `\nLast checkpoint: ${rec.checkpoint.replace(/\s+/g, ' ').slice(0, 200)}` : '';
-  return 'Recovery note (from the run record — prior owner requests and whether they look handled):\n' + lines.join('\n') + foot + cp;
+  const orphans = Array.isArray(rec.orphanedSubagents) ? rec.orphanedSubagents : [];
+  const orph = orphans.length
+    ? `\n${orphans.length} subagent${orphans.length === 1 ? ' was' : 's were'} in flight when the run ended and never reported back (${orphans.map((o) => `${o.kind}: "${String(o.label).slice(0, 40)}"`).join('; ')}) — their work was discarded with the run; nothing they did reached the workspace.`
+    : '';
+  return 'Recovery note (from the run record — prior owner requests and whether they look handled):\n' + lines.join('\n') + foot + cp + orph;
 }
 
 // ──────────────────────────────────────── supervisor / stagnation (D2) ──

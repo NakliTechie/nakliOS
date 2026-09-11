@@ -421,7 +421,18 @@ export function parseApplyPatch(patch) {
 // and the tamper-evident chain all covered the supervisor only. It is OPTIONAL: absent, the
 // behaviour is exactly as before, because a subagent must still run where no recorder exists
 // (the ablation harness, the conformance fixtures, a caller that only wants the text).
-export function makeToolExecutor({ shell, face, mode = 'code', infer = null, subagentDepth = 0, spawnIsolated = null, recordSubagent = null }) {
+// ESS-1 (2026-09-11): a subagent is a child of the run, not a process of its own. Before this,
+// `task` / `dispatch` / `review` ran with no abort signal and no budget: pressing Stop ended the
+// parent between turns while its children kept calling the model, and a `dispatch` whose
+// sibling had finished cleanly still MERGED that sibling's writes into the workspace after the
+// owner had said stop. `signal` is the parent run's AbortSignal; `subagentBudget` is the child
+// loop's own ladder (wall-clock by default — a child that has hung on a slow endpoint must not
+// hang the parent's turn forever). `recordSubagentStart` writes the claim BEFORE the child
+// runs, so a child that never reports back is visible on the chain as an orphan — the same
+// shape as the queue's `dispatching` claim and the task's `running` status.
+export const SUBAGENT_WALL_CLOCK_MS = 240_000;
+export function makeToolExecutor({ shell, face, mode = 'code', infer = null, subagentDepth = 0, spawnIsolated = null, recordSubagent = null,
+                                   signal = null, subagentBudget = null, recordSubagentStart = null }) {
   if (!face) throw new Error('makeToolExecutor requires a Rig agent face');
   const modeAllow = MODE_TOOLS[mode] || null; // null = all tools
   const subagentsOn = typeof infer === 'function' && subagentDepth < 1; // depth cap 1 (no recursion)
@@ -433,14 +444,24 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
   // nondeterministically and break replay. Recording is best-effort: a recorder that throws must
   // not fail a subagent that did its work.
   async function runRecorded({ kind, label, tool_call_id, messages, tools, executeTool, maxSteps }) {
-    if (!recordSubagent) return runAgentLoop({ messages, tools, infer, executeTool, maxSteps });
+    const budget = subagentBudget || { wallClockMs: SUBAGENT_WALL_CLOCK_MS };
+    // The claim first: on the chain before the child has done anything, so a child that dies
+    // in flight (tab closed, page reloaded) leaves a `subagent.started` with no `subagent.ran`.
+    if (recordSubagentStart) { try { await recordSubagentStart({ kind, label, tool_call_id }); } catch (_) {} }
+    // (An already-stopped run needs no guard here: the loop checks the signal before its first
+    // model call and returns stop:'aborted' with zero calls.)
     let rec = null;
-    try {
-      rec = createRunRecorder({ app: 'anvil', principal: `subagent:${kind}` });
-      await rec.start({ messages, tools });
-    } catch (_) { rec = null; }
+    if (recordSubagent) {
+      try {
+        rec = createRunRecorder({ app: 'anvil', principal: `subagent:${kind}` });
+        await rec.start({ messages, tools });
+      } catch (_) { rec = null; }
+    }
+    // ONE loop call for both the recorded and the unrecorded path. They used to be two calls with
+    // the same argument list, which is how a signal or budget could be dropped from one of them
+    // and no test notice — the mutation that removed them from the recorded path survived.
     const res = await runAgentLoop({
-      messages, tools, maxSteps, executeTool,
+      messages, tools, maxSteps, executeTool, signal, budget,
       infer: rec ? rec.wrapInfer(infer) : infer,
       onEvent: rec ? rec.onEvent : undefined,
     });
@@ -659,6 +680,8 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
 
       if (name === 'task') {
         if (!subagentsOn) return 'Error: subagents are not available here.';
+        // No `signal` on the child EXECUTOR: it only matters to grandchildren, and the depth cap
+        // forbids them. The child LOOP gets the signal in runRecorded — that is what stops it.
         const child = makeToolExecutor({ shell, face, mode: 'code', infer, subagentDepth: subagentDepth + 1 });
         const res = await runRecorded({
           kind: 'task',
@@ -672,6 +695,7 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
           executeTool: child,
           maxSteps: 16,
         });
+        if (res.stop === 'aborted') return '(subagent stopped with the run — its work was not completed)';
         return res.text || `(subagent finished: ${res.stop})`;
       }
 
@@ -705,6 +729,12 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
             return { label: t.label, ok: false, stop: 'error', text: `Subagent error: ${String(e && e.message || e)}`, changes: iso.changes ? iso.changes() : { written: [], deleted: [] }, iso };
           }
         }));
+        // The owner pressed Stop while the workers ran. A sibling that had already finished
+        // cleanly is still not merged: "stop" means nothing lands, not "keep whatever was
+        // done by then" — the workspace after a stop must be the workspace before the dispatch.
+        if (signal && signal.aborted) {
+          return formatDispatchDigest({ results: runs, status: runs.map(() => 'aborted'), conflicts: [], dropped: norm.dropped });
+        }
         // Merge plan: only cleanly-finished runs are eligible; a path clash holds
         // just the clashers (a disjoint clean sibling still merges).
         const plan = planMerge(runs);
@@ -739,6 +769,7 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
           executeTool: iso.executor,
           maxSteps: SUBAGENT_MAX_STEPS,
         });
+        if (res.stop === 'aborted') return '(review stopped with the run)';
         return res.text || `(review finished: ${res.stop})`;
       }
 

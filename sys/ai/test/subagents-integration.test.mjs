@@ -150,6 +150,91 @@ await test('review: reviewer subagent returns findings and writes NOTHING to bas
   eq((await base.list('')).length, before, 'reviewer did not add files to base');
 });
 
+// ESS-1 (2026-09-11): a subagent is a child of the run. Stop stops it, and nothing merges after.
+function supervisedExecutor(base, infer, { signal = null, subagentBudget = null } = {}) {
+  const fs = createFileops({ backend: base });
+  const registry = buildRigRegistry({ fs });
+  const grant = createGrant({ prefixes: [''], scopes: ['fs:read', 'fs:write', 'fs:remove'] });
+  const opLog = createOpLog({ fs: createFileops({ backend: new MemoryBackend() }) });
+  const face = createAgentFace({ registry, grant, opLog, actor: 'agent' });
+  const shell = createShell({ registry, face });
+  return makeToolExecutor({ shell, face, mode: 'code', infer, subagentDepth: 0, spawnIsolated: makeSpawnIsolated(base, infer), signal, subagentBudget });
+}
+
+await test('ESS-1: Stop mid-dispatch — the children stop, and a sibling that had already finished is NOT merged', async () => {
+  const base = new MemoryBackend();
+  const ac = new AbortController();
+  const calls = { a: 0, b: 0 };
+  // Child A finishes cleanly on its first turn (write, then done). Child B's first model call
+  // presses Stop on the parent, then answers with a write it would do next.
+  const infer = async ({ messages }) => {
+    const user = [...messages].reverse().find(m => m.role === 'user');
+    const prompt = String(user?.content || '');
+    const priorTools = messages.filter(m => m.role === 'tool').length;
+    if (/^A:/.test(prompt)) {
+      calls.a++;
+      if (priorTools === 0) return { content: '', toolCalls: [{ id: 'wa', function: { name: 'write', arguments: JSON.stringify({ path: 'a.txt', content: 'A was here' }) } }] };
+      return { content: 'A done.', toolCalls: [] };
+    }
+    calls.b++;
+    ac.abort();
+    return { content: '', toolCalls: [{ id: 'wb', function: { name: 'write', arguments: JSON.stringify({ path: 'b.txt', content: 'B was here' }) } }] };
+  };
+  const exec = supervisedExecutor(base, infer, { signal: ac.signal });
+  const out = await exec('dispatch', { tasks: [{ label: 'A', prompt: 'A: write a.txt' }, { label: 'B', prompt: 'B: write b.txt' }] }, { id: 'd1' });
+  assert(/STOPPED — the owner ended the run/.test(out), `the digest says stopped: ${out.slice(0, 200)}`);
+  assert(!/— merged$/m.test(out), 'no subagent line reads "— merged"');
+  const realFs = createFileops({ backend: base });
+  eq((await realFs.read('a.txt')).ok, false, "A finished cleanly BEFORE the stop and is still not merged — a stop means the workspace is as it was");
+  eq((await realFs.read('b.txt')).ok, false, 'B never landed');
+  eq(calls.b, 1, 'B made no further model calls after the stop');
+});
+
+await test('ESS-1: a child carries its own wall clock — a slow child stops on budget, not the parent\'s patience', async () => {
+  const base = new MemoryBackend();
+  let n = 0;
+  const slow = async ({ messages }) => {
+    n++; await new Promise(r => setTimeout(r, 30));
+    // never finishes on its own: a different write every turn (no no-progress trip)
+    return { content: '', toolCalls: [{ id: 'w' + n, function: { name: 'write', arguments: JSON.stringify({ path: `f${n}.txt`, content: 'x' }) } }] };
+  };
+  const exec = supervisedExecutor(base, slow, { subagentBudget: { wallClockMs: 70 } });
+  const t0 = Date.now();
+  const out = await exec('task', { prompt: 'keep writing' }, { id: 't1' });
+  const took = Date.now() - t0;
+  assert(/\(subagent finished: budget\)/.test(out), `stopped on the child budget: ${out}`);
+  assert(took < 2000 && n <= 6, `the wall clock ended it early (took ${took}ms, ${n} calls)`);
+});
+
+await test('ESS-1: the executor writes the start claim BEFORE the child makes its first model call', async () => {
+  const base = new MemoryBackend();
+  const order = [];
+  const fs = createFileops({ backend: base });
+  const registry = buildRigRegistry({ fs });
+  const grant = createGrant({ prefixes: [''], scopes: ['fs:read', 'fs:write', 'fs:remove'] });
+  const opLog = createOpLog({ fs: createFileops({ backend: new MemoryBackend() }) });
+  const face = createAgentFace({ registry, grant, opLog, actor: 'agent' });
+  const shell = createShell({ registry, face });
+  const infer = async () => { order.push('infer'); return { content: 'done', toolCalls: [] }; };
+  const exec = makeToolExecutor({ shell, face, mode: 'code', infer, subagentDepth: 0, spawnIsolated: makeSpawnIsolated(base, infer),
+    recordSubagentStart: async (m) => { order.push('start:' + m.kind + ':' + m.label); },
+    recordSubagent: async (m) => { order.push('ran:' + m.kind); } });
+  await exec('dispatch', { tasks: [{ label: 'L', prompt: 'do' }] }, { id: 'd9' });
+  assert(/^start:dispatch:/.test(order[0]), `the claim is first: ${order.join(' > ')}`);
+  eq(order[1], 'infer', 'then the child runs');
+  eq(order[order.length - 1], 'ran:dispatch', 'and reports back last');
+});
+
+await test('ESS-1: a run already stopped does not start a child at all', async () => {
+  const base = new MemoryBackend();
+  const ac = new AbortController(); ac.abort();
+  let n = 0;
+  const exec = supervisedExecutor(base, async () => { n++; return { content: 'x', toolCalls: [] }; }, { signal: ac.signal });
+  const out = await exec('task', { prompt: 'anything' }, { id: 't2' });
+  assert(/stopped with the run/.test(out), out);
+  eq(n, 0, 'zero model calls');
+});
+
 await test('supervisor tools refuse to nest (depth cap) — a subagent has no dispatch', async () => {
   const base = new MemoryBackend();
   const fs = createFileops({ backend: base });

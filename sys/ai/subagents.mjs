@@ -182,6 +182,7 @@ const STATUS_TAG = {
   'no-op': 'no file changes',
   error: 'ERROR — subagent failed to run',
   'merge-failed': 'merge FAILED (workspace unchanged for this one)',
+  aborted: 'STOPPED — the owner ended the run while it worked; nothing merged',
 };
 export function formatDispatchDigest({ results, status, conflicts, dropped }) {
   const st = (i) => (status && status[i]) || (results[i] && results[i].ok ? 'no-op' : 'incomplete');

@@ -2126,7 +2126,12 @@
     // substrate's own guarantees stopped at the fan-out. `runCtx.rec` is this run's recorder; a
     // tool call made outside a run (there are none today) simply records nothing.
     const baseExec = makeToolExecutor({ shell, face, mode, infer: inferViaHost, spawnIsolated,
-      recordSubagent: async (sub)=>{ try{ if(runCtx && runCtx.rec) await runCtx.rec.subagent(sub); }catch(_){} } });
+      recordSubagent: async (sub)=>{ try{ if(runCtx && runCtx.rec) await runCtx.rec.subagent(sub); }catch(_){} },
+      // ESS-1: children stop with the run (Stop button), carry their own wall clock, and write
+      // their claim to the chain before they start — a child that never reports back is an orphan
+      // the recovery note names, not a silent hole in the record.
+      signal: abortController ? abortController.signal : null,
+      recordSubagentStart: async (sub)=>{ try{ if(runCtx && runCtx.rec) await runCtx.rec.subagentStarted(sub); }catch(_){} } });
     const skillMap = {};
     const skillStatus={}; // name -> lifecycle status: a staged/quarantined skill is never served or listed // skill name -> SKILL.md path, populated below
     const factMap = {};  // memory-fact name -> .md path, populated below
