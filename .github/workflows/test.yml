@@ -60,6 +60,9 @@ jobs:
       - name: Verify SDK-vendoring canonical invariants and splicer round-trip
         run: node scripts/test-vendored-sdk.mjs
 
+      - name: Verify every public SDK member has an audit-ledger line with a valid status (B4)
+        run: node scripts/test-sdk-audit.mjs
+
       - name: Verify naklios.net egress SDK seam (ENOEGRESS until a backend is advertised)
         run: node scripts/test-net-seam.mjs
 
