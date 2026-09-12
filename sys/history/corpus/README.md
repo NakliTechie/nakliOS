@@ -67,3 +67,47 @@ are declared per entry in an override rather than faked into a record:
   assert the loop's own deadline or abort without waiting on a real clock.
 
 See `sys/history/test/replay-corpus.test.mjs`.
+
+## The matrix (B2, 2026-09-12)
+
+The corpus is a set of NAMED CELLS, not a list of runs. Every cell the loop can end in has a
+`<cell>.manifest.json` — what it pins, when and on what it was recorded, the stop it ends in — and
+`replay-corpus.test.mjs` names the required cells: a required cell with no manifest is red, a
+manifest whose counts disagree with its record is red, a manifest on disk that nobody required is
+red. Two kinds:
+
+- **recorded** — a real run, replayed keyless against its own opening. The seven from 2026-09-07
+  were captured on Ollama `qwen3:8b` (before the rule that no bed runs on a local model); the five
+  from 2026-09-12 on DeepSeek `deepseek-flash` as configured — one live run each, six in all
+  (`supervisor` took two: the first ended `max-steps` when the scenario demanded `done`; the cell
+  now records the stop the model actually chose, because the LOOP is what it pins, not the model).
+- **override** — a failure path a settled transcript cannot hold, declared over a base record in
+  the manifest's `override` field: `auth-failure` (401 before the first chunk → `stop:'error'`, over
+  `write-a-file`), `aborted` (a hung call cancelled by Stop → `stop:'aborted'`, over `budget-stop`)
+  and `tool-error` (the executor itself throws → `tool.failed`, kind `execution_error`, over
+  `failed-command`; the standard executors never throw, so no live run can record that path — the
+  model's answer to the turn the record never saw is the override's `reply`). The aborted cell's
+  hang presses Stop on its own first poll (`abortOnHang`) — no clock. Every override cell must
+  diverge from its base, names how many recorded responses it leaves unserved, and has its own
+  explicit test in the lane.
+
+| cell | kind | pins | ends |
+|---|---|---|---|
+| `write-a-file` · `read-then-answer` · `refused-command` | recorded | the three plain shell runs | `done` |
+| `failing-gate` · `gate-on-prose` · `budget-stop` · `act-or-nudge` | recorded | Chunk 0's 2b conditions (above) | `unverified` · `unverified` · `budget` · `done` |
+| `clarify` | recorded | the loop pauses on the model's one question | `clarify` |
+| `failed-command` | recorded | a failing command's error text fed back (`not_found`); the run continues | `done` |
+| `stale-edit` | recorded | F8 in a real run: read → shell rewrite → edit **refused as stale** → re-read → applied | `done` |
+| `parallel-reads` | recorded | three reads in ONE turn through the F9 pool; the record's shape is the serial one | `done` |
+| `supervisor` | recorded | a spinning run redirected once by the D2 supervisor — two loops on one chain | `max-steps` |
+| `auth-failure` | override | the endpoint fails before the first chunk | `error` |
+| `aborted` | override | Stop mid-call: the in-flight request is cancelled, never answered | `aborted` |
+| `tool-error` | override | the executor throws: `tool.failed` + `execution_error`, the run goes on | `done` |
+
+A step cap the record cannot hold (`supervisor` spins to it) rides in `<cell>.opts.json` like a
+budget; the stop a cell ends in is the manifest's to say, and only the manifest's. Recording a new
+cell: add it to `SCENARIOS` in `scripts/record-corpus.mjs` (description, tools, seed, expect), to
+`REQUIRED_CELLS` in the test, and run
+`BASE=… MODEL=… KEY=… node scripts/record-corpus.mjs --only <cell>` — `OUT=<dir>` for a dry run
+against a stub, never into this folder. A cell that already has a record is skipped; `--overwrite`
+re-captures it, and that is a decision to write down, never a way to make a red lane green.

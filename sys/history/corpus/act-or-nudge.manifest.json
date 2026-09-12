@@ -1,0 +1,13 @@
+{
+  "cell": "act-or-nudge",
+  "kind": "recorded",
+  "description": "0.3 — a prose-only code-mode run is nudged once and the loop is re-entered: two loops on one chain.",
+  "recordedAt": "2026-09-07",
+  "model": "qwen3:8b (Ollama; the corpus predates the 2026-09-12 no-local-model rule)",
+  "expect": "done",
+  "loops": 2,
+  "events": 17,
+  "tools": [
+    "shell"
+  ]
+}

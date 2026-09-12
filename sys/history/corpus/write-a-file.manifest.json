@@ -1,0 +1,13 @@
+{
+  "cell": "write-a-file",
+  "kind": "recorded",
+  "description": "A one-command task: echo into a file, then DONE.",
+  "recordedAt": "2026-09-07",
+  "model": "qwen3:8b (Ollama; the corpus predates the 2026-09-12 no-local-model rule)",
+  "expect": "done",
+  "loops": 1,
+  "events": 11,
+  "tools": [
+    "shell"
+  ]
+}

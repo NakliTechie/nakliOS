@@ -15,7 +15,7 @@
 // Each of those is a way the metric could quietly lie, which is worse than not having it.
 import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
-import { createRunRecorder, loadRecord, foldOrdering, groupOrdering } from '../run-record.mjs';
+import { createRunRecorder, loadRecord, foldOrdering, groupOrdering, isCorpusRecord } from '../run-record.mjs';
 import { deltaOf, metricsOf } from '../../ai/ablate.mjs';
 
 // ── a recorder driven by hand, so each shape is exactly the one being asserted ──
@@ -149,9 +149,11 @@ assert.ok(flailing.toFirstAction > straight.toFirstAction);
 // ── 7. over the real corpus, keyless ───────────────────────────────────────
 // Every entry is a REAL recorded run. This is the [test] leg AC-1 was written with: the fold
 // runs over records captured from a live endpoint, with zero model calls.
+let corpusCount = 0;
 {
   const dir = new URL('../corpus/', import.meta.url);
-  const files = (await readdir(dir)).filter((f) => f.endsWith('.json') && !f.endsWith('.opts.json'));
+  const files = (await readdir(dir)).filter(isCorpusRecord);
+  corpusCount = files.length;
   assert.ok(files.length >= 7, `the corpus still has entries (found ${files.length})`);
   const recs = [];
   for (const f of files) recs.push(loadRecord(JSON.parse(await readFile(new URL(f, dir), 'utf8'))));
@@ -191,4 +193,4 @@ assert.ok(flailing.toFirstAction > straight.toFirstAction);
   assert.equal(g.toFirstAction.n, 1, 'the mean is over 1 run, not 4');
 }
 
-console.log('ordering: anchor ladder, null-not-zero, 2>&1, the 2026-09-07 rg shape, delta refusal, 7 corpus records');
+console.log('ordering: anchor ladder, null-not-zero, 2>&1, the 2026-09-07 rg shape, delta refusal, ' + corpusCount + ' corpus records');

@@ -1,0 +1,15 @@
+{
+  "cell": "aborted",
+  "kind": "override",
+  "description": "Stop pressed while a model call is in flight: the call is cancelled, never answered — the loop returns stop:\"aborted\" at that boundary, and the record ends on an unanswered request.",
+  "record": "budget-stop.json",
+  "override": {
+    "hangUntil": true,
+    "atCall": 1,
+    "abortOnHang": true
+  },
+  "expect": "aborted",
+  "recordedAt": "2026-09-12",
+  "model": "(none — declared over budget-stop, recorded 2026-09-07)",
+  "events": 9
+}

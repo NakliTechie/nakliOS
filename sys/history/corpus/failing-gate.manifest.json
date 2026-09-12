@@ -1,0 +1,14 @@
+{
+  "cell": "failing-gate",
+  "kind": "recorded",
+  "description": "0.0 — task_done with a gate that never passes: the loop feeds the verdict back, retries to the rounds cap, stops unverified.",
+  "recordedAt": "2026-09-07",
+  "model": "qwen3:8b (Ollama; the corpus predates the 2026-09-12 no-local-model rule)",
+  "expect": "unverified",
+  "loops": 1,
+  "events": 21,
+  "tools": [
+    "shell",
+    "task_done"
+  ]
+}

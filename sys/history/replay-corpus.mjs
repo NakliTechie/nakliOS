@@ -17,8 +17,8 @@
 // Records are replayed as they were RECORDED: the messages and tools come out of the corpus
 // entry's own `run.started`, never rebuilt from today's app. That is the normalization — a
 // corpus does not go stale when the system prompt is reworded, because the corpus IS the
-// prompt that was sent. What a record cannot express is the two failure modes that never
-// produce a settled transcript, and those come from the sidecar below.
+// prompt that was sent. What a record cannot express is a failure path that never produces a
+// settled transcript; those are declared in a cell's manifest as an override (below).
 
 import { loadRecord, createRunRecorder, replayInfer, replayExecuteTool, replayVerify, compareRuns, joined, ReplayMiss } from './run-record.mjs';
 import { runAgentLoop } from '../ai/agent-loop.mjs';
@@ -39,16 +39,21 @@ export function openingsOf(record) {
   return starts.map((e) => ({ messages: e.input?.messages || [], tools: e.input?.tools || [] }));
 }
 
-// The two failure modes a settled transcript cannot express, declared per entry in a sidecar
-// (`<name>.override.json`) rather than faked inside the record:
+// The failure modes a settled transcript cannot express, declared per cell in its manifest
+// (`<cell>.manifest.json`, field `override`) over a base record rather than faked inside one:
 //
 //   throwBeforeFirstChunk — the endpoint fails before it emits anything. There is no response
 //     to record, so a record alone can only ever show the run that DIDN'T happen.
-//   hangUntil — the call never returns. `readyFile` names a path the harness creates when it
-//     wants the hang released, so a test can assert the loop's own deadline/abort rather than
-//     waiting on a real clock.
+//   hangUntil — the call never returns. `released()` is the harness's hand on the hang, so a
+//     test can assert the loop's own abort rather than waiting on a real clock. With
+//     `abortOnHang`, the hang's first poll presses Stop itself: the in-flight call is cancelled,
+//     never answered, and the loop stops at that boundary — the aborted cell, with no clock at all.
+//   throwOnTool — the executor itself throws (not a failing command: a broken executor). The
+//     standard executors never throw, so no live run can record the loop's tool-error path.
+//   reply — the model's answer to a request the record never saw (the turn after a thrown
+//     tool): served fixed, so the run reaches a real stop instead of a ReplayMiss.
 //
-// An override applies to the request at `atCall` (0-based, counting model calls).
+// `atCall` is 0-based and counts model calls (tool calls, for throwOnTool).
 export function applyOverride(infer, override) {
   if (!override) return infer;
   let n = -1;
@@ -65,6 +70,7 @@ export function applyOverride(infer, override) {
         if (args?.signal) args.signal.addEventListener('abort', () => { clearInterval(timer); reject(new Error('aborted')); });
       });
     }
+    if (override.reply && n === override.reply.atCall) return { content: String(override.reply.content || ''), toolCalls: [], finishReason: 'stop' };
     return infer(args);
   };
   wrapped.remaining = () => infer.remaining();
@@ -72,16 +78,36 @@ export function applyOverride(infer, override) {
   return wrapped;
 }
 
-// Replay one corpus entry. Returns { ok, why, steps, stop, consumed }.
+function applyToolOverride(exec, override) {
+  if (!override?.throwOnTool) return exec;
+  let n = -1;
+  const wrapped = (name, args, call) => {
+    n++;
+    if (n === (override.throwOnTool.atCall ?? 0)) throw new Error(override.throwOnTool.message || 'executor threw');
+    return exec(name, args, call);
+  };
+  wrapped.remaining = () => exec.remaining();
+  wrapped.assertConsumed = () => exec.assertConsumed();
+  return wrapped;
+}
+
+// Replay one corpus entry. Returns { ok, why, steps, stop, consumed } — plus `events` (the live
+// chain, joined) for an override cell, whose divergence from its base is the thing to assert on.
 // `expectConsumed:false` is for an entry whose override deliberately cuts the run short.
 export async function replayEntry(dump, { override = null, expectConsumed = true, maxSteps = 24, opts = {} } = {}) {
   const recorded = loadRecord(dump);
   const openings = openingsOf(recorded);
+  let signal = null;
+  if (override?.abortOnHang) {
+    const ac = new AbortController();
+    signal = ac.signal;
+    override = { ...override, released: () => { ac.abort(); return false; } };
+  }
 
   const live = createRunRecorder({ app: 'anvil', principal: 'replay' });
   const baseInfer = replayInfer(recorded, { strict: true });
   const infer = applyOverride(baseInfer, override);
-  const exec = replayExecuteTool(recorded, { strict: true });
+  const exec = applyToolOverride(replayExecuteTool(recorded, { strict: true }), override);
   // A gate verdict is served from the chain — no command is ever run. A budget cannot be, so it
   // comes from the entry's own capture-time options; only the WALL-CLOCK axis is unreplayable
   // (a replay is instant), which is why the corpus uses turns.
@@ -94,7 +120,8 @@ export async function replayEntry(dump, { override = null, expectConsumed = true
       await live.start({ messages, tools });
       result = await runAgentLoop({
         messages, tools, infer: live.wrapInfer(infer), executeTool: exec, onEvent: live.onEvent,
-        maxSteps, verify, ...(opts.budget ? { budget: opts.budget } : {}),
+        // a step cap is not in the record either (the supervisor cell spins to it); it rides in opts
+        maxSteps: opts.maxSteps ?? maxSteps, verify, signal, ...(opts.budget ? { budget: opts.budget } : {}),
         ...(opts.maxVerifyRounds ? { maxVerifyRounds: opts.maxVerifyRounds } : {}),
       });
       await live.finish(result);
@@ -109,11 +136,14 @@ export async function replayEntry(dump, { override = null, expectConsumed = true
   // question — what happened is. The loop does not propagate a failed inference: it records
   // `run.stopped {stop:'error'}` and returns, which is the failure path this lane exists to
   // pin. Report it, and let the caller assert the stop it declared.
+  // What it did NOT serve is part of what happened: an override cuts the run short by a knowable
+  // amount, and the cell says how much.
   if (override) {
     const stopped = joined(live.events(), live.resolve).find((e) => e.tool === 'run.stopped');
+    const count = (r) => r.remaining().reduce((n, x) => n + (x.recorded - x.served), 0);
     return { ok: true, why: '', stop: result.stop, steps: result.steps, consumed: false,
              error: result.error || stopped?.output?.error || null,
-             recorded: joined(live.events(), live.resolve).map((e) => e.tool) };
+             events: joined(live.events(), live.resolve), left: { model: count(baseInfer), tools: count(exec) } };
   }
 
   // 3 — nothing recorded went unused

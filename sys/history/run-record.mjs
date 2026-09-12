@@ -306,6 +306,12 @@ export function createRunRecorder({ app = 'anvil', principal = 'local', grant_id
 }
 
 // Rehydrate an exported record into the same shape the recorder exposes for reading.
+// A corpus folder holds RECORDS and their sidecars — `<cell>.opts.json` (budget, rounds cap, step
+// cap) and `<cell>.manifest.json` (what the cell pins, the stop it ends in, an override if it is
+// one). One predicate says which names are records, so a new sidecar kind is one edit here and not
+// one per reader.
+export const isCorpusRecord = (name) => name.endsWith('.json') && !/\.(opts|manifest)\.json$/.test(name);
+
 export function loadRecord({ events, blobs }) {
   const evs = typeof events === 'string' ? fromNDJSON(events) : events.slice();
   const map = blobs instanceof Map ? new Map(blobs) : new Map(Object.entries(blobs || {}));

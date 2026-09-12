@@ -1,0 +1,13 @@
+{
+  "cell": "supervisor",
+  "kind": "recorded",
+  "description": "A run that spins (the same call, non-consecutively) to max-steps; the D2 supervisor folds the record, injects ONE redirect, and re-enters the loop — two loops on one chain. The model kept alternating, so the second loop ends max-steps too.",
+  "recordedAt": "2026-09-12",
+  "model": "deepseek-flash",
+  "expect": "max-steps",
+  "loops": 2,
+  "events": 64,
+  "tools": [
+    "shell"
+  ]
+}

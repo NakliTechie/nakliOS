@@ -1,0 +1,13 @@
+{
+  "cell": "refused-command",
+  "kind": "recorded",
+  "description": "An unsupported flag is refused by the curated shell; the model reports the exit code.",
+  "recordedAt": "2026-09-07",
+  "model": "qwen3:8b (Ollama; the corpus predates the 2026-09-12 no-local-model rule)",
+  "expect": "done",
+  "loops": 1,
+  "events": 11,
+  "tools": [
+    "shell"
+  ]
+}
