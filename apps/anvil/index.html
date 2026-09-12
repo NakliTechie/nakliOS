@@ -2758,6 +2758,7 @@
         : result.stop==='budget' ? ('hit budget ('+(result.budgetAxis||'')+')')
         : result.stop==='unverified' ? 'gate never passed'
         : (result.stop==='done' && !gated) ? 'finished — no gate, so this is the agent\'s own claim'
+        : (result.stop==='done' && result.atCap) ? 'done — the gate passed at the step cap (the agent never called task_done)'
         : result.stop;
       t.log.push({k:'system',text:`agent ${stopLabel} · ${result.steps} steps`});
       // Persist the record — the tamper-evident source of truth, and what the history tool

@@ -733,6 +733,22 @@ export async function runAgentLoop({
   }
 
   onEvent({ type: 'max-steps', steps: maxSteps });
+  // The verifier's word does not depend on the model remembering task_done. Four live runs on
+  // 2026-09-12 (deepseek-flash, mdlite) ended here with the gate already green in the
+  // transcript — the model saw "[gate] … exited 0 — call task_done" and kept probing. A gated
+  // run that runs out of steps is asked the only question that matters, once: does the
+  // acceptance criterion pass? Green → done, verified, and `atCap` says the model never
+  // called it. Red → max-steps, with the verdict the owner would have wanted to see.
+  if (verify) {
+    const { verdict, ran } = await runGate();
+    if (verdict && verdict.ok) {
+      onEvent({ type: 'verify-pass', verdict, step: maxSteps });
+      onEvent({ type: 'done', reason: 'verified', step: maxSteps, atCap: true });
+      return { messages: convo, steps: maxSteps, stop: 'done', verified: true, atCap: true, text: lastText };
+    }
+    onEvent({ type: 'verify-fail', verdict, round: verifyRounds + 1, ran, step: maxSteps });
+    return { messages: convo, steps: maxSteps, stop: 'max-steps', verified: false, verdict, text: lastText };
+  }
   return { messages: convo, steps: maxSteps, stop: 'max-steps', text: lastText };
 }
 

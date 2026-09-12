@@ -310,6 +310,37 @@ await test('max-steps bounds a model that keeps calling distinct tools', async (
   eq(result.steps, 5, 'stopped at the cap');
 });
 
+await test('at the step cap a gated run asks the verifier once: green is done (atCap), red stays max-steps with the verdict', async () => {
+  // a model that keeps probing and never calls task_done — the 2026-09-12 mdlite shape
+  const probing = () => { let n = 0; return async () => ({ content: '', toolCalls: [call('shell', { command: `echo ${n++}` }, `c${n}`)] }); };
+  const events = [];
+  const green = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }], tools: [shellTool()], infer: probing(),
+    executeTool: makeShellExecutor(freshShell()), maxSteps: 3, verify: async () => ({ ok: true, exit: 0 }),
+    onEvent: (e) => events.push(e.type),
+  });
+  eq(green.stop, 'done', 'the gate passed, so the run is done');
+  eq(green.verified, true, 'on the verifier\'s word');
+  eq(green.atCap, true, 'and the record says the model never called task_done');
+  eq(green.steps, 3, 'it did run out of steps');
+  eq(events.slice(-3).join(' '), 'max-steps verify-pass done', 'the cap, then the verdict, then done');
+  let asked = 0;
+  const red = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }], tools: [shellTool()], infer: probing(),
+    executeTool: makeShellExecutor(freshShell()), maxSteps: 3, verify: async () => { asked++; return { ok: false, exit: 1, stderr: 'FAILED (failures=1)' }; },
+  });
+  eq(red.stop, 'max-steps', 'a red gate leaves the stop as it was');
+  eq(red.verified, false, 'and says so');
+  assert(red.verdict && /FAILED/.test(red.verdict.stderr), 'with the verdict the owner would want to see');
+  eq(asked, 1, 'the verifier is asked exactly once at the cap');
+  const ungated = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }], tools: [shellTool()], infer: probing(),
+    executeTool: makeShellExecutor(freshShell()), maxSteps: 3,
+  });
+  eq(ungated.stop, 'max-steps', 'no gate → nothing to ask; the cap is the cap');
+  eq(ungated.verified, undefined, 'and no claim is made');
+});
+
 await test('a tool call with invalid JSON args yields an error result, loop continues', async () => {
   const shell = freshShell();
   const result = await runAgentLoop({
