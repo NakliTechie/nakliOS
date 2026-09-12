@@ -1465,8 +1465,10 @@ const DEFAULT_DESKTOP_APP_IDS = Object.freeze([
   'files',
   'notes',
   'anvil',
+  'abhyas',
+  'chapters',
 ]);
-const DESKTOP_DEFAULTS_VERSION = 3;
+const DESKTOP_DEFAULTS_VERSION = 4;
 
 const APPS = [
   // ── Built-in classics (always inline windows) ──
@@ -1825,6 +1827,11 @@ const FOLDERS = [
     apps:['tijori','rotor','mehfil'] },
   { id:'fld-games', kind:'folder', name:'Play', glyph:'🎮', bg:'act',
     apps:['reel','nakliamp','minesweeper','solitaire','spider','kolocal','gambit','kingme','tictactoe','strait','chokepoint'] },
+  // Every app has exactly one folder home (scripts/test-app-catalog.mjs); the two Class 1–5 apps
+  // were added straight to the desktop (5e7168e) with none, and the lane was red for it. Their
+  // desktop presence is kept the way the others' is — as a default pull-out below.
+  { id:'fld-learn', kind:'folder', name:'Learn', glyph:'🎓', bg:'brand',
+    apps:['abhyas','chapters'] },
 ];
 if (THIRD_PARTY_CATALOG_APPS.length){
   FOLDERS.push({

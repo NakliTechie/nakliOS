@@ -36,6 +36,7 @@ for (const [id, name] of [
   ['fld-work', 'Work & Build'],
   ['fld-privacy', 'Privacy & Security'],
   ['fld-games', 'Play'],
+  ['fld-learn', 'Learn'],
 ]) {
   assert.match(html, new RegExp(`id:'${id}'[\\s\\S]*?name:'${name}'`),
     `${name} task folder must be present`);
@@ -57,12 +58,12 @@ assert.match(
 );
 assert.match(
   html,
-  /const DEFAULT_DESKTOP_APP_IDS = Object\.freeze\(\[\s*'books',\s*'nakliposter',\s*'bofh',\s*'mod',\s*'naklidata',\s*'tijori',\s*'files',\s*'notes',\s*'anvil',\s*\]\)/,
-  'core apps, storage utilities, and Anvil are first-party desktop defaults',
+  /const DEFAULT_DESKTOP_APP_IDS = Object\.freeze\(\[\s*'books',\s*'nakliposter',\s*'bofh',\s*'mod',\s*'naklidata',\s*'tijori',\s*'files',\s*'notes',\s*'anvil',\s*'abhyas',\s*'chapters',\s*\]\)/,
+  'core apps, storage utilities, Anvil and the two Learn apps are first-party desktop defaults',
 );
 assert.match(
   html,
-  /const DESKTOP_DEFAULTS_VERSION = 3/,
+  /const DESKTOP_DEFAULTS_VERSION = 4/,
   'existing desktops receive each expanded shortcut set once',
 );
 assert.match(
