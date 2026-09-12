@@ -209,13 +209,13 @@
       "id": "kanzen",
       "repo": "NakliTechie/KanZen",
       "requestedRef": "main",
-      "resolvedCommit": "232645d7f8bbf4bf981187390400a7170ac9d73d",
+      "resolvedCommit": "d58e26cd09af1f31b888187894136cc18f10b498",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "7a80c3d7f0620ebcbeffcafbd35cdfd0a5f4e9969c4d4604e73a284e1c52e3ec",
-          "bytes": 288620
+          "sha256": "87f56c977d81a51c29220025e76f975af3d09f3ad532ead6fb73098814840128",
+          "bytes": 288989
         }
       ]
     },
@@ -223,13 +223,13 @@
       "id": "menagerie",
       "repo": "NakliTechie/menagerie",
       "requestedRef": "main",
-      "resolvedCommit": "6013d1a6953c594afd1007933f67522a45cf4720",
+      "resolvedCommit": "e9ee1386bb865e764fd5a1a2ded63e4aa6384086",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "9b3fd96cc01b4edd377c787b148e960d75f2b84c7a589f483c9d109a5389eb4f",
-          "bytes": 252679
+          "sha256": "9ad3cba59a2f725ad07e3f66252ce0b3157f923f4536e0b0ec90e87b2e56ad13",
+          "bytes": 256368
         },
         {
           "source": "manifest.webmanifest",
@@ -407,13 +407,13 @@
       "id": "nakliposter",
       "repo": "NakliTechie/NakliPoster",
       "requestedRef": "main",
-      "resolvedCommit": "1fa1d4c2484ef90c2b5ed002d8694b229668a375",
+      "resolvedCommit": "0f4ce9ab0ec6bf05901cda27721f2a16db3c9811",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "517b3dfa7e4b4d5a637a0cc607578ef7d3a71d487e90403152716f99acfe9a26",
-          "bytes": 309478
+          "sha256": "4203d5981a5a6e3fc87d7f45431150cab5029530714c02669ced61fd2f3fc861",
+          "bytes": 309847
         },
         {
           "source": "LICENSE",
@@ -441,13 +441,13 @@
       "id": "reel",
       "repo": "NakliTechie/reel",
       "requestedRef": "main",
-      "resolvedCommit": "d16f7ef1d855aebcbb48b388d44dce2050dbad7e",
+      "resolvedCommit": "292b0916d7f139f6f27fe14661772a7dee43da7d",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "e15cb557b1ac79c925b26352ff14275ac85c7cb0a549bd718fcc51b55748b045",
-          "bytes": 115788
+          "sha256": "b3020b620e419adb8c853b06b79456f424d10ab5aaedd08d870550c65317ea18",
+          "bytes": 51319
         },
         {
           "source": "vendor/mediabunny/mediabunny-1.51.0.min.mjs",
@@ -467,7 +467,7 @@
       "id": "sheaf",
       "repo": "NakliTechie/sheaf",
       "requestedRef": "main",
-      "resolvedCommit": "e38555bf7ac2abc972edc21e40794c512755d6a7",
+      "resolvedCommit": "327865c5f54484615230b0cc5d35c579e1839aed",
       "files": [
         {
           "source": "index.html",
@@ -523,13 +523,13 @@
       "id": "tijori",
       "repo": "NakliTechie/Tijori",
       "requestedRef": "main",
-      "resolvedCommit": "871ad9eb04c7e8b152fda38ce31281d5d8745fd1",
+      "resolvedCommit": "b38e674f199934a9ae624994bcb8b19f95074924",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "7cc99bcda36a57d9be3654a22fb7f7a550149035a0eeae68952ff05c33845119",
-          "bytes": 483093
+          "sha256": "4661224135654f157b0aeddd4b4b1e54155905b49d02a40bb65b8164c5357d3b",
+          "bytes": 483462
         }
       ]
     },
@@ -537,13 +537,13 @@
       "id": "vaultmind",
       "repo": "NakliTechie/VaultMind",
       "requestedRef": "main",
-      "resolvedCommit": "5391b37b4916081022d6d9b907ff43667ff98f03",
+      "resolvedCommit": "2bfae98c8860be0e835f021c906111f581ddf486",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "3f252856d92d77f5acdb1b6cae3c192311ed1a72dc7a9fa79b30a1f8e4ccd341",
-          "bytes": 368732
+          "sha256": "aa7ed75506b4fc6a9151b0ae72aecab6eb5c352f0968b442496fcbf2f3e4e4c1",
+          "bytes": 369101
         },
         {
           "source": "LICENSE",
