@@ -857,6 +857,17 @@ export function makeShellVerifier({ createShell, registry, face, command }) {
     const res = await shell.feed(cmd);
     const exit = shell.lastCode | 0;
     const output = (res && res.output) || '';
+    // A green that ran nothing is red (Chirag, 2026-09-12). The isolate-mode `__name__` defect let
+    // a unittest gate exit 0 having run zero tests; the runtime is fixed, and the verdict now
+    // refuses the shape on its own: a runner that reports it ran no tests did not verify anything.
+    const empty = ranNothing(output);
+    if (exit === 0 && empty) return { ok: false, exit: 0, stdout: output, stderr: `the gate exited 0 but ran no tests (${empty}) — a criterion that never executed cannot pass` };
     return { ok: exit === 0, exit, stdout: output, stderr: exit === 0 ? '' : output };
   };
+}
+
+// The test-runner lines that mean "nothing ran": unittest's, pytest's. Returns the matched phrase.
+export function ranNothing(output) {
+  const m = /\b(Ran 0 tests\b|NO TESTS RAN\b|no tests ran\b|collected 0 items\b)/.exec(String(output || ''));
+  return m ? m[1] : null;
 }

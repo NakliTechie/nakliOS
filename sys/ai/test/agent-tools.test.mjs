@@ -3,7 +3,7 @@
 //
 //   node sys/ai/test/agent-tools.test.mjs
 
-import { applyEdit, parseApplyPatch, makeToolExecutor, codingToolset, makeShellVerifier } from '../agent-tools.mjs';
+import { applyEdit, parseApplyPatch, makeToolExecutor, codingToolset, makeShellVerifier, ranNothing } from '../agent-tools.mjs';
 import { contentToken } from '../content-token.mjs';
 import { createFileops, MemoryBackend } from '../../rig/fileops/index.mjs';
 import { OverlayBackend } from '../../rig/fileops/overlay-backend.mjs';
@@ -401,6 +401,23 @@ await test('makeShellVerifier runs a fixed command in a fresh shell → exit-cod
   const fail = makeShellVerifier({ createShell, registry, face, command: 'grep NOPE status.txt' });
   const r2 = await fail();
   eq(r2.ok, false, 'fails when the check does not hold'); assert(r2.exit !== 0, 'non-zero exit');
+});
+
+await test('makeShellVerifier: a gate that exited 0 having run no tests is red, and says so', async () => {
+  const { face, registry } = fresh();
+  // unittest's own words for an empty run, on an exit-0 command
+  const empty = makeShellVerifier({ createShell, registry, face, command: 'printf "\n----\nRan 0 tests in 0.000s\n\nNO TESTS RAN\n"' });
+  const r = await empty();
+  eq(r.ok, false, 'exit 0 with zero tests is not a pass');
+  eq(r.exit, 0, 'the exit code is reported as it was');
+  assert(/ran no tests \(Ran 0 tests\)/.test(r.stderr), `the verdict names the shape: ${r.stderr}`);
+  const ran = makeShellVerifier({ createShell, registry, face, command: 'printf "..\n----\nRan 2 tests in 0.001s\n\nOK\n"' });
+  const r2 = await ran();
+  eq(r2.ok, true, 'a runner that ran tests and exited 0 passes');
+  const plain = makeShellVerifier({ createShell, registry, face, command: 'echo inv: OK' });
+  eq((await plain()).ok, true, 'a criterion with no runner banner is judged by its exit code alone');
+  eq(ranNothing('collected 0 items'), 'collected 0 items', 'pytest\'s phrase too');
+  eq(ranNothing('Ran 10 tests'), null, 'a count is not zero');
 });
 
 await test('codingToolset advertises read/edit/write/apply_patch/shell', () => {
