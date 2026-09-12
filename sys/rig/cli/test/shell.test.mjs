@@ -141,6 +141,30 @@ await test('rm is destructive: stages, then removes on y', async () => {
   assert(/error|not|ENOENT|failed/i.test(after), `file should be gone: ${after}`);
 });
 
+await test('a staged statement mid-line: the confirm runs the rest of the line, and a refusal counts as a failed command', async () => {
+  const { shell } = freshShell();
+  await run(shell, 'echo x > a.txt; echo y > b.txt; echo z > c.txt');
+  const staged = await run(shell, 'rm a.txt; echo AFTER; ls');
+  assert(/destructive/.test(staged) && !/AFTER/.test(staged), `stops at the staged rm: ${staged}`);
+  const rest = await run(shell, 'y');
+  assert(/AFTER/.test(rest) && /b\.txt/.test(rest) && !/a\.txt/.test(rest), `the confirm carried on down the line, after the removal: ${rest}`);
+  // && after a REFUSED rm does not run; ; does
+  const s2 = await run(shell, 'rm b.txt && echo RAN_AND; echo RAN_SEMI');
+  assert(/destructive/.test(s2), 'staged again');
+  const r2 = await run(shell, 'n');
+  assert(/cancelled/.test(r2) && !/RAN_AND/.test(r2) && /RAN_SEMI/.test(r2), `refused rm short-circuits && but not ;: ${r2}`);
+  eq((await run(shell, 'cat b.txt')), 'y', 'the refused file is still there');
+  // two staged statements on one line: each confirm reaches the next
+  const s3 = await run(shell, 'rm b.txt; echo MID; rm c.txt; echo END');
+  assert(/destructive/.test(s3), 'first stage');
+  const r3 = await run(shell, 'y');
+  assert(/MID/.test(r3) && /destructive/.test(r3) && !/END/.test(r3), `ran to the second stage: ${r3}`);
+  assert(shell.awaitingConfirm, 'and is waiting on it');
+  const r4 = await run(shell, 'y');
+  assert(/END/.test(r4), `the second confirm finished the line: ${r4}`);
+  assert(!shell.awaitingConfirm, 'nothing pending');
+});
+
 await test('rm cancelled on n leaves the file', async () => {
   const { shell } = freshShell();
   await run(shell, 'echo keep > keep.txt');

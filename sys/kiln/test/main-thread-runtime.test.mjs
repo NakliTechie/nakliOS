@@ -20,6 +20,7 @@ function makeFakePyodide() {
     mkdirTree(p) { addDirs(p); },
     writeFile(p, d) { const dd = p.slice(0, p.lastIndexOf('/')); if (dd) addDirs(dd); files.set(p, String(d)); },
     readFile(p) { if (!files.has(p)) throw new Error('ENOENT: ' + p); return files.get(p); },
+    unlink(p) { if (!files.has(p)) throw new Error('ENOENT: ' + p); files.delete(p); },
     readdir(dir) {
       const prefix = dir === '/' ? '/' : dir + '/';
       const names = new Set();
@@ -85,6 +86,28 @@ async function run() {
     ok('output keeps the write order', r.output === 'before\nRan 0 tests\nafter\né: multibyte\n');
     ok('stdout alone is still stdout', r.stdout === 'before\nafter\n');
     ok('stderr alone is still stderr', r.stderr === 'Ran 0 tests\né: multibyte\n');
+  }
+
+  // ── 1b. MEMFS mirrors the workspace both ways: a workspace delete is not undone by the next run,
+  // and a delete Python makes reaches the workspace ──
+  {
+    const fs = createFileops({ backend: new MemoryBackend() });
+    await fs.write('keep.py', 'x = 1\n'); await fs.write('gone.md', 'bye\n');
+    const fake = makeFakePyodide();
+    const kiln = createMainThreadKiln({ fs, mount: 'work', loadPyodide: async () => fake });
+    fake._onRun = () => {};
+    await kiln.exec('shell', 'noop');
+    ok('first run synced gone.md in', fake._files.has('/work/gone.md'));
+    await fs.remove('gone.md');                       // the shell's rm, between two runs
+    let memAfterSync = null;
+    fake._onRun = ({ FS }) => { let has = true; try { FS.readFile('/work/gone.md'); } catch (_) { has = false; } memAfterSync = has; };
+    await kiln.exec('shell', 'noop');
+    ok('a file the workspace no longer has is gone from MEMFS on the next run', memAfterSync === false);
+    ok('and was NOT written back into the workspace', !(await fs.read('gone.md', { encoding: 'utf-8' })).ok);
+    ok('the file that stayed is still there', (await fs.read('keep.py', { encoding: 'utf-8' })).data === 'x = 1\n');
+    fake._onRun = ({ FS }) => { FS.unlink('/work/keep.py'); };   // os.remove in the script
+    await kiln.exec('shell', 'import os; os.remove("keep.py")');
+    ok('a delete Python makes reaches the workspace', !(await fs.read('keep.py', { encoding: 'utf-8' })).ok);
   }
 
   // ── 2c. stdin is what the shell fed, then EOF; nothing fed is EOF at once, never an I/O error ──

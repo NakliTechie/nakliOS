@@ -116,11 +116,33 @@ export function createMainThreadKiln({ fs, mount = 'work', loadPyodide = default
   const dirOf = (p) => { const i = p.lastIndexOf('/'); return i <= 0 ? '' : p.slice(0, i); };
   function mkdirp(rel) { if (!rel) return; try { py.FS.mkdirTree(root + '/' + rel); } catch (_) {} }
 
-  // Copy every workspace file into MEMFS; remember contents to detect changes.
+  // Every file under the mount root in MEMFS, relative to it (caches skipped).
+  function memfsFiles() {
+    const out = [];
+    (function walk(dir) {
+      let ents; try { ents = py.FS.readdir(dir); } catch (_) { return; }
+      for (const name of ents) {
+        if (name === '.' || name === '..') continue;
+        const full = dir + '/' + name;
+        let st; try { st = py.FS.stat(full); } catch (_) { continue; }
+        if (py.FS.isDir(st.mode)) walk(full);
+        else out.push(full.slice(root.length + 1));
+      }
+    })(root);
+    return out.filter((rel) => !SKIP_BACK.test(rel));
+  }
+
+  // Copy every workspace file into MEMFS; remember contents to detect changes. MEMFS is a
+  // MIRROR of the workspace, so a file the workspace no longer has is unlinked here first:
+  // it used to stay behind, and the next syncOut wrote it back as though Python had created
+  // it — `rm in.md`, then any `python`, and in.md was back (live 2026-09-12, mdlite-3; the
+  // agent saw its deletes undone and spent its last steps re-deleting).
   async function syncIn() {
     const seen = new Map();
     const res = await fs.list('', { recursive: true });
     if (!res || !res.ok) return seen;
+    const present = new Set(res.entries.filter((e) => e.type === 'file').map((e) => e.path));
+    for (const rel of memfsFiles()) if (!present.has(rel)) { try { py.FS.unlink(root + '/' + rel); } catch (_) {} }
     for (const e of res.entries) {
       if (e.type !== 'file') continue;
       if (SKIP_BACK.test(e.path)) continue; // never pull .git/ or caches into MEMFS
@@ -132,26 +154,16 @@ export function createMainThreadKiln({ fs, mount = 'work', loadPyodide = default
     return seen;
   }
 
-  // Walk MEMFS; write new/changed files back to the workspace (skipping caches).
+  // Walk MEMFS; write new/changed files back to the workspace, and remove from the workspace
+  // what Python removed (a file that was synced in and is gone now) — the mirror runs both ways.
   async function syncOut(seen) {
-    const out = [];
-    (function walk(dir) {
-      let ents; try { ents = py.FS.readdir(dir); } catch (_) { return; }
-      for (const name of ents) {
-        if (name === '.' || name === '..') continue;
-        const full = dir + '/' + name;
-        let st; try { st = py.FS.stat(full); } catch (_) { continue; }
-        if (py.FS.isDir(st.mode)) walk(full);
-        else out.push(full);
-      }
-    })(root);
-    for (const full of out) {
-      const rel = full.slice(root.length + 1);
-      if (SKIP_BACK.test(rel)) continue;
-      let data; try { data = py.FS.readFile(full, { encoding: 'utf8' }); } catch (_) { continue; }
+    const now = new Set(memfsFiles());
+    for (const rel of now) {
+      let data; try { data = py.FS.readFile(root + '/' + rel, { encoding: 'utf8' }); } catch (_) { continue; }
       if (seen.get(rel) === data) continue; // unchanged since snapshot
       await fs.write(rel, data);
     }
+    for (const rel of seen.keys()) if (!now.has(rel)) { try { await fs.remove(rel); } catch (_) {} }
   }
 
   return {

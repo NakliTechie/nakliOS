@@ -379,6 +379,14 @@ await test('YOLO: the shell tool auto-confirms a staged destructive op', async (
   const after = await shell.feed('cat gone.txt');
   assert(/error|not|ENOENT/i.test(after.output), `file was removed: ${after.output}`);
 });
+await test('YOLO: a line that stages twice is confirmed twice, and its tail runs — the tool result carries the whole line', async () => {
+  const { exec, shell } = fresh();
+  await shell.feed('echo x > a.txt; echo y > b.txt');
+  const out = await exec('shell', { command: 'rm a.txt; echo MID; rm b.txt; echo END; ls' });
+  assert(!shell.awaitingConfirm, 'nothing left pending');
+  assert(/MID/.test(out) && /END/.test(out), `both statements after the stages ran: ${out}`);
+  assert(!/a\.txt|b\.txt/.test(out.split('END')[1] || ''), `and both files are gone by the ls: ${out}`);
+});
 
 await test('unknown tool is reported, never thrown', async () => {
   const { exec } = fresh();

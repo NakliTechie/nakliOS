@@ -1182,7 +1182,11 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
     const out = [];
     const write = (s) => { if (s != null && s !== '') out.push(String(s)); };
 
-    // Resolve a pending destructive confirm first.
+    // Resolve a pending destructive confirm first — then run what was still on the line
+    // behind it. `rm x; ls; python gate.py` used to run only the rm: the confirm returned
+    // from the whole line and the rest was never seen, so the agent (whose executor answers
+    // the confirm for it) got the deletion but not its gate run, and re-ran the line to find
+    // the files already gone (live 2026-09-12, mdlite-3).
     if (pending) {
       const ans = String(line == null ? '' : line).trim().toLowerCase();
       const p = pending; pending = null;
@@ -1196,27 +1200,37 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
           if (!r.ok) errs.push(`${pr.verb}: ${r.message || 'failed'}`);
         }
         write(errs.join('\n'));
+        lastCode = errs.length ? 1 : 0;
       } else {
         for (const pr of proposals) face.reject(pr.proposalId);
         write(`cancelled: ${p.verb}`);
+        lastCode = 1; // a refused rm is a failed rm: `rm x && next` stops here, `;` goes on
       }
-      return { output: out.join('\n') };
+      const rest = await runStatements(p.rest || [], write);
+      return { output: out.join('\n'), ...(rest.awaitingConfirm ? { awaitingConfirm: rest.awaitingConfirm } : {}), ...(rest.cleared ? { cleared: true } : {}) };
     }
 
     const raw = String(line == null ? '' : line);
     if (raw.trim() !== '') state.history.push(raw.trim());
-    let cleared = false;
+    const r = await runStatements(parseLine(raw), write);
+    return { output: out.join('\n'), ...(r.awaitingConfirm ? { awaitingConfirm: r.awaitingConfirm } : {}), cleared: !!r.cleared };
+  }
 
-    for (const stmt of parseLine(raw)) {
+  // Run statements in order. A destructive statement stages and STOPS here, remembering the
+  // statements behind it so the confirm's answer can carry on down the line.
+  async function runStatements(stmts, write) {
+    let cleared = false;
+    for (let i = 0; i < stmts.length; i++) {
+      const stmt = stmts[i];
       if (stmt.op === '&&' && lastCode !== 0) continue; // short-circuit on failure
       if (stmt.op === '||' && lastCode === 0) continue; // short-circuit on success
       const res = await runPipeline(stmt.pipeline, stmt.stdinFrom);
       lastCode = res.code || 0;
       if (res.clear) { cleared = true; continue; }
       if (res.staged) {
-        pending = { proposalId: res.staged, verb: res.verb, proposals: res.proposals };
+        pending = { proposalId: res.staged, verb: res.verb, proposals: res.proposals, rest: stmts.slice(i + 1) };
         write(`${res.verb} is destructive. confirm? [y/N]`);
-        return { output: out.join('\n'), awaitingConfirm: res.staged };
+        return { awaitingConfirm: res.staged, cleared };
       }
       if (stmt.redirect && /^\/?dev\/null$/.test(expand(stmt.redirect.path))) {
         // `> /dev/null` discards. It used to WRITE the output to a workspace file dev/null.
@@ -1240,7 +1254,7 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
         write(res.text.endsWith('\n') ? res.text.slice(0, -1) : res.text);
       }
     }
-    return { output: out.join('\n'), cleared };
+    return { cleared };
   }
 
   return {

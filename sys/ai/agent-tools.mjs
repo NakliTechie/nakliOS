@@ -585,9 +585,12 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
         // Read the exit code BEFORE the auto-confirm — that fires a second
         // shell.feed('y') and overwrites lastCode with the confirmation's result.
         let code = reachedShell && shell ? shell.lastCode : null;
-        if (shell && shell.awaitingConfirm) {
+        // A line can stage more than once (`rm a; ls; rm b`): each confirm runs the statements
+        // behind it, up to the next staged one — answer until the line has run out.
+        let guard = 0;
+        while (shell && shell.awaitingConfirm && guard++ < 8) {
           const confirmed = await runShell('shell', { command: 'y' });
-          result = (out ? out + '\n' : '') + confirmed;
+          result = (result ? result + '\n' : '') + confirmed;
           code = shell.lastCode; // the confirmed run is the real outcome
         }
         // A plain single-file display satisfies the read-before-edit ledger. The version it
