@@ -17,7 +17,7 @@
 // prefer the worker Kiln instead — it's non-blocking and interruptible.
 //
 // It implements the minimal contract the Rig shell calls (shell.mjs `python`):
-//   exec(cellId, code, { isolate, cwd, argv }) -> { status:'ok'|'error'|'unavailable', stdout, stderr, output, message? }
+//   exec(cellId, code, { isolate, cwd, argv, stdin }) -> { status:'ok'|'error'|'unavailable', stdout, stderr, output, message? }
 //   (`output` is both streams in the order they were written — what a terminal would show)
 
 import { PYODIDE_VERSION, PYODIDE_INDEX_URL, sanitizeTraceback, systemExitCode } from './pyodide-runtime.mjs';
@@ -176,8 +176,10 @@ export function createMainThreadKiln({ fs, mount = 'work', loadPyodide = default
     // THERE, so a script's own relative opens agree with the shell that launched it. A cwd that
     // would leave the root (`..`, absolute) is ignored: the root is the floor, as everywhere.
     // `argv` is what the script sees as sys.argv — the shell passes the file name and its
-    // arguments, as CPython would; without it a script saw [''] (live 2026-09-12).
-    async exec(cellId, code, { isolate = false, cwd = '', argv = null } = {}) {
+    // arguments, as CPython would; without it a script saw [''] (live 2026-09-12). `stdin` is
+    // the text a pipe or `<` fed the command; without it sys.stdin is at EOF, never an I/O error
+    // (live 2026-09-12: `python mdlite.py < in.md` → OSError: [Errno 29]).
+    async exec(cellId, code, { isolate = false, cwd = '', argv = null, stdin = null } = {}) {
       let p;
       try { p = await ensure(); }
       catch (e) { return { status: 'unavailable', message: 'Pyodide failed to load: ' + (e && e.message ? e.message : e) }; }
@@ -191,6 +193,8 @@ export function createMainThreadKiln({ fs, mount = 'work', loadPyodide = default
       const outDec = new TextDecoder('utf-8'), errDec = new TextDecoder('utf-8');
       try { p.setStdout({ write: (buf) => { const s = outDec.decode(buf, { stream: true }); out += s; all += s; return buf.length; } }); } catch (_) {}
       try { p.setStderr({ write: (buf) => { const s = errDec.decode(buf, { stream: true }); err += s; all += s; return buf.length; } }); } catch (_) {}
+      let fed = false;
+      try { p.setStdin({ stdin: () => { if (fed || stdin == null) return null; fed = true; return String(stdin); }, isatty: false }); } catch (_) {}
 
       let seen = new Map();
       try {
@@ -200,17 +204,33 @@ export function createMainThreadKiln({ fs, mount = 'work', loadPyodide = default
         p.runPython(`import os, sys\nos.chdir(${JSON.stringify(dir)})\nif ${JSON.stringify(root)} not in sys.path: sys.path.insert(0, ${JSON.stringify(root)})`
           + (Array.isArray(argv) ? `\nsys.argv = ${JSON.stringify(argv.map(String))}` : ''));
         if (isolate) p.runPython(isolationPreamble(root));
-        // A fresh globals namespace when isolating, so a name the agent left behind cannot
-        // stand in for one the gate expects to import. Degrades to the shared namespace where
-        // the runtime does not support the option rather than failing the gate outright.
-        // The namespace is a SCRIPT's: `__name__` is "__main__", as under `python file.py`. A
-        // bare dict() ran the script as "builtins", so every `if __name__ == "__main__":` guard
-        // was skipped — a unittest gate ran zero tests and exited 0: a green that proved nothing
-        // (live 2026-09-12).
+        // A fresh namespace when isolating, so a name the agent left behind cannot stand in for
+        // one the gate expects to import. Degrades to the shared namespace where the runtime
+        // does not support the option rather than failing the gate outright.
+        // The namespace is a SCRIPT's, exactly as `python file.py` makes it: a module named
+        // __main__ that IS sys.modules["__main__"] for the run. A bare dict() ran the script as
+        // "builtins" (every `if __name__ == "__main__":` guard skipped); a dict merely NAMED
+        // __main__ still left unittest.main() looking at Pyodide's own __main__ and finding no
+        // tests — "Ran 0 tests", exit 0, a green that proved nothing (live 2026-09-12, twice).
         let freshGlobals = null;
-        if (isolate) { try { freshGlobals = p.runPython('dict(__name__="__main__")'); } catch (_) { freshGlobals = null; } }
-        await (freshGlobals ? p.runPythonAsync(code, { globals: freshGlobals }) : p.runPythonAsync(code));
-        if (freshGlobals) { try { freshGlobals.destroy(); } catch (_) {} }
+        if (isolate) {
+          try {
+            freshGlobals = p.runPython('import sys, types\n'
+              + '__kiln_script = types.ModuleType("__main__")\n'
+              + `__kiln_script.__file__ = ${JSON.stringify(Array.isArray(argv) && argv[0] ? String(argv[0]) : '')}\n`
+              + '__kiln_prev_main = sys.modules.get("__main__")\n'
+              + 'sys.modules["__main__"] = __kiln_script\n'
+              + '__kiln_script.__dict__');
+          } catch (_) { freshGlobals = null; }
+        }
+        try {
+          await (freshGlobals ? p.runPythonAsync(code, { globals: freshGlobals }) : p.runPythonAsync(code));
+        } finally {
+          if (freshGlobals) {
+            try { p.runPython('import sys\nsys.modules["__main__"] = __kiln_prev_main\ndel __kiln_prev_main, __kiln_script'); } catch (_) {}
+            try { freshGlobals.destroy(); } catch (_) {}
+          }
+        }
         await syncOut(seen);
         return { status: 'ok', stdout: out, stderr: err, output: all };
       } catch (e) {
@@ -225,6 +245,7 @@ export function createMainThreadKiln({ fs, mount = 'work', loadPyodide = default
       } finally {
         try { p.setStdout(); } catch (_) {}
         try { p.setStderr(); } catch (_) {}
+        try { p.setStdin(); } catch (_) {}
       }
     },
   };

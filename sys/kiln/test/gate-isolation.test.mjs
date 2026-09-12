@@ -31,7 +31,7 @@ function makeFakePyodide() {
     setStdout() {}, setStderr() {},
     runPython(code) {
       seen.sync.push(String(code));
-      if (/^dict\(__name__="__main__"\)$/.test(String(code).trim())) return { destroy() { seen.globalsPassed.push('destroyed'); } };
+      if (/types\.ModuleType\("__main__"\)[\s\S]*__kiln_script\.__dict__$/.test(String(code).trim())) return { destroy() { seen.globalsPassed.push('destroyed'); } };
       return undefined;
     },
     async runPythonAsync(code, opts) { seen.async.push(String(code)); seen.globalsPassed.push(opts && opts.globals ? 'fresh' : 'shared'); },
@@ -65,7 +65,8 @@ const mkKiln = (py) => createMainThreadKiln({
   ok('isolate runs the gate in a FRESH globals namespace', py._seen.globalsPassed.includes('fresh'));
   // and that namespace is a script's: __name__ is "__main__", so a unittest gate's main guard fires
   // (a bare dict() ran the gate as "builtins" — zero tests, exit 0, a green that proved nothing)
-  ok('the fresh namespace names itself __main__', py._seen.sync.some((c) => /dict\(__name__="__main__"\)/.test(c)));
+  ok('the fresh namespace IS sys.modules["__main__"] for the run — unittest.main() finds the script\'s tests', py._seen.sync.some((c) => /sys\.modules\["__main__"\] = __kiln_script/.test(c)));
+  ok('and Pyodide\'s own __main__ is put back afterwards', py._seen.sync.some((c) => /sys\.modules\["__main__"\] = __kiln_prev_main/.test(c)));
 }
 
 // ── 3. the snapshot is taken before any agent code can run ──────────────────
@@ -115,7 +116,7 @@ const mkKiln = (py) => createMainThreadKiln({
 // ── 5. a runtime without the globals option still runs the gate ─────────────
 {
   const py = makeFakePyodide();
-  py.runPython = (code) => { if (/^dict\(__name__="__main__"\)$/.test(String(code).trim())) throw new Error('unsupported'); return undefined; };
+  py.runPython = (code) => { if (/types\.ModuleType\("__main__"\)[\s\S]*__kiln_script\.__dict__$/.test(String(code).trim())) throw new Error('unsupported'); return undefined; };
   let ran = false;
   py.runPythonAsync = async () => { ran = true; };
   const r = await mkKiln(py).exec('gate', 'print(1)', { isolate: true });

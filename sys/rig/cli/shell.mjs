@@ -1004,7 +1004,8 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
       // now runs where the shell is.
       // sys.argv as CPython sets it: the script and its arguments, or -c and what follows.
       const argv = ci >= 0 ? ['-c', ...args.slice(ci + 2)] : (args[0] && !args[0].startsWith('-') ? args : ['']);
-      const r = await kiln.exec('shell', code, { isolate: kilnIsolate, cwd: state.cwd, argv });
+      // what a pipe or `<` fed this command is the script's stdin
+      const r = await kiln.exec('shell', code, { isolate: kilnIsolate, cwd: state.cwd, argv, stdin: stdin || '' });
       if (r.status === 'unavailable') return { text: 'python: ' + (r.message || 'kernel unavailable'), code: 1 };
       // A `sys.exit(n)` rides through as n; anything else that is not ok is 1. `output` is the
       // two streams in write order; a runtime without it hands back stdout then stderr.

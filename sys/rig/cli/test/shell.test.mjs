@@ -387,14 +387,20 @@ await test('python: the script gets its sys.argv, and the kernel\'s interleaved 
   const grant = createGrant({ prefixes: [''], scopes: ['fs:read', 'fs:write', 'fs:remove'] });
   const opLog = createOpLog({ fs: createFileops({ backend: new MemoryBackend() }) });
   const face = createAgentFace({ registry, grant, opLog, actor: 'agent' });
-  const argvs = [];
-  const kiln = { exec: async (_id, _code, opts) => { argvs.push(opts && opts.argv); return { status: 'ok', stdout: 'out1\nout2\n', stderr: 'err1\n', output: 'out1\nerr1\nout2\n' }; } };
+  const argvs = [], stdins = [];
+  const kiln = { exec: async (_id, _code, opts) => { argvs.push(opts && opts.argv); stdins.push(opts && opts.stdin); return { status: 'ok', stdout: 'out1\nout2\n', stderr: 'err1\n', output: 'out1\nerr1\nout2\n' }; } };
   const shell = createShell({ registry, face, kiln });
   await fs.write('t.py', 'print(1)');
   eq(await run(shell, 'python t.py a b'), 'out1\nerr1\nout2', 'the shell shows the streams in the order they were written, not stdout-then-stderr');
   eq(JSON.stringify(argvs[0]), '["t.py","a","b"]', 'a file run: argv is the file and its arguments, as CPython sets it');
   await run(shell, 'python -c "print(2)" x');
   eq(JSON.stringify(argvs[1]), '["-c","x"]', 'a -c run: argv starts with -c');
+  await fs.write('in.md', '# T\n');
+  await run(shell, 'python t.py < in.md');
+  eq(stdins[2], '# T\n', '`< file` is the script\'s stdin');
+  await run(shell, 'cat in.md | python t.py');
+  eq(stdins[3], '# T\n', 'and so is a pipe');
+  eq(stdins[0], '', 'nothing fed → empty, never undefined');
   // a runtime without `output` (an older kernel) still hands back both streams
   const old = { exec: async () => ({ status: 'ok', stdout: 'o\n', stderr: 'e\n' }) };
   const shell2 = createShell({ registry, face, kiln: old });

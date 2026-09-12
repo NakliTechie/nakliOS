@@ -38,6 +38,7 @@ function makeFakePyodide() {
     // bytes in, as Pyodide's `write` hands them; the runtime must not use `batched` (it strips newlines)
     setStdout(o) { if (o && o.batched) throw new Error('batched capture strips newlines — use write'); stdout = o && o.write; },
     setStderr(o) { if (o && o.batched) throw new Error('batched capture strips newlines — use write'); stderr = o && o.write; },
+    setStdin(o) { py._stdin = o && o.stdin; },
     runPython() { /* os.chdir / sys.path — no-op in the fake */ },
     async runPythonAsync(code) { const enc = new TextEncoder(); if (py._onRun) await py._onRun({ FS, out: (s) => stdout && stdout(enc.encode(s)), err: (s) => stderr && stderr(enc.encode(s)), code }); },
     _files: files, _onRun: null,
@@ -84,6 +85,19 @@ async function run() {
     ok('output keeps the write order', r.output === 'before\nRan 0 tests\nafter\né: multibyte\n');
     ok('stdout alone is still stdout', r.stdout === 'before\nafter\n');
     ok('stderr alone is still stderr', r.stderr === 'Ran 0 tests\né: multibyte\n');
+  }
+
+  // ── 2c. stdin is what the shell fed, then EOF; nothing fed is EOF at once, never an I/O error ──
+  {
+    const fs = createFileops({ backend: new MemoryBackend() });
+    const fake = makeFakePyodide();
+    const kiln = createMainThreadKiln({ fs, mount: 'work', loadPyodide: async () => fake });
+    let reads = null;
+    fake._onRun = () => { reads = [fake._stdin(), fake._stdin()]; };
+    await kiln.exec('shell', 'sys.stdin.read()', { stdin: 'line one\nline two' });
+    ok('the fed text comes first, then EOF', reads && reads[0] === 'line one\nline two' && reads[1] === null);
+    await kiln.exec('shell', 'sys.stdin.read()');
+    ok('no stdin → EOF at once', reads && reads[0] === null);
   }
 
   // ── 3. syncOut: a NEW file Python writes is synced back to the workspace ──
