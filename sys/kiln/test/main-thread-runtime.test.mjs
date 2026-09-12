@@ -39,7 +39,8 @@ function makeFakePyodide() {
     // bytes in, as Pyodide's `write` hands them; the runtime must not use `batched` (it strips newlines)
     setStdout(o) { if (o && o.batched) throw new Error('batched capture strips newlines — use write'); stdout = o && o.write; },
     setStderr(o) { if (o && o.batched) throw new Error('batched capture strips newlines — use write'); stderr = o && o.write; },
-    setStdin(o) { py._stdin = o && o.stdin; },
+    // the byte protocol, as Pyodide offers it: read(buf) fills and returns a count, 0 at EOF
+    setStdin(o) { if (o && o.stdin) throw new Error('the string stdin handler appends a newline — use read'); py._read = o && o.read; },
     runPython() { /* os.chdir / sys.path — no-op in the fake */ },
     async runPythonAsync(code) { const enc = new TextEncoder(); if (py._onRun) await py._onRun({ FS, out: (s) => stdout && stdout(enc.encode(s)), err: (s) => stderr && stderr(enc.encode(s)), code }); },
     _files: files, _onRun: null,
@@ -115,12 +116,15 @@ async function run() {
     const fs = createFileops({ backend: new MemoryBackend() });
     const fake = makeFakePyodide();
     const kiln = createMainThreadKiln({ fs, mount: 'work', loadPyodide: async () => fake });
-    let reads = null;
-    fake._onRun = () => { reads = [fake._stdin(), fake._stdin()]; };
-    await kiln.exec('shell', 'sys.stdin.read()', { stdin: 'line one\nline two' });
-    ok('the fed text comes first, then EOF', reads && reads[0] === 'line one\nline two' && reads[1] === null);
+    const drain = () => { const dec = new TextDecoder(); let s = '', calls = 0; for (;;) { const buf = new Uint8Array(7); const n = fake._read(buf); calls++; if (!n) break; s += dec.decode(buf.subarray(0, n), { stream: true }); } return { s, calls }; };
+    let got = null;
+    fake._onRun = () => { got = drain(); };
+    await kiln.exec('shell', 'sys.stdin.read()', { stdin: 'q' });
+    ok('the fed bytes are the bytes — no newline appended to a text that has none', got && got.s === 'q');
+    await kiln.exec('shell', 'sys.stdin.read()', { stdin: 'line one\nline two — é' });
+    ok('a text longer than the read buffer arrives whole, then EOF', got && got.s === 'line one\nline two — é' && got.calls > 2);
     await kiln.exec('shell', 'sys.stdin.read()');
-    ok('no stdin → EOF at once', reads && reads[0] === null);
+    ok('no stdin → EOF at once', got && got.s === '' && got.calls === 1);
   }
 
   // ── 3. syncOut: a NEW file Python writes is synced back to the workspace ──

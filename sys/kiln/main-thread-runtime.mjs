@@ -205,8 +205,11 @@ export function createMainThreadKiln({ fs, mount = 'work', loadPyodide = default
       const outDec = new TextDecoder('utf-8'), errDec = new TextDecoder('utf-8');
       try { p.setStdout({ write: (buf) => { const s = outDec.decode(buf, { stream: true }); out += s; all += s; return buf.length; } }); } catch (_) {}
       try { p.setStderr({ write: (buf) => { const s = errDec.decode(buf, { stream: true }); err += s; all += s; return buf.length; } }); } catch (_) {}
-      let fed = false;
-      try { p.setStdin({ stdin: () => { if (fed || stdin == null) return null; fed = true; return String(stdin); }, isatty: false }); } catch (_) {}
+      // Bytes, through `read`, never the string handler: Pyodide appends a newline to a string that
+      // lacks one, so `printf 'q' | python x.py` read 'q\n' (live 2026-09-12). The bytes are the bytes.
+      const inBytes = stdin == null ? new Uint8Array(0) : new TextEncoder().encode(String(stdin));
+      let inPos = 0;
+      try { p.setStdin({ read: (buf) => { const n = Math.min(buf.length, inBytes.length - inPos); buf.set(inBytes.subarray(inPos, inPos + n)); inPos += n; return n; }, isatty: false }); } catch (_) {}
 
       let seen = new Map();
       try {
