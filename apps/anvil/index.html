@@ -431,7 +431,8 @@
   import { registerAppDiffTypes } from '../../sys/staging/diff-types.mjs';
   // A skill write is a P0 envelope (diff type 'anvil-skill') — the first agent-produced diff.
   registerAppDiffTypes(['anvil']);
-  import { MEMORY_DIR, parseFact, buildMemoryIndex, noteToFact, applyRevision, applyDemotion, dependantsOf, slotHolder, findDuplicate, duplicateReply, createRememberBudget, budgetSpentReply, checkRulesCap, rulesCapReply } from '../../sys/ai/memory-store.mjs';
+  import { MEMORY_DIR, parseFact, buildMemoryIndex, noteToFact, applyRevision, applyDemotion, dependantsOf, slotHolder, findDuplicate, duplicateReply, createRememberBudget, budgetSpentReply, checkRulesCap, rulesCapReply, createFactSession } from '../../sys/ai/memory-store.mjs';
+  import { asStored } from '../../sys/ai/content-token.mjs';
   import { HOOKS_FILE, parseHooks } from '../../sys/ai/hooks.mjs';
   import { systemPrompt as assembledSystemPrompt, systemMessage, gateNote as assembledGateNote, runToolset, synthesizeTool, driveRun, loadHooks, preHookReply, postHookNotes, contextMessage } from '../../sys/ai/run-assembly.mjs';
   import { gateAction, gateEvent, actionClasses } from '../../sys/ai/action-gate.mjs';
@@ -2198,6 +2199,9 @@
     const remBudget=createRememberBudget();
     // C1: read-before-write — which skills THIS run has loaded through the `skill` tool.
     const skillSession=createSkillSession();
+    // B6: which facts THIS run has recalled, at which version — `revise` refuses a fact it has not
+    // seen, or one that changed since (sys/ai/memory-store.mjs createFactSession).
+    const factSession=createFactSession();
     // The run this executor is serving. executeTool is defined long before runTask creates the
     // recorder, so it could not see either: checkpoint referenced `rec` out of scope and threw
     // into a swallowing catch (NAF-08), and history fell back to the selected task (NAF-07).
@@ -2378,6 +2382,7 @@
           const bud=await currentBudget(); const cap=bud.usable ? Math.min(8000, Math.max(1000, bud.remaining*4)) : 4000;
           const off=Math.max(0, Number(ar&&ar.offset)||0);
           if(off && off>=body.length) return 'recall: offset '+off+' is past the end of "'+name+'" ('+body.length+' chars). Retry from 0.';
+          factSession.noteRecalled(name, r.data); // B6: the version the model is being shown — after the refusal, not before
           const slice=body.slice(off, off+cap); const more=(off+cap)<body.length;
           return 'Fact: '+(f.name||name)+(off?(' [from '+off+']'):'')+'\n\n'+slice+(more?('\n[more — recall name "'+name+'" offset '+(off+cap)+']'):''); } }catch(_){}
         const names=Object.keys(factMap);
@@ -2403,6 +2408,8 @@
         // check corroborates it (promote with `revise`) or an observation disproves it.
         const slug=await recordFact(note, ar&&ar.type, 'hypothesis', { slot: ar&&ar.slot, derived_from: ar&&ar.derived_from, supersedes: ar&&ar.supersedes, weight: ar&&ar.weight });
         if(slug) factMap[slug]=MEMORY_DIR+'/'+slug+'.md';
+        // B6: a fact the model just wrote is a version it knows — a same-run revise need not recall it first.
+        if(slug){ try{ const w=await fs.read(MEMORY_DIR+'/'+slug+'.md',{encoding:'utf-8'}); if(w&&w.ok) factSession.noteRecalled(slug, w.data); }catch(_){} }
         return slug?('Recorded fact "'+slug+'" (hypothesis) — promote or retract it with `revise` as evidence arrives.'):'Nothing recorded.';
       }
       // skill_manage (C1): the agent writes its own skills — read-before-write enforced,
@@ -2441,7 +2448,12 @@
         if(status!=='verified' && status!=='retracted') return 'status must be "verified" or "retracted".';
         const p = factMap[name] || (MEMORY_DIR+'/'+name+'.md');
         try{ const r=await fs.read(p,{encoding:'utf-8'}); if(r&&r.ok){
-          await fs.write(p, applyRevision(r.data, { status, reason: ar&&ar.reason, cause: ar&&ar.cause, contradicts: ar&&ar.contradicts }));
+          // B6: a revision is about the version the model read — refused when it never recalled the
+          // fact this run, or when the fact changed since.
+          const staleFact=factSession.staleReply(name, r.data); if(staleFact) return staleFact;
+          const revisedText=applyRevision(r.data, { status, reason: ar&&ar.reason, cause: ar&&ar.cause, contradicts: ar&&ar.contradicts });
+          await fs.write(p, revisedText);
+          factSession.noteRecalled(name, asStored(revisedText)); // the new version is now known — as the store keeps it
           // Revalidation: a retracted basis demotes every fact derived from it (transitively)
           // back to hypothesis — the dependants keep their derived_from link as the audit trail.
           let demoted=[];

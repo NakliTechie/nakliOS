@@ -93,12 +93,15 @@ export function instantiate(fnSource, name, ctx = {}) {
 
 // A minimal in-memory fs shaped like the app's `fs` face: read/write/list/remove.
 // `files` is a plain object of path -> contents, and stays readable after the call.
+// Writes keep what a real store keeps: UTF-8, decoded again on read — a lone surrogate comes back
+// as U+FFFD, exactly as OPFS hands it back. A ledger that tokens the un-encoded string is caught here.
+const asStored = (s) => new TextDecoder('utf-8').decode(new TextEncoder().encode(String(s ?? '')));
 export function memFs(files = {}) {
   const store = { ...files };
   return {
     store,
     read: async (p) => (p in store ? { ok: true, data: store[p] } : { ok: false, error: 'ENOENT' }),
-    write: async (p, d) => { store[p] = String(d); return { ok: true }; },
+    write: async (p, d) => { store[p] = asStored(d); return { ok: true }; },
     remove: async (p) => { delete store[p]; return { ok: true }; },
     list: async (dir) => ({ ok: true, entries: Object.keys(store)
       .filter((p) => p.startsWith(dir))

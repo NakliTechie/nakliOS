@@ -23,6 +23,7 @@ import {
   dispatchTool, reviewTool, normalizeTasks, planMerge, formatDispatchDigest,
   SUBAGENT_SYSTEM, REVIEW_SYSTEM, SUBAGENT_MAX_STEPS, clampSubagentBudget, SUBAGENT_WALL_CLOCK_S, SUBAGENT_MIN_WALL_CLOCK_S } from './subagents.mjs';
 import { renderHashline, applyHashlineBlock, parseHashlineEdit } from './hashline.mjs';
+import { contentToken, asStored } from './content-token.mjs';
 import { createRunRecorder } from '../history/run-record.mjs';
 
 const READ_MAX_LINES = 2000;
@@ -164,18 +165,6 @@ export function codingToolset(mode = 'code', { subagents = false, supervisor = f
   if (completion) all.push(taskDoneTool());
   const allow = MODE_TOOLS[mode];
   return allow ? all.filter((t) => allow.has(t.function.name)) : all;
-}
-
-// ── the version token (pure) ────────────────────────────────────────────
-// A short digest of a file's content — FNV-1a over the code units plus the length — that the
-// read-before-edit ledger stores as "the version the model last saw". Two contents with the
-// same token are the same content for every purpose an edit has; a differing token is the
-// stale refusal. Not a security hash: nothing here defends against an adversary forging one.
-export function contentToken(text) {
-  const s = String(text == null ? '' : text);
-  let h = 0x811c9dc5;
-  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
-  return s.length.toString(36) + ':' + (h >>> 0).toString(36);
 }
 
 // ── the edit replacer chain (pure) — 9 strategies ───────────────────────
@@ -515,10 +504,6 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
   // file anyway, so the check costs nothing and cannot be forgotten.
   const readLedger = new Map(); // resolved path -> contentToken of the content last seen
   const noteSeen = (p, content) => { if (p) readLedger.set(p, contentToken(content)); };
-  // What a write leaves behind is what a read will hand back: UTF-8 on disk, decoded — a leading
-  // BOM or a lone surrogate does not survive the round trip, and recording the string as handed
-  // in made the very next edit a false "stale" (checker, 2026-09-12).
-  const asStored = (s) => new TextDecoder('utf-8').decode(new TextEncoder().encode(String(s ?? '')));
   // F8's check, shared by every editor: the version the model last saw must be the version on
   // disk now. Null when current; the refusal text otherwise. `Refused:` — the closed failure-kind
   // set reads this as `rejected` (understood and refused), not an execution error.

@@ -1,9 +1,10 @@
 // Conformance — structured project memory (pure).
 //   node sys/ai/test/memory-store.test.mjs
-import { parseFact, buildMemoryIndex, noteToFact, recallTool, MEMORY_DIR, MEMORY_TYPES,
+import { createFactSession, parseFact, buildMemoryIndex, noteToFact, recallTool, MEMORY_DIR, MEMORY_TYPES,
          findDuplicate, duplicateReply, slotHolder, createRememberBudget, budgetSpentReply, MAX_REMEMBER_PER_RUN, NEAR_DUPLICATE_JACCARD,
          checkRulesCap, rulesCapReply, RULES_CAP_CHARS, LESSON_CONTRACT, serializeFact }
   from '../memory-store.mjs';
+import { asStored } from '../content-token.mjs';
 
 let passed = 0; const failures = [];
 async function test(n, fn){ try { await fn(); passed++; } catch (e){ failures.push({ n, message: e.message }); } }
@@ -319,6 +320,32 @@ await test('slotHolder prefers the recorded time over array order, and degrades 
   const same = '2026-05-05T00:00:00Z';
   eq(slotHolder([F('first', same), F('second', same)], 'phase'), 'second', 'a tie keeps the last-in-array winner');
   eq(slotHolder([F('second', same), F('first', same)], 'phase'), 'first', 'and the tie really is decided by order');
+});
+
+// ── B6: the per-run fact session ──────────────────────────────────────────
+await test('fact session: revise needs a recall this run, at the version that was shown', () => {
+  const s = createFactSession();
+  const v1 = '---\nname: a\nstatus: hypothesis\n---\nbody\n';
+  assert(/^Refused: "a" has not been recalled this run/.test(s.staleReply('a', v1)), 'never recalled → refused, naming the fact');
+  s.noteRecalled('a', v1);
+  eq(s.staleReply('a', v1), null, 'the same bytes are current');
+  const v2 = v1.replace('hypothesis', 'verified');
+  const stale = s.staleReply('a', v2);
+  assert(/^Refused: "a" is stale — it changed since you recalled it \(version \S+ → \S+; /.test(stale), 'a changed fact is stale, both versions named: ' + stale);
+  s.noteRecalled('a', v2);
+  eq(s.staleReply('a', v2), null, 'recalling the new version makes it current');
+  eq(s.staleReply('b', v1).startsWith('Refused: "b" has not been recalled'), true, 'per fact, not per session');
+  const bom = '\uFEFF' + v2;
+  s.noteRecalled('a', asStored(bom));
+  eq(s.staleReply('a', asStored(bom)), null, 'a BOM the store keeps is tokened as stored');
+  s.noteRecalled('a', asStored('bad \uD800 surrogate'));
+  eq(s.staleReply('a', 'bad \uFFFD surrogate'), null, 'a lone surrogate is tokened as the round trip leaves it (agent-tools ledger parity)');
+});
+await test('fact session: the refusals classify as rejected — the closed failure-kind set', async () => {
+  const { classifyToolResult } = await import('../tool-result-kind.mjs');
+  const s = createFactSession();
+  eq(classifyToolResult('revise', s.unrecalledReply('a')), 'rejected');
+  s.noteRecalled('a', 'x'); eq(classifyToolResult('revise', s.staleReply('a', 'y')), 'rejected');
 });
 
 if (failures.length){

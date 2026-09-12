@@ -267,6 +267,72 @@ async function skillHandler(files, skillStatus = {}) {
   });
   return { handle, reads, skillStatus };
 }
+// B6: the REAL recall and revise branches, with a real fact session and a memFs, so a fact that
+// changes under the model between recall and revise is refused — by the app's code, not a stand-in.
+async function memoryHandlers(files) {
+  const { MEMORY_DIR, parseFact, applyRevision, applyDemotion, dependantsOf, createFactSession } = await import('../sys/ai/memory-store.mjs');
+  const { asStored } = await import('../sys/ai/content-token.mjs');
+  const recallRegion = extractRegion(src, "if(nm==='recall'){", '// Project memory: record ONE durable learning');
+  const reviseRegion = extractRegion(src, "if(nm==='revise'){", '// synthesize (AVO crib)');
+  // the TOOL branch, not the priming executor's own remember (which comes first in the file)
+  const rememberRegion = extractRegion(src, '// Project memory: record ONE durable learning as a fact file under', '// skill_manage (C1): the agent writes its own skills');
+  const body = `async function handle(nm, ar){ ${recallRegion}\n ${reviseRegion}\n ${rememberRegion}\n return '(fell through)'; }\n;handle`;
+  const fs = memFs(Object.fromEntries(Object.entries(files).map(([p, c]) => [MEMORY_DIR + '/' + p, c])));
+  const factSession = createFactSession();
+  const handle = evaluate(body, {
+    MEMORY_DIR, parseFact, applyRevision, applyDemotion, dependantsOf, asStored, fs, factSession,
+    factMap: {}, safeSeg: (s) => /^[a-z0-9][a-z0-9_.-]*$/i.test(String(s)),
+    currentBudget: async () => ({ usable: false }), renderFiles: () => {},
+    // the remember branch's collaborators: a real-shaped recordFact over the memFs, no duplicates, an open budget
+    findDuplicate: () => null, duplicateReply: () => 'dup', auditRefusal: () => {}, checkRulesCap: () => ({ ok: true }), rulesCapReply: () => 'cap',
+    slotHolder: () => null, noteToFact: (note, type, status) => ({ slug: 'new-fact' }), remBudget: { take: () => ({ ok: true }) }, budgetSpentReply: () => 'spent',
+    recordFact: async (note, type, status) => { const slug = 'new-fact'; await fs.write(MEMORY_DIR + '/' + slug + '.md', `---\nname: ${slug}\ndescription: d\ntype: project\nstatus: ${status}\n---\n${note}\n`); return slug; },
+    renderLog: () => {}, t: { log: [] },
+    listFacts: async () => Object.entries(fs.store).filter(([p]) => p.startsWith(MEMORY_DIR + '/')).map(([p, c]) => ({ ...parseFact(c), path: p })),
+  });
+  return { handle, fs, factSession, parseFact };
+}
+const FACT = (status, body = 'index.js is a shim.') => `---\nname: shim\ndescription: a shim\ntype: project\nstatus: ${status}\n---\n${body}\n`;
+
+await test('B6: revise is refused before a recall, applied after one, and refused again when the fact changed under the model', async () => {
+  const { handle, fs, parseFact } = await memoryHandlers({ 'shim.md': FACT('hypothesis') });
+  const unread = await handle('revise', { name: 'shim', status: 'verified', reason: 'checked' });
+  assert.match(unread, /^Refused: "shim" has not been recalled this run/, `unread: ${unread}`);
+  assert.equal(parseFact((await fs.read('.anvil/memory/shim.md', { encoding: 'utf-8' })).data).status, 'hypothesis', 'not applied');
+  const shown = await handle('recall', { name: 'shim' });
+  assert.match(shown, /^Fact: shim/, `recalled: ${shown.slice(0, 60)}`);
+  const ok = await handle('revise', { name: 'shim', status: 'verified', reason: 'checked' });
+  assert.match(ok, /^Revised "shim" → verified/, `applied after recall: ${ok}`);
+  assert.equal(parseFact((await fs.read('.anvil/memory/shim.md', { encoding: 'utf-8' })).data).status, 'verified');
+  // a second revise right after: the revision itself is a known version
+  const again = await handle('revise', { name: 'shim', status: 'retracted', reason: 'wrong after all' });
+  assert.match(again, /^Revised "shim" → retracted/, `the revised version is known: ${again}`);
+  // the owner (or a demotion) edits the fact behind the model's back → stale
+  await fs.write('.anvil/memory/shim.md', FACT('hypothesis', 'index.js is a shim, rewritten by the owner.'));
+  const stale = await handle('revise', { name: 'shim', status: 'verified' });
+  assert.match(stale, /^Refused: "shim" is stale — it changed since you recalled it/, `stale: ${stale}`);
+  assert.equal(parseFact((await fs.read('.anvil/memory/shim.md', { encoding: 'utf-8' })).data).status, 'hypothesis', 'the stale revise did not land');
+  await handle('recall', { name: 'shim' });
+  assert.match(await handle('revise', { name: 'shim', status: 'verified' }), /^Revised "shim" → verified/, 'recall again, then it applies');
+  // a fact the model just wrote is a known version: revise without a recall applies
+  const rec = await handle('remember', { note: 'The build is node build.mjs.', type: 'project' });
+  assert.match(rec, /^Recorded fact "new-fact"/, `remembered: ${rec}`);
+  const fresh = await handle('revise', { name: 'new-fact', status: 'verified', reason: 'ran it' });
+  assert.match(fresh, /^Revised "new-fact" → verified/, `a just-written fact revises without a recall: ${fresh}`);
+  // a recall REFUSED for an offset past the end showed the model nothing — it does not prime the session
+  await fs.write('.anvil/memory/shim.md', FACT('hypothesis', 'rewritten once more'));
+  const past = await handle('recall', { name: 'shim', offset: 9999 });
+  assert.match(past, /^recall: offset 9999 is past the end/, `refused recall: ${past}`);
+  const unseen = await handle('revise', { name: 'shim', status: 'verified' });
+  assert.match(unseen, /^Refused: "shim" is stale/, `a refused recall primes nothing: ${unseen}`);
+  // the version noted after a revise is the STORED one: a reason with a lone surrogate does not
+  // survive the UTF-8 round trip, and the next revise must still see a current fact
+  await handle('recall', { name: 'shim' });
+  assert.match(await handle('revise', { name: 'shim', status: 'verified', reason: 'bad \uD800 surrogate' }), /^Revised "shim" → verified/);
+  const next = await handle('revise', { name: 'shim', status: 'retracted', reason: 'after all' });
+  assert.match(next, /^Revised "shim" → retracted/, `tokened as stored, not as handed in: ${next}`);
+});
+
 const SK = (status, body = 'Run the script.') => `---\nname: k\ndescription: d\nstatus: ${status}\n---\n${body}`;
 
 await test('skill handler: an active skill with a hostile support file is quarantined at load, not served', async () => {
