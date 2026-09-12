@@ -35,10 +35,11 @@ function makeFakePyodide() {
   };
   const py = {
     FS,
-    setStdout(o) { stdout = o && o.batched; },
-    setStderr(o) { stderr = o && o.batched; },
+    // bytes in, as Pyodide's `write` hands them; the runtime must not use `batched` (it strips newlines)
+    setStdout(o) { if (o && o.batched) throw new Error('batched capture strips newlines — use write'); stdout = o && o.write; },
+    setStderr(o) { if (o && o.batched) throw new Error('batched capture strips newlines — use write'); stderr = o && o.write; },
     runPython() { /* os.chdir / sys.path — no-op in the fake */ },
-    async runPythonAsync(code) { if (py._onRun) await py._onRun({ FS, out: (s) => stdout && stdout(s), err: (s) => stderr && stderr(s), code }); },
+    async runPythonAsync(code) { const enc = new TextEncoder(); if (py._onRun) await py._onRun({ FS, out: (s) => stdout && stdout(enc.encode(s)), err: (s) => stderr && stderr(enc.encode(s)), code }); },
     _files: files, _onRun: null,
   };
   return py;
@@ -69,6 +70,20 @@ async function run() {
     const r = await kiln.exec('shell', 'print("hello"); print("world")');
     ok('stdout captured', r.stdout === 'hello\nworld\n');
     ok('no stderr on success', r.stderr === '');
+  }
+
+  // ── 2b. the two streams come back in the order they were written ──
+  // `print("before")` then unittest's stderr came back as "before-----…" with `batched`: newline
+  // gone, and stderr appended after ALL of stdout. `output` is what a terminal showed.
+  {
+    const fs = createFileops({ backend: new MemoryBackend() });
+    const fake = makeFakePyodide();
+    const kiln = createMainThreadKiln({ fs, mount: 'work', loadPyodide: async () => fake });
+    fake._onRun = ({ out, err }) => { out('before\n'); err('Ran 0 tests\n'); out('after\n'); err('é: multi'); err('byte\n'); };
+    const r = await kiln.exec('shell', 'x');
+    ok('output keeps the write order', r.output === 'before\nRan 0 tests\nafter\né: multibyte\n');
+    ok('stdout alone is still stdout', r.stdout === 'before\nafter\n');
+    ok('stderr alone is still stderr', r.stderr === 'Ran 0 tests\né: multibyte\n');
   }
 
   // ── 3. syncOut: a NEW file Python writes is synced back to the workspace ──

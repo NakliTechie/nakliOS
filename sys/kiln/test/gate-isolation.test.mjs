@@ -31,7 +31,7 @@ function makeFakePyodide() {
     setStdout() {}, setStderr() {},
     runPython(code) {
       seen.sync.push(String(code));
-      if (String(code).trim() === 'dict()') return { destroy() { seen.globalsPassed.push('destroyed'); } };
+      if (/^dict\(__name__="__main__"\)$/.test(String(code).trim())) return { destroy() { seen.globalsPassed.push('destroyed'); } };
       return undefined;
     },
     async runPythonAsync(code, opts) { seen.async.push(String(code)); seen.globalsPassed.push(opts && opts.globals ? 'fresh' : 'shared'); },
@@ -63,6 +63,9 @@ const mkKiln = (py) => createMainThreadKiln({
   ok('isolate scopes the purge to the workspace root', pre.includes('"/work"') || pre.includes("'/work'"));
   ok('isolate leaves stdlib alone (purge is guarded on __file__)', pre.includes("getattr(m, '__file__', None)"));
   ok('isolate runs the gate in a FRESH globals namespace', py._seen.globalsPassed.includes('fresh'));
+  // and that namespace is a script's: __name__ is "__main__", so a unittest gate's main guard fires
+  // (a bare dict() ran the gate as "builtins" — zero tests, exit 0, a green that proved nothing)
+  ok('the fresh namespace names itself __main__', py._seen.sync.some((c) => /dict\(__name__="__main__"\)/.test(c)));
 }
 
 // ── 3. the snapshot is taken before any agent code can run ──────────────────
@@ -99,10 +102,20 @@ const mkKiln = (py) => createMainThreadKiln({
   ok("the verifier's shell DOES isolate", calls.length === 2 && calls[1].isolate === true);
 }
 
+// ── 4b. sys.argv is the script's, as CPython sets it ──────────────────────
+{
+  const py = makeFakePyodide();
+  await mkKiln(py).exec('shell', 'print(1)', { isolate: true, argv: ['t.py', 'a', 'b'] });
+  ok('argv lands in sys.argv before the script runs', py._seen.sync.some((c) => /sys\.argv = \["t\.py","a","b"\]/.test(c)));
+  const py2 = makeFakePyodide();
+  await mkKiln(py2).exec('shell', 'print(1)', { isolate: true });
+  ok('no argv given → sys.argv untouched', !py2._seen.sync.some((c) => /sys\.argv/.test(c)));
+}
+
 // ── 5. a runtime without the globals option still runs the gate ─────────────
 {
   const py = makeFakePyodide();
-  py.runPython = (code) => { if (String(code).trim() === 'dict()') throw new Error('unsupported'); return undefined; };
+  py.runPython = (code) => { if (/^dict\(__name__="__main__"\)$/.test(String(code).trim())) throw new Error('unsupported'); return undefined; };
   let ran = false;
   py.runPythonAsync = async () => { ran = true; };
   const r = await mkKiln(py).exec('gate', 'print(1)', { isolate: true });

@@ -1002,10 +1002,13 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
       // Defect 7 (live 2026-09-11): `cd sub && python x.py` read x.py relative to the shell's cwd
       // but RAN with cwd = the mount root, so a relative open inside the script missed. The kernel
       // now runs where the shell is.
-      const r = await kiln.exec('shell', code, { isolate: kilnIsolate, cwd: state.cwd });
+      // sys.argv as CPython sets it: the script and its arguments, or -c and what follows.
+      const argv = ci >= 0 ? ['-c', ...args.slice(ci + 2)] : (args[0] && !args[0].startsWith('-') ? args : ['']);
+      const r = await kiln.exec('shell', code, { isolate: kilnIsolate, cwd: state.cwd, argv });
       if (r.status === 'unavailable') return { text: 'python: ' + (r.message || 'kernel unavailable'), code: 1 };
-      // A `sys.exit(n)` rides through as n; anything else that is not ok is 1.
-      return { text: (r.stdout || '') + (r.stderr || ''), code: r.status === 'ok' ? 0 : (Number.isInteger(r.code) && r.code > 0 ? r.code : 1) };
+      // A `sys.exit(n)` rides through as n; anything else that is not ok is 1. `output` is the
+      // two streams in write order; a runtime without it hands back stdout then stderr.
+      return { text: r.output != null ? r.output : (r.stdout || '') + (r.stderr || ''), code: r.status === 'ok' ? 0 : (Number.isInteger(r.code) && r.code > 0 ? r.code : 1) };
     }
     if (verb === 'find') {
       // -name / -type / -maxdepth were SILENTLY IGNORED, so `find . -name "*.txt"` returned every
