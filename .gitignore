@@ -25,6 +25,8 @@ plan/
 !redirects/**
 !test/
 !test/**
+!verify/
+!verify/**
 !.github/
 !.github/**
 !vendor/

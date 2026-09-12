@@ -108,6 +108,12 @@ jobs:
       - name: Verify the run assembly — prompt bytes, tool list, budgets and re-loops equal the app (N1)
         run: node scripts/test-run-assembly.mjs
 
+      - name: Verify every Anvil surface has a recipe owner and none changed unreviewed (B1 — the map is a gate)
+        run: node scripts/verify-inventory.mjs
+
+      - name: Verify the inventory check's own teeth — an added, changed or vanished surface goes red (B1)
+        run: node scripts/test-verify-inventory.mjs
+
       - name: Verify the procedural bed runs the app's assembly end to end (stub model, zero spend)
         run: node scripts/test-bench-procedural.mjs
 
