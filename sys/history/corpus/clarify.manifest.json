@@ -1,0 +1,14 @@
+{
+  "cell": "clarify",
+  "kind": "recorded",
+  "description": "The loop pauses on the model's one clarify question — stop:\"clarify\" on the first response; the owner's next message is the answer.",
+  "recordedAt": "2026-09-12",
+  "model": "deepseek-flash",
+  "expect": "clarify",
+  "loops": 1,
+  "events": 6,
+  "tools": [
+    "shell",
+    "clarify"
+  ]
+}

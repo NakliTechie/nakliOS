@@ -1,0 +1,467 @@
+{
+  "version": 1,
+  "surfaces": {
+    "button:.es-chip": {
+      "owner": "header.md",
+      "fingerprint": "f7f3d0567097",
+      "kind": "button",
+      "detail": "'+esc(x)+'"
+    },
+    "button:.mb-stop": {
+      "owner": "header.md",
+      "fingerprint": "44934b7d1583",
+      "kind": "button",
+      "detail": "◼ Stop"
+    },
+    "button:.mb-title": {
+      "owner": "header.md",
+      "fingerprint": "6283a0e16ccf",
+      "kind": "button",
+      "detail": "Switch task"
+    },
+    "button:.mb-verify": {
+      "owner": "header.md",
+      "fingerprint": "e2fc2cb5dd04",
+      "kind": "button",
+      "detail": "Set verify command"
+    },
+    "button:adv-btn": {
+      "owner": "header.md",
+      "fingerprint": "442aa5ce27d5",
+      "kind": "button",
+      "detail": "Advanced / experimental features"
+    },
+    "button:campaign-btn": {
+      "owner": "header.md",
+      "fingerprint": "96e62006b506",
+      "kind": "button",
+      "detail": "Experimental — an independently-checked build: one agent writes the test/standard first, another writes the code without seeing it, a third referees. Guards against the agent grading its own work."
+    },
+    "button:drawer-btn": {
+      "owner": "header.md",
+      "fingerprint": "6293d18077f6",
+      "kind": "button",
+      "detail": "Projects & files"
+    },
+    "button:files-scope": {
+      "owner": "header.md",
+      "fingerprint": "0982ff699685",
+      "kind": "button",
+      "detail": "Scope: this project only vs. the whole store"
+    },
+    "button:gate-btn": {
+      "owner": "header.md",
+      "fingerprint": "5c5002e262d2",
+      "kind": "button",
+      "detail": "Set a verify command — the agent isn't 'done' until it exits 0"
+    },
+    "button:home-chip": {
+      "owner": "header.md",
+      "fingerprint": "bbf70f7a039d",
+      "kind": "button",
+      "detail": "Anvil home — a folder on your disk where run records are kept durably"
+    },
+    "button:hooks-chip": {
+      "owner": "header.md",
+      "fingerprint": "768707087ac0",
+      "kind": "button",
+      "detail": "Project hooks — .anvil/hooks.json pre/post-tool commands (format, lint, guards). Dimmed until this project has hooks."
+    },
+    "button:learn-btn": {
+      "owner": "header.md",
+      "fingerprint": "573401f0cf1b",
+      "kind": "button",
+      "detail": "Learn this project — a read-only pass surveys the repo and records durable facts into project memory, so future tasks (and weaker models) start informed"
+    },
+    "button:mem-chip": {
+      "owner": "header.md",
+      "fingerprint": "1b642b1cf0a5",
+      "kind": "button",
+      "detail": "Project memory — the facts the agent records and recalls. Dimmed until this project has memory."
+    },
+    "button:mode-btn": {
+      "owner": "header.md",
+      "fingerprint": "ec1380a0e46e",
+      "kind": "button",
+      "detail": "Switch mode — code (edits files) · plan (read-only, proposes a plan) · ask (answers only)"
+    },
+    "button:more-btn": {
+      "owner": "header.md",
+      "fingerprint": "1debe24de689",
+      "kind": "button",
+      "detail": "More"
+    },
+    "button:new-project": {
+      "owner": "header.md",
+      "fingerprint": "628720e05f54",
+      "kind": "button",
+      "detail": "New project"
+    },
+    "button:new-task": {
+      "owner": "header.md",
+      "fingerprint": "217392ec751a",
+      "kind": "button",
+      "detail": "＋ New task"
+    },
+    "button:open-folder": {
+      "owner": "header.md",
+      "fingerprint": "34b7debf44c5",
+      "kind": "button",
+      "detail": "Point the agent at a real folder"
+    },
+    "button:pv-close": {
+      "owner": "header.md",
+      "fingerprint": "1b0703aac5cc",
+      "kind": "button",
+      "detail": "Close"
+    },
+    "button:pv-revert": {
+      "owner": "header.md",
+      "fingerprint": "1ce386ddaf85",
+      "kind": "button",
+      "detail": "Undo this change"
+    },
+    "button:refresh-files": {
+      "owner": "header.md",
+      "fingerprint": "30b415c8814c",
+      "kind": "button",
+      "detail": "Refresh"
+    },
+    "button:send": {
+      "owner": "header.md",
+      "fingerprint": "3b6d995bfe19",
+      "kind": "button",
+      "detail": "Send"
+    },
+    "button:skills-chip": {
+      "owner": "header.md",
+      "fingerprint": "49b3dc5db6a3",
+      "kind": "button",
+      "detail": "Project skills — .anvil/skills/<name>/SKILL.md the agent loads on demand. Dimmed until this project has skills."
+    },
+    "button:stop": {
+      "owner": "header.md",
+      "fingerprint": "44934b7d1583",
+      "kind": "button",
+      "detail": "◼ Stop"
+    },
+    "button:tab-chat": {
+      "owner": "header.md",
+      "fingerprint": "8e6328bf64e3",
+      "kind": "button",
+      "detail": "❯Chat"
+    },
+    "button:tab-files": {
+      "owner": "header.md",
+      "fingerprint": "100833de8530",
+      "kind": "button",
+      "detail": "▸Files"
+    },
+    "button:tab-preview": {
+      "owner": "header.md",
+      "fingerprint": "f605a2a85de8",
+      "kind": "button",
+      "detail": "◫Preview"
+    },
+    "button:toggle-preview": {
+      "owner": "header.md",
+      "fingerprint": "47786e966add",
+      "kind": "button",
+      "detail": "Toggle preview"
+    },
+    "button:ws": {
+      "owner": "header.md",
+      "fingerprint": "b17e07d653d2",
+      "kind": "button",
+      "detail": "Where this workspace is stored — click for what Browser / Folder / Crate mean"
+    },
+    "file:.anvil/gate": {
+      "owner": "workspace-files.md",
+      "fingerprint": "f9dfa0598ee8",
+      "kind": "file",
+      "detail": ".anvil/gate"
+    },
+    "file:.anvil/hooks.json": {
+      "owner": "workspace-files.md",
+      "fingerprint": "866415830d48",
+      "kind": "file",
+      "detail": ".anvil/hooks.json"
+    },
+    "file:.anvil/memory": {
+      "owner": "workspace-files.md",
+      "fingerprint": "6b04e15cd473",
+      "kind": "file",
+      "detail": ".anvil/memory"
+    },
+    "file:.anvil/procedural.json": {
+      "owner": "workspace-files.md",
+      "fingerprint": "766a1ba67fb3",
+      "kind": "file",
+      "detail": ".anvil/procedural.json"
+    },
+    "file:.anvil/search-index.json": {
+      "owner": "workspace-files.md",
+      "fingerprint": "0bd9fa660aa7",
+      "kind": "file",
+      "detail": ".anvil/search-index.json"
+    },
+    "file:.anvil/skills": {
+      "owner": "workspace-files.md",
+      "fingerprint": "0d86baa8dda5",
+      "kind": "file",
+      "detail": ".anvil/skills"
+    },
+    "hook:armGate": {
+      "owner": "test-door.md",
+      "fingerprint": "6ba46ce54ade",
+      "kind": "hook",
+      "detail": "__anvil.test.armGate"
+    },
+    "hook:demoCampaign": {
+      "owner": "test-door.md",
+      "fingerprint": "6ba1c24507a2",
+      "kind": "hook",
+      "detail": "__anvil.test.demoCampaign"
+    },
+    "hook:fs": {
+      "owner": "test-door.md",
+      "fingerprint": "6939f08996a5",
+      "kind": "hook",
+      "detail": "__anvil.test.fs"
+    },
+    "hook:gitClone": {
+      "owner": "test-door.md",
+      "fingerprint": "afcb1d776bf8",
+      "kind": "hook",
+      "detail": "__anvil.test.gitClone"
+    },
+    "hook:gitLsRemote": {
+      "owner": "test-door.md",
+      "fingerprint": "293a476eb830",
+      "kind": "hook",
+      "detail": "__anvil.test.gitLsRemote"
+    },
+    "hook:gitPushTest": {
+      "owner": "test-door.md",
+      "fingerprint": "3ef532cf458e",
+      "kind": "hook",
+      "detail": "__anvil.test.gitPushTest"
+    },
+    "hook:infer": {
+      "owner": "test-door.md",
+      "fingerprint": "84ef579d8b72",
+      "kind": "hook",
+      "detail": "__anvil.test.infer"
+    },
+    "hook:liveCampaign": {
+      "owner": "test-door.md",
+      "fingerprint": "55b95b986ff1",
+      "kind": "hook",
+      "detail": "__anvil.test.liveCampaign"
+    },
+    "hook:score": {
+      "owner": "test-door.md",
+      "fingerprint": "d710285648df",
+      "kind": "hook",
+      "detail": "__anvil.test.score"
+    },
+    "hook:setGate": {
+      "owner": "test-door.md",
+      "fingerprint": "52e5cf148155",
+      "kind": "hook",
+      "detail": "__anvil.test.setGate"
+    },
+    "hook:synthesize": {
+      "owner": "test-door.md",
+      "fingerprint": "72ff6dad9df0",
+      "kind": "hook",
+      "detail": "__anvil.test.synthesize"
+    },
+    "hook:taskState": {
+      "owner": "test-door.md",
+      "fingerprint": "e68ef7b04339",
+      "kind": "hook",
+      "detail": "__anvil.test.taskState"
+    },
+    "sheet:campaign": {
+      "owner": "sheet.md",
+      "fingerprint": "765d2d0920d4",
+      "kind": "sheet",
+      "detail": "⚑Proof buildbeta"
+    },
+    "sheet:home": {
+      "owner": "sheet.md",
+      "fingerprint": "58b8b80ed344",
+      "kind": "sheet",
+      "detail": "🗄Anvil home folder"
+    },
+    "sheet:hooks": {
+      "owner": "sheet.md",
+      "fingerprint": "9948c1b89296",
+      "kind": "sheet",
+      "detail": "⚓Hooks"
+    },
+    "sheet:learn": {
+      "owner": "sheet.md",
+      "fingerprint": "ed2f6b434542",
+      "kind": "sheet",
+      "detail": "🎓Learn from this project"
+    },
+    "sheet:memory": {
+      "owner": "sheet.md",
+      "fingerprint": "fc3dd31c8bfd",
+      "kind": "sheet",
+      "detail": "🧠Project memory"
+    },
+    "sheet:open-folder": {
+      "owner": "sheet.md",
+      "fingerprint": "7855f97ea5b4",
+      "kind": "sheet",
+      "detail": "📁Open folder…"
+    },
+    "sheet:policy": {
+      "owner": "sheet.md",
+      "fingerprint": "6bfc753eeedf",
+      "kind": "sheet",
+      "detail": "🛡Policy"
+    },
+    "sheet:skills": {
+      "owner": "sheet.md",
+      "fingerprint": "fa2ba5da3e92",
+      "kind": "sheet",
+      "detail": "✨Skills"
+    },
+    "sheet:storage": {
+      "owner": "sheet.md",
+      "fingerprint": "ff57cc55322d",
+      "kind": "sheet",
+      "detail": "🗄Storage"
+    },
+    "tool:apply_patch": {
+      "owner": "tools-files.md",
+      "fingerprint": "781a52d1a9a4",
+      "kind": "tool",
+      "detail": "code code+gate"
+    },
+    "tool:checkpoint": {
+      "owner": "tools-store.md",
+      "fingerprint": "b63f4aaa1bea",
+      "kind": "tool",
+      "detail": "code code+gate"
+    },
+    "tool:clarify": {
+      "owner": "tools-loop.md",
+      "fingerprint": "097c93480507",
+      "kind": "tool",
+      "detail": "code code+gate plan plan+gate"
+    },
+    "tool:context_remaining": {
+      "owner": "tools-store.md",
+      "fingerprint": "5adfa3e92d75",
+      "kind": "tool",
+      "detail": "code code+gate plan plan+gate ask ask+gate"
+    },
+    "tool:dispatch": {
+      "owner": "tools-loop.md",
+      "fingerprint": "1962efb6f672",
+      "kind": "tool",
+      "detail": "code code+gate"
+    },
+    "tool:edit": {
+      "owner": "tools-files.md",
+      "fingerprint": "3d59154aa118",
+      "kind": "tool",
+      "detail": "code code+gate"
+    },
+    "tool:history": {
+      "owner": "tools-store.md",
+      "fingerprint": "611dec80caab",
+      "kind": "tool",
+      "detail": "code code+gate plan plan+gate ask ask+gate"
+    },
+    "tool:learn_this_run": {
+      "owner": "tools-store.md",
+      "fingerprint": "caa4b05f5370",
+      "kind": "tool",
+      "detail": "code code+gate"
+    },
+    "tool:read": {
+      "owner": "tools-files.md",
+      "fingerprint": "00124ec05db2",
+      "kind": "tool",
+      "detail": "code code+gate plan plan+gate ask ask+gate"
+    },
+    "tool:recall": {
+      "owner": "tools-store.md",
+      "fingerprint": "58b7abf9e5fd",
+      "kind": "tool",
+      "detail": "code code+gate plan plan+gate ask ask+gate"
+    },
+    "tool:remember": {
+      "owner": "tools-store.md",
+      "fingerprint": "4fe8e235ce66",
+      "kind": "tool",
+      "detail": "code code+gate"
+    },
+    "tool:review": {
+      "owner": "tools-loop.md",
+      "fingerprint": "ece63564af6c",
+      "kind": "tool",
+      "detail": "code code+gate"
+    },
+    "tool:revise": {
+      "owner": "tools-store.md",
+      "fingerprint": "0e3f811c796c",
+      "kind": "tool",
+      "detail": "code code+gate"
+    },
+    "tool:shell": {
+      "owner": "tools-files.md",
+      "fingerprint": "199108da2440",
+      "kind": "tool",
+      "detail": "code code+gate"
+    },
+    "tool:skill": {
+      "owner": "tools-store.md",
+      "fingerprint": "14f55e131261",
+      "kind": "tool",
+      "detail": "code code+gate plan plan+gate ask ask+gate"
+    },
+    "tool:skill_manage": {
+      "owner": "tools-store.md",
+      "fingerprint": "a6ec20a445f2",
+      "kind": "tool",
+      "detail": "code code+gate"
+    },
+    "tool:synthesize": {
+      "owner": "tools-store.md",
+      "fingerprint": "97ae2c70cad1",
+      "kind": "tool",
+      "detail": "code code+gate"
+    },
+    "tool:task": {
+      "owner": "tools-loop.md",
+      "fingerprint": "9929aa595f80",
+      "kind": "tool",
+      "detail": "code code+gate"
+    },
+    "tool:task_done": {
+      "owner": "tools-loop.md",
+      "fingerprint": "3c641fd38c88",
+      "kind": "tool",
+      "detail": "code+gate"
+    },
+    "tool:todowrite": {
+      "owner": "tools-files.md",
+      "fingerprint": "1f81778c77d4",
+      "kind": "tool",
+      "detail": "code code+gate plan plan+gate"
+    },
+    "tool:write": {
+      "owner": "tools-files.md",
+      "fingerprint": "181b2c57da19",
+      "kind": "tool",
+      "detail": "code code+gate"
+    }
+  }
+}

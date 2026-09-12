@@ -1,0 +1,13 @@
+{
+  "cell": "failed-command",
+  "kind": "recorded",
+  "description": "A command that exits non-zero: its error text is fed back as the tool result (not_found), and the run continues to a one-line report.",
+  "recordedAt": "2026-09-12",
+  "model": "deepseek-flash",
+  "expect": "done",
+  "loops": 1,
+  "events": 11,
+  "tools": [
+    "shell"
+  ]
+}

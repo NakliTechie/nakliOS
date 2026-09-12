@@ -1,0 +1,20 @@
+{
+  "cell": "tool-error",
+  "kind": "override",
+  "description": "The executor itself throws on a tool call (a broken executor, not a failing command): the loop records tool.failed (kind execution_error), hands the model `Error: …` as the result, and the run goes on to its stop.",
+  "record": "failed-command.json",
+  "override": {
+    "throwOnTool": {
+      "atCall": 0,
+      "message": "executor threw: EPIPE on the shell bridge"
+    },
+    "reply": {
+      "atCall": 1,
+      "content": "The shell tool threw (EPIPE on the bridge); I cannot run the command. Stopping."
+    }
+  },
+  "expect": "done",
+  "recordedAt": "2026-09-12",
+  "model": "(none — declared over failed-command, recorded 2026-09-12)",
+  "events": 12
+}

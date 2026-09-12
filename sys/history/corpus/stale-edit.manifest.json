@@ -1,0 +1,15 @@
+{
+  "cell": "stale-edit",
+  "kind": "recorded",
+  "description": "F8 in a real run: read → a shell rewrite behind the tools → edit refused as stale (rejected) → re-read → the edit applies.",
+  "recordedAt": "2026-09-12",
+  "model": "deepseek-flash",
+  "expect": "done",
+  "loops": 1,
+  "events": 31,
+  "tools": [
+    "read",
+    "edit",
+    "shell"
+  ]
+}

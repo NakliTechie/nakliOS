@@ -1,0 +1,13 @@
+{
+  "cell": "gate-on-prose",
+  "kind": "recorded",
+  "description": "0.0b — the OTHER route to the gate: no tool calls, the verdict comes back as a [coordination] user turn.",
+  "recordedAt": "2026-09-07",
+  "model": "qwen3:8b (Ollama; the corpus predates the 2026-09-12 no-local-model rule)",
+  "expect": "unverified",
+  "loops": 1,
+  "events": 12,
+  "tools": [
+    "shell"
+  ]
+}

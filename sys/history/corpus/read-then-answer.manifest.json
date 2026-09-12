@@ -1,0 +1,13 @@
+{
+  "cell": "read-then-answer",
+  "kind": "recorded",
+  "description": "Read a file through the shell and answer with its one word.",
+  "recordedAt": "2026-09-07",
+  "model": "qwen3:8b (Ollama; the corpus predates the 2026-09-12 no-local-model rule)",
+  "expect": "done",
+  "loops": 1,
+  "events": 11,
+  "tools": [
+    "shell"
+  ]
+}

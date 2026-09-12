@@ -13,6 +13,13 @@ lowercase `naklios`.
 
 ## Loading the SDK
 
+**Every public member of `sdk/naklios.js` has a line in `docs/sdk-api-audit.md`** (kind, status, and — for
+an `experimental_` member — the criteria that stabilize it); `scripts/test-sdk-audit.mjs` reads both and
+goes red when they disagree. A new member ships as `experimental_<name>` with a ledger line; it is
+stabilized by the audit, one rename across the SDK, the host and every vendored copy, and the row
+flipping to `stable` — never by drift. (Rule from 2026-09-12; the SDK's own banner will carry it at
+its next byte change.)
+
 Bundled system apps use the checked-in SDK:
 
 ```html

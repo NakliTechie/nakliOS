@@ -3,7 +3,8 @@
 //
 //   node sys/ai/test/agent-tools.test.mjs
 
-import { applyEdit, parseApplyPatch, makeToolExecutor, codingToolset, makeShellVerifier, contentToken } from '../agent-tools.mjs';
+import { applyEdit, parseApplyPatch, makeToolExecutor, codingToolset, makeShellVerifier } from '../agent-tools.mjs';
+import { contentToken } from '../content-token.mjs';
 import { createFileops, MemoryBackend } from '../../rig/fileops/index.mjs';
 import { OverlayBackend } from '../../rig/fileops/overlay-backend.mjs';
 import { buildRigRegistry } from '../../rig/registry/index.mjs';

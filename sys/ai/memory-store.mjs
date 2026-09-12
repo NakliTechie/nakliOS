@@ -28,6 +28,7 @@
 import { parseFrontmatter } from './skills.mjs';
 
 import { scanSkill } from './skill-sentinel.mjs';
+import { contentToken } from './content-token.mjs';
 
 export const MEMORY_DIR = '.anvil/memory';
 export const MEMORY_TYPES = ['user', 'feedback', 'project', 'reference', 'rule'];
@@ -517,6 +518,28 @@ export function recallTool(){
 // OpenAI-style tool: belief revision. Promote a corroborated hypothesis to verified,
 // or retract one an observation disproved — the mechanism that keeps memory from
 // re-asserting a wrong note. A retraction says WHY (cause) and what retracted it.
+// ── the per-run fact session (B6, 2026-09-12) ──────────────────────────────
+// `revise` changes a fact's status on evidence — but evidence about WHICH version? F8 gave files a
+// version the model last saw; facts get the same: `recall` (and a `remember` that wrote it) record
+// the content token of what the model was shown, and `revise` re-reads the fact and refuses when
+// it changed since — a demotion, another agent's revise, an owner edit in the reader. Refused, not
+// applied: a revision written over a fact the model has not seen is a status with no evidence.
+// Pure; the app wires it beside the skill session. The reply starts `Refused:` so the closed
+// failure-kind set reads it as `rejected`.
+export function createFactSession(){
+  const seen = new Map(); // fact name -> contentToken of the text last shown to (or written by) the model
+  return {
+    noteRecalled(name, text){ if (name) seen.set(String(name), contentToken(text)); },
+    unrecalledReply(name){ return `Refused: "${name}" has not been recalled this run. Recall it first, then revise — a revision must be about the version you read.`; },
+    // null when the fact on disk is the version the model saw; the refusal otherwise
+    staleReply(name, text){
+      const now = contentToken(text), was = seen.get(String(name));
+      if (was === undefined) return this.unrecalledReply(name);
+      return now === was ? null : `Refused: "${name}" is stale — it changed since you recalled it (version ${was} → ${now}; a demotion, another agent, or the owner). Recall it again, then revise.`;
+    },
+  };
+}
+
 export function reviseTool(){
   return {
     type: 'function',
@@ -529,7 +552,9 @@ export function reviseTool(){
         'retraction the cause: correction (it was wrong), temporal_change (it was true ' +
         'and the world moved), scope_difference (true only under a qualifier), ' +
         'entity_mismatch (it was about something else), write_error (the note was ' +
-        'malformed). Retracting a fact demotes every fact derived from it to hypothesis.',
+        'malformed). Retracting a fact demotes every fact derived from it to hypothesis. ' +
+        'Recall the fact first: a revise is refused when the fact was not recalled this run, or ' +
+        'when it changed since you recalled it — recall it again, then revise.',
       parameters: {
         type: 'object',
         properties: {

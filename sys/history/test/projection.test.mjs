@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 import {
   loadRecord, createProjector, runUnit,
   logUnit, statusUnit, transcriptUnit,
-  foldLog, foldStatus, foldTranscript,
+  foldLog, foldStatus, foldTranscript, isCorpusRecord,
 } from '../run-record.mjs';
 
 const CORPUS = join(dirname(fileURLToPath(import.meta.url)), '..', 'corpus');
@@ -28,7 +28,7 @@ function eq(a, b, m) { if (a !== b) throw new Error(`${m || 'ne'}: ${a} !== ${b}
 const same = (a, b, m) => { const x = JSON.stringify(a), y = JSON.stringify(b); if (x !== y) throw new Error(`${m}\n  incremental: ${x}\n  one-shot   : ${y}`); };
 
 const entries = existsSync(CORPUS)
-  ? readdirSync(CORPUS).filter((f) => f.endsWith('.json') && !f.endsWith('.override.json') && !f.endsWith('.opts.json'))
+  ? readdirSync(CORPUS).filter(isCorpusRecord)
   : [];
 const load = (f) => loadRecord(JSON.parse(readFileSync(join(CORPUS, f), 'utf8')));
 

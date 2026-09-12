@@ -18,7 +18,7 @@
 // breaks, which is exactly why it must not live where foldOutcome lives. It is a probe. It reports
 // what it could not parse rather than assuming it parsed everything.
 import { readFile, readdir, stat } from 'node:fs/promises';
-import { loadRecord, foldOutcome, joined } from '../sys/history/run-record.mjs';
+import { loadRecord, foldOutcome, joined, isCorpusRecord } from '../sys/history/run-record.mjs';
 
 // ── what was IN CONTEXT: the index blocks, as buildSkillsIndex/buildMemoryIndex render them ──
 // Each block renders its entries differently, and getting this wrong is silent: a pattern that
@@ -168,7 +168,7 @@ async function loadDir(dir) {
   let names = [];
   try { names = await readdir(dir); } catch (_) { return out; }
   for (const n of names) {
-    if (!n.endsWith('.json') || n.endsWith('.opts.json')) continue;
+    if (!isCorpusRecord(n)) continue;
     const p = new URL(n, dir.href ? dir : new URL(`file://${dir}/`));
     try {
       if ((await stat(p)).isFile()) out.push(loadRecord(JSON.parse(await readFile(p, 'utf8'))));

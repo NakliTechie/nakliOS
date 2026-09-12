@@ -1,0 +1,15 @@
+{
+  "cell": "auth-failure",
+  "kind": "override",
+  "description": "The endpoint answers 401 before emitting anything (a revoked key): the loop records run.stopped {stop:\"error\"} and returns — nothing propagates.",
+  "record": "write-a-file.json",
+  "override": {
+    "throwBeforeFirstChunk": true,
+    "atCall": 0,
+    "message": "http 401: invalid api key"
+  },
+  "expect": "error",
+  "recordedAt": "2026-09-12",
+  "model": "(none — declared over write-a-file, recorded 2026-09-07)",
+  "events": 4
+}

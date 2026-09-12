@@ -1,0 +1,15 @@
+{
+  "cell": "parallel-reads",
+  "kind": "recorded",
+  "description": "Three reads asked for in ONE turn run through the F9 pool; the record's shape is the serial one — call, responded, per read, in request order.",
+  "recordedAt": "2026-09-12",
+  "model": "deepseek-flash",
+  "expect": "done",
+  "loops": 1,
+  "events": 15,
+  "tools": [
+    "read",
+    "edit",
+    "shell"
+  ]
+}
