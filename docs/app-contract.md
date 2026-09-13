@@ -1,4 +1,10 @@
-# NakliOS app contract
+# NakliOS app contract — the SDK document
+
+This is the ONE document for `sdk/naklios.js` (Chirag, 2026-09-13): the filesystem surface, the AI
+surface and the vendoring instructions live here, and the **Reference** section near the end names
+every public member, rendered from the audit ledger and checked in the gate. `docs/app-loading.md` is
+about mirroring an APP into naklios.dev, not the SDK; `docs/sdk-api-audit.md` is the member ledger
+(status and stabilization criteria), not the manual; the SDK banner points here.
 
 This is the stable integration boundary between NakliOS and a cooperative app.
 Apps remain ordinary browser applications. When hosted in a NakliOS window,
@@ -166,7 +172,7 @@ dark or that `BRAND` has sufficient contrast as body text.
 ```js
 {
   hosted: true,
-  version: 1,
+  version: 2,
   fs: true,
   fsBackends: [
     { id: "fsa", label: "Folder", name: "NakliOS" },
@@ -391,6 +397,168 @@ apps/editor/
 Crash recoveries remain in a Browser-only IndexedDB store, keyed independently
 by storage location and file identity. A recovery is removed only after that
 file saves successfully or the user explicitly discards it.
+
+## Reference — every public member
+
+This is the one SDK document: the sections above are the guide (loading, vendoring, the host, the
+transport, filesystem, AI, subscriptions, handoff, persistence); this section is the reference. It is
+rendered from the member ledger and checked in the gate, so a member cannot exist without a line here.
+
+<!-- sdk-reference:begin — rendered by `node scripts/sdk-reference.mjs --write` from docs/sdk-api-audit.md; do not edit by hand -->
+
+75 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
+
+### `version`
+
+| member | kind | what it is |
+|---|---|---|
+| `version` | field | The SDK's own protocol version constant (2); nothing compares it today — `ready()` sends feature flags, not this. |
+
+### `capabilities` (namespace)
+
+| member | kind | what it is |
+|---|---|---|
+| `capabilities` | namespace | What the host has granted; mutated in place — read fields directly, or subscribe. |
+| `capabilities.hosted` | field | Set at construction: embedded in a frame, or `?naklios` present. Never rewritten by the host's messages. |
+| `capabilities.flagged` | field | `?naklios` was present — a hint, never a transport switch. |
+| `capabilities.version` | field | A constant 2 in the SDK, never set from a host message. |
+| `capabilities.fs` | field | App-scoped filesystem available (Folder or Crate connected). |
+| `capabilities.fsBackends` | field | The backends the host offers, as descriptors `[{ id, label, name }]` — ids `fsa` (a picked folder) and `crate`; the browser's own OPFS is not on this list. |
+| `capabilities.fsBackend` | field | The backend in use. |
+| `capabilities.system` | field | The app is a system app (same-origin, `kind: system`). |
+| `capabilities.sysFs` | field | Whole-store filesystem granted (system apps only). |
+| `capabilities.ai` | field | Shared host inference granted. |
+| `capabilities.aiModel` | field | Configured chat model id, or null. |
+| `capabilities.aiModelLabel` | field | Human label for it. |
+| `capabilities.aiProvider` | field | Provider of the chat model. |
+| `capabilities.aiLocal` | field | The chat model runs on-device. |
+| `capabilities.aiState` | field | `idle` (standalone default) · `loading` · `ready` · `error`, as the host sets it. |
+| `capabilities.aiImages` | field | Image generation granted. |
+| `capabilities.aiImageModel` | field | Configured image model id, or null. |
+| `capabilities.aiImageModelLabel` | field | Human label for it. |
+| `capabilities.aiImageProvider` | field | Provider of the image model. |
+| `capabilities.aiImageLocal` | field | The image model runs on-device. |
+| `capabilities.aiImageState` | field | State of the image runtime. |
+| `capabilities.aiSearchState` | field | State of the local semantic-search rung (`idle` · `loading` · `ready` · `error`). |
+| `capabilities.aiSearch` | field | Semantic (local, embedding) search over the app's own namespace granted — not web search. |
+| `capabilities.net` | field | Sovereign egress (`naklios.net.fetch`) granted. |
+| `capabilities.netBackend` | field | Which egress backend the host is configured with: `worker` (the default) · `bridge`; null when none. Never a package name. |
+
+### `ready`
+
+| member | kind | what it is |
+|---|---|---|
+| `ready` | function | Signal "loaded"; carries the feature flags this SDK build supports. |
+
+### `title`
+
+| member | kind | what it is |
+|---|---|---|
+| `title` | function | Set the host window title. |
+
+### `close`
+
+| member | kind | what it is |
+|---|---|---|
+| `close` | function | Ask the host to close this window. |
+
+### `openSettings`
+
+| member | kind | what it is |
+|---|---|---|
+| `openSettings` | function | Open the host Settings at a section (`ai`, `storage`, …). |
+
+### `beforeClose`
+
+| member | kind | what it is |
+|---|---|---|
+| `beforeClose` | function | Register a callback the host awaits before closing (ack protocol). |
+
+### `theme` (namespace)
+
+| member | kind | what it is |
+|---|---|---|
+| `theme` | namespace | Host theme. |
+| `theme.current` | getter | The last theme the host sent. |
+| `theme.onChange` | function | Subscribe; called at once when a theme has already arrived; returns an unsubscribe. |
+| `theme.request` | function | Ask the host to re-send the theme. |
+
+### `onCapabilitiesChange`
+
+| member | kind | what it is |
+|---|---|---|
+| `onCapabilitiesChange` | function | Subscribe to capability changes; replays the current set at registration. |
+
+### `requestCapabilities`
+
+| member | kind | what it is |
+|---|---|---|
+| `requestCapabilities` | function | Ask the host to re-broadcast capabilities. |
+
+### `fs` (namespace)
+
+| member | kind | what it is |
+|---|---|---|
+| `fs` | namespace | App-scoped filesystem (paths under `apps/<id>/`). |
+| `fs.read` | function | Read text. |
+| `fs.readBinary` | function | Read bytes. |
+| `fs.write` | function | Write text or bytes. |
+| `fs.append` | function | Append. |
+| `fs.list` | function | List entries. |
+| `fs.delete` | function | Delete a path. |
+| `fs.exists` | function | Existence check. |
+| `fs.subscribe` | function | Change subscription over a prefix; async — resolves to a stop function. |
+| `fs.useBackend` | function | Ask the host to switch the app's backend. |
+
+### `sys` (namespace)
+
+| member | kind | what it is |
+|---|---|---|
+| `sys` | namespace | System-app surfaces. |
+| `sys.fs` | namespace | Whole-store filesystem (system apps only). |
+| `sys.fs.read` | function | Read text. |
+| `sys.fs.readBinary` | function | Read bytes. |
+| `sys.fs.write` | function | Write. |
+| `sys.fs.append` | function | Append. |
+| `sys.fs.list` | function | List. |
+| `sys.fs.delete` | function | Delete. |
+| `sys.fs.exists` | function | Existence check. |
+
+### `files` (namespace)
+
+| member | kind | what it is |
+|---|---|---|
+| `files` | namespace | Exact-file handoff (`docs/file-handoff-v1.md`). |
+| `files.openWith` | function | Hand a file to another app. |
+| `files.onOpen` | function | Receive a handed file. |
+| `files.read` | function | Read a handed file. |
+| `files.write` | function | Write it back. |
+| `files.release` | function | Release the handle. |
+
+### `ai` (namespace)
+
+| member | kind | what it is |
+|---|---|---|
+| `ai` | namespace | Shared host inference (OpenAI-shaped). |
+| `ai.chat` | namespace | Chat. |
+| `ai.chat.completions` | namespace | Completions. |
+| `ai.chat.completions.create` | function | One completion; `stream:true` returns an async iterable. |
+| `ai.images` | namespace | Images. |
+| `ai.images.generate` | function | One image generation. |
+| `ai.search` | function | Semantic search over the app's OWN files on the connected backend — a local embedding index, no network. Behind the "Enable semantic search?" consent. |
+| `ai.searchStatus` | function | State of the local semantic-search rung. No app consumer yet (`scripts/test-net-seam.mjs` only). |
+| `ai.cancelAll` | function | Cancel in-flight chat and image calls (searches are not cancelled). No app consumer yet (`scripts/test-net-seam.mjs` only). |
+
+### `net` (namespace)
+
+| member | kind | what it is |
+|---|---|---|
+| `net` | namespace | Sovereign egress. |
+| `net.available` | function | Whether a backend is configured. No app consumer yet (`scripts/test-net-seam.mjs` only). |
+| `net.info` | function | Which backend, and whether it roams (`{ backend, roams }`). No app consumer yet (`scripts/test-net-seam.mjs` only). |
+| `net.fetch` | function | A fetch routed through the user's own egress (Grant-gated, History-logged). |
+
+<!-- sdk-reference:end -->
 
 ## Security boundary
 

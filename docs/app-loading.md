@@ -1,5 +1,9 @@
 # App loading, mirrors, and launch diagnostics
 
+*This page is about placing an APP in naklios.dev — its mirror, its launch readiness and the
+source-side automation. The SDK — its surface, the AI and filesystem contracts, and how to vendor
+the file — is documented in one place: [`docs/app-contract.md`](app-contract.md).*
+
 NakliOS keeps standalone app repositories authoritative. Cross-origin, sandboxed
 iframes are the default; a copy under `apps/<id>/` is an exceptional deployment
 artifact, not a fork.

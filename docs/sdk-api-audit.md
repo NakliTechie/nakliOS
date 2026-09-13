@@ -1,5 +1,9 @@
 # SDK API audit — `sdk/naklios.js`
 
+*The ledger, not the manual: status and stabilization criteria per member. The member reference in
+[`docs/app-contract.md`](app-contract.md) (the one SDK document) is rendered from this table by
+`node scripts/sdk-reference.mjs --write`, and the gate is red when the two disagree.*
+
 Every member of the public surface (`window.naklios`, walked to depth 3 by `scripts/sdk-surface.mjs`
 after running the SDK standalone) has one line here: its kind, its status, and — for an experimental
 member — the criteria that stabilize it. `scripts/test-sdk-audit.mjs` reads the SDK and this table and
@@ -28,7 +32,7 @@ first that does is the first to walk the checklist below.
 | `capabilities.flagged` | field | stable | — | `?naklios` was present — a hint, never a transport switch. |
 | `capabilities.version` | field | stable | — | A constant 2 in the SDK, never set from a host message. |
 | `capabilities.fs` | field | stable | — | App-scoped filesystem available (Folder or Crate connected). |
-| `capabilities.fsBackends` | field | stable | — | Backends the host offers (`opfs` · `folder` · `crate`). |
+| `capabilities.fsBackends` | field | stable | — | The backends the host offers, as descriptors `[{ id, label, name }]` — ids `fsa` (a picked folder) and `crate`; the browser's own OPFS is not on this list. |
 | `capabilities.fsBackend` | field | stable | — | The backend in use. |
 | `capabilities.system` | field | stable | — | The app is a system app (same-origin, `kind: system`). |
 | `capabilities.sysFs` | field | stable | — | Whole-store filesystem granted (system apps only). |
@@ -44,10 +48,10 @@ first that does is the first to walk the checklist below.
 | `capabilities.aiImageProvider` | field | stable | — | Provider of the image model. |
 | `capabilities.aiImageLocal` | field | stable | — | The image model runs on-device. |
 | `capabilities.aiImageState` | field | stable | — | State of the image runtime. |
-| `capabilities.aiSearchState` | field | stable | — | State of the search rung. |
-| `capabilities.aiSearch` | field | stable | — | Web search through the host granted. |
+| `capabilities.aiSearchState` | field | stable | — | State of the local semantic-search rung (`idle` · `loading` · `ready` · `error`). |
+| `capabilities.aiSearch` | field | stable | — | Semantic (local, embedding) search over the app's own namespace granted — not web search. |
 | `capabilities.net` | field | stable | — | Sovereign egress (`naklios.net.fetch`) granted. |
-| `capabilities.netBackend` | field | stable | — | `nakli-egress` · `nakli-local-bridge` · null. |
+| `capabilities.netBackend` | field | stable | — | Which egress backend the host is configured with: `worker` (the default) · `bridge`; null when none. Never a package name. |
 | `ready` | function | stable | — | Signal "loaded"; carries the feature flags this SDK build supports. |
 | `title` | function | stable | — | Set the host window title. |
 | `close` | function | stable | — | Ask the host to close this window. |
@@ -90,8 +94,8 @@ first that does is the first to walk the checklist below.
 | `ai.chat.completions.create` | function | stable | — | One completion; `stream:true` returns an async iterable. |
 | `ai.images` | namespace | stable | — | Images. |
 | `ai.images.generate` | function | stable | — | One image generation. |
-| `ai.search` | function | stable | — | Web search through the host. |
-| `ai.searchStatus` | function | stable | — | State of the search rung. No app consumer yet (`scripts/test-net-seam.mjs` only). |
+| `ai.search` | function | stable | — | Semantic search over the app's OWN files on the connected backend — a local embedding index, no network. Behind the "Enable semantic search?" consent. |
+| `ai.searchStatus` | function | stable | — | State of the local semantic-search rung. No app consumer yet (`scripts/test-net-seam.mjs` only). |
 | `ai.cancelAll` | function | stable | — | Cancel in-flight chat and image calls (searches are not cancelled). No app consumer yet (`scripts/test-net-seam.mjs` only). |
 | `net` | namespace | stable | — | Sovereign egress. |
 | `net.available` | function | stable | — | Whether a backend is configured. No app consumer yet (`scripts/test-net-seam.mjs` only). |

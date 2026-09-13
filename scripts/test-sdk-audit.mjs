@@ -5,10 +5,11 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { sdkSurface } from './sdk-surface.mjs';
+import { ledgerRows } from './sdk-reference.mjs';
 
 const ledger = readFileSync(new URL('../docs/sdk-api-audit.md', import.meta.url), 'utf8');
-const rows = new Map();
-for (const m of ledger.matchAll(/^\| `([^`]+)` \| (\w+) \| (\w+) \| ([^|]*) \|/gm)) rows.set(m[1], { kind: m[2].trim(), status: m[3].trim(), criteria: m[4].trim() });
+// one parser for the ledger, shared with the reference renderer (a `|` in a note, a duplicate row → red)
+const rows = new Map(ledgerRows(ledger).map((r) => [r.member, { kind: r.kind, status: r.status, criteria: r.criteria }]));
 assert.ok(rows.size > 0, 'the ledger has a member table');
 
 function audit(surface = sdkSurface(), table = rows) {
