@@ -193,6 +193,12 @@
       "kind": "file",
       "detail": ".anvil/memory"
     },
+    "file:.anvil/oplog.jsonl": {
+      "owner": "workspace-files.md",
+      "fingerprint": "2cdf93fcb5f1",
+      "kind": "file",
+      "detail": ".anvil/oplog.jsonl"
+    },
     "file:.anvil/procedural.json": {
       "owner": "workspace-files.md",
       "fingerprint": "766a1ba67fb3",

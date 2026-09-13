@@ -51,3 +51,11 @@ Shared prerequisites: the launch in `../README.md`; `__anvil.test.fs` to seed an
 - **Reach and drive:** seed `.anvil/skills/k/SKILL.md` (frontmatter `name`, `description`, `status: active`) and a second with `status: staged`; start a run; open ✨.
 - **Observable success:** the context message lists only the active skill; the reader shows both with statuses and lint notes; a fresh browser project is seeded with `working-in-anvil`.
 - **Gotchas:** the folder's support files are scanned by the sentinel at load; a failing one quarantines the skill.
+
+### file:.anvil/oplog.jsonl
+- **Goal:** the app's OWN state writes, chained (CRIB-D D3, 2026-09-13) — every write of `state.json` and every refused stale write is one hash-chained NDJSON line: the state's lineage, replayable; a torn or tampered log is caught at the line and never extended.
+- **Source:** `sys/history/state-oplog.mjs` (`createStateOplog`, `replayStateLog`, over the ledger's `appendEvent`/`verifyChain`); `apps/anvil/index.html` `writeRemoteState` appends under the same Web Lock that serialises the write, tagged with a per-page-load `TAB_ID`.
+- **Prerequisites:** launch with a host fs mounted (the log lives next to `state.json`; localStorage-only sessions write no log).
+- **Reach and drive:** change anything that saves state (rename a task) twice; read `.anvil/oplog.jsonl` through the host. Then open a second tab on the same project, save there, and save in the first (now stale) tab.
+- **Observable success:** two `state.written` lines whose `prev_hash` chain and whose `input.rev` increases; `replayStateLog(text)` → `ok: true`; after the stale save, a `state.refused` line with `{ mine, diskRev }` and no third `state.written` from that tab.
+- **Gotchas:** the append is best-effort and never fails or blocks the state write; the module is driven headless in `sys/history/test/state-oplog.test.mjs` and the app wiring is anchored in `scripts/test-run-assembly.mjs` — the lane cannot drive two real tabs.
