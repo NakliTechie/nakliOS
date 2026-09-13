@@ -93,6 +93,22 @@ function searchHandle(content, max = 48) {
 // something to search FOR: the body it would query by is the very thing that was elided.
 // So the ref carries a verbatim handle, and a caller that keeps no record gets the plain
 // statement that the content is gone.
+// CRIB-A A3 (osaurus B6, 2026-09-13): a LISTING is the commonest bulky tool result — `ls -l` (one
+// `d name` / `- name` per line) or a `find` (one path per line). When it ages into the shakeable
+// region it collapses to its COUNT, not to a generic "chars elided": the model keeps the one fact
+// a stale listing still carries (how many entries there were) and re-lists if it needs the names.
+// Only a `shell` result can be one: a `read` of a bulleted note, a requirements file or an env
+// dump has the same shape, and eliding it to "N entries" would lose what the model read it for
+// (the checker's probe, 2026-09-13). A path listing needs a `/` on every line for the same reason.
+export function listingEntries(text, { tool = '' } = {}) {
+  if (tool !== 'shell') return null;
+  const lines = String(text || '').split('\n').filter((l) => l.trim() !== '');
+  if (lines.length < 2) return null;
+  const long = lines.every((l) => /^[d-] \S/.test(l));
+  const paths = !long && lines.every((l) => /^[^\s:=\[\]]+$/.test(l) && l.includes('/'));
+  return long || paths ? lines.length : null;
+}
+
 export function shake(region, { estimate = estimateTokens, minChars = 200, artifactPrefix = 'artifact://tool-', retrievable = false } = {}) {
   const artifacts = new Map();
   let saved = 0;
@@ -111,7 +127,11 @@ export function shake(region, { estimate = estimateTokens, minChars = 200, artif
       const name = m.name || names.get(m.tool_call_id) || '';
       const from = name ? ` from \`${name}\`` : '';
       const handle = retrievable ? searchHandle(m.content) : '';
-      const ref = handle
+      const entries = listingEntries(m.content, { tool: name });
+      const ref = entries !== null
+        // a listing: the count survives; the names are one `ls`/`find` away — or one history search
+        ? `[listing elided — ${entries} entries${from}. Re-run the listing if you need the names; do not guess them.${handle ? ` The full listing is in this task's run history: history {"op":"search","query":${JSON.stringify(handle)}}.` : ''}]`
+        : handle
         // The record keeps every tool result and `history` searches it, so name the exact two
         // calls and hand over a phrase that occurs in the stored text. The last clause is not a
         // hedge: the carry happens before the record is written, so a failed save is a real

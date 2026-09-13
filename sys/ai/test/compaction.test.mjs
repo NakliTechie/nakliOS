@@ -5,7 +5,7 @@
 // Pure/headless: a scripted token estimator drives the thresholds, so the cut
 // boundaries and the shake/summarize/drop ladder are verified deterministically.
 
-import { shake, compactConversation } from '../compaction.mjs';
+import { shake, compactConversation, listingEntries } from '../compaction.mjs';
 import { estimateTokens } from '../agent-loop.mjs';
 
 let passed = 0;
@@ -231,6 +231,45 @@ await test('an elided body the record would CLIP promises nothing — the hole a
   const prose = 'REPORT-HEADER line one\n' + Array.from({ length: 300 }, (_, i) => `row ${i} value`).join('\n');
   const okRef = shake([{ role: 'tool', tool_call_id: 'c2', content: prose }], { retrievable: true }).messages[0].content;
   assert(/"op":"search"/.test(okRef), `prose must still get the retrieval promise: ${okRef.slice(0, 160)}`);
+});
+
+// A3: a listing that ages into the shakeable region collapses to its count, not to "chars elided"
+await test('shake collapses a stale listing to its entry count', () => {
+  const list = Array.from({ length: 60 }, (_, i) => `- file-${i}.txt`).join('\n');
+  const find = Array.from({ length: 40 }, (_, i) => `src/dir${i}/mod.py`).join('\n');
+  const region = [
+    { role: 'assistant', content: '', tool_calls: [{ id: 'c1', function: { name: 'shell', arguments: '{"command":"ls -l"}' } }] },
+    { role: 'tool', tool_call_id: 'c1', content: list },
+    { role: 'assistant', content: '', tool_calls: [{ id: 'c2', function: { name: 'shell', arguments: '{"command":"find ."}' } }] },
+    { role: 'tool', tool_call_id: 'c2', content: find },
+    { role: 'assistant', content: '', tool_calls: [{ id: 'c3', function: { name: 'read', arguments: '{"path":"a.py"}' } }] },
+    { role: 'tool', tool_call_id: 'c3', content: 'def f():\n    return 1\n'.repeat(20) },
+  ];
+  const { messages } = shake(region, { minChars: 50 });
+  assert(/^\[listing elided — 60 entries from `shell`/.test(messages[1].content), `ls -l → its count: ${messages[1].content.slice(0, 80)}`);
+  assert(/^\[listing elided — 40 entries from `shell`/.test(messages[3].content), `find → its count: ${messages[3].content.slice(0, 80)}`);
+  assert(/^\[tool output elided — \d+ chars/.test(messages[5].content), 'a file body is still the generic elision');
+  const sh = { tool: 'shell' };
+  eq(listingEntries('d .anvil\n- README.md\n- hello.py', sh), 3, 'a short ls -l counts too');
+  eq(listingEntries('hello world\nthis is prose', sh), null, 'prose is not a listing');
+  eq(listingEntries('a.txt  b.txt', sh), null, 'a one-line name list is not a listing (nothing to collapse)');
+  eq(listingEntries('./a.py\n./lib/b.py', sh), 2, 'a find: one path per line');
+  // only a shell result is a listing — the same SHAPE from read/recall/review is content, not a listing
+  eq(listingEntries('- first item\n- second item\n- third item', { tool: 'read' }), null, 'a bulleted note read from a file is not a listing');
+  eq(listingEntries('- first item\n- second item\n- third item'), null, 'no tool named → not a listing');
+  eq(listingEntries('numpy==1.26.0\npandas>=2.0\nrequests', sh), null, 'a requirements file catted in the shell is not a listing');
+  eq(listingEntries('PATH=/usr/bin\nHOME=/root', sh), null, 'an env dump is not a listing');
+  eq(listingEntries('README.md\nhello.py\nnotes.txt', sh), null, 'bare names without a slash are not a path listing');
+  // an aged bulleted READ result keeps the generic elision (and its content is retrievable through the handle)
+  const note = Array.from({ length: 30 }, (_, i) => `- step ${i}: read the file, then edit it carefully`).join('\n');
+  const r2 = shake([
+    { role: 'assistant', content: '', tool_calls: [{ id: 'r1', function: { name: 'read', arguments: '{"path":"notes.md"}' } }] },
+    { role: 'tool', tool_call_id: 'r1', content: note },
+    { role: 'assistant', content: '', tool_calls: [{ id: 'r2', function: { name: 'shell', arguments: '{"command":"ls -l"}' } }] },
+    { role: 'tool', tool_call_id: 'r2', content: list },
+  ], { minChars: 50, retrievable: true });
+  assert(/^\[tool output elided — \d+ chars from `read`/.test(r2.messages[1].content), `a bulleted read result is the generic elision: ${r2.messages[1].content.slice(0, 60)}`);
+  assert(/^\[listing elided — 60 entries from `shell`.*history \{"op":"search","query":/.test(r2.messages[3].content), `a retrievable listing keeps the history handle: ${r2.messages[3].content.slice(0, 160)}`);
 });
 
 if (failures.length) {
