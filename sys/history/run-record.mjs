@@ -1379,6 +1379,7 @@ export function groupOrdering(records, { classify = null } = {}) {
   const byClass = new Map();
   const defaultClassify = (rec) => {
     const started = rec.events().find((e) => e.tool === 'run.started');
+    if (!started) return 'unstarted'; // a truncated or foreign record: counted under its own name, not skipped
     const tools = (rec.resolve(started)?.input?.tools) || [];
     const names = tools.map((t) => t?.function?.name ?? t?.name).filter(Boolean).sort();
     return names.length ? names.join('+') : 'no-tools';
@@ -1414,6 +1415,18 @@ export function groupOrdering(records, { classify = null } = {}) {
     redundantBefore: stat(g.redundantBefore),
     toolCalls: stat(g.toolCalls),
   })).sort((a, b) => b.runs - a.runs || a.class.localeCompare(b.class));
+}
+
+// PG-A4, U6 (2026-09-13): the ordering number as ONE line, per task class, for the doctor's report
+// beside stopReasonsLine. Anchored runs and the median calls-to-first-action are the number; a class
+// with nothing anchored says so rather than printing a mean over nothing.
+export function orderingLine(groups) {
+  if (!groups || !groups.length) return 'ordering: no runs';
+  return 'ordering: ' + groups.map((g) => {
+    const first = g.toFirstAction && g.toFirstAction.n ? `first action median ${g.toFirstAction.median} (mean ${g.toFirstAction.mean}) over ${g.toFirstAction.n}` : 'nothing anchored';
+    const by = Object.entries(g.byAnchor || {}).filter(([k, n]) => k !== 'none' && n).map(([k, n]) => `${k} ${n}`).join(', ');
+    return `${g.class}: ${g.anchored}/${g.runs} anchored${by ? ' (' + by + ')' : ''}, ${first}`;
+  }).join(' · ');
 }
 
 // F1 — the invariant that makes this file's opening claim checkable.

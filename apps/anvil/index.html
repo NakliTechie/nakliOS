@@ -455,7 +455,7 @@
   import { runCampaign } from '../../sys/assay/runmode.mjs';
   import { makeCampaignExecutors } from '../../sys/assay/executors.mjs';
   import { verifyWall, verifyTests, replay as replayLineage } from '../../sys/assay/verify.mjs';
-  import { createRunRecorder, foldStatus, foldLog, foldTranscript, loadRecord, foldStopReasons, stopReasonsLine, searchRecords, scopeEntries, readEvent, foldRecovery, recoveryNote, foldOutcome, foldSkillUsage, statusUnit, createProjector } from '../../sys/history/run-record.mjs';
+  import { createRunRecorder, foldStatus, foldLog, foldTranscript, loadRecord, foldStopReasons, stopReasonsLine, searchRecords, scopeEntries, readEvent, foldRecovery, recoveryNote, foldOutcome, foldSkillUsage, statusUnit, createProjector, foldOrdering, groupOrdering, orderingLine } from '../../sys/history/run-record.mjs';
 
   const $ = (id) => document.getElementById(id);
   const nak = window.naklios || null;
@@ -619,13 +619,17 @@
     return { st:r.value, resumed: !!(restored.restored && !r.rebuilt), checkpoint:saved };
   }
   // One index row from one record. `tiers` is where the file was found/written.
+  // PG-A4 (U6): the row also carries the ORDERING number — the anchor the run measured to and the
+  // tool calls before its first action — so the doctor can group it per task class (groupOrdering)
+  // instead of it living only in a bench doc.
   async function runIndexRow({ project, task, name, path, tiers, rec, gated, prev=null }){
     const ev=rec.events(); const { st, resumed, checkpoint }=await foldIndexStatus({ rec, gated, prev });
+    const ord=foldOrdering(ev, rec.resolve);
     return { id: project+'/'+task+'/'+name, project, task, name, path, tiers,
       head: rec.head ? rec.head() : null, events: ev.length,
       stop: st.stop, status: st.status, verified: st.verified, steps: st.steps,
       startedAt: ev.length ? ev[0].ts : null, endedAt: ev.length ? ev[ev.length-1].ts : null,
-      checkpoint, resumed };
+      checkpoint, resumed, anchor: ord.anchor, toFirstAction: ord.toFirstAction };
   }
   // The doctor: rebuild the index from the record FILES (OPFS, and the home when
   // connected). Runs at boot when the index is empty but files exist — Codex's
@@ -668,8 +672,13 @@
     for(const { row } of found.values()){ await runsPut(row); indexed++; if(row.chainOk===false) broken++; if(row.resumed) resumed++; }
     // D1: how runs end, over every record the doctor just read — the stop-reason distribution, as a fold.
     const stops=foldStopReasons([...found.values()].map(f=>f.rec), { gated:true });
+    // U6: the ordering number per task class, over the same records. The class is what decides the
+    // anchor a run can reach: a gated run (task_done in its toolset) can anchor on the gate; an ungated
+    // one only on a write. The full tool-set name is the fold's default and unreadable in a line.
+    const classOf=(rec)=>{ const st=rec.events().find(e=>e.tool==='run.started'); if(!st) return 'unstarted'; const names=((rec.resolve(st)||{}).input||{}).tools||[]; return names.some(t=>(t&&t.function&&t.function.name)==='task_done') ? 'gated' : 'ungated'; };
+    const ordering=groupOrdering([...found.values()].map(f=>f.rec), { classify: classOf });
     // `resumed`: rows whose status fold continued from the checkpoint the previous row carried
-    return { indexed, broken, resumed, stops, stopsLine: stopReasonsLine(stops) };
+    return { indexed, broken, resumed, stops, stopsLine: stopReasonsLine(stops), ordering, orderingLine: orderingLine(ordering) };
   }
   async function idbGet(k){try{const db=await idbOpen();return await new Promise((res)=>{const t=db.transaction(DIR_STORE).objectStore(DIR_STORE).get(k);t.onsuccess=()=>res(t.result);t.onerror=()=>res(null);});}catch(_){return null;}}
   async function idbSet(k,v){try{const db=await idbOpen();await new Promise((res)=>{const t=db.transaction(DIR_STORE,'readwrite').objectStore(DIR_STORE).put(v,k);t.oncomplete=res;t.onerror=res;});}catch(_){} }
@@ -3115,7 +3124,7 @@
   try{ if(navigator.storage&&navigator.storage.persisted) opfsPersisted=await navigator.storage.persisted(); }catch(_){}
   updateHomeChip();
   // Startup backfill: an empty index over existing record files rebuilds silently.
-  try{ if((await runsCount())===0){ const r=await rebuildRunIndex(); if(r&&r.indexed) console.info('[anvil] run index rebuilt: '+r.indexed+' record(s)'+(r.broken?(', '+r.broken+' broken chain(s)'):'')+' — '+r.stopsLine); } }catch(_){}
+  try{ if((await runsCount())===0){ const r=await rebuildRunIndex(); if(r&&r.indexed) console.info('[anvil] run index rebuilt: '+r.indexed+' record(s)'+(r.broken?(', '+r.broken+' broken chain(s)'):'')+' — '+r.stopsLine+' — '+r.orderingLine); } }catch(_){}
   if(!folderMode) await mountProject(state.activeProject);
   renderAll(); syncMode();
   // AC-4: a queue entry recovered from a dead run is surfaced, never silently restored.

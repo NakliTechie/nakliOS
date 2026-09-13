@@ -15,7 +15,7 @@
 // Each of those is a way the metric could quietly lie, which is worse than not having it.
 import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
-import { createRunRecorder, loadRecord, foldOrdering, groupOrdering, isCorpusRecord } from '../run-record.mjs';
+import { createRunRecorder, loadRecord, foldOrdering, groupOrdering, orderingLine, isCorpusRecord } from '../run-record.mjs';
 import { deltaOf, metricsOf } from '../../ai/ablate.mjs';
 
 // ── a recorder driven by hand, so each shape is exactly the one being asserted ──
@@ -171,6 +171,22 @@ let corpusCount = 0;
 
   const groups = groupOrdering(recs);
   assert.ok(groups.length >= 1);
+  // U6: the one-line report the doctor prints — every class named, the anchored count and the median
+  const line = orderingLine(groups);
+  for (const g of groups) assert.ok(line.includes(`${g.class}: ${g.anchored}/${g.runs} anchored`), `the line names ${g.class}: ${line}`);
+  const anchored = groups.find((g) => g.anchored > 0);
+  if (anchored) assert.ok(line.includes(`first action median ${anchored.toFirstAction.median}`), `and the median: ${line}`);
+  assert.equal(orderingLine([]), 'ordering: no runs');
+  assert.ok(/nothing anchored/.test(orderingLine([{ class: 'x', runs: 2, anchored: 0, unanchored: 2, byAnchor: { none: 2 }, toFirstAction: null }])), 'a class with nothing anchored says so, no mean over nothing');
+  // the corpus's anchored classes have median == mean, so a line printing the mean as the median would
+  // pass over them — a skewed group tells the two apart
+  // a record with no run.started (truncated, foreign) is counted under its own name by the default classify, never dropped
+  const empty = loadRecord({ events: [], blobs: {} });
+  const withEmpty = groupOrdering([...recs, empty]);
+  assert.equal(withEmpty.reduce((n, g) => n + g.runs, 0), recs.length + 1, 'every record is in exactly one class, the empty one too');
+  assert.ok(withEmpty.some((g) => g.class === 'unstarted' && g.runs === 1 && g.unanchored === 1), 'and it is named, not silently skipped');
+  const skew = orderingLine([{ class: 'k', runs: 3, anchored: 3, unanchored: 0, byAnchor: { write: 3 }, toFirstAction: { n: 3, min: 0, max: 9, median: 1, mean: 3.33 } }]);
+  assert.ok(/first action median 1 \(mean 3\.33\) over 3/.test(skew), `the median is the median and the mean is the mean: ${skew}`);
   for (const g of groups) {
     assert.equal(g.runs, g.anchored + g.unanchored, 'every run is counted exactly once');
     assert.equal(Object.values(g.byAnchor).reduce((a, b) => a + b, 0), g.runs, 'byAnchor sums to the run count');

@@ -7,7 +7,7 @@
 // exist, a filter whose condition is inverted. This file extracts the actual functions and calls
 // them, so those failures are loud.
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { inlineModule, extractFunction, extractRegion, evaluate, instantiate, memFs, failingFs } from './anvil-harness.mjs';
 import { searchRecords, scopeEntries, readEvent, createRunRecorder } from '../sys/history/run-record.mjs';
 import { runToolset } from '../sys/ai/run-assembly.mjs';
@@ -359,6 +359,50 @@ await test('WIRE: a reopened record refolds from its checkpoint (resumed), a for
     assert.deepEqual(forged.st, first.st, `${why}: the status is still the fold's`);
     assert.equal(forged.checkpoint.consumed, rec.events().length, `${why}: a fresh checkpoint replaces it`);
   }
+});
+
+// U6 (PG-A4): the index row carries the ordering number — driven through the app's own runIndexRow
+await test('U6: the run-index row carries anchor and toFirstAction, folded from the record', async () => {
+  const { loadRecord, statusUnit, createProjector, foldOrdering } = await import('../sys/history/run-record.mjs');
+  const fis = instantiate(extractRegion(src, 'async function foldIndexStatus(', '// One index row from one record.'), 'foldIndexStatus', { statusUnit, createProjector });
+  const runIndexRow = instantiate(extractRegion(src, 'async function runIndexRow(', '// The doctor: rebuild the index'), 'runIndexRow', { foldIndexStatus: fis, foldOrdering });
+  const load = (f) => loadRecord(JSON.parse(readFileSync(new URL('../sys/history/corpus/' + f, import.meta.url), 'utf8')));
+  const wf = await runIndexRow({ project: 'p', task: 't', name: 'w.json', path: 'x', tiers: ['t'], rec: { ...load('write-a-file.json'), head: () => null }, gated: false });
+  assert.equal(wf.anchor, 'shell-write', 'write-a-file went straight to a shell write');
+  assert.equal(wf.toFirstAction, 0, 'with zero calls before it');
+  const ra = await runIndexRow({ project: 'p', task: 't', name: 'r.json', path: 'x', tiers: ['t'], rec: { ...load('read-then-answer.json'), head: () => null }, gated: false });
+  assert.equal(ra.anchor, 'none', 'a run that never acted has no anchor');
+  assert.equal(ra.toFirstAction, null, 'and null, not 0, for its number');
+});
+
+await test('U6: the doctor groups the ordering number over the records it read — gated and ungated classes, every run counted', async () => {
+  const { loadRecord, foldStopReasons, stopReasonsLine, groupOrdering, orderingLine, statusUnit, createProjector, foldOrdering, isCorpusRecord } = await import('../sys/history/run-record.mjs');
+  const fis = instantiate(extractRegion(src, 'async function foldIndexStatus(', '// One index row from one record.'), 'foldIndexStatus', { statusUnit, createProjector });
+  const runIndexRow = instantiate(extractRegion(src, 'async function runIndexRow(', '// The doctor: rebuild the index'), 'runIndexRow', { foldIndexStatus: fis, foldOrdering });
+  // a fake OPFS: anvil/runs/<project>/<task>/<file>.json over the real corpus dumps, plus one empty record
+  const corpusDir = new URL('../sys/history/corpus/', import.meta.url);
+  const files = readdirSync(corpusDir).filter(isCorpusRecord).map((f) => [f, readFileSync(new URL(f, corpusDir), 'utf8')]);
+  files.push(['empty.json', JSON.stringify({ events: [], blobs: {} })]);
+  const fileHandle = (text) => ({ kind: 'file', getFile: async () => ({ text: async () => text }) });
+  const dir = (entries) => ({ kind: 'directory', entries: async function* () { for (const e of entries) yield e; }, getDirectoryHandle: async (n) => entries.find(([k]) => k === n)[1] });
+  const tree = dir([['anvil', dir([['runs', dir([['proj', dir([['task', dir(files.map(([f, t]) => [f, fileHandle(t)]))]])]])]])]]);
+  const rows = [];
+  const rebuild = instantiate(extractFunction(src, 'rebuildRunIndex'), 'rebuildRunIndex', {
+    opfsAvailable: () => true, opfsPersisted: false, homeHandle: null, hostFsReady: () => false, nak: null,
+    navigator: { storage: { getDirectory: async () => tree } },
+    loadRecord, runsGet: async () => null, runsPut: async (row) => { rows.push(row); }, runIndexRow,
+    foldStopReasons, stopReasonsLine, groupOrdering, orderingLine, createFileops: null, CrateBackend: null,
+  });
+  const r = await rebuild();
+  assert.equal(r.indexed, files.length, 'every record file is indexed');
+  assert.equal(rows.length, files.length, 'and has a row');
+  assert.ok(rows.every((row) => 'anchor' in row && 'toFirstAction' in row), 'every row carries the ordering number');
+  const counted = r.ordering.reduce((n, g) => n + g.runs, 0);
+  assert.equal(counted, r.indexed, `the grouping counts every run it indexed (${counted} of ${r.indexed})`);
+  const classes = r.ordering.map((g) => g.class).sort();
+  assert.deepEqual(classes, ['gated', 'ungated', 'unstarted'], `gated, ungated and the empty record, by name: ${classes}`);
+  assert.ok(/gated: \d+\/\d+ anchored/.test(r.orderingLine) && /ungated: \d+\/\d+ anchored/.test(r.orderingLine), `the line names both classes: ${r.orderingLine}`);
+  assert.ok(r.orderingLine.length < 400, `and stays a line (${r.orderingLine.length} chars)`);
 });
 
 const SK = (status, body = 'Run the script.') => `---\nname: k\ndescription: d\nstatus: ${status}\n---\n${body}`;
