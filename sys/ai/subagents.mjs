@@ -61,7 +61,8 @@ export function dispatchTool() {
       'changes are merged back automatically when no two touched the same path (any ' +
       'conflict is reported for you to resolve). Keep sub-tasks INDEPENDENT; run at ' +
       'most ' + DISPATCH_MAX + ' at once. For a single bounded sub-task use `task`; for ' +
-      'critique use `review`.',
+      'critique use `review`. The result may be PARTIAL: a slow subagent\'s completion arrives ' +
+      'later as a [coordination] message in this conversation — do not re-dispatch it.',
     parameters: { type: 'object', properties: {
       tasks: { type: 'array', description: 'The independent sub-tasks to run in parallel (max ' + DISPATCH_MAX + ').',
         items: { type: 'object', properties: {
@@ -206,7 +207,8 @@ const STATUS_TAG = {
   'merge-failed': 'merge FAILED (workspace unchanged for this one)',
   aborted: 'STOPPED — the owner ended the run while it worked; nothing merged',
 };
-export function formatDispatchDigest({ results, status, conflicts, dropped, budget }) {
+export function formatDispatchDigest({ results, status, conflicts, dropped, budget, inFlight = [], indices = null, refused = [] }) {
+  const num = (i) => (indices ? indices[i] : i) + 1; // B2: number by the COHORT index, so a steer's [n] matches
   const st = (i) => (status && status[i]) || (results[i] && results[i].ok ? 'no-op' : 'incomplete');
   const lines = [];
   lines.push(`Dispatched ${results.length} subagent${results.length === 1 ? '' : 's'} in parallel.${budget && budget.line ? ' (' + budget.line + ')' : ''}`);
@@ -217,8 +219,9 @@ export function formatDispatchDigest({ results, status, conflicts, dropped, budg
     const s = st(i);
     let tag = STATUS_TAG[s] || s;
     if (s === 'incomplete' && r.stop) tag += ` (${r.stop})`;
+    if (s === 'conflict' && r.conflictWith && r.conflictWith.length) tag += ` — merged by an earlier sibling since this dispatch launched (${r.conflictWith.join(', ')})`;
     lines.push('');
-    lines.push(`### [${i + 1}] ${r.label} — ${tag}`);
+    lines.push(`### [${num(i)}] ${r.label} — ${tag}`);
     if (touched.length) {
       const parts = [];
       if ((ch.written || []).length) parts.push('wrote ' + ch.written.join(', '));
@@ -231,10 +234,52 @@ export function formatDispatchDigest({ results, status, conflicts, dropped, budg
   if (conflicts && conflicts.length) {
     lines.push('');
     lines.push('### ⚠ path conflicts — the clashing subagents were held (their disjoint siblings still merged)');
-    for (const c of conflicts) lines.push(`- ${c.path} — touched by subagents ${c.agents.map(a => a + 1).join(' & ')}`);
+    for (const c of conflicts) lines.push(`- ${c.path} — touched by subagents ${c.agents.map(a => num(a)).join(' & ')}`);
     lines.push('Resolve by re-running the conflicting sub-tasks sequentially with `task`, or pick one and apply it yourself.');
   }
+  // B2: what this call refused is in the digest too — a sub-task silently missing is a hole the model fills by re-dispatching
+  if (refused && refused.length) {
+    lines.push('');
+    lines.push(`### refused: ${refused.join('; ')} — unverifiable authorizes nothing. Wait for the completion message; do not re-dispatch.`);
+  }
+  // B2: the stragglers. Paseo's polling ban as an affordance, not a rule: the message is coming.
+  if (inFlight && inFlight.length) {
+    lines.push('');
+    lines.push(`### still in flight: ${inFlight.map((l) => '"' + l + '"').join(', ')} — ${inFlight.length === 1 ? 'its' : 'each'} completion will arrive as a [coordination] message in this conversation; do not re-dispatch ${inFlight.length === 1 ? 'it' : 'them'} (unverifiable authorizes nothing). Work on what has landed, or reply without tools to wait.`);
+  }
   return lines.join('\n');
+}
+
+// CRIB-B B2 (Paseo 3.1, 2026-09-13): completion as a steer, not a join. The tool result is composed at
+// the FIRST of "every child complete" or "the first completion plus the settle window" — near-
+// simultaneous real completions batch into one digest; a slow child no longer holds the fan-out. With
+// no steer queue there is nowhere to deliver a later completion, so the caller passes Infinity and the
+// result is the whole cohort, byte-identical to the barrier it replaces. Pure in `sleep`.
+export const DISPATCH_SETTLE_MS = 250;
+export async function awaitCohort(promises, { settleMs = Infinity, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
+  const done = new Map(); // cohort index -> { ok, value | error }
+  const tagged = promises.map((p, i) => Promise.resolve(p).then((value) => { done.set(i, { ok: true, value }); return i; }, (error) => { done.set(i, { ok: false, error }); return i; }));
+  if (!tagged.length) return { done: [], inFlight: [] };
+  await Promise.race(tagged); // the first completion
+  if (settleMs === Infinity) await Promise.all(tagged);
+  else if (settleMs > 0) await Promise.race([Promise.all(tagged), sleep(settleMs)]);
+  const finished = [...done.entries()].map(([index, r]) => ({ index, ...r })).sort((a, b) => a.index - b.index);
+  const inFlight = promises.map((promise, index) => ({ index, promise })).filter((x) => !done.has(x.index));
+  return { done: finished, inFlight };
+}
+// One straggler's completion, as the [coordination] message the parent re-plans on. `status` is the
+// digest's vocabulary; a first-come conflict names the paths an earlier sibling already merged.
+export function formatCompletionSteer({ index, label, run, status, conflictWith = null }) {
+  const r = run || {}; const ch = r.changes || { written: [], deleted: [] };
+  let tag = STATUS_TAG[status] || status;
+  if (status === 'incomplete' && r.stop) tag += ` (${r.stop})`;
+  if (status === 'conflict' && conflictWith && conflictWith.length) tag = `held — conflicts with an earlier sibling that already merged (${conflictWith.join(', ')}); un-merging is not possible`;
+  const parts = [];
+  if ((ch.written || []).length) parts.push('wrote ' + ch.written.join(', '));
+  if ((ch.deleted || []).length) parts.push('deleted ' + ch.deleted.join(', '));
+  const verb = status === 'merge' ? 'applied' : 'attempted (NOT applied)';
+  const report = String(r.text || '(no report)').trim().replace(/\s+/g, ' ').slice(0, 600);
+  return `[coordination] subagent [${index + 1}] "${label}" finished — ${tag}.${parts.length ? ' changes ' + verb + ': ' + parts.join('; ') + '.' : ''} ${report}`;
 }
 
 // ── ESS-2: the live feed — what a parent sees WHILE a child runs ─────────────────────────

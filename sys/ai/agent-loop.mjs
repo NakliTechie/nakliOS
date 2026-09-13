@@ -316,6 +316,9 @@ export function stepSignature(toolCalls) {
 // away a run that one sentence might have saved — and the model never learned why. The
 // budget ladder (turns / tokens / wall-clock) is what ends a run; this only interrupts.
 export const REPEAT_NUDGE_AT = Object.freeze([3, 5, 8]);
+// B2: the longest one waiting turn may wait with no wall clock — the subagent wall clock's default,
+// so a child that outlives its own budget cannot outlive the parent's patience.
+export const WAIT_CAP_MS = 240_000;
 
 // What a refused result looks like coming back from a tool. Deliberately narrow: an
 // ordinary empty result or a "no matches" is NOT a denial, and calling it one would put
@@ -373,6 +376,8 @@ export async function runAgentLoop({
   maxParallel = MAX_PARALLEL,             // F9: the pool's width
   now = () => Date.now(),  // injectable clock (wall-clock budget is testable headlessly)
   signal = null,           // optional AbortSignal — cooperative stop between turns/tools
+  steer = null,            // CRIB-B B2: a steer queue (sys/ai/steer.mjs) — what arrives mid-turn lands at the next turn
+  waitCapMs = WAIT_CAP_MS, // B2: how long one waiting turn may wait when there is no wall clock to bound it
 }) {
   if (typeof infer !== 'function') throw new Error('runAgentLoop needs an infer function');
   if (typeof executeTool !== 'function') throw new Error('runAgentLoop needs an executeTool function');
@@ -439,8 +444,20 @@ export async function runAgentLoop({
     return null;
   }
 
+  // B2: how long a waiting turn may wait — the wall clock when there is one, else the cap (a child
+  // that never settles must not hold the loop forever; each wait is a turn, so maxSteps still bounds it).
+  const wallLeft = () => (budget && Number.isFinite(budget.wallClockMs)) ? Math.max(0, budget.wallClockMs - (now() - startedAt)) : waitCapMs;
+
   for (let step = 0; step < maxSteps; step++) {
     if (aborted()) return abortReturn(step);
+    // B2: what arrived while the last turn ran (a child's completion) lands HERE — after that
+    // turn's tool results, before this turn's request — as a loop-authored user turn: the model
+    // re-plans on it, and echoing it back is not the owner speaking.
+    if (steer) for (const m of steer.take()) {
+      const note = { role: 'user', content: String(m && m.content != null ? m.content : m) };
+      loopAuthored.add(note); convo.push(note);
+      onEvent({ type: 'steer', step, content: note.content });
+    }
     const axis = budgetTripped(step);
     if (axis) {
       onEvent({ type: 'budget', axis, step });
@@ -491,6 +508,14 @@ export async function runAgentLoop({
     // fed back so the model fixes it; only a passing verdict (exit 0) completes.
     if (!toolCalls.length) {
       convo.push(assistantTurn(content, null));
+      // B2: nothing to do while children are still in flight is WAITING, not done — the next
+      // completion steers the run on, and the gate does not run over a half-finished fan-out.
+      // Wakes on a steer, on the last child settling, on abort, or when the wall clock runs out.
+      if (steer && steer.inFlight() > 0) {
+        onEvent({ type: 'waiting', step, inFlight: steer.inFlight() });
+        await steer.next({ signal, timeoutMs: wallLeft() });
+        continue; // the top of the loop checks the abort and the budget before draining
+      }
       if (verify) {
         const { verdict, ran } = await runGate();
         if (verdict && verdict.ok) {
@@ -606,6 +631,15 @@ export async function runAgentLoop({
           const msg = `Error (invalid_args): ${problem}`;
           onEvent({ type: 'tool-error', name, id, error: msg, kind: 'invalid_args', step });
           onEvent({ type: 'tool-result', name, id, result: msg, kind: 'invalid_args', step });
+          convo.push({ role: 'tool', tool_call_id: id, content: msg });
+          continue;
+        }
+        // B2: a task is not done while its children are in flight — their completion messages are
+        // still to come, and the gate does not run over a half-finished fan-out.
+        if (steer && steer.inFlight() > 0) {
+          const n = steer.inFlight();
+          const msg = `Not yet: ${n} subagent${n === 1 ? ' is' : 's are'} still in flight — ${n === 1 ? 'its' : 'their'} completion will arrive as a [coordination] message; call task_done after it.`;
+          onEvent({ type: 'tool-result', name, id, result: msg, kind: 'in_flight', step });
           convo.push({ role: 'tool', tool_call_id: id, content: msg });
           continue;
         }

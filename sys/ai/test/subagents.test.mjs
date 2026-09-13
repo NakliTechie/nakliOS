@@ -1,6 +1,6 @@
 // Conformance — supervisor / parallel-subagent pure helpers.
 //   node sys/ai/test/subagents.test.mjs
-import { subagentLiveness, SUBAGENT_STALE_MS,
+import { awaitCohort, formatCompletionSteer, DISPATCH_SETTLE_MS, subagentLiveness, SUBAGENT_STALE_MS,
   dispatchTool, reviewTool, normalizeTasks, detectConflicts, mergeDecision,
   planMerge, formatDispatchDigest, DISPATCH_MAX,
   subagentFeedRow, subagentFeedLine, clampSubagentBudget, SUBAGENT_MAX_STEPS, SUBAGENT_WALL_CLOCK_S,
@@ -168,6 +168,37 @@ await test('subagentFeedLine: running says where it is; a finished row says how 
   assert(/split lexer — live \(last event 4s ago\) · step 3/.test(seen), seen);
   const done = subagentFeedLine({ ...running, status: 'done', tools: 1 });
   assert(/split lexer — done \(3 steps, 1 tool call\)/.test(done), done);
+});
+
+// CRIB-B B2: the cohort wait, the completion steer, the digest's in-flight tail
+await test('B2: awaitCohort — all at once, the settle window, Infinity, empty', async () => {
+  const later = (ms, v) => new Promise((r) => setTimeout(() => r(v), ms));
+  let c = await awaitCohort([later(5, 'a'), later(8, 'b')]);
+  eq(c.done.map((d) => d.value).join(','), 'a,b', 'Infinity waits for all'); eq(c.inFlight.length, 0);
+  c = await awaitCohort([later(5, 'a'), later(120, 'b'), later(8, 'c')], { settleMs: 40 });
+  eq(c.done.map((d) => d.index + ':' + d.value).join(','), '0:a,2:c', 'the first completion plus what settles inside the window, in cohort order');
+  eq(c.inFlight.map((x) => x.index).join(','), '1', 'the slow one is still in flight, with its promise');
+  eq(await c.inFlight[0].promise, 'b');
+  c = await awaitCohort([later(5, 'a'), later(30, 'b')], { settleMs: 0 });
+  eq(c.done.length, 1, 'a zero window returns after the first completion');
+  c = await awaitCohort([]); eq(c.done.length + c.inFlight.length, 0, 'empty cohort');
+  c = await awaitCohort([Promise.reject(new Error('x')).catch((e) => { throw e; }), later(3, 'ok')]);
+  eq(c.done[0].ok, false); eq(c.done[1].value, 'ok', 'a rejection is a done entry, not a throw');
+  eq(DISPATCH_SETTLE_MS, 250);
+});
+await test('B2: formatCompletionSteer and the digest tail speak the same vocabulary, numbered by the cohort index', () => {
+  const run = { label: 'slow', ok: true, stop: 'done', text: 'wrote the thing', changes: { written: ['s.txt'], deleted: [] } };
+  const merged = formatCompletionSteer({ index: 1, label: 'slow', run, status: 'merge' });
+  assert(/^\[coordination\] subagent \[2\] "slow" finished — merged\. changes applied: wrote s\.txt\. wrote the thing$/.test(merged), merged);
+  const held = formatCompletionSteer({ index: 2, label: 'late', run, status: 'conflict', conflictWith: ['s.txt'] });
+  assert(/held — conflicts with an earlier sibling that already merged \(s\.txt\); un-merging is not possible\. changes attempted \(NOT applied\)/.test(held), held);
+  const inc = formatCompletionSteer({ index: 0, label: 'x', run: { ...run, ok: false, stop: 'budget' }, status: 'incomplete' });
+  assert(/held — subagent did not finish cleanly \(budget\)/.test(inc), inc);
+  const d = formatDispatchDigest({ results: [run], status: ['merge'], conflicts: [], dropped: 0, budget: null, inFlight: ['late'], indices: [2] });
+  assert(/### \[3\] slow — merged/.test(d), 'numbered by the cohort index: ' + d);
+  assert(/### still in flight: "late" — its completion will arrive as a \[coordination\] message/.test(d) && /do not re-dispatch it/.test(d), d);
+  const plain = formatDispatchDigest({ results: [run], status: ['merge'], conflicts: [], dropped: 0, budget: null });
+  assert(!/still in flight/.test(plain) && /### \[1\] slow/.test(plain), 'no tail and identity numbering when nothing is in flight');
 });
 
 // CRIB-B B1: the typed in-flight state — live by a recent event, unverifiable by silence, exited by a stop

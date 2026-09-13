@@ -10,6 +10,8 @@ import { buildRigRegistry } from '../../rig/registry/index.mjs';
 import { createGrant, createOpLog, createAgentFace } from '../../rig/agent/index.mjs';
 import { createShell } from '../../rig/cli/shell.mjs';
 import { makeToolExecutor } from '../agent-tools.mjs';
+import { createSteerQueue } from '../steer.mjs';
+import { formatDispatchDigest } from '../subagents.mjs';
 
 let passed = 0; const failures = [];
 async function test(n, fn){ try { await fn(); passed++; } catch (e){ failures.push({ n, message: e.message + (e.stack ? '\n' + e.stack.split('\n')[1] : '') }); } }
@@ -68,6 +70,16 @@ function makeSpawnIsolated(base, infer, root = '') {
   };
 }
 
+// B2: the same top executor, with a steer queue and a settle window
+function topExecutorWith(base, infer, extra = {}) {
+  const fs = createFileops({ backend: base, root: '' });
+  const registry = buildRigRegistry({ fs });
+  const grant = createGrant({ prefixes: [''], scopes: ['fs:read', 'fs:write', 'fs:remove'] });
+  const opLog = createOpLog({ fs: createFileops({ backend: new MemoryBackend() }) });
+  const face = createAgentFace({ registry, grant, opLog, actor: 'agent' });
+  const shell = createShell({ registry, face });
+  return makeToolExecutor({ shell, face, mode: 'code', infer, subagentDepth: 0, spawnIsolated: makeSpawnIsolated(base, infer, ''), ...extra });
+}
 function topExecutor(base, infer, root = '') {
   const fs = createFileops({ backend: base, root });
   const registry = buildRigRegistry({ fs });
@@ -317,6 +329,121 @@ await test('supervisor tools refuse to nest (depth cap) — a subagent has no di
   const child = makeToolExecutor({ shell, face, mode: 'code', infer: async () => ({ content: '', toolCalls: [] }), subagentDepth: 1 });
   const out = await child('dispatch', { tasks: [{ prompt: 'x' }] });
   assert(/not available/i.test(out), 'nested dispatch refused');
+});
+
+// ── CRIB-B B2: completion as a steer — a slow child no longer stalls the fan-out ──
+const slowInfer = (plan, slowRe, ms) => async (a) => {
+  const user = [...a.messages].reverse().find((m) => m.role === 'user' && !/^\[coordination\]/.test(String(m.content || '')));
+  if (slowRe.test(String(user?.content || ''))) await new Promise((r) => setTimeout(r, ms));
+  return plan(a);
+};
+await test('B2: the fast child is in the tool result at once; the slow one arrives as a steer and merges when it lands', async () => {
+  const base = new MemoryBackend();
+  const plan = scriptedInfer((p) => /fast/i.test(p) ? { write: { file: 'fast.txt', content: 'F' } } : { write: { file: 'slow.txt', content: 'S' } });
+  const q = createSteerQueue();
+  const exec = topExecutorWith(base, slowInfer(plan, /slow/i, 250), { steer: q, settleMs: 40 });
+  const t0 = Date.now();
+  const out = await exec('dispatch', { tasks: [{ description: 'fast', prompt: 'fast: create fast.txt' }, { description: 'slow', prompt: 'slow: create slow.txt' }] });
+  assert(Date.now() - t0 < 200, 'the tool result did not wait for the slow child (' + (Date.now() - t0) + 'ms)');
+  assert(/### \[1\] fast — merged/.test(out), out);
+  assert(/### still in flight: "slow" — its completion will arrive as a \[coordination\] message/.test(out) && /do not re-dispatch it/.test(out), out);
+  eq(dec(await base.readBinary('fast.txt')), 'F', 'the fast child merged at once');
+  eq(await base.exists('slow.txt'), false, 'the slow one has not landed yet');
+  eq(q.inFlight(), 1, 'tracked');
+  await q.next(); // wakes on the steer
+  const steers = q.take(); eq(steers.length, 1);
+  assert(/^\[coordination\] subagent \[2\] "slow" finished — merged\. changes applied: wrote slow\.txt\./.test(steers[0].content), steers[0].content);
+  eq(dec(await base.readBinary('slow.txt')), 'S', 'the slow child merged when it finished');
+  await new Promise((r) => setTimeout(r, 0)); eq(q.inFlight(), 0);
+});
+await test('B2: first-come — a straggler touching a path an earlier sibling already merged is HELD, and the steer says so', async () => {
+  const base = new MemoryBackend();
+  const plan = scriptedInfer((p) => /fast/i.test(p) ? { write: { file: 'shared.txt', content: 'FAST' } } : { write: { file: 'shared.txt', content: 'SLOW' } });
+  const q = createSteerQueue();
+  const exec = topExecutorWith(base, slowInfer(plan, /slow/i, 200), { steer: q, settleMs: 30 });
+  const out = await exec('dispatch', { tasks: [{ description: 'fast', prompt: 'fast: write shared.txt' }, { description: 'slow', prompt: 'slow: write shared.txt' }] });
+  assert(/### \[1\] fast — merged/.test(out), out);
+  eq(dec(await base.readBinary('shared.txt')), 'FAST');
+  await q.next(); const s = q.take()[0].content;
+  assert(/subagent \[2\] "slow" finished — held — conflicts with an earlier sibling that already merged \(shared\.txt\); un-merging is not possible/.test(s), s);
+  eq(dec(await base.readBinary('shared.txt')), 'FAST', 'the straggler did not overwrite the merged sibling');
+});
+await test('B2: a cohort that completes together is byte-identical to the barrier digest; without a queue the barrier stands', async () => {
+  const mk = () => { const base = new MemoryBackend(); const plan = scriptedInfer((p) => /alpha/i.test(p) ? { write: { file: 'alpha.txt', content: 'A' } } : { write: { file: 'beta.txt', content: 'B' } }); return { base, plan }; };
+  const tasks = [{ description: 'alpha', prompt: 'Create alpha.txt' }, { description: 'beta', prompt: 'Create beta.txt' }];
+  const a = mk(); const barrier = await topExecutor(a.base, a.plan)('dispatch', { tasks });
+  const b = mk(); const q = createSteerQueue(); const streamed = await topExecutorWith(b.base, b.plan, { steer: q, settleMs: 500 })('dispatch', { tasks });
+  eq(streamed, barrier, 'same digest, byte for byte');
+  eq(q.inFlight(), 0, 'nothing left in flight'); eq(q.take().length, 0, 'no steers');
+  const c = mk(); const slow = slowInfer(c.plan, /beta/i, 120);
+  const t0 = Date.now(); const noQueue = await topExecutorWith(c.base, slow, { settleMs: 10 })('dispatch', { tasks });
+  assert(Date.now() - t0 >= 100, 'no queue → the barrier: the result waited for the slow child');
+  assert(!/still in flight/.test(noQueue) && /### \[2\] beta — merged/.test(noQueue), noQueue);
+});
+await test('B2 (B1): a re-dispatch of a label still in flight is refused; a disjoint label in the same call runs', async () => {
+  const base = new MemoryBackend();
+  const plan = scriptedInfer((p) => /slow/i.test(p) ? { write: { file: 'slow.txt', content: 'S' } } : { write: { file: 'other.txt', content: 'O' } });
+  const q = createSteerQueue();
+  const exec = topExecutorWith(base, slowInfer(plan, /slow/i, 200), { steer: q, settleMs: 0 });
+  const first = await exec('dispatch', { tasks: [{ description: 'slow', prompt: 'slow: create slow.txt' }, { description: 'quick', prompt: 'quick: create other.txt' }] });
+  assert(/still in flight: "slow"/.test(first), first);
+  const again = await exec('dispatch', { tasks: [{ description: 'slow', prompt: 'slow: create slow.txt' }] });
+  assert(/^Refused: "slow" is still in flight from an earlier dispatch — unverifiable authorizes nothing/.test(again), again);
+  const mixed = await exec('dispatch', { tasks: [{ description: 'slow', prompt: 'slow: create slow.txt' }, { description: 'third', prompt: 'third: create other.txt' }] });
+  assert(/### \[1\] third — merged/.test(mixed), 'the disjoint label ran: ' + mixed);
+  assert(/### refused: "slow" is still in flight from an earlier dispatch — unverifiable authorizes nothing/.test(mixed), 'a partial refusal is in the digest, never silent: ' + mixed);
+  await q.next(); q.take(); await new Promise((r) => setTimeout(r, 0));
+  const after = await exec('dispatch', { tasks: [{ description: 'slow', prompt: 'slow: create slow.txt' }] });
+  assert(!/^Refused/.test(after), 'once it reported back the label is free again: ' + after.slice(0, 80));
+});
+
+await test('B2: a straggler that touches a path a LATER dispatch merged is held — first-come across dispatches, not per call', async () => {
+  const base = new MemoryBackend();
+  const plan = scriptedInfer((p) => /slow/i.test(p) ? { write: { file: 'shared.txt', content: 'SLOW-FROM-DISPATCH-1' } } : /mid/i.test(p) ? { write: { file: 'shared.txt', content: 'MID' } } : { write: { file: 'fast.txt', content: 'F' } });
+  const q = createSteerQueue();
+  const exec = topExecutorWith(base, slowInfer(plan, /slow/i, 250), { steer: q, settleMs: 20 });
+  const first = await exec('dispatch', { tasks: [{ description: 'fast', prompt: 'fast: write fast.txt' }, { description: 'slow', prompt: 'slow: write shared.txt' }] });
+  assert(/still in flight: "slow"/.test(first), first);
+  const second = await exec('dispatch', { tasks: [{ description: 'mid', prompt: 'mid: write shared.txt' }] });
+  assert(/\[1\] mid — merged/.test(second), second);
+  eq(dec(await base.readBinary('shared.txt')), 'MID');
+  await q.next(); const s = q.take()[0].content;
+  assert(/"slow" finished — held — conflicts with an earlier sibling that already merged \(shared\.txt\)/.test(s), 'the straggler is held against the later dispatch: ' + s);
+  eq(dec(await base.readBinary('shared.txt')), 'MID', 'the later merge stands');
+});
+
+await test('B2: the batch path obeys the merge clock — a cohort launched before a straggler merged is held on that path, so the straggler\'s "merged" steer stays true', async () => {
+  const base = new MemoryBackend();
+  const plan = scriptedInfer((p) => /slow/i.test(p) ? { write: { file: 'shared.txt', content: 'SLOW' } } : /mid/i.test(p) ? { write: { file: 'shared.txt', content: 'MID' } } : { write: { file: 'fast.txt', content: 'F' } });
+  const q = createSteerQueue();
+  const infer = async (a) => { const u = [...a.messages].reverse().find((m) => m.role === 'user' && !/^\[coordination\]/.test(String(m.content || ''))); const p = String(u?.content || ''); if (/slow/i.test(p)) await new Promise((r) => setTimeout(r, 120)); if (/mid/i.test(p)) await new Promise((r) => setTimeout(r, 300)); return plan(a); };
+  const exec = topExecutorWith(base, infer, { steer: q, settleMs: 20 });
+  const first = await exec('dispatch', { tasks: [{ description: 'fast', prompt: 'fast: write fast.txt' }, { description: 'slow', prompt: 'slow: write shared.txt' }] });
+  assert(/still in flight: "slow"/.test(first), first);
+  const second = await exec('dispatch', { tasks: [{ description: 'mid', prompt: 'mid: write shared.txt' }] }); // launched before slow merges, finishes after
+  const s = q.take()[0].content;
+  assert(/"slow" finished — merged\. changes applied: wrote shared\.txt/.test(s), 'the straggler merged first: ' + s);
+  assert(/\[1\] mid — held — path conflict — merged by an earlier sibling since this dispatch launched \(shared\.txt\)/.test(second), 'the later cohort is held on that path: ' + second);
+  eq(dec(await base.readBinary('shared.txt')), 'SLOW', 'the steer on the chain is true');
+});
+
+await test('B2: check → commit is one critical section across the merge clock — a straggler committing while the next cohort checks cannot leave two "merged" claims on one path', async () => {
+  const base = new MemoryBackend();
+  const plan = scriptedInfer((p) => /slow/i.test(p) ? { write: { file: 'shared.txt', content: 'SLOW' } } : /mid/i.test(p) ? { write: { file: 'shared.txt', content: 'MID' } } : { write: { file: 'fast.txt', content: 'F' } });
+  const infer = async (a) => { const u = [...a.messages].reverse().find((m) => m.role === 'user' && !/^\[coordination\]/.test(String(m.content || ''))); const p = String(u?.content || ''); if (/slow/i.test(p)) await new Promise((r) => setTimeout(r, 100)); if (/mid/i.test(p)) await new Promise((r) => setTimeout(r, 150)); return plan(a); };
+  // each scripted child makes two model calls: slow completes at ~200 ms, mid at ~330 ms — inside slow's 250 ms commit
+  // (only the shared.txt commits are slow: a slow fast.txt commit would hold the first dispatch's return and move the window)
+  const inner = makeSpawnIsolated(base, infer, '');
+  const slowCommit = async () => { const iso = await inner(); const c = iso.commit.bind(iso); iso.commit = async () => { if ((iso.changes().written || []).includes('shared.txt')) await new Promise((r) => setTimeout(r, 250)); return c(); }; return iso; };
+  const q = createSteerQueue();
+  const exec = topExecutorWith(base, infer, { steer: q, settleMs: 20, spawnIsolated: slowCommit });
+  const first = await exec('dispatch', { tasks: [{ description: 'fast', prompt: 'fast: write fast.txt' }, { description: 'slow', prompt: 'slow: write shared.txt' }] });
+  assert(/still in flight: "slow"/.test(first), first);
+  const second = await exec('dispatch', { tasks: [{ description: 'mid', prompt: 'mid: write shared.txt' }] }); // completes while slow's 150 ms commit is in flight
+  await q.next(); const s = q.take()[0].content;
+  const slowMerged = /"slow" finished — merged/.test(s), midMerged = /\[1\] mid — merged/.test(second);
+  assert(slowMerged !== midMerged, 'exactly one "merged" claim on shared.txt — slow: ' + s + ' | mid: ' + second);
+  eq(dec(await base.readBinary('shared.txt')), slowMerged ? 'SLOW' : 'MID', 'the workspace holds the one that merged');
 });
 
 if (failures.length){

@@ -294,11 +294,19 @@ assert.match(anvil, /const rel='runs\/'\+project\+'\/'\+String\(t\.id\);/, 'the 
 assert.match(anvil, /if\(event&&\(event\.type==='turn-start'\|\|event\.type==='tool-call'\)&&runCtx&&runCtx\.rec\)\{ try\{ runCtx\.rec\.subagentBeat\(\{ kind, label, tool_call_id, child_step: event\.step, tool: event\.name\|\|'' \}\)/, 'B1: a heartbeat per child turn / tool call, on the parent chain');
 // (the ticker, the stamp and the settle are DRIVEN in test-anvil-handlers; here only their call sites)
 assert.match(anvil, /tool: event\.name\|\|'' \}\)\.catch\(\(\)=>\{\}\); \}catch\(_\)\{\} \}\n\s*armFleetTicker\(\);\n\s*renderLog\(\);/, 'B1: the ticker is armed on every child event');
-assert.match(anvil, /runCtx = null; \/\/ the executor serves no run between tasks\n\s*settleFleetRows\(t\);/, 'B1: every run settles its child rows at the end');
+assert.match(anvil, /\}finally\{[\s\S]{0,700}?settleFleetRows\(t\); \/\/ B1: no child outlives its run/, 'B1: every run settles its child rows at the end');
+// B2: no straggler outlives its run — the run's signal is aborted in the same finally, so a child still in
+// flight takes the hold path and nothing of it merges unrecorded (the checker's probe)
+assert.match(anvil, /ownerStopped = !!\(abortController&&abortController\.signal\.aborted\);\n\s*if\(abortController&&!ownerStopped\)\{ try\{ abortController\.abort\(\); \}catch\(_\)\{\} \}/, 'B2: the run aborts its signal the moment its loops return, before the record is saved');
+assert.match(anvil, /\}finally\{[\s\S]{0,900}?if\(abortController&&!abortController\.signal\.aborted\)\{ try\{ abortController\.abort\(\); \}catch\(_\)\{\} \}/, 'B2: and the finally is the backstop');
+assert.match(anvil, /const wasAborted = ownerStopped!=null \? ownerStopped : /, 'B2: the owner-stopped reading is taken BEFORE the run aborts itself');
 assert.match(anvil, /settleFleetRows\(t\); \/\/ B1: a child row still 'running' from before the reload is interrupted[^\n]*\n\s*if\(t\.status === 'running'\)\{/, 'B1: and boot settles them before the run-status demotion');
 assert.match(anvil, /^  let runCtx = null;$/m, 'runCtx is module-scoped (the ticker reads it from outside runTask)');
 assert.ok(!/^    let runCtx = null;$/m.test(anvil), 'and not shadowed inside runTask');
 assert.match(anvil, /const lv = e\.status==='running' \? subagentLiveness\(e\)\.state : 'exited';/, 'B1: the row is rendered by its typed state');
+// CRIB-B B2: one steer queue per run, shared by the executor and the loop
+assert.match(anvil, /const steer=createSteerQueue\(\);\n\s*const baseExec = makeToolExecutor\(\{ shell, face, mode, infer: inferViaHost, spawnIsolated, steer,/, 'B2: the executor gets the run\'s steer queue');
+assert.match(anvil, /await driveRun\(\{\n\s*steer,/, 'B2: and so does the loop, through driveRun');
 assert.ok(!/async function saveRunRecord[\s\S]{0,400}runIndexRow\(\{ project:String\(state\.activeProject/.test(anvil), 'the row never reads the live activeProject at save time');
 console.log('run-assembly: A4 readiness == the toolset in every mode; A2 episode rides ungated');
 // …and rides run.started only when the app supplies it: a bed that passes none records the old shape
@@ -319,6 +327,21 @@ console.log('run-assembly: A4 readiness == the toolset in every mode; A2 episode
   const inB = recB.resolve(recB.events().find((e) => e.tool === 'run.started')).input;
   assert.equal('readiness' in inB, false, 'absent when not given — the record keeps its shape');
   console.log('run-assembly: A4 readiness rides run.started only when supplied');
+// B2: driveRun hands the steer queue to the loop — a completion pushed while the model waits lands as run.steered on the record
+{
+  const { createSteerQueue } = await import('../sys/ai/steer.mjs');
+  const q = createSteerQueue();
+  let finish; q.track(new Promise((r) => { finish = r; }).then(() => q.push({ content: '[coordination] subagent [1] "x" finished — merged.' })));
+  const rec = createRunRecorder({ app: 'anvil', principal: 'test' });
+  let calls = 0;
+  const infer = async ({ messages }) => { calls++; return calls === 1 ? { content: 'waiting', toolCalls: [] } : { content: 'saw ' + messages[messages.length - 1].content.slice(0, 14), toolCalls: [] }; };
+  const p = driveRun({ mode: 'code', convo: [{ role: 'user', content: 'go' }], sysMsg: () => ({ role: 'system', content: 'sys' }), tools: runToolset('code', { verify: false }), infer, executeTool: async () => '', rec, steer: q, onEvent: (e) => rec.onEvent(e) });
+  setTimeout(finish, 15);
+  const res = await p; await rec.settled();
+  assert.equal(res.stop, 'done'); assert.equal(res.text, 'saw [coordination]');
+  assert.ok(rec.events().some((e) => e.tool === 'run.steered'), 'the steer is on the record');
+  console.log('run-assembly: B2 the steer reaches the loop through driveRun and lands on the record');
+}
 }
 
 console.log(`run-assembly: ${n} groups green — prompt bytes, tool list, budgets and texts equal e870f0b; driveRun records every loop; the app is wired through the module`);

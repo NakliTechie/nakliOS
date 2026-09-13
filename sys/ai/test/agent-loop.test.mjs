@@ -12,6 +12,7 @@ import { createGitCore } from '../../rig/git/git-core.mjs';
 import { buildRigRegistry } from '../../rig/registry/index.mjs';
 import { createGrant, createOpLog, createAgentFace } from '../../rig/agent/index.mjs';
 import { createShell } from '../../rig/cli/shell.mjs';
+import { createSteerQueue } from '../steer.mjs';
 import { runAgentLoop, shellTool, makeShellExecutor, taskDoneTool, DEFAULT_TOOL_CONCURRENCY,
   estimateTokens, boundedText, interceptBashCommand,
   REPEAT_NUDGE_AT, repeatNudge, stepSignature,
@@ -1261,6 +1262,117 @@ await test('F9: a call whose arguments do not parse is never started, and a loop
   eq(seen.join(' '), 'read:a read:c read:d', 'the unparseable call and task_done never reached the executor');
   const tools = r.messages.filter((m) => m.role === 'tool').map((m) => m.tool_call_id + '=' + m.content.slice(0, 24));
   eq(tools.join(' | '), 'c0=ok | c1=Error: could not parse a | c2=ok | c3=Task accepted (no verifi | c4=ok', 'every call answered, in request order');
+});
+
+// ── CRIB-B B2: completion as a steer — what arrives mid-turn lands at the next turn; waiting is not done ──
+await test('B2: a steer pushed during a tool call lands at the next turn start, after the tool result, as a loop-authored user turn', async () => {
+  const q = createSteerQueue();
+  const events = [];
+  const result = await runAgentLoop({
+    messages: [{ role: 'system', content: 's' }, { role: 'user', content: 'go' }],
+    tools: [],
+    infer: scriptedInfer([
+      { content: '', toolCalls: [call('ping', {}, 'c0')] },
+      (messages) => { const last = messages[messages.length - 1]; return { content: 'saw: ' + last.content, toolCalls: [] }; },
+    ]),
+    executeTool: async () => { q.push({ content: '[coordination] subagent "x" finished — merged' }); return 'pong'; },
+    steer: q,
+    onEvent: (e) => events.push(e),
+  });
+  eq(result.stop, 'done');
+  const roles = result.messages.map((m) => m.role + (m.tool_call_id ? ':result' : '')).join(' ');
+  eq(roles, 'system user assistant tool:result user assistant', 'assistant(tool_call) → tool result → the steer → the next reply');
+  eq(result.messages[4].content, '[coordination] subagent "x" finished — merged');
+  eq(result.text, 'saw: [coordination] subagent "x" finished — merged', 'the model read it at its next turn');
+  const st = events.find((e) => e.type === 'steer');
+  assert(st && st.content === result.messages[4].content && st.step === 1, 'a steer event carries the content and the step it landed on');
+});
+
+await test('B2: a no-tool-call turn while a child is in flight WAITS; the completion steers the run on; the gate does not run meanwhile', async () => {
+  const q = createSteerQueue();
+  let finishChild; const child = new Promise((r) => { finishChild = r; });
+  q.track(child.then(() => { q.push({ content: '[coordination] subagent "y" finished — held' }); }));
+  const events = []; let gateRuns = 0;
+  const p = runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }], tools: [],
+    infer: scriptedInfer([
+      { content: 'Waiting for the child.', toolCalls: [] },
+      (messages) => ({ content: 'done after: ' + messages[messages.length - 1].content, toolCalls: [] }),
+    ]),
+    executeTool: async () => '', steer: q,
+    verify: async () => { gateRuns++; return { ok: true, exit: 0, stdout: '', stderr: '' }; },
+    onEvent: (e) => events.push(e),
+  });
+  await new Promise((r) => setTimeout(r, 20));
+  assert(events.some((e) => e.type === 'waiting' && e.inFlight === 1), 'the loop announced it is waiting');
+  eq(gateRuns, 0, 'no gate while a child is in flight');
+  finishChild();
+  const result = await p;
+  eq(result.stop, 'done'); eq(result.verified, true); eq(gateRuns, 1, 'the gate ran once, after the fan-out settled');
+  eq(result.text, 'done after: [coordination] subagent "y" finished — held');
+  eq(result.steps, 2, 'the waiting turn was a turn');
+});
+
+await test('B2: abort while waiting returns aborted; the wall clock trips a waiting loop', async () => {
+  const q = createSteerQueue(); q.track(new Promise(() => {}));
+  const ac = new AbortController();
+  const p = runAgentLoop({ messages: [{ role: 'user', content: 'go' }], tools: [], infer: scriptedInfer([{ content: 'waiting', toolCalls: [] }]), executeTool: async () => '', steer: q, signal: ac.signal });
+  await new Promise((r) => setTimeout(r, 10)); ac.abort();
+  eq((await p).stop, 'aborted');
+  const q2 = createSteerQueue(); q2.track(new Promise(() => {}));
+  const r2 = await runAgentLoop({ messages: [{ role: 'user', content: 'go' }], tools: [], infer: scriptedInfer([{ content: 'waiting', toolCalls: [] }]), executeTool: async () => '', steer: q2, budget: { wallClockMs: 40 } });
+  eq(r2.stop, 'budget'); eq(r2.budgetAxis, 'wall-clock', 'a waiting loop still honours the wall clock');
+});
+
+await test('B2: a steer is LOOP-authored — it does not read as an owner interjection, so a repeating model is still nudged', async () => {
+  const q = createSteerQueue();
+  const events = [];
+  const same = { content: '', toolCalls: [call('ping', { n: 1 }, 'c0')] };
+  await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }], tools: [],
+    infer: scriptedInfer([same, same, same, same, { content: 'done', toolCalls: [] }]),
+    executeTool: async () => { q.push({ content: '[coordination] a child finished' }); return 'pong'; },
+    steer: q, onEvent: (e) => events.push(e),
+  });
+  const nudge = events.find((e) => e.type === 'repeat-nudge');
+  assert(nudge && nudge.times === 3, `the third identical turn is nudged despite a steer landing between each: ${JSON.stringify(events.map((e) => e.type))}`);
+});
+
+await test('B2: task_done while a child is in flight is answered "not yet" and the gate does not run; after the child settles it is accepted', async () => {
+  const q = createSteerQueue();
+  let fin; q.track(new Promise((r) => { fin = r; }).then(() => q.push({ content: '[coordination] subagent [1] "x" finished — merged.' })));
+  const events = []; let gateRuns = 0;
+  const p = runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }], tools: [taskDoneTool()],
+    infer: scriptedInfer([
+      { content: '', toolCalls: [call('task_done', { summary: 'all of it is done' }, 'td1')] },
+      (messages) => (/Not yet: 1 subagent is still in flight/.test(messages[messages.length - 1].content) ? { content: 'ok, waiting', toolCalls: [] } : { content: 'unexpected', toolCalls: [] }),
+      { content: '', toolCalls: [call('task_done', { summary: 'all of it is done' }, 'td2')] },
+    ]),
+    executeTool: async () => '', steer: q,
+    verify: async () => { gateRuns++; return { ok: true, exit: 0, stdout: '', stderr: '' }; },
+    onEvent: (e) => events.push(e),
+  });
+  await new Promise((r) => setTimeout(r, 20));
+  eq(gateRuns, 0, 'no gate while the child is in flight');
+  const refusal = events.find((e) => e.type === 'tool-result' && e.kind === 'in_flight');
+  assert(refusal && /call task_done after it/.test(refusal.result), 'task_done was answered not-yet: ' + JSON.stringify(refusal));
+  fin();
+  const result = await p;
+  eq(result.stop, 'done'); eq(result.verified, true); eq(gateRuns, 1, 'the gate ran once, for the second task_done');
+});
+
+await test('B2: with no wall clock a waiting turn waits at most waitCapMs, and maxSteps bounds the waits', async () => {
+  const q = createSteerQueue(); q.track(new Promise(() => {}));
+  const t0 = Date.now();
+  const r = await runAgentLoop({ messages: [{ role: 'user', content: 'go' }], tools: [], infer: scriptedInfer([{ content: 'waiting', toolCalls: [] }]), executeTool: async () => '', steer: q, maxSteps: 3, waitCapMs: 15 });
+  eq(r.stop, 'max-steps'); eq(r.steps, 3, 'three waiting turns');
+  assert(Date.now() - t0 < 400, 'each wait was capped (' + (Date.now() - t0) + 'ms)');
+});
+
+await test('B2: without a steer queue nothing changes — a no-tool-call turn is done, as before', async () => {
+  const r = await runAgentLoop({ messages: [{ role: 'user', content: 'go' }], tools: [], infer: scriptedInfer([{ content: 'done', toolCalls: [] }]), executeTool: async () => '' });
+  eq(r.stop, 'done'); eq(r.steps, 1);
 });
 
 if (failures.length) {

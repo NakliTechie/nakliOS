@@ -94,6 +94,32 @@ function applyToolOverride(exec, override) {
 // Replay one corpus entry. Returns { ok, why, steps, stop, consumed } — plus `events` (the live
 // chain, joined) for an override cell, whose divergence from its base is the thing to assert on.
 // `expectConsumed:false` is for an entry whose override deliberately cuts the run short.
+// B2: the steers a record carries, served back to the replayed loop at the turns they preceded. The
+// live loop drains its queue once per turn, before the turn starts, so a steer's position is "the
+// number of turn.started events before it" and `take()` counts its calls the same way. `inFlight()`
+// is 1 while any steer is unserved — a waiting turn then waits, `next()` resolves at once, and the
+// next turn takes it — and 0 after, so the replayed loop ends where the live one did. Same contract
+// as the other replayers: remaining() + assertConsumed().
+export function replaySteer(record) {
+  // keyed by (loop, turn-within-loop): a budget-axis exit drains without starting a turn, and a
+  // re-loop starts its turns at 0 again — a global count lined up with neither (the re-check's probe)
+  const byKey = new Map(); let loop = -1, turn = 0, total = 0;
+  for (const e of joined(record.events(), record.resolve)) {
+    if (e.tool === 'run.started') { loop++; turn = 0; }
+    else if (e.tool === 'turn.started') turn++;
+    else if (e.tool === 'run.steered') { const k = `${loop}:${turn}`; if (!byKey.has(k)) byKey.set(k, []); byKey.get(k).push({ content: e.output?.content ?? '' }); total++; }
+  }
+  let curLoop = -1, calls = 0, served = 0;
+  return {
+    push() {}, size() { return 0; }, track(p) { return p; }, next() { return Promise.resolve(); },
+    nextLoop() { curLoop++; calls = 0; }, // replayEntry calls it before each loop, as run.started marks one in the record
+    take() { const list = byKey.get(`${curLoop}:${calls++}`) || []; served += list.length; return list; },
+    inFlight() { return served < total ? 1 : 0; },
+    remaining() { return [{ what: 'steers', recorded: total, served }]; },
+    assertConsumed() { if (served < total) throw new ReplayMiss(`${total - served} recorded steers were never served`, { recorded: total, served }); },
+  };
+}
+
 export async function replayEntry(dump, { override = null, expectConsumed = true, maxSteps = 24, opts = {} } = {}) {
   const recorded = loadRecord(dump);
   const openings = openingsOf(recorded);
@@ -113,13 +139,15 @@ export async function replayEntry(dump, { override = null, expectConsumed = true
   // (a replay is instant), which is why the corpus uses turns.
   const gate = replayVerify(recorded);
   const verify = gate.count() ? gate : null;
+  const steer = replaySteer(recorded); // B2: a record with no steers is a queue that never waits
 
   let result, threw = null;
   try {
     for (const { messages, tools } of openings) {
       await live.start({ messages, tools });
+      steer.nextLoop();
       result = await runAgentLoop({
-        messages, tools, infer: live.wrapInfer(infer), executeTool: exec, onEvent: live.onEvent,
+        messages, tools, infer: live.wrapInfer(infer), executeTool: exec, onEvent: live.onEvent, steer,
         // a step cap is not in the record either (the supervisor cell spins to it); it rides in opts
         maxSteps: opts.maxSteps ?? maxSteps, verify, signal, ...(opts.budget ? { budget: opts.budget } : {}),
         ...(opts.maxVerifyRounds ? { maxVerifyRounds: opts.maxVerifyRounds } : {}),
@@ -148,7 +176,7 @@ export async function replayEntry(dump, { override = null, expectConsumed = true
 
   // 3 — nothing recorded went unused
   let consumed = true, consumeWhy = '';
-  try { baseInfer.assertConsumed(); exec.assertConsumed(); gate.assertConsumed(); }
+  try { baseInfer.assertConsumed(); exec.assertConsumed(); gate.assertConsumed(); steer.assertConsumed(); }
   catch (e) { consumed = false; consumeWhy = e.message; }
   if (expectConsumed && !consumed) return { ok: false, why: consumeWhy, stop: result.stop, steps: result.steps, consumed };
 

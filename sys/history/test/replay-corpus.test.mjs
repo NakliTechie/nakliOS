@@ -11,9 +11,10 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { replayEntry, openingOf, applyOverride } from '../replay-corpus.mjs';
+import { replayEntry, openingOf, applyOverride, replaySteer } from '../replay-corpus.mjs';
 import { loadRecord, replayInfer, replayExecuteTool, assertConsumed, joined, foldTranscript, foldStagnation, ReplayMiss } from '../run-record.mjs';
 import { runAgentLoop, shellTool } from '../../ai/agent-loop.mjs';
+import { createSteerQueue } from '../../ai/steer.mjs';
 import { createRunRecorder, isCorpusRecord } from '../run-record.mjs';
 import { classifyToolResult } from '../../ai/tool-result-kind.mjs';
 
@@ -401,6 +402,49 @@ await test('cell supervisor — a spinning run is redirected ONCE by the D2 supe
   const r = await replayEntry(dump, { opts: optsOf('supervisor.json') });
   assert(r.ok, `the two-loop replay failed: ${r.why}`);
   eq(r.consumed, true, 'both loops served every recorded response');
+});
+
+// CRIB-B B2: a record that carries a steer replays keyless — the steer is served at the turn it preceded
+await test('B2: a record with run.steered replays: the steer lands at the same turn, nothing is left unserved, the shape matches', async () => {
+  const q = createSteerQueue(); let fin; q.track(new Promise((r) => { fin = r; }).then(() => q.push({ content: '[coordination] subagent [1] "x" finished — merged.' })));
+  const rec = createRunRecorder({ app: 'anvil', principal: 'p' });
+  let n = 0; const infer = rec.wrapInfer(async () => (n++ === 0 ? { content: 'waiting', toolCalls: [] } : { content: 'done', toolCalls: [] }));
+  await rec.start({ messages: [{ role: 'user', content: 'go' }], tools: [] });
+  setTimeout(fin, 10);
+  const res = await runAgentLoop({ messages: [{ role: 'user', content: 'go' }], tools: [], infer, executeTool: async () => '', onEvent: rec.onEvent, steer: q });
+  await rec.finish(res); await rec.settled();
+  assert(rec.events().some((e) => e.tool === 'run.steered'), 'the record carries the steer');
+  const r = await replayEntry(rec.export());
+  assert(r.ok, 'replays keyless: ' + r.why);
+  eq(r.steps, res.steps, 'the same number of turns'); eq(r.stop, 'done'); eq(r.consumed, true);
+  const rs = replaySteer(loadRecord(rec.export())); rs.nextLoop();
+  eq(rs.inFlight(), 1, 'one steer to serve → the first waiting turn waits');
+  eq(rs.take().length, 0, 'turn 0 preceded no steer'); eq(rs.take()[0].content, '[coordination] subagent [1] "x" finished — merged.', 'turn 1 takes it');
+  eq(rs.inFlight(), 0, 'served → nothing in flight'); let threw = false; try { rs.assertConsumed(); } catch (_) { threw = true; } assert(!threw, 'all served');
+  const none = replaySteer(loadRecord(rec.export())); none.nextLoop(); none.take(); let miss = false; try { none.assertConsumed(); } catch (e) { miss = /1 recorded steers were never served/.test(e.message); } assert(miss, 'an unserved steer is a replay miss');
+});
+
+await test('B2: a two-loop record under a turns budget, the steer drained on the budget-tripped step of loop 2, replays — keyed per loop, not by a global turn count', async () => {
+  const rec = createRunRecorder({ app: 'anvil', principal: 'p' });
+  // loop 1: one waiting turn (a child in flight, never settles), then the turns budget trips at the drain
+  const infer1 = rec.wrapInfer(async () => ({ content: 'first loop', toolCalls: [] }));
+  await rec.start({ messages: [{ role: 'user', content: 'go' }], tools: [] });
+  const q1 = createSteerQueue(); q1.track(new Promise(() => {}));
+  const r1 = await runAgentLoop({ messages: [{ role: 'user', content: 'go' }], tools: [], infer: infer1, executeTool: async () => '', onEvent: rec.onEvent, steer: q1, budget: { turns: 1 }, waitCapMs: 15 });
+  await rec.finish(r1); eq(r1.stop, 'budget');
+  // loop 2: one waiting turn, the steer lands during the wait and is drained at step 1 — where the budget then trips
+  const q2 = createSteerQueue(); let fin; q2.track(new Promise((r) => { fin = r; }).then(() => q2.push({ content: '[coordination] subagent [1] "y" finished — merged.' })));
+  const infer2 = rec.wrapInfer(async () => ({ content: 'waiting', toolCalls: [] }));
+  await rec.start({ messages: [{ role: 'user', content: 'again' }], tools: [] });
+  setTimeout(fin, 5);
+  const r2 = await runAgentLoop({ messages: [{ role: 'user', content: 'again' }], tools: [], infer: infer2, executeTool: async () => '', onEvent: rec.onEvent, steer: q2, budget: { turns: 1 }, waitCapMs: 50 });
+  await rec.finish(r2); await rec.settled(); eq(r2.stop, 'budget');
+  const ev = joined(rec.events(), rec.resolve).map((e) => e.tool);
+  eq(ev.filter((v) => v === 'run.started').length, 2, 'two loops on one record');
+  const at = ev.indexOf('run.steered'); assert(at > 0 && ev[at + 1] === 'run.stopped', 'the steer was drained on the step the budget then stopped: ' + ev.slice(at - 2, at + 2).join(' '));
+  const r = await replayEntry(rec.export(), { opts: { budget: { turns: 1 } } });
+  assert(r.ok, 'replays with the steer served at loop 2, step 1 — not at a global turn index: ' + r.why);
+  eq(r.consumed, true);
 });
 
 if (failures.length) {

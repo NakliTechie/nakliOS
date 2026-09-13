@@ -20,7 +20,7 @@
 import { shellTool, makeShellExecutor, runAgentLoop, taskDoneTool, interceptBashCommand, clarifyTool } from './agent-loop.mjs';
 import { parseExpect, gradeExpect, expectLine } from './expect.mjs';
 import {
-  dispatchTool, reviewTool, normalizeTasks, planMerge, formatDispatchDigest,
+  dispatchTool, reviewTool, normalizeTasks, planMerge, formatDispatchDigest, awaitCohort, formatCompletionSteer, DISPATCH_SETTLE_MS,
   SUBAGENT_SYSTEM, REVIEW_SYSTEM, SUBAGENT_MAX_STEPS, clampSubagentBudget, SUBAGENT_WALL_CLOCK_S, SUBAGENT_MIN_WALL_CLOCK_S } from './subagents.mjs';
 import { renderHashline, applyHashlineBlock, parseHashlineEdit } from './hashline.mjs';
 import { contentToken, asStored } from './content-token.mjs';
@@ -464,10 +464,21 @@ export function parseApplyPatch(patch) {
 // shape as the queue's `dispatching` claim and the task's `running` status.
 export const SUBAGENT_WALL_CLOCK_MS = 240_000;
 export function makeToolExecutor({ shell, face, mode = 'code', infer = null, subagentDepth = 0, spawnIsolated = null, recordSubagent = null,
-                                   signal = null, subagentBudget = null, recordSubagentStart = null, onSubagentEvent = null }) {
+                                   signal = null, subagentBudget = null, recordSubagentStart = null, onSubagentEvent = null,
+                                   steer = null, settleMs = DISPATCH_SETTLE_MS }) {
   if (!face) throw new Error('makeToolExecutor requires a Rig agent face');
   const modeAllow = MODE_TOOLS[mode] || null; // null = all tools
   const subagentsOn = typeof infer === 'function' && subagentDepth < 1; // depth cap 1 (no recursion)
+  const inFlightLabels = new Set(); // B2: dispatched and not yet reported back — a re-dispatch of one is refused (B1: absence authorizes nothing)
+  // B2: the merge clock. Every merge this executor performs bumps it and stamps its paths, so a
+  // straggler is judged against everything merged AFTER it launched — by this dispatch or a later
+  // one (the checker's probe: a per-call set let a straggler overwrite a later dispatch's merge).
+  let mergeGen = 0; const lastMerged = new Map(); // path -> the generation that merged it
+  // …and the clock is read and advanced under ONE lock: a check that passed while another commit was
+  // still writing would let two "merged" claims coexist on one path (the third pass's probe, a
+  // 150 ms commit). Check, commit and stamp are one critical section, on both merge paths.
+  let mergeLock = Promise.resolve();
+  const withMergeLock = (fn) => { const run = mergeLock.then(fn, fn); mergeLock = run.then(() => {}, () => {}); return run; };
 
   // Run one subagent loop on its OWN chain and hand the dump to the parent. The child gets a
   // separate recorder rather than the parent's onEvent for two load-bearing reasons: interleaved
@@ -783,18 +794,23 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
         const norm = normalizeTasks(args?.tasks);
         if (!norm.ok) return `Error: ${norm.error}`;
         const budget = clampSubagentBudget(args || {}); // ESS-3: per call, clamped, stated in the digest
-        // Launch every sub-task concurrently, each in its own isolated overlay.
-        // `ok` is true ONLY when the subagent finished cleanly (stop 'done') — a
-        // subagent that errored or ran out of steps is held, its partial writes
-        // never committed to the real workspace.
-        const runs = await Promise.all(norm.tasks.map(async (t) => {
+        // B2 (B1 → B2): a label still in flight from an earlier dispatch is refused for THIS call — it
+        // is live or unverifiable, and absence authorizes nothing. Disjoint labels in the same call run.
+        const refused = [], tasks = [];
+        for (const t of norm.tasks) { const label = t.label || t.prompt.slice(0, 60); if (inFlightLabels.has(label)) refused.push(label); else tasks.push({ ...t, label }); }
+        const refusals = refused.map((l) => `"${l}" is still in flight from an earlier dispatch`);
+        if (!tasks.length) return `Refused: ${refusals.join('; ')} — unverifiable authorizes nothing. Wait for the completion message; do not re-dispatch.`;
+        // Launch every sub-task concurrently, each in its own isolated overlay. `ok` is true ONLY
+        // when the subagent finished cleanly (stop 'done') — a subagent that errored or ran out of
+        // steps is held, its partial writes never committed to the real workspace.
+        const runOne = async (t) => {
           let iso;
           try { iso = await spawnIsolated(); }
           catch (e) { return { label: t.label, ok: false, stop: 'spawn-failed', text: `Failed to start subagent: ${String(e && e.message || e)}`, changes: { written: [], deleted: [] }, iso: null }; }
           try {
             const res = await runRecorded({
               kind: 'dispatch',
-              label: t.label || t.prompt.slice(0, 60),
+              label: t.label,
               tool_call_id: call?.id ?? null,
               messages: [
                 { role: 'system', content: SUBAGENT_SYSTEM },
@@ -809,24 +825,67 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
           } catch (e) {
             return { label: t.label, ok: false, stop: 'error', text: `Subagent error: ${String(e && e.message || e)}`, changes: iso.changes ? iso.changes() : { written: [], deleted: [] }, iso };
           }
-        }));
+        };
+        const children = tasks.map((t) => { inFlightLabels.add(t.label); return runOne(t).finally(() => inFlightLabels.delete(t.label)); });
+        // B2: the tool result is composed at the first of "every child complete" or "the first
+        // completion plus the settle window". With no steer queue there is nowhere to deliver a later
+        // completion, so the window is infinite and the result is the whole cohort — exactly as before.
+        const launchGen = mergeGen; // B2: what was merged before this cohort launched is not a clash for its stragglers
+        const { done, inFlight } = await awaitCohort(children, { settleMs: steer ? settleMs : Infinity });
+        const runs = done.map((d) => d.ok ? d.value : { label: tasks[d.index].label, ok: false, stop: 'error', text: `Subagent error: ${String(d.error && d.error.message || d.error)}`, changes: { written: [], deleted: [] }, iso: null });
+        const indices = done.map((d) => d.index);
+        const stragglers = inFlight.map((x) => tasks[x.index].label);
         // The owner pressed Stop while the workers ran. A sibling that had already finished
         // cleanly is still not merged: "stop" means nothing lands, not "keep whatever was
         // done by then" — the workspace after a stop must be the workspace before the dispatch.
+        // (A straggler dies with the signal; nothing of it merges either.)
         if (signal && signal.aborted) {
-          return formatDispatchDigest({ results: runs, status: runs.map(() => 'aborted'), conflicts: [], dropped: norm.dropped, budget });
+          return formatDispatchDigest({ results: runs, status: runs.map(() => 'aborted'), conflicts: [], dropped: norm.dropped, budget, indices, refused: refusals }); // no message is coming: the run is stopping
         }
-        // Merge plan: only cleanly-finished runs are eligible; a path clash holds
-        // just the clashers (a disjoint clean sibling still merges).
+        // Merge plan for what completed together: only cleanly-finished runs are eligible; a path
+        // clash holds just the clashers (a disjoint clean sibling still merges).
         const plan = planMerge(runs);
-        for (const i of plan.apply) {
-          const r = runs[i];
-          if (r.iso && typeof r.iso.commit === 'function') {
-            try { await r.iso.commit(); }
-            catch (e) { r.text += `\n(merge failed: ${String(e && e.message || e)})`; plan.status[i] = 'merge-failed'; }
+        const stamp = (r) => { mergeGen++; for (const p of [...(r.changes.written || []), ...(r.changes.deleted || [])]) lastMerged.set(p, mergeGen); };
+        await withMergeLock(async () => {
+          // B2: the batch path obeys the merge clock too — a clean run whose path anyone merged since
+          // this cohort launched (an earlier dispatch's straggler, most likely) is held, never committed
+          // over it: the straggler's "merged" steer on the chain stays true (the re-check's probe).
+          for (let i = 0; i < runs.length; i++) {
+            if (plan.status[i] !== 'merge') continue;
+            const late = [...(runs[i].changes.written || []), ...(runs[i].changes.deleted || [])].filter((p) => (lastMerged.get(p) || 0) > launchGen);
+            if (late.length) { plan.status[i] = 'conflict'; runs[i].conflictWith = late; }
           }
+          plan.apply = plan.apply.filter((i) => plan.status[i] === 'merge');
+          for (const i of plan.apply) {
+            const r = runs[i];
+            if (r.iso && typeof r.iso.commit === 'function') {
+              try { await r.iso.commit(); stamp(r); }
+              catch (e) { r.text += `\n(merge failed: ${String(e && e.message || e)})`; plan.status[i] = 'merge-failed'; }
+            }
+          }
+        });
+        // B2: the stragglers merge one by one as they finish — FIRST-COME: a path an earlier sibling
+        // already merged holds the newcomer (un-merging is not possible) — and each steers the parent
+        // with one [coordination] message. Nothing merges after a Stop.
+        for (const { index, promise } of inFlight) {
+          const label = tasks[index].label;
+          steer.track(promise.then(async (r) => {
+            let status = 'incomplete', conflictWith = null;
+            if (signal && signal.aborted) status = 'aborted';
+            else if (r.ok) await withMergeLock(async () => {
+              const paths = [...(r.changes.written || []), ...(r.changes.deleted || [])];
+              const clash = paths.filter((p) => (lastMerged.get(p) || 0) > launchGen); // merged since this cohort launched, by anyone
+              if (clash.length) { status = 'conflict'; conflictWith = clash; }
+              else if (!paths.length) status = 'no-op';
+              else if (r.iso && typeof r.iso.commit === 'function') {
+                try { await r.iso.commit(); status = 'merge'; stamp(r); }
+                catch (e) { status = 'merge-failed'; r.text += `\n(merge failed: ${String(e && e.message || e)})`; }
+              }
+            });
+            steer.push({ content: formatCompletionSteer({ index, label, run: r, status, conflictWith }) });
+          }));
         }
-        return formatDispatchDigest({ results: runs, status: plan.status, conflicts: plan.conflicts, dropped: norm.dropped, budget });
+        return formatDispatchDigest({ results: runs, status: plan.status, conflicts: plan.conflicts, dropped: norm.dropped, budget, inFlight: stragglers, indices, refused: refusals });
       }
 
       if (name === 'review') {

@@ -47,6 +47,7 @@ export const RUN_EVENTS = Object.freeze([
   'run.checkpoint',   // input: { step }                        output: { handoff }  (B4: a rollover landmark)
   'run.compacted',    // input: { method, from, to, step }      output: { replacement }  (F4: a logged surface replace)
   'run.nudged',       // input: { step, times, denied }         output: { content }  (F7: the loop's own escalating reminder)
+  'run.steered',      // input: { step }                        output: { content }  (CRIB-B B2: a child's completion, spliced in as a loop-authored user turn)
   'tool.spilled',     // input: { id, name, step, chars }       output: { sent }  (F5: the capped form the model actually saw)
   'subagent.ran',     // input: { kind, label, step, tool_call_id } output: { record, stop, steps, text }
   'subagent.started', // input: { kind, label, step, tool_call_id } output: {}  (ESS-1: the claim, before the child runs)
@@ -67,6 +68,7 @@ const LOOP_TO_VERB = Object.freeze({
   'tool-spilled': 'tool.spilled',
   'tool-error': 'tool.failed',
   'repeat-nudge': 'run.nudged',
+  'steer': 'run.steered',
   'verify-pass': 'verify.passed',
   'verify-fail': 'verify.failed',
 });
@@ -179,6 +181,8 @@ export function createRunRecorder({ app = 'anvil', principal = 'local', grant_id
         // must be on the chain or foldTranscript cannot reproduce what was sent — which is
         // precisely the divergence F1 checks for.
         case 'run.nudged': enqueue(verb, () => ({ input: { step: s, times: e.times ?? null, denied: !!e.denied }, output: { content: String(e.content ?? '') } })); break;
+        // B2: a child's completion the loop spliced in — a user turn the LOOP wrote, on the chain for the same reason
+        case 'run.steered': enqueue(verb, () => ({ input: { step: s }, output: { content: String(e.content ?? '') } })); break;
       }
     },
 
@@ -419,6 +423,7 @@ export function logUnit() {
         }
         case 'verify.passed': rows.push({ k: 'system', text: '✓ gate passed — exit 0' }); return { rows, open };
         case 'verify.failed': rows.push({ k: 'system', text: `✗ gate failed (round ${inp.round ?? 1}) — exit ${out.verdict?.exit ?? '?'}; agent retrying` }); return { rows, open };
+        case 'run.steered': rows.push({ k: 'system', text: '⇆ ' + String(out.content || '').replace(/^\[coordination\] /, '') }); return { rows, open }; // B2
         case 'run.stopped': {
           const st = out.stop;
           const label = st === 'aborted' ? 'stopped' : st === 'budget' ? `hit budget (${out.axis || ''})` : st === 'unverified' ? 'gate never passed' : st === 'error' ? `error: ${out.error || ''}` : st === 'clarify' ? `paused to ask: ${out.question || ''}` : st;
@@ -479,7 +484,9 @@ export function transcriptUnit({ applyCompaction = false } = {}) {
           let pc = flushed(s.pendingCalls);
           const calls = Array.isArray(o.toolCalls) ? o.toolCalls : [];
           if (calls.length) pc = { content: typeof o.content === 'string' ? o.content : '', calls: calls.map((c) => ({ id: c.id, type: 'function', function: { name: c.function?.name, arguments: c.function?.arguments } })) };
-          else if (o.content) out.push({ role: 'assistant', content: o.content });
+          // B2: a no-call reply is an assistant turn even when EMPTY — the loop pushes it (a waiting
+          // model may say nothing), so the next request carries it and the fold must too (F1)
+          else out.push({ role: 'assistant', content: typeof o.content === 'string' ? o.content : '' });
           return { out, pendingCalls: pc, started: s.started };
         }
         case 'tool.responded': {
@@ -511,6 +518,7 @@ export function transcriptUnit({ applyCompaction = false } = {}) {
         // F7: the reminder is replayed verbatim from the record, not regenerated — the wording
         // may change between versions, and the surface must be what THAT run actually sent.
         case 'run.nudged':
+        case 'run.steered':
           if (!o.content) return s;
           out.push({ role: 'user', content: String(o.content) });
           return { out, pendingCalls: s.pendingCalls, started: s.started };

@@ -331,6 +331,10 @@ jobs:
 
       - name: Verify agent loop over the Rig shell
         run: node sys/ai/test/agent-loop.test.mjs
+      - name: Verify the steer queue (CRIB-B B2 — a completion lands at the next turn; waiting is not done)
+        run: node sys/ai/test/steer.test.mjs
+      - name: Verify structured output (CRIB-B B4 — JSON out of prose, a repair turn, a ladder with its trail)
+        run: node sys/ai/test/structured.test.mjs
 
       - name: Verify transcript compaction (turn-boundary cut, and no impossible retrieval)
         run: node sys/ai/test/compaction.test.mjs

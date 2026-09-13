@@ -11,6 +11,7 @@ import { createRunRecorder, joined, foldSubagents, verifySubagents, foldTranscri
          reconstructionCheck, loadRecord, foldSubagentFleet, SUBAGENT_STALE_MS } from '../run-record.mjs';
 import { verifyChain } from '../ledger.mjs';
 import { runAgentLoop } from '../../ai/agent-loop.mjs';
+import { createSteerQueue } from '../../ai/steer.mjs';
 import { makeToolExecutor, codingToolset } from '../../ai/agent-tools.mjs';
 import { createFileops, MemoryBackend } from '../../rig/fileops/index.mjs';
 import { OverlayBackend } from '../../rig/fileops/overlay-backend.mjs';
@@ -181,6 +182,40 @@ await test('ESS-1: a child that started and never reported back is an orphan, na
   assert(/1 subagent was in flight when the run ended and never reported back/.test(note), `named in the note: ${note}`);
   assert(/split lexer/.test(note), 'by label');
   assert(/nothing they did reached the workspace/.test(note), 'and says what that means');
+});
+
+// CRIB-B B2: a steer is on the chain as run.steered and the transcript fold reproduces it as the user turn it was
+await test('B2: run.steered is recorded with its content, reproduced by foldTranscript, and is not an owner input', async () => {
+  const rec = createRunRecorder({ app: 'anvil', principal: 'p' });
+  await rec.start({ messages: [{ role: 'user', content: 'fan out' }], tools: [] });
+  rec.onEvent({ type: 'turn-start', step: 0 });
+  rec.onEvent({ type: 'assistant', content: 'waiting', step: 0 });
+  rec.onEvent({ type: 'steer', step: 1, content: '[coordination] subagent [2] "slow" finished — merged. wrote slow.txt' });
+  await rec.settled();
+  const ev = rec.events();
+  const st = ev.find((e) => e.tool === 'run.steered');
+  assert(st, 'on the chain'); eq(rec.resolve(st).output.content, '[coordination] subagent [2] "slow" finished — merged. wrote slow.txt');
+  const tr = foldTranscript(ev, rec.resolve);
+  const last = tr[tr.length - 1];
+  eq(last.role, 'user'); assert(/^\[coordination\] subagent \[2\]/.test(last.content), 'reproduced as the user turn the loop wrote');
+  const r = foldRecovery(ev, rec.resolve);
+  eq(r.ownerInputs.length, 1, 'the steer is not an owner input'); eq(r.ownerInputs[0].text, 'fan out');
+});
+
+// B2 / F1: a waiting model may reply with NOTHING; the empty assistant turn is in the next request, so the fold carries it
+await test('B2/F1: an empty no-tool-call reply reconstructs as an empty assistant turn — the next request has no divergence', async () => {
+  const q = createSteerQueue(); let fin; q.track(new Promise((r) => { fin = r; }).then(() => q.push({ content: '[coordination] subagent [1] "x" finished — merged.' })));
+  const rec = createRunRecorder({ app: 'anvil', principal: 'p' });
+  let divergences = 0, n = 0;
+  const infer = rec.wrapInfer(async () => (n++ === 0 ? { content: '', toolCalls: [] } : { content: 'done', toolCalls: [] }), { onDivergence: () => { divergences++; } });
+  await rec.start({ messages: [{ role: 'user', content: 'go' }], tools: [] });
+  setTimeout(fin, 10);
+  const res = await runAgentLoop({ messages: [{ role: 'user', content: 'go' }], tools: [], infer, executeTool: async () => '', onEvent: rec.onEvent, steer: q });
+  await rec.finish(res); await rec.settled();
+  eq(res.stop, 'done'); eq(divergences, 0, 'the second request (user, "", the steer) reconstructs from the chain');
+  const tr = foldTranscript(rec.events(), rec.resolve);
+  eq(tr.map((m) => m.role).join(' '), 'user assistant user assistant', 'the empty turn is a turn');
+  eq(tr[1].content, ''); assert(/^\[coordination\] subagent/.test(tr[2].content), 'then the steer');
 });
 
 // CRIB-B B1: the fleet fold — every child typed live / unverifiable / exited from the chain, by the record's clock

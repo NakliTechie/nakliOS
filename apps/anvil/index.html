@@ -420,6 +420,7 @@
   import { rowKeys, planLogUpdate, isPinned } from '../../sys/ai/log-render-plan.mjs';
   import { buildChangeRow, planRevert, prunePreimages, preimageBytes, MAX_PREIMAGE_BUDGET } from '../../sys/ai/change-preimages.mjs';
   import { subagentFeedRow, subagentFeedLine, subagentLiveness } from '../../sys/ai/subagents.mjs'; // ESS-2: the live child feed; B1: its typed state
+  import { createSteerQueue } from '../../sys/ai/steer.mjs'; // B2: a child's completion lands at the parent's next turn
   import { migrateQueue, reconcileQueue, enqueue as qEnqueue, removeEntry as qRemove, moveEntry as qMove, editEntry as qEdit, nextDispatch, completeDispatch, releaseDispatch, admitRun } from '../../sys/ai/followup-queue.mjs';
   import { planSkillWrite, createSkillSession, SKILL_FILE, SKILL_SHAPE, scaffoldSkill, starterSkillFile, renderSkillReader, lintSkill } from '../../sys/ai/skill-manage.mjs';
   import { createProposalLedger } from '../../sys/ai/proposal-fingerprint.mjs';
@@ -2227,7 +2228,9 @@
     // supervisor's turns and a digest, with the workers' model calls and writes absent — so the
     // substrate's own guarantees stopped at the fan-out. `runCtx.rec` is this run's recorder; a
     // tool call made outside a run (there are none today) simply records nothing.
-    const baseExec = makeToolExecutor({ shell, face, mode, infer: inferViaHost, spawnIsolated,
+    // B2: one steer queue per run, shared by the executor (dispatch pushes completions) and the loop (drains them)
+    const steer=createSteerQueue();
+    const baseExec = makeToolExecutor({ shell, face, mode, infer: inferViaHost, spawnIsolated, steer,
       recordSubagent: async (sub)=>{
         try{ const id=String(sub.tool_call_id||'')+'\u0000'+String(sub.label||''); const row=(t.log||[]).find(r=>r && r.k==='subagent' && r.id===id); if(row){ row.status=String(sub.stop||'done'); row.steps=Math.max(row.steps||0, Number(sub.steps)||0); renderLog(); } }catch(_){}
         try{ if(runCtx && runCtx.rec) await runCtx.rec.subagent(sub); }catch(_){} },
@@ -2711,6 +2714,7 @@
     // no producer here yet: no tool is whole-unavailable today (Kiln gates python INSIDE shell, not
     // shell) — the gap is in the ledger.
     const readiness = runReadiness(mode, { verify: !!verify });
+    let ownerStopped=null; // B2: whether the OWNER stopped the run — read before the run aborts its own signal
     try{
       // F3 — the system message is the CACHE PREFIX, so only stable text lives in it.
       // It used to concatenate SYSTEM + MODE_NOTE + LESSON_NOTE + projectContext +
@@ -2738,6 +2742,9 @@
           else if(e.type==='verify-pass'){ clearThinking(); liveTool=null; t.log.push({k:'system',text:'✓ gate passed — `'+verifyCmd+'` exit 0'}); renderLog(); }
           else if(e.type==='verify-fail'){ clearThinking(); liveTool=null; t.log.push({k:'system',text:'✗ gate failed (round '+(e.round||1)+') — `'+verifyCmd+'` exit '+((e.verdict&&e.verdict.exit)!=null?e.verdict.exit:'?')+'; agent retrying'}); renderLog(); }
           else if(e.type==='error'){ clearThinking(); t.log.push({k:'system',text:'agent error: '+e.error}); renderLog(); }
+          // B2: the owner sees the wait and each completion as it steers the run
+          else if(e.type==='waiting'){ clearThinking(); t.log.push({k:'system',text:'waiting for '+e.inFlight+' subagent'+(e.inFlight===1?'':'s')+' — '+(e.inFlight===1?'its':'their')+' completion will steer the run'}); renderLog(); }
+          else if(e.type==='steer'){ clearThinking(); t.log.push({k:'system',text:'⇆ '+String(e.content||'').replace(/^\[coordination\] /,'')}); renderLog(); }
       };
       // The run record (plan/anvil-event-log-substrate.md, layer 2a): every event of
       // this run lands on an append-only hash chain and is persisted OUTSIDE the
@@ -2796,11 +2803,17 @@
       // rec.finish after) through the recording infer, on the app's budgets. This app owns only
       // what the driver cannot: the model stamp, the budget probe's copy of the prompt, the log.
       let result = await driveRun({
+        steer, // B2: completions land at the next turn; a turn with nothing to do while a child runs waits
         mode, convo, sysMsg, tools, infer: recInfer, executeTool, rec,
         verify, signal: abortController.signal, onEvent: recEvent, model: runModel, gateNote, readiness,
         note: (text)=>{ t.log.push({k:'system', text}); renderLog(); },
         onSystemText: (s)=>{ liveSystemText = s; }, // so the budget counts the prompt actually sent
       });
+      // B2: the run is over the moment its loops return — abort the signal NOW, before the record is
+      // settled and saved, so a straggler completing in that window takes the hold path and never
+      // merges unrecorded (the re-check's probe); the finally below is the backstop.
+      ownerStopped = !!(abortController&&abortController.signal.aborted);
+      if(abortController&&!ownerStopped){ try{ abortController.abort(); }catch(_){} }
       const finalAssistant=[...t.log].reverse().find(x=>x.k==='assistant');
       // Layer 2b: the run record is the source of truth. Settle it, then DERIVE the carried
       // transcript and the status from folds — there is no parallel durable writer left to
@@ -2880,8 +2893,13 @@
       t.log.push({k:'system',text:String(e&&e.message||e)});
     }finally{
       runCtx = null; // the executor serves no run between tasks
+      const wasAborted = ownerStopped!=null ? ownerStopped : !!(abortController && abortController.signal.aborted);
+      // B2: no straggler outlives its run — a child still in flight when the run ends (task_done,
+      // max-steps, budget, error) is aborted here, so its completion takes the hold path and nothing
+      // of it merges into the workspace unrecorded (the checker's probe). The backstop for the early
+      // abort above (an error path never reaches it).
+      if(abortController&&!abortController.signal.aborted){ try{ abortController.abort(); }catch(_){} }
       settleFleetRows(t); // B1: no child outlives its run — a row still 'running' here is interrupted
-      const wasAborted = abortController && abortController.signal.aborted;
       running=false; abortController=null; setSend(); save(); renderAll();
       if(phoneMode()){ const _st=(activeTask()||{}).status; badge('chat', _st==='error'?'✗':'✓'); }
       if(nak&&nak.title) nak.title('Anvil — '+t.title);
