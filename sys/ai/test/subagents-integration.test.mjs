@@ -540,6 +540,16 @@ await test('B5: a dispatched child under a read-only grant is never offered writ
   assert(/\[1\] w — /.test(out), out);
 });
 
+await test('D1: an intercepted command with an expect gets NO verdict line — it never ran, so there is nothing to grade', async () => {
+  const base = new MemoryBackend();
+  await base.write('x.txt', new TextEncoder().encode('a\n'));
+  const exec = topExecutor(base, scriptedInfer(() => ({ done: 'x' })));
+  const out = await exec('shell', { command: 'sed -i s/a/b/ x.txt', expect: 'contains done' });
+  assert(!/\[expect\]/.test(out), 'no [expect] line on an intercepted command: ' + out.slice(0, 160));
+  const ran = await exec('shell', { command: 'cat x.txt', expect: 'contains a' });
+  assert(/\[expect\] MET \(contains a\)/.test(ran), 'a command that ran is graded: ' + ran.slice(0, 160));
+});
+
 if (failures.length){
   console.error(`subagents-integration: ${passed} passed, ${failures.length} FAILED`);
   for (const f of failures) console.error(`  FAIL ${f.n}: ${f.message}`);

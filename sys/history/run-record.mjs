@@ -48,6 +48,7 @@ export const RUN_EVENTS = Object.freeze([
   'run.compacted',    // input: { method, from, to, step }      output: { replacement }  (F4: a logged surface replace)
   'run.nudged',       // input: { step, times, denied }         output: { content }  (F7: the loop's own escalating reminder)
   'run.steered',      // input: { step }                        output: { content }  (CRIB-B B2: a child's completion, spliced in as a loop-authored user turn)
+  'expect.missed',    // input: { step, id, misses, streak }    output: {}  (CRIB-D D1: a graded prediction missed — the streak that stops the run)
   'tool.spilled',     // input: { id, name, step, chars }       output: { sent }  (F5: the capped form the model actually saw)
   'subagent.ran',     // input: { kind, label, step, tool_call_id } output: { record, stop, steps, text }
   'subagent.started', // input: { kind, label, step, tool_call_id } output: {}  (ESS-1: the claim, before the child runs)
@@ -69,6 +70,7 @@ const LOOP_TO_VERB = Object.freeze({
   'tool-error': 'tool.failed',
   'repeat-nudge': 'run.nudged',
   'steer': 'run.steered',
+  'expect-miss': 'expect.missed',
   'verify-pass': 'verify.passed',
   'verify-fail': 'verify.failed',
 });
@@ -183,6 +185,7 @@ export function createRunRecorder({ app = 'anvil', principal = 'local', grant_id
         case 'run.nudged': enqueue(verb, () => ({ input: { step: s, times: e.times ?? null, denied: !!e.denied }, output: { content: String(e.content ?? '') } })); break;
         // B2: a child's completion the loop spliced in — a user turn the LOOP wrote, on the chain for the same reason
         case 'run.steered': enqueue(verb, () => ({ input: { step: s }, output: { content: String(e.content ?? '') } })); break;
+        case 'expect.missed': enqueue(verb, () => ({ input: { step: s, id: e.id ?? null, misses: Number(e.misses) || 0, streak: Number(e.streak) || 0 }, output: {} })); break; // D1
       }
     },
 
@@ -834,6 +837,7 @@ export function foldOutcome(events, resolve) {
     } else if (stop === 'unverified') push('terminal', 'failure', 1.0, 'gate never passed');
     else if (stop === 'error') push('terminal', 'failure', 1.0, `error: ${o.error || ''}`);
     else if (stop === 'budget' || stop === 'max-steps' || stop === 'no-progress') push('terminal', 'failure', 0.8, `did not finish: ${stop}${o.axis ? ` (${o.axis})` : ''}`);
+    else if (stop === 'expect-misses') push('terminal', 'failure', 0.9, `stopped: ${o.reason || 'predictions kept missing'}`); // D1: the model of the workspace was wrong
     else if (stop === 'aborted') { note = 'aborted by the owner — no evidence either way'; push('terminal', 'neutral', 0, 'aborted'); }
     else if (stop === 'clarify') { note = 'paused to ask the owner — not an outcome'; push('terminal', 'neutral', 0, 'clarify'); }
     else push('terminal', 'neutral', 0, `unknown stop: ${stop}`);

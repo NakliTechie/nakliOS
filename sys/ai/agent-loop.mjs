@@ -19,7 +19,7 @@
 
 import { parseToolArguments } from './agent-protocol.mjs';
 import { classifyToolResult } from './tool-result-kind.mjs';
-import { NO_OUTPUT } from './expect.mjs';
+import { NO_OUTPUT, EXPECT_MARKER, parseExpect, stripExpect } from './expect.mjs';
 
 // The single most powerful tool for a coding agent: a real shell. The Forge
 // shell already covers fileops, git, pipes, and globs, so one `shell` tool is a
@@ -319,6 +319,17 @@ export const REPEAT_NUDGE_AT = Object.freeze([3, 5, 8]);
 // B2: the longest one waiting turn may wait with no wall clock — the subagent wall clock's default,
 // so a child that outlives its own budget cannot outlive the parent's patience.
 export const WAIT_CAP_MS = 240_000;
+// CRIB-D D1 (khiladi §1, with teeth): a graded prediction that MISSED is counted per run; this many
+// misses IN A ROW stop the run — the agent's model of the workspace is wrong, and edits made on a
+// wrong model land damage. A single miss is information; a streak is a verdict. 0 disables.
+export const EXPECT_MISS_STREAK = 3;
+// The verdict the runner appended to a graded tool result — the word after the LAST marker.
+export function expectVerdictIn(text) {
+  const s = String(text ?? ''); const i = s.lastIndexOf(EXPECT_MARKER);
+  if (i < 0) return null;
+  const m = /^(MET|MISS|VACUOUS)\b/.exec(s.slice(i + EXPECT_MARKER.length));
+  return m ? m[1] : null;
+}
 
 // What a refused result looks like coming back from a tool. Deliberately narrow: an
 // ordinary empty result or a "no matches" is NOT a denial, and calling it one would put
@@ -378,6 +389,7 @@ export async function runAgentLoop({
   signal = null,           // optional AbortSignal — cooperative stop between turns/tools
   steer = null,            // CRIB-B B2: a steer queue (sys/ai/steer.mjs) — what arrives mid-turn lands at the next turn
   waitCapMs = WAIT_CAP_MS, // B2: how long one waiting turn may wait when there is no wall clock to bound it
+  expectMissStreak = EXPECT_MISS_STREAK, // D1: consecutive missed predictions that stop the run (0 = never)
 }) {
   if (typeof infer !== 'function') throw new Error('runAgentLoop needs an infer function');
   if (typeof executeTool !== 'function') throw new Error('runAgentLoop needs an executeTool function');
@@ -394,6 +406,7 @@ export async function runAgentLoop({
   let scannedTo = 0;         // how much of convo has been checked for an owner interjection
   let requestLen = 0;        // convo length at the moment the in-flight request was sent (F6)
   let verifyRounds = 0;
+  let expectMisses = 0, expectStreak = 0; // D1: missed predictions this run, and in a row
   const startedAt = now();
 
   // Cooperative stop: the caller aborts the signal (a Stop button). We check it
@@ -737,6 +750,18 @@ export async function runAgentLoop({
       }
       convo.push({ role: 'tool', tool_call_id: id, content: sentText });
       stepResults.push(sentText);
+      // D1: count the runner's verdict on THIS call's prediction — only a shell call that carried an
+      // `expect` is graded (a command's own output can print a marker; a call with no prediction has
+      // none to miss), and a prediction on a command that never ran (an intercepted one — no [exit N]
+      // line) is ungradable — neither hit nor miss. A MET resets the streak; a VACUOUS hit counts for
+      // nothing either way.
+      if (name === 'shell' && parsed.ok) {
+        const exp = parseExpect(parsed.value?.expect);
+        const gradable = !!exp && /\n\[exit -?\d+\]\s*$/.test(stripExpect(sentText)); // the runner appends [exit N] only for a command that RAN — no observation, no grade, any kind
+        const v = gradable ? expectVerdictIn(sentText) : null;
+        if (v === 'MISS') { expectMisses++; expectStreak++; onEvent({ type: 'expect-miss', step, id, misses: expectMisses, streak: expectStreak }); }
+        else if (v === 'MET') expectStreak = 0;
+      }
     }
 
     // Did this turn's calls all come back refused? A refusal is a guard speaking (the skills
@@ -763,6 +788,12 @@ export async function runAgentLoop({
     if (gateGreen) {
       onEvent({ type: 'done', reason: 'verified', step });
       return { messages: convo, steps: step + 1, stop: 'done', verified: true, text: lastText };
+    }
+    // D1: the streak — stop, as its own recorded stop, so the owner (or the supervisor's re-plan)
+    // looks before anything else lands on a model of the workspace that has now been shown wrong
+    if (expectMissStreak > 0 && expectStreak >= expectMissStreak) {
+      onEvent({ type: 'done', reason: 'expect-misses', step });
+      return { messages: convo, steps: step + 1, stop: 'expect-misses', reason: `${expectStreak} predictions in a row missed — the model of this workspace is wrong; stopped before more edits land on it`, text: lastText, expectMisses: { total: expectMisses, streak: expectStreak } };
     }
   }
 

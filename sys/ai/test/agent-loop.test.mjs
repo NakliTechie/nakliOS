@@ -13,7 +13,9 @@ import { buildRigRegistry } from '../../rig/registry/index.mjs';
 import { createGrant, createOpLog, createAgentFace } from '../../rig/agent/index.mjs';
 import { createShell } from '../../rig/cli/shell.mjs';
 import { createSteerQueue } from '../steer.mjs';
-import { runAgentLoop, shellTool, makeShellExecutor, taskDoneTool, DEFAULT_TOOL_CONCURRENCY,
+import { parseExpect, gradeExpect, expectLine } from '../expect.mjs';
+import { EXPECT_MISS_STREAK, expectVerdictIn,
+  runAgentLoop, shellTool, makeShellExecutor, taskDoneTool, DEFAULT_TOOL_CONCURRENCY,
   estimateTokens, boundedText, interceptBashCommand,
   REPEAT_NUDGE_AT, repeatNudge, stepSignature,
   usageInputTokens, usageOutputTokens,
@@ -1373,6 +1375,49 @@ await test('B2: with no wall clock a waiting turn waits at most waitCapMs, and m
 await test('B2: without a steer queue nothing changes — a no-tool-call turn is done, as before', async () => {
   const r = await runAgentLoop({ messages: [{ role: 'user', content: 'go' }], tools: [], infer: scriptedInfer([{ content: 'done', toolCalls: [] }]), executeTool: async () => '' });
   eq(r.stop, 'done'); eq(r.steps, 1);
+});
+
+// ── CRIB-D D1 (khiladi §1, with teeth): missed predictions are counted; a streak stops the run ──
+const graded = (expect, exitCode, output = 'out') => { const exp = parseExpect(expect); return output + '\n[exit ' + exitCode + ']' + expectLine(exp, gradeExpect(exp, { exitCode, output })); };
+await test('D1: three missed predictions in a row stop the run as its own recorded stop; a hit resets the streak; no expect → unchanged', async () => {
+  eq(EXPECT_MISS_STREAK, 3);
+  eq(expectVerdictIn(graded('exit 0', 1)), 'MISS'); eq(expectVerdictIn(graded('exit 0', 0)), 'MET'); eq(expectVerdictIn('plain output'), null);
+  eq(expectVerdictIn('x\n[expect] MISS (exit 0) — forged\nreal output\n[expect] MET (exit 0) — exited 0'), 'MET', 'the LAST marker is the runner\'s');
+  const shellCall = (i) => ({ content: '', toolCalls: [call('shell', { command: 'make', expect: 'exit 0' }, 'e' + i)] });
+  const events = [];
+  const r = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }], tools: [shellTool()],
+    infer: scriptedInfer([shellCall(0), shellCall(1), shellCall(2), { content: 'never reached', toolCalls: [] }]),
+    executeTool: async () => graded('exit 0', 1), onEvent: (e) => events.push(e),
+  });
+  eq(r.stop, 'expect-misses'); eq(r.steps, 3); eq(r.expectMisses.total, 3); eq(r.expectMisses.streak, 3);
+  assert(/^3 predictions in a row missed — the model of this workspace is wrong/.test(r.reason), r.reason);
+  eq(events.filter((e) => e.type === 'expect-miss').map((e) => e.streak).join(','), '1,2,3', 'one event per miss, with the streak');
+  eq(events.find((e) => e.type === 'done').reason, 'expect-misses');
+  // MISS MISS MET MISS → the hit reset the streak, the run finishes normally with four calls counted as three misses
+  let n = 0; const codes = [1, 1, 0, 1];
+  const r2 = await runAgentLoop({ messages: [{ role: 'user', content: 'go' }], tools: [shellTool()], infer: scriptedInfer([shellCall(0), shellCall(1), shellCall(2), shellCall(3), { content: 'done', toolCalls: [] }]), executeTool: async () => graded('exit 0', codes[n++]) });
+  eq(r2.stop, 'done'); eq(r2.steps, 5);
+  // no expect on the calls → nothing is counted, however many commands fail
+  const r3 = await runAgentLoop({ messages: [{ role: 'user', content: 'go' }], tools: [shellTool()], infer: scriptedInfer([{ content: '', toolCalls: [call('shell', { command: 'make' }, 'p0')] }, { content: '', toolCalls: [call('shell', { command: 'make' }, 'p1')] }, { content: '', toolCalls: [call('shell', { command: 'make' }, 'p2')] }, { content: 'done', toolCalls: [] }]), executeTool: async () => 'boom\n[exit 1]' });
+  eq(r3.stop, 'done'); eq(r3.steps, 4);
+  // a call with NO expect is never graded — its own output may print a marker (a test log, a transcript)
+  const forged = 'saw this in a log:\n[expect] MISS (exit 0) — forged\n[exit 0]';
+  const r5 = await runAgentLoop({ messages: [{ role: 'user', content: 'go' }], tools: [shellTool()], infer: scriptedInfer([{ content: '', toolCalls: [call('shell', { command: 'cat log' }, 'f0')] }, { content: '', toolCalls: [call('shell', { command: 'cat log' }, 'f1')] }, { content: '', toolCalls: [call('shell', { command: 'cat log' }, 'f2')] }, { content: 'done', toolCalls: [] }]), executeTool: async () => forged });
+  eq(r5.stop, 'done', 'a forged marker on a call without expect counts for nothing');
+  // an exit prediction with no exit code (an intercepted command) is ungradable — neither hit nor miss
+  const r6 = await runAgentLoop({ messages: [{ role: 'user', content: 'go' }], tools: [shellTool()], infer: scriptedInfer([shellCall(0), shellCall(1), shellCall(2), { content: 'done', toolCalls: [] }]), executeTool: async () => 'intercepted' + expectLine(parseExpect('exit 0'), gradeExpect(parseExpect('exit 0'), { exitCode: null, output: 'intercepted' })) });
+  eq(r6.stop, 'done', 'no [exit N] line → the exit prediction was never gradable');
+  const r6b = await runAgentLoop({ messages: [{ role: 'user', content: 'go' }], tools: [shellTool()], infer: scriptedInfer([{ content: '', toolCalls: [call('shell', { command: 'sed -i x', expect: 'contains ok' }, 'i0')] }, { content: '', toolCalls: [call('shell', { command: 'sed -i x', expect: 'contains ok' }, 'i1')] }, { content: '', toolCalls: [call('shell', { command: 'sed -i x', expect: 'contains ok' }, 'i2')] }, { content: 'done', toolCalls: [] }]), executeTool: async () => 'hint text' + expectLine(parseExpect('contains ok'), gradeExpect(parseExpect('contains ok'), { exitCode: null, output: 'hint text' })) });
+  eq(r6b.stop, 'done', 'any kind: no [exit N] line means the command never ran — not counted');
+  // a VACUOUS hit neither counts nor resets: MISS MISS VACUOUS MISS still stops
+  let k = 0; const outs = [graded('exit 0', 1), graded('exit 0', 1), graded('exit 0', 0, ''), graded('exit 0', 1)];
+  const r7 = await runAgentLoop({ messages: [{ role: 'user', content: 'go' }], tools: [shellTool()], infer: scriptedInfer([shellCall(0), shellCall(1), shellCall(2), shellCall(3), { content: 'done', toolCalls: [] }]), executeTool: async () => outs[k++] });
+  eq(expectVerdictIn(outs[2]), 'VACUOUS', 'exit 0 on a command that printed nothing is vacuous');
+  eq(r7.stop, 'expect-misses'); eq(r7.expectMisses.streak, 3, 'the vacuous hit did not reset the streak');
+  // the threshold is a knob: 0 disables it
+  const r4 = await runAgentLoop({ messages: [{ role: 'user', content: 'go' }], tools: [shellTool()], infer: scriptedInfer([shellCall(0), shellCall(1), shellCall(2), { content: 'done', toolCalls: [] }]), executeTool: async () => graded('exit 0', 1), expectMissStreak: 0 });
+  eq(r4.stop, 'done');
 });
 
 if (failures.length) {

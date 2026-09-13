@@ -183,7 +183,9 @@ export function needsActNudge({ mode, toolCalls, stop, aborted = false }) {
 // inject ONE capped redirect and re-loop. Never on a run that finished 'done', and not for
 // no-tools (the act-or-nudge owns that).
 export function needsSupervisor({ mode, stop, aborted = false, stag }) {
-  return mode === 'code' && stop !== 'done' && !aborted && !!(stag && stag.stalled && stag.signal !== 'no-tools');
+  // D1: a run that stopped on a prediction streak stopped ON PURPOSE — a re-loop would land more
+  // edits on the model of the workspace the streak just showed wrong
+  return mode === 'code' && stop !== 'done' && stop !== 'expect-misses' && !aborted && !!(stag && stag.stalled && stag.signal !== 'no-tools');
 }
 // Every re-loop carries the SAME conversation the first loop built, unfiltered: filtering the
 // context message out would drop the memory and skills index mid-run and make the second

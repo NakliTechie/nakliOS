@@ -668,7 +668,10 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
         // D3: an optional prediction, graded live so the agent gets immediate feedback; a shell
         // call without `expect` is unchanged. The record keeps the expect in the call args, so a
         // post-hoc fold can re-grade it (foldOutcome).
-        const exp = parseExpect(args?.expect);
+        // An intercepted command (sed -i, grep -r, a heredoc write) never reached the shell: its "output"
+        // is the interceptor's hint, not an observation, so there is nothing to grade — a MISS there
+        // would be minted from silence, and D1's streak would stop a run on it.
+        const exp = reachedShell ? parseExpect(args?.expect) : null;
         return exp ? final + expectLine(exp, gradeExpect(exp, { exitCode: code, output: capped })) : final;
       }
 

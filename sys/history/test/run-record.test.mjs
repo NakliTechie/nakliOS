@@ -505,6 +505,11 @@ await test('SESSION CONTEXT + DECISIONS folds (C2): goal, files, outcome; tool�
   const cut = foldEpisode(gated.rec.events(), gated.rec.resolve, { cap: 120 });
   assert(cut.length <= 120 && /…\(cut\)$/.test(cut), 'a cap cuts it and says so');
   eq(foldEpisode([], () => null), null, 'a record with no events has nothing to say — null, never a digest of nothing');
+  // D1: a run stopped by a prediction streak folds as a terminal failure that says why
+  { const r2 = createRunRecorder({ app: 'anvil', principal: 'p' }); await r2.start({ messages: [{ role: 'user', content: 'go' }], tools: [] }); await r2.finish({ stop: 'expect-misses', steps: 3, reason: '3 predictions in a row missed — the model of this workspace is wrong; stopped before more edits land on it' }); await r2.settled();
+    const o = foldOutcome(r2.events(), r2.resolve); eq(o.label, 'failure', 'a prediction streak is a failure, not an unknown stop');
+    r2.onEvent({ type: 'expect-miss', step: 2, id: 'c9', misses: 2, streak: 2 }); await r2.settled();
+    const em = r2.events().find((e) => e.tool === 'expect.missed'); assert(em, 'D1: the miss is on the chain'); eq(r2.resolve(em).input.streak, 2); assert(o.signals.some((s) => s.kind === 'terminal' && s.polarity === 'failure' && /stopped: 3 predictions in a row missed/.test(s.detail)), JSON.stringify(o.signals)); }
   assert(dec.length === 3 && dec.every((d) => typeof d.toolSignature === 'string'), 'one decision per tool call, each with a signature');
   assert(dec.some((d) => d.outcome === 'passed'), 'a decision is paired with the gate pass');
   const ungated = await recordRun();
