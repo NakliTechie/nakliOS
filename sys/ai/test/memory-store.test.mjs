@@ -1,6 +1,6 @@
 // Conformance — structured project memory (pure).
 //   node sys/ai/test/memory-store.test.mjs
-import { createFactSession, parseFact, buildMemoryIndex, noteToFact, recallTool, MEMORY_DIR, MEMORY_TYPES, factUsage, isResting,
+import { parseScope, createFactSession, parseFact, buildMemoryIndex, noteToFact, recallTool, MEMORY_DIR, MEMORY_TYPES, factUsage, isResting,
          findDuplicate, duplicateReply, slotHolder, createRememberBudget, budgetSpentReply, MAX_REMEMBER_PER_RUN, NEAR_DUPLICATE_JACCARD,
          checkRulesCap, rulesCapReply, RULES_CAP_CHARS, LESSON_CONTRACT, serializeFact }
   from '../memory-store.mjs';
@@ -393,6 +393,34 @@ await test('fact session: the refusals classify as rejected — the closed failu
   const s = createFactSession();
   eq(classifyToolResult('revise', s.unrecalledReply('a')), 'rejected');
   s.noteRecalled('a', 'x'); eq(classifyToolResult('revise', s.staleReply('a', 'y')), 'rejected');
+});
+
+// ── CRIB-D D2: a task-scoped fact — read only by the runs of its task ──
+await test('D2: scope parses and round-trips; noteToFact carries it; the index injects a scoped fact only into its task, never elsewhere', () => {
+  eq(parseScope('task:abc-1'), 'task:abc-1'); eq(parseScope(' task:x.y_z '), 'task:x.y_z'); eq(parseScope('project'), null); eq(parseScope('task:'), null); eq(parseScope('task:a b'), null); eq(parseScope(null), null);
+  const f = noteToFact('Stalled last run — gate never passed: at step 9', 'project', 'hypothesis', { scope: 'task:t1', slot: 'stall-t1', created: '2026-09-13T10:00:00Z' });
+  eq(f.scope, 'task:t1'); const text = serializeFact(f); assert(/^scope: task:t1$/m.test(text), text);
+  const back = parseFact(text); eq(back.scope, 'task:t1'); eq(back.slot, 'stall-t1');
+  eq(parseFact(serializeFact({ ...f, scope: 'bogus' })).scope, null, 'an unparseable scope is not written');
+  const facts = [
+    { name: 'shared', description: 'for everyone', type: 'project', status: 'verified' },
+    { name: 'mine', description: 'only task t1', type: 'project', status: 'hypothesis', scope: 'task:t1' },
+    { name: 'theirs', description: 'only task t2', type: 'project', status: 'hypothesis', scope: 'task:t2' },
+  ];
+  const t1 = buildMemoryIndex(facts, { scope: 'task:t1' });
+  assert(t1.includes('**shared**') && t1.includes('**mine**') && !t1.includes('**theirs**'), 'task t1 sees the project\'s facts and its own: ' + t1);
+  const t2 = buildMemoryIndex(facts, { scope: 'task:t2' });
+  assert(t2.includes('**theirs**') && !t2.includes('**mine**'), 'task t2 sees its own, not t1\'s');
+  const none = buildMemoryIndex(facts);
+  assert(none.includes('**shared**') && !none.includes('**mine**') && !none.includes('**theirs**'), 'a project-wide index (no scope) carries no task note');
+  // a slot holder REPLACES its predecessor in the index — five stalls render as one line, not five
+  const chain = [];
+  for (let i = 1; i <= 5; i++) chain.push({ name: 'stall-' + i, description: 'Stalled last run — attempt ' + i, type: 'project', status: 'hypothesis', scope: 'task:t1', slot: 'stall-t1', created: '2026-09-1' + i + 'T00:00:00Z', supersedes: i > 1 ? ['stall-' + (i - 1)] : [] });
+  const stalled = buildMemoryIndex(chain, { scope: 'task:t1' });
+  eq((stalled.match(/Stalled last run/g) || []).length, 1, 'one stall line for the task: ' + stalled);
+  assert(stalled.includes('**stall-5**') && !stalled.includes('**stall-4**'), 'the newest holder, not its replaced predecessors');
+  const annotated = buildMemoryIndex([{ name: 'new', description: 'n', type: 'project', status: 'verified', supersedes: ['old'] }, { name: 'old', description: 'o', type: 'project', status: 'verified' }]);
+  assert(annotated.includes('**old**'), 'a supersession WITHOUT a shared slot still rides below its successor, as before');
 });
 
 if (failures.length){

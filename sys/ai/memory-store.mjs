@@ -110,10 +110,17 @@ function parseCreated(v){
 // Parse a fact file → { name, description, type, status, cause, slot, created, supersedes,
 // derived_from, contradicts, body }. Unknown/absent type falls back to 'project';
 // unknown/absent status → null (a plain fact); relations → [] when absent.
+// CRIB-D D2: a fact's scope — absent (project-wide, the default) or `task:<id>`: a note only the
+// runs of THAT task read. The stall note is the first writer; the index filters at injection.
+export function parseScope(v){
+  const m = /^task:([A-Za-z0-9._-]{1,80})$/.exec(String(v == null ? '' : v).trim());
+  return m ? `task:${m[1]}` : null;
+}
 export function parseFact(text){
   const { meta, body } = parseFrontmatter(text);
   return {
     name: meta.name || '',
+    scope: parseScope(meta.scope),
     description: meta.description || '',
     type: MEMORY_TYPES.includes((meta.type || '').toLowerCase()) ? meta.type.toLowerCase() : 'project',
     status: MEMORY_STATUSES.includes((meta.status || '').toLowerCase()) ? meta.status.toLowerCase() : null,
@@ -139,6 +146,7 @@ export function serializeFact(f){
   if (MEMORY_STATUSES.includes(f.status)) lines.push(`status: ${f.status}`);
   if (REVISION_CAUSES.includes(f.cause)) lines.push(`cause: ${f.cause}`);
   if (f.slot) lines.push(`slot: ${safeSlug(f.slot)}`);
+  const scope = parseScope(f.scope); if (scope) lines.push(`scope: ${scope}`);
   const created = parseCreated(f.created); if (created) lines.push(`created: ${created}`);
   const w = clampWeight(f.weight); if (w !== DEFAULT_WEIGHT) lines.push(`weight: ${w}`);
   for (const rel of MEMORY_RELATIONS){
@@ -311,8 +319,10 @@ export function isResting(f, { usage = null, now = Date.now(), restDays = REST_D
   if (now - createdMs < window) return false;
   return true;
 }
-export function buildMemoryIndex(facts, { usage = null, now = Date.now(), restDays = REST_DAYS } = {}){
-  const all = (facts || []).filter(f => f && (f.name || f.description) && !injectionUnsafe(f));
+export function buildMemoryIndex(facts, { usage = null, now = Date.now(), restDays = REST_DAYS, scope = null } = {}){
+  // D2: a task-scoped fact is injected only into the runs of its task — never into another task's
+  // context, and never into a project-wide index (no scope given)
+  const all = (facts || []).filter(f => f && (f.name || f.description) && !injectionUnsafe(f) && (!f.scope || (scope && f.scope === scope)));
   // Resting is decided on the whole live set, so a successor that supersedes an AWAKE fact stays
   // awake with it (the stale one would otherwise render untagged as current — the checker's probe).
   const liveEvery = all.filter(f => f.status !== 'retracted');
@@ -350,13 +360,17 @@ export function buildMemoryIndex(facts, { usage = null, now = Date.now(), restDa
     if (!f || emitted.has(f.name)) return;
     emitted.add(f.name); lines.push(line(f));
     // its stale predecessors ride immediately below it
-    for (const s of (f.supersedes || [])) if (byName.has(s) && stale.get(s) === f.name) emit(byName.get(s));
+    // D2: a predecessor that held the SAME slot is a replaced entry, not an annotation — it does not ride
+    // below its successor (a task's stall note would otherwise stack one line per stall)
+    for (const s of (f.supersedes || [])) if (byName.has(s) && stale.get(s) === f.name && !(f.slot && byName.get(s).slot === f.slot)) emit(byName.get(s));
   };
   for (const f of live){
     if (stale.has(f.name) && byName.has(stale.get(f.name))) continue; // rendered under its successor
     emit(f);
   }
-  for (const f of live) emit(f); // any stale fact whose successor is unnamed still renders
+  // any stale fact whose successor is unnamed still renders — except a replaced slot entry, whose
+  // named successor holds the same slot (D2: it was replaced, not annotated)
+  for (const f of live) { const succ = stale.has(f.name) ? byName.get(stale.get(f.name)) : null; if (succ && f.slot && succ.slot === f.slot) continue; emit(f); }
   return rulesBlock + '\n\n# Project memory\n' +
     'Durable learnings recorded for THIS project — honor them. A fact marked ' +
     '_hypothesis_ is provisional: when a check corroborates it, promote it with ' +
@@ -389,6 +403,7 @@ export function noteToFact(note, type, status, rel = {}){
   const fact = {
     name: slug, description, type: t, status: st, cause: null,
     slot: rel && rel.slot ? safeSlug(rel.slot) || null : null,
+    scope: parseScope(rel && rel.scope), // D2: task-scoped when the caller says so
     // The recency signal slotHolder needs. Deterministic when the caller supplies
     // `rel.created` (the tests and any replay do); otherwise stamped from the clock,
     // which is the ONE non-deterministic field in this function.
