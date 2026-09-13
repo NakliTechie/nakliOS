@@ -1,6 +1,6 @@
 // Conformance — structured project memory (pure).
 //   node sys/ai/test/memory-store.test.mjs
-import { createFactSession, parseFact, buildMemoryIndex, noteToFact, recallTool, MEMORY_DIR, MEMORY_TYPES,
+import { createFactSession, parseFact, buildMemoryIndex, noteToFact, recallTool, MEMORY_DIR, MEMORY_TYPES, factUsage, isResting,
          findDuplicate, duplicateReply, slotHolder, createRememberBudget, budgetSpentReply, MAX_REMEMBER_PER_RUN, NEAR_DUPLICATE_JACCARD,
          checkRulesCap, rulesCapReply, RULES_CAP_CHARS, LESSON_CONTRACT, serializeFact }
   from '../memory-store.mjs';
@@ -320,6 +320,53 @@ await test('slotHolder prefers the recorded time over array order, and degrades 
   const same = '2026-05-05T00:00:00Z';
   eq(slotHolder([F('first', same), F('second', same)], 'phase'), 'second', 'a tie keeps the last-in-array winner');
   eq(slotHolder([F('second', same), F('first', same)], 'phase'), 'first', 'and the tie really is decided by order');
+});
+
+// ── A1 (CRIB-A): salience from use — a fact nobody recalls rests out of the index ──
+await test('factUsage folds run rows into name → { runs, lastUsed }; a row with no recalls adds nothing', () => {
+  const u = factUsage([{ recalled: ['a', 'b'], endedAt: 100 }, { recalled: ['a'], endedAt: 200 }, { recalled: [], endedAt: 300 }, { startedAt: 50, recalled: ['c'] }]);
+  eq(u.get('a').runs, 2); eq(u.get('a').lastUsed, 200, 'the latest run wins'); eq(u.get('b').runs, 1); eq(u.get('c').lastUsed, 50, 'startedAt when no endedAt');
+  eq(u.has('d'), false);
+  eq(factUsage([]), null, 'no rows → no evidence → null, never an empty Map');
+  eq(factUsage([{ endedAt: 1 }, { endedAt: 2 }]), null, 'rows from before A1 (no recalled field) → null: resting stays off');
+  eq(factUsage([{ endedAt: 1, recalled: [] }]).size, 0, 'a row that CARRIES an empty recalled is evidence — an empty Map');
+  eq(factUsage([{ endedAt: 1, recalled: [] }]).since, 1, 'and says how far back the evidence reaches');
+  eq(factUsage([{ recalled: [], endedAt: null, startedAt: null }]), null, 'a carried row with no date (a zero-event record) is no evidence of WHEN — null, so nothing rests on it');
+});
+await test('the index rests a fact no run has recalled in 30 days; a recently recalled, a young, or a rule fact stays', () => {
+  const DAY = 86400000, now = 100 * DAY;
+  const old = (name, extra = {}) => ({ name, description: 'd ' + name, type: 'project', status: 'verified', created: new Date(now - 60 * DAY).toISOString(), ...extra });
+  const facts = [old('used-lately'), old('never-used'), old('young', { created: new Date(now - 3 * DAY).toISOString() }), old('a-rule', { type: 'rule' }), { name: 'undated', description: 'd', type: 'project', status: 'verified' }];
+  const usage = factUsage([{ recalled: ['used-lately'], endedAt: now - 2 * DAY }, { recalled: ['never-used'], endedAt: now - 45 * DAY }]);
+  const idx = buildMemoryIndex(facts, { usage, now });
+  assert(idx.includes('**used-lately**'), 'recalled two days ago → listed');
+  assert(idx.includes('**young**'), 'three days old, never recalled → listed (not had its chance)');
+  assert(idx.includes('a-rule') , 'a rule never rests');
+  assert(!idx.includes('**never-used**'), 'last recalled 45 days ago → rests');
+  assert(idx.includes('**undated**'), 'no readable created → never rests (an unknown age is not an old age)');
+  assert(/1 fact\(s\) rest \(not recalled in 30 days\)/.test(idx), 'the index says how many rest: ' + idx.slice(-160));
+  // the evidence must reach back a window before anything rests: five days of rows prove nothing
+  const shallow = factUsage([{ recalled: [], endedAt: now - 5 * DAY }, { recalled: [], endedAt: now - 1 * DAY }]);
+  eq(isResting(old('never-used'), { usage: shallow, now }), false, 'rows span 5 days — no fact can be shown unrecalled for 30');
+  assert(!/rest \(/.test(buildMemoryIndex(facts, { usage: shallow, now })), 'the index rests nothing on a shallow window');
+  const deep = factUsage([{ recalled: [], endedAt: now - 40 * DAY }, { recalled: [], endedAt: now - 1 * DAY }]);
+  eq(isResting(old('never-used'), { usage: deep, now }), true, 'rows span 40 days and never named it — rests');
+  // a supersession chain wakes end to end, whichever order the facts arrive in
+  const ladder = (order) => { const A = old('A'), B = old('B', { supersedes: ['A'] }), C = old('C', { supersedes: ['B'] }); const by = { A, B, C }; return buildMemoryIndex(order.map((k) => by[k]), { usage: factUsage([{ recalled: ['A'], endedAt: now - 1 * DAY }, { recalled: [], endedAt: now - 40 * DAY }]), now }); };
+  for (const order of [['C', 'B', 'A'], ['A', 'B', 'C'], ['B', 'C', 'A']]) { const ix = ladder(order); assert(ix.includes('**C**') && !/rest \(/.test(ix), order.join('') + ': A recalled yesterday keeps B and C awake too: ' + ix.slice(0, 200)); }
+  // without usage nothing rests — the index is what it always was
+  const plain = buildMemoryIndex(facts, { now });
+  assert(plain.includes('**never-used**') && plain.includes('**undated**') && !/rest \(/.test(plain), 'no usage → no resting');
+  // only resting facts → the index is the rest line alone (rules still render)
+  eq(isResting(old('never-used'), { usage, now }), true); eq(isResting(old('used-lately'), { usage, now }), false);
+  // a retracted fact is never rested away: its "do not re-derive" footer survives the window
+  const withRetracted = buildMemoryIndex([...facts, old('disproven', { status: 'retracted' })], { usage, now });
+  assert(/1 fact\(s\) were retracted/.test(withRetracted) && /1 fact\(s\) rest/.test(withRetracted), 'retracted counted as retracted, not resting: ' + withRetracted.slice(-260));
+  // a successor that supersedes an AWAKE fact stays awake with it, so the stale one is still tagged
+  const chain = [old('new-x', { supersedes: ['old-x'] }), old('old-x')];
+  const chainUsage = factUsage([{ recalled: ['old-x'], endedAt: now - DAY }]);
+  const idx2 = buildMemoryIndex(chain, { usage: chainUsage, now });
+  assert(idx2.includes('**new-x**') && /old-x.*superseded by \*\*new-x\*\*/.test(idx2), 'the successor stays awake and the stale fact keeps its tag: ' + idx2.slice(-300));
 });
 
 // ── B6: the per-run fact session ──────────────────────────────────────────

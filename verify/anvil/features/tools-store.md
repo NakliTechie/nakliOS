@@ -16,6 +16,7 @@ launch in `../README.md`; code mode; a fresh project.
 - **Gotchas:** the memory index the model sees rides the context message, so a fresh fact is listed on the NEXT run, not this one.
 
 ### tool:recall
+<!-- A1 (2026-09-13): a fact no run recalled in 30 days RESTS — unlisted in the injected index, its file kept, recallable by name; the index says how many rest -->
 - **Goal:** one fact's full body on demand, by name, from the index the model was shown.
 - **Source:** `sys/ai/memory-store.mjs` (`recallTool`), the `nm==='recall'` branch.
 - **Prerequisites:** launch; a project with ≥ 1 fact.

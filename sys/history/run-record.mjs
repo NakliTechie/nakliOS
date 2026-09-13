@@ -135,12 +135,12 @@ export function createRunRecorder({ app = 'anvil', principal = 'local', grant_id
     // compares the recorded `run.started` input byte-for-byte, so an always-present key
     // would make every run recorded before this existed a replay miss — and the corpus is
     // real captured runs, which are never re-recorded just to make a lane green.
-    start({ messages, tools, model = null }) {
+    start({ messages, tools, model = null, readiness = null }) {
       const stamp = normaliseModelStamp(model);
+      // `readiness` (A4) is additive: present only when the caller passes it, so records without it
+      // keep their shape and hash exactly (the replay corpus is untouched).
       return enqueue('run.started', () => ({
-        input: stamp
-          ? { messages, tools: tools || [], model: stamp }
-          : { messages, tools: tools || [] },
+        input: { messages, tools: tools || [], ...(stamp ? { model: stamp } : {}), ...(Array.isArray(readiness) ? { readiness } : {}) },
         output: {},
       }));
     },
@@ -1543,6 +1543,52 @@ export function foldSessionContext(events, resolve) {
   const filesTouched = [...new Set(ev.filter((e) => e.tool === 'tool.called').map((e) => e.input?.args?.path || e.input?.args?.file).filter(Boolean).map(String))];
   const outcome = foldOutcome(events, resolve).label;
   return { goal, lastCheckpoint, filesTouched, outcome };
+}
+
+// CRIB-A A1: the fact names a run recalled, each once, in first-recall order — what the run-index
+// row carries and `factUsage` folds into salience. Pure.
+export function foldRecalled(events, resolve) {
+  const out = [];
+  for (const e of joined(events, resolve)) {
+    if (e.tool !== 'tool.called' || !e.input || e.input.name !== 'recall') continue;
+    const n = e.input.args && e.input.args.name; if (!n) continue;
+    if (!out.includes(String(n))) out.push(String(n));
+  }
+  return out;
+}
+
+// CRIB-A A2 (osaurus B8, 2026-09-13): the session-end EPISODE — one digest per run, folded from the
+// record, no model call: what the run was for, how it ended, what it touched, which moves led to a
+// gate verdict, which facts it recalled, and what it last said. The digest of a project's newest
+// run rides the next run's working context ("## Last run") in place of per-turn narrative; the
+// fact index stays. Bounded by `cap` chars (≈800 tokens at the default) so it never crowds the
+// context; the cut is marked. Pure.
+export function foldEpisode(events, resolve, { cap = 3200 } = {}) {
+  const ev = joined(events, resolve);
+  if (!ev.length) return null; // nothing happened → nothing to say (never a "## Last run — unknown" of nothing)
+  const ctx = foldSessionContext(events, resolve);
+  const out = foldOutcome(events, resolve);
+  const decisions = foldDecisions(events, resolve);
+  const stops = ev.filter((e) => e.tool === 'run.stopped');
+  const last = stops.length ? stops[stops.length - 1].output || {} : {};
+  const said = [...ev].reverse().find((e) => e.tool === 'assistant.said');
+  const started = ev.filter((e) => e.tool === 'run.started').length;
+  const steps = ev.filter((e) => e.tool === 'tool.called').length;
+  const clip = (s, n) => { const t = String(s || '').replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
+  const when = ev.length ? new Date(ev[ev.length - 1].ts || 0).toISOString().slice(0, 16).replace('T', ' ') : '';
+  const lines = [`## Last run${when ? ' (' + when + ' UTC)' : ''} — ${out.label}${last.stop ? ', stopped: ' + last.stop : ''}${last.verified ? ', gate passed' : ''}`];
+  if (ctx.goal) lines.push(`Goal: ${clip(ctx.goal, 300)}`);
+  lines.push(`Shape: ${steps} tool call${steps === 1 ? '' : 's'}${started > 1 ? ` over ${started} loops` : ''}${out.note ? ' — ' + clip(out.note, 160) : ''}`);
+  if (ctx.filesTouched.length) lines.push(`Files touched: ${ctx.filesTouched.slice(0, 12).join(', ')}${ctx.filesTouched.length > 12 ? ` (+${ctx.filesTouched.length - 12})` : ''}`);
+  const passed = decisions.filter((d) => d.outcome === 'passed').map((d) => d.name), failed = decisions.filter((d) => d.outcome === 'failed').map((d) => d.name);
+  if (passed.length) lines.push(`Led to a gate pass: ${[...new Set(passed)].join(', ')}`);
+  if (failed.length) lines.push(`Led to a gate failure: ${[...new Set(failed)].join(', ')}`);
+  if (out.recalled && out.recalled.length) lines.push(`Facts recalled: ${out.recalled.join(', ')}`);
+  if (ctx.lastCheckpoint) lines.push(`Last checkpoint: ${clip(ctx.lastCheckpoint, 300)}`);
+  if (said && said.output && said.output.content) lines.push(`Last said: ${clip(said.output.content, 400)}`);
+  let text = lines.join('\n');
+  if (text.length > cap) text = text.slice(0, cap - 12) + '\n…(cut)';
+  return text;
 }
 
 // A DecisionLog: each tool call paired with the gate verdict that followed it (the next

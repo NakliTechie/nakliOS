@@ -264,11 +264,70 @@ function injectionUnsafe(f){
     return (scan.findings || []).some(x => x.check === 'prompt-injection');
   } catch (_) { return false; }
 }
-export function buildMemoryIndex(facts){
+// CRIB-A A1 (osaurus B7, 2026-09-13): salience from USE. `factUsage` folds the run-index rows the
+// doctor keeps (each row carries the fact names its run recalled) into name -> { runs, lastUsed };
+// nothing is dual-written — the record is the source, the row its projection. A fact that no run
+// has recalled for `restDays` (and that is older than that) RESTS: it leaves the injected index
+// (its file stays; `recall` by name still works) and the index says how many rest. The 2026-09-13
+// probe (`plan/bench-index-usage-2026-09-13.md`): 202 of 203 injected items never fired — the
+// index was pure cost; making retraction cheap is AC-9's arm that its negative result pointed at.
+export const REST_DAYS = 30;
+export function factUsage(rows){
+  const out = new Map(); let carried = 0, since = Infinity;
+  for (const r of rows || []) {
+    if (!r || !Array.isArray(r.recalled)) continue; // a row from before A1 says nothing about use
+    carried++;
+    const when = Number(r.endedAt || r.startedAt) || 0;
+    if (when > 0) since = Math.min(since, when);
+    for (const name of r.recalled) {
+      const u = out.get(String(name)) || { runs: 0, lastUsed: 0 };
+      u.runs++; u.lastUsed = Math.max(u.lastUsed, when); out.set(String(name), u);
+    }
+  }
+  // No row that CARRIES use is no evidence at all — resting stays off (the checker: an index
+  // written before A1 had no `recalled` on any row, and an empty Map switched resting on).
+  if (!carried) return null;
+  if (!Number.isFinite(since)) return null; // rows that carry recalls but no date say nothing about WHEN — no window, no evidence (the re-check's N1)
+  // `since` is the earliest carried row — how far back the evidence reaches. Resting needs a
+  // window's worth of it: with five days of rows, no fact can be shown unrecalled for thirty.
+  out.since = Number.isFinite(since) ? since : 0;
+  return out;
+}
+// Resting is decided per fact from two dates only: the last recall (from usage) and the fact's own
+// `created`. A fact younger than the window is never rested (it has not had its chance); a rule
+// is never rested (it binds by policy, not by use); a fact whose `created` cannot be read is never
+// rested (an unknown age is not an old age — hiding is the costlier error); and while the carried
+// rows reach back less than a window, nothing rests: the evidence cannot yet show 30 unrecalled
+// days (the checker's probe: one post-A1 row would otherwise rest every mature fact at once).
+export function isResting(f, { usage = null, now = Date.now(), restDays = REST_DAYS } = {}){
+  if (!f || f.type === 'rule' || f.status === 'retracted') return false; // a retraction is a fact about the fact — never rested away
+  const window = restDays * 86400000;
+  const u = usage && usage.get(f.name);
+  if (u && u.lastUsed && now - u.lastUsed < window) return false;
+  if (usage && Number.isFinite(usage.since) && usage.since > 0 && now - usage.since < window) return false;
+  const created = parseCreated(f.created); // the one reader every other fold uses
+  const createdMs = created ? Date.parse(created) : NaN;
+  if (!Number.isFinite(createdMs)) return false;
+  if (now - createdMs < window) return false;
+  return true;
+}
+export function buildMemoryIndex(facts, { usage = null, now = Date.now(), restDays = REST_DAYS } = {}){
   const all = (facts || []).filter(f => f && (f.name || f.description) && !injectionUnsafe(f));
-  const liveAll = all.filter(f => f.status !== 'retracted');
-  const retracted = all.length - liveAll.length;
-  if (!liveAll.length) return '';
+  // Resting is decided on the whole live set, so a successor that supersedes an AWAKE fact stays
+  // awake with it (the stale one would otherwise render untagged as current — the checker's probe).
+  const liveEvery = all.filter(f => f.status !== 'retracted');
+  const restingSet = new Set();
+  if (usage) {
+    for (const f of liveEvery) if (isResting(f, { usage, now, restDays })) restingSet.add(f.name);
+    // to a fixed point: a chain C ⊃ B ⊃ A wakes end to end whichever order the facts arrive in
+    for (let changed = true; changed;) { changed = false; for (const f of liveEvery) if (restingSet.has(f.name) && (f.supersedes || []).some((s) => liveEvery.some((g) => g.name === s) && !restingSet.has(s))) { restingSet.delete(f.name); changed = true; } }
+  }
+  const awake = all.filter(f => !restingSet.has(f.name));
+  const resting = restingSet.size;
+  const restLine = resting ? `\n\n${resting} fact(s) rest (not recalled in ${restDays} days) and are not listed — \`recall\` one by name if a task needs it.` : '';
+  const liveAll = awake.filter(f => f.status !== 'retracted');
+  const retracted = all.length - liveEvery.length;
+  if (!liveAll.length) return resting ? restLine.replace(/^\n\n/, '') + '\n' : '';
   const staleAll = supersededSet(liveAll);
   const rules = liveRules(liveAll, staleAll);
   const live = liveAll.filter(f => f.type !== 'rule');
@@ -277,7 +336,7 @@ export function buildMemoryIndex(facts){
     'Mandatory for THIS project — they bind your own choices; the owner\'s explicit instruction ' +
     'in this task overrides them. Read once, obey throughout.\n\n' +
     rules.map(renderRule).join(RULE_SEP) + '\n' : '';
-  const foot = retracted ? `\n\n${retracted} fact(s) were retracted (disproven) and hidden — do not re-derive them.` : '';
+  const foot = (retracted ? `\n\n${retracted} fact(s) were retracted (disproven) and hidden — do not re-derive them.` : '') + restLine;
   if (!live.length) return rulesBlock ? rulesBlock + foot.replace(/^\n\n/, '\n') : '';
   const byName = new Map(live.map(f => [f.name, f]));
   const emitted = new Set();

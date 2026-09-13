@@ -14,7 +14,7 @@ import { RUN_EVENTS, createRunRecorder, loadRecord, foldStatus, foldLog, foldTra
          replayInfer, replayExecuteTool, compareRuns, requestHash, ReplayMiss,
          OUTCOME_SIGNALS, foldOutcome, foldReuse, foldStopReasons, stopReasonsLine,
          searchRecords, scopeEntries, readEvent, historyTool, HISTORY_ROLES, foldRecovery, recoveryNote,
-         foldStagnation, stagnationNudge, foldSessionContext, foldDecisions,
+         foldStagnation, stagnationNudge, foldSessionContext, foldDecisions, foldEpisode,
          foldSurface, compactionOrphaned, reconstructionCheck, joined,
          foldModels, normaliseModelStamp, foldSubstitutions, substitutionsLine } from '../run-record.mjs';
 
@@ -497,6 +497,14 @@ await test('SESSION CONTEXT + DECISIONS folds (C2): goal, files, outcome; tool�
   assert(/Create src\/a\.txt/.test(ctx.goal), 'goal is the first owner input'); eq(ctx.outcome, 'success', 'gated pass → success');
   assert(ctx.filesTouched.length === 0 || Array.isArray(ctx.filesTouched), 'filesTouched is a list (shell commands carry no path arg here)');
   const dec = foldDecisions(gated.rec.events(), gated.rec.resolve);
+  // A2: the episode is one digest, bounded, with the run's goal, shape, files and verdicts in it
+  const ep = foldEpisode(gated.rec.events(), gated.rec.resolve);
+  assert(/^## Last run .*— (success|failure|unknown)/.test(ep), 'the episode opens with the run\'s outcome: ' + ep.split('\n')[0]);
+  assert(/^Goal: /m.test(ep) && /^Shape: \d+ tool call/m.test(ep), 'goal and shape are in it: ' + ep);
+  assert(ep.includes('Goal: ' + String(ctx.goal).replace(/\s+/g, ' ').trim().slice(0, 40)), 'the goal is quoted verbatim (whitespace folded), not mangled: ' + ep);
+  const cut = foldEpisode(gated.rec.events(), gated.rec.resolve, { cap: 120 });
+  assert(cut.length <= 120 && /…\(cut\)$/.test(cut), 'a cap cuts it and says so');
+  eq(foldEpisode([], () => null), null, 'a record with no events has nothing to say — null, never a digest of nothing');
   assert(dec.length === 3 && dec.every((d) => typeof d.toolSignature === 'string'), 'one decision per tool call, each with a signature');
   assert(dec.some((d) => d.outcome === 'passed'), 'a decision is paired with the gate pass');
   const ungated = await recordRun();
