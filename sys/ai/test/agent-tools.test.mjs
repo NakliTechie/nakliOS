@@ -3,7 +3,7 @@
 //
 //   node sys/ai/test/agent-tools.test.mjs
 
-import { applyEdit, parseApplyPatch, makeToolExecutor, codingToolset, makeShellVerifier, ranNothing, toolReadiness, readinessLine, TOOL_OPT_INS } from '../agent-tools.mjs';
+import { applyEdit, parseApplyPatch, makeToolExecutor, codingToolset, makeShellVerifier, ranNothing, toolReadiness, readinessLine, TOOL_OPT_INS , scopeAllows, TOOL_SCOPES } from '../agent-tools.mjs';
 import { contentToken } from '../content-token.mjs';
 import { createFileops, MemoryBackend } from '../../rig/fileops/index.mjs';
 import { OverlayBackend } from '../../rig/fileops/overlay-backend.mjs';
@@ -492,6 +492,26 @@ await test('write: an absolute path is resolved against the root AND the result 
   assert(r.ok, 'the file is where the line says it is');
   const rel = await exec('write', { path: 'inv/store.py', content: 'x = 2\n' });
   eq(rel, 'Wrote inv/store.py (6 bytes)', 'a relative path gets the plain line — the note is not noise on every write');
+});
+
+// CRIB-B B5: the catalog is a projection of the grant — a tool the grant cannot honour is never presented
+await test('B5: codingToolset drops what the grant cannot honour; no scopes → no projection; readiness says blocked and names the scope', () => {
+  const names = (tools) => tools.map((x) => x.function.name).sort().join(',');
+  const full = codingToolset('code', { hashline: true });
+  const ro = codingToolset('code', { hashline: true, scopes: ['fs:read'] });
+  eq(names(ro), 'read,read_lines,shell,todowrite', 'read-only grant: no edit/write/apply_patch/edit_lines');
+  eq(names(codingToolset('code', { hashline: true, scopes: new Set(['fs:read', 'fs:write']) })), names(full), 'a Set works; both scopes → the full set');
+  eq(names(codingToolset('code', { scopes: [] })), 'todowrite', 'an empty grant presents only what needs no scope');
+  eq(names(codingToolset('code', { scopes: null })), names(codingToolset('code')), 'null scopes → not projected (beds)');
+  eq(scopeAllows(['fs:read'], 'write'), false); eq(scopeAllows(['fs:read'], 'todowrite'), true); eq(scopeAllows(null, 'write'), true); eq(scopeAllows(['fs:read'], 'unknown-tool'), true, 'a tool with no entry needs nothing');
+  eq(TOOL_SCOPES.shell, 'fs:read', 'the shell needs only fs:read to be worth presenting');
+  const rows = toolReadiness('code', { hashline: true, scopes: ['fs:read'] });
+  const st = (n) => rows.find((r) => r.name === n);
+  eq(st('write').state, 'blocked'); eq(st('write').why, 'blocked by policy — the grant lacks fs:write');
+  eq(st('read').state, 'exposed'); eq(st('todowrite').state, 'exposed');
+  eq(st('dispatch').state, 'off', 'an opt-in that is off is off, not blocked');
+  eq(toolReadiness('plan', { scopes: ['fs:read'] }).find((r) => r.name === 'write').state, 'hidden', 'the mode hides before the grant blocks');
+  assert(rows.every((r) => ['exposed', 'hidden', 'blocked', 'off', 'unavailable'].includes(r.state)), 'five states');
 });
 
 if (failures.length) {

@@ -61,7 +61,7 @@ assert.equal(shared(old(idx1), old(idx2)), 0, 'control: with the index in the sy
 
 // The tool list must not depend on the store's contents either.
 // N1: the toolset is runToolset(mode, { verify }) — it takes no store, so it CANNOT depend on one.
-assert.match(anvil, /const tools = runToolset\(mode, \{ verify: !!verify \}\);/, 'the app sends the assembly\'s toolset and nothing else reaches it');
+assert.match(anvil, /const tools = runToolset\(mode, \{ verify: !!verify, scopes: grant\.scopes \}\);/, 'the app sends the assembly\'s toolset and nothing else reaches it');
 for (const mode of ['code', 'plan', 'ask']) {
   const names = runToolset(mode).map((x) => x.function.name);
   assert.ok(names.includes('skill'), `the skill tool is offered unconditionally (${mode})`);

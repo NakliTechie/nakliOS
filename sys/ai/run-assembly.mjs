@@ -5,7 +5,7 @@
 // prompt bytes, same tool list per mode, same budgets, same re-loops. scripts/test-run-assembly.mjs
 // holds the byte-equality lane against the inline app.
 import { runAgentLoop } from './agent-loop.mjs';
-import { codingToolset, toolReadiness } from './agent-tools.mjs';
+import { codingToolset, toolReadiness , scopeAllows, TOOL_SCOPES } from './agent-tools.mjs';
 import { renderProcedural } from './procedural.mjs';
 import { rememberTool } from './project-context.mjs';
 import { skillTool } from './skills.mjs';
@@ -61,32 +61,35 @@ export function synthesizeTool() {
 // are read-only). `skill` and `recall` are UNCONDITIONAL: gating them on whether the store had
 // anything changed the tool SCHEMA block — the most expensive thing in the prompt to invalidate
 // (F3). The tools answer honestly when there is nothing yet.
-export function runToolsetOptions(mode = 'code', { verify = false } = {}) {
+export function runToolsetOptions(mode = 'code', { verify = false, scopes = null } = {}) {
   const code = mode === 'code';
-  return { subagents: true, supervisor: code, completion: !!verify, clarify: true }; // B3: top level may ask
+  return { subagents: true, supervisor: code, completion: !!verify, clarify: true, scopes }; // B3: top level may ask; B5: the grant projects the catalog
 }
 // A4 (osaurus B9): the readiness surface for THIS run's options — exposed / hidden (mode) / off
 // (opt-in) / unavailable (the host's capability gap, named by the app) — from the same option
 // object the toolset is built from, so the two cannot drift.
-export function runReadiness(mode = 'code', { verify = false } = {}, { unavailable = {} } = {}) {
-  const rows = toolReadiness(mode, runToolsetOptions(mode, { verify }), { unavailable });
+export function runReadiness(mode = 'code', { verify = false, scopes = null } = {}, { unavailable = {} } = {}) {
+  const rows = toolReadiness(mode, runToolsetOptions(mode, { verify, scopes }), { unavailable });
   // The tools this module adds AFTER codingToolset (memory, skills, history, checkpoint, …) are
   // derived from the toolset itself, never listed here: what this mode offers is exposed; what
-  // code mode would offer and this mode does not is hidden by the mode.
+  // the mode would offer but the grant cannot honour is blocked (B5); what code mode would offer
+  // and this mode does not is hidden by the mode.
   const named = new Set(rows.map((r) => r.name));
-  const offered = new Set(runToolset(mode, { verify }).map((t) => t.function.name));
+  const offered = new Set(runToolset(mode, { verify, scopes }).map((t) => t.function.name));
+  const modeOffers = new Set(runToolset(mode, { verify }).map((t) => t.function.name)); // the mode's list before the grant
   const codeOffers = runToolset('code', { verify }).map((t) => t.function.name);
-  for (const name of [...new Set([...offered, ...codeOffers])]) {
+  for (const name of [...new Set([...modeOffers, ...codeOffers])]) {
     if (named.has(name)) continue;
     if (unavailable[name]) rows.push({ name, state: 'unavailable', why: String(unavailable[name]) });
     else if (offered.has(name)) rows.push({ name, state: 'exposed', why: '' });
+    else if (modeOffers.has(name)) rows.push({ name, state: 'blocked', why: `blocked by policy — the grant lacks ${TOOL_SCOPES[name]}` });
     else rows.push({ name, state: 'hidden', why: `not in ${mode} mode` });
   }
   return rows;
 }
-export function runToolset(mode = 'code', { verify = false } = {}) {
+export function runToolset(mode = 'code', { verify = false, scopes = null } = {}) {
   const code = mode === 'code';
-  const tools = codingToolset(mode, runToolsetOptions(mode, { verify }));
+  const tools = codingToolset(mode, runToolsetOptions(mode, { verify, scopes }));
   if (code) tools.push(rememberTool());
   if (code) tools.push(skillManageTool());
   if (code) tools.push(synthesizeTool());
@@ -96,7 +99,7 @@ export function runToolset(mode = 'code', { verify = false } = {}) {
   tools.push(skillTool());
   tools.push(recallTool());
   if (code) tools.push(reviseTool()); // belief revision over existing facts
-  return tools;
+  return tools.filter((t) => scopeAllows(scopes, t.function.name)); // B5: the extras are projected by the grant too
 }
 
 // Tools the app hands the model that a node bed has no store or Kiln behind. A bed answers

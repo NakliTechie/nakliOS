@@ -247,7 +247,7 @@ for (const volatile of ['projectContext', 'memoryIndex', 'skillsIndex', 'recover
   assert.ok(!new RegExp(`proceduralPrior\\s*=\\s*[^;]*${volatile}`).test(anvil), `${volatile} must not reach the procedural prior`);
   assert.ok(!new RegExp(`systemMessage\\(\\{[^}]*${volatile}`).test(anvil), `${volatile} must not reach the system message`);
 }
-assert.match(runTask, /const tools = runToolset\(mode, \{ verify: !!verify \}\);/, 'the toolset is the module\'s — the beds get the same list');
+assert.match(runTask, /const tools = runToolset\(mode, \{ verify: !!verify, scopes: grant\.scopes \}\);/, 'the toolset is the module\'s — the beds get the same list');
 assert.ok(!/tools\.push\(/.test(runTask.slice(0, runTask.indexOf('const sysMsg='))), 'nothing is pushed onto the toolset after the module built it');
 assert.match(runTask, /const gateNote = assembledGateNote\(verifyCmd\);/, 'the gate note is the module\'s');
 const call = runTask.match(/let result = await driveRun\(\{[\s\S]*?\n      \}\);/);
@@ -308,7 +308,37 @@ assert.match(anvil, /const lv = e\.status==='running' \? subagentLiveness\(e\)\.
 assert.match(anvil, /const steer=createSteerQueue\(\);\n\s*const baseExec = makeToolExecutor\(\{ shell, face, mode, infer: inferViaHost, spawnIsolated, steer,/, 'B2: the executor gets the run\'s steer queue');
 assert.match(anvil, /await driveRun\(\{\n\s*steer,/, 'B2: and so does the loop, through driveRun');
 assert.ok(!/async function saveRunRecord[\s\S]{0,400}runIndexRow\(\{ project:String\(state\.activeProject/.test(anvil), 'the row never reads the live activeProject at save time');
-console.log('run-assembly: A4 readiness == the toolset in every mode; A2 episode rides ungated');
+// B5: the grant projects the run's toolset — extras included — and the readiness says blocked, by scope
+{
+  const names = (tools) => tools.map((x) => x.function.name).sort().join(',');
+  const fullNames = names(runToolset('code', { verify: false }));
+  const ro = runToolset('code', { verify: false, scopes: ['fs:read'] });
+  for (const n of ['write', 'edit', 'apply_patch', 'remember', 'skill_manage', 'synthesize', 'revise']) assert.ok(!ro.some((x) => x.function.name === n), `read-only grant drops ${n}`);
+  for (const n of ['read', 'shell', 'history', 'skill', 'recall', 'checkpoint', 'context_remaining']) assert.ok(ro.some((x) => x.function.name === n), `read-only grant keeps ${n}`);
+  assert.equal(names(runToolset('code', { verify: false, scopes: ['fs:read', 'fs:write', 'fs:remove'] })), fullNames, 'the app\'s full grant is the full set');
+  assert.equal(names(runToolset('code', { verify: false, scopes: null })), fullNames, 'no grant → not projected');
+  for (const [mode, scopes] of [['code', ['fs:read']], ['plan', ['fs:read']], ['code', []], ['ask', []]]) {
+    const rows = runReadiness(mode, { verify: false, scopes });
+    const exposed = rows.filter((r) => r.state === 'exposed').map((r) => r.name).sort().join(',');
+    assert.equal(exposed, names(runToolset(mode, { verify: false, scopes })), `${mode}/${scopes.join('+') || 'none'}: exposed == offered`);
+    assert.equal(new Set(rows.map((r) => r.name)).size, rows.length, 'one row per tool');
+  }
+  const rows = runReadiness('code', { verify: false, scopes: ['fs:read'] });
+  assert.equal(rows.find((r) => r.name === 'remember').state, 'blocked'); assert.equal(rows.find((r) => r.name === 'remember').why, 'blocked by policy — the grant lacks fs:write');
+  assert.equal(runReadiness('plan', { verify: false, scopes: ['fs:read'] }).find((r) => r.name === 'remember').state, 'hidden', 'the mode hides before the grant blocks, for the extras too');
+  // the record's run.started tools equal what the grant allows (the chunk's test)
+  const rec = createRunRecorder({ app: 'anvil', principal: 'test' });
+  await driveRun({ mode: 'code', convo: [{ role: 'user', content: 'go' }], sysMsg: () => ({ role: 'system', content: 'sys' }), tools: ro, infer: async () => ({ content: 'done', toolCalls: [] }), executeTool: async () => '', rec });
+  await rec.settled();
+  const started = rec.resolve(rec.events().find((e) => e.tool === 'run.started')).input;
+  assert.equal(started.tools.map((x) => x.function.name).sort().join(','), names(ro), 'run.started carries the projected list — a blocked tool is never presented');
+}
+assert.match(anvil, /const tools = runToolset\(mode, \{ verify: !!verify, scopes: grant\.scopes \}\);/, 'B5: the app projects the catalog by the run grant');
+assert.match(anvil, /const readiness = runReadiness\(mode, \{ verify: !!verify, scopes: grant\.scopes \}\);/, 'B5: and the readiness');
+assert.match(anvil, /makeToolExecutor\(\{ shell, face, mode, infer: inferViaHost, spawnIsolated, steer, scopes: grant\.scopes,/, 'B5: the children\'s catalogs are projected by the grant too');
+assert.match(anvil, /tools=codingToolset\('code',\{ scopes: grant\.scopes \}\)\.concat\(emitTool\);/, 'B5: and the builder role');
+assert.match(anvil, /changes: \(\)=>\{ const c=overlay\.changes\(\); return \{ written:\(c\.written\|\|\[\]\)\.map\(toRel\), deleted:\(c\.deleted\|\|\[\]\)\.map\(toRel\) \}; \}/, 'B3: a child\'s changes are reported workspace-relative — a Crate mount root never reaches ownership or the merge clock');
+console.log('run-assembly: A4 readiness == the toolset in every mode; A2 episode rides ungated; B5 the grant projects the catalog');
 // …and rides run.started only when the app supplies it: a bed that passes none records the old shape
 {
   const mk = () => createRunRecorder({ app: 'anvil', principal: 'test' });

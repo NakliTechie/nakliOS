@@ -214,7 +214,7 @@ await test('NAF-08: the checkpoint handler can actually reach the run recorder',
 await test('NAF-04: the learn fork is reachable — tool registered, handled, and deferred not skipped', async () => {
   // N1: the toolset is the assembly's (sys/ai/run-assembly.mjs); registration is checked there, wiring here.
   assert.ok(runToolset('code').some((x) => x.function.name === 'learn_this_run'), 'learn_this_run is in the code-mode toolset the app sends');
-  assert.match(src, /const tools = runToolset\(mode, \{ verify: !!verify \}\);/, 'and the app sends that toolset — importing the builder is not registering it');
+  assert.match(src, /const tools = runToolset\(mode, \{ verify: !!verify, scopes: grant\.scopes \}\);/, 'and the app sends that toolset — importing the builder is not registering it');
   assert.ok(/nm===['"]learn_this_run['"]/.test(src), 'executeTool has a learn_this_run branch — without it the advertised entry point does not exist');
   // the scheduler must DEFER on a local model, not skip forever: idleMs was hardcoded 0, which
   // made `isLocalModel && idleMs < AUTO_REVIEW_IDLE_MS` permanently true.
