@@ -63,9 +63,9 @@ assert.ok(!/logStart/.test(anvil), 'the self-check\'s logStart bookkeeping is go
 // Persisted OUTSIDE the agent's mount.
 assert.match(anvil, /async function saveRunRecord\(t, rec(, \{[^)]*\})?\)\{/, 'a run store exists');
 assert.match(anvil, /createOpfsBackend\(\{ path:'anvil\/'\+rel \}\)/, 'records go to OPFS');
-assert.match(anvil, /const rel='runs\/'\+String\(state\.activeProject/, 'under anvil/runs/<project>/<task>/, not the workspace mount');
+assert.match(anvil, /const rel='runs\/'\+project\+'\/'\+String\(t\.id\);/, 'under anvil/runs/<project>/<task>/ — the project captured at run START (CRIB-A), not the workspace mount');
 assert.ok(!/fs\.write\([^)]*runs\//.test(anvil), 'never written through the agent-facing `fs`');
-assert.match(runTask, /await saveRunRecord\(t, rec(, \{ gated \})?\)/, 'every run is persisted');
+assert.match(runTask, /await saveRunRecord\(t, rec, \{ gated, project: runProject \}\)/, 'every run is persisted, under the project it started in');
 assert.match(runTask, /record: could not persist/, 'a persistence failure is surfaced');
 
 // ── the storage ladder: rung 1 (Anvil home) and the honest durability line ──

@@ -2022,7 +2022,8 @@
 
   // `project` is the run's project as captured at run START: a project switch mid-run must not file
   // the record — and, since A1/A2, the next run's salience and episode — under the wrong project.
-  async function saveRunRecord(t, rec, { gated=false, project=String(state.activeProject||'local') }={}){
+  async function saveRunRecord(t, rec, { gated=false, project=null }={}){
+    project = project || String(state.activeProject||'local');
     const rel='runs/'+project+'/'+String(t.id);
     const name=new Date().toISOString().replace(/[:.]/g,'-')+'.json';
     const text=JSON.stringify(rec.export());
