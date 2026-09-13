@@ -101,3 +101,19 @@ from the host page's console or a browser-automation script against the iframe.
 - **Reach and drive:** `await t.gitPushTest('<your scratch remote>', 'm1')`.
 - **Observable success:** `{ok:true, oid, marker:'m1', pushErr:null}` and the remote's `main` shows `HELLO.md` with the marker.
 - **Gotchas:** OWED and owner-gated (`pending.md` Now); a run without the token returns `pushErr`, which is the honest outcome, not a bug.
+
+### hook:rebuildIndex
+- **Goal:** run the run-index doctor — rebuild the IndexedDB `runs` rows from the record files — and read how many rows resumed from their own checkpoint (WIRE, 2026-09-13).
+- **Source:** the door's `rebuildIndex`; `rebuildRunIndex`, `runIndexRow`, `foldIndexStatus` in `apps/anvil/index.html`; `sys/history/projection.mjs` (`createProjector`, `restore`/`checkpoint`).
+- **Prerequisites:** launch; at least one finished run in the project (a record under `anvil/runs/<project>/<task>/`).
+- **Reach and drive:** `await t.rebuildIndex()` twice; between them nothing.
+- **Observable success:** `{indexed, broken, resumed, stops, stopsLine}`; the first call has `resumed` ≤ the rows that already carried a checkpoint, the second has `resumed === indexed` — every row's status fold continued from its checkpoint (`rebuilt:false`) and the rows' `status`/`stop` are unchanged between the two calls.
+- **Gotchas:** a row whose checkpoint does not fit its record (a bumped `stateVersion`, a witness from another array) is refolded from event zero and counted as not resumed — same status, one more rebuild; that is the design, not a defect.
+
+### hook:runRow
+- **Goal:** read one IndexedDB run row by id (`<project>/<task>/<file>.json`) — the row the doctor writes, with its `checkpoint` and `resumed`.
+- **Source:** the door's `runRow`; `runsGet`.
+- **Prerequisites:** launch; the row exists (after a run or a rebuild).
+- **Reach and drive:** `await t.runRow('<project>/<task>/<ts>.json')`.
+- **Observable success:** `{id, status, stop, events, checkpoint:{stateVersion, consumed, witness, state}, resumed}`; `checkpoint.consumed === events`.
+- **Gotchas:** `null` for an unknown id; the row is derived — the record file is the truth.

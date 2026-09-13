@@ -101,9 +101,10 @@ assert.match(anvil, /createObjectStore\(RUNS_STORE,\{keyPath:'id'\}\)/, 'a runs 
 for (const ix of ['project','task','endedAt']) assert.match(anvil, new RegExp(`createIndex\\('${ix}','${ix}'\\)`), `indexed by ${ix}`);
 assert.match(anvil, /if\(!db\.objectStoreNames\.contains\(DIR_STORE\)\) db\.createObjectStore\(DIR_STORE\)/, 'the v1 store survives the upgrade');
 assert.match(anvil, /function runIndexRow\(/, 'rows are derived by one function');
-assert.match(anvil, /const st=foldStatus\(ev, rec\.resolve, \{ gated \}\)/, 'a row\'s status is the FOLD, not a copy of t.status');
+assert.match(anvil, /const \{ st, resumed, checkpoint \}=await foldIndexStatus\(\{ rec, gated, prev \}\)/, 'a row\'s status is the FOLD, not a copy of t.status');
+assert.match(anvil, /createProjector\(statusUnit\(\{ gated \}\), \{ checkpoint:/, 'WIRE: the fold is a projector that restores and saves the row\'s checkpoint');
 const save2 = anvil.slice(anvil.indexOf('async function saveRunRecord(t, rec'), anvil.indexOf('async function runTask(t, text){'));
-assert.match(save2, /await runsPut\(runIndexRow\(/, 'saveRunRecord writes the row after the files');
+assert.match(save2, /await runsPut\(await runIndexRow\(/, 'saveRunRecord writes the row after the files');
 assert.match(save2, /count=\(await runsForTask\(String\(t\.id\)\)\)\.length/, 'and reads the task\'s run count back');
 assert.match(runTask, /' · run '\+saved\.count\+' of this task'/, 'the closing line is a real reader of the index');
 assert.match(anvil, /async function rebuildRunIndex\(\)/, 'the doctor exists');

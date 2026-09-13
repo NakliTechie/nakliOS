@@ -7,6 +7,7 @@
 // exist, a filter whose condition is inverted. This file extracts the actual functions and calls
 // them, so those failures are loud.
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { inlineModule, extractFunction, extractRegion, evaluate, instantiate, memFs, failingFs } from './anvil-harness.mjs';
 import { searchRecords, scopeEntries, readEvent, createRunRecorder } from '../sys/history/run-record.mjs';
 import { runToolset } from '../sys/ai/run-assembly.mjs';
@@ -331,6 +332,33 @@ await test('B6: revise is refused before a recall, applied after one, and refuse
   assert.match(await handle('revise', { name: 'shim', status: 'verified', reason: 'bad \uD800 surrogate' }), /^Revised "shim" → verified/);
   const next = await handle('revise', { name: 'shim', status: 'retracted', reason: 'after all' });
   assert.match(next, /^Revised "shim" → retracted/, `tokened as stored, not as handed in: ${next}`);
+});
+
+// WIRE: the status fold that the run index carries resumes from the row's own checkpoint — driven
+// with a real corpus record through the app's foldIndexStatus, not a stand-in.
+await test('WIRE: a reopened record refolds from its checkpoint (resumed), a forged checkpoint is ignored, the status never changes', async () => {
+  const { loadRecord, statusUnit, createProjector } = await import('../sys/history/run-record.mjs');
+  // extractFunction stops at the first `{` — the destructured parameter list here — so take the region
+  const fn = extractRegion(src, 'async function foldIndexStatus(', '// One index row from one record.');
+  const foldIndexStatus = instantiate(fn, 'foldIndexStatus', { statusUnit, createProjector });
+  const rec = loadRecord(JSON.parse(readFileSync(new URL('../sys/history/corpus/write-a-file.json', import.meta.url), 'utf8')));
+  const first = await foldIndexStatus({ rec, gated: false, prev: null });
+  assert.equal(first.resumed, false, 'no checkpoint yet → folded from event zero');
+  assert.ok(first.checkpoint && first.checkpoint.consumed === rec.events().length, 'a checkpoint was saved for the whole record');
+  assert.equal(typeof first.checkpoint.witness, 'string', 'and it knows which array it came from');
+  const second = await foldIndexStatus({ rec, gated: false, prev: first.checkpoint });
+  assert.equal(second.resumed, true, 'the checkpoint fits → resumed, no rebuild');
+  assert.deepEqual(second.st, first.st, 'and the status is the same either way');
+  for (const [why, forge] of [
+    ['a bumped stateVersion', (cp) => ({ ...cp, stateVersion: 99 })],
+    ['a witness from another array', (cp) => ({ ...cp, witness: 'not-this-array' })],
+    ['a snapshot the unit rejects', (cp) => ({ ...cp, state: { steps: -1, stopOut: 'garbage' } })],
+  ]) {
+    const forged = await foldIndexStatus({ rec, gated: false, prev: forge(first.checkpoint) });
+    assert.equal(forged.resumed, false, `${why}: ignored, refolded`);
+    assert.deepEqual(forged.st, first.st, `${why}: the status is still the fold's`);
+    assert.equal(forged.checkpoint.consumed, rec.events().length, `${why}: a fresh checkpoint replaces it`);
+  }
 });
 
 const SK = (status, body = 'Run the script.') => `---\nname: k\ndescription: d\nstatus: ${status}\n---\n${body}`;

@@ -455,7 +455,7 @@
   import { runCampaign } from '../../sys/assay/runmode.mjs';
   import { makeCampaignExecutors } from '../../sys/assay/executors.mjs';
   import { verifyWall, verifyTests, replay as replayLineage } from '../../sys/assay/verify.mjs';
-  import { createRunRecorder, foldStatus, foldLog, foldTranscript, loadRecord, foldStopReasons, stopReasonsLine, searchRecords, scopeEntries, readEvent, foldRecovery, recoveryNote, foldOutcome, foldSkillUsage } from '../../sys/history/run-record.mjs';
+  import { createRunRecorder, foldStatus, foldLog, foldTranscript, loadRecord, foldStopReasons, stopReasonsLine, searchRecords, scopeEntries, readEvent, foldRecovery, recoveryNote, foldOutcome, foldSkillUsage, statusUnit, createProjector } from '../../sys/history/run-record.mjs';
 
   const $ = (id) => document.getElementById(id);
   const nak = window.naklios || null;
@@ -600,15 +600,32 @@
   const RUNS_STORE='runs';
   function idbOpen(){return new Promise((res,rej)=>{const r=indexedDB.open(DIR_DB,2);r.onupgradeneeded=()=>{const db=r.result; if(!db.objectStoreNames.contains(DIR_STORE)) db.createObjectStore(DIR_STORE); if(!db.objectStoreNames.contains(RUNS_STORE)){ const st=db.createObjectStore(RUNS_STORE,{keyPath:'id'}); st.createIndex('project','project'); st.createIndex('task','task'); st.createIndex('endedAt','endedAt'); }};r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
   async function runsPut(row){try{const db=await idbOpen();await new Promise((res)=>{const t=db.transaction(RUNS_STORE,'readwrite').objectStore(RUNS_STORE).put(row);t.onsuccess=res;t.onerror=res;});}catch(_){} }
+  async function runsGet(id){try{const db=await idbOpen();return await new Promise((res)=>{const q=db.transaction(RUNS_STORE).objectStore(RUNS_STORE).get(id);q.onsuccess=()=>res(q.result||null);q.onerror=()=>res(null);});}catch(_){return null;}}
   async function runsForTask(taskId){try{const db=await idbOpen();return await new Promise((res)=>{const q=db.transaction(RUNS_STORE).objectStore(RUNS_STORE).index('task').getAll(taskId);q.onsuccess=()=>res(q.result||[]);q.onerror=()=>res([]);});}catch(_){return [];}}
   async function runsCount(){try{const db=await idbOpen();return await new Promise((res)=>{const q=db.transaction(RUNS_STORE).objectStore(RUNS_STORE).count();q.onsuccess=()=>res(q.result||0);q.onerror=()=>res(0);});}catch(_){return 0;}}
+  // WIRE (2026-09-13): the status fold resumes from the row's own CHECKPOINT (N5's mechanism,
+  // sys/history/projection.mjs) instead of refolding every record from event zero on each rebuild.
+  // `prev` is the checkpoint the last row carried; the projector restores it, advances over the
+  // events, and hands back a fresh one for the row. A checkpoint that does not fit — a bumped
+  // stateVersion, a witness that is not this array's, a snapshot the unit rejects — is ignored
+  // and the fold rebuilds: `resumed` says which happened, so the doctor can count it. Pure
+  // apart from the record: the test drives it with a corpus record and a forged checkpoint.
+  async function foldIndexStatus({ rec, gated, prev }){
+    let saved=null;
+    const proj=createProjector(statusUnit({ gated }), { checkpoint:{ load:async()=>prev||null, save:async(cp)=>{ saved=cp; } } });
+    const restored=await proj.restore();
+    const r=proj.advance(rec.events(), rec.resolve);
+    await proj.checkpoint();
+    return { st:r.value, resumed: !!(restored.restored && !r.rebuilt), checkpoint:saved };
+  }
   // One index row from one record. `tiers` is where the file was found/written.
-  function runIndexRow({ project, task, name, path, tiers, rec, gated }){
-    const ev=rec.events(); const st=foldStatus(ev, rec.resolve, { gated });
+  async function runIndexRow({ project, task, name, path, tiers, rec, gated, prev=null }){
+    const ev=rec.events(); const { st, resumed, checkpoint }=await foldIndexStatus({ rec, gated, prev });
     return { id: project+'/'+task+'/'+name, project, task, name, path, tiers,
       head: rec.head ? rec.head() : null, events: ev.length,
       stop: st.stop, status: st.status, verified: st.verified, steps: st.steps,
-      startedAt: ev.length ? ev[0].ts : null, endedAt: ev.length ? ev[ev.length-1].ts : null };
+      startedAt: ev.length ? ev[0].ts : null, endedAt: ev.length ? ev[ev.length-1].ts : null,
+      checkpoint, resumed };
   }
   // The doctor: rebuild the index from the record FILES (OPFS, and the home when
   // connected). Runs at boot when the index is empty but files exist — Codex's
@@ -624,7 +641,8 @@
             try{ const dump=JSON.parse(await (await fh.getFile()).text()); const rec=loadRecord(dump); const v=await rec.verify();
               const id=project+'/'+task+'/'+name; const prev=found.get(id);
               if(prev){ prev.tiers.push(tier); continue; }
-              const row=runIndexRow({ project, task, name, path:(tier==='home'?'home:':'anvil/runs/')+project+'/'+task+'/'+name, tiers:[tier], rec:{ events:rec.events, resolve:rec.resolve, head:()=>null }, gated:true });
+              const was=await runsGet(id);
+              const row=await runIndexRow({ project, task, name, path:(tier==='home'?'home:':'anvil/runs/')+project+'/'+task+'/'+name, tiers:[tier], rec:{ events:rec.events, resolve:rec.resolve, head:()=>null }, gated:true, prev: was&&was.checkpoint });
               row.chainOk=v.ok; row.brokenAt=v.brokenAt; found.set(id,{ row, tiers:row.tiers, rec });
             }catch(_){ /* unreadable file: not indexed, not fatal */ }
           } } }
@@ -640,16 +658,18 @@
         const parts=String(e.path).split('/'); if(parts.length<4) continue; const [ , project, task, name ]=parts;
         try{ const r=await hx.read(e.path,{encoding:'utf-8'}); if(!(r&&r.ok)) continue; const dump=JSON.parse(r.data); const rec=loadRecord(dump); const v=await rec.verify();
           const id=project+'/'+task+'/'+name; const prev=found.get(id); if(prev){ prev.tiers.push(tier); continue; }
-          const row=runIndexRow({ project, task, name, path:e.path, tiers:[tier], rec:{ events:rec.events, resolve:rec.resolve, head:()=>null }, gated:true });
+          const was=await runsGet(id);
+          const row=await runIndexRow({ project, task, name, path:e.path, tiers:[tier], rec:{ events:rec.events, resolve:rec.resolve, head:()=>null }, gated:true, prev: was&&was.checkpoint });
           row.chainOk=v.ok; row.brokenAt=v.brokenAt; found.set(id,{ row, tiers:row.tiers, rec });
         }catch(_){}
       }
     } }catch(_){}
-    let indexed=0, broken=0;
-    for(const { row } of found.values()){ await runsPut(row); indexed++; if(row.chainOk===false) broken++; }
+    let indexed=0, broken=0, resumed=0;
+    for(const { row } of found.values()){ await runsPut(row); indexed++; if(row.chainOk===false) broken++; if(row.resumed) resumed++; }
     // D1: how runs end, over every record the doctor just read — the stop-reason distribution, as a fold.
     const stops=foldStopReasons([...found.values()].map(f=>f.rec), { gated:true });
-    return { indexed, broken, stops, stopsLine: stopReasonsLine(stops) };
+    // `resumed`: rows whose status fold continued from the checkpoint the previous row carried
+    return { indexed, broken, resumed, stops, stopsLine: stopReasonsLine(stops) };
   }
   async function idbGet(k){try{const db=await idbOpen();return await new Promise((res)=>{const t=db.transaction(DIR_STORE).objectStore(DIR_STORE).get(k);t.onsuccess=()=>res(t.result);t.onerror=()=>res(null);});}catch(_){return null;}}
   async function idbSet(k,v){try{const db=await idbOpen();await new Promise((res)=>{const t=db.transaction(DIR_STORE,'readwrite').objectStore(DIR_STORE).put(v,k);t.oncomplete=res;t.onerror=res;});}catch(_){} }
@@ -2020,7 +2040,7 @@
     }
     // The index row — derived from the record, after the files are down.
     let count=null;
-    try{ await runsPut(runIndexRow({ project:String(state.activeProject||'local'), task:String(t.id), name, path, tiers, rec, gated })); count=(await runsForTask(String(t.id))).length; }
+    try{ await runsPut(await runIndexRow({ project:String(state.activeProject||'local'), task:String(t.id), name, path, tiers, rec, gated })); count=(await runsForTask(String(t.id))).length; }
     catch(e){ errors.push('index: '+(e&&e.message||e)); }
     return { path, name, tiers, errors, count };
   }
@@ -2922,6 +2942,10 @@
       return { ok:true, path:plan.path, verifyCmd:t.verifyCmd, gated:true };
     },
     taskState:()=>{ const t=activeTask(); return t? { id:t.id, title:t.title, status:t.status, verifyCmd:t.verifyCmd||'', mode:t.mode||'code' } : null; },
+    // The run-index doctor (WIRE): rebuild the IndexedDB index from the record files and say how
+    // many rows resumed from their own checkpoint rather than refolding from event zero.
+    rebuildIndex:()=>rebuildRunIndex(),
+    runRow:(id)=>runsGet(id),
     demoCampaign:(g)=>startCampaign(g||'samtools view parity',{live:false}),
     liveCampaign:(g,maxIters)=>startCampaign(g||'samtools view parity',{live:true, maxIters:maxIters||8}),
     synthesize:(goal, examples, popSize, maxGen)=>runSynthesize({goal, examples, popSize, maxGen}),
