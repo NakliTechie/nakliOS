@@ -141,6 +141,9 @@ jobs:
       - name: Replay the recorded-run corpus keyless (real runs, zero model calls)
         run: node sys/history/test/replay-corpus.test.mjs
 
+      - name: Verify the corpus recorder end to end against a stub, keyless, into a temp folder (U2)
+        run: node scripts/test-record-corpus.mjs
+
       - name: Verify a subagent's run lands on the parent's chain (multi-agent auditability)
         run: node sys/history/test/subagent-chain.test.mjs
 
