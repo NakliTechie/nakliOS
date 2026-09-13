@@ -117,3 +117,11 @@ from the host page's console or a browser-automation script against the iframe.
 - **Reach and drive:** `await t.runRow('<project>/<task>/<ts>.json')`.
 - **Observable success:** `{id, status, stop, events, checkpoint:{stateVersion, consumed, witness, state}, resumed}`; `checkpoint.consumed === events`.
 - **Gotchas:** `null` for an unknown id; the row is derived — the record file is the truth.
+
+### hook:shell
+- **Goal:** run one line through the AGENT's shell — the same `createShell` instance a run uses, with its Kiln `python` — so a change under `sys/kiln/` or the shell's `python` branch is proven on real Pyodide (the 2026-09-12 rule) without spending a model call.
+- **Source:** the door's `shell`; `shell.feed` in `sys/rig/cli/shell.mjs`; `sys/kiln/main-thread-runtime.mjs` for `python`.
+- **Prerequisites:** launch; a mounted workspace (the shell exists once a project is mounted); for `python`, cross-origin isolation (`?anviltest` on the standalone page has it; inside the host the app runs without SAB and `python` is unavailable).
+- **Reach and drive:** `await t.shell("python -c \"open('b.bin','wb').write(bytes(range(256)))\"")`, then `await t.shell('ls')`, then read the file's bytes from OPFS.
+- **Observable success:** `{output, code, awaitingConfirm}`; `code` is the line's exit code; a `python` line's `output` is the interpreter's stdout+stderr in write order.
+- **Gotchas:** a destructive line (`rm`) stages and returns `awaitingConfirm:true` — answer with `t.shell('y')`; the door never auto-confirms (the agent's executor does).

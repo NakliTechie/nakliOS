@@ -2946,6 +2946,9 @@
     // many rows resumed from their own checkpoint rather than refolding from event zero.
     rebuildIndex:()=>rebuildRunIndex(),
     runRow:(id)=>runsGet(id),
+    // The agent's own shell, one line at a time — what a Kiln live check drives (the 2026-09-12 rule:
+    // any change under sys/kiln/ or the shell's python branch is proven on real Pyodide through THIS shell).
+    shell:async(line)=>{ if(!shell) return { output:'no shell — the workspace is not mounted', code:1 }; const r=await shell.feed(String(line||'')); return { output:(r&&r.output)||'', code:shell.lastCode|0, awaitingConfirm:!!shell.awaitingConfirm }; },
     demoCampaign:(g)=>startCampaign(g||'samtools view parity',{live:false}),
     liveCampaign:(g,maxIters)=>startCampaign(g||'samtools view parity',{live:true, maxIters:maxIters||8}),
     synthesize:(goal, examples, popSize, maxGen)=>runSynthesize({goal, examples, popSize, maxGen}),

@@ -283,6 +283,12 @@
       "kind": "hook",
       "detail": "__anvil.test.setGate"
     },
+    "hook:shell": {
+      "owner": "test-door.md",
+      "fingerprint": "ee337382308f",
+      "kind": "hook",
+      "detail": "__anvil.test.shell"
+    },
     "hook:synthesize": {
       "owner": "test-door.md",
       "fingerprint": "72ff6dad9df0",
