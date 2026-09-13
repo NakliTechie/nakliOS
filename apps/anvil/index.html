@@ -421,6 +421,7 @@
   import { buildChangeRow, planRevert, prunePreimages, preimageBytes, MAX_PREIMAGE_BUDGET } from '../../sys/ai/change-preimages.mjs';
   import { subagentFeedRow, subagentFeedLine, subagentLiveness } from '../../sys/ai/subagents.mjs'; // ESS-2: the live child feed; B1: its typed state
   import { createSteerQueue } from '../../sys/ai/steer.mjs'; // B2: a child's completion lands at the parent's next turn
+  import { createStateOplog } from '../../sys/history/state-oplog.mjs'; // D3: the app's own state writes, chained
   import { migrateQueue, reconcileQueue, enqueue as qEnqueue, removeEntry as qRemove, moveEntry as qMove, editEntry as qEdit, nextDispatch, completeDispatch, releaseDispatch, admitRun } from '../../sys/ai/followup-queue.mjs';
   import { planSkillWrite, createSkillSession, SKILL_FILE, SKILL_SHAPE, scaffoldSkill, starterSkillFile, renderSkillReader, lintSkill } from '../../sys/ai/skill-manage.mjs';
   import { createProposalLedger } from '../../sys/ai/proposal-fingerprint.mjs';
@@ -457,7 +458,7 @@
   import { runCampaign } from '../../sys/assay/runmode.mjs';
   import { makeCampaignExecutors } from '../../sys/assay/executors.mjs';
   import { verifyWall, verifyTests, replay as replayLineage } from '../../sys/assay/verify.mjs';
-  import { createRunRecorder, foldStatus, foldLog, foldTranscript, loadRecord, foldStopReasons, stopReasonsLine, searchRecords, scopeEntries, readEvent, foldRecovery, recoveryNote, foldOutcome, foldSkillUsage, statusUnit, createProjector, foldOrdering, groupOrdering, orderingLine, foldRecalled, foldEpisode } from '../../sys/history/run-record.mjs';
+  import { createRunRecorder, foldSessionContext, foldStatus, foldLog, foldTranscript, loadRecord, foldStopReasons, stopReasonsLine, searchRecords, scopeEntries, readEvent, foldRecovery, recoveryNote, foldOutcome, foldSkillUsage, statusUnit, createProjector, foldOrdering, groupOrdering, orderingLine, foldRecalled, foldEpisode } from '../../sys/history/run-record.mjs';
 
   const $ = (id) => document.getElementById(id);
   const nak = window.naklios || null;
@@ -798,6 +799,12 @@
   // restores them). The host write is debounced; localStorage is the fast cache.
   const hostFsReady = () => !!(nak && nak.capabilities && nak.capabilities.fs && nak.fs);
   let remoteSaveTimer=null;
+  // D3: who is writing (one id per page load) and where the lineage goes
+  const TAB_ID = 'tab-'+Math.random().toString(36).slice(2, 8);
+  const stateLog = createStateOplog({
+    read: async (p)=>{ try{ const d=await nak.fs.read(p); if(d==null) return null; return typeof d==='string'?d:new TextDecoder().decode(d); }catch(_){ return null; } },
+    write: async (p, t)=>{ await nak.fs.write(p, t); },
+  });
   // Two Anvil tabs on one project both write this WHOLE blob, so an idle tab's
   // debounced save used to silently overwrite the other tab's tasks 800ms after
   // any trivial UI change — last-writer-wins over the entire projects/tasks/
@@ -820,12 +827,16 @@
         const disk=await loadRemoteState();
         const diskRev=Number(disk&&disk.rev)||0, mine=Number(state.rev)||0;
         if(disk && diskRev>mine){
+          try{ await stateLog.append({ writer: TAB_ID, tool: 'state.refused', input: { mine, diskRev } }); }catch(_){} // D3: the refusal is a line too
           const t=activeTask();
           if(t){ (t.log=t.log||[]).push({k:'system',text:'⚠ Another Anvil tab saved newer state (rev '+diskRev+' > '+mine+'). This tab did NOT overwrite it — reload to pick up its work.'}); renderLog(); }
           return;
         }
         state.rev=mine+1;
-        await nak.fs.write('state.json', JSON.stringify(state));
+        const text=JSON.stringify(state);
+        await nak.fs.write('state.json', text);
+        // D3: one hash-chained line per write, under this same lock — the state's lineage, replayable
+        try{ await stateLog.append({ writer: TAB_ID, tool: 'state.written', input: { rev: state.rev, bytes: text.length } }); }catch(_){}
       }catch(_){}
     };
     try{
@@ -2702,7 +2713,7 @@
         }
         // A1: salience from use — the project's run rows say which facts any run recalled and when
         let usage=null; try{ usage=factUsage(projectRows); }catch(_){ usage=null; }
-        memoryIndex = buildMemoryIndex(facts, { usage });
+        memoryIndex = buildMemoryIndex(facts, { usage, scope: 'task:'+String(t.id) }); // D2: this task's notes and the project's, never another task's
       }
     }catch(_){}
     // Per-project tool hooks: pre-tool guards + post-tool commands from
@@ -2745,6 +2756,8 @@
           // B2: the owner sees the wait and each completion as it steers the run
           else if(e.type==='waiting'){ clearThinking(); t.log.push({k:'system',text:'waiting for '+e.inFlight+' subagent'+(e.inFlight===1?'':'s')+' — '+(e.inFlight===1?'its':'their')+' completion will steer the run'}); renderLog(); }
           else if(e.type==='steer'){ clearThinking(); t.log.push({k:'system',text:'⇆ '+String(e.content||'').replace(/^\[coordination\] /,'')}); renderLog(); }
+          // D1: a missed prediction is visible as it happens — three in a row stop the run
+          else if(e.type==='expect-miss'){ t.log.push({k:'system',text:'✗ prediction missed ('+e.streak+' in a row'+(e.streak>=2?' — one more stops the run':'')+')'}); renderLog(); }
       };
       // The run record (plan/anvil-event-log-substrate.md, layer 2a): every event of
       // this run lands on an append-only hash chain and is persisted OUTSIDE the
@@ -2852,10 +2865,17 @@
         : result.stop==='clarify' ? 'paused — a question for you (answer it to continue)'
         : result.stop==='budget' ? ('hit budget ('+(result.budgetAxis||'')+')')
         : result.stop==='unverified' ? 'gate never passed'
+        : result.stop==='expect-misses' ? ('stopped — '+(result.reason||'predictions kept missing')) // D1
         : (result.stop==='done' && !gated) ? 'finished — no gate, so this is the agent\'s own claim'
         : (result.stop==='done' && result.atCap) ? 'done — the gate passed at the step cap (the agent never called task_done)'
         : result.stop;
       t.log.push({k:'system',text:`agent ${stopLabel} · ${result.steps} steps`});
+      // D2 (khiladi §6/§8): a run that did not finish leaves a TASK-SCOPED note — where it stalled and
+      // why — that the next run of THIS task reads at the top of its memory index and no other task
+      // ever sees. One slot per task, so the newest stall supersedes the last.
+      if(['max-steps','unverified','budget','no-progress','expect-misses'].includes(result.stop)){
+        try{ const ctxS=foldSessionContext(recEvents, rec.resolve); const where=ctxS.lastCheckpoint||(finalAssistant&&finalAssistant.text)||''; await recordFact('Stalled last run — '+stopLabel+(where?': '+String(where).replace(/\s+/g,' ').slice(0,300):''), 'project', 'hypothesis', { scope:'task:'+String(t.id), slot:'stall-'+String(t.id) }); }catch(_){}
+      }
       // Persist the record — the tamper-evident source of truth, and what the history tool
       // (B2) searches. The status and the carried transcript above are DERIVED from it, so the
       // dual-write self-check is gone. t.log stays a written array: it is what renderLog draws

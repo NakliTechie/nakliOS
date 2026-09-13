@@ -337,8 +337,20 @@ assert.match(anvil, /const tools = runToolset\(mode, \{ verify: !!verify, scopes
 assert.match(anvil, /const readiness = runReadiness\(mode, \{ verify: !!verify, scopes: grant\.scopes \}\);/, 'B5: and the readiness');
 assert.match(anvil, /makeToolExecutor\(\{ shell, face, mode, infer: inferViaHost, spawnIsolated, steer, scopes: grant\.scopes,/, 'B5: the children\'s catalogs are projected by the grant too');
 assert.match(anvil, /tools=codingToolset\('code',\{ scopes: grant\.scopes \}\)\.concat\(emitTool\);/, 'B5: and the builder role');
+// CRIB-D D2: the memory index is scoped to the task at injection; a run that did not finish leaves a task-scoped stall note
+assert.match(anvil, /memoryIndex = buildMemoryIndex\(facts, \{ usage, scope: 'task:'\+String\(t\.id\) \}\);/, 'D2: the index is built for THIS task (its notes and the project\'s, never another task\'s)');
+assert.match(anvil, /if\(\['max-steps','unverified','budget','no-progress','expect-misses'\]\.includes\(result\.stop\)\)\{\n\s*try\{ const ctxS=foldSessionContext\(recEvents, rec\.resolve\);[^\n]*recordFact\('Stalled last run — '\+stopLabel[^\n]*\{ scope:'task:'\+String\(t\.id\), slot:'stall-'\+String\(t\.id\) \}\);/, 'D2: a non-done stop writes one task-scoped, slot-held stall note');
+assert.match(anvil, /result\.stop==='expect-misses' \? \('stopped — '\+\(result\.reason\|\|'predictions kept missing'\)\)/, 'D1: the expect-misses stop has its own label');
+// CRIB-D D3: every state write and every refused stale write is a chained line, under the same lock
+assert.match(anvil, /await nak\.fs\.write\('state\.json', text\);\n[^\n]*\n\s*try\{ await stateLog\.append\(\{ writer: TAB_ID, tool: 'state\.written', input: \{ rev: state\.rev, bytes: text\.length \} \}\); \}catch\(_\)\{\}/, 'D3: the write is logged after it lands');
+assert.match(anvil, /try\{ await stateLog\.append\(\{ writer: TAB_ID, tool: 'state\.refused', input: \{ mine, diskRev \} \}\); \}catch\(_\)\{\}/, 'D3: and so is a refusal');
+assert.ok(anvil.indexOf('const stateLog = createStateOplog({') < anvil.indexOf('async function writeRemoteState()'), 'D3: the log exists before the writer');
 assert.match(anvil, /changes: \(\)=>\{ const c=overlay\.changes\(\); return \{ written:\(c\.written\|\|\[\]\)\.map\(toRel\), deleted:\(c\.deleted\|\|\[\]\)\.map\(toRel\) \}; \}/, 'B3: a child\'s changes are reported workspace-relative — a Crate mount root never reaches ownership or the merge clock');
-console.log('run-assembly: A4 readiness == the toolset in every mode; A2 episode rides ungated; B5 the grant projects the catalog');
+// D1: the driver never re-loops a run that stopped on a prediction streak — that stop is the feature
+assert.equal(needsSupervisor({ mode: 'code', stop: 'expect-misses', stag: { stalled: true, signal: 'repeat' } }), false, 'a prediction-streak stop is never re-looped');
+assert.equal(needsSupervisor({ mode: 'code', stop: 'max-steps', stag: { stalled: true, signal: 'repeat' } }), true, 'a stalled max-steps still is');
+assert.match(anvil, /else if\(e\.type==='expect-miss'\)\{ t\.log\.push\(\{k:'system',text:'✗ prediction missed \('/, 'D1: a miss is a row as it happens');
+console.log('run-assembly: A4 readiness == the toolset in every mode; A2 episode rides ungated; B5 the grant projects the catalog; D1 a miss-streak stop stays stopped');
 // …and rides run.started only when the app supplies it: a bed that passes none records the old shape
 {
   const mk = () => createRunRecorder({ app: 'anvil', principal: 'test' });
