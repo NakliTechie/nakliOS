@@ -1,6 +1,6 @@
 // Conformance — the post-run review fork (C2) + the auto-review scheduler (C5).
 //   node sys/ai/test/learn.test.mjs
-import { buildReviewPrompt, parseProposals, runLearnReview, shouldAutoReview, learnReviewTool, AUTO_REVIEW_IDLE_MS } from '../learn.mjs';
+import { buildReviewPrompt, parseProposals, validateProposals, runLearnReview, shouldAutoReview, learnReviewTool, AUTO_REVIEW_IDLE_MS } from '../learn.mjs';
 import { createRunRecorder, foldSessionContext, foldDecisions } from '../../history/run-record.mjs';
 import { runAgentLoop, makeShellExecutor, shellTool } from '../agent-loop.mjs';
 import { buildRigRegistry } from '../../rig/registry/index.mjs';
@@ -51,6 +51,41 @@ await test('buildReviewPrompt asks for JSON and names the outcome; parseProposal
   eq(parseProposals('{"proposals":[]}').length, 0, 'empty → none');
   const two = parseProposals('sure: {"proposals":[{"kind":"skill","name":"a"},{"kind":"fact","name":"b"},{"bad":1}]} done');
   eq(two.length, 2, 'valid proposals extracted, junk dropped');
+});
+
+// CRIB-B B4: the review's JSON comes out of prose, a bad reply costs one repair turn that names the
+// error, a ladder hands over to the next rung, and the report carries the trail
+await test('B4: parseProposals reads JSON out of prose, a code fence, or after another object; validateProposals names what is wrong', () => {
+  eq(parseProposals('Sure: ```json\n{"proposals": [{"kind": "fact", "name": "n", "content": "c"}]}\n``` done').length, 1);
+  eq(parseProposals('{"note": "x"} then {"proposals": [{"kind": "skill", "name": "s"}]}').length, 1, 'an earlier object without proposals is skipped');
+  eq(parseProposals('{"proposals": [{"kind": "fact"}, {"name": "no kind"}, {"kind": "fact", "name": "ok"}]}').length, 1, 'the filter still drops what has no kind or name');
+  eq(parseProposals('no json').length, 0);
+  eq(validateProposals({ proposals: [{ kind: 'fact', name: 'a' }] }).length, 0);
+  eq(validateProposals({}).join('|'), 'the JSON must be an object with a "proposals" array');
+  eq(validateProposals({ proposals: [{ kind: 'note', name: 'x' }, { kind: 'fact' }, 3] }).join('|'), 'proposal 1 ("x") needs "kind": "skill" or "fact"|proposal 2 has no "name"|proposal 3 is not an object');
+});
+await test('B4: a prose-first reviewer is repaired once with the errors; the report carries the trail; a dead rung hands over to the next', async () => {
+  const rec = await recordRun();
+  const replies = ['Here are my thoughts: {"proposals": [{"kind": "note", "name": "x"}]}', '{"proposals": [{"kind": "fact", "name": "x", "content": "c"}]}'];
+  let i = 0; const calls = [];
+  const infer = async ({ messages }) => { calls.push(messages); return { content: replies[Math.min(i++, replies.length - 1)], toolCalls: [] }; };
+  const staged = [];
+  const rep = await runLearnReview({ record: rec, infer, propose: async (p) => { staged.push(p); return { ok: true }; } });
+  eq(rep.answered, true); eq(rep.rung, 'default'); eq(rep.proposalCount, 1); eq(staged.length, 1);
+  eq(rep.attempts.length, 1); assert(/needs "kind": "skill" or "fact"/.test(rep.attempts[0].error), rep.attempts[0].error);
+  eq(calls.length, 2, 'one repair turn'); assert(/^Your reply was not the JSON that was asked for:\n- proposal 1 \("x"\) needs "kind"/.test(calls[1][calls[1].length - 1].content), 'the repair names the error');
+  assert(/^answered by default after 1 failed attempt: default#1 — /.test(rep.attemptsLine), rep.attemptsLine);
+  const dead = { name: 'local', infer: async () => { throw new Error('ECONNREFUSED'); } };
+  const byok = { name: 'byok', infer: async () => ({ content: '{"proposals": []}', toolCalls: [] }) };
+  const rep2 = await runLearnReview({ record: rec, ladder: [dead, byok], propose: async () => ({ ok: true }) });
+  eq(rep2.answered, true); eq(rep2.rung, 'byok'); eq(rep2.proposalCount, 0); eq(rep2.attempts.map((a) => a.rung + '#' + a.try).join(','), 'local#1');
+  const rep3 = await runLearnReview({ record: rec, infer: async () => ({ content: 'never json', toolCalls: [] }), propose: async () => ({ ok: true }) });
+  eq(rep3.answered, false); eq(rep3.rung, null); eq(rep3.proposalCount, 0); eq(rep3.salvaged, false); eq(rep3.attempts.length, 2, 'one try and one repair, then the honest no'); assert(/^no rung answered after 2 attempts/.test(rep3.attemptsLine), rep3.attemptsLine);
+  // a reply with one malformed proposal among good ones, twice: not answered, but the good ones are salvaged item by item, as the old parser did
+  const mixed = '{"proposals": [{"kind": "fact", "name": "keep-me", "content": "c"}, {"kind": "note", "name": "junk"}]}';
+  const staged4 = [];
+  const rep4 = await runLearnReview({ record: rec, infer: async () => ({ content: mixed, toolCalls: [] }), propose: async (p) => { staged4.push(p); return { ok: true }; } });
+  eq(rep4.answered, false); eq(rep4.salvaged, true); eq(rep4.salvagedFrom, 'default', 'the record can say whose reply was salvaged'); eq(rep4.proposalCount, 2, 'the lenient filter keeps kind+name items; the sink drops what it cannot stage'); eq(staged4.length, 2); eq(staged4[0].name, 'keep-me');
 });
 
 await test('runLearnReview: routes every proposal through the sink as STAGED, 0 active writes', async () => {

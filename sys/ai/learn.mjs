@@ -9,6 +9,7 @@
 // content?, note?, goal?, steps?, paths? } ] }. Anything else parses to zero proposals (a
 // review that proposes nothing is the common, correct case).
 
+import { extractJson, inferStructured, attemptsLine } from './structured.mjs';
 import { filterProposals, createProposalLedger } from './proposal-fingerprint.mjs';
 import { foldTranscript, foldSessionContext, foldDecisions, foldOutcome } from '../history/run-record.mjs';
 
@@ -35,14 +36,24 @@ export function buildReviewPrompt(record) {
   ].filter(Boolean).join('\n');
 }
 
-// Tolerant JSON extraction — the first {...} block that parses with a proposals array.
+// Tolerant JSON extraction — the first balanced value in the reply that parses with a proposals
+// array (B4: the balanced scanner, so JSON wrapped in prose or a code fence, or preceded by another
+// object, still comes out). Same contract as before: the proposals with a kind and a name, else [].
+const wantProposals = (v) => Array.isArray(v?.proposals);
 export function parseProposals(text) {
-  const s = String(text == null ? '' : text);
-  const start = s.indexOf('{'); if (start < 0) return [];
-  for (let end = s.lastIndexOf('}'); end > start; end = s.lastIndexOf('}', end - 1)) {
-    try { const o = JSON.parse(s.slice(start, end + 1)); if (Array.isArray(o?.proposals)) return o.proposals.filter((p) => p && p.kind && p.name); } catch (_) { /* keep shrinking */ }
-  }
-  return [];
+  const found = extractJson(text, { want: wantProposals });
+  return found ? found.value.proposals.filter((p) => p && p.kind && p.name) : [];
+}
+// B4: what a reply must satisfy — the sentences the repair turn carries back to the model.
+export function validateProposals(v) {
+  const errors = [];
+  if (!Array.isArray(v?.proposals)) return ['the JSON must be an object with a "proposals" array'];
+  v.proposals.forEach((p, i) => {
+    if (!p || typeof p !== 'object') { errors.push(`proposal ${i + 1} is not an object`); return; }
+    if (p.kind !== 'skill' && p.kind !== 'fact') errors.push(`proposal ${i + 1} ("${String(p.name || '').slice(0, 40)}") needs "kind": "skill" or "fact"`);
+    if (!p.name) errors.push(`proposal ${i + 1} has no "name"`);
+  });
+  return errors;
 }
 
 // Give a proposal the {goal, steps, paths} the fingerprint (C3) needs, defaulting from its fields.
@@ -53,10 +64,19 @@ function forFingerprint(p) {
 // The fork. `infer` is the (narrow-toolset) model; `ledger` a proposal ledger (C3); `propose`
 // the sink that STAGES a kept proposal (skill → planSkillWrite, fact → memory store) and returns
 // { ok, staged } — it must never apply anything active. Returns a report; activeWrites is always 0.
-export async function runLearnReview({ record, infer, ledger = null, propose, now = Date.now() }) {
+// B4: the review's JSON goes through the structured ladder — `ladder` is an ordered list of
+// { name, infer } rungs (the configured endpoint first; a fallback after it when the app has one);
+// `infer` alone is a one-rung ladder. A malformed reply costs one repair turn that names what was
+// wrong; the report carries the attempt trail, so a review that failed says how.
+export async function runLearnReview({ record, infer = null, ladder = null, propose, ledger = null, now = Date.now() }) {
   const prompt = buildReviewPrompt(record);
-  const reply = await infer({ messages: [{ role: 'system', content: 'You are a terse reviewer. Reply only with the JSON described.' }, { role: 'user', content: prompt }], tools: [] });
-  const proposals = parseProposals(reply?.content ?? '');
+  const rungs = Array.isArray(ladder) && ladder.length ? ladder : [{ name: 'default', infer }];
+  const messages = [{ role: 'system', content: 'You are a terse reviewer. Reply only with the JSON described.' }, { role: 'user', content: prompt }];
+  const res = await inferStructured({ ladder: rungs, messages, validate: validateProposals, extract: (text) => extractJson(text, { want: wantProposals }), retries: 1 });
+  // ok → the validated reply; not ok → whatever parsed last, filtered item by item as the old parser
+  // did (a reply with one malformed proposal among good ones still stages the good ones)
+  const salvage = res.partial && Array.isArray(res.partial.proposals) ? res.partial.proposals : [];
+  const proposals = (res.ok ? res.value.proposals : salvage).filter((p) => p && p.kind && p.name);
   // fingerprint + poison-check: a proposal the reviewer already rejected is dropped.
   // Index-carried, because two proposals can share a name and kind: find() then returned the
   // FIRST match, so a poisoned proposal's CONTENT was staged under a clean one's fingerprint
@@ -72,7 +92,8 @@ export async function runLearnReview({ record, infer, ledger = null, propose, no
     const r = propose ? await propose({ ...orig, fp: p.fp }) : { ok: false };
     if (r && r.ok) staged.push({ kind: orig.kind, name: orig.name, fp: p.fp, staged: r.staged ?? true });
   }
-  return { prompt, proposalCount: proposals.length, staged, dropped: dropped.map((d) => ({ name: d.name, reason: d.reason })), activeWrites: 0 };
+  return { prompt, proposalCount: proposals.length, staged, dropped: dropped.map((d) => ({ name: d.name, reason: d.reason })), activeWrites: 0,
+    answered: res.ok, salvaged: !res.ok && proposals.length > 0, rung: res.rung, salvagedFrom: !res.ok && proposals.length > 0 ? res.partialRung : null, attempts: res.attempts, attemptsLine: attemptsLine(res) };
 }
 
 // C5: when may the post-run review run UNATTENDED? Defer on a local model until idle; skip an
