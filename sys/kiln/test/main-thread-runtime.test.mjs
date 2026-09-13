@@ -264,6 +264,86 @@ async function run() {
     ok('normal source edits still sync back', app.ok && app.data === 'print(2)\n');
   }
 
+  // ── 8. a file that fails to sync IN is not written back stale ──
+  // Reproduced 2026-09-13: MEMFS held f.txt=v1 from an earlier run; the shell wrote v2; the next
+  // run's sync-in of f.txt failed and `continue`d — the workspace still listed the file, so the
+  // unlink pass left the stale node, `seen` had no record of it, and syncOut wrote v1 back over
+  // v2 with exec reporting ok. Python read v1 during the run. Every failure shape must leave the
+  // workspace at v2 and give Python ENOENT, not the stale text; the rest of the run is unaffected.
+  {
+    // A fileops whose read / list can be made to fail on demand, per path.
+    const hook = (fs, ctl) => new Proxy(fs, {
+      get(t, k) {
+        if (k === 'read') return async (path, o) => {
+          if (ctl.readNotOk.has(path)) return { ok: false, code: 'EIO', message: 'injected: ' + path };
+          if (ctl.readThrows.has(path)) throw new Error('injected read rejection: ' + path);
+          return t.read(path, o);
+        };
+        if (k === 'list') return async (...a) => { if (ctl.listThrows) throw new Error('injected list rejection'); return t.list(...a); };
+        const v = t[k]; return typeof v === 'function' ? v.bind(t) : v;
+      },
+    });
+    const probe = (FS) => { try { return FS.readFile('/work/f.txt', { encoding: 'utf8' }); } catch (_) { return 'ENOENT'; } };
+    // Drives one failure shape: seed v1 into MEMFS, edit to v2 in the workspace, arm the failure,
+    // run, and report what Python saw + what the workspace holds afterwards.
+    const drive = async (label, arm, disarm) => {
+      const ctl = { readNotOk: new Set(), readThrows: new Set(), listThrows: false };
+      const real = createFileops({ backend: new MemoryBackend() });
+      const fs = hook(real, ctl);
+      await fs.write('f.txt', 'v1'); await fs.write('g.txt', 'g1');
+      const fake = makeFakePyodide();
+      const kiln = createMainThreadKiln({ fs, mount: 'work', loadPyodide: async () => fake });
+      fake._onRun = () => {};
+      await kiln.exec('shell', 'noop');
+      ok(`${label}: MEMFS holds v1 after the first run`, new TextDecoder().decode(fake._files.get('/work/f.txt')) === 'v1');
+      await fs.write('f.txt', 'v2');                     // the shell's edit, between two runs
+      arm(ctl, fake);
+      let saw = null, sawG = null;
+      fake._onRun = ({ FS }) => { saw = probe(FS); sawG = FS.readFile('/work/g.txt', { encoding: 'utf8' }); FS.writeFile('/work/new.txt', 'made'); };
+      const r = await kiln.exec('shell', 'noop');
+      ok(`${label}: the workspace keeps v2`, (await real.read('f.txt', { encoding: 'utf-8' })).data === 'v2');
+      ok(`${label}: Python sees ENOENT, not the stale v1`, saw === 'ENOENT');
+      ok(`${label}: the run itself still happens and other files sync in`, r.status === 'ok' && sawG === 'g1');
+      ok(`${label}: what Python wrote still syncs out`, (await real.read('new.txt', { encoding: 'utf-8' })).data === 'made');
+      disarm(ctl, fake);
+      fake._onRun = ({ FS }) => { saw = probe(FS); };
+      await kiln.exec('shell', 'noop');
+      ok(`${label}: once readable again the file is back at v2 for Python`, saw === 'v2');
+    };
+    await drive('fs.read ok:false', (ctl) => ctl.readNotOk.add('f.txt'), (ctl) => ctl.readNotOk.clear());
+    await drive('fs.read rejects', (ctl) => ctl.readThrows.add('f.txt'), (ctl) => ctl.readThrows.clear());
+    let origWrite = null;
+    await drive('py.FS.writeFile throws',
+      (_ctl, fake) => { origWrite = fake.FS.writeFile; fake.FS.writeFile = (p, d) => { if (p === '/work/f.txt') throw new Error('ENOMEM'); return origWrite(p, d); }; },
+      (_ctl, fake) => { fake.FS.writeFile = origWrite; });
+
+    // The whole sync-in throwing (the listing rejects) must not reach syncOut with an empty `seen`:
+    // that wrote EVERY stale MEMFS file over the workspace. The run is refused instead.
+    {
+      const ctl = { readNotOk: new Set(), readThrows: new Set(), listThrows: false };
+      const real = createFileops({ backend: new MemoryBackend() });
+      const fs = hook(real, ctl);
+      await fs.write('f.txt', 'v1'); await fs.write('g.txt', 'g1');
+      const fake = makeFakePyodide();
+      const kiln = createMainThreadKiln({ fs, mount: 'work', loadPyodide: async () => fake });
+      let ran = 0;
+      fake._onRun = () => { ran++; };
+      await kiln.exec('shell', 'noop');
+      await fs.write('f.txt', 'v2'); await fs.write('g.txt', 'g2');
+      ctl.listThrows = true;
+      const r = await kiln.exec('shell', 'noop');
+      ok('sync-in throws: exec reports error, not ok', r.status === 'error' && /sync/.test(r.stderr));
+      ok('sync-in throws: the script did not run', ran === 1);
+      ok('sync-in throws: no stale write-back — f.txt is v2', (await real.read('f.txt', { encoding: 'utf-8' })).data === 'v2');
+      ok('sync-in throws: no stale write-back — g.txt is g2', (await real.read('g.txt', { encoding: 'utf-8' })).data === 'g2');
+      ctl.listThrows = false;
+      let saw = null;
+      fake._onRun = ({ FS }) => { saw = [probe(FS), FS.readFile('/work/g.txt', { encoding: 'utf8' })].join(','); };
+      const r2 = await kiln.exec('shell', 'noop');
+      ok('sync-in throws: the next run recovers with the current workspace', r2.status === 'ok' && saw === 'v2,g2');
+    }
+  }
+
   console.log(`sys/kiln/main-thread-runtime conformance: ${pass}/${pass + fail} passed`);
   if (fail) process.exit(1);
 }

@@ -152,12 +152,21 @@ export function createMainThreadKiln({ fs, mount = 'work', loadPyodide = default
     for (const e of res.entries) {
       if (e.type !== 'file') continue;
       if (SKIP_BACK.test(e.path)) continue; // never pull .git/ or caches into MEMFS
-      const rd = await fs.read(e.path);
-      // A read the workspace refuses leaves NO stale copy behind: the copy from an earlier run would
-      // otherwise be written back over the file on the way out (checker probe, 2026-09-13).
-      if (!rd || !rd.ok) { try { py.FS.unlink(root + '/' + e.path); } catch (_) {} continue; }
-      const d = dirOf(e.path); if (d) mkdirp(d);
-      try { py.FS.writeFile(root + '/' + e.path, rd.data); seen.set(e.path, rd.data); } catch (_) {}
+      const abs = root + '/' + e.path;
+      let rd = null; try { rd = await fs.read(e.path); } catch (_) { rd = null; }
+      let synced = false;
+      if (rd && rd.ok) {
+        const d = dirOf(e.path); if (d) mkdirp(d);
+        try { py.FS.writeFile(abs, rd.data); seen.set(e.path, rd.data); synced = true; } catch (_) {}
+      }
+      // A file that did NOT sync in — a read that came back not-ok, a read that rejected, a MEMFS
+      // write that threw — must not survive in MEMFS from an earlier run. It used to: the workspace
+      // still listed it, so the unlink pass above left it alone, and `seen` had no record of it, so
+      // syncOut took the stale copy for something Python wrote and put it back OVER the workspace's
+      // newer bytes — a shell edit made between two runs reverted, exec reporting ok, Python having
+      // read the old text meanwhile (found by the U4 checker; fixed in a chip session, ported here
+      // onto the byte mirror). ENOENT is the honest state for a file this run could not read.
+      if (!synced) { try { py.FS.unlink(abs); } catch (_) {} }
     }
     return seen;
   }
@@ -221,7 +230,15 @@ export function createMainThreadKiln({ fs, mount = 'work', loadPyodide = default
 
       let seen = new Map();
       try {
-        seen = await syncIn();
+        // A sync-in that throws outright (the listing rejecting, not a typed ok:false) leaves MEMFS
+        // half-refreshed and `seen` empty; reaching the catch below with that would syncOut EVERY
+        // MEMFS file over the workspace — the per-file staleness defect, tree-wide. The run does not
+        // happen and nothing is written back.
+        try { seen = await syncIn(); }
+        catch (e) {
+          const msg = 'kiln: workspace sync into the interpreter failed: ' + String(e && e.message ? e.message : e) + '\n';
+          return { status: 'error', stdout: '', stderr: msg, output: msg };
+        }
         // Run from the workspace dir and make its modules importable.
         const dir = safeCwd(root, cwd);
         p.runPython(`import os, sys\nos.chdir(${JSON.stringify(dir)})\nif ${JSON.stringify(root)} not in sys.path: sys.path.insert(0, ${JSON.stringify(root)})`
