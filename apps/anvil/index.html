@@ -431,10 +431,11 @@
   import { registerAppDiffTypes } from '../../sys/staging/diff-types.mjs';
   // A skill write is a P0 envelope (diff type 'anvil-skill') — the first agent-produced diff.
   registerAppDiffTypes(['anvil']);
-  import { MEMORY_DIR, parseFact, buildMemoryIndex, noteToFact, applyRevision, applyDemotion, dependantsOf, slotHolder, findDuplicate, duplicateReply, createRememberBudget, budgetSpentReply, checkRulesCap, rulesCapReply, createFactSession } from '../../sys/ai/memory-store.mjs';
+  import { MEMORY_DIR, parseFact, buildMemoryIndex, noteToFact, applyRevision, applyDemotion, dependantsOf, slotHolder, findDuplicate, duplicateReply, createRememberBudget, budgetSpentReply, checkRulesCap, rulesCapReply, createFactSession, factUsage } from '../../sys/ai/memory-store.mjs';
+  import { readinessLine } from '../../sys/ai/agent-tools.mjs';
   import { asStored } from '../../sys/ai/content-token.mjs';
   import { HOOKS_FILE, parseHooks } from '../../sys/ai/hooks.mjs';
-  import { systemPrompt as assembledSystemPrompt, systemMessage, gateNote as assembledGateNote, runToolset, synthesizeTool, driveRun, loadHooks, preHookReply, postHookNotes, contextMessage } from '../../sys/ai/run-assembly.mjs';
+  import { systemPrompt as assembledSystemPrompt, systemMessage, gateNote as assembledGateNote, runToolset, runReadiness, synthesizeTool, driveRun, loadHooks, preHookReply, postHookNotes, contextMessage } from '../../sys/ai/run-assembly.mjs';
   import { gateAction, gateEvent, actionClasses } from '../../sys/ai/action-gate.mjs';
   import { applyPolicy, grant as policyGrant, revoke as policyRevoke, policyRows, normalisePolicy, POLICY_HINT } from '../../sys/ai/action-policy.mjs';
   import { decideByRules, applyMode, MODES as PERM_MODES, MODE_LABEL as PERM_MODE_LABEL, modeIsLoud } from '../../sys/ai/permission-rules.mjs';
@@ -455,7 +456,7 @@
   import { runCampaign } from '../../sys/assay/runmode.mjs';
   import { makeCampaignExecutors } from '../../sys/assay/executors.mjs';
   import { verifyWall, verifyTests, replay as replayLineage } from '../../sys/assay/verify.mjs';
-  import { createRunRecorder, foldStatus, foldLog, foldTranscript, loadRecord, foldStopReasons, stopReasonsLine, searchRecords, scopeEntries, readEvent, foldRecovery, recoveryNote, foldOutcome, foldSkillUsage, statusUnit, createProjector, foldOrdering, groupOrdering, orderingLine } from '../../sys/history/run-record.mjs';
+  import { createRunRecorder, foldStatus, foldLog, foldTranscript, loadRecord, foldStopReasons, stopReasonsLine, searchRecords, scopeEntries, readEvent, foldRecovery, recoveryNote, foldOutcome, foldSkillUsage, statusUnit, createProjector, foldOrdering, groupOrdering, orderingLine, foldRecalled, foldEpisode } from '../../sys/history/run-record.mjs';
 
   const $ = (id) => document.getElementById(id);
   const nak = window.naklios || null;
@@ -601,6 +602,7 @@
   function idbOpen(){return new Promise((res,rej)=>{const r=indexedDB.open(DIR_DB,2);r.onupgradeneeded=()=>{const db=r.result; if(!db.objectStoreNames.contains(DIR_STORE)) db.createObjectStore(DIR_STORE); if(!db.objectStoreNames.contains(RUNS_STORE)){ const st=db.createObjectStore(RUNS_STORE,{keyPath:'id'}); st.createIndex('project','project'); st.createIndex('task','task'); st.createIndex('endedAt','endedAt'); }};r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
   async function runsPut(row){try{const db=await idbOpen();await new Promise((res)=>{const t=db.transaction(RUNS_STORE,'readwrite').objectStore(RUNS_STORE).put(row);t.onsuccess=res;t.onerror=res;});}catch(_){} }
   async function runsGet(id){try{const db=await idbOpen();return await new Promise((res)=>{const q=db.transaction(RUNS_STORE).objectStore(RUNS_STORE).get(id);q.onsuccess=()=>res(q.result||null);q.onerror=()=>res(null);});}catch(_){return null;}}
+  async function runsForProject(project){try{const db=await idbOpen();return await new Promise((res)=>{const q=db.transaction(RUNS_STORE).objectStore(RUNS_STORE).index('project').getAll(project);q.onsuccess=()=>res(q.result||[]);q.onerror=()=>res([]);});}catch(_){return [];}}
   async function runsForTask(taskId){try{const db=await idbOpen();return await new Promise((res)=>{const q=db.transaction(RUNS_STORE).objectStore(RUNS_STORE).index('task').getAll(taskId);q.onsuccess=()=>res(q.result||[]);q.onerror=()=>res([]);});}catch(_){return [];}}
   async function runsCount(){try{const db=await idbOpen();return await new Promise((res)=>{const q=db.transaction(RUNS_STORE).objectStore(RUNS_STORE).count();q.onsuccess=()=>res(q.result||0);q.onerror=()=>res(0);});}catch(_){return 0;}}
   // WIRE (2026-09-13): the status fold resumes from the row's own CHECKPOINT (N5's mechanism,
@@ -625,11 +627,15 @@
   async function runIndexRow({ project, task, name, path, tiers, rec, gated, prev=null }){
     const ev=rec.events(); const { st, resumed, checkpoint }=await foldIndexStatus({ rec, gated, prev });
     const ord=foldOrdering(ev, rec.resolve);
+    // A1: the fact names this run recalled — what factUsage folds into salience for the index
+    const recalled=foldRecalled(ev, rec.resolve);
+    // A2: the run's episode — the digest the NEXT run's working context opens with
+    const episode=foldEpisode(ev, rec.resolve);
     return { id: project+'/'+task+'/'+name, project, task, name, path, tiers,
       head: rec.head ? rec.head() : null, events: ev.length,
       stop: st.stop, status: st.status, verified: st.verified, steps: st.steps,
       startedAt: ev.length ? ev[0].ts : null, endedAt: ev.length ? ev[ev.length-1].ts : null,
-      checkpoint, resumed, anchor: ord.anchor, toFirstAction: ord.toFirstAction };
+      checkpoint, resumed, anchor: ord.anchor, toFirstAction: ord.toFirstAction, recalled, episode };
   }
   // The doctor: rebuild the index from the record FILES (OPFS, and the home when
   // connected). Runs at boot when the index is empty but files exist — Codex's
@@ -2014,8 +2020,10 @@
     return rep;
   }
 
-  async function saveRunRecord(t, rec, { gated=false }={}){
-    const rel='runs/'+String(state.activeProject||'local')+'/'+String(t.id);
+  // `project` is the run's project as captured at run START: a project switch mid-run must not file
+  // the record — and, since A1/A2, the next run's salience and episode — under the wrong project.
+  async function saveRunRecord(t, rec, { gated=false, project=String(state.activeProject||'local') }={}){
+    const rel='runs/'+project+'/'+String(t.id);
     const name=new Date().toISOString().replace(/[:.]/g,'-')+'.json';
     const text=JSON.stringify(rec.export());
     const tiers=[], errors=[]; let path=null;
@@ -2049,7 +2057,7 @@
     }
     // The index row — derived from the record, after the files are down.
     let count=null;
-    try{ await runsPut(await runIndexRow({ project:String(state.activeProject||'local'), task:String(t.id), name, path, tiers, rec, gated })); count=(await runsForTask(String(t.id))).length; }
+    try{ await runsPut(await runIndexRow({ project, task:String(t.id), name, path, tiers, rec, gated })); count=(await runsForTask(String(t.id))).length; }
     catch(e){ errors.push('index: '+(e&&e.message||e)); }
     return { path, name, tiers, errors, count };
   }
@@ -2100,6 +2108,7 @@
     if(t.title==='Untitled task'){ t.title=text.slice(0,48); }
     (t.log=t.log||[]).push({k:'user',text});
     const mode=t.mode||'code';
+    const runProject=String(state.activeProject||'local'); // the project this run belongs to — read once, filed under at the end
     t.status='running'; running=true; abortController=new AbortController(); setSend(); save(); renderAll();
     // A run is a fresh shell session. The shell is per project and outlives tasks, so a `cd` in
     // the previous run used to decide where every relative path in this one landed.
@@ -2568,6 +2577,9 @@
     // Per-project memory & skills: prepend AGENTS.md + memory.md (workspace root)
     // so the task starts with this project's conventions and past learnings.
     let projectContext='';
+    // A1/A2: the project's run rows, once — salience for the memory index and the newest run's episode
+    let projectRows=[]; try{ projectRows=await runsForProject(runProject); }catch(_){ projectRows=[]; }
+    let lastEpisode='';
     try{
       const [ag, mem] = await Promise.all([
         fs.read('AGENTS.md',{encoding:'utf-8'}).catch(()=>null),
@@ -2577,6 +2589,14 @@
         agents: ag&&ag.ok? ag.data : null,
         memory: mem&&mem.ok? mem.data : null,
       });
+      // A2: the project's last run, digested — sent only when it was ANOTHER task. This task's own
+      // last run is already in the carried transcript; a digest of it would be repetition. Named,
+      // so task B does not read task A's "Last run" as its own (the checker's red flag).
+      const newest=projectRows.slice().sort((a,b)=>(Number(b.endedAt)||0)-(Number(a.endedAt)||0))[0];
+      if(newest&&newest.episode&&String(newest.task)!==String(t.id)){
+        let other=null; for(const p of state.projects){ other=(p.tasks||[]).find(x=>String(x.id)===String(newest.task)); if(other) break; }
+        lastEpisode='Last run in this project was another task'+(other&&other.title?' ("'+other.title+'")':'')+':\n'+newest.episode;
+      }
     }catch(_){}
     // AC-3: the procedural prior. A project may disable or reword an edge in
     // .anvil/procedural.json; unknown ids are dropped and named in the log rather than honoured,
@@ -2655,13 +2675,20 @@
               facts.push({ ...f, name, description:f.description, type:f.type, status:f.status }); factMap[name]=e.path; }
           }catch(_){}
         }
-        memoryIndex = buildMemoryIndex(facts);
+        // A1: salience from use — the project's run rows say which facts any run recalled and when
+        let usage=null; try{ usage=factUsage(projectRows); }catch(_){ usage=null; }
+        memoryIndex = buildMemoryIndex(facts, { usage });
       }
     }catch(_){}
     // Per-project tool hooks: pre-tool guards + post-tool commands from
     // .anvil/hooks.json (loaded once per run; executeTool reads hooksCfg).
     hooksCfg = await loadHooks(fs, hooksCfg);
     const tools = runToolset(mode, { verify: !!verify }); // the app's list, in the app's order — the beds get the same one
+    // A4: why a tool is or is not available in THIS run — into the record (the mode button carries the
+    // same sentence, recomputed on every switch in setModeBtn). The fourth state, `unavailable`, has
+    // no producer here yet: no tool is whole-unavailable today (Kiln gates python INSIDE shell, not
+    // shell) — the gap is in the ledger.
+    const readiness = runReadiness(mode, { verify: !!verify });
     try{
       // F3 — the system message is the CACHE PREFIX, so only stable text lives in it.
       // It used to concatenate SYSTEM + MODE_NOTE + LESSON_NOTE + projectContext +
@@ -2731,6 +2758,10 @@
       // Per-run, never gated: it is about THIS resumption and is worthless stale.
       const recoveryMsg = recoveryPreface.trim();
       if(recoveryMsg) convo.push({role:'user', content:'[coordination] '+recoveryMsg});
+      // A2: the last run's episode rides the same way — per-run, never gated. It changes every run by
+      // construction, so bundling it into the gated block above would defeat the gate exactly as the
+      // recovery note once did (the 2026-09-07 live check; the checker's probe, 2026-09-13).
+      if(lastEpisode) convo.push({role:'user', content:'[coordination] '+lastEpisode});
       // F1: if what we are about to send cannot be reconstructed from the chain, SAY SO in the
       // log. It does not stop the run — a divergence is diagnostic, and killing a live run over
       // one would cost more than the drift it found.
@@ -2744,7 +2775,7 @@
       // what the driver cannot: the model stamp, the budget probe's copy of the prompt, the log.
       let result = await driveRun({
         mode, convo, sysMsg, tools, infer: recInfer, executeTool, rec,
-        verify, signal: abortController.signal, onEvent: recEvent, model: runModel, gateNote,
+        verify, signal: abortController.signal, onEvent: recEvent, model: runModel, gateNote, readiness,
         note: (text)=>{ t.log.push({k:'system', text}); renderLog(); },
         onSystemText: (s)=>{ liveSystemText = s; }, // so the budget counts the prompt actually sent
       });
@@ -2797,7 +2828,7 @@
       // so reload rebuilds it from the record needs pre-images — a parked follow-up).
       try{
         const ev=recEvents;
-        const saved=await saveRunRecord(t, rec, { gated });
+        const saved=await saveRunRecord(t, rec, { gated, project: runProject });
         const where = saved.tiers.length ? saved.tiers.join(' + ') : 'NOT saved';
         const nth = saved.count ? ' · run '+saved.count+' of this task' : '';
         // Only browser storage, and the browser has not promised to keep it: say so
@@ -2814,7 +2845,7 @@
           // deferred (NAF-04). Defer for real: wait for quiet, and drop it if a new run began.
           const outcomeLabel = foldOutcome(ev, rec.resolve).label;
           const decide=(idleMs)=>shouldAutoReview({ outcome: outcomeLabel, stop: result.stop, idleMs, isLocalModel: isLocal });
-          const runProject = String(state.activeProject||'local'); // D1: the project this run belonged to
+          // D1: runProject — the project this run belonged to, captured at run start
           if(decide(0).review) learnThisRun(t, rec, runProject).catch(()=>{});
           else if(decide(AUTO_REVIEW_IDLE_MS).review){
             clearTimeout(autoReviewTimer);
@@ -3103,7 +3134,9 @@
   // ── boot ──
   // Keep the mode button's label AND its accessible name in sync with the current
   // mode (L2 — a screen reader should hear "Mode: plan", not a static "Cycle mode").
-  function setModeBtn(m){ const b=$('mode-btn'); if(!b) return; b.textContent='Mode: '+m+' ▾'; b.setAttribute('aria-label','Mode: '+m+' — click to switch (code edits files · plan is read-only · ask only answers)'); b.classList.toggle('on', m!=='code'); }
+  function setModeBtn(m){ const b=$('mode-btn'); if(!b) return; b.textContent='Mode: '+m+' ▾'; b.setAttribute('aria-label','Mode: '+m+' — click to switch (code edits files · plan is read-only · ask only answers)'); b.classList.toggle('on', m!=='code');
+    // A4: the readiness sentence for THIS mode, recomputed on every switch — never the previous run's
+    try{ const t=activeTask(); b.title='Tools in '+m+' mode — '+readinessLine(runReadiness(m, { verify: !!(t&&t.verifyCmd) }))+'. Switch the mode to change what is exposed.'; }catch(_){} }
   function syncMode(){ const t=activeTask(); setModeBtn((t&&t.mode)||'code'); }
   // Signal ready first so the host reports connected storage, then mount:
   // a remembered disk folder if still granted, else the host Folder/Crate, else OPFS.

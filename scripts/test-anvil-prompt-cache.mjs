@@ -28,7 +28,7 @@ const sysMsgLine = anvil.match(/const sysMsg=\(extra\)=>systemMessage\((\{[^}]*\
 assert.ok(sysMsgLine, 'the system message is built in one place');
 const prefixExpr = sysMsgLine[1];
 assert.equal(prefixExpr, '{ mode, proceduralPrior, extra }', 'the assembly is handed the mode, the prior and the per-run extra — nothing else');
-for (const volatile of ['projectContext', 'memoryIndex', 'skillsIndex', 'recoveryPreface']) {
+for (const volatile of ['projectContext', 'memoryIndex', 'skillsIndex', 'recoveryPreface', 'lastEpisode']) {
   assert.ok(!prefixExpr.includes(volatile), `${volatile} is in the cache prefix: ${prefixExpr}`);
 }
 
@@ -103,7 +103,7 @@ assert.equal(digest('same'), digest('same'), 'and is stable for the same context
   const digestFn = extractFunction(mod, 'ctxDigest');
   const run = (ctx, task, convo) => evaluate(
     `${digestFn}\n;(function(){ ${region} return convo; })()`,
-    { ...ctx, t: task, convo, recoveryPreface: ctx.recoveryPreface || '', contextMessage });
+    { ...ctx, t: task, convo, recoveryPreface: ctx.recoveryPreface || '', lastEpisode: ctx.lastEpisode || '', contextMessage });
 
   const ctx = { projectContext: 'PROJECT NOTES', memoryIndex: '\n## memory\n- a fact', skillsIndex: '', recoveryPreface: '' };
   const t = {};
@@ -130,6 +130,19 @@ assert.equal(digest('same'), digest('same'), 'and is stable for the same context
   const t2 = {}, convo2 = [{ role: 'user', content: 'go' }];
   run({ projectContext: '', memoryIndex: '', skillsIndex: '', recoveryPreface: '' }, t2, convo2);
   assert.equal(convo2.length, 1, 'a workspace with no context sends no context message');
+
+  // CRIB-A A2: the last run's EPISODE is per-run by construction (it names the previous run), so it
+  // must ride outside the gated block — inside it, the digest would differ every run and the whole
+  // block would be re-sent and accumulate (the checker's finding, 2026-09-13; the same failure the
+  // recovery note had on 2026-09-07). Driven: two runs with a fresh episode each, the context once.
+  const t3 = {}, convo3 = [{ role: 'user', content: 'go' }];
+  run({ ...ctx, lastEpisode: 'Last run in this project was another task ("A"):\n## Last run — success' }, t3, convo3);
+  run({ ...ctx, lastEpisode: 'Last run in this project was another task ("A"):\n## Last run — failure' }, t3, convo3);
+  const working = convo3.filter((m) => /Working context/.test(String(m.content)));
+  assert.equal(working.length, 1, 'a per-run episode does not defeat the gate: the unchanged context is sent once across two runs');
+  assert.ok(working.every((m) => !/Last run/.test(String(m.content))), 'and the episode is not inside the gated block');
+  assert.equal(convo3.filter((m) => /^\[coordination\] Last run in this project/.test(String(m.content))).length, 2, 'the episode rides as its own [coordination] message, once per run');
+  assert.ok(convo3.findIndex((m) => /Working context/.test(String(m.content))) < convo3.findIndex((m) => /^\[coordination\] Last run/.test(String(m.content))), 'context first, then the episode');
 }
 
-console.log('anvil-prompt-cache: the system prefix is stable, the volatile context is change-gated, and the tool list does not depend on the store');
+console.log('anvil-prompt-cache: the system prefix is stable, the volatile context is change-gated (the per-run episode rides outside it), and the tool list does not depend on the store');

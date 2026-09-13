@@ -11,6 +11,7 @@ import {
   systemPrompt, systemMessage, runToolset, gateNote, ACT_NUDGE, RUN_BUDGET, RELOOP_BUDGET,
   needsActNudge, needsSupervisor, reloopMessages, driveRun, withBedStubs, BED_UNWIRED, bedStub,
   withHooks, loadHooks, preHookReply, postHookNotes, EMPTY_HOOKS, contextMessage, SYSTEM_HEAD, SYSTEM_TAIL, MODE_NOTE, LESSON_NOTE,
+  runReadiness,
 } from '../sys/ai/run-assembly.mjs';
 import { renderProcedural } from '../sys/ai/procedural.mjs';
 import { LESSON_CONTRACT } from '../sys/ai/memory-store.mjs';
@@ -261,5 +262,54 @@ assert.match(anvil, /const hookReply = preHookReply\(hooksCfg, nm, ar\);\s*\n\s*
 assert.match(anvil, /const extra = await postHookNotes\(hooksCfg, nm, ar, \(\)=>createShell\(\{ registry, face, kiln: kilnRef \}\)\);/, 'the post-tool notes are the module\'s, over a shell built only when a hook runs');
 assert.ok(!/const SYSTEM_HEAD = |const SYSTEM_TAIL = |const MODE_NOTE = |const LESSON_NOTE = |function synthesizeTool\(\)/.test(anvil), 'no second copy of the constants lives in the app');
 ok('app wiring');
+
+// A4: the readiness surface is the run's toolset, exactly — every exposed row is a tool the run
+// offers and every offered tool is an exposed row; hidden/off/unavailable name the rest
+for (const [mode, verify] of [['code', true], ['code', false], ['plan', false], ['ask', false]]) {
+  const offered = runToolset(mode, { verify }).map((t) => t.function.name).sort().join(',');
+  const rows = runReadiness(mode, { verify });
+  const exposed = rows.filter((r) => r.state === 'exposed').map((r) => r.name).sort().join(',');
+  assert.equal(exposed, offered, `${mode}/verify=${verify}: exposed == offered`);
+  assert.ok(rows.every((r) => ['exposed', 'hidden', 'off', 'unavailable'].includes(r.state)), 'four states only');
+  assert.equal(new Set(rows.map((r) => r.name)).size, rows.length, 'one row per tool');
+  // a tool code mode offers and this mode does not is a HIDDEN row that names the mode — never silently absent
+  const codeOnly = runToolset('code', { verify }).map((t) => t.function.name).filter((n) => !offered.split(',').includes(n));
+  // (the mode filters first, so every code-only tool — opt-ins included — is hidden BY THE MODE here)
+  for (const n of codeOnly) { const row = rows.find((r) => r.name === n); assert.ok(row && row.state === 'hidden' && row.why.includes(mode), `${mode}: ${n} is hidden by the mode, never absent or off (${row && row.state}: ${row && row.why})`); }
+  if (mode !== 'code') assert.equal((rows.find((r) => r.name === 'remember') || {}).state, 'hidden', `${mode}: remember is hidden by the mode`);
+}
+assert.equal(runReadiness('code', { verify: true }, { unavailable: { synthesize: 'no AI' } }).find((r) => r.name === 'synthesize').state, 'unavailable', 'the app names a capability gap');
+// A2 wiring: the last run's episode is its own per-run message, never inside the change-gated block
+// (a per-run digest in the gated block re-sends the whole block every run — the 2026-09-07 regression)
+assert.match(anvil, /if\(lastEpisode\) convo\.push\(\{role:'user', content:'\[coordination\] '\+lastEpisode\}\);/, 'A2: the episode rides as its own per-run [coordination] message');
+assert.ok(!/episode:\s*newest/.test(anvil) && !/buildProjectContext\(\{[^}]*episode/.test(anvil), 'A2: and never inside the change-gated project context');
+assert.match(anvil, /String\(newest\.task\)!==String\(t\.id\)/, 'A2: sent only when the last run was ANOTHER task — this task\'s own is in the carried transcript');
+// the record is filed under the project captured at run START — a mid-run project switch cannot misfile
+// the row the next run's salience and episode read (both checkers' red flag, 2026-09-13)
+assert.match(anvil, /const runProject=String\(state\.activeProject\|\|'local'\);/, 'the run project is captured once at run start');
+assert.match(anvil, /runsForProject\(runProject\)/, 'the rows are read for it');
+assert.match(anvil, /saveRunRecord\(t, rec, \{ gated, project: runProject \}\)/, 'and the record is filed under it');
+assert.match(anvil, /const rel='runs\/'\+project\+'\/'\+String\(t\.id\);/, 'the record path is under it too — not the live activeProject');
+assert.ok(!/async function saveRunRecord[\s\S]{0,400}runIndexRow\(\{ project:String\(state\.activeProject/.test(anvil), 'the row never reads the live activeProject at save time');
+console.log('run-assembly: A4 readiness == the toolset in every mode; A2 episode rides ungated');
+// …and rides run.started only when the app supplies it: a bed that passes none records the old shape
+{
+  const mk = () => createRunRecorder({ app: 'anvil', principal: 'test' });
+  const infer = async () => ({ content: 'done', toolCalls: [] });
+  const sysMsg = () => ({ role: 'system', content: 'sys' });
+  const tools = runToolset('code', { verify: false });
+  const recA = mk();
+  await driveRun({ mode: 'code', convo: [{ role: 'user', content: 'go' }], sysMsg, tools, infer, executeTool: async () => '', rec: recA, readiness: runReadiness('code', { verify: false }) });
+  await recA.settled();
+  const startedA = recA.events().find((e) => e.tool === 'run.started');
+  const inA = recA.resolve(startedA).input;
+  assert.ok(Array.isArray(inA.readiness) && inA.readiness.some((r) => r.name === 'shell' && r.state === 'exposed'), 'readiness rides run.started when given');
+  const recB = mk();
+  await driveRun({ mode: 'code', convo: [{ role: 'user', content: 'go' }], sysMsg, tools, infer, executeTool: async () => '', rec: recB });
+  await recB.settled();
+  const inB = recB.resolve(recB.events().find((e) => e.tool === 'run.started')).input;
+  assert.equal('readiness' in inB, false, 'absent when not given — the record keeps its shape');
+  console.log('run-assembly: A4 readiness rides run.started only when supplied');
+}
 
 console.log(`run-assembly: ${n} groups green — prompt bytes, tool list, budgets and texts equal e870f0b; driveRun records every loop; the app is wired through the module`);

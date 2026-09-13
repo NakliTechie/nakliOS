@@ -363,9 +363,9 @@ await test('WIRE: a reopened record refolds from its checkpoint (resumed), a for
 
 // U6 (PG-A4): the index row carries the ordering number — driven through the app's own runIndexRow
 await test('U6: the run-index row carries anchor and toFirstAction, folded from the record', async () => {
-  const { loadRecord, statusUnit, createProjector, foldOrdering } = await import('../sys/history/run-record.mjs');
+  const { loadRecord, statusUnit, createProjector, foldOrdering, foldRecalled, foldEpisode } = await import('../sys/history/run-record.mjs');
   const fis = instantiate(extractRegion(src, 'async function foldIndexStatus(', '// One index row from one record.'), 'foldIndexStatus', { statusUnit, createProjector });
-  const runIndexRow = instantiate(extractRegion(src, 'async function runIndexRow(', '// The doctor: rebuild the index'), 'runIndexRow', { foldIndexStatus: fis, foldOrdering });
+  const runIndexRow = instantiate(extractRegion(src, 'async function runIndexRow(', '// The doctor: rebuild the index'), 'runIndexRow', { foldIndexStatus: fis, foldOrdering, foldRecalled, foldEpisode });
   const load = (f) => loadRecord(JSON.parse(readFileSync(new URL('../sys/history/corpus/' + f, import.meta.url), 'utf8')));
   const wf = await runIndexRow({ project: 'p', task: 't', name: 'w.json', path: 'x', tiers: ['t'], rec: { ...load('write-a-file.json'), head: () => null }, gated: false });
   assert.equal(wf.anchor, 'shell-write', 'write-a-file went straight to a shell write');
@@ -376,9 +376,9 @@ await test('U6: the run-index row carries anchor and toFirstAction, folded from 
 });
 
 await test('U6: the doctor groups the ordering number over the records it read — gated and ungated classes, every run counted', async () => {
-  const { loadRecord, foldStopReasons, stopReasonsLine, groupOrdering, orderingLine, statusUnit, createProjector, foldOrdering, isCorpusRecord } = await import('../sys/history/run-record.mjs');
+  const { loadRecord, foldStopReasons, stopReasonsLine, groupOrdering, orderingLine, statusUnit, createProjector, foldOrdering, foldRecalled, foldEpisode, isCorpusRecord } = await import('../sys/history/run-record.mjs');
   const fis = instantiate(extractRegion(src, 'async function foldIndexStatus(', '// One index row from one record.'), 'foldIndexStatus', { statusUnit, createProjector });
-  const runIndexRow = instantiate(extractRegion(src, 'async function runIndexRow(', '// The doctor: rebuild the index'), 'runIndexRow', { foldIndexStatus: fis, foldOrdering });
+  const runIndexRow = instantiate(extractRegion(src, 'async function runIndexRow(', '// The doctor: rebuild the index'), 'runIndexRow', { foldIndexStatus: fis, foldOrdering, foldRecalled, foldEpisode });
   // a fake OPFS: anvil/runs/<project>/<task>/<file>.json over the real corpus dumps, plus one empty record
   const corpusDir = new URL('../sys/history/corpus/', import.meta.url);
   const files = readdirSync(corpusDir).filter(isCorpusRecord).map((f) => [f, readFileSync(new URL(f, corpusDir), 'utf8')]);
@@ -397,6 +397,21 @@ await test('U6: the doctor groups the ordering number over the records it read �
   assert.equal(r.indexed, files.length, 'every record file is indexed');
   assert.equal(rows.length, files.length, 'and has a row');
   assert.ok(rows.every((row) => 'anchor' in row && 'toFirstAction' in row), 'every row carries the ordering number');
+  assert.ok(rows.every((row) => Array.isArray(row.recalled)), 'A1: every row carries the fact names its run recalled');
+  // a run that recalled two facts (one twice) → the row names each once
+  const { createRunRecorder } = await import('../sys/history/run-record.mjs');
+  const rr = createRunRecorder({ app: 'anvil', principal: 'test' });
+  await rr.start({ messages: [{ role: 'user', content: 'go' }], tools: [{ type: 'function', function: { name: 'recall' } }] });
+  let s = 0; for (const n of ['deploy', 'deploy', 'build']) { rr.onEvent({ type: 'tool-call', id: 'c' + s, name: 'recall', args: { name: n }, step: s }); rr.onEvent({ type: 'tool-result', id: 'c' + s, name: 'recall', result: 'Fact: ' + n, step: s }); s++; }
+  await rr.finish({ stop: 'done', steps: s }); await rr.settled();
+  const recRow = await runIndexRow({ project: 'p', task: 't', name: 'r.json', path: 'x', tiers: ['t'], rec: { ...loadRecord(rr.export()), head: () => null }, gated: false });
+  assert.equal(recRow.recalled.join(','), 'deploy,build', `the row names each recalled fact once, in first-recall order: ${recRow.recalled}`);
+  // A2: the same row carries the run's episode — the digest the next run opens with — and it names what was recalled
+  assert.ok(typeof recRow.episode === 'string' && recRow.episode.startsWith('## Last run'), `A2: the row carries the episode digest: ${String(recRow.episode).slice(0, 40)}`);
+  assert.ok(/deploy/.test(recRow.episode) && /build/.test(recRow.episode), 'and the episode names the recalled facts');
+  assert.ok(rows.every((row) => 'episode' in row), 'A2: every doctor row carries an episode field');
+  const emptyRow = rows.find((row) => row.name === 'empty.json');
+  assert.equal(emptyRow && emptyRow.episode, null, 'A2: a record with no events has no episode — null, not a digest of nothing');
   const counted = r.ordering.reduce((n, g) => n + g.runs, 0);
   assert.equal(counted, r.indexed, `the grouping counts every run it indexed (${counted} of ${r.indexed})`);
   const classes = r.ordering.map((g) => g.class).sort();
