@@ -3,7 +3,7 @@
 //
 //   node sys/ai/test/agent-tools.test.mjs
 
-import { applyEdit, parseApplyPatch, makeToolExecutor, codingToolset, makeShellVerifier, ranNothing } from '../agent-tools.mjs';
+import { applyEdit, parseApplyPatch, makeToolExecutor, codingToolset, makeShellVerifier, ranNothing, toolReadiness, readinessLine, TOOL_OPT_INS } from '../agent-tools.mjs';
 import { contentToken } from '../content-token.mjs';
 import { createFileops, MemoryBackend } from '../../rig/fileops/index.mjs';
 import { OverlayBackend } from '../../rig/fileops/overlay-backend.mjs';
@@ -418,6 +418,26 @@ await test('makeShellVerifier: a gate that exited 0 having run no tests is red, 
   eq((await plain()).ok, true, 'a criterion with no runner banner is judged by its exit code alone');
   eq(ranNothing('collected 0 items'), 'collected 0 items', 'pytest\'s phrase too');
   eq(ranNothing('Ran 10 tests'), null, 'a count is not zero');
+});
+
+await test('toolReadiness: every tool the set could offer is exposed, hidden by mode, off by opt-in, or unavailable by capability', () => {
+  const code = toolReadiness('code', { completion: true });
+  const st = (rows, n) => rows.find((r) => r.name === n);
+  eq(st(code, 'shell').state, 'exposed'); eq(st(code, 'task_done').state, 'exposed');
+  eq(st(code, 'dispatch').state, 'off'); assert(/supervisor/.test(st(code, 'dispatch').why), 'names the opt-in');
+  eq(st(code, 'clarify').state, 'off');
+  const plan = toolReadiness('plan', { clarify: true, supervisor: true });
+  eq(st(plan, 'read').state, 'exposed'); eq(st(plan, 'clarify').state, 'exposed');
+  eq(st(plan, 'shell').state, 'hidden'); assert(/plan mode/.test(st(plan, 'shell').why), 'names the mode');
+  eq(st(plan, 'dispatch').state, 'hidden', 'opted in but the mode hides it — the mode wins');
+  const un = toolReadiness('code', { supervisor: true }, { unavailable: { dispatch: 'no AI capability for subagents' } });
+  eq(st(un, 'dispatch').state, 'unavailable'); assert(/no AI/.test(st(un, 'dispatch').why));
+  // every tool has exactly one state, and the exposed set is exactly codingToolset's
+  const names = codingToolset('code', { supervisor: true }).map((t) => t.function.name).sort().join(',');
+  eq(toolReadiness('code', { supervisor: true }).filter((r) => r.state === 'exposed').map((r) => r.name).sort().join(','), names, 'exposed == the run\'s toolset');
+  assert(Object.keys(TOOL_OPT_INS).every((n) => toolReadiness('code').some((r) => r.name === n)), 'every opt-in tool is in the surface');
+  const line = readinessLine(code);
+  assert(/^exposed: .*shell/.test(line) && /off: .*dispatch/.test(line), 'one line, grouped by state: ' + line);
 });
 
 await test('codingToolset advertises read/edit/write/apply_patch/shell', () => {

@@ -5,7 +5,7 @@
 // prompt bytes, same tool list per mode, same budgets, same re-loops. scripts/test-run-assembly.mjs
 // holds the byte-equality lane against the inline app.
 import { runAgentLoop } from './agent-loop.mjs';
-import { codingToolset } from './agent-tools.mjs';
+import { codingToolset, toolReadiness } from './agent-tools.mjs';
 import { renderProcedural } from './procedural.mjs';
 import { rememberTool } from './project-context.mjs';
 import { skillTool } from './skills.mjs';
@@ -61,9 +61,32 @@ export function synthesizeTool() {
 // are read-only). `skill` and `recall` are UNCONDITIONAL: gating them on whether the store had
 // anything changed the tool SCHEMA block — the most expensive thing in the prompt to invalidate
 // (F3). The tools answer honestly when there is nothing yet.
+export function runToolsetOptions(mode = 'code', { verify = false } = {}) {
+  const code = mode === 'code';
+  return { subagents: true, supervisor: code, completion: !!verify, clarify: true }; // B3: top level may ask
+}
+// A4 (osaurus B9): the readiness surface for THIS run's options — exposed / hidden (mode) / off
+// (opt-in) / unavailable (the host's capability gap, named by the app) — from the same option
+// object the toolset is built from, so the two cannot drift.
+export function runReadiness(mode = 'code', { verify = false } = {}, { unavailable = {} } = {}) {
+  const rows = toolReadiness(mode, runToolsetOptions(mode, { verify }), { unavailable });
+  // The tools this module adds AFTER codingToolset (memory, skills, history, checkpoint, …) are
+  // derived from the toolset itself, never listed here: what this mode offers is exposed; what
+  // code mode would offer and this mode does not is hidden by the mode.
+  const named = new Set(rows.map((r) => r.name));
+  const offered = new Set(runToolset(mode, { verify }).map((t) => t.function.name));
+  const codeOffers = runToolset('code', { verify }).map((t) => t.function.name);
+  for (const name of [...new Set([...offered, ...codeOffers])]) {
+    if (named.has(name)) continue;
+    if (unavailable[name]) rows.push({ name, state: 'unavailable', why: String(unavailable[name]) });
+    else if (offered.has(name)) rows.push({ name, state: 'exposed', why: '' });
+    else rows.push({ name, state: 'hidden', why: `not in ${mode} mode` });
+  }
+  return rows;
+}
 export function runToolset(mode = 'code', { verify = false } = {}) {
   const code = mode === 'code';
-  const tools = codingToolset(mode, { subagents: true, supervisor: code, completion: !!verify, clarify: true }); // B3: top level may ask
+  const tools = codingToolset(mode, runToolsetOptions(mode, { verify }));
   if (code) tools.push(rememberTool());
   if (code) tools.push(skillManageTool());
   if (code) tools.push(synthesizeTool());
@@ -171,14 +194,14 @@ export function reloopMessages(sysMsg, convo) { return [sysMsg(''), ...convo]; }
 export async function driveRun({
   mode = 'code', convo, sysMsg, tools, infer, executeTool, rec,
   verify = null, signal = null, onEvent = () => {}, model = () => null,
-  gateNote: gate = '', note = () => {}, onSystemText = () => {},
+  gateNote: gate = '', note = () => {}, onSystemText = () => {}, readiness = null,
 }) {
   let toolCalls = 0;
   const onLoop = (e) => { if (e && e.type === 'tool-call') toolCalls++; onEvent(e); };
   const aborted = () => !!(signal && signal.aborted);
   const loop = async (messages, budget) => {
     onSystemText(messages[0].content); // the budget counts THIS loop's prompt
-    await rec.start({ messages, tools, model: model() });
+    await rec.start({ messages, tools, model: model(), readiness }); // A4: the readiness rows ride run.started when the app supplies them
     const result = await runAgentLoop({ messages, tools, infer, executeTool, ...budget, signal, verify, onEvent: onLoop });
     await rec.finish(result);
     return result;

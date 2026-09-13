@@ -167,6 +167,35 @@ export function codingToolset(mode = 'code', { subagents = false, supervisor = f
   return allow ? all.filter((t) => allow.has(t.function.name)) : all;
 }
 
+// CRIB-A A4 (osaurus B9, 2026-09-13): the readiness surface — "why is this tool not available?"
+// For every tool the coding set could offer, one of four states: `exposed` (in this run's set),
+// `hidden` (the mode's allowlist filters it), `off` (an opt-in the run did not turn on — subagents,
+// supervisor, hashline, completion, clarify), `unavailable` (a capability the host lacks, named by
+// the caller: no Kiln, no AI, no host). The AC-7b sentence for actions ("blocked by policy — go
+// here") extended to tools: the same sentence, the same four words, on the tools chip and in the
+// record's run.started input. Pure; the app supplies `unavailable`.
+export const TOOL_OPT_INS = Object.freeze({ task: 'subagents', dispatch: 'supervisor', review: 'supervisor', read_lines: 'hashline', edit_lines: 'hashline', task_done: 'completion', clarify: 'clarify' });
+export function toolReadiness(mode = 'code', options = {}, { unavailable = {} } = {}) {
+  const full = codingToolset('code', { subagents: true, supervisor: true, hashline: true, completion: true, clarify: true }).map((t) => t.function.name);
+  const offered = new Set(codingToolset(mode, options).map((t) => t.function.name));
+  const allow = MODE_TOOLS[mode];
+  return full.map((name) => {
+    if (unavailable && unavailable[name]) return { name, state: 'unavailable', why: String(unavailable[name]) };
+    if (offered.has(name)) return { name, state: 'exposed', why: '' };
+    // the mode filters first: an opt-in the mode would hide anyway is hidden, not off — turning the
+    // opt-in on would change nothing, and "off" would say it could (the checker's probe)
+    if (allow && !allow.has(name)) return { name, state: 'hidden', why: `not in ${mode} mode` };
+    const optIn = TOOL_OPT_INS[name];
+    if (optIn && !options[optIn]) return { name, state: 'off', why: `opt-in \`${optIn}\` is off for this run` };
+    return { name, state: 'hidden', why: `not in ${mode} mode` }; // unreachable by construction; the honest default
+  });
+}
+export function readinessLine(rows) {
+  const by = {}; for (const r of rows) (by[r.state] = by[r.state] || []).push(r.name);
+  const part = (k) => by[k] && by[k].length ? `${k}: ${by[k].join(', ')}` : '';
+  return ['exposed', 'hidden', 'off', 'unavailable'].map(part).filter(Boolean).join(' · ');
+}
+
 // ── the edit replacer chain (pure) — 9 strategies ───────────────────────
 // Each strategy is a generator that yields candidate SUBSTRINGS of `content`.
 // The driver locates a candidate with indexOf, enforces GLOBAL uniqueness
