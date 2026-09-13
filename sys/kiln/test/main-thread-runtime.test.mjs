@@ -18,8 +18,9 @@ function makeFakePyodide() {
   const addDirs = (p) => { const parts = p.split('/').filter(Boolean); let cur = ''; for (const s of parts) { cur += '/' + s; dirs.add(cur); } };
   const FS = {
     mkdirTree(p) { addDirs(p); },
-    writeFile(p, d) { const dd = p.slice(0, p.lastIndexOf('/')); if (dd) addDirs(dd); files.set(p, String(d)); },
-    readFile(p) { if (!files.has(p)) throw new Error('ENOENT: ' + p); return files.get(p); },
+    // bytes in the store, as MEMFS keeps them; a string write is encoded, a read decodes only when asked
+    writeFile(p, d) { const dd = p.slice(0, p.lastIndexOf('/')); if (dd) addDirs(dd); files.set(p, d instanceof Uint8Array ? new Uint8Array(d) : new TextEncoder().encode(String(d))); },
+    readFile(p, o) { if (!files.has(p)) throw new Error('ENOENT: ' + p); const b = files.get(p); return o && o.encoding ? new TextDecoder().decode(b) : new Uint8Array(b); },
     unlink(p) { if (!files.has(p)) throw new Error('ENOENT: ' + p); files.delete(p); },
     readdir(dir) {
       const prefix = dir === '/' ? '/' : dir + '/';
@@ -57,7 +58,7 @@ async function run() {
     const fake = makeFakePyodide();
     const kiln = createMainThreadKiln({ fs, mount: 'work', loadPyodide: async () => fake });
     let sawFiles = null;
-    fake._onRun = ({ FS }) => { sawFiles = { a: FS.readFile('/work/a.py'), b: FS.readFile('/work/pkg/b.py') }; };
+    fake._onRun = ({ FS }) => { sawFiles = { a: FS.readFile('/work/a.py', { encoding: 'utf8' }), b: FS.readFile('/work/pkg/b.py', { encoding: 'utf8' }) }; };
     const r = await kiln.exec('shell', 'noop');
     ok('exec returns ok', r.status === 'ok');
     ok('syncIn copied a.py into MEMFS', sawFiles && sawFiles.a === 'print("hi")\n');
@@ -125,6 +126,42 @@ async function run() {
     ok('a text longer than the read buffer arrives whole, then EOF', got && got.s === 'line one\nline two — é' && got.calls > 2);
     await kiln.exec('shell', 'sys.stdin.read()');
     ok('no stdin → EOF at once', got && got.s === '' && got.calls === 1);
+  }
+
+  // ── 1c. U4: bytes both ways — a binary the workspace holds reaches MEMFS intact, a binary
+  // Python writes reaches the workspace intact, and text is still text ──
+  {
+    const fs = createFileops({ backend: new MemoryBackend() });
+    const all = new Uint8Array(256); for (let i = 0; i < 256; i++) all[i] = i;   // every byte, incl. 0x00 and 0x80–0xFF
+    await fs.write('in.bin', all); await fs.write('note.txt', 'héllo\n');
+    const fake = makeFakePyodide();
+    const kiln = createMainThreadKiln({ fs, mount: 'work', loadPyodide: async () => fake });
+    let sawIn = null;
+    fake._onRun = ({ FS }) => { sawIn = FS.readFile('/work/in.bin'); const out = new Uint8Array(256); for (let i = 0; i < 256; i++) out[i] = 255 - i; FS.writeFile('/work/out.bin', out); FS.writeFile('/work/made.txt', 'ok\n'); };
+    await kiln.exec('shell', 'x');
+    ok('a workspace binary reaches MEMFS byte-exact', sawIn instanceof Uint8Array && sawIn.length === 256 && sawIn.every((b, i) => b === i));
+    const outBin = await fs.read('out.bin');
+    ok('a binary Python wrote reaches the workspace byte-exact', outBin.ok && outBin.data.length === 256 && outBin.data.every((b, i) => b === 255 - i));
+    ok('a text file Python wrote is still its text', (await fs.read('made.txt', { encoding: 'utf-8' })).data === 'ok\n');
+    ok('a workspace text file is unchanged by the round trip', (await fs.read('note.txt', { encoding: 'utf-8' })).data === 'héllo\n');
+    // nothing changed → NOTHING written: the change check is on bytes, and it is a check, not a rewrite
+    let writes = 0; const rawWrite = fs.write.bind(fs); fs.write = (...a) => { writes++; return rawWrite(...a); };
+    fake._onRun = () => {};
+    await kiln.exec('shell', 'noop');
+    ok('an unchanged workspace is not rewritten on the way out', writes === 0);
+    // same length, different bytes → written (a length compare would miss it)
+    fake._onRun = ({ FS }) => { const flip = new Uint8Array(256); for (let i = 0; i < 256; i++) flip[i] = i; flip[7] = 99; FS.writeFile('/work/in.bin', flip); };
+    writes = 0; await kiln.exec('shell', 'x');
+    ok('a same-length change in one byte is seen and written', writes === 1 && (await fs.read('in.bin')).data[7] === 99);
+    fs.write = rawWrite;
+    // a read the workspace refuses leaves no stale copy in MEMFS to be written back
+    const fs2 = createFileops({ backend: new MemoryBackend() }); await fs2.write('v.txt', 'v1\n');
+    const fake2 = makeFakePyodide(); const kiln2 = createMainThreadKiln({ fs: fs2, mount: 'work', loadPyodide: async () => fake2 });
+    fake2._onRun = () => {}; await kiln2.exec('shell', 'noop');
+    await fs2.write('v.txt', 'v2\n');
+    const rawRead = fs2.read.bind(fs2); fs2.read = async (p, o) => (p === 'v.txt' ? { ok: false, error: 'EIO' } : rawRead(p, o));
+    await kiln2.exec('shell', 'noop'); fs2.read = rawRead;
+    ok('a refused read does not resurrect the previous run\'s copy', (await fs2.read('v.txt', { encoding: 'utf-8' })).data === 'v2\n');
   }
 
   // ── 3. syncOut: a NEW file Python writes is synced back to the workspace ──

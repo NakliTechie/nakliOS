@@ -137,8 +137,14 @@ export function createMainThreadKiln({ fs, mount = 'work', loadPyodide = default
   // it used to stay behind, and the next syncOut wrote it back as though Python had created
   // it — `rm in.md`, then any `python`, and in.md was back (live 2026-09-12, mdlite-3; the
   // agent saw its deletes undone and spent its last steps re-deleting).
+  // BYTES both ways (U4, 2026-09-13). The mirror used to read every file as UTF-8 and write it
+  // back decoded, so a PNG a Python run made, or a .db, was corrupted on the way to the workspace
+  // and a binary already there was corrupted on the way in (the .git/ exclusion, cc74717, was the
+  // one case fixed by not mirroring). `fs.read` hands back a Uint8Array by default and `fs.write`
+  // takes one; MEMFS speaks bytes natively. Text is bytes too, so nothing about a .py changes.
+  const sameBytes = (a, b) => { if (!a || !b || a.length !== b.length) return false; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false; return true; };
   async function syncIn() {
-    const seen = new Map();
+    const seen = new Map(); // rel -> Uint8Array as synced in
     const res = await fs.list('', { recursive: true });
     if (!res || !res.ok) return seen;
     const present = new Set(res.entries.filter((e) => e.type === 'file').map((e) => e.path));
@@ -146,8 +152,10 @@ export function createMainThreadKiln({ fs, mount = 'work', loadPyodide = default
     for (const e of res.entries) {
       if (e.type !== 'file') continue;
       if (SKIP_BACK.test(e.path)) continue; // never pull .git/ or caches into MEMFS
-      const rd = await fs.read(e.path, { encoding: 'utf-8' });
-      if (!rd || !rd.ok) continue;
+      const rd = await fs.read(e.path);
+      // A read the workspace refuses leaves NO stale copy behind: the copy from an earlier run would
+      // otherwise be written back over the file on the way out (checker probe, 2026-09-13).
+      if (!rd || !rd.ok) { try { py.FS.unlink(root + '/' + e.path); } catch (_) {} continue; }
       const d = dirOf(e.path); if (d) mkdirp(d);
       try { py.FS.writeFile(root + '/' + e.path, rd.data); seen.set(e.path, rd.data); } catch (_) {}
     }
@@ -159,8 +167,8 @@ export function createMainThreadKiln({ fs, mount = 'work', loadPyodide = default
   async function syncOut(seen) {
     const now = new Set(memfsFiles());
     for (const rel of now) {
-      let data; try { data = py.FS.readFile(root + '/' + rel, { encoding: 'utf8' }); } catch (_) { continue; }
-      if (seen.get(rel) === data) continue; // unchanged since snapshot
+      let data; try { data = py.FS.readFile(root + '/' + rel); } catch (_) { continue; }
+      if (sameBytes(seen.get(rel), data)) continue; // unchanged since snapshot
       await fs.write(rel, data);
     }
     for (const rel of seen.keys()) if (!now.has(rel)) { try { await fs.remove(rel); } catch (_) {} }
