@@ -381,7 +381,7 @@
     },
     "tool:dispatch": {
       "owner": "tools-loop.md",
-      "fingerprint": "21b9dff4ed23",
+      "fingerprint": "d762b76ccc43",
       "kind": "tool",
       "detail": "code code+gate"
     },

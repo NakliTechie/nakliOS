@@ -21,6 +21,7 @@ import { shellTool, makeShellExecutor, runAgentLoop, taskDoneTool, interceptBash
 import { parseExpect, gradeExpect, expectLine } from './expect.mjs';
 import {
   dispatchTool, reviewTool, normalizeTasks, planMerge, formatDispatchDigest, awaitCohort, formatCompletionSteer, DISPATCH_SETTLE_MS,
+  ownershipOverlaps, ownershipsOverlap, outsideOwnership, renderTaskSpec,
   SUBAGENT_SYSTEM, REVIEW_SYSTEM, SUBAGENT_MAX_STEPS, clampSubagentBudget, SUBAGENT_WALL_CLOCK_S, SUBAGENT_MIN_WALL_CLOCK_S } from './subagents.mjs';
 import { renderHashline, applyHashlineBlock, parseHashlineEdit } from './hashline.mjs';
 import { contentToken, asStored } from './content-token.mjs';
@@ -156,7 +157,24 @@ function forgeShellTool() {
 // Opt-in extras keep the default surface minimal (pi's lesson): `subagents` adds
 // `task`, `supervisor` adds `dispatch`/`review` (parallel isolated subagents),
 // `hashline` adds read_lines/edit_lines, `completion` adds task_done.
-export function codingToolset(mode = 'code', { subagents = false, supervisor = false, hashline = false, completion = false, clarify = false } = {}) {
+// CRIB-B B5 (Paseo 3.6, 2026-09-13): the scope a tool needs to be worth PRESENTING. The grant gated
+// execution — a write with no fs:write was refused after the model spent a turn on it; with the
+// catalog a projection of the grant, a tool the grant cannot honour is never on the list: a small
+// model cannot burn a turn on it and cannot be prompt-injected into trying. `null` = no scope
+// needed. The shell needs only fs:read to be useful (its writes still refuse at the face).
+export const TOOL_SCOPES = Object.freeze({
+  read: 'fs:read', read_lines: 'fs:read', shell: 'fs:read', history: null, context_remaining: null, skill: null, recall: null,
+  edit: 'fs:write', write: 'fs:write', apply_patch: 'fs:write', edit_lines: 'fs:write',
+  remember: 'fs:write', skill_manage: 'fs:write', synthesize: 'fs:write', revise: 'fs:write', checkpoint: null, learn_this_run: null,
+  todowrite: null, clarify: null, task: null, dispatch: null, review: null, task_done: null,
+});
+export function scopeAllows(scopes, name) {
+  if (scopes == null) return true; // no grant handed in → the catalog is not projected (beds, tests)
+  const need = TOOL_SCOPES[name];
+  if (!need) return true;
+  return scopes instanceof Set ? scopes.has(need) : (Array.isArray(scopes) && scopes.includes(need));
+}
+export function codingToolset(mode = 'code', { subagents = false, supervisor = false, hashline = false, completion = false, clarify = false, scopes = null } = {}) {
   const all = [readTool(), editTool(), writeTool(), applyPatchTool(), todoTool(), forgeShellTool()];
   if (clarify) all.push(clarifyTool()); // B3: top level only — a subagent that asks pauses nobody
   if (subagents) all.push(taskTool());
@@ -164,27 +182,31 @@ export function codingToolset(mode = 'code', { subagents = false, supervisor = f
   if (hashline) all.push(readLinesTool(), editLinesTool());
   if (completion) all.push(taskDoneTool());
   const allow = MODE_TOOLS[mode];
-  return allow ? all.filter((t) => allow.has(t.function.name)) : all;
+  const byMode = allow ? all.filter((t) => allow.has(t.function.name)) : all;
+  return byMode.filter((t) => scopeAllows(scopes, t.function.name)); // B5: then the grant
 }
 
 // CRIB-A A4 (osaurus B9, 2026-09-13): the readiness surface — "why is this tool not available?"
-// For every tool the coding set could offer, one of four states: `exposed` (in this run's set),
-// `hidden` (the mode's allowlist filters it), `off` (an opt-in the run did not turn on — subagents,
-// supervisor, hashline, completion, clarify), `unavailable` (a capability the host lacks, named by
-// the caller: no Kiln, no AI, no host). The AC-7b sentence for actions ("blocked by policy — go
-// here") extended to tools: the same sentence, the same four words, on the tools chip and in the
-// record's run.started input. Pure; the app supplies `unavailable`.
+// For every tool the coding set could offer, one of five states: `exposed` (in this run's set),
+// `hidden` (the mode's allowlist filters it), `blocked` (B5: the grant lacks the scope the tool
+// needs — policy), `off` (an opt-in the run did not turn on — subagents, supervisor, hashline,
+// completion, clarify), `unavailable` (a capability the host lacks, named by the caller: no Kiln,
+// no AI, no host). The AC-7b sentence for actions ("blocked by policy — go here") extended to tools:
+// the same sentence, the same words, on the tools chip and in the record's run.started input. Pure;
+// the app supplies `unavailable` and the grant's scopes.
 export const TOOL_OPT_INS = Object.freeze({ task: 'subagents', dispatch: 'supervisor', review: 'supervisor', read_lines: 'hashline', edit_lines: 'hashline', task_done: 'completion', clarify: 'clarify' });
 export function toolReadiness(mode = 'code', options = {}, { unavailable = {} } = {}) {
   const full = codingToolset('code', { subagents: true, supervisor: true, hashline: true, completion: true, clarify: true }).map((t) => t.function.name);
   const offered = new Set(codingToolset(mode, options).map((t) => t.function.name));
   const allow = MODE_TOOLS[mode];
+  const scopes = options.scopes ?? null;
   return full.map((name) => {
     if (unavailable && unavailable[name]) return { name, state: 'unavailable', why: String(unavailable[name]) };
     if (offered.has(name)) return { name, state: 'exposed', why: '' };
     // the mode filters first: an opt-in the mode would hide anyway is hidden, not off — turning the
     // opt-in on would change nothing, and "off" would say it could (the checker's probe)
     if (allow && !allow.has(name)) return { name, state: 'hidden', why: `not in ${mode} mode` };
+    if (!scopeAllows(scopes, name)) return { name, state: 'blocked', why: `blocked by policy — the grant lacks ${TOOL_SCOPES[name]}` }; // B5
     const optIn = TOOL_OPT_INS[name];
     if (optIn && !options[optIn]) return { name, state: 'off', why: `opt-in \`${optIn}\` is off for this run` };
     return { name, state: 'hidden', why: `not in ${mode} mode` }; // unreachable by construction; the honest default
@@ -465,11 +487,12 @@ export function parseApplyPatch(patch) {
 export const SUBAGENT_WALL_CLOCK_MS = 240_000;
 export function makeToolExecutor({ shell, face, mode = 'code', infer = null, subagentDepth = 0, spawnIsolated = null, recordSubagent = null,
                                    signal = null, subagentBudget = null, recordSubagentStart = null, onSubagentEvent = null,
-                                   steer = null, settleMs = DISPATCH_SETTLE_MS }) {
+                                   steer = null, settleMs = DISPATCH_SETTLE_MS, scopes = null }) {
   if (!face) throw new Error('makeToolExecutor requires a Rig agent face');
   const modeAllow = MODE_TOOLS[mode] || null; // null = all tools
   const subagentsOn = typeof infer === 'function' && subagentDepth < 1; // depth cap 1 (no recursion)
   const inFlightLabels = new Set(); // B2: dispatched and not yet reported back — a re-dispatch of one is refused (B1: absence authorizes nothing)
+  const inFlightOwnership = new Map(); // B3: label -> the ownership a child still in flight declared — a new claim on it is refused
   // B2: the merge clock. Every merge this executor performs bumps it and stamps its paths, so a
   // straggler is judged against everything merged AFTER it launched — by this dispatch or a later
   // one (the checker's probe: a per-call set let a straggler overwrite a later dispatch's merge).
@@ -779,7 +802,7 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
             { role: 'system', content: 'You are a subagent with tools: read, write, edit, apply_patch, todowrite, shell. Do the task over the shared workspace, then return a concise result (what you found or changed).' },
             { role: 'user', content: String(args?.prompt ?? '') },
           ],
-          tools: codingToolset('code'), // subagents don't nest (depth cap)
+          tools: codingToolset('code', { scopes }), // subagents don't nest (depth cap); B5: the grant projects the child's catalog too
           executeTool: child,
           // A budget the model did not name falls through to the executor's, then the default.
           maxSteps: clampSubagentBudget(args || {}).explicit.steps ? Math.min(16, clampSubagentBudget(args || {}).maxSteps) : 16,
@@ -796,10 +819,23 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
         const budget = clampSubagentBudget(args || {}); // ESS-3: per call, clamped, stated in the digest
         // B2 (B1 → B2): a label still in flight from an earlier dispatch is refused for THIS call — it
         // is live or unverifiable, and absence authorizes nothing. Disjoint labels in the same call run.
-        const refused = [], tasks = [];
-        for (const t of norm.tasks) { const label = t.label || t.prompt.slice(0, 60); if (inFlightLabels.has(label)) refused.push(label); else tasks.push({ ...t, label }); }
-        const refusals = refused.map((l) => `"${l}" is still in flight from an earlier dispatch`);
-        if (!tasks.length) return `Refused: ${refusals.join('; ')} — unverifiable authorizes nothing. Wait for the completion message; do not re-dispatch.`;
+        const refusals = [], tasks = [];
+        for (const t of norm.tasks) {
+          const label = t.label || t.prompt.slice(0, 60);
+          if (inFlightLabels.has(label)) { refusals.push(`"${label}" is still in flight from an earlier dispatch`); continue; }
+          // B3: a claim on ownership a child still in flight declared is refused for this sub-task
+          let held = null; for (const [l, own] of inFlightOwnership) { const p = ownershipsOverlap(t.ownership, own); if (p) { held = { l, p }; break; } }
+          if (held) { refusals.push(`"${label}" claims ${held.p}, still owned by "${held.l}" (in flight)`); continue; }
+          tasks.push({ ...t, label });
+        }
+        if (!tasks.length) return `Refused: ${refusals.join('; ')} — unverifiable authorizes nothing; wait for the completion message.`;
+        // B3: overlapping ownership WITHIN the call is refused before any child runs — the conflict
+        // Anvil used to detect after the work, path by path, is predicted from the declaration.
+        const ov = ownershipOverlaps(tasks);
+        if (ov.length) {
+          const who = [...new Set(ov.flatMap((o) => [o.a, o.b]))].map((i) => `[${i + 1}] "${tasks[i].label}"`).join(' and ');
+          return `Refused: sub-tasks ${who} claim overlapping ownership (${[...new Set(ov.map((o) => o.path))].join(', ')}) — declare disjoint ownership, or run them sequentially with \`task\`. Nothing was started.`;
+        }
         // Launch every sub-task concurrently, each in its own isolated overlay. `ok` is true ONLY
         // when the subagent finished cleanly (stop 'done') — a subagent that errored or ran out of
         // steps is held, its partial writes never committed to the real workspace.
@@ -814,19 +850,22 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
               tool_call_id: call?.id ?? null,
               messages: [
                 { role: 'system', content: SUBAGENT_SYSTEM },
-                { role: 'user', content: t.prompt },
+                { role: 'user', content: renderTaskSpec(t) }, // B3: the spec's lines, then the prompt
               ],
-              tools: codingToolset('code'), // full tools, isolated; no nesting (depth cap)
+              tools: codingToolset('code', { scopes }), // full tools, isolated; no nesting (depth cap); B5: projected by the grant
               executeTool: iso.executor,
               maxSteps: budget.maxSteps,
               budget: budget.explicit.secs ? { wallClockMs: budget.wallClockMs } : null,
             });
-            return { label: t.label, ok: res.stop === 'done', stop: res.stop, text: res.text || `(stopped: ${res.stop})`, changes: iso.changes(), iso };
+            return { label: t.label, ownership: t.ownership || [], ok: res.stop === 'done', stop: res.stop, text: res.text || `(stopped: ${res.stop})`, changes: iso.changes(), iso };
           } catch (e) {
-            return { label: t.label, ok: false, stop: 'error', text: `Subagent error: ${String(e && e.message || e)}`, changes: iso.changes ? iso.changes() : { written: [], deleted: [] }, iso };
+            return { label: t.label, ownership: t.ownership || [], ok: false, stop: 'error', text: `Subagent error: ${String(e && e.message || e)}`, changes: iso.changes ? iso.changes() : { written: [], deleted: [] }, iso };
           }
         };
-        const children = tasks.map((t) => { inFlightLabels.add(t.label); return runOne(t).finally(() => inFlightLabels.delete(t.label)); });
+        const children = tasks.map((t) => {
+          inFlightLabels.add(t.label); if (t.ownership && t.ownership.length) inFlightOwnership.set(t.label, t.ownership);
+          return runOne(t).finally(() => { inFlightLabels.delete(t.label); inFlightOwnership.delete(t.label); });
+        });
         // B2: the tool result is composed at the first of "every child complete" or "the first
         // completion plus the settle window". With no steer queue there is nowhere to deliver a later
         // completion, so the window is infinite and the result is the whole cohort — exactly as before.
@@ -844,7 +883,11 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
         }
         // Merge plan for what completed together: only cleanly-finished runs are eligible; a path
         // clash holds just the clashers (a disjoint clean sibling still merges).
-        const plan = planMerge(runs);
+        // B3: the declared ownership is an invariant — a clean child that wrote outside it is held, and
+        // held BEFORE the plan: a trespasser must not drag the path's rightful owner into a conflict hold
+        const outsideOf = runs.map((r) => (r && r.ok) ? outsideOwnership(r.ownership, r.changes) : []);
+        const plan = planMerge(runs.map((r, i) => (outsideOf[i].length ? { ...r, ok: false } : r)));
+        outsideOf.forEach((out, i) => { if (out.length) { plan.status[i] = 'outside'; runs[i].outside = out; } });
         const stamp = (r) => { mergeGen++; for (const p of [...(r.changes.written || []), ...(r.changes.deleted || [])]) lastMerged.set(p, mergeGen); };
         await withMergeLock(async () => {
           // B2: the batch path obeys the merge clock too — a clean run whose path anyone merged since
@@ -875,7 +918,9 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
             else if (r.ok) await withMergeLock(async () => {
               const paths = [...(r.changes.written || []), ...(r.changes.deleted || [])];
               const clash = paths.filter((p) => (lastMerged.get(p) || 0) > launchGen); // merged since this cohort launched, by anyone
-              if (clash.length) { status = 'conflict'; conflictWith = clash; }
+              const out = outsideOwnership(r.ownership, r.changes); // B3: the invariant, for a straggler too
+              if (out.length) { status = 'outside'; r.outside = out; }
+              else if (clash.length) { status = 'conflict'; conflictWith = clash; }
               else if (!paths.length) status = 'no-op';
               else if (r.iso && typeof r.iso.commit === 'function') {
                 try { await r.iso.commit(); status = 'merge'; stamp(r); }

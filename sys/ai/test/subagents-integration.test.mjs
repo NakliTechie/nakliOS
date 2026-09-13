@@ -61,7 +61,7 @@ function makeSpawnIsolated(base, infer, root = '') {
     const executor = makeToolExecutor({ shell, face, mode: 'code', infer, subagentDepth: 1 });
     return {
       executor,
-      changes: () => overlay.changes(),
+      changes: () => { const c = overlay.changes(); return { written: (c.written || []).map(toRel), deleted: (c.deleted || []).map(toRel) }; }, // workspace-relative, as the app maps them
       commit: async () => overlay.commit({
         write: async (p, bytes) => { await realFs.write(toRel(p), bytes); }, // byte-accurate, like production
         remove: async (p) => { await realFs.remove(toRel(p)); },
@@ -444,6 +444,100 @@ await test('B2: check → commit is one critical section across the merge clock 
   const slowMerged = /"slow" finished — merged/.test(s), midMerged = /\[1\] mid — merged/.test(second);
   assert(slowMerged !== midMerged, 'exactly one "merged" claim on shared.txt — slow: ' + s + ' | mid: ' + second);
   eq(dec(await base.readBinary('shared.txt')), slowMerged ? 'SLOW' : 'MID', 'the workspace holds the one that merged');
+});
+
+// ── CRIB-B B3: ownership declared at dispatch ──
+await test('B3: two sub-tasks claiming one prefix are refused before any child runs; disjoint declared ownership merges as today', async () => {
+  const base = new MemoryBackend();
+  let infers = 0;
+  const plan = scriptedInfer((p) => /alpha/i.test(p) ? { write: { file: 'src/alpha.txt', content: 'A' } } : { write: { file: 'docs/beta.txt', content: 'B' } });
+  const infer = async (a) => { infers++; return plan(a); };
+  const exec = topExecutor(base, infer);
+  const out = await exec('dispatch', { tasks: [
+    { description: 'alpha', prompt: 'Create src/alpha.txt', ownership: ['src/'] },
+    { description: 'beta', prompt: 'Create docs/beta.txt', ownership: ['src/alpha.txt', 'docs/'] },
+  ] });
+  assert(/^Refused: sub-tasks \[1\] "alpha" and \[2\] "beta" claim overlapping ownership \(src\/\) — declare disjoint ownership, or run them sequentially with `task`\. Nothing was started\.$/.test(out), out);
+  eq(infers, 0, 'no child ran'); eq(await base.exists('src/alpha.txt'), false);
+  const ok = await exec('dispatch', { tasks: [
+    { description: 'alpha', prompt: 'Create src/alpha.txt', ownership: ['src/'] },
+    { description: 'beta', prompt: 'Create docs/beta.txt', ownership: ['docs/'] },
+  ] });
+  assert(/\[1\] alpha — merged/.test(ok) && /\[2\] beta — merged/.test(ok), ok);
+  eq(dec(await base.readBinary('src/alpha.txt')), 'A'); eq(dec(await base.readBinary('docs/beta.txt')), 'B');
+});
+await test('B3: a child that writes outside its declared ownership is HELD — base untouched, the digest names the path; the child was briefed with the boundary', async () => {
+  const base = new MemoryBackend();
+  const briefs = [];
+  const plan = scriptedInfer((p) => { briefs.push(p); return /stray/i.test(p) ? { write: { file: 'src/core/stray.txt', content: 'X' } } : { write: { file: 'src/api/ok.txt', content: 'OK' } }; });
+  const exec = topExecutor(base, plan);
+  const out = await exec('dispatch', { tasks: [
+    { description: 'good', prompt: 'good: write src/api/ok.txt', ownership: ['src/api/'], target: 'src/api', acceptance: 'the file exists' },
+    { description: 'stray', prompt: 'stray: write src/core/stray.txt', ownership: ['src/other/'] },
+  ] });
+  assert(/\[1\] good — merged/.test(out), out);
+  assert(/\[2\] stray — held — wrote outside its declared ownership \(src\/core\/stray\.txt\)/.test(out), out);
+  eq(dec(await base.readBinary('src/api/ok.txt')), 'OK'); eq(await base.exists('src/core/stray.txt'), false, 'held, never merged');
+  assert(briefs.some((b) => /^Target: src\/api\nOwnership: you may write only under src\/api\/ — anything written elsewhere is held and never merged\.\nObservable acceptance: the file exists\n\ngood: write src\/api\/ok\.txt$/.test(b)), 'the child saw its spec: ' + JSON.stringify(briefs));
+});
+await test('B3 (B2): a second dispatch claiming a prefix still owned by an in-flight child is refused for that sub-task and named in the digest; the other runs; a straggler outside its ownership is held on completion', async () => {
+  const base = new MemoryBackend();
+  const plan = scriptedInfer((p) => /slow/i.test(p) ? { write: { file: 'src/core/late.txt', content: 'L' } } : /other/i.test(p) ? { write: { file: 'docs/o.txt', content: 'O' } } : { write: { file: 'src/api/x.txt', content: 'X' } });
+  const q = createSteerQueue();
+  const exec = topExecutorWith(base, slowInfer(plan, /slow/i, 200), { steer: q, settleMs: 0 });
+  const first = await exec('dispatch', { tasks: [{ description: 'slow', prompt: 'slow: write src/core/late.txt', ownership: ['src/api/'] }, { description: 'quick', prompt: 'other: write docs/o.txt' }] });
+  assert(/still in flight: "slow"/.test(first), first);
+  const second = await exec('dispatch', { tasks: [
+    { description: 'claim', prompt: 'claim: write src/api/x.txt', ownership: ['src/api/x.txt'] },
+    { description: 'other2', prompt: 'other: write docs/o.txt', ownership: ['docs/'] },
+  ] });
+  assert(/\[1\] other2 — merged/.test(second), 'the disjoint sub-task ran and merged: ' + second);
+  assert(/### refused: "claim" claims src\/api\/, still owned by "slow" \(in flight\) — unverifiable authorizes nothing/.test(second), 'the refusal is named: ' + second);
+  eq(await base.exists('src/api/x.txt'), false, 'the claim on in-flight ownership did not run');
+  const only = await exec('dispatch', { tasks: [{ description: 'claim2', prompt: 'claim: write src/api/x.txt', ownership: ['src/api/'] }] });
+  assert(/^Refused: "claim2" claims src\/api\/, still owned by "slow" \(in flight\) — unverifiable authorizes nothing/.test(only), only);
+  await q.next(); const s = q.take()[0].content;
+  assert(/"slow" finished — held — wrote outside its declared ownership \(src\/core\/late\.txt\)/.test(s), s);
+  eq(await base.exists('src/core/late.txt'), false, 'the straggler outside its ownership never merged');
+  await new Promise((r) => setTimeout(r, 0));
+  const freed = await exec('dispatch', { tasks: [{ description: 'claim3', prompt: 'claim: write src/api/x.txt', ownership: ['src/api/'] }] });
+  assert(/\[1\] claim3 — merged/.test(freed), 'once the child reported back its ownership is free: ' + freed);
+});
+
+await test('B3: under a rooted mount (the Crate shape) ownership still compares workspace-relative — a clean child merges, not "outside"', async () => {
+  const base = new MemoryBackend();
+  const plan = scriptedInfer(() => ({ write: { file: 'src/api/x.txt', content: 'X' } }));
+  const exec = topExecutor(base, plan, 'ws/p1');
+  const out = await exec('dispatch', { tasks: [{ description: 'api', prompt: 'write src/api/x.txt', ownership: ['src/api/'] }] });
+  assert(/\[1\] api — merged/.test(out), 'merged, not held as outside: ' + out);
+  eq(dec(await base.readBinary('ws/p1/src/api/x.txt')), 'X', 'landed under the mount root');
+});
+await test('B3: a trespasser is held before the plan — the path\'s rightful owner still merges', async () => {
+  const base = new MemoryBackend();
+  const plan = scriptedInfer((p) => /owner/i.test(p) ? { write: { file: 'src/a.py', content: 'OWNER' } } : { write: { file: 'src/a.py', content: 'TRESPASS' } });
+  const exec = topExecutor(base, plan);
+  const out = await exec('dispatch', { tasks: [
+    { description: 'owner', prompt: 'owner: write src/a.py', ownership: ['src/'] },
+    { description: 'stray', prompt: 'stray: write src/a.py', ownership: ['docs/'] },
+  ] });
+  assert(/\[1\] owner — merged/.test(out), 'the owner merged: ' + out);
+  assert(/\[2\] stray — held — wrote outside its declared ownership \(src\/a\.py\)/.test(out), 'the trespasser is held for what it is: ' + out);
+  assert(!/path conflict/.test(out), 'and it is not a conflict');
+  eq(dec(await base.readBinary('src/a.py')), 'OWNER');
+});
+
+await test('B5: a dispatched child under a read-only grant is never offered write — the catalog is the grant\'s projection down the tree', async () => {
+  const base = new MemoryBackend();
+  const seen = [];
+  const plan = scriptedInfer(() => ({ write: { file: 'x.txt', content: 'X' } }));
+  const infer = async (a) => { seen.push((a.tools || []).map((t) => t.function.name)); return plan(a); };
+  const exec = topExecutorWith(base, infer, { scopes: ['fs:read'] });
+  const out = await exec('dispatch', { tasks: [{ description: 'w', prompt: 'write x.txt' }] });
+  assert(seen.length > 0 && seen.every((names) => !names.includes('write') && !names.includes('edit')), 'the child was never offered write/edit: ' + JSON.stringify(seen[0]));
+  assert(seen[0].includes('read') && seen[0].includes('shell'), 'and was offered what fs:read allows: ' + JSON.stringify(seen[0]));
+  // (the scripted child calls write anyway — a real model cannot call what it was not offered; whether the
+  // CALL lands is the child grant's job, which this bed leaves at the full set, as the app does today)
+  assert(/\[1\] w — /.test(out), out);
 });
 
 if (failures.length){

@@ -60,14 +60,21 @@ export function dispatchTool() {
       'subagent per file/module/angle. Each returns a concise report; their file ' +
       'changes are merged back automatically when no two touched the same path (any ' +
       'conflict is reported for you to resolve). Keep sub-tasks INDEPENDENT; run at ' +
-      'most ' + DISPATCH_MAX + ' at once. For a single bounded sub-task use `task`; for ' +
-      'critique use `review`. The result may be PARTIAL: a slow subagent\'s completion arrives ' +
+      'most ' + DISPATCH_MAX + ' at once. Declare each sub-task\'s ownership (the paths it may ' +
+      'write) so an overlap is refused before the work instead of held after it. For a single ' +
+      'bounded sub-task use `task`; for critique use `review`. The result may be PARTIAL: a slow subagent\'s completion arrives ' +
       'later as a [coordination] message in this conversation — do not re-dispatch it.',
     parameters: { type: 'object', properties: {
       tasks: { type: 'array', description: 'The independent sub-tasks to run in parallel (max ' + DISPATCH_MAX + ').',
         items: { type: 'object', properties: {
           description: { type: 'string', description: 'A 3–5 word label.' },
           prompt: { type: 'string', description: 'The full, self-contained task for this subagent.' },
+          // B3: the five-field spec — optional; ownership is the one that changes what happens
+          target: { type: 'string', description: 'What this subagent works on (a file, module, or angle).' },
+          change: { type: 'string', description: 'The change to make, in one or two sentences.' },
+          constraints: { type: 'string', description: 'What must not change; style or API limits.' },
+          ownership: { type: 'array', items: { type: 'string' }, description: 'Workspace paths this subagent may WRITE (a trailing / covers the subtree). Overlapping ownership between sub-tasks is refused before any runs; a write outside its ownership is held, never merged. Omit to fall back to path-level conflict detection after the work.' },
+          acceptance: { type: 'string', description: 'An observable check that the change is done (a command, a file, a behaviour).' },
         }, required: ['prompt'] } },
       max_steps: { type: 'integer', description: 'Optional step budget per subagent (1–' + SUBAGENT_MAX_STEPS + '; default ' + SUBAGENT_MAX_STEPS + ').' },
       wall_clock_s: { type: 'integer', description: 'Optional wall-clock budget per subagent in seconds (' + SUBAGENT_MIN_WALL_CLOCK_S + '–' + SUBAGENT_WALL_CLOCK_S + '; default ' + SUBAGENT_WALL_CLOCK_S + ').' },
@@ -100,7 +107,12 @@ export function normalizeTasks(raw) {
     const prompt = String((t && t.prompt) || '').trim();
     if (!prompt) { droppedEmpty++; continue; }
     const label = String((t && t.description) || '').trim() || firstWords(prompt, 5);
-    cleaned.push({ label, prompt });
+    // B3 (Orca R8): the five-field spec, every field optional — a sub-task with none behaves as before
+    const spec = {};
+    for (const k of ['target', 'change', 'constraints', 'acceptance']) { const v = String((t && t[k]) || '').trim(); if (v) spec[k] = v; }
+    const ownership = normalizeOwnership(t && t.ownership);
+    if (ownership.length) spec.ownership = ownership;
+    cleaned.push({ label, prompt, ...spec });
   }
   if (!cleaned.length) return { ok: false, error: 'No non-empty sub-tasks provided.', tasks: [], dropped: droppedEmpty };
   // B1: the label is the child's identity on the chain (with the kind and the call id) and in the
@@ -115,6 +127,62 @@ export function normalizeTasks(raw) {
 function firstWords(s, n) {
   const w = String(s).trim().split(/\s+/).slice(0, n).join(' ');
   return w.length > 48 ? w.slice(0, 48) + '…' : w;
+}
+
+// ── CRIB-B B3 (Orca R8, 2026-09-13): ownership declared at dispatch ──────────────────────
+// A sub-task may name what it OWNS — the workspace paths it may write; a trailing `/` is a prefix
+// (the subtree). Overlap between sub-tasks is refused before any child runs (Anvil detected it after
+// the work, path by path); and what a child actually touched is checked against what it declared —
+// a write outside its ownership is held, never merged. No globs; reads are not fenced (the overlay
+// is a copy). Undeclared ownership means today's rules.
+export function normalizeOwnership(raw) {
+  const list = Array.isArray(raw) ? raw : (typeof raw === 'string' && raw.trim() ? raw.split(/[,\n]/) : []);
+  const out = [];
+  for (const p0 of list) {
+    const s = String(p0 || '').trim();
+    if (!s) continue;
+    // the same segment walk the write face applies to a path: `//`, `.` and `..` collapse, so a
+    // declaration compares to what the child actually touched; a trailing / stays the prefix marker
+    const segs = [];
+    for (const seg of s.split('/')) { if (!seg || seg === '.') continue; if (seg === '..') { segs.pop(); continue; } segs.push(seg); }
+    if (!segs.length) continue;
+    const p = segs.join('/') + (s.endsWith('/') ? '/' : '');
+    if (!out.includes(p)) out.push(p);
+  }
+  return out;
+}
+// A declaration owns itself and — with or without the trailing slash — everything under it: a file
+// cannot also be a directory, so `src/api` covering `src/api/x.py` costs no false positive, and a
+// small model writes the bare name far more often than the slash form.
+const under = (own, path) => path === own || path.startsWith(own.endsWith('/') ? own : own + '/');
+const ownsPath = under;
+const overlaps = (a, b) => under(a, b) || under(b, a);
+export function ownershipsOverlap(a, b) { for (const x of a || []) for (const y of b || []) if (overlaps(x, y)) return x.length <= y.length ? x : y; return null; }
+// Pairs of sub-tasks whose declared ownership overlaps: [{ a, b, path }] (indices into `tasks`).
+export function ownershipOverlaps(tasks) {
+  const out = [];
+  const list = tasks || [];
+  for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+    const path = ownershipsOverlap(list[i].ownership, list[j].ownership);
+    if (path) out.push({ a: i, b: j, path });
+  }
+  return out;
+}
+// The paths a child touched outside what it declared. Empty when nothing was declared.
+export function outsideOwnership(ownership, changes) {
+  const own = ownership || []; if (!own.length) return [];
+  const ch = changes || {};
+  return [...(ch.written || []), ...(ch.deleted || [])].filter((p) => !own.some((o) => ownsPath(o, p)));
+}
+// The child's briefing: the spec's lines, then the prompt — the boundary is in the child's context.
+export function renderTaskSpec(t) {
+  const lines = [];
+  if (t.target) lines.push(`Target: ${t.target}`);
+  if (t.change) lines.push(`Change: ${t.change}`);
+  if (t.constraints) lines.push(`Constraints: ${t.constraints}`);
+  if (t.ownership && t.ownership.length) lines.push(`Ownership: you may write only under ${t.ownership.join(', ')} — anything written elsewhere is held and never merged.`);
+  if (t.acceptance) lines.push(`Observable acceptance: ${t.acceptance}`);
+  return lines.length ? lines.join('\n') + '\n\n' + t.prompt : t.prompt;
 }
 
 // Cross-subagent conflict detection. `changesets` is an array aligned to the
@@ -206,6 +274,7 @@ const STATUS_TAG = {
   error: 'ERROR — subagent failed to run',
   'merge-failed': 'merge FAILED (workspace unchanged for this one)',
   aborted: 'STOPPED — the owner ended the run while it worked; nothing merged',
+  outside: 'held — wrote outside its declared ownership', // B3
 };
 export function formatDispatchDigest({ results, status, conflicts, dropped, budget, inFlight = [], indices = null, refused = [] }) {
   const num = (i) => (indices ? indices[i] : i) + 1; // B2: number by the COHORT index, so a steer's [n] matches
@@ -220,6 +289,7 @@ export function formatDispatchDigest({ results, status, conflicts, dropped, budg
     let tag = STATUS_TAG[s] || s;
     if (s === 'incomplete' && r.stop) tag += ` (${r.stop})`;
     if (s === 'conflict' && r.conflictWith && r.conflictWith.length) tag += ` — merged by an earlier sibling since this dispatch launched (${r.conflictWith.join(', ')})`;
+    if (s === 'outside' && r.outside && r.outside.length) tag += ` (${r.outside.join(', ')})`;
     lines.push('');
     lines.push(`### [${num(i)}] ${r.label} — ${tag}`);
     if (touched.length) {
@@ -240,7 +310,7 @@ export function formatDispatchDigest({ results, status, conflicts, dropped, budg
   // B2: what this call refused is in the digest too — a sub-task silently missing is a hole the model fills by re-dispatching
   if (refused && refused.length) {
     lines.push('');
-    lines.push(`### refused: ${refused.join('; ')} — unverifiable authorizes nothing. Wait for the completion message; do not re-dispatch.`);
+    lines.push(`### refused: ${refused.join('; ')} — unverifiable authorizes nothing; wait for the completion message.`);
   }
   // B2: the stragglers. Paseo's polling ban as an affordance, not a rule: the message is coming.
   if (inFlight && inFlight.length) {
@@ -273,6 +343,7 @@ export function formatCompletionSteer({ index, label, run, status, conflictWith 
   const r = run || {}; const ch = r.changes || { written: [], deleted: [] };
   let tag = STATUS_TAG[status] || status;
   if (status === 'incomplete' && r.stop) tag += ` (${r.stop})`;
+  if (status === 'outside' && r.outside && r.outside.length) tag += ` (${r.outside.join(', ')})`;
   if (status === 'conflict' && conflictWith && conflictWith.length) tag = `held — conflicts with an earlier sibling that already merged (${conflictWith.join(', ')}); un-merging is not possible`;
   const parts = [];
   if ((ch.written || []).length) parts.push('wrote ' + ch.written.join(', '));

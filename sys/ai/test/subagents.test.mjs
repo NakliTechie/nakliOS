@@ -1,6 +1,6 @@
 // Conformance — supervisor / parallel-subagent pure helpers.
 //   node sys/ai/test/subagents.test.mjs
-import { awaitCohort, formatCompletionSteer, DISPATCH_SETTLE_MS, subagentLiveness, SUBAGENT_STALE_MS,
+import { normalizeOwnership, ownershipOverlaps, ownershipsOverlap, outsideOwnership, renderTaskSpec, awaitCohort, formatCompletionSteer, DISPATCH_SETTLE_MS, subagentLiveness, SUBAGENT_STALE_MS,
   dispatchTool, reviewTool, normalizeTasks, detectConflicts, mergeDecision,
   planMerge, formatDispatchDigest, DISPATCH_MAX,
   subagentFeedRow, subagentFeedLine, clampSubagentBudget, SUBAGENT_MAX_STEPS, SUBAGENT_WALL_CLOCK_S,
@@ -168,6 +168,43 @@ await test('subagentFeedLine: running says where it is; a finished row says how 
   assert(/split lexer — live \(last event 4s ago\) · step 3/.test(seen), seen);
   const done = subagentFeedLine({ ...running, status: 'done', tools: 1 });
   assert(/split lexer — done \(3 steps, 1 tool call\)/.test(done), done);
+});
+
+// CRIB-B B3: ownership declared at dispatch — normalised, overlap predicted, the invariant checked
+await test('B3: normalizeOwnership — workspace-relative, a trailing / is a prefix, empties and duplicates dropped, a string splits', () => {
+  eq(normalizeOwnership(['./src/api/', '/README.md', ' ', 'src/api/', '.', 'lib']).join('|'), 'src/api/|README.md|lib');
+  eq(normalizeOwnership('a.py, b/\nc').join('|'), 'a.py|b/|c');
+  eq(normalizeOwnership(null).length, 0); eq(normalizeOwnership(42).length, 0);
+  eq(normalizeOwnership(['src//api/', 'src/./api/', '../x', 'a/b/../c', '..', 'd/e/../../f/']).join('|'), 'src/api/|x|a/c|f/', 'the write face\'s segment walk: //, . and .. collapse; the trailing / stays');
+});
+await test('B3: ownershipOverlaps — equal, prefix either way, disjoint, undeclared', () => {
+  const T = (ownership) => ({ ownership });
+  eq(ownershipOverlaps([T(['src/api/']), T(['src/api/routes.py'])]).map((o) => `${o.a}-${o.b}:${o.path}`).join(','), '0-1:src/api/', 'a prefix owns the file under it');
+  eq(ownershipOverlaps([T(['a.py']), T(['a.py'])])[0].path, 'a.py', 'equal paths');
+  eq(ownershipOverlaps([T(['src/api/']), T(['src/apix/'])]).length, 0, 'src/api/ does not cover src/apix/');
+  eq(ownershipOverlaps([T(['src/api']), T(['src/api/x.py'])]).length, 1, 'a bare directory name owns its subtree too');
+  eq(ownershipOverlaps([T(['src/api']), T(['src/api/'])]).length, 1, 'with or without the slash, the same claim');
+  eq(ownershipOverlaps([T(['README.md']), T(['README.md.bak'])]).length, 0, 'a file does not own a longer name');
+  eq(ownershipOverlaps([T(['src/']), T(['docs/']), T(['src/x.py'])]).map((o) => `${o.a}-${o.b}`).join(','), '0-2', 'only the overlapping pair');
+  eq(ownershipOverlaps([T([]), T(['src/'])]).length, 0, 'undeclared overlaps nothing');
+  eq(ownershipsOverlap(['a/'], ['a/b.py', 'c']), 'a/'); eq(ownershipsOverlap(['a/'], ['b/']), null);
+});
+await test('B3: outsideOwnership — the paths a child touched beyond its declaration; nothing when undeclared', () => {
+  eq(outsideOwnership(['src/api/', 'README.md'], { written: ['src/api/a.py', 'README.md', 'src/core/b.py'], deleted: ['tests/t.py'] }).join(','), 'src/core/b.py,tests/t.py');
+  eq(outsideOwnership([], { written: ['anything'] }).length, 0, 'undeclared → today\'s rules');
+  eq(outsideOwnership(['src/api'], { written: ['src/api/x.py', 'src/apix/y.py'], deleted: [] }).join(','), 'src/apix/y.py', 'a bare name owns its subtree, not a sibling with the same prefix');
+  eq(outsideOwnership(['src/'], null).length, 0);
+});
+await test('B3: normalizeTasks keeps the five fields; renderTaskSpec briefs the child with the boundary, then the prompt', () => {
+  const r = normalizeTasks([{ description: 'api', prompt: 'Add the route.', target: 'src/api', change: 'add GET /x', constraints: 'no new deps', ownership: ['src/api/'], acceptance: 'python -m pytest tests/api' }, { prompt: 'plain' }]);
+  eq(r.tasks[0].ownership.join(), 'src/api/'); eq(r.tasks[0].acceptance, 'python -m pytest tests/api'); eq('ownership' in r.tasks[1], false, 'absent fields stay absent');
+  const spec = renderTaskSpec(r.tasks[0]);
+  assert(/^Target: src\/api\nChange: add GET \/x\nConstraints: no new deps\nOwnership: you may write only under src\/api\/ — anything written elsewhere is held and never merged\.\nObservable acceptance: python -m pytest tests\/api\n\nAdd the route\.$/.test(spec), spec);
+  eq(renderTaskSpec(r.tasks[1]), 'plain', 'no spec → the prompt alone, byte for byte');
+  const d = formatDispatchDigest({ results: [{ label: 'api', ok: true, stop: 'done', text: 'r', changes: { written: ['src/core/b.py'], deleted: [] }, outside: ['src/core/b.py'] }], status: ['outside'], conflicts: [], dropped: 0, budget: null });
+  assert(/### \[1\] api — held — wrote outside its declared ownership \(src\/core\/b\.py\)/.test(d) && /attempted \(NOT applied\)/.test(d), d);
+  const s = formatCompletionSteer({ index: 0, label: 'api', run: { ok: true, text: 'r', changes: { written: ['src/core/b.py'], deleted: [] }, outside: ['src/core/b.py'] }, status: 'outside' });
+  assert(/finished — held — wrote outside its declared ownership \(src\/core\/b\.py\)\./.test(s), s);
 });
 
 // CRIB-B B2: the cohort wait, the completion steer, the digest's in-flight tail

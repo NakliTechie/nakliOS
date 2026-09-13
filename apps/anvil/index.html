@@ -1521,7 +1521,7 @@
     if(role==='builder'){
       const codeExec = makeToolExecutor({ shell, face, mode:'code', infer: inferViaHost });
       execTool=async(nm,ar,call)=>{ if(nm==='emit'){ emitted=ar&&ar.result; return 'Recorded — you are done.'; } return await codeExec(nm,ar,call); };
-      tools=codingToolset('code',{}).concat(emitTool);
+      tools=codingToolset('code',{ scopes: grant.scopes }).concat(emitTool); // B5: the builder role is projected by the grant too
       sys=sysBase + '\n\nUse the coding tools to build the candidate toward the directive, then run your own tests. You FINISH by calling `emit` exactly once — nothing is recorded until you do. '+emitSpec;
       kick='Implement the current directive (or, for c0, a first candidate for the goal), then call `emit` with your candidate.';
       maxSteps=20; budget={tokens:120000, wallClockMs:240000};
@@ -2192,7 +2192,7 @@
       const executor = makeToolExecutor({ shell: oshell, face: oface, mode:'code', infer: inferViaHost, subagentDepth: 1 });
       return {
         executor,
-        changes: ()=> overlay.changes(),
+        changes: ()=>{ const c=overlay.changes(); return { written:(c.written||[]).map(toRel), deleted:(c.deleted||[]).map(toRel) }; }, // B3: workspace-relative, like the ownership the child declared (a Crate mount carries a root)
         commit: async ()=>{
           const t = activeTask();
           await overlay.commit({
@@ -2230,7 +2230,7 @@
     // tool call made outside a run (there are none today) simply records nothing.
     // B2: one steer queue per run, shared by the executor (dispatch pushes completions) and the loop (drains them)
     const steer=createSteerQueue();
-    const baseExec = makeToolExecutor({ shell, face, mode, infer: inferViaHost, spawnIsolated, steer,
+    const baseExec = makeToolExecutor({ shell, face, mode, infer: inferViaHost, spawnIsolated, steer, scopes: grant.scopes,
       recordSubagent: async (sub)=>{
         try{ const id=String(sub.tool_call_id||'')+'\u0000'+String(sub.label||''); const row=(t.log||[]).find(r=>r && r.k==='subagent' && r.id===id); if(row){ row.status=String(sub.stop||'done'); row.steps=Math.max(row.steps||0, Number(sub.steps)||0); renderLog(); } }catch(_){}
         try{ if(runCtx && runCtx.rec) await runCtx.rec.subagent(sub); }catch(_){} },
@@ -2708,12 +2708,12 @@
     // Per-project tool hooks: pre-tool guards + post-tool commands from
     // .anvil/hooks.json (loaded once per run; executeTool reads hooksCfg).
     hooksCfg = await loadHooks(fs, hooksCfg);
-    const tools = runToolset(mode, { verify: !!verify }); // the app's list, in the app's order — the beds get the same one
+    const tools = runToolset(mode, { verify: !!verify, scopes: grant.scopes }); // the app's list, in the app's order — the beds get the same one; B5: projected by the run's grant
     // A4: why a tool is or is not available in THIS run — into the record (the mode button carries the
     // same sentence, recomputed on every switch in setModeBtn). The fourth state, `unavailable`, has
     // no producer here yet: no tool is whole-unavailable today (Kiln gates python INSIDE shell, not
     // shell) — the gap is in the ledger.
-    const readiness = runReadiness(mode, { verify: !!verify });
+    const readiness = runReadiness(mode, { verify: !!verify, scopes: grant.scopes });
     let ownerStopped=null; // B2: whether the OWNER stopped the run — read before the run aborts its own signal
     try{
       // F3 — the system message is the CACHE PREFIX, so only stable text lives in it.
@@ -3177,7 +3177,7 @@
   // mode (L2 — a screen reader should hear "Mode: plan", not a static "Cycle mode").
   function setModeBtn(m){ const b=$('mode-btn'); if(!b) return; b.textContent='Mode: '+m+' ▾'; b.setAttribute('aria-label','Mode: '+m+' — click to switch (code edits files · plan is read-only · ask only answers)'); b.classList.toggle('on', m!=='code');
     // A4: the readiness sentence for THIS mode, recomputed on every switch — never the previous run's
-    try{ const t=activeTask(); b.title='Tools in '+m+' mode — '+readinessLine(runReadiness(m, { verify: !!(t&&t.verifyCmd) }))+'. Switch the mode to change what is exposed.'; }catch(_){} }
+    try{ const t=activeTask(); b.title='Tools in '+m+' mode — '+readinessLine(runReadiness(m, { verify: !!(t&&t.verifyCmd), scopes: grant ? grant.scopes : null }))+'. Switch the mode to change what is exposed.'; }catch(_){} }
   function syncMode(){ const t=activeTask(); setModeBtn((t&&t.mode)||'code'); }
   // Signal ready first so the host reports connected storage, then mount:
   // a remembered disk folder if still granted, else the host Folder/Crate, else OPFS.
