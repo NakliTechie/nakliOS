@@ -14,6 +14,8 @@
 // one, or split the work). Isolated parallel WRITERS are supported; automatic
 // conflicting-write resolution is deliberately left to the supervisor.
 
+import { SUBAGENT_STALE_MS } from '../history/run-record.mjs';
+export { SUBAGENT_STALE_MS };
 export const DISPATCH_MAX = 4;        // max subagents per dispatch (bounds host-AI load)
 export const SUBAGENT_MAX_STEPS = 20; // per-subagent step budget (also the per-call ceiling)
 export const SUBAGENT_WALL_CLOCK_S = 240;   // per-subagent wall clock, seconds (default and ceiling)
@@ -100,6 +102,11 @@ export function normalizeTasks(raw) {
     cleaned.push({ label, prompt });
   }
   if (!cleaned.length) return { ok: false, error: 'No non-empty sub-tasks provided.', tasks: [], dropped: droppedEmpty };
+  // B1: the label is the child's identity on the chain (with the kind and the call id) and in the
+  // feed — two sub-tasks sharing one would share a row and a fleet entry, and beats would land on
+  // the wrong child. A duplicate is suffixed, in order.
+  const seen = new Map();
+  for (const c of cleaned) { const n = (seen.get(c.label) || 0) + 1; seen.set(c.label, n); if (n > 1) c.label = `${c.label} (${n})`; }
   const overflow = Math.max(0, cleaned.length - DISPATCH_MAX);
   return { ok: true, tasks: cleaned.slice(0, DISPATCH_MAX), dropped: droppedEmpty + overflow, overflow };
 }
@@ -235,9 +242,10 @@ export function formatDispatchDigest({ results, status, conflicts, dropped, budg
 // child that the transcript renders in place. Pure: (row, event) → row, so the shape is
 // testable without a DOM and the app only ever calls this and re-renders. The dispatch digest
 // is still the tool result; this is the part that used to be silence until the digest arrived.
-export function subagentFeedRow(row, ev) {
-  const r = row ? { ...row } : { k: 'subagent', status: 'running', steps: 0, tools: 0, lastTool: '', lastDetail: '' };
+export function subagentFeedRow(row, ev, { now = Date.now() } = {}) {
+  const r = row ? { ...row } : { k: 'subagent', status: 'running', steps: 0, tools: 0, lastTool: '', lastDetail: '', lastSeen: now };
   const e = ev || {};
+  if (e.type) r.lastSeen = now; // B1: any event from the child is a sign of life — never of completion
   switch (e.type) {
     case 'turn-start': r.steps = Math.max(r.steps, (Number(e.step) || 0) + 1); break;
     case 'tool-call': {
@@ -254,11 +262,26 @@ export function subagentFeedRow(row, ev) {
   return r;
 }
 
+// CRIB-B B1 (Orca R1): the row's TYPED in-flight state. `live` — an event from the child within the
+// window; `unverifiable` — silence longer than the window, which is what a stalled endpoint and a
+// slow one both look like, so it authorizes nothing (not killed, not re-dispatched); `exited` — the
+// row carries its stop. Pure in `now`; the app re-renders on a ticker so a silent child's row can
+// flip to unverifiable without an event. The same three words come off the chain (foldSubagentFleet).
+export function subagentLiveness(row, { now = Date.now(), staleMs = SUBAGENT_STALE_MS } = {}) {
+  const r = row || {};
+  if (r.status && r.status !== 'running') return { state: 'exited', why: String(r.status), ageMs: 0 };
+  if (!r.lastSeen) return { state: 'unverifiable', why: 'no event seen from it yet', ageMs: null };
+  const ageMs = Math.max(0, now - Number(r.lastSeen));
+  const s = Math.round(ageMs / 1000);
+  if (ageMs < staleMs) return { state: 'live', why: `last event ${s}s ago`, ageMs };
+  return { state: 'unverifiable', why: `no event for ${s}s — a stalled endpoint looks like a slow one; this authorizes nothing: not killed, not re-dispatched`, ageMs };
+}
+
 // The row's one-line summary. `stop` is the child's final stop once it reported back; until
-// then the row says running and how far it got.
-export function subagentFeedLine(row) {
+// then the row says its TYPED state (B1) and how far it got.
+export function subagentFeedLine(row, opts = {}) {
   const r = row || {};
   const where = r.lastTool ? ` · last: ${r.lastTool}${r.lastDetail ? '(' + r.lastDetail + ')' : ''}` : '';
-  if (r.status === 'running') return `${r.kind || 'task'} · ${r.label || ''} — running · step ${r.steps || 0} · ${r.tools || 0} tool call${r.tools === 1 ? '' : 's'}${where}`;
+  if (r.status === 'running') { const lv = subagentLiveness(r, opts); return `${r.kind || 'task'} · ${r.label || ''} — ${lv.state} (${lv.why}) · step ${r.steps || 0} · ${r.tools || 0} tool call${r.tools === 1 ? '' : 's'}${where}`; }
   return `${r.kind || 'task'} · ${r.label || ''} — ${r.status} (${r.steps || 0} step${r.steps === 1 ? '' : 's'}, ${r.tools || 0} tool call${r.tools === 1 ? '' : 's'})`;
 }

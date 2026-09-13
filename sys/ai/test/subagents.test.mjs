@@ -1,6 +1,6 @@
 // Conformance — supervisor / parallel-subagent pure helpers.
 //   node sys/ai/test/subagents.test.mjs
-import {
+import { subagentLiveness, SUBAGENT_STALE_MS,
   dispatchTool, reviewTool, normalizeTasks, detectConflicts, mergeDecision,
   planMerge, formatDispatchDigest, DISPATCH_MAX,
   subagentFeedRow, subagentFeedLine, clampSubagentBudget, SUBAGENT_MAX_STEPS, SUBAGENT_WALL_CLOCK_S,
@@ -29,6 +29,10 @@ await test('normalizeTasks: labels default, empties dropped, non-array rejected'
   assert(r.tasks[0].label.startsWith('do a thing'), 'label defaults from prompt');
 });
 
+await test('normalizeTasks: duplicate labels under one dispatch are suffixed, in order (B1: the label is the child\'s identity)', () => {
+  const r = normalizeTasks([{ description: 'same', prompt: 'a' }, { description: 'same', prompt: 'b' }, { prompt: 'x y z' }, { description: 'same', prompt: 'c' }]);
+  eq(r.tasks.map((t) => t.label).join('|'), 'same|same (2)|x y z|same (3)');
+});
 await test('normalizeTasks: caps at DISPATCH_MAX and reports overflow', () => {
   const many = Array.from({ length: DISPATCH_MAX + 3 }, (_, i) => ({ prompt: 'task ' + i }));
   const r = normalizeTasks(many);
@@ -151,16 +155,38 @@ await test('subagentFeedRow: a fresh row, steps from turn-start, tool calls with
   r = subagentFeedRow(r, { type: 'turn-start', step: 3 }); eq(r.steps, 4, 'steps only grow');
   r = subagentFeedRow(r, { type: 'turn-start', step: 1 }); eq(r.steps, 4, 'never backwards');
   r = subagentFeedRow(r, { type: 'tool-error', error: 'boom' }); eq(r.lastError, 'boom');
-  const before = { ...r }; r = subagentFeedRow(r, { type: 'assistant', content: 'hi' }); eq(JSON.stringify(r), JSON.stringify(before), 'an unrelated event changes nothing');
+  const { lastSeen: _s0, ...before } = r; const { lastSeen: _s1, ...after } = subagentFeedRow(r, { type: 'assistant', content: 'hi' }); eq(JSON.stringify(after), JSON.stringify(before), 'an unrelated event changes nothing but the last-seen clock');
+  r = subagentFeedRow(r, { type: 'assistant', content: 'hi' });
   r = subagentFeedRow(r, { type: 'aborted' }); eq(r.status, 'aborted');
   assert(subagentFeedRow(before, {}) !== before, 'pure — returns a new object');
 });
 await test('subagentFeedLine: running says where it is; a finished row says how it ended', () => {
   const running = { kind: 'dispatch', label: 'split lexer', status: 'running', steps: 3, tools: 2, lastTool: 'read', lastDetail: 'lexer.py' };
   const line = subagentFeedLine(running);
-  assert(/dispatch · split lexer — running · step 3 · 2 tool calls · last: read\(lexer\.py\)/.test(line), line);
+  assert(/dispatch · split lexer — unverifiable \(no event seen from it yet\) · step 3 · 2 tool calls · last: read\(lexer\.py\)/.test(line), `a running row with no last-seen cannot prove liveness: ${line}`);
+  const seen = subagentFeedLine({ ...running, lastSeen: 1000 }, { now: 5000 });
+  assert(/split lexer — live \(last event 4s ago\) · step 3/.test(seen), seen);
   const done = subagentFeedLine({ ...running, status: 'done', tools: 1 });
   assert(/split lexer — done \(3 steps, 1 tool call\)/.test(done), done);
+});
+
+// CRIB-B B1: the typed in-flight state — live by a recent event, unverifiable by silence, exited by a stop
+await test('B1: subagentLiveness — live within the window, unverifiable past it (authorizes nothing), exited by a stop', () => {
+  const now = 5_000_000;
+  let r = subagentFeedRow(null, {}, { now });
+  eq(r.lastSeen, now, 'a fresh row was seen now');
+  r = subagentFeedRow(r, { type: 'assistant', content: 'hi' }, { now: now + 30_000 });
+  eq(r.lastSeen, now + 30_000, 'any event is a sign of life');
+  eq(subagentLiveness(r, { now: now + 31_000 }).state, 'live');
+  eq(subagentLiveness(r, { now: now + 30_000 + SUBAGENT_STALE_MS - 1 }).state, 'live', 'one ms inside the window');
+  const stale = subagentLiveness(r, { now: now + 30_000 + SUBAGENT_STALE_MS });
+  eq(stale.state, 'unverifiable', 'at the window'); assert(/no event for 90s/.test(stale.why) && /authorizes nothing: not killed, not re-dispatched/.test(stale.why), stale.why);
+  eq(subagentLiveness({ ...r, status: 'done' }, { now: now + 999_999 }).state, 'exited', 'a stop is a stop, however old');
+  eq(subagentLiveness({ ...r, status: 'aborted' }).why, 'aborted');
+  eq(subagentLiveness({ status: 'running' }).state, 'unverifiable', 'no last-seen → nothing can be proven');
+  const line = subagentFeedLine({ kind: 'dispatch', label: 'x', status: 'running', steps: 1, tools: 0, lastSeen: now }, { now: now + 200_000 });
+  assert(/x — unverifiable \(no event for 200s — a stalled endpoint looks like a slow one; this authorizes nothing: not killed, not re-dispatched\) · step 1 · 0 tool calls$/.test(line), line);
+  eq(SUBAGENT_STALE_MS, 90_000, 'the window is a named constant');
 });
 
 // ESS-3: a launch budget decided per call — clamped to the ceilings, never above them, stated.

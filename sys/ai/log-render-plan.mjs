@@ -45,8 +45,10 @@ export function rowKey(e, i) {
       return `${i}:diff:${part(e.path)}:${part(e.status)}:${part(e.text)}`;
     // ESS-2: a child's live row changes in place as it runs — every field the line shows is in
     // the key, so a step or a new tool call is a visible change and never a stale row.
+    // B1: `live` and `age` are the ticker's stamp — the typed state and the seconds since the child
+    // was last seen — so a silent child's row repaints as it ages and flips to unverifiable.
     case 'subagent':
-      return `${i}:subagent:${part(e.kind)}:${part(e.label)}:${part(e.status)}:${part(e.steps)}:${part(e.tools)}:${part(e.lastTool)}:${part(e.lastDetail)}:${part(e.lastError)}`;
+      return `${i}:subagent:${part(e.kind)}:${part(e.label)}:${part(e.status)}:${part(e.steps)}:${part(e.tools)}:${part(e.lastTool)}:${part(e.lastDetail)}:${part(e.lastError)}:${part(e.live)}:${part(e.age)}`;
     default:
       return `${i}:${k}:${part(e.text)}`;
   }

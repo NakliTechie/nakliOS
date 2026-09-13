@@ -290,6 +290,15 @@ assert.match(anvil, /const runProject=String\(state\.activeProject\|\|'local'\);
 assert.match(anvil, /runsForProject\(runProject\)/, 'the rows are read for it');
 assert.match(anvil, /saveRunRecord\(t, rec, \{ gated, project: runProject \}\)/, 'and the record is filed under it');
 assert.match(anvil, /const rel='runs\/'\+project\+'\/'\+String\(t\.id\);/, 'the record path is under it too — not the live activeProject');
+// CRIB-B B1: the child's turns and tool calls beat on the chain; the feed row's state is typed by the clock
+assert.match(anvil, /if\(event&&\(event\.type==='turn-start'\|\|event\.type==='tool-call'\)&&runCtx&&runCtx\.rec\)\{ try\{ runCtx\.rec\.subagentBeat\(\{ kind, label, tool_call_id, child_step: event\.step, tool: event\.name\|\|'' \}\)/, 'B1: a heartbeat per child turn / tool call, on the parent chain');
+// (the ticker, the stamp and the settle are DRIVEN in test-anvil-handlers; here only their call sites)
+assert.match(anvil, /tool: event\.name\|\|'' \}\)\.catch\(\(\)=>\{\}\); \}catch\(_\)\{\} \}\n\s*armFleetTicker\(\);\n\s*renderLog\(\);/, 'B1: the ticker is armed on every child event');
+assert.match(anvil, /runCtx = null; \/\/ the executor serves no run between tasks\n\s*settleFleetRows\(t\);/, 'B1: every run settles its child rows at the end');
+assert.match(anvil, /settleFleetRows\(t\); \/\/ B1: a child row still 'running' from before the reload is interrupted[^\n]*\n\s*if\(t\.status === 'running'\)\{/, 'B1: and boot settles them before the run-status demotion');
+assert.match(anvil, /^  let runCtx = null;$/m, 'runCtx is module-scoped (the ticker reads it from outside runTask)');
+assert.ok(!/^    let runCtx = null;$/m.test(anvil), 'and not shadowed inside runTask');
+assert.match(anvil, /const lv = e\.status==='running' \? subagentLiveness\(e\)\.state : 'exited';/, 'B1: the row is rendered by its typed state');
 assert.ok(!/async function saveRunRecord[\s\S]{0,400}runIndexRow\(\{ project:String\(state\.activeProject/.test(anvil), 'the row never reads the live activeProject at save time');
 console.log('run-assembly: A4 readiness == the toolset in every mode; A2 episode rides ungated');
 // …and rides run.started only when the app supplies it: a bed that passes none records the old shape

@@ -420,6 +420,42 @@ await test('U6: the doctor groups the ordering number over the records it read �
   assert.ok(r.orderingLine.length < 400, `and stays a line (${r.orderingLine.length} chars)`);
 });
 
+// CRIB-B B1: the fleet ticker and the settle — driven, not grepped (the checker: a text anchor passed
+// a ticker that threw on its first tick)
+await test('B1: the ticker stamps in-flight rows with state + age and re-renders, stops when none is running; a settled row is interrupted', async () => {
+  const src = await inlineModule();
+  const { subagentLiveness } = await import('../sys/ai/subagents.mjs');
+  const stamp = instantiate(extractFunction(src, 'stampFleetRows'), 'stampFleetRows', { subagentLiveness });
+  const now = 5_000_000;
+  const t = { log: [{ k: 'subagent', status: 'running', lastSeen: now - 4000 }, { k: 'subagent', status: 'running', lastSeen: now - 100_000 }, { k: 'subagent', status: 'done' }, { k: 'user', text: 'x' }] };
+  assert.equal(stamp(t, now), 2, 'two rows in flight');
+  assert.equal(t.log[0].live, 'live'); assert.equal(t.log[0].age, 4);
+  assert.equal(t.log[1].live, 'unverifiable'); assert.equal(t.log[1].age, 100);
+  assert.equal('live' in t.log[2], false, 'an exited row is not stamped');
+  assert.equal(stamp(null, now), 0, 'no task → nothing in flight');
+  let cb = null, cleared = 0, renders = 0, armed = 0;
+  const ctx = { fleetTicker: null, runCtx: { t }, subagentLiveness,
+    setInterval: (fn, ms) => { armed++; cb = fn; assert.equal(ms, 5000, 'a 5 s tick'); return 7; },
+    clearInterval: (id) => { assert.equal(id, 7); cleared++; },
+    renderLog: () => { renders++; }, stampFleetRows: (x) => stamp(x, now) };
+  const arm = instantiate(extractFunction(src, 'armFleetTicker'), 'armFleetTicker', ctx);
+  arm(); arm(); arm();
+  assert.equal(armed, 1, 'armed once, however many child events arrive');
+  cb(); assert.equal(renders, 1, 'a tick with rows in flight re-renders'); assert.equal(cleared, 0);
+  t.log[0].status = 'done'; t.log[1].status = 'interrupted';
+  cb(); assert.equal(renders, 1, 'nothing in flight → no render'); assert.equal(cleared, 1, 'and the ticker is cleared');
+  arm(); assert.equal(armed, 2, 'and can be armed again for the next dispatch');
+  ctx.runCtx = null; cb(); assert.equal(cleared, 2, 'no run → the ticker clears itself');
+  ctx.renderLog = () => { throw new Error('render boom'); }; ctx.runCtx = { t: { log: [{ k: 'subagent', status: 'running', lastSeen: now }] } }; arm(); cb();
+  assert.equal(cleared, 3, 'a throwing render clears the ticker rather than throwing every 5 s');
+  const settle = instantiate(extractFunction(src, 'settleFleetRows'), 'settleFleetRows', {});
+  const t2 = { log: [{ k: 'subagent', status: 'running', live: 'live', age: 3 }, { k: 'subagent', status: 'done' }, { k: 'tool', name: 'read' }] };
+  assert.equal(settle(t2), 1, 'one row settled');
+  assert.equal(t2.log[0].status, 'interrupted'); assert.equal('live' in t2.log[0] || 'age' in t2.log[0], false, 'the stamp goes with it');
+  assert.equal(t2.log[1].status, 'done', 'an exited row is untouched');
+  assert.equal(settle(null), 0); assert.equal(settle({}), 0);
+});
+
 const SK = (status, body = 'Run the script.') => `---\nname: k\ndescription: d\nstatus: ${status}\n---\n${body}`;
 
 await test('skill handler: an active skill with a hostile support file is quarantined at load, not served', async () => {

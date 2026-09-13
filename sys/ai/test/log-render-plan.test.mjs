@@ -120,6 +120,16 @@ assert.match(anvil, /const cached = \(logCache\.taskId===t\.id\) \? logCache\.ke
 assert.equal((anvil.match(/logCache=\{taskId:null,keys:null\}/g) || []).length, 2,
   'both early returns in renderLog invalidate the cache');
 
+// B1: a subagent row's typed state and age are drawn, so they are in the key — a tick that re-stamps
+// a silent child (live → unverifiable, 4s → 9s) is a visible change, never a stale row.
+{
+  const sub = (o) => rowKey({ k: 'subagent', kind: 'dispatch', label: 'x', status: 'running', steps: 1, tools: 0, ...o }, 0);
+  assert.notEqual(sub({ live: 'live', age: 4 }), sub({ live: 'unverifiable', age: 4 }), 'the state is drawn');
+  assert.notEqual(sub({ live: 'live', age: 4 }), sub({ live: 'live', age: 9 }), 'the age is drawn');
+  assert.equal(sub({ live: 'live', age: 4 }), sub({ live: 'live', age: 4 }), 'stable for the same stamp');
+  assert.equal(planLogUpdate({ keys: [sub({ live: 'live', age: 4 })] }, [{ k: 'subagent', kind: 'dispatch', label: 'x', status: 'running', steps: 1, tools: 0, live: 'live', age: 9 }]).mode !== 'noop', true, 'a re-stamp is not a noop');
+}
+
 console.log('log-render-plan: noop/append/rebuild, keys cover what is drawn, verified≠claimed, scroll belongs to the reader');
 
 // ESS-2: a child's live row updates IN PLACE. Every field the line draws is in its key, so an

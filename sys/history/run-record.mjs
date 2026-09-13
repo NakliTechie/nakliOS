@@ -50,6 +50,7 @@ export const RUN_EVENTS = Object.freeze([
   'tool.spilled',     // input: { id, name, step, chars }       output: { sent }  (F5: the capped form the model actually saw)
   'subagent.ran',     // input: { kind, label, step, tool_call_id } output: { record, stop, steps, text }
   'subagent.started', // input: { kind, label, step, tool_call_id } output: {}  (ESS-1: the claim, before the child runs)
+  'subagent.beat',    // input: { kind, label, step, tool_call_id, child_step, tool } output: {}  (CRIB-B B1: a heartbeat — proves liveness, never completion)
 ]);
 
 // The loop's onEvent types this recorder understands. 'done' and the pre-stop
@@ -279,6 +280,15 @@ export function createRunRecorder({ app = 'anvil', principal = 'local', grant_id
       const s = step;
       return enqueue('subagent.started', () => ({
         input: { kind: String(kind || 'task'), label: String(label || ''), step: s, tool_call_id: tool_call_id ?? null },
+        output: {},
+      }));
+    },
+    // CRIB-B B1: a heartbeat — the child's turn or tool call as the parent saw it. Proves liveness,
+    // never completion; bounded by the child's step budget. foldSubagentFleet reads it.
+    subagentBeat({ kind, label, tool_call_id, child_step = null, tool = '' }) {
+      const s = step;
+      return enqueue('subagent.beat', () => ({
+        input: { kind: String(kind || 'task'), label: String(label || ''), step: s, tool_call_id: tool_call_id ?? null, child_step: child_step ?? null, tool: String(tool || '') },
         output: {},
       }));
     },
@@ -674,6 +684,49 @@ export function foldSubagentOrphans(events, resolve) {
     if (n > 0) { pool.set(k, n - 1); return false; }
     return true;
   }).map((st) => ({ kind: st.kind || 'task', label: st.label || '', step: st.step ?? null, tool_call_id: st.tool_call_id ?? null }));
+}
+
+// CRIB-B B1 (Orca R1/R10, 2026-09-13): every child's in-flight state, TYPED, from the chain alone —
+// `live` (a heartbeat within the window), `unverifiable` (silence longer than the window: a stalled
+// endpoint looks exactly like a slow one, and absence authorizes NOTHING — a supervisor neither kills
+// live work nor re-dispatches it), `exited` (its `subagent.ran` is on the chain, with its stop). The
+// heartbeat is `subagent.beat` — the child's turns and tool calls as the parent saw them — which
+// proves liveness and never completion. `now` defaults to the record's own clock — its last event,
+// which is the stop once the run stopped (then no unreported child can be live). Replays with zero
+// model calls; the same fold serves the live feed's row and the recovery note.
+export const SUBAGENT_STALE_MS = 90_000;
+export function foldSubagentFleet(events, resolve, { now = null, staleMs = SUBAGENT_STALE_MS } = {}) {
+  const ev = joined(events, resolve);
+  const key = (i) => `${i.kind || 'task'} ${i.label || ''} ${i.tool_call_id ?? ''}`;
+  const sec = (ms) => Math.round(ms / 1000);
+  const rows = []; const open = new Map(); // key -> the started-not-exited rows, in start order
+  let stoppedAt = null, last = 0;
+  for (const e of ev) {
+    const ts = Number(e.ts) || 0; last = Math.max(last, ts);
+    if (e.tool === 'run.started') stoppedAt = null;
+    else if (e.tool === 'run.stopped') stoppedAt = ts || last;
+    else if (e.tool === 'subagent.started') {
+      const i = e.input || {};
+      const r = { kind: i.kind || 'task', label: i.label || '', tool_call_id: i.tool_call_id ?? null, lastSeen: ts, beats: 0, state: 'live', why: '', stop: null, ageMs: 0 };
+      rows.push(r); const k = key(i); if (!open.has(k)) open.set(k, []); open.get(k).push(r);
+    } else if (e.tool === 'subagent.beat') {
+      const q = open.get(key(e.input || {})); const r = q && q[q.length - 1];
+      if (r) { r.lastSeen = ts || r.lastSeen; r.beats++; }
+    } else if (e.tool === 'subagent.ran') {
+      const q = open.get(key(e.input || {})); const r = q && q.shift(); // FIFO, as the orphan matcher pairs them
+      if (r) { r.state = 'exited'; r.stop = String((e.output || {}).stop || 'unknown'); r.why = `stopped: ${r.stop}`; r.lastSeen = ts || r.lastSeen; }
+    }
+  }
+  const clock = now != null ? Number(now) : last;
+  for (const r of rows) {
+    if (r.state === 'exited') continue;
+    r.ageMs = Math.max(0, clock - r.lastSeen);
+    if (stoppedAt != null) { r.state = 'unverifiable'; r.why = `never reported back before the run ended (last seen ${sec(r.ageMs)}s before the end)`; }
+    else if (r.ageMs < staleMs) { r.state = 'live'; r.why = `last event ${sec(r.ageMs)}s ago`; }
+    else { r.state = 'unverifiable'; r.why = `no event for ${sec(r.ageMs)}s — a stalled endpoint looks like a slow one; this authorizes nothing: not killed, not re-dispatched`; }
+  }
+  const count = (s) => rows.filter((r) => r.state === s).length;
+  return { rows, live: count('live'), unverifiable: count('unverifiable'), exited: count('exited') };
 }
 
 // Every subagent chain on this record verifies, and each one's own stop matches what the parent
@@ -1156,8 +1209,16 @@ export function foldRecovery(events, resolve) {
     ownerInputs: annotated,
     coordinationCount,
     checkpoint: lastCheckpoint ? String(resolve(lastCheckpoint)?.output?.handoff ?? '') : null,
-    // ESS-1: children that were in flight when the run ended and never reported back.
-    orphanedSubagents: foldSubagentOrphans(events, resolve),
+    // ESS-1: children that were in flight when the run ended and never reported back — typed by
+    // B1's fleet fold: unverifiable, with how long before the end each was last seen.
+    orphanedSubagents: (() => {
+      const fleet = foldSubagentFleet(events, resolve).rows.filter((r) => r.state !== 'exited');
+      return foldSubagentOrphans(events, resolve).map((o) => {
+        const i = fleet.findIndex((r) => r.kind === o.kind && r.label === o.label && String(r.tool_call_id ?? '') === String(o.tool_call_id ?? ''));
+        const f = i >= 0 ? fleet.splice(i, 1)[0] : null;
+        return { ...o, state: 'unverifiable', sinceMs: f ? f.ageMs : null };
+      });
+    })(),
   };
 }
 
@@ -1174,7 +1235,7 @@ export function recoveryNote(rec) {
   const cp = rec.checkpoint ? `\nLast checkpoint: ${rec.checkpoint.replace(/\s+/g, ' ').slice(0, 200)}` : '';
   const orphans = Array.isArray(rec.orphanedSubagents) ? rec.orphanedSubagents : [];
   const orph = orphans.length
-    ? `\n${orphans.length} subagent${orphans.length === 1 ? ' was' : 's were'} in flight when the run ended and never reported back (${orphans.map((o) => `${o.kind}: "${String(o.label).slice(0, 40)}"`).join('; ')}) — their work was discarded with the run; nothing they did reached the workspace.`
+    ? `\n${orphans.length} subagent${orphans.length === 1 ? ' was' : 's were'} in flight when the run ended and never reported back (${orphans.map((o) => `${o.kind}: "${String(o.label).slice(0, 40)}"${o.sinceMs != null ? ', last seen ' + Math.round(o.sinceMs / 1000) + 's before the end' : ''}`).join('; ')}) — unverifiable: their overlays never merged, so nothing they did reached the workspace; re-dispatch if the task still matters.`
     : '';
   return 'Recovery note (from the run record — prior owner requests and whether they look handled):\n' + lines.join('\n') + foot + cp + orph;
 }

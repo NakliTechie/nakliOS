@@ -8,7 +8,7 @@
 // keyless replay, the tamper-evident chain — therefore covered the supervisor only, and stopped
 // holding the moment Anvil fanned out. That is what this file exists to prevent recurring.
 import { createRunRecorder, joined, foldSubagents, verifySubagents, foldTranscript, foldSurface, foldSubagentOrphans, foldRecovery, recoveryNote,
-         reconstructionCheck, loadRecord } from '../run-record.mjs';
+         reconstructionCheck, loadRecord, foldSubagentFleet, SUBAGENT_STALE_MS } from '../run-record.mjs';
 import { verifyChain } from '../ledger.mjs';
 import { runAgentLoop } from '../../ai/agent-loop.mjs';
 import { makeToolExecutor, codingToolset } from '../../ai/agent-tools.mjs';
@@ -181,6 +181,52 @@ await test('ESS-1: a child that started and never reported back is an orphan, na
   assert(/1 subagent was in flight when the run ended and never reported back/.test(note), `named in the note: ${note}`);
   assert(/split lexer/.test(note), 'by label');
   assert(/nothing they did reached the workspace/.test(note), 'and says what that means');
+});
+
+// CRIB-B B1: the fleet fold — every child typed live / unverifiable / exited from the chain, by the record's clock
+await test('B1: foldSubagentFleet types every child from heartbeats on the chain; silence is unverifiable, never exited', async () => {
+  let t = 1_000_000; const rec = createRunRecorder({ app: 'anvil', principal: 'p', now: () => t });
+  await rec.start({ messages: [{ role: 'user', content: 'go' }], tools: [] });
+  for (const label of ['a', 'b', 'c']) await rec.subagentStarted({ kind: 'dispatch', label, tool_call_id: 'c1' });
+  t += 10_000; await rec.subagentBeat({ kind: 'dispatch', label: 'a', tool_call_id: 'c1', child_step: 1, tool: 'read' });
+  t += 10_000; await rec.subagentBeat({ kind: 'dispatch', label: 'a', tool_call_id: 'c1', child_step: 2, tool: 'write' });
+  await rec.subagent({ kind: 'dispatch', label: 'c', tool_call_id: 'c1', dump: null, stop: 'done', steps: 2, text: 'ok' });
+  await rec.settled();
+  let f; const by = (l) => f.rows.find((r) => r.label === l);
+  f = foldSubagentFleet(rec.events(), rec.resolve, { now: t });
+  eq(by('a').state, 'live'); eq(by('a').beats, 2); eq(by('a').why, 'last event 0s ago');
+  eq(by('b').state, 'live', 'silent for 20s is inside the 90s window'); eq(by('b').beats, 0);
+  eq(by('c').state, 'exited'); eq(by('c').stop, 'done'); eq(by('c').why, 'stopped: done');
+  f = foldSubagentFleet(rec.events(), rec.resolve, { now: t, staleMs: 15_000 });
+  eq(by('b').state, 'unverifiable', 'past a 15s window'); assert(/no event for 20s/.test(by('b').why) && /authorizes nothing: not killed, not re-dispatched/.test(by('b').why), by('b').why);
+  eq(by('a').state, 'live', 'a beat 0s ago');
+  f = foldSubagentFleet(rec.events(), rec.resolve, { now: t, staleMs: 20_000 });
+  eq(by('b').state, 'unverifiable', 'silence equal to the window is past it'); eq(by('a').state, 'live');
+  // a duplicate label under one call: the ran pairs FIFO with the starts, as the orphan matcher does
+  let td = t; const dup = createRunRecorder({ app: 'anvil', principal: 'p', now: () => td });
+  await dup.start({ messages: [], tools: [] });
+  await dup.subagentStarted({ kind: 'task', label: 'same', tool_call_id: 'k' }); td += 5_000; await dup.subagentStarted({ kind: 'task', label: 'same', tool_call_id: 'k' });
+  await dup.subagent({ kind: 'task', label: 'same', tool_call_id: 'k', dump: null, stop: 'done', steps: 1, text: '' }); await dup.settled();
+  const d = foldSubagentFleet(dup.events(), dup.resolve, { now: td }); eq(d.exited, 1); eq(d.live, 1); eq(d.rows[0].state, 'exited', 'the FIRST start is the one paired'); eq(d.rows[1].state, 'live');
+  t += 100_000; f = foldSubagentFleet(rec.events(), rec.resolve, { now: t });
+  eq(by('a').state, 'unverifiable', 'a: 100s of silence'); eq(by('b').state, 'unverifiable'); eq(by('c').state, 'exited', 'exited never flips back');
+  eq(f.live, 0); eq(f.unverifiable, 2); eq(f.exited, 1);
+  // the run ends with a and b unreported: unverifiable by the record's OWN clock (the stop), never exited
+  await rec.finish({ stop: 'interrupted', steps: 1 }); await rec.settled();
+  f = foldSubagentFleet(rec.events(), rec.resolve);
+  eq(by('a').state, 'unverifiable'); eq(by('a').why, 'never reported back before the run ended (last seen 100s before the end)');
+  eq(by('b').state, 'unverifiable'); assert(/last seen 120s before the end/.test(by('b').why), by('b').why);
+  eq(by('c').state, 'exited');
+  const r = foldRecovery(rec.events(), rec.resolve);
+  eq(r.orphanedSubagents.length, 2); eq(r.orphanedSubagents[0].state, 'unverifiable'); eq(r.orphanedSubagents[0].sinceMs, 100_000, 'the orphan row carries when it was last seen');
+  const note = recoveryNote(r);
+  assert(/2 subagents were in flight when the run ended and never reported back/.test(note), note);
+  assert(/"a", last seen 100s before the end/.test(note) && /"b", last seen 120s before the end/.test(note), `each orphan says when it was last seen: ${note}`);
+  assert(/unverifiable: their overlays never merged, so nothing they did reached the workspace; re-dispatch if the task still matters/.test(note), 'ESS-1\'s fact stays, typed');
+  // a chain with no children folds to nothing; a beat for a child never started is ignored
+  const none = createRunRecorder({ app: 'anvil', principal: 'p', now: () => t });
+  await none.start({ messages: [], tools: [] }); await none.subagentBeat({ kind: 'dispatch', label: 'ghost', tool_call_id: 'z' }); await none.settled();
+  const g = foldSubagentFleet(none.events(), none.resolve); eq(g.rows.length, 0); eq(g.live + g.unverifiable + g.exited, 0);
 });
 
 await test('a recorder that throws does not lose the subagent\'s work', async () => {
