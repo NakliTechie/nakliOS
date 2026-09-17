@@ -1340,7 +1340,7 @@ await test('B2: a steer is LOOP-authored — it does not read as an owner interj
   assert(nudge && nudge.times === 3, `the third identical turn is nudged despite a steer landing between each: ${JSON.stringify(events.map((e) => e.type))}`);
 });
 
-await test('task_done: with no gate its summary is the run\'s final text when the model said nothing else — a child reporting through task_done alone is not "(no report)"', async () => {
+await test('task_done: its summary is the run\'s final text — a child reporting through task_done is neither "(no report)" nor its own opening narration', async () => {
   const r = await runAgentLoop({
     messages: [{ role: 'user', content: 'go' }], tools: [taskDoneTool()],
     infer: scriptedInfer([{ content: '', toolCalls: [call('task_done', { summary: 'Wrote a/x.txt and read it back: it says X.' }, 'd1')] }]),
@@ -1348,11 +1348,11 @@ await test('task_done: with no gate its summary is the run\'s final text when th
   });
   eq(r.stop, 'done'); eq(r.text, 'Wrote a/x.txt and read it back: it says X.', 'the summary stands as the report');
   const r2 = await runAgentLoop({
-    messages: [{ role: 'user', content: 'go' }], tools: [taskDoneTool()],
-    infer: scriptedInfer([{ content: 'Here is what I found: X.', toolCalls: [] }, { content: '', toolCalls: [call('task_done', { summary: 'checked X twice' }, 'd2')] }]),
-    executeTool: async () => '',
+    messages: [{ role: 'user', content: 'go' }], tools: [shellTool(), taskDoneTool()],
+    infer: scriptedInfer([{ content: 'I will create the file and verify it.', toolCalls: [call('shell', { command: 'ls' }, 's1')] }, { content: '', toolCalls: [call('task_done', { summary: 'checked X twice' }, 'd2')] }]),
+    executeTool: async () => 'out\n[exit 0]',
   });
-  eq(r2.text, 'Here is what I found: X.', 'prose said earlier is kept; the summary does not overwrite it');
+  eq(r2.text, 'checked X twice', 'the summary is the final word even after earlier prose — a narration before the work is not the report');
 });
 
 await test('B2: task_done while a child is in flight is answered "not yet" and the gate does not run; after the child settles it is accepted', async () => {

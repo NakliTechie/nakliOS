@@ -657,9 +657,10 @@ export async function runAgentLoop({
           convo.push({ role: 'tool', tool_call_id: id, content: msg });
           continue;
         }
-        // The summary is the run's final word when the model said nothing else in prose — a child that
-        // reports through task_done alone must not come back as "(no report)" (live, 2026-09-17).
-        if (!lastText) lastText = summary;
+        // The summary IS the run's final word: what was done and how it was checked, said last. A child
+        // that narrates ("I'll create the file and verify it.") and then reports through task_done came
+        // back with the narration as its report (live prod, 2026-09-17, task xt8c1frc).
+        lastText = summary;
         if (!verify) { // no gate wired → the explicit signal is accepted as-is
           onEvent({ type: 'tool-result', name, id, result: 'accepted', step });
           convo.push({ role: 'tool', tool_call_id: id, content: 'Task accepted (no verification gate configured).' });
