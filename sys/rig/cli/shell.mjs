@@ -353,8 +353,17 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
 
   // ── builtins: shell-native, may consume/produce piped text ──
   const builtins = {
-    cd(argv) {
-      const target = normalizePath(state.cwd, argv[0] || '');
+    // `cd` used to move to ANY path and exit 0 — `cd w` twice put the shell in `w/w`, and every command
+    // after it failed ENOENT while the model believed the directory had vanished (live prod, 2026-09-17,
+    // a child stopped on three missed predictions). It refuses a target that is not a directory, as bash does.
+    async cd(argv) {
+      if (argv.length > 1) return { text: 'cd: too many arguments', code: 1 };
+      const target = argv.length ? normalizePath(state.cwd, argv[0]) : ''; // bare `cd` goes to the workspace root, as bash's goes home
+      if (target !== '') {
+        const st = await face.invoke('fs.stat', { path: target });
+        if (!st.ok || !st.stat) return { text: `cd: ${argv[0]}: No such file or directory`, code: 1 };
+        if (st.stat.type !== 'dir') return { text: `cd: ${argv[0]}: Not a directory`, code: 1 };
+      }
       state.cwd = target;
       return { text: '', code: 0 };
     },

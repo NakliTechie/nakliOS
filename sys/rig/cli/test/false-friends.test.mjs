@@ -447,6 +447,18 @@ await test('B6: a listing over the cap is cut at the terminal with a trailer tha
   const t = truncateListing('d:\na\nb\n\ne:\nc', 3, 2); eq(t.text, 'd:\na\nb\n[listing truncated: 2 of 3 entries shown — narrow the path, add -name / -maxdepth, or pipe through grep]'); eq(t.shown, 2);
 });
 
+// ── cd — moved to ANY path and exited 0 (live prod 2026-09-17: `cd w` twice → `w/w`, then three ENOENTs) ──
+await test('cd: refuses a missing target and a file, stays put, exits 1 — and a `&&` behind it does not run', async () => {
+  const { run } = await shell();
+  await run('printf x > w/hello.txt');
+  eq((await run('cd w && pwd')).out, '/w', 'a real directory: moved');
+  const twice = await run('cd w && echo moved-again'); eq(twice.code, 1); eq(twice.out, 'cd: w: No such file or directory', 'from inside w, `cd w` is a miss — not a silent move to w/w');
+  eq((await run('pwd')).out, '/w', 'still in w'); eq((await run('cat hello.txt')).out, 'x', 'and the file is still here');
+  const file = await run('cd hello.txt'); eq(file.code, 1); eq(file.out, 'cd: hello.txt: Not a directory');
+  eq((await run('cd')).code, 0); eq((await run('pwd')).out, '/', 'bare cd goes to the root');
+  eq((await run('cd nope || echo fallback')).out, 'cd: nope: No such file or directory\nfallback', 'a missing dir takes the || branch');
+});
+
 if (failures.length) {
   console.error(`shell false-friends: ${passed} passed, ${failures.length} FAILED`);
   for (const f of failures) console.error(`  FAIL ${f.n}\n        ${f.message}`);
