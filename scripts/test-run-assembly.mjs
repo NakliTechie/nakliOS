@@ -94,6 +94,9 @@ assert.equal(needsSupervisor({ mode: 'code', stop: 'max-steps', stag: stalled })
 assert.equal(needsSupervisor({ mode: 'code', stop: 'done', stag: stalled }), false, 'never second-guesses a done run');
 assert.equal(needsSupervisor({ mode: 'code', stop: 'max-steps', stag: { stalled: true, signal: 'no-tools' } }), false, 'no-tools belongs to the act-or-nudge');
 assert.equal(needsSupervisor({ mode: 'code', stop: 'max-steps', stag: { stalled: false } }), false, 'not stalled, no redirect');
+assert.equal(needsSupervisor({ mode: 'code', stop: 'clarify', stag: stalled }), false, 'DC2: a run paused on a question is the owner\'s, never redirected over the question');
+assert.equal(needsSupervisor({ mode: 'code', stop: 'budget', budgetAxis: 'tokens', stag: stalled }), false, 'DC2: a token-budget stop would re-loop into a zero-step loop — no redirect');
+assert.equal(needsSupervisor({ mode: 'code', stop: 'budget', budgetAxis: 'turns', stag: stalled }), true, 'a turns-budget stop still redirects (the re-loop has its own turns)');
 assert.equal(needsSupervisor({ mode: 'plan', stop: 'max-steps', stag: stalled }), false, 'plan/ask are not supervised');
 assert.equal(needsSupervisor({ mode: 'code', stop: 'max-steps', stag: stalled, aborted: true }), false, 'an aborted run is left alone');
 {
@@ -116,7 +119,9 @@ ok('predicates');
   await rec.settled();
   assert.equal(rec.events().filter((e) => e.tool === 'run.started').length, 2, 'the empty reply drew the nudge: two loops');
   assert.deepEqual(divergences, [], 'the re-loop request is exactly what the record reconstructs — the empty assistant turn rides in both');
-  assert.deepEqual(convo.map((m) => [m.role, m.content]).slice(0, 3), [['user', 'do the thing'], ['assistant', ''], ['user', ACT_NUDGE]], 'the carried conversation holds the empty turn');
+  const starts2 = rec.events().filter((e) => e.tool === 'run.started').map((e) => rec.resolve(e).input.messages.filter((m) => m.role !== 'system').map((m) => [m.role, m.content]));
+  assert.deepEqual(starts2[1].slice(0, 3), [['user', 'do the thing'], ['assistant', ''], ['user', ACT_NUDGE]], 'the re-loop received the empty turn');
+  assert.deepEqual(convo, [{ role: 'user', content: 'do the thing' }], 'the caller\'s convo is not inflated by the driver (DC2: the fold owns what is carried)');
 }
 ok('empty reply → nudge reconstructs');
 
@@ -144,6 +149,22 @@ for (const route of ['turn', 'tool']) {
   else assert.equal(fb.id, 'd1', 'the tool call the verdict answered');
 }
 ok('DC1 gate-fail round reconstructs (turn + tool)');
+
+// ── 2d. DC2: a carried compaction marker (a system-role message that is NOT the head) survives the re-loop ──
+{
+  const rec = createRunRecorder({ app: 'anvil', principal: 'test' });
+  let i = 0;
+  const replies = [{ content: 'I would edit the file.', toolCalls: [] }, { content: '', toolCalls: [{ id: 'c1', type: 'function', function: { name: 'read', arguments: '{"path":"a"}' } }] }, { content: 'done', toolCalls: [] }];
+  const infer = rec.wrapInfer(async () => replies[Math.min(i++, replies.length - 1)]);
+  const marker = { role: 'system', content: '[3 earlier messages of this conversation were dropped to fit the context window]' };
+  const convo = [marker, { role: 'user', content: 'do the thing' }];
+  await driveRun({ mode: 'code', convo, sysMsg: (extra) => ({ role: 'system', content: 'SYS' + (extra || '') }), tools: runToolset('code'), infer, executeTool: async () => 'ran', rec, onEvent: rec.onEvent, model: () => null });
+  await rec.settled();
+  const second = rec.resolve(rec.events().filter((e) => e.tool === 'run.started')[1]).input.messages;
+  assert.equal(second[0].content, 'SYS', 'one system head'); assert.equal(second[1].content, marker.content, 'the carried marker is still there (only the HEAD is dropped on re-seed)');
+  assert.equal(second.filter((m) => m.role === 'system').length, 2, 'head + marker, nothing else');
+}
+ok('a carried compaction marker survives the re-loop');
 
 // ── 3. driveRun records every loop and re-loops exactly as the inline app did ──
 function fakeRec() {
@@ -228,7 +249,8 @@ async function drive({ replies, stag = null, mode = 'code', verify = null, gate 
   const call = (cmd, id) => ({ id, type: 'function', function: { name: 'shell', arguments: JSON.stringify({ command: cmd }) } });
   const spin = []; for (let i = 0; i < 30; i++) spin.push({ content: '', toolCalls: [call(i % 2 ? 'ls' : 'npm test', 'c' + i)] });
   let i = 0;
-  const infer = rec.wrapInfer(async () => spin[Math.min(i++, spin.length - 1)]);
+  const divergences = [];
+  const infer = rec.wrapInfer(async () => spin[Math.min(i++, spin.length - 1)], { onDivergence: (d) => divergences.push(d.why) });
   const notes = [];
   const convo = [{ role: 'user', content: 'fix it' }];
   const starts = []; const origStart = rec.start.bind(rec); rec.start = async (o) => { starts.push(o.messages.map((m) => m.content)); return origStart(o); };
@@ -236,11 +258,17 @@ async function drive({ replies, stag = null, mode = 'code', verify = null, gate 
   await rec.settled();
   assert.equal(starts.length, 2, 'first loop + one supervisor re-loop, both recorded');
   assert.equal(notes.length, 1); assert.match(notes[0], /^Supervisor: .* — redirecting\.$/, 'the redirect is announced once');
-  assert.match(convo[convo.length - 1].content, /^\[coordination\]/, 'the redirect is a tagged coordination message');
-  assert.equal(starts[1][starts[1].length - 1], convo[convo.length - 1].content, 'and it is the last message the re-loop sends');
+  assert.match(starts[1][starts[1].length - 1], /^\[coordination\]/, 'the redirect is a tagged coordination message, and the last message the re-loop sends');
+  assert.deepEqual(convo, [{ role: 'user', content: 'fix it' }], 'the caller\'s convo is untouched (the re-loop worked on the driver\'s own copy)');
   assert.equal(starts[1][0], 'SYS', 'the re-loop opens with the same system message');
   assert.equal(result.stop, 'max-steps', 'the re-loop ran on the reloop budget and ended the same way');
   assert.equal(i, RUN_BUDGET.maxSteps + RELOOP_BUDGET.maxSteps, 'exactly 24 + 16 model calls — the app\'s budgets, not a bed\'s');
+  // DC2 (2026-09-17): the re-loop carries the first loop's own history — every shell call and result — then the
+  // redirect, so the record reconstructs every one of the 16 re-loop requests (it read "sending 2, the record
+  // reconstructs 51" on all of them before)
+  assert.deepEqual(divergences, [], 'no divergence on the supervisor re-loop');
+  assert.equal(starts[1].length, 1 + 1 + 2 * RUN_BUDGET.maxSteps + 1, 'system + the opening + 24 assistant/tool pairs + the redirect');
+  assert.equal(starts[1][2], null, 'the first assistant turn (a bare tool call: content null) is carried'); assert.equal(starts[1][3], 'still failing', 'and its tool result');
 }
 ok('driveRun');
 

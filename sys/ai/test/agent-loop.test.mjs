@@ -605,6 +605,29 @@ await test('clarify: the run pauses with stop:clarify, the question rides the re
   const toolMsg = result.messages.find((m) => m.role === 'tool' && m.tool_call_id === 'q1');
   assert(/pauses here/.test(toolMsg.content), 'the model was told the run pauses');
 });
+await test('DC2: a return in the middle of a batch answers the calls behind it — clarify and the final failed gate round leave no unanswered tool_call_id', async () => {
+  const evs = [];
+  const r = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }], tools: [shellTool(), clarifyTool()],
+    infer: scriptedInfer([{ content: '', toolCalls: [call('clarify', { question: 'which file?' }, 'q1'), call('shell', { command: 'ls' }, 's1'), call('shell', { command: 'pwd' }, 's2')] }]),
+    executeTool: async () => 'out\n[exit 0]', onEvent: (e) => evs.push(e),
+  });
+  eq(r.stop, 'clarify');
+  const last = r.messages[r.messages.length - 4]; assert(last.role === 'assistant' && last.tool_calls.length === 3, 'the batch turn');
+  const answered = r.messages.slice(-3).map((m) => m.tool_call_id).join(','); eq(answered, 'q1,s1,s2', 'every call in the batch has a tool message');
+  eq(r.messages[r.messages.length - 1].content, 'not run — the run paused on a question for the owner');
+  eq(evs.filter((e) => e.type === 'tool-result' && e.id === 's2').length, 1, 'the record sees the same answer');
+  const evs2 = [];
+  const r2 = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }], tools: [shellTool(), taskDoneTool()],
+    infer: scriptedInfer([{ content: '', toolCalls: [call('task_done', { summary: 'wrote it and ran the tests' }, 'd1'), call('shell', { command: 'ls' }, 'r1')] }]),
+    executeTool: async () => 'out\n[exit 0]', verify: async () => ({ ok: false, exit: 1, stdout: 'red' }), maxVerifyRounds: 1, onEvent: (e) => evs2.push(e),
+  });
+  eq(r2.stop, 'unverified');
+  eq(r2.messages.slice(-2).map((m) => m.tool_call_id).join(','), 'd1,r1', 'the final failed round answers the call behind it too');
+  eq(r2.messages[r2.messages.length - 1].content, 'not run — the run ended on its last failed gate round');
+});
+
 await test('clarify: an empty question is refused as invalid_args and the run continues', async () => {
   const result = await runAgentLoop({
     messages: [{ role: 'user', content: 'go' }],

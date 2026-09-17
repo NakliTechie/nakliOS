@@ -599,6 +599,18 @@ export async function runAgentLoop({
       catch (e) { const m = String(e?.message || e); return { text: `Error: ${m}`, error: m }; }
     };
     const parallelOk = (n) => !!concurrency && Object.hasOwn(concurrency, n) && concurrency[n] === 'parallel' && n !== 'clarify' && n !== 'task_done';
+    // A return in the MIDDLE of a batch (clarify; the final failed gate round) leaves the calls behind it
+    // unanswered — an assistant turn with a `tool_call_id` no tool message answers, which a re-entered loop
+    // (DC2) or the next run's carried transcript would re-send and a strict endpoint refuses. Each is
+    // answered honestly, and the record sees the same (the DC2 checker's repro).
+    const answerRest = (from, why) => {
+      for (let k = from + 1; k < toolCalls.length; k++) {
+        if (inFlight.has(k)) continue; // a pool member already running answers itself
+        const rid = callId(toolCalls[k], step, k); const text = `not run — ${why}`;
+        onEvent({ type: 'tool-result', name: toolCalls[k].function?.name || '', id: rid, result: text, step });
+        convo.push({ role: 'tool', tool_call_id: rid, content: text });
+      }
+    };
     const inFlight = new Map(); // call index -> pending runOne, for the pool members started ahead
     const started = new Set();  // call indexes ever started (ahead or inline)
     let active = 0;             // members RUNNING right now — a settled member no one has consumed yet holds no slot
@@ -640,6 +652,7 @@ export async function runAgentLoop({
         onEvent({ type: 'tool-result', name, id, result: msg, step });
         convo.push({ role: 'tool', tool_call_id: id, content: msg });
         onEvent({ type: 'clarify', question: q, step });
+        answerRest(i, 'the run paused on a question for the owner');
         return { messages: convo, steps: step + 1, stop: 'clarify', question: q, text: lastText };
       }
 
@@ -686,6 +699,7 @@ export async function runAgentLoop({
           convo.push({ role: 'tool', tool_call_id: id, content: feedback });
           if (verifyRounds >= maxVerifyRounds) {
             onEvent({ type: 'done', reason: 'unverified', step });
+            answerRest(i, 'the run ended on its last failed gate round');
             return { messages: convo, steps: step + 1, stop: 'unverified', verified: false, text: lastText, verdict };
           }
         }

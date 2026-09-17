@@ -182,10 +182,13 @@ export function needsActNudge({ mode, toolCalls, stop, aborted = false }) {
 // guard misses — the SAME call repeated non-consecutively, or gate rounds with no new file —
 // inject ONE capped redirect and re-loop. Never on a run that finished 'done', and not for
 // no-tools (the act-or-nudge owns that).
-export function needsSupervisor({ mode, stop, aborted = false, stag }) {
+export function needsSupervisor({ mode, stop, aborted = false, stag, budgetAxis = null }) {
   // D1: a run that stopped on a prediction streak stopped ON PURPOSE — a re-loop would land more
   // edits on the model of the workspace the streak just showed wrong
-  return mode === 'code' && stop !== 'done' && stop !== 'expect-misses' && !aborted && !!(stag && stag.stalled && stag.signal !== 'no-tools');
+  // DC2 checker: a run paused on a question (`clarify`) is the owner's to answer, not the supervisor's to
+  // redirect; a run that ran out of TOKENS re-loops into a zero-step loop (the re-loop carries the same
+  // history and the same budget), so it is not redirected either.
+  return mode === 'code' && stop !== 'done' && stop !== 'expect-misses' && stop !== 'clarify' && !(stop === 'budget' && budgetAxis === 'tokens') && !aborted && !!(stag && stag.stalled && stag.signal !== 'no-tools');
 }
 // Every re-loop carries the SAME conversation the first loop built, unfiltered: filtering the
 // context message out would drop the memory and skills index mid-run and make the second
@@ -212,26 +215,34 @@ export async function driveRun({
     await rec.finish(result);
     return result;
   };
-  let result = await loop([sysMsg(gate), ...convo], RUN_BUDGET);
+  // DC2 (decided 2026-09-17): a re-entered loop carries the loop's OWN conversation — every tool call,
+  // result, steer and gate verdict of the loop before it — then the redirect. The lean re-send (the
+  // owner's convo + a nudge) hid the first loop's history from the model and diverged from the record
+  // on every request of the re-loop ("sending 2, the record reconstructs 51"): the fold expects the
+  // re-entered run.started to repeat what the transcript holds. `convo` is re-seeded IN PLACE (the
+  // caller holds the reference) from the loop's messages minus the system head.
+  // The re-loops work on a DRIVER-LOCAL copy: the caller's `convo` (the app's `t.convo`, saved to
+  // localStorage mid-run) is never inflated with a loop's whole history — the record's fold owns what
+  // is carried into the next run.
+  let carried = convo.slice();
+  const reseed = (r) => { carried = (r.messages || []).slice(1); }; // minus the system HEAD only — a carried compaction marker is a system-role message too
+  let result = await loop([sysMsg(gate), ...carried], RUN_BUDGET);
   if (needsActNudge({ mode, toolCalls, stop: result.stop, aborted: aborted() })) {
     note('No tools were used — nudging the agent to make the change, not just describe it.');
-    // The reply is an assistant turn even when EMPTY (B2's rule: the loop pushed it into its own
-    // conversation, and the record's fold holds it), so the re-loop's request must carry it too —
-    // without it the F1 check read "sending 4, the record reconstructs 8" on every act-or-nudge
-    // after an empty first reply (live, 2026-09-17, task xezy2tdj).
-    convo.push({ role: 'assistant', content: result.text || '' });
-    convo.push({ role: 'user', content: ACT_NUDGE });
-    result = await loop(reloopMessages(sysMsg, convo), RELOOP_BUDGET);
+    reseed(result); // the loop's convo already ends with the (possibly empty) assistant turn
+    carried.push({ role: 'user', content: ACT_NUDGE });
+    result = await loop(reloopMessages(sysMsg, carried), RELOOP_BUDGET);
   }
   const abortedAfterFirst = aborted(); // read once, as the inline app did — not again after settling
   if (mode === 'code' && result.stop !== 'done' && !abortedAfterFirst) {
     try {
       await rec.settled();
       const stag = foldStagnation(rec.events(), rec.resolve);
-      if (needsSupervisor({ mode, stop: result.stop, aborted: abortedAfterFirst, stag })) {
+      if (needsSupervisor({ mode, stop: result.stop, aborted: abortedAfterFirst, stag, budgetAxis: result.budgetAxis || null })) {
         note('Supervisor: ' + stag.detail + ' — redirecting.');
-        convo.push({ role: 'user', content: stagnationNudge(stag) });
-        result = await loop(reloopMessages(sysMsg, convo), RELOOP_BUDGET);
+        reseed(result); // the redirect lands on the whole history the model produced, not on the owner's opening alone
+        carried.push({ role: 'user', content: stagnationNudge(stag) });
+        result = await loop(reloopMessages(sysMsg, carried), RELOOP_BUDGET);
       }
     } catch (_) {}
   }

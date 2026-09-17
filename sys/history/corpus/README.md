@@ -123,4 +123,9 @@ re-captures it, and that is a decision to write down, never a way to make a red 
   produced. The recorded deepseek run still investigated (three shell calls) and then answered in
   prose, so 0.0's second round is the prose route and its first round is the task_done route (the lane
   pins that). The replay lane's 0.0b assertion follows the new bytes.
+- **2026-09-17 — `act-or-nudge` and `supervisor`, on `deepseek-v4-flash`.** DC2 made every re-entered loop
+  carry the loop's OWN messages (the tool calls, results, steers and verdicts of the loop before it) and
+  then the nudge — the lean re-send (the owner's convo + the nudge) is gone from `driveRun` and from
+  this recorder's two re-loop reproductions. The old cells would still have replayed (the lane serves
+  openings from the record), but a corpus is the behaviour that is meant, so both were re-captured.
 

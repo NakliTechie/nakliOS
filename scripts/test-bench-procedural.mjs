@@ -93,9 +93,11 @@ check(`the tool list is the app's ${wantTools.length}-tool code-mode set with ta
 // stagnation nudge, and the re-loop's prefix is the same system message without the gate note.
 const redirects = requests.filter((b) => b.messages.some((m) => m.role === 'user' && STAGNATION.test(String(m.content))));
 check('the supervisor re-loop ran through the bed', redirects.length > 0);
-// As in the app: the re-loop restarts from the CARRIED conversation plus the redirect — the spun
-// loop's own turns live in the record, not in what is re-sent (runAgentLoop copies its messages).
-check('and it re-sent the carried conversation with the redirect last', redirects.filter((b) => !b.messages.some((m) => m.role === 'tool')).every((b) => b.messages.length === 3 && b.messages[1].role === 'user' && /hello\.txt/.test(b.messages[1].content) && STAGNATION.test(b.messages[2].content)));
+// As in the app since DC2 (2026-09-17): the re-loop carries the spun loop's OWN turns after the opening
+// (here a prose-only spin: assistant turns, no tool results), and the redirect last. (Before, it restarted from the
+// carried opening alone, and the record could not reconstruct a single re-loop request.)
+const firstRedirect = redirects.map((b) => b.messages).find((ms) => STAGNATION.test(String(ms[ms.length - 1].content)));
+check('and it re-sent the loop\'s own history with the redirect last', !!firstRedirect && firstRedirect[1].role === 'user' && /hello\.txt/.test(firstRedirect[1].content) && firstRedirect.slice(2, -1).some((m) => m.role === 'assistant') && firstRedirect.length > 3 && STAGNATION.test(firstRedirect[firstRedirect.length - 1].content));
 check('and its prefix is the re-loop\'s (no gate note)', redirects.every((b) => /re-loop/.test(expectedSystems.get(b.messages[0].content) || '')));
 check('only the -shell-to-verify arm needed it', redirects.every((b) => /-shell-to-verify/.test(expectedSystems.get(b.messages[0].content) || '')) && !requests.some((b) => /^full/.test(expectedSystems.get(b.messages[0].content) || '') && b.messages.some((m) => STAGNATION.test(String(m.content)))));
 

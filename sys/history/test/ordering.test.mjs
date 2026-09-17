@@ -163,11 +163,14 @@ let corpusCount = 0;
     if (o.anchor === 'none') assert.equal(o.toFirstAction, null);
     else assert.ok(Number.isInteger(o.toFirstAction) && o.toFirstAction >= 0);
   }
-  // write-a-file.json is the one corpus entry that mutates, and it does so through a shell
-  // redirect — which is why the payload-key test alone found no action in 7 of 7 records.
-  const wf = recs.find((r) => JSON.stringify(r.events()).length && foldOrdering(r.events(), r.resolve).anchor === 'shell-write');
-  assert.ok(wf, 'the corpus contains at least one shell-mutating run');
+  // write-a-file.json mutates through a shell redirect — which is why the payload-key test alone found
+  // no action in 7 of 7 records. It is pinned BY NAME: since the 2026-09-17 re-captures other cells
+  // (act-or-nudge: the nudged model wrote through the shell at step 2) fold to `shell-write` too.
+  const wfIndex = files.indexOf('write-a-file.json'); assert.ok(wfIndex >= 0, 'write-a-file.json is in the corpus');
+  const wf = recs[wfIndex];
+  assert.equal(foldOrdering(wf.events(), wf.resolve).anchor, 'shell-write', 'it mutates through the shell');
   assert.equal(foldOrdering(wf.events(), wf.resolve).toFirstAction, 0, 'it went straight to the write');
+  assert.ok(recs.filter((r) => foldOrdering(r.events(), r.resolve).anchor === 'shell-write').length >= 1, 'the corpus contains at least one shell-mutating run');
 
   const groups = groupOrdering(recs);
   assert.ok(groups.length >= 1);

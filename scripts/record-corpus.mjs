@@ -213,8 +213,9 @@ for (const sc of SCENARIOS) {
   if (sc.nudge) {
     const usedTools = rec.events().some((e) => e.tool === 'tool.called');
     if (usedTools) { console.log(`SKIPPED ${sc.name}: the model used a tool, so act-or-nudge never fires — re-run`); continue; }
-    const convo = [...messages];
-    if (result.text) convo.push({ role: 'assistant', content: result.text });
+    // DC2 (2026-09-17): as driveRun does it — the re-loop carries the loop's OWN messages (minus the
+    // system head), then the nudge; the loop's convo already ends with the (possibly empty) assistant turn
+    const convo = [messages[0], ...result.messages.slice(1)]; // minus the system head only
     convo.push({ role: 'user', content: sc.nudge });
     await rec.start({ messages: convo, tools });
     result = await loop(convo);
@@ -226,7 +227,7 @@ for (const sc of SCENARIOS) {
     await rec.settled();
     const stag = foldStagnation(rec.events(), rec.resolve);
     if (!needsSupervisor({ mode: 'code', stop: result.stop, stag })) { console.log(`SKIPPED ${sc.name}: the app's supervisor would not fire (stop=${result.stop}, ${JSON.stringify(stag)}) — re-run`); continue; }
-    const convo = [...messages, { role: 'user', content: stagnationNudge(stag) }];
+    const convo = [messages[0], ...result.messages.slice(1), { role: 'user', content: stagnationNudge(stag) }]; // DC2: the redirect lands on the whole history (minus the system head only)
     await rec.start({ messages: convo, tools });
     result = await loop(convo);
     await rec.finish(result);
