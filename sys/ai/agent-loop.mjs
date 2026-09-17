@@ -759,8 +759,13 @@ export async function runAgentLoop({
         const exp = parseExpect(parsed.value?.expect);
         const gradable = !!exp && /\n\[exit -?\d+\]\s*$/.test(stripExpect(sentText)); // the runner appends [exit N] only for a command that RAN — no observation, no grade, any kind
         const v = gradable ? expectVerdictIn(sentText) : null;
-        if (v === 'MISS') { expectMisses++; expectStreak++; onEvent({ type: 'expect-miss', step, id, misses: expectMisses, streak: expectStreak }); }
-        else if (v === 'MET') expectStreak = 0;
+        // A streak that has reached the limit is final within the turn: the stop is decided after the
+        // turn's calls, so a later MET in the same turn must not talk it out of stopping, and a later
+        // MISS must not grow it past the limit it stops at (LV2 checker). The event carries the limit the
+        // loop applies, so a row can say how far the run is from the stop.
+        const final = expectMissStreak > 0 && expectStreak >= expectMissStreak;
+        if (v === 'MISS') { expectMisses++; if (!final) expectStreak++; onEvent({ type: 'expect-miss', step, id, misses: expectMisses, streak: expectStreak, limit: expectMissStreak }); }
+        else if (v === 'MET' && !final) expectStreak = 0;
       }
     }
 

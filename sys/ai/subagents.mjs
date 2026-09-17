@@ -280,7 +280,11 @@ export function formatDispatchDigest({ results, status, conflicts, dropped, budg
   const num = (i) => (indices ? indices[i] : i) + 1; // B2: number by the COHORT index, so a steer's [n] matches
   const st = (i) => (status && status[i]) || (results[i] && results[i].ok ? 'no-op' : 'incomplete');
   const lines = [];
-  lines.push(`Dispatched ${results.length} subagent${results.length === 1 ? '' : 's'} in parallel.${budget && budget.line ? ' (' + budget.line + ')' : ''}`);
+  // LV1 (live check 2026-09-13): the head counts the COHORT — what was launched — not the settled
+  // slice this call happens to report; `Dispatched 1` for a cohort of two read as a lost child.
+  const cohort = results.length + (inFlight ? inFlight.length : 0);
+  const flight = inFlight && inFlight.length ? ` ${results.length} settled, ${inFlight.length} still in flight.` : '';
+  lines.push(`Dispatched ${cohort} subagent${cohort === 1 ? '' : 's'} in parallel.${flight}${budget && budget.line ? ' (' + budget.line + ')' : ''}`);
   if (dropped) lines.push(`(${dropped} sub-task${dropped === 1 ? '' : 's'} dropped: empty or over the ${DISPATCH_MAX}-at-once cap — re-dispatch the rest.)`);
   results.forEach((r, i) => {
     const ch = r.changes || { written: [], deleted: [] };

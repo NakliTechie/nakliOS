@@ -2110,6 +2110,13 @@
   // at step 10, saw "inv: OK [exit 0]", and then spent 30 more steps writing probe scripts and
   // asking for reviews, never calling task_done — max-steps with a green gate. The result of a
   // shell call that IS the gate now says what it means. Pure, so the handlers test can drive it.
+  // D1 / LV2 (live check 2026-09-13): the miss row says where the run stands against the loop's own
+  // limit — "one more stops the run" only ONE short of it, "the run stops here" at it, nothing below.
+  function expectMissText(e){
+    const streak=Number(e.streak)||0, limit=Number(e.limit)||0;
+    const tail=limit&&streak>=limit?' — the run stops here':limit&&streak===limit-1?' — one more stops the run':'';
+    return '✗ prediction missed ('+streak+' in a row'+tail+')';
+  }
   function gateHint(nm, ar, res, verifyCmd){
     if(nm!=='shell' || typeof res!=='string' || !verifyCmd) return res;
     const cmd=String((ar&&ar.command)||''); if(!cmd.includes(verifyCmd)) return res;
@@ -2757,7 +2764,7 @@
           else if(e.type==='waiting'){ clearThinking(); t.log.push({k:'system',text:'waiting for '+e.inFlight+' subagent'+(e.inFlight===1?'':'s')+' — '+(e.inFlight===1?'its':'their')+' completion will steer the run'}); renderLog(); }
           else if(e.type==='steer'){ clearThinking(); t.log.push({k:'system',text:'⇆ '+String(e.content||'').replace(/^\[coordination\] /,'')}); renderLog(); }
           // D1: a missed prediction is visible as it happens — three in a row stop the run
-          else if(e.type==='expect-miss'){ t.log.push({k:'system',text:'✗ prediction missed ('+e.streak+' in a row'+(e.streak>=2?' — one more stops the run':'')+')'}); renderLog(); }
+          else if(e.type==='expect-miss'){ t.log.push({k:'system',text:expectMissText(e)}); renderLog(); }
       };
       // The run record (plan/anvil-event-log-substrate.md, layer 2a): every event of
       // this run lands on an append-only hash chain and is persisted OUTSIDE the

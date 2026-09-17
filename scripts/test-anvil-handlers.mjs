@@ -480,6 +480,19 @@ await test('skill handler: a staged draft is served labelled; an archived skill 
 });
 
 // A sanity check on the harness itself: it must actually be able to fail.
+await test('LV2: the miss row says where the run stands against the loop\'s limit — a tail one short of it, the stop at it, nothing below', () => {
+  const expectMissText = instantiate(extractFunction(src, 'expectMissText'), 'expectMissText', {});
+  assert.equal(expectMissText({ streak: 1, limit: 3 }), '✗ prediction missed (1 in a row)', 'two short of the limit: no tail');
+  assert.equal(expectMissText({ streak: 2, limit: 3 }), '✗ prediction missed (2 in a row — one more stops the run)', 'one short: the warning');
+  assert.equal(expectMissText({ streak: 3, limit: 3 }), '✗ prediction missed (3 in a row — the run stops here)', 'at the limit: the stop, never "one more"');
+  assert.equal(expectMissText({ streak: 4, limit: 3 }), '✗ prediction missed (4 in a row — the run stops here)', 'past it (a wider limit never re-loops): still the stop');
+  assert.equal(expectMissText({ streak: 2, limit: 2 }), '✗ prediction missed (2 in a row — the run stops here)', 'the tail follows the limit, not a hard-coded 3');
+  assert.equal(expectMissText({ streak: 3, limit: 4 }), '✗ prediction missed (3 in a row — one more stops the run)', 'a wider limit: the warning sits one short of IT, not at 2');
+  assert.equal(expectMissText({ streak: 2, limit: 4 }), '✗ prediction missed (2 in a row)', 'a wider limit: two short of it is silent');
+  assert.equal(expectMissText({ streak: 5 }), '✗ prediction missed (5 in a row)', 'no limit on the event (a loop that never stops on misses): no tail');
+  assert.equal(expectMissText({ streak: 4, limit: 0 }), '✗ prediction missed (4 in a row)', 'limit 0 (D1 off — the loop still counts and emits): no tail, never "stops here"');
+});
+
 await test('the harness is not vacuous — a deliberately wrong expectation fails', () => {
   let threw = false;
   try { assert.match(src, /this_string_is_not_in_the_module_xyzzy/, 'sentinel'); } catch { threw = true; }

@@ -233,9 +233,11 @@ await test('B2: formatCompletionSteer and the digest tail speak the same vocabul
   assert(/held — subagent did not finish cleanly \(budget\)/.test(inc), inc);
   const d = formatDispatchDigest({ results: [run], status: ['merge'], conflicts: [], dropped: 0, budget: null, inFlight: ['late'], indices: [2] });
   assert(/### \[3\] slow — merged/.test(d), 'numbered by the cohort index: ' + d);
+  assert(/^Dispatched 2 subagents in parallel\. 1 settled, 1 still in flight\./.test(d), 'LV1: the head counts the cohort, not the settled slice: ' + d.split('\n')[0]);
   assert(/### still in flight: "late" — its completion will arrive as a \[coordination\] message/.test(d) && /do not re-dispatch it/.test(d), d);
   const plain = formatDispatchDigest({ results: [run], status: ['merge'], conflicts: [], dropped: 0, budget: null });
   assert(!/still in flight/.test(plain) && /### \[1\] slow/.test(plain), 'no tail and identity numbering when nothing is in flight');
+  assert(/^Dispatched 1 subagent in parallel\.\n/.test(plain), 'LV1: no settled/in-flight clause when nothing is in flight: ' + plain.split('\n')[0]);
 });
 
 // CRIB-B B1: the typed in-flight state — live by a recent event, unverifiable by silence, exited by a stop

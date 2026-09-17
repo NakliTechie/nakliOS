@@ -882,7 +882,9 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
         // done by then" — the workspace after a stop must be the workspace before the dispatch.
         // (A straggler dies with the signal; nothing of it merges either.)
         if (signal && signal.aborted) {
-          return formatDispatchDigest({ results: runs, status: runs.map(() => 'aborted'), conflicts: [], dropped: norm.dropped, budget, indices, refused: refusals }); // no message is coming: the run is stopping
+          // LV1: a straggler died with the signal — it is in the cohort the head counts, on the same 'stopped, nothing merged' line; no message is coming: the run is stopping
+          const all = [...runs, ...inFlight.map((x) => ({ label: tasks[x.index].label, ok: false, stop: 'aborted', text: '(stopped before it finished)', changes: { written: [], deleted: [] } }))];
+          return formatDispatchDigest({ results: all, status: all.map(() => 'aborted'), conflicts: [], dropped: norm.dropped, budget, indices: [...indices, ...inFlight.map((x) => x.index)], refused: refusals });
         }
         // Merge plan for what completed together: only cleanly-finished runs are eligible; a path
         // clash holds just the clashers (a disjoint clean sibling still merges).

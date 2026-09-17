@@ -356,6 +356,20 @@ await test('B2: the fast child is in the tool result at once; the slow one arriv
   eq(dec(await base.readBinary('slow.txt')), 'S', 'the slow child merged when it finished');
   await new Promise((r) => setTimeout(r, 0)); eq(q.inFlight(), 0);
 });
+await test('LV1: Stop while a straggler is still in flight — the digest counts the whole cohort and the straggler is on the same stopped line', async () => {
+  const base = new MemoryBackend();
+  const ac = new AbortController();
+  const plan = scriptedInfer((p) => /fast/i.test(p) ? { write: { file: 'fast.txt', content: 'F' } } : { write: { file: 'slow.txt', content: 'S' } });
+  // the slow child's first model call presses Stop and then never answers — it is in flight at the settle, and dead with the signal
+  const infer = async (a) => { const user = [...a.messages].reverse().find((m) => m.role === 'user'); if (/slow/i.test(String(user?.content || ''))) { ac.abort(); await new Promise(() => {}); } return plan(a); };
+  const q = createSteerQueue();
+  const exec = topExecutorWith(base, infer, { steer: q, settleMs: 40, signal: ac.signal });
+  const out = await exec('dispatch', { tasks: [{ description: 'fast', prompt: 'fast: create fast.txt' }, { description: 'slow', prompt: 'slow: create slow.txt' }] });
+  assert(/^Dispatched 2 subagents in parallel\./.test(out), 'the head counts the cohort on the abort path too: ' + out.split('\n')[0]);
+  assert(/### \[2\] slow — STOPPED — the owner ended the run/.test(out) && /\(stopped before it finished\)/.test(out), 'the straggler has its own stopped line: ' + out);
+  assert(!/still in flight/.test(out), 'no "completion will arrive" promise on a stop — no message is coming');
+  eq(await base.exists('fast.txt'), false, 'the finished sibling is still not merged on a stop');
+});
 await test('B2: first-come — a straggler touching a path an earlier sibling already merged is HELD, and the steer says so', async () => {
   const base = new MemoryBackend();
   const plan = scriptedInfer((p) => /fast/i.test(p) ? { write: { file: 'shared.txt', content: 'FAST' } } : { write: { file: 'shared.txt', content: 'SLOW' } });

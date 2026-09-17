@@ -1393,6 +1393,41 @@ await test('D1: three missed predictions in a row stop the run as its own record
   eq(r.stop, 'expect-misses'); eq(r.steps, 3); eq(r.expectMisses.total, 3); eq(r.expectMisses.streak, 3);
   assert(/^3 predictions in a row missed — the model of this workspace is wrong/.test(r.reason), r.reason);
   eq(events.filter((e) => e.type === 'expect-miss').map((e) => e.streak).join(','), '1,2,3', 'one event per miss, with the streak');
+  eq(events.filter((e) => e.type === 'expect-miss').map((e) => e.limit).join(','), '3,3,3', 'LV2: each miss event carries the limit the loop applies, so a row can say where the run stands');
+  // LV2: the limit on the event is the CONFIGURED one, not the module constant
+  const evL = [];
+  const rL = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }], tools: [shellTool()], expectMissStreak: 2,
+    infer: scriptedInfer([shellCall(0), shellCall(1), { content: 'never reached', toolCalls: [] }]),
+    executeTool: async () => graded('exit 0', 1), onEvent: (e) => evL.push(e),
+  });
+  eq(rL.stop, 'expect-misses'); eq(rL.steps, 2);
+  eq(evL.filter((e) => e.type === 'expect-miss').map((e) => e.limit).join(','), '2,2', 'a run configured to stop at 2 says 2 on its events');
+  // A streak that reached the limit is final within the turn: MISS MISS MISS MET in ONE turn still stops (the checker's probe)
+  const four = { content: '', toolCalls: [0, 1, 2, 3].map((i) => call('shell', { command: 'make', expect: 'exit 0' }, 'q' + i)) };
+  let nQ = 0; const evQ = [];
+  const rQ = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }], tools: [shellTool()],
+    infer: scriptedInfer([four, { content: 'never reached', toolCalls: [] }]),
+    executeTool: async () => graded('exit 0', nQ++ < 3 ? 1 : 0), onEvent: (e) => evQ.push(e),
+  });
+  eq(rQ.stop, 'expect-misses', 'a MET after the third miss in the same turn does not talk the run out of stopping');
+  eq(evQ.filter((e) => e.type === 'expect-miss').map((e) => e.streak).join(','), '1,2,3');
+  // ...and MISS MISS MISS MET MISS: the fifth call is counted but the streak stays at the limit it stops at — never "4 in a row" with a hit between
+  const five = { content: '', toolCalls: [0, 1, 2, 3, 4].map((i) => call('shell', { command: 'make', expect: 'exit 0' }, 'v' + i)) };
+  let nV = 0; const evV = [];
+  const rV = await runAgentLoop({ messages: [{ role: 'user', content: 'go' }], tools: [shellTool()], infer: scriptedInfer([five, { content: 'never reached', toolCalls: [] }]), executeTool: async () => graded('exit 0', [1, 1, 1, 0, 1][nV++]), onEvent: (e) => evV.push(e) });
+  eq(rV.stop, 'expect-misses'); eq(rV.expectMisses.total, 4, 'every miss is counted'); eq(rV.expectMisses.streak, 3, 'the streak is the limit it stopped at');
+  eq(evV.filter((e) => e.type === 'expect-miss').map((e) => e.streak).join(','), '1,2,3,3', 'the fifth miss is on the chain at the frozen streak');
+  assert(/^3 predictions in a row missed/.test(rV.reason), rV.reason);
+  // ...and below the limit a MET in the same turn still resets: MISS MISS MET MISS → streak 1, the run goes on
+  let nR = 0; const evR = [];
+  const rR = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }], tools: [shellTool()],
+    infer: scriptedInfer([four, { content: 'done', toolCalls: [] }]),
+    executeTool: async () => graded('exit 0', [1, 1, 0, 1][nR++]), onEvent: (e) => evR.push(e),
+  });
+  eq(rR.stop, 'done'); eq(evR.filter((e) => e.type === 'expect-miss').map((e) => e.streak).join(','), '1,2,1', 'the hit below the limit reset the streak');
   eq(events.find((e) => e.type === 'done').reason, 'expect-misses');
   // MISS MISS MET MISS → the hit reset the streak, the run finishes normally with four calls counted as three misses
   let n = 0; const codes = [1, 1, 0, 1];

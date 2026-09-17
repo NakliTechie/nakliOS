@@ -349,7 +349,7 @@ assert.match(anvil, /changes: \(\)=>\{ const c=overlay\.changes\(\); return \{ w
 // D1: the driver never re-loops a run that stopped on a prediction streak — that stop is the feature
 assert.equal(needsSupervisor({ mode: 'code', stop: 'expect-misses', stag: { stalled: true, signal: 'repeat' } }), false, 'a prediction-streak stop is never re-looped');
 assert.equal(needsSupervisor({ mode: 'code', stop: 'max-steps', stag: { stalled: true, signal: 'repeat' } }), true, 'a stalled max-steps still is');
-assert.match(anvil, /else if\(e\.type==='expect-miss'\)\{ t\.log\.push\(\{k:'system',text:'✗ prediction missed \('/, 'D1: a miss is a row as it happens');
+assert.match(anvil, /else if\(e\.type==='expect-miss'\)\{ t\.log\.push\(\{k:'system',text:expectMissText\(e\)\}\)/, 'D1: a miss is a row as it happens (LV2: composed by expectMissText)');
 console.log('run-assembly: A4 readiness == the toolset in every mode; A2 episode rides ungated; B5 the grant projects the catalog; D1 a miss-streak stop stays stopped');
 // …and rides run.started only when the app supplies it: a bed that passes none records the old shape
 {
