@@ -163,6 +163,12 @@ await test('review: reviewer subagent returns findings and writes NOTHING to bas
   const out = await exec('review', { prompt: 'Review app.js for correctness.' });
   assert(/no blocking issues/i.test(out), 'review findings returned');
   eq((await base.list('')).length, before, 'reviewer did not add files to base');
+  assert(!/stale content/.test(out), 'nothing moved: no notice');
+  // #9: a reviewer that read app.js while the owner rewrote it says so under its verdict
+  const call = (id, name, args) => ({ id, function: { name, arguments: JSON.stringify(args) } });
+  const moving = async ({ messages }) => { const sys = String(messages[0]?.content || ''); const tools = messages.filter((m) => m.role === 'tool'); if (!/read-only access|reviewer/i.test(sys)) return { content: '', toolCalls: [] }; if (tools.length === 0) return { content: '', toolCalls: [call('r', 'read', { path: 'app.js' })] }; await base.write('app.js', new TextEncoder().encode('function f(){ return 2 }')); return { content: 'app.js:1 — returns 1. Fine.', toolCalls: [] }; };
+  const out2 = await topExecutor(base, moving)('review', { prompt: 'Review app.js again.' });
+  assert(/Fine\.\n\n\[review read 1 file that changed under it since \(app\.js\) — its verdict may rest on stale content\]$/.test(out2), out2);
 });
 
 // ESS-1 (2026-09-11): a subagent is a child of the run. Stop stops it, and nothing merges after.

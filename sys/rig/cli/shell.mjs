@@ -254,7 +254,11 @@ function globToRe(glob) {
 
 // `kilnIsolate` marks this shell as the VERIFIER's: its `python` runs on an interpreter
 // reset first, so a gate cannot measure state the agent left behind (main-thread-runtime.mjs).
-export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate = false } = {}) {
+// `signal` (optional): the run's AbortSignal, or a function returning the current one (a shell that
+// outlives its runs). The shell has no way to stop a builtin mid-flight in general — a half-run
+// `python` must not report "stopped" while its effects land — but a wait has no effects: `sleep`
+// races its timer against the signal and returns `sleep: interrupted` (exit 130).
+export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate = false, signal = null } = {}) {
   if (!registry || !face) throw new Error('createShell requires { registry, face }');
   const state = { cwd, history: [], vars: new Map([['HOME', '/']]) };
 
@@ -365,8 +369,14 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
       const secs = /^\d+(\.\d+)?$/.test(argv[0]) ? Number(argv[0]) : NaN;
       if (!Number.isFinite(secs)) return { text: `sleep: invalid time interval '${argv[0]}' (seconds)`, code: 1 };
       if (secs > SLEEP_MAX_S) return { text: `sleep: ${argv[0]} exceeds the ${SLEEP_MAX_S} s cap`, code: 1 };
-      await new Promise((r) => setTimeout(r, Math.round(secs * 1000)));
-      return { text: '', code: 0 };
+      const sig = typeof signal === 'function' ? signal() : signal;
+      if (sig && sig.aborted) return { text: 'sleep: interrupted', code: 130 };
+      const interrupted = await new Promise((resolve) => {
+        const t = setTimeout(() => { if (sig) sig.removeEventListener('abort', onAbort); resolve(false); }, Math.round(secs * 1000));
+        const onAbort = () => { clearTimeout(t); resolve(true); };
+        if (sig) sig.addEventListener('abort', onAbort, { once: true });
+      });
+      return interrupted ? { text: 'sleep: interrupted', code: 130 } : { text: '', code: 0 };
     },
     echo(argv) { return { text: argv.join(' '), code: 0 }; },
     clear() { return { text: '', code: 0, clear: true }; },

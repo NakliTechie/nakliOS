@@ -981,7 +981,11 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
           maxSteps: SUBAGENT_MAX_STEPS,
         });
         if (res.stop === 'aborted') return '(review stopped with the run)';
-        return res.text || `(review finished: ${res.stop})`;
+        // #9: the reviewer's overlay pins what it read; if the workspace moved under it meanwhile (the
+        // owner's edits, a sibling's merge), its verdict may rest on stale content — say so under it.
+        let stale = '';
+        try { const mv = (iso && typeof iso.moved === 'function') ? await iso.moved() : null; const read = mv ? [...mv.read, ...mv.wrote] : []; if (read.length) stale = `\n\n[review read ${read.length} file${read.length === 1 ? '' : 's'} that changed under it since (${read.join(', ')}) — its verdict may rest on stale content]`; } catch (_) {}
+        return (res.text || `(review finished: ${res.stop})`) + stale;
       }
 
       if (name === 'todowrite') {

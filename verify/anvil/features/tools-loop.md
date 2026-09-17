@@ -41,7 +41,7 @@ says "gated" (the lint refuses a one-assert or `__eq__`-defining criterion — t
 - **Prerequisites:** launch; a file with an obvious bug seeded.
 - **Reach and drive:** "Ask the review tool for a second opinion on bug.js, then fix what it finds."
 - **Observable success:** the review digest names the bug with a line; the workspace is unchanged until the parent's own `edit`; the child record is on the parent's chain.
-- **Gotchas:** "review stopped with the run" when Stop is pressed mid-review.
+- **Gotchas:** "review stopped with the run" when Stop is pressed mid-review. #9 (2026-09-17): a reviewer that read a file the owner (or a sibling merge) changed while it ran gets `[review read N files that changed under it since (paths) — its verdict may rest on stale content]` appended under its verdict.
 
 ### tool:task_done
 - **Goal:** the model claims completion; the gate decides. A placeholder summary is bounced; a failing gate feeds its output back; three failed rounds end `unverified`.

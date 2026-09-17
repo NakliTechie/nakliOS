@@ -103,6 +103,23 @@ assert.equal(needsSupervisor({ mode: 'code', stop: 'max-steps', stag: stalled, a
 }
 ok('predicates');
 
+// ── 2b. an EMPTY first reply, then the act-or-nudge: the re-loop's request reconstructs from the record (F1) ──
+{
+  const rec = createRunRecorder({ app: 'anvil', principal: 'test' });
+  const divergences = [];
+  let i = 0;
+  const replies = [{ content: '', toolCalls: [] }, { content: 'ok', toolCalls: [{ id: 'c1', type: 'function', function: { name: 'read', arguments: '{"path":"a"}' } }] }, { content: 'done now', toolCalls: [] }];
+  const infer = rec.wrapInfer(async () => replies[Math.min(i++, replies.length - 1)], { onDivergence: (d) => divergences.push(d.why) });
+  const sysMsg = (extra) => ({ role: 'system', content: 'SYS' + (extra || '') });
+  const convo = [{ role: 'user', content: 'do the thing' }];
+  await driveRun({ mode: 'code', convo, sysMsg, tools: runToolset('code'), infer, executeTool: async () => 'ran', rec, onEvent: rec.onEvent, model: () => null });
+  await rec.settled();
+  assert.equal(rec.events().filter((e) => e.tool === 'run.started').length, 2, 'the empty reply drew the nudge: two loops');
+  assert.deepEqual(divergences, [], 'the re-loop request is exactly what the record reconstructs — the empty assistant turn rides in both');
+  assert.deepEqual(convo.map((m) => [m.role, m.content]).slice(0, 3), [['user', 'do the thing'], ['assistant', ''], ['user', ACT_NUDGE]], 'the carried conversation holds the empty turn');
+}
+ok('empty reply → nudge reconstructs');
+
 // ── 3. driveRun records every loop and re-loops exactly as the inline app did ──
 function fakeRec() {
   const starts = [], finishes = [], ev = [];

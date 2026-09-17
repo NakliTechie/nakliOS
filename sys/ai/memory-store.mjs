@@ -514,11 +514,14 @@ function polarityFlip(aTokens, bTokens){
 // `exempt` names facts the note is ALLOWED to overlap: the ones it declares it supersedes
 // and the holder of its slot — a correction must be able to say the opposite of the claim
 // it replaces without being refused as its duplicate (the checker's trap, closed).
-export function findDuplicate(facts, note, { exempt = [] } = {}){
+// `scope` (D2, 2026-09-17): a fact scoped to ANOTHER task is invisible to this run's index, so it must
+// not refuse this run's `remember` either — another task's stall note is not a duplicate of a
+// project fact in the same words. The same rule as buildMemoryIndex: unscoped, or scoped to us.
+export function findDuplicate(facts, note, { exempt = [], scope = null } = {}){
   const clean = String(note == null ? '' : note).trim();
   if (!clean) return null;
   const skip = new Set(parseList(Array.isArray(exempt) ? exempt.join(',') : exempt).map(safeSlug));
-  const all = (facts || []).filter(f => f && f.name && !skip.has(f.name));
+  const all = (facts || []).filter(f => f && f.name && !skip.has(f.name) && (!f.scope || (scope && f.scope === scope)));
   const staleTo = supersededSet(all);
   const isLive = (f) => f.status !== 'retracted' && !staleTo.has(f.name);
   const firstLine = clean.split('\n')[0] || '';

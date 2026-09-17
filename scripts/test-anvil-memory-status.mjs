@@ -31,7 +31,7 @@ for (const p of pushes) {
 assert.match(anvil, /recordFact\(note, ar&&ar\.type, 'hypothesis', \{ slot: ar&&ar\.slot, derived_from: ar&&ar\.derived_from, supersedes: ar&&ar\.supersedes, weight: ar&&ar\.weight \}\)/, 'the remember handler passes slot/derived_from/supersedes/weight to recordFact');
 assert.match(anvil, /slotHolder\(await listFacts\(\), r\.slot\)/, 'a slot supersedes its current holder at write time');
 // A2: search before save on BOTH remember paths (task loop + prime), and one budget per run.
-assert.equal((anvil.match(/findDuplicate\(all, note(?:, \{ exempt \})?\); if\(dup\)[\s\S]{0,80}?return duplicateReply\(dup\)/g) || []).length, 2, 'both remember paths search before they save (main path also audits the refusal)');
+assert.equal((anvil.match(/findDuplicate\(all, note, \{ (?:exempt, )?scope: [^}]*\}\); if\(dup\)[\s\S]{0,80}?return duplicateReply\(dup\)/g) || []).length, 2, 'both remember paths search before they save, scoped to this task (main path also audits the refusal)');
 // shape, not signature: checkRulesCap takes an options arg (the prospective rule's name/status)
 assert.equal((anvil.match(/checkRulesCap\(all, note[^;]*\); if\(!cap\.ok\)[\s\S]{0,120}?return rulesCapReply\(cap\)/g) || []).length, 2, 'both remember paths cap rules');
 assert.equal((anvil.match(/checkRulesCap\(all, note, \{ name: noteToFact\([^)]*\)\.slug, status: 'hypothesis' \}\)/g) || []).length, 2, 'the cap measures the rule as it will be STORED (its own heading + status)');

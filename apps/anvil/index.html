@@ -536,7 +536,7 @@
     // cached, and the baseline sys.path — the same isolation the verifier already gets. A real
     // `python` invocation is a new process; a shared kernel let `sys.path.insert(0,'/workspace')`
     // in one run poison `import inv` in the next (live 2026-09-11).
-    shell = createShell({ registry, face, kiln, kilnIsolate:true });
+    shell = createShell({ registry, face, kiln, kilnIsolate:true, signal: ()=>abortController ? abortController.signal : null }); // Stop cuts a `sleep`
     $('ws').textContent = label;
   }
   async function seedIfEmpty(){
@@ -983,7 +983,7 @@
       if(nm==='remember'){
         const note=String((ar&&ar.note)||'').trim();
         const all=await listFacts();
-        const dup=findDuplicate(all, note); if(dup) return duplicateReply(dup); // search before save (A2)
+        const dup=findDuplicate(all, note, { scope: t ? 'task:'+String(t.id) : null }); if(dup) return duplicateReply(dup); // search before save (A2); another task's scoped notes do not count (D2)
         if(ar&&ar.type==='rule'){ const cap=checkRulesCap(all, note, { name: noteToFact(note, 'rule', 'hypothesis').slug, status: 'hypothesis' }); if(!cap.ok) return rulesCapReply(cap); } // rules stay capped here too (A3); the prospective rule's OWN heading is counted
         const slug=await recordFact(note, ar&&ar.type, 'hypothesis', { weight: ar&&ar.weight }); if(slug) recorded++; return slug?('Recorded '+slug):'empty note'; }
       return await codeExec(nm,ar,call);
@@ -2207,7 +2207,7 @@
       const ograph = createGrant({ prefixes:[''], scopes:['fs:read','fs:write','fs:remove','git:read','git:write','git:remote'], readOnlyPrefixes:[SKILLS_DIR, GATE_DIR, SEARCH_INDEX_PATH] });
       const oopLog = createOpLog({ fs: createFileops({ backend:new MemoryBackend() }) });
       const oface = createAgentFace({ registry: oregistry, grant: ograph, opLog: oopLog, actor:'agent' });
-      const oshell = createShell({ registry: oregistry, face: oface }); // no kiln in subagents
+      const oshell = createShell({ registry: oregistry, face: oface, signal: abortController ? abortController.signal : null }); // no kiln in subagents; Stop cuts a child's `sleep`
       const executor = makeToolExecutor({ shell: oshell, face: oface, mode:'code', infer: inferViaHost, subagentDepth: 1 });
       return {
         executor,
@@ -2483,7 +2483,7 @@
         // write with the next move, so the store never grows a second copy.
         const all=await listFacts();
         const exempt=[ar&&ar.supersedes, ar&&ar.slot?slotHolder(all, ar.slot):null].filter(Boolean);
-        const dup=findDuplicate(all, note, { exempt }); if(dup){ auditRefusal('duplicate:'+dup.reason, note); return duplicateReply(dup); }
+        const dup=findDuplicate(all, note, { exempt, scope: 'task:'+String(t.id) }); if(dup){ auditRefusal('duplicate:'+dup.reason, note); return duplicateReply(dup); } // D2: another task's scoped notes do not count
         // A rule is injected whole every run, so rules are capped (A3): over the cap the tool
         // errors and the agent has to merge or retract one first.
         if(ar&&ar.type==='rule'){ const cap=checkRulesCap(all, note, { name: noteToFact(note, 'rule', 'hypothesis').slug, status: 'hypothesis' }); if(!cap.ok){ auditRefusal('rules-cap', note); return rulesCapReply(cap); } }

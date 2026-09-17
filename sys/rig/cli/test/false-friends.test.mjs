@@ -399,6 +399,20 @@ await test('sleep: waits the interval, exits 0, refuses the false friends (no ar
 });
 
 // ── B6 structured listings — `ls -R` flattened every name into one line; a big listing had no cap ──
+await test('sleep: the run\'s Stop cuts it — `sleep: interrupted`, exit 130, at once; a signal getter serves a shell that outlives its runs', async () => {
+  const fs = createFileops({ backend: new MemoryBackend() }); const registry = buildRigRegistry({ fs });
+  const grant = createGrant({ prefixes: [''], scopes: ['fs:read', 'fs:write', 'fs:remove'] });
+  const face = createAgentFace({ registry, grant, opLog: createOpLog({ fs: createFileops({ backend: new MemoryBackend() }) }), actor: 'a' });
+  let ac = new AbortController();
+  const sh = createShell({ registry, face, signal: () => ac.signal });
+  const t0 = Date.now(); setTimeout(() => ac.abort(), 80);
+  const r = await sh.feed('sleep 5 && echo never');
+  assert(Date.now() - t0 < 2000, 'returned on the abort, not after 5 s');
+  eq(String(r.output).trim(), 'sleep: interrupted'); eq(sh.lastCode, 130, 'exit 130 — the && did not run');
+  eq(String((await sh.feed('sleep 1')).output).trim(), 'sleep: interrupted', 'an already-aborted run: no wait at all');
+  ac = new AbortController(); // the next run: the getter sees the new signal
+  const t1 = Date.now(); eq((await sh.feed('sleep 0.1 && echo ok')).output.trim(), 'ok'); assert(Date.now() - t1 >= 90, 'a live run waits');
+});
 await test('B6: ls -R prints directory blocks, one entry a line, so a name says which directory it is in', async () => {
   const { sh, run } = await shell();
   for (const p of ['src/app.js', 'src/util/a.js', 'docs/guide.md']) await run(`printf x > ${p}`);

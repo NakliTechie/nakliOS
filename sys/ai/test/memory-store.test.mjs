@@ -89,7 +89,15 @@ await test('recallTool + constants', () => {
 });
 
 // ─────────────────────────────────── search before save + per-run cap (A2) ──
-const P = (name, extra = {}) => parseFact(`---\nname: ${name}\ndescription: ${extra.description || name}\ntype: project\n${extra.status ? 'status: ' + extra.status + '\n' : ''}${extra.supersedes ? 'supersedes: ' + extra.supersedes + '\n' : ''}---\n${extra.body || extra.description || name}`);
+const P = (name, extra = {}) => parseFact(`---\nname: ${name}\ndescription: ${extra.description || name}\ntype: project\n${extra.status ? 'status: ' + extra.status + '\n' : ''}${extra.supersedes ? 'supersedes: ' + extra.supersedes + '\n' : ''}${extra.scope ? 'scope: ' + extra.scope + '\n' : ''}---\n${extra.body || extra.description || name}`);
+
+await test('findDuplicate: a fact scoped to ANOTHER task is invisible here — it refuses nothing; one scoped to THIS task, or unscoped, still does (D2, 2026-09-17)', () => {
+  const facts = [P('stalled-last-run', { description: 'Stalled last run — the gate never ran', scope: 'task:aaaa' }), P('build-tool', { description: 'The build tool is Vite.' })];
+  eq(findDuplicate(facts, 'Stalled last run — the gate never ran', { scope: 'task:bbbb' }), null, 'another task\'s note is not a duplicate of mine');
+  eq(findDuplicate(facts, 'Stalled last run — the gate never ran'), null, 'nor with no scope at all (the note could not be seen)');
+  assert(findDuplicate(facts, 'Stalled last run — the gate never ran', { scope: 'task:aaaa' }), 'the same task sees its own note');
+  assert(findDuplicate(facts, 'The build tool is Vite.', { scope: 'task:bbbb' }), 'an unscoped project fact still counts for every task');
+});
 
 await test('findDuplicate: exact — same text (normalised) as a live fact → refused with the next move', () => {
   const facts = [P('build-tool', { description: 'The build tool is Vite.', body: 'The build tool is Vite.\nSee package.json.' })];

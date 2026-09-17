@@ -215,7 +215,11 @@ export async function driveRun({
   let result = await loop([sysMsg(gate), ...convo], RUN_BUDGET);
   if (needsActNudge({ mode, toolCalls, stop: result.stop, aborted: aborted() })) {
     note('No tools were used — nudging the agent to make the change, not just describe it.');
-    if (result.text) convo.push({ role: 'assistant', content: result.text });
+    // The reply is an assistant turn even when EMPTY (B2's rule: the loop pushed it into its own
+    // conversation, and the record's fold holds it), so the re-loop's request must carry it too —
+    // without it the F1 check read "sending 4, the record reconstructs 8" on every act-or-nudge
+    // after an empty first reply (live, 2026-09-17, task xezy2tdj).
+    convo.push({ role: 'assistant', content: result.text || '' });
     convo.push({ role: 'user', content: ACT_NUDGE });
     result = await loop(reloopMessages(sysMsg, convo), RELOOP_BUDGET);
   }
