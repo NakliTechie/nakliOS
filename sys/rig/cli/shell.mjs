@@ -25,6 +25,7 @@ const REGISTRY_ALIAS = {
 // Short flags -> registry input keys (per command, resolved in buildRegistryInput).
 const LIST_FLAGS = { R: 'recursive', a: 'all' };
 const RM_FLAGS = { r: 'recursive', R: 'recursive', f: 'force' };
+export const SLEEP_MAX_S = 300; // the longest `sleep` — above any run's wall budget it is a hang, not a wait
 
 // ── path helpers: cwd lives inside the fileops root; '' is the root, and a
 // path can never climb above it. ──
@@ -329,6 +330,19 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
       return { text: '', code: 0 };
     },
     pwd() { return { text: '/' + state.cwd, code: 0 }; },
+    // `sleep N` — seconds, decimals allowed, capped at SLEEP_MAX_S (a longer wait than any run budget is
+    // a hang, and Stop has no way into a builtin). Live 2026-09-17: a child asked to pace itself spent
+    // its whole step budget looking for one. It is also the honest stall for a liveness check: no
+    // events while it waits, so the parent's row shows the silence (B1 `unverifiable`).
+    async sleep(argv) {
+      if (!argv.length) return { text: 'sleep: missing operand', code: 1 };
+      if (argv.length > 1) return { text: 'sleep: one interval only (seconds)', code: 1 };
+      const secs = /^\d+(\.\d+)?$/.test(argv[0]) ? Number(argv[0]) : NaN;
+      if (!Number.isFinite(secs)) return { text: `sleep: invalid time interval '${argv[0]}' (seconds)`, code: 1 };
+      if (secs > SLEEP_MAX_S) return { text: `sleep: ${argv[0]} exceeds the ${SLEEP_MAX_S} s cap`, code: 1 };
+      await new Promise((r) => setTimeout(r, Math.round(secs * 1000)));
+      return { text: '', code: 0 };
+    },
     echo(argv) { return { text: argv.join(' '), code: 0 }; },
     clear() { return { text: '', code: 0, clear: true }; },
     history() { return { text: state.history.map((h, i) => `${i + 1}  ${h}`).join('\n'), code: 0 }; },
@@ -805,7 +819,7 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
       const cmds = ['cd', 'pwd', 'ls', 'cat', 'echo', 'printf', 'grep', 'rg', 'sed', 'awk', 'diff',
         'find', 'head', 'tail', 'wc', 'sort', 'uniq', 'cut', 'tr', 'tee', 'xargs', 'basename', 'dirname',
         'test', '[', 'touch', 'mkdir', 'rm', 'mv', 'cp', 'chmod', 'stat', 'git', 'python', 'python3',
-        'env', 'export', 'unset', 'clear', 'history', 'which'];
+        'env', 'export', 'unset', 'clear', 'history', 'which', 'sleep'];
       // Say what is ACTUALLY here. `help` used to list these as if they were coreutils, and the
       // agent believed it — flags it did not implement were ignored rather than refused
       // (forward-pass R3a). An unsupported flag is now an error, so this text and the behaviour
@@ -819,7 +833,7 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
         + '\n  rg -i -l -n -c -t/--type -g/--glob --files   (PATTERN [paths...])'
         + '\n  head/tail -n   wc -l -w -c   sort -r -n -u -f   uniq -c -d -u   cut -d -f -c   tr [-d], ranges'
         + '\n  find [dir] -name -type -maxdepth       sed s/// on stdin or a file (no -i; use the edit tool)'
-        + '\n  awk -F with {print $N}      ls -R -a -l'
+        + '\n  awk -F with {print $N}      ls -R -a -l      sleep SECONDS (decimals; capped at ' + SLEEP_MAX_S + ' s)'
         + '\nNo subshells, loops, functions, heredocs, background jobs or command substitution.'
         + '\nPython is a real kernel (`python file.py`); it is the scripting layer, not bash.', code: 0 };
     },

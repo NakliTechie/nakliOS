@@ -9,7 +9,7 @@
 //
 // Every case below asserts BOTH that the old wrong answer is gone AND that a benign use still
 // works — a widened check that fires on ordinary work gets turned off, which helps nobody.
-import { createShell } from '../shell.mjs';
+import { createShell, SLEEP_MAX_S } from '../shell.mjs';
 import { buildRigRegistry } from '../../registry/index.mjs';
 import { createFileops, MemoryBackend } from '../../fileops/index.mjs';
 import { createGrant, createOpLog, createAgentFace } from '../../agent/index.mjs';
@@ -377,6 +377,25 @@ await test('$? expands inside double quotes exactly as it does outside them', as
   const ok0 = await run('true; echo "code=$?"');             assert(/code=0$/.test(ok0.out), `after success: ${JSON.stringify(ok0.out)}`);
   const glob = await run('echo "a?b"');                      eq(glob.out, 'a?b', 'a quoted ? that is not $? is still a literal, not a glob');
   const lit = await run("echo '$?'");                        eq(lit.out, '$?', 'single quotes still protect it');
+});
+
+// ── sleep — a child asked to pace itself spent 20 steps hunting for one (live 2026-09-17) ────
+await test('sleep: waits the interval, exits 0, refuses the false friends (no arg, a word, two args, above the cap)', async () => {
+  const { run } = await shell();
+  const t0 = Date.now();
+  const ok = await run('sleep 0.3');
+  const dt = Date.now() - t0;
+  eq(ok.code, 0, 'sleep 0.3 exits 0'); eq(ok.out, '', 'and prints nothing');
+  assert(dt >= 280 && dt < 2000, `it actually waited ~300 ms: ${dt} ms`);
+  eq((await run('sleep 0.1 && echo after')).out, 'after', 'a sleep chains like any other command');
+  eq((await run('which sleep')).out, 'sleep', 'which knows it');
+  assert(/\bsleep SECONDS\b/.test((await run('help')).out), 'help lists it');
+  for (const [cmd, why] of [['sleep', 'no operand'], ['sleep abc', 'a word'], ['sleep 1 2', 'two args'], ['sleep -1', 'negative'], [`sleep ${SLEEP_MAX_S + 1}`, 'above the cap']]) {
+    const r = await run(cmd);
+    assert(r.code !== 0, `${why} must not exit 0: ${JSON.stringify(r)}`);
+    assert(/^sleep: /.test(r.out), `${why} says who refused: ${r.out}`);
+  }
+  eq((await run(`sleep ${SLEEP_MAX_S + 1}`)).out, `sleep: ${SLEEP_MAX_S + 1} exceeds the ${SLEEP_MAX_S} s cap`, 'the cap is named');
 });
 
 if (failures.length) {
