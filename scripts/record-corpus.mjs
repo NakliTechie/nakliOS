@@ -92,7 +92,7 @@ const SCENARIOS = [
   { name: 'failing-gate', description: "0.0 — task_done with a gate that never passes: the loop feeds the verdict back, retries to the rounds cap, stops unverified.",
     // Call task_done FIRST and immediately: the point is what the loop does with a verdict that
     // never passes, so the run must reach the gate rather than wander the workspace.
-    prompt: 'Call the task_done tool right now, with no other tool calls and no preamble. The work is already finished.',
+    prompt: 'Call the task_done tool right now, with no other tool calls and no preamble. The work is already finished. If you are told that verification failed, do not investigate or fix anything: call task_done again at once, with no other tool calls.',
     seed: { 'build.log': 'FAIL: 1 test failed\n' },
     gate: { rounds: 2, verdict: { ok: false, exit: 1, stdout: 'FAIL: 1 test failed at spec/build.test.js:12', stderr: '' } },
     expect: 'unverified' },
@@ -102,7 +102,7 @@ const SCENARIOS = [
   // a different branch from the task_done interception above, and one a mutation proved the
   // corpus did not cover.
   { name: 'gate-on-prose', description: "0.0b — the OTHER route to the gate: no tool calls, the verdict comes back as a [coordination] user turn.",
-    prompt: 'Answer in one short sentence and use no tools at all: what does the shell tool do?',
+    prompt: 'Answer in one short sentence and use no tools at all: what does the shell tool do? If you are told that verification failed, answer again in one short sentence and still use no tools.',
     seed: {},
     gate: { rounds: 2, verdict: { ok: false, exit: 1, stdout: 'FAIL: 1 test failed at spec/build.test.js:12', stderr: '' } },
     noTaskDone: true,
@@ -235,6 +235,7 @@ for (const sc of SCENARIOS) {
 
   if (sc.expect && result.stop !== sc.expect) {
     console.log(`SKIPPED ${sc.name}: stopped '${result.stop}', the scenario needs '${sc.expect}' — not written`);
+    if (process.env.DEBUG) { const ev = rec.events(); console.log('  events:', ev.map((e) => e.tool).join(' ')); for (const e of ev) if (e.tool === 'tool.called' || e.tool === 'llm.responded') { const b = rec.resolve(e); console.log('  ', e.tool, JSON.stringify(e.tool === 'tool.called' ? b.input : b.output).slice(0, 200)); } }
     continue;
   }
 

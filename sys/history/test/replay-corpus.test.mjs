@@ -291,6 +291,7 @@ await test('0.0 failing gate — the model does not get to declare done; the ver
   const fails = ev.filter((e) => e.tool === 'verify.failed');
   assert(fails.length >= 2, `the failing verdict was fed back and retried: ${fails.length} round(s)`);
   assert(!ev.some((e) => e.tool === 'verify.passed'), 'nothing passed');
+  eq(fails[0].output?.via, 'tool', 'DC1: round 1 answered the task_done call as its tool result (the route this cell names)');
   const stop = ev.find((e) => e.tool === 'run.stopped');
   eq(stop.output.verified, false, 'and the run says so: verified=false');
   // HOW the model asked to be done, in this recording: it called `task_done`. The loop
@@ -328,8 +329,10 @@ await test('0.0b the OTHER route to the gate — the model answers in prose and 
 
   // and the verdict really was fed back as a USER turn — the fold reproduces it
   const folded = foldTranscript(ev.length ? rec.events() : [], rec.resolve);
-  const coord = folded.filter((m) => m.role === 'user' && /^\[coordination\] Gate failed/.test(String(m.content || '')));
+  // DC1 (2026-09-17): the fold replays the loop's exact bytes — `[coordination] Verification failed (exit 1). The task is NOT complete.` + the gate's output + `Fix the problem and continue.`
+  const coord = folded.filter((m) => m.role === 'user' && /^\[coordination\] Verification failed \(exit 1\)\. The task is NOT complete\./.test(String(m.content || '')));
   assert(coord.length >= 1, `the failing verdict is carried as a coordination turn: ${JSON.stringify(folded.map((m) => m.role))}`);
+  assert(/FAIL: 1 test failed at spec\/build\.test\.js:12/.test(coord[0].content) && /\nFix the problem and continue\.$/.test(coord[0].content), 'with the gate\'s output and the closing line, verbatim: ' + coord[0].content);
 });
 
 await test('0.2 budget stop — the budget ends the run, and it replays because the axis is turns', async () => {

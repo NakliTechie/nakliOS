@@ -350,6 +350,19 @@ await test('RECOVERY resolution: a gate pass marks an EARLIER owner input likely
   assert(/likely handled.*verify before redoing/.test(recoveryNote(p)), 'the note HEDGES: verify, do not blindly redo'); void passed;
 });
 
+await test('DC1 legacy shapes: a verify.failed recorded WITHOUT `via` folds to the old `[coordination] Gate failed` line; a legacy verify.passed folds to nothing', async () => {
+  const rec = createRunRecorder({ app: 'anvil', principal: 'p' });
+  await rec.start({ messages: [{ role: 'user', content: 'go' }], tools: [] });
+  rec.onEvent({ type: 'verify-fail', verdict: { ok: false, exit: 3 }, round: 1 }); // the pre-DC1 event: no feedback, no via
+  rec.onEvent({ type: 'verify-pass', verdict: { ok: true, exit: 0 } });
+  await rec.settled();
+  const t = foldTranscript(rec.events(), rec.resolve);
+  eq(t.filter((m) => m.role === 'user').length, 2, 'the opening and the reconstructed verdict, nothing for the pass');
+  eq(t[1].content, '[coordination] Gate failed (exit 3). Fix the problem and continue.', 'a record from before the field reconstructs as it always did');
+  const fail = rec.resolve(rec.events().find((e) => e.tool === 'verify.failed')).output;
+  assert(!('via' in fail) && !('feedback' in fail), 'nothing invented on the chain for a legacy event');
+});
+
 await test('RECOVERY: coordination (a carried gate verdict) is tagged and never reads as an owner turn', async () => {
   const shell = freshShell();
   const rec = createRunRecorder({ app: 'anvil', principal: 'p' });
@@ -361,8 +374,9 @@ await test('RECOVERY: coordination (a carried gate verdict) is tagged and never 
     executeTool: makeShellExecutor(shell), onEvent: rec.onEvent, verify: async () => (++n >= 2 ? { ok: true, exit: 0 } : { ok: false, exit: 1 }), maxVerifyRounds: 3 });
   await rec.finish(r); await rec.settled();
   const t = foldTranscript(rec.events(), rec.resolve);
-  const gate = t.find((m) => m.role === 'user' && /Gate failed/.test(m.content || ''));
-  assert(gate && /^\[coordination\]/.test(gate.content), 'a carried gate verdict is tagged [coordination]');
+  const gate = t.find((m) => m.role === 'user' && /Verification failed \(exit 1\)/.test(m.content || ''));
+  assert(gate && /^\[coordination\] Verification failed \(exit 1\)\. The task is NOT complete\./.test(gate.content) && /\nFix the problem and continue\.$/.test(gate.content), 'a carried gate verdict is tagged [coordination], verbatim as the loop wrote it (DC1): ' + (gate && gate.content));
+  eq(r.messages.find((m) => m.role === 'user' && /Verification failed/.test(m.content)).content, gate.content, 'the fold replays the exact bytes the loop sent');
   const ownerAt = t.findIndex((m) => m.role === 'user' && /fix the build/.test(m.content || ''));
   const coordAt = t.findIndex((m) => /^\[coordination\]/.test(m.content || ''));
   assert(ownerAt >= 0 && (coordAt === -1 || coordAt > ownerAt), 'coordination never precedes the owner intent');

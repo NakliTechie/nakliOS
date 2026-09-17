@@ -111,3 +111,16 @@ cell: add it to `SCENARIOS` in `scripts/record-corpus.mjs` (description, tools, 
 `BASE=… MODEL=… KEY=… node scripts/record-corpus.mjs --only <cell>` — `OUT=<dir>` for a dry run
 against a stub, never into this folder. A cell that already has a record is skipped; `--overwrite`
 re-captures it, and that is a decision to write down, never a way to make a red lane green.
+
+## Re-captures (the decisions written down)
+
+- **2026-09-17 — `failing-gate` and `gate-on-prose`, on `deepseek-v4-flash`.** DC1 made the fed-back
+  gate verdict a `[coordination]`-prefixed turn (so the bytes of every request after a failed round
+  changed) and put the verdict's exact text on `verify.failed`/`verify.passed` (so the recorded outputs
+  changed shape). Both cells' 2026-09-07 records (qwen3:8b) could no longer replay. The scenario prompts
+  now also tell the model not to investigate after a failed verdict — three capable models (poolside,
+  solar, deepseek) went looking for the failing test and hit max-steps, a shape the old weak model never
+  produced. The recorded deepseek run still investigated (three shell calls) and then answered in
+  prose, so 0.0's second round is the prose route and its first round is the task_done route (the lane
+  pins that). The replay lane's 0.0b assertion follows the new bytes.
+

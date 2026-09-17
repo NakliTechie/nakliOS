@@ -41,8 +41,8 @@ export const RUN_EVENTS = Object.freeze([
   'tool.called',      // input: { id, name, args, step }       output: {}
   'tool.responded',   // input: { id, name, args_hash, step }  output: { result, sent }  (F5: `sent` is the capped surface form when it differs)
   'tool.failed',      // input: { id, name, step }             output: { error }
-  'verify.passed',    // input: { step }                       output: { verdict }
-  'verify.failed',    // input: { step, round, ran }           output: { verdict }
+  'verify.passed',    // input: { step }                       output: { verdict, feedback?, via?, id? }  (DC1: the exact text the loop fed back, and how — 'tool' | 'turn' | null)
+  'verify.failed',    // input: { step, round, ran }           output: { verdict, feedback?, via?, id? }
   'run.stopped',      // input: { steps }                      output: { stop, reason, verified, axis, error }
   'run.checkpoint',   // input: { step }                        output: { handoff }  (B4: a rollover landmark)
   'run.compacted',    // input: { method, from, to, step }      output: { replacement }  (F4: a logged surface replace)
@@ -177,8 +177,8 @@ export function createRunRecorder({ app = 'anvil', principal = 'local', grant_id
           enqueue(verb, () => ({ input: { id: e.id, name: e.name, step: s, chars: e.chars ?? null }, output: { sent: String(e.sent ?? '') } }));
           break;
         case 'tool.failed': enqueue(verb, () => ({ input: { id: e.id, name: e.name, step: s }, output: { error: String(e.error ?? '') } })); break;
-        case 'verify.passed': enqueue(verb, () => ({ input: { step: s }, output: { verdict: e.verdict ?? null } })); break;
-        case 'verify.failed': enqueue(verb, () => ({ input: { step: s, round: e.round ?? null, ran: e.ran ?? null }, output: { verdict: e.verdict ?? null } })); break;
+        case 'verify.passed': enqueue(verb, () => ({ input: { step: s }, output: { verdict: e.verdict ?? null, ...(e.via !== undefined ? { feedback: e.feedback ?? null, via: e.via, id: e.id ?? null } : {}) } })); break;
+        case 'verify.failed': enqueue(verb, () => ({ input: { step: s, round: e.round ?? null, ran: e.ran ?? null }, output: { verdict: e.verdict ?? null, ...(e.via !== undefined ? { feedback: e.feedback ?? null, via: e.via, id: e.id ?? null } : {}) } })); break;
         // F7: the loop's escalating repeat reminder. It is a user turn the LOOP wrote, so it
         // must be on the chain or foldTranscript cannot reproduce what was sent — which is
         // precisely the divergence F1 checks for.
@@ -425,7 +425,7 @@ export function logUnit() {
           return { rows, open };
         }
         case 'verify.passed': rows.push({ k: 'system', text: '✓ gate passed — exit 0' }); return { rows, open };
-        case 'verify.failed': rows.push({ k: 'system', text: `✗ gate failed (round ${inp.round ?? 1}) — exit ${out.verdict?.exit ?? '?'}; agent retrying` }); return { rows, open };
+        case 'verify.failed': rows.push({ k: 'system', text: `✗ gate failed (round ${inp.round ?? 1}) — exit ${out.verdict?.exit ?? '?'}; ${out.via === null ? 'the run ended on it' : 'agent retrying'}` }); return { rows, open };
         case 'run.steered': rows.push({ k: 'system', text: '⇆ ' + String(out.content || '').replace(/^\[coordination\] /, '') }); return { rows, open }; // B2
         case 'run.stopped': {
           const st = out.stop;
@@ -513,11 +513,19 @@ export function transcriptUnit({ applyCompaction = false } = {}) {
         // chain for the log and the outcome folds; it just does not build the transcript.
         case 'tool.failed':
           return { out, pendingCalls: flushed(s.pendingCalls), started: s.started };
-        // Coordination, not the owner: a carried gate verdict must never read as the owner's
-        // instruction (B3). The tag survives into the next run's transcript.
-        case 'verify.failed':
-          out.push({ role: 'user', content: `[coordination] Gate failed (exit ${o.verdict?.exit ?? '?'}). Fix the problem and continue.` });
+        // DC1 (2026-09-17): the verdict's feedback is replayed VERBATIM from the record — as the user turn
+        // the loop wrote (`via: 'turn'`, always `[coordination]`-prefixed), as the task_done tool's result
+        // (`via: 'tool'`), or nothing (`via: null` — the round that ended the run, or an implicit pass).
+        // A record from before the field is reconstructed as it always was: the wording the loop
+        // used then differed from this line, which is why the field exists (F1 named the divergence).
+        case 'verify.passed':
+        case 'verify.failed': {
+          if (o.via === 'tool') { const pc = flushed(s.pendingCalls); out.push({ role: 'tool', tool_call_id: o.id ?? null, content: String(o.feedback ?? '') }); return { out, pendingCalls: pc, started: s.started }; }
+          if (o.via === 'turn') { out.push({ role: 'user', content: String(o.feedback ?? '') }); return { out, pendingCalls: s.pendingCalls, started: s.started }; }
+          if (o.via === null || e.tool === 'verify.passed') return s;
+          out.push({ role: 'user', content: `[coordination] Gate failed (exit ${o.verdict?.exit ?? '?'}). Fix the problem and continue.` }); // legacy records
           return { out, pendingCalls: s.pendingCalls, started: s.started };
+        }
         // F7: the reminder is replayed verbatim from the record, not regenerated — the wording
         // may change between versions, and the surface must be what THAT run actually sent.
         case 'run.nudged':
@@ -1210,7 +1218,7 @@ export function foldRecovery(events, resolve) {
   // A gate pass anywhere in the record is a completion signal for inputs before it.
   const passIndex = ev.findIndex((e) => e.tool === 'verify.passed');
   const lastCheckpoint = [...ev].reverse().find((e) => e.tool === 'run.checkpoint');
-  const coordinationCount = ev.filter((e) => e.tool === 'verify.failed').length;
+  const coordinationCount = ev.filter((e) => e.tool === 'verify.failed' && (e.output?.via === undefined || e.output?.via === 'turn')).length; // DC1: only a verdict that went out as a turn is a [coordination] line (a legacy record: every one was)
   const annotated = ownerInputs.map((inp, k) => {
     const isLatest = k === ownerInputs.length - 1;
     const gatePassedAfter = passIndex !== -1 && passIndex > inp.atIndex;

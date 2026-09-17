@@ -1,4 +1,3 @@
 {
-  "maxVerifyRounds": 2,
-  "expect": "unverified"
+  "maxVerifyRounds": 2
 }

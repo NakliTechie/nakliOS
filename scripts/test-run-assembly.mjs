@@ -120,6 +120,31 @@ ok('predicates');
 }
 ok('empty reply → nudge reconstructs');
 
+// ── 2c. DC1: a gate that fails once, on BOTH routes — the F1 check finds no divergence (real recorder) ──
+for (const route of ['turn', 'tool']) {
+  const rec = createRunRecorder({ app: 'anvil', principal: 'test' });
+  const divergences = [];
+  let i = 0, gates = 0;
+  const replies = route === 'turn'
+    ? [{ content: 'I believe it is done.', toolCalls: [] }, { content: '', toolCalls: [{ id: 'c1', type: 'function', function: { name: 'read', arguments: '{"path":"a"}' } }] }, { content: 'done now', toolCalls: [] }]
+    : [{ content: '', toolCalls: [{ id: 'd1', type: 'function', function: { name: 'task_done', arguments: '{"summary":"wrote it and ran the tests"}' } }] }, { content: '', toolCalls: [{ id: 'c1', type: 'function', function: { name: 'read', arguments: '{"path":"a"}' } }] }, { content: '', toolCalls: [{ id: 'd2', type: 'function', function: { name: 'task_done', arguments: '{"summary":"ran the tests again, green"}' } }] }];
+  const infer = rec.wrapInfer(async () => replies[Math.min(i++, replies.length - 1)], { onDivergence: (d) => divergences.push(d.why) });
+  const verify = async () => (++gates === 1 ? { ok: false, exit: 1, stdout: 'FAIL: 1 test failed at spec/x.js:3', stderr: '' } : { ok: true, exit: 0, stdout: 'ok', stderr: '' });
+  const sysMsg = (extra) => ({ role: 'system', content: 'SYS' + (extra || '') });
+  const convo = [{ role: 'user', content: 'do the thing' }];
+  const result = await driveRun({ mode: 'code', convo, sysMsg, tools: runToolset('code', { verify: true }), infer, executeTool: async () => 'ran', rec, verify, onEvent: rec.onEvent, model: () => null });
+  await rec.settled();
+  assert.equal(result.verified, true, route + ': the second gate passed');
+  assert.deepEqual(divergences, [], route + ': every request after the failed round reconstructs from the record — the fold replays the verdict verbatim');
+  const ev = rec.events();
+  assert.equal(ev.filter((e) => e.tool === 'verify.failed').length, 1, route + ': one failed round on the chain');
+  const fb = rec.resolve(ev.find((e) => e.tool === 'verify.failed')).output;
+  assert.equal(fb.via, route, route + ': the record says how the verdict went');
+  if (route === 'turn') assert.match(fb.feedback, /^\[coordination\] Verification failed \(exit 1\)\. The task is NOT complete\.\n\nFAIL: 1 test failed at spec\/x\.js:3\nFix the problem and continue\.$/, 'the exact bytes are on the chain');
+  else assert.equal(fb.id, 'd1', 'the tool call the verdict answered');
+}
+ok('DC1 gate-fail round reconstructs (turn + tool)');
+
 // ── 3. driveRun records every loop and re-loops exactly as the inline app did ──
 function fakeRec() {
   const starts = [], finishes = [], ev = [];

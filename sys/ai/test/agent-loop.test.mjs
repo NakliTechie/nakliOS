@@ -342,6 +342,10 @@ await test('at the step cap a gated run asks the verifier once: green is done (a
   });
   eq(ungated.stop, 'max-steps', 'no gate → nothing to ask; the cap is the cap');
   eq(ungated.verified, undefined, 'and no claim is made');
+  // DC1: at the cap nothing is pushed, and the events say so (a fold must not invent a turn)
+  { const evs = []; const rr = await runAgentLoop({ messages: [{ role: 'user', content: 'go' }], tools: [shellTool()], infer: scriptedInfer([{ content: '', toolCalls: [call('shell', { command: 'ls' }, 'x1')] }, { content: '', toolCalls: [call('shell', { command: 'ls' }, 'x2')] }]), executeTool: async () => 'out\n[exit 0]', maxSteps: 2, verify: async () => ({ ok: false, exit: 1, stdout: 'red' }), onEvent: (e) => evs.push(e) });
+    eq(rr.stop, 'max-steps'); eq(evs.find((e) => e.type === 'verify-fail').via, null, 'the cap\'s failed gate pushed nothing');
+    assert(!rr.messages.some((m) => m.role === 'user' && /Verification failed/.test(m.content)), 'no turn was pushed at the cap'); }
 });
 
 await test('a tool call with invalid JSON args yields an error result, loop continues', async () => {
@@ -415,6 +419,28 @@ await test('verifier gate: a failing verdict is fed back; only a passing one com
   eq(result.stop, 'done', 'completed'); eq(result.verified, true, 'verified true');
   assert(events.some((e) => e.type === 'verify-fail'), 'a verify-fail was surfaced');
   assert(events.some((e) => e.type === 'verify-pass'), 'a verify-pass ended it');
+  // DC1: the fed-back verdict is a [coordination] turn, and the event carries the exact bytes and how they went
+  const fail = events.find((e) => e.type === 'verify-fail');
+  eq(fail.via, 'turn'); assert(/^\[coordination\] Verification failed \(exit 1\)\. The task is NOT complete\.\n\nFAIL\nFix the problem and continue\.$/.test(fail.feedback), fail.feedback);
+  const sent = result.messages.find((m) => m.role === 'user' && /Verification failed/.test(m.content));
+  eq(sent.content, fail.feedback, 'the turn the model saw is the text on the event, byte for byte');
+  eq(events.find((e) => e.type === 'verify-pass').via, null, 'an implicit pass pushes nothing');
+  { const evs = []; const rr = await runAgentLoop({ messages: [{ role: 'user', content: 'go' }], tools: [taskDoneTool()], infer: scriptedInfer([{ content: '', toolCalls: [call('task_done', { summary: 'wrote and checked it' }, 'n1')] }]), executeTool: async () => '', onEvent: (e) => evs.push(e) });
+    eq(evs.find((e) => e.type === 'tool-result' && e.id === 'n1').result, rr.messages.find((m) => m.role === 'tool' && m.tool_call_id === 'n1').content, 'no gate: the event carries the bytes the model saw'); }
+});
+await test('DC1: on the task_done route the verdict is the tool result (no prefix) and the event says via: tool with the call id; the round that ends the run pushes nothing', async () => {
+  const events = [];
+  const r = await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }], tools: [taskDoneTool()],
+    infer: scriptedInfer([{ content: '', toolCalls: [call('task_done', { summary: 'wrote it and ran the tests' }, 'd1')] }, { content: '', toolCalls: [call('task_done', { summary: 'ran the tests again' }, 'd2')] }, { content: 'never', toolCalls: [] }]),
+    executeTool: async () => '', verify: async () => ({ ok: false, exit: 2, stdout: 'boom', stderr: '' }), maxVerifyRounds: 2, onEvent: (e) => events.push(e),
+  });
+  eq(r.stop, 'unverified');
+  const fails = events.filter((e) => e.type === 'verify-fail');
+  eq(fails.length, 2); eq(fails[0].via, 'tool'); eq(fails[0].id, 'd1'); eq(fails[0].feedback, 'Verification failed (exit 2). The task is NOT complete.\n\nboom');
+  eq(r.messages.find((m) => m.role === 'tool' && m.tool_call_id === 'd1').content, fails[0].feedback, 'the tool result is the text on the event');
+  eq(fails[1].via, 'tool'); eq(fails[1].id, 'd2', 'the last round on this route still answered the call (the loop then returned)');
+  assert(!r.messages.some((m) => m.role === 'user' && /Verification failed/.test(m.content)), 'no user turn on the task_done route');
 });
 
 await test('verifier gate: stop:unverified when the model never satisfies the verifier', async () => {

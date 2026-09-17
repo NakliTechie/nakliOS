@@ -532,17 +532,22 @@ export async function runAgentLoop({
       if (verify) {
         const { verdict, ran } = await runGate();
         if (verdict && verdict.ok) {
-          onEvent({ type: 'verify-pass', verdict, step });
+          onEvent({ type: 'verify-pass', verdict, step, via: null });
           onEvent({ type: 'done', reason: 'verified', step });
           return { messages: convo, steps: step + 1, stop: 'done', verified: true, text: lastText };
         }
         verifyRounds++;
-        onEvent({ type: 'verify-fail', verdict, round: verifyRounds, ran, step });
-        if (verifyRounds >= maxVerifyRounds) {
+        // DC1 (2026-09-17): the gate's verdict is a `[coordination]` turn like every other turn the loop
+        // writes — the owner-prompt scan skips it — and the exact text rides the event, so the record's
+        // fold replays THESE bytes rather than regenerating them (F7's rule). Exhausted rounds push nothing.
+        const final = verifyRounds >= maxVerifyRounds;
+        const feedback = final ? null : '[coordination] ' + gateFeedback(verdict, gateOutputCap) + '\nFix the problem and continue.';
+        onEvent({ type: 'verify-fail', verdict, round: verifyRounds, ran, step, feedback, via: final ? null : 'turn' });
+        if (final) {
           onEvent({ type: 'done', reason: 'unverified', step });
           return { messages: convo, steps: step + 1, stop: 'unverified', verified: false, text: lastText, verdict };
         }
-        const fb = { role: 'user', content: gateFeedback(verdict, gateOutputCap) + '\nFix the problem and continue.' };
+        const fb = { role: 'user', content: feedback };
         loopAuthored.add(fb);
         convo.push(fb);
         continue;
@@ -662,20 +667,23 @@ export async function runAgentLoop({
         // back with the narration as its report (live prod, 2026-09-17, task xt8c1frc).
         lastText = summary;
         if (!verify) { // no gate wired → the explicit signal is accepted as-is
-          onEvent({ type: 'tool-result', name, id, result: 'accepted', step });
-          convo.push({ role: 'tool', tool_call_id: id, content: 'Task accepted (no verification gate configured).' });
+          const accepted = 'Task accepted (no verification gate configured).';
+          onEvent({ type: 'tool-result', name, id, result: accepted, step }); // the event carries the bytes the model saw (the checker's probe: it said 'accepted')
+          convo.push({ role: 'tool', tool_call_id: id, content: accepted });
           gateGreen = true;
           continue;
         }
         const { verdict, ran } = await runGate();
         if (verdict && verdict.ok) {
-          onEvent({ type: 'verify-pass', verdict, step });
-          convo.push({ role: 'tool', tool_call_id: id, content: 'Verification passed. Task complete.' });
+          const passed = 'Verification passed. Task complete.';
+          onEvent({ type: 'verify-pass', verdict, step, feedback: passed, via: 'tool', id });
+          convo.push({ role: 'tool', tool_call_id: id, content: passed });
           gateGreen = true;
         } else {
           verifyRounds++;
-          onEvent({ type: 'verify-fail', verdict, round: verifyRounds, ran, step });
-          convo.push({ role: 'tool', tool_call_id: id, content: gateFeedback(verdict, gateOutputCap) });
+          const feedback = gateFeedback(verdict, gateOutputCap); // a tool result, not an owner turn: no prefix
+          onEvent({ type: 'verify-fail', verdict, round: verifyRounds, ran, step, feedback, via: 'tool', id });
+          convo.push({ role: 'tool', tool_call_id: id, content: feedback });
           if (verifyRounds >= maxVerifyRounds) {
             onEvent({ type: 'done', reason: 'unverified', step });
             return { messages: convo, steps: step + 1, stop: 'unverified', verified: false, text: lastText, verdict };
@@ -818,11 +826,11 @@ export async function runAgentLoop({
   if (verify) {
     const { verdict, ran } = await runGate();
     if (verdict && verdict.ok) {
-      onEvent({ type: 'verify-pass', verdict, step: maxSteps });
+      onEvent({ type: 'verify-pass', verdict, step: maxSteps, via: null }); // DC1: nothing pushed at the cap
       onEvent({ type: 'done', reason: 'verified', step: maxSteps, atCap: true });
       return { messages: convo, steps: maxSteps, stop: 'done', verified: true, atCap: true, text: lastText };
     }
-    onEvent({ type: 'verify-fail', verdict, round: verifyRounds + 1, ran, step: maxSteps });
+    onEvent({ type: 'verify-fail', verdict, round: verifyRounds + 1, ran, step: maxSteps, via: null }); // DC1: nothing pushed at the cap — the fold must not invent a turn
     return { messages: convo, steps: maxSteps, stop: 'max-steps', verified: false, verdict, text: lastText };
   }
   return { messages: convo, steps: maxSteps, stop: 'max-steps', text: lastText };
