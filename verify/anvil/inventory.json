@@ -193,6 +193,12 @@
       "kind": "file",
       "detail": ".anvil/memory"
     },
+    "file:.anvil/memory/proposals.json": {
+      "owner": "workspace-files.md",
+      "fingerprint": "e01620faa68f",
+      "kind": "file",
+      "detail": ".anvil/memory/proposals.json"
+    },
     "file:.anvil/oplog.jsonl": {
       "owner": "workspace-files.md",
       "fingerprint": "2cdf93fcb5f1",

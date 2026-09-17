@@ -19,7 +19,7 @@
 // the reviewer, outside any loop, and the run vocabulary (RUN_EVENTS) stays the
 // loop's. Same appendEvent contract as History, so the chain is tamper-evident.
 
-import { appendEvent, contentHash, verifyChain, toNDJSON, fromNDJSON } from '../history/ledger.mjs';
+import { appendEvent, contentHash, verifyChain, toNDJSON, fromNDJSON, eventHash } from '../history/ledger.mjs';
 
 export const FINGERPRINT_VERSION = 'v1';
 export const DEFAULT_TOP_K_PATHS = 5;
@@ -63,18 +63,27 @@ export async function fingerprint(proposal, opts) {
 
 // A tiny chain of proposal.* events with payloads by hash — same shape as the run
 // recorder, same tamper-evidence, its own vocabulary.
-export function createProposalLedger({ app = 'anvil', principal = 'local', now = () => Date.now() } = {}) {
+// `seed` (PG-A3): a stored export ({events, blobs}) to continue — rejections persist across sessions.
+export function createProposalLedger({ app = 'anvil', principal = 'local', now = () => Date.now(), seed = null } = {}) {
   const events = []; const blobs = new Map(); let head = null; let queue = Promise.resolve();
+  if (seed && seed.events) {
+    const evs = typeof seed.events === 'string' ? fromNDJSON(seed.events) : seed.events.slice();
+    for (const e of evs) events.push(e);
+    for (const [k, v] of (seed.blobs instanceof Map ? seed.blobs : Object.entries(seed.blobs || {}))) blobs.set(k, v);
+  }
   async function append(tool, input, output) {
+    if (head === null && events.length) head = await eventHash(events[events.length - 1]); // continuing a seeded chain
     const { event, head: h } = await appendEvent(head, { ts: now(), principal, door: 'call', tool, app, input, output, grant_id: null });
     head = h; events.push(event); blobs.set(event.input_hash, input); blobs.set(event.output_hash, output); return event;
   }
   const enqueue = (tool, input, output) => { const p = queue.then(() => append(tool, input, output)); queue = p.catch(() => {}); return p; };
   return {
     // Record a rejection: the fingerprint, why, and how long it stays poisoned.
-    reject({ fp, reason = '', cooloffDays = DEFAULT_COOLOFF_DAYS, by = principal } = {}) {
+    // `label` (PG-A3): the proposal in words, so the next review can be TOLD what was refused.
+    reject({ fp, reason = '', cooloffDays = DEFAULT_COOLOFF_DAYS, by = principal, label = '' } = {}) {
       if (!/^fp:v\d+:[0-9a-f]{64}$/.test(String(fp))) return Promise.reject(new Error(`not a fingerprint: ${fp}`));
-      return enqueue('proposal.rejected', { fp, by }, { reason: String(reason).slice(0, 500), cooloff_days: Number(cooloffDays) || 0 });
+      const lbl = String(label || '').replace(/\s+/g, ' ').trim().slice(0, 200); // one line: it is printed as a bullet in the next review's prompt
+      return enqueue('proposal.rejected', { fp, by, ...(lbl ? { label: lbl } : {}) }, { reason: String(reason).replace(/\s+/g, ' ').trim().slice(0, 500), cooloff_days: Number(cooloffDays) || 0 });
     },
     settled() { return queue; },
     events() { return events.slice(); },
@@ -103,6 +112,19 @@ export function isPoisoned(ledger, fp, now = Date.now()) {
   if (!last) return { poisoned: false, until: null, reason: null };
   const until = last.ts + last.cooloffDays * 86_400_000;
   return { poisoned: now < until, until, reason: last.reason };
+}
+
+// PG-A3: what is poisoned right now, in words — the list the next review is told, so the model does
+// not spend a proposal on something the owner refused (the filter still drops an equivalent).
+export function rejectedList(ledger, now = Date.now()) {
+  const latest = new Map();
+  for (const e of ledger.events()) {
+    if (e.tool !== 'proposal.rejected') continue;
+    const { input, output } = ledger.resolve(e) || {};
+    if (!input || !input.fp) continue;
+    latest.set(input.fp, { fp: input.fp, label: input.label || '', reason: output?.reason || '', until: e.ts + (Number(output?.cooloff_days) || 0) * 86_400_000 });
+  }
+  return [...latest.values()].filter((r) => now < r.until);
 }
 
 // The fork's gate: keep only proposals whose fingerprint is not poisoned. Each

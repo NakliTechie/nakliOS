@@ -1,6 +1,6 @@
 // Conformance — structured project memory (pure).
 //   node sys/ai/test/memory-store.test.mjs
-import { parseScope, createFactSession, parseFact, buildMemoryIndex, noteToFact, recallTool, MEMORY_DIR, MEMORY_TYPES, factUsage, isResting,
+import { parseScope, createFactSession, parseFact, buildMemoryIndex, noteToFact, recallTool, MEMORY_DIR, MEMORY_TYPES, factUsage, isResting, earnedFacts, applyEarned, EARN_RUNS, applyRevision, parseFp, SYSTEM_CAUSES,
          findDuplicate, duplicateReply, slotHolder, createRememberBudget, budgetSpentReply, MAX_REMEMBER_PER_RUN, NEAR_DUPLICATE_JACCARD,
          checkRulesCap, rulesCapReply, RULES_CAP_CHARS, LESSON_CONTRACT, serializeFact }
   from '../memory-store.mjs';
@@ -331,6 +331,49 @@ await test('slotHolder prefers the recorded time over array order, and degrades 
 });
 
 // ── A1 (CRIB-A): salience from use — a fact nobody recalls rests out of the index ──
+await test('PG-A3: a fact carries the fingerprint of the proposal it came from; the system causes are not the agent\'s', () => {
+  const f = noteToFact('The build tool is Vite.', 'project', 'hypothesis', { fp: 'fp:v1:' + 'ab'.repeat(32) });
+  assert(/^fp: fp:v1:abab/m.test(f.file), 'serialised'); eq(parseFact(f.file).fp, 'fp:v1:' + 'ab'.repeat(32), 'round-trips');
+  eq(parseFact(serializeFact({ ...parseFact(f.file), fp: 'junk' })).fp, null, 'a malformed fp is dropped, never written');
+  eq(parseFp('fp:v1:' + '0'.repeat(64)), 'fp:v1:' + '0'.repeat(64)); eq(parseFp('fp:v1:short'), null);
+  eq(SYSTEM_CAUSES.join(','), 'earned,rejected');
+  const viaRevise = parseFact(applyRevision(f.file, { status: 'verified', cause: 'earned', reason: 'I say so' }));
+  eq(viaRevise.cause, null, 'revise cannot claim a system cause'); eq(viaRevise.status, 'verified');
+  eq(parseFact(applyRevision(f.file, { status: 'verified', cause: 'earned', reason: 'x', system: true })).cause, 'earned', 'the system entry can');
+});
+
+await test('PG-A3: factUsage counts recalls in runs the gate PASSED; earnedFacts names the hypotheses with EARN_RUNS of them; applyEarned promotes with the cause and the evidence', () => {
+  // `gatePassed` is the row's word that a verify.passed is on its record — NOT `verified`, which an ungated
+  // task_done sets true (the checker's probe: two ungated finishes must earn nothing)
+  const rows = [
+    { recalled: ['vite', 'tests-live'], verified: true, gatePassed: true, endedAt: 1_000 },
+    { recalled: ['vite'], verified: true, gatePassed: true, endedAt: 2_000 },
+    { recalled: ['tests-live'], verified: false, gatePassed: false, endedAt: 3_000 },
+    { recalled: ['vite', 'tests-live'], verified: true, gatePassed: false, endedAt: 4_000 },
+  ];
+  const u = factUsage(rows);
+  eq(u.get('vite').verifiedRuns, 2); eq(u.get('vite').runs, 3); eq(u.get('tests-live').verifiedRuns, 1); eq(u.get('tests-live').runs, 3);
+  const facts = [P('vite', { description: 'The build tool is Vite.', status: 'hypothesis' }), P('tests-live', { description: 'Tests live under sys/ai/test', status: 'hypothesis' }), P('done-already', { description: 'x', status: 'verified' })];
+  eq(EARN_RUNS, 2);
+  const earned = earnedFacts(facts, u);
+  eq(earned.map((e) => e.name).join(','), 'vite', 'two verified recalls earn it; one does not; a verified fact is not re-earned');
+  eq(earned[0].verifiedRuns, 2); eq(earned[0].lastUsed, 2_000);
+  eq(earnedFacts(facts, null).length, 0, 'no usage evidence, nothing earned');
+  eq(earnedFacts(facts, u, { earnRuns: 1 }).map((e) => e.name).sort().join(','), 'tests-live,vite', 'the threshold is the knob');
+  const promoted = parseFact(applyEarned(facts[0]._text || serializeFact(facts[0]), { verifiedRuns: 2, lastUsed: 2_000 }));
+  eq(promoted.status, 'verified'); eq(promoted.cause, 'earned');
+  assert(/recalled in 2 runs the gate passed \(last 1970-01-01\)/.test(promoted.body), 'the evidence is in the revision note: ' + promoted.body);
+  assert(/_\(earned — recalled in runs the gate passed\)_/.test(buildMemoryIndex([promoted])), 'the index says it earned its place');
+  // a hypothesis a sibling superseded is never earned
+  const sup = [P('old-vite', { description: 'old', status: 'hypothesis' }), P('new-vite', { description: 'new', supersedes: 'old-vite' })];
+  eq(earnedFacts(sup, factUsage([{ recalled: ['old-vite'], gatePassed: true, endedAt: 1 }, { recalled: ['old-vite'], gatePassed: true, endedAt: 2 }])).length, 0);
+  // an ungated finish is `verified: true` with no gate: it earns nothing
+  eq(factUsage([{ recalled: ['vite'], verified: true, endedAt: 1 }, { recalled: ['vite'], verified: true, endedAt: 2 }]).get('vite').verifiedRuns, 0, 'the loop\'s flag alone is no evidence');
+  // a task-scoped note (a stall note) is never promoted to a verified belief
+  const scoped = [P('stalled-last-run', { description: 'Stalled last run — the gate never ran', status: 'hypothesis', scope: 'task:aaaa' })];
+  eq(earnedFacts(scoped, factUsage([{ recalled: ['stalled-last-run'], gatePassed: true, endedAt: 1 }, { recalled: ['stalled-last-run'], gatePassed: true, endedAt: 2 }])).length, 0);
+});
+
 await test('factUsage folds run rows into name → { runs, lastUsed }; a row with no recalls adds nothing', () => {
   const u = factUsage([{ recalled: ['a', 'b'], endedAt: 100 }, { recalled: ['a'], endedAt: 200 }, { recalled: [], endedAt: 300 }, { startedAt: 50, recalled: ['c'] }]);
   eq(u.get('a').runs, 2); eq(u.get('a').lastUsed, 200, 'the latest run wins'); eq(u.get('b').runs, 1); eq(u.get('c').lastUsed, 50, 'startedAt when no endedAt');

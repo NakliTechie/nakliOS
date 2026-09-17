@@ -134,7 +134,8 @@ function learnCtx(over = {}) {
       renderFiles: () => {}, renderLog: () => {},
       state: { activeProject: 'A' },
       parseSkill: (t) => ({ name: /name:\s*(\S+)/.exec(t || '')?.[1] || '', body: String(t || '') }),
-      projectLedger: () => over.ledger || { reject: async () => {} },
+      projectLedger: async () => over.ledger || { reject: async () => {} },
+      saveLedger: async () => {}, learnStaged: {},
       ...over.ctx,
     },
     staged, fs,
@@ -290,6 +291,8 @@ async function memoryHandlers(files) {
     recordFact: async (note, type, status) => { const slug = 'new-fact'; await fs.write(MEMORY_DIR + '/' + slug + '.md', `---\nname: ${slug}\ndescription: d\ntype: project\nstatus: ${status}\n---\n${note}\n`); return slug; },
     renderLog: () => {}, t: { log: [] },
     listFacts: async () => Object.entries(fs.store).filter(([p]) => p.startsWith(MEMORY_DIR + '/')).map(([p, c]) => ({ ...parseFact(c), path: p })),
+    // PG-A3: the retraction cascade is one shared function now — the real one, over the same memFs
+    demoteDependants: async (name) => { const all = Object.entries(fs.store).filter(([p]) => p.startsWith(MEMORY_DIR + '/')).map(([p, c]) => ({ ...parseFact(c), path: p })); const demoted = []; for (const dn of dependantsOf(all, name)) { const d = all.find((x) => x.name === dn); if (!d) continue; const dr = await fs.read(d.path, { encoding: 'utf-8' }); if (dr && dr.ok) { await fs.write(d.path, applyDemotion(dr.data, { basis: name })); demoted.push(dn); } } return demoted; },
   });
   return { handle, fs, factSession, parseFact };
 }
@@ -491,6 +494,58 @@ await test('LV2: the miss row says where the run stands against the loop\'s limi
   assert.equal(expectMissText({ streak: 2, limit: 4 }), '✗ prediction missed (2 in a row)', 'a wider limit: two short of it is silent');
   assert.equal(expectMissText({ streak: 5 }), '✗ prediction missed (5 in a row)', 'no limit on the event (a loop that never stops on misses): no tail');
   assert.equal(expectMissText({ streak: 4, limit: 0 }), '✗ prediction missed (4 in a row)', 'limit 0 (D1 off — the loop still counts and emits): no tail, never "stops here"');
+});
+
+// ── PG-A3 (2026-09-17): Anvil's own write-admission gate ─────────────────────────────
+const { parseFact, applyRevision, factUsage, earnedFacts, applyEarned } = await import('../sys/ai/memory-store.mjs');
+await test('PG-A3: earnFromRuns promotes a hypothesis recalled in two runs the gate passed, writes the cause and the evidence, and leaves the rest alone', async () => {
+  const fact = (name, status) => `---\nname: ${name}\ndescription: ${name} desc\ntype: project\nstatus: ${status}\n---\n${name} body`;
+  const fs = memFs({ '.anvil/memory/vite.md': fact('vite', 'hypothesis'), '.anvil/memory/once.md': fact('once', 'hypothesis'), '.anvil/memory/done.md': fact('done', 'verified') });
+  const earnFromRuns = instantiate(extractFunction(src, 'earnFromRuns'), 'earnFromRuns', { MEMORY_DIR: '.anvil/memory', factUsage, earnedFacts, applyEarned });
+  const facts = Object.entries(fs.store).map(([path, t]) => ({ ...parseFact(t), path }));
+  const rows = [{ recalled: ['vite', 'once'], gatePassed: true, endedAt: 1_000 }, { recalled: ['vite'], gatePassed: true, endedAt: 2_000 }, { recalled: ['once'], gatePassed: false, endedAt: 3_000 }];
+  const done = await earnFromRuns({ rows, facts, read: (p) => fs.read(p, { encoding: 'utf-8' }), write: (p, x) => fs.write(p, x) });
+  assert.equal(Array.from(done, (e) => e.name).join(','), 'vite', 'two verified recalls earn; one does not (the evaluated realm\'s arrays are not this realm\'s — compare by value)');
+  const vite = parseFact(fs.store['.anvil/memory/vite.md']);
+  assert.equal(vite.status, 'verified'); assert.equal(vite.cause, 'earned'); assert.match(vite.body, /recalled in 2 runs the gate passed/);
+  assert.equal(parseFact(fs.store['.anvil/memory/once.md']).status, 'hypothesis', 'untouched');
+  assert.equal(parseFact(fs.store['.anvil/memory/done.md']).cause, null, 'an already-verified fact is not re-written');
+  assert.equal((await earnFromRuns({ rows: [], facts, read: () => ({ ok: false }), write: () => ({ ok: false }) })).length, 0, 'no rows, no evidence, nothing');
+  // wiring: the pass runs after the record row lands, and the panes carry the owner's doors
+  assert.match(src, /await saveRunRecord\(t, rec, \{ gated, project: runProject \}\);\n\s*await earnPass\(t, runProject\);/, 'the earn pass follows the row that could be the second verified run');
+  assert.match(src, /label:'✓ Activate', onClick: async \(\)=>\{ await activateSkill\(name\)/, 'a staged skill offers Activate');
+  assert.match(src, /learnStaged\['skill:'\+name\] \? \[\{ label:'✗ Reject', onClick: async \(\)=>\{ await rejectProposal\(\{ kind:'skill', name \}\)/, 'and Reject — only for a skill the review staged');
+  assert.match(src, /gatePassed: ev\.some\(e=>e\.tool==='verify\.passed'\)/, 'the row carries the gate\'s word');
+  assert.match(src, /label:'✗ reject '\+f\.name, onClick: async \(\)=>\{ await rejectProposal\(\{ kind:'fact', name:f\.name, path:f\.path \}\)/, 'a hypothesis fact offers reject, by its real path');
+});
+
+await test('PG-A3: rejectProposal poisons the fingerprint with a label, retracts a fact with cause `rejected` or removes a staged skill, and saves the ledger', async () => {
+  const rejects = [], saved = [];
+  const fs = memFs({ '.anvil/memory/vite.md': '---\nname: vite\ndescription: The build tool is Vite.\ntype: project\nstatus: hypothesis\nfp: fp:v1:' + 'ab'.repeat(32) + '\n---\nbody', '.anvil/skills/deploy/SKILL.md': '---\nname: deploy\nstatus: staged\n---\nDRAFT' });
+  const ctx = { projectLedger: async () => ({ reject: async (r) => { rejects.push(r); } }), saveLedger: async () => { saved.push(1); }, learnStaged: { 'skill:deploy': { fp: 'fp:v1:' + 'cd'.repeat(32), label: 'deploy to prod' } },
+    fs, MEMORY_DIR: '.anvil/memory', SKILLS_DIR: '.anvil/skills', SKILL_FILE: 'SKILL.md', parseFact, applyRevision, demoteDependants: async () => ['derived-one'], pushSystem: (m) => { rows.push(m); }, renderFiles: () => {} };
+  const rows = [];
+  const rejectProposal = instantiate(extractFunction(src, 'rejectProposal'), 'rejectProposal', ctx);
+  await rejectProposal({ kind: 'fact', name: 'vite' });
+  const f = parseFact(fs.store['.anvil/memory/vite.md']);
+  assert.equal(f.status, 'retracted'); assert.equal(f.cause, 'rejected', 'the fact is retracted with the system cause');
+  assert.equal(rejects[0].fp, 'fp:v1:' + 'ab'.repeat(32)); assert.equal(rejects[0].label, 'The build tool is Vite.', 'the ledger learns the fact\'s fp and its words');
+  await rejectProposal({ kind: 'skill', name: 'deploy' });
+  assert.ok(!('.anvil/skills/deploy/SKILL.md' in fs.store), 'the staged skill file is gone');
+  assert.equal(rejects[1].fp, 'fp:v1:' + 'cd'.repeat(32)); assert.equal(rejects[1].label, 'deploy to prod');
+  assert.ok(!ctx.learnStaged['skill:deploy'], 'its staged entry is dropped'); assert.equal(saved.length, 2, 'the ledger is saved after each');
+  assert.match(rows[0], /Rejected fact "vite" — retracted; an equivalent will not be proposed again/, 'the row says retracted, and what the poison buys'); assert.match(rows[0], /Demoted to hypothesis \(basis retracted\): derived-one/, 'the dependants cascade ran');
+  fs.store['.anvil/skills/mine/SKILL.md'] = '---\nname: mine\nstatus: staged\n---\nOWNER';
+  assert.equal(await rejectProposal({ kind: 'skill', name: 'mine' }), false, 'a staged skill the review did not stage has no reject door'); assert.ok('.anvil/skills/mine/SKILL.md' in fs.store, 'and is untouched');
+});
+
+await test('PG-A3: saveLedger writes only into the project the ledger was loaded for — a switch mid-review saves nothing into the other project', async () => {
+  const writes = [];
+  const state = { activeProject: 'A' };
+  const ctx = { state, learnLedger: { settled: async () => {}, export: () => ({ events: '', blobs: {} }) }, learnLedgerProject: 'A', learnStaged: {}, PROPOSALS_PATH: '.anvil/memory/proposals.json', fs: { write: async (p, x) => { writes.push(p); return { ok: true }; } } };
+  const saveLedger = instantiate(extractFunction(src, 'saveLedger'), 'saveLedger', ctx);
+  await saveLedger(); assert.equal(writes.length, 1, 'same project: saved');
+  state.activeProject = 'B'; await saveLedger(); assert.equal(writes.length, 1, 'the owner switched to B: A\'s ledger is not written through B\'s fs');
 });
 
 await test('the harness is not vacuous — a deliberately wrong expectation fails', () => {

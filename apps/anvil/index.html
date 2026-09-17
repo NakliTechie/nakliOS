@@ -424,7 +424,7 @@
   import { createStateOplog } from '../../sys/history/state-oplog.mjs'; // D3: the app's own state writes, chained
   import { migrateQueue, reconcileQueue, enqueue as qEnqueue, removeEntry as qRemove, moveEntry as qMove, editEntry as qEdit, nextDispatch, completeDispatch, releaseDispatch, admitRun } from '../../sys/ai/followup-queue.mjs';
   import { planSkillWrite, createSkillSession, SKILL_FILE, SKILL_SHAPE, scaffoldSkill, starterSkillFile, renderSkillReader, lintSkill } from '../../sys/ai/skill-manage.mjs';
-  import { createProposalLedger } from '../../sys/ai/proposal-fingerprint.mjs';
+  import { createProposalLedger } from '../../sys/ai/proposal-fingerprint.mjs'; // PG-A3: the poison ledger, persisted per project
   import { skillLifecycle, applySkillStatus, reviveOnUse } from '../../sys/ai/skill-lifecycle.mjs';
   import { contextBudget, windowFromOllama, windowForPreset, capHandoff } from '../../sys/ai/context-budget.mjs';
   import { runLearnReview, shouldAutoReview, AUTO_REVIEW_IDLE_MS } from '../../sys/ai/learn.mjs';
@@ -433,7 +433,7 @@
   import { registerAppDiffTypes } from '../../sys/staging/diff-types.mjs';
   // A skill write is a P0 envelope (diff type 'anvil-skill') — the first agent-produced diff.
   registerAppDiffTypes(['anvil']);
-  import { MEMORY_DIR, parseFact, buildMemoryIndex, noteToFact, applyRevision, applyDemotion, dependantsOf, slotHolder, findDuplicate, duplicateReply, createRememberBudget, budgetSpentReply, checkRulesCap, rulesCapReply, createFactSession, factUsage } from '../../sys/ai/memory-store.mjs';
+  import { MEMORY_DIR, parseFact, buildMemoryIndex, noteToFact, applyRevision, applyDemotion, dependantsOf, slotHolder, findDuplicate, duplicateReply, createRememberBudget, budgetSpentReply, checkRulesCap, rulesCapReply, createFactSession, factUsage, earnedFacts, applyEarned } from '../../sys/ai/memory-store.mjs';
   import { readinessLine } from '../../sys/ai/agent-tools.mjs';
   import { asStored } from '../../sys/ai/content-token.mjs';
   import { HOOKS_FILE, parseHooks } from '../../sys/ai/hooks.mjs';
@@ -636,6 +636,7 @@
     return { id: project+'/'+task+'/'+name, project, task, name, path, tiers,
       head: rec.head ? rec.head() : null, events: ev.length,
       stop: st.stop, status: st.status, verified: st.verified, steps: st.steps,
+      gatePassed: ev.some(e=>e.tool==='verify.passed'), // PG-A3: the gate's word, not the loop's flag — what a fact can earn on
       startedAt: ev.length ? ev[0].ts : null, endedAt: ev.length ? ev[ev.length-1].ts : null,
       checkpoint, resumed, anchor: ord.anchor, toFirstAction: ord.toFirstAction, recalled, episode };
   }
@@ -1091,7 +1092,9 @@
       // dead hypothesis is not silently re-derived (the file is kept for provenance).
       const mark=(s)=> s==='retracted' ? ' [RETRACTED — hidden from the agent]' : s==='hypothesis' ? ' [hypothesis]' : '';
       const body=facts.map(f=>'• '+f.name+' ('+(f.type||'project')+')'+mark(f.status)+(f.description?(' — '+f.description):'')).join('\n');
-      globalPreview={ type:'text', file:'Project memory', content:'Facts the agent recorded (loaded on demand via recall):\n\n'+body };
+      // PG-A3: a hypothesis the owner does not want is rejected here — retracted, and its proposal poisoned
+      const actions = facts.filter(f=>f.status==='hypothesis').slice(0,20).map(f=>({ label:'✗ reject '+f.name, onClick: async ()=>{ await rejectProposal({ kind:'fact', name:f.name, path:f.path }); openProjectMemory(); } }));
+      globalPreview={ type:'text', file:'Project memory', content:'Facts the agent recorded (loaded on demand via recall):\n\n'+body, actions };
       { const _t=activeTask(); if(_t) _t.preview=null; }   // a stale task preview would hide this global view
       state.previewOpen=true; save(); renderPreview(); return;
     }
@@ -1146,9 +1149,10 @@
     const sk=(await listSkills()).find(s=>s.name===name);
     if(!sk){ openSkills(); return; }
     const warnings = lintSkill(sk);
+    const doors = sk.status==='staged' ? [{ label:'✓ Activate', onClick: async ()=>{ await activateSkill(name); openSkill(name); } }, ...(learnStaged['skill:'+name] ? [{ label:'✗ Reject', onClick: async ()=>{ await rejectProposal({ kind:'skill', name }); openSkills(); } }] : [])] : []; // PG-A3: the owner's doors — Reject only for a skill the REVIEW staged
     globalPreview={ type:'md', label:'Skill', file:sk.dir+'/'+SKILL_FILE, content: renderSkillReader(sk),
       note: warnings.length ? 'shape: '+warnings.join(' · ') : null,
-      actions:[{ label:'← Skills', onClick: openSkills }] };
+      actions:[...doors, { label:'← Skills', onClick: openSkills }] };
     { const _t=activeTask(); if(_t) _t.preview=null; }
     state.previewOpen=true; save(); renderPreview();
   }
@@ -1995,10 +1999,92 @@
   // every review ran against nothing and the poison check was a no-op (forward-pass NAF-09).
   // One ledger per project, rebuilt when the project changes — rejections stick for the session.
   let learnLedger = null, learnLedgerProject = null;
-  function projectLedger(){
+  // PG-A3 (2026-09-17) — Anvil's own write-admission gate. The poison ledger PERSISTS in the project
+  // (`.anvil/memory/proposals.json`: the chain, and the fingerprints of staged skills — a fact carries
+  // its own in its frontmatter), so a rejection outlives the session and the next review is told.
+  const PROPOSALS_PATH = MEMORY_DIR+'/proposals.json';
+  let learnStaged = {}; // 'skill:<name>' -> { fp, label }
+  async function projectLedger(){
     const proj = String(state.activeProject||'local');
-    if(learnLedgerProject !== proj){ learnLedgerProject = proj; learnLedger = createProposalLedger({ app:'anvil', principal:'anvil:'+proj }); }
+    if(learnLedgerProject !== proj){
+      let led=null, staged={}, raw=null;
+      try{ const r=await fs.read(PROPOSALS_PATH,{encoding:'utf-8'}); if(r&&r.ok){ raw=r.data; const j=JSON.parse(r.data); led=createProposalLedger({ app:'anvil', principal:'anvil:'+proj, seed:{ events:j.events||'', blobs:j.blobs||{} } }); staged=j.staged||{}; } }catch(_){ led=null; }
+      if(!led && raw!=null){ // a file that does not load is set aside, never overwritten in silence
+        try{ await fs.write(PROPOSALS_PATH.replace(/\.json$/, '.'+Date.now()+'.corrupt.json'), raw); }catch(_){}
+        pushSystem('The proposal ledger could not be read — set aside as proposals.<ts>.corrupt.json; starting a new one.');
+      }
+      learnLedger = led || createProposalLedger({ app:'anvil', principal:'anvil:'+proj }); learnStaged = staged; learnLedgerProject = proj; // the project is claimed only once the ledger exists
+    }
     return learnLedger;
+  }
+  async function saveLedger(){
+    if(!learnLedger) return;
+    if(learnLedgerProject !== String(state.activeProject||'local')) return; // the same pin as the review sink: never another project's ledger into this one's file
+    await learnLedger.settled();
+    try{ await fs.write(PROPOSALS_PATH, JSON.stringify({ ...learnLedger.export(), staged: learnStaged })); }catch(_){}
+  }
+  // The owner's two doors. A rejection poisons the proposal's fingerprint (an equivalent is never
+  // re-proposed, and the next review is told why) and removes what was staged: a skill file goes,
+  // a fact is retracted with cause `rejected`. Activation is the owner setting `status: active`.
+  async function rejectProposal(opts){ // plain parameter: the handlers lane extracts this function by its braces
+    const { kind, name, path=null, reason='rejected by the owner' } = opts||{};
+    const led = await projectLedger();
+    let fp=null, label=name, touched=false, demoted=[];
+    if(kind==='skill'){
+      const st=learnStaged['skill:'+name]; if(!st) return false; // only a review-staged skill has this door — an owner's own skill is never one click from gone
+      fp=st.fp; label=st.label||name;
+      try{ await fs.remove(SKILLS_DIR+'/'+name+'/'+SKILL_FILE); touched=true; }catch(_){} try{ await fs.remove(SKILLS_DIR+'/'+name); }catch(_){}
+      delete learnStaged['skill:'+name];
+    } else {
+      const p=path||MEMORY_DIR+'/'+name+'.md'; // the pane passes the file's real path; a name is the stem only for review-staged facts
+      try{ const r=await fs.read(p,{encoding:'utf-8'}); if(r&&r.ok){ const f=parseFact(r.data); fp=f.fp||null; label=f.description||name; await fs.write(p, applyRevision(r.data, { status:'retracted', cause:'rejected', system:true, reason })); touched=true; } }catch(_){}
+      // a retracted basis demotes what was derived from it — the same cascade `revise` runs
+      if(touched) demoted=await demoteDependants(name);
+    }
+    if(!touched){ pushSystem('Nothing to reject: '+kind+' "'+name+'" was not found.'); return false; }
+    if(fp){ try{ await led.reject({ fp, reason, label }); }catch(_){} }
+    await saveLedger();
+    pushSystem('Rejected '+kind+' "'+name+'" — '+(kind==='skill'?'removed':'retracted')+(fp?'; an equivalent will not be proposed again for 14 days, and the next review is told.':'; it carried no proposal fingerprint, so nothing is poisoned.')+(demoted.length?(' Demoted to hypothesis (basis retracted): '+demoted.join(', ')+'.'):''));
+    renderFiles(); return true;
+  }
+  // Revalidation: a retracted basis demotes every fact derived from it (transitively) back to
+  // hypothesis — the dependants keep their derived_from link as the audit trail. One cascade, two doors.
+  async function demoteDependants(name){
+    const demoted=[];
+    try{
+      const all=await listFacts();
+      for(const dn of dependantsOf(all, name)){
+        const d=all.find(x=>x.name===dn); if(!d||!d.path) continue;
+        try{ const dr=await fs.read(d.path,{encoding:'utf-8'}); if(dr&&dr.ok){ await fs.write(d.path, applyDemotion(dr.data, { basis:name })); demoted.push(dn); } }catch(_){}
+      }
+    }catch(_){}
+    return demoted;
+  }
+  async function activateSkill(name){
+    const p=SKILLS_DIR+'/'+name+'/'+SKILL_FILE;
+    try{ const r=await fs.read(p,{encoding:'utf-8'}); if(!(r&&r.ok)) return false; await fs.write(p, applySkillStatus(r.data, 'active', { now: Date.now() })); }catch(_){ return false; }
+    delete learnStaged['skill:'+name]; await saveLedger();
+    pushSystem('Skill "'+name+'" is active — it binds from the next run.'); renderFiles(); return true;
+  }
+  // Admission by evidence: after a run, a hypothesis recalled in EARN_RUNS runs the gate passed is
+  // promoted to `verified` with cause `earned` — the evidence is the project's own run rows.
+  async function earnFromRuns(opts){
+    const { rows, facts, read, write } = opts||{};
+    const usage = factUsage(rows||[]); if(!usage) return [];
+    const earned = earnedFacts(facts||[], usage);
+    const done=[];
+    for(const e of earned){
+      const f=(facts||[]).find(x=>x&&x.name===e.name); const p=(f&&f.path)||MEMORY_DIR+'/'+e.name+'.md';
+      try{ const r=await read(p); if(!(r&&r.ok)) continue; const w=await write(p, applyEarned(r.data, { verifiedRuns:e.verifiedRuns, lastUsed:e.lastUsed })); if(w&&w.ok!==false) done.push(e); }catch(_){}
+    }
+    return done;
+  }
+  async function earnPass(t, project){
+    try{
+      const rows=await runsForProject(project); const facts=await listFacts();
+      const done=await earnFromRuns({ rows, facts, read:(p)=>fs.read(p,{encoding:'utf-8'}), write:(p,x)=>fs.write(p,x) });
+      if(done.length && t){ (t.log=t.log||[]).push({ k:'system', text:'Earned: '+done.map(e=>e.name+' (recalled in '+e.verifiedRuns+' runs the gate passed)').join(', ')+' — now verified.' }); renderLog(); renderFiles(); }
+    }catch(_){}
   }
   async function learnThisRun(t, rec, projectId = null){
     if(!(nak && nak.capabilities && nak.capabilities.ai)) return null;
@@ -2026,15 +2112,17 @@
           // A write that failed is not a staged skill (NAF-11).
           const w = await fs.write(dir+'/'+SKILL_FILE, plan.skillText);
           if(!(w&&w.ok)) return { ok:false, error:(w&&w.error)||'write failed' };
+          if(pr.fp) learnStaged['skill:'+pr.name]={ fp:pr.fp, label:(pr.description||pr.name) };
           return { ok:true, staged:'skill:'+pr.name+' ('+plan.status+')' };
         }
-        if(pr.kind==='fact'){ const slug=await recordFact(pr.note||pr.description||pr.name, 'project', 'hypothesis'); return { ok: !!slug, staged:'fact:'+slug }; }
+        if(pr.kind==='fact'){ const slug=await recordFact(pr.note||pr.description||pr.name, 'project', 'hypothesis', { fp: pr.fp||null }); return { ok: !!slug, staged:'fact:'+slug }; }
       }catch(_){}
       return { ok:false };
     };
-    const rep = await runLearnReview({ record:{ events:rec.events, resolve:rec.resolve }, infer:inferViaHost, ledger:projectLedger(), propose, now:Date.now() });
+    const rep = await runLearnReview({ record:{ events:rec.events, resolve:rec.resolve }, infer:inferViaHost, ledger:await projectLedger(), propose, now:Date.now() });
     if(!sameProject()) return rep; // do not narrate into a task that is no longer on screen
-    if(rep.staged.length) (t.log=t.log||[]).push({ k:'system', text:'Learned from this run — staged for your approval: '+rep.staged.map(x=>x.staged).join(', ')+'. Nothing was saved active.' });
+    if(rep.staged.length) await saveLedger(); // the staged skills' fingerprints ride with the ledger
+    if(rep.staged.length) (t.log=t.log||[]).push({ k:'system', text:'Learned from this run — staged for your approval: '+rep.staged.map(x=>x.staged).join(', ')+'. Nothing was saved active — keep or reject each from the Skills / Memory panes.' });
     else (t.log=t.log||[]).push({ k:'system', text:'Reviewed this run — nothing new worth staging.'+(rep.dropped.length?(' ('+rep.dropped.length+' already-rejected proposal(s) skipped.)'):'') });
     renderFiles(); renderLog();
     return rep;
@@ -2545,14 +2633,7 @@
           factSession.noteRecalled(name, asStored(revisedText)); // the new version is now known — as the store keeps it
           // Revalidation: a retracted basis demotes every fact derived from it (transitively)
           // back to hypothesis — the dependants keep their derived_from link as the audit trail.
-          let demoted=[];
-          if(status==='retracted'){
-            const all=await listFacts();
-            for(const dn of dependantsOf(all, name)){
-              const d=all.find(x=>x.name===dn); if(!d||!d.path) continue;
-              try{ const dr=await fs.read(d.path,{encoding:'utf-8'}); if(dr&&dr.ok){ await fs.write(d.path, applyDemotion(dr.data, { basis:name })); demoted.push(dn); } }catch(_){}
-            }
-          }
+          const demoted = status==='retracted' ? await demoteDependants(name) : [];
           renderFiles();
           return 'Revised "'+name+'" → '+status+(ar&&ar.cause?(' ['+String(ar.cause)+']'):'')+(ar&&ar.reason?(' ('+String(ar.reason).slice(0,80)+')'):'')+'.'
             +(demoted.length?(' Demoted to hypothesis (basis retracted): '+demoted.join(', ')+'.'):'');
@@ -2899,6 +2980,7 @@
       try{
         const ev=recEvents;
         const saved=await saveRunRecord(t, rec, { gated, project: runProject });
+        await earnPass(t, runProject); // PG-A3: the row just written may be the second verified run a hypothesis was recalled in
         const where = saved.tiers.length ? saved.tiers.join(' + ') : 'NOT saved';
         const nth = saved.count ? ' · run '+saved.count+' of this task' : '';
         // Only browser storage, and the browser has not promised to keep it: say so

@@ -109,6 +109,14 @@ await test('runLearnReview: a poisoned fingerprint is dropped, not re-proposed',
   const rep = await runLearnReview({ record: rec, infer, ledger: led, propose: async (p) => { staged.push(p); return { ok: true }; }, now: 2000 });
   eq(rep.staged.length, 0, 'the poisoned proposal is not staged'); eq(rep.dropped.length, 1, 'it is dropped'); assert(/do not want/.test(rep.dropped[0].reason), 'with the rejection reason');
   eq(staged.length, 0, 'the sink never saw it');
+  // PG-A3: the reviewer was TOLD what the owner refused, in words, before it proposed
+  assert(/Rejected by the owner before — do not propose these or anything equivalent:\n- /.test(rep.prompt), rep.prompt);
+  eq(rep.rejectedTold, 1);
+  const led2 = createProposalLedger({ now: () => 1000 }); await led2.reject({ fp, reason: 'we do not want a retry skill', cooloffDays: 30, label: 'add retry (wrap the loop in net.js)' }); await led2.settled();
+  const rep2 = await runLearnReview({ record: rec, infer, ledger: led2, propose: async () => ({ ok: true }), now: 2000 });
+  assert(/- add retry \(wrap the loop in net\.js\) — we do not want a retry skill/.test(rep2.prompt), 'the label and the reason, when the rejection carried a label: ' + rep2.prompt.split('\n').filter((l) => /^- /.test(l)).join(' | '));
+  const rep3 = await runLearnReview({ record: rec, infer: async () => ({ content: '{"proposals":[]}' }), propose: async () => ({ ok: true }), now: 2000 });
+  assert(!/Rejected by the owner/.test(rep3.prompt) && rep3.rejectedTold === 0, 'no ledger, nothing told');
 });
 
 await test('shouldAutoReview (C5): fires on a gated pass when idle; defers on a local model; skips aborted', () => {

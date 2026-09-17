@@ -10,12 +10,14 @@
 // review that proposes nothing is the common, correct case).
 
 import { extractJson, inferStructured, attemptsLine } from './structured.mjs';
-import { filterProposals, createProposalLedger } from './proposal-fingerprint.mjs';
+import { filterProposals, createProposalLedger, rejectedList } from './proposal-fingerprint.mjs';
 import { foldTranscript, foldSessionContext, foldDecisions, foldOutcome } from '../history/run-record.mjs';
 
 // Build the review prompt from the record's folds. Bounded — the transcript is summarised to
 // its shape, not dumped, so the review is cheap.
-export function buildReviewPrompt(record) {
+// `rejected` (PG-A3): what the owner refused before, in words — the model is told, so it does not spend a
+// proposal on it (an equivalent is dropped by the fingerprint filter regardless).
+export function buildReviewPrompt(record, { rejected = [] } = {}) {
   const ev = record.events(), resolve = record.resolve;
   const ctx = foldSessionContext(ev, resolve);
   const decisions = foldDecisions(ev, resolve);
@@ -30,6 +32,7 @@ export function buildReviewPrompt(record) {
     passed.length ? `Tools that led to a gate pass: ${passed.join(', ')}` : '',
     failed.length ? `Tools that led to a gate failure: ${failed.join(', ')}` : '',
     ctx.lastCheckpoint ? `Last checkpoint: ${ctx.lastCheckpoint}` : '',
+    rejected.length ? 'Rejected by the owner before — do not propose these or anything equivalent:\n' + rejected.slice(0, 12).map((r) => `- ${r.label || r.fp}${r.reason ? ` — ${r.reason}` : ''}`).join('\n') : '',
     'Propose at most a few durable skills or facts (lessons, not logs). Reply ONLY with JSON:',
     '{ "proposals": [ { "kind": "skill"|"fact", "name": "...", "description": "...", "content": "...", "goal": "...", "steps": ["..."], "paths": ["..."] } ] }',
     'If nothing is worth saving, reply { "proposals": [] }.',
@@ -69,7 +72,8 @@ function forFingerprint(p) {
 // `infer` alone is a one-rung ladder. A malformed reply costs one repair turn that names what was
 // wrong; the report carries the attempt trail, so a review that failed says how.
 export async function runLearnReview({ record, infer = null, ladder = null, propose, ledger = null, now = Date.now() }) {
-  const prompt = buildReviewPrompt(record);
+  const rejected = ledger ? rejectedList(ledger, now) : []; // PG-A3: the reviewer is told what was refused
+  const prompt = buildReviewPrompt(record, { rejected });
   const rungs = Array.isArray(ladder) && ladder.length ? ladder : [{ name: 'default', infer }];
   const messages = [{ role: 'system', content: 'You are a terse reviewer. Reply only with the JSON described.' }, { role: 'user', content: prompt }];
   const res = await inferStructured({ ladder: rungs, messages, validate: validateProposals, extract: (text) => extractJson(text, { want: wantProposals }), retries: 1 });
@@ -92,7 +96,7 @@ export async function runLearnReview({ record, infer = null, ladder = null, prop
     const r = propose ? await propose({ ...orig, fp: p.fp }) : { ok: false };
     if (r && r.ok) staged.push({ kind: orig.kind, name: orig.name, fp: p.fp, staged: r.staged ?? true });
   }
-  return { prompt, proposalCount: proposals.length, staged, dropped: dropped.map((d) => ({ name: d.name, reason: d.reason })), activeWrites: 0,
+  return { prompt, proposalCount: proposals.length, staged, dropped: dropped.map((d) => ({ name: d.name, reason: d.reason })), rejectedTold: rejected.length, activeWrites: 0,
     answered: res.ok, salvaged: !res.ok && proposals.length > 0, rung: res.rung, salvagedFrom: !res.ok && proposals.length > 0 ? res.partialRung : null, attempts: res.attempts, attemptsLine: attemptsLine(res) };
 }
 

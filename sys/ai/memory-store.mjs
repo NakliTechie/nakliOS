@@ -62,6 +62,14 @@ export const MEMORY_RELATIONS = ['supersedes', 'derived_from', 'contradicts'];
 // under different qualifiers. `entity_mismatch`: it was about something else.
 // `write_error`: the note itself was malformed or misfiled.
 export const REVISION_CAUSES = ['correction', 'temporal_change', 'scope_difference', 'entity_mismatch', 'write_error'];
+// PG-A3 (2026-09-17): two causes only the SYSTEM and the OWNER write — never the agent's `revise` (its enum
+// stays the five above): `earned` (the admission gate promoted it on evidence) and `rejected` (the owner
+// refused the proposal it came from).
+export const SYSTEM_CAUSES = ['earned', 'rejected'];
+const ALL_CAUSES = [...REVISION_CAUSES, ...SYSTEM_CAUSES];
+// PG-A3 (2026-09-17): a proposal's fingerprint rides on the fact it became, so the owner's rejection of
+// the fact can poison the proposal — and an equivalent is never re-proposed.
+export const parseFp = (v) => (/^fp:v\d+:[0-9a-f]{64}$/.test(String(v == null ? '' : v).trim()) ? String(v).trim() : null);
 
 // A single frontmatter value is one line; a relation is a comma-separated list of
 // fact names. Names are slugs, so commas and whitespace are safe separators.
@@ -124,8 +132,9 @@ export function parseFact(text){
     description: meta.description || '',
     type: MEMORY_TYPES.includes((meta.type || '').toLowerCase()) ? meta.type.toLowerCase() : 'project',
     status: MEMORY_STATUSES.includes((meta.status || '').toLowerCase()) ? meta.status.toLowerCase() : null,
-    cause: REVISION_CAUSES.includes((meta.cause || '').toLowerCase()) ? meta.cause.toLowerCase() : null,
+    cause: ALL_CAUSES.includes((meta.cause || '').toLowerCase()) ? meta.cause.toLowerCase() : null,
     slot: meta.slot ? safeSlug(meta.slot) || null : null,
+    fp: parseFp(meta.fp),
     created: parseCreated(meta.created),
     weight: clampWeight(meta.weight),
     supersedes: parseList(meta.supersedes),
@@ -144,8 +153,9 @@ export function serializeFact(f){
     `type: ${MEMORY_TYPES.includes(f.type) ? f.type : 'project'}`,
   ];
   if (MEMORY_STATUSES.includes(f.status)) lines.push(`status: ${f.status}`);
-  if (REVISION_CAUSES.includes(f.cause)) lines.push(`cause: ${f.cause}`);
+  if (ALL_CAUSES.includes(f.cause)) lines.push(`cause: ${f.cause}`);
   if (f.slot) lines.push(`slot: ${safeSlug(f.slot)}`);
+  const fp = parseFp(f.fp); if (fp) lines.push(`fp: ${fp}`);
   const scope = parseScope(f.scope); if (scope) lines.push(`scope: ${scope}`);
   const created = parseCreated(f.created); if (created) lines.push(`created: ${created}`);
   const w = clampWeight(f.weight); if (w !== DEFAULT_WEIGHT) lines.push(`weight: ${w}`);
@@ -288,8 +298,11 @@ export function factUsage(rows){
     const when = Number(r.endedAt || r.startedAt) || 0;
     if (when > 0) since = Math.min(since, when);
     for (const name of r.recalled) {
-      const u = out.get(String(name)) || { runs: 0, lastUsed: 0 };
-      u.runs++; u.lastUsed = Math.max(u.lastUsed, when); out.set(String(name), u);
+      const u = out.get(String(name)) || { runs: 0, lastUsed: 0, verifiedRuns: 0, lastVerified: 0 };
+      // PG-A3: recalled in a run the GATE passed — the row's `gatePassed` (a verify.passed on its record), never
+      // the loop's `verified` flag, which an ungated task_done sets true (the checker's probe: two ungated
+      // finishes would have minted "verified" for a fact no gate ever saw)
+      u.runs++; u.lastUsed = Math.max(u.lastUsed, when); if (r.gatePassed === true) { u.verifiedRuns++; u.lastVerified = Math.max(u.lastVerified, when); } out.set(String(name), u);
     }
   }
   // No row that CARRIES use is no evidence at all — resting stays off (the checker: an index
@@ -300,6 +313,28 @@ export function factUsage(rows){
   // window's worth of it: with five days of rows, no fact can be shown unrecalled for thirty.
   out.since = Number.isFinite(since) ? since : 0;
   return out;
+}
+// PG-A3 (2026-09-17) — admission by evidence from Anvil's own records. A hypothesis a run recalled and
+// then verified (the gate passed) has been used where it mattered; EARN_RUNS such runs and it is
+// `verified` with cause `earned` — never on one run (a coincidence), never on recall alone (a run
+// that failed says nothing for the fact). The complement is A1: a fact nobody recalls rests. This is
+// the write-admission gate Anvil can afford: held-out validation was measured and could not pay for
+// its own evidence (AC-9); usage in verified runs is already on the run index.
+export const EARN_RUNS = 2;
+export function earnedFacts(facts, usage, { earnRuns = EARN_RUNS } = {}){
+  if (!usage) return [];
+  const stale = supersededSet(facts || []);
+  const out = [];
+  for (const f of facts || []) {
+    if (!f || !f.name || f.status !== 'hypothesis' || stale.has(f.name) || f.scope) continue; // a task-scoped note (a stall note) is never a verified belief
+    const u = usage.get(f.name); if (!u || !(u.verifiedRuns >= earnRuns)) continue;
+    out.push({ name: f.name, verifiedRuns: u.verifiedRuns, lastUsed: u.lastVerified });
+  }
+  return out;
+}
+export function applyEarned(text, { verifiedRuns, lastUsed } = {}){
+  const when = lastUsed ? new Date(Number(lastUsed)).toISOString().slice(0, 10) : '';
+  return applyRevision(text, { status: 'verified', cause: 'earned', system: true, reason: `recalled in ${verifiedRuns} runs the gate passed${when ? ` (last ${when})` : ''}` });
 }
 // Resting is decided per fact from two dates only: the last recall (from usage) and the fact's own
 // `created`. A fact younger than the window is never rested (it has not had its chance); a rule
@@ -352,7 +387,7 @@ export function buildMemoryIndex(facts, { usage = null, now = Date.now(), restDa
   const emitted = new Set();
   const lines = [];
   const line = (f) => {
-    const tag = f.status === 'hypothesis' ? ' _(hypothesis — verify or retract with `revise`)_' : '';
+    const tag = f.status === 'hypothesis' ? ' _(hypothesis — verify or retract with `revise`)_' : f.cause === 'earned' ? ' _(earned — recalled in runs the gate passed)_' : '';
     const sup = stale.has(f.name) ? ` _(superseded by **${stale.get(f.name)}** — prefer it)_` : '';
     return `- **${f.name || '(fact)'}** (${f.type || 'project'}): ${String(f.description || '').replace(/\s+/g, ' ').trim()}${tag}${sup}`;
   };
@@ -404,6 +439,7 @@ export function noteToFact(note, type, status, rel = {}){
     name: slug, description, type: t, status: st, cause: null,
     slot: rel && rel.slot ? safeSlug(rel.slot) || null : null,
     scope: parseScope(rel && rel.scope), // D2: task-scoped when the caller says so
+    fp: parseFp(rel && rel.fp), // PG-A3: the proposal it came from
     // The recency signal slotHolder needs. Deterministic when the caller supplies
     // `rel.created` (the tests and any replay do); otherwise stamped from the clock,
     // which is the ONE non-deterministic field in this function.
@@ -422,10 +458,11 @@ export function noteToFact(note, type, status, rel = {}){
 // `reason` is the free one-liner of evidence; `contradicts` names the fact or
 // observation that retracted this one. Pure — the app reads the file, calls this,
 // writes it back. Preserves identity and every relation already on the fact.
-export function applyRevision(text, { status, reason, cause, contradicts } = {}){
+export function applyRevision(text, { status, reason, cause, contradicts, system = false } = {}){
   const st = MEMORY_STATUSES.includes(status) ? status : 'retracted';
   const f = parseFact(text);
-  const c = REVISION_CAUSES.includes(cause) ? cause : null;
+  // a SYSTEM cause (`earned`, `rejected`) is written only by the code paths that own it — `revise` cannot claim one
+  const c = REVISION_CAUSES.includes(cause) ? cause : (system && SYSTEM_CAUSES.includes(cause)) ? cause : null;
   const why = String(reason || '').replace(/\r?\n/g, ' ').trim();
   const head = `**Revised → ${st}${c ? ` (${c})` : ''}${why ? ':' : '.'}**`;
   const next = {

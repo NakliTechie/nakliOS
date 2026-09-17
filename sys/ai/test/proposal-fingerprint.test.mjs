@@ -1,6 +1,6 @@
 // Conformance — proposal fingerprints (five stability properties) + poison memory.
 //   node sys/ai/test/proposal-fingerprint.test.mjs
-import { fingerprint, canonicalize, canonicalString, normToken, createProposalLedger, loadProposalLedger,
+import { rejectedList, fingerprint, canonicalize, canonicalString, normToken, createProposalLedger, loadProposalLedger,
          isPoisoned, filterProposals, FINGERPRINT_VERSION, PROPOSAL_EVENTS, DEFAULT_COOLOFF_DAYS } from '../proposal-fingerprint.mjs';
 import { RUN_EVENTS } from '../../history/run-record.mjs';
 
@@ -91,6 +91,23 @@ await test('POISON: the latest rejection wins; cooloff 0 never poisons; bad fing
   eq((await back.verify()).ok, true, 'reloaded chain verifies'); eq(isPoisoned(back, fp, 1_500).poisoned, true, 'fold works on the reloaded ledger');
   eq(DEFAULT_COOLOFF_DAYS, 14, 'default cooloff');
   eq(PROPOSAL_EVENTS[0], 'proposal.rejected', 'own vocabulary'); assert(!RUN_EVENTS.includes('proposal.rejected'), 'the run vocabulary is untouched');
+});
+
+await test('PG-A3: a seeded ledger continues the chain across sessions; a rejection carries its label; rejectedList is what is poisoned NOW, in words', async () => {
+  let t = 1_000; const led = createProposalLedger({ now: () => t });
+  const fp = await fingerprint(P); const fp2 = await fingerprint({ ...P, goal: 'something else entirely' });
+  await led.reject({ fp, reason: 'not wanted', cooloffDays: 30, label: 'add retry to net.js' }); t = 2_000; await led.reject({ fp: fp2, reason: 'expired one', cooloffDays: 1, label: 'the other' }); await led.settled();
+  const list = rejectedList(led, 3_000);
+  eq(list.length, 2, 'both still poisoned an instant later');
+  const later = rejectedList(led, 2_000 + 2 * 86_400_000);
+  eq(later.map((r) => r.label).join(','), 'add retry to net.js', 'only the 30-day rejection is still told; the expired one is not');
+  eq(later[0].reason, 'not wanted');
+  // a new session continues the stored chain: the head is recomputed from the last stored event
+  const stored = led.export();
+  t = 5_000; const led2 = createProposalLedger({ now: () => t, seed: stored });
+  await led2.reject({ fp: fp2, reason: 'again', cooloffDays: 30, label: 'the other' }); await led2.settled();
+  eq(led2.events().length, 3, 'two stored + one new'); eq((await led2.verify()).ok, true, 'one chain across the seam');
+  eq(rejectedList(led2, 6_000).length, 2);
 });
 
 if (failures.length) { console.error(`proposal-fingerprint: ${passed} passed, ${failures.length} FAILED`); for (const f of failures) console.error(`  FAIL ${f.n}: ${f.message}`); process.exit(1); }
