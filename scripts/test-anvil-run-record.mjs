@@ -114,7 +114,7 @@ assert.match(doctor, /row\.chainOk=v\.ok; row\.brokenAt=v\.brokenAt/, 'a broken 
 assert.match(doctor, /getDirectoryHandle\('anvil'\)/, 'scans OPFS');
 assert.match(doctor, /homeHandle\.getDirectoryHandle\('runs'\)/, 'and the home when connected');
 assert.match(anvil, /const n=await runsCount\(\); if\(n===0\)\{ (?:const r=)?await rebuildRunIndex\(\)/, 'boot backfills an empty index from files');
-assert.match(anvil, /else if\(\(\(await idbGet\(SHAPE_KEY\)\)\|\|\{\}\)\.shape!==ROW_SHAPE\)\{ const r=await rebuildRunIndex\(\);/, 'LX-3: boot re-derives the index once per row-shape bump');
+assert.match(anvil, /else reshape=\(\(await idbGet\(SHAPE_KEY\)\)\|\|\{\}\)\.shape!==ROW_SHAPE;/, 'LX-3: boot re-derives the index once per row-shape bump (after the boot net stands down)');
 
 // ── rung 2: the host store (Crate / host Folder) ──
 const save3 = anvil.slice(anvil.indexOf('async function saveRunRecord(t, rec'), anvil.indexOf('async function runTask(t, text){'));

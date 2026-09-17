@@ -564,12 +564,14 @@ await test('LX-3: the run index row carries the goal row\'s inputs (gatePassed, 
   // the row shape: a stale row (no `shape`, or an older one) makes the startup backfill re-derive every row
   const ROW_SHAPE = Number((src.match(/const ROW_SHAPE=(\d+);/) || [])[1]); assert.ok(ROW_SHAPE >= 2, 'ROW_SHAPE is declared');
   assert.equal(row.shape, ROW_SHAPE, 'every row the builder writes carries the current shape');
-  assert.match(src, /else if\(\(\(await idbGet\(SHAPE_KEY\)\)\|\|\{\}\)\.shape!==ROW_SHAPE\)\{ const r=await rebuildRunIndex\(\);/, 'the boot backfill re-derives once per shape bump');
+  assert.match(src, /else reshape=\(\(await idbGet\(SHAPE_KEY\)\)\|\|\{\}\)\.shape!==ROW_SHAPE;/, 'the boot decides once per shape bump');
+  assert.match(src, /window\.__anvilBoot\.ok = true;[\s\S]{0,600}if\(reshape\)\{ reshaping=true; renderTaskbar\(\); rebuildRunIndex\(\)\.then\(/, 'and re-derives AFTER the boot net stands down, not inside the 10 s window');
+  assert.match(src, /async function goalOf\(t\)\{ if\(!t\|\|reshaping\) return null;/, 'no goal is projected while the re-derive is in flight');
   assert.match(src, /await idbSet\(SHAPE_KEY, \{ shape: ROW_SHAPE, home: !!homeHandle \}\);/, 'the doctor stamps the shape it ran under and whether the home was reachable');
   assert.match(src, /if\(m && m\.shape===ROW_SHAPE && !m\.home\)\{ const r=await rebuildRunIndex\(\);/, 'reconnecting the home re-derives once when the shape run missed it');
   assert.match(src, /if\(!loud\.length && t && !running\) goalOf\(t\)\.then\(g=>\{ if\(g && g\.quota\.runs>0 && activeTask\(\)===t && !running && !state\.runsHeld && !modeIsLoud\(state\.permissionMode\)\) \$\('tb-meta'\)\.textContent = goalLine\(g\);/, 'the task bar shows the goal line when the task has runs, nothing louder is on, and — re-read at resolve — no run started meanwhile');
   assert.match(src, /goal:async\(\)=>\{ const t=activeTask\(\); return t\? await goalOf\(t\) : null; \}/, 'the door exposes the goal');
-  assert.match(src, /async function goalOf\(t\)\{ if\(!t\) return null; return foldGoal\(await runsForTask\(t\.id\), \{ objective: t\.title\|\|'' \}\); \}/, 'the goal is folded from the task\'s own rows, by the task index');
+  assert.match(src, /async function goalOf\(t\)\{ if\(!t\|\|reshaping\) return null; return foldGoal\(await runsForTask\(t\.id\), \{ objective: t\.title\|\|'' \}\); \}/, 'the goal is folded from the task\'s own rows, by the task index');
 });
 
 await test('the harness is not vacuous — a deliberately wrong expectation fails', () => {

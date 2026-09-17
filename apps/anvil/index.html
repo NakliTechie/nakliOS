@@ -612,7 +612,8 @@
   async function runsPut(row){try{const db=await idbOpen();await new Promise((res)=>{const t=db.transaction(RUNS_STORE,'readwrite').objectStore(RUNS_STORE).put(row);t.onsuccess=res;t.onerror=res;});}catch(_){} }
   async function runsGet(id){try{const db=await idbOpen();return await new Promise((res)=>{const q=db.transaction(RUNS_STORE).objectStore(RUNS_STORE).get(id);q.onsuccess=()=>res(q.result||null);q.onerror=()=>res(null);});}catch(_){return null;}}
   // LX-3: the goal row of a task, folded from its run rows (the record is the store; the row is derived)
-  async function goalOf(t){ if(!t) return null; return foldGoal(await runsForTask(t.id), { objective: t.title||'' }); } // by the task index: activeProject can lag the active task (New project), and a task's runs are its runs wherever they were filed
+  let reshaping=false; // the one-shot re-derive is in flight: the rows are the old shape, so there is no goal to project yet
+  async function goalOf(t){ if(!t||reshaping) return null; return foldGoal(await runsForTask(t.id), { objective: t.title||'' }); } // by the task index: activeProject can lag the active task (New project), and a task's runs are its runs wherever they were filed
   async function runsForProject(project){try{const db=await idbOpen();return await new Promise((res)=>{const q=db.transaction(RUNS_STORE).objectStore(RUNS_STORE).index('project').getAll(project);q.onsuccess=()=>res(q.result||[]);q.onerror=()=>res([]);});}catch(_){return [];}}
   async function runsForTask(taskId){try{const db=await idbOpen();return await new Promise((res)=>{const q=db.transaction(RUNS_STORE).objectStore(RUNS_STORE).index('task').getAll(taskId);q.onsuccess=()=>res(q.result||[]);q.onerror=()=>res([]);});}catch(_){return [];}}
   async function runsCount(){try{const db=await idbOpen();return await new Promise((res)=>{const q=db.transaction(RUNS_STORE).objectStore(RUNS_STORE).count();q.onsuccess=()=>res(q.result||0);q.onerror=()=>res(0);});}catch(_){return 0;}}
@@ -3336,10 +3337,10 @@
   try{ const h=await idbGet(HOME_KEY); if(h&&typeof h.queryPermission==='function'){ homeSaved=true; if((await h.queryPermission({mode:'readwrite'}))==='granted') homeHandle=h; } }catch(_){}
   try{ if(navigator.storage&&navigator.storage.persisted) opfsPersisted=await navigator.storage.persisted(); }catch(_){}
   updateHomeChip();
-  // Startup backfill: an empty index over existing record files rebuilds silently; so does an index
-  // the doctor has not yet run under this row SHAPE (a field a fold reads that older rows do not carry).
+  // Startup backfill: an empty index over existing record files rebuilds silently.
+  let reshape=false;
   try{ const n=await runsCount(); if(n===0){ const r=await rebuildRunIndex(); if(r&&r.indexed) console.info('[anvil] run index rebuilt: '+r.indexed+' record(s)'+(r.broken?(', '+r.broken+' broken chain(s)'):'')+' — '+r.stopsLine+' — '+r.orderingLine); }
-    else if(((await idbGet(SHAPE_KEY))||{}).shape!==ROW_SHAPE){ const r=await rebuildRunIndex(); console.info('[anvil] run index re-derived: '+(r&&r.indexed||0)+' row(s) — the row shape moved to '+ROW_SHAPE); } }catch(_){}
+    else reshape=((await idbGet(SHAPE_KEY))||{}).shape!==ROW_SHAPE; }catch(_){}
   if(!folderMode) await mountProject(state.activeProject);
   renderAll(); syncMode();
   // AC-4: a queue entry recovered from a dead run is surfaced, never silently restored.
@@ -3350,6 +3351,10 @@
   // strand the user on a blank surface, so fall back to Chat when nothing rendered.
   if(layoutMode==='phone' && phoneSurface==='preview' && document.querySelector('#pv-body .pempty')) setSurface('chat');
   window.__anvilBoot.ok = true;   // the net above stands down
+  // An index the doctor has not yet run under this row SHAPE (a field a fold reads that older rows do
+  // not carry) is re-derived once, AFTER the boot — chain-verifying every record took a real index past
+  // the 10 s boot net on prod (2026-09-17). No goal is projected until it lands; the doctor re-renders.
+  if(reshape){ reshaping=true; renderTaskbar(); rebuildRunIndex().then(r=>{ console.info('[anvil] run index re-derived: '+(r&&r.indexed||0)+' row(s) — the row shape moved to '+ROW_SHAPE); }).catch(()=>{}).finally(()=>{ reshaping=false; try{ renderTaskbar(); }catch(_){} }); }
 
   // Seamlessly follow the host storage backend: when the user switches
   // browser/folder/crate elsewhere, remount this project's workspace on the new
