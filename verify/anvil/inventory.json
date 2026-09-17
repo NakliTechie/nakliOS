@@ -259,6 +259,12 @@
       "kind": "hook",
       "detail": "__anvil.test.gitPushTest"
     },
+    "hook:goal": {
+      "owner": "test-door.md",
+      "fingerprint": "07c39a387124",
+      "kind": "hook",
+      "detail": "__anvil.test.goal"
+    },
     "hook:infer": {
       "owner": "test-door.md",
       "fingerprint": "84ef579d8b72",

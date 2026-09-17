@@ -87,7 +87,7 @@
   #center{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--bg-0)}
   #taskbar{display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--rule);background:var(--bg-1);flex:0 0 auto}
   #taskbar .ttl{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  #taskbar .meta{color:var(--fg-2);font-family:var(--mono);font-size:11px}
+  #taskbar .meta{color:var(--fg-2);font-family:var(--mono);font-size:11px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #taskbar .spacer{flex:1}
   .stopbtn{font-size:11px;color:var(--err);background:transparent;border:1px solid var(--err);border-radius:5px;padding:3px 10px;cursor:pointer;flex:0 0 auto}
   .stopbtn:hover{background:var(--err);color:#fff}
@@ -458,7 +458,7 @@
   import { runCampaign } from '../../sys/assay/runmode.mjs';
   import { makeCampaignExecutors } from '../../sys/assay/executors.mjs';
   import { verifyWall, verifyTests, replay as replayLineage } from '../../sys/assay/verify.mjs';
-  import { createRunRecorder, foldSessionContext, foldStatus, foldLog, foldTranscript, loadRecord, foldStopReasons, stopReasonsLine, searchRecords, scopeEntries, readEvent, foldRecovery, recoveryNote, foldOutcome, foldSkillUsage, statusUnit, createProjector, foldOrdering, groupOrdering, orderingLine, foldRecalled, foldEpisode } from '../../sys/history/run-record.mjs';
+  import { createRunRecorder, foldSessionContext, foldStatus, foldLog, foldTranscript, loadRecord, foldStopReasons, stopReasonsLine, searchRecords, scopeEntries, readEvent, foldRecovery, recoveryNote, foldOutcome, foldSkillUsage, statusUnit, createProjector, foldOrdering, groupOrdering, orderingLine, foldRecalled, foldQuota, foldGoal, goalLine, foldEpisode } from '../../sys/history/run-record.mjs';
 
   const $ = (id) => document.getElementById(id);
   const nak = window.naklios || null;
@@ -601,9 +601,18 @@
   // + a SQLite index with a parity doctor); ours is IndexedDB because the browser
   // already provides it, and rebuildRunIndex() is the doctor.
   const RUNS_STORE='runs';
+  // LX-3 (2026-09-17): the SHAPE of an index row — bumped whenever runIndexRow gains a field a fold
+  // reads (2: gatePassed, the quota, evidence). A row an older Anvil wrote lacks the field and would
+  // fold to a lie (a passed gate read as unverified), so the startup backfill re-derives every row
+  // once per bump — the doctor stamps SHAPE_KEY with the shape it ran under and whether the home was
+  // reachable. A home-only row skipped because the home was not re-granted at that boot keeps its old
+  // shape until the home is reconnected, which re-runs the doctor once (the checker's red flag).
+  const ROW_SHAPE=2; const SHAPE_KEY='anvil-row-shape';
   function idbOpen(){return new Promise((res,rej)=>{const r=indexedDB.open(DIR_DB,2);r.onupgradeneeded=()=>{const db=r.result; if(!db.objectStoreNames.contains(DIR_STORE)) db.createObjectStore(DIR_STORE); if(!db.objectStoreNames.contains(RUNS_STORE)){ const st=db.createObjectStore(RUNS_STORE,{keyPath:'id'}); st.createIndex('project','project'); st.createIndex('task','task'); st.createIndex('endedAt','endedAt'); }};r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
   async function runsPut(row){try{const db=await idbOpen();await new Promise((res)=>{const t=db.transaction(RUNS_STORE,'readwrite').objectStore(RUNS_STORE).put(row);t.onsuccess=res;t.onerror=res;});}catch(_){} }
   async function runsGet(id){try{const db=await idbOpen();return await new Promise((res)=>{const q=db.transaction(RUNS_STORE).objectStore(RUNS_STORE).get(id);q.onsuccess=()=>res(q.result||null);q.onerror=()=>res(null);});}catch(_){return null;}}
+  // LX-3: the goal row of a task, folded from its run rows (the record is the store; the row is derived)
+  async function goalOf(t){ if(!t) return null; return foldGoal(await runsForTask(t.id), { objective: t.title||'' }); } // by the task index: activeProject can lag the active task (New project), and a task's runs are its runs wherever they were filed
   async function runsForProject(project){try{const db=await idbOpen();return await new Promise((res)=>{const q=db.transaction(RUNS_STORE).objectStore(RUNS_STORE).index('project').getAll(project);q.onsuccess=()=>res(q.result||[]);q.onerror=()=>res([]);});}catch(_){return [];}}
   async function runsForTask(taskId){try{const db=await idbOpen();return await new Promise((res)=>{const q=db.transaction(RUNS_STORE).objectStore(RUNS_STORE).index('task').getAll(taskId);q.onsuccess=()=>res(q.result||[]);q.onerror=()=>res([]);});}catch(_){return [];}}
   async function runsCount(){try{const db=await idbOpen();return await new Promise((res)=>{const q=db.transaction(RUNS_STORE).objectStore(RUNS_STORE).count();q.onsuccess=()=>res(q.result||0);q.onerror=()=>res(0);});}catch(_){return 0;}}
@@ -633,10 +642,11 @@
     const recalled=foldRecalled(ev, rec.resolve);
     // A2: the run's episode — the digest the NEXT run's working context opens with
     const episode=foldEpisode(ev, rec.resolve);
-    return { id: project+'/'+task+'/'+name, project, task, name, path, tiers,
+    return { id: project+'/'+task+'/'+name, project, task, name, path, tiers, shape: ROW_SHAPE,
       head: rec.head ? rec.head() : null, events: ev.length,
       stop: st.stop, status: st.status, verified: st.verified, steps: st.steps,
       gatePassed: ev.some(e=>e.tool==='verify.passed'), // PG-A3: the gate's word, not the loop's flag — what a fact can earn on
+      ...(()=>{ const q=foldQuota(ev, rec.resolve); return { tokens:q.tokens, calls:q.calls, seconds:q.seconds, evidence:q.evidence, axis: st.axis||null, reason: st.reason||null }; })(), // LX-3: the goal row's quota and evidence, per run
       startedAt: ev.length ? ev[0].ts : null, endedAt: ev.length ? ev[ev.length-1].ts : null,
       checkpoint, resumed, anchor: ord.anchor, toFirstAction: ord.toFirstAction, recalled, episode };
   }
@@ -687,6 +697,8 @@
     const classOf=(rec)=>{ const st=rec.events().find(e=>e.tool==='run.started'); if(!st) return 'unstarted'; const names=((rec.resolve(st)||{}).input||{}).tools||[]; return names.some(t=>(t&&t.function&&t.function.name)==='task_done') ? 'gated' : 'ungated'; };
     const ordering=groupOrdering([...found.values()].map(f=>f.rec), { classify: classOf });
     // `resumed`: rows whose status fold continued from the checkpoint the previous row carried
+    await idbSet(SHAPE_KEY, { shape: ROW_SHAPE, home: !!homeHandle }); // every row the doctor could reach now carries this shape
+    try{ renderTaskbar(); }catch(_){} // the goal line reads the rows the doctor just rewrote
     return { indexed, broken, resumed, stops, stopsLine: stopReasonsLine(stops), ordering, orderingLine: orderingLine(ordering) };
   }
   async function idbGet(k){try{const db=await idbOpen();return await new Promise((res)=>{const t=db.transaction(DIR_STORE).objectStore(DIR_STORE).get(k);t.onsuccess=()=>res(t.result);t.onerror=()=>res(null);});}catch(_){return null;}}
@@ -708,7 +720,10 @@
     let perm=await h.queryPermission({mode:'readwrite'});
     if(perm!=='granted') perm=await h.requestPermission({mode:'readwrite'});
     if(perm!=='granted') return false;
-    homeHandle=h; homeSaved=true; await idbSet(HOME_KEY,h); updateHomeChip(); return true;
+    homeHandle=h; homeSaved=true; await idbSet(HOME_KEY,h); updateHomeChip();
+    // the shape re-derive ran without this home: its records' rows were skipped — re-derive once, now
+    try{ const m=await idbGet(SHAPE_KEY); if(m && m.shape===ROW_SHAPE && !m.home){ const r=await rebuildRunIndex(); console.info('[anvil] run index re-derived with the home: '+(r&&r.indexed||0)+' row(s)'); } }catch(_){}
+    return true;
   }
   function updateHomeChip(){
     const b=$('home-chip'); if(!b) return;
@@ -1251,6 +1266,12 @@
     if(modeIsLoud(state.permissionMode)) loud.push('⚠ BYPASS — nothing is asked');
     $('tb-meta').textContent = loud.join('  ·  ');
     $('tb-meta').className = loud.length ? 'meta bypass' : 'meta';
+    // LX-3: the task's goal row — status with re-entry first-class, its quota, its evidence — folded from
+    // the task's run rows; a bypass/hold notice outranks it (they must stay obvious). A task that never
+    // ran shows none (nothing to project). The fold is async and the bar may have moved on, so the line
+    // lands only if this task is still on the bar, nothing louder came on, and no run started meanwhile
+    // (`running` is the live binding, read at resolve time).
+    if(!loud.length && t && !running) goalOf(t).then(g=>{ if(g && g.quota.runs>0 && activeTask()===t && !running && !state.runsHeld && !modeIsLoud(state.permissionMode)) $('tb-meta').textContent = goalLine(g); }).catch(()=>{});
     const g=$('gate-btn'); if(g){ const vc=((t&&t.verifyCmd)||'').trim(); g.textContent=vc?('✓ '+vc):'✓ Must-pass'; g.classList.toggle('on', !!vc);
       // Always visible. The old progressive reveal keyed on `state.proven`, which
       // seedState() never set — so on a fresh install it was undefined and the gate
@@ -3144,6 +3165,7 @@
     // many rows resumed from their own checkpoint rather than refolding from event zero.
     rebuildIndex:()=>rebuildRunIndex(),
     runRow:(id)=>runsGet(id),
+    goal:async()=>{ const t=activeTask(); return t? await goalOf(t) : null; }, // LX-3: the task's goal row
     // The agent's own shell, one line at a time — what a Kiln live check drives (the 2026-09-12 rule:
     // any change under sys/kiln/ or the shell's python branch is proven on real Pyodide through THIS shell).
     shell:async(line)=>{ if(!shell) return { output:'no shell — the workspace is not mounted', code:1 }; const r=await shell.feed(String(line||'')); return { output:(r&&r.output)||'', code:shell.lastCode|0, awaitingConfirm:!!shell.awaitingConfirm }; },
@@ -3314,8 +3336,10 @@
   try{ const h=await idbGet(HOME_KEY); if(h&&typeof h.queryPermission==='function'){ homeSaved=true; if((await h.queryPermission({mode:'readwrite'}))==='granted') homeHandle=h; } }catch(_){}
   try{ if(navigator.storage&&navigator.storage.persisted) opfsPersisted=await navigator.storage.persisted(); }catch(_){}
   updateHomeChip();
-  // Startup backfill: an empty index over existing record files rebuilds silently.
-  try{ if((await runsCount())===0){ const r=await rebuildRunIndex(); if(r&&r.indexed) console.info('[anvil] run index rebuilt: '+r.indexed+' record(s)'+(r.broken?(', '+r.broken+' broken chain(s)'):'')+' — '+r.stopsLine+' — '+r.orderingLine); } }catch(_){}
+  // Startup backfill: an empty index over existing record files rebuilds silently; so does an index
+  // the doctor has not yet run under this row SHAPE (a field a fold reads that older rows do not carry).
+  try{ const n=await runsCount(); if(n===0){ const r=await rebuildRunIndex(); if(r&&r.indexed) console.info('[anvil] run index rebuilt: '+r.indexed+' record(s)'+(r.broken?(', '+r.broken+' broken chain(s)'):'')+' — '+r.stopsLine+' — '+r.orderingLine); }
+    else if(((await idbGet(SHAPE_KEY))||{}).shape!==ROW_SHAPE){ const r=await rebuildRunIndex(); console.info('[anvil] run index re-derived: '+(r&&r.indexed||0)+' row(s) — the row shape moved to '+ROW_SHAPE); } }catch(_){}
   if(!folderMode) await mountProject(state.activeProject);
   renderAll(); syncMode();
   // AC-4: a queue entry recovered from a dead run is surfaced, never silently restored.

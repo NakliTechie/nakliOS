@@ -29,6 +29,7 @@
 import { appendEvent, contentHash, verifyChain, toNDJSON, fromNDJSON } from './ledger.mjs';
 import { classifyToolResult } from '../ai/tool-result-kind.mjs';
 import { parseExpect, gradeExpect, stripExpect, EXPECT_MARKER } from '../ai/expect.mjs';
+import { usageOf } from '../ai/usage.mjs';
 import { runUnit, createProjector } from './projection.mjs';
 export { runUnit, createProjector };
 
@@ -36,7 +37,7 @@ export const RUN_EVENTS = Object.freeze([
   'run.started',      // input: { messages, tools, model }     output: {}  (`model` = {id,provider,label} or null — who answered this run)
   'turn.started',     // input: { step }                       output: {}
   'llm.requested',    // input: { request_hash, step }         output: {}
-  'llm.responded',    // input: { request_hash, step }         output: { content, toolCalls, finishReason, model? }  (`model` = the id that ANSWERED, when the reply named one)
+  'llm.responded',    // input: { request_hash, step }         output: { content, toolCalls, finishReason, model?, usage? }  (`model` = the id that ANSWERED, when the reply named one; `usage` = {prompt, completion, total} when it reported one)
   'assistant.said',   // input: { step }                       output: { content }
   'tool.called',      // input: { id, name, args, step }       output: {}
   'tool.responded',   // input: { id, name, args_hash, step }  output: { result, sent }  (F5: `sent` is the capped surface form when it differs)
@@ -221,7 +222,11 @@ export function createRunRecorder({ app = 'anvil', principal = 'local', grant_id
         // make every record captured with it a replay miss. Omitted, never null, when the
         // reply does not say — the same rule as run.started's stamp.
         const answered = typeof reply?.model === 'string' && reply.model.trim() ? reply.model.trim() : null;
-        const response = { content: reply?.content ?? '', toolCalls: reply?.toolCalls ?? [], finishReason: reply?.finishReason ?? 'stop', ...(answered ? { model: answered } : {}) };
+        // LX-3 (2026-09-17): the provider's token count rides the OUTPUT beside `model`, for the same replay-
+        // stability reason — usageOf is idempotent on the stored shape, so the served-back reply re-records
+        // the same bytes. The goal row's quota is summed from it; a reply without one adds nothing.
+        const usage = usageOf(reply?.usage);
+        const response = { content: reply?.content ?? '', toolCalls: reply?.toolCalls ?? [], finishReason: reply?.finishReason ?? 'stop', ...(answered ? { model: answered } : {}), ...(usage ? { usage } : {}) };
         await enqueue('llm.responded', () => ({ input: { request_hash, step: s }, output: response }));
         return reply;
       };
@@ -1628,6 +1633,67 @@ export function foldSessionContext(events, resolve) {
 
 // CRIB-A A1: the fact names a run recalled, each once, in first-recall order — what the run-index
 // row carries and `factUsage` folds into salience. Pure.
+// LX-3 (decided 2026-09-17: the state kernel is a projection in Anvil) — the QUOTA a run spent, folded
+// from the chain: tokens from every llm.responded that carried a count, model calls, wall seconds
+// from the first event to the last, and the hash of the passing verdict when the gate passed. A
+// subagent's whole record rides this chain as `subagent.ran.output.record` (crib #1), so its spend
+// is this run's spend: tokens and calls descend into every child; seconds do not (a child's wall
+// clock lies inside the parent's).
+export function foldQuota(events, resolve) {
+  const ev = joined(events, resolve);
+  let tokens = 0, calls = 0, counted = 0, evidence = null;
+  for (const e of ev) {
+    if (e.tool === 'llm.responded') { calls++; const u = e.output?.usage; if (u && Number(u.total) > 0) { tokens += Number(u.total); counted++; } }
+    else if (e.tool === 'subagent.ran' && e.output?.record) {
+      try { const child = loadRecord(e.output.record); const q = foldQuota(child.events(), child.resolve); tokens += q.tokens; calls += q.calls; counted += q.counted; } catch (_) { /* an unreadable child adds nothing */ }
+    }
+    if (e.tool === 'verify.passed' && !evidence) evidence = e.output_hash || null;
+  }
+  const t0 = Number(ev[0]?.ts), t1 = Number(ev[ev.length - 1]?.ts);
+  const seconds = Number.isFinite(t0) && Number.isFinite(t1) ? Math.max(0, Math.round((t1 - t0) / 1000)) : 0;
+  return { tokens, calls, counted, seconds, evidence };
+}
+
+// LX-3 — the GOAL ROW of a task: Codex's shape (objective · a status with re-entry first-class · the
+// quota · the evidence), folded from the task's run index rows — no new store, the record is the store.
+//   complete       the last run ended `done` AND its gate passed on record — evidence is the passing
+//                  verdict's hash. Never without it: done is the verifier's word (hard rule ⑤)
+//   paused         the owner's word is what is needed next: a question (`clarify`), Stop, or a `done`
+//                  with no passing gate on the row (the agent's own claim — set a gate, or accept it)
+//   blocked        the last run could not finish: the gate never passed, a prediction streak, an error,
+//                  the step cap, a stall, a record whose chain is broken — a redirect or the owner re-enters
+//   budget_limited the last run ran out of a budget (tokens / turns / wall clock) — a budget re-enters
+//   active         the last row is one without a run.stopped (a run the doctor indexed mid-flight)
+export const GOAL_STATUSES = Object.freeze(['active', 'paused', 'blocked', 'budget_limited', 'complete']);
+export function foldGoal(rows, opts) {
+  const objective = (opts && opts.objective) || '';
+  const list = (rows || []).filter(Boolean).slice().sort((a, b) => (Number(a.startedAt) || 0) - (Number(b.startedAt) || 0));
+  const quota = { tokens: 0, seconds: 0, runs: list.length };
+  for (const r of list) { quota.tokens += Number(r.tokens) || 0; quota.seconds += Number(r.seconds) || 0; }
+  const last = list[list.length - 1] || null;
+  let status = 'blocked', why = 'no run yet', evidence = null;
+  if (!last) { status = 'paused'; why = 'not started'; }
+  else if (last.chainOk === false) { status = 'blocked'; why = 'the record\'s chain is broken' + (last.brokenAt != null ? ` at event ${last.brokenAt}` : ''); }
+  else if (last.status === 'running' || last.phase === 'running') { status = 'active'; why = 'running'; }
+  else {
+    const stop = String(last.stop || '');
+    if (stop === 'done' && last.gatePassed === true && last.evidence) { status = 'complete'; evidence = last.evidence; why = 'the gate passed'; }
+    else if (stop === 'done') { status = 'paused'; why = 'unverified — no passing gate on record'; }
+    else if (stop === 'clarify') { status = 'paused'; why = 'a question for the owner'; }
+    else if (stop === 'aborted') { status = 'paused'; why = 'stopped by the owner'; }
+    else if (stop === 'budget') { status = 'budget_limited'; why = last.axis ? `${last.axis} budget` : 'budget'; }
+    else { status = 'blocked'; why = last.reason ? `${stop}: ${String(last.reason).slice(0, 120)}` : (stop || last.status || 'unknown'); }
+  }
+  return { objective: String(objective), status, why, quota, evidence, lastRun: last ? (last.id || null) : null, since: list.length ? (Number(list[0].startedAt) || null) : null };
+}
+export function goalLine(goal) {
+  if (!goal || !goal.status) return '';
+  const g = goal; const q = g.quota || {}; const n = Number(q.tokens) || 0;
+  const tokens = n >= 1e6 ? (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M' : n >= 1000 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : String(n);
+  const label = g.status === 'complete' ? 'complete ✓' : g.status === 'budget_limited' ? 'budget-limited' : g.status;
+  return `${label}${g.why && g.status !== 'complete' ? ' — ' + g.why : ''} · ${q.runs || 0} run${q.runs === 1 ? '' : 's'} · ${tokens} tokens · ${q.seconds || 0}s`;
+}
+
 export function foldRecalled(events, resolve) {
   const out = [];
   for (const e of joined(events, resolve)) {

@@ -16,7 +16,7 @@ import { RUN_EVENTS, createRunRecorder, loadRecord, foldStatus, foldLog, foldTra
          searchRecords, scopeEntries, readEvent, historyTool, HISTORY_ROLES, foldRecovery, recoveryNote,
          foldStagnation, stagnationNudge, foldSessionContext, foldDecisions, foldEpisode,
          foldSurface, compactionOrphaned, reconstructionCheck, joined,
-         foldModels, normaliseModelStamp, foldSubstitutions, substitutionsLine } from '../run-record.mjs';
+         foldModels, normaliseModelStamp, foldSubstitutions, substitutionsLine, foldQuota, foldGoal, goalLine, GOAL_STATUSES } from '../run-record.mjs';
 
 let passed = 0; const failures = [];
 async function test(n, fn) { try { await fn(); passed++; } catch (e) { failures.push({ n, message: e.message }); } }
@@ -361,6 +361,115 @@ await test('DC1 legacy shapes: a verify.failed recorded WITHOUT `via` folds to t
   eq(t[1].content, '[coordination] Gate failed (exit 3). Fix the problem and continue.', 'a record from before the field reconstructs as it always did');
   const fail = rec.resolve(rec.events().find((e) => e.tool === 'verify.failed')).output;
   assert(!('via' in fail) && !('feedback' in fail), 'nothing invented on the chain for a legacy event');
+});
+
+// ── LX-3 (2026-09-17): the goal row — a projection over the task's run rows; the quota from the chain ──
+await test('LX-3 foldQuota: tokens from every llm.responded that carried a count (on the OUTPUT, replay-stable), calls, wall seconds, the passing verdict\'s hash', async () => {
+  let t = 1_000_000; const now = () => (t += 1500);
+  const withUsage = (r) => async (a) => ({ ...(await r(a)), usage: { prompt_tokens: 100, completion_tokens: 20, total_tokens: 120 } });
+  const { rec } = await recordRun({ infer: withUsage(scripted(SCRIPT())), verify: async () => ({ ok: true, exit: 0, stdout: 'ok' }), now });
+  const q = foldQuota(rec.events(), rec.resolve);
+  eq(q.calls, 4, 'four model calls (the script, then the gated finish)'); eq(q.counted, 4); eq(q.tokens, 480, '120 × 4'); assert(q.seconds >= 1, 'wall seconds from the chain: ' + q.seconds);
+  assert(/^sha256:/.test(q.evidence), 'the passing verdict\'s output hash is the evidence');
+  const resp = rec.resolve(rec.events().find((e) => e.tool === 'llm.responded')).output;
+  eq(resp.usage.total, 120, 'usage rides the output'); eq(resp.usage.prompt, 100);
+  const { rec: bare } = await recordRun(); const q2 = foldQuota(bare.events(), bare.resolve);
+  eq(q2.tokens, 0); eq(q2.counted, 0); assert(q2.calls >= 3, 'no count on the reply: nothing summed, calls still counted'); eq(q2.evidence, null, 'no gate, no evidence');
+  eq(foldQuota([{ tool: 'run.started', input_hash: 'a', output_hash: 'b' }], () => ({ input: {}, output: {} })).seconds, 0, 'an event without ts is not NaN seconds');
+});
+
+await test('LX-3 foldQuota: a subagent\'s spend is this run\'s spend — tokens and calls descend into every child record on the chain; seconds do not', async () => {
+  const child = createRunRecorder({ app: 'anvil', principal: 'p' });
+  await child.start({ messages: [{ role: 'user', content: 'child' }], tools: [] });
+  const ci = child.wrapInfer(async () => ({ content: 'ok', toolCalls: [], usage: { prompt_tokens: 900, completion_tokens: 100 } }));
+  await ci({ messages: [{ role: 'user', content: 'a' }], tools: [] }); await ci({ messages: [{ role: 'user', content: 'b' }], tools: [] });
+  await child.finish({ stop: 'done', steps: 2 }); await child.settled();
+  const parent = createRunRecorder({ app: 'anvil', principal: 'p' });
+  await parent.start({ messages: [{ role: 'user', content: 'parent' }], tools: [] });
+  await parent.wrapInfer(async () => ({ content: '', toolCalls: [], usage: { prompt_tokens: 40, completion_tokens: 10 } }))({ messages: [{ role: 'user', content: 'p' }], tools: [] });
+  await parent.subagent({ kind: 'task', label: 'w1', dump: child.export(), stop: 'done', steps: 2, text: 'ok', tool_call_id: 'c1' });
+  await parent.subagent({ kind: 'task', label: 'w2', dump: { events: 'not a record', blobs: {} }, stop: 'error', steps: 0, text: '', tool_call_id: 'c2' });
+  await parent.finish({ stop: 'done', steps: 1 }); await parent.settled();
+  const q = foldQuota(parent.events(), parent.resolve);
+  eq(q.tokens, 2050, '50 of the parent + 2000 of the child'); eq(q.calls, 3); eq(q.counted, 3);
+});
+
+await test('LX-3: a token budget that tripped LIVE on the provider\'s count trips the same way on REPLAY — the loop reads the stored shape', async () => {
+  const withUsage = (r) => async (a) => ({ ...(await r(a)), usage: { prompt_tokens: 5000, completion_tokens: 10 } });
+  const budget = { tokens: 1000 }; // the chars/4 estimate of this convo is far under 1000; the provider says 5000
+  const liveEv = [];
+  const live = createRunRecorder({ app: 'anvil', principal: 'p' }); await live.start({ messages: MESSAGES, tools: [shellTool()] });
+  const r1 = await runAgentLoop({ messages: MESSAGES, tools: [shellTool()], infer: live.wrapInfer(withUsage(scripted(SCRIPT()))), executeTool: makeShellExecutor(freshShell()), onEvent: (e) => { liveEv.push(e.type); live.onEvent(e); }, budget });
+  await live.finish(r1); await live.settled();
+  eq(r1.stop, 'budget'); eq(r1.budgetAxis, 'tokens'); eq(liveEv.filter((t) => t === 'usage').length, 1, 'the live loop anchored on the provider\'s count');
+  const repEv = []; const inf = replayInfer(live, { strict: true });
+  const rep = createRunRecorder({ app: 'anvil', principal: 'p' }); await rep.start({ messages: MESSAGES, tools: [shellTool()] });
+  const r2 = await runAgentLoop({ messages: MESSAGES, tools: [shellTool()], infer: rep.wrapInfer(inf), executeTool: makeShellExecutor(freshShell()), onEvent: (e) => { repEv.push(e.type); rep.onEvent(e); }, budget });
+  await rep.finish(r2); await rep.settled();
+  eq(r2.stop, 'budget', 'the replay stops where the live run did'); eq(r2.budgetAxis, 'tokens'); eq(r2.steps, r1.steps);
+  eq(repEv.filter((t) => t === 'usage').length, 1, 'the replayed loop anchored on the served-back count'); eq(inf.remaining().length, 0, 'every recorded reply served');
+  eq(compareRuns(live, rep).ok, true, 'same bytes: ' + compareRuns(live, rep).why);
+  // the provider reports only the output side: the live loop has no anchor and trips on the chars/4 estimate of a
+  // long system prompt — the replay must do the same, which it cannot if the record stored prompt:0 as an anchor
+  const LONG = [{ role: 'system', content: 'x'.repeat(6000) }, { role: 'user', content: 'go' }];
+  const outOnly = (r) => async (a) => ({ ...(await r(a)), usage: { completion_tokens: 10 } });
+  const live2 = createRunRecorder({ app: 'anvil', principal: 'p' }); await live2.start({ messages: LONG, tools: [shellTool()] });
+  const r3 = await runAgentLoop({ messages: LONG, tools: [shellTool()], infer: live2.wrapInfer(outOnly(scripted(SCRIPT()))), executeTool: makeShellExecutor(freshShell()), onEvent: live2.onEvent, budget: { tokens: 1500 } });
+  await live2.finish(r3); await live2.settled();
+  eq(r3.stop, 'budget', 'live: the estimate trips it'); eq(r3.budgetAxis, 'tokens');
+  const rep2 = createRunRecorder({ app: 'anvil', principal: 'p' }); await rep2.start({ messages: LONG, tools: [shellTool()] });
+  const r4 = await runAgentLoop({ messages: LONG, tools: [shellTool()], infer: rep2.wrapInfer(replayInfer(live2, { strict: true })), executeTool: makeShellExecutor(freshShell()), onEvent: rep2.onEvent, budget: { tokens: 1500 } });
+  await rep2.finish(r4); await rep2.settled();
+  eq(r4.stop, 'budget', 'replay: the same estimate trips it — the stored null is no anchor'); eq(r4.steps, r3.steps);
+  eq(compareRuns(live2, rep2).ok, true, 'same bytes: ' + compareRuns(live2, rep2).why);
+});
+
+await test('LX-3: a record with usage REPLAYS to the same bytes — usageOf is idempotent on the stored shape, both provider shapes land in one', async () => {
+  const { usageOf } = await import('../../ai/usage.mjs'); const j = (x) => JSON.stringify(x);
+  eq(j(usageOf({ prompt_tokens: 100, completion_tokens: 20, total_tokens: 999 })), j({ prompt: 100, completion: 20, total: 120 }), 'openai: the total is the sum, never the provider\'s');
+  eq(j(usageOf({ input_tokens: 100, cache_read_input_tokens: 900, output_tokens: 5 })), j({ prompt: 1000, completion: 5, total: 1005 }), 'anthropic: cache reads are input');
+  eq(j(usageOf(usageOf({ prompt_tokens: 7, completion_tokens: 3 }))), j({ prompt: 7, completion: 3, total: 10 }), 'idempotent');
+  eq(j(usageOf({})), j(null), 'an empty usage is not a zero-token request'); eq(j(usageOf(null)), j(null)); eq(j(usageOf({ prompt: 0, completion: 0 })), j({ prompt: 0, completion: 0, total: 0 }), 'a stored zero stays a zero');
+  eq(j(usageOf({ completion_tokens: 10 })), j({ prompt: null, completion: 10, total: 10 }), 'a side the provider did not report is null, never 0');
+  eq(j(usageOf(usageOf({ completion_tokens: 10 }))), j({ prompt: null, completion: 10, total: 10 }), 'and stays null through a round trip');
+  const { usageInputTokens } = await import('../../ai/usage.mjs'); eq(usageInputTokens(usageOf({ completion_tokens: 10 })), null, 'the loop reads the stored null as unknown — no anchor the live run never had');
+  eq(j(usageOf({ prompt_tokens: -5, completion_tokens: 3 })), j({ prompt: null, completion: 3, total: 3 }), 'a negative count is unknown, not zero');
+  const withUsage = (r) => async (a) => ({ ...(await r(a)), usage: { prompt_tokens: 100, completion_tokens: 20 } });
+  const { rec } = await recordRun({ infer: withUsage(scripted(SCRIPT())) });
+  const shell = freshShell(); const live = createRunRecorder({ app: 'anvil', principal: 'prin_test' });
+  await live.start({ messages: MESSAGES, tools: [shellTool()] });
+  const r = await runAgentLoop({ messages: MESSAGES, tools: [shellTool()], infer: live.wrapInfer(replayInfer(rec, { strict: true })), executeTool: makeShellExecutor(shell), onEvent: live.onEvent });
+  await live.finish(r); await live.settled();
+  const cmp = compareRuns(rec, live); eq(cmp.ok, true, 'the served-back reply re-records the same output hash: ' + cmp.why);
+  eq(foldQuota(live.events(), live.resolve).tokens, foldQuota(rec.events(), rec.resolve).tokens, 'and the replayed quota is the recorded quota');
+});
+
+await test('LX-3 foldGoal: the five statuses from the last run, re-entry first-class, the quota summed, complete only with the gate\'s evidence', () => {
+  const row = (o) => ({ id: 'p/t/' + (o.startedAt || 0), task: 't', startedAt: o.startedAt || 0, endedAt: (o.startedAt || 0) + 1000, tokens: 100, seconds: 2, ...o });
+  eq(GOAL_STATUSES.join(','), 'active,paused,blocked,budget_limited,complete');
+  eq(foldGoal([], { objective: 'ship it' }).status, 'paused'); eq(foldGoal([]).why, 'not started');
+  const done = foldGoal([row({ startedAt: 1, stop: 'unverified', status: 'error' }), row({ startedAt: 2, stop: 'done', status: 'done', gatePassed: true, evidence: 'sha256:abc' })], { objective: 'ship it' });
+  eq(done.status, 'complete'); eq(done.evidence, 'sha256:abc'); eq(done.quota.runs, 2); eq(done.quota.tokens, 200); eq(done.quota.seconds, 4); eq(done.objective, 'ship it'); eq(done.lastRun, 'p/t/2');
+  const claimed = foldGoal([row({ startedAt: 1, stop: 'done', status: 'unclaimed', gatePassed: false })]);
+  eq(claimed.status, 'paused', 'done is the verifier\'s word: an ungated finish waits for the owner'); eq(claimed.evidence, null); eq(claimed.why, 'unverified — no passing gate on record');
+  eq(foldGoal([row({ startedAt: 1, stop: 'done', gatePassed: true, evidence: null })]).status, 'paused', 'a passed flag without the verdict\'s hash is not evidence');
+  eq(foldGoal([row({ startedAt: 1, stop: 'done', gatePassed: true, evidence: 'sha256:x', chainOk: false, brokenAt: 7 })]).status, 'blocked', 'a broken chain earns nothing');
+  assert(/chain is broken at event 7/.test(foldGoal([row({ startedAt: 1, stop: 'done', gatePassed: true, evidence: 'sha256:x', chainOk: false, brokenAt: 7 })]).why));
+  eq(foldGoal([row({ startedAt: 1, stop: 'done' })], null).status, 'paused', 'opts may be null'); eq(goalLine(null), ''); eq(goalLine({}), '');
+  eq(foldGoal([row({ startedAt: 1, stop: 'clarify', status: 'paused' })]).status, 'paused');
+  const ab = foldGoal([row({ startedAt: 1, stop: 'aborted', status: 'aborted' })]); eq(ab.status, 'paused', 'Stop is the owner re-entering, not a wall'); eq(ab.why, 'stopped by the owner');
+  const b = foldGoal([row({ startedAt: 1, stop: 'budget', axis: 'tokens' })]); eq(b.status, 'budget_limited'); eq(b.why, 'tokens budget');
+  const bl = foldGoal([row({ startedAt: 1, stop: 'expect-misses', reason: '3 predictions in a row missed — the model of this workspace is wrong' })]); eq(bl.status, 'blocked'); assert(/^expect-misses: 3 predictions/.test(bl.why));
+  eq(foldGoal([row({ startedAt: 1, stop: 'max-steps' })]).status, 'blocked');
+  eq(foldGoal([row({ startedAt: 2, stop: 'done', gatePassed: true, evidence: 'x' }), row({ startedAt: 1, stop: 'error' })]).status, 'complete', 'rows are ordered by start, whatever order they arrive in');
+  eq(foldGoal([row({ startedAt: 1, status: 'running', stop: null })]).status, 'active');
+  // the one-line render
+  assert(/^complete ✓ · 2 runs · 200 tokens · 4s$/.test(goalLine(done)), goalLine(done));
+  assert(/^paused — unverified — no passing gate on record · 1 run · 100 tokens · 2s$/.test(goalLine(claimed)), goalLine(claimed));
+  assert(/· 2\.5M tokens ·/.test(goalLine({ status: 'blocked', why: 'x', quota: { tokens: 2_500_000, seconds: 1, runs: 1 } })));
+  assert(/^blocked — expect-misses: 3 predictions/.test(goalLine(bl)), goalLine(bl));
+  assert(/^budget-limited — tokens budget · 1 run · 100 tokens · 2s$/.test(goalLine(b)), goalLine(b));
+  assert(/· 12\.4k tokens ·/.test(goalLine({ status: 'blocked', why: 'x', quota: { tokens: 12_400, seconds: 1, runs: 1 } })));
 });
 
 await test('RECOVERY: coordination (a carried gate verdict) is tagged and never reads as an owner turn', async () => {

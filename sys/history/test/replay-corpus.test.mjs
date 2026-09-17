@@ -450,6 +450,23 @@ await test('B2: a two-loop record under a turns budget, the steer drained on the
   eq(r.consumed, true);
 });
 
+await test('LX-3: every corpus record folds to a quota and, as a one-run task, to a goal row in the closed set — the projection reads real runs', async () => {
+  const { foldQuota, foldGoal, GOAL_STATUSES, foldStatus } = await import('../run-record.mjs');
+  const seen = new Set();
+  for (const f of entries) {
+    const rec = loadRecord(load(f));
+    const q = foldQuota(rec.events(), rec.resolve);
+    assert(Number.isInteger(q.tokens) && q.tokens >= 0 && Number.isInteger(q.calls) && q.calls >= 1 && q.seconds >= 0, `${f}: quota ${JSON.stringify(q)}`);
+    const st = foldStatus(rec.events(), rec.resolve, { gated: q.evidence !== null });
+    const ev = joined(rec.events(), rec.resolve);
+    const row = { id: f, task: f, startedAt: ev[0].ts, endedAt: ev[ev.length - 1].ts, stop: st.stop, status: st.status, gatePassed: q.evidence !== null, evidence: q.evidence, tokens: q.tokens, seconds: q.seconds, axis: st.axis, reason: st.reason };
+    const g = foldGoal([row], { objective: f });
+    assert(GOAL_STATUSES.includes(g.status), `${f}: goal status ${g.status}`); seen.add(g.status);
+    if (g.status === 'complete' && g.evidence) assert(/^sha256:/.test(g.evidence), `${f}: evidence is a hash`);
+  }
+  assert(seen.size >= 3, `the corpus spans at least three goal states: ${[...seen].join(',')}`);
+});
+
 if (failures.length) {
   console.error(`replay-corpus: ${passed} passed, ${failures.length} FAILED`);
   for (const f of failures) console.error(`  FAIL ${f.n}: ${f.message}`);

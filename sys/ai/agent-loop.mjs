@@ -20,6 +20,7 @@
 import { parseToolArguments } from './agent-protocol.mjs';
 import { classifyToolResult, listingShape } from './tool-result-kind.mjs';
 import { NO_OUTPUT, EXPECT_MARKER, parseExpect, stripExpect } from './expect.mjs';
+import { usageInputTokens, usageOutputTokens } from './usage.mjs';
 
 // The single most powerful tool for a coding agent: a real shell. The Forge
 // shell already covers fileops, git, pipes, and globs, so one `shell` tool is a
@@ -95,42 +96,19 @@ export function taskDoneTool() {
   };
 }
 
-// Rough token estimate (~4 chars/token) over a string or a message transcript.
-// Deliberately cheap and dependency-free — the budget ladder and compaction only
-// need a monotonic proxy, not a real tokenizer.
 // ── usage-anchored token accounting (F6) ──
 //
 // estimateTokens is chars/4. That is fine for a log line and wrong for a budget that ENDS
 // runs: it ignores the system prompt's real tokenisation, tool schemas, images, and every
 // provider's own accounting. When the provider tells us what a request actually cost, that
-// number is the truth and the estimate is only used for the delta since.
-//
-// The two provider shapes, and why they are NOT added together:
-//   Anthropic: input_tokens EXCLUDES cache reads/writes, which are reported separately —
-//              so the real input is the sum of the three.
-//   OpenAI:    prompt_tokens INCLUDES the cached part, and prompt_tokens_details.cached_tokens
-//              is a SUBSET of it — adding it would double-count the cache on every turn.
-// Returns null when the object carries no usable input count, so the caller falls back to
-// the estimate rather than silently anchoring on zero.
-export function usageInputTokens(usage) {
-  if (!usage || typeof usage !== 'object') return null;
-  const num = (v) => (Number.isFinite(v) && v >= 0 ? v : null);
-  const anthropic = num(usage.input_tokens);
-  if (anthropic !== null) {
-    return anthropic + (num(usage.cache_read_input_tokens) || 0) + (num(usage.cache_creation_input_tokens) || 0);
-  }
-  const openai = num(usage.prompt_tokens);
-  if (openai !== null) return openai; // cached_tokens is already inside this
-  return null;
-}
+// number is the truth and the estimate is only used for the delta since. The two provider
+// shapes, and the cache rule that keeps them from being added together, live in usage.mjs
+// (the run record reads the same count); re-exported here as the loop's own face.
+export { usageInputTokens, usageOutputTokens };
 
-// What the provider says the reply itself cost, or null.
-export function usageOutputTokens(usage) {
-  if (!usage || typeof usage !== 'object') return null;
-  const num = (v) => (Number.isFinite(v) && v >= 0 ? v : null);
-  return num(usage.output_tokens) ?? num(usage.completion_tokens);
-}
-
+// Rough token estimate (~4 chars/token) over a string or a message transcript.
+// Deliberately cheap and dependency-free — the budget ladder and compaction only
+// need a monotonic proxy, not a real tokenizer.
 export function estimateTokens(input) {
   if (typeof input === 'string') return Math.ceil(input.length / 4);
   if (Array.isArray(input)) {

@@ -366,9 +366,9 @@ await test('WIRE: a reopened record refolds from its checkpoint (resumed), a for
 
 // U6 (PG-A4): the index row carries the ordering number — driven through the app's own runIndexRow
 await test('U6: the run-index row carries anchor and toFirstAction, folded from the record', async () => {
-  const { loadRecord, statusUnit, createProjector, foldOrdering, foldRecalled, foldEpisode } = await import('../sys/history/run-record.mjs');
+  const { loadRecord, statusUnit, createProjector, foldOrdering, foldRecalled, foldEpisode, foldQuota } = await import('../sys/history/run-record.mjs');
   const fis = instantiate(extractRegion(src, 'async function foldIndexStatus(', '// One index row from one record.'), 'foldIndexStatus', { statusUnit, createProjector });
-  const runIndexRow = instantiate(extractRegion(src, 'async function runIndexRow(', '// The doctor: rebuild the index'), 'runIndexRow', { foldIndexStatus: fis, foldOrdering, foldRecalled, foldEpisode });
+  const runIndexRow = instantiate(extractRegion(src, 'async function runIndexRow(', '// The doctor: rebuild the index'), 'runIndexRow', { foldIndexStatus: fis, foldOrdering, foldRecalled, foldEpisode, foldQuota, ROW_SHAPE: Number((src.match(/const ROW_SHAPE=(\d+);/) || [])[1]) });
   const load = (f) => loadRecord(JSON.parse(readFileSync(new URL('../sys/history/corpus/' + f, import.meta.url), 'utf8')));
   const wf = await runIndexRow({ project: 'p', task: 't', name: 'w.json', path: 'x', tiers: ['t'], rec: { ...load('write-a-file.json'), head: () => null }, gated: false });
   assert.equal(wf.anchor, 'shell-write', 'write-a-file went straight to a shell write');
@@ -379,9 +379,9 @@ await test('U6: the run-index row carries anchor and toFirstAction, folded from 
 });
 
 await test('U6: the doctor groups the ordering number over the records it read — gated and ungated classes, every run counted', async () => {
-  const { loadRecord, foldStopReasons, stopReasonsLine, groupOrdering, orderingLine, statusUnit, createProjector, foldOrdering, foldRecalled, foldEpisode, isCorpusRecord } = await import('../sys/history/run-record.mjs');
+  const { loadRecord, foldStopReasons, stopReasonsLine, groupOrdering, orderingLine, statusUnit, createProjector, foldOrdering, foldRecalled, foldEpisode, foldQuota, isCorpusRecord } = await import('../sys/history/run-record.mjs');
   const fis = instantiate(extractRegion(src, 'async function foldIndexStatus(', '// One index row from one record.'), 'foldIndexStatus', { statusUnit, createProjector });
-  const runIndexRow = instantiate(extractRegion(src, 'async function runIndexRow(', '// The doctor: rebuild the index'), 'runIndexRow', { foldIndexStatus: fis, foldOrdering, foldRecalled, foldEpisode });
+  const runIndexRow = instantiate(extractRegion(src, 'async function runIndexRow(', '// The doctor: rebuild the index'), 'runIndexRow', { foldIndexStatus: fis, foldOrdering, foldRecalled, foldEpisode, foldQuota, ROW_SHAPE: Number((src.match(/const ROW_SHAPE=(\d+);/) || [])[1]) });
   // a fake OPFS: anvil/runs/<project>/<task>/<file>.json over the real corpus dumps, plus one empty record
   const corpusDir = new URL('../sys/history/corpus/', import.meta.url);
   const files = readdirSync(corpusDir).filter(isCorpusRecord).map((f) => [f, readFileSync(new URL(f, corpusDir), 'utf8')]);
@@ -395,9 +395,12 @@ await test('U6: the doctor groups the ordering number over the records it read �
     navigator: { storage: { getDirectory: async () => tree } },
     loadRecord, runsGet: async () => null, runsPut: async (row) => { rows.push(row); }, runIndexRow,
     foldStopReasons, stopReasonsLine, groupOrdering, orderingLine, createFileops: null, CrateBackend: null,
+    idbSet: async (k, v) => { stamped.push([k, v]); }, SHAPE_KEY: 'anvil-row-shape', ROW_SHAPE: Number((src.match(/const ROW_SHAPE=(\d+);/) || [])[1]), renderTaskbar: () => {},
   });
+  const stamped = [];
   const r = await rebuild();
   assert.equal(r.indexed, files.length, 'every record file is indexed');
+  assert.equal(JSON.stringify(stamped), JSON.stringify([['anvil-row-shape', { shape: Number((src.match(/const ROW_SHAPE=(\d+);/) || [])[1]), home: false }]]), 'LX-3: the doctor stamps the shape it ran under, and that the home was not reachable');
   assert.equal(rows.length, files.length, 'and has a row');
   assert.ok(rows.every((row) => 'anchor' in row && 'toFirstAction' in row), 'every row carries the ordering number');
   assert.ok(rows.every((row) => Array.isArray(row.recalled)), 'A1: every row carries the fact names its run recalled');
@@ -546,6 +549,27 @@ await test('PG-A3: saveLedger writes only into the project the ledger was loaded
   const saveLedger = instantiate(extractFunction(src, 'saveLedger'), 'saveLedger', ctx);
   await saveLedger(); assert.equal(writes.length, 1, 'same project: saved');
   state.activeProject = 'B'; await saveLedger(); assert.equal(writes.length, 1, 'the owner switched to B: A\'s ledger is not written through B\'s fs');
+});
+
+await test('LX-3: the run index row carries the goal row\'s inputs (gatePassed, tokens, seconds, evidence, axis, reason); the task bar and the door read the goal', async () => {
+  const { loadRecord, statusUnit, createProjector, foldOrdering, foldRecalled, foldEpisode, foldQuota } = await import('../sys/history/run-record.mjs');
+  const fis = instantiate(extractRegion(src, 'async function foldIndexStatus(', '// One index row from one record.'), 'foldIndexStatus', { statusUnit, createProjector });
+  const runIndexRow = instantiate(extractRegion(src, 'async function runIndexRow(', '// The doctor: rebuild the index'), 'runIndexRow', { foldIndexStatus: fis, foldOrdering, foldRecalled, foldEpisode, foldQuota, ROW_SHAPE: Number((src.match(/const ROW_SHAPE=(\d+);/) || [])[1]) });
+  const rec = createRunRecorder({ app: 'anvil', principal: 'p' });
+  await rec.start({ messages: [{ role: 'user', content: 'go' }], tools: [] });
+  rec.onEvent({ type: 'verify-pass', verdict: { ok: true, exit: 0 }, via: null });
+  await rec.finish({ stop: 'done', steps: 1, verified: true }); await rec.settled();
+  const row = await runIndexRow({ project: 'p', task: 't', name: 'r.json', path: 'p/t/r.json', tiers: ['opfs'], rec: { events: rec.events, resolve: rec.resolve, head: () => null }, gated: true, prev: null });
+  assert.equal(row.gatePassed, true); assert.match(row.evidence, /^sha256:/); assert.equal(typeof row.tokens, 'number'); assert.equal(typeof row.seconds, 'number'); assert.equal(row.calls, 0);
+  // the row shape: a stale row (no `shape`, or an older one) makes the startup backfill re-derive every row
+  const ROW_SHAPE = Number((src.match(/const ROW_SHAPE=(\d+);/) || [])[1]); assert.ok(ROW_SHAPE >= 2, 'ROW_SHAPE is declared');
+  assert.equal(row.shape, ROW_SHAPE, 'every row the builder writes carries the current shape');
+  assert.match(src, /else if\(\(\(await idbGet\(SHAPE_KEY\)\)\|\|\{\}\)\.shape!==ROW_SHAPE\)\{ const r=await rebuildRunIndex\(\);/, 'the boot backfill re-derives once per shape bump');
+  assert.match(src, /await idbSet\(SHAPE_KEY, \{ shape: ROW_SHAPE, home: !!homeHandle \}\);/, 'the doctor stamps the shape it ran under and whether the home was reachable');
+  assert.match(src, /if\(m && m\.shape===ROW_SHAPE && !m\.home\)\{ const r=await rebuildRunIndex\(\);/, 'reconnecting the home re-derives once when the shape run missed it');
+  assert.match(src, /if\(!loud\.length && t && !running\) goalOf\(t\)\.then\(g=>\{ if\(g && g\.quota\.runs>0 && activeTask\(\)===t && !running && !state\.runsHeld && !modeIsLoud\(state\.permissionMode\)\) \$\('tb-meta'\)\.textContent = goalLine\(g\);/, 'the task bar shows the goal line when the task has runs, nothing louder is on, and — re-read at resolve — no run started meanwhile');
+  assert.match(src, /goal:async\(\)=>\{ const t=activeTask\(\); return t\? await goalOf\(t\) : null; \}/, 'the door exposes the goal');
+  assert.match(src, /async function goalOf\(t\)\{ if\(!t\) return null; return foldGoal\(await runsForTask\(t\.id\), \{ objective: t\.title\|\|'' \}\); \}/, 'the goal is folded from the task\'s own rows, by the task index');
 });
 
 await test('the harness is not vacuous — a deliberately wrong expectation fails', () => {
