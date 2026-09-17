@@ -703,7 +703,10 @@
     return { indexed, broken, resumed, stops, stopsLine: stopReasonsLine(stops), ordering, orderingLine: orderingLine(ordering) };
   }
   async function idbGet(k){try{const db=await idbOpen();return await new Promise((res)=>{const t=db.transaction(DIR_STORE).objectStore(DIR_STORE).get(k);t.onsuccess=()=>res(t.result);t.onerror=()=>res(null);});}catch(_){return null;}}
-  async function idbSet(k,v){try{const db=await idbOpen();await new Promise((res)=>{const t=db.transaction(DIR_STORE,'readwrite').objectStore(DIR_STORE).put(v,k);t.oncomplete=res;t.onerror=res;});}catch(_){} }
+  // `put` returns a REQUEST: it fires onsuccess, never oncomplete (that is the transaction's). With
+  // oncomplete this promise never settled — the write landed, and every caller that awaited it hung:
+  // Open folder's confirmation, the home chip's, and the doctor's shape stamp (found on prod 2026-09-17).
+  async function idbSet(k,v){try{const db=await idbOpen();await new Promise((res)=>{const t=db.transaction(DIR_STORE,'readwrite').objectStore(DIR_STORE).put(v,k);t.onsuccess=res;t.onerror=res;});}catch(_){} }
 
   // ── Anvil home — rung 1 of the record's storage ladder ────────────────────
   // OPFS (rung 0) is site storage: on 2026-09-04 navigator.storage.persisted()
@@ -1272,7 +1275,7 @@
     // ran shows none (nothing to project). The fold is async and the bar may have moved on, so the line
     // lands only if this task is still on the bar, nothing louder came on, and no run started meanwhile
     // (`running` is the live binding, read at resolve time).
-    if(!loud.length && t && !running) goalOf(t).then(g=>{ if(g && g.quota.runs>0 && activeTask()===t && !running && !state.runsHeld && !modeIsLoud(state.permissionMode)) $('tb-meta').textContent = goalLine(g); }).catch(()=>{});
+    if(!loud.length && t && !running) goalOf(t).then(g=>{ if(g && g.quota.runs>0 && activeTask()===t && !running && !reshaping && !state.runsHeld && !modeIsLoud(state.permissionMode)) $('tb-meta').textContent = goalLine(g); }).catch(()=>{});
     const g=$('gate-btn'); if(g){ const vc=((t&&t.verifyCmd)||'').trim(); g.textContent=vc?('✓ '+vc):'✓ Must-pass'; g.classList.toggle('on', !!vc);
       // Always visible. The old progressive reveal keyed on `state.proven`, which
       // seedState() never set — so on a fresh install it was undefined and the gate

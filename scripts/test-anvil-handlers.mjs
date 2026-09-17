@@ -569,9 +569,22 @@ await test('LX-3: the run index row carries the goal row\'s inputs (gatePassed, 
   assert.match(src, /async function goalOf\(t\)\{ if\(!t\|\|reshaping\) return null;/, 'no goal is projected while the re-derive is in flight');
   assert.match(src, /await idbSet\(SHAPE_KEY, \{ shape: ROW_SHAPE, home: !!homeHandle \}\);/, 'the doctor stamps the shape it ran under and whether the home was reachable');
   assert.match(src, /if\(m && m\.shape===ROW_SHAPE && !m\.home\)\{ const r=await rebuildRunIndex\(\);/, 'reconnecting the home re-derives once when the shape run missed it');
-  assert.match(src, /if\(!loud\.length && t && !running\) goalOf\(t\)\.then\(g=>\{ if\(g && g\.quota\.runs>0 && activeTask\(\)===t && !running && !state\.runsHeld && !modeIsLoud\(state\.permissionMode\)\) \$\('tb-meta'\)\.textContent = goalLine\(g\);/, 'the task bar shows the goal line when the task has runs, nothing louder is on, and — re-read at resolve — no run started meanwhile');
+  assert.match(src, /if\(!loud\.length && t && !running\) goalOf\(t\)\.then\(g=>\{ if\(g && g\.quota\.runs>0 && activeTask\(\)===t && !running && !reshaping && !state\.runsHeld && !modeIsLoud\(state\.permissionMode\)\) \$\('tb-meta'\)\.textContent = goalLine\(g\);/, 'the task bar shows the goal line when the task has runs, nothing louder is on, and — re-read at resolve — no run started meanwhile');
   assert.match(src, /goal:async\(\)=>\{ const t=activeTask\(\); return t\? await goalOf\(t\) : null; \}/, 'the door exposes the goal');
   assert.match(src, /async function goalOf\(t\)\{ if\(!t\|\|reshaping\) return null; return foldGoal\(await runsForTask\(t\.id\), \{ objective: t\.title\|\|'' \}\); \}/, 'the goal is folded from the task\'s own rows, by the task index');
+});
+
+await test('idbSet settles on the request\'s onsuccess — a put fires no oncomplete, and every awaiting caller hung on prod (2026-09-17)', async () => {
+  // a request object the way IDB hands one back: onsuccess fires on the next tick; oncomplete never (it is the transaction's event)
+  const puts = [];
+  const fakeDb = { transaction: () => ({ objectStore: () => ({ put: (v, k) => { const req = {}; puts.push([k, v]); setTimeout(() => { if (typeof req.onsuccess === 'function') req.onsuccess({ target: req }); }, 0); return req; } }) }) };
+  const idbSet = instantiate(extractFunction(src, 'idbSet'), 'idbSet', { idbOpen: async () => fakeDb, DIR_STORE: 'h' });
+  const settled = await Promise.race([idbSet('k', { a: 1 }).then(() => 'settled'), new Promise((r) => setTimeout(() => r('HUNG'), 200))]);
+  assert.equal(settled, 'settled', 'the promise settles once the request succeeds');
+  assert.equal(JSON.stringify(puts), JSON.stringify([['k', { a: 1 }]]), 'and the write landed');
+  const failing = { transaction: () => ({ objectStore: () => ({ put: () => { const req = {}; setTimeout(() => req.onerror && req.onerror({ target: req }), 0); return req; } }) }) };
+  const idbSet2 = instantiate(extractFunction(src, 'idbSet'), 'idbSet', { idbOpen: async () => failing, DIR_STORE: 'h' });
+  assert.equal(await Promise.race([idbSet2('k', 1).then(() => 'settled'), new Promise((r) => setTimeout(() => r('HUNG'), 200))]), 'settled', 'a failed put settles too');
 });
 
 await test('the harness is not vacuous — a deliberately wrong expectation fails', () => {
