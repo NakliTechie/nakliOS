@@ -5,7 +5,7 @@
 // Pure/headless: a scripted token estimator drives the thresholds, so the cut
 // boundaries and the shake/summarize/drop ladder are verified deterministically.
 
-import { shake, compactConversation, listingEntries } from '../compaction.mjs';
+import { shake, compactConversation, listingEntries, listingShape } from '../compaction.mjs';
 import { estimateTokens } from '../agent-loop.mjs';
 
 let passed = 0;
@@ -260,6 +260,26 @@ await test('shake collapses a stale listing to its entry count', () => {
   eq(listingEntries('numpy==1.26.0\npandas>=2.0\nrequests', sh), null, 'a requirements file catted in the shell is not a listing');
   eq(listingEntries('PATH=/usr/bin\nHOME=/root', sh), null, 'an env dump is not a listing');
   eq(listingEntries('README.md\nhello.py\nnotes.txt', sh), null, 'bare names without a slash are not a path listing');
+  // B6 (2026-09-17): `ls -R` directory blocks and the shell's cap trailer are listings too
+  eq(listingEntries('src:\napp.js\nutil\n\nsrc/util:\na.js', sh), 3, 'ls -R blocks: the entries, not the headers');
+  eq(listingEntries('.:\nREADME.md\ndocs\n\ndocs:\nguide.md', sh), 3, 'bare names count inside blocks (the block says where they are)');
+  eq(JSON.stringify(listingShape('a/x.py\na/y.py\n[listing truncated: 2 of 900 entries shown — narrow the path, add -name / -maxdepth, or pipe through grep]', sh)), JSON.stringify({ entries: 900, shown: 2, truncated: true }), 'the trailer carries the real count');
+  eq(listingEntries('a/x.py\na/y.py\n[listing truncated: 2 of 900 entries shown — narrow the path]', sh), 900, 'a capped listing collapses to the count it HAD');
+  eq(listingShape('src:\napp.js', sh), null, 'a one-entry block is not a listing (nothing to collapse; `Results:` over a word must not be one)');
+  eq(listingShape('Results:\nok', sh), null); eq(listingShape('Summary:\nPASS', sh), null);
+  eq(listingShape('- read the file\n- edit it\n- run tests\n[exit 0]', sh), null, 'a bulleted note catted in the shell is prose, not an ls -l');
+  eq(listingEntries('src/a.py\nsrc/b.py\n[exit 0]\n[hook] ls\nsrc\ntests', sh), 2, 'a post-hook block after the exit line is not the listing');
+  eq(listingShape('Traceback:\n  x', sh), null, 'a header-looking line over prose is not a listing');
+  eq(listingShape('src:\napp.js', { tool: 'read' }), null, 'shell only');
+  // the REAL shape: the runner appends `[exit N]` (and an `[expect]` verdict) to every shell result — the
+  // A3 fixtures above lack it, and the collapse never fired on a live run until this was pinned
+  eq(listingEntries('src/a.py\nsrc/b.py\n[exit 0]', sh), 2, 'a find with the runner\'s exit line is still a listing');
+  eq(listingEntries('src:\napp.js\nutil\n[exit 0]\n[expect] MET (exit 0) — exited 0', sh), 2, 'and with an expect verdict');
+  eq(listingEntries('d .anvil\n- README.md\n[exit 0]', sh), 2, 'ls -l too');
+  { const find = Array.from({ length: 40 }, (_, i) => `src/dir${i}/mod.py`).join('\n') + '\n[exit 0]';
+    const region = [{ role: 'assistant', content: '', tool_calls: [{ id: 'r1', function: { name: 'shell', arguments: '{"command":"find ."}' } }] }, { role: 'tool', tool_call_id: 'r1', content: find }];
+    const { messages } = shake(region, { minChars: 50 });
+    assert(/^\[listing elided — 40 entries from `shell`/.test(messages[1].content), 'shake collapses a REAL shell listing: ' + messages[1].content.slice(0, 60)); }
   // an aged bulleted READ result keeps the generic elision (and its content is retrievable through the handle)
   const note = Array.from({ length: 30 }, (_, i) => `- step ${i}: read the file, then edit it carefully`).join('\n');
   const r2 = shake([

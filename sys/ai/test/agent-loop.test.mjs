@@ -1379,6 +1379,19 @@ await test('B2: without a steer queue nothing changes — a no-tool-call turn is
 
 // ── CRIB-D D1 (khiladi §1, with teeth): missed predictions are counted; a streak stops the run ──
 const graded = (expect, exitCode, output = 'out') => { const exp = parseExpect(expect); return output + '\n[exit ' + exitCode + ']' + expectLine(exp, gradeExpect(exp, { exitCode, output })); };
+await test('B6: a shell listing says its size on the tool-result event — the cap trailer\'s numbers when it was cut; nothing on a non-listing', async () => {
+  const events = [];
+  const texts = ['src:\napp.js\nutil\n\nsrc/util:\na.js\n[exit 0]', 'a/x.py\na/y.py\n[listing truncated: 2 of 900 entries shown — narrow the path]\n[exit 0]', 'hello world\n[exit 0]'];
+  let n = 0;
+  await runAgentLoop({
+    messages: [{ role: 'user', content: 'go' }], tools: [shellTool()],
+    infer: scriptedInfer([0, 1, 2].map((i) => ({ content: '', toolCalls: [call('shell', { command: 'ls -R' }, 'l' + i)] })).concat([{ content: 'done', toolCalls: [] }])),
+    executeTool: async () => texts[n++], onEvent: (e) => events.push(e),
+  });
+  const ls = events.filter((e) => e.type === 'tool-result').map((e) => e.listing ? `${e.listing.shown}/${e.listing.entries}/${e.listing.truncated}` : 'none');
+  eq(ls.join(' '), '3/3/false 2/900/true none', 'blocks count their entries; a trailer carries the real count; prose is not a listing');
+});
+
 await test('D1: three missed predictions in a row stop the run as its own recorded stop; a hit resets the streak; no expect → unchanged', async () => {
   eq(EXPECT_MISS_STREAK, 3);
   eq(expectVerdictIn(graded('exit 0', 1)), 'MISS'); eq(expectVerdictIn(graded('exit 0', 0)), 'MET'); eq(expectVerdictIn('plain output'), null);

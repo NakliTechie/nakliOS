@@ -9,7 +9,7 @@
 //
 // Every case below asserts BOTH that the old wrong answer is gone AND that a benign use still
 // works — a widened check that fires on ordinary work gets turned off, which helps nobody.
-import { createShell, SLEEP_MAX_S } from '../shell.mjs';
+import { createShell, SLEEP_MAX_S, LISTING_MAX_ENTRIES, truncateListing } from '../shell.mjs';
 import { buildRigRegistry } from '../../registry/index.mjs';
 import { createFileops, MemoryBackend } from '../../fileops/index.mjs';
 import { createGrant, createOpLog, createAgentFace } from '../../agent/index.mjs';
@@ -396,6 +396,38 @@ await test('sleep: waits the interval, exits 0, refuses the false friends (no ar
     assert(/^sleep: /.test(r.out), `${why} says who refused: ${r.out}`);
   }
   eq((await run(`sleep ${SLEEP_MAX_S + 1}`)).out, `sleep: ${SLEEP_MAX_S + 1} exceeds the ${SLEEP_MAX_S} s cap`, 'the cap is named');
+});
+
+// ── B6 structured listings — `ls -R` flattened every name into one line; a big listing had no cap ──
+await test('B6: ls -R prints directory blocks, one entry a line, so a name says which directory it is in', async () => {
+  const { sh, run } = await shell();
+  for (const p of ['src/app.js', 'src/util/a.js', 'docs/guide.md']) await run(`printf x > ${p}`);
+  const r = await run('ls -R src');
+  eq(r.out, 'src:\napp.js\nutil\n\nsrc/util:\na.js\nb.js'.replace('\nb.js', ''), 'blocks: the dir, its entries, a blank line between');
+  eq((await run('ls -Rl src')).out, 'src:\n- app.js\nd util\n\nsrc/util:\n- a.js', '-l keeps the d/- marks inside the blocks');
+  eq((await run('ls src')).out, 'app.js  util', 'a plain ls is unchanged (names on one line)');
+  eq((await run('ls -R src | head -2')).out, 'src:\napp.js', 'one entry a line, so a pipe sees lines');
+  const fed = await sh.feed('ls -R src'); eq(JSON.stringify(fed.listing), JSON.stringify({ tool: 'ls', entries: 3, shown: 3, truncated: false }), 'feed() names the listing it displayed');
+  eq(sh.lastListing.entries, 3); eq((await sh.feed('echo hi')).listing, undefined, 'and only a listing');
+  eq((await sh.feed('ls src/app.js')).listing.entries, 1, 'a file target is one entry');
+  await run('printf x > other/z.js'); eq((await run('ls -R src other')).out, 'src:\napp.js\nutil\n\nsrc/util:\na.js\n\nother:\nz.js', 'two targets: a blank line between their blocks');
+});
+await test('B6: a listing over the cap is cut at the terminal with a trailer that counts — never inside a pipe', async () => {
+  const { sh, run } = await shell();
+  const N = LISTING_MAX_ENTRIES + 7;
+  for (let i = 0; i < N; i++) await run(`printf x > many/f${String(i).padStart(4, '0')}.txt`);
+  const r = await run('find many -type f');
+  const lines = r.out.split('\n');
+  eq(lines.length, LISTING_MAX_ENTRIES + 1, 'the cap, plus the trailer');
+  eq(lines[lines.length - 1], `[listing truncated: ${LISTING_MAX_ENTRIES} of ${N} entries shown — narrow the path, add -name / -maxdepth, or pipe through grep]`);
+  eq(sh.lastListing.truncated, true); eq(sh.lastListing.entries, N); eq(sh.lastListing.shown, LISTING_MAX_ENTRIES);
+  eq((await run('find many -type f | wc -l')).out, String(N), 'piped: every entry reaches the consumer');
+  eq((await run(`find many -name f0${N - 1}.txt`)).out, `many/f0${N - 1}.txt`, 'a narrowed find is whole');
+  const ls = await run('ls -R many'); assert(ls.out.startsWith('many:\nf0000.txt'), ls.out.slice(0, 40));
+  eq(ls.out.split('\n').length, LISTING_MAX_ENTRIES + 2, 'ls -R: the header, the cap, the trailer'); assert(/^\[listing truncated: 500 of 507 entries shown/.test(ls.out.split('\n').pop()));
+  // the helper itself: headers and blanks are not entries; nothing under the cap is touched
+  eq(truncateListing('a\nb', 2).truncated, false);
+  const t = truncateListing('d:\na\nb\n\ne:\nc', 3, 2); eq(t.text, 'd:\na\nb\n[listing truncated: 2 of 3 entries shown — narrow the path, add -name / -maxdepth, or pipe through grep]'); eq(t.shown, 2);
 });
 
 if (failures.length) {

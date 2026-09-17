@@ -26,6 +26,22 @@ const REGISTRY_ALIAS = {
 const LIST_FLAGS = { R: 'recursive', a: 'all' };
 const RM_FLAGS = { r: 'recursive', R: 'recursive', f: 'force' };
 export const SLEEP_MAX_S = 300; // the longest `sleep` — above any run's wall budget it is a hang, not a wait
+// B6 (osaurus, 2026-09-17): a listing shown to the model is capped by ENTRIES, at the terminal only — a
+// piped listing (`find … | xargs`, `| wc -l`) is never cut, its consumer bounds it. Past the cap the
+// text ends in a trailer that says how many there were and how to narrow.
+export const LISTING_MAX_ENTRIES = 500;
+export function truncateListing(text, entries, max = LISTING_MAX_ENTRIES) {
+  if (!(entries > max)) return { text, shown: entries, truncated: false };
+  const out = []; let shown = 0;
+  for (const line of String(text).split('\n')) {
+    const isEntry = line !== '' && !/:$/.test(line);
+    if (isEntry && shown >= max) break;
+    out.push(line); if (isEntry) shown++;
+  }
+  while (out.length && (out[out.length - 1] === '' || /:$/.test(out[out.length - 1]))) out.pop(); // no dangling header or blank before the trailer
+  out.push(`[listing truncated: ${shown} of ${entries} entries shown — narrow the path, add -name / -maxdepth, or pipe through grep]`);
+  return { text: out.join('\n'), shown, truncated: true };
+}
 
 // ── path helpers: cwd lives inside the fileops root; '' is the root, and a
 // path can never climb above it. ──
@@ -165,11 +181,19 @@ function decodeData(data) {
 }
 
 // Render a registry result as terminal text (bash-ish, not the repl's format).
-function renderResult(name, res, { long } = {}) {
+function renderResult(name, res, { long, recursive = false, root = '' } = {}) {
   if (res.entries) {
-    return res.entries
-      .map((e) => (long ? `${e.type === 'dir' ? 'd' : '-'} ${e.name}` : e.name))
-      .join(long ? '\n' : '  ');
+    const line = (e) => (long ? `${e.type === 'dir' ? 'd' : '-'} ${e.name}` : e.name);
+    if (!recursive) return res.entries.map(line).join(long ? '\n' : '  ');
+    // B6: `ls -R` used to flatten every name into one line — `README.md docs guide.md src app.js` —
+    // so the model could not tell which directory a name was in. Directory blocks, one entry per
+    // line (what coreutils prints to a pipe): the shape every model already knows.
+    const blocks = new Map(); // dir -> [lines]
+    const dirOf = (e) => { const i = e.path.lastIndexOf('/'); return i < 0 ? '' : e.path.slice(0, i); };
+    for (const e of res.entries) { const d = dirOf(e); if (!blocks.has(d)) blocks.set(d, []); blocks.get(d).push(line(e)); }
+    const label = (d) => (d === root || d === '' ? (root || '.') : d) + ':';
+    const order = [...blocks.keys()].sort((a, b) => (a === root ? -1 : b === root ? 1 : a < b ? -1 : a > b ? 1 : 0));
+    return order.map((d) => [label(d), ...blocks.get(d)].join('\n')).join('\n\n');
   }
   if (res.matches) return res.matches.map((m) => (typeof m === 'object' ? `${m.path}:${m.line}: ${m.text}` : m)).join('\n');
   if (typeof res.data === 'string' || (res.data && res.data.byteLength != null)) return decodeData(res.data);
@@ -257,6 +281,7 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
   }
   let pending = null; // { proposalId, verb }
   let lastCode = 0;
+  let lastListing = null; // B6: the listing the last feed() displayed — { tool, entries, shown, truncated } — or null
 
   // Build a registry command input from argv, resolving paths against cwd.
   function buildRegistryInput(cmdName, argv) {
@@ -470,13 +495,13 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
       const positionals = argv.filter((a) => !a.startsWith('-'));
       const targets = positionals.length ? positionals : [null];
       const results = [];
-      let failed = false;
+      let failed = false, entries = 0;
       for (const p of targets) {
         const abs = p == null ? state.cwd : normalizePath(state.cwd, p);
         const st = await face.invoke('fs.stat', { path: abs });
         if (st.ok && st.stat && st.stat.type === 'file') {
           const name = p != null ? p : abs.split('/').pop();
-          results.push(long ? `- ${name}` : name);
+          results.push(long ? `- ${name}` : name); entries++;
           continue;
         }
         const input = { path: abs };
@@ -487,10 +512,11 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
         }
         const res = await face.invoke('fs.list', input);
         if (!res.ok) { results.push(`ls: ${p ?? '.'}: ${res.code || 'error'}`); failed = true; continue; }
-        results.push(renderResult('fs.list', res, { long }));
+        entries += (res.entries || []).length;
+        results.push(renderResult('fs.list', res, { long, recursive: !!input.recursive, root: abs }));
       }
       // a missing path used to still exit 0, so `ls d || mkdir d` never took the fallback (R2e)
-      return { text: results.filter((s) => s !== '').join('\n'), code: failed ? 1 : 0 };
+      return { text: results.filter((s) => s !== '').join(argv.some((a) => /^-\w*R/.test(a)) ? '\n\n' : '\n'), code: failed ? 1 : 0, listing: { tool: 'ls', entries } }; // -R: a blank line between targets' blocks too
     },
     // printf FORMAT [ARGS] — backslash escapes + %s/%d/%%. Unlike echo it adds no
     // trailing newline of its own; the format supplies it (\n).
@@ -1076,7 +1102,7 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
         }
         out.push(m);
       }
-      return { text: out.join('\n'), code: 0 };
+      return { text: out.join('\n'), code: 0, listing: { tool: 'find', entries: out.length } };
     }
     if (verb === 'git') return runGit(args);
     const cmdName = REGISTRY_ALIAS[verb] || (registry.describeCommand(verb) ? verb : null);
@@ -1194,6 +1220,7 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
 
   async function feed(line) {
     const out = [];
+    lastListing = null;
     const write = (s) => { if (s != null && s !== '') out.push(String(s)); };
 
     // Resolve a pending destructive confirm first — then run what was still on the line
@@ -1221,13 +1248,13 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
         lastCode = 1; // a refused rm is a failed rm: `rm x && next` stops here, `;` goes on
       }
       const rest = await runStatements(p.rest || [], write);
-      return { output: out.join('\n'), ...(rest.awaitingConfirm ? { awaitingConfirm: rest.awaitingConfirm } : {}), ...(rest.cleared ? { cleared: true } : {}) };
+      return { output: out.join('\n'), ...(rest.awaitingConfirm ? { awaitingConfirm: rest.awaitingConfirm } : {}), ...(rest.cleared ? { cleared: true } : {}), ...(lastListing ? { listing: lastListing } : {}) };
     }
 
     const raw = String(line == null ? '' : line);
     if (raw.trim() !== '') state.history.push(raw.trim());
     const r = await runStatements(parseLine(raw), write);
-    return { output: out.join('\n'), ...(r.awaitingConfirm ? { awaitingConfirm: r.awaitingConfirm } : {}), cleared: !!r.cleared };
+    return { output: out.join('\n'), ...(r.awaitingConfirm ? { awaitingConfirm: r.awaitingConfirm } : {}), cleared: !!r.cleared, ...(lastListing ? { listing: lastListing } : {}) };
   }
 
   // Run statements in order. A destructive statement stages and STOPS here, remembering the
@@ -1265,7 +1292,12 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
       } else {
         // Terminal display: drop the single trailing newline (the screen adds
         // its own line break); inner newlines are preserved.
-        write(res.text.endsWith('\n') ? res.text.slice(0, -1) : res.text);
+        let text = res.text;
+        if (res.listing) { // B6: the cap applies here and only here — what the model sees
+          const t = truncateListing(text, res.listing.entries);
+          text = t.text; lastListing = { tool: res.listing.tool, entries: res.listing.entries, shown: t.shown, truncated: t.truncated };
+        }
+        write(text.endsWith('\n') ? text.slice(0, -1) : text);
       }
     }
     return { cleared };
@@ -1273,6 +1305,7 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
 
   return {
     feed,
+    get lastListing() { return lastListing; },
     // Live 2026-09-11: a `cd /workspace` in one task left cwd='workspace' for the NEXT task in
     // the project, so a relative `write inv/store.py` there landed in workspace/inv/ and the
     // agent lost the run before its first real step. A run is a fresh session: root, no vars.

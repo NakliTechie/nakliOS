@@ -18,7 +18,7 @@
 //   // result: { messages, steps, stop: 'done'|'max-steps'|'no-progress'|'error', text }
 
 import { parseToolArguments } from './agent-protocol.mjs';
-import { classifyToolResult } from './tool-result-kind.mjs';
+import { classifyToolResult, listingShape } from './tool-result-kind.mjs';
 import { NO_OUTPUT, EXPECT_MARKER, parseExpect, stripExpect } from './expect.mjs';
 
 // The single most powerful tool for a coding agent: a real shell. The Forge
@@ -735,7 +735,8 @@ export async function runAgentLoop({
         }
         // B1: the kind rides the event; the text the model sees is untouched.
         const kind = classifyToolResult(name, resultText);
-        onEvent({ type: 'tool-result', name, id, result: resultText, ...(kind ? { kind } : {}), step });
+        const listing = listingShape(resultText, { tool: name }); // B6: a listing says its size on the event (pure function of the text, like `kind`)
+        onEvent({ type: 'tool-result', name, id, result: resultText, ...(kind ? { kind } : {}), ...(listing ? { listing } : {}), step });
       }
       // F5: cap what enters the SURFACE; the record keeps what was produced. If the recorder
       // refuses the event, the elision has nowhere to point, so the original stays inline —

@@ -20,6 +20,7 @@
 // Pure and headless: the token estimator is injected (defaults to the loop's
 // ~4-chars/token proxy), so this is fully unit-testable with a scripted estimator.
 
+import { listingShape } from './tool-result-kind.mjs';
 import { estimateTokens } from './agent-loop.mjs';
 
 // How many leading messages are the pinned system preamble (never compacted).
@@ -100,14 +101,13 @@ function searchHandle(content, max = 48) {
 // Only a `shell` result can be one: a `read` of a bulleted note, a requirements file or an env
 // dump has the same shape, and eliding it to "N entries" would lose what the model read it for
 // (the checker's probe, 2026-09-13). A path listing needs a `/` on every line for the same reason.
-export function listingEntries(text, { tool = '' } = {}) {
-  if (tool !== 'shell') return null;
-  const lines = String(text || '').split('\n').filter((l) => l.trim() !== '');
-  if (lines.length < 2) return null;
-  const long = lines.every((l) => /^[d-] \S/.test(l));
-  const paths = !long && lines.every((l) => /^[^\s:=\[\]]+$/.test(l) && l.includes('/'));
-  return long || paths ? lines.length : null;
+// B6 (2026-09-17): the listing reading lives with the other text classifiers (tool-result-kind.mjs);
+// compaction keeps the count.
+export function listingEntries(text, opts = {}) {
+  const s = listingShape(text, opts);
+  return s ? s.entries : null;
 }
+export { listingShape };
 
 export function shake(region, { estimate = estimateTokens, minChars = 200, artifactPrefix = 'artifact://tool-', retrievable = false } = {}) {
   const artifacts = new Map();
