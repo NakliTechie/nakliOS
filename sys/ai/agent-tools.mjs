@@ -894,14 +894,22 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
         const plan = planMerge(runs.map((r, i) => (outsideOf[i].length ? { ...r, ok: false } : r)));
         outsideOf.forEach((out, i) => { if (out.length) { plan.status[i] = 'outside'; runs[i].outside = out; } });
         const stamp = (r) => { mergeGen++; for (const p of [...(r.changes.written || []), ...(r.changes.deleted || [])]) lastMerged.set(p, mergeGen); };
+        // #9: the fence at merge — the base NOW against what the child pinned. `wrote` holds the run (a merge
+        // would land on a workspace the child never saw: the owner's own edits, another writer); `read` merges
+        // and is SAID (the digest / steer name the files its result may rest on). Sibling merges are still
+        // attributed by the merge clock (`late`/`clash`), which runs first.
+        const fence = async (r) => { if (!(r.iso && typeof r.iso.moved === 'function')) return { wrote: [], read: [] }; try { return await r.iso.moved(); } catch (e) { r.fenceError = String(e && e.message || e); return { wrote: [], read: [] }; } }; // a fence that cannot run says so on the line — never silently open
         await withMergeLock(async () => {
           // B2: the batch path obeys the merge clock too — a clean run whose path anyone merged since
           // this cohort launched (an earlier dispatch's straggler, most likely) is held, never committed
           // over it: the straggler's "merged" steer on the chain stays true (the re-check's probe).
           for (let i = 0; i < runs.length; i++) {
-            if (plan.status[i] !== 'merge') continue;
+            if (plan.status[i] !== 'merge' && plan.status[i] !== 'no-op') continue; // #9: a read-only child gets the stale-read notice too — its REPORT is what the parent acts on
             const late = [...(runs[i].changes.written || []), ...(runs[i].changes.deleted || [])].filter((p) => (lastMerged.get(p) || 0) > launchGen);
-            if (late.length) { plan.status[i] = 'conflict'; runs[i].conflictWith = late; }
+            if (late.length) { plan.status[i] = 'conflict'; runs[i].conflictWith = late; continue; }
+            const mv = await fence(runs[i]);
+            if (mv.wrote.length) { plan.status[i] = 'conflict'; runs[i].conflictWith = mv.wrote; runs[i].movedUnder = true; }
+            if (mv.read.length) runs[i].readMoved = mv.read;
           }
           plan.apply = plan.apply.filter((i) => plan.status[i] === 'merge');
           for (const i of plan.apply) {
@@ -910,6 +918,16 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
               try { await r.iso.commit(); stamp(r); }
               catch (e) { r.text += `\n(merge failed: ${String(e && e.message || e)})`; plan.status[i] = 'merge-failed'; }
             }
+          }
+          // #9: siblings that landed together — a merge in THIS batch is not in the base when the fence runs
+          // above, so a child that read a path a sibling just merged is told here (set intersection, no re-read).
+          const landed = new Map(); // path -> the run that merged it
+          for (const i of plan.apply) if (plan.status[i] === 'merge') for (const p of [...(runs[i].changes.written || []), ...(runs[i].changes.deleted || [])]) landed.set(p, i);
+          if (landed.size) for (let i = 0; i < runs.length; i++) {
+            if (plan.status[i] !== 'merge' && plan.status[i] !== 'no-op') continue;
+            const pins = (runs[i].iso && typeof runs[i].iso.pinned === 'function') ? runs[i].iso.pinned() : [];
+            const sib = pins.filter((p) => landed.has(p) && landed.get(p) !== i);
+            if (sib.length) runs[i].readMoved = [...new Set([...(runs[i].readMoved || []), ...sib])].sort();
           }
         });
         // B2: the stragglers merge one by one as they finish — FIRST-COME: a path an earlier sibling
@@ -924,15 +942,18 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
               const paths = [...(r.changes.written || []), ...(r.changes.deleted || [])];
               const clash = paths.filter((p) => (lastMerged.get(p) || 0) > launchGen); // merged since this cohort launched, by anyone
               const out = outsideOwnership(r.ownership, r.changes); // B3: the invariant, for a straggler too
+              const mv = (out.length || clash.length) ? { wrote: [], read: [] } : await fence(r); // #9 (a no-op run is fenced too: its report may rest on moved files)
+              if (mv.read.length) r.readMoved = mv.read;
               if (out.length) { status = 'outside'; r.outside = out; }
               else if (clash.length) { status = 'conflict'; conflictWith = clash; }
+              else if (mv.wrote.length) { status = 'conflict'; conflictWith = mv.wrote; r.movedUnder = true; }
               else if (!paths.length) status = 'no-op';
               else if (r.iso && typeof r.iso.commit === 'function') {
                 try { await r.iso.commit(); status = 'merge'; stamp(r); }
                 catch (e) { status = 'merge-failed'; r.text += `\n(merge failed: ${String(e && e.message || e)})`; }
               }
             });
-            steer.push({ content: formatCompletionSteer({ index, label, run: r, status, conflictWith }) });
+            steer.push({ content: formatCompletionSteer({ index, label, run: r, status, conflictWith, movedUnder: !!r.movedUnder, readMoved: r.readMoved || [] }) });
           }));
         }
         return formatDispatchDigest({ results: runs, status: plan.status, conflicts: plan.conflicts, dropped: norm.dropped, budget, inFlight: stragglers, indices, refused: refusals });

@@ -292,7 +292,11 @@ export function formatDispatchDigest({ results, status, conflicts, dropped, budg
     const s = st(i);
     let tag = STATUS_TAG[s] || s;
     if (s === 'incomplete' && r.stop) tag += ` (${r.stop})`;
-    if (s === 'conflict' && r.conflictWith && r.conflictWith.length) tag += ` — merged by an earlier sibling since this dispatch launched (${r.conflictWith.join(', ')})`;
+    if (s === 'conflict' && r.conflictWith && r.conflictWith.length) tag += r.movedUnder
+      ? ` — the workspace moved under it since it started (${r.conflictWith.join(', ')} changed in the base — your own edits, or another writer); un-merging is not possible`
+      : ` — merged by an earlier sibling since this dispatch launched (${r.conflictWith.join(', ')})`;
+    if (r.readMoved && r.readMoved.length) tag += ` · read ${r.readMoved.length} file${r.readMoved.length === 1 ? '' : 's'} that changed under it since (${r.readMoved.join(', ')}) — its result may rest on stale content`; // #9
+    if (r.fenceError) tag += ` · (fence unavailable: ${r.fenceError} — merged unfenced; the base may have moved under it)`; // #9
     if (s === 'outside' && r.outside && r.outside.length) tag += ` (${r.outside.join(', ')})`;
     lines.push('');
     lines.push(`### [${num(i)}] ${r.label} — ${tag}`);
@@ -343,12 +347,16 @@ export async function awaitCohort(promises, { settleMs = Infinity, sleep = (ms) 
 }
 // One straggler's completion, as the [coordination] message the parent re-plans on. `status` is the
 // digest's vocabulary; a first-come conflict names the paths an earlier sibling already merged.
-export function formatCompletionSteer({ index, label, run, status, conflictWith = null }) {
+export function formatCompletionSteer({ index, label, run, status, conflictWith = null, movedUnder = false, readMoved = [] }) {
   const r = run || {}; const ch = r.changes || { written: [], deleted: [] };
   let tag = STATUS_TAG[status] || status;
   if (status === 'incomplete' && r.stop) tag += ` (${r.stop})`;
   if (status === 'outside' && r.outside && r.outside.length) tag += ` (${r.outside.join(', ')})`;
-  if (status === 'conflict' && conflictWith && conflictWith.length) tag = `held — conflicts with an earlier sibling that already merged (${conflictWith.join(', ')}); un-merging is not possible`;
+  if (status === 'conflict' && conflictWith && conflictWith.length) tag = movedUnder
+    ? `held — the workspace moved under it since it started (${conflictWith.join(', ')} changed in the base — your own edits, or another writer); un-merging is not possible`
+    : `held — conflicts with an earlier sibling that already merged (${conflictWith.join(', ')}); un-merging is not possible`;
+  if (readMoved && readMoved.length) tag += `. It read ${readMoved.length} file${readMoved.length === 1 ? '' : 's'} that changed under it since (${readMoved.join(', ')}) — its result may rest on stale content`; // #9
+  if (r.fenceError) tag += `. (fence unavailable: ${r.fenceError} — merged unfenced; the base may have moved under it)`; // #9
   const parts = [];
   if ((ch.written || []).length) parts.push('wrote ' + ch.written.join(', '));
   if ((ch.deleted || []).length) parts.push('deleted ' + ch.deleted.join(', '));

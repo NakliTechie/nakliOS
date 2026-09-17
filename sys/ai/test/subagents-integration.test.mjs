@@ -18,6 +18,7 @@ async function test(n, fn){ try { await fn(); passed++; } catch (e){ failures.pu
 function assert(c, m){ if (!c) throw new Error(m || 'assertion failed'); }
 function eq(a, b, m){ if (a !== b) throw new Error(`${m || 'ne'}: ${JSON.stringify(a)} !== ${JSON.stringify(b)}`); }
 const dec = (u) => new TextDecoder().decode(u);
+const enc = (s) => new TextEncoder().encode(s);
 
 // A scripted host AI. `plan(prompt, ctx)` returns a directive:
 //   { write:{file,content} } | { read:{file} } | { loop:{file,content} } | { done:text }
@@ -62,6 +63,8 @@ function makeSpawnIsolated(base, infer, root = '') {
     return {
       executor,
       changes: () => { const c = overlay.changes(); return { written: (c.written || []).map(toRel), deleted: (c.deleted || []).map(toRel) }; }, // workspace-relative, as the app maps them
+      moved: async () => { const m = await overlay.moved(); return { wrote: m.wrote.map(toRel), read: m.read.map(toRel) }; }, // #9: the fence, as the app maps it
+      pinned: () => overlay.pinned().map(toRel),
       commit: async () => overlay.commit({
         write: async (p, bytes) => { await realFs.write(toRel(p), bytes); }, // byte-accurate, like production
         remove: async (p) => { await realFs.remove(toRel(p)); },
@@ -355,6 +358,106 @@ await test('B2: the fast child is in the tool result at once; the slow one arriv
   assert(/^\[coordination\] subagent \[2\] "slow" finished — merged\. changes applied: wrote slow\.txt\./.test(steers[0].content), steers[0].content);
   eq(dec(await base.readBinary('slow.txt')), 'S', 'the slow child merged when it finished');
   await new Promise((r) => setTimeout(r, 0)); eq(q.inFlight(), 0);
+});
+// ── #9 snapshot-rooted overlays: the child's view is pinned; the fence at merge holds or says ──
+// A child that reads shared.txt, reads it AGAIN after the base moved (the owner edited it), then writes.
+// `outFile` decides the fence's verdict: writing elsewhere → merged with the read notice; writing
+// shared.txt itself → held, the base keeps the owner's edit.
+function movingBaseInfer(base, outFile) {
+  const call = (id, name, args) => ({ id, function: { name, arguments: JSON.stringify(args) } });
+  return async ({ messages }) => {
+    const user = [...messages].reverse().find((m) => m.role === 'user' && !/^\[coordination\]/.test(String(m.content || '')));
+    if (!/^child:/.test(String(user?.content || ''))) return { content: '', toolCalls: [] }; // the parent never speaks here
+    const tools = messages.filter((m) => m.role === 'tool');
+    if (tools.length === 0) return { content: '', toolCalls: [call('r1', 'read', { path: 'shared.txt' })] };
+    if (tools.length === 1) { await base.write('shared.txt', enc('OWNER EDITED THIS')); return { content: '', toolCalls: [call('r2', 'read', { path: 'shared.txt' })] }; }
+    if (tools.length === 2) return { content: '', toolCalls: [call('w', 'write', { path: outFile, content: 'derived from: ' + String(tools[1].content).replace(/\s+/g, ' ').slice(0, 40) })] };
+    return { content: 'saw ' + String(tools[0].content).replace(/\s+/g, ' ').slice(0, 30) + ' then ' + String(tools[1].content).replace(/\s+/g, ' ').slice(0, 30), toolCalls: [] };
+  };
+}
+await test('#9 the child\'s view is pinned: shared.txt reads the same before and after the owner edits it, and the digest says its result may be stale', async () => {
+  const base = new MemoryBackend();
+  await base.write('shared.txt', enc('ORIGINAL'));
+  const exec = topExecutorWith(base, movingBaseInfer(base, 'out.txt'));
+  const out = await exec('dispatch', { tasks: [{ description: 'reader', prompt: 'child: read shared.txt twice, write out.txt' }] });
+  assert(/### \[1\] reader — merged · read 1 file that changed under it since \(shared\.txt\) — its result may rest on stale content/.test(out), out);
+  assert(/saw\s+1 ORIGINAL then\s+1 ORIGINAL/.test(out) && !/OWNER EDITED/.test(out.split('changes applied')[1] || ''), 'the second read served the pinned bytes, not the moved base: ' + out);
+  assert(/^derived from:\s+1 ORIGINAL$/.test(dec(await base.readBinary('out.txt'))), 'the derived write merged (it touched no moved path), from the pinned bytes');
+  eq(dec(await base.readBinary('shared.txt')), 'OWNER EDITED THIS', 'the owner\'s edit stands');
+});
+await test('#9 the fence holds a child whose OUTPUT path moved under it — the owner\'s own edit, no sibling involved', async () => {
+  const base = new MemoryBackend();
+  await base.write('shared.txt', enc('ORIGINAL'));
+  const exec = topExecutorWith(base, movingBaseInfer(base, 'shared.txt'));
+  const out = await exec('dispatch', { tasks: [{ description: 'writer', prompt: 'child: read shared.txt twice, then rewrite it' }] });
+  assert(/### \[1\] writer — held — path conflict — the workspace moved under it since it started \(shared\.txt changed in the base — your own edits, or another writer\); un-merging is not possible/.test(out), out);
+  assert(/changes attempted \(NOT applied\): wrote shared\.txt/.test(out), out);
+  eq(dec(await base.readBinary('shared.txt')), 'OWNER EDITED THIS', 'nothing landed on the moved base');
+});
+await test('#9 the same fence on the straggler path: the completion steer says the workspace moved under it', async () => {
+  const base = new MemoryBackend();
+  await base.write('shared.txt', enc('ORIGINAL'));
+  const fast = scriptedInfer((p) => /fast/i.test(p) ? { write: { file: 'fast.txt', content: 'F' } } : null);
+  const slow = movingBaseInfer(base, 'shared.txt');
+  const infer = async (a) => { const user = [...a.messages].reverse().find((m) => m.role === 'user' && !/^\[coordination\]/.test(String(m.content || ''))); if (/^child:/.test(String(user?.content || ''))) { await new Promise((r) => setTimeout(r, 60)); return slow(a); } return fast(a); };
+  const q = createSteerQueue();
+  const exec = topExecutorWith(base, infer, { steer: q, settleMs: 40 });
+  const out = await exec('dispatch', { tasks: [{ description: 'fast', prompt: 'fast: create fast.txt' }, { description: 'slow', prompt: 'child: rewrite shared.txt after reading it twice' }] });
+  assert(/### \[1\] fast — merged/.test(out) && /still in flight: "slow"/.test(out), out);
+  await q.next(); const steers = q.take(); eq(steers.length, 1);
+  assert(/^\[coordination\] subagent \[2\] "slow" finished — held — the workspace moved under it since it started \(shared\.txt changed in the base — your own edits, or another writer\); un-merging is not possible\. changes attempted \(NOT applied\): wrote shared\.txt\./.test(steers[0].content), steers[0].content);
+  eq(dec(await base.readBinary('shared.txt')), 'OWNER EDITED THIS', 'the straggler did not land on the moved base');
+});
+// #9 (checker): a READ-ONLY child gets the notice too — its report is what the parent acts on
+function inspectorInfer(base) {
+  const call = (id, name, args) => ({ id, function: { name, arguments: JSON.stringify(args) } });
+  return async ({ messages }) => {
+    const user = [...messages].reverse().find((m) => m.role === 'user' && !/^\[coordination\]/.test(String(m.content || '')));
+    if (!/^inspect:/.test(String(user?.content || ''))) return { content: '', toolCalls: [] };
+    const tools = messages.filter((m) => m.role === 'tool');
+    if (tools.length === 0) return { content: '', toolCalls: [call('r1', 'read', { path: 'shared.txt' })] };
+    await base.write('shared.txt', enc('OWNER EDITED THIS'));
+    return { content: 'shared.txt says ' + String(tools[0].content).replace(/\s+/g, ' ').slice(0, 20), toolCalls: [] };
+  };
+}
+await test('#9 a read-only child (no changes) still gets "read N files that changed under it" — batch and straggler paths', async () => {
+  const base = new MemoryBackend(); await base.write('shared.txt', enc('ORIGINAL'));
+  const out = await topExecutorWith(base, inspectorInfer(base))('dispatch', { tasks: [{ description: 'inspector', prompt: 'inspect: report shared.txt' }] });
+  assert(/### \[1\] inspector — no file changes · read 1 file that changed under it since \(shared\.txt\) — its result may rest on stale content/.test(out), out);
+  // straggler path
+  const base2 = new MemoryBackend(); await base2.write('shared.txt', enc('ORIGINAL'));
+  const fast = scriptedInfer((p) => /fast/i.test(p) ? { write: { file: 'fast.txt', content: 'F' } } : null);
+  const insp = inspectorInfer(base2);
+  const infer = async (a) => { const user = [...a.messages].reverse().find((m) => m.role === 'user' && !/^\[coordination\]/.test(String(m.content || ''))); if (/^inspect:/.test(String(user?.content || ''))) { await new Promise((r) => setTimeout(r, 60)); return insp(a); } return fast(a); };
+  const q = createSteerQueue();
+  const out2 = await topExecutorWith(base2, infer, { steer: q, settleMs: 40 })('dispatch', { tasks: [{ description: 'fast', prompt: 'fast: create fast.txt' }, { description: 'inspector', prompt: 'inspect: report shared.txt' }] });
+  assert(/still in flight: "inspector"/.test(out2), out2);
+  await q.next(); const st = q.take(); eq(st.length, 1);
+  assert(/^\[coordination\] subagent \[2\] "inspector" finished — no file changes\. It read 1 file that changed under it since \(shared\.txt\) — its result may rest on stale content\. shared\.txt says/.test(st[0].content), st[0].content);
+});
+await test('#9 siblings that land together: B read x.txt, A merged x.txt in the same batch — B is told (no re-read, set intersection)', async () => {
+  const base = new MemoryBackend(); await base.write('x.txt', enc('OLD'));
+  const call = (id, name, args) => ({ id, function: { name, arguments: JSON.stringify(args) } });
+  const infer = async ({ messages }) => {
+    const user = [...messages].reverse().find((m) => m.role === 'user' && !/^\[coordination\]/.test(String(m.content || '')));
+    const prompt = String(user?.content || ''); const tools = messages.filter((m) => m.role === 'tool');
+    if (/^A:/.test(prompt)) return tools.length === 0 ? { content: '', toolCalls: [call('a', 'write', { path: 'x.txt', content: 'NEW' })] } : { content: 'A rewrote x', toolCalls: [] };
+    if (/^B:/.test(prompt)) { if (tools.length === 0) return { content: '', toolCalls: [call('b1', 'read', { path: 'x.txt' })] }; if (tools.length === 1) return { content: '', toolCalls: [call('b2', 'write', { path: 'y.txt', content: 'from ' + String(tools[0].content).replace(/\s+/g, ' ').slice(0, 10) })] }; return { content: 'B done', toolCalls: [] }; }
+    return { content: '', toolCalls: [] };
+  };
+  const out = await topExecutorWith(base, infer)('dispatch', { tasks: [{ description: 'A', prompt: 'A: rewrite x.txt' }, { description: 'B', prompt: 'B: read x.txt, write y.txt' }] });
+  assert(/### \[1\] A — merged\n/.test(out), out);
+  assert(/### \[2\] B — merged · read 1 file that changed under it since \(x\.txt\) — its result may rest on stale content/.test(out), out);
+  eq(dec(await base.readBinary('x.txt')), 'NEW'); assert(/^from\s+1 OLD/.test(dec(await base.readBinary('y.txt'))), 'B\'s derived write landed, built on the OLD it read');
+});
+await test('#9 a fence that cannot run is SAID on the digest line, never silently open', async () => {
+  const base = new MemoryBackend();
+  const plan = scriptedInfer((p) => /fast/i.test(p) ? { write: { file: 'fast.txt', content: 'F' } } : null);
+  const inner = makeSpawnIsolated(base, plan);
+  const spawnIsolated = async () => { const iso = await inner(); return { ...iso, moved: async () => { throw new Error('crypto.subtle missing'); } }; };
+  const out = await topExecutorWith(base, plan, { spawnIsolated })('dispatch', { tasks: [{ description: 'fast', prompt: 'fast: create fast.txt' }] });
+  assert(/### \[1\] fast — merged · \(fence unavailable: crypto\.subtle missing — merged unfenced; the base may have moved under it\)/.test(out), out);
+  eq(dec(await base.readBinary('fast.txt')), 'F', 'it still merged (fail-open), with the word on the line');
 });
 await test('LV1: Stop while a straggler is still in flight — the digest counts the whole cohort and the straggler is on the same stopped line', async () => {
   const base = new MemoryBackend();

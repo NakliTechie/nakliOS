@@ -240,6 +240,25 @@ await test('B2: formatCompletionSteer and the digest tail speak the same vocabul
   assert(/^Dispatched 1 subagent in parallel\.\n/.test(plain), 'LV1: no settled/in-flight clause when nothing is in flight: ' + plain.split('\n')[0]);
 });
 
+// #9: the fence's two voices — a held run says the workspace moved under it; a merged run says what it read that moved
+await test('#9: digest and steer name a moved-under hold and a stale-read notice, distinct from a sibling clash', () => {
+  const run = { label: 'w', ok: true, stop: 'done', text: 'rewrote it', changes: { written: ['shared.txt'], deleted: [] }, conflictWith: ['shared.txt'], movedUnder: true };
+  const d = formatDispatchDigest({ results: [run], status: ['conflict'], conflicts: [], dropped: 0, budget: null });
+  assert(/### \[1\] w — held — path conflict — the workspace moved under it since it started \(shared\.txt changed in the base — your own edits, or another writer\); un-merging is not possible/.test(d), d);
+  assert(!/earlier sibling/.test(d), 'a moved-under hold is not blamed on a sibling');
+  const sib = formatDispatchDigest({ results: [{ ...run, movedUnder: false }], status: ['conflict'], conflicts: [], dropped: 0, budget: null });
+  assert(/merged by an earlier sibling since this dispatch launched \(shared\.txt\)/.test(sib), sib);
+  const merged = formatDispatchDigest({ results: [{ label: 'r', ok: true, stop: 'done', text: 'ok', changes: { written: ['out.txt'], deleted: [] }, readMoved: ['a.py', 'b.py'] }], status: ['merge'], conflicts: [], dropped: 0, budget: null });
+  assert(/### \[1\] r — merged · read 2 files that changed under it since \(a\.py, b\.py\) — its result may rest on stale content/.test(merged), merged);
+  const s1 = formatCompletionSteer({ index: 1, label: 'w', run, status: 'conflict', conflictWith: ['shared.txt'], movedUnder: true });
+  assert(/^\[coordination\] subagent \[2\] "w" finished — held — the workspace moved under it since it started \(shared\.txt changed in the base — your own edits, or another writer\); un-merging is not possible\. changes attempted \(NOT applied\): wrote shared\.txt\./.test(s1), s1);
+  const s2 = formatCompletionSteer({ index: 0, label: 'r', run: { ...run, changes: { written: ['out.txt'], deleted: [] } }, status: 'merge', readMoved: ['a.py'] });
+  assert(/finished — merged\. It read 1 file that changed under it since \(a\.py\) — its result may rest on stale content\. changes applied: wrote out\.txt\./.test(s2), s2);
+  const fe = { label: 'f', ok: true, stop: 'done', text: 'ok', changes: { written: ['o.txt'], deleted: [] }, fenceError: 'crypto.subtle missing' };
+  assert(/### \[1\] f — merged · \(fence unavailable: crypto\.subtle missing — merged unfenced; the base may have moved under it\)/.test(formatDispatchDigest({ results: [fe], status: ['merge'], conflicts: [], dropped: 0, budget: null })), 'a fence that could not run is on the digest line');
+  assert(/finished — merged\. \(fence unavailable: crypto\.subtle missing — merged unfenced; the base may have moved under it\)\. changes applied/.test(formatCompletionSteer({ index: 0, label: 'f', run: fe, status: 'merge' })), 'and on the steer');
+});
+
 // CRIB-B B1: the typed in-flight state — live by a recent event, unverifiable by silence, exited by a stop
 await test('B1: subagentLiveness — live within the window, unverifiable past it (authorizes nothing), exited by a stop', () => {
   const now = 5_000_000;

@@ -2210,7 +2210,9 @@
       const executor = makeToolExecutor({ shell: oshell, face: oface, mode:'code', infer: inferViaHost, subagentDepth: 1 });
       return {
         executor,
-        changes: ()=>{ const c=overlay.changes(); return { written:(c.written||[]).map(toRel), deleted:(c.deleted||[]).map(toRel) }; }, // B3: workspace-relative, like the ownership the child declared (a Crate mount carries a root)
+        changes: ()=>{ const c=overlay.changes(); return { written:(c.written||[]).map(toRel), deleted:(c.deleted||[]).map(toRel) }; }, // B3: workspace-relative, like the ownership the child declared
+        moved: async ()=>{ const m=await overlay.moved(); return { wrote:(m.wrote||[]).map(toRel), read:(m.read||[]).map(toRel) }; }, // #9: the fence at merge — the base now against what the child pinned
+        pinned: ()=>overlay.pinned().map(toRel), // #9: what it looked at, for the batch's sibling notice (a Crate mount carries a root)
         commit: async ()=>{
           const t = activeTask();
           await overlay.commit({

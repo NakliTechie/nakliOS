@@ -1,7 +1,7 @@
 // Conformance — OverlayBackend: copy-on-write worktree over a base backend.
 //   node sys/rig/fileops/test/overlay-backend.test.mjs
 import { MemoryBackend } from '../memory-backend.mjs';
-import { OverlayBackend } from '../overlay-backend.mjs';
+import { OverlayBackend, PIN_MAX_BYTES } from '../overlay-backend.mjs';
 import { createFileops } from '../fileops.mjs';
 
 let passed = 0; const failures = [];
@@ -141,6 +141,126 @@ await test('commit through a real fileops applier is BYTE-EXACT (fixes lossy tex
   const got = await base.readBinary('blob.bin');
   eq(got.length, blob.length, 'length preserved');
   assert(blob.every((v, i) => v === got[i]), 'every byte preserved (0xFF intact)');
+});
+
+// ── #9 snapshot-rooted overlays: pins, and the fence at merge ──────────────────────────────
+await test('#9 pins: what the child has looked at does not move under it when the base changes', async () => {
+  const base = await seed();
+  const ov = new OverlayBackend(base);
+  eq(dec(await ov.readBinary('src/app.js')), 'app', 'first read pins');
+  eq(await ov.exists('src/new.js'), false, 'first exists pins an absence');
+  eq((await ov.list('docs')).join(','), 'docs/guide.md', 'first list pins the listing');
+  const st = await ov.stat('src/util.js'); eq(st.size, 4, 'first stat pins');
+  // the base moves: a sibling merged, the owner edited
+  await base.write('src/app.js', enc('app-v2'));
+  await base.write('src/new.js', enc('new'));
+  await base.write('docs/more.md', enc('more'));
+  await base.write('src/util.js', enc('util-longer'));
+  eq(dec(await ov.readBinary('src/app.js')), 'app', 'the pinned bytes, not the moved base');
+  eq(await ov.exists('src/new.js'), false, 'still absent for this child');
+  eq((await ov.list('docs')).join(','), 'docs/guide.md', 'the pinned listing');
+  eq((await ov.stat('src/util.js')).size, 4, 'the pinned stat');
+  eq(dec(await ov.readBinary('README.md')), 'root readme', 'a path never touched reads the live base (nothing pinned it)');
+  eq(dec(await base.readBinary('src/app.js')), 'app-v2', 'the base itself did move');
+});
+
+await test('#9 moved(): exact fence — read that moved → read; write/delete over a moved base → wrote; untouched → neither', async () => {
+  const base = await seed();
+  const ov = new OverlayBackend(base);
+  await ov.readBinary('src/app.js');                 // looked, not written
+  await ov.readBinary('src/util.js');                // looked, unchanged later
+  await ov.write('docs/guide.md', enc('mine'));      // written; base pre-image pinned at write
+  await ov.delete('README.md');                      // deleted; pre-image pinned
+  await ov.write('out/result.txt', enc('r'));        // written; base absent at pin
+  eq(await ov.exists('later.txt'), false);           // looked, absent
+  let m = await ov.moved();
+  eq(m.wrote.join(','), '', 'nothing moved yet'); eq(m.read.join(','), '', 'nothing moved yet');
+  await base.write('src/app.js', enc('APP'));        // a read moved
+  await base.write('docs/guide.md', enc('guide-v2')); // a written path's base moved under it
+  await base.delete('README.md');                    // the deleted path vanished from the base first
+  await base.write('out/result.txt', enc('someone else'));  // the child's new file now exists in the base
+  await base.write('later.txt', enc('x'));           // a pinned absence appeared
+  await base.write('src/other.js', enc('o'));        // never touched by the child
+  m = await ov.moved();
+  eq(m.wrote.join(','), 'README.md,docs/guide.md,out/result.txt', 'written/deleted paths whose base moved — the run is held');
+  eq(m.read.join(','), 'later.txt,src/app.js', 'looked-at paths that moved — merge, and say so');
+  assert(!m.read.includes('src/util.js') && !m.read.includes('src/other.js'), 'unchanged and untouched paths are not moved');
+  // a same-bytes rewrite is not a move: the fence is on content, not on mtime
+  const ov2 = new OverlayBackend(base); await ov2.readBinary('src/util.js'); await base.write('src/util.js', enc('util'));
+  eq((await ov2.moved()).read.join(','), '', 'identical bytes rewritten: not moved');
+});
+
+await test('#9 a file above PIN_MAX_BYTES pins a HASH, reads the live base, and the fence still catches a same-size rewrite with mtime 0', async () => {
+  const base = new MemoryBackend();
+  const big = new Uint8Array(PIN_MAX_BYTES + 1); big[0] = 7;
+  await base.write('big.bin', big);
+  const realStat = base.stat.bind(base); base.stat = async (p) => { const s = await realStat(p); return s && s.type === 'file' ? { ...s, mtimeMs: 0 } : s; }; // a Crate-like base: no mtime
+  const ov = new OverlayBackend(base);
+  eq((await ov.readBinary('big.bin')).length, PIN_MAX_BYTES + 1, 'readable');
+  const pin = ov.pins.get('big.bin');
+  assert(pin.hash && !pin.bytes, 'a hash is held, not the bytes');
+  eq(ov.pinHeldBytes, 0, 'nothing counted against the budget');
+  const big2 = new Uint8Array(PIN_MAX_BYTES + 1); big2[0] = 8; await base.write('big.bin', big2); // same size, one byte differs, mtime 0
+  eq((await ov.readBinary('big.bin'))[0], 8, 'the live base — a hashed pin is not snapshotted (documented)');
+  eq((await ov.moved()).read.join(','), 'big.bin', 'the fence re-hashes and sees the one-byte change');
+});
+
+await test('#9 the pin budget: past PIN_BUDGET_BYTES new pins are hashes; earlier pins keep their bytes', async () => {
+  const base = new MemoryBackend();
+  for (const n of ['a', 'b', 'c']) await base.write(n + '.txt', enc(n.repeat(100)));
+  const ov = new OverlayBackend(base, { pinBudgetBytes: 250 });
+  await ov.readBinary('a.txt'); await ov.readBinary('b.txt'); await ov.readBinary('c.txt');
+  assert(ov.pins.get('a.txt').bytes && ov.pins.get('b.txt').bytes && ov.pins.get('c.txt').hash, 'two held, the third hashed');
+  eq(ov.pinHeldBytes, 200);
+  await base.write('a.txt', enc('A'.repeat(100))); await base.write('c.txt', enc('C'.repeat(100)));
+  eq(dec(await ov.readBinary('a.txt')), 'a'.repeat(100), 'held: snapshotted'); eq(dec(await ov.readBinary('c.txt')), 'C'.repeat(100), 'hashed: live');
+  eq((await ov.moved()).read.join(','), 'a.txt,c.txt', 'the fence is exact for both');
+  eq(ov.pinned().join(','), 'a.txt,b.txt,c.txt', 'pinned() lists every pin');
+});
+
+await test('#9 (re-check): parallel first touches pin once; a write/delete pre-image is a hash, not held bytes; absent→dir is a move; a hashed pin\'s stat is live', async () => {
+  const base = await seed();
+  let reads = 0; const realRead = base.readBinary.bind(base); base.readBinary = async (p) => { reads++; return realRead(p); };
+  const ov = new OverlayBackend(base);
+  const [a, b, c] = await Promise.all([ov.readBinary('src/app.js'), ov.readBinary('src/app.js'), ov.stat('src/app.js')]);
+  eq(dec(a), 'app'); eq(dec(b), 'app'); eq(c.size, 3);
+  eq(reads, 1, 'three concurrent first touches → one base read'); eq(ov.pinHeldBytes, 3, 'counted once');
+  await ov.write('docs/guide.md', enc('mine')); await ov.delete('README.md');
+  assert(ov.pins.get('docs/guide.md').hash && !ov.pins.get('docs/guide.md').bytes, 'a write pre-image is hashed, never held');
+  assert(ov.pins.get('README.md').hash && !ov.pins.get('README.md').bytes, 'a delete pre-image too');
+  eq(ov.pinHeldBytes, 3, 'the budget is for what the child reads');
+  await base.write('docs/guide.md', enc('guide-v2'));
+  eq((await ov.moved()).wrote.join(','), 'docs/guide.md', 'the hashed pre-image still fences the write');
+  // absent → dir: a file must not land over a directory
+  eq(await ov.exists('p'), false); await ov.write('p', enc('file'));
+  await base.write('p/inner.txt', enc('x'));
+  eq((await ov.moved()).wrote.join(','), 'docs/guide.md,p', 'the pinned absence that became a dir is a move');
+  // a hashed pin: stat is live, like its bytes
+  const big = new Uint8Array(PIN_MAX_BYTES + 1); await base.write('big.bin', big);
+  const ov2 = new OverlayBackend(base); await ov2.readBinary('big.bin'); await base.write('big.bin', new Uint8Array(PIN_MAX_BYTES + 5));
+  eq((await ov2.stat('big.bin')).size, PIN_MAX_BYTES + 5, 'live stat for a hashed pin'); eq((await ov2.readBinary('big.bin')).length, PIN_MAX_BYTES + 5, 'live bytes');
+  await base.delete('big.bin'); eq(await ov2.exists('big.bin'), false, 'and a live absence');
+});
+
+await test('#9 a base error is not pinned: it propagates, and the next call sees the base again', async () => {
+  const base = await seed();
+  let fail = 1; const realStat = base.stat.bind(base); base.stat = async (p) => { if (p === 'src/app.js' && fail-- > 0) throw new Error('host hiccup'); return realStat(p); };
+  const ov = new OverlayBackend(base);
+  let threw = null; try { await ov.readBinary('src/app.js'); } catch (e) { threw = e.message; }
+  eq(threw, 'host hiccup', 'the first read surfaces the base error');
+  assert(!ov.pins.has('src/app.js'), 'nothing pinned for it');
+  eq(dec(await ov.readBinary('src/app.js')), 'app', 'the next read works — the failure was not made a run-long absence');
+  eq((await ov.moved()).read.join(','), '', 'and the fence has nothing false to say');
+});
+
+await test('#9 a symlink pins stat-only: the fence compares its stat, never a false "moved" from missing bytes', async () => {
+  const base = await seed();
+  if (typeof base.symlink !== 'function') return; // MemoryBackend only
+  await base.symlink('link', 'src/app.js');
+  const ov = new OverlayBackend(base);
+  const st = await ov.stat('link'); eq(st && st.type, 'symlink');
+  assert(!ov.pins.get('link').bytes && !ov.pins.get('link').hash, 'stat-only');
+  eq((await ov.moved()).read.join(','), '', 'unchanged symlink: not moved');
 });
 
 await test('through createFileops: an isolated agent-style fs works over the overlay', async () => {
