@@ -802,10 +802,10 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
           label: String(args?.description || args?.prompt || '').slice(0, 60),
           tool_call_id: call?.id ?? null,
           messages: [
-            { role: 'system', content: 'You are a subagent with tools: read, write, edit, apply_patch, todowrite, shell. Do the task over the shared workspace, then return a concise result (what you found or changed).' },
+            { role: 'system', content: 'You are a subagent with tools: read, write, edit, apply_patch, todowrite, shell, task_done. Do the task over the shared workspace, then return a concise result (what you found or changed).' },
             { role: 'user', content: String(args?.prompt ?? '') },
           ],
-          tools: codingToolset('code', { scopes }), // subagents don't nest (depth cap); B5: the grant projects the child's catalog too
+          tools: codingToolset('code', { scopes, completion: true }), // subagents don't nest (depth cap); B5: the grant projects the child's catalog too; task_done exists for a child (2026-09-17: a DeepSeek child noticed it did not)
           executeTool: child,
           // A budget the model did not name falls through to the executor's, then the default.
           maxSteps: clampSubagentBudget(args || {}).explicit.steps ? Math.min(16, clampSubagentBudget(args || {}).maxSteps) : 16,
@@ -855,7 +855,7 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
                 { role: 'system', content: SUBAGENT_SYSTEM },
                 { role: 'user', content: renderTaskSpec(t) }, // B3: the spec's lines, then the prompt
               ],
-              tools: codingToolset('code', { scopes }), // full tools, isolated; no nesting (depth cap); B5: projected by the grant
+              tools: codingToolset('code', { scopes, completion: true }), // full tools, isolated; no nesting (depth cap); B5: projected by the grant; task_done exists for a child (no gate: accepted as-is, its summary is the report)
               executeTool: iso.executor,
               maxSteps: budget.maxSteps,
               budget: budget.explicit.secs ? { wallClockMs: budget.wallClockMs } : null,

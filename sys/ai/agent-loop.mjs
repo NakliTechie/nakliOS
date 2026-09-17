@@ -639,7 +639,8 @@ export async function runAgentLoop({
       }
 
       if (name === 'task_done') {
-        const problem = placeholderSummary(parseToolArguments(call).value?.summary);
+        const summary = String(parseToolArguments(call).value?.summary ?? '').trim();
+        const problem = placeholderSummary(summary);
         if (problem) { // B2: no substance, no gate run — bounce it back
           const msg = `Error (invalid_args): ${problem}`;
           onEvent({ type: 'tool-error', name, id, error: msg, kind: 'invalid_args', step });
@@ -656,6 +657,9 @@ export async function runAgentLoop({
           convo.push({ role: 'tool', tool_call_id: id, content: msg });
           continue;
         }
+        // The summary is the run's final word when the model said nothing else in prose — a child that
+        // reports through task_done alone must not come back as "(no report)" (live, 2026-09-17).
+        if (!lastText) lastText = summary;
         if (!verify) { // no gate wired → the explicit signal is accepted as-is
           onEvent({ type: 'tool-result', name, id, result: 'accepted', step });
           convo.push({ role: 'tool', tool_call_id: id, content: 'Task accepted (no verification gate configured).' });

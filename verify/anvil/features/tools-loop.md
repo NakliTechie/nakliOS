@@ -33,7 +33,7 @@ says "gated" (the lint refuses a one-assert or `__eq__`-defining criterion — t
 - **Prerequisites:** launch; code mode.
 - **Reach and drive:** "Dispatch two subagents: one writes a.txt with A, the other writes b.txt with B." Then the conflict: "Dispatch two subagents that both write c.txt with different content."
 - **Observable success:** both files exist after the first; the digest names each worker's outcome and files; the second reports the conflict and leaves `c.txt` as the merge rule says (first writer, or unmerged with the digest naming it) — read the digest and the file, do not assume.
-- **Gotchas:** capped at 4 workers; `dispatch` is exclusive in the F9 pool. A worker's stale edit over a file the parent changed is F8's refusal, inside the worker.
+- **Gotchas:** capped at 4 workers; `dispatch` is exclusive in the F9 pool. A worker's stale edit over a file the parent changed is F8's refusal, inside the worker. Children (`task` and `dispatch`) have `task_done` since 2026-09-17 — with no gate it is accepted as-is and its summary is the child's report in the digest; a plain final reply still ends a child the same way. (A DeepSeek child had said "There is no task_done tool in my toolset" when the parent's prompt asked for one.)
 
 ### tool:review
 - **Goal:** a read-only reviewer over the current workspace returns findings without changing anything.

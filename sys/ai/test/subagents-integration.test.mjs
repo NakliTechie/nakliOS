@@ -456,6 +456,22 @@ await test('#9 siblings that land together: B read x.txt, A merged x.txt in the 
   assert(/### \[2\] B — merged · read 1 file that changed under it since \(x\.txt\) — its result may rest on stale content/.test(out), out);
   eq(dec(await base.readBinary('x.txt')), 'NEW'); assert(/^from\s+1 OLD/.test(dec(await base.readBinary('y.txt'))), 'B\'s derived write landed, built on the OLD it read');
 });
+await test('a child has task_done: it reports through it alone and the digest shows the summary as its report, merged (live 2026-09-17: a DeepSeek child said it had no task_done)', async () => {
+  const base = new MemoryBackend();
+  const call = (id, name, args) => ({ id, function: { name, arguments: JSON.stringify(args) } });
+  const infer = async ({ messages, tools }) => {
+    const user = [...messages].reverse().find((m) => m.role === 'user' && !/^\[coordination\]/.test(String(m.content || '')));
+    if (!/^child:/.test(String(user?.content || ''))) return { content: '', toolCalls: [] };
+    const names = (tools || []).map((t) => t.function.name);
+    if (!names.includes('task_done')) return { content: 'NO TASK_DONE IN MY TOOLSET', toolCalls: [] };
+    const done = messages.filter((m) => m.role === 'tool').length;
+    if (done === 0) return { content: '', toolCalls: [call('w', 'write', { path: 'out.txt', content: 'x' })] };
+    return { content: '', toolCalls: [call('d', 'task_done', { summary: 'Wrote out.txt with x and read it back.' })] };
+  };
+  const out = await topExecutorWith(base, infer)('dispatch', { tasks: [{ description: 'worker', prompt: 'child: write out.txt then call task_done' }] });
+  assert(/### \[1\] worker — merged\nchanges applied: wrote out\.txt\nWrote out\.txt with x and read it back\./.test(out), out);
+  eq(dec(await base.readBinary('out.txt')), 'x');
+});
 await test('#9 a fence that cannot run is SAID on the digest line, never silently open', async () => {
   const base = new MemoryBackend();
   const plan = scriptedInfer((p) => /fast/i.test(p) ? { write: { file: 'fast.txt', content: 'F' } } : null);

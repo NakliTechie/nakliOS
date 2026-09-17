@@ -35,9 +35,10 @@ export function clampSubagentBudget({ max_steps, wall_clock_s } = {}) {
 export const SUBAGENT_SYSTEM =
   'You are a subagent working in an ISOLATED copy of the shared workspace — your ' +
   'file changes are private until the supervisor merges them, so work freely. You ' +
-  'have the full coding toolset (read, write, edit, apply_patch, shell, todowrite). ' +
+  'have the full coding toolset (read, write, edit, apply_patch, shell, todowrite, task_done). ' +
   'Do exactly the task you were given, keep your edits tightly scoped to it, and ' +
-  'finish with a concise report of what you changed (files touched) or found. Do not ' +
+  'finish by calling task_done with a concise report of what you changed (files touched) ' +
+  'or found — a plain final reply with no tool calls ends your task the same way. Do not ' +
   'ask questions — decide and act.';
 
 export const REVIEW_SYSTEM =
