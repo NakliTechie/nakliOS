@@ -147,7 +147,7 @@ jobs:
       - name: Verify the corpus recorder end to end against a stub, keyless, into a temp folder (U2)
         run: node scripts/test-record-corpus.mjs
 
-      - name: Verify the index-usage probe (PG-A2): parser, fired/never-fired per record, the per-class summary
+      - name: "Verify the index-usage probe (PG-A2): parser, fired/never-fired per record, the per-class summary"
         run: node scripts/test-probe-index-usage.mjs
 
       - name: Verify a subagent's run lands on the parent's chain (multi-agent auditability)
