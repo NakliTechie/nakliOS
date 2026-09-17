@@ -276,7 +276,7 @@ assert.equal([...runTask.matchAll(/runAgentLoop\(\{/g)].length, 0, 'runTask no l
 assert.ok(!/const nudgeMessages=|const superMessages=|foldStagnation\(rec\.events/.test(runTask), 'no inline copy of the re-loops survives in runTask');
 assert.match(runTask, /hooksCfg = await loadHooks\(fs, hooksCfg\);/, 'hooks load through the module (a missing file keeps the previous config, as before)');
 assert.match(anvil, /const hookReply = preHookReply\(hooksCfg, nm, ar\);\s*\n\s*if\(hookReply!=null\) return hookReply;/, 'the pre-tool guard is the module\'s');
-assert.match(anvil, /const extra = await postHookNotes\(hooksCfg, nm, ar, \(\)=>createShell\(\{ registry, face, kiln: kilnRef \}\)\);/, 'the post-tool notes are the module\'s, over a shell built only when a hook runs');
+assert.match(anvil, /const extra = await postHookNotes\(hooksCfg, nm, ar, \(\)=>createShell\(\{ registry, face, kiln: kilnRef, signal: [^}]*\}\)\);/, 'the post-tool notes are the module\'s, over a shell built only when a hook runs (with the run\'s signal since 2026-09-17)');
 assert.ok(!/const SYSTEM_HEAD = |const SYSTEM_TAIL = |const MODE_NOTE = |const LESSON_NOTE = |function synthesizeTool\(\)/.test(anvil), 'no second copy of the constants lives in the app');
 ok('app wiring');
 
@@ -367,6 +367,8 @@ assert.match(anvil, /changes: \(\)=>\{ const c=overlay\.changes\(\); return \{ w
 assert.equal(needsSupervisor({ mode: 'code', stop: 'expect-misses', stag: { stalled: true, signal: 'repeat' } }), false, 'a prediction-streak stop is never re-looped');
 assert.equal(needsSupervisor({ mode: 'code', stop: 'max-steps', stag: { stalled: true, signal: 'repeat' } }), true, 'a stalled max-steps still is');
 assert.match(anvil, /else if\(e\.type==='expect-miss'\)\{ t\.log\.push\(\{k:'system',text:expectMissText\(e\)\}\)/, 'D1: a miss is a row as it happens (LV2: composed by expectMissText)');
+assert.match(anvil, /if\(signal\)\{ req\.signal = signal; \}/, 'Stop reaches the host\'s fetch: inferViaHost passes the run\'s signal to the SDK request (2026-09-17)');
+assert.equal((anvil.match(/createShell\(\{[^\n]*signal: \(\)=>abortController \? abortController\.signal : null/g) || []).length, 3, 'the main, hook and verifier shells all take the run\'s signal getter');
 console.log('run-assembly: A4 readiness == the toolset in every mode; A2 episode rides ungated; B5 the grant projects the catalog; D1 a miss-streak stop stays stopped');
 // …and rides run.started only when the app supplies it: a bed that passes none records the old shape
 {

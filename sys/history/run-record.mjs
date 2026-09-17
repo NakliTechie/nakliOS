@@ -708,7 +708,7 @@ export function foldSubagentOrphans(events, resolve) {
 export const SUBAGENT_STALE_MS = 90_000;
 export function foldSubagentFleet(events, resolve, { now = null, staleMs = SUBAGENT_STALE_MS } = {}) {
   const ev = joined(events, resolve);
-  const key = (i) => `${i.kind || 'task'} ${i.label || ''} ${i.tool_call_id ?? ''}`;
+  const key = (i) => `${i.kind || 'task'}\u0000${i.label || ''}\u0000${i.tool_call_id ?? ''}`;
   const sec = (ms) => Math.round(ms / 1000);
   const rows = []; const open = new Map(); // key -> the started-not-exited rows, in start order
   let stoppedAt = null, last = 0;
@@ -1573,7 +1573,7 @@ export function foldModels(events, resolve) {
     if (e.tool !== 'run.started') continue;
     const m = normaliseModelStamp(e.input?.model);
     if (!m) continue;
-    const key = `${m.provider || ''} ${m.id || ''} ${m.label || ''}`;
+    const key = `${m.provider || ''}\u0000${m.id || ''}\u0000${m.label || ''}`;
     if (seen.has(key)) continue;
     seen.add(key); out.push(m);
   }

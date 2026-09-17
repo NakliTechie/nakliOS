@@ -1918,6 +1918,11 @@
         // can hit the default output cap and return empty (finishReason "length").
         const req = { agent:true, messages, tools, tool_choice:'auto', stream:false };
         if(maxTokens){ req.max_tokens = maxTokens; }
+        // Stop must reach the HOST's fetch, not only this promise: the SDK sends naklios:ai:cancel only
+        // from options.signal, and without it the orphaned request stayed aiHost.active — the host is
+        // single-active, so the next Send from any app queued behind it until the endpoint finished
+        // (the checker's trace, 2026-09-17; withDeadline alone only made THIS side look stopped).
+        if(signal){ req.signal = signal; }
         const r = await withDeadline(ai.chat.completions.create(req), signal);
         const ch=r&&r.choices&&r.choices[0]; const m=(ch&&ch.message)||{};
         // F6: carry the provider's own token count through to the loop. Without it the budget
@@ -2598,7 +2603,7 @@
       // Post-tool hooks: run configured commands (auto-format / lint / verify)
       // after the tool succeeds; their bounded output is fed back to the agent.
       try{
-        const extra = await postHookNotes(hooksCfg, nm, ar, ()=>createShell({ registry, face, kiln: kilnRef }));
+        const extra = await postHookNotes(hooksCfg, nm, ar, ()=>createShell({ registry, face, kiln: kilnRef, signal: ()=>abortController ? abortController.signal : null }));
         if(extra){ renderFiles(); return String(res==null?'':res)+extra; }
       }catch(_){}
       return res;
@@ -2619,7 +2624,7 @@
     // kilnIsolate: the gate's python resets the interpreter first. The agent's own python
       // shares one memoized Pyodide, so without this the gate can import a module the agent
       // cached before editing its file, or one it pre-seeded outright.
-      const verify = verifyCmd ? makeShellVerifier({ createShell:(o)=>createShell({ ...o, kiln: kilnRef, kilnIsolate:true }), registry, face, command: verifyCmd }) : null;
+      const verify = verifyCmd ? makeShellVerifier({ createShell:(o)=>createShell({ ...o, kiln: kilnRef, kilnIsolate:true, signal: ()=>abortController ? abortController.signal : null }), registry, face, command: verifyCmd }) : null;
     // Per-project memory & skills: prepend AGENTS.md + memory.md (workspace root)
     // so the task starts with this project's conventions and past learnings.
     let projectContext='';

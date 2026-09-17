@@ -370,13 +370,13 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
       if (!Number.isFinite(secs)) return { text: `sleep: invalid time interval '${argv[0]}' (seconds)`, code: 1 };
       if (secs > SLEEP_MAX_S) return { text: `sleep: ${argv[0]} exceeds the ${SLEEP_MAX_S} s cap`, code: 1 };
       const sig = typeof signal === 'function' ? signal() : signal;
-      if (sig && sig.aborted) return { text: 'sleep: interrupted', code: 130 };
+      if (sig && sig.aborted) return { text: 'sleep: interrupted', code: 130, interrupted: true };
       const interrupted = await new Promise((resolve) => {
         const t = setTimeout(() => { if (sig) sig.removeEventListener('abort', onAbort); resolve(false); }, Math.round(secs * 1000));
         const onAbort = () => { clearTimeout(t); resolve(true); };
         if (sig) sig.addEventListener('abort', onAbort, { once: true });
       });
-      return interrupted ? { text: 'sleep: interrupted', code: 130 } : { text: '', code: 0 };
+      return interrupted ? { text: 'sleep: interrupted', code: 130, interrupted: true } : { text: '', code: 0 };
     },
     echo(argv) { return { text: argv.join(' '), code: 0 }; },
     clear() { return { text: '', code: 0, clear: true }; },
@@ -1277,6 +1277,9 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
       if (stmt.op === '||' && lastCode === 0) continue; // short-circuit on success
       const res = await runPipeline(stmt.pipeline, stmt.stdinFrom);
       lastCode = res.code || 0;
+      // An interrupted wait ends the LINE, as SIGINT would: `sleep 5; echo after` runs nothing after
+      // the owner's Stop — a `;` or `||` continuation is not a way past it (the checker's probe).
+      if (res.interrupted) { write(res.text); return { cleared }; }
       if (res.clear) { cleared = true; continue; }
       if (res.staged) {
         pending = { proposalId: res.staged, verb: res.verb, proposals: res.proposals, rest: stmts.slice(i + 1) };

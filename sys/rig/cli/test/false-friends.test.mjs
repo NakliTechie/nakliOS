@@ -409,6 +409,9 @@ await test('sleep: the run\'s Stop cuts it — `sleep: interrupted`, exit 130, a
   const r = await sh.feed('sleep 5 && echo never');
   assert(Date.now() - t0 < 2000, 'returned on the abort, not after 5 s');
   eq(String(r.output).trim(), 'sleep: interrupted'); eq(sh.lastCode, 130, 'exit 130 — the && did not run');
+  const line = await sh.feed('sleep 5; printf x > ran.txt; echo done-semi'); eq(String(line.output).trim(), 'sleep: interrupted', 'a `;` continuation does not run after the Stop either'); eq(sh.lastCode, 130);
+  eq((await sh.feed('sleep 5 || echo after-or')).output.trim(), 'sleep: interrupted', 'nor a `||` one');
+  eq(String((await sh.feed('cat ran.txt')).output), 'cat: ran.txt: ENOENT', 'nothing after the interrupted sleep ran');
   eq(String((await sh.feed('sleep 1')).output).trim(), 'sleep: interrupted', 'an already-aborted run: no wait at all');
   ac = new AbortController(); // the next run: the getter sees the new signal
   const t1 = Date.now(); eq((await sh.feed('sleep 0.1 && echo ok')).output.trim(), 'ok'); assert(Date.now() - t1 >= 90, 'a live run waits');
