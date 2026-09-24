@@ -302,6 +302,9 @@ jobs:
 
       - name: Verify Anvil's inline module actually parses (not just greps)
         run: node scripts/test-anvil-parses.mjs
+
+      - name: "S2: the Anvil inline module loads — its top level runs and the boot finishes"
+        run: node scripts/test-anvil-loads.mjs
       - name: anvil handlers run (not just parse)
         run: node scripts/test-anvil-handlers.mjs
       - name: rig shell (its own tests were never in the gate)
