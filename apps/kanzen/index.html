@@ -6654,6 +6654,7 @@ document.addEventListener('click', e => {
 
 const SYNC_PUSH_DEBOUNCE_MS = 30000;   // 30s after last edit
 const SYNC_PULL_INTERVAL_MS = 60000;   // 60s background pull
+const SYNC_KEEPALIVE_MAX_BYTES = 60*1024; // under the browser's 64 KB keepalive body cap
 const SYNC_MAX_PAYLOAD_BYTES = 5*1024*1024;
 let _syncPushTimer = null;
 let _syncDirtyBoards = new Set();
@@ -6797,7 +6798,8 @@ async function pushBoard(board){
   } else {
     payload = bytesToB64Url(compressed);
   }
-  if(new TextEncoder().encode(payload).byteLength>SYNC_MAX_PAYLOAD_BYTES){
+  const payloadBytes=new TextEncoder().encode(payload).byteLength;
+  if(payloadBytes>SYNC_MAX_PAYLOAD_BYTES){
     throw new Error('Board is over the 5 MB encrypted sync limit. Remove large attachments or disable sync for this board.');
   }
   const meta = encodeURIComponent(JSON.stringify({
@@ -6815,7 +6817,10 @@ async function pushBoard(board){
       'X-Board-Meta': meta,
       'If-Match': `"${Number(board._meta?.syncRevision)||0}"`,
     },
-    body: payload
+    body: payload,
+    // A push started as the page hides (the SDK autosave flushes then) must outlive the page.
+    // keepalive caps a body at 64 KB, so larger boards go out as ordinary requests.
+    keepalive: document.visibilityState==='hidden' && payloadBytes<=SYNC_KEEPALIVE_MAX_BYTES,
   });
   if(res.status===409){
     const error=new Error('Remote board changed before this push');
