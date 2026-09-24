@@ -2010,10 +2010,32 @@
   }
   // The fixed limits, kept as the fallback when no window is known (X1: carryLimits in context-budget.mjs).
   const CARRY_FALLBACK = { threshold: 24000, keepRecentTokens: 10000, maxChars: CONVO_MAX_CHARS };
+  // A run the owner STOPPED before any reply leaves its ask in the transcript as an unanswered owner
+  // turn, and the next run answers it alongside the new message — a recovery note saying "cancelled"
+  // did not outweigh an open question (battery 2026-09-24, run 3: "list the files here" wrote the
+  // stopped ask's notes.md first). So the carry drops that ask and the [coordination] turns after it.
+  // Only when the run ended 'aborted' AND no assistant turn follows the ask: a stopped run that had
+  // started replying keeps its work. The record keeps the ask, the recovery note names it
+  // "cancelled", and the drop is recorded below with the rest of the carry's changes (F1 holds).
+  function lastStopOf(rec){
+    try{
+      if(!rec || typeof rec.events !== 'function' || typeof rec.resolve !== 'function') return null;
+      const ev = rec.events(); for(let k = ev.length - 1; k >= 0; k--) if(ev[k].tool === 'run.stopped'){ const o = rec.resolve(ev[k]); return o && o.output ? String(o.output.stop || '') : null; }
+    }catch(_){}
+    return null;
+  }
+  function dropStoppedAsk(out){
+    let k = out.length - 1;
+    while (k >= 0 && !(out[k] && out[k].role === 'user' && !/^\[coordination\]/.test(String(out[k].content || '')))) k--;
+    if (k < 0) return out;
+    for (let j = k + 1; j < out.length; j++) if (out[j] && out[j].role === 'assistant') return out;
+    return out.slice(0, k);
+  }
   async function carryForward(messages, rec, limits = CARRY_FALLBACK){
     const msgs = Array.isArray(messages) ? messages.slice() : [];
     let i = 0; while (i < msgs.length && msgs[i] && msgs[i].role === 'system') i++;
     let out = msgs.slice(i);
+    if (lastStopOf(rec) === 'aborted') out = dropStoppedAsk(out);
     try {
       // `retrievable` decides what an elided tool body TELLS the model. Compaction cannot keep
       // the bytes — its whole job is to shed them, and the carried transcript lives in

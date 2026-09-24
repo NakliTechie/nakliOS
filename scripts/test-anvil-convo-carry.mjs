@@ -186,4 +186,22 @@ const turn = (i) => ([
 assert.match(anvil, /compactConversation\(out, \{[^}]*retrievable: !!\(rec && rec\.compacted\)/,
   'carryForward gates the retrieval promise on a recorder actually being present');
 
+// Battery 2026-09-24 (run 3, errored · list): a run STOPPED before any reply left its ask as an
+// unanswered owner turn; the next run did it anyway. The carry drops it — and records that it did.
+{
+  const recWith = (stop) => { const ev = [{ tool: 'run.started' }, { tool: 'run.stopped' }]; const calls = [];
+    return { calls, events: () => ev, resolve: (e) => (e.tool === 'run.stopped' ? { output: { stop } } : {}), compacted: async (x) => { calls.push(x); } }; };
+  const earlier = [{ role: 'user', content: 'list the files' }, { role: 'assistant', content: 'a.py' }];
+  const stoppedTail = [{ role: 'user', content: 'create notes.md' }, { role: 'user', content: '[coordination] Working context' }];
+  const r1 = recWith('aborted');
+  const out = await carryForward([sys, ...earlier, ...stoppedTail], r1);
+  assert.deepEqual(out, earlier, 'a stopped, unanswered ask and its [coordination] turns leave the carry');
+  assert.equal(r1.calls.length, 1, 'and the drop is ON THE CHAIN (F1): the replacement is recorded');
+  assert.deepEqual(r1.calls[0].replacement, earlier, 'the recorded replacement is what the next run is sent');
+  const started = [{ role: 'user', content: 'create notes.md' }, { role: 'assistant', content: 'writing it' }];
+  assert.deepEqual(await carryForward([sys, ...earlier, ...started], recWith('aborted')), [...earlier, ...started], 'a stopped run that had started replying keeps its work');
+  assert.deepEqual(await carryForward([sys, ...earlier, ...stoppedTail], recWith('done')), [...earlier, ...stoppedTail], 'only a Stop drops anything');
+  assert.deepEqual(await carryForward([sys, ...earlier, ...stoppedTail], recWith('error')), [...earlier, ...stoppedTail], 'an error is not a cancellation');
+}
+
 console.log('anvil-convo-carry: the next run sees tool calls, tool results, the gate verdict, and no impossible retrieval');
