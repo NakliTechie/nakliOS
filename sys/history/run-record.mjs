@@ -1270,6 +1270,9 @@ export function recoveryNote(rec) {
   const lines = rec.ownerInputs.map((inp) => {
     const tag = inp.resolution === 'likely-satisfied' ? ' — likely handled (a gate passed after it); verify before redoing'
       : inp.endedAfter === 'done' ? ' — answered: the run after it finished (no gate checked it)'
+      // The owner pressed Stop: a cancellation, not a to-do. Framed as merely "unfinished", 2 of 5
+      // battery cases (2026-09-24) went back and did the stopped ask on an unrelated message.
+      : inp.endedAfter === 'aborted' ? ' — cancelled: the owner stopped the run; do not do it unless the newest message asks for it again'
       : inp.endedAfter ? ` — unfinished: the run after it ended '${inp.endedAfter}'`
       : ' — open';
     return `  • "${inp.text.replace(/\s+/g, ' ').slice(0, 100)}"${tag}`;

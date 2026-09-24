@@ -367,6 +367,9 @@ await test('RECOVERY framing (live 2026-09-24): an answered or unfinished earlie
   assert(/"solve the ARC puzzle" — unfinished: the run after it ended 'truncated'/.test(note), 'an unfinished ask says how it ended');
   assert(!/" — open$/m.test(note), 'neither is presented as a bare open to-do');
   assert(/newest message is the current request — do that/.test(note) && /only if the newest message asks you to/.test(note), 'the note scopes the run to the owner\'s newest message');
+  const stopped = createRunRecorder({ app: 'anvil', principal: 'p' });
+  await stopped.start({ messages: [{ role: 'user', content: 'create notes.md' }], tools: [] }); await stopped.finish({ stop: 'aborted', steps: 0 }); await stopped.settled();
+  assert(/"create notes.md" — cancelled: the owner stopped the run; do not do it unless the newest message asks for it again/.test(recoveryNote(foldRecovery(stopped.events(), stopped.resolve))), 'a Stop is a cancellation, not an unfinished to-do');
   // a legacy record with no run.stopped (died mid-flight) still reads open, as before
   const dead = createRunRecorder({ app: 'anvil', principal: 'p' });
   await dead.start({ messages: [{ role: 'user', content: 'go' }], tools: [] }); await dead.settled();
