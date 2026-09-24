@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import {
   systemPrompt, systemMessage, runToolset, gateNote, ACT_NUDGE, RUN_BUDGET, RELOOP_BUDGET,
-  needsActNudge, isQuestionAsk, ownerAsk, needsSupervisor, reloopMessages, driveRun, withBedStubs, BED_UNWIRED, bedStub,
+  needsActNudge, isQuestionAsk, ownerAsk, isSimpleAsk, MEMORY_TOOLS, needsSupervisor, reloopMessages, driveRun, withBedStubs, BED_UNWIRED, bedStub,
   withHooks, loadHooks, preHookReply, postHookNotes, EMPTY_HOOKS, contextMessage, SYSTEM_HEAD, SYSTEM_TAIL, MODE_NOTE, LESSON_NOTE,
   runReadiness,
 } from '../sys/ai/run-assembly.mjs';
@@ -330,7 +330,8 @@ for (const volatile of ['projectContext', 'memoryIndex', 'skillsIndex', 'recover
   assert.ok(!new RegExp(`proceduralPrior\\s*=\\s*[^;]*${volatile}`).test(anvil), `${volatile} must not reach the procedural prior`);
   assert.ok(!new RegExp(`systemMessage\\(\\{[^}]*${volatile}`).test(anvil), `${volatile} must not reach the system message`);
 }
-assert.match(runTask, /const tools = runToolset\(mode, \{ verify: !!verify, scopes: grant\.scopes \}\);/, 'the toolset is the module\'s — the beds get the same list');
+assert.match(runTask, /const tools = runToolset\(mode, \{ verify: !!verify, scopes: grant\.scopes, simple: simpleAsk \}\);/, 'the toolset is the module\'s — the beds get the same list');
+assert.match(runTask, /const simpleAsk = isSimpleAsk\(text\);/, 'the memory gate is decided once, at run start, from the owner\'s ask');
 assert.ok(!/tools\.push\(/.test(runTask.slice(0, runTask.indexOf('const sysMsg='))), 'nothing is pushed onto the toolset after the module built it');
 assert.match(runTask, /const gateNote = assembledGateNote\(verifyCmd\);/, 'the gate note is the module\'s');
 const call = runTask.match(/let result = await driveRun\(\{[\s\S]*?\n      \}\);/);
@@ -416,8 +417,18 @@ assert.ok(!/async function saveRunRecord[\s\S]{0,400}runIndexRow\(\{ project:Str
   const started = rec.resolve(rec.events().find((e) => e.tool === 'run.started')).input;
   assert.equal(started.tools.map((x) => x.function.name).sort().join(','), names(ro), 'run.started carries the projected list — a blocked tool is never presented');
 }
-assert.match(anvil, /const tools = runToolset\(mode, \{ verify: !!verify, scopes: grant\.scopes \}\);/, 'B5: the app projects the catalog by the run grant');
-assert.match(anvil, /const readiness = runReadiness\(mode, \{ verify: !!verify, scopes: grant\.scopes \}\);/, 'B5: and the readiness');
+assert.match(anvil, /const tools = runToolset\(mode, \{ verify: !!verify, scopes: grant\.scopes, simple: simpleAsk \}\);/, 'B5: the app projects the catalog by the run grant');
+assert.match(anvil, /const readiness = runReadiness\(mode, \{ verify: !!verify, scopes: grant\.scopes, simple: simpleAsk \}\);/, 'B5: and the readiness');
+// The memory gate (battery 2026-09-24): a simple ask's run is offered no memory tool; real work keeps them.
+{
+  const names = (o) => runToolset('code', o).map((t) => t.function.name);
+  for (const ask of ['list the files here', 'write hi.txt containing hi', 'what is the first line of seed.txt?', 'rename seed.txt to seed2.txt', 'in seed.txt, change beta to gamma']) assert.equal(isSimpleAsk(ask), true, `simple: ${ask}`);
+  for (const ask of ['fix the flaky test in parser.py', 'add a --verbose flag', 'why does the build fail?', 'remember that we use tabs', 'x'.repeat(81), 'list files\nthen fix them']) assert.equal(isSimpleAsk(ask), false, `not simple: ${ask.slice(0, 30)}`);
+  for (const m of MEMORY_TOOLS) { assert.ok(names({}).includes(m), `${m} offered by default`); assert.ok(!names({ simple: true }).includes(m), `${m} withheld on a simple ask`); }
+  assert.deepEqual(names({ simple: true }), names({}).filter((n) => !MEMORY_TOOLS.includes(n)), 'only the memory tools move');
+  const rows = runReadiness('code', { simple: true });
+  for (const m of MEMORY_TOOLS) { const r = rows.find((x) => x.name === m); assert.ok(r && r.state === 'off' && /simple ask/.test(r.why), `readiness names why ${m} is off: ${JSON.stringify(r)}`); }
+}
 assert.match(anvil, /makeToolExecutor\(\{ shell, face, mode, infer: inferViaHost, spawnIsolated, steer, scopes: grant\.scopes,/, 'B5: the children\'s catalogs are projected by the grant too');
 assert.match(anvil, /tools=codingToolset\('code',\{ scopes: grant\.scopes \}\)\.concat\(emitTool\);/, 'B5: and the builder role');
 // CRIB-D D2: the memory index is scoped to the task at injection; a run that did not finish leaves a task-scoped stall note

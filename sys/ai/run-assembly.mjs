@@ -73,26 +73,40 @@ export function runToolsetOptions(mode = 'code', { verify = false, scopes = null
 // A4 (osaurus B9): the readiness surface for THIS run's options — exposed / hidden (mode) / off
 // (opt-in) / unavailable (the host's capability gap, named by the app) — from the same option
 // object the toolset is built from, so the two cannot drift.
-export function runReadiness(mode = 'code', { verify = false, scopes = null } = {}, { unavailable = {} } = {}) {
+// The memory gate (battery 2026-09-24): on trivial asks the model kept calling recall / remember /
+// revise — +1 step each — through three prompt revisions that told it not to. A prompt rule is a
+// request; this is the gate. A SIMPLE ask's run is offered no memory tools at all. The memory INDEX
+// still rides the context (the one-line facts are visible), and the post-run review still stages
+// lessons, so nothing is lost but a step. Decided once, at run start, from the owner's ask — the
+// toolset is recorded on run.started, so it never changes mid-run (the record's replay contract).
+export const MEMORY_TOOLS = Object.freeze(['remember', 'recall', 'revise']);
+const WORK_WORDS = /\b(fix|debug|implement|refactor|build|add|test|tests|investigate|optimi[sz]e|design|port|migrate|update|improve|why|review|audit|plan|learn|remember|recall|memory|continue|resume)\b/;
+export function isSimpleAsk(text) {
+  const t = String(text || '').trim().toLowerCase();
+  if (!t || t.length > 80 || /\n/.test(t)) return false;
+  return !WORK_WORDS.test(t);
+}
+export function runReadiness(mode = 'code', { verify = false, scopes = null, simple = false } = {}, { unavailable = {} } = {}) {
   const rows = toolReadiness(mode, runToolsetOptions(mode, { verify, scopes }), { unavailable });
   // The tools this module adds AFTER codingToolset (memory, skills, history, checkpoint, …) are
   // derived from the toolset itself, never listed here: what this mode offers is exposed; what
   // the mode would offer but the grant cannot honour is blocked (B5); what code mode would offer
   // and this mode does not is hidden by the mode.
   const named = new Set(rows.map((r) => r.name));
-  const offered = new Set(runToolset(mode, { verify, scopes }).map((t) => t.function.name));
+  const offered = new Set(runToolset(mode, { verify, scopes, simple }).map((t) => t.function.name));
   const modeOffers = new Set(runToolset(mode, { verify }).map((t) => t.function.name)); // the mode's list before the grant
   const codeOffers = runToolset('code', { verify }).map((t) => t.function.name);
   for (const name of [...new Set([...modeOffers, ...codeOffers])]) {
     if (named.has(name)) continue;
     if (unavailable[name]) rows.push({ name, state: 'unavailable', why: String(unavailable[name]) });
     else if (offered.has(name)) rows.push({ name, state: 'exposed', why: '' });
+    else if (simple && MEMORY_TOOLS.includes(name) && runToolset(mode, { verify, scopes }).some((t) => t.function.name === name)) rows.push({ name, state: 'off', why: 'not offered on a simple ask' });
     else if (modeOffers.has(name)) rows.push({ name, state: 'blocked', why: `blocked by policy — the grant lacks ${TOOL_SCOPES[name]}` });
     else rows.push({ name, state: 'hidden', why: `not in ${mode} mode` });
   }
   return rows;
 }
-export function runToolset(mode = 'code', { verify = false, scopes = null } = {}) {
+export function runToolset(mode = 'code', { verify = false, scopes = null, simple = false } = {}) {
   const code = mode === 'code';
   const tools = codingToolset(mode, runToolsetOptions(mode, { verify, scopes }));
   if (code) tools.push(rememberTool());
@@ -104,7 +118,8 @@ export function runToolset(mode = 'code', { verify = false, scopes = null } = {}
   tools.push(skillTool());
   tools.push(recallTool());
   if (code) tools.push(reviseTool()); // belief revision over existing facts
-  return tools.filter((t) => scopeAllows(scopes, t.function.name)); // B5: the extras are projected by the grant too
+  return tools.filter((t) => scopeAllows(scopes, t.function.name)) // B5: the extras are projected by the grant too
+    .filter((t) => !(simple && MEMORY_TOOLS.includes(t.function.name)));
 }
 
 // Tools the app hands the model that a node bed has no store or Kiln behind. A bed answers

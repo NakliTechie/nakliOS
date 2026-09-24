@@ -445,7 +445,7 @@
   import { readinessLine } from '../../sys/ai/agent-tools.mjs';
   import { asStored } from '../../sys/ai/content-token.mjs';
   import { HOOKS_FILE, parseHooks } from '../../sys/ai/hooks.mjs';
-  import { systemPrompt as assembledSystemPrompt, systemMessage, gateNote as assembledGateNote, runToolset, runReadiness, synthesizeTool, driveRun, loadHooks, preHookReply, postHookNotes, contextMessage } from '../../sys/ai/run-assembly.mjs';
+  import { systemPrompt as assembledSystemPrompt, systemMessage, gateNote as assembledGateNote, runToolset, runReadiness, isSimpleAsk, synthesizeTool, driveRun, loadHooks, preHookReply, postHookNotes, contextMessage } from '../../sys/ai/run-assembly.mjs';
   import { gateAction, gateEvent, actionClasses } from '../../sys/ai/action-gate.mjs';
   import { applyPolicy, grant as policyGrant, revoke as policyRevoke, policyRows, normalisePolicy, POLICY_HINT } from '../../sys/ai/action-policy.mjs';
   import { decideByRules, invalidRules, applyMode, MODES as PERM_MODES, MODE_LABEL as PERM_MODE_LABEL, modeIsLoud } from '../../sys/ai/permission-rules.mjs';
@@ -2980,12 +2980,13 @@
     // Per-project tool hooks: pre-tool guards + post-tool commands from
     // .anvil/hooks.json (loaded once per run; executeTool reads hooksCfg).
     hooksCfg = await loadHooks(fs, hooksCfg);
-    const tools = runToolset(mode, { verify: !!verify, scopes: grant.scopes }); // the app's list, in the app's order — the beds get the same one; B5: projected by the run's grant
+    const simpleAsk = isSimpleAsk(text); // the memory gate — decided once, from the owner's ask
+    const tools = runToolset(mode, { verify: !!verify, scopes: grant.scopes, simple: simpleAsk }); // the app's list, in the app's order — the beds get the same one; B5: projected by the run's grant
     // A4: why a tool is or is not available in THIS run — into the record (the mode button carries the
     // same sentence, recomputed on every switch in setModeBtn). The fourth state, `unavailable`, has
     // no producer here yet: no tool is whole-unavailable today (Kiln gates python INSIDE shell, not
     // shell) — the gap is in the ledger.
-    const readiness = runReadiness(mode, { verify: !!verify, scopes: grant.scopes });
+    const readiness = runReadiness(mode, { verify: !!verify, scopes: grant.scopes, simple: simpleAsk });
     let ownerStopped=null; // B2: whether the OWNER stopped the run — read before the run aborts its own signal
     try{
       // F3 — the system message is the CACHE PREFIX, so only stable text lives in it.
