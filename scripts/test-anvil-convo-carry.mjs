@@ -198,6 +198,8 @@ assert.match(anvil, /compactConversation\(out, \{[^}]*retrievable: !!\(rec && re
   assert.deepEqual(out, earlier, 'a stopped, unanswered ask and its [coordination] turns leave the carry');
   assert.equal(r1.calls.length, 1, 'and the drop is ON THE CHAIN (F1): the replacement is recorded');
   assert.deepEqual(r1.calls[0].replacement, earlier, 'the recorded replacement is what the next run is sent');
+  const dangling = [{ role: 'user', content: 'create notes.md' }, { role: 'assistant', content: '', tool_calls: [{ id: 'c1', type: 'function', function: { name: 'write', arguments: '{}' } }] }];
+  assert.deepEqual(await carryForward([sys, ...earlier, ...dangling], recWith('aborted')), earlier, 'stopped after issuing a call that never ran: the dangling turn AND the ask leave (live: 5 of 6 stops)');
   const started = [{ role: 'user', content: 'create notes.md' }, { role: 'assistant', content: 'writing it' }];
   assert.deepEqual(await carryForward([sys, ...earlier, ...started], recWith('aborted')), [...earlier, ...started], 'a stopped run that had started replying keeps its work');
   assert.deepEqual(await carryForward([sys, ...earlier, ...stoppedTail], recWith('done')), [...earlier, ...stoppedTail], 'only a Stop drops anything');

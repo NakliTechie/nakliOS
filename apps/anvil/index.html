@@ -2035,7 +2035,6 @@
     const msgs = Array.isArray(messages) ? messages.slice() : [];
     let i = 0; while (i < msgs.length && msgs[i] && msgs[i].role === 'system') i++;
     let out = msgs.slice(i);
-    if (lastStopOf(rec) === 'aborted') out = dropStoppedAsk(out);
     try {
       // `retrievable` decides what an elided tool body TELLS the model. Compaction cannot keep
       // the bytes — its whole job is to shed them, and the carried transcript lives in
@@ -2053,6 +2052,10 @@
     // is malformed as the START of the next request — drop it.
     while (out.length && out[out.length-1] && out[out.length-1].role === 'assistant'
            && Array.isArray(out[out.length-1].tool_calls) && out[out.length-1].tool_calls.length) out.pop();
+    // After that pop, not before: a Stop usually lands after the model has issued its first call, so
+    // the stopped ask is followed by exactly such a dangling turn — checked first, it read as "the run
+    // had started replying" and the ask stayed (live, battery run 5: 5 of 6 stopped asks still sent).
+    if (lastStopOf(rec) === 'aborted') out = dropStoppedAsk(out);
     // Trim from the front, whole turns only, until it fits.
     while (out.length && JSON.stringify(out).length > limits.maxChars) {
       out.shift();
