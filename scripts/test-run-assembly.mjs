@@ -39,7 +39,7 @@ assert.equal(MODE_NOTE.code, '', 'code mode adds no mode note');
 // seams: a lost or doubled space between the tool list and the prior is invisible to a human
 {
   const assembled = systemPrompt();
-  assert.match(assembled, /scripting\)\. Read a file before editing it\./, 'the head seam joins with exactly one space');
+  assert.match(assembled, /scripting\)\. Read a file before editing it, unless/, 'the head seam joins with exactly one space');
   assert.match(assembled, /one solver\. Work in small, verifiable steps/, 'the tail seam joins with exactly one space');
   assert.ok(!/ {2}/.test(assembled), 'no doubled space anywhere in the assembled prompt');
 }

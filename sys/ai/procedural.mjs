@@ -38,7 +38,10 @@ export const DEFAULT_GRAPH = Object.freeze({
   ],
   edges: Object.freeze({
     'read-before-edit': {
-      text: 'Read a file before editing it',
+      // 2026-09-24: the edit tool applies an exact, unique old_string without a read, and the prior
+      // still said "read first" unconditionally — so a one-word edit the ask spelled out ran read,
+      // edit (battery run 7: fresh edit 3 steps). The edge now carries the exception.
+      text: 'Read a file before editing it, unless the exact text to replace is already known — an edit whose old_string occurs exactly once applies without a read',
       condition: 'about to modify a file whose current contents are not already in the transcript',
       guidance: 'read it first; the edit tools require an exact old_string match',
       pitfalls: 'an edit written from memory fails the match and burns a turn, or silently patches the wrong region',

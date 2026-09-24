@@ -18,7 +18,7 @@
 //   await runAgentLoop({ messages, tools, infer, executeTool: exec });
 
 import { shellTool, makeShellExecutor, runAgentLoop, taskDoneTool, interceptBashCommand, clarifyTool } from './agent-loop.mjs';
-import { parseExpect, gradeExpect, expectLine } from './expect.mjs';
+import { parseExpect, gradeExpect, expectLine, isBlankOutput } from './expect.mjs';
 import {
   dispatchTool, reviewTool, normalizeTasks, planMerge, formatDispatchDigest, awaitCohort, formatCompletionSteer, DISPATCH_SETTLE_MS,
   ownershipOverlaps, ownershipsOverlap, outsideOwnership, renderTaskSpec,
@@ -588,6 +588,27 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
     }
     return base.join('/');
   }
+  // A silent file op carries its own evidence (battery 2026-09-24): `mv seed.txt seed2.txt` prints
+  // nothing, so the model spent a step on `ls` to see that it worked — on every rename. After a
+  // successful mv / cp / rm / mkdir / touch that printed nothing, the result states what now
+  // exists, CHECKED on disk (fs.stat), never inferred from the command line. One simple command
+  // only: a pipeline, a chain or a redirect gets no note.
+  async function fileOpEvidence(command, output) {
+    if (!isBlankOutput(output)) return '';
+    const cmd = String(command || '').trim();
+    if (/[;&|<>`$(){}*?]/.test(cmd)) return '';
+    const parts = cmd.split(/\s+/); const verb = parts[0];
+    if (!['mv', 'cp', 'rm', 'mkdir', 'touch'].includes(verb)) return '';
+    const paths = parts.slice(1).filter((a) => !a.startsWith('-'));
+    if (!paths.length || paths.length > 4) return '';
+    const exists = async (x) => { try { const r = await face.invoke('fs.stat', { path: resolve(x) }); return !!(r && r.ok); } catch (_) { return false; } };
+    const say = async (x) => `${x} ${(await exists(x)) ? 'exists' : 'is gone'}`;
+    let lines;
+    if (verb === 'mv' && paths.length === 2) lines = [await say(paths[1]), await say(paths[0])];
+    else if (verb === 'cp' && paths.length === 2) lines = [await say(paths[1])];
+    else lines = await Promise.all(paths.map(say));
+    return 'checked: ' + lines.join('; ');
+  }
   async function readFile(path) {
     const res = await face.invoke('fs.read', { path: resolve(path), encoding: 'utf-8' });
     if (!res.ok) return { ok: false, error: `${res.code || 'error'}: ${res.message || 'read failed'}` };
@@ -655,7 +676,8 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
         if (m && !/[|>]/.test(command)) { const seen = await readFile(m[1]); if (seen.ok) noteSeen(resolve(m[1]), seen.data); }
         // Without this the model reads a failing build's stdout with no verdict.
         // Appended AFTER capping so truncation can never eat the exit code.
-        const capped = await capOutput(result, 'shell output');
+        const evidence = code === 0 ? await fileOpEvidence(command, result) : '';
+        const capped = evidence ? `(no output; ${evidence})` : await capOutput(result, 'shell output');
         const final = code == null ? capped : `${capped}\n[exit ${code}]`;
         // D3: an optional prediction, graded live so the agent gets immediate feedback; a shell
         // call without `expect` is unchanged. The record keeps the expect in the call args, so a

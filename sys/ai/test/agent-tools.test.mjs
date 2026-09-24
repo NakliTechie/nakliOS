@@ -344,6 +344,19 @@ await test('edit without a read: applies only on an exact, unique match; everyth
   assert(/^Edited s\.txt/.test(next), 'after its own edit the file is known — the next edit goes through: ' + next);
 });
 
+await test('a silent file op states what now exists, checked on disk; a chain or a failure gets no note', async () => {
+  const { exec } = fresh();
+  await exec('write', { path: 'seed.txt', content: 'x\n' });
+  const mv = await exec('shell', { command: 'mv seed.txt seed2.txt' });
+  eq(mv, '(no output; checked: seed2.txt exists; seed.txt is gone)\n[exit 0]', 'mv states both ends');
+  const mk = await exec('shell', { command: 'mkdir -p out' });
+  assert(/checked: out exists/.test(mk), 'mkdir: ' + mk);
+  const chain = await exec('shell', { command: 'mv seed2.txt s3.txt && ls' });
+  assert(!/checked:/.test(chain), 'a chain gets no note: ' + chain);
+  const bad = await exec('shell', { command: 'mv nope.txt x.txt' });
+  assert(!/checked:/.test(bad), 'a failed op gets no note: ' + bad);
+});
+
 await test('F8: a write records what the store hands back — a BOM or a lone surrogate does not make the next edit stale', async () => {
   const { exec } = fresh();
   await exec('write', { path: 'bom.txt', content: '\uFEFFx = 1\n' });

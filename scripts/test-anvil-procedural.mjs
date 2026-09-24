@@ -15,8 +15,9 @@ import { SYSTEM_HEAD, SYSTEM_TAIL, systemPrompt } from '../sys/ai/run-assembly.m
 
 const anvil = await readFile(new URL('../apps/anvil/index.html', import.meta.url), 'utf8');
 
-// The exact prose that lived in the literal before this change (git: apps/anvil/index.html@fedf4ec).
-const BEFORE = 'Read a file before editing it. Prefer edit/apply_patch for changes, write for new files; use shell to explore and verify. For work that splits into independent parts, use dispatch to parallelise; after a significant change, consider review before finishing. For a task defined by input→output EXAMPLES (a puzzle), prefer the `synthesize` tool — it evolves and tests candidate solve() programs across generations and writes the best solver.py — over hand-writing one solver.';
+// The exact prose that lived in the literal before this change (git: apps/anvil/index.html@fedf4ec),
+// with one deliberate edit since: the read-before-edit exception (2026-09-24).
+const BEFORE = 'Read a file before editing it, unless the exact text to replace is already known — an edit whose old_string occurs exactly once applies without a read. Prefer edit/apply_patch for changes, write for new files; use shell to explore and verify. For work that splits into independent parts, use dispatch to parallelise; after a significant change, consider review before finishing. For a task defined by input→output EXAMPLES (a puzzle), prefer the `synthesize` tool — it evolves and tests candidate solve() programs across generations and writes the best solver.py — over hand-writing one solver.';
 
 // ── 1. byte-identical, and the literal is really gone ──────────────────────
 assert.equal(renderProcedural(), BEFORE, 'the default graph renders exactly the prose it replaced');
@@ -28,7 +29,7 @@ assert.ok(!anvil.includes(BEFORE), 'and the prose is no longer duplicated in the
   // N1: the two halves live in the assembly (sys/ai/run-assembly.mjs), which the app imports.
   const assembled = SYSTEM_HEAD + BEFORE + SYSTEM_TAIL;
   assert.equal(systemPrompt(), assembled, 'the assembly renders head + default prior + tail');
-  assert.match(assembled, /scripting\)\. Read a file before editing it\./, 'the head seam joins with exactly one space');
+  assert.match(assembled, /scripting\)\. Read a file before editing it, unless/, 'the head seam joins with exactly one space');
   assert.match(assembled, /one solver\. Work in small, verifiable steps/, 'the tail seam joins with exactly one space');
   assert.ok(!/ {2}/.test(assembled), 'no doubled space anywhere in the assembled prompt');
   assert.match(anvil, /function systemPrompt\(\)\{ return assembledSystemPrompt\(proceduralPrior\); \}/, 'the app hands the assembly its per-run prior');
@@ -90,7 +91,7 @@ for (const [id, e] of Object.entries(DEFAULT_GRAPH.edges)) {
 }
 {
   const { graph } = mergeProceduralGraph(DEFAULT_GRAPH, { sentences: [['read-before-edit'], ['smuggled']] });
-  assert.equal(renderProcedural(graph), 'Read a file before editing it.', 'an unknown id in sentences is dropped too');
+  assert.equal(renderProcedural(graph), 'Read a file before editing it, unless the exact text to replace is already known — an edit whose old_string occurs exactly once applies without a read.', 'an unknown id in sentences is dropped too');
 }
 {
   const { graph } = mergeProceduralGraph(DEFAULT_GRAPH, { edges: { 'review-after-change': { enabled: false } } });
