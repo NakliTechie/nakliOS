@@ -35,16 +35,22 @@
   async function newTask() { D().getElementById('new-task').click(); await sleep(300); return T().taskState().id; }
 
   function status() { const s = T().taskState(); return s && s.status; }
+  // The Send button reads "Queue" while the app's own run flag is set — which outlives the task's
+  // status for a moment after Stop. A prompt sent then is QUEUED, and the queue holds after an
+  // aborted run (the first harness pass stalled every errored case on exactly this).
+  const sendReady = () => D().getElementById('send').textContent.trim() === 'Send';
   async function send(text) {
+    await waitFor(sendReady, 30000, 'Send button ready');
     const p = D().getElementById('prompt'); p.value = text; p.dispatchEvent(new Event('input', { bubbles: true }));
     D().getElementById('send').click();
   }
-  // Send, and if the admission speed bump holds it once ("Send again to run anyway"), send again.
+  // Send. The admission speed bump ("Send again to run anyway") keeps the prompt in the box and
+  // lets the second click through — so while the prompt is still there, click again.
   async function sendAndWait(text, { abortAfterFirstCall = false, timeoutMs = 240000 } = {}) {
     const before = (await records()).length;
     await send(text);
-    await sleep(1200);
-    if (status() !== 'running' && (await records()).length === before) { await send(text); await sleep(1200); }
+    await sleep(800);
+    if (D().getElementById('prompt').value.trim() === text) { D().getElementById('send').click(); await sleep(800); }
     if (abortAfterFirstCall) { await waitFor(() => status() === 'running', 15000, 'run start'); await sleep(1500); D().getElementById('stop').click(); }
     await waitFor(async () => status() !== 'running' && (await records()).length > before, timeoutMs, 'run end');
     return (await records()).at(-1);
@@ -113,7 +119,7 @@
   async function run({ asks = ASKS, states = STATES, project = 'battery-' + new Date().toISOString().slice(0, 16).replace(/[:T]/g, '') } = {}) {
     if (!T()) throw new Error('Anvil test door is closed: set localStorage["anvil-test"]="1" on this origin and reload');
     await newProject(project);
-    const rows = [];
+    const rows = []; window.__batteryRows = rows;
     for (const state of states) for (const ask of asks) {
       try { const row = await oneCase(ask, state); rows.push(row); console.info('[battery]', JSON.stringify(row)); }
       catch (e) { const row = { ask: ask.id, state, pass: false, error: String(e && e.message || e) }; rows.push(row); console.warn('[battery]', JSON.stringify(row)); }
