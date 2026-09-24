@@ -219,6 +219,15 @@ const RULE_SEP = '\n\n';
 // Would adding `newBody` as a rule exceed the cap? The cap is what makes the agent choose:
 // over it, the tool errors and the agent must merge or retract a rule first.
 // `name`/`status` describe the prospective rule so its heading is counted too.
+// S5 (2026-09-24): the name a new fact will be stored under — `base`, or `base-2`, `base-3`… when taken,
+// the same numbering recordFact uses on disk. The rules cap measures THIS name: the rendered heading is
+// part of the cap, and a `-2` suffix measured as the bare base could carry a rule past it.
+export function nextFreeSlug(base, names){
+  const taken = new Set([...(names || [])].map(String));
+  if (!taken.has(base)) return base;
+  let n = 2; while (taken.has(`${base}-${n}`)) n++;
+  return `${base}-${n}`;
+}
 export function checkRulesCap(facts, newBody, { name = 'new-rule', status = null } = {}){
   const all = (facts || []).filter(f => f && f.name);
   const rules = liveRules(all.filter(f => f.status !== 'retracted'), supersededSet(all));

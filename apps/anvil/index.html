@@ -434,7 +434,7 @@
   import { registerAppDiffTypes } from '../../sys/staging/diff-types.mjs';
   // A skill write is a P0 envelope (diff type 'anvil-skill') — the first agent-produced diff.
   registerAppDiffTypes(['anvil']);
-  import { MEMORY_DIR, parseFact, buildMemoryIndex, noteToFact, applyRevision, applyDemotion, dependantsOf, slotHolder, findDuplicate, duplicateReply, createRememberBudget, budgetSpentReply, checkRulesCap, rulesCapReply, createFactSession, factUsage, earnedFacts, applyEarned, unhelpfulFacts, applyUnhelpful } from '../../sys/ai/memory-store.mjs';
+  import { MEMORY_DIR, parseFact, buildMemoryIndex, noteToFact, applyRevision, applyDemotion, dependantsOf, slotHolder, nextFreeSlug, findDuplicate, duplicateReply, createRememberBudget, budgetSpentReply, checkRulesCap, rulesCapReply, createFactSession, factUsage, earnedFacts, applyEarned, unhelpfulFacts, applyUnhelpful } from '../../sys/ai/memory-store.mjs';
   import { readinessLine } from '../../sys/ai/agent-tools.mjs';
   import { asStored } from '../../sys/ai/content-token.mjs';
   import { HOOKS_FILE, parseHooks } from '../../sys/ai/hooks.mjs';
@@ -1059,7 +1059,7 @@
         const note=String((ar&&ar.note)||'').trim();
         const all=await listFacts();
         const dup=findDuplicate(all, note, { scope: t ? 'task:'+String(t.id) : null }); if(dup) return duplicateReply(dup); // search before save (A2); another task's scoped notes do not count (D2)
-        if(ar&&ar.type==='rule'){ const cap=checkRulesCap(all, note, { name: noteToFact(note, 'rule', 'hypothesis').slug, status: 'hypothesis' }); if(!cap.ok) return rulesCapReply(cap); } // rules stay capped here too (A3); the prospective rule's OWN heading is counted
+        if(ar&&ar.type==='rule'){ const cap=checkRulesCap(all, note, { name: nextFreeSlug(noteToFact(note, 'rule', 'hypothesis').slug, all.map(f=>f.name)), status: 'hypothesis' }); if(!cap.ok) return rulesCapReply(cap); } // rules stay capped here too (A3); the prospective rule's OWN heading is counted
         const slug=await recordFact(note, ar&&ar.type, 'hypothesis', { weight: ar&&ar.weight }); if(slug) recorded++; return slug?('Recorded '+slug):'empty note'; }
       return await codeExec(nm,ar,call);
     };
@@ -2668,7 +2668,7 @@
         const dup=findDuplicate(all, note, { exempt, scope: 'task:'+String(t.id) }); if(dup){ auditRefusal('duplicate:'+dup.reason, note); return duplicateReply(dup); } // D2: another task's scoped notes do not count
         // A rule is injected whole every run, so rules are capped (A3): over the cap the tool
         // errors and the agent has to merge or retract one first.
-        if(ar&&ar.type==='rule'){ const cap=checkRulesCap(all, note, { name: noteToFact(note, 'rule', 'hypothesis').slug, status: 'hypothesis' }); if(!cap.ok){ auditRefusal('rules-cap', note); return rulesCapReply(cap); } }
+        if(ar&&ar.type==='rule'){ const cap=checkRulesCap(all, note, { name: nextFreeSlug(noteToFact(note, 'rule', 'hypothesis').slug, all.map(f=>f.name)), status: 'hypothesis' }); if(!cap.ok){ auditRefusal('rules-cap', note); return rulesCapReply(cap); } }
         const take=remBudget.take(); if(!take.ok){ auditRefusal('per-run-cap', note); return budgetSpentReply(take); }
         // A fresh learning is a HYPOTHESIS (Agno belief-revision): provisional until a
         // check corroborates it (promote with `revise`) or an observation disproves it.

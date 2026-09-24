@@ -2,7 +2,7 @@
 //   node sys/ai/test/memory-store.test.mjs
 import { parseScope, createFactSession, parseFact, buildMemoryIndex, noteToFact, recallTool, MEMORY_DIR, MEMORY_TYPES, factUsage, isResting, earnedFacts, applyEarned, EARN_RUNS, unhelpfulFacts, applyUnhelpful, FAIL_RUNS, applyRevision, parseFp, SYSTEM_CAUSES,
          findDuplicate, duplicateReply, slotHolder, createRememberBudget, budgetSpentReply, MAX_REMEMBER_PER_RUN, NEAR_DUPLICATE_JACCARD,
-         checkRulesCap, rulesCapReply, RULES_CAP_CHARS, LESSON_CONTRACT, serializeFact }
+         checkRulesCap, rulesCapReply, RULES_CAP_CHARS, nextFreeSlug, LESSON_CONTRACT, serializeFact }
   from '../memory-store.mjs';
 import { asStored } from '../content-token.mjs';
 
@@ -237,6 +237,16 @@ await test('rules: weight round-trips (1–10, default 5 omitted); the cap error
   const over = checkRulesCap([big], 'y'.repeat(200));
   assert(!over.ok && over.next === 4121 && over.count === 1, JSON.stringify(over));
   assert(/capped at 4000/.test(rulesCapReply(over)) && /4121/.test(rulesCapReply(over)) && /`revise`/.test(rulesCapReply(over)), rulesCapReply(over));
+  // S5: the cap measures the name the rule will be STORED under. A taken base name becomes base-2, and
+  // the heading is part of the cap — so a rule that fits as `## use-pnpm` can overflow as `## use-pnpm-2`.
+  eq(nextFreeSlug('use-pnpm', []), 'use-pnpm'); eq(nextFreeSlug('use-pnpm', ['use-pnpm']), 'use-pnpm-2');
+  eq(nextFreeSlug('use-pnpm', ['use-pnpm', 'use-pnpm-2']), 'use-pnpm-3', 'the same numbering recordFact uses');
+  { const taken = R('use-pnpm', 'q'); const filler = R('filler', 'f'.repeat(3900));
+    const base = checkRulesCap([taken, filler], 'b'.repeat(4000 - checkRulesCap([taken, filler], '', { name: 'use-pnpm' }).next), { name: 'use-pnpm' });
+    const body = 'b'.repeat(4000 - checkRulesCap([taken, filler], '', { name: 'use-pnpm' }).next);
+    assert(base.ok && base.next === 4000, 'under the base name it fits exactly: ' + JSON.stringify(base));
+    const real = checkRulesCap([taken, filler], body, { name: nextFreeSlug('use-pnpm', [taken.name, filler.name]) });
+    assert(!real.ok && real.next === 4002, 'under the name it will really get, it does not: ' + JSON.stringify(real)); }
   // the property the cap exists for: anything it passes must actually RENDER within the cap
   const many = [1,2,3,4,5,6,7,8,9,10].map((n) => R('rule-number-' + n, 'z'.repeat(380)));
   const verdict = checkRulesCap(many, 'w'.repeat(40));

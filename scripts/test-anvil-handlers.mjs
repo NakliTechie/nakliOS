@@ -286,7 +286,7 @@ async function memoryHandlers(files) {
     factMap: {}, safeSeg: (s) => /^[a-z0-9][a-z0-9_.-]*$/i.test(String(s)),
     currentBudget: async () => ({ usable: false }), renderFiles: () => {},
     // the remember branch's collaborators: a real-shaped recordFact over the memFs, no duplicates, an open budget
-    findDuplicate: () => null, duplicateReply: () => 'dup', auditRefusal: () => {}, checkRulesCap: () => ({ ok: true }), rulesCapReply: () => 'cap',
+    findDuplicate: () => null, duplicateReply: () => 'dup', auditRefusal: () => {}, checkRulesCap: () => ({ ok: true }), rulesCapReply: () => 'cap', nextFreeSlug: (b) => b,
     slotHolder: () => null, noteToFact: (note, type, status) => ({ slug: 'new-fact' }), remBudget: { take: () => ({ ok: true }) }, budgetSpentReply: () => 'spent',
     recordFact: async (note, type, status) => { const slug = 'new-fact'; await fs.write(MEMORY_DIR + '/' + slug + '.md', `---\nname: ${slug}\ndescription: d\ntype: project\nstatus: ${status}\n---\n${note}\n`); return slug; },
     renderLog: () => {}, t: { log: [] },
