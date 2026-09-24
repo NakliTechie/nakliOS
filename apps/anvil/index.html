@@ -157,6 +157,7 @@
 
   /* right — preview */
   #preview{background:var(--bg-1);border-left:1px solid var(--rule);display:flex;flex-direction:column;min-width:0;overflow:hidden}
+  main:not(.preview-open) #preview{border-left-width:0}   /* a closed pane's 0 track still drew its 1px border past the viewport */
   #preview .phead{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--rule);flex:0 0 auto}
   #preview .phead .pt{font-weight:600;font-size:12px} #preview .phead .pf{color:var(--fg-2);font-family:var(--mono);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
   .revertbtn{font-size:10px;color:var(--err);background:transparent;border:1px solid var(--err);border-radius:5px;padding:2px 8px;cursor:pointer;flex:0 0 auto}
