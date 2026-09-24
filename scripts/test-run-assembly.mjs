@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import {
   systemPrompt, systemMessage, runToolset, gateNote, ACT_NUDGE, RUN_BUDGET, RELOOP_BUDGET,
-  needsActNudge, needsSupervisor, reloopMessages, driveRun, withBedStubs, BED_UNWIRED, bedStub,
+  needsActNudge, isQuestionAsk, ownerAsk, needsSupervisor, reloopMessages, driveRun, withBedStubs, BED_UNWIRED, bedStub,
   withHooks, loadHooks, preHookReply, postHookNotes, EMPTY_HOOKS, contextMessage, SYSTEM_HEAD, SYSTEM_TAIL, MODE_NOTE, LESSON_NOTE,
   runReadiness,
 } from '../sys/ai/run-assembly.mjs';
@@ -89,6 +89,14 @@ assert.equal(needsActNudge({ mode: 'code', toolCalls: 1, stop: 'done' }), false,
 assert.equal(needsActNudge({ mode: 'code', toolCalls: 0, stop: 'max-steps' }), false, 'only a done run is nudged');
 assert.equal(needsActNudge({ mode: 'plan', toolCalls: 0, stop: 'done' }), false, 'plan mode is prose by design');
 assert.equal(needsActNudge({ mode: 'code', toolCalls: 0, stop: 'done', aborted: true }), false, 'an aborted run is left alone');
+// 2026-09-24: a question answered in prose is done, not "described but not done".
+assert.equal(needsActNudge({ mode: 'code', toolCalls: 0, stop: 'done', ask: 'what is 17 times 23? answer without using any tools' }), false, 'a question is never nudged');
+assert.equal(needsActNudge({ mode: 'code', toolCalls: 0, stop: 'done', ask: 'explain what parser.py does' }), false, 'an explain-ask is a question');
+assert.equal(needsActNudge({ mode: 'code', toolCalls: 0, stop: 'done', ask: 'answer from memory, no tools: capital of France' }), false, 'an explicit no-tools ask is never nudged');
+assert.equal(needsActNudge({ mode: 'code', toolCalls: 0, stop: 'done', ask: 'add a --verbose flag to cli.py' }), true, 'a work request answered in prose is still nudged');
+assert.equal(needsActNudge({ mode: 'code', toolCalls: 0, stop: 'done', ask: 'can you fix the parser?' }), true, 'a polite request is work, question mark or not');
+assert.equal(needsActNudge({ mode: 'code', toolCalls: 0, stop: 'done', ask: 'do the thing' }), true, 'an imperative "do" is work');
+assert.equal(ownerAsk([{ role: 'user', content: 'fix the bug' }, { role: 'assistant', content: 'ok' }, { role: 'user', content: 'what changed?' }, { role: 'user', content: '[coordination] context' }]), 'what changed?', 'the owner ask skips the machine\'s [coordination] turns');
 const stalled = { stalled: true, signal: 'repeat', detail: 'x' };
 assert.equal(needsSupervisor({ mode: 'code', stop: 'max-steps', stag: stalled }), true, 'code + not done + stalled → redirect');
 assert.equal(needsSupervisor({ mode: 'code', stop: 'done', stag: stalled }), false, 'never second-guesses a done run');

@@ -178,8 +178,30 @@ export function contextMessage(volatileCtx) {
 // actually use the tools — weak endpoints often "answer" instead of doing the work. plan/ask
 // untouched.
 export const ACT_NUDGE = '[coordination] You described the work but did not do it. Use the tools (write / edit / apply_patch / shell) to actually make and run the change in the workspace now, then give a one-line summary. Do not only explain.';
-export function needsActNudge({ mode, toolCalls, stop, aborted = false }) {
-  return mode === 'code' && toolCalls === 0 && stop === 'done' && !aborted;
+// A QUESTION answered in prose is not "described but not done" — it is done. Live 2026-09-24 (the
+// simple-task battery): "what is 17 times 23? answer without using any tools" was answered at step 1
+// ("391"), nudged, and the agent went on to write check.py and edit an unrelated notes.md (9 steps).
+// The owner's newest message decides: a question, or an explicit no-tools ask, is never nudged.
+export function isQuestionAsk(text) {
+  const t = String(text || '').trim().toLowerCase();
+  if (!t) return false;
+  if (/\bwithout (using )?(any )?tools?\b|\bno tools\b|\bdon'?t use (any )?tools?\b/.test(t)) return true;
+  // "can you fix the parser?" is a request for work, question mark or not.
+  if (/^(please\b|(can|could|would|will) you\b)/.test(t)) return false;
+  if (/\?\s*$/.test(t)) return true;
+  return /^(what|why|how|which|who|whom|whose|when|where|explain|tell me|describe)\b/.test(t);
+}
+export function needsActNudge({ mode, toolCalls, stop, aborted = false, ask = '' }) {
+  return mode === 'code' && toolCalls === 0 && stop === 'done' && !aborted && !isQuestionAsk(ask);
+}
+// The owner's newest message in a carried conversation — the last user turn that is not the
+// machine's own [coordination] context.
+export function ownerAsk(messages) {
+  for (let i = (messages || []).length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m && m.role === 'user' && typeof m.content === 'string' && !/^\[coordination\]/.test(m.content)) return m.content;
+  }
+  return '';
 }
 // Supervisor: after a loop, if the RECORD shows spinning the loop's own consecutive-identical
 // guard misses — the SAME call repeated non-consecutively, or gate rounds with no new file —
@@ -235,7 +257,7 @@ export async function driveRun({
   let carried = convo.slice();
   const reseed = (r) => { carried = (r.messages || []).slice(1); }; // minus the system HEAD only — a carried compaction marker is a system-role message too
   let result = await loop([sysMsg(gate), ...carried], RUN_BUDGET);
-  if (needsActNudge({ mode, toolCalls, stop: result.stop, aborted: aborted() })) {
+  if (needsActNudge({ mode, toolCalls, stop: result.stop, aborted: aborted(), ask: ownerAsk(convo) })) {
     note('No tools were used — nudging the agent to make the change, not just describe it.');
     reseed(result); // the loop's convo already ends with the (possibly empty) assistant turn
     carried.push({ role: 'user', content: ACT_NUDGE });
