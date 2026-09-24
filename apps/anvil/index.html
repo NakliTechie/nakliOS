@@ -3345,9 +3345,11 @@
   try{ const h=await idbGet(HOME_KEY); if(h&&typeof h.queryPermission==='function'){ homeSaved=true; if((await h.queryPermission({mode:'readwrite'}))==='granted') homeHandle=h; } }catch(_){}
   try{ if(navigator.storage&&navigator.storage.persisted) opfsPersisted=await navigator.storage.persisted(); }catch(_){}
   updateHomeChip();
-  // Startup backfill: an empty index over existing record files rebuilds silently.
-  let reshape=false;
-  try{ const n=await runsCount(); if(n===0){ const r=await rebuildRunIndex(); if(r&&r.indexed) console.info('[anvil] run index rebuilt: '+r.indexed+' record(s)'+(r.broken?(', '+r.broken+' broken chain(s)'):'')+' — '+r.stopsLine+' — '+r.orderingLine); }
+  // Startup backfill: an empty index over existing record files rebuilds silently. The boot only
+  // DECIDES; the rebuild runs after the net stands down (H4, 2026-09-24) — chain-verifying every
+  // record of a large first import would paint "Anvil did not start" the way the re-derive did.
+  let reshape=false, backfill=false;
+  try{ const n=await runsCount(); if(n===0) backfill=true;
     else reshape=((await idbGet(SHAPE_KEY))||{}).shape!==ROW_SHAPE; }catch(_){}
   if(!folderMode) await mountProject(state.activeProject);
   renderAll(); syncMode();
@@ -3363,6 +3365,7 @@
   // not carry) is re-derived once, AFTER the boot — chain-verifying every record took a real index past
   // the 10 s boot net on prod (2026-09-17). No goal is projected until it lands; the doctor re-renders.
   if(reshape){ reshaping=true; renderTaskbar(); rebuildRunIndex().then(r=>{ console.info('[anvil] run index re-derived: '+(r&&r.indexed||0)+' row(s) — the row shape moved to '+ROW_SHAPE); }).catch(()=>{}).finally(()=>{ reshaping=false; try{ renderTaskbar(); }catch(_){} }); }
+  else if(backfill){ reshaping=true; renderTaskbar(); rebuildRunIndex().then(r=>{ if(r&&r.indexed) console.info('[anvil] run index rebuilt: '+r.indexed+' record(s)'+(r.broken?(', '+r.broken+' broken chain(s)'):'')+' — '+r.stopsLine+' — '+r.orderingLine); }).catch(()=>{}).finally(()=>{ reshaping=false; try{ renderTaskbar(); }catch(_){} }); }
 
   // Seamlessly follow the host storage backend: when the user switches
   // browser/folder/crate elsewhere, remount this project's workspace on the new

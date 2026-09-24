@@ -113,7 +113,11 @@ assert.match(doctor, /const rec=loadRecord\(dump\); const v=await rec\.verify\(\
 assert.match(doctor, /row\.chainOk=v\.ok; row\.brokenAt=v\.brokenAt/, 'a broken chain is indexed as broken, not hidden');
 assert.match(doctor, /getDirectoryHandle\('anvil'\)/, 'scans OPFS');
 assert.match(doctor, /homeHandle\.getDirectoryHandle\('runs'\)/, 'and the home when connected');
-assert.match(anvil, /const n=await runsCount\(\); if\(n===0\)\{ (?:const r=)?await rebuildRunIndex\(\)/, 'boot backfills an empty index from files');
+assert.match(anvil, /const n=await runsCount\(\); if\(n===0\) backfill=true;/, 'boot decides to backfill an empty index from files');
+// H4 (2026-09-24): the backfill itself runs AFTER the boot net stands down, never inside the 10 s window
+{ const boot = anvil.indexOf('window.__anvilBoot.ok = true;'); const bf = anvil.indexOf("else if(backfill){ reshaping=true; renderTaskbar(); rebuildRunIndex()");
+  assert.ok(boot > 0 && bf > boot, 'H4: the first-import backfill runs after the boot net stands down');
+  assert.ok(anvil.slice(anvil.indexOf("let reshape=false, backfill=false;"), boot).indexOf('rebuildRunIndex(') < 0, 'H4: nothing between the decision and the net awaits a rebuild'); }
 assert.match(anvil, /else reshape=\(\(await idbGet\(SHAPE_KEY\)\)\|\|\{\}\)\.shape!==ROW_SHAPE;/, 'LX-3: boot re-derives the index once per row-shape bump (after the boot net stands down)');
 
 // ── rung 2: the host store (Crate / host Folder) ──
