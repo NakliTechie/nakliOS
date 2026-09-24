@@ -289,6 +289,7 @@ Available methods:
 - `delete(path)`
 - `useBackend("fsa" | "crate")`
 - `subscribe(path, callback)`
+- `experimental_autosave({ save, delay, onError })` — see [Durability](#durability)
 
 `useBackend()` always goes through host confirmation. It changes the app's
 view; it does not copy or delete data.
@@ -297,6 +298,51 @@ Every filesystem request carries the backend visible when it was issued.
 NakliOS rejects the request if the app is rebound before the operation is
 processed. Apps should surface the error and retry only after re-reading
 capabilities.
+
+## Durability
+
+What an app may assume, and what it may not (DUR, 2026-09-24).
+
+- **`write()` resolving means the file is committed.** The host replies after the
+  backend's write finishes — for a picked folder, after the writable stream's
+  `close()`; for Crate, after Crate acknowledges. Before it resolves, assume nothing.
+- **Ops on one path apply in the order you issued them.** The host queues each app
+  path, so a newer write never lands before an older one it overtook.
+- **The browser's own storage is persistent.** The host calls
+  `navigator.storage.persist()` at start, so browser-local data is not evicted
+  under storage pressure while the grant holds.
+- **`beforeunload` cannot save.** It cannot await, so a write started there is lost
+  when the tab closes. Do not rely on it, and do not hand-roll a flush there.
+- **Autosave is the SDK's job.** Declare changes; the SDK chooses when to save:
+
+```js
+const saver = naklios.fs.experimental_autosave({
+  save: () => naklios.fs.write('state.json', JSON.stringify(state)), // or any async save
+  delay: 1000,                // at most this long after the first unsaved change
+  onError: (e) => showSaveError(e),
+});
+// on every edit:
+saver.markDirty();
+// before an operation that needs the state on disk:
+await saver.flush();
+saver.dirty;                  // true while a change is not yet durable
+```
+
+The SDK saves at most `delay` ms after the first unsaved change. It saves
+**immediately** when the page hides (`visibilitychange` → hidden, `pagehide`), which
+fires early enough for the message to reach the host. It also saves when NakliOS
+closes the window: the host's `beforeclose` waits for the save as well as your
+`beforeClose` callback. A failed save stays dirty, calls `onError`, and the next
+flush retries.
+
+While any saver is dirty, the SDK reports it to the host (`naklios:fs:dirty`), and
+the host holds a tab close with the browser's own leave-page prompt. Standalone,
+the SDK arms that prompt itself. The guard is armed only while something is
+unsaved, so it never nags. This is the one exception to the no-native-dialogs rule:
+the browser's own prompt is the only thing that can interpose on a close.
+
+`save` is yours. It may write through `naklios.fs`, IndexedDB, or a picked folder,
+so the timing half also runs standalone; only the dirty report needs a host.
 
 ## Storage locations are separate
 
@@ -406,7 +452,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 
 <!-- sdk-reference:begin — rendered by `node scripts/sdk-reference.mjs --write` from docs/sdk-api-audit.md; do not edit by hand -->
 
-75 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
+76 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
 
 ### `version`
 
@@ -509,6 +555,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 | `fs.exists` | function | Existence check. |
 | `fs.subscribe` | function | Change subscription over a prefix; async — resolves to a stop function. |
 | `fs.useBackend` | function | Ask the host to switch the app's backend. |
+| `fs.experimental_autosave` | function · **experimental** | SDK-owned save timing: throttled, immediate on hide / pagehide / the host's beforeclose, a close guard only while unsaved (DUR, 2026-09-24). Returns `{ markDirty, flush, dirty, dispose }`. |
 
 ### `sys` (namespace)
 
@@ -582,7 +629,9 @@ A stateful cooperative app should prove:
 1. Standalone fallback remains usable, or the UI clearly says it requires
    NakliOS.
 2. Folder and Crate contain separate data and switching copies nothing.
-3. Autosave survives reload and an immediate window close.
+3. Autosave survives reload, an immediate window close, and a tab close: the app
+   saves through `naklios.fs.experimental_autosave` (see Durability), and no
+   `beforeunload` handler awaits a save.
 4. A backend disconnect does not silently discard a dirty record.
 5. Remote changes refresh a clean view and require an explicit decision for a
    dirty view.

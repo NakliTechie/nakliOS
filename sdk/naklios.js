@@ -168,6 +168,115 @@
     });
   }
 
+  // Autosave (DUR, 2026-09-24): the SDK owns WHEN an app's state is written; the app owns WHAT and
+  // WHERE through its own save(). `beforeunload` cannot await, so a save that starts there is lost on
+  // close — the reliable moments are visibilitychange → hidden and pagehide, which fire while the page
+  // can still post a message, and the host's beforeclose, which waits. The timing half runs standalone
+  // too (the save is the app's own); only the dirty report to the host needs a frame.
+  var savers = new Set();
+  var reportedDirty = false;
+  var autosaveWired = false;
+  function noop() {}
+  function anyUnsaved() {
+    var out = false;
+    savers.forEach(function (s) { if (s.dirty) out = true; });
+    return out;
+  }
+  function reportDirty() {
+    var d = anyUnsaved();
+    if (d === reportedDirty) return;
+    reportedDirty = d;
+    send('naklios:fs:dirty', { dirty: d });
+  }
+  // urgent: issue every unsaved save NOW, in this task — never behind an in-flight one
+  function flushSavers(urgent) {
+    var all = [];
+    savers.forEach(function (s) { all.push(s._flush(urgent).catch(noop)); });
+    return Promise.all(all);
+  }
+  function wireAutosave() {
+    if (autosaveWired) return;
+    autosaveWired = true;
+    try {
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'hidden') flushSavers(true);
+      });
+    } catch (_) {}
+    try {
+      window.addEventListener('pagehide', function () { flushSavers(true); });
+      window.addEventListener('beforeunload', function (e) {
+        if (!anyUnsaved()) return;
+        flushSavers(true);
+        // Hosted, the NakliOS host arms its own guard from the dirty report; a second prompt from
+        // the frame would be noise. Standalone, this is the only thing that can interpose.
+        if (inNakliOS) return;
+        e.preventDefault();
+        e.returnValue = '';
+      });
+    } catch (_) {}
+  }
+  function makeAutosave(opts) {
+    if (!opts || typeof opts.save !== 'function') {
+      throw new Error('naklios.fs.experimental_autosave requires { save: function }');
+    }
+    var delay = typeof opts.delay === 'number' && opts.delay >= 0 ? opts.delay : 1000;
+    var onError = typeof opts.onError === 'function' ? opts.onError : null;
+    // generations: gen counts changes, issuedGen the newest handed to save(), savedGen the newest durable
+    var gen = 0, issuedGen = 0, savedGen = 0;
+    var timer = null, tail = Promise.resolve(), last = Promise.resolve(), queued = null, disposed = false;
+    function issue() {
+      queued = null;
+      if (gen <= issuedGen) return last;
+      var g = gen;
+      issuedGen = g;
+      var p;
+      try { p = Promise.resolve(opts.save()); } catch (err) { p = Promise.reject(err); }
+      p = p.then(function () {
+        if (g > savedGen) savedGen = g;
+        reportDirty();
+      }, function (err) {
+        if (issuedGen === g) issuedGen = savedGen; // the next flush retries
+        reportDirty();
+        if (onError) { try { onError(err); } catch (_) {} }
+        throw err;
+      });
+      last = p;
+      tail = p.catch(noop);
+      return p;
+    }
+    function flush(urgent) {
+      clearTimeout(timer);
+      timer = null;
+      if (gen <= issuedGen) return last;
+      if (urgent) return issue();
+      if (!queued) queued = tail.then(issue);
+      return queued;
+    }
+    var saver = {
+      // State changed. The save runs at most `delay` ms after the first unsaved change.
+      markDirty: function () {
+        if (disposed) return;
+        gen++;
+        reportDirty();
+        if (!timer) timer = setTimeout(function () { timer = null; flush(false).catch(noop); }, delay);
+      },
+      // Save now (after any save already running). Resolves when the state as of this call is durable.
+      flush: function () { return flush(false); },
+      get dirty() { return gen > savedGen; },
+      dispose: function () {
+        disposed = true;
+        clearTimeout(timer);
+        timer = null;
+        savers.delete(saver);
+        reportDirty();
+      },
+      _flush: flush,
+    };
+    savers.add(saver);
+    wireAutosave();
+    return saver;
+  }
+
   // Typed egress error so an app can branch (fall back / prompt to connect) rather
   // than parse a message. code is 'ENOEGRESS' (no backend / not hosted) or 'EINVAL'.
   function mkEgressErr(code, message) {
@@ -349,7 +458,7 @@
     } else if (msg.type === 'naklios:beforeclose') {
       var closeWork;
       try { closeWork = beforeCloseCb ? beforeCloseCb() : null; } catch (_) { closeWork = null; }
-      Promise.resolve(closeWork).catch(function () {}).then(function () {
+      Promise.all([Promise.resolve(closeWork).catch(function () {}), flushSavers(true)]).then(function () {
         send('naklios:beforeclose-ready', { requestId: msg.requestId });
       });
     } else if (msg.type === 'naklios:capabilities') {
@@ -571,6 +680,11 @@
       // Explicit backend changes are always confirmed by the NakliOS host.
       // Switching changes the app-scoped view; it never copies or deletes data.
       useBackend: function (backend)    { return rpc('naklios:fs:selectBackend', { backend: backend }); },
+      // Autosave: the app says WHEN state changed (markDirty) and HOW to save it ({ save }); the SDK
+      // owns the timing — a throttled save, an immediate one when the page hides or the host closes
+      // the window, and a close guard only while something is unsaved. Returns
+      // { markDirty, flush, dirty, dispose }. Runs standalone too. See docs/app-contract.md "Durability".
+      experimental_autosave: function (opts) { return makeAutosave(opts); },
     },
     // System-scoped filesystem — the WHOLE store on the active backend, not just
     // this app's apps/<id>/ namespace. Available to same-origin system apps only

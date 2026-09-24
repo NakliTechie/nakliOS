@@ -4591,6 +4591,15 @@ function finalizeCloseWindow(win){
   updateDock();
 }
 
+// The close guard (DUR, 2026-09-24): armed only while an open app window reports unsaved state
+// through its SDK autosave — never a nag. `beforeunload` cannot await a save; the apps' own
+// hidden/pagehide flushes are what land the data, this only gives them the moment to.
+window.addEventListener('beforeunload', e => {
+  if (!Object.values(openWindows).some(w => w && w._appDirty)) return;
+  e.preventDefault();
+  e.returnValue = '';
+});
+
 function makeDraggable(win){
   const bar = win.querySelector('.nw-titlebar');
   bar.addEventListener('pointerdown', e => {
@@ -5002,8 +5011,25 @@ async function fsHostSelectBackend(appId, requestedBackendId){
   return true;
 }
 
+// Ops on one app path apply in the order their messages arrived (DUR, 2026-09-24). Each op awaits
+// a permission check and then its backend, so two writes to one file could finish out of order —
+// and an autosave issues an urgent write while an older one may still be running, so the older one
+// must never land last. The queue is keyed before the first await, i.e. in arrival order.
+const fsHostPathQueues = new Map();
+function fsHostSerial(key, fn){
+  const run = (fsHostPathQueues.get(key) || Promise.resolve()).then(fn);
+  const tail = run.catch(() => {});
+  fsHostPathQueues.set(key, tail);
+  tail.then(() => { if (fsHostPathQueues.get(key) === tail) fsHostPathQueues.delete(key); });
+  return run;
+}
+
+function fsHostHandle(msg, type, appId){
+  return fsHostSerial(appId + '\0' + String(msg.path || ''), () => fsHostHandleNow(msg, type, appId));
+}
+
 // Resolve { dir, name } for fs reply ops. Throws if path unsafe or no handle.
-async function fsHostHandle(msg, type, appId){
+async function fsHostHandleNow(msg, type, appId){
   const backendId = await fsEnsurePermission(appId);
   if (!backendId) throw new Error('Permission denied');
   if (msg.backend && msg.backend !== backendId) {
@@ -7914,6 +7940,11 @@ window.addEventListener('message', async e => {
   } else if (msg.type === 'naklios:beforeclose-ready'){
     const win = findWin();
     if (win?._closing && msg.requestId === win._closeRequestId) finalizeCloseWindow(win);
+  } else if (msg.type === 'naklios:fs:dirty'){
+    // An app's autosave reports state newer than its last durable write; the host's close
+    // guard (below finalizeCloseWindow) holds a tab close while any open window says so.
+    const win = findWin();
+    if (win) win._appDirty = msg.dirty === true;
   } else if (msg.type === 'naklios:close'){
     const win = findWin();
     if (win) closeWindow(win);

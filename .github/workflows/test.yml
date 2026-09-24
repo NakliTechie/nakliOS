@@ -69,6 +69,12 @@ jobs:
       - name: Verify naklios.net egress SDK seam (ENOEGRESS until a backend is advertised)
         run: node scripts/test-net-seam.mjs
 
+      - name: "DUR: SDK autosave timing (throttle, save on hide/pagehide/beforeclose, close guard only while unsaved)"
+        run: node scripts/test-sdk-autosave.mjs
+
+      - name: "DUR: host durability (per-path op order, close guard from the dirty report)"
+        run: node scripts/test-host-durability.mjs
+
       - name: Verify nakli-egress Worker security core (sign/allowlist/SSRF/replay)
         run: node nakli-egress/test/lib.test.mjs
 
