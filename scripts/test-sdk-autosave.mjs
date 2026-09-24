@@ -178,5 +178,21 @@ const ok = (n, c) => { if (c) pass++; else { fail++; console.error('FAIL:', n); 
   ok('markDirty after dispose schedules nothing', saves === 0);
 }
 
+// 10. guard:false — the timing holds, the close guard and the dirty report do not.
+{
+  const t = load({ hosted: false });
+  let saves = 0;
+  const bg = t.nak.fs.experimental_autosave({ save: () => { saves++; }, delay: 10_000, guard: false });
+  bg.markDirty();
+  ok('a background saver is dirty', bg.dirty === true);
+  ok('a background saver never prompts', t.beforeunload().prevented === false);
+  t.hide();
+  ok('a background saver still saves on hide', saves >= 1);
+  const h = load({ hosted: true });
+  const hb = h.nak.fs.experimental_autosave({ save: () => {}, delay: 10_000, guard: false });
+  hb.markDirty();
+  ok('a background saver sends no dirty report', !h.sent.some((m) => m.type === 'naklios:fs:dirty'));
+}
+
 console.log(`sdk-autosave: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

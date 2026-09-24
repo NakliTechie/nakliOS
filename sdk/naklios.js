@@ -179,7 +179,7 @@
   function noop() {}
   function anyUnsaved() {
     var out = false;
-    savers.forEach(function (s) { if (s.dirty) out = true; });
+    savers.forEach(function (s) { if (s._guard && s.dirty) out = true; });
     return out;
   }
   function reportDirty() {
@@ -221,6 +221,8 @@
     }
     var delay = typeof opts.delay === 'number' && opts.delay >= 0 ? opts.delay : 1000;
     var onError = typeof opts.onError === 'function' ? opts.onError : null;
+    // guard:false — a background save (a remote push, say) that keeps the timing but never holds a close
+    var guard = opts.guard !== false;
     // generations: gen counts changes, issuedGen the newest handed to save(), savedGen the newest durable
     var gen = 0, issuedGen = 0, savedGen = 0;
     var timer = null, tail = Promise.resolve(), last = Promise.resolve(), queued = null, disposed = false;
@@ -271,6 +273,7 @@
         reportDirty();
       },
       _flush: flush,
+      _guard: guard,
     };
     savers.add(saver);
     wireAutosave();
@@ -683,7 +686,8 @@
       // Autosave: the app says WHEN state changed (markDirty) and HOW to save it ({ save }); the SDK
       // owns the timing — a throttled save, an immediate one when the page hides or the host closes
       // the window, and a close guard only while something is unsaved. Returns
-      // { markDirty, flush, dirty, dispose }. Runs standalone too. See docs/app-contract.md "Durability".
+      // { markDirty, flush, dirty, dispose }. { guard: false } keeps the timing but never holds a
+      // close (a background push, not the user's data). Runs standalone too. See docs/app-contract.md "Durability".
       experimental_autosave: function (opts) { return makeAutosave(opts); },
     },
     // System-scoped filesystem — the WHOLE store on the active backend, not just

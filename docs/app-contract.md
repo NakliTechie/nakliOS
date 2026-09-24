@@ -289,7 +289,7 @@ Available methods:
 - `delete(path)`
 - `useBackend("fsa" | "crate")`
 - `subscribe(path, callback)`
-- `experimental_autosave({ save, delay, onError })` — see [Durability](#durability)
+- `experimental_autosave({ save, delay, onError, guard })` — see [Durability](#durability)
 
 `useBackend()` always goes through host confirmation. It changes the app's
 view; it does not copy or delete data.
@@ -340,6 +340,10 @@ the host holds a tab close with the browser's own leave-page prompt. Standalone,
 the SDK arms that prompt itself. The guard is armed only while something is
 unsaved, so it never nags. This is the one exception to the no-native-dialogs rule:
 the browser's own prompt is the only thing that can interpose on a close.
+
+Pass `guard: false` for a background save that is not the user's only copy (a
+remote sync push after a local save, say): it keeps the timing, and it never holds a
+close or reports dirty.
 
 `save` is yours. It may write through `naklios.fs`, IndexedDB, or a picked folder,
 so the timing half also runs standalone; only the dirty report needs a host.
