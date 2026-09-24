@@ -54,6 +54,24 @@ export function contextBudget({ window, reserve = DEFAULT_RESERVE, used = 0 } = 
   };
 }
 
+// X1 (CliffCompaction follow-up, 2026-09-24): how much of a task's transcript the NEXT run carries.
+// These were fixed at 24k tokens / 10k recent / 120k chars — sized to protect a localStorage key,
+// not to the model. The carried transcript now lives in IndexedDB, so the limits follow the window:
+// compact above half the usable window, keep the most recent 40% of that verbatim, and trim by
+// size at 1.25× the threshold in chars. An unknown window keeps the old fixed limits.
+export const CARRY_DEFAULTS = Object.freeze({ threshold: 24_000, keepRecentTokens: 10_000, maxChars: 120_000, source: 'fixed (window not known)' });
+export function carryLimits({ window = null, reserve = DEFAULT_RESERVE, source = null } = {}) {
+  if (!Number.isFinite(window) || window <= 0) return { ...CARRY_DEFAULTS };
+  const usable = Math.max(0, window - reserve);
+  const threshold = Math.max(2_000, Math.floor(usable * 0.5));
+  return {
+    threshold,
+    keepRecentTokens: Math.floor(threshold * 0.4),
+    maxChars: Math.floor(threshold * CHARS_PER_TOKEN * 1.25),
+    source: `half the usable window of ${window}` + (source ? ` (${source})` : ''),
+  };
+}
+
 // Cap a handoff at 20,000 chars AND half the usable window (Posthorse's rule). `usable` in tokens.
 export function capHandoff(text, { usable = null } = {}) {
   const byWindow = Number.isFinite(usable) ? Math.floor((usable / 2) * CHARS_PER_TOKEN) : Infinity;

@@ -28,7 +28,7 @@ assert.match(anvil, /t\.convo = await carryForward\(foldTranscript\(recEvents, r
 // (mutation-tested by a cross-family review).
 assert.match(anvil, /rec\.compacted\(\{ method:'carry-forward'/,
   'a lossy carry is put ON THE CHAIN, not just stored — otherwise the record and the surface drift');
-assert.match(anvil, /await carryForward\(foldTranscript\(recEvents, rec\.resolve\), rec\)/,
+assert.match(anvil, /await carryForward\(foldTranscript\(recEvents, rec\.resolve\), rec, carryLimits\(await resolveWindow\(\)\)\)/,
   'and the CALL SITE actually hands carryForward the recorder — without it the recording is dead code');
 {
   const sig = anvil.match(/async function carryForward\(([^)]*)\)/);
@@ -44,6 +44,20 @@ assert.ok(start > 0 && end > start, 'carryForward found in apps/anvil/index.html
 const carryForward = new Function('compactConversation', `${anvil.slice(start, end)}; return carryForward;`)(compactConversation);
 
 const sys = { role: 'system', content: 'you are a coding agent' };
+
+// X1 (2026-09-24): the carry follows the window, and it lives in IndexedDB, not localStorage.
+{
+  const big = [{ role: 'user', content: 'x'.repeat(50_000) }, { role: 'assistant', content: 'y'.repeat(50_000) }, { role: 'user', content: 'z'.repeat(50_000) }, { role: 'assistant', content: 'ok' }];
+  const fixed = await carryForward([sys, ...big]);
+  assert.ok(JSON.stringify(fixed).length <= 120_000, 'no window: the fixed 120k-char trim still applies');
+  const wide = await carryForward([sys, ...big], null, { threshold: 200_000, keepRecentTokens: 80_000, maxChars: 1_000_000 });
+  assert.equal(wide.length, 4, 'a wide window carries all 150k chars that the fixed limit would have trimmed');
+  assert.match(anvil, /for\(const p of c\.projects\|\|\[\]\) for\(const t of p\.tasks\|\|\[\]\) delete t\.convo; localStorage\.setItem\(LS,/, 'save() keeps the carried transcript out of localStorage');
+  assert.match(anvil, /try\{ persistConvos\(\); \}catch\(_\)\{\}/, 'and writes it to IndexedDB on the same save');
+  assert.match(anvil, /try\{ await hydrateConvos\(\); \}catch\(_\)\{\} \/\/ X1/, 'the boot reads it back');
+  assert.match(anvil, /const own=key && state\.contextWindows && Number\(state\.contextWindows\[key\]\);\n    if\(own>0\) return \{ window: own,/, "the owner's per-model window wins");
+  assert.match(anvil, /const \{ window:win, source \}=await resolveWindow\(\);/, 'the budget and the carry read ONE window resolver');
+}
 const turn = (i) => ([
   { role: 'assistant', content: null, tool_calls: [{ id: 'c' + i, type: 'function', function: { name: 'shell', arguments: '{"command":"echo ' + i + '"}' } }] },
   { role: 'tool', tool_call_id: 'c' + i, content: 'output ' + i },

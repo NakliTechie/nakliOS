@@ -373,6 +373,12 @@
       "kind": "sheet",
       "detail": "🗄Storage"
     },
+    "sheet:window": {
+      "owner": "sheet.md",
+      "fingerprint": "6b4cb140515c",
+      "kind": "sheet",
+      "detail": "📏Context window"
+    },
     "tool:apply_patch": {
       "owner": "tools-files.md",
       "fingerprint": "781a52d1a9a4",

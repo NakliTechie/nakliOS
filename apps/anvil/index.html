@@ -341,6 +341,7 @@
   <button class="sheet-row" data-act="skills"><span class="sr-ic">✨</span>Skills</button>
   <button class="sheet-row" data-act="hooks"><span class="sr-ic">⚓</span>Hooks</button>
   <button class="sheet-row" data-act="policy"><span class="sr-ic">🛡</span>Policy<span class="sr-sub" id="sheet-policy"></span></button>
+  <button class="sheet-row" data-act="window"><span class="sr-ic">📏</span>Context window</button>
   <button class="sheet-row" data-act="learn"><span class="sr-ic">🎓</span>Learn from this project</button>
   <button class="sheet-row" data-act="home"><span class="sr-ic">🗄</span>Anvil home folder</button>
 </div></div>
@@ -426,7 +427,7 @@
   import { planSkillWrite, createSkillSession, SKILL_FILE, SKILL_SHAPE, scaffoldSkill, starterSkillFile, renderSkillReader, lintSkill } from '../../sys/ai/skill-manage.mjs';
   import { createProposalLedger } from '../../sys/ai/proposal-fingerprint.mjs'; // PG-A3: the poison ledger, persisted per project
   import { skillLifecycle, applySkillStatus, reviveOnUse } from '../../sys/ai/skill-lifecycle.mjs';
-  import { contextBudget, windowFromOllama, windowForPreset, capHandoff } from '../../sys/ai/context-budget.mjs';
+  import { contextBudget, windowFromOllama, windowForPreset, capHandoff, carryLimits } from '../../sys/ai/context-budget.mjs';
   import { runLearnReview, shouldAutoReview, AUTO_REVIEW_IDLE_MS } from '../../sys/ai/learn.mjs';
   import { sentinelLine, scanSkill } from '../../sys/ai/skill-sentinel.mjs';
   import { makeEnvelope } from '../../sys/staging/envelope.mjs';
@@ -864,7 +865,61 @@
       else await write();
     }catch(_){ /* lock unavailable (or aborted) — the next save retries */ }
   }
-  function save(){ try{ const c=JSON.parse(JSON.stringify(state)); localStorage.setItem(LS, JSON.stringify(c)); }catch(_){} scheduleRemoteSave(); }
+  // X1 (2026-09-24): the carried transcript (t.convo) lives in IndexedDB, not localStorage. The host
+  // and every same-origin app share one ~5 MB localStorage quota, which is why the carry was capped
+  // at 120k chars; out of it, the carry can follow the model's window. localStorage keeps the rest of
+  // the state; the host's state.json still carries convo (it has no such quota). A legacy convo read
+  // from localStorage is written here on the next save and stripped from localStorage — no migration step.
+  const CONVO_KEY=(id)=>'convo:'+id;
+  const convoSaved=new Map(); // task id -> signature last written, so a save writes only what changed
+  const convoSig=(c)=>Array.isArray(c) ? c.length+':'+JSON.stringify(c[c.length-1]||null).length : 'none';
+  function persistConvos(){
+    for(const p of state.projects||[]) for(const t of p.tasks||[]){
+      if(!Array.isArray(t.convo)) continue;
+      const sig=convoSig(t.convo); if(convoSaved.get(t.id)===sig) continue;
+      convoSaved.set(t.id, sig); idbSet(CONVO_KEY(t.id), t.convo);
+    }
+  }
+  async function hydrateConvos(){
+    for(const p of state.projects||[]) for(const t of p.tasks||[]){
+      if(Array.isArray(t.convo)) continue;
+      const c=await idbGet(CONVO_KEY(t.id)); if(Array.isArray(c)){ t.convo=c; convoSaved.set(t.id, convoSig(c)); }
+    }
+  }
+  function save(){
+    try{ persistConvos(); }catch(_){}
+    try{ const c=JSON.parse(JSON.stringify(state)); for(const p of c.projects||[]) for(const t of p.tasks||[]) delete t.convo; localStorage.setItem(LS, JSON.stringify(c)); }catch(_){}
+    scheduleRemoteSave();
+  }
+  // The model's context window, and where it came from. The owner's own setting for this model wins
+  // (⋯ → Context window): the app cannot see a hosted provider's window, and a guessed one is worse
+  // than none. Then the Ollama probe and the preset table (when the host exposes the endpoint).
+  function modelKey(){ try{ const c=(nak&&nak.capabilities)||{}; return c.aiModel||null; }catch(_){ return null; } }
+  async function resolveWindow(){
+    const key=modelKey(); const own=key && state.contextWindows && Number(state.contextWindows[key]);
+    if(own>0) return { window: own, source: 'set by you for '+key };
+    let ep=null; try{ ep=(nak&&nak.ai&&nak.ai.endpoint)||null; }catch(_){ ep=null; }
+    try{
+      if(ep&&ep.preset==='ollama'){ const base=String(ep.baseUrl||'').replace(/\/v1\/?$/,''); const r=await fetch(base+'/api/show',{method:'POST',body:JSON.stringify({name:ep.model})}); if(r&&r.ok){ const w=windowFromOllama(await r.json(), ep.numCtx??ep.num_ctx??null); return { window:w.window, source:w.source }; } }
+      else if(ep&&ep.preset){ const w=windowForPreset(ep.preset); return { window:w.window, source:w.source }; }
+    }catch(_){}
+    return { window: null, source: key ? 'not known for '+key+' — set it in ⋯ → Context window' : 'the app cannot read the endpoint here' };
+  }
+  async function setContextWindow(){
+    const key=modelKey();
+    if(!key){ pushSystem('No model is configured — set one in NakliOS Settings → AI first.'); return; }
+    const cur=state.contextWindows && state.contextWindows[key];
+    const v=await askText({ title:'Context window', okLabel:'Save', value: cur ? String(cur) : '', placeholder:'e.g. 128000 or 128k',
+      label:'The context window of '+key+', in tokens, from the provider\'s documentation. Anvil uses it for the budget and for how much of a task\'s transcript the next run carries (half the usable window).\n\nLeave empty to clear it; unknown keeps the fixed limits.' });
+    if(v===null) return;
+    const txt=String(v).trim().toLowerCase(); state.contextWindows=state.contextWindows||{};
+    if(!txt){ delete state.contextWindows[key]; save(); pushSystem('Context window for '+key+' cleared — fixed carry limits apply.'); return; }
+    const m=/^(\d+(?:\.\d+)?)\s*(k|m)?$/.exec(txt); const n=m ? Math.round(Number(m[1])*(m[2]==='k'?1e3:m[2]==='m'?1e6:1)) : NaN;
+    if(!(n>=1000 && n<=10e6)){ pushSystem('⚠ "'+v+'" is not a window size — give tokens, e.g. 128000 or 128k.'); return; }
+    state.contextWindows[key]=n; save();
+    const L=carryLimits({ window:n });
+    pushSystem('Context window for '+key+': '+n.toLocaleString()+' tokens. The next run carries up to ~'+L.threshold.toLocaleString()+' tokens of this task\'s transcript before compacting.');
+  }
   async function loadRemoteState(){
     if(!hostFsReady()) return null;
     try{ const data = await nak.fs.read('state.json'); const s = JSON.parse(typeof data==='string'?data:new TextDecoder().decode(data)); return (s && Array.isArray(s.projects)) ? s : null; }
@@ -1902,7 +1957,9 @@
   // model actually saw could disagree, while run-record's header claimed the transcript was a
   // projection. Recording the net replacement makes `foldSurface` reproduce it (F4), which is
   // what F1's invariant then checks.
-  async function carryForward(messages, rec){
+  // The fixed limits, kept as the fallback when no window is known (X1: carryLimits in context-budget.mjs).
+  const CARRY_FALLBACK = { threshold: 24000, keepRecentTokens: 10000, maxChars: CONVO_MAX_CHARS };
+  async function carryForward(messages, rec, limits = CARRY_FALLBACK){
     const msgs = Array.isArray(messages) ? messages.slice() : [];
     let i = 0; while (i < msgs.length && msgs[i] && msgs[i].role === 'system') i++;
     let out = msgs.slice(i);
@@ -1914,7 +1971,7 @@
       // retrieval path — and it is only true when a record is actually being written. `rec` is
       // that condition. Without it the ref says the content is gone rather than sending the
       // agent after something nothing kept (forward-pass R1a).
-      const r = await compactConversation(out, { threshold: 24000, keepRecentTokens: 10000, retrievable: !!(rec && rec.compacted) });
+      const r = await compactConversation(out, { threshold: limits.threshold, keepRecentTokens: limits.keepRecentTokens, retrievable: !!(rec && rec.compacted) });
       if (Array.isArray(r.messages)) out = r.messages;
       // r.artifacts is deliberately not kept: persisting the elided bodies here would push them
       // straight back into the localStorage budget the trim below exists to defend.
@@ -1924,7 +1981,7 @@
     while (out.length && out[out.length-1] && out[out.length-1].role === 'assistant'
            && Array.isArray(out[out.length-1].tool_calls) && out[out.length-1].tool_calls.length) out.pop();
     // Trim from the front, whole turns only, until it fits.
-    while (out.length && JSON.stringify(out).length > CONVO_MAX_CHARS) {
+    while (out.length && JSON.stringify(out).length > limits.maxChars) {
       out.shift();
       while (out.length && !startsATurn(out[0])) out.shift(); // never begin on an orphan tool reply
     }
@@ -2294,12 +2351,7 @@
         }
       }catch(_){}
       const used=Math.ceil(JSON.stringify(counted).length/4);
-      let win=null, source='the app cannot read the endpoint here', ep=null;
-      try{ ep=(nak&&nak.ai&&nak.ai.endpoint)||null; }catch(_){ ep=null; }
-      try{
-        if(ep&&ep.preset==='ollama'){ const base=String(ep.baseUrl||'').replace(/\/v1\/?$/,''); const r=await fetch(base+'/api/show',{method:'POST',body:JSON.stringify({name:ep.model})}); if(r&&r.ok){ const w=windowFromOllama(await r.json(), ep.numCtx??ep.num_ctx??null); win=w.window; source=w.source; } }
-        else if(ep&&ep.preset){ const w=windowForPreset(ep.preset); win=w.window; source=w.source; }
-      }catch(_){}
+      const { window:win, source }=await resolveWindow();
       const b=contextBudget({ window:win, used }); b.source=source; return b;
     }
     // B5: a content-free audit tag for a REFUSED memory write — a short hash + a category,
@@ -2960,7 +3012,7 @@
       // so a follow-up send resumes instead of restarting blind.
       await rec.settled();
       const recEvents = rec.events();
-      try{ t.convo = await carryForward(foldTranscript(recEvents, rec.resolve), rec); }
+      try{ t.convo = await carryForward(foldTranscript(recEvents, rec.resolve), rec, carryLimits(await resolveWindow())); }
       catch(_){ if(finalAssistant) convo.push({role:'assistant', content:finalAssistant.text}); }
       // B3: the recovery note the NEXT run is prefaced with — a pure fold of THIS run's record,
       // so it never re-applies a steer a gate already verified and never reads coordination as
@@ -3314,6 +3366,7 @@
     else if(a==='skills'){ openSkills(); raise('preview'); }
     else if(a==='hooks'){ openHooks(); raise('preview'); }
     else if(a==='policy'){ openPolicy(); raise('preview'); }
+    else if(a==='window') setContextWindow();
     else if(a==='learn'){ if(typeof primeProject==='function') primeProject(); }
     else if(a==='home') call('home-chip');
   });
@@ -3334,6 +3387,7 @@
   // Roam: prefer the host-stored session (Crate/Folder) — brings projects, tasks,
   // and transcripts back on a new machine on the same backend.
   try{ const remote = await loadRemoteState(); if(remote){ state = remote; } }catch(_){}
+  try{ await hydrateConvos(); }catch(_){} // X1: the carried transcripts live in IndexedDB
   try{
     const saved = await idbGet(DIR_KEY);
     if(saved && typeof saved.queryPermission==='function'){

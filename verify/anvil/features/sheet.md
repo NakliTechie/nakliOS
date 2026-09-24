@@ -62,6 +62,14 @@ prerequisites: the launch in `../README.md`; a narrow viewport (≤ 978 px, `res
 - **Observable success:** the pane lists granted/revoked actions and the permission mode; a standing grant given from a run's "Always allow" appears here and can be revoked.
 - **Gotchas:** the sub-label shows the mode when it is loud (`modeIsLoud`).
 
+### sheet:window
+- **Goal:** set the configured model's context window, which sizes the budget and the next run's carried transcript (X1).
+- **Source:** `data-act="window"` → `setContextWindow()` → `state.contextWindows[aiModel]`; `resolveWindow()`; `carryLimits` in `sys/ai/context-budget.mjs`.
+- **Prerequisites:** narrow layout; a model configured in NakliOS Settings → AI (`capabilities.aiModel`).
+- **Reach and drive:** ⋯ → 📏 Context window → enter `128k` → Save.
+- **Observable success:** a system row names the window and the carry threshold (`~63,000 tokens` for 128k); `context_remaining` reports `set by you for <model>`; an empty value clears it.
+- **Gotchas:** with no model configured it says so and changes nothing; a value outside 1,000–10,000,000 is refused.
+
 ### sheet:learn
 - **Goal:** start the read-only "Learn this project" pass.
 - **Source:** `data-act="learn"` → `primeProject()`.

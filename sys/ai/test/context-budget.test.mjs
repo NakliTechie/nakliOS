@@ -1,6 +1,6 @@
 // Conformance — the honest context budget (B4).
 //   node sys/ai/test/context-budget.test.mjs
-import { contextBudget, windowFromOllama, windowForPreset, capHandoff, reminderFingerprint,
+import { contextBudget, windowFromOllama, windowForPreset, capHandoff, reminderFingerprint, carryLimits, CARRY_DEFAULTS,
          shouldRemind, filterStaleReminders, contextRemainingTool, checkpointTool,
          MIN_USABLE_TOKENS, OLLAMA_DEFAULT_NUM_CTX, HANDOFF_MAX_CHARS, DEFAULT_RESERVE } from '../context-budget.mjs';
 
@@ -51,6 +51,18 @@ test('reminder: fingerprinted by budget shape; a stale-shape reminder is dropped
 test('the tools advertise themselves', () => {
   eq(contextRemainingTool().function.name, 'context_remaining', 'context_remaining');
   const c = checkpointTool(); eq(c.function.name, 'checkpoint', 'checkpoint'); assert(c.function.parameters.required.includes('handoff'), 'handoff required');
+});
+
+await test('X1: carry limits follow the window; an unknown window keeps the fixed ones', () => {
+  const unk = carryLimits({ window: null });
+  eq(unk.threshold, 24000, 'unknown threshold'); eq(unk.keepRecentTokens, 10000, 'unknown recent'); eq(unk.maxChars, 120000, 'unknown chars');
+  eq(JSON.stringify(carryLimits()), JSON.stringify({ ...CARRY_DEFAULTS }), 'no argument = the defaults');
+  const big = carryLimits({ window: 128000, source: 'owner set' });
+  eq(big.threshold, 63000, 'half of 126000 usable'); eq(big.keepRecentTokens, 25200, '40% of the threshold'); eq(big.maxChars, 315000, '1.25x the threshold in chars');
+  assert(/128000 \(owner set\)/.test(big.source), 'says where the window came from');
+  const tiny = carryLimits({ window: 4096 });
+  eq(tiny.threshold, 2000, 'a 4k Ollama default carries a small transcript, not 24k it cannot hold');
+  assert(carryLimits({ window: 1e6 }).threshold > carryLimits({ window: 128000 }).threshold, 'monotone in the window');
 });
 
 if (failures.length) { console.error(`context-budget: ${passed} passed, ${failures.length} FAILED`); for (const f of failures) console.error(`  FAIL ${f.n}: ${f.message}`); process.exit(1); }
