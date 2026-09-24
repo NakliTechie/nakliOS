@@ -3124,7 +3124,10 @@
         // until idle (the scheduler decides). Cancelled implicitly if a new run has started
         // (running flips true). Fire-and-forget; a review failure never fails the task.
         try{
-          let isLocal=true; try{ const ep=(nak&&nak.ai&&nak.ai.endpoint)||null; isLocal = ep ? ['ollama','lmstudio','llamacpp'].includes(ep.preset) : true; }catch(_){ isLocal=true; }
+          // The SDK exposes no `ai.endpoint`, so the preset test above it read null on every run and treated
+          // DeepSeek as a local model — every review waited 15 s for nothing (found live 2026-09-24, Chunk L).
+          // The host's own word is `capabilities.aiLocal` (scope !== 'external'); unknown still defers.
+          const isLocal = !(nak && nak.capabilities && nak.capabilities.aiLocal === false);
           // C5: idleMs was hardcoded 0, so `isLocalModel && idleMs < AUTO_REVIEW_IDLE_MS` stayed
           // permanently true and a local model NEVER reviewed — the scheduler skipped rather than
           // deferred (NAF-04). Defer for real: wait for quiet, and drop it if a new run began.

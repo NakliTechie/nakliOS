@@ -585,6 +585,9 @@ await test('LX-3: the run index row carries the goal row\'s inputs (gatePassed, 
   assert.match(src, /async function goalOf\(t\)\{ if\(!t\|\|reshaping\) return null;/, 'no goal is projected while the re-derive is in flight');
   assert.match(src, /await idbSet\(SHAPE_KEY, \{ shape: ROW_SHAPE, home: !!homeHandle \}\);/, 'the doctor stamps the shape it ran under and whether the home was reachable');
   assert.match(src, /if\(m && m\.shape===ROW_SHAPE && !m\.home\)\{ const r=await rebuildRunIndex\(\);/, 'reconnecting the home re-derives once when the shape run missed it');
+  // Chunk L (2026-09-24): the review's local-model defer reads the host's word, not an endpoint the SDK never exposes
+  assert.match(src, /const isLocal = !\(nak && nak\.capabilities && nak\.capabilities\.aiLocal === false\);/, 'isLocal from capabilities.aiLocal');
+  assert.doesNotMatch(src, /nak\.ai\.endpoint\)\|\|null; isLocal/, 'the dead endpoint read is gone');
   // G9 (2026-09-24): the agent's shell, the gate's shell and the hook shell all get the JS gate runner
   assert.equal((src.match(/createShell\(\{[^\n]*js: jsHost,/g) || []).length, 3, 'three shells get the js host: agent, gate, hooks');
   assert.match(src, /spawn:\(url\)=>\{ const w=new Worker\(url, \{ type:'module' \}\);/, 'the browser host spawns a module Worker');
