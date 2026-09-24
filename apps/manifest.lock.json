@@ -209,7 +209,7 @@
       "id": "kanzen",
       "repo": "NakliTechie/KanZen",
       "requestedRef": "main",
-      "resolvedCommit": "0653e352fb4d529c3b0842a716eafdb50270a4ba",
+      "resolvedCommit": "c30018b2f4aa024f3a70c6d73efba2e9384e2e65",
       "files": [
         {
           "source": "index.html",
@@ -223,7 +223,7 @@
       "id": "menagerie",
       "repo": "NakliTechie/menagerie",
       "requestedRef": "main",
-      "resolvedCommit": "0dff96dcdb16f7c72081349887888749e114f2e9",
+      "resolvedCommit": "6a46bee8f30798461c96880010bbb071c579c045",
       "files": [
         {
           "source": "index.html",
@@ -407,7 +407,7 @@
       "id": "nakliposter",
       "repo": "NakliTechie/NakliPoster",
       "requestedRef": "main",
-      "resolvedCommit": "e2e545dc1cff3123c48b0723d99a5f8569186ece",
+      "resolvedCommit": "97572e7a61da1a7e26f56f5a0bbc0b49828962ef",
       "files": [
         {
           "source": "index.html",
@@ -441,13 +441,13 @@
       "id": "reel",
       "repo": "NakliTechie/reel",
       "requestedRef": "main",
-      "resolvedCommit": "d16f7ef1d855aebcbb48b388d44dce2050dbad7e",
+      "resolvedCommit": "292b0916d7f139f6f27fe14661772a7dee43da7d",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "e15cb557b1ac79c925b26352ff14275ac85c7cb0a549bd718fcc51b55748b045",
-          "bytes": 115788
+          "sha256": "b3020b620e419adb8c853b06b79456f424d10ab5aaedd08d870550c65317ea18",
+          "bytes": 51319
         },
         {
           "source": "vendor/mediabunny/mediabunny-1.51.0.min.mjs",
@@ -467,7 +467,7 @@
       "id": "sheaf",
       "repo": "NakliTechie/sheaf",
       "requestedRef": "main",
-      "resolvedCommit": "e38555bf7ac2abc972edc21e40794c512755d6a7",
+      "resolvedCommit": "327865c5f54484615230b0cc5d35c579e1839aed",
       "files": [
         {
           "source": "index.html",
@@ -543,7 +543,7 @@
       "id": "tijori",
       "repo": "NakliTechie/Tijori",
       "requestedRef": "main",
-      "resolvedCommit": "264deba4603e300ecf986f75c85ad1bb70749b57",
+      "resolvedCommit": "57a3c0319b6f712cdcf0d8dedc35f5788a88738b",
       "files": [
         {
           "source": "index.html",
@@ -557,7 +557,7 @@
       "id": "vaultmind",
       "repo": "NakliTechie/VaultMind",
       "requestedRef": "main",
-      "resolvedCommit": "cefc020d598bdf0219dcb5da3d6f14818de98d37",
+      "resolvedCommit": "17253ee1911148b2834a1edc641b6c5beb4ac4de",
       "files": [
         {
           "source": "index.html",
