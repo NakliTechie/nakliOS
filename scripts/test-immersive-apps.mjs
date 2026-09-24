@@ -4,7 +4,10 @@ import { readFileSync } from 'node:fs';
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
 // Non-FSA apps must EMBED (Immersive iframe window), never force a browser tab.
-for (const id of ['bofh']){
+// SDK-hosted apps embed cross-origin (decision 2026-09-24, Chirag: lift the cap on bolo, mantra, books):
+// their storage and AI go through naklios.fs / naklios.ai over postMessage, so the picker block does not
+// reach them. books was on the FSA-cap list until it was; it moved here.
+for (const id of ['bofh', 'bolo', 'mantra', 'books']){
   const start = html.indexOf(`{ id:'${id}'`);
   const end = html.indexOf('\n  { id:', start + 1);
   assert.ok(start >= 0 && end > start, `${id} app entry exists`);
@@ -29,7 +32,7 @@ for (const id of ['bofh']){
 const manifest = JSON.parse(readFileSync(new URL('../apps/manifest.json', import.meta.url), 'utf8'));
 const mirrored = new Set(manifest.apps.map(app => app.id));
 
-for (const id of ['books', 'vaultmind', 'nakliposter', 'slate']){
+for (const id of ['vaultmind', 'nakliposter', 'slate']){
   const start = html.indexOf(`{ id:'${id}'`);
   const end = html.indexOf('\n  { id:', start + 1);
   assert.ok(start >= 0 && end > start, `${id} app entry exists`);
@@ -87,3 +90,13 @@ assert.match(
 );
 
 console.log('NakliOS Immersive BOFH-embed + FSA-apps-top-level contract: PASS');
+
+// A recording app embedded needs the powers a cross-origin iframe lacks by default; the host grants
+// exactly what the catalog names, and never to a user-installed (opaque) app.
+{
+  const start = html.indexOf(`{ id:'bolo'`);
+  const entry = html.slice(start, html.indexOf('\n  { id:', start + 1));
+  assert.match(entry, /iframeAllow:'camera; microphone; display-capture'/, 'bolo asks for camera, mic and screen capture');
+  assert.match(html, /if \(app\.iframeAllow && !forceOpaqueSandbox\) iframe\.setAttribute\('allow', app\.iframeAllow\);/, 'the host applies it, catalog apps only');
+}
+

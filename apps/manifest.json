@@ -365,6 +365,21 @@
       ]
     },
     {
+      "id": "slate",
+      "repo": "NakliTechie/slate",
+      "ref": "main",
+      "files": [
+        {
+          "source": "index.html",
+          "destination": "index.html"
+        },
+        {
+          "source": "LICENSE",
+          "destination": "LICENSE"
+        }
+      ]
+    },
+    {
       "id": "tijori",
       "repo": "NakliTechie/Tijori",
       "ref": "main",

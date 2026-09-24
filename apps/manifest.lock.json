@@ -520,6 +520,26 @@
       ]
     },
     {
+      "id": "slate",
+      "repo": "NakliTechie/slate",
+      "requestedRef": "main",
+      "resolvedCommit": "e921bc8245e61626b879e18df95c44a8b9779a55",
+      "files": [
+        {
+          "source": "index.html",
+          "destination": "index.html",
+          "sha256": "7ab4d892cea320f28e212d0a1a9dc44ce5e18c200bd45bfef1f01c932b99bbe0",
+          "bytes": 356442
+        },
+        {
+          "source": "LICENSE",
+          "destination": "LICENSE",
+          "sha256": "2a207501f6a7346fd6d37bbd2394079ac2034c73354fe3ce17e7636826276591",
+          "bytes": 1085
+        }
+      ]
+    },
+    {
       "id": "tijori",
       "repo": "NakliTechie/Tijori",
       "requestedRef": "main",
