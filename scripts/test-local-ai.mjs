@@ -308,4 +308,19 @@ assert.deepEqual(
   'completion surfaces tool_calls',
 );
 
+// Chunk W (2026-09-24): Ferrule is a provider preset — NakliOS holds a frl_ token, the provider keys
+// stay in Ferrule's vault, and spend/egress are Ferrule's own panel. The preset is evaluated, not grepped.
+{
+  const block = /const AI_ENDPOINT_PRESETS = (Object\.freeze\(\{[\s\S]*?\n\}\));/.exec(html);
+  assert.ok(block, 'the preset table is extractable');
+  const presets = vm.runInNewContext('(' + block[1] + ')');
+  assert.equal(presets.ferrule.baseUrl, 'http://127.0.0.1:8899/v1', 'Ferrule\'s endpoint');
+  assert.equal(presets.ferrule.keyRequired, true, 'a Ferrule token is required — its /v1 refuses without one');
+  assert.match(presets.ferrule.note, /frl_/, 'the note says what goes in the key box');
+  assert.match(presets.ferrule.note, /never a provider key/, 'and what never does');
+  assert.match(presets.ferrule.note, /localhost:8899/, 'and where spend and egress are shown');
+  assert.match(html, /note\.textContent = preset\.note \|\| ''; note\.hidden = !preset\.note;/, 'the note follows the picked provider');
+  assert.ok(Object.entries(presets).filter(([, v]) => v.note).length === 1, 'only Ferrule carries a note today');
+}
+
 console.log('NakliOS AI broker, providers, model catalog, and SDK contract: PASS');

@@ -5293,6 +5293,15 @@ const AI_ENDPOINT_PRESETS = Object.freeze({
     baseUrl:'http://127.0.0.1:8080/v1',
     keyRequired:false,
   }),
+  ferrule: Object.freeze({
+    // Ferrule (github.com/NakliTechie/ferrule): the provider keys live in Ferrule's vault on
+    // this machine; NakliOS holds only a revocable frl_ token. Ferrule ≥ its /v1 CORS change
+    // answers a browser page. Spend and egress are Ferrule's own panel — nothing duplicated here.
+    label:'Ferrule',
+    baseUrl:'http://127.0.0.1:8899/v1',
+    keyRequired:true,
+    note:'Paste a Ferrule token (frl_…), never a provider key — `ferrule key naklios` makes one. What it spends and where each prompt went: the Ferrule panel at http://localhost:8899.',
+  }),
   openai: Object.freeze({
     label:'OpenAI',
     baseUrl:'https://api.openai.com/v1',
@@ -9259,6 +9268,7 @@ function openSettings(section){
                 : selectedEndpointPreset.keyRequired ? 'Required' : 'Optional for local endpoints'}">
           </label>
         </div>
+        <div class="nw-fs-blurb" id="ai-endpoint-note" style="margin:8px 0 0;" ${selectedEndpointPreset.note ? '' : 'hidden'}>${_dlgEscape(selectedEndpointPreset.note || '')}</div>
         <label class="nw-fs-blurb" style="display:flex; grid-template-columns:auto 1fr; gap:6px; align-items:center; margin:8px 0 0;">
           <input type="checkbox" id="ai-remember-key" style="width:auto;"
             ${aiSettings.endpoint.rememberKey ? 'checked' : ''}>
@@ -9583,6 +9593,8 @@ function openSettings(section){
       ? (hasKey ? 'Key already available — leave blank to keep it' : 'Required')
       : (hasKey ? 'Key already available — leave blank to keep it' : 'Optional for local endpoints');
     wrap.querySelector('#ai-forget-key').disabled = !hasKey;
+    const note = wrap.querySelector('#ai-endpoint-note');
+    if (note) { note.textContent = preset.note || ''; note.hidden = !preset.note; }
   };
 
   const paintImageEndpointKeyState = () => {
