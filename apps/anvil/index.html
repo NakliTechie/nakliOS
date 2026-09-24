@@ -418,7 +418,7 @@
   // The persistence optimisation is untouched — the app still writes it, the AGENT cannot.
   const SEARCH_INDEX_PATH = '.anvil/search-index.json';
   import { renderProcedural, loadProceduralGraph, PROCEDURAL_PATH } from '../../sys/ai/procedural.mjs';
-  import { rowKeys, planLogUpdate, isPinned } from '../../sys/ai/log-render-plan.mjs';
+  import { rowKey, rowKeys, planLogUpdate, isPinned } from '../../sys/ai/log-render-plan.mjs';
   import { buildChangeRow, planRevert, prunePreimages, preimageBytes, MAX_PREIMAGE_BUDGET } from '../../sys/ai/change-preimages.mjs';
   import { subagentFeedRow, subagentFeedLine, subagentLiveness } from '../../sys/ai/subagents.mjs'; // ESS-2: the live child feed; B1: its typed state
   import { createSteerQueue } from '../../sys/ai/steer.mjs'; // B2: a child's completion lands at the parent's next turn
@@ -1339,6 +1339,63 @@
       g.hidden = false; }
     try{ renderSwitcher(); }catch(_){}
   }
+  // One element per log row — ALWAYS one, a hidden placeholder for a kind that draws nothing — so the
+  // wrapper's i-th child is row i and a `patch` can replace a row in place (U1).
+  function buildLogRow(t, e, i){
+    if(e.k==='user'||e.k==='system'){
+      const d=document.createElement('div'); d.className='msg '+e.k;
+      d.innerHTML=`<div class="who">${e.k==='user'?'you':'system'}</div><div class="body"></div>`;
+      d.querySelector('.body').textContent=e.text; return d;
+    } else if(e.k==='assistant'){
+      // Agent reply: render Markdown (code blocks get a Copy button), plus a
+      // "Copy md" button on the whole reply.
+      const d=document.createElement('div'); d.className='msg assistant';
+      const head=document.createElement('div'); head.className='mhead';
+      head.innerHTML='<div class="who">agent</div>';
+      const cp=document.createElement('button'); cp.className='copybtn'; cp.textContent='Copy md';
+      cp.title='Copy this reply as Markdown'; cp.onclick=()=>copyText(e.text, cp);
+      head.appendChild(cp);
+      const body=document.createElement('div'); body.className='body';
+      renderMarkdown(body, e.text);
+      d.appendChild(head); d.appendChild(body); return d;
+    } else if(e.k==='tool'){
+      const dt=document.createElement('details'); dt.className='tool'+(e.error?' err':''); if(e.open) dt.open=true;
+      const sum=document.createElement('summary');
+      // B1: a failure says its KIND in the tag (not found · refused · invalid args …), not just "error".
+      // B6: a listing's tag says its size — and when the shell cut it, how much of it the model saw
+      const tag = e.kind ? String(e.kind).replace(/_/g,' ') : e.listing ? ('listing · '+(e.listing.truncated ? e.listing.shown+' of '+e.listing.entries+' entries (truncated)' : e.listing.entries+' entr'+(e.listing.entries===1?'y':'ies'))) : (e.error?'error':(e.result!=null?'result':'…'));
+      dt.className='tool'+((e.error||e.kind)?' err':''); if(e.open) dt.open=true;
+      sum.innerHTML=`<span class="tn">${esc(e.name)}</span><span class="td">${esc(e.detail||'')}</span><span class="tg">${esc(tag)}</span>`;
+      dt.appendChild(sum);
+      const out = e.error!=null?e.error:e.result;
+      if(out!=null){
+        const o=document.createElement('div'); o.className='tout'; o.textContent=out; dt.appendChild(o);
+        const cp=document.createElement('button'); cp.className='copybtn'; cp.textContent='Copy';
+        cp.title='Copy output as Markdown';
+        cp.onclick=(ev)=>{ ev.preventDefault(); ev.stopPropagation(); copyText('```\n'+out+'\n```', cp); };
+        sum.appendChild(cp);
+      }
+      // U1: a user's open/close is recorded on the row and in the key cache, so no render reverts it
+      // (a <details> used to close on every rebuild — the fleet ticker's, every 5 s — because e.open was never written)
+      dt.addEventListener('toggle', ()=>{ e.open = dt.open; if(logCache.taskId===t.id && Array.isArray(logCache.keys) && i<logCache.keys.length) logCache.keys[i] = rowKey(e, i); });
+      return dt;
+    } else if(e.k==='subagent'){
+      // ESS-2: the child's row — B1: live / unverifiable while in flight (by the clock), then its final stop.
+      const lv = e.status==='running' ? subagentLiveness(e).state : 'exited';
+      const c=document.createElement('div'); c.className='change subagent'+(lv==='live'?' live':'');
+      c.innerHTML=`<span class="ci">${e.status==='running'?'⇄':'⇆'}</span><span class="cf">${esc(subagentFeedLine(e))}</span>`;
+      return c;
+    } else if(e.k==='change'){
+      // "We made changes — view": a change line that opens the file. The write/edit is
+      // already applied (YOLO); clicking reads the current file and shows it in
+      // the preview, instead of auto-popping the pane.
+      const c=document.createElement('div'); c.className='change'; c.title='View this file in the preview';
+      c.innerHTML=`<span class="ci">✎</span><span class="cf">${esc(e.verb||'wrote')} ${esc(e.file)}</span><span class="cv">view →</span>`;
+      c.onclick=()=>{ openChange(e); raise('preview'); };
+      return c;
+    }
+    const ph=document.createElement('span'); ph.hidden=true; ph.className='row-placeholder'; return ph;
+  }
   function renderLog(){
     const box=$('log'); const t=activeTask();
     if(!t){ logCache={taskId:null,keys:null}; box.innerHTML='<div class="empty"><h2>No task selected</h2>Pick a task on the left, or make a new one.</div>'; return; }
@@ -1369,60 +1426,18 @@
     const prevTop = box.scrollTop;
     // A queue chip is not a log row, so it is rebuilt on every pass; the log rows above it are not.
     if(plan.mode!=='rebuild' && existingWrap){ for(const q of [...existingWrap.querySelectorAll('.msg.queued')]) q.remove(); }
+    if(plan.mode==='patch' && existingWrap){
+      // U1: rows that changed IN PLACE (the fleet ticker re-stamping a child, a row edited) are replaced
+      // node for node; the rest of the transcript is untouched. The wrapper must hold exactly one node
+      // per cached row — anything else and the row→node map is unknown, so it rebuilds instead.
+      const nodes=[...existingWrap.children];
+      if(nodes.length===cached.length){ for(const i of plan.patched) existingWrap.replaceChild(buildLogRow(t, t.log[i], i), nodes[i]); }
+      else { plan.mode='rebuild'; }
+    }
     const w = (plan.mode==='rebuild' || !existingWrap) ? document.createElement('div') : existingWrap;
     if(plan.mode==='rebuild' || !existingWrap) w.className='wrap';
-    const rows = (plan.mode==='rebuild' || !existingWrap) ? t.log : t.log.slice(plan.from);
-    for(const e of rows){
-      if(e.k==='user'||e.k==='system'){
-        const d=document.createElement('div'); d.className='msg '+e.k;
-        d.innerHTML=`<div class="who">${e.k==='user'?'you':'system'}</div><div class="body"></div>`;
-        d.querySelector('.body').textContent=e.text; w.appendChild(d);
-      } else if(e.k==='assistant'){
-        // Agent reply: render Markdown (code blocks get a Copy button), plus a
-        // "Copy md" button on the whole reply.
-        const d=document.createElement('div'); d.className='msg assistant';
-        const head=document.createElement('div'); head.className='mhead';
-        head.innerHTML='<div class="who">agent</div>';
-        const cp=document.createElement('button'); cp.className='copybtn'; cp.textContent='Copy md';
-        cp.title='Copy this reply as Markdown'; cp.onclick=()=>copyText(e.text, cp);
-        head.appendChild(cp);
-        const body=document.createElement('div'); body.className='body';
-        renderMarkdown(body, e.text);
-        d.appendChild(head); d.appendChild(body); w.appendChild(d);
-      } else if(e.k==='tool'){
-        const dt=document.createElement('details'); dt.className='tool'+(e.error?' err':''); if(e.open) dt.open=true;
-        const sum=document.createElement('summary');
-        // B1: a failure says its KIND in the tag (not found · refused · invalid args …), not just "error".
-        // B6: a listing's tag says its size — and when the shell cut it, how much of it the model saw
-        const tag = e.kind ? String(e.kind).replace(/_/g,' ') : e.listing ? ('listing · '+(e.listing.truncated ? e.listing.shown+' of '+e.listing.entries+' entries (truncated)' : e.listing.entries+' entr'+(e.listing.entries===1?'y':'ies'))) : (e.error?'error':(e.result!=null?'result':'…'));
-        dt.className='tool'+((e.error||e.kind)?' err':''); if(e.open) dt.open=true;
-        sum.innerHTML=`<span class="tn">${esc(e.name)}</span><span class="td">${esc(e.detail||'')}</span><span class="tg">${esc(tag)}</span>`;
-        dt.appendChild(sum);
-        const out = e.error!=null?e.error:e.result;
-        if(out!=null){
-          const o=document.createElement('div'); o.className='tout'; o.textContent=out; dt.appendChild(o);
-          const cp=document.createElement('button'); cp.className='copybtn'; cp.textContent='Copy';
-          cp.title='Copy output as Markdown';
-          cp.onclick=(ev)=>{ ev.preventDefault(); ev.stopPropagation(); copyText('```\n'+out+'\n```', cp); };
-          sum.appendChild(cp);
-        }
-        w.appendChild(dt);
-      } else if(e.k==='subagent'){
-        // ESS-2: the child's row — B1: live / unverifiable while in flight (by the clock), then its final stop.
-        const lv = e.status==='running' ? subagentLiveness(e).state : 'exited';
-        const c=document.createElement('div'); c.className='change subagent'+(lv==='live'?' live':'');
-        c.innerHTML=`<span class="ci">${e.status==='running'?'⇄':'⇆'}</span><span class="cf">${esc(subagentFeedLine(e))}</span>`;
-        w.appendChild(c);
-      } else if(e.k==='change'){
-        // "We made changes — view": a change line that opens the file. The write/edit is
-        // already applied (YOLO); clicking reads the current file and shows it in
-        // the preview, instead of auto-popping the pane.
-        const c=document.createElement('div'); c.className='change'; c.title='View this file in the preview';
-        c.innerHTML=`<span class="ci">✎</span><span class="cf">${esc(e.verb||'wrote')} ${esc(e.file)}</span><span class="cv">view →</span>`;
-        c.onclick=()=>{ openChange(e); raise('preview'); };
-        w.appendChild(c);
-      }
-    }
+    const from = (plan.mode==='rebuild' || !existingWrap) ? 0 : plan.from;
+    for(let i=from;i<t.log.length;i++) w.appendChild(buildLogRow(t, t.log[i], i));
     // Queued follow-ups (Codex-style): prompts waiting for the current run to end.
     for(const q of (t.queued||[])){
       const d=document.createElement('div'); d.className='msg user queued';
@@ -3229,6 +3244,9 @@
       t.verifyCmd=plan.command; save(); renderTaskbar();
       return { ok:true, path:plan.path, verifyCmd:t.verifyCmd, gated:true };
     },
+    // U1: change row i of the active task's log in place and render — what the fleet ticker does to a
+    // child's row every 5 s — so a browser bed can see the transcript patched, not rebuilt.
+    logRow:(i, patch)=>{ const t=activeTask(); if(!t||!Array.isArray(t.log)||!t.log[i]) return false; Object.assign(t.log[i], patch||{}); renderLog(); return true; },
     taskState:()=>{ const t=activeTask(); return t? { id:t.id, title:t.title, status:t.status, verifyCmd:t.verifyCmd||'', mode:t.mode||'code' } : null; },
     // The run-index doctor (WIRE): rebuild the IndexedDB index from the record files and say how
     // many rows resumed from their own checkpoint rather than refolding from event zero.

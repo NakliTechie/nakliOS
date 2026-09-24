@@ -17,7 +17,8 @@
 //
 //   noop     — nothing changed. Do not touch the DOM at all (the idle case).
 //   append   — the previous rows are an exact prefix of the new ones. Build only the tail.
-//   rebuild  — anything else (an edit, a removal, a reorder, a task switch). Full rebuild, which is
+//   patch    — up to PATCH_MAX rows changed in place (U1): replace those nodes, append any tail.
+//   rebuild  — anything else (a removal, a large reorder, a task switch). Full rebuild, which is
 //              what the old code did unconditionally.
 //
 // Correctness over cleverness: the prefix test is exact-equality on row KEYS, and any mismatch
@@ -68,17 +69,23 @@ export function planLogUpdate(prev, next) {
   const b = Array.isArray(next) ? next : [];
   // No previous render (a fresh mount, or a task switch that cleared the cache).
   if (!a) return { mode: 'rebuild', from: 0, reused: 0, built: b.length };
-  // The prefix walk covers truncation on its own: for i past the end of `b`, `b[i]` is undefined
-  // and can never equal a real key, so a shortened log falls out here as a rebuild. An explicit
-  // `b.length < a.length` guard ahead of this loop was written first and then removed — mutation
-  // testing showed nothing could make it fail, because it was unreachable. An untestable branch in
-  // the one function whose failure mode is a permanently stale row is worse than no branch.
-  for (let i = 0; i < a.length; i++) {
-    if (a[i] !== b[i]) return { mode: 'rebuild', from: 0, reused: 0, built: b.length };
-  }
+  // A shortened log is a rebuild: a row that no longer exists has no node to replace it with.
+  if (b.length < a.length) return { mode: 'rebuild', from: 0, reused: 0, built: b.length };
+  // U1 (2026-09-24): rows that changed IN PLACE are patched, not rebuilt. Every 5 s the fleet ticker
+  // re-stamps a child's row (`live`, `age` are in its key), and that one changed key used to force a
+  // full rebuild of the whole transcript — ~48 ms at 600 rows, and it closed any <details> the user
+  // had opened. Keys carry their index, so an insertion shifts every later key and shows up as many
+  // changed rows; past PATCH_MAX the rebuild is the cheaper render. A patch is correct for ANY change
+  // pattern of the same or greater length — the renderer rebuilds row i from row i — so the cap is a
+  // cost bound, never a correctness one.
+  const patched = [];
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) patched.push(i);
+  if (patched.length > PATCH_MAX) return { mode: 'rebuild', from: 0, reused: 0, built: b.length };
+  if (patched.length) return { mode: 'patch', from: a.length, patched, reused: a.length - patched.length, built: patched.length + (b.length - a.length) };
   if (b.length === a.length) return { mode: 'noop', from: b.length, reused: a.length, built: 0 };
   return { mode: 'append', from: a.length, reused: a.length, built: b.length - a.length };
 }
+export const PATCH_MAX = 8;
 
 /**
  * Where should the scroll land after a render?

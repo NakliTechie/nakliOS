@@ -30,6 +30,14 @@ from the host page's console or a browser-automation script against the iframe.
 - **Observable success:** the first returns `{ok:true, path:'.anvil/gate/test_x.py', verifyCmd:'python .anvil/gate/test_x.py', gated:true}` and the file exists; the one-assert source is refused `did not pass the lint: has 1 independent assertion`; the outside path `must live under .anvil/gate/`; the `__eq__` source `defines __eq__`; none of the refused calls writes a file (`t.fs.list('.anvil/gate')`).
 - **Gotchas:** the lint reads the criterion FILE only — a solver-side `__eq__` still passes (`plan/missed-invariants.md`).
 
+### hook:logRow
+- **Goal:** change one row of the active task's log in place and render it — the fleet ticker's move — to see the transcript patched, not rebuilt (U1).
+- **Source:** the door's `logRow(i, patch)` → `renderLog()` → `planLogUpdate` `patch` → `buildLogRow`.
+- **Prerequisites:** launch; an active task with a log of at least `i+1` rows.
+- **Reach and drive:** keep a reference to a row node other than `i`; open a tool row's `<details>`; `t.logRow(i, { age: 9 })` on a subagent row.
+- **Observable success:** returns true; row `i`'s node is a NEW node with the new text; every other row node is the SAME node; the opened `<details>` is still open.
+- **Gotchas:** returns false with no task or no row `i`; a change to more than `PATCH_MAX` rows rebuilds by design.
+
 ### hook:taskState
 - **Goal:** the active task's id, title, status, gate and mode as the UI holds them.
 - **Source:** the door's `taskState`.

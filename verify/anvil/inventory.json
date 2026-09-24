@@ -277,6 +277,12 @@
       "kind": "hook",
       "detail": "__anvil.test.liveCampaign"
     },
+    "hook:logRow": {
+      "owner": "test-door.md",
+      "fingerprint": "bb1881f34be3",
+      "kind": "hook",
+      "detail": "__anvil.test.logRow"
+    },
     "hook:rebuildIndex": {
       "owner": "test-door.md",
       "fingerprint": "227f72c8ef32",

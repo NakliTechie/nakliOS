@@ -10,7 +10,7 @@
 // falls back to a full rebuild, and these cases exist to prove it does.
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { rowKey, rowKeys, planLogUpdate, planScroll, isPinned } from '../log-render-plan.mjs';
+import { rowKey, rowKeys, planLogUpdate, PATCH_MAX, planScroll, isPinned } from '../log-render-plan.mjs';
 
 const anvil = await readFile(new URL('../../../apps/anvil/index.html', import.meta.url), 'utf8');
 const log = (...rows) => rows;
@@ -33,7 +33,9 @@ const K = (rows) => rowKeys(rows);
   assert.equal(planLogUpdate(K(a), []).mode, 'rebuild', 'clearing the log rebuilds');
 }
 
-// ── everything that is NOT an append must rebuild ──────────────────────────
+// ── everything that is NOT an append is a patch or a rebuild — never a noop or a stale append ──
+// U1 (2026-09-24): an in-place change of the same or greater length PATCHES exactly the changed rows
+// (the renderer rebuilds row i from row i, so any such pattern is correct); a shortened log rebuilds.
 {
   const base = log({ k: 'user', text: 'a' }, { k: 'assistant', text: 'b' }, { k: 'system', text: 'c' });
   const cases = {
@@ -44,9 +46,20 @@ const K = (rows) => rowKeys(rows);
     'a row kind changed': log({ k: 'user', text: 'a' }, { k: 'system', text: 'b' }, { k: 'system', text: 'c' }),
     'a row inserted in the middle': log({ k: 'user', text: 'a' }, { k: 'system', text: 'X' }, { k: 'assistant', text: 'b' }, { k: 'system', text: 'c' }),
   };
+  const want = { 'a middle row edited': [1], 'the first row edited': [0], 'rows reordered': [0, 1], 'a row kind changed': [1], 'a row inserted in the middle': [1, 2] };
   for (const [why, next] of Object.entries(cases)) {
-    assert.equal(planLogUpdate(K(base), K(next)).mode, 'rebuild', `${why} → rebuild, never append`);
+    const plan = planLogUpdate(K(base), K(next));
+    assert.ok(plan.mode !== 'noop' && plan.mode !== 'append', `${why} → never noop or append`);
+    if (why === 'a row removed') assert.equal(plan.mode, 'rebuild', 'a removed row has no node to be replaced by — rebuild');
+    else { assert.equal(plan.mode, 'patch', `${why} → patch`); assert.deepEqual(plan.patched, want[why], `${why} → exactly the changed rows`); }
   }
+  // an insertion in the middle patches the rows it shifted and appends the tail it pushed out
+  const ins = planLogUpdate(K(base), K(cases['a row inserted in the middle']));
+  assert.equal(ins.from, 3, 'the tail is appended from the old length'); assert.equal(ins.built, 3, '2 replaced + 1 appended');
+  // past PATCH_MAX changed rows, the rebuild is the cheaper render
+  const many = Array.from({ length: PATCH_MAX + 1 }, (_, i) => ({ k: 'user', text: 'r' + i }));
+  assert.equal(planLogUpdate(K(many), K(many.map((r) => ({ ...r, text: r.text + '!' })))).mode, 'rebuild', 'more than PATCH_MAX changed rows → rebuild');
+  assert.equal(planLogUpdate(K(many), K(many.map((r, i) => (i < PATCH_MAX ? { ...r, text: r.text + '!' } : r)))).mode, 'patch', 'exactly PATCH_MAX → patch');
 }
 
 // ── the key must cover everything that is DRAWN ────────────────────────────
@@ -79,8 +92,9 @@ const K = (rows) => rowKeys(rows);
   const gated = { k: 'system', text: 'agent gate passed · 4 steps' };
   const claimed = { k: 'system', text: "finished — no gate, so this is the agent's own claim" };
   assert.notEqual(rowKey(gated, 0), rowKey(claimed, 0), 'a verified finish and a claimed one are different rows');
-  assert.equal(planLogUpdate(K([gated]), K([claimed])).mode, 'rebuild',
-    'turning one into the other forces a rebuild — it can never be skipped as unchanged');
+  const turned = planLogUpdate(K([gated]), K([claimed]));
+  assert.ok(turned.mode === 'patch' && turned.patched[0] === 0,
+    'turning one into the other re-draws that row — it can never be skipped as unchanged');
   assert.match(anvil, /this is the agent\\'s own claim/, 'the ungated wording still exists in the app');
   assert.match(anvil, /result\.stop==='unverified' \? 'gate never passed'/, 'and so does the unverified wording');
 }
@@ -130,7 +144,12 @@ assert.equal((anvil.match(/logCache=\{taskId:null,keys:null\}/g) || []).length, 
   assert.equal(planLogUpdate({ keys: [sub({ live: 'live', age: 4 })] }, [{ k: 'subagent', kind: 'dispatch', label: 'x', status: 'running', steps: 1, tools: 0, live: 'live', age: 9 }]).mode !== 'noop', true, 'a re-stamp is not a noop');
 }
 
-console.log('log-render-plan: noop/append/rebuild, keys cover what is drawn, verified≠claimed, scroll belongs to the reader');
+// ── U1: the app performs the plan node for node, and a user's toggle survives ──
+assert.match(anvil, /function buildLogRow\(t, e, i\)\{[\s\S]{0,6000}?const ph=document\.createElement\('span'\); ph\.hidden=true;/, 'one node per row, a placeholder for a kind that draws nothing');
+assert.match(anvil, /if\(nodes\.length===cached\.length\)\{ for\(const i of plan\.patched\) existingWrap\.replaceChild\(buildLogRow\(t, t\.log\[i\], i\), nodes\[i\]\); \}\n\s*else \{ plan\.mode='rebuild'; \}/, 'a patch replaces the changed nodes, and rebuilds when the node count is not the row count');
+assert.match(anvil, /dt\.addEventListener\('toggle', \(\)=>\{ e\.open = dt\.open;[^\n]*logCache\.keys\[i\] = rowKey\(e, i\); \}\);/, 'a user-opened <details> is written to the row and the key cache, so no render closes it');
+assert.ok(anvil.indexOf("q.remove(); }") < anvil.indexOf("if(plan.mode==='patch' && existingWrap){"), 'queue chips are removed before the node count is compared');
+console.log('log-render-plan: noop/append/patch/rebuild, keys cover what is drawn, verified≠claimed, scroll belongs to the reader');
 
 // ESS-2: a child's live row updates IN PLACE. Every field the line draws is in its key, so an
 // update is a visible change (a rebuild), never a stale row left on screen.
@@ -144,6 +163,7 @@ console.log('log-render-plan: noop/append/rebuild, keys cover what is drawn, ver
   const prev = [{ k: 'user', text: 'go' }, row, { k: 'system', text: 'thinking…' }];
   const next = [prev[0], { ...row, steps: 2, tools: 1, lastTool: 'read', lastDetail: 'a.py' }, prev[2]];
   const plan = planLogUpdate(rowKeys(prev), rowKeys(next));
-  assert.equal(plan.mode, 'rebuild', 'an in-place child update is never a noop or a plain append');
+  assert.equal(plan.mode, 'patch', 'an in-place child update is patched — never a noop or a plain append');
+  assert.deepEqual(plan.patched, [1], 'only the child\'s row is re-drawn, not the transcript');
   console.log('  ok    ESS-2: a subagent row that changes in place is re-drawn');
 }
