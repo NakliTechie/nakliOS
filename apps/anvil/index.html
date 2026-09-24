@@ -2891,6 +2891,17 @@
     // A1/A2: the project's run rows, once — salience for the memory index and the newest run's episode
     let projectRows=[]; try{ projectRows=await runsForProject(runProject); }catch(_){ projectRows=[]; }
     let lastEpisode='';
+    // What is in the workspace root, now — per run, capped. A fresh task's first move was almost
+    // always an orienting `ls` (battery 2026-09-24: 'list', 'rename' and 'edit' all opened with one),
+    // a whole model round-trip to learn what a directory read answers in a millisecond.
+    let workspaceListing='';
+    try{
+      const l=await fs.list('',{});
+      if(l && l.ok){
+        const names=(l.entries||[]).map(e=>e.name+(e.type==='dir'?'/':'')).filter(n=>n!=='.git/').sort();
+        workspaceListing = names.length ? 'Workspace root now ('+names.length+' entr'+(names.length===1?'y':'ies')+(names.length>40?', first 40':'')+'): '+names.slice(0,40).join('  ') : 'The workspace root is empty.';
+      }
+    }catch(_){}
     try{
       const [ag, mem] = await Promise.all([
         fs.read('AGENTS.md',{encoding:'utf-8'}).catch(()=>null),
@@ -3081,6 +3092,7 @@
       // construction, so bundling it into the gated block above would defeat the gate exactly as the
       // recovery note once did (the 2026-09-07 live check; the checker's probe, 2026-09-13).
       if(lastEpisode) convo.push({role:'user', content:'[coordination] '+lastEpisode});
+      if(workspaceListing) convo.push({role:'user', content:'[coordination] '+workspaceListing});
       // F1: if what we are about to send cannot be reconstructed from the chain, SAY SO in the
       // log. It does not stop the run — a divergence is diagnostic, and killing a live run over
       // one would cost more than the drift it found.

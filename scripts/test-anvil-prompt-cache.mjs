@@ -103,7 +103,7 @@ assert.equal(digest('same'), digest('same'), 'and is stable for the same context
   const digestFn = extractFunction(mod, 'ctxDigest');
   const run = (ctx, task, convo) => evaluate(
     `${digestFn}\n;(function(){ ${region} return convo; })()`,
-    { ...ctx, t: task, convo, recoveryPreface: ctx.recoveryPreface || '', lastEpisode: ctx.lastEpisode || '', contextMessage });
+    { ...ctx, t: task, convo, recoveryPreface: ctx.recoveryPreface || '', lastEpisode: ctx.lastEpisode || '', workspaceListing: ctx.workspaceListing || '', contextMessage });
 
   const ctx = { projectContext: 'PROJECT NOTES', memoryIndex: '\n## memory\n- a fact', skillsIndex: '', recoveryPreface: '' };
   const t = {};
@@ -125,6 +125,16 @@ assert.equal(digest('same'), digest('same'), 'and is stable for the same context
     'changed context IS re-sent');
   assert.match(convo[convo.length - 1].content, /a second fact/, 'and it carries the new fact');
   assert.match(convo[convo.length - 1].content, /^\[coordination\]/, 'tagged as the machine speaking, not the owner');
+
+  // 2026-09-24: the workspace listing rides every run, outside the gate (it changes whenever a file does)
+  {
+    const t3 = {}, convo3 = [{ role: 'user', content: 'go' }];
+    run({ ...ctx, workspaceListing: 'Workspace root now (2 entries): a.py  seed.txt' }, t3, convo3);
+    run({ ...ctx, workspaceListing: 'Workspace root now (2 entries): a.py  seed.txt' }, t3, convo3);
+    assert.equal(convo3.filter((m) => /^\[coordination\] Workspace root now/.test(String(m.content))).length, 2, 'the listing is per-run: sent on every run, even unchanged');
+    assert.equal(convo3.filter((m) => /Working context/.test(String(m.content))).length, 1, 'while the gated context still goes once');
+    assert.match(anvil, /const l=await fs\.list\('',\{\}\);/, 'the listing is read from the workspace at run start');
+  }
 
   // an EMPTY context appends nothing at all
   const t2 = {}, convo2 = [{ role: 'user', content: 'go' }];

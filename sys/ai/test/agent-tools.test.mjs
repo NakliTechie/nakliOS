@@ -325,6 +325,11 @@ await test('F8: edit_lines and apply_patch update are gated by the same version 
   assert(/has not been read yet/.test(await fresh2('apply_patch', { patch: '*** Begin Patch\n*** Update File: p.txt\n@@\n keep\n-changed\n+again\n*** End Patch\n' })), 'a patch update on an unread file is refused');
 });
 
+await test('the edit tool description names the no-read exception (the model reads the description, not the code)', () => {
+  const d = codingToolset('code', {}).find((x) => x.function.name === 'edit').function.description;
+  assert(/occurs exactly once, verbatim, applies without one/.test(d) && !/^[^.]*\. Read the file first;/.test(d), d);
+});
+
 await test('edit without a read: applies only on an exact, unique match; everything else still needs the read', async () => {
   const { exec, shell, face } = fresh();
   await exec('write', { path: 's.txt', content: 'alpha\nbeta\nbeta2\n' });

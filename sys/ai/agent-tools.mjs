@@ -57,7 +57,7 @@ export function writeTool() {
 export function editTool() {
   return { type: 'function', function: {
     name: 'edit',
-    description: 'Replace an exact string in a file. old_string must match uniquely (include surrounding context) unless replace_all is set. Whitespace-tolerant. Read the file first; if it changed since you last read it, the edit is refused as stale — read it again, then edit.',
+    description: 'Replace an exact string in a file. old_string must match uniquely (include surrounding context) unless replace_all is set. Whitespace-tolerant. When you already know the exact text (the ask spells it out), no read is needed: an old_string that occurs exactly once, verbatim, applies without one. Otherwise read the file first; if it changed since you last read it, the edit is refused as stale — read it again, then edit.',
     parameters: { type: 'object', properties: {
       path: { type: 'string' },
       old_string: { type: 'string', description: 'The existing text to replace (with enough context to be unique).' },

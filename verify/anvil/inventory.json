@@ -423,7 +423,7 @@
     },
     "tool:edit": {
       "owner": "tools-files.md",
-      "fingerprint": "3d59154aa118",
+      "fingerprint": "19298dac9d79",
       "kind": "tool",
       "detail": "code code+gate"
     },
