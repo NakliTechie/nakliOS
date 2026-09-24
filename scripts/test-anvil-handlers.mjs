@@ -13,6 +13,8 @@ import { searchRecords, scopeEntries, readEvent, createRunRecorder } from '../sy
 import { runToolset } from '../sys/ai/run-assembly.mjs';
 
 const src = await inlineModule();
+// the whole page — markup and CSS are outside the inline module
+const page = await (await import('node:fs/promises')).readFile(new URL('../apps/anvil/index.html', import.meta.url), 'utf8');
 let passed = 0; const failures = [];
 async function test(n, fn) { try { await fn(); passed++; } catch (e) { failures.push({ n, message: e.message }); } }
 
@@ -583,6 +585,11 @@ await test('LX-3: the run index row carries the goal row\'s inputs (gatePassed, 
   assert.match(src, /async function goalOf\(t\)\{ if\(!t\|\|reshaping\) return null;/, 'no goal is projected while the re-derive is in flight');
   assert.match(src, /await idbSet\(SHAPE_KEY, \{ shape: ROW_SHAPE, home: !!homeHandle \}\);/, 'the doctor stamps the shape it ran under and whether the home was reachable');
   assert.match(src, /if\(m && m\.shape===ROW_SHAPE && !m\.home\)\{ const r=await rebuildRunIndex\(\);/, 'reconnecting the home re-derives once when the shape run missed it');
+  // U2 (2026-09-24): HOLD / BYPASS has its own element that wraps; the goal line owns #tb-meta
+  assert.match(page, /<span class="notice" id="tb-notice" role="status" hidden><\/span>\n\s*<span class="meta" id="tb-meta"><\/span>/, 'the notice is its own element beside the goal line');
+  assert.match(page, /#taskbar \.notice\{[^}]*white-space:normal;overflow-wrap:anywhere/, 'the notice wraps — never an ellipsis');
+  assert.match(src, /const notice=\$\('tb-notice'\); notice\.textContent = loud\.join\('  ·  '\); notice\.hidden = !loud\.length;/, 'renderTaskbar writes HOLD / BYPASS to the notice');
+  assert.doesNotMatch(src, /\$\('tb-meta'\)\.textContent = loud\.join/, 'and never to the ellipsised goal line');
   assert.match(src, /if\(!loud\.length && t && !running\) goalOf\(t\)\.then\(g=>\{ if\(g && g\.quota\.runs>0 && activeTask\(\)===t && !running && !reshaping && !state\.runsHeld && !modeIsLoud\(state\.permissionMode\)\) \$\('tb-meta'\)\.textContent = goalLine\(g\);/, 'the task bar shows the goal line when the task has runs, nothing louder is on, and — re-read at resolve — no run started meanwhile');
   assert.match(src, /goal:async\(\)=>\{ const t=activeTask\(\); return t\? await goalOf\(t\) : null; \}/, 'the door exposes the goal');
   assert.match(src, /async function goalOf\(t\)\{ if\(!t\|\|reshaping\) return null; return foldGoal\(await runsForTask\(t\.id\), \{ objective: t\.title\|\|'' \}\); \}/, 'the goal is folded from the task\'s own rows, by the task index');

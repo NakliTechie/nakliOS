@@ -163,6 +163,10 @@
   .pv-note{font-size:11px;color:var(--muted);border-left:2px solid var(--muted);padding:4px 8px;margin:0 0 8px}
   .pv-actions{display:flex;gap:6px;flex-wrap:wrap;padding:10px 0 0;border-top:1px solid var(--line);margin-top:10px}
   .meta.bypass{color:var(--err);font-weight:600}
+  /* U2: HOLD / BYPASS is a safety notice — it WRAPS, never ellipsises. It used to share #tb-meta's
+     one-line ellipsis with the goal line and was cut after its first token at ~978 px. */
+  #taskbar .notice{color:var(--err);font-weight:600;font-family:var(--mono);font-size:11px;flex:0 1 auto;min-width:0;white-space:normal;overflow-wrap:anywhere;line-height:1.3}
+  #taskbar .notice[hidden]{display:none}
   .revertbtn:hover{background:var(--err);color:#fff}
   #preview .pbody{flex:1;min-height:0;overflow:auto}
   #preview iframe{width:100%;height:100%;border:0;background:#fff}
@@ -295,6 +299,7 @@
       <button id="gate-btn" class="gatebtn" title="Set a verify command — the agent isn't 'done' until it exits 0">✓ Must-pass</button>
       <span class="advwrap"><button id="adv-btn" class="gatebtn" title="Advanced / experimental features" aria-haspopup="true" aria-expanded="false">Advanced ▾</button><div id="adv-menu" class="advmenu" hidden role="menu"><button id="campaign-btn" class="advitem" role="menuitem" title="Experimental — an independently-checked build: one agent writes the test/standard first, another writes the code without seeing it, a third referees. Guards against the agent grading its own work.">⚑ Proof build · beta</button></div></span>
       <button id="stop" class="stopbtn" hidden>◼ Stop</button>
+      <span class="notice" id="tb-notice" role="status" hidden></span>
       <span class="meta" id="tb-meta"></span>
     </div>
     <div id="log"></div>
@@ -1323,8 +1328,9 @@
     const loud=[];
     if(state.runsHeld) loud.push('⏸ HOLD — new runs blocked');
     if(modeIsLoud(state.permissionMode)) loud.push('⚠ BYPASS — nothing is asked');
-    $('tb-meta').textContent = loud.join('  ·  ');
-    $('tb-meta').className = loud.length ? 'meta bypass' : 'meta';
+    // U2: the notice has its own element that wraps; #tb-meta is the goal line's alone.
+    const notice=$('tb-notice'); notice.textContent = loud.join('  ·  '); notice.hidden = !loud.length;
+    $('tb-meta').textContent = ''; $('tb-meta').className = 'meta';
     // LX-3: the task's goal row — status with re-entry first-class, its quota, its evidence — folded from
     // the task's run rows; a bypass/hold notice outranks it (they must stay obvious). A task that never
     // ran shows none (nothing to project). The fold is async and the bar may have moved on, so the line
