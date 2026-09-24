@@ -21,6 +21,8 @@ import { parseToolArguments } from './agent-protocol.mjs';
 import { classifyToolResult, listingShape } from './tool-result-kind.mjs';
 import { NO_OUTPUT, EXPECT_MARKER, parseExpect, stripExpect } from './expect.mjs';
 import { usageInputTokens, usageOutputTokens } from './usage.mjs';
+import { transcriptCallIds, withCallIds } from './call-ids.mjs';
+export { transcriptCallIds, withCallIds };
 
 // The single most powerful tool for a coding agent: a real shell. The Forge
 // shell already covers fileops, git, pipes, and globs, so one `shell` tool is a
@@ -262,6 +264,8 @@ function callId(call, step, index) {
   return call.id || `call_${step}_${index}`;
 }
 
+// H3: ids are assigned once, before the assistant turn is stored — see ./call-ids.mjs.
+
 // A signature of the tool calls in a step, to detect a stuck loop (the model
 // repeating the identical call with no new information).
 // The CANONICAL form of a tool call's arguments: same object, same string, whatever
@@ -372,6 +376,7 @@ export async function runAgentLoop({
   if (typeof infer !== 'function') throw new Error('runAgentLoop needs an infer function');
   if (typeof executeTool !== 'function') throw new Error('runAgentLoop needs an executeTool function');
   const convo = messages.slice();
+  const usedCallIds = transcriptCallIds(convo); // H3: synthesised ids never collide with a carried transcript
   let lastText = '';
   let repeats = 0;           // consecutive turns whose canonical tool-call set was identical
   let prevSignature = null;
@@ -491,7 +496,7 @@ export async function runAgentLoop({
 
     if (aborted()) return abortReturn(step);
     const content = typeof reply?.content === 'string' ? reply.content : '';
-    const toolCalls = Array.isArray(reply?.toolCalls) ? reply.toolCalls : [];
+    const toolCalls = withCallIds(Array.isArray(reply?.toolCalls) ? reply.toolCalls : [], step, usedCallIds);
     if (content) { lastText = content; onEvent({ type: 'assistant', content, step }); }
 
     // No tool calls → the model believes it is done. If a verifier is wired, the

@@ -1322,6 +1322,32 @@ await test('F1: a failed tool call folds to exactly the text the loop sent, once
   assert(rec.events().some((e) => e.tool === 'tool.failed'), 'tool.failed still lands on the chain for the log and outcome folds');
 });
 
+await test('H3: an id-less provider — the loop assigns ids once, the fold assigns the same, no divergence, no collision on a re-entered loop', async () => {
+  const shell = freshShell();
+  const rec = createRunRecorder({ app: 'anvil', principal: 'p' });
+  const bare = (cmd) => ({ type: 'function', function: { name: 'shell', arguments: JSON.stringify({ command: cmd }) } }); // no id, as some endpoints send
+  const divergences = [];
+  await rec.start({ messages: MESSAGES, tools: [shellTool()] });
+  const r1 = await runAgentLoop({ messages: MESSAGES, tools: [shellTool()],
+    infer: rec.wrapInfer(scripted([{ content: '', toolCalls: [bare('echo a'), bare('echo b')] }, { content: 'first loop done', toolCalls: [] }]), { onDivergence: (d) => divergences.push(d) }),
+    executeTool: makeShellExecutor(shell), onEvent: rec.onEvent, maxSteps: 4 });
+  const asst = r1.messages.find((m) => m.role === 'assistant' && m.tool_calls);
+  deepEq(asst.tool_calls.map((c) => c.id), ['call_0_0', 'call_0_1'], 'the stored assistant turn carries the ids');
+  deepEq(r1.messages.filter((m) => m.role === 'tool').map((m) => m.tool_call_id), ['call_0_0', 'call_0_1'], 'and its results name the same ids');
+  // a DC2-style re-entered loop: step restarts at 0 over the carried transcript
+  const carried = [...r1.messages, { role: 'user', content: '[coordination] continue' }];
+  await rec.start({ messages: carried, tools: [shellTool()] });
+  const r2 = await runAgentLoop({ messages: carried, tools: [shellTool()],
+    infer: rec.wrapInfer(scripted([{ content: '', toolCalls: [bare('echo c')] }, { content: 'done', toolCalls: [] }]), { onDivergence: (d) => divergences.push(d) }),
+    executeTool: makeShellExecutor(shell), onEvent: rec.onEvent, maxSteps: 4 });
+  const ids = r2.messages.filter((m) => m.role === 'tool').map((m) => m.tool_call_id);
+  deepEq(ids, ['call_0_0', 'call_0_1', 'call_0_0_2'], 'the re-entered loop never reuses an id already in the transcript');
+  await rec.finish(r2); await rec.settled();
+  deepEq(divergences, [], 'the fold assigns the ids the loop assigned — every request reconstructs');
+  const folded = foldTranscript(rec.events(), rec.resolve).filter((m) => m.role === 'assistant' && m.tool_calls).flatMap((m) => m.tool_calls.map((c) => c.id));
+  deepEq(folded, ['call_0_0', 'call_0_1', 'call_0_0_2'], 'the folded transcript carries the same ids');
+});
+
 await test('B1: foldToolFailures classifies from the recorded text — nothing stored, old records count too', async () => {
   const shell = freshShell();
   const rec = createRunRecorder({ app: 'anvil', principal: 'p' });

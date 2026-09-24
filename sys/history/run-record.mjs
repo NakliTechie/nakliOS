@@ -30,6 +30,7 @@ import { appendEvent, contentHash, verifyChain, toNDJSON, fromNDJSON } from './l
 import { classifyToolResult } from '../ai/tool-result-kind.mjs';
 import { parseExpect, gradeExpect, stripExpect, EXPECT_MARKER } from '../ai/expect.mjs';
 import { usageOf } from '../ai/usage.mjs';
+import { transcriptCallIds, withCallIds } from '../ai/call-ids.mjs';
 import { runUnit, createProjector } from './projection.mjs';
 export { runUnit, createProjector };
 
@@ -490,7 +491,9 @@ export function transcriptUnit({ applyCompaction = false } = {}) {
         }
         case 'llm.responded': {
           let pc = flushed(s.pendingCalls);
-          const calls = Array.isArray(o.toolCalls) ? o.toolCalls : [];
+          // H3: an id the provider omitted is the one the loop assigned — same step, same ids already present
+          const raw = Array.isArray(o.toolCalls) ? o.toolCalls : [];
+          const calls = raw.length ? withCallIds(raw, inp.step ?? 0, transcriptCallIds(out)) : raw;
           if (calls.length) pc = { content: typeof o.content === 'string' ? o.content : '', calls: calls.map((c) => ({ id: c.id, type: 'function', function: { name: c.function?.name, arguments: c.function?.arguments } })) };
           // B2: a no-call reply is an assistant turn even when EMPTY — the loop pushes it (a waiting
           // model may say nothing), so the next request carries it and the fold must too (F1)
