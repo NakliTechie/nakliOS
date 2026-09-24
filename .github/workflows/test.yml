@@ -21,6 +21,9 @@ jobs:
       - name: Verify vendored Crate manifest security
         run: node scripts/test-crate-manifest.mjs
 
+      - name: Verify vendored Crate serialises concurrent write()s under the rollback anchor
+        run: node scripts/test-crate-vendored-concurrent-writes.mjs
+
       - name: Verify Files uses the Crate-capable host bridge
         run: node scripts/test-files-crate-bridge.mjs
 
