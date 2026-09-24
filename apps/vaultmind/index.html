@@ -884,13 +884,19 @@ body {
 <!-- naklios.js — cooperative SDK, vendored inline (single-file / no-network ethos).
      Canonical source: https://naklios.dev/sdk/naklios.js (MIT). -->
 <script>
-/* naklios-sdk:begin ver=2 sha256=8322d238687f2e71538e3cca94ea3bb27a482b4bfce91ff0533d1db6267ed667 — DO NOT EDIT until :end; run `node scripts/vendor-naklios-sdk.mjs` */
+/* naklios-sdk:begin ver=2 sha256=727cb3e12f17f4a3872d0119b0719bae3ef8c5fc0389eb10ecc2f635876a8617 — DO NOT EDIT until :end; run `node scripts/vendor-naklios-sdk.mjs` */
 /*!
  * naklios.js — cooperative SDK for apps hosted inside NakliOS (Immersive mode)
  *
  * Drop this file into your app's <head> or copy its contents inline. The
  * surface is a no-op when the app loads standalone (window.parent === window),
  * so the same source works in both contexts:
+ *
+ * Vendoring: if your app needs a capability an iframe sandbox blocks — a folder
+ * picker above all — the supported route is a manifest-declared same-origin
+ * MIRROR under naklios.dev/apps/<id>/, not a hand-copied snapshot. See
+ * docs/app-loading.md. Your repo stays authoritative; the mirror is a pinned,
+ * hash-checked deployment artifact refreshed by CI.
  *
  *   <script src="https://naklios.dev/sdk/naklios.js"><\/script>
  *   <script>
@@ -953,6 +959,10 @@ body {
  *
  *   v2 = learn-on-contact origin + ?naklios flag (no-referrer-safe). v1 (pre-2026-08)
  *   posted to '*' and skipped inbound-origin checks — a v1 copy is a drift bug.
+ *
+ *   New public members ship as `experimental_<name>` with a line in docs/sdk-api-audit.md
+ *   naming what stabilizes them; stabilizing drops the prefix in one fleet change
+ *   (this file, the host, every vendored copy). fs.autosave was the first, 2026-09-24.
  * License: MIT.
  */
 (function () {
@@ -1047,6 +1057,118 @@ body {
         }
       }, timeoutMs || 30000);
     });
+  }
+
+  // Autosave (DUR, 2026-09-24): the SDK owns WHEN an app's state is written; the app owns WHAT and
+  // WHERE through its own save(). `beforeunload` cannot await, so a save that starts there is lost on
+  // close — the reliable moments are visibilitychange → hidden and pagehide, which fire while the page
+  // can still post a message, and the host's beforeclose, which waits. The timing half runs standalone
+  // too (the save is the app's own); only the dirty report to the host needs a frame.
+  var savers = new Set();
+  var reportedDirty = false;
+  var autosaveWired = false;
+  function noop() {}
+  function anyUnsaved() {
+    var out = false;
+    savers.forEach(function (s) { if (s._guard && s.dirty) out = true; });
+    return out;
+  }
+  function reportDirty() {
+    var d = anyUnsaved();
+    if (d === reportedDirty) return;
+    reportedDirty = d;
+    send('naklios:fs:dirty', { dirty: d });
+  }
+  // urgent: issue every unsaved save NOW, in this task — never behind an in-flight one
+  function flushSavers(urgent) {
+    var all = [];
+    savers.forEach(function (s) { all.push(s._flush(urgent).catch(noop)); });
+    return Promise.all(all);
+  }
+  function wireAutosave() {
+    if (autosaveWired) return;
+    autosaveWired = true;
+    try {
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'hidden') flushSavers(true);
+      });
+    } catch (_) {}
+    try {
+      window.addEventListener('pagehide', function () { flushSavers(true); });
+      window.addEventListener('beforeunload', function (e) {
+        if (!anyUnsaved()) return;
+        flushSavers(true);
+        // Hosted, the NakliOS host arms its own guard from the dirty report; a second prompt from
+        // the frame would be noise. Standalone, this is the only thing that can interpose.
+        if (inNakliOS) return;
+        e.preventDefault();
+        e.returnValue = '';
+      });
+    } catch (_) {}
+  }
+  function makeAutosave(opts) {
+    if (!opts || typeof opts.save !== 'function') {
+      throw new Error('naklios.fs.autosave requires { save: function }');
+    }
+    var delay = typeof opts.delay === 'number' && opts.delay >= 0 ? opts.delay : 1000;
+    var onError = typeof opts.onError === 'function' ? opts.onError : null;
+    // guard:false — a background save (a remote push, say) that keeps the timing but never holds a close
+    var guard = opts.guard !== false;
+    // generations: gen counts changes, issuedGen the newest handed to save(), savedGen the newest durable
+    var gen = 0, issuedGen = 0, savedGen = 0;
+    var timer = null, tail = Promise.resolve(), last = Promise.resolve(), queued = null, disposed = false;
+    function issue() {
+      queued = null;
+      if (gen <= issuedGen) return last;
+      var g = gen;
+      issuedGen = g;
+      var p;
+      try { p = Promise.resolve(opts.save()); } catch (err) { p = Promise.reject(err); }
+      p = p.then(function () {
+        if (g > savedGen) savedGen = g;
+        reportDirty();
+      }, function (err) {
+        if (issuedGen === g) issuedGen = savedGen; // the next flush retries
+        reportDirty();
+        if (onError) { try { onError(err); } catch (_) {} }
+        throw err;
+      });
+      last = p;
+      tail = p.catch(noop);
+      return p;
+    }
+    function flush(urgent) {
+      clearTimeout(timer);
+      timer = null;
+      if (gen <= issuedGen) return last;
+      if (urgent) return issue();
+      if (!queued) queued = tail.then(issue);
+      return queued;
+    }
+    var saver = {
+      // State changed. The save runs at most `delay` ms after the first unsaved change.
+      markDirty: function () {
+        if (disposed) return;
+        gen++;
+        reportDirty();
+        if (!timer) timer = setTimeout(function () { timer = null; flush(false).catch(noop); }, delay);
+      },
+      // Save now (after any save already running). Resolves when the state as of this call is durable.
+      flush: function () { return flush(false); },
+      get dirty() { return gen > savedGen; },
+      dispose: function () {
+        disposed = true;
+        clearTimeout(timer);
+        timer = null;
+        savers.delete(saver);
+        reportDirty();
+      },
+      _flush: flush,
+      _guard: guard,
+    };
+    savers.add(saver);
+    wireAutosave();
+    return saver;
   }
 
   // Typed egress error so an app can branch (fall back / prompt to connect) rather
@@ -1230,7 +1352,7 @@ body {
     } else if (msg.type === 'naklios:beforeclose') {
       var closeWork;
       try { closeWork = beforeCloseCb ? beforeCloseCb() : null; } catch (_) { closeWork = null; }
-      Promise.resolve(closeWork).catch(function () {}).then(function () {
+      Promise.all([Promise.resolve(closeWork).catch(function () {}), flushSavers(true)]).then(function () {
         send('naklios:beforeclose-ready', { requestId: msg.requestId });
       });
     } else if (msg.type === 'naklios:capabilities') {
@@ -1452,6 +1574,12 @@ body {
       // Explicit backend changes are always confirmed by the NakliOS host.
       // Switching changes the app-scoped view; it never copies or deletes data.
       useBackend: function (backend)    { return rpc('naklios:fs:selectBackend', { backend: backend }); },
+      // Autosave: the app says WHEN state changed (markDirty) and HOW to save it ({ save }); the SDK
+      // owns the timing — a throttled save, an immediate one when the page hides or the host closes
+      // the window, and a close guard only while something is unsaved. Returns
+      // { markDirty, flush, dirty, dispose }. { guard: false } keeps the timing but never holds a
+      // close (a background push, not the user's data). Runs standalone too. See docs/app-contract.md "Durability".
+      autosave: function (opts) { return makeAutosave(opts); },
     },
     // System-scoped filesystem — the WHOLE store on the active backend, not just
     // this app's apps/<id>/ namespace. Available to same-origin system apps only
@@ -4345,7 +4473,23 @@ document.getElementById('btn-close-panel').addEventListener('click', closeNotePa
 // ── Note editor ───────────────────────────────────────────────────────────────
 
 let _editNote = null;  // the note currently being edited
-let _autosaveTimer = null;
+let _savedLabelTimer = null;
+// Note autosave (opt-in, the Autosave box): the NakliOS SDK owns WHEN the note is written —
+// 1.5 s after the first unsaved keystroke, and at once when the page hides or NakliOS closes the
+// window (docs/app-contract.md "Durability"). The old timer shared its handle with the "✓ Saved"
+// label, so the label's reset cancelled the save queued by a keystroke typed during a save.
+let _noteSaver = null;
+function noteSaver() {
+  return _noteSaver || (_noteSaver = window.naklios.fs.autosave({
+    save: async () => {
+      if (!_editNote || !vaultWritable() || !_editNote.path) return;
+      if (document.getElementById('note-textarea').value === _editNote._savedBody) return;
+      if (!(await saveNoteEdit())) throw new Error('VaultMind could not save the note');
+    },
+    delay: 1500,
+  }));
+}
+function autosaveOn() { return !!document.getElementById('autosave-cb')?.checked; }
 
 function enterEditMode(note) {
   _editNote = note;
@@ -4371,6 +4515,9 @@ function enterEditMode(note) {
 function exitEditMode({ discard = false } = {}) {
   if (_editNote) {
     const ta = document.getElementById('note-textarea');
+    // Leaving a note with autosave on writes it now: saveNoteEdit takes the note and its text before
+    // its first await, so clearing _editNote below cannot redirect or break the write.
+    if (!discard && autosaveOn() && vaultWritable() && _editNote.path && ta.value !== _editNote._savedBody) saveNoteEdit();
     if (!discard && ta.value !== _editNote._savedBody) {
       // Preserve edits in memory so coming back shows the latest draft
       _editNote.body = ta.value;
@@ -4542,38 +4689,44 @@ async function getFileHandleFromPath(dirHandle, path, create = true) {
   return handle.getFileHandle(parts[parts.length - 1], { create });
 }
 
+// Resolves true once the note is on disk (or handed to a download), false when the write failed.
+// The note is captured before the first await, so switching notes mid-save saves the right one.
 async function saveNoteEdit() {
-  if (!_editNote) return;
+  const note = _editNote;
+  if (!note) return true;
   const content = document.getElementById('note-textarea').value;
-  _editNote.body = content;          // update in-memory copy
+  note.body = content;          // update in-memory copy
 
-  if (vaultWritable() && _editNote.path) {
+  if (vaultWritable() && note.path) {
     try {
       // Reconstruct the file: restore frontmatter if it had any
-      const hasFm = Object.keys(_editNote.fm).length > 0;
+      const hasFm = Object.keys(note.fm).length > 0;
       let fileContent = content;
-      if (hasFm) fileContent = dumpFrontmatter(_editNote.fm) + content;
-      await storageWrite(_editNote.path, fileContent);
-      _editNote._savedBody = content;
-      _editNote._dirty = false;
-      markDirtyInList(_editNote);
-      showSaved();
+      if (hasFm) fileContent = dumpFrontmatter(note.fm) + content;
+      await storageWrite(note.path, fileContent);
+      note._savedBody = content;
+      note._dirty = false;
+      markDirtyInList(note);
+      if (_editNote === note) showSaved();
       await saveIndexMd();
+      return true;
     } catch (err) {
       vaultToast('Save failed: ' + err.message);
+      return false;
     }
   } else {
     // No dirHandle — offer download
     const blob = new Blob([content], { type: 'text/markdown' });
     const a = Object.assign(document.createElement('a'), {
       href: URL.createObjectURL(blob),
-      download: (_editNote.filename || 'note') + '.md',
+      download: (note.filename || 'note') + '.md',
     });
     a.click(); URL.revokeObjectURL(a.href);
-    _editNote._savedBody = content;
-    _editNote._dirty = false;
-    markDirtyInList(_editNote);
+    note._savedBody = content;
+    note._dirty = false;
+    markDirtyInList(note);
     showSaved();
+    return true;
   }
 }
 
@@ -4582,17 +4735,16 @@ function showSaved() {
   el.textContent = '✓ Saved';
   el.style.color = 'var(--node-hub)';
   el.style.display = '';
-  clearTimeout(_autosaveTimer);
-  _autosaveTimer = setTimeout(() => { el.style.display = 'none'; }, 2500);
+  clearTimeout(_savedLabelTimer);
+  _savedLabelTimer = setTimeout(() => { el.style.display = 'none'; }, 2500);
 }
 
 document.getElementById('btn-save-note').addEventListener('click', saveNoteEdit);
 
 // Autosave
 document.getElementById('note-textarea').addEventListener('input', () => {
-  if (!document.getElementById('autosave-cb').checked) return;
-  clearTimeout(_autosaveTimer);
-  _autosaveTimer = setTimeout(saveNoteEdit, 1500);
+  if (!autosaveOn()) return;
+  noteSaver().markDirty();
 });
 document.getElementById('btn-chat-node').addEventListener('click', () => {
   const pill = document.getElementById('chat-ctx-pill');
