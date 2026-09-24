@@ -219,14 +219,15 @@ await test('subagents: task spawns a depth-capped child loop over the same works
 
 await test('read-before-edit ledger: edit refuses an unread file; read or cat unlocks it', async () => {
   const { exec, shell } = fresh();
-  await shell.feed('printf "const v = 1;\\n" > cfg.js'); // written via the shell, NOT the tools
+  // (2026-09-24: an exact, unique old_string may edit unread — so the refusal is shown on a string that occurs twice)
+  await shell.feed('printf "const v = 1;\\n// const v = 1;\\n" > cfg.js'); // written via the shell, NOT the tools
   const blocked = await exec('edit', { path: 'cfg.js', old_string: 'const v = 1;', new_string: 'const v = 2;' });
   assert(/has not been read/.test(blocked), `blocked: ${blocked}`);
   await exec('read', { path: 'cfg.js' });
-  assert(/Edited/.test(await exec('edit', { path: 'cfg.js', old_string: 'const v = 1;', new_string: 'const v = 2;' })), 'read unlocks edit');
-  await shell.feed('printf "x = 1\\n" > other.txt');
+  assert(/Edited/.test(await exec('edit', { path: 'cfg.js', old_string: '// const v = 1;', new_string: '// const v = 2;' })), 'read unlocks edit');
+  await shell.feed('printf "x = 1\\nx = 1\\n" > other.txt');
   await exec('shell', { command: 'cat other.txt' });
-  assert(/Edited/.test(await exec('edit', { path: 'other.txt', old_string: 'x = 1', new_string: 'x = 2' })), 'cat unlocks edit');
+  assert(/Edited/.test(await exec('edit', { path: 'other.txt', old_string: 'x = 1', new_string: 'x = 2', replace_all: true })), 'cat unlocks edit');
 });
 
 // F8 (N3): the ledger holds the VERSION last seen; an edit over a file that changed under it is
@@ -322,6 +323,25 @@ await test('F8: edit_lines and apply_patch update are gated by the same version 
   await exec('read', { path: 'p.txt' });
   assert(/Applied patch/.test(await exec('apply_patch', { patch })), 're-read, then the patch applies');
   assert(/has not been read yet/.test(await fresh2('apply_patch', { patch: '*** Begin Patch\n*** Update File: p.txt\n@@\n keep\n-changed\n+again\n*** End Patch\n' })), 'a patch update on an unread file is refused');
+});
+
+await test('edit without a read: applies only on an exact, unique match; everything else still needs the read', async () => {
+  const { exec, shell, face } = fresh();
+  await exec('write', { path: 's.txt', content: 'alpha\nbeta\nbeta2\n' });
+  const unread = makeToolExecutor({ shell, face }); // never read s.txt
+  const multi = await unread('edit', { path: 's.txt', old_string: 'beta', new_string: 'gamma' });
+  assert(/has not been read yet/.test(multi), '"beta" occurs twice → refused: ' + multi);
+  const none = await unread('edit', { path: 's.txt', old_string: 'delta', new_string: 'x' });
+  assert(/has not been read yet/.test(none), 'no match → refused (not a mystery miss)');
+  const all = await unread('edit', { path: 's.txt', old_string: 'alpha', new_string: 'A', replace_all: true });
+  assert(/has not been read yet/.test(all), 'replace_all → refused');
+  const fuzzy = await unread('edit', { path: 's.txt', old_string: '  alpha', new_string: 'A' });
+  assert(/has not been read yet/.test(fuzzy), 'a whitespace-fuzzy match → refused');
+  const once = await unread('edit', { path: 's.txt', old_string: 'beta2', new_string: 'gamma2' });
+  assert(/^Edited s\.txt \(1 replacement, [a-z-]+ match\) — now at line 3:\n3: gamma2$/.test(once), 'an exact unique match applies unread and shows the line: ' + once);
+  eq((await face.invoke('fs.read', { path: 's.txt', encoding: 'utf-8' })).data, 'alpha\nbeta\ngamma2\n', 'on disk');
+  const next = await unread('edit', { path: 's.txt', old_string: 'alpha', new_string: 'ALPHA' });
+  assert(/^Edited s\.txt/.test(next), 'after its own edit the file is known — the next edit goes through: ' + next);
 });
 
 await test('F8: a write records what the store hands back — a BOM or a lone surrogate does not make the next edit stale', async () => {

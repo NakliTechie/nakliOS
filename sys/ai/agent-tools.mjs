@@ -715,12 +715,20 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
         const p = resolve(args?.path);
         const r = await readFile(args?.path);
         if (!r.ok) return `Error: cannot edit ${args?.path}: ${r.error}`;
-        if (!readLedger.has(p)) {
+        // Read-before-edit, with one exception (Chirag, 2026-09-24): an old_string that occurs EXACTLY
+        // ONCE, verbatim, in the current file pins the edit to text that is there — the model has, in
+        // effect, quoted what it replaces. That edit applies unread, and its result shows the edited
+        // lines. Anything else — no match, several matches, a fuzzy (whitespace/indent) match,
+        // replace_all — still needs the read. Battery run 6: "in seed.txt, change beta to gamma" went
+        // edit (refused) → read → edit, 5 steps, for a one-word change the ask spelled out.
+        const oldStr = String(args?.old_string ?? '');
+        const exactOnce = oldStr !== '' && args?.replace_all !== true && r.data.split(oldStr).length === 2;
+        if (!readLedger.has(p) && !exactOnce) {
           return `${args?.path} has not been read yet. Use the read tool on it first, then edit — this prevents editing content you have not seen.`;
         }
         // F8: refused, not applied — an old_string that still matches would silently edit around a
         // change the model has never seen.
-        const stale = staleReply(args?.path, p, r.data);
+        const stale = readLedger.has(p) ? staleReply(args?.path, p, r.data) : null;
         if (stale) return stale;
         const ed = applyEdit(r.data, args?.old_string, args?.new_string, args?.replace_all === true);
         if (!ed.ok) return `Error editing ${args?.path}: ${ed.error}`;
