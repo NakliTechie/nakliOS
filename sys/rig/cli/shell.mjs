@@ -1047,11 +1047,21 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
       // Resolve the code to run: `-c "<code>"`, a `<file.py>`, or bare text.
       let code;
       const ci = args.indexOf('-c');
+      // SH1 (2026-09-24): `python -m pkg …`, asked for in live DeepSeek runs, exited 2. It runs the module as
+      // CPython does — runpy as __main__, with the cwd first on sys.path and sys.argv = [module, …args]. The
+      // name is checked before it is spliced into code, so an argument can never become Python.
+      const mi = ci < 0 && args[0] === '-m' ? 0 : -1;
+      if (mi === 0) {
+        const mod = args[1];
+        if (!mod || !/^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$/.test(mod)) return { text: `python: -m needs a module name${mod ? ` — "${mod}" is not one` : ''}`, code: 2 };
+        code = `import os, runpy, sys\nsys.path.insert(0, os.getcwd())\nrunpy.run_module(${JSON.stringify(mod)}, run_name="__main__", alter_sys=True)`;
+      }
       // `python --version` used to be RUN AS SOURCE (NameError: name 'version' is not defined) —
       // live 2026-09-11, three times in one run while the agent tried to find out what it had.
       // Answer the two version spellings; refuse every other flag the way the builtins do.
-      if (ci < 0 && (args[0] === '--version' || args[0] === '-V')) code = 'import sys; print("Python " + sys.version.split()[0])';
-      else if (ci < 0 && args[0] && args[0].startsWith('-')) return { text: `python: unsupported option ${args[0]} — use \`python file.py\`, \`python -c "code"\` or \`python --version\``, code: 2 };
+      if (mi === 0) { /* code set above */ }
+      else if (ci < 0 && (args[0] === '--version' || args[0] === '-V')) code = 'import sys; print("Python " + sys.version.split()[0])';
+      else if (ci < 0 && args[0] && args[0].startsWith('-')) return { text: `python: unsupported option ${args[0]} — use \`python file.py\`, \`python -m module\`, \`python -c "code"\` or \`python --version\``, code: 2 };
       else if (ci >= 0 && args[ci + 1] != null) code = args[ci + 1];
       else if (args[0] && !args[0].startsWith('-')) {
         const rd = await face.invoke('fs.read', { path: normalizePath(state.cwd, args[0]), encoding: 'utf-8' });
@@ -1062,7 +1072,7 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
       // but RAN with cwd = the mount root, so a relative open inside the script missed. The kernel
       // now runs where the shell is.
       // sys.argv as CPython sets it: the script and its arguments, or -c and what follows.
-      const argv = ci >= 0 ? ['-c', ...args.slice(ci + 2)] : (args[0] && !args[0].startsWith('-') ? args : ['']);
+      const argv = mi === 0 ? [args[1], ...args.slice(2)] : ci >= 0 ? ['-c', ...args.slice(ci + 2)] : (args[0] && !args[0].startsWith('-') ? args : ['']);
       // what a pipe or `<` fed this command is the script's stdin
       const r = await kiln.exec('shell', code, { isolate: kilnIsolate, cwd: state.cwd, argv, stdin: stdin || '' });
       if (r.status === 'unavailable') return { text: 'python: ' + (r.message || 'kernel unavailable'), code: 1 };

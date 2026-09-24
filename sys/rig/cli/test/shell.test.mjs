@@ -472,6 +472,25 @@ await test('git add *.glob stages every match', async () => {
   }
 });
 
+await test('SH1: python -m runs a module as __main__ with argv = [module, …args]; a bad name is refused, never spliced', async () => {
+  const fs = createFileops({ backend: new MemoryBackend() });
+  const registry = buildRigRegistry({ fs });
+  const grant = createGrant({ prefixes: [''], scopes: ['fs:read', 'fs:write', 'fs:remove'] });
+  const opLog = createOpLog({ fs: createFileops({ backend: new MemoryBackend() }) });
+  const face = createAgentFace({ registry, grant, opLog, actor: 'agent' });
+  const calls = [];
+  const kiln = { exec: async (_id, code, opts) => { calls.push({ code, argv: opts && opts.argv }); return { status: 'ok', stdout: 'ok\n' }; } };
+  const shell = createShell({ registry, face, kiln });
+  await run(shell, 'python -m pkg.tool --flag x');
+  assert(/runpy\.run_module\("pkg\.tool", run_name="__main__", alter_sys=True\)/.test(calls[0].code), 'runpy as __main__: ' + calls[0].code);
+  assert(/sys\.path\.insert\(0, os\.getcwd\(\)\)/.test(calls[0].code), 'the cwd is first on sys.path, as CPython does for -m');
+  eq(JSON.stringify(calls[0].argv), '["pkg.tool","--flag","x"]', 'argv is the module and its arguments');
+  const bad = await run(shell, 'python -m "os; import shutil"');
+  assert(/is not one/.test(bad) && calls.length === 1, 'a name that is not a dotted identifier is refused before any code runs');
+  assert(/-m needs a module name/.test(await run(shell, 'python -m')) && calls.length === 1, 'a bare -m is refused');
+  assert(/python -m module/.test(await run(shell, 'python -X')), 'the unsupported-option message names -m');
+});
+
 if (failures.length) {
   console.error(`shell core: ${passed} passed, ${failures.length} FAILED`);
   for (const f of failures) console.error(`  FAIL ${f.name}: ${f.message}`);
