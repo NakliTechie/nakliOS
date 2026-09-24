@@ -72,6 +72,10 @@
  *
  *   v2 = learn-on-contact origin + ?naklios flag (no-referrer-safe). v1 (pre-2026-08)
  *   posted to '*' and skipped inbound-origin checks — a v1 copy is a drift bug.
+ *
+ *   New public members ship as `experimental_<name>` with a line in docs/sdk-api-audit.md
+ *   naming what stabilizes them; stabilizing drops the prefix in one fleet change
+ *   (this file, the host, every vendored copy). fs.autosave was the first, 2026-09-24.
  * License: MIT.
  */
 (function () {
@@ -217,7 +221,7 @@
   }
   function makeAutosave(opts) {
     if (!opts || typeof opts.save !== 'function') {
-      throw new Error('naklios.fs.experimental_autosave requires { save: function }');
+      throw new Error('naklios.fs.autosave requires { save: function }');
     }
     var delay = typeof opts.delay === 'number' && opts.delay >= 0 ? opts.delay : 1000;
     var onError = typeof opts.onError === 'function' ? opts.onError : null;
@@ -688,7 +692,7 @@
       // the window, and a close guard only while something is unsaved. Returns
       // { markDirty, flush, dirty, dispose }. { guard: false } keeps the timing but never holds a
       // close (a background push, not the user's data). Runs standalone too. See docs/app-contract.md "Durability".
-      experimental_autosave: function (opts) { return makeAutosave(opts); },
+      autosave: function (opts) { return makeAutosave(opts); },
     },
     // System-scoped filesystem — the WHOLE store on the active backend, not just
     // this app's apps/<id>/ namespace. Available to same-origin system apps only

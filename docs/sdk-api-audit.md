@@ -21,8 +21,9 @@ rename is a fleet change and is done once, in the audit.
 Status today: every member below is `stable` by grandfathering — all shipped before this ledger
 existed. Most are in use by the vendored apps (Books, VaultMind, Tijori, KanZen, NakliPoster) or the
 host's own system apps; four (`net.available`, `net.info`, `ai.searchStatus`, `ai.cancelAll`) have no
-app consumer yet and say so in their note. The first `experimental_` member is `fs.experimental_autosave`
-(2026-09-24); it is the first to walk the checklist below.
+app consumer yet and say so in their note. The first `experimental_` member was `fs.experimental_autosave`
+(2026-09-24); it walked the checklist below the same day and is now `fs.autosave`. No member carries the
+prefix today.
 
 | member | kind | status | criteria (experimental only) | note |
 |---|---|---|---|---|
@@ -73,7 +74,7 @@ app consumer yet and say so in their note. The first `experimental_` member is `
 | `fs.exists` | function | stable | — | Existence check. |
 | `fs.subscribe` | function | stable | — | Change subscription over a prefix; async — resolves to a stop function. |
 | `fs.useBackend` | function | stable | — | Ask the host to switch the app's backend. |
-| `fs.experimental_autosave` | function | experimental | used through the vendored copy by KanZen and NakliPoster; the DUR5 live leg (edit, hide or close within the delay, reopen: the edit is on disk) observed on naklios.dev; `scripts/test-sdk-autosave.mjs` and `scripts/test-host-durability.mjs` in the gate | SDK-owned save timing: throttled, immediate on hide / pagehide / the host's beforeclose, a close guard only while unsaved (DUR, 2026-09-24). Returns `{ markDirty, flush, dirty, dispose }`. |
+| `fs.autosave` | function | stable | — | SDK-owned save timing: throttled, immediate on hide / pagehide / the host's beforeclose, a close guard only while unsaved (DUR, 2026-09-24). Returns `{ markDirty, flush, dirty, dispose }`; `{ guard:false }` for a background save. Stabilized 2026-09-24 from `experimental_autosave` (FLEET F1): used by KanZen and NakliPoster through the vendored copy, contract section Durability, host lanes test-sdk-autosave + test-host-durability, live on naklios.dev. |
 | `sys` | namespace | stable | — | System-app surfaces. |
 | `sys.fs` | namespace | stable | — | Whole-store filesystem (system apps only). |
 | `sys.fs.read` | function | stable | — | Read text. |

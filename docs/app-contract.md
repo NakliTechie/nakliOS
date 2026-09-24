@@ -289,7 +289,7 @@ Available methods:
 - `delete(path)`
 - `useBackend("fsa" | "crate")`
 - `subscribe(path, callback)`
-- `experimental_autosave({ save, delay, onError, guard })` — see [Durability](#durability)
+- `autosave({ save, delay, onError, guard })` — see [Durability](#durability)
 
 `useBackend()` always goes through host confirmation. It changes the app's
 view; it does not copy or delete data.
@@ -316,7 +316,7 @@ What an app may assume, and what it may not (DUR, 2026-09-24).
 - **Autosave is the SDK's job.** Declare changes; the SDK chooses when to save:
 
 ```js
-const saver = naklios.fs.experimental_autosave({
+const saver = naklios.fs.autosave({
   save: () => naklios.fs.write('state.json', JSON.stringify(state)), // or any async save
   delay: 1000,                // at most this long after the first unsaved change
   onError: (e) => showSaveError(e),
@@ -582,7 +582,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 | `fs.exists` | function | Existence check. |
 | `fs.subscribe` | function | Change subscription over a prefix; async — resolves to a stop function. |
 | `fs.useBackend` | function | Ask the host to switch the app's backend. |
-| `fs.experimental_autosave` | function · **experimental** | SDK-owned save timing: throttled, immediate on hide / pagehide / the host's beforeclose, a close guard only while unsaved (DUR, 2026-09-24). Returns `{ markDirty, flush, dirty, dispose }`. |
+| `fs.autosave` | function | SDK-owned save timing: throttled, immediate on hide / pagehide / the host's beforeclose, a close guard only while unsaved (DUR, 2026-09-24). Returns `{ markDirty, flush, dirty, dispose }`; `{ guard:false }` for a background save. Stabilized 2026-09-24 from `experimental_autosave` (FLEET F1): used by KanZen and NakliPoster through the vendored copy, contract section Durability, host lanes test-sdk-autosave + test-host-durability, live on naklios.dev. |
 
 ### `sys` (namespace)
 
@@ -657,7 +657,7 @@ A stateful cooperative app should prove:
    NakliOS.
 2. Folder and Crate contain separate data and switching copies nothing.
 3. Autosave survives reload, an immediate window close, and a tab close: the app
-   saves through `naklios.fs.experimental_autosave` (see Durability), and no
+   saves through `naklios.fs.autosave` (see Durability), and no
    `beforeunload` handler awaits a save.
 4. A backend disconnect does not silently discard a dirty record.
 5. Remote changes refresh a clean view and require an explicit decision for a

@@ -1,4 +1,4 @@
-// DUR (2026-09-24): naklios.fs.experimental_autosave — the SDK owns WHEN an app's state is saved.
+// DUR (2026-09-24): naklios.fs.autosave — the SDK owns WHEN an app's state is saved.
 // Loads the real sdk/naklios.js in a vm with a fake window/document and drives the timing contract:
 // a throttled save, an immediate save when the page hides (issued in the same task, never behind an
 // in-flight one), the host's beforeclose waiting for it, a close guard only while unsaved, the dirty
@@ -45,9 +45,9 @@ const ok = (n, c) => { if (c) pass++; else { fail++; console.error('FAIL:', n); 
 // 1. The member exists and refuses a missing save.
 {
   const { nak } = load({ hosted: false });
-  ok('fs.experimental_autosave is a function', typeof nak.fs.experimental_autosave === 'function');
+  ok('fs.autosave is a function', typeof nak.fs.autosave === 'function');
   let threw = false;
-  try { nak.fs.experimental_autosave({}); } catch (_) { threw = true; }
+  try { nak.fs.autosave({}); } catch (_) { threw = true; }
   ok('no save → throws', threw);
 }
 
@@ -55,7 +55,7 @@ const ok = (n, c) => { if (c) pass++; else { fail++; console.error('FAIL:', n); 
 {
   const { nak } = load({ hosted: false });
   let saves = 0;
-  const a = nak.fs.experimental_autosave({ save: () => { saves++; }, delay: 30 });
+  const a = nak.fs.autosave({ save: () => { saves++; }, delay: 30 });
   ok('clean at start', a.dirty === false);
   a.markDirty(); await sleep(10); a.markDirty(); await sleep(10); a.markDirty();
   ok('dirty after markDirty', a.dirty === true);
@@ -72,7 +72,7 @@ const ok = (n, c) => { if (c) pass++; else { fail++; console.error('FAIL:', n); 
 {
   const t = load({ hosted: false });
   let saves = 0;
-  const a = t.nak.fs.experimental_autosave({ save: () => { saves++; }, delay: 10_000 });
+  const a = t.nak.fs.autosave({ save: () => { saves++; }, delay: 10_000 });
   a.markDirty();
   t.hide();
   ok('visibilitychange→hidden issues the save in the same task', saves === 1);
@@ -89,7 +89,7 @@ const ok = (n, c) => { if (c) pass++; else { fail++; console.error('FAIL:', n); 
 {
   const t = load({ hosted: false });
   const d1 = deferred(); const calls = [];
-  const a = t.nak.fs.experimental_autosave({ save: () => { calls.push(calls.length + 1); return calls.length === 1 ? d1.promise : undefined; }, delay: 10_000 });
+  const a = t.nak.fs.autosave({ save: () => { calls.push(calls.length + 1); return calls.length === 1 ? d1.promise : undefined; }, delay: 10_000 });
   a.markDirty();
   const f1 = a.flush(); await tick();
   ok('first save in flight', calls.length === 1);
@@ -107,7 +107,7 @@ const ok = (n, c) => { if (c) pass++; else { fail++; console.error('FAIL:', n); 
   const t = load({ hosted: true });
   t.host({ type: 'naklios:capabilities', fs: true });
   const d = deferred(); let saves = 0;
-  const a = t.nak.fs.experimental_autosave({ save: () => { saves++; return d.promise; }, delay: 10_000 });
+  const a = t.nak.fs.autosave({ save: () => { saves++; return d.promise; }, delay: 10_000 });
   a.markDirty();
   t.host({ type: 'naklios:beforeclose', requestId: 'c1' });
   ok('beforeclose issues the save in the same task', saves === 1);
@@ -121,8 +121,8 @@ const ok = (n, c) => { if (c) pass++; else { fail++; console.error('FAIL:', n); 
 {
   const t = load({ hosted: true });
   t.host({ type: 'naklios:capabilities', fs: true });
-  const a = t.nak.fs.experimental_autosave({ save: () => {}, delay: 10_000 });
-  const b = t.nak.fs.experimental_autosave({ save: () => {}, delay: 10_000 });
+  const a = t.nak.fs.autosave({ save: () => {}, delay: 10_000 });
+  const b = t.nak.fs.autosave({ save: () => {}, delay: 10_000 });
   const dirty = () => t.sent.filter((m) => m.type === 'naklios:fs:dirty').map((m) => m.dirty);
   a.markDirty(); a.markDirty(); b.markDirty();
   ok('one true report for three changes across two savers', JSON.stringify(dirty()) === '[true]');
@@ -138,14 +138,14 @@ const ok = (n, c) => { if (c) pass++; else { fail++; console.error('FAIL:', n); 
 {
   const t = load({ hosted: false });
   let saves = 0;
-  const a = t.nak.fs.experimental_autosave({ save: () => { saves++; }, delay: 10_000 });
+  const a = t.nak.fs.autosave({ save: () => { saves++; }, delay: 10_000 });
   ok('clean → no prompt', t.beforeunload().prevented === false);
   a.markDirty();
   const ev = t.beforeunload();
   ok('unsaved → prompt', ev.prevented === true && ev.returnValue === '');
   ok('beforeunload still starts the save', saves === 1);
   const h = load({ hosted: true });
-  const b = h.nak.fs.experimental_autosave({ save: () => new Promise(() => {}), delay: 10_000 });
+  const b = h.nak.fs.autosave({ save: () => new Promise(() => {}), delay: 10_000 });
   b.markDirty();
   ok('hosted → the frame never prompts (the host guards)', h.beforeunload().prevented === false);
 }
@@ -154,7 +154,7 @@ const ok = (n, c) => { if (c) pass++; else { fail++; console.error('FAIL:', n); 
 {
   const { nak } = load({ hosted: false });
   const errors = []; let n = 0;
-  const a = nak.fs.experimental_autosave({ save: () => { n++; if (n === 1) throw new Error('disk full'); }, onError: (e) => errors.push(e.message), delay: 10_000 });
+  const a = nak.fs.autosave({ save: () => { n++; if (n === 1) throw new Error('disk full'); }, onError: (e) => errors.push(e.message), delay: 10_000 });
   a.markDirty();
   let rejected = false;
   try { await a.flush(); } catch (_) { rejected = true; }
@@ -169,7 +169,7 @@ const ok = (n, c) => { if (c) pass++; else { fail++; console.error('FAIL:', n); 
 {
   const { nak } = load({ hosted: false });
   let saves = 0;
-  const a = nak.fs.experimental_autosave({ save: () => { saves++; }, delay: 15 });
+  const a = nak.fs.autosave({ save: () => { saves++; }, delay: 15 });
   a.markDirty(); a.dispose();
   await sleep(30);
   ok('no save after dispose', saves === 0);
@@ -182,14 +182,14 @@ const ok = (n, c) => { if (c) pass++; else { fail++; console.error('FAIL:', n); 
 {
   const t = load({ hosted: false });
   let saves = 0;
-  const bg = t.nak.fs.experimental_autosave({ save: () => { saves++; }, delay: 10_000, guard: false });
+  const bg = t.nak.fs.autosave({ save: () => { saves++; }, delay: 10_000, guard: false });
   bg.markDirty();
   ok('a background saver is dirty', bg.dirty === true);
   ok('a background saver never prompts', t.beforeunload().prevented === false);
   t.hide();
   ok('a background saver still saves on hide', saves >= 1);
   const h = load({ hosted: true });
-  const hb = h.nak.fs.experimental_autosave({ save: () => {}, delay: 10_000, guard: false });
+  const hb = h.nak.fs.autosave({ save: () => {}, delay: 10_000, guard: false });
   hb.markDirty();
   ok('a background saver sends no dirty report', !h.sent.some((m) => m.type === 'naklios:fs:dirty'));
 }
