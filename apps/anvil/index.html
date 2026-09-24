@@ -434,7 +434,7 @@
   import { registerAppDiffTypes } from '../../sys/staging/diff-types.mjs';
   // A skill write is a P0 envelope (diff type 'anvil-skill') — the first agent-produced diff.
   registerAppDiffTypes(['anvil']);
-  import { MEMORY_DIR, parseFact, buildMemoryIndex, noteToFact, applyRevision, applyDemotion, dependantsOf, slotHolder, findDuplicate, duplicateReply, createRememberBudget, budgetSpentReply, checkRulesCap, rulesCapReply, createFactSession, factUsage, earnedFacts, applyEarned } from '../../sys/ai/memory-store.mjs';
+  import { MEMORY_DIR, parseFact, buildMemoryIndex, noteToFact, applyRevision, applyDemotion, dependantsOf, slotHolder, findDuplicate, duplicateReply, createRememberBudget, budgetSpentReply, checkRulesCap, rulesCapReply, createFactSession, factUsage, earnedFacts, applyEarned, unhelpfulFacts, applyUnhelpful } from '../../sys/ai/memory-store.mjs';
   import { readinessLine } from '../../sys/ai/agent-tools.mjs';
   import { asStored } from '../../sys/ai/content-token.mjs';
   import { HOOKS_FILE, parseHooks } from '../../sys/ai/hooks.mjs';
@@ -2163,13 +2163,21 @@
       const f=(facts||[]).find(x=>x&&x.name===e.name); const p=(f&&f.path)||MEMORY_DIR+'/'+e.name+'.md';
       try{ const r=await read(p); if(!(r&&r.ok)) continue; const w=await write(p, applyEarned(r.data, { verifiedRuns:e.verifiedRuns, lastUsed:e.lastUsed })); if(w&&w.ok!==false) done.push(e); }catch(_){}
     }
+    // X2: the other side of the same evidence — a hypothesis recalled only in runs that did not finish is retired
+    for(const e of unhelpfulFacts(facts||[], usage)){
+      const f=(facts||[]).find(x=>x&&x.name===e.name); const p=(f&&f.path)||MEMORY_DIR+'/'+e.name+'.md';
+      try{ const r=await read(p); if(!(r&&r.ok)) continue; const w=await write(p, applyUnhelpful(r.data, { failedRuns:e.failedRuns, lastFailed:e.lastFailed })); if(w&&w.ok!==false) done.push({ ...e, retired:true }); }catch(_){}
+    }
     return done;
   }
   async function earnPass(t, project){
     try{
       const rows=await runsForProject(project); const facts=await listFacts();
       const done=await earnFromRuns({ rows, facts, read:(p)=>fs.read(p,{encoding:'utf-8'}), write:(p,x)=>fs.write(p,x) });
-      if(done.length && t){ (t.log=t.log||[]).push({ k:'system', text:'Earned: '+done.map(e=>e.name+' (recalled in '+e.verifiedRuns+' runs the gate passed)').join(', ')+' — now verified.' }); renderLog(); renderFiles(); }
+      const earnedNow=done.filter(e=>!e.retired), retired=done.filter(e=>e.retired);
+      if(earnedNow.length && t){ (t.log=t.log||[]).push({ k:'system', text:'Earned: '+earnedNow.map(e=>e.name+' (recalled in '+e.verifiedRuns+' runs the gate passed)').join(', ')+' — now verified.' }); }
+      if(retired.length && t){ (t.log=t.log||[]).push({ k:'system', text:'Retired: '+retired.map(e=>e.name+' (recalled in '+e.failedRuns+' runs that did not finish, never in a passing one)').join(', ')+' — retracted as unhelpful; edit the note in .anvil/memory to restore it.' }); }
+      if(done.length && t){ renderLog(); renderFiles(); }
     }catch(_){}
   }
   async function learnThisRun(t, rec, projectId = null){

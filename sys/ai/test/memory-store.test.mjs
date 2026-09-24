@@ -1,6 +1,6 @@
 // Conformance — structured project memory (pure).
 //   node sys/ai/test/memory-store.test.mjs
-import { parseScope, createFactSession, parseFact, buildMemoryIndex, noteToFact, recallTool, MEMORY_DIR, MEMORY_TYPES, factUsage, isResting, earnedFacts, applyEarned, EARN_RUNS, applyRevision, parseFp, SYSTEM_CAUSES,
+import { parseScope, createFactSession, parseFact, buildMemoryIndex, noteToFact, recallTool, MEMORY_DIR, MEMORY_TYPES, factUsage, isResting, earnedFacts, applyEarned, EARN_RUNS, unhelpfulFacts, applyUnhelpful, FAIL_RUNS, applyRevision, parseFp, SYSTEM_CAUSES,
          findDuplicate, duplicateReply, slotHolder, createRememberBudget, budgetSpentReply, MAX_REMEMBER_PER_RUN, NEAR_DUPLICATE_JACCARD,
          checkRulesCap, rulesCapReply, RULES_CAP_CHARS, LESSON_CONTRACT, serializeFact }
   from '../memory-store.mjs';
@@ -336,10 +336,38 @@ await test('PG-A3: a fact carries the fingerprint of the proposal it came from; 
   assert(/^fp: fp:v1:abab/m.test(f.file), 'serialised'); eq(parseFact(f.file).fp, 'fp:v1:' + 'ab'.repeat(32), 'round-trips');
   eq(parseFact(serializeFact({ ...parseFact(f.file), fp: 'junk' })).fp, null, 'a malformed fp is dropped, never written');
   eq(parseFp('fp:v1:' + '0'.repeat(64)), 'fp:v1:' + '0'.repeat(64)); eq(parseFp('fp:v1:short'), null);
-  eq(SYSTEM_CAUSES.join(','), 'earned,rejected');
+  eq(SYSTEM_CAUSES.join(','), 'earned,rejected,unhelpful');
   const viaRevise = parseFact(applyRevision(f.file, { status: 'verified', cause: 'earned', reason: 'I say so' }));
   eq(viaRevise.cause, null, 'revise cannot claim a system cause'); eq(viaRevise.status, 'verified');
   eq(parseFact(applyRevision(f.file, { status: 'verified', cause: 'earned', reason: 'x', system: true })).cause, 'earned', 'the system entry can');
+});
+
+await test('X2 (RRSI L1): a hypothesis recalled only in runs that did not finish is retired as unhelpful', () => {
+  const R = (names, stop, t, gatePassed = false) => ({ recalled: names, stop, gatePassed, endedAt: t });
+  const rows = [
+    R(['stale-path', 'mixed', 'owner-fact', 'a-rule', 'stall'], 'max-steps', 1_000),
+    R(['stale-path', 'mixed', 'owner-fact', 'a-rule', 'stall'], 'unverified', 2_000),
+    R(['stale-path', 'mixed', 'owner-fact', 'a-rule', 'stall', 'twice'], 'truncated', 3_000),
+    R(['twice'], 'budget', 4_000),
+    R(['mixed'], 'done', 5_000, true),
+    R(['not-evidence'], 'aborted', 6_000), R(['not-evidence'], 'clarify', 7_000), R(['not-evidence'], 'aborted', 8_000),
+  ];
+  const u = factUsage(rows);
+  eq(u.get('stale-path').failedRuns, 3); eq(u.get('stale-path').lastFailed, 3_000); eq(u.get('not-evidence').failedRuns, 0, 'an owner stop or a question is no evidence');
+  eq(FAIL_RUNS, 3);
+  const facts = [P('stale-path', { description: 'Sources live in lib/', status: 'hypothesis' }), P('mixed', { description: 'm', status: 'hypothesis' }),
+    P('owner-fact', { description: 'o' }), { ...P('a-rule', { description: 'r', status: 'hypothesis' }), type: 'rule' },
+    P('stall', { description: 's', status: 'hypothesis', scope: 'task:x' }), P('twice', { description: 't', status: 'hypothesis' }), P('not-evidence', { description: 'n', status: 'hypothesis' })];
+  eq(unhelpfulFacts(facts, u).map((e) => e.name).join(','), 'stale-path', 'only the hypothesis with 3 failed recalls and no passing one');
+  eq(unhelpfulFacts(facts, u, { failRuns: 2 }).map((e) => e.name).sort().join(','), 'stale-path,twice', 'the threshold is the knob');
+  eq(unhelpfulFacts(facts, null).length, 0, 'no evidence, nothing retired');
+  const sup = [P('stale-path', { description: 'x', status: 'hypothesis' }), P('newer', { description: 'y', supersedes: 'stale-path' })];
+  eq(unhelpfulFacts(sup, u).length, 0, 'a superseded fact is already out of the index');
+  const retired = parseFact(applyUnhelpful(serializeFact(facts[0]), { failedRuns: 3, lastFailed: 3_000 }));
+  eq(retired.status, 'retracted'); eq(retired.cause, 'unhelpful');
+  assert(/recalled in 3 runs that did not finish \(last 1970-01-01\) and never in a run the gate passed/.test(retired.body), 'the evidence is in the note: ' + retired.body);
+  assert(!/Sources live in lib/.test(buildMemoryIndex([retired])), 'a retired fact leaves the index');
+  eq(parseFact(applyRevision(serializeFact(facts[0]), { status: 'retracted', cause: 'unhelpful', reason: 'x' })).cause, null, 'the agent\'s revise cannot claim it');
 });
 
 await test('PG-A3: factUsage counts recalls in runs the gate PASSED; earnedFacts names the hypotheses with EARN_RUNS of them; applyEarned promotes with the cause and the evidence', () => {

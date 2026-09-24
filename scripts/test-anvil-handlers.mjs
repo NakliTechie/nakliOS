@@ -500,11 +500,11 @@ await test('LV2: the miss row says where the run stands against the loop\'s limi
 });
 
 // ── PG-A3 (2026-09-17): Anvil's own write-admission gate ─────────────────────────────
-const { parseFact, applyRevision, factUsage, earnedFacts, applyEarned } = await import('../sys/ai/memory-store.mjs');
+const { parseFact, applyRevision, factUsage, earnedFacts, applyEarned, unhelpfulFacts, applyUnhelpful } = await import('../sys/ai/memory-store.mjs');
 await test('PG-A3: earnFromRuns promotes a hypothesis recalled in two runs the gate passed, writes the cause and the evidence, and leaves the rest alone', async () => {
   const fact = (name, status) => `---\nname: ${name}\ndescription: ${name} desc\ntype: project\nstatus: ${status}\n---\n${name} body`;
   const fs = memFs({ '.anvil/memory/vite.md': fact('vite', 'hypothesis'), '.anvil/memory/once.md': fact('once', 'hypothesis'), '.anvil/memory/done.md': fact('done', 'verified') });
-  const earnFromRuns = instantiate(extractFunction(src, 'earnFromRuns'), 'earnFromRuns', { MEMORY_DIR: '.anvil/memory', factUsage, earnedFacts, applyEarned });
+  const earnFromRuns = instantiate(extractFunction(src, 'earnFromRuns'), 'earnFromRuns', { MEMORY_DIR: '.anvil/memory', factUsage, earnedFacts, applyEarned, unhelpfulFacts, applyUnhelpful });
   const facts = Object.entries(fs.store).map(([path, t]) => ({ ...parseFact(t), path }));
   const rows = [{ recalled: ['vite', 'once'], gatePassed: true, endedAt: 1_000 }, { recalled: ['vite'], gatePassed: true, endedAt: 2_000 }, { recalled: ['once'], gatePassed: false, endedAt: 3_000 }];
   const done = await earnFromRuns({ rows, facts, read: (p) => fs.read(p, { encoding: 'utf-8' }), write: (p, x) => fs.write(p, x) });
@@ -520,6 +520,20 @@ await test('PG-A3: earnFromRuns promotes a hypothesis recalled in two runs the g
   assert.match(src, /learnStaged\['skill:'\+name\] \? \[\{ label:'✗ Reject', onClick: async \(\)=>\{ await rejectProposal\(\{ kind:'skill', name \}\)/, 'and Reject — only for a skill the review staged');
   assert.match(src, /gatePassed: ev\.some\(e=>e\.tool==='verify\.passed'\)/, 'the row carries the gate\'s word');
   assert.match(src, /label:'✗ reject '\+f\.name, onClick: async \(\)=>\{ await rejectProposal\(\{ kind:'fact', name:f\.name, path:f\.path \}\)/, 'a hypothesis fact offers reject, by its real path');
+});
+
+await test('X2: earnFromRuns retires a hypothesis recalled only in runs that did not finish, and says so', async () => {
+  const fact = (name, status) => `---\nname: ${name}\ndescription: ${name} desc\ntype: project\n${status ? 'status: ' + status + '\n' : ''}---\n${name} body`;
+  const fs = memFs({ '.anvil/memory/lib-path.md': fact('lib-path', 'hypothesis'), '.anvil/memory/mine.md': fact('mine', null) });
+  const earnFromRuns = instantiate(extractFunction(src, 'earnFromRuns'), 'earnFromRuns', { MEMORY_DIR: '.anvil/memory', factUsage, earnedFacts, applyEarned, unhelpfulFacts, applyUnhelpful });
+  const facts = Object.entries(fs.store).map(([path, t]) => ({ ...parseFact(t), path }));
+  const rows = ['max-steps', 'unverified', 'expect-misses'].map((stop, i) => ({ recalled: ['lib-path', 'mine'], stop, gatePassed: false, endedAt: (i + 1) * 1000 }));
+  const done = await earnFromRuns({ rows, facts, read: (p) => fs.read(p, { encoding: 'utf-8' }), write: (p, x) => fs.write(p, x) });
+  assert.equal(Array.from(done, (e) => e.name + ':' + !!e.retired).join(','), 'lib-path:true', 'the hypothesis is retired; the owner\'s plain fact is not');
+  const lib = parseFact(fs.store['.anvil/memory/lib-path.md']);
+  assert.equal(lib.status, 'retracted'); assert.equal(lib.cause, 'unhelpful'); assert.match(lib.body, /recalled in 3 runs that did not finish/);
+  assert.equal(parseFact(fs.store['.anvil/memory/mine.md']).status, null, 'a plain fact is untouched');
+  assert.match(src, /text:'Retired: '\+retired\.map\(e=>e\.name\+' \(recalled in '\+e\.failedRuns\+' runs that did not finish, never in a passing one\)'\)/, 'the task log names what was retired and why');
 });
 
 await test('PG-A3: rejectProposal poisons the fingerprint with a label, retracts a fact with cause `rejected` or removes a staged skill, and saves the ledger', async () => {

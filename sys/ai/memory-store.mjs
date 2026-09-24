@@ -65,7 +65,9 @@ export const REVISION_CAUSES = ['correction', 'temporal_change', 'scope_differen
 // PG-A3 (2026-09-17): two causes only the SYSTEM and the OWNER write — never the agent's `revise` (its enum
 // stays the five above): `earned` (the admission gate promoted it on evidence) and `rejected` (the owner
 // refused the proposal it came from).
-export const SYSTEM_CAUSES = ['earned', 'rejected'];
+// X2 (2026-09-24): `unhelpful` — the system retired a hypothesis recalled in runs that did not finish and never
+// in one the gate passed (RRSI's L1 rule).
+export const SYSTEM_CAUSES = ['earned', 'rejected', 'unhelpful'];
 const ALL_CAUSES = [...REVISION_CAUSES, ...SYSTEM_CAUSES];
 // PG-A3 (2026-09-17): a proposal's fingerprint rides on the fact it became, so the owner's rejection of
 // the fact can poison the proposal — and an equivalent is never re-proposed.
@@ -298,11 +300,13 @@ export function factUsage(rows){
     const when = Number(r.endedAt || r.startedAt) || 0;
     if (when > 0) since = Math.min(since, when);
     for (const name of r.recalled) {
-      const u = out.get(String(name)) || { runs: 0, lastUsed: 0, verifiedRuns: 0, lastVerified: 0 };
+      const u = out.get(String(name)) || { runs: 0, lastUsed: 0, verifiedRuns: 0, lastVerified: 0, failedRuns: 0, lastFailed: 0 };
       // PG-A3: recalled in a run the GATE passed — the row's `gatePassed` (a verify.passed on its record), never
       // the loop's `verified` flag, which an ungated task_done sets true (the checker's probe: two ungated
       // finishes would have minted "verified" for a fact no gate ever saw)
-      u.runs++; u.lastUsed = Math.max(u.lastUsed, when); if (r.gatePassed === true) { u.verifiedRuns++; u.lastVerified = Math.max(u.lastVerified, when); } out.set(String(name), u);
+      u.runs++; u.lastUsed = Math.max(u.lastUsed, when); if (r.gatePassed === true) { u.verifiedRuns++; u.lastVerified = Math.max(u.lastVerified, when); }
+      else if (FAILED_STOPS.has(String(r.stop || ''))) { u.failedRuns++; u.lastFailed = Math.max(u.lastFailed, when); } // X2
+      out.set(String(name), u);
     }
   }
   // No row that CARRIES use is no evidence at all — resting stays off (the checker: an index
@@ -331,6 +335,29 @@ export function earnedFacts(facts, usage, { earnRuns = EARN_RUNS } = {}){
     out.push({ name: f.name, verifiedRuns: u.verifiedRuns, lastUsed: u.lastVerified });
   }
   return out;
+}
+// X2 (RRSI's L1 rule, 2026-09-24). Resting (A1) hides a fact nobody recalls; nothing handled a fact that IS
+// recalled and keeps not helping. A hypothesis recalled in FAIL_RUNS runs that did not finish, and never in a
+// run the gate passed, is retired: `retracted`, cause `unhelpful`, with the evidence in its revision note.
+// Only hypotheses — a plain fact (the owner's) and a rule are never touched; a task-scoped stall note is
+// written BECAUSE a run failed, so it is exempt. "Did not finish" is a stop that says the work went wrong,
+// not an owner's stop (aborted) or a question (clarify), which say nothing about the fact.
+export const FAIL_RUNS = 3;
+export const FAILED_STOPS = new Set(['max-steps', 'unverified', 'budget', 'no-progress', 'expect-misses', 'truncated', 'error']);
+export function unhelpfulFacts(facts, usage, { failRuns = FAIL_RUNS } = {}){
+  if (!usage) return [];
+  const stale = supersededSet(facts || []);
+  const out = [];
+  for (const f of facts || []) {
+    if (!f || !f.name || f.status !== 'hypothesis' || f.type === 'rule' || stale.has(f.name) || f.scope) continue;
+    const u = usage.get(f.name); if (!u || u.verifiedRuns > 0 || !(u.failedRuns >= failRuns)) continue;
+    out.push({ name: f.name, failedRuns: u.failedRuns, lastFailed: u.lastFailed });
+  }
+  return out;
+}
+export function applyUnhelpful(text, { failedRuns, lastFailed } = {}){
+  const when = lastFailed ? new Date(Number(lastFailed)).toISOString().slice(0, 10) : '';
+  return applyRevision(text, { status: 'retracted', cause: 'unhelpful', system: true, reason: `recalled in ${failedRuns} runs that did not finish${when ? ` (last ${when})` : ''} and never in a run the gate passed` });
 }
 export function applyEarned(text, { verifiedRuns, lastUsed } = {}){
   const when = lastUsed ? new Date(Number(lastUsed)).toISOString().slice(0, 10) : '';
