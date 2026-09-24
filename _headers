@@ -38,3 +38,7 @@
 /*
   Content-Security-Policy: frame-ancestors 'self'
   X-Frame-Options: SAMEORIGIN
+
+# PWA manifest: the registered type, so every browser parses it as a manifest.
+/manifest.webmanifest
+  Content-Type: application/manifest+json

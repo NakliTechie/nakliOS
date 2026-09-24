@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NakliOS — a private browser desktop</title>
+<!-- PWA (2026-09-24): installable, so the browser treats NakliOS as an app — the strongest signal for
+     navigator.storage.persist(), which the Durability contract leans on (docs/app-contract.md). -->
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#15100c">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <meta name="description" content="A desktop full of single-file, privacy-first browser-native tools. All these tools, none of your data.">
 <meta name="author" content="Chirag Patnaik">
 <link rel="canonical" href="https://naklios.dev/">

@@ -11,6 +11,9 @@ plan/
 !.assetsignore
 !wrangler.jsonc
 !_headers
+!manifest.webmanifest
+!icons/
+!icons/*
 !sdk/
 !sdk/*
 !apps/
