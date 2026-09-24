@@ -509,6 +509,35 @@ await test('SH2: rm -f ignores a missing path (single, many, and at confirm time
   await run(shell, 'rm b gone'); await run(shell, 'y'); eq(shell.lastCode, 1, 'and plain rm of many still reports the missing one');
 });
 
+await test('SH3: a here-document is the statement\'s stdin; python - runs it; bad forms are refused; od shows bytes', async () => {
+  const fs = createFileops({ backend: new MemoryBackend() });
+  const registry = buildRigRegistry({ fs });
+  const grant = createGrant({ prefixes: [''], scopes: ['fs:read', 'fs:write', 'fs:remove'] });
+  const opLog = createOpLog({ fs: createFileops({ backend: new MemoryBackend() }) });
+  const face = createAgentFace({ registry, grant, opLog, actor: 'agent' });
+  const calls = [];
+  const kiln = { exec: async (_id, code, opts) => { calls.push({ code, argv: opts.argv, stdin: opts.stdin }); return { status: 'ok', stdout: 'ran' }; } };
+  const shell = createShell({ registry, face, kiln });
+  await run(shell, "python - a <<'PY'\nprint($X)\n  indented\nPY");
+  eq(calls[0].code, 'print($X)\n  indented\n', 'a quoted body is literal — $ and indentation kept');
+  eq(JSON.stringify(calls[0].argv), '["-","a"]', 'argv starts with -, as CPython sets it'); eq(calls[0].stdin, '', 'the program was the stdin; the script reads none');
+  await run(shell, 'python - <<-PY\n\tx = 1\n\tPY'); eq(calls[1].code, 'x = 1\n', '<<- strips leading tabs, the terminator too');
+  eq(await run(shell, 'grep -c b <<\'E\'\nab\ncd\nbb\nE'), '2', 'any command reads it as stdin');
+  eq(await run(shell, 'grep -c b <<\'E\'; echo after\nab\nE'), '1\nafter', 'a statement written after << on its line still runs (bash form)');
+  assert(/no line `E` ends/.test(await run(shell, 'grep -c b <<\'E\'\nab\nE; echo after')), 'a terminator must be alone on its line, as in bash');
+  assert(/does not expand inside a here-document/.test(await run(shell, 'python - <<PY\nx = $HOME\nPY')) && shell.lastCode === 2 && calls.length === 2, 'an unquoted body that would expand is refused, not run literally');
+  assert(/no line `PY` ends/.test(await run(shell, "python - <<'PY'\nprint(1)")) && shell.lastCode === 2, 'a missing terminator is an error');
+  assert(/and `<` on one command/.test(await run(shell, "cat < x <<'E'\nq\nE")), 'a heredoc and < on one command is refused');
+  eq(await run(shell, 'echo "a<<b"'), 'a<<b', 'a quoted << is text, not a heredoc');
+  // od
+  await run(shell, 'printf "a\\tb\\r\\n" > f.txt');
+  eq(await run(shell, 'od -c f.txt'), '0000000   a  \\t   b  \\r  \\n\n0000005', 'od -c: address, escapes, end address');
+  eq(await run(shell, 'od -An -t x1 f.txt'), ' 61 09 62 0d 0a', 'od -An -t x1: hex bytes, no address');
+  eq(await run(shell, 'od -b f.txt'), '0000000 141 011 142 015 012\n0000005', 'od -b: octal bytes');
+  assert(/od supports/.test(await run(shell, 'od -x f.txt')) && shell.lastCode === 2, 'an unsupported flag is refused and names what works');
+  assert(/give a format/.test(await run(shell, 'od f.txt')) && shell.lastCode === 2, 'no format is refused, not guessed');
+});
+
 if (failures.length) {
   console.error(`shell core: ${passed} passed, ${failures.length} FAILED`);
   for (const f of failures) console.error(`  FAIL ${f.name}: ${f.message}`);

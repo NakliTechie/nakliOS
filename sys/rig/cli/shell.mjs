@@ -58,19 +58,70 @@ function normalizePath(cwd, arg) {
   return base.join('/');
 }
 
+// SH3 (2026-09-24): heredocs as stdin. `python - <<'PY' … PY` — the form a model reaches for to run a
+// short script — failed with a misleading `<: ENOENT`: the lines of a multi-line call reached the
+// tokenizer as one line, newlines as spaces. The body is lifted out BEFORE parsing and replaced by a
+// marker token the parser attaches to its statement, where it is that statement's stdin (the same
+// path `< file` takes). `<<'TAG'` / `<<"TAG"` are literal; `<<TAG` is literal when the body has no `$`
+// — this shell does not expand inside a heredoc, so a body that would expand is refused, not run
+// with a different meaning; `<<-` strips leading tabs, as bash does. A missing terminator is an error.
+export const HEREDOC_MARK = '\u0002';
+export function extractHeredocs(raw) {
+  const lines = String(raw == null ? '' : raw).split('\n');
+  const bodies = [];
+  const kept = [];
+  for (let li = 0; li < lines.length; li++) {
+    let line = lines[li];
+    const found = [];
+    let quote = null, out = '';
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (quote) { out += c; if (c === quote) quote = null; continue; }
+      if (c === '"' || c === "'") { quote = c; out += c; continue; }
+      if (c === '#' && (out === '' || /\s$/.test(out))) { out += line.slice(i); break; }
+      if (c === '<' && line[i + 1] === '<' && line[i + 2] !== '<') {
+        const m = /^<<(-?)\s*(?:'([^']*)'|"([^"]*)"|([A-Za-z_][A-Za-z0-9_]*))/.exec(line.slice(i));
+        if (!m) return { error: 'heredoc: `<<` needs a terminator word — e.g. <<\'EOF\'' };
+        const tag = m[2] ?? m[3] ?? m[4];
+        found.push({ tag, strip: m[1] === '-', quoted: m[4] == null });
+        out += ` ${HEREDOC_MARK}HD${bodies.length + found.length - 1}${HEREDOC_MARK} `;
+        i += m[0].length - 1;
+        continue;
+      }
+      out += c;
+    }
+    kept.push(out);
+    for (const h of found) {
+      const body = [];
+      let closed = false;
+      for (li++; li < lines.length; li++) {
+        const l = h.strip ? lines[li].replace(/^\t+/, '') : lines[li];
+        if (l === h.tag) { closed = true; break; }
+        body.push(l);
+      }
+      if (!closed) return { error: `heredoc: no line \`${h.tag}\` ends the here-document` };
+      const text = body.join('\n') + (body.length ? '\n' : '');
+      if (!h.quoted && /\$/.test(text)) return { error: `heredoc: this shell does not expand inside a here-document — quote the tag (<<'${h.tag}') for a literal body` };
+      bodies.push(text);
+    }
+  }
+  return { line: kept.join('\n'), bodies };
+}
+
 // ── split a line into statements (`;`, `&&`) then pipelines (`|`) then argv,
 // pulling trailing redirects (`>`, `>>`) off the last stage. Reuses the
 // quote-aware tokenizer so quoted operators stay literal. ──
-function parseLine(line) {
+function parseLine(line, bodies = []) {
   const tokens = tokenizeOps(line);
   const statements = [];
-  let stmt = { op: 'first', pipeline: [], redirect: null, stdinFrom: null };
+  let stmt = { op: 'first', pipeline: [], redirect: null, stdinFrom: null, stdinBody: null };
   let stage = [];
   const pushStage = () => { if (stage.length) { stmt.pipeline.push(stage); stage = []; } };
   const pushStmt = () => { pushStage(); if (stmt.pipeline.length) statements.push(stmt); };
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i];
-    if (t === ';' || t === '&&' || t === '||') { pushStmt(); stmt = { op: t, pipeline: [], redirect: null, stdinFrom: null }; }
+    if (t === ';' || t === '&&' || t === '||') { pushStmt(); stmt = { op: t, pipeline: [], redirect: null, stdinFrom: null, stdinBody: null }; }
+    else if (t.startsWith(HEREDOC_MARK + 'HD')) { stmt.stdinBody = bodies[Number(t.slice(3, -1))] ?? ''; }
     else if (t === '|') { pushStage(); }
     else if (t === '>' || t === '>>') { stmt.redirect = { append: t === '>>', path: tokens[++i] }; }
     else if (t === '<') { stmt.stdinFrom = tokens[++i]; } // was silently ignored → empty stdin, exit 0 (R2e)
@@ -479,6 +530,42 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
       if (has('w')) return { text: String(words), code: 0 };
       if (has('c') || has('m')) return { text: String(text.length), code: 0 };
       return { text: `${lines} ${words} ${text.length}`, code: 0 };
+    },
+    // SH3 (2026-09-24): `od` — asked for in live runs to see a file's exact bytes (a stray \r, a BOM).
+    // A documented subset: -c (characters), -b (octal bytes), -t x1 / -tx1 (hex bytes), -t c, -An (no
+    // address column). 16 bytes a line, GNU's layout. Anything else is refused and says what works.
+    async od(argv, stdin) {
+      const types = []; let addr = true; const files = [];
+      for (let i = 0; i < argv.length; i++) {
+        const a = argv[i];
+        if (a === '-c' || a === '-tc') types.push('c');
+        else if (a === '-b') types.push('b');
+        else if (a === '-tx1') types.push('x');
+        else if (a === '-t') { const t = argv[++i]; if (t === 'x1') types.push('x'); else if (t === 'c') types.push('c'); else return { text: `od: unsupported type ${t ?? ''} — od supports -c -b -t x1 -t c -An`, code: 2 }; }
+        else if (a === '-An' || (a === '-A' && argv[i + 1] === 'n' && ++i)) addr = false;
+        else if (a.startsWith('-') && a !== '-') return { text: `od: unsupported flag ${a} — od supports -c -b -t x1 -t c -An`, code: 2 };
+        else files.push(a);
+      }
+      if (!types.length) return { text: 'od: give a format — -c (characters), -b (octal bytes) or -t x1 (hex bytes)', code: 2 };
+      let bytes;
+      if (files.length) {
+        const parts = [];
+        for (const f of files) {
+          const r = await face.invoke('fs.read', { path: normalizePath(state.cwd, f) });
+          if (!r.ok) return { text: `od: ${f}: ${r.code || 'ENOENT'}`, code: 1 };
+          parts.push(typeof r.data === 'string' ? new TextEncoder().encode(r.data) : new Uint8Array(r.data));
+        }
+        bytes = new Uint8Array(parts.reduce((n, p) => n + p.length, 0)); let o = 0; for (const p of parts) { bytes.set(p, o); o += p.length; }
+      } else bytes = new TextEncoder().encode(stdin || '');
+      const ESC = { 0: '\\0', 7: '\\a', 8: '\\b', 9: '\\t', 10: '\\n', 11: '\\v', 12: '\\f', 13: '\\r' };
+      const cell = { c: (b) => (ESC[b] ?? (b >= 32 && b < 127 ? String.fromCharCode(b) : b.toString(8).padStart(3, '0'))).padStart(4), b: (b) => ' ' + b.toString(8).padStart(3, '0'), x: (b) => ' ' + b.toString(16).padStart(2, '0') };
+      const out = [];
+      for (let off = 0; off < bytes.length; off += 16) {
+        const row = bytes.subarray(off, off + 16);
+        types.forEach((t, k) => out.push((addr ? (k === 0 ? off.toString(8).padStart(7, '0') : ' '.repeat(7)) : '') + Array.from(row, cell[t]).join('')));
+      }
+      if (addr) out.push(bytes.length.toString(8).padStart(7, '0'));
+      return { text: out.join('\n'), code: 0 };
     },
     async sort(argv, stdin) {
       const { flags, positionals } = splitArgs(argv);
@@ -889,7 +976,8 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
         + '\n  head/tail -n   wc -l -w -c   sort -r -n -u -f   uniq -c -d -u   cut -d -f -c   tr [-d], ranges'
         + '\n  find [dir] -name -type -maxdepth       sed s/// on stdin or a file (no -i; use the edit tool)'
         + '\n  awk -F with {print $N}      ls -R -a -l      sleep SECONDS (decimals; capped at ' + SLEEP_MAX_S + ' s)'
-        + '\nNo subshells, loops, functions, heredocs, background jobs or command substitution.'
+        + '\n  od -c -b -t x1 -An        here-documents as stdin: cmd <<\'EOF\' … EOF  (literal; python - <<\'PY\' runs it)'
+        + '\nNo subshells, loops, functions, background jobs or command substitution.'
         + '\nPython is a real kernel (`python file.py`); it is the scripting layer, not bash.', code: 0 };
     },
   };
@@ -1071,6 +1159,7 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
       // Answer the two version spellings; refuse every other flag the way the builtins do.
       if (mi === 0) { /* code set above */ }
       else if (ci < 0 && (args[0] === '--version' || args[0] === '-V')) code = 'import sys; print("Python " + sys.version.split()[0])';
+      else if (ci < 0 && args[0] === '-') code = stdin || ''; // SH3: `python -` reads the program from stdin (a heredoc, a pipe), as CPython does
       else if (ci < 0 && args[0] && args[0].startsWith('-')) return { text: `python: unsupported option ${args[0]} — use \`python file.py\`, \`python -m module\`, \`python -c "code"\` or \`python --version\``, code: 2 };
       else if (ci >= 0 && args[ci + 1] != null) code = args[ci + 1];
       else if (args[0] && !args[0].startsWith('-')) {
@@ -1082,9 +1171,9 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
       // but RAN with cwd = the mount root, so a relative open inside the script missed. The kernel
       // now runs where the shell is.
       // sys.argv as CPython sets it: the script and its arguments, or -c and what follows.
-      const argv = mi === 0 ? [args[1], ...args.slice(2)] : ci >= 0 ? ['-c', ...args.slice(ci + 2)] : (args[0] && !args[0].startsWith('-') ? args : ['']);
+      const argv = mi === 0 ? [args[1], ...args.slice(2)] : (ci < 0 && args[0] === '-') ? args : ci >= 0 ? ['-c', ...args.slice(ci + 2)] : (args[0] && !args[0].startsWith('-') ? args : ['']);
       // what a pipe or `<` fed this command is the script's stdin
-      const r = await kiln.exec('shell', code, { isolate: kilnIsolate, cwd: state.cwd, argv, stdin: stdin || '' });
+      const r = await kiln.exec('shell', code, { isolate: kilnIsolate, cwd: state.cwd, argv, stdin: (ci < 0 && args[0] === '-') ? '' : (stdin || '') });
       if (r.status === 'unavailable') return { text: 'python: ' + (r.message || 'kernel unavailable'), code: 1 };
       // A `sys.exit(n)` rides through as n; anything else that is not ok is 1. `output` is the
       // two streams in write order; a runtime without it hands back stdout then stderr.
@@ -1223,8 +1312,14 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
     return { text: renderGit(sub, res), code: 0 };
   }
 
-  async function runPipeline(pipeline, stdinFrom = null) {
+  async function runPipeline(pipeline, stdinFrom = null, stdinBody = null) {
     let stdin = '';
+    // SH3: a here-document is the statement's stdin — the FIRST stage's, the command it is written
+    // beside in every pipeline an agent writes (`python - <<'PY' | head`)
+    if (stdinBody != null) {
+      if (stdinFrom) return { text: '<<: a here-document and `<` on one command — use one', code: 2 };
+      stdin = stdinBody;
+    }
     if (stdinFrom && pipeline.length > 1) {
       // bash attaches `<` to the command it is written beside; this shell records it per
       // STATEMENT and cannot say which stage owns it. A guess is the failure this batch removes.
@@ -1293,7 +1388,9 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
 
     const raw = String(line == null ? '' : line);
     if (raw.trim() !== '') state.history.push(raw.trim());
-    const r = await runStatements(parseLine(raw), write);
+    const hd = extractHeredocs(raw); // SH3
+    if (hd.error) { lastCode = 2; return { output: hd.error, cleared: false }; }
+    const r = await runStatements(parseLine(hd.line, hd.bodies), write);
     return { output: out.join('\n'), ...(r.awaitingConfirm ? { awaitingConfirm: r.awaitingConfirm } : {}), cleared: !!r.cleared, ...(lastListing ? { listing: lastListing } : {}) };
   }
 
@@ -1305,7 +1402,7 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
       const stmt = stmts[i];
       if (stmt.op === '&&' && lastCode !== 0) continue; // short-circuit on failure
       if (stmt.op === '||' && lastCode === 0) continue; // short-circuit on success
-      const res = await runPipeline(stmt.pipeline, stmt.stdinFrom);
+      const res = await runPipeline(stmt.pipeline, stmt.stdinFrom, stmt.stdinBody);
       lastCode = res.code || 0;
       // An interrupted wait ends the LINE, as SIGINT would: `sleep 5; echo after` runs nothing after
       // the owner's Stop — a `;` or `||` continuation is not a way past it (the checker's probe).
