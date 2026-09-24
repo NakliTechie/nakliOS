@@ -192,7 +192,8 @@ await test('Anvil passes GATE_DIR to BOTH grants and annotates every route\'s re
   const anvil = await readFile(new URL('../../../apps/anvil/index.html', import.meta.url), 'utf8');
   // Contains, not equals — the list grew with the search index (Med1) and will grow again.
   const grants = anvil.match(/readOnlyPrefixes:\[[^\]]*SKILLS_DIR[^\]]*GATE_DIR[^\]]*\]/g) || [];
-  eq(grants.length, 2, 'the top-level agent grant AND the subagent overlay grant both fence the gate dir');
+  eq(grants.length, 1, 'the one grant builder fences the gate dir');
+  assert(/grant = agentGrant\(\);/.test(anvil) && /const ograph = agentGrant\(grant\.scopes\);/.test(anvil), 'the top-level agent grant AND the subagent overlay grant both come from it');
   // Pin the RELATIONSHIP, not the literal import line: an exact-text anchor here went stale the
   // first time a name was added to the import (2026-09-10). What must hold is that every gate
   // name the app uses is imported from the module rather than redefined locally.

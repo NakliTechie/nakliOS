@@ -103,12 +103,17 @@ const call = async (f, name, input) => {
   assert.equal(scopeOf('commit'), 'git:write', 'a LOCAL commit is unchanged — that is the point of splitting');
   assert.equal(scopeOf('log'), 'git:read', 'and so is a local log');
 
-  // Both Anvil grant sites, or the two drift and one of them is the hole.
+  // ONE Anvil grant builder (agentGrant), used by every agent route — two literals drifted into a hole
+  // risk; since 2026-09-24 the top level, the dispatched child and the test door all call the one helper.
   const grants = anvil.match(/createGrant\(\{ prefixes:\[''\][^)]*\)/g) || [];
-  assert.equal(grants.length, 2, 'Anvil builds its agent grant in exactly two places');
+  assert.equal(grants.length, 1, 'Anvil builds its agent grant in exactly one place');
+  assert.equal((anvil.match(/createGrant\(/g) || []).length, 1, 'the one builder is the only createGrant call — no other grant site');
+  assert.match(anvil, /grant = agentGrant\(\);/, 'the top-level grant is the builder\'s');
+  assert.match(anvil, /const ograph = agentGrant\(grant\.scopes\);/, 'the child grant is the builder\'s, with the parent\'s scopes');
+  const scopes = /const AGENT_SCOPES = (\[[^\]]*\]);/.exec(anvil)?.[1] || '';
+  assert.match(scopes, /'git:remote'/, 'the agent scopes hold git:remote');
+  assert.ok(!/'git:push'/.test(scopes), 'and not git:push');
   for (const g of grants) {
-    assert.match(g, /'git:remote'/, 'each grant holds git:remote');
-    assert.ok(!/'git:push'/.test(g), 'and neither holds git:push');
     assert.match(g, /SEARCH_INDEX_PATH/, 'each fences the search index');
     assert.match(g, /SKILLS_DIR, GATE_DIR/, 'without losing the fences it already had');
   }

@@ -71,7 +71,8 @@ assert.equal(explainSkillsRefusal('ok'), 'ok', 'an ordinary result is untouched'
 // like a regression. What must hold is that neither grant loses a fence, not that nobody adds one.
 {
   const grants = anvil.match(/createGrant\(\{ prefixes:\[''\][^)]*\)/g) || [];
-  assert.equal(grants.length, 2, 'both the agent grant and the subagent grant exist');
+  assert.equal(grants.length, 1, 'one grant builder (agentGrant) serves the agent and every subagent');
+  assert.match(anvil, /grant = agentGrant\(\);/); assert.match(anvil, /const ograph = agentGrant\(grant\.scopes\);/);
   for (const g of grants) {
     assert.match(g, /readOnlyPrefixes:\[[^\]]*SKILLS_DIR/, 'each fences the skills dir read-only');
     assert.match(g, /readOnlyPrefixes:\[[^\]]*GATE_DIR/, 'and the gate dir');

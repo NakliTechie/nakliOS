@@ -215,7 +215,7 @@ export function toolReadiness(mode = 'code', options = {}, { unavailable = {} } 
 export function readinessLine(rows) {
   const by = {}; for (const r of rows) (by[r.state] = by[r.state] || []).push(r.name);
   const part = (k) => by[k] && by[k].length ? `${k}: ${by[k].join(', ')}` : '';
-  return ['exposed', 'hidden', 'off', 'unavailable'].map(part).filter(Boolean).join(' · ');
+  return ['exposed', 'blocked', 'hidden', 'off', 'unavailable'].map(part).filter(Boolean).join(' · '); // B5 live 2026-09-24: 'blocked' was missing, so the owner never saw what the grant removed
 }
 
 // ── the edit replacer chain (pure) — 9 strategies ───────────────────────

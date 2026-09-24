@@ -38,6 +38,14 @@ from the host page's console or a browser-automation script against the iframe.
 - **Observable success:** returns true; row `i`'s node is a NEW node with the new text; every other row node is the SAME node; the opened `<details>` is still open.
 - **Gotchas:** returns false with no task or no row `i`; a change to more than `PATCH_MAX` rows rebuilds by design.
 
+### hook:narrowGrant
+- **Goal:** run the agent under a narrower grant — a read-only project is `['fs:read','git:read']` — so the grant's live consumers are observable: the catalog (B5 `blocked`), the shell's refusal, and a dispatched child holding the parent's scopes (2026-09-24).
+- **Source:** the door's `narrowGrant(scopes)` → `agentGrant(scopes)` → a new `face` and `agentShell()` → `syncMode()`.
+- **Prerequisites:** launch; a mounted workspace.
+- **Reach and drive:** `t.narrowGrant(['fs:read','git:read'])`; read `#mode-btn`'s title; `t.shell('echo x >> notes.txt')`; run a task asking for one `dispatch` whose child appends to a file; read the run record's `run.started` tools and the dispatch result.
+- **Observable success:** returns `{scopes}`; the title has `blocked: edit, write, apply_patch, edit_lines, …`; the shell prints `scope not granted: fs:write`; `run.started` tools hold no write tool; the child's shell is refused the same way and the file is unchanged.
+- **Gotchas:** Kiln keeps the face it booted with (a `python` write is not narrowed); reload to restore the full grant.
+
 ### hook:taskState
 - **Goal:** the active task's id, title, status, gate and mode as the UI holds them.
 - **Source:** the door's `taskState`.

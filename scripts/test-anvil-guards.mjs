@@ -123,7 +123,7 @@ assert.match(anvil, /let result = await driveRun\(\{/, 'the app runs on that bud
 // not the app's executeTool wrapper — so remember / skill_manage / history / checkpoint (which
 // live only in the wrapper) do not exist for a subagent. A subagent's memory write cannot land
 // anywhere because the tool is not there; the overlay-copy question is moot. Answer recorded, no code.
-assert.match(anvil, /const executor = makeToolExecutor\(\{ shell: oshell, face: oface, mode:'code', infer: inferViaHost, subagentDepth: 1 \}\)/, 'a subagent executor is a raw makeToolExecutor over its overlay');
+assert.match(anvil, /const executor = makeToolExecutor\(\{ shell: oshell, face: oface, mode:'code', infer: inferViaHost, subagentDepth: 1, scopes: ograph\.scopes \}\)/, 'a subagent executor is a raw makeToolExecutor over its overlay, projected by its grant');
 assert.ok(!/nm==='remember'/.test(anvil.slice(anvil.indexOf('async function spawnIsolated'), anvil.indexOf('const baseExec'))), 'the subagent factory adds no remember handler');
 
 // ── the boot error net ────────────────────────────────────────────────────

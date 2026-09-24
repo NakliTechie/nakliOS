@@ -512,6 +512,8 @@ await test('B5: codingToolset drops what the grant cannot honour; no scopes → 
   eq(st('dispatch').state, 'off', 'an opt-in that is off is off, not blocked');
   eq(toolReadiness('plan', { scopes: ['fs:read'] }).find((r) => r.name === 'write').state, 'hidden', 'the mode hides before the grant blocks');
   assert(rows.every((r) => ['exposed', 'hidden', 'blocked', 'off', 'unavailable'].includes(r.state)), 'five states');
+  assert(/ · blocked: edit, write, apply_patch, edit_lines · /.test(readinessLine(rows)), 'the one-line summary the mode button shows names the blocked tools: ' + readinessLine(rows));
+  for (const r of rows) assert(readinessLine([r]).startsWith(r.state + ': '), `the line renders every state, ${r.state} included`);
 });
 
 if (failures.length) {

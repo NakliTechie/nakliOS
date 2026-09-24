@@ -283,6 +283,12 @@
       "kind": "hook",
       "detail": "__anvil.test.logRow"
     },
+    "hook:narrowGrant": {
+      "owner": "test-door.md",
+      "fingerprint": "af30c8e037de",
+      "kind": "hook",
+      "detail": "__anvil.test.narrowGrant"
+    },
     "hook:rebuildIndex": {
       "owner": "test-door.md",
       "fingerprint": "227f72c8ef32",

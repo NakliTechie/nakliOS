@@ -480,6 +480,13 @@
 
   // ── Rig workspace stack (lifted from Forge) — the agent's file substrate ──
   let backend, fs, git, registry, grant, opLog, face, shell, kilnRef=null;
+  // The ONE agent grant: every agent route — the top level, a dispatched child, the test door's
+  // narrowed grant — is built here, so the fences (skills, gate, search index) cannot drift between
+  // sites. A child passes the parent's scopes (B5): a read-only project gains no write by dispatch.
+  const AGENT_SCOPES = ['fs:read','fs:write','fs:remove','git:read','git:write','git:remote'];
+  const agentGrant = (scopes=AGENT_SCOPES) => createGrant({ prefixes:[''], scopes:[...scopes], readOnlyPrefixes:[SKILLS_DIR, GATE_DIR, SEARCH_INDEX_PATH] });
+  // The agent's own shell over the current face and Kiln (boot and the test door's rebind).
+  const agentShell = () => createShell({ registry, face, kiln: kilnRef, kilnIsolate:true, js: jsHost, signal: ()=>abortController ? abortController.signal : null }); // Stop cuts a `sleep`
   let workspaceLabel = 'memory · scratch';
   let wsRoot = ''; // fileops root for the active mount (subagent overlays match it)
   // `exclusive` says nothing outside this fileops writes to the backend, which
@@ -518,7 +525,7 @@
     // instead of meeting it, and the gate could then only ever report green. Readable (the
     // agent is aimed at it) and unwritable, with NO agent-facing door — the owner authors it
     // through the app's own ungranted `fs`.
-    grant = createGrant({ prefixes:[''], scopes:['fs:read','fs:write','fs:remove','git:read','git:write','git:remote'], readOnlyPrefixes:[SKILLS_DIR, GATE_DIR, SEARCH_INDEX_PATH] });
+    grant = agentGrant();
     opLog = createOpLog({ fs: createFileops({ backend:new MemoryBackend() }) });
     face = createAgentFace({ registry, grant, opLog, actor:'agent' });
     // Kiln (Pyodide) — same wiring as Forge. Requires cross-origin isolation
@@ -551,7 +558,7 @@
     // cached, and the baseline sys.path — the same isolation the verifier already gets. A real
     // `python` invocation is a new process; a shared kernel let `sys.path.insert(0,'/workspace')`
     // in one run poison `import inv` in the next (live 2026-09-11).
-    shell = createShell({ registry, face, kiln, kilnIsolate:true, js: jsHost, signal: ()=>abortController ? abortController.signal : null }); // Stop cuts a `sleep`
+    shell = agentShell();
     $('ws').textContent = label;
   }
   async function seedIfEmpty(){
@@ -2429,11 +2436,11 @@
       const oregistry = buildRigRegistry({ fs: ofs, git: ogit });
       // Same two fences as the top-level grant: a subagent working in a copy-on-write overlay
       // must not be the route by which the skills dir or the acceptance criterion gets rewritten.
-      const ograph = createGrant({ prefixes:[''], scopes:['fs:read','fs:write','fs:remove','git:read','git:write','git:remote'], readOnlyPrefixes:[SKILLS_DIR, GATE_DIR, SEARCH_INDEX_PATH] });
+      const ograph = agentGrant(grant.scopes); // B5: the parent's scopes, never a fresh full set
       const oopLog = createOpLog({ fs: createFileops({ backend:new MemoryBackend() }) });
       const oface = createAgentFace({ registry: oregistry, grant: ograph, opLog: oopLog, actor:'agent' });
       const oshell = createShell({ registry: oregistry, face: oface, signal: abortController ? abortController.signal : null }); // no kiln in subagents; Stop cuts a child's `sleep`
-      const executor = makeToolExecutor({ shell: oshell, face: oface, mode:'code', infer: inferViaHost, subagentDepth: 1 });
+      const executor = makeToolExecutor({ shell: oshell, face: oface, mode:'code', infer: inferViaHost, subagentDepth: 1, scopes: ograph.scopes });
       return {
         executor,
         changes: ()=>{ const c=overlay.changes(); return { written:(c.written||[]).map(toRel), deleted:(c.deleted||[]).map(toRel) }; }, // B3: workspace-relative, like the ownership the child declared
@@ -3279,6 +3286,10 @@
     // U1: change row i of the active task's log in place and render — what the fleet ticker does to a
     // child's row every 5 s — so a browser bed can see the transcript patched, not rebuilt.
     logRow:(i, patch)=>{ const t=activeTask(); if(!t||!Array.isArray(t.log)||!t.log[i]) return false; Object.assign(t.log[i], patch||{}); renderLog(); return true; },
+    // B3/B5 live: narrow the agent's grant (e.g. ['fs:read','git:read'] = a read-only project). The grant,
+    // the face and the shell are rebuilt together so the catalog, the mode button and execution all see
+    // it; the fences stay. Kiln keeps the face it booted with. Reload to restore the full grant.
+    narrowGrant:(scopes)=>{ grant=agentGrant(scopes); face=createAgentFace({ registry, grant, opLog, actor:'agent' }); shell=agentShell(); syncMode(); return { scopes:[...grant.scopes] }; },
     taskState:()=>{ const t=activeTask(); return t? { id:t.id, title:t.title, status:t.status, verifyCmd:t.verifyCmd||'', mode:t.mode||'code' } : null; },
     // The run-index doctor (WIRE): rebuild the IndexedDB index from the record files and say how
     // many rows resumed from their own checkpoint rather than refolding from event zero.

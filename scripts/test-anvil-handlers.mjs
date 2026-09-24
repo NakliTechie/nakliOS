@@ -214,6 +214,14 @@ await test('NAF-08: the checkpoint handler can actually reach the run recorder',
   assert.ok(!/\brec\.checkpoint\(/.test(cp), 'it no longer calls the out-of-scope `rec`');
 });
 
+await test('B5 live (2026-09-24): a dispatched child holds the parent grant\'s scopes — a read-only project gains no write through a subagent', async () => {
+  const body = extractFunction(src, 'spawnIsolated');
+  assert.ok(body && body.length > 200, 'spawnIsolated extracted');
+  assert.match(body, /const ograph = agentGrant\(grant\.scopes\);/, 'the child grant is built from the parent grant\'s scopes');
+  assert.ok(!/createGrant\(/.test(body), 'no fresh grant literal inside spawnIsolated');
+  assert.match(body, /makeToolExecutor\(\{[^}]*subagentDepth: 1, scopes: ograph\.scopes \}\)/, 'and the child executor projects its catalog by the same scopes');
+});
+
 await test('NAF-04: the learn fork is reachable — tool registered, handled, and deferred not skipped', async () => {
   // N1: the toolset is the assembly's (sys/ai/run-assembly.mjs); registration is checked there, wiring here.
   assert.ok(runToolset('code').some((x) => x.function.name === 'learn_this_run'), 'learn_this_run is in the code-mode toolset the app sends');
@@ -589,7 +597,7 @@ await test('LX-3: the run index row carries the goal row\'s inputs (gatePassed, 
   assert.match(src, /const isLocal = !\(nak && nak\.capabilities && nak\.capabilities\.aiLocal === false\);/, 'isLocal from capabilities.aiLocal');
   assert.doesNotMatch(src, /nak\.ai\.endpoint\)\|\|null; isLocal/, 'the dead endpoint read is gone');
   // G9 (2026-09-24): the agent's shell, the gate's shell and the hook shell all get the JS gate runner
-  assert.equal((src.match(/createShell\(\{[^\n]*js: jsHost,/g) || []).length, 3, 'three shells get the js host: agent, gate, hooks');
+  assert.equal((src.match(/createShell\(\{[^\n]*js: jsHost,/g) || []).length, 3, 'three shells get the js host: agent (agentShell), gate, hooks');
   assert.match(src, /spawn:\(url\)=>\{ const w=new Worker\(url, \{ type:'module' \}\);/, 'the browser host spawns a module Worker');
   // U2 (2026-09-24): HOLD / BYPASS has its own element that wraps; the goal line owns #tb-meta
   assert.match(page, /<span class="notice" id="tb-notice" role="status" hidden><\/span>\n\s*<span class="meta" id="tb-meta"><\/span>/, 'the notice is its own element beside the goal line');
