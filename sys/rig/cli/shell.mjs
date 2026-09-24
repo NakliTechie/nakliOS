@@ -1299,7 +1299,7 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
     const positional = rest.filter((a) => !a.startsWith('-'));
     const flags = rest.filter((a) => a.startsWith('-'));
     const rel = (p) => normalizePath(state.cwd, p);
-    if (!sub) return { text: 'usage: git <init|add|rm|commit|status|log|diff|branch|checkout|clone|fetch|push>', code: 1 };
+    if (!sub) return { text: 'usage: git <init|add|rm|mv|commit|status|log|diff|branch|checkout|clone|fetch|push>', code: 1 };
 
     let name; let input = {};
     switch (sub) {
@@ -1321,6 +1321,25 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
         name = 'git.add'; input = { filepath: rel(positional[0] || '') }; break;
       }
       case 'rm': name = 'git.remove'; input = { filepath: rel(positional[0] || '') }; break;
+      // `git mv` (battery 2026-09-24: a model reached for `git mv seed.txt seed2.txt`, got "not a rig
+      // git command", and renamed with python — a wasted step). It is a rename plus the index
+      // update: fs.move, then, when a repository is wired and answers, stage the new path and drop
+      // the old one. Without a repository it is the rename alone, and it says so.
+      case 'mv': {
+        if (positional.length !== 2) return { text: 'usage: git mv <source> <destination>', code: 2 };
+        const [from, to] = positional.map(rel);
+        const mv = await face.invoke('fs.move', { from, to });
+        if (mv.staged) return { staged: mv.proposalId, verb: 'git mv' };
+        if (!mv.ok) return { text: `git mv: ${mv.code || 'error'}: ${mv.message || 'failed'}`, code: 1 };
+        if (!registry.describeCommand('git.add') || !registry.describeCommand('git.remove')) return { text: `renamed ${positional[0]} -> ${positional[1]} (no git core wired: nothing staged)`, code: 0 };
+        const add = await face.invoke('git.add', { filepath: to });
+        if (!add.ok) return { text: `renamed ${positional[0]} -> ${positional[1]} (not staged: ${add.message || add.code || 'no repository'})`, code: 0 };
+        const rm = await face.invoke('git.remove', { filepath: from });
+        // Dropping the old path from the index is destructive, so the face stages it for the same
+        // y/N every `git rm` gets; the rename itself has already happened.
+        if (rm.staged) return { staged: rm.proposalId, verb: 'git mv' };
+        return { text: `renamed ${positional[0]} -> ${positional[1]}` + (rm.ok ? ' (staged)' : ` (new path staged; old path: ${rm.message || rm.code || 'not in the index'})`), code: 0 };
+      }
       case 'commit': {
         const mi = rest.findIndex((a) => a === '-m' || a === '--message');
         const message = mi >= 0 ? rest[mi + 1] : positional[0];

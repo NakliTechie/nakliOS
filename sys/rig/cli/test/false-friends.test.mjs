@@ -170,6 +170,31 @@ await test('a FAILED redirect is a non-zero exit, and && does not fire', async (
   assert(/fs:write|write failed/.test(out), `and says why: ${JSON.stringify(out)}`);
 });
 
+// Battery 2026-09-24: a model reached for `git mv`, got "not a rig git command" and renamed with python.
+await test('git mv renames, and stages both ends when a git core is wired; without one it renames and says nothing was staged', async () => {
+  const { run } = await shell();
+  await run("printf 'x\\n' > seed.txt");
+  const bare = await run('git mv seed.txt seed2.txt');
+  eq(bare.code, 0, 'git mv without a git core still renames: ' + bare.out);
+  assert(/renamed seed\.txt -> seed2\.txt \(no git core wired: nothing staged\)/.test(bare.out), bare.out);
+  assert(/seed2\.txt/.test((await run('ls')).out) && !/(^|\s)seed\.txt/.test((await run('ls')).out), 'the file moved');
+  assert(/usage: git mv/.test((await run('git mv only-one')).out), 'one path is a usage error');
+  const calls = [];
+  const fakeGit = { add: async (i) => { calls.push(['add', i.filepath]); return { ok: true }; }, remove: async (i) => { calls.push(['remove', i.filepath]); return { ok: true }; } };
+  const fs2 = createFileops({ backend: new MemoryBackend() });
+  const reg2 = buildRigRegistry({ fs: fs2, git: fakeGit });
+  const grant2 = createGrant({ prefixes: [''], scopes: ['fs:read', 'fs:write', 'fs:remove', 'git:read', 'git:write'] });
+  const face2 = createAgentFace({ registry: reg2, grant: grant2, opLog: createOpLog({ fs: createFileops({ backend: new MemoryBackend() }) }), actor: 'a' });
+  const sh2 = createShell({ registry: reg2, face: face2 });
+  const feed = async (c) => { const r = await sh2.feed(c); if (sh2.awaitingConfirm) await sh2.feed('y'); return String(r.output || '').trim(); };
+  await feed("printf 'x\\n' > a.txt");
+  const first = await sh2.feed('git mv a.txt b.txt');
+  assert(sh2.awaitingConfirm, 'dropping the old path from the index asks, like git rm: ' + JSON.stringify(first.output));
+  await sh2.feed('y');
+  assert(/b\.txt/.test(await feed('ls')) && !/a\.txt/.test(await feed('ls')), 'the rename happened');
+  eq(JSON.stringify(calls), JSON.stringify([['add', 'b.txt'], ['remove', 'a.txt']]), 'the new path is added, the old one removed from the index');
+});
+
 // ── R3b — reachable at all ───────────────────────────────────────────────────────────────
 await test('R3b: git clone/fetch/push actually DISPATCH, not just print usage', async () => {
   const { run } = await shell();
