@@ -1877,13 +1877,19 @@
    Single-file local-first kanban
    ============================================================ */
 
-/* naklios-sdk:begin ver=2 sha256=8322d238687f2e71538e3cca94ea3bb27a482b4bfce91ff0533d1db6267ed667 — DO NOT EDIT until :end; run `node scripts/vendor-naklios-sdk.mjs` */
+/* naklios-sdk:begin ver=2 sha256=b43c9024ec2f6595befdc7cee3ec79d354d991b69712e2f03c9fc137f412d851 — DO NOT EDIT until :end; run `node scripts/vendor-naklios-sdk.mjs` */
 /*!
  * naklios.js — cooperative SDK for apps hosted inside NakliOS (Immersive mode)
  *
  * Drop this file into your app's <head> or copy its contents inline. The
  * surface is a no-op when the app loads standalone (window.parent === window),
  * so the same source works in both contexts:
+ *
+ * Vendoring: if your app needs a capability an iframe sandbox blocks — a folder
+ * picker above all — the supported route is a manifest-declared same-origin
+ * MIRROR under naklios.dev/apps/<id>/, not a hand-copied snapshot. See
+ * docs/app-loading.md. Your repo stays authoritative; the mirror is a pinned,
+ * hash-checked deployment artifact refreshed by CI.
  *
  *   <script src="https://naklios.dev/sdk/naklios.js"><\/script>
  *   <script>
@@ -2040,6 +2046,118 @@
         }
       }, timeoutMs || 30000);
     });
+  }
+
+  // Autosave (DUR, 2026-09-24): the SDK owns WHEN an app's state is written; the app owns WHAT and
+  // WHERE through its own save(). `beforeunload` cannot await, so a save that starts there is lost on
+  // close — the reliable moments are visibilitychange → hidden and pagehide, which fire while the page
+  // can still post a message, and the host's beforeclose, which waits. The timing half runs standalone
+  // too (the save is the app's own); only the dirty report to the host needs a frame.
+  var savers = new Set();
+  var reportedDirty = false;
+  var autosaveWired = false;
+  function noop() {}
+  function anyUnsaved() {
+    var out = false;
+    savers.forEach(function (s) { if (s._guard && s.dirty) out = true; });
+    return out;
+  }
+  function reportDirty() {
+    var d = anyUnsaved();
+    if (d === reportedDirty) return;
+    reportedDirty = d;
+    send('naklios:fs:dirty', { dirty: d });
+  }
+  // urgent: issue every unsaved save NOW, in this task — never behind an in-flight one
+  function flushSavers(urgent) {
+    var all = [];
+    savers.forEach(function (s) { all.push(s._flush(urgent).catch(noop)); });
+    return Promise.all(all);
+  }
+  function wireAutosave() {
+    if (autosaveWired) return;
+    autosaveWired = true;
+    try {
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'hidden') flushSavers(true);
+      });
+    } catch (_) {}
+    try {
+      window.addEventListener('pagehide', function () { flushSavers(true); });
+      window.addEventListener('beforeunload', function (e) {
+        if (!anyUnsaved()) return;
+        flushSavers(true);
+        // Hosted, the NakliOS host arms its own guard from the dirty report; a second prompt from
+        // the frame would be noise. Standalone, this is the only thing that can interpose.
+        if (inNakliOS) return;
+        e.preventDefault();
+        e.returnValue = '';
+      });
+    } catch (_) {}
+  }
+  function makeAutosave(opts) {
+    if (!opts || typeof opts.save !== 'function') {
+      throw new Error('naklios.fs.experimental_autosave requires { save: function }');
+    }
+    var delay = typeof opts.delay === 'number' && opts.delay >= 0 ? opts.delay : 1000;
+    var onError = typeof opts.onError === 'function' ? opts.onError : null;
+    // guard:false — a background save (a remote push, say) that keeps the timing but never holds a close
+    var guard = opts.guard !== false;
+    // generations: gen counts changes, issuedGen the newest handed to save(), savedGen the newest durable
+    var gen = 0, issuedGen = 0, savedGen = 0;
+    var timer = null, tail = Promise.resolve(), last = Promise.resolve(), queued = null, disposed = false;
+    function issue() {
+      queued = null;
+      if (gen <= issuedGen) return last;
+      var g = gen;
+      issuedGen = g;
+      var p;
+      try { p = Promise.resolve(opts.save()); } catch (err) { p = Promise.reject(err); }
+      p = p.then(function () {
+        if (g > savedGen) savedGen = g;
+        reportDirty();
+      }, function (err) {
+        if (issuedGen === g) issuedGen = savedGen; // the next flush retries
+        reportDirty();
+        if (onError) { try { onError(err); } catch (_) {} }
+        throw err;
+      });
+      last = p;
+      tail = p.catch(noop);
+      return p;
+    }
+    function flush(urgent) {
+      clearTimeout(timer);
+      timer = null;
+      if (gen <= issuedGen) return last;
+      if (urgent) return issue();
+      if (!queued) queued = tail.then(issue);
+      return queued;
+    }
+    var saver = {
+      // State changed. The save runs at most `delay` ms after the first unsaved change.
+      markDirty: function () {
+        if (disposed) return;
+        gen++;
+        reportDirty();
+        if (!timer) timer = setTimeout(function () { timer = null; flush(false).catch(noop); }, delay);
+      },
+      // Save now (after any save already running). Resolves when the state as of this call is durable.
+      flush: function () { return flush(false); },
+      get dirty() { return gen > savedGen; },
+      dispose: function () {
+        disposed = true;
+        clearTimeout(timer);
+        timer = null;
+        savers.delete(saver);
+        reportDirty();
+      },
+      _flush: flush,
+      _guard: guard,
+    };
+    savers.add(saver);
+    wireAutosave();
+    return saver;
   }
 
   // Typed egress error so an app can branch (fall back / prompt to connect) rather
@@ -2223,7 +2341,7 @@
     } else if (msg.type === 'naklios:beforeclose') {
       var closeWork;
       try { closeWork = beforeCloseCb ? beforeCloseCb() : null; } catch (_) { closeWork = null; }
-      Promise.resolve(closeWork).catch(function () {}).then(function () {
+      Promise.all([Promise.resolve(closeWork).catch(function () {}), flushSavers(true)]).then(function () {
         send('naklios:beforeclose-ready', { requestId: msg.requestId });
       });
     } else if (msg.type === 'naklios:capabilities') {
@@ -2445,6 +2563,12 @@
       // Explicit backend changes are always confirmed by the NakliOS host.
       // Switching changes the app-scoped view; it never copies or deletes data.
       useBackend: function (backend)    { return rpc('naklios:fs:selectBackend', { backend: backend }); },
+      // Autosave: the app says WHEN state changed (markDirty) and HOW to save it ({ save }); the SDK
+      // owns the timing — a throttled save, an immediate one when the page hides or the host closes
+      // the window, and a close guard only while something is unsaved. Returns
+      // { markDirty, flush, dirty, dispose }. { guard: false } keeps the timing but never holds a
+      // close (a background push, not the user's data). Runs standalone too. See docs/app-contract.md "Durability".
+      experimental_autosave: function (opts) { return makeAutosave(opts); },
     },
     // System-scoped filesystem — the WHOLE store on the active backend, not just
     // this app's apps/<id>/ namespace. Available to same-origin system apps only
@@ -3498,7 +3622,6 @@ async function applyExternalBoardUpdate(incoming,sourceLabel){
         return false;
       }
       await takeSnapshotForBoard(local,'auto-destructive','pre-external-update');
-      debouncedSave.cancel();
       S.dirty=false;
     }
     S.boards[incoming.id]=incoming;
@@ -3537,7 +3660,6 @@ async function applyExternalBoardRemoval(boardId,sourceLabel){
         return false;
       }
       await takeSnapshotForBoard(local,'auto-destructive','pre-external-delete');
-      debouncedSave.cancel();
       S.dirty=false;
     }
     delete S.boards[boardId];
@@ -3971,7 +4093,12 @@ function rebuildBoardOrder(){
 function findColumnByCard(board, cardId){
   return board.columns.find(c => c.cardIds.includes(cardId));
 }
-function markDirty(){ S.dirty = true; setSaveIndicator('dirty'); }
+function markDirty(){
+  S.dirty = true;
+  S._dirtyGen = (S._dirtyGen || 0) + 1;
+  setSaveIndicator('dirty');
+  boardSaver().markDirty();
+}
 
 /* idempotent migration: brings older board JSON up to current schema; safe to re-run */
 function migrateLoadedBoard(b){
@@ -4039,25 +4166,39 @@ function migrateLoadedBoard(b){
    Persistence orchestration
    ============================================================ */
 
+// Resolves true once the board is on disk. An edit made while the write was running keeps the
+// board dirty (the next save carries it) instead of being cleared with the older state.
 async function flushSave(){
   const b = currentBoard();
-  if(!b){ S.dirty = false; return; }
+  if(!b){ S.dirty = false; return true; }
+  const gen = S._dirtyGen;
   setSaveIndicator('saving');
   b._meta.lastModified = now();
   try{
     await storage.saveBoard(b);
-    S.dirty = false;
-    setSaveIndicator('saved');
+    if(S._dirtyGen === gen){ S.dirty = false; setSaveIndicator('saved'); }
+    else setSaveIndicator('dirty');
+    return true;
   }catch(e){
     console.error(e);
     setSaveIndicator('error');
+    return false;
   }
 }
-const debouncedSave = debounce(flushSave, 5000);
+// The NakliOS SDK owns WHEN the board is saved: at most 5 s after the first unsaved change, and at
+// once when the page hides or NakliOS closes the window (docs/app-contract.md "Durability").
+// beforeunload cannot await a save, so there is no save-on-close here. A rebind to another library
+// clears S.dirty first, so a pending save of the old library becomes a no-op.
+var _boardSaver = null;
+function boardSaver(){
+  return _boardSaver || (_boardSaver = naklios.fs.experimental_autosave({
+    save: async () => { if(S.dirty && !(await flushSave())) throw new Error('KanZen could not save the board'); },
+    delay: 5000,
+  }));
+}
 function scheduleSave(){
   pushHistory();
   markDirty();
-  debouncedSave();
   if(S.currentBoardId) markBoardForSync(S.currentBoardId);
 }
 async function flushAllBoards(){
@@ -6584,8 +6725,17 @@ function markBoardForSync(boardId){
   if(!syncReady()) return;
   const b = S.boards[boardId]; if(!b || !b._meta?.sync) return;
   _syncDirtyBoards.add(boardId);
-  if(_syncPushTimer) clearTimeout(_syncPushTimer);
-  _syncPushTimer = setTimeout(flushSyncPushes, SYNC_PUSH_DEBOUNCE_MS);
+  syncSaver().markDirty();
+}
+// The push is a copy of a board already saved locally, so it keeps the SDK's timing (30 s, and at
+// once when the page hides) but never holds a close: guard:false.
+var _syncSaver = null;
+function syncSaver(){
+  return _syncSaver || (_syncSaver = naklios.fs.experimental_autosave({
+    save: () => flushSyncPushes(),
+    delay: SYNC_PUSH_DEBOUNCE_MS,
+    guard: false,
+  }));
 }
 
 async function flushSyncPushes(){
@@ -6886,8 +7036,6 @@ async function init(){
   $('filter-member').addEventListener('change', e => { S.filter.memberId = e.target.value; renderBoard(); });
   $('card-desc-input').addEventListener('input', renderDescPreview);
   document.addEventListener('keydown', onKey);
-  window.addEventListener('beforeunload', () => { if(S.dirty) flushSave(); });
-  naklios.beforeClose(() => { if(S.dirty) flushSave(); });
   naklios.onCapabilitiesChange(caps => {
     refreshStorageStatus();
     updateAiSubtasksBtn(caps);
@@ -6896,7 +7044,6 @@ async function init(){
     // A backend can also be changed from NakliOS Settings. Reload the new
     // isolated library immediately; never flush the old library into it.
     const hadUnsavedChanges=S.dirty;
-    debouncedSave.cancel();
     S._nakliosBackend=next;
     S.dirty=false;
     activateLibrary('naklios',StorageNakliOS).then(()=>{
@@ -6908,8 +7055,6 @@ async function init(){
   });
   await watchNakliOSLibrary();
 
-  // periodic save tick
-  setInterval(() => { if(S.dirty) flushSave(); }, 5000);
   // file-change polling (5s) — picks up external edits when a folder is connected
   setInterval(pollFsChanges, 5000);
   // cloud sync periodic pull (60s) when configured
@@ -6918,8 +7063,6 @@ async function init(){
   document.addEventListener('visibilitychange', () => { if(!document.hidden && syncReady()) syncPullAll(); });
   // initial pull on startup once configured
   if(syncReady()) setTimeout(syncPullAll, 1000);
-  // beforeunload — try to flush any pending pushes
-  window.addEventListener('beforeunload', () => { if(syncReady() && _syncDirtyBoards.size) flushSyncPushes(); });
 
   // PWA install prompt capture
   window.addEventListener('beforeinstallprompt', e => {

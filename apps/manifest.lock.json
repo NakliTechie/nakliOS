@@ -209,13 +209,13 @@
       "id": "kanzen",
       "repo": "NakliTechie/KanZen",
       "requestedRef": "main",
-      "resolvedCommit": "232645d7f8bbf4bf981187390400a7170ac9d73d",
+      "resolvedCommit": "bf53a2e361126048c1791e8b0f1d3a11d07c2920",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "7a80c3d7f0620ebcbeffcafbd35cdfd0a5f4e9969c4d4604e73a284e1c52e3ec",
-          "bytes": 288620
+          "sha256": "60b60ff008c8201e10d190bdf83764f065d831a0ef4c55d985cd8e109f09826e",
+          "bytes": 294678
         }
       ]
     },
@@ -407,13 +407,13 @@
       "id": "nakliposter",
       "repo": "NakliTechie/NakliPoster",
       "requestedRef": "main",
-      "resolvedCommit": "1fa1d4c2484ef90c2b5ed002d8694b229668a375",
+      "resolvedCommit": "6a9504aca1db77016b67d02f1d0978ff2c4edf00",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "517b3dfa7e4b4d5a637a0cc607578ef7d3a71d487e90403152716f99acfe9a26",
-          "bytes": 309478
+          "sha256": "6140da5bf80eb361ccc2b1ca27495903f7cedea5edea8fbe43912083c39f533a",
+          "bytes": 315117
         },
         {
           "source": "LICENSE",
