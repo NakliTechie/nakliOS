@@ -108,6 +108,27 @@ export function extractHeredocs(raw) {
   return { line: kept.join('\n'), bodies };
 }
 
+// SH4 (2026-09-24): command substitution is REFUSED, not passed through. `$(…)` and backticks used to
+// reach the command as literal text — `echo $(ls)` printed "$(ls)" with exit 0 — so an agent could
+// believe a command ran that never did. Executing them instead would put a command the permission
+// rules cannot see inside another (`echo $(rm -rf src)` reads as `echo`), so this shell refuses them
+// and says what to do. Single quotes keep them literal, as in bash; heredoc bodies are data.
+export function findSubstitution(line) {
+  let q = null;
+  const s = String(line == null ? '' : line);
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (q === "'") { if (c === "'") q = null; continue; }
+    if (c === '\\') { i++; continue; }
+    if (q === '"' && c === '"') { q = null; continue; }
+    if (!q && (c === "'" || c === '"')) { q = c; continue; }
+    if (!q && c === '#' && (i === 0 || /\s/.test(s[i - 1]))) return null; // a comment
+    if (c === '`') return '`…`';
+    if (c === '$' && s[i + 1] === '(') return s[i + 2] === '(' ? '$((…))' : '$(…)';
+  }
+  return null;
+}
+
 // ── split a line into statements (`;`, `&&`) then pipelines (`|`) then argv,
 // pulling trailing redirects (`>`, `>>`) off the last stage. Reuses the
 // quote-aware tokenizer so quoted operators stay literal. ──
@@ -977,7 +998,7 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
         + '\n  find [dir] -name -type -maxdepth       sed s/// on stdin or a file (no -i; use the edit tool)'
         + '\n  awk -F with {print $N}      ls -R -a -l      sleep SECONDS (decimals; capped at ' + SLEEP_MAX_S + ' s)'
         + '\n  od -c -b -t x1 -An        here-documents as stdin: cmd <<\'EOF\' … EOF  (literal; python - <<\'PY\' runs it)'
-        + '\nNo subshells, loops, functions, background jobs or command substitution.'
+        + '\nNo subshells, loops, functions or background jobs. Command substitution ($(…), backticks) is REFUSED (exit 2), not run.'
         + '\nPython is a real kernel (`python file.py`); it is the scripting layer, not bash.', code: 0 };
     },
   };
@@ -1390,6 +1411,8 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
     if (raw.trim() !== '') state.history.push(raw.trim());
     const hd = extractHeredocs(raw); // SH3
     if (hd.error) { lastCode = 2; return { output: hd.error, cleared: false }; }
+    const sub = findSubstitution(hd.line); // SH4
+    if (sub) { lastCode = 2; return { output: `${sub}: ${sub === '$((…))' ? 'arithmetic expansion' : 'command substitution'} is not supported here, so nothing was run — ${sub === '$((…))' ? 'compute it in `python -c`' : 'run the inner command on its own and use its output, or do the whole step in `python -c`'}`, cleared: false }; }
     const r = await runStatements(parseLine(hd.line, hd.bodies), write);
     return { output: out.join('\n'), ...(r.awaitingConfirm ? { awaitingConfirm: r.awaitingConfirm } : {}), cleared: !!r.cleared, ...(lastListing ? { listing: lastListing } : {}) };
   }

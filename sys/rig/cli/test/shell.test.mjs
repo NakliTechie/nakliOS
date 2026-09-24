@@ -538,6 +538,24 @@ await test('SH3: a here-document is the statement\'s stdin; python - runs it; ba
   assert(/give a format/.test(await run(shell, 'od f.txt')) && shell.lastCode === 2, 'no format is refused, not guessed');
 });
 
+await test('SH4: command substitution is refused before anything runs — never passed through as text', async () => {
+  const fs = createFileops({ backend: new MemoryBackend() });
+  const registry = buildRigRegistry({ fs });
+  const grant = createGrant({ prefixes: [''], scopes: ['fs:read', 'fs:write', 'fs:remove'] });
+  const opLog = createOpLog({ fs: createFileops({ backend: new MemoryBackend() }) });
+  const face = createAgentFace({ registry, grant, opLog, actor: 'agent' });
+  const shell = createShell({ registry, face });
+  for (const line of ['echo $(ls)', 'echo "n=$(ls | wc -l)"', 'echo `date`', 'touch made; echo $(ls)']) {
+    const out = await run(shell, line);
+    assert(/command substitution is not supported here, so nothing was run/.test(out) && shell.lastCode === 2, `${line} → refused: ${out}`);
+  }
+  eq(/made/.test(await run(shell, 'ls')), false, 'the WHOLE line is refused — a statement before the substitution did not run either');
+  assert(/arithmetic expansion is not supported/.test(await run(shell, 'echo $((1+2))')), '$((…)) is named as arithmetic');
+  eq(await run(shell, "echo '$(ls)'"), '$(ls)', 'single quotes keep it literal, as in bash');
+  eq(await run(shell, 'ls # $(x)'), '', 'a comment is not a substitution');
+  eq(await run(shell, "grep -c ls <<'E'\n$(ls)\nE"), '1', 'a heredoc body is data, not a substitution');
+});
+
 if (failures.length) {
   console.error(`shell core: ${passed} passed, ${failures.length} FAILED`);
   for (const f of failures) console.error(`  FAIL ${f.name}: ${f.message}`);

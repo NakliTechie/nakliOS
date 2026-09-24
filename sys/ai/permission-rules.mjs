@@ -49,9 +49,29 @@ export function parseRule(str) {
  * something we refuse to reason about — a caller must treat null as "cannot match", never as
  * "matches nothing".
  */
+// A here-document's body is DATA — the stdin of the command beside it — never commands (SH3). Drop the
+// bodies and the `<<TAG` operators so the command lines are matched like any other; a body that is
+// never closed leaves the line unparseable (null), because the shell refuses it too.
+function stripHeredocs(s) {
+  const lines = s.split('\n'); const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    const tags = [];
+    const line = lines[i].replace(/<<(-?)\s*(?:'([^']*)'|"([^"]*)"|([A-Za-z_][A-Za-z0-9_]*))/g, (_, strip, a, b, c) => { tags.push({ tag: a ?? b ?? c, strip: strip === '-' }); return ' '; });
+    out.push(line);
+    for (const t of tags) {
+      let closed = false;
+      for (i++; i < lines.length; i++) { if ((t.strip ? lines[i].replace(/^\t+/, '') : lines[i]) === t.tag) { closed = true; break; } }
+      if (!closed) return null;
+    }
+  }
+  return out.join(' '); // the shell reads a newline outside a body as a space
+}
+
 export function segments(command) {
-  const s = String(command == null ? '' : command);
-  if (/\$\(|`|<<|\$\{/.test(s)) return null;   // substitution / heredoc: not ours to parse
+  const s = stripHeredocs(String(command == null ? '' : command));
+  if (s === null) return null;
+  // substitution and ${…}: not ours to parse — decideByRules fails CLOSED on a null for deny/ask rules
+  if (/\$\(|`|<<|\$\{/.test(s)) return null;
   const out = []; let cur = ''; let q = null;
   for (let i = 0; i < s.length; i++) {
     const c = s[i];
@@ -149,6 +169,15 @@ export function decideByRules(cfg, toolName, args) {
     }
   }
   const bad = invalidRules(cfg);
+  // A shell line that cannot be split into the commands it runs cannot be CHECKED against a shell deny
+  // or ask rule — and 'unmatched' used to let bypass allow it (\`rm -rf \${DIR}\`, a heredoc before SH3).
+  // Fail closed: with any shell deny rule it is refused, with any shell ask rule it asks.
+  const isShellCall = SHELL_TOOLS.has(String(toolName || '').toLowerCase());
+  if (isShellCall && segments(args && args.command) === null) {
+    const shellRule = (k) => lists[k].find((r) => r.tool === 'bash' || r.tool === 'shell' || r.tool === 'sh');
+    const d = shellRule('deny'); if (d) return { decision: 'deny', rule: d.source, why: 'this command line cannot be split into the commands it runs, so your deny rule (' + d.source + ') cannot be checked — refused' };
+    const a = shellRule('ask'); if (a) return { decision: 'ask', rule: a.source, why: 'this command line cannot be split into the commands it runs, so your ask rule (' + a.source + ') asks' };
+  }
   for (const b of bad) {
     if (b.list === 'deny' && invalidReaches(b, toolName)) {
       return { decision: 'deny', rule: b.source, invalid: true,

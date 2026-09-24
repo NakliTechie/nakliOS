@@ -48,9 +48,19 @@ const d = (tool, args, cfg = CFG) => decideByRules(cfg, tool, args).decision;
     assert.equal(d('shell', { command: bad }, { allow: ['Bash(ls:*)', 'Bash(cat:*)', 'Bash(echo:*)'] }), 'unmatched',
       `${bad} can never be ALLOWED by a prefix rule`);
   }
-  // A deny rule cannot match one either — but the action gate still sees it, and that is the point
-  // of falling through rather than pretending to have an answer.
-  assert.equal(d('shell', { command: 'ls $(rm -rf /)' }, { deny: ['Bash(rm:*)'] }), 'unmatched');
+  // SH4 (2026-09-24): a line that cannot be split cannot be CHECKED against a deny rule, and
+  // 'unmatched' let bypass allow it. It fails CLOSED now: any shell deny rule refuses it, any shell ask rule asks.
+  assert.equal(d('shell', { command: 'ls $(rm -rf /)' }, { deny: ['Bash(rm:*)'] }), 'deny', 'an unsplittable line under a deny rule is refused');
+  assert.equal(d('shell', { command: 'rm -rf ${DIR}' }, { deny: ['Bash(rm:*)'] }), 'deny', '${…} too');
+  assert.equal(d('shell', { command: 'ls $(pwd)' }, { ask: ['Bash(git push:*)'] }), 'ask', 'under an ask rule it asks');
+  assert.equal(d('shell', { command: 'ls $(pwd)' }, { deny: ['Write(secrets/**)'] }), 'unmatched', 'a non-shell deny rule is not reached');
+  assert.equal(d('shell', { command: 'ls $(pwd)' }, {}), 'unmatched', 'with no shell rules it falls to the action gate, as before');
+  // SH3: a here-document's body is data — its command line is matched; its body never is
+  assert.deepEqual(segments("python - <<'PY'\nprint(1)\nPY"), ['python -'], 'the heredoc command line is segmented, the body dropped');
+  assert.deepEqual(segments("grep -c b <<'E'; echo after\nab\nE"), ['grep -c b', 'echo after']);
+  assert.equal(d('shell', { command: "python - <<'PY'\nimport os\nPY" }, { deny: ['Bash(python:*)'] }), 'deny', 'a heredoc python is caught by a python deny rule');
+  assert.equal(d('shell', { command: "grep x <<'E'\npython evil\nE" }, { deny: ['Bash(python:*)'] }), 'unmatched', 'a body that mentions python is not a python call');
+  assert.equal(segments("cat <<'E'\nnever closed"), null, 'an unclosed body is unparseable (the shell refuses it too)');
 }
 
 // ── rule syntax ───────────────────────────────────────────────────────────
