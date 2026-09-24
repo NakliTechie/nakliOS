@@ -2014,8 +2014,8 @@
   // turn, and the next run answers it alongside the new message — a recovery note saying "cancelled"
   // did not outweigh an open question (battery 2026-09-24, run 3: "list the files here" wrote the
   // stopped ask's notes.md first). So the carry drops that ask and the [coordination] turns after it.
-  // Only when the run ended 'aborted' AND no assistant turn follows the ask: a stopped run that had
-  // started replying keeps its work. The record keeps the ask, the recovery note names it
+  // Only when the run ended 'aborted' AND nothing after the ask changed the workspace: a stopped run
+  // that had started changing files keeps its work. The record keeps the ask, the recovery note names it
   // "cancelled", and the drop is recorded below with the rest of the carry's changes (F1 holds).
   function lastStopOf(rec){
     try{
@@ -2024,11 +2024,25 @@
     }catch(_){}
     return null;
   }
+  // Kept only when the stopped run CHANGED the workspace (a write/edit/patch/remove/move/mkdir call,
+  // or a shell command that writes): then its exchange is the record of files that now differ.
+  // A run that only looked around (battery run 6: one `ls`, then Stop) or said something is dropped
+  // whole — the ask, the exchange, the [coordination] turns — or the next run finishes the ask.
+  const CARRY_MUTATING = new Set(['write','edit','apply_patch','edit_lines','remove','move','mkdir','skill_manage','synthesize']);
+  const shellWrites = (cmd) => /(^|[;&|]\s*)(rm|mv|cp|touch|mkdir|tee|git)\b|>\s*\S|\bsed\s+-i/.test(String(cmd || ''));
+  function mutated(turn){
+    for(const c of (turn && turn.tool_calls) || []){
+      const name = c && (c.function ? c.function.name : c.name);
+      if(CARRY_MUTATING.has(name)) return true;
+      if(name === 'shell'){ let a = c.function ? c.function.arguments : c.arguments; if(typeof a === 'string'){ try{ a = JSON.parse(a); }catch(_){ a = {}; } } if(shellWrites(a && a.command)) return true; }
+    }
+    return false;
+  }
   function dropStoppedAsk(out){
     let k = out.length - 1;
     while (k >= 0 && !(out[k] && out[k].role === 'user' && !/^\[coordination\]/.test(String(out[k].content || '')))) k--;
     if (k < 0) return out;
-    for (let j = k + 1; j < out.length; j++) if (out[j] && out[j].role === 'assistant') return out;
+    for (let j = k + 1; j < out.length; j++) if (out[j] && out[j].role === 'assistant' && mutated(out[j])) return out;
     return out.slice(0, k);
   }
   async function carryForward(messages, rec, limits = CARRY_FALLBACK){

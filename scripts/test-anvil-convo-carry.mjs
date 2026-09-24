@@ -200,8 +200,13 @@ assert.match(anvil, /compactConversation\(out, \{[^}]*retrievable: !!\(rec && re
   assert.deepEqual(r1.calls[0].replacement, earlier, 'the recorded replacement is what the next run is sent');
   const dangling = [{ role: 'user', content: 'create notes.md' }, { role: 'assistant', content: '', tool_calls: [{ id: 'c1', type: 'function', function: { name: 'write', arguments: '{}' } }] }];
   assert.deepEqual(await carryForward([sys, ...earlier, ...dangling], recWith('aborted')), earlier, 'stopped after issuing a call that never ran: the dangling turn AND the ask leave (live: 5 of 6 stops)');
-  const started = [{ role: 'user', content: 'create notes.md' }, { role: 'assistant', content: 'writing it' }];
-  assert.deepEqual(await carryForward([sys, ...earlier, ...started], recWith('aborted')), [...earlier, ...started], 'a stopped run that had started replying keeps its work');
+  const call = (name, args) => ({ id: 'c' + name, type: 'function', function: { name, arguments: JSON.stringify(args) } });
+  const looked = [{ role: 'user', content: 'create notes.md' }, { role: 'assistant', content: '', tool_calls: [call('shell', { command: 'ls' })] }, { role: 'tool', tool_call_id: 'cshell', content: 'a.py' }, { role: 'assistant', content: 'I will now write it' }];
+  assert.deepEqual(await carryForward([sys, ...earlier, ...looked], recWith('aborted')), earlier, 'stopped after only looking around (live, battery run 6: one ls): the whole exchange leaves');
+  const wrote = [{ role: 'user', content: 'create notes.md' }, { role: 'assistant', content: '', tool_calls: [call('write', { path: 'notes.md', content: '# N' })] }, { role: 'tool', tool_call_id: 'cwrite', content: 'Wrote notes.md' }];
+  assert.deepEqual(await carryForward([sys, ...earlier, ...wrote], recWith('aborted')), [...earlier, ...wrote], 'a stopped run that changed files keeps its exchange');
+  const redirected = [{ role: 'user', content: 'create notes.md' }, { role: 'assistant', content: '', tool_calls: [call('shell', { command: 'echo hi > notes.md' })] }, { role: 'tool', tool_call_id: 'cshell', content: '' }];
+  assert.deepEqual(await carryForward([sys, ...earlier, ...redirected], recWith('aborted')), [...earlier, ...redirected], 'a shell write counts as a change');
   assert.deepEqual(await carryForward([sys, ...earlier, ...stoppedTail], recWith('done')), [...earlier, ...stoppedTail], 'only a Stop drops anything');
   assert.deepEqual(await carryForward([sys, ...earlier, ...stoppedTail], recWith('error')), [...earlier, ...stoppedTail], 'an error is not a cancellation');
 }
