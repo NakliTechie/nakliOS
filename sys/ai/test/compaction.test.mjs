@@ -5,7 +5,7 @@
 // Pure/headless: a scripted token estimator drives the thresholds, so the cut
 // boundaries and the shake/summarize/drop ladder are verified deterministically.
 
-import { shake, compactConversation, listingEntries, listingShape } from '../compaction.mjs';
+import { shake, compactConversation, listingEntries, listingShape , shakeSmall } from '../compaction.mjs';
 import { estimateTokens } from '../agent-loop.mjs';
 
 let passed = 0;
@@ -290,6 +290,28 @@ await test('shake collapses a stale listing to its entry count', () => {
   ], { minChars: 50, retrievable: true });
   assert(/^\[tool output elided — \d+ chars from `read`/.test(r2.messages[1].content), `a bulleted read result is the generic elision: ${r2.messages[1].content.slice(0, 60)}`);
   assert(/^\[listing elided — 60 entries from `shell`.*history \{"op":"search","query":/.test(r2.messages[3].content), `a retrievable listing keeps the history handle: ${r2.messages[3].content.slice(0, 160)}`);
+});
+
+await test('C2: old small results collapse once their total is worth it — before anything is dropped', async () => {
+  const smallRes = (i) => ({ role: 'tool', tool_call_id: 'c' + i, content: 'line ' + i + ' ' + 'x'.repeat(120) });
+  const turn = (i) => [{ role: 'assistant', content: null, tool_calls: [{ id: 'c' + i, type: 'function', function: { name: 'shell', arguments: '{}' } }] }, smallRes(i)];
+  const msgs = [{ role: 'system', content: 'sys' }, { role: 'user', content: 'go' }];
+  for (let i = 0; i < 120; i++) msgs.push(...turn(i));
+  msgs.push({ role: 'user', content: 'recent question' });
+  const before = estimateTokens(msgs);
+  const r = await compactConversation(msgs, { threshold: Math.floor(before * 0.8), keepRecentTokens: 400 });
+  eq(r.method, 'shake', 'solved by collapsing small results — the older region was NOT dropped');
+  assert(r.smallCollapsed > 50, 'many small results were cut: ' + r.smallCollapsed);
+  assert(r.messages.some((m) => /… \[old result cut — \d+ chars\]$/.test(String(m.content))), 'a cut result says its full size');
+  assert(r.messages.filter((m) => m.role === 'tool').length === 120, 'no tool result was removed — each keeps its call id, so no turn is orphaned');
+  eq(r.messages[r.messages.length - 1].content, 'recent question', 'the recent context is untouched');
+  assert(!r.messages.some((m) => '_small' in m), 'no private field rides to the provider');
+  // below the aggregate, small results are left alone
+  const few = [{ role: 'tool', content: 'x'.repeat(150) }, { role: 'tool', content: 'y'.repeat(150) }];
+  eq(shakeSmall(few).collapsed, 0, 'two small results are not worth collapsing');
+  // a cut result is never cut again
+  const once = shakeSmall(Array.from({ length: 80 }, (_, i) => ({ role: 'tool', content: String(i) + 'z'.repeat(150) })), { aggregateTokens: 10 });
+  eq(shakeSmall(once.messages, { aggregateTokens: 10 }).collapsed, 0, 'a second pass finds nothing to cut');
 });
 
 if (failures.length) {

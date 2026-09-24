@@ -151,6 +151,28 @@ export function shake(region, { estimate = estimateTokens, minChars = 200, artif
   return { messages: out, artifacts, saved };
 }
 
+// C2 (iii #25, 2026-09-24): small tool results are immortal under `shake` — each is below minChars,
+// so a long run's hundreds of `exit 0`s, short cats and one-line greps ride to the end (the iii gist's
+// 63k–76k-token floor). When their AGGREGATE in the older region crosses `aggregateTokens`, each is cut
+// to its first `keepChars` characters and a note of its size. This runs after the bulky shake and
+// before the drop/summarize — so it can spare the whole older region from being dropped. Results
+// already elided by `shake` are left as they are.
+const SMALL_CUT = /… \[old result cut — \d+ chars\]$/;
+export function shakeSmall(region, { estimate = estimateTokens, minChars = 200, keepChars = 60, aggregateTokens = 2000 } = {}) {
+  // a result this pass already cut is recognised by its marker — no private field rides to the provider
+  const small = region.filter((m) => m?.role === 'tool' && typeof m.content === 'string' && m.content.length < minChars && m.content.length > keepChars + 20 && !m._artifact && !SMALL_CUT.test(m.content));
+  const cost = small.reduce((n, m) => n + estimate([m]), 0);
+  if (cost < aggregateTokens) return { messages: region, saved: 0, collapsed: 0 };
+  let saved = 0, collapsed = 0;
+  const out = region.map((m) => {
+    if (!small.includes(m)) return m;
+    const next = { ...m, content: `${m.content.slice(0, keepChars)}… [old result cut — ${m.content.length} chars]` };
+    saved += estimate([m]) - estimate([next]); collapsed++;
+    return next;
+  });
+  return { messages: out, saved, collapsed };
+}
+
 // The top-level pass. Returns:
 //   { messages, compacted, method, artifacts, droppedTokens }
 // method ∈ 'none' | 'shake' | 'summarize' | 'drop'.
@@ -182,6 +204,16 @@ export async function compactConversation(messages, {
   let next = [...system, ...shaken.messages, ...kept];
   if (estimate(next) <= threshold) {
     return { messages: next, compacted: true, method: 'shake', artifacts: shaken.artifacts, droppedTokens: shaken.saved };
+  }
+
+  // 1b. C2: still over → collapse the old small results once their total is worth it.
+  const small = shakeSmall(shaken.messages, { estimate, minChars: shakeMinChars });
+  if (small.collapsed) {
+    shaken.messages = small.messages; shaken.saved += small.saved;
+    next = [...system, ...shaken.messages, ...kept];
+    if (estimate(next) <= threshold) {
+      return { messages: next, compacted: true, method: 'shake', artifacts: shaken.artifacts, droppedTokens: shaken.saved, smallCollapsed: small.collapsed };
+    }
   }
 
   // 2. still over → summarize (or drop) the older region.
