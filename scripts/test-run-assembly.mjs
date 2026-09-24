@@ -216,10 +216,15 @@ async function drive({ replies, stag = null, mode = 'code', verify = null, gate 
   assert.equal(d.rec.starts.length, 1, 'one loop when the agent acted');
   assert.deepEqual(d.notes, []);
 }
-{ // the gate note rides on the FIRST loop only
+{ // S3 (2026-09-24): a gated run's re-loop keeps the gate note — the truthful bytes, not the cache hit
   const d = await drive({ replies: [{ content: 'prose', toolCalls: [] }, { content: 'still prose', toolCalls: [] }], gate: ' GATE' });
   assert.equal(d.rec.starts[0].messages[0].content, 'SYS GATE', 'the first loop carries the gate note');
-  assert.equal(d.rec.starts[1].messages[0].content, 'SYS', 'the re-loop does not repeat it');
+  assert.equal(d.rec.starts[1].messages[0].content, 'SYS GATE', 'and so does the re-loop — the gate still decides done');
+  assert.deepEqual(d.systemTexts, ['SYS GATE', 'SYS GATE'], 'the budget probe counts the note in both loops');
+  const ungated = await drive({ replies: [{ content: 'prose', toolCalls: [] }, { content: 'still prose', toolCalls: [] }] });
+  assert.equal(ungated.rec.starts[1].messages[0].content, 'SYS', 'an ungated re-loop is byte-identical to before');
+  assert.deepEqual(reloopMessages((g) => ({ role: 'system', content: 'SYS' + g }), [{ role: 'user', content: 'x' }], ' GATE').map((m) => m.content), ['SYS GATE', 'x'], 'reloopMessages takes the gate');
+  assert.deepEqual(reloopMessages((g) => ({ role: 'system', content: 'SYS' + g }), [{ role: 'user', content: 'x' }]).map((m) => m.content), ['SYS', 'x'], 'and defaults to none');
 }
 { // plan mode: prose is the product; never nudged
   const d = await drive({ replies: [{ content: 'the plan', toolCalls: [] }], mode: 'plan' });

@@ -193,7 +193,11 @@ export function needsSupervisor({ mode, stop, aborted = false, stag, budgetAxis 
 // Every re-loop carries the SAME conversation the first loop built, unfiltered: filtering the
 // context message out would drop the memory and skills index mid-run and make the second
 // run.started disagree with the first.
-export function reloopMessages(sysMsg, convo) { return [sysMsg(''), ...convo]; }
+// S3 (2026-09-24): and the SAME system head — a gated run's re-loop keeps its gate note. It used to
+// send sysMsg(''), so the redirected model lost the instruction that the gate, not it, decides done
+// (a pinned byte equality kept one prompt-cache hit per re-loop; the truthful bytes won). An ungated
+// run's note is '' — its re-loop bytes are unchanged.
+export function reloopMessages(sysMsg, convo, gate = '') { return [sysMsg(gate), ...convo]; }
 
 // ── the driver ────────────────────────────────────────────────────────────────
 // One run = the first loop, then at most one act-or-nudge, then at most one supervisor redirect.
@@ -231,7 +235,7 @@ export async function driveRun({
     note('No tools were used — nudging the agent to make the change, not just describe it.');
     reseed(result); // the loop's convo already ends with the (possibly empty) assistant turn
     carried.push({ role: 'user', content: ACT_NUDGE });
-    result = await loop(reloopMessages(sysMsg, carried), RELOOP_BUDGET);
+    result = await loop(reloopMessages(sysMsg, carried, gate), RELOOP_BUDGET);
   }
   const abortedAfterFirst = aborted(); // read once, as the inline app did — not again after settling
   if (mode === 'code' && result.stop !== 'done' && !abortedAfterFirst) {
@@ -242,7 +246,7 @@ export async function driveRun({
         note('Supervisor: ' + stag.detail + ' — redirecting.');
         reseed(result); // the redirect lands on the whole history the model produced, not on the owner's opening alone
         carried.push({ role: 'user', content: stagnationNudge(stag) });
-        result = await loop(reloopMessages(sysMsg, carried), RELOOP_BUDGET);
+        result = await loop(reloopMessages(sysMsg, carried, gate), RELOOP_BUDGET);
       }
     } catch (_) {}
   }
