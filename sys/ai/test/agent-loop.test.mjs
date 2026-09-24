@@ -1532,6 +1532,20 @@ await test('D1: three missed predictions in a row stop the run as its own record
   eq(r4.stop, 'done');
 });
 
+await test('H2 (iii #11/#12): a reply cut at the output cap ends ungated as truncated, never done', async () => {
+  const run = (reply, extra = {}) => { const evs = []; return runAgentLoop({ messages: [{ role: 'user', content: 'go' }], tools: [shellTool()], infer: scriptedInfer([reply]), executeTool: async () => 'x', maxSteps: 3, onEvent: (e) => evs.push(e), ...extra }).then((r) => ({ r, evs })); };
+  const empty = await run({ content: '', toolCalls: [], finishReason: 'length' });
+  eq(empty.r.stop, 'truncated', 'empty + length'); assert(/nothing said/.test(empty.r.reason), 'the reason says nothing was said');
+  eq(empty.evs.find((e) => e.type === 'done').reason, 'truncated', 'the done event says truncated');
+  const cut = await run({ content: 'The answer is', toolCalls: [], finishReason: 'length' });
+  eq(cut.r.stop, 'truncated', 'partial text + length'); assert(/cut off/.test(cut.r.reason));
+  eq((await run({ content: 'all good', toolCalls: [], finishReason: 'stop' })).r.stop, 'done', 'a clean stop is still done');
+  eq((await run({ content: 'all good', toolCalls: [] })).r.stop, 'done', 'no finishReason is still done');
+  // gated: the gate, not the finish reason, decides — a cut reply over a green gate is verified done
+  const gated = await run({ content: '', toolCalls: [], finishReason: 'length' }, { verify: async () => ({ ok: true, exit: 0 }) });
+  eq(gated.r.stop, 'done', 'gated'); eq(gated.r.verified, true);
+});
+
 if (failures.length) {
   console.error(`agent-loop: ${passed} passed, ${failures.length} FAILED`);
   for (const f of failures) console.error(`  FAIL ${f.name}: ${f.message}`);

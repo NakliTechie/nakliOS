@@ -451,6 +451,7 @@ await test('LX-3 foldGoal: the five statuses from the last run, re-entry first-c
   const done = foldGoal([row({ startedAt: 1, stop: 'unverified', status: 'error' }), row({ startedAt: 2, stop: 'done', status: 'done', gatePassed: true, evidence: 'sha256:abc' })], { objective: 'ship it' });
   eq(done.status, 'complete'); eq(done.evidence, 'sha256:abc'); eq(done.quota.runs, 2); eq(done.quota.tokens, 200); eq(done.quota.seconds, 4); eq(done.objective, 'ship it'); eq(done.lastRun, 'p/t/2');
   const claimed = foldGoal([row({ startedAt: 1, stop: 'done', status: 'unclaimed', gatePassed: false })]);
+  { const tr = foldGoal([row({ startedAt: 1, stop: 'truncated', status: 'idle', reason: 'the reply hit the output-token limit with nothing said' })]); eq(tr.status, 'blocked'); assert(/^truncated: the reply hit/.test(tr.why), 'H2: a truncated run is never complete, and says why'); }
   eq(claimed.status, 'paused', 'done is the verifier\'s word: an ungated finish waits for the owner'); eq(claimed.evidence, null); eq(claimed.why, 'unverified — no passing gate on record');
   eq(foldGoal([row({ startedAt: 1, stop: 'done', gatePassed: true, evidence: null })]).status, 'paused', 'a passed flag without the verdict\'s hash is not evidence');
   eq(foldGoal([row({ startedAt: 1, stop: 'done', gatePassed: true, evidence: 'sha256:x', chainOk: false, brokenAt: 7 })]).status, 'blocked', 'a broken chain earns nothing');

@@ -15,7 +15,7 @@
 //     maxSteps: 24,
 //     onEvent,                  // optional (event) => void   progress taps
 //   });
-//   // result: { messages, steps, stop: 'done'|'max-steps'|'no-progress'|'error', text }
+//   // result: { messages, steps, stop: 'done'|'max-steps'|'no-progress'|'error'|'truncated'|…, text }
 
 import { parseToolArguments } from './agent-protocol.mjs';
 import { classifyToolResult, listingShape } from './tool-result-kind.mjs';
@@ -529,6 +529,14 @@ export async function runAgentLoop({
         loopAuthored.add(fb);
         convo.push(fb);
         continue;
+      }
+      // H2 (iii #11/#12, 2026-09-24): a reply cut at the output-token cap is not the model saying it
+      // is finished — a weak model can spend the whole cap on reasoning and return nothing. With no
+      // gate to overrule it, that ended the run as `done`. It is its own stop.
+      if (reply?.finishReason === 'length') {
+        const reason = content.trim() ? 'the reply was cut off at the output-token limit' : 'the reply hit the output-token limit with nothing said';
+        onEvent({ type: 'done', reason: 'truncated', step });
+        return { messages: convo, steps: step + 1, stop: 'truncated', reason, text: lastText };
       }
       onEvent({ type: 'done', reason: reply?.finishReason || 'stop', step });
       return { messages: convo, steps: step + 1, stop: 'done', text: lastText };

@@ -849,7 +849,7 @@ export function foldOutcome(events, resolve) {
       else { note = 'unclaimed: the loop finished but no gate corroborated it — no success evidence'; push('terminal', 'neutral', 0, 'finished without a gate'); }
     } else if (stop === 'unverified') push('terminal', 'failure', 1.0, 'gate never passed');
     else if (stop === 'error') push('terminal', 'failure', 1.0, `error: ${o.error || ''}`);
-    else if (stop === 'budget' || stop === 'max-steps' || stop === 'no-progress') push('terminal', 'failure', 0.8, `did not finish: ${stop}${o.axis ? ` (${o.axis})` : ''}`);
+    else if (stop === 'budget' || stop === 'max-steps' || stop === 'no-progress' || stop === 'truncated') push('terminal', 'failure', 0.8, `did not finish: ${stop}${o.axis ? ` (${o.axis})` : ''}`);
     else if (stop === 'expect-misses') push('terminal', 'failure', 0.9, `stopped: ${o.reason || 'predictions kept missing'}`); // D1: the model of the workspace was wrong
     else if (stop === 'aborted') { note = 'aborted by the owner — no evidence either way'; push('terminal', 'neutral', 0, 'aborted'); }
     else if (stop === 'clarify') { note = 'paused to ask the owner — not an outcome'; push('terminal', 'neutral', 0, 'clarify'); }

@@ -2991,6 +2991,7 @@
         : result.stop==='budget' ? ('hit budget ('+(result.budgetAxis||'')+')')
         : result.stop==='unverified' ? 'gate never passed'
         : result.stop==='expect-misses' ? ('stopped — '+(result.reason||'predictions kept missing')) // D1
+        : result.stop==='truncated' ? ('stopped — '+(result.reason||'the reply was cut off')+' (raise the model\'s output limit, or add a gate)') // H2
         : (result.stop==='done' && !gated) ? 'finished — no gate, so this is the agent\'s own claim'
         : (result.stop==='done' && result.atCap) ? 'done — the gate passed at the step cap (the agent never called task_done)'
         : result.stop;
@@ -2998,7 +2999,7 @@
       // D2 (khiladi §6/§8): a run that did not finish leaves a TASK-SCOPED note — where it stalled and
       // why — that the next run of THIS task reads at the top of its memory index and no other task
       // ever sees. One slot per task, so the newest stall supersedes the last.
-      if(['max-steps','unverified','budget','no-progress','expect-misses'].includes(result.stop)){
+      if(['max-steps','unverified','budget','no-progress','expect-misses','truncated'].includes(result.stop)){
         try{ const ctxS=foldSessionContext(recEvents, rec.resolve); const where=ctxS.lastCheckpoint||(finalAssistant&&finalAssistant.text)||''; await recordFact('Stalled last run — '+stopLabel+(where?': '+String(where).replace(/\s+/g,' ').slice(0,300):''), 'project', 'hypothesis', { scope:'task:'+String(t.id), slot:'stall-'+String(t.id) }); }catch(_){}
       }
       // Persist the record — the tamper-evident source of truth, and what the history tool
