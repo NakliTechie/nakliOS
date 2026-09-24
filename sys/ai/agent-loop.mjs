@@ -266,6 +266,15 @@ function callId(call, step, index) {
 
 // H3: ids are assigned once, before the assistant turn is stored — see ./call-ids.mjs.
 
+// C1: does this inference error say the REQUEST was too long for the model? Provider wording varies —
+// OpenAI 'context_length_exceeded' / 'maximum context length', Anthropic 'prompt is too long', llama.cpp /
+// Ollama 'context window' / 'too many tokens'. A plain 400 without these words is not treated as one.
+export const OVERFLOW_RECOVERIES = 2;
+export function isContextOverflow(e) {
+  const t = String((e && (e.code || '')) + ' ' + (e && (e.message || e)) || '');
+  return /context[_ ]length|maximum context|context window|prompt is too long|too many tokens|reduce the length of the (messages|prompt)|exceeds? the (model'?s )?(max(imum)? )?(context|token)/i.test(t);
+}
+
 // A signature of the tool calls in a step, to detect a stuck loop (the model
 // repeating the identical call with no new information).
 // The CANONICAL form of a tool call's arguments: same object, same string, whatever
@@ -372,10 +381,12 @@ export async function runAgentLoop({
   steer = null,            // CRIB-B B2: a steer queue (sys/ai/steer.mjs) — what arrives mid-turn lands at the next turn
   waitCapMs = WAIT_CAP_MS, // B2: how long one waiting turn may wait when there is no wall clock to bound it
   expectMissStreak = EXPECT_MISS_STREAK, // D1: consecutive missed predictions that stop the run (0 = never)
+  compact = null,          // C1: async (messages) => { messages, method } | null — shrinks the transcript after a context overflow
 }) {
   if (typeof infer !== 'function') throw new Error('runAgentLoop needs an infer function');
   if (typeof executeTool !== 'function') throw new Error('runAgentLoop needs an executeTool function');
   const convo = messages.slice();
+  let overflowRecoveries = 0; // C1: in-loop recoveries from a context overflow this run (at most OVERFLOW_RECOVERIES)
   const usedCallIds = transcriptCallIds(convo); // H3: synthesised ids never collide with a carried transcript
   let lastText = '';
   let repeats = 0;           // consecutive turns whose canonical tool-call set was identical
@@ -477,6 +488,24 @@ export async function runAgentLoop({
       // fault. Report it as the abort it is; 'error' is for the model or the host
       // failing on their own (live finding 2026-09-06: Stop read as 'agent error').
       if (aborted()) return abortReturn(step);
+      // C1 (2026-09-24; Strands' third default): a request the provider refused for its LENGTH is not the
+      // end of the run. Compact the transcript in place and retry the same step — at most
+      // OVERFLOW_RECOVERIES times a run. The replacement rides a `compacted` event so the record's fold
+      // rebuilds exactly what the retry sends (surface coordinates: the system head is not part of it).
+      if (compact && isContextOverflow(e) && overflowRecoveries < OVERFLOW_RECOVERIES) {
+        overflowRecoveries++;
+        let r = null;
+        try { r = await compact(convo.slice()); } catch (_) { r = null; }
+        const head = convo[0] && convo[0].role === 'system' ? 1 : 0;
+        if (r && Array.isArray(r.messages) && r.messages.length && JSON.stringify(r.messages) !== JSON.stringify(convo)) {
+          const before = convo.length - head;
+          const body = r.messages[0] && r.messages[0].role === 'system' && head ? r.messages.slice(1) : r.messages;
+          convo.splice(head, before, ...body);
+          onEvent({ type: 'compacted', step, method: String(r.method || 'shake'), from: 0, to: before, replacement: body, reason: String(e?.message || e).slice(0, 200) });
+          step--; // retry this step on the smaller transcript
+          continue;
+        }
+      }
       onEvent({ type: 'error', error: String(e?.message || e), step });
       return { messages: convo, steps: step, stop: 'error', text: lastText, error: String(e?.message || e) };
     }

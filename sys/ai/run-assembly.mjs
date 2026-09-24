@@ -208,6 +208,7 @@ export async function driveRun({
   verify = null, signal = null, onEvent = () => {}, model = () => null,
   gateNote: gate = '', note = () => {}, onSystemText = () => {}, readiness = null,
   steer = null, // B2: the run's steer queue — a child's completion lands at the parent's next turn
+  compact = null, // C1: the loop's compactor after a context overflow (every loop of the run gets it)
 }) {
   let toolCalls = 0;
   const onLoop = (e) => { if (e && e.type === 'tool-call') toolCalls++; onEvent(e); };
@@ -215,7 +216,7 @@ export async function driveRun({
   const loop = async (messages, budget) => {
     onSystemText(messages[0].content); // the budget counts THIS loop's prompt
     await rec.start({ messages, tools, model: model(), readiness }); // A4: the readiness rows ride run.started when the app supplies them
-    const result = await runAgentLoop({ messages, tools, infer, executeTool, ...budget, signal, verify, onEvent: onLoop, steer });
+    const result = await runAgentLoop({ messages, tools, infer, executeTool, ...budget, signal, verify, onEvent: onLoop, steer, compact });
     await rec.finish(result);
     return result;
   };

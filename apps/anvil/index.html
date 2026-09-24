@@ -1978,6 +1978,19 @@
   // model actually saw could disagree, while run-record's header claimed the transcript was a
   // projection. Recording the net replacement makes `foldSurface` reproduce it (F4), which is
   // what F1's invariant then checks.
+  // C1 (2026-09-24): the loop's compactor when the provider refuses a request for its length. The same
+  // compaction the carry uses; the target is the smaller of half the usable window and HALF the current
+  // transcript — "under the carry threshold" can still be too big for the model that just refused it.
+  // The loop records the replacement (run.compacted), so the retry's request reconstructs.
+  async function compactForOverflow(msgs){
+    const head = msgs[0] && msgs[0].role==='system' ? [msgs[0]] : [];
+    const body = msgs.slice(head.length);
+    const L = carryLimits(await resolveWindow());
+    const now = Math.ceil(JSON.stringify(body).length/4);
+    const threshold = Math.max(1000, Math.min(L.threshold, Math.floor(now/2)));
+    const r = await compactConversation(body, { threshold, keepRecentTokens: Math.min(L.keepRecentTokens, Math.floor(threshold*0.4)), retrievable: true });
+    return r.compacted ? { method: r.method, messages: [...head, ...r.messages] } : null;
+  }
   // The fixed limits, kept as the fallback when no window is known (X1: carryLimits in context-budget.mjs).
   const CARRY_FALLBACK = { threshold: 24000, keepRecentTokens: 10000, maxChars: CONVO_MAX_CHARS };
   async function carryForward(messages, rec, limits = CARRY_FALLBACK){
@@ -2962,6 +2975,7 @@
           // B2: the owner sees the wait and each completion as it steers the run
           else if(e.type==='waiting'){ clearThinking(); t.log.push({k:'system',text:'waiting for '+e.inFlight+' subagent'+(e.inFlight===1?'':'s')+' — '+(e.inFlight===1?'its':'their')+' completion will steer the run'}); renderLog(); }
           else if(e.type==='steer'){ clearThinking(); t.log.push({k:'system',text:'⇆ '+String(e.content||'').replace(/^\[coordination\] /,'')}); renderLog(); }
+          else if(e.type==='compacted'){ clearThinking(); t.log.push({k:'system',text:'↺ the model refused the request as too long — the transcript was compacted ('+String(e.method||'shake')+') and the turn retried'}); renderLog(); } // C1
           // D1: a missed prediction is visible as it happens — three in a row stop the run
           else if(e.type==='expect-miss'){ t.log.push({k:'system',text:expectMissText(e)}); renderLog(); }
       };
@@ -3024,7 +3038,7 @@
       let result = await driveRun({
         steer, // B2: completions land at the next turn; a turn with nothing to do while a child runs waits
         mode, convo, sysMsg, tools, infer: recInfer, executeTool, rec,
-        verify, signal: abortController.signal, onEvent: recEvent, model: runModel, gateNote, readiness,
+        verify, signal: abortController.signal, onEvent: recEvent, model: runModel, gateNote, readiness, compact: compactForOverflow,
         note: (text)=>{ t.log.push({k:'system', text}); renderLog(); },
         onSystemText: (s)=>{ liveSystemText = s; }, // so the budget counts the prompt actually sent
       });

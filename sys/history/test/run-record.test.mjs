@@ -4,7 +4,7 @@
 // A real runAgentLoop over a real Rig shell is RECORDED; then everything Anvil
 // keeps about a run is derived from the record, and the run is REPLAYED with
 // zero model calls. Strict replay must name the first divergent event.
-import { runAgentLoop, shellTool, makeShellExecutor } from '../../ai/agent-loop.mjs';
+import { runAgentLoop, shellTool, makeShellExecutor, isContextOverflow, OVERFLOW_RECOVERIES } from '../../ai/agent-loop.mjs';
 import { buildRigRegistry } from '../../rig/registry/index.mjs';
 import { createFileops, MemoryBackend } from '../../rig/fileops/index.mjs';
 import { createGrant, createOpLog, createAgentFace } from '../../rig/agent/index.mjs';
@@ -1346,6 +1346,44 @@ await test('H3: an id-less provider — the loop assigns ids once, the fold assi
   deepEq(divergences, [], 'the fold assigns the ids the loop assigned — every request reconstructs');
   const folded = foldTranscript(rec.events(), rec.resolve).filter((m) => m.role === 'assistant' && m.tool_calls).flatMap((m) => m.tool_calls.map((c) => c.id));
   deepEq(folded, ['call_0_0', 'call_0_1', 'call_0_0_2'], 'the folded transcript carries the same ids');
+});
+
+await test('C1: a context overflow is compacted in the loop and retried — on the chain, every request reconstructs', async () => {
+  const shell = freshShell();
+  const rec = createRunRecorder({ app: 'anvil', principal: 'p' });
+  const divergences = [], sent = [];
+  let n = 0;
+  const overflow = () => Object.assign(new Error("This model's maximum context length is 65536 tokens. However, you requested 70123 tokens"), { status: 400 });
+  // turn 1 acts; turn 2 overflows once; the retry (on the compacted transcript) finishes
+  const infer = async ({ messages }) => { n++; sent.push(messages.length); if (n === 1) return { content: '', toolCalls: [{ id: 'k1', type: 'function', function: { name: 'shell', arguments: JSON.stringify({ command: 'echo big' }) } }] }; if (n === 2) throw overflow(); return { content: 'done', toolCalls: [] }; };
+  // the compactor keeps the system head and the last message — a stand-in for compactConversation
+  const compact = async (msgs) => ({ method: 'drop', messages: [msgs[0], { role: 'user', content: '[earlier turns dropped to fit the context window]' }, msgs[msgs.length - 1]] });
+  await rec.start({ messages: MESSAGES, tools: [shellTool()] });
+  const events = [];
+  const result = await runAgentLoop({ messages: MESSAGES, tools: [shellTool()], infer: rec.wrapInfer(infer, { onDivergence: (d) => divergences.push(d) }), executeTool: makeShellExecutor(shell), onEvent: (e) => { events.push(e.type); rec.onEvent(e); }, maxSteps: 6, compact });
+  await rec.finish(result); await rec.settled();
+  eq(result.stop, 'done', 'the run finished instead of stopping on the overflow');
+  assert(events.includes('compacted') && !events.includes('error'), 'a compaction, not an error');
+  assert(sent[2] < sent[1], `the retry sent a smaller transcript (${sent[1]} → ${sent[2]})`);
+  assert(rec.events().some((e) => e.tool === 'run.compacted'), 'the compaction is on the chain');
+  deepEq(divergences, [], 'every request — the retry included — reconstructs from the record');
+  eq(isContextOverflow(overflow()), true); eq(isContextOverflow(new Error('HTTP 400: invalid tool schema')), false, 'a plain 400 is not an overflow');
+  eq(isContextOverflow({ code: 'context_length_exceeded', message: 'x' }), true, 'the OpenAI code counts');
+});
+
+await test('C1: the recovery is bounded, needs a compactor, and never touches other errors', async () => {
+  const always = async () => { throw new Error('prompt is too long: 250000 tokens > 200000 maximum'); };
+  let compacts = 0;
+  const shrink = async (msgs) => { compacts++; return { method: 'drop', messages: msgs.slice(0, 1).concat(msgs.slice(-1)).concat([{ role: 'user', content: 'n' + compacts }]) }; };
+  const r1 = await runAgentLoop({ messages: MESSAGES, tools: [shellTool()], infer: always, executeTool: async () => 'x', maxSteps: 6, compact: shrink });
+  eq(r1.stop, 'error', 'an overflow that compaction cannot cure still stops'); eq(compacts, OVERFLOW_RECOVERIES, `at most ${OVERFLOW_RECOVERIES} recoveries a run`);
+  eq((await runAgentLoop({ messages: MESSAGES, tools: [shellTool()], infer: always, executeTool: async () => 'x', maxSteps: 6 })).stop, 'error', 'no compactor → the old behaviour');
+  let asked = 0;
+  eq((await runAgentLoop({ messages: MESSAGES, tools: [shellTool()], infer: async () => { throw new Error('upstream 503'); }, executeTool: async () => 'x', maxSteps: 6, compact: async (m) => { asked++; return { messages: m.slice(0, 1) }; } })).stop, 'error', 'another error stops');
+  eq(asked, 0, 'and the compactor is never asked');
+  let same = 0;
+  eq((await runAgentLoop({ messages: MESSAGES, tools: [shellTool()], infer: always, executeTool: async () => 'x', maxSteps: 6, compact: async (m) => { same++; return { messages: m }; } })).stop, 'error', 'a compactor that changes nothing does not loop');
+  eq(same, 1, 'it is asked once, then the run stops');
 });
 
 await test('B1: foldToolFailures classifies from the recorded text — nothing stored, old records count too', async () => {

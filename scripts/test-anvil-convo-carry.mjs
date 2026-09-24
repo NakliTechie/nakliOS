@@ -45,6 +45,21 @@ const carryForward = new Function('compactConversation', `${anvil.slice(start, e
 
 const sys = { role: 'system', content: 'you are a coding agent' };
 
+// C1 (2026-09-24): after a context overflow the loop asks Anvil's compactor for a smaller transcript.
+// It is the carry's compaction, aimed at half the CURRENT size when that is below the window's target.
+{
+  const compactForOverflow = new Function('compactConversation', 'carryLimits', 'resolveWindow',
+    `${anvil.slice(start, end)}; return compactForOverflow;`)(compactConversation, () => ({ threshold: 63000, keepRecentTokens: 25200 }), async () => ({ window: 128000 }));
+  const big = [sys, ...Array.from({ length: 12 }, (_, i) => ({ role: i % 2 ? 'assistant' : 'user', content: String(i).repeat(6000) }))];
+  const r = await compactForOverflow(big);
+  assert.ok(r && Array.isArray(r.messages), 'a transcript under the window target still compacts after an overflow');
+  assert.equal(r.messages[0], sys, 'the system head is kept as it was');
+  assert.ok(JSON.stringify(r.messages).length < JSON.stringify(big).length / 1.5, 'and the result is materially smaller');
+  assert.equal(await compactForOverflow([sys, { role: 'user', content: 'hi' }]), null, 'nothing to compact → null, and the loop stops as before');
+  assert.match(anvil, /readiness, compact: compactForOverflow,/, 'the run hands the loop the compactor');
+  assert.match(anvil, /e\.type==='compacted'\)\{[^\n]*compacted \('\+String\(e\.method/, 'and the log says it happened');
+}
+
 // X1 (2026-09-24): the carry follows the window, and it lives in IndexedDB, not localStorage.
 {
   const big = [{ role: 'user', content: 'x'.repeat(50_000) }, { role: 'assistant', content: 'y'.repeat(50_000) }, { role: 'user', content: 'z'.repeat(50_000) }, { role: 'assistant', content: 'ok' }];

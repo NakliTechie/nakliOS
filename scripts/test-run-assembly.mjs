@@ -463,4 +463,9 @@ console.log('run-assembly: A4 readiness == the toolset in every mode; A2 episode
 }
 }
 
+// C1: driveRun hands every loop of the run the caller's compactor
+{
+  const src = await (await import('node:fs/promises')).readFile(new URL('../sys/ai/run-assembly.mjs', import.meta.url), 'utf8');
+  assert.match(src, /runAgentLoop\(\{ messages, tools, infer, executeTool, \.\.\.budget, signal, verify, onEvent: onLoop, steer, compact \}\)/, 'the loop gets compact');
+}
 console.log(`run-assembly: ${n} groups green — prompt bytes, tool list, budgets and texts equal e870f0b; driveRun records every loop; the app is wired through the module`);
