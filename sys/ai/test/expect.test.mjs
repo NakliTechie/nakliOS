@@ -40,6 +40,9 @@ test('gradeExpect output: hit and miss, and the line renders without a dangling 
   assert(gradeExpect({ kind: 'output', value: '' }, { output: 'one line' }).ok, 'output hit');
   const m = gradeExpect({ kind: 'output', value: '' }, { output: NO_OUTPUT }); assert(!m.ok && /printed nothing/.test(m.why), m.why);
   assert(!gradeExpect({ kind: 'output', value: '' }, { output: '' }).ok, 'empty is a miss');
+  const failed = gradeExpect({ kind: 'output', value: '' }, { exitCode: 1, output: 'ls: .: ENOENT' });
+  assert(!failed.ok && /failed \(exit 1\)/.test(failed.why), 'an error printed on a non-zero exit is not the predicted output: ' + failed.why);
+  assert(gradeExpect({ kind: 'output', value: '' }, { exitCode: 0, output: 'a.txt' }).ok, 'exit 0 with output is still a hit');
   const line = expectLine({ kind: 'output', value: '' }, m);
   assert(line.startsWith(EXPECT_MARKER + 'MISS (output) — '), `no trailing space inside the parens: ${line}`);
 });

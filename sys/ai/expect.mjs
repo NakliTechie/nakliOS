@@ -63,6 +63,11 @@ export function gradeExpect(exp, { exitCode = null, output = '' } = {}) {
     return { ok, why: ok ? `output contains "${exp.value}"` : `expected output to contain "${exp.value}" — it did not` };
   }
   if (exp.kind === 'output') {
+    // An error message is output too, but not the output predicted: `ls` on a missing path printed
+    // "ls: .: ENOENT" with exit 1 and graded MET (live 2026-09-24), telling the model it had listed.
+    if (exitCode != null && Number(exitCode) !== 0) {
+      return { ok: false, why: `the command failed (exit ${exitCode}) — what it printed is an error, not the output predicted` };
+    }
     const ok = !isBlankOutput(out);
     return { ok, why: ok ? 'the command printed output as expected' : 'expected output — the command printed nothing' };
   }

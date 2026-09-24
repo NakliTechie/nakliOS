@@ -537,10 +537,17 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     return { ok: true, path: r.path };
   }
 
+  // The workspace root always exists. On an object store (Crate) a directory is implicit — it is
+  // there only while a file sits under it — so a fresh workspace's root stat()s as nothing, and
+  // `ls` answered "ENOENT" on a brand-new project (live 2026-09-24: four failed listings before
+  // the model found its footing). An empty root is an empty directory, never a missing one.
+  const rootSafe = joinRoot(rootPrefix, '');
+  const statSafe = async (safe) => (await backend.stat(safe)) || (safe === rootSafe ? { type: 'dir', size: 0, mtimeMs: 0 } : null);
+
   async function stat(path) {
     const r = await resolve(path);
     if (!r.ok) return r;
-    const st = await backend.stat(r.safe);
+    const st = await statSafe(r.safe);
     if (!st) return err('ENOENT', `no such path: ${r.path}`, { path: r.path });
     const out = { type: st.type, size: st.size ?? 0, mtimeMs: st.mtimeMs ?? 0 };
     if (st.target !== undefined) out.target = st.target;
@@ -563,7 +570,7 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
   async function list(path, opts = {}) {
     const r = await resolve(path);
     if (!r.ok) return r;
-    const st = await backend.stat(r.safe);
+    const st = await statSafe(r.safe);
     if (!st) return err('ENOENT', `no such directory: ${r.path}`, { path: r.path });
     if (st.type !== 'dir') return err('ENOTDIR', `not a directory: ${r.path}`, { path: r.path });
     const base = r.safe === '' ? '' : r.safe + '/';

@@ -128,6 +128,26 @@ await test('a shell over CrateBackend persists across a fresh shell (reload anal
   eq((await s2.feed('cat work/data.txt')).output, 'persisted', 'survived a fresh shell over the same store');
 });
 
+// Live 2026-09-24: a fresh project on Crate (workspace mounted at ws/<project>, no files yet) answered
+// `ls` with ENOENT four times — an object store has no directory until a file sits under it.
+await test('a fresh workspace mounted under a prefix: the empty root lists as empty, and `ls` exits 0', async () => {
+  const fs = createFileops({ backend: new CrateBackend(new MockNakliosFs()), root: 'ws/p1' });
+  const l = await fs.list('');
+  assert(l.ok, 'list of the empty mount root is ok: ' + JSON.stringify(l));
+  eq(l.entries.length, 0, 'and empty');
+  const st = await fs.stat('');
+  assert(st.ok && st.stat.type === 'dir', 'the root stats as a directory');
+  assert(!(await fs.stat('nope')).ok, 'a missing path under it is still missing');
+  const registry = buildRigRegistry({ fs });
+  const grant = createGrant({ prefixes: [''], scopes: ['fs:read', 'fs:write', 'fs:remove'] });
+  const face = createAgentFace({ registry, grant, opLog: createOpLog({ fs: createFileops({ backend: new MemoryBackend() }) }), actor: 'agent' });
+  const sh = createShell({ registry, face });
+  const r = await sh.feed('ls -la');
+  assert(!/ENOENT/.test(r.output || ''), '`ls -la` on the empty root does not say ENOENT: ' + JSON.stringify(r));
+  await sh.feed('echo hi > c.txt');
+  assert(/c\.txt/.test((await sh.feed('ls')).output), 'then lists what was written');
+});
+
 if (failures.length) {
   console.error(`crate-backend: ${passed} passed, ${failures.length} FAILED`);
   for (const f of failures) console.error(`  FAIL ${f.name}: ${f.message}`);
