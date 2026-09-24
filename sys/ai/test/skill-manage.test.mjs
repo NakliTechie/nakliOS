@@ -176,6 +176,8 @@ await test('STARTER_SKILL: parses, lints clean, sentinel-clean, and says the fou
   for (const must of [/no \/workspace/, /\.anvil\/gate\//, /call task_done/, /do not cd/]) assert(must.test(sk.body), `says: ${must}`);
   assert(/## Steps[\s\S]*call task_done[\s\S]*## Check/.test(sk.body), 'task_done is a STEP, not only the check');
   assert(sk.description.length < 120, 'its index line is short');
+  // 2026-09-24: scoped to code work — "any task" had it loaded on every one-word edit
+  assert(/^For writing code or working a verify gate/.test(sk.description) && /Not needed for a one-line ask/.test(sk.body), 'the index line and the When say what it is NOT for');
 });
 await test('lintSkill checks against the shape: a multi-line or long description, a body with no instruction', () => {
   assert(lintSkill({ description: 'one\ntwo', body: 'Run the thing and then check the other thing carefully.' }).some((w) => /spans lines/.test(w)), 'multi-line description');

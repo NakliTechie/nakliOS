@@ -83,13 +83,16 @@ export function scaffoldSkill({ name, description = '', now = null } = {}) {
 // index line and is loaded only when the agent reaches for it.
 export const STARTER_SKILL = {
   name: 'working-in-anvil',
-  description: 'How this workspace works: paths, the verify gate, task_done, and what not to do',
+  // Scoped 2026-09-24: "Any task, especially before the first write" made the model load this on
+  // every one-word edit, and "run the code before claiming it works" became a `cat` after it (the
+  // simple-task battery's last extra steps). It is for code work and gated tasks.
+  description: 'For writing code or working a verify gate: paths, the gate, task_done, what not to do',
   body: [
-    '## When', 'Any task in this workspace, especially before the first write or the first shell command.', '',
+    '## When', 'Writing or changing code, or any task with a verify gate. Not needed for a one-line ask (list, read, rename, a small text edit).', '',
     '## Steps',
     '1. Paths are relative to the workspace root. There is no /workspace, /home or /tmp; do not cd.',
     '2. If a verify gate is set, read its criterion under .anvil/gate/ before writing code — it is the spec.',
-    '3. Make the change with write/edit; keep edits small; run the code before claiming it works.',
+    '3. Make the change with write/edit; keep edits small; run CODE before claiming it works. A text change needs no re-check: the write/edit result shows the new content.',
     '4. When the gate command exits 0 (or the task is plainly done), call task_done — do not keep probing.',
     '5. Never edit .anvil/gate/ or .anvil/skills/ directly; they are read-only to you.', '',
     '## Check', 'The gate exits 0, or task_done is accepted.',
