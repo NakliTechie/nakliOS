@@ -491,7 +491,23 @@ await test('write: an absolute path is resolved against the root AND the result 
   const r = await face.invoke('fs.read', { path: 'workspace/inv/store.py', encoding: 'utf-8' });
   assert(r.ok, 'the file is where the line says it is');
   const rel = await exec('write', { path: 'inv/store.py', content: 'x = 2\n' });
-  eq(rel, 'Wrote inv/store.py (6 bytes)', 'a relative path gets the plain line — the note is not noise on every write');
+  assert(rel.startsWith('Wrote inv/store.py (6 bytes)') && !/absolute paths/.test(rel), 'a relative path gets no note — it is not noise on every write: ' + rel);
+});
+
+// Battery 2026-09-24: after every write/edit the model ran `cat` "to verify" — the result never
+// showed what the file now held. It does now, for a small write and for the edited lines.
+await test('write/edit results carry the evidence: a small write echoes the file; an edit shows its lines; a big write does not echo', async () => {
+  const { exec } = fresh();
+  const w = await exec('write', { path: 'hi.txt', content: 'hi\n' });
+  eq(w, 'Wrote hi.txt (3 bytes) — the file now reads:\nhi', 'a small write is echoed');
+  const big = await exec('write', { path: 'big.txt', content: 'x'.repeat(5000) });
+  eq(big, 'Wrote big.txt (5000 bytes)', 'a large write is not echoed back into the context');
+  const many = await exec('write', { path: 'many.txt', content: Array.from({ length: 20 }, (_, i) => 'l' + i).join('\n') });
+  assert(!/now reads/.test(many), 'nor is a many-line one');
+  await exec('write', { path: 'seed.txt', content: 'alpha\nbeta\n' });
+  await exec('read', { path: 'seed.txt' });
+  const e = await exec('edit', { path: 'seed.txt', old_string: 'beta', new_string: 'gamma' });
+  assert(/^Edited seed\.txt \(1 replacement, [a-z-]+ match\) — now at line 2:\n2: gamma$/.test(e), 'an edit shows the line it produced: ' + e);
 });
 
 // CRIB-B B5: the catalog is a projection of the grant — a tool the grant cannot honour is never presented

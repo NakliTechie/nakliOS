@@ -5,7 +5,7 @@
 //
 // Why: on 2026-09-24 two trivial asks ran 4 and 13 steps, because a message sent into an existing
 // task inherited that task's unfinished goal. This battery pins the behaviour: 6 trivial asks ×
-// 3 task states. The bar (plan/pending.md): a trivial ask on a FRESH task ends in ≤ 2 steps with
+// 3 task states. The bar (plan/pending.md): a trivial ask on a FRESH task ends in ≤ 2 steps (edit: 3) with
 // no unrelated writes; on a finished or errored task, no write outside the ask.
 //
 // It drives the real app through its own DOM (new project, new task, #prompt, #send, #stop) and
@@ -98,7 +98,8 @@
     { id: 'read',   text: 'what is the first line of seed.txt?',          allowed: [] },
     { id: 'answer', text: 'what is 17 times 23? answer without using any tools', allowed: [] },
     { id: 'rename', text: 'rename seed.txt to seed2.txt',                 allowed: ['seed.txt', 'seed2.txt'] },
-    { id: 'edit',   text: 'in seed.txt, change beta to gamma',            allowed: ['seed.txt'] },
+    // edit's floor is 3: the edit tool refuses a file not yet read (agent-tools readLedger) — read, edit, summary.
+    { id: 'edit',   text: 'in seed.txt, change beta to gamma',            allowed: ['seed.txt'], maxSteps: 3 },
   ];
   const PRIOR = 'create notes.md with a heading "Notes" and three bullet points about Python';
   const STATES = ['fresh', 'finished', 'errored'];
@@ -112,7 +113,7 @@
     const r = await sendAndWait(ask.text);
     const m = await readRecord(r);
     const unrelated = m.writes.filter((p) => !ask.allowed.includes(String(p).replace(/^\.?\//, '')));
-    const pass = state === 'fresh' ? (m.steps <= 2 && unrelated.length === 0) : unrelated.length === 0;
+    const pass = state === 'fresh' ? (m.steps <= (ask.maxSteps || 2) && unrelated.length === 0) : unrelated.length === 0;
     return { ask: ask.id, state, pass, ...m, unrelated };
   }
 

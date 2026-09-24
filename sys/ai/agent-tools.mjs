@@ -29,6 +29,8 @@ import { createRunRecorder } from '../history/run-record.mjs';
 
 const READ_MAX_LINES = 2000;
 const READ_MAX_BYTES = 50_000;
+const WRITE_ECHO_BYTES = 400; // a write this small is echoed back in its result
+const WRITE_ECHO_LINES = 8;
 const READ_MAX_LINE_CHARS = 2000;
 
 // ── tool schemas (OpenAI function shape) ────────────────────────────────
@@ -682,6 +684,23 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
         return (body || '(empty file)') + footer;
       }
 
+      // The result IS the check (battery 2026-09-24): after every write/edit the model ran `cat` on the
+      // file "to verify" — one extra step on every trivial change — because the result line never
+      // showed what the file now holds. A small file's content, or the edited lines, ride the result.
+      function nowReads(content) {
+        const c = String(content ?? '');
+        if (!c || c.length > WRITE_ECHO_BYTES || c.split('\n').length > WRITE_ECHO_LINES + 1) return '';
+        return ' — the file now reads:\n' + c.replace(/\n$/, '');
+      }
+      function changedLines(content, newString) {
+        const lines = String(content ?? '').split('\n'); const ns = String(newString ?? '');
+        if (!ns) return '';
+        const first = ns.split('\n')[0];
+        const at = lines.findIndex((l) => first && l.includes(first));
+        if (at < 0) return '';
+        const n = Math.min(ns.split('\n').length, WRITE_ECHO_LINES);
+        return ' — now at line ' + (at + 1) + ':\n' + lines.slice(at, at + n).map((l, k) => `${at + 1 + k}: ${l.length > 200 ? l.slice(0, 200) + '…' : l}`).join('\n');
+      }
       if (name === 'write') {
         const r = await writeFile(args?.path, args?.content);
         if (r.ok) noteSeen(resolve(args?.path), asStored(args?.content)); // writing establishes known state
@@ -689,7 +708,7 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
         // against the root, and the plain "Wrote workspace/inv/store.py" read to it as proof that
         // /workspace existed. Say what happened, once, on the line it is already reading.
         const rebased = /^\s*\//.test(String(args?.path ?? '')) ? ' — note: absolute paths resolve against the workspace root; there is no /workspace' : '';
-        return r.ok ? `Wrote ${resolve(args?.path)} (${String(args?.content ?? '').length} bytes)${rebased}` : `Error writing ${args?.path}: ${r.error}`;
+        return r.ok ? `Wrote ${resolve(args?.path)} (${String(args?.content ?? '').length} bytes)${rebased}${nowReads(args?.content)}` : `Error writing ${args?.path}: ${r.error}`;
       }
 
       if (name === 'edit') {
@@ -707,7 +726,7 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
         if (!ed.ok) return `Error editing ${args?.path}: ${ed.error}`;
         const w = await writeFile(args?.path, ed.content);
         if (w.ok) noteSeen(p, asStored(ed.content)); // the new state is now known
-        return w.ok ? `Edited ${resolve(args?.path)} (${ed.count} replacement${ed.count === 1 ? '' : 's'}, ${ed.strategy} match)` : `Error writing ${args?.path}: ${w.error}`;
+        return w.ok ? `Edited ${resolve(args?.path)} (${ed.count} replacement${ed.count === 1 ? '' : 's'}, ${ed.strategy} match)${changedLines(ed.content, args?.new_string)}` : `Error writing ${args?.path}: ${w.error}`;
       }
 
       if (name === 'read_lines') {
