@@ -31,11 +31,17 @@ test('contextBudget: usable = window − reserve; below 10k usable → automatic
   const unknown = contextBudget({ window: null }); eq(unknown.supported, false, 'unknown window'); eq(unknown.usable, null, 'no usable'); assert(/usage not known/.test(unknown.reason), unknown.reason);
 });
 
-test('capHandoff: 20,000 chars AND half the usable window, whichever is smaller', () => {
+test('capHandoff: 20,000 chars AND half the usable window, whichever is smaller; the marker says what was dropped (S4)', () => {
   eq(capHandoff('x'.repeat(100), { usable: 40000 }), 'x'.repeat(100), 'short handoff untouched');
-  const bigWin = capHandoff('x'.repeat(50000), { usable: 40000 }); assert(bigWin.length <= HANDOFF_MAX_CHARS + 40 && /truncated at 20000/.test(bigWin), '20k char cap dominates a big window');
-  const smallWin = capHandoff('x'.repeat(50000), { usable: 6000 }); assert(/truncated at 12000/.test(smallWin), 'half the usable window (6000/2*4=12000) dominates a small one');
-  assert(capHandoff('x'.repeat(50000), {}).length <= HANDOFF_MAX_CHARS + 40, 'no window → the 20k char cap still applies');
+  const bigWin = capHandoff('x'.repeat(50000), { usable: 40000 });
+  assert(bigWin.length <= HANDOFF_MAX_CHARS, 'the result stays within the 20k cap, marker included: ' + bigWin.length);
+  const m = /\[handoff truncated: kept the first (\d+) of 50000 chars; (\d+) dropped from the end\]$/.exec(bigWin);
+  assert(m, 'the marker names what was kept and dropped: ' + bigWin.slice(-100));
+  eq(Number(m[1]) + Number(m[2]), 50000, 'kept + dropped = the original'); eq(bigWin.indexOf('\n[handoff'), Number(m[1]), 'and kept is exactly what precedes the marker');
+  const smallWin = capHandoff('x'.repeat(50000), { usable: 6000 });
+  assert(smallWin.length <= 12000 && /of 50000 chars/.test(smallWin), 'half the usable window (6000/2*4=12000) dominates a small one');
+  assert(capHandoff('x'.repeat(50000), {}).length <= HANDOFF_MAX_CHARS, 'no window → the 20k char cap still applies');
+  eq(capHandoff('y'.repeat(20000), {}), 'y'.repeat(20000), 'exactly at the cap is untouched');
 });
 
 test('reminder: fingerprinted by budget shape; a stale-shape reminder is dropped from the projection; fires only near the line', () => {

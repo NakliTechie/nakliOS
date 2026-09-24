@@ -77,7 +77,14 @@ export function capHandoff(text, { usable = null } = {}) {
   const byWindow = Number.isFinite(usable) ? Math.floor((usable / 2) * CHARS_PER_TOKEN) : Infinity;
   const cap = Math.min(HANDOFF_MAX_CHARS, byWindow);
   const s = String(text ?? '');
-  return s.length <= cap ? s : s.slice(0, cap) + `\n[handoff truncated at ${cap} chars]`;
+  if (s.length <= cap) return s;
+  // S4 (iii #46, 2026-09-24): the marker says what was LOST, and the whole result stays within the
+  // cap — it used to append a bare "truncated at N" past the cap, so the next loop could not tell a
+  // 21k handoff from a 200k one.
+  const marker = (kept) => `\n[handoff truncated: kept the first ${kept} of ${s.length} chars; ${s.length - kept} dropped from the end]`;
+  let kept = Math.max(0, cap - marker(cap).length);
+  kept = Math.max(0, cap - marker(kept).length); // the count's own digits can shrink the marker by a char or two
+  return s.slice(0, kept) + marker(kept);
 }
 
 // One reminder, fingerprinted by the budget shape so a window/reserve change re-arms it and a
