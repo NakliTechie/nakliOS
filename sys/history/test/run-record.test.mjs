@@ -350,6 +350,29 @@ await test('RECOVERY resolution: a gate pass marks an EARLIER owner input likely
   assert(/likely handled.*verify before redoing/.test(recoveryNote(p)), 'the note HEDGES: verify, do not blindly redo'); void passed;
 });
 
+await test('RECOVERY framing (live 2026-09-24): an answered or unfinished earlier ask is background, not an open to-do — and nothing is promoted to satisfied', async () => {
+  // The live failure: run 1 answered "list the files" (done, no gate); run 2 ("solve the ARC puzzle")
+  // was cut off; the owner then asked something unrelated and the model went back to finish the ARC.
+  const rec = createRunRecorder({ app: 'anvil', principal: 'p' });
+  await rec.start({ messages: [{ role: 'system', content: 's' }, { role: 'user', content: 'list the files here' }], tools: [] });
+  await rec.finish({ stop: 'done', steps: 1 });
+  await rec.start({ messages: [{ role: 'system', content: 's' }, { role: 'user', content: 'list the files here' }, { role: 'assistant', content: 'a.py b.py' }, { role: 'user', content: 'solve the ARC puzzle' }], tools: [] });
+  await rec.finish({ stop: 'truncated', steps: 1 });
+  await rec.settled();
+  const r = foldRecovery(rec.events(), rec.resolve);
+  eq(r.ownerInputs.map((x) => x.endedAfter).join(','), 'done,truncated', 'each input carries how the run after it ended');
+  assert(r.ownerInputs.every((x) => x.resolution === 'open'), 'no gate → resolution stays open (the BLOCKS rule: never a false satisfied)');
+  const note = recoveryNote(r);
+  assert(/"list the files here" — answered: the run after it finished \(no gate checked it\)/.test(note), 'a done run frames its ask as answered, hedged: ' + note);
+  assert(/"solve the ARC puzzle" — unfinished: the run after it ended 'truncated'/.test(note), 'an unfinished ask says how it ended');
+  assert(!/" — open$/m.test(note), 'neither is presented as a bare open to-do');
+  assert(/newest message is the current request — do that/.test(note) && /only if the newest message asks you to/.test(note), 'the note scopes the run to the owner\'s newest message');
+  // a legacy record with no run.stopped (died mid-flight) still reads open, as before
+  const dead = createRunRecorder({ app: 'anvil', principal: 'p' });
+  await dead.start({ messages: [{ role: 'user', content: 'go' }], tools: [] }); await dead.settled();
+  assert(/"go" — open/.test(recoveryNote(foldRecovery(dead.events(), dead.resolve))), 'no ending on the chain → open');
+});
+
 await test('DC1 legacy shapes: a verify.failed recorded WITHOUT `via` folds to the old `[coordination] Gate failed` line; a legacy verify.passed folds to nothing', async () => {
   const rec = createRunRecorder({ app: 'anvil', principal: 'p' });
   await rec.start({ messages: [{ role: 'user', content: 'go' }], tools: [] });

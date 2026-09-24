@@ -1231,11 +1231,19 @@ export function foldRecovery(events, resolve) {
   const passIndex = ev.findIndex((e) => e.tool === 'verify.passed');
   const lastCheckpoint = [...ev].reverse().find((e) => e.tool === 'run.checkpoint');
   const coordinationCount = ev.filter((e) => e.tool === 'verify.failed' && (e.output?.via === undefined || e.output?.via === 'turn')).length; // DC1: only a verdict that went out as a turn is a [coordination] line (a legacy record: every one was)
+  // How the first run after each input ENDED. A fact from the chain, not a completion claim: a run
+  // that stopped 'done' without a gate is the agent's own word, so it never promotes the resolution
+  // (that stays 'open' — the BLOCKS rule below). It changes only how the note FRAMES the input: a
+  // request the agent already answered read as "open" made the model redo it on every later send
+  // (live 2026-09-24: "list the files here" reopened an earlier ARC task; "write a.txt" re-ran a
+  // search audit, 13 steps).
+  const stops = ev.map((e, i) => (e.tool === 'run.stopped' ? { i, stop: String(e.output?.stop ?? '') } : null)).filter(Boolean);
   const annotated = ownerInputs.map((inp, k) => {
     const isLatest = k === ownerInputs.length - 1;
     const gatePassedAfter = passIndex !== -1 && passIndex > inp.atIndex;
     const resolution = isLatest ? 'open' : (gatePassedAfter ? 'likely-satisfied' : 'open');
-    return { ...inp, resolution };
+    const after = stops.find((s) => s.i > inp.atIndex);
+    return { ...inp, resolution, endedAfter: after ? (after.stop || null) : null };
   });
   return {
     ownerInputs: annotated,
@@ -1260,7 +1268,10 @@ export function foldRecovery(events, resolve) {
 export function recoveryNote(rec) {
   if (!rec || !rec.ownerInputs || !rec.ownerInputs.length) return '';
   const lines = rec.ownerInputs.map((inp) => {
-    const tag = inp.resolution === 'likely-satisfied' ? ' — likely handled (a gate passed after it); verify before redoing' : ' — open';
+    const tag = inp.resolution === 'likely-satisfied' ? ' — likely handled (a gate passed after it); verify before redoing'
+      : inp.endedAfter === 'done' ? ' — answered: the run after it finished (no gate checked it)'
+      : inp.endedAfter ? ` — unfinished: the run after it ended '${inp.endedAfter}'`
+      : ' — open';
     return `  • "${inp.text.replace(/\s+/g, ' ').slice(0, 100)}"${tag}`;
   });
   const foot = rec.coordinationCount ? `\n(${rec.coordinationCount} gate-feedback line(s) in the transcript are marked [coordination] — they are not the owner's instructions.)` : '';
@@ -1269,7 +1280,8 @@ export function recoveryNote(rec) {
   const orph = orphans.length
     ? `\n${orphans.length} subagent${orphans.length === 1 ? ' was' : 's were'} in flight when the run ended and never reported back (${orphans.map((o) => `${o.kind}: "${String(o.label).slice(0, 40)}"${o.sinceMs != null ? ', last seen ' + Math.round(o.sinceMs / 1000) + 's before the end' : ''}`).join('; ')}) — unverifiable: their overlays never merged, so nothing they did reached the workspace; re-dispatch if the task still matters.`
     : '';
-  return 'Recovery note (from the run record — prior owner requests and whether they look handled):\n' + lines.join('\n') + foot + cp + orph;
+  const scope = "\nThe owner's newest message is the current request — do that. Pick an earlier request back up only if the newest message asks you to; an unfinished one is background, not a to-do.";
+  return 'Recovery note (from the run record — earlier owner requests in this task and how they ended):\n' + lines.join('\n') + foot + cp + orph + scope;
 }
 
 // ──────────────────────────────────────── supervisor / stagnation (D2) ──
