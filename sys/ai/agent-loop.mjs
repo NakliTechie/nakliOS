@@ -860,7 +860,19 @@ export function makeShellExecutor(shell) {
     const hint = interceptBashCommand(command);
     if (hint) return hint; // omp interceptor: redirect to a structured tool, don't run
     const res = await shell.feed(command);
-    const out = res?.output ?? '';
+    let out = res?.output ?? '';
+    // SH2 (2026-09-24): an agent cannot answer the shell's `[y/N]`. Staged destructive ops (rm, git
+    // commit) are confirmed here — the YOLO rule Anvil's toolset has kept since 3ccfb05 — so EVERY agent
+    // path does it: the corpus recorder's executor used to leave the prompt pending, and the agent's
+    // next command was swallowed as the answer ('cancelled: rm'). The prompt line itself is replaced
+    // by what happened: the model used to be shown a question it could not answer, and the result-kind
+    // fold read the line as a rejection. A line that stages more than once is answered until it has run.
+    let guard = 0;
+    while (shell.awaitingConfirm && guard++ < 8) {
+      const confirmed = await shell.feed('y');
+      out = (out ? out + '\n' : '') + (confirmed?.output ?? '');
+    }
+    out = String(out).replace(/^(.*) is destructive\. confirm\? \[y\/N\]$/gm, 'confirmed: $1').replace(/\n+$/, '');
     return out === '' ? NO_OUTPUT : String(out);
   };
 }

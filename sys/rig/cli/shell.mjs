@@ -329,18 +329,28 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
     if (cmdName === 'fs.remove') {
       const flags = argv.filter((a) => a.length > 1 && a[0] === '-');
       const paths = argv.filter((a) => !(a.length && a[0] === '-'));
+      // SH2 (2026-09-24): `-f` ignores a path that does not exist, as bash does — `rm -f a missing`
+      // exited 1 on the missing one while `a` was staged for removal.
+      const force = flags.some((f) => /^-[a-zA-Z]*f/.test(f));
+      const missingOk = (res) => force && (res.code === 'ENOENT' || /no such path/.test(String(res.message || '')));
       if (paths.length > 1) {
         const proposals = [];
         const errors = [];
         for (const p of paths) {
           const res = await face.invoke('fs.remove', buildRegistryInput(cmdName, [...flags, p]));
           if (res.staged) proposals.push({ proposalId: res.proposalId, verb: `rm ${p}` });
-          else if (!res.ok) errors.push(`rm: ${p}: ${res.message || 'failed'}`);
+          else if (!res.ok && !missingOk(res)) errors.push(`rm: ${p}: ${res.message || 'failed'}`);
         }
         if (proposals.length) {
-          return { staged: proposals[0].proposalId, proposals, verb: `rm (${proposals.length} paths)` };
+          return { staged: proposals[0].proposalId, proposals, verb: `rm (${proposals.length} paths)`, force };
         }
         if (errors.length) return { text: errors.join('\n'), code: 1 };
+        return { text: '', code: 0 };
+      }
+      if (paths.length === 1) {
+        const res = await face.invoke('fs.remove', buildRegistryInput(cmdName, argv));
+        if (res.staged) return { staged: res.proposalId, verb: cmdName, force };
+        if (!res.ok) return missingOk(res) ? { text: '', code: 0 } : { text: `${cmdName}: ${res.code || 'error'}: ${res.message || 'failed'}`, code: 1 };
         return { text: '', code: 0 };
       }
     }
@@ -1267,7 +1277,8 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
         const errs = [];
         for (const pr of proposals) {
           const r = await face.accept(pr.proposalId);
-          if (!r.ok) errs.push(`${pr.verb}: ${r.message || 'failed'}`);
+          // SH2: under `rm -f` a path that is gone by the time the removal applies is not an error
+          if (!r.ok && !(p.force && (r.code === 'ENOENT' || /no such path/.test(String(r.message || ''))))) errs.push(`${pr.verb}: ${r.message || 'failed'}`);
         }
         write(errs.join('\n'));
         lastCode = errs.length ? 1 : 0;
@@ -1301,7 +1312,7 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
       if (res.interrupted) { write(res.text); return { cleared }; }
       if (res.clear) { cleared = true; continue; }
       if (res.staged) {
-        pending = { proposalId: res.staged, verb: res.verb, proposals: res.proposals, rest: stmts.slice(i + 1) };
+        pending = { proposalId: res.staged, verb: res.verb, proposals: res.proposals, force: !!res.force, rest: stmts.slice(i + 1) };
         write(`${res.verb} is destructive. confirm? [y/N]`);
         return { awaitingConfirm: res.staged, cleared };
       }

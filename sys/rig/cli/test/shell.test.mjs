@@ -491,6 +491,24 @@ await test('SH1: python -m runs a module as __main__ with argv = [module, …arg
   assert(/python -m module/.test(await run(shell, 'python -X')), 'the unsupported-option message names -m');
 });
 
+await test('SH2: rm -f ignores a missing path (single, many, and at confirm time); plain rm still fails on one', async () => {
+  const fs = createFileops({ backend: new MemoryBackend() });
+  const registry = buildRigRegistry({ fs });
+  const grant = createGrant({ prefixes: [''], scopes: ['fs:read', 'fs:write', 'fs:remove'] });
+  const opLog = createOpLog({ fs: createFileops({ backend: new MemoryBackend() }) });
+  const face = createAgentFace({ registry, grant, opLog, actor: 'agent' });
+  const shell = createShell({ registry, face });
+  await run(shell, 'echo 1 > a; echo 2 > b');
+  // staging does not look at the disk, so even a lone missing path stages; -f is honoured when it applies
+  await run(shell, 'rm -f nothing-here'); assert(shell.awaitingConfirm, 'a lone rm -f stages like any rm');
+  await run(shell, 'y'); eq(shell.lastCode, 0, 'rm -f of one missing path exits 0 once confirmed');
+  await run(shell, 'rm -f a nothing-here'); assert(shell.awaitingConfirm, 'the existing one is staged');
+  const out = await run(shell, 'y'); eq(shell.lastCode, 0, 'and confirming it ignores the missing one'); assert(!/no such path/.test(out), out);
+  eq(/\ba\b/.test(await run(shell, 'ls')), false, 'a is gone');
+  await run(shell, 'rm missing-too'); await run(shell, 'y'); eq(shell.lastCode, 1, 'plain rm of a missing path still fails');
+  await run(shell, 'rm b gone'); await run(shell, 'y'); eq(shell.lastCode, 1, 'and plain rm of many still reports the missing one');
+});
+
 if (failures.length) {
   console.error(`shell core: ${passed} passed, ${failures.length} FAILED`);
   for (const f of failures) console.error(`  FAIL ${f.name}: ${f.message}`);

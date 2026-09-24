@@ -14,6 +14,7 @@ const cases = [
   ['edit', 'Refused: cfg.js is stale — it changed since you last read it (version 1a:2b → 3c:4d; the shell, a hook or another agent wrote it). Read it again, then edit.', 'rejected'],
   ['shell', 'path is read-only under this grant: .anvil/gate/x.py\n[exit 1]', 'rejected'],
   ['shell', 'rm (4 paths) is destructive. confirm? [y/N]', 'rejected'],
+  ['shell', 'confirmed: rm (4 paths)\n[exit 0]', null], // SH2: what an agent now sees for a confirmed destructive op — not a rejection
   ['shell', 'Error: could not parse arguments as JSON: Unterminated string', 'invalid_args'],
   ['task_done', 'Error (invalid_args): task_done needs a summary', 'invalid_args'],
   ['nosuch', 'Error: unknown tool "nosuch"', 'unavailable'],

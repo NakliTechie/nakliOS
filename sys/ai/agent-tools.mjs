@@ -641,21 +641,11 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
         // stale from some earlier call — only ever report a code we caused.
         const reachedShell = !interceptBashCommand(command);
         const out = await runShell(name, args);
-        // YOLO: the agent auto-confirms a staged destructive op (rm, git commit)
-        // rather than stalling on a [y/N] it can't answer. Git history + the
-        // verifier are the safety net.
-        let result = out;
-        // Read the exit code BEFORE the auto-confirm — that fires a second
-        // shell.feed('y') and overwrites lastCode with the confirmation's result.
-        let code = reachedShell && shell ? shell.lastCode : null;
-        // A line can stage more than once (`rm a; ls; rm b`): each confirm runs the statements
-        // behind it, up to the next staged one — answer until the line has run out.
-        let guard = 0;
-        while (shell && shell.awaitingConfirm && guard++ < 8) {
-          const confirmed = await runShell('shell', { command: 'y' });
-          result = (result ? result + '\n' : '') + confirmed;
-          code = shell.lastCode; // the confirmed run is the real outcome
-        }
+        // YOLO: a staged destructive op (rm, git commit) is confirmed by the shell executor itself
+        // (makeShellExecutor, SH2) — the agent cannot answer a [y/N]. Git history + the verifier are the
+        // safety net. The code read here is the confirmed run's, the real outcome.
+        const result = out;
+        const code = reachedShell && shell ? shell.lastCode : null;
         // A plain single-file display satisfies the read-before-edit ledger. The version it
         // records is the file's whole content — head/tail showed a part, but the file it is
         // a part of is what an edit will be checked against.

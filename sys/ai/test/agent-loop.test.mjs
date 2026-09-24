@@ -1546,6 +1546,20 @@ await test('H2 (iii #11/#12): a reply cut at the output cap ends ungated as trun
   eq(gated.r.stop, 'done', 'gated'); eq(gated.r.verified, true);
 });
 
+await test('SH2: the shell executor answers a staged confirm, shows what happened, and never swallows the next command', async () => {
+  const shell = freshShell();
+  await shell.feed('echo 1 > a; echo 2 > b; echo 3 > c');
+  const exec = makeShellExecutor(shell);
+  const out = await exec('shell', { command: 'rm -f a b' });
+  assert(!/\[y\/N\]/.test(out), 'no unanswerable question in the result: ' + out);
+  assert(/^confirmed: rm \(2 paths\)/.test(out), 'the line says what was confirmed: ' + out);
+  assert(!shell.awaitingConfirm, 'nothing left pending');
+  const ls = await exec('shell', { command: 'ls' });
+  assert(/\bc\b/.test(ls) && !/\ba\b|\bb\b/.test(ls) && !/cancelled/.test(ls), 'the next command runs as itself: ' + ls);
+  const two = await exec('shell', { command: 'echo x > d; rm d; echo MID; rm c; echo END' });
+  assert(/MID/.test(two) && /END/.test(two) && (two.match(/confirmed:/g) || []).length === 2, 'a line that stages twice is answered twice and runs to its end: ' + two);
+});
+
 if (failures.length) {
   console.error(`agent-loop: ${passed} passed, ${failures.length} FAILED`);
   for (const f of failures) console.error(`  FAIL ${f.name}: ${f.message}`);
