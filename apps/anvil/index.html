@@ -440,7 +440,7 @@
   import { systemPrompt as assembledSystemPrompt, systemMessage, gateNote as assembledGateNote, runToolset, runReadiness, synthesizeTool, driveRun, loadHooks, preHookReply, postHookNotes, contextMessage } from '../../sys/ai/run-assembly.mjs';
   import { gateAction, gateEvent, actionClasses } from '../../sys/ai/action-gate.mjs';
   import { applyPolicy, grant as policyGrant, revoke as policyRevoke, policyRows, normalisePolicy, POLICY_HINT } from '../../sys/ai/action-policy.mjs';
-  import { decideByRules, applyMode, MODES as PERM_MODES, MODE_LABEL as PERM_MODE_LABEL, modeIsLoud } from '../../sys/ai/permission-rules.mjs';
+  import { decideByRules, invalidRules, applyMode, MODES as PERM_MODES, MODE_LABEL as PERM_MODE_LABEL, modeIsLoud } from '../../sys/ai/permission-rules.mjs';
   import { compactConversation } from '../../sys/ai/compaction.mjs';
   import { evolve } from '../../sys/ai/evolve.mjs';
   import { createKiln, createWorkerRuntime } from '../../sys/kiln/index.mjs';
@@ -1462,7 +1462,11 @@
     const granted = rows.filter(r=>r.granted);
     const mode = PERM_MODES.includes(state.permissionMode) ? state.permissionMode : 'default';
     const rules = state.permissionRules || {};
-    const ruleList = (k) => (Array.isArray(rules[k]) && rules[k].length) ? rules[k].map(r=>'    '+r).join('\n') : '    (none)';
+    // H1: an unreadable rule is shown as broken, never listed as if it worked — it fails closed.
+    const badRules = new Set(invalidRules(rules).map(b=>b.list+'\0'+b.source));
+    const ruleList = (k) => (Array.isArray(rules[k]) && rules[k].length)
+      ? rules[k].map(r=>'    '+r+(badRules.has(k+'\0'+String(r??'')) ? '   ⚠ cannot be read — '+(k==='allow'?'it allows nothing':k==='ask'?'its tool always asks':'its tool is refused')+' until you fix it' : '')).join('\n')
+      : '    (none)';
     globalPreview = { type:'text', file:'Policy',
       content:
         'Mode: ' + PERM_MODE_LABEL[mode] + '\n'

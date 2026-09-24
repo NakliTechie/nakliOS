@@ -106,6 +106,34 @@ export function ruleCovers(rule, toolName, args = {}) {
 }
 
 /**
+ * H1 (iii #41, 2026-09-24): a rule that does not parse was dropped in silence, so a typo in a DENY
+ * rule (`shell(rm:*` — no closing paren; `shell rm` — a space) matched nothing, and bypass turned
+ * that `unmatched` into allow. An unreadable rule is a configuration error the owner is shown, and
+ * it fails CLOSED: an unreadable deny refuses its tool (every tool, when no tool name can be read
+ * off it), an unreadable ask asks for its tool, an unreadable allow allows nothing.
+ * Returns [{ list, source, tool }] — tool is the leading name when one can be read, else null.
+ */
+export function invalidRules(cfg) {
+  const out = [];
+  for (const list of ['deny', 'ask', 'allow']) {
+    for (const r of (cfg && Array.isArray(cfg[list]) ? cfg[list] : [])) {
+      if (parseRule(r)) continue;
+      const m = /^\s*([A-Za-z_][\w-]*)/.exec(String(r ?? ''));
+      out.push({ list, source: String(r ?? ''), tool: m ? m[1].toLowerCase() : null });
+    }
+  }
+  return out;
+}
+
+// Does an unreadable rule's leading tool name reach this call? null reaches everything.
+function invalidReaches(bad, toolName) {
+  if (bad.tool === null) return true;
+  const name = String(toolName || '').toLowerCase();
+  if (SHELL_TOOLS.has(name) && SHELL_TOOLS.has(bad.tool)) return true;
+  return bad.tool === name;
+}
+
+/**
  * The owner's rules, applied. decision is 'allow' | 'deny' | 'ask' | 'unmatched'.
  * `unmatched` means the rules say nothing and the caller falls through to the action gate — these
  * rules are an override layer, not a replacement for it.
@@ -120,6 +148,13 @@ export function decideByRules(cfg, toolName, args) {
       const p = parseRule(r); if (p) lists[k].push(p);
     }
   }
+  const bad = invalidRules(cfg);
+  for (const b of bad) {
+    if (b.list === 'deny' && invalidReaches(b, toolName)) {
+      return { decision: 'deny', rule: b.source, invalid: true,
+        why: 'your deny rule "' + b.source + '" cannot be read, so ' + (b.tool ? 'every ' + b.tool + ' call' : 'every call') + ' is refused until you fix it (⋯ → Policy)' };
+    }
+  }
   // Deny first, and 'some' is enough: one refused command in a chain refuses the chain.
   for (const r of lists.deny) {
     const c = ruleCovers(r, toolName, args);
@@ -128,6 +163,11 @@ export function decideByRules(cfg, toolName, args) {
   for (const r of lists.ask) {
     const c = ruleCovers(r, toolName, args);
     if (c === 'all' || c === 'some') return { decision: 'ask', rule: r.source, why: 'an ask rule matches (' + r.source + ')' };
+  }
+  for (const b of bad) {
+    if (b.list === 'ask' && invalidReaches(b, toolName)) {
+      return { decision: 'ask', rule: b.source, invalid: true, why: 'your ask rule "' + b.source + '" cannot be read, so this asks' };
+    }
   }
   // Allow needs EVERY segment covered.
   for (const r of lists.allow) {

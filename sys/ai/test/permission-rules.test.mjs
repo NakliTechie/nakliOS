@@ -10,7 +10,7 @@
 // around keeping that true.
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { parseRule, segments, ruleCovers, decideByRules, applyMode, MODES, MODE_LABEL, modeIsLoud }
+import { parseRule, segments, ruleCovers, decideByRules, invalidRules, applyMode, MODES, MODE_LABEL, modeIsLoud }
   from '../permission-rules.mjs';
 
 const anvil = await readFile(new URL('../../../apps/anvil/index.html', import.meta.url), 'utf8');
@@ -121,6 +121,26 @@ const d = (tool, args, cfg = CFG) => decideByRules(cfg, tool, args).decision;
   // An unknown mode falls back to the safe one rather than throwing or waving through.
   assert.equal(applyMode('nonsense', 'shell', { command: 'x' }).decision, 'unmatched');
   assert.equal(applyMode(undefined, 'write', { path: 'a' }).decision, 'unmatched');
+}
+
+// ── H1 (iii #41): an unreadable rule fails CLOSED, and is named ─────────────
+{
+  // the observed 2026-09-22 case: a missing paren made the deny rule vanish, and bypass allowed rm
+  const typo = { deny: ['shell(rm:*'] };
+  const d = decideByRules(typo, 'shell', { command: 'rm -rf src' });
+  assert.equal(d.decision, 'deny', 'an unreadable deny rule refuses its tool');
+  assert.equal(d.invalid, true, 'and says it is the unreadable rule that refused');
+  assert.match(d.why, /cannot be read/, 'the refusal tells the owner why');
+  assert.equal(decideByRules(typo, 'bash', { command: 'ls' }).decision, 'deny', 'the shell family shares the refusal');
+  assert.equal(decideByRules(typo, 'read', { path: 'a' }).decision, 'unmatched', 'another tool is not reached');
+  assert.equal(decideByRules({ deny: ['shell rm'] }, 'shell', { command: 'rm x' }).decision, 'deny', 'a space instead of parens is unreadable too');
+  assert.equal(decideByRules({ deny: ['('] }, 'read', { path: 'a' }).decision, 'deny', 'no tool name → every tool is refused');
+  assert.equal(decideByRules({ ask: ['Write(src'] }, 'write', { path: 'x' }).decision, 'ask', 'an unreadable ask rule asks');
+  assert.equal(decideByRules({ allow: ['Bash(ls'] }, 'shell', { command: 'ls' }).decision, 'unmatched', 'an unreadable allow rule allows nothing');
+  assert.equal(decideByRules({ deny: ['Bash(rm:*)', 'shell(rm:*'], allow: ['Read'] }, 'read', { path: 'a' }).decision, 'allow', 'a readable allow still applies to tools the bad rule does not reach');
+  assert.deepEqual(invalidRules({ deny: ['Bash(rm:*)', 'shell(rm:*'], ask: ['('], allow: ['Read'] }),
+    [{ list: 'deny', source: 'shell(rm:*', tool: 'shell' }, { list: 'ask', source: '(', tool: null }], 'invalidRules names each broken rule with its list');
+  assert.match(anvil, /const badRules = new Set\(invalidRules\(rules\)/, 'the Policy view marks unreadable rules');
 }
 
 // ── the app: order of operations, and the loudness ────────────────────────
