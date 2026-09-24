@@ -75,6 +75,9 @@ jobs:
       - name: "DUR: host durability (per-path op order, close guard from the dirty report)"
         run: node scripts/test-host-durability.mjs
 
+      - name: "S1: net.fetch is Grant-gated and History-logged (the real host block, real grant/ledger)"
+        run: node scripts/test-host-egress-authority.mjs
+
       - name: Verify nakli-egress Worker security core (sign/allowlist/SSRF/replay)
         run: node nakli-egress/test/lib.test.mjs
 

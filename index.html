@@ -7442,6 +7442,122 @@ async function _egHmac(secret,message){ const enc=new TextEncoder(); const key=a
 function _egB64(u8){ let bin=''; for(let i=0;i<u8.length;i++) bin+=String.fromCharCode(u8[i]); return btoa(bin); }
 function _egUnb64(b64){ const bin=atob(b64); const u8=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u8[i]=bin.charCodeAt(i); return u8; }
 function _egBytes(body){ if(body==null) return new Uint8Array(0); if(body instanceof Uint8Array) return body; if(body instanceof ArrayBuffer) return new Uint8Array(body); return new TextEncoder().encode(String(body)); }
+// ── Egress authority (S1, 2026-09-24; plan/egress-transport-spec.md §6) ─────────────────────────
+// The contract says naklios.net.fetch is Grant-gated and History-logged (docs/app-contract.md); until
+// now the handler checked only "system app" + "backend configured". Now an app holds one Grant per
+// host — caveats principal app:<id>, tools [net.fetch], scope net:<host> — issued by this host after
+// the owner allows it once, and verified at every call. Every attempt, refused ones included, appends
+// one hash-chained History event (door 'net') to OPFS naklios/history/net.ndjson: host, method,
+// status, bytes, grant id — never the URL path, a body, or a token.
+// The boundary, said plainly: egress is a system-app capability and system apps are same-origin with
+// this host, so the root key is not hidden from them. The Grant is the owner's consent and the audit
+// trail, not a wall against a hostile system app.
+const NET_GRANTS_KEY = 'nakliOS.netGrants.v1';   // { [appId]: { [host]: grant | { denied:true, decidedAt } } }
+const NET_ROOT_KEY = 'nakliOS.netGrantRoot.v1';  // b64u issuer secret
+const NET_REVOKED_KEY = 'nakliOS.netRevoked.v1'; // [grant identifier]
+let _netMods = null;
+function netMods(){
+  return _netMods || (_netMods = Promise.all([import('./sys/identity/grant.mjs'), import('./sys/history/ledger.mjs'), import('./sys/identity/crypto.mjs')])
+    .then(([g, l, c]) => ({ g, l, c })));
+}
+function netGrants(){ try { return JSON.parse(localStorage.getItem(NET_GRANTS_KEY) || '{}') || {}; } catch(_) { return {}; } }
+function saveNetGrants(v){ try { localStorage.setItem(NET_GRANTS_KEY, JSON.stringify(v)); } catch(_) {} }
+function netRevoked(){ try { return new Set(JSON.parse(localStorage.getItem(NET_REVOKED_KEY) || '[]')); } catch(_) { return new Set(); } }
+// grants AND remembered declines — what the Settings reset forgets
+function netGrantCount(){ return Object.values(netGrants()).reduce((n, hosts) => n + Object.keys(hosts || {}).length, 0); }
+async function netRootKey(){
+  const { g, c } = await netMods();
+  const saved = localStorage.getItem(NET_ROOT_KEY);
+  if (saved) { try { return c.b64uDecode(saved); } catch(_) {} }
+  const key = g.newRootKey(); localStorage.setItem(NET_ROOT_KEY, c.b64uEncode(key)); return key;
+}
+// Revoke every network grant: identifiers go on the revocation list, decisions are forgotten.
+function revokeNetGrants(){
+  const revoked = netRevoked();
+  for (const hosts of Object.values(netGrants())) for (const v of Object.values(hosts || {})) if (v && v.identifier) revoked.add(v.identifier);
+  try { localStorage.setItem(NET_REVOKED_KEY, JSON.stringify([...revoked])); } catch(_) {}
+  saveNetGrants({});
+}
+const netPrompts = new Map();
+// The app's Grant for this host: the stored one, or — once, with the owner's consent — a new one.
+// null when the owner declined (remembered until revoked in Settings).
+async function netEnsureGrant(appId, host){
+  const have = (netGrants()[appId] || {})[host];
+  if (have && have.denied) return null;
+  if (have && have.identifier) return have;
+  const key = appId + '\0' + host;
+  if (netPrompts.has(key)) return netPrompts.get(key);
+  const p = (async () => {
+    const app = APPS.find(a => a.id === appId); const name = app?.name || appId;
+    const ok = await nakliosConfirm(
+      `${name} wants to send requests to ${host} through your egress backend.\n\n` +
+      `Requests leave this device for ${host}. NakliOS keeps the backend secret and any git token hidden from the app, ` +
+      `and records each request's host, method and status in History — never its body.`,
+      { title:'Allow network access?', okLabel:'Allow', cancelLabel:'Not now' });
+    const all = netGrants(); all[appId] = all[appId] || {};
+    if (!ok) { all[appId][host] = { denied:true, decidedAt: Date.now() }; saveNetGrants(all); return null; }
+    const { g } = await netMods();
+    const grant = await g.issueGrant(await netRootKey(), { caveats: [g.caveat.principal('app:' + appId), g.caveat.tools(['net.fetch']), g.caveat.scope('net:' + host)] });
+    all[appId][host] = grant; saveNetGrants(all); return grant;
+  })().finally(() => netPrompts.delete(key));
+  netPrompts.set(key, p);
+  return p;
+}
+async function netAuthorize(appId, host){
+  const grant = await netEnsureGrant(appId, host);
+  if (!grant) return { ok:false, grant:null, reason:`network access to ${host} was not allowed` };
+  const { g } = await netMods();
+  const v = await g.verifyGrant(grant, await netRootKey(), { principal:'app:' + appId, tool:'net.fetch', target:'net:' + host, now: Date.now(), revocationList: netRevoked() });
+  return { ok: v.ok, grant, reason: v.ok ? '' : `the network grant for ${host} did not verify (${v.reason})` };
+}
+// History: one serialized append chain per origin. A failed write never fails the request it records,
+// and says so in the console.
+let _netHead, _netTail = Promise.resolve();
+async function netHistoryFile(){
+  const root = await navigator.storage.getDirectory();
+  const d = await (await root.getDirectoryHandle('naklios', { create:true })).getDirectoryHandle('history', { create:true });
+  return d.getFileHandle('net.ndjson', { create:true });
+}
+function netHistoryAppend({ appId, host, method, grantId, output }){
+  const run = _netTail.then(async () => {
+    const { l } = await netMods();
+    const fh = await netHistoryFile();
+    const file = await fh.getFile();
+    if (_netHead === undefined) {
+      const lines = (await file.text()).split('\n').filter(Boolean);
+      _netHead = lines.length ? await l.eventHash(JSON.parse(lines[lines.length - 1])) : null;
+    }
+    const input = { host, method: String(method || 'GET').toUpperCase() };
+    const { event, head } = await l.appendEvent(_netHead, { ts: Date.now(), principal:'app:' + appId, door:'net', tool:'net.fetch', app: appId, input, output, grant_id: grantId || null });
+    const w = await fh.createWritable({ keepExistingData:true });
+    await w.write({ type:'write', position: file.size, data: JSON.stringify({ ...event, input, output }) + '\n' });
+    await w.close();
+    _netHead = head;
+  });
+  _netTail = run.catch((e) => { console.error('[naklios] net History append failed', e); });
+  return _netTail;
+}
+// The whole enforcement point: authorize, fetch, record. Throws with a code the SDK passes through.
+async function netHostFetch(appId, msg){
+  let host = '';
+  try { host = new URL(String(msg.url || '')).hostname.toLowerCase(); } catch(_) {}
+  if (!host) { const er = new Error('net.fetch needs an absolute URL'); er.code = 'EINVAL'; throw er; }
+  const auth = await netAuthorize(appId, host);
+  if (!auth.ok) {
+    await netHistoryAppend({ appId, host, method: msg.method, grantId: auth.grant?.identifier, output:{ refused: auth.reason } });
+    const er = new Error(auth.reason); er.code = 'ENOGRANT'; throw er;
+  }
+  try {
+    const res = await egressFetch({ url: msg.url, method: msg.method, headers: msg.headers, body: msg.body });
+    const b = res && res.body; const bytes = b == null ? 0 : (typeof b === 'string' ? b.length : (b.byteLength ?? b.length ?? 0));
+    await netHistoryAppend({ appId, host, method: msg.method, grantId: auth.grant.identifier, output:{ status: res?.status ?? null, bytes } });
+    return res;
+  } catch (err) {
+    await netHistoryAppend({ appId, host, method: msg.method, grantId: auth.grant.identifier, output:{ error: String(err?.message || err).slice(0, 200) } });
+    throw err;
+  }
+}
+
 async function egressFetch({url, method='GET', headers={}, body=null}){
   const s = egressSettings();
   if(!s || !s.workerUrl || !s.secret){ const e=new Error('No egress backend configured'); e.code='ENOEGRESS'; throw e; }
@@ -7999,7 +8115,7 @@ window.addEventListener('message', async e => {
       if (!appId) throw new Error('Unknown app');
       if (!aiAppIsSystem(appId)) throw new Error('Egress is a system-app capability');
       if (!egressConfigured()) { const er = new Error('No egress backend configured'); er.code = 'ENOEGRESS'; throw er; }
-      reply.result = await egressFetch({ url: msg.url, method: msg.method, headers: msg.headers, body: msg.body });
+      reply.result = await netHostFetch(appId, msg); // S1: Grant-gated, History-logged
     } catch(err){ reply.error = String(err?.message || err); }
     if (msg.requestId) { try { e.source.postMessage(reply, replyTo); } catch(_){} }
   } else if (typeof msg.type === 'string' && msg.type.startsWith('naklios:fs:')){
@@ -9270,6 +9386,10 @@ function openSettings(section){
           ${aiDecisionCount ? '' : 'disabled'}>
           Reset app decisions${aiDecisionCount ? ` (${aiDecisionCount})` : ''}
         </button>
+        <button class="nw-fs-btn-secondary" id="net-revoke-grants" type="button"
+          ${netGrantCount() ? '' : 'disabled'} title="Revokes every network grant and forgets every decline — each app asks again before its next request through your egress backend">
+          Reset network decisions${netGrantCount() ? ` (${netGrantCount()})` : ''}
+        </button>
       </div>
       <div class="nw-ai-result" id="ai-settings-result" role="status"></div>
     </div>
@@ -9831,6 +9951,12 @@ function openSettings(section){
     }
   });
 
+  wrap.querySelector('#net-revoke-grants')?.addEventListener('click', (event) => {
+    revokeNetGrants();
+    event.currentTarget.disabled = true;
+    event.currentTarget.textContent = 'Reset network decisions';
+    aiSettingsResult.textContent = 'Network decisions were reset — grants revoked, declines forgotten; every app asks again before its next request.';
+  });
   wrap.querySelector('#ai-forget-permissions')?.addEventListener('click', (event) => {
     state.aiPermissions = {};
     saveAiPermissions();

@@ -348,6 +348,29 @@ close or reports dirty.
 `save` is yours. It may write through `naklios.fs`, IndexedDB, or a picked folder,
 so the timing half also runs standalone; only the dirty report needs a host.
 
+## Network egress
+
+`naklios.net.fetch({ url, method, headers, body })` sends a request the browser's
+same-origin policy would block through the user's own egress backend (their Worker,
+or the local bridge). It is a system-app capability, and `capabilities.net` says
+whether a backend is configured.
+
+- **Grant-gated.** An app holds one Grant per host (`principal app:<id>`,
+  `tools [net.fetch]`, `scope net:<host>`). The first request to a host asks the
+  owner once. A decline is remembered and refuses at once, without touching the
+  backend, until the owner revokes it in Settings → AI → Reset network decisions.
+  Revoking also adds every issued grant to a revocation list.
+- **History-logged.** Every attempt, refused ones included, appends one hash-chained
+  History event (door `net`) to the host's origin storage. The event records the
+  host, method, status and byte count, and the grant id. It never records the URL
+  path, a body or a token.
+- **The boundary.** System apps are same-origin with the host. A Grant is the owner's
+  consent and the audit trail. It is not a cryptographic wall against a hostile
+  system app.
+
+A refused request rejects with the reason in the message: not allowed, or did not
+verify.
+
 ## Storage locations are separate
 
 Browser, Folder, and Crate are distinct libraries:
