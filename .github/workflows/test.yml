@@ -210,6 +210,9 @@ jobs:
       - name: Verify the Kiln verifier
         run: node sys/kiln/test/verifier.test.mjs
 
+      - name: "G9: a workspace ES module runs as a gate — node --test through a real worker (exit codes, node:test, no network, no npm)"
+        run: node sys/kiln/test/js-runner.test.mjs
+
       - name: Verify the Kiln worker runtime
         run: node sys/kiln/test/worker-runtime.test.mjs
 

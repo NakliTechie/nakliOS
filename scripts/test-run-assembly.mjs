@@ -334,7 +334,7 @@ assert.equal([...runTask.matchAll(/runAgentLoop\(\{/g)].length, 0, 'runTask no l
 assert.ok(!/const nudgeMessages=|const superMessages=|foldStagnation\(rec\.events/.test(runTask), 'no inline copy of the re-loops survives in runTask');
 assert.match(runTask, /hooksCfg = await loadHooks\(fs, hooksCfg\);/, 'hooks load through the module (a missing file keeps the previous config, as before)');
 assert.match(anvil, /const hookReply = preHookReply\(hooksCfg, nm, ar\);\s*\n\s*if\(hookReply!=null\) return hookReply;/, 'the pre-tool guard is the module\'s');
-assert.match(anvil, /const extra = await postHookNotes\(hooksCfg, nm, ar, \(\)=>createShell\(\{ registry, face, kiln: kilnRef, signal: [^}]*\}\)\);/, 'the post-tool notes are the module\'s, over a shell built only when a hook runs (with the run\'s signal since 2026-09-17)');
+assert.match(anvil, /const extra = await postHookNotes\(hooksCfg, nm, ar, \(\)=>createShell\(\{ registry, face, kiln: kilnRef, js: jsHost, signal: [^}]*\}\)\);/, 'the post-tool notes are the module\'s, over a shell built only when a hook runs (with the run\'s signal since 2026-09-17)');
 assert.ok(!/const SYSTEM_HEAD = |const SYSTEM_TAIL = |const MODE_NOTE = |const LESSON_NOTE = |function synthesizeTool\(\)/.test(anvil), 'no second copy of the constants lives in the app');
 ok('app wiring');
 

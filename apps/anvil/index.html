@@ -450,6 +450,14 @@
   import { compactConversation } from '../../sys/ai/compaction.mjs';
   import { evolve } from '../../sys/ai/evolve.mjs';
   import { createKiln, createWorkerRuntime } from '../../sys/kiln/index.mjs';
+  // G9 (2026-09-24): the browser host for `node file.mjs` gates (sys/kiln/js-runner.mjs): blob-URL modules
+  // run in a module Worker, where the runner stubs the network. A blob URL is same-origin, so it loads
+  // under the page's COEP; each run revokes what it made.
+  const jsHost = {
+    makeModuleURL:(src)=>URL.createObjectURL(new Blob([src], { type:'text/javascript' })),
+    revoke:(u)=>URL.revokeObjectURL(u),
+    spawn:(url)=>{ const w=new Worker(url, { type:'module' }); return { onMessage:(cb)=>{ w.onmessage=(e)=>cb(e.data); }, onError:(cb)=>{ w.onerror=(e)=>{ try{ e.preventDefault(); }catch(_){} cb(e && e.message || 'worker error'); }; }, terminate:()=>w.terminate() }; },
+  };
   import { createFsBridge } from '../../sys/kiln/fs-bridge.mjs';
   import { generateRigModule } from '../../sys/kiln/rig-bindings.mjs';
   import { createMainThreadKiln } from '../../sys/kiln/main-thread-runtime.mjs';
@@ -542,7 +550,7 @@
     // cached, and the baseline sys.path — the same isolation the verifier already gets. A real
     // `python` invocation is a new process; a shared kernel let `sys.path.insert(0,'/workspace')`
     // in one run poison `import inv` in the next (live 2026-09-11).
-    shell = createShell({ registry, face, kiln, kilnIsolate:true, signal: ()=>abortController ? abortController.signal : null }); // Stop cuts a `sleep`
+    shell = createShell({ registry, face, kiln, kilnIsolate:true, js: jsHost, signal: ()=>abortController ? abortController.signal : null }); // Stop cuts a `sleep`
     $('ws').textContent = label;
   }
   async function seedIfEmpty(){
@@ -2807,7 +2815,7 @@
       // Post-tool hooks: run configured commands (auto-format / lint / verify)
       // after the tool succeeds; their bounded output is fed back to the agent.
       try{
-        const extra = await postHookNotes(hooksCfg, nm, ar, ()=>createShell({ registry, face, kiln: kilnRef, signal: ()=>abortController ? abortController.signal : null }));
+        const extra = await postHookNotes(hooksCfg, nm, ar, ()=>createShell({ registry, face, kiln: kilnRef, js: jsHost, signal: ()=>abortController ? abortController.signal : null }));
         if(extra){ renderFiles(); return String(res==null?'':res)+extra; }
       }catch(_){}
       return res;
@@ -2828,7 +2836,7 @@
     // kilnIsolate: the gate's python resets the interpreter first. The agent's own python
       // shares one memoized Pyodide, so without this the gate can import a module the agent
       // cached before editing its file, or one it pre-seeded outright.
-      const verify = verifyCmd ? makeShellVerifier({ createShell:(o)=>createShell({ ...o, kiln: kilnRef, kilnIsolate:true, signal: ()=>abortController ? abortController.signal : null }), registry, face, command: verifyCmd }) : null;
+      const verify = verifyCmd ? makeShellVerifier({ createShell:(o)=>createShell({ ...o, kiln: kilnRef, kilnIsolate:true, js: jsHost, signal: ()=>abortController ? abortController.signal : null }), registry, face, command: verifyCmd }) : null;
     // Per-project memory & skills: prepend AGENTS.md + memory.md (workspace root)
     // so the task starts with this project's conventions and past learnings.
     let projectContext='';

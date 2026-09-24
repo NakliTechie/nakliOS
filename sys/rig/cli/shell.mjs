@@ -13,6 +13,7 @@
 // It is deliberately a CURATED shell — the command set below is everything it
 // knows; `sed`/`awk`/`node`/etc. are "command not found" until implemented.
 
+import { createJsRunner } from '../../kiln/js-runner.mjs';
 import { tokenize } from './parser.mjs';
 
 // bash verb -> registry command name. The dotted name (fs.list) always works too.
@@ -330,8 +331,11 @@ function globToRe(glob) {
 // outlives its runs). The shell has no way to stop a builtin mid-flight in general — a half-run
 // `python` must not report "stopped" while its effects land — but a wait has no effects: `sleep`
 // races its timer against the signal and returns `sleep: interrupted` (exit 130).
-export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate = false, signal = null } = {}) {
+export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate = false, signal = null, js = null } = {}) {
   if (!registry || !face) throw new Error('createShell requires { registry, face }');
+  // G9: `node` — a workspace ES module as a gate (sys/kiln/js-runner.mjs). The host supplies how to make
+  // module URLs and spawn a worker; the runner reads through THIS shell's face, so the grant fences it.
+  const jsRunner = js ? createJsRunner({ ...js, read: async (p) => { const r = await face.invoke('fs.read', { path: p, encoding: 'utf-8' }); return r.ok ? decodeData(r.data) : null; } }) : null;
   const state = { cwd, history: [], vars: new Map([['HOME', '/']]) };
 
   // $VAR / ${VAR} / $? / $PWD expansion. NOTE: the tokenizer already stripped
@@ -474,7 +478,7 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
     history() { return { text: state.history.map((h, i) => `${i + 1}  ${h}`).join('\n'), code: 0 }; },
     which(argv) {
       const v = argv[0];
-      const known = builtins[v] || REGISTRY_ALIAS[v] || registry.describeCommand(v) || (v === 'git' || v === 'python' || v === 'python3' || v === 'py');
+      const known = builtins[v] || REGISTRY_ALIAS[v] || registry.describeCommand(v) || (v === 'git' || v === 'python' || v === 'python3' || v === 'py' || v === 'node');
       return { text: known ? v : `${v} not found`, code: known ? 0 : 1 };
     },
     async cat(argv, stdin) {
@@ -999,7 +1003,8 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
         + '\n  awk -F with {print $N}      ls -R -a -l      sleep SECONDS (decimals; capped at ' + SLEEP_MAX_S + ' s)'
         + '\n  od -c -b -t x1 -An        here-documents as stdin: cmd <<\'EOF\' … EOF  (literal; python - <<\'PY\' runs it)'
         + '\nNo subshells, loops, functions or background jobs. Command substitution ($(…), backticks) is REFUSED (exit 2), not run.'
-        + '\nPython is a real kernel (`python file.py`); it is the scripting layer, not bash.', code: 0 };
+        + '\nPython is a real kernel (`python file.py`); it is the scripting layer, not bash.'
+        + '\n`node file.mjs` / `node --test a.test.mjs …` runs a workspace ES module as a gate: node:assert and node:test, relative imports only — no npm, no fs, no network.', code: 0 };
     },
   };
 
@@ -1199,6 +1204,32 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
       // A `sys.exit(n)` rides through as n; anything else that is not ok is 1. `output` is the
       // two streams in write order; a runtime without it hands back stdout then stderr.
       return { text: r.output != null ? r.output : (r.stdout || '') + (r.stderr || ''), code: r.status === 'ok' ? 0 : (Number.isInteger(r.code) && r.code > 0 ? r.code : 1) };
+    }
+    if (verb === 'node') {
+      // G9 (2026-09-24): a JS project's own test file as its gate. Not Node: ES modules, relative imports
+      // from the workspace, node:assert / node:test shims, no npm, no fs, no network (js-runner.mjs).
+      if (!jsRunner) return { text: 'node: the JS gate runner is not available in this shell', code: 1 };
+      const sig = typeof signal === 'function' ? signal() : signal;
+      if (args[0] === '--version' || args[0] === '-v') return { text: 'v22-compatible gate runner — ES modules, node:assert, node:test; no npm packages, no fs, no network', code: 0 };
+      if (args[0] === '-e' || args[0] === '--eval') {
+        if (args[1] == null) return { text: 'node: -e needs code', code: 2 };
+        const r = await jsRunner.run({ source: args[1], cwd: state.cwd, argv: args.slice(2), stdin: stdin || '', signal: sig });
+        return { text: r.output.replace(/\n$/, ''), code: r.code };
+      }
+      if (args[0] === '--test') {
+        const files = args.slice(1);
+        if (!files.length) return { text: 'node: --test needs the test files to run (no discovery here) — e.g. `node --test test/a.test.mjs test/b.test.mjs`', code: 2 };
+        let text = '', code = 0;
+        for (const f of files) {
+          const r = await jsRunner.run({ entry: normalizePath(state.cwd, f), cwd: state.cwd, argv: [], stdin: stdin || '', signal: sig });
+          text += `# ${f}\n${r.output}`; if (r.code !== 0 && code === 0) code = r.code;
+          if (r.code === 130) break; // stopped
+        }
+        return { text: text.replace(/\n$/, ''), code };
+      }
+      if (!args[0] || args[0].startsWith('-')) return { text: `node: ${args[0] ? `unsupported option ${args[0]}` : 'give a file'} — use \`node file.mjs\`, \`node --test a.test.mjs …\`, \`node -e "code"\` or \`node --version\``, code: 2 };
+      const r = await jsRunner.run({ entry: normalizePath(state.cwd, args[0]), cwd: state.cwd, argv: args.slice(1), stdin: stdin || '', signal: sig });
+      return { text: r.output.replace(/\n$/, ''), code: r.code };
     }
     if (verb === 'find') {
       // -name / -type / -maxdepth were SILENTLY IGNORED, so `find . -name "*.txt"` returned every
