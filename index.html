@@ -9197,6 +9197,32 @@ function openSettings(section){
     </label>
   `;
 
+  // Per-app storage (2026-09-24). The first-use dialog promised "You can revoke or switch backends
+  // later in Settings" and no control did it — with Folder and Crate both connected, moving an app
+  // needed the console. One row per app holding storage: its backend, switchable to any CONNECTED
+  // backend, or revoked. Switching copies nothing: the app sees apps/<id>/ on the new backend.
+  const storageApps = Object.entries(state.appPermissions)
+    .filter(([, perm]) => perm && typeof perm === 'object' && perm.granted && perm.backend)
+    .sort(([a], [b]) => a.localeCompare(b));
+  const appStorageHTML = storageApps.length ? `
+    <div class="nw-fs-blurb">Where each app keeps its <code>apps/&lt;id&gt;/</code> data. Switching copies nothing — the app starts on the other backend's copy.</div>
+    <div id="app-storage-list">${storageApps.map(([appId, perm]) => {
+      const app = APPS.find(a => a.id === appId);
+      const opt = (id, label) => {
+        const here = perm.backend === id;
+        const live = BACKENDS[id]?.isConnected();
+        if (!here && !live) return '';
+        const suffix = here && !live ? (id === 'crate' && state.crateLocked ? ' (locked)' : ' (not connected)') : '';
+        return `<option value="${id}" ${here ? 'selected' : ''}>${label}${suffix}</option>`;
+      };
+      return `<label class="nw-app-storage-row" style="display:flex; align-items:center; gap:8px; margin:4px 0;">
+        <span style="flex:1;">${_dlgEscape(app?.name || appId)}</span>
+        <select class="app-storage-select" data-app-id="${_dlgEscape(appId)}">
+          ${opt('fsa', 'Folder')}${opt('crate', 'Crate')}<option value="revoke">Revoke access</option>
+        </select>
+      </label>`;
+    }).join('')}</div>` : '<p class="nw-fs-blurb">No app holds storage yet. An app asks the first time it saves.</p>';
+
   const aiDecisionCount = Object.keys(state.aiPermissions).length;
   const selectedAiModel = aiSelectedModel();
   const aiModelOptions = globalThis.LocalMindHostCatalog.models.map(model => `
@@ -9453,6 +9479,8 @@ function openSettings(section){
     ${fsHTML}
     <h4>Crate (cloud, encrypted)</h4>
     ${crateHTML}
+    <h4 id="settings-app-storage-heading">App storage</h4>
+    ${appStorageHTML}
     <h4 id="settings-ai-heading" tabindex="-1">AI</h4>
     ${aiHTML}
     <h4>Mode</h4>
@@ -9549,6 +9577,22 @@ function openSettings(section){
 
   wrap.querySelector('#crate-disconnect')?.addEventListener('click', async () => {
     if (await crateInteractiveDisconnect()){ closeSettings(); openSettings(); }
+  });
+  wrap.querySelectorAll('.app-storage-select').forEach(sel => {
+    sel.addEventListener('change', async () => {
+      const appId = sel.dataset.appId;
+      try {
+        if (sel.value === 'revoke') {
+          delete state.appPermissions[appId];
+          saveAppPermissions(); broadcastCapabilities();
+        } else {
+          await fsHostSelectBackend(appId, sel.value);
+        }
+      } catch (e) {
+        await nakliosAlert(String(e && e.message || e), { title: 'Could not switch storage', kind: 'error' });
+      }
+      closeSettings(); openSettings('storage');
+    });
   });
   wrap.querySelector('#crate-stay')?.addEventListener('change', (e) => {
     setCrateStayUnlocked(e.target.checked);

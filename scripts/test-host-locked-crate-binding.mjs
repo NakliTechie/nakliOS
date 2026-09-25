@@ -82,4 +82,12 @@ const bound = { backend: 'crate', granted: true };
   assert.equal(d.calls.confirms, 1);
 }
 
-console.log('host-locked-crate-binding: a locked Crate asks unlock / move / cancel; the binding moves only on an explicit choice');
+// The first-use dialog promises "You can revoke or switch backends later in Settings" — the control
+// that keeps the promise (2026-09-24): one select per app, wired to fsHostSelectBackend / revoke.
+assert.match(host, /switch backends later in Settings/, 'the promise is still made');
+assert.match(host, /<h4 id="settings-app-storage-heading">App storage<\/h4>\s*\$\{appStorageHTML\}/, 'Settings renders the App storage section');
+assert.match(host, /class="app-storage-select" data-app-id=/, 'one select per app');
+assert.match(host, /querySelectorAll\('\.app-storage-select'\)[\s\S]{0,400}await fsHostSelectBackend\(appId, sel\.value\)/, 'a change switches through the host function');
+assert.match(host, /sel\.value === 'revoke'\) \{\s*delete state\.appPermissions\[appId\];/, 'and revoke removes the binding');
+
+console.log('host-locked-crate-binding: a locked Crate asks unlock / move / cancel; the binding moves only on an explicit choice; Settings switches or revokes it per app');
