@@ -184,8 +184,11 @@ const texts = (q) => q.map((e) => e.text);
 // ── the app actually uses all of it ────────────────────────────────────────
 assert.match(anvil, /t\.queued=qEnqueue\(t\.queued, text\)\.queue/, 'submit enqueues through the reducer');
 assert.match(anvil, /const _d = nextDispatch\(t\.queued, _out\)/, 'the drain goes through nextDispatch');
-assert.match(anvil, /completeDispatch\(t\.queued, _d\.entry\.id\)/, 'and consumes the entry only once the run starts');
-assert.match(anvil, /releaseDispatch\(t\.queued, _d\.entry\.id\)/, 'a throw before the run releases the claim');
+// These two anchors once matched a drain that consumed the entry BEFORE runTask ran (a rejected
+// promise or `if(running) return` then lost it). Their messages were true only in intent; the
+// behaviour is now DRIVEN in scripts/test-anvil-queue-handlers.mjs (E1, 2026-09-24).
+assert.match(anvil, /if\(!err && t\.status==='running'\)\{ t\.queued = completeDispatch\(t\.queued, qid\)/, 'the entry is consumed only once runTask has taken the run');
+assert.match(anvil, /t\.queued = releaseDispatch\(t\.queued, qid\)/, 'a run that did not start releases the claim');
 assert.match(anvil, /t\.lastStop = result\.stop/, 'the run records how it ended, so the queue can hold on an ambiguous end');
 assert.match(anvil, /const m = migrateQueue\(t\.queued\)/, 'load migrates every task queue');
 assert.match(anvil, /const r = reconcileQueue\(m\.queue\)/, 'and reconciles dead claims');

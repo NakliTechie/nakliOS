@@ -3229,9 +3229,20 @@
       t.queued = _d.queue; save(); renderLog();
       if(_d.paused && _d.reason) pushSystem('⏸ '+_d.reason+'. Send anything to continue, or edit the queue above.');
       else if(_d.entry){
+        // The claim is honoured only once the run has STARTED — runTask's synchronous prefix sets
+        // t.status='running' before its first await. It used to be honoured first: runTask is async, so
+        // a failure is a rejected promise the try never saw, and `if(running) return` (another run
+        // took the tick) returned without starting — either way the prompt was deleted, unrun
+        // (E1's handlers test, 2026-09-24). Not started → the claim is released and the entry waits.
         setTimeout(()=>{
-          try{ t.queued = completeDispatch(t.queued, _d.entry.id); save(); renderLog(); runTask(t, _d.entry.text); }
-          catch(e){ t.queued = releaseDispatch(t.queued, _d.entry.id); save(); renderLog(); pushSystem('queue: could not start the next follow-up — '+String(e&&e.message||e)); }
+          const qid=_d.entry.id; let p=null, err=null;
+          try{ p=runTask(t, _d.entry.text); }catch(e){ err=e; }
+          if(!err && t.status==='running'){ t.queued = completeDispatch(t.queued, qid); save(); renderLog(); }
+          else {
+            t.queued = releaseDispatch(t.queued, qid); save(); renderLog();
+            pushSystem('queue: could not start the next follow-up — '+(err ? String(err&&err.message||err) : 'another run is in progress')+'. It is still queued; Send anything to continue.');
+          }
+          if(p && typeof p.catch==='function') p.catch((e)=>pushSystem('queue: the follow-up run failed — '+String(e&&e.message||e)));
         }, 0);
       }
     }
