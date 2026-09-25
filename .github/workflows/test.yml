@@ -297,6 +297,9 @@ jobs:
       - name: Verify the NakliOS dialog promise always settles (no wedged consent)
         run: node scripts/test-host-dialog-settles.mjs
 
+      - name: Verify a locked Crate keeps an app's storage binding (unlock / move / cancel)
+        run: node scripts/test-host-locked-crate-binding.mjs
+
       - name: Verify Anvil carries tool results + gate verdict into the next run
         run: node scripts/test-anvil-convo-carry.mjs
 

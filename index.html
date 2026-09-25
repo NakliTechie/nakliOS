@@ -4933,14 +4933,36 @@ async function fsEnsurePermission(appId){
   migrateAppPermission(appId);
   const v = state.appPermissions[appId];
   if (v && v.granted === false) return null;
+  const name = app?.name || appId;
   if (v && v.granted && v.backend){
     // Verify the backend the app was bound to is still connected.
     if (BACKENDS[v.backend]?.isConnected()) return v.backend;
-    // Backend was disconnected — fall through to re-prompt.
+    // A LOCKED Crate is still this app's storage. Falling through to the re-prompt offered the one
+    // connected backend as if this were a first-time grant, and its Allow silently replaced the
+    // Crate binding (live 2026-09-24: Anvil bound to Crate, a reload locked it, one Allow later it
+    // was on the Folder and unlocking did not bring it back). Ask to unlock; moving is explicit.
+    if (v.backend === 'crate' && state.crateLocked){
+      const buttons = [{ value: 'cancel', label: 'Cancel' }];
+      if (BACKENDS.fsa.isConnected()) buttons.push({ value: 'fsa', label: 'Use Folder instead' });
+      buttons.push({ value: 'unlock', label: 'Unlock Crate', primary: true });
+      const ans = await _nakliosDialog({
+        title: `${name} keeps its data in your Crate`,
+        body: `Your Crate (<code>${_dlgEscape(state.crateBucketName || 'Crate')}</code>) is locked. ` +
+          `Unlock it to continue` + (BACKENDS.fsa.isConnected() ? `, or move <strong>${_dlgEscape(name)}</strong> to your Folder — its Crate data stays where it is.` : '.'),
+        buttons, allowHtmlBody: true,
+      });
+      if (ans === 'unlock') return (await crateInteractiveUnlock()) ? 'crate' : null;
+      if (ans === 'fsa' && BACKENDS.fsa.isConnected()){
+        state.appPermissions[appId] = { backend: 'fsa', granted: true };
+        saveAppPermissions(); broadcastCapabilities();
+        return 'fsa';
+      }
+      return null;
+    }
+    // Backend was disconnected (not merely locked) — fall through to re-prompt.
   }
   const avail = backendsAvailable();
   if (avail.length === 0) return null;
-  const name = app?.name || appId;
 
   let chosen = null;
   if (avail.length === 1){
