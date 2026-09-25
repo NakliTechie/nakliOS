@@ -956,22 +956,41 @@
   function clickable(el, handler, label){ el.setAttribute('role','button'); el.tabIndex=0; if(label) el.setAttribute('aria-label',label); el.onclick=handler; el.onkeydown=(e)=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); handler(e); } }; return el; }
 
   // ── Left pane render ──
+  // ZR-A3 (CRIB-E E2): the list is rebuilt on every renderAll — which runs on every status change
+  // of a streaming run — and a rebuild threw away the list's scroll position and whichever row had
+  // keyboard focus (a Tab-navigating reader was dropped to <body> each time a dot changed colour).
+  // Rows keep their order (array order, never sorted by status); the rebuild now restores both.
+  // ↑/↓ move focus between rows, so the list is navigable without a pointer.
   function renderProjects(){
-    const box=$('projects'); box.innerHTML='';
+    const box=$('projects');
+    const top=box.scrollTop;
+    const ae=document.activeElement;
+    const focusKey=(ae && ae.dataset && ae.dataset.navkey) || null;
+    const rows=new Map();
+    box.innerHTML='';
     for(const p of state.projects){
       const pd=document.createElement('div'); pd.className='proj';
       const prow=document.createElement('div'); prow.className='prow';
       prow.innerHTML=`<span class="tw">${p.open?'▾':'▸'}</span><span class="pname">${esc(p.name)}</span><span class="pcount">${(p.tasks||[]).length}</span>`;
       clickable(prow, ()=>{ p.open=!p.open; save(); renderProjects(); }, (p.open?'Collapse':'Expand')+' project '+p.name);
+      prow.dataset.navkey='p:'+p.id; rows.set(prow.dataset.navkey, prow);
       pd.appendChild(prow);
       if(p.open) for(const t of (p.tasks||[])){
         const td=document.createElement('div'); td.className='task'+(t.id===state.activeTask?' active':'');
         td.innerHTML=`<span class="dot ${t.status||'idle'}"></span><span class="ttitle">${esc(t.title)}</span>`;
         clickable(td, ()=>selectTask(t.id), 'Open task '+t.title);
+        td.dataset.navkey='t:'+t.id; rows.set(td.dataset.navkey, td);
         pd.appendChild(td);
       }
       box.appendChild(pd);
     }
+    const order=[...rows.values()];
+    order.forEach((el, i)=>{ const own=el.onkeydown; el.onkeydown=(e)=>{
+      if(e.key==='ArrowDown'||e.key==='ArrowUp'){ e.preventDefault(); const n=order[i+(e.key==='ArrowDown'?1:-1)]; if(n) n.focus(); return; }
+      if(own) own(e);
+    }; });
+    box.scrollTop=top;
+    if(focusKey && rows.has(focusKey)) rows.get(focusKey).focus({ preventScroll:true });
   }
   async function selectTask(tid){
     state.activeTask=tid;
@@ -1453,6 +1472,10 @@
     const existingWrap = box.querySelector('.wrap');
     const pinned = isPinned({ scrollTop:box.scrollTop, scrollHeight:box.scrollHeight, clientHeight:box.clientHeight });
     const prevTop = box.scrollTop;
+    // ZR-A3: a task switch used to hand the incoming task the OUTGOING task's scroll offset. Each
+    // task keeps its own reading position ('bottom' when its reader was following along).
+    const switched = logCache.taskId!==t.id;
+    if(switched && logCache.taskId!=null) logScroll.set(logCache.taskId, pinned ? 'bottom' : prevTop);
     // A queue chip is not a log row, so it is rebuilt on every pass; the log rows above it are not.
     if(plan.mode!=='rebuild' && existingWrap){ for(const q of [...existingWrap.querySelectorAll('.msg.queued')]) q.remove(); }
     if(plan.mode==='patch' && existingWrap){
@@ -1488,8 +1511,10 @@
     logCache = { taskId:t.id, keys };
     // The reader's position is theirs unless they were following along at the bottom. The rare
     // resize path (applyLayout) has always done this; the hot path never did.
-    box.scrollTop = pinned ? box.scrollHeight : prevTop;
+    if(switched){ const saved=logScroll.get(t.id); box.scrollTop = (saved==null || saved==='bottom') ? box.scrollHeight : saved; }
+    else box.scrollTop = pinned ? box.scrollHeight : prevTop;
   }
+  const logScroll = new Map(); // task id → its log's scroll offset, or 'bottom' (ZR-A3)
   // Keys of the log rows currently on screen, and whose task they belong to. A task switch
   // invalidates it by id, so a switch can never append one task's rows under another's.
   let logCache = { taskId:null, keys:null };
