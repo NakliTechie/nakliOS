@@ -426,7 +426,7 @@
   const SEARCH_INDEX_PATH = '.anvil/search-index.json';
   import { renderProcedural, loadProceduralGraph, PROCEDURAL_PATH } from '../../sys/ai/procedural.mjs';
   import { rowKey, rowKeys, planLogUpdate, isPinned } from '../../sys/ai/log-render-plan.mjs';
-  import { buildChangeRow, planRevert, prunePreimages, preimageBytes, MAX_PREIMAGE_BUDGET } from '../../sys/ai/change-preimages.mjs';
+  import { buildChangeRow, planRevert, prunePreimages, preimageBytes, MAX_PREIMAGE_BUDGET, turnChanges, planTurnRevert } from '../../sys/ai/change-preimages.mjs';
   import { subagentFeedRow, subagentFeedLine, subagentLiveness } from '../../sys/ai/subagents.mjs'; // ESS-2: the live child feed; B1: its typed state
   import { createSteerQueue } from '../../sys/ai/steer.mjs'; // B2: a child's completion lands at the parent's next turn
   import { createStateOplog } from '../../sys/history/state-oplog.mjs'; // D3: the app's own state writes, chained
@@ -1408,6 +1408,12 @@
       const c=document.createElement('div'); c.className='change subagent'+(lv==='live'?' live':'');
       c.innerHTML=`<span class="ci">${e.status==='running'?'⇄':'⇆'}</span><span class="cf">${esc(subagentFeedLine(e))}</span>`;
       return c;
+    } else if(e.k==='turn'){
+      const c=document.createElement('div'); c.className='change turn'; c.title='Review everything this run changed';
+      const note = e.state==='partial' ? ' · some without a before-version' : e.state==='unavailable' ? ' · no before-versions kept' : '';
+      c.innerHTML=`<span class="ci">◫</span><span class="cf">This run changed ${e.files} file${e.files===1?'':'s'}${note}</span><span class="cv">review →</span>`;
+      c.onclick=()=>{ openTurn(t, e.run); raise('preview'); };
+      return c;
     } else if(e.k==='change'){
       // "We made changes — view": a change line that opens the file. The write/edit is
       // already applied (YOLO); clicking reads the current file and shows it in
@@ -1508,10 +1514,14 @@
       pv.type==='html' ? 'Preview' : 'File'
     );
     $('pv-file').textContent=pv.file||'';
-    if(rev){ rev.hidden = pv.pre==null; rev.onclick = pv.pre==null ? null : (()=>revertChange(pv)); }
+    if(rev){
+      if(pv.turn!=null){ rev.hidden=false; rev.textContent='↶ Revert this run'; rev.title='Restore every file this run changed that has not been touched since'; rev.onclick=()=>revertTurn(pv.turn); }
+      else { rev.textContent='↶ Revert'; rev.title='Undo this change'; rev.hidden = pv.pre==null; rev.onclick = pv.pre==null ? null : (()=>revertChange(pv)); }
+    }
     const body=$('pv-body');
     if(pv.type==='html'){ body.innerHTML=''; const f=document.createElement('iframe'); f.setAttribute('sandbox','allow-scripts'); f.srcdoc=pv.content; body.appendChild(f); }
-    else if(pv.type==='diff'){ body.innerHTML='<pre></pre>'; body.querySelector('pre').innerHTML=diffHtml(pv.content); }
+    else if(pv.type==='diff'){ body.innerHTML='<pre></pre>'; body.querySelector('pre').innerHTML=diffHtml(pv.content);
+      if(pv.note){ const n=document.createElement('div'); n.className='pv-note'; n.textContent=pv.note; body.insertBefore(n, body.firstChild); } }
     else if(pv.type==='md'){
       // ESS-4: a document, rendered — the skill reader. Same note + actions contract as text.
       body.innerHTML=''; const d=document.createElement('div'); d.className='pv-md'; renderMarkdown(d, pv.content); body.appendChild(d);
@@ -1863,6 +1873,7 @@
       // clean undo from destroying whatever touched the file since.
       let post=null; try{ const r=await fs.read(path,{encoding:'utf-8'}); if(r&&r.ok) post=r.data; }catch(_){}
       const row = buildChangeRow({ file:path, verb: name==='edit'?'edited':'wrote', pre:raw, post });
+      if(t.runSeq) row.run = t.runSeq;
       t.log.push(row);
       // Bounded retention: without this every change row keeps a full copy of the file's previous
       // contents forever, in localStorage AND in the roamed state.json.
@@ -1893,6 +1904,39 @@
     }
     state.previewOpen=true; save(); renderPreview();
   }
+  // ZR-A2: the whole run in one diff — each file from its state BEFORE the run to what is there now.
+  async function openTurn(t, run){
+    if(!t) return;
+    const tc=turnChanges(t.log, run);
+    const parts=[]; const missing=[];
+    for(const f of tc.files){
+      let now=null; try{ const r=await fs.read(f.file,{encoding:'utf-8'}); if(r&&r.ok) now=r.data; }catch(_){}
+      if(f.pre==null){ missing.push(f.file+(f.preUnavailable?' — '+f.preUnavailable:'')); continue; }
+      parts.push('=== '+f.file+(f.edits>1?' ('+f.edits+' edits)':'')+' ===\n'+lineDiff(f.pre, now==null?'':now));
+    }
+    globalPreview=null;
+    t.preview={ type:'diff', file:'Run '+run+' — '+tc.files.length+' file'+(tc.files.length===1?'':'s'), label:'This run', content:parts.join('\n'), turn:run,
+      note: missing.length ? 'No before/after diff for: '+missing.join('; ')+'.' : '' };
+    state.previewOpen=true; save(); renderPreview();
+  }
+  // Revert a run: restore each file the run changed to its pre-run version — but only files that
+  // still look the way the run left them. Anything touched since (the owner, a later run, a merge)
+  // is skipped and named; nothing is overwritten on a guess.
+  async function revertTurn(run){
+    const t=activeTask(); if(!t) return;
+    const tc=turnChanges(t.log, run); const contents={};
+    for(const f of tc.files){ try{ const r=await fs.read(f.file,{encoding:'utf-8'}); contents[f.file]= (r&&r.ok)? r.data : null; }catch(_){ contents[f.file]=null; } }
+    const plan=planTurnRevert(tc, contents); const done=[]; const failed=[];
+    // fs.write reports failure as {ok:false} as well as by throwing — both are a failed revert, never a success.
+    for(const p of plan.restore){ try{ const w=await fs.write(p.file, p.content); if(w && w.ok===false) failed.push(p.file+' — '+(w.error||w.message||'write failed')); else done.push(p.file); }catch(e){ failed.push(p.file+' — '+String(e&&e.message||e)); } }
+    const lines=[];
+    if(done.length) lines.push('↶ Reverted run '+run+': '+done.join(', ')+'.');
+    for(const s of plan.skipped) lines.push('↶ Not reverted — '+s.message);
+    for(const f of failed) lines.push('↶ Not reverted — '+f);
+    if(!lines.length) lines.push('↶ Run '+run+' changed nothing that can be reverted.');
+    for(const l of lines) pushSystem(l);
+    await openTurn(t, run); save(); renderAll();
+  }
   // Revert: only when the file still looks the way the agent left it. It used to write the
   // pre-image back unconditionally, which silently destroyed anything that had touched the file
   // since — your own edit, a later turn, a subagent merge, a second tab (AC-6).
@@ -1901,7 +1945,7 @@
     let current=null; try{ const r=await fs.read(pv.file,{encoding:'utf-8'}); if(r&&r.ok) current=r.data; }catch(_){}
     const plan = planRevert({ k:'change', file:pv.file, pre:pv.pre, postHash:pv.postHash, preUnavailable:pv.preUnavailable }, current);
     if(!plan.ok){ pushSystem('↶ Not reverted — '+plan.message); return; }
-    try{ await fs.write(pv.file, plan.content); }catch(e){ pushSystem('↶ Not reverted — '+String(e&&e.message||e)); return; }
+    try{ const w=await fs.write(pv.file, plan.content); if(w && w.ok===false){ pushSystem('↶ Not reverted — '+(w.error||w.message||'write failed')); return; } }catch(e){ pushSystem('↶ Not reverted — '+String(e&&e.message||e)); return; }
     pushSystem('Reverted '+pv.file+'.');
     const at=activeTask(); if(at) at.preview={ type:'text', file:pv.file, content:plan.content };
     save(); renderAll();
@@ -2425,6 +2469,7 @@
     (t.log=t.log||[]).push({k:'user',text});
     const mode=t.mode||'code';
     const runProject=String(state.activeProject||'local'); // the project this run belongs to — read once, filed under at the end
+    t.runSeq=(t.runSeq||0)+1; // ZR-A2: this run's changes are tagged with it, so they can be reviewed as a unit
     t.status='running'; running=true; abortController=new AbortController(); setSend(); save(); renderAll();
     // A run is a fresh shell session. The shell is per project and outlives tasks, so a `cd` in
     // the previous run used to decide where every relative path in this one landed.
@@ -3214,6 +3259,9 @@
       // abort above (an error path never reaches it).
       if(abortController&&!abortController.signal.aborted){ try{ abortController.abort(); }catch(_){} }
       settleFleetRows(t); // B1: no child outlives its run — a row still 'running' here is interrupted
+      // ZR-A2: one row that reviews the whole run — "this run changed N files" — opening a combined
+      // diff (each file before the run → now) with a Revert that skips what changed since.
+      try{ const tc=turnChanges(t.log, t.runSeq); if(tc.files.length) t.log.push({ k:'turn', run:t.runSeq, files:tc.files.length, state:tc.state }); }catch(_){}
       running=false; abortController=null; setSend(); save(); renderAll();
       if(phoneMode()){ const _st=(activeTask()||{}).status; badge('chat', _st==='error'?'✗':'✓'); }
       if(nak&&nak.title) nak.title('Anvil — '+t.title);

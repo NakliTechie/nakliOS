@@ -122,3 +122,36 @@ export function prunePreimages(log, { budget = MAX_PREIMAGE_BUDGET } = {}) {
 export function preimageBytes(log) {
   return (Array.isArray(log) ? log : []).reduce((n, r) => n + (r && r.k === 'change' && r.pre != null ? String(r.pre).length : 0), 0);
 }
+
+// ── ZR-A2 (CRIB-E E3, 2026-09-24): turn-scoped change review ──────────────────────────────────
+// A chip reviews ONE write. A run is reviewed as a unit: "this run changed these files" — each
+// file's state before the run (the FIRST pre-image the run took of it) against what the run left
+// (the LAST post digest), however many edits it took in between. Change rows carry `run` (the
+// task's run sequence number) so a run's changes are separable from everything else in the log —
+// the owner's edits and earlier runs' are not this run's, and are never attributed to it.
+
+/** The files one run changed, collapsed per file. `state`: complete (every file has its pre-run
+ *  version) · partial (some do) · unavailable (none do) · empty (the run changed nothing). */
+export function turnChanges(log, run) {
+  const byFile = new Map();
+  for (const r of Array.isArray(log) ? log : []) {
+    if (!r || r.k !== 'change' || r.run !== run) continue;
+    const e = byFile.get(r.file);
+    if (!e) byFile.set(r.file, { file: r.file, verb: r.verb, pre: r.pre ?? null, preUnavailable: r.preUnavailable || null, postHash: r.postHash || null, edits: 1 });
+    else { e.postHash = r.postHash || null; e.edits++; if (r.verb === 'wrote') e.verb = 'wrote'; }
+  }
+  const files = [...byFile.values()];
+  const kept = files.filter((f) => f.pre != null).length;
+  const state = !files.length ? 'empty' : kept === files.length ? 'complete' : kept ? 'partial' : 'unavailable';
+  return { run, files, state };
+}
+
+/** Revert a whole run, file by file, with planRevert's refusals intact: a file changed since the
+ *  run left it is SKIPPED with its reason, never overwritten. `contents` maps file → current text
+ *  (null when unreadable). Nothing here writes; the app applies `restore`. */
+export function planTurnRevert(turn, contents = {}) {
+  const plans = (turn && turn.files ? turn.files : []).map((f) => ({ file: f.file,
+    ...planRevert({ k: 'change', file: f.file, pre: f.pre, postHash: f.postHash, preUnavailable: f.preUnavailable },
+      Object.prototype.hasOwnProperty.call(contents, f.file) ? contents[f.file] : null) }));
+  return { restore: plans.filter((p) => p.ok), skipped: plans.filter((p) => !p.ok) };
+}

@@ -319,6 +319,9 @@ jobs:
 
       - name: Drive the follow-up queue through Anvil's real handlers (submit, drain, reload, rows)
         run: node scripts/test-anvil-queue-handlers.mjs
+
+      - name: Review and revert a whole run through Anvil's real handlers (ZR-A2)
+        run: node scripts/test-anvil-turn-review.mjs
       - name: rig shell (its own tests were never in the gate)
         run: node sys/rig/cli/test/shell.test.mjs
       - name: rig shell conformance
