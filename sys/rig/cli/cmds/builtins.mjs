@@ -46,13 +46,22 @@ export function createBuiltins({ state, face, normalizePath, SLEEP_MAX_S, comman
     },
 
     export(args) {
-      for (const a of args) {
-        const eq = a.indexOf('=');
-        if (eq > 0) state.vars.set(a.slice(0, eq), a.slice(eq + 1));
+      for (const item of args) {
+        const cut = item.indexOf('='), name = cut < 0 ? item : item.slice(0, cut);
+        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) return { text: `export: invalid variable name '${name}'`, code: 2 };
+      }
+      for (const item of args) {
+        const cut = item.indexOf('='), name = cut < 0 ? item : item.slice(0, cut);
+        if (cut >= 0) state.vars.set(name, item.slice(cut + 1));
+        else if (!state.vars.has(name)) state.vars.set(name, '');
       }
       return { text: '', code: 0 };
     },
-    unset(args) { for (const a of args) state.vars.delete(a); return { text: '', code: 0 }; },
+    unset(args) {
+      if (args.some((name) => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name))) return { text: 'unset: expected variable names', code: 2 };
+      for (const name of args) state.vars.delete(name);
+      return { text: '', code: 0 };
+    },
     help() {
       const cmds = commandNames();
       // Say what is ACTUALLY here. `help` used to list these as if they were coreutils, and the
@@ -60,7 +69,7 @@ export function createBuiltins({ state, face, normalizePath, SLEEP_MAX_S, comman
       // (forward-pass R3a). An unsupported flag is now an error, so this text and the behaviour
       // agree.
       return { text: 'commands: ' + cmds.join(' ')
-        + '\noperators: | && || ; > >> < 2>&1   globs: * ?   comments: #'
+        + '\noperators: | && || ; newline ! > >> < 1> 2> 2>&1 &> &>>; globs: * ? []; comments: #'
         + '\nvars: NAME=value, $NAME, ${NAME}, $?, $PWD  (single quotes are literal; double quotes expand)'
         + '\nThis is a CURATED shell, not coreutils. Each builtin implements a documented subset and'
         + '\nREFUSES an unsupported flag (exit 2) rather than ignoring it. Notably:'
@@ -83,7 +92,9 @@ export function createBuiltins({ state, face, normalizePath, SLEEP_MAX_S, comman
         + '\n  git: init [-b] | add [-A|-u] PATHS | rm [--cached] [-r] | mv | commit -m [-a] | status [-s] | log [-n N] [REF]'
         + '\n       diff [--name-status|--name-only|--quiet] [--cached | REF [REF]] [-- PATHS] | branch [NAME]'
         + '\n       checkout [-f] REF | checkout -b NAME | clone | fetch | push [-f]'
-        + '\nNo subshells, loops, functions or background jobs. Command substitution ($(…), backticks) is REFUSED (exit 2), not run.'
+        + '\nLanguage: if/elif/else, for, while/until, case, { groups; }, (subshells), functions, local/return, shift, break/continue, read -r.'
+        + '\nExpansions: $(commands), backticks, $((integer arithmetic)), positional parameters, IFS splitting and parameter operators.'
+        + '\nPipes carry stdout; diagnostics use stderr. Background jobs and host processes are unavailable. Execution and captured output are bounded.'
         + '\nPython is a real kernel (`python file.py`); it is the scripting layer, not bash.'
         + '\n`node file.mjs` / `node --test a.test.mjs …` runs a workspace ES module as a gate: node:assert and node:test, relative imports only — no npm, no fs, no network.', code: 0 };
     },

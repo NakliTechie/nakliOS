@@ -446,9 +446,9 @@
   import { asStored } from '../../sys/ai/content-token.mjs';
   import { HOOKS_FILE, parseHooks } from '../../sys/ai/hooks.mjs';
   import { systemPrompt as assembledSystemPrompt, systemMessage, gateNote as assembledGateNote, runToolset, runReadiness, isSimpleAsk, synthesizeTool, driveRun, loadHooks, preHookReply, postHookNotes, contextMessage } from '../../sys/ai/run-assembly.mjs';
-  import { gateAction, gateEvent, actionClasses } from '../../sys/ai/action-gate.mjs';
+  import { gateAction, gateEvent, actionClasses, guardCriticalShellInvocation } from '../../sys/ai/action-gate.mjs';
   import { applyPolicy, grant as policyGrant, revoke as policyRevoke, policyRows, normalisePolicy, POLICY_HINT } from '../../sys/ai/action-policy.mjs';
-  import { decideByRules, invalidRules, applyMode, MODES as PERM_MODES, MODE_LABEL as PERM_MODE_LABEL, modeIsLoud } from '../../sys/ai/permission-rules.mjs';
+  import { withShellContext, decideByRules, invalidRules, applyMode, MODES as PERM_MODES, MODE_LABEL as PERM_MODE_LABEL, modeIsLoud } from '../../sys/ai/permission-rules.mjs';
   import { compactConversation } from '../../sys/ai/compaction.mjs';
   import { evolve } from '../../sys/ai/evolve.mjs';
   import { createKiln, createWorkerRuntime } from '../../sys/kiln/index.mjs';
@@ -487,7 +487,7 @@
   const AGENT_SCOPES = ['fs:read','fs:write','fs:remove','git:read','git:write','git:remote'];
   const agentGrant = (scopes=AGENT_SCOPES) => createGrant({ prefixes:[''], scopes:[...scopes], readOnlyPrefixes:[SKILLS_DIR, GATE_DIR, SEARCH_INDEX_PATH] });
   // The agent's own shell over the current face and Kiln (boot and the test door's rebind).
-  const agentShell = () => createShell({ registry, face, kiln: kilnRef, kilnIsolate:true, js: jsHost, signal: ()=>abortController ? abortController.signal : null }); // Stop cuts a `sleep`
+  const agentShell = () => createShell({ registry, face, beforeCommand: guardCriticalShellInvocation, kiln: kilnRef, kilnIsolate:true, js: jsHost, signal: ()=>abortController ? abortController.signal : null }); // Stop cuts a `sleep`
   let workspaceLabel = 'memory · scratch';
   let wsRoot = ''; // fileops root for the active mount (subagent overlays match it)
   // `exclusive` says nothing outside this fileops writes to the backend, which
@@ -2549,7 +2549,7 @@
       const ograph = agentGrant(grant.scopes); // B5: the parent's scopes, never a fresh full set
       const oopLog = createOpLog({ fs: createFileops({ backend:new MemoryBackend() }) });
       const oface = createAgentFace({ registry: oregistry, grant: ograph, opLog: oopLog, actor:'agent' });
-      const oshell = createShell({ registry: oregistry, face: oface, signal: abortController ? abortController.signal : null }); // no kiln in subagents; Stop cuts a child's `sleep`
+      const oshell = createShell({ registry: oregistry, face: oface, beforeCommand: guardCriticalShellInvocation, signal: abortController ? abortController.signal : null }); // no kiln in subagents; Stop cuts a child's `sleep`
       const executor = makeToolExecutor({ shell: oshell, face: oface, mode:'code', infer: inferViaHost, subagentDepth: 1, scopes: ograph.scopes });
       return {
         executor,
@@ -2650,6 +2650,7 @@
         // AC-7c: the owner's own rules come first — they are the layer you can actually steer.
         // A DENY rule is absolute and is checked before everything, including bypass mode: a rule
         // that says "never do this" which a mode can ignore is not a rule.
+        if (['shell', 'bash', 'sh'].includes(nm)) ar = withShellContext(ar, shell.permissionContext);
         const byRule = decideByRules(state.permissionRules, nm, ar);
         if(byRule.decision === 'deny'){
           if(t){ t.log.push({ k:'system', text:'⛔ Refused — '+byRule.why+'. '+POLICY_HINT }); renderLog(); }
@@ -2666,8 +2667,8 @@
         // A wrapper whose inner commands cannot be inspected retains its rule
         // prompt even in bypass mode. Ordinary inspectable asks keep mode policy.
         if(byMode.decision === 'allow' && !byRule.uninspectable) verdict = { ...verdict, outcome:'allow', liftedBy:null };
-        else if(byRule.decision === 'allow') verdict = { ...verdict, outcome:'allow', liftedBy:null };
-        else if(byRule.decision === 'ask' && verdict.outcome === 'allow') verdict = { ...verdict, outcome:'deny', liftable:true, why:'is covered by one of your ask rules', evidence:byRule.why };
+        else if(byRule.decision === 'allow' && verdict.liftable !== false) verdict = { ...verdict, outcome:'allow', liftedBy:null };
+        else if(byRule.decision === 'ask' && verdict.outcome === 'allow') verdict = { ...verdict, outcome:'deny', liftable:true, why:byRule.uninspectable ? 'cannot be inspected before expansion' : 'is covered by one of your ask rules', evidence:byRule.why, rationale:'Refused: '+byRule.why };
         // AC-7b: a liftable refusal is ASKED, not just reported. Without this the only way to
         // authorize was to abandon the run, retype the request with the right words, and start
         // again — which is why every gate anyone actually uses has a prompt.
@@ -2692,7 +2693,7 @@
           return verdict.rationale+' '+POLICY_HINT;
         }
         if(verdict.liftedBy && t){ t.log.push({ k:'system', text:'✓ Allowed '+(verdict.id||nm)+(verdict.liftedBy==='once'?' (this once)':' — standing permission, change it in ⋯ → Policy') }); renderLog(); }
-      }catch(_){ /* a gate that throws must never be the thing that stops a run */ }
+      }catch(_){ return 'Refused: authorization could not be evaluated. Retry after checking the permission configuration.'; }
       // Defence in depth for the same five: they are only pushed into `tools`
       // when mode==='code', so reaching one from plan/ask means the model invented
       // a name it was never handed. A MODE_TOOLS lookup would be wrong here —
@@ -2935,7 +2936,7 @@
       // Post-tool hooks: run configured commands (auto-format / lint / verify)
       // after the tool succeeds; their bounded output is fed back to the agent.
       try{
-        const extra = await postHookNotes(hooksCfg, nm, ar, ()=>createShell({ registry, face, kiln: kilnRef, js: jsHost, signal: ()=>abortController ? abortController.signal : null }));
+        const extra = await postHookNotes(hooksCfg, nm, ar, ()=>createShell({ registry, face, beforeCommand: guardCriticalShellInvocation, kiln: kilnRef, js: jsHost, signal: ()=>abortController ? abortController.signal : null }));
         if(extra){ renderFiles(); return String(res==null?'':res)+extra; }
       }catch(_){}
       return res;
@@ -2956,7 +2957,7 @@
     // kilnIsolate: the gate's python resets the interpreter first. The agent's own python
       // shares one memoized Pyodide, so without this the gate can import a module the agent
       // cached before editing its file, or one it pre-seeded outright.
-      const verify = verifyCmd ? makeShellVerifier({ createShell:(o)=>createShell({ ...o, kiln: kilnRef, kilnIsolate:true, js: jsHost, signal: ()=>abortController ? abortController.signal : null }), registry, face, command: verifyCmd }) : null;
+      const verify = verifyCmd ? makeShellVerifier({ createShell:(o)=>createShell({ ...o, beforeCommand: guardCriticalShellInvocation, kiln: kilnRef, kilnIsolate:true, js: jsHost, signal: ()=>abortController ? abortController.signal : null }), registry, face, command: verifyCmd }) : null;
     // Per-project memory & skills: prepend AGENTS.md + memory.md (workspace root)
     // so the task starts with this project's conventions and past learnings.
     let projectContext='';

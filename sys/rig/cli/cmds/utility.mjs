@@ -1,5 +1,6 @@
 // U1a command wrappers and predicates. Nested commands retain the shell's I/O,
 // staging and cancellation context; no command string is reparsed here.
+import { lineData, resultEvents, streamResult } from '../command-streams.mjs';
 import { parseArgs, ArgError } from '../args.mjs';
 import { concatData, toText, IOFailure } from '../io.mjs';
 import { ShellInterrupted } from '../execution.mjs';
@@ -41,7 +42,7 @@ function words(text, preserveSpaces = false) {
   flush(); return items;
 }
 
-export function createUtilityCommands({ io, state, commandNames, signal, maxSleep }) {
+export function createUtilityCommands({ io, state, commandNames, signal, maxSleep, owner = () => null }) {
   async function stat(path) {
     try { return await io.stat(path); }
     catch (error) { if (error instanceof IOFailure && error.code === 'ENOENT') return null; throw error; }
@@ -98,7 +99,7 @@ export function createUtilityCommands({ io, state, commandNames, signal, maxSlee
       if (!operands.length) return usage('which: missing operand');
       // One implementation exists per dispatch name, so -a has one result too.
       const names = commandNames();
-      return result(operands.map((name) => names.includes(name) ? name : `${name} not found`).join('\n'), operands.every((name) => names.includes(name)) ? 0 : 1);
+      return streamResult(operands.map((name) => ({ channel: names.includes(name) ? 1 : 2, data: lineData(names.includes(name) ? name : `${name} not found`) })), operands.every((name) => names.includes(name)) ? 0 : 1);
     },
     basename(argv) {
       const { options, operands } = parseArgs(argv, { multiple: { short: 'a', long: 'multiple' }, suffix: { short: 's', long: 'suffix', value: true } }, { command: 'basename' });
@@ -122,7 +123,8 @@ export function createUtilityCommands({ io, state, commandNames, signal, maxSlee
     },
     async env(argv, stdin) {
       const { options, operands } = parseArgs(argv, { ignore: { short: 'i', long: 'ignore-environment' }, unset: { short: 'u', long: 'unset', value: true, multiple: true } }, { command: 'env', stopAtOperand: true });
-      const saved = state.vars, savedCwd = state.cwd;
+      const saved = state.vars, savedCwd = state.cwd, invocation = owner();
+      const savedFunctions = state.functions, savedPositionals = state.positionals;
       const vars = options.ignore ? new Map() : new Map(saved);
       if (!options.ignore && !state.explicitEnv) vars.set('PWD', '/' + state.cwd);
       for (const name of options.unset || []) vars.delete(name);
@@ -133,8 +135,15 @@ export function createUtilityCommands({ io, state, commandNames, signal, maxSlee
       if (at === operands.length) return result([...vars].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([k, v]) => `${k}=${v}`).join('\n'));
       const explicit = state.explicitEnv;
       state.vars = vars; state.explicitEnv = true;
+      if (state.functions) state.functions = new Map(state.functions);
+      if (state.positionals) state.positionals = [...state.positionals];
       try { return await io.run(operands.slice(at), stdin); }
-      finally { state.vars = saved; state.cwd = savedCwd; state.explicitEnv = explicit; }
+      finally {
+        if (owner() === invocation) {
+          state.vars = saved; state.cwd = savedCwd; state.explicitEnv = explicit;
+          state.functions = savedFunctions; state.positionals = savedPositionals;
+        }
+      }
     },
     async sleep(argv) {
       if (!argv.length) return result('sleep: missing operand', 1);
@@ -146,14 +155,15 @@ export function createUtilityCommands({ io, state, commandNames, signal, maxSlee
       }
       if (!Number.isFinite(seconds) || seconds > maxSleep) return result(`sleep: interval exceeds the ${maxSleep} s cap`, 1);
       const sig = signal();
-      if (sig?.aborted) return { text: 'sleep: interrupted', code: 130, interrupted: true };
+      if (sig?.aborted) throw new ShellInterrupted();
       const stopped = await new Promise((resolve) => {
         const finish = (value) => { clearTimeout(timer); sig?.removeEventListener('abort', stop); resolve(value); };
         const stop = () => finish(true);
         const timer = setTimeout(() => finish(false), Math.round(seconds * 1000));
         sig?.addEventListener('abort', stop, { once: true });
       });
-      return stopped ? { text: 'sleep: interrupted', code: 130, interrupted: true } : result();
+      if (stopped) throw new ShellInterrupted();
+      return result();
     },
     async xargs(argv, stdin) {
       const { options, operands, occurrences } = parseArgs(argv, {
@@ -175,6 +185,7 @@ export function createUtilityCommands({ io, state, commandNames, signal, maxSlee
       const lineLimit = batching?.key === 'maxLines' ? Number(batching.value) : Infinity;
       const replace = batching?.key === 'replace' ? batching.value : undefined;
       const text = toText(stdin), mode = occurrences.filter((o) => o.key === 'null' || o.key === 'delimiter').at(-1);
+      if (text.length > 262144) throw new ArgError('xargs: input exceeds the argument byte limit');
       let items;
       if (mode) {
         const delimiter = mode.key === 'null' ? '\0' : mode.value.replace(/\\(n|t|r|0|\\)/g, (_, ch) => ({ n: '\n', t: '\t', r: '\r', 0: '\0', '\\': '\\' })[ch]);
@@ -200,21 +211,21 @@ export function createUtilityCommands({ io, state, commandNames, signal, maxSlee
         }
         if (!batches.length) batches.push(command);
       }
-      const output = []; let code = 0;
+      const events = []; let code = 0;
       for (const batch of batches) {
         let r;
         try { r = await io.run(batch, ''); }
         catch (error) {
           if (!(error instanceof ShellInterrupted)) throw error;
-          return { text: concatData([...output, error.message]), code: 130, interrupted: true, raw: true };
+          return streamResult([...events, { channel: 2, data: lineData(error.message) }], 130, { interrupted: true });
         }
-        if (r.text !== '' && r.text != null) output.push(r.raw || typeof r.text !== 'string' ? r.text : r.text.replace(/\n?$/, '\n'));
-        if (r.cancelled || r.interrupted) return { ...r, text: concatData(output), raw: true };
+        events.push(...resultEvents(r));
+        if (r.cancelled || r.interrupted || r.timedOut || r.streamFailed) return streamResult(events, r.code, { cancelled: r.cancelled, interrupted: r.interrupted, timedOut: r.timedOut, streamFailed: r.streamFailed });
         if (r.code === 255) { code = 124; break; }
         if (r.code === 127 || r.code === 126) { code = r.code; break; }
         if (r.code) code = 123;
       }
-      return { text: concatData(output), code, raw: true };
+      return streamResult(events, code);
     },
   };
 }

@@ -133,14 +133,14 @@ function workerSource({ entryURL, argv, cwd, stdin }) {
 const post = (m) => self.postMessage(m);
 const EXIT = Symbol('exit');
 const fmt = (a) => a.map((x) => (typeof x === 'string' ? x : x instanceof Error ? (x.stack || String(x)) : (() => { try { return JSON.stringify(x, null, 2) ?? String(x); } catch { return String(x); } })())).join(' ');
-for (const k of ['log', 'info', 'debug', 'warn', 'error']) console[k] = (...a) => post({ t: 'out', s: fmt(a) + '\\n' });
+for (const k of ['log', 'info', 'debug', 'warn', 'error']) console[k] = (...a) => post({ t: 'out', channel: k === 'warn' || k === 'error' ? 2 : 1, s: fmt(a) + '\\n' });
 for (const name of ${JSON.stringify(NETWORK_GLOBALS)}) { const stub = function () { throw new Error(name + ': network access is disabled in a gate'); }; try { Object.defineProperty(globalThis, name, { value: stub, configurable: true, writable: true }); } catch (_) { try { globalThis[name] = stub; } catch (_) {} } }
 const proc = { argv: ${JSON.stringify(argv)}, env: {}, exitCode: undefined, platform: 'browser', versions: {}, cwd: () => ${JSON.stringify(cwd || '/')},
-  stdout: { write: (s) => { post({ t: 'out', s: String(s) }); return true; } }, stderr: { write: (s) => { post({ t: 'out', s: String(s) }); return true; } },
+  stdout: { write: (s) => { post({ t: 'out', channel: 1, s: String(s) }); return true; } }, stderr: { write: (s) => { post({ t: 'out', channel: 2, s: String(s) }); return true; } },
   stdin: { text: ${JSON.stringify(stdin || '')} },
   exit: (c) => { post({ t: 'exit', code: Number.isInteger(c) ? c : (proc.exitCode | 0) }); throw EXIT; } };
 globalThis.process = proc;
-const died = (e) => { if (e === EXIT) return; post({ t: 'out', s: 'Uncaught ' + String((e && (e.stack || e.message)) || e) + '\\n' }); post({ t: 'exit', code: 1 }); };
+const died = (e) => { if (e === EXIT) return; post({ t: 'out', channel: 2, s: 'Uncaught ' + String((e && (e.stack || e.message)) || e) + '\\n' }); post({ t: 'exit', code: 1 }); };
 if (typeof self.addEventListener === 'function') { self.addEventListener('unhandledrejection', (ev) => { ev.preventDefault && ev.preventDefault(); died(ev.reason); }); self.addEventListener('error', (ev) => { ev.preventDefault && ev.preventDefault(); died(ev.error || ev.message); }); }
 try {
   await import(${JSON.stringify(entryURL)});
@@ -197,16 +197,17 @@ export function createJsRunner({ read, makeModuleURL, spawn, revoke = () => {}, 
     const b = source != null
       ? await createJsRunner({ read: (p) => (p === virtual ? String(source) : read(p)), makeModuleURL, spawn, revoke, timeoutMs })._bundle(virtual)
       : await bundle(entry);
-    if (b.error) return { code: 1, output: `node: ${b.error}\n` };
+    if (b.error) return { code: 1, output: `node: ${b.error}\n`, stdout: '', stderr: `node: ${b.error}\n` };
     const bootURL = makeModuleURL(workerSource({ entryURL: b.url, argv: ['node', entryPath, ...argv], cwd, stdin }));
     const cleanup = () => { for (const u of [bootURL, ...(b.made || [])]) try { revoke(u); } catch (_) {} };
     return await new Promise((resolve) => {
-      let out = ''; let done = false; let w = null;
-      const finish = (code, extra = '') => { if (done) return; done = true; clearTimeout(timer); try { w && w.terminate(); } catch (_) {} cleanup(); resolve({ code, output: out + extra }); };
+      let out = '', stdout = '', stderr = ''; let done = false; let w = null;
+      const stop = () => finish(130, 'node: stopped\n');
+      const finish = (code, extra = '') => { if (done) return; done = true; clearTimeout(timer); try { w && w.terminate(); } catch (_) {} cleanup(); signal?.removeEventListener('abort', stop); resolve({ code, output: out + extra, stdout, stderr: stderr + extra }); };
       const timer = setTimeout(() => finish(124, `node: timed out after ${Math.round(timeoutMs / 1000)} s — the gate was stopped\n`), timeoutMs);
-      if (signal) { if (signal.aborted) return finish(130, 'node: stopped\n'); signal.addEventListener('abort', () => finish(130, 'node: stopped\n'), { once: true }); }
+      if (signal) { if (signal.aborted) return finish(130, 'node: stopped\n'); signal.addEventListener('abort', stop, { once: true }); }
       try { w = spawn(bootURL); } catch (e) { return finish(1, `node: could not start a worker: ${e && e.message || e}\n`); }
-      w.onMessage((m) => { if (!m || done) return; if (m.t === 'out') out += m.s; else if (m.t === 'exit') finish(Number.isInteger(m.code) ? m.code : 1); });
+      w.onMessage((m) => { if (!m || done) return; if (m.t === 'out') { const value = String(m.s ?? ''); out += value; if (m.channel === 2) stderr += value; else stdout += value; } else if (m.t === 'exit') finish(Number.isInteger(m.code) ? m.code : 1); });
       w.onError((e) => finish(1, `Uncaught ${String((e && (e.message || e)) || e)}\n`));
     });
   }

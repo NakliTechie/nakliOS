@@ -29,6 +29,6 @@ export function createEncodingCommands(io, { signal = () => null, limits = {} } 
       code = 1; diagnostic = `${command}: ${error instanceof IOFailure ? error.code + ': ' : ''}${error.message}\n`;
     }
     const text = ctx.output.finish();
-    return { text, code, raw: true, ...(diagnostic ? { displayText: diagnostic + renderData(autoData(text)) } : {}) };
+    return { text, stdout: text, stderr: diagnostic, code, raw: true, ...(diagnostic ? { displayText: diagnostic + renderData(autoData(text)) } : {}) };
   }]));
 }

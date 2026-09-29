@@ -11,7 +11,7 @@ const fail = (ctx, text) => { throw new ArgError(`${ctx.command}: ${text}`); };
 const count = (ctx, text, label, min = 0, max = Number.MAX_SAFE_INTEGER) => parseCount(String(text), { command: ctx.command, label, min, max });
 const metaError = (message, code = 'ENODATA') => new IOFailure('inspection.metadata', { code, message });
 const appendPath = (base, name) => base.endsWith('/') ? base + name : base + '/' + name;
-const outcome = (ctx, code = ctx.code) => ({ text: ctx.output.finish(), code, raw: true });
+const outcome = (ctx, code = ctx.code) => ({ text: ctx.output.finish(), stdout: ctx.output.finish(), stderr: ctx.diagnostics.finish(), code, raw: true });
 
 function invocation(command, io, signal, limits, argv, stdin) {
   let ctx;
@@ -20,14 +20,14 @@ function invocation(command, io, signal, limits, argv, stdin) {
     return io.readBytes('/' + resolved.path, { ...options, rejectSymlinks: true });
   } };
   ctx = createU2Context({ command, io: contentIO, signal, limits: { maxEntries: 100000, maxDepth: 1024, ...limits }, stdin });
-  ctx.io = io; ctx.code = 0; ctx.entries = 0; ctx.canonicalPaths = new WeakMap();
+  ctx.io = io; ctx.diagnostics = ctx.output.fork(); ctx.code = 0; ctx.entries = 0; ctx.canonicalPaths = new WeakMap();
   for (const arg of argv) ctx.budget.spend('argumentBytes', utf8Length(arg) + 1);
   return ctx;
 }
 function ordinaryError(ctx, path, error, code = 1, silent = false) {
   if (!(error instanceof IOFailure)) throw error;
   ctx.code = Math.max(ctx.code, code);
-  if (!silent) ctx.output.argument(`${ctx.command}: ${path}: ${error.code}: ${error.message}\n`);
+  if (!silent) ctx.diagnostics.argument(`${ctx.command}: ${path}: ${error.code}: ${error.message}\n`);
 }
 function paths(ctx, operands, fallback = ['.']) {
   const values = operands.length ? operands : fallback;
@@ -382,7 +382,7 @@ export function createInspectionCommands(io, { signal = () => null, limits = {} 
       }
       if (length < limit && Math.max(0, data[0].length - offsets[0]) !== Math.max(0, data[1].length - offsets[1])) {
         different = true;
-        if (!o.silent) ctx.output.argument(`cmp: EOF on ${names[Math.max(0, data[0].length - offsets[0]) < Math.max(0, data[1].length - offsets[1]) ? 0 : 1]} after byte ${length}, in line ${line}\n`);
+        if (!o.silent) ctx.diagnostics.argument(`cmp: EOF on ${names[Math.max(0, data[0].length - offsets[0]) < Math.max(0, data[1].length - offsets[1]) ? 0 : 1]} after byte ${length}, in line ${line}\n`);
       }
       return outcome(ctx, different ? 1 : 0);
     },

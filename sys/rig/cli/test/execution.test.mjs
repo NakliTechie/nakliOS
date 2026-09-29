@@ -120,8 +120,8 @@ await test('successive prompts report the previous confirmation once', async () 
   assert.equal(final.output, 'done');
   assert.equal(final.confirmation.verb, 'second');
   await work;
-  assert.deepEqual(await execution.next(), { output: '' });
-  assert.deepEqual(await execution.next(), { output: '' });
+  assert.deepEqual(await execution.next(), { output: '', stdout: '', stderr: '', cleared: false });
+  assert.deepEqual(await execution.next(), { output: '', stdout: '', stderr: '', cleared: false });
 });
 
 await test('Stop while staged rejects proposals and abandons the continuation', async () => {
@@ -199,7 +199,7 @@ await test('an already-aborted execution never invokes the face', async () => {
   await assert.rejects(execution.invoke('fs.write', {}), ShellInterrupted);
   assert.equal(invoked, false);
   execution.finish();
-  assert.deepEqual(await execution.next(), { output: '' });
+  assert.deepEqual(await execution.next(), { output: '', stdout: '', stderr: '', cleared: false });
 });
 
 await test('a failed accept remains failed in confirmation metadata', async () => {
@@ -240,7 +240,7 @@ await test('reset rejects a staged old line before the fresh session runs', asyn
   await fs.write('keep', 'keep');
   await shell.feed('X=old; rm keep; echo bad > after');
   shell.reset();
-  assert.equal((await shell.feed('echo fresh $X')).output, 'fresh ');
+  assert.equal((await shell.feed('echo fresh $X')).output, 'fresh');
   assert.equal(shell.lastCode, 0);
   assert.deepEqual(face.pendingProposals(), []);
   assert.equal((await fs.stat('keep')).ok, true);
@@ -309,7 +309,7 @@ await test('reset while a read is in flight leaves the reset session state intac
   await active;
   assert.equal(shell.lastCode, 0);
   assert.equal((await fs.stat('after')).code, 'ENOENT');
-  assert.equal((await shell.feed('echo fresh $X')).output, 'fresh ');
+  assert.equal((await shell.feed('echo fresh $X')).output, 'fresh');
 });
 
 if (failures.length) {

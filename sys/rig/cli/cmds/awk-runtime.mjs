@@ -633,5 +633,5 @@ export async function runAwk(program, { io, stdin = '', operands = [], preassign
     else throw error;
   }
   const result = autoData(bytes(stdout.join('')));
-  return { text: diagnostics.length ? concatData([diagnostics.join('\n') + '\n', result]) : result, code: exitCode, raw: true };
+  return { text: diagnostics.length ? concatData([diagnostics.join('\n') + '\n', result]) : result, stdout: result, stderr: diagnostics.length ? diagnostics.join('\n') + '\n' : '', code: exitCode, raw: true };
 }

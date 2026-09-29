@@ -1,5 +1,6 @@
 // Find keeps displayed pathname spelling separate from normalized virtual I/O
 // paths. Every metadata request, traversal, removal, and execution is governed.
+import { resultEvents, streamResult } from '../command-streams.mjs';
 import { ArgError } from '../args.mjs';
 import { IOFailure, autoData, concatData, toBytes } from '../io.mjs';
 import { ShellInterrupted } from '../execution.mjs';
@@ -34,7 +35,7 @@ class FindCommandStop extends Error {
   constructor(result) { super('nested command stopped'); this.result = result; }
 }
 
-function parseFind(argv, cap) {
+export function parseFind(argv, cap = { maxTokens: 10000, maxArgumentBytes: 262144, maxExpressionDepth: 128, maxPatternBytes: 16384, maxExecArgs: 4096, maxExecBytes: 65536 }) {
   if (!Array.isArray(argv) || argv.some((arg) => typeof arg !== 'string')) fail('arguments must be strings');
   if (argv.length > cap.maxTokens) fail(`expression exceeds the ${cap.maxTokens}-token limit`);
   let argumentBytes = 0;
@@ -164,7 +165,7 @@ export function createFindCommands(io, { signal = () => null, runAt, limits = {}
       const invocationDirectory = absolute(io, '.');
       let steps = 0, yieldedAt = 0, visited = 0, outputBytes = 0, retainedBytes = 0, invocations = 0;
       let code = 0, printed = 0, plainListing = !program.hasPrint0 && !program.executions.length;
-      const output = [];
+      const output = [], events = [];
       const check = () => { if (signal()?.aborted) throw new ShellInterrupted(); };
       const tick = () => { check(); if (++steps > cap.maxSteps) fail(`execution exceeds the ${cap.maxSteps}-step limit`); };
       const checkpoint = async () => {
@@ -173,15 +174,15 @@ export function createFindCommands(io, { signal = () => null, runAt, limits = {}
       };
       const retain = (count) => { if (retainedBytes + count > cap.maxRetainedBytes) fail(`retained paths exceed the ${cap.maxRetainedBytes}-byte limit`); retainedBytes += count; };
       const release = (count) => { retainedBytes -= count; };
-      const append = (data) => {
+      const append = (data, channel = 1) => {
         if (data == null || data === '') return;
         const size = typeof data === 'string' ? utf8Length(data, cap.maxOutputBytes - outputBytes) : toBytes(data).byteLength;
         if (outputBytes + size > cap.maxOutputBytes) fail(`output exceeds the ${cap.maxOutputBytes}-byte limit`);
-        outputBytes += size; output.push(data);
+        outputBytes += size; output.push(data); events.push({ channel, data });
       };
       const diagnostic = (path, error) => {
         code = Math.max(code, 1); plainListing = false;
-        append(`find: '${path}': ${error.code || 'EIO'}: ${error.message}\n`);
+        append(`find: '${path}': ${error.code || 'EIO'}: ${error.message}\n`, 2);
       };
       const timeOf = (stat) => {
         if (!Number.isFinite(stat.mtimeMs) || stat.mtimeMs === 0) throw new FindMetadataError('modification time metadata is unavailable');
@@ -196,10 +197,8 @@ export function createFindCommands(io, { signal = () => null, runAt, limits = {}
         await checkpoint();
         if (++invocations > cap.maxExecutions) fail(`execution exceeds the ${cap.maxExecutions}-invocation limit`);
         const result = await runAt(directory, args, ''); check();
-        // raw owns exact stdout framing. Legacy non-raw results omit their
-        // display newline, so use the same framing as shell.runPipeline.
-        if (result.text != null && result.text !== '') append(result.raw || typeof result.text !== 'string' ? result.text : result.text.replace(/\n?$/, '\n'));
-        if (result.cancelled || result.interrupted) throw new FindCommandStop(result);
+        for (const event of resultEvents(result)) append(event.data, event.channel);
+        if (result.cancelled || result.interrupted || result.timedOut || result.streamFailed) throw new FindCommandStop(result);
         return result.code === 0;
       };
       const flush = async (action) => {
@@ -304,7 +303,7 @@ export function createFindCommands(io, { signal = () => null, runAt, limits = {}
           catch (error) {
             if (!(error instanceof IOFailure) && !(error instanceof FindMetadataError)) throw error;
             diagnostic(reference.reference, error);
-            return { text: autoData(concatData(output)), code: 1, raw: true };
+            return streamResult(events, 1);
           }
         }
         for (const path of program.paths) {
@@ -345,18 +344,17 @@ export function createFindCommands(io, { signal = () => null, runAt, limits = {}
         for (const execution of program.executions) await flush(execution);
       } catch (error) {
         if (error instanceof ShellInterrupted) throw error;
-        if (error instanceof FindCommandStop) return { ...error.result, text: autoData(concatData(output)), raw: true };
+        if (error instanceof FindCommandStop) return streamResult(events, error.result.code, { cancelled: error.result.cancelled, interrupted: error.result.interrupted, timedOut: error.result.timedOut, streamFailed: error.result.streamFailed });
         if (error instanceof ArgError) { code = 2; plainListing = false;
           // A full output buffer still needs a visible diagnostic. Keep its
           // already-bounded payload and provide separate terminal text.
           const diagnostic = error.message + '\n';
-          if (outputBytes + utf8Length(diagnostic) <= cap.maxOutputBytes) append(diagnostic);
-          else return { text: autoData(concatData(output)), displayText: error.message, code, raw: true };
+          if (outputBytes + utf8Length(diagnostic) <= cap.maxOutputBytes) append(diagnostic, 2);
+          else return streamResult([...events, { channel: 2, data: diagnostic }], code);
         } else if (error instanceof IOFailure || error instanceof FindMetadataError) diagnostic('', error);
         else throw error;
       }
-      return { text: autoData(concatData(output)), code, raw: true,
-        ...(plainListing ? { listing: { tool: 'find', entries: printed } } : {}) };
+      return streamResult(events, code, plainListing ? { listing: { tool: 'find', entries: printed } } : {});
     },
   };
 }

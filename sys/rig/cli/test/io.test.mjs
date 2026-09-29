@@ -78,7 +78,7 @@ await test('I/O resolves paths using current cwd and clamps parent traversal to 
   assert.equal(io.resolve('./nested/../file'), 'src/file');
   assert.equal(io.resolve('../../../outside'), 'outside');
   assert.equal(io.resolve('/absolute'), 'absolute');
-  assert.equal(io.resolve('\u0001*.txt'), 'src/*.txt');
+  assert.equal(io.resolve('\u0001*.txt'), 'src/\u0001*.txt');
   assert.equal(await io.readText('nested/file'), 'nested');
   cd('src/nested');
   assert.equal(await io.readText('file'), 'nested');

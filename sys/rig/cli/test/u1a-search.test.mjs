@@ -51,10 +51,10 @@ test('grep file modes, count limits and quiet status handle errors without dropp
   assert.equal((await c.grep(['-cm1', 'hit', 'a', 'b'])).text, 'a:1\nb:0\n');
   assert.equal((await c.grep(['-m0', 'hit', 'a'])).code, 1);
   const error = await c.grep(['-n', 'hit', 'missing', 'a']);
-  assert.equal(error.code, 2); assert.match(error.text, /missing: ENOENT/); assert.match(error.text, /a:2:hit again/);
-  assert.deepEqual(await c.grep(['-sq', 'hit', 'missing', 'a']), { text: '', code: 0, raw: true });
-  assert.deepEqual(await c.grep(['-s', 'hit', 'missing']), { text: '', code: 2, raw: true });
-  assert.deepEqual(await c.grep(['-sf', 'missing', 'a']), { text: '', code: 2, raw: true });
+  assert.equal(error.code, 2); assert.match(error.stderr, /missing: ENOENT/); assert.match(error.text, /a:2:hit again/);
+  assert.deepEqual(await c.grep(['-sq', 'hit', 'missing', 'a']), { text: '', stdout: '', stderr: '', code: 0, raw: true });
+  assert.deepEqual(await c.grep(['-s', 'hit', 'missing']), { text: '', stdout: '', stderr: '', code: 2, raw: true });
+  assert.deepEqual(await c.grep(['-sf', 'missing', 'a']), { text: '', stdout: '', stderr: '', code: 2, raw: true });
 });
 
 test('grep context merges adjacent ranges and keeps match versus context delimiters', async () => {
@@ -119,7 +119,7 @@ test('rg retains types, globs, filename modes, default line numbers and direct-f
   assert.equal(calls.filter((call) => call.name === 'fs.grep').at(-1).input.glob, 'a.py');
   assert.equal((await c.rg(['-l', '-v', 'cat', 'deep'])).code, 1);
   const bad = await c.rg(['--files', 'missing']);
-  assert.equal(bad.code, 2); assert.match(bad.text, /no such file/);
+  assert.equal(bad.code, 2); assert.match(bad.stderr, /no such file/);
 });
 
 test('rg context and inverted fixed matching share the granted indexed route', async () => {
@@ -141,7 +141,7 @@ test('search reports per-file backend failures and continues through readable fi
     const { commands: c, write, fs } = fixture({ backend: new FailingBackend(), index });
     await write('src/broken', 'needle\n'); await write('src/good', 'needle\n');
     const result = await c.grep(['-r', 'needle', 'src']);
-    assert.equal(result.code, 2); assert.match(result.text, /src\/broken: EACCES/); assert.match(result.text, /src\/good:needle/);
+    assert.equal(result.code, 2); assert.match(result.stderr, /src\/broken: EACCES/); assert.match(result.text, /src\/good:needle/);
     const scan = await fs.grep('needle', { cwd: 'src' });
     assert.equal(scan.ok, true); assert.deepEqual(scan.errors.map((error) => error.path), ['src/broken']);
     const silent = await c.grep(['-rs', 'needle', 'src']);
@@ -153,7 +153,7 @@ test('search honors directory grants and direct-file grants without exposing sib
   const allowed = fixture({ prefixes: ['allowed'] });
   await allowed.write('allowed/a', 'needle\n'); await allowed.write('private/a', 'secret needle\n');
   const denied = await allowed.commands.grep(['-r', 'needle', '/']);
-  assert.equal(denied.code, 2); assert.match(denied.text, /EGRANT/); assert.doesNotMatch(denied.text, /secret/);
+  assert.equal(denied.code, 2); assert.match(denied.stderr, /EGRANT/); assert.doesNotMatch(denied.text, /secret/);
   assert.equal((await allowed.commands.grep(['-r', 'needle', 'allowed'])).text, 'allowed/a:needle\n');
   const fileOnly = fixture({ prefixes: ['allowed/a'] });
   await fileOnly.write('allowed/a', 'needle\n'); await fileOnly.write('allowed/private', 'secret needle\n');
@@ -241,7 +241,7 @@ test('diff handles file-directory pairs, binary bytes and grant failures', async
   const restricted = fixture({ prefixes: ['allowed'] });
   await restricted.write('allowed/a', 'a'); await restricted.write('private/a', 'private');
   const denied = await restricted.commands.diff(['allowed/a', 'private/a']);
-  assert.equal(denied.code, 2); assert.match(denied.text, /EGRANT/); assert.doesNotMatch(denied.text, /\+ private/);
+  assert.equal(denied.code, 2); assert.match(denied.stderr, /EGRANT/); assert.doesNotMatch(denied.text, /\+ private/);
 });
 
 test('registry fs.grep exposes regex flags and returns case-insensitive matches', async () => {

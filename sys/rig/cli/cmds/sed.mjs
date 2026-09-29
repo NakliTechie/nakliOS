@@ -329,7 +329,7 @@ export function createSedCommands(io, { signal = () => null, maxSteps = 1000000,
             };
             while (pc < program.commands.length && !deleted && !quit) {
               tick();
-              if (steps - yieldedAt >= 256) await checkpoint();
+              if (steps - yieldedAt >= 512) await checkpoint();
               const command = program.commands[pc++];
               if (command.op === '}') continue;
               const selection = await selected(command, line, hasNext, pattern.text);
@@ -438,7 +438,8 @@ export function createSedCommands(io, { signal = () => null, maxSteps = 1000000,
       const output = autoData(bytes(stdout.value()));
       return {
         text: errors.length ? concatData([errors.join('\n') + '\n', output]) : output,
-        code: exitCode || (errors.length ? 1 : 0), raw: true,
+        ...(errors.length ? { displayText: errors.join('\n') + '\n' + (typeof output === 'string' ? output : `<${output.length} bytes>`) } : {}),
+        stdout: output, stderr: errors.length ? errors.join('\n') + '\n' : '', code: errors.length ? 2 : exitCode, raw: true,
       };
     },
   };

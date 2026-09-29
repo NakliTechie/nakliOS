@@ -11,13 +11,14 @@ const wrappers = [
   'echo secret | timeout 1 xargs rm', 'timeout -- 1 rm secret', ...aliases.map(([command]) => command),
 ];
 
-test('runtime wrappers and aliases take the fail-closed permission path until recursive analysis exists', () => {
-  for (const command of wrappers) {
-    assert.equal(segments(command), null, command);
+test('static timeout wrappers recurse while dynamic duration or executable positions remain closed', () => {
+  for (const command of wrappers.filter((command) => !aliases.some(([alias]) => alias === command))) {
+    const dynamic = command.includes('$T');
+    assert.equal(segments(command) === null, dynamic, command);
     assert.equal(decideByRules({ deny: ['Bash(rm:*)'] }, 'shell', { command }).decision, 'deny', command);
     const ask = decideByRules({ ask: ['Bash(rm:*)'] }, 'shell', { command });
-    assert.equal(ask.decision, 'ask', command); assert.equal(ask.uninspectable, true, command);
-    assert.equal(decideByRules({ allow: ['Bash(timeout:*)', 'Bash(*)'] }, 'shell', { command }).decision, 'unmatched', command);
+    assert.equal(ask.decision, 'ask', command); assert.equal(ask.uninspectable === true, dynamic, command);
+    assert.equal(decideByRules({ allow: ['Bash(*)'] }, 'shell', { command }).decision, dynamic ? 'ask' : 'allow', command);
   }
 });
 
@@ -37,12 +38,12 @@ test('the actual app consumer preserves wrapped deny and ask decisions in bypass
   // Execute the actual consumer, replacing unrelated policy/action-gate calls with an allowed verdict.
   const consume = new Function('state', 'nm', 'ar', 'decideByRules', 'applyMode', 'applyPolicy', 'gateAction',
     `const t=null, convoNow=[], POLICY_HINT=''; ${source.slice(start, end)} return verdict;`);
-  for (const command of wrappers) {
+  for (const command of wrappers.filter((command) => !aliases.some(([alias]) => alias === command))) {
     const run = (permissionRules) => consume({ permissionMode: 'bypass', permissionRules }, 'shell', { command },
       decideByRules, applyMode, (value) => value, () => ({ outcome: 'allow', liftable: true }));
     assert.match(run({ deny: ['Bash(rm:*)'] }), /^Refused:/, command);
     const ask = run({ ask: ['Bash(rm:*)'] });
-    assert.equal(ask.outcome, 'deny', command); assert.equal(ask.liftable, true, command);
+    assert.equal(ask.outcome, command.includes('$T') ? 'deny' : 'allow', command); assert.equal(ask.liftable, true, command);
   }
 });
 
@@ -50,6 +51,6 @@ test('aliases cannot bypass permission rules for their canonical commands', () =
   for (const [command, canonical] of aliases) {
     assert.equal(decideByRules({ deny: [`Bash(${canonical}:*)`] }, 'shell', { command }).decision, 'deny', command);
     const ask = decideByRules({ ask: [`Bash(${canonical}:*)`] }, 'shell', { command });
-    assert.equal(ask.decision, 'ask', command); assert.equal(ask.uninspectable, true, command);
+    assert.equal(ask.decision, 'ask', command); assert.notEqual(ask.uninspectable, true, command);
   }
 });

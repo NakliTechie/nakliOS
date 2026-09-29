@@ -45,13 +45,7 @@ export function createBcCommands(io, { signal = () => null, limits = {} } = {}) 
         if (!ctx.output.length && error instanceof ArgError) throw error;
         let message = error instanceof IOFailure ? `bc: ${display}: ${error.code}: ${error.message}` : error.message;
         message = message.slice(0, 2048);
-        const room = ctx.budget.remaining('outputBytes');
-        if (room && ctx.budget.remaining('fragments')) {
-          const separator = ctx.output.length && runtime.outputColumn ? '\n' : '';
-          const encoded = new TextEncoder().encode(separator + message + '\n');
-          ctx.output.append(encoded.subarray(0, room));
-        }
-        return { text: ctx.output.finish(), code: 2, raw: true };
+        return { text: ctx.output.finish(), stdout: ctx.output.finish(), stderr: message + '\n', code: 2, raw: true };
       }
       return { text: ctx.output.finish(), code: 0, raw: true };
     },

@@ -133,7 +133,7 @@ test('truncate leaves no-create paths absent and honors reference size adjustmen
 test('truncate cumulative allocation bounds preserve later files when exhausted', async () => {
   const f = fixture({ limits: { maxMutationBytes: 5 } }); await f.backend.write('one', bytes('a')); await f.backend.write('two', bytes('keep'));
   const result = await f.commands.truncate(['-s', '3', 'one', 'two']);
-  assert.equal(result.code, 1); assert.match(decode(result.text), /EFBIG/);
+  assert.equal(result.code, 1); assert.match(decode(result.stderr), /EFBIG/);
   assert.deepEqual(await f.backend.readBinary('one'), Uint8Array.of(97, 0, 0)); assert.deepEqual(await f.backend.readBinary('two'), bytes('keep'));
 });
 
@@ -147,7 +147,7 @@ test('truncate reference metadata refuses alias-only grants without traversing t
   let touchedPrivate = false; const original = backend.stat.bind(backend);
   backend.stat = (path, options) => { if (path.startsWith('private')) touchedPrivate = true; return original(path, options); };
   const result = await commands.truncate(['-r', 'allowed/reference', 'allowed/target']);
-  assert.equal(result.code, 1); assert.match(decode(result.text), /ENOTSUP/); assert.equal(touchedPrivate, false);
+  assert.equal(result.code, 1); assert.match(decode(result.stderr), /ENOTSUP/); assert.equal(touchedPrivate, false);
   assert.deepEqual(await backend.readBinary('allowed/target'), bytes('keep'));
 });
 

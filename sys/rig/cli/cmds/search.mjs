@@ -4,7 +4,11 @@ import { autoData, toText } from '../io.mjs';
 import { createPatch } from '../../fileops/patch.mjs';
 
 const switches = (letters) => Object.fromEntries([...letters].map((short) => [short, { short }]));
-const result = (lines, code = 0) => ({ text: lines.length ? lines.join('\n') + '\n' : '', code, raw: true });
+const result = (lines, code = 0, errors = null) => {
+  const text = lines.length ? lines.join('\n') + '\n' : '';
+  const diagnostic = errors === null ? code >= 2 ? text : '' : errors.length ? errors.join('\n') + '\n' : '';
+  return { text, stdout: errors === null && code >= 2 ? '' : text, stderr: diagnostic, code, raw: true };
+};
 const linesOf = (text) => text === '' ? [] : (text.endsWith('\n') ? text.slice(0, -1) : text).split('\n');
 const baseName = (path) => path.slice(path.lastIndexOf('/') + 1);
 const dirName = (path) => path.slice(0, Math.max(0, path.lastIndexOf('/')));
@@ -221,11 +225,11 @@ export function createSearchCommands(io) {
     }
     const filePrefix = occurrences.filter((entry) => entry.key === 'H' || entry.key === 'h').at(-1)?.key;
     const prefix = rg || filePrefix === 'H' || (filePrefix !== 'h' && (requested.length > 1 || targets.some((target) => target.root && !target.root.direct)));
-    const output = [];
+    const output = [], diagnostics = [];
     let selectedAny = false, errored = false, contextStarted = false;
     const fail = (label, error) => {
       errored = true;
-      if (!o.s) output.push(`${name}: ${label}: ${rg ? errorText(error) : error}`);
+      if (!o.s) diagnostics.push(`${name}: ${label}: ${rg ? errorText(error) : error}`);
     };
     const loadRoot = async (root) => {
       if (root.loaded) return;
@@ -281,7 +285,7 @@ export function createSearchCommands(io) {
             const count = Math.min(maximum, linesOf(text).filter((line) => match.test(line) !== !!o.v).length);
             const any = count > 0;
             selectedAny ||= any;
-            if (o.q && any) return result(output, 0);
+            if (o.q && any) return result(output, 0, diagnostics);
             if (o.q) continue;
             if (o.l || o.L) {
               const fileMode = occurrences.filter((entry) => entry.key === 'l' || entry.key === 'L').at(-1)?.key;
@@ -297,7 +301,7 @@ export function createSearchCommands(io) {
       rows = rows.slice(0, maximum);
       const selected = rows.length > 0;
       selectedAny ||= selected;
-      if (o.q && selected) return result(output, 0);
+      if (o.q && selected) return result(output, 0, diagnostics);
       if (o.q) continue;
       if (o.l || o.L) {
         const fileMode = occurrences.filter((entry) => entry.key === 'l' || entry.key === 'L').at(-1)?.key;
@@ -339,7 +343,7 @@ export function createSearchCommands(io) {
           glob: '**', filesWalked: 0, filesRead: 0, bytesRead: 0, matches: output.length, truncated: false, ms: 0 });
       } catch (error) { propagateControl(error); }
     }
-    return result(output, errored ? 2 : selectedAny ? 0 : 1);
+    return result(output, errored ? 2 : selectedAny ? 0 : 1, diagnostics);
   }
 
   async function diff(argv) {
@@ -350,7 +354,7 @@ export function createSearchCommands(io) {
       i: { short: 'i', long: 'ignore-case' },
     }, { command: 'diff' });
     if (operands.length !== 2) return result([`usage: diff [-u|-q] [-rNwbi] <a> <b>${operands.length > 2 ? ` — extra operand '${operands[2]}'` : ''}`], 2);
-    const output = [];
+    const output = [], diagnostics = [];
     let code = 0;
     const stat = async (path) => {
       try { return await io.stat(path); }
@@ -390,7 +394,7 @@ export function createSearchCommands(io) {
         }
         if ((!ls || !rs) && !o.N) {
           const existing = ls ? left : right;
-          if (!inside) { output.push(`diff: ${ls ? right : left}: ENOENT`); code = 2; return; }
+          if (!inside) { diagnostics.push(`diff: ${ls ? right : left}: ENOENT`); code = 2; return; }
           output.push(`Only in ${existing.slice(0, existing.lastIndexOf('/')) || '.'}: ${baseName(existing)}`);
           code = Math.max(code, 1); return;
         }
@@ -425,7 +429,7 @@ export function createSearchCommands(io) {
         if (inside) output.push(`diff${o.r ? ' -r' : ''}${o.u ? ' -u' : ''} ${left} ${right}`);
         if (o.u) output.push(patch.replace(/\n$/, ''));
         else output.push(...patch.split('\n').slice(2).filter((line) => line[0] === '-' || line[0] === '+').map((line) => line[0] + ' ' + line.slice(1)));
-      } catch (error) { propagateControl(error); output.push(`diff: ${left} / ${right}: ${error.code || error.message}`); code = 2; }
+      } catch (error) { propagateControl(error); diagnostics.push(`diff: ${left} / ${right}: ${error.code || error.message}`); code = 2; }
     };
     let [left, right] = operands;
     try {
@@ -433,8 +437,8 @@ export function createSearchCommands(io) {
       if (ls?.type === 'dir' && rs && rs.type !== 'dir') { left = join(left, baseName(right)); ls = await stat(left); }
       else if (rs?.type === 'dir' && ls && ls.type !== 'dir') { right = join(right, baseName(left)); rs = await stat(right); }
       await compare(left, right, ls, rs);
-    } catch (error) { propagateControl(error); output.push(`diff: ${error.code || error.message}`); code = 2; }
-    return result(output, code);
+    } catch (error) { propagateControl(error); diagnostics.push(`diff: ${error.code || error.message}`); code = 2; }
+    return result(output, code, diagnostics);
   }
 
   return {

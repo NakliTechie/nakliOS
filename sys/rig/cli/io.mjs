@@ -10,8 +10,7 @@ const strictDecoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
 const BINARY_BYTES = /[\u0000-\u0008\u000e-\u001f]/;
 
 export function normalizePath(cwd, path) {
-  // The current tokenizer uses this marker to protect quoted glob characters.
-  const raw = String(path ?? '').replace(/\u0001/g, '');
+  const raw = String(path ?? '');
   const parts = raw.startsWith('/') ? [] : String(cwd ?? '').split('/').filter(Boolean);
   for (const part of raw.split('/')) {
     if (!part || part === '.') continue;

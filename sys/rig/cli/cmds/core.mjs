@@ -1,4 +1,5 @@
 // Byte-preserving commands demonstrate the shared command context. U1 adds flags.
+import { streamResult } from '../command-streams.mjs';
 import { parseArgs } from '../args.mjs';
 import { autoData, concatData, IOFailure, renderData, toBytes } from '../io.mjs';
 
@@ -6,20 +7,24 @@ export function createCoreCommands(io) {
   return {
     async cat(argv, stdin) {
       const { options, operands } = parseArgs(argv, Object.fromEntries([...'nbsAET'].map((short) => [short, { short }])), { command: 'cat' });
-      const parts = []; let failed = false;
+      const parts = [], events = []; let failed = false;
       for (const path of operands.length ? operands : ['-']) {
-        try { parts.push(path === '-' ? stdin : await io.read(path)); }
+        try { const data = path === '-' ? stdin : await io.read(path); parts.push(data); events.push({ channel: 1, data }); }
         catch (error) {
           if (!(error instanceof IOFailure)) throw error;
-          // A missing file used to end cat and drop every operand after it. Its error takes its
-          // place on a line of its own (this shell has one output stream) and cat goes on.
-          const prev = parts.length ? toBytes(parts[parts.length - 1]) : null;
-          parts.push(`${prev && prev.length && prev[prev.length - 1] !== 10 ? '\n' : ''}cat: ${path}: ${error.code || 'error'}\n`);
+          events.push({ channel: 2, data: `cat: ${path}: ${error.code || 'error'}\n` });
           failed = true;
         }
       }
       const data = concatData(parts);
-      if (!Object.keys(options).length) return { text: data, code: failed ? 1 : 0, raw: true };
+      if (!Object.keys(options).length) {
+        let displayText = '';
+        for (const event of events) {
+          if (event.channel === 2 && displayText && !displayText.endsWith('\n')) displayText += '\n';
+          displayText += renderData(autoData(event.data));
+        }
+        return streamResult(events, failed ? 1 : 0, failed ? { displayText } : {});
+      }
       const bytes = toBytes(data), output = [];
       let number = 0, blankRun = 0;
       const ascii = (s) => output.push(...new TextEncoder().encode(s));
@@ -44,7 +49,7 @@ export function createCoreCommands(io) {
         }
         start = end + 1;
       }
-      return { text: autoData(Uint8Array.from(output)), code: failed ? 1 : 0, raw: true };
+      return streamResult([{ channel: 1, data: autoData(Uint8Array.from(output)) }, ...events.filter((event) => event.channel === 2)], failed ? 1 : 0);
     },
     async tee(argv, stdin) {
       const { options, operands } = parseArgs(argv, { append: { short: 'a', long: 'append' } }, { command: 'tee' });
@@ -62,7 +67,7 @@ export function createCoreCommands(io) {
           errors.push(`tee: ${path}: ${error.code}: ${error.message}\n`);
         }
       }
-      return { text: concatData([...errors, stdin]), code: errors.length ? 1 : 0, raw: true,
+      return { text: concatData([...errors, stdin]), stdout: stdin, stderr: errors.join(''), code: errors.length ? 1 : 0, raw: true,
         ...(errors.length ? { displayText: errors.join('') + renderData(stdin) } : {}) };
     },
   };

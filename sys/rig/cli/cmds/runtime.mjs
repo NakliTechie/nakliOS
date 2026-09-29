@@ -1,3 +1,4 @@
+import { commandStreams, resultEvents, streamResult } from '../command-streams.mjs';
 import { ArgError, parseArgs } from '../args.mjs';
 import { createU2Context, parseCount, utf8Length } from './u2-common.mjs';
 import { resolveVirtualPath } from './path-resolution.mjs';
@@ -115,8 +116,9 @@ export function createRuntimeCommands(io, { signal = () => null, limits = {}, no
       const result = await runWithTimeout(milliseconds, operands.slice(1), stdin);
       ctx.budget.check();
       if (!result.timedOut) return result.result;
-      return { text: new Uint8Array(), raw: true, code: options.preserve ? 130 : 124,
-        ...(options.verbose ? { displayText: 'timeout: command timed out' } : {}) };
+      const events = result.result ? resultEvents(commandStreams(result.result)) : [];
+      if (options.verbose) events.push({ channel: 2, data: 'timeout: command timed out\n' });
+      return streamResult(events, options.preserve ? 130 : 124, { timedOut: true });
     },
   };
 }

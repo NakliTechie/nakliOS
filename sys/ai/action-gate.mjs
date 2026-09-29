@@ -20,9 +20,12 @@
 //
 // WHAT THIS IS NOT. It is not the fence. The fence is the GRANT — `readOnlyPrefixes` refusing on
 // the normalised path, every spelling and `..` included. String-matching a shell command line is
-// not security and must never be treated as any; a `shell` classification here is ADVISORY, it
-// explains a refusal and raises a question, and it is deliberately incapable of granting anything
-// the grant would refuse. Classification can only ever make Anvil ask MORE, never less.
+// insufficient for shell language. Static classification uses the shared AST and trusted function
+// context; Anvil also checks expanded argv at dispatch for immutable critical refusals. Neither
+// layer can grant filesystem or transport access that the underlying grant refuses.
+
+import { inspectShellArguments } from './permission-rules.mjs';
+import { normalizePath } from '../rig/cli/io.mjs';
 
 export const RISK = Object.freeze(['low', 'medium', 'high', 'critical']);
 export const AUTHORIZATION = Object.freeze(['unknown', 'low', 'medium', 'high']);
@@ -84,6 +87,50 @@ const RULES = [
     tool: SHELL, cmd: /(^|[\s;&|(])ssh\b/ },
 ];
 
+const lowAction = () => ({ id: null, risk: 'low', why: '', topic: [], ask: null });
+const actionFor = (id) => {
+  const rule = RULES.find((entry) => entry.id === id);
+  return rule ? { id: rule.id, risk: rule.risk, why: rule.why, topic: rule.topic, ask: rule.ask } : lowAction();
+};
+// Inspect argv as data. Quoted arguments never become shell source here.
+export function classifyShellInvocation(argv, { cwd = null } = {}) {
+  const [verb, ...args] = argv;
+  const stop = args.indexOf('--'), options = stop < 0 ? args : args.slice(0, stop);
+  const has = (long, short) => options.some((arg) => typeof arg === 'string'
+    && (arg === '--' + long || short && /^-[^-]/.test(arg) && arg.slice(1).includes(short)));
+  if (['shutdown', 'mkfs'].includes(verb)) return actionFor('irreversible');
+  if (verb === 'git' || verb === 'git.push') {
+    const sub = verb === 'git.push' ? 'push' : args[0];
+    if (sub === 'push') return actionFor(has('force', 'f') || options.some((arg) => typeof arg === 'string'
+      && /^--force(?:-with-lease)?(?:=|$)/.test(arg)) ? 'irreversible' : 'git-push');
+    if (sub === 'reset' && has('hard')) return actionFor('irreversible');
+  }
+  if (verb === 'rm' || verb === 'fs.remove') {
+    // Registry commands accept --path= as well as positional paths. An empty
+    // operand resolves to the current virtual directory, including its root.
+    const paths = args.map((arg, index) => typeof arg === 'string' && (stop < 0 || index < stop) && arg.startsWith('--path=') ? arg.slice(7) : arg);
+    if ((has('recursive', 'r') || has('recursive', 'R')) && has('force', 'f')
+      && paths.some((arg) => typeof arg === 'string' && !arg.startsWith('-') && (arg.startsWith('/') || cwd !== null) && normalizePath(cwd, arg) === '')) return actionFor('irreversible');
+  }
+  if (['curl', 'wget'].includes(verb) && options.some((arg, index) => typeof arg === 'string'
+    && (/^--(?:data(?:-ascii|-binary|-raw|-urlencode)?|form(?:-string)?|upload-file|post-data|post-file|body-data|body-file)(?:=|$)/.test(arg) || /^-[dFT]/.test(arg)
+      || arg === '-X' && /^(?:POST|PUT|PATCH)$/i.test(options[index + 1] ?? '')
+      || /^-X(?:POST|PUT|PATCH)$/i.test(arg)))) return actionFor('upload');
+  if (['scp', 'rsync', 'nc'].includes(verb)) return actionFor('copy-remote');
+  if (verb === 'ssh') return actionFor('ssh');
+  return lowAction();
+}
+
+// Anvil installs this at the final dispatch boundary. Runtime argv catches
+// flags and verbs supplied by variables, positionals, wrappers and functions.
+// Approval and bypass can never lift this immutable critical-action refusal.
+export function guardCriticalShellInvocation(argv, context) {
+  const action = classifyShellInvocation(argv, context);
+  if (action.risk !== 'critical') return;
+  const verdict = decideAction(action);
+  throw Object.assign(new Error(verdict.rationale), { code: 126, cancelled: true, shellFlow: true });
+}
+
 /**
  * How risky is this planned action? Pure, and deliberately conservative in one direction only:
  * an unmatched action is `low`, because this is not the fence and must not become a second one
@@ -91,6 +138,19 @@ const RULES = [
  */
 export function classifyAction(toolName, args = {}, { rules = RULES } = {}) {
   const name = String(toolName || '');
+  if (rules === RULES && SHELL.test(name)) {
+    const commands = inspectShellArguments(args);
+    if (commands !== null) {
+      let result = lowAction();
+      for (const argv of commands) {
+        const candidate = classifyShellInvocation(argv);
+        if (RISK.indexOf(candidate.risk) > RISK.indexOf(result.risk)) result = candidate;
+      }
+      return result;
+    }
+    // Uninspectable executables require approval in permission-rules. Retain
+    // the legacy classification as additional evidence for malformed input.
+  }
   const cmd = typeof args?.command === 'string' ? args.command : '';
   for (const r of rules) {
     if (r.tool && !r.tool.test(name)) continue;

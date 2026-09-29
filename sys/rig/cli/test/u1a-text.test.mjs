@@ -60,10 +60,10 @@ test('sort output may replace its input after reading; check mode never writes s
   assert.equal((await fs.read('data', { encoding: 'utf-8' })).data, 'a\nb\nc\n');
   assert.equal((await run('sort', ['-c', 'data'])).code, 0);
   const disorder = await run('sort', ['-c'], 'z\na\n');
-  assert.equal(disorder.code, 1); assert.match(disorder.text, /line 2/);
+  assert.equal(disorder.code, 1); assert.equal(disorder.stdout, ''); assert.match(disorder.stderr, /line 2/);
   assert.equal((await run('sort', ['-cu'], 'a\na\n')).code, 1);
   const missing = await run('sort', ['missing', 'data']);
-  assert.equal(missing.code, 1); assert.equal(missing.text, 'sort: missing: ENOENT');
+  assert.equal(missing.code, 1); assert.equal(missing.stdout, ''); assert.equal(missing.stderr, 'sort: missing: ENOENT\n');
   await refusal(run, 'sort', ['-co', 'data']);
 });
 
@@ -141,9 +141,9 @@ test('cut distinguishes Unicode characters from original bytes and continues aft
   assert.equal(await output(run('cut', ['-c1', 'a'])), 'é\n');
   assert.deepEqual(toBytes((await run('cut', ['-b1', 'a'])).text), Uint8Array.of(0xc3, 10));
   const result = await run('cut', ['-c2', 'missing', 'a']);
-  assert.equal(result.code, 1); assert.equal(toText(result.text), 'cut: missing: ENOENT\nx\n');
+  assert.equal(result.code, 1); assert.equal(toText(result.stdout), 'x\n'); assert.equal(result.stderr, 'cut: missing: ENOENT\n');
   const middle = await run('cut', ['-c2', 'a', 'missing', 'a']);
-  assert.equal(middle.code, 1); assert.equal(toText(middle.text), 'cut: missing: ENOENT\nx\nx\n');
+  assert.equal(middle.code, 1); assert.equal(toText(middle.stdout), 'x\nx\n'); assert.equal(middle.stderr, 'cut: missing: ENOENT\n');
 });
 
 test('tr expands C-locale character classes and ranges, then translates or deletes', async () => {
@@ -195,7 +195,7 @@ test('printf %b and literal numeric escapes produce exact bytes and \c stops fur
   assert.equal(await output(run('printf', ['%b', '\\u00e9'])), 'é');
   assert.equal(await output(run('printf', ['%.2e|%.3g', '100', '1.25'])), '1.00e+02|1.25');
   const invalid = await run('printf', ['%d\n', '12abc']);
-  assert.equal(invalid.code, 1); assert.equal(toText(invalid.text), '12\nprintf: 12abc: invalid number');
+  assert.equal(invalid.code, 1); assert.equal(toText(invalid.stdout), '12\n'); assert.equal(invalid.stderr, 'printf: 12abc: invalid number\n');
   await refusal(run, 'printf', ['%q', 'x']); await refusal(run, 'printf', ['%100001s', 'x']);
 });
 
@@ -222,7 +222,7 @@ test('od concatenates every readable operand and reports missing files', async (
   const { fs, run } = setup(); await fs.write('a', 'x'); await fs.write('b', 'y');
   const result = await run('od', ['-c', 'a', 'missing', 'b']);
   assert.equal(result.code, 1);
-  assert.equal(toText(result.text), 'od: missing: ENOENT\n0000000   x   y\n0000002\n');
+  assert.equal(toText(result.stdout), '0000000   x   y\n0000002\n'); assert.equal(result.stderr, 'od: missing: ENOENT\n');
 });
 
 test('every override refuses unsupported flags with exit 2 and a supported-flags list', async () => {

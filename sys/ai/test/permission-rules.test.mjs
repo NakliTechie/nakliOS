@@ -1,13 +1,8 @@
 // AC-7c — Tool(pattern) permission rules, and the modes.
 //   node sys/ai/test/permission-rules.test.mjs
 //
-// A harness over a real shell needs a model to work out what a command really invokes, because
-// in a real shell substitution and nested quoting make prefix-matching unsound. Anvil's curated shell
-// REFUSES all of that (sys/rig/cli/shell.mjs:810), which is why these rules can be exact.
-//
-// The case that justifies the whole file is `ls && rm -rf /`: an allow rule for `ls` must not
-// cover it, and a deny rule for `rm` must still catch it. Everything else here is scaffolding
-// around keeping that true.
+// The U3 parser is shared with execution. Deny rules inspect every nested
+// command; dynamic executable positions fail closed.
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { parseRule, segments, ruleCovers, decideByRules, invalidRules, applyMode, MODES, MODE_LABEL, modeIsLoud }
@@ -33,75 +28,46 @@ const d = (tool, args, cfg = CFG) => decideByRules(cfg, tool, args).decision;
     'a chain where EVERY segment is covered is allowed');
 }
 
-// ── segmentation, including what it refuses to parse ──────────────────────
+// Canonical argv is segmented through the execution grammar.
 {
   assert.deepEqual(segments('ls && rm -rf /'), ['ls', 'rm -rf /']);
   assert.deepEqual(segments('a | b | c'), ['a', 'b', 'c']);
   assert.deepEqual(segments('  ls   '), ['ls']);
   assert.deepEqual(segments(''), []);
-  // Quotes are tracked, so an && inside a string is not a separator.
   assert.deepEqual(segments('echo "a && b"'), ['echo "a && b"']);
-  assert.deepEqual(segments("echo 'x; y'"), ["echo 'x; y'"]);
-  // Anything we refuse to reason about returns null — and null must never read as "matches".
-  for (const bad of ['ls $(rm -rf /)', 'ls `rm -rf /`', 'cat <<EOF', 'echo ${HOME}']) {
-    assert.equal(segments(bad), null, `${bad} is not ours to parse`);
-    assert.equal(d('shell', { command: bad }, { allow: ['Bash(ls:*)', 'Bash(cat:*)', 'Bash(echo:*)'] }), 'unmatched',
-      `${bad} can never be ALLOWED by a prefix rule`);
+  assert.deepEqual(segments("echo 'x; y'"), ['echo "x; y"']);
+  for (const bad of ['cat <<EOF', 'echo "unterminated', '$COMMAND victim', 'find . "$ACTION" victim']) {
+    assert.equal(segments(bad), null, bad);
+    assert.equal(d('shell', { command: bad }, { allow: ['Bash(*)'] }), 'ask', bad);
+    assert.equal(d('shell', { command: bad }, { deny: ['Bash(rm:*)'] }), 'deny', bad);
+    assert.equal(d('shell', { command: bad }, { ask: ['Bash(rm:*)'] }), 'ask', bad);
   }
-  // SH4 (2026-09-24): a line that cannot be split cannot be CHECKED against a deny rule, and
-  // 'unmatched' let bypass allow it. It fails CLOSED now: any shell deny rule refuses it, any shell ask rule asks.
-  assert.equal(d('shell', { command: 'ls $(rm -rf /)' }, { deny: ['Bash(rm:*)'] }), 'deny', 'an unsplittable line under a deny rule is refused');
-  assert.equal(d('shell', { command: 'rm -rf ${DIR}' }, { deny: ['Bash(rm:*)'] }), 'deny', '${…} too');
-  assert.equal(d('shell', { command: 'ls $(pwd)' }, { ask: ['Bash(git push:*)'] }), 'ask', 'under an ask rule it asks');
-  assert.equal(d('shell', { command: 'ls $(pwd)' }, { deny: ['Write(secrets/**)'] }), 'unmatched', 'a non-shell deny rule is not reached');
-  assert.equal(d('shell', { command: 'ls $(pwd)' }, {}), 'unmatched', 'with no shell rules it falls to the action gate, as before');
-  // SH3: a here-document's body is data — its command line is matched; its body never is
-  assert.deepEqual(segments("python - <<'PY'\nprint(1)\nPY"), ['python -'], 'the heredoc command line is segmented, the body dropped');
-  assert.deepEqual(segments("grep -c b <<'E'; echo after\nab\nE"), ['grep -c b', 'echo after']);
-  assert.equal(d('shell', { command: "python - <<'PY'\nimport os\nPY" }, { deny: ['Bash(python:*)'] }), 'deny', 'a heredoc python is caught by a python deny rule');
-  assert.equal(d('shell', { command: "grep x <<'E'\npython evil\nE" }, { deny: ['Bash(python:*)'] }), 'unmatched', 'a body that mentions python is not a python call');
-  assert.equal(segments("cat <<'E'\nnever closed"), null, 'an unclosed body is unparseable (the shell refuses it too)');
-}
-
-// B03 find actions and expansion-derived verbs cannot hide work behind a safe prefix.
-{
-  const hidden = [
-    "find . -exec rm '{}' ';'", 'find . -exec rm {} \\;',
-    "'find' . -execdir rm '{}' +", "find . -e''xec rm '{}' ';'",
-    'find . -delete', 'find . -name x -o -delete',
-    'find . $ACTION rm {} +', 'find . "$ACTION" rm {} +',
-    '$COMMAND . -exec rm {} +', 'COMMAND=find; $COMMAND . -delete',
-    'fi\\nd . -delete', 'r\\m file', 'find . -exec', 'find . *', 'find . -name x*', 'git p\\ush',
-    'echo \\<<EOF\n;rm target\nEOF',
-    "printf x | find . -exec rm '{}' ';'",
-  ];
-  for (const command of hidden) {
-    assert.equal(segments(command), null, command);
+  for (const command of ['ls $(rm -rf /)', 'ls `rm -rf /`', 'rm -rf ${DIR}',
+    "find . -exec rm '{}' ';'", "'find' . -execdir rm '{}' +", "find . -e''xec rm '{}' ';'",
+    'find . -delete', 'find . -name x -o -delete', String.raw`fi\nd . -delete`, String.raw`r\m file`,
+    'printf x | find . -exec rm {} \';\'', 'env rm file', "'env' -i FOO=bar rm file", 'env -u HOME rm file',
+    'printf file | xargs -n1 rm', 'xargs -I{} env rm {}']) {
+    assert.ok(Array.isArray(segments(command)), command);
     assert.equal(d('shell', { command }, { deny: ['Bash(rm:*)'] }), 'deny', command);
+    assert.equal(d('shell', { command }, { deny: ['Bash(unrelated:*)'] }), 'unmatched', command);
     assert.equal(d('shell', { command }, { ask: ['Bash(rm:*)'] }), 'ask', command);
-    assert.equal(d('shell', { command }, { allow: ['Bash(find:*)', 'Bash(*)'] }), 'unmatched', command);
-    // The actual app checks this decision before bypass mode, as asserted below.
+    assert.equal(d('shell', { command }, { allow: ['Bash(*)'] }), 'allow', command);
+    assert.equal(d('shell', { command }, { deny: ['shell(rm:*'], ask: ['Bash(ls:*)'] }), 'deny', 'malformed deny retains precedence');
   }
-  for (const command of ['find . -type f -name "*.mjs"', 'find src -empty -print0', 'find . -prune']) {
-    assert.deepEqual(segments(command), [command]);
-    assert.equal(d('shell', { command }, { allow: ['Bash(find:*)'] }), 'allow');
-  }
-  assert.equal(segments('echo \\; rm file'), null);
-  assert.equal(d('shell', { command: 'echo \\; rm file' }, { allow: ['Bash(echo:*)'], deny: ['Bash(rm:*)'] }), 'deny');
-  assert.equal(d('shell', { command: 'git p\\ush' }, { deny: ['Bash(git push:*)'] }), 'deny');
+  assert.equal(d('shell', { command: 'ls $(pwd)' }, { ask: ['Bash(git push:*)'] }), 'unmatched', 'an unrelated ask does not match inspected commands');
+  assert.equal(d('shell', { command: 'ls $(pwd)' }, { deny: ['Write(secrets/**)'] }), 'unmatched');
+  assert.equal(d('shell', { command: 'ls $(pwd)' }, {}), 'unmatched');
+  assert.equal(d('shell', { command: String.raw`git p\ush` }, { deny: ['Bash(git push:*)'] }), 'deny');
+  assert.equal(d('shell', { command: String.raw`echo \; rm file` }, { deny: ['Bash(rm:*)'] }), 'unmatched', 'an escaped separator remains an argument');
   assert.equal(d('shell', { command: "echo '<<EOF'\n;rm target\nEOF" }, { deny: ['Bash(rm:*)'] }), 'deny');
-}
-
-// ── rule syntax ───────────────────────────────────────────────────────────
-// U1a wrappers cannot conceal a denied nested command before U3 has an AST.
-{
-  for (const command of ['env rm file', "'env' -i FOO=bar rm file", 'env -u HOME rm file', 'printf file | xargs -n1 rm', 'xargs -I{} env rm {}']) {
-    assert.equal(segments(command), null, command);
-    assert.equal(d('shell', { command }, { deny: ['Bash(rm:*)'] }), 'deny', command);
-    assert.equal(d('shell', { command }, { ask: ['Bash(rm:*)'] }), 'ask', command);
-    assert.equal(d('shell', { command }, { allow: ['Bash(env:*)', 'Bash(xargs:*)'] }), 'unmatched', command);
-    assert.equal(d('shell', { command }, { deny: ['shell(rm:*'], ask: ['Bash(ls:*)'] }), 'deny',
-      'a malformed deny must outrank the unsplittable-command ask fallback');
+  assert.deepEqual(segments("python - <<'PY'\nprint(1)\nPY"), ['python -']);
+  assert.deepEqual(segments("grep -c b <<'E'; echo after\nab\nE"), ['grep -c b', 'echo after']);
+  assert.equal(d('shell', { command: "python - <<'PY'\nimport os\nPY" }, { deny: ['Bash(python:*)'] }), 'deny');
+  assert.equal(d('shell', { command: "grep x <<'E'\npython evil\nE" }, { deny: ['Bash(python:*)'] }), 'unmatched');
+  assert.equal(segments("cat <<'E'\nnever closed"), null);
+  for (const command of ['find . -type f -name "*.mjs"', 'find src -empty -print0', 'find . -prune']) {
+    assert.ok(Array.isArray(segments(command)));
+    assert.equal(d('shell', { command }, { allow: ['Bash(find:*)'] }), 'allow');
   }
   assert.deepEqual(segments('env -i FOO=bar'), ['env -i FOO=bar']);
   assert.deepEqual(segments('echo xargs rm'), ['echo xargs rm']);

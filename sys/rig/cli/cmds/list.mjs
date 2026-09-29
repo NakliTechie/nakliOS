@@ -1,5 +1,6 @@
 // Directory presentation stays separate from storage. The terminal alone applies
 // LISTING_MAX_ENTRIES; a pipe or redirect receives the entire listing.
+import { lineData } from '../command-streams.mjs';
 import { parseArgs } from '../args.mjs';
 import { IOFailure } from '../io.mjs';
 
@@ -55,8 +56,9 @@ export function createListCommands(io) {
         }
       }
       files.sort(compare);
-      const blocks = [...errors, files.map(display).join('\n'), ...directories].filter((s) => s !== '');
-      return { text: blocks.join(options.R || targets.length > 1 ? '\n\n' : '\n'), code: errors.length ? 1 : 0, listing: { tool: 'ls', entries: count } };
+      const blocks = [files.map(display).join('\n'), ...directories].filter((s) => s !== '');
+      return { text: blocks.join(options.R || targets.length > 1 ? '\n\n' : '\n'),
+        stdout: lineData(blocks.join(options.R || targets.length > 1 ? '\n\n' : '\n')), stderr: lineData(errors.join('\n')), code: errors.length ? 1 : 0, listing: { tool: 'ls', entries: count } };
     },
   };
 }

@@ -83,6 +83,7 @@ test('a hash after escaped whitespace remains part of the same argument', async 
 test('substitution detection does not mistake escaped whitespace for a comment boundary', async () => {
   const ctx = fresh();
   const result = await ctx.run(String.raw`echo a\ #$(rm x)`);
-  assert.equal(result.code, 2, result.output);
-  assert.match(result.output, /substitution/);
+  assert.equal(result.code, 0, result.output);
+  assert.match(result.stderr, /rm: x: ENOENT/);
+  assert.equal(result.stdout, 'a #\n');
 });

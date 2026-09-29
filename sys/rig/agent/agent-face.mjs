@@ -106,6 +106,16 @@ export function createAgentFace({ registry, grant, opLog, actor = 'agent', calle
     return runThroughRegistry(name, input);
   }
 
+  // A redirect must reject a denied destination before its command runs.
+  // This check grants no reusable authority: invoke/accept check again later.
+  async function check(name, input = {}) {
+    const command = registry.describeCommand(name);
+    if (!command) return { ok: false, code: 'ENOCMD', message: `unknown command: ${name}` };
+    const denied = await capabilityCheck(command, input, name) || grantCheck(command, input);
+    if (denied) { await logAnd(name, input, denied.code); return denied; }
+    return { ok: true };
+  }
+
   // Operator-only: execute a staged destructive proposal. Grant is re-checked at
   // accept time in case it was revoked or narrowed after staging.
   async function accept(proposalId) {
@@ -132,6 +142,7 @@ export function createAgentFace({ registry, grant, opLog, actor = 'agent', calle
 
   return {
     invoke,
+    check,
     accept,
     reject,
     pendingProposals: () => [...staged.keys()],

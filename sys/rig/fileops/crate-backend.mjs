@@ -41,6 +41,9 @@ export class CrateBackend {
     }
     this.host = host;
     this._dirs = new Set(); // session-local empty-directory markers (not persisted)
+    // Flat keys expose types without content reads. Sizes remain unavailable;
+    // the host's whole-object reader does not qualify as a bounded-read API.
+    this.supportsMetadataOnly = true;
   }
 
   async readBinary(safePath) {
@@ -71,8 +74,19 @@ export class CrateBackend {
     return !!(await this.host.exists(safePath));
   }
 
-  async stat(safePath) {
+  async stat(safePath, { metadataOnly = false } = {}) {
     if (safePath === '') return { type: 'dir', size: 0, mtimeMs: 0 };
+    if (metadataOnly) {
+      const parent = safePath.slice(0, Math.max(0, safePath.lastIndexOf('/')));
+      const keys = await this.host.list(parent);
+      if (!Array.isArray(keys) || keys.some((key) => typeof key !== 'string')) {
+        throw Object.assign(new Error('object-store listing did not return path keys'), { code: 'EIO' });
+      }
+      if (keys.includes(safePath)) return { type: 'file' };
+      if (this._dirs.has(safePath) || keys.some((key) => key.startsWith(safePath + '/'))
+        || [...this._dirs].some((key) => key.startsWith(safePath + '/'))) return { type: 'dir' };
+      return null;
+    }
     if (this._dirs.has(safePath)) return { type: 'dir', size: 0, mtimeMs: 0 };
     // Prefer a host-native stat when available (avoids a full read to get size).
     if (typeof this.host.stat === 'function') {
