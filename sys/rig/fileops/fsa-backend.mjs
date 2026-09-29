@@ -30,13 +30,16 @@ function metadataError(error, operation, path) {
 
 export class FsaBackend {
   /** @param {FileSystemDirectoryHandle} rootHandle */
-  constructor(rootHandle) {
+  constructor(rootHandle, { symlinkFree = false } = {}) {
     if (!rootHandle || typeof rootHandle.getDirectoryHandle !== 'function') {
       throw new Error('FsaBackend requires a FileSystemDirectoryHandle');
     }
     this.root = rootHandle;
     this.supportsBoundedReads = true;
     this.supportsMetadataOnly = true;
+    // Only the OPFS factory supplies this provenance. A picked native folder's
+    // handle API does not expose an atomic no-follow path-resolution contract.
+    this.supportsNoFollowMutation = symlinkFree === true;
     // FSA has no exclusive name creation or atomic type-constrained removal.
     // Even handle.remove() can remove a differently typed replacement by name.
     // Truncation additionally feature-detects the transactional writable handle.

@@ -101,6 +101,9 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
       acc.push(v.segments[i]);
       const safe = joinRoot(rootPrefix, acc.join('/'));
       const st = await backend.stat(safe, readOptions);
+      if (rejectSymlinks && st && st.type !== 'dir' && st.type !== 'symlink' && i < v.segments.length - 1) {
+        return err('ENOTDIR', 'pathname ancestor is not a directory', { input: mountRel });
+      }
       if (st && st.type === 'symlink' && (followFinal || i < v.segments.length - 1)) {
         if (rejectSymlinks) return err('ENOTSUP', 'symlink traversal requires canonical-target authorization', { input: mountRel });
         if (depthLeft <= 0) {
@@ -503,12 +506,17 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     return { files, dirs };
   }
 
-  async function ensureParents(mountPath) {
+  async function ensureParents(mountPath, readOptions, rejectSymlinks = false) {
     const parts = mountPath.split('/');
     for (let k = 1; k < parts.length; k++) {
-      const anc = joinRoot(rootPrefix, parts.slice(0, k).join('/'));
-      const st = await backend.stat(anc);
-      if (!st && backend.mkdir) await backend.mkdir(anc);
+      const prefix = parts.slice(0, k).join('/');
+      if (rejectSymlinks) {
+        const resolved = await resolve(prefix, readOptions, true, true);
+        if (!resolved.ok) throw Object.assign(new Error(resolved.message), { code: resolved.code });
+      }
+      const anc = joinRoot(rootPrefix, prefix), st = await backend.stat(anc, readOptions);
+      if (rejectSymlinks && st && st.type !== 'dir') throw Object.assign(new Error('parent is not a directory'), { code: 'ENOTDIR' });
+      if (!st && backend.mkdir) await backend.mkdir(anc, rejectSymlinks ? { rejectSymlinks: true, root: rootSafe } : undefined);
     }
   }
 
@@ -544,21 +552,29 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
   async function write(path, data, opts = {}) {
     const bytes = toBytes(data);
     if (bytes === null) return err('EINVAL', 'data must be a string, Uint8Array, or ArrayBuffer');
-    const r = await resolve(path);
-    if (!r.ok) return r;
-    const st = await backend.stat(r.safe);
-    if (st && st.type === 'dir') return err('EISDIR', `is a directory: ${r.path}`, { path: r.path });
-    if (opts.createParents) await ensureParents(r.path);
-    // Invalidate in a finally: a backend that writes and THEN throws (or commits
-    // and reports failure) still changed the bytes, and an invalidation only on
-    // the success path left the index holding content that no longer exists.
-    try {
-      await backend.write(r.safe, bytes);
-    } finally {
-      indexDrop(r.path);
-      indexDropBySafe(r.safe);
-    }
-    return { ok: true, path: r.path };
+    if (opts.rejectSymlinks !== undefined && typeof opts.rejectSymlinks !== 'boolean') return err('EINVAL', 'rejectSymlinks must be a boolean');
+    if (opts.expectedData !== undefined) return conditionalMutation(path, opts.expectedData, bytes, opts);
+    return metadataCall(opts.rejectSymlinks ? { metadataOnly: true } : {}, async (options) => {
+      if (opts.rejectSymlinks) requireMutation(backend, 'supportsNoFollowMutation', 'write', 'no-follow mutation');
+      const r = await resolve(path, options, true, opts.rejectSymlinks === true);
+      if (!r.ok) return r;
+      const st = await backend.stat(r.safe, options);
+      if (opts.rejectSymlinks && st?.type === 'symlink') return err('ENOTSUP', 'symlink traversal requires canonical-target authorization');
+      if (st && st.type === 'dir') return err('EISDIR', `is a directory: ${r.path}`, { path: r.path });
+      if (opts.createParents) await ensureParents(r.path, options, opts.rejectSymlinks === true);
+      // A staged operation reaches this resolver only after acceptance. Repeat
+      // resolution after parent creation; no preflight authorization follows a link.
+      if (opts.rejectSymlinks) {
+        const current = await resolve(path, options, true, true);
+        if (!current.ok) return current;
+        const final = await statSafe(current.safe, options);
+        if (final && final.type !== 'file') return err(final.type === 'dir' ? 'EISDIR' : 'ENOTSUP', 'destination is not a regular file');
+      }
+      // A backend can commit then throw; invalidate either way.
+      try { await backend.write(r.safe, bytes, opts.rejectSymlinks ? { rejectSymlinks: true, root: rootSafe } : undefined); }
+      finally { indexDrop(r.path); indexDropBySafe(r.safe); }
+      return { ok: true, path: r.path };
+    });
   }
 
   // The workspace root always exists. On an object store (Crate) a directory is implicit — it is
@@ -599,16 +615,24 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
   }
 
   async function mkdir(path, opts = {}) {
-    const r = await resolve(path);
-    if (!r.ok) return r;
-    const st = await backend.stat(r.safe);
-    if (st) {
-      if (st.type === 'dir') return { ok: true, path: r.path };
-      return err('EEXIST', `already exists: ${r.path}`, { path: r.path });
-    }
-    if (opts.createParents) await ensureParents(r.path);
-    if (backend.mkdir) await backend.mkdir(r.safe);
-    return { ok: true, path: r.path };
+    if (opts.rejectSymlinks !== undefined && typeof opts.rejectSymlinks !== 'boolean') return err('EINVAL', 'rejectSymlinks must be a boolean');
+    return metadataCall(opts.rejectSymlinks ? { metadataOnly: true } : {}, async (options) => {
+      if (opts.rejectSymlinks) requireMutation(backend, 'supportsNoFollowMutation', 'mkdir', 'no-follow mutation');
+      const r = await resolve(path, options, true, opts.rejectSymlinks === true);
+      if (!r.ok) return r;
+      const st = await backend.stat(r.safe, options);
+      if (st) {
+        if (st.type === 'dir') return { ok: true, path: r.path };
+        return err('EEXIST', `already exists: ${r.path}`, { path: r.path });
+      }
+      if (opts.createParents) await ensureParents(r.path, options, opts.rejectSymlinks === true);
+      if (opts.rejectSymlinks) {
+        const current = await resolve(path, options, true, true);
+        if (!current.ok) return current;
+      }
+      if (backend.mkdir) await backend.mkdir(r.safe, opts.rejectSymlinks ? { rejectSymlinks: true, root: rootSafe } : undefined);
+      return { ok: true, path: r.path };
+    });
   }
 
   async function mutationCall(run) {
@@ -647,6 +671,31 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
       }
       if (result.changed) checkReadSize(result.size, options.maxBytes);
       return { ok: true, path: r.path, changed: result.changed, size: result.size };
+    });
+  }
+
+  // Compare and mutate must belong to one backend transaction. A pre-read or
+  // user-space lock cannot protect FSA/Crate from independent writers.
+  async function conditionalMutation(path, expectedData, data, opts = {}) {
+    return mutationCall(async () => {
+      const deleting = data === undefined;
+      if (opts.recursive || opts.follow === true || deleting && opts.kind !== 'non-dir') return err('EINVAL', 'conditional removal requires nonrecursive non-dir semantics');
+      let expected = expectedData === null ? null : toBytes(expectedData);
+      if (expectedData !== null && expected === null || deleting && expected === null) return err('EINVAL', 'expectedData must contain original file bytes');
+      if (expected && expected.byteLength > 64 * 1024 * 1024) return err('EFBIG', 'conditional input exceeds the 64 MiB limit');
+      if (expected) expected = new Uint8Array(expected); // own the bytes, including Buffer views, before resolver awaits
+      const method = deleting ? 'conditionalDelete' : 'conditionalWrite';
+      requireMutation(backend, deleting ? 'supportsConditionalDelete' : 'supportsConditionalWrite', method, 'atomic expected-content mutation');
+      const r = await resolve(path, { metadataOnly: true }, false, true);
+      if (!r.ok) return r;
+      if (r.safe === rootSafe) return err('EBUSY', 'cannot replace or remove the filesystem root');
+      // Conditional methods require existing parents. They never create any
+      // ancestor before comparing the original final object.
+      try {
+        if (deleting) await backend.conditionalDelete(r.safe, { expectedData: expected, root: rootSafe });
+        else await backend.conditionalWrite(r.safe, data, { expectedData: expected, root: rootSafe });
+      } finally { indexDrop(r.path); indexDropBySafe(r.safe); }
+      return { ok: true, path: r.path };
     });
   }
 
@@ -701,6 +750,7 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
   }
 
   async function remove(path, opts = {}) {
+    if (opts.expectedData !== undefined) return conditionalMutation(path, opts.expectedData, undefined, opts);
     if (opts.kind !== undefined) return removeTyped(path, opts);
     if (opts.follow !== undefined && typeof opts.follow !== 'boolean') return err('EINVAL', 'follow must be a boolean');
     return metadataCall(opts, async (options) => {

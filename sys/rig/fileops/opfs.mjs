@@ -26,7 +26,7 @@ export async function createOpfsBackend({ path = 'workspace' } = {}) {
   for (const seg of String(path).split('/').filter(Boolean)) {
     dir = await dir.getDirectoryHandle(seg, { create: true });
   }
-  return new FsaBackend(dir);
+  return new FsaBackend(dir, { symlinkFree: true });
 }
 
 // Permanently remove an OPFS workspace subtree (e.g. when a project is deleted).

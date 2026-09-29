@@ -474,3 +474,51 @@ Existing grep/listing flags and virtual metadata limits remain in effect.
 Timeout and these aliases take the conservative permission-rule path until
 U3 can recursively inspect their meaning. Uninspectable rule prompts survive
 bypass mode; ordinary inspectable ask rules retain the existing mode policy.
+
+## U4a archives and compression
+
+`tar` creates, extracts, or lists ustar archives with `-c`, `-x`, or `-t`.
+It accepts traditional bundles such as `czf`, gzip with `-z`, and `-f ARCHIVE` (`-` means stdin/stdout).
+`-C DIR` changes source selection and each extraction operand’s destination in order without changing shell cwd.
+Archive filenames remain relative to the invocation directory.
+`-v`, `--exclude=PATTERN`, selected member operands, and extraction `--strip-components=N` are supported.
+The reader accepts bounded PAX path/size metadata and GNU long names.
+Files and directories retain their bytes and names; host ownership, permissions, and timestamps are not restored.
+Links, devices, sparse formats, and base-256 tar numeric fields fail explicitly.
+
+`gzip`, `gunzip`, and `zcat` use platform raw-DEFLATE streams with RFC1952 framing.
+They support concatenated gzip members, metadata/header checksums, CRC32, and expanded-size validation.
+`-c`, `-d`, `-k`, `-f`, `-q`, `-v`, `-t`, and deterministic `-n` headers are supported.
+File conversions validate data before output replacement and request governed source removal afterward.
+Refusal or Stop preserves the source; previously completed output may remain.
+Decompression to files recognizes `.gz` and `.tgz`; stdout accepts any filename.
+Compression levels and unavailable platform transforms fail explicitly.
+
+`zip [-r] [-q] [-0] ARCHIVE PATH...` creates or updates entries while retaining untouched members.
+`zip -d ARCHIVE PATTERN...` removes matching archive entries.
+`unzip` supports `-l`, `-d DIR`, `-p`, `-q`, `-o`, `-n`, and selected member patterns.
+The default refuses existing file destinations before extraction; `-o` overwrites and `-n` skips them.
+ZIP supports stored and DEFLATE entries, signed/unsigned data descriptors, and UTF-8 names.
+ZIP64, split archives, encryption, links, special files, and unknown methods fail explicitly.
+No archive command falls back to a host shell or downloads an implementation.
+
+Every archive validates completely before extraction effects.
+Every selected destination crosses type and grant preflight before the first write.
+Member names reject traversal, absolute paths, drive prefixes, backslashes, control bytes, and encoded traversal.
+Existing destination links are refused, including links introduced before staged write acceptance.
+Completed writes remain when a later staged operation is refused or stopped; pending proposals are cleared.
+Bounds cover input (64 MiB), expanded data (16 MiB), output (16 MiB), retained data (64 MiB),
+entries (4096), path bytes (1 MiB), header metadata (64 KiB), and work steps (1,000,000).
+Storage must support bounded reads and content-free metadata; unavailable guarantees fail explicitly.
+
+Archive writes require a no-follow storage guarantee. Memory and origin-private storage provide it.
+Picked native folders and opaque host adapters refuse strict archive mutations when that guarantee is unavailable.
+Existing ZIP updates additionally require atomic comparison with the original archive bytes.
+Gzip source removal compares the source bytes again atomically when the proposal is accepted.
+A changed file returns `ESTALE`; unsupported conditional storage returns `ENOTSUP`.
+Memory currently supplies these conditional mutations. FSA, Crate, and Overlay do not claim compare-and-swap support.
+Use `gzip -k` or stdout to keep source files where conditional removal is unavailable.
+Tar preserves repeated source entries; later entries replace earlier file contents on extraction.
+Tar selects each archived entry with the first matching member operand, before exclusions.
+An operand shadowed completely by earlier operands fails before extraction writes.
+A present operand whose members are all excluded succeeds without extracting those members.

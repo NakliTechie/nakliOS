@@ -27,6 +27,9 @@ export class MemoryBackend {
     this.supportsExclusiveCreate = true;
     this.supportsTypedRemoval = true;
     this.supportsAtomicTruncate = true;
+    this.supportsNoFollowMutation = true;
+    this.supportsConditionalWrite = true;
+    this.supportsConditionalDelete = true;
     this.files = new Map();     // safePath -> { bytes, mtimeMs }
     this.dirs = new Set();      // explicit directory markers
     this.symlinks = new Map();  // safePath -> { target, mtimeMs }
@@ -43,9 +46,42 @@ export class MemoryBackend {
     return entry.bytes.slice(); // defensive copy
   }
 
-  async write(safePath, data) {
-    const bytes = data instanceof Uint8Array ? data.slice() : new Uint8Array(data);
+  async write(safePath, data, { rejectSymlinks = false, root = '' } = {}) {
+    if (rejectSymlinks) {
+      this._requireMutationParents(safePath, root);
+      if (!safePath || safePath === root || this.symlinks.has(safePath) || ['dir', 'symlink'].includes(this._mutationType(safePath))) {
+        throw mutationError('ENOTSUP', 'no-follow write requires a regular file or absent final entry');
+      }
+    }
+    const bytes = new Uint8Array(data);
     this.files.set(safePath, { bytes, mtimeMs: this._now() });
+  }
+
+  _compareOriginal(safePath, expectedData, root) {
+    if (!safePath || safePath === root) throw mutationError('EBUSY', 'cannot mutate the filesystem root');
+    this._requireMutationParents(safePath, root);
+    const kind = this._mutationType(safePath);
+    if (expectedData === null) {
+      if (kind) throw mutationError('ESTALE', 'destination appeared after preparation');
+      return;
+    }
+    const current = this.files.get(safePath)?.bytes;
+    if (kind !== 'file' || this.symlinks.has(safePath) || !current || current.length !== expectedData.length
+        || current.some((byte, index) => byte !== expectedData[index])) {
+      throw mutationError('ESTALE', 'file content changed after preparation');
+    }
+  }
+
+  async conditionalWrite(safePath, data, { expectedData, root = '' } = {}) {
+    // No await separates comparison from insertion; an independent edit cannot
+    // enter between the expected-content check and this exact-key mutation.
+    this._compareOriginal(safePath, expectedData, root);
+    this.files.set(safePath, { bytes: new Uint8Array(data), mtimeMs: this._now() });
+  }
+
+  async conditionalDelete(safePath, { expectedData, root = '' } = {}) {
+    this._compareOriginal(safePath, expectedData, root);
+    this.files.delete(safePath);
   }
 
   async delete(safePath, { kind, root = '' } = {}) {
@@ -116,7 +152,12 @@ export class MemoryBackend {
       || this.symlinks.has(safePath) || this._isImplicitDir(safePath);
   }
 
-  async mkdir(safePath) {
+  async mkdir(safePath, { rejectSymlinks = false, root = '' } = {}) {
+    if (rejectSymlinks) {
+      this._requireMutationParents(safePath, root);
+      const kind = this._mutationType(safePath);
+      if (this.symlinks.has(safePath) || kind && kind !== 'dir') throw mutationError('ENOTSUP', 'no-follow mkdir requires a directory or absent final entry');
+    }
     this.dirs.add(safePath);
   }
 

@@ -64,14 +64,14 @@ export function buildFileopsCommands(fs) {
     {
       name: 'fs.write',
       summary: 'Write bytes or text to a file.',
-      description: 'Write a file within the mount, creating or overwriting it. Pass {createParents:true} to create missing directories. EISDIR if the path is a directory.',
+      description: 'Write a file within the mount, creating or overwriting it. Pass {createParents:true} to create missing directories. EISDIR if the path is a directory. Pass {rejectSymlinks:true} for content-free metadata checks and refusal of ancestor or final links at execution time.',
       inputSchema: {
         type: 'object',
-        properties: { path: PATH, data: { description: 'string, Uint8Array, or ArrayBuffer.' }, createParents: { type: 'boolean' } },
+        properties: { path: PATH, data: { description: 'string, Uint8Array, or ArrayBuffer.' }, expectedData: { description: 'Original file bytes for atomic conditional replacement; null requires absence. Unsupported storage refuses.' }, createParents: { type: 'boolean' }, rejectSymlinks: { type: 'boolean' } },
         required: ['path', 'data'], additionalProperties: false,
       },
       returnSchema: RESULT_OK, destructive: false, scope: 'fs:write', annotations: RW,
-      run: (i) => fs.write(i.path, i.data, { createParents: i.createParents }),
+      run: (i) => fs.write(i.path, i.data, { createParents: i.createParents, rejectSymlinks: i.rejectSymlinks, expectedData: i.expectedData }),
     },
     {
       name: 'fs.create',
@@ -115,14 +115,14 @@ export function buildFileopsCommands(fs) {
     {
       name: 'fs.mkdir',
       summary: 'Create a directory.',
-      description: 'Create a directory within the mount. Pass {createParents:true} for missing ancestors. Succeeds if it already exists as a directory; EEXIST if a file is there.',
+      description: 'Create a directory within the mount. Pass {createParents:true} for missing ancestors. Succeeds if it already exists as a directory; EEXIST if a file is there. Pass {rejectSymlinks:true} to refuse ancestor and final links using content-free metadata.',
       inputSchema: {
         type: 'object',
-        properties: { path: PATH, createParents: { type: 'boolean' } },
+        properties: { path: PATH, createParents: { type: 'boolean' }, rejectSymlinks: { type: 'boolean' } },
         required: ['path'], additionalProperties: false,
       },
       returnSchema: RESULT_OK, destructive: false, scope: 'fs:write', annotations: RW,
-      run: (i) => fs.mkdir(i.path, { createParents: i.createParents }),
+      run: (i) => fs.mkdir(i.path, { createParents: i.createParents, rejectSymlinks: i.rejectSymlinks }),
     },
     {
       name: 'fs.remove',
@@ -130,11 +130,11 @@ export function buildFileopsCommands(fs) {
       description: 'Pass kind:dir or kind:non-dir for atomic type-checked, nonrecursive removal of the final object; symlink ancestors and unsupported storage return ENOTSUP. FSA lacks atomic type-constrained deletion and refuses typed removal before metadata access. Remove a file, or a directory with {recursive:true}. Pass {follow:false} to delete a final symlink without deleting its target. Pass {metadataOnly:true} for nonrecursive removal without file-content reads. Unsupported storage, recursive combinations, and Overlay base files without existing content pins return ENOTSUP; symlink removal needs no target pin. Destructive; C4 stages a proposal before this runs.',
       inputSchema: {
         type: 'object',
-        properties: { path: PATH, recursive: { type: 'boolean' }, follow: { type: 'boolean' }, metadataOnly: { type: 'boolean' }, kind: { enum: ['dir', 'non-dir'] } },
+        properties: { path: PATH, recursive: { type: 'boolean' }, follow: { type: 'boolean' }, metadataOnly: { type: 'boolean' }, kind: { enum: ['dir', 'non-dir'] }, expectedData: { description: 'Original file bytes for atomic conditional nonrecursive removal. Unsupported storage refuses.' } },
         required: ['path'], additionalProperties: false,
       },
       returnSchema: RESULT_OK, destructive: true, scope: 'fs:remove', annotations: RW,
-      run: (i) => fs.remove(i.path, { recursive: i.recursive, follow: i.follow, metadataOnly: i.metadataOnly, kind: i.kind }),
+      run: (i) => fs.remove(i.path, { recursive: i.recursive, follow: i.follow, metadataOnly: i.metadataOnly, kind: i.kind, expectedData: i.expectedData }),
     },
     {
       name: 'fs.move',

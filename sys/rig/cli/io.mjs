@@ -100,8 +100,9 @@ export function createIO({ invoke, cwd = () => '', run } = {}) {
     readBytes,
     readText: async (path) => toText(await readBytes(path)),
     read: async (path) => autoData(await readBytes(path)),
-    write: (path, data, { createParents = false } = {}) => call('fs.write', {
-      path: resolve(path), data, createParents,
+    write: (path, data, { createParents = false, rejectSymlinks, expectedData } = {}) => call('fs.write', {
+      path: resolve(path), data, createParents, ...(rejectSymlinks === undefined ? {} : { rejectSymlinks }),
+      ...(expectedData === undefined ? {} : { expectedData }),
     }),
     stat: async (path, { follow, metadataOnly, rejectSymlinks } = {}) => (await call('fs.stat', { path: resolve(path),
       ...(follow === undefined ? {} : { follow }), ...(metadataOnly === undefined ? {} : { metadataOnly }),
@@ -118,13 +119,14 @@ export function createIO({ invoke, cwd = () => '', run } = {}) {
         : { pattern, cwd: resolve(from) };
       return (await call('fs.glob', input)).matches;
     },
-    mkdir: (path, { createParents = false } = {}) => call('fs.mkdir', { path: resolve(path), createParents }),
+    mkdir: (path, { createParents = false, rejectSymlinks } = {}) => call('fs.mkdir', { path: resolve(path), createParents,
+      ...(rejectSymlinks === undefined ? {} : { rejectSymlinks }) }),
     create: (path, { directory = false } = {}) => call('fs.create', { path: resolve(path), directory }),
     truncate: (path, { size, mode = 'set', create = true, maxBytes } = {}) => call('fs.truncate', { path: resolve(path), size, mode, create,
       ...(maxBytes === undefined ? {} : { maxBytes }) }),
-    remove: (path, { recursive = false, follow, metadataOnly, kind } = {}) => call('fs.remove', { path: resolve(path), recursive,
+    remove: (path, { recursive = false, follow, metadataOnly, kind, expectedData } = {}) => call('fs.remove', { path: resolve(path), recursive,
       ...(follow === undefined ? {} : { follow }), ...(metadataOnly === undefined ? {} : { metadataOnly }),
-      ...(kind === undefined ? {} : { kind }) }),
+      ...(kind === undefined ? {} : { kind }), ...(expectedData === undefined ? {} : { expectedData }) }),
     move: (from, to, { overwrite = false } = {}) => call('fs.move', { from: resolve(from), to: resolve(to), overwrite }),
     copy: (from, to, { overwrite = false } = {}) => call('fs.copy', { from: resolve(from), to: resolve(to), overwrite }),
     run: async (argv, stdin = '') => {
