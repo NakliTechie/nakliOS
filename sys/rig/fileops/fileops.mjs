@@ -22,7 +22,7 @@
 //   - patch is atomic (no write on a failed hunk) and returns an exact `revert`.
 
 import { normalizeMountPath, joinRoot } from './pathguard.mjs';
-import { applyPatch, reversePatch } from './patch.mjs';
+import { applyPatch, createPatch } from './patch.mjs';
 import { planQuery, evaluateQuery, evaluateQueryIds, trigrams, foldCase } from './trigram.mjs';
 
 const enc = new TextEncoder();
@@ -629,15 +629,25 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     return { ok: true, path: r.path };
   }
 
-  async function copy(from, to) {
+  // {overwrite:true} replaces an existing FILE with a file, as cp/mv do; a directory on either side
+  // still refuses. A destination equal to or inside the source is refused: copying a tree into
+  // itself and then (for move) removing the source deleted both — `mv d d/sub` exited 0 and left
+  // nothing (2026-09-29).
+  async function copy(from, to, opts = {}) {
     const fr = await resolve(from);
     if (!fr.ok) return fr;
     const tr = await resolve(to);
     if (!tr.ok) return tr;
     const fst = await backend.stat(fr.safe);
     if (!fst) return err('ENOENT', `no such path: ${fr.path}`, { path: fr.path });
+    if (tr.path === fr.path) return err('EINVAL', `source and destination are the same: ${fr.path}`, { path: fr.path });
+    if (fst.type === 'dir' && (fr.path === '' || tr.path.startsWith(fr.path + '/'))) {
+      return err('EINVAL', `cannot copy ${fr.path || '/'} into itself: ${tr.path}`, { path: tr.path });
+    }
     const tst = await backend.stat(tr.safe);
-    if (tst) return err('EEXIST', `destination exists: ${tr.path}`, { path: tr.path });
+    if (tst && !(opts.overwrite && tst.type === 'file' && fst.type === 'file')) {
+      return err('EEXIST', `destination exists: ${tr.path}`, { path: tr.path });
+    }
     if (fst.type === 'dir') {
       const { files } = await walkAll(fr.safe);
       const fromBase = fr.safe === '' ? '' : fr.safe + '/';
@@ -664,8 +674,8 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     return { ok: true, from: fr.path, to: tr.path };
   }
 
-  async function move(from, to) {
-    const c = await copy(from, to);
+  async function move(from, to, opts = {}) {
+    const c = await copy(from, to, opts);
     if (!c.ok) return c;
     const rm = await remove(from, { recursive: true });
     if (!rm.ok) return rm;
@@ -688,7 +698,9 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
       indexDrop(r.path);
       indexDropBySafe(r.safe);
     }
-    return { ok: true, path: r.path, revert: reversePatch(unifiedDiff) };
+    // The revert is computed from the bytes, not by flipping the caller's diff, so it restores the
+    // original exactly even when that diff was loose about the final newline.
+    return { ok: true, path: r.path, revert: createPatch(applied.result, text) };
   }
 
   async function glob(pattern, opts = {}) {

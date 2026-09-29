@@ -550,7 +550,8 @@ await test('operands: which, dirname, printf and history answer for all; basenam
   eq((await run('basename .txt .txt')).out, '.txt', 'a suffix equal to the name is kept, as coreutils does');
   await run("printf 'a\\n' > p; printf 'b\\n' > q");
   const d = await run('diff p q r'); eq(d.code, 2); assert(/extra operand 'r'/.test(d.out), d.out);
-  const dq = await run('diff -q p q'); eq(dq.code, 2); assert(/unsupported flag -q/.test(dq.out), 'a diff flag is refused, not filtered out: ' + dq.out);
+  const dq = await run('diff -q p q'); eq(dq.code, 1); eq(dq.out, 'Files p and q differ', 'diff -q answers briefly, not with a full diff');
+  const dx = await run('diff -w p q'); eq(dx.code, 2); assert(/unsupported flag -w/.test(dx.out), 'an unsupported diff flag is refused, not filtered out: ' + dx.out);
   eq((await run('diff p q')).out, '- a\n+ b', 'diff of two files is unchanged');
   const u = await run('uniq p q'); eq(u.code, 2); assert(/OUTPUT operand/.test(u.out), u.out);
   eq((await run('cat q')).out, 'b', 'and the output operand is untouched');
@@ -654,16 +655,15 @@ await test('git: rm leaves the working tree unless --cached; branch, checkout -b
   eq((await run('git rm -r --cached sub')).out, "rm 'sub/c'\nrm 'sub/d'");
   eq((await run('git rm nope')).code, 1, 'an unknown path is an error');
   await run('git add -A && git commit -m second');
-  eq((await run('git branch')).out, 'main', 'git branch lists');
+  eq((await run('git branch')).out, '* main', 'git branch lists, marking the checked-out one');
   eq((await run('git branch feat')).code, 0, 'git branch NAME creates');
-  eq((await run('git branch')).out, 'feat\nmain');
+  eq((await run('git branch')).out, '  feat\n* main');
   const del = await run('git branch -d feat'); eq(del.code, 2, 'a delete is refused, never read as a create: ' + del.out);
-  eq((await run('git branch')).out, 'feat\nmain');
+  eq((await run('git branch')).out, '  feat\n* main');
   eq((await run('git checkout -b feat2')).code, 0);
-  eq((await run('git branch')).out, 'feat\nfeat2\nmain');
+  eq((await run('git branch')).out, '  feat\n* feat2\n  main', 'checkout -b moved the mark');
   await run("printf changed > sub/c");
-  const patch = await run('git diff'); eq(patch.code, 2, 'no patch to show, so plain git diff refuses rather than print ok');
-  assert(/--name-status/.test(patch.out), patch.out);
+  eq((await run('git diff')).out, 'diff --git a/sub/c b/sub/c\n--- a/sub/c\n+++ b/sub/c\n@@ -1 +1 @@\n-3\n\\ No newline at end of file\n+changed\n\\ No newline at end of file', 'git diff prints the patch');
   eq((await run('git diff --name-status')).out, 'M\tsub/c');
   eq((await run('git diff --name-only -- sub')).out, 'sub/c');
   eq((await run('git diff --name-only -- other')).out, '', 'a path filter');
@@ -680,6 +680,106 @@ await test('git: rm leaves the working tree unless --cached; branch, checkout -b
   eq((await run('git checkout -- sub/c')).code, 2, 'restoring a file is refused, not read as a ref');
   eq((await run('git commit -m x sub/c')).code, 2, 'a commit pathspec is refused');
   eq((await run('git log -- a')).code, 2);
+});
+
+// ── Lenient successes and loud divergences found by the operand audit (2026-09-29) ─────────
+await test('mkdir, touch, chmod and printf fail where coreutils fails, instead of exiting 0', async () => {
+  const { run } = await shell();
+  await run('mkdir d');
+  const again = await run('mkdir d'); eq(again.code, 1, 'mkdir on an existing path fails without -p');
+  eq(again.out, 'mkdir: EEXIST: already exists: d');
+  eq((await run('mkdir d || echo fallback')).out.split('\n').pop(), 'fallback', 'so `mkdir d || …` takes its fallback');
+  eq((await run('mkdir -p d')).code, 0, 'with -p an existing directory is fine');
+  const deep = await run('mkdir x/y'); eq(deep.code, 1, 'a missing parent fails without -p');
+  eq((await run('ls x')).code, 1, 'and x was not created');
+  eq((await run('mkdir -p x/y && ls x')).out, 'y', '-p still makes parents');
+  const t = await run('touch nodir/f'); eq(t.code, 1, 'touch into a missing directory fails');
+  eq(t.out, 'touch: ENOENT: no such directory: nodir');
+  eq((await run('ls nodir')).code, 1, 'and makes no directory');
+  await run('touch d/f');
+  eq((await run('touch d/f/g')).code, 1, 'a file as the parent fails');
+  eq((await run('chmod +x d/f')).code, 0, 'chmod on a file that exists is a no-op success');
+  const cm = await run('chmod 755 d/f nope'); eq(cm.code, 1); eq(cm.out, "chmod: cannot access 'nope': ENOENT");
+  eq((await run('chmod zz d/f')).code, 1, 'an invalid mode fails');
+  eq((await run('chmod -v 755 d/f')).code, 2, 'an unsupported flag refuses');
+  eq((await run('chmod -x d/f')).code, 0, '-x is a mode, not a flag');
+  const pf = await run("printf '%d\\n' 12abc"); eq(pf.code, 1, 'a non-number for %d fails');
+  eq(pf.out, '12\nprintf: 12abc: invalid number');
+  eq((await run("printf '%d|' 0x1f \"'A\" 010 -3 ''")).out, '31|65|8|-3|0|', 'hex, a character, octal, negative and empty are numbers');
+});
+
+await test('mv and cp replace a destination file; a directory into itself is refused, not deleted', async () => {
+  const { run } = await shell();
+  await run("printf 1 > a; printf 2 > b; mkdir d; printf keep > d/f");
+  eq((await run('cp a b && cat b')).out, '1', 'cp replaces an existing file');
+  await run('printf 3 > c');
+  eq((await run('mv c b && cat b')).out, '3', 'mv replaces an existing file');
+  eq((await run('ls')).out, 'a  b  d  f.txt', 'and the source is gone');
+  const self = await run('mv d d'); eq(self.code, 1, 'mv d d is refused');
+  eq(self.out, 'mv: EINVAL: cannot copy d into itself: d/d');
+  const sub = await run('mv d d/sub'); eq(sub.code, 1, 'mv into its own subdirectory is refused');
+  eq((await run('cat d/f')).out, 'keep', 'and d is intact (both used to delete it, exit 0)');
+  eq((await run('cp -r d d/x')).code, 1);
+  eq((await run('cp a a')).out, 'cp: EINVAL: source and destination are the same: a');
+  eq((await run('cp d a')).code, 1, 'a directory never replaces a file');
+  eq((await run('cat a')).out, '1');
+});
+
+await test('cat, cut, sed, grep and od go on past a missing file; sort stops; grep -c counts per file', async () => {
+  const { run } = await shell();
+  await run("printf 'a1\\nb2\\n' > a; printf 'c3\\n' > b; printf x > nonl");
+  const c = await run('cat a nope b'); eq(c.code, 1);
+  eq(c.out, 'a1\nb2\ncat: nope: ENOENT\nc3', 'cat prints b too, the error in its place');
+  eq((await run('cat nonl nope')).out, 'x\ncat: nope: ENOENT', 'the error starts its own line');
+  eq((await run('cat a b')).out, 'a1\nb2\nc3', 'every file present is unchanged');
+  const cu = await run('cut -c1 a nope b'); eq(cu.code, 1); eq(cu.out, 'cut: nope: ENOENT\na\nb\nc');
+  const se = await run("sed 's/[0-9]//' a nope b"); eq(se.code, 1); eq(se.out, 'sed: nope: ENOENT\na\nb\nc');
+  const g = await run('grep 1 a nope b'); eq(g.code, 2, 'grep: an unreadable file is exit 2'); eq(g.out, 'a:a1\ngrep: nope: ENOENT', 'and the match in a survives');
+  eq((await run('grep -c . a b')).out, 'a:2\nb:1', 'grep -c counts per file');
+  eq((await run('grep -hc . a b')).out, '2\n1');
+  eq((await run('grep -c . a')).out, '2', 'one file keeps the bare count');
+  const od = await run('od -c nope nonl'); eq(od.code, 1); eq(od.out, 'od: nope: ENOENT\n0000000   x\n0000001', 'od still dumps the file it could read');
+  const so = await run('sort a nope'); eq(so.code, 1, 'sort stops, as coreutils sort does'); eq(so.out, 'sort: nope: ENOENT');
+});
+
+await test('diff matches lines by a real diff; -u writes a patch that `fs.patch` applies', async () => {
+  const { run } = await shell();
+  await run("printf 'a\\nb\\nc\\n' > p; printf 'z\\na\\nb\\nc\\n' > q");
+  eq((await run('diff p q')).out, '+ z', 'one inserted line is one change (it used to be every line)');
+  const u = await run('diff -u p q'); eq(u.code, 1);
+  eq(u.out, '--- p\n+++ q\n@@ -1,3 +1,4 @@\n+z\n a\n b\n c');
+  await run('diff -u p q > p.diff');
+  const diffText = (await run('cat p.diff')).out + '\n';
+  const applied = await run(`fs.patch p --unifiedDiff='${diffText}'`);
+  eq(applied.code, 0, 'the diff applies: ' + applied.out);
+  eq((await run('diff p q')).code, 0, 'and p now equals q');
+});
+
+await test('git: diff prints patches from the index, HEAD or a ref; log reads HEAD~N; no repository is an error', async () => {
+  const { fs, run } = await gitShell();
+  const none = await run('git status'); eq(none.code, 1, 'no repository is an error, not a list of untracked files');
+  assert(/not a git repository/.test(none.out), none.out);
+  await run("printf 'a\\nb\\nc\\n' > f; printf 'x\\n' > g");
+  await run('git init && git add -A && git commit -m one');
+  await run("printf 'a\\nB\\nc\\n' > f; rm g; printf 'new\\n' > n; git add n");
+  eq((await run('git diff')).out, [
+    'diff --git a/f b/f', '--- a/f', '+++ b/f', '@@ -1,3 +1,3 @@', ' a', '-b', '+B', ' c',
+    'diff --git a/g b/g', 'deleted file mode 100644', '--- a/g', '+++ /dev/null', '@@ -1 +0,0 @@', '-x'].join('\n'), 'git diff: the working tree against the index');
+  eq((await run('git diff --cached')).out, ['diff --git a/n b/n', 'new file mode 100644', '--- /dev/null', '+++ b/n', '@@ -0,0 +1 @@', '+new'].join('\n'), '--cached: the index against HEAD');
+  eq((await run('git diff HEAD --name-status')).out, 'M\tf\nD\tg\nA\tn');
+  await run('git add -A && git commit -m two');
+  eq((await run('git log --oneline HEAD~1')).out.split(' ').slice(1).join(' '), 'one', 'git log HEAD~1');
+  eq((await run('git diff HEAD~1 HEAD --name-only')).out, 'f\ng\nn');
+  eq((await run('git diff HEAD^ -- f')).out, ['diff --git a/f b/f', '--- a/f', '+++ b/f', '@@ -1,3 +1,3 @@', ' a', '-b', '+B', ' c'].join('\n'), 'HEAD^ and a path filter');
+  eq((await run('git log HEAD~5')).code, 1, 'past the root is an error');
+  // the patch git diff prints is one fs.patch applies
+  await run("printf 'a\\nB\\nC\\n' > f");
+  const p = (await run('git diff -- f')).out + '\n';
+  await run("printf 'a\\nB\\nc\\n' > f2");
+  eq((await run(`fs.patch f2 --unifiedDiff='${p}'`)).code, 0, 'git diff output applies with fs.patch');
+  eq((await run('cat f2')).out, 'a\nB\nC');
+  await fs.write('bin', Uint8Array.of(0, 1, 2)); await run('git add bin && git commit -m bin'); await fs.write('bin', Uint8Array.of(0, 9));
+  assert((await run('git diff')).out.startsWith('diff --git a/bin b/bin\nBinary files a/bin and b/bin differ\ndiff --git a/f b/f'), 'binary content is not printed');
 });
 
 if (failures.length) {

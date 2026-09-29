@@ -114,8 +114,8 @@ export function createIO({ invoke, cwd = () => '', run } = {}) {
     },
     mkdir: (path, { createParents = false } = {}) => call('fs.mkdir', { path: resolve(path), createParents }),
     remove: (path, { recursive = false } = {}) => call('fs.remove', { path: resolve(path), recursive }),
-    move: (from, to) => call('fs.move', { from: resolve(from), to: resolve(to) }),
-    copy: (from, to) => call('fs.copy', { from: resolve(from), to: resolve(to) }),
+    move: (from, to, { overwrite = false } = {}) => call('fs.move', { from: resolve(from), to: resolve(to), overwrite }),
+    copy: (from, to, { overwrite = false } = {}) => call('fs.copy', { from: resolve(from), to: resolve(to), overwrite }),
     run: async (argv, stdin = '') => {
       if (!Array.isArray(argv) || argv.some((arg) => typeof arg !== 'string')) {
         throw new TypeError('io.run requires an array of string arguments');

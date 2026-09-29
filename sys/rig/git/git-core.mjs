@@ -32,6 +32,32 @@ export function createGitCore({ fs, dir = '/', transport = null }) {
   const igfs = makeFsAdapter(fs);
   const base = { fs: igfs, dir };
 
+  // The local operations below need a repository. isomorphic-git's statusMatrix does not check,
+  // so without `.git` it listed every file as untracked (2026-09-29).
+  const NOT_A_REPO = { ok: false, code: 'ENOTREPO', message: 'not a git repository (run `git init` first)' };
+  async function hasRepo() {
+    try { await git.findRoot({ fs: igfs, filepath: dir }); return true; } catch (_) { return false; }
+  }
+  const inRepo = (fn) => async (...args) => ((await hasRepo()) ? fn(...args) : NOT_A_REPO);
+
+  // A commit oid for REF: a branch, a tag, HEAD, a full or abbreviated oid, each optionally followed
+  // by `~N` (N first parents back) or `^` (one), as git reads them.
+  async function resolveCommit(ref) {
+    const m = /^(.*?)((?:~\d*|\^)*)$/.exec(String(ref));
+    let oid;
+    if (/^[0-9a-f]{4,40}$/i.test(m[1])) {
+      try { oid = await git.expandOid({ ...base, oid: m[1] }); } catch (_) { oid = await git.resolveRef({ ...base, ref: m[1] }); }
+    } else oid = await git.resolveRef({ ...base, ref: m[1] });
+    for (const step of m[2].match(/~\d*|\^/g) || []) {
+      for (let n = step === '^' || step === '~' ? 1 : Number(step.slice(1)); n > 0; n--) {
+        const { commit } = await git.readCommit({ ...base, oid });
+        if (!commit.parent.length) throw Object.assign(new Error(`${ref}: no such commit (history ends first)`), { code: 'NotFoundError' });
+        oid = commit.parent[0];
+      }
+    }
+    return oid;
+  }
+
   async function init({ defaultBranch = 'main' } = {}) {
     await git.init({ ...base, defaultBranch });
     return { ok: true };
@@ -72,7 +98,7 @@ export function createGitCore({ fs, dir = '/', transport = null }) {
   }
 
   async function log(opts = {}) {
-    return { ok: true, commits: await git.log({ ...base, ...opts }) };
+    return { ok: true, commits: await git.log({ ...base, ...opts, ...(opts.ref ? { ref: await resolveCommit(opts.ref) } : {}) }) };
   }
 
   async function status({ filepath }) {
@@ -122,7 +148,7 @@ export function createGitCore({ fs, dir = '/', transport = null }) {
 
   // diff working tree (refB omitted) or between two refs.
   async function diff({ refA = 'HEAD', refB = null } = {}) {
-    const trees = [git.TREE({ ref: refA }), refB ? git.TREE({ ref: refB }) : git.WORKDIR()];
+    const trees = [git.TREE({ ref: await resolveCommit(refA) }), refB ? git.TREE({ ref: await resolveCommit(refB) }) : git.WORKDIR()];
     // walk prunes a subtree when map returns undefined, so directories must
     // return a truthy marker to keep descending; only blobs emit a change.
     const KEEP = { _dir: true };
@@ -152,6 +178,30 @@ export function createGitCore({ fs, dir = '/', transport = null }) {
     return { ok: true, changes: (changes || []).filter((c) => c && c.path) };
   }
 
+  // The bytes of `filepath` in a commit (`ref`, as resolveCommit reads it) or, with no ref, in the
+  // index. ENOENT when the path is not there. `git diff` reads both sides of a patch with it.
+  async function readBlob({ filepath, ref }) {
+    const missing = { ok: false, code: 'ENOENT', message: `${filepath}: not in ${ref || 'the index'}` };
+    if (ref) {
+      const oid = await resolveCommit(ref); // a bad ref throws, and says so
+      try { return { ok: true, data: (await git.readBlob({ ...base, oid, filepath })).blob }; }
+      catch (e) { if (e && e.code === 'NotFoundError') return missing; throw e; }
+    }
+    let oid = null;
+    await git.walk({ ...base, trees: [git.STAGE()], map: async (fp, [entry]) => {
+      if (fp === '.') return true;
+      if (fp === filepath) { if (entry) oid = await entry.oid(); return undefined; }
+      return filepath.startsWith(fp + '/') ? true : undefined; // descend only toward the path
+    } });
+    if (!oid) return missing;
+    return { ok: true, data: (await git.readBlob({ ...base, oid })).blob };
+  }
+
+  // The checked-out branch's short name, or null on a detached HEAD.
+  async function currentBranch() {
+    return { ok: true, branch: (await git.currentBranch({ ...base, fullname: false })) || null };
+  }
+
   // ── Transport-backed (Layer 2): clone/fetch/push/listRemote ──────────────
   function requireTransport(op) {
     if (!transport) throw new Error(`git.${op} needs a Transport (none configured)`);
@@ -166,9 +216,12 @@ export function createGitCore({ fs, dir = '/', transport = null }) {
   async function listServerRefs(opts = {}) { return requireTransport('listServerRefs').listServerRefs({ git, base, fs, dir, ...opts }); }
 
   return {
-    init, add, remove, commit, log, status, statusMatrix,
-    branch, listBranches, checkout, listRemotes,
-    resolveRef, readCommit, treeOid, diff,
+    init,
+    add: inRepo(add), remove: inRepo(remove), commit: inRepo(commit), log: inRepo(log),
+    status: inRepo(status), statusMatrix: inRepo(statusMatrix),
+    branch: inRepo(branch), listBranches: inRepo(listBranches), checkout: inRepo(checkout),
+    listRemotes: inRepo(listRemotes), resolveRef: inRepo(resolveRef), readCommit: inRepo(readCommit),
+    treeOid: inRepo(treeOid), diff: inRepo(diff), readBlob: inRepo(readBlob), currentBranch: inRepo(currentBranch),
     clone, fetch, push, listServerRefs,
     _git: git, _base: base,
   };

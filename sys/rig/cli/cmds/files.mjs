@@ -8,6 +8,8 @@ import { IOFailure } from '../io.mjs';
 
 const usage = (text) => ({ text, code: 2 });
 const baseName = (path) => String(path).replace(/\/+$/, '').split('/').pop();
+// A failure of one operand, reported the way coreutils words it.
+const fail = (code, message) => new IOFailure('shell', { code, message });
 
 export function createFileCommands(io) {
   // One result line per operand, in order. A failed operand prints its error and the rest still
@@ -27,32 +29,54 @@ export function createFileCommands(io) {
     try { return await io.stat(path); }
     catch (error) { if (error instanceof IOFailure && error.code === 'ENOENT') return null; throw error; }
   }
+  // touch and mkdir (without -p) need the parent to exist, as coreutils does. They used to create
+  // it, so a mistyped directory became a new tree with exit 0.
+  async function requireParent(path) {
+    const abs = io.resolve(path);
+    const cut = abs.lastIndexOf('/');
+    if (cut < 0) return;
+    const parent = await statOrNull('/' + abs.slice(0, cut));
+    if (!parent) throw fail('ENOENT', `no such directory: ${abs.slice(0, cut)}`);
+    if (parent.type !== 'dir') throw fail('ENOTDIR', `not a directory: ${abs.slice(0, cut)}`);
+  }
 
   // mv/cp SOURCE DEST, or SOURCE... DIRECTORY (POSIX). A destination that is an existing
   // directory receives each source under its own name; with several sources it must be one.
+  // An existing destination FILE is replaced, as coreutils does (it used to fail EEXIST).
   async function transfer(command, argv, spec, op) {
     const { operands } = parseArgs(argv, spec, { command });
     if (operands.length < 2) return usage(`${command}: missing ${operands.length ? 'destination' : 'file'} operand — ${command} SOURCE DEST, or ${command} SOURCE... DIRECTORY`);
     const sources = operands.slice(0, -1), dest = operands[operands.length - 1];
     const intoDir = (await statOrNull(dest))?.type === 'dir';
     if (sources.length > 1 && !intoDir) return { text: `${command}: target '${dest}' is not a directory`, code: 1 };
-    return each(command, sources, (src) => op(src, intoDir ? `${dest.replace(/\/+$/, '')}/${baseName(src)}` : dest).then(() => null));
+    return each(command, sources, (src) => op(src, intoDir ? `${dest.replace(/\/+$/, '')}/${baseName(src)}` : dest, { overwrite: true }).then(() => null));
   }
 
   return {
-    // No mtime to update, so an existing path is left as it is. A missing parent is created.
+    // No mtime to update, so an existing path is left as it is.
     async touch(argv) {
       const { operands } = parseArgs(argv, {}, { command: 'touch' });
       if (!operands.length) return usage('touch: missing file operand');
       return each('touch', operands, async (path) => {
-        if (!(await statOrNull(path))) await io.write(path, '', { createParents: true });
+        if (await statOrNull(path)) return null;
+        await requireParent(path);
+        await io.write(path, '');
         return null;
       });
     },
+    // Without -p an existing path is an error, as in coreutils; `mkdir d || …` used to never
+    // take its fallback. With -p an existing directory is fine and parents are made.
     async mkdir(argv) {
       const { options, operands } = parseArgs(argv, { parents: { short: 'p', long: 'parents' } }, { command: 'mkdir' });
       if (!operands.length) return usage('mkdir: missing operand');
-      return each('mkdir', operands, (path) => io.mkdir(path, { createParents: !!options.parents }).then(() => null));
+      return each('mkdir', operands, async (path) => {
+        if (!options.parents) {
+          if (await statOrNull(path)) throw fail('EEXIST', `already exists: ${io.resolve(path)}`);
+          await requireParent(path);
+        }
+        await io.mkdir(path, { createParents: !!options.parents });
+        return null;
+      });
     },
     // `TYPE SIZE`; with several operands each line leads with its path.
     async stat(argv) {

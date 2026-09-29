@@ -118,29 +118,29 @@ export function buildFileopsCommands(fs) {
     {
       name: 'fs.move',
       summary: 'Move (rename) a file or directory.',
-      description: 'Move (rename) a path within the mount, DELETING the source `from`. EEXIST if the destination exists. Executes immediately — it is NOT staged.',
+      description: 'Move (rename) a path within the mount, DELETING the source `from`. EEXIST if the destination exists, unless {overwrite:true} and both are files. EINVAL if `to` is `from` or inside it. Executes immediately — it is NOT staged.',
       inputSchema: {
         type: 'object',
-        properties: { from: PATH, to: PATH },
+        properties: { from: PATH, to: PATH, overwrite: { type: 'boolean' } },
         required: ['from', 'to'], additionalProperties: false,
       },
       returnSchema: RESULT_OK, destructive: false, scope: 'fs:write', annotations: RW,
-      run: (i) => fs.move(i.from, i.to),
+      run: (i) => fs.move(i.from, i.to, { overwrite: i.overwrite }),
     },
     {
       name: 'fs.copy',
       summary: 'Copy a file or directory.',
-      description: 'Copy a path to a new location within the mount. EEXIST if the destination exists.',
+      description: 'Copy a path to a new location within the mount. EEXIST if the destination exists, unless {overwrite:true} and both are files. EINVAL if `to` is `from` or inside it.',
       inputSchema: {
         type: 'object',
-        properties: { from: PATH, to: PATH },
+        properties: { from: PATH, to: PATH, overwrite: { type: 'boolean' } },
         required: ['from', 'to'], additionalProperties: false,
       },
       returnSchema: RESULT_OK, destructive: false, scope: 'fs:write', annotations: RW,
       // `from` is READ, not written: copying a file OUT of a read-only region is a read.
       // (fs.move deliberately declares none — a move deletes its source.)
       sourceParams: ['from'],
-      run: (i) => fs.copy(i.from, i.to),
+      run: (i) => fs.copy(i.from, i.to, { overwrite: i.overwrite }),
     },
     {
       name: 'fs.patch',

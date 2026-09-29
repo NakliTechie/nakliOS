@@ -16,11 +16,12 @@
 import { createJsRunner } from '../../kiln/js-runner.mjs';
 import { tokenize } from './parser.mjs';
 import { parseArgs } from './args.mjs';
-import { createIO, normalizePath, concatData, autoData, toText, renderData } from './io.mjs';
+import { createIO, normalizePath, concatData, autoData, toText, toBytes, renderData } from './io.mjs';
 import { createExecution, ShellInterrupted } from './execution.mjs';
 import { createBuiltins } from './cmds/builtins.mjs';
 import { createCoreCommands } from './cmds/core.mjs';
 import { createFileCommands } from './cmds/files.mjs';
+import { createPatch } from '../fileops/patch.mjs';
 
 // bash verb -> registry command name. The dotted name (fs.list) always works too.
 // ls, stat, mkdir, mv and cp are commands of their own (cmds/), which take every operand.
@@ -781,10 +782,6 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
           return { text: res.commits.map((c) => `${c.oid.slice(0, 7)} ${c.commit.message.split('\n')[0]}`).join('\n'), code: 0 };
         }
         case 'diff': {
-          // Paths and status letters only: this shell cannot read a blob, so it has no patch to show.
-          if (!options.nameOnly && !options.nameStatus && !options.quiet) {
-            return { text: 'git diff: patch output is not supported — use `git diff --name-status` (or --name-only, --quiet) for the changed paths, then `diff` or `cat` the files', code: 2 };
-          }
           if (operands.length > 2) return { text: `git diff: two refs at most — extra operand '${operands[2]}'`, code: 2 };
           if (options.cached && operands.length) return { text: 'git diff --cached <ref> is not supported — the index is compared with HEAD', code: 2 };
           let changes;
@@ -804,10 +801,37 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
           changes = changes.filter((c) => !specs.length || specs.some((s) => covers(s, c.path))).sort((a, b) => (a.path < b.path ? -1 : 1));
           const code = (options.quiet || options.exitCode) && changes.length ? 1 : 0;
           if (options.quiet) return { text: '', code };
-          return { text: changes.map((c) => (options.nameOnly ? c.path : `${c.letter}\t${c.path}`)).join('\n'), code };
+          if (options.nameOnly || options.nameStatus) {
+            return { text: changes.map((c) => (options.nameOnly ? c.path : `${c.letter}\t${c.path}`)).join('\n'), code };
+          }
+          // The patch: each side read where git reads it — the index, a commit, or the working tree.
+          const [oldSide, newSide] = options.cached ? ['HEAD', null] : !operands.length ? [null, 'work'] : [operands[0], operands[1] || 'work'];
+          const read = async (side, filepath) => (side === 'work'
+            ? (await call('fs.read', { path: filepath })).data
+            : (await call('git.readBlob', { filepath, ...(side ? { ref: side } : {}) })).data);
+          const out = [];
+          for (const { path, letter } of changes) {
+            const before = letter === 'A' ? '' : await read(oldSide, path);
+            const after = letter === 'D' ? '' : await read(newSide, path);
+            out.push(`diff --git a/${path} b/${path}`);
+            if (letter === 'A') out.push('new file mode 100644');
+            if (letter === 'D') out.push('deleted file mode 100644');
+            const binary = [before, after].some((d) => typeof d !== 'string' && toBytes(d).includes(0));
+            if (binary) { out.push(`Binary files ${letter === 'A' ? '/dev/null' : 'a/' + path} and ${letter === 'D' ? '/dev/null' : 'b/' + path} differ`); continue; }
+            const patch = createPatch(toText(before), toText(after), { from: letter === 'A' ? '/dev/null' : `a/${path}`, to: letter === 'D' ? '/dev/null' : `b/${path}` });
+            if (patch) out.push(patch.replace(/\n$/, ''));
+          }
+          return { text: out.join('\n'), code };
         }
         case 'branch': {
-          if (!operands.length) return { text: (await call('git.listBranches', {})).branches.join('\n'), code: 0 };
+          if (!operands.length) {
+            // `* ` marks the checked-out branch, as git prints it
+            const names = (await call('git.listBranches', {})).branches;
+            const current = registry.describeCommand('git.currentBranch') ? (await call('git.currentBranch', {})).branch : undefined;
+            const lines = names.map((n) => (n === current ? '* ' : '  ') + n);
+            if (current === null) lines.unshift('* (HEAD detached)');
+            return { text: lines.join('\n'), code: 0 };
+          }
           if (options.list) return { text: 'git branch --list: patterns are not supported — use `git branch` and grep', code: 2 };
           if (operands.length > 1) return { text: `git branch: a start point is not supported ('${operands[1]}') — a new branch starts at HEAD`, code: 2 };
           await call('git.branch', { ref: operands[0] });

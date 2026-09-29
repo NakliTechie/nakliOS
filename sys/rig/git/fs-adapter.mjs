@@ -51,6 +51,38 @@ function makeStat(path, st) {
   };
 }
 
+// Racy git. isomorphic-git trusts an index entry whose size and whole-second mtime match the file
+// (compareStats), so an edit of the same size in the same second as `git add` was invisible to
+// status, diff and commit -a — and on a backend that reports no mtime (0), every same-size edit was
+// (2026-09-29). Real git "smudges" such entries when it writes the index: the stored size becomes 0,
+// the next compare fails, and the file is hashed. This does the same on every index write. An entry
+// is racy when its mtime is not before the second the index is written in, or is unknown (0).
+// Index versions 2 and 3 only (what isomorphic-git writes); anything else is left as it is.
+export async function smudgeRacyEntries(bytes, nowMs = Date.now()) {
+  const b = bytes instanceof Uint8Array ? new Uint8Array(bytes) : new Uint8Array(bytes);
+  const view = new DataView(b.buffer, b.byteOffset, b.byteLength);
+  const subtle = globalThis.crypto && globalThis.crypto.subtle;
+  if (!subtle || b.length < 32 || view.getUint32(0) !== 0x44495243) return bytes; // 'DIRC'
+  const version = view.getUint32(4);
+  if (version !== 2 && version !== 3) return bytes;
+  const nowSec = Math.floor(nowMs / 1000);
+  let off = 12, changed = false;
+  for (let i = 0, n = view.getUint32(8); i < n; i++) {
+    const mtimeSec = view.getUint32(off + 8), mtimeNs = view.getUint32(off + 12);
+    const isFile = (view.getUint32(off + 24) >>> 12) === 8;
+    if (isFile && view.getUint32(off + 36) !== 0 && (mtimeSec >= nowSec || (mtimeSec === 0 && mtimeNs === 0))) {
+      view.setUint32(off + 36, 0); changed = true;
+    }
+    const pathStart = off + 62 + (version === 3 && (view.getUint16(off + 60) & 0x4000) ? 2 : 0);
+    let end = pathStart; while (end < b.length && b[end] !== 0) end++;
+    off += (pathStart - off + (end - pathStart) + 8) & ~7;
+  }
+  if (!changed) return bytes;
+  const sum = new Uint8Array(await subtle.digest('SHA-1', b.subarray(0, b.length - 20)));
+  b.set(sum, b.length - 20);
+  return b;
+}
+
 /**
  * @param {object} fs  a createFileops(...) instance
  * @returns an object with a `.promises` namespace consumable by isomorphic-git.
@@ -66,6 +98,7 @@ export function makeFsAdapter(fs) {
     },
 
     async writeFile(path, data, _opts) {
+      if (/(^|\/)\.git\/index$/.test(path) && typeof data !== 'string') data = await smudgeRacyEntries(data);
       // isomorphic-git mkdirs first, but createParents keeps the Folder backend
       // safe if a parent is missing; the object store ignores dirs anyway.
       const res = await fs.write(path, data, { createParents: true });

@@ -7,7 +7,7 @@
 // matrix (every escape class fails closed). No deps; environment-neutral so it
 // runs in node now and a browser harness later.
 
-import { createFileops, MemoryBackend, applyPatch, reversePatch } from '../index.mjs';
+import { createFileops, MemoryBackend, applyPatch, reversePatch, createPatch } from '../index.mjs';
 
 // ── tiny harness ──────────────────────────────────────────────────────────
 let passed = 0;
@@ -142,12 +142,42 @@ await test('patch atomic: failed hunk names itself, file unchanged', async () =>
 
 await test('patch preserves a no-trailing-newline file', async () => {
   const original = 'x\ny'; // no final newline
-  const diff = ['@@ -1,2 +1,2 @@', ' x', '-y', '+Y', '\\ No newline at end of file'].join('\n');
+  // As `diff` writes it: each side's unterminated last line carries the marker.
+  const diff = ['@@ -1,2 +1,2 @@', ' x', '-y', '\\ No newline at end of file', '+Y', '\\ No newline at end of file'].join('\n');
   const applied = applyPatch(original, diff);
   assert(applied.ok, 'apply ok');
   eq(applied.result, 'x\nY', 'no trailing newline preserved');
   const back = applyPatch(applied.result, reversePatch(diff));
   eq(back.result, original, 'reverse restores exactly');
+  // A loose diff (the old side unmarked) still applies, and fs.patch's revert — computed from the
+  // bytes — still restores the original exactly.
+  const loose = ['@@ -1,2 +1,2 @@', ' x', '-y', '+Y', '\\ No newline at end of file'].join('\n');
+  eq(applyPatch(original, loose).result, 'x\nY', 'a loose diff applies');
+  const fs = newFs();
+  await fs.write('n.txt', original);
+  const p = await fs.patch('n.txt', loose);
+  assert(p.ok, 'fs.patch applies the loose diff');
+  assert((await fs.patch('n.txt', p.revert)).ok, 'its revert applies');
+  eq((await fs.read('n.txt', { encoding: 'utf-8' })).data, original, 'and restores the bytes');
+});
+
+// createPatch is the inverse of applyPatch, final newline included; `diff -u` and `git diff` output
+// ends in a newline, which parsePatch once read as an extra context line (every such patch failed).
+await test('createPatch round-trips through applyPatch; a newline-terminated patch applies', async () => {
+  eq(JSON.stringify(applyPatch('a\n', '@@ -1 +1 @@\n-a\n+b\n')), JSON.stringify({ ok: true, result: 'b\n' }), 'a patch ending in a newline');
+  eq(applyPatch('a\nb\n', '@@ -1,0 +2 @@\n+x\n').result, 'a\nx\nb\n', '-N,0 inserts after line N');
+  const cases = [['', 'a\n'], ['a\n', ''], ['a', 'a\n'], ['a\n', 'a'], ['\n', 'x'], ['x\ny', 'x\ny\n'],
+    ['a\nb\nc\nd\ne\nf\ng\nh\n', 'a\nB\nc\nd\ne\nf\ng\nH\n'], ['r\r\n', 'r\n'], ['--- a\n', '-- a\n']];
+  let seed = 3; const rnd = (n) => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed % n; };
+  const gen = () => { const l = []; for (let i = rnd(10); i > 0; i--) l.push(['a', 'b', '', ' x', '\\ No newline at end of file', '@@ -1 +1 @@'][rnd(6)]); const t = l.join('\n'); return rnd(2) && t ? t + '\n' : t; };
+  for (let i = 0; i < 2000; i++) cases.push([gen(), gen()]);
+  for (const [a, b] of cases) {
+    const p = createPatch(a, b, { from: 'a/f', to: 'b/f' });
+    const r = applyPatch(a, p);
+    assert(r.ok && r.result === b, `round trip ${JSON.stringify(a)} -> ${JSON.stringify(b)}: ${JSON.stringify(r)}\n${p}`);
+    if (p) { const back = applyPatch(b, reversePatch(p)); assert(back.ok && back.result === a, `reverse ${JSON.stringify(b)} -> ${JSON.stringify(a)}`); }
+  }
+  eq(createPatch('same\n', 'same\n'), '', 'equal texts give an empty patch');
 });
 
 // ── glob / grep ─────────────────────────────────────────────────────────
@@ -286,6 +316,28 @@ await test('expected conditions return typed results, never throw', async () => 
 });
 
 // ── report ──────────────────────────────────────────────────────────────
+// `mv d d/sub` copied d into itself and then removed d: both gone, exit 0 (2026-09-29).
+await test('copy/move refuse a destination inside the source; overwrite replaces a file only', async () => {
+  const fs = newFs();
+  await fs.write('d/f.txt', 'keep');
+  eq((await fs.move('d', 'd/sub')).code, 'EINVAL', 'move into its own subdirectory');
+  eq((await fs.copy('d', 'd/sub')).code, 'EINVAL', 'copy into its own subdirectory');
+  eq((await fs.move('d', 'd')).code, 'EINVAL', 'move onto itself');
+  eq((await fs.read('d/f.txt', { encoding: 'utf-8' })).data, 'keep', 'd is intact');
+  eq((await fs.move('d', 'dd')).ok, true, 'a sibling whose name starts the same is not inside');
+  await fs.write('a.txt', 'A'); await fs.write('b.txt', 'B');
+  eq((await fs.copy('a.txt', 'b.txt')).code, 'EEXIST', 'no overwrite by default');
+  eq((await fs.copy('a.txt', 'b.txt', { overwrite: true })).ok, true, 'overwrite a file');
+  eq((await fs.read('b.txt', { encoding: 'utf-8' })).data, 'A');
+  await fs.write('c.txt', 'C');
+  eq((await fs.move('c.txt', 'b.txt', { overwrite: true })).ok, true, 'move over a file');
+  eq((await fs.read('b.txt', { encoding: 'utf-8' })).data, 'C');
+  eq((await fs.stat('c.txt')).code, 'ENOENT', 'the source is gone');
+  eq((await fs.copy('dd', 'b.txt', { overwrite: true })).code, 'EEXIST', 'a directory never replaces a file');
+  eq((await fs.copy('b.txt', 'dd', { overwrite: true })).code, 'EEXIST', 'a file never replaces a directory');
+  eq((await fs.copy('b.txt', 'b.txt', { overwrite: true })).code, 'EINVAL', 'a file onto itself');
+});
+
 const total = passed + failures.length;
 if (failures.length === 0) {
   console.log(`C0 conformance: ${passed}/${total} passed`);

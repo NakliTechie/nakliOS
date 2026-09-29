@@ -6,4 +6,4 @@
 export { createFileops } from './fileops.mjs';
 export { MemoryBackend } from './memory-backend.mjs';
 export { normalizeMountPath, joinRoot, EINVAL_PATH } from './pathguard.mjs';
-export { applyPatch, reversePatch, parsePatch, EPATCH } from './patch.mjs';
+export { applyPatch, reversePatch, parsePatch, createPatch, EPATCH } from './patch.mjs';

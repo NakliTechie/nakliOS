@@ -151,6 +151,65 @@ await test('diff between two refs', async () => {
 });
 
 // ── report ──────────────────────────────────────────────────────────────
+// ── racy git: a same-size edit right after `git add` (2026-09-29) ─────────
+// isomorphic-git trusts an index entry whose size and whole-second mtime match the file. The adapter
+// smudges racy entries on every index write (fs-adapter.mjs), so these edits are hashed and seen.
+await test('a same-size edit in the second of the commit is seen by statusMatrix and diff', async () => {
+  const { fs, git } = newRepo();
+  await git.init({ defaultBranch: 'main' });
+  await fs.write('a.txt', 'one\n');
+  await git.add({ filepath: 'a.txt' });
+  await commitOp(git, 'first');
+  // A status after the commit refreshes the entry's stats (as the shell's `git commit` does). The
+  // first status after an add re-hashes anyway, so without this the test would pass by accident.
+  eq(JSON.stringify((await git.statusMatrix()).matrix), JSON.stringify([['a.txt', 1, 1, 1]]), 'clean after commit');
+  await fs.write('a.txt', 'two\n'); // same size, same second
+  const row = (await git.statusMatrix()).matrix.find(([f]) => f === 'a.txt');
+  eq(JSON.stringify(row), JSON.stringify(['a.txt', 1, 2, 1]), 'modified in the working tree');
+  eq((await git.diff()).changes.map((c) => c.status).join(), 'modified', 'and in diff');
+  await fs.write('a.txt', 'one\n');
+  eq(JSON.stringify((await git.statusMatrix()).matrix.find(([f]) => f === 'a.txt')), JSON.stringify(['a.txt', 1, 1, 1]), 'written back: clean again');
+});
+
+await test('on a backend with no mtime (0), a same-size edit is still seen', async () => {
+  class NoTimes extends MemoryBackend { async stat(p) { const st = await super.stat(p); return st && { ...st, mtimeMs: 0 }; } }
+  const fs = createFileops({ backend: new NoTimes() });
+  const git = createGitCore({ fs, dir: '/' });
+  await git.init({ defaultBranch: 'main' });
+  await fs.write('a.txt', 'one\n');
+  await git.add({ filepath: 'a.txt' });
+  await commitOp(git, 'first');
+  await git.statusMatrix(); // refresh the entry's stats, as above
+  await new Promise((r) => setTimeout(r, 1100)); // past the second of the write: only mtime 0 makes it racy
+  await git.statusMatrix();
+  await fs.write('a.txt', 'two\n');
+  eq(JSON.stringify((await git.statusMatrix()).matrix.find(([f]) => f === 'a.txt')), JSON.stringify(['a.txt', 1, 2, 1]), 'mtime 0 is racy, so the file is hashed');
+});
+
+await test('without a repository the local ops refuse; readBlob, currentBranch and REF~N read history', async () => {
+  const { fs, git } = newRepo();
+  await fs.write('a.txt', 'x\n');
+  for (const op of ['statusMatrix', 'add', 'log', 'listBranches', 'currentBranch']) {
+    const r = await git[op]({ filepath: 'a.txt' });
+    eq(r.code, 'ENOTREPO', `${op} without .git`);
+  }
+  await git.init({ defaultBranch: 'main' });
+  await git.add({ filepath: 'a.txt' }); const c1 = await commitOp(git, 'one');
+  await fs.write('a.txt', 'y\n'); await git.add({ filepath: 'a.txt' }); await commitOp(git, 'two');
+  await fs.write('a.txt', 'z\n'); await git.add({ filepath: 'a.txt' });
+  const text = async (i) => new TextDecoder().decode((await git.readBlob(i)).data);
+  eq(await text({ filepath: 'a.txt' }), 'z\n', 'no ref: the index');
+  eq(await text({ filepath: 'a.txt', ref: 'HEAD' }), 'y\n', 'HEAD');
+  eq(await text({ filepath: 'a.txt', ref: 'HEAD~1' }), 'x\n', 'HEAD~1');
+  eq(await text({ filepath: 'a.txt', ref: 'HEAD^' }), 'x\n', 'HEAD^');
+  eq(await text({ filepath: 'a.txt', ref: c1.oid.slice(0, 7) }), 'x\n', 'an abbreviated oid');
+  eq((await git.readBlob({ filepath: 'nope', ref: 'HEAD' })).code, 'ENOENT', 'a missing path');
+  let threw = null; try { await git.readBlob({ filepath: 'a.txt', ref: 'HEAD~9' }); } catch (e) { threw = e; }
+  assert(threw && /no such commit/.test(threw.message), 'past the root throws');
+  eq((await git.currentBranch()).branch, 'main');
+  eq((await git.log({ ref: 'HEAD~1' })).commits.length, 1, 'log from HEAD~1');
+});
+
 const total = passed + failures.length;
 if (failures.length === 0) {
   console.log(`C2 (Layer 1) conformance: ${passed}/${total} passed`);
