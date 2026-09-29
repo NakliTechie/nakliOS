@@ -609,7 +609,7 @@ async function gitShell() {
     const text = out.join('\n').split('\n').filter((l) => !/is destructive\. confirm\?/.test(l)).join('\n');
     return { out: text.replace(/^\n+|\n+$/g, ''), code: sh.lastCode }; // porcelain rows can start with a space
   };
-  return { fs, run };
+  return { fs, sh, run };
 }
 
 await test('git: `git init && git add -A && git commit -m first` commits the tree; add . and -u too', async () => {
@@ -642,6 +642,66 @@ await test('git: `git init && git add -A && git commit -m first` commits the tre
   eq((await run('git add')).code, 0, 'bare git add says nothing was added, as git does');
   const p = await run('git add -p a'); eq(p.code, 2); assert(/unsupported flag -p/.test(p.out), p.out);
   eq((await fs.stat('n')).ok, true);
+});
+
+// Forge's first-run line, observed 2026-09-29 against the pre-005f6dc shell: every form below reached
+// git.add as an empty path ("path must not be empty"), so `git init && git add -A && git commit`
+// never reached the commit. Each form runs in a fresh workspace seeded as Forge's seedScratch seeds one.
+await test('git: add -A, --all, . and <dir> stage the seeded tree, removals too; the promo line reaches the commit confirm', async () => {
+  const seeded = async ({ init = true } = {}) => {
+    const g = await gitShell();
+    await g.fs.write('README.md', '# Forge workspace\n');
+    await g.fs.write('src/main.py', 'print("hello from Forge")\n', { createParents: true });
+    if (init) eq((await g.run('git init')).code, 0);
+    return g;
+  };
+  for (const form of ['git add -A', 'git add --all', 'git add .', 'git add -A .']) {
+    const { run } = await seeded();
+    const r = await run(form);
+    eq(r.code, 0, `${form}: ${r.out}`);
+    assert(!/path must not be empty/.test(r.out), r.out);
+    eq((await run('git status')).out, 'A  README.md\nA  src/main.py', `${form} stages every untracked file`);
+  }
+  {
+    const { run } = await seeded();
+    eq((await run('git add src')).code, 0);
+    eq((await run('git status')).out, 'A  src/main.py\n?? README.md', 'git add <dir> stages that directory alone');
+    eq((await run('git add src/')).code, 0, 'a trailing slash names the same directory');
+  }
+  // Fed raw, not auto-confirmed: both adds answer ok and the chain stops at the commit's confirmation.
+  const { fs, sh, run } = await seeded({ init: false });
+  const promo = await sh.feed('git init && git add -A && git commit -m first');
+  eq(promo.output, 'ok\nok\ngit.commit is destructive. confirm? [y/N]', 'the chain reaches the commit');
+  assert(sh.awaitingConfirm, 'the commit waits for the owner');
+  const committed = await sh.feed('y');
+  assert(/^\[[0-9a-f]{7}\]$/.test(committed.output), committed.output);
+  eq(sh.lastCode, 0);
+  eq((await run('git status')).out, '(clean)');
+  // A directory pathspec stages a deletion under it, and leaves the rest of the tree alone.
+  await fs.remove('src/main.py'); await fs.write('README.md', 'edited\n');
+  eq((await run('git add src')).code, 0);
+  eq((await run('git status')).out, ' M README.md\nD  src/main.py', 'git add <dir> staged the removal');
+  await run('git commit -m second');
+  // -A with no pathspec covers the whole tree from a subdirectory: the edit, a new file, a removal.
+  await fs.write('src/lib/util.py', 'x = 1\n', { createParents: true }); await fs.remove('README.md');
+  const sub = await run('cd src && git add -A && cd ..'); eq(sub.code, 0, sub.out);
+  eq((await run('git status')).out, 'D  README.md\nA  src/lib/util.py', '-A staged the removal and the new file');
+});
+
+await test('git: add . in an empty workspace and add <empty dir> exit 0, as git does; a missing path still fails', async () => {
+  const { fs, run } = await gitShell();
+  await run('git init');
+  const dot = await run('git add .'); eq(dot.code, 0, 'git add . with nothing to add: ' + dot.out);
+  eq((await run('git add -A')).code, 0);
+  await run('mkdir empty');
+  eq((await run('git add empty')).code, 0, 'an empty directory matches its pathspec');
+  const chain = await run('git add . && git commit -m first');
+  eq(chain.code, 1); eq(chain.out, 'ok\nnothing to commit, working tree clean', 'the commit, not the add, stops the chain');
+  await fs.write('.gitignore', '*.log\n'); await fs.write('logs/run.log', 'x', { createParents: true });
+  eq((await run('git add logs')).code, 0, 'so does a directory holding only ignored files');
+  eq((await run('git status')).out, '?? .gitignore', 'and nothing ignored was staged');
+  const miss = await run('git add nope/'); eq(miss.code, 1);
+  eq(miss.out, "git add: pathspec 'nope/' did not match any files");
 });
 
 await test('git: rm leaves the working tree unless --cached; branch, checkout -b, diff and status answer honestly', async () => {

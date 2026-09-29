@@ -732,8 +732,13 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
           // -A / -u with no pathspec cover the whole tree, wherever the shell is
           const specs = operands.length ? operands.map(rel) : [''];
           const rows = await matrix();
-          const miss = operands.find((p, i) => !rows.some(([f]) => covers(specs[i], f)));
-          if (miss != null) return { text: `git add: pathspec '${miss}' did not match any files`, code: 1 };
+          // A pathspec matches a path under it, or an existing directory: git exits 0 for `git add .`
+          // in an empty workspace and for a directory that holds no addable file.
+          for (let i = 0; i < operands.length; i++) {
+            if (rows.some(([f]) => covers(specs[i], f))) continue;
+            const st = await face.invoke('fs.stat', { path: specs[i] });
+            if (!st.ok || st.stat?.type !== 'dir') return { text: `git add: pathspec '${operands[i]}' did not match any files`, code: 1 };
+          }
           await stageTree(specs, { trackedOnly: !!options.update });
           return ok;
         }
