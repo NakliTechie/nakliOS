@@ -121,7 +121,7 @@ export function segments(command) {
     // U1a adds env execution and xargs batching/replacement. Until U3 recursively
     // models nested argv, never let an outer wrapper hide a denied inner command.
     // The existing null path fails closed under deny/ask rules, including bypass.
-    if (words[0] === 'xargs') return null;
+    if (['xargs', 'timeout', 'egrep', 'fgrep', 'more', 'dir', 'vdir'].includes(words[0])) return null;
     if (words[0] === 'env') {
       try {
         const { operands } = parseArgs(words.slice(1), {
@@ -234,7 +234,7 @@ export function decideByRules(cfg, toolName, args) {
   if (isShellCall && segments(args && args.command) === null) {
     const shellRule = (k) => lists[k].find((r) => r.tool === 'bash' || r.tool === 'shell' || r.tool === 'sh');
     const d = shellRule('deny'); if (d) return { decision: 'deny', rule: d.source, why: 'this command line cannot be split into the commands it runs, so your deny rule (' + d.source + ') cannot be checked — refused' };
-    const a = shellRule('ask'); if (a) return { decision: 'ask', rule: a.source, why: 'this command line cannot be split into the commands it runs, so your ask rule (' + a.source + ') asks' };
+    const a = shellRule('ask'); if (a) return { decision: 'ask', uninspectable: true, rule: a.source, why: 'this command line cannot be split into the commands it runs, so your ask rule (' + a.source + ') asks' };
   }
   // Deny first, and 'some' is enough: one refused command in a chain refuses the chain.
   for (const r of lists.deny) {

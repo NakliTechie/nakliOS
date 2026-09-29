@@ -399,6 +399,12 @@ jobs:
       - name: Verify digest compression boundaries and capability refusals
         run: node sys/rig/cli/test/digest-algorithms.test.mjs
 
+      - name: Verify virtual runtime facts, date, aliases and scoped timeout
+        run: node sys/rig/cli/test/u2d-runtime.test.mjs
+
+      - name: Verify nested timeout and alias permission rules through Anvil policy
+        run: node sys/ai/test/timeout-permission.test.mjs
+
       - name: Verify literal shell operators and escaped arguments
         run: node sys/rig/cli/test/literal-operators.test.mjs
 

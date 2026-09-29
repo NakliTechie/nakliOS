@@ -38,6 +38,7 @@ import { createMutationCommands } from './cmds/mutation.mjs';
 import { createInspectionCommands } from './cmds/inspection.mjs';
 import { createEncodingCommands } from './cmds/encodings.mjs';
 import { createChecksumCommands } from './cmds/checksums.mjs';
+import { createRuntimeCommands } from './cmds/runtime.mjs';
 import { isByteStream, ownByteStream, closeByteStream, collectByteStream, createStreamingHead } from './cmds/streams.mjs';
 import { createPatch } from '../fileops/patch.mjs';
 
@@ -469,7 +470,16 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
     createMutationCommands(io, { signal: commandSignal, environment: commandEnvironment }),
     createInspectionCommands(io, { signal: commandSignal }),
     createEncodingCommands(io, { signal: commandSignal }),
-    createChecksumCommands(io, { signal: commandSignal }));
+    createChecksumCommands(io, { signal: commandSignal }),
+    createRuntimeCommands(io, { signal: commandSignal, environment: commandEnvironment,
+      runWithTimeout: (milliseconds, argv, stdin) => execution.withTimeout(milliseconds, () => io.run(argv, stdin)) }));
+  Object.assign(builtins, {
+    egrep: (argv, stdin) => builtins.grep(['-E', ...argv], stdin),
+    fgrep: (argv, stdin) => builtins.grep(['-F', ...argv], stdin),
+    more: (argv, stdin) => builtins.cat(argv, stdin),
+    dir: (argv, stdin) => builtins.ls(argv, stdin),
+    vdir: (argv, stdin) => builtins.ls(['-l', ...argv], stdin),
+  });
   builtins.head = createStreamingHead({ fallback: builtins.head, signal: commandSignal });
 
   // One dispatch table also owns discovery and help. Dotted registry names remain reachable.
@@ -541,7 +551,8 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
         'tac', 'rev', 'nl', 'paste', 'join', 'comm', 'split', 'fold', 'fmt', 'expand', 'unexpand', 'column',
         'seq', 'shuf', 'tsort', 'expr', 'numfmt', 'printenv', 'yes', 'ptx', 'bc', 'factor',
         'readlink', 'realpath', 'rmdir', 'mktemp', 'truncate', 'unlink', 'du', 'tree', 'file', 'strings', 'cmp', 'ln', 'link',
-        'base64', 'base32', 'basenc', 'md5sum', 'sha1sum', 'sha224sum', 'sha256sum', 'sha384sum', 'sha512sum', 'b2sum', 'cksum', 'sum'].includes(verb) || !builtins[verb] ? stdin : toText(stdin);
+        'base64', 'base32', 'basenc', 'md5sum', 'sha1sum', 'sha224sum', 'sha256sum', 'sha384sum', 'sha512sum', 'b2sum', 'cksum', 'sum',
+        'timeout', 'more'].includes(verb) || !builtins[verb] ? stdin : toText(stdin);
       const result = await handler(argv.slice(1), input);
       if (!result.stream) return result;
       const stream = ownByteStream(result.stream);
@@ -561,6 +572,9 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
   async function runSpecial(verb, args, stdin) {
     // Runtime code can mutate through its own bridge, outside the shell I/O wrapper.
     if (currentSignal()?.aborted && ['python', 'python3', 'py', 'node'].includes(verb)) throw new ShellInterrupted();
+    if (execution?.hasDeadline && ['python', 'python3', 'py'].includes(verb)) {
+      return { text: `${verb}: scoped timeout is unavailable for this Python runtime`, code: 2 };
+    }
     stdin = toText(stdin);
     if (verb === 'python' || verb === 'py' || verb === 'python3') {
       if (!kiln) return { text: 'python: the Kiln kernel is not available (needs cross-origin isolation — open Forge as a tab)', code: 1 };
@@ -990,7 +1004,9 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
       // An abort may finish a suspended command between feed calls. Drain it first.
       if (running) {
         await running;
-        if (execution?.stopped) {
+        if (execution) {
+          // A scoped deadline can finish a confirmation while no feed is
+          // waiting. Drain that completion before opening a fresh invocation.
           const result = await execution.next();
           priorOutput = result.output;
           execution = null; running = null;
