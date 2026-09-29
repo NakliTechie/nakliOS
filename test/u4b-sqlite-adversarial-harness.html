@@ -95,7 +95,14 @@ for name in ('fetch','Request','WebSocket'):
         getattr(js,name)('http://127.0.0.1:8878/forbidden-private-sqlite-egress')
         blocked.append(name+':LEAK')
     except Exception as error:
-        blocked.append(name+(':BLOCKED' if 'network access is disabled in Kiln' in str(error) else ':WRONG_ERROR'))
+        blocked.append(name+(':BLOCKED' if 'network access is disabled in Kiln' in str(error) else ':WRONG_ERROR['+type(error).__module__+'.'+type(error).__name__+':'+str(error)+']'))
+        if 'network access is disabled in Kiln' not in str(error):
+            _b13_tb=error.__traceback__
+            _b13_frames=[]
+            while _b13_tb is not None:
+                _b13_frames.append(_b13_tb.tb_frame.f_code.co_filename+':'+str(_b13_tb.tb_lineno)+':'+_b13_tb.tb_frame.f_code.co_name)
+                _b13_tb=_b13_tb.tb_next
+            blocked[-1]+='[frames='+repr(_b13_frames)+'][cause='+repr(error.__cause__)+'][context='+repr(error.__context__)+']'
 print(','.join(blocked))`,{interpreter:'sqlite'});
     observations.push({mode,name:'private SQLite egress',status:probe.status,stdout:probe.stdout});
     assert(probe.status==='ok','private egress probe executes');
