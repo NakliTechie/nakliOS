@@ -1,26 +1,42 @@
 # NakliOS
 
-A private browser desktop: single-file, privacy-first, browser-native tools. No server, no account, no tracking. Data stays on the device (OPFS, a picked folder, or a Crate). Live: https://naklios.dev — Source: https://github.com/NakliTechie/nakliOS (MIT).
+A browser desktop that brings your tools, files, and coding agents into one workspace.
+Storage follows the selected backend: Browser, a picked folder, or encrypted Crate storage on the user's Cloudflare R2.
+Agent inference sends requests to the configured endpoint. No NakliOS account or build step is required.
+Live: https://naklios.dev — Source: https://github.com/NakliTechie/nakliOS (MIT).
 
 ## What it is
-A launcher (one HTML file at the root) that hosts standalone apps. Each app is its own single-file HTML page under /apps/<id>/ and also runs standalone. Two modes: Basic (opens app URLs in a tab), Immersive (apps run as iframe windows over a postMessage protocol).
+A desktop entrypoint at index.html that hosts bundled apps and links to standalone tools.
+Immersive is the default: compatible apps open in windows. Basic keeps system apps hosted and opens other web apps in tabs.
+Apps may ship additional modules and assets; declared mirrors preserve their upstream source and asset inventory.
 
 ## Apps (/apps/<id>/)
-- anvil — on-device coding agent (read/write/edit/shell tools; workspace in the browser, a disk folder, or a Crate)
+- anvil — browser coding agent with read/write/edit/shell tools and a configured inference endpoint
 - forge — shell/desktop over Rig + Kiln
 - reckon — spreadsheet; draft — word processor; editor; notes; files; menagerie — a fleet of coding agents in one tab, over relays you run
 - reel — media player; nakliamp — music; sheaf — PDF editor; tijori — vault; calendar
 
 ## Runtime surface
-- Host bridge: window.naklios (+ .ai) over postMessage; SDK at /sdk/naklios.js. Methods no-op when standalone (window.parent === window). Events: naklios:ready, :title, :close, :beforeclose, :theme.
-- Storage: OPFS by default; File System Access for a picked folder; Crate (host store) roams across devices.
-- AI: apps reach a model through the host (naklios.ai) — a BYOK endpoint set in Settings → AI. No model ships in the page; AI is removable.
+- Host bridge: window.naklios (+ .ai) over postMessage; SDK at /sdk/naklios.js. Hosted transport requires a real host channel; standalone apps use their own fallback adapters. Events: naklios:ready, :title, :close, :beforeclose, :theme.
+- Storage: Browser support is app-specific; File System Access uses a picked folder; Crate provides encrypted remote storage. Files has no Browser backend.
+- AI: apps use the host broker (naklios.ai). General inference can use browser models or a configured endpoint; coding agents require the endpoint.
 - Egress: naklios.net.fetch routes one cross-origin request through the user's own signed Cloudflare Worker (nakli-egress) — HMAC envelope, destination allowlist, SSRF guard. naklios never proxies traffic.
 
 ## Coding agents
-- Rig (sys/rig): fileops, git, registry, agent-face, curated shell, goal records.
-- Kiln (sys/kiln): a persistent Pyodide-in-Worker kernel — the only tool the model gets; a separate verifier kernel gates "done".
-- Anvil (apps/anvil): the coding agent on Rig + Kiln; mobile + foldable.
+- Rig (sys/rig): governed fileops, Git, registry, agent face, and a bounded Unix shell with byte streams and recursive permission analysis.
+- Kiln (sys/kiln): optional Python execution and a separate private SQLite interpreter; runtime downloads, cancellation, and egress limits are documented in sys/kiln/README.md.
+- Anvil (apps/anvil): projects, tasks, structured tools, shell dispatch, hooks, protected paths, and optional task verification commands.
+- Forge (apps/forge): terminal access to the same shell and agent loop.
+
+## Read next
+- docs/desktop-reference.md — desktop modes, storage, AI, egress, app catalog, mirroring, and SDK vendoring.
+- docs/app-contract.md — host SDK and app integration contract.
+- sys/rig/cli/README.md — shell syntax, byte streams, staging, Stop, and permission inspection.
+- sys/rig/cli/cmds/README.md — implemented commands, flags, bounds, and explicit capability refusals.
+- docs/kothri-unix-handoff.md — immutable core pin and optional-runtime requirements; Kothri packaging and public APIs remain future work.
+- .github/workflows/test.yml — full verification commands; Node 24 and Chrome requirements.
 
 ## Constraints
-No build step (vanilla ESM, vendored + pinned). Chromium/WebKit. Removable AI: pull the model, the tools still stand.
+No build step: JavaScript ES modules and pinned vendored dependencies.
+Browser capabilities determine available storage and runtime paths. The shell does not launch host processes or promise full POSIX/GNU compatibility.
+Local tools remain usable without model inference.
