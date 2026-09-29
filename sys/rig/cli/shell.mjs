@@ -25,6 +25,7 @@ import { createTextCommands } from './cmds/text.mjs';
 import { createSearchCommands } from './cmds/search.mjs';
 import { createUtilityCommands } from './cmds/utility.mjs';
 import { createListCommands } from './cmds/list.mjs';
+import { createSedCommands } from './cmds/sed.mjs';
 import { createPatch } from '../fileops/patch.mjs';
 
 // bash verb -> registry command name. The dotted name (fs.list) always works too.
@@ -415,6 +416,7 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
     signal: () => currentSignal()?.aborted ? currentSignal() : execution?.signal,
     SLEEP_MAX_S, LIST_FLAGS, commandNames });
   Object.assign(builtins, createCoreCommands(io), createFileCommands(io), createTextCommands(io),
+    createSedCommands(io, { signal: () => currentSignal()?.aborted ? currentSignal() : execution?.signal }),
     createSearchCommands(io), createListCommands(io), createUtilityCommands({ io, state, commandNames,
       signal: () => currentSignal()?.aborted ? currentSignal() : execution?.signal, maxSleep: SLEEP_MAX_S }));
 
@@ -480,7 +482,7 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
       const handler = dispatch.get(verb);
       if (!handler) return { text: `${verb}: command not found`, code: 127 };
       // Text-only commands decode at their boundary, never in the pipeline itself.
-      const input = ['cat', 'tee', 'od', 'head', 'tail', 'wc', 'tr', 'cut', 'env'].includes(verb) || !builtins[verb] ? stdin : toText(stdin);
+      const input = ['cat', 'tee', 'od', 'head', 'tail', 'wc', 'tr', 'cut', 'env', 'sed'].includes(verb) || !builtins[verb] ? stdin : toText(stdin);
       return await handler(argv.slice(1), input);
     } catch (error) {
       if (error instanceof ShellInterrupted) throw error;
