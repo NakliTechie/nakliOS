@@ -542,9 +542,9 @@
         // Python's writes must invalidate the search index the agent then greps.
         const fsBridge = createFsBridge({ backend, mount:'', fs });
         kiln = createKiln({
-          sizeBytes: 12 * 1024 * 1024,
+          sizeBytes: 13 * 1024 * 1024,
           consent: () => true,
-          loadRuntime: () => createWorkerRuntime({ face, fsBridge, rigModuleSource }),
+          loadRuntime: ({ purpose } = {}) => createWorkerRuntime(purpose === 'sqlite' ? {} : { face, fsBridge, rigModuleSource }),
         });
       } catch(_) { kiln = null; }
     }

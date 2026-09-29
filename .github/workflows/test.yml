@@ -431,6 +431,33 @@ jobs:
         run: node sys/rig/cli/test/u4a-archive-selection.test.mjs
       - name: Unix U4a atomic archive mutations and storage guarantees
         run: node sys/rig/fileops/test/archive-mutation.test.mjs
+      - name: Unix U4b structured-data command semantics
+        run: node sys/rig/cli/test/u4b-data.test.mjs
+      - name: Unix U4b structured-data grants, limits and cancellation
+        run: node sys/rig/cli/test/u4b-data-governance.test.mjs
+      - name: Unix U4b real SQLite SQL and governed database snapshots
+        run: node sys/rig/cli/test/u4b-sqlite.test.mjs
+      - name: Unix U4b SQLite loader consent and initialization order
+        run: node sys/rig/cli/test/u4b-sqlite-loader.test.mjs
+      - name: Unix U4b SQLite statement preparation work bounds
+        run: node sys/rig/cli/test/u4b-sqlite-preparation.test.mjs
+      - name: Unix U4b SQLite large database transport and retention
+        run: node sys/rig/cli/test/u4b-sqlite-review.test.mjs
+      - name: Unix U4b private SQLite interpreter and cancellation ownership
+        run: node sys/rig/cli/test/u4b-sqlite-isolation.test.mjs
+      - name: Verify SQLite preserves duplicate JSON columns
+        run: node sys/rig/cli/test/u4b-sqlite-columns.test.mjs
+      - name: Verify SQLite main-thread loading cancellation
+        run: node sys/rig/cli/test/u4b-sqlite-loading.test.mjs
+      - name: Verify independent Python and SQLite readiness
+        run: node sys/rig/cli/test/u4b-sqlite-status.test.mjs
+      - name: Verify bounded and cancellable private SQLite startup
+        run: node sys/rig/cli/test/u4b-sqlite-startup.test.mjs
+      - name: Reject incomplete or misattributed SQLite browser reports
+        run: node scripts/test-sqlite-browser-results.mjs
+
+      - name: Verify SQLite browser CDN allowlist assertions
+        run: node scripts/test-sqlite-browser-network.mjs
 
       - name: Verify literal shell operators and escaped arguments
         run: node sys/rig/cli/test/literal-operators.test.mjs
@@ -587,3 +614,14 @@ jobs:
 
       - name: Verify third-party app manifests, isolation, and lifecycle
         run: node scripts/test-third-party-apps.mjs
+
+  sqlite-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify real pinned Pyodide SQLite in Chrome
+        run: node scripts/test-sqlite-browser.mjs

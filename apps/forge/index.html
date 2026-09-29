@@ -157,9 +157,9 @@
           const rigModuleSource = generateRigModule(registry).source;
           const fsBridge = createFsBridge({ backend, mount: '' });
           kiln = createKiln({
-            sizeBytes: 12 * 1024 * 1024,
-            consent: () => true, // typing `python` is consent; a one-time notice prints on first load
-            loadRuntime: () => createWorkerRuntime({ face, fsBridge, rigModuleSource }),
+            sizeBytes: 13 * 1024 * 1024,
+            consent: () => true, // invoking Python or SQLite is consent; first load prints a notice
+            loadRuntime: ({ purpose } = {}) => createWorkerRuntime(purpose === 'sqlite' ? {} : { face, fsBridge, rigModuleSource }),
           });
         } catch (_) { kiln = null; }
       }
@@ -462,10 +462,10 @@
         term.write(`${ACCENT}◆${RESET} ${DIM}workspace → memory scratch (not persisted).${RESET}\r\n`);
         return;
       }
-      // First `python`: announce the one-time Pyodide download so the wait is explained.
-      if (/^(python|py)\b/.test(line.trim()) && kiln && !pyAnnounced && kiln.status && kiln.status() !== 'ready') {
+      // Announce the first Python/SQLite runtime download.
+      if (/^(python3?|py|sqlite3)\b/.test(line.trim()) && kiln && !pyAnnounced && kiln.status && kiln.status() !== 'ready') {
         pyAnnounced = true;
-        term.write(`${DIM}◆ Kiln: loading Pyodide (~12 MB, first run only)…${RESET}\r\n`);
+        term.write(`${DIM}◆ Kiln: loading Pyodide with SQLite (~13 MiB, first run only)…${RESET}\r\n`);
       }
       let res;
       // ^C cancels this feed; the feed itself then returns `shell: interrupted`.

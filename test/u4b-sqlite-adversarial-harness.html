@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>B10 SQLite interpreter isolation regressions</title>
+<h1>B10 SQLite interpreter isolation regressions</h1><pre id="out">Starting disposable runtimes…</pre>
+<script type="module">
+import { createShell } from '/sys/rig/cli/shell.mjs';
+import { MemoryBackend, createFileops } from '/sys/rig/fileops/index.mjs';
+import { createGrant, createOpLog, createAgentFace } from '/sys/rig/agent/index.mjs';
+import { buildRigRegistry } from '/sys/rig/registry/index.mjs';
+import { createFsBridge } from '/sys/kiln/fs-bridge.mjs';
+import { generateRigModule } from '/sys/kiln/rig-bindings.mjs';
+import { createKiln, createWorkerRuntime } from '/sys/kiln/index.mjs';
+import { createMainThreadKiln } from '/sys/kiln/main-thread-runtime.mjs';
+const results = [], observations = [], out = document.querySelector('#out');
+const assert = (yes, why) => { if (!yes) throw new Error(why); };
+const decode = value => typeof value === 'string' ? value : new TextDecoder().decode(value);
+const quote = s => "'" + s.replaceAll("'", "'\\''") + "'";
+// BEGIN harness report contract
+const requestedModes = new URL(location.href).searchParams.getAll('mode');
+const modeValid = requestedModes.length === 0 || (requestedModes.length === 1 && ['worker', 'main'].includes(requestedModes[0]));
+const selectedModes = modeValid ? (requestedModes.length ? requestedModes : ['worker', 'main']) : [];
+const expectedByMode = { worker: 5, main: 4 };
+const expectedTotal = selectedModes.reduce((total, mode) => total + expectedByMode[mode], 0);
+function publish(done = false) {
+  if (done && modeValid && (expectedTotal <= 0 || results.length !== expectedTotal)
+      && !results.some(result => result.name === 'harness: assertion count')) {
+    results.push({ name: 'harness: assertion count', ok: false,
+      detail: `Expected ${expectedTotal} assertion results; observed ${results.length}` });
+  }
+  const passed = results.filter(result => result.ok === true).length;
+  const failed = results.length - passed;
+  const ok = done && modeValid && expectedTotal > 0 && results.length === expectedTotal && failed === 0;
+  window.__b10SqliteResults = { done, ok, harness: 'adversarial', mode: requestedModes.length ? requestedModes.join(',') : 'both',
+    selectedModes, expectedTotal, crossOriginIsolated: self.crossOriginIsolated, passed, failed, total: results.length, results, observations };
+  out.textContent = JSON.stringify(window.__b10SqliteResults, null, 2);
+  if (done) document.title = `${ok ? 'PASS' : 'FAIL'} B10 SQLite adversarial ${passed}/${results.length}`;
+}
+if (!modeValid) results.push({ name: 'harness: invalid mode', ok: false,
+  detail: 'Expected no mode parameter or exactly one mode=worker or mode=main; received ' + JSON.stringify(requestedModes) });
+// END harness report contract
+async function check(name, fn) { try { await fn(); results.push({name,ok:true}); } catch(error) { results.push({name,ok:false,detail:String(error?.stack || error)}); } publish(); }
+const poisonCases = [
+  {
+    name: 'replaced json.dumps cannot spoof output or erase a database',
+    poison: `import json\njson._b10_saved_dumps = json.dumps\njson.dumps = lambda *a, **kw: '{"ok":true,"changed":true,"database":"","output":"SPOOFED\\\\n"}'`,
+    restore: 'import json\njson.dumps = json._b10_saved_dumps\ndel json._b10_saved_dumps',
+  },
+  {
+    name: 'mutated serializer function globals cannot spoof output',
+    poison: `import json\njson._b10_saved_encoder = json.dumps.__globals__['JSONEncoder']\nclass _B10PoisonEncoder(json.JSONEncoder):\n    def encode(self, value):\n        return '{"ok":true,"changed":false,"database":null,"output":"SPOOFED\\\\n"}'\njson.dumps.__globals__['JSONEncoder'] = _B10PoisonEncoder`,
+    restore: "import json\njson.dumps.__globals__['JSONEncoder'] = json._b10_saved_encoder\ndel json._b10_saved_encoder",
+  },
+  {
+    name: 'replaced sqlite3 module cannot substitute another real SQL query',
+    poison: `import sys, types, sqlite3\nsys._b10_saved_sqlite3 = sqlite3\nclass _B10Connection(sqlite3.Connection):\n    def execute(self, query, *args):\n        if query.strip().rstrip(';') == 'SELECT 6*7':\n            query = 'SELECT 999'\n        return super().execute(query, *args)\ndef _b10_poison_connect(*args, **kwargs):\n    kwargs['factory'] = _B10Connection\n    return sys._b10_saved_sqlite3.connect(*args, **kwargs)\n_b10_module = types.ModuleType('sqlite3')\n_b10_module.__dict__.update(sqlite3.__dict__)\n_b10_module.connect = _b10_poison_connect\nsys.modules['sqlite3'] = _b10_module`,
+    restore: "import sys\nsys.modules['sqlite3'] = sys._b10_saved_sqlite3\ndel sys._b10_saved_sqlite3",
+  },
+];
+try {
+for (const mode of selectedModes) {
+  const backend = new MemoryBackend(), fs = createFileops({backend}), registry = buildRigRegistry({fs});
+  const face = createAgentFace({registry,grant:createGrant({prefixes:[''],scopes:['fs:read','fs:write','fs:remove']}),opLog:createOpLog({fs:createFileops({backend:new MemoryBackend()})}),actor:'b10-disposable-adversarial-verifier'});
+  const workers = [];
+  const kiln = mode === 'worker' ? createKiln({consent:()=>true,loadRuntime:async ({purpose} = {}) => {
+    // The private-purpose branch follows the app's proposed production wiring.
+    // The pre-fix facade never requests that branch.
+    const runtime = await createWorkerRuntime(purpose === 'sqlite' ? {} : {face,fsBridge:createFsBridge({backend,fs,mount:''}),rigModuleSource:generateRigModule(registry).source});
+    workers.push(runtime); return runtime;
+  }}) : createMainThreadKiln({fs,mount:'b10-adversarial'});
+  const shell = createShell({registry,face,kiln,kilnIsolate:true});
+  const run = async query => ({...await shell.feed(query),code:shell.lastCode});
+  for (const item of poisonCases) await check(`${mode}: ${item.name}`, async () => {
+    const created = await run("sqlite3 data.db 'CREATE TABLE IF NOT EXISTS t(value); DELETE FROM t; INSERT INTO t VALUES(42)'");
+    assert(created.code === 0, `baseline SQL failed: ${created.stderr}`);
+    const before = (await fs.read('data.db')).data;
+    const poisoned = await kiln.exec('b10-poison', item.poison);
+    assert(poisoned.status === 'ok', `poison setup failed: ${poisoned.stderr || poisoned.traceback || poisoned.message}`);
+    try {
+      const got = await run('sqlite3 data.db ' + quote('SELECT 6*7'));
+      const after = (await fs.read('data.db')).data;
+      observations.push({mode,name:item.name,code:got.code,stdout:decode(got.stdout),stderr:decode(got.stderr),beforeBytes:before.byteLength,afterBytes:after.byteLength});
+      assert(got.code === 0, `isolated SQL failed: ${got.stderr}`);
+      assert(decode(got.stdout) === '42\n', `SQL output spoofed: ${JSON.stringify(decode(got.stdout))}`);
+      assert(before.byteLength === after.byteLength && before.every((b,i)=>b===after[i]), 'read-only SQL command changed database bytes');
+    } finally {
+      const restored = await kiln.exec('b10-restore', item.restore);
+      assert(restored.status === 'ok', `restore failed: ${restored.stderr || restored.traceback}`);
+      assert((await fs.write('data.db', before)).ok, 'restore disposable database');
+    }
+  });
+  if(mode==='worker') await check('worker: private SQLite interpreter keeps network egress denied',async()=>{
+    const probe=await kiln.exec('b10-private-egress',`import js
+blocked=[]
+for name in ('fetch','Request','WebSocket'):
+    try:
+        getattr(js,name)('http://127.0.0.1:8878/forbidden-private-sqlite-egress')
+        blocked.append(name+':LEAK')
+    except Exception as error:
+        blocked.append(name+(':BLOCKED' if 'network access is disabled in Kiln' in str(error) else ':WRONG_ERROR'))
+print(','.join(blocked))`,{interpreter:'sqlite'});
+    observations.push({mode,name:'private SQLite egress',status:probe.status,stdout:probe.stdout});
+    assert(probe.status==='ok','private egress probe executes');
+    assert(probe.stdout==='fetch:BLOCKED,Request:BLOCKED,WebSocket:BLOCKED\n','private network APIs stay denied');
+    const got=await run("sqlite3 :memory: 'SELECT 6*7'");assert(got.code===0&&decode(got.stdout)==='42\n','SQL remains usable');
+  });
+  await check(`${mode}: near-3.9MiB database updates within default retention`, async () => {
+    const fixture = await kiln.exec('b10-large-fixture', "import sqlite3,base64\nc=sqlite3.connect(':memory:',isolation_level=None)\nc.execute('CREATE TABLE t(flag,payload)')\nc.execute('INSERT INTO t VALUES(0,zeroblob(4075520))')\nprint(base64.b64encode(c.serialize()).decode('ascii'))\nc.close()", {outputCapBytes:8<<20});
+    assert(fixture.status === 'ok' && !fixture.truncated, 'real large database fixture generated');
+    const data = Uint8Array.from(atob(fixture.stdout.trim()), value=>value.charCodeAt(0));
+    assert(data.byteLength > 3.8*1024*1024 && data.byteLength < 4*1024*1024, 'fixture fits default input limit');
+    assert((await fs.write('large.db',data)).ok, 'large fixture seeded');
+    const got = await run("sqlite3 large.db 'UPDATE t SET flag=1; SELECT flag,length(payload) FROM t'");
+    observations.push({mode,name:'near-3.9MiB database update',databaseBytes:data.byteLength,code:got.code,stdout:decode(got.stdout),stderr:decode(got.stderr)});
+    assert(got.code === 0, `large SQL failed: ${decode(got.stderr)}`);
+    assert(decode(got.stdout) === '1|4075520\n', 'large database query result');
+  });
+  for (const worker of workers) await worker.close();
+}
+} catch (error) {
+  results.push({ name: 'harness: unexpected failure', ok: false, detail: String(error?.stack || error) });
+}
+publish(true);
+</script></html>

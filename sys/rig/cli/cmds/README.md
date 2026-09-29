@@ -522,3 +522,77 @@ Tar preserves repeated source entries; later entries replace earlier file conten
 Tar selects each archived entry with the first matching member operand, before exclusions.
 An operand shadowed completely by earlier operands fails before extraction writes.
 A present operand whose members are all excluded succeeds without extracting those members.
+
+## U4b data commands
+
+`jq` evaluates a bounded filter subset over a stream of JSON values.
+It supports identity, object paths, array indices, slices, iteration, optional paths,
+pipes, comma generators, comparisons, boolean operators, and basic arithmetic.
+`select`, `map`, `keys`, `keys_unsorted`, `length`, `has`, `type`, `empty`, and `not` are available.
+Array and object construction preserve generator multiplicity.
+Flags include `-r`, `-c`, `-s`, `-n`, `-e`, `--arg NAME VALUE`, and `--argjson NAME JSON`.
+Null input skips file and stdin reads. `-e` returns 1 for false/null or 4 for no results.
+Unknown filters, assignments, modules, user functions, and unsupported arithmetic types fail explicitly.
+Numbers use JavaScript's finite numeric representation; arbitrary-precision jq numbers are unavailable.
+
+`yq` applies those filters to YAML documents using locally vendored js-yaml 5.4.2.
+YAML output is the default; `-j`/`--output-json` selects JSON, while `-y`/`--yaml-output` selects YAML.
+Multiple documents remain separate unless `-s` collects them.
+The core schema leaves timestamps as strings and rejects custom tags.
+Subsequent JSON-value validation rejects nonfinite numbers, including `.inf` and `.nan`.
+Aliases count on every expanded occurrence; cycles and excessive nesting fail.
+In-place editing, comment preservation, and the Mike Farah assignment language are unavailable.
+Dependency provenance and its MIT license accompany the vendored module.
+
+`envsubst [-v] [SHELL-FORMAT]` expands `$NAME` and `${NAME}` from the virtual shell environment.
+A format operand restricts substitution names; `-v` prints its variable occurrences without reading stdin.
+Other bytes remain unchanged. Parameter operators and command substitution are not evaluated.
+
+`fd [PATTERN [ROOT...]]` searches governed metadata using smart-case basename matching.
+Flags include `-H`, `-I`, `-u`, `-i`, `-s`, `-g`, `-F`, `-p`, `-a`, and `-0`.
+Filters include `-t f/d/l`, `-e EXT`, `-E GLOB`, `-d DEPTH`, and `--min-depth DEPTH`.
+Regex matching uses the existing bounded POSIX ERE engine; unsupported Rust regex extensions fail.
+Regex dots and glob wildcards match UTF-8 bytes in the C locale, rather than Unicode scalar values.
+Case folding covers ASCII. Symlinks may match, but traversal never descends through them.
+Workspace `.gitignore`, `.git/info/exclude`, `.ignore`, and `.fdignore` files supply bounded ignore rules.
+Git rules apply within detected repositories. Ancestor rules apply to selected search roots.
+Host-global ignore configuration, process execution flags, and host filesystem discovery are unavailable.
+
+`sqlite3 [OPTIONS] DATABASE [SQL]` uses the real Python sqlite3 module through injected Kiln.
+SQL may come from stdin; `:memory:` selects a transient database.
+Options include `-readonly`, `-header`, `-noheader`, `-list`, `-csv`, `-json`, `-separator`, and `-nullvalue`.
+JSON output preserves duplicate column names as repeated object keys, matching SQLite CLI text output.
+Use distinct SQL aliases when downstream JSON parsers require unique keys.
+SQL executes against an in-memory connection with bounded database import and export.
+An unfinished explicit transaction rolls back before export; an execution error publishes no database changes.
+Database writes pass through grants, staging, no-follow checks, and atomic comparison with the original bytes.
+Concurrent replacement returns `ESTALE`. Storage without conditional writes refuses publication with `ENOTSUP`.
+Memory currently provides conditional writes; other backends can still use `:memory:`.
+Read-only file queries also require bounded reads and content-free metadata.
+
+SQLite shell dot commands, attachments, extension loading, and host-file functions fail explicitly.
+Raw BLOB output requires an explicit SQL conversion such as `hex(blob)`.
+Kiln retains its host invocation policy and isolation requirements.
+Its default loaders fetch the pinned SQLite standard-library package during initialization, before Worker network denial takes effect.
+SQLite never reopens network access from a running SQL command.
+Default Kiln facades use a separate private interpreter for SQL, with no workspace mirror or Rig bindings.
+Ordinary Python cannot replace its SQLite or serializer modules. The private interpreter is cached separately within each facade.
+The Worker facade applies its existing consent callback to both interpreters.
+Forge and Anvil authorize lazy downloads upon invocation; the main-thread facade has no built-in approval prompt.
+Failed isolation never falls back to the ordinary Python interpreter.
+Injected runtimes must honor the `interpreter: 'sqlite'` request with equivalent isolation.
+The runtime must expose Python SQLite serialization and resource limits; unavailable capabilities produce explicit failures.
+Scoped `timeout` is refused. Private initialization has a 30-second waiting limit and responds immediately to Stop.
+Already-started downloads may finish, but an abandoned initialization request never executes SQL.
+After SQL starts, global Stop awaits owned execution before checking cancellation and preventing publication.
+Python VM progress checks bound SQL execution on facades without scoped interruption.
+The deterministic host adapter requires Python 3.11 or later with SQLite serialization enabled.
+Actual Kiln browser evidence supplements that host adapter.
+`duckdb` exits nonzero because this shell has no DuckDB runtime.
+
+Default bounds cover input/output (4 MiB each), retained data (32 MiB), nesting (128), values (100,000),
+results (65,536), filter bytes (64 KiB), SQL (1 MiB), database bytes (8 MiB), and rows (10,000).
+These bounds compose: imported databases also consume the 4 MiB input budget; returned snapshots consume the live retained-data budget.
+Transport accounts for live encodings and releases temporary copies after their last use.
+SQL preparation, SQL VM work, and shared command work each have a 1,000,000-step ceiling.
+Shared file and path budgets remain active. Commands never fall back to host tools or network downloads.

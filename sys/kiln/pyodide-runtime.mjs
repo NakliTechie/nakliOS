@@ -17,7 +17,7 @@
 // size and asks before fetching).
 export const PYODIDE_VERSION = 'v0.26.4';
 export const PYODIDE_INDEX_URL = `https://cdn.jsdelivr.net/pyodide/${PYODIDE_VERSION}/full/`;
-export const PYODIDE_APPROX_BYTES = 12 * 1024 * 1024; // ~12 MiB core, for the consent prompt
+export const PYODIDE_APPROX_BYTES = 13 * 1024 * 1024; // core plus SQLite, for the consent prompt
 
 // Pinned SHA-256 of the entry module (`pyodide.mjs`) for the version above, so
 // the loader can prove the CDN served the exact bytes it expected before it runs
