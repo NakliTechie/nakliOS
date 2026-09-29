@@ -1,5 +1,6 @@
 // Shell state and discovery; command implementations live in their own modules.
 // All filesystem access uses the shell's confirmation-aware face.
+import { unsupportedCommandNames } from './unsupported.mjs';
 
 export function createBuiltins({ state, face, normalizePath, SLEEP_MAX_S, commandNames }) {
   // ── builtins: shell-native, may consume/produce piped text ──
@@ -71,8 +72,9 @@ export function createBuiltins({ state, face, normalizePath, SLEEP_MAX_S, comman
       return { text: 'commands: ' + cmds.join(' ')
         + '\noperators: | && || ; newline ! > >> < 1> 2> 2>&1 &> &>>; globs: * ? []; comments: #'
         + '\nvars: NAME=value, $NAME, ${NAME}, $?, $PWD  (single quotes are literal; double quotes expand)'
-        + '\nThis is a CURATED shell, not coreutils. Each builtin implements a documented subset and'
+        + '\nThis is a CURATED shell, not coreutils. Each implemented command provides a documented subset and'
         + '\nREFUSES an unsupported flag (exit 2) rather than ignoring it. Notably:'
+        + '\nUnavailable capability refusals (always exit 1): ' + unsupportedCommandNames.join(' ')
         + '\n  grep -r -R -l -L -o -w -x -q -s -e -f -m -A -B -C --include --exclude (also -nvicEFhH)'
         + '\n  rg -A -B -C -w -o -F -v -i -l -n -c -t/--type -g/--glob --files'
         + '\n  head/tail -n/-c [+N]   wc -lwmc   sort -k -t -h -V -s -b -d -g -o -c -rnuf'
@@ -94,7 +96,7 @@ export function createBuiltins({ state, face, normalizePath, SLEEP_MAX_S, comman
         + '\n  od -c -b -x -o -d -t x1 -A -N -j        here-documents as stdin: cmd <<\'EOF\' … EOF  (literal; python - <<\'PY\' runs it)'
         + '\ncat -nbsAET   echo -ne   printf width/precision, %s %d %x %o %f %c %b   tee -a'
         + '\n  mv/cp [-n -t DIR] SOURCE... DEST; cp -r for directories; mkdir -pv; touch -c; stat -c; rm -vd'
-        + '\n  xargs -n -I -0 -d -r -L; env -i -u CMD; which -a; basename -a -s; test ! -a -o ( ) -nt -ot'
+        + '\n  xargs -n -I -0 -d -r -L; env -i -u CMD; which -a; type NAME...; basename -a -s; test ! -a -o ( ) -nt -ot'
         + '\n  uniq -cdu -i -f -s -w; cut -d -f -c -b --complement; tr -d -c -s, ASCII classes; diff -uqrNwbi'
         + '\n  git: init [-b] | add [-A|-u] PATHS | rm [--cached] [-r] | mv | commit -m [-a] | status [-s] | log [-n N] [REF]'
         + '\n       diff [--name-status|--name-only|--quiet] [--cached | REF [REF]] [-- PATHS] | branch [NAME]'

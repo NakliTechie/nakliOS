@@ -10,7 +10,8 @@ U0 provides the shared foundation. U1 adds command flags, sed, awk, and find. U2
 | `list.mjs` | Directory selection, classification and ordering |
 | `text.mjs` | sort, head, tail, wc, uniq, cut, tr, echo, printf, od |
 | `search.mjs` | Indexed recursive grep/rg and recursive diffs |
-| `utility.mjs` | env, xargs, test, basename, dirname, which, sleep |
+| `utility.mjs` | env, xargs, test, basename, dirname, which, type, sleep |
+| `unsupported.mjs` | U5 explicit capability refusals with no host operations |
 | `sed.mjs` | U1b stream editing, addresses, hold space, branching and governed in-place edits |
 | `awk.mjs` | U1c records, patterns, expressions, arrays, functions and governed file streams |
 | `find.mjs` | U1d bounded traversal, predicates, expressions, governed deletion and nested commands |
@@ -64,8 +65,33 @@ safely match quoted or escaped verbs yet, so those also fail closed.
   output. Pipes and redirects continue to use `text` unchanged.
   Legacy line-oriented producers add their newline before entering a pipe;
   `cat` and `tee` transport their input unchanged.
-- Add commands to the shell's dispatch table. `help`, `which`, and the
+- Add commands to the shell's dispatch table. `help`, `which`, `type`, and the
   public `commands` getter use that same table, including dotted registry names.
+
+## Unavailable host capabilities
+
+The following names are recognized capability refusals:
+
+`curl wget ssh chown chgrp mount findmnt df mknod mkfifo kill nice nohup su runas
+stdbuf shred dd getent hostname logname dircolors pathchk getfacl setfacl chacl
+attr getfattr setfattr xfs_io chcon runcon chroot groups hostid install pinky
+who users uptime stty sync tty`.
+
+Each handler exits 1 with an empty stdout and one command-prefixed stderr line.
+Its diagnostic names the missing capability without echoing operands.
+Flags, including help and version, retain that refusal.
+The handlers accept no filesystem, network, runtime, process, or grant dependencies.
+Shell expansion and redirection still happen before command dispatch.
+For example, `shred file > output` can create or truncate `output` through governed shell I/O before refusing `shred`.
+For staged output, the shell can report the command diagnostic with the confirmation prompt before publishing the redirect.
+Accepting that write preserves the command status without repeating its diagnostic; refusal preserves the original file.
+
+`help` labels these names as unavailable; `which [-a] NAME...` reports recognized names.
+`type NAME...` distinguishes functions, capability refusals, and other workspace commands.
+It accepts `--`, refuses unsupported flags with exit 2, and exits 1 for unknown names.
+Functions can shadow command names and are reported as functions.
+Unknown command execution still exits 127.
+The egress refusals apply to those three commands; Git retains its existing governed transport.
 
 The confirmation-aware face suspends a command's async call stack at a staged
 operation. `feed()` returns the prompt; the next `feed('y')` resumes that same

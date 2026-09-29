@@ -459,6 +459,12 @@ jobs:
       - name: Verify SQLite browser CDN allowlist assertions
         run: node scripts/test-sqlite-browser-network.mjs
 
+      - name: Verify explicit Unix capability refusals and discovery
+        run: node sys/rig/cli/test/u5-unsupported.test.mjs
+
+      - name: Verify shell type discovery and function shadowing
+        run: node sys/rig/cli/test/u5-type.test.mjs
+
       - name: Verify literal shell operators and escaped arguments
         run: node sys/rig/cli/test/literal-operators.test.mjs
 

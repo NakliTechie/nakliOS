@@ -4,6 +4,7 @@ import { lineData, resultEvents, streamResult } from '../command-streams.mjs';
 import { parseArgs, ArgError } from '../args.mjs';
 import { concatData, toText, IOFailure } from '../io.mjs';
 import { ShellInterrupted } from '../execution.mjs';
+import { unsupportedReason } from './unsupported.mjs';
 
 const result = (text = '', code = 0) => ({ text, code });
 const usage = (text) => result(text, 2);
@@ -100,6 +101,20 @@ export function createUtilityCommands({ io, state, commandNames, signal, maxSlee
       // One implementation exists per dispatch name, so -a has one result too.
       const names = commandNames();
       return streamResult(operands.map((name) => ({ channel: names.includes(name) ? 1 : 2, data: lineData(names.includes(name) ? name : `${name} not found`) })), operands.every((name) => names.includes(name)) ? 0 : 1);
+    },
+    type(argv) {
+      const { operands } = parseArgs(argv, {}, { command: 'type' });
+      if (!operands.length) return usage('type: missing operand');
+      const names = new Set(commandNames());
+      const events = operands.map(name => {
+        const known = names.has(name), reason = unsupportedReason(name);
+        const description = !known ? `type: ${name}: not found`
+          : state.functions.has(name) ? `${name} is a shell function`
+          : reason ? `${name} is an unavailable capability refusal; requires ${reason}`
+          : `${name} is a workspace shell command`;
+        return { channel: known ? 1 : 2, data: lineData(description) };
+      });
+      return streamResult(events, operands.every(name => names.has(name)) ? 0 : 1);
     },
     basename(argv) {
       const { options, operands } = parseArgs(argv, { multiple: { short: 'a', long: 'multiple' }, suffix: { short: 's', long: 'suffix', value: true } }, { command: 'basename' });
