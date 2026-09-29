@@ -13,6 +13,7 @@ import { createShell, SLEEP_MAX_S, LISTING_MAX_ENTRIES, truncateListing } from '
 import { buildRigRegistry } from '../../registry/index.mjs';
 import { createFileops, MemoryBackend } from '../../fileops/index.mjs';
 import { createGrant, createOpLog, createAgentFace } from '../../agent/index.mjs';
+import { createGitCore } from '../../git/git-core.mjs';
 
 let passed = 0; const failures = [];
 async function test(n, fn) { try { await fn(); passed++; } catch (e) { failures.push({ n, message: e.message }); } }
@@ -482,6 +483,203 @@ await test('cd: refuses a missing target and a file, stays put, exits 1 — and 
   const file = await run('cd hello.txt'); eq(file.code, 1); eq(file.out, 'cd: hello.txt: Not a directory');
   eq((await run('cd')).code, 0); eq((await run('pwd')).out, '/', 'bare cd goes to the root');
   eq((await run('cd nope || echo fallback')).out, 'cd: nope: No such file or directory\nfallback', 'a missing dir takes the || branch');
+});
+
+// ── Operands — a command took its first operand and dropped the rest, with exit 0 ───────────
+// Found 2026-09-29 recording the Forge promo: `touch t/a t/b t/c` made `t/a` alone. An audit of
+// every builtin found the same shape in mkdir, stat, mv, cp, which, dirname, basename, printf,
+// head, tail, wc, ls, diff, uniq, env, history, find, the dotted registry commands and git.
+// Each now takes every operand, or refuses the form with exit 2.
+await test('operands: touch, mkdir and stat take every operand; rm, cat and tee still do', async () => {
+  const { sh, run } = await shell();
+  await run('mkdir t; touch t/a t/b t/c');
+  eq((await run('ls t')).out, 'a  b  c', 'the repro: touch makes all three');
+  await run("printf 'keep' > t/a"); await run('touch t/a t/d');
+  eq((await run('cat t/a')).out, 'keep', 'touch leaves an existing file as it is');
+  eq((await run('ls t')).out, 'a  b  c  d');
+  const bare = await run('touch'); eq(bare.code, 2); eq(bare.out, 'touch: missing file operand');
+  const flag = await run('touch -c x'); eq(flag.code, 2, 'an unsupported flag refuses');
+  assert(!/(^|\s)-c(\s|$)/.test((await run('ls')).out), 'and no file named -c appears');
+  await run('mkdir d1 d2 d3');
+  eq((await run('ls')).out.split('  ').filter((n) => /^d\d$/.test(n)).join(' '), 'd1 d2 d3', 'mkdir makes all three');
+  await run('mkdir -p p/q r/s');
+  eq((await run('ls p r')).out, 'p:\nq\n\nr:\ns', 'mkdir -p makes every path');
+  const st = await run('stat t/a nope d1'); eq(st.code, 1, 'one missing operand fails the command');
+  eq(st.out, 't/a: file 4\nstat: ENOENT: no such path: nope\nd1: dir 0', 'and every other operand still answers');
+  eq((await run('stat t/a')).out, 'file 4', 'one operand keeps the old shape');
+  eq((await run('cat t/a t/a')).out, 'keepkeep', 'cat reads every operand');
+  await run('echo hi | tee o1 o2 > /dev/null');
+  eq((await run('cat o1 o2')).out, 'hi\nhi', 'tee writes every operand');
+  await sh.feed('rm t/b t/c'); await sh.feed('y');
+  eq((await run('ls t')).out, 'a  d', 'rm removes every operand under one confirmation');
+});
+
+await test('operands: mv and cp move several sources into a directory, and refuse a file target', async () => {
+  const { run } = await shell();
+  await run("printf 1 > a; printf 2 > b; printf 3 > c; mkdir d");
+  const many = await run('mv a b d'); eq(many.code, 0, many.out);
+  eq((await run('ls d')).out, 'a  b', 'both sources moved into d');
+  eq((await run('cat d/a d/b')).out, '12', 'with their content');
+  eq((await run('mv c d')).code, 0, 'one source into an existing directory');
+  eq((await run('ls d')).out, 'a  b  c');
+  await run('mkdir e'); await run('cp d/a d/b e');
+  eq((await run('ls e')).out, 'a  b', 'cp copies every source');
+  eq((await run('ls d')).out, 'a  b  c', 'and leaves them');
+  eq((await run('cp -r d f && ls f')).out, 'a  b  c', 'cp -r copies a directory');
+  eq((await run('mv d/a renamed && cat renamed')).out, '1', 'a plain rename is unchanged');
+  const notDir = await run('mv d/b d/c renamed'); eq(notDir.code, 1);
+  eq(notDir.out, "mv: target 'renamed' is not a directory");
+  eq((await run('ls d')).out, 'b  c', 'and nothing moved');
+  const one = await run('mv d/b'); eq(one.code, 2); assert(/missing destination operand/.test(one.out), one.out);
+  eq((await run('mv -f d/b x')).code, 2, 'an unsupported flag refuses');
+});
+
+await test('operands: which, dirname, printf and history answer for all; basename, diff, uniq and env refuse extras', async () => {
+  const { run } = await shell();
+  const w = await run('which ls nope cat'); eq(w.code, 1, 'one unknown name fails which');
+  eq(w.out, 'ls\nnope not found\ncat', 'every name answers');
+  eq((await run('dirname a/b c/d /x y')).out, 'a\nc\n/\n.', 'dirname answers per operand');
+  eq((await run("printf '%s\\n' a b c")).out, 'a\nb\nc', 'printf reuses its format');
+  eq((await run("printf '%s-%s\\n' a b c")).out, 'a-b\nc-', 'a short last round pads with empty');
+  eq((await run("printf 'hi\\n' a b")).out, 'hi', 'a format without a conversion runs once');
+  await run('echo one'); await run('echo two');
+  eq((await run('history 2')).out.split('\n').map((l) => l.replace(/^\d+\s+/, '')).join('|'), 'echo two|history 2', 'history N prints the last N');
+  eq((await run('history x')).code, 2, 'a non-numeric count refuses');
+  const b = await run('basename a/b c d'); eq(b.code, 2); assert(/extra operand 'd'/.test(b.out), b.out);
+  eq((await run('basename dir/x.txt .txt')).out, 'x', 'basename NAME SUFFIX is unchanged');
+  eq((await run('basename .txt .txt')).out, '.txt', 'a suffix equal to the name is kept, as coreutils does');
+  await run("printf 'a\\n' > p; printf 'b\\n' > q");
+  const d = await run('diff p q r'); eq(d.code, 2); assert(/extra operand 'r'/.test(d.out), d.out);
+  const dq = await run('diff -q p q'); eq(dq.code, 2); assert(/unsupported flag -q/.test(dq.out), 'a diff flag is refused, not filtered out: ' + dq.out);
+  eq((await run('diff p q')).out, '- a\n+ b', 'diff of two files is unchanged');
+  const u = await run('uniq p q'); eq(u.code, 2); assert(/OUTPUT operand/.test(u.out), u.out);
+  eq((await run('cat q')).out, 'b', 'and the output operand is untouched');
+  const e = await run('env FOO'); eq(e.code, 2); assert(!/HOME=/.test(e.out), 'env CMD refuses rather than printing the environment: ' + e.out);
+  assert(/HOME=\//.test((await run('env')).out), 'plain env still prints');
+});
+
+await test('operands: head, tail and wc report each file; ls heads each directory; grep -h / -H', async () => {
+  const { run } = await shell();
+  await run("printf '1\\n2\\n3\\n' > a; printf 'x\\ny\\n' > b; mkdir -p d1 d2; touch d1/m d2/n");
+  eq((await run('head -n 1 a b')).out, '==> a <==\n1\n\n==> b <==\nx', 'head shows b too');
+  eq((await run('tail -n 1 a b')).out, '==> a <==\n3\n\n==> b <==\ny', 'tail shows b too');
+  const miss = await run('head -n 1 a nope b'); eq(miss.code, 1);
+  assert(/==> b <==\nx$/.test(miss.out), 'a missing file does not stop the rest: ' + miss.out);
+  eq((await run('head -n 1 a')).out, '1', 'one file keeps the old shape');
+  eq((await run('wc -l a b')).out, '3 a\n2 b\n5 total', 'wc: a row per file and a total');
+  eq((await run('wc a b')).out, '3 3 6 a\n2 2 4 b\n5 5 10 total');
+  eq((await run('wc -lw a')).out, '3 3', 'wc -lw prints both columns');
+  eq((await run('wc -l a')).out, '3', 'one file keeps the old shape');
+  eq((await run("printf 'é' | wc -c")).out, '2', 'wc -c counts bytes');
+  eq((await run("printf 'é' | wc -m")).out, '1', 'wc -m counts characters');
+  eq((await run('ls d1 d2')).out, 'd1:\nm\n\nd2:\nn', 'ls: each directory under its name');
+  eq((await run('ls a d1 b')).out, 'a\nb\n\nd1:\nm', 'files first, then directories, as coreutils prints');
+  eq((await run('ls d1')).out, 'm', 'one directory keeps the old shape');
+  eq((await run('grep -h 1 a b')).out, '1', 'grep -h drops the file prefix');
+  eq((await run('grep -H 1 a')).out, 'a:1', 'grep -H forces it');
+  eq((await run('grep 1 a b')).out, 'a:1', 'several files still prefix by default');
+});
+
+await test('operands: find searches every start path; registry commands refuse an operand they would drop', async () => {
+  const { run } = await shell();
+  await run('mkdir -p s t; touch s/a.js t/b.js t/c.txt');
+  eq((await run("find s t -name '*.js'")).out, 's/a.js\nt/b.js', 'find searches t as well as s');
+  const late = await run('find s -name x t'); eq(late.code, 2); assert(/paths must precede the expression: t/.test(late.out), late.out);
+  const gone = await run('find nope s'); eq(gone.code, 1, 'a missing start path is an error, not an empty success');
+  eq(gone.out, "find: 'nope': No such file or directory\ns/a.js");
+  eq((await run('find t/c.txt')).out, 't/c.txt', 'a file start path lists itself');
+  const rd = await run('fs.read s/a.js t/b.js'); eq(rd.code, 2); assert(/extra operand 't\/b\.js'/.test(rd.out), rd.out);
+  const gl = await run("glob '*.js' s t"); eq(gl.code, 2); assert(/extra operand 't'/.test(gl.out), gl.out);
+  eq((await run('fs.stat s/a.js')).out, 'file 0', 'one operand still runs');
+});
+
+// A shell with a real git core, answering every confirmation `y` as the agent executor does.
+async function gitShell() {
+  const fs = createFileops({ backend: new MemoryBackend() });
+  const registry = buildRigRegistry({ fs, git: createGitCore({ fs }) });
+  const grant = createGrant({ prefixes: [''], scopes: ['fs:read', 'fs:write', 'fs:remove', 'git:read', 'git:write'] });
+  const face = createAgentFace({ registry, grant, opLog: createOpLog({ fs: createFileops({ backend: new MemoryBackend() }) }), actor: 'a' });
+  const sh = createShell({ registry, face });
+  const run = async (c) => {
+    let r = await sh.feed(c); const out = [r.output];
+    while (sh.awaitingConfirm) { r = await sh.feed('y'); out.push(r.output); }
+    const text = out.join('\n').split('\n').filter((l) => !/is destructive\. confirm\?/.test(l)).join('\n');
+    return { out: text.replace(/^\n+|\n+$/g, ''), code: sh.lastCode }; // porcelain rows can start with a space
+  };
+  return { fs, run };
+}
+
+await test('git: `git init && git add -A && git commit -m first` commits the tree; add . and -u too', async () => {
+  const { fs, run } = await gitShell();
+  await run("printf 1 > a; printf 2 > b; mkdir sub; printf 3 > sub/c");
+  const promo = await run('git init && git add -A && git commit -m first');
+  eq(promo.code, 0, 'the promo line: ' + promo.out);
+  assert(!/path must not be empty/.test(promo.out), promo.out);
+  assert(/^ok\nok\n\[[0-9a-f]{7}\]$/.test(promo.out), promo.out);
+  eq((await run('git status')).out, '(clean)', 'every file was committed');
+  eq((await run('git log')).out.split(' ').slice(1).join(' '), 'first');
+  const empty = await run('git commit -m again'); eq(empty.code, 1, 'nothing staged is not a commit');
+  eq(empty.out, 'nothing to commit, working tree clean');
+  await run("printf 4 > sub/d; printf 33 > sub/c; cd sub");
+  eq((await run('git add .')).code, 0);
+  await run('cd ..');
+  eq((await run('git status')).out, 'M  sub/c\nA  sub/d', 'git add . staged the cwd subtree');
+  await run('git commit -m second'); await run("printf 11 > a; rm b");
+  eq((await run('git status')).out, ' M a\n D b');
+  const unstaged = await run('git commit -m nope'); eq(unstaged.code, 1);
+  eq(unstaged.out, 'no changes added to commit (use "git add" and/or "git commit -a")');
+  eq((await run('git add -u')).code, 0);
+  eq((await run('git status')).out, 'M  a\nD  b', 'add -u stages the edit and the deletion');
+  await run('git commit -m third'); await run('printf new > n');
+  await run("printf 111 > a");
+  const am = await run('git commit -am fourth'); eq(am.code, 0, am.out);
+  eq((await run('git status')).out, '?? n', 'commit -a took the edit and left the untracked file');
+  const nope = await run('git add missing'); eq(nope.code, 1);
+  eq(nope.out, "git add: pathspec 'missing' did not match any files");
+  eq((await run('git add')).code, 0, 'bare git add says nothing was added, as git does');
+  const p = await run('git add -p a'); eq(p.code, 2); assert(/unsupported flag -p/.test(p.out), p.out);
+  eq((await fs.stat('n')).ok, true);
+});
+
+await test('git: rm leaves the working tree unless --cached; branch, checkout -b, diff and status answer honestly', async () => {
+  const { fs, run } = await gitShell();
+  await run("printf 1 > a; printf 2 > b; mkdir sub; printf 3 > sub/c; printf 4 > sub/d");
+  await run('git init && git add -A && git commit -m first');
+  eq((await run('git rm a')).out, "rm 'a'");
+  eq((await fs.stat('a')).ok, false, 'git rm removes the file from the working tree, as git does');
+  eq((await run('git rm --cached b')).out, "rm 'b'");
+  eq((await fs.stat('b')).ok, true, '--cached keeps it');
+  eq((await run('git status')).out, 'D  a\nD  b\n?? b');
+  const dir = await run('git rm sub'); eq(dir.code, 1); assert(/without -r/.test(dir.out), dir.out);
+  eq((await run('git rm -r --cached sub')).out, "rm 'sub/c'\nrm 'sub/d'");
+  eq((await run('git rm nope')).code, 1, 'an unknown path is an error');
+  await run('git add -A && git commit -m second');
+  eq((await run('git branch')).out, 'main', 'git branch lists');
+  eq((await run('git branch feat')).code, 0, 'git branch NAME creates');
+  eq((await run('git branch')).out, 'feat\nmain');
+  const del = await run('git branch -d feat'); eq(del.code, 2, 'a delete is refused, never read as a create: ' + del.out);
+  eq((await run('git branch')).out, 'feat\nmain');
+  eq((await run('git checkout -b feat2')).code, 0);
+  eq((await run('git branch')).out, 'feat\nfeat2\nmain');
+  await run("printf changed > sub/c");
+  const patch = await run('git diff'); eq(patch.code, 2, 'no patch to show, so plain git diff refuses rather than print ok');
+  assert(/--name-status/.test(patch.out), patch.out);
+  eq((await run('git diff --name-status')).out, 'M\tsub/c');
+  eq((await run('git diff --name-only -- sub')).out, 'sub/c');
+  eq((await run('git diff --name-only -- other')).out, '', 'a path filter');
+  eq((await run('git diff --quiet')).code, 1, '--quiet exits 1 on a change');
+  await run('git add sub/c');
+  eq((await run('git diff --quiet')).code, 0, 'the working tree now matches the index');
+  eq((await run('git diff --cached --name-status')).out, 'M\tsub/c');
+  eq((await run('git diff HEAD --name-only')).out, 'sub/c');
+  await run('printf z > z');
+  eq((await run('git status')).out, 'M  sub/c\n?? z');
+  eq((await run('git status sub/c b')).out, 'M  sub/c', 'status reads every pathspec, and only those');
+  eq((await run('git status z')).out, '?? z');
+  eq((await run('git log -1')).out.split(' ').slice(1).join(' '), 'second');
+  eq((await run('git checkout -- sub/c')).code, 2, 'restoring a file is refused, not read as a ref');
+  eq((await run('git commit -m x sub/c')).code, 2, 'a commit pathspec is refused');
+  eq((await run('git log -- a')).code, 2);
 });
 
 if (failures.length) {

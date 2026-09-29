@@ -20,13 +20,11 @@ import { createIO, normalizePath, concatData, autoData, toText, renderData } fro
 import { createExecution, ShellInterrupted } from './execution.mjs';
 import { createBuiltins } from './cmds/builtins.mjs';
 import { createCoreCommands } from './cmds/core.mjs';
+import { createFileCommands } from './cmds/files.mjs';
 
 // bash verb -> registry command name. The dotted name (fs.list) always works too.
-const REGISTRY_ALIAS = {
-  ls: 'fs.list', stat: 'fs.stat', mkdir: 'fs.mkdir',
-  rm: 'fs.remove', mv: 'fs.move', cp: 'fs.copy',
-  glob: 'fs.glob', patch: 'fs.patch',
-};
+// ls, stat, mkdir, mv and cp are commands of their own (cmds/), which take every operand.
+const REGISTRY_ALIAS = { rm: 'fs.remove', glob: 'fs.glob', patch: 'fs.patch' };
 
 // Short flags -> registry input keys (per command, resolved in buildRegistryInput).
 const LIST_FLAGS = { R: 'recursive', a: 'all' };
@@ -216,10 +214,6 @@ function tokenizeOps(line) {
 const BINARY_BYTES = new RegExp("[\\u0000-\\u0008\\u000e-\\u001f]");
 
 const withTrailingNewline = (t) => t instanceof Uint8Array || t === '' || t.endsWith('\n') ? t : t + '\n';
-function flagNum(argv, dflt) {
-  const i = argv.indexOf('-n');
-  return i >= 0 ? Number(argv[i + 1]) : Number(argv.find((a) => /^-\d+$/.test(a))?.slice(1) ?? dflt);
-}
 
 function decodeData(data) {
   if (typeof data === 'string') return data;
@@ -258,30 +252,24 @@ function renderResult(name, res, { long, recursive = false, root = '' } = {}) {
   return '';
 }
 
-// Map an isomorphic-git statusMatrix row [filepath, head, workdir, stage] to a
-// short porcelain code. null = unmodified (omit from `git status`).
-function statusCode(row) {
-  const [f, head, work, stage] = row;
-  if (head === 1 && work === 1 && stage === 1) return null; // clean
-  if (head === 0 && stage === 0) return `?? ${f}`;           // untracked
-  if (head === 0) return `A  ${f}`;                          // staged new
-  if (work === 0) return `${stage === 0 ? 'D ' : ' D'} ${f}`; // deleted
-  const staged = stage !== 1;                                // differs from HEAD in index
-  const dirty = work === 2 && stage === 1;                   // differs from index in tree
-  return `${staged ? 'M' : ' '}${dirty ? 'M' : ' '} ${f}`;
+// Render isomorphic-git statusMatrix rows [filepath, head, workdir, stage] as `git status -s`:
+// `XY path`, X the index against HEAD, Y the working tree against the index, untracked `??` rows
+// last. It used to print `A ` for a staged file edited again, where git prints `AM`, and to drop
+// the `??` row of a file removed with `git rm --cached`.
+function porcelain(rows) {
+  const changed = [], untracked = [];
+  for (const [f, head, work, stage] of rows) {
+    if (stage === 0 && work !== 0) untracked.push(`?? ${f}`); // on disk, not in the index
+    if (head === 0 && stage === 0) continue;
+    const x = head === 0 ? 'A' : stage === 0 ? 'D' : stage !== 1 ? 'M' : ' ';
+    const y = stage === 0 ? ' ' : work === 0 ? 'D' : stage !== work ? 'M' : ' ';
+    if (x !== ' ' || y !== ' ') changed.push(`${x}${y} ${f}`);
+  }
+  return [...changed, ...untracked].join('\n');
 }
 
-function renderGit(sub, res) {
-  if (sub === 'status') {
-    if (res.matrix) return res.matrix.map(statusCode).filter(Boolean).join('\n') || '(clean)';
-    if (typeof res.status === 'string') return res.status;
-  }
-  if (res.commits) return res.commits.map((c) => `${c.oid.slice(0, 7)} ${c.commit.message.split('\n')[0]}`).join('\n');
-  if (res.branches) return res.branches.join('\n');
-  if (typeof res.diff === 'string') return res.diff;
-  if (res.oid) return `[${res.oid.slice(0, 7)}]`;
-  return 'ok';
-}
+// A git subcommand's failure, rendered as its one line of output with exit 1.
+class GitFailed extends Error {}
 
 // `kilnIsolate` marks this shell as the VERIFIER's: its `python` runs on an interpreter
 // reset first, so a gate cannot measure state the agent left behind (main-thread-runtime.mjs).
@@ -340,6 +328,10 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
     return { ...parseArgs(argv, spec, { command: cmdName }), props };
   }
 
+  // The operands a registry command reads, in order: `fs.read a b` used to read `a` and drop `b`.
+  const operandKeys = (props) => ('from' in props && 'to' in props ? ['from', 'to']
+    : 'path' in props ? ['path'] : 'pattern' in props ? ['pattern', 'cwd'] : []);
+
   function registryInput(parsed, positional = parsed.operands) {
     const { props, options } = parsed;
     const input = Object.fromEntries(Object.entries(options).filter(([k]) => k in props));
@@ -387,6 +379,10 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
       }
       return { text: errors.join('\n'), code: errors.length ? 1 : 0 };
     }
+    const keys = operandKeys(parsed.props);
+    if (parsed.operands.length > keys.length) {
+      return { text: `${cmdName}: extra operand '${parsed.operands[keys.length]}' — ${cmdName} takes ${keys.length ? keys.join(', ') : 'no operands'}`, code: 2 };
+    }
     const res = await face.invoke(cmdName, registryInput(parsed));
     if (!res.ok) return { text: `${cmdName}: ${res.code || 'error'}: ${res.message || 'failed'}`, code: 1 };
     return { text: renderResult(cmdName, res, { long: !!parsed.options.longListing }), code: 0,
@@ -397,7 +393,7 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
     renderResult, runStage: io.run,
     signal: () => currentSignal()?.aborted ? currentSignal() : execution?.signal,
     SLEEP_MAX_S, LIST_FLAGS, commandNames });
-  Object.assign(builtins, createCoreCommands(io));
+  Object.assign(builtins, createCoreCommands(io), createFileCommands(io));
 
   // One dispatch table also owns discovery and help. Dotted registry names remain reachable.
   const dispatch = new Map(Object.entries(builtins));
@@ -542,9 +538,10 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
     if (verb === 'find') {
       // -name / -type / -maxdepth were SILENTLY IGNORED, so `find . -name "*.txt"` returned every
       // file in the tree and the agent believed that was the answer (forward-pass R2e).
-      let base = null, name = null, type = null, maxdepth = null, bad = null;
+      const bases = []; let name = null, type = null, maxdepth = null, bad = null, sawExpr = false;
       for (let i = 0; i < args.length; i++) {
         const a = args[i];
+        if (a.startsWith('-')) sawExpr = true;
         if (a === '-name') { name = args[++i]; continue; }
         if (a === '-type') {
           type = args[++i];
@@ -557,132 +554,297 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
           continue;
         }
         if (a.startsWith('-')) { bad = a; break; }
-        if (base == null) base = a;
+        // `find a b -name x` used to search `a` and drop `b`; a word after the expression was dropped too
+        if (sawExpr) return { text: `find: paths must precede the expression: ${a}`, code: 2 };
+        bases.push(a);
       }
       if (bad) return { text: `find: ${bad} is not implemented — this shell supports -name, -type and -maxdepth`, code: 2 };
-      const root = base ? normalizePath(state.cwd, base) : state.cwd;
-      const res = await face.invoke('fs.glob', { pattern: (root ? root + '/' : '') + '**', cwd: '' });
-      if (!res.ok) return { text: `find: ${res.message}`, code: 1 };
-      // a glob, anchored to the basename, exactly as find's -name means it
-      const rx = name ? new RegExp('^' + String(name).replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.') + '$') : null;
-      const depthOf = (m) => m.slice(root ? root.length + 1 : 0).split('/').length;
-      // fs.glob yields FILES only, so `-type d` over it alone could never match anything — it
-      // would have returned an empty success, which is the very failure this batch removes.
-      // Directories are the distinct path prefixes of the files found.
-      let candidates = res.matches;
-      if (type === 'd') {
-        const dirs = new Set();
-        for (const m of res.matches) {
-          const parts = m.split('/');
-          for (let k = (root ? root.split('/').length : 0) + 1; k < parts.length; k++) dirs.add(parts.slice(0, k).join('/'));
-        }
-        candidates = [...dirs].sort();
+      const out = []; let entries = 0, failed = false;
+      for (const base of bases.length ? bases : [null]) {
+        const found = await findUnder(base ? normalizePath(state.cwd, base) : state.cwd, { name, type, maxdepth });
+        if (found.error) return found.error;
+        // a missing start path used to answer empty with exit 0
+        if (found.missing) { out.push(`find: '${base}': No such file or directory`); failed = true; continue; }
+        out.push(...found.paths); entries += found.paths.length;
       }
-      const out = [];
-      for (const m of candidates) {
-        if (rx && !rx.test(m.split('/').pop())) continue;
-        if (maxdepth != null && depthOf(m) > maxdepth) continue;
-        if (type) {
-          const st = await face.invoke('fs.stat', { path: m });
-          const isDir = st.ok && st.stat && st.stat.type === 'dir';
-          if (type === 'f' && isDir) continue;
-          if (type === 'd' && !isDir) continue;
-        }
-        out.push(m);
-      }
-      return { text: out.join('\n'), code: 0, listing: { tool: 'find', entries: out.length } };
+      return { text: out.join('\n'), code: failed ? 1 : 0, listing: { tool: 'find', entries } };
     }
     if (verb === 'git') return runGit(args);
   }
 
-  // git <sub> [args]: map porcelain to the Rig git.* registry commands. Paths
-  // resolve against cwd (git core dir is the root). Commits go through the face
-  // as agent@rig.local and stage like any destructive op.
+  // One start path of `find`: the glob, then -name / -maxdepth / -type over its results.
+  async function findUnder(root, { name, type, maxdepth }) {
+    // a glob, anchored to the basename, exactly as find's -name means it
+    const rx = name ? new RegExp('^' + String(name).replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.') + '$') : null;
+    const top = await face.invoke('fs.stat', { path: root });
+    if (!top.ok) return { missing: true };
+    if (top.stat?.type === 'file') return { paths: (!rx || rx.test(root.split('/').pop())) && type !== 'd' ? [root] : [] };
+    const res = await face.invoke('fs.glob', { pattern: (root ? root + '/' : '') + '**', cwd: '' });
+    if (!res.ok) return { error: { text: `find: ${res.message}`, code: 1 } };
+    const depthOf = (m) => m.slice(root ? root.length + 1 : 0).split('/').length;
+    // fs.glob yields FILES only, so `-type d` over it alone could never match anything — it
+    // would have returned an empty success, which is the very failure this batch removes.
+    // Directories are the distinct path prefixes of the files found.
+    let candidates = res.matches;
+    if (type === 'd') {
+      const dirs = new Set();
+      for (const m of res.matches) {
+        const parts = m.split('/');
+        for (let k = (root ? root.split('/').length : 0) + 1; k < parts.length; k++) dirs.add(parts.slice(0, k).join('/'));
+      }
+      candidates = [...dirs].sort();
+    }
+    const out = [];
+    for (const m of candidates) {
+      if (rx && !rx.test(m.split('/').pop())) continue;
+      if (maxdepth != null && depthOf(m) > maxdepth) continue;
+      if (type) {
+        const st = await face.invoke('fs.stat', { path: m });
+        const isDir = st.ok && st.stat && st.stat.type === 'dir';
+        if (type === 'f' && isDir) continue;
+        if (type === 'd' && !isDir) continue;
+      }
+      out.push(m);
+    }
+    return { paths: out };
+  }
+
+  // git <sub> [args]: porcelain over the Rig git.* registry commands. Each subcommand parses its
+  // flags, so an unsupported one is refused (exit 2), never dropped. Before 2026-09-29 flags were
+  // filtered out unread: `git add -A` reached git.add as an empty path, `git commit -am` committed
+  // without -a, `git rm` left the file on disk, `git branch NAME` sent the wrong field, and
+  // `git diff` printed "ok" over a modified tree. Paths resolve against cwd (the git core dir is the
+  // root). Commits go through the face as agent@rig.local and stage like any destructive op.
+  const GIT_USAGE = 'usage: git <init|add|rm|mv|commit|status|log|diff|branch|checkout|clone|fetch|push>';
+  const GIT_FLAGS = {
+    init: { branch: { short: 'b', long: 'initial-branch', value: true }, quiet: { short: 'q', long: 'quiet' } },
+    add: { all: { short: 'A', long: 'all' }, update: { short: 'u', long: 'update' } },
+    rm: { cached: { long: 'cached' }, recursive: { short: 'r' }, force: { short: 'f', long: 'force' }, quiet: { short: 'q', long: 'quiet' } },
+    mv: {},
+    commit: { message: { short: 'm', long: 'message', value: true, multiple: true }, all: { short: 'a', long: 'all' },
+      allowEmpty: { long: 'allow-empty' }, quiet: { short: 'q', long: 'quiet' } },
+    status: { short: { short: 's', long: 'short' }, porcelain: { long: 'porcelain' } },
+    log: { count: { short: 'n', long: 'max-count', value: true }, oneline: { long: 'oneline' } },
+    diff: { cached: { long: ['cached', 'staged'] }, nameOnly: { long: 'name-only' }, nameStatus: { long: 'name-status' },
+      quiet: { long: 'quiet' }, exitCode: { long: 'exit-code' } },
+    branch: { list: { short: 'l', long: 'list' } },
+    checkout: { branch: { short: 'b', value: true }, force: { short: 'f', long: 'force' } },
+    clone: {}, fetch: {}, push: { force: { short: 'f', long: 'force' } },
+  };
+  // A pathspec covers a path when it names it or a directory above it; '' is the whole tree.
+  const covers = (spec, path) => spec === '' || path === spec || path.startsWith(spec + '/');
+  // statusMatrix rows are [path, head, workdir, stage]. A path is in the index when stage != 0,
+  // and the index differs from the working tree when stage != workdir (both use 0 for absent,
+  // 1 for "same as HEAD", 2 for "same as the working tree").
+  const inIndex = ([, , , stage]) => stage !== 0;
+  const tracked = ([, head, , stage]) => head === 1 || stage !== 0;
+  const staged = ([, head, , stage]) => (head === 1 ? stage !== 1 : stage !== 0);
+  const unstaged = ([, , work, stage]) => stage !== work;
+
+  // Stage every destructive op, then ask once for the batch, as `rm` does.
+  async function confirmBatch(label, ops) {
+    const proposals = [], results = [];
+    try {
+      for (const op of ops) {
+        const res = await execution.stage(op.name, op.input);
+        if (res.staged) proposals.push({ proposalId: res.proposalId }); else results.push(res);
+      }
+      if (proposals.length) results.push(...await execution.confirm(proposals, proposals.length > 1 ? `${label} (${proposals.length} changes)` : ops[0].name));
+    } finally {
+      for (const proposal of proposals) rawFace.reject(proposal.proposalId);
+    }
+    return results;
+  }
+
   async function runGit(args) {
     const sub = args[0];
-    const rest = args.slice(1);
-    const positional = rest.filter((a) => !a.startsWith('-'));
-    const flags = rest.filter((a) => a.startsWith('-'));
+    if (!sub) return { text: GIT_USAGE, code: 1 };
+    const spec = GIT_FLAGS[sub];
+    if (!spec) return { text: `git: '${sub}' is not a rig git command`, code: 1 };
+    let rest = args.slice(1);
+    if (sub === 'log') rest = rest.map((a) => (/^-\d+$/.test(a) ? '-n' + a.slice(1) : a)); // git log -5
+    // diff, log and checkout give `--` a meaning of their own (paths after it); the rest read it as
+    // the usual end of flags.
+    const dd = ['diff', 'log', 'checkout'].includes(sub) ? rest.indexOf('--') : -1;
+    const { options, operands } = parseArgs(dd < 0 ? rest : rest.slice(0, dd), spec, { command: `git ${sub}` });
+    const paths = dd < 0 ? null : rest.slice(dd + 1);
     const rel = (p) => normalizePath(state.cwd, p);
-    if (!sub) return { text: 'usage: git <init|add|rm|mv|commit|status|log|diff|branch|checkout|clone|fetch|push>', code: 1 };
+    const ok = { text: 'ok', code: 0 };
+    const call = async (name, input) => {
+      if (!registry.describeCommand(name)) throw new GitFailed(`git: '${sub}' is unavailable (no git core wired)`);
+      let res;
+      try { res = await face.invoke(name, input); }
+      catch (error) {
+        if (error instanceof ShellInterrupted || error.cancelled) throw error;
+        throw new GitFailed(`git ${sub}: ${error.code || 'error'}: ${error.message}`);
+      }
+      if (!res.ok) throw new GitFailed(`git ${sub}: ${res.code || 'error'}: ${res.message || 'failed'}`);
+      return res;
+    };
+    const matrix = async () => (await call('git.statusMatrix', {})).matrix;
+    // Bring the index to the working tree for every covered path: add what changed or is new,
+    // drop what was deleted (a destructive index change, so it is confirmed). -u skips untracked.
+    const stageTree = async (specs, { trackedOnly = false } = {}) => {
+      const adds = [], drops = [];
+      for (const row of await matrix()) {
+        if (!specs.some((s) => covers(s, row[0])) || !unstaged(row)) continue;
+        if (trackedOnly && !tracked(row)) continue;
+        (row[2] === 0 ? drops : adds).push(row[0]);
+      }
+      for (const filepath of adds) await call('git.add', { filepath });
+      const results = drops.length ? await confirmBatch('git rm --cached', drops.map((filepath) => ({ name: 'git.remove', input: { filepath } }))) : [];
+      const bad = results.find((r) => !r.ok);
+      if (bad) throw new GitFailed(`git ${sub}: ${bad.code || 'error'}: ${bad.message || 'failed'}`);
+    };
 
-    let name; let input = {};
-    switch (sub) {
-      case 'init': input = {}; name = 'git.init'; break;
-      case 'add': {
-        // Multi-path fan-out: `git add *.txt` expands to several positionals;
-        // stage each (git.add is non-destructive — no confirm) so all matches
-        // are added, not just the first.
-        if (positional.length > 1) {
-          const errors = [];
-          for (const f of positional) {
-            const r = await face.invoke('git.add', { filepath: rel(f) });
-            if (!r.ok) errors.push(`git add: ${f}: ${r.message || 'failed'}`);
-          }
-          return errors.length
-            ? { text: errors.join('\n'), code: 1 }
-            : { text: renderGit('add', { ok: true }), code: 0 };
+    try {
+      switch (sub) {
+        case 'init': {
+          if (operands.length) return { text: `git init: a directory operand ('${operands[0]}') is not supported — the repository is the workspace root`, code: 2 };
+          await call('git.init', options.branch ? { defaultBranch: options.branch } : {});
+          return ok;
         }
-        name = 'git.add'; input = { filepath: rel(positional[0] || '') }; break;
+        case 'add': {
+          if (!operands.length && !options.all && !options.update) return { text: "Nothing specified, nothing added.\nhint: Maybe you wanted to say 'git add .'?", code: 0 };
+          // -A / -u with no pathspec cover the whole tree, wherever the shell is
+          const specs = operands.length ? operands.map(rel) : [''];
+          const rows = await matrix();
+          const miss = operands.find((p, i) => !rows.some(([f]) => covers(specs[i], f)));
+          if (miss != null) return { text: `git add: pathspec '${miss}' did not match any files`, code: 1 };
+          await stageTree(specs, { trackedOnly: !!options.update });
+          return ok;
+        }
+        case 'rm': {
+          if (!operands.length) return { text: 'usage: git rm [--cached] [-r] [-f] <path>...', code: 2 };
+          const rows = (await matrix()).filter(inIndex); // git rm matches the index
+          const targets = new Map(); // path -> row; overlapping pathspecs remove a path once
+          for (const p of operands) {
+            const s = rel(p);
+            const under = rows.filter(([f]) => covers(s, f));
+            if (!under.length) return { text: `git rm: pathspec '${p}' did not match any files`, code: 1 };
+            if (!under.some(([f]) => f === s) && !options.recursive) return { text: `git rm: not removing '${p}' recursively without -r`, code: 1 };
+            for (const row of under) targets.set(row[0], row);
+          }
+          // Without --cached the file leaves the working tree too, as git does; it used to stay.
+          const ops = [...targets.values()].flatMap(([filepath, , work]) => [{ name: 'git.remove', input: { filepath } },
+            ...(!options.cached && work !== 0 ? [{ name: 'fs.remove', input: { path: filepath } }] : [])]);
+          const results = await confirmBatch('git rm', ops);
+          const bad = results.find((r) => !r.ok);
+          if (bad) return { text: `git rm: ${bad.code || 'error'}: ${bad.message || 'failed'}`, code: 1 };
+          return { text: options.quiet ? '' : [...targets.keys()].map((f) => `rm '${f}'`).join('\n'), code: 0 };
+        }
+        // `git mv` (battery 2026-09-24: a model reached for `git mv seed.txt seed2.txt`, got "not a rig
+        // git command", and renamed with python — a wasted step). It is a rename plus the index
+        // update: fs.move, then, when a repository is wired and answers, stage the new path and drop
+        // the old one. Without a repository it is the rename alone, and it says so.
+        case 'mv': {
+          if (operands.length !== 2) return { text: 'usage: git mv <source> <destination>', code: 2 };
+          const [from, to] = operands.map(rel);
+          const mv = await face.invoke('fs.move', { from, to });
+          if (!mv.ok) return { text: `git mv: ${mv.code || 'error'}: ${mv.message || 'failed'}`, code: 1 };
+          if (!registry.describeCommand('git.add') || !registry.describeCommand('git.remove')) return { text: `renamed ${operands[0]} -> ${operands[1]} (no git core wired: nothing staged)`, code: 0 };
+          const add = await face.invoke('git.add', { filepath: to });
+          if (!add.ok) return { text: `renamed ${operands[0]} -> ${operands[1]} (not staged: ${add.message || add.code || 'no repository'})`, code: 0 };
+          const rm = await face.invoke('git.remove', { filepath: from });
+          // Dropping the old path from the index is destructive, so the face stages it for the same
+          // y/N every `git rm` gets; the rename itself has already happened.
+          return { text: `renamed ${operands[0]} -> ${operands[1]}` + (rm.ok ? ' (staged)' : ` (new path staged; old path: ${rm.message || rm.code || 'not in the index'})`), code: 0 };
+        }
+        case 'commit': {
+          const messages = options.message || [];
+          if (!messages.length) return { text: 'git commit: need -m "<message>"', code: 1 };
+          if (operands.length) return { text: `git commit: pathspecs are not supported ('${operands[0]}') — git add them, then commit`, code: 2 };
+          if (options.all) await stageTree([''], { trackedOnly: true });
+          if (!options.allowEmpty) {
+            // An empty commit used to be recorded and reported as a success.
+            const rows = await matrix();
+            if (!rows.some(staged)) {
+              return { text: rows.some((r) => tracked(r) && unstaged(r)) ? 'no changes added to commit (use "git add" and/or "git commit -a")'
+                : rows.some((r) => !tracked(r)) ? 'nothing added to commit but untracked files present (use "git add" to track)'
+                : 'nothing to commit, working tree clean', code: 1 };
+            }
+          }
+          const res = await call('git.commit', { message: messages.join('\n\n') });
+          return { text: options.quiet ? '' : `[${res.oid.slice(0, 7)}]`, code: 0 };
+        }
+        case 'status': {
+          const specs = operands.map(rel);
+          const rows = (await matrix()).filter(([f]) => !specs.length || specs.some((s) => covers(s, f)));
+          return { text: porcelain(rows) || '(clean)', code: 0 };
+        }
+        case 'log': {
+          if (paths) return { text: 'git log: path-limited history is not supported — drop the `-- <path>`', code: 2 };
+          if (operands.length > 1) return { text: `git log: one ref at most — extra operand '${operands[1]}'`, code: 2 };
+          const depth = options.count == null ? 0 : Number(options.count);
+          if (!Number.isInteger(depth) || depth < 0) return { text: `git log: -n ${options.count}: expected a non-negative integer`, code: 2 };
+          const res = await call('git.log', { ...(operands[0] ? { ref: operands[0] } : {}), ...(depth ? { depth } : {}) });
+          return { text: res.commits.map((c) => `${c.oid.slice(0, 7)} ${c.commit.message.split('\n')[0]}`).join('\n'), code: 0 };
+        }
+        case 'diff': {
+          // Paths and status letters only: this shell cannot read a blob, so it has no patch to show.
+          if (!options.nameOnly && !options.nameStatus && !options.quiet) {
+            return { text: 'git diff: patch output is not supported — use `git diff --name-status` (or --name-only, --quiet) for the changed paths, then `diff` or `cat` the files', code: 2 };
+          }
+          if (operands.length > 2) return { text: `git diff: two refs at most — extra operand '${operands[2]}'`, code: 2 };
+          if (options.cached && operands.length) return { text: 'git diff --cached <ref> is not supported — the index is compared with HEAD', code: 2 };
+          let changes;
+          if (!operands.length) {
+            // no ref: the working tree against the index; --cached: the index against HEAD
+            const rows = await matrix();
+            changes = options.cached
+              ? rows.filter(staged).map(([f, head, , stage]) => ({ path: f, letter: head === 0 ? 'A' : stage === 0 ? 'D' : 'M' }))
+              : rows.filter((r) => inIndex(r) && unstaged(r)).map(([f, , work]) => ({ path: f, letter: work === 0 ? 'D' : 'M' }));
+          } else {
+            const res = await call('git.diff', { refA: operands[0], ...(operands[1] ? { refB: operands[1] } : {}) });
+            // one ref: the working tree against it, which walks untracked files too; git leaves them out
+            const untracked = operands[1] ? new Set() : new Set((await matrix()).filter((r) => !tracked(r)).map(([f]) => f));
+            changes = res.changes.filter((c) => !untracked.has(c.path)).map((c) => ({ path: c.path, letter: c.status[0].toUpperCase() }));
+          }
+          const specs = (paths || []).map(rel);
+          changes = changes.filter((c) => !specs.length || specs.some((s) => covers(s, c.path))).sort((a, b) => (a.path < b.path ? -1 : 1));
+          const code = (options.quiet || options.exitCode) && changes.length ? 1 : 0;
+          if (options.quiet) return { text: '', code };
+          return { text: changes.map((c) => (options.nameOnly ? c.path : `${c.letter}\t${c.path}`)).join('\n'), code };
+        }
+        case 'branch': {
+          if (!operands.length) return { text: (await call('git.listBranches', {})).branches.join('\n'), code: 0 };
+          if (options.list) return { text: 'git branch --list: patterns are not supported — use `git branch` and grep', code: 2 };
+          if (operands.length > 1) return { text: `git branch: a start point is not supported ('${operands[1]}') — a new branch starts at HEAD`, code: 2 };
+          await call('git.branch', { ref: operands[0] });
+          return ok;
+        }
+        case 'checkout': {
+          if (paths) return { text: 'git checkout -- <path>: restoring files is not supported — git checkout switches branches or commits only', code: 2 };
+          if (options.branch) {
+            if (operands.length) return { text: `git checkout -b: a start point is not supported ('${operands[0]}') — a new branch starts at HEAD`, code: 2 };
+            await call('git.branch', { ref: options.branch, checkout: true });
+            return ok;
+          }
+          if (operands.length !== 1) return { text: 'usage: git checkout [-f] <ref> | git checkout -b <new-branch>', code: 2 };
+          await call('git.checkout', { ref: operands[0], ...(options.force ? { force: true } : {}) });
+          return ok;
+        }
+        // These three existed in the registry, were tested, and were simply unreachable from the
+        // shell — runGit had no case for them (forward-pass R3b). Network rides the sovereign
+        // egress, so an unconfigured backend fails loudly rather than silently doing nothing.
+        case 'clone': case 'fetch': {
+          if (!operands[0]) return { text: `usage: git ${sub} <url> [ref]`, code: 2 };
+          if (operands.length > 2) return { text: `git ${sub}: extra operand '${operands[2]}' — usage: git ${sub} <url> [ref]`, code: 2 };
+          const res = await call(`git.${sub}`, { url: operands[0], ...(operands[1] ? { ref: operands[1] } : {}) });
+          return { text: res.oid ? `[${res.oid.slice(0, 7)}]` : 'ok', code: 0 };
+        }
+        case 'push': {
+          if (operands.length < 2) return { text: 'usage: git push <url> <ref> [remoteRef]', code: 2 };
+          if (operands.length > 3) return { text: `git push: extra operand '${operands[3]}' — usage: git push <url> <ref> [remoteRef]`, code: 2 };
+          const res = await call('git.push', { url: operands[0], ref: operands[1],
+            ...(operands[2] ? { remoteRef: operands[2] } : {}), ...(options.force ? { force: true } : {}) });
+          return { text: res.oid ? `[${res.oid.slice(0, 7)}]` : 'ok', code: 0 };
+        }
       }
-      case 'rm': name = 'git.remove'; input = { filepath: rel(positional[0] || '') }; break;
-      // `git mv` (battery 2026-09-24: a model reached for `git mv seed.txt seed2.txt`, got "not a rig
-      // git command", and renamed with python — a wasted step). It is a rename plus the index
-      // update: fs.move, then, when a repository is wired and answers, stage the new path and drop
-      // the old one. Without a repository it is the rename alone, and it says so.
-      case 'mv': {
-        if (positional.length !== 2) return { text: 'usage: git mv <source> <destination>', code: 2 };
-        const [from, to] = positional.map(rel);
-        const mv = await face.invoke('fs.move', { from, to });
-        if (!mv.ok) return { text: `git mv: ${mv.code || 'error'}: ${mv.message || 'failed'}`, code: 1 };
-        if (!registry.describeCommand('git.add') || !registry.describeCommand('git.remove')) return { text: `renamed ${positional[0]} -> ${positional[1]} (no git core wired: nothing staged)`, code: 0 };
-        const add = await face.invoke('git.add', { filepath: to });
-        if (!add.ok) return { text: `renamed ${positional[0]} -> ${positional[1]} (not staged: ${add.message || add.code || 'no repository'})`, code: 0 };
-        const rm = await face.invoke('git.remove', { filepath: from });
-        // Dropping the old path from the index is destructive, so the face stages it for the same
-        // y/N every `git rm` gets; the rename itself has already happened.
-        return { text: `renamed ${positional[0]} -> ${positional[1]}` + (rm.ok ? ' (staged)' : ` (new path staged; old path: ${rm.message || rm.code || 'not in the index'})`), code: 0 };
-      }
-      case 'commit': {
-        const mi = rest.findIndex((a) => a === '-m' || a === '--message');
-        const message = mi >= 0 ? rest[mi + 1] : positional[0];
-        if (!message) return { text: 'git commit: need -m "<message>"', code: 1 };
-        name = 'git.commit'; input = { message, actor: 'agent' };
-        break;
-      }
-      case 'status':
-        if (positional[0]) { name = 'git.status'; input = { filepath: rel(positional[0]) }; }
-        else { name = 'git.statusMatrix'; input = {}; }
-        break;
-      case 'log': name = 'git.log'; input = flagNum(rest, 0) ? { depth: flagNum(rest, 0) } : {}; break;
-      case 'diff': name = 'git.diff'; input = positional[0] ? { ref: positional[0] } : {}; break;
-      case 'branch': name = 'git.branch'; input = positional[0] ? { name: positional[0] } : {}; break;
-      case 'checkout': name = 'git.checkout'; input = { ref: positional[0] || '' }; break;
-      // These three existed in the registry, were tested, and were simply unreachable from the
-      // shell — runGit had no case for them (forward-pass R3b). Network rides the sovereign
-      // egress, so an unconfigured backend fails loudly rather than silently doing nothing.
-      case 'clone': {
-        if (!positional[0]) return { text: 'usage: git clone <url> [ref]', code: 2 };
-        name = 'git.clone'; input = { url: positional[0], ...(positional[1] ? { ref: positional[1] } : {}) }; break;
-      }
-      case 'fetch': {
-        if (!positional[0]) return { text: 'usage: git fetch <url> [ref]', code: 2 };
-        name = 'git.fetch'; input = { url: positional[0], ...(positional[1] ? { ref: positional[1] } : {}) }; break;
-      }
-      case 'push': {
-        if (positional.length < 2) return { text: 'usage: git push <url> <ref> [remoteRef]', code: 2 };
-        name = 'git.push';
-        input = { url: positional[0], ref: positional[1],
-                  ...(positional[2] ? { remoteRef: positional[2] } : {}),
-                  ...(flags.includes('-f') || flags.includes('--force') ? { force: true } : {}) };
-        break;
-      }
-      default: return { text: `git: '${sub}' is not a rig git command`, code: 1 };
+    } catch (error) {
+      if (error instanceof GitFailed) return { text: error.message, code: 1 };
+      throw error;
     }
-    if (!registry.describeCommand(name)) return { text: `git: '${sub}' is unavailable (no git core wired)`, code: 1 };
-    const res = await face.invoke(name, input);
-    if (!res.ok) return { text: `git ${sub}: ${res.code || 'error'}: ${res.message || 'failed'}`, code: 1 };
-    return { text: renderGit(sub, res), code: 0 };
   }
 
   async function runPipeline(pipeline, stdinFrom = null, stdinBody = null) {

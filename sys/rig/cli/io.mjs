@@ -112,6 +112,7 @@ export function createIO({ invoke, cwd = () => '', run } = {}) {
         : { pattern, cwd: resolve(from) };
       return (await call('fs.glob', input)).matches;
     },
+    mkdir: (path, { createParents = false } = {}) => call('fs.mkdir', { path: resolve(path), createParents }),
     remove: (path, { recursive = false } = {}) => call('fs.remove', { path: resolve(path), recursive }),
     move: (from, to) => call('fs.move', { from: resolve(from), to: resolve(to) }),
     copy: (from, to) => call('fs.copy', { from: resolve(from), to: resolve(to) }),

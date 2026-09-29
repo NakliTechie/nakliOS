@@ -2,7 +2,12 @@
 
 U0 provides the shared foundation for the Unix expansion. Existing curated
 commands live in `builtins.mjs`; `core.mjs` uses the new context directly.
-The language remains unchanged until U3.
+`files.mjs` holds touch, mkdir, stat, mv and cp. The language remains
+unchanged until U3.
+
+- Handle every operand, or refuse the form with exit 2. A command that reads
+  its first operand and drops the rest exits 0 with a wrong answer; the
+  false-friends suite has one test per command that takes several.
 
 - Parse argv with `parseArgs` from `../args.mjs`. It supports bundled short
   flags, attached values, long options, and `--`. `ArgError` carries exit 2

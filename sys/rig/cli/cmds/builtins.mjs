@@ -79,11 +79,19 @@ export function createBuiltins({ state, face, registry, normalizePath, decodeDat
     },
     echo(argv) { return { text: argv.join(' '), code: 0 }; },
     clear() { return { text: '', code: 0, clear: true }; },
-    history() { return { text: state.history.map((h, i) => `${i + 1}  ${h}`).join('\n'), code: 0 }; },
+    // `history N` shows the last N lines; the count used to be ignored and every line printed.
+    history(argv) {
+      if (argv.length > 1 || (argv.length && !/^\d+$/.test(argv[0]))) return { text: 'history: takes one optional count — history [N]', code: 2 };
+      const from = argv.length ? Math.max(0, state.history.length - Number(argv[0])) : 0;
+      return { text: state.history.slice(from).map((h, i) => `${from + i + 1}  ${h}`).join('\n'), code: 0 };
+    },
+    // One line per name; exit 1 when any is unknown. `which a b` used to answer for `a` alone.
     which(argv) {
-      const v = argv[0];
-      const known = commandNames().includes(v);
-      return { text: known ? v : `${v} not found`, code: known ? 0 : 1 };
+      const { operands } = parseArgs(argv, {}, { command: 'which' });
+      if (!operands.length) return { text: 'which: missing operand', code: 2 };
+      const names = commandNames();
+      return { text: operands.map((v) => (names.includes(v) ? v : `${v} not found`)).join('\n'),
+        code: operands.every((v) => names.includes(v)) ? 0 : 1 };
     },
     // -v INVERTED (it returned exactly the lines it was asked to exclude), -i was ignored so a
     // match reported none, -c was ignored, -r returned empty exit 1 — all silently (R2b).
@@ -112,7 +120,8 @@ export function createBuiltins({ state, face, registry, normalizePath, decodeDat
         for (const f of files) {
           const res = await face.invoke('fs.read', { path: normalizePath(state.cwd, f), encoding: 'utf-8' });
           if (!res.ok) return { text: `grep: ${f}: ${res.code || 'ENOENT'}`, code: 2 };
-          hits.push(...filter(decodeData(res.data), files.length > 1 ? f : ''));
+          // -h drops the file prefix, -H forces it; both used to be accepted and ignored
+          hits.push(...filter(decodeData(res.data), has('H') || (files.length > 1 && !has('h')) ? f : ''));
         }
       } else {
         hits = filter(stdin || '', '');
@@ -124,30 +133,49 @@ export function createBuiltins({ state, face, registry, normalizePath, decodeDat
       const { options, operands: positionals } = lineArgs('head', argv);
       const n = flagNum(options.n, 10);
       if (n && typeof n === 'object' && n.bad !== undefined) return { text: `head: invalid line count: ${n.bad}`, code: 2 };
+      const take = (text) => linesOf(text).slice(0, n).join('\n');
+      if (positionals.length > 1) return eachFile('head', positionals, take);
       const inp = await textInput('head', positionals, stdin); if (inp.failed) return inp;
-      return { text: linesOf(inp.text).slice(0, n).join('\n'), code: 0 };
+      return { text: take(inp.text), code: 0 };
     },
     async tail(argv, stdin) {
       const { options, operands: positionals } = lineArgs('tail', argv);
       const n = flagNum(options.n, 10);
       if (n && typeof n === 'object' && n.bad !== undefined) return { text: `tail: invalid line count: ${n.bad}`, code: 2 };
+      const take = (text) => { const lines = linesOf(text); return lines.slice(Math.max(0, lines.length - n)).join('\n'); };
+      if (positionals.length > 1) return eachFile('tail', positionals, take);
       const inp = await textInput('tail', positionals, stdin); if (inp.failed) return inp;
-      const lines = linesOf(inp.text);
-      return { text: lines.slice(Math.max(0, lines.length - n)).join('\n'), code: 0 };
+      return { text: take(inp.text), code: 0 };
     },
     async wc(argv, stdin) {
       const { options, operands: positionals } = parseArgs(argv, shortFlags('lwcm'), { command: 'wc' });
+      // Columns in coreutils order. `wc -lw` used to print lines only, and -c counted UTF-16
+      // units, not bytes.
+      const cols = ['l', 'w', 'm', 'c'].filter((ch) => options[ch]);
+      if (!cols.length) cols.push('l', 'w', 'c');
+      const count = (text) => ({
+        // LINES, not newlines: a pipeline's last line usually has no trailing newline, so counting
+        // "\n" made `grep x | wc -l` undercount by one on every non-empty result (R2e).
+        l: text === '' ? 0 : linesOf(text).length,
+        w: text.split(/\s+/).filter(Boolean).length,
+        m: [...text].length,
+        c: new TextEncoder().encode(text).length,
+      });
+      const row = (n) => cols.map((ch) => n[ch]).join(' ');
+      if (positionals.length > 1) {
+        // One row per file and a total, as coreutils prints. The rows used to merge into one count.
+        const rows = [], total = { l: 0, w: 0, m: 0, c: 0 }; let failed = false;
+        for (const f of positionals) {
+          const inp = await textInput('wc', [f], '');
+          if (inp.failed) { rows.push(inp.text); failed = true; continue; }
+          const n = count(inp.text); for (const k in total) total[k] += n[k];
+          rows.push(`${row(n)} ${f}`);
+        }
+        rows.push(`${row(total)} total`);
+        return { text: rows.join('\n'), code: failed ? 1 : 0 };
+      }
       const inp = await textInput('wc', positionals, stdin); if (inp.failed) return inp;
-      const text = inp.text;
-      // LINES, not newlines: a pipeline's last line usually has no trailing newline, so counting
-      // "\n" made `grep x | wc -l` undercount by one on every non-empty result (R2e).
-      const lines = text === '' ? 0 : linesOf(text).length;
-      const words = text.split(/\s+/).filter(Boolean).length;
-      const has = (ch) => !!options[ch];
-      if (has('l')) return { text: String(lines), code: 0 };
-      if (has('w')) return { text: String(words), code: 0 };
-      if (has('c') || has('m')) return { text: String(text.length), code: 0 };
-      return { text: `${lines} ${words} ${text.length}`, code: 0 };
+      return { text: row(count(inp.text)), code: 0 };
     },
     // SH3 (2026-09-24): `od` — asked for in live runs to see a file's exact bytes (a stray \r, a BOM).
     // A documented subset: -c (characters), -b (octal bytes), -t x1 / -tx1 (hex bytes), -t c, -An (no
@@ -199,6 +227,8 @@ export function createBuiltins({ state, face, registry, normalizePath, decodeDat
     },
     async uniq(argv, stdin) {
       const { options, operands: positionals } = parseArgs(argv, shortFlags('cdu'), { command: 'uniq' });
+      // POSIX reads a second operand as the OUTPUT file; it used to be read as more input.
+      if (positionals.length > 1) return { text: `uniq: an OUTPUT operand ('${positionals[1]}') is not supported — redirect instead: uniq INPUT > OUTPUT`, code: 2 };
       const inp = await textInput('uniq', positionals, stdin); if (inp.failed) return inp;
       const has = (ch) => !!options[ch];
       const runs = [];
@@ -211,13 +241,6 @@ export function createBuiltins({ state, face, registry, normalizePath, decodeDat
       if (has('u')) keep = runs.filter((r) => r.n === 1);
       return { text: keep.map((r) => (has('c') ? `${String(r.n).padStart(7)} ${r.l}` : r.l)).join('\n'), code: 0 };
     },
-    async touch(argv) {
-      const path = normalizePath(state.cwd, argv[0] || '');
-      const exists = await face.invoke('fs.stat', { path });
-      if (exists.ok) return { text: '', code: 0 };
-      const res = await face.invoke('fs.write', { path, data: '', createParents: true });
-      return { text: res.ok ? '' : `touch: ${res.message || 'failed'}`, code: res.ok ? 0 : 1 };
-    },
     // ls that lists a directory but PRINTS a file (coreutils behaviour). The old
     // path routed every `ls X` through fs.list, so `ls afile` threw ENOTDIR and
     // misled callers into thinking a file was a directory.
@@ -225,25 +248,30 @@ export function createBuiltins({ state, face, registry, normalizePath, decodeDat
       const { options, operands: positionals } = parseArgs(argv, shortFlags('Ral'), { command: 'ls' });
       const long = !!options.l;
       const targets = positionals.length ? positionals : [null];
-      const results = [];
+      const errors = [], files = [], dirs = [];
       let failed = false, entries = 0;
       for (const p of targets) {
         const abs = p == null ? state.cwd : normalizePath(state.cwd, p);
         const st = await face.invoke('fs.stat', { path: abs });
         if (st.ok && st.stat && st.stat.type === 'file') {
           const name = p != null ? p : abs.split('/').pop();
-          results.push(long ? `- ${name}` : name); entries++;
+          files.push(long ? `- ${name}` : name); entries++;
           continue;
         }
         const input = { path: abs };
         for (const ch of Object.keys(options)) if (LIST_FLAGS[ch]) input[LIST_FLAGS[ch]] = true;
         const res = await face.invoke('fs.list', input);
-        if (!res.ok) { results.push(`ls: ${p ?? '.'}: ${res.code || 'error'}`); failed = true; continue; }
+        if (!res.ok) { errors.push(`ls: ${p ?? '.'}: ${res.code || 'error'}`); failed = true; continue; }
         entries += (res.entries || []).length;
-        results.push(renderResult('fs.list', res, { long, recursive: !!input.recursive, root: abs }));
+        const body = renderResult('fs.list', res, { long, recursive: !!input.recursive, root: abs });
+        // Several targets: each directory under a `NAME:` header, as coreutils prints. The listings
+        // used to run together, so `ls a b` could not say which name was in which directory.
+        // -R blocks already carry their own headers.
+        dirs.push(targets.length > 1 && !input.recursive ? `${p}:${body ? '\n' + body : ''}` : body);
       }
       // a missing path used to still exit 0, so `ls d || mkdir d` never took the fallback (R2e)
-      return { text: results.filter((s) => s !== '').join(options.R ? '\n\n' : '\n'), code: failed ? 1 : 0, listing: { tool: 'ls', entries } }; // -R: a blank line between targets' blocks too
+      const blocks = [...errors, files.join('\n'), ...dirs].filter((s) => s !== '');
+      return { text: blocks.join(options.R || targets.length > 1 ? '\n\n' : '\n'), code: failed ? 1 : 0, listing: { tool: 'ls', entries } }; // -R: a blank line between targets' blocks too
     },
     // printf FORMAT [ARGS] — backslash escapes + %s/%d/%%. Unlike echo it adds no
     // trailing newline of its own; the format supplies it (\n).
@@ -253,12 +281,18 @@ export function createBuiltins({ state, face, registry, normalizePath, decodeDat
       if (!argv.length) return { text: '', code: 0 };
       const fmt = unescapePrintf(argv[0]);
       const args = argv.slice(1);
-      let ai = 0;
-      const text = fmt.replace(/%[sd%]/g, (m) => {
-        if (m === '%%') return '%';
-        const v = ai < args.length ? args[ai++] : '';
-        return m === '%d' ? String(parseInt(v, 10) || 0) : String(v);
-      });
+      let ai = 0, text = '';
+      // POSIX reuses the format until the arguments run out: `printf '%s\n' a b c` prints three
+      // lines. It used to print `a` and drop the rest. A format that takes no argument runs once.
+      do {
+        const before = ai;
+        text += fmt.replace(/%[sd%]/g, (m) => {
+          if (m === '%%') return '%';
+          const v = ai < args.length ? args[ai++] : '';
+          return m === '%d' ? String(parseInt(v, 10) || 0) : String(v);
+        });
+        if (ai === before) break;
+      } while (ai < args.length);
       return { text, code: 0, raw: true };
     },
     // test / [ EXPR ] — the condition primitive. No output; the exit code is the
@@ -443,8 +477,10 @@ export function createBuiltins({ state, face, registry, normalizePath, decodeDat
     // diff — line-level unified-ish diff of two files (enough for the agent to see
     // what changed / confirm an edit).
     async diff(argv) {
-      const files = argv.filter((a) => !a.startsWith('-'));
-      if (files.length < 2) return { text: 'usage: diff <a> <b>', code: 2 };
+      // Flags used to be filtered out unread (`diff -q` printed a full diff) and a third file was
+      // dropped. Neither is supported, so both are refused.
+      const { operands: files } = parseArgs(argv, {}, { command: 'diff' });
+      if (files.length !== 2) return { text: `usage: diff <a> <b>${files.length > 2 ? ` — extra operand '${files[2]}'` : ''}`, code: 2 };
       const a = await face.invoke('fs.read', { path: normalizePath(state.cwd, files[0]), encoding: 'utf-8' });
       const b = await face.invoke('fs.read', { path: normalizePath(state.cwd, files[1]), encoding: 'utf-8' });
       if (!a.ok) return { text: `diff: ${files[0]}: not found`, code: 2 };
@@ -516,20 +552,32 @@ export function createBuiltins({ state, face, registry, normalizePath, decodeDat
       }
       return { text: out, code: 0 };
     },
+    // basename NAME [SUFFIX]. A third operand used to be dropped; it is refused, as coreutils does.
     basename(argv) {
-      let b = String(argv[0] || '').replace(/\/+$/, '').split('/').pop() || '/';
-      if (argv[1] && b.endsWith(argv[1])) b = b.slice(0, -argv[1].length);
+      const { operands } = parseArgs(argv, {}, { command: 'basename' });
+      if (!operands.length) return { text: 'basename: missing operand', code: 2 };
+      if (operands.length > 2) return { text: `basename: extra operand '${operands[2]}' — basename NAME [SUFFIX]`, code: 2 };
+      const [name, suffix] = operands;
+      let b = String(name).replace(/\/+$/, '').split('/').pop() || '/';
+      if (suffix && b !== suffix && b.endsWith(suffix)) b = b.slice(0, -suffix.length);
       return { text: b, code: 0 };
     },
+    // One line per operand, as coreutils prints; `dirname a/b c/d` used to answer for `a/b` alone.
     dirname(argv) {
-      const p = String(argv[0] || '').replace(/\/+$/, '');
-      const i = p.lastIndexOf('/');
-      return { text: i > 0 ? p.slice(0, i) : (i === 0 ? '/' : '.'), code: 0 };
+      const { operands } = parseArgs(argv, {}, { command: 'dirname' });
+      if (!operands.length) return { text: 'dirname: missing operand', code: 2 };
+      return { text: operands.map((path) => {
+        const p = String(path).replace(/\/+$/, '');
+        const i = p.lastIndexOf('/');
+        return i > 0 ? p.slice(0, i) : (i === 0 ? '/' : '.');
+      }).join('\n'), code: 0 };
     },
     // chmod — accepted for script compatibility; the virtual fs has no POSIX
     // permission bits, so it is a successful no-op (documented).
     chmod() { return { text: '', code: 0 }; },
-    env() {
+    // `env CMD` would run CMD in coreutils; here it printed the environment and exited 0.
+    env(argv) {
+      if (argv.length) return { text: `env: '${argv[0]}': running a command or changing the environment is not supported — use \`export NAME=value\` or \`NAME=value cmd\`, or plain \`env\` to print it`, code: 2 };
       const lines = [...state.vars.entries()].sort().map(([k, v]) => `${k}=${v}`);
       lines.push(`PWD=/${state.cwd}`);
       return { text: lines.join('\n'), code: 0 };
@@ -553,12 +601,17 @@ export function createBuiltins({ state, face, registry, normalizePath, decodeDat
         + '\nvars: NAME=value, $NAME, ${NAME}, $?, $PWD  (single quotes are literal; double quotes expand)'
         + '\nThis is a CURATED shell, not coreutils. Each builtin implements a documented subset and'
         + '\nREFUSES an unsupported flag (exit 2) rather than ignoring it. Notably:'
-        + '\n  grep -n -v -i -c -E -F      (no -r; use `rg` for a recursive search)'
+        + '\n  grep -n -v -i -c -E -F -h -H   (no -r; use `rg` for a recursive search)'
         + '\n  rg -i -l -n -c -t/--type -g/--glob --files   (PATTERN [paths...])'
-        + '\n  head/tail -n   wc -l -w -c   sort -r -n -u -f   uniq -c -d -u   cut -d -f -c   tr [-d], ranges'
-        + '\n  find [dir] -name -type -maxdepth       sed s/// on stdin or a file (no -i; use the edit tool)'
+        + '\n  head/tail -n   wc -l -w -m -c   sort -r -n -u -f   uniq -c -d -u   cut -d -f -c   tr [-d], ranges'
+        + '\n  find [dir...] -name -type -maxdepth    sed s/// on stdin or a file (no -i; use the edit tool)'
         + '\n  awk -F with {print $N}      ls -R -a -l      sleep SECONDS (decimals; capped at ' + SLEEP_MAX_S + ' s)'
         + '\n  od -c -b -t x1 -An        here-documents as stdin: cmd <<\'EOF\' … EOF  (literal; python - <<\'PY\' runs it)'
+        + '\nEvery operand is handled or refused: touch/mkdir [-p]/stat/rm/cat/tee/which/dirname take many;'
+        + '\n  mv/cp [-r] SOURCE... DIR move into DIR; head/tail/wc print each file; printf reuses its format.'
+        + '\n  git: init [-b] | add [-A|-u] PATHS | rm [--cached] [-r] | mv | commit -m [-a] | status [-s] | log [-n N] [REF]'
+        + '\n       diff --name-status|--name-only|--quiet [--cached | REF [REF]] [-- PATHS] (no patches) | branch [NAME]'
+        + '\n       checkout [-f] REF | checkout -b NAME | clone | fetch | push [-f]'
         + '\nNo subshells, loops, functions or background jobs. Command substitution ($(…), backticks) is REFUSED (exit 2), not run.'
         + '\nPython is a real kernel (`python file.py`); it is the scripting layer, not bash.'
         + '\n`node file.mjs` / `node --test a.test.mjs …` runs a workspace ES module as a gate: node:assert and node:test, relative imports only — no npm, no fs, no network.', code: 0 };
@@ -599,6 +652,20 @@ export function createBuiltins({ state, face, registry, normalizePath, decodeDat
       parts.push(decodeData(res.data));
     }
     return { text: parts.join(''), code: 0 };
+  }
+
+  // Several files: each under a `==> NAME <==` header, as coreutils prints. `head -n 1 a b` used
+  // to read the files as one stream, so b never showed. A missing file prints its error; the rest
+  // still run; the exit is 1.
+  async function eachFile(name, positionals, take) {
+    const blocks = []; let failed = false;
+    for (const f of positionals) {
+      const inp = await textInput(name, [f], '');
+      if (inp.failed) { blocks.push(inp.text); failed = true; continue; }
+      const body = take(inp.text);
+      blocks.push(`==> ${f} <==` + (body === '' ? '' : '\n' + body));
+    }
+    return { text: blocks.join('\n\n'), code: failed ? 1 : 0 };
   }
 
   // Returns a number, or { bad } when -n was given a non-numeric value — which used to fall back
