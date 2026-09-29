@@ -15,7 +15,7 @@ import { createShell } from '../../rig/cli/shell.mjs';
 import { createSteerQueue } from '../steer.mjs';
 import { parseExpect, gradeExpect, expectLine } from '../expect.mjs';
 import { EXPECT_MISS_STREAK, expectVerdictIn,
-  runAgentLoop, shellTool, makeShellExecutor, taskDoneTool, DEFAULT_TOOL_CONCURRENCY,
+  runAgentLoop, shellTool, makeShellExecutor, taskDoneTool, DEFAULT_TOOL_CONCURRENCY, MAX_SHELL_CONFIRMATIONS,
   estimateTokens, boundedText, interceptBashCommand,
   REPEAT_NUDGE_AT, repeatNudge, stepSignature,
   usageInputTokens, usageOutputTokens,
@@ -35,7 +35,7 @@ function eq(a, b, msg) {
 }
 function assert(cond, msg) { if (!cond) throw new Error(msg || 'assertion failed'); }
 
-function freshShell() {
+function freshShell({ signal = null } = {}) {
   const backend = new MemoryBackend();
   const fs = createFileops({ backend });
   const git = createGitCore({ fs, dir: '/' });
@@ -46,7 +46,7 @@ function freshShell() {
   });
   const opLog = createOpLog({ fs: createFileops({ backend: new MemoryBackend() }) });
   const face = createAgentFace({ registry, grant, opLog, actor: 'agent' });
-  return createShell({ registry, face });
+  return createShell({ registry, face, signal });
 }
 
 // A scripted model: each entry is what infer() returns for that step. Later
@@ -1558,6 +1558,133 @@ await test('SH2: the shell executor answers a staged confirm, shows what happene
   assert(/\bc\b/.test(ls) && !/\ba\b|\bb\b/.test(ls) && !/cancelled/.test(ls), 'the next command runs as itself: ' + ls);
   const two = await exec('shell', { command: 'echo x > d; rm d; echo MID; rm c; echo END' });
   assert(/MID/.test(two) && /END/.test(two) && (two.match(/confirmed:/g) || []).length === 2, 'a line that stages twice is answered twice and runs to its end: ' + two);
+});
+
+await test('U0: the shell executor completes more than eight confirmations', async () => {
+  const shell = freshShell();
+  const paths = Array.from({ length: 20 }, (_, i) => `batch${i}`);
+  await shell.feed(paths.map((path) => `echo x > ${path}`).join('; '));
+  const exec = makeShellExecutor(shell);
+  const out = await exec('shell', { command: paths.map((path) => `rm ${path}`).join('; ') + '; echo FINISHED' });
+  eq((out.match(/^confirmed:/gm) || []).length, paths.length, 'each staged operation completed');
+  assert(out.endsWith('FINISHED'), 'the continuation reached its final statement');
+  assert(!shell.awaitingConfirm, 'no pending confirmation remains');
+  eq(await exec('shell', { command: 'echo NEXT' }), 'NEXT', 'the next call runs its own command');
+  eq((await shell.feed('ls')).output, '', 'all twenty files were removed');
+});
+
+await test('U0: the confirmation bound cancels the remainder without mislabelling it confirmed', async () => {
+  let pending = false, answered = 0, cancelled = 0, lastCode = 0;
+  const shell = {
+    get awaitingConfirm() { return pending ? `proposal-${answered}` : null; },
+    get lastCode() { return lastCode; },
+    async feed(line) {
+      if (line === 'batch') { pending = true; return { output: 'rm 0 is destructive. confirm? [y/N]' }; }
+      if (!pending) return { output: 'NEXT' };
+      eq(line, 'y', 'the pending operation receives an affirmative answer');
+      const verb = `rm ${answered++}`;
+      return { output: `rm ${answered} is destructive. confirm? [y/N]`, confirmation: { verb, accepted: true, ok: true } };
+    },
+    async cancel() { pending = false; cancelled++; lastCode = 130; return { output: `cancelled: rm ${answered}` }; },
+  };
+  const exec = makeShellExecutor(shell);
+  const out = await exec('shell', { command: 'batch' });
+  eq(answered, MAX_SHELL_CONFIRMATIONS, 'the bounded number of answers was sent');
+  eq(cancelled, 1, 'the pending operation was explicitly cancelled');
+  eq(shell.lastCode, 130, 'the cancellation exit status survives');
+  assert(out.includes(`confirmation limit reached (${MAX_SHELL_CONFIRMATIONS})`), 'the result names the limit');
+  assert(!out.includes(`confirmed: rm ${MAX_SHELL_CONFIRMATIONS}\n`), 'the unanswered operation was never reported confirmed');
+  assert(!/\[y\/N\]/.test(out), 'no unanswered question remains in model output');
+  assert(!shell.awaitingConfirm, 'the cancellation cleared the pending proposal');
+  eq(await exec('shell', { command: 'echo NEXT' }), 'NEXT', 'the next call is not consumed as an answer');
+});
+
+await test('U0: Stop between staging and confirmation preserves files and abandons the line', async () => {
+  let controller = new AbortController();
+  const shell = freshShell({ signal: () => controller.signal });
+  await shell.feed('echo keep > stop-file');
+  const feed = shell.feed;
+  shell.feed = async (line) => {
+    const result = await feed(line);
+    if (shell.awaitingConfirm) controller.abort();
+    return result;
+  };
+  const out = await makeShellExecutor(shell)('shell', { command: 'rm stop-file; echo bad > after-stop' });
+  assert(/interrupted/.test(out), 'the result reports Stop');
+  assert(!/\[y\/N\]/.test(out), 'the prompt cleared by the abort listener is removed');
+  assert(!/^confirmed:/m.test(out), 'the rejected removal was never reported confirmed');
+  assert(!shell.awaitingConfirm, 'Stop cleared the pending proposal');
+  eq(shell.lastCode, 130, 'Stop uses the interruption status');
+  shell.feed = feed;
+  // A new run gets a fresh signal, as Anvil supplies through its signal getter.
+  controller = new AbortController();
+  eq((await shell.feed('cat stop-file')).output, 'keep', 'the unaccepted removal did not run');
+  await shell.feed('cat after-stop');
+  assert(shell.lastCode !== 0, 'the continuation after Stop never created its file');
+  eq((await shell.feed('echo NEXT')).output, 'NEXT', 'the next command runs independently');
+});
+
+await test('U0: Stop after one acceptance drains the following suspended confirmation', async () => {
+  let controller = new AbortController();
+  const shell = freshShell({ signal: () => controller.signal });
+  await shell.feed('echo first > removed; echo second > preserved');
+  const feed = shell.feed;
+  let stages = 0;
+  shell.feed = async (line) => {
+    const result = await feed(line);
+    if (result.awaitingConfirm && ++stages === 2) controller.abort();
+    return result;
+  };
+  const out = await makeShellExecutor(shell)('shell', { command: 'rm removed; rm preserved; echo bad > after-stop' });
+  eq((out.match(/^confirmed:/gm) || []).length, 1, 'only the completed removal is reported confirmed');
+  assert(/interrupted/.test(out), 'the result includes the interruption after the second stage');
+  assert(!/\[y\/N\]/.test(out), 'neither prompt remains in model output');
+  assert(!shell.awaitingConfirm, 'Stop clears the suspended proposal');
+  eq(shell.lastCode, 130, 'the completed first removal does not mask Stop');
+  shell.feed = feed;
+  controller = new AbortController();
+  eq((await shell.feed('cat preserved')).output, 'second', 'the next call runs after the drained cancellation');
+  await shell.feed('cat removed');
+  assert(shell.lastCode !== 0, 'the first accepted removal completed');
+  await shell.feed('cat after-stop');
+  assert(shell.lastCode !== 0, 'the final continuation did not execute');
+});
+
+await test('U0: failed confirmations and prompt-shaped file output retain their meaning', async () => {
+  let pending = false;
+  const shell = {
+    get awaitingConfirm() { return pending ? 'p' : null; },
+    async feed(line) {
+      if (line === 'rm file') { pending = true; return { output: 'rm file is destructive. confirm? [y/N]' }; }
+      pending = false;
+      return { output: 'rm file: permission denied', confirmation: { verb: 'rm file', accepted: true, ok: false } };
+    },
+  };
+  const out = await makeShellExecutor(shell)('shell', { command: 'rm file' });
+  assert(!/^confirmed:/m.test(out), 'a failed accept does not claim confirmation success');
+  assert(/permission denied/.test(out), 'the operation error reaches the agent');
+  const literal = 'rm imaginary is destructive. confirm? [y/N]';
+  const text = await makeShellExecutor({ feed: async () => ({ output: literal }) })('shell', { command: 'cat log' });
+  eq(text, literal, 'ordinary command output is not rewritten as a confirmation');
+});
+
+await test('U0: a thrown confirmation cancels pending state before propagating the error', async () => {
+  let pending = false, cancelled = 0;
+  const failure = new Error('accept unavailable');
+  const shell = {
+    get awaitingConfirm() { return pending ? 'p' : null; },
+    async feed(line) {
+      if (line === 'y') throw failure;
+      pending = true;
+      return { output: 'rm file is destructive. confirm? [y/N]' };
+    },
+    async cancel() { pending = false; cancelled++; return { output: 'cancelled: rm file' }; },
+  };
+  let caught;
+  try { await makeShellExecutor(shell)('shell', { command: 'rm file' }); } catch (error) { caught = error; }
+  eq(caught, failure, 'the original error reaches the caller');
+  eq(cancelled, 1, 'the executor explicitly cancelled the pending state');
+  assert(!shell.awaitingConfirm, 'the failed call leaves no confirmation for the next call');
 });
 
 if (failures.length) {

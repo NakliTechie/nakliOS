@@ -873,6 +873,11 @@ export async function runAgentLoop({
 // Bind the shell tool to a Forge shell instance: returns an executeTool(name,args)
 // that runs `args.command` through the shell and returns its output. Unknown tool
 // names return an error string (the model learns from it) rather than throwing.
+// A line may legitimately stage more than eight operations. Keep a finite bound for
+// runaway continuations, with room for ordinary file batches; reaching it cancels
+// the remaining line instead of leaving a prompt to consume the next tool call.
+export const MAX_SHELL_CONFIRMATIONS = 1024;
+
 export function makeShellExecutor(shell) {
   return async function executeTool(name, args) {
     if (name !== 'shell') return `Error: unknown tool "${name}"`;
@@ -888,20 +893,44 @@ export function makeShellExecutor(shell) {
     }
     const hint = interceptBashCommand(command);
     if (hint) return hint; // omp interceptor: redirect to a structured tool, don't run
-    const res = await shell.feed(command);
-    let out = res?.output ?? '';
     // SH2 (2026-09-24): an agent cannot answer the shell's `[y/N]`. Staged destructive ops (rm, git
     // commit) are confirmed here — the YOLO rule Anvil's toolset has kept since 3ccfb05 — so EVERY agent
     // path does it: the corpus recorder's executor used to leave the prompt pending, and the agent's
-    // next command was swallowed as the answer ('cancelled: rm'). The prompt line itself is replaced
-    // by what happened: the model used to be shown a question it could not answer, and the result-kind
-    // fold read the line as a rejection. A line that stages more than once is answered until it has run.
-    let guard = 0;
-    while (shell.awaitingConfirm && guard++ < 8) {
-      const confirmed = await shell.feed('y');
-      out = (out ? out + '\n' : '') + (confirmed?.output ?? '');
+    // next command was swallowed as the answer ('cancelled: rm'). Report a confirmation only after
+    // the shell says every proposal succeeded; a cap, Stop, or failed accept is never "confirmed".
+    const chunks = [];
+    const append = (result) => {
+      let output = String(result?.output ?? '');
+      // Only the trailing prompt belongs to the pending operation. Ordinary command output
+      // that resembles a prompt must survive unchanged.
+      if (result?.awaitingConfirm || shell.awaitingConfirm) output = output.replace(/(?:^|\n)[^\n]* is destructive\. confirm\? \[y\/N\]\s*$/, '');
+      if (output) chunks.push(output);
+    };
+    try {
+      append(await shell.feed(command));
+      let confirmations = 0;
+      // An abort listener may already have cleared the pending proposal. Still drain
+      // the suspended invocation through cancel() before returning its tool result.
+      while (shell.awaitingConfirm || shell.interrupted) {
+        if (shell.interrupted || confirmations >= MAX_SHELL_CONFIRMATIONS) {
+          const reason = shell.interrupted ? 'interrupted' : `confirmation limit reached (${MAX_SHELL_CONFIRMATIONS})`;
+          append(await shell.cancel());
+          chunks.push(`shell: ${reason}; remaining command cancelled`);
+          break;
+        }
+        const result = await shell.feed('y');
+        confirmations++;
+        if (result?.confirmation?.accepted) {
+          chunks.push(`${result.confirmation.ok ? 'confirmed' : 'confirmation failed'}: ${result.confirmation.verb}`);
+        }
+        append(result);
+      }
+    } catch (error) {
+      // A failed executor must not leave a proposal or a continuation for a later call.
+      if (shell.awaitingConfirm || shell.interrupted) await shell.cancel();
+      throw error;
     }
-    out = String(out).replace(/^(.*) is destructive\. confirm\? \[y\/N\]$/gm, 'confirmed: $1').replace(/\n+$/, '');
+    const out = chunks.join('\n').replace(/\n+$/, '');
     return out === '' ? NO_OUTPUT : String(out);
   };
 }

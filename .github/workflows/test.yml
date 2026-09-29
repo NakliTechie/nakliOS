@@ -331,6 +331,14 @@ jobs:
         run: node sys/rig/cli/test/conformance.test.mjs
       - name: shell false friends (never a wrong exit 0)
         run: node sys/rig/cli/test/false-friends.test.mjs
+      - name: Unix foundation argument parsing
+        run: node sys/rig/cli/test/args.test.mjs
+      - name: Unix foundation command I/O
+        run: node sys/rig/cli/test/io.test.mjs
+      - name: Unix foundation suspension lifecycle
+        run: node sys/rig/cli/test/execution.test.mjs
+      - name: Unix foundation bytes, nested confirmation and dispatch
+        run: node sys/rig/cli/test/foundation.test.mjs
 
       - name: Verify the history tool — search and read past runs (the retrieval half)
         run: node scripts/test-anvil-history.mjs
