@@ -415,6 +415,22 @@ jobs:
         run: node sys/ai/test/u3-permission.test.mjs
       - name: U3 review semantics regressions
         run: node sys/rig/cli/test/u3-review-semantics.test.mjs
+      - name: Unix U4a archive formats and command semantics
+        run: node sys/rig/cli/test/u4a-archives.test.mjs
+      - name: Unix U4a archive grants, staging, Stop and resource limits
+        run: node sys/rig/cli/test/u4a-archive-governance.test.mjs
+      - name: Unix U4a native metadata and staged type regressions
+        run: node sys/rig/cli/test/u4a-archive-review.test.mjs
+      - name: Unix U4a archive operand ordering
+        run: node sys/rig/cli/test/u4a-archive-operands.test.mjs
+      - name: Unix U4a stale archive and source proposals
+        run: node sys/rig/cli/test/u4a-archive-races.test.mjs
+      - name: Unix U4a excluded archive selections
+        run: node sys/rig/cli/test/u4a-archive-exclusion.test.mjs
+      - name: Unix U4a first-match archive selector ownership
+        run: node sys/rig/cli/test/u4a-archive-selection.test.mjs
+      - name: Unix U4a atomic archive mutations and storage guarantees
+        run: node sys/rig/fileops/test/archive-mutation.test.mjs
 
       - name: Verify literal shell operators and escaped arguments
         run: node sys/rig/cli/test/literal-operators.test.mjs

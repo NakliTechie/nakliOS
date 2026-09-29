@@ -57,6 +57,9 @@ export class OverlayBackend {
   }
 
   get supportsBoundedReads() { return this.base.supportsBoundedReads === true; }
+  // Writes use literal overlay keys. Base pinning is safe only when the base
+  // also guarantees no-follow mutation paths (Memory or origin-private storage).
+  get supportsNoFollowMutation() { return this.base.supportsNoFollowMutation === true; }
   get supportsMetadataOnly() { return this.base.supportsMetadataOnly === true; }
 
   _now() { return Date.now(); }

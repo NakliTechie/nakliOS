@@ -82,6 +82,8 @@ export function createBuiltins({ state, face, normalizePath, SLEEP_MAX_S, comman
         + '\n  awk -F -v -f; patterns, records, arrays, functions, loops, printf, getline and governed file output'
         + '\n  tac rev nl paste join comm split; fold fmt expand unexpand column ptx'
         + '\n  seq shuf tsort expr numfmt factor; bc exact decimal language and -l math library'
+        + '\n  tar -c/-x/-t -z -f ARCHIVE -C DIR -v --strip-components=N --exclude=PATTERN'
+        + '\n  gzip/gunzip/zcat -c -d -k -f -q -v -t; zip -r -q -0 -d; unzip -l -d DIR -o -n -p -q'
         + '\n  printenv [-0] [NAME...]; yes [WORDS...] | head -n N (bounded byte producers)'
         + '\n  ls -1 -A -d -h -S -t -r -F -Ral      sleep N[s|m|h|d] (cap ' + SLEEP_MAX_S + ' s)'
         + '\n  od -c -b -x -o -d -t x1 -A -N -j        here-documents as stdin: cmd <<\'EOF\' … EOF  (literal; python - <<\'PY\' runs it)'

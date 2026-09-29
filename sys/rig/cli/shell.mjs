@@ -41,6 +41,7 @@ import { createInspectionCommands } from './cmds/inspection.mjs';
 import { createEncodingCommands } from './cmds/encodings.mjs';
 import { createChecksumCommands } from './cmds/checksums.mjs';
 import { createRuntimeCommands } from './cmds/runtime.mjs';
+import { createArchiveCommands } from './cmds/archives.mjs';
 import { isByteStream, ownByteStream, closeByteStream, collectByteStream, createStreamingHead } from './cmds/streams.mjs';
 import { createPatch } from '../fileops/patch.mjs';
 
@@ -362,6 +363,7 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
     createInspectionCommands(io, { signal: commandSignal }),
     createEncodingCommands(io, { signal: commandSignal }),
     createChecksumCommands(io, { signal: commandSignal }),
+    createArchiveCommands(io, { signal: commandSignal, authorize: (name, input) => execution.authorize(name, input) }),
     createRuntimeCommands(io, { signal: commandSignal, environment: commandEnvironment,
       runWithTimeout: (milliseconds, argv, stdin) => execution.withTimeout(milliseconds, () => io.run(argv, stdin)) }));
   Object.assign(builtins, {
@@ -403,7 +405,7 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
         'seq', 'shuf', 'tsort', 'expr', 'numfmt', 'printenv', 'yes', 'ptx', 'bc', 'factor',
         'readlink', 'realpath', 'rmdir', 'mktemp', 'truncate', 'unlink', 'du', 'tree', 'file', 'strings', 'cmp', 'ln', 'link',
         'base64', 'base32', 'basenc', 'md5sum', 'sha1sum', 'sha224sum', 'sha256sum', 'sha384sum', 'sha512sum', 'b2sum', 'cksum', 'sum',
-        'timeout', 'more'].includes(verb) || !builtins[verb] ? stdin : toText(stdin);
+        'tar', 'gzip', 'gunzip', 'zcat', 'zip', 'unzip', 'timeout', 'more'].includes(verb) || !builtins[verb] ? stdin : toText(stdin);
       const result = await handler(argv.slice(1), input);
       if (!result.stream) return result;
       const stream = ownByteStream(result.stream);
