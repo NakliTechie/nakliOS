@@ -56,29 +56,47 @@ export function parseRule(str) {
 // bodies and the `<<TAG` operators so the command lines are matched like any other; a body that is
 // never closed leaves the line unparseable (null), because the shell refuses it too.
 function stripHeredocs(s) {
-  const lines = s.split('\n'); const out = [];
+  const lines = s.split('\n'), out = [];
   for (let i = 0; i < lines.length; i++) {
-    const tags = [];
-    const line = lines[i].replace(/<<(-?)\s*(?:'([^']*)'|"([^"]*)"|([A-Za-z_][A-Za-z0-9_]*))/g, (_, strip, a, b, c) => { tags.push({ tag: a ?? b ?? c, strip: strip === '-' }); return ' '; });
-    out.push(line);
+    const tags = []; let header = '', quote = null;
+    const line = lines[i];
+    for (let j = 0; j < line.length; j++) {
+      const c = line[j];
+      if (c === '\\' && quote !== "'" && j + 1 < line.length) { header += c + line[++j]; continue; }
+      if (quote) { header += c; if (c === quote) quote = null; continue; }
+      if (c === '"' || c === "'") { quote = c; header += c; continue; }
+      if (c === '#' && (j === 0 || /\s/.test(line[j - 1]))) { header += line.slice(j); break; }
+      if (c === '<' && line[j + 1] === '<' && line[j + 2] !== '<') {
+        const m = /^<<(-?)\s*(?:'([^']*)'|"([^"]*)"|([A-Za-z_][A-Za-z0-9_]*))/.exec(line.slice(j));
+        if (!m) return null;
+        tags.push({ tag: m[2] ?? m[3] ?? m[4], strip: m[1] === '-' });
+        header += ' '; j += m[0].length - 1; continue;
+      }
+      header += c;
+    }
+    out.push(header);
     for (const t of tags) {
       let closed = false;
       for (i++; i < lines.length; i++) { if ((t.strip ? lines[i].replace(/^\t+/, '') : lines[i]) === t.tag) { closed = true; break; } }
       if (!closed) return null;
     }
   }
-  return out.join(' '); // the shell reads a newline outside a body as a space
+  return out.join(' '); // U3 will give non-heredoc newlines their full grammar.
 }
 
 export function segments(command) {
   const s = stripHeredocs(String(command == null ? '' : command));
   if (s === null) return null;
+  // Escape removal can change any multiword prefix (git p\\ush), not just verbs.
+  // Textual rules cannot prove those prefixes until U3 analyzes argv structurally.
+  if (s.includes('\\')) return null;
   // substitution and ${…}: not ours to parse — decideByRules fails CLOSED on a null for deny/ask rules
   if (/\$\(|`|<<|\$\{/.test(s)) return null;
   const out = []; let cur = ''; let q = null;
   for (let i = 0; i < s.length; i++) {
     const c = s[i];
-    if (q) { cur += c; if (c === q && s[i - 1] !== '\\') q = null; continue; }
+    if (c === '\\' && q !== "'" && i + 1 < s.length) { cur += c + s[++i]; continue; }
+    if (q) { cur += c; if (c === q) q = null; continue; }
     if (c === '"' || c === "'") { q = c; cur += c; continue; }
     if (c === '&' && s[i + 1] === '&') { out.push(cur); cur = ''; i++; continue; }
     if (c === '|' && s[i + 1] === '|') { out.push(cur); cur = ''; i++; continue; }
@@ -88,8 +106,18 @@ export function segments(command) {
   out.push(cur);
   const commands = out.map((x) => x.trim()).filter(Boolean);
   for (const line of commands) {
-    const words = tokenize(line);
-    while (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[0] || '')) words.shift();
+    const markedWords = tokenize(line, { markLiteral: true });
+    while (/^[A-Za-z_][A-Za-z0-9_]*=/.test(markedWords[0] || '')) markedWords.shift();
+    const words = markedWords.map((word) => word.replace(/\u0001/g, ''));
+    // Expansion-derived and quoted/escaped verbs cannot be matched safely by
+    // the current textual prefix rules. U3 will replace this conservative path.
+    const verb = words[0];
+    if (verb && (verb.includes('$') || !(line === verb || line.startsWith(verb + ' ') || line.startsWith(verb + '\t')))) return null;
+    // B03 find can mutate or run a nested argv. Keep hidden actions and dynamic
+    // action tokens on the fail-closed path until recursive U3 analysis exists.
+    if (verb === 'find' && words.slice(1).some((word) =>
+      ['-exec', '-execdir', '-delete'].includes(word) || word.includes('$'))) return null;
+    if (verb === 'find' && markedWords.slice(1).some((word) => /[*?]/.test(word.replace(/\u0001./g, '')))) return null;
     // U1a adds env execution and xargs batching/replacement. Until U3 recursively
     // models nested argv, never let an outer wrapper hide a denied inner command.
     // The existing null path fails closed under deny/ask rules, including bypass.

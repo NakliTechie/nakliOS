@@ -27,6 +27,7 @@ import { createUtilityCommands } from './cmds/utility.mjs';
 import { createListCommands } from './cmds/list.mjs';
 import { createSedCommands } from './cmds/sed.mjs';
 import { createAwkCommands } from './cmds/awk.mjs';
+import { createFindCommands } from './cmds/find.mjs';
 import { createPatch } from '../fileops/patch.mjs';
 
 // bash verb -> registry command name. The dotted name (fs.list) always works too.
@@ -61,6 +62,15 @@ export function truncateListing(text, entries, max = LISTING_MAX_ENTRIES) {
 // path `< file` takes). `<<'TAG'` / `<<"TAG"` are literal; `<<TAG` is literal when the body has no `$`
 // — this shell does not expand inside a heredoc, so a body that would expand is refused, not run
 // with a different meaning; `<<-` strips leading tabs, as bash does. A missing terminator is an error.
+// Escaped whitespace belongs to the current word, so a following # is data.
+function tokenBoundaryAt(source, at) {
+  if (at === 0) return true;
+  if (!/\s/.test(source[at - 1])) return false;
+  let slashes = 0;
+  for (let i = at - 2; i >= 0 && source[i] === '\\'; i--) slashes++;
+  return slashes % 2 === 0;
+}
+
 export const HEREDOC_MARK = '\u0002';
 export function extractHeredocs(raw) {
   const lines = String(raw == null ? '' : raw).split('\n');
@@ -72,9 +82,10 @@ export function extractHeredocs(raw) {
     let quote = null, out = '';
     for (let i = 0; i < line.length; i++) {
       const c = line[i];
+      if (c === '\\' && quote !== "'" && i + 1 < line.length) { out += c + line[++i]; continue; }
       if (quote) { out += c; if (c === quote) quote = null; continue; }
       if (c === '"' || c === "'") { quote = c; out += c; continue; }
-      if (c === '#' && (out === '' || /\s$/.test(out))) { out += line.slice(i); break; }
+      if (c === '#' && tokenBoundaryAt(line, i)) { out += line.slice(i); break; }
       if (c === '<' && line[i + 1] === '<' && line[i + 2] !== '<') {
         const m = /^<<(-?)\s*(?:'([^']*)'|"([^"]*)"|([A-Za-z_][A-Za-z0-9_]*))/.exec(line.slice(i));
         if (!m) return { error: 'heredoc: `<<` needs a terminator word — e.g. <<\'EOF\'' };
@@ -118,7 +129,7 @@ export function findSubstitution(line) {
     if (c === '\\') { i++; continue; }
     if (q === '"' && c === '"') { q = null; continue; }
     if (!q && (c === "'" || c === '"')) { q = c; continue; }
-    if (!q && c === '#' && (i === 0 || /\s/.test(s[i - 1]))) return null; // a comment
+    if (!q && c === '#' && tokenBoundaryAt(s, i)) return null; // a comment
     if (c === '`') return '`…`';
     if (c === '$' && s[i + 1] === '(') return s[i + 2] === '(' ? '$((…))' : '$(…)';
   }
@@ -164,9 +175,10 @@ function tokenizeOps(line) {
   const s = String(line == null ? '' : line);
   for (let i = 0; i < s.length; i++) {
     const c = s[i];
+    if (c === '\\' && quote !== "'" && i + 1 < s.length) { out += c + s[++i]; continue; }
     if (quote) { out += c; if (c === quote) quote = null; continue; }
     // an unquoted `#` at a token boundary starts a comment — it used to be a 127 (R2e)
-    if (c === '#' && (out === '' || /\s$/.test(out))) break;
+    if (c === '#' && tokenBoundaryAt(s, i)) break;
     if (c === '"' || c === "'") { quote = c; out += c; continue; }
     if (c === ';') { out += ` ${c} `; continue; }
     if (c === '|') {
@@ -361,8 +373,9 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
     return input;
   }
 
-  async function runRegistry(cmdName, argv) {
+  async function runRegistry(cmdName, argv, defaults = {}) {
     const parsed = registryArgs(cmdName, argv);
+    parsed.options = { ...defaults, ...parsed.options };
     if (cmdName === 'fs.remove') {
       const paths = parsed.operands.length ? parsed.operands : parsed.options.path !== undefined ? [parsed.options.path] : [];
       const proposals = [], errors = [], removed = [];
@@ -378,7 +391,8 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
         // Batch the same rm's paths under one prompt, but leave its caller suspended.
         for (const path of paths) {
           execution.check();
-          const st = await face.invoke('fs.stat', { path: io.resolve(path) });
+          const st = await face.invoke('fs.stat', { path: io.resolve(path),
+            ...(parsed.options.follow === undefined ? {} : { follow: parsed.options.follow }) });
           if (!st.ok) { record(st, path); continue; }
           if (st.stat.type === 'dir' && !parsed.options.recursive && !parsed.options.dir) {
             errors.push(`rm: ${path}: EISDIR: is a directory; use -r or -d`); continue;
@@ -420,19 +434,25 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
     createSedCommands(io, { signal: () => currentSignal()?.aborted ? currentSignal() : execution?.signal }),
     createAwkCommands(io, { signal: () => currentSignal()?.aborted ? currentSignal() : execution?.signal,
       environment: () => new Map(state.vars) }),
+    createFindCommands(io, { signal: () => currentSignal()?.aborted ? currentSignal() : execution?.signal,
+      runAt: async (directory, argv, stdin = '') => {
+        const saved = state.cwd, current = execution;
+        try { state.cwd = normalizePath('', directory); return await runStage(argv, stdin, true); }
+        finally { if (execution === current) state.cwd = saved; }
+      } }),
     createSearchCommands(io), createListCommands(io), createUtilityCommands({ io, state, commandNames,
       signal: () => currentSignal()?.aborted ? currentSignal() : execution?.signal, maxSleep: SLEEP_MAX_S }));
 
   // One dispatch table also owns discovery and help. Dotted registry names remain reachable.
   const dispatch = new Map(Object.entries(builtins));
-  for (const name of ['python', 'python3', 'py', 'node', 'find', 'git']) {
+  for (const name of ['python', 'python3', 'py', 'node', 'git']) {
     dispatch.set(name, (args, stdin) => runSpecial(name, args, stdin));
   }
   for (const [alias, name] of Object.entries(REGISTRY_ALIAS)) {
-    if (!dispatch.has(alias)) dispatch.set(alias, (args, stdin) => runRegistry(name, args, stdin));
+    if (!dispatch.has(alias)) dispatch.set(alias, (args) => runRegistry(name, args, alias === 'rm' ? { follow: false } : {}));
   }
   for (const { name } of registry.commands) {
-    if (!dispatch.has(name)) dispatch.set(name, (args, stdin) => runRegistry(name, args, stdin));
+    if (!dispatch.has(name)) dispatch.set(name, (args) => runRegistry(name, args));
   }
   function commandNames() { return [...dispatch.keys()].sort(); }
 
@@ -485,7 +505,7 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
       const handler = dispatch.get(verb);
       if (!handler) return { text: `${verb}: command not found`, code: 127 };
       // Text-only commands decode at their boundary, never in the pipeline itself.
-      const input = ['cat', 'tee', 'od', 'head', 'tail', 'wc', 'tr', 'cut', 'env', 'sed', 'awk'].includes(verb) || !builtins[verb] ? stdin : toText(stdin);
+      const input = ['cat', 'tee', 'od', 'head', 'tail', 'wc', 'tr', 'cut', 'env', 'sed', 'awk', 'find'].includes(verb) || !builtins[verb] ? stdin : toText(stdin);
       return await handler(argv.slice(1), input);
     } catch (error) {
       if (error instanceof ShellInterrupted) throw error;
@@ -563,78 +583,7 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
       const r = await jsRunner.run({ entry: normalizePath(state.cwd, args[0]), cwd: state.cwd, argv: args.slice(1), stdin: stdin || '', signal: sig });
       return { text: r.output.replace(/\n$/, ''), code: r.code };
     }
-    if (verb === 'find') {
-      // -name / -type / -maxdepth were SILENTLY IGNORED, so `find . -name "*.txt"` returned every
-      // file in the tree and the agent believed that was the answer (forward-pass R2e).
-      const bases = []; let name = null, type = null, maxdepth = null, bad = null, sawExpr = false;
-      for (let i = 0; i < args.length; i++) {
-        const a = args[i];
-        if (a.startsWith('-')) sawExpr = true;
-        if (a === '-name') { name = args[++i]; continue; }
-        if (a === '-type') {
-          type = args[++i];
-          if (type !== 'f' && type !== 'd') return { text: `find: -type ${type ?? ''}: expected f or d`, code: 2 };
-          continue;
-        }
-        if (a === '-maxdepth') {
-          const v = args[++i]; maxdepth = Number(v);
-          if (!Number.isInteger(maxdepth) || maxdepth < 0) return { text: `find: -maxdepth ${v ?? ''}: expected a non-negative integer`, code: 2 };
-          continue;
-        }
-        if (a.startsWith('-')) { bad = a; break; }
-        // `find a b -name x` used to search `a` and drop `b`; a word after the expression was dropped too
-        if (sawExpr) return { text: `find: paths must precede the expression: ${a}`, code: 2 };
-        bases.push(a);
-      }
-      if (bad) return { text: `find: ${bad} is not implemented — this shell supports -name, -type and -maxdepth`, code: 2 };
-      const out = []; let entries = 0, failed = false;
-      for (const base of bases.length ? bases : [null]) {
-        const found = await findUnder(base ? normalizePath(state.cwd, base) : state.cwd, { name, type, maxdepth });
-        if (found.error) return found.error;
-        // a missing start path used to answer empty with exit 0
-        if (found.missing) { out.push(`find: '${base}': No such file or directory`); failed = true; continue; }
-        out.push(...found.paths); entries += found.paths.length;
-      }
-      return { text: out.join('\n'), code: failed ? 1 : 0, listing: { tool: 'find', entries } };
-    }
     if (verb === 'git') return runGit(args);
-  }
-
-  // One start path of `find`: the glob, then -name / -maxdepth / -type over its results.
-  async function findUnder(root, { name, type, maxdepth }) {
-    // a glob, anchored to the basename, exactly as find's -name means it
-    const rx = name ? new RegExp('^' + String(name).replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.') + '$') : null;
-    const top = await face.invoke('fs.stat', { path: root });
-    if (!top.ok) return { missing: true };
-    if (top.stat?.type === 'file') return { paths: (!rx || rx.test(root.split('/').pop())) && type !== 'd' ? [root] : [] };
-    const res = await face.invoke('fs.glob', { pattern: (root ? root + '/' : '') + '**', cwd: '' });
-    if (!res.ok) return { error: { text: `find: ${res.message}`, code: 1 } };
-    const depthOf = (m) => m.slice(root ? root.length + 1 : 0).split('/').length;
-    // fs.glob yields FILES only, so `-type d` over it alone could never match anything — it
-    // would have returned an empty success, which is the very failure this batch removes.
-    // Directories are the distinct path prefixes of the files found.
-    let candidates = res.matches;
-    if (type === 'd') {
-      const dirs = new Set();
-      for (const m of res.matches) {
-        const parts = m.split('/');
-        for (let k = (root ? root.split('/').length : 0) + 1; k < parts.length; k++) dirs.add(parts.slice(0, k).join('/'));
-      }
-      candidates = [...dirs].sort();
-    }
-    const out = [];
-    for (const m of candidates) {
-      if (rx && !rx.test(m.split('/').pop())) continue;
-      if (maxdepth != null && depthOf(m) > maxdepth) continue;
-      if (type) {
-        const st = await face.invoke('fs.stat', { path: m });
-        const isDir = st.ok && st.stat && st.stat.type === 'dir';
-        if (type === 'f' && isDir) continue;
-        if (type === 'd' && !isDir) continue;
-      }
-      out.push(m);
-    }
-    return { paths: out };
   }
 
   // git <sub> [args]: porcelain over the Rig git.* registry commands. Each subcommand parses its

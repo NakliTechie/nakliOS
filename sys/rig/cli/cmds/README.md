@@ -1,6 +1,6 @@
 # Shell command modules
 
-U0 provides the shared foundation. U1a extends the command flags. U1b and U1c add sed and awk:
+U0 provides the shared foundation. U1a extends the command flags. U1b, U1c, and U1d add sed, awk, and find:
 
 | Module | Commands |
 | --- | --- |
@@ -13,11 +13,15 @@ U0 provides the shared foundation. U1a extends the command flags. U1b and U1c ad
 | `utility.mjs` | env, xargs, test, basename, dirname, which, sleep |
 | `sed.mjs` | U1b stream editing, addresses, hold space, branching and governed in-place edits |
 | `awk.mjs` | U1c records, patterns, expressions, arrays, functions and governed file streams |
+| `find.mjs` | U1d bounded traversal, predicates, expressions, governed deletion and nested commands |
 
-The language remains unchanged until U3. Agent interceptors for recursive grep,
+Quoted and escaped operator arguments now remain literal. The full language expansion remains scheduled for U3. Agent interceptors for recursive grep,
 in-place editors and heredoc writes remain unchanged until the agent migration.
-Before U3's nested-command analysis, env commands and xargs use the existing
-fail-closed permission-rule path when an owner sets shell deny/ask rules.
+Before U3's nested-command analysis, executable env, xargs, and find actions
+use the fail-closed permission-rule path when an owner sets shell deny/ask rules.
+Dynamic verbs, find action tokens, and unquoted find globs also take that path.
+Escaped command arguments cannot safely match textual multiword prefixes yet; those also fail closed. Textual rules cannot
+safely match quoted or escaped verbs yet, so those also fail closed.
 
 - Handle every operand, or refuse the form with exit 2. A command that reads
   its first operand and drops the rest exits 0 with a wrong answer; the
@@ -129,3 +133,48 @@ Long-running loops yield so Stop can cancel the current invocation.
 File stream operations honor grants and the registry's existing confirmation policy.
 The default `fs.write` executes immediately; a registry marking writes destructive requires confirmation before each write.
 The interpreter awaits those proposals and preserves Stop while suspended.
+
+## Find contract (U1d)
+
+`find [path...] [expression]` visits roots at depth zero and preserves their display spelling.
+Omitted paths mean `.`; its descendants display as `./name`. Empty directories are real entries.
+Traversal does not follow final symlinks, including dangling links.
+A trailing slash requires a directory; trailing-slash symlink dereferencing is explicitly unsupported.
+Pathguard continues to reject control characters, including newlines, in filesystem names.
+Metadata-only stat, listing, and deletion requests refuse backends that would load content to synthesize metadata.
+FSA metadata requests propagate provider failures; deletion remains nonrecursive if a directory gains children during the operation.
+Overlay also refuses deletion of unpinned base files when preserving its conflict guarantees would require an unbounded preimage read. Ancestor links retain governed mount containment checks.
+`-type` accepts `f`, `d`, and `l`; unsupported special file kinds fail explicitly.
+
+Expressions support parentheses, `!`, implicit or explicit `-a`, and `-o`, in that precedence order.
+Predicates include `-name`, ASCII-insensitive `-iname`, `-path`, `-regex`, `-size`, `-mtime`, `-mmin`, `-newer`, and `-empty`.
+`-regex` matches the whole display path with bounded POSIX ERE, differing from GNU find's default Emacs syntax.
+Size tests use rounded-up 512-byte blocks by default, with `c`, `w`, `b`, `k`, `M`, and `G` units.
+Numeric `+n` and `-n` mean strictly greater and strictly less than n.
+Time predicates require available backend timestamps; zero timestamps produce an explicit metadata diagnostic when evaluated.
+Use `-type f` before time predicates when directory timestamps are unavailable.
+`-mindepth` and `-maxdepth` control evaluation and descent globally.
+
+Default output is `-print` unless any print, execution, or deletion action occurs in the expression.
+`-print0` preserves UTF-8 pathname bytes separated by NUL.
+`-prune` prevents descent when its branch evaluates true.
+`-delete` uses postorder, nonrecursive, non-following removal through the existing confirmation boundary.
+Combining `-delete` with `-prune` fails before traversal. Earlier accepted deletions remain if later operations fail or stop.
+
+`-exec CMD {} \;` runs once per match; `{}` occurrences are replaced within existing arguments without reparsing.
+`-exec CMD {} +` requires exactly one standalone `{}` immediately before `+` and batches bounded arguments.
+`-execdir` runs within each containing directory using `./basename`; its batches never mix directories.
+Starting `.` uses `./.` in the invocation directory; the virtual root uses `.` within `/`.
+Nested commands receive empty stdin and retain grants, staging, byte output, and Stop.
+The shell `rm` alias now defaults to non-following final-link removal, including within find execution.
+Direct registry and fileops removal retain their existing following default.
+The caller's directory is restored after nested success, failure, or cancellation.
+A nonzero child exit makes the semicolon predicate false; a failed plus batch makes find exit nonzero.
+The plus action remains true during expression evaluation. Earlier completed batches retain their effects when later batches fail.
+Only a plus immediately following a standalone `{}` terminates a batch template; other plus arguments remain literal.
+
+All expressions and execution templates are parsed before traversal; reference timestamps are checked before actions.
+The command bounds traversal entries, depth, matcher steps, retained paths, output, and nested invocations.
+The backend supplies each directory listing eagerly; find bounds retained entries after that call returns.
+Plain line listings retain the terminal's 500-entry cap; pipes receive all entries within resource limits.
+NUL and mixed nested output bypass line-based truncation.

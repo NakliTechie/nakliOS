@@ -75,7 +75,7 @@ await test('R2c: single quotes are literal; double quotes still expand', async (
   // a quoted glob is a PATTERN for the command, not a filename for the shell
   await run("printf 'a\\n' > one.txt"); await run("printf 'b\\n' > sub/two.txt");
   const found = (await run("find . -name '*.txt'")).out.split('\n').sort();
-  assert(found.includes('sub/two.txt'), `a quoted glob reaches the command: ${JSON.stringify(found)}`);
+  assert(found.includes('./sub/two.txt'), `a quoted glob reaches the command: ${JSON.stringify(found)}`);
   // an UNquoted glob still expands as a filename
   const globbed = await run('cat one.txt');
   eq(globbed.out, 'a', 'sanity: the file holds exactly "a"');
@@ -123,20 +123,22 @@ await test('R2e: find predicates, wc line counting, true/false, comments, ls exi
   const { run } = await shell();
   await run("printf 'x\\n' > keep.txt"); await run("printf 'y\\n' > drop.log");
   const named = (await run("find . -name '*.log'")).out;
-  eq(named, 'drop.log', `-name filters (it used to return everything): ${named}`);
+  eq(named, './drop.log', `-name filters (it used to return everything): ${named}`);
   assert(!(await run("find . -name '*.log'")).out.includes('keep.txt'), '-name really excludes');
   await run("printf 'z\\n' > nested/deep.txt");
   const dirs = (await run('find . -type d')).out.split('\n').sort();
-  eq(dirs.join('|'), 'nested', '-type d returns exactly the directories');
+  eq(dirs.join('|'), '.|./nested', '-type d includes the starting directory and its child directories');
   const files = (await run('find . -type f')).out.split('\n').sort();
-  assert(files.includes('nested/deep.txt') && !files.includes('nested'), `-type f returns files and no directory: ${files}`);
+  assert(files.includes('./nested/deep.txt') && !files.includes('./nested') && !files.includes('.'), `-type f returns files and no directory: ${files}`);
   assert(files.length >= 3, `-type f is not empty — returning nothing must not pass: ${files}`);
   // -maxdepth had no assertion at all; a mutation disabling it survived
   const d1 = (await run('find . -maxdepth 1')).out.split('\n').sort();
-  assert(!d1.includes('nested/deep.txt'), `-maxdepth 1 excludes a deeper file: ${d1}`);
-  assert(d1.includes('keep.txt'), `-maxdepth 1 keeps a top-level file: ${d1}`);
-  for (const [cmd, why] of [['find . -newer x', 'an unimplemented predicate'],
-                            ['find . -type X', 'an invalid -type value'],
+  assert(!d1.includes('./nested/deep.txt'), `-maxdepth 1 excludes a deeper file: ${d1}`);
+  assert(d1.includes('.') && d1.includes('./keep.txt'), `-maxdepth 1 keeps its root and a top-level file: ${d1}`);
+  const newer = await run('find keep.txt -newer keep.txt');
+  eq(newer.code, 0, '-newer is supported'); eq(newer.out, '', 'a file is not strictly newer than itself');
+  eq((await run('find keep.txt -newer absent-reference')).code, 1, 'a missing -newer reference is an I/O error');
+  for (const [cmd, why] of [['find . -type X', 'an invalid -type value'],
                             ['find . -maxdepth nope', 'a non-numeric -maxdepth']]) {
     eq((await run(cmd)).code, 2, `${why} is refused, not ignored`);
   }
@@ -384,7 +386,7 @@ await test('/dev/null: 2> is a no-op, > discards, and no dev/null file is ever c
   const { run } = await shell();
   await run('echo x > .anvil/gate/x.py');
   const f = await run('find / -name x.py 2>/dev/null');
-  eq(f.out, '.anvil/gate/x.py', 'stdout survives a 2>/dev/null'); eq(f.code, 0, 'exit 0');
+  eq(f.out, '/.anvil/gate/x.py', 'stdout survives a 2>/dev/null'); eq(f.code, 0, 'exit 0');
   const l = await run('ls f.txt 2>/dev/null'); eq(l.out, 'f.txt', 'ordinary output survives too');
   const d = await run('ls > /dev/null'); eq(d.out, '', '> /dev/null discards'); eq(d.code, 0, 'and succeeds');
   const d2 = await run('ls >/dev/null'); eq(d2.out, '', 'with or without the space');
@@ -589,7 +591,8 @@ await test('operands: find searches every start path; registry commands refuse a
   eq((await run("find s t -name '*.js'")).out, 's/a.js\nt/b.js', 'find searches t as well as s');
   const late = await run('find s -name x t'); eq(late.code, 2); assert(/paths must precede the expression: t/.test(late.out), late.out);
   const gone = await run('find nope s'); eq(gone.code, 1, 'a missing start path is an error, not an empty success');
-  eq(gone.out, "find: 'nope': No such file or directory\ns/a.js");
+  assert(/^find: 'nope': ENOENT:/.test(gone.out), gone.out);
+  eq(gone.out.split('\n').slice(1).join('\n'), 's\ns/a.js', 'later roots still include their root and matching descendants');
   eq((await run('find t/c.txt')).out, 't/c.txt', 'a file start path lists itself');
   const rd = await run('fs.read s/a.js t/b.js'); eq(rd.code, 2); assert(/extra operand 't\/b\.js'/.test(rd.out), rd.out);
   const gl = await run("glob '*.js' s t"); eq(gl.code, 2); assert(/extra operand 't'/.test(gl.out), gl.out);

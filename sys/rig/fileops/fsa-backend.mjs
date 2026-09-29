@@ -14,6 +14,19 @@
 
 import { checkReadLimit, checkReadSize } from './read-limit.mjs';
 
+// DOMException.code is a legacy number, not a filesystem error code. Keep
+// provider failures typed at the metadata-only boundary without changing the
+// older best-effort backend paths.
+function metadataError(error, operation, path) {
+  if (error?.code === 130 || error?.cancelled) return error;
+  const code = typeof error?.code === 'string' && /^E[A-Z0-9_]+$/.test(error.code) ? error.code : ({
+    NotFoundError: 'ENOENT', TypeMismatchError: 'ENOTDIR',
+    NotAllowedError: 'EACCES', SecurityError: 'EACCES', NoModificationAllowedError: 'EACCES',
+    InvalidModificationError: 'ENOTEMPTY', NotSupportedError: 'ENOTSUP', AbortError: 'ECANCELED',
+  }[error?.name] || 'EIO');
+  return Object.assign(new Error(`${operation} ${path}: ${error?.message || 'provider failed'}`, { cause: error }), { code });
+}
+
 export class FsaBackend {
   /** @param {FileSystemDirectoryHandle} rootHandle */
   constructor(rootHandle) {
@@ -22,6 +35,7 @@ export class FsaBackend {
     }
     this.root = rootHandle;
     this.supportsBoundedReads = true;
+    this.supportsMetadataOnly = true;
   }
 
   _split(safePath) {
@@ -62,12 +76,19 @@ export class FsaBackend {
     await w.close();
   }
 
-  async delete(safePath) {
+  async delete(safePath, { metadataOnly } = {}) {
     const { parts, name } = this._split(safePath);
-    if (!name) return; // never remove the root
+    if (!name) {
+      if (metadataOnly) throw metadataError(Object.assign(new Error('cannot remove the filesystem root'), { code: 'EBUSY' }), 'remove', '/');
+      return; // never remove the root
+    }
     let dir;
-    try { dir = await this._dirHandle(parts, false); } catch { return; }
-    try { await dir.removeEntry(name, { recursive: true }); } catch { /* already gone */ }
+    try { dir = await this._dirHandle(parts, false); }
+    catch (error) { if (metadataOnly) throw metadataError(error, 'remove', safePath); return; }
+    // A checked empty directory may gain children before removeEntry. Metadata
+    // deletion is nonrecursive, so that race must fail rather than remove them.
+    try { await dir.removeEntry(name, { recursive: !metadataOnly }); }
+    catch (error) { if (metadataOnly) throw metadataError(error, 'remove', safePath); /* already gone */ }
   }
 
   async mkdir(safePath) {
@@ -75,22 +96,32 @@ export class FsaBackend {
     await this._dirHandle(name ? [...parts, name] : parts, true);
   }
 
-  async stat(safePath) {
+  async stat(safePath, { metadataOnly } = {}) {
     const { parts, name } = this._split(safePath);
     if (!name) return { type: 'dir', size: 0, mtimeMs: 0 }; // root
     let dir;
-    try { dir = await this._dirHandle(parts, false); } catch { return null; }
+    try { dir = await this._dirHandle(parts, false); }
+    catch (error) {
+      if (metadataOnly && error?.name !== 'NotFoundError') throw metadataError(error, 'stat', safePath);
+      return null;
+    }
     // File?
     try {
       const fh = await dir.getFileHandle(name, { create: false });
       const file = await fh.getFile();
       return { type: 'file', size: file.size, mtimeMs: file.lastModified || 0 };
-    } catch { /* not a file */ }
+    } catch (error) {
+      if (metadataOnly && !['NotFoundError', 'TypeMismatchError'].includes(error?.name)) throw metadataError(error, 'stat', safePath);
+      /* not a file */
+    }
     // Directory?
     try {
       await dir.getDirectoryHandle(name, { create: false });
       return { type: 'dir', size: 0, mtimeMs: 0 };
-    } catch { /* not a dir */ }
+    } catch (error) {
+      if (metadataOnly && error?.name !== 'NotFoundError') throw metadataError(error, 'stat', safePath);
+      /* not a dir */
+    }
     return null;
   }
 
@@ -100,14 +131,20 @@ export class FsaBackend {
   }
 
   // Immediate children only, each a full safePath; directories suffixed '/'.
-  async list(prefix) {
+  async list(prefix, { metadataOnly } = {}) {
     const parts = String(prefix).split('/').filter(Boolean);
     let dir;
-    try { dir = await this._dirHandle(parts, false); } catch { return []; }
+    try { dir = await this._dirHandle(parts, false); }
+    catch (error) { if (metadataOnly) throw metadataError(error, 'list', prefix); return []; }
     const base = prefix === '' ? '' : prefix + '/';
     const out = [];
-    for await (const [name, handle] of dir.entries()) {
-      out.push(base + name + (handle.kind === 'directory' ? '/' : ''));
+    try {
+      for await (const [name, handle] of dir.entries()) {
+        out.push(base + name + (handle.kind === 'directory' ? '/' : ''));
+      }
+    } catch (error) {
+      if (metadataOnly) throw metadataError(error, 'list', prefix);
+      throw error;
     }
     return out.sort();
   }

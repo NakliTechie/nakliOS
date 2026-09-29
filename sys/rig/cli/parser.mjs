@@ -39,11 +39,16 @@ export function tokenize(s, { markLiteral = false } = {}) {
   let has = false;
   for (let i = 0; i < s.length; i++) {
     const c = s[i];
-    if (quote) {
+    if (markLiteral && c === '\\' && quote !== "'" && i + 1 < s.length
+      && (!quote || /[$`"\\\n]/.test(s[i + 1]))) {
+      const next = s[++i];
+      if (next !== '\n') { cur += /[$*?;|&<>]/.test(next) ? LITERAL_MARK + next : next; has = true; }
+    } else if (quote) {
       if (c === quote) quote = null;
       // `$` is literal only inside SINGLE quotes; `*` and `?` are literal inside EITHER kind,
-      // because a quoted glob must not be filename-expanded (bash behaves the same way).
-      else if (markLiteral && ((quote === "'" && c === '$') || c === '*' || c === '?')) cur += LITERAL_MARK + c;
+      // because a quoted glob must not be filename-expanded. Quoted shell operators
+      // retain markers too, so a standalone ';' remains an argument after tokenization.
+      else if (markLiteral && ((quote === "'" && c === '$') || /[*?;|&<>]/.test(c))) cur += LITERAL_MARK + c;
       else cur += c;
     } else if (c === '"' || c === "'") {
       quote = c; has = true;
