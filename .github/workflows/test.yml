@@ -390,6 +390,15 @@ jobs:
       - name: Verify filesystem mutation command bounds and option handling
         run: node sys/rig/cli/test/mutation.test.mjs
 
+      - name: Verify U2c encoding bytes, formats, grants and cancellation
+        run: node sys/rig/cli/test/u2c-encoding.test.mjs
+
+      - name: Verify U2c checksum manifests, algorithms and governed reads
+        run: node sys/rig/cli/test/u2c-checksum.test.mjs
+
+      - name: Verify digest compression boundaries and capability refusals
+        run: node sys/rig/cli/test/digest-algorithms.test.mjs
+
       - name: Verify literal shell operators and escaped arguments
         run: node sys/rig/cli/test/literal-operators.test.mjs
 

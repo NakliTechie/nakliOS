@@ -22,6 +22,9 @@ U0 provides the shared foundation. U1 adds command flags, sed, awk, and find. U2
 | `paths.mjs`, `path-resolution.mjs` | U2b governed readlink and realpath; explicit ln/link refusals |
 | `mutation.mjs` | U2b rmdir, mktemp, truncate and unlink |
 | `inspection.mjs` | U2b du, tree, file, strings and cmp |
+| `encodings.mjs`, `encoding-codecs.mjs` | U2c base64, base32 and nine basenc formats |
+| `checksums.mjs`, `checksum-manifest.mjs`, `digest-algorithms.mjs` | U2c seven digest commands, cksum and sum |
+| `canonical-input.mjs` | Shared canonical, bounded and governed content reads |
 | `u2-common.mjs`, `u2-decimal.mjs`, `streams.mjs` | Bounded byte I/O, exact arithmetic, and producer cleanup |
 
 Quoted and escaped operator arguments now remain literal. The full language expansion remains scheduled for U3. Agent interceptors for recursive grep,
@@ -355,3 +358,65 @@ It supports seven-bit and eight-bit single-byte modes; other encodings fail expl
 It supports silent output, listed differences, byte display, decimal skips, and a decimal comparison limit.
 Inspection content reads use canonical targets and the remaining aggregate bounded-read budget.
 `file` and `cmp` read bounded complete inputs because the I/O interface has no range-read capability.
+
+## Encodings and checksums
+
+`base64`, `base32` and `basenc` accept `-d`, `-i`, `-w WIDTH`, their long
+forms, and one file or stdin. Basenc requires an encoding selector:
+`--base64`, `--base64url`, `--base32`, `--base32hex`, `--base16`,
+`--base2msbf`, `--base2lsbf`, `--z85` or `--base58`.
+Encoding wraps at 76 characters by default. Width zero omits wrapping and
+final LF. Empty input produces empty output. Decoding adds no newline.
+LF is ignored during decoding. `-i` also skips non-alphabet bytes.
+Padding placement, complete padded groups and unused pad bits remain strict.
+Unpadded short groups and concatenated padded records refuse explicitly.
+Base16 decoding accepts both uppercase and lowercase hexadecimal digits.
+Malformed input returns failure; previously completed groups may remain.
+Z85 needs complete four-byte/five-character groups and rejects overflow.
+Base58 preserves leading zero bytes with the Bitcoin alphabet. It limits
+input to 8192 bytes; the shared work limit can reject smaller costly inputs.
+
+`md5sum`, `sha1sum`, `sha224sum`, `sha256sum`, `sha384sum`, `sha512sum`,
+and `b2sum` accept multiple operands, binary/text markers, tagged output,
+NUL output and checksum verification. Repeated `-` consumes stdin once.
+`b2sum -l BITS` supports multiples of eight through 512; zero means 512.
+Short BLAKE2b digests use the requested initialization parameter.
+They are not prefixes of a 512-bit digest. Check mode infers digest length.
+
+`cksum` defaults to POSIX CRC and byte count. `-a` selects `crc`, `crc32b`,
+`bsd`, `sysv`, `md5`, `sha1`, `sha224`, `sha256`, `sha384`, `sha512` or
+`blake2b`. Digest output defaults to tags; `--untagged` selects sum format.
+`--base64` encodes digests; `--raw` emits one binary digest without framing.
+Raw legacy values use network byte order. SHA3, SM3 and truncated SHA512
+selectors explicitly refuse. `sum -r` uses BSD rotation and 1024-byte blocks;
+`sum -s` uses System V folding and 512-byte blocks.
+
+Check mode accepts GNU tagged/untagged and unambiguous BSD reversed records.
+Cksum can auto-detect tagged algorithms and hex/base64 digest encoding.
+Untagged cksum checks require an explicit algorithm. Legacy sum/CRC, raw and
+NUL-delimited checking refuse. `--quiet` suppresses successful records;
+`--status` suppresses verification output. `--warn` reports malformed lines;
+`--strict` makes malformed lines fail even when another record verifies.
+`--ignore-missing` skips missing targets, but all-missing manifests fail.
+A stdin manifest cannot also identify stdin as its target.
+Manifest targets resolve against command cwd, not the manifest directory.
+Every operand, manifest and target crosses canonical grants independently.
+Inherited virtual path restrictions can reject control characters/backslashes
+that a native filesystem permits. Parsed names never become shell commands.
+
+All commands preserve byte views, budgets and invocation cancellation.
+Canonical metadata probes and final reads reject newly introduced symlinks.
+Input/output/retention/work limits share the U2 accounting context.
+Pure JavaScript hashing yields between blocks. SHA1/256/384/512 use lazily
+resolved WebCrypto. Missing capabilities refuse explicitly. Stop suppresses
+late results; it cannot cancel a platform digest already executing.
+These commands supply file checksums, not password storage or signatures.
+
+Algorithm provenance: these are original implementations of the mathematical
+specifications, without copied third-party implementations or new packages:
+[MD5 RFC 1321, section 3](https://www.rfc-editor.org/rfc/rfc1321.html),
+[SHA224 RFC 6234, sections 4–6](https://www.rfc-editor.org/rfc/rfc6234.html),
+[BLAKE2b RFC 7693, sections 2–3](https://www.rfc-editor.org/rfc/rfc7693.html),
+[RFC 4648 encodings](https://www.rfc-editor.org/rfc/rfc4648.html),
+[ZeroMQ Z85](https://rfc.zeromq.org/spec/32/), and the
+[GNU checksum contracts](https://www.gnu.org/software/coreutils/manual/html_node/cksum-common-options.html).
