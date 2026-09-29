@@ -23,3 +23,14 @@ export function requireBoundedReads(backend, maxBytes) {
     throw readLimitError('ENOTSUP', 'storage backend does not support bounded reads');
   }
 }
+
+// A metadata-only operation must never discover a size by reading file bytes.
+// Check the capability before resolver traversal, not after the first stat.
+export function requireMetadataOnly(backend, metadataOnly) {
+  if (metadataOnly !== undefined && typeof metadataOnly !== 'boolean') {
+    throw readLimitError('EINVAL', 'metadataOnly must be a boolean');
+  }
+  if (metadataOnly && backend.supportsMetadataOnly !== true) {
+    throw readLimitError('ENOTSUP', 'storage backend does not support metadata-only access');
+  }
+}

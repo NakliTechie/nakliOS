@@ -177,6 +177,12 @@ jobs:
       - name: Verify governed bounded reads before backend allocation
         run: node sys/rig/fileops/test/bounded-read.test.mjs
 
+      - name: Verify non-following metadata and staged final-symlink deletion
+        run: node sys/rig/fileops/test/final-symlink.test.mjs
+
+      - name: Verify metadata-only traversal avoids content reads and preserves Overlay fences
+        run: node sys/rig/fileops/test/metadata-only.test.mjs
+
       - name: Verify the OPFS backend
         run: node sys/rig/fileops/test/opfs.test.mjs
 
@@ -359,6 +365,12 @@ jobs:
         run: node sys/rig/cli/test/u1b-sed.test.mjs
       - name: Unix U1c awk language, governed streams and bounded execution
         run: node sys/rig/cli/test/u1c-awk.test.mjs
+
+      - name: Verify U1d find predicates, actions, grants and cancellation
+        run: node sys/rig/cli/test/u1d-find.test.mjs
+
+      - name: Verify literal shell operators and escaped arguments
+        run: node sys/rig/cli/test/literal-operators.test.mjs
 
       - name: Verify the history tool — search and read past runs (the retrieval half)
         run: node scripts/test-anvil-history.mjs

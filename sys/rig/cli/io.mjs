@@ -103,9 +103,10 @@ export function createIO({ invoke, cwd = () => '', run } = {}) {
     write: (path, data, { createParents = false } = {}) => call('fs.write', {
       path: resolve(path), data, createParents,
     }),
-    stat: async (path) => (await call('fs.stat', { path: resolve(path) })).stat,
-    list: async (path = '.', { recursive = false } = {}) => (await call('fs.list', {
-      path: resolve(path), recursive,
+    stat: async (path, { follow, metadataOnly } = {}) => (await call('fs.stat', { path: resolve(path),
+      ...(follow === undefined ? {} : { follow }), ...(metadataOnly === undefined ? {} : { metadataOnly }) })).stat,
+    list: async (path = '.', { recursive = false, metadataOnly } = {}) => (await call('fs.list', {
+      path: resolve(path), recursive, ...(metadataOnly === undefined ? {} : { metadataOnly }),
     })).entries,
     glob: async (pattern, { cwd: from = '.' } = {}) => {
       // The registry glob's pattern is relative to its cwd, including for `/...`.
@@ -116,7 +117,8 @@ export function createIO({ invoke, cwd = () => '', run } = {}) {
       return (await call('fs.glob', input)).matches;
     },
     mkdir: (path, { createParents = false } = {}) => call('fs.mkdir', { path: resolve(path), createParents }),
-    remove: (path, { recursive = false } = {}) => call('fs.remove', { path: resolve(path), recursive }),
+    remove: (path, { recursive = false, follow, metadataOnly } = {}) => call('fs.remove', { path: resolve(path), recursive,
+      ...(follow === undefined ? {} : { follow }), ...(metadataOnly === undefined ? {} : { metadataOnly }) }),
     move: (from, to, { overwrite = false } = {}) => call('fs.move', { from: resolve(from), to: resolve(to), overwrite }),
     copy: (from, to, { overwrite = false } = {}) => call('fs.copy', { from: resolve(from), to: resolve(to), overwrite }),
     run: async (argv, stdin = '') => {

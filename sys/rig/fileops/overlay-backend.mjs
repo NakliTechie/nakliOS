@@ -30,7 +30,7 @@
 // write/delete — and never consulted again for that key, so nothing the child has looked at moves
 // under it while a sibling merges or the owner edits. `moved()` is the fence at merge: the base NOW
 // against every pin, exact (bytes), backend-independent, bounded by what the child touched.
-import { checkReadSize, requireBoundedReads } from './read-limit.mjs';
+import { checkReadSize, readLimitError, requireBoundedReads, requireMetadataOnly } from './read-limit.mjs';
 
 const MAX_DESCENDANT_SCAN = 5000; // safety cap on the base emptiness walk
 export const PIN_MAX_BYTES = 4 * 1024 * 1024;     // per file: above this the pin is a hash, and reads fall through live
@@ -57,22 +57,28 @@ export class OverlayBackend {
   }
 
   get supportsBoundedReads() { return this.base.supportsBoundedReads === true; }
+  get supportsMetadataOnly() { return this.base.supportsMetadataOnly === true; }
 
   _now() { return Date.now(); }
 
   // Pin the base's current state of safePath (once). A base error is NOT pinned — it propagates, as it
   // did before pins, so a transient host failure is not turned into a run-long absence.
   // `hold: false` (a write/delete pre-image the child will never read back) pins a hash, never bytes.
-  async _pin(safePath, { hold = true, maxBytes } = {}) {
+  async _pin(safePath, { hold = true, maxBytes, metadataOnly } = {}) {
+    requireMetadataOnly(this.base, metadataOnly);
     requireBoundedReads(this.base, maxBytes);
     const checked = (pin) => { if (pin.bytes) checkReadSize(pin.bytes.byteLength, maxBytes); return pin; };
     if (this.pins.has(safePath)) return checked(this.pins.get(safePath));
-    if (this.pinning.has(safePath)) return checked(await this.pinning.get(safePath));
+    if (this.pinning.has(safePath)) {
+      if (metadataOnly) throw readLimitError('ENOTSUP', 'metadata-only deletion requires a completed content pin for base files');
+      return checked(await this.pinning.get(safePath));
+    }
     const p = (async () => {
-      const stat = await this.base.stat(safePath, { maxBytes });
+      const stat = await this.base.stat(safePath, { maxBytes, ...(metadataOnly ? { metadataOnly: true } : {}) });
       let pin;
       if (!stat || stat.type !== 'file') pin = { stat: stat ? { ...stat } : null };
       else {
+        if (metadataOnly) throw readLimitError('ENOTSUP', 'metadata-only deletion requires an existing content pin for base files');
         checkReadSize(stat.size, maxBytes);
         const bytes = await this.base.readBinary(safePath, { maxBytes });
         checkReadSize(bytes.byteLength, maxBytes);
@@ -86,10 +92,12 @@ export class OverlayBackend {
     try { return await p; } finally { this.pinning.delete(safePath); }
   }
 
-  async _baseList(prefix) {
+  async _baseList(prefix, options) {
+    requireMetadataOnly(this.base, options?.metadataOnly);
     if (this.lists.has(prefix)) return this.lists.get(prefix);
     let kids;
-    try { kids = await this.base.list(prefix); } catch (_) { kids = []; }
+    try { kids = await this.base.list(prefix, options); }
+    catch (error) { if (options?.metadataOnly) throw error; return []; }
     this.lists.set(prefix, kids);
     return kids;
   }
@@ -116,8 +124,8 @@ export class OverlayBackend {
     this.tomb.delete(safePath);
   }
 
-  async delete(safePath) {
-    await this._pin(safePath, { hold: false });
+  async delete(safePath, { metadataOnly } = {}) {
+    await this._pin(safePath, { hold: false, metadataOnly });
     this.writes.delete(safePath);
     this.dirsAdded.delete(safePath);
     this.tomb.add(safePath);
@@ -132,27 +140,34 @@ export class OverlayBackend {
     return (await this.stat(safePath)) !== null;
   }
 
-  async stat(safePath, { maxBytes } = {}) {
+  async stat(safePath, { maxBytes, metadataOnly } = {}) {
+    requireMetadataOnly(this.base, metadataOnly);
     requireBoundedReads(this.base, maxBytes);
     const w = this.writes.get(safePath);
     if (w) { checkReadSize(w.bytes.byteLength, maxBytes); return { type: 'file', size: w.bytes.length, mtimeMs: w.mtimeMs }; }
     if (this.dirsAdded.has(safePath)) return { type: 'dir', size: 0, mtimeMs: 0 };
     if (this.tomb.has(safePath)) {
       // Exact key deleted; it may still be an implicit dir if live descendants remain.
-      return (await this._isImplicitDir(safePath)) ? { type: 'dir', size: 0, mtimeMs: 0 } : null;
+      return (await this._isImplicitDir(safePath, metadataOnly ? { metadataOnly: true } : undefined)) ? { type: 'dir', size: 0, mtimeMs: 0 } : null;
     }
     // Not touched in the overlay: consult the base, but resolve directoriness
     // from the merged live key-space (base dirs emptied by tombstones vanish).
-    const pin = await this._pin(safePath, { maxBytes });
-    const b = pin.hash ? await this.base.stat(safePath, { maxBytes }) : pin.stat; // a hashed pin is not snapshotted: its stat is live, like its bytes
-    if (b && (b.type === 'file' || b.type === 'symlink')) return { ...b };
-    if (await this._isImplicitDir(safePath)) return { type: 'dir', size: 0, mtimeMs: 0 };
+    // Metadata-only traversal cannot establish a content snapshot. Respect an
+    // existing held pin, but inspect untouched/hash-pinned paths without reading
+    // or hashing file bytes. Ordinary stat preserves its existing pin behavior.
+    const pin = metadataOnly ? this.pins.get(safePath) : await this._pin(safePath, { maxBytes });
+    const b = !pin || pin.hash ? await this.base.stat(safePath, { maxBytes, ...(metadataOnly ? { metadataOnly: true } : {}) }) : pin.stat;
+    if (b && (b.type === 'file' || b.type === 'symlink')) {
+      if (b.type === 'file') checkReadSize(b.size, maxBytes);
+      return { ...b };
+    }
+    if (await this._isImplicitDir(safePath, metadataOnly ? { metadataOnly: true } : undefined)) return { type: 'dir', size: 0, mtimeMs: 0 };
     return null;
   }
 
   // Any LIVE descendant under safePath? Live = an overlay write/dir under it, or
   // a base descendant that is not tombstoned. Bounded so a huge tree can't hang.
-  async _isImplicitDir(safePath) {
+  async _isImplicitDir(safePath, options) {
     if (safePath === '') return true; // the store root always exists
     const p = safePath + '/';
     for (const k of this.writes.keys()) if (k.startsWith(p)) return true;
@@ -163,7 +178,7 @@ export class OverlayBackend {
     while (stack.length) {
       const dir = stack.pop();
       let kids;
-      kids = await this._baseList(dir);
+      kids = await this._baseList(dir, options);
       for (const kid of kids) {
         if (++scanned > MAX_DESCENDANT_SCAN) return true; // assume live (keeps dir visible)
         const isDir = kid.endsWith('/');
@@ -177,20 +192,21 @@ export class OverlayBackend {
 
   // Immediate children of prefix, dirs suffixed '/', base+overlay merged with
   // tombstones applied and overlay writes shadowing base. Mirrors MemoryBackend.list.
-  async list(prefix) {
+  async list(prefix, options) {
+    requireMetadataOnly(this.base, options?.metadataOnly);
     const base = prefix === '' ? '' : prefix + '/';
     const children = new Map(); // childName -> isDir
 
     // Base children first (tomb-filtered; emptied dirs dropped).
     let baseKids;
-    baseKids = await this._baseList(prefix);
+    baseKids = await this._baseList(prefix, options);
     for (const kid of baseKids) {
       const isDir = kid.endsWith('/');
       const full = isDir ? kid.slice(0, -1) : kid;
       const rest = base ? full.slice(base.length) : full;
       if (rest === '' || rest.includes('/')) continue; // defensive: not an immediate child
       if (isDir) {
-        if (await this._isImplicitDir(full)) children.set(rest, true);
+        if (await this._isImplicitDir(full, options)) children.set(rest, true);
       } else if (!this.tomb.has(full)) {
         if (!children.has(rest)) children.set(rest, false);
       }

@@ -22,6 +22,7 @@ import { checkReadLimit, checkReadSize } from './read-limit.mjs';
 export class MemoryBackend {
   constructor() {
     this.supportsBoundedReads = true;
+    this.supportsMetadataOnly = true;
     this.files = new Map();     // safePath -> { bytes, mtimeMs }
     this.dirs = new Set();      // explicit directory markers
     this.symlinks = new Map();  // safePath -> { target, mtimeMs }

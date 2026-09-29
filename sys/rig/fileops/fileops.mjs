@@ -4,7 +4,7 @@
 // MemoryBackend in tests) into the 11-op API the handoff specifies:
 //
 //   read(path,{encoding,maxBytes})  write(path,data,{createParents})  list(path,{recursive})
-//   stat(path)   mkdir(path,{createParents})   remove(path,{recursive})
+//   stat(path,{follow,metadataOnly})   mkdir(path,{createParents})   remove(path,{recursive,follow})
 //   move(from,to)   copy(from,to)   patch(path,unifiedDiff)
 //   glob(pattern,{cwd})   grep(pattern,{cwd,glob,maxResults})
 //
@@ -12,6 +12,8 @@
 //   readBinary/write/delete/exists/stat/mkdir act on a single safePath.
 //   supportsBoundedReads:true promises stat(path,{maxBytes}) and
 //   readBinary(path,{maxBytes}) enforce limits before copying file contents.
+//   supportsMetadataOnly:true promises stat(path,{metadataOnly:true}) obtains
+//   metadata without reading, copying, or hashing file contents.
 //   list(safeDir) returns the IMMEDIATE children only (one level), each a full
 //   safePath, directories suffixed '/'. Recursion is owned here, not by the
 //   backend — so a one-level Folder (fsList) and an object-store Crate both work.
@@ -23,7 +25,7 @@
 //   - Expected conditions return typed { ok:false, code, message } — no throws.
 //   - patch is atomic (no write on a failed hunk) and returns an exact `revert`.
 
-import { checkReadSize, requireBoundedReads } from './read-limit.mjs';
+import { checkReadSize, requireBoundedReads, requireMetadataOnly } from './read-limit.mjs';
 import { normalizeMountPath, joinRoot } from './pathguard.mjs';
 import { applyPatch, createPatch } from './patch.mjs';
 import { planQuery, evaluateQuery, evaluateQueryIds, trigrams, foldCase } from './trigram.mjs';
@@ -87,9 +89,9 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
   if (!backend) throw new Error('createFileops requires a backend');
   const rootPrefix = String(root || '').replace(/\/+$/, '');
 
-  // Validate + fully resolve symlinks, re-checking mount containment on every
+  // Validate + resolve symlinks, optionally retaining the final link. Check containment on every
   // hop. Returns { ok, path (mount-relative), safe (backend safePath) }.
-  async function resolveMount(mountRel, depthLeft, readOptions) {
+  async function resolveMount(mountRel, depthLeft, readOptions, followFinal = true) {
     const v = normalizeMountPath(mountRel);
     if (!v.ok) return v;
     const acc = [];
@@ -97,7 +99,7 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
       acc.push(v.segments[i]);
       const safe = joinRoot(rootPrefix, acc.join('/'));
       const st = await backend.stat(safe, readOptions);
-      if (st && st.type === 'symlink') {
+      if (st && st.type === 'symlink' && (followFinal || i < v.segments.length - 1)) {
         if (depthLeft <= 0) {
           return err('ELOOP', 'too many symlink levels', { input: mountRel });
         }
@@ -107,7 +109,7 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
         const next = combined + (rest ? '/' + rest : '');
         // normalizeMountPath inside the recursion rejects a target that climbs
         // above the mount root — this is the symlink-escape gate.
-        const r = await resolveMount(next, depthLeft - 1, readOptions);
+        const r = await resolveMount(next, depthLeft - 1, readOptions, followFinal);
         if (!r.ok && r.code === 'EINVAL_PATH') {
           return err('EINVAL_PATH', 'symlink escapes mount root', { input: mountRel });
         }
@@ -118,15 +120,15 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     return { ok: true, path, safe: joinRoot(rootPrefix, path) };
   }
 
-  const resolve = (p, readOptions) => resolveMount(p, symlinkDepth, readOptions);
+  const resolve = (p, readOptions, followFinal = true) => resolveMount(p, symlinkDepth, readOptions, followFinal);
 
   // Immediate children of a directory safePath → [{ safe, name, type }].
   // Collapses whatever the backend returns to one level, so it is correct
   // whether backend.list is one-level (Folder/fsList) or recursive (an
   // object-store Crate that returns deep descendants). A deeper entry
   // contributes its first segment as a directory child.
-  async function listChildren(safeDir) {
-    const raw = await backend.list(safeDir);
+  async function listChildren(safeDir, options) {
+    const raw = await backend.list(safeDir, options);
     const base = safeDir === '' ? '' : safeDir + '/';
     const map = new Map(); // childName -> isDir
     for (const full0 of raw) {
@@ -385,6 +387,7 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
   const invalidateWalk = () => { walkCache = null; walkSeq++; };
 
   let dropSeq = 0;
+  let indexTopology = 0; // A removed link can invalidate paths absent from the current index.
   const dropSeqByPath = new Map();
   const dropSeqBySafe = new Map();
   function seqOf(path) { return dropSeqByPath.get(path) || 0; }
@@ -452,7 +455,8 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     for (const [p, e] of [...idx.files]) if (e.safe === safe) indexDrop(p);
   }
 
-  function indexAdd(path, text, st, safe, readStartedAt, seenSeq, seenSafeSeq, binary = false) {
+  function indexAdd(path, text, st, safe, readStartedAt, seenSeq, seenSafeSeq, binary = false, seenTopology = indexTopology) {
+    if (seenTopology !== indexTopology) return;
     // Discard a read that raced a write to the same path, under EITHER name.
     if (seenSeq !== undefined && seqOf(path) !== seenSeq) return;
     if (seenSafeSeq !== undefined && safe && seqOfSafe(safe) !== seenSafeSeq) return;
@@ -557,16 +561,34 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
   // `ls` answered "ENOENT" on a brand-new project (live 2026-09-24: four failed listings before
   // the model found its footing). An empty root is an empty directory, never a missing one.
   const rootSafe = joinRoot(rootPrefix, '');
-  const statSafe = async (safe) => (await backend.stat(safe)) || (safe === rootSafe ? { type: 'dir', size: 0, mtimeMs: 0 } : null);
+  const statSafe = async (safe, options) => (await backend.stat(safe, options)) || (safe === rootSafe ? { type: 'dir', size: 0, mtimeMs: 0 } : null);
 
-  async function stat(path) {
-    const r = await resolve(path);
-    if (!r.ok) return r;
-    const st = await statSafe(r.safe);
-    if (!st) return err('ENOENT', `no such path: ${r.path}`, { path: r.path });
-    const out = { type: st.type, size: st.size ?? 0, mtimeMs: st.mtimeMs ?? 0 };
-    if (st.target !== undefined) out.target = st.target;
-    return { ok: true, stat: out };
+  async function metadataCall(opts, run) {
+    try {
+      requireMetadataOnly(backend, opts.metadataOnly);
+      const options = opts.metadataOnly ? { metadataOnly: true } : undefined;
+      return await run(options);
+    } catch (error) {
+      if (opts.metadataOnly !== undefined && typeof error?.code === 'string' && /^E[A-Z0-9_]+$/.test(error.code)) return err(error.code, error.message);
+      throw error;
+    }
+  }
+
+  async function stat(path, opts = {}) {
+    if (opts.follow !== undefined && typeof opts.follow !== 'boolean') return err('EINVAL', 'follow must be a boolean');
+    return metadataCall(opts, async (options) => {
+      const r = await resolve(path, options, opts.follow !== false);
+      if (!r.ok) return r;
+      const st = await statSafe(r.safe, options);
+      if (!st) return err('ENOENT', `no such path: ${r.path}`, { path: r.path });
+      // Content-free metadata can be partial. Preserve unknown fields instead
+      // of turning an unavailable file size or timestamp into a real zero.
+      const out = { type: st.type,
+        ...(!opts.metadataOnly || st.size != null ? { size: st.size ?? 0 } : {}),
+        ...(!opts.metadataOnly || st.mtimeMs != null ? { mtimeMs: st.mtimeMs ?? 0 } : {}) };
+      if (st.target !== undefined) out.target = st.target;
+      return { ok: true, stat: out };
+    });
   }
 
   async function mkdir(path, opts = {}) {
@@ -583,65 +605,92 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
   }
 
   async function list(path, opts = {}) {
-    const r = await resolve(path);
-    if (!r.ok) return r;
-    const st = await statSafe(r.safe);
-    if (!st) return err('ENOENT', `no such directory: ${r.path}`, { path: r.path });
-    if (st.type !== 'dir') return err('ENOTDIR', `not a directory: ${r.path}`, { path: r.path });
-    const base = r.safe === '' ? '' : r.safe + '/';
-    const toEntry = (safe, type) => {
-      const rel = base ? (safe.startsWith(base) ? safe.slice(base.length) : safe) : safe;
-      return { path: r.path ? r.path + '/' + rel : rel, name: rel.split('/').pop(), type };
-    };
-    let entries;
-    if (opts.recursive) {
-      const { files, dirs } = await walkAll(r.safe);
-      entries = [...dirs.map((d) => toEntry(d, 'dir')), ...files.map((f) => toEntry(f, 'file'))];
-    } else {
-      const children = await listChildren(r.safe);
-      entries = children.map((c) => ({
-        path: r.path ? r.path + '/' + c.name : c.name, name: c.name, type: c.type,
-      }));
-    }
-    entries.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
-    return { ok: true, entries };
+    return metadataCall(opts, async (options) => {
+      if (opts.metadataOnly && opts.recursive) return err('ENOTSUP', 'metadata-only recursive listing is not supported');
+      const r = await resolve(path, options);
+      if (!r.ok) return r;
+      const st = await statSafe(r.safe, options);
+      if (!st) return err('ENOENT', `no such directory: ${r.path}`, { path: r.path });
+      if (st.type !== 'dir') return err('ENOTDIR', `not a directory: ${r.path}`, { path: r.path });
+      const base = r.safe === '' ? '' : r.safe + '/';
+      const toEntry = (safe, type) => {
+        const rel = base ? (safe.startsWith(base) ? safe.slice(base.length) : safe) : safe;
+        return { path: r.path ? r.path + '/' + rel : rel, name: rel.split('/').pop(), type };
+      };
+      let entries;
+      if (opts.recursive) {
+        const { files, dirs } = await walkAll(r.safe);
+        entries = [...dirs.map((d) => toEntry(d, 'dir')), ...files.map((f) => toEntry(f, 'file'))];
+      } else {
+        const children = await listChildren(r.safe, options);
+        entries = children.map((c) => ({
+          path: r.path ? r.path + '/' + c.name : c.name, name: c.name, type: c.type,
+        }));
+      }
+      entries.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+      return { ok: true, entries };
+    });
   }
 
   async function remove(path, opts = {}) {
-    const r = await resolve(path);
-    if (!r.ok) return r;
-    const st = await backend.stat(r.safe);
-    if (!st) return err('ENOENT', `no such path: ${r.path}`, { path: r.path });
-    // Directories are implicit on object stores (Crate.remove throws on a
-    // folder); deleting a dir path there is a no-op success. So dir-path deletes
-    // are best-effort, while file deletes are strict — a failed file delete is a
-    // real EIO, surfaced as a typed result rather than a throw.
-    const deleteDir = async (p) => { try { await backend.delete(p); } catch (_) { /* implicit dir */ } };
-    const deleteFile = async (p) => {
-      try { await backend.delete(p); return null; }
-      catch (e) { return err('EIO', `could not remove ${p}: ${e && e.message ? e.message : e}`); }
-    };
-    if (st.type === 'dir') {
-      const { files, dirs } = await walkAll(r.safe);
-      if ((files.length || dirs.length) && !opts.recursive) {
-        return err('ENOTEMPTY', `directory not empty: ${r.path}`, { path: r.path });
+    if (opts.follow !== undefined && typeof opts.follow !== 'boolean') return err('EINVAL', 'follow must be a boolean');
+    return metadataCall(opts, async (options) => {
+      if (opts.metadataOnly && opts.recursive) return err('ENOTSUP', 'metadata-only recursive removal is not supported');
+      const r = await resolve(path, options, opts.follow !== false);
+      if (!r.ok) return r;
+      const st = await backend.stat(r.safe, options);
+      if (!st) return err('ENOENT', `no such path: ${r.path}`, { path: r.path });
+      // Directories are implicit on object stores (Crate.remove throws on a
+      // folder); deleting a dir path there is a no-op success. So dir-path deletes
+      // are best-effort, while file deletes are strict — a failed file delete is a
+      // real EIO, surfaced as a typed result rather than a throw.
+      const deleteDir = async (p) => {
+        try { await backend.delete(p, options); }
+        catch (error) { if (opts.metadataOnly) throw error; /* implicit dir */ }
+      };
+      const deleteFile = async (p) => {
+        try { await backend.delete(p, options); return null; }
+        catch (e) {
+          if (opts.metadataOnly) throw e;
+          return err('EIO', `could not remove ${p}: ${e && e.message ? e.message : e}`);
+        }
+      };
+      if (st.type === 'dir') {
+        if (opts.metadataOnly) {
+          const children = await listChildren(r.safe, options);
+          if (children.length) return err('ENOTEMPTY', `directory not empty: ${r.path}`, { path: r.path });
+          try { await deleteDir(r.safe); } finally { indexDropSubtree(r.path); }
+          return { ok: true, path: r.path };
+        }
+        const { files, dirs } = await walkAll(r.safe);
+        if ((files.length || dirs.length) && !opts.recursive) {
+          return err('ENOTEMPTY', `directory not empty: ${r.path}`, { path: r.path });
+        }
+        try {
+          for (const f of files) { const e = await deleteFile(f); if (e) return e; }
+          // deepest-first so a backend that tracks explicit dir markers stays consistent
+          for (const d of dirs.sort((a, b) => b.split('/').length - a.split('/').length)) await deleteDir(d);
+          await deleteDir(r.safe);
+        } finally {
+          // Even a removal that stopped partway deleted something.
+          indexDropSubtree(r.path);
+        }
+        return { ok: true, path: r.path };
       }
-      try {
-        for (const f of files) { const e = await deleteFile(f); if (e) return e; }
-        // deepest-first so a backend that tracks explicit dir markers stays consistent
-        for (const d of dirs.sort((a, b) => b.split('/').length - a.split('/').length)) await deleteDir(d);
-        await deleteDir(r.safe);
-      } finally {
-        // Even a removal that stopped partway deleted something.
-        indexDropSubtree(r.path);
+      const e = await deleteFile(r.safe);
+      if (st.type === 'symlink' && opts.follow === false) {
+        // Alias chains may have cached the target's safe path, not this link's
+        // path. Clear derived postings and reject in-flight pre-unlink results.
+        // This changes no target bytes; later searches rebuild their postings.
+        indexTopology++;
+        indexDropSubtree('');
+      } else {
+        indexDrop(r.path);
+        indexDropBySafe(r.safe);
       }
+      if (e) return e;
       return { ok: true, path: r.path };
-    }
-    const e = await deleteFile(r.safe);
-    indexDrop(r.path);
-    indexDropBySafe(r.safe);
-    if (e) return e;
-    return { ok: true, path: r.path };
+    });
   }
 
   // {overwrite:true} replaces an existing FILE with a file, as cp/mv do; a directory on either side
@@ -827,6 +876,7 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
         // Resolve and stat as two steps rather than through `stat`, which discards
         // the resolved path. `safe` is what alias invalidation matches on, and an
         // entry validated without a re-read has no other way to learn it.
+        const seenTopology = indexTopology;
         const rr = await resolve(p);
         if (!rr.ok) { failedRead(p, rr); indexDrop(p); continue; }
         const raw = await backend.stat(rr.safe);
@@ -862,7 +912,7 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
         // already knew. On one real folder that was 4.29 MB per query — exactly
         // cancelling the bytes the index saved.
         const isBinary = rd.data.includes('\u0000');
-        indexAdd(p, isBinary ? '' : rd.data, st.stat, rr.safe, readStartedAt, seenSeq, seenSafeSeq, isBinary);
+        indexAdd(p, isBinary ? '' : rd.data, st.stat, rr.safe, readStartedAt, seenSeq, seenSafeSeq, isBinary, seenTopology);
         } catch (error) { failedRead(p, error); indexDrop(p); }
       }
       // Snapshot the keys: indexDrop mutates idx.files, so iterating it live

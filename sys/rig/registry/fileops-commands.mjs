@@ -22,7 +22,7 @@ const RESULT_STAT = {
       type: 'object',
       properties: {
         type: { enum: ['file', 'dir', 'symlink'] },
-        size: { type: 'number' }, mtimeMs: { type: 'number' },
+        size: { type: 'number' }, mtimeMs: { type: 'number' }, target: { type: 'string' },
       },
     },
   },
@@ -76,22 +76,22 @@ export function buildFileopsCommands(fs) {
     {
       name: 'fs.list',
       summary: 'List a directory (optionally recursive).',
-      description: 'List the immediate children of a directory, or all descendants with {recursive:true}. Each entry is {path,name,type}. ENOTDIR for a file, ENOENT if absent.',
+      description: 'List the immediate children of a directory, or all descendants with {recursive:true}. Each entry is {path,name,type}. Pass {metadataOnly:true} for nonrecursive listing without file-content reads; unsupported storage or recursive combinations return ENOTSUP. ENOTDIR for a file, ENOENT if absent.',
       inputSchema: {
         type: 'object',
-        properties: { path: PATH, recursive: { type: 'boolean' } },
+        properties: { path: PATH, recursive: { type: 'boolean' }, metadataOnly: { type: 'boolean' } },
         required: ['path'], additionalProperties: false,
       },
       returnSchema: RESULT_LIST, destructive: false, scope: 'fs:read', annotations: RO,
-      run: (i) => fs.list(i.path, { recursive: i.recursive }),
+      run: (i) => fs.list(i.path, { recursive: i.recursive, metadataOnly: i.metadataOnly }),
     },
     {
       name: 'fs.stat',
       summary: 'Stat a path (type, size, mtime).',
-      description: 'Return {type,size,mtimeMs} for a file, directory, or symlink. ENOENT if absent.',
-      inputSchema: { type: 'object', properties: { path: PATH }, required: ['path'], additionalProperties: false },
+      description: 'Return {type,size,mtimeMs,target?}. Pass {follow:false} to inspect the final symlink itself; ancestor links still resolve within the mount. Pass {metadataOnly:true} to prohibit file-content reads; unavailable size/mtime fields remain absent, and unsupported storage returns ENOTSUP. ENOENT if absent.',
+      inputSchema: { type: 'object', properties: { path: PATH, follow: { type: 'boolean' }, metadataOnly: { type: 'boolean' } }, required: ['path'], additionalProperties: false },
       returnSchema: RESULT_STAT, destructive: false, scope: 'fs:read', annotations: RO,
-      run: (i) => fs.stat(i.path),
+      run: (i) => fs.stat(i.path, { follow: i.follow, metadataOnly: i.metadataOnly }),
     },
     {
       name: 'fs.mkdir',
@@ -108,14 +108,14 @@ export function buildFileopsCommands(fs) {
     {
       name: 'fs.remove',
       summary: 'Remove a file or directory.',
-      description: 'Remove a file, or a directory with {recursive:true}. A non-empty directory without recursive returns ENOTEMPTY. Destructive — C4 stages a proposal before this runs.',
+      description: 'Remove a file, or a directory with {recursive:true}. Pass {follow:false} to delete a final symlink without deleting its target. Pass {metadataOnly:true} for nonrecursive removal without file-content reads. Unsupported storage, recursive combinations, and Overlay base files without existing content pins return ENOTSUP; symlink removal needs no target pin. Destructive; C4 stages a proposal before this runs.',
       inputSchema: {
         type: 'object',
-        properties: { path: PATH, recursive: { type: 'boolean' } },
+        properties: { path: PATH, recursive: { type: 'boolean' }, follow: { type: 'boolean' }, metadataOnly: { type: 'boolean' } },
         required: ['path'], additionalProperties: false,
       },
       returnSchema: RESULT_OK, destructive: true, scope: 'fs:remove', annotations: RW,
-      run: (i) => fs.remove(i.path, { recursive: i.recursive }),
+      run: (i) => fs.remove(i.path, { recursive: i.recursive, follow: i.follow, metadataOnly: i.metadataOnly }),
     },
     {
       name: 'fs.move',

@@ -63,6 +63,35 @@ const d = (tool, args, cfg = CFG) => decideByRules(cfg, tool, args).decision;
   assert.equal(segments("cat <<'E'\nnever closed"), null, 'an unclosed body is unparseable (the shell refuses it too)');
 }
 
+// B03 find actions and expansion-derived verbs cannot hide work behind a safe prefix.
+{
+  const hidden = [
+    "find . -exec rm '{}' ';'", 'find . -exec rm {} \\;',
+    "'find' . -execdir rm '{}' +", "find . -e''xec rm '{}' ';'",
+    'find . -delete', 'find . -name x -o -delete',
+    'find . $ACTION rm {} +', 'find . "$ACTION" rm {} +',
+    '$COMMAND . -exec rm {} +', 'COMMAND=find; $COMMAND . -delete',
+    'fi\\nd . -delete', 'r\\m file', 'find . -exec', 'find . *', 'find . -name x*', 'git p\\ush',
+    'echo \\<<EOF\n;rm target\nEOF',
+    "printf x | find . -exec rm '{}' ';'",
+  ];
+  for (const command of hidden) {
+    assert.equal(segments(command), null, command);
+    assert.equal(d('shell', { command }, { deny: ['Bash(rm:*)'] }), 'deny', command);
+    assert.equal(d('shell', { command }, { ask: ['Bash(rm:*)'] }), 'ask', command);
+    assert.equal(d('shell', { command }, { allow: ['Bash(find:*)', 'Bash(*)'] }), 'unmatched', command);
+    // The actual app checks this decision before bypass mode, as asserted below.
+  }
+  for (const command of ['find . -type f -name "*.mjs"', 'find src -empty -print0', 'find . -prune']) {
+    assert.deepEqual(segments(command), [command]);
+    assert.equal(d('shell', { command }, { allow: ['Bash(find:*)'] }), 'allow');
+  }
+  assert.equal(segments('echo \\; rm file'), null);
+  assert.equal(d('shell', { command: 'echo \\; rm file' }, { allow: ['Bash(echo:*)'], deny: ['Bash(rm:*)'] }), 'deny');
+  assert.equal(d('shell', { command: 'git p\\ush' }, { deny: ['Bash(git push:*)'] }), 'deny');
+  assert.equal(d('shell', { command: "echo '<<EOF'\n;rm target\nEOF" }, { deny: ['Bash(rm:*)'] }), 'deny');
+}
+
 // ── rule syntax ───────────────────────────────────────────────────────────
 // U1a wrappers cannot conceal a denied nested command before U3 has an AST.
 {
