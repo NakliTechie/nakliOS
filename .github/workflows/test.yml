@@ -174,6 +174,9 @@ jobs:
       - name: Verify Rig fileops conformance (the 8-method backend contract)
         run: node sys/rig/fileops/test/conformance.test.mjs
 
+      - name: Verify governed bounded reads before backend allocation
+        run: node sys/rig/fileops/test/bounded-read.test.mjs
+
       - name: Verify the OPFS backend
         run: node sys/rig/fileops/test/opfs.test.mjs
 
@@ -354,6 +357,8 @@ jobs:
         run: node sys/rig/cli/test/u1a-files-utility.test.mjs
       - name: Unix U1b sed scripts, governed edits and bounded execution
         run: node sys/rig/cli/test/u1b-sed.test.mjs
+      - name: Unix U1c awk language, governed streams and bounded execution
+        run: node sys/rig/cli/test/u1c-awk.test.mjs
 
       - name: Verify the history tool — search and read past runs (the retrieval half)
         run: node scripts/test-anvil-history.mjs

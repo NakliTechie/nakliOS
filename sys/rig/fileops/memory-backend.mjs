@@ -17,8 +17,11 @@
 //   stat(safePath) -> {type,size,mtimeMs,target?} | null
 //   mkdir(safePath) -> void                      (explicit empty-dir marker)
 
+import { checkReadLimit, checkReadSize } from './read-limit.mjs';
+
 export class MemoryBackend {
   constructor() {
+    this.supportsBoundedReads = true;
     this.files = new Map();     // safePath -> { bytes, mtimeMs }
     this.dirs = new Set();      // explicit directory markers
     this.symlinks = new Map();  // safePath -> { target, mtimeMs }
@@ -26,9 +29,12 @@ export class MemoryBackend {
 
   _now() { return Date.now(); }
 
-  async readBinary(safePath) {
+  async readBinary(safePath, { maxBytes } = {}) {
+    checkReadLimit(maxBytes);
     const entry = this.files.get(safePath);
     if (!entry) throw new Error(`no such file: ${safePath}`);
+    // Capture and check the same entry before copying; a prior stat may be stale.
+    checkReadSize(entry.bytes.byteLength, maxBytes);
     return entry.bytes.slice(); // defensive copy
   }
 

@@ -90,7 +90,7 @@ export function createIO({ invoke, cwd = () => '', run } = {}) {
     if (!result?.ok) throw new IOFailure(operation, result);
     return result;
   };
-  const readBytes = async (path) => toBytes((await call('fs.read', { path: resolve(path) })).data);
+  const readBytes = async (path, { maxBytes } = {}) => toBytes((await call('fs.read', { path: resolve(path), ...(maxBytes === undefined ? {} : { maxBytes }) })).data);
 
   return {
     // Advanced commands use the same granted/staged call boundary for indexed search.

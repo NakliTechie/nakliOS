@@ -30,6 +30,8 @@
 // write/delete — and never consulted again for that key, so nothing the child has looked at moves
 // under it while a sibling merges or the owner edits. `moved()` is the fence at merge: the base NOW
 // against every pin, exact (bytes), backend-independent, bounded by what the child touched.
+import { checkReadSize, requireBoundedReads } from './read-limit.mjs';
+
 const MAX_DESCENDANT_SCAN = 5000; // safety cap on the base emptiness walk
 export const PIN_MAX_BYTES = 4 * 1024 * 1024;     // per file: above this the pin is a hash, and reads fall through live
 export const PIN_BUDGET_BYTES = 32 * 1024 * 1024; // per overlay: bytes held in pins; past it, new pins are hashes
@@ -54,20 +56,26 @@ export class OverlayBackend {
     this.pinHeldBytes = 0;
   }
 
+  get supportsBoundedReads() { return this.base.supportsBoundedReads === true; }
+
   _now() { return Date.now(); }
 
   // Pin the base's current state of safePath (once). A base error is NOT pinned — it propagates, as it
   // did before pins, so a transient host failure is not turned into a run-long absence.
   // `hold: false` (a write/delete pre-image the child will never read back) pins a hash, never bytes.
-  async _pin(safePath, { hold = true } = {}) {
-    if (this.pins.has(safePath)) return this.pins.get(safePath);
-    if (this.pinning.has(safePath)) return this.pinning.get(safePath);
+  async _pin(safePath, { hold = true, maxBytes } = {}) {
+    requireBoundedReads(this.base, maxBytes);
+    const checked = (pin) => { if (pin.bytes) checkReadSize(pin.bytes.byteLength, maxBytes); return pin; };
+    if (this.pins.has(safePath)) return checked(this.pins.get(safePath));
+    if (this.pinning.has(safePath)) return checked(await this.pinning.get(safePath));
     const p = (async () => {
-      const stat = await this.base.stat(safePath);
+      const stat = await this.base.stat(safePath, { maxBytes });
       let pin;
       if (!stat || stat.type !== 'file') pin = { stat: stat ? { ...stat } : null };
       else {
-        const bytes = await this.base.readBinary(safePath);
+        checkReadSize(stat.size, maxBytes);
+        const bytes = await this.base.readBinary(safePath, { maxBytes });
+        checkReadSize(bytes.byteLength, maxBytes);
         if (!hold || bytes.length > this.pinMaxBytes || this.pinHeldBytes + bytes.length > this.pinBudgetBytes) pin = { stat: { ...stat }, hash: await sha256(bytes) };
         else { pin = { stat: { ...stat }, bytes }; this.pinHeldBytes += bytes.length; }
       }
@@ -86,13 +94,18 @@ export class OverlayBackend {
     return kids;
   }
 
-  async readBinary(safePath) {
+  async readBinary(safePath, { maxBytes } = {}) {
+    requireBoundedReads(this.base, maxBytes);
     const w = this.writes.get(safePath);
-    if (w) return w.bytes.slice();
+    if (w) { checkReadSize(w.bytes.byteLength, maxBytes); return w.bytes.slice(); }
     if (this.tomb.has(safePath)) throw new Error(`no such file: ${safePath}`);
-    const pin = await this._pin(safePath);
-    if (pin.bytes) return pin.bytes.slice();
-    if (pin.hash || (pin.stat && pin.stat.type === 'symlink')) return this.base.readBinary(safePath); // not held: the live base (the fence still sees it)
+    const pin = await this._pin(safePath, { maxBytes });
+    if (pin.bytes) { checkReadSize(pin.bytes.byteLength, maxBytes); return pin.bytes.slice(); }
+    if (pin.hash || (pin.stat && pin.stat.type === 'symlink')) {
+      const result = await this.base.readBinary(safePath, { maxBytes });
+      checkReadSize(result.byteLength, maxBytes);
+      return result;
+    } // not held: the live base (the fence still sees it)
     throw new Error(`no such file: ${safePath}`);
   }
 
@@ -119,9 +132,10 @@ export class OverlayBackend {
     return (await this.stat(safePath)) !== null;
   }
 
-  async stat(safePath) {
+  async stat(safePath, { maxBytes } = {}) {
+    requireBoundedReads(this.base, maxBytes);
     const w = this.writes.get(safePath);
-    if (w) return { type: 'file', size: w.bytes.length, mtimeMs: w.mtimeMs };
+    if (w) { checkReadSize(w.bytes.byteLength, maxBytes); return { type: 'file', size: w.bytes.length, mtimeMs: w.mtimeMs }; }
     if (this.dirsAdded.has(safePath)) return { type: 'dir', size: 0, mtimeMs: 0 };
     if (this.tomb.has(safePath)) {
       // Exact key deleted; it may still be an implicit dir if live descendants remain.
@@ -129,8 +143,8 @@ export class OverlayBackend {
     }
     // Not touched in the overlay: consult the base, but resolve directoriness
     // from the merged live key-space (base dirs emptied by tombstones vanish).
-    const pin = await this._pin(safePath);
-    const b = pin.hash ? await this.base.stat(safePath) : pin.stat; // a hashed pin is not snapshotted: its stat is live, like its bytes
+    const pin = await this._pin(safePath, { maxBytes });
+    const b = pin.hash ? await this.base.stat(safePath, { maxBytes }) : pin.stat; // a hashed pin is not snapshotted: its stat is live, like its bytes
     if (b && (b.type === 'file' || b.type === 'symlink')) return { ...b };
     if (await this._isImplicitDir(safePath)) return { type: 'dir', size: 0, mtimeMs: 0 };
     return null;

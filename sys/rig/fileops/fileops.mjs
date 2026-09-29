@@ -3,13 +3,15 @@
 // Composes the injected storage backend (live BACKENDS[bound] in the browser,
 // MemoryBackend in tests) into the 11-op API the handoff specifies:
 //
-//   read(path,{encoding})  write(path,data,{createParents})  list(path,{recursive})
+//   read(path,{encoding,maxBytes})  write(path,data,{createParents})  list(path,{recursive})
 //   stat(path)   mkdir(path,{createParents})   remove(path,{recursive})
 //   move(from,to)   copy(from,to)   patch(path,unifiedDiff)
 //   glob(pattern,{cwd})   grep(pattern,{cwd,glob,maxResults})
 //
 // Backend contract (deliberately the common denominator of Folder + Crate):
 //   readBinary/write/delete/exists/stat/mkdir act on a single safePath.
+//   supportsBoundedReads:true promises stat(path,{maxBytes}) and
+//   readBinary(path,{maxBytes}) enforce limits before copying file contents.
 //   list(safeDir) returns the IMMEDIATE children only (one level), each a full
 //   safePath, directories suffixed '/'. Recursion is owned here, not by the
 //   backend — so a one-level Folder (fsList) and an object-store Crate both work.
@@ -21,6 +23,7 @@
 //   - Expected conditions return typed { ok:false, code, message } — no throws.
 //   - patch is atomic (no write on a failed hunk) and returns an exact `revert`.
 
+import { checkReadSize, requireBoundedReads } from './read-limit.mjs';
 import { normalizeMountPath, joinRoot } from './pathguard.mjs';
 import { applyPatch, createPatch } from './patch.mjs';
 import { planQuery, evaluateQuery, evaluateQueryIds, trigrams, foldCase } from './trigram.mjs';
@@ -86,14 +89,14 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
 
   // Validate + fully resolve symlinks, re-checking mount containment on every
   // hop. Returns { ok, path (mount-relative), safe (backend safePath) }.
-  async function resolveMount(mountRel, depthLeft) {
+  async function resolveMount(mountRel, depthLeft, readOptions) {
     const v = normalizeMountPath(mountRel);
     if (!v.ok) return v;
     const acc = [];
     for (let i = 0; i < v.segments.length; i++) {
       acc.push(v.segments[i]);
       const safe = joinRoot(rootPrefix, acc.join('/'));
-      const st = await backend.stat(safe);
+      const st = await backend.stat(safe, readOptions);
       if (st && st.type === 'symlink') {
         if (depthLeft <= 0) {
           return err('ELOOP', 'too many symlink levels', { input: mountRel });
@@ -104,7 +107,7 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
         const next = combined + (rest ? '/' + rest : '');
         // normalizeMountPath inside the recursion rejects a target that climbs
         // above the mount root — this is the symlink-escape gate.
-        const r = await resolveMount(next, depthLeft - 1);
+        const r = await resolveMount(next, depthLeft - 1, readOptions);
         if (!r.ok && r.code === 'EINVAL_PATH') {
           return err('EINVAL_PATH', 'symlink escapes mount root', { input: mountRel });
         }
@@ -115,7 +118,7 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     return { ok: true, path, safe: joinRoot(rootPrefix, path) };
   }
 
-  const resolve = (p) => resolveMount(p, symlinkDepth);
+  const resolve = (p, readOptions) => resolveMount(p, symlinkDepth, readOptions);
 
   // Immediate children of a directory safePath → [{ safe, name, type }].
   // Collapses whatever the backend returns to one level, so it is correct
@@ -503,18 +506,30 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
   }
 
   async function read(path, opts = {}) {
-    const r = await resolve(path);
-    if (!r.ok) return r;
-    const st = await backend.stat(r.safe);
-    if (!st) return err('ENOENT', `no such file: ${r.path}`, { path: r.path });
-    if (st.type === 'dir') return err('EISDIR', `is a directory: ${r.path}`, { path: r.path });
-    const bytes = await backend.readBinary(r.safe);
-    if (opts.encoding) {
-      // `bytes` is the size on disk: a decoded string's .length counts UTF-16 code units, which
-      // undercounts every non-ASCII file (N6) — the meter below wants what was actually read.
-      return { ok: true, data: new TextDecoder(opts.encoding).decode(bytes), bytes: bytes.byteLength ?? bytes.length ?? 0 };
+    const bounded = opts.maxBytes !== undefined;
+    try {
+      // Capability checking must precede resolver metadata: some adapters obtain
+      // stat by reading the complete file, and overlays pin content during stat.
+      requireBoundedReads(backend, opts.maxBytes);
+      const readOptions = bounded ? { maxBytes: opts.maxBytes } : undefined;
+      const r = await resolve(path, readOptions);
+      if (!r.ok) return r;
+      const st = await backend.stat(r.safe, readOptions);
+      if (!st) return err('ENOENT', `no such file: ${r.path}`, { path: r.path });
+      if (st.type === 'dir') return err('EISDIR', `is a directory: ${r.path}`, { path: r.path });
+      checkReadSize(st.size, opts.maxBytes);
+      const bytes = await backend.readBinary(r.safe, readOptions);
+      // Backends check their fresh snapshot before allocation. This final check
+      // also rejects a backend response that violates the advertised contract.
+      checkReadSize(bytes.byteLength ?? bytes.length, opts.maxBytes);
+      if (opts.encoding) {
+        return { ok: true, data: new TextDecoder(opts.encoding).decode(bytes), bytes: bytes.byteLength ?? bytes.length ?? 0 };
+      }
+      return { ok: true, data: bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes) };
+    } catch (error) {
+      if (bounded && ['EFBIG', 'ENOTSUP', 'EINVAL'].includes(error?.code)) return err(error.code, error.message);
+      throw error;
     }
-    return { ok: true, data: bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes) };
   }
 
   async function write(path, data, opts = {}) {

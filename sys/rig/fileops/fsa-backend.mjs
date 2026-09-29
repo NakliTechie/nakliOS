@@ -12,6 +12,8 @@
 // it runs against a mock handle in tests (fsa-backend.test.mjs) and a real
 // showDirectoryPicker() handle in the browser — no branching between them.
 
+import { checkReadLimit, checkReadSize } from './read-limit.mjs';
+
 export class FsaBackend {
   /** @param {FileSystemDirectoryHandle} rootHandle */
   constructor(rootHandle) {
@@ -19,6 +21,7 @@ export class FsaBackend {
       throw new Error('FsaBackend requires a FileSystemDirectoryHandle');
     }
     this.root = rootHandle;
+    this.supportsBoundedReads = true;
   }
 
   _split(safePath) {
@@ -36,12 +39,17 @@ export class FsaBackend {
     return h;
   }
 
-  async readBinary(safePath) {
+  async readBinary(safePath, { maxBytes } = {}) {
+    checkReadLimit(maxBytes);
     const { parts, name } = this._split(safePath);
     const dir = await this._dirHandle(parts, false);
     const fh = await dir.getFileHandle(name, { create: false });
     const file = await fh.getFile();
-    return new Uint8Array(await file.arrayBuffer());
+    // Check the fresh File snapshot that will supply arrayBuffer, not an older stat.
+    checkReadSize(file.size, maxBytes);
+    const buffer = await file.arrayBuffer();
+    checkReadSize(buffer.byteLength, maxBytes);
+    return new Uint8Array(buffer);
   }
 
   async write(safePath, data) {
