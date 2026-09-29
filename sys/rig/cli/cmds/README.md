@@ -25,6 +25,7 @@ U0 provides the shared foundation. U1 adds command flags, sed, awk, and find. U2
 | `encodings.mjs`, `encoding-codecs.mjs` | U2c base64, base32 and nine basenc formats |
 | `checksums.mjs`, `checksum-manifest.mjs`, `digest-algorithms.mjs` | U2c seven digest commands, cksum and sum |
 | `canonical-input.mjs` | Shared canonical, bounded and governed content reads |
+| `runtime.mjs`, `date-format.mjs` | U2d date, virtual runtime facts and scoped timeout |
 | `u2-common.mjs`, `u2-decimal.mjs`, `streams.mjs` | Bounded byte I/O, exact arithmetic, and producer cleanup |
 
 Quoted and escaped operator arguments now remain literal. The full language expansion remains scheduled for U3. Agent interceptors for recursive grep,
@@ -420,3 +421,56 @@ specifications, without copied third-party implementations or new packages:
 [RFC 4648 encodings](https://www.rfc-editor.org/rfc/rfc4648.html),
 [ZeroMQ Z85](https://rfc.zeromq.org/spec/32/), and the
 [GNU checksum contracts](https://www.gnu.org/software/coreutils/manual/html_node/cksum-common-options.html).
+
+## Runtime utilities and aliases
+
+`date` reads the runtime clock without changing it. It supports `-u`,
+`-d ISO_OR_EPOCH`, `-r FILE`, `-I[date|hours|minutes|seconds|ns]`, `-R`,
+`--rfc-3339=date|seconds|ns`, their long forms and one `+FORMAT`.
+Calendar input accepts YYYY-MM-DD and ISO timestamps with optional numeric
+UTC offsets. Epoch input uses `@SECONDS` with at most three fractional digits.
+Natural-language dates, leap seconds and clock setting refuse explicitly.
+Reference files use canonical governed metadata; date never reads their contents.
+Missing backend timestamps refuse. The clock has millisecond precision;
+`%N` appends six zeros rather than claiming measured nanosecond resolution.
+Bare `%-N` reports three fractional digits, matching that millisecond resolution.
+
+Supported C-locale conversions are `%a %A %b %B %c %C %d %D %e %F %g %G %h`
+`%H %I %j %k %l %m %M %n %N %p %P %q %r %R %s %S %t %T %u %U %V %w %W`
+`%x %X %y %Y %z %:z %Z %%`. Padding/case flags and bounded field widths are
+supported; unknown conversions refuse. Without `-u` or virtual `TZ`, date
+uses the runtime's actual local timezone. Virtual TZ overrides support
+UTC/UTC0/GMT/GMT0; other values refuse. `-u` overrides virtual TZ.
+
+`uname` identifies this virtual runtime: kernel and OS `nakliOS`, node
+`workspace`, release `virtual`, version `JavaScript`, machine `javascript`.
+Processor and hardware-platform queries return `unknown`. `arch` returns
+`javascript`. These values do not describe the host kernel or CPU.
+`whoami` returns the virtual principal label `workspace`. `id` describes that
+label; `id -un` selects it. Numeric UID/GID, groups and host identity queries
+refuse. No synthetic POSIX numbers or host privileges are implied.
+`nproc` reports the shell's one JavaScript execution lane. `--all` and
+`--ignore=N` retain the minimum of one; they do not report host CPU capacity.
+
+`timeout [--preserve-status] [--verbose] DURATION COMMAND [ARGS...]` runs
+nested argv through the same governed shell. Decimal durations accept
+s/m/h/d suffixes with a 300-second ceiling. Zero disables the deadline.
+Deadlines cooperatively abort nested work and pending proposals. Expiry
+returns 124, or 130 with `--preserve-status`. Normal completion preserves status
+and exact bytes. Host signals, process groups and kill-after escalation refuse.
+There are at most 32 nested deadline scopes. Stop and enclosing deadlines
+cancel inner scopes. The shell awaits owned work before restoring its parent.
+A later invocation cannot inherit an expired scope. An accepted operation may
+complete before cancellation is observed. No rollback or synchronous-code
+preemption is promised. Completed confirmation events drain on the next feed.
+
+Python runtimes lack scoped cancellation, so Python refuses under a nonzero
+deadline, including through wrappers. Zero alone imposes no deadline. The
+JavaScript gate runner already accepts the scope's cancellation signal.
+
+`egrep` delegates to `grep -E`, `fgrep` to `grep -F`, `more` to byte-preserving
+`cat`, `dir` to `ls`, and `vdir` to `ls -l`. More is not an interactive pager.
+Existing grep/listing flags and virtual metadata limits remain in effect.
+Timeout and these aliases take the conservative permission-rule path until
+U3 can recursively inspect their meaning. Uninspectable rule prompts survive
+bypass mode; ordinary inspectable ask rules retain the existing mode policy.

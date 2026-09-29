@@ -2663,7 +2663,9 @@
           if(t){ t.log.push({ k:'system', text:'⛔ '+byMode.why }); renderLog(); }
           return 'Refused: '+byMode.why+' '+POLICY_HINT;
         }
-        if(byMode.decision === 'allow') verdict = { ...verdict, outcome:'allow', liftedBy:null };
+        // A wrapper whose inner commands cannot be inspected retains its rule
+        // prompt even in bypass mode. Ordinary inspectable asks keep mode policy.
+        if(byMode.decision === 'allow' && !byRule.uninspectable) verdict = { ...verdict, outcome:'allow', liftedBy:null };
         else if(byRule.decision === 'allow') verdict = { ...verdict, outcome:'allow', liftedBy:null };
         else if(byRule.decision === 'ask' && verdict.outcome === 'allow') verdict = { ...verdict, outcome:'deny', liftable:true, why:'is covered by one of your ask rules', evidence:byRule.why };
         // AC-7b: a liftable refusal is ASKED, not just reported. Without this the only way to
