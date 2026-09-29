@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>B10 SQLite startup verification</title>
+<h1>B10 SQLite startup verification</h1><pre id="out">Starting disposable runtime checks…</pre>
+<script type="module">
+import {createKiln,createWorkerRuntime} from '/sys/kiln/index.mjs';
+import {createMainThreadKiln} from '/sys/kiln/main-thread-runtime.mjs';
+import {PYODIDE_INDEX_URL} from '/sys/kiln/pyodide-runtime.mjs';
+import {createShell} from '/sys/rig/cli/shell.mjs';
+import {MemoryBackend,createFileops} from '/sys/rig/fileops/index.mjs';
+import {createGrant,createOpLog,createAgentFace} from '/sys/rig/agent/index.mjs';
+import {buildRigRegistry} from '/sys/rig/registry/index.mjs';
+const deferred=()=>{let resolve;const promise=new Promise(done=>{resolve=done;});return {promise,resolve};};
+const out=document.querySelector('#out'),results=[],observations=[],decode=v=>typeof v==='string'?v:new TextDecoder().decode(v);
+// BEGIN harness report contract
+const requestedModes = new URL(location.href).searchParams.getAll('mode');
+const modeValid = requestedModes.length === 0 || (requestedModes.length === 1 && ['worker', 'main'].includes(requestedModes[0]));
+const selectedModes = modeValid ? (requestedModes.length ? requestedModes : ['worker', 'main']) : [];
+const expectedByMode = { worker: 4, main: 4 };
+const expectedTotal = selectedModes.reduce((total, mode) => total + expectedByMode[mode], 0);
+function publish(done = false) {
+  if (done && modeValid && (expectedTotal <= 0 || results.length !== expectedTotal)
+      && !results.some(result => result.name === 'harness: assertion count')) {
+    results.push({ name: 'harness: assertion count', ok: false,
+      detail: `Expected ${expectedTotal} assertion results; observed ${results.length}` });
+  }
+  const passed = results.filter(result => result.ok === true).length;
+  const failed = results.length - passed;
+  const ok = done && modeValid && expectedTotal > 0 && results.length === expectedTotal && failed === 0;
+  window.__b10SqliteResults = { done, ok, harness: 'startup', mode: requestedModes.length ? requestedModes.join(',') : 'both',
+    selectedModes, expectedTotal, crossOriginIsolated: self.crossOriginIsolated, passed, failed, total: results.length, results, observations };
+  out.textContent = JSON.stringify(window.__b10SqliteResults, null, 2);
+  if (done) document.title = `${ok ? 'PASS' : 'FAIL'} B10 SQLite startup ${passed}/${results.length}`;
+}
+if (!modeValid) results.push({ name: 'harness: invalid mode', ok: false,
+  detail: 'Expected no mode parameter or exactly one mode=worker or mode=main; received ' + JSON.stringify(requestedModes) });
+// END harness report contract
+const check=(name,ok,detail)=>{results.push({name,ok,...(detail?{detail}:{})});publish();};
+async function promptly(promise){let timer;try{return await Promise.race([promise,new Promise(resolve=>{timer=setTimeout(()=>resolve({status:'test-wait-expired'}),500);})]);}finally{clearTimeout(timer);}}
+try {
+for (const mode of selectedModes) for (const reason of ['abort','timeout']) {
+  const backend=new MemoryBackend(),fs=createFileops({backend}),entered=deferred(),release=deferred(),controller=new AbortController();
+  let runtime,calls=0,loads=0;
+  const load=async()=>{
+    loads++;
+    if(mode==='worker'){
+      runtime=await createWorkerRuntime({});const original=runtime.runCode.bind(runtime);
+      const wrapped=Object.create(runtime);wrapped.runCode=(...args)=>{calls++;return original(...args);};
+      entered.resolve();await release.promise;return wrapped;
+    }
+    const mod=await import(PYODIDE_INDEX_URL+'pyodide.mjs');runtime=await mod.loadPyodide({indexURL:PYODIDE_INDEX_URL});
+    await runtime.loadPackage('sqlite3',{checkIntegrity:true});runtime.runPython('import json, base64, math, sqlite3');
+    const original=runtime.runPythonAsync.bind(runtime);runtime.runPythonAsync=(...args)=>{calls++;return original(...args);};
+    entered.resolve();await release.promise;return runtime;
+  };
+  const kiln=mode==='worker'?createKiln({consent:()=>true,loadRuntime:load}):createMainThreadKiln({fs,loadPyodide:load});
+  try{
+    const pending=kiln.exec('abandoned','b10_abandoned_marker = True',{interpreter:'sqlite',signal:controller.signal,loadTimeoutMs:reason==='timeout'?10:30000});
+    if(reason==='abort'){await entered.promise;controller.abort();}
+    const result=await promptly(pending);
+    check(`${mode}: ${reason} returns before private initialization settles`,result.status===(reason==='abort'?'interrupted':'unavailable'),result.status);
+    await entered.promise;release.resolve();await new Promise(resolve=>setTimeout(resolve,0));const abandonedCalls=calls;
+    const registry=buildRigRegistry({fs}),face=createAgentFace({registry,grant:createGrant({prefixes:[''],scopes:['fs:read','fs:write','fs:remove']}),opLog:createOpLog({fs:createFileops({backend:new MemoryBackend()})}),actor:'b10-disposable-startup-verifier'});
+    const shell=createShell({registry,face,kiln,kilnIsolate:true}),sql=await shell.feed("sqlite3 recovery.db 'CREATE TABLE t(x); INSERT INTO t VALUES(42); SELECT x FROM t'");
+    observations.push({mode,reason,startupStatus:result.status,abandonedCalls,loads,sqlCode:shell.lastCode,sqlOutput:decode(sql.stdout),files:(await fs.list('')).entries.map(e=>e.name)});
+    check(`${mode}: ${reason} completion runs no abandoned code and reuses real SQLite`,abandonedCalls===0&&loads===1&&shell.lastCode===0&&decode(sql.stdout)==='42\n');
+  }catch(error){check(`${mode}: ${reason} runtime smoke`,false,String(error?.stack||error));}
+  finally{release.resolve();if(mode==='worker')await runtime?.close();}
+}
+} catch (error) {
+  results.push({ name: 'harness: unexpected failure', ok: false, detail: String(error?.stack || error) });
+}
+publish(true);
+</script></html>

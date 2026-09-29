@@ -1,0 +1,11 @@
+{
+  "name": "js-yaml",
+  "version": "5.4.2",
+  "license": "MIT",
+  "tarball": "https://registry.npmjs.org/js-yaml/-/js-yaml-5.4.2.tgz",
+  "integrity": "sha512-m+aqu+LwO1O6sIopafj8HUVl5aawITwZQe/yHpMCKjaWBaA/d07B/QdMb3529REftiU+RMMHL3Vlsw3hON7vWg==",
+  "files": {
+    "js-yaml.mjs": "86ac62558d7cd103ff5f5a10a885ebecc04c23ca2f1487522864b49221edc25c",
+    "LICENSE": "a07bc24468b9654ce76a547d47a2db282d07733b715db4c73a98bd63961f9550"
+  }
+}

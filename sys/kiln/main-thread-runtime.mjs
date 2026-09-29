@@ -20,11 +20,17 @@
 //   exec(cellId, code, { isolate, cwd, argv, stdin }) -> { status:'ok'|'error'|'unavailable', stdout, stderr, output, message? }
 //   (`output` is both streams in the order they were written — what a terminal would show)
 
-import { PYODIDE_VERSION, PYODIDE_INDEX_URL, sanitizeTraceback, systemExitCode } from './pyodide-runtime.mjs';
+import { PYODIDE_APPROX_BYTES, PYODIDE_INDEX_URL, sanitizeTraceback, systemExitCode } from './pyodide-runtime.mjs';
+import { waitForSqliteLoad } from './sqlite-load.mjs';
+
+const PRIVATE_SQL_EXEC = Symbol('private SQLite execution');
 
 async function defaultLoadPyodide() {
   const mod = await import(PYODIDE_INDEX_URL + 'pyodide.mjs');
-  return mod.loadPyodide({ indexURL: PYODIDE_INDEX_URL });
+  const runtime = await mod.loadPyodide({ indexURL: PYODIDE_INDEX_URL });
+  await runtime.loadPackage('sqlite3', { checkIntegrity: true });
+  runtime.runPython('import json, base64, math, sqlite3');
+  return runtime;
 }
 
 // Paths the python MEMFS snapshot must not touch, in EITHER direction.
@@ -98,12 +104,14 @@ export function createMainThreadKiln({ fs, mount = 'work', loadPyodide = default
   const root = '/' + String(mount).replace(/^\/+|\/+$/g, '');
   let py = null;
   let loading = null;
+  let sqlite = null, sqlitePy = null, sqliteTail = Promise.resolve();
 
   async function ensure() {
     if (py) return py;
     if (!loading) {
       loading = (async () => {
         const p = await loadPyodide();
+        if (p === sqlitePy) throw new Error('Kiln SQLite requires a distinct private interpreter');
         try { p.runPython(SNAPSHOT); } catch (_) {}
         try { p.FS.mkdirTree(root); } catch (_) {}
         py = p;
@@ -185,7 +193,7 @@ export function createMainThreadKiln({ fs, mount = 'work', loadPyodide = default
 
   return {
     status: () => (py ? 'ready' : 'idle'),
-    downloadSize: () => PYODIDE_VERSION && (12 * 1024 * 1024),
+    downloadSize: () => PYODIDE_APPROX_BYTES,
     // `isolate` is for the VERIFIER GATE. The interpreter is memoized (one Pyodide for the
     // life of the app), so by default the agent's `python` and the gate's `python` are the
     // SAME interpreter: globals, `sys.modules` and `builtins` all carry over. Two consequences,
@@ -208,10 +216,40 @@ export function createMainThreadKiln({ fs, mount = 'work', loadPyodide = default
     // arguments, as CPython would; without it a script saw [''] (live 2026-09-12). `stdin` is
     // the text a pipe or `<` fed the command; without it sys.stdin is at EOF, never an I/O error
     // (live 2026-09-12: `python mdlite.py < in.md` → OSError: [Errno 29]).
-    async exec(cellId, code, { isolate = false, cwd = '', argv = null, stdin = null } = {}) {
+    async exec(cellId, code, options = {}) {
+      if (options.interpreter === 'sqlite') {
+        if (!sqlite) {
+          // SQL bytes cross the governed shell boundary explicitly. This
+          // interpreter sees no workspace mirror or general Python namespace.
+          sqlite = createMainThreadKiln({
+            fs: { list: async () => ({ ok: true, entries: [] }),
+              write: async () => { throw new Error('private SQLite filesystem writes are unavailable'); },
+              remove: async () => { throw new Error('private SQLite filesystem removals are unavailable'); } },
+            mount: 'sqlite-private',
+            loadPyodide: async () => {
+              const loaded = await loadPyodide();
+              if (loaded === py) throw new Error('Kiln SQLite requires a distinct private interpreter');
+              sqlitePy = loaded; return loaded;
+            },
+          });
+        }
+        const run = sqliteTail.then(() => options.signal?.aborted
+          ? { status: 'interrupted', stdout: '', stderr: 'SQLite execution cancelled' }
+          : sqlite.exec(cellId, code, { isolate: true, cwd: '', argv: ['sqlite3'], stdin: '',
+            signal: options.signal, loadTimeoutMs: options.loadTimeoutMs, [PRIVATE_SQL_EXEC]: true }));
+        sqliteTail = run.catch(() => {}); return run;
+      }
+      const { isolate = false, cwd = '', argv = null, stdin = null } = options;
       let p;
-      try { p = await ensure(); }
+      try {
+        if (options[PRIVATE_SQL_EXEC]) {
+          const loaded = await waitForSqliteLoad(ensure, { signal: options.signal, timeoutMs: options.loadTimeoutMs });
+          if (!loaded.ok) return loaded.result;
+          p = loaded.value;
+        } else p = await ensure();
+      }
       catch (e) { return { status: 'unavailable', message: 'Pyodide failed to load: ' + (e && e.message ? e.message : e) }; }
+      if (options.signal?.aborted) return { status: 'interrupted', stdout: '', stderr: 'SQLite execution cancelled' };
 
       // `write` (raw bytes), never `batched`: batched is line-buffered and strips the newline,
       // so `print("before")` followed by unittest's stderr came back as "before-----" and a

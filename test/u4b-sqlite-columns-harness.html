@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>B10 SQLite duplicate-column verification</title>
+<h1>B10 SQLite duplicate-column verification</h1><pre id="out">Starting disposable runtimes…</pre>
+<script type="module">
+import { createShell } from '/sys/rig/cli/shell.mjs';
+import { MemoryBackend, createFileops } from '/sys/rig/fileops/index.mjs';
+import { createGrant, createOpLog, createAgentFace } from '/sys/rig/agent/index.mjs';
+import { buildRigRegistry } from '/sys/rig/registry/index.mjs';
+import { createKiln, createWorkerRuntime } from '/sys/kiln/index.mjs';
+import { createMainThreadKiln } from '/sys/kiln/main-thread-runtime.mjs';
+const cases=[
+  {name:'duplicate aliases',sql:'SELECT 1 AS x,2 AS x',expected:'[{"x":1,"x":2}]\n'},
+  {name:'duplicate join columns',sql:"SELECT * FROM (SELECT 1 AS id,'left' AS value) a CROSS JOIN (SELECT 2 AS id,'right' AS value) b",expected:'[{"id":1,"value":"left","id":2,"value":"right"}]\n'},
+  {name:'escaped duplicate columns',sql:`SELECT NULL AS "a""b",'नमस्ते' AS "a""b",'line' AS "a""b"`,expected:'[{"a\\"b":null,"a\\"b":"नमस्ते","a\\"b":"line"}]\n'},
+];
+const results=[],out=document.querySelector('#out'),decode=v=>typeof v==='string'?v:new TextDecoder().decode(v),quote=v=>"'"+v.replaceAll("'","'\\''")+"'";
+// BEGIN harness report contract
+const requestedModes = new URL(location.href).searchParams.getAll('mode');
+const modeValid = requestedModes.length === 0 || (requestedModes.length === 1 && ['worker', 'main'].includes(requestedModes[0]));
+const selectedModes = modeValid ? (requestedModes.length ? requestedModes : ['worker', 'main']) : [];
+const expectedByMode = { worker: 3, main: 3 };
+const expectedTotal = selectedModes.reduce((total, mode) => total + expectedByMode[mode], 0);
+function publish(done = false) {
+  if (done && modeValid && (expectedTotal <= 0 || results.length !== expectedTotal)
+      && !results.some(result => result.name === 'harness: assertion count')) {
+    results.push({ name: 'harness: assertion count', ok: false,
+      detail: `Expected ${expectedTotal} assertion results; observed ${results.length}` });
+  }
+  const passed = results.filter(result => result.ok === true).length;
+  const failed = results.length - passed;
+  const ok = done && modeValid && expectedTotal > 0 && results.length === expectedTotal && failed === 0;
+  window.__b10SqliteResults = { done, ok, harness: 'columns', mode: requestedModes.length ? requestedModes.join(',') : 'both',
+    selectedModes, expectedTotal, crossOriginIsolated: self.crossOriginIsolated, passed, failed, total: results.length, results };
+  out.textContent = JSON.stringify(window.__b10SqliteResults, null, 2);
+  if (done) document.title = `${ok ? 'PASS' : 'FAIL'} B10 SQLite columns ${passed}/${results.length}`;
+}
+if (!modeValid) results.push({ name: 'harness: invalid mode', ok: false,
+  detail: 'Expected no mode parameter or exactly one mode=worker or mode=main; received ' + JSON.stringify(requestedModes) });
+// END harness report contract
+try {
+for (const mode of selectedModes) {
+  const backend=new MemoryBackend(),fs=createFileops({backend}),registry=buildRigRegistry({fs});
+  const face=createAgentFace({registry,grant:createGrant({prefixes:[''],scopes:['fs:read','fs:write','fs:remove']}),opLog:createOpLog({fs:createFileops({backend:new MemoryBackend()})}),actor:'b10-disposable-column-verifier'});
+  const kiln=mode==='worker'?createKiln({consent:()=>true,loadRuntime:()=>createWorkerRuntime({})}):createMainThreadKiln({fs,mount:'b10-columns'});
+  const shell=createShell({registry,face,kiln,kilnIsolate:true});
+  for(const item of cases){
+    try{const r=await shell.feed('sqlite3 -json :memory: '+quote(item.sql));const stdout=decode(r.stdout);results.push({mode,name:item.name,ok:shell.lastCode===0&&stdout===item.expected,code:shell.lastCode,stdout,expected:item.expected,stderr:decode(r.stderr)});}
+    catch(error){results.push({mode,name:item.name,ok:false,error:String(error)});}
+    publish();
+  }
+  await kiln.close?.();
+}
+} catch (error) {
+  results.push({ name: 'harness: unexpected failure', ok: false, detail: String(error?.stack || error) });
+}
+publish(true);
+</script></html>

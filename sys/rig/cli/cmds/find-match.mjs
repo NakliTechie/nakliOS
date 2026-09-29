@@ -20,7 +20,7 @@ const classes = {
   word: (c) => classes.alnum(c) || c === 95,
 };
 
-export function parseRegex(source) {
+export function parseRegex(source, { wholePath = true } = {}) {
   if (source.length > 16384) fail('expression exceeds the 16384-byte limit');
   const extended = true;
   let at = 0, groups = 0, depth = 0;
@@ -118,7 +118,7 @@ export function parseRegex(source) {
   }
   const root = expression();
   if (at !== source.length) fail('unexpected expression suffix');
-  return { root: { kind: 'sequence', nodes: [{ kind: 'anchor', which: '^' }, root, { kind: 'anchor', which: '$' }] }, groups, source };
+  return { root: wholePath ? { kind: 'sequence', nodes: [{ kind: 'anchor', which: '^' }, root, { kind: 'anchor', which: '$' }] } : root, groups, source };
 }
 
 export function findRegex(regex, input, start = 0, { insensitive = false, multiline = false, tick = () => {} } = {}) {

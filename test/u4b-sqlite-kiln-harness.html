@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>B10 SQLite real Kiln verification</title>
+<h1>B10 SQLite real Kiln verification</h1>
+<p>This harness uses disposable MemoryBackend workspaces. It loads the repository's pinned Pyodide runtime.</p>
+<pre id="out">Harness starting…</pre>
+<script type="module">
+import { createShell } from '/sys/rig/cli/shell.mjs';
+import { createDataCommands } from '/sys/rig/cli/cmds/data.mjs';
+import { createIO } from '/sys/rig/cli/io.mjs';
+import { MemoryBackend, createFileops } from '/sys/rig/fileops/index.mjs';
+import { createGrant, createOpLog, createAgentFace } from '/sys/rig/agent/index.mjs';
+import { buildRigRegistry, createRegistry } from '/sys/rig/registry/index.mjs';
+import { createFsBridge } from '/sys/kiln/fs-bridge.mjs';
+import { generateRigModule } from '/sys/kiln/rig-bindings.mjs';
+import { createKiln, createWorkerRuntime } from '/sys/kiln/index.mjs';
+import { createMainThreadKiln } from '/sys/kiln/main-thread-runtime.mjs';
+
+const out = document.querySelector('#out'), results = [];
+const assert = (condition, message) => { if (!condition) throw new Error(message); };
+const equal = (actual, expected, message) => assert(JSON.stringify(actual) === JSON.stringify(expected), `${message}: ${JSON.stringify(actual)} != ${JSON.stringify(expected)}`);
+const text = (value) => typeof value === 'string' ? value : new TextDecoder().decode(value);
+const quote = (value) => "'" + String(value).replaceAll("'", "'\\''") + "'";
+const cmd = (db, sql, flags = '') => `sqlite3 ${flags} ${quote(db)} ${quote(sql)}`;
+const good = (r) => { equal(r.code, 0, text(r.stderr || r.output || 'SQL failed')); return text(r.stdout); };
+const bad = (r) => { assert(r.code !== 0, 'SQL must fail'); assert(text(r.stderr || '') !== '', 'diagnostic required'); };
+const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
+// BEGIN harness report contract
+const requestedModes = new URL(location.href).searchParams.getAll('mode');
+const modeValid = requestedModes.length === 0 || (requestedModes.length === 1 && ['worker', 'main'].includes(requestedModes[0]));
+const selectedModes = modeValid ? (requestedModes.length ? requestedModes : ['worker', 'main']) : [];
+const expectedByMode = { worker: 18, main: 17 };
+const expectedTotal = selectedModes.reduce((total, mode) => total + expectedByMode[mode], 0);
+function publish(done = false) {
+  if (done && modeValid && (expectedTotal <= 0 || results.length !== expectedTotal)
+      && !results.some(result => result.name === 'harness: assertion count')) {
+    results.push({ name: 'harness: assertion count', ok: false,
+      detail: `Expected ${expectedTotal} assertion results; observed ${results.length}` });
+  }
+  const passed = results.filter(result => result.ok === true).length;
+  const failed = results.length - passed;
+  const ok = done && modeValid && expectedTotal > 0 && results.length === expectedTotal && failed === 0;
+  window.__b10SqliteResults = { done, ok, harness: 'kiln', mode: requestedModes.length ? requestedModes.join(',') : 'both',
+    selectedModes, expectedTotal, crossOriginIsolated: self.crossOriginIsolated, passed, failed, total: results.length, results };
+  out.textContent = JSON.stringify(window.__b10SqliteResults, null, 2);
+  if (done) document.title = `${ok ? 'PASS' : 'FAIL'} B10 SQLite kiln ${passed}/${results.length}`;
+}
+if (!modeValid) results.push({ name: 'harness: invalid mode', ok: false,
+  detail: 'Expected no mode parameter or exactly one mode=worker or mode=main; received ' + JSON.stringify(requestedModes) });
+// END harness report contract
+async function check(name, fn) {
+  try { await fn(); results.push({ name, ok: true }); }
+  catch (error) { results.push({ name, ok: false, detail: String(error?.stack || error) }); }
+  publish();
+}
+function context({ stage = false, readOnly = false } = {}) {
+  const backend = new MemoryBackend(), fs = createFileops({ backend }), base = buildRigRegistry({ fs });
+  const registry = stage ? createRegistry(base.commands.map(c => c.name === 'fs.write' ? { ...c, destructive: true } : c)) : base;
+  const face = createAgentFace({ registry, grant: createGrant({ prefixes: [''], scopes: readOnly ? ['fs:read'] : ['fs:read', 'fs:write', 'fs:remove'] }),
+    opLog: createOpLog({ fs: createFileops({ backend: new MemoryBackend() }) }), actor: 'b10-real-kiln-verifier' });
+  return { backend, fs, registry, face };
+}
+function shellFor(ctx, kiln) {
+  const shell = createShell({ registry: ctx.registry, face: ctx.face, kiln, kilnIsolate: true });
+  return { shell, run: async line => ({ ...await shell.feed(line), code: shell.lastCode }) };
+}
+async function bytes(ctx, path) { const r = await ctx.fs.read(path); assert(r.ok, `read ${path}`); return Array.from(r.data); }
+async function absent(ctx, path) { equal((await ctx.fs.stat(path)).code, 'ENOENT', `${path} must not exist`); }
+
+try {
+for (const mode of selectedModes) {
+  let runtime, kiln;
+  const ctx = context();
+  // Seed before creating either actual runtime. Loading fixed dependencies must
+  // not import a workspace file with the same name on the first SQL command.
+  for (const name of ['sqlite3', 'json', 'base64', 'math']) {
+    const shadow = `open('shadow-executed.txt','w').write('${name}')\nraise RuntimeError('workspace shadow module executed')\n`;
+    assert((await ctx.fs.write(name + '.py', shadow)).ok, 'shadow fixture seeded');
+  }
+  await check(`${mode}: actual facade loads pinned Pyodide and Python sqlite3`, async () => {
+    if (mode === 'worker') {
+      assert(self.crossOriginIsolated, 'Worker requires crossOriginIsolated');
+      kiln = createKiln({ consent: () => true, loadRuntime: async ({ purpose } = {}) => {
+        runtime = await createWorkerRuntime(purpose === 'sqlite' ? {} : { face: ctx.face, fsBridge: createFsBridge({ backend: ctx.backend, fs: ctx.fs, mount: '' }), rigModuleSource: generateRigModule(ctx.registry).source });
+        return runtime;
+      } });
+    } else kiln = createMainThreadKiln({ fs: ctx.fs, mount: 'b10-disposable' });
+    const r = await kiln.exec('b10-capability', 'import sqlite3, sys\nprint(sys.version.split()[0], sqlite3.sqlite_version)\nprint(hasattr(sqlite3.Connection, "serialize"), hasattr(sqlite3.Connection, "deserialize"))');
+    equal(r.status, 'ok', text(r.stderr || r.message || 'runtime unavailable'));
+    assert(/True True/.test(r.stdout), `SQLite byte transport unavailable: ${r.stdout}`);
+    results.push({ name: `${mode}: runtime versions`, ok: true, detail: r.stdout });
+  });
+  if (!kiln) continue;
+  const s = shellFor(ctx, kiln), create = "CREATE TABLE t(id INTEGER PRIMARY KEY,value TEXT,payload BLOB); INSERT INTO t VALUES(1,'seed',x'00ff80');";
+  await check(`${mode}: public SQL returns actual expression results`, async () => {
+    equal(good(await s.run(cmd(':memory:', 'WITH n(v) AS (SELECT 1 UNION ALL SELECT 2) SELECT sum(v),7*6 FROM n'))), '3|42\n', 'real SQL');
+  });
+  await check(`${mode}: first SQL ignores workspace shadow modules`, async () => {
+    equal(good(await s.run(cmd(':memory:', 'SELECT 6*7 AS answer', '-json'))), '[{"answer":42}]\n', 'standard-library imports');
+    await absent(ctx, 'shadow-executed.txt');
+  });
+  if (mode === 'worker') await check('worker: sqlite3 package loading does not reopen network egress', async () => {
+    const query = `import js
+blocked = []
+for name in ('fetch', 'Request', 'WebSocket'):
+    try:
+        getattr(js, name)('http://127.0.0.1:8876/forbidden-sqlite-egress')
+        blocked.append(name + ':LEAK')
+    except Exception as error:
+        blocked.append(name + (':BLOCKED' if 'network access is disabled in Kiln' in str(error) else ':WRONG_ERROR'))
+print(','.join(blocked))`;
+    const r = await kiln.exec('b10-network-after-sqlite', query);
+    equal(r.status, 'ok', text(r.stderr || r.traceback || 'network check failed'));
+    equal(r.stdout, 'fetch:BLOCKED,Request:BLOCKED,WebSocket:BLOCKED\n', 'egress APIs remain denied');
+    equal(good(await s.run(cmd(':memory:', 'SELECT 42'))), '42\n', 'SQLite remains usable after denied egress');
+  });
+  await check(`${mode}: binary database round trip`, async () => {
+    good(await s.run(cmd('data.db', create)));
+    equal(text(Uint8Array.from((await bytes(ctx, 'data.db')).slice(0, 16))), 'SQLite format 3\0', 'database header');
+    equal(good(await s.run(cmd('data.db', 'SELECT id,value,hex(payload) FROM t'))), '1|seed|00FF80\n', 'database rows');
+  });
+  await check(`${mode}: transaction commit and rollback`, async () => {
+    good(await s.run(cmd('data.db', "BEGIN; INSERT INTO t VALUES(2,'kept',NULL); COMMIT; BEGIN; DELETE FROM t; ROLLBACK;")));
+    equal(good(await s.run(cmd('data.db', 'SELECT count(*) FROM t'))), '2\n', 'committed rows');
+  });
+  await check(`${mode}: SQL errors preserve database bytes`, async () => {
+    const before = await bytes(ctx, 'data.db'); bad(await s.run(cmd('data.db', 'DELETE FROM t; SELECT missing FROM t'))); equal(await bytes(ctx, 'data.db'), before, 'failed SQL bytes');
+  });
+  await check(`${mode}: readonly does not mutate`, async () => {
+    const before = await bytes(ctx, 'data.db'); equal(good(await s.run(cmd('data.db', 'SELECT count(*) FROM t', '-readonly'))), '2\n', 'readonly count');
+    bad(await s.run(cmd('data.db', 'DELETE FROM t', '-readonly'))); equal(await bytes(ctx, 'data.db'), before, 'readonly bytes');
+  });
+  await check(`${mode}: SQL literals and trigger bodies stay data`, async () => {
+    const q = "CREATE TABLE a(v); CREATE TABLE b(v); CREATE TRIGGER tr AFTER INSERT ON a BEGIN INSERT INTO b VALUES(new.v); INSERT INTO b VALUES('semi;colon'); END; INSERT INTO a VALUES('quote '' text'); SELECT v FROM b;";
+    equal(good(await s.run(cmd(':memory:', q))), "quote ' text\nsemi;colon\n", 'trigger output');
+  });
+  for (const query of ["ATTACH 'forbidden.db' AS bad", "SELECT load_extension('forbidden.so')", "VACUUM INTO 'forbidden.db'", "SELECT writefile('forbidden.db','bad')"])
+    await check(`${mode}: external effect denied: ${query}`, async () => { bad(await s.run(cmd(':memory:', query))); await absent(ctx, 'forbidden.db'); });
+  await check(`${mode}: work and row limits execute in Python`, async () => {
+    const io = createIO({ invoke: (name, input) => ctx.face.invoke(name, input) });
+    for (const [limits, query] of [[{ maxRows: 1 }, 'SELECT 1 UNION ALL SELECT 2'], [{ maxSqlSteps: 100 }, 'WITH RECURSIVE n(v) AS (SELECT 1 UNION ALL SELECT v+1 FROM n WHERE v<100000) SELECT sum(v) FROM n']]) {
+      const handlers = createDataCommands(io, { kiln, limits, authorize: (name, input) => ctx.face.check(name, input) });
+      let r; try { r = await handlers.sqlite3(['out.db', query]); } catch (e) { r = { code: 2, stderr: e.message }; }
+      bad(r); await absent(ctx, 'out.db');
+    }
+  });
+  await check(`${mode}: write staging keeps bytes pending until approval`, async () => {
+    const staged = context({ stage: true }), ss = shellFor(staged, kiln);
+    assert((await ss.run(cmd('staged.db', create))).awaitingConfirm, 'write awaits confirmation'); await absent(staged, 'staged.db');
+    good(await ss.run('y')); equal(text(Uint8Array.from((await bytes(staged, 'staged.db')).slice(0, 16))), 'SQLite format 3\0', 'approved binary database');
+  });
+  await check(`${mode}: Stop awaits runtime and discards returned database bytes`, async () => {
+    const entered = deferred(), release = deferred(), stopped = context();
+    const heldKiln = { exec: async (...args) => { const r = await kiln.exec(...args); entered.resolve(); await release.promise; return r; } };
+    const ss = shellFor(stopped, heldKiln), active = ss.run(cmd('stop.db', create)); await entered.promise;
+    let settled = false; const cancel = ss.shell.cancel().then(() => { settled = true; }); await new Promise(r => setTimeout(r, 15));
+    equal(settled, false, 'runtime still owned'); release.resolve(); await Promise.all([active, cancel]); equal(ss.shell.lastCode, 130, 'Stop code'); await absent(stopped, 'stop.db');
+  });
+  await check(`${mode}: scoped deadline refuses before SQL`, async () => { bad(await s.run("timeout 1 sqlite3 :memory: 'SELECT 1'")); });
+  if (runtime) await kiln.close();
+}
+} catch (error) {
+  results.push({ name: 'harness: unexpected failure', ok: false, detail: String(error?.stack || error) });
+}
+publish(true);
+</script>
+</html>

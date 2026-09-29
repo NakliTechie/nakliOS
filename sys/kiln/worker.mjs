@@ -251,6 +251,13 @@ async function initialize(message) {
   mountPath = message.mountPath || mountPath;
   rigRpcBytes = message.rigRpcBytes || rigRpcBytes;
   pyodide = await loadPyodide({ indexURL: message.indexURL });
+  // SQLite is an unvendored standard-library module in the pinned Pyodide.
+  // Load this fixed dependency during consent-gated initialization, before
+  // model-authored cells run and before network egress is disabled.
+  await pyodide.loadPackage('sqlite3', { checkIntegrity: true });
+  // Discover standard-library modules before the filesystem guard restricts
+  // package-directory enumeration and workspace modules enter the import path.
+  pyodide.runPython('import json, base64, math, sqlite3');
   ensureDirectory(mountPath);
   pyodide.FS.mount(pyodide.FS.filesystems.MEMFS, {}, mountPath);
   runtime = createPyodideRuntime(pyodide, interruptBuffer);
