@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "source": {
     "repository": "https://github.com/NakliTechie/nakliOS",
-    "commit": "102c6437bbce3020fe6542151e48c4274a2b401f"
+    "commit": "c3553134571d1d601bfdbf857f6b3df138a6bf4f"
   },
   "entrypoints": [
     "sys/rig/agent/index.mjs",
