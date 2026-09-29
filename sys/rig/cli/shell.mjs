@@ -11,7 +11,7 @@
 // through the C4 agent face and stage for a `y` confirm, exactly like the repl.
 //
 // It is deliberately a CURATED shell — the command set below is everything it
-// knows. `help` lists the dispatch table; unsupported commands exit 127.
+// knows. `help` lists the dispatch table; unknown commands exit 127.
 
 import { createJsRunner } from '../../kiln/js-runner.mjs';
 import { parseShell, languageLimits as resolveLanguageLimits } from './language-parser.mjs';
@@ -43,6 +43,7 @@ import { createChecksumCommands } from './cmds/checksums.mjs';
 import { createRuntimeCommands } from './cmds/runtime.mjs';
 import { createArchiveCommands } from './cmds/archives.mjs';
 import { createDataCommands } from './cmds/data.mjs';
+import { createUnsupportedCommands } from './cmds/unsupported.mjs';
 import { isByteStream, ownByteStream, closeByteStream, collectByteStream, createStreamingHead } from './cmds/streams.mjs';
 import { createPatch } from '../fileops/patch.mjs';
 
@@ -377,6 +378,7 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
     dir: (argv, stdin) => io.run(['ls', ...argv], stdin),
     vdir: (argv, stdin) => io.run(['ls', '-l', ...argv], stdin),
   });
+  Object.assign(builtins, createUnsupportedCommands());
   builtins.head = createStreamingHead({ fallback: builtins.head, signal: commandSignal });
 
   // One dispatch table also owns discovery and help. Dotted registry names remain reachable.
