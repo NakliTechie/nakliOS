@@ -18,11 +18,15 @@
 //   mkdir(safePath) -> void                      (explicit empty-dir marker)
 
 import { checkReadLimit, checkReadSize } from './read-limit.mjs';
+import { mutationError, checkCreateOptions, checkTruncateOptions, truncateSize } from './mutation-limit.mjs';
 
 export class MemoryBackend {
   constructor() {
     this.supportsBoundedReads = true;
     this.supportsMetadataOnly = true;
+    this.supportsExclusiveCreate = true;
+    this.supportsTypedRemoval = true;
+    this.supportsAtomicTruncate = true;
     this.files = new Map();     // safePath -> { bytes, mtimeMs }
     this.dirs = new Set();      // explicit directory markers
     this.symlinks = new Map();  // safePath -> { target, mtimeMs }
@@ -44,10 +48,67 @@ export class MemoryBackend {
     this.files.set(safePath, { bytes, mtimeMs: this._now() });
   }
 
-  async delete(safePath) {
+  async delete(safePath, { kind, root = '' } = {}) {
+    if (kind !== undefined) {
+      if (!['dir', 'non-dir'].includes(kind)) throw mutationError('EINVAL', 'invalid removal kind');
+      if (!safePath || safePath === root) throw mutationError('EBUSY', 'cannot remove the filesystem root');
+      this._requireMutationParents(safePath, root);
+      const type = this._mutationType(safePath);
+      if (!type) throw mutationError('ENOENT', `no such path: ${safePath}`);
+      if (kind === 'dir' && type !== 'dir') throw mutationError('ENOTDIR', `not a directory: ${safePath}`);
+      if (kind === 'non-dir' && type === 'dir') throw mutationError('EISDIR', `is a directory: ${safePath}`);
+      if (type === 'dir' && this._isImplicitDir(safePath)) throw mutationError('ENOTEMPTY', `directory not empty: ${safePath}`);
+    }
     this.files.delete(safePath);
     this.dirs.delete(safePath);
     this.symlinks.delete(safePath);
+  }
+
+  _mutationType(safePath) {
+    if (this.files.has(safePath)) return 'file';
+    if (this.symlinks.has(safePath)) return 'symlink';
+    if (this.dirs.has(safePath) || this._isImplicitDir(safePath)) return 'dir';
+    return null;
+  }
+
+  _requireMutationParents(safePath, root = '') {
+    const parts = safePath.split('/');
+    for (let index = 1; index < parts.length; index++) {
+      const path = parts.slice(0, index).join('/'), type = this._mutationType(path);
+      // fileops treats its empty mount root as an existing directory, including
+      // object-store roots whose directory marker has never been materialized.
+      const mountAncestor = root && (path === root || root.startsWith(path + '/'));
+      if (!type && !mountAncestor) throw mutationError('ENOENT', `no such parent directory: ${path}`);
+      if (type && type !== 'dir') throw mutationError('ENOTDIR', `not a parent directory: ${path}`);
+    }
+  }
+
+  async createExclusive(safePath, { directory = false, root = '' } = {}) {
+    checkCreateOptions({ directory });
+    // No await separates the live checks from insertion. A collision never
+    // reaches write(), so files, links, and implicit directories remain intact.
+    if (!safePath || safePath === root || this._mutationType(safePath)) throw mutationError('EEXIST', `already exists: ${safePath}`);
+    this._requireMutationParents(safePath, root);
+    if (directory) this.dirs.add(safePath);
+    else this.files.set(safePath, { bytes: new Uint8Array(0), mtimeMs: this._now() });
+  }
+
+  async truncate(safePath, options = {}) {
+    const opts = checkTruncateOptions(options), root = options.root || '';
+    if (!safePath || safePath === root) throw mutationError('EISDIR', 'cannot truncate the filesystem root');
+    this._requireMutationParents(safePath, root);
+    const type = this._mutationType(safePath);
+    if (type === 'dir') throw mutationError('EISDIR', `is a directory: ${safePath}`);
+    if (type === 'symlink') throw mutationError('ELOOP', `path changed to a symlink before truncation: ${safePath}`);
+    if (!type && !opts.create) return { changed: false, size: null };
+    const previous = this.files.get(safePath)?.bytes;
+    const size = truncateSize(previous?.byteLength || 0, opts);
+    // Allocation and prefix copying finish before replacing the authoritative
+    // entry. Allocation failures leave every existing byte unchanged.
+    const bytes = new Uint8Array(size);
+    if (previous) bytes.set(previous.subarray(0, Math.min(size, previous.byteLength)));
+    this.files.set(safePath, { bytes, mtimeMs: this._now() });
+    return { changed: true, size };
   }
 
   async exists(safePath) {

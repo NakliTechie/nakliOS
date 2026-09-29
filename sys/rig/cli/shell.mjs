@@ -33,6 +33,9 @@ import { createLayoutCommands } from './cmds/layout.mjs';
 import { createNumericCommands } from './cmds/numeric.mjs';
 import { createBcCommands } from './cmds/bc.mjs';
 import { createGeneratorCommands } from './cmds/generators.mjs';
+import { createPathCommands } from './cmds/paths.mjs';
+import { createMutationCommands } from './cmds/mutation.mjs';
+import { createInspectionCommands } from './cmds/inspection.mjs';
 import { isByteStream, ownByteStream, closeByteStream, collectByteStream, createStreamingHead } from './cmds/streams.mjs';
 import { createPatch } from '../fileops/patch.mjs';
 
@@ -459,7 +462,10 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
     createLayoutCommands(io, { signal: commandSignal, environment: commandEnvironment }),
     createNumericCommands(io, { signal: commandSignal }),
     createBcCommands(io, { signal: commandSignal }),
-    createGeneratorCommands({ signal: commandSignal, environment: commandEnvironment }));
+    createGeneratorCommands({ signal: commandSignal, environment: commandEnvironment }),
+    createPathCommands(io, { signal: commandSignal, environment: commandEnvironment }),
+    createMutationCommands(io, { signal: commandSignal, environment: commandEnvironment }),
+    createInspectionCommands(io, { signal: commandSignal }));
   builtins.head = createStreamingHead({ fallback: builtins.head, signal: commandSignal });
 
   // One dispatch table also owns discovery and help. Dotted registry names remain reachable.
@@ -529,7 +535,8 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
       // Text-only commands decode at their boundary, never in the pipeline itself.
       const input = ['cat', 'tee', 'od', 'head', 'tail', 'wc', 'tr', 'cut', 'env', 'sed', 'awk', 'find',
         'tac', 'rev', 'nl', 'paste', 'join', 'comm', 'split', 'fold', 'fmt', 'expand', 'unexpand', 'column',
-        'seq', 'shuf', 'tsort', 'expr', 'numfmt', 'printenv', 'yes', 'ptx', 'bc', 'factor'].includes(verb) || !builtins[verb] ? stdin : toText(stdin);
+        'seq', 'shuf', 'tsort', 'expr', 'numfmt', 'printenv', 'yes', 'ptx', 'bc', 'factor',
+        'readlink', 'realpath', 'rmdir', 'mktemp', 'truncate', 'unlink', 'du', 'tree', 'file', 'strings', 'cmp', 'ln', 'link'].includes(verb) || !builtins[verb] ? stdin : toText(stdin);
       const result = await handler(argv.slice(1), input);
       if (!result.stream) return result;
       const stream = ownByteStream(result.stream);

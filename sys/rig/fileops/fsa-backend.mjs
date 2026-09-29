@@ -13,6 +13,7 @@
 // showDirectoryPicker() handle in the browser — no branching between them.
 
 import { checkReadLimit, checkReadSize } from './read-limit.mjs';
+import { mutationError, checkTruncateOptions, truncateSize } from './mutation-limit.mjs';
 
 // DOMException.code is a legacy number, not a filesystem error code. Keep
 // provider failures typed at the metadata-only boundary without changing the
@@ -36,6 +37,10 @@ export class FsaBackend {
     this.root = rootHandle;
     this.supportsBoundedReads = true;
     this.supportsMetadataOnly = true;
+    // FSA has no exclusive name creation or atomic type-constrained removal.
+    // Even handle.remove() can remove a differently typed replacement by name.
+    // Truncation additionally feature-detects the transactional writable handle.
+    this.supportsAtomicTruncate = true;
   }
 
   _split(safePath) {
@@ -76,7 +81,8 @@ export class FsaBackend {
     await w.close();
   }
 
-  async delete(safePath, { metadataOnly } = {}) {
+  async delete(safePath, { metadataOnly, kind } = {}) {
+    if (kind !== undefined) throw mutationError('ENOTSUP', 'provider lacks atomic type-constrained removal');
     const { parts, name } = this._split(safePath);
     if (!name) {
       if (metadataOnly) throw metadataError(Object.assign(new Error('cannot remove the filesystem root'), { code: 'EBUSY' }), 'remove', '/');
@@ -89,6 +95,62 @@ export class FsaBackend {
     // deletion is nonrecursive, so that race must fail rather than remove them.
     try { await dir.removeEntry(name, { recursive: !metadataOnly }); }
     catch (error) { if (metadataOnly) throw metadataError(error, 'remove', safePath); /* already gone */ }
+  }
+
+  async truncate(safePath, options = {}) {
+    const opts = checkTruncateOptions(options);
+    // A File snapshot is immutable, but FSA cannot atomically obtain current
+    // size and commit a relative change. Do not approximate those modes.
+    if (opts.mode !== 'set') throw mutationError('ENOTSUP', 'provider lacks atomic relative truncation');
+    const size = truncateSize(0, opts), { parts, name } = this._split(safePath);
+    if (!name) throw mutationError('EISDIR', 'cannot truncate the filesystem root');
+    let writable;
+    try {
+      const dir = await this._dirHandle(parts, false);
+      let handle;
+      try { handle = await dir.getFileHandle(name, { create: false }); }
+      catch (error) {
+        if (error?.name === 'NotFoundError') {
+          if (!opts.create) return { changed: false, size: null };
+          throw mutationError('ENOTSUP', 'provider lacks exclusive creation for missing truncate targets');
+        }
+        if (error?.name === 'TypeMismatchError') throw mutationError('EISDIR', `is a directory: ${safePath}`);
+        throw error;
+      }
+      if (typeof handle.createWritable !== 'function') throw mutationError('ENOTSUP', 'provider lacks transactional writable files');
+      const snapshot = await handle.getFile();
+      if (!Number.isSafeInteger(snapshot.size) || snapshot.size < 0) throw mutationError('EIO', 'provider returned an invalid file size');
+      const keep = Math.min(snapshot.size, size);
+      let prefix = new Uint8Array(0);
+      if (keep) {
+        if (typeof snapshot.slice !== 'function') throw mutationError('ENOTSUP', 'provider lacks bounded immutable file slices');
+        const slice = snapshot.slice(0, keep);
+        checkReadSize(slice.size, keep);
+        if (slice.size !== keep) throw mutationError('EIO', 'provider returned an incomplete file slice');
+        const buffer = await slice.arrayBuffer();
+        checkReadSize(buffer.byteLength, keep);
+        if (buffer.byteLength !== keep) throw mutationError('EIO', 'provider returned an incomplete file prefix');
+        prefix = new Uint8Array(buffer);
+      }
+      // keepExistingData could copy an externally grown file without a bound.
+      // Instead, commit only the bounded immutable prefix and requested zeros.
+      // This is snapshot replacement, not compare-and-swap against external edits.
+      writable = await handle.createWritable({ keepExistingData: false });
+      if (typeof writable.abort !== 'function' || typeof writable.write !== 'function'
+          || typeof writable.truncate !== 'function' || typeof writable.close !== 'function') {
+        throw mutationError('ENOTSUP', 'provider lacks abortable transactional truncation');
+      }
+      if (prefix.length) await writable.write(prefix);
+      await writable.truncate(size);
+      await writable.close();
+      writable = null;
+      return { changed: true, size };
+    } catch (error) {
+      if (typeof writable?.abort === 'function') {
+        try { await writable.abort(); } catch { /* preserve the original failure */ }
+      }
+      throw metadataError(error, 'truncate', safePath);
+    }
   }
 
   async mkdir(safePath) {

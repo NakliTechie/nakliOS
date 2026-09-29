@@ -90,7 +90,8 @@ export function createIO({ invoke, cwd = () => '', run } = {}) {
     if (!result?.ok) throw new IOFailure(operation, result);
     return result;
   };
-  const readBytes = async (path, { maxBytes } = {}) => toBytes((await call('fs.read', { path: resolve(path), ...(maxBytes === undefined ? {} : { maxBytes }) })).data);
+  const readBytes = async (path, { maxBytes, rejectSymlinks } = {}) => toBytes((await call('fs.read', { path: resolve(path),
+    ...(maxBytes === undefined ? {} : { maxBytes }), ...(rejectSymlinks === undefined ? {} : { rejectSymlinks }) })).data);
 
   return {
     // Advanced commands use the same granted/staged call boundary for indexed search.
@@ -103,10 +104,12 @@ export function createIO({ invoke, cwd = () => '', run } = {}) {
     write: (path, data, { createParents = false } = {}) => call('fs.write', {
       path: resolve(path), data, createParents,
     }),
-    stat: async (path, { follow, metadataOnly } = {}) => (await call('fs.stat', { path: resolve(path),
-      ...(follow === undefined ? {} : { follow }), ...(metadataOnly === undefined ? {} : { metadataOnly }) })).stat,
-    list: async (path = '.', { recursive = false, metadataOnly } = {}) => (await call('fs.list', {
+    stat: async (path, { follow, metadataOnly, rejectSymlinks } = {}) => (await call('fs.stat', { path: resolve(path),
+      ...(follow === undefined ? {} : { follow }), ...(metadataOnly === undefined ? {} : { metadataOnly }),
+      ...(rejectSymlinks === undefined ? {} : { rejectSymlinks }) })).stat,
+    list: async (path = '.', { recursive = false, metadataOnly, rejectSymlinks } = {}) => (await call('fs.list', {
       path: resolve(path), recursive, ...(metadataOnly === undefined ? {} : { metadataOnly }),
+      ...(rejectSymlinks === undefined ? {} : { rejectSymlinks }),
     })).entries,
     glob: async (pattern, { cwd: from = '.' } = {}) => {
       // The registry glob's pattern is relative to its cwd, including for `/...`.
@@ -117,8 +120,12 @@ export function createIO({ invoke, cwd = () => '', run } = {}) {
       return (await call('fs.glob', input)).matches;
     },
     mkdir: (path, { createParents = false } = {}) => call('fs.mkdir', { path: resolve(path), createParents }),
-    remove: (path, { recursive = false, follow, metadataOnly } = {}) => call('fs.remove', { path: resolve(path), recursive,
-      ...(follow === undefined ? {} : { follow }), ...(metadataOnly === undefined ? {} : { metadataOnly }) }),
+    create: (path, { directory = false } = {}) => call('fs.create', { path: resolve(path), directory }),
+    truncate: (path, { size, mode = 'set', create = true, maxBytes } = {}) => call('fs.truncate', { path: resolve(path), size, mode, create,
+      ...(maxBytes === undefined ? {} : { maxBytes }) }),
+    remove: (path, { recursive = false, follow, metadataOnly, kind } = {}) => call('fs.remove', { path: resolve(path), recursive,
+      ...(follow === undefined ? {} : { follow }), ...(metadataOnly === undefined ? {} : { metadataOnly }),
+      ...(kind === undefined ? {} : { kind }) }),
     move: (from, to, { overwrite = false } = {}) => call('fs.move', { from: resolve(from), to: resolve(to), overwrite }),
     copy: (from, to, { overwrite = false } = {}) => call('fs.copy', { from: resolve(from), to: resolve(to), overwrite }),
     run: async (argv, stdin = '') => {
