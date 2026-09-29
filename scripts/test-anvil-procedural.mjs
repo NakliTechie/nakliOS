@@ -1,4 +1,4 @@
-// AC-3 — the procedural prior is data, and the migration changed nothing.
+// AC-3 — the procedural prior is data, with explicit versioned prompt-contract changes.
 //   node scripts/test-anvil-procedural.mjs
 //
 // Six transitions used to live as prose inside one 1,400-character SYSTEM string literal. The
@@ -6,8 +6,8 @@
 // 87.50 -> 58.93), and we had zero evidence about any of our six because removing one meant
 // editing a string literal inside a single-file app.
 //
-// The assertion that matters most here is the BORING one: the default render is byte-identical to
-// what Anvil sent before. Without that, the first ablation would be measuring its own migration.
+// The default render equals an independent golden literal. Intentional changes are recorded below;
+// unrelated text, ablation behavior, and punctuation remain pinned.
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { DEFAULT_GRAPH, renderProcedural, proceduralEdges, mergeProceduralGraph, loadProceduralGraph, PROCEDURAL_PATH } from '../sys/ai/procedural.mjs';
@@ -16,11 +16,12 @@ import { SYSTEM_HEAD, SYSTEM_TAIL, systemPrompt } from '../sys/ai/run-assembly.m
 const anvil = await readFile(new URL('../apps/anvil/index.html', import.meta.url), 'utf8');
 
 // The exact prose that lived in the literal before this change (git: apps/anvil/index.html@fedf4ec),
-// with one deliberate edit since: the read-before-edit exception (2026-09-24).
-const BEFORE = 'Read a file before editing it, unless the exact text to replace is already known — an edit whose old_string occurs exactly once applies without a read. Prefer edit/apply_patch for changes, write for new files; use shell to explore and verify. For work that splits into independent parts, use dispatch to parallelise; after a significant change, consider review before finishing. For a task defined by input→output EXAMPLES (a puzzle), prefer the `synthesize` tool — it evolves and tests candidate solve() programs across generations and writes the best solver.py — over hand-writing one solver.';
+// with deliberate edits since: the read-before-edit exception (2026-09-24), and B12's supported
+// batch-edit guidance (2026-09-30). Historical snapshots remain unchanged.
+const BEFORE = 'Read a file before editing it, unless the exact text to replace is already known — an edit whose old_string occurs exactly once applies without a read. Prefer edit/apply_patch for changes, write for new files; use shell to explore and verify or perform supported batch edits. For work that splits into independent parts, use dispatch to parallelise; after a significant change, consider review before finishing. For a task defined by input→output EXAMPLES (a puzzle), prefer the `synthesize` tool — it evolves and tests candidate solve() programs across generations and writes the best solver.py — over hand-writing one solver.';
 
 // ── 1. byte-identical, and the literal is really gone ──────────────────────
-assert.equal(renderProcedural(), BEFORE, 'the default graph renders exactly the prose it replaced');
+assert.equal(renderProcedural(), BEFORE, 'the default graph renders exactly the approved prompt contract');
 assert.ok(!anvil.includes(BEFORE), 'and the prose is no longer duplicated in the app — one source, not two');
 
 // The app assembles head + prior + tail, so check the SEAMS: a lost or doubled space between the
@@ -63,7 +64,7 @@ assert.equal(renderProcedural(DEFAULT_GRAPH, { disable: ['shell-to-verify'] }).i
   'Prefer edit/apply_patch for changes, write for new files.'), true,
   'a sentence that loses its second clause still terminates');
 assert.equal(renderProcedural(DEFAULT_GRAPH, { disable: ['prefer-surgical'] }).includes(
-  'Use shell') || renderProcedural(DEFAULT_GRAPH, { disable: ['prefer-surgical'] }).includes('use shell to explore and verify.'), true,
+  'use shell to explore and verify or perform supported batch edits.'), true,
   'a sentence that loses its FIRST clause still terminates');
 
 // ── 3. everything off yields nothing, not a stray full stop ────────────────
@@ -122,4 +123,4 @@ const fakeFs = (answer) => ({ read: async () => answer });
 }
 assert.equal(PROCEDURAL_PATH, '.anvil/procedural.json');
 
-console.log('anvil-procedural: byte-identical default, 6 edges each removable, override is narrow, load fails soft');
+console.log('anvil-procedural: approved default prompt contract, 6 edges each removable, override is narrow, load fails soft');

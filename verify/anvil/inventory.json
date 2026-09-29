@@ -471,7 +471,7 @@
     },
     "tool:shell": {
       "owner": "tools-files.md",
-      "fingerprint": "199108da2440",
+      "fingerprint": "7ef333b00b3b",
       "kind": "tool",
       "detail": "code code+gate"
     },

@@ -465,6 +465,9 @@ jobs:
       - name: Verify shell type discovery and function shadowing
         run: node sys/rig/cli/test/u5-type.test.mjs
 
+      - name: Verify Anvil executes supported Unix shell operations through its real wrapper
+        run: node scripts/test-anvil-unix-integration.mjs
+
       - name: Verify literal shell operators and escaped arguments
         run: node sys/rig/cli/test/literal-operators.test.mjs
 

@@ -109,7 +109,7 @@ test('Anvil preserves interceptor hints without running a shell command or attac
   await ctx.fs.write('file', 'aaa');
   assert.match(await ctx.run('unknown-command'), /\[exit 127\]$/);
   const count = ctx.feeds.length;
-  const output = await ctx.run('sed -i s/a/b/ file');
+  const output = await ctx.run('perl -i -pe s/a/b/ file');
   assert.match(output, /edit` tool/);
   assert.doesNotMatch(output, /\[exit /);
   assert.equal(ctx.feeds.length, count, 'neither wrapper sends the intercepted command to feed');

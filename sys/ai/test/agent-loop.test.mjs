@@ -706,13 +706,13 @@ await test('budget ladder: the wall-clock axis trips its stop reason', async () 
 });
 
 // ── Batch 3 rest: bash interceptor hints ────────────────────────────────
-await test('interceptBashCommand redirects sed -i / grep -r / cat > to structured tools', () => {
-  assert(/edit/.test(interceptBashCommand('sed -i s/a/b/ f.txt') || ''), 'sed -i → edit');
+await test('interceptBashCommand executes supported shell forms and redirects unsupported perl -i', () => {
+  eq(interceptBashCommand('sed -i s/a/b/ f.txt'), null, 'supported sed -i runs');
   assert(/edit/.test(interceptBashCommand('perl -i -pe s/a/b/ f') || ''), 'perl -i → edit');
-  assert(/rg|ripgrep/.test(interceptBashCommand('grep -r foo src/') || ''), 'grep -r → rg');
-  assert(/rg|ripgrep/.test(interceptBashCommand('grep -R foo .') || ''), 'grep -R → rg');
-  assert(/write/.test(interceptBashCommand('cat > out.txt') || ''), 'cat > → write');
-  assert(/write/.test(interceptBashCommand('cat <<EOF') || ''), 'cat heredoc → write');
+  eq(interceptBashCommand('grep -r foo src/'), null, 'supported grep -r runs');
+  eq(interceptBashCommand('grep -R foo .'), null, 'supported grep -R runs');
+  eq(interceptBashCommand('cat > out.txt'), null, 'supported cat redirection runs');
+  eq(interceptBashCommand('cat <<EOF'), null, 'supported cat heredoc reaches the shell parser');
   eq(interceptBashCommand('cat f.txt'), null, 'plain cat read is not intercepted');
   eq(interceptBashCommand('grep foo f.txt'), null, 'non-recursive grep is not intercepted');
   eq(interceptBashCommand('echo hi > f.txt'), null, 'echo redirect (supported) is not intercepted');
@@ -721,7 +721,7 @@ await test('interceptBashCommand redirects sed -i / grep -r / cat > to structure
 
 await test('the shell executor returns the interceptor hint instead of running the command', async () => {
   const exec = makeShellExecutor(freshShell());
-  const out = await exec('shell', { command: 'sed -i s/a/b/ f.txt' });
+  const out = await exec('shell', { command: 'perl -i -pe s/a/b/ f.txt' });
   assert(/edit/.test(out), `hint returned: ${out}`);
 });
 

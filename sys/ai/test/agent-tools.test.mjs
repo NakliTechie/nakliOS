@@ -135,7 +135,7 @@ await test('an intercepted command reports NO exit code (lastCode would be stale
   const { exec } = fresh();
   // interceptBashCommand redirects this to the edit tool without ever calling
   // shell.feed, so shell.lastCode still holds some earlier command's result.
-  const out = await exec('shell', { command: 'sed -i s/a/b/ f.txt' });
+  const out = await exec('shell', { command: 'perl -i -pe s/a/b/ f.txt' });
   assert(/edit` tool/.test(out), `redirected: ${out}`);
   assert(!/\[exit /.test(out), `no exit code invented for an unrun command: ${out}`);
 });

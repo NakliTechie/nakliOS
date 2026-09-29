@@ -1,8 +1,8 @@
 // N1 (2026-09-12): the run assembly is ONE module the app imports and the beds call. Two claims,
 // each checked against something outside the module:
 //   1. bytes — the prompt, tool list, budgets and re-loop texts the module builds equal what the
-//      last inline app (e870f0b) sent, frozen in sys/ai/test/run-assembly-e870f0b.json. A
-//      deliberate prompt change updates the fixture with a reason; an accidental one goes red.
+//      last inline app (e870f0b) sent, frozen in sys/ai/test/run-assembly-e870f0b.json, except
+//      B12's two explicitly pinned prompt-span changes. The historical JSON stays unchanged.
 //   2. wiring — the app's run actually goes through the module (systemMessage / runToolset /
 //      driveRun with the recorder), and driveRun records every loop the way the app used to.
 import assert from 'node:assert/strict';
@@ -19,6 +19,24 @@ import { parseHooks } from '../sys/ai/hooks.mjs';
 import { createRunRecorder } from '../sys/history/run-record.mjs';
 
 const fixture = JSON.parse(await readFile(new URL('../sys/ai/test/run-assembly-e870f0b.json', import.meta.url), 'utf8'));
+// B12 intentionally advertises the implemented Unix surface and supported batch edits.
+// Independent literal replacements preserve exact comparison outside these two authorized spans.
+// Never derive expected replacement bytes from current SYSTEM_HEAD or renderProcedural().
+const HISTORICAL_SHELL_SPAN = 'shell (a CURATED bash-like shell, not coreutils: ls cat grep rg sed awk find head tail wc sort uniq cut tr test git python, with pipes, && || ; > >> < and globs. Each builtin implements a documented subset and REFUSES an unsupported flag rather than ignoring it — run `help` to see what each one supports. No loops, subshells, command substitution or heredocs; use python for scripting). ';
+const B12_SHELL_SPAN = 'shell (a CURATED bash-like workspace shell with pipes, separate stdout/stderr, redirects, globs, quoted heredocs, bounded loops, subshells, functions and command substitution. It runs governed sed -i edits, recursive grep/rg, find-exec, tar/gzip/zip, jq/yq and fd. SQLite requires an available host-authorized Kiln runtime. Supported commands and syntax run through the shell; read/write/edit/apply_patch remain available for focused changes. Run `help` for exact flags and capability refusals. Background jobs and arbitrary host processes are unavailable. Use python for scripting). ';
+const HISTORICAL_SHELL_GUIDANCE = 'use shell to explore and verify';
+const B12_SHELL_GUIDANCE = 'use shell to explore and verify or perform supported batch edits';
+function replacePinnedSpan(text, before, after, label) {
+  assert.equal(text.split(before).length - 1, 1, `${label}: the historical span occurs exactly once`);
+  return text.replace(before, () => after);
+}
+function expectedB12Prompt(historicalPrompt, mode) {
+  assert.equal(typeof historicalPrompt, 'string', `${mode}: historical prompt remains a string`);
+  const shellUpdated = replacePinnedSpan(historicalPrompt, HISTORICAL_SHELL_SPAN, B12_SHELL_SPAN, `${mode}: shell capability`);
+  return replacePinnedSpan(shellUpdated, HISTORICAL_SHELL_GUIDANCE, B12_SHELL_GUIDANCE, `${mode}: shell procedural clause`);
+}
+const expectedPrompts = Object.fromEntries(['code', 'plan', 'ask'].map((mode) =>
+  [mode, expectedB12Prompt(fixture.prompts[mode], mode)]));
 const anvil = await readFile(new URL('../apps/anvil/index.html', import.meta.url), 'utf8');
 const runTask = anvil.slice(anvil.indexOf('async function runTask(t, text){'));
 assert.ok(runTask.length > 1000, 'runTask found');
@@ -27,11 +45,11 @@ const ok = (label) => { n++; };
 
 // ── 1. bytes ──────────────────────────────────────────────────────────────────
 for (const mode of ['code', 'plan', 'ask']) {
-  assert.equal(systemMessage({ mode }).content, fixture.prompts[mode], `${mode}: the system message is byte-identical to the inline app's`);
+  assert.equal(systemMessage({ mode }).content, expectedPrompts[mode], `${mode}: the system message differs from the historical prompt only by B12's two approved spans`);
   assert.equal(systemMessage({ mode }).role, 'system');
 }
 assert.equal(systemPrompt(), SYSTEM_HEAD + renderProcedural() + SYSTEM_TAIL, 'systemPrompt is head + prior + tail, and nothing else');
-assert.equal(systemMessage({ mode: 'code', extra: ' X' }).content, fixture.prompts.code + ' X', 'extra goes at the very end');
+assert.equal(systemMessage({ mode: 'code', extra: ' X' }).content, expectedPrompts.code + ' X', 'extra goes at the very end');
 assert.equal(LESSON_NOTE, ' Memory: ' + LESSON_CONTRACT, 'the lesson note is built from the contract, not a paraphrase');
 assert.ok(!systemMessage({ mode: 'plan' }).content.includes(LESSON_CONTRACT), 'plan mode carries no lesson note (no remember tool)');
 assert.ok(!systemMessage({ mode: 'ask' }).content.includes(LESSON_CONTRACT), 'ask mode carries no lesson note');
@@ -487,4 +505,4 @@ console.log('run-assembly: A4 readiness == the toolset in every mode; A2 episode
   const src = await (await import('node:fs/promises')).readFile(new URL('../sys/ai/run-assembly.mjs', import.meta.url), 'utf8');
   assert.match(src, /runAgentLoop\(\{ messages, tools, infer, executeTool, \.\.\.budget, signal, verify, onEvent: onLoop, steer, compact \}\)/, 'the loop gets compact');
 }
-console.log(`run-assembly: ${n} groups green — prompt bytes, tool list, budgets and texts equal e870f0b; driveRun records every loop; the app is wired through the module`);
+console.log(`run-assembly: ${n} groups green — prompt bytes match e870f0b plus two approved B12 spans; tool list, budgets and other texts match e870f0b; driveRun records every loop; the app is wired through the module`);
