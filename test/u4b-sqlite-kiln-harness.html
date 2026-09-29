@@ -108,7 +108,7 @@ for name in ('fetch', 'Request', 'WebSocket'):
         getattr(js, name)('http://127.0.0.1:8876/forbidden-sqlite-egress')
         blocked.append(name + ':LEAK')
     except Exception as error:
-        blocked.append(name + (':BLOCKED' if 'network access is disabled in Kiln' in str(error) else ':WRONG_ERROR'))
+        blocked.append(name + (':BLOCKED' if 'network access is disabled in Kiln' in str(error) else ':WRONG_ERROR[' + type(error).__name__ + ':' + str(error) + ']'))
 print(','.join(blocked))`;
     const r = await kiln.exec('b10-network-after-sqlite', query);
     equal(r.status, 'ok', text(r.stderr || r.traceback || 'network check failed'));
