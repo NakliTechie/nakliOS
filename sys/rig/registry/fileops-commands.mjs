@@ -55,11 +55,11 @@ export function buildFileopsCommands(fs) {
       description: 'Read a file within the mount. Returns a Uint8Array by default; pass {encoding} (e.g. "utf-8") for text. ENOENT if absent, EISDIR for a directory.',
       inputSchema: {
         type: 'object',
-        properties: { path: PATH, encoding: { type: 'string', description: 'e.g. "utf-8"; omit for raw bytes.' } },
+        properties: { path: PATH, encoding: { type: 'string', description: 'e.g. "utf-8"; omit for raw bytes.' }, maxBytes: { type: 'integer', minimum: 0, description: 'Reject oversized reads before allocating content; unsupported storage returns ENOTSUP.' } },
         required: ['path'], additionalProperties: false,
       },
       returnSchema: RESULT_READ, destructive: false, scope: 'fs:read', annotations: RO,
-      run: (i) => fs.read(i.path, { encoding: i.encoding }),
+      run: (i) => fs.read(i.path, { encoding: i.encoding, maxBytes: i.maxBytes }),
     },
     {
       name: 'fs.write',

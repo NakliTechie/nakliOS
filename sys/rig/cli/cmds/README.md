@@ -1,10 +1,10 @@
 # Shell command modules
 
-U0 provides the shared foundation. U1a extends the command flags. U1b adds sed:
+U0 provides the shared foundation. U1a extends the command flags. U1b and U1c add sed and awk:
 
 | Module | Commands |
 | --- | --- |
-| `builtins.mjs` | Shell state, discovery, chmod, existing awk subset |
+| `builtins.mjs` | Shell state, discovery and chmod |
 | `core.mjs` | Byte-preserving cat, display flags, and tee append |
 | `files.mjs` | touch, mkdir, stat, mv, recursive cp and no-clobber transfers |
 | `list.mjs` | Directory selection, classification and ordering |
@@ -12,6 +12,7 @@ U0 provides the shared foundation. U1a extends the command flags. U1b adds sed:
 | `search.mjs` | Indexed recursive grep/rg and recursive diffs |
 | `utility.mjs` | env, xargs, test, basename, dirname, which, sleep |
 | `sed.mjs` | U1b stream editing, addresses, hold space, branching and governed in-place edits |
+| `awk.mjs` | U1c records, patterns, expressions, arrays, functions and governed file streams |
 
 The language remains unchanged until U3. Agent interceptors for recursive grep,
 in-place editors and heredoc writes remain unchanged until the agent migration.
@@ -28,6 +29,8 @@ fail-closed permission-rule path when an owner sets shell deny/ask rules.
 - Use the `createIO` context from `../io.mjs` for filesystem access. Paths
   resolve against the shell's current directory. Grant checks, staging, and
   the operation log remain in the face. Failures throw `IOFailure`.
+  `readBytes(path, {maxBytes})` requests a bounded read before content allocation.
+  Storage without bounded-read support returns `ENOTSUP` before metadata reads.
   `io.invoke` accepts registry-shaped inputs for indexed search. It passes through
   the same grant/staging boundary; callers resolve its paths explicitly.
 - Call `io.run(argv, stdin)` for a nested command. Arguments are already
@@ -88,3 +91,41 @@ In-place edits compute a file's replacement before writing it.
 An accepted backup write can remain if a later edit is cancelled or refused.
 Writes retain the backend's existing atomicity guarantees; sed adds no transaction
 across files or independent write destinations.
+
+## Awk
+
+`awk` accepts `-F`, repeated `-v` assignments, and repeated `-f` script files.
+Programs support patterns, ranges, `BEGIN`/`END`, expressions, fields, arrays,
+functions, loops, `print`/`printf`, builtins, and `getline`.
+Script files and data files resolve against the shell's current directory.
+`-F` and `-v` assignments apply in argument order before `BEGIN`.
+Operand assignments take effect during input traversal.
+
+Strings and regular expressions use byte-oriented C-locale semantics.
+`ENVIRON` contains the shell's virtual variables. It never reads the host process environment.
+`ARGC` and `ARGV` expose the command's operands and govern subsequent file traversal.
+Field assignments rebuild `$0` through `OFS`; assigning `$0` rebuilds fields.
+Paragraph records follow GNU/Unix field splitting: an additional newline separator applies only to single-character `FS`.
+Empty `FS`, regex `RS`, and embedded NUL preservation are explicit extensions.
+At EOF, `getline` returns zero and retains its target's previous value.
+
+File-directed `getline`, output redirection, and `close` use governed I/O.
+Streams use literal filename strings as their identities, including for `close`.
+The first `>` opening truncates its file. Subsequent writes append to that open stream.
+Closing a stream permits a later `>` opening to truncate again.
+`>>` preserves existing content and requires read access when that content exists.
+Program validation precedes execution and file mutations.
+
+The interpreter bounds total input at 64 MiB and programs at 256 KiB.
+File reads require bounded-read support: Memory, FSA/OPFS, and supported overlays provide it.
+The current Crate adapter refuses these reads because its metadata fallback loads whole files.
+Output, individual buffers, aggregate array storage, and aggregate scalar storage each have 16 MiB limits.
+It permits 262,144 records, 100,000 fields or array entries, 64 open streams, and 128 function calls of recursion.
+Execution and regex matching share a one-million-step budget.
+Floating-point format precision above 100 fails explicitly.
+Unsigned integer formats use 64-bit wrapping.
+Long-running loops yield so Stop can cancel the current invocation.
+`system()` and command pipes fail explicitly because this runtime cannot start processes.
+File stream operations honor grants and the registry's existing confirmation policy.
+The default `fs.write` executes immediately; a registry marking writes destructive requires confirmation before each write.
+The interpreter awaits those proposals and preserves Stop while suspended.
