@@ -1,0 +1,928 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "repository": "https://github.com/NakliTechie/nakliOS",
+    "commit": "102c6437bbce3020fe6542151e48c4274a2b401f"
+  },
+  "entrypoints": [
+    "sys/rig/agent/index.mjs",
+    "sys/rig/cli/shell.mjs",
+    "sys/rig/fileops/index.mjs",
+    "sys/rig/git/git-core.mjs",
+    "sys/rig/registry/index.mjs"
+  ],
+  "modules": [
+    {
+      "path": "sys/kiln/js-runner.mjs",
+      "sha256": "7f559db670805c0f0caa9daf7498b797820a7cf43f3eab6ba48f9749a4599c31",
+      "bytes": 16297,
+      "imports": []
+    },
+    {
+      "path": "sys/rig/agent/agent-face.mjs",
+      "sha256": "e725217ed3bd6b0cc7e7e88be51eb998df9e06a8c380d984eabe97deb47cd846",
+      "bytes": 7653,
+      "imports": []
+    },
+    {
+      "path": "sys/rig/agent/grant.mjs",
+      "sha256": "6550b688c1f331a88e63b9206859f7279d895cdef137d40ac10b1579e87c999e",
+      "bytes": 3846,
+      "imports": [
+        "sys/rig/fileops/pathguard.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/agent/index.mjs",
+      "sha256": "7ee3afd77b39504eaa68fe71ef0ca39c84a57252392d2e88234c55cb760c405e",
+      "bytes": 552,
+      "imports": [
+        "sys/rig/agent/agent-face.mjs",
+        "sys/rig/agent/grant.mjs",
+        "sys/rig/agent/oplog.mjs",
+        "sys/rig/agent/window-rig.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/agent/oplog.mjs",
+      "sha256": "7916d99333fb20cd1375a4caf36bcd2d49fa46b76e5efeea4f95a0f18b05502d",
+      "bytes": 3210,
+      "imports": []
+    },
+    {
+      "path": "sys/rig/agent/window-rig.mjs",
+      "sha256": "0109cb2821bd5a73ed8893c90eefd4e33978e2ab472a8ed6b735cabea7fcde45",
+      "bytes": 1364,
+      "imports": []
+    },
+    {
+      "path": "sys/rig/cli/args.mjs",
+      "sha256": "0060037e63c7e6f70ef2dbbe64524e13cd4198b38abe0feaa89d49337b6781d7",
+      "bytes": 5755,
+      "imports": []
+    },
+    {
+      "path": "sys/rig/cli/cmds/archive-common.mjs",
+      "sha256": "084b2dd9bd50429345324e045fbdb98e3b39b4ce9dd0623d010fcbf6e07c2669",
+      "bytes": 2981,
+      "imports": [
+        "sys/rig/cli/args.mjs",
+        "sys/rig/cli/cmds/u2-common.mjs",
+        "sys/rig/cli/io.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/archive-compression.mjs",
+      "sha256": "1469dada97f4946a4c6e2052bd7b67fe3706a149d56c8fba04c1c3e5020d16ff",
+      "bytes": 10032,
+      "imports": [
+        "sys/rig/cli/cmds/archive-common.mjs",
+        "sys/rig/cli/cmds/digest-algorithms.mjs",
+        "sys/rig/cli/execution.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/archive-files.mjs",
+      "sha256": "39fd4a379bf220b1483e6da6e150c0b18db7f3fcd52842af8483f2dd04ebc8ac",
+      "bytes": 8878,
+      "imports": [
+        "sys/rig/cli/cmds/find-match.mjs",
+        "sys/rig/cli/cmds/path-resolution.mjs",
+        "sys/rig/cli/cmds/u2-common.mjs",
+        "sys/rig/cli/io.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/archive-tar.mjs",
+      "sha256": "ba76acbfab254103357238401a8a8b4b4d5bd471016a519fbc74a62a5f339fa2",
+      "bytes": 10665,
+      "imports": [
+        "sys/rig/cli/args.mjs",
+        "sys/rig/cli/cmds/archive-common.mjs",
+        "sys/rig/cli/cmds/archive-files.mjs",
+        "sys/rig/cli/cmds/u2-common.mjs",
+        "sys/rig/cli/io.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/archive-zip.mjs",
+      "sha256": "ab4492b891991b4796c394bf45b5aa12db31da51b34a8d5e42071d5984f80d01",
+      "bytes": 8965,
+      "imports": [
+        "sys/rig/cli/cmds/archive-common.mjs",
+        "sys/rig/cli/cmds/archive-compression.mjs",
+        "sys/rig/cli/cmds/archive-files.mjs",
+        "sys/rig/cli/cmds/digest-algorithms.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/archives.mjs",
+      "sha256": "75abdd9c8d483936b573bf780c53a7c9fd4eeb44a96c9b5bd558d552f86acf15",
+      "bytes": 10890,
+      "imports": [
+        "sys/rig/cli/args.mjs",
+        "sys/rig/cli/cmds/archive-common.mjs",
+        "sys/rig/cli/cmds/archive-compression.mjs",
+        "sys/rig/cli/cmds/archive-files.mjs",
+        "sys/rig/cli/cmds/archive-tar.mjs",
+        "sys/rig/cli/cmds/archive-zip.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/awk-format.mjs",
+      "sha256": "5cf40fb01fc73935d995b8bc612ed70369d6d7a1b1f59c99b57bb5bedb023565",
+      "bytes": 6509,
+      "imports": [
+        "sys/rig/cli/args.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/awk-parser.mjs",
+      "sha256": "820da571833a1c47bea386f7e3ac6d87f7eff99b578cec592c64b0dd99e844d2",
+      "bytes": 22518,
+      "imports": [
+        "sys/rig/cli/args.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/awk-regex.mjs",
+      "sha256": "9a62f01211ef08f213ecdeb02bd1a1043dc4f24d34d46c5aaadc1ff13ea76cd6",
+      "bytes": 10871,
+      "imports": [
+        "sys/rig/cli/args.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/awk-runtime.mjs",
+      "sha256": "4b2ab5c76aee0e6e5bf6cb4c6ce6a3bc0e6faabae91bb3fce1d0aebb7eb2c074",
+      "bytes": 37845,
+      "imports": [
+        "sys/rig/cli/args.mjs",
+        "sys/rig/cli/cmds/awk-format.mjs",
+        "sys/rig/cli/cmds/awk-regex.mjs",
+        "sys/rig/cli/execution.mjs",
+        "sys/rig/cli/io.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/awk.mjs",
+      "sha256": "77c6304e6ecc1588aa2ada88c5a31dc409caed0cac90a83e2766916aad637698",
+      "bytes": 2851,
+      "imports": [
+        "sys/rig/cli/args.mjs",
+        "sys/rig/cli/cmds/awk-parser.mjs",
+        "sys/rig/cli/cmds/awk-runtime.mjs",
+        "sys/rig/cli/execution.mjs",
+        "sys/rig/cli/io.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/bc-math.mjs",
+      "sha256": "359054b8dedeea95433562b64f162f852f06072f76ad53513e3084079c108d55",
+      "bytes": 12420,
+      "imports": [
+        "sys/rig/cli/args.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/bc-parser.mjs",
+      "sha256": "bbf9b38ee5cf683b8675eb70402e68ec97c2ada3b99318f1cbada234bf07061d",
+      "bytes": 14873,
+      "imports": [
+        "sys/rig/cli/args.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/bc-runtime.mjs",
+      "sha256": "8057cd36ded7c46ef8a08b8f9999e8a25397b08bea7e8168678a82bddc0f19b9",
+      "bytes": 17440,
+      "imports": [
+        "sys/rig/cli/args.mjs",
+        "sys/rig/cli/cmds/bc-math.mjs",
+        "sys/rig/cli/cmds/u2-decimal.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/bc.mjs",
+      "sha256": "223c3bca1fca36e3eaef38972fcadecf6ef2d160da731c69ff1a8944f3a35903",
+      "bytes": 3199,
+      "imports": [
+        "sys/rig/cli/args.mjs",
+        "sys/rig/cli/cmds/bc-parser.mjs",
+        "sys/rig/cli/cmds/bc-runtime.mjs",
+        "sys/rig/cli/cmds/u2-common.mjs",
+        "sys/rig/cli/io.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/builtins.mjs",
+      "sha256": "3da28e33be7f8a1ab0104f1c68b2212d63a990f1efffcad98416684ff712cc96",
+      "bytes": 7884,
+      "imports": [
+        "sys/rig/cli/cmds/unsupported.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/canonical-input.mjs",
+      "sha256": "92dd6744fb70b26db017b32b5bd471e9550018177d1fc2a54cc7ec09a82d486b",
+      "bytes": 724,
+      "imports": [
+        "sys/rig/cli/cmds/path-resolution.mjs",
+        "sys/rig/cli/cmds/u2-common.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/checksum-manifest.mjs",
+      "sha256": "0dd2065ab3a9eb85660482d2318739edaa776bd47650053b54a58aa294e08a35",
+      "bytes": 3088,
+      "imports": []
+    },
+    {
+      "path": "sys/rig/cli/cmds/checksums.mjs",
+      "sha256": "f8e951d09f203df108b9ae7189ae166d0bf85e1b8659e5aa6f8812c3eea1db91",
+      "bytes": 9991,
+      "imports": [
+        "sys/rig/cli/args.mjs",
+        "sys/rig/cli/cmds/canonical-input.mjs",
+        "sys/rig/cli/cmds/checksum-manifest.mjs",
+        "sys/rig/cli/cmds/digest-algorithms.mjs",
+        "sys/rig/cli/cmds/encoding-codecs.mjs",
+        "sys/rig/cli/cmds/u2-common.mjs",
+        "sys/rig/cli/io.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/core.mjs",
+      "sha256": "abc3d3ab806ade028b61dcb0b80546f4c368a077a82845d7ead510a4208a0c0b",
+      "bytes": 3659,
+      "imports": [
+        "sys/rig/cli/args.mjs",
+        "sys/rig/cli/command-streams.mjs",
+        "sys/rig/cli/io.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/data-common.mjs",
+      "sha256": "31b5f376d2cb2ca06c528bd8174d1375d80186fd13fc336d1bc58115c980d784",
+      "bytes": 6088,
+      "imports": [
+        "sys/rig/cli/cmds/canonical-input.mjs",
+        "sys/rig/cli/cmds/u2-common.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/data.mjs",
+      "sha256": "db15c5c63a32650cef9a7ee7250a11bfe379aa8a77950cb3c9dc2c84896cc14e",
+      "bytes": 7749,
+      "imports": [
+        "sys/rig/cli/cmds/data-common.mjs",
+        "sys/rig/cli/cmds/fd.mjs",
+        "sys/rig/cli/cmds/jq-parser.mjs",
+        "sys/rig/cli/cmds/jq-runtime.mjs",
+        "sys/rig/cli/cmds/sqlite.mjs",
+        "sys/rig/cli/io.mjs",
+        "vendor/js-yaml/js-yaml.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/date-format.mjs",
+      "sha256": "02982aa982d38fae0291871559bc152a9e13513eabdccfe84b1c743f4bee7feb",
+      "bytes": 9423,
+      "imports": [
+        "sys/rig/cli/args.mjs",
+        "sys/rig/cli/cmds/u2-common.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/digest-algorithms.mjs",
+      "sha256": "6280c3873c51c68c8cd1621b6c106669afaadac413bb209c2baaa6c141062828",
+      "bytes": 9461,
+      "imports": [
+        "sys/rig/cli/args.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/encoding-codecs.mjs",
+      "sha256": "7d353188971ce94b2bb3ddc61a8b52836300d14027b92736db0aae898fdd910d",
+      "bytes": 7982,
+      "imports": [
+        "sys/rig/cli/args.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/encodings.mjs",
+      "sha256": "ce364eaa17306905e11a17971db90f5c97ba4b8783d926e923358fc1b7947f53",
+      "bytes": 2335,
+      "imports": [
+        "sys/rig/cli/args.mjs",
+        "sys/rig/cli/cmds/canonical-input.mjs",
+        "sys/rig/cli/cmds/encoding-codecs.mjs",
+        "sys/rig/cli/cmds/u2-common.mjs",
+        "sys/rig/cli/io.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/fd.mjs",
+      "sha256": "a42d25a42b4db2b01d8866e0c57d53973785c660e6c20c338d4bc800a061b299",
+      "bytes": 10434,
+      "imports": [
+        "sys/rig/cli/args.mjs",
+        "sys/rig/cli/cmds/data-common.mjs",
+        "sys/rig/cli/cmds/find-match.mjs",
+        "sys/rig/cli/cmds/path-resolution.mjs",
+        "sys/rig/cli/cmds/u2-common.mjs",
+        "sys/rig/cli/io.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/files.mjs",
+      "sha256": "bfced1193bdf9a67f17d10c94f6156203287c96da306065666c9f9c47b0944c7",
+      "bytes": 8860,
+      "imports": [
+        "sys/rig/cli/args.mjs",
+        "sys/rig/cli/command-streams.mjs",
+        "sys/rig/cli/io.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/find-match.mjs",
+      "sha256": "e5c07c6f861c962fcdab7ae1341021f135dfa0f503706a5ca3806dbb4103715c",
+      "bytes": 13669,
+      "imports": [
+        "sys/rig/cli/args.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/find.mjs",
+      "sha256": "71c5f6af4fa36a3dd8b5af60149c498378dfb43e69f42094e08028548e9ead79",
+      "bytes": 22571,
+      "imports": [
+        "sys/rig/cli/args.mjs",
+        "sys/rig/cli/cmds/find-match.mjs",
+        "sys/rig/cli/command-streams.mjs",
+        "sys/rig/cli/execution.mjs",
+        "sys/rig/cli/io.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/generators.mjs",
+      "sha256": "dd2075b1a9752930b06620e0028268274cdd0cfd640380f3e5326799f50e64b6",
+      "bytes": 3370,
+      "imports": [
+        "sys/rig/cli/args.mjs",
+        "sys/rig/cli/cmds/streams.mjs",
+        "sys/rig/cli/cmds/u2-common.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/inspection.mjs",
+      "sha256": "27b60433ce0b023910aa4ed867d7ca1c5f4578a8f194c79a2c6ddf025bc52a69",
+      "bytes": 27291,
+      "imports": [
+        "sys/rig/cli/args.mjs",
+        "sys/rig/cli/cmds/path-resolution.mjs",
+        "sys/rig/cli/cmds/u2-common.mjs",
+        "sys/rig/cli/io.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/jq-parser.mjs",
+      "sha256": "91e2cd288fa0be874dc079bd8dae377203f9c8b68ea18811abd1e874e29750b8",
+      "bytes": 6169,
+      "imports": [
+        "sys/rig/cli/cmds/data-common.mjs",
+        "sys/rig/cli/cmds/u2-common.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/jq-runtime.mjs",
+      "sha256": "2ff2f81d6d31d522b53b34d4b5dcf3a1ae92b26f320212c2644b529e7449f1bd",
+      "bytes": 9421,
+      "imports": [
+        "sys/rig/cli/cmds/data-common.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/layout.mjs",
+      "sha256": "db5d6497c3839d88a8dcfbef3b0bb5f386a256b3e66e6626e28bff25f63a53b7",
+      "bytes": 31771,
+      "imports": [
+        "sys/rig/cli/args.mjs",
+        "sys/rig/cli/cmds/u2-common.mjs",
+        "sys/rig/cli/io.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/list.mjs",
+      "sha256": "78c00e82e44827e0ae6c83841813d6525152c96565c924021d87a9a8f6959b84",
+      "bytes": 3490,
+      "imports": [
+        "sys/rig/cli/args.mjs",
+        "sys/rig/cli/command-streams.mjs",
+        "sys/rig/cli/io.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/mutation.mjs",
+      "sha256": "43147425632fbf80558248881e3e2cb21c2fad2162c35c20c60f6181ff833c8f",
+      "bytes": 13341,
+      "imports": [
+        "sys/rig/cli/args.mjs",
+        "sys/rig/cli/cmds/u2-common.mjs",
+        "sys/rig/cli/io.mjs",
+        "sys/rig/fileops/mutation-limit.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/numeric.mjs",
+      "sha256": "09b5ef53a4c750b13c5042b154a828e4bbb6fbcba6034803e44304b6d717fdc9",
+      "bytes": 34549,
+      "imports": [
+        "sys/rig/cli/args.mjs",
+        "sys/rig/cli/cmds/records-regex.mjs",
+        "sys/rig/cli/cmds/streams.mjs",
+        "sys/rig/cli/cmds/u2-common.mjs",
+        "sys/rig/cli/cmds/u2-decimal.mjs",
+        "sys/rig/cli/io.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/path-resolution.mjs",
+      "sha256": "1dfb01f089caf9205facc28eb2f00376005884fc28a24819e3816712132fe96f",
+      "bytes": 7255,
+      "imports": [
+        "sys/rig/cli/args.mjs",
+        "sys/rig/cli/cmds/u2-common.mjs",
+        "sys/rig/cli/io.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/paths.mjs",
+      "sha256": "62927750a5ecdba5da535ce4eacf16d094f02b291ba9a36597944fbefd377662",
+      "bytes": 6412,
+      "imports": [
+        "sys/rig/cli/args.mjs",
+        "sys/rig/cli/cmds/path-resolution.mjs",
+        "sys/rig/cli/cmds/u2-common.mjs",
+        "sys/rig/cli/io.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/records-regex.mjs",
+      "sha256": "7aa122f61a76b3d80435a22b7c59e6355609c563ccaac53eba007a627aa77b9a",
+      "bytes": 10559,
+      "imports": [
+        "sys/rig/cli/args.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/records.mjs",
+      "sha256": "83ad82d1cb1b4dc625032dbb091ea811a97f035f5c875087abb60d5f45f97366",
+      "bytes": 25171,
+      "imports": [
+        "sys/rig/cli/args.mjs",
+        "sys/rig/cli/cmds/records-regex.mjs",
+        "sys/rig/cli/cmds/u2-common.mjs",
+        "sys/rig/cli/io.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/runtime.mjs",
+      "sha256": "229fd1ccd0ab1b6288572038f4f2a09b97e8bb1bd2fa99c462f88c80add2e684",
+      "bytes": 8455,
+      "imports": [
+        "sys/rig/cli/args.mjs",
+        "sys/rig/cli/cmds/date-format.mjs",
+        "sys/rig/cli/cmds/path-resolution.mjs",
+        "sys/rig/cli/cmds/u2-common.mjs",
+        "sys/rig/cli/command-streams.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/search.mjs",
+      "sha256": "ed079b35ed09b51b2995446ba6ee9546f809d107e22584a46c5b79269ab2d8cb",
+      "bytes": 22698,
+      "imports": [
+        "sys/rig/cli/args.mjs",
+        "sys/rig/cli/io.mjs",
+        "sys/rig/fileops/patch.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/sed-parser.mjs",
+      "sha256": "d85505b43beb60efa6d94a5d42065fd4010e743684532f18fbc941365bb2cdf5",
+      "bytes": 10244,
+      "imports": [
+        "sys/rig/cli/args.mjs",
+        "sys/rig/cli/cmds/sed-regex.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/sed-regex.mjs",
+      "sha256": "615f6c3d02ab4ed6158bb88b8cb60b30daef066cf7eaeea6a607cb94772ba994",
+      "bytes": 12031,
+      "imports": [
+        "sys/rig/cli/args.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/sed.mjs",
+      "sha256": "b3295018987b468b5f3b3bdd343041686b2287163c3b80df08f900d9b401f2b9",
+      "bytes": 23316,
+      "imports": [
+        "sys/rig/cli/args.mjs",
+        "sys/rig/cli/cmds/sed-parser.mjs",
+        "sys/rig/cli/cmds/sed-regex.mjs",
+        "sys/rig/cli/execution.mjs",
+        "sys/rig/cli/io.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/sqlite-python.mjs",
+      "sha256": "9048ce61916d22805340fc14fcd05050318dcb31a2f40b59c7b73ace61bf0682",
+      "bytes": 8518,
+      "imports": []
+    },
+    {
+      "path": "sys/rig/cli/cmds/sqlite.mjs",
+      "sha256": "571381f4d3bd42a5a5fd6a3461a28cafa604a9edcb5e5dc21170d2f6259b626b",
+      "bytes": 9207,
+      "imports": [
+        "sys/rig/cli/cmds/data-common.mjs",
+        "sys/rig/cli/cmds/path-resolution.mjs",
+        "sys/rig/cli/cmds/sqlite-python.mjs",
+        "sys/rig/cli/cmds/u2-common.mjs",
+        "sys/rig/cli/io.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/streams.mjs",
+      "sha256": "17be6e2b4d8474adc5755e63125ecc2c5083c32b1836a46687fa2332b78fa501",
+      "bytes": 5490,
+      "imports": [
+        "sys/rig/cli/args.mjs",
+        "sys/rig/cli/cmds/text.mjs",
+        "sys/rig/cli/cmds/u2-common.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/text.mjs",
+      "sha256": "530ed8eccb717ddea33c672eb4b46290e31b2c0698f5a662560415d98fcedbb3",
+      "bytes": 31797,
+      "imports": [
+        "sys/rig/cli/args.mjs",
+        "sys/rig/cli/command-streams.mjs",
+        "sys/rig/cli/io.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/u2-common.mjs",
+      "sha256": "291bb98aa1c9230adb70eee8cef418d8616ab19643ab64adf77f6484af87e935",
+      "bytes": 10249,
+      "imports": [
+        "sys/rig/cli/args.mjs",
+        "sys/rig/cli/execution.mjs",
+        "sys/rig/cli/io.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/u2-decimal.mjs",
+      "sha256": "d76152de2a009e2aa4cf0db83b5c671ec851827985e15e38b9f657eb932b099d",
+      "bytes": 13268,
+      "imports": [
+        "sys/rig/cli/args.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/cmds/unsupported.mjs",
+      "sha256": "530f7b455f0ff6dcb97d0576e4c1d3948c7c189d7ed12b46633cfdca1b8e03dc",
+      "bytes": 2425,
+      "imports": []
+    },
+    {
+      "path": "sys/rig/cli/cmds/utility.mjs",
+      "sha256": "88df745ee496f21f554c93ec2616cc539d8093fb2b0a1c91fa9bada58bc2f80d",
+      "bytes": 14016,
+      "imports": [
+        "sys/rig/cli/args.mjs",
+        "sys/rig/cli/cmds/unsupported.mjs",
+        "sys/rig/cli/command-streams.mjs",
+        "sys/rig/cli/execution.mjs",
+        "sys/rig/cli/io.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/command-streams.mjs",
+      "sha256": "c951eb7556fc65ca68debe095befe4f6222710c8df02744c9a3544c6e2e1ea8b",
+      "bytes": 1516,
+      "imports": [
+        "sys/rig/cli/io.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/execution.mjs",
+      "sha256": "66b74c601d621b35ea5af32482d17915bb60d63b1caa4dc36488fcc1c851659b",
+      "bytes": 6245,
+      "imports": [
+        "sys/rig/cli/io.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/io.mjs",
+      "sha256": "396d0db2497179e10d12d59fc9a3094fe8d26f6f816104d70963b4aa47413884",
+      "bytes": 7383,
+      "imports": []
+    },
+    {
+      "path": "sys/rig/cli/language-arithmetic.mjs",
+      "sha256": "ff8c9991a90f020317377dbcfb20916bb6c72c94346764fd450599e4963d458e",
+      "bytes": 7633,
+      "imports": [
+        "sys/rig/cli/language-parser.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/language-parser.mjs",
+      "sha256": "3f20e36b1f271e7c9daf19a57137754bbc237972a3a6922131de379dd6970d47",
+      "bytes": 19675,
+      "imports": [
+        "sys/rig/cli/cmds/u2-common.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/language-pattern.mjs",
+      "sha256": "fc328b59dd6156f14ba7e269c16ecfccc33f2e45a857766d386c43402297bcdc",
+      "bytes": 3817,
+      "imports": [
+        "sys/rig/cli/language-parser.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/language-runtime.mjs",
+      "sha256": "1844c6e290fb999e3a8289cd5bf58ceeaab29fcd8b689db985d5b2ec959707cf",
+      "bytes": 27102,
+      "imports": [
+        "sys/rig/cli/cmds/path-resolution.mjs",
+        "sys/rig/cli/cmds/streams.mjs",
+        "sys/rig/cli/cmds/u2-common.mjs",
+        "sys/rig/cli/command-streams.mjs",
+        "sys/rig/cli/execution.mjs",
+        "sys/rig/cli/io.mjs",
+        "sys/rig/cli/language-parser.mjs",
+        "sys/rig/cli/language-words.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/language-words.mjs",
+      "sha256": "15ce1b724e952b082ec02545ed384e05a913f536d7492520bdb3dc3e7ec71cab",
+      "bytes": 12218,
+      "imports": [
+        "sys/rig/cli/io.mjs",
+        "sys/rig/cli/language-arithmetic.mjs",
+        "sys/rig/cli/language-parser.mjs",
+        "sys/rig/cli/language-pattern.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/cli/shell.mjs",
+      "sha256": "f263726119ef75d5d822ebd6b8ad3626d82492e79cadaa51a42892c16bc9d883",
+      "bytes": 57845,
+      "imports": [
+        "sys/kiln/js-runner.mjs",
+        "sys/rig/cli/args.mjs",
+        "sys/rig/cli/cmds/archives.mjs",
+        "sys/rig/cli/cmds/awk.mjs",
+        "sys/rig/cli/cmds/bc.mjs",
+        "sys/rig/cli/cmds/builtins.mjs",
+        "sys/rig/cli/cmds/checksums.mjs",
+        "sys/rig/cli/cmds/core.mjs",
+        "sys/rig/cli/cmds/data.mjs",
+        "sys/rig/cli/cmds/encodings.mjs",
+        "sys/rig/cli/cmds/files.mjs",
+        "sys/rig/cli/cmds/find.mjs",
+        "sys/rig/cli/cmds/generators.mjs",
+        "sys/rig/cli/cmds/inspection.mjs",
+        "sys/rig/cli/cmds/layout.mjs",
+        "sys/rig/cli/cmds/list.mjs",
+        "sys/rig/cli/cmds/mutation.mjs",
+        "sys/rig/cli/cmds/numeric.mjs",
+        "sys/rig/cli/cmds/paths.mjs",
+        "sys/rig/cli/cmds/records.mjs",
+        "sys/rig/cli/cmds/runtime.mjs",
+        "sys/rig/cli/cmds/search.mjs",
+        "sys/rig/cli/cmds/sed.mjs",
+        "sys/rig/cli/cmds/streams.mjs",
+        "sys/rig/cli/cmds/text.mjs",
+        "sys/rig/cli/cmds/unsupported.mjs",
+        "sys/rig/cli/cmds/utility.mjs",
+        "sys/rig/cli/command-streams.mjs",
+        "sys/rig/cli/execution.mjs",
+        "sys/rig/cli/io.mjs",
+        "sys/rig/cli/language-parser.mjs",
+        "sys/rig/cli/language-runtime.mjs",
+        "sys/rig/fileops/patch.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/fileops/fileops.mjs",
+      "sha256": "4ca4aa328d1f29018dea17702c8e477f34d3a82f15d076c004b04a699caec81d",
+      "bytes": 61508,
+      "imports": [
+        "sys/rig/fileops/mutation-limit.mjs",
+        "sys/rig/fileops/patch.mjs",
+        "sys/rig/fileops/pathguard.mjs",
+        "sys/rig/fileops/read-limit.mjs",
+        "sys/rig/fileops/trigram.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/fileops/index.mjs",
+      "sha256": "3eb2956e57536a199659bbcf4db60f23ef41059f5c7bda8961386381d71111f8",
+      "bytes": 531,
+      "imports": [
+        "sys/rig/fileops/fileops.mjs",
+        "sys/rig/fileops/memory-backend.mjs",
+        "sys/rig/fileops/patch.mjs",
+        "sys/rig/fileops/pathguard.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/fileops/memory-backend.mjs",
+      "sha256": "e8d85ac7ae65510edcab915031674fa1a732ff825b2b49fc5827704091b5d5f9",
+      "bytes": 10303,
+      "imports": [
+        "sys/rig/fileops/mutation-limit.mjs",
+        "sys/rig/fileops/read-limit.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/fileops/mutation-limit.mjs",
+      "sha256": "e26698d2d1346c460cef096bb7e71c0df1d7a24947cd3ac6ff1c848d25461cc3",
+      "bytes": 2694,
+      "imports": []
+    },
+    {
+      "path": "sys/rig/fileops/patch.mjs",
+      "sha256": "b55f3d3ddce32118f676f31a174536297f717a3cb70708350031fa53538640a1",
+      "bytes": 12470,
+      "imports": []
+    },
+    {
+      "path": "sys/rig/fileops/pathguard.mjs",
+      "sha256": "11ab13f34925411641ea9e7fe7abffac0c3c119302b367f5bab007d7bc8d75d0",
+      "bytes": 3063,
+      "imports": []
+    },
+    {
+      "path": "sys/rig/fileops/read-limit.mjs",
+      "sha256": "72be0b307ff384d03665f4e482a1afee74c4651d493176f83b4e30e3157eac13",
+      "bytes": 1590,
+      "imports": []
+    },
+    {
+      "path": "sys/rig/fileops/trigram.mjs",
+      "sha256": "bda6037ca30df69828bf9243064bdac5cbbc1364164be2b78838cfc9d477507d",
+      "bytes": 21082,
+      "imports": []
+    },
+    {
+      "path": "sys/rig/git/fs-adapter.mjs",
+      "sha256": "754759c3b4c3e9ce47e235e49cbb85c5f4aae9ea4a0c9177bae2177926086ef1",
+      "bytes": 6216,
+      "imports": []
+    },
+    {
+      "path": "sys/rig/git/git-core.mjs",
+      "sha256": "e9cf47166ff466bbe07e33018a565c260bdf78de57d796ed03026f2b7beb79a8",
+      "bytes": 10471,
+      "imports": [
+        "sys/rig/git/fs-adapter.mjs",
+        "vendor/isomorphic-git/1.40.0/isomorphic-git.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/registry/fileops-commands.mjs",
+      "sha256": "d9f86881548949d924dd6a88d413cff52b4ce35bd3c09cf7cf8e8415d1777bc7",
+      "bytes": 15819,
+      "imports": []
+    },
+    {
+      "path": "sys/rig/registry/git-commands.mjs",
+      "sha256": "65bf17fbda618e20a520f6a65ff94f8a5cdacd4ba88fd65d857491cce20537d3",
+      "bytes": 11244,
+      "imports": []
+    },
+    {
+      "path": "sys/rig/registry/index.mjs",
+      "sha256": "029aa0c48c766dac996907258cd9049f173a2ebe021fd57e69297deedb352e69",
+      "bytes": 1380,
+      "imports": [
+        "sys/rig/registry/fileops-commands.mjs",
+        "sys/rig/registry/git-commands.mjs",
+        "sys/rig/registry/registry.mjs"
+      ]
+    },
+    {
+      "path": "sys/rig/registry/registry.mjs",
+      "sha256": "19378bd3450f7b88a521bd9f0074744f0446ce26e220954bd96088eed77774fe",
+      "bytes": 6078,
+      "imports": []
+    },
+    {
+      "path": "vendor/isomorphic-git/1.40.0/isomorphic-git.mjs",
+      "sha256": "2a814cf84cb6f14d29c0a5727843738e2a33de3fdef341e5285d31c190e7b898",
+      "bytes": 608158,
+      "imports": []
+    },
+    {
+      "path": "vendor/js-yaml/js-yaml.mjs",
+      "sha256": "86ac62558d7cd103ff5f5a10a885ebecc04c23ca2f1487522864b49221edc25c",
+      "bytes": 128860,
+      "imports": []
+    }
+  ],
+  "supportingFiles": [
+    {
+      "path": "LICENSE",
+      "sha256": "605e510d14e21b7519f4b970c483bf033c3b0654a13b974eb16f4536aff3e40d",
+      "bytes": 1068
+    },
+    {
+      "path": "vendor/isomorphic-git/1.40.0/LICENSE.md",
+      "sha256": "b916888fb16893c3a1df138543f994b96bb6892d74b6777c3a080d9cd2520c48",
+      "bytes": 1073
+    },
+    {
+      "path": "vendor/isomorphic-git/1.40.0/README.md",
+      "sha256": "661ee49aee05a39bf7e75e4b0b8641dbff0df88c23dcb6f80af813b01cd7d637",
+      "bytes": 955
+    },
+    {
+      "path": "vendor/js-yaml/LICENSE",
+      "sha256": "a07bc24468b9654ce76a547d47a2db282d07733b715db4c73a98bd63961f9550",
+      "bytes": 1084
+    },
+    {
+      "path": "vendor/js-yaml/PROVENANCE.json",
+      "sha256": "0fbc99a1baddbd5ba3ab4ca6ac0faffd57f279bd6d7b998e5c647e19fbefb2b0",
+      "bytes": 438
+    }
+  ],
+  "optionalRuntime": [
+    {
+      "id": "kiln-python-sqlite",
+      "localEntrypoints": [
+        "sys/kiln/index.mjs",
+        "sys/kiln/worker-runtime.mjs",
+        "sys/kiln/worker.mjs",
+        "sys/kiln/main-thread-runtime.mjs"
+      ],
+      "requirements": [
+        "Copy the separate static closure of the selected adapter from this same commit; core modules alone do not supply Kiln.",
+        "Inject kiln into createShell. Authorize runtime downloads in the embedding application; createKiln requires consent().",
+        "Worker mode requires module Workers and cross-origin isolation with SharedArrayBuffer for synchronous interruption.",
+        "The main-thread adapter needs application-controlled invocation consent and cannot interrupt synchronous general Python.",
+        "SQLite uses a private interpreter, separate from general Python; retain SQL work/output limits and bounded initialization.",
+        "Retain the generated Rig bridge, grant enforcement and staging for workspace Python access.",
+        "Apply an embedding CSP; JavaScript network stubs do not block dynamic import()."
+      ],
+      "externalAssets": [
+        {
+          "baseURL": "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/",
+          "version": "0.26.4",
+          "approximateBytes": 13631488,
+          "workerEntrySHA256": "7f24c6655a79eacf0061d3d4e6a60dc0b1938812d15c52d7ff8b37d9e0689e51",
+          "integrity": "Worker pins pyodide.mjs; main-thread loader imports the fixed version. Other runtime assets rely on CDN version and pyodide-lock.json package digests."
+        }
+      ]
+    },
+    {
+      "id": "javascript-gate",
+      "localEntrypoints": [
+        "sys/kiln/js-runner.mjs"
+      ],
+      "requirements": [
+        "The helper is already in the core closure; execution remains optional.",
+        "Inject js.makeModuleURL(source) and js.spawn(entryURL), plus URL cleanup when supplied by the host.",
+        "Use a disposable Worker with termination and message/error callbacks. Retain its grant-scoped read callback and deadline.",
+        "This is a workspace ES-module evaluator with limited assert/test shims, not the Node runtime or npm.",
+        "Embedding CSP remains necessary for dynamic-import egress containment."
+      ],
+      "externalAssets": []
+    },
+    {
+      "id": "persistent-browser-storage",
+      "localEntrypoints": [
+        "sys/rig/fileops/opfs.mjs",
+        "sys/rig/fileops/fsa-backend.mjs"
+      ],
+      "requirements": [
+        "Copy the chosen backend static closure from this pin and inject it into createFileops.",
+        "OPFS requires a secure browser origin with navigator.storage.getDirectory().",
+        "Folder storage requires an owner-selected FileSystemDirectoryHandle and maintained browser permissions.",
+        "Neither backend is necessary for the browser-free MemoryBackend portability check."
+      ],
+      "externalAssets": []
+    }
+  ]
+}

@@ -161,14 +161,15 @@ try {
       const url = (isolated ? isolatedOrigin : plainOrigin) + route + (isolated ? '' : '?mode=main');
       console.log(`Browser SQLite ${suite.harness}: ${isolated ? 'Worker + main' : 'main without isolation'}`);
       const captured = await visit(url);
+      reports.push({ url, ...captured });
       assertHarnessResult(captured.report, { ...suite, expectedByMode, isolated });
       assertHarnessNetwork(captured.externalRequests);
       assert.deepEqual(captured.errors, [], 'no uncaught browser exceptions');
-      reports.push({ url, ...captured });
       console.log(`PASS ${captured.report.passed}/${captured.report.total}`);
     }
     for (const query of ['?mode=workre', '?mode=', '?mode=main&mode=worker']) {
       const captured = await visit(isolatedOrigin + route + query), report = captured.report;
+      reports.push({ url: isolatedOrigin + route + query, ...captured });
       assert.equal(report.ok, false); assert.equal(report.passed, 0); assert.equal(report.failed, 1);
       assert.equal(report.expectedTotal, 0); assert.equal(report.total, 1);
       assert.equal(report.results.length, 1); assert.equal(report.results[0].ok, false);
@@ -176,10 +177,13 @@ try {
       assert.deepEqual(report.selectedModes, []);
       assert.deepEqual(captured.externalRequests, [], 'invalid mode must not initialize a CDN runtime');
       assert.throws(() => assertHarnessResult(report, { ...suite, isolated: true }));
-      reports.push({ url: isolatedOrigin + route + query, ...captured });
     }
   }
   console.log(JSON.stringify({ ok: true, runtimeAssertions: 86, invalidModeChecks: 12, reports }, null, 2));
+} catch (error) {
+  // Retain caught browser assertion details before the original validation error exits CI.
+  console.error(JSON.stringify({ ok: false, error: String(error?.stack || error), reports }, null, 2));
+  throw error;
 } finally {
   if (connection) {
     await connection.send('Browser.close').catch(() => {});

@@ -13,10 +13,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+
+      - name: Verify immutable Unix portability closure without browser globals
+        run: node --experimental-vm-modules scripts/test-unix-portability.mjs 102c6437bbce3020fe6542151e48c4274a2b401f
 
       - name: Verify vendored Crate manifest security
         run: node scripts/test-crate-manifest.mjs
