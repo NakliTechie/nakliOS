@@ -381,6 +381,15 @@ jobs:
       - name: Verify bounded byte producers, head cleanup and virtual environment
         run: node sys/rig/cli/test/u2a-streams.test.mjs
 
+      - name: Verify U2b filesystem commands, capabilities, grants and cancellation
+        run: node sys/rig/cli/test/u2b-filesystem.test.mjs
+
+      - name: Verify exclusive creation, typed deletion and bounded truncation backends
+        run: node sys/rig/fileops/test/atomic-mutation.test.mjs
+
+      - name: Verify filesystem mutation command bounds and option handling
+        run: node sys/rig/cli/test/mutation.test.mjs
+
       - name: Verify literal shell operators and escaped arguments
         run: node sys/rig/cli/test/literal-operators.test.mjs
 

@@ -1,6 +1,6 @@
 # Shell command modules
 
-U0 provides the shared foundation. U1 adds command flags, sed, awk, and find. U2a adds text and numeric utilities:
+U0 provides the shared foundation. U1 adds command flags, sed, awk, and find. U2 adds text, numeric, filesystem and inspection utilities:
 
 | Module | Commands |
 | --- | --- |
@@ -19,6 +19,9 @@ U0 provides the shared foundation. U1 adds command flags, sed, awk, and find. U2
 | `numeric.mjs` | U2a seq, shuf, tsort, expr, numfmt, factor |
 | `bc.mjs` | U2a exact decimal calculator language and math library |
 | `generators.mjs` | U2a virtual printenv and bounded yes producer |
+| `paths.mjs`, `path-resolution.mjs` | U2b governed readlink and realpath; explicit ln/link refusals |
+| `mutation.mjs` | U2b rmdir, mktemp, truncate and unlink |
+| `inspection.mjs` | U2b du, tree, file, strings and cmp |
 | `u2-common.mjs`, `u2-decimal.mjs`, `streams.mjs` | Bounded byte I/O, exact arithmetic, and producer cleanup |
 
 Quoted and escaped operator arguments now remain literal. The full language expansion remains scheduled for U3. Agent interceptors for recursive grep,
@@ -41,6 +44,9 @@ safely match quoted or escaped verbs yet, so those also fail closed.
   the operation log remain in the face. Failures throw `IOFailure`.
   `readBytes(path, {maxBytes})` requests a bounded read before content allocation.
   Storage without bounded-read support returns `ENOTSUP` before metadata reads.
+  `readBytes`, `stat`, and nonrecursive `list` accept `rejectSymlinks:true` for already canonical paths.
+  This prevents those calls from following aliases introduced after canonical grant checks.
+  With `stat({follow:false})`, final-link metadata remains available while ancestor links refuse.
   `io.invoke` accepts registry-shaped inputs for indexed search. It passes through
   the same grant/staging boundary; callers resolve its paths explicitly.
 - Call `io.run(argv, stdin)` for a nested command. Arguments are already
@@ -294,3 +300,58 @@ It reports a resource error when its bounded precision or work cannot establish 
 Default calculator limits include 256 KiB source, 100,000 syntax nodes, 128 syntax/function levels, 10,000 decimal digits, and scale 1,000.
 Arrays and exponentiation have separate bounds; arithmetic checks intermediate allocation before constructing large values.
 Stop interrupts yielded loops and preserves a subsequent independent shell invocation.
+
+## U2b paths, mutations and inspection
+
+`readlink` prints literal link targets or canonical paths with `-f`, `-e`, and `-m`.
+It supports LF, NUL, and single-operand no-newline framing.
+It reads `POSIXLY_CORRECT` only from the virtual environment when choosing default diagnostics.
+`realpath` supports physical and logical resolution, existence policies, lexical stripping, relative output, and NUL framing.
+Physical resolution expands links before processing subsequent `..`; logical resolution collapses original dot components first.
+Absolute link targets start at the virtual mount root. Paths cannot escape that root.
+Every canonical component passes governed metadata checks, including components reached through links.
+This requires grants for resolved ancestors and targets, not only the original alias.
+`realpath -sm` is the explicit lexical-only form and performs no filesystem I/O.
+The default bounds include 1,024 path components, eight link expansions, and shared path-byte and work budgets.
+Resolution does not promise an atomic snapshot across independent metadata calls.
+
+`rmdir` removes empty directories and optionally their emptied parents.
+`unlink` removes exactly one non-directory entry without following its final link.
+Typed deletion requires a backend primitive that preserves the type constraint at deletion.
+`mktemp` exclusively creates its result; collisions never overwrite existing entries.
+It supports templates and directory creation with bounded cryptographic name generation.
+Its default directory is virtual `TMPDIR` when set, otherwise the shell's current directory.
+`truncate` shrinks or zero-extends bytes through the backend's bounded mutation capability.
+Relative size operations require atomic use of the current size; unsupported provider guarantees fail explicitly.
+The new mutations refuse symlink ancestors. Truncation also refuses final symlinks.
+Each mutation retains the registry's grants and staging policy; accepted earlier operations survive a later refusal or Stop.
+`ln` and `link` report the unavailable governed link-creation capability and exit nonzero.
+
+| Backend | Exclusive creation | Typed removal | Truncation |
+| --- | --- | --- | --- |
+| Memory | Atomic creation | Atomic type check and deletion | All supported size modes, atomic replacement |
+| FSA/OPFS | Explicit refusal | Explicit refusal | Absolute size on existing files through an abortable writable transaction |
+| Crate, Overlay, undeclared adapters | Explicit refusal | Explicit refusal | Explicit refusal |
+
+FSA truncation reads a bounded immutable file prefix, then commits a replacement through the selected file handle.
+It refuses relative modes and missing-file creation because those guarantees require capabilities the adapter cannot provide.
+Its transaction does not compare against external edits made after the immutable snapshot.
+Capability refusals precede metadata traversal when the adapter declares the capability unavailable.
+Browser handle removal does not establish an atomic type constraint; these commands refuse that path even when `handle.remove` exists.
+
+`du` reports virtual apparent file sizes, using 1 KiB units by default.
+It supports summaries, individual files, totals, depth limits, human-readable units, and NUL framing.
+It does not invent physical allocation or directory storage overhead. Unknown file sizes produce a diagnostic.
+`tree` produces deterministic UTF-8-byte ordering with ASCII branches, hidden-file selection, depth limits, and optional sizes.
+Both commands inspect final links without traversing their targets; unsupported dereference flags fail explicitly.
+Their metadata operations never load file contents to synthesize metadata.
+
+`file` uses a finite set of signatures and text checks, with a generic data fallback.
+It supports brief and MIME output, list files, and explicit link dereferencing through governed canonical paths.
+It has no host magic database and refuses decompression options.
+`strings` finds C-locale printable byte runs with configurable minimum length, separators, filenames, and byte offsets.
+It supports seven-bit and eight-bit single-byte modes; other encodings fail explicitly.
+`cmp` preserves binary input and returns zero for equality, one for differences, and two for errors.
+It supports silent output, listed differences, byte display, decimal skips, and a decimal comparison limit.
+Inspection content reads use canonical targets and the remaining aggregate bounded-read budget.
+`file` and `cmp` read bounded complete inputs because the I/O interface has no range-read capability.

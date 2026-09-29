@@ -1,12 +1,13 @@
 // fileops — Rig's C0 filesystem surface.
 //
 // Composes the injected storage backend (live BACKENDS[bound] in the browser,
-// MemoryBackend in tests) into the 11-op API the handoff specifies:
+// MemoryBackend in tests) into the filesystem API:
 //
 //   read(path,{encoding,maxBytes})  write(path,data,{createParents})  list(path,{recursive})
 //   stat(path,{follow,metadataOnly})   mkdir(path,{createParents})   remove(path,{recursive,follow})
 //   move(from,to)   copy(from,to)   patch(path,unifiedDiff)
 //   glob(pattern,{cwd})   grep(pattern,{cwd,glob,maxResults})
+//   create(path,{directory})   truncate(path,{size,mode,create,maxBytes})
 //
 // Backend contract (deliberately the common denominator of Folder + Crate):
 //   readBinary/write/delete/exists/stat/mkdir act on a single safePath.
@@ -26,6 +27,7 @@
 //   - patch is atomic (no write on a failed hunk) and returns an exact `revert`.
 
 import { checkReadSize, requireBoundedReads, requireMetadataOnly } from './read-limit.mjs';
+import { requireMutation, checkCreateOptions, checkTruncateOptions } from './mutation-limit.mjs';
 import { normalizeMountPath, joinRoot } from './pathguard.mjs';
 import { applyPatch, createPatch } from './patch.mjs';
 import { planQuery, evaluateQuery, evaluateQueryIds, trigrams, foldCase } from './trigram.mjs';
@@ -91,7 +93,7 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
 
   // Validate + resolve symlinks, optionally retaining the final link. Check containment on every
   // hop. Returns { ok, path (mount-relative), safe (backend safePath) }.
-  async function resolveMount(mountRel, depthLeft, readOptions, followFinal = true) {
+  async function resolveMount(mountRel, depthLeft, readOptions, followFinal = true, rejectSymlinks = false) {
     const v = normalizeMountPath(mountRel);
     if (!v.ok) return v;
     const acc = [];
@@ -100,6 +102,7 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
       const safe = joinRoot(rootPrefix, acc.join('/'));
       const st = await backend.stat(safe, readOptions);
       if (st && st.type === 'symlink' && (followFinal || i < v.segments.length - 1)) {
+        if (rejectSymlinks) return err('ENOTSUP', 'symlink traversal requires canonical-target authorization', { input: mountRel });
         if (depthLeft <= 0) {
           return err('ELOOP', 'too many symlink levels', { input: mountRel });
         }
@@ -109,7 +112,7 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
         const next = combined + (rest ? '/' + rest : '');
         // normalizeMountPath inside the recursion rejects a target that climbs
         // above the mount root — this is the symlink-escape gate.
-        const r = await resolveMount(next, depthLeft - 1, readOptions, followFinal);
+        const r = await resolveMount(next, depthLeft - 1, readOptions, followFinal, rejectSymlinks);
         if (!r.ok && r.code === 'EINVAL_PATH') {
           return err('EINVAL_PATH', 'symlink escapes mount root', { input: mountRel });
         }
@@ -120,7 +123,7 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     return { ok: true, path, safe: joinRoot(rootPrefix, path) };
   }
 
-  const resolve = (p, readOptions, followFinal = true) => resolveMount(p, symlinkDepth, readOptions, followFinal);
+  const resolve = (p, readOptions, followFinal = true, rejectSymlinks = false) => resolveMount(p, symlinkDepth, readOptions, followFinal, rejectSymlinks);
 
   // Immediate children of a directory safePath → [{ safe, name, type }].
   // Collapses whatever the backend returns to one level, so it is correct
@@ -510,16 +513,18 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
   }
 
   async function read(path, opts = {}) {
+    if (opts.rejectSymlinks !== undefined && typeof opts.rejectSymlinks !== 'boolean') return err('EINVAL', 'rejectSymlinks must be a boolean');
     const bounded = opts.maxBytes !== undefined;
     try {
       // Capability checking must precede resolver metadata: some adapters obtain
       // stat by reading the complete file, and overlays pin content during stat.
       requireBoundedReads(backend, opts.maxBytes);
       const readOptions = bounded ? { maxBytes: opts.maxBytes } : undefined;
-      const r = await resolve(path, readOptions);
+      const r = await resolve(path, readOptions, true, opts.rejectSymlinks === true);
       if (!r.ok) return r;
       const st = await backend.stat(r.safe, readOptions);
       if (!st) return err('ENOENT', `no such file: ${r.path}`, { path: r.path });
+      if (opts.rejectSymlinks && st.type === 'symlink') return err('ENOTSUP', 'symlink traversal requires canonical-target authorization');
       if (st.type === 'dir') return err('EISDIR', `is a directory: ${r.path}`, { path: r.path });
       checkReadSize(st.size, opts.maxBytes);
       const bytes = await backend.readBinary(r.safe, readOptions);
@@ -576,11 +581,13 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
 
   async function stat(path, opts = {}) {
     if (opts.follow !== undefined && typeof opts.follow !== 'boolean') return err('EINVAL', 'follow must be a boolean');
+    if (opts.rejectSymlinks !== undefined && typeof opts.rejectSymlinks !== 'boolean') return err('EINVAL', 'rejectSymlinks must be a boolean');
     return metadataCall(opts, async (options) => {
-      const r = await resolve(path, options, opts.follow !== false);
+      const r = await resolve(path, options, opts.follow !== false, opts.rejectSymlinks === true);
       if (!r.ok) return r;
       const st = await statSafe(r.safe, options);
       if (!st) return err('ENOENT', `no such path: ${r.path}`, { path: r.path });
+      if (opts.rejectSymlinks && opts.follow !== false && st.type === 'symlink') return err('ENOTSUP', 'symlink traversal requires canonical-target authorization');
       // Content-free metadata can be partial. Preserve unknown fields instead
       // of turning an unavailable file size or timestamp into a real zero.
       const out = { type: st.type,
@@ -604,10 +611,71 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     return { ok: true, path: r.path };
   }
 
+  async function mutationCall(run) {
+    try { return await run(); }
+    catch (error) {
+      if (typeof error?.code === 'string' && /^E[A-Z0-9_]+$/.test(error.code)) return err(error.code, error.message);
+      throw error;
+    }
+  }
+
+  async function create(path, opts = {}) {
+    return mutationCall(async () => {
+      const options = checkCreateOptions(opts);
+      requireMutation(backend, 'supportsExclusiveCreate', 'createExclusive', 'atomic exclusive creation');
+      const r = await resolve(path, { metadataOnly: true }, false, true);
+      if (!r.ok) return r;
+      if (r.safe === rootSafe) return err('EEXIST', 'filesystem root already exists');
+      try { await backend.createExclusive(r.safe, { ...options, root: rootSafe }); }
+      finally { indexDrop(r.path); indexDropBySafe(r.safe); }
+      return { ok: true, path: r.path };
+    });
+  }
+
+  async function truncate(path, opts = {}) {
+    return mutationCall(async () => {
+      const options = checkTruncateOptions(opts);
+      requireMutation(backend, 'supportsAtomicTruncate', 'truncate', 'atomic file truncation');
+      const r = await resolve(path, { metadataOnly: true }, true, true);
+      if (!r.ok) return r;
+      if (r.safe === rootSafe) return err('EISDIR', 'cannot truncate the filesystem root');
+      let result;
+      try { result = await backend.truncate(r.safe, { ...options, root: rootSafe }); }
+      finally { indexDrop(r.path); indexDropBySafe(r.safe); }
+      if (!result || typeof result.changed !== 'boolean' || result.changed && (!Number.isSafeInteger(result.size) || result.size < 0)) {
+        return err('EIO', 'storage returned invalid truncate metadata');
+      }
+      if (result.changed) checkReadSize(result.size, options.maxBytes);
+      return { ok: true, path: r.path, changed: result.changed, size: result.size };
+    });
+  }
+
+  async function removeTyped(path, opts) {
+    return mutationCall(async () => {
+      if (!['dir', 'non-dir'].includes(opts.kind)) return err('EINVAL', 'invalid removal kind');
+      if (opts.recursive || opts.follow === true) return err('EINVAL', 'typed removal requires nonrecursive final-link semantics');
+      if (opts.follow !== undefined && typeof opts.follow !== 'boolean') return err('EINVAL', 'follow must be a boolean');
+      if (opts.metadataOnly !== undefined && typeof opts.metadataOnly !== 'boolean') return err('EINVAL', 'metadataOnly must be a boolean');
+      requireMutation(backend, 'supportsTypedRemoval', 'delete', 'atomic typed removal');
+      const r = await resolve(path, { metadataOnly: true }, false, true);
+      if (!r.ok) return r;
+      if (r.safe === rootSafe) return err('EBUSY', 'cannot remove the filesystem root');
+      try { await backend.delete(r.safe, { kind: opts.kind, metadataOnly: true, root: rootSafe }); }
+      finally {
+        // A final object can change from a file into a link before atomic
+        // deletion. Drop aliases independently of the resolver's earlier type.
+        indexTopology++; indexDropSubtree('');
+      }
+      return { ok: true, path: r.path };
+    });
+  }
+
   async function list(path, opts = {}) {
+    if (opts.rejectSymlinks !== undefined && typeof opts.rejectSymlinks !== 'boolean') return err('EINVAL', 'rejectSymlinks must be a boolean');
+    if (opts.rejectSymlinks && opts.recursive) return err('ENOTSUP', 'recursive listing with rejected symlinks is not supported');
     return metadataCall(opts, async (options) => {
       if (opts.metadataOnly && opts.recursive) return err('ENOTSUP', 'metadata-only recursive listing is not supported');
-      const r = await resolve(path, options);
+      const r = await resolve(path, options, true, opts.rejectSymlinks === true);
       if (!r.ok) return r;
       const st = await statSafe(r.safe, options);
       if (!st) return err('ENOENT', `no such directory: ${r.path}`, { path: r.path });
@@ -633,6 +701,7 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
   }
 
   async function remove(path, opts = {}) {
+    if (opts.kind !== undefined) return removeTyped(path, opts);
     if (opts.follow !== undefined && typeof opts.follow !== 'boolean') return err('EINVAL', 'follow must be a boolean');
     return metadataCall(opts, async (options) => {
       if (opts.metadataOnly && opts.recursive) return err('ENOTSUP', 'metadata-only recursive removal is not supported');
@@ -1023,7 +1092,7 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
   }
 
   return {
-    read, write, list, stat, mkdir, remove, move, copy, patch, glob, grep,
+    read, write, list, stat, mkdir, create, truncate, remove, move, copy, patch, glob, grep,
     // measurement surface (plan/anvil-indexed-search.md §6); changes no result
     searchStats, recordSearch,
     // index persistence — derived, never authoritative (see indexLoad)
