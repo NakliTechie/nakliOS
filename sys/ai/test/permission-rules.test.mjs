@@ -64,6 +64,20 @@ const d = (tool, args, cfg = CFG) => decideByRules(cfg, tool, args).decision;
 }
 
 // ── rule syntax ───────────────────────────────────────────────────────────
+// U1a wrappers cannot conceal a denied nested command before U3 has an AST.
+{
+  for (const command of ['env rm file', "'env' -i FOO=bar rm file", 'env -u HOME rm file', 'printf file | xargs -n1 rm', 'xargs -I{} env rm {}']) {
+    assert.equal(segments(command), null, command);
+    assert.equal(d('shell', { command }, { deny: ['Bash(rm:*)'] }), 'deny', command);
+    assert.equal(d('shell', { command }, { ask: ['Bash(rm:*)'] }), 'ask', command);
+    assert.equal(d('shell', { command }, { allow: ['Bash(env:*)', 'Bash(xargs:*)'] }), 'unmatched', command);
+    assert.equal(d('shell', { command }, { deny: ['shell(rm:*'], ask: ['Bash(ls:*)'] }), 'deny',
+      'a malformed deny must outrank the unsplittable-command ask fallback');
+  }
+  assert.deepEqual(segments('env -i FOO=bar'), ['env -i FOO=bar']);
+  assert.deepEqual(segments('echo xargs rm'), ['echo xargs rm']);
+}
+
 {
   assert.deepEqual(parseRule('Bash(git push:*)'), { tool: 'bash', spec: 'git push', prefix: true, source: 'Bash(git push:*)' });
   assert.deepEqual(parseRule('Read'), { tool: 'read', spec: null, prefix: false, source: 'Read' });

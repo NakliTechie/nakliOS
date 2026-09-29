@@ -342,6 +342,16 @@ jobs:
         run: node sys/rig/cli/test/execution.test.mjs
       - name: Unix foundation bytes, nested confirmation and dispatch
         run: node sys/rig/cli/test/foundation.test.mjs
+      - name: Git removal refuses uncommitted content unless forced
+        run: node sys/rig/cli/test/git-rm-safety.test.mjs
+      - name: Anvil shell wrapper confirmations, Stop and policy integration
+        run: node scripts/test-anvil-shell-integration.mjs
+      - name: Unix U1a text flags and byte preservation
+        run: node sys/rig/cli/test/u1a-text.test.mjs
+      - name: Unix U1a indexed search and recursive diffs
+        run: node sys/rig/cli/test/u1a-search.test.mjs
+      - name: Unix U1a file and command wrapper flags
+        run: node sys/rig/cli/test/u1a-files-utility.test.mjs
 
       - name: Verify the history tool — search and read past runs (the retrieval half)
         run: node scripts/test-anvil-history.mjs

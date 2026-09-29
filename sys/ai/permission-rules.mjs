@@ -18,6 +18,9 @@
 // one thing that survives bypass mode, because writing "never do this" and having a mode ignore it
 // would make deny rules worthless.
 
+import { tokenize } from '../rig/cli/parser.mjs';
+import { parseArgs } from '../rig/cli/args.mjs';
+
 export const MODES = Object.freeze(['default', 'acceptEdits', 'bypass']);
 
 export const MODE_LABEL = Object.freeze({
@@ -83,7 +86,26 @@ export function segments(command) {
     cur += c;
   }
   out.push(cur);
-  return out.map((x) => x.trim()).filter(Boolean);
+  const commands = out.map((x) => x.trim()).filter(Boolean);
+  for (const line of commands) {
+    const words = tokenize(line);
+    while (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[0] || '')) words.shift();
+    // U1a adds env execution and xargs batching/replacement. Until U3 recursively
+    // models nested argv, never let an outer wrapper hide a denied inner command.
+    // The existing null path fails closed under deny/ask rules, including bypass.
+    if (words[0] === 'xargs') return null;
+    if (words[0] === 'env') {
+      try {
+        const { operands } = parseArgs(words.slice(1), {
+          ignore: { short: 'i', long: 'ignore-environment' },
+          unset: { short: 'u', long: 'unset', value: true, multiple: true },
+        }, { command: 'env', stopAtOperand: true });
+        while (/^[A-Za-z_][A-Za-z0-9_]*=/.test(operands[0] || '')) operands.shift();
+        if (operands.length) return null;
+      } catch (_) { return null; }
+    }
+  }
+  return commands;
 }
 
 function specMatchesCommand(rule, cmd) {
@@ -169,6 +191,14 @@ export function decideByRules(cfg, toolName, args) {
     }
   }
   const bad = invalidRules(cfg);
+  // Malformed deny rules retain precedence even when wrapper segmentation
+  // would otherwise fall back to an applicable ask rule.
+  for (const b of bad) {
+    if (b.list === 'deny' && invalidReaches(b, toolName)) {
+      return { decision: 'deny', rule: b.source, invalid: true,
+        why: 'your deny rule "' + b.source + '" cannot be read, so ' + (b.tool ? 'every ' + b.tool + ' call' : 'every call') + ' is refused until you fix it (⋯ → Policy)' };
+    }
+  }
   // A shell line that cannot be split into the commands it runs cannot be CHECKED against a shell deny
   // or ask rule — and 'unmatched' used to let bypass allow it (\`rm -rf \${DIR}\`, a heredoc before SH3).
   // Fail closed: with any shell deny rule it is refused, with any shell ask rule it asks.
@@ -177,12 +207,6 @@ export function decideByRules(cfg, toolName, args) {
     const shellRule = (k) => lists[k].find((r) => r.tool === 'bash' || r.tool === 'shell' || r.tool === 'sh');
     const d = shellRule('deny'); if (d) return { decision: 'deny', rule: d.source, why: 'this command line cannot be split into the commands it runs, so your deny rule (' + d.source + ') cannot be checked — refused' };
     const a = shellRule('ask'); if (a) return { decision: 'ask', rule: a.source, why: 'this command line cannot be split into the commands it runs, so your ask rule (' + a.source + ') asks' };
-  }
-  for (const b of bad) {
-    if (b.list === 'deny' && invalidReaches(b, toolName)) {
-      return { decision: 'deny', rule: b.source, invalid: true,
-        why: 'your deny rule "' + b.source + '" cannot be read, so ' + (b.tool ? 'every ' + b.tool + ' call' : 'every call') + ' is refused until you fix it (⋯ → Policy)' };
-    }
   }
   // Deny first, and 'some' is enough: one refused command in a chain refuses the chain.
   for (const r of lists.deny) {

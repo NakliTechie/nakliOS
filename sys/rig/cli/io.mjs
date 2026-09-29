@@ -93,6 +93,9 @@ export function createIO({ invoke, cwd = () => '', run } = {}) {
   const readBytes = async (path) => toBytes((await call('fs.read', { path: resolve(path) })).data);
 
   return {
+    // Advanced commands use the same granted/staged call boundary for indexed search.
+    // Inputs here are registry-shaped; convenience methods below resolve relative paths.
+    invoke: call,
     resolve,
     readBytes,
     readText: async (path) => toText(await readBytes(path)),

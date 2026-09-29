@@ -48,7 +48,7 @@ await test('R2a: the text builtins read their file arguments', async () => {
 });
 
 // ── R2b — grep answered wrongly ───────────────────────────────────────────────────────────
-await test('R2b: grep -v excludes, -i matches, -c counts, -r refuses', async () => {
+await test('R2b: grep -v excludes, -i matches, -c counts, -r searches', async () => {
   const { run } = await shell();
   // the worst one: -v returned exactly the lines it was asked to suppress
   eq((await run('grep -v banana f.txt')).out, 'Apple\nCherry', '-v EXCLUDES');
@@ -56,7 +56,7 @@ await test('R2b: grep -v excludes, -i matches, -c counts, -r refuses', async () 
   eq((await run('grep -c banana f.txt')).out, '2', '-c counts');
   eq((await run('grep -n Cherry f.txt')).out, '3:Cherry', '-n still numbers');
   const r = await run('grep -r x f.txt');
-  assert(r.code !== 0 && /rg/.test(r.out), `-r refuses and names the alternative: ${JSON.stringify(r)}`);
+  eq(r.code, 1, 'recursive search with no matches exits 1'); eq(r.out, '', 'a supported recursive search does not return a hint');
   // benign: a plain grep is unchanged, and a real miss still exits non-zero with no output
   eq((await run('grep banana f.txt')).out, 'banana\nbanana', 'a plain grep is unchanged');
   const none = await run('grep zebra f.txt');
@@ -271,8 +271,8 @@ await test('R2f: rg implements its flags or refuses them, and never answers empt
   assert(/unknown type/.test(badType.out) && /py/.test(badType.out), `unknown type names the known ones: ${badType.out}`);
   assert(badType.code !== 0, 'and is a non-zero exit');
 
-  const badFlag = await run('rg "solve" -A 3');
-  assert(/unsupported flag -A/.test(badFlag.out), `an unimplemented flag is refused: ${badFlag.out}`);
+  const badFlag = await run('rg "solve" --unsupported');
+  assert(/unsupported flag --unsupported/.test(badFlag.out), `an unimplemented flag is refused: ${badFlag.out}`);
   assert(badFlag.code !== 0, 'and is a non-zero exit');
 });
 
@@ -304,7 +304,7 @@ await test('R3a: help describes a curated subset and says flags are refused', as
   const h = (await run('help')).out;
   assert(/CURATED/.test(h), 'help says this is not coreutils');
   assert(/REFUSES an unsupported flag/.test(h), 'help states the unknown-flag policy');
-  assert(/no -r/.test(h) && /rg/.test(h), 'help names grep -r and its alternative');
+  assert(/grep -r -R/.test(h) && /rg/.test(h), 'help names recursive grep and rg');
   assert(/single quotes are literal/.test(h), 'help states the quoting rule');
   assert(/No subshells, loops/.test(h), 'help names what the grammar lacks');
 });
@@ -406,7 +406,7 @@ await test('$? expands inside double quotes exactly as it does outside them', as
 });
 
 // ── sleep — a child asked to pace itself spent 20 steps hunting for one (live 2026-09-17) ────
-await test('sleep: waits the interval, exits 0, refuses the false friends (no arg, a word, two args, above the cap)', async () => {
+await test('sleep: waits the interval, sums operands, and refuses invalid or excessive intervals', async () => {
   const { run } = await shell();
   const t0 = Date.now();
   const ok = await run('sleep 0.3');
@@ -415,13 +415,14 @@ await test('sleep: waits the interval, exits 0, refuses the false friends (no ar
   assert(dt >= 280 && dt < 2000, `it actually waited ~300 ms: ${dt} ms`);
   eq((await run('sleep 0.1 && echo after')).out, 'after', 'a sleep chains like any other command');
   eq((await run('which sleep')).out, 'sleep', 'which knows it');
-  assert(/\bsleep SECONDS\b/.test((await run('help')).out), 'help lists it');
-  for (const [cmd, why] of [['sleep', 'no operand'], ['sleep abc', 'a word'], ['sleep 1 2', 'two args'], ['sleep -1', 'negative'], [`sleep ${SLEEP_MAX_S + 1}`, 'above the cap']]) {
+  assert(/\bsleep N\[s\|m\|h\|d\]/.test((await run('help')).out), 'help lists intervals and suffixes');
+  eq((await run('sleep 0 0s')).code, 0, 'multiple intervals are supported');
+  for (const [cmd, why] of [['sleep', 'no operand'], ['sleep abc', 'a word'], ['sleep -1', 'negative'], [`sleep ${SLEEP_MAX_S + 1}`, 'above the cap']]) {
     const r = await run(cmd);
     assert(r.code !== 0, `${why} must not exit 0: ${JSON.stringify(r)}`);
     assert(/^sleep: /.test(r.out), `${why} says who refused: ${r.out}`);
   }
-  eq((await run(`sleep ${SLEEP_MAX_S + 1}`)).out, `sleep: ${SLEEP_MAX_S + 1} exceeds the ${SLEEP_MAX_S} s cap`, 'the cap is named');
+  eq((await run(`sleep ${SLEEP_MAX_S + 1}`)).out, `sleep: interval exceeds the ${SLEEP_MAX_S} s cap`, 'the aggregate cap is named');
 });
 
 // ── B6 structured listings — `ls -R` flattened every name into one line; a big listing had no cap ──
@@ -498,8 +499,9 @@ await test('operands: touch, mkdir and stat take every operand; rm, cat and tee 
   eq((await run('cat t/a')).out, 'keep', 'touch leaves an existing file as it is');
   eq((await run('ls t')).out, 'a  b  c  d');
   const bare = await run('touch'); eq(bare.code, 2); eq(bare.out, 'touch: missing file operand');
-  const flag = await run('touch -c x'); eq(flag.code, 2, 'an unsupported flag refuses');
-  assert(!/(^|\s)-c(\s|$)/.test((await run('ls')).out), 'and no file named -c appears');
+  const flag = await run('touch --unsupported x'); eq(flag.code, 2, 'an unsupported flag refuses');
+  eq((await run('touch -c x')).code, 0, '-c succeeds without creating an absent file');
+  assert(!/(^|\s)(?:-c|x)(\s|$)/.test((await run('ls')).out), 'no absent operand or flag file appears');
   await run('mkdir d1 d2 d3');
   eq((await run('ls')).out.split('  ').filter((n) => /^d\d$/.test(n)).join(' '), 'd1 d2 d3', 'mkdir makes all three');
   await run('mkdir -p p/q r/s');
@@ -551,11 +553,11 @@ await test('operands: which, dirname, printf and history answer for all; basenam
   await run("printf 'a\\n' > p; printf 'b\\n' > q");
   const d = await run('diff p q r'); eq(d.code, 2); assert(/extra operand 'r'/.test(d.out), d.out);
   const dq = await run('diff -q p q'); eq(dq.code, 1); eq(dq.out, 'Files p and q differ', 'diff -q answers briefly, not with a full diff');
-  const dx = await run('diff -w p q'); eq(dx.code, 2); assert(/unsupported flag -w/.test(dx.out), 'an unsupported diff flag is refused, not filtered out: ' + dx.out);
+  const dx = await run('diff --unsupported p q'); eq(dx.code, 2); assert(/unsupported flag --unsupported/.test(dx.out), 'an unsupported diff flag is refused, not filtered out: ' + dx.out);
   eq((await run('diff p q')).out, '- a\n+ b', 'diff of two files is unchanged');
   const u = await run('uniq p q'); eq(u.code, 2); assert(/OUTPUT operand/.test(u.out), u.out);
   eq((await run('cat q')).out, 'b', 'and the output operand is untouched');
-  const e = await run('env FOO'); eq(e.code, 2); assert(!/HOME=/.test(e.out), 'env CMD refuses rather than printing the environment: ' + e.out);
+  const e = await run('env FOO'); eq(e.code, 127); assert(!/HOME=/.test(e.out), 'env CMD attempts the named command rather than printing the environment: ' + e.out);
   assert(/HOME=\//.test((await run('env')).out), 'plain env still prints');
 });
 

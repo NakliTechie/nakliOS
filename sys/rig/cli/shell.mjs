@@ -21,6 +21,10 @@ import { createExecution, ShellInterrupted } from './execution.mjs';
 import { createBuiltins } from './cmds/builtins.mjs';
 import { createCoreCommands } from './cmds/core.mjs';
 import { createFileCommands } from './cmds/files.mjs';
+import { createTextCommands } from './cmds/text.mjs';
+import { createSearchCommands } from './cmds/search.mjs';
+import { createUtilityCommands } from './cmds/utility.mjs';
+import { createListCommands } from './cmds/list.mjs';
 import { createPatch } from '../fileops/patch.mjs';
 
 // bash verb -> registry command name. The dotted name (fs.list) always works too.
@@ -326,6 +330,10 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
       spec[key].short = [...(spec[key].short || []), short];
     }
     if (cmdName === 'fs.list') spec.longListing = { short: 'l' };
+    if (cmdName === 'fs.remove') {
+      spec.verbose = { short: 'v', long: 'verbose' };
+      spec.dir = { short: 'd', long: 'dir' };
+    }
     return { ...parseArgs(argv, spec, { command: cmdName }), props };
   }
 
@@ -354,18 +362,30 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
   async function runRegistry(cmdName, argv) {
     const parsed = registryArgs(cmdName, argv);
     if (cmdName === 'fs.remove') {
-      const paths = parsed.operands.length ? parsed.operands : [parsed.options.path ?? ''];
-      const proposals = [], errors = [];
+      const paths = parsed.operands.length ? parsed.operands : parsed.options.path !== undefined ? [parsed.options.path] : [];
+      const proposals = [], errors = [], removed = [];
       const force = !!parsed.options.force;
+      if (!paths.length) return force ? { text: '', code: 0 } : { text: 'rm: missing operand', code: 2 };
       const record = (res, path) => {
         if (!res.ok && !(force && (res.code === 'ENOENT' || /no such path/.test(res.message || '')))) {
           errors.push(`rm: ${path}: ${res.code || 'error'}: ${res.message || 'failed'}`);
         }
+        if (res.ok && parsed.options.verbose) removed.push(`removed '${path}'`);
       };
       try {
         // Batch the same rm's paths under one prompt, but leave its caller suspended.
         for (const path of paths) {
           execution.check();
+          const st = await face.invoke('fs.stat', { path: io.resolve(path) });
+          if (!st.ok) { record(st, path); continue; }
+          if (st.stat.type === 'dir' && !parsed.options.recursive && !parsed.options.dir) {
+            errors.push(`rm: ${path}: EISDIR: is a directory; use -r or -d`); continue;
+          }
+          if (st.stat.type === 'dir' && !parsed.options.recursive) {
+            const children = await face.invoke('fs.list', { path: io.resolve(path) });
+            if (!children.ok) { record(children, path); continue; }
+            if (children.entries.length) { errors.push(`rm: ${path}: ENOTEMPTY: directory not empty`); continue; }
+          }
           const res = await execution.stage(cmdName, registryInput(parsed, [path]));
           if (res.staged) proposals.push({ proposalId: res.proposalId, path });
           else record(res, path);
@@ -378,7 +398,7 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
       } finally {
         for (const proposal of proposals) rawFace.reject(proposal.proposalId);
       }
-      return { text: errors.join('\n'), code: errors.length ? 1 : 0 };
+      return { text: [...errors, ...removed].join('\n'), code: errors.length ? 1 : 0 };
     }
     const keys = operandKeys(parsed.props);
     if (parsed.operands.length > keys.length) {
@@ -394,7 +414,9 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
     renderResult, runStage: io.run,
     signal: () => currentSignal()?.aborted ? currentSignal() : execution?.signal,
     SLEEP_MAX_S, LIST_FLAGS, commandNames });
-  Object.assign(builtins, createCoreCommands(io), createFileCommands(io));
+  Object.assign(builtins, createCoreCommands(io), createFileCommands(io), createTextCommands(io),
+    createSearchCommands(io), createListCommands(io), createUtilityCommands({ io, state, commandNames,
+      signal: () => currentSignal()?.aborted ? currentSignal() : execution?.signal, maxSleep: SLEEP_MAX_S }));
 
   // One dispatch table also owns discovery and help. Dotted registry names remain reachable.
   const dispatch = new Map(Object.entries(builtins));
@@ -458,7 +480,7 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
       const handler = dispatch.get(verb);
       if (!handler) return { text: `${verb}: command not found`, code: 127 };
       // Text-only commands decode at their boundary, never in the pipeline itself.
-      const input = ['cat', 'tee', 'od'].includes(verb) || !builtins[verb] ? stdin : toText(stdin);
+      const input = ['cat', 'tee', 'od', 'head', 'tail', 'wc', 'tr', 'cut', 'env'].includes(verb) || !builtins[verb] ? stdin : toText(stdin);
       return await handler(argv.slice(1), input);
     } catch (error) {
       if (error instanceof ShellInterrupted) throw error;
@@ -726,10 +748,42 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
             if (!under.some(([f]) => f === s) && !options.recursive) return { text: `git rm: not removing '${p}' recursively without -r`, code: 1 };
             for (const row of under) targets.set(row[0], row);
           }
+          // Check every target before staging any deletion. Plain rm may discard only
+          // committed content; --cached may discard an index copy preserved in HEAD or
+          // the working tree. A confirmation is not a substitute for explicit --force.
+          if (!options.force) {
+            const errors = [];
+            for (const [filepath, head, work, stage] of targets.values()) {
+              const matchesHead = head === 1 && stage === 1;
+              const matchesWork = work !== 0 && stage === work;
+              // Native git also accepts an already-removed working-tree file.
+              if (!options.cached && work === 0) continue;
+              if (options.cached ? !matchesHead && !matchesWork : !matchesHead || !matchesWork) {
+                const reason = !matchesHead && !matchesWork
+                  ? 'staged content differs from both the working tree and HEAD'
+                  : !matchesHead ? 'changes are staged in the index' : 'local modifications';
+                errors.push(`git rm: '${filepath}': ${reason} (use -f to force removal)`);
+              }
+            }
+            if (errors.length) return { text: errors.join('\n'), code: 1 };
+          }
           // Without --cached the file leaves the working tree too, as git does; it used to stay.
           const ops = [...targets.values()].flatMap(([filepath, , work]) => [{ name: 'git.remove', input: { filepath } },
             ...(!options.cached && work !== 0 ? [{ name: 'fs.remove', input: { path: filepath } }] : [])]);
-          const results = await confirmBatch('git rm', ops);
+          // The governed face checks grants while staging. Refuse the whole batch if any
+          // target is denied, before accepting another target's index or file deletion.
+          const proposals = [];
+          let results;
+          try {
+            for (const op of ops) {
+              const result = await execution.stage(op.name, op.input);
+              if (!result.staged) return { text: `git rm: ${result.code || 'error'}: ${result.message || 'could not stage removal'}`, code: 1 };
+              proposals.push({ proposalId: result.proposalId });
+            }
+            results = await execution.confirm(proposals, proposals.length > 1 ? `git rm (${proposals.length} changes)` : ops[0].name);
+          } finally {
+            for (const proposal of proposals) rawFace.reject(proposal.proposalId);
+          }
           const bad = results.find((r) => !r.ok);
           if (bad) return { text: `git rm: ${bad.code || 'error'}: ${bad.message || 'failed'}`, code: 1 };
           return { text: options.quiet ? '' : [...targets.keys()].map((f) => `rm '${f}'`).join('\n'), code: 0 };
@@ -1015,7 +1069,7 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
           const w = await face.invoke('fs.write', { path, data, createParents: true });
           if (!w.ok) { write(`${path}: ${w.message || 'write failed'}`); lastCode = 1; }
         } else {
-          let text = renderData(res.text);
+          let text = res.displayText ?? renderData(res.text);
           if (res.listing) {
             const t = truncateListing(text, res.listing.entries);
             text = t.text; lastListing = { tool: res.listing.tool, entries: res.listing.entries, shown: t.shown, truncated: t.truncated };

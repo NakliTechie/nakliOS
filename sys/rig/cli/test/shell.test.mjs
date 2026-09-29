@@ -499,14 +499,16 @@ await test('SH2: rm -f ignores a missing path (single, many, and at confirm time
   const face = createAgentFace({ registry, grant, opLog, actor: 'agent' });
   const shell = createShell({ registry, face });
   await run(shell, 'echo 1 > a; echo 2 > b');
-  // staging does not look at the disk, so even a lone missing path stages; -f is honoured when it applies
-  await run(shell, 'rm -f nothing-here'); assert(shell.awaitingConfirm, 'a lone rm -f stages like any rm');
-  await run(shell, 'y'); eq(shell.lastCode, 0, 'rm -f of one missing path exits 0 once confirmed');
+  // U1a checks operand type before staging; a missing forced operand has no mutation to confirm.
+  await run(shell, 'rm -f nothing-here'); assert(!shell.awaitingConfirm, 'a missing forced operand needs no confirmation');
+  eq(shell.lastCode, 0, 'rm -f of one missing path exits 0');
   await run(shell, 'rm -f a nothing-here'); assert(shell.awaitingConfirm, 'the existing one is staged');
   const out = await run(shell, 'y'); eq(shell.lastCode, 0, 'and confirming it ignores the missing one'); assert(!/no such path/.test(out), out);
   eq(/\ba\b/.test(await run(shell, 'ls')), false, 'a is gone');
-  await run(shell, 'rm missing-too'); await run(shell, 'y'); eq(shell.lastCode, 1, 'plain rm of a missing path still fails');
+  await run(shell, 'rm missing-too'); eq(shell.lastCode, 1, 'plain rm of a missing path still fails');
   await run(shell, 'rm b gone'); await run(shell, 'y'); eq(shell.lastCode, 1, 'and plain rm of many still reports the missing one');
+  await run(shell, 'echo x > vanished; rm -f vanished'); assert(shell.awaitingConfirm);
+  await fs.remove('vanished'); await run(shell, 'y'); eq(shell.lastCode, 0, '-f also tolerates a file vanishing during confirmation');
 });
 
 await test('SH3: a here-document is the statement\'s stdin; python - runs it; bad forms are refused; od shows bytes', async () => {
@@ -534,7 +536,7 @@ await test('SH3: a here-document is the statement\'s stdin; python - runs it; ba
   eq(await run(shell, 'od -c f.txt'), '0000000   a  \\t   b  \\r  \\n\n0000005', 'od -c: address, escapes, end address');
   eq(await run(shell, 'od -An -t x1 f.txt'), ' 61 09 62 0d 0a', 'od -An -t x1: hex bytes, no address');
   eq(await run(shell, 'od -b f.txt'), '0000000 141 011 142 015 012\n0000005', 'od -b: octal bytes');
-  assert(/od supports/.test(await run(shell, 'od -x f.txt')) && shell.lastCode === 2, 'an unsupported flag is refused and names what works');
+  assert(/od supports/.test(await run(shell, 'od --unsupported f.txt')) && shell.lastCode === 2, 'an unsupported flag is refused and names what works');
   assert(/give a format/.test(await run(shell, 'od f.txt')) && shell.lastCode === 2, 'no format is refused, not guessed');
 });
 

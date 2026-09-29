@@ -38,7 +38,9 @@ const RESULT_LIST = {
 };
 const RESULT_MATCHES = {
   type: 'object',
-  properties: { ok: { const: true }, matches: { type: 'array' } },
+  properties: { ok: { const: true }, matches: { type: 'array' }, errors: { type: 'array', items: {
+    type: 'object', properties: { path: PATH, code: { type: 'string' }, message: { type: 'string' } },
+  } } },
   required: ['ok', 'matches'],
 };
 
@@ -175,14 +177,14 @@ export function buildFileopsCommands(fs) {
     {
       name: 'fs.grep',
       summary: 'Search file contents by pattern.',
-      description: 'Search files under {cwd} (optionally filtered by {glob}) for a regex, returning {path,line,text} matches up to {maxResults}; reports truncation.',
+      description: 'Search files under {cwd} (optionally filtered by {glob}) for a regex with optional {flags}, returning {path,line,text} matches up to {maxResults}; reports truncation and per-file read errors.',
       inputSchema: {
         type: 'object',
-        properties: { pattern: { type: 'string' }, cwd: PATH, glob: { type: 'string' }, maxResults: { type: 'number' } },
+        properties: { pattern: { type: 'string' }, flags: { type: 'string', description: 'JavaScript regular-expression flags, e.g. i for case-insensitive search.' }, cwd: PATH, glob: { type: 'string' }, maxResults: { type: 'number' } },
         required: ['pattern'], additionalProperties: false,
       },
       returnSchema: RESULT_MATCHES, destructive: false, scope: 'fs:read', annotations: RO,
-      run: (i) => fs.grep(i.pattern, { cwd: i.cwd, glob: i.glob, maxResults: i.maxResults }),
+      run: (i) => fs.grep(i.pattern, { flags: i.flags, cwd: i.cwd, glob: i.glob, maxResults: i.maxResults }),
     },
     // Measurement only (plan/anvil-indexed-search.md §6). Not advertised to the
     // agent — these exist so a human can read what search costs on a real

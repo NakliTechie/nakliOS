@@ -649,10 +649,18 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
       return err('EEXIST', `destination exists: ${tr.path}`, { path: tr.path });
     }
     if (fst.type === 'dir') {
-      const { files } = await walkAll(fr.safe);
+      const { files, dirs } = await walkAll(fr.safe);
       const fromBase = fr.safe === '' ? '' : fr.safe + '/';
-      if (backend.mkdir) await backend.mkdir(tr.safe);
       try {
+        if (backend.mkdir) {
+          await backend.mkdir(tr.safe);
+          // File copies alone cannot preserve empty directories. Create all directory
+          // markers, parent first, before a move is allowed to remove its source tree.
+          for (const dir of dirs.sort((a, b) => a.split('/').length - b.split('/').length)) {
+            const rel = dir.startsWith(fromBase) ? dir.slice(fromBase.length) : dir;
+            await backend.mkdir(joinRoot(tr.safe, rel));
+          }
+        }
         for (const f of files) {
           const rel = f.startsWith(fromBase) ? f.slice(fromBase.length) : f;
           const bytes = await backend.readBinary(f);
@@ -760,8 +768,12 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
       if (index && exclusiveOk() && walkSeq === walkedFrom) walkCache = { key: walkKey, matches: globbed.matches, walked: globbed.walked };
     }
     if (!globbed.ok) return globbed;
-    const re = pattern instanceof RegExp ? pattern : new RegExp(pattern);
+    const re = pattern instanceof RegExp ? pattern : new RegExp(pattern, opts.flags || '');
     const matches = [];
+    const searchErrors = new Map();
+    const failedRead = (path, failure) => searchErrors.set(path, {
+      path, code: failure.code || 'EIO', message: failure.message || 'could not read file',
+    });
     let truncated = false;
     // Candidate narrowing. `lit` is null whenever the pattern is anything the
     // extractor does not fully understand, and null means "scan everything" —
@@ -786,6 +798,7 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
       if (sweeping) lastSweepAt = Date.now();
       const seen = new Set();
       for (const p of globbed.matches) {
+        try {
         if (indexPath && p === indexPath) continue;   // the index does not index itself
         seen.add(p);
         const e = idx.files.get(p);
@@ -800,9 +813,9 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
         // the resolved path. `safe` is what alias invalidation matches on, and an
         // entry validated without a re-read has no other way to learn it.
         const rr = await resolve(p);
-        if (!rr.ok) { indexDrop(p); continue; }
+        if (!rr.ok) { failedRead(p, rr); indexDrop(p); continue; }
         const raw = await backend.stat(rr.safe);
-        if (!raw) { indexDrop(p); continue; }
+        if (!raw) { failedRead(p, { code: 'ENOENT', message: 'file disappeared during search' }); indexDrop(p); continue; }
         const st = { stat: { type: raw.type, size: raw.size ?? 0, mtimeMs: raw.mtimeMs ?? 0 } };
         filesStatted++;
         // Trust an unchanged mtime+size only when the file was already at least a
@@ -826,7 +839,7 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
         const seenSeq = seqOf(p);
         const seenSafeSeq = seqOfSafe(rr.safe);
         const rd = await read(p, { encoding: 'utf-8' });
-        if (!rd.ok) { indexDrop(p); continue; }
+        if (!rd.ok) { failedRead(p, rd); indexDrop(p); continue; }
         opened.add(p);
         bytesRead += rd.bytes;
         // Binaries are never searched, but REMEMBER that: dropping them meant the
@@ -835,6 +848,7 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
         // cancelling the bytes the index saved.
         const isBinary = rd.data.includes('\u0000');
         indexAdd(p, isBinary ? '' : rd.data, st.stat, rr.safe, readStartedAt, seenSeq, seenSafeSeq, isBinary);
+        } catch (error) { failedRead(p, error); indexDrop(p); }
       }
       // Snapshot the keys: indexDrop mutates idx.files, so iterating it live
       // would skip entries. (oxlint flags the spread as useless; it is not.)
@@ -892,8 +906,11 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
     }
 
     outer: for (const p of (candidates || globbed.matches)) {
-      const rd = await read(p, { encoding: 'utf-8' });
-      if (!rd.ok) continue; // unreadable → skip silently
+      if (searchErrors.has(p)) continue;
+      let rd;
+      try { rd = await read(p, { encoding: 'utf-8' }); }
+      catch (error) { failedRead(p, error); continue; }
+      if (!rd.ok) { failedRead(p, rd); continue; }
       // Binary detection by NUL byte, as grep, ripgrep and the shell's own rg do.
       // This comment used to claim binaries were skipped while nothing checked,
       // so fs.grep reported matches from inside binary files and disagreed with
@@ -937,7 +954,7 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
       ms: Date.now() - t0,
       at: t0,
     });
-    return { ok: true, matches, truncated };
+    return { ok: true, matches, truncated, ...(searchErrors.size ? { errors: [...searchErrors.values()] } : {}) };
   }
 
   return {
