@@ -1,0 +1,29 @@
+<!doctype html><meta charset="utf-8"><title>Kiln network denial regression</title>
+<pre id="out">Starting…</pre>
+<script type="module">
+import { createKiln, createWorkerRuntime } from '/sys/kiln/index.mjs';
+import { verifyNetworkDenialRegression } from './kiln-network-denial-regression.mjs';
+const results = [], observations = [], out = document.querySelector('#out');
+let kiln;
+function publish(done = false) {
+  const passed = results.filter(row => row.ok).length;
+  out.textContent = JSON.stringify({ done, ok: done && results.length === 1 && passed === 1,
+    harness: 'network-denial', selectedModes: ['worker'], expectedTotal: 1,
+    crossOriginIsolated: self.crossOriginIsolated, passed, failed: results.length - passed,
+    total: results.length, results, observations }, null, 2);
+}
+publish();
+try {
+  if (!self.crossOriginIsolated) throw new Error('Dedicated Worker regression requires cross-origin isolation');
+  kiln = createKiln({ consent: () => true, loadRuntime: () => createWorkerRuntime() });
+  observations.push(...await verifyNetworkDenialRegression(kiln));
+  results.push({ name: 'worker: both interpreters preserve network denials after type-cache invalidation', ok: true });
+} catch (error) {
+  results.push({ name: 'worker: both interpreters preserve network denials after type-cache invalidation',
+    ok: false, detail: String(error?.stack || error) });
+} finally {
+  try { await kiln?.close(); }
+  catch (error) { results.push({ name: 'worker: shutdown', ok: false, detail: String(error?.stack || error) }); }
+  publish(true);
+}
+</script>

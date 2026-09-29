@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Real pinned Pyodide in a disposable Chrome profile. No npm browser driver,
+// Real pinned Pyodide network-denial regression in a disposable Chrome profile. No browser driver,
 // existing user profile, private credential, or platform shell is involved.
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -13,12 +13,7 @@ import { assertHarnessNetwork, assertHarnessResult } from './sqlite-browser-resu
 
 const root = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
-const suites = [
-  { harness: 'kiln', expectedByMode: { worker: 18, main: 17 } },
-  { harness: 'adversarial', expectedByMode: { worker: 5, main: 4 } },
-  { harness: 'columns', expectedByMode: { worker: 3, main: 3 } },
-  { harness: 'startup', expectedByMode: { worker: 4, main: 4 } },
-];
+const suites = [{ harness: 'network-denial', expectedByMode: { worker: 1 } }];
 const candidates = [process.env.CHROME_BIN,
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   '/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium', '/usr/bin/chromium-browser',
@@ -156,8 +151,8 @@ try {
   connection = await connect(socket);
   console.log(JSON.stringify({ browser: await connection.send('Browser.getVersion'), node: process.version }));
   for (const suite of suites) {
-    const route = `/test/u4b-sqlite-${suite.harness}-harness.html`;
-    for (const isolated of [true, false]) {
+    const route = `/test/kiln-${suite.harness}-harness.html`;
+    for (const isolated of [true]) {
       const expectedByMode = isolated ? suite.expectedByMode : { main: suite.expectedByMode.main };
       const url = (isolated ? isolatedOrigin : plainOrigin) + route + (isolated ? '' : '?mode=main');
       console.log(`Browser SQLite ${suite.harness}: ${isolated ? 'Worker + main' : 'main without isolation'}`);
@@ -168,19 +163,8 @@ try {
       assert.deepEqual(captured.errors, [], 'no uncaught browser exceptions');
       console.log(`PASS ${captured.report.passed}/${captured.report.total}`);
     }
-    for (const query of ['?mode=workre', '?mode=', '?mode=main&mode=worker']) {
-      const captured = await visit(isolatedOrigin + route + query), report = captured.report;
-      reports.push({ url: isolatedOrigin + route + query, ...captured });
-      assert.equal(report.ok, false); assert.equal(report.passed, 0); assert.equal(report.failed, 1);
-      assert.equal(report.expectedTotal, 0); assert.equal(report.total, 1);
-      assert.equal(report.results.length, 1); assert.equal(report.results[0].ok, false);
-      assert.match(JSON.stringify(report.results[0]), /invalid.*mode|mode.*invalid/i);
-      assert.deepEqual(report.selectedModes, []);
-      assert.deepEqual(captured.externalRequests, [], 'invalid mode must not initialize a CDN runtime');
-      assert.throws(() => assertHarnessResult(report, { ...suite, isolated: true }));
-    }
   }
-  console.log(JSON.stringify({ ok: true, runtimeAssertions: 86, invalidModeChecks: 12, reports }, null, 2));
+  console.log(JSON.stringify({ ok: true, runtimeGroups: 2, requiredDenialCalls: 92, sqliteFollowups: 2, reports }, null, 2));
 } catch (error) {
   // Retain caught browser assertion details before the original validation error exits CI.
   console.error(JSON.stringify({ ok: false, error: String(error?.stack || error), reports }, null, 2));

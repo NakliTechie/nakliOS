@@ -109,6 +109,15 @@ Captured external HTTP requests must stay inside the pinned Pyodide CDN director
 Fixed per-runtime counts, individual results, unique identities, isolation state and harness identity must all agree.
 Empty or incomplete result sets fail. Browser profiles and servers are removed after the run.
 
+`node scripts/test-kiln-network-denial-browser.mjs` checks both dedicated Worker interpreters against real Pyodide.
+It invalidates CPython's type cache before calls to each denied network API, including Python `.new` forms.
+It also checks JavaScript calls, JavaScript construction, CacheStorage methods and subsequent SQLite execution.
+Worker denials use native Python `PermissionError` callables that round-trip through Pyodide's FFI.
+This avoids Pyodide 0.26.4 losing a JavaScript exception during temporary callable cleanup after a type-cache miss.
+JavaScript construction has a separate throwing trap because PyProxy construction otherwise returns an empty object.
+The PyProxy targets remain reachable through Worker globals until Worker termination.
+This preserves API refusal; it does not remove the documented dynamic-import/CSP requirement.
+
 > Unrelated to `~/Code/kiln`, a separate project that happens to share the name.
 
 Design and roadmap live in `KILN-VISION-AND-ROADMAP.md` and
