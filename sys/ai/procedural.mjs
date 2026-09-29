@@ -49,14 +49,14 @@ export const DEFAULT_GRAPH = Object.freeze({
     'prefer-surgical': {
       text: 'Prefer edit/apply_patch for changes, write for new files',
       condition: 'changing a file that already exists',
-      guidance: 'use the surgical tools; reserve whole-file write for files being created',
+      guidance: 'use exact structured edits for targeted replacements; use governed shell commands for supported batch transformations',
       pitfalls: 'a whole-file write silently discards concurrent edits and any part of the file not held in context',
     },
     'shell-to-verify': {
-      text: 'use shell to explore and verify',
-      condition: 'a belief about the workspace is load-bearing for the next step',
-      guidance: 'check it with a command rather than asserting it',
-      pitfalls: 'the curated shell refuses unsupported flags rather than ignoring them — read the refusal, it names the supported subset',
+      text: 'use shell to explore and verify or perform supported batch edits',
+      condition: 'exploring, verifying, or applying a supported batch transformation in the workspace',
+      guidance: 'run actual commands; sed -i, recursive grep, redirects, loops, substitution, find-exec and archives retain grants and Stop',
+      pitfalls: 'read capability refusals; each command implements documented flags and bounded execution',
     },
     'dispatch-independent': {
       text: 'For work that splits into independent parts, use dispatch to parallelise',

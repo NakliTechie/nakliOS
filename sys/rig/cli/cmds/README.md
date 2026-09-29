@@ -27,15 +27,18 @@ U0 provides the shared foundation. U1 adds command flags, sed, awk, and find. U2
 | `checksums.mjs`, `checksum-manifest.mjs`, `digest-algorithms.mjs` | U2c seven digest commands, cksum and sum |
 | `canonical-input.mjs` | Shared canonical, bounded and governed content reads |
 | `runtime.mjs`, `date-format.mjs` | U2d date, virtual runtime facts and scoped timeout |
+| `archives.mjs` | U4a tar, gzip, gunzip, zcat, zip and unzip |
+| `data.mjs`, `jq-parser.mjs`, `jq-runtime.mjs` | U4b jq, yq and byte-preserving envsubst |
+| `fd.mjs`, `sqlite.mjs`, `sqlite-python.mjs` | U4b governed discovery and private Kiln SQLite |
 | `u2-common.mjs`, `u2-decimal.mjs`, `streams.mjs` | Bounded byte I/O, exact arithmetic, and producer cleanup |
 
-Quoted and escaped operator arguments now remain literal. The full language expansion remains scheduled for U3. Agent interceptors for recursive grep,
-in-place editors and heredoc writes remain unchanged until the agent migration.
-Before U3's nested-command analysis, executable env, xargs, and find actions
-use the fail-closed permission-rule path when an owner sets shell deny/ask rules.
-Dynamic verbs, find action tokens, and unquoted find globs also take that path.
-Escaped command arguments cannot safely match textual multiword prefixes yet; those also fail closed. Textual rules cannot
-safely match quoted or escaped verbs yet, so those also fail closed.
+Quoted and escaped operator arguments remain literal.
+The shell supports bounded loops, conditionals, functions, subshell scopes, command substitution and separate stdout/stderr.
+Anvil executes supported sed edits, recursive search, redirects, quoted heredocs and compound commands through this shell.
+Its pre/post hooks, owner policy, recursively analyzed permissions and expanded-invocation checks remain in place.
+File grants protect every actual filesystem operation, including skill, gate and search-index paths configured by Anvil.
+Structured read/write/edit tools remain available for focused changes.
+Unsupported `perl -i` and `awk -i inplace` forms retain guidance hints without invented exit evidence.
 
 - Handle every operand, or refuse the form with exit 2. A command that reads
   its first operand and drops the rest exits 0 with a wrong answer; the
@@ -107,11 +110,13 @@ It cannot mutate files or run Python/JavaScript runtime code.
 
 The agent executor permits at most 1,024 confirmations per command line.
 This replaces the silent eight-confirmation cutoff. At the bound, it cancels
-the pending proposal and remainder with exit 130. Existing agent redirects
-remain unchanged; moving the agent onto shell tools is a later chunk.
+the pending proposal and remainder with exit 130.
+Anvil's executor accepts staged operations internally and reports their confirmation receipts.
+Stop clears pending proposals; a subsequent independent invocation uses its own cancellation signal.
 
-Compatibility limits remain explicit. Streams combine stdout and stderr until
-U3. `wc -l` retains the historical unterminated-line count. Single-file `wc`
+Compatibility limits remain explicit. Pipes carry stdout; diagnostics use stderr.
+The agent tool renders both streams as text and appends the actual exit status.
+`wc -l` retains the historical unterminated-line count. Single-file `wc`
 omits its filename. `uniq INPUT OUTPUT` remains refused; redirect its output.
 `od` requires an explicit format. Character classes use the C/ASCII locale.
 `stat -c` exposes only name, size, type and backend timestamps; it refuses fake
@@ -245,7 +250,7 @@ File-only head operands close ignored pipeline input before reading the named fi
 
 Other consumers, negative head counts, and mixed head operands require bounded materialization.
 Nested executable wrappers also materialize their child results within the byte ceiling.
-Streaming through arbitrary wrapper or filter chains is not implemented before U3.
+Streaming through arbitrary wrapper or filter chains is not implemented.
 Standalone infinite producers fail at their resource ceiling; they never report a finite prefix as complete.
 The default limits are 64 MiB input, 16 MiB output, and 16 MiB auxiliary retention per invocation.
 Producer chunks contain at most 64 KiB. Loops yield for Stop and share explicit work limits.

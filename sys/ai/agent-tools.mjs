@@ -138,20 +138,16 @@ export const MODE_TOOLS = {
   harden: new Set(['read', 'edit', 'apply_patch', 'todowrite', 'dispatch', 'review']),
 };
 
-// `shellTool()` (from agent-loop) advertises "destructive commands stage for
-// confirmation" — true for agent-loop's own executor, which returns the staged
-// [y/N] and waits. THIS module's executor does not wait: it auto-answers the
-// prompt (see the YOLO block in executeTool), so that description would misstate
-// this surface. Present an honest one here — no gate; git history + the verifier
-// are the safety net. Only the description is overridden; the parameter schema is
-// inherited so it tracks agent-loop.
+// This tool executor adds the real exit status to the shell's rendered streams.
+// Staging is accepted internally; filesystem grants and host policy still apply.
+// Inherit the parameter schema so it stays aligned with the common shell tool.
 function forgeShellTool() {
   const t = shellTool();
   t.function.description =
-    'Run a command in the workspace shell (bash-style: fileops, git, pipes, ' +
-    'redirects, globs). Returns combined stdout/stderr as text. Destructive ' +
-    'commands (rm, git commit) are NOT gated: this executor auto-answers the ' +
-    '[y/N], so git history and the verifier are the safety net.';
+    'Run workspace shell commands: sed -i, recursive grep/rg, find-exec, loops, ' +
+    'substitution, redirects, quoted heredocs, archives, data tools, and git. ' +
+    'Run help for exact syntax and capability refusals. Returns rendered stdout/stderr with actual exit status. ' +
+    'File grants apply; this executor accepts staged operations and reports confirmation receipts. Stop cancels pending operations.';
   return t;
 }
 
@@ -682,7 +678,7 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
         // D3: an optional prediction, graded live so the agent gets immediate feedback; a shell
         // call without `expect` is unchanged. The record keeps the expect in the call args, so a
         // post-hoc fold can re-grade it (foldOutcome).
-        // An intercepted command (sed -i, grep -r, a heredoc write) never reached the shell: its "output"
+        // An unsupported editor hint (perl -i or awk -i inplace) never reached the shell: its "output"
         // is the interceptor's hint, not an observation, so there is nothing to grade — a MISS there
         // would be minted from silence, and D1's streak would stop a run on it.
         const exp = reachedShell ? parseExpect(args?.expect) : null;

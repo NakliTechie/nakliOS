@@ -48,10 +48,39 @@ Shared prerequisites: the launch in `../README.md`; a fresh project with a seede
 - **Gotchas:** the list is per executor (per run); a new task starts empty.
 
 ### tool:shell
-- **Goal:** the curated shell runs a command in the workspace and returns output plus `[exit N]`; unsupported flags are refused, never ignored; a single-file `cat/head/tail` counts as a read.
-- **Source:** `sys/rig/cli/shell.mjs` (the builtins), `sys/ai/agent-tools.mjs` (the `shell` branch, `capOutput`, `expect`), `sys/ai/agent-loop.mjs` (`interceptBashCommand`).
-- **Prerequisites:** launch; for `python`, the COI serve.
-- **Reach and drive:** "Run `ls -la`, then `rg -n 'const' cfg.js`, then `sed -i 's/a/b/' cfg.js`." Then "Run `python -c 'print(1+1)'`." Then a shell call with a missing `command` parameter (ask the model to call the tool with `cmd`).
-- **Observable success:** `ls` and `rg` output with `[exit 0]`; `sed -i` refused with "use the `edit` tool"; python prints `2` with `[exit 0]`; the mis-parameterised call is refused before anything runs, naming `"command"` and the keys sent, with no exit code.
-- **Gotchas:** output over the cap spills to `.forge/out-N.txt` with a pointer; a `[expect]` line is graded live when the model passed `expect`. Shell `cd` moves python's cwd since `e6b6f0f`.
+- **Goal:** execute supported workspace commands and report their output, actual exit status, and optional prediction grade.
+- **Source:** `sys/rig/cli/shell.mjs`, `sys/ai/agent-tools.mjs`, `sys/ai/agent-loop.mjs`, and Anvil's actual `executeTool` wrapper.
+- **Prerequisites:** a named disposable workspace and a configured inference endpoint for the model-driven replay.
+- **Reach and drive:** ask the agent to execute these commands through its shell tool:
+
+```sh
+printf 'a\n' > cfg.js
+sed -i.bak 's/a/b/' cfg.js
+grep -r b .
+cat cfg.js.bak
+cat <<'EOF' > literal.txt
+$HOME $(echo literal)
+EOF
+for n in one two; do printf '%s\n' "$(echo $n)" >> loop.txt; done
+tar -cf check.tar cfg.js loop.txt
+gzip -c check.tar > check.tar.gz
+gunzip -c check.tar.gz > restored.tar
+mkdir unpacked
+tar -xf restored.tar -C unpacked
+mkdir disposable
+printf x > disposable/to-delete
+find disposable -type f -exec rm {} \;
+```
+
+- **Observable success:** `cfg.js` contains `b`, its backup contains `a`, the literal file preserves expansion syntax, and `loop.txt` contains both lines.
+- **Archive evidence:** extracted files match their source bytes; restored tar bytes match the original archive.
+- **Staging evidence:** find-exec removal reports a real confirmation receipt, removes its target, and leaves no pending proposals.
+- **Stop check:** run `sleep 30; printf late > after-stop`, press Stop during sleep, and verify that `after-stop` remains absent.
+- **Recovery check:** a subsequent independent `echo NEXT` succeeds with no queued writes or pending confirmations.
+- **Authority check:** owner deny rules, file grants, pre/post hooks, and protected skill/gate/index paths still govern supported edits.
+- **Refusal check:** unsupported flags fail explicitly; unsupported `perl -i` and `awk -i inplace` hints contain no fabricated exit or prediction grade.
+- **Parameter check:** a call using `cmd` instead of `command` names the required parameter without running anything or inventing an exit code.
+- **Optional runtime check:** with an authorized Kiln runtime, `python -c 'print(1+1)'` prints `2`; SQLite reports explicit availability requirements when absent.
+- **Gotchas:** the tool renders shell stdout/stderr together; pipes carry stdout only. Oversized output spills to `.forge/out-N.txt` with a pointer.
+- **Evidence:** `scripts/test-anvil-unix-integration.mjs` executes real handlers; the retained shell integration suite checks expanded permissions and cancellation boundaries.
 - **B6 structured listings (2026-09-17):** `ls -R` prints directory blocks (`src:` then one entry a line, a blank line between blocks — what coreutils prints to a pipe), never the old flat run of names; a listing (`ls`, `ls -R`, `find`) over 500 entries is cut at the terminal with `[listing truncated: 500 of N entries shown — narrow the path, add -name / -maxdepth, or pipe through grep]` — never inside a pipe (`find … | wc -l` counts every entry). The tool row's tag reads `listing · N entries` or `listing · 500 of N entries (truncated)` (the loop derives it from the text, like a failure `kind`); compaction collapses a stale listing to its real count, including one that was cut. Drive it: a workspace with 600 files, "Run `find . -type f`", then "Run `find . -type f | wc -l`" — the first ends in the trailer with the tag `listing · 500 of 600 entries (truncated)`, the second prints `600`. Also `sleep SECONDS` exists (2026-09-17; capped at 300 s; Stop interrupts it and ends the line). `cd` refuses a missing target or a file (`cd: x: No such file or directory`, exit 1) and stays put — it used to move anywhere and exit 0, so `cd w` twice landed in `w/w` and everything after failed ENOENT (live prod 2026-09-17); bare `cd` returns to the workspace root.

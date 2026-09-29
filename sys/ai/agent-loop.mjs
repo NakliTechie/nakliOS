@@ -33,14 +33,15 @@ export function shellTool() {
     function: {
       name: 'shell',
       description:
-        'Run a command in the workspace shell (bash-style: fileops, git, pipes, ' +
-        'redirects, globs). Returns combined stdout/stderr as text. Destructive ' +
-        'commands (rm, git commit) stage for confirmation.',
+        'Run workspace shell commands: sed -i, recursive grep/rg, find-exec, loops, ' +
+        'substitution, redirects, quoted heredocs, archives, data tools, and git. ' +
+        'Run help for exact syntax and capability refusals. Returns rendered stdout/stderr as text. ' +
+        'File grants apply; the agent executor accepts staged operations and reports confirmation receipts.',
       parameters: {
         type: 'object',
         properties: {
           command: { type: 'string', description: 'The command line to run.' },
-          expect: { type: 'string', description: 'Optional prediction, graded against the result: "exit <n>", "contains <text>", "absent <text>", or "output" (the command prints something). A miss is recorded — predict when you are testing a belief. For a search or a listing predict "output" or "contains <text>", not "exit 0": a search that finds nothing also exits 0, and that grade is reported as VACUOUS.' },
+          expect: { type: 'string', description: 'Optional prediction, graded against the result: "exit <n>", "contains <text>", "absent <text>", or "output" (the command prints something). A miss is recorded — predict when you are testing a belief. For searches or listings, predict "output" or "contains <text>" when you need a match. Exit 0 with no output is graded VACUOUS.' },
         },
         required: ['command'],
       },
@@ -225,27 +226,14 @@ function gateFeedback(verdict, cap) {
     (body ? '\n\n' + boundedText(body, cap) : '');
 }
 
-// omp's bash interceptors: shell idioms with a strictly-better structured tool
-// are redirected instead of run, so the model reaches for read/write/edit/rg.
-// Returns a hint string (the tool result) when a command should be intercepted,
-// or null to run it normally. Conservative by design — only idioms the curated
-// shell handles poorly or destructively-in-place are intercepted; plain reads
-// (`cat file`) and simple redirects the shell supports are left alone.
+// Hints remain only for unsupported editor forms. Implemented shell syntax
+// executes through its governed command path and produces actual exit evidence.
 export function interceptBashCommand(command) {
   const cmd = String(command == null ? '' : command).trim();
   if (!cmd) return null;
-  // In-place stream editors → the edit tool (the shell's sed reads stdin only).
-  if (/(^|\|)\s*sed\s+[^|]*-i\b/.test(cmd) || /(^|\|)\s*perl\s+[^|]*-i\b/.test(cmd) ||
+  if (/(^|\|)\s*perl\s+[^|]*-i\b/.test(cmd) ||
       /(^|\|)\s*awk\s+[^|]*-i\s+inplace\b/.test(cmd)) {
-    return 'Use the `edit` tool for in-place file edits instead of `sed -i`/`perl -i` — it is exact, reviewable, and cannot silently corrupt the file.';
-  }
-  // Recursive grep → the `rg` tool (the shell grep does not recurse directories).
-  if (/(^|\|)\s*grep\s+[^|]*-(?:r|R|-recursive)\b/.test(cmd)) {
-    return 'Use the `rg` tool (ripgrep) for recursive search — the shell `grep` reads named files/stdin only, not directory trees.';
-  }
-  // Writing a file via cat/heredoc redirection → the write tool.
-  if (/(^|\|)\s*cat\s*(?:<<|>)/.test(cmd) || /(^|\|)\s*cat\s+[^|]*<</.test(cmd)) {
-    return 'Use the `write` tool to create or overwrite a file instead of `cat >`/heredoc — it creates parent directories and is unambiguous.';
+    return 'Use the `edit` tool or supported `sed -i` syntax; this shell does not implement `perl -i` or `awk -i inplace`.';
   }
   return null;
 }

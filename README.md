@@ -153,6 +153,13 @@ Immersive mode.
   per-change revert, plan/code/ask modes, and an optional verify gate (the agent
   is not "done" until your command exits 0).
 
+Both agents execute supported shell edits, recursive search, quoted heredocs,
+loops, command substitution, find-exec, archives and structured-data commands.
+Run `help` for command flags and explicit capability refusals.
+Anvil retains its hooks, owner policy, protected paths and file grants around shell execution.
+Its executor accepts staged operations internally and reports confirmation receipts.
+Stop clears pending operations; structured read/write/edit tools remain available.
+
 Anvil's capabilities are at parity with desktop coding agents:
 
 - **Edit robustness** — a 9-strategy replacer chain plus a read-before-edit
