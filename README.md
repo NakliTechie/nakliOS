@@ -34,9 +34,6 @@ Your notes, files, media, and coding tasks occupy separate browser tabs with sep
 NakliOS gives those tools a desktop, app windows, and shared storage and inference settings.
 Apps retain their standalone entrypoints.
 
-Use [VS Code](https://code.visualstudio.com/docs/remote/vscode-web#_relationship-to-vs-code-desktop) instead if you need host processes, a full terminal, or desktop extensions.
-Use [vscode.dev](https://vscode.dev/) if you only want browser-based repository editing.
-
 ## Choose where your work lives
 
 Apps offer storage according to their capabilities: Browser storage, a Folder you select, or encrypted Crate storage on your own Cloudflare R2.
