@@ -36,6 +36,8 @@ import { createGeneratorCommands } from './cmds/generators.mjs';
 import { createPathCommands } from './cmds/paths.mjs';
 import { createMutationCommands } from './cmds/mutation.mjs';
 import { createInspectionCommands } from './cmds/inspection.mjs';
+import { createEncodingCommands } from './cmds/encodings.mjs';
+import { createChecksumCommands } from './cmds/checksums.mjs';
 import { isByteStream, ownByteStream, closeByteStream, collectByteStream, createStreamingHead } from './cmds/streams.mjs';
 import { createPatch } from '../fileops/patch.mjs';
 
@@ -465,7 +467,9 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
     createGeneratorCommands({ signal: commandSignal, environment: commandEnvironment }),
     createPathCommands(io, { signal: commandSignal, environment: commandEnvironment }),
     createMutationCommands(io, { signal: commandSignal, environment: commandEnvironment }),
-    createInspectionCommands(io, { signal: commandSignal }));
+    createInspectionCommands(io, { signal: commandSignal }),
+    createEncodingCommands(io, { signal: commandSignal }),
+    createChecksumCommands(io, { signal: commandSignal }));
   builtins.head = createStreamingHead({ fallback: builtins.head, signal: commandSignal });
 
   // One dispatch table also owns discovery and help. Dotted registry names remain reachable.
@@ -536,7 +540,8 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
       const input = ['cat', 'tee', 'od', 'head', 'tail', 'wc', 'tr', 'cut', 'env', 'sed', 'awk', 'find',
         'tac', 'rev', 'nl', 'paste', 'join', 'comm', 'split', 'fold', 'fmt', 'expand', 'unexpand', 'column',
         'seq', 'shuf', 'tsort', 'expr', 'numfmt', 'printenv', 'yes', 'ptx', 'bc', 'factor',
-        'readlink', 'realpath', 'rmdir', 'mktemp', 'truncate', 'unlink', 'du', 'tree', 'file', 'strings', 'cmp', 'ln', 'link'].includes(verb) || !builtins[verb] ? stdin : toText(stdin);
+        'readlink', 'realpath', 'rmdir', 'mktemp', 'truncate', 'unlink', 'du', 'tree', 'file', 'strings', 'cmp', 'ln', 'link',
+        'base64', 'base32', 'basenc', 'md5sum', 'sha1sum', 'sha224sum', 'sha256sum', 'sha384sum', 'sha512sum', 'b2sum', 'cksum', 'sum'].includes(verb) || !builtins[verb] ? stdin : toText(stdin);
       const result = await handler(argv.slice(1), input);
       if (!result.stream) return result;
       const stream = ownByteStream(result.stream);
