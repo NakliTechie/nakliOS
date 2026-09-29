@@ -28,6 +28,12 @@ import { createListCommands } from './cmds/list.mjs';
 import { createSedCommands } from './cmds/sed.mjs';
 import { createAwkCommands } from './cmds/awk.mjs';
 import { createFindCommands } from './cmds/find.mjs';
+import { createRecordCommands } from './cmds/records.mjs';
+import { createLayoutCommands } from './cmds/layout.mjs';
+import { createNumericCommands } from './cmds/numeric.mjs';
+import { createBcCommands } from './cmds/bc.mjs';
+import { createGeneratorCommands } from './cmds/generators.mjs';
+import { isByteStream, ownByteStream, closeByteStream, collectByteStream, createStreamingHead } from './cmds/streams.mjs';
 import { createPatch } from '../fileops/patch.mjs';
 
 // bash verb -> registry command name. The dotted name (fs.list) always works too.
@@ -430,6 +436,12 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
     renderResult, runStage: io.run,
     signal: () => currentSignal()?.aborted ? currentSignal() : execution?.signal,
     SLEEP_MAX_S, LIST_FLAGS, commandNames });
+  const commandSignal = () => currentSignal()?.aborted ? currentSignal() : execution?.signal;
+  const commandEnvironment = () => {
+    const vars = new Map(state.vars);
+    if (!state.explicitEnv) vars.set('PWD', '/' + state.cwd);
+    return vars;
+  };
   Object.assign(builtins, createCoreCommands(io), createFileCommands(io), createTextCommands(io),
     createSedCommands(io, { signal: () => currentSignal()?.aborted ? currentSignal() : execution?.signal }),
     createAwkCommands(io, { signal: () => currentSignal()?.aborted ? currentSignal() : execution?.signal,
@@ -442,6 +454,13 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
       } }),
     createSearchCommands(io), createListCommands(io), createUtilityCommands({ io, state, commandNames,
       signal: () => currentSignal()?.aborted ? currentSignal() : execution?.signal, maxSleep: SLEEP_MAX_S }));
+  Object.assign(builtins,
+    createRecordCommands(io, { signal: commandSignal }),
+    createLayoutCommands(io, { signal: commandSignal, environment: commandEnvironment }),
+    createNumericCommands(io, { signal: commandSignal }),
+    createBcCommands(io, { signal: commandSignal }),
+    createGeneratorCommands({ signal: commandSignal, environment: commandEnvironment }));
+  builtins.head = createStreamingHead({ fallback: builtins.head, signal: commandSignal });
 
   // One dispatch table also owns discovery and help. Dotted registry names remain reachable.
   const dispatch = new Map(Object.entries(builtins));
@@ -482,7 +501,8 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
     return out;
   }
 
-  async function runStage(rawArgv, stdin, expanded = false) {
+  async function runStage(rawArgv, stdin, expanded = false, allowProducer = false) {
+    const incomingStream = isByteStream(stdin) ? ownByteStream(stdin) : null;
     try {
       const current = execution;
       current.check();
@@ -504,14 +524,26 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
       const verb = argv[0];
       const handler = dispatch.get(verb);
       if (!handler) return { text: `${verb}: command not found`, code: 127 };
+      if (incomingStream) stdin = verb === 'head' ? incomingStream
+        : await collectByteStream(incomingStream, { signal: commandSignal, command: verb });
       // Text-only commands decode at their boundary, never in the pipeline itself.
-      const input = ['cat', 'tee', 'od', 'head', 'tail', 'wc', 'tr', 'cut', 'env', 'sed', 'awk', 'find'].includes(verb) || !builtins[verb] ? stdin : toText(stdin);
-      return await handler(argv.slice(1), input);
+      const input = ['cat', 'tee', 'od', 'head', 'tail', 'wc', 'tr', 'cut', 'env', 'sed', 'awk', 'find',
+        'tac', 'rev', 'nl', 'paste', 'join', 'comm', 'split', 'fold', 'fmt', 'expand', 'unexpand', 'column',
+        'seq', 'shuf', 'tsort', 'expr', 'numfmt', 'printenv', 'yes', 'ptx', 'bc', 'factor'].includes(verb) || !builtins[verb] ? stdin : toText(stdin);
+      const result = await handler(argv.slice(1), input);
+      if (!result.stream) return result;
+      const stream = ownByteStream(result.stream);
+      if (allowProducer) return { ...result, stream };
+      // Nested callers expect complete results. They cannot accidentally treat
+      // a producer as empty text or leave it alive outside its invocation.
+      const text = await collectByteStream(stream, { signal: commandSignal, command: verb });
+      const { stream: ignored, ...rest } = result;
+      return { ...rest, text, raw: true };
     } catch (error) {
       if (error instanceof ShellInterrupted) throw error;
       return { text: error.message, code: typeof error.code === 'number' ? error.code : 1,
         ...(error.cancelled ? { cancelled: true } : {}) };
-    }
+    } finally { if (incomingStream) await closeByteStream(incomingStream, { suppress: true }); }
   }
 
   async function runSpecial(verb, args, stdin) {
@@ -905,8 +937,8 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
     }
     let last = { text: '', code: 0 };
     for (const argv of pipeline) {
-      last = await runStage(argv, stdin);
-      if (last.clear || last.cancelled) return last;
+      last = await runStage(argv, stdin, false, true);
+      if (last.clear || last.cancelled) { await closeByteStream(last.stream, { suppress: true }); return last; }
       // A stage that ERRORED must not have its message eaten as the next stage's input.
       // This shell has no stderr, so `rg --bad-flag x | wc -l` used to pipe the refusal
       // text into wc and report `1` with exit 0 — a refused command reporting success and
@@ -917,10 +949,15 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
       // Exit 1 is NOT an error here: grep/rg use it for "no match", and `grep x f | wc -l`
       // legitimately counts zero. Only >= 2 (usage/refusal) aborts, which is exactly the
       // line the builtins already draw with flagErr's exit 2.
-      if (last.code >= 2) return last;
+      if (last.code >= 2) { await closeByteStream(last.stream, { suppress: true }); return last; }
       // Normalize legacy line-oriented producers before transport; byte/raw
       // producers already own their exact bytes. Consumers never guess a newline.
-      stdin = last.raw ? last.text : withTrailingNewline(last.text);
+      stdin = last.stream ? ownByteStream(last.stream) : last.raw ? last.text : withTrailingNewline(last.text);
+    }
+    if (last.stream) {
+      const text = await collectByteStream(last.stream, { signal: commandSignal });
+      const { stream: ignored, ...rest } = last;
+      return { ...rest, text, raw: true };
     }
     return last;
   }
@@ -1028,7 +1065,7 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
           const w = await face.invoke('fs.write', { path, data, createParents: true });
           if (!w.ok) { write(`${path}: ${w.message || 'write failed'}`); lastCode = 1; }
         } else {
-          let text = res.displayText ?? renderData(res.text);
+          let text = res.displayText ?? renderData(autoData(res.text));
           if (res.listing) {
             const t = truncateListing(text, res.listing.entries);
             text = t.text; lastListing = { tool: res.listing.tool, entries: res.listing.entries, shown: t.shown, truncated: t.truncated };

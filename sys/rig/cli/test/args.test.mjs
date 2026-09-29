@@ -96,6 +96,16 @@ test('wrapper mode leaves nested command flags and terminators intact', () => {
   assert.deepEqual(parse(['-', '-x'], { stopAtOperand: true }).operands, ['-', '-x']);
 });
 
+test('numeric operands opt in without rewriting option values or weakening ordinary flag refusal', () => {
+  const result = parse(['-3', '-.5', '-n', '-1', '--expression=-2', '\u0002-9'], { negativeNumbers: true });
+  assert.deepEqual(result.operands, ['-3', '-.5', '\u0002-9']);
+  assert.equal(result.options.lines, '-1');
+  assert.deepEqual(result.options.expression, ['-2']);
+  refuses(['-3'], 'unsupported flag -3');
+  assert.throws(() => parse(['-x'], { negativeNumbers: true }), /unsupported flag -x/);
+  assert.deepEqual(parse(['-3', '-x'], { negativeNumbers: true, stopAtOperand: true }).operands, ['-3', '-x']);
+});
+
 test('every unsupported spelling refuses with exit 2 and supported flags', () => {
   refuses(['-x'], 'unsupported flag -x');
   refuses(['-vqx'], 'unsupported flag -x');

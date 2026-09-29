@@ -1,6 +1,6 @@
 # Shell command modules
 
-U0 provides the shared foundation. U1a extends the command flags. U1b, U1c, and U1d add sed, awk, and find:
+U0 provides the shared foundation. U1 adds command flags, sed, awk, and find. U2a adds text and numeric utilities:
 
 | Module | Commands |
 | --- | --- |
@@ -14,6 +14,12 @@ U0 provides the shared foundation. U1a extends the command flags. U1b, U1c, and 
 | `sed.mjs` | U1b stream editing, addresses, hold space, branching and governed in-place edits |
 | `awk.mjs` | U1c records, patterns, expressions, arrays, functions and governed file streams |
 | `find.mjs` | U1d bounded traversal, predicates, expressions, governed deletion and nested commands |
+| `records.mjs` | U2a tac, rev, nl, paste, join, comm, split |
+| `layout.mjs` | U2a fold, fmt, expand, unexpand, column, ptx |
+| `numeric.mjs` | U2a seq, shuf, tsort, expr, numfmt, factor |
+| `bc.mjs` | U2a exact decimal calculator language and math library |
+| `generators.mjs` | U2a virtual printenv and bounded yes producer |
+| `u2-common.mjs`, `u2-decimal.mjs`, `streams.mjs` | Bounded byte I/O, exact arithmetic, and producer cleanup |
 
 Quoted and escaped operator arguments now remain literal. The full language expansion remains scheduled for U3. Agent interceptors for recursive grep,
 in-place editors and heredoc writes remain unchanged until the agent migration.
@@ -42,7 +48,8 @@ safely match quoted or escaped verbs yet, so those also fail closed.
 - Return `{ text, code }`, where `text` is a string or `Uint8Array`. Return
   `raw: true` for text whose exact final newline must survive pipes and redirection.
   Byte output always survives pipes and redirects verbatim. The terminal
-  renders byte output as `<N bytes>`. Text-only commands decode at entry.
+  displays valid UTF-8 as text and other byte output as `<N bytes>`.
+  Text-only commands decode at entry.
   A result may provide `displayText` for readable terminal diagnostics beside binary
   output. Pipes and redirects continue to use `text` unchanged.
   Legacy line-oriented producers add their newline before entering a pipe;
@@ -178,3 +185,112 @@ The command bounds traversal entries, depth, matcher steps, retained paths, outp
 The backend supplies each directory listing eagerly; find bounds retained entries after that call returns.
 Plain line listings retain the terminal's 500-entry cap; pipes receive all entries within resource limits.
 NUL and mixed nested output bypass line-based truncation.
+
+## U2a transport and environment
+
+The U2a commands treat input as bytes under C-locale rules.
+Their output retains exact framing through pipes and redirected files.
+Terminal rendering classifies complete valid UTF-8 byte output at the display boundary.
+Binary output retains the existing byte-count display.
+
+`printenv [-0] [NAME...]` reads the virtual shell environment.
+Named variables preserve operand order; missing variables produce status 1 while present values still print.
+The virtual PWD follows the current directory unless `env` establishes an explicit environment.
+`env -i printenv` therefore remains empty. No host environment is read.
+
+`yes` emits `y` or its words joined by spaces, followed by LF.
+`yes | head -n N` and `yes | head -c N` stop normally at the requested boundary.
+Count-free `shuf -r` uses the same producer protocol.
+Head closes its producer after early completion, invalid arguments, failure, or Stop.
+Unsigned or plus-prefixed zero-count head closes the producer without requesting data.
+Negative counts mean all except the last N records or bytes; `-0` therefore requires the entire input.
+Repeated standard-input operands for head refuse before reading instead of replaying the same input prefix.
+File-only head operands close ignored pipeline input before reading the named files.
+
+Other consumers, negative head counts, and mixed head operands require bounded materialization.
+Nested executable wrappers also materialize their child results within the byte ceiling.
+Streaming through arbitrary wrapper or filter chains is not implemented before U3.
+Standalone infinite producers fail at their resource ceiling; they never report a finite prefix as complete.
+The default limits are 64 MiB input, 16 MiB output, and 16 MiB auxiliary retention per invocation.
+Producer chunks contain at most 64 KiB. Loops yield for Stop and share explicit work limits.
+
+Shared exact decimals use scaled BigInts with explicit rounding and allocation checks.
+No numeric command invokes host processes or a remote calculation service.
+File readers request the remaining aggregate byte limit before backend content allocation.
+Commands preserve typed grant and backend capability failures.
+
+### Record utilities
+
+`tac [-b] [-s SEP] [-r] [FILE...]` reverses records independently for each input.
+The regex mode uses bounded POSIX BRE with C-locale byte classes.
+`rev [FILE...]` reverses bytes within each LF-delimited line and preserves unterminated tails.
+`nl` supports logical page delimiters, header/body/footer numbering styles, line increments, blank groups, numbering formats, and page resets.
+
+`paste [-s] [-d LIST] [-z] [FILE...]` shares one stdin cursor across repeated `-` operands.
+`paste - -` therefore consumes alternating records from the same input.
+`join` supports selected key fields, delimiters, unmatched rows, replacement fields, output selection, case folding, and order controls.
+Duplicate matching key groups produce their complete Cartesian product within resource limits.
+`comm [-123] [-z] FILE1 FILE2` retains duplicate multiplicities and adjusts indentation for suppressed columns.
+Join and comm require sorted inputs unless `--nocheck-order` explicitly disables checking.
+They refuse two simultaneous `-` operands before reading, because shared two-stream stdin semantics are outside this implementation.
+
+`split` supports line, byte, and line-byte pieces, alphabetic/numeric suffixes, numeric starts, and additional suffixes.
+It validates destination names, suffix capacity, input collisions, and aggregate output before its first governed write.
+Split refuses symlinked input or destination paths, including ancestors, during metadata-only preflight.
+This prevents aliases from bypassing input-collision checks. Backends lacking content-free metadata refuse explicitly.
+Each write awaits the registry's existing confirmation policy.
+Refusal, Stop, or a write failure prevents later pieces; earlier accepted pieces remain.
+
+### Layout utilities
+
+`fold [-b] [-s] [-w N]` distinguishes byte width from C-locale display columns.
+`expand [-i] [-t STOPS]` and `unexpand [-a] [-t STOPS] [--first-only]` share checked tab stops.
+Layout counts bytes rather than Unicode graphemes or East Asian terminal widths.
+`fmt` supports width, goal, split-only, uniform spacing, prefixes, crown margins, and tagged paragraphs.
+`column` supports table, separator, output separator, output width, and row-first forms.
+It chooses explicit width, virtual `COLUMNS`, then width 80.
+
+`ptx` builds a bounded permuted keyword index with contextual output.
+It supports case folding, references, widths/gaps, break files, ignored words, selected words, and optional roff output.
+`ptx -o FILE` reads selected words; it is not an output destination.
+Every auxiliary file uses governed reads and the same aggregate input limit.
+
+### Numeric utilities
+
+`seq` steps exact decimals and supports separators, equal-width output, and one checked numeric format directive.
+Formats support `e/E/f/F/g/G`, bounded width/precision, and literal `%%`; hexadecimal floating formats explicitly refuse.
+`shuf` supports input records, explicit elements, inclusive ranges, finite counts, replacement, NUL records, and governed output files.
+It uses platform cryptographic entropy with rejection sampling; unavailable entropy fails explicitly.
+`shuf -o FILE` reads its input before writing, including same-path input/output.
+`tsort` validates token pairs and reports cycles with a nonzero status.
+
+`expr` implements integer arithmetic, comparisons, value-selecting logical operators, string operations, and bounded anchored BRE matching.
+It preserves exact BigInt integers and statuses 0 for truthy results, 1 for empty/zero results, and 2 for usage errors.
+`numfmt` scales exact decimals using none, SI, IEC, IEC-i, or automatic input units.
+It supports selected fields, headers, delimiters, padding, suffixes, rounding, numeric formatting, and invalid-input policies.
+`factor` handles exact nonnegative integers through 64 bits with bounded deterministic primality and factor-search work.
+Zero and one have no fabricated prime factors. Exhausted work reports failure instead of returning an incomplete factor list.
+
+### Calculator
+
+`bc [-lqsw] [FILE...]` uses a dedicated parser and exact scaled-integer interpreter.
+It processes file programs in order, followed by stdin, through governed bounded reads.
+The language supports variables, arrays, assignment, arithmetic, comparisons, conditionals, loops, functions, automatic locals, return, and quit.
+Functions copy ordinary array parameters; explicit `*array[]` parameters provide the supported reference extension.
+GNU-style extensions such as `else`, boolean operators, `print`, and multi-character names are explicit in strict and warning modes.
+`-s` refuses extensions; `-w` reports them. Noninteractive `-q` does not add a banner.
+
+`scale`, `ibase`, `obase`, `length`, `scale(expr)`, and `sqrt` retain calculator-specific decimal rules.
+Input bases follow GNU's documented 2–16 clamping behavior.
+Output bases above the implemented ceiling of 999 fail explicitly.
+`read()` remains unsupported; programs receive source through files and stdin.
+Numbers use bounded continuation lines rather than losing significant digits during formatting.
+
+`-l` initializes scale 20 and supplies sine, cosine, arctangent, logarithm, exponential, and integer-order Bessel functions.
+The math library uses scaled-integer intervals with remainder bounds and precision refinement.
+It returns a value only when enclosing endpoints truncate to the same requested decimal result.
+It reports a resource error when its bounded precision or work cannot establish that result.
+
+Default calculator limits include 256 KiB source, 100,000 syntax nodes, 128 syntax/function levels, 10,000 decimal digits, and scale 1,000.
+Arrays and exponentiation have separate bounds; arithmetic checks intermediate allocation before constructing large values.
+Stop interrupts yielded loops and preserves a subsequent independent shell invocation.

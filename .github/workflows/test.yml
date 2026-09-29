@@ -369,6 +369,18 @@ jobs:
       - name: Verify U1d find predicates, actions, grants and cancellation
         run: node sys/rig/cli/test/u1d-find.test.mjs
 
+      - name: Verify U2a text and numeric utilities through the governed shell
+        run: node sys/rig/cli/test/u2a-text-numeric.test.mjs
+
+      - name: Verify U2 bounded input, output, decimal and cancellation contracts
+        run: node sys/rig/cli/test/u2-common.test.mjs
+
+      - name: Verify U2a exact calculator language and math library
+        run: node sys/rig/cli/test/u2a-bc.test.mjs
+
+      - name: Verify bounded byte producers, head cleanup and virtual environment
+        run: node sys/rig/cli/test/u2a-streams.test.mjs
+
       - name: Verify literal shell operators and escaped arguments
         run: node sys/rig/cli/test/literal-operators.test.mjs
 

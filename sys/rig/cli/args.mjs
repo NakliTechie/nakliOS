@@ -73,9 +73,11 @@ export function formatSupportedFlags(spec) {
  * for commands that combine -e and -f. Each entry is { key, flag, value }.
  * Options may follow operands unless stopAtOperand:true is set (for wrappers
  * such as env). A lone '-' is an operand; '--' ends option parsing.
+ * negativeNumbers:true treats a leading minus followed by a digit or .digit as
+ * an operand. Numeric commands still validate the complete value themselves.
  * User argument errors throw ArgError with code:2 and text for shell results.
  */
-export function parseArgs(argv, spec, { command = 'command', stopAtOperand = false } = {}) {
+export function parseArgs(argv, spec, { command = 'command', stopAtOperand = false, negativeNumbers = false } = {}) {
   if (!Array.isArray(argv) || argv.some((arg) => typeof arg !== 'string')) {
     throw new TypeError('argv must be an array of strings');
   }
@@ -102,7 +104,7 @@ export function parseArgs(argv, spec, { command = 'command', stopAtOperand = fal
       operands.push(...argv.slice(i + 1));
       break;
     }
-    if (arg === '-' || !arg.startsWith('-')) {
+    if (arg === '-' || !arg.startsWith('-') || negativeNumbers === true && /^-(?:[0-9]|\.[0-9])/.test(arg)) {
       if (stopAtOperand) {
         operands.push(...argv.slice(i));
         break;

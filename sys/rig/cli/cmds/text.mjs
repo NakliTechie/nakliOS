@@ -42,6 +42,17 @@ function numberArgs(command, argv) {
   return parseArgs(normalized, { n: value('n', 'lines'), c: value('c', 'bytes') }, { command });
 }
 
+// Both eager and streaming head use one option/number contract.
+export function parseEndArguments(command, argv) {
+  const parsed = numberArgs(command, argv);
+  if (command === 'head' && parsed.operands.filter((operand) => operand === '-').length > 1) {
+    fail(command, 'repeated standard-input operands are unsupported');
+  }
+  const selected = parsed.occurrences.at(-1), byteMode = selected?.key === 'c', count = selected?.value ?? '10';
+  integer(command, count, byteMode ? 'byte count' : 'line count', { signed: true });
+  return { ...parsed, count, byteMode };
+}
+
 function lineBoundaries(bytes) {
   const ends = [];
   for (let i = 0; i < bytes.length; i++) if (bytes[i] === 10) ends.push(i + 1);
@@ -337,9 +348,7 @@ function printfCommand(argv) {
 
 export function createTextCommands(io) {
   const endCommand = (command) => async (argv, stdin = '') => {
-    const { operands, occurrences } = numberArgs(command, argv);
-    const selected = occurrences.at(-1), byteMode = selected?.key === 'c', count = selected?.value ?? '10';
-    integer(command, count, byteMode ? 'byte count' : 'line count', { signed: true });
+    const { operands, count, byteMode } = parseEndArguments(command, argv);
     const entries = await inputs(io, command, operands, stdin), out = []; let failed = false;
     for (const entry of entries) {
       if (out.length && operands.length > 1) out.push('\n');
