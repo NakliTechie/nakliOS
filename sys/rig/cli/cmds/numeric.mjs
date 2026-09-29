@@ -408,7 +408,7 @@ export function createNumericCommands(io, { signal = () => null, randomBytes, li
       }
       if (diagnosticBytes + ctx.output.length > ctx.limits.maxOutputBytes) fail('numfmt', 'result and diagnostics exceed the output limit');
       const output = result(ctx, code);
-      return { ...output, ...(diagnostics.length ? { displayText: [renderData(autoData(output.text)).replace(/\n$/, ''), diagnostics.join('\n')].filter(Boolean).join('\n') } : {}) };
+      return { ...output, stdout: output.text, stderr: diagnostics.length ? diagnostics.join('\n') + '\n' : '', ...(diagnostics.length ? { displayText: [renderData(autoData(output.text)).replace(/\n$/, ''), diagnostics.join('\n')].filter(Boolean).join('\n') } : {}) };
     },
   };
 }

@@ -405,6 +405,17 @@ jobs:
       - name: Verify nested timeout and alias permission rules through Anvil policy
         run: node sys/ai/test/timeout-permission.test.mjs
 
+      - name: Verify U3 shell grammar and expansion
+        run: node sys/rig/cli/test/u3-language.test.mjs
+      - name: Verify U3 separated streams and redirects
+        run: node sys/rig/cli/test/u3-streams.test.mjs
+      - name: Verify U3 grants, staging, Stop and limits
+        run: node sys/rig/cli/test/u3-governance.test.mjs
+      - name: Verify U3 recursive permission analysis through Anvil
+        run: node sys/ai/test/u3-permission.test.mjs
+      - name: U3 review semantics regressions
+        run: node sys/rig/cli/test/u3-review-semantics.test.mjs
+
       - name: Verify literal shell operators and escaped arguments
         run: node sys/rig/cli/test/literal-operators.test.mjs
 

@@ -1,12 +1,14 @@
 // U1a text tools. Locale-sensitive ordering and character classes use the C
 // locale; byte consumers never decode before counting, slicing, or dumping.
+import { lineData, streamResult } from '../command-streams.mjs';
 import { ArgError, parseArgs } from '../args.mjs';
-import { IOFailure, autoData, concatData, toBytes, toText } from '../io.mjs';
+import { IOFailure, autoData, concatData, toBytes, toText, renderData } from '../io.mjs';
 
 const flags = (letters) => Object.fromEntries([...letters].map((short) => [short, { short }]));
 const value = (short, long) => ({ short, ...(long ? { long } : {}), value: true });
 const fail = (command, message) => { throw new ArgError(`${command}: ${message}`); };
-const raw = (text, code = 0) => ({ text, code, raw: true });
+const raw = (text, code = 0, stderr = '', displayText) => ({ text, stdout: text, stderr, code, raw: true, ...(displayText === undefined ? {} : { displayText }) });
+const errorResult = (text, code = 1) => raw('', code, lineData(text));
 const records = (text) => text === '' ? [] : (text.endsWith('\n') ? text.slice(0, -1) : text).split('\n');
 const lines = (items) => items.length ? items.join('\n') + '\n' : '';
 const compare = (a, b) => a < b ? -1 : a > b ? 1 : 0;
@@ -338,42 +340,39 @@ function printfCommand(argv) {
     }
     if (stopped || ai === before) break;
   } while (ai < args.length);
-  let output = concatData(parts);
-  if (bad != null) {
-    const bytes = toBytes(output);
-    output = concatData([output, bytes.length && bytes.at(-1) !== 10 ? '\n' : '', `printf: ${bad}: invalid number`]);
-  }
-  return raw(autoData(output), bad == null ? 0 : 1);
+  return raw(autoData(concatData(parts)), bad == null ? 0 : 1, bad == null ? '' : `printf: ${bad}: invalid number\n`);
 }
 
 export function createTextCommands(io) {
   const endCommand = (command) => async (argv, stdin = '') => {
     const { operands, count, byteMode } = parseEndArguments(command, argv);
-    const entries = await inputs(io, command, operands, stdin), out = []; let failed = false;
+    const entries = await inputs(io, command, operands, stdin), events = []; let failed = false, printed = false;
     for (const entry of entries) {
-      if (out.length && operands.length > 1) out.push('\n');
-      if (entry.error) { out.push(entry.error + '\n'); failed = true; continue; }
-      if (operands.length > 1) out.push(`==> ${entry.path === '-' ? 'standard input' : entry.path} <==\n`);
-      out.push(selectEnd(command, toBytes(entry.data), count, byteMode));
+      if (entry.error) { events.push({ channel: 2, data: lineData(entry.error) }); failed = true; continue; }
+      const parts = [];
+      if (printed && operands.length > 1) parts.push('\n');
+      if (operands.length > 1) parts.push(`==> ${entry.path === '-' ? 'standard input' : entry.path} <==\n`);
+      parts.push(selectEnd(command, toBytes(entry.data), count, byteMode));
+      events.push({ channel: 1, data: autoData(concatData(parts)) }); printed = true;
     }
-    return raw(autoData(concatData(out)), failed ? 1 : 0);
+    return streamResult(events, failed ? 1 : 0);
   };
   return {
     head: endCommand('head'), tail: endCommand('tail'),
     async wc(argv, stdin = '') {
       const { options, operands } = parseArgs(argv, flags('lwcm'), { command: 'wc' });
       const columns = ['l', 'w', 'm', 'c'].filter((key) => options[key]); if (!columns.length) columns.push('l', 'w', 'c');
-      const entries = await inputs(io, 'wc', operands, stdin), total = { l: 0, w: 0, m: 0, c: 0 }, output = []; let failed = false;
+      const entries = await inputs(io, 'wc', operands, stdin), total = { l: 0, w: 0, m: 0, c: 0 }, output = [], errors = []; let failed = false;
       const row = (count) => columns.map((key) => count[key]).join(' ');
       for (const entry of entries) {
-        if (entry.error) { output.push(entry.error); failed = true; continue; }
+        if (entry.error) { errors.push(entry.error); failed = true; continue; }
         const bytes = toBytes(entry.data), text = toText(bytes);
         const count = { l: lineBoundaries(bytes).length, w: text.split(/\s+/u).filter(Boolean).length, m: [...text].length, c: bytes.length };
         for (const key of Object.keys(total)) total[key] += count[key];
         output.push(row(count) + (operands.length > 1 ? ' ' + entry.path : ''));
       }
       if (operands.length > 1) output.push(row(total) + ' total');
-      return raw(lines(output), failed ? 1 : 0);
+      return raw(lines(output), failed ? 1 : 0, lines(errors));
     },
     async sort(argv, stdin = '') {
       const { options, operands } = parseArgs(argv, { ...flags('rnufhVsbdgc'),
@@ -384,7 +383,7 @@ export function createTextCommands(io) {
       const keys = (options.k || []).map(sortKey);
       for (const key of keys) if (['n', 'g', 'h', 'V'].filter((ch) => key.modifiers.includes(ch)).length > 1) fail('sort', 'incompatible key ordering modes');
       const entries = await inputs(io, 'sort', operands, stdin, { stop: true });
-      const error = entries.find((entry) => entry.error); if (error) return raw(error.error, 1);
+      const error = entries.find((entry) => entry.error); if (error) return errorResult(error.error);
       const input = entries.flatMap((entry) => records(toText(entry.data)));
       const byKey = (a, b) => {
         for (const key of keys.length ? keys : [null]) {
@@ -396,7 +395,7 @@ export function createTextCommands(io) {
       };
       const order = (a, b) => byKey(a, b) || (options.s || options.u ? 0 : (options.r ? -1 : 1) * compare(a, b));
       if (options.c) {
-        for (let i = 1; i < input.length; i++) if (order(input[i - 1], input[i]) > 0 || (options.u && byKey(input[i - 1], input[i]) === 0)) return raw(`sort: disorder at line ${i + 1}: ${input[i]}\n`, 1);
+        for (let i = 1; i < input.length; i++) if (order(input[i - 1], input[i]) > 0 || (options.u && byKey(input[i - 1], input[i]) === 0)) return errorResult(`sort: disorder at line ${i + 1}: ${input[i]}\n`, 1);
         return raw('');
       }
       let sorted = input.slice().sort(order);
@@ -411,7 +410,7 @@ export function createTextCommands(io) {
       const skipFields = integer('uniq', options.f ?? '0', 'field count'), skipChars = integer('uniq', options.s ?? '0', 'character count');
       const width = options.w == null ? Infinity : integer('uniq', options.w, 'comparison width');
       const entries = await inputs(io, 'uniq', operands, stdin, { stop: true });
-      if (entries[0].error) return raw(entries[0].error, 1);
+      if (entries[0].error) return errorResult(entries[0].error);
       const key = (line) => {
         let text = line;
         for (let i = 0; i < skipFields && text; i++) text = text.replace(/^[\t ]*[^\t ]*/, '');
@@ -436,10 +435,9 @@ export function createTextCommands(io) {
       if (mode !== 'f' && (options.d != null || options.s)) fail('cut', '-d and -s require -f');
       const want = (i) => selected(i) !== !!options.complement;
       const entries = await inputs(io, 'cut', operands, stdin);
-      // Keep the existing merged-stream contract: read failures lead the
-      // selected data, regardless of the missing operand's position.
+      // Read failures stay on stderr regardless of operand order.
       const errors = entries.filter((entry) => entry.error).map((entry) => entry.error);
-      const output = errors.length ? [lines(errors)] : [];
+      const output = [];
       for (const entry of entries) {
         if (entry.error) continue;
         const bytes = toBytes(entry.data); let begin = 0;
@@ -464,7 +462,8 @@ export function createTextCommands(io) {
           output.push(chosen.join(''), hasNewline ? '\n' : '');
         }
       }
-      return raw(autoData(concatData(output)), errors.length ? 1 : 0);
+      const data = autoData(concatData(output));
+      return raw(data, errors.length ? 1 : 0, lines(errors), errors.length ? lines(errors) + renderData(data) : undefined);
     },
     tr(argv, stdin = '') {
       const { options, operands } = parseArgs(argv, { ...flags('ds'), complement: { short: ['c', 'C'], long: 'complement' } }, { command: 'tr' });
@@ -507,8 +506,8 @@ export function createTextCommands(io) {
       const skip = size(options.j ?? '0', 'skip count'), maximum = options.N == null ? Infinity : size(options.N, 'read count');
       const entries = await inputs(io, 'od', operands, stdin), errors = entries.filter((e) => e.error).map((e) => e.error);
       const all = toBytes(concatData(entries.filter((e) => !e.error).map((e) => e.data)));
-      if (skip > all.length) return raw(lines([...errors, 'od: cannot skip past end of input']), 1);
-      const bytes = all.slice(skip, Math.min(all.length, skip + maximum)), out = [...errors];
+      if (skip > all.length) return errorResult(lines([...errors, 'od: cannot skip past end of input']));
+      const bytes = all.slice(skip, Math.min(all.length, skip + maximum)), out = [];
       const address = (n) => n.toString({ o: 8, d: 10, x: 16 }[radix]).padStart(7, '0');
       const escaped = { 0: '\\0', 7: '\\a', 8: '\\b', 9: '\\t', 10: '\\n', 11: '\\v', 12: '\\f', 13: '\\r' };
       for (let start = 0; start < bytes.length; start += 16) {
@@ -529,7 +528,7 @@ export function createTextCommands(io) {
         });
       }
       if (radix !== 'n') out.push(address(skip + bytes.length));
-      return raw(lines(out), errors.length ? 1 : 0);
+      return raw(lines(out), errors.length ? 1 : 0, lines(errors), errors.length ? lines(errors) + lines(out) : undefined);
     },
   };
 }

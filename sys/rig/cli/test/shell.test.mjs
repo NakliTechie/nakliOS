@@ -64,7 +64,7 @@ await test('echo, redirect (>), append (>>), and cat', async () => {
   eq(await run(shell, 'cat notes.txt'), 'line1\nline2', 'append keeps line separators');
 });
 
-await test('2>&1 and friends are no-ops, never a literal &1 file', async () => {
+await test('descriptor duplication and closing never create a literal &1 file', async () => {
   const { shell } = freshShell();
   // `echo hi 2>&1` prints hi and writes NO `&1` file.
   eq(await run(shell, 'echo hi 2>&1'), 'hi', '2>&1 leaves output intact');
@@ -72,9 +72,9 @@ await test('2>&1 and friends are no-ops, never a literal &1 file', async () => {
   assert(/error|not|ENOENT|failed/i.test(afterAmp1), `no &1 file created: ${afterAmp1}`);
   // The `2` fd is not leaked as an argument.
   eq(await run(shell, 'echo start 2>&1'), 'start', 'fd prefix stripped, not echoed');
-  // Other merge forms are equally inert.
-  eq(await run(shell, 'echo a 1>&2'), 'a', '1>&2 no-op');
-  eq(await run(shell, 'echo b 2>&-'), 'b', '2>&- close-fd no-op');
+  // Terminal rendering includes either visible descriptor.
+  eq(await run(shell, 'echo a 1>&2'), 'a', '1>&2 routes output to visible stderr');
+  eq(await run(shell, 'echo b 2>&-'), 'b', 'closing stderr keeps stdout open');
 });
 
 await test('2>&1 pipes correctly into the next stage', async () => {
@@ -90,9 +90,9 @@ await test('real > and >> redirects survive the merge-idiom handling', async () 
   eq(await run(shell, 'cat out.txt'), 'one', '> still writes');
   await run(shell, 'echo two >> out.txt');
   eq(await run(shell, 'cat out.txt'), 'one\ntwo', '>> still appends');
-  // `2>file` collapses to a merged redirect (fd stripped, no `2` argument).
-  await run(shell, 'echo merged 2> both.txt');
-  eq(await run(shell, 'cat both.txt'), 'merged', '2>file writes the merged stream');
+  // stderr-only redirection leaves stdout visible.
+  eq(await run(shell, 'echo visible 2> both.txt'), 'visible', 'stdout remains visible');
+  eq(await run(shell, 'cat both.txt'), '', '2>file captures no stdout');
   // `&>file` redirects the combined stream too.
   await run(shell, 'echo combo &> c.txt');
   eq(await run(shell, 'cat c.txt'), 'combo', '&>file writes combined stream');
@@ -526,10 +526,11 @@ await test('SH3: a here-document is the statement\'s stdin; python - runs it; ba
   await run(shell, 'python - <<-PY\n\tx = 1\n\tPY'); eq(calls[1].code, 'x = 1\n', '<<- strips leading tabs, the terminator too');
   eq(await run(shell, 'grep -c b <<\'E\'\nab\ncd\nbb\nE'), '2', 'any command reads it as stdin');
   eq(await run(shell, 'grep -c b <<\'E\'; echo after\nab\nE'), '1\nafter', 'a statement written after << on its line still runs (bash form)');
-  assert(/no line `E` ends/.test(await run(shell, 'grep -c b <<\'E\'\nab\nE; echo after')), 'a terminator must be alone on its line, as in bash');
-  assert(/does not expand inside a here-document/.test(await run(shell, 'python - <<PY\nx = $HOME\nPY')) && shell.lastCode === 2 && calls.length === 2, 'an unquoted body that would expand is refused, not run literally');
-  assert(/no line `PY` ends/.test(await run(shell, "python - <<'PY'\nprint(1)")) && shell.lastCode === 2, 'a missing terminator is an error');
-  assert(/and `<` on one command/.test(await run(shell, "cat < x <<'E'\nq\nE")), 'a heredoc and < on one command is refused');
+  assert(/heredoc has no terminator/.test(await run(shell, 'grep -c b <<\'E\'\nab\nE; echo after')), 'a terminator must be alone on its line, as in bash');
+  assert(/heredoc expansion is unavailable/.test(await run(shell, 'python - <<PY\nx = $HOME\nPY')) && shell.lastCode === 2 && calls.length === 2, 'an unquoted body that would expand is refused, not run literally');
+  assert(/heredoc has no terminator/.test(await run(shell, "python - <<'PY'\nprint(1)")) && shell.lastCode === 2, 'a missing terminator is an error');
+  await fs.write('x', 'old');
+  eq(await run(shell, "cat < x <<'E'\nq\nE"), 'q', 'the last input redirect supplies stdin');
   eq(await run(shell, 'echo "a<<b"'), 'a<<b', 'a quoted << is text, not a heredoc');
   // od
   await run(shell, 'printf "a\\tb\\r\\n" > f.txt');
@@ -540,22 +541,15 @@ await test('SH3: a here-document is the statement\'s stdin; python - runs it; ba
   assert(/give a format/.test(await run(shell, 'od f.txt')) && shell.lastCode === 2, 'no format is refused, not guessed');
 });
 
-await test('SH4: command substitution is refused before anything runs — never passed through as text', async () => {
-  const fs = createFileops({ backend: new MemoryBackend() });
-  const registry = buildRigRegistry({ fs });
-  const grant = createGrant({ prefixes: [''], scopes: ['fs:read', 'fs:write', 'fs:remove'] });
-  const opLog = createOpLog({ fs: createFileops({ backend: new MemoryBackend() }) });
-  const face = createAgentFace({ registry, grant, opLog, actor: 'agent' });
-  const shell = createShell({ registry, face });
-  for (const line of ['echo $(ls)', 'echo "n=$(ls | wc -l)"', 'echo `date`', 'touch made; echo $(ls)']) {
-    const out = await run(shell, line);
-    assert(/command substitution is not supported here, so nothing was run/.test(out) && shell.lastCode === 2, `${line} → refused: ${out}`);
-  }
-  eq(/made/.test(await run(shell, 'ls')), false, 'the WHOLE line is refused — a statement before the substitution did not run either');
-  assert(/arithmetic expansion is not supported/.test(await run(shell, 'echo $((1+2))')), '$((…)) is named as arithmetic');
-  eq(await run(shell, "echo '$(ls)'"), '$(ls)', 'single quotes keep it literal, as in bash');
-  eq(await run(shell, 'ls # $(x)'), '', 'a comment is not a substitution');
-  eq(await run(shell, "grep -c ls <<'E'\n$(ls)\nE"), '1', 'a heredoc body is data, not a substitution');
+await test('U3 replaces SH4 refusal with governed substitutions and literal quoting', async () => {
+  const { shell } = freshShell();
+  eq(await run(shell, 'echo "n=$(printf x | wc -c)"'), 'n=1', 'a pipeline runs inside substitution');
+  eq(await run(shell, 'echo `printf inner`'), 'inner', 'backticks execute');
+  eq(await run(shell, 'touch made; echo "$(ls made)"'), 'made', 'substitution sees preceding governed effects');
+  eq(await run(shell, 'echo $((1+2))'), '3', 'arithmetic evaluates');
+  eq(await run(shell, "echo '$(ls)'"), '$(ls)', 'single quotes keep substitution literal');
+  eq(await run(shell, 'echo safe # $(missing)'), 'safe', 'comments do not execute');
+  eq(await run(shell, "grep -c ls <<'E'\n$(ls)\nE"), '1', 'literal heredoc bodies remain data');
 });
 
 if (failures.length) {

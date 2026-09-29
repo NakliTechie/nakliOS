@@ -5,21 +5,20 @@
 // fine here" or "never touch the deploy script". So, alongside the gate:
 // Tool(specifier) rules in allow/deny/ask lists, plus a permission MODE.
 //
-// WHY WE MOSTLY DO NOT NEED A CLASSIFIER. A harness over a real shell needs a model to work out
-// what a command really invokes, because in a real shell command substitution, backticks, nested
-// quoting and heredocs make prefix-matching unsound — `ls $(rm -rf /)` starts with "ls". Anvil's
-// curated shell REFUSES all of those (sys/rig/cli/shell.mjs:810 — no subshells, loops, functions,
-// heredocs, background jobs or command substitution). What is left is a flat sequence of commands
-// joined by && || ; and |, which segments deterministically. So these rules are exact rather than
-// probabilistic — and where a command still cannot be segmented with confidence, the answer is
-// `ask`, never `allow`.
+// Execution and permission inspection use one quote-aware AST. Every branch,
+// substitution, function body and executable wrapper contributes its commands.
+// Dynamic executable positions remain uninspectable and fail closed.
 //
 // PRECEDENCE: deny beats ask beats allow. A deny rule is absolute; it is the
 // one thing that survives bypass mode, because writing "never do this" and having a mode ignore it
 // would make deny rules worthless.
 
-import { tokenize } from '../rig/cli/parser.mjs';
-import { parseArgs } from '../rig/cli/args.mjs';
+import { inspectShell, describeInvocation, commandMatches } from '../rig/cli/language-inspect.mjs';
+
+const SHELL_CONTEXT = Symbol('trusted shell permission context');
+export function withShellContext(args, context) { return { ...args, [SHELL_CONTEXT]: context }; }
+export const inspectShellArguments = (args) => inspectShell(args?.command, args?.[SHELL_CONTEXT]);
+const inspected = inspectShellArguments;
 
 export const MODES = Object.freeze(['default', 'acceptEdits', 'bypass']);
 
@@ -44,104 +43,8 @@ export function parseRule(str) {
   return { tool, spec, prefix, source: String(str) };
 }
 
-/**
- * Segment a shell command line into the commands it actually runs.
- *
- * Sound here BECAUSE the curated shell refuses substitution and subshells. Quotes are still
- * tracked, so `echo "a && b"` is one command, not two. Returns null when the line contains
- * something we refuse to reason about — a caller must treat null as "cannot match", never as
- * "matches nothing".
- */
-// A here-document's body is DATA — the stdin of the command beside it — never commands (SH3). Drop the
-// bodies and the `<<TAG` operators so the command lines are matched like any other; a body that is
-// never closed leaves the line unparseable (null), because the shell refuses it too.
-function stripHeredocs(s) {
-  const lines = s.split('\n'), out = [];
-  for (let i = 0; i < lines.length; i++) {
-    const tags = []; let header = '', quote = null;
-    const line = lines[i];
-    for (let j = 0; j < line.length; j++) {
-      const c = line[j];
-      if (c === '\\' && quote !== "'" && j + 1 < line.length) { header += c + line[++j]; continue; }
-      if (quote) { header += c; if (c === quote) quote = null; continue; }
-      if (c === '"' || c === "'") { quote = c; header += c; continue; }
-      if (c === '#' && (j === 0 || /\s/.test(line[j - 1]))) { header += line.slice(j); break; }
-      if (c === '<' && line[j + 1] === '<' && line[j + 2] !== '<') {
-        const m = /^<<(-?)\s*(?:'([^']*)'|"([^"]*)"|([A-Za-z_][A-Za-z0-9_]*))/.exec(line.slice(j));
-        if (!m) return null;
-        tags.push({ tag: m[2] ?? m[3] ?? m[4], strip: m[1] === '-' });
-        header += ' '; j += m[0].length - 1; continue;
-      }
-      header += c;
-    }
-    out.push(header);
-    for (const t of tags) {
-      let closed = false;
-      for (i++; i < lines.length; i++) { if ((t.strip ? lines[i].replace(/^\t+/, '') : lines[i]) === t.tag) { closed = true; break; } }
-      if (!closed) return null;
-    }
-  }
-  return out.join(' '); // U3 will give non-heredoc newlines their full grammar.
-}
-
-export function segments(command) {
-  const s = stripHeredocs(String(command == null ? '' : command));
-  if (s === null) return null;
-  // Escape removal can change any multiword prefix (git p\\ush), not just verbs.
-  // Textual rules cannot prove those prefixes until U3 analyzes argv structurally.
-  if (s.includes('\\')) return null;
-  // substitution and ${…}: not ours to parse — decideByRules fails CLOSED on a null for deny/ask rules
-  if (/\$\(|`|<<|\$\{/.test(s)) return null;
-  const out = []; let cur = ''; let q = null;
-  for (let i = 0; i < s.length; i++) {
-    const c = s[i];
-    if (c === '\\' && q !== "'" && i + 1 < s.length) { cur += c + s[++i]; continue; }
-    if (q) { cur += c; if (c === q) q = null; continue; }
-    if (c === '"' || c === "'") { q = c; cur += c; continue; }
-    if (c === '&' && s[i + 1] === '&') { out.push(cur); cur = ''; i++; continue; }
-    if (c === '|' && s[i + 1] === '|') { out.push(cur); cur = ''; i++; continue; }
-    if (c === ';' || c === '|') { out.push(cur); cur = ''; continue; }
-    cur += c;
-  }
-  out.push(cur);
-  const commands = out.map((x) => x.trim()).filter(Boolean);
-  for (const line of commands) {
-    const markedWords = tokenize(line, { markLiteral: true });
-    while (/^[A-Za-z_][A-Za-z0-9_]*=/.test(markedWords[0] || '')) markedWords.shift();
-    const words = markedWords.map((word) => word.replace(/\u0001/g, ''));
-    // Expansion-derived and quoted/escaped verbs cannot be matched safely by
-    // the current textual prefix rules. U3 will replace this conservative path.
-    const verb = words[0];
-    if (verb && (verb.includes('$') || !(line === verb || line.startsWith(verb + ' ') || line.startsWith(verb + '\t')))) return null;
-    // B03 find can mutate or run a nested argv. Keep hidden actions and dynamic
-    // action tokens on the fail-closed path until recursive U3 analysis exists.
-    if (verb === 'find' && words.slice(1).some((word) =>
-      ['-exec', '-execdir', '-delete'].includes(word) || word.includes('$'))) return null;
-    if (verb === 'find' && markedWords.slice(1).some((word) => /[*?]/.test(word.replace(/\u0001./g, '')))) return null;
-    // U1a adds env execution and xargs batching/replacement. Until U3 recursively
-    // models nested argv, never let an outer wrapper hide a denied inner command.
-    // The existing null path fails closed under deny/ask rules, including bypass.
-    if (['xargs', 'timeout', 'egrep', 'fgrep', 'more', 'dir', 'vdir'].includes(words[0])) return null;
-    if (words[0] === 'env') {
-      try {
-        const { operands } = parseArgs(words.slice(1), {
-          ignore: { short: 'i', long: 'ignore-environment' },
-          unset: { short: 'u', long: 'unset', value: true, multiple: true },
-        }, { command: 'env', stopAtOperand: true });
-        while (/^[A-Za-z_][A-Za-z0-9_]*=/.test(operands[0] || '')) operands.shift();
-        if (operands.length) return null;
-      } catch (_) { return null; }
-    }
-  }
-  return commands;
-}
-
-function specMatchesCommand(rule, cmd) {
-  if (rule.spec === null || rule.spec === '') return true;     // Bash or Bash(*) — any command
-  const c = cmd.trim();
-  if (rule.prefix) return c === rule.spec || c.startsWith(rule.spec + ' ');
-  return c === rule.spec;
-}
+/** Canonical executable segments; null means inspection cannot prove the invoked verbs. */
+export function segments(command) { return inspectShell(command)?.map(describeInvocation) ?? null; }
 
 // A path spec is a glob: * within a segment, ** across segments.
 function globToRe(glob) {
@@ -157,15 +60,15 @@ function globToRe(glob) {
  * The all/some split is the load-bearing part: Bash(ls:*) must not allow `ls && rm -rf /`, while
  * Bash(rm:*) in a deny list must still catch the rm hiding at the end of it.
  */
-export function ruleCovers(rule, toolName, args = {}) {
+export function ruleCovers(rule, toolName, args = {}, { possible = false, analysis } = {}) {
   if (!rule) return 'none';
   const name = String(toolName || '').toLowerCase();
   const isShell = SHELL_TOOLS.has(name);
   const ruleIsShell = rule.tool === 'bash' || rule.tool === 'shell' || rule.tool === 'sh';
   if (isShell && ruleIsShell) {
-    const segs = segments(args && args.command);
+    const segs = analysis === undefined ? inspected(args) : analysis;
     if (segs === null || !segs.length) return 'none';   // cannot reason => cannot match => falls to ask
-    const hits = segs.filter((c) => specMatchesCommand(rule, c)).length;
+    const hits = segs.filter((c) => commandMatches(rule, c, possible)).length;
     return hits === segs.length ? 'all' : (hits > 0 ? 'some' : 'none');
   }
   if (isShell !== ruleIsShell) return 'none';
@@ -229,20 +132,23 @@ export function decideByRules(cfg, toolName, args) {
   }
   // A shell line that cannot be split into the commands it runs cannot be CHECKED against a shell deny
   // or ask rule — and 'unmatched' used to let bypass allow it (\`rm -rf \${DIR}\`, a heredoc before SH3).
-  // Fail closed: with any shell deny rule it is refused, with any shell ask rule it asks.
+  // Fail closed: any shell deny rule refuses it; otherwise it asks even without configured rules.
   const isShellCall = SHELL_TOOLS.has(String(toolName || '').toLowerCase());
-  if (isShellCall && segments(args && args.command) === null) {
+  const analysis = isShellCall ? inspected(args) : undefined;
+  if (isShellCall && analysis === null) {
     const shellRule = (k) => lists[k].find((r) => r.tool === 'bash' || r.tool === 'shell' || r.tool === 'sh');
-    const d = shellRule('deny'); if (d) return { decision: 'deny', rule: d.source, why: 'this command line cannot be split into the commands it runs, so your deny rule (' + d.source + ') cannot be checked — refused' };
+    const d = shellRule('deny'); if (d) return { decision: 'deny', uninspectable: true, rule: d.source, why: 'this command line cannot be split into the commands it runs, so your deny rule (' + d.source + ') cannot be checked — refused' };
     const a = shellRule('ask'); if (a) return { decision: 'ask', uninspectable: true, rule: a.source, why: 'this command line cannot be split into the commands it runs, so your ask rule (' + a.source + ') asks' };
+    return { decision: 'ask', uninspectable: true, rule: null,
+      why: 'the executable command cannot be determined before expansion, so this invocation needs approval' };
   }
   // Deny first, and 'some' is enough: one refused command in a chain refuses the chain.
   for (const r of lists.deny) {
-    const c = ruleCovers(r, toolName, args);
+    const c = ruleCovers(r, toolName, args, { possible: true, analysis });
     if (c === 'all' || c === 'some') return { decision: 'deny', rule: r.source, why: 'a deny rule matches (' + r.source + ')' };
   }
   for (const r of lists.ask) {
-    const c = ruleCovers(r, toolName, args);
+    const c = ruleCovers(r, toolName, args, { possible: true, analysis });
     if (c === 'all' || c === 'some') return { decision: 'ask', rule: r.source, why: 'an ask rule matches (' + r.source + ')' };
   }
   for (const b of bad) {
@@ -250,8 +156,13 @@ export function decideByRules(cfg, toolName, args) {
       return { decision: 'ask', rule: b.source, invalid: true, why: 'your ask rule "' + b.source + '" cannot be read, so this asks' };
     }
   }
-  // Allow needs EVERY segment covered.
-  for (const r of lists.allow) {
+  // Different allow rules may cover different commands, but none may be omitted.
+  if (isShellCall && analysis?.length) {
+    const applicable = lists.allow.filter((rule) => SHELL_TOOLS.has(rule.tool));
+    if (analysis.every((argv) => applicable.some((rule) => commandMatches(rule, argv)))) {
+      return { decision: 'allow', rule: applicable.map((rule) => rule.source).join(', '), why: 'allow rules cover every executable command' };
+    }
+  } else if (!isShellCall) for (const r of lists.allow) {
     if (ruleCovers(r, toolName, args) === 'all') return { decision: 'allow', rule: r.source, why: 'an allow rule matches (' + r.source + ')' };
   }
   return { decision: 'unmatched', rule: null, why: '' };

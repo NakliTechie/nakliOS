@@ -16,7 +16,7 @@ export function createPathCommands(io, { signal = () => null, environment = () =
   };
   const finish = (ctx, diagnostics, code) => {
     const text = ctx.output.finish();
-    return { text, code, raw: true, ...(diagnostics.length ? {
+    return { text, stdout: text, stderr: diagnostics.finish(), code, raw: true, ...(diagnostics.length ? {
       displayText: decoder.decode(diagnostics.finish()) + renderData(autoData(text)),
     } : {}) };
   };

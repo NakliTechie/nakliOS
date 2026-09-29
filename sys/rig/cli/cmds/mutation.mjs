@@ -19,12 +19,13 @@ export function createMutationCommands(io, { signal = () => null, randomBytes, e
       try { ctx.budget.spend('argumentBytes', utf8Length(arg, ctx.budget.remaining('argumentBytes'))); }
       catch (error) { if (error instanceof ArgError) fail(command, 'argument bytes exceed the resource limit'); throw error; }
     }
+    ctx.diagnostics = ctx.output.fork();
     return ctx;
   }
   const diagnostic = (ctx, error, path) => {
-    ctx.output.argument(`${ctx.command}: ${path ? path + ': ' : ''}${error.code}: ${error.message}\n`);
+    ctx.diagnostics.argument(`${ctx.command}: ${path ? path + ': ' : ''}${error.code}: ${error.message}\n`);
   };
-  const result = (ctx, failed = false) => ({ text: ctx.output.finish(), code: failed ? 1 : 0, raw: true });
+  const result = (ctx, failed = false) => ({ text: ctx.output.finish(), stdout: ctx.output.finish(), stderr: ctx.diagnostics.finish(), code: failed ? 1 : 0, raw: true });
   const nonemptyOperands = (command, operands) => { if (!operands.length) fail(command, 'missing operand'); };
   const reservePath = (ctx, path) => {
     ctx.budget.spend('pathBytes', utf8Length(path, ctx.budget.remaining('pathBytes')));

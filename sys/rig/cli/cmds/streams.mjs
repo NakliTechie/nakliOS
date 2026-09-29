@@ -75,7 +75,7 @@ export async function collectByteStream(source, { signal = () => null, limits = 
       ctx.output.append(next.value);
     }
     return ctx.output.finish();
-  } catch (error) { failed = true; throw error; }
+  } catch (error) { failed = true; error.streamFailed = true; throw error; }
   finally { await closeByteStream(stream, { suppress: failed }); }
 }
 

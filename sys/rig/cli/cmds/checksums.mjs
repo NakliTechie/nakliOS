@@ -15,7 +15,7 @@ const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 const fail = (ctx, text) => { throw new ArgError(`${ctx.command}: ${text}`); };
 function finish(ctx, diagnostics, code) {
   const text = ctx.output.finish();
-  return { text, code, raw: true, ...(diagnostics.length ? { displayText: new TextDecoder().decode(diagnostics.finish()) + renderData(autoData(text)) } : {}) };
+  return { text, stdout: text, stderr: diagnostics.finish(), code, raw: true, ...(diagnostics.length ? { displayText: new TextDecoder().decode(diagnostics.finish()) + renderData(autoData(text)) } : {}) };
 }
 function named(name) {
   const escaped = escapeChecksumName(name); return (escaped.escaped ? '\\' : '') + escaped.name;

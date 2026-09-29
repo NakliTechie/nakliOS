@@ -1,5 +1,7 @@
 // An async command keeps its call stack while the terminal answers a confirmation.
 // Only feed() yields: nested commands and pipelines await the same invocation.
+import { concatData, autoData, renderData } from './io.mjs';
+
 export class ShellInterrupted extends Error {
   constructor() { super('shell: interrupted'); this.code = 130; }
 }
@@ -8,20 +10,26 @@ export class ShellRefused extends Error {
   constructor(verb) { super(`cancelled: ${verb}`); this.code = 1; this.cancelled = true; }
 }
 
-export function createExecution({ face, signal = null }) {
+export function createExecution({ face, signal = null, describeCommand = (name) => face.describeCommand?.(name) }) {
   const controller = new AbortController();
   const scopes = [];
   let pending = null, stopped = false, finished = false, waiter = null;
-  let output = [], confirmation = null;
+  let output = [], stdout = [], stderr = [], confirmation = null, cleared = false;
   const events = [];
   const emit = (extra = {}) => {
-    const event = { output: output.join('\n'), ...extra, ...(confirmation ? { confirmation } : {}) };
-    output = []; confirmation = null;
+    const event = { output: output.join('').replace(/\n$/, ''), stdout: concatData(stdout), stderr: concatData(stderr),
+      cleared, ...extra, ...(confirmation ? { confirmation } : {}) };
+    output = []; stdout = []; stderr = []; confirmation = null; cleared = false;
     if (waiter) { const resolve = waiter; waiter = null; resolve(event); }
     else events.push(event);
   };
   const check = () => { if (stopped || signal?.aborted || scopes.some((scope) => scope.controller.signal.aborted)) throw new ShellInterrupted(); };
-  const write = (text) => { if (text !== '' && text != null) output.push(String(text)); };
+  const write = (text) => { if (text !== '' && text != null) output.push(String(text).replace(/\n$/, '') + '\n'); };
+  const writeStreams = (out = '', err = '', display) => {
+    stdout.push(out); stderr.push(err);
+    if (display !== undefined) output.push(String(display));
+    else output.push(renderData(autoData(concatData([out, err]))));
+  };
   const reject = (proposals) => { for (const p of proposals) face.reject(p.proposalId); };
   function cancel() {
     stopped = true;
@@ -36,7 +44,14 @@ export function createExecution({ face, signal = null }) {
   signal?.addEventListener('abort', cancel, { once: true });
 
   return {
-    check, write, cancel,
+    check, write, writeStreams, cancel,
+    clear() { cleared = true; },
+    isStaged(name) { return !!describeCommand(name)?.destructive; },
+    async authorize(name, input) {
+      check();
+      if (typeof face.check !== 'function') return null;
+      const result = await face.check(name, input); check(); return result;
+    },
     get signal() { return scopes.at(-1)?.controller.signal ?? controller.signal; },
     get hasDeadline() { return scopes.some((scope) => scope.milliseconds > 0); },
     async withTimeout(milliseconds, operation) {
@@ -58,6 +73,7 @@ export function createExecution({ face, signal = null }) {
       try { result = await operation(); }
       catch (error) {
         if (!(error instanceof ShellInterrupted) || !scope.expired) throw error;
+        result = error.shellResult;
       } finally {
         clearTimeout(timer);
         scopes.pop();
@@ -71,7 +87,7 @@ export function createExecution({ face, signal = null }) {
     get stopped() { return stopped || !!signal?.aborted; },
     next() {
       if (events.length) return Promise.resolve(events.shift());
-      if (finished) return Promise.resolve({ output: '' });
+      if (finished) return Promise.resolve({ output: '', stdout: '', stderr: '', cleared: false });
       return new Promise((resolve) => { waiter = resolve; });
     },
     answer(yes) {

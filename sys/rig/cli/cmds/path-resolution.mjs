@@ -8,7 +8,7 @@ const failure = (code, message) => { throw new IOFailure('fs.stat', { code, mess
 const badPath = (text) => /[\\\x00-\x1f]/.test(text) || /%(2e|2f|5c|00|25)/i.test(text);
 
 export async function resolveVirtualPath(io, input, { context: ctx, mode = 'all-but-last', logical = false,
-  strip = false, followFinal = true } = {}) {
+  strip = false, followFinal = true, missingParents = false } = {}) {
   if (!ctx) throw new TypeError('path resolution requires a shared context');
   if (!['all-but-last', 'existing', 'missing'].includes(mode)) throw new TypeError('invalid path resolution mode');
   if (typeof input !== 'string' || !input.length) failure('ENOENT', 'empty pathname');
@@ -57,7 +57,7 @@ export async function resolveVirtualPath(io, input, { context: ctx, mode = 'all-
       ctx.budget.check(); return stat;
     } catch (error) {
       if (error instanceof IOFailure && (mode === 'missing' && ['ENOENT', 'ENOTDIR'].includes(error.code)
-        || mode === 'all-but-last' && last && error.code === 'ENOENT')) return null;
+        || mode === 'all-but-last' && (last || missingParents) && error.code === 'ENOENT')) return null;
       throw error;
     } finally { release(); }
   };

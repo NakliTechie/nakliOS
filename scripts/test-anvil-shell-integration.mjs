@@ -10,9 +10,9 @@ import { createGrant, createOpLog, createAgentFace } from '../sys/rig/agent/inde
 import { createShell } from '../sys/rig/cli/shell.mjs';
 import { makeToolExecutor } from '../sys/ai/agent-tools.mjs';
 import { preHookReply, postHookNotes } from '../sys/ai/run-assembly.mjs';
-import { gateAction, gateEvent } from '../sys/ai/action-gate.mjs';
+import { gateAction, gateEvent, guardCriticalShellInvocation } from '../sys/ai/action-gate.mjs';
 import { applyPolicy, grant as policyGrant, POLICY_HINT } from '../sys/ai/action-policy.mjs';
-import { decideByRules, applyMode } from '../sys/ai/permission-rules.mjs';
+import { withShellContext, decideByRules, applyMode } from '../sys/ai/permission-rules.mjs';
 import { explainSkillsRefusal } from '../sys/ai/skills.mjs';
 import { explainGateRefusal } from '../sys/ai/gate.mjs';
 
@@ -20,20 +20,23 @@ const source = await inlineModule();
 const executorSource = extractFunction(source, 'executeTool');
 const stopSource = extractFunction(source, 'stopRun');
 const gateHintSource = extractFunction(source, 'gateHint');
+const agentShellSource = source.split('\n').find((line) => line.includes('const agentShell = () => createShell('));
+assert.ok(agentShellSource, 'extract the actual agent shell factory');
 
-function fixture({ hooksCfg = { preTool: [], postTool: [] }, permissionRules = {}, permissionMode = 'bypass', answer = 'no' } = {}) {
+function fixture({ hooksCfg = { preTool: [], postTool: [] }, permissionRules = {}, permissionMode = 'bypass', answer = 'no', extraScopes = [] } = {}) {
   const fs = createFileops({ backend: new MemoryBackend() });
   const git = createGitCore({ fs, dir: '/' });
   const registry = buildRigRegistry({ fs, git });
   const face = createAgentFace({ registry,
-    grant: createGrant({ prefixes: [''], scopes: ['fs:read', 'fs:write', 'fs:remove', 'git:read', 'git:write'] }),
+    grant: createGrant({ prefixes: [''], scopes: ['fs:read', 'fs:write', 'fs:remove', 'git:read', 'git:write', ...extraScopes] }),
     opLog: createOpLog({ fs: createFileops({ backend: new MemoryBackend() }) }), actor: 'agent' });
   const t = { id: 'shell-integration', verifyCmd: '', log: [], convo: [{ role: 'user', content: 'Inspect the fixture workspace.' }] };
   const state = { permissionRules, permissionMode, policy: {} };
   const system = [], questions = [], events = [];
   const runtime = evaluate(`
     let abortController = new AbortController();
-    const shell = createShell({ registry, face, signal: () => abortController.signal });
+    ${agentShellSource}
+    const shell = agentShell();
     const baseExec = makeToolExecutor({ shell, face, mode });
     ${gateHintSource}
     ${executorSource}
@@ -43,8 +46,8 @@ function fixture({ hooksCfg = { preTool: [], postTool: [] }, permissionRules = {
        isAborted: () => abortController.signal.aborted });
   `, {
     AbortController, createShell, makeToolExecutor, registry, face, fs, mode: 'code', t, state, hooksCfg,
-    preHookReply, postHookNotes, gateAction, gateEvent, applyPolicy, policyGrant, POLICY_HINT,
-    decideByRules, applyMode, explainSkillsRefusal, explainGateRefusal,
+    preHookReply, postHookNotes, gateAction, gateEvent, guardCriticalShellInvocation, applyPolicy, policyGrant, POLICY_HINT,
+    withShellContext, decideByRules, applyMode, explainSkillsRefusal, explainGateRefusal,
     kilnRef: null, jsHost: null,
     runCtx: { t, messages: t.convo, rec: { onEvent: (event) => events.push(event) } },
     pushSystem: (text) => system.push(text),
@@ -175,4 +178,118 @@ test('a malformed deny rule still blocks wrapped commands in bypass mode when an
     assert.equal(ctx.feeds.length, 0);
   }
   assert.equal((await ctx.fs.read('keep', { encoding: 'utf-8' })).data, 'unchanged');
+});
+
+
+// Review regressions use only MemoryBackend and an in-process recording transport.
+// No host Git command, network request, or remote mutation occurs in these tests.
+for (const permissionMode of ['default', 'bypass']) test(`Anvil refuses critical expanded function arguments in ${permissionMode} mode`, async () => {
+  const ctx = fixture({ permissionMode, answer: 'once', extraScopes: ['git:push'] });
+  const dispatched = [];
+  ctx.git.push = async (args) => { dispatched.push(args); return { ok: true }; };
+  assert.match(await ctx.run('f(){ git push "$1" origin main; }'), /\[exit 0\]$/);
+  const output = await ctx.run('f --force; printf BAD > after-critical');
+  assert.match(output, /whatever it was asked/);
+  assert.match(output, /\[exit 126\]$/);
+  assert.deepEqual(dispatched, [], 'the recording transport receives no call');
+  assert.equal((await ctx.fs.stat('after-critical')).ok, false);
+  assert.deepEqual(ctx.face.pendingProposals(), []);
+  assert.equal(await ctx.run('echo NEXT'), 'NEXT\n[exit 0]');
+});
+
+for (const permissionMode of ['default', 'bypass']) test(`Anvil static critical actions remain non-liftable with an allow wildcard in ${permissionMode} mode`, async () => {
+  const ctx = fixture({ permissionMode, permissionRules: { allow: ['Bash(*)'] }, answer: 'always' });
+  for (const command of ["g'it' push --force origin main", 'env git push -f origin main', 'timeout 1 git push --force origin main',
+    'if false; then git push --force origin main; fi']) {
+    const output = await ctx.run(command);
+    assert.match(output, /Refused/);
+  }
+  assert.deepEqual(ctx.feeds, [], 'static critical classification refuses before shell execution');
+  assert.deepEqual(ctx.questions, [], 'no approval choice can lift a critical refusal');
+});
+
+for (const permissionMode of ['default', 'bypass']) test(`Anvil asks about dynamic executables with empty rules in ${permissionMode} mode`, async () => {
+  const ctx = fixture({ permissionMode });
+  for (const command of ['$COMMAND victim', 'f(){ "$1" victim; }; f rm']) {
+    assert.match(await ctx.run(command), /^Refused: /);
+  }
+  assert.equal(ctx.questions.length, 2);
+  assert.deepEqual(ctx.feeds, []);
+});
+
+test('Anvil approves an inspectable dynamic invocation once and asks again for a persisted dynamic function', async () => {
+  const ctx = fixture({ answer: 'once' });
+  assert.match(await ctx.run('f(){ "$1" "$2"; }'), /\[exit 0\]$/);
+  assert.equal(ctx.questions.length, 1);
+  assert.equal(await ctx.run('f echo FIRST'), 'FIRST\n[exit 0]');
+  assert.equal(await ctx.run('f echo SECOND'), 'SECOND\n[exit 0]');
+  assert.equal(ctx.questions.length, 3, 'each dynamic invocation retains its approval requirement');
+});
+
+
+for (const [name, body] of [
+  ['variable', 'git push "$FLAG" origin main'],
+  ['env', 'env git push "$FLAG" origin main'],
+  ['timeout', 'timeout 1 git push "$FLAG" origin main'],
+  ['xargs', "printf '%s' --force | xargs -n1 git push origin main"],
+  ['find', "find . -type f -exec git push \"$FLAG\" origin main ';'"],
+  ['substitution', 'printf "%s" "$(git push "$FLAG" origin main)"'],
+  ['loop', 'for x in one two; do git push "$FLAG" origin main; done'],
+]) test(`Anvil expanded critical guard survives ${name} dispatch`, async () => {
+  const ctx = fixture({ answer: 'once', extraScopes: ['git:push'] });
+  await ctx.fs.write('fixture', 'unchanged');
+  const dispatched = [];
+  ctx.git.push = async (args) => { dispatched.push(args); return { ok: true }; };
+  const output = await ctx.run('FLAG=--force; ' + body + '; printf BAD > after-critical');
+  assert.match(output, /whatever it was asked/);
+  assert.match(output, /\[exit 126\]$/);
+  assert.deepEqual(dispatched, []);
+  assert.equal((await ctx.fs.stat('after-critical')).ok, false);
+  assert.equal((await ctx.fs.read('fixture', { encoding: 'utf-8' })).data, 'unchanged');
+  assert.deepEqual(ctx.face.pendingProposals(), []);
+  assert.equal(await ctx.run('echo NEXT'), 'NEXT\n[exit 0]');
+});
+
+
+for (const command of ['FLAGS=-rf; rm "$FLAGS" ""', 'FLAGS=-rf; fs.remove "$FLAGS" --path=/']) {
+  test(`Anvil critical root guard uses resolved registry path forms: ${command}`, async () => {
+    const ctx = fixture({ answer: 'once' });
+    await ctx.fs.write('keep', 'unchanged');
+    const output = await ctx.run(command + '; printf BAD > after-critical');
+    assert.match(output, /whatever it was asked/);
+    assert.match(output, /\[exit 126\]$/);
+    assert.equal((await ctx.fs.read('keep', { encoding: 'utf-8' })).data, 'unchanged');
+    assert.equal((await ctx.fs.stat('after-critical')).ok, false);
+    assert.deepEqual(ctx.face.pendingProposals(), []);
+    assert.equal(await ctx.run('echo NEXT'), 'NEXT\n[exit 0]');
+  });
+}
+
+
+for (const permissionMode of ['default', 'bypass']) test(`Anvil recognizes root operands after -- in ${permissionMode} mode`, async () => {
+  const ctx = fixture({ permissionMode, permissionRules: { allow: ['Bash(*)'] }, answer: 'always' });
+  await ctx.fs.write('keep', 'unchanged');
+  const output = await ctx.run('rm -rf -- /; printf BAD > after-critical');
+  assert.match(output, /Refused/);
+  assert.deepEqual(ctx.feeds, [], 'static refusal occurs before the shell executes');
+  assert.deepEqual(ctx.questions, [], 'critical refusal has no override');
+  assert.equal((await ctx.fs.read('keep', { encoding: 'utf-8' })).data, 'unchanged');
+  assert.equal((await ctx.fs.stat('after-critical')).ok, false);
+  assert.deepEqual(ctx.face.pendingProposals(), []);
+  assert.equal(await ctx.run('echo NEXT'), 'NEXT\n[exit 0]');
+});
+
+test('Anvil runtime critical guard retains root operands after -- with dynamic flags', async () => {
+  const ctx = fixture({ answer: 'once' });
+  await ctx.fs.write('keep', 'unchanged');
+  const invoke = ctx.face.invoke; let removals = 0;
+  ctx.face.invoke = (name, args) => { if (name === 'fs.remove') removals++; return invoke(name, args); };
+  const output = await ctx.run('FLAGS=-rf; rm "$FLAGS" -- /; printf BAD > after-critical');
+  assert.match(output, /whatever it was asked/);
+  assert.match(output, /\[exit 126\]$/);
+  assert.equal(removals, 0, 'no remove operation reaches the governed face');
+  assert.equal((await ctx.fs.read('keep', { encoding: 'utf-8' })).data, 'unchanged');
+  assert.equal((await ctx.fs.stat('after-critical')).ok, false);
+  assert.deepEqual(ctx.face.pendingProposals(), []);
+  assert.equal(await ctx.run('echo NEXT'), 'NEXT\n[exit 0]');
 });

@@ -3,6 +3,7 @@
 // that read their first operand and dropped the rest (found recording the Forge promo,
 // 2026-09-29). Here each command takes every operand or refuses the form with exit 2.
 // Flags are the documented subset; parseArgs refuses the rest.
+import { lineData, streamResult } from '../command-streams.mjs';
 import { parseArgs } from '../args.mjs';
 import { IOFailure } from '../io.mjs';
 
@@ -15,15 +16,15 @@ export function createFileCommands(io) {
   // One result line per operand, in order. A failed operand prints its error and the rest still
   // run, as coreutils does; the exit is 1 when any failed.
   async function each(command, operands, fn) {
-    const lines = []; let failed = false;
+    const events = []; let failed = false;
     for (const path of operands) {
-      try { const line = await fn(path); if (line != null) lines.push(line); }
+      try { const line = await fn(path); if (line != null) events.push({ channel: 1, data: lineData(line) }); }
       catch (error) {
         if (!(error instanceof IOFailure)) throw error; // Stop and refusals stay control flow
-        lines.push(`${command}: ${error.code}: ${error.message}`); failed = true;
+        events.push({ channel: 2, data: `${command}: ${error.code}: ${error.message}\n` }); failed = true;
       }
     }
-    return { text: lines.join('\n'), code: failed ? 1 : 0 };
+    return streamResult(events, failed ? 1 : 0);
   }
   async function statOrNull(path) {
     try { return await io.stat(path); }

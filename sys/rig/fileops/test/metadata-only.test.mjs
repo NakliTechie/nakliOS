@@ -124,12 +124,17 @@ test('Crate content-based stat fallback cannot run for metadata-only requests', 
   const host = {
     async readBinary() { calls.push('read'); return bytes('contents'); },
     async exists() { calls.push('exists'); return true; },
-    async list() { calls.push('list'); return []; },
+    async list() { calls.push('list'); return ['file']; },
     async write() {}, async delete() { calls.push('delete'); },
   };
   const fs = createFileops({ backend: new CrateBackend(host) });
-  for (const method of ['stat', 'list', 'remove']) assert.equal((await fs[method]('file', options)).code, 'ENOTSUP');
-  assert.deepEqual(calls, []);
+  assert.deepEqual((await fs.stat('file', options)).stat, { type: 'file' });
+  assert.equal((await fs.list('file', options)).code, 'ENOTDIR');
+  assert.equal((await fs.remove('file', options)).ok, true);
+  assert.ok(calls.length > 0);
+  assert.ok(calls.every((call) => call === 'list' || call === 'delete'));
+  assert.equal(calls.includes('read'), false);
+  assert.equal(calls.includes('exists'), false);
   assert.equal((await fs.stat('file')).stat.size, 8);
   assert.ok(calls.includes('read'));
 });

@@ -167,12 +167,12 @@ test('calculator retains completed output when a later program read fails', asyn
     throw new IOFailure('fs.read', { code: 'ENOENT', message: 'missing file' });
   } });
   const result = await commands.bc(['first', 'missing']);
-  assert.equal(result.code, 2); assert.match(decode(result.text), /^42\nbc: missing: ENOENT:/);
+  assert.equal(result.code, 2); assert.equal(decode(result.stdout), '42\n'); assert.match(result.stderr, /^bc: missing: ENOENT:/);
 });
 
 test('calculator retains completed expression output on later arithmetic failure', async () => {
   const result = await createBcCommands({}).bc([], '42\n1/0\n');
-  assert.equal(result.code, 2); assert.match(decode(result.text), /^42\nbc: division by zero/);
+  assert.equal(result.code, 2); assert.equal(decode(result.stdout), '42\n'); assert.match(result.stderr, /^bc: division by zero/);
 });
 
 test('calculator bounded cells permit replacement while prohibiting additional variables', async () => {

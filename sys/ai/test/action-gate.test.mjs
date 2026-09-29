@@ -278,8 +278,8 @@ assert.match(anvil, /let verdict = applyPolicy\(gateAction\(nm, ar, convoNow\), 
 assert.match(anvil, /if\(verdict\.outcome === 'deny'\)/, 'and a denial stops the call');
 assert.match(anvil, /return verdict\.rationale\+' '\+POLICY_HINT;/, 'the model is told why, and where the setting is');
 assert.match(anvil, /gate:gateEvent\(nm, verdict\)/, 'the decision reaches the ledger');
-assert.match(anvil, /catch\(_\)\{ \/\* a gate that throws must never be the thing that stops a run \*\/ \}/,
-  'a throwing gate fails open — it is not the fence, the grant is');
+assert.match(anvil, /catch\(_\)\{ return 'Refused: authorization could not be evaluated\./,
+  'authorization evaluation failures refuse before any tool effect');
 // It must sit AFTER the project hook and BEFORE the tool bodies.
 assert.ok(anvil.indexOf('const dec0 = preToolDecision') < anvil.indexOf('let verdict = applyPolicy'),
   'the project hook still runs first');

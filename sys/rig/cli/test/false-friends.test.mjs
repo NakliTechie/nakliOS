@@ -308,26 +308,22 @@ await test('R3a: help describes a curated subset and says flags are refused', as
   assert(/REFUSES an unsupported flag/.test(h), 'help states the unknown-flag policy');
   assert(/grep -r -R/.test(h) && /rg/.test(h), 'help names recursive grep and rg');
   assert(/single quotes are literal/.test(h), 'help states the quoting rule');
-  assert(/No subshells, loops/.test(h), 'help names what the grammar lacks');
+  assert(/Language: if\/elif\/else, for, while\/until/.test(h), 'help names supported grammar');
 });
 
 
-// ── a failing stage inside a PIPE was fed to the next stage as data ───────────────────────
-// The worst false friend found so far, because it manufactures a plausible answer rather
-// than an empty one. This shell has no stderr, so a refused stage's message went down the
-// pipe: `rg --bogus x | wc -l` answered `1` with exit 0 — the "1" being the refusal line
-// itself, counted. Live-found 2026-09-10 driving Anvil on qwen3:8b: a four-stage pipeline
-// whose FIRST stage was refused reported exit 0, had its `expect: exit 0` graded MET, and
-// the agent wrote the unexpanded command text into findings.md believing it had results.
-await test('R-pipe: a stage that errors surfaces instead of feeding the next stage', async () => {
+// U3 separates diagnostics from stdout, so the last stage sets pipeline status.
+await test('R-pipe: a failing stage reports stderr while its downstream receives empty stdout', async () => {
   const { run } = await shell();
   const counted = await run('rg --bogus-flag x | wc -l');
-  assert(counted.code >= 2, `a refused stage must not report success: exit ${counted.code}`);
+  eq(counted.code, 0, 'the successful final wc determines pipeline status');
+  assert(/\n0$/.test(counted.out), 'wc counts zero stdout lines');
   assert(/unsupported flag --bogus-flag/.test(counted.out), `the refusal itself must surface: ${counted.out}`);
   assert(counted.out !== '1', 'the refusal line must never be counted as if it were output');
 
   const missing = await run('nosuchcommand | wc -l');
-  eq(missing.code, 127, 'a missing command keeps its 127 through a pipe');
+  eq(missing.code, 0, 'the final wc determines status after a missing command');
+  assert(/\n0$/.test(missing.out), 'missing-command diagnostics never enter stdin');
   assert(/command not found/.test(missing.out), `and says so: ${missing.out}`);
 
   // ...and the failure surfaces from any position, not just the first stage.
@@ -437,11 +433,11 @@ await test('sleep: the run\'s Stop cuts it — `sleep: interrupted`, exit 130, a
   const t0 = Date.now(); setTimeout(() => ac.abort(), 80);
   const r = await sh.feed('sleep 5 && echo never');
   assert(Date.now() - t0 < 2000, 'returned on the abort, not after 5 s');
-  eq(String(r.output).trim(), 'sleep: interrupted'); eq(sh.lastCode, 130, 'exit 130 — the && did not run');
-  const line = await sh.feed('sleep 5; printf x > ran.txt; echo done-semi'); eq(String(line.output).trim(), 'sleep: interrupted', 'a `;` continuation does not run after the Stop either'); eq(sh.lastCode, 130);
-  eq((await sh.feed('sleep 5 || echo after-or')).output.trim(), 'sleep: interrupted', 'nor a `||` one');
+  eq(String(r.output).trim(), 'shell: interrupted'); eq(sh.lastCode, 130, 'exit 130 — the && did not run');
+  const line = await sh.feed('sleep 5; printf x > ran.txt; echo done-semi'); eq(String(line.output).trim(), 'shell: interrupted', 'a `;` continuation does not run after the Stop either'); eq(sh.lastCode, 130);
+  eq((await sh.feed('sleep 5 || echo after-or')).output.trim(), 'shell: interrupted', 'nor a `||` one');
   eq(String((await sh.feed('cat ran.txt')).output), 'cat: ran.txt: ENOENT', 'nothing after the interrupted sleep ran');
-  eq(String((await sh.feed('sleep 1')).output).trim(), 'sleep: interrupted', 'an already-aborted run: no wait at all');
+  eq(String((await sh.feed('sleep 1')).output).trim(), 'shell: interrupted', 'an already-aborted run: no wait at all');
   ac = new AbortController(); // the next run: the getter sees the new signal
   const t1 = Date.now(); eq((await sh.feed('sleep 0.1 && echo ok')).output.trim(), 'ok'); assert(Date.now() - t1 >= 90, 'a live run waits');
 });
@@ -798,7 +794,7 @@ await test('cat, cut, sed, grep and od go on past a missing file; sort stops; gr
   eq((await run('cat nonl nope')).out, 'x\ncat: nope: ENOENT', 'the error starts its own line');
   eq((await run('cat a b')).out, 'a1\nb2\nc3', 'every file present is unchanged');
   const cu = await run('cut -c1 a nope b'); eq(cu.code, 1); eq(cu.out, 'cut: nope: ENOENT\na\nb\nc');
-  const se = await run("sed 's/[0-9]//' a nope b"); eq(se.code, 1); eq(se.out, 'sed: nope: ENOENT\na\nb\nc');
+  const se = await run("sed 's/[0-9]//' a nope b"); eq(se.code, 2); eq(se.out, 'sed: nope: ENOENT\na\nb\nc');
   const g = await run('grep 1 a nope b'); eq(g.code, 2, 'grep: an unreadable file is exit 2'); eq(g.out, 'a:a1\ngrep: nope: ENOENT', 'and the match in a survives');
   eq((await run('grep -c . a b')).out, 'a:2\nb:1', 'grep -c counts per file');
   eq((await run('grep -hc . a b')).out, '2\n1');
