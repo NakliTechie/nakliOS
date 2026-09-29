@@ -34,34 +34,53 @@ export const NETWORK_EGRESS_GLOBALS = [
 // clear error. Idempotent, and safe to run once Pyodide (and any packages) are
 // loaded but before the first user cell. Exported so headless tests can assert
 // the stubs are installed without a real Worker.
-export function neuterNetworkEgress(target = globalThis) {
-  const deny = (label) => {
-    const stub = function kilnNetworkDisabled() {
+export function neuterNetworkEgress(target = globalThis, pythonRuntime) {
+  // Pyodide 0.26.4 can lose a JavaScript exception while destroying a
+  // temporary JsProxy callable after a CPython type-cache miss. Python
+  // callables round-trip through the FFI without that temporary proxy, so
+  // Python receives the original PermissionError even with a cold cache.
+  const makeDenial = pythonRuntime?.runPython(`
+def _kiln_make_network_denial(label):
+    message = label + ": network access is disabled in Kiln"
+    error_type = PermissionError
+    def denied(*args, **kwargs):
+        raise error_type(message)
+    denied.new = denied
+    return denied
+_kiln_make_network_denial
+`);
+  const deny = makeDenial
+    ? label => new Proxy(makeDenial(label), {
+      // PyProxy's JavaScript constructor otherwise returns an empty object
+      // without calling Python. Preserve explicit refusal for `new` too.
+      construct() { throw new Error(`${label}: network access is disabled in Kiln`); },
+    })
+    : label => function kilnNetworkDisabled() {
       throw new Error(`${label}: network access is disabled in Kiln`);
     };
-    return stub;
-  };
-  for (const name of NETWORK_EGRESS_GLOBALS) {
-    const stub = deny(name);
-    try {
-      Object.defineProperty(target, name, { value: stub, configurable: true, writable: true });
-    } catch (_) {
-      try { target[name] = stub; } catch (_) {}
+  try {
+    for (const name of NETWORK_EGRESS_GLOBALS) {
+      const stub = deny(name);
+      try {
+        Object.defineProperty(target, name, { value: stub, configurable: true, writable: true });
+      } catch (_) {
+        try { target[name] = stub; } catch (_) {}
+      }
     }
-  }
-  const nav = target.navigator;
-  if (nav && typeof nav.sendBeacon === 'function') {
-    try { nav.sendBeacon = deny('navigator.sendBeacon'); } catch (_) {}
-  }
-  // CacheStorage: Cache.add/addAll fetch over the network without touching the
-  // `fetch` global, so stub the whole caches accessor (M-K1 completeness).
-  const cachesStub = {
-    open: deny('caches.open'), match: deny('caches.match'), has: deny('caches.has'),
-    delete: deny('caches.delete'), keys: deny('caches.keys'),
-  };
-  try { Object.defineProperty(target, 'caches', { value: cachesStub, configurable: true, writable: true }); }
-  catch (_) { try { target.caches = cachesStub; } catch (_) {} }
-  return target;
+    const nav = target.navigator;
+    if (nav && typeof nav.sendBeacon === 'function') {
+      try { nav.sendBeacon = deny('navigator.sendBeacon'); } catch (_) {}
+    }
+    // CacheStorage: Cache.add/addAll fetch over the network without touching the
+    // `fetch` global, so stub the whole caches accessor (M-K1 completeness).
+    const cachesStub = {
+      open: deny('caches.open'), match: deny('caches.match'), has: deny('caches.has'),
+      delete: deny('caches.delete'), keys: deny('caches.keys'),
+    };
+    try { Object.defineProperty(target, 'caches', { value: cachesStub, configurable: true, writable: true }); }
+    catch (_) { try { target.caches = cachesStub; } catch (_) {} }
+    return target;
+  } finally { makeDenial?.destroy(); }
 }
 
 // Fetch the Pyodide entry module, verify its bytes against the pinned digest,
@@ -265,7 +284,7 @@ async function initialize(message) {
   installFilesystemGuard();
   // Deny network egress now: Pyodide is up and every package is loaded, and no
   // user cell has run yet. Any later `import js; js.fetch(...)` hits a stub.
-  if (!networkNeutered) { neuterNetworkEgress(globalThis); networkNeutered = true; }
+  if (!networkNeutered) { neuterNetworkEgress(globalThis, pyodide); networkNeutered = true; }
   return { version: pyodide.version, mountPath };
 }
 
