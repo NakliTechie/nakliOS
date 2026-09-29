@@ -41,7 +41,7 @@ Use [vscode.dev](https://vscode.dev/) if you only want browser-based repository 
 
 Apps offer storage according to their capabilities: Browser storage, a Folder you select, or encrypted Crate storage on your own Cloudflare R2.
 Switching storage does not copy or delete existing data. Files browses connected Folder or Crate storage.
-Immersive mode opens compatible apps in windows; Basic mode opens other web apps in tabs.
+Immersive mode opens compatible apps in windows; Basic mode opens other web apps in tabs. See the [`Experience mode policy`](docs/experience-modes.md).
 
 Local tools need no model. General AI can use supported browser models or your configured endpoint.
 Coding agents use the configured endpoint; prompts and selected context go to that provider.
