@@ -1,11 +1,13 @@
 # Unix substrate handoff to kothri
 
-The source pin is [`102c6437bbce3020fe6542151e48c4274a2b401f`](https://github.com/NakliTechie/nakliOS/tree/102c6437bbce3020fe6542151e48c4274a2b401f).
+The source pin is [`c3553134571d1d601bfdbf857f6b3df138a6bf4f`](https://github.com/NakliTechie/nakliOS/tree/c3553134571d1d601bfdbf857f6b3df138a6bf4f).
 It includes Unix batches B01–B12 and Anvil's shell-tool integration.
 The [manifest](kothri-unix-imports.json) names every static dependency of five public entrypoints.
 Copy those module paths unchanged beneath `vendor/naklios/`, alongside all listed license and provenance files.
 Every inventory row carries its immutable source byte count and SHA-256 digest.
 The manifest excludes optional-only adapters and runtime downloads.
+The source pin includes the Worker network-denial correction for Pyodide 0.26.4 type-cache invalidation.
+The static core and supporting file bytes remain identical to the previous B12 pin.
 
 This handoff supplies the reusable substrate.
 Kothri's packaging, Worker message protocol, ACP adapter and public `openKothri()` API remain future work.
@@ -18,8 +20,8 @@ Use Node 24 with the source commit available locally.
 CI fetches history because a shallow checkout of a later documentation commit cannot resolve the pin.
 
 ```sh
-node --experimental-vm-modules scripts/generate-unix-imports.mjs 102c6437bbce3020fe6542151e48c4274a2b401f
-node --experimental-vm-modules scripts/test-unix-portability.mjs 102c6437bbce3020fe6542151e48c4274a2b401f
+node --experimental-vm-modules scripts/generate-unix-imports.mjs c3553134571d1d601bfdbf857f6b3df138a6bf4f
+node --experimental-vm-modules scripts/test-unix-portability.mjs c3553134571d1d601bfdbf857f6b3df138a6bf4f
 ```
 
 The generator parses immutable Git blobs without evaluating application code.

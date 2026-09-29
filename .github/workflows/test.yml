@@ -21,7 +21,7 @@ jobs:
           node-version: 24
 
       - name: Verify immutable Unix portability closure without browser globals
-        run: node --experimental-vm-modules scripts/test-unix-portability.mjs 102c6437bbce3020fe6542151e48c4274a2b401f
+        run: node --experimental-vm-modules scripts/test-unix-portability.mjs c3553134571d1d601bfdbf857f6b3df138a6bf4f
 
       - name: Verify vendored Crate manifest security
         run: node scripts/test-crate-manifest.mjs
