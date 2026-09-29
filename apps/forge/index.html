@@ -137,6 +137,9 @@
     let backend, fs, git, registry, grant, opLog, face, kiln, shell;
     let workspaceLabel = 'memory · scratch';
     let pyAnnounced = false;
+    // The running `agent`'s controller. The shell reads it as its signal, so ^C during an agent
+    // run also cuts the tool command in flight (as Anvil's Stop does).
+    let agentCtl = null;
 
     function mountWorkspace(newBackend, label) {
       backend = newBackend;
@@ -161,7 +164,7 @@
         } catch (_) { kiln = null; }
       }
       pyAnnounced = false;
-      shell = createShell({ registry, face, kiln });
+      shell = createShell({ registry, face, kiln, signal: () => (agentCtl ? agentCtl.signal : null) });
     }
     async function seedScratch() {
       await fs.write('README.md', '# Forge workspace\n\nA bash-style terminal over your files, in the browser.\nTry: ls, cat README.md, echo hi > note.txt, git init, help\nPersist to a real folder: use-folder\n');
@@ -227,12 +230,88 @@
     addEventListener('resize', doFit);
 
     const cwdEl = document.getElementById('cwd');
-    function promptFor() { return `${ACCENT}/${shell.cwd}${RESET} $ `; }
-    function syncPrompt() { editor.setPrompt(promptFor()); cwdEl.textContent = '/' + shell.cwd; }
-    function writePrompt() { term.write(editor.prompt()); }
+    // Built before every prompt, like bash's PROMPT_COMMAND: the header and title follow the cwd.
+    function promptNow() {
+      cwdEl.textContent = '/' + shell.cwd;
+      if (nak && nak.title) nak.title(`Forge — /${shell.cwd}`);
+      return `${ACCENT}/${shell.cwd}${RESET} $ `;
+    }
 
     const RED = '\x1b[38;2;194;86;75m';
     const toCRLF = (s) => String(s == null ? '' : s).replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '').replace(/\n/g, '\r\n');
+    // Shell output is plain text (the app adds its own colour separately), so scrub every C0
+    // control except tab/newline before writing — a file whose bytes contain ANSI/OSC escapes
+    // can't then drive the terminal (matters once external content, not just this scratch
+    // workspace, can land).
+    function writeOut(text) {
+      if (text) term.write(toCRLF(text) + '\r\n');
+    }
+
+    // ── Input: a real terminal's type-ahead. ──
+    // The shell runs one line at a time: a second shell.feed while one is in flight throws
+    // `shell: feed already in progress`. Forge used to feed every Enter straight in, so a line
+    // typed while a command ran was lost (live 2026-09-29). Now every submitted line joins a
+    // queue and runs once the line before it has returned. While a command runs the editor
+    // keeps echoing, with no prompt, so type-ahead shows as it does in a tty. ^C clears the
+    // queue and stops the command in flight, as a tty's SIGINT does.
+    // Self-contained on purpose: scripts/test-forge-input-queue.mjs drives this function.
+    function createInputPump({ editor, run, stop, interrupt, write, clear, prompt }) {
+      const queue = []; // { line, ahead } | { interrupt: true }
+      let busy = false;
+      let drained = Promise.resolve();
+      // Unfinished type-ahead echoes on the cursor line. Erase it before the pump writes there,
+      // or a re-echoed line would land after it (bash leaves `ec$ echo queued` on screen).
+      const unfinished = () => (editor.line ? '\r\x1b[K' : '');
+      function showPrompt() {
+        editor.setPrompt(prompt());
+        // Unfinished type-ahead reappears after the prompt, as readline redisplays it.
+        const back = editor.line.length - editor.cursor;
+        write(unfinished() + editor.prompt() + editor.line + (back > 0 ? `\x1b[${back}D` : ''));
+      }
+      async function drain() {
+        busy = true;
+        // No prompt while a command runs: type-ahead echoes bare, and an edit never
+        // repaints a prompt that has not come back yet.
+        editor.setPrompt('');
+        try {
+          while (queue.length) {
+            const job = queue.shift();
+            try {
+              if (job.interrupt) { await interrupt(); continue; }
+              // A line typed ahead was echoed bare; show it at the prompt it runs under.
+              if (job.ahead) write(unfinished() + prompt() + job.line + '\r\n');
+              await run(job.line);
+            } catch (e) {
+              write(String((e && e.message) || e).replace(/[\x00-\x1f\x7f]/g, '') + '\r\n');
+            }
+          }
+        } finally {
+          busy = false;
+          showPrompt();
+        }
+      }
+      function input(data) {
+        // The editor stops at the first Enter it sees, so feed it one line at a time:
+        // a pasted block would otherwise keep only its first line.
+        for (const chunk of String(data == null ? '' : data).match(/[^\r\n]*(?:\r\n|\r|\n)|[^\r\n]+/g) || []) {
+          const r = editor.feed(chunk);
+          if (r.output) write(r.output);
+          if (r.clear) clear();
+          if (r.interrupt) {
+            queue.length = 0;
+            if (busy) stop();
+            queue.push({ interrupt: true });
+          }
+          if (r.submit != null) queue.push({ line: r.submit, ahead: busy });
+          if (queue.length && !busy) drained = drain();
+        }
+      }
+      return {
+        input, showPrompt,
+        get busy() { return busy; },
+        settled: () => drained,
+      };
+    }
 
     // The model side of the agent loop: the host inference tier (agent scope),
     // reached through the SDK. Forge is a system app, so the broker grants it the
@@ -266,6 +345,10 @@
       throw lastErr;
     }
 
+    // How to stop the command in flight, for ^C: set while a shell feed or an agent run is
+    // awaited, null otherwise.
+    let inflight = null;
+
     // `agent "<task>"` — a tool-using coding agent over this workspace. The model
     // drives the same shell you type into; every tool call is echoed live.
     async function runAgent(raw) {
@@ -283,7 +366,11 @@
       term.write(`${ACCENT}◆ agent${mode !== 'code' ? ' (' + mode + ')' : ''}${RESET} ${DIM}${task}${RESET}\r\n`);
       const modeNote = mode === 'plan' ? ' You are in PLAN mode: read and think only — no writes/edits/shell; produce a concise plan.'
         : mode === 'ask' ? ' You are in ASK mode: read-only; answer the question, do not modify anything.' : '';
-      const result = await runAgentLoop({
+      // ^C aborts the loop between steps; the shell reads the same signal and cuts its command.
+      const ctl = agentCtl = new AbortController();
+      inflight = () => ctl.abort();
+      let result;
+      try { result = await runAgentLoop({
         messages: [
           { role: 'system', content:
             'You are a coding agent working over the user\'s files. You have tools: ' +
@@ -296,7 +383,8 @@
         ],
         tools: codingToolset(mode, { subagents: true }),
         infer: inferViaHost,
-        executeTool: makeToolExecutor({ shell, face, mode, infer: inferViaHost }),
+        executeTool: makeToolExecutor({ shell, face, mode, infer: inferViaHost, signal: ctl.signal }),
+        signal: ctl.signal,
         maxSteps: 24,
         onEvent: (e) => {
           if (e.type === 'tool-call') {
@@ -313,14 +401,16 @@
           else if (e.type === 'assistant' && e.content) term.write(`${toCRLF(e.content)}\r\n`);
           else if (e.type === 'error') term.write(`${RED}agent: ${e.error}${RESET}\r\n`);
         },
-      });
+      }); }
+      finally { agentCtl = null; inflight = null; }
       const tag = result.stop === 'done' ? `${ACCENT}done${RESET}` : `${DIM}${result.stop}${RESET}`;
       term.write(`${DIM}agent ${RESET}${tag}${DIM} · ${result.steps} steps${RESET}\r\n`);
       await refreshCache();
     }
 
+    // Runs one submitted line. It never writes a prompt: the input pump does, once the queue is empty.
     async function runCommand(line) {
-      if (line.trim() === '') { writePrompt(); return; }
+      if (line.trim() === '') return;
       // `agent …` is a Forge-level command (it needs host inference), handled
       // before the shell — the shell core stays free of any AI dependency.
       const agentMatch = line.trim().match(/^agent(?:\s+([\s\S]+))?$/);
@@ -329,8 +419,6 @@
         // strips surrounding quotes itself.
         try { await runAgent(agentMatch[1] || ''); }
         catch (e) { term.write(`${RED}agent: ${String(e && e.message || e)}${RESET}\r\n`); }
-        syncPrompt(); writePrompt();
-        if (nak && nak.title) nak.title(`Forge — /${shell.cwd}`);
         return;
       }
       // Workspace backend commands (Forge-level: they remount the stack live).
@@ -360,11 +448,10 @@
         // The native picker pauses xterm's renderer; defer the redraw to the next
         // frame so the message + fresh prompt actually paint (otherwise they wait
         // for the next keystroke — the "hit Enter to get the prompt back" glitch).
-        requestAnimationFrame(() => {
-          if (msg) term.write(msg + '\r\n');
-          syncPrompt(); writePrompt(); term.focus();
-          if (nak && nak.title) nak.title(`Forge — /${shell.cwd}`);
-        });
+        // The pump writes the prompt in this same frame, straight after this returns.
+        await new Promise((r) => requestAnimationFrame(r));
+        if (msg) term.write(msg + '\r\n');
+        term.focus();
         return;
       }
       if (cmd0 === 'use-memory') {
@@ -373,7 +460,6 @@
         await seedScratch();
         await refreshCache();
         term.write(`${ACCENT}◆${RESET} ${DIM}workspace → memory scratch (not persisted).${RESET}\r\n`);
-        syncPrompt(); writePrompt();
         return;
       }
       // First `python`: announce the one-time Pyodide download so the wait is explained.
@@ -382,30 +468,31 @@
         term.write(`${DIM}◆ Kiln: loading Pyodide (~12 MB, first run only)…${RESET}\r\n`);
       }
       let res;
+      // ^C cancels this feed; the feed itself then returns `shell: interrupted`.
+      inflight = () => { shell.cancel(); };
       try { res = await shell.feed(line); }
-      catch (e) { term.write(`\x1b[38;2;194;86;75m${String(e && e.message || e)}${RESET}\r\n`); res = { output: '' }; }
+      catch (e) { term.write(`${RED}${toCRLF(String(e && e.message || e))}${RESET}\r\n`); res = { output: '' }; }
+      finally { inflight = null; }
       if (res.cleared) term.clear();
-      // Shell output is plain text (the app adds its own colour separately), so
-      // scrub every C0 control except tab/newline before writing — a file whose
-      // bytes contain ANSI/OSC escapes can't then drive the terminal (matters
-      // once external content, not just this scratch workspace, can land).
-      if (res.output) {
-        const safe = res.output.replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '').replace(/\n/g, '\r\n');
-        term.write(safe + '\r\n');
-      }
+      writeOut(res.output);
       await refreshCache();
-      syncPrompt();
-      writePrompt();
-      if (nak && nak.title) nak.title(`Forge — /${shell.cwd}`);
     }
 
-    term.onData(async (d) => {
-      const r = editor.feed(d);
-      if (r.output) term.write(r.output);
-      if (r.clear) { term.clear(); writePrompt(); return; }
-      if (r.interrupt) { writePrompt(); return; }
-      if (r.submit != null) await runCommand(r.submit);
+    // ^C at a [y/N] prompt refuses it and ends that command, so the next line typed runs
+    // as a command instead of being read as the answer.
+    async function cancelConfirm() {
+      if (!shell.awaitingConfirm) return;
+      writeOut((await shell.cancel()).output);
+    }
+
+    const pump = createInputPump({
+      editor, run: runCommand, interrupt: cancelConfirm, prompt: promptNow,
+      stop: () => { if (inflight) inflight(); },
+      write: (s) => term.write(s),
+      // The editor's ^L output already repaints the prompt and line; writing it again doubled it.
+      clear: () => term.clear(),
     });
+    term.onData((d) => pump.input(d));
 
     // Decode a data-seq attribute into its control bytes. JSON.parse chokes on
     // \x escapes (JSON has none), so handle \x / \u / \t / \r / \n ourselves.
@@ -420,9 +507,7 @@
       const b = e.target.closest('button'); if (!b) return;
       const seq = unescapeSeq(b.dataset.seq);
       term.focus();
-      const r = editor.feed(seq);
-      if (r.output) term.write(r.output);
-      if (r.submit != null) runCommand(r.submit);
+      pump.input(seq);
     });
 
     // ── banner + first prompt ──
@@ -431,8 +516,7 @@
     term.writeln(`${DIM}Type ${RESET}help${DIM}, ${RESET}use-folder${DIM} to persist to a real folder, or ${RESET}agent "<task>"${DIM} for a coding agent.${RESET}`);
     if (reconnectNotice) term.writeln(`${ACCENT}◆${RESET} ${DIM}${reconnectNotice}${RESET}`);
     await refreshCache();
-    syncPrompt();
-    writePrompt();
+    pump.showPrompt();
     term.focus();
 
     if (nak && nak.ready) nak.ready();

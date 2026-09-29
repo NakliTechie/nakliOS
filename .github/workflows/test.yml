@@ -306,6 +306,9 @@ jobs:
       - name: Verify Forge survives the agent-loop contract (signal + turn-start)
         run: node scripts/test-forge-loop-contract.mjs
 
+      - name: Verify Forge queues lines typed while a command runs (type-ahead, ^C)
+        run: node scripts/test-forge-input-queue.mjs
+
       - name: Verify Anvil records every run onto the chain and self-checks the folds
         run: node scripts/test-anvil-run-record.mjs
 

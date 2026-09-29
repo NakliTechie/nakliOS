@@ -22,14 +22,39 @@ export async function inlineModule(appUrl = APP) {
   return blocks.join('\n');
 }
 
-// Walk from `i` (which must index the opening brace) to its match, skipping over string literals,
-// template literals, regex-ish slashes and comments so a brace inside text never miscounts.
-function matchBrace(src, i) {
+// A `/` starts a regex literal only where an expression can start: after an operator, opening
+// punctuation or a keyword such as `return`. After a name, `)` or `]` it is division.
+function regexCanStart(src, p) {
+  let q = p - 1;
+  while (q >= 0 && /\s/.test(src[q])) q--;
+  if (q < 0 || '(,=:[!&|?{};+-*%<>~^'.includes(src[q])) return true;
+  if (!/[\w$]/.test(src[q])) return false;
+  let w = q;
+  while (w >= 0 && /[\w$]/.test(src[w])) w--;
+  return /^(?:return|typeof|instanceof|case|do|else|in|of|new|delete|void|throw|yield|await)$/.test(src.slice(w + 1, q + 1));
+}
+
+// Walk from `i` (which must index the opening bracket) to its match, skipping over string literals,
+// template literals, regex literals and comments so a bracket inside text never miscounts.
+function matchBrace(src, i, open = '{', close = '}') {
   let depth = 0;
   for (let p = i; p < src.length; p++) {
     const c = src[p], n = src[p + 1];
     if (c === '/' && n === '/') { p = src.indexOf('\n', p); if (p < 0) break; continue; }
     if (c === '/' && n === '*') { p = src.indexOf('*/', p + 2); if (p < 0) break; p++; continue; }
+    if (c === '/' && regexCanStart(src, p)) {
+      // `/["']/` would otherwise open a string. A literal ends on its line; if none does, it was not one.
+      const start = p;
+      let inClass = false;
+      for (p++; p < src.length && src[p] !== '\n'; p++) {
+        if (src[p] === '\\') { p++; continue; }
+        if (inClass) { if (src[p] === ']') inClass = false; }
+        else if (src[p] === '[') inClass = true;
+        else if (src[p] === '/') break;
+      }
+      if (p >= src.length || src[p] === '\n') p = start;
+      continue;
+    }
     if (c === '"' || c === "'" || c === '`') {
       const q = c;
       for (p++; p < src.length; p++) {
@@ -40,8 +65,8 @@ function matchBrace(src, i) {
       }
       continue;
     }
-    if (c === '{') depth++;
-    else if (c === '}') { depth--; if (depth === 0) return p; }
+    if (c === open) depth++;
+    else if (c === close) { depth--; if (depth === 0) return p; }
   }
   return -1;
 }
@@ -56,7 +81,10 @@ export function extractFunction(src, name) {
   for (const re of pats) {
     const m = re.exec(src);
     if (!m) continue;
-    const open = src.indexOf('{', m.index + m[0].length - 1);
+    // The body opens after the parameter list, which may itself hold braces: `f({ a, b }) {`.
+    const params = matchBrace(src, m.index + m[0].length - 1, '(', ')');
+    if (params < 0) continue;
+    const open = src.indexOf('{', params);
     if (open < 0) continue;
     const close = matchBrace(src, open);
     if (close < 0) continue;
