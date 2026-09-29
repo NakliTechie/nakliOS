@@ -1,16 +1,17 @@
 # Shell command modules
 
-U0 provides the shared foundation. U1a extends the command flags:
+U0 provides the shared foundation. U1a extends the command flags. U1b adds sed:
 
 | Module | Commands |
 | --- | --- |
-| `builtins.mjs` | Shell state, discovery, chmod, existing sed and awk subsets |
+| `builtins.mjs` | Shell state, discovery, chmod, existing awk subset |
 | `core.mjs` | Byte-preserving cat, display flags, and tee append |
 | `files.mjs` | touch, mkdir, stat, mv, recursive cp and no-clobber transfers |
 | `list.mjs` | Directory selection, classification and ordering |
 | `text.mjs` | sort, head, tail, wc, uniq, cut, tr, echo, printf, od |
 | `search.mjs` | Indexed recursive grep/rg and recursive diffs |
 | `utility.mjs` | env, xargs, test, basename, dirname, which, sleep |
+| `sed.mjs` | U1b stream editing, addresses, hold space, branching and governed in-place edits |
 
 The language remains unchanged until U3. Agent interceptors for recursive grep,
 in-place editors and heredoc writes remain unchanged until the agent migration.
@@ -66,3 +67,24 @@ omits its filename. `uniq INPUT OUTPUT` remains refused; redirect its output.
 `stat -c` exposes only name, size, type and backend timestamps; it refuses fake
 permission/ownership fields. The virtual filesystem has no POSIX mode bits.
 `touch` preserves an existing file without updating its backend timestamp.
+
+## Sed
+
+`sed` accepts `-n`, repeated `-e` and `-f`, `-E`/`-r`, `-i[SUFFIX]`, `-s`,
+and `-z`. Script files resolve against the shell's current directory.
+Addresses include line numbers, `$`, regular expressions, `first~step`, ranges,
+relative range endings, negation, and command groups.
+Commands cover substitution, deletion, printing, multiline cycles, text insertion,
+transliteration, quitting, listing, file reads/writes, hold space, labels, and branches.
+
+Pattern spaces preserve bytes, including invalid UTF-8 and unterminated records.
+Regular expressions use byte semantics and C/ASCII character classes.
+The matcher bounds its work. The interpreter bounds steps, buffers, and output.
+Unsupported commands and expressions fail explicitly, including shell execution.
+
+Script reads, data reads, `r`, `w`, edits, and backups use the same governed I/O.
+The interpreter parses the complete script before opening write destinations.
+In-place edits compute a file's replacement before writing it.
+An accepted backup write can remain if a later edit is cancelled or refused.
+Writes retain the backend's existing atomicity guarantees; sed adds no transaction
+across files or independent write destinations.

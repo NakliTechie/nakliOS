@@ -1,6 +1,6 @@
-// Shell state and the sed/awk subsets; U1a commands live in their own modules.
+// Shell state and the legacy awk subset; command implementations live in their own modules.
 // All filesystem access uses the shell's confirmation-aware face.
-import { ArgError, parseArgs } from '../args.mjs';
+import { parseArgs } from '../args.mjs';
 
 // Split text into lines the way coreutils do: a single trailing newline is a
 // line terminator, not an extra empty line.
@@ -8,7 +8,6 @@ const linesOf = (t) => {
   const s = String(t == null ? '' : t);
   return (s.endsWith('\n') ? s.slice(0, -1) : s).split('\n');
 };
-const shortFlags = (letters) => Object.fromEntries([...letters].map((short) => [short, { short }]));
 
 export function createBuiltins({ state, face, normalizePath, decodeData, SLEEP_MAX_S, commandNames }) {
   // ── builtins: shell-native, may consume/produce piped text ──
@@ -35,33 +34,6 @@ export function createBuiltins({ state, face, normalizePath, decodeData, SLEEP_M
 
     true() { return { text: '', code: 0 }; },
     false() { return { text: '', code: 1 }; },
-
-    async sed(argv, stdin) {
-      let parsed;
-      try { parsed = parseArgs(argv, shortFlags('nEr'), { command: 'sed' }); }
-      catch (error) {
-        if (error instanceof ArgError && error.message.startsWith('sed: unsupported flag -i;')) {
-          return { text: error.text + '; use the `edit` tool for in-place edits', code: error.code };
-        }
-        throw error;
-      }
-      const { operands: pos } = parsed;
-      const script = pos[0] || '';
-      // a file argument used to be IGNORED, so `sed 's/a/b/' f.txt` returned "" exit 0 (R2a)
-      const inp = await textInput('sed', pos.slice(1), stdin, { keepGoing: true });
-      const lines = linesOf(inp.text);
-      let m = /^s\/((?:[^/\\]|\\.)*)\/((?:[^/\\]|\\.)*)\/([gips]*)$/.exec(script);
-      if (m) {
-        let re; try { re = new RegExp(m[1], m[3].includes('g') ? 'g' : ''); } catch (e) { return { text: `sed: invalid pattern: ${e.message}`, code: 2 }; }
-        const rep = m[2].replace(/\\\//g, '/');
-        return withErrors(inp, lines.map((l) => l.replace(re, rep)).join('\n'));
-      }
-      let pm = /^(\d+)p$/.exec(script);
-      if (pm) { const l = lines[Number(pm[1]) - 1]; return withErrors(inp, l == null ? '' : l); }
-      let rp = /^\/(.*)\/p$/.exec(script);
-      if (rp) { const re = new RegExp(rp[1]); return withErrors(inp, lines.filter((l) => re.test(l)).join('\n')); }
-      return { text: `sed: unsupported script: ${script}`, code: 1 };
-    },
 
     async awk(argv, stdin) {
       const { options, operands: parts } = parseArgs(argv, { F: { short: 'F', value: true } }, { command: 'awk' });
@@ -125,7 +97,7 @@ export function createBuiltins({ state, face, normalizePath, decodeData, SLEEP_M
         + '\n  grep -r -R -l -L -o -w -x -q -s -e -f -m -A -B -C --include --exclude (also -nvicEFhH)'
         + '\n  rg -A -B -C -w -o -F -v -i -l -n -c -t/--type -g/--glob --files'
         + '\n  head/tail -n/-c [+N]   wc -lwmc   sort -k -t -h -V -s -b -d -g -o -c -rnuf'
-        + '\n  find [dir...] -name -type -maxdepth    sed s/// on stdin or a file (no -i; use the edit tool)'
+        + '\n  find [dir...] -name -type -maxdepth    sed -n -e -f -E -r -i[SUFFIX] -s -z; addresses, hold space, branches'
         + '\n  awk -F with {print $N}      ls -1 -A -d -h -S -t -r -F -Ral      sleep N[s|m|h|d] (cap ' + SLEEP_MAX_S + ' s)'
         + '\n  od -c -b -x -o -d -t x1 -A -N -j        here-documents as stdin: cmd <<\'EOF\' … EOF  (literal; python - <<\'PY\' runs it)'
         + '\ncat -nbsAET   echo -ne   printf width/precision, %s %d %x %o %f %c %b   tee -a'
@@ -169,11 +141,5 @@ export function createBuiltins({ state, face, normalizePath, decodeData, SLEEP_M
     }
     return { text: parts.join(''), code: 0, errors };
   }
-  // This shell has one output stream, so a keep-going read's errors lead the output; the exit is 1.
-  function withErrors(inp, text) {
-    if (!inp.errors.length) return { text, code: 0 };
-    return { text: [...inp.errors, text].filter((t) => t !== '').join('\n'), code: 1 };
-  }
-
   return builtins;
 }

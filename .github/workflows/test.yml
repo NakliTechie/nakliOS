@@ -352,6 +352,8 @@ jobs:
         run: node sys/rig/cli/test/u1a-search.test.mjs
       - name: Unix U1a file and command wrapper flags
         run: node sys/rig/cli/test/u1a-files-utility.test.mjs
+      - name: Unix U1b sed scripts, governed edits and bounded execution
+        run: node sys/rig/cli/test/u1b-sed.test.mjs
 
       - name: Verify the history tool — search and read past runs (the retrieval half)
         run: node scripts/test-anvil-history.mjs
