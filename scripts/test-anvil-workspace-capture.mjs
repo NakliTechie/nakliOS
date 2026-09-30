@@ -9,6 +9,7 @@ import { createShell } from '../sys/rig/cli/shell.mjs';
 import { makeToolExecutor } from '../sys/ai/agent-tools.mjs';
 import { createWorkspaceCapture, snapshotWorkspace } from '../sys/ai/workspace-capture.mjs';
 import { planRevert, turnChanges, planTurnRevert } from '../sys/ai/change-preimages.mjs';
+import { MAX_REVIEW_BYTES } from '../sys/ai/review-diff.mjs';
 import { inlineModule, extractFunction, instantiate, memFs } from './anvil-harness.mjs';
 
 function fixture() {
@@ -171,13 +172,18 @@ test('change rows survive JSON reload and real revert handlers refuse stale writ
   const src=await inlineModule();
   const t={id:'capture',log:rows,runSeq:4};
   const storage=memFs({'create.txt':'new'});
-  const ctx={fs:storage,activeTask:()=>t,turnChanges,planTurnRevert,planRevert,save(){},renderAll(){},renderPreview(){},state:{},globalPreview:null,
-    backend:{supportsConditionalWrite:true,supportsConditionalDelete:true},lineDiff:(a,b)=>`${a} -> ${b}`,pushSystem() {}};
+  // The real openTurn reader is covered by test-anvil-turn-review; this lane isolates revert.
+  const opened=[];
+  const ctx={fs:storage,MAX_REVIEW_BYTES,activeTask:()=>t,turnChanges,planTurnRevert,planRevert,save(){},renderAll(){},renderPreview(){},state:{},globalPreview:null,
+    backend:{supportsConditionalWrite:true,supportsConditionalDelete:true},lineDiff:(a,b)=>`${a} -> ${b}`,pushSystem() {},
+    openTurn(task,run){ opened.push({task,run}); }};
   ctx.atomicRevertAvailable=instantiate(extractFunction(src,'atomicRevertAvailable'),'atomicRevertAvailable',ctx);
-  ctx.openTurn=instantiate(extractFunction(src,'openTurn'),'openTurn',ctx);
   ctx.readRevertState=instantiate(extractFunction(src,'readRevertState'),'readRevertState',ctx);
   const revertTurn=instantiate(extractFunction(src,'revertTurn'),'revertTurn',ctx);
   await revertTurn(4);
+  assert.equal(opened.length,1, 'the handler calls the run-preview reader once after reverting');
+  assert.equal(opened[0].task,t, 'the same task reaches the preview reader');
+  assert.equal(opened[0].run,4, 'the exact run number reaches the preview reader');
   assert.equal(storage.store['delete.txt'],'old');
   assert.equal('create.txt' in storage.store,false);
   storage.store['create.txt']='new + owner';

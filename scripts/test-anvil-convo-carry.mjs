@@ -14,6 +14,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { compactConversation } from '../sys/ai/compaction.mjs';
 import { normaliseAgentMessages } from '../sys/ai/agent-protocol.mjs';
+import { extractFunction, instantiate } from './anvil-harness.mjs';
 
 const anvil = await readFile(new URL('../apps/anvil/index.html', import.meta.url), 'utf8');
 
@@ -68,8 +69,27 @@ const sys = { role: 'system', content: 'you are a coding agent' };
   assert.ok(JSON.stringify(fixed).length <= 120_000, 'no window: the fixed 120k-char trim still applies');
   const wide = await carryForward([sys, ...big], null, { threshold: 200_000, keepRecentTokens: 80_000, maxChars: 1_000_000 });
   assert.equal(wide.length, 4, 'a wide window carries all 150k chars that the fixed limit would have trimmed');
-  assert.match(anvil, /for\(const p of c\.projects\|\|\[\]\) for\(const t of p\.tasks\|\|\[\]\) delete t\.convo; localStorage\.setItem\(LS,/, 'save() keeps the carried transcript out of localStorage');
-  assert.match(anvil, /try\{ persistConvos\(\); \}catch\(_\)\{\}/, 'and writes it to IndexedDB on the same save');
+  const saveSource = extractFunction(anvil, 'save');
+  assert.match(saveSource, /localStorage\.setItem\(LS, stateJson\(\{ omitConvos:true \}\)\)/, 'save() requests localStorage without the carried transcript');
+  const persistAt = saveSource.indexOf('persistConvos()');
+  const localAt = saveSource.indexOf('localStorage.setItem(');
+  assert.ok(persistAt >= 0 && localAt >= 0 && persistAt < localAt, 'save() sends convos to IDB before writing the local copy');
+  const example = { projects:[
+    { tasks:[{ id:'a', convo:[{role:'user',content:'first'}], title:'kept a' },{ id:'b', convo:[{role:'assistant',content:'second'}], title:'kept b' }] },
+    { tasks:[{ id:'c', convo:[{role:'user',content:'third'}], title:'kept c' },{ id:'d', convo:[{role:'assistant',content:'fourth'}], title:'kept d' }] },
+    {}], preview:{reviewFiles:[{file:'draft'}]} };
+  const stateJson = instantiate(extractFunction(anvil, 'stateJson'), 'stateJson', {state:example});
+  const local = JSON.parse(stateJson({ omitConvos:true }));
+  assert.equal(local.projects.length, 3, 'all projects remain');
+  for(const project of local.projects) for(const task of project.tasks||[]){
+    assert.equal(task.convo, undefined, 'every task omits convo from the local copy');
+    assert.match(task.title, /^kept /, 'task metadata remains');
+  }
+  assert.equal(local.preview.reviewFiles, undefined, 'derived preview rows are always omitted');
+  const full = JSON.parse(stateJson());
+  assert.equal(full.projects[1].tasks[1].convo[0].content, 'fourth', 'the non-local serialization still carries convos');
+  assert.equal(full.preview.reviewFiles, undefined, 'derived preview rows remain ephemeral even without omitConvos');
+  assert.match(anvil, /try\{ persistConvos\(\); \}catch\(_\)\{\}/, 'and writes the carried transcript to IndexedDB on the same save');
   assert.match(anvil, /try\{ await hydrateConvos\(\); \}catch\(_\)\{\} \/\/ X1/, 'the boot reads it back');
   assert.match(anvil, /const own=key && state\.contextWindows && Number\(state\.contextWindows\[key\]\);\n    if\(own>0\) return \{ window: own,/, "the owner's per-model window wins");
   assert.match(anvil, /const \{ window:win, source \}=await resolveWindow\(\);/, 'the budget and the carry read ONE window resolver');

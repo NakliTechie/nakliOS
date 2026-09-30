@@ -313,6 +313,12 @@
       "kind": "hook",
       "detail": "__anvil.test.setGate"
     },
+    "hook:setRunBudget": {
+      "owner": "test-door.md",
+      "fingerprint": "a68a0c7319d7",
+      "kind": "hook",
+      "detail": "__anvil.test.setRunBudget"
+    },
     "hook:shell": {
       "owner": "test-door.md",
       "fingerprint": "ee337382308f",
@@ -336,6 +342,12 @@
       "fingerprint": "765d2d0920d4",
       "kind": "sheet",
       "detail": "⚑Proof buildbeta"
+    },
+    "sheet:foreign": {
+      "owner": "sheet.md",
+      "fingerprint": "c171bb885fe2",
+      "kind": "sheet",
+      "detail": "▤Imported conversations"
     },
     "sheet:home": {
       "owner": "sheet.md",
