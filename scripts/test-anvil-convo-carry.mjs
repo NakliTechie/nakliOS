@@ -13,6 +13,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { compactConversation } from '../sys/ai/compaction.mjs';
+import { normaliseAgentMessages } from '../sys/ai/agent-protocol.mjs';
 
 const anvil = await readFile(new URL('../apps/anvil/index.html', import.meta.url), 'utf8');
 
@@ -179,6 +180,36 @@ const turn = (i) => ([
   const q = JSON.parse(keptRef.match(/"query":("(?:[^"\\]|\\.)*")/)[1]);
   assert.ok(bulky()[3].content.includes(q), `the handed query is a verbatim substring of the elided body: ${JSON.stringify(q)}`);
   assert.ok(calls.length, 'and the lossy carry is still recorded on the chain');
+}
+
+// B02: persisted and provider-normalised references survive another carry and overflow pass.
+{
+  const limits = { threshold: 1000, keepRecentTokens: 100, maxChars: 20_000 };
+  const call = (id) => ({ role: 'assistant', content: null, tool_calls: [{ id, type: 'function', function: { name: 'shell', arguments: '{}' } }] });
+  const body = (label) => `${label} original diagnostic line\n` + `${label} result details\n`.repeat(500);
+  const recorded = [];
+  const rec = { compacted: async (entry) => recorded.push(entry) };
+  const first = await carryForward([sys, { role: 'user', content: 'first' }, call('old'),
+    { role: 'tool', tool_call_id: 'old', content: body('FIRST') }, { role: 'user', content: 'recent' }], rec, limits);
+  const oldRef = first.find((m) => m.tool_call_id === 'old')?.content;
+  assert.ok(oldRef, 'first carry retains the paired tool result');
+  assert.match(oldRef, /history \{"op":"search"/, 'first carry keeps a resolving handle');
+  assert.ok(oldRef.includes(`${body('FIRST').length} chars`), 'first carry names the original size');
+  const persisted = JSON.parse(JSON.stringify(normaliseAgentMessages([sys, ...first]))).slice(1);
+  const persistedTool = persisted.find((m) => m.tool_call_id === 'old');
+  assert.ok(persistedTool, 'persisted transcript retains the paired tool result');
+  assert.ok(!('_artifact' in persistedTool), 'provider normalisation removes private metadata');
+  const second = await carryForward([sys, ...persisted, { role: 'user', content: 'second' }, call('new'),
+    { role: 'tool', tool_call_id: 'new', content: body('SECOND') }, { role: 'user', content: 'review' }], rec, limits);
+  assert.equal(second.find((m) => m.tool_call_id === 'old')?.content, oldRef, 'second carry keeps the original reference byte-for-byte');
+  assert.match(second.find((m) => m.tool_call_id === 'new')?.content || '', /elided/, 'new output is still compacted');
+  assert.ok(recorded.length >= 2, 'both lossy replacements are recorded for ledger replay');
+  const compactForOverflow = new Function('compactConversation', 'carryLimits', 'resolveWindow',
+    `${anvil.slice(start, end)}; return compactForOverflow;`)(compactConversation, () => ({ threshold: 63000, keepRecentTokens: 25200 }), async () => ({ window: 128000 }));
+  const overflow = await compactForOverflow([sys, ...persisted, { role: 'user', content: 'overflow' }, call('extra'),
+    { role: 'tool', tool_call_id: 'extra', content: body('THIRD') }, { role: 'user', content: 'review' }]);
+  assert.ok(overflow?.messages, 'in-loop overflow recovery compacts the new result');
+  assert.equal(overflow.messages.find((m) => m.tool_call_id === 'old')?.content, oldRef, 'overflow recovery also keeps the original handle');
 }
 
 // 8. The call site actually passes the condition — a correct default the app overrides blindly
