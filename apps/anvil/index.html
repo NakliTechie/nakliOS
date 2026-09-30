@@ -362,6 +362,7 @@
   <button class="sheet-row" data-act="window"><span class="sr-ic">📏</span>Context window</button>
   <button class="sheet-row" data-act="learn"><span class="sr-ic">🎓</span>Learn from this project</button>
   <button class="sheet-row" data-act="home"><span class="sr-ic">🗄</span>Anvil home folder</button>
+  <button class="sheet-row" data-act="foreign"><span class="sr-ic">▤</span>Imported conversations</button>
 </div></div>
 
 <!-- The NakliOS host bridge: establishes window.naklios (+ .ai) over postMessage
@@ -489,6 +490,7 @@
   import { makeCampaignExecutors } from '../../sys/assay/executors.mjs';
   import { verifyWall, verifyTests, replay as replayLineage } from '../../sys/assay/verify.mjs';
   import { createRunRecorder, foldSessionContext, foldStatus, foldLog, foldTranscript, loadRecord, foldStopReasons, stopReasonsLine, searchRecords, scopeEntries, readEvent, foldRecovery, recoveryNote, foldOutcome, foldSkillUsage, statusUnit, createProjector, foldOrdering, groupOrdering, orderingLine, foldRecalled, foldQuota, foldGoal, goalLine, foldEpisode } from '../../sys/history/run-record.mjs';
+  import { FOREIGN_LIMITS, importForeignJsonl, detectForeignProvider, foreignSourceId, matchesForeignRow, foreignSourceLabel, foreignBloom, foreignBloomMayContain, foreignStoredBytes, redactForeignText } from '../../sys/history/foreign-transcripts.mjs';
 
   const $ = (id) => document.getElementById(id);
   const nak = window.naklios || null;
@@ -638,6 +640,8 @@
   // + a SQLite index with a parity doctor); ours is IndexedDB because the browser
   // already provides it, and rebuildRunIndex() is the doctor.
   const RUNS_STORE='runs';
+  const FOREIGN_STORE='foreign-entries', FOREIGN_SOURCES='foreign-sources';
+  const FOREIGN_RAW='foreign-raw', FOREIGN_SEARCH='foreign-search', FOREIGN_ARCHIVE_MAX=50_000, FOREIGN_ARCHIVE_BYTES=128*1024*1024;
   // LX-3 (2026-09-17): the SHAPE of an index row — bumped whenever runIndexRow gains a field a fold
   // reads (2: gatePassed, the quota, evidence). A row an older Anvil wrote lacks the field and would
   // fold to a lie (a passed gate read as unverified), so the startup backfill re-derives every row
@@ -645,7 +649,30 @@
   // reachable. A home-only row skipped because the home was not re-granted at that boot keeps its old
   // shape until the home is reconnected, which re-runs the doctor once (the checker's red flag).
   const ROW_SHAPE=2; const SHAPE_KEY='anvil-row-shape';
-  function idbOpen(){return new Promise((res,rej)=>{const r=indexedDB.open(DIR_DB,2);r.onupgradeneeded=()=>{const db=r.result; if(!db.objectStoreNames.contains(DIR_STORE)) db.createObjectStore(DIR_STORE); if(!db.objectStoreNames.contains(RUNS_STORE)){ const st=db.createObjectStore(RUNS_STORE,{keyPath:'id'}); st.createIndex('project','project'); st.createIndex('task','task'); st.createIndex('endedAt','endedAt'); }};r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
+  function idbOpen(){return new Promise((res,rej)=>{
+    const r=indexedDB.open(DIR_DB,3); let blocked=false;
+    r.onupgradeneeded=()=>{
+      const db=r.result;
+      if(!db.objectStoreNames.contains(DIR_STORE)) db.createObjectStore(DIR_STORE);
+      if(!db.objectStoreNames.contains(RUNS_STORE)){
+        const st=db.createObjectStore(RUNS_STORE,{keyPath:'id'});
+        st.createIndex('project','project'); st.createIndex('task','task'); st.createIndex('endedAt','endedAt');
+      }
+      if(!db.objectStoreNames.contains(FOREIGN_STORE)){
+        const st=db.createObjectStore(FOREIGN_STORE,{keyPath:'id'});
+        st.createIndex('source','source.id'); st.createIndex('sourceLine',['source.id','source.line']); st.createIndex('fingerprint','eventFingerprint');
+      }
+      if(!db.objectStoreNames.contains(FOREIGN_SOURCES)) db.createObjectStore(FOREIGN_SOURCES,{keyPath:'id'});
+      if(!db.objectStoreNames.contains(FOREIGN_RAW)) db.createObjectStore(FOREIGN_RAW,{keyPath:'id'});
+      if(!db.objectStoreNames.contains(FOREIGN_SEARCH)){
+        const st=db.createObjectStore(FOREIGN_SEARCH,{keyPath:'id'});
+        st.createIndex('source','sourceId'); st.createIndex('ts','tsSort'); st.createIndex('providerTs',['provider','tsSort']);
+      }
+    };
+    r.onsuccess=()=>{if(blocked){r.result.close();return;}r.result.onversionchange=()=>r.result.close();res(r.result);};
+    r.onerror=()=>rej(r.error);
+    r.onblocked=()=>{blocked=true;rej(new Error('Close other Anvil tabs to upgrade the local archive'));};
+  });}
   async function runsPut(row){try{const db=await idbOpen();await new Promise((res)=>{const t=db.transaction(RUNS_STORE,'readwrite').objectStore(RUNS_STORE).put(row);t.onsuccess=res;t.onerror=res;});}catch(_){} }
   async function runsGet(id){try{const db=await idbOpen();return await new Promise((res)=>{const q=db.transaction(RUNS_STORE).objectStore(RUNS_STORE).get(id);q.onsuccess=()=>res(q.result||null);q.onerror=()=>res(null);});}catch(_){return null;}}
   // LX-3: the goal row of a task, folded from its run rows (the record is the store; the row is derived)
@@ -744,6 +771,118 @@
   // oncomplete this promise never settled — the write landed, and every caller that awaited it hung:
   // Open folder's confirmation, the home chip's, and the doctor's shape stamp (found on prod 2026-09-17).
   async function idbSet(k,v){try{const db=await idbOpen();await new Promise((res)=>{const t=db.transaction(DIR_STORE,'readwrite').objectStore(DIR_STORE).put(v,k);t.onsuccess=res;t.onerror=res;});}catch(_){} }
+
+  // Imported copies remain separate from native, hash-verified Anvil runs.
+  async function foreignSourcePut(row){
+    const db=await idbOpen();
+    try{ await new Promise((resolve,reject)=>{ const tx=db.transaction(FOREIGN_SOURCES,'readwrite'); tx.objectStore(FOREIGN_SOURCES).put(row); tx.oncomplete=resolve; tx.onerror=()=>reject(tx.error); tx.onabort=()=>reject(tx.error); }); }
+    finally{ db.close(); }
+  }
+  async function foreignClaimSource(row){
+    const db=await idbOpen();
+    try{
+      await new Promise((resolve,reject)=>{ const tx=db.transaction(FOREIGN_SOURCES,'readwrite');
+        tx.objectStore(FOREIGN_SOURCES).add(row);
+        tx.oncomplete=resolve; tx.onerror=()=>reject(tx.error); tx.onabort=()=>reject(tx.error);
+      });
+      return true;
+    }catch(e){ if(e?.name==='ConstraintError') return false; throw e; }
+    finally{ db.close(); }
+  }
+  async function foreignSources(){
+    const db=await idbOpen();
+    try{ return await new Promise((resolve,reject)=>{ const r=db.transaction(FOREIGN_SOURCES).objectStore(FOREIGN_SOURCES).getAll(); r.onsuccess=()=>resolve(r.result||[]); r.onerror=()=>reject(r.error); }); }
+    finally{ db.close(); }
+  }
+  async function foreignArchiveUsage(){
+    const db=await idbOpen();
+    try{ return await new Promise((resolve,reject)=>{
+      let entries=0, bytes=0;
+      const tx=db.transaction(FOREIGN_SEARCH), q=tx.objectStore(FOREIGN_SEARCH).openCursor();
+      q.onsuccess=()=>{const cursor=q.result;if(cursor){entries++;bytes+=Number(cursor.value.storageBytes)||0;cursor.continue();}};
+      tx.oncomplete=()=>resolve({entries,bytes}); tx.onerror=()=>reject(tx.error); tx.onabort=()=>reject(tx.error);
+    }); }
+    finally{ db.close(); }
+  }
+  async function foreignPutRows(rows){
+    if(!rows.length) return { inserted:0, existingDuplicates:0 };
+    const db=await idbOpen(); let inserted=0, existingDuplicates=0;
+    try{ await new Promise((resolve,reject)=>{
+      const tx=db.transaction([FOREIGN_STORE,FOREIGN_RAW,FOREIGN_SEARCH],'readwrite');
+      const store=tx.objectStore(FOREIGN_STORE), raw=tx.objectStore(FOREIGN_RAW), search=tx.objectStore(FOREIGN_SEARCH);
+      // These three stores form one copied entry. Keep every source's copy even
+      // when its upstream event ID matches another source, so forgetting either
+      // source cannot remove the other's transcript.
+      for(const row of rows){ const q=store.get(row.id); q.onsuccess=()=>{ if(!q.result){
+        if(row.eventFingerprint){ const match=store.index('fingerprint').get(row.eventFingerprint); match.onsuccess=()=>{ if(match.result) existingDuplicates++; }; }
+        const { raw:sourceFields, ...entry }=row;
+        const added=store.add(entry); added.onsuccess=()=>{ inserted++; };
+        raw.add({id:row.id,raw:sourceFields});
+        search.add({id:row.id,sourceId:row.source.id,provider:row.provider,project:row.project,
+          tsSort:row.ts||'0000-01-01T00:00:00.000Z',bloom:foreignBloom(row.text),storageBytes:foreignStoredBytes(row)});
+      } }; }
+      tx.oncomplete=resolve; tx.onerror=()=>reject(tx.error); tx.onabort=()=>reject(tx.error);
+    }); return { inserted, existingDuplicates }; }
+    finally{ db.close(); }
+  }
+  async function foreignRawGet(id){
+    const db=await idbOpen();
+    try{ return await new Promise((resolve,reject)=>{ const r=db.transaction(FOREIGN_RAW).objectStore(FOREIGN_RAW).get(id); r.onsuccess=()=>resolve(r.result?.raw||''); r.onerror=()=>reject(r.error); }); }
+    finally{ db.close(); }
+  }
+  async function foreignForgetSource(sourceId){
+    const db=await idbOpen();
+    try{ await new Promise((resolve,reject)=>{
+      const tx=db.transaction([FOREIGN_STORE,FOREIGN_RAW,FOREIGN_SEARCH,FOREIGN_SOURCES],'readwrite');
+      const q=tx.objectStore(FOREIGN_STORE).index('source').openCursor(IDBKeyRange.only(sourceId));
+      q.onsuccess=()=>{ const cursor=q.result;
+        if(cursor){
+          tx.objectStore(FOREIGN_RAW).delete(cursor.value.id);
+          tx.objectStore(FOREIGN_SEARCH).delete(cursor.value.id);
+          cursor.delete(); cursor.continue();
+        }
+        else tx.objectStore(FOREIGN_SOURCES).delete(sourceId);
+      };
+      tx.oncomplete=resolve; tx.onerror=()=>reject(tx.error); tx.onabort=()=>reject(tx.error);
+    }); }
+    finally{ db.close(); }
+  }
+  async function foreignSearch(filters, allowedSources, limit=30){
+    const db=await idbOpen(), rows=[];
+    try{ await new Promise((resolve,reject)=>{
+      const tx=db.transaction([FOREIGN_STORE,FOREIGN_SEARCH]);
+      const entries=tx.objectStore(FOREIGN_STORE), search=tx.objectStore(FOREIGN_SEARCH);
+      const lower=filters.from?new Date(filters.from).toISOString():'0000-01-01T00:00:00.000Z';
+      const upper=filters.to?new Date(Date.parse(filters.to)+86_399_999).toISOString():'9999-12-31T23:59:59.999Z';
+      const index=filters.provider?search.index('providerTs'):search.index('ts');
+      const range=filters.provider?IDBKeyRange.bound([filters.provider,lower],[filters.provider,upper]):IDBKeyRange.bound(lower,upper);
+      const q=index.openCursor(range,'prev');
+      q.onsuccess=()=>{ const cursor=q.result; if(!cursor) return;
+        const meta=cursor.value;
+        if(!allowedSources.has(meta.sourceId) ||
+           (filters.project&&!String(meta.project||'').toLowerCase().includes(filters.project.toLowerCase())) ||
+           (filters.query&&!foreignBloomMayContain(meta.bloom,filters.query))){ cursor.continue(); return; }
+        const item=entries.get(meta.id);
+        item.onsuccess=()=>{
+          if(item.result && matchesForeignRow(item.result,filters)) rows.push(item.result);
+          if(rows.length<limit) cursor.continue();
+        };
+      };
+      tx.oncomplete=resolve; tx.onerror=()=>reject(tx.error); tx.onabort=()=>reject(tx.error);
+    });
+      return rows; }
+    finally{ db.close(); }
+  }
+  async function foreignContext(sourceId, line){
+    const db=await idbOpen(), rows=[];
+    try{ await new Promise((resolve,reject)=>{
+      const tx=db.transaction(FOREIGN_STORE);
+      const q=tx.objectStore(FOREIGN_STORE).index('sourceLine').openCursor(IDBKeyRange.bound([sourceId,Math.max(0,line-2)],[sourceId,line+2]));
+      q.onsuccess=()=>{ const cursor=q.result; if(cursor){ rows.push(cursor.value); cursor.continue(); } };
+      tx.oncomplete=resolve; tx.onerror=()=>reject(tx.error); tx.onabort=()=>reject(tx.error);
+    }); return rows.sort((a,b)=>a.source.line-b.source.line); }
+    finally{ db.close(); }
+  }
 
   // ── Anvil home — rung 1 of the record's storage ladder ────────────────────
   // OPFS (rung 0) is site storage: on 2026-09-04 navigator.storage.persisted()
@@ -1339,6 +1478,166 @@
       'Switch to a disk folder anytime with "Open folder" (top right).';
     globalPreview={ type:'text', file:'Storage', label:'Storage', content };
     { const _t=activeTask(); if(_t) _t.preview=null; }   // a stale task preview would hide this global view
+    state.previewOpen=true; save(); renderPreview();
+  }
+  const foreignFilters={ query:'', project:'', provider:'', from:'', to:'' };
+  async function pickForeignFile(){
+    if(window.showOpenFilePicker){
+      try{ const handles=await window.showOpenFilePicker({ multiple:false, types:[{ description:'Agent JSONL transcript', accept:{ 'application/json':['.jsonl'], 'text/plain':['.jsonl'] } }] });
+        return handles.length ? await handles[0].getFile() : null;
+      }catch(e){ if(e&&e.name==='AbortError') return null; throw e; }
+    }
+    return await new Promise(resolve=>{
+      const input=document.createElement('input'); input.type='file'; input.accept='.jsonl,application/json,text/plain';
+      let settled=false, timer=null;
+      const finish=(file)=>{if(settled)return;settled=true;clearTimeout(timer);resolve(file);};
+      input.onchange=()=>finish(input.files&&input.files[0]||null);
+      input.oncancel=()=>finish(null);
+      timer=setTimeout(()=>finish(null),10*60*1000);
+      input.click();
+    });
+  }
+  async function* foreignFileChunks(file){
+    const reader=file.stream().getReader();
+    try{ while(true){ const part=await reader.read(); if(part.done) return; yield part.value; } }
+    finally{ try{ await reader.cancel(); }catch(_){} reader.releaseLock(); }
+  }
+  async function foreignSampleDigest(file){
+    if(!globalThis.crypto?.subtle) throw new Error('This browser cannot fingerprint selected files');
+    const first=await file.slice(0,64*1024).arrayBuffer();
+    const last=await file.slice(Math.max(0,file.size-64*1024)).arrayBuffer();
+    const bytes=new Uint8Array(first.byteLength+last.byteLength);
+    bytes.set(new Uint8Array(first)); bytes.set(new Uint8Array(last),first.byteLength);
+    const digest=new Uint8Array(await crypto.subtle.digest('SHA-256',bytes));
+    return Array.from(digest,b=>b.toString(16).padStart(2,'0')).join('');
+  }
+  let foreignImporting=false;
+  async function importSelectedForeign(provider){
+    if(foreignImporting){ await openForeignArchive('An import is already running.'); return; }
+    foreignImporting=true;
+    let file;
+    try{
+      file=await pickForeignFile(); if(!file) return;
+      const detected=detectForeignProvider(await file.slice(0,256*1024).text());
+      if(detected!==provider){ await openForeignArchive('Selected file format is '+(detected||'unrecognized')+'; choose a '+provider+' JSONL export.'); return; }
+      const source={ name:redactForeignText(file.name,160), size:file.size, lastModified:file.lastModified,
+        sampleDigest:await foreignSampleDigest(file) };
+      const sourceId=foreignSourceId(provider,source);
+      const perform=async()=>{
+        if((await foreignSources()).length>=50){ await openForeignArchive('The local archive has reached its 50-source limit. Forget a source before importing another.'); return; }
+        const archive=await foreignArchiveUsage();
+        const room=FOREIGN_ARCHIVE_MAX-archive.entries;
+        if(room<=0){ await openForeignArchive('The local archive has reached its 50,000-entry limit. Forget a source before importing another.'); return; }
+        let roomBytes=FOREIGN_ARCHIVE_BYTES-archive.bytes;
+        try{const estimate=await navigator.storage?.estimate?.();
+          if(Number.isFinite(estimate?.quota)&&Number.isFinite(estimate?.usage)) roomBytes=Math.min(roomBytes,Math.floor(estimate.quota*0.8-estimate.usage));
+        }catch(_){}
+        if(roomBytes<=0){ await openForeignArchive('The local archive is near its byte or browser storage limit. Forget a source before importing another.'); return; }
+        const claimed=await foreignClaimSource({id:sourceId,provider,source,status:'importing',importedAt:new Date().toISOString(),report:null});
+        if(!claimed){ await openForeignArchive('This source is already imported or an import is in progress. Forget its copy before trying again.'); return; }
+        try{
+          let batch=[], inserted=0, existingDuplicates=0;
+          const flush=async()=>{ if(batch.length){ const result=await foreignPutRows(batch); inserted+=result.inserted; existingDuplicates+=result.existingDuplicates; batch=[]; } };
+          const report=await importForeignJsonl(foreignFileChunks(file),{ provider, source,
+            limits:{ entries:Math.min(FOREIGN_LIMITS.entries,room) }, onEntry:async row=>{
+              const size=foreignStoredBytes(row);
+              if(size>roomBytes) return 'archive byte cap';
+              roomBytes-=size;
+              batch.push(row); if(batch.length>=100) await flush();
+            } });
+          await flush();
+          report.parsed=report.imported;
+          report.stored=inserted;
+          report.existingDuplicates=existingDuplicates;
+          report.storageConflicts=report.parsed-inserted;
+          if(report.truncationReason==='entry cap'&&room<FOREIGN_LIMITS.entries) report.truncationReason='archive entry cap';
+          await foreignSourcePut({ id:sourceId, provider, source, status:report.truncated?'truncated':'complete', importedAt:new Date().toISOString(), report });
+          await openForeignArchive('Imported '+source.name+': '+inserted+' copied entries'+(report.truncated?' (partial: '+report.truncationReason+'; forget and reimport for a complete copy)':'')+'.');
+        }catch(e){
+          try{ await foreignForgetSource(sourceId); }catch(_){}
+          await openForeignArchive('Transcript import failed: '+String(e&&e.message||e));
+        }
+      };
+      if(navigator.locks?.request) await navigator.locks.request('anvil-foreign-import',perform);
+      else await perform();
+    }catch(e){ await openForeignArchive('Transcript import failed: '+String(e&&e.message||e)); }
+    finally{ foreignImporting=false; }
+  }
+  async function openForeignEntry(row){
+    let near, raw;
+    try{ [near,raw]=await Promise.all([foreignContext(row.source.id,row.source.line),foreignRawGet(row.id)]); }
+    catch(e){ await openForeignArchive('Could not open the imported source: '+String(e&&e.message||e)); return; }
+    const context=near.map(r=>(r.id===row.id?'▶ ':'  ')+foreignSourceLabel(r)+' ['+r.role+'] '+r.text.slice(0,500)).join('\n');
+    globalPreview={ type:'text', label:'Imported', file:foreignSourceLabel(row),
+      content:'Foreign transcript copy · '+row.provider+' · '+row.adapter+'\n'+
+        'Project: '+(row.project||'unknown')+' · Thread: '+(row.threadId||'unknown')+' · Date: '+(row.ts||'unknown')+'\n'+
+        'Tool outcome: unverified\n\n'+row.text+'\n\nNearby source lines:\n'+context+'\n\nPreserved source fields (common credentials redacted, bounded):\n'+raw,
+      actions:[{label:'← Imported conversations',onClick:()=>void openForeignArchive()}] };
+    { const t=activeTask(); if(t) t.preview=null; }
+    state.previewOpen=true; save(); renderPreview();
+  }
+  async function setForeignFilter(key,label){
+    const value=await askText({title:'Imported conversations',label,value:foreignFilters[key]||''});
+    if(value===null) return;
+    const next=String(value).trim();
+    if(key==='provider' && next && next!=='claude' && next!=='codex'){
+      await openForeignArchive('Provider filter must be claude, codex, or empty.'); return;
+    }
+    if((key==='from'||key==='to') && next && (!/^\d{4}-\d{2}-\d{2}$/.test(next)||!Number.isFinite(Date.parse(next)))){
+      await openForeignArchive('Date filter must be YYYY-MM-DD or empty.'); return;
+    }
+    foreignFilters[key]=next;
+    await openForeignArchive();
+  }
+  async function forgetForeignSource(source){
+    const answer=await askChoice({ title:'Forget imported conversation?',
+      label:'Remove the local copy of '+source.source.name+'? The selected source file remains untouched.',
+      choices:[{label:'Keep copy',value:'keep',primary:true},{label:'Forget copy',value:'forget'}] });
+    if(answer!=='forget') return;
+    try{ await foreignForgetSource(source.id); await openForeignArchive('Forgot the local copy of '+source.source.name+'.'); }
+    catch(e){ await openForeignArchive('Could not forget the copy: '+String(e&&e.message||e)); }
+  }
+  async function chooseForeignSourceToForget(sources){
+    const answer=await askText({ title:'Forget an imported source', label:'Source number from the list', value:'' });
+    if(answer===null) return;
+    const index=Number(String(answer).trim())-1;
+    if(!Number.isInteger(index)||index<0||index>=sources.length){ await openForeignArchive('Choose a listed source number.'); return; }
+    await forgetForeignSource(sources[index]);
+  }
+  async function openForeignArchive(note=''){
+    let sources, hits;
+    try{ sources=await foreignSources();
+      const allowed=new Set(sources.filter(s=>s.status==='complete'||s.status==='truncated').map(s=>s.id));
+      hits=await foreignSearch(foreignFilters,allowed,10);
+    }catch(e){
+      globalPreview={type:'text',label:'Imported',file:'Imported conversations',content:'Local archive unavailable: '+String(e&&e.message||e)};
+      { const t=activeTask(); if(t) t.preview=null; } state.previewOpen=true; save(); renderPreview(); return;
+    }
+    const filters=Object.entries(foreignFilters).filter(([,v])=>v).map(([k,v])=>k+'='+v).join(' · ')||'none';
+    const lines=hits.map((r,i)=>(i+1)+'. '+foreignSourceLabel(r)+' · '+r.provider+' · '+(r.project||'unknown')+' · '+(r.ts||'undated')+'\n   '+r.text.replace(/\s+/g,' ').slice(0,160));
+    const sourceLines=sources.map((s,i)=>{
+      const rep=s.report||{};
+      return (i+1)+'. '+s.source.name+' ['+s.provider+'] '+(rep.stored??rep.imported??0)+' stored entries'+
+        (s.status==='truncated'?' · bounded partial':s.status==='importing'?' · interrupted/in progress':'')+
+        '; '+(rep.malformed||0)+' malformed, '+(rep.duplicate||0)+' repeated in file, '+(rep.existingDuplicates||0)+' matching event IDs in other copies';
+    }).join('\n');
+    const actions=[
+      {label:'Import Claude Code JSONL',onClick:()=>void importSelectedForeign('claude')},
+      {label:'Import Codex JSONL',onClick:()=>void importSelectedForeign('codex')},
+      {label:'Search text',onClick:()=>void setForeignFilter('query','Text to find (empty shows recent entries)')},
+      {label:'Project',onClick:()=>void setForeignFilter('project','Project name contains')},
+      {label:'Provider',onClick:()=>void setForeignFilter('provider','claude, codex, or empty')},
+      {label:'From date',onClick:()=>void setForeignFilter('from','From YYYY-MM-DD')},
+      {label:'To date',onClick:()=>void setForeignFilter('to','To YYYY-MM-DD')},
+      {label:'Clear filters',onClick:()=>{ for(const key of Object.keys(foreignFilters)) foreignFilters[key]=''; void openForeignArchive(); }},
+      ...(sources.length?[{label:'Forget a source',onClick:()=>void chooseForeignSourceToForget(sources)}]:[]),
+      ...hits.map((r,i)=>({label:'Open result '+(i+1)+' · '+foreignSourceLabel(r),onClick:()=>void openForeignEntry(r)})),
+    ];
+    globalPreview={ type:'text', label:'Imported', file:'Imported conversations',
+      content:(note?note+'\n\n':'')+'Selected JSONL files become bounded local copies with common credential patterns redacted. Unrecognized secrets may remain in this browser. Native Anvil runs remain separate.\n'+
+        'Filters: '+filters+'\n'+((foreignFilters.from||foreignFilters.to)?'Date filters exclude undated entries.\n':'')+
+        'Showing up to 10 recent matches; refine filters for more.\n\nSources:\n'+(sourceLines||'(none)')+'\n\nResults:\n'+(lines.join('\n')||'(none)'), actions };
+    { const t=activeTask(); if(t) t.preview=null; }
     state.previewOpen=true; save(); renderPreview();
   }
   async function renderFiles(){
@@ -3738,6 +4037,7 @@
     else if(a==='window') setContextWindow();
     else if(a==='learn'){ if(typeof primeProject==='function') primeProject(); }
     else if(a==='home') call('home-chip');
+    else if(a==='foreign'){ void openForeignArchive(); raise('preview'); }
   });
   applyLayout();   // set data-mode before the boot awaits so first paint is correct
 
