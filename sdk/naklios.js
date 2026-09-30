@@ -112,6 +112,7 @@
     fs: false,
     fsBackends: [],
     fsBackend: null,
+    fsBoundedReads: false,
     // system: this app is a same-origin system app (non-third-party).
     // sysFs: system-scoped filesystem is available — the whole store, not just
     // apps/<your-id>/. Only true for system apps with a connected backend.
@@ -472,6 +473,7 @@
       if (typeof msg.fs === 'boolean') capabilities.fs = msg.fs;
       if (Array.isArray(msg.fsBackends)) capabilities.fsBackends = msg.fsBackends;
       capabilities.fsBackend = typeof msg.fsBackend === 'string' ? msg.fsBackend : null;
+      capabilities.fsBoundedReads = msg.fsBoundedReads === true;
       capabilities.system = msg.system === true;
       capabilities.sysFs = msg.sysFs === true;
       if (typeof msg.ai === 'boolean') capabilities.ai = msg.ai;
@@ -656,11 +658,13 @@
     },
     requestCapabilities: function () { send('naklios:capabilities-request'); },
     fs: {
+      get supportsBoundedReads() { return capabilities.fsBoundedReads === true; },
       // All paths are app-relative (under apps/<your-id>/ in the host folder).
       // Returns Promises. Reject if no folder connected, permission denied,
       // or path tries to traverse.
       read:       function (path)       { return rpc('naklios:fs:read', fsPayload({ path: path })); },
-      readBinary: function (path)       { return rpc('naklios:fs:readBinary', fsPayload({ path: path })); },
+      readBinary: function (path, options) { return rpc('naklios:fs:readBinary', fsPayload({ path: path, maxBytes: options && options.maxBytes })); },
+      stat:       function (path)       { return rpc('naklios:fs:stat', fsPayload({ path: path })); },
       write:      function (path, data) { return rpc('naklios:fs:write', fsPayload({ path: path, data: data })); },
       append:     function (path, line) { return rpc('naklios:fs:append', fsPayload({ path: path, line: line })); },
       list:       function (prefix)     { return rpc('naklios:fs:list', fsPayload({ prefix: prefix || '' })); },
@@ -703,7 +707,8 @@
     sys: {
       fs: {
         read:       function (path)       { return rpc('naklios:sysfs:read', fsPayload({ path: path })); },
-        readBinary: function (path)       { return rpc('naklios:sysfs:readBinary', fsPayload({ path: path })); },
+        readBinary: function (path, options) { return rpc('naklios:sysfs:readBinary', fsPayload({ path: path, maxBytes: options && options.maxBytes })); },
+        stat:       function (path)       { return rpc('naklios:sysfs:stat', fsPayload({ path: path })); },
         write:      function (path, data) { return rpc('naklios:sysfs:write', fsPayload({ path: path, data: data })); },
         append:     function (path, line) { return rpc('naklios:sysfs:append', fsPayload({ path: path, line: line })); },
         list:       function (prefix)     { return rpc('naklios:sysfs:list', fsPayload({ prefix: prefix || '' })); },

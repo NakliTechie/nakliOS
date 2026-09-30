@@ -66,9 +66,19 @@ export function buildChangeRow({ file, verb, pre, post, maxChars = MAX_PREIMAGE_
  */
 export function planRevert(row, currentContent) {
   if (!row || row.k !== 'change') return { ok: false, reason: 'not-a-change', message: 'This is not a change that can be reverted.' };
+  if (row.captureIncomplete) return { ok: false, reason: 'incomplete-capture',
+    message: `${row.file} belongs to an incomplete workspace capture. Review it manually before restoring anything.` };
+  if (row.revertUnavailable) return { ok: false, reason: 'unsupported-backend',
+    message: `${row.file} cannot be reverted safely on this storage backend because it lacks atomic expected-content mutation. Restore it manually.` };
   if (row.pre == null) {
     return { ok: false, reason: 'no-preimage',
       message: `No previous version was kept for ${row.file}${row.preUnavailable ? ` — ${row.preUnavailable}` : ''}.` };
+  }
+  if (row.deleted && currentContent === undefined) {
+    return { ok: true, reason: '', message: '', action: 'write', content: row.pre, expectedData: null };
+  }
+  if (row.created && currentContent === undefined) {
+    return { ok: false, reason: 'already-reverted', message: `${row.file} is already absent.` };
   }
   if (currentContent == null) {
     return { ok: false, reason: 'unreadable', message: `${row.file} could not be read, so reverting it is not safe.` };
@@ -80,6 +90,9 @@ export function planRevert(row, currentContent) {
       message: `${row.file} was changed before Anvil started recording what it wrote, so it cannot check whether anything has touched the file since. Open the file and edit it directly.` };
   }
   const now = digest(currentContent);
+  if (row.created && now === row.postHash) {
+    return { ok: true, reason: '', message: '', action: 'remove', content: null, expectedData: currentContent };
+  }
   // `already-reverted` is checked BEFORE `stale` on purpose. A file that already equals the
   // pre-image also differs from the postHash, so the stale branch would claim it first and say
   // "reverting would discard that" about content identical to what we would write. Safe to order
@@ -91,7 +104,7 @@ export function planRevert(row, currentContent) {
     return { ok: false, reason: 'stale',
       message: `${row.file} has changed since the agent wrote it — reverting now would discard that. Open the file and check before undoing.` };
   }
-  return { ok: true, reason: '', message: '', content: row.pre };
+  return { ok: true, reason: '', message: '', action: 'write', content: row.pre, expectedData: currentContent };
 }
 
 /**
@@ -137,8 +150,8 @@ export function turnChanges(log, run) {
   for (const r of Array.isArray(log) ? log : []) {
     if (!r || r.k !== 'change' || r.run !== run) continue;
     const e = byFile.get(r.file);
-    if (!e) byFile.set(r.file, { file: r.file, verb: r.verb, pre: r.pre ?? null, preUnavailable: r.preUnavailable || null, postHash: r.postHash || null, edits: 1 });
-    else { e.postHash = r.postHash || null; e.edits++; if (r.verb === 'wrote') e.verb = 'wrote'; }
+    if (!e) byFile.set(r.file, { file: r.file, verb: r.verb, pre: r.pre ?? null, preUnavailable: r.preUnavailable || null, postHash: r.postHash || null, created: !!r.created, deleted: !!r.deleted, captureIncomplete: !!r.captureIncomplete, revertUnavailable: !!r.revertUnavailable, edits: 1 });
+    else { e.postHash = r.postHash || null; e.deleted = !!r.deleted; e.captureIncomplete ||= !!r.captureIncomplete; e.revertUnavailable ||= !!r.revertUnavailable; e.edits++; if (r.verb === 'wrote') e.verb = 'wrote'; }
   }
   const files = [...byFile.values()];
   const kept = files.filter((f) => f.pre != null).length;
@@ -151,7 +164,7 @@ export function turnChanges(log, run) {
  *  (null when unreadable). Nothing here writes; the app applies `restore`. */
 export function planTurnRevert(turn, contents = {}) {
   const plans = (turn && turn.files ? turn.files : []).map((f) => ({ file: f.file,
-    ...planRevert({ k: 'change', file: f.file, pre: f.pre, postHash: f.postHash, preUnavailable: f.preUnavailable },
+    ...planRevert({ k: 'change', file: f.file, pre: f.pre, postHash: f.postHash, preUnavailable: f.preUnavailable, created: f.created, deleted: f.deleted, captureIncomplete: f.captureIncomplete, revertUnavailable: f.revertUnavailable },
       Object.prototype.hasOwnProperty.call(contents, f.file) ? contents[f.file] : null) }));
   return { restore: plans.filter((p) => p.ok), skipped: plans.filter((p) => !p.ok) };
 }

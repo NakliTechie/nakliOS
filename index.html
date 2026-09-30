@@ -2168,11 +2168,14 @@ async function fsRead(path){
   const file = await fh.getFile();
   return await file.text();
 }
-async function fsReadBinary(path){
+async function fsReadBinary(path, maxBytes){
   const { dir, name } = await fsGetDir(path);
   const fh = await dir.getFileHandle(name);
   const file = await fh.getFile();
-  return new Uint8Array(await file.arrayBuffer());
+  if (maxBytes !== undefined && file.size > maxBytes) throw new Error('EFBIG: file exceeds bounded read limit');
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (maxBytes !== undefined && bytes.length > maxBytes) throw new Error('EFBIG: file exceeds bounded read limit');
+  return bytes;
 }
 async function fsWrite(path, data){
   const { dir, name } = await fsGetDir(path, true);
@@ -4794,7 +4797,7 @@ const BACKENDS = {
     isConnected(){ return !!state.fsHandle; },
     displayName(){ return state.fsFolderName || ''; },
     async read(safePath){ return await fsRead(safePath); },
-    async readBinary(safePath){ return await fsReadBinary(safePath); },
+    async readBinary(safePath, maxBytes){ return await fsReadBinary(safePath, maxBytes); },
     async write(safePath, data){ await fsWrite(safePath, data); },
     async append(safePath, line){ await fsAppend(safePath, line); },
     async delete(safePath){ await fsDelete(safePath); },
@@ -4812,7 +4815,8 @@ const BACKENDS = {
       const bytes = await state.crate.read('/' + safePath);
       return new TextDecoder().decode(bytes);
     },
-    async readBinary(safePath){
+    async readBinary(safePath, maxBytes){
+      if (maxBytes !== undefined) throw new Error('ENOTSUP: Crate does not support bounded reads');
       return await state.crate.read('/' + safePath);
     },
     async write(safePath, data){
@@ -5055,6 +5059,12 @@ function fsHostHandle(msg, type, appId){
   return fsHostSerial(appId + '\0' + String(msg.path || ''), () => fsHostHandleNow(msg, type, appId));
 }
 
+function fsHostReadLimit(value){
+  if (value === undefined) return undefined;
+  if (!Number.isSafeInteger(value) || value < 0) throw new Error('EINVAL: maxBytes must be a non-negative safe integer');
+  return value;
+}
+
 // Resolve { dir, name } for fs reply ops. Throws if path unsafe or no handle.
 async function fsHostHandleNow(msg, type, appId){
   const backendId = await fsEnsurePermission(appId);
@@ -5067,7 +5077,8 @@ async function fsHostHandleNow(msg, type, appId){
   const safe = fsSafePath(appId, msg.path || '');
   switch (type){
     case 'read':       return await backend.read(safe);
-    case 'readBinary': return await backend.readBinary(safe);
+    case 'readBinary': return await backend.readBinary(safe, fsHostReadLimit(msg.maxBytes));
+    case 'stat':       return await backend.stat(safe);
     case 'write':      await backend.write(safe, msg.data); return null;
     case 'append':     await backend.append(safe, String(msg.line ?? '')); return null;
     case 'delete':     await backend.delete(safe); return null;
@@ -5122,7 +5133,8 @@ async function fsHostSysHandle(msg, op, appId){
   const safe = fsSysCleanPath(msg.path || '');
   switch (op){
     case 'read':       return await backend.read(safe);
-    case 'readBinary': return await backend.readBinary(safe);
+    case 'readBinary': return await backend.readBinary(safe, fsHostReadLimit(msg.maxBytes));
+    case 'stat':       return await backend.stat(safe);
     case 'write':      await backend.write(safe, msg.data); return null;
     case 'append':     await backend.append(safe, String(msg.line ?? '')); return null;
     case 'delete':     await backend.delete(safe); return null;
@@ -7677,6 +7689,7 @@ function capabilitySnapshot(appId){
     fs: fsCap,
     fsBackends,
     fsBackend,
+    fsBoundedReads: fsCap && fsBackend === 'fsa',
     // Same-origin system apps may browse the whole store, not just their own
     // apps/<id>/ namespace — this is what powers the OS-level file manager.
     system: isSystem,

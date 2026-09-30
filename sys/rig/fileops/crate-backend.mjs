@@ -10,9 +10,7 @@
 // The host `naklios.fs` surface (docs/app-contract.md) is an OBJECT STORE, so it
 // is narrower than the backend contract in two ways this adapter bridges:
 //
-//   • No `stat`. Synthesized from exists + a subtree listing (+ a byte read, or an
-//     optional host `stat`/`size` when the host provides one, to avoid reading a
-//     whole file just to size it).
+//   • Legacy hosts lack `stat`. A current host exposes metadata and bounded reads.
 //   • No `mkdir` / no empty directories. Object stores have only keys; a directory
 //     exists only while it has descendants. `mkdir` records a SESSION-LOCAL empty-
 //     dir marker so list/stat behave, mirroring MemoryBackend's `dirs` set. Empty
@@ -41,13 +39,19 @@ export class CrateBackend {
     }
     this.host = host;
     this._dirs = new Set(); // session-local empty-directory markers (not persisted)
-    // Flat keys expose types without content reads. Sizes remain unavailable;
-    // the host's whole-object reader does not qualify as a bounded-read API.
+    // Require an explicit host capability. A legacy whole-object reader must not
+    // become a bounded reader merely because it accepts an ignored argument.
     this.supportsMetadataOnly = true;
   }
 
-  async readBinary(safePath) {
-    const data = await this.host.readBinary(safePath);
+  get supportsBoundedReads() {
+    return this.host.supportsBoundedReads === true && typeof this.host.stat === 'function';
+  }
+
+  async readBinary(safePath, { maxBytes } = {}) {
+    if (maxBytes !== undefined && !this.supportsBoundedReads)
+      throw Object.assign(new Error('host does not support bounded reads'), { code: 'ENOTSUP' });
+    const data = await this.host.readBinary(safePath, { maxBytes });
     return data instanceof Uint8Array ? data : new Uint8Array(data);
   }
 
@@ -74,7 +78,7 @@ export class CrateBackend {
     return !!(await this.host.exists(safePath));
   }
 
-  async stat(safePath, { metadataOnly = false } = {}) {
+  async stat(safePath, { metadataOnly = false, maxBytes } = {}) {
     if (safePath === '') return { type: 'dir', size: 0, mtimeMs: 0 };
     if (metadataOnly) {
       const parent = safePath.slice(0, Math.max(0, safePath.lastIndexOf('/')));
@@ -92,7 +96,10 @@ export class CrateBackend {
     if (typeof this.host.stat === 'function') {
       const s = await this.host.stat(safePath);
       if (s) return { type: s.type || 'file', size: s.size || 0, mtimeMs: s.mtimeMs || 0 };
+      if (maxBytes !== undefined) return null;
     }
+    if (maxBytes !== undefined)
+      throw Object.assign(new Error('host does not expose bounded metadata'), { code: 'ENOTSUP' });
     // File? A readable key is a file; its byte length is the size.
     if (await this.host.exists(safePath)) {
       try {

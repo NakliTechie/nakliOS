@@ -281,7 +281,12 @@ await naklios.fs.delete("notes/one.md");
 
 Available methods:
 
-- `read(path)` and `readBinary(path)`
+- `read(path)` and `readBinary(path, { maxBytes? })`
+- `stat(path)` returns `{ type, size, mtimeMs }` or `null`. A bounded binary read
+  rejects an oversized Folder snapshot before returning bytes. Crate currently
+  has no bounded object reader, so it does not advertise this capability.
+  Check `naklios.fs.supportsBoundedReads` before relying on this contract; older
+  hosts do not advertise it.
 - `write(path, stringOrBytes)`
 - `append(path, line)`
 - `list(prefix)`
@@ -479,7 +484,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 
 <!-- sdk-reference:begin — rendered by `node scripts/sdk-reference.mjs --write` from docs/sdk-api-audit.md; do not edit by hand -->
 
-76 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
+80 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
 
 ### `version`
 
@@ -498,6 +503,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 | `capabilities.fs` | field | App-scoped filesystem available (Folder or Crate connected). |
 | `capabilities.fsBackends` | field | The backends the host offers, as descriptors `[{ id, label, name }]` — ids `fsa` (a picked folder) and `crate`; the browser's own OPFS is not on this list. |
 | `capabilities.fsBackend` | field | The backend in use. |
+| `capabilities.fsBoundedReads` | field | True when the active host storage backend supports a byte-limited read. |
 | `capabilities.system` | field | The app is a system app (same-origin, `kind: system`). |
 | `capabilities.sysFs` | field | Whole-store filesystem granted (system apps only). |
 | `capabilities.ai` | field | Shared host inference granted. |
@@ -575,6 +581,8 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 | `fs` | namespace | App-scoped filesystem (paths under `apps/<id>/`). |
 | `fs.read` | function | Read text. |
 | `fs.readBinary` | function | Read bytes. |
+| `fs.supportsBoundedReads` | getter | True when the host advertises bounded reads for the active backend. |
+| `fs.stat` | function | Read path type and size without loading file bytes. |
 | `fs.write` | function | Write text or bytes. |
 | `fs.append` | function | Append. |
 | `fs.list` | function | List entries. |
@@ -592,6 +600,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 | `sys.fs` | namespace | Whole-store filesystem (system apps only). |
 | `sys.fs.read` | function | Read text. |
 | `sys.fs.readBinary` | function | Read bytes. |
+| `sys.fs.stat` | function | Read path type and size without loading file bytes. |
 | `sys.fs.write` | function | Write. |
 | `sys.fs.append` | function | Append. |
 | `sys.fs.list` | function | List. |

@@ -340,6 +340,9 @@ jobs:
       - name: Review and revert a whole run through Anvil's real handlers (ZR-A2)
         run: node scripts/test-anvil-turn-review.mjs
 
+      - name: Capture and review all bounded Anvil workspace mutations (B01)
+        run: node scripts/test-anvil-workspace-capture.mjs
+
       - name: Stable task navigation — focus, scroll and order survive a status change (ZR-A3)
         run: node scripts/test-anvil-stable-nav.mjs
       - name: rig shell (its own tests were never in the gate)

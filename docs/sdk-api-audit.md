@@ -35,6 +35,7 @@ prefix today.
 | `capabilities.fs` | field | stable | — | App-scoped filesystem available (Folder or Crate connected). |
 | `capabilities.fsBackends` | field | stable | — | The backends the host offers, as descriptors `[{ id, label, name }]` — ids `fsa` (a picked folder) and `crate`; the browser's own OPFS is not on this list. |
 | `capabilities.fsBackend` | field | stable | — | The backend in use. |
+| `capabilities.fsBoundedReads` | field | stable | — | True when the active host storage backend supports a byte-limited read. |
 | `capabilities.system` | field | stable | — | The app is a system app (same-origin, `kind: system`). |
 | `capabilities.sysFs` | field | stable | — | Whole-store filesystem granted (system apps only). |
 | `capabilities.ai` | field | stable | — | Shared host inference granted. |
@@ -67,6 +68,8 @@ prefix today.
 | `fs` | namespace | stable | — | App-scoped filesystem (paths under `apps/<id>/`). |
 | `fs.read` | function | stable | — | Read text. |
 | `fs.readBinary` | function | stable | — | Read bytes. |
+| `fs.supportsBoundedReads` | getter | stable | — | True when the host advertises bounded reads for the active backend. |
+| `fs.stat` | function | stable | — | Read path type and size without loading file bytes. |
 | `fs.write` | function | stable | — | Write text or bytes. |
 | `fs.append` | function | stable | — | Append. |
 | `fs.list` | function | stable | — | List entries. |
@@ -79,6 +82,7 @@ prefix today.
 | `sys.fs` | namespace | stable | — | Whole-store filesystem (system apps only). |
 | `sys.fs.read` | function | stable | — | Read text. |
 | `sys.fs.readBinary` | function | stable | — | Read bytes. |
+| `sys.fs.stat` | function | stable | — | Read path type and size without loading file bytes. |
 | `sys.fs.write` | function | stable | — | Write. |
 | `sys.fs.append` | function | stable | — | Append. |
 | `sys.fs.list` | function | stable | — | List. |
