@@ -22,6 +22,7 @@
 
 import { runAgentLoop } from './agent-loop.mjs';
 import { createRunRecorder, loadRecord, foldOutcome, foldOrdering, replayInfer } from '../history/run-record.mjs';
+import { inspectLessonEvidence } from './lesson-evidence.mjs';
 
 export function armsFor(capabilities) {
   const all = Object.fromEntries(capabilities.map((c) => [c, true]));
@@ -75,7 +76,10 @@ async function runArm(task, arm, { prior, principal, now }) {
   const drive = task.driver ? task.driver(arm.caps, ctx) : singleLoop(task.loopOptions ? task.loopOptions(arm.caps, ctx) : {});
   const result = await drive({ messages, tools, infer: rec.wrapInfer(infer), executeTool, onEvent: rec.onEvent, verify, rec });
   await rec.settled();
-  return { rec, liveCalls, metrics: metricsOf(rec) };
+  const metrics = metricsOf(rec);
+  if (task.activationEvidence) metrics.lessonEvidence = inspectLessonEvidence(rec, task.activationEvidence,
+    { validatedFuelKey:task.validatedFuelKey, currentFuelKey:task.currentFuelKey, validatedModelId:task.validatedModelId });
+  return { rec, liveCalls, metrics };
 }
 
 // Run the whole matrix. Returns { arms, rows, records, liveCalls } where rows is

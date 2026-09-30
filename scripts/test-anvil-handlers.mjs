@@ -132,8 +132,9 @@ function learnCtx(over = {}) {
       createSkillSession: () => ({}),
       recordFact: async () => 'slug',
       inferViaHost: async () => ({ content: '' }),
-      runLearnReview: async (a) => { if (over.onReview) await over.onReview(a); return over.report || { staged: [], dropped: [] }; },
+      runLearnReview: async (a) => { if (over.onReview) await over.onReview(a); return over.report || { staged: [], dropped: [], quarantined: [] }; },
       renderFiles: () => {}, renderLog: () => {},
+      save: () => {},
       state: { activeProject: 'A' },
       parseSkill: (t) => ({ name: /name:\s*(\S+)/.exec(t || '')?.[1] || '', body: String(t || '') }),
       projectLedger: async () => over.ledger || { reject: async () => {} },
@@ -196,6 +197,23 @@ await test('NAF-11: a failed skill write is reported, not swallowed as staged', 
   const fn = instantiate(extractFunction(src, 'learnThisRun'), 'learnThisRun', ctx);
   await fn({ log: [] }, { events: [], resolve: () => ({}) });
   assert.ok(result && result.ok === false, `a failing fs.write must not report success — got ${JSON.stringify(result)}`);
+});
+
+await test('learning quarantine keeps its explanation and source in the task state', async () => {
+  let saves = 0;
+  const report = { staged:[], dropped:[], models:[{id:'model-one'}], quarantined:[{
+    kind:'fact', name:'late-rule', reason:'citation e4 arrived after responsible turn 0 began',
+    responsibleTurn:0, sourceRefs:[{id:'e4',tool:'run.steered',hash:'h4'}], explanation:'Later feedback named the rule.',
+  }] };
+  const { ctx } = learnCtx({ report, ctx:{ save:()=>{ saves++; } } });
+  const fn = instantiate(extractFunction(src, 'learnThisRun'), 'learnThisRun', ctx);
+  const task = { log:[] };
+  await fn(task, { events:[], resolve:()=>({}), head:()=> 'sha256:review-run' });
+  assert.equal(saves,1);
+  assert.equal(task.learnQuarantine[0].recordHead,'sha256:review-run');
+  assert.equal(task.learnQuarantine[0].sourceRefs[0].id,'e4');
+  assert.match(task.learnQuarantine[0].explanation,/Later feedback/);
+  assert.match(task.log.at(-1).text,/Learning proposal quarantined/);
 });
 
 // ── NAF-04 / NAF-08 / NAF-19 — wiring the grep anchors could not see ───────────────────

@@ -497,6 +497,11 @@ jobs:
       - name: Verify the post-run review fork + auto-review scheduler (learn this run)
         run: node sys/ai/test/learn.test.mjs
 
+      - name: Verify learning proposals cite evidence available before the responsible turn
+        run: node sys/ai/test/learn-grounding.test.mjs
+      - name: Verify lesson activation and model provenance stay observational
+        run: node sys/ai/test/lesson-evidence.test.mjs
+
       - name: Verify generational evolutionary loop (AVO crib)
         run: node sys/ai/test/evolve.test.mjs
 

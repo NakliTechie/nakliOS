@@ -449,7 +449,7 @@
   import { createProposalLedger } from '../../sys/ai/proposal-fingerprint.mjs'; // PG-A3: the poison ledger, persisted per project
   import { skillLifecycle, applySkillStatus, reviveOnUse } from '../../sys/ai/skill-lifecycle.mjs';
   import { contextBudget, windowFromOllama, windowForPreset, capHandoff, carryLimits } from '../../sys/ai/context-budget.mjs';
-  import { runLearnReview, shouldAutoReview, AUTO_REVIEW_IDLE_MS } from '../../sys/ai/learn.mjs';
+  import { runLearnReview, reviewResultLine, shouldAutoReview, AUTO_REVIEW_IDLE_MS } from '../../sys/ai/learn.mjs';
   import { sentinelLine, scanSkill } from '../../sys/ai/skill-sentinel.mjs';
   import { makeEnvelope } from '../../sys/staging/envelope.mjs';
   import { registerAppDiffTypes } from '../../sys/staging/diff-types.mjs';
@@ -2518,7 +2518,17 @@
     if(!sameProject()) return rep; // do not narrate into a task that is no longer on screen
     if(rep.staged.length) await saveLedger(); // the staged skills' fingerprints ride with the ledger
     if(rep.staged.length) (t.log=t.log||[]).push({ k:'system', text:'Learned from this run — staged for your approval: '+rep.staged.map(x=>x.staged).join(', ')+'. Nothing was saved active — keep or reject each from the Skills / Memory panes.' });
-    else (t.log=t.log||[]).push({ k:'system', text:'Reviewed this run — nothing new worth staging.'+(rep.dropped.length?(' ('+rep.dropped.length+' already-rejected proposal(s) skipped.)'):'') });
+    else if(!(rep.quarantined||[]).length) (t.log=t.log||[]).push({ k:'system', text:'Reviewed this run — nothing new worth staging.'+(rep.dropped.length?(' ('+rep.dropped.length+' already-rejected proposal(s) skipped.)'):'') });
+    if((rep.quarantined||[]).length){
+      const rows=rep.quarantined.slice(0,50).map(q=>({ run:t.runSeq||null, recordHead:typeof rec.head==='function'?rec.head():null,
+        kind:String(q.kind||''), name:String(q.name||'').slice(0,120),
+        reason:String(q.reason||'').slice(0,300), responsibleTurn:q.responsibleTurn,
+        sourceRefs:(q.sourceRefs||[]).slice(0,8).map(ref=>typeof ref==='string'?ref:{ id:ref.id, tool:ref.tool, hash:ref.hash }),
+        explanation:String(q.explanation||'').slice(0,1000), modelIds:(rep.models||[]).map(m=>m.id).filter(Boolean) }));
+      t.learnQuarantine=[...(t.learnQuarantine||[]),...rows].slice(-50);
+      for(const q of rows) (t.log=t.log||[]).push({ k:'system', run:q.run, text:'Learning proposal quarantined: '+q.name+' — '+q.reason+'; turn '+String(q.responsibleTurn??'unknown')+'; sources '+q.sourceRefs.map(ref=>typeof ref==='string'?ref:ref.id).join(', ')+'; '+q.explanation });
+    }
+    save();
     renderFiles(); renderLog();
     return rep;
   }
@@ -2922,9 +2932,7 @@
         if(!(runCtx && runCtx.rec && runCtx.t)) return 'learn_this_run: no active run to review.';
         const rep = await learnThisRun(runCtx.t, runCtx.rec);
         if(!rep) return 'learn_this_run: no AI capability available for the review.';
-        return rep.staged.length
-          ? ('Staged for your approval: '+rep.staged.map(x=>x.staged).join(', ')+'. Nothing was saved active.')
-          : ('Reviewed this run — nothing new worth staging.'+(rep.dropped.length?(' ('+rep.dropped.length+' already-rejected proposal(s) skipped.)'):''));
+        return reviewResultLine(rep);
       }
       if(nm==='checkpoint'){
         const b=await currentBudget();
