@@ -500,6 +500,26 @@ console.log('run-assembly: A4 readiness == the toolset in every mode; A2 episode
 }
 }
 
+// L4: the owner test door can lower one first-loop budget without changing the
+// normal budget or spending a model call when the prompt already exceeds it.
+{
+  const rec=createRunRecorder({app:'anvil',principal:'budget-fixture'});
+  let calls=0;
+  const result=await driveRun({mode:'code',convo:[{role:'user',content:'build a file'}],
+    sysMsg:()=>({role:'system',content:'system prompt'}),tools:[],
+    infer:async()=>{calls++;return {content:'unexpected',toolCalls:[]};},
+    executeTool:async()=>'',rec,
+    firstBudget:{maxSteps:RUN_BUDGET.maxSteps,budget:{tokens:1,wallClockMs:RUN_BUDGET.budget.wallClockMs},maxVerifyRounds:RUN_BUDGET.maxVerifyRounds}});
+  await rec.settled();
+  assert.equal(result.stop,'budget');
+  assert.equal(result.budgetAxis,'tokens');
+  assert.equal(calls,0);
+  assert.equal(rec.events().filter(e=>e.tool==='run.started').length,1,'the test budget cannot escape into a re-loop');
+  const last=rec.events().at(-1);
+  assert.equal(last.tool,'run.stopped');
+  assert.equal(rec.resolve(last).output.axis,'tokens');
+}
+
 // C1: driveRun hands every loop of the run the caller's compactor
 {
   const src = await (await import('node:fs/promises')).readFile(new URL('../sys/ai/run-assembly.mjs', import.meta.url), 'utf8');

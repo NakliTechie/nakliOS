@@ -53,6 +53,9 @@ jobs:
       - name: Verify Books stays hosted and uses explicit Folder or Crate storage
         run: node scripts/test-books-storage-bridge.mjs
 
+      - name: Verify the local COI server maps the sibling Books source
+        run: node scripts/test-serve-coi-books.mjs
+
       - name: Verify Slate and BOFH open in Immersive NakliOS windows
         run: node scripts/test-immersive-apps.mjs
 

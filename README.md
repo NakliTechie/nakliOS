@@ -26,6 +26,9 @@ node scripts/serve-coi.mjs
 ```
 
 Open `http://127.0.0.1:8947/`; the server supplies the headers needed by Forge and Anvil.
+If a Books checkout sits beside NakliOS, the server serves it at `/Books/` for
+Lorewell's local embed. It also finds that checkout from a NakliOS worktree under
+`.worktrees/`. Use `--books-root /path/to/Books` for another location.
 No package installation or NakliOS account is required. Try Notes with Browser storage before connecting a folder, cloud storage, or AI.
 
 ## Why

@@ -460,7 +460,7 @@
   import { readinessLine } from '../../sys/ai/agent-tools.mjs';
   import { asStored } from '../../sys/ai/content-token.mjs';
   import { HOOKS_FILE, parseHooks } from '../../sys/ai/hooks.mjs';
-  import { systemPrompt as assembledSystemPrompt, systemMessage, gateNote as assembledGateNote, runToolset, runReadiness, isSimpleAsk, synthesizeTool, driveRun, loadHooks, preHookReply, postHookNotes, contextMessage } from '../../sys/ai/run-assembly.mjs';
+  import { systemPrompt as assembledSystemPrompt, systemMessage, gateNote as assembledGateNote, runToolset, runReadiness, isSimpleAsk, synthesizeTool, driveRun, RUN_BUDGET, loadHooks, preHookReply, postHookNotes, contextMessage } from '../../sys/ai/run-assembly.mjs';
   import { gateAction, gateEvent, actionClasses, guardCriticalShellInvocation } from '../../sys/ai/action-gate.mjs';
   import { applyPolicy, grant as policyGrant, revoke as policyRevoke, policyRows, normalisePolicy, POLICY_HINT } from '../../sys/ai/action-policy.mjs';
   import { withShellContext, decideByRules, invalidRules, applyMode, MODES as PERM_MODES, MODE_LABEL as PERM_MODE_LABEL, modeIsLoud } from '../../sys/ai/permission-rules.mjs';
@@ -2625,6 +2625,7 @@
   }
 
   let running=false;
+  let testRunBudget=null; // one-shot, opt-in owner test door only
   let autoReviewTimer=null; // the idle-deferred post-run review (C5)
   let abortController=null;   // aborts the in-flight run (the Stop button)
   // Enter sends; while a run is in flight, Enter/Send QUEUES the prompt (Codex-
@@ -3618,8 +3619,12 @@
         try{ return await executeTool(name,args,call); }
         finally{ try{ await runCapture.observe(); }catch(e){ t.changeCapture.complete=false; t.changeCapture.problems.push('observation failed: '+String(e?.message||e)); } }
       };
+      const armedBudget=testRunBudget; testRunBudget=null;
+      if(armedBudget&&(armedBudget.taskId!==t.id||Date.now()>=armedBudget.expiresAt))
+        throw new Error('Test budget expired or belongs to another task; rearm before sending. No model call ran.');
+      const firstBudget=armedBudget?armedBudget.value:null;
       let result = await driveRun({
-        steer, // B2: completions land at the next turn; a turn with nothing to do while a child runs waits
+        steer, firstBudget, // B2: completions land at the next turn; a turn with nothing to do while a child runs waits
         mode, convo, sysMsg, tools, infer: recInfer, executeTool:captureExecute, rec,
         verify, signal: abortController.signal, onEvent: recEvent, model: runModel, gateNote, readiness, compact: compactForOverflow,
         note: (text)=>{ t.log.push({k:'system', text}); renderLog(); },
@@ -3889,6 +3894,22 @@
     // the face and the shell are rebuilt together so the catalog, the mode button and execution all see
     // it; the fences stay. Kiln keeps the face it booted with. Reload to restore the full grant.
     narrowGrant:(scopes)=>{ grant=agentGrant(scopes); face=createAgentFace({ registry, grant, opLog, actor:'agent' }); shell=agentShell(); syncMode(); return { scopes:[...grant.scopes] }; },
+    // L4: one bounded run, scoped to this task; no re-loop can escape the cap.
+    setRunBudget:(limits)=>{
+      if(limits==null){ testRunBudget=null; return {ok:true,pending:null}; }
+      if(running) return {ok:false,error:'wait for the current run to finish before arming a budget'};
+      const task=activeTask(); if(!task) return {ok:false,error:'no active task'};
+      if(typeof limits!=='object'||['tokens','wallClockMs','maxSteps'].some(k=>typeof limits[k]!=='number'))
+        return {ok:false,error:'numeric tokens, wallClockMs, and maxSteps required'};
+      const values={tokens:Number(limits.tokens),wallClockMs:Number(limits.wallClockMs),maxSteps:Number(limits.maxSteps)};
+      if(!Number.isInteger(values.tokens)||values.tokens<1||values.tokens>RUN_BUDGET.budget.tokens||
+         !Number.isInteger(values.wallClockMs)||values.wallClockMs<1000||values.wallClockMs>RUN_BUDGET.budget.wallClockMs||
+         !Number.isInteger(values.maxSteps)||values.maxSteps<1||values.maxSteps>RUN_BUDGET.maxSteps)
+        return {ok:false,error:'tokens 1–120000, wallClockMs 1000–900000, maxSteps 1–24 required'};
+      const value=Object.freeze({maxSteps:values.maxSteps,budget:Object.freeze({tokens:values.tokens,wallClockMs:values.wallClockMs}),maxVerifyRounds:RUN_BUDGET.maxVerifyRounds});
+      testRunBudget={value,taskId:task.id,expiresAt:Date.now()+5*60*1000};
+      return {ok:true,pending:{maxSteps:value.maxSteps,budget:{...value.budget},expiresAt:testRunBudget.expiresAt,taskId:task.id}};
+    },
     taskState:()=>{ const t=activeTask(); return t? { id:t.id, title:t.title, status:t.status, verifyCmd:t.verifyCmd||'', mode:t.mode||'code' } : null; },
     // The run-index doctor (WIRE): rebuild the IndexedDB index from the record files and say how
     // many rows resumed from their own checkpoint rather than refolding from event zero.
