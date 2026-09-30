@@ -109,6 +109,17 @@ export function listingEntries(text, opts = {}) {
 }
 export { listingShape };
 
+// The provider and the persisted transcript may strip private message fields.
+// Recognise our own references from their public content so a later shake does
+// not replace a history handle with a reference to that reference.
+function alreadyElided(content) {
+  if (typeof content !== 'string' || content.length > 600 || !content.endsWith(']')) return false;
+  if (!/^\[(?:tool output elided — \d+ chars|listing elided — \d+ entries)(?: from `[^`\n]+`)?\./.test(content)) return false;
+  return content.includes(' The full result is in this task\'s run history:') ||
+    content.includes(' This content is GONE:') ||
+    content.includes(' Re-run the listing if you need the names; do not guess them.');
+}
+
 export function shake(region, { estimate = estimateTokens, minChars = 200, artifactPrefix = 'artifact://tool-', retrievable = false } = {}) {
   const artifacts = new Map();
   let saved = 0;
@@ -120,7 +131,7 @@ export function shake(region, { estimate = estimateTokens, minChars = 200, artif
     for (const c of m.tool_calls) if (c?.id) names.set(c.id, c.function?.name || '');
   }
   const out = region.map((m) => {
-    if (m?.role === 'tool' && typeof m.content === 'string' && m.content.length >= minChars) {
+    if (m?.role === 'tool' && typeof m.content === 'string' && m.content.length >= minChars && !alreadyElided(m.content)) {
       const id = `${artifactPrefix}${++counter}`;
       artifacts.set(id, m.content);
       saved += estimate([m]);
@@ -160,7 +171,7 @@ export function shake(region, { estimate = estimateTokens, minChars = 200, artif
 const SMALL_CUT = /… \[old result cut — \d+ chars\]$/;
 export function shakeSmall(region, { estimate = estimateTokens, minChars = 200, keepChars = 60, aggregateTokens = 2000 } = {}) {
   // a result this pass already cut is recognised by its marker — no private field rides to the provider
-  const small = region.filter((m) => m?.role === 'tool' && typeof m.content === 'string' && m.content.length < minChars && m.content.length > keepChars + 20 && !m._artifact && !SMALL_CUT.test(m.content));
+  const small = region.filter((m) => m?.role === 'tool' && typeof m.content === 'string' && m.content.length < minChars && m.content.length > keepChars + 20 && !m._artifact && !alreadyElided(m.content) && !SMALL_CUT.test(m.content));
   const cost = small.reduce((n, m) => n + estimate([m]), 0);
   if (cost < aggregateTokens) return { messages: region, saved: 0, collapsed: 0 };
   let saved = 0, collapsed = 0;

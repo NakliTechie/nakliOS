@@ -7,6 +7,7 @@
 
 import { shake, compactConversation, listingEntries, listingShape , shakeSmall } from '../compaction.mjs';
 import { estimateTokens } from '../agent-loop.mjs';
+import { normaliseAgentMessages } from '../agent-protocol.mjs';
 
 let passed = 0;
 const failures = [];
@@ -29,6 +30,61 @@ await test('shake elides large tool results and preserves them in artifacts', ()
   eq(r.artifacts.size, 1, 'one artifact captured');
   assert(r.artifacts.get(r.messages[1]._artifact).length === 4000, 'full content recoverable');
   assert(r.saved > 0, 'reported a token saving');
+});
+
+await test('repeated shake keeps the original size and history handle after private fields are stripped', () => {
+  const body = 'original output search handle for a failed command\n' + 'a useful result line\n'.repeat(400);
+  const region = [
+    { role: 'assistant', content: null, tool_calls: [{ id: 'again', function: { name: 'shell', arguments: '{}' } }] },
+    { role: 'tool', tool_call_id: 'again', content: body },
+  ];
+  const first = shake(region, { minChars: 100, retrievable: true });
+  const reference = first.messages[1].content;
+  assert(reference.length <= 600, 'a generated reference fits the recogniser size bound');
+  assert(reference.includes(`${body.length} chars`), 'first reference keeps the original byte-scale size');
+  assert(reference.includes('history {"op":"search"'), 'first reference contains a history search');
+  const persisted = JSON.parse(JSON.stringify(normaliseAgentMessages(first.messages)));
+  const second = shake(persisted, { minChars: 100, retrievable: true });
+  eq(second.messages[1].content, reference, 'second shake does not create a reference to a reference');
+  eq(second.artifacts.size, 0, 'an old reference is not retained as a new artifact');
+  const small = shakeSmall(persisted, { minChars: 1000, aggregateTokens: 1 });
+  eq(small.messages[1].content, reference, 'aggregate small-result compaction also leaves the reference intact');
+  const stillPrivate = [{ role: 'tool', content: 'unusual body ' + 'z'.repeat(130), _artifact: 'already-registered' }];
+  eq(shakeSmall(stillPrivate, { aggregateTokens: 1 }).collapsed, 0,
+    'the existing private artifact guard still protects non-reference content');
+  const echoed = [{ role: 'tool', content: reference.slice(0, -1) + 'x'.repeat(800) + ']' }];
+  assert(shake(echoed, { minChars: 100 }).artifacts.size === 1,
+    'a long tool output that resembles a reference remains eligible for compaction');
+  const gone = shake(region, { minChars: 100, retrievable: false }).messages;
+  eq(shake(normaliseAgentMessages(gone), { minChars: 100 }).messages[1].content, gone[1].content,
+    'a non-retrievable reference does not become a false history promise');
+  const listing = [region[0], { role: 'tool', tool_call_id: 'again', content: Array.from({ length: 80 }, (_, i) => `src/file-${i}.mjs`).join('\n') }];
+  const firstListing = shake(listing, { minChars: 100, retrievable: true }).messages;
+  eq(shake(normaliseAgentMessages(firstListing), { minChars: 100, retrievable: true }).messages[1].content,
+    firstListing[1].content, 'a listing keeps its original count and history handle');
+});
+
+await test('a second conversation compaction preserves an earlier reference and compacts a new result', async () => {
+  const call = (id, body) => [
+    { role: 'assistant', content: null, tool_calls: [{ id, function: { name: 'shell', arguments: '{}' } }] },
+    { role: 'tool', tool_call_id: id, content: body },
+  ];
+  const first = await compactConversation([
+    { role: 'system', content: 'system' }, { role: 'user', content: 'first' },
+    ...call('old', 'FIRST ORIGINAL HANDLE\n' + big(10_000)),
+    { role: 'user', content: 'recent' }, { role: 'assistant', content: 'done' },
+  ], { threshold: 1000, keepRecentTokens: 100, retrievable: true });
+  eq(first.method, 'shake');
+  const originalRef = first.messages.find((m) => m.tool_call_id === 'old').content;
+  const persisted = JSON.parse(JSON.stringify(normaliseAgentMessages(first.messages)));
+  const second = await compactConversation([
+    ...persisted, { role: 'user', content: 'second' }, ...call('new', 'SECOND ORIGINAL HANDLE\n' + big(10_000)),
+    { role: 'user', content: 'now review' },
+  ], { threshold: 1300, keepRecentTokens: 100, retrievable: true });
+  eq(second.method, 'shake');
+  eq(second.messages.find((m) => m.tool_call_id === 'old').content, originalRef);
+  assert(/SECOND ORIGINAL HANDLE|history \{"op":"search"/.test(second.messages.find((m) => m.tool_call_id === 'new').content));
+  assert(second.messages.some((m) => m.content === 'now review'), 'recent turn remains');
 });
 
 // ── compaction is a no-op under budget ──────────────────────────────────
