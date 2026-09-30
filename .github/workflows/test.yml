@@ -119,6 +119,12 @@ jobs:
       - name: Verify Revert refuses on drift, a dropped pre-image says why, and retention is bounded
         run: node sys/ai/test/change-preimages.test.mjs
 
+      - name: Verify shared review diff anchors, versions, and file states
+        run: node sys/ai/test/review-diff.test.mjs
+
+      - name: Verify shared review highlighting preserves source text
+        run: node sys/ai/test/review-highlight.test.mjs
+
       - name: Verify the transcript render plans noop/append/rebuild and leaves the reader's scroll alone
         run: node sys/ai/test/log-render-plan.test.mjs
 
