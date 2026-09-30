@@ -25,10 +25,12 @@ function task() {
 }
 function bed(t, fs) {
   const calls = { system: [], renders: 0 };
-  const ctx = { turnChanges, planTurnRevert, lineDiff, fs, state: {}, globalPreview: null,
+  const ctx = { turnChanges, planTurnRevert, lineDiff, fs, backend:{supportsConditionalWrite:true,supportsConditionalDelete:true}, state: {}, globalPreview: null,
     activeTask: () => t, pushSystem: (x) => calls.system.push(x), save() {}, renderAll() { calls.renders++; }, renderPreview() {} };
+  ctx.atomicRevertAvailable = instantiate(extractFunction(src, 'atomicRevertAvailable'), 'atomicRevertAvailable', ctx);
   const openTurn = instantiate(extractFunction(src, 'openTurn'), 'openTurn', ctx);
   ctx.openTurn = openTurn;
+  ctx.readRevertState = instantiate(extractFunction(src, 'readRevertState'), 'readRevertState', ctx);
   const revertTurn = instantiate(extractFunction(src, 'revertTurn'), 'revertTurn', ctx);
   return { openTurn, revertTurn, calls };
 }
@@ -37,7 +39,7 @@ await test('the review shows each file from BEFORE the run to now — one entry 
   const t = task(); const fs = memFs({ 'a.py': 'A2', 'b.py': 'B1', 'old.txt': 'o1' });
   await bed(t, fs).openTurn(t, 2);
   assert.equal(t.preview.turn, 2); assert.equal(t.preview.type, 'diff');
-  assert.match(t.preview.file, /Run 2 — 2 files/);
+  assert.match(t.preview.file, /Run 2 — 2 paths/);
   assert.match(t.preview.content, /=== a\.py \(2 edits\) ===/, 'a.py once, with its edit count');
   assert.match(t.preview.content, /-A0/); assert.match(t.preview.content, /\+A2/);
   assert.ok(!/old\.txt/.test(t.preview.content), 'run 1\'s change is not this run\'s');
@@ -89,14 +91,14 @@ await test('reload: the turn row, its run tag and the pre-images are plain task 
 // the preview's Revert to the run when the preview is a turn.
 await test('wiring: run tag, turn row at run end, and the preview button', async () => {
   assert.match(src, /t\.runSeq=\(t\.runSeq\|\|0\)\+1;/, 'each run takes a sequence number');
-  assert.match(src, /if\(t\.runSeq\) row\.run = t\.runSeq;/, 'each change row carries it');
+  assert.match(src, /createWorkspaceCapture\(captureFs, t\.runSeq\)/, 'each run binds a capture to its sequence');
   const endRegion = extractRegion(src, "try{ const tc=turnChanges(t.log, t.runSeq);", 'running=false;');
-  const t = task(); t.log = t.log.slice(); evaluate(endRegion, { t, turnChanges });
+  const t = task(); t.log = t.log.slice(); evaluate(endRegion, { t, turnChanges, runCapture:null });
   // (the row is built inside the vm realm, so compare by value, not by prototype)
-  assert.equal(JSON.stringify(t.log.at(-1)), JSON.stringify({ k: 'turn', run: 2, files: 2, state: 'complete' }), 'a run that changed files leaves one turn row');
-  const quiet = { id: 'q', runSeq: 3, log: task().log }; evaluate(endRegion, { t: quiet, turnChanges });
+  assert.equal(JSON.stringify(t.log.at(-1)), JSON.stringify({ k: 'turn', run: 2, files: 2, state: 'complete', observed:false }), 'a run that changed files leaves one turn row');
+  const quiet = { id: 'q', runSeq: 3, log: task().log }; evaluate(endRegion, { t: quiet, turnChanges, runCapture:null });
   assert.notEqual(quiet.log.at(-1).k, 'turn', 'a run that changed nothing leaves no row');
-  assert.match(src, /if\(pv\.turn!=null\)\{ rev\.hidden=false; rev\.textContent='↶ Revert this run';[^\n]*rev\.onclick=\(\)=>revertTurn\(pv\.turn\); \}/, 'the preview button reverts the run');
+  assert.match(src, /if\(pv\.turn!=null\)\{ rev\.hidden=!!\(pv\.captureIncomplete\|\|pv\.revertUnavailable\);[^\n]*rev\.onclick=rev\.hidden\?null:\(\)=>revertTurn\(pv\.turn\); \}/, 'the preview button reverts only a complete run on an atomic backend');
 });
 
 if (failures.length) {

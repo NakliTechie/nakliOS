@@ -135,16 +135,20 @@ assert.notEqual(digest(''), digest(' '));
 assert.equal(digest('same'), digest('same'));
 assert.match(digest('abc'), /^3:/, 'the length is part of the digest, so a collision needs both');
 
-// ── the app uses all three ─────────────────────────────────────────────────
-assert.match(anvil, /const row = buildChangeRow\(\{ file:path, verb: name==='edit'\?'edited':'wrote', pre:raw, post \}\)/,
-  'the write path builds its row through the module');
-assert.match(anvil, /const row = buildChangeRow\(\{ file:rel, verb:'wrote', pre, post \}\)/,
-  'and so does the subagent-merge path — both write paths, or one drifts');
-assert.equal((anvil.match(/prunePreimages\(t\.log\)/g) || []).length, 2, 'both write paths prune');
+// ── the app reconciles every tool path before presenting retained diffs ────
+assert.match(anvil, /createWorkspaceCapture\(captureFs, t\.runSeq\)/,
+  'the run takes a workspace baseline');
+assert.match(anvil, /executeTool\(name,args,call\)/,
+  'the capture wrapper runs the actual handler');
+assert.match(anvil, /await runCapture\.observe\(\)/,
+  'the wrapper observes tools that mutate without a write/edit name');
+assert.match(anvil, /const captured=await runCapture\.finish\(\)/,
+  'the run waits for final reconciliation');
+assert.match(anvil, /prunePreimages\(t\.log\)/, 'the completed capture keeps pre-images bounded');
 assert.match(anvil, /const plan = planRevert\(/, 'revert asks first');
 assert.match(anvil, /if\(!plan\.ok\)\{ pushSystem\('↶ Not reverted — '\+plan\.message\); return; \}/,
   'and a refusal is shown to the user with its reason');
-assert.match(anvil, /await fs\.write\(pv\.file, plan\.content\)/, 'only the planned content is ever written');
+assert.match(anvil, /plan\.action==='remove' \? await fs\.remove\(pv\.file,\{expectedData:plan\.expectedData,kind:'non-dir'\}\) : await fs\.write\(pv\.file, plan\.content,\{expectedData:plan\.expectedData\}\)/, 'revert uses atomic expected-content mutations');
 // The unconditional clobber must be gone.
 assert.ok(!/if\(!pv \|\| pv\.pre==null\) return;\s*\n\s*try\{ await fs\.write\(pv\.file, pv\.pre\); \}/.test(anvil),
   'the blind revert is gone');

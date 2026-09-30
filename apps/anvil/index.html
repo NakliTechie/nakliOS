@@ -426,7 +426,8 @@
   const SEARCH_INDEX_PATH = '.anvil/search-index.json';
   import { renderProcedural, loadProceduralGraph, PROCEDURAL_PATH } from '../../sys/ai/procedural.mjs';
   import { rowKey, rowKeys, planLogUpdate, isPinned } from '../../sys/ai/log-render-plan.mjs';
-  import { buildChangeRow, planRevert, prunePreimages, preimageBytes, MAX_PREIMAGE_BUDGET, turnChanges, planTurnRevert } from '../../sys/ai/change-preimages.mjs';
+  import { planRevert, prunePreimages, preimageBytes, MAX_PREIMAGE_BUDGET, turnChanges, planTurnRevert } from '../../sys/ai/change-preimages.mjs';
+  import { createWorkspaceCapture } from '../../sys/ai/workspace-capture.mjs';
   import { subagentFeedRow, subagentFeedLine, subagentLiveness } from '../../sys/ai/subagents.mjs'; // ESS-2: the live child feed; B1: its typed state
   import { createSteerQueue } from '../../sys/ai/steer.mjs'; // B2: a child's completion lands at the parent's next turn
   import { createStateOplog } from '../../sys/history/state-oplog.mjs'; // D3: the app's own state writes, chained
@@ -813,6 +814,10 @@
         settleFleetRows(t); // B1: a child row still 'running' from before the reload is interrupted, not in flight
         if(t.status === 'running'){
           t.status = 'idle'; t.lastStop = 'interrupted'; t.ackAfterBadRun = false;
+          if(t.changeCapture?.status==='running'){
+            t.changeCapture.status='interrupted'; t.changeCapture.complete=false;
+            t.changeCapture.problems=['Anvil closed before final workspace reconciliation'];
+          }
           (t.log = t.log || []).push({ k:'system', text:'⚠︎ This task was still running when Anvil last closed. The run did not finish, and anything it was part-way through is unfinished in your workspace.' });
           runsInterrupted++;
         }
@@ -1430,7 +1435,7 @@
     } else if(e.k==='turn'){
       const c=document.createElement('div'); c.className='change turn'; c.title='Review everything this run changed';
       const note = e.state==='partial' ? ' · some without a before-version' : e.state==='unavailable' ? ' · no before-versions kept' : '';
-      c.innerHTML=`<span class="ci">◫</span><span class="cf">This run changed ${e.files} file${e.files===1?'':'s'}${note}</span><span class="cv">review →</span>`;
+      c.innerHTML=`<span class="ci">◫</span><span class="cf">${e.observed?'Workspace changed during this run':'This run changed'} ${e.files} path${e.files===1?'':'s'}${note}</span><span class="cv">review →</span>`;
       c.onclick=()=>{ openTurn(t, e.run); raise('preview'); };
       return c;
     } else if(e.k==='change'){
@@ -1438,7 +1443,7 @@
       // already applied (YOLO); clicking reads the current file and shows it in
       // the preview, instead of auto-popping the pane.
       const c=document.createElement('div'); c.className='change'; c.title='View this file in the preview';
-      c.innerHTML=`<span class="ci">✎</span><span class="cf">${esc(e.verb||'wrote')} ${esc(e.file)}</span><span class="cv">view →</span>`;
+      c.innerHTML=`<span class="ci">✎</span><span class="cf">${e.observed?'Observed ':''}${esc(e.verb||'wrote')} ${esc(e.file)}</span><span class="cv">view →</span>`;
       c.onclick=()=>{ openChange(e); raise('preview'); };
       return c;
     }
@@ -1540,8 +1545,8 @@
     );
     $('pv-file').textContent=pv.file||'';
     if(rev){
-      if(pv.turn!=null){ rev.hidden=false; rev.textContent='↶ Revert this run'; rev.title='Restore every file this run changed that has not been touched since'; rev.onclick=()=>revertTurn(pv.turn); }
-      else { rev.textContent='↶ Revert'; rev.title='Undo this change'; rev.hidden = pv.pre==null; rev.onclick = pv.pre==null ? null : (()=>revertChange(pv)); }
+      if(pv.turn!=null){ rev.hidden=!!(pv.captureIncomplete||pv.revertUnavailable); rev.textContent='↶ Revert this run'; rev.title='Restore every unchanged file using an atomic expected-content check'; rev.onclick=rev.hidden?null:()=>revertTurn(pv.turn); }
+      else { rev.textContent='↶ Revert'; rev.title='Undo this change with an atomic expected-content check'; rev.hidden = pv.pre==null || !!pv.captureIncomplete || !!pv.revertUnavailable; rev.onclick = rev.hidden ? null : (()=>revertChange(pv)); }
     }
     const body=$('pv-body');
     if(pv.type==='html'){ body.innerHTML=''; const f=document.createElement('iframe'); f.setAttribute('sandbox','allow-scripts'); f.srcdoc=pv.content; body.appendChild(f); }
@@ -1879,54 +1884,32 @@
     while(i<m) out.push('-'+A[i++]); while(j<n) out.push('+'+B[j++]);
     return out.join('\n');
   }
-  // Pre-images snapshotted just before a write/edit runs (see runTask), so a
-  // change chip can show a real before→after diff and offer Revert.
-  const preImages = {};
-
   function pushSystem(text){ const t=activeTask(); if(!t) return; (t.log=t.log||[]).push({k:'system',text}); save(); renderLog(); }
 
-  // ── Change capture (view-on-click): the agent applies writes/edits directly
-  // (YOLO); we don't auto-pop the preview. Instead we drop a compact "✎ wrote X ·
-  // view" chip in the chat — click it to open the file/diff in the preview. ──
-  async function noteChange(t, name, args){
-    try{
-      const path = args && (args.path||args.file);
-      if(!path || !(name==='write'||name==='edit')) return;
-      const raw = (path in preImages) ? preImages[path] : null;
-      // AC-6: read back what the agent just wrote. Its digest is what lets Revert later ask "does
-      // this file still look the way the agent left it?" — without it a Revert cannot tell a
-      // clean undo from destroying whatever touched the file since.
-      let post=null; try{ const r=await fs.read(path,{encoding:'utf-8'}); if(r&&r.ok) post=r.data; }catch(_){}
-      const row = buildChangeRow({ file:path, verb: name==='edit'?'edited':'wrote', pre:raw, post });
-      if(t.runSeq) row.run = t.runSeq;
-      t.log.push(row);
-      // Bounded retention: without this every change row keeps a full copy of the file's previous
-      // contents forever, in localStorage AND in the roamed state.json.
-      const pr = prunePreimages(t.log); if(pr.dropped){ t.log = pr.log; }
-      pendingDiff={ file:path, pre:row.pre }; badge('preview','◫');
-      // This is async now (it reads the file back), so the caller's renderLog() has already run
-      // by the time the row exists. Render again here or the chip appears one event late.
-      save(); renderLog();
-    }catch(_){}
-  }
+  // Reconcile one bounded workspace baseline at run end. Tool names cannot
+  // describe all mutations: shell, Python, patches, hooks and merges share it.
+  function atomicRevertAvailable(row){ return !!(backend && (row?.created ? backend.supportsConditionalDelete : backend.supportsConditionalWrite)); }
   // Clicking a change chip opens it in the preview: a real before→after DIFF when
   // we have the pre-image (with a Revert), else the current file.
   async function openChange(row){
     const at=activeTask(); if(!at) return;
     const file=row.file, pre=row.pre;
+    const revertUnavailable=!!row.revertUnavailable || !atomicRevertAvailable(row);
     globalPreview=null;
-    let content='(could not read '+file+')';
-    try{ const r=await fs.read(file,{encoding:'utf-8'}); if(r&&r.ok) content=r.data; }catch(_){}
-    if(pre!=null && !/\.html?$/.test(file)){
+    let content=row.directory ? '(directory change — inspect the workspace)' : '(could not read '+file+')';
+    try{ const r=await fs.read(file,{encoding:'utf-8'}); if(r&&r.ok) content=r.data; else if(row.deleted) content=''; }catch(_){ if(row.deleted) content=''; }
+    if(pre!=null && (row.observed || row.deleted || !/\.html?$/.test(file))){
       // postHash and preUnavailable ride along so Revert can refuse with a reason instead of
       // silently overwriting whatever has touched the file since (AC-6).
-      at.preview={ type:'diff', file, content: lineDiff(pre, content), pre, postHash:row.postHash, preUnavailable:row.preUnavailable };
+      at.preview={ type:'diff', file, content: lineDiff(pre, content), pre, postHash:row.postHash, preUnavailable:row.preUnavailable, created:row.created, deleted:row.deleted, captureIncomplete:row.captureIncomplete, revertUnavailable };
     } else {
-      at.preview={ type:/\.html?$/.test(file)?'html':'text', file, content:String(content).slice(0,50000), postHash:row.postHash, preUnavailable:row.preUnavailable };
+      at.preview={ type:/\.html?$/.test(file)?'html':'text', file, content:String(content).slice(0,50000), postHash:row.postHash, preUnavailable:row.preUnavailable, created:row.created, deleted:row.deleted, captureIncomplete:row.captureIncomplete, revertUnavailable };
       // A chip whose diff was dropped must SAY so — it used to render identically to one that
       // simply had no changes worth showing.
       if(row.preUnavailable) at.preview.note='No before/after diff: '+row.preUnavailable+'.';
     }
+    if(row.captureIncomplete) at.preview.note='Workspace capture was incomplete. Revert is disabled; inspect the file manually.';
+    else if(revertUnavailable) at.preview.note='This storage backend cannot revert atomically. Inspect the file and restore it manually.';
     state.previewOpen=true; save(); renderPreview();
   }
   // ZR-A2: the whole run in one diff — each file from its state BEFORE the run to what is there now.
@@ -1940,20 +1923,31 @@
       parts.push('=== '+f.file+(f.edits>1?' ('+f.edits+' edits)':'')+' ===\n'+lineDiff(f.pre, now==null?'':now));
     }
     globalPreview=null;
-    t.preview={ type:'diff', file:'Run '+run+' — '+tc.files.length+' file'+(tc.files.length===1?'':'s'), label:'This run', content:parts.join('\n'), turn:run,
-      note: missing.length ? 'No before/after diff for: '+missing.join('; ')+'.' : '' };
+    const incomplete=tc.files.some(f=>f.captureIncomplete);
+    const unavailable=tc.files.some(f=>f.revertUnavailable||!atomicRevertAvailable(f));
+    t.preview={ type:'diff', file:'Run '+run+' — '+tc.files.length+' path'+(tc.files.length===1?'':'s'), label:'This run', content:parts.join('\n'), turn:run, captureIncomplete:incomplete, revertUnavailable:unavailable,
+      note: (incomplete?'Workspace capture was incomplete. Revert is disabled. ':'')+(unavailable?'This storage backend cannot revert every change atomically. Restore manually. ':'')+(missing.length ? 'No before/after diff for: '+missing.join('; ')+'.' : '') };
     state.previewOpen=true; save(); renderPreview();
   }
   // Revert a run: restore each file the run changed to its pre-run version — but only files that
   // still look the way the run left them. Anything touched since (the owner, a later run, a merge)
   // is skipped and named; nothing is overwritten on a guess.
+  async function readRevertState(path){
+    try{
+      const r=await fs.read(path,{encoding:'utf-8'});
+      if(r&&r.ok) return r.data;
+      return (r?.code==='ENOENT'||r?.error==='ENOENT') ? undefined : null;
+    }catch(e){ return e?.code==='ENOENT' ? undefined : null; }
+  }
   async function revertTurn(run){
     const t=activeTask(); if(!t) return;
     const tc=turnChanges(t.log, run); const contents={};
-    for(const f of tc.files){ try{ const r=await fs.read(f.file,{encoding:'utf-8'}); contents[f.file]= (r&&r.ok)? r.data : null; }catch(_){ contents[f.file]=null; } }
+    for(const f of tc.files) f.revertUnavailable ||= !atomicRevertAvailable(f);
+    for(const f of tc.files) contents[f.file]=await readRevertState(f.file);
     const plan=planTurnRevert(tc, contents); const done=[]; const failed=[];
-    // fs.write reports failure as {ok:false} as well as by throwing — both are a failed revert, never a success.
-    for(const p of plan.restore){ try{ const w=await fs.write(p.file, p.content); if(w && w.ok===false) failed.push(p.file+' — '+(w.error||w.message||'write failed')); else done.push(p.file); }catch(e){ failed.push(p.file+' — '+String(e&&e.message||e)); } }
+    // Atomic expected-content mutations refuse another writer's interleaving.
+    // A backend without them returns ENOTSUP; no best-effort overwrite follows.
+    for(const p of plan.restore){ try{ const w=p.action==='remove' ? await fs.remove(p.file,{expectedData:p.expectedData,kind:'non-dir'}) : await fs.write(p.file, p.content,{expectedData:p.expectedData}); if(w && w.ok===false) failed.push(p.file+' — '+(w.error||w.message||'revert failed')); else done.push(p.file); }catch(e){ failed.push(p.file+' — '+String(e&&e.message||e)); } }
     const lines=[];
     if(done.length) lines.push('↶ Reverted run '+run+': '+done.join(', ')+'.');
     for(const s of plan.skipped) lines.push('↶ Not reverted — '+s.message);
@@ -1967,10 +1961,10 @@
   // since — your own edit, a later turn, a subagent merge, a second tab (AC-6).
   async function revertChange(pv){
     if(!pv) return;
-    let current=null; try{ const r=await fs.read(pv.file,{encoding:'utf-8'}); if(r&&r.ok) current=r.data; }catch(_){}
-    const plan = planRevert({ k:'change', file:pv.file, pre:pv.pre, postHash:pv.postHash, preUnavailable:pv.preUnavailable }, current);
+    const current=await readRevertState(pv.file);
+    const plan = planRevert({ k:'change', file:pv.file, pre:pv.pre, postHash:pv.postHash, preUnavailable:pv.preUnavailable, created:pv.created, deleted:pv.deleted, captureIncomplete:pv.captureIncomplete, revertUnavailable:pv.revertUnavailable||!atomicRevertAvailable(pv) }, current);
     if(!plan.ok){ pushSystem('↶ Not reverted — '+plan.message); return; }
-    try{ const w=await fs.write(pv.file, plan.content); if(w && w.ok===false){ pushSystem('↶ Not reverted — '+(w.error||w.message||'write failed')); return; } }catch(e){ pushSystem('↶ Not reverted — '+String(e&&e.message||e)); return; }
+    try{ const w=plan.action==='remove' ? await fs.remove(pv.file,{expectedData:plan.expectedData,kind:'non-dir'}) : await fs.write(pv.file, plan.content,{expectedData:plan.expectedData}); if(w && w.ok===false){ pushSystem('↶ Not reverted — '+(w.error||w.message||'revert failed')); return; } }catch(e){ pushSystem('↶ Not reverted — '+String(e&&e.message||e)); return; }
     pushSystem('Reverted '+pv.file+'.');
     const at=activeTask(); if(at) at.preview={ type:'text', file:pv.file, content:plan.content };
     save(); renderAll();
@@ -2528,15 +2522,18 @@
     function auditRefusal(category, note){ if(t){ (t.log=t.log||[]).push({ k:'system', text:'memory write refused ['+category+'] · '+shortHash(note)+' (content not logged)' }); renderLog(); } }
     convo.push({role:'user', content:text});
     let liveTool=null;
-    // Wrap the executor to snapshot each file's PRE-IMAGE just before a write/edit
-    // applies — that's what powers the real before→after diff + revert (YOLO stays;
-    // review is after-the-fact). Cheap: one extra read per mutating tool call.
+    const captureFs=fs;
+    const captureBackend=backend;
+    const runCapture=createWorkspaceCapture(captureFs, t.runSeq);
+    const captureStart=await runCapture.start();
+    t.changeCapture={ run:t.runSeq, project:runProject, workspace:workspaceLabel, status:'running',
+      complete:captureStart.complete, problems:captureStart.problems.slice(0,12) };
+    save();
+    // Workspace capture observes every tool path and reconciles the final net diff.
     // Supervisor isolation factory: each parallel subagent (dispatch/review) gets
     // a fresh executor over a copy-on-write OverlayBackend of the live workspace —
-    // a browser-native "worktree". Its writes stay private until the supervisor
-    // merges them; `commit` replays the overlay onto the real workspace through the
-    // app's own write path (capturing pre-images + change chips, so a subagent's
-    // merged edits are viewable/revertable like any other). Isolated subagents get
+      // a browser-native "worktree". Its writes stay private until the supervisor
+      // merges them; run capture observes the real workspace after merge. Isolated subagents get
     // no kiln (python) — that stays a top-level capability.
     const toRel = (p)=> (wsRoot && p.startsWith(wsRoot+'/')) ? p.slice(wsRoot.length+1) : (wsRoot && p===wsRoot ? '' : p);
     async function spawnIsolated(){
@@ -2561,25 +2558,14 @@
           await overlay.commit({
             write: async (p, bytes)=>{
               const rel = toRel(p);
-              // Pre-image (for the diff/revert chip) — text-only; a binary file
-              // just yields no useful diff, same as any other binary write.
-              let pre=''; try{ const r=await fs.read(rel,{encoding:'utf-8'}); pre=(r&&r.ok)?r.data:''; }catch(_){ pre=''; }
-              preImages[rel]=pre;
               // Write the EXACT bytes (fileops.toBytes takes a Uint8Array) — no
               // lossy UTF-8 round-trip, so binary artifacts survive the merge.
               await fs.write(rel, bytes);
-              if(t){
-                let post=null; try{ const rr=await fs.read(rel,{encoding:'utf-8'}); if(rr&&rr.ok) post=rr.data; }catch(_){}
-                const row = buildChangeRow({ file:rel, verb:'wrote', pre, post });
-                (t.log=t.log||[]).push(row);
-                const pr = prunePreimages(t.log); if(pr.dropped){ t.log = pr.log; }
-                pendingDiff={ file:rel, pre:row.pre }; badge('preview','◫');
-              }
             },
             remove: async (p)=>{
               const rel = toRel(p);
               try{ await fs.remove(rel); }catch(_){}
-              if(t) (t.log=t.log||[]).push({ k:'system', text:'subagent deleted '+rel });
+              if(t) (t.log=t.log||[]).push({ k:'system', text:'subagent removed '+rel });
             },
           });
           save(); renderLog(); renderFiles();
@@ -2917,10 +2903,6 @@
         if(blob.includes(SKILLS_DIR))
           return 'Refused: '+SKILLS_DIR+'/ is managed by `skill_manage`, which scans a skill before it can bind. Editing it with `'+nm+'` would bypass that check. Use skill_manage (create/patch), and remember only the owner can set status: active.';
       }
-      if((nm==='write'||nm==='edit') && ar && (ar.path||ar.file)){
-        const p=ar.path||ar.file;
-        try{ const r=await fs.read(p,{encoding:'utf-8'}); preImages[p]= (r&&r.ok)? r.data : ''; }catch(_){ preImages[p]=''; }
-      }
       // The shell's own fence lives in the GRANT (readOnlyPrefixes above), which refuses on
       // the normalised path — every spelling, `..` and dotted fs.* verbs included. Its message
       // is correct but bare, so a refusal that names the skills dir gets the sentence that
@@ -3106,7 +3088,7 @@
           // task_done is intercepted before executeTool and emits only a result,
           // and unparseable arguments emit only an error. Dropping them made those
           // paths invisible — the agent's own completion signal left no trace.
-          else if(e.type==='tool-result'){ clearThinking(); if(liveTool){ liveTool.result=String(e.result==null?'':e.result).slice(0,8000); if(e.kind) liveTool.kind=e.kind; if(e.listing) liveTool.listing=e.listing; noteChange(t,liveTool.name,liveTool.args); liveTool=null; } else { t.log.push({k:'tool',name:e.name||'(tool)',detail:'',result:String(e.result==null?'':e.result).slice(0,8000),error:null,kind:e.kind||null,listing:e.listing||null}); } renderLog(); }
+          else if(e.type==='tool-result'){ clearThinking(); if(liveTool){ liveTool.result=String(e.result==null?'':e.result).slice(0,8000); if(e.kind) liveTool.kind=e.kind; if(e.listing) liveTool.listing=e.listing; liveTool=null; } else { t.log.push({k:'tool',name:e.name||'(tool)',detail:'',result:String(e.result==null?'':e.result).slice(0,8000),error:null,kind:e.kind||null,listing:e.listing||null}); } renderLog(); }
           else if(e.type==='clarify'){ clearThinking(); liveTool=null; t.log.push({k:'system',text:'❓ '+String(e.question||'')+'\n(the run is paused — your next message is the answer)'}); renderLog(); }
           else if(e.type==='tool-error'){ clearThinking(); if(liveTool){ liveTool.error=String(e.error); liveTool=null; } else { t.log.push({k:'tool',name:e.name||'(tool)',detail:'(arguments rejected)',result:null,error:String(e.error)}); } renderLog(); }
           else if(e.type==='assistant' && e.content){ clearThinking(); t.log.push({k:'assistant',text:e.content}); renderLog(); }
@@ -3177,9 +3159,13 @@
       // driveRun, the same driver the node beds call: every loop is recorded (rec.start before,
       // rec.finish after) through the recording infer, on the app's budgets. This app owns only
       // what the driver cannot: the model stamp, the budget probe's copy of the prompt, the log.
+      const captureExecute=async (name,args,call)=>{
+        try{ return await executeTool(name,args,call); }
+        finally{ try{ await runCapture.observe(); }catch(e){ t.changeCapture.complete=false; t.changeCapture.problems.push('observation failed: '+String(e?.message||e)); } }
+      };
       let result = await driveRun({
         steer, // B2: completions land at the next turn; a turn with nothing to do while a child runs waits
-        mode, convo, sysMsg, tools, infer: recInfer, executeTool, rec,
+        mode, convo, sysMsg, tools, infer: recInfer, executeTool:captureExecute, rec,
         verify, signal: abortController.signal, onEvent: recEvent, model: runModel, gateNote, readiness, compact: compactForOverflow,
         note: (text)=>{ t.log.push({k:'system', text}); renderLog(); },
         onSystemText: (s)=>{ liveSystemText = s; }, // so the budget counts the prompt actually sent
@@ -3287,9 +3273,27 @@
       // abort above (an error path never reaches it).
       if(abortController&&!abortController.signal.aborted){ try{ abortController.abort(); }catch(_){} }
       settleFleetRows(t); // B1: no child outlives its run — a row still 'running' here is interrupted
+      if(runCapture){
+        try{
+          const captured=await runCapture.finish();
+          const complete=captured.complete && fs===captureFs && t.changeCapture?.complete!==false;
+          for(const row of captured.rows){
+            row.captureIncomplete ||= !complete;
+            row.revertUnavailable=!!(row.created ? !captureBackend?.supportsConditionalDelete : !captureBackend?.supportsConditionalWrite);
+          }
+          t.log.push(...captured.rows);
+          const pr=prunePreimages(t.log); if(pr.dropped) t.log=pr.log;
+          t.changeCapture={ run:t.runSeq, project:runProject, workspace:t.changeCapture?.workspace||workspaceLabel,
+            status:'settled', complete, touched:captured.touched, net:captured.rows.length,
+            problems:[...(t.changeCapture?.problems||[]),...captured.problems,
+              ...(fs===captureFs?[]:['workspace backend changed during run'])].slice(0,12) };
+          if(captured.rows.length){ pendingDiff=captured.rows[0]; badge('preview','◫'); }
+          if(!complete) t.log.push({k:'system',text:'Workspace change capture incomplete — '+t.changeCapture.problems.slice(0,3).join('; ')+'. Review the workspace before relying on the diff.'});
+        }catch(e){ t.changeCapture={run:t.runSeq,project:runProject,workspace:workspaceLabel,status:'failed',complete:false,problems:[String(e?.message||e)]}; t.log.push({k:'system',text:'Workspace change capture failed — '+String(e?.message||e)}); }
+      }
       // ZR-A2: one row that reviews the whole run — "this run changed N files" — opening a combined
       // diff (each file before the run → now) with a Revert that skips what changed since.
-      try{ const tc=turnChanges(t.log, t.runSeq); if(tc.files.length) t.log.push({ k:'turn', run:t.runSeq, files:tc.files.length, state:tc.state }); }catch(_){}
+      try{ const tc=turnChanges(t.log, t.runSeq); if(tc.files.length) t.log.push({ k:'turn', run:t.runSeq, files:tc.files.length, state:tc.state, observed:!!runCapture }); }catch(_){}
       running=false; abortController=null; setSend(); save(); renderAll();
       if(phoneMode()){ const _st=(activeTask()||{}).status; badge('chat', _st==='error'?'✗':'✓'); }
       if(nak&&nak.title) nak.title('Anvil — '+t.title);
@@ -3499,7 +3503,7 @@
     if(s==='preview'){ const b=swtabOf('preview'); if(b){ b.classList.remove('has-new'); const g=b.querySelector('.g'); if(g) g.textContent='◫'; }
       // A bare tab tap on a badged Preview opens the newest autonomous write; a gesture that
       // already opened its own file (raise) drops the now-stale pointer instead of racing it.
-      if(consumePending && pendingDiff){ const d=pendingDiff; pendingDiff=null; openChange(d.file, d.pre); } else pendingDiff=null;
+      if(consumePending && pendingDiff){ const d=pendingDiff; pendingDiff=null; openChange(d); } else pendingDiff=null;
       // Keyboard-activated a file row that this switch just hid → focus fell to <body>; re-anchor.
       if(phoneMode()){ const c=$('pv-close'); if(c && document.activeElement===document.body) c.focus(); } }
     if(s==='chat'){ const b=swtabOf('chat'); if(b){ b.classList.remove('has-new'); const g=b.querySelector('.g'); if(g) g.textContent='❯'; } }
