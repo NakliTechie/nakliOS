@@ -40,6 +40,7 @@ assert.equal(buildReviewDiff({ before:'', after:'x\n'.repeat(50_001), beforePath
 
 assert.notEqual(reviewVersion('a'), reviewVersion('b'));
 assert.notEqual(reviewVersion('', true), reviewVersion('', false));
+assert.notEqual(reviewVersion(new Uint8Array([0, 1])), reviewVersion(new Uint8Array([0, 2])));
 const prompt = reviewPrompt([{ file: 'src/a.js', anchorLine: 3, kind: 'delete', text: 'Keep the check.' }]);
 assert.deepEqual(JSON.parse(prompt.split('\n\n')[1]), { file:'src/a.js', line:3, anchor:'deleted line anchor', comment:'Keep the check.' });
 const joined = await loadWorkingReview({ filepath: 'new.txt',

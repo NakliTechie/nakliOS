@@ -7,7 +7,13 @@ export const MAX_DIFF_ROWS = 50_000;
 export const MAX_REVIEW_BYTES = 4 * 1024 * 1024;
 
 export function reviewVersion(content, exists = true) {
-  return exists ? `file:${digest(content)}` : 'missing';
+  if (!exists) return 'missing';
+  if (content instanceof Uint8Array) {
+    let hash = 0x811c9dc5;
+    for (const byte of content) { hash ^= byte; hash = Math.imul(hash, 0x01000193) >>> 0; }
+    return `bytes:${content.length}:${hash.toString(36)}`;
+  }
+  return `file:${digest(content)}`;
 }
 
 function linesOf(value) {

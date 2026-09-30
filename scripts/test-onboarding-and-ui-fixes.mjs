@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 
 // Regression lever for the 2026-08-22 walkthrough: the three quick-win fixes
 // (Editor Ask-answer visibility, stray-HTML-in-<style>, Spotlight ArrowUp) and
@@ -13,8 +14,18 @@ const editor = readFileSync(new URL('../apps/editor/index.html', import.meta.url
 for (const [i, m] of [...host.matchAll(/<script>([\s\S]*?)<\/script>/g)].entries()) {
   assert.doesNotThrow(() => new Function(m[1]), `inline host script ${i + 1} parses`);
 }
-for (const [i, m] of [...editor.matchAll(/<script>([\s\S]*?)<\/script>/g)].entries()) {
-  assert.doesNotThrow(() => new Function(m[1]), `inline editor script ${i + 1} parses`);
+const editorScripts = [...editor.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)]
+  .filter((match) => !/\bsrc\s*=/.test(match[1]));
+assert.ok(editorScripts.length > 0, 'Editor exposes an inline application script to the syntax gate');
+for (const [i, match] of editorScripts.entries()) {
+  if (/\btype\s*=\s*["']module["']/.test(match[1])) {
+    const parsed = spawnSync(process.execPath, ['--check', '--input-type=module'], {
+      input: match[2], encoding: 'utf8',
+    });
+    assert.equal(parsed.status, 0, `inline Editor module ${i + 1} parses: ${parsed.stderr}`);
+  } else {
+    assert.doesNotThrow(() => new Function(match[2]), `inline Editor script ${i + 1} parses`);
+  }
 }
 
 // ── H-3: Spotlight keyboard nav works in both directions ──
