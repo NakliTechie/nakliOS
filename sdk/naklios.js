@@ -149,6 +149,8 @@
   var ragSearches = new Map();     // requestId → semantic-search progress callback
   var fileOpenListeners = new Set(); // exact-file grants delivered by the host
   var pendingFileGrants = [];
+  var fileEditListeners = new Set();
+  var pendingFileEdits = [];
   var reviewDecisionHandler = null;
   var appliedReviewIds = new Set();
   var applyingReviewIds = new Map();
@@ -598,12 +600,17 @@
         path: String(msg.grant.path || ''),
         sourceAppId: String(msg.grant.sourceAppId || ''),
         backend: String(msg.grant.backend || ''),
+        kind: String(msg.grant.kind || 'file'),
       };
       if (!grant.token) return;
       if (!fileOpenListeners.size) pendingFileGrants.push(grant);
       else fileOpenListeners.forEach(function (cb) {
         try { cb(grant); } catch (_) {}
       });
+    } else if (msg.type === 'naklios:file:edit-proposal' && msg.proposal) {
+      if (!fileEditListeners.size) {
+        if (pendingFileEdits.length < 16) pendingFileEdits.push(msg.proposal);
+      } else fileEditListeners.forEach(function (cb) { try { cb(msg.proposal); } catch (_) {} });
     } else if (msg.type === 'naklios:review:commit' && msg.proposal_id) {
       var reviewId = String(msg.proposal_id);
       if (appliedReviewIds.has(reviewId)) {
@@ -771,6 +778,18 @@
       },
     },
     files: {
+      experimental_editInAnvil: function (request) {
+        return rpc('naklios:file:editInAnvil', { request: request });
+      },
+      experimental_proposeEdit: function (token, after, run) {
+        return rpc('naklios:file:proposeEdit', { token: String(token || ''), after: after, run: run });
+      },
+      experimental_onEditProposal: function (cb) {
+        if (typeof cb !== 'function') return function () {};
+        fileEditListeners.add(cb);
+        pendingFileEdits.splice(0).forEach(function (proposal) { try { cb(proposal); } catch (_) {} });
+        return function () { fileEditListeners.delete(cb); };
+      },
       // Ask NakliOS to open one app-relative file in another cooperative app.
       // The target gets a window-lifetime token for exactly that file; it does
       // not receive the source app's namespace or a Folder/Crate credential.

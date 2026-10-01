@@ -15,7 +15,7 @@ button,input,textarea{font:inherit}button{border:1px solid var(--line);border-ra
 header{display:flex;gap:9px;align-items:center;padding:8px 11px;background:var(--panel);border-bottom:1px solid var(--line)}.brand{font-weight:750;letter-spacing:.02em}.brand b{color:var(--brand)}.spacer{flex:1}.locations{display:flex;gap:2px;padding:2px;border:1px solid var(--line);border-radius:9px}.locations button{border:0;background:transparent;padding:4px 8px;color:var(--muted)}.locations button.active{background:var(--panel2);color:var(--ink)}.locations button.disabled{opacity:.55}
 .tabs{display:flex;min-height:35px;overflow:auto;background:var(--panel);border-bottom:1px solid var(--line)}.tab{display:flex;align-items:center;gap:6px;min-width:110px;max-width:230px;border:0;border-right:1px solid var(--line);border-radius:0;background:transparent;color:var(--muted);padding:7px 9px}.tab.active{background:var(--body);color:var(--ink)}.tab .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tab .dirty{color:var(--brand)}.tab .close{margin-left:auto;padding:0;border:0;background:none;color:inherit}
 .main{display:grid;grid-template-columns:250px 1fr;min-height:0}.sidebar{display:grid;grid-template-rows:auto auto 1fr auto;min-height:0;border-right:1px solid var(--line);background:color-mix(in srgb,var(--panel) 76%,var(--body))}.side-head{display:flex;align-items:center;gap:6px;padding:8px 10px;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}.side-search{margin:0 8px 7px;width:calc(100% - 16px);border:1px solid var(--line);border-radius:7px;background:var(--body);color:var(--ink);padding:7px 8px}.tree{overflow:auto;padding:4px 6px 12px}.tree details{padding-left:8px}.tree summary{padding:4px;cursor:pointer;color:var(--muted);user-select:none}.tree-file,.result{display:block;width:100%;border:0;background:transparent;text-align:left;padding:5px 7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink)}.tree-file.active{background:color-mix(in srgb,var(--brand) 20%,var(--panel));color:var(--ink)}.search-results{max-height:38%;overflow:auto;border-top:1px solid var(--line);padding:6px}.result small{display:block;color:var(--muted);overflow:hidden;text-overflow:ellipsis}.empty{padding:20px 12px;color:var(--muted);text-align:center}
-.workspace{display:grid;grid-template-rows:auto auto 1fr;min-width:0;min-height:0}.toolbar{display:flex;gap:6px;align-items:center;padding:6px 9px;background:var(--panel);border-bottom:1px solid var(--line)}.findbar{display:none;gap:6px;padding:6px 9px;background:var(--panel2);border-bottom:1px solid var(--line)}.findbar.open{display:flex}.findbar input{min-width:0;flex:1;border:1px solid var(--line);border-radius:6px;background:var(--body);color:var(--ink);padding:5px 7px}.editor-shell{position:relative;display:grid;grid-template-columns:auto 1fr;min-height:0;background:var(--body)}.line-numbers{margin:0;padding:12px 9px 80px;min-width:45px;overflow:hidden;text-align:right;color:color-mix(in srgb,var(--muted) 68%,transparent);background:var(--panel);border-right:1px solid var(--line);font:13px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;user-select:none}.editor{width:100%;height:100%;resize:none;border:0;outline:0;background:var(--body);color:var(--ink);padding:12px 14px 80px;tab-size:2;white-space:pre;overflow:auto;font:13px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace}.welcome{grid-column:1/-1;display:grid;place-items:center;color:var(--muted);text-align:center;padding:30px}.welcome[hidden]{display:none}.recovery{position:absolute;left:55px;right:12px;top:10px;z-index:5;display:none;align-items:center;gap:8px;padding:9px 11px;border:1px solid color-mix(in srgb,var(--brand) 58%,var(--line));border-radius:8px;background:var(--panel2);box-shadow:0 8px 30px rgba(0,0,0,.35)}.recovery.show{display:flex}.recovery span{flex:1}.ask-answer{display:none;padding:8px 12px;background:var(--panel2);border-bottom:1px solid var(--line);white-space:pre-wrap;font-size:.85rem;max-height:38vh;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.ask-answer.open{display:block}
+.workspace{display:grid;grid-template-rows:auto auto 1fr;min-width:0;min-height:0}.toolbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 9px;background:var(--panel);border-bottom:1px solid var(--line)}.findbar{display:none;gap:6px;padding:6px 9px;background:var(--panel2);border-bottom:1px solid var(--line)}.findbar.open{display:flex}.findbar input{min-width:0;flex:1;border:1px solid var(--line);border-radius:6px;background:var(--body);color:var(--ink);padding:5px 7px}.editor-shell{position:relative;display:grid;grid-template-columns:auto 1fr;min-height:0;background:var(--body)}.line-numbers{margin:0;padding:12px 9px 80px;min-width:45px;overflow:hidden;text-align:right;color:color-mix(in srgb,var(--muted) 68%,transparent);background:var(--panel);border-right:1px solid var(--line);font:13px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;user-select:none}.editor{width:100%;height:100%;resize:none;border:0;outline:0;background:var(--body);color:var(--ink);padding:12px 14px 80px;tab-size:2;white-space:pre;overflow:auto;font:13px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace}.welcome{grid-column:1/-1;display:grid;place-items:center;color:var(--muted);text-align:center;padding:30px}.welcome[hidden]{display:none}.recovery{position:absolute;left:55px;right:12px;top:10px;z-index:5;display:none;align-items:center;gap:8px;padding:9px 11px;border:1px solid color-mix(in srgb,var(--brand) 58%,var(--line));border-radius:8px;background:var(--panel2);box-shadow:0 8px 30px rgba(0,0,0,.35)}.recovery.show{display:flex}.recovery span{flex:1}.ask-answer{display:none;padding:8px 12px;background:var(--panel2);border-bottom:1px solid var(--line);white-space:pre-wrap;font-size:.85rem;max-height:38vh;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.ask-answer.open{display:block}
 .reader{grid-column:1/-1;overflow:auto;position:relative;min-height:0;font:13px/20px ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre;tab-size:2}.reader[hidden]{display:none}.reader-canvas{position:relative;min-width:100%;}.reader-window{position:absolute;left:0;top:0;min-width:100%}.reader-row{height:20px;display:grid;grid-template-columns:62px minmax(max-content,1fr);align-items:center}.reader-row.selected{background:color-mix(in srgb,var(--brand) 24%,var(--body))}.reader-row.add{background:color-mix(in srgb,var(--ok) 12%,var(--body))}.reader-row.delete{background:color-mix(in srgb,var(--danger) 12%,var(--body))}.reader-line{height:20px;border:0;border-radius:0;background:var(--panel);color:var(--muted);padding:0 7px;text-align:right}.reader-code{padding:0 10px;white-space:pre}.syntax-comment{color:var(--muted)}.syntax-string{color:#d9ab74}.syntax-number{color:#b4c993}.syntax-keyword{color:#a7bdf0}.syntax-tag{color:#d6a7cf}
 footer{display:flex;gap:13px;align-items:center;padding:5px 10px;background:var(--panel);border-top:1px solid var(--line);font-size:11px;color:var(--muted)}footer .save-state{color:var(--ok)}
 dialog{width:min(500px,calc(100vw - 30px));padding:0;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);box-shadow:0 20px 70px rgba(0,0,0,.55)}dialog::backdrop{background:rgba(0,0,0,.6)}.dialog-body{padding:18px}.dialog-body h2{margin:0 0 13px;font-size:16px}.field{display:grid;gap:5px;margin:10px 0;color:var(--muted)}.field input,.field textarea{width:100%;border:1px solid var(--line);border-radius:7px;background:var(--body);color:var(--ink);padding:8px}.field textarea{min-height:120px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.dialog-error{min-height:1.3em;color:var(--danger)}.dialog-actions{display:flex;justify-content:flex-end;gap:7px;padding:0 18px 18px}.primary{background:var(--brand);border-color:var(--brand);color:#fff}.palette-list{display:grid;gap:5px}.palette-list button{text-align:left;padding:9px}.toast{position:fixed;right:16px;bottom:35px;z-index:50;max-width:min(430px,calc(100vw - 32px));padding:9px 12px;border:1px solid var(--line);border-left:3px solid var(--brand);border-radius:8px;background:var(--panel);box-shadow:0 10px 35px rgba(0,0,0,.5)}
@@ -47,6 +47,12 @@ dialog{width:min(500px,calc(100vw - 30px));padding:0;border:1px solid var(--line
       <button id="ask-toggle">Ask AI</button>
       <button id="read-view">Read</button>
       <button id="git-review">Review changes</button>
+      <button id="edit-anvil">Edit selection in Anvil</button>
+      <button id="cancel-anvil" hidden>Cancel Anvil request</button>
+      <button id="review-anvil" hidden>Review Anvil edit</button>
+      <button id="apply-anvil" hidden>Apply reviewed edit</button>
+      <button id="revert-anvil" hidden>Revert Anvil edit</button>
+      <button id="discard-anvil" hidden>Discard Anvil proposal</button>
       <button id="indent">Indent</button>
       <button id="outdent">Outdent</button>
       <span class="spacer"></span><span id="file-origin"></span>
@@ -74,16 +80,21 @@ dialog{width:min(500px,calc(100vw - 30px));padding:0;border:1px solid var(--line
 
 <dialog id="new-dialog" aria-labelledby="new-title"><form id="new-form" method="dialog"><div class="dialog-body"><h2 id="new-title">New project file</h2><label class="field">Relative path<input id="new-path" value="src/main.js" autocomplete="off"></label><label class="field">Contents<textarea id="new-content"></textarea></label><div class="dialog-error" id="new-error" role="status"></div></div><div class="dialog-actions"><button type="button" id="new-cancel">Cancel</button><button class="primary" type="submit">Create</button></div></form></dialog>
 <dialog id="baseline-dialog" aria-labelledby="baseline-title"><form id="baseline-form"><div class="dialog-body"><h2 id="baseline-title">Start Editor review history</h2><p>Editor can use only its own workspace inside this Folder. Create a local Git baseline for the current file there. A repository at the Folder root stays separate.</p><label class="field">Commit name<input id="baseline-name" autocomplete="name" required></label><label class="field">Commit email<input id="baseline-email" type="email" autocomplete="email" required></label><div class="dialog-error" id="baseline-error" role="status"></div></div><div class="dialog-actions"><button type="button" id="baseline-cancel">Cancel</button><button class="primary" type="submit">Create baseline</button></div></form></dialog>
+<dialog id="anvil-dialog" aria-labelledby="anvil-title"><form id="anvil-form"><div class="dialog-body"><h2 id="anvil-title">Edit selected lines in Anvil</h2><p id="anvil-selection"></p><label class="field">Instruction<textarea id="anvil-instruction" maxlength="4000" required></textarea></label><div class="dialog-error" id="anvil-error" role="status"></div></div><div class="dialog-actions"><button type="button" id="anvil-cancel">Cancel</button><button class="primary" type="submit">Send selection</button></div></form></dialog>
 <dialog id="palette" aria-labelledby="palette-title"><div class="dialog-body"><h2 id="palette-title">Commands</h2><div class="palette-list"><button data-command="new">New file</button><button data-command="save">Save all</button><button data-command="find">Find / replace</button><button data-command="search">Search project contents</button><button data-command="ask">Ask AI about this project</button><button data-command="read">Read file</button><button data-command="review">Review changes</button><button data-command="format-json">Format JSON</button></div></div><div class="dialog-actions"><button id="palette-close">Close</button></div></dialog>
 <script type="module">
 import { highlightLine } from '../../sys/ai/review-highlight.mjs';
 import { loadWorkingReview, reviewVersion } from '../../sys/ai/review-diff.mjs';
+import { rangeEditRequest, rangeEditProposal, compareRangeEditIdb } from '../../sys/ai/range-edit.mjs';
+import { EDITOR_COMMANDS } from './commands.mjs';
 (() => {
 'use strict';
 const Core=window.EditorCore,$=id=>document.getElementById(id),STATE_FILE='.editor-state.json',LOCATION_KEY='naklios.editor.location.v1';
 let activeLocation='browser',adapter=null,tabs=[],activeId=null,projectFiles=[],unsubscribe=null,saveChain=Promise.resolve(),capabilitiesReady=false,searchRun=0;
 let readerMode='edit',readerModel=null,reviewData=null,readerSelection=null,readerFindOffset=0,readerFindTabId=null,readerScanSeq=0,readerPendingLine=null;
 const saveTimers=new Map();
+const pendingRangeEdits=new Map();
+let rangeDialogResolve=null;
 window.addEventListener('error',event=>setSave('Editor error: '+event.message,false));
 window.addEventListener('unhandledrejection',event=>setSave('Editor error: '+(event.reason?.message||event.reason),false));
 
@@ -109,7 +120,7 @@ async function recoveryDelete(key){await idbAction('naklios-editor-recovery','re
 
 function renderLocations(){const root=$('locations');root.replaceChildren();for(const item of[{id:'browser',label:'Browser',ok:true},{id:'fsa',label:'Folder',ok:available().includes('fsa')},{id:'crate',label:'Crate',ok:available().includes('crate')}]){const button=document.createElement('button');button.textContent=item.ok?item.label:`Connect ${item.label}`;button.classList.toggle('active',activeLocation===item.id);button.classList.toggle('disabled',!item.ok);button.setAttribute('aria-pressed',String(activeLocation===item.id));button.onclick=()=>item.ok?void activate(item.id):naklios.openSettings?.('storage');root.append(button)}$('location-status').textContent=activeLocation==='browser'?'Browser workspace':`${locationLabel(activeLocation)} · apps/editor/`}
 
-async function activate(id){if(id===activeLocation&&adapter)return;await saveAll();if(id!=='browser'&&naklios.capabilities.fsBackend!==id){if(!await naklios.fs.useBackend(id))return}unsubscribe?.();unsubscribe=null;activeLocation=id;adapter=id==='browser'?browserAdapter:hostAdapter;localStorage.setItem(LOCATION_KEY,id);tabs=tabs.filter(tab=>tab.kind==='grant');activeId=tabs[0]?.id||null;renderLocations();await loadWorkspace();await ensureSubscription();naklios.title(`Editor — ${locationLabel(id)}`)}
+async function activate(id){if(tabs.some(tab=>tab.rangeBusy)){toast('Wait for the file operation to finish.');return}if(id===activeLocation&&adapter)return;await saveAll();if(id!=='browser'&&naklios.capabilities.fsBackend!==id){if(!await naklios.fs.useBackend(id))return}unsubscribe?.();unsubscribe=null;activeLocation=id;adapter=id==='browser'?browserAdapter:hostAdapter;localStorage.setItem(LOCATION_KEY,id);tabs=tabs.filter(tab=>tab.kind==='grant');activeId=tabs[0]?.id||null;renderLocations();await loadWorkspace();await ensureSubscription();naklios.title(`Editor — ${locationLabel(id)}`)}
 
 async function chooseInitial(){const choices=available(),stored=localStorage.getItem(LOCATION_KEY);let preferred=stored==='browser'||choices.includes(stored)?stored:(choices.includes(naklios.capabilities.fsBackend)?naklios.capabilities.fsBackend:'browser');try{await activate(preferred)}catch(error){toast(`${locationLabel(preferred)} was not opened: ${error.message}`);if(preferred!=='browser')await activate('browser')}}
 
@@ -126,8 +137,127 @@ async function openProjectFile(path,options={}){path=Core.normalisePath(path);co
 async function openGrant(grant){const id=`grant:${grant.token}`;if(tabs.some(tab=>tab.id===id)){activeId=id;render();return}try{const file=await naklios.files.read(grant.token),key=Core.recoveryKey('grant',`${grant.sourceAppId}:${grant.backend}:${grant.path}`),recovery=await recoveryGet(key);tabs.push({id,kind:'grant',token:grant.token,path:file.path,name:file.name,sourceAppId:file.sourceAppId,backend:file.backend,content:file.data,saved:file.data,dirty:false,recovery:recovery&&recovery.content!==file.data?recovery:null,recoveryKey:key});activeId=id;render();toast(`Opened ${file.name} with an exact-file grant`)}catch(error){toast('Open With failed: '+error.message)}}
 
 function activeTab(){return tabs.find(tab=>tab.id===activeId)||null}
+function rangeSourceCurrent(tab,request){return tabs.includes(tab)&&tab.kind==='project'&&!tab.dirty
+  &&tab.location===activeLocation&&tab.path===request.path&&tab.saved===request.before
+  &&(request.backend==='browser'||naklios.capabilities.fsBackend===request.backend)}
+function renderRangeActions(){
+  const tab=activeTab(),stage=tab?.rangeEdit;
+  $('edit-anvil').disabled=!tab||!!tab.rangeBusy||!!tab.rangeClosing||!!tab.rangeEdit;
+  $('cancel-anvil').hidden=![...pendingRangeEdits.values()].some(item=>item.tab===tab);
+  $('review-anvil').hidden=!stage;
+  $('discard-anvil').hidden=!stage||stage.state==='applied';
+  $('discard-anvil').disabled=!!tab?.rangeBusy;
+  $('apply-anvil').hidden=!stage||stage.state!=='reviewed';
+  $('revert-anvil').hidden=!stage||stage.state!=='applied';
+  $('apply-anvil').disabled=!!tab?.rangeBusy||tab?.location!=='browser';
+  $('revert-anvil').disabled=!!tab?.rangeBusy||tab?.location!=='browser';
+}
+async function sendSelectionToAnvil(){
+  const tab=activeTab();
+  if(!tab||tab.kind!=='project'){toast('This handoff needs a file in Editor’s own workspace.');return}
+  if(tab.rangeEdit){toast('Discard the current proposal before sending another selection. Revert an applied proposal first.');return}
+  if(tab.dirty||tab.rangeBusy||tab.rangeClosing){toast('Save this file before sending a selection.');return}
+  if(!naklios.capabilities.hosted||!naklios.files?.experimental_editInAnvil){toast('Anvil handoff requires the NakliOS host.');return}
+  if([...pendingRangeEdits.values()].some(item=>item.tab===tab)){toast('This file already has an Anvil request.');return}
+  let selection;
+  if(readerMode==='edit'){
+    const editor=$('editor');if(editor.selectionEnd<=editor.selectionStart){toast('Select file text or read-view line numbers first.');return}
+    const starts=Core.lineOffsets(tab.content);
+    selection={start:Core.lineForOffset(starts,editor.selectionStart),end:Core.lineForOffset(starts,editor.selectionEnd-1)};
+  }else{
+    if(readerSelection?.tabId!==tab.id||readerSelection.version!==reviewVersion(tab.saved)){toast('Select current read-view or diff line numbers first.');return}
+    selection={start:readerSelection.start,end:readerSelection.end};
+  }
+  const before=tab.saved,backend=tab.location;
+  $('anvil-selection').textContent=`${tab.path} · lines ${selection.start}–${selection.end}. Anvil edits a private snapshot; the source stays unchanged until review.`;
+  $('anvil-instruction').value='';$('anvil-error').textContent='';
+  const instruction=await new Promise(resolve=>{rangeDialogResolve=resolve;$('anvil-dialog').showModal();$('anvil-instruction').focus()});
+  if(instruction===null)return;
+  try{
+    const request=rangeEditRequest({path:tab.path,project:'editor:'+backend,backend,before,selection,instruction,version:reviewVersion(before)});
+    if(activeTab()!==tab||!rangeSourceCurrent(tab,request))throw new Error('Selection context changed while the instruction opened');
+    if(backend==='browser'&&await browserAdapter.read(tab.path)!==before)throw new Error('The Browser file changed before the handoff');
+    if(activeTab()!==tab||!rangeSourceCurrent(tab,request))throw new Error('The selection changed before the handoff');
+    const result=await naklios.files.experimental_editInAnvil(request);
+    if(!result)return;
+    if(activeTab()!==tab||!rangeSourceCurrent(tab,request)){naklios.files.release(result.token);throw new Error('Selection context changed before handoff completed')}
+    pendingRangeEdits.set(result.token,{tab,request});
+    renderRangeActions();
+    toast('Selection sent. Anvil can edit only its file snapshot.');
+  }catch(error){toast('Anvil handoff unavailable: '+error.message)}
+}
+function receiveRangeEdit(result){
+  const pending=pendingRangeEdits.get(result?.token);if(!pending)return;
+  pendingRangeEdits.delete(result.token);
+  renderRangeActions();
+  try{
+    if(result.cancelled)throw new Error('The request ended without a staged proposal. The source remains unchanged');
+    const {tab,request}=pending;
+    if(!rangeSourceCurrent(tab,request))throw new Error('The source changed during the Anvil run. Its proposal was not applied');
+    // The retained request establishes identity; incoming identity cannot select a new target.
+    if(result.request?.path!==request.path||result.request?.project!==request.project
+        ||result.request?.backend!==request.backend||result.request?.before!==request.before
+        ||result.request?.version!==request.version)throw new Error('Proposal does not match the selected source');
+    const proposal=rangeEditProposal(request,result.after);
+    tab.rangeEdit={proposal,run:result.run,state:'staged'};
+    renderRangeActions();toast('Anvil returned a staged edit. Review it before applying.');
+  }catch(error){toast('Anvil proposal refused: '+error.message)}
+}
+function reviewAnvilEdit(){
+  const tab=activeTab(),stage=tab?.rangeEdit;if(!stage)return;
+  if(stage.state!=='applied'&&!rangeSourceCurrent(tab,stage.proposal)){toast('The source changed. This proposal cannot be applied.');return}
+  reviewData={tabId:tab.id,rows:stage.proposal.diff.hunks.flatMap(h=>h.rows),diff:stage.proposal.diff,label:'saved → Anvil proposal'};
+  if(stage.state==='staged')stage.state='reviewed';
+  readerMode='diff';$('reader').scrollTop=0;render();renderRangeActions();
+  if(tab.location!=='browser')toast('This storage cannot safely apply over concurrent changes. The proposal remains available for review.');
+}
+function cancelAnvilRequest(){
+  const tab=activeTab();
+  for(const [token,pending] of pendingRangeEdits){
+    if(pending.tab===tab){pendingRangeEdits.delete(token);naklios.files.release(token)}
+  }
+  renderRangeActions();toast('Anvil request cancelled. The source remains unchanged.');
+}
+function discardAnvilEdit(){
+  const tab=activeTab();if(!tab?.rangeEdit||tab.rangeBusy)return;
+  if(tab.rangeEdit.state==='applied'){toast('Revert the applied edit before discarding its proposal.');return}
+  tab.rangeEdit=null;if(reviewData?.tabId===tab.id){reviewData=null;if(readerMode==='diff')readerMode='read'}
+  render();toast('Anvil proposal discarded. The source remains unchanged.');
+}
+async function beforeRangeClose(){
+  for(const tab of tabs){tab.rangeClosing=true;tab.rangeController?.abort();}
+  await Promise.all(tabs.map(tab=>tab.rangeCommit).filter(Boolean));
+}
+async function commitRangeEdit(revert=false){
+  const tab=activeTab(),stage=tab?.rangeEdit;
+  if(!stage||stage.state!==(revert?'applied':'reviewed'))return;
+  if(tab.kind!=='project'||tab.location!=='browser'||activeLocation!=='browser'){toast('This storage cannot safely apply or revert concurrent file changes.');return}
+  const {proposal}=stage,expected=revert?proposal.after:proposal.before,replacement=revert?proposal.before:proposal.after;
+  if(tab.dirty||tab.saved!==expected||tab.rangeBusy){toast('The file changed after review. No source bytes were replaced.');return}
+  tab.rangeBusy=true;tab.rangeController=new AbortController();
+  let finishCommit;tab.rangeCommit=new Promise(resolve=>{finishCommit=resolve});
+  $('editor').disabled=true;renderRangeActions();
+  let db;
+  try{
+    db=await openDb('naklios-editor','files');
+    await compareRangeEditIdb(db,'files',tab.path,expected,replacement,{
+      valid:()=>activeTab()===tab&&activeLocation==='browser'&&tab.rangeEdit===stage&&!tab.dirty&&tab.saved===expected&&!tab.rangeClosing,
+      signal:tab.rangeController.signal,
+    });
+    const bufferUnchanged=tab.content===expected&&!tab.dirty;
+    tab.saved=replacement;if(bufferUnchanged)tab.content=replacement;tab.dirty=tab.content!==replacement;
+    stage.state=revert?'reverted':'applied';
+    reviewData={tabId:tab.id,rows:proposal.diff.hunks.flatMap(h=>h.rows),diff:proposal.diff,label:revert?'reverted Anvil edit':'before → applied Anvil edit'};
+    setSave(revert?'Anvil edit safely reverted':'Reviewed Anvil edit applied');
+  }catch(error){toast((revert?'Revert':'Apply')+' refused: '+error.message)}
+  finally{db?.close();tab.rangeBusy=false;tab.rangeController=null;finishCommit();tab.rangeCommit=null;render();renderRangeActions()}
+}
+function finishRangeDialog(value){const resolve=rangeDialogResolve;rangeDialogResolve=null;$('anvil-dialog').close();resolve?.(value)}
+$('anvil-form').addEventListener('submit',event=>{event.preventDefault();const value=$('anvil-instruction').value.trim();if(value)finishRangeDialog(value)});
+$('anvil-cancel').onclick=()=>finishRangeDialog(null);
+$('anvil-dialog').addEventListener('cancel',()=>finishRangeDialog(null));
 function renderTabs(){const root=$('tabs');root.replaceChildren();for(const tab of tabs){const button=document.createElement('button');button.className='tab';button.classList.toggle('active',tab.id===activeId);button.innerHTML=`<span class="name"></span><span class="dirty">${tab.dirty?'●':''}</span><span class="close" aria-label="Close ${tab.name}">×</span>`;button.querySelector('.name').textContent=tab.name;button.onclick=e=>{if(e.target.closest('.close'))void closeTab(tab);else{activeId=tab.id;render()}};root.append(button)}}
-function render(){renderTabs();renderTree();const tab=activeTab(),editor=$('editor');if(readerMode==='diff'&&reviewData?.tabId!==tab?.id)readerMode='read';$('welcome').hidden=!!tab;$('line-numbers').hidden=!tab||readerMode!=='edit';editor.hidden=!tab||readerMode!=='edit';editor.disabled=!tab||readerMode!=='edit';$('reader').hidden=!tab||readerMode==='edit';$('read-view').textContent=readerMode==='edit'?'Read':'Edit';for(const id of ['replace-one','replace-all','indent','outdent'])$(id).disabled=!tab||readerMode!=='edit';if(tab&&readerMode==='edit'&&editor.value!==tab.content)editor.value=tab.content;$('language').textContent=tab?Core.detectLanguage(tab.path):'Plain text';$('file-origin').textContent=tab?(tab.kind==='grant'?`${tab.sourceAppId} · ${tab.backend} · exact file`:`${locationLabel(tab.location)} · ${tab.path}${readerMode==='diff'?' · HEAD → working tree':''}`):'';$('recovery').classList.toggle('show',!!tab?.recovery);if(readerMode==='edit')updateLines();else if(tab)prepareReader(tab);updateCursor()}
+function render(){renderTabs();renderTree();const tab=activeTab(),editor=$('editor');if(readerMode==='diff'&&reviewData?.tabId!==tab?.id)readerMode='read';$('welcome').hidden=!!tab;$('line-numbers').hidden=!tab||readerMode!=='edit';editor.hidden=!tab||readerMode!=='edit';editor.disabled=!tab||readerMode!=='edit'||!!tab.rangeBusy;$('reader').hidden=!tab||readerMode==='edit';$('read-view').textContent=readerMode==='edit'?'Read':'Edit';for(const id of ['replace-one','replace-all','indent','outdent'])$(id).disabled=!tab||readerMode!=='edit'||!!tab.rangeBusy;if(tab&&readerMode==='edit'&&editor.value!==tab.content)editor.value=tab.content;$('language').textContent=tab?Core.detectLanguage(tab.path):'Plain text';$('file-origin').textContent=tab?(tab.kind==='grant'?`${tab.sourceAppId} · ${tab.backend} · exact file`:`${locationLabel(tab.location)} · ${tab.path}${readerMode==='diff'?' · '+(reviewData?.label||'HEAD → working tree'):''}`):'';$('recovery').classList.toggle('show',!!tab?.recovery);if(readerMode==='edit')updateLines();else if(tab)prepareReader(tab);updateCursor();renderRangeActions()}
 function updateLines(){const count=Math.max(1,$('editor').value.split('\n').length);$('line-numbers').textContent=Array.from({length:count},(_,i)=>i+1).join('\n')}
 function updateCursor(){if(readerMode!=='edit'){$('cursor').textContent=readerSelection?.tabId===activeId?`Ln ${readerSelection.start}${readerSelection.end!==readerSelection.start?'–'+readerSelection.end:''} · read-only`:'Read-only';return}const pos=Core.lineColumn($('editor').value,$('editor').selectionStart);$('cursor').textContent=`Ln ${pos.line}, Col ${pos.column}`}
 
@@ -180,7 +310,7 @@ function renderReaderRows(viewportHeight){
     const number=document.createElement('button');number.className='reader-line';number.textContent=item.label;
     number.title=`Select line ${item.anchorLine}`;
     number.onclick=(event)=>{const start=event.shiftKey&&readerSelection?.tabId===tab.id?readerSelection.start:item.anchorLine;
-      readerSelection={tabId:tab.id,start:Math.min(start,item.anchorLine),end:Math.max(start,item.anchorLine),path:tab.path,mode:readerMode};
+      readerSelection={tabId:tab.id,start:Math.min(start,item.anchorLine),end:Math.max(start,item.anchorLine),path:tab.path,mode:readerMode,version:reviewVersion(tab.content)};
       updateCursor();renderReaderRows();};
     const code=document.createElement('span');code.className='reader-code';
     if(model.mode==='diff')code.appendChild(document.createTextNode(item.kind==='add'?'+':item.kind==='delete'?'-':' '));
@@ -192,10 +322,10 @@ function renderReaderRows(viewportHeight){
   }
 }
 
-async function saveTab(tab){if(!tab?.dirty)return;clearTimeout(saveTimers.get(tab.id));saveTimers.delete(tab.id);try{if(tab.kind==='grant')await naklios.files.write(tab.token,tab.content);else{if(tab.location!==activeLocation)throw new Error('Switch back to the file storage location before saving');await adapter.write(tab.path,tab.content)}tab.saved=tab.content;tab.dirty=false;tab.recovery=null;await recoveryDelete(tab.recoveryKey);setSave('Saved');renderTabs()}catch(error){setSave('Recovery saved · '+error.message,false);throw error}}
+async function saveTab(tab){if(!tab?.dirty||tab.rangeBusy)return;clearTimeout(saveTimers.get(tab.id));saveTimers.delete(tab.id);try{if(tab.kind==='grant')await naklios.files.write(tab.token,tab.content);else{if(tab.location!==activeLocation)throw new Error('Switch back to the file storage location before saving');await adapter.write(tab.path,tab.content)}tab.saved=tab.content;tab.dirty=false;tab.recovery=null;await recoveryDelete(tab.recoveryKey);setSave('Saved');renderTabs()}catch(error){setSave('Recovery saved · '+error.message,false);throw error}}
 function scheduleSave(tab){clearTimeout(saveTimers.get(tab.id));saveTimers.set(tab.id,setTimeout(()=>void saveTab(tab).catch(()=>{}),900))}
-async function saveAll(){for(const tab of [...tabs])if(tab.dirty)await saveTab(tab);await queueWorkspace();setSave('Saved')}
-async function closeTab(tab){try{if(tab.dirty)await saveTab(tab)}catch(error){toast(`Could not close ${tab.name}: ${error.message}`);return}if(tab.kind==='grant')naklios.files.release(tab.token);tabs=tabs.filter(item=>item!==tab);if(activeId===tab.id)activeId=tabs.at(-1)?.id||null;render();queueWorkspace()}
+async function saveAll(){await Promise.all(tabs.map(tab=>tab.rangeCommit).filter(Boolean));for(const tab of [...tabs])if(tab.dirty)await saveTab(tab);await queueWorkspace();setSave('Saved')}
+async function closeTab(tab){if(tab.rangeBusy){toast('Wait for the file operation to finish.');return}try{if(tab.dirty)await saveTab(tab)}catch(error){toast(`Could not close ${tab.name}: ${error.message}`);return}if(tab.kind==='grant')naklios.files.release(tab.token);for(const [token,pending] of pendingRangeEdits){if(pending.tab===tab){pendingRangeEdits.delete(token);naklios.files.release(token)}}tabs=tabs.filter(item=>item!==tab);if(activeId===tab.id)activeId=tabs.at(-1)?.id||null;render();queueWorkspace()}
 
 async function ensureSubscription(){unsubscribe?.();unsubscribe=null;if(activeLocation==='browser')return;try{unsubscribe=await naklios.fs.subscribe('',event=>{if(event.op==='disconnected'){unsubscribe=null;setSave('Storage disconnected; recoveries remain in Browser',false);return}const tab=tabs.find(item=>item.kind==='project'&&item.location===activeLocation&&item.path===event.path);if(!tab){void refreshTree();return}if(tab.dirty){toast(`${tab.name} changed elsewhere. Your unsaved recovery was kept.`);return}void adapter.read(tab.path).then(content=>{tab.content=tab.saved=content;if(reviewData?.tabId===tab.id){reviewData=null;if(readerMode==='diff')readerMode='read';toast('File changed; refresh Git review.')}render()}).catch(()=>{})})}catch(error){setSave('Live updates unavailable: '+error.message,false)}}
 
@@ -322,22 +452,36 @@ async function openGitReview(){
   }catch(error){toast('Git review unavailable: '+error.message)}
   finally{$('git-review').disabled=false}
 }
-function replaceSelection(){if(readerMode!=='edit')return;const editor=$('editor'),tab=activeTab();if(!tab||editor.selectionStart===editor.selectionEnd)return findNext();editor.setRangeText($('replace-text').value,editor.selectionStart,editor.selectionEnd,'end');editor.dispatchEvent(new Event('input'));findNext()}
-function replaceAll(){if(readerMode!=='edit')return;const tab=activeTab(),query=$('find-text').value;if(!tab||!query)return;let pattern;try{pattern=new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi')}catch(error){toast(error.message);return}$('editor').value=tab.content.replace(pattern,$('replace-text').value);$('editor').dispatchEvent(new Event('input'))}
-function indent(out=false){if(readerMode!=='edit')return;const editor=$('editor'),start=editor.selectionStart,end=editor.selectionEnd,lineStart=editor.value.lastIndexOf('\n',start-1)+1,chunk=editor.value.slice(lineStart,end),updated=chunk.split('\n').map(line=>out?line.replace(/^ {1,2}/,''):'  '+line).join('\n');editor.setRangeText(updated,lineStart,end,'select');editor.dispatchEvent(new Event('input'))}
-function formatJson(){if(readerMode!=='edit')return;const tab=activeTab();if(!tab)return;try{$('editor').value=JSON.stringify(JSON.parse(tab.content),null,2)+'\n';$('editor').dispatchEvent(new Event('input'))}catch(error){toast('JSON could not be formatted: '+error.message)}}
+function replaceSelection(){if(readerMode!=='edit'||activeTab()?.rangeBusy)return;const editor=$('editor'),tab=activeTab();if(!tab||editor.selectionStart===editor.selectionEnd)return findNext();editor.setRangeText($('replace-text').value,editor.selectionStart,editor.selectionEnd,'end');editor.dispatchEvent(new Event('input'));findNext()}
+function replaceAll(){if(readerMode!=='edit'||activeTab()?.rangeBusy)return;const tab=activeTab(),query=$('find-text').value;if(!tab||!query)return;let pattern;try{pattern=new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi')}catch(error){toast(error.message);return}$('editor').value=tab.content.replace(pattern,$('replace-text').value);$('editor').dispatchEvent(new Event('input'))}
+function indent(out=false){if(readerMode!=='edit'||activeTab()?.rangeBusy)return;const editor=$('editor'),start=editor.selectionStart,end=editor.selectionEnd,lineStart=editor.value.lastIndexOf('\n',start-1)+1,chunk=editor.value.slice(lineStart,end),updated=chunk.split('\n').map(line=>out?line.replace(/^ {1,2}/,''):'  '+line).join('\n');editor.setRangeText(updated,lineStart,end,'select');editor.dispatchEvent(new Event('input'))}
+function formatJson(){if(readerMode!=='edit'||activeTab()?.rangeBusy)return;const tab=activeTab();if(!tab)return;try{$('editor').value=JSON.stringify(JSON.parse(tab.content),null,2)+'\n';$('editor').dispatchEvent(new Event('input'))}catch(error){toast('JSON could not be formatted: '+error.message)}}
 
-$('editor').addEventListener('input',()=>{const tab=activeTab();if(!tab)return;tab.content=$('editor').value;tab.dirty=tab.content!==tab.saved;tab.recovery=null;if(tab.dirty){void recoveryPut(tab.recoveryKey,{content:tab.content,updatedAt:Date.now()});scheduleSave(tab)}else{clearTimeout(saveTimers.get(tab.id));saveTimers.delete(tab.id);void recoveryDelete(tab.recoveryKey)}updateLines();updateCursor();renderTabs()});
+$('editor').addEventListener('input',()=>{const tab=activeTab();if(!tab||tab.rangeBusy)return;tab.content=$('editor').value;tab.dirty=tab.content!==tab.saved;tab.recovery=null;if(tab.dirty){void recoveryPut(tab.recoveryKey,{content:tab.content,updatedAt:Date.now()});scheduleSave(tab)}else{clearTimeout(saveTimers.get(tab.id));saveTimers.delete(tab.id);void recoveryDelete(tab.recoveryKey)}updateLines();updateCursor();renderTabs()});
 $('editor').addEventListener('scroll',()=>{$('line-numbers').scrollTop=$('editor').scrollTop});$('editor').addEventListener('click',updateCursor);$('editor').addEventListener('keyup',updateCursor);
 $('reader').addEventListener('scroll',()=>renderReaderRows());
 $('read-view').onclick=toggleRead;$('git-review').onclick=()=>void openGitReview();
 $('editor').addEventListener('keydown',e=>{if(e.key==='Tab'){e.preventDefault();indent(e.shiftKey)}if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='s'){e.preventDefault();void saveAll()}if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='f'){e.preventDefault();$('findbar').classList.add('open');$('find-text').focus()}if((e.metaKey||e.ctrlKey)&&e.shiftKey&&e.key.toLowerCase()==='p'){e.preventDefault();$('palette').showModal()}});
 $('new-file').onclick=()=>{$('new-error').textContent='';$('new-dialog').showModal();$('new-path').focus();$('new-path').select()};$('new-cancel').onclick=()=>$('new-dialog').close();$('new-form').addEventListener('submit',e=>{e.preventDefault();void createFile()});$('save-all').onclick=()=>void saveAll();
 $('toggle-find').onclick=()=>{$('askbar').classList.remove('open');$('findbar').classList.toggle('open');if($('findbar').classList.contains('open'))$('find-text').focus()};$('close-find').onclick=()=>$('findbar').classList.remove('open');$('find-next').onclick=findNext;$('replace-one').onclick=replaceSelection;$('replace-all').onclick=replaceAll;$('indent').onclick=()=>indent(false);$('outdent').onclick=()=>indent(true);
-$('project-search').addEventListener('input',renderTree);$('project-search').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();void projectSearch()}});$('commands').onclick=()=>$('palette').showModal();$('palette-close').onclick=()=>$('palette').close();$('palette').addEventListener('click',e=>{const command=e.target.closest('[data-command]')?.dataset.command;if(!command)return;$('palette').close();if(command==='new')$('new-file').click();if(command==='save')void saveAll();if(command==='find')$('toggle-find').click();if(command==='search'){$('project-search').focus();void projectSearch()}if(command==='ask'){$('findbar').classList.remove('open');$('askbar').classList.add('open');$('ask-answer').classList.remove('open');$('ask-text').focus()}if(command==='read')toggleRead();if(command==='review')void openGitReview();if(command==='format-json')formatJson()});
-$('restore-recovery').onclick=()=>{const tab=activeTab();if(!tab?.recovery)return;tab.content=tab.recovery.content;tab.dirty=tab.content!==tab.saved;tab.recovery=null;render();scheduleSave(tab)};$('discard-recovery').onclick=()=>{const tab=activeTab();if(!tab)return;tab.recovery=null;void recoveryDelete(tab.recoveryKey);render()};
+$('project-search').addEventListener('input',renderTree);$('project-search').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();void projectSearch()}});$('commands').onclick=()=>$('palette').showModal();$('palette-close').onclick=()=>$('palette').close();const editorCommandHandlers={
+ new:()=>$('new-file').click(),save:()=>saveAll(),find:()=>$('toggle-find').click(),
+ search:()=>{$('project-search').focus();return projectSearch()},
+ ask:()=>{$('findbar').classList.remove('open');$('askbar').classList.add('open');$('ask-answer').classList.remove('open');$('ask-text').focus()},
+ read:toggleRead,review:openGitReview,'format-json':formatJson,
+ 'edit-anvil':sendSelectionToAnvil,'cancel-anvil':cancelAnvilRequest,'review-anvil':reviewAnvilEdit,
+ 'apply-anvil':()=>commitRangeEdit(false),'revert-anvil':()=>commitRangeEdit(true),'discard-anvil':discardAnvilEdit,
+};
+function executeEditorCommand(command){if(!EDITOR_COMMANDS.some(item=>item.id===command))return;return editorCommandHandlers[command]?.()}
+const commandList=$('palette').querySelector('.palette-list');commandList.replaceChildren();
+for(const command of EDITOR_COMMANDS){const button=document.createElement('button');button.dataset.command=command.id;button.textContent=command.label;commandList.append(button)}
+$('palette').addEventListener('click',e=>{const command=e.target.closest('[data-command]')?.dataset.command;if(!command)return;$('palette').close();void executeEditorCommand(command)});
+for(const command of ['edit-anvil','cancel-anvil','review-anvil','apply-anvil','revert-anvil','discard-anvil'])$(command).onclick=()=>void executeEditorCommand(command);
+$('restore-recovery').onclick=()=>{const tab=activeTab();if(!tab?.recovery||tab.rangeBusy)return;tab.content=tab.recovery.content;tab.dirty=tab.content!==tab.saved;tab.recovery=null;render();scheduleSave(tab)};$('discard-recovery').onclick=()=>{const tab=activeTab();if(!tab)return;tab.recovery=null;void recoveryDelete(tab.recoveryKey);render()};
 
-naklios.files.onOpen(grant=>void openGrant(grant));naklios.beforeClose(()=>saveAll());naklios.theme.onChange(theme=>{if(!theme?.colors)return;for(const [key,value] of Object.entries(theme.colors))document.documentElement.style.setProperty(`--${key}`,value)});naklios.theme.request();
+naklios.files.experimental_onEditProposal?.(receiveRangeEdit);
+naklios.files.onOpen(grant=>void openGrant(grant));naklios.beforeClose(()=>saveAll());
+window.addEventListener('message',event=>{if(event.source===window.parent&&event.origin===location.origin&&event.data?.type==='naklios:beforeclose')void beforeRangeClose()});naklios.theme.onChange(theme=>{if(!theme?.colors)return;for(const [key,value] of Object.entries(theme.colors))document.documentElement.style.setProperty(`--${key}`,value)});naklios.theme.request();
 let boot=setTimeout(()=>{if(!capabilitiesReady){capabilitiesReady=true;void chooseInitial()}},650);naklios.onCapabilitiesChange(()=>{renderLocations();if(!capabilitiesReady&&(available().length||!naklios.capabilities.hosted)){clearTimeout(boot);capabilitiesReady=true;void chooseInitial()}else if(capabilitiesReady&&activeLocation!=='browser'&&!available().includes(activeLocation)){void activate('browser');toast('Storage disconnected. Opened Browser workspace.')}else if(capabilitiesReady&&activeLocation!=='browser'&&!unsubscribe){void ensureSubscription()}});naklios.requestCapabilities();naklios.ready();renderLocations();render();
 })();
 </script>

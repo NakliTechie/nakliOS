@@ -484,7 +484,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 
 <!-- sdk-reference:begin — rendered by `node scripts/sdk-reference.mjs --write` from docs/sdk-api-audit.md; do not edit by hand -->
 
-84 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
+87 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
 
 ### `version`
 
@@ -621,6 +621,9 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 | member | kind | what it is |
 |---|---|---|
 | `files` | namespace | Exact-file handoff (`docs/file-handoff-v1.md`). |
+| `files.experimental_editInAnvil` | function · **experimental** | Ask the host to stage one selected-file edit in Anvil. |
+| `files.experimental_proposeEdit` | function · **experimental** | Return a snapshot edit without writing its source. |
+| `files.experimental_onEditProposal` | function · **experimental** | Receive the host-authenticated staged proposal. |
 | `files.openWith` | function | Hand a file to another app. |
 | `files.onOpen` | function | Receive a handed file. |
 | `files.read` | function | Read a handed file. |

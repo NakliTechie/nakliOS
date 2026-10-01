@@ -109,7 +109,7 @@ export function extractRegion(src, start, end) {
 // in place, so the caller can read back anything the code assigned.
 export function evaluate(expr, ctx = {}) {
   const sandbox = { console, JSON, String, Number, Boolean, Array, Object, Math, Date, Promise,
-    RegExp, Error, TypeError, Set, Map, Symbol, structuredClone, ...ctx };
+    RegExp, Error, TypeError, Set, Map, Symbol, structuredClone, activeRangeEdit:null, rangeRun:null, ...ctx };
   return vm.runInNewContext(expr, vm.createContext(sandbox));
 }
 

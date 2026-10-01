@@ -442,6 +442,7 @@
   import { planRevert, prunePreimages, preimageBytes, MAX_PREIMAGE_BUDGET, turnChanges, planTurnRevert } from '../../sys/ai/change-preimages.mjs';
   import { buildReviewDiff, reviewVersion, reviewPrompt, MAX_REVIEW_BYTES } from '../../sys/ai/review-diff.mjs';
   import { highlightLine } from '../../sys/ai/review-highlight.mjs';
+  import { createRangeEditBackend, rangeEditPrompt, RANGE_EDIT_LIMITS } from '../../sys/ai/range-edit.mjs';
   import { createWorkspaceCapture } from '../../sys/ai/workspace-capture.mjs';
   import { subagentFeedRow, subagentFeedLine, subagentLiveness } from '../../sys/ai/subagents.mjs'; // ESS-2: the live child feed; B1: its typed state
   import { createSteerQueue } from '../../sys/ai/steer.mjs'; // B2: a child's completion lands at the parent's next turn
@@ -499,13 +500,16 @@
 
   // ── Rig workspace stack (lifted from Forge) — the agent's file substrate ──
   let backend, fs, git, registry, grant, opLog, face, shell, kilnRef=null;
+  let activeRangeEdit = null;
+  const cancelledRangeTokens = new Set();
+  const RANGE_EDIT_TOOLS = new Set(['read','write','edit','edit_lines','apply_patch','shell','list','search','todowrite','task_done','clarify','context_remaining','checkpoint']);
   // The ONE agent grant: every agent route — the top level, a dispatched child, the test door's
   // narrowed grant — is built here, so the fences (skills, gate, search index) cannot drift between
   // sites. A child passes the parent's scopes (B5): a read-only project gains no write by dispatch.
   const AGENT_SCOPES = ['fs:read','fs:write','fs:remove','git:read','git:write','git:remote'];
-  const agentGrant = (scopes=AGENT_SCOPES) => createGrant({ prefixes:[''], scopes:[...scopes], readOnlyPrefixes:[SKILLS_DIR, GATE_DIR, SEARCH_INDEX_PATH] });
+  const agentGrant = (scopes=AGENT_SCOPES) => createGrant({ prefixes:[''], scopes:[...scopes], readOnlyPrefixes:[SKILLS_DIR, GATE_DIR, SEARCH_INDEX_PATH], ...(activeRangeEdit ? {prefixes:[activeRangeEdit.request.path],scopes:scopes.filter(s=>s==='fs:read'||s==='fs:write')} : {}) });
   // The agent's own shell over the current face and Kiln (boot and the test door's rebind).
-  const agentShell = () => createShell({ registry, face, beforeCommand: guardCriticalShellInvocation, kiln: kilnRef, kilnIsolate:true, js: jsHost, signal: ()=>abortController ? abortController.signal : null }); // Stop cuts a `sleep`
+  const agentShell = () => createShell({ registry, face, beforeCommand: guardCriticalShellInvocation, kiln: kilnRef, kilnIsolate:true, js: jsHost, ...(activeRangeEdit ? {js:null} : {}), signal: ()=>abortController ? abortController.signal : null }); // Stop cuts a `sleep`
   let workspaceLabel = 'memory · scratch';
   let wsRoot = ''; // fileops root for the active mount (subagent overlays match it)
   // `exclusive` says nothing outside this fileops writes to the backend, which
@@ -1169,6 +1173,7 @@
     if(focusKey && rows.has(focusKey)) rows.get(focusKey).focus({ preventScroll:true });
   }
   async function selectTask(tid){
+    if(activeRangeEdit && tid!==activeRangeEdit.task.id){ pushSystem('Finish or stop the selected-file edit before switching tasks.'); return; }
     if(priming && tid!==state.activeTask && primeAbortController) primeAbortController.abort();
     state.activeTask=tid;
     for(const p of state.projects) if((p.tasks||[]).some(t=>t.id===tid)) state.activeProject=p.id;
@@ -1177,12 +1182,12 @@
     renderAll();
   }
 
-  $('new-project').onclick=async ()=>{ const n=await askText({ title:'New project', label:'Project name', value:'project' }); if(!n) return; if(primeAbortController) primeAbortController.abort(); const p={id:id(),name:n,open:true,tasks:[]}; state.projects.push(p); state.activeProject=p.id; save(); if(!folderMode) await mountProject(p.id);
+  $('new-project').onclick=async ()=>{ if(activeRangeEdit){pushSystem('Finish or stop the selected-file edit first.');return;} const n=await askText({ title:'New project', label:'Project name', value:'project' }); if(!n) return; if(primeAbortController) primeAbortController.abort(); const p={id:id(),name:n,open:true,tasks:[]}; state.projects.push(p); state.activeProject=p.id; save(); if(!folderMode) await mountProject(p.id);
     // ESS-5: a project with no skills should not start empty — one short starter, owner-written
     // so it is active at once. Browser-mounted projects only: a real folder is the owner's.
     if(!folderMode){ try{ const f=starterSkillFile({ now:Date.now() }); const cur=await fs.read(f.path,{encoding:'utf-8'}); if(!(cur&&cur.ok)) await fs.write(f.path, f.text); }catch(_){} }
     renderAll(); };
-  $('new-task').onclick=()=>{ const p=activeProject(); if(!p) return; const t={id:id(),title:'Untitled task',status:'idle',mode:'code',convo:[],log:[],preview:null}; p.tasks.push(t); p.open=true; selectTask(t.id); $('prompt').focus(); };
+  $('new-task').onclick=()=>{ if(activeRangeEdit){pushSystem('Finish or stop the selected-file edit first.');return;} const p=activeProject(); if(!p) return; if(p.rangeSnapshot){pushSystem('Start new tasks in a regular project.');return;} const t={id:id(),title:'Untitled task',status:'idle',mode:'code',convo:[],log:[],preview:null}; p.tasks.push(t); p.open=true; selectTask(t.id); $('prompt').focus(); };
 
   // ── File explorer: the active workspace's tree (whatever backend), so files
   // are visible in-app. Clicking a file opens it in the preview; the backend tag
@@ -1297,6 +1302,7 @@
   // Facts land as hypotheses; the agent promotes/retracts them as it works.
   let priming=false, primeAbortController=null;
   async function primeProject(){
+    if(activeTask()?.rangeEdit){pushSystem('This snapshot task has ended. Learn a regular project instead.');return;}
     if(!(nak && nak.capabilities && nak.capabilities.ai)){ pushSystem('“Learn project” needs the NakliOS AI — open Anvil inside NakliOS with an endpoint set (Settings → AI).'); return; }
     if(priming||running){ return; }
     const t=activeTask(); if(!t){ pushSystem('Open a task before learning its project.'); return; }
@@ -2487,7 +2493,7 @@
 
   // Reconcile one bounded workspace baseline at run end. Tool names cannot
   // describe all mutations: shell, Python, patches, hooks and merges share it.
-  function atomicRevertAvailable(row){ return !!(backend && (row?.created ? backend.supportsConditionalDelete : backend.supportsConditionalWrite)); }
+  function atomicRevertAvailable(row){ return !activeTask()?.rangeEdit && !!(backend && (row?.created ? backend.supportsConditionalDelete : backend.supportsConditionalWrite)); }
   // Clicking a change chip opens it in the preview: a real before→after DIFF when
   // we have the pre-image (with a Revert), else the current file.
   async function openChange(row){
@@ -2561,6 +2567,11 @@
     }catch(e){ return e?.code==='ENOENT' ? undefined : null; }
   }
   async function readReviewState(path){
+    const snapshotTask=activeTask();
+    if(snapshotTask?.rangeEdit && activeRangeEdit?.task!==snapshotTask){
+      return path===snapshotTask.rangeEdit.path && typeof snapshotTask.rangeEdit.after==='string'
+        ? snapshotTask.rangeEdit.after : null;
+    }
     try{
       const r=await fs.read(path,{maxBytes:MAX_REVIEW_BYTES});
       if(r&&r.ok){
@@ -2573,6 +2584,7 @@
   }
   async function revertTurn(run){
     const t=activeTask(); if(!t) return;
+    if(t.rangeEdit){ pushSystem('Snapshot edits must be reviewed and reverted in Editor. The source remains outside this task’s grant.'); return; }
     const tc=turnChanges(t.log, run); const contents={};
     for(const f of tc.files) f.revertUnavailable ||= !atomicRevertAvailable(f);
     for(const f of tc.files) contents[f.file]=await readRevertState(f.file);
@@ -2593,6 +2605,7 @@
   // since — your own edit, a later turn, a subagent merge, a second tab (AC-6).
   async function revertChange(pv){
     if(!pv) return;
+    if(activeTask()?.rangeEdit){ pushSystem('Snapshot edits must be reviewed and reverted in Editor.'); return; }
     const current=await readRevertState(pv.file);
     const plan = planRevert({ k:'change', file:pv.file, pre:pv.pre, postHash:pv.postHash, preUnavailable:pv.preUnavailable, created:pv.created, deleted:pv.deleted, captureIncomplete:pv.captureIncomplete, revertUnavailable:pv.revertUnavailable||!atomicRevertAvailable(pv) }, current);
     if(!plan.ok){ pushSystem('↶ Not reverted — '+plan.message); return; }
@@ -2840,6 +2853,7 @@
   // style) and it runs automatically when the current run finishes.
   function submit(){
     const t=activeTask(); if(!t) return false;
+    if(t.rangeEdit){pushSystem('Start a fresh selection from Editor; snapshot tasks do not accept follow-ups.');return false;}
     if(priming){ pushSystem('Stop project learning before sending a task.'); return false; }
     const text=$('prompt').value.trim(); if(!text) return false;
     $('prompt').value=''; autoGrow();
@@ -2991,6 +3005,7 @@
     }catch(_){}
   }
   async function learnThisRun(t, rec, projectId = null){
+    if(t?.rangeEdit) return null; // Snapshot records never gain authority over a later mount.
     if(!(nak && nak.capabilities && nak.capabilities.ai)) return null;
     // The review is async and `fs` follows whatever project is MOUNTED, so switching project
     // mid-review wrote this run's skills into the other project (forward-pass NAF-06). Pin it:
@@ -3209,6 +3224,8 @@
   function settleFleetRows(t){ let n=0; for(const r of (t&&t.log)||[]){ if(r&&r.k==='subagent'&&r.status==='running'){ r.status='interrupted'; delete r.live; delete r.age; n++; } } return n; }
   async function runTask(t, text){
     if(!t||running||priming) return;
+    if(t.rangeEdit && activeRangeEdit?.task!==t){ pushSystem('This snapshot task has ended. Start a fresh selection from Editor.'); return; }
+    const rangeRun = activeRangeEdit;
     if(t.title==='Untitled task'){ t.title=text.slice(0,48); }
     (t.log=t.log||[]).push({k:'user',text});
     const mode=t.mode||'code';
@@ -3249,7 +3266,7 @@
     let liveTool=null;
     const captureFs=fs;
     const captureBackend=backend;
-    const runCapture=createWorkspaceCapture(captureFs, t.runSeq);
+    const runCapture=rangeRun ? createWorkspaceCapture(captureFs, t.runSeq, {readLimit:RANGE_EDIT_LIMITS.bytes}) : createWorkspaceCapture(captureFs, t.runSeq);
     const captureStart=await runCapture.start();
     t.changeCapture={ run:t.runSeq, project:runProject, workspace:workspaceLabel, status:'running',
       complete:captureStart.complete, problems:captureStart.problems.slice(0,12) };
@@ -3345,6 +3362,8 @@
     // into a swallowing catch (NAF-08), and history fell back to the selected task (NAF-07).
     // runTask sets this for the duration of a run and clears it after.
     const executeTool = async (nm, ar, callObj)=>{
+      if(rangeRun && (activeRangeEdit!==rangeRun || fs!==rangeRun.fs || activeTask()!==t || rangeRun.cancelled
+          || !RANGE_EDIT_TOOLS.has(nm))) return 'Refused: this task grants only its selected-file snapshot.';
       // Pre-tool hook guard, hoisted to the TOP: skill/recall/remember/revise/
       // synthesize all return below before the old guard site, so a project's
       // preTool rule could never see — let alone block — any of them.
@@ -3787,7 +3806,8 @@
     // .anvil/hooks.json (loaded once per run; executeTool reads hooksCfg).
     hooksCfg = await loadHooks(fs, hooksCfg);
     const simpleAsk = isSimpleAsk(text); // the memory gate — decided once, from the owner's ask
-    const tools = runToolset(mode, { verify: !!verify, scopes: grant.scopes, simple: simpleAsk }); // the app's list, in the app's order — the beds get the same one; B5: projected by the run's grant
+    const tools = runToolset(mode, { verify: !!verify, scopes: grant.scopes, simple: simpleAsk });
+    if(rangeRun) tools.splice(0,tools.length,...tools.filter(tool=>RANGE_EDIT_TOOLS.has(tool.function?.name)));
     // A4: why a tool is or is not available in THIS run — into the record (the mode button carries the
     // same sentence, recomputed on every switch in setModeBtn). The fourth state, `unavailable`, has
     // no producer here yet: no tool is whole-unavailable today (Kiln gates python INSIDE shell, not
@@ -3995,10 +4015,12 @@
           const outcomeLabel = foldOutcome(ev, rec.resolve).label;
           const decide=(idleMs)=>shouldAutoReview({ outcome: outcomeLabel, stop: result.stop, idleMs, isLocalModel: isLocal });
           // D1: runProject — the project this run belonged to, captured at run start
-          if(decide(0).review) learnThisRun(t, rec, runProject).catch(()=>{});
-          else if(decide(AUTO_REVIEW_IDLE_MS).review){
-            clearTimeout(autoReviewTimer);
-            autoReviewTimer=setTimeout(()=>{ if(!running) learnThisRun(t, rec, runProject).catch(()=>{}); }, AUTO_REVIEW_IDLE_MS);
+          if(!t.rangeEdit){
+            if(decide(0).review) learnThisRun(t, rec, runProject).catch(()=>{});
+            else if(decide(AUTO_REVIEW_IDLE_MS).review){
+              clearTimeout(autoReviewTimer);
+              autoReviewTimer=setTimeout(()=>{ if(!running) learnThisRun(t, rec, runProject).catch(()=>{}); }, AUTO_REVIEW_IDLE_MS);
+            }
           }
         }catch(_){}
       }catch(e){ t.log.push({k:'system',text:'record: could not persist — '+String(e&&e.message||e)}); }
@@ -4020,7 +4042,7 @@
           const complete=captured.complete && fs===captureFs && t.changeCapture?.complete!==false;
           for(const row of captured.rows){
             row.captureIncomplete ||= !complete;
-            row.revertUnavailable=!!(row.created ? !captureBackend?.supportsConditionalDelete : !captureBackend?.supportsConditionalWrite);
+            row.revertUnavailable=!!rangeRun || !!(row.created ? !captureBackend?.supportsConditionalDelete : !captureBackend?.supportsConditionalWrite);
           }
           t.log.push(...captured.rows);
           const pr=prunePreimages(t.log); if(pr.dropped) t.log=pr.log;
@@ -4070,7 +4092,7 @@
   }
   // The coding run queues Send; the project survey exposes Stop and holds Send.
   function setSend(){ $('send').textContent = priming ? 'Learning…' : running ? 'Queue' : 'Send'; $('send').disabled=priming; const s=$('stop'); if(s) s.hidden=!(running||priming); renderSwitcher(); }
-  function stopRun(){ const controller=priming ? primeAbortController : abortController; if(controller && !controller.signal.aborted){ controller.abort(); pushSystem('Stopping…'); } }
+  function stopRun(){ if(activeRangeEdit) activeRangeEdit.cancelled=true; const controller=priming ? primeAbortController : abortController; if(controller && !controller.signal.aborted){ controller.abort(); pushSystem('Stopping…'); } }
 
   // ── Composer wiring ──
   const ta=$('prompt');
@@ -4403,11 +4425,20 @@
   // strand the user on a blank surface, so fall back to Chat when nothing rendered.
   if(layoutMode==='phone' && phoneSurface==='preview' && document.querySelector('#pv-body .pempty')) setSurface('chat');
   window.__anvilBoot.ok = true;   // the net above stands down
+
   // An index the doctor has not yet run under this row SHAPE (a field a fold reads that older rows do
   // not carry) is re-derived once, AFTER the boot — chain-verifying every record took a real index past
   // the 10 s boot net on prod (2026-09-17). No goal is projected until it lands; the doctor re-renders.
   if(reshape){ reshaping=true; renderTaskbar(); rebuildRunIndex().then(r=>{ console.info('[anvil] run index re-derived: '+(r&&r.indexed||0)+' row(s) — the row shape moved to '+ROW_SHAPE); }).catch(()=>{}).finally(()=>{ reshaping=false; try{ renderTaskbar(); }catch(_){} }); }
   else if(backfill){ reshaping=true; renderTaskbar(); rebuildRunIndex().then(r=>{ if(r&&r.indexed) console.info('[anvil] run index rebuilt: '+r.indexed+' record(s)'+(r.broken?(', '+r.broken+' broken chain(s)'):'')+' — '+r.stopsLine+' — '+r.orderingLine); }).catch(()=>{}).finally(()=>{ reshaping=false; try{ renderTaskbar(); }catch(_){} }); }
+  if(nak?.files?.onOpen) nak.files.onOpen(file=>{
+    if(file.kind==='range-edit') void acceptRangeEdit(file).catch(e=>pushSystem('Editor edit unavailable: '+String(e?.message||e)));
+    if(file.kind==='range-edit-cancelled'){
+      cancelledRangeTokens.add(file.token);
+      while(cancelledRangeTokens.size>16)cancelledRangeTokens.delete(cancelledRangeTokens.values().next().value);
+      if(activeRangeEdit?.token===file.token)stopRun();
+    }
+  });
 
   // Seamlessly follow the host storage backend: when the user switches
   // browser/folder/crate elsewhere, remount this project's workspace on the new
@@ -4418,10 +4449,66 @@
       updateScopeBtn();
       const nb = (caps||{}).fsBackend || null;
       if(nb===lastBackend || folderMode) return;
+      if(activeRangeEdit){ activeRangeEdit.cancelled=true; stopRun(); return; }
       lastBackend = nb;
       mountedProject = null;
       await mountProject(state.activeProject);
       renderAll();
     });
+  }
+
+  function pruneRangeSnapshots(){
+    const retired=new Set(state.projects.filter(p=>p.rangeSnapshot&&p.id!==state.activeProject).slice(0,-4).map(p=>p.id));
+    state.projects=state.projects.filter(p=>!retired.has(p.id));
+  }
+  async function acceptRangeEdit(file){
+    if(running || priming || state.runsHeld || activeRangeEdit || !nak?.files?.experimental_proposeEdit){
+      nak?.files?.release(file.token); pushSystem('Finish the current Anvil work, then resend the selection from Editor.'); return;
+    }
+    let received;
+    try{received=await nak.files.read(file.token)}catch(error){nak.files.release(file.token);throw error}
+    if(running || priming || state.runsHeld || activeRangeEdit || cancelledRangeTokens.has(file.token)){
+      nak.files.release(file.token); throw new Error('The handoff was cancelled or another Anvil run started');
+    }
+    const previous = { backend, root:wsRoot, label:workspaceLabel,
+      project:state.activeProject, task:state.activeTask, mounted:mountedProject };
+    const task = { id:id(), title:'Editor · '+received.path, status:'idle', mode:'code', convo:[], log:[], preview:null,
+      rangeEdit:{ path:received.path, project:received.request.project, backend:received.backend, state:'snapshot' } };
+    const session = { token:file.token, request:received.request, task, previous, cancelled:false };
+    const snapshot = createRangeEditBackend(received.request, {
+      valid:()=>activeRangeEdit===session && !session.cancelled && activeTask()===task && Date.now()<received.expires,
+    });
+    // A fresh project keeps ambient histories and lessons out of the grant's
+    // bounded source context. The original project is restored after the task.
+    const project = { id:id(), name:'Editor snapshot · '+received.path, open:true, rangeSnapshot:true, tasks:[task] };
+    state.projects.push(project); state.activeProject=project.id; state.activeTask=task.id;
+    activeRangeEdit=session;
+    try{
+      mountWorkspace(snapshot.backend, 'Editor snapshot · '+received.path);
+      session.fs=fs; kilnRef=null; shell=agentShell();
+      task.log.push({k:'system',text:'Only this file snapshot is granted. Editor owns source review and apply. The source remains unchanged.'});
+      save(); renderAll();
+      await runTask(task, rangeEditPrompt(received.request));
+      if(session.cancelled || task.lastStop!=='done' || task.status==='error') {
+        task.rangeEdit.state='cancelled'; return;
+      }
+      const proposal=snapshot.proposal();
+      if(!proposal.diff.hunks.length && proposal.before===proposal.after){ task.rangeEdit.state='unchanged'; return; }
+      task.rangeEdit.before=proposal.before; task.rangeEdit.after=proposal.after;
+      await nak.files.experimental_proposeEdit(file.token, proposal.after,
+        { task:task.id, project:state.activeProject, sequence:task.runSeq });
+      task.rangeEdit.state='proposed';
+      task.log.push({k:'system',text:'Staged proposal returned to Editor. The source has not been changed.'});
+    }catch(error){ task.rangeEdit.state='failed'; task.log.push({k:'system',text:'Editor proposal failed: '+String(error?.message||error)}); }
+    finally{
+      task.queued=[];
+      snapshot.revoke(); nak.files.release(file.token); activeRangeEdit=null;
+      cancelledRangeTokens.delete(file.token);
+      state.activeProject=previous.project; state.activeTask=previous.task; mountedProject=previous.mounted;
+      mountWorkspace(previous.backend, previous.label, previous.root);
+      if(session.cancelled && !folderMode){ mountedProject=null; await mountProject(state.activeProject); }
+      pruneRangeSnapshots();
+      save(); renderAll();
+    }
   }
 </script>

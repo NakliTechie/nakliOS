@@ -50,6 +50,12 @@ jobs:
       - name: Verify Editor recovery and exact-file handoff boundaries
         run: node scripts/test-editor-v1.mjs
 
+      - name: Verify selected-file snapshot bounds and Rig shell isolation
+        run: node sys/ai/test/range-edit.test.mjs
+
+      - name: Verify Editor and Anvil range-edit handler authority
+        run: node scripts/test-range-edit-handlers.mjs
+
       - name: Verify Books stays hosted and uses explicit Folder or Crate storage
         run: node scripts/test-books-storage-bridge.mjs
 
@@ -671,3 +677,6 @@ jobs:
 
       - name: Verify native Worker network denials after CPython type-cache invalidation
         run: node scripts/test-kiln-network-denial-browser.mjs
+
+      - name: Verify native IndexedDB range-edit comparison, concurrent writers, and cancellation
+        run: node scripts/test-range-edit-browser.mjs

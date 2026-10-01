@@ -4803,6 +4803,8 @@ function spawnIframeWindow(app, options = {}){
   iframe.addEventListener('load', () => {
     markIframeLaunchPhase(win, 'loaded');
     try {
+      if(iframe._fileGrantLoaded) releaseFileGrantsForSource(iframe.contentWindow);
+      iframe._fileGrantLoaded = true;
       // Belt-and-suspenders: re-add in case the contentWindow identity changed.
       knownIframes.add(iframe.contentWindow);
       // Send the theme so any listening app can apply it
@@ -4810,6 +4812,7 @@ function spawnIframeWindow(app, options = {}){
       iframe.contentWindow.postMessage({ type:'naklios:theme', theme:t.id, colors:t.colors, mood:t.mood }, '*');
       // Push capabilities (fs availability) so the SDK can flip naklios.capabilities.fs
       postCapabilities(iframe, app.id);
+      deliverPendingFileGrants(win);
     } catch(_){}
   });
 }
@@ -5202,6 +5205,7 @@ function deliverFileGrant(win, token){
   const grant = fileGrants.get(token);
   const iframe = win?.querySelector('iframe');
   if (!grant || !iframe?.contentWindow || win.dataset.id !== grant.targetAppId) return false;
+  if(grant.kind==='range-edit'&&(!iframe._fileGrantLoaded||iframe.contentDocument?.readyState!=='complete'))return false;
   grant.targetSource = iframe.contentWindow;
   try {
     iframe.contentWindow.postMessage({
@@ -5212,6 +5216,7 @@ function deliverFileGrant(win, token){
         path:grant.sourcePath,
         sourceAppId:grant.sourceAppId,
         backend:grant.backendId,
+        kind:grant.kind || 'file',
       },
     }, '*');
     return true;
@@ -5220,13 +5225,22 @@ function deliverFileGrant(win, token){
 
 function deliverPendingFileGrants(win){
   if (!win?._sdkReady) return;
-  for (const token of win._pendingFileGrantTokens || []) deliverFileGrant(win, token);
-  win._pendingFileGrantTokens = [];
+  win._pendingFileGrantTokens = (win._pendingFileGrantTokens || []).filter(token=>fileGrants.has(token)&&!deliverFileGrant(win,token));
 }
 
 function releaseFileGrantsForSource(source){
   for (const [token, grant] of fileGrants){
-    if (grant.targetSource === source) fileGrants.delete(token);
+    if (grant.targetSource === source || grant.sourceSource === source) revokeFileGrant(grant);
+  }
+}
+
+function revokeFileGrant(grant){
+  fileGrants.delete(grant.token);
+  if (grant.kind === 'range-edit') {
+    try { grant.targetSource?.postMessage({ type:'naklios:file:grant',
+      grant:{ token:grant.token, kind:'range-edit-cancelled' } }, '*'); } catch(_){}
+    try { grant.sourceSource?.postMessage({ type:'naklios:file:edit-proposal',
+      proposal:{ token:grant.token, cancelled:true } }, '*'); } catch(_){}
   }
 }
 
@@ -5293,6 +5307,12 @@ async function fileHostHandle(source, msg, targetAppId, op){
   if (!grant || grant.targetSource !== source || grant.targetAppId !== targetAppId) {
     throw new Error('File grant is missing or expired');
   }
+  if (grant.kind === 'range-edit') {
+    assertRangeEditGrant(grant);
+    if (op !== 'read') throw new Error('Range edits can only propose a staged change');
+    return { data:grant.request.before, name:grant.name, path:grant.sourcePath,
+      sourceAppId:grant.sourceAppId, backend:grant.backendId, kind:grant.kind, request:grant.request, expires:grant.expires };
+  }
   const backend = BACKENDS[grant.backendId];
   if (!backend?.isConnected() || fileGrantBackendIdentity(grant.backendId) !== grant.backendIdentity) {
     fileGrants.delete(token);
@@ -5316,6 +5336,106 @@ async function fileHostHandle(source, msg, targetAppId, op){
     return null;
   }
   throw new Error('Unknown file-grant operation');
+}
+
+function assertRangeEditGrant(grant){
+  const sourceFrame = openWindows.editor?.querySelector('iframe');
+  if (fileGrants.get(grant.token) !== grant || grant.expires <= Date.now()
+      || sourceFrame?.contentWindow !== grant.sourceSource) {
+    revokeFileGrant(grant);
+    throw new Error('Editor range edit expired or its source window closed');
+  }
+  if (grant.backendId !== 'browser'
+      && (!BACKENDS[grant.backendId]?.isConnected()
+        || fileGrantBackendIdentity(grant.backendId) !== grant.backendIdentity
+        || !state.appPermissions.editor?.granted || state.appPermissions.editor.backend !== grant.backendId)) {
+    revokeFileGrant(grant);
+    throw new Error('Range edit storage location changed');
+  }
+}
+
+async function fileHostEditInAnvil(source, msg, sourceAppId){
+  if (sourceAppId !== 'editor') throw new Error('Only Editor can request a range edit');
+  const deadline=Date.now()+25000; // Refuse before the SDK's 30-second request timeout.
+  const target = APPS.find(app => app.id === 'anvil' && app.kind === 'system');
+  if (!target) throw new Error('Anvil is unavailable');
+  const { rangeEditRequest, RANGE_EDIT_LIMITS } = await import('./sys/ai/range-edit.mjs');
+  const request = rangeEditRequest(msg.request);
+  for (const grant of fileGrants.values()) {
+    if (grant.kind==='range-edit' && grant.expires<=Date.now()) revokeFileGrant(grant);
+  }
+  if ([...fileGrants.values()].filter(g=>g.kind==='range-edit' && g.sourceSource===source).length>=16) {
+    throw new Error('Editor has too many pending selected-file edits');
+  }
+  const sourceFrame = openWindows.editor?.querySelector('iframe');
+  if (sourceFrame?.contentWindow !== source) throw new Error('Editor window changed');
+  let backendIdentity = null;
+  if (request.backend !== 'browser') {
+    const binding = state.appPermissions.editor;
+    if (!binding?.granted || binding.backend !== request.backend) throw new Error('Editor storage binding changed');
+    const backend = BACKENDS[request.backend];
+    if (!backend?.isConnected()) throw new Error('Source storage is disconnected');
+    backendIdentity = fileGrantBackendIdentity(request.backend);
+    const bytes = await backend.readBinary(fsSafePath('editor', request.path), RANGE_EDIT_LIMITS.bytes);
+    const current = new TextDecoder('utf-8', { fatal:true,ignoreBOM:true }).decode(bytes);
+    if (current !== request.before) throw new Error('Source changed before the handoff');
+  }
+  const approved = await nakliosConfirm(
+    `Send lines ${request.selection.start}–${request.selection.end} of <code>${_dlgEscape(request.path)}</code> to Anvil?\n\n`
+      + `Anvil receives a bounded snapshot of this file only. Editor reviews the proposal before applying it.`,
+    { title:'Edit selection in Anvil?', okLabel:'Send to Anvil', cancelLabel:'Cancel', allowHtmlBody:true },
+  );
+  if (!approved) return null;
+  if(Date.now()>=deadline) throw new Error('Confirmation expired. Resend the selection from Editor');
+  if (openWindows.editor?.querySelector('iframe')?.contentWindow !== source) throw new Error('Editor window changed');
+  if (request.backend !== 'browser') {
+    if (fileGrantBackendIdentity(request.backend) !== backendIdentity
+        || !state.appPermissions.editor?.granted || state.appPermissions.editor.backend!==request.backend) throw new Error('Source storage changed');
+    const bytes = await BACKENDS[request.backend].readBinary(fsSafePath('editor',request.path),RANGE_EDIT_LIMITS.bytes);
+    if (new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(bytes)!==request.before) throw new Error('Source changed during confirmation');
+    if (openWindows.editor?.querySelector('iframe')?.contentWindow!==source
+        || fileGrantBackendIdentity(request.backend)!==backendIdentity) throw new Error('Source storage changed');
+  }
+  if(Date.now()>=deadline) throw new Error('Confirmation expired. Resend the selection from Editor');
+  const token = newFileGrantToken();
+  const grant = { token, kind:'range-edit', targetAppId:'anvil', sourceAppId:'editor',
+    sourcePath:request.path, name:request.path.split('/').at(-1), request, sourceSource:source,
+    backendId:request.backend, backendIdentity, targetSource:null, expires:Date.now()+15*60*1000 };
+  fileGrants.set(token, grant);
+  openApp(target, { action:'range-edit' });
+  const win = openWindows.anvil;
+  if (!win) { fileGrants.delete(token); throw new Error('Anvil could not be opened'); }
+  win._pendingFileGrantTokens = [...(win._pendingFileGrantTokens || []), token];
+  deliverPendingFileGrants(win);
+  return { token, expires:grant.expires };
+}
+
+async function fileHostProposeEdit(source, msg, appId){
+  const grant = fileGrants.get(String(msg.token || ''));
+  if (!grant || grant.kind !== 'range-edit' || appId !== 'anvil' || grant.targetSource !== source) {
+    throw new Error('No exact-file range edit is granted to this window');
+  }
+  assertRangeEditGrant(grant);
+  const { rangeEditProposal, RANGE_EDIT_LIMITS } = await import('./sys/ai/range-edit.mjs');
+  const proposal = rangeEditProposal(grant.request, msg.after);
+  assertRangeEditGrant(grant);
+  if(grant.backendId!=='browser'){
+    try{
+      const bytes=await BACKENDS[grant.backendId].readBinary(fsSafePath('editor',grant.sourcePath),RANGE_EDIT_LIMITS.bytes);
+      assertRangeEditGrant(grant);
+      if(new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(bytes)!==grant.request.before)throw new Error('Source changed during the Anvil run');
+    }catch(error){revokeFileGrant(grant);throw error;}
+  }
+  const run = msg.run;
+  if (!run || typeof run.task !== 'string' || run.task.length > 128 || typeof run.project !== 'string'
+      || run.project.length > 128 || typeof run.sequence !== 'number' || !Number.isSafeInteger(run.sequence) || run.sequence < 1) {
+    throw new Error('Proposal lacks its Anvil run identity');
+  }
+  grant.sourceSource.postMessage({ type:'naklios:file:edit-proposal',
+    proposal:{ token:grant.token, request:grant.request, after:proposal.after,
+      run:{ task:run.task, project:run.project, sequence:run.sequence } } }, '*');
+  fileGrants.delete(grant.token); // a one-shot result; replay never overwrites another proposal
+  return true;
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -8280,10 +8400,12 @@ window.addEventListener('message', async e => {
       if (!appId) throw new Error('Unknown app');
       const op = msg.type.slice('naklios:file:'.length);
       if (op === 'openWith') reply.result = await fileHostOpenWith(e.source, msg, appId);
+      else if (op === 'editInAnvil') reply.result = await fileHostEditInAnvil(e.source, msg, appId);
+      else if (op === 'proposeEdit') reply.result = await fileHostProposeEdit(e.source, msg, appId);
       else if (op === 'read' || op === 'write') reply.result = await fileHostHandle(e.source, msg, appId, op);
       else if (op === 'release') {
         const grant = fileGrants.get(String(msg.token || ''));
-        if (grant?.targetSource === e.source) fileGrants.delete(grant.token);
+        if (grant?.targetSource === e.source || grant?.sourceSource === e.source) revokeFileGrant(grant);
         reply.result = true;
       } else throw new Error('Unknown file handoff operation');
     } catch (err){

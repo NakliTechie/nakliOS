@@ -93,6 +93,9 @@ prefix today.
 | `sys.fs.delete` | function | stable | — | Delete. |
 | `sys.fs.exists` | function | stable | — | Existence check. |
 | `files` | namespace | stable | — | Exact-file handoff (`docs/file-handoff-v1.md`). |
+| `files.experimental_editInAnvil` | function | experimental | Bounded Editor snapshot; exact-file grant and stale-source refusal tested before stabilization. | Ask the host to stage one selected-file edit in Anvil. |
+| `files.experimental_proposeEdit` | function | experimental | One-shot source-bound proposals; real model-to-review flow required before stabilization. | Return a snapshot edit without writing its source. |
+| `files.experimental_onEditProposal` | function | experimental | Editor reviews; transactional Browser apply and concurrent-write refusal required before stabilization. | Receive the host-authenticated staged proposal. |
 | `files.openWith` | function | stable | — | Hand a file to another app. |
 | `files.onOpen` | function | stable | — | Receive a handed file. |
 | `files.read` | function | stable | — | Read a handed file. |
