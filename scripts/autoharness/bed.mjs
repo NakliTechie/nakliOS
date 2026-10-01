@@ -113,6 +113,8 @@ export function liveInfer({ base, model, key, timeoutMs = 180000, log = () => {}
     clearTimeout(timer);
     if (!res.ok) { infer.failures++; log(`${label} call ${i} http ${res.status}`); throw new Error(`http ${res.status}: ${String(json?.error?.message || '').slice(0, 160)}`); }
     const m = json?.choices?.[0]?.message || {};
+    // OpenRouter reports what each call cost; summed per run, it is a measured cost, not an estimate.
+    if (json?.usage && json.usage.cost !== undefined) { infer.cost += Number(json.usage.cost) || 0; infer.costSeen = true; }
     log(`${label} call ${i}: ${Math.round((Date.now() - t0) / 1000)}s, ${json?.usage?.prompt_tokens ?? '?'}+${json?.usage?.completion_tokens ?? '?'} tok, ${(m.tool_calls || []).length} tool call(s)`);
     return {
       content: m.content || '',
@@ -122,7 +124,7 @@ export function liveInfer({ base, model, key, timeoutMs = 180000, log = () => {}
       usage: json?.usage || null,
     };
   };
-  infer.failures = 0;
+  infer.failures = 0; infer.cost = 0; infer.costSeen = false;
   return infer;
 }
 
@@ -193,7 +195,7 @@ export async function runTask(task, { infer, stamp = null, sysPrior = undefined 
   return {
     id: task.id, pass: !!g.ok, why: g.ok ? '' : String(g.why || ''), void: isVoid, crash,
     stop: result?.stop ?? 'crash', steps: metrics.steps, toolCalls: metrics.toolCalls, label: metrics.label,
-    usage: out.usage, tools: out.toolNames, answer: out.answer.slice(0, 2000), wallMs,
+    usage: out.usage, costReported: infer.costSeen ? infer.cost : null, tools: out.toolNames, answer: out.answer.slice(0, 2000), wallMs,
     changed: changedPaths(seedSnap, snapshot(ws.backend)),
     record: rec.export(),
   };

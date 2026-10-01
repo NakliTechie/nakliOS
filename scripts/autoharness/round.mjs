@@ -5,7 +5,7 @@
 // Scoring the candidate on dev — keep or revert — is layer 4 (loop.mjs).
 //
 //   node scripts/autoharness/round.mjs --round 1 [--n 20] [--seed 1] [--train-dir DIR]
-//     [--base URL --model ID --key-from opencode:deepseek]          (the solver, for the train runs)
+//     [--endpoint openrouter-bunny | --base URL --model ID --key-from SOURCE]   (the solver, for the train runs)
 //     [--optimizer-model gpt-5.6-luna | --optimizer-cmd "<shell command>"]
 //     [--history FILE] [--gate full | lane,lane] [--no-commit]
 //
@@ -27,6 +27,7 @@ import { tasksIn } from './battery.mjs';
 import { readRuns, failureMarkdown } from './failures.mjs';
 import { snapshot, writePins, PIN_FILES } from './pins.mjs';
 import { runGate, gateCommands, treeOf } from './gate.mjs';
+import { ENDPOINTS, DEFAULT_ENDPOINT } from './endpoints.mjs';
 
 const args = process.argv.slice(2);
 const opt = (f, d = null) => { const i = args.indexOf(f); return i < 0 ? d : args[i + 1]; };
@@ -99,7 +100,7 @@ if (!trainDir) {
   const ids = sample(tasksIn('train').map((t) => t.id), N, SEED);
   trainDir = join(WS, 'train');
   log(`train: ${ids.length} task(s), seed ${SEED}`);
-  const pass = ['--base', '--model', '--key-from', '--key', '--concurrency', '--timeout'].flatMap((f) => (opt(f) !== null ? [f, opt(f)] : []));
+  const pass = ['--endpoint', '--base', '--model', '--key-from', '--key', '--concurrency', '--timeout'].flatMap((f) => (opt(f) !== null ? [f, opt(f)] : []));
   await new Promise((res, rej) => {
     const p = spawn(process.execPath, [join(REPO, 'scripts/autoharness/run-split.mjs'), '--tasks', ids.join(','), '--reps', '1', '--out', trainDir, ...pass], { cwd: REPO, stdio: ['ignore', 'ignore', 'inherit'] });
     p.on('close', (c) => (c === 0 ? res() : rej(new Error(`run-split exited ${c}`))));
@@ -137,7 +138,7 @@ for (const id of failed) copyFileSync(join(WS, 'failures', `${id}.md`), join(STA
 if (existsSync(join(WS, 'summary.json'))) copyFileSync(join(WS, 'summary.json'), join(STAGE, 'evidence', 'summary.json'));
 const HISTORY = opt('--history');
 if (HISTORY && existsSync(HISTORY)) copyFileSync(HISTORY, join(STAGE, 'evidence', 'history.md'));
-const SOLVER = opt('--model', 'deepseek-flash');
+const SOLVER = opt('--model') || ENDPOINTS[opt('--endpoint') || DEFAULT_ENDPOINT]?.model || 'an unnamed model';
 const PROMPT = `You are optimizing the harness of Anvil, a coding agent whose model is ${SOLVER}. The agent works over a user's files with tools (read, write, edit, apply_patch, shell, task_done and others) and a curated bash-like shell. In this benchmark it runs in a node bed: \`node file.mjs\` runs, python does not.
 
 Harness files you may edit (and ONLY these), under harness/:

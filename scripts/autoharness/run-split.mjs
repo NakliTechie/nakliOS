@@ -2,59 +2,32 @@
 // Layer 2 of the autoharness optimizer: run one split of the battery, N reps per task, on a live
 // model, and write summary.json plus every run's record.
 //
-//   node scripts/autoharness/run-split.mjs --split dev --reps 3 --out DIR \
-//     --base https://api.deepseek.com/v1 --model deepseek-flash --key-from opencode:deepseek
+//   node scripts/autoharness/run-split.mjs --split dev --reps 3 --out DIR [--endpoint openrouter-bunny]
+//     [--base URL --model ID --key-from SOURCE]   (override the endpoint's fields; SOURCE: opencode:<p>, file:<path>, env:<VAR>)
 //     [--tasks id,id] [--concurrency 4] [--timeout 180]
 //
-// The key comes from --key-from (opencode's credential store, provider name after the colon), the
-// BENCH_KEY environment variable, or --key — in that order of preference, so it stays off the
-// process list. Nothing retries: a call that fails makes its run VOID, counted apart and never
-// scored (plan/bench-playbook.md §2). The summary names the bed, the model, the harness fingerprint
-// and the git head, because a number without them cannot be compared with the next one.
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+// Endpoints are named in endpoints.mjs (default openrouter-bunny); keys are read at run time and stay
+// off the process list. Nothing retries: a call that fails makes its run VOID, counted apart and never
+// scored (plan/bench-playbook.md §2). The summary names the bed, the endpoint and model, the harness
+// fingerprint and the git head, because a number without them cannot be compared with the next one.
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { homedir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { TASKS, tasksIn } from './battery.mjs';
 import { runTask, liveInfer, harnessFingerprint } from './bed.mjs';
+import { resolveEndpoint, spend } from './endpoints.mjs';
 
 const args = process.argv.slice(2);
 const opt = (f, d = null) => { const i = args.indexOf(f); return i < 0 ? d : args[i + 1]; };
 const SPLIT = opt('--split', 'dev');
 const REPS = Number(opt('--reps', '3'));
 const OUT = opt('--out');
-const BASE = opt('--base', 'https://api.deepseek.com/v1');
-const MODEL = opt('--model', 'deepseek-flash');
 const CONC = Math.max(1, Number(opt('--concurrency', '4')));
 const TIMEOUT = Number(opt('--timeout', '180')) * 1000;
 const ONLY = (opt('--tasks') || '').split(',').filter(Boolean);
 if (!OUT) { console.error('--out DIR is required'); process.exit(2); }
-
-async function resolveKey() {
-  const from = opt('--key-from');
-  if (from) {
-    const [store, provider] = from.split(':');
-    if (store !== 'opencode') throw new Error(`--key-from knows only opencode:<provider>, not ${store}`);
-    const auth = JSON.parse(await readFile(join(homedir(), '.local/share/opencode/auth.json'), 'utf8'));
-    const k = auth?.[provider]?.key;
-    if (!k) throw new Error(`opencode has no key for ${provider}`);
-    return k;
-  }
-  return process.env.BENCH_KEY || opt('--key') || 'local';
-}
-const KEY = await resolveKey();
-
-// The provider's own balance, read before and after: the measured cost of the run. Only DeepSeek
-// exposes one; elsewhere the field is null and the token counts are the measure.
-async function balance() {
-  if (!/api\.deepseek\.com/.test(BASE)) return null;
-  try {
-    const r = await fetch(BASE.replace(/\/v1\/?$/, '') + '/user/balance', { headers: { authorization: `Bearer ${KEY}` } });
-    const j = await r.json();
-    const b = (j.balance_infos || []).find((x) => x.currency === 'USD') || (j.balance_infos || [])[0];
-    return b ? { currency: b.currency, total: Number(b.total_balance) } : null;
-  } catch (_) { return null; }
-}
+const EP = await resolveEndpoint({ endpoint: opt('--endpoint'), base: opt('--base'), model: opt('--model'), keyFrom: opt('--key-from'), key: opt('--key') });
+const { base: BASE, model: MODEL, key: KEY } = EP;
 
 function gitHead() {
   try {
@@ -72,7 +45,7 @@ const jobs = tasks.flatMap((t) => Array.from({ length: REPS }, (_, rep) => ({ t,
 const t0 = Date.now();
 const log = (m) => process.stderr.write(`  [${String(Math.round((Date.now() - t0) / 1000)).padStart(5)}s] ${m}\n`);
 log(`autoharness ${ONLY.length ? 'custom' : SPLIT}: ${tasks.length} task(s) × ${REPS} rep(s) = ${jobs.length} runs, concurrency ${CONC}, model ${MODEL} @ ${BASE}`);
-const before = await balance();
+const before = await spend(EP);
 await mkdir(join(OUT, 'runs'), { recursive: true });
 
 const stamp = { id: MODEL, provider: (() => { try { return new URL(BASE).host; } catch (_) { return null; } })(), label: MODEL };
@@ -91,7 +64,7 @@ async function worker() {
   }
 }
 await Promise.all(Array.from({ length: Math.min(CONC, jobs.length) }, worker));
-const after = await balance();
+const after = await spend(EP);
 const wallMs = Date.now() - t0;
 
 const mean = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
@@ -113,7 +86,7 @@ const scored = results.filter((r) => !r.void);
 const rated = perTask.filter((p) => p.passRate !== null);
 const summary = {
   bed: 'node bed (scripts/autoharness/bed.mjs): in-memory workspace, the app assembly via sys/ai/run-assembly.mjs, node via the app js-runner, no Kiln/python, no host context message',
-  split: ONLY.length ? 'custom' : SPLIT, tasks: tasks.length, reps: REPS, model: MODEL, base: BASE, concurrency: CONC,
+  split: ONLY.length ? 'custom' : SPLIT, tasks: tasks.length, reps: REPS, endpoint: EP.name, model: MODEL, base: BASE, concurrency: CONC,
   harness: harnessFingerprint(), git: gitHead(),
   started: ist(t0), ended: ist(Date.now()), wallS: Math.round(wallMs / 1000),
   runs: results.length, voids: results.length - scored.length, scored: scored.length,
@@ -124,8 +97,11 @@ const summary = {
   meanInputTokensPerRun: Math.round(mean(scored.map((r) => r.usage.input)) || 0),
   meanStepsPerRun: r2(mean(scored.map((r) => r.steps))),
   unpricedCalls: results.reduce((s, r) => s + (r.usage.calls - r.usage.priced), 0),
-  balanceBefore: before, balanceAfter: after,
-  costMeasured: before && after ? r2(before.total - after.total) : null,
+  spendBefore: before, spendAfter: after,
+  // the provider's own counter, after minus before (DeepSeek's balance falls; OpenRouter's usage rises)
+  costMeasured: before && after ? Math.round(Math.abs(after.total - before.total) * 1e6) / 1e6 : null,
+  // the sum of the per-call costs the provider reported (OpenRouter's usage.cost), null when none did
+  costReported: results.some((r) => r.costReported !== null) ? Math.round(results.reduce((s, r) => s + (r.costReported || 0), 0) * 1e6) / 1e6 : null,
   perTask,
 };
 await writeFile(join(OUT, 'summary.json'), JSON.stringify(summary, null, 2));
