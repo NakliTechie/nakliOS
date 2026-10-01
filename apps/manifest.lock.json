@@ -267,13 +267,13 @@
       "id": "nakliamp",
       "repo": "NakliTechie/nakliamp",
       "requestedRef": "main",
-      "resolvedCommit": "e246b18fc0ec24fb8460cd05981183b09155b712",
+      "resolvedCommit": "0fb842be3b4b00aa6982796d8fb5611a36d985b7",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "bb2bab18a9d01f90d0e22e82017572bc64adce444ac132c4873cdc6c5cb80ffc",
-          "bytes": 69159
+          "sha256": "7c0ba3a7d5186cf1025240b2e9633f04ae9dd1a1b82eecd5edef962cfeadf227",
+          "bytes": 69238
         },
         {
           "source": "VENDOR.md",
