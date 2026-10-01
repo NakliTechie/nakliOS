@@ -21,9 +21,10 @@
 //
 // Run it in the run worktree (never on main), detached, registered with `delegate`.
 import { execFileSync, spawn } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync, appendFileSync, existsSync, rmSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync, appendFileSync, existsSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { scoreArms, readScore, compare } from './score.mjs';
 
 const args = process.argv.slice(2);
 const opt = (f, d = null) => { const i = args.indexOf(f); return i < 0 ? d : args[i + 1]; };
@@ -53,44 +54,11 @@ function run(cmd, argv, cwd) {
   });
 }
 
-// Score commits on dev, each from a detached worktree of it, all at once (the same batch).
-async function scoreAll(arms, dir) {
-  try { git('worktree', 'prune'); } catch (_) {}
-  const wts = arms.map(({ label, sha }) => { const wt = join(AH, 'score', label); rmSync(wt, { recursive: true, force: true }); git('worktree', 'add', '--detach', '--force', wt, sha); return wt; });
-  const devArgs = opt('--dev-tasks') ? ['--tasks', opt('--dev-tasks')] : ['--split', 'dev'];
-  try {
-    await Promise.all(arms.map(({ label }, i) => run(process.execPath, [join(wts[i], 'scripts/autoharness/run-split.mjs'), ...devArgs, '--reps', String(REPS), '--out', join(dir, label),
-      ...pass(['--endpoint', '--base', '--model', '--key-from', '--key', '--concurrency', '--timeout'])], wts[i])));
-  } finally { for (const wt of wts) { try { git('worktree', 'remove', '--force', wt); } catch (_) {} } }
-  return arms.map(({ label }) => readScore(join(dir, label)));
-}
-export function readScore(out) {
-  const summary = JSON.parse(readFileSync(join(out, 'summary.json'), 'utf8'));
-  const runs = new Map();
-  for (const t of summary.perTask) {
-    for (let r = 0; r < t.reps; r++) {
-      const f = join(out, 'runs', t.id, `${r}.json`);
-      if (existsSync(f)) { const x = JSON.parse(readFileSync(f, 'utf8')); runs.set(`${t.id}#${r}`, { pass: x.pass, void: x.void, tools: x.tools, record: x.record, id: t.id }); }
-    }
-  }
-  return { summary, runs };
-}
-
-// Paired comparison over the (task, rep) pairs where neither run is void.
-export function compare(inc, cand) {
-  let up = 0, down = 0, pairs = 0;
-  const flippedTasks = new Set();
-  for (const [k, a] of inc.runs) {
-    const b = cand.runs.get(k);
-    if (!b || a.void || b.void) continue;
-    pairs++;
-    if (!a.pass && b.pass) { up++; flippedTasks.add(a.id); }
-    if (a.pass && !b.pass) down++;
-  }
-  const tokInc = inc.summary.meanInputTokensPerRun, tokCand = cand.summary.meanInputTokensPerRun;
-  return { pairs, up, down, delta: up - down, z: up + down ? Math.round(((up - down) / Math.sqrt(up + down)) * 100) / 100 : 0, passInc: inc.summary.passes, passCand: cand.summary.passes, scoredInc: inc.summary.scored, scoredCand: cand.summary.scored,
-    tokInc, tokCand, tokGrowth: tokInc ? Math.round(((tokCand - tokInc) / tokInc) * 1000) / 1000 : null, flippedTasks: [...flippedTasks] };
-}
+// Score commits on dev from detached worktrees, all at once (score.mjs).
+const scoreAll = (arms, dir) => scoreArms({ repo: REPO, arms, reps: REPS, outDir: dir, wtDir: join(AH, 'score'),
+  select: opt('--dev-tasks') ? ['--tasks', opt('--dev-tasks')] : ['--split', 'dev'],
+  passArgs: pass(['--endpoint', '--base', '--model', '--key-from', '--key', '--concurrency', '--timeout']) });
+export { readScore, compare };
 
 // The act-or-nudge re-loop ran: a second run.started with no tool called before it (the supervisor's
 // re-loop needs a stall, which needs tool calls). Read from the record, not by matching nudge text,
