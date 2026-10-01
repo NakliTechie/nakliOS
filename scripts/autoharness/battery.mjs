@@ -9,70 +9,19 @@
 //          test runs it through the real assembly and requires the gate to pass, and requires the gate
 //          to FAIL on the untouched seed and on an empty workspace.
 //
-// Splits are fixed and stratified by family. Related cases share a split (the six simple-battery
-// asks keep all three task states together), so an edit tuned on train never sees its dev twin.
-// Sources: scripts/bench-procedural.mjs (3), scripts/anvil-simple-battery.browser.js (6 asks × 3
-// states), and 45 tasks written for this battery. Every task is solvable with the file tools and
-// the curated shell: the node bed has no python and no node runner.
-import vm from 'node:vm';
+// Splits are fixed (re-cut once on 2026-10-01, before any optimizer round, when the hard tier landed).
+// Dev and test each hold the six battery cases of two asks (all three task states of an ask share a
+// split, so an edit tuned on train never sees its dev twin), one guard per base family, and a third of
+// the hard tier dealt per family by its calibrated pass rate (plan/bench-autoharness-2026-10-01.md), so
+// the two match in difficulty. The base tier's ceiling tasks are train: in dev they cost runs and
+// carried no signal. Sources: scripts/bench-procedural.mjs (3), scripts/anvil-simple-battery.browser.js
+// (6 asks × 3 states), 45 base tasks written for this battery, and the hard tier (battery-hard.mjs,
+// battery-build.mjs). Every task is solvable with the file tools, the curated shell and `node`: the
+// node bed has no python.
 import { recoveryNote } from '../../sys/history/run-record.mjs';
-
-const ok = () => ({ ok: true });
-const no = (why) => ({ ok: false, why });
-// The first failing check wins.
-const all = (...checks) => async (c) => { for (const f of checks) { const r = await f(c); if (!r.ok) return r; } return ok(); };
-const norm = (p) => String(p).replace(/^\.?\//, '');
-const onlyChanged = (allowed = []) => (c) => {
-  const extra = c.changed.filter((p) => !allowed.includes(p));
-  return extra.length ? no(`files changed outside the ask: ${extra.join(', ')}`) : ok();
-};
-const fileEq = (p, want, { trim = true } = {}) => (c) => {
-  const t = c.file(p);
-  if (t === null) return no(`${p} does not exist`);
-  return (trim ? t.trim() === want.trim() : t === want) ? ok() : no(`${p} does not have the required content`);
-};
-const absent = (p) => (c) => (c.file(p) === null ? ok() : no(`${p} still exists`));
-const answerHas = (re, what) => (c) => (re.test(c.answer) ? ok() : no(`the final answer does not state ${what}`));
-const stepsAtMost = (n) => (c) => (!c.metrics || c.metrics.steps <= n ? ok() : no(`${c.metrics.steps} steps, the bar is ${n}`));
-const noTools = (c) => (!c.metrics || c.metrics.toolCalls === 0 ? ok() : no(`${c.metrics.toolCalls} tool call(s) on an ask that said not to use tools`));
-const answerFile = (p, want, what = 'the right value') => (c) => {
-  const t = c.file(p);
-  if (t === null) return no(`${p} does not exist`);
-  return norm(t.trim()) === String(want) ? ok() : no(`${p} does not hold ${what}`);
-};
-
-// Load a model-written ES module in a fresh vm context: no process, no require, a 2 s budget. The
-// `export` keywords are stripped so the source runs as a script; `names` are read back afterwards.
-// vm is not a security boundary (Node docs) — it keeps a bench gate from handing the model's code
-// this process's globals, which is the bar for a bench over a provider's output.
-function loadModule(src, names) {
-  const body = String(src).replace(/^\s*export\s+\{[^}]*\};?\s*$/gm, '').replace(/^(\s*)export\s+(default\s+)?/gm, '$1');
-  const probe = names.map((n) => `${JSON.stringify(n)}: typeof ${n} === 'undefined' ? undefined : ${n}`).join(', ');
-  const ctx = vm.createContext({});
-  vm.runInContext(`${body}\n;globalThis.__out = { ${probe} };`, ctx, { timeout: 2000 });
-  return ctx.__out;
-}
-// A gate over a JS file: `cases` is [[fnName, args, expected], …]; deep equality via JSON.
-const jsGate = (p, cases) => (c) => {
-  const src = c.file(p);
-  if (src === null) return no(`${p} does not exist`);
-  let mod;
-  try { mod = loadModule(src, [...new Set(cases.map((k) => k[0]))]); } catch (e) { return no(`${p} does not load: ${String(e.message).slice(0, 120)}`); }
-  for (const [fn, args, want] of cases) {
-    if (typeof mod[fn] !== 'function') return no(`${p} does not define ${fn}`);
-    let got;
-    try { got = mod[fn](...args); } catch (e) { return no(`${fn}(${args.map((a) => JSON.stringify(a)).join(', ')}) threw: ${String(e.message).slice(0, 80)}`); }
-    if (JSON.stringify(got) !== JSON.stringify(want)) return no(`${fn}(${args.map((a) => JSON.stringify(a)).join(', ')}) returned ${JSON.stringify(got)}`);
-  }
-  return ok();
-};
-
-const sh = (command) => ({ tool: 'shell', args: { command } });
-const read = (path) => ({ tool: 'read', args: { path } });
-const write = (path, content) => ({ tool: 'write', args: { path, content } });
-const edit = (path, old_string, new_string, extra = {}) => ({ tool: 'edit', args: { path, old_string, new_string, ...extra } });
-const say = (text) => ({ say: text });
-const done = (summary = 'done') => ({ tool: 'task_done', args: { summary } });
+import { all, ok, no, onlyChanged, fileEq, absent, answerHas, stepsAtMost, noTools, answerFile, jsGate, sh, read, write, edit, say, done } from './gates.mjs';
+import { HARD_TASKS } from './battery-hard.mjs';
+import { BUILD_TASKS } from './battery-build.mjs';
 
 // ── the simple-task battery (scripts/anvil-simple-battery.browser.js), ported to the node bed ─────
 // States: fresh (a new task); finished (a prior ask ran to done in the same task — its exchange is
@@ -175,7 +124,7 @@ const editTasks = [
     prompt: 'Bump the patch version in package.json (1.4.2 → 1.4.3). Change nothing else.',
     gate: all(fileEq('package.json', PKG.replace('1.4.2', '1.4.3'), { trim: false }), onlyChanged(['package.json'])),
     solve: [edit('package.json', '"version": "1.4.2"', '"version": "1.4.3"'), say('Bumped to 1.4.3.')] },
-  { id: 'edit-uncomment', split: 'dev', seed: { 'settings.ini': INI },
+  { id: 'edit-uncomment', split: 'train', seed: { 'settings.ini': INI },
     prompt: 'In settings.ini, enable the cache setting by uncommenting it. Leave the other lines as they are.',
     gate: all(fileEq('settings.ini', INI.replace('# cache = on', 'cache = on'), { trim: false }), onlyChanged(['settings.ini'])),
     solve: [edit('settings.ini', '# cache = on', 'cache = on'), say('Uncommented cache.')] },
@@ -191,7 +140,7 @@ const editTasks = [
     prompt: 'Add "- Fix login timeout" to CHANGELOG.md as the first bullet under the Unreleased heading.',
     gate: all(fileEq('CHANGELOG.md', CHANGELOG.replace('## Unreleased\n\n- Add dark mode', '## Unreleased\n\n- Fix login timeout\n- Add dark mode')), onlyChanged(['CHANGELOG.md'])),
     solve: [edit('CHANGELOG.md', '## Unreleased\n\n- Add dark mode', '## Unreleased\n\n- Fix login timeout\n- Add dark mode'), say('Added the bullet.')] },
-  { id: 'edit-rename-function', split: 'test', seed: { 'utils.js': UTILS_CALC },
+  { id: 'edit-rename-function', split: 'train', seed: { 'utils.js': UTILS_CALC },
     prompt: 'In utils.js, rename the function calc to calculateTotal, including every place it is called.',
     gate: all((c) => { const t = c.file('utils.js') || ''; return /\bcalc\b/.test(t) ? no('utils.js still names calc') : ok(); },
       jsGate('utils.js', [['calculateTotal', [[1, 2, 3]], 6], ['report', [[2, 3]], 'total: 5'], ['double', [[4]], 8]]), onlyChanged(['utils.js'])),
@@ -200,11 +149,11 @@ const editTasks = [
     prompt: 'Fix the spelling mistakes in README.md.',
     gate: all(fileEq('README.md', README_TYPO.replaceAll('recieve', 'receive').replace('seperate', 'separate')), onlyChanged(['README.md'])),
     solve: [write('README.md', README_TYPO.replaceAll('recieve', 'receive').replace('seperate', 'separate')), say('Fixed recieve and seperate.')] },
-  { id: 'edit-yaml-scoped', split: 'dev', seed: { 'config.yaml': YAML },
+  { id: 'edit-yaml-scoped', split: 'train', seed: { 'config.yaml': YAML },
     prompt: 'Scale the web service in config.yaml to 3 replicas. The worker service must stay at 2.',
     gate: all(fileEq('config.yaml', 'web:\n  image: app:1.0\n  replicas: 3\nworker:\n  image: app:1.0\n  replicas: 2\n', { trim: false }), onlyChanged(['config.yaml'])),
     solve: [edit('config.yaml', 'web:\n  image: app:1.0\n  replicas: 2', 'web:\n  image: app:1.0\n  replicas: 3'), say('web is at 3 replicas.')] },
-  { id: 'edit-env-append', split: 'test', seed: { '.env': ENV },
+  { id: 'edit-env-append', split: 'train', seed: { '.env': ENV },
     prompt: 'Add LOG_LEVEL=debug to the .env file, keeping the existing variables.',
     gate: all((c) => { const t = c.file('.env'); if (t === null) return no('.env does not exist'); const lines = t.split('\n').map((l) => l.trim()).filter(Boolean); return lines.includes('LOG_LEVEL=debug') && lines.includes('DATABASE_URL=postgres://localhost/app') && lines.includes('PORT=3000') && lines.length === 3 ? ok() : no('.env does not hold exactly the old variables plus LOG_LEVEL=debug'); }, onlyChanged(['.env'])),
     solve: [sh('echo LOG_LEVEL=debug >> .env'), say('Added LOG_LEVEL=debug.')] },
@@ -233,11 +182,11 @@ const multiTasks = [
     prompt: 'notes.txt has a [todo] section and a [done] section. Put the todo items in todo.txt and the done items in done.txt, one per line, without the section headers. Leave notes.txt as it is.',
     gate: all(fileEq('todo.txt', 'write tests\nship v2'), fileEq('done.txt', 'set up CI\nfix login'), onlyChanged(['todo.txt', 'done.txt'])),
     solve: [write('todo.txt', 'write tests\nship v2\n'), write('done.txt', 'set up CI\nfix login\n'), say('Split.')] },
-  { id: 'multi-delete-tmp', split: 'dev', seed: { 'keep.txt': 'keep\n', 'a.tmp': 'x', 'b.tmp': 'y', 'cache/c.tmp': 'z', 'cache/data.json': '{}\n' },
+  { id: 'multi-delete-tmp', split: 'train', seed: { 'keep.txt': 'keep\n', 'a.tmp': 'x', 'b.tmp': 'y', 'cache/c.tmp': 'z', 'cache/data.json': '{}\n' },
     prompt: 'Delete every .tmp file in this workspace, including inside subfolders. Keep everything else.',
     gate: all(absent('a.tmp'), absent('b.tmp'), absent('cache/c.tmp'), fileEq('keep.txt', 'keep'), fileEq('cache/data.json', '{}'), onlyChanged(['a.tmp', 'b.tmp', 'cache/c.tmp'])),
     solve: [sh('rm a.tmp b.tmp cache/c.tmp'), say('Deleted 3 .tmp files.')] },
-  { id: 'multi-concat', split: 'test', seed: { 'part1.txt': 'one\n', 'part2.txt': 'two\n', 'part3.txt': 'three\n' },
+  { id: 'multi-concat', split: 'train', seed: { 'part1.txt': 'one\n', 'part2.txt': 'two\n', 'part3.txt': 'three\n' },
     prompt: 'Combine part1.txt, part2.txt and part3.txt, in that order, into full.txt.',
     gate: all(fileEq('full.txt', 'one\ntwo\nthree'), onlyChanged(['full.txt'])),
     solve: [sh('cat part1.txt part2.txt part3.txt > full.txt'), say('Wrote full.txt.')] },
@@ -264,11 +213,11 @@ const queryTasks = [
     prompt: 'What is the total of the amount column in sales.csv? Write just the number into answer.txt.',
     gate: all((c) => { const t = c.file('answer.txt'); return t !== null && Math.abs(parseFloat(t) - SALES_SUM) < 1e-9 ? ok() : no('answer.txt does not hold the total'); }, onlyChanged(['answer.txt'])),
     solve: [sh("awk -F, 'NR>1 {s+=$3} END {print s}' sales.csv > answer.txt"), say(String(SALES_SUM))] },
-  { id: 'query-count-rows', split: 'dev', seed: { 'users.csv': USERS_CSV },
+  { id: 'query-count-rows', split: 'train', seed: { 'users.csv': USERS_CSV },
     prompt: 'How many users in users.csv are from country IN? Write just the number into answer.txt.',
     gate: all(answerFile('answer.txt', String(USERS_IN), 'the count'), onlyChanged(['answer.txt'])),
     solve: [sh('grep -c ",IN$" users.csv > answer.txt'), say(String(USERS_IN))] },
-  { id: 'query-line-number', split: 'test', seed: { 'app.log': APPLOG },
+  { id: 'query-line-number', split: 'train', seed: { 'app.log': APPLOG },
     prompt: 'On which line number of app.log does the FATAL error appear? Write just the line number into answer.txt.',
     gate: all(answerFile('answer.txt', '31', 'the line number'), onlyChanged(['answer.txt'])),
     solve: [sh('grep -n FATAL app.log'), write('answer.txt', '31\n'), say('31')] },
@@ -276,11 +225,11 @@ const queryTasks = [
     prompt: 'Which file in this directory is the largest? Write just its file name into answer.txt.',
     gate: all(answerFile('answer.txt', 'b.txt', 'the largest file'), onlyChanged(['answer.txt'])),
     solve: [sh('wc -c *'), write('answer.txt', 'b.txt\n'), say('b.txt')] },
-  { id: 'query-unique-words', split: 'dev', seed: { 'words.txt': WORDS.join('\n') + '\n' },
+  { id: 'query-unique-words', split: 'train', seed: { 'words.txt': WORDS.join('\n') + '\n' },
     prompt: 'words.txt has one word per line. How many distinct words does it contain? Write just the number into answer.txt.',
     gate: all(answerFile('answer.txt', String(WORDS_UNIQ), 'the distinct count'), onlyChanged(['answer.txt'])),
     solve: [sh('sort -u words.txt | wc -l > answer.txt'), say(String(WORDS_UNIQ))] },
-  { id: 'query-count-md', split: 'test', seed: DOCS,
+  { id: 'query-count-md', split: 'train', seed: DOCS,
     prompt: 'How many Markdown (.md) files are under docs/, including its subfolders? Write just the number into answer.txt.',
     gate: all(answerFile('answer.txt', '4', 'the count'), onlyChanged(['answer.txt'])),
     solve: [sh('find docs -name "*.md" | wc -l > answer.txt'), say('4')] },
@@ -292,7 +241,7 @@ const transformTasks = [
     prompt: 'Write the names from names.txt into sorted.txt in alphabetical order, one per line.',
     gate: all(fileEq('sorted.txt', [...NAMES].sort().join('\n')), onlyChanged(['sorted.txt'])),
     solve: [sh('sort names.txt > sorted.txt'), say('Sorted.')] },
-  { id: 'xf-dedupe', split: 'dev', seed: { 'emails.txt': EMAILS.join('\n') + '\n' },
+  { id: 'xf-dedupe', split: 'train', seed: { 'emails.txt': EMAILS.join('\n') + '\n' },
     prompt: 'Write the addresses from emails.txt into unique.txt with duplicates removed, keeping the order of first appearance.',
     gate: all(fileEq('unique.txt', [...new Set(EMAILS)].join('\n')), onlyChanged(['unique.txt'])),
     solve: [write('unique.txt', [...new Set(EMAILS)].join('\n') + '\n'), say('Deduplicated.')] },
@@ -308,7 +257,7 @@ const transformTasks = [
     prompt: 'users.json is a list of users. Write the names of the active users into active.txt, one per line, in the order they appear.',
     gate: all(fileEq('active.txt', 'mira\nzoe\nliam'), onlyChanged(['active.txt'])),
     solve: [sh("jq -r '.[] | select(.active) | .name' users.json > active.txt"), say('Wrote active.txt.')] },
-  { id: 'xf-reverse-lines', split: 'test', seed: { 'poem.txt': POEM },
+  { id: 'xf-reverse-lines', split: 'train', seed: { 'poem.txt': POEM },
     prompt: 'Write the lines of poem.txt into reversed.txt in reverse order (last line first).',
     gate: all(fileEq('reversed.txt', POEM.trim().split('\n').reverse().join('\n')), onlyChanged(['reversed.txt'])),
     solve: [sh('tac poem.txt > reversed.txt'), say('Reversed.')] },
@@ -331,11 +280,11 @@ const codeTasks = [
     prompt: 'Create math.js, an ES module that exports two functions: add(a, b) returns a + b, and mul(a, b) returns a * b.',
     gate: all(jsGate('math.js', [['add', [2, 3], 5], ['add', [-1, 1], 0], ['mul', [4, 5], 20], ['mul', [0, 9], 0]]), onlyChanged(['math.js'])),
     solve: [write('math.js', 'export function add(a, b) { return a + b; }\nexport function mul(a, b) { return a * b; }\n'), say('Created math.js.')] },
-  { id: 'code-fix-iseven', split: 'dev', gated: true, seed: { 'utils.js': ISEVEN },
+  { id: 'code-fix-iseven', split: 'train', gated: true, seed: { 'utils.js': ISEVEN },
     prompt: 'isEven in utils.js gives the wrong answer. Fix it.',
     gate: all(jsGate('utils.js', [['isEven', [4], true], ['isEven', [7], false], ['isEven', [0], true], ['isEven', [-2], true]]), onlyChanged(['utils.js'])),
     solve: [edit('utils.js', 'n % 2 === 1', 'n % 2 === 0'), done('fixed isEven')] },
-  { id: 'code-fix-range', split: 'test', gated: true, seed: { 'range.js': RANGE },
+  { id: 'code-fix-range', split: 'train', gated: true, seed: { 'range.js': RANGE },
     prompt: 'range(n) in range.js should return the n numbers 0 … n-1, but it returns one too many. Fix it.',
     gate: all(jsGate('range.js', [['range', [3], [0, 1, 2]], ['range', [0], []], ['range', [1], [0]]]), onlyChanged(['range.js'])),
     solve: [edit('range.js', 'i <= n', 'i < n'), done('fixed the bound')] },
@@ -367,7 +316,7 @@ const readonlyTasks = [
   { id: 'ro-list-subdirs', split: 'train', seed: { 'src/a.js': '', 'docs/x.md': '', 'tests/t.js': '', 'top.txt': '' },
     prompt: 'Which folders are at the top level of this workspace?',
     gate: all(answerHas(/\bsrc\b/, 'src'), answerHas(/\bdocs\b/, 'docs'), answerHas(/\btests\b/, 'tests'), onlyChanged([])), solve: [sh('ls'), say('docs, src, tests')] },
-  { id: 'ro-maintainer', split: 'test', seed: { 'MAINTAINERS': 'Lead: Priya Raman <priya@example.org>\nReviewers: Tom Okafor\n', 'README.md': '# Project\n' },
+  { id: 'ro-maintainer', split: 'train', seed: { 'MAINTAINERS': 'Lead: Priya Raman <priya@example.org>\nReviewers: Tom Okafor\n', 'README.md': '# Project\n' },
     prompt: 'Who is the lead maintainer of this project?',
     gate: all(answerHas(/Priya Raman/, 'the lead'), onlyChanged([])), solve: [sh('cat MAINTAINERS'), say('Priya Raman')] },
 ].map((t) => ({ family: 'readonly', ...t }));
@@ -391,7 +340,7 @@ const constraintTasks = [
     gate: all(answerHas(/\b5\b|\bfive\b/i, 'the count'), onlyChanged([])), solve: [sh('wc -l config.txt'), say('5')] },
 ].map((t) => ({ family: 'constraint', ...t }));
 
-export const TASKS = Object.freeze([...proceduralTasks, ...batteryTasks, ...editTasks, ...multiTasks, ...queryTasks, ...transformTasks, ...codeTasks, ...readonlyTasks, ...constraintTasks]);
+export const TASKS = Object.freeze([...proceduralTasks, ...batteryTasks, ...editTasks, ...multiTasks, ...queryTasks, ...transformTasks, ...codeTasks, ...readonlyTasks, ...constraintTasks, ...HARD_TASKS, ...BUILD_TASKS]);
 export const SPLITS = Object.freeze(['train', 'dev', 'test']);
 export function tasksIn(split) {
   if (!SPLITS.includes(split)) throw new Error(`no split "${split}" — one of ${SPLITS.join(', ')}`);

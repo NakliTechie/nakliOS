@@ -7,7 +7,7 @@
 //     not only the in-loop gate. Only tasks marked `gated` also hand the gate to the loop.
 //   - the live infer returns the provider's `usage`, so the record carries input tokens per call.
 //
-// This is a NODE bed: no Kiln (python refuses), no host context message (project notes, memory and
+// This is a NODE bed: `node` runs (the app's js-runner), python does not (no Kiln), no host context message (project notes, memory and
 // skills indexes), no recovery-note fold over a real prior record. Every number from it names this
 // bed, not the app (plan/bench-playbook.md §2).
 import { makeToolExecutor } from '../../sys/ai/agent-tools.mjs';
@@ -18,6 +18,11 @@ import { createShell } from '../../sys/rig/cli/shell.mjs';
 import { createRunRecorder } from '../../sys/history/run-record.mjs';
 import { metricsOf } from '../../sys/ai/ablate.mjs';
 import { createHash } from 'node:crypto';
+import { Worker } from 'node:worker_threads';
+import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { systemMessage, gateNote, runToolset, driveRun, withHooks, withBedStubs, loadHooks, isSimpleAsk } from '../../sys/ai/run-assembly.mjs';
 
 const decoder = new TextDecoder();
@@ -31,13 +36,34 @@ export function harnessFingerprint() {
   return h.digest('hex').slice(0, 16);
 }
 
+// The shell's `node` (sys/kiln/js-runner.mjs, G9) on node's worker_threads. The app hands its agent
+// shell the same runner (`js: jsHost`) over module Workers with blob URLs, so the bed's
+// `node test.mjs` is the app's. Module URLs are SHORT file: URLs (content-addressed under the OS temp
+// dir), as blob: URLs are in the app: with data: URLs every stack frame carried a whole URL-encoded
+// module, one failing assert passed the 50 KB tool-output cap, and the executor spilled it to
+// .forge/out-N.txt in the workspace — a write the app would never have made (calibration 2026-10-01).
+const MODULE_DIR = join(tmpdir(), 'autoharness-js');
+mkdirSync(MODULE_DIR, { recursive: true });
+export const nodeJsHost = Object.freeze({
+  makeModuleURL: (src) => {
+    const file = join(MODULE_DIR, createHash('sha256').update(src).digest('hex').slice(0, 24) + '.mjs');
+    if (!existsSync(file)) writeFileSync(file, src);
+    return pathToFileURL(file).href;
+  },
+  spawn: (url) => {
+    const boot = `import { parentPort } from 'node:worker_threads'; globalThis.self = globalThis; self.postMessage = (m) => parentPort.postMessage(m); await import(${JSON.stringify(url)});`;
+    const w = new Worker(new URL(nodeJsHost.makeModuleURL(boot)));
+    return { onMessage: (cb) => w.on('message', cb), onError: (cb) => w.on('error', cb), terminate: () => w.terminate() };
+  },
+});
+
 export function freshWorkspace(seed = {}) {
   const backend = new MemoryBackend();
   const fs = createFileops({ backend });
   const registry = buildRigRegistry({ fs });
   const grant = createGrant({ prefixes: [''], scopes: ['fs:read', 'fs:write', 'fs:remove'] });
   const face = createAgentFace({ registry, grant, opLog: createOpLog({ fs: createFileops({ backend: new MemoryBackend() }) }), actor: 'agent' });
-  const shell = createShell({ registry, face });
+  const shell = createShell({ registry, face, js: nodeJsHost });
   const ws = { backend, fs, shell, face, hooks: null };
   ws.ready = (async () => { for (const [p, c] of Object.entries(seed)) await fs.write(p, c); ws.hooks = await loadHooks(fs); })();
   return ws;

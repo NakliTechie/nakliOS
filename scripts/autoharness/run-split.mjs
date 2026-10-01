@@ -112,7 +112,7 @@ const perTask = tasks.map((t) => {
 const scored = results.filter((r) => !r.void);
 const rated = perTask.filter((p) => p.passRate !== null);
 const summary = {
-  bed: 'node bed (scripts/autoharness/bed.mjs): in-memory workspace, the app assembly via sys/ai/run-assembly.mjs, no Kiln/python, no host context message',
+  bed: 'node bed (scripts/autoharness/bed.mjs): in-memory workspace, the app assembly via sys/ai/run-assembly.mjs, node via the app js-runner, no Kiln/python, no host context message',
   split: ONLY.length ? 'custom' : SPLIT, tasks: tasks.length, reps: REPS, model: MODEL, base: BASE, concurrency: CONC,
   harness: harnessFingerprint(), git: gitHead(),
   started: ist(t0), ended: ist(Date.now()), wallS: Math.round(wallMs / 1000),
