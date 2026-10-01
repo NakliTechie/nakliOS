@@ -7,7 +7,7 @@
 //   node scripts/autoharness/round.mjs --round 1 [--n 20] [--seed 1] [--train-dir DIR]
 //     [--endpoint openrouter-bunny | --base URL --model ID --key-from SOURCE]   (the solver, for the train runs)
 //     [--optimizer-model gpt-5.6-luna | --optimizer-cmd "<shell command>"]
-//     [--history FILE] [--gate full | lane,lane] [--no-commit]
+//     [--history FILE] [--gate full | lane,lane] [--min-failures 3] [--no-commit]
 //
 // The repo is the one this script lives in; run it on a branch or worktree, never on main.
 // Modelled on huyxdang/AutoHarness optimizer/round.py, with three differences:
@@ -28,6 +28,7 @@ import { readRuns, failureMarkdown } from './failures.mjs';
 import { snapshot, writePins, PIN_FILES } from './pins.mjs';
 import { runGate, gateCommands, treeOf } from './gate.mjs';
 import { ENDPOINTS, DEFAULT_ENDPOINT } from './endpoints.mjs';
+import { freshWorkspace } from './bed.mjs';
 
 const args = process.argv.slice(2);
 const opt = (f, d = null) => { const i = args.indexOf(f); return i < 0 ? d : args[i + 1]; };
@@ -35,6 +36,9 @@ const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const ROUND = Number(opt('--round'));
 if (!Number.isInteger(ROUND) || ROUND < 1) { console.error('--round N (a positive integer) is required'); process.exit(2); }
 const N = Number(opt('--n', '20'));
+// Below this many scored train failures the optimizer is not called: rounds 1 and 4 of the first live
+// run each generalised one slip into a harness edit (2026-10-01). More train tasks are drawn first.
+const MIN_FAILURES = Number(opt('--min-failures', '3'));
 const SEED = Number(opt('--seed', String(ROUND)));
 const OPT_MODEL = opt('--optimizer-model', 'gpt-5.6-luna');
 const OPT_CMD = opt('--optimizer-cmd');
@@ -95,20 +99,30 @@ function sample(ids, n, seed) {
   for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
   return a.slice(0, n);
 }
-let trainDir = opt('--train-dir');
-if (!trainDir) {
-  const ids = sample(tasksIn('train').map((t) => t.id), N, SEED);
-  trainDir = join(WS, 'train');
-  log(`train: ${ids.length} task(s), seed ${SEED}`);
+// Draw train tasks N at a time, in a seeded order, until MIN_FAILURES scored failures or the split
+// runs out. A given --train-dir is used as it is.
+const GIVEN = opt('--train-dir');
+const trainDirs = GIVEN ? [GIVEN] : [];
+const scoredFailures = () => trainDirs.reduce((n, d) => n + [...readRuns(d).values()].filter((reps) => reps.some((r) => !r.pass && !r.void)).length, 0);
+if (!GIVEN) {
+  const all = tasksIn('train').map((t) => t.id);
+  const order = sample(all, all.length, SEED);
   const pass = ['--endpoint', '--base', '--model', '--key-from', '--key', '--concurrency', '--timeout'].flatMap((f) => (opt(f) !== null ? [f, opt(f)] : []));
-  await new Promise((res, rej) => {
-    const p = spawn(process.execPath, [join(REPO, 'scripts/autoharness/run-split.mjs'), '--tasks', ids.join(','), '--reps', '1', '--out', trainDir, ...pass], { cwd: REPO, stdio: ['ignore', 'ignore', 'inherit'] });
-    p.on('close', (c) => (c === 0 ? res() : rej(new Error(`run-split exited ${c}`))));
-  });
+  for (let k = 0; k * N < order.length; k++) {
+    const ids = order.slice(k * N, (k + 1) * N);
+    const dir = join(WS, 'train', `c${k + 1}`);
+    log(`train: ${ids.length} task(s), seed ${SEED}, draw ${k + 1}`);
+    await new Promise((res, rej) => {
+      const p = spawn(process.execPath, [join(REPO, 'scripts/autoharness/run-split.mjs'), '--tasks', ids.join(','), '--reps', '1', '--out', dir, ...pass], { cwd: REPO, stdio: ['ignore', 'ignore', 'inherit'] });
+      p.on('close', (c) => (c === 0 ? res() : rej(new Error(`run-split exited ${c}`))));
+    });
+    trainDirs.push(dir);
+    if (scoredFailures() >= MIN_FAILURES) break;
+  }
 }
 
 // ── 2. the evidence: failures as markdown ──────────────────────────────────────────────────────
-const runs = readRuns(trainDir);
+const runs = new Map(trainDirs.flatMap((d) => [...readRuns(d)]));
 let nRuns = 0, nVoid = 0;
 const failed = [];
 for (const [id, reps] of runs) {
@@ -118,10 +132,12 @@ for (const [id, reps] of runs) {
   failed.push(id);
   writeFileSync(join(WS, 'failures', `${id}.md`), failureMarkdown(bad[0], { reps: reps.filter((r) => !r.void).length, failed: bad.length }));
 }
-if (existsSync(join(trainDir, 'summary.json'))) copyFileSync(join(trainDir, 'summary.json'), join(WS, 'summary.json'));
-record.train = { dir: trainDir, tasks: runs.size, runs: nRuns, voids: nVoid, failed };
+const summaries = trainDirs.map((d) => join(d, 'summary.json')).filter(existsSync).map((f) => JSON.parse(readFileSync(f, 'utf8')));
+if (summaries.length) writeFileSync(join(WS, 'summary.json'), JSON.stringify({ model: summaries[0].model, endpoint: summaries[0].endpoint, perTask: summaries.flatMap((x) => x.perTask) }, null, 2));
+record.train = { dirs: trainDirs, tasks: runs.size, runs: nRuns, voids: nVoid, failed };
 log(`train: ${failed.length} of ${runs.size} task(s) failed (${nVoid} void)`);
 if (!failed.length) finish('no-failures');
+if (!GIVEN && failed.length < MIN_FAILURES) finish('thin-evidence', { note: `${failed.length} scored failure(s) across the whole train split; the optimizer needs ${MIN_FAILURES}` });
 
 // ── 3. the base gate (cached by tree) ─────────────────────────────────────────────────────────
 const gateList = GATE === 'full' ? gateCommands(REPO) : GATE.split(',').map((l) => (l.startsWith('node ') ? l : `node ${l}`));
@@ -133,6 +149,10 @@ log(`base gate: ${baseGate.lanes - baseGate.red.length}/${baseGate.lanes} green$
 const STAGE = mkdtempSync(join(tmpdir(), 'autoharness-stage-'));
 for (const p of HARNESS) { mkdirSync(dirname(join(STAGE, 'harness', p)), { recursive: true }); copyFileSync(join(REPO, p), join(STAGE, 'harness', p)); }
 for (const p of CONTEXT) { mkdirSync(dirname(join(STAGE, 'context', p)), { recursive: true }); copyFileSync(join(REPO, p), join(STAGE, 'context', p)); }
+// The shell's own `help` — the ground truth for any claim about quoting, flags or commands. Round 4 of
+// the first live run wrote "single quotes are literal rather than shell-quoting" into the shell tool's
+// description; they quote as in any shell, and the edit cost 4 net dev runs.
+{ const ws = freshWorkspace({}); await ws.ready; writeFileSync(join(STAGE, 'context', 'shell-help.txt'), String((await ws.shell.feed('help')).output || '')); }
 mkdirSync(join(STAGE, 'evidence', 'failures'), { recursive: true });
 for (const id of failed) copyFileSync(join(WS, 'failures', `${id}.md`), join(STAGE, 'evidence', 'failures', `${id}.md`));
 if (existsSync(join(WS, 'summary.json'))) copyFileSync(join(WS, 'summary.json'), join(STAGE, 'evidence', 'summary.json'));
@@ -145,7 +165,7 @@ Harness files you may edit (and ONLY these), under harness/:
 - harness/sys/ai/run-assembly.mjs — the system prompt (SYSTEM_HEAD, SYSTEM_TAIL, MODE_NOTE, LESSON_NOTE), the act-or-nudge text (ACT_NUDGE), the gate note, the toolset assembly and the run driver (driveRun).
 - harness/sys/ai/procedural.mjs — the procedural prior: DEFAULT_GRAPH's edges, rendered between SYSTEM_HEAD and SYSTEM_TAIL.
 - harness/sys/ai/agent-tools.mjs — every tool's schema and description (what the model reads about each tool) and the tool executors.
-context/ holds read-only files that explain them (the agent loop). Use only the files in this directory.
+context/ holds read-only files that explain them: the agent loop, and shell-help.txt (the shell's own \`help\` output). Use only the files in this directory.
 
 Evidence for round ${ROUND}, in evidence/:
 - summary.json — pass/fail, tokens and steps per train task
@@ -156,6 +176,7 @@ Constraints:
 - The system prompt is a cache prefix shared by every run and project: no per-task, per-run or time-varying text in SYSTEM_HEAD, SYSTEM_TAIL or the procedural graph.
 - RUN_BUDGET and RELOOP_BUDGET are fixed by the owner; do not change them.
 - The repo's CI pins the prompt's seams (the head ends "Use python for scripting). ", the prior starts "Read a file before editing it, unless" and ends "one solver.", the tail starts " Work in small, verifiable steps") and several procedural sentences. An edit that breaks a CI lane is rejected. Safest: add or reword sentences inside SYSTEM_TAIL, ACT_NUDGE, an edge's text or a tool's description; keep edge ids, exported names and function signatures.
+- Every statement you add about how a tool or the shell behaves must be true: check it against harness/sys/ai/agent-tools.mjs or context/shell-help.txt first. A false description is worse than none.
 - Do not run the agent or any benchmark.
 
 Do this:

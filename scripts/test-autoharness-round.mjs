@@ -12,6 +12,8 @@
 //   4. no edit                 → no-edit
 //   5. a bed fact              → bed-leak (screened before pins, gate or dev runs)
 //   6. python named, no bed    → committed (the screen is not a python ban)
+//   7. (round 8) no --train-dir → train drawn N at a time until 3 scored failures
+// The stub optimizer also refuses to run unless the shell's `help` was staged as context.
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -37,7 +39,8 @@ writeFileSync(STUB, `import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 const [file, from, to] = JSON.parse(process.env.STUB_EDIT || 'null') || [];
 const stage = process.env.AUTOHARNESS_STAGE;
-if (!readFileSync(join(stage, 'evidence/failures/battery-write-fresh.md'), 'utf8').includes('write hi.txt containing hi')) throw new Error('the evidence is not staged');
+if (!process.env.STUB_ANY_EVIDENCE && !readFileSync(join(stage, 'evidence/failures/battery-write-fresh.md'), 'utf8').includes('write hi.txt containing hi')) throw new Error('the evidence is not staged');
+if (!/single quotes are literal/.test(readFileSync(join(stage, 'context/shell-help.txt'), 'utf8'))) throw new Error('the shell help is not staged');
 if (file) { const p = join(stage, 'harness', file); const t = readFileSync(p, 'utf8'); if (!t.includes(from)) throw new Error('stub: no ' + from); writeFileSync(p, t.replace(from, to)); }
 writeFileSync(join(process.env.REPO_UNDER_TEST, 'stray.txt'), 'stray');
 writeFileSync(join(process.env.REPO_UNDER_TEST, 'scripts/autoharness/battery.mjs'), '// clobbered');
@@ -90,6 +93,30 @@ check('and leaves no commit and a clean harness', git('rev-parse', 'HEAD') === h
 // a harness sentence that merely mentions python stays allowed
 const r6 = round(6, ['sys/ai/run-assembly.mjs', 'End with a one-line summary.', 'End with a one-line summary. Prefer python for multi-step data work.']);
 check('round 6 (python named, nothing about the bed) is not screened out', r6.rec?.outcome === 'committed', JSON.stringify({ o: r6.rec?.outcome, l: r6.rec?.leaks }));
+
+// 7. no --train-dir: train tasks are drawn N at a time until 3 scored failures. A stub model that
+//    answers every ask with "done" fails every task, so N=2 needs a second draw.
+{
+  const { createServer } = await import('node:http');
+  const srv = createServer((req, res) => { let raw = ''; req.on('data', (c) => { raw += c; }); req.on('end', () => {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'done' }, finish_reason: 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 1 }, model: 'stub' }));
+  }); });
+  await new Promise((r) => srv.listen(0, '127.0.0.1', r));
+  const { spawn } = await import('node:child_process');
+  const out = await new Promise((resolve) => {
+    const c = spawn(process.execPath, ['scripts/autoharness/round.mjs', '--round', '8', '--n', '2', '--min-failures', '3', '--optimizer-cmd', `node ${STUB}`, '--gate', GATE,
+      '--base', `http://127.0.0.1:${srv.address().port}/v1`, '--model', 'stub', '--key', 'x', '--concurrency', '2', '--timeout', '20'],
+      { cwd: REPO, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, STUB_EDIT: 'null', STUB_ANY_EVIDENCE: '1', REPO_UNDER_TEST: REPO } });
+    let e = ''; c.stderr.on('data', (d) => { e += d; }); c.stdout.on('data', () => {});
+    c.on('close', (code) => resolve({ code, e }));
+  });
+  srv.close();
+  const f = join(REPO, '.autoharness/round-8/round.json');
+  const r8 = existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : null;
+  check('round 8 draws a second batch of train tasks to reach 3 scored failures', r8?.train?.dirs?.length === 2 && r8.train.failed.length >= 3, `${out.e.slice(-500)} ${JSON.stringify(r8?.train)}`);
+  check('and calls the optimizer once it has them (no edit here → no-edit)', r8?.outcome === 'no-edit', r8?.outcome);
+}
 
 // the round refuses main
 git('checkout', '-q', 'main');
