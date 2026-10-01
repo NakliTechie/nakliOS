@@ -149,6 +149,9 @@ jobs:
       - name: Verify an autoharness round commits only the harness and its pins, restores stray edits, and rejects a CI-red edit (stub optimizer)
         run: node scripts/test-autoharness-round.mjs
 
+      - name: Verify the autoharness loop keeps a paired gain, reverts noise, and stops on patience (stub model and optimizer)
+        run: node scripts/test-autoharness-loop.mjs
+
       - name: Verify ordering metrics — anchored, never zero-for-null, refusing unlike comparisons
         run: node sys/history/test/ordering.test.mjs
 

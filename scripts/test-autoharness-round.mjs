@@ -10,27 +10,16 @@
 //   2. a tool description      → committed with the inventory rebaselined (tool:read)
 //   3. a pinned seam           → ci-red: nothing committed, the working tree restored
 //   4. no edit                 → no-edit
-import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { tmpdir } from 'node:os';
-import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { TASKS } from './autoharness/battery.mjs';
 import { runTask, scriptedInfer } from './autoharness/bed.mjs';
+import { scratchRepo } from './autoharness/scratch.mjs';
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const TMP = mkdtempSync(join(tmpdir(), 'ah-round-'));
-const REPO = join(TMP, 'repo');
-const git = (...a) => execFileSync('git', a, { cwd: REPO, encoding: 'utf8' }).trim();
+const { TMP, REPO, git } = scratchRepo('ah-round-');
 let failed = 0;
 const check = (name, cond, detail = '') => { console.log(`  ${cond ? 'ok  ' : 'FAIL'}  ${name}${cond || !detail ? '' : '\n        ' + String(detail).slice(0, 600)}`); if (!cond) failed++; };
-
-// ── the scratch repo ──
-const listed = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], { cwd: ROOT, encoding: 'utf8' }).split('\n')
-  .filter((p) => p && (/^(sys|scripts|verify|vendor)\//.test(p) || p.startsWith('apps/anvil/') || p === '.gitignore' || p === '.github/workflows/test.yml'));
-for (const p of listed) { if (!existsSync(join(ROOT, p))) continue; mkdirSync(dirname(join(REPO, p)), { recursive: true }); copyFileSync(join(ROOT, p), join(REPO, p)); }
-git('init', '-q', '-b', 'main'); git('config', 'user.email', 'test@example.invalid'); git('config', 'user.name', 'test');
-git('add', '-A'); git('commit', '-q', '-m', 'scratch'); git('checkout', '-q', '-b', 'autoharness/test');
 
 // ── one scripted failed train run, in run-split's layout ──
 const task = TASKS.find((t) => t.id === 'battery-write-fresh');
