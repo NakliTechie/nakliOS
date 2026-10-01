@@ -139,7 +139,7 @@ if (existsSync(join(WS, 'summary.json'))) copyFileSync(join(WS, 'summary.json'),
 const HISTORY = opt('--history');
 if (HISTORY && existsSync(HISTORY)) copyFileSync(HISTORY, join(STAGE, 'evidence', 'history.md'));
 const SOLVER = opt('--model') || ENDPOINTS[opt('--endpoint') || DEFAULT_ENDPOINT]?.model || 'an unnamed model';
-const PROMPT = `You are optimizing the harness of Anvil, a coding agent whose model is ${SOLVER}. The agent works over a user's files with tools (read, write, edit, apply_patch, shell, task_done and others) and a curated bash-like shell. In this benchmark it runs in a node bed: \`node file.mjs\` runs, python does not.
+const PROMPT = `You are optimizing the harness of Anvil, a coding agent whose model is ${SOLVER}. The agent works over a user's files with tools (read, write, edit, apply_patch, shell, task_done and others) and a curated bash-like shell. In the app the agent has python (a Pyodide kernel) and node. This benchmark runs it in a bed that has node but NOT python, so a failure caused by a python call is a gap in the bed, not in the harness. Never write facts about this bed or benchmark into the harness — that python is unavailable, that the environment is a bed or a benchmark, task names, file names or answers. An edit that does is rejected before it is scored.
 
 Harness files you may edit (and ONLY these), under harness/:
 - harness/sys/ai/run-assembly.mjs — the system prompt (SYSTEM_HEAD, SYSTEM_TAIL, MODE_NOTE, LESSON_NOTE), the act-or-nudge text (ACT_NUDGE), the gate note, the toolset assembly and the run driver (driveRun).
@@ -201,6 +201,17 @@ record.edited = edited;
 rmSync(STAGE, { recursive: true, force: true });
 if (!edited.length) finish('no-edit');
 record.diffStat = git('diff', '--stat', '--', ...edited);
+
+// ── 6b. the leakage screen (RRSI's critic, for this bed's one known confound) ──────────────────
+// The words the edit ADDED, from a word diff, checked for facts about the bench rather than about the
+// app. Round 2 of the first live loop (2026-10-01) added "This Node bed does not provide Python; use
+// node for scripting" — true in the bed, false in Anvil, where python is the scripting language.
+const added = git('diff', '-U0', '--word-diff=porcelain', '--word-diff-regex=[^[:space:]]+', '--', ...edited)
+  .split('\n').filter((l) => l.startsWith('+') && !l.startsWith('+++')).map((l) => l.slice(1)).join(' ');
+const BED_FACTS = [/\bbed\b/i, /\bbench(mark)?s?\b/i, /\bautoharness\b/i, /\bbattery\b/i,
+  /\bpython\b[^.;]{0,48}\b(not|unavailable|absent|missing|lacks?|no longer)\b/i, /\b(no|not|without|lacks?|unavailable)\b[^.;]{0,48}\bpython\b/i];
+const leaks = BED_FACTS.map((re) => re.exec(added)?.[0]).filter(Boolean);
+if (leaks.length) { restore(before, [...HARNESS, ...PIN_FILES]); finish('bed-leak', { leaks, addedText: added.slice(0, 600) }); }
 writeFileSync(join(WS, 'candidate.diff'), git('diff', '--', ...edited) + '\n');
 
 // ── 7. pins ────────────────────────────────────────────────────────────────────────────────────

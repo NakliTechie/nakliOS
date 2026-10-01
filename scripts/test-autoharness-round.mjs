@@ -10,6 +10,8 @@
 //   2. a tool description      → committed with the inventory rebaselined (tool:read)
 //   3. a pinned seam           → ci-red: nothing committed, the working tree restored
 //   4. no edit                 → no-edit
+//   5. a bed fact              → bed-leak (screened before pins, gate or dev runs)
+//   6. python named, no bed    → committed (the screen is not a python ban)
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
@@ -81,9 +83,17 @@ check('and leaves no commit and a clean harness', git('rev-parse', 'HEAD') === h
 const r4 = round(4, null);
 check('round 4 with no edit reports no-edit', r4.rec?.outcome === 'no-edit' && git('rev-parse', 'HEAD') === head2, r4.rec?.outcome);
 
+// 5. a bed fact → bed-leak, rejected before pins, gate or dev runs
+const r5 = round(5, ['sys/ai/run-assembly.mjs', 'End with a one-line summary.', 'End with a one-line summary. This Node bed does not provide Python; use node for scripting.']);
+check('round 5 (a fact about the bed, not the app) is screened out as bed-leak', r5.rec?.outcome === 'bed-leak' && (r5.rec.leaks || []).length > 0 && !r5.rec.gate, JSON.stringify({ o: r5.rec?.outcome, l: r5.rec?.leaks }));
+check('and leaves no commit and a clean harness', git('rev-parse', 'HEAD') === head2 && git('status', '--porcelain', '--', 'sys/ai', 'verify/anvil') === '', git('status', '--porcelain'));
+// a harness sentence that merely mentions python stays allowed
+const r6 = round(6, ['sys/ai/run-assembly.mjs', 'End with a one-line summary.', 'End with a one-line summary. Prefer python for multi-step data work.']);
+check('round 6 (python named, nothing about the bed) is not screened out', r6.rec?.outcome === 'committed', JSON.stringify({ o: r6.rec?.outcome, l: r6.rec?.leaks }));
+
 // the round refuses main
 git('checkout', '-q', 'main');
-const rm = spawnSync(process.execPath, ['scripts/autoharness/round.mjs', '--round', '5', '--train-dir', TRAIN, '--optimizer-cmd', 'true'], { cwd: REPO, encoding: 'utf8' });
+const rm = spawnSync(process.execPath, ['scripts/autoharness/round.mjs', '--round', '7', '--train-dir', TRAIN, '--optimizer-cmd', 'true'], { cwd: REPO, encoding: 'utf8' });
 check('a round on main is refused', rm.status === 2 && /refusing to run on main/.test(rm.stderr), rm.stderr);
 
 if (failed) { console.log(`${failed} check(s) failed — scratch repo kept at ${REPO}`); process.exit(1); }
