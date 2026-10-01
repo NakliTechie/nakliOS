@@ -97,7 +97,7 @@ await test('parseApplyPatch: add / delete / update hunk', () => {
   const r = parseApplyPatch(p);
   assert(r.ok, 'parsed');
   eq(r.ops.length, 3, 'three ops');
-  eq(r.ops[0].kind, 'add'); eq(r.ops[0].content, 'hello\nworld', 'add body');
+  eq(r.ops[0].kind, 'add'); eq(r.ops[0].content, 'hello\nworld\n', 'add body: every added line ends with a newline, as in Codex');
   eq(r.ops[1].kind, 'delete');
   eq(r.ops[2].kind, 'update');
   eq(r.ops[2].hunks[0].before, 'keep\nremove me', 'hunk before');
@@ -165,7 +165,7 @@ await test('edit reports a non-unique match instead of guessing', async () => {
   assert(/multiple matches/i.test(r), `blocked: ${r}`);
 });
 await test('apply_patch adds, updates, and deletes files', async () => {
-  const { exec, shell } = fresh();
+  const { exec, shell, face } = fresh();
   await exec('write', { path: 'b.txt', content: 'keep\nremove me\n' });
   await exec('write', { path: 'old.txt', content: 'bye\n' });
   const patch = [
@@ -182,10 +182,28 @@ await test('apply_patch adds, updates, and deletes files', async () => {
   ].join('\n');
   const r = await exec('apply_patch', { patch });
   assert(/Applied patch/.test(r), `applied: ${r}`);
-  eq((await shell.feed('cat a.txt')).output, 'hello', 'added');
-  assert((await shell.feed('cat b.txt')).output.includes('added'), 'updated');
+  // Bytes, not `cat`: the shell's output drops a trailing newline, which hid a lost one here.
+  eq((await face.invoke('fs.read', { path: 'a.txt', encoding: 'utf-8' })).data, 'hello\n', 'added');
+  eq((await face.invoke('fs.read', { path: 'b.txt', encoding: 'utf-8' })).data, 'keep\nadded\n', 'updated');
   const gone = (await shell.feed('cat old.txt')).output;
   assert(/error|not|ENOENT/i.test(gone), `deleted: ${gone}`);
+});
+await test('apply_patch keeps end-of-file bytes: an Add+Delete rename is byte-exact, an empty Add stays empty', async () => {
+  // The autoharness bench (2026-10-01): seed.txt renamed by Add File + Delete File lost its final newline.
+  const { exec, face } = fresh();
+  const bytes = async (p) => (await face.invoke('fs.read', { path: p, encoding: 'utf-8' })).data;
+  await exec('write', { path: 'seed.txt', content: 'alpha\nbeta\n' });
+  const r = await exec('apply_patch', { patch: '*** Begin Patch\n*** Add File: seed2.txt\n+alpha\n+beta\n*** Delete File: seed.txt\n*** End Patch' });
+  assert(/Applied patch/.test(r), `applied: ${r}`);
+  eq(await bytes('seed2.txt'), 'alpha\nbeta\n', 'the renamed file keeps its final newline');
+  await exec('apply_patch', { patch: '*** Begin Patch\n*** Add File: empty.txt\n*** End Patch' });
+  eq(await bytes('empty.txt'), '', 'an Add File with no body lines is empty');
+  // Update applies hunks as substring edits: the file's own end — newline or none — survives.
+  await exec('write', { path: 'nl.txt', content: 'a\nb\n' });
+  await exec('write', { path: 'bare.txt', content: 'a\nb' });
+  await exec('apply_patch', { patch: '*** Begin Patch\n*** Update File: nl.txt\n@@\n a\n-b\n+c\n*** Update File: bare.txt\n@@\n a\n-b\n+c\n*** End Patch' });
+  eq(await bytes('nl.txt'), 'a\nc\n', 'an update keeps a final newline');
+  eq(await bytes('bare.txt'), 'a\nc', 'an update adds no newline the file did not have');
 });
 await test('modes: plan/ask gate the tool set and refuse mutation', async () => {
   eq(codingToolset('plan').map((t) => t.function.name).sort().join(','), 'read,todowrite', 'plan exposes read+todo');
@@ -268,7 +286,7 @@ await test('F8: every way of seeing a file records its version — write, cat, r
   // apply_patch add + update leave the file at a known version
   await exec('apply_patch', { patch: '*** Begin Patch\n*** Add File: c.txt\n+hello\n*** End Patch\n' });
   assert(/Edited/.test(await exec('edit', { path: 'c.txt', old_string: 'hello', new_string: 'hullo' })), 'a patched-in file is a known version');
-  eq((await face.invoke('fs.read', { path: 'c.txt', encoding: 'utf-8' })).data, 'hullo', 'edited over the patched content (apply_patch adds without a trailing newline)');
+  eq((await face.invoke('fs.read', { path: 'c.txt', encoding: 'utf-8' })).data, 'hullo\n', 'edited over the patched content (apply_patch adds with a trailing newline)');
 });
 
 await test('F8: a sibling overlay merging back makes the parent\'s picture stale', async () => {
