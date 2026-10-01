@@ -16,8 +16,10 @@
 // the two match in difficulty. The base tier's ceiling tasks are train: in dev they cost runs and
 // carried no signal. Sources: scripts/bench-procedural.mjs (3), scripts/anvil-simple-battery.browser.js
 // (6 asks × 3 states), 45 base tasks written for this battery, and the hard tier (battery-hard.mjs,
-// battery-build.mjs). Every task is solvable with the file tools, the curated shell and `node`: the
-// node bed has no python.
+// battery-build.mjs). Every task is solvable with the file tools, the curated shell and `node`, so a bed
+// without python (CI's) can score every one. A task marked `pythonRef` has a reference that runs
+// `python -c`: it is checked to pass in a bed with python (AUTOHARNESS_PYODIDE, python.mjs) and to fail
+// in one without it.
 import { recoveryNote } from '../../sys/history/run-record.mjs';
 import { all, ok, no, onlyChanged, fileEq, absent, answerHas, stepsAtMost, noTools, answerFile, jsGate, sh, read, write, edit, say, done } from './gates.mjs';
 import { HARD_TASKS } from './battery-hard.mjs';
@@ -195,6 +197,10 @@ const multiTasks = [
 // ── questions whose answer has to be computed (written to answer.txt) ────────────────────────────
 const TODO_FILES = { 'src/a.js': '// TODO: validate input\nexport const a = 1;\n// TODO: add tests\n', 'src/b.js': 'export const b = 2;\n', 'src/c.js': '// TODO: remove\n// todo lowercase is not counted\nexport const c = 3; // TODO: rename\n', 'lib/d.js': '// TODO: document\n// TODO: benchmark\n' };
 const SIZES = { 'a.txt': 'a'.repeat(120), 'b.txt': 'b'.repeat(340), 'c.txt': 'c'.repeat(95), 'd.log': 'd'.repeat(200) };
+// Shipped orders over 100: the bounds (100, 99.99, 100.01) are in the data on purpose.
+const ORDERS = [[1, 'shipped', 120.5], [2, 'pending', 310], [3, 'shipped', 99.99], [4, 'shipped', 100], [5, 'cancelled', 450], [6, 'shipped', 101],
+  [7, 'shipped', 75], [8, 'pending', 15], [9, 'shipped', 260], [10, 'shipped', 100.01], [11, 'cancelled', 120], [12, 'shipped', 12]].map(([id, status, total]) => ({ id, status, total }));
+const ORDERS_BIG = ORDERS.filter((o) => o.status === 'shipped' && o.total > 100).length;
 const DOCS = { 'docs/intro.md': '# Intro\n', 'docs/setup.md': '# Setup\n', 'docs/guide/usage.md': '# Usage\n', 'docs/guide/faq.md': '# FAQ\n', 'docs/guide/notes.txt': 'notes\n', 'docs/img/logo.svg': '<svg/>\n', 'README.md': '# Root\n' };
 const queryTasks = [
   { id: 'query-count-lines', split: 'train', seed: { 'log.txt': LOG37 },
@@ -233,6 +239,10 @@ const queryTasks = [
     prompt: 'How many Markdown (.md) files are under docs/, including its subfolders? Write just the number into answer.txt.',
     gate: all(answerFile('answer.txt', '4', 'the count'), onlyChanged(['answer.txt'])),
     solve: [sh('find docs -name "*.md" | wc -l > answer.txt'), say('4')] },
+  { id: 'query-shipped-orders', split: 'train', pythonRef: true, seed: { 'orders.json': JSON.stringify(ORDERS, null, 2) + '\n' },
+    prompt: 'How many orders in orders.json have status "shipped" and a total greater than 100? Write just the number into answer.txt.',
+    gate: all(answerFile('answer.txt', String(ORDERS_BIG), 'the count'), onlyChanged(['answer.txt'])),
+    solve: [sh(`python -c "import json; n = sum(1 for o in json.load(open('orders.json')) if o['status'] == 'shipped' and o['total'] > 100); open('answer.txt', 'w').write(str(n))"`), say(String(ORDERS_BIG))] },
 ].map((t) => ({ family: 'query', ...t }));
 
 // ── transforms ─────────────────────────────────────────────────────────────────────────────────

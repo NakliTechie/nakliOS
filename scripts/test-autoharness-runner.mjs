@@ -51,6 +51,9 @@ const list = s.perTask.find((p) => p.id === 'battery-list-fresh');
 check('a task with only void reps has no pass rate (null, never 0)', list && list.passRate === null && list.outcomes.join() === 'void,void', JSON.stringify(list));
 check('input tokens are the provider\'s, summed over scored runs (2 × 100)', s.inputTokens === 200, `inputTokens ${s.inputTokens}`);
 check('the summary names the model, the harness fingerprint and the bed', s.model === 'stub' && /^[0-9a-f]{16}$/.test(s.harness) && /node bed/.test(s.bed));
+// CI runs this without AUTOHARNESS_PYODIDE; a local run with it set must say so instead
+const withPython = !!process.env.AUTOHARNESS_PYODIDE;
+check(`the summary records whether the bed had python (${withPython})`, s.python?.present === withPython && /no Kiln\/python/.test(s.bed) === !withPython && (!withPython || /^\d+\.\d+/.test(s.python.version)), JSON.stringify(s.python) + ' | ' + s.bed);
 check('a file: key source reaches the provider trimmed, and only it', auths.size === 1 && auths.has('Bearer sk-test-from-file'), [...auths].join(' | '));
 check('the per-call cost the provider reports is summed (2 scored calls × 0.00125)', s.costReported === 0.0025, `costReported ${s.costReported}`);
 const runs = await readdir(join(out, 'runs', 'battery-answer-fresh'));

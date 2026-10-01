@@ -133,8 +133,11 @@ for (const [id, reps] of runs) {
   writeFileSync(join(WS, 'failures', `${id}.md`), failureMarkdown(bad[0], { reps: reps.filter((r) => !r.void).length, failed: bad.length }));
 }
 const summaries = trainDirs.map((d) => join(d, 'summary.json')).filter(existsSync).map((f) => JSON.parse(readFileSync(f, 'utf8')));
-if (summaries.length) writeFileSync(join(WS, 'summary.json'), JSON.stringify({ model: summaries[0].model, endpoint: summaries[0].endpoint, perTask: summaries.flatMap((x) => x.perTask) }, null, 2));
-record.train = { dirs: trainDirs, tasks: runs.size, runs: nRuns, voids: nVoid, failed };
+// The bed the evidence came from: each draw's summary says whether the agent had python (python.mjs).
+// A summary without the field predates it, and that bed had none.
+const BED_PYTHON = summaries.length > 0 && summaries.every((x) => x.python?.present === true);
+if (summaries.length) writeFileSync(join(WS, 'summary.json'), JSON.stringify({ model: summaries[0].model, endpoint: summaries[0].endpoint, python: BED_PYTHON ? summaries[0].python : { present: false }, perTask: summaries.flatMap((x) => x.perTask) }, null, 2));
+record.train = { dirs: trainDirs, tasks: runs.size, runs: nRuns, voids: nVoid, failed, python: BED_PYTHON };
 log(`train: ${failed.length} of ${runs.size} task(s) failed (${nVoid} void)`);
 if (!failed.length) finish('no-failures');
 if (!GIVEN && failed.length < MIN_FAILURES) finish('thin-evidence', { note: `${failed.length} scored failure(s) across the whole train split; the optimizer needs ${MIN_FAILURES}` });
@@ -159,7 +162,10 @@ if (existsSync(join(WS, 'summary.json'))) copyFileSync(join(WS, 'summary.json'),
 const HISTORY = opt('--history');
 if (HISTORY && existsSync(HISTORY)) copyFileSync(HISTORY, join(STAGE, 'evidence', 'history.md'));
 const SOLVER = opt('--model') || ENDPOINTS[opt('--endpoint') || DEFAULT_ENDPOINT]?.model || 'an unnamed model';
-const PROMPT = `You are optimizing the harness of Anvil, a coding agent whose model is ${SOLVER}. The agent works over a user's files with tools (read, write, edit, apply_patch, shell, task_done and others) and a curated bash-like shell. In the app the agent has python (a Pyodide kernel) and node. This benchmark runs it in a bed that has node but NOT python, so a failure caused by a python call is a gap in the bed, not in the harness. Never write facts about this bed or benchmark into the harness — that python is unavailable, that the environment is a bed or a benchmark, task names, file names or answers. An edit that does is rejected before it is scored.
+const BED = BED_PYTHON
+  ? { runs: 'This benchmark runs it in a bed that has both, with the python runtime the app uses.', never: 'that the environment is a bed or a benchmark' }
+  : { runs: 'This benchmark runs it in a bed that has node but NOT python, so a failure caused by a python call is a gap in the bed, not in the harness.', never: 'that python is unavailable, that the environment is a bed or a benchmark' };
+const PROMPT = `You are optimizing the harness of Anvil, a coding agent whose model is ${SOLVER}. The agent works over a user's files with tools (read, write, edit, apply_patch, shell, task_done and others) and a curated bash-like shell. In the app the agent has python (a Pyodide kernel) and node. ${BED.runs} Never write facts about this bed or benchmark into the harness — ${BED.never}, task names, file names or answers. An edit that does is rejected before it is scored.
 
 Harness files you may edit (and ONLY these), under harness/:
 - harness/sys/ai/run-assembly.mjs — the system prompt (SYSTEM_HEAD, SYSTEM_TAIL, MODE_NOTE, LESSON_NOTE), the act-or-nudge text (ACT_NUDGE), the gate note, the toolset assembly and the run driver (driveRun).

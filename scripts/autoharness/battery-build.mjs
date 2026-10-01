@@ -3,8 +3,8 @@
 // (gates.mjs hiddenTest). The agent can write and run its own tests (`node test/x.mjs`); the hidden
 // cases are not in the workspace. Ports of the live-bed tasks (plan/bench-live-bed-2026-09-1{1,2}.md):
 // mdlite (a Markdown subset renderer), T1 inventory (package + CLI with exit codes), T2 fix-red (a
-// package with planted bugs and a red test) — in JS, because the node bed has no python. Plus six
-// spec-heavy modules (router, expression evaluator, cron, glob, template, JSON Patch).
+// package with planted bugs and a red test) — in JS, so the tier runs in CI's bed, which has no
+// python. Plus six spec-heavy modules (router, expression evaluator, cron, glob, template, JSON Patch).
 // Every expected value comes from the reference implementation below, run at load time.
 import { all, onlyChanged, hiddenTest, testSource, write, say } from './gates.mjs';
 

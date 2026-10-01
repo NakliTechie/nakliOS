@@ -9,13 +9,13 @@
 //      the copied test-run-assembly passes on the new bytes
 //   2. a tool description      → committed with the inventory rebaselined (tool:read)
 //   3. a pinned seam           → ci-red: nothing committed, the working tree restored
-//   4. no edit                 → no-edit
+//   4. no edit                 → no-edit (on evidence from a bed with python: the prompt says so)
 //   5. a bed fact              → bed-leak (screened before pins, gate or dev runs)
 //   6. python named, no bed    → committed (the screen is not a python ban)
 //   7. (round 8) no --train-dir → train drawn N at a time until 3 scored failures
 // The stub optimizer also refuses to run unless the shell's `help` was staged as context.
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { TASKS } from './autoharness/battery.mjs';
 import { runTask, scriptedInfer } from './autoharness/bed.mjs';
@@ -69,6 +69,8 @@ const rt = spawnSync(process.execPath, ['scripts/test-run-assembly.mjs'], { cwd:
 check('the pinned test passes on the new bytes', rt.status === 0, rt.stderr.slice(-400));
 check('the commit message carries the rationale', /autoharness R1: stub edit for the round test/.test(git('log', '-1', '--format=%B')));
 check('the failure evidence was written as markdown', existsSync(join(REPO, '.autoharness/round-1/failures/battery-write-fresh.md')));
+const prompt1 = readFileSync(join(REPO, '.autoharness/round-1/optimizer_prompt.md'), 'utf8');
+check('evidence with no python field came from a bed without python, and the prompt says so', /a bed that has node but NOT python/.test(prompt1) && r1.rec?.train?.python === false, prompt1.slice(0, 600));
 
 // 2. a tool description → the inventory is rebaselined
 const head1 = git('rev-parse', 'HEAD');
@@ -82,9 +84,13 @@ const r3 = round(3, ['sys/ai/run-assembly.mjs', ' Work in small, verifiable step
 check('round 3 is rejected by the gate (ci-red)', r3.rec?.outcome === 'ci-red' && r3.rec.gate.newRed.some((c) => c.includes('test-run-assembly')), `${r3.rec?.outcome} ${JSON.stringify(r3.rec?.gate?.newRed)}`);
 check('and leaves no commit and a clean harness', git('rev-parse', 'HEAD') === head2 && git('status', '--porcelain', '--', 'sys/ai', 'verify/anvil') === '', git('status', '--porcelain'));
 
-// 4. no edit
+// 4. no edit, on evidence from a bed WITH python: the prompt must not tell the optimizer python is missing
+writeFileSync(join(TRAIN, 'summary.json'), JSON.stringify({ python: { present: true, version: '0.27.8' }, perTask: [] }));
 const r4 = round(4, null);
 check('round 4 with no edit reports no-edit', r4.rec?.outcome === 'no-edit' && git('rev-parse', 'HEAD') === head2, r4.rec?.outcome);
+const prompt4 = readFileSync(join(REPO, '.autoharness/round-4/optimizer_prompt.md'), 'utf8');
+check('evidence from a bed with python: the prompt says the bed has both, and nothing says python is missing', /a bed that has both/.test(prompt4) && !/NOT python|python is unavailable/.test(prompt4) && r4.rec?.train?.python === true, prompt4.slice(0, 600));
+rmSync(join(TRAIN, 'summary.json'));
 
 // 5. a bed fact → bed-leak, rejected before pins, gate or dev runs
 const r5 = round(5, ['sys/ai/run-assembly.mjs', 'End with a one-line summary.', 'End with a one-line summary. This Node bed does not provide Python; use node for scripting.']);

@@ -16,6 +16,7 @@ import { join } from 'node:path';
 import { TASKS } from './autoharness/battery.mjs';
 import { runTask, scriptedInfer } from './autoharness/bed.mjs';
 import { scratchRepo } from './autoharness/scratch.mjs';
+import { compare } from './autoharness/score.mjs';
 
 const MARKER = 'Answer arithmetic exactly.';
 const { TMP, REPO, git } = scratchRepo('ah-loop-');
@@ -81,4 +82,9 @@ const hist = readFileSync(join(REPO, '.autoharness/history.md'), 'utf8');
 check('the optimizer history names each verdict', /Round 1: KEPT/.test(hist) && /Round 2: REJECTED/.test(hist) && /Round 3: NO-CANDIDATE/.test(hist), hist.slice(0, 400));
 check('each ledger row carries hypothesis, ΔS, ΔC and the margin (RRSI shape)', !!(k?.hypothesis && k.dS && k.dC && k.margin === 3 && k.diff));
 check('the scoring worktrees were removed', !/score/.test(git('worktree', 'list')), git('worktree', 'list'));
+// a summary with python and one without are two beds: never paired (a summary without the field had none)
+const arm = (python) => ({ summary: { ...(python === undefined ? {} : { python: { present: python } }), meanInputTokensPerRun: 1 }, runs: new Map() });
+let mixed = null;
+try { compare(arm(true), arm(false)); } catch (e) { mixed = e.message; }
+check('arms from a bed with python and one without are refused, never paired', /different beds/.test(mixed || '') && compare(arm(undefined), arm(false)).pairs === 0, mixed);
 if (failed) { console.log(`${failed} check(s) failed — scratch repo kept at ${REPO}`); process.exit(1); }

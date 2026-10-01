@@ -14,10 +14,14 @@ export function gateCommands(repo) {
   return [...yml.matchAll(/^\s*run:\s*(node\s.+?)\s*$/gm)].map((m) => m[1]).filter((c) => !SKIP.some((re) => re.test(c)));
 }
 
+// A lane runs as CI runs it: CI has no Pyodide, so a loop that gives its runs python
+// (AUTOHARNESS_PYODIDE) does not hand it to the lanes, and the tree-keyed cache stays CI's answer.
+const LANE_ENV = (() => { const e = { ...process.env }; delete e.AUTOHARNESS_PYODIDE; return e; })();
+
 function runOne(repo, command, timeoutMs) {
   return new Promise((resolve) => {
     const t0 = Date.now();
-    const p = spawn('/bin/bash', ['-c', command], { cwd: repo, stdio: ['ignore', 'pipe', 'pipe'] });
+    const p = spawn('/bin/bash', ['-c', command], { cwd: repo, env: LANE_ENV, stdio: ['ignore', 'pipe', 'pipe'] });
     let out = '';
     p.stdout.on('data', (c) => { out += c; });
     p.stderr.on('data', (c) => { out += c; });

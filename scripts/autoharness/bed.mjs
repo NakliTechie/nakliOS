@@ -7,9 +7,10 @@
 //     not only the in-loop gate. Only tasks marked `gated` also hand the gate to the loop.
 //   - the live infer returns the provider's `usage`, so the record carries input tokens per call.
 //
-// This is a NODE bed: `node` runs (the app's js-runner), python does not (no Kiln), no host context message (project notes, memory and
-// skills indexes), no recovery-note fold over a real prior record. Every number from it names this
-// bed, not the app (plan/bench-playbook.md §2).
+// This is a NODE bed: `node` runs (the app's js-runner); python runs only when AUTOHARNESS_PYODIDE names
+// a Pyodide install (python.mjs: the app's main-thread Kiln, one interpreter per run); no host context
+// message (project notes, memory and skills indexes), no recovery-note fold over a real prior record.
+// Every number from it names this bed, and whether it had python, not the app (plan/bench-playbook.md §2).
 import { makeToolExecutor } from '../../sys/ai/agent-tools.mjs';
 import { buildRigRegistry } from '../../sys/rig/registry/index.mjs';
 import { createFileops, MemoryBackend } from '../../sys/rig/fileops/index.mjs';
@@ -24,6 +25,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { systemMessage, gateNote, runToolset, driveRun, withHooks, withBedStubs, loadHooks, isSimpleAsk } from '../../sys/ai/run-assembly.mjs';
+import { bedKiln, LIMIT_MS } from './python.mjs';
 
 const decoder = new TextDecoder();
 
@@ -34,6 +36,12 @@ export function harnessFingerprint() {
   h.update(systemMessage({ mode: 'code' }).content);
   h.update(JSON.stringify(runToolset('code', { verify: true })));
   return h.digest('hex').slice(0, 16);
+}
+
+// The bed, in the words a summary carries. `python` is loadBedPython()'s result, null without python.
+export function bedDescription(python = null) {
+  const py = python ? `python via the app main-thread Kiln on Pyodide ${python.version} (one interpreter per run, kilnIsolate, ${LIMIT_MS / 1000} s limit)` : 'no Kiln/python';
+  return `node bed (scripts/autoharness/bed.mjs): in-memory workspace, the app assembly via sys/ai/run-assembly.mjs, node via the app js-runner, ${py}, no host context message`;
 }
 
 // The shell's `node` (sys/kiln/js-runner.mjs, G9) on node's worker_threads. The app hands its agent
@@ -63,8 +71,11 @@ export function freshWorkspace(seed = {}) {
   const registry = buildRigRegistry({ fs });
   const grant = createGrant({ prefixes: [''], scopes: ['fs:read', 'fs:write', 'fs:remove'] });
   const face = createAgentFace({ registry, grant, opLog: createOpLog({ fs: createFileops({ backend: new MemoryBackend() }) }), actor: 'agent' });
-  const shell = createShell({ registry, face, js: nodeJsHost });
-  const ws = { backend, fs, shell, face, hooks: null };
+  // The app hands its agent shell the kiln with kilnIsolate: every `python` starts from clean
+  // builtins, the baseline sys.path and no workspace modules cached (apps/anvil/index.html).
+  const kiln = bedKiln(fs);
+  const shell = createShell({ registry, face, js: nodeJsHost, ...(kiln ? { kiln, kilnIsolate: true } : {}) });
+  const ws = { backend, fs, shell, face, kiln, hooks: null };
   ws.ready = (async () => { for (const [p, c] of Object.entries(seed)) await fs.write(p, c); ws.hooks = await loadHooks(fs); })();
   return ws;
 }
@@ -196,6 +207,7 @@ export async function runTask(task, { infer, stamp = null, sysPrior = undefined 
     id: task.id, pass: !!g.ok, why: g.ok ? '' : String(g.why || ''), void: isVoid, crash,
     stop: result?.stop ?? 'crash', steps: metrics.steps, toolCalls: metrics.toolCalls, label: metrics.label,
     usage: out.usage, costReported: infer.costSeen ? infer.cost : null, tools: out.toolNames, answer: out.answer.slice(0, 2000), wallMs,
+    python: ws.kiln ? { ...ws.kiln.stats } : null, // what python cost this run; null in a bed without it
     changed: changedPaths(seedSnap, snapshot(ws.backend)),
     record: rec.export(),
   };

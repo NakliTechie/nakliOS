@@ -44,8 +44,12 @@ export function mcnemarP(up, down) {
   return Math.min(1, (2 * tail) / 2 ** n);
 }
 
-// Paired comparison over the (task, rep) pairs where neither run is void.
+// Paired comparison over the (task, rep) pairs where neither run is void. Both arms must come from the
+// same bed: a run with python and a run without it are not a pair (run-split's summary.python; a
+// summary without the field predates it, and that bed had none).
 export function compare(inc, cand) {
+  const py = (s) => s.summary.python?.present === true;
+  if (py(inc) !== py(cand)) throw new Error(`the two arms ran in different beds (python ${py(inc)} vs ${py(cand)}); their runs are not pairs`);
   let up = 0, down = 0, pairs = 0;
   const flippedTasks = new Set();
   for (const [k, a] of inc.runs) {

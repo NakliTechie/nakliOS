@@ -5,16 +5,19 @@
 //   node scripts/autoharness/run-split.mjs --split dev --reps 3 --out DIR [--endpoint openrouter-bunny]
 //     [--base URL --model ID --key-from SOURCE]   (override the endpoint's fields; SOURCE: opencode:<p>, file:<path>, env:<VAR>)
 //     [--tasks id,id] [--concurrency 4] [--timeout 180]
+//   AUTOHARNESS_PYODIDE=<dir>   give the agent python (python.mjs; `npm i --prefix <dir> pyodide@0.27`)
 //
 // Endpoints are named in endpoints.mjs (default openrouter-bunny); keys are read at run time and stay
 // off the process list. Nothing retries: a call that fails makes its run VOID, counted apart and never
-// scored (plan/bench-playbook.md §2). The summary names the bed, the endpoint and model, the harness
-// fingerprint and the git head, because a number without them cannot be compared with the next one.
+// scored (plan/bench-playbook.md §2). The summary names the bed (with or without python), the endpoint
+// and model, the harness fingerprint and the git head, because a number without them cannot be compared
+// with the next one.
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { TASKS, tasksIn } from './battery.mjs';
-import { runTask, liveInfer, harnessFingerprint } from './bed.mjs';
+import { runTask, liveInfer, harnessFingerprint, bedDescription } from './bed.mjs';
+import { loadBedPython, LIMIT_MS } from './python.mjs';
 import { resolveEndpoint, spend } from './endpoints.mjs';
 
 const args = process.argv.slice(2);
@@ -45,6 +48,8 @@ const jobs = tasks.flatMap((t) => Array.from({ length: REPS }, (_, rep) => ({ t,
 const t0 = Date.now();
 const log = (m) => process.stderr.write(`  [${String(Math.round((Date.now() - t0) / 1000)).padStart(5)}s] ${m}\n`);
 log(`autoharness ${ONLY.length ? 'custom' : SPLIT}: ${tasks.length} task(s) × ${REPS} rep(s) = ${jobs.length} runs, concurrency ${CONC}, model ${MODEL} @ ${BASE}`);
+const PY = await loadBedPython(); // before any run spends tokens: a wrong directory fails here
+log(PY ? `python: Pyodide ${PY.version} from ${PY.dir}, one interpreter loaded in ${PY.loadMs} ms` : 'python: none (AUTOHARNESS_PYODIDE unset)');
 const before = await spend(EP);
 await mkdir(join(OUT, 'runs'), { recursive: true });
 
@@ -84,8 +89,16 @@ const perTask = tasks.map((t) => {
 });
 const scored = results.filter((r) => !r.void);
 const rated = perTask.filter((p) => p.passRate !== null);
+// What python cost: the startup load, and per run that called it, its own interpreter's load (the
+// private SQLite one too, if the run ran sqlite3). Two beds' numbers are never compared: loop.mjs refuses.
+const loaded = results.filter((r) => r.python?.loads);
+const python = PY ? {
+  present: true, version: PY.version, dir: PY.dir, limitMs: LIMIT_MS, startupLoadMs: PY.loadMs,
+  runsCalling: results.filter((r) => r.python?.calls).length, calls: results.reduce((n, r) => n + (r.python?.calls || 0), 0),
+  runsLoading: loaded.length, meanLoadMsPerLoadingRun: loaded.length ? Math.round(mean(loaded.map((r) => r.python.loadMs))) : null,
+} : { present: false };
 const summary = {
-  bed: 'node bed (scripts/autoharness/bed.mjs): in-memory workspace, the app assembly via sys/ai/run-assembly.mjs, node via the app js-runner, no Kiln/python, no host context message',
+  bed: bedDescription(PY), python,
   split: ONLY.length ? 'custom' : SPLIT, tasks: tasks.length, reps: REPS, endpoint: EP.name, model: MODEL, base: BASE, concurrency: CONC,
   harness: harnessFingerprint(), git: gitHead(),
   started: ist(t0), ended: ist(Date.now()), wallS: Math.round(wallMs / 1000),
