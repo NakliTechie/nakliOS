@@ -22,6 +22,8 @@ plan/
 !sys/**
 !scripts/
 !scripts/*
+!scripts/autoharness/
+!scripts/autoharness/*
 !docs/
 !docs/**
 !redirects/
