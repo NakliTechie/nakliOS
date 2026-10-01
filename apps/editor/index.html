@@ -85,7 +85,7 @@ dialog{width:min(500px,calc(100vw - 30px));padding:0;border:1px solid var(--line
 <script type="module">
 import { highlightLine } from '../../sys/ai/review-highlight.mjs';
 import { loadWorkingReview, reviewVersion } from '../../sys/ai/review-diff.mjs';
-import { rangeEditRequest, rangeEditProposal, compareRangeEditIdb } from '../../sys/ai/range-edit.mjs';
+import { rangeEditRequest, rangeEditProposal, compareRangeEditIdb, rangeEditRecord, restoreRangeEditRecord, retainRangeEditIdb, cancelRangeEditIdb, discardRangeEditIdb, openRangeEditDatabase } from '../../sys/ai/range-edit.mjs';
 import { EDITOR_COMMANDS } from './commands.mjs';
 (() => {
 'use strict';
@@ -104,8 +104,8 @@ function basename(path){return String(path).split('/').filter(Boolean).at(-1)||'
 function locationLabel(id){if(id==='browser')return'Browser';return naklios.capabilities.fsBackends.find(x=>x.id===id)?.label||(id==='crate'?'Crate':'Folder')}
 function available(){return naklios.capabilities.fsBackends.map(x=>x.id)}
 
-function openDb(name,store){return new Promise((resolve,reject)=>{const request=indexedDB.open(name,1);request.onupgradeneeded=()=>request.result.createObjectStore(store);request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)})}
-async function idbAction(dbName,store,mode,action){const db=await openDb(dbName,store);return await new Promise((resolve,reject)=>{const tx=db.transaction(store,mode),os=tx.objectStore(store);let value;try{value=action(os)}catch(error){reject(error);return}tx.oncomplete=()=>resolve(value?.result);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error)})}
+function openDb(name,store){return openRangeEditDatabase(name,store,{version:name==='naklios-editor'?2:1,journal:name==='naklios-editor'})}
+async function idbAction(dbName,store,mode,action){const db=await openDb(dbName,store);try{return await new Promise((resolve,reject)=>{const tx=db.transaction(store,mode),os=tx.objectStore(store);let value;try{value=action(os)}catch(error){tx.abort();reject(error);return}tx.oncomplete=()=>resolve(value?.result);tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error)})}finally{db.close()}}
 const browserAdapter={
  async read(path){const value=await idbAction('naklios-editor','files','readonly',os=>os.get(path));if(value==null)throw new Error('Not found: '+path);return String(value)},
  async write(path,data){await idbAction('naklios-editor','files','readwrite',os=>os.put(String(data),path))},
@@ -133,7 +133,30 @@ async function walkFiles(prefix='',out=[]){for(const entry of await adapter.list
 async function refreshTree(){try{projectFiles=await walkFiles()}catch(error){projectFiles=[];setSave(error.message,false)}renderTree()}
 function renderTree(){const root=$('tree'),query=$('project-search').value.trim().toLowerCase(),files=projectFiles.filter(path=>!query||path.toLowerCase().includes(query));$('project-count').textContent=`${projectFiles.length} file${projectFiles.length===1?'':'s'}`;root.replaceChildren();if(!files.length){root.innerHTML='<div class="empty">No matching project files.</div>';return}const tree={};for(const path of files){let cursor=tree;for(const part of path.split('/'))cursor=cursor[part]||(cursor[part]={})}function renderNode(node,parent,prefix=''){for(const name of Object.keys(node).sort()){const path=prefix?`${prefix}/${name}`:name,children=node[name],folder=Object.keys(children).length>0;if(folder){const details=document.createElement('details');details.open=true;const summary=document.createElement('summary');summary.textContent=name;details.append(summary);renderNode(children,details,path);parent.append(details)}else{const button=document.createElement('button');button.className='tree-file';button.textContent=name;button.title=path;button.classList.toggle('active',tabs.find(tab=>tab.id===activeId)?.path===path);button.onclick=()=>void openProjectFile(path);parent.append(button)}}}renderNode(tree,root)}
 
-async function openProjectFile(path,options={}){path=Core.normalisePath(path);const id=`project:${activeLocation}:${path}`;let tab=tabs.find(item=>item.id===id);if(!tab){const content=await adapter.read(path),key=Core.recoveryKey(activeLocation,path),recovery=await recoveryGet(key);tab={id,kind:'project',location:activeLocation,path,name:basename(path),content,saved:content,dirty:false,recovery:recovery&&recovery.content!==content?recovery:null,recoveryKey:key};tabs.push(tab)}if(options.focus!==false)activeId=id;render();if(options.persist!==false)queueWorkspace();return tab}
+async function openProjectFile(path,options={}){path=Core.normalisePath(path);const id=`project:${activeLocation}:${path}`;let tab=tabs.find(item=>item.id===id);if(!tab){const content=await adapter.read(path),key=Core.recoveryKey(activeLocation,path),recovery=await recoveryGet(key);tab={id,kind:'project',location:activeLocation,path,name:basename(path),content,saved:content,dirty:false,recovery:recovery&&recovery.content!==content?recovery:null,recoveryKey:key};if(activeLocation==='browser')await restoreAnvilEdit(tab);tabs.push(tab)}if(options.focus!==false)activeId=id;render();if(options.persist!==false)queueWorkspace();return tab}
+
+async function restoreAnvilEdit(tab){
+  const record=await idbAction('naklios-editor','range-edits','readonly',os=>os.get(tab.path));
+  if(!record)return;
+  try{tab.rangeEdit=restoreRangeEditRecord(record,tab.path,tab.saved)}
+  catch(error){toast('Saved Anvil proposal is unavailable: '+error.message);tab.rangeEdit={id:record.id,state:'conflict',recordState:record.state};tab.rangeRecordConflict=true}
+}
+async function persistAnvilEdit(tab,stage,pending){
+  if(tab.location!=='browser')return true;
+  const db=await openDb('naklios-editor','files');
+  try{return await retainRangeEditIdb(db,'range-edits',tab.path,rangeEditRecord({...stage,state:'staged'},stage.id),{
+    filesStore:'files',signal:pending.controller.signal,
+    valid:()=>!pending.cancelled&&pendingRangeEdits.get(pending.token)===pending&&tab.rangeEdit===stage&&rangeSourceCurrent(tab,stage.proposal),
+  })}finally{db.close()}
+}
+async function removeCancelledReceipt(tab,stage){
+  const db=await openDb('naklios-editor','files');
+  try{
+    try{await cancelRangeEditIdb(db,'range-edits',tab.path,stage.id);stage.recordState='cleanup'}
+    catch(error){await discardRangeEditIdb(db,'range-edits',tab.path,stage.id,'staged');return}
+    await discardRangeEditIdb(db,'range-edits',tab.path,stage.id,'cleanup');
+  }finally{db.close()}
+}
 async function openGrant(grant){const id=`grant:${grant.token}`;if(tabs.some(tab=>tab.id===id)){activeId=id;render();return}try{const file=await naklios.files.read(grant.token),key=Core.recoveryKey('grant',`${grant.sourceAppId}:${grant.backend}:${grant.path}`),recovery=await recoveryGet(key);tabs.push({id,kind:'grant',token:grant.token,path:file.path,name:file.name,sourceAppId:file.sourceAppId,backend:file.backend,content:file.data,saved:file.data,dirty:false,recovery:recovery&&recovery.content!==file.data?recovery:null,recoveryKey:key});activeId=id;render();toast(`Opened ${file.name} with an exact-file grant`)}catch(error){toast('Open With failed: '+error.message)}}
 
 function activeTab(){return tabs.find(tab=>tab.id===activeId)||null}
@@ -142,20 +165,22 @@ function rangeSourceCurrent(tab,request){return tabs.includes(tab)&&tab.kind==='
   &&(request.backend==='browser'||naklios.capabilities.fsBackend===request.backend)}
 function renderRangeActions(){
   const tab=activeTab(),stage=tab?.rangeEdit;
-  $('edit-anvil').disabled=!tab||!!tab.rangeBusy||!!tab.rangeClosing||!!tab.rangeEdit;
-  $('cancel-anvil').hidden=![...pendingRangeEdits.values()].some(item=>item.tab===tab);
-  $('review-anvil').hidden=!stage;
+  $('edit-anvil').disabled=!tab||!!tab.rangeBusy||!!tab.rangeClosing||!!tab.rangeEdit||!!tab.rangeRecordConflict;
+  $('cancel-anvil').hidden=![...pendingRangeEdits.values()].some(item=>item.tab===tab&&!item.cancelled);
+  $('review-anvil').hidden=!stage?.proposal||stage.state==='cleanup';
   $('discard-anvil').hidden=!stage||stage.state==='applied';
+  $('discard-anvil').textContent=stage?.state==='cleanup'?'Retry cancellation cleanup':stage?.state==='conflict'?'Discard stale Anvil proposal':'Discard Anvil proposal';
   $('discard-anvil').disabled=!!tab?.rangeBusy;
   $('apply-anvil').hidden=!stage||stage.state!=='reviewed';
   $('revert-anvil').hidden=!stage||stage.state!=='applied';
-  $('apply-anvil').disabled=!!tab?.rangeBusy||tab?.location!=='browser';
+  $('apply-anvil').disabled=!!tab?.rangeBusy||tab?.location!=='browser'||[...pendingRangeEdits.values()].some(item=>item.tab===tab);
   $('revert-anvil').disabled=!!tab?.rangeBusy||tab?.location!=='browser';
 }
 async function sendSelectionToAnvil(){
   const tab=activeTab();
   if(!tab||tab.kind!=='project'){toast('This handoff needs a file in Editor’s own workspace.');return}
   if(tab.rangeEdit){toast('Discard the current proposal before sending another selection. Revert an applied proposal first.');return}
+  if(tab.rangeRecordConflict){toast('The saved proposal conflicts with current bytes. Restore the matching file before reopening its review.');return}
   if(tab.dirty||tab.rangeBusy||tab.rangeClosing){toast('Save this file before sending a selection.');return}
   if(!naklios.capabilities.hosted||!naklios.files?.experimental_editInAnvil){toast('Anvil handoff requires the NakliOS host.');return}
   if([...pendingRangeEdits.values()].some(item=>item.tab===tab)){toast('This file already has an Anvil request.');return}
@@ -187,11 +212,11 @@ async function sendSelectionToAnvil(){
   }catch(error){toast('Anvil handoff unavailable: '+error.message)}
 }
 function receiveRangeEdit(result){
-  const pending=pendingRangeEdits.get(result?.token);if(!pending)return;
-  pendingRangeEdits.delete(result.token);
+  const pending=pendingRangeEdits.get(result?.token);if(!pending)return false;
+  if(result.cancelled){pending.cancelled=true;pending.controller?.abort();if(pending.tab.rangeEdit===pending.stage)pending.tab.rangeEdit=null;if(!pending.persist)pendingRangeEdits.delete(result.token);renderRangeActions();return false}
+  if(pending.persist)return pending.persist;
   renderRangeActions();
   try{
-    if(result.cancelled)throw new Error('The request ended without a staged proposal. The source remains unchanged');
     const {tab,request}=pending;
     if(!rangeSourceCurrent(tab,request))throw new Error('The source changed during the Anvil run. Its proposal was not applied');
     // The retained request establishes identity; incoming identity cannot select a new target.
@@ -199,12 +224,32 @@ function receiveRangeEdit(result){
         ||result.request?.backend!==request.backend||result.request?.before!==request.before
         ||result.request?.version!==request.version)throw new Error('Proposal does not match the selected source');
     const proposal=rangeEditProposal(request,result.after);
-    tab.rangeEdit={proposal,run:result.run,state:'staged'};
+    if(typeof result.deliveryId!=='string'||!result.deliveryId||result.deliveryId.length>128)throw new Error('Proposal lacks a delivery identity');
+    const stage={proposal,run:result.run,state:'staged',id:result.deliveryId};
+    tab.rangeEdit=stage;
+    pending.token=result.token;pending.stage=stage;pending.controller=new AbortController();
+    if(tab.location==='browser'){
+      pending.persist=persistAnvilEdit(tab,stage,pending).then(async()=>{
+        pending.retained=true;
+        if(pending.cancelled){await removeCancelledReceipt(tab,stage);pendingRangeEdits.delete(result.token);renderRangeActions();return false}
+        pendingRangeEdits.delete(result.token);renderRangeActions();return true;
+      }).catch(error=>{
+        if(pending.cancelled&&pending.retained){
+          tab.rangeEdit={...stage,state:'cleanup',recordState:stage.recordState||'staged'};tab.rangeRecordConflict=true;
+          pendingRangeEdits.delete(result.token);
+          toast('Cancellation cleanup failed: '+error.message+'. Retry cleanup before starting another selection.');renderRangeActions();return false;
+        }
+        if(tab.rangeEdit===stage)tab.rangeEdit=null;
+        if(pending.cancelled)pendingRangeEdits.delete(result.token);else pending.persist=null;
+        toast('Proposal could not be retained: '+error.message);renderRangeActions();return false;
+      });
+    }else{pendingRangeEdits.delete(result.token);pending.persist=Promise.resolve(true)}
     renderRangeActions();toast('Anvil returned a staged edit. Review it before applying.');
-  }catch(error){toast('Anvil proposal refused: '+error.message)}
+    return pending.persist;
+  }catch(error){pendingRangeEdits.delete(result.token);toast('Anvil proposal refused: '+error.message);return false}
 }
 function reviewAnvilEdit(){
-  const tab=activeTab(),stage=tab?.rangeEdit;if(!stage)return;
+  const tab=activeTab(),stage=tab?.rangeEdit;if(!stage?.proposal||stage.state==='cleanup')return;
   if(stage.state!=='applied'&&!rangeSourceCurrent(tab,stage.proposal)){toast('The source changed. This proposal cannot be applied.');return}
   reviewData={tabId:tab.id,rows:stage.proposal.diff.hunks.flatMap(h=>h.rows),diff:stage.proposal.diff,label:'saved → Anvil proposal'};
   if(stage.state==='staged')stage.state='reviewed';
@@ -214,22 +259,34 @@ function reviewAnvilEdit(){
 function cancelAnvilRequest(){
   const tab=activeTab();
   for(const [token,pending] of pendingRangeEdits){
-    if(pending.tab===tab){pendingRangeEdits.delete(token);naklios.files.release(token)}
+    if(pending.tab===tab){pending.cancelled=true;pending.controller?.abort();if(tab.rangeEdit===pending.stage)tab.rangeEdit=null;if(!pending.persist)pendingRangeEdits.delete(token);naklios.files.release(token)}
   }
-  renderRangeActions();toast('Anvil request cancelled. The source remains unchanged.');
+  renderRangeActions();toast('Anvil request stopped. Pending proposal cleanup may still be running.');
 }
-function discardAnvilEdit(){
+async function discardAnvilEdit(){
   const tab=activeTab();if(!tab?.rangeEdit||tab.rangeBusy)return;
   if(tab.rangeEdit.state==='applied'){toast('Revert the applied edit before discarding its proposal.');return}
-  tab.rangeEdit=null;if(reviewData?.tabId===tab.id){reviewData=null;if(readerMode==='diff')readerMode='read'}
+  const stage=tab.rangeEdit;
+  if(tab.location==='browser'){
+    tab.rangeBusy=true;renderRangeActions();
+    try{
+      const db=await openDb('naklios-editor','files');
+      try{await discardRangeEditIdb(db,'range-edits',tab.path,stage.id,stage.recordState||(stage.state==='reviewed'?'staged':stage.state),{
+        filesStore:'files',allowStaleApplied:stage.state==='conflict'&&stage.recordState==='applied',
+      })}finally{db.close()}
+    }catch(error){toast('Discard refused: '+error.message);return}finally{tab.rangeBusy=false;renderRangeActions()}
+  }
+  tab.rangeEdit=null;tab.rangeRecordConflict=false;if(reviewData?.tabId===tab.id){reviewData=null;if(readerMode==='diff')readerMode='read'}
   render();toast('Anvil proposal discarded. The source remains unchanged.');
 }
 async function beforeRangeClose(){
   for(const tab of tabs){tab.rangeClosing=true;tab.rangeController?.abort();}
   await Promise.all(tabs.map(tab=>tab.rangeCommit).filter(Boolean));
+  await Promise.all([...pendingRangeEdits.values()].map(item=>item.persist).filter(Boolean));
 }
 async function commitRangeEdit(revert=false){
   const tab=activeTab(),stage=tab?.rangeEdit;
+  if([...pendingRangeEdits.values()].some(item=>item.tab===tab))return;
   if(!stage||stage.state!==(revert?'applied':'reviewed'))return;
   if(tab.kind!=='project'||tab.location!=='browser'||activeLocation!=='browser'){toast('This storage cannot safely apply or revert concurrent file changes.');return}
   const {proposal}=stage,expected=revert?proposal.after:proposal.before,replacement=revert?proposal.before:proposal.after;
@@ -243,6 +300,7 @@ async function commitRangeEdit(revert=false){
     await compareRangeEditIdb(db,'files',tab.path,expected,replacement,{
       valid:()=>activeTab()===tab&&activeLocation==='browser'&&tab.rangeEdit===stage&&!tab.dirty&&tab.saved===expected&&!tab.rangeClosing,
       signal:tab.rangeController.signal,
+      journal:{store:'range-edits',value:rangeEditRecord({...stage,state:revert?'reverted':'applied'},stage.id)},
     });
     const bufferUnchanged=tab.content===expected&&!tab.dirty;
     tab.saved=replacement;if(bufferUnchanged)tab.content=replacement;tab.dirty=tab.content!==replacement;
@@ -324,8 +382,8 @@ function renderReaderRows(viewportHeight){
 
 async function saveTab(tab){if(!tab?.dirty||tab.rangeBusy)return;clearTimeout(saveTimers.get(tab.id));saveTimers.delete(tab.id);try{if(tab.kind==='grant')await naklios.files.write(tab.token,tab.content);else{if(tab.location!==activeLocation)throw new Error('Switch back to the file storage location before saving');await adapter.write(tab.path,tab.content)}tab.saved=tab.content;tab.dirty=false;tab.recovery=null;await recoveryDelete(tab.recoveryKey);setSave('Saved');renderTabs()}catch(error){setSave('Recovery saved · '+error.message,false);throw error}}
 function scheduleSave(tab){clearTimeout(saveTimers.get(tab.id));saveTimers.set(tab.id,setTimeout(()=>void saveTab(tab).catch(()=>{}),900))}
-async function saveAll(){await Promise.all(tabs.map(tab=>tab.rangeCommit).filter(Boolean));for(const tab of [...tabs])if(tab.dirty)await saveTab(tab);await queueWorkspace();setSave('Saved')}
-async function closeTab(tab){if(tab.rangeBusy){toast('Wait for the file operation to finish.');return}try{if(tab.dirty)await saveTab(tab)}catch(error){toast(`Could not close ${tab.name}: ${error.message}`);return}if(tab.kind==='grant')naklios.files.release(tab.token);for(const [token,pending] of pendingRangeEdits){if(pending.tab===tab){pendingRangeEdits.delete(token);naklios.files.release(token)}}tabs=tabs.filter(item=>item!==tab);if(activeId===tab.id)activeId=tabs.at(-1)?.id||null;render();queueWorkspace()}
+async function saveAll(){await Promise.all(tabs.map(tab=>tab.rangeCommit).filter(Boolean));await Promise.all([...pendingRangeEdits.values()].map(item=>item.persist).filter(Boolean));for(const tab of [...tabs])if(tab.dirty)await saveTab(tab);await queueWorkspace();setSave('Saved')}
+async function closeTab(tab){if(tab.rangeBusy){toast('Wait for the file operation to finish.');return}const receipts=[...pendingRangeEdits.values()].filter(item=>item.tab===tab&&item.persist).map(item=>item.persist);if(receipts.length){tab.rangeBusy=true;renderRangeActions();try{await Promise.all(receipts)}finally{tab.rangeBusy=false;renderRangeActions()}}try{if(tab.dirty)await saveTab(tab)}catch(error){toast(`Could not close ${tab.name}: ${error.message}`);return}if(tab.kind==='grant')naklios.files.release(tab.token);for(const [token,pending] of pendingRangeEdits){if(pending.tab===tab){pendingRangeEdits.delete(token);naklios.files.release(token)}}tabs=tabs.filter(item=>item!==tab);if(activeId===tab.id)activeId=tabs.at(-1)?.id||null;render();queueWorkspace()}
 
 async function ensureSubscription(){unsubscribe?.();unsubscribe=null;if(activeLocation==='browser')return;try{unsubscribe=await naklios.fs.subscribe('',event=>{if(event.op==='disconnected'){unsubscribe=null;setSave('Storage disconnected; recoveries remain in Browser',false);return}const tab=tabs.find(item=>item.kind==='project'&&item.location===activeLocation&&item.path===event.path);if(!tab){void refreshTree();return}if(tab.dirty){toast(`${tab.name} changed elsewhere. Your unsaved recovery was kept.`);return}void adapter.read(tab.path).then(content=>{tab.content=tab.saved=content;if(reviewData?.tabId===tab.id){reviewData=null;if(readerMode==='diff')readerMode='read';toast('File changed; refresh Git review.')}render()}).catch(()=>{})})}catch(error){setSave('Live updates unavailable: '+error.message,false)}}
 

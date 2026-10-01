@@ -28,9 +28,9 @@ const server=createServer(async(req,res)=>{
     }
     if(req.method!=='GET'){res.writeHead(405).end();return}
     if(url.pathname==='/test.html'){
-      res.writeHead(200,{'Content-Type':'text/html'}).end(`<script type="module">try{const {runNativeRangeEditCases}=await import('/scripts/range-edit-browser-cases.mjs');const result=await runNativeRangeEditCases();await fetch('/report/${token}',{method:'POST',body:JSON.stringify(result)})}catch(e){await fetch('/report/${token}',{method:'POST',body:JSON.stringify({error:String(e.stack||e)})})}</script>`);return;
+      res.writeHead(200,{'Content-Type':'text/html'}).end(`<script type="module">try{const {runNativeRangeEditCases}=await import('/scripts/range-edit-browser-cases.mjs');const {runRangeEditLifecycleCases}=await import('/scripts/range-edit-lifecycle-browser-cases.mjs');const {runRangeEditReceiptCases,runStaleAppliedRangeEditCases,runMissingSourceRangeEditCases,runCancelledReloadRangeEditCases}=await import('/scripts/range-edit-receipt-browser-cases.mjs');const result=await runNativeRangeEditCases();result.lifecycle=await runRangeEditLifecycleCases();result.receipt=await runRangeEditReceiptCases();result.staleApplied=await runStaleAppliedRangeEditCases();result.missingSource=await runMissingSourceRangeEditCases();result.cancelledReload=await runCancelledReloadRangeEditCases();await fetch('/report/${token}',{method:'POST',body:JSON.stringify(result)})}catch(e){await fetch('/report/${token}',{method:'POST',body:JSON.stringify({error:String(e.stack||e)})})}</script>`);return;
     }
-    if(!(url.pathname.startsWith('/sys/')&&url.pathname.endsWith('.mjs'))&&url.pathname!=='/scripts/range-edit-browser-cases.mjs'){
+    if(!(url.pathname.startsWith('/sys/')&&url.pathname.endsWith('.mjs'))&&!['/scripts/range-edit-browser-cases.mjs','/scripts/range-edit-lifecycle-browser-cases.mjs','/scripts/range-edit-receipt-browser-cases.mjs'].includes(url.pathname)){
       res.writeHead(404).end();return;
     }
     const target=await realpath(path.resolve(root,'.'+decodeURIComponent(url.pathname)));
@@ -44,7 +44,13 @@ try{
   browser=spawn(executable,['--headless=new','--no-sandbox','--disable-gpu','--no-first-run','--no-default-browser-check','--disable-background-networking','--user-data-dir='+profile,`http://127.0.0.1:${server.address().port}/test.html`],{stdio:'ignore'});
   browser.once('error',rejectReport);browser.once('exit',code=>{if(code!==null)rejectReport(new Error('Chrome exited before its receipt: '+code))});
   const result=await report;assert.equal(result.error,undefined,result.error);assert.equal(result.passed,12);
-  assert.ok(result.rows.every(row=>row.pass===true));console.log(JSON.stringify({backend:'native Chrome IndexedDB',providerCalls:0,...result}));
+  assert.ok(result.rows.every(row=>row.pass===true));
+  assert.equal(result.lifecycle.passed,11);assert.ok(result.lifecycle.rows.every(row=>row.pass===true));
+  assert.equal(result.receipt.passed,7);assert.ok(result.receipt.rows.every(row=>row.pass===true));
+  assert.equal(result.staleApplied.passed,3);assert.ok(result.staleApplied.rows.every(row=>row.pass===true));
+  assert.equal(result.missingSource.passed,1);assert.ok(result.missingSource.rows.every(row=>row.pass===true));
+  assert.equal(result.cancelledReload.passed,5);assert.ok(result.cancelledReload.rows.every(row=>row.pass===true));
+  console.log(JSON.stringify({backend:'native Chrome IndexedDB',providerCalls:0,...result}));
 }finally{
   clearTimeout(timer);if(browser?.pid&&browser.exitCode===null){const exited=new Promise(resolve=>browser.once('exit',resolve));browser.kill('SIGTERM');await exited}
   await new Promise(resolve=>server.close(resolve));await rm(profile,{recursive:true,force:true});

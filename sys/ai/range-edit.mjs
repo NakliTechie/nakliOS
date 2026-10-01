@@ -115,11 +115,11 @@ export function createRangeEditBackend(request, { valid = () => true } = {}) {
 
 // The compare and put share one readwrite transaction. No await occurs between
 // them. Another tab's overlapping writer runs wholly before or after this one.
-export function compareRangeEditIdb(db, storeName, key, expected, replacement, { valid = () => true, signal = null } = {}) {
+export function compareRangeEditIdb(db, storeName, key, expected, replacement, { valid = () => true, signal = null, journal = null } = {}) {
   text(expected, RANGE_EDIT_LIMITS.bytes, 'Expected source');
   text(replacement, RANGE_EDIT_LIMITS.bytes, 'Replacement');
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, 'readwrite'), store = tx.objectStore(storeName);
+    const tx = db.transaction(journal ? [storeName, journal.store] : storeName, 'readwrite'), store = tx.objectStore(storeName);
     let failure = null;
     const abort=()=>{failure=Object.assign(new Error('Source operation cancelled'),{code:'ECANCELED'});try{tx.abort()}catch{}};
     const cleanup=()=>signal?.removeEventListener('abort',abort);
@@ -127,6 +127,7 @@ export function compareRangeEditIdb(db, storeName, key, expected, replacement, {
     tx.onabort = tx.onerror = () => {cleanup();reject(failure || tx.error || new Error('Conditional source write failed'))};
     signal?.addEventListener('abort',abort,{once:true});
     if(signal?.aborted){abort();return;}
+    const compare = () => {
     const read = store.get(key);
     read.onsuccess = () => {
       try {
@@ -135,10 +136,128 @@ export function compareRangeEditIdb(db, storeName, key, expected, replacement, {
           tx.abort(); return;
         }
         store.put(replacement, key);
+        if (journal) tx.objectStore(journal.store).put(journal.value, key);
       } catch (error) {
         failure = error;
         try { tx.abort(); } catch { reject(error); }
       }
     };
+    };
+    if(journal){
+      const prior=tx.objectStore(journal.store).get(key);
+      prior.onsuccess=()=>{
+        const priorState=prior.result?.state,nextState=journal.value.state;
+        const allowed=nextState==='applied'?['staged','reviewed'].includes(priorState):nextState==='reverted'&&priorState==='applied';
+        if(prior.result?.id!==journal.value.id||!allowed){failure=Object.assign(new Error('Retained proposal changed'),{code:'ESTALE'});tx.abort();return}compare();
+      };
+    }else compare();
+  });
+}
+
+// Persist only validated proposal data. Host tokens and delivery authority never
+// survive app reload. Restore requires exact source bytes, not a version hash.
+export function rangeEditRecord(stage, id) {
+  if (typeof id !== 'string' || !id || id.length > 128) fail('EINVAL', 'Invalid proposal identity');
+  if (!['staged', 'reviewed', 'applied', 'reverted', 'cleanup'].includes(stage?.state)) fail('EINVAL', 'Invalid proposal state');
+  const proposal = rangeEditProposal(stage.proposal, stage.proposal.after);
+  if (proposal.backend !== 'browser' || proposal.project !== 'editor:browser') fail('EINVAL', 'Only Browser proposals can be retained');
+  const run = stage.run;
+  if (!run || typeof run.task !== 'string' || run.task.length > 128 || typeof run.project !== 'string'
+      || run.project.length > 128 || !Number.isSafeInteger(run.sequence) || run.sequence < 1) fail('EINVAL', 'Invalid proposal run');
+  const {after, diff, afterVersion, ...request} = proposal;
+  return {version:1, id, request, after, run:{task:run.task,project:run.project,sequence:run.sequence},state:stage.state};
+}
+
+export function restoreRangeEditRecord(record, path, current) {
+  if (!record || record.version !== 1) fail('EINVAL', 'Invalid saved proposal');
+  const proposal = rangeEditProposal(record.request, record.after);
+  const clean = rangeEditRecord({proposal,run:record.run,state:record.state},record.id);
+  if (proposal.path !== path || current !== (clean.state === 'applied' ? proposal.after : proposal.before)) {
+    fail('ESTALE', 'Saved proposal no longer matches the file');
+  }
+  // Reviewing again is required after restart, even if it was reviewed earlier.
+  return {proposal,run:clean.run,state:clean.state === 'reviewed' ? 'staged' : clean.state,id:clean.id};
+}
+
+// One bounded record per path. A concurrent Editor cannot replace another
+// proposal or downgrade an applied state with a late delivery replay.
+export function retainRangeEditIdb(db, storeName, path, record, {signal=null,valid=()=>true,filesStore=null}={}) {
+  const clean = rangeEditRecord({proposal:rangeEditProposal(record.request,record.after),run:record.run,state:record.state},record.id);
+  if (clean.request.path !== path) fail('EINVAL', 'Proposal path mismatch');
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(filesStore?[storeName,filesStore]:storeName,'readwrite'),store=tx.objectStore(storeName);
+    let failure;
+    const abort=(message,code='ESTALE')=>{failure=Object.assign(new Error(message),{code});try{tx.abort()}catch{}};
+    const cancel=()=>abort('Proposal retention cancelled','ECANCELED');
+    const cleanup=()=>signal?.removeEventListener('abort',cancel);
+    tx.oncomplete=()=>{cleanup();resolve(true)};tx.onabort=tx.onerror=()=>{cleanup();reject(failure||tx.error||new Error('Proposal retention failed'))};
+    signal?.addEventListener('abort',cancel,{once:true});if(signal?.aborted){cancel();return}
+    const put=()=>{try{if(!valid()){abort('Proposal receipt context changed');return}store.put(clean,path)}catch(error){failure=error;tx.abort()}};
+    const existing=store.get(path);
+    existing.onsuccess=()=>{
+      if(existing.result){
+        if(existing.result.id!==clean.id){abort('A different proposal is already retained');return}
+        // Delivery retries are idempotent; never reset a later applied state.
+        if(JSON.stringify(existing.result.request)!==JSON.stringify(clean.request)||existing.result.after!==clean.after){abort('Proposal identity changed');return}
+        return;
+      }
+      const count=store.count();count.onsuccess=()=>{
+        if(count.result>=16){abort('Discard an old proposal before retaining another');return}
+        if(filesStore){const source=tx.objectStore(filesStore).get(path);source.onsuccess=()=>{if(source.result!==clean.request.before){abort('Source changed before proposal receipt');return}put()}}
+        else put();
+      };
+    };
+  });
+}
+
+// Commit cancellation intent before attempting journal deletion. A failed delete
+// must never restore this receipt as an actionable proposal after restart.
+export function cancelRangeEditIdb(db,storeName,path,id){
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(storeName,'readwrite'),store=tx.objectStore(storeName),read=store.get(path);
+    let failure;
+    read.onsuccess=()=>{
+      const record=read.result;
+      if(record?.id!==id||!['staged','cleanup'].includes(record.state)){
+        failure=Object.assign(new Error('Retained proposal changed before cancellation'),{code:'ESTALE'});tx.abort();return;
+      }
+      try{store.put(rangeEditRecord({proposal:rangeEditProposal(record.request,record.after),run:record.run,state:'cleanup'},id),path)}
+      catch(error){failure=error;tx.abort()}
+    };
+    tx.oncomplete=()=>resolve(true);tx.onabort=tx.onerror=()=>reject(failure||tx.error||new Error('Proposal cancellation retention failed'));
+  });
+}
+
+export function discardRangeEditIdb(db,storeName,path,id,expectedState,{filesStore=null,allowStaleApplied=false}={}){
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(filesStore?[storeName,filesStore]:storeName,'readwrite'),store=tx.objectStore(storeName),read=store.get(path);
+    let failure;
+    const refuse=()=>{failure=Object.assign(new Error('Retained proposal changed or still requires Revert'),{code:'ESTALE'});tx.abort()};
+    read.onsuccess=()=>{
+      if(read.result?.id!==id||read.result.state!==expectedState){refuse();return}
+      if(read.result.state==='applied'){
+        if(!allowStaleApplied||!filesStore||read.result.request?.path!==path){refuse();return}
+        const source=tx.objectStore(filesStore).get(path);
+        source.onsuccess=()=>{if((source.result!==undefined&&typeof source.result!=='string')||source.result===read.result.after){refuse();return}store.delete(path)};
+        return;
+      }
+      store.delete(path);
+    };
+    tx.oncomplete=()=>resolve(true);tx.onabort=tx.onerror=()=>reject(failure||tx.error||new Error('Proposal discard failed'));
+  });
+}
+
+export function openRangeEditDatabase(name,store,{version=1,journal=false}={}){
+  return new Promise((resolve,reject)=>{
+    let settled=false;
+    const request=indexedDB.open(name,version);
+    request.onupgradeneeded=()=>{
+      if(settled){request.transaction.abort();return}
+      if(!request.result.objectStoreNames.contains(store))request.result.createObjectStore(store);
+      if(journal&&!request.result.objectStoreNames.contains('range-edits'))request.result.createObjectStore('range-edits');
+    };
+    request.onsuccess=()=>{if(settled){request.result.close();return}settled=true;request.result.onversionchange=()=>request.result.close();resolve(request.result)};
+    request.onerror=()=>{if(!settled){settled=true;reject(request.error)}};
+    request.onblocked=()=>{if(!settled){settled=true;reject(Object.assign(new Error('Close older Editor tabs to update proposal storage.'),{code:'ELOCKED'}))}};
   });
 }

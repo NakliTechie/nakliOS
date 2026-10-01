@@ -5236,6 +5236,7 @@ function releaseFileGrantsForSource(source){
 
 function revokeFileGrant(grant){
   fileGrants.delete(grant.token);
+  if(grant.delivery){clearInterval(grant.delivery.timer);clearTimeout(grant.delivery.timeout);grant.delivery.reject(new Error('Proposal delivery cancelled before acknowledgement'))}
   if (grant.kind === 'range-edit') {
     try { grant.targetSource?.postMessage({ type:'naklios:file:grant',
       grant:{ token:grant.token, kind:'range-edit-cancelled' } }, '*'); } catch(_){}
@@ -5309,6 +5310,7 @@ async function fileHostHandle(source, msg, targetAppId, op){
   }
   if (grant.kind === 'range-edit') {
     assertRangeEditGrant(grant);
+    if(grant.delivery)throw new Error('Snapshot has ended; proposal acknowledgement is pending');
     if (op !== 'read') throw new Error('Range edits can only propose a staged change');
     return { data:grant.request.before, name:grant.name, path:grant.sourcePath,
       sourceAppId:grant.sourceAppId, backend:grant.backendId, kind:grant.kind, request:grant.request, expires:grant.expires };
@@ -5431,10 +5433,61 @@ async function fileHostProposeEdit(source, msg, appId){
       || run.project.length > 128 || typeof run.sequence !== 'number' || !Number.isSafeInteger(run.sequence) || run.sequence < 1) {
     throw new Error('Proposal lacks its Anvil run identity');
   }
-  grant.sourceSource.postMessage({ type:'naklios:file:edit-proposal',
-    proposal:{ token:grant.token, request:grant.request, after:proposal.after,
-      run:{ task:run.task, project:run.project, sequence:run.sequence } } }, '*');
-  fileGrants.delete(grant.token); // a one-shot result; replay never overwrites another proposal
+  const identity=JSON.stringify({after:proposal.after,run:{task:run.task,project:run.project,sequence:run.sequence}});
+  if(grant.delivery){
+    if(grant.delivery.identity!==identity)throw new Error('A different proposal is already being delivered');
+    return grant.delivery.promise;
+  }
+  const delivery={id:newFileGrantToken(),identity,attempts:0,deadline:Date.now()+12000};
+  delivery.promise=new Promise((resolve,reject)=>{delivery.resolve=resolve;delivery.reject=reject});
+  grant.delivery=delivery;
+  const retry=async()=>{
+    if(fileGrants.get(grant.token)!==grant){clearInterval(delivery.timer);return}
+    if(delivery.retrying)return;
+    delivery.retrying=true;
+    try{
+      assertRangeEditGrant(grant);
+      if(grant.backendId!=='browser')await recheckRangeEditSource(grant);
+      if(Date.now()>=delivery.deadline||delivery.attempts>=12)throw new Error('Editor did not acknowledge proposal retention');
+      delivery.attempts++;
+      grant.sourceSource.postMessage({type:'naklios:file:edit-proposal',proposal:{token:grant.token,deliveryId:delivery.id,
+        request:grant.request,after:proposal.after,run:{task:run.task,project:run.project,sequence:run.sequence}}},'*');
+    }catch(error){clearInterval(delivery.timer);delivery.reject(error);revokeFileGrant(grant)}finally{delivery.retrying=false}
+  };
+  delivery.timeout=setTimeout(()=>{delivery.reject(new Error('Editor did not acknowledge proposal retention'));revokeFileGrant(grant)},12000);
+  delivery.timer=setInterval(retry,1000);
+  retry();
+  return delivery.promise;
+}
+
+function fileHostEditAck(source,msg,appId){
+  const grant=fileGrants.get(String(msg.token||''));
+  if(appId!=='editor'||!grant?.delivery||grant.sourceSource!==source||grant.delivery.id!==msg.deliveryId)return false;
+  assertRangeEditGrant(grant);
+  if(grant.backendId!=='browser'){
+    if(!grant.delivery.ackPromise)grant.delivery.ackPromise=(async()=>{
+      try{await recheckRangeEditSource(grant);return finishRangeEditAck(grant)}catch(error){revokeFileGrant(grant);throw error}
+    })();
+    return grant.delivery.ackPromise;
+  }
+  return finishRangeEditAck(grant);
+}
+
+async function recheckRangeEditSource(grant){
+  assertRangeEditGrant(grant);
+  const {RANGE_EDIT_LIMITS}=await import('./sys/ai/range-edit.mjs');
+  const bytes=await BACKENDS[grant.backendId].readBinary(fsSafePath('editor',grant.sourcePath),RANGE_EDIT_LIMITS.bytes);
+  assertRangeEditGrant(grant);
+  if(new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(bytes)!==grant.request.before)throw new Error('Source changed before proposal acknowledgement');
+}
+
+function finishRangeEditAck(grant){
+  assertRangeEditGrant(grant);
+  if(Date.now()>=grant.delivery.deadline){revokeFileGrant(grant);throw new Error('Proposal acknowledgement expired')}
+  clearInterval(grant.delivery.timer);
+  clearTimeout(grant.delivery.timeout);
+  fileGrants.delete(grant.token);
+  grant.delivery.resolve(true);
   return true;
 }
 
@@ -8402,6 +8455,7 @@ window.addEventListener('message', async e => {
       if (op === 'openWith') reply.result = await fileHostOpenWith(e.source, msg, appId);
       else if (op === 'editInAnvil') reply.result = await fileHostEditInAnvil(e.source, msg, appId);
       else if (op === 'proposeEdit') reply.result = await fileHostProposeEdit(e.source, msg, appId);
+      else if (op === 'edit-ack') reply.result = await fileHostEditAck(e.source, msg, appId);
       else if (op === 'read' || op === 'write') reply.result = await fileHostHandle(e.source, msg, appId, op);
       else if (op === 'release') {
         const grant = fileGrants.get(String(msg.token || ''));

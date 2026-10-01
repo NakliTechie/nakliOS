@@ -56,6 +56,9 @@ jobs:
       - name: Verify Editor and Anvil range-edit handler authority
         run: node scripts/test-range-edit-handlers.mjs
 
+      - name: Verify acknowledged range-edit delivery and bounded retries
+        run: node scripts/test-range-edit-delivery.mjs
+
       - name: Verify Books stays hosted and uses explicit Folder or Crate storage
         run: node scripts/test-books-storage-bridge.mjs
 

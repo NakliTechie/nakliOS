@@ -151,6 +151,28 @@
   var pendingFileGrants = [];
   var fileEditListeners = new Set();
   var pendingFileEdits = [];
+  var acceptedFileEdits = new Map();
+  var acceptingFileEdits = new Map();
+
+  function deliverFileEdit(proposal) {
+    var id=String(proposal.deliveryId||'');
+    var ack=function(){if(id)send('naklios:file:edit-ack',{token:proposal.token,deliveryId:id});};
+    if(id&&acceptedFileEdits.get(id)===proposal.token){ack();return;}
+    if(id&&acceptingFileEdits.has(id))return;
+    if(!fileEditListeners.size){
+      if(pendingFileEdits.length<16&&!pendingFileEdits.some(function(p){return p.token===proposal.token&&p.deliveryId===proposal.deliveryId;}))pendingFileEdits.push(proposal);
+      return;
+    }
+    var work=Promise.all(Array.from(fileEditListeners).map(function(cb){
+      try{return Promise.resolve(cb(proposal)).catch(function(){return false;});}catch(_){return Promise.resolve(false);}
+    })).then(function(results){
+      if(results.some(function(value){return value===true;})){
+        if(id){acceptedFileEdits.set(id,proposal.token);while(acceptedFileEdits.size>16)acceptedFileEdits.delete(acceptedFileEdits.keys().next().value);}
+        ack();
+      }
+    }).finally(function(){if(id)acceptingFileEdits.delete(id);});
+    if(id)acceptingFileEdits.set(id,work);
+  }
   var reviewDecisionHandler = null;
   var appliedReviewIds = new Set();
   var applyingReviewIds = new Map();
@@ -608,9 +630,7 @@
         try { cb(grant); } catch (_) {}
       });
     } else if (msg.type === 'naklios:file:edit-proposal' && msg.proposal) {
-      if (!fileEditListeners.size) {
-        if (pendingFileEdits.length < 16) pendingFileEdits.push(msg.proposal);
-      } else fileEditListeners.forEach(function (cb) { try { cb(msg.proposal); } catch (_) {} });
+      deliverFileEdit(msg.proposal);
     } else if (msg.type === 'naklios:review:commit' && msg.proposal_id) {
       var reviewId = String(msg.proposal_id);
       if (appliedReviewIds.has(reviewId)) {
@@ -787,7 +807,7 @@
       experimental_onEditProposal: function (cb) {
         if (typeof cb !== 'function') return function () {};
         fileEditListeners.add(cb);
-        pendingFileEdits.splice(0).forEach(function (proposal) { try { cb(proposal); } catch (_) {} });
+        pendingFileEdits.splice(0).forEach(deliverFileEdit);
         return function () { fileEditListeners.delete(cb); };
       },
       // Ask NakliOS to open one app-relative file in another cooperative app.

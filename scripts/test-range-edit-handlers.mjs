@@ -14,17 +14,18 @@ const req=rangeModule.rangeEditRequest({path:'main.js',project:'editor:browser',
 function hostHarness({confirm=()=>true,backend='browser',clock=Date}={}){
   const sent=[],source={postMessage:msg=>sent.push({to:'editor',msg})},target={postMessage:msg=>sent.push({to:'anvil',msg})};
   const originalIdentity={};
-  const ctx={fileGrants:new Map(),state:{appPermissions:{editor:{granted:true,backend}},fsHandle:originalIdentity},
+  const ctx={setInterval,clearInterval,setTimeout,clearTimeout,fileGrants:new Map(),state:{appPermissions:{editor:{granted:true,backend}},fsHandle:originalIdentity},
     APPS:[{id:'editor',kind:'system'},{id:'anvil',kind:'system'}],
     openWindows:{editor:{querySelector:()=>({contentWindow:source})},anvil:{querySelector:()=>({contentWindow:target})}},
     BACKENDS:{fsa:{isConnected:()=>true,readBinary:async()=>new TextEncoder().encode(req.before)}},
     Date:clock,TextDecoder,rangeModule,source,target,sent,fsSafePath:(app,path)=>`apps/${app}/${path}`,
     _dlgEscape:String,nakliosConfirm:confirm,newFileGrantToken:()=>`token-${sent.length}-${Math.random()}`,
     openApp:()=>{},deliverPendingFileGrants:()=>{for(const g of ctx.fileGrants.values())g.targetSource=target}};
-  const names=['fileGrantBackendIdentity','revokeFileGrant','assertRangeEditGrant','fileHostEditInAnvil','fileHostProposeEdit','fileHostHandle'];
+  const names=['fileGrantBackendIdentity','revokeFileGrant','assertRangeEditGrant','fileHostEditInAnvil','fileHostProposeEdit','fileHostEditAck','finishRangeEditAck','recheckRangeEditSource','fileHostHandle'];
   const code=names.map(n=>extractFunction(host,n)).join('\n')
     .replaceAll("await import('./sys/ai/range-edit.mjs')",'rangeModule');
-  const api=evaluate(code+'\n;({fileHostEditInAnvil,fileHostProposeEdit,fileHostHandle})',ctx);
+  const api=evaluate(code+'\n;({fileHostEditInAnvil,fileHostProposeEdit,fileHostEditAck,fileHostHandle})',ctx);
+  source.postMessage=msg=>{sent.push({to:'editor',msg});if(msg.proposal?.deliveryId)api.fileHostEditAck(source,msg.proposal,'editor')};
   return {...ctx,...api,originalIdentity};
 }
 {
@@ -100,15 +101,15 @@ for(const outcome of ['done','aborted','throw']){
 {
   const tab={id:'qa-tab',kind:'project',location:'browser',path:req.path,saved:req.before,content:req.before,dirty:false};
   const pendingRangeEdits=new Map([['qa-token',{tab,request:req}]]),messages=[];
-  const ctx={rangeEditProposal:rangeModule.rangeEditProposal,pendingRangeEdits,activeLocation:'browser',tabs:[tab],
-    naklios:{capabilities:{}},renderRangeActions:()=>{},toast:m=>messages.push(m),tab};
+  const ctx={AbortController,rangeEditProposal:rangeModule.rangeEditProposal,pendingRangeEdits,activeLocation:'browser',tabs:[tab],
+    naklios:{capabilities:{}},persistAnvilEdit:async()=>true,renderRangeActions:()=>{},toast:m=>messages.push(m),tab};
   const receive=evaluate('function activeTab(){return tab}\n'+extractFunction(editor,'rangeSourceCurrent')
     +'\n'+extractFunction(editor,'receiveRangeEdit')+'\n;receiveRangeEdit',ctx);
   receive({token:'unknown',request:req,after:'attack'});assert.equal(tab.rangeEdit,undefined);
   receive({token:'qa-token',request:{...req,project:'other'},after:'attack'});
   assert.equal(tab.rangeEdit,undefined);assert.match(messages.at(-1),/does not match/);
   pendingRangeEdits.set('qa-token',{tab,request:req});
-  receive({token:'qa-token',request:req,after:req.before.replace('1','2'),run:{task:'qa-task',project:'qa-project',sequence:1}});
+  receive({token:'qa-token',deliveryId:'qa-delivery',request:req,after:req.before.replace('1','2'),run:{task:'qa-task',project:'qa-project',sequence:1}});
   assert.equal(tab.rangeEdit.state,'staged');
   assert.equal(tab.saved,req.before,'receiving a proposal does not save the source');
   pendingRangeEdits.set('qa-token',{tab,request:req});tab.dirty=true;
@@ -147,9 +148,9 @@ for(const outcome of ['done','aborted','throw']){
   const stage={proposal,state:'reviewed'},tab={kind:'project',location:'browser',path:req.path,
     content:req.before,saved:req.before,dirty:false,rangeEdit:stage};
   let release,committing;const atCompare=new Promise(resolve=>{committing=resolve});
-  const elements=new Map(),ctx={AbortController,activeTab:()=>tab,activeLocation:'browser',
+  const elements=new Map(),ctx={AbortController,pendingRangeEdits:new Map(),activeTab:()=>tab,activeLocation:'browser',
     $:id=>{if(!elements.has(id))elements.set(id,{});return elements.get(id)},
-    openDb:async()=>({close(){}}),compareRangeEditIdb:async(db,store,key,expected,replacement,{valid})=>{
+    rangeEditRecord:stage=>rangeModule.rangeEditRecord({...stage,run:{task:'fixture-task',project:'fixture-project',sequence:1}},'fixture-id'),openDb:async()=>({close(){}}),compareRangeEditIdb:async(db,store,key,expected,replacement,{valid})=>{
       assert.equal(valid(),true);committing();await new Promise(resolve=>{release=resolve});
     },renderRangeActions(){},render(){},toast(){},setSave(){},reviewData:null};
   const commit=evaluate(extractFunction(editor,'commitRangeEdit')+'\n;commitRangeEdit',ctx);
@@ -211,11 +212,31 @@ for(const name of ['replaceSelection','replaceAll','indent','formatJson']){
   const controller=new AbortController(),calls=[];let finish;
   const tab={rangeController:controller,rangeCommit:new Promise(resolve=>{finish=resolve})};
   const beforeClose=evaluate(extractFunction(editor,'beforeRangeClose')+'\n;beforeRangeClose',{
-    tabs:[tab],saveAll:async()=>calls.push('saved'),
+    tabs:[tab],pendingRangeEdits:new Map(),saveAll:async()=>calls.push('saved'),
   });
   const close=beforeClose();assert.equal(controller.signal.aborted,true);assert.equal(tab.rangeClosing,true);
   let settled=false;close.then(()=>{settled=true});await Promise.resolve();assert.equal(settled,false);finish();await close;assert.equal(settled,true);
 }
+// The actual SDK close callback cannot acknowledge before proposal persistence.
+{
+  const sdk=await readFile(new URL('../sdk/naklios.js',import.meta.url),'utf8'),sent=[];
+  let finishPersist;
+  const pendingRangeEdits=new Map([['owned-close-token',{persist:new Promise(resolve=>{finishPersist=resolve})}]]);
+  const registration=editor.match(/naklios\.beforeClose\((.*?)\);/)[1];
+  const branch=sdk.split("} else if (msg.type === 'naklios:beforeclose') {")[1]
+    .split("} else if (msg.type === 'naklios:capabilities')")[0];
+  const close=evaluate(extractFunction(editor,'saveAll')+'\nconst beforeCloseCb='+registration
+    +';\nfunction sdkClose(){'+branch+'}\n;sdkClose',{
+      tabs:[],pendingRangeEdits,saveTab:async()=>{},queueWorkspace:async()=>{},setSave(){},
+      flushSavers:async()=>{},send:(type,data)=>sent.push({type,...data}),msg:{requestId:'owned-close-request'},
+    });
+  close();await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(sent.length,0,'SDK close waits for durable proposal retention');
+  finishPersist(true);await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(sent.length,1);assert.equal(sent[0].type,'naklios:beforeclose-ready');
+  assert.equal(sent[0].requestId,'owned-close-request');
+}
+
 // Interactive snapshot projects remain bounded; durable recorder storage is separate.
 {
   const normal={id:'normal'},selected={id:'selected',rangeSnapshot:true};
