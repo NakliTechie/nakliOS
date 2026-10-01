@@ -2200,14 +2200,12 @@ async function fsRead(path){
   const file = await fh.getFile();
   return await file.text();
 }
-async function fsReadBinary(path, maxBytes){
+async function fsReadBinary(path, maxBytes, offset){
+  const { checkBinaryRead, readFileBytes } = await import('./sys/storage/binary-read.mjs');
+  const options={maxBytes,offset};checkBinaryRead(options);
   const { dir, name } = await fsGetDir(path);
   const fh = await dir.getFileHandle(name);
-  const file = await fh.getFile();
-  if (maxBytes !== undefined && file.size > maxBytes) throw new Error('EFBIG: file exceeds bounded read limit');
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  if (maxBytes !== undefined && bytes.length > maxBytes) throw new Error('EFBIG: file exceeds bounded read limit');
-  return bytes;
+  return await readFileBytes(await fh.getFile(),options);
 }
 async function fsWrite(path, data){
   const { dir, name } = await fsGetDir(path, true);
@@ -4833,7 +4831,7 @@ const BACKENDS = {
     isConnected(){ return !!state.fsHandle; },
     displayName(){ return state.fsFolderName || ''; },
     async read(safePath){ return await fsRead(safePath); },
-    async readBinary(safePath, maxBytes){ return await fsReadBinary(safePath, maxBytes); },
+    async readBinary(safePath, maxBytes, offset){ return await fsReadBinary(safePath, maxBytes, offset); },
     async write(safePath, data){ await fsWrite(safePath, data); },
     async append(safePath, line){ await fsAppend(safePath, line); },
     async delete(safePath){ await fsDelete(safePath); },
@@ -4851,8 +4849,8 @@ const BACKENDS = {
       const bytes = await state.crate.read('/' + safePath);
       return new TextDecoder().decode(bytes);
     },
-    async readBinary(safePath, maxBytes){
-      if (maxBytes !== undefined) throw new Error('ENOTSUP: Crate does not support bounded reads');
+    async readBinary(safePath, maxBytes, offset){
+      if (maxBytes !== undefined || offset !== undefined) throw new Error('ENOTSUP: Crate does not support bounded reads');
       return await state.crate.read('/' + safePath);
     },
     async write(safePath, data){
@@ -5101,6 +5099,14 @@ function fsHostReadLimit(value){
   return value;
 }
 
+function fsHostReadOffset(value,maxBytes){
+  if(value===undefined)return undefined;
+  if(!Number.isSafeInteger(value)||value<0)throw new Error('EINVAL: offset must be a non-negative safe integer');
+  if(maxBytes===undefined)throw new Error('EINVAL: offset requires an explicit maxBytes');
+  if(maxBytes>16*1024*1024)throw new Error('EFBIG: range read exceeds the 16 MiB limit');
+  return value;
+}
+
 // Resolve { dir, name } for fs reply ops. Throws if path unsafe or no handle.
 async function fsHostHandleNow(msg, type, appId){
   const backendId = await fsEnsurePermission(appId);
@@ -5113,7 +5119,7 @@ async function fsHostHandleNow(msg, type, appId){
   const safe = fsSafePath(appId, msg.path || '');
   switch (type){
     case 'read':       return await backend.read(safe);
-    case 'readBinary': return await backend.readBinary(safe, fsHostReadLimit(msg.maxBytes));
+    case 'readBinary': return await backend.readBinary(safe, fsHostReadLimit(msg.maxBytes), fsHostReadOffset(msg.offset,msg.maxBytes));
     case 'stat':       return await backend.stat(safe);
     case 'write':      await backend.write(safe, msg.data); return null;
     case 'append':     await backend.append(safe, String(msg.line ?? '')); return null;
@@ -5169,7 +5175,7 @@ async function fsHostSysHandle(msg, op, appId){
   const safe = fsSysCleanPath(msg.path || '');
   switch (op){
     case 'read':       return await backend.read(safe);
-    case 'readBinary': return await backend.readBinary(safe, fsHostReadLimit(msg.maxBytes));
+    case 'readBinary': return await backend.readBinary(safe, fsHostReadLimit(msg.maxBytes), fsHostReadOffset(msg.offset,msg.maxBytes));
     case 'stat':       return await backend.stat(safe);
     case 'write':      await backend.write(safe, msg.data); return null;
     case 'append':     await backend.append(safe, String(msg.line ?? '')); return null;
@@ -7896,6 +7902,7 @@ function capabilitySnapshot(appId){
     fsBackends,
     fsBackend,
     fsBoundedReads: fsCap && fsBackend === 'fsa',
+    fsRangeReads: fsCap && fsBackend === 'fsa',
     // Same-origin system apps may browse the whole store, not just their own
     // apps/<id>/ namespace — this is what powers the OS-level file manager.
     system: isSystem,

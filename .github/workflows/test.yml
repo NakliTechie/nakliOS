@@ -74,6 +74,9 @@ jobs:
       - name: Verify filesystem operations remain bound to their selected backend
         run: node scripts/test-fs-backend-affinity.mjs
 
+      - name: Verify bounded Folder byte ranges and filesystem authority
+        run: node scripts/test-fs-binary-ranges.mjs
+
       - name: Verify shared local AI broker and SDK contracts
         run: node scripts/test-local-ai.mjs
 

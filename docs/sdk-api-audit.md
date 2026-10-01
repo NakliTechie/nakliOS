@@ -36,6 +36,7 @@ prefix today.
 | `capabilities.fsBackends` | field | stable | — | The backends the host offers, as descriptors `[{ id, label, name }]` — ids `fsa` (a picked folder) and `crate`; the browser's own OPFS is not on this list. |
 | `capabilities.fsBackend` | field | stable | — | The backend in use. |
 | `capabilities.fsBoundedReads` | field | stable | — | True when the active host storage backend supports a byte-limited read. |
+| `capabilities.fsRangeReads` | field | stable | — | True when the active host Folder backend supports explicit bounded byte ranges. |
 | `capabilities.system` | field | stable | — | The app is a system app (same-origin, `kind: system`). |
 | `capabilities.sysFs` | field | stable | — | Whole-store filesystem granted (system apps only). |
 | `capabilities.ai` | field | stable | — | Shared host inference granted. |
@@ -71,7 +72,7 @@ prefix today.
 | `review.onDecision` | function | stable | — | Register one app decision handler. The SDK acknowledges a successful commit once and re-acknowledges replays without reapplying. |
 | `fs` | namespace | stable | — | App-scoped filesystem (paths under `apps/<id>/`). |
 | `fs.read` | function | stable | — | Read text. |
-| `fs.readBinary` | function | stable | — | Read bytes. |
+| `fs.readBinary` | function | stable | — | Read bytes; Folder offsets require an explicit bounded cap. |
 | `fs.supportsBoundedReads` | getter | stable | — | True when the host advertises bounded reads for the active backend. |
 | `fs.stat` | function | stable | — | Read path type and size without loading file bytes. |
 | `fs.write` | function | stable | — | Write text or bytes. |
@@ -85,7 +86,7 @@ prefix today.
 | `sys` | namespace | stable | — | System-app surfaces. |
 | `sys.fs` | namespace | stable | — | Whole-store filesystem (system apps only). |
 | `sys.fs.read` | function | stable | — | Read text. |
-| `sys.fs.readBinary` | function | stable | — | Read bytes. |
+| `sys.fs.readBinary` | function | stable | — | Read bytes; Folder offsets require an explicit bounded cap. |
 | `sys.fs.stat` | function | stable | — | Read path type and size without loading file bytes. |
 | `sys.fs.write` | function | stable | — | Write. |
 | `sys.fs.append` | function | stable | — | Append. |
