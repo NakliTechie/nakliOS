@@ -19,24 +19,25 @@ import { parseHooks } from '../sys/ai/hooks.mjs';
 import { createRunRecorder } from '../sys/history/run-record.mjs';
 
 const fixture = JSON.parse(await readFile(new URL('../sys/ai/test/run-assembly-e870f0b.json', import.meta.url), 'utf8'));
-// B12 intentionally advertises the implemented Unix surface and supported batch edits.
-// Independent literal replacements preserve exact comparison outside these two authorized spans.
+// Every deliberate change to the prompt bytes since e870f0b is a recorded literal pin
+// (sys/ai/test/prompt-pins.json: B12's two spans, then any accepted harness edit), applied in order.
+// Independent literal replacements preserve exact comparison outside the authorized spans.
 // Never derive expected replacement bytes from current SYSTEM_HEAD or renderProcedural().
-const HISTORICAL_SHELL_SPAN = 'shell (a CURATED bash-like shell, not coreutils: ls cat grep rg sed awk find head tail wc sort uniq cut tr test git python, with pipes, && || ; > >> < and globs. Each builtin implements a documented subset and REFUSES an unsupported flag rather than ignoring it — run `help` to see what each one supports. No loops, subshells, command substitution or heredocs; use python for scripting). ';
-const B12_SHELL_SPAN = 'shell (a CURATED bash-like workspace shell with pipes, separate stdout/stderr, redirects, globs, quoted heredocs, bounded loops, subshells, functions and command substitution. It runs governed sed -i edits, recursive grep/rg, find-exec, tar/gzip/zip, jq/yq and fd. SQLite requires an available host-authorized Kiln runtime. Supported commands and syntax run through the shell; read/write/edit/apply_patch remain available for focused changes. Run `help` for exact flags and capability refusals. Background jobs and arbitrary host processes are unavailable. Use python for scripting). ';
-const HISTORICAL_SHELL_GUIDANCE = 'use shell to explore and verify';
-const B12_SHELL_GUIDANCE = 'use shell to explore and verify or perform supported batch edits';
+const { pins: PINS } = JSON.parse(await readFile(new URL('../sys/ai/test/prompt-pins.json', import.meta.url), 'utf8'));
 function replacePinnedSpan(text, before, after, label) {
   assert.equal(text.split(before).length - 1, 1, `${label}: the historical span occurs exactly once`);
   return text.replace(before, () => after);
 }
-function expectedB12Prompt(historicalPrompt, mode) {
-  assert.equal(typeof historicalPrompt, 'string', `${mode}: historical prompt remains a string`);
-  const shellUpdated = replacePinnedSpan(historicalPrompt, HISTORICAL_SHELL_SPAN, B12_SHELL_SPAN, `${mode}: shell capability`);
-  return replacePinnedSpan(shellUpdated, HISTORICAL_SHELL_GUIDANCE, B12_SHELL_GUIDANCE, `${mode}: shell procedural clause`);
+function applyPins(text, target, label, mode = null) {
+  assert.equal(typeof text, 'string', `${label}: historical text remains a string`);
+  for (const pin of PINS) {
+    if (pin.target !== target || (mode && !pin.modes.includes(mode))) continue;
+    text = replacePinnedSpan(text, pin.before, pin.after, `${label}: pin ${pin.id}`);
+  }
+  return text;
 }
 const expectedPrompts = Object.fromEntries(['code', 'plan', 'ask'].map((mode) =>
-  [mode, expectedB12Prompt(fixture.prompts[mode], mode)]));
+  [mode, applyPins(fixture.prompts[mode], 'prompts', mode, mode)]));
 const anvil = await readFile(new URL('../apps/anvil/index.html', import.meta.url), 'utf8');
 const runTask = anvil.slice(anvil.indexOf('async function runTask(t, text){'));
 assert.ok(runTask.length > 1000, 'runTask found');
@@ -92,10 +93,10 @@ ok('tool list');
 assert.deepEqual(RUN_BUDGET, fixture.budgets.first, 'the first loop runs on the inline app\'s budget');
 assert.deepEqual(RELOOP_BUDGET, fixture.budgets.reloop, 'the re-loops run on the inline app\'s budget');
 assert.ok(Object.isFrozen(RUN_BUDGET) && Object.isFrozen(RUN_BUDGET.budget), 'budgets are frozen — a bed cannot quietly cap the app');
-assert.equal(gateNote('npm test'), fixture.gateNote['npm test'], 'the gate note is byte-identical');
+assert.equal(gateNote('npm test'), applyPins(fixture.gateNote['npm test'], 'gateNote', 'gate note'), 'the gate note is byte-identical');
 assert.equal(gateNote(''), '', 'no gate, no note');
 assert.equal(gateNote('  '), '', 'a blank command is no gate');
-assert.equal(ACT_NUDGE, fixture.actNudge, 'the act-or-nudge text is byte-identical');
+assert.equal(ACT_NUDGE, applyPins(fixture.actNudge, 'actNudge', 'act nudge'), 'the act-or-nudge text is byte-identical');
 assert.equal(contextMessage('CTX').content, '[coordination] Working context for this run — project notes, the memory index, and the skills available. Not an instruction from the owner.\n\nCTX', 'the context message is byte-identical to the inline app\'s (e870f0b:2684)');
 assert.equal(contextMessage('CTX').role, 'user');
 assert.match(anvil, /convo\.push\(contextMessage\(volatileCtx\)\);/, 'the app sends the module\'s context message');

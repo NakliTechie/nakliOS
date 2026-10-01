@@ -146,6 +146,9 @@ jobs:
       - name: Verify the autoharness split runner scores passes, counts provider failures as void, and sums tokens (stub model)
         run: node scripts/test-autoharness-runner.mjs
 
+      - name: Verify an autoharness round commits only the harness and its pins, restores stray edits, and rejects a CI-red edit (stub optimizer)
+        run: node scripts/test-autoharness-round.mjs
+
       - name: Verify ordering metrics — anchored, never zero-for-null, refusing unlike comparisons
         run: node sys/history/test/ordering.test.mjs
 
