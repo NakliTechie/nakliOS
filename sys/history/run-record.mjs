@@ -55,6 +55,7 @@ export const RUN_EVENTS = Object.freeze([
   'subagent.ran',     // input: { kind, label, step, tool_call_id } output: { record, stop, steps, text }
   'subagent.started', // input: { kind, label, step, tool_call_id } output: {}  (ESS-1: the claim, before the child runs)
   'subagent.beat',    // input: { kind, label, step, tool_call_id, child_step, tool } output: {}  (CRIB-B B1: a heartbeat — proves liveness, never completion)
+  'prime.fact.settled', // input: { surveyId, projectId, taskId } output: { slug, error, status }  (write reconciliation)
 ]);
 
 // The loop's onEvent types this recorder understands. 'done' and the pre-stop
@@ -143,12 +144,13 @@ export function createRunRecorder({ app = 'anvil', principal = 'local', grant_id
     // compares the recorded `run.started` input byte-for-byte, so an always-present key
     // would make every run recorded before this existed a replay miss — and the corpus is
     // real captured runs, which are never re-recorded just to make a lane green.
-    start({ messages, tools, model = null, readiness = null }) {
+    start({ messages, tools, model = null, readiness = null, lesson = null }) {
       const stamp = normaliseModelStamp(model);
       // `readiness` (A4) is additive: present only when the caller passes it, so records without it
       // keep their shape and hash exactly (the replay corpus is untouched).
       return enqueue('run.started', () => ({
-        input: { messages, tools: tools || [], ...(stamp ? { model: stamp } : {}), ...(Array.isArray(readiness) ? { readiness } : {}) },
+        input: { messages, tools: tools || [], ...(stamp ? { model: stamp } : {}), ...(Array.isArray(readiness) ? { readiness } : {}),
+          ...(lesson ? { lesson } : {}) },
         output: {},
       }));
     },
@@ -248,6 +250,15 @@ export function createRunRecorder({ app = 'anvil', principal = 'local', grant_id
         error: result?.error ?? null,
         ...(result?.question ? { question: String(result.question) } : {}), // B3: what the run paused to ask
       } }));
+    },
+
+    // A priming write can settle after Stop when the backend cannot cancel an
+    // in-flight mutation. A linked follow-up record preserves that outcome.
+    primeFactSettled({ surveyId, projectId, taskId, slug=null, error=null, status=slug?'saved':'failed' }) {
+      return enqueue('prime.fact.settled', () => ({
+        input:{surveyId:String(surveyId),projectId:String(projectId),taskId:String(taskId)},
+        output:{slug:slug==null?null:String(slug),error:error==null?null:String(error),status:String(status)},
+      }));
     },
 
     // ---- the record ----
@@ -1031,24 +1042,42 @@ export function stopReasonsLine(h) {
 
 // ────────────────────────────────────────────────── skill usage (C4) ──
 
-// How often each skill was DELIBERATELY loaded — `skill` tool calls, per run — the
+// How often each skill was DELIBERATELY loaded — successful active `skill` results, per run — the
 // telemetry the curator ages skills by. Injection into the index never counts
 // (NOOA: spontaneous injection is logged but must never self-reinforce); only a call
 // the model chose to make does. `records` are anything with events() + resolve().
-// Returns Map name -> { views, runs, lastUsed (ms ts of the latest call), firstUsed }.
+// Outcomes count distinct runs, not calls. A failed gate without a later passing
+// gate is a verified fail; other stops remain unverified. These are associations
+// with skill use, not evidence that the skill caused an outcome.
+// Returns Map name -> { views, runs, lastUsed, firstUsed, verifiedPass, verifiedFail, unverified }.
 export function foldSkillUsage(records) {
   const out = new Map();
   dedupeRecords(records).forEach((r, i) => {
     if (!r || typeof r.events !== 'function') return;
-    for (const e of joined(r.events(), r.resolve)) {
+    const events=joined(r.events(), r.resolve);
+    const stop=[...events].reverse().find(e=>e.tool==='run.stopped');
+    const verdict=[...events].reverse().find(e=>e.tool==='verify.passed'||e.tool==='verify.failed');
+    const outcome=stop?.output?.stop==='done' && stop.output.verified===true && verdict?.tool==='verify.passed'
+      ? 'verifiedPass' : stop?.output && verdict?.tool==='verify.failed' ? 'verifiedFail' : 'unverified';
+    const loaded=new Set();
+    for (const [at,e] of events.entries()) {
       if (e.tool !== 'tool.called' || e.input?.name !== 'skill') continue;
       const name = e.input?.args?.name; if (!name) continue;
-      const u = out.get(name) || { views: 0, runs: new Set(), lastUsed: 0, firstUsed: Infinity };
+      const id=e.input?.id;
+      if(!id) continue;
+      const answer=events.slice(at+1).find(item=>(item.tool==='tool.responded'||item.tool==='tool.failed') && item.input?.id===id);
+      if(answer?.tool!=='tool.responded' || typeof answer.output?.result!=='string' ||
+         !answer.output.result.startsWith('Skill: ')) continue;
+      const u = out.get(name) || { views: 0, runs: new Set(), lastUsed: 0, firstUsed: Infinity,
+        verifiedPass:0, verifiedFail:0, unverified:0 };
       u.views++; u.runs.add(i); u.lastUsed = Math.max(u.lastUsed, e.ts || 0); u.firstUsed = Math.min(u.firstUsed, e.ts || Infinity);
+      if(!loaded.has(name)){ u[outcome]++; loaded.add(name); }
       out.set(name, u);
     }
   });
-  for (const [k, u] of out) out.set(k, { views: u.views, runs: u.runs.size, lastUsed: u.lastUsed, firstUsed: u.firstUsed === Infinity ? null : u.firstUsed });
+  for (const [k, u] of out) out.set(k, { views: u.views, runs: u.runs.size, lastUsed: u.lastUsed,
+    firstUsed: u.firstUsed === Infinity ? null : u.firstUsed,
+    verifiedPass:u.verifiedPass, verifiedFail:u.verifiedFail, unverified:u.unverified });
   return out;
 }
 
@@ -1065,9 +1094,9 @@ export function foldSkillUsage(records) {
 // different slices"). reviewer → what the tools did/changed; supervisor → the
 // trajectory (turns + stops); default → the transcript a next turn needs.
 export const HISTORY_ROLES = Object.freeze({
-  reviewer: new Set(['tool.called', 'tool.responded', 'tool.failed', 'verify.passed', 'verify.failed']),
-  supervisor: new Set(['turn.started', 'run.stopped', 'verify.passed', 'verify.failed', 'run.checkpoint']),
-  default: new Set(['run.started', 'assistant.said', 'llm.responded', 'tool.responded', 'tool.failed', 'verify.failed', 'run.checkpoint']),
+  reviewer: new Set(['tool.called', 'tool.responded', 'tool.failed', 'verify.passed', 'verify.failed', 'prime.fact.settled']),
+  supervisor: new Set(['turn.started', 'run.stopped', 'verify.passed', 'verify.failed', 'run.checkpoint', 'prime.fact.settled']),
+  default: new Set(['run.started', 'assistant.said', 'llm.responded', 'tool.responded', 'tool.failed', 'verify.failed', 'run.checkpoint', 'prime.fact.settled']),
 });
 
 // The searchable / readable text of one joined event — never raw base64 or a data:
@@ -1106,6 +1135,7 @@ function eventText(e) {
     case 'verify.failed': return `[gate] failed (round ${inp.round ?? 1}) exit ${out.verdict?.exit ?? '?'}`;
     case 'run.checkpoint': return `[checkpoint] ${clip(out.handoff)}`;
     case 'run.stopped': return `[stopped] ${out.stop}${out.reason ? ` (${out.reason})` : ''}${out.axis ? ` [${out.axis}]` : ''}`;
+    case 'prime.fact.settled': return `[project-learning write] survey ${inp.surveyId || '?'} project ${inp.projectId || '?'} task ${inp.taskId || '?'} status ${out.status || 'unknown'}${out.slug ? ' fact '+out.slug : ''}${out.error ? ' '+out.error : ''}`;
     case 'turn.started': return `[turn ${inp.step ?? '?'}]`;
     default: return '';
   }

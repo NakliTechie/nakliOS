@@ -58,7 +58,7 @@ const sys = { role: 'system', content: 'you are a coding agent' };
   assert.equal(r.messages[0], sys, 'the system head is kept as it was');
   assert.ok(JSON.stringify(r.messages).length < JSON.stringify(big).length / 1.5, 'and the result is materially smaller');
   assert.equal(await compactForOverflow([sys, { role: 'user', content: 'hi' }]), null, 'nothing to compact → null, and the loop stops as before');
-  assert.match(anvil, /readiness, compact: compactForOverflow,/, 'the run hands the loop the compactor');
+  assert.match(anvil, /readiness, lesson, compact: compactForOverflow,/, 'the run hands the loop the lesson declaration and compactor');
   assert.match(anvil, /e\.type==='compacted'\)\{[^\n]*compacted \('\+String\(e\.method/, 'and the log says it happened');
 }
 

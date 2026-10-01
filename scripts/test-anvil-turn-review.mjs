@@ -97,7 +97,7 @@ await test('review comments: one send for a run, with a current-version check be
     {id:'b',run:2,project:'p',workspace:'folder',file:'b.py',version:reviewVersion('B1'),anchorLine:5,kind:'add',text:'Name this value.'},
   ]};
   const field={value:''}, calls=[]; let current={ 'a.py':'A2', 'b.py':'B1' };
-  const ctx={activeTask:()=>t,running:false,state:{activeProject:'p'},workspaceLabel:'folder',
+  const ctx={activeTask:()=>t,running:false,priming:false,state:{activeProject:'p'},workspaceLabel:'folder',
     $:()=>field,readReviewState:async(path)=>current[path],reviewVersion,reviewPrompt,
     autoGrow(){},submit(){calls.push(field.value);field.value='';return true;},save(){},renderPreview(){},pushSystem:(s)=>calls.push('BLOCK '+s)};
   const send=instantiate(extractFunction(src,'submitReviewDrafts'),'submitReviewDrafts',ctx);
@@ -117,7 +117,7 @@ await test('review comments: one send for a run, with a current-version check be
   let started=false;
   const heldState={activeProject:'p',runsHeld:true};
   const realSubmit=instantiate(extractFunction(src,'submit'),'submit',{
-    activeTask:()=>t,$:()=>field,autoGrow(){},running:false,state:heldState,admitRun,
+    activeTask:()=>t,$:()=>field,autoGrow(){},running:false,priming:false,state:heldState,admitRun,
     pushSystem:(s)=>calls.push('BLOCK '+s),runTask(){started=true},save(){},renderLog(){},qEnqueue(){},
   });
   const held=instantiate(extractFunction(src,'submitReviewDrafts'),'submitReviewDrafts',{...ctx,state:heldState,submit:realSubmit});

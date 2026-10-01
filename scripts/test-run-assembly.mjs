@@ -482,6 +482,16 @@ console.log('run-assembly: A4 readiness == the toolset in every mode; A2 episode
   await recB.settled();
   const inB = recB.resolve(recB.events().find((e) => e.tool === 'run.started')).input;
   assert.equal('readiness' in inB, false, 'absent when not given — the record keeps its shape');
+  const recC = mk();
+  const lesson={declaration:{tool:'skill',args:{name:'repair'}},declaredFuelKey:'test/m1',currentFuelKey:'test/m1',fuelIdentityComplete:false};
+  await driveRun({mode:'plan',convo:[{role:'user',content:'go'}],sysMsg,tools,infer,executeTool:async()=>'',rec:recC,lesson});
+  await recC.settled();
+  const inC=recC.resolve(recC.events().find(e=>e.tool==='run.started')).input;
+  assert.deepEqual(inC.lesson,lesson,'the declaration rides the replayable run record');
+  const {inspectLessonEvidence}=await import('../sys/ai/lesson-evidence.mjs');
+  const activation=inspectLessonEvidence(recC,inC.lesson.declaration,inC.lesson);
+  assert.equal(activation.activation,'unobserved','a completed run without the declared call is explicit');
+  assert.equal(activation.gain,'unmeasured','the run does not attribute benefit');
   console.log('run-assembly: A4 readiness rides run.started only when supplied');
 // B2: driveRun hands the steer queue to the loop — a completion pushed while the model waits lands as run.steered on the record
 {

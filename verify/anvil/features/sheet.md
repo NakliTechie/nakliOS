@@ -75,8 +75,8 @@ prerequisites: the launch in `../README.md`; a narrow viewport (≤ 978 px, `res
 - **Source:** `data-act="learn"` → `primeProject()`.
 - **Prerequisites:** narrow layout; an endpoint.
 - **Reach and drive:** ⋯ → 🎓 Learn from this project.
-- **Observable success:** a priming run starts in ask mode with `rememberTool`; its tool calls show in the log; facts land under `.anvil/memory`.
-- **Gotchas:** fuel — one run.
+- **Observable success:** a priming run lists and reads project files before `remember`; saved hypotheses cite read paths and source versions, land under `.anvil/memory`, and carry a survey ID linked to the task's run record.
+- **Gotchas:** fuel — one run. No source read means no fact; the pass has no shell or edit tool. Stop remains available on the phone bar during learning.
 
 ### sheet:home
 - **Goal:** pick the Anvil home folder where run records are kept durably.

@@ -1,6 +1,6 @@
 // Conformance — skill usage as a fold + the curator's lifecycle (C4).
 //   node sys/ai/test/skill-lifecycle.test.mjs
-import { skillLifecycle, reviveOnUse, applySkillStatus, dedupeSkills, STALE_AFTER_DAYS, ARCHIVE_AFTER_DAYS } from '../skill-lifecycle.mjs';
+import { skillLifecycle, skillOutcomeReview, foldIndexedSkillOutcomes, reviveOnUse, applySkillStatus, dedupeSkills, STALE_AFTER_DAYS, ARCHIVE_AFTER_DAYS } from '../skill-lifecycle.mjs';
 import { parseSkill, buildSkillsIndex } from '../skills.mjs';
 import { foldSkillUsage, createRunRecorder } from '../../history/run-record.mjs';
 import { runAgentLoop } from '../agent-loop.mjs';
@@ -33,6 +33,61 @@ await test('foldSkillUsage: deliberate `skill` loads per run — views, distinct
   const d = u.get('deploy'); eq(d.views, 3, 'three loads'); eq(d.runs, 2, 'two distinct runs (the duplicate record counts once)'); eq(d.lastUsed, T0 - 2 * DAY, 'last used'); eq(d.firstUsed, T0 - 5 * DAY, 'first used');
   eq(u.get('test').runs, 1, 'test in one run'); assert(!u.has('never'), 'an unloaded skill has no usage');
   eq(foldSkillUsage([none]).size, 0, 'a run with no skill calls contributes nothing');
+});
+
+await test('skill outcomes separate passing gates, failing gates, and unverified stops', async () => {
+  let tick=T0;
+  const use=async ({gate=null,stop='done',verified=false,loads=1})=>{
+    tick+=1000;
+    const rec=createRunRecorder({app:'anvil',principal:'p',now:()=>tick});
+    await rec.start({messages:[{role:'user',content:'go '+tick}],tools:[]});
+    for(let i=0;i<loads;i++){
+      rec.onEvent({type:'tool-call',name:'skill',args:{name:'repair'},id:'k'+i,step:0});
+      rec.onEvent({type:'tool-result',name:'skill',result:'Skill: repair\n\nInstructions',id:'k'+i,step:0});
+    }
+    if(gate) rec.onEvent({type:gate==='pass'?'verify-pass':'verify-fail',step:0,verdict:{ok:gate==='pass'}});
+    await rec.finish({stop,verified,steps:1}); await rec.settled(); return rec;
+  };
+  const a=await use({gate:'fail',stop:'unverified',loads:2});
+  const b=await use({gate:'fail',stop:'budget'});
+  const c=await use({gate:'pass',stop:'done',verified:true});
+  const d=await use({stop:'aborted'});
+  const usage=foldSkillUsage([a,b,c,d,a]).get('repair');
+  eq(usage.views,5,'repeated calls count as views, duplicate records do not');
+  eq(usage.runs,4,'four distinct runs used the skill');
+  eq(usage.verifiedPass,1,'a completed passing gate counts once');
+  eq(usage.verifiedFail,2,'two final failing gate outcomes count');
+  eq(usage.unverified,1,'an abort remains unverified');
+  const review=skillOutcomeReview(new Map([['repair',usage]]));
+  eq(review.length,1,'repeated failed associations trigger review');
+  eq(review[0].name,'repair','the review names the skill');
+  assert(/attribution unmeasured/.test(review[0].reason),'review does not assign blame');
+  eq(skillOutcomeReview(new Map([['repair',{verifiedFail:1}]] )).length,0,'one failure is not repeated');
+});
+
+await test('failed or inactive skill reads do not become use or failed-run review evidence', async () => {
+  const rec=createRunRecorder({app:'anvil',principal:'p',now:()=>T0});
+  await rec.start({messages:[{role:'user',content:'load'}],tools:[]});
+  for(const [i,result] of ['No skill named "missing".',
+    'Draft skill "draft" (staged — NOT active)',
+    'Skill "archived" is archived and does not bind until the owner sets status: active.'].entries()){
+    const name=['missing','draft','archived'][i],id='k'+i;
+    rec.onEvent({type:'tool-call',name:'skill',args:{name},id,step:0});
+    rec.onEvent({type:'tool-result',name:'skill',result,id,step:0});
+  }
+  rec.onEvent({type:'verify-fail',step:0,verdict:{ok:false}});
+  await rec.finish({stop:'budget',verified:false,steps:1});await rec.settled();
+  eq(foldSkillUsage([rec]).size,0,'failed and inactive loads contribute no skill outcome');
+});
+
+await test('compact index rows fold skill outcomes without loading run transcripts', () => {
+  const item={name:'repair',verifiedFail:1,verifiedPass:0,unverified:0};
+  const rows=[{shape:3,skillOutcomes:[item]},{shape:3,skillOutcomes:[item]},
+    {shape:2,skillOutcomes:[item]}];
+  const folded=foldIndexedSkillOutcomes(rows,{shape:3});
+  eq(folded.usage.get('repair').verifiedFail,2,'only current-shape rows count');
+  assert(folded.incomplete,'an older row shape marks history incomplete');
+  eq(skillOutcomeReview(folded.usage).length,1,'two indexed failures suggest review');
 });
 
 await test('lifecycle: active → stale at 30 days unused → archived at 90; pinned exempt; staged/quarantined/archived untouched', async () => {

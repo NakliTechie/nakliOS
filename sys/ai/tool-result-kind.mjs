@@ -13,7 +13,7 @@ const RULES = [
   // agent-loop: arguments that were not JSON; a tool that asked for something it lacks
   ['invalid_args',    /^Error: could not parse arguments as JSON|^Error: (?:\w+ needs|only one todo|old_string|new_string)|^Error \(invalid_args\)/i],
   // grant / fence / policy / confirm: the call was understood and refused
-  ['rejected',        /^Refused:|\brefused\b|read-only under this grant|EGRANT|is destructive\. confirm\?|blocked by policy|\bdenied\b/i],
+  ['rejected',        /^Refused:|\brefused\b|^Read not granted\b|read-only under this grant|EGRANT|is destructive\. confirm\?|blocked by policy|\bdenied\b/i],
   // shell + fs: the thing named is not there
   ['not_found',       /\bENOENT\b|No such file or directory|can't open file|not found\b|No skill named|No fact named|unknown command:/i],
   // the tool exists but cannot run here
@@ -29,6 +29,12 @@ export function classifyToolResult(name, text) {
   if (!s) return null;
   for (const [kind, re] of RULES) if (re.test(s)) return kind;
   return null;
+}
+
+// The read tool renders every successful line with its number, including a
+// blank file's first line. Its error/refusal replies do not use this envelope.
+export function isSuccessfulReadToolResult(text) {
+  return typeof text === 'string' && /^ {0,4}\d+  /.test(text);
 }
 
 // B6 (osaurus, 2026-09-17): the SHAPE of a shell listing, read from the text the model saw — like the
@@ -58,4 +64,3 @@ export function listingShape(text, { tool = '' } = {}) {
   if (trailer) return { entries: Number(trailer[2]), shown: Number(trailer[1]), truncated: true };
   return { entries: lines.length, shown: lines.length, truncated: false };
 }
-

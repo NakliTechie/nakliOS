@@ -73,6 +73,12 @@
       "kind": "button",
       "detail": "Learn this project — a read-only pass surveys the repo and records durable facts into project memory, so future tasks (and weaker models) start informed"
     },
+    "button:lesson-evidence-btn": {
+      "owner": "header.md",
+      "fingerprint": "d61d65a71ab2",
+      "kind": "button",
+      "detail": "Declare one exact tool call that would show a lesson was activated in later runs. Observation does not measure benefit."
+    },
     "button:mem-chip": {
       "owner": "header.md",
       "fingerprint": "1b642b1cf0a5",

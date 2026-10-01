@@ -29,12 +29,15 @@ for (const p of pushes) {
 // And the write side can create a related fact: the remember tool offers the relations
 // and the handler passes them through to recordFact.
 assert.match(anvil, /recordFact\(note, ar&&ar\.type, 'hypothesis', \{ slot: ar&&ar\.slot, derived_from: ar&&ar\.derived_from, supersedes: ar&&ar\.supersedes, weight: ar&&ar\.weight \}\)/, 'the remember handler passes slot/derived_from/supersedes/weight to recordFact');
-assert.match(anvil, /slotHolder\(await listFacts\(\), r\.slot\)/, 'a slot supersedes its current holder at write time');
+assert.match(anvil, /slotHolder\(await listFacts\(fileops\), r\.slot\)/, 'a slot supersedes its current holder inside the pinned workspace');
 // A2: search before save on BOTH remember paths (task loop + prime), and one budget per run.
 assert.equal((anvil.match(/findDuplicate\(all, note, \{ (?:exempt, )?scope: [^}]*\}\); if\(dup\)[\s\S]{0,80}?return duplicateReply\(dup\)/g) || []).length, 2, 'both remember paths search before they save, scoped to this task (main path also audits the refusal)');
-// shape, not signature: checkRulesCap takes an options arg (the prospective rule's name/status)
-assert.equal((anvil.match(/checkRulesCap\(all, note[^;]*\); if\(!cap\.ok\)[\s\S]{0,120}?return rulesCapReply\(cap\)/g) || []).length, 2, 'both remember paths cap rules');
-assert.equal((anvil.match(/checkRulesCap\(all, note, \{ name: nextFreeSlug\(noteToFact\(note, 'rule', 'hypothesis'\)\.slug, all\.map\(f=>f\.name\)\)/g) || []).length, 2, 'the cap measures the rule as it will be STORED — its real (collision-suffixed) name and its status (S5)');
+// Only the ordinary task handler may write a binding rule. Priming is restricted
+// to source-cited project/reference hypotheses, so its rule path cannot bypass
+// the cap by using a second writer.
+assert.match(anvil, /if\(ar && Object\.hasOwn\(ar,'type'\) && !\['project','reference'\]\.includes\(ar\.type\)\) return 'Not recorded:/, 'the priming handler refuses every explicit non-project/reference type, including falsy values');
+assert.equal((anvil.match(/checkRulesCap\(all, note[^;]*\); if\(!cap\.ok\)[\s\S]{0,120}?return rulesCapReply\(cap\)/g) || []).length, 1, 'the rule-cap check remains on the only rule-writing path');
+assert.equal((anvil.match(/checkRulesCap\(all, note, \{ name: nextFreeSlug\(noteToFact\(note, 'rule', 'hypothesis'\)\.slug, all\.map\(f=>f\.name\)\)/g) || []).length, 1, 'the cap measures the rule as it will be STORED — its real name and status');
 assert.match(anvil, /exempt=\[ar&&ar\.supersedes, ar&&ar\.slot\?slotHolder\(all, ar\.slot\):null\]/, 'a declared replacement is exempt from the duplicate check (the correction exit)');
 assert.match(anvil, /const remBudget=createRememberBudget\(\);[\s\S]{0,900}?const executeTool = async/, 'the remember budget is created once per run, just above the executor');
 assert.match(anvil, /const take=remBudget\.take\(\); if\(!take\.ok\)[\s\S]{0,80}?return budgetSpentReply\(take\)/, 'the remember handler spends the budget and refuses when it is gone');
