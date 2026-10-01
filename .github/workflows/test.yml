@@ -497,6 +497,9 @@ jobs:
       - name: Verify the honest context budget (Ollama num_ctx, usable floor, handoff cap, reminder)
         run: node sys/ai/test/context-budget.test.mjs
 
+      - name: Verify frozen checkpoint handoff cap acceptance
+        run: node sys/ai/test/handoff-cap.test.mjs
+
       - name: Verify predict-then-grade (expect on shell) — grammar, grade, miss recorded
         run: node sys/ai/test/expect.test.mjs
 
