@@ -11,6 +11,12 @@ import { join } from 'node:path';
 export const ENDPOINTS = Object.freeze({
   // OpenRouter's free stealth model (Chirag 2026-10-01: "Its free for now"); key on the Desktop.
   'openrouter-bunny': Object.freeze({ base: 'https://openrouter.ai/api/v1', model: 'stealth/space-bunny-alpha', keyFrom: 'file:~/Desktop/or-key.txt' }),
+  // Space Bunny through opencode's Zen gateway, with opencode's stored key (whether Zen serves the same
+  // weights as OpenRouter's alpha is not verified — record which endpoint a number came from). Zen's other
+  // free models answer 403 "OpenCode's free tier can only be used from within OpenCode" to a direct
+  // call (probed 2026-10-01): reaching them means opencode's own agent loop, which would measure that
+  // harness and not Anvil's, so they are not endpoints here.
+  'opencode-bunny': Object.freeze({ base: 'https://opencode.ai/zen/v1', model: 'space-bunny-free', keyFrom: 'opencode:opencode' }),
   // DeepSeek V4.1 Flash, the app's configured fuel; the first calibration ran on it.
   'deepseek-flash': Object.freeze({ base: 'https://api.deepseek.com/v1', model: 'deepseek-flash', keyFrom: 'opencode:deepseek' }),
 });
