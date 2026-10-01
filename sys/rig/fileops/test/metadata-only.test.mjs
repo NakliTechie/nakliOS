@@ -43,7 +43,8 @@ test('bounded FSA listing stops enumeration and unsupported backends refuse', as
 });
 
 test('bounded FSA listing reports a provider refusal instead of an empty project', async () => {
-  const root={async getDirectoryHandle(){throw providerError('NotAllowedError');},async *entries(){}};
+  const root={async getDirectoryHandle(){throw providerError('NotAllowedError');},
+    async getFileHandle(){throw providerError('NotFoundError');},async *entries(){}};
   const fs=createFileops({backend:new FsaBackend(root)});
   const result=await fs.list('private',{maxEntries:50});
   assert.equal(result.ok,false);

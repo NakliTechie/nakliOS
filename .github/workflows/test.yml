@@ -71,6 +71,9 @@ jobs:
       - name: Verify SDK-vendoring canonical invariants and splicer round-trip
         run: node scripts/test-vendored-sdk.mjs
 
+      - name: Verify SDK review staging, source-bound decisions, and replay acknowledgements
+        run: node scripts/test-sdk-review-bridge.mjs
+
       - name: Verify every public SDK member has an audit-ledger line with a valid status (B4)
         run: node scripts/test-sdk-audit.mjs
 
@@ -582,6 +585,9 @@ jobs:
 
       - name: Verify the host review queue reducer (stage/commit/discard, authority, poison)
         run: node sys/staging/test/review-queue.test.mjs
+
+      - name: Verify host review bridge over native app diffs and source acknowledgements
+        run: node sys/staging/test/review-host.test.mjs
 
       - name: Verify P0 enforcement — agent face capability check
         run: node sys/rig/agent/test/agent-face-capability.test.mjs

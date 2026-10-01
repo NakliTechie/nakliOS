@@ -56,8 +56,8 @@ const DRAFT_DIFF = {
   ],
 };
 
-await test('all three production diff types register (reckon, draft, and Anvil skill writes)', () => {
-  eq(registered.join(','), 'reckon,draft,anvil', 'registered apps');
+await test('all four production diff types register', () => {
+  eq(registered.join(','), 'reckon,draft,kanzen,anvil', 'registered apps');
 });
 
 await test('anvil-skill normalizes a planned skill write: the file row plus one row per Sentinel finding and lint warning', () => {
@@ -85,10 +85,30 @@ await test('reckon cell-range normalizes a real setCells tx + inverse into befor
   eq(n.rows[2].before, 'old', 'C3 before'); eq(n.rows[2].after, '', 'C3 cleared'); eq(n.rows[2].change, 'remove', 'C3 is a remove');
 });
 
+await test('reckon repeated cell edits show the value before the whole transaction', () => {
+  const n = normalizeCellRange({
+    sheet: 's1',
+    ops: [
+      { op: 'setCells', sheet: 's1', cells: { A1: { v: 1 } } },
+      { op: 'setCells', sheet: 's1', cells: { A1: { v: 2 } } },
+    ],
+    inverse: [
+      { op: 'setCells', sheet: 's1', cells: { A1: { v: 1 } } },
+      { op: 'setCells', sheet: 's1', cells: { A1: { v: 0 } } },
+    ],
+  });
+  eq(n.rows.length, 1, 'one cell has one preview row');
+  eq(n.rows[0].before, '0', 'preview starts from the original cell value');
+  eq(n.rows[0].after, '2', 'preview shows only the final cell value');
+  eq(n.summary, 's1 — 1 cell', 'summary counts distinct cells');
+});
+
 await test('a structural reckon op stays VISIBLE rather than being dropped', () => {
   const n = normalizeCellRange({ sheet: 's1', ops: [{ op: 'insertRows', sheet: 's1', at: 3, n: 2 }], inverse: [] });
   eq(n.rows.length, 1, 'structural op listed');
   eq(n.rows[0].label, 'insertRows', 'names the op');
+  eq(n.summary, 's1 — 1 operation', 'structural work is not counted as a cell');
+  assert(n.rows[0].after.includes('"at":3'), 'the operation details are visible');
 });
 
 await test('draft prosemirror-steps normalizes real hunks', () => {

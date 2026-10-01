@@ -4860,6 +4860,28 @@ export function createSession({ engine, baseline, now = () => new Date().toISOSt
 
   // ---- public surface ----
   const session = {
+    // Preview against an isolated copy of the current workbook. The copy runs
+    // the same validation and inverse computation as a real transaction, but
+    // cannot mutate this session's engine, history, or display change feed.
+    computeTransaction(tx, makeEngine) {
+      if (typeof makeEngine !== 'function') throw new Error('computeTransaction needs an engine factory');
+      if (typeof tx?.actor !== 'string' || !ACTORS.has(tx.actor)) throw new Error(`invalid actor "${tx?.actor}" (owner|api|system|sidecar)`);
+      if (typeof tx.origin !== 'string' || !tx.origin) throw new Error('transaction needs an origin string');
+      if (!Array.isArray(tx.ops) || !tx.ops.length) throw new Error('transaction needs a non-empty ops array');
+      if (tx.ops.length === 1) {
+        const error = opError(tx.ops[0]);
+        if (error) throw new Error(`invalid op: ${error}`);
+        return { ops: clone(tx.ops), inverse: clone(computeInverse(tx.ops[0])) };
+      }
+      const preview = NS.createSession({ engine: makeEngine(), baseline: session.serialize(), now });
+      try {
+        preview.applyTransaction(tx);
+        const entry = preview.entryAt(0);
+        return { ops: entry.ops, inverse: entry.inverse };
+      } finally {
+        preview.destroy();
+      }
+    },
     applyTransaction({ actor, origin, ops } = {}) {
       if (typeof actor !== 'string' || !ACTORS.has(actor)) throw new Error(`invalid actor "${actor}" (owner|api|system|sidecar)`);
       if (typeof origin !== 'string' || origin.length === 0) throw new Error('transaction needs an origin string');
@@ -5353,6 +5375,23 @@ const methods = {
     const result = session.applyTransaction(tx);
     return { ...result, display: drainDisplay(fmtTouched(tx.ops), tx.ops), meta: metaAffecting(tx.ops) };
   },
+  previewTransaction(tx) {
+    if (tx && tx.enforce) {
+      const gate = enforceDataValidation(tx.ops || []);
+      if (gate.rejects.length) return { rejected: gate.rejects };
+    }
+    const base = session.snapshotJson();
+    const { ops, inverse } = session.computeTransaction(tx, makeEngine);
+    const sheet = ops.find((op) => op && op.sheet)?.sheet ?? null;
+    const sheetName = session.sheetNames().find((item) => item.id === sheet)?.name ?? null;
+    return { base, diff: { sheet, sheetName, ops, inverse } };
+  },
+  applyTransactionIfBase({ tx, base } = {}) {
+    if (typeof base !== 'string' || session.snapshotJson() !== base) {
+      return { stale: true, reason: 'workbook changed after review staging' };
+    }
+    return methods.applyTransaction(tx);
+  },
   // list values a cell's DV rule offers for the in-cell dropdown (Batch M).
   // Returns { values, onInvalid } if the cell has a list rule, else null.
   dvListFor({ sheet, a1 }) {
@@ -5541,29 +5580,42 @@ postMessage({ event: 'boot', payload: { ok: true } });
      vendor/naklios.js by scripts/inline-sync.mjs. -->
 <script>
 /*__RK_VENDOR_BEGIN vendor/naklios.js*/
-/*!
- * naklios.js — cooperative SDK for apps hosted inside NakliOS (Immersive mode).
- * Vendored INLINE for the single-file build (never loaded as an external asset). No-ops
- * when standalone (window.parent === window), so the same source works in both
- * contexts. Canonical source: naklios-universe/naklOS/sdk/naklios.js. License: MIT.
- * (The upstream usage-example doc comment is omitted here because it contains a
- * literal closing script tag that cannot survive inlining; the IIFE below is
- * byte-identical to the canonical source.)
- */
+/*! NakliOS cooperative SDK, vendored from nakliOS/sdk/naklios.js. License: MIT. */
 (function () {
+  // A real host FRAME is what the transports talk to (postMessage to parent), so
+  // it gates every send/rpc — `inNakliOS`. The `?naklios` URL flag is the host's
+  // EXPLICIT signal (it appends it to embed URLs) and a deliberate opt-in for
+  // testing; it sets capabilities.hosted so an app KNOWS to route through NakliOS,
+  // but it never fakes a channel that isn't there — a bare `?naklios` top-level tab
+  // has no host, so fs/ai capabilities stay false (no handshake) and the app's
+  // adapter falls back to its own APIs. No hang, no breakage.
   var inNakliOS = false;
   try { inNakliOS = !!(window.parent && window.parent !== window); } catch (_) {}
+  var naklFlag = false;
+  try { naklFlag = new URLSearchParams(window.location.search).has('naklios'); } catch (_) {}
+  // Targeted postMessage origin, LEARNED on first contact — the NakliOS shell embeds
+  // apps with referrerpolicy="no-referrer", so document.referrer is empty and can't
+  // be used to verify the parent (that path breaks hosted detection — it is the
+  // Lorewell iframe bug). Instead the first `naklios:*` message from window.parent
+  // locks trustedParentOrigin, and every later send targets that origin (not '*').
+  // The only pre-lock send is `ready`, which carries no app data.
+  var trustedParentOrigin = null;
 
   var currentTheme = null;
   var themeListeners = new Set();
   var capListeners = new Set();
   var beforeCloseCb = null;
   var capabilities = {
-    hosted: inNakliOS,
-    version: 1,
+    // hosted honours the ?naklios flag as well as a real embed, so an app can
+    // decide to route through NakliOS; the fs/ai flags below only flip true after
+    // a real host handshake, so the adapter still self-corrects with no channel.
+    hosted: inNakliOS || naklFlag,
+    flagged: naklFlag,
+    version: 2,
     fs: false,
     fsBackends: [],
     fsBackend: null,
+    fsBoundedReads: false,
     // system: this app is a same-origin system app (non-third-party).
     // sysFs: system-scoped filesystem is available — the whole store, not just
     // apps/<your-id>/. Only true for system apps with a connected backend.
@@ -5583,6 +5635,12 @@ postMessage({ event: 'boot', payload: { ok: true } });
     aiImageState: 'idle',
     aiSearchState: 'idle',
     aiSearch: false,
+    // net: a sovereign egress backend (the user's own Worker or local bridge) is
+    // configured + permitted, so naklios.net.fetch can reach cross-origin hosts the
+    // browser blocks. Stays false until a host advertises one — the SDK seam.
+    net: false,
+    netBackend: null,
+    review: false,
   };
 
   // Request/reply correlation for fs RPCs
@@ -5594,12 +5652,15 @@ postMessage({ event: 'boot', payload: { ok: true } });
   var ragSearches = new Map();     // requestId → semantic-search progress callback
   var fileOpenListeners = new Set(); // exact-file grants delivered by the host
   var pendingFileGrants = [];
+  var reviewDecisionHandler = null;
+  var appliedReviewIds = new Set();
+  var applyingReviewIds = new Map();
 
   function send(type, data) {
     if (!inNakliOS) return;
     try {
       var msg = Object.assign({ type: type }, data || {});
-      window.parent.postMessage(msg, '*');
+      window.parent.postMessage(msg, trustedParentOrigin || '*');
     } catch (_) {}
   }
 
@@ -5617,6 +5678,127 @@ postMessage({ event: 'boot', payload: { ok: true } });
         }
       }, timeoutMs || 30000);
     });
+  }
+
+  // Autosave (DUR, 2026-09-24): the SDK owns WHEN an app's state is written; the app owns WHAT and
+  // WHERE through its own save(). `beforeunload` cannot await, so a save that starts there is lost on
+  // close — the reliable moments are visibilitychange → hidden and pagehide, which fire while the page
+  // can still post a message, and the host's beforeclose, which waits. The timing half runs standalone
+  // too (the save is the app's own); only the dirty report to the host needs a frame.
+  var savers = new Set();
+  var reportedDirty = false;
+  var autosaveWired = false;
+  function noop() {}
+  function anyUnsaved() {
+    var out = false;
+    savers.forEach(function (s) { if (s._guard && s.dirty) out = true; });
+    return out;
+  }
+  function reportDirty() {
+    var d = anyUnsaved();
+    if (d === reportedDirty) return;
+    reportedDirty = d;
+    send('naklios:fs:dirty', { dirty: d });
+  }
+  // urgent: issue every unsaved save NOW, in this task — never behind an in-flight one
+  function flushSavers(urgent) {
+    var all = [];
+    savers.forEach(function (s) { all.push(s._flush(urgent).catch(noop)); });
+    return Promise.all(all);
+  }
+  function wireAutosave() {
+    if (autosaveWired) return;
+    autosaveWired = true;
+    try {
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'hidden') flushSavers(true);
+      });
+    } catch (_) {}
+    try {
+      window.addEventListener('pagehide', function () { flushSavers(true); });
+      window.addEventListener('beforeunload', function (e) {
+        if (!anyUnsaved()) return;
+        flushSavers(true);
+        // Hosted, the NakliOS host arms its own guard from the dirty report; a second prompt from
+        // the frame would be noise. Standalone, this is the only thing that can interpose.
+        if (inNakliOS) return;
+        e.preventDefault();
+        e.returnValue = '';
+      });
+    } catch (_) {}
+  }
+  function makeAutosave(opts) {
+    if (!opts || typeof opts.save !== 'function') {
+      throw new Error('naklios.fs.autosave requires { save: function }');
+    }
+    var delay = typeof opts.delay === 'number' && opts.delay >= 0 ? opts.delay : 1000;
+    var onError = typeof opts.onError === 'function' ? opts.onError : null;
+    // guard:false — a background save (a remote push, say) that keeps the timing but never holds a close
+    var guard = opts.guard !== false;
+    // generations: gen counts changes, issuedGen the newest handed to save(), savedGen the newest durable
+    var gen = 0, issuedGen = 0, savedGen = 0;
+    var timer = null, tail = Promise.resolve(), last = Promise.resolve(), queued = null, disposed = false;
+    function issue() {
+      queued = null;
+      if (gen <= issuedGen) return last;
+      var g = gen;
+      issuedGen = g;
+      var p;
+      try { p = Promise.resolve(opts.save()); } catch (err) { p = Promise.reject(err); }
+      p = p.then(function () {
+        if (g > savedGen) savedGen = g;
+        reportDirty();
+      }, function (err) {
+        if (issuedGen === g) issuedGen = savedGen; // the next flush retries
+        reportDirty();
+        if (onError) { try { onError(err); } catch (_) {} }
+        throw err;
+      });
+      last = p;
+      tail = p.catch(noop);
+      return p;
+    }
+    function flush(urgent) {
+      clearTimeout(timer);
+      timer = null;
+      if (gen <= issuedGen) return last;
+      if (urgent) return issue();
+      if (!queued) queued = tail.then(issue);
+      return queued;
+    }
+    var saver = {
+      // State changed. The save runs at most `delay` ms after the first unsaved change.
+      markDirty: function () {
+        if (disposed) return;
+        gen++;
+        reportDirty();
+        if (!timer) timer = setTimeout(function () { timer = null; flush(false).catch(noop); }, delay);
+      },
+      // Save now (after any save already running). Resolves when the state as of this call is durable.
+      flush: function () { return flush(false); },
+      get dirty() { return gen > savedGen; },
+      dispose: function () {
+        disposed = true;
+        clearTimeout(timer);
+        timer = null;
+        savers.delete(saver);
+        reportDirty();
+      },
+      _flush: flush,
+      _guard: guard,
+    };
+    savers.add(saver);
+    wireAutosave();
+    return saver;
+  }
+
+  // Typed egress error so an app can branch (fall back / prompt to connect) rather
+  // than parse a message. code is 'ENOEGRESS' (no backend / not hosted) or 'EINVAL'.
+  function mkEgressErr(code, message) {
+    var e = new Error(message);
+    e.code = code;
+    e.egress = true;
+    return e;
   }
 
   // Bind each operation to the backend visible when it was issued. The host
@@ -5695,23 +5877,30 @@ postMessage({ event: 'boot', payload: { ok: true } });
     var content = '';
     var finishReason = 'stop';
     var toolCalls = null;
+    var usage = null;
+    var model = null;
     for await (var chunk of stream) {
       var choice = chunk.choices && chunk.choices[0];
       if (choice && choice.delta && choice.delta.content) content += choice.delta.content;
       if (choice && choice.delta && choice.delta.tool_calls) toolCalls = choice.delta.tool_calls;
       if (choice && choice.finish_reason) finishReason = choice.finish_reason;
+      if (chunk.usage) usage = chunk.usage;
+      // the last chunk is the done chunk, which names the id that actually answered
+      if (chunk.model) model = chunk.model;
     }
     var message = { role: 'assistant', content: content };
     if (toolCalls) message.tool_calls = toolCalls;
     return {
       id: 'naklios-local',
       object: 'chat.completion',
-      model: capabilities.aiModel || 'localmind',
+      model: model || capabilities.aiModel || 'localmind',
       choices: [{
         index: 0,
         message: message,
         finish_reason: finishReason,
       }],
+      // top level, as the OpenAI completion shape has it; null when the provider said nothing
+      usage: usage,
     };
   }
 
@@ -5766,6 +5955,16 @@ postMessage({ event: 'boot', payload: { ok: true } });
     if (inNakliOS && e.source !== window.parent) return;
     var msg = e.data;
     if (!msg || typeof msg !== 'object') return;
+    // Lock the trusted origin on the first naklios:* message, then verify every
+    // later message against it (no-referrer-safe; see the detection note). This
+    // runs standalone too: a bare/?naklios top-level tab has no window.parent to
+    // pin the source against, so learn-on-contact origin is the only check it can
+    // make — without it the handler would mutate capabilities and fire listeners
+    // for naklios:* messages from ANY origin (opener, child frame, injected page).
+    if (typeof msg.type === 'string' && msg.type.indexOf('naklios:') === 0) {
+      if (!trustedParentOrigin) trustedParentOrigin = e.origin;
+      else if (e.origin !== trustedParentOrigin) return;
+    }
     if (msg.type === 'naklios:theme') {
       currentTheme = { id: msg.theme, colors: msg.colors, mood: msg.mood };
       themeListeners.forEach(function (cb) {
@@ -5774,13 +5973,14 @@ postMessage({ event: 'boot', payload: { ok: true } });
     } else if (msg.type === 'naklios:beforeclose') {
       var closeWork;
       try { closeWork = beforeCloseCb ? beforeCloseCb() : null; } catch (_) { closeWork = null; }
-      Promise.resolve(closeWork).catch(function () {}).then(function () {
+      Promise.all([Promise.resolve(closeWork).catch(function () {}), flushSavers(true)]).then(function () {
         send('naklios:beforeclose-ready', { requestId: msg.requestId });
       });
     } else if (msg.type === 'naklios:capabilities') {
       if (typeof msg.fs === 'boolean') capabilities.fs = msg.fs;
       if (Array.isArray(msg.fsBackends)) capabilities.fsBackends = msg.fsBackends;
       capabilities.fsBackend = typeof msg.fsBackend === 'string' ? msg.fsBackend : null;
+      capabilities.fsBoundedReads = msg.fsBoundedReads === true;
       capabilities.system = msg.system === true;
       capabilities.sysFs = msg.sysFs === true;
       if (typeof msg.ai === 'boolean') capabilities.ai = msg.ai;
@@ -5805,6 +6005,9 @@ postMessage({ event: 'boot', payload: { ok: true } });
         ? msg.aiSearchState
         : 'idle';
       capabilities.aiSearch = msg.aiSearch === true;
+      capabilities.net = msg.net === true;
+      capabilities.netBackend = typeof msg.netBackend === 'string' ? msg.netBackend : null;
+      capabilities.review = msg.review === true;
       capListeners.forEach(function (cb) {
         try { cb(capabilities); } catch (_) {}
       });
@@ -5837,12 +6040,19 @@ postMessage({ event: 'boot', payload: { ok: true } });
         aiRequest.deliver({
           id: msg.requestId,
           object: 'chat.completion.chunk',
-          model: msg.model || capabilities.aiModel || 'localmind',
+          // Who answered, where the OpenAI shape puts it. The host's fallback ladder can
+          // answer from an id other than the configured one; the done chunk is the only
+          // frame that knows, so it names the responder and the token chunks keep the
+          // configured entry.
+          model: msg.answeredModel || msg.model || capabilities.aiModel || 'localmind',
           choices: [{
             index: 0,
             delta: msg.toolCalls && msg.toolCalls.length ? { tool_calls: msg.toolCalls } : {},
             finish_reason: msg.finishReason || 'stop',
           }],
+          // The provider's token count, where the OpenAI shape puts it. An app that budgets
+          // on estimated characters cannot see tool schemas or the host's own preamble.
+          usage: msg.usage || null,
         });
         aiRequests.delete(msg.requestId);
         aiRequest.finish();
@@ -5897,8 +6107,39 @@ postMessage({ event: 'boot', payload: { ok: true } });
       else fileOpenListeners.forEach(function (cb) {
         try { cb(grant); } catch (_) {}
       });
+    } else if (msg.type === 'naklios:review:commit' && msg.proposal_id) {
+      var reviewId = String(msg.proposal_id);
+      if (appliedReviewIds.has(reviewId)) {
+        send('naklios:review:applied', { proposal_id: reviewId, ok: true });
+      } else if (!reviewDecisionHandler) {
+        send('naklios:review:applied', { proposal_id: reviewId, ok: false, error: 'app has no review decision handler' });
+      } else {
+        var application = applyingReviewIds.get(reviewId);
+        if (!application) {
+          application = Promise.resolve().then(function () {
+            return reviewDecisionHandler({ type: 'commit', proposal_id: reviewId });
+          }).then(function (result) {
+            if (result && result.ok === false) throw new Error(result.reason || 'app refused the staged change');
+            appliedReviewIds.add(reviewId);
+          });
+          applyingReviewIds.set(reviewId, application);
+          application.then(function () { applyingReviewIds.delete(reviewId); }, function () { applyingReviewIds.delete(reviewId); });
+        }
+        application.then(function () {
+          send('naklios:review:applied', { proposal_id: reviewId, ok: true });
+        }).catch(function (error) {
+          send('naklios:review:applied', { proposal_id: reviewId, ok: false, error: String(error && error.message || error) });
+        });
+      }
+    } else if (msg.type === 'naklios:review:discard' && msg.proposal_id) {
+      if (reviewDecisionHandler) {
+        Promise.resolve().then(function () {
+          return reviewDecisionHandler({ type: 'discard', proposal_id: String(msg.proposal_id) });
+        }).catch(function () {});
+      }
     } else if ((msg.type === 'naklios:fs:reply' || msg.type === 'naklios:file:reply' ||
-                msg.type === 'naklios:rag:reply') && msg.requestId) {
+                msg.type === 'naklios:review:reply' ||
+                msg.type === 'naklios:rag:reply' || msg.type === 'naklios:net:reply') && msg.requestId) {
       var p = pendingRpc.get(msg.requestId);
       if (!p) return;
       pendingRpc.delete(msg.requestId);
@@ -5919,7 +6160,7 @@ postMessage({ event: 'boot', payload: { ok: true } });
   });
 
   window.naklios = {
-    version: 1,
+    version: 2,
     capabilities: capabilities,   // mutated in place; read fields directly
     ready: function () {
       send('naklios:ready', {
@@ -5955,12 +6196,32 @@ postMessage({ event: 'boot', payload: { ok: true } });
       return function () { capListeners.delete(cb); };
     },
     requestCapabilities: function () { send('naklios:capabilities-request'); },
+    review: {
+      // The host owns normalization and approval. A standalone app receives a
+      // clear fallback marker; its own caller performs the immediate write.
+      stage: function (tool, diff, options) {
+        if (!inNakliOS) return Promise.resolve({ standalone: true, proposal_id: null });
+        if (!capabilities.review) return Promise.reject(new Error('NakliOS review is unavailable'));
+        options = options || {};
+        return rpc('naklios:review:stage', {
+          tool: tool, diff: diff, expires: options.expires,
+          reversible: options.reversible === true,
+        });
+      },
+      onDecision: function (cb) {
+        if (typeof cb !== 'function') throw new Error('naklios.review.onDecision needs a callback');
+        reviewDecisionHandler = cb;
+        return function () { if (reviewDecisionHandler === cb) reviewDecisionHandler = null; };
+      },
+    },
     fs: {
+      get supportsBoundedReads() { return capabilities.fsBoundedReads === true; },
       // All paths are app-relative (under apps/<your-id>/ in the host folder).
       // Returns Promises. Reject if no folder connected, permission denied,
       // or path tries to traverse.
       read:       function (path)       { return rpc('naklios:fs:read', fsPayload({ path: path })); },
-      readBinary: function (path)       { return rpc('naklios:fs:readBinary', fsPayload({ path: path })); },
+      readBinary: function (path, options) { return rpc('naklios:fs:readBinary', fsPayload({ path: path, maxBytes: options && options.maxBytes })); },
+      stat:       function (path)       { return rpc('naklios:fs:stat', fsPayload({ path: path })); },
       write:      function (path, data) { return rpc('naklios:fs:write', fsPayload({ path: path, data: data })); },
       append:     function (path, line) { return rpc('naklios:fs:append', fsPayload({ path: path, line: line })); },
       list:       function (prefix)     { return rpc('naklios:fs:list', fsPayload({ prefix: prefix || '' })); },
@@ -5987,6 +6248,12 @@ postMessage({ event: 'boot', payload: { ok: true } });
       // Explicit backend changes are always confirmed by the NakliOS host.
       // Switching changes the app-scoped view; it never copies or deletes data.
       useBackend: function (backend)    { return rpc('naklios:fs:selectBackend', { backend: backend }); },
+      // Autosave: the app says WHEN state changed (markDirty) and HOW to save it ({ save }); the SDK
+      // owns the timing — a throttled save, an immediate one when the page hides or the host closes
+      // the window, and a close guard only while something is unsaved. Returns
+      // { markDirty, flush, dirty, dispose }. { guard: false } keeps the timing but never holds a
+      // close (a background push, not the user's data). Runs standalone too. See docs/app-contract.md "Durability".
+      autosave: function (opts) { return makeAutosave(opts); },
     },
     // System-scoped filesystem — the WHOLE store on the active backend, not just
     // this app's apps/<id>/ namespace. Available to same-origin system apps only
@@ -5997,7 +6264,8 @@ postMessage({ event: 'boot', payload: { ok: true } });
     sys: {
       fs: {
         read:       function (path)       { return rpc('naklios:sysfs:read', fsPayload({ path: path })); },
-        readBinary: function (path)       { return rpc('naklios:sysfs:readBinary', fsPayload({ path: path })); },
+        readBinary: function (path, options) { return rpc('naklios:sysfs:readBinary', fsPayload({ path: path, maxBytes: options && options.maxBytes })); },
+        stat:       function (path)       { return rpc('naklios:sysfs:stat', fsPayload({ path: path })); },
         write:      function (path, data) { return rpc('naklios:sysfs:write', fsPayload({ path: path, data: data })); },
         append:     function (path, line) { return rpc('naklios:sysfs:append', fsPayload({ path: path, line: line })); },
         list:       function (prefix)     { return rpc('naklios:sysfs:list', fsPayload({ prefix: prefix || '' })); },
@@ -6087,6 +6355,39 @@ postMessage({ event: 'boot', payload: { ok: true } });
         aiImageRequests.forEach(function (_, requestId) {
           send('naklios:ai:cancel', { requestId: requestId });
         });
+      },
+    },
+
+    // Sovereign egress — a cross-origin HTTP request the browser's Same-Origin
+    // Policy blocks (git push, arbitrary-host fetch, no-CORS APIs). The host routes
+    // it to the user-configured backend (their own Worker or the local bridge); it
+    // is NEVER a naklios-hosted proxy. Grant-gated + History-logged host-side.
+    // This is the SDK seam: until a host advertises a backend (capabilities.net),
+    // every call fails fast with a typed ENOEGRESS — no 30s RPC timeout.
+    net: {
+      // Synchronous check an app can gate its UI on.
+      available: function () { return capabilities.net === true; },
+      // { backend: 'worker'|'bridge', roams } — no secrets; null when unavailable.
+      info: function () {
+        if (!inNakliOS || !capabilities.net) return Promise.resolve(null);
+        return rpc('naklios:net:info', {});
+      },
+      // fetch({ url, method, headers, body }) -> { status, statusText, headers, body }.
+      // Binary bodies as ArrayBuffer/Uint8Array; text as string. Buffered in v1.
+      fetch: function (req) {
+        req = req || {};
+        if (!req.url) return Promise.reject(mkEgressErr('EINVAL', 'net.fetch requires a url'));
+        if (!inNakliOS || !capabilities.net) {
+          return Promise.reject(mkEgressErr('ENOEGRESS', inNakliOS
+            ? 'No egress backend configured — connect one in NakliOS settings'
+            : 'Not hosted — naklios.net unavailable standalone'));
+        }
+        return rpc('naklios:net:fetch', {
+          url: String(req.url),
+          method: req.method || 'GET',
+          headers: req.headers || {},
+          body: req.body != null ? req.body : null,
+        }, req.timeoutMs);
       },
     },
   };
@@ -6469,6 +6770,8 @@ export function createWorkerClient(worker) {
     init: (hfUrl) => call('init', { hfUrl }),
     loadWorkbook: (workbook) => call('loadWorkbook', { workbook }),
     applyTransaction: (tx) => call('applyTransaction', tx),
+    previewTransaction: (tx) => call('previewTransaction', tx),
+    applyTransactionIfBase: (tx, base) => call('applyTransactionIfBase', { tx, base }),
     undo: () => call('undo'),
     redo: () => call('redo'),
     canUndo: () => call('canUndo'),
@@ -10709,7 +11012,7 @@ export function createAgentFace(deps) {
     sheets,        // () -> [{id,name}]
     activeSheet,   // () -> {id,name}
     getRange,      // (ref) -> Promise<{values, formulas}>
-    setRange,      // (ref, values) -> Promise<txId>   (goes through applyTransaction, actor:"api")
+    setRange,      // (ref, values) -> Promise<txId | {staged,proposal_id}>
     evalFormula,   // (formula, {sheet, at}) -> Promise<value | {error}>   (no commit)
     recalc,        // () -> Promise<void>
     exportBlob,    // (kind) -> Promise<Blob>
@@ -10740,12 +11043,12 @@ export function createAgentFace(deps) {
     activeSheet: () => activeSheet(),
     getRange: (ref) => getRange(ref),
     async setRange(ref, values) {
-      const txId = await setRange(ref, values);
+      const result = await setRange(ref, values);
       // The face owns the change event for an API write (it carries the `ref`);
-      // the app's txApply deliberately does NOT notify for actor:"api" so the
-      // fan-out is single, not double (L4).
-      emit('change', { ref, txId, actor: 'api' });
-      return txId;
+      // a hosted staged write is only a proposal. The app sends the event after
+      // the host approves and the worker actually commits it.
+      if (!result?.staged) emit('change', { ref, txId: result, actor: 'api' });
+      return result;
     },
     eval: (formula, opts) => evalFormula(formula, opts || {}),
     async recalc() { await recalc(); emit('recalc', {}); },
@@ -12905,9 +13208,52 @@ export function createApp({ client, params = new URLSearchParams() }) {
     if (meta.pivots || (activePivots.length && dataChanged)) await refreshPivots();
   };
 
+  const pendingReview = new Map();
+  if (window.naklios?.review?.onDecision) {
+    window.naklios.review.onDecision(async ({ type, proposal_id }) => {
+      const pending = pendingReview.get(proposal_id);
+      if (!pending) throw new Error('Reckon has no pending transaction for this proposal');
+      if (type === 'discard') {
+        pendingReview.delete(proposal_id);
+        toast('Spreadsheet change discarded.');
+        return;
+      }
+      if (type !== 'commit') throw new Error('Unknown review decision');
+      const res = await client.applyTransactionIfBase(pending.tx, pending.base);
+      if (res.stale) throw new Error(res.reason || 'Workbook changed after staging');
+      if (res.rejected) throw new Error(dvRejectMessage(res.rejected[0]));
+      pendingReview.delete(proposal_id);
+      // Application already happened in the worker. A repaint failure must not
+      // turn the host acknowledgement into a retry of the same transaction.
+      try { await handleTxResult(res, { skipMeta: pending.skipMeta }); }
+      catch (error) { toast(`Change committed; refresh failed: ${error.message || error}`, { kind:'error' }); }
+      if (res.warnings?.length) toast(dvWarnMessage(res.warnings[0]), { kind:'info', ms:5000 });
+      agentFace?.notify('change', pending.actor === 'api'
+        ? { ref:pending.ref, txId:res.txId, actor:'api' }
+        : { txId:res.txId, actor:pending.actor, origin:pending.origin });
+      toast('Spreadsheet change committed.');
+      return { ok:true };
+    });
+  }
+
   const txApply = async (ops, { origin = 'ui', skipMeta = false, actor = 'owner', enforce = false } = {}) => {
     try {
-      const res = await client.applyTransaction(enforce ? { actor, origin, ops, enforce } : { actor, origin, ops });
+      const tx = enforce ? { actor, origin, ops, enforce } : { actor, origin, ops };
+      let res;
+      if (window.naklios?.capabilities.review === true) {
+        const preview = await client.previewTransaction(tx);
+        if (preview.rejected) res = preview;
+        else {
+          const staged = await window.naklios.review.stage('reckon.transaction', preview.diff, {
+            reversible:preview.diff.inverse.length > 0,
+          });
+          pendingReview.set(staged.proposal_id, { tx, base:preview.base, actor, origin, skipMeta });
+          toast('Spreadsheet change staged for review.');
+          return { staged:true, proposal_id:staged.proposal_id };
+        }
+      } else {
+        res = await client.applyTransaction(tx);
+      }
       // data-validation reject (Batch M, §4): the whole write was refused before
       // it touched state. Surface an in-app message (never a native dialog, §13);
       // nothing to render. API callers get an Error so their promise rejects.
@@ -13927,6 +14273,11 @@ export function createApp({ client, params = new URLSearchParams() }) {
       } else cells[a1] = (typeof entry === 'string' && entry.startsWith('=')) ? { f: entry } : { v: entry };
     }));
     const res = await txApply([{ op: 'setCells', sheet: sheetId, cells }], { actor: 'api', origin: `api:${API_ORIGIN()}`, enforce: true });
+    if (res?.staged) {
+      const pending = pendingReview.get(res.proposal_id);
+      if (pending) pending.ref = ref;
+      return res;
+    }
     return res ? res.txId : null;
   };
   const apiEval = async (formula, { sheet } = {}) => {

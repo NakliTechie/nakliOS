@@ -1397,6 +1397,32 @@ body.is-mobile .nw-dock{display:none;}
 @media (max-width: 380px){
   body.is-mobile .icon-area{grid-template-columns:repeat(3, 1fr);}
 }
+#review-btn[hidden]{display:none;}
+#nw-review-dialog{
+  width:min(780px, calc(100vw - 32px)); max-height:min(82vh, 760px);
+  padding:0; border:1px solid var(--line-strong); border-radius:12px;
+  background:var(--panel); color:var(--ink); box-shadow:0 18px 60px #0008;
+}
+#nw-review-dialog::backdrop{background:#0008;}
+.nw-review-header{display:flex; align-items:center; gap:12px; padding:16px 20px; border-bottom:1px solid var(--line);}
+.nw-review-header h2{font-size:17px; margin:0; flex:1;}
+.nw-review-header button{padding:5px 9px; border:1px solid var(--line); border-radius:6px;}
+#nw-review-status{min-height:20px; padding:8px 20px; color:var(--muted);}
+#nw-review-list{max-height:calc(82vh - 100px); overflow:auto; padding:0 20px 20px;}
+.nk-rev{margin:10px 0; padding:12px; border:1px solid var(--line); border-radius:8px; background:var(--row);}
+.nk-rev-head{display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:10px;}
+.nk-rev-app{font-weight:700; text-transform:capitalize;}
+.nk-rev-summary{color:var(--muted);}
+.nk-rev-diff{width:100%; border-collapse:collapse; table-layout:fixed;}
+.nk-rev-diff caption{text-align:left; color:var(--muted); padding-bottom:6px;}
+.nk-rev-diff th,.nk-rev-diff td{padding:7px; text-align:left; vertical-align:top; border:1px solid var(--line); overflow-wrap:anywhere; user-select:text;}
+.nk-rev-diff th:first-child{width:22%;}
+.nk-rev-foot{display:flex; align-items:center; gap:8px; margin-top:12px;}
+.nk-rev-foot button{padding:6px 10px; border:1px solid var(--line-strong); border-radius:6px;}
+.nk-rev-commit{background:var(--brand); color:var(--panel);}
+.nk-rev-foot button[disabled]{opacity:.5; cursor:not-allowed;}
+.nk-rev-why{flex:1; color:var(--muted);}
+.nk-sr{position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%);}
 </style>
 </head>
 <body>
@@ -1423,6 +1449,7 @@ body.is-mobile .nw-dock{display:none;}
       <span class="topbar-chip-icon">☁️</span>
       <span class="topbar-chip-label">Crate</span>
     </button>
+    <button id="review-btn" class="topbar-btn" type="button" hidden aria-label="Review staged changes">Review 0</button>
     <button id="mode-pill" type="button" title="Click Settings to change mode" aria-label="Experience mode: Immersive">Immersive</button>
     <span id="clock">—</span>
     <button id="settings-btn" class="topbar-btn" title="Settings" aria-label="Settings">⚙</button>
@@ -1443,6 +1470,11 @@ body.is-mobile .nw-dock{display:none;}
 
   <div id="overlay-root"></div>
 </div>
+<dialog id="nw-review-dialog" aria-labelledby="nw-review-title">
+  <div class="nw-review-header"><h2 id="nw-review-title">Staged changes</h2><button type="button" id="nw-review-close">Close</button></div>
+  <div id="nw-review-status" role="status"></div>
+  <div id="nw-review-list"></div>
+</dialog>
 
 <script src="vendor/localmind/host-model-catalog.js"></script>
 <script>
@@ -4590,6 +4622,7 @@ function finalizeCloseWindow(win){
     fsHostUnsubscribeSource(iframe.contentWindow);
     releaseFileGrantsForSource(iframe.contentWindow);
     aiHostCancelSource(iframe.contentWindow);
+    if (reviewHostPromise) void reviewHostPromise.then(host => host.detach(iframe.contentWindow));
     knownIframes.delete(iframe.contentWindow);
   }
   win.remove();
@@ -7712,6 +7745,7 @@ function capabilitySnapshot(appId){
     // configured a backend. Third-party apps never get it (isSystem gate).
     net: isSystem && egressConfigured(),
     netBackend: (isSystem && egressConfigured()) ? egressBackendLabel() : null,
+    review: appId === 'reckon' || appId === 'draft' || appId === 'kanzen',
   };
 }
 
@@ -8069,6 +8103,103 @@ function bindTopbarChips(){
   document.getElementById('crate-chip')?.addEventListener('click', openCrateChipMenu);
 }
 
+let reviewHostPromise = null;
+let reviewRendererPromise = null;
+let reviewHistoryTail = Promise.resolve();
+const reviewDecisionPending = new Set();
+
+function reviewHistoryAppend(tool, input, output){
+  const append = async () => {
+    const ledger = await import('./sys/history/ledger.mjs');
+    const root = await navigator.storage.getDirectory();
+    const dir = await (await root.getDirectoryHandle('naklios', { create:true })).getDirectoryHandle('history', { create:true });
+    const handle = await dir.getFileHandle('review.ndjson', { create:true });
+    const file = await handle.getFile();
+    const lines = (await file.text()).split('\n').filter(Boolean);
+    const prev = lines.length ? await ledger.eventHash(JSON.parse(lines[lines.length - 1])) : null;
+    const { event } = await ledger.appendEvent(prev, {
+      ts:Date.now(), principal:'person', door:'ui', tool,
+      app:input.app, input, output, grant_id:null,
+    });
+    const writer = await handle.createWritable({ keepExistingData:true });
+    await writer.write({ type:'write', position:file.size, data:JSON.stringify(event) + '\n' });
+    await writer.close();
+  };
+  const run = reviewHistoryTail.then(() => navigator.locks?.request
+    ? navigator.locks.request('naklios-review-history', append)
+    : append());
+  reviewHistoryTail = run.catch(() => {});
+  return run;
+}
+
+function sendReviewDecision(source, message){
+  const iframe = Array.from(document.querySelectorAll('.nw-window iframe')).find(f => f.contentWindow === source);
+  const win = iframe?.closest('.nw-window');
+  if (!win) throw new Error('originating app closed');
+  const target = (!win._expectedOrigin || win._expectedOrigin === 'null') ? '*' : win._expectedOrigin;
+  source.postMessage(message, target);
+}
+
+function reviewHost(){
+  if (!reviewHostPromise){
+    reviewHostPromise = import('./sys/staging/review-host.mjs').then(({ createReviewHost }) => createReviewHost({
+      sendDecision:sendReviewDecision,
+      onChange:() => { void renderReviewPanel(false); },
+      record:reviewHistoryAppend,
+    }));
+  }
+  return reviewHostPromise;
+}
+
+function reviewStatus(message){
+  document.getElementById('nw-review-status').textContent = message || '';
+}
+
+async function renderReviewPanel(open = false){
+  const host = await reviewHost();
+  const envelopes = host.envelopes();
+  const button = document.getElementById('review-btn');
+  button.hidden = envelopes.length === 0;
+  button.textContent = `Review ${envelopes.length}`;
+  button.setAttribute('aria-label', `Review ${envelopes.length} staged changes`);
+  const dialog = document.getElementById('nw-review-dialog');
+  if (open && !dialog.open) { reviewStatus(''); dialog.showModal(); }
+  if (!dialog.open) return;
+  if (!reviewRendererPromise) reviewRendererPromise = import('./sys/staging/reviewer.mjs');
+  const { renderReviewQueue } = await reviewRendererPromise;
+  const list = document.getElementById('nw-review-list');
+  list.replaceChildren();
+  if (!envelopes.length){
+    list.textContent = 'No staged changes.';
+    return;
+  }
+  const { element } = renderReviewQueue(envelopes, { actor:'person', now:Date.now() }, {
+    doc:document,
+    onCommit:model => { void decideReview('commit', model.proposalId); },
+    onDiscard:model => { void decideReview('discard', model.proposalId); },
+  });
+  list.appendChild(element);
+}
+
+async function decideReview(action, proposalId){
+  if (reviewDecisionPending.has(proposalId)) return;
+  reviewDecisionPending.add(proposalId);
+  try {
+    const host = await reviewHost();
+    reviewStatus(action === 'commit' ? 'Applying in the app…' : 'Discarding…');
+    const result = action === 'commit' ? await host.commit(proposalId) : await host.discard(proposalId, 'person discarded');
+    reviewStatus(result.historyError ? `Decision saved; History failed: ${result.historyError}` :
+      result.ok ? (action === 'commit' ? 'Change committed.' : 'Change discarded.') : `Decision refused: ${result.reason}`);
+    await renderReviewPanel();
+    if (result.ok && !result.historyError && host.size() === 0) document.getElementById('nw-review-dialog').close();
+  } catch (error) {
+    reviewStatus(`Decision failed: ${String(error?.message || error)}`);
+  } finally { reviewDecisionPending.delete(proposalId); }
+}
+
+document.getElementById('review-btn').addEventListener('click', () => { void renderReviewPanel(true); });
+document.getElementById('nw-review-close').addEventListener('click', () => document.getElementById('nw-review-dialog').close());
+
 window.addEventListener('message', async e => {
   if (!knownIframes.has(e.source)) return;
   const msg = e.data;
@@ -8123,6 +8254,23 @@ window.addEventListener('message', async e => {
   } else if (msg.type === 'naklios:capabilities-request'){
     const iframe = findIframe(); const appId = getAppId();
     if (iframe && appId) postCapabilities(iframe, appId);
+  } else if (msg.type === 'naklios:review:stage'){
+    const reply = { type:'naklios:review:reply', requestId:msg.requestId };
+    try {
+      const appId = getAppId();
+      if (!appId || !capabilitySnapshot(appId).review) throw new Error('Review is unavailable for this app');
+      reply.result = await (await reviewHost()).stage({
+        source:e.source, app:appId, tool:msg.tool, diff:msg.diff,
+        expires:msg.expires, reversible:msg.reversible === true,
+      });
+      if (reply.result.historyError) reviewStatus(`History failed: ${reply.result.historyError}`);
+    } catch (err){ reply.error = String(err?.message || err); }
+    if (msg.requestId) { try { e.source.postMessage(reply, replyTo); } catch(_){} }
+    if (reply.result?.proposal_id) setTimeout(() => { void renderReviewPanel(true); }, 0);
+  } else if (msg.type === 'naklios:review:applied'){
+    if (reviewHostPromise) (await reviewHostPromise).acknowledge({
+      source:e.source, proposal_id:msg.proposal_id, ok:msg.ok, error:msg.error,
+    });
   } else if (msg.type === 'naklios:open-settings'){
     openSettings(typeof msg.section === 'string' ? msg.section : 'storage');
   } else if (typeof msg.type === 'string' && msg.type.startsWith('naklios:file:')){

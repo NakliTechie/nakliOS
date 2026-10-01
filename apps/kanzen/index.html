@@ -1877,7 +1877,7 @@
    Single-file local-first kanban
    ============================================================ */
 
-/* naklios-sdk:begin ver=2 sha256=727cb3e12f17f4a3872d0119b0719bae3ef8c5fc0389eb10ecc2f635876a8617 — DO NOT EDIT until :end; run `node scripts/vendor-naklios-sdk.mjs` */
+/* naklios-sdk:begin ver=2 sha256=52439c903507fb2416e978a7d05acf61b79253aa04fe6857f596289aefc90005 — DO NOT EDIT until :end; run `node scripts/vendor-naklios-sdk.mjs` */
 /*!
  * naklios.js — cooperative SDK for apps hosted inside NakliOS (Immersive mode)
  *
@@ -1992,6 +1992,7 @@
     fs: false,
     fsBackends: [],
     fsBackend: null,
+    fsBoundedReads: false,
     // system: this app is a same-origin system app (non-third-party).
     // sysFs: system-scoped filesystem is available — the whole store, not just
     // apps/<your-id>/. Only true for system apps with a connected backend.
@@ -2016,6 +2017,7 @@
     // browser blocks. Stays false until a host advertises one — the SDK seam.
     net: false,
     netBackend: null,
+    review: false,
   };
 
   // Request/reply correlation for fs RPCs
@@ -2027,6 +2029,9 @@
   var ragSearches = new Map();     // requestId → semantic-search progress callback
   var fileOpenListeners = new Set(); // exact-file grants delivered by the host
   var pendingFileGrants = [];
+  var reviewDecisionHandler = null;
+  var appliedReviewIds = new Set();
+  var applyingReviewIds = new Map();
 
   function send(type, data) {
     if (!inNakliOS) return;
@@ -2352,6 +2357,7 @@
       if (typeof msg.fs === 'boolean') capabilities.fs = msg.fs;
       if (Array.isArray(msg.fsBackends)) capabilities.fsBackends = msg.fsBackends;
       capabilities.fsBackend = typeof msg.fsBackend === 'string' ? msg.fsBackend : null;
+      capabilities.fsBoundedReads = msg.fsBoundedReads === true;
       capabilities.system = msg.system === true;
       capabilities.sysFs = msg.sysFs === true;
       if (typeof msg.ai === 'boolean') capabilities.ai = msg.ai;
@@ -2378,6 +2384,7 @@
       capabilities.aiSearch = msg.aiSearch === true;
       capabilities.net = msg.net === true;
       capabilities.netBackend = typeof msg.netBackend === 'string' ? msg.netBackend : null;
+      capabilities.review = msg.review === true;
       capListeners.forEach(function (cb) {
         try { cb(capabilities); } catch (_) {}
       });
@@ -2477,7 +2484,38 @@
       else fileOpenListeners.forEach(function (cb) {
         try { cb(grant); } catch (_) {}
       });
+    } else if (msg.type === 'naklios:review:commit' && msg.proposal_id) {
+      var reviewId = String(msg.proposal_id);
+      if (appliedReviewIds.has(reviewId)) {
+        send('naklios:review:applied', { proposal_id: reviewId, ok: true });
+      } else if (!reviewDecisionHandler) {
+        send('naklios:review:applied', { proposal_id: reviewId, ok: false, error: 'app has no review decision handler' });
+      } else {
+        var application = applyingReviewIds.get(reviewId);
+        if (!application) {
+          application = Promise.resolve().then(function () {
+            return reviewDecisionHandler({ type: 'commit', proposal_id: reviewId });
+          }).then(function (result) {
+            if (result && result.ok === false) throw new Error(result.reason || 'app refused the staged change');
+            appliedReviewIds.add(reviewId);
+          });
+          applyingReviewIds.set(reviewId, application);
+          application.then(function () { applyingReviewIds.delete(reviewId); }, function () { applyingReviewIds.delete(reviewId); });
+        }
+        application.then(function () {
+          send('naklios:review:applied', { proposal_id: reviewId, ok: true });
+        }).catch(function (error) {
+          send('naklios:review:applied', { proposal_id: reviewId, ok: false, error: String(error && error.message || error) });
+        });
+      }
+    } else if (msg.type === 'naklios:review:discard' && msg.proposal_id) {
+      if (reviewDecisionHandler) {
+        Promise.resolve().then(function () {
+          return reviewDecisionHandler({ type: 'discard', proposal_id: String(msg.proposal_id) });
+        }).catch(function () {});
+      }
     } else if ((msg.type === 'naklios:fs:reply' || msg.type === 'naklios:file:reply' ||
+                msg.type === 'naklios:review:reply' ||
                 msg.type === 'naklios:rag:reply' || msg.type === 'naklios:net:reply') && msg.requestId) {
       var p = pendingRpc.get(msg.requestId);
       if (!p) return;
@@ -2535,12 +2573,32 @@
       return function () { capListeners.delete(cb); };
     },
     requestCapabilities: function () { send('naklios:capabilities-request'); },
+    review: {
+      // The host owns normalization and approval. A standalone app receives a
+      // clear fallback marker; its own caller performs the immediate write.
+      stage: function (tool, diff, options) {
+        if (!inNakliOS) return Promise.resolve({ standalone: true, proposal_id: null });
+        if (!capabilities.review) return Promise.reject(new Error('NakliOS review is unavailable'));
+        options = options || {};
+        return rpc('naklios:review:stage', {
+          tool: tool, diff: diff, expires: options.expires,
+          reversible: options.reversible === true,
+        });
+      },
+      onDecision: function (cb) {
+        if (typeof cb !== 'function') throw new Error('naklios.review.onDecision needs a callback');
+        reviewDecisionHandler = cb;
+        return function () { if (reviewDecisionHandler === cb) reviewDecisionHandler = null; };
+      },
+    },
     fs: {
+      get supportsBoundedReads() { return capabilities.fsBoundedReads === true; },
       // All paths are app-relative (under apps/<your-id>/ in the host folder).
       // Returns Promises. Reject if no folder connected, permission denied,
       // or path tries to traverse.
       read:       function (path)       { return rpc('naklios:fs:read', fsPayload({ path: path })); },
-      readBinary: function (path)       { return rpc('naklios:fs:readBinary', fsPayload({ path: path })); },
+      readBinary: function (path, options) { return rpc('naklios:fs:readBinary', fsPayload({ path: path, maxBytes: options && options.maxBytes })); },
+      stat:       function (path)       { return rpc('naklios:fs:stat', fsPayload({ path: path })); },
       write:      function (path, data) { return rpc('naklios:fs:write', fsPayload({ path: path, data: data })); },
       append:     function (path, line) { return rpc('naklios:fs:append', fsPayload({ path: path, line: line })); },
       list:       function (prefix)     { return rpc('naklios:fs:list', fsPayload({ prefix: prefix || '' })); },
@@ -2583,7 +2641,8 @@
     sys: {
       fs: {
         read:       function (path)       { return rpc('naklios:sysfs:read', fsPayload({ path: path })); },
-        readBinary: function (path)       { return rpc('naklios:sysfs:readBinary', fsPayload({ path: path })); },
+        readBinary: function (path, options) { return rpc('naklios:sysfs:readBinary', fsPayload({ path: path, maxBytes: options && options.maxBytes })); },
+        stat:       function (path)       { return rpc('naklios:sysfs:stat', fsPayload({ path: path })); },
         write:      function (path, data) { return rpc('naklios:sysfs:write', fsPayload({ path: path, data: data })); },
         append:     function (path, line) { return rpc('naklios:sysfs:append', fsPayload({ path: path, line: line })); },
         list:       function (prefix)     { return rpc('naklios:sysfs:list', fsPayload({ prefix: prefix || '' })); },
@@ -4727,28 +4786,24 @@ function onColDrop(e, colId){
     const cardId = _drag.id;
     const fromCol = findColumnByCard(b, cardId);
     if(!fromCol) return;
-    fromCol.cardIds = fromCol.cardIds.filter(x => x !== cardId);
     const toCol = b.columns.find(c => c.id === colId);
     if(!toCol) return;
-    stampCard(b.cards[cardId]);
-    if(fromCol.id !== toCol.id){
-      const card = b.cards[cardId];
-      logActivity('card_moved', { cardId, cardTitle: card?.title, detail: { fromColumn: fromCol.name, toColumn: toCol.name } });
-    }
 
     // compute insertion index by pointer Y vs existing cards in target body
     const columnEl=[...document.querySelectorAll('#board-area .column')]
       .find(element=>element.dataset.columnId===colId);
     const body = columnEl?.querySelector('.col-body');
-    let insertIdx = toCol.cardIds.length;
+    let insertIdx = toCol.cardIds.filter(id => id !== cardId).length;
     if(body){
-      const cards = [...body.querySelectorAll('.card')];
+      const cards = [...body.querySelectorAll('.card')].filter(card => card.dataset.cardId !== cardId);
       for(let i = 0; i < cards.length; i++){
         const r = cards[i].getBoundingClientRect();
         if(e.clientY < r.top + r.height/2){ insertIdx = i; break; }
       }
     }
-    toCol.cardIds.splice(insertIdx, 0, cardId);
+    _drag = null;
+    void stageCardMove(cardId, colId, insertIdx);
+    return;
   } else if(_drag.kind === 'column'){
     if(_drag.id === colId){ _drag = null; return; }
     const fromIdx = b.columns.findIndex(c => c.id === _drag.id);
@@ -6633,20 +6688,63 @@ function openMovePopover(cardId, x, y){
 function closeMovePopover(){
   $('move-popover').classList.remove('open');
 }
-function moveCardTo(cardId, toColId){
+const pendingCardMoves = new Map();
+function applyCardMove(cardId, toColId, toIndex){
   const b = currentBoard(); if(!b) return;
   const fromCol = findColumnByCard(b, cardId);
   if(!fromCol) return;
-  fromCol.cardIds = fromCol.cardIds.filter(x => x !== cardId);
   const toCol = b.columns.find(c => c.id === toColId);
   if(!toCol) return;
-  toCol.cardIds.push(cardId);
+  fromCol.cardIds = fromCol.cardIds.filter(x => x !== cardId);
+  const index = Number.isInteger(toIndex) ? Math.max(0, Math.min(toIndex, toCol.cardIds.length)) : toCol.cardIds.length;
+  toCol.cardIds.splice(index, 0, cardId);
   const card = b.cards[cardId];
   stampCard(card);
-  logActivity('card_moved', { cardId, cardTitle: card?.title, detail: { fromColumn: fromCol.name, toColumn: toCol.name } });
+  if(fromCol.id !== toCol.id) logActivity('card_moved', { cardId, cardTitle: card?.title, detail: { fromColumn: fromCol.name, toColumn: toCol.name } });
   scheduleSave();
   closeMovePopover();
   renderBoard();
+}
+async function stageCardMove(cardId, toColId, toIndex=null){
+  const b = currentBoard(); if(!b) return;
+  const fromCol = findColumnByCard(b, cardId);
+  const toCol = b.columns.find(c => c.id === toColId);
+  const card = b.cards[cardId];
+  if(!fromCol || !toCol || !card) return;
+  if(naklios.capabilities.review !== true){ applyCardMove(cardId, toColId, toIndex); return; }
+  const base = boardRevisionSignature(b);
+  const diff = {
+    boardId:b.id, card:cardId, cardTitle:card.title,
+    from:fromCol.id, fromName:fromCol.name, fromIndex:fromCol.cardIds.indexOf(cardId),
+    to:toCol.id, toName:toCol.name,
+    toIndex:Number.isInteger(toIndex) ? toIndex : toCol.cardIds.filter(id=>id!==cardId).length,
+  };
+  try{
+    const staged = await naklios.review.stage('kanzen.card-move', diff, { reversible:true });
+    pendingCardMoves.set(staged.proposal_id, { base, diff });
+    closeMovePopover();
+    toast('Card move staged for review');
+  }catch(error){ toast('Could not stage card move: '+String(error?.message||error)); }
+}
+naklios.review?.onDecision?.(({type,proposal_id})=>{
+  const pending = pendingCardMoves.get(proposal_id);
+  if(!pending) throw new Error('KanZen has no pending card move for this proposal');
+  if(type==='discard'){
+    pendingCardMoves.delete(proposal_id);
+    toast('Card move discarded');
+    return;
+  }
+  if(type!=='commit') throw new Error('Unknown review decision');
+  const b = S.boards[pending.diff.boardId];
+  if(!b || boardRevisionSignature(b)!==pending.base) throw new Error('Board changed after review staging');
+  if(currentBoard()?.id!==b.id) throw new Error('Open the staged board before committing its card move');
+  applyCardMove(pending.diff.card, pending.diff.to, pending.diff.toIndex);
+  pendingCardMoves.delete(proposal_id);
+  toast('Card move committed');
+  return {ok:true};
+});
+function moveCardTo(cardId, toColId){
+  void stageCardMove(cardId,toColId);
 }
 document.addEventListener('click', e => {
   if(!e.target.closest('#move-popover') && !e.target.closest('.card')) closeMovePopover();

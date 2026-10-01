@@ -484,7 +484,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 
 <!-- sdk-reference:begin — rendered by `node scripts/sdk-reference.mjs --write` from docs/sdk-api-audit.md; do not edit by hand -->
 
-80 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
+84 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
 
 ### `version`
 
@@ -522,6 +522,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 | `capabilities.aiSearch` | field | Semantic (local, embedding) search over the app's own namespace granted — not web search. |
 | `capabilities.net` | field | Sovereign egress (`naklios.net.fetch`) granted. |
 | `capabilities.netBackend` | field | Which egress backend the host is configured with: `worker` (the default) · `bridge`; null when none. Never a package name. |
+| `capabilities.review` | field | The host can stage native diffs from this app and return source-bound review decisions. Enabled for Reckon, Draft, and KanZen. |
 
 ### `ready`
 
@@ -573,6 +574,14 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 | member | kind | what it is |
 |---|---|---|
 | `requestCapabilities` | function | Ask the host to re-broadcast capabilities. |
+
+### `review` (namespace)
+
+| member | kind | what it is |
+|---|---|---|
+| `review` | namespace | Host-owned staging queue and person review bridge. The P0 app contract names this stable namespace directly. |
+| `review.stage` | function | Send a native diff without applying it. Returns a proposal ID; standalone returns a fallback marker. |
+| `review.onDecision` | function | Register one app decision handler. The SDK acknowledges a successful commit once and re-acknowledges replays without reapplying. |
 
 ### `fs` (namespace)
 

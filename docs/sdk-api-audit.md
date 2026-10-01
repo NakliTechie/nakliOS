@@ -54,6 +54,7 @@ prefix today.
 | `capabilities.aiSearch` | field | stable | — | Semantic (local, embedding) search over the app's own namespace granted — not web search. |
 | `capabilities.net` | field | stable | — | Sovereign egress (`naklios.net.fetch`) granted. |
 | `capabilities.netBackend` | field | stable | — | Which egress backend the host is configured with: `worker` (the default) · `bridge`; null when none. Never a package name. |
+| `capabilities.review` | field | stable | — | The host can stage native diffs from this app and return source-bound review decisions. Enabled for Reckon, Draft, and KanZen. |
 | `ready` | function | stable | — | Signal "loaded"; carries the feature flags this SDK build supports. |
 | `title` | function | stable | — | Set the host window title. |
 | `close` | function | stable | — | Ask the host to close this window. |
@@ -65,6 +66,9 @@ prefix today.
 | `theme.request` | function | stable | — | Ask the host to re-send the theme. |
 | `onCapabilitiesChange` | function | stable | — | Subscribe to capability changes; replays the current set at registration. |
 | `requestCapabilities` | function | stable | — | Ask the host to re-broadcast capabilities. |
+| `review` | namespace | stable | — | Host-owned staging queue and person review bridge. The P0 app contract names this stable namespace directly. |
+| `review.stage` | function | stable | — | Send a native diff without applying it. Returns a proposal ID; standalone returns a fallback marker. |
+| `review.onDecision` | function | stable | — | Register one app decision handler. The SDK acknowledges a successful commit once and re-acknowledges replays without reapplying. |
 | `fs` | namespace | stable | — | App-scoped filesystem (paths under `apps/<id>/`). |
 | `fs.read` | function | stable | — | Read text. |
 | `fs.readBinary` | function | stable | — | Read bytes. |
