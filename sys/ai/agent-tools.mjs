@@ -439,7 +439,10 @@ export function parseApplyPatch(patch) {
     if ((m = /^\*\*\* Add File: (.+)$/.exec(line))) {
       i++; const body = [];
       while (i < lines.length && !/^\*\*\* /.test(lines[i])) { body.push(lines[i].replace(/^\+/, '')); i++; }
-      ops.push({ kind: 'add', path: m[1].trim(), content: body.join('\n') });
+      // Codex ends every added line with "\n": "+alpha" / "+beta" is "alpha\nbeta\n", and an empty
+      // body stays empty. A join('\n') dropped the final newline, so an Add+Delete rename lost
+      // a byte (autoharness bench, 2026-10-01).
+      ops.push({ kind: 'add', path: m[1].trim(), content: body.map((l) => l + '\n').join('') });
     } else if ((m = /^\*\*\* Delete File: (.+)$/.exec(line))) {
       ops.push({ kind: 'delete', path: m[1].trim() }); i++;
     } else if ((m = /^\*\*\* Update File: (.+)$/.exec(line))) {
@@ -448,6 +451,9 @@ export function parseApplyPatch(patch) {
       // Optional "*** Move to: newpath"
       let moveTo = null;
       if (i < lines.length && (m = /^\*\*\* Move to: (.+)$/.exec(trim(lines[i])))) { moveTo = m[1].trim(); i++; }
+      // Hunks stay joined with '\n' on purpose: the executor applies each one as a substring
+      // edit, so the bytes past the last matched line, the file's final newline or its absence
+      // included, are kept as they were. (Codex instead always ends an updated file with "\n".)
       let before = [], after = [];
       const flush = () => { if (before.length || after.length) { hunks.push({ before: before.join('\n'), after: after.join('\n') }); before = []; after = []; } };
       while (i < lines.length && !/^\*\*\* /.test(lines[i])) {
