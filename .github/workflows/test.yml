@@ -23,6 +23,9 @@ jobs:
       - name: Verify immutable Unix portability closure without browser globals
         run: node --experimental-vm-modules scripts/test-unix-portability.mjs c3553134571d1d601bfdbf857f6b3df138a6bf4f
 
+      - name: Verify owner-paired native gate authority and cancellation
+        run: node scripts/test-native-gate.mjs
+
       - name: Verify vendored Crate manifest security
         run: node scripts/test-crate-manifest.mjs
 

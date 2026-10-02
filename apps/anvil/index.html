@@ -310,7 +310,7 @@
       <span class="ttl" id="tb-title">No task</span>
       <span class="spacer"></span>
       <button id="gate-btn" class="gatebtn" title="Set a verify command — the agent isn't 'done' until it exits 0">✓ Must-pass</button>
-      <span class="advwrap"><button id="adv-btn" class="gatebtn" title="Advanced / experimental features" aria-haspopup="true" aria-expanded="false">Advanced ▾</button><div id="adv-menu" class="advmenu" hidden role="menu"><button id="campaign-btn" class="advitem" role="menuitem" title="Experimental — an independently-checked build: one agent writes the test/standard first, another writes the code without seeing it, a third referees. Guards against the agent grading its own work.">⚑ Proof build · beta</button><button id="lesson-evidence-btn" class="advitem" role="menuitem" title="Declare one exact tool call that would show a lesson was activated in later runs. Observation does not measure benefit.">Lesson activation evidence…</button></div></span>
+      <span class="advwrap"><button id="adv-btn" class="gatebtn" title="Advanced / experimental features" aria-haspopup="true" aria-expanded="false">Advanced ▾</button><div id="adv-menu" class="advmenu" hidden role="menu"><button id="campaign-btn" class="advitem" role="menuitem" title="Experimental — an independently-checked build: one agent writes the test/standard first, another writes the code without seeing it, a third referees. Guards against the agent grading its own work.">⚑ Proof build · beta</button><button id="lesson-evidence-btn" class="advitem" role="menuitem" title="Declare one exact tool call that would show a lesson was activated in later runs. Observation does not measure benefit.">Lesson activation evidence…</button><button id="native-gate-btn" class="advitem" role="menuitem" title="Connect or disconnect an owner-authorized local native gate">Native gate connection…</button></div></span>
       <button id="stop" class="stopbtn" hidden>◼ Stop</button>
       <span class="notice" id="tb-notice" role="status" hidden></span>
       <span class="meta" id="tb-meta"></span>
@@ -423,6 +423,7 @@
   import { createGitCore } from '../../sys/rig/git/git-core.mjs';
   import { naklHttp, HttpTransport } from '../../sys/rig/git/transport.mjs';
   import { buildRigRegistry } from '../../sys/rig/registry/index.mjs';
+  import { createNativeGateClient, NATIVE_BINDING_PATH } from '../../sys/rig/native-gate/client.mjs';
   import { createGrant, createOpLog, createAgentFace } from '../../sys/rig/agent/index.mjs';
   import { createShell } from '../../sys/rig/cli/shell.mjs';
   import { runAgentLoop, boundedText } from '../../sys/ai/agent-loop.mjs';
@@ -500,6 +501,8 @@
 
   // ── Rig workspace stack (lifted from Forge) — the agent's file substrate ──
   let backend, fs, git, registry, grant, opLog, face, shell, kilnRef=null;
+  let nativeGateSession = null, nativeGateTransition=false, nativeGateRecovery=null;
+  let workspaceOptions={};
   let activeRangeEdit = null;
   const cancelledRangeTokens = new Set();
   const RANGE_EDIT_TOOLS = new Set(['read','write','edit','edit_lines','apply_patch','shell','list','search','todowrite','task_done','clarify','context_remaining','checkpoint']);
@@ -507,7 +510,7 @@
   // narrowed grant — is built here, so the fences (skills, gate, search index) cannot drift between
   // sites. A child passes the parent's scopes (B5): a read-only project gains no write by dispatch.
   const AGENT_SCOPES = ['fs:read','fs:write','fs:remove','git:read','git:write','git:remote'];
-  const agentGrant = (scopes=AGENT_SCOPES) => createGrant({ prefixes:[''], scopes:[...scopes], readOnlyPrefixes:[SKILLS_DIR, GATE_DIR, SEARCH_INDEX_PATH], ...(activeRangeEdit ? {prefixes:[activeRangeEdit.request.path],scopes:scopes.filter(s=>s==='fs:read'||s==='fs:write')} : {}) });
+  const agentGrant = (scopes=AGENT_SCOPES) => createGrant({ prefixes:[''], readOnlyPrefixes:[SKILLS_DIR, GATE_DIR, SEARCH_INDEX_PATH], scopes:[...(typeof nativeGateSession==='object' && nativeGateSession ? scopes.filter(s=>!['git:write','git:remote','git:push'].includes(s)) : scopes),  ...(scopes===AGENT_SCOPES && typeof nativeGateSession==='object' && nativeGateSession ? ['native:gate'] : [])],  ...(typeof nativeGateSession==='object' && nativeGateSession ? {writePaths:[nativeGateSession.mutable]} : {}),  ...(activeRangeEdit ? {prefixes:[activeRangeEdit.request.path],scopes:scopes.filter(s=>s==='fs:read'||s==='fs:write')} : {}) });
   // The agent's own shell over the current face and Kiln (boot and the test door's rebind).
   const agentShell = () => createShell({ registry, face, beforeCommand: guardCriticalShellInvocation, kiln: kilnRef, kilnIsolate:true, js: jsHost, ...(activeRangeEdit ? {js:null} : {}), signal: ()=>abortController ? abortController.signal : null }); // Stop cuts a `sleep`
   let workspaceLabel = 'memory · scratch';
@@ -517,7 +520,49 @@
   // invalidation from the mutators instead. True for OPFS and memory (private to
   // this app); FALSE for a picked disk folder or the host Crate, where the user's
   // own editor, Finder or the Files app can write behind us.
-  function mountWorkspace(newBackend, label, root='', opts={}){
+  async function nativeAuthorityTransition(operation){
+    if(nativeGateTransition) throw new Error('Workspace transition is in progress');
+    if(typeof campaignBusy==='boolean' && campaignBusy) throw new Error('Wait for the campaign before changing the workspace');
+    const bound=nativeGateSession;
+    if(bound && ((typeof running==='boolean' && running) || (typeof priming==='boolean' && priming))) throw new Error('Stop the run before changing native authority');
+    const originalGrant=grant;
+    const recovery=bound ? {kind:'switch',client:bound.client,kiln:kilnRef,backend,project:state.activeProject,task:state.activeTask,label:workspaceLabel,root:wsRoot,options:workspaceOptions,folderMode,mountedProject} : null;
+    nativeGateTransition=true;
+    try{
+      const result=await operation();
+      if(bound && ((typeof running==='boolean' && running) || (typeof priming==='boolean' && priming))) throw new Error('A run started during the workspace change');
+      if(bound && nativeGateSession===bound && (backend!==recovery.backend || state.activeProject!==recovery.project)) throw new Error('Native workspace changed without disconnect');
+      return result;
+    }
+    catch(error){
+      if(recovery && (nativeGateSession!==bound || backend!==recovery.backend || state.activeProject!==recovery.project || grant!==originalGrant || typeof originalGrant.allowsScope!=='function' || !originalGrant.allowsScope('native:gate'))){
+        grant.revoke();nativeGateRecovery=recovery;
+      }
+      throw error;
+    }
+    finally{nativeGateTransition=!!nativeGateRecovery;}
+  }
+  const nativeWorkspaceAction=operation=>async(...args)=>{
+    try{return await nativeAuthorityTransition(()=>operation(...args));}
+    catch(error){if(error?.name!=='AbortError')pushSystem(String(error.message));}
+  };
+  async function disconnectNativeAuthority({restoreRuntime=false,internal=false}={}){
+    if(!internal && nativeGateTransition) throw new Error('Workspace transition is in progress');
+    const bound=nativeGateSession; if(!bound) return;
+    if(!internal) return nativeAuthorityTransition(()=>disconnectNativeAuthority({restoreRuntime,internal:true}));
+    const sourceBackend=backend, project=state.activeProject;
+    grant.revoke();
+    try{
+      await bound.client.close();
+      if(backend!==sourceBackend || state.activeProject!==project || (typeof running==='boolean' && running) || (typeof priming==='boolean' && priming)) throw new Error('Native workspace changed during disconnect');
+      if(nativeGateSession===bound) nativeGateSession=null;
+      if(restoreRuntime) await mountWorkspace(sourceBackend,workspaceLabel,wsRoot,workspaceOptions,true);
+    }catch(error){ pushSystem('Native cancellation or restoration unconfirmed. Retry disconnect before switching.'); throw error; }
+  }
+  async function mountWorkspace(newBackend, label, root='', opts={}, nativeRecovery=false){
+    if(!nativeRecovery) return nativeAuthorityTransition(()=>mountWorkspace(newBackend,label,root,opts,true));
+    await disconnectNativeAuthority({internal:true});
+    workspaceOptions=opts;
     backend = newBackend; workspaceLabel = label; wsRoot = root;
     // The search index persists inside the workspace itself — OPFS for a Browser
     // project, the real folder for a picked one — so a reload does not pay a cold
@@ -605,15 +650,17 @@
   //      a Folder), and (Crate) synced across devices;
   //   2. OPFS — persistent but browser-private, when no host storage is connected;
   //   3. in-memory — last resort.
-  async function mountProject(projectId){
+  async function mountProject(projectId,internal=false){
+    if(!internal) return nativeAuthorityTransition(()=>mountProject(projectId,true));
     if(folderMode) return;
+    await disconnectNativeAuthority({internal:true});
     const p = state && (state.projects||[]).find(x=>x.id===projectId);
     const name = p ? p.name : projectId;
     try{
       if(nak && nak.capabilities && nak.capabilities.fs && nak.fs){
         const raw = nak.capabilities.fsBackend || 'host';
         const which = raw==='fsa' ? 'folder' : raw;
-        mountWorkspace(new CrateBackend(nak.fs), which+' · '+name, 'ws/'+projectId);
+        await mountWorkspace(new CrateBackend(nak.fs), which+' · '+name, 'ws/'+projectId,{},true);
         // Round-trip probe: only commit to the host fs if it actually works —
         // otherwise fall through to OPFS (throws are caught below).
         await fs.write('.anvil-probe','ok');
@@ -621,11 +668,11 @@
         await fs.remove('.anvil-probe').catch(()=>{});
         if(!(rd && rd.ok && rd.data==='ok')) throw new Error('host fs probe failed');
       } else {
-        mountWorkspace(await createOpfsBackend({ path:'anvil/ws/'+projectId }), 'Browser · '+name, '', { exclusive:true });
+        await mountWorkspace(await createOpfsBackend({ path:'anvil/ws/'+projectId }), 'Browser · '+name, '', { exclusive:true },true);
       }
     }catch(_){
-      try{ mountWorkspace(await createOpfsBackend({ path:'anvil/ws/'+projectId }), 'Browser · '+name, '', { exclusive:true }); }
-      catch(__){ mountWorkspace(new MemoryBackend(), 'memory · scratch', '', { exclusive:true }); }
+      try{ await mountWorkspace(await createOpfsBackend({ path:'anvil/ws/'+projectId }), 'Browser · '+name, '', { exclusive:true },true); }
+      catch(__){ await mountWorkspace(new MemoryBackend(), 'memory · scratch', '', { exclusive:true },true); }
     }
     mountedProject = projectId;
     await seedIfEmpty();
@@ -934,20 +981,19 @@
         : 'Anvil home — pick a folder on your disk where run records are kept durably. Until then they live only in browser storage, which the browser may evict.';
   }
 
-  $('open-folder').onclick = async ()=>{
+  $('open-folder').onclick = nativeWorkspaceAction(async ()=>{
     if(!window.showDirectoryPicker){ pushSystem('This browser has no File System Access — folders unavailable.'); return; }
-    try{
       const h = await window.showDirectoryPicker({ mode:'readwrite' });
       let perm = await h.queryPermission({mode:'readwrite'});
       if(perm!=='granted') perm = await h.requestPermission({mode:'readwrite'});
       if(perm!=='granted'){ pushSystem('Folder permission not granted.'); return; }
+      await disconnectNativeAuthority({internal:true});
       folderMode = true;
-      mountWorkspace(new FsaBackend(h), 'folder · '+h.name);
+      await mountWorkspace(new FsaBackend(h), 'folder · '+h.name,'',{},true);
       await idbSet(DIR_KEY, h);
       pushSystem('Workspace → folder "'+h.name+'". The agent now reads/writes your files (this overrides the per-project workspace).');
       renderTaskbar();
-    }catch(e){ if(!(e&&e.name==='AbortError')) pushSystem('Open folder: '+(e&&e.message||e)); }
-  };
+  });
   $('home-chip').onclick = async ()=>{
     if(!window.showDirectoryPicker){ pushSystem('This browser has no File System Access — an Anvil home folder is unavailable here; records stay in browser storage.'); return; }
     try{
@@ -1172,22 +1218,24 @@
     box.scrollTop=top;
     if(focusKey && rows.has(focusKey)) rows.get(focusKey).focus({ preventScroll:true });
   }
-  async function selectTask(tid){
+  async function selectTask(tid,internal=false){
+    if(!internal){try{return await nativeAuthorityTransition(()=>selectTask(tid,true));}catch(error){pushSystem(String(error.message));return;}}
+    if(nativeGateSession && tid!==state.activeTask) await disconnectNativeAuthority({restoreRuntime:folderMode,internal:true});
     if(activeRangeEdit && tid!==activeRangeEdit.task.id){ pushSystem('Finish or stop the selected-file edit before switching tasks.'); return; }
     if(priming && tid!==state.activeTask && primeAbortController) primeAbortController.abort();
     state.activeTask=tid;
     for(const p of state.projects) if((p.tasks||[]).some(t=>t.id===tid)) state.activeProject=p.id;
     save();
-    if(!folderMode && state.activeProject!==mountedProject) await mountProject(state.activeProject);
+    if(!folderMode && state.activeProject!==mountedProject) await mountProject(state.activeProject,true);
     renderAll();
   }
 
-  $('new-project').onclick=async ()=>{ if(activeRangeEdit){pushSystem('Finish or stop the selected-file edit first.');return;} const n=await askText({ title:'New project', label:'Project name', value:'project' }); if(!n) return; if(primeAbortController) primeAbortController.abort(); const p={id:id(),name:n,open:true,tasks:[]}; state.projects.push(p); state.activeProject=p.id; save(); if(!folderMode) await mountProject(p.id);
+  $('new-project').onclick=nativeWorkspaceAction(async ()=>{ if(activeRangeEdit){pushSystem('Finish or stop the selected-file edit first.');return;} const n=await askText({ title:'New project', label:'Project name', value:'project' }); if(!n) return; if(nativeGateSession)await disconnectNativeAuthority({restoreRuntime:folderMode,internal:true}); if(primeAbortController) primeAbortController.abort(); const p={id:id(),name:n,open:true,tasks:[]}; state.projects.push(p); state.activeProject=p.id; save(); if(!folderMode) await mountProject(p.id,true);
     // ESS-5: a project with no skills should not start empty — one short starter, owner-written
     // so it is active at once. Browser-mounted projects only: a real folder is the owner's.
     if(!folderMode){ try{ const f=starterSkillFile({ now:Date.now() }); const cur=await fs.read(f.path,{encoding:'utf-8'}); if(!(cur&&cur.ok)) await fs.write(f.path, f.text); }catch(_){} }
-    renderAll(); };
-  $('new-task').onclick=()=>{ if(activeRangeEdit){pushSystem('Finish or stop the selected-file edit first.');return;} const p=activeProject(); if(!p) return; if(p.rangeSnapshot){pushSystem('Start new tasks in a regular project.');return;} const t={id:id(),title:'Untitled task',status:'idle',mode:'code',convo:[],log:[],preview:null}; p.tasks.push(t); p.open=true; selectTask(t.id); $('prompt').focus(); };
+    renderAll(); });
+  $('new-task').onclick=nativeWorkspaceAction(async()=>{ if(nativeGateSession)await disconnectNativeAuthority({restoreRuntime:true,internal:true}); if(activeRangeEdit){pushSystem('Finish or stop the selected-file edit first.');return;} const p=activeProject(); if(!p) return; if(p.rangeSnapshot){pushSystem('Start new tasks in a regular project.');return;} const t={id:id(),title:'Untitled task',status:'idle',mode:'code',convo:[],log:[],preview:null}; p.tasks.push(t); p.open=true; await selectTask(t.id,true); $('prompt').focus(); });
 
   // ── File explorer: the active workspace's tree (whatever backend), so files
   // are visible in-app. Clicking a file opens it in the preview; the backend tag
@@ -1302,6 +1350,7 @@
   // Facts land as hypotheses; the agent promotes/retracts them as it works.
   let priming=false, primeAbortController=null;
   async function primeProject(){
+    if(typeof nativeGateTransition==='boolean' && nativeGateTransition){pushSystem('Wait for the workspace change before starting project learning.');return;}
     if(activeTask()?.rangeEdit){pushSystem('This snapshot task has ended. Learn a regular project instead.');return;}
     if(!(nak && nak.capabilities && nak.capabilities.ai)){ pushSystem('“Learn project” needs the NakliOS AI — open Anvil inside NakliOS with an endpoint set (Settings → AI).'); return; }
     if(priming||running){ return; }
@@ -2268,7 +2317,7 @@
   // topology, wall, and verifiers are visible and testable without a live endpoint.
   // Next iteration: `roleExecutors` that run the agent loop as each role (through the
   // role's grant set) instead of the demo scripts. The driver + view stay unchanged.
-  let campaignRun = null;
+  let campaignRun = null, campaignBusy=false;
   // Demo role executors: the canonical converge-to-ship campaign (same shape a real
   // role-subagent would append), so the driver visibly runs start→ship.
   function demoExecutors(C, goal){
@@ -2327,6 +2376,11 @@
     return emitted;
   }
   async function startCampaign(goal, opts={}){
+    if(typeof nativeGateTransition==='boolean' && nativeGateTransition){pushSystem('Wait for the workspace change before starting a campaign.');return;}
+    if(campaignBusy){pushSystem('Wait for the current campaign to finish.');return;}
+    const campaignBackend=backend, campaignProject=state.activeProject;
+    campaignBusy=true;
+    try{
     raise('preview');
     const C='camp-'+id();
     const rk=newRootKey();
@@ -2335,6 +2389,7 @@
     for(const role of ['checker','builder','lead']){
       roleSets[role]=await mintRole(rk,{campaign:C,role,principal:'actor:agent:'+role+':'+C,now:0,ttlMs:3600000});
     }
+    if(nativeGateTransition || backend!==campaignBackend || state.activeProject!==campaignProject){pushSystem('Workspace changed before campaign execution.');return;}
     const L=createAssayLedger();
     const live = !!(opts.live && nak && nak.ai);
     const executors = live
@@ -2345,6 +2400,7 @@
     campaignRun = { C, L, result, goal, roleSets, rk, live };
     renderCampaign();
     return campaignRun;
+    }finally{campaignBusy=false;}
   }
   function renderCampaign(){
     const cs=campaignRun; if(!cs) return;
@@ -2852,6 +2908,7 @@
   // Enter sends; while a run is in flight, Enter/Send QUEUES the prompt (Codex-
   // style) and it runs automatically when the current run finishes.
   function submit(){
+    if(typeof nativeGateTransition==='boolean' && nativeGateTransition){pushSystem('Wait for the workspace change before sending.');return false;}
     const t=activeTask(); if(!t) return false;
     if(t.rangeEdit){pushSystem('Start a fresh selection from Editor; snapshot tasks do not accept follow-ups.');return false;}
     if(priming){ pushSystem('Stop project learning before sending a task.'); return false; }
@@ -2876,21 +2933,24 @@
     return true;
   }
   async function submitReviewDrafts(run){
+    if(typeof nativeGateTransition==='boolean' && nativeGateTransition){pushSystem('Wait for the workspace change before sending review comments.');return;}
     const t=activeTask(); if(!t) return;
     if(running||priming){ pushSystem('Wait for the current run or project learning to finish before sending review comments.'); return; }
     const drafts=(t.reviewDrafts||[]).filter(x=>x.run===run);
     if(!drafts.length) return;
     if($('prompt').value.trim()){ pushSystem('Send or save the current prompt before applying review comments.'); return; }
     const project=state.activeProject, workspace=workspaceLabel;
+    const reviewBackend=typeof backend==='undefined'?null:backend, reviewFs=typeof fs==='undefined'?null:fs;
     for(const draft of drafts){
       if(draft.project!==project || draft.workspace!==workspace){ pushSystem('Review comments belong to another project or workspace. Reopen that run before sending.'); return; }
       const current=await readReviewState(draft.file);
-      if(activeTask()!==t || state.activeProject!==project || workspaceLabel!==workspace){ pushSystem('Review context changed while checking files. No comments were sent.'); return; }
+      if(activeTask()!==t || state.activeProject!==project || workspaceLabel!==workspace || (typeof backend!=='undefined' && backend!==reviewBackend) || (typeof fs!=='undefined' && fs!==reviewFs)){ pushSystem('Review context changed while checking files. No comments were sent.'); return; }
       if(current===null || current instanceof Uint8Array || reviewVersion(current===undefined?'':current,current!==undefined)!==draft.version){
         pushSystem('Review comment is stale at '+draft.file+':'+draft.anchorLine+'. Reopen the run and draft against current bytes.'); return;
       }
     }
-    if(running){ pushSystem('A run started while checking comments. No comments were sent.'); return; }
+    if(running||priming||(typeof nativeGateTransition==='boolean' && nativeGateTransition)){ pushSystem('Run or workspace state changed while checking comments. No comments were sent.'); return; }
+    if($('prompt').value.trim()){ pushSystem('Send or save the current prompt before applying review comments.'); return; }
     $('prompt').value=reviewPrompt(drafts); autoGrow();
     if(submit()){
       t.reviewDrafts=(t.reviewDrafts||[]).filter(x=>x.run!==run);
@@ -3223,6 +3283,7 @@
   // certainly dead (the B1 checker's finding).
   function settleFleetRows(t){ let n=0; for(const r of (t&&t.log)||[]){ if(r&&r.k==='subagent'&&r.status==='running'){ r.status='interrupted'; delete r.live; delete r.age; n++; } } return n; }
   async function runTask(t, text){
+    if(typeof nativeGateTransition!=='undefined' && nativeGateTransition){pushSystem('Wait for the native connection change before starting a run.');return;}
     if(!t||running||priming) return;
     if(t.rangeEdit && activeRangeEdit?.task!==t){ pushSystem('This snapshot task has ended. Start a fresh selection from Editor.'); return; }
     const rangeRun = activeRangeEdit;
@@ -4170,6 +4231,92 @@
     t.lessonActivation={declaration:{tool:declaration.tool.trim(),args:declaration.args},declaredFuelKey:modelSelectionKey()||'unconfigured'};
     save(); pushSystem('Lesson activation declaration saved for this task. Future runs will record observed, attempted-failed, unobserved, or insufficient evidence. Gain remains unmeasured.');
   };
+  // The owner imports a service-produced connection file. It is never a task
+  // attachment, transcript message, localStorage setting, or agent tool input.
+  const nativeGatePicker=document.createElement('input');
+  nativeGatePicker.type='file'; nativeGatePicker.accept='.json'; nativeGatePicker.hidden=true;
+  nativeGatePicker.id='native-gate-connection'; document.body.appendChild(nativeGatePicker);
+  async function rebuildNativeAuthority(){
+    const bound=nativeGateSession;
+    registry=buildRigRegistry({ fs, git, ...(bound ? {nativeGate:{run:async(mode)=>{
+      if(nativeGateSession!==bound || backend!==bound.backend || state.activeProject!==bound.project || activeRangeEdit)
+        throw new Error('Native gate workspace or authority changed');
+      if(!grant.allowsScope('native:gate')) throw new Error('Native gate scope revoked');
+      const result=await bound.client.run(mode,{signal:abortController?.signal});
+      if(!grant.allowsScope('native:gate')) throw new Error('Native gate scope revoked');
+      return result;
+    }}} : {}) });
+    grant.revoke(); grant=agentGrant(); face=createAgentFace({registry,grant,opLog,actor:'agent'});
+    shell=agentShell(); syncMode();
+  }
+  async function recoverNativePairing(){
+    if(typeof campaignBusy==='boolean' && campaignBusy) throw new Error('Wait for the campaign before changing native authority');
+    const pending=nativeGateRecovery; if(!pending) return;
+    nativeGateTransition=true; grant.revoke();
+    try{
+      await pending.client.close();
+      if(pending.kiln?.close) await pending.kiln.close();
+      pending.kiln=null;
+      if(pending.kind==='switch'){
+        backend=pending.backend;state.activeProject=pending.project;state.activeTask=pending.task;folderMode=pending.folderMode;mountedProject=pending.mountedProject;
+      }else if(backend!==pending.backend || state.activeProject!==pending.project) throw new Error('Native recovery workspace changed');
+      nativeGateSession=null; kilnRef=null;
+      await mountWorkspace(pending.backend,pending.label,pending.root,pending.options,true);
+      if(pending.kind==='switch'){mountedProject=pending.project;save();renderAll();}
+      if(nativeGateRecovery===pending) nativeGateRecovery=null;
+    }finally{nativeGateTransition=!!nativeGateRecovery;}
+  }
+  $('native-gate-btn').onclick=async()=>{
+    $('adv-menu').hidden=true;
+    if(nativeGateRecovery){
+      try{await recoverNativePairing();pushSystem('Browser runtime restored. Select the native connection again to pair.');}
+      catch(_){pushSystem('Native runtime closure or recovery remains unconfirmed. Retry Native gate connection before running or switching tasks.');}
+      return;
+    }
+    if(nativeGateTransition || campaignBusy || running || priming){ pushSystem('Stop this run before changing its native gate connection.'); return; }
+    if(nativeGateSession){
+      try{await disconnectNativeAuthority({restoreRuntime:true}); await rebuildNativeAuthority();}catch(_){return;}
+      pushSystem('Native gate disconnected.'); return;
+    }
+    if(activeRangeEdit){ pushSystem('A selected-file task cannot receive native execution authority.'); return; }
+    nativeGatePicker.value=''; nativeGatePicker.click();
+  };
+  nativeGatePicker.onchange=async()=>{
+    const file=nativeGatePicker.files?.[0]; if(!file) return;
+    if(nativeGateTransition || campaignBusy || running || priming || activeRangeEdit || file.size>16384){ pushSystem('Native gate connection refused for this task or file size.'); return; }
+    const sourceFs=fs, sourceBackend=backend, project=state.activeProject;
+    let client; nativeGateTransition=true;
+    try{
+      const connection=JSON.parse(await file.text());
+      client=createNativeGateClient({connection,readBinding:async()=>{
+        if(fs!==sourceFs || backend!==sourceBackend || state.activeProject!==project) throw new Error('Native gate workspace changed');
+        const read=await sourceFs.read(NATIVE_BINDING_PATH,{encoding:'utf-8',maxBytes:1024});
+        if(!read.ok) throw new Error('This workspace has no matching owner-issued native gate binding');
+        return read.data;
+      }});
+      const metadata=await client.connect();
+      if(running || fs!==sourceFs || backend!==sourceBackend || state.activeProject!==project) throw new Error('Native gate workspace changed during pairing');
+      if(typeof metadata.mutable!=='string' || !/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/.test(metadata.mutable)
+          || metadata.mutable.split('/').some(p=>p==='.'||p==='..')) throw new Error('Invalid native write scope');
+      const oldGrant=grant, oldKiln=kilnRef;
+      nativeGateRecovery={client,kiln:oldKiln,backend:sourceBackend,project,label:workspaceLabel,root:wsRoot,options:workspaceOptions};
+      oldGrant.revoke();
+      if(oldKiln?.close) await oldKiln.close();
+      nativeGateRecovery.kiln=null;
+      if(running || fs!==sourceFs || backend!==sourceBackend || state.activeProject!==project) throw new Error('Native gate workspace changed during runtime teardown');
+      kilnRef=null;
+      nativeGateSession={client,backend:sourceBackend,project,mutable:metadata.mutable}; await rebuildNativeAuthority();
+      nativeGateRecovery=null;
+      pushSystem('Native gate connected: '+metadata.commandCount+' fixed commands. Use native-gate full or native-gate criterion. Disconnect through Advanced.');
+    }catch(_){
+      try{
+        if(nativeGateRecovery) await recoverNativePairing();
+        else if(client) await client.close();
+      }catch(_){pushSystem('Native runtime closure or recovery remains unconfirmed. Retry Native gate connection before running or switching tasks.');return;}
+      pushSystem('Native gate connection refused. Use the current connection file for this workspace.');
+    }
+    finally { nativeGateTransition=!!nativeGateRecovery; nativeGatePicker.value=''; }
+  };
   // Test hooks: a deterministic demo (offline) and a live run (needs a host endpoint).
   // These expose REAL capabilities on `window` — campaign runs plus git egress probes
   // (clone / ls-remote / an isolated push to an arbitrary URL over the sovereign transport).
@@ -4402,7 +4549,7 @@
     const saved = await idbGet(DIR_KEY);
     if(saved && typeof saved.queryPermission==='function'){
       const perm = await saved.queryPermission({mode:'readwrite'});
-      if(perm==='granted'){ folderMode=true; mountWorkspace(new FsaBackend(saved), 'folder · '+saved.name); await seedIfEmpty(); }
+      if(perm==='granted'){ folderMode=true; await mountWorkspace(new FsaBackend(saved), 'folder · '+saved.name); await seedIfEmpty(); }
     }
   }catch(_){}
   // The remembered home: query only (a re-grant needs a click); the chip says which.
@@ -4445,16 +4592,16 @@
   // backend and refresh the explorer — no reload, no prompt.
   if(nak && nak.onCapabilitiesChange){
     let lastBackend = (nak.capabilities||{}).fsBackend || null;
-    nak.onCapabilitiesChange(async (caps)=>{
+    nak.onCapabilitiesChange(nativeWorkspaceAction(async (caps)=>{
       updateScopeBtn();
       const nb = (caps||{}).fsBackend || null;
       if(nb===lastBackend || folderMode) return;
       if(activeRangeEdit){ activeRangeEdit.cancelled=true; stopRun(); return; }
       lastBackend = nb;
       mountedProject = null;
-      await mountProject(state.activeProject);
+      await mountProject(state.activeProject,true);
       renderAll();
-    });
+    }));
   }
 
   function pruneRangeSnapshots(){
@@ -4462,12 +4609,12 @@
     state.projects=state.projects.filter(p=>!retired.has(p.id));
   }
   async function acceptRangeEdit(file){
-    if(running || priming || state.runsHeld || activeRangeEdit || !nak?.files?.experimental_proposeEdit){
+    if((typeof nativeGateSession==='object' && nativeGateSession) || (typeof nativeGateTransition==='boolean' && nativeGateTransition) || running || priming || state.runsHeld || activeRangeEdit || !nak?.files?.experimental_proposeEdit){
       nak?.files?.release(file.token); pushSystem('Finish the current Anvil work, then resend the selection from Editor.'); return;
     }
     let received;
     try{received=await nak.files.read(file.token)}catch(error){nak.files.release(file.token);throw error}
-    if(running || priming || state.runsHeld || activeRangeEdit || cancelledRangeTokens.has(file.token)){
+    if((typeof nativeGateSession==='object' && nativeGateSession) || (typeof nativeGateTransition==='boolean' && nativeGateTransition) || running || priming || state.runsHeld || activeRangeEdit || cancelledRangeTokens.has(file.token)){
       nak.files.release(file.token); throw new Error('The handoff was cancelled or another Anvil run started');
     }
     const previous = { backend, root:wsRoot, label:workspaceLabel,
@@ -4484,7 +4631,7 @@
     state.projects.push(project); state.activeProject=project.id; state.activeTask=task.id;
     activeRangeEdit=session;
     try{
-      mountWorkspace(snapshot.backend, 'Editor snapshot · '+received.path);
+      await mountWorkspace(snapshot.backend, 'Editor snapshot · '+received.path);
       session.fs=fs; kilnRef=null; shell=agentShell();
       task.log.push({k:'system',text:'Only this file snapshot is granted. Editor owns source review and apply. The source remains unchanged.'});
       save(); renderAll();
@@ -4505,7 +4652,7 @@
       snapshot.revoke(); nak.files.release(file.token); activeRangeEdit=null;
       cancelledRangeTokens.delete(file.token);
       state.activeProject=previous.project; state.activeTask=previous.task; mountedProject=previous.mounted;
-      mountWorkspace(previous.backend, previous.label, previous.root);
+      await mountWorkspace(previous.backend, previous.label, previous.root);
       if(session.cancelled && !folderMode){ mountedProject=null; await mountProject(state.activeProject); }
       pruneRangeSnapshots();
       save(); renderAll();

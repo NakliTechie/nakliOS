@@ -97,6 +97,12 @@
       "kind": "button",
       "detail": "More"
     },
+    "button:native-gate-btn": {
+      "owner": "native-gate.md",
+      "fingerprint": "a5a800ef4821",
+      "kind": "button",
+      "detail": "Connect or disconnect an owner-authorized local native gate"
+    },
     "button:new-project": {
       "owner": "header.md",
       "fingerprint": "628720e05f54",

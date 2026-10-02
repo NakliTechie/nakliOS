@@ -49,7 +49,7 @@ import { createPatch } from '../fileops/patch.mjs';
 
 // bash verb -> registry command name. The dotted name (fs.list) always works too.
 // ls, stat, mkdir, mv and cp are commands of their own (cmds/), which take every operand.
-const REGISTRY_ALIAS = { rm: 'fs.remove', glob: 'fs.glob', patch: 'fs.patch' };
+const REGISTRY_ALIAS = { rm: 'fs.remove', glob: 'fs.glob', patch: 'fs.patch', 'native-gate': 'native.gate' };
 
 // Short flags -> registry input keys (per command, resolved in buildRegistryInput).
 const LIST_FLAGS = { R: 'recursive', a: 'all' };
@@ -327,6 +327,9 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
       return { text: `${cmdName}: extra operand '${parsed.operands[keys.length]}' — ${cmdName} takes ${keys.length ? keys.join(', ') : 'no operands'}`, code: 2 };
     }
     const res = await face.invoke(cmdName, registryInput(parsed));
+    if (cmdName === 'native.gate' && Number.isInteger(res.exitCode)) {
+      return { text: String(res.data || res.message || ''), code: res.exitCode };
+    }
     if (!res.ok) return { text: `${cmdName}: ${res.code || 'error'}: ${res.message || 'failed'}`, code: 1 };
     return { text: renderResult(cmdName, res, { long: !!parsed.options.longListing }), code: 0,
       ...(cmdName === 'fs.read' ? { raw: true } : {}) };
@@ -387,6 +390,11 @@ export function createShell({ registry, face, cwd = '', kiln = null, kilnIsolate
     dispatch.set(name, (args, stdin) => runSpecial(name, args, stdin));
   }
   for (const [alias, name] of Object.entries(REGISTRY_ALIAS)) {
+    if (alias === 'native-gate' && !registry.describeCommand(name)) continue;
+    if (alias === 'native-gate') {
+      dispatch.set(alias, (args) => runRegistry(name, args.length === 1 && !args[0].startsWith('-') ? ['--mode', args[0]] : args));
+      continue;
+    }
     if (!dispatch.has(alias)) dispatch.set(alias, (args) => runRegistry(name, args, alias === 'rm' ? { follow: false } : {}));
   }
   for (const { name } of registry.commands) {
