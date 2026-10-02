@@ -73,6 +73,8 @@ Each retry retains the same delivery identity and source binding.
 The SDK coalesces pending retries and acknowledges accepted duplicates without staging them again.
 Editor acknowledges Browser receipt only after durable retention succeeds.
 Retention compares current Browser source bytes in that same transaction.
+Identical retention retries repeat the source and current-tab checks without replacing the saved lifecycle state.
+Discard remains unavailable while its proposal receipt is pending.
 Cancel aborts an outstanding receipt transaction and removes a matching late receipt before acknowledgement.
 Failed late cleanup retains an actionable cleanup state and never acknowledges successful delivery.
 The explicit cleanup retry removes only the matching retained proposal.

@@ -686,3 +686,6 @@ jobs:
 
       - name: Verify native IndexedDB range-edit comparison, concurrent writers, and cancellation
         run: node scripts/test-range-edit-browser.mjs
+
+      - name: Verify range-edit receipt discard races and retry freshness
+        run: node scripts/test-range-edit-receipt-races.mjs

@@ -192,19 +192,22 @@ export function retainRangeEditIdb(db, storeName, path, record, {signal=null,val
     const cleanup=()=>signal?.removeEventListener('abort',cancel);
     tx.oncomplete=()=>{cleanup();resolve(true)};tx.onabort=tx.onerror=()=>{cleanup();reject(failure||tx.error||new Error('Proposal retention failed'))};
     signal?.addEventListener('abort',cancel,{once:true});if(signal?.aborted){cancel();return}
-    const put=()=>{try{if(!valid()){abort('Proposal receipt context changed');return}store.put(clean,path)}catch(error){failure=error;tx.abort()}};
+    const validate=next=>{
+      const accept=()=>{try{if(!valid()){abort('Proposal receipt context changed');return}next()}catch(error){failure=error;tx.abort()}};
+      if(filesStore){const source=tx.objectStore(filesStore).get(path);source.onsuccess=()=>{if(source.result!==clean.request.before){abort('Source changed before proposal receipt');return}accept()}}
+      else accept();
+    };
     const existing=store.get(path);
     existing.onsuccess=()=>{
       if(existing.result){
         if(existing.result.id!==clean.id){abort('A different proposal is already retained');return}
         // Delivery retries are idempotent; never reset a later applied state.
         if(JSON.stringify(existing.result.request)!==JSON.stringify(clean.request)||existing.result.after!==clean.after){abort('Proposal identity changed');return}
-        return;
+        validate(()=>{});return;
       }
       const count=store.count();count.onsuccess=()=>{
         if(count.result>=16){abort('Discard an old proposal before retaining another');return}
-        if(filesStore){const source=tx.objectStore(filesStore).get(path);source.onsuccess=()=>{if(source.result!==clean.request.before){abort('Source changed before proposal receipt');return}put()}}
-        else put();
+        validate(()=>store.put(clean,path));
       };
     };
   });
