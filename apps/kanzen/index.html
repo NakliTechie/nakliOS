@@ -1267,6 +1267,39 @@
   #palette-popover .pop-foot a { color: var(--accent); text-decoration: none; }
   #palette-popover .pop-foot a:hover { text-decoration: underline; }
 
+  /* ---------- agent face: indicator, proposals, preferences ---------- */
+  .agent-indicator { width: auto; padding: 4px 8px; font-size: 11px; gap: 4px; }
+  .agent-indicator.has-pending { background: rgba(242,169,0,0.35); }
+  .agent-indicator #agent-count:empty { display: none; }
+  .agent-intro { font-size: 12px; color: var(--text-mute); margin: 0 0 12px; line-height: 1.5; }
+  .agent-section-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-mute); margin: 16px 0 6px; }
+  .agent-empty { font-size: 12px; color: var(--text-faint); padding: 8px 0; }
+  .proposal-row { border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 8px; background: var(--bg-elev); }
+  .proposal-row.destructive { border-color: var(--danger); }
+  .proposal-head { display: flex; gap: 8px; align-items: baseline; }
+  .proposal-summary { font-size: 13px; color: var(--text); overflow-wrap: anywhere; }
+  .proposal-kind { font-size: 10px; padding: 1px 7px; border-radius: 8px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.04em; white-space: nowrap; background: rgba(0,121,191,0.15); color: var(--accent); }
+  .proposal-kind.destructive { background: rgba(235,90,70,0.15); color: var(--danger); }
+  .proposal-details { margin: 6px 0 0; padding-left: 18px; font-size: 12px; color: var(--text-mute); }
+  .proposal-details li { overflow-wrap: anywhere; }
+  .proposal-note { font-style: italic; }
+  .proposal-foot { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+  .proposal-meta { flex: 1; min-width: 160px; font-size: 11px; color: var(--text-faint); }
+  .agent-log-row { display: flex; gap: 8px; align-items: baseline; font-size: 12px; padding: 4px 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+  .agent-log-row:last-child { border-bottom: none; }
+  .agent-log-row code { font-size: 11px; }
+  .agent-call-meta { color: var(--text-faint); font-size: 11px; }
+  .agent-status { font-size: 10px; padding: 1px 6px; border-radius: 8px; text-transform: uppercase; font-weight: 600; white-space: nowrap; background: rgba(9,30,66,0.08); color: var(--text-mute); }
+  .agent-status.applied, .agent-status.ok { background: rgba(97,189,79,0.15); color: var(--ok); }
+  .agent-status.staged { background: rgba(242,169,0,0.18); color: var(--warn); }
+  .agent-status.failed, .agent-status.error, .agent-status.refused { background: rgba(235,90,70,0.15); color: var(--danger); }
+  details.agent-tools { margin-top: 8px; font-size: 12px; }
+  details.agent-tools summary { cursor: pointer; color: var(--accent); }
+  .agent-tools-heading { font-size: 11px; color: var(--text-mute); margin: 8px 0 2px; font-weight: 600; }
+  .agent-tools-names { line-height: 1.8; }
+  .agent-tools-names code { font-size: 11px; cursor: help; }
+  .agent-tools-person { font-size: 11px; color: var(--text-mute); margin: 2px 0; }
+
   /* ---------- a11y / motion preferences ---------- */
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { transition: none !important; animation: none !important; }
@@ -1339,6 +1372,7 @@
   <div class="save-indicator" id="save-indicator">Ready</div>
   <button id="storage-hint" class="icon-btn" style="display:none;width:auto;padding:4px 8px;font-size:11px;font-weight:500;gap:4px;" onclick="handleStorageButton()" title="Choose where this board library lives.">📁 Save to disk</button>
   <button id="sync-indicator" class="icon-btn" style="display:none;width:auto;padding:4px 8px;font-size:11px;gap:4px;" onclick="onSyncClick()" title="Cloud sync"></button>
+  <button id="agent-indicator" class="icon-btn agent-indicator" style="display:none;" onclick="openModal('agent-modal')" title="Agent activity" aria-label="Agent proposals and activity">🤖 <span id="agent-count"></span></button>
   <button class="help-btn" onclick="openModal('help-modal')" title="Help">?</button>
   <div class="header-actions">
     <button class="icon-btn" onclick="undo()" title="Undo (Cmd/Ctrl+Z)" aria-label="Undo">↶</button>
@@ -1664,6 +1698,18 @@
           <span id="prefs-sync-status" style="font-size:11px;color:var(--text-mute);"></span>
         </div>
       </div>
+      <div class="field">
+        <span class="label-txt">Agent access</span>
+        <p style="font-size:11px;color:var(--text-mute);margin:0 0 8px;line-height:1.45;">Agents and scripts in this tab can read your boards and ask for changes through <code>window.kanzen</code>, and through WebMCP where the browser has it. Every change waits for your approval in 🤖.</p>
+        <label style="display:flex;align-items:flex-start;gap:8px;font-size:12px;color:var(--text-mute);">
+          <input type="checkbox" id="prefs-agent-channel" style="width:auto;margin-top:2px;" onchange="setAgentChannel(this.checked)">
+          <span><strong style="color:var(--text);">Let other KanZen tabs call these tools</strong> (cross-tab channel). Off by default: it lets callers outside this tab ask for changes.</span>
+        </label>
+        <details class="agent-tools">
+          <summary id="agent-tools-summary">Tools</summary>
+          <div id="agent-tools-list"></div>
+        </details>
+      </div>
       <p style="font-size:11px;color:var(--text-faint);margin:0;">Device id: <code id="prefs-deviceid"></code></p>
     </div>
     <div class="modal-footer">
@@ -1753,6 +1799,30 @@
     </div>
   </div>
 
+  <!-- agent proposals and activity -->
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="agent-modal-title" id="agent-modal" style="max-width:680px;">
+    <div class="modal-header">
+      <h2 id="agent-modal-title">Agent proposals</h2>
+      <button onclick="closeModal()" aria-label="Close">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="agent-intro">Agents can read your boards. Every change an agent asks for waits here until you approve it. Approved changes show in the activity feed as made via an agent.</p>
+      <div id="agent-proposals"></div>
+      <div id="agent-decided-wrap" style="display:none;">
+        <h3 class="agent-section-title">Decided</h3>
+        <div id="agent-decided"></div>
+      </div>
+      <h3 class="agent-section-title">Agent calls in this tab</h3>
+      <div id="agent-calls"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" id="agent-reject-all" onclick="rejectAllProposals()">Reject all</button>
+      <div class="spacer"></div>
+      <button onclick="closeModal()">Close</button>
+      <button class="btn-primary" id="agent-approve-all" onclick="approveAllProposals()">Approve all</button>
+    </div>
+  </div>
+
   <!-- help -->
   <div class="modal help-modal" id="help-modal" style="max-width:720px;">
     <div class="modal-header">
@@ -1766,6 +1836,7 @@
         <button class="tab-btn" data-help-tab="board"    onclick="setHelpTab('board')">Board &amp; cards</button>
         <button class="tab-btn" data-help-tab="views"    onclick="setHelpTab('views')">Views &amp; filters</button>
         <button class="tab-btn" data-help-tab="keys"     onclick="setHelpTab('keys')">Keyboard &amp; touch</button>
+        <button class="tab-btn" data-help-tab="agents"   onclick="setHelpTab('agents')">Agents</button>
       </div>
 
       <div class="tab-pane active" data-help-pane="overview">
@@ -1830,6 +1901,19 @@
         <h3>Touch</h3>
         <p>Long-press any card to bring up a "Move to…" popover with all other columns.</p>
       </div>
+
+      <div class="tab-pane" data-help-pane="agents">
+        <h3>Two doors, one set of commands</h3>
+        <p>Everything you can do in KanZen is also a tool an agent can call: the same commands, with the same checks. Agents reach them through <strong>WebMCP</strong> where the browser supports it, through <code>window.kanzen</code> in this tab, or through a cross-tab channel you can open in Preferences.</p>
+        <h3>Nothing changes without you</h3>
+        <p>Agents can read boards, cards, activity and snapshots, and can change what this tab shows (board, view, filters). Every change to your data arrives as a proposal under <strong>🤖</strong> in the header. Approve it and it applies; reject it and nothing happens. Before an approved agent change removes data, KanZen takes a safety snapshot.</p>
+        <h3>Only you</h3>
+        <p>Choosing where boards live, cloud-sync credentials, sending a board to the cloud, your name, installing the app, opening the cross-tab channel, and approving proposals stay with you. Agents can see that these exist, but cannot do them.</p>
+        <h3>The record</h3>
+        <p>The activity feed marks every agent change as "via agent" with the door it came through. 🤖 lists this tab's agent calls.</p>
+        <h3>For developers</h3>
+        <p><code>window.kanzen.manifest()</code> lists every tool and its JSON-schema input. <code>window.kanzen.tools.create_card({column_id, title})</code> returns a proposal id; <code>get_proposal</code> reports the outcome. <code>window.kanzen.on('change', fn)</code> follows edits.</p>
+      </div>
     </div>
     <div class="modal-footer">
       <div class="spacer"></div>
@@ -1877,7 +1961,7 @@
    Single-file local-first kanban
    ============================================================ */
 
-/* naklios-sdk:begin ver=2 sha256=727cb3e12f17f4a3872d0119b0719bae3ef8c5fc0389eb10ecc2f635876a8617 — DO NOT EDIT until :end; run `node scripts/vendor-naklios-sdk.mjs` */
+/* naklios-sdk:begin ver=2 sha256=52439c903507fb2416e978a7d05acf61b79253aa04fe6857f596289aefc90005 — DO NOT EDIT until :end; run `node scripts/vendor-naklios-sdk.mjs` */
 /*!
  * naklios.js — cooperative SDK for apps hosted inside NakliOS (Immersive mode)
  *
@@ -1992,6 +2076,7 @@
     fs: false,
     fsBackends: [],
     fsBackend: null,
+    fsBoundedReads: false,
     // system: this app is a same-origin system app (non-third-party).
     // sysFs: system-scoped filesystem is available — the whole store, not just
     // apps/<your-id>/. Only true for system apps with a connected backend.
@@ -2016,6 +2101,7 @@
     // browser blocks. Stays false until a host advertises one — the SDK seam.
     net: false,
     netBackend: null,
+    review: false,
   };
 
   // Request/reply correlation for fs RPCs
@@ -2027,6 +2113,9 @@
   var ragSearches = new Map();     // requestId → semantic-search progress callback
   var fileOpenListeners = new Set(); // exact-file grants delivered by the host
   var pendingFileGrants = [];
+  var reviewDecisionHandler = null;
+  var appliedReviewIds = new Set();
+  var applyingReviewIds = new Map();
 
   function send(type, data) {
     if (!inNakliOS) return;
@@ -2352,6 +2441,7 @@
       if (typeof msg.fs === 'boolean') capabilities.fs = msg.fs;
       if (Array.isArray(msg.fsBackends)) capabilities.fsBackends = msg.fsBackends;
       capabilities.fsBackend = typeof msg.fsBackend === 'string' ? msg.fsBackend : null;
+      capabilities.fsBoundedReads = msg.fsBoundedReads === true;
       capabilities.system = msg.system === true;
       capabilities.sysFs = msg.sysFs === true;
       if (typeof msg.ai === 'boolean') capabilities.ai = msg.ai;
@@ -2378,6 +2468,7 @@
       capabilities.aiSearch = msg.aiSearch === true;
       capabilities.net = msg.net === true;
       capabilities.netBackend = typeof msg.netBackend === 'string' ? msg.netBackend : null;
+      capabilities.review = msg.review === true;
       capListeners.forEach(function (cb) {
         try { cb(capabilities); } catch (_) {}
       });
@@ -2477,7 +2568,38 @@
       else fileOpenListeners.forEach(function (cb) {
         try { cb(grant); } catch (_) {}
       });
+    } else if (msg.type === 'naklios:review:commit' && msg.proposal_id) {
+      var reviewId = String(msg.proposal_id);
+      if (appliedReviewIds.has(reviewId)) {
+        send('naklios:review:applied', { proposal_id: reviewId, ok: true });
+      } else if (!reviewDecisionHandler) {
+        send('naklios:review:applied', { proposal_id: reviewId, ok: false, error: 'app has no review decision handler' });
+      } else {
+        var application = applyingReviewIds.get(reviewId);
+        if (!application) {
+          application = Promise.resolve().then(function () {
+            return reviewDecisionHandler({ type: 'commit', proposal_id: reviewId });
+          }).then(function (result) {
+            if (result && result.ok === false) throw new Error(result.reason || 'app refused the staged change');
+            appliedReviewIds.add(reviewId);
+          });
+          applyingReviewIds.set(reviewId, application);
+          application.then(function () { applyingReviewIds.delete(reviewId); }, function () { applyingReviewIds.delete(reviewId); });
+        }
+        application.then(function () {
+          send('naklios:review:applied', { proposal_id: reviewId, ok: true });
+        }).catch(function (error) {
+          send('naklios:review:applied', { proposal_id: reviewId, ok: false, error: String(error && error.message || error) });
+        });
+      }
+    } else if (msg.type === 'naklios:review:discard' && msg.proposal_id) {
+      if (reviewDecisionHandler) {
+        Promise.resolve().then(function () {
+          return reviewDecisionHandler({ type: 'discard', proposal_id: String(msg.proposal_id) });
+        }).catch(function () {});
+      }
     } else if ((msg.type === 'naklios:fs:reply' || msg.type === 'naklios:file:reply' ||
+                msg.type === 'naklios:review:reply' ||
                 msg.type === 'naklios:rag:reply' || msg.type === 'naklios:net:reply') && msg.requestId) {
       var p = pendingRpc.get(msg.requestId);
       if (!p) return;
@@ -2535,12 +2657,32 @@
       return function () { capListeners.delete(cb); };
     },
     requestCapabilities: function () { send('naklios:capabilities-request'); },
+    review: {
+      // The host owns normalization and approval. A standalone app receives a
+      // clear fallback marker; its own caller performs the immediate write.
+      stage: function (tool, diff, options) {
+        if (!inNakliOS) return Promise.resolve({ standalone: true, proposal_id: null });
+        if (!capabilities.review) return Promise.reject(new Error('NakliOS review is unavailable'));
+        options = options || {};
+        return rpc('naklios:review:stage', {
+          tool: tool, diff: diff, expires: options.expires,
+          reversible: options.reversible === true,
+        });
+      },
+      onDecision: function (cb) {
+        if (typeof cb !== 'function') throw new Error('naklios.review.onDecision needs a callback');
+        reviewDecisionHandler = cb;
+        return function () { if (reviewDecisionHandler === cb) reviewDecisionHandler = null; };
+      },
+    },
     fs: {
+      get supportsBoundedReads() { return capabilities.fsBoundedReads === true; },
       // All paths are app-relative (under apps/<your-id>/ in the host folder).
       // Returns Promises. Reject if no folder connected, permission denied,
       // or path tries to traverse.
       read:       function (path)       { return rpc('naklios:fs:read', fsPayload({ path: path })); },
-      readBinary: function (path)       { return rpc('naklios:fs:readBinary', fsPayload({ path: path })); },
+      readBinary: function (path, options) { return rpc('naklios:fs:readBinary', fsPayload({ path: path, maxBytes: options && options.maxBytes })); },
+      stat:       function (path)       { return rpc('naklios:fs:stat', fsPayload({ path: path })); },
       write:      function (path, data) { return rpc('naklios:fs:write', fsPayload({ path: path, data: data })); },
       append:     function (path, line) { return rpc('naklios:fs:append', fsPayload({ path: path, line: line })); },
       list:       function (prefix)     { return rpc('naklios:fs:list', fsPayload({ prefix: prefix || '' })); },
@@ -2583,7 +2725,8 @@
     sys: {
       fs: {
         read:       function (path)       { return rpc('naklios:sysfs:read', fsPayload({ path: path })); },
-        readBinary: function (path)       { return rpc('naklios:sysfs:readBinary', fsPayload({ path: path })); },
+        readBinary: function (path, options) { return rpc('naklios:sysfs:readBinary', fsPayload({ path: path, maxBytes: options && options.maxBytes })); },
+        stat:       function (path)       { return rpc('naklios:sysfs:stat', fsPayload({ path: path })); },
         write:      function (path, data) { return rpc('naklios:sysfs:write', fsPayload({ path: path, data: data })); },
         append:     function (path, line) { return rpc('naklios:sysfs:append', fsPayload({ path: path, line: line })); },
         list:       function (prefix)     { return rpc('naklios:sysfs:list', fsPayload({ prefix: prefix || '' })); },
@@ -4200,8 +4343,10 @@ function boardSaver(){
     delay: 5000,
   }));
 }
+// apply_changes runs several commands as one undo step: history is pushed once, after the batch.
+let _kzBatchDepth = 0;
 function scheduleSave(){
-  pushHistory();
+  if(!_kzBatchDepth) pushHistory();
   markDirty();
   if(S.currentBoardId) markBoardForSync(S.currentBoardId);
 }
@@ -4263,11 +4408,11 @@ function renderFilters(){
   }
   $('filter-priority').value = S.filter.priority || '';
   $('filter-due').value = S.filter.due || '';
-  $('search-input').value = S.filter.search || '';
+  // only write the search box when it differs, so typing keeps its caret
+  if($('search-input').value !== (S.filter.search || '')) $('search-input').value = S.filter.search || '';
 }
 
-function cardMatchesFilter(card, board){
-  const f = S.filter;
+function cardMatchesFilter(card, board, f=S.filter){
   if(f.search){
     const q = f.search.toLowerCase();
     if(!(card.title||'').toLowerCase().includes(q) && !(card.description||'').toLowerCase().includes(q)) return false;
@@ -4291,8 +4436,7 @@ function cardMatchesFilter(card, board){
   return true;
 }
 
-function isFilterActive(){
-  const f = S.filter;
+function isFilterActive(f=S.filter){
   return !!(f.search || f.labelId || f.memberId || f.priority || f.due);
 }
 
@@ -4301,12 +4445,12 @@ function currentViewMode(){
   return S.viewMode[id] || 'board';
 }
 function setViewMode(mode){
-  const id = S.currentBoardId; if(!id) return;
-  S.viewMode[id] = mode;
-  if(mode === 'calendar' && !S.calMonth){
-    const d = new Date(); S.calMonth = { y: d.getFullYear(), m: d.getMonth() };
-  }
-  renderBoard();
+  return kzUi('set_view', { mode });
+}
+const LIST_SORT_FIELDS = { title:'title', col:'column', priority:'priority', due:'due_date', updated:'updated' };
+function sortListBy(key){
+  const direction = S.listSort.col === key && S.listSort.dir === 'asc' ? 'desc' : 'asc';
+  return kzUi('set_view', { list_sort: { field: LIST_SORT_FIELDS[key], direction } });
 }
 function syncViewPills(){
   const mode = currentViewMode();
@@ -4486,12 +4630,7 @@ function renderListView(area){
   area.appendChild(wrap);
 
   for(const th of wrap.querySelectorAll('thead th[data-col]')){
-    th.addEventListener('click', () => {
-      const k = th.dataset.col;
-      if(S.listSort.col === k) S.listSort.dir = S.listSort.dir === 'asc' ? 'desc' : 'asc';
-      else { S.listSort.col = k; S.listSort.dir = 'asc'; }
-      renderBoard();
-    });
+    th.addEventListener('click', () => sortListBy(th.dataset.col));
   }
   for(const tr of wrap.querySelectorAll('tbody tr[data-card-id]')){
     tr.addEventListener('click', () => openCardEditor(tr.dataset.cardId));
@@ -4584,28 +4723,26 @@ function renderCalendarView(area){
       e.preventDefault();
       day.classList.remove('drag-over');
       if(_drag?.kind !== 'cal-card') return;
-      const card = b.cards[_drag.id]; if(!card) return;
-      card.dueDate = day.dataset.date;
-      stampCard(card);
+      const cardId = _drag.id;
       _drag = null;
-      logActivity('card_due_changed', { cardId: card.id, cardTitle: card.title, detail: { dueDate: card.dueDate } });
-      scheduleSave();
-      renderBoard();
+      setCardDueDate(cardId, day.dataset.date);
     });
   }
 }
+function setCardDueDate(cardId, date){
+  return kzUi('update_card', { card_id: cardId, due_date: date });
+}
+function calMonthKey(y, m){ return `${y}-${String(m+1).padStart(2,'0')}`; }
 function calNav(delta){
   let { y, m } = S.calMonth;
   m += delta;
   if(m < 0){ m = 11; y--; }
   if(m > 11){ m = 0; y++; }
-  S.calMonth = { y, m };
-  renderBoard();
+  return kzUi('set_view', { calendar_month: calMonthKey(y, m) });
 }
 function calToday(){
   const d = new Date();
-  S.calMonth = { y: d.getFullYear(), m: d.getMonth() };
-  renderBoard();
+  return kzUi('set_view', { calendar_month: calMonthKey(d.getFullYear(), d.getMonth()) });
 }
 function setHelpTab(name){
   for(const b of document.querySelectorAll('.help-modal .tab-btn')) b.classList.toggle('active', b.dataset.helpTab === name);
@@ -4727,187 +4864,124 @@ function onColDrop(e, colId){
     const cardId = _drag.id;
     const fromCol = findColumnByCard(b, cardId);
     if(!fromCol) return;
-    fromCol.cardIds = fromCol.cardIds.filter(x => x !== cardId);
     const toCol = b.columns.find(c => c.id === colId);
     if(!toCol) return;
-    stampCard(b.cards[cardId]);
-    if(fromCol.id !== toCol.id){
-      const card = b.cards[cardId];
-      logActivity('card_moved', { cardId, cardTitle: card?.title, detail: { fromColumn: fromCol.name, toColumn: toCol.name } });
-    }
 
     // compute insertion index by pointer Y vs existing cards in target body
     const columnEl=[...document.querySelectorAll('#board-area .column')]
       .find(element=>element.dataset.columnId===colId);
     const body = columnEl?.querySelector('.col-body');
-    let insertIdx = toCol.cardIds.length;
+    let insertIdx = toCol.cardIds.filter(id => id !== cardId).length;
     if(body){
-      const cards = [...body.querySelectorAll('.card')];
+      const cards = [...body.querySelectorAll('.card')].filter(card => card.dataset.cardId !== cardId);
       for(let i = 0; i < cards.length; i++){
         const r = cards[i].getBoundingClientRect();
         if(e.clientY < r.top + r.height/2){ insertIdx = i; break; }
       }
     }
-    toCol.cardIds.splice(insertIdx, 0, cardId);
+    _drag = null;
+    moveCardTo(cardId, colId, insertIdx);
+    return;
   } else if(_drag.kind === 'column'){
-    if(_drag.id === colId){ _drag = null; return; }
-    const fromIdx = b.columns.findIndex(c => c.id === _drag.id);
-    const toIdx   = b.columns.findIndex(c => c.id === colId);
-    if(fromIdx < 0 || toIdx < 0) return;
-    const [moved] = b.columns.splice(fromIdx, 1);
-    b.columns.splice(toIdx, 0, moved);
+    const columnId = _drag.id;
+    _drag = null;
+    if(columnId === colId) return;
+    const toIdx = b.columns.findIndex(c => c.id === colId);
+    if(toIdx < 0) return;
+    moveColumnTo(columnId, toIdx);
   }
-  _drag = null;
-  scheduleSave();
-  renderBoard();
+}
+function moveColumnTo(columnId, position){
+  return kzUi('move_column', { column_id: columnId, position });
 }
 
 /* ============================================================
-   Board CRUD
+   Board CRUD — UI side: gather input, then dispatch a command
    ============================================================ */
 
 async function newBoardPrompt(){
   const name = await kzPrompt({ title:'New board', placeholder:'Board name', defaultValue:'Untitled board', okLabel:'Create' });
   if(!name) return;
-  const b = newBoard(name);
-  S.boards[b.id] = b;
-  rebuildBoardOrder();
-  S.currentBoardId = b.id;
-  S.settings.lastBoardId = b.id;
-  storage.saveSettings(S.settings);
-  scheduleSave();
-  renderAll();
+  await kzUi('create_board', { name });
 }
 async function renameBoardPrompt(){
   const b = currentBoard(); if(!b) return;
   const name = await kzPrompt({ title:'Rename board', defaultValue: b.name, okLabel:'Rename' });
   if(!name) return;
-  const oldName = b.name;
-  b.name = name;
-  if(oldName !== name) logActivity('board_renamed', { detail: { oldName, newName: name } });
-  rebuildBoardOrder();
-  scheduleSave();
-  renderAll();
+  await kzUi('rename_board', { name });
 }
 async function deleteBoardConfirm(){
   const b = currentBoard(); if(!b) return;
   if(!await kzConfirm({ title:`Delete "${b.name}"?`, message:'This cannot be undone.', okLabel:'Delete board', danger:true })) return;
-  await maybeAutoSnapshot('destructive');
-  if(syncReady()&&b._meta?.sync){
-    try{ await deleteRemoteBoard(b); }
-    catch(error){
-      console.error(error);
-      toast(error.code==='SYNC_CONFLICT'?'Board changed remotely — sync it before deleting':'Cloud delete failed: '+error.message);
-      return;
-    }
-  }
-  await storage.deleteBoard(b);
-  delete S.boards[b.id];
-  rebuildBoardOrder();
-  S.currentBoardId = S.boardOrder[0] || null;
-  S.settings.lastBoardId = S.currentBoardId;
-  storage.saveSettings(S.settings);
-  renderAll();
-  toast('Board deleted');
+  if(await kzUi('delete_board', { board_id: b.id })) toast('Board deleted');
 }
 function switchBoard(id){
-  if(!S.boards[id]) return;
-  S.currentBoardId = id;
-  S.settings.lastBoardId = id;
-  storage.saveSettings(S.settings);
-  S.focusedCardId = null;
-  if(!S.history.byBoard[id]) pushHistory();
-  renderAll();
+  return kzUi('switch_board', { board_id: id });
 }
 
 /* ============================================================
-   Column CRUD
+   Column CRUD — UI side
    ============================================================ */
 
 async function addColumnPrompt(){
-  const b = currentBoard(); if(!b) return;
+  if(!currentBoard()) return;
   const name = await kzPrompt({ title:'New column', defaultValue:'New column', okLabel:'Add' });
   if(!name) return;
-  b.columns.push({ id:uid(), name, wipLimit:0, collapsed:false, cardIds:[] });
-  logActivity('column_created', { detail: { name } });
-  scheduleSave();
-  renderBoard();
+  await kzUi('create_column', { name });
 }
 function renameColumn(colId, newName){
-  const b = currentBoard(); if(!b) return;
-  const c = b.columns.find(x => x.id === colId); if(!c) return;
-  const oldName = c.name;
-  c.name = newName;
-  if(oldName !== newName) logActivity('column_renamed', { detail: { oldName, newName } });
-  scheduleSave();
+  const name = String(newName || '').trim();
+  if(!name){ renderBoard(); return; }
+  return kzUi('update_column', { column_id: colId, name });
 }
 function toggleColumnCollapse(colId){
-  const b = currentBoard(); if(!b) return;
-  const c = b.columns.find(x => x.id === colId); if(!c) return;
-  c.collapsed = !c.collapsed;
-  scheduleSave();
-  renderBoard();
+  const c = currentBoard()?.columns.find(x => x.id === colId); if(!c) return;
+  return kzUi('update_column', { column_id: colId, collapsed: !c.collapsed });
 }
 async function deleteColumnConfirm(colId){
-  const b = currentBoard(); if(!b) return;
-  const c = b.columns.find(x => x.id === colId); if(!c) return;
+  const c = currentBoard()?.columns.find(x => x.id === colId); if(!c) return;
   const msg = c.cardIds.length ? `${c.cardIds.length} card${c.cardIds.length===1?'':'s'} in this column will also be deleted.` : 'This column will be removed.';
   if(!await kzConfirm({ title:`Delete "${c.name}"?`, message: msg, okLabel:'Delete column', danger:true })) return;
-  await maybeAutoSnapshot('destructive');
-  const removedName = c.name;
-  for(const cid of c.cardIds) delete b.cards[cid];
-  b.columns = b.columns.filter(x => x.id !== colId);
-  logActivity('column_deleted', { detail: { name: removedName } });
-  await flushSave();
-  renderBoard();
+  return kzUi('delete_column', { column_id: colId });
 }
 
 /* ============================================================
-   Card CRUD
+   Card CRUD — UI side
    ============================================================ */
 
 async function addCardPrompt(colId){
-  const b = currentBoard(); if(!b) return;
+  if(!currentBoard()) return;
   const title = await kzPrompt({ title:'New card', placeholder:'What needs doing?', okLabel:'Add card' });
   if(!title) return;
-  const card = newCard(title);
-  b.cards[card.id] = card;
-  const c = b.columns.find(x => x.id === colId); if(!c) return;
-  c.cardIds.push(card.id);
-  logActivity('card_created', { cardId: card.id, cardTitle: title, detail: { column: c.name } });
-  scheduleSave();
-  renderBoard();
+  await kzUi('create_card', { column_id: colId, title });
 }
 async function deleteCardConfirm(){
   const b = currentBoard(); if(!b || !S.editingCardId) return;
   const card = b.cards[S.editingCardId]; if(!card) return;
   if(!await kzConfirm({ title:`Delete "${card.title}"?`, message:'This cannot be undone.', okLabel:'Delete card', danger:true })) return;
-  await maybeAutoSnapshot('destructive');
-  const col = findColumnByCard(b, card.id);
-  if(col) col.cardIds = col.cardIds.filter(x => x !== card.id);
-  markCardDeleted(card.id);
-  delete b.cards[card.id];
-  logActivity('card_deleted', { cardId: card.id, cardTitle: card.title, detail: { column: col?.name } });
-  pushHistory();
-  closeModal();
-  await flushSave();
-  renderBoard();
+  if(await kzUi('delete_card', { card_id: card.id })) closeModal();
 }
 
 /* ============================================================
    Card editor modal
+   Title, description, priority, due date, labels, members and the checklist
+   are a draft: Save dispatches one update_card, Cancel discards the draft.
+   Comments and attachments commit at once, through their own commands.
    ============================================================ */
 
+function editingCard(){
+  const b = currentBoard();
+  return b && S.editingCardId && Object.hasOwn(b.cards, S.editingCardId) ? b.cards[S.editingCardId] : null;
+}
 function openCardEditor(cardId){
   const b = currentBoard(); if(!b) return;
-  const card = b.cards[cardId]; if(!card) return;
-  if(!card.comments) card.comments = [];
+  const card = Object.hasOwn(b.cards, cardId) ? b.cards[cardId] : null; if(!card) return;
   S.editingCardId = cardId;
-  // snapshot the card so we can diff for activity log on save
-  S._editorBefore = JSON.stringify({
-    title: card.title, description: card.description, priority: card.priority,
-    dueDate: card.dueDate, labelIds: [...(card.labelIds||[])].sort(), memberIds: [...(card.memberIds||[])].sort()
-  });
+  S._editorDraft = {
+    labelIds: [...(card.labelIds||[])],
+    memberIds: [...(card.memberIds||[])],
+    checklist: (card.checklist||[]).map(item => ({ id:item.id, text:item.text, done:!!item.done })),
+  };
   $('card-modal-title').textContent = 'Edit card';
   $('card-title-input').value = card.title || '';
   $('card-desc-input').value  = card.description || '';
@@ -4939,7 +5013,7 @@ function renderEditorAuthor(card){
   el.textContent = `Last edited by ${lmb} · ${lma}    ·    Created by ${cb} · ${ca}`;
 }
 function renderEditorComments(){
-  const b = currentBoard(); const card = b.cards[S.editingCardId]; if(!card) return;
+  const b = currentBoard(); const card = editingCard(); if(!card) return;
   // populate author select
   const sel = $('comment-author');
   sel.innerHTML = '<option value="">— anonymous —</option>';
@@ -4951,7 +5025,7 @@ function renderEditorComments(){
   }
   // render comment list
   const list = $('comments-list'); list.innerHTML = '';
-  if(!card.comments.length){
+  if(!(card.comments||[]).length){
     list.innerHTML = '<div style="font-size:11px;color:var(--text-faint);">No comments yet.</div>';
     return;
   }
@@ -4965,34 +5039,34 @@ function renderEditorComments(){
         <span class="actions"><button title="Delete">✕</button></span>
       </div>
       <div class="body">${mdToHtml(c.text)}</div>`;
-    div.querySelector('button').onclick = () => {
-      card.comments = card.comments.filter(x => x.id !== c.id);
-      renderEditorComments();
-    };
+    div.querySelector('button').onclick = () => deleteCommentFromEditor(c.id);
     list.appendChild(div);
   }
 }
-function addCommentFromEditor(){
-  const b = currentBoard(); const card = b.cards[S.editingCardId]; if(!card) return;
+async function addCommentFromEditor(){
+  const card = editingCard(); if(!card) return;
   const text = $('comment-input').value.trim(); if(!text) return;
   const who  = $('comment-author').value || '';
   S._lastCommentAuthor = who;
-  if(!card.comments) card.comments = [];
-  card.comments.push({ id: uid(), timestamp: now(), who, text });
-  $('comment-input').value = '';
-  renderEditorComments();
-  logActivity('card_commented', { cardId: card.id, cardTitle: card.title, detail: {} });
-  scheduleSave();
-  renderBoard();
+  const input = { card_id: card.id, text };
+  if(who) input.author_member_id = who;
+  if(await kzUi('add_comment', input)){
+    $('comment-input').value = '';
+    renderEditorComments();
+  }
+}
+async function deleteCommentFromEditor(commentId){
+  const card = editingCard(); if(!card) return;
+  if(await kzUi('delete_comment', { card_id: card.id, comment_id: commentId })) renderEditorComments();
 }
 function renderDescPreview(){
   const v = $('card-desc-input').value;
   $('card-desc-preview').innerHTML = mdToHtml(v);
 }
 function renderEditorChecklist(){
-  const b = currentBoard(); const card = b.cards[S.editingCardId]; if(!card) return;
+  const draft = S._editorDraft; if(!draft) return;
   const el = $('checklist-block'); el.innerHTML = '';
-  for(const item of card.checklist){
+  for(const item of draft.checklist){
     const row = document.createElement('div');
     row.className = 'check-row' + (item.done ? ' done' : '');
     row.innerHTML = `
@@ -5003,21 +5077,21 @@ function renderEditorChecklist(){
     const [cb, txt, rm] = row.children;
     cb.onchange  = () => { item.done = cb.checked; row.classList.toggle('done', cb.checked); updateChecklistProgress(); };
     txt.onchange = () => { item.text = txt.value; };
-    rm.onclick   = () => { card.checklist = card.checklist.filter(x => x.id !== item.id); renderEditorChecklist(); };
+    rm.onclick   = () => { draft.checklist = draft.checklist.filter(x => x !== item); renderEditorChecklist(); };
     el.appendChild(row);
   }
   updateChecklistProgress();
 }
 function updateChecklistProgress(){
-  const b = currentBoard(); const card = b.cards[S.editingCardId]; if(!card) return;
-  const total = card.checklist.length;
-  const done = card.checklist.filter(i => i.done).length;
+  const draft = S._editorDraft; if(!draft) return;
+  const total = draft.checklist.length;
+  const done = draft.checklist.filter(i => i.done).length;
   const pct = total ? Math.round(done/total*100) : 0;
   $('check-fill').style.width = pct + '%';
 }
 function addChecklistItem(){
-  const b = currentBoard(); const card = b.cards[S.editingCardId]; if(!card) return;
-  card.checklist.push({ id:uid(), text:'New item', done:false });
+  if(!S._editorDraft) return;
+  S._editorDraft.checklist.push({ text:'New item', done:false });
   renderEditorChecklist();
 }
 // Show the AI subtask button only when hosted with the shared NakliOS model.
@@ -5028,8 +5102,9 @@ function updateAiSubtasksBtn(caps){
   if(on && caps && caps.aiModelLabel) btn.title = 'Suggest subtasks with ' + caps.aiModelLabel + ' — private, no setup';
 }
 // Break the card's title/description into checklist items via the on-device model.
+// The suggestions join the draft; Save keeps them, Cancel drops them.
 async function aiSuggestSubtasks(){
-  const b = currentBoard(); const card = b && b.cards[S.editingCardId]; if(!card) return;
+  const card = editingCard(); if(!card || !S._editorDraft) return;
   const title = ($('card-title-input').value || card.title || '').trim();
   const desc  = ($('card-desc-input').value  || card.description || '').trim();
   if(!title && !desc){ toast('Add a title or description first'); return; }
@@ -5037,78 +5112,62 @@ async function aiSuggestSubtasks(){
   const orig = btn ? btn.textContent : '';
   if(btn){ btn.disabled = true; btn.textContent = '✨ Thinking…'; }
   try{
-    const messages = [
-      { role:'system', content:'You break a task into a short checklist of concrete, actionable subtasks. Output ONLY the subtasks, one per line — no numbering, no bullets, no preamble. 3 to 6 items, each under 8 words.' },
-      { role:'user', content:('Task: ' + title + (desc ? ('\nDetails: ' + desc) : '')).trim() },
-    ];
-    const res = await window.naklios.ai.chat.completions.create({ messages, max_tokens:200 });
-    const text = res && res.choices && res.choices[0] && res.choices[0].message ? res.choices[0].message.content : '';
-    const items = String(text||'').split('\n')
-      .map(l => l.replace(/^[\s\-*•\d.)\]]+/, '').trim())
-      .filter(l => l.length > 1).slice(0, 8);
-    if(!items.length){ toast('No subtasks suggested — try again'); return; }
-    for(const t of items) card.checklist.push({ id:uid(), text:t, done:false });
+    const result = await kzUi('suggest_subtasks', { title: title || desc.slice(0,200), description: desc });
+    if(!result) return;
+    if(!result.items.length){ toast('No subtasks suggested — try again'); return; }
+    for(const text of result.items) S._editorDraft.checklist.push({ text, done:false });
     renderEditorChecklist();
-    if(typeof scheduleSave === 'function') scheduleSave();
-    toast('Added ' + items.length + ' subtask' + (items.length === 1 ? '' : 's'));
-  }catch(e){ toast('AI error: ' + (e.message || e)); }
-  finally{ if(btn){ btn.disabled = false; btn.textContent = orig || '✨ Suggest subtasks'; } }
+    toast('Added ' + result.items.length + ' subtask' + (result.items.length === 1 ? '' : 's') + ' — Save to keep them');
+  }finally{ if(btn){ btn.disabled = false; btn.textContent = orig || '✨ Suggest subtasks'; } }
 }
 function renderEditorLabels(){
-  const b = currentBoard(); const card = b.cards[S.editingCardId]; if(!card) return;
+  const b = currentBoard(); const draft = S._editorDraft; if(!b || !draft) return;
   const el = $('card-labels-list'); el.innerHTML = '';
   for(const l of b.labels){
     const pill = document.createElement('span');
-    pill.className = 'label-pill' + (card.labelIds.includes(l.id) ? ' selected' : '');
+    pill.className = 'label-pill' + (draft.labelIds.includes(l.id) ? ' selected' : '');
     pill.style.background = safeCssColor(l.color);
     pill.style.color = '#000';
     pill.textContent = l.name;
     pill.onclick = () => {
-      if(card.labelIds.includes(l.id)) card.labelIds = card.labelIds.filter(x => x !== l.id);
-      else card.labelIds.push(l.id);
+      if(draft.labelIds.includes(l.id)) draft.labelIds = draft.labelIds.filter(x => x !== l.id);
+      else draft.labelIds.push(l.id);
       renderEditorLabels();
     };
     el.appendChild(pill);
   }
 }
 async function newLabelPrompt(){
-  const b = currentBoard(); if(!b) return;
+  if(!currentBoard()) return;
   const name = await kzPrompt({ title:'New label', placeholder:'Label name', okLabel:'Add label' });
   if(!name) return;
-  const color = LABEL_COLORS[b.labels.length % LABEL_COLORS.length];
-  b.labels.push({ id:uid(), name, color });
-  logActivity('label_created', { detail: { name } });
-  renderEditorLabels();
-  scheduleSave();
+  if(await kzUi('create_label', { name })) renderEditorLabels();
 }
 function renderEditorMembers(){
-  const b = currentBoard(); const card = b.cards[S.editingCardId]; if(!card) return;
+  const b = currentBoard(); const draft = S._editorDraft; if(!b || !draft) return;
   const el = $('card-members-list'); el.innerHTML = '';
   if(!b.members.length){ el.innerHTML = '<span style="font-size:11px;color:var(--text-faint);">No members yet</span>'; return; }
   for(const m of b.members){
     const pill = document.createElement('span');
-    pill.className = 'member-pill' + (card.memberIds.includes(m.id) ? ' selected' : '');
+    pill.className = 'member-pill' + (draft.memberIds.includes(m.id) ? ' selected' : '');
     if(m.color) pill.style.background = safeCssColor(m.color,'#0079bf');
     pill.textContent = m.name;
     pill.onclick = () => {
-      if(card.memberIds.includes(m.id)) card.memberIds = card.memberIds.filter(x => x !== m.id);
-      else card.memberIds.push(m.id);
+      if(draft.memberIds.includes(m.id)) draft.memberIds = draft.memberIds.filter(x => x !== m.id);
+      else draft.memberIds.push(m.id);
       renderEditorMembers();
     };
     el.appendChild(pill);
   }
 }
 async function newMemberPrompt(){
-  const b = currentBoard(); if(!b) return;
+  if(!currentBoard()) return;
   const name = await kzPrompt({ title:'New member', placeholder:'Member name', okLabel:'Add member' });
   if(!name) return;
-  b.members.push({ id:uid(), name, color:LABEL_COLORS[b.members.length % LABEL_COLORS.length] });
-  logActivity('member_added', { detail: { name } });
-  renderEditorMembers();
-  scheduleSave();
+  if(await kzUi('create_member', { name })){ renderEditorMembers(); renderEditorComments(); }
 }
 function renderEditorAttachments(){
-  const b = currentBoard(); const card = b.cards[S.editingCardId]; if(!card) return;
+  const card = editingCard(); if(!card) return;
   const el = $('attachments-list'); el.innerHTML = '';
   for(const a of card.attachments){
     const row = document.createElement('div');
@@ -5130,13 +5189,14 @@ function renderEditorAttachments(){
     const remove=document.createElement('button');
     remove.title='Remove';
     remove.textContent='✕';
-    remove.onclick = () => {
-      card.attachments = card.attachments.filter(x => x.id !== a.id);
-      renderEditorAttachments();
-    };
+    remove.onclick = () => removeAttachmentFromEditor(a.id);
     row.append(link,size,remove);
     el.appendChild(row);
   }
+}
+async function removeAttachmentFromEditor(attachmentId){
+  const card = editingCard(); if(!card) return;
+  if(await kzUi('remove_attachment', { card_id: card.id, attachment_id: attachmentId })) renderEditorAttachments();
 }
 function formatBytes(n){
   if(n < 1024) return n + ' B';
@@ -5144,7 +5204,7 @@ function formatBytes(n){
   return (n/1024/1024).toFixed(1) + ' MB';
 }
 async function onAttachFiles(e){
-  const b = currentBoard(); const card = b.cards[S.editingCardId]; if(!card) return;
+  const card = editingCard(); if(!card) return;
   const files = [...e.target.files];
   for(const f of files){
     if(f.size > 3*1024*1024){
@@ -5153,40 +5213,30 @@ async function onAttachFiles(e){
     const dataUrl = await new Promise((res,rej)=>{
       const r = new FileReader(); r.onload = ()=>res(r.result); r.onerror = rej; r.readAsDataURL(f);
     });
-    card.attachments.push({ id:uid(), name:f.name, type:f.type, size:f.size, dataUrl });
+    const comma = String(dataUrl).indexOf(',');
+    await kzUi('add_attachment', {
+      card_id: card.id,
+      name: f.name.slice(0,200) || 'attachment',
+      mime_type: f.type || 'application/octet-stream',
+      data_base64: String(dataUrl).slice(comma + 1),
+    });
   }
   e.target.value = '';
   renderEditorAttachments();
 }
-function saveCardModal(){
-  const b = currentBoard(); const card = b.cards[S.editingCardId]; if(!card) return;
-  const before = S._editorBefore ? JSON.parse(S._editorBefore) : {};
-  card.title       = $('card-title-input').value.trim() || 'Untitled';
-  card.description = $('card-desc-input').value;
-  card.priority    = $('card-priority').value;
-  card.dueDate     = $('card-due').value || null;
-  stampCard(card);
-  // diff to log specific changes
-  const changedFields = [];
-  if(before.title !== undefined && before.title !== card.title)               changedFields.push({ field:'title',       oldValue: before.title,       newValue: card.title });
-  if(before.description !== undefined && before.description !== card.description) changedFields.push({ field:'description', oldValue: before.description, newValue: card.description });
-  if(before.priority !== undefined && before.priority !== card.priority)       changedFields.push({ field:'priority',    oldValue: before.priority,    newValue: card.priority });
-  if(before.dueDate !== undefined && before.dueDate !== card.dueDate)          changedFields.push({ field:'dueDate',     oldValue: before.dueDate,     newValue: card.dueDate });
-  for(const ch of changedFields){
-    logActivity('card_edited', { cardId: card.id, cardTitle: card.title, detail: ch });
-  }
-  // member-list change → card_assigned
-  if(before.memberIds){
-    const after = [...(card.memberIds||[])].sort().join(',');
-    const prev  = before.memberIds.join(',');
-    if(after !== prev){
-      logActivity('card_assigned', { cardId: card.id, cardTitle: card.title, detail: { memberIds: card.memberIds } });
-    }
-  }
-  S._editorBefore = null;
-  closeModal();
-  scheduleSave();
-  renderBoard();
+async function saveCardModal(){
+  const card = editingCard(); const draft = S._editorDraft; if(!card || !draft) return;
+  const result = await kzUi('update_card', {
+    card_id: card.id,
+    title: $('card-title-input').value.trim() || 'Untitled',
+    description: $('card-desc-input').value,
+    priority: $('card-priority').value,
+    due_date: $('card-due').value || null,
+    label_ids: draft.labelIds,
+    member_ids: draft.memberIds,
+    checklist: draft.checklist.map(item => ({ ...(item.id ? { id:item.id } : {}), text:item.text, done:!!item.done })),
+  });
+  if(result) closeModal();
 }
 
 /* ============================================================
@@ -5209,14 +5259,7 @@ function openSettingsModal(){
     const [nameI, wipI, rm] = row.children;
     nameI.dataset.colId = c.id;
     wipI.dataset.colId  = c.id;
-    rm.onclick = async () => {
-      if(c.cardIds.length){
-        if(!await kzConfirm({ title:`Delete "${c.name}"?`, message:`${c.cardIds.length} card${c.cardIds.length===1?'':'s'} will be deleted.`, okLabel:'Delete column', danger:true })) return;
-      }
-      for(const cid of c.cardIds) delete b.cards[cid];
-      b.columns = b.columns.filter(x => x.id !== c.id);
-      openSettingsModal();
-    };
+    rm.onclick = () => removeColumnFromSettings(c.id);
     cl.appendChild(row);
   }
   // members
@@ -5226,7 +5269,7 @@ function openSettingsModal(){
     row.style.cssText = 'display:flex;gap:6px;align-items:center;margin-bottom:4px;';
     row.innerHTML = `<input type="text" value="${escapeHtml(m.name)}" style="flex:1;"><button>✕</button>`;
     row.children[0].dataset.memberId = m.id;
-    row.children[1].onclick = () => { b.members = b.members.filter(x => x.id !== m.id); openSettingsModal(); };
+    row.children[1].onclick = () => removeMemberFromSettings(m.id);
     ml.appendChild(row);
   }
   // team mode toggle
@@ -5263,7 +5306,7 @@ function openSettingsModal(){
     const div = document.createElement('div');
     div.title = g.name;
     div.style.cssText = `height:40px;border-radius:6px;background:${g.value};cursor:pointer;border:2px solid ${cur.kind==='gradient'&&cur.value===g.value?'var(--accent)':'transparent'};`;
-    div.onclick = () => setBoardBackground('gradient', g.value);
+    div.onclick = () => setBoardBackground('gradient', g.name);
     grid.appendChild(div);
   }
   for(const c of BG_SOLIDS){
@@ -5289,61 +5332,78 @@ function openSettingsModal(){
     const [_chip, nameI, colorI, rm] = row.children;
     nameI.dataset.labelId  = l.id;
     colorI.dataset.labelId = l.id;
-    rm.onclick = () => { b.labels = b.labels.filter(x => x.id !== l.id); openSettingsModal(); };
+    rm.onclick = () => removeLabelFromSettings(l.id);
     ll.appendChild(row);
   }
 }
-function addColumnFromSettings(){
-  const b = currentBoard(); if(!b) return;
-  saveSettingsModal(true);
-  b.columns.push({ id:uid(), name:'New column', wipLimit:0, collapsed:false, cardIds:[] });
-  openSettingsModal();
+async function addColumnFromSettings(){
+  if(!currentBoard() || !await saveSettingsModal(true)) return;
+  if(await kzUi('create_column', { name:'New column' })) openSettingsModal();
 }
-function addMemberFromSettings(){
-  const b = currentBoard(); if(!b) return;
+async function addMemberFromSettings(){
   const name = $('settings-new-member').value.trim();
-  if(!name) return;
-  saveSettingsModal(true);
-  b.members.push({ id:uid(), name, color:LABEL_COLORS[b.members.length % LABEL_COLORS.length] });
-  $('settings-new-member').value = '';
-  openSettingsModal();
+  if(!name || !currentBoard() || !await saveSettingsModal(true)) return;
+  if(await kzUi('create_member', { name })){ $('settings-new-member').value = ''; openSettingsModal(); }
 }
-function addLabelFromSettings(){
-  const b = currentBoard(); if(!b) return;
+async function addLabelFromSettings(){
   const name = $('settings-new-label').value.trim();
-  if(!name) return;
-  saveSettingsModal(true);
-  b.labels.push({ id:uid(), name, color:LABEL_COLORS[b.labels.length % LABEL_COLORS.length] });
-  $('settings-new-label').value = '';
-  openSettingsModal();
+  if(!name || !currentBoard() || !await saveSettingsModal(true)) return;
+  if(await kzUi('create_label', { name })){ $('settings-new-label').value = ''; openSettingsModal(); }
 }
-function saveSettingsModal(skipClose){
-  const b = currentBoard(); if(!b) return;
-  b.name = $('settings-board-name').value.trim() || b.name;
-  // columns
-  for(const inp of $('settings-columns-list').querySelectorAll('input[type=text][data-col-id]')){
-    const c = b.columns.find(x => x.id === inp.dataset.colId);
-    if(c) c.name = inp.value.trim() || c.name;
+async function removeColumnFromSettings(colId){
+  const c = currentBoard()?.columns.find(x => x.id === colId); if(!c) return;
+  if(c.cardIds.length){
+    if(!await kzConfirm({ title:`Delete "${c.name}"?`, message:`${c.cardIds.length} card${c.cardIds.length===1?'':'s'} will be deleted.`, okLabel:'Delete column', danger:true })) return;
   }
-  for(const inp of $('settings-columns-list').querySelectorAll('input[type=number][data-col-id]')){
-    const c = b.columns.find(x => x.id === inp.dataset.colId);
-    if(c) c.wipLimit = parseInt(inp.value, 10) || 0;
+  if(!await saveSettingsModal(true)) return;
+  if(await kzUi('delete_column', { column_id: colId })) openSettingsModal();
+}
+async function removeMemberFromSettings(memberId){
+  if(!await saveSettingsModal(true)) return;
+  if(await kzUi('delete_member', { member_id: memberId })) openSettingsModal();
+}
+async function removeLabelFromSettings(labelId){
+  if(!await saveSettingsModal(true)) return;
+  if(await kzUi('delete_label', { label_id: labelId })) openSettingsModal();
+}
+// The form's edits, as commands: only fields that differ from the board.
+function settingsFormChanges(b){
+  const operations = [];
+  const name = $('settings-board-name').value.trim();
+  if(name && name !== b.name) operations.push({ tool:'rename_board', input:{ name } });
+  for(const c of b.columns){
+    const input = {};
+    const nameInput = [...$('settings-columns-list').querySelectorAll('input[type=text][data-col-id]')].find(el => el.dataset.colId === c.id);
+    const wipInput = [...$('settings-columns-list').querySelectorAll('input[type=number][data-col-id]')].find(el => el.dataset.colId === c.id);
+    const colName = nameInput?.value.trim();
+    if(colName && colName !== c.name) input.name = colName;
+    const wip = Math.max(0, parseInt(wipInput?.value, 10) || 0);
+    if(wipInput && wip !== (c.wipLimit || 0)) input.wip_limit = wip;
+    if(Object.keys(input).length) operations.push({ tool:'update_column', input:{ column_id:c.id, ...input } });
   }
   for(const inp of $('settings-members-list').querySelectorAll('input[type=text][data-member-id]')){
     const m = b.members.find(x => x.id === inp.dataset.memberId);
-    if(m) m.name = inp.value.trim() || m.name;
+    const value = inp.value.trim();
+    if(m && value && value !== m.name) operations.push({ tool:'update_member', input:{ member_id:m.id, name:value } });
   }
-  for(const inp of $('settings-labels-list').querySelectorAll('input[type=text][data-label-id]')){
-    const l = b.labels.find(x => x.id === inp.dataset.labelId);
-    if(l) l.name = inp.value.trim() || l.name;
+  for(const l of b.labels){
+    const input = {};
+    const nameInput = [...$('settings-labels-list').querySelectorAll('input[type=text][data-label-id]')].find(el => el.dataset.labelId === l.id);
+    const colorInput = [...$('settings-labels-list').querySelectorAll('input[type=color][data-label-id]')].find(el => el.dataset.labelId === l.id);
+    const labelName = nameInput?.value.trim();
+    if(labelName && labelName !== l.name) input.name = labelName;
+    if(colorInput && colorInput.value.toLowerCase() !== String(l.color||'').toLowerCase()) input.color = colorInput.value;
+    if(Object.keys(input).length) operations.push({ tool:'update_label', input:{ label_id:l.id, ...input } });
   }
-  for(const inp of $('settings-labels-list').querySelectorAll('input[type=color][data-label-id]')){
-    const l = b.labels.find(x => x.id === inp.dataset.labelId);
-    if(l) l.color = inp.value;
-  }
-  rebuildBoardOrder();
-  scheduleSave();
-  if(!skipClose){ closeModal(); renderAll(); }
+  return operations;
+}
+// Resolves true when the form's edits landed (or there were none).
+async function saveSettingsModal(skipClose){
+  const b = currentBoard(); if(!b) return false;
+  const operations = settingsFormChanges(b);
+  if(operations.length && !await kzUi('apply_changes', { operations })) return false;
+  if(!skipClose) closeModal();
+  return true;
 }
 
 /* ============================================================
@@ -5358,25 +5418,26 @@ function downloadFile(filename, content, type='application/json'){
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(url), 1000);
 }
-function exportCurrentBoard(){
-  const b = currentBoard(); if(!b){ toast('No board'); return; }
-  downloadFile(slugify(b.name)+'.kanzen.json', stableJson(b));
+async function downloadExport(tool, input){
+  const result = await kzUi(tool, input);
+  if(result) downloadFile(result.filename, result.content, result.mime_type);
 }
-function exportAllBoards(){
-  const payload = { kanzenVersion:1, exportedAt: new Date().toISOString(), boards: S.boards };
-  downloadFile('kanzen-export-' + new Date().toISOString().slice(0,10) + '.json', stableJson(payload));
-}
-async function onImportFile(e){
-  const file = e.target.files[0]; if(!file) return;
-  if(file.size>25*1024*1024){ toast('Import is too large (25 MB maximum)'); e.target.value=''; return; }
-  const text = await file.text();
-  let json;
-  try{ json = JSON.parse(text); }catch(_){ toast('Invalid JSON'); return; }
-  const mode = document.querySelector('input[name=import-mode]:checked').value;
+function exportCurrentBoard(){ return downloadExport('export_board', { format:'json' }); }
+function exportAllBoards(){ return downloadExport('export_all_boards', {}); }
+const MAX_IMPORT_BYTES = 25*1024*1024;
+// Turns an exported KanZen file (one board, or {boards:{...}}) into boards ready to store.
+// Never touches S: fresh IDs avoid collisions with `reservedIds`, and every board is validated.
+function prepareBoardImport(data, reservedIds){
+  let json = data;
+  if(typeof json === 'string'){
+    if(json.length > MAX_IMPORT_BYTES) throw kzError('too_large', 'Import is too large (25 MB maximum)');
+    try{ json = JSON.parse(json); }catch(_){ throw kzError('invalid_json', 'Invalid JSON'); }
+  }else json = structuredClone(json);
+  if(!isPlainRecord(json)) throw kzError('invalid_board', 'Invalid board collection');
   const rawIncoming = json.boards ? json.boards : { [json.id || uid()]: json };
-  if(!isPlainRecord(rawIncoming)){ toast('Invalid board collection'); e.target.value=''; return; }
+  if(!isPlainRecord(rawIncoming)) throw kzError('invalid_board', 'Invalid board collection');
   const prepared=[];
-  const reserved=new Set(mode==='replace'?[]:Object.keys(S.boards));
+  const reserved=new Set(reservedIds);
   for(const id of Object.keys(rawIncoming)){
     const b=rawIncoming[id];
     if(!isPlainRecord(b)) continue;
@@ -5388,31 +5449,27 @@ async function onImportFile(e){
     delete b._meta.syncRevision;
     migrateLoadedBoard(b);
     const validation=validateBoardPayload(b);
-    if(!validation.ok){
-      toast('Import blocked: '+validation.error);
-      e.target.value='';
-      return;
-    }
+    if(!validation.ok) throw kzError('invalid_board', 'Import blocked: '+validation.error);
     prepared.push(b);
   }
-  if(!prepared.length){ toast('No valid boards found'); e.target.value=''; return; }
+  if(!prepared.length) throw kzError('invalid_board', 'No valid boards found');
+  return prepared;
+}
+async function onImportFile(e){
+  const file = e.target.files[0]; if(!file) return;
+  const reset = () => { e.target.value = ''; };
+  if(file.size>MAX_IMPORT_BYTES){ toast('Import is too large (25 MB maximum)'); reset(); return; }
+  let json;
+  try{ json = JSON.parse(await file.text()); }catch(_){ toast('Invalid JSON'); reset(); return; }
+  const mode = document.querySelector('input[name=import-mode]:checked').value;
   if(mode === 'replace'){
-    if(!await kzConfirm({ title:'Replace all boards?', message:'This will delete every existing board and import the new ones. This cannot be undone.', okLabel:'Replace', danger:true })){ e.target.value=''; return; }
-    for(const id of Object.keys(S.boards)) await storage.deleteBoard(S.boards[id]);
-    S.boards = {};
+    if(!await kzConfirm({ title:'Replace all boards?', message:'This will delete every existing board and import the new ones. This cannot be undone.', okLabel:'Replace', danger:true })){ reset(); return; }
   }
-  for(const b of prepared){
-    S.boards[b.id] = b;
-    await storage.saveBoard(b);
-  }
-  rebuildBoardOrder();
-  if(!S.currentBoardId || !S.boards[S.currentBoardId]) S.currentBoardId = S.boardOrder[0] || null;
-  S.settings.lastBoardId = S.currentBoardId;
-  await storage.saveSettings(S.settings);
-  e.target.value = '';
+  const result = await kzUi(mode === 'replace' ? 'replace_all_boards' : 'import_boards', { data: json });
+  reset();
+  if(!result) return;
   closeModal();
-  renderAll();
-  toast(`Imported ${prepared.length} board${prepared.length===1?'':'s'}`);
+  toast(`Imported ${result.imported} board${result.imported===1?'':'s'}`);
 }
 
 /* ============================================================
@@ -5428,11 +5485,13 @@ function openModal(id){
   if(id === 'snapshots-modal') renderSnapshotsList();
   if(id === 'activity-modal') renderActivityModal();
   if(id === 'prefs-modal') openPrefsModal();
+  if(id === 'agent-modal') renderAgentModal();
 }
 function closeModal(){
   $('modal-overlay').classList.remove('open');
   for(const m of document.querySelectorAll('#modal-overlay .modal')) m.classList.remove('open');
   S.editingCardId = null;
+  S._editorDraft = null;
 }
 function onOverlayClick(e){
   if(e.target.id === 'modal-overlay') closeModal();
@@ -5444,12 +5503,10 @@ function onOverlayClick(e){
 
 function toggleTheme(){
   const cur = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
-  setTheme(cur === 'dark' ? 'light' : 'dark');
+  return setTheme(cur === 'dark' ? 'light' : 'dark');
 }
 function setTheme(t){
-  document.documentElement.dataset.theme = t;
-  S.settings.theme = t;
-  storage.saveSettings(S.settings);
+  return kzUi('set_theme', { theme: t });
 }
 function applyTheme(){
   document.documentElement.dataset.theme = S.settings.theme || 'light';
@@ -5475,14 +5532,9 @@ function applyPalette(){
   if(id === 'default') document.documentElement.removeAttribute('data-palette');
   else document.documentElement.dataset.palette = id;
 }
-function setPalette(id){
-  if(!PALETTES.find(p => p.id === id)) return;
-  S.settings.palette = id;
-  storage.saveSettings(S.settings);
-  applyPalette();
-  renderPalettePopover();
-  closePalettePopover();
-  toast(`Palette: ${PALETTES.find(p => p.id === id).name}`);
+async function setPalette(id){
+  const result = await kzUi('set_palette', { palette: id });
+  if(result) toast(`Palette: ${PALETTES.find(p => p.id === id).name}`);
 }
 function togglePalettePopover(){
   const pop = $('palette-popover');
@@ -5564,6 +5616,7 @@ function openPrefsModal(){
   $('prefs-localuser').value = S.settings.localUser || '';
   $('prefs-theme').value = S.settings.theme || 'light';
   openPrefsSyncFields();
+  renderAgentPrefs();
 }
 function savePrefName(name){
   name = (name || '').trim();
@@ -5578,9 +5631,10 @@ function savePrefName(name){
    ============================================================ */
 
 function clearFilters(){
-  S.filter = { search:'', labelId:'', priority:'', due:'', memberId:'' };
-  renderFilters();
-  renderBoard();
+  return kzUi('clear_filters', {});
+}
+function setFilterField(field, value){
+  return kzUi('set_filter', { [field]: value });
 }
 
 /* ============================================================
@@ -5666,12 +5720,10 @@ function pushHistory(){
   if(h.stack.length > S.history.max){ h.stack.shift(); }
   h.cursor = h.stack.length - 1;
 }
-function undo(){
-  const id = S.currentBoardId; const h = S.history.byBoard[id];
-  if(!h || h.cursor <= 0){ toast('Nothing to undo'); return; }
-  h.cursor--;
-  const previous=S.boards[id];
-  const restored=migrateLoadedBoard(JSON.parse(h.stack[h.cursor]));
+// Rebuilds a board from serialized state (undo, redo, snapshot restore, a failed batch). In team
+// mode every card is rewritten and cards absent from the restored state are deleted on disk.
+function restoreBoardState(previous, restored){
+  migrateLoadedBoard(restored);
   if(restored._meta?.teamMode){
     const flushedActivityIds=new Set(ensureFlushedActivityIds(previous));
     setBoardRuntime(restored,'_flushedActivityIds',flushedActivityIds);
@@ -5679,36 +5731,21 @@ function undo(){
     setBoardRuntime(restored,'_dirtyCards',new Set(Object.keys(restored.cards||{})));
     setBoardRuntime(restored,'_deletedCards',new Set(Object.keys(previous?.cards||{}).filter(cardId=>!restored.cards?.[cardId])));
   }
-  S.boards[id] = restored;
-  _skipNextHistoryPush = true;
-  scheduleSave();
-  renderAll();
+  return restored;
 }
-function redo(){
-  const id = S.currentBoardId; const h = S.history.byBoard[id];
-  if(!h || h.cursor >= h.stack.length - 1){ toast('Nothing to redo'); return; }
-  h.cursor++;
-  const previous=S.boards[id];
-  const restored=migrateLoadedBoard(JSON.parse(h.stack[h.cursor]));
-  if(restored._meta?.teamMode){
-    const flushedActivityIds=new Set(ensureFlushedActivityIds(previous));
-    setBoardRuntime(restored,'_flushedActivityIds',flushedActivityIds);
-    setBoardRuntime(restored,'_activityFlushed',(restored.activity||[]).filter(entry=>flushedActivityIds.has(activityKey(entry))).length);
-    setBoardRuntime(restored,'_dirtyCards',new Set(Object.keys(restored.cards||{})));
-    setBoardRuntime(restored,'_deletedCards',new Set(Object.keys(previous?.cards||{}).filter(cardId=>!restored.cards?.[cardId])));
-  }
-  S.boards[id] = restored;
-  _skipNextHistoryPush = true;
-  scheduleSave();
-  renderAll();
-}
+function undo(){ return kzUi('undo', {}); }
+function redo(){ return kzUi('redo', {}); }
 
+// ctx says who caused the entry: a person in the UI, or an agent through one of its doors.
+// agentOnly entries (display changes such as collapsing a column) are logged for agents only.
 function logActivity(action, opts = {}){
   if(_suppressActivity) return;
+  const ctx = opts.ctx || KZ_PERSON;
+  if(opts.agentOnly && ctx.actor !== 'agent') return;
   const b = currentBoard(); if(!b) return;
   if(!b.activity) b.activity = [];
   if(b._meta?.teamMode) ensureFlushedActivityIds(b);
-  b.activity.unshift({
+  const entry = {
     id: uid(),
     timestamp: now(),
     user: S.settings.localUser || null,
@@ -5716,7 +5753,14 @@ function logActivity(action, opts = {}){
     cardId:    opts.cardId    || null,
     cardTitle: opts.cardTitle || null,
     detail:    opts.detail    || {}
-  });
+  };
+  if(ctx.actor === 'agent'){
+    entry.actor = 'agent';
+    entry.door = ctx.door;
+    if(ctx.caller) entry.caller = ctx.caller;
+    if(ctx.proposalId) entry.proposalId = ctx.proposalId;
+  }
+  b.activity.unshift(entry);
   if(b.activity.length > 500) b.activity.length = 500;
 }
 const ACTION_META = {
@@ -5727,19 +5771,39 @@ const ACTION_META = {
   card_commented:  { icon:'💬', verb:'commented on',    noun:'card' },
   card_assigned:   { icon:'👥', verb:'changed members on', noun:'card' },
   card_due_changed:{ icon:'📅', verb:'changed due date of', noun:'card' },
+  comment_deleted: { icon:'💬', verb:'deleted a comment on', noun:'card' },
+  attachment_added:{ icon:'📎', verb:'attached a file to', noun:'card' },
+  attachment_removed:{ icon:'📎', verb:'removed a file from', noun:'card' },
   column_created:  { icon:'➕', verb:'added',           noun:'column' },
   column_renamed:  { icon:'✏️', verb:'renamed',         noun:'column' },
+  column_updated:  { icon:'✏️', verb:'updated',         noun:'column' },
+  column_moved:    { icon:'↔️', verb:'moved',           noun:'column' },
   column_deleted:  { icon:'🗑', verb:'deleted',         noun:'column' },
   label_created:   { icon:'🏷️', verb:'added',           noun:'label' },
+  label_updated:   { icon:'🏷️', verb:'updated',         noun:'label' },
+  label_deleted:   { icon:'🏷️', verb:'deleted',         noun:'label' },
   member_added:    { icon:'👤', verb:'added',           noun:'member' },
+  member_updated:  { icon:'👤', verb:'updated',         noun:'member' },
+  member_deleted:  { icon:'👤', verb:'removed',         noun:'member' },
+  board_created:   { icon:'🪧', verb:'created',         noun:'board' },
   board_renamed:   { icon:'🪧', verb:'renamed',         noun:'board' },
+  board_background:{ icon:'🎨', verb:'changed the background of', noun:'board' },
+  board_team_mode: { icon:'👥', verb:'changed team mode of', noun:'board' },
   snapshot_taken:  { icon:'📸', verb:'took',            noun:'snapshot' },
+  snapshot_restored:{ icon:'📸', verb:'restored',       noun:'snapshot' },
   legacy:          { icon:'·',  verb:'',                noun:'' }
 };
 function actionIcon(a){
   return (ACTION_META[a.action] || ACTION_META.legacy).icon;
 }
+const KZ_DOOR_LABELS = { modelContext:'WebMCP', window:'window API', channel:'cross-tab channel' };
 function activityRowText(a){
+  const text = activityRowBaseText(a);
+  if(a.actor !== 'agent') return text;
+  const door = KZ_DOOR_LABELS[a.door] || 'agent';
+  return `${text} · via agent (${door}${a.caller ? ', '+a.caller : ''})`;
+}
+function activityRowBaseText(a){
   if(a.detail && a.detail.text) return a.detail.text;
   const m = ACTION_META[a.action] || ACTION_META.legacy;
   const who = a.user ? a.user : 'Someone';
@@ -5842,7 +5906,7 @@ function relTime(ts){
   return new Date(ms).toLocaleDateString();
 }
 
-async function takeSnapshotForBoard(b,kind='manual',name=''){
+async function takeSnapshotForBoard(b,kind='manual',name='',ctx=KZ_PERSON){
   if(!b) return null;
   const ts = tsForFilename();
   const filename = snapFilename(b, ts);
@@ -5851,21 +5915,20 @@ async function takeSnapshotForBoard(b,kind='manual',name=''){
   try{
     await storage.saveSnapshot(filename, b.id, snap);
     if(kind === 'manual'&&b.id===S.currentBoardId){
-      logActivity('snapshot_taken', { detail: { name: name || '(unnamed)' } });
+      logActivity('snapshot_taken', { detail: { name: name || '(unnamed)' }, ctx });
       scheduleSave();
     }
     return { filename, snap };
   }catch(e){ console.error(e); toast('Snapshot failed'); return null; }
 }
-async function takeSnapshot(kind='manual',name=''){
-  return takeSnapshotForBoard(currentBoard(),kind,name);
+async function takeSnapshot(kind='manual',name='',ctx=KZ_PERSON){
+  return takeSnapshotForBoard(currentBoard(),kind,name,ctx);
 }
 async function takeSnapshotPrompt(){
-  const b = currentBoard(); if(!b) return;
+  if(!currentBoard()) return;
   const name = await kzPrompt({ title:'Take snapshot', message:'Add an optional name to find it later.', placeholder:'e.g. Sprint 12 kickoff', okLabel:'Take snapshot' });
   if(name === null) return;   // cancelled
-  const r = await takeSnapshot('manual', name || '');
-  if(r){ toast('Snapshot saved'); renderSnapshotsList(); }
+  if(await kzUi('take_snapshot', { name: name || '' })) toast('Snapshot saved');
 }
 async function maybeAutoSnapshot(reason){
   if(!S.settings.autoSnapDestructive) return;
@@ -5880,9 +5943,7 @@ async function maybeDailySnapshot(){
   await takeSnapshot('auto-daily');
 }
 function toggleAutoSnap(which, on){
-  if(which === 'destructive') S.settings.autoSnapDestructive = on;
-  if(which === 'daily')       S.settings.autoSnapDaily = on;
-  storage.saveSettings(S.settings);
+  return kzUi('set_auto_snapshot', which === 'daily' ? { daily: on } : { before_destructive: on });
 }
 
 let _snapCompare = false;
@@ -5951,11 +6012,11 @@ function pickSnapshotForCompare(filename){
   }
   renderSnapshotsList();
 }
-async function renderSnapshotDiff(fnA, fnB){
+// Card-level diff between two snapshots: the older is the base, the newer the head.
+async function computeSnapshotDiff(fnA, fnB){
   const a = await storage.loadSnapshot(fnA);
   const b = await storage.loadSnapshot(fnB);
-  if(!a || !b) return '';
-  // sort by takenAt: older = base, newer = head
+  if(!a || !b) return null;
   const [base, head] = a.takenAt < b.takenAt ? [a, b] : [b, a];
   const baseCards = base.data.cards || {};
   const headCards = head.data.cards || {};
@@ -5978,6 +6039,12 @@ async function renderSnapshotDiff(fnA, fnB){
     if((A.attachments||[]).length !== (B.attachments||[]).length) changes.push(`attachments: ${(A.attachments||[]).length} → ${(B.attachments||[]).length}`);
     if(changes.length) modified.push({ id, title: B.title, changes });
   }
+  return { base, head, baseCards, headCards, added, removed, modified };
+}
+async function renderSnapshotDiff(fnA, fnB){
+  const diff = await computeSnapshotDiff(fnA, fnB);
+  if(!diff) return '';
+  const { base, head, baseCards, headCards, added, removed, modified } = diff;
   let html = `<div class="diff-header">
     <strong>Comparing</strong> base: ${escapeHtml(relTime(base.takenAt))} → head: ${escapeHtml(relTime(head.takenAt))}
     <span style="margin-left:auto;">+${added.length} −${removed.length} ~${modified.length}</span>
@@ -6003,40 +6070,19 @@ async function renderSnapshotDiff(fnA, fnB){
   return html;
 }
 async function restoreSnapshot(filename){
-  const b = currentBoard(); if(!b) return;
+  if(!currentBoard()) return;
   if(!await kzConfirm({ title:'Restore snapshot?', message:'Your current board will be replaced. A safety snapshot will be taken first.', okLabel:'Restore', danger:true })) return;
-  await takeSnapshot('auto-destructive', 'pre-restore safety');
-  const row = await storage.loadSnapshot(filename); if(!row) return;
-  const restored = JSON.parse(stableJson(row.data));
-  delete restored._snapshot;
-  restored.id = b.id;                           // preserve current id so file/IDB row continues
-  restored._meta = { ...(b._meta||{}), boardId:b.id, lastModified:now(), kanzenVersion:1 };
-  migrateLoadedBoard(restored);
-  const validation=validateBoardPayload(restored);
-  if(!validation.ok){ toast('Snapshot restore blocked: '+validation.error); return; }
-  if(restored._meta.teamMode){
-    const flushedActivityIds=new Set(ensureFlushedActivityIds(b));
-    setBoardRuntime(restored,'_flushedActivityIds',flushedActivityIds);
-    setBoardRuntime(restored,'_activityFlushed',(restored.activity||[]).filter(entry=>flushedActivityIds.has(activityKey(entry))).length);
-    setBoardRuntime(restored,'_dirtyCards',new Set(Object.keys(restored.cards||{})));
-    setBoardRuntime(restored,'_deletedCards',new Set(Object.keys(b.cards||{}).filter(cardId=>!restored.cards?.[cardId])));
-  }
-  S.boards[b.id] = restored;
-  await flushSave();
-  markBoardForSync(b.id);
-  renderAll();
+  if(!await kzUi('restore_snapshot', { filename })) return;
   closeModal();
   toast('Snapshot restored');
 }
 async function deleteSnapshotConfirm(filename){
   if(!await kzConfirm({ title:'Delete snapshot?', message:'This snapshot will be removed permanently.', okLabel:'Delete', danger:true })) return;
-  await storage.deleteSnapshot(filename);
-  renderSnapshotsList();
+  await kzUi('delete_snapshot', { filename });
 }
-async function shareSnapshot(filename){
-  const row = await storage.loadSnapshot(filename); if(!row) return;
+function shareSnapshot(filename){
   closeModal();
-  openShareModal(row.data);
+  openShareModal(filename);
 }
 
 /* ============================================================
@@ -6146,25 +6192,26 @@ function stripBoardForShare(board){
 }
 
 let _lastShareUrl = '';
-let _shareSourceBoard = null;   // optional override for snapshot-share
-function openShareModal(boardOverride){
-  _shareSourceBoard = boardOverride || null;
+let _shareSourceSnapshot = null;   // optional snapshot filename for snapshot-share
+function openShareModal(snapshotFilename){
+  _shareSourceSnapshot = typeof snapshotFilename === 'string' ? snapshotFilename : null;
   $('share-passphrase').value = '';
   $('share-stripped').checked = false;
   $('share-result').style.display = 'none';
   $('qr-wrap').style.display = 'none';
   openModal('share-modal');
 }
-async function generateShareUrl(){
-  const src = _shareSourceBoard || currentBoard();
-  if(!src){ toast('No board'); return; }
-  const board = $('share-stripped').checked ? stripBoardForShare(src) : JSON.parse(stableJson(src));
+const SHARE_URL_FITS = {
+  messaging: ['green',  len => `${len.toLocaleString()} chars · safe for messaging`],
+  browser:   ['yellow', len => `${len.toLocaleString()} chars · works in browsers, may break in chat apps`],
+  too_large: ['red',    len => `${len.toLocaleString()} chars · too large for URL sharing — try "Share stripped" or use JSON export`],
+};
+// The share URL for a board or snapshot. The board travels in the hash fragment only.
+async function buildShareUrl(source, { stripped=false, passphrase='' }={}){
+  const board = stripped ? stripBoardForShare(source) : JSON.parse(stableJson(source));
   delete board._meta;
-  const json = JSON.stringify(board);
-  let compressed;
-  try{ compressed = await compressBytes(new TextEncoder().encode(json)); }
-  catch(e){ toast(e.message); return; }
-  const passphrase = $('share-passphrase').value;
+  delete board._snapshot;
+  const compressed = await compressBytes(new TextEncoder().encode(JSON.stringify(board)));
   let hashFragment;
   if(passphrase){
     const { salt, iv, ct } = await encryptBytes(compressed, passphrase);
@@ -6173,23 +6220,23 @@ async function generateShareUrl(){
     hashFragment = '#kz:' + bytesToB64Url(compressed);
   }
   const url = location.origin + location.pathname + hashFragment;
-  const len = url.length;
-  let badge = '', badgeClass = '';
-  if(len <= 8000){       badge = `${len.toLocaleString()} chars · safe for messaging`;             badgeClass = 'green'; }
-  else if(len <= 64000){ badge = `${len.toLocaleString()} chars · works in browsers, may break in chat apps`; badgeClass = 'yellow'; }
-  else {
-    badge = `${len.toLocaleString()} chars · too large for URL sharing — try "Share stripped" or use JSON export`;
-    badgeClass = 'red';
-    $('share-result').style.display = 'block';
-    $('share-url-box').textContent = '(URL not generated — board too large)';
-    const sb = $('share-size-badge'); sb.textContent = badge; sb.className = 'size-badge ' + badgeClass;
-    return;
-  }
-  _lastShareUrl = url;
+  const length = url.length;
+  const fit = length <= 8000 ? 'messaging' : length <= 64000 ? 'browser' : 'too_large';
+  return { url: fit === 'too_large' ? null : url, length, fit, encrypted: !!passphrase, stripped: !!stripped };
+}
+async function generateShareUrl(){
+  const input = { stripped: $('share-stripped').checked };
+  const passphrase = $('share-passphrase').value;
+  if(passphrase) input.passphrase = passphrase;
+  if(_shareSourceSnapshot) input.snapshot = _shareSourceSnapshot;
+  const result = await kzUi('create_share_link', input);
+  if(!result) return;
+  const [badgeClass, label] = SHARE_URL_FITS[result.fit];
   $('share-result').style.display = 'block';
-  $('share-url-box').textContent = url;
-  const sb = $('share-size-badge'); sb.textContent = badge; sb.className = 'size-badge ' + badgeClass;
+  const sb = $('share-size-badge'); sb.textContent = label(result.length); sb.className = 'size-badge ' + badgeClass;
   $('qr-wrap').style.display = 'none';
+  _lastShareUrl = result.url || '';
+  $('share-url-box').textContent = result.url || '(URL not generated — board too large)';
 }
 async function copyShareUrl(){
   if(!_lastShareUrl) return;
@@ -6218,22 +6265,48 @@ async function renderQrCode(){
 /* ---------- import banner / load shared board ---------- */
 
 let _pendingShare = null;
-function detectShareInHash(){
-  const h = location.hash;
-  if(!h) return;
-  if(h.startsWith('#kz:')){
-    _pendingShare = { format:'kz', encrypted:false, b64: h.slice(4) };
-    showImportBanner(false);
-  } else if(h.startsWith('#kze:')){
+// Reads a KanZen share fragment: #kz: (plain), #kze: (encrypted) or the spec #e= format.
+function parseShareFragment(hash){
+  const h = String(hash || '');
+  if(h.startsWith('#kz:')) return { format:'kz', encrypted:false, b64: h.slice(4) };
+  if(h.startsWith('#kze:')){
     const parts = h.slice(5).split('.');
-    if(parts.length !== 3) return;
-    _pendingShare = { format:'kze', encrypted:true, salt:parts[0], iv:parts[1], ct:parts[2] };
-    showImportBanner(true);
-  } else if(h.startsWith('#e=')){
-    // spec format — concatenated salt(16) + iv(12) + ciphertext, base64url
-    _pendingShare = { format:'e', encrypted:true, b64: h.slice(3) };
-    showImportBanner(true);
+    if(parts.length !== 3) return null;
+    return { format:'kze', encrypted:true, salt:parts[0], iv:parts[1], ct:parts[2] };
   }
+  // spec format — concatenated salt(16) + iv(12) + ciphertext, base64url
+  if(h.startsWith('#e=')) return { format:'e', encrypted:true, b64: h.slice(3) };
+  return null;
+}
+// Decodes a parsed share into a board object (not yet stored).
+async function decodeSharedBoard(share, passphrase){
+  let compressed;
+  try{
+    if(share.format === 'kze'){
+      if(!passphrase) throw kzError('passphrase_required', 'Passphrase required');
+      compressed = await decryptBytes(b64UrlToBytes(share.salt), b64UrlToBytes(share.iv), b64UrlToBytes(share.ct), passphrase);
+    } else if(share.format === 'e'){
+      if(!passphrase) throw kzError('passphrase_required', 'Passphrase required');
+      const all = b64UrlToBytes(share.b64);
+      if(all.length < 28) throw kzError('invalid_share', 'Invalid share payload');
+      compressed = await decryptBytes(all.slice(0, 16), all.slice(16, 28), all.slice(28), passphrase);
+    } else {
+      compressed = b64UrlToBytes(share.b64);
+    }
+  }catch(e){
+    if(e instanceof KzError) throw e;
+    console.error(e); throw kzError('decrypt_failed', 'Decryption failed — wrong passphrase?');
+  }
+  try{
+    const inflated = await decompressBytes(compressed);
+    return JSON.parse(new TextDecoder().decode(inflated));
+  }catch(e){
+    console.error(e); throw kzError('invalid_share', 'Could not decode shared board');
+  }
+}
+function detectShareInHash(){
+  _pendingShare = parseShareFragment(location.hash);
+  if(_pendingShare) showImportBanner(_pendingShare.encrypted);
 }
 function showImportBanner(needsPass){
   $('import-banner').classList.add('open');
@@ -6246,52 +6319,11 @@ function dismissImportBanner(){
 }
 async function loadSharedBoard(){
   if(!_pendingShare) return;
-  let compressed;
-  try{
-    if(_pendingShare.format === 'kze'){
-      const pass = $('import-banner-pass').value;
-      if(!pass){ toast('Passphrase required'); return; }
-      const salt = b64UrlToBytes(_pendingShare.salt);
-      const iv   = b64UrlToBytes(_pendingShare.iv);
-      const ct   = b64UrlToBytes(_pendingShare.ct);
-      compressed = await decryptBytes(salt, iv, ct, pass);
-    } else if(_pendingShare.format === 'e'){
-      // spec format: concatenated salt(16) + iv(12) + ciphertext
-      const pass = $('import-banner-pass').value;
-      if(!pass){ toast('Passphrase required'); return; }
-      const all = b64UrlToBytes(_pendingShare.b64);
-      if(all.length < 28){ toast('Invalid share payload'); return; }
-      const salt = all.slice(0, 16);
-      const iv   = all.slice(16, 28);
-      const ct   = all.slice(28);
-      compressed = await decryptBytes(salt, iv, ct, pass);
-    } else {
-      compressed = b64UrlToBytes(_pendingShare.b64);
-    }
-  }catch(e){
-    console.error(e); toast('Decryption failed — wrong passphrase?'); return;
-  }
-  let json;
-  try{
-    const inflated = await decompressBytes(compressed);
-    json = JSON.parse(new TextDecoder().decode(inflated));
-  }catch(e){
-    console.error(e); toast('Could not decode shared board'); return;
-  }
-  json.id = uid();
-  json._meta = { boardId:json.id, lastModified:now(), kanzenVersion:1, teamMode:false, sync:false };
-  json.name = (json.name || 'Shared board') + ' (imported)';
-  migrateLoadedBoard(json);
-  const validation=validateBoardPayload(json);
-  if(!validation.ok){ toast('Invalid board payload: '+validation.error); return; }
-  S.boards[json.id] = json;
-  rebuildBoardOrder();
-  S.currentBoardId = json.id;
-  S.settings.lastBoardId = json.id;
-  await storage.saveBoard(json);
-  await storage.saveSettings(S.settings);
+  const input = { url: location.href };
+  const pass = $('import-banner-pass').value;
+  if(pass) input.passphrase = pass;
+  if(!await kzUi('import_share_link', input)) return;
   dismissImportBanner();
-  renderAll();
   toast('Shared board imported');
 }
 
@@ -6301,42 +6333,22 @@ async function loadSharedBoard(){
 
 async function onTeamModeToggle(on){
   const b = currentBoard(); if(!b) return;
-  if(S.storageMode !== 'fs' && S.storageMode !== 'naklios'){
-    toast('Choose a Folder or Crate first');
-    $('team-mode-toggle').checked = !!b._meta?.teamMode;
-    return;
-  }
-  if(on && b._meta?.teamMode) return;          // already on
-  if(!on && !b._meta?.teamMode) return;        // already off
-  if(on){
-    if(!await kzConfirm({
-      title:'Switch to team mode?',
-      message:'KanZen will split this board into a folder containing _board.json, cards/<id>.json, and _activity.jsonl. The original .kanzen.json file will be deleted. The conversion is lossless and reversible.',
-      okLabel:'Switch on'
-    })){ $('team-mode-toggle').checked = false; return; }
-    try{
-      await convertSoloToTeam(b);
-      toast('Team mode on');
-      openSettingsModal();
-    }catch(e){
-      console.error(e); toast('Conversion failed: ' + e.message);
-      $('team-mode-toggle').checked = false;
-    }
-  } else {
-    if(!await kzConfirm({
-      title:'Switch to solo mode?',
-      message:'KanZen will collapse the per-card files back into a single .kanzen.json. The team-mode directory will be deleted. The conversion is lossless and reversible.',
-      okLabel:'Switch off'
-    })){ $('team-mode-toggle').checked = true; return; }
-    try{
-      await convertTeamToSolo(b);
-      toast('Team mode off');
-      openSettingsModal();
-    }catch(e){
-      console.error(e); toast('Conversion failed: ' + e.message);
-      $('team-mode-toggle').checked = true;
-    }
-  }
+  const revert = () => { $('team-mode-toggle').checked = !!b._meta?.teamMode; };
+  if(on === !!b._meta?.teamMode) return;
+  const ok = await kzConfirm(on ? {
+    title:'Switch to team mode?',
+    message:'KanZen will split this board into a folder containing _board.json, cards/<id>.json, and _activity.jsonl. The original .kanzen.json file will be deleted. The conversion is lossless and reversible.',
+    okLabel:'Switch on'
+  } : {
+    title:'Switch to solo mode?',
+    message:'KanZen will collapse the per-card files back into a single .kanzen.json. The team-mode directory will be deleted. The conversion is lossless and reversible.',
+    okLabel:'Switch off'
+  });
+  if(!ok){ revert(); return; }
+  const result = await kzUi('set_team_mode', { on });
+  if(!result){ revert(); return; }
+  toast(on ? 'Team mode on' : 'Team mode off');
+  openSettingsModal();
 }
 
 async function convertSoloToTeam(board){
@@ -6457,20 +6469,12 @@ function importTrelloJson(json){
 async function onImportTrelloFile(e){
   const file = e.target.files[0]; if(!file) return;
   let json;
-  try{ json = JSON.parse(await file.text()); }catch(_){ toast('Invalid JSON'); return; }
-  let result;
-  try{ result = importTrelloJson(json); }
-  catch(err){ toast(err.message); return; }
-  S.boards[result.board.id] = result.board;
-  rebuildBoardOrder();
-  S.currentBoardId = result.board.id;
-  S.settings.lastBoardId = S.currentBoardId;
-  await storage.saveBoard(result.board);
-  await storage.saveSettings(S.settings);
+  try{ json = JSON.parse(await file.text()); }catch(_){ toast('Invalid JSON'); e.target.value = ''; return; }
+  const result = await kzUi('import_trello', { data: json });
   e.target.value = '';
+  if(!result) return;
   closeModal();
-  renderAll();
-  toast(`Imported "${result.board.name}" — ${result.cardCount} cards in ${result.listCount} lists${result.attachmentSkipped?` (${result.attachmentSkipped} attachments skipped)`:''}`);
+  toast(`Imported "${result.name}" — ${result.cards} cards in ${result.lists} lists${result.attachments_skipped?` (${result.attachments_skipped} attachments skipped)`:''}`);
 }
 
 /* ============================================================
@@ -6482,8 +6486,9 @@ function csvEscape(v){
   if(/[",\r\n]/.test(s)) return '"' + s.replaceAll('"','""') + '"';
   return s;
 }
-function exportBoardCsv(){
-  const b = currentBoard(); if(!b) return;
+function exportBoardCsv(){ return downloadExport('export_board', { format:'csv' }); }
+function exportBoardMarkdown(){ return downloadExport('export_board', { format:'markdown' }); }
+function boardCsv(b){
   const headers = ['column','title','description','priority','due','labels','members','checklist','comments','created','updated'];
   let csv = headers.join(',') + '\r\n';
   for(const col of b.columns){
@@ -6497,10 +6502,9 @@ function exportBoardCsv(){
       csv += row.map(csvEscape).join(',') + '\r\n';
     }
   }
-  downloadFile(slugify(b.name)+'.csv', csv, 'text/csv');
+  return csv;
 }
-function exportBoardMarkdown(){
-  const b = currentBoard(); if(!b) return;
+function boardMarkdown(b){
   let md = `# ${b.name}\n\n`;
   for(const col of b.columns){
     md += `## ${col.name} (${col.cardIds.length})\n\n`;
@@ -6531,7 +6535,7 @@ function exportBoardMarkdown(){
       }
     }
   }
-  downloadFile(slugify(b.name)+'.md', md, 'text/markdown');
+  return md;
 }
 
 /* ============================================================
@@ -6572,13 +6576,7 @@ function applyBoardBackground(){
   }
 }
 function setBoardBackground(kind, value){
-  const b = currentBoard(); if(!b) return;
-  const safeValue=safeBoardBackgroundValue({kind,value});
-  if(!safeValue) return;
-  b.background = { kind, value:safeValue };
-  scheduleSave();
-  applyBoardBackground();
-  if($('settings-modal').classList.contains('open')) openSettingsModal();
+  return kzUi('set_board_background', { kind, value });
 }
 
 /* ============================================================
@@ -6633,20 +6631,66 @@ function openMovePopover(cardId, x, y){
 function closeMovePopover(){
   $('move-popover').classList.remove('open');
 }
-function moveCardTo(cardId, toColId){
+const pendingCardMoves = new Map();
+function applyCardMove(cardId, toColId, toIndex, ctx){
   const b = currentBoard(); if(!b) return;
   const fromCol = findColumnByCard(b, cardId);
   if(!fromCol) return;
-  fromCol.cardIds = fromCol.cardIds.filter(x => x !== cardId);
   const toCol = b.columns.find(c => c.id === toColId);
   if(!toCol) return;
-  toCol.cardIds.push(cardId);
+  fromCol.cardIds = fromCol.cardIds.filter(x => x !== cardId);
+  const index = Number.isInteger(toIndex) ? Math.max(0, Math.min(toIndex, toCol.cardIds.length)) : toCol.cardIds.length;
+  toCol.cardIds.splice(index, 0, cardId);
   const card = b.cards[cardId];
   stampCard(card);
-  logActivity('card_moved', { cardId, cardTitle: card?.title, detail: { fromColumn: fromCol.name, toColumn: toCol.name } });
+  if(fromCol.id !== toCol.id) logActivity('card_moved', { cardId, cardTitle: card?.title, detail: { fromColumn: fromCol.name, toColumn: toCol.name }, ctx });
   scheduleSave();
   closeMovePopover();
   renderBoard();
+}
+async function stageCardMove(cardId, toColId, toIndex=null){
+  const b = currentBoard(); if(!b) return;
+  const fromCol = findColumnByCard(b, cardId);
+  const toCol = b.columns.find(c => c.id === toColId);
+  const card = b.cards[cardId];
+  if(!fromCol || !toCol || !card) return;
+  if(naklios.capabilities.review !== true){ applyCardMove(cardId, toColId, toIndex); return; }
+  const base = boardRevisionSignature(b);
+  const diff = {
+    boardId:b.id, card:cardId, cardTitle:card.title,
+    from:fromCol.id, fromName:fromCol.name, fromIndex:fromCol.cardIds.indexOf(cardId),
+    to:toCol.id, toName:toCol.name,
+    toIndex:Number.isInteger(toIndex) ? toIndex : toCol.cardIds.filter(id=>id!==cardId).length,
+  };
+  try{
+    const staged = await naklios.review.stage('kanzen.card-move', diff, { reversible:true });
+    pendingCardMoves.set(staged.proposal_id, { base, diff });
+    closeMovePopover();
+    toast('Card move staged for review');
+  }catch(error){ toast('Could not stage card move: '+String(error?.message||error)); }
+}
+naklios.review?.onDecision?.(({type,proposal_id})=>{
+  const pending = pendingCardMoves.get(proposal_id);
+  if(!pending) throw new Error('KanZen has no pending card move for this proposal');
+  if(type==='discard'){
+    pendingCardMoves.delete(proposal_id);
+    toast('Card move discarded');
+    return;
+  }
+  if(type!=='commit') throw new Error('Unknown review decision');
+  const b = S.boards[pending.diff.boardId];
+  if(!b || boardRevisionSignature(b)!==pending.base) throw new Error('Board changed after review staging');
+  if(currentBoard()?.id!==b.id) throw new Error('Open the staged board before committing its card move');
+  applyCardMove(pending.diff.card, pending.diff.to, pending.diff.toIndex);
+  pendingCardMoves.delete(proposal_id);
+  toast('Card move committed');
+  return {ok:true};
+});
+function moveCardTo(cardId, toColId, toIndex){
+  const input = { card_id: cardId, column_id: toColId };
+  if(Number.isInteger(toIndex)) input.position = toIndex;
+  closeMovePopover();
+  return kzUi('move_card', input);
 }
 document.addEventListener('click', e => {
   if(!e.target.closest('#move-popover') && !e.target.closest('.card')) closeMovePopover();
@@ -6709,20 +6753,30 @@ function saveSyncConfig(){
 
 async function testSyncConnection(){
   const status = $('prefs-sync-status');
-  if(!S.settings.syncWorkerUrl){ status.textContent = 'No worker URL'; return; }
-  if(!S.settings.syncToken){ status.textContent = 'A sync token is required'; status.style.color = 'var(--danger)'; return; }
-  if(!S.settings.syncPassword){ status.textContent = 'A sync passphrase is required'; status.style.color = 'var(--danger)'; return; }
   status.textContent = 'Testing…';
+  status.style.color = '';
+  const result = await kzUi('test_sync_connection', {});
+  if(!result){ status.textContent = ''; return; }
+  status.textContent = result.message;
+  status.style.color = result.ok ? 'var(--ok)' : (result.status === 'not_configured' ? '' : 'var(--danger)');
+}
+// Checks the configured Worker without sending any board. Never returns the token or passphrase.
+async function checkSyncConnection(){
+  if(!S.settings.syncWorkerUrl) return { ok:false, status:'not_configured', message:'No worker URL' };
+  if(!S.settings.syncToken) return { ok:false, status:'not_configured', message:'A sync token is required' };
+  if(!S.settings.syncPassword) return { ok:false, status:'not_configured', message:'A sync passphrase is required' };
   try{
     const res = await fetch(S.settings.syncWorkerUrl + '/list', {
       headers: { 'X-Sync-Token': S.settings.syncToken || '' }
     });
-    if(res.ok&&res.headers.get('X-Kanzen-Sync-Version')==='2'){ status.textContent = '✓ Connected · revision-safe'; status.style.color = 'var(--ok)'; setSyncIndicator('ok'); }
-    else if(res.ok){ status.textContent = '✗ Worker is outdated'; status.style.color = 'var(--danger)'; setSyncIndicator('error','Worker is outdated'); }
-    else if(res.status === 401){ status.textContent = '✗ Token rejected'; status.style.color = 'var(--danger)'; setSyncIndicator('error'); }
-    else { status.textContent = '✗ HTTP ' + res.status; status.style.color = 'var(--danger)'; setSyncIndicator('error'); }
+    if(res.ok&&res.headers.get('X-Kanzen-Sync-Version')==='2'){ setSyncIndicator('ok'); return { ok:true, status:'connected', message:'✓ Connected · revision-safe' }; }
+    if(res.ok){ setSyncIndicator('error','Worker is outdated'); return { ok:false, status:'outdated', message:'✗ Worker is outdated' }; }
+    setSyncIndicator('error');
+    if(res.status === 401) return { ok:false, status:'unauthorized', message:'✗ Token rejected' };
+    return { ok:false, status:'http_error', message:'✗ HTTP ' + res.status };
   }catch(e){
-    status.textContent = '✗ ' + e.message; status.style.color = 'var(--danger)'; setSyncIndicator('error');
+    setSyncIndicator('error');
+    return { ok:false, status:'network_error', message:'✗ ' + e.message };
   }
 }
 
@@ -6968,6 +7022,1782 @@ async function syncPullAll(){
 }
 
 /* ============================================================
+   Command bus — every change the UI or an agent can make
+   The UI and the agent face are two clients of one set of commands. Each
+   command is a cmd* function, declared once in KZ_TOOLS below with its name,
+   description and JSON-schema input. The UI dispatches through kzUi(); agents
+   reach the same entries through the doors in the agent-face section.
+   ============================================================ */
+
+const KZ_PERSON = Object.freeze({ actor:'person', door:'ui' });
+class KzError extends Error {
+  constructor(code, message){ super(message); this.name = 'KzError'; this.code = code; }
+}
+function kzError(code, message){ return new KzError(code, message); }
+
+/* ---------- input validation: the JSON-schema subset the manifest uses ---------- */
+function kzTypeOf(value){
+  if(value === null) return 'null';
+  if(Array.isArray(value)) return 'array';
+  if(typeof value === 'number') return Number.isInteger(value) ? 'integer' : 'number';
+  return typeof value;
+}
+function kzValidate(schema, value, path, errors){
+  if(errors.length >= 8) return;
+  const types = schema.type == null ? null : [].concat(schema.type);
+  if(types){
+    const actual = kzTypeOf(value);
+    if(!types.some(type => type === actual || (type === 'number' && actual === 'integer'))){
+      errors.push(`${path} must be ${types.join(' or ')}`);
+      return;
+    }
+  }
+  if(schema.enum && !schema.enum.includes(value)){
+    errors.push(`${path} must be one of ${schema.enum.map(v => JSON.stringify(v)).join(', ')}`);
+    return;
+  }
+  if(typeof value === 'string'){
+    if(schema.minLength != null && value.length < schema.minLength) errors.push(`${path} must have at least ${schema.minLength} character${schema.minLength===1?'':'s'}`);
+    if(schema.maxLength != null && value.length > schema.maxLength) errors.push(`${path} must have at most ${schema.maxLength} characters`);
+    if(schema.pattern && !new RegExp(schema.pattern).test(value)) errors.push(`${path} has an invalid format`);
+  }
+  if(typeof value === 'number'){
+    if(!Number.isFinite(value)) errors.push(`${path} must be a finite number`);
+    if(schema.minimum != null && value < schema.minimum) errors.push(`${path} must be at least ${schema.minimum}`);
+    if(schema.maximum != null && value > schema.maximum) errors.push(`${path} must be at most ${schema.maximum}`);
+  }
+  if(Array.isArray(value)){
+    if(schema.minItems != null && value.length < schema.minItems) errors.push(`${path} needs at least ${schema.minItems} item${schema.minItems===1?'':'s'}`);
+    if(schema.maxItems != null && value.length > schema.maxItems) errors.push(`${path} allows at most ${schema.maxItems} items`);
+    if(schema.items) value.forEach((item, index) => kzValidate(schema.items, item, `${path}[${index}]`, errors));
+  }
+  if(isPlainRecord(value) && (schema.properties || schema.required)){
+    for(const key of schema.required || []){
+      if(value[key] === undefined) errors.push(`${path}.${key} is required`);
+    }
+    for(const [key, child] of Object.entries(value)){
+      if(child === undefined) continue;
+      if(schema.properties && Object.hasOwn(schema.properties, key)) kzValidate(schema.properties[key], child, `${path}.${key}`, errors);
+      else if(schema.additionalProperties === false) errors.push(`${path}.${key} is not a known field`);
+    }
+  }
+}
+function kzValidateInput(tool, input){
+  if(!isPlainRecord(input)) throw kzError('invalid_input', `${tool.name} takes an object of named fields`);
+  const errors = [];
+  kzValidate(tool.inputSchema, input, 'input', errors);
+  if(errors.length) throw kzError('invalid_input', `${tool.name}: ${errors.join('; ')}`);
+  return input;
+}
+
+/* ---------- lookups that raise structured errors ---------- */
+function kzBoardFor(input, mustBeCurrent=true){
+  const id = input.board_id || S.currentBoardId;
+  const b = id && Object.hasOwn(S.boards, id) ? S.boards[id] : null;
+  if(!b) throw kzError('not_found', id ? `Board ${id} not found` : 'No board is open');
+  if(mustBeCurrent && b.id !== S.currentBoardId){
+    throw kzError('not_current', `Board "${b.name}" is not open. Call switch_board first.`);
+  }
+  return b;
+}
+function kzColumn(b, id){
+  const column = b.columns.find(c => c.id === id);
+  if(!column) throw kzError('not_found', `Column ${id} is not on board "${b.name}"`);
+  return column;
+}
+function kzCard(b, id){
+  if(!Object.hasOwn(b.cards, id)) throw kzError('not_found', `Card ${id} is not on board "${b.name}"`);
+  return b.cards[id];
+}
+function kzLabel(b, id){
+  const label = b.labels.find(l => l.id === id);
+  if(!label) throw kzError('not_found', `Label ${id} is not on board "${b.name}"`);
+  return label;
+}
+function kzMember(b, id){
+  const member = b.members.find(m => m.id === id);
+  if(!member) throw kzError('not_found', `Member ${id} is not on board "${b.name}"`);
+  return member;
+}
+function kzListItem(list, id, noun, card){
+  const item = (list || []).find(x => x.id === id);
+  if(!item) throw kzError('not_found', `${noun} ${id} is not on card "${card.title}"`);
+  return item;
+}
+function kzIsRef(value){ return typeof value === 'string' && value.startsWith('$'); }
+// Existence checks for every id field an input carries. `$name` values are apply_changes
+// references to an id an earlier change creates, so they are checked when that change runs.
+function kzCheckRefs(input, b){
+  const check = (value, fn) => { if(value != null && value !== '' && !kzIsRef(value)) fn(value); };
+  check(input.column_id, id => kzColumn(b, id));
+  check(input.label_id, id => kzLabel(b, id));
+  check(input.member_id, id => kzMember(b, id));
+  check(input.author_member_id, id => kzMember(b, id));
+  for(const id of input.label_ids || []) check(id, x => kzLabel(b, x));
+  for(const id of input.member_ids || []) check(id, x => kzMember(b, x));
+  check(input.due_date, kzCheckDate);
+  if(input.card_id == null || kzIsRef(input.card_id)) return;
+  const card = kzCard(b, input.card_id);
+  check(input.item_id, id => kzListItem(card.checklist, id, 'Checklist item', card));
+  check(input.comment_id, id => kzListItem(card.comments, id, 'Comment', card));
+  check(input.attachment_id, id => kzListItem(card.attachments, id, 'Attachment', card));
+}
+function kzCheckDate(value){
+  const [y, m, d] = String(value).split('-').map(Number);
+  const t = new Date(Date.UTC(y, m - 1, d));
+  if(t.getUTCFullYear() !== y || t.getUTCMonth() !== m - 1 || t.getUTCDate() !== d) throw kzError('invalid_input', `${value} is not a calendar date`);
+  return value;
+}
+async function kzLoadSnapshot(filename){
+  let row = null;
+  try{ row = await storage.loadSnapshot(filename); }catch(_){}
+  if(!row?.data) throw kzError('not_found', `Snapshot ${filename} not found`);
+  return row;
+}
+// Opens a board, saving the board being left first so its unsaved edits are not dropped.
+async function kzActivateBoard(id, baseline=true){
+  if(S.currentBoardId !== id){
+    if(S.dirty && !(await flushSave())) throw kzError('save_failed', 'KanZen could not save the open board, so it stayed open');
+    S.currentBoardId = id;
+    S.focusedCardId = null;
+  }
+  S.settings.lastBoardId = id;
+  storage.saveSettings(S.settings);
+  if(baseline && !S.history.byBoard[id]) pushHistory();
+}
+function kzModalOpen(id){ return !!$(id)?.classList.contains('open'); }
+
+/* ---------- read commands ---------- */
+function kzCardSummary(card, column, position, withDescription){
+  const checklist = card.checklist || [];
+  const out = {
+    id: card.id, title: card.title, column_id: column?.id || null, column_name: column?.name || null, position,
+    priority: card.priority || 'none', due_date: card.dueDate || null,
+    label_ids: [...(card.labelIds || [])], member_ids: [...(card.memberIds || [])],
+    checklist: { done: checklist.filter(item => item.done).length, total: checklist.length },
+    comments: (card.comments || []).length, attachments: (card.attachments || []).length,
+    updated_at: card.updatedAt || null,
+  };
+  if(withDescription) out.description = card.description || '';
+  return out;
+}
+function kzBoardRows(b){
+  const rows = [];
+  for(const column of b.columns){
+    column.cardIds.forEach((id, position) => {
+      if(Object.hasOwn(b.cards, id)) rows.push({ card: b.cards[id], column, position });
+    });
+  }
+  return rows;
+}
+function kzStorageLabel(){
+  if(S.storageMode === 'naklios') return nakliOSBackendLabel(currentNakliOSBackend());
+  if(S.storageMode === 'fs') return 'Local folder';
+  return 'This browser';
+}
+function kzViewState(){
+  const f = S.filter;
+  return {
+    mode: currentViewMode(),
+    filter: { search: f.search || '', label_id: f.labelId || '', member_id: f.memberId || '', priority: f.priority || '', due: f.due || '' },
+    list_sort: { field: LIST_SORT_FIELDS[S.listSort.col] || S.listSort.col, direction: S.listSort.dir },
+    calendar_month: S.calMonth ? calMonthKey(S.calMonth.y, S.calMonth.m) : null,
+  };
+}
+function cmdDescribeTools(){ return kzManifest(); }
+function cmdGetAppState(){
+  const b = currentBoard();
+  return {
+    app: 'KanZen', agent_face_version: KZ_AGENT_FACE_VERSION,
+    storage: { mode: S.storageMode, location: kzStorageLabel() },
+    user_name: S.settings.localUser || null,
+    current_board_id: b?.id || null, current_board_name: b?.name || null,
+    board_count: S.boardOrder.length,
+    view: kzViewState(),
+    theme: S.settings.theme || 'light', palette: S.settings.palette || 'default',
+    auto_snapshot: { before_destructive: !!S.settings.autoSnapDestructive, daily: !!S.settings.autoSnapDaily },
+    capabilities: { hosted: !!naklios.capabilities.hosted, ai: !!naklios.capabilities.ai, sync_configured: syncReady() },
+    agent: { pending_proposals: kzPending().length, channel_enabled: !!KZ_AGENT.channel },
+  };
+}
+function cmdListBoards(){
+  return {
+    current_board_id: S.currentBoardId,
+    boards: S.boardOrder.map(id => {
+      const b = S.boards[id];
+      return { id, name: b.name, columns: b.columns.length, cards: Object.keys(b.cards || {}).length, team_mode: !!b._meta?.teamMode, sync: !!b._meta?.sync };
+    }),
+  };
+}
+function cmdGetBoard(input){
+  const b = kzBoardFor(input, false);
+  return {
+    id: b.id, name: b.name, is_open: b.id === S.currentBoardId, created_at: b.createdAt || null,
+    background: b.background ? { ...b.background } : null,
+    team_mode: !!b._meta?.teamMode, sync: !!b._meta?.sync,
+    columns: b.columns.map(c => ({ id: c.id, name: c.name, wip_limit: c.wipLimit || 0, collapsed: !!c.collapsed, card_ids: [...c.cardIds] })),
+    labels: b.labels.map(l => ({ id: l.id, name: l.name, color: l.color })),
+    members: b.members.map(m => ({ id: m.id, name: m.name, color: m.color || null })),
+    cards: kzBoardRows(b).map(row => kzCardSummary(row.card, row.column, row.position, !!input.include_descriptions)),
+  };
+}
+function cmdGetCard(input){
+  const b = kzBoardFor(input, false);
+  const card = kzCard(b, input.card_id);
+  const column = findColumnByCard(b, card.id);
+  const memberName = id => b.members.find(m => m.id === id)?.name || null;
+  return {
+    ...kzCardSummary(card, column, column ? column.cardIds.indexOf(card.id) : null, true),
+    board_id: b.id,
+    labels: (card.labelIds || []).map(id => b.labels.find(l => l.id === id)).filter(Boolean).map(l => ({ id: l.id, name: l.name })),
+    members: (card.memberIds || []).map(id => b.members.find(m => m.id === id)).filter(Boolean).map(m => ({ id: m.id, name: m.name })),
+    checklist_items: (card.checklist || []).map(item => ({ id: item.id, text: item.text, done: !!item.done })),
+    comment_list: (card.comments || []).map(c => ({ id: c.id, timestamp: c.timestamp || null, author_member_id: c.who || null, author_name: memberName(c.who), text: c.text })),
+    attachment_list: (card.attachments || []).map(a => ({ id: a.id, name: a.name, mime_type: a.type || null, size: Number(a.size) || 0 })),
+    created_by: card.createdBy || null, created_at: card.createdAt || null,
+    last_modified_by: card.lastModifiedBy || null, last_modified_at: card.lastModifiedAt || null,
+  };
+}
+function cmdSearchCards(input){
+  const b = kzBoardFor(input, false);
+  kzCheckRefs({ column_id: input.column_id, label_id: input.label_id, member_id: input.member_id }, b);
+  const filter = { search: input.query || '', labelId: input.label_id || '', memberId: input.member_id || '', priority: input.priority || '', due: input.due || '' };
+  const rows = kzBoardRows(b).filter(row => (!input.column_id || row.column.id === input.column_id) && cardMatchesFilter(row.card, b, filter));
+  return {
+    board_id: b.id, total: rows.length,
+    cards: rows.slice(0, input.limit || 100).map(row => kzCardSummary(row.card, row.column, row.position, !!input.include_descriptions)),
+  };
+}
+function cmdGetActivity(input){
+  const b = kzBoardFor(input, false);
+  const rows = (b.activity || []).filter(a =>
+    (!input.user || a.user === input.user) &&
+    (!input.action || a.action === input.action) &&
+    (!input.card_id || a.cardId === input.card_id) &&
+    (!input.actor || (input.actor === 'agent') === (a.actor === 'agent')));
+  return {
+    board_id: b.id, total: rows.length,
+    entries: rows.slice(0, input.limit || 50).map(a => ({
+      id: a.id || null, timestamp: a.timestamp || null, user: a.user || null, action: a.action,
+      card_id: a.cardId || null, card_title: a.cardTitle || null, detail: a.detail || {},
+      actor: a.actor === 'agent' ? 'agent' : 'person', door: a.door || 'ui', caller: a.caller || null,
+      text: activityRowText(a),
+    })),
+  };
+}
+async function cmdListSnapshots(input){
+  const b = kzBoardFor(input, false);
+  const rows = await storage.listSnapshots(b.id);
+  return {
+    board_id: b.id,
+    snapshots: rows.map(row => ({
+      filename: row.filename, name: row.data?._snapshot?.name || '',
+      kind: row.data?._snapshot?.kind || 'manual', taken_at: toIso(row.takenAt),
+    })),
+  };
+}
+async function cmdCompareSnapshots(input){
+  await kzLoadSnapshot(input.a);
+  await kzLoadSnapshot(input.b);
+  const diff = await computeSnapshotDiff(input.a, input.b);
+  if(!diff) throw kzError('not_found', 'One of the snapshots could not be read');
+  return {
+    base: { filename: diff.base.filename, taken_at: toIso(diff.base.takenAt) },
+    head: { filename: diff.head.filename, taken_at: toIso(diff.head.takenAt) },
+    added: diff.added.map(id => ({ id, title: diff.headCards[id].title })),
+    removed: diff.removed.map(id => ({ id, title: diff.baseCards[id].title })),
+    modified: diff.modified.map(m => ({ id: m.id, title: m.title, changes: m.changes })),
+  };
+}
+function cmdExportBoard(input){
+  const b = kzBoardFor(input, false);
+  const slug = slugify(b.name);
+  if(input.format === 'csv') return { filename: slug + '.csv', mime_type: 'text/csv', content: boardCsv(b) };
+  if(input.format === 'markdown') return { filename: slug + '.md', mime_type: 'text/markdown', content: boardMarkdown(b) };
+  return { filename: slug + '.kanzen.json', mime_type: 'application/json', content: stableJson(b) };
+}
+function cmdExportAllBoards(){
+  const payload = { kanzenVersion:1, exportedAt: new Date().toISOString(), boards: S.boards };
+  return { filename: 'kanzen-export-' + new Date().toISOString().slice(0,10) + '.json', mime_type: 'application/json', content: stableJson(payload) };
+}
+async function cmdCreateShareLink(input){
+  const source = input.snapshot ? (await kzLoadSnapshot(input.snapshot)).data : kzBoardFor(input, false);
+  try{ return await buildShareUrl(source, { stripped: !!input.stripped, passphrase: input.passphrase || '' }); }
+  catch(e){ throw kzError('share_failed', 'Could not build the share link: ' + (e?.message || e)); }
+}
+async function cmdSuggestSubtasks(input){
+  if(!naklios.capabilities.ai) throw kzError('unavailable', 'Subtask suggestions use the on-device model, which KanZen has only inside NakliOS with AI access');
+  const messages = [
+    { role:'system', content:'You break a task into a short checklist of concrete, actionable subtasks. Output ONLY the subtasks, one per line — no numbering, no bullets, no preamble. 3 to 6 items, each under 8 words.' },
+    { role:'user', content:('Task: ' + input.title + (input.description ? ('\nDetails: ' + input.description) : '')).trim() },
+  ];
+  let res;
+  try{ res = await window.naklios.ai.chat.completions.create({ messages, max_tokens:200 }); }
+  catch(e){ throw kzError('ai_failed', 'AI error: ' + (e?.message || e)); }
+  const text = res && res.choices && res.choices[0] && res.choices[0].message ? res.choices[0].message.content : '';
+  const items = String(text || '').split('\n')
+    .map(l => l.replace(/^[\s\-*•\d.)\]]+/, '').trim())
+    .filter(l => l.length > 1).slice(0, 8);
+  return { items };
+}
+function cmdTestSyncConnection(){ return checkSyncConnection(); }
+function cmdListProposals(input){
+  const rows = [...KZ_AGENT.proposals.values()].filter(p => !input.status || p.status === input.status);
+  return { proposals: rows.reverse().slice(0, input.limit || 50).map(kzProposalView) };
+}
+function cmdGetProposal(input){
+  const p = KZ_AGENT.proposals.get(input.proposal_id);
+  if(!p) throw kzError('not_found', `Proposal ${input.proposal_id} not found; proposals last only as long as this KanZen tab`);
+  return kzProposalView(p);
+}
+
+/* ---------- session commands: what this tab shows ---------- */
+async function cmdSwitchBoard(input, ctx){
+  if(!Object.hasOwn(S.boards, input.board_id)) throw kzError('not_found', `Board ${input.board_id} not found`);
+  if(ctx.actor === 'agent' && (S.editingCardId || kzModalOpen('settings-modal'))){
+    throw kzError('busy', 'The person is editing in KanZen; switch boards after they close the dialog');
+  }
+  await kzActivateBoard(input.board_id);
+  renderAll();
+  return { board_id: input.board_id, board_name: S.boards[input.board_id].name };
+}
+function cmdSetView(input){
+  if(!('mode' in input) && !input.list_sort && !input.calendar_month) throw kzError('invalid_input', 'set_view needs mode, list_sort or calendar_month');
+  const id = S.currentBoardId; if(!id) throw kzError('not_found', 'No board is open');
+  if(input.calendar_month){
+    const [y, m] = input.calendar_month.split('-').map(Number);
+    if(m < 1 || m > 12) throw kzError('invalid_input', 'calendar_month must be YYYY-MM');
+    S.calMonth = { y, m: m - 1 };
+  }
+  if(input.mode){
+    S.viewMode[id] = input.mode;
+    if(input.mode === 'calendar' && !S.calMonth){
+      const d = new Date(); S.calMonth = { y: d.getFullYear(), m: d.getMonth() };
+    }
+  }
+  if(input.list_sort){
+    const col = Object.keys(LIST_SORT_FIELDS).find(key => LIST_SORT_FIELDS[key] === input.list_sort.field);
+    S.listSort = { col, dir: input.list_sort.direction || 'asc' };
+  }
+  renderBoard();
+  return kzViewState();
+}
+const KZ_FILTER_FIELDS = { search:'search', label_id:'labelId', member_id:'memberId', priority:'priority', due:'due' };
+function cmdSetFilter(input){
+  if(!Object.keys(input).some(key => key in KZ_FILTER_FIELDS)) throw kzError('invalid_input', 'set_filter needs at least one of search, label_id, member_id, priority, due');
+  const b = currentBoard();
+  if(b) kzCheckRefs({ label_id: input.label_id, member_id: input.member_id }, b);
+  for(const [key, field] of Object.entries(KZ_FILTER_FIELDS)) if(key in input) S.filter[field] = input[key];
+  renderFilters();
+  renderBoard();
+  return kzViewState().filter;
+}
+function cmdClearFilters(){
+  S.filter = { search:'', labelId:'', priority:'', due:'', memberId:'' };
+  renderFilters();
+  renderBoard();
+  return kzViewState().filter;
+}
+function cmdWithdrawProposal(input){
+  const p = KZ_AGENT.proposals.get(input.proposal_id);
+  if(!p) throw kzError('not_found', `Proposal ${input.proposal_id} not found`);
+  if(p.status !== 'pending') throw kzError('not_pending', `Proposal ${p.id} is already ${p.status}`);
+  kzDecide(p, 'withdrawn');
+  return kzProposalView(p);
+}
+
+/* ---------- board commands ---------- */
+async function cmdCreateBoard(input, ctx){
+  const b = newBoard(input.name);
+  S.boards[b.id] = b;
+  rebuildBoardOrder();
+  await kzActivateBoard(b.id, false);
+  logActivity('board_created', { detail: { name: b.name }, ctx });
+  scheduleSave();
+  renderAll();
+  return { board_id: b.id };
+}
+function cmdRenameBoard(input, ctx){
+  const b = kzBoardFor(input);
+  const oldName = b.name;
+  b.name = input.name;
+  if(oldName !== b.name) logActivity('board_renamed', { detail: { oldName, newName: b.name }, ctx });
+  rebuildBoardOrder();
+  scheduleSave();
+  renderAll();
+  return { board_id: b.id, name: b.name };
+}
+async function cmdDeleteBoard(input, ctx){
+  const b = kzBoardFor({ board_id: input.board_id }, false);
+  if(!ctx.snapshotTaken && S.settings.autoSnapDestructive) await takeSnapshotForBoard(b, 'auto-destructive');
+  if(syncReady()&&b._meta?.sync){
+    try{ await deleteRemoteBoard(b); }
+    catch(error){
+      console.error(error);
+      throw error.code==='SYNC_CONFLICT'
+        ? kzError('sync_conflict', 'Board changed remotely — sync it before deleting')
+        : kzError('sync_failed', 'Cloud delete failed: '+error.message);
+    }
+  }
+  await storage.deleteBoard(b);
+  delete S.boards[b.id];
+  rebuildBoardOrder();
+  if(S.currentBoardId === b.id){
+    S.currentBoardId = S.boardOrder[0] || null;
+    S.dirty = false;
+  }
+  S.settings.lastBoardId = S.currentBoardId;
+  storage.saveSettings(S.settings);
+  renderAll();
+  return { deleted_board_id: b.id, current_board_id: S.currentBoardId };
+}
+function cmdSetBoardBackground(input, ctx){
+  const b = kzBoardFor(input);
+  let value = input.value;
+  if(input.kind === 'gradient'){
+    const gradient = BG_GRADIENTS.find(g => g.name.toLowerCase() === String(value).toLowerCase() || g.value === value);
+    if(!gradient) throw kzError('invalid_input', `Unknown gradient; use one of ${BG_GRADIENTS.map(g => g.name).join(', ')}`);
+    value = gradient.value;
+  }
+  const safeValue = safeBoardBackgroundValue({ kind: input.kind, value });
+  if(!safeValue) throw kzError('invalid_input', 'A solid background needs a #rrggbb colour');
+  b.background = { kind: input.kind, value: safeValue };
+  logActivity('board_background', { detail: { kind: input.kind, value: input.value }, ctx, agentOnly: true });
+  scheduleSave();
+  applyBoardBackground();
+  if(kzModalOpen('settings-modal')) openSettingsModal();
+  return { board_id: b.id, background: { ...b.background } };
+}
+
+/* ---------- column commands ---------- */
+function cmdCreateColumn(input, ctx){
+  const b = kzBoardFor(input);
+  const column = { id: uid(), name: input.name, wipLimit: 0, collapsed: false, cardIds: [] };
+  const at = Number.isInteger(input.position) ? Math.min(input.position, b.columns.length) : b.columns.length;
+  b.columns.splice(at, 0, column);
+  logActivity('column_created', { detail: { name: column.name }, ctx });
+  scheduleSave();
+  renderBoard();
+  return { column_id: column.id, position: at };
+}
+function cmdUpdateColumn(input, ctx){
+  const b = kzBoardFor(input);
+  const c = kzColumn(b, input.column_id);
+  if(!['name','wip_limit','collapsed'].some(key => key in input)) throw kzError('invalid_input', 'update_column needs name, wip_limit or collapsed');
+  if('name' in input && input.name !== c.name){
+    const oldName = c.name;
+    c.name = input.name;
+    logActivity('column_renamed', { detail: { oldName, newName: c.name }, ctx });
+  }
+  if('wip_limit' in input && input.wip_limit !== (c.wipLimit || 0)){
+    c.wipLimit = input.wip_limit;
+    logActivity('column_updated', { detail: { name: c.name, wipLimit: c.wipLimit }, ctx });
+  }
+  if('collapsed' in input && input.collapsed !== !!c.collapsed){
+    c.collapsed = input.collapsed;
+    logActivity('column_updated', { detail: { name: c.name, collapsed: c.collapsed }, ctx, agentOnly: true });
+  }
+  scheduleSave();
+  renderBoard();
+  return { column_id: c.id, name: c.name, wip_limit: c.wipLimit || 0, collapsed: !!c.collapsed };
+}
+function cmdMoveColumn(input, ctx){
+  const b = kzBoardFor(input);
+  const c = kzColumn(b, input.column_id);
+  const from = b.columns.indexOf(c);
+  const to = Math.min(input.position, b.columns.length - 1);
+  if(from !== to){
+    b.columns.splice(from, 1);
+    b.columns.splice(to, 0, c);
+    logActivity('column_moved', { detail: { name: c.name, position: to }, ctx });
+    scheduleSave();
+    renderBoard();
+  }
+  return { column_id: c.id, position: to };
+}
+async function cmdDeleteColumn(input, ctx){
+  const b = kzBoardFor(input);
+  const c = kzColumn(b, input.column_id);
+  if(!ctx.snapshotTaken) await maybeAutoSnapshot('destructive');
+  for(const cardId of c.cardIds){
+    markCardDeleted(cardId);
+    delete b.cards[cardId];
+  }
+  b.columns = b.columns.filter(x => x !== c);
+  logActivity('column_deleted', { detail: { name: c.name, cards: c.cardIds.length }, ctx });
+  scheduleSave();
+  await flushSave();
+  renderBoard();
+  return { deleted_column_id: c.id, deleted_cards: c.cardIds.length };
+}
+
+/* ---------- card commands ---------- */
+function cmdCreateCard(input, ctx){
+  const b = kzBoardFor(input);
+  const column = kzColumn(b, input.column_id);
+  kzCheckRefs(input, b);
+  const card = newCard(input.title);
+  if(input.description) card.description = input.description;
+  if(input.priority) card.priority = input.priority;
+  if(input.due_date) card.dueDate = kzCheckDate(input.due_date);
+  if(input.label_ids) card.labelIds = [...new Set(input.label_ids)];
+  if(input.member_ids) card.memberIds = [...new Set(input.member_ids)];
+  b.cards[card.id] = card;
+  const at = Number.isInteger(input.position) ? Math.min(input.position, column.cardIds.length) : column.cardIds.length;
+  column.cardIds.splice(at, 0, card.id);
+  markCardDirty(card.id);
+  logActivity('card_created', { cardId: card.id, cardTitle: card.title, detail: { column: column.name }, ctx });
+  scheduleSave();
+  renderBoard();
+  return { card_id: card.id, column_id: column.id, position: at };
+}
+function cmdUpdateCard(input, ctx){
+  const b = kzBoardFor(input);
+  const card = kzCard(b, input.card_id);
+  if(!['title','description','priority','due_date','label_ids','member_ids','checklist'].some(key => key in input)){
+    throw kzError('invalid_input', 'update_card needs at least one field to change');
+  }
+  kzCheckRefs(input, b);
+  const due = 'due_date' in input && input.due_date ? kzCheckDate(input.due_date) : null;
+  const edited = detail => logActivity('card_edited', { cardId: card.id, cardTitle: card.title, detail, ctx });
+  for(const [key, field] of [['title','title'],['description','description'],['priority','priority']]){
+    if(!(key in input) || input[key] === (card[field] ?? '')) continue;
+    const oldValue = card[field];
+    card[field] = input[key];
+    edited({ field, oldValue, newValue: card[field] });
+  }
+  if('due_date' in input && due !== (card.dueDate || null)){
+    card.dueDate = due;
+    logActivity('card_due_changed', { cardId: card.id, cardTitle: card.title, detail: { dueDate: due }, ctx });
+  }
+  if('label_ids' in input){
+    const next = [...new Set(input.label_ids)];
+    if([...next].sort().join(',') !== [...card.labelIds].sort().join(',')) edited({ field:'labels', labelIds: next });
+    card.labelIds = next;
+  }
+  if('member_ids' in input){
+    const next = [...new Set(input.member_ids)];
+    if([...next].sort().join(',') !== [...card.memberIds].sort().join(',')){
+      logActivity('card_assigned', { cardId: card.id, cardTitle: card.title, detail: { memberIds: next }, ctx });
+    }
+    card.memberIds = next;
+  }
+  if('checklist' in input){
+    const used = new Set();
+    const next = input.checklist.map(item => {
+      const id = item.id && !used.has(item.id) ? item.id : uid();
+      used.add(id);
+      return { id, text: item.text, done: !!item.done };
+    });
+    const shape = list => JSON.stringify(list.map(item => [item.text, !!item.done]));
+    if(shape(next) !== shape(card.checklist)){
+      edited({ field:'checklist', done: next.filter(item => item.done).length, total: next.length });
+    }
+    card.checklist = next;
+  }
+  stampCard(card);
+  scheduleSave();
+  renderBoard();
+  return { card_id: card.id };
+}
+async function cmdMoveCard(input, ctx){
+  const b = kzBoardFor(input);
+  kzCard(b, input.card_id);
+  kzColumn(b, input.column_id);
+  const position = Number.isInteger(input.position) ? input.position : null;
+  // A person's own move inside NakliOS stages for the host's review (see stageCardMove).
+  if(ctx.actor === 'person'){
+    await stageCardMove(input.card_id, input.column_id, position);
+    return { card_id: input.card_id, column_id: input.column_id };
+  }
+  applyCardMove(input.card_id, input.column_id, position, ctx);
+  return { card_id: input.card_id, column_id: input.column_id, position: kzColumn(b, input.column_id).cardIds.indexOf(input.card_id) };
+}
+async function cmdDeleteCard(input, ctx){
+  const b = kzBoardFor(input);
+  const card = kzCard(b, input.card_id);
+  if(!ctx.snapshotTaken) await maybeAutoSnapshot('destructive');
+  const col = findColumnByCard(b, card.id);
+  if(col) col.cardIds = col.cardIds.filter(x => x !== card.id);
+  markCardDeleted(card.id);
+  delete b.cards[card.id];
+  logActivity('card_deleted', { cardId: card.id, cardTitle: card.title, detail: { column: col?.name }, ctx });
+  scheduleSave();
+  await flushSave();
+  renderBoard();
+  return { deleted_card_id: card.id };
+}
+function cmdAddChecklistItems(input, ctx){
+  const b = kzBoardFor(input);
+  const card = kzCard(b, input.card_id);
+  const items = input.items.map(text => ({ id: uid(), text, done: false }));
+  card.checklist.push(...items);
+  logActivity('card_edited', { cardId: card.id, cardTitle: card.title, detail: { field:'checklist', added: items.length }, ctx });
+  stampCard(card);
+  scheduleSave();
+  renderBoard();
+  return { card_id: card.id, item_ids: items.map(item => item.id) };
+}
+function cmdUpdateChecklistItem(input, ctx){
+  const b = kzBoardFor(input);
+  const card = kzCard(b, input.card_id);
+  const item = kzListItem(card.checklist, input.item_id, 'Checklist item', card);
+  if(!('text' in input) && !('done' in input)) throw kzError('invalid_input', 'update_checklist_item needs text or done');
+  if('text' in input) item.text = input.text;
+  if('done' in input) item.done = input.done;
+  logActivity('card_edited', { cardId: card.id, cardTitle: card.title, detail: { field:'checklist', item: item.text, done: !!item.done }, ctx });
+  stampCard(card);
+  scheduleSave();
+  renderBoard();
+  return { card_id: card.id, item_id: item.id, text: item.text, done: !!item.done };
+}
+function cmdRemoveChecklistItem(input, ctx){
+  const b = kzBoardFor(input);
+  const card = kzCard(b, input.card_id);
+  const item = kzListItem(card.checklist, input.item_id, 'Checklist item', card);
+  card.checklist = card.checklist.filter(x => x !== item);
+  logActivity('card_edited', { cardId: card.id, cardTitle: card.title, detail: { field:'checklist', removed: item.text }, ctx });
+  stampCard(card);
+  scheduleSave();
+  renderBoard();
+  return { card_id: card.id, removed_item_id: item.id };
+}
+function cmdAddComment(input, ctx){
+  const b = kzBoardFor(input);
+  const card = kzCard(b, input.card_id);
+  if(input.author_member_id) kzMember(b, input.author_member_id);
+  if(!card.comments) card.comments = [];
+  const comment = { id: uid(), timestamp: now(), who: input.author_member_id || '', text: input.text };
+  card.comments.push(comment);
+  markCardDirty(card.id);
+  logActivity('card_commented', { cardId: card.id, cardTitle: card.title, detail: {}, ctx });
+  scheduleSave();
+  renderBoard();
+  return { card_id: card.id, comment_id: comment.id };
+}
+function cmdDeleteComment(input, ctx){
+  const b = kzBoardFor(input);
+  const card = kzCard(b, input.card_id);
+  const comment = kzListItem(card.comments, input.comment_id, 'Comment', card);
+  card.comments = card.comments.filter(x => x !== comment);
+  markCardDirty(card.id);
+  logActivity('comment_deleted', { cardId: card.id, cardTitle: card.title, detail: {}, ctx });
+  scheduleSave();
+  renderBoard();
+  return { card_id: card.id, deleted_comment_id: comment.id };
+}
+const MAX_ATTACHMENT_BYTES = 25*1024*1024;
+function cmdAddAttachment(input, ctx){
+  const b = kzBoardFor(input);
+  const card = kzCard(b, input.card_id);
+  const b64 = input.data_base64.replace(/\s+/g, '');
+  if(!/^[A-Za-z0-9+/]*={0,2}$/.test(b64)) throw kzError('invalid_input', 'data_base64 is not base64');
+  const size = Math.floor(b64.length * 3 / 4) - (b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0);
+  if(size > MAX_ATTACHMENT_BYTES) throw kzError('too_large', 'Attachments are limited to 25 MB');
+  const dataUrl = `data:${input.mime_type};base64,${b64}`;
+  if(!safeAttachmentHref(dataUrl)) throw kzError('unsafe_attachment', `KanZen does not embed ${input.mime_type} files, because a browser could run them as a page`);
+  const attachment = { id: uid(), name: input.name, type: input.mime_type, size, dataUrl };
+  card.attachments.push(attachment);
+  logActivity('attachment_added', { cardId: card.id, cardTitle: card.title, detail: { name: attachment.name, size }, ctx });
+  stampCard(card);
+  scheduleSave();
+  renderBoard();
+  return { card_id: card.id, attachment_id: attachment.id, size };
+}
+function cmdRemoveAttachment(input, ctx){
+  const b = kzBoardFor(input);
+  const card = kzCard(b, input.card_id);
+  const attachment = kzListItem(card.attachments, input.attachment_id, 'Attachment', card);
+  card.attachments = card.attachments.filter(x => x !== attachment);
+  logActivity('attachment_removed', { cardId: card.id, cardTitle: card.title, detail: { name: attachment.name }, ctx });
+  stampCard(card);
+  scheduleSave();
+  renderBoard();
+  return { card_id: card.id, removed_attachment_id: attachment.id };
+}
+
+/* ---------- label and member commands ---------- */
+function cmdCreateLabel(input, ctx){
+  const b = kzBoardFor(input);
+  const label = { id: uid(), name: input.name, color: input.color || LABEL_COLORS[b.labels.length % LABEL_COLORS.length] };
+  b.labels.push(label);
+  logActivity('label_created', { detail: { name: label.name }, ctx });
+  scheduleSave();
+  renderAll();
+  return { label_id: label.id };
+}
+function cmdUpdateLabel(input, ctx){
+  const b = kzBoardFor(input);
+  const label = kzLabel(b, input.label_id);
+  if(!('name' in input) && !('color' in input)) throw kzError('invalid_input', 'update_label needs name or color');
+  if('name' in input) label.name = input.name;
+  if('color' in input) label.color = input.color;
+  logActivity('label_updated', { detail: { name: label.name }, ctx });
+  scheduleSave();
+  renderAll();
+  return { label_id: label.id, name: label.name, color: label.color };
+}
+function cmdDeleteLabel(input, ctx){
+  const b = kzBoardFor(input);
+  const label = kzLabel(b, input.label_id);
+  b.labels = b.labels.filter(x => x !== label);
+  let updated = 0;
+  for(const card of Object.values(b.cards)){
+    if(!card.labelIds.includes(label.id)) continue;
+    card.labelIds = card.labelIds.filter(id => id !== label.id);
+    markCardDirty(card.id);
+    updated++;
+  }
+  if(S.filter.labelId === label.id) S.filter.labelId = '';
+  logActivity('label_deleted', { detail: { name: label.name, cards: updated }, ctx });
+  scheduleSave();
+  renderAll();
+  return { deleted_label_id: label.id, cards_updated: updated };
+}
+function cmdCreateMember(input, ctx){
+  const b = kzBoardFor(input);
+  const member = { id: uid(), name: input.name, color: input.color || LABEL_COLORS[b.members.length % LABEL_COLORS.length] };
+  b.members.push(member);
+  logActivity('member_added', { detail: { name: member.name }, ctx });
+  scheduleSave();
+  renderAll();
+  return { member_id: member.id };
+}
+function cmdUpdateMember(input, ctx){
+  const b = kzBoardFor(input);
+  const member = kzMember(b, input.member_id);
+  if(!('name' in input) && !('color' in input)) throw kzError('invalid_input', 'update_member needs name or color');
+  if('name' in input) member.name = input.name;
+  if('color' in input) member.color = input.color;
+  logActivity('member_updated', { detail: { name: member.name }, ctx });
+  scheduleSave();
+  renderAll();
+  return { member_id: member.id, name: member.name, color: member.color };
+}
+function cmdDeleteMember(input, ctx){
+  const b = kzBoardFor(input);
+  const member = kzMember(b, input.member_id);
+  b.members = b.members.filter(x => x !== member);
+  let updated = 0;
+  for(const card of Object.values(b.cards)){
+    if(!card.memberIds.includes(member.id)) continue;
+    card.memberIds = card.memberIds.filter(id => id !== member.id);
+    markCardDirty(card.id);
+    updated++;
+  }
+  if(S.filter.memberId === member.id) S.filter.memberId = '';
+  logActivity('member_deleted', { detail: { name: member.name, cards: updated }, ctx });
+  scheduleSave();
+  renderAll();
+  return { deleted_member_id: member.id, cards_updated: updated };
+}
+
+/* ---------- history and snapshot commands ---------- */
+function kzHistoryStep(input, delta){
+  const b = kzBoardFor(input);
+  const h = S.history.byBoard[b.id];
+  if(delta < 0 && (!h || h.cursor <= 0)) throw kzError('nothing_to_undo', 'Nothing to undo');
+  if(delta > 0 && (!h || h.cursor >= h.stack.length - 1)) throw kzError('nothing_to_redo', 'Nothing to redo');
+  h.cursor += delta;
+  S.boards[b.id] = restoreBoardState(b, JSON.parse(h.stack[h.cursor]));
+  _skipNextHistoryPush = true;
+  scheduleSave();
+  renderAll();
+  return { board_id: b.id, history_position: h.cursor, history_length: h.stack.length };
+}
+function cmdUndo(input){ return kzHistoryStep(input, -1); }
+function cmdRedo(input){ return kzHistoryStep(input, 1); }
+async function cmdTakeSnapshot(input, ctx){
+  const b = kzBoardFor(input);
+  const r = await takeSnapshotForBoard(b, 'manual', input.name || '', ctx);
+  if(!r) throw kzError('snapshot_failed', 'Snapshot failed');
+  if(kzModalOpen('snapshots-modal')) renderSnapshotsList();
+  return { board_id: b.id, filename: r.filename };
+}
+async function cmdRestoreSnapshot(input, ctx){
+  const b = kzBoardFor(input);
+  const row = await kzLoadSnapshot(input.filename);
+  const owner = row.data?._snapshot?.boardId;
+  if(owner && owner !== b.id) throw kzError('wrong_board', `Snapshot ${input.filename} belongs to another board`);
+  if(!ctx.snapshotTaken) await takeSnapshot('auto-destructive', 'pre-restore safety');
+  const restored = JSON.parse(stableJson(row.data));
+  delete restored._snapshot;
+  restored.id = b.id;                           // preserve current id so file/IDB row continues
+  restored._meta = { ...(b._meta||{}), boardId:b.id, lastModified:now(), kanzenVersion:1 };
+  migrateLoadedBoard(restored);
+  const validation=validateBoardPayload(restored);
+  if(!validation.ok) throw kzError('invalid_board', 'Snapshot restore blocked: '+validation.error);
+  S.boards[b.id] = restoreBoardState(b, restored);
+  logActivity('snapshot_restored', { detail: { name: row.data?._snapshot?.name || input.filename }, ctx });
+  scheduleSave();
+  await flushSave();
+  renderAll();
+  return { board_id: b.id, restored_from: input.filename };
+}
+async function cmdDeleteSnapshot(input){
+  await kzLoadSnapshot(input.filename);
+  await storage.deleteSnapshot(input.filename);
+  if(kzModalOpen('snapshots-modal')) renderSnapshotsList();
+  return { deleted_snapshot: input.filename };
+}
+function cmdSetAutoSnapshot(input){
+  if(!('before_destructive' in input) && !('daily' in input)) throw kzError('invalid_input', 'set_auto_snapshot needs before_destructive or daily');
+  if('before_destructive' in input) S.settings.autoSnapDestructive = input.before_destructive;
+  if('daily' in input) S.settings.autoSnapDaily = input.daily;
+  storage.saveSettings(S.settings);
+  if(kzModalOpen('snapshots-modal')) renderSnapshotsList();
+  return { before_destructive: !!S.settings.autoSnapDestructive, daily: !!S.settings.autoSnapDaily };
+}
+
+/* ---------- import commands ---------- */
+async function kzStoreImported(prepared, replace){
+  if(replace){
+    for(const id of Object.keys(S.boards)) await storage.deleteBoard(S.boards[id]);
+    S.boards = {};
+  }
+  for(const b of prepared){
+    S.boards[b.id] = b;
+    await storage.saveBoard(b);
+  }
+  rebuildBoardOrder();
+  if(!S.currentBoardId || !S.boards[S.currentBoardId]) S.currentBoardId = S.boardOrder[0] || null;
+  S.settings.lastBoardId = S.currentBoardId;
+  await storage.saveSettings(S.settings);
+  renderAll();
+  return { imported: prepared.length, board_ids: prepared.map(b => b.id) };
+}
+function cmdImportBoards(input){ return kzStoreImported(prepareBoardImport(input.data, Object.keys(S.boards)), false); }
+function cmdReplaceAllBoards(input){ return kzStoreImported(prepareBoardImport(input.data, []), true); }
+function kzParseTrello(data){
+  try{ return importTrelloJson(typeof data === 'string' ? JSON.parse(data) : structuredClone(data)); }
+  catch(e){ throw kzError('invalid_trello', e?.message || 'Not a valid Trello export'); }
+}
+async function cmdImportTrello(input){
+  const result = kzParseTrello(input.data);
+  const b = result.board;
+  S.boards[b.id] = b;
+  rebuildBoardOrder();
+  await storage.saveBoard(b);
+  await kzActivateBoard(b.id);
+  renderAll();
+  return { board_id: b.id, name: b.name, cards: result.cardCount, lists: result.listCount, attachments_skipped: result.attachmentSkipped };
+}
+function kzShareFromUrl(url){
+  let hash = String(url).trim();
+  if(!hash.startsWith('#')){
+    try{ hash = new URL(hash).hash; }
+    catch(_){ throw kzError('invalid_share', 'Give a KanZen share URL or its #fragment'); }
+  }
+  const share = parseShareFragment(hash);
+  if(!share) throw kzError('invalid_share', 'This URL has no KanZen board in it');
+  return share;
+}
+async function cmdImportShareLink(input){
+  const json = await decodeSharedBoard(kzShareFromUrl(input.url), input.passphrase || '');
+  if(!isPlainRecord(json)) throw kzError('invalid_share', 'Could not decode shared board');
+  json.id = uid();
+  json._meta = { boardId:json.id, lastModified:now(), kanzenVersion:1, teamMode:false, sync:false };
+  json.name = (json.name || 'Shared board') + ' (imported)';
+  migrateLoadedBoard(json);
+  const validation=validateBoardPayload(json);
+  if(!validation.ok) throw kzError('invalid_board', 'Invalid board payload: '+validation.error);
+  S.boards[json.id] = json;
+  rebuildBoardOrder();
+  await storage.saveBoard(json);
+  await kzActivateBoard(json.id);
+  renderAll();
+  return { board_id: json.id, name: json.name };
+}
+async function cmdSetTeamMode(input, ctx){
+  const b = kzBoardFor(input);
+  if(S.storageMode !== 'fs' && S.storageMode !== 'naklios') throw kzError('storage_required', 'Choose a Folder or Crate first');
+  if(input.on === !!b._meta?.teamMode) return { board_id: b.id, team_mode: input.on, changed: false };
+  try{
+    if(input.on) await convertSoloToTeam(b);
+    else await convertTeamToSolo(b);
+  }catch(e){
+    console.error(e);
+    throw kzError('conversion_failed', 'Conversion failed: ' + e.message);
+  }
+  logActivity('board_team_mode', { detail: { on: input.on }, ctx });
+  scheduleSave();
+  return { board_id: b.id, team_mode: input.on, changed: true };
+}
+
+/* ---------- preference commands ---------- */
+function cmdSetTheme(input){
+  document.documentElement.dataset.theme = input.theme;
+  S.settings.theme = input.theme;
+  storage.saveSettings(S.settings);
+  if(kzModalOpen('prefs-modal')) $('prefs-theme').value = input.theme;
+  return { theme: input.theme };
+}
+function cmdSetPalette(input){
+  S.settings.palette = input.palette;
+  storage.saveSettings(S.settings);
+  applyPalette();
+  renderPalettePopover();
+  closePalettePopover();
+  return { palette: input.palette };
+}
+
+/* ---------- apply_changes: several board edits as one proposal and one undo step ---------- */
+function kzResolveRefs(value, refs){
+  if(kzIsRef(value)){
+    const name = value.slice(1);
+    if(!Object.hasOwn(refs, name)) throw kzError('invalid_input', `${value} does not name an earlier change's "as"`);
+    return refs[name];
+  }
+  if(Array.isArray(value)) return value.map(v => kzResolveRefs(v, refs));
+  if(isPlainRecord(value)) return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, kzResolveRefs(v, refs)]));
+  return value;
+}
+function kzPrimaryId(result){
+  for(const key of ['card_id','column_id','label_id','member_id','comment_id','attachment_id']){
+    if(result && typeof result[key] === 'string') return result[key];
+  }
+  return null;
+}
+// Staging-time check: every change names a batchable tool, its input is valid once
+// references stand in as ids, and every id it names exists or comes from an earlier "as".
+function kzCheckBatch(input, b){
+  const defined = new Set();
+  input.operations.forEach((op, index) => {
+    const tool = KZ_TOOL_MAP.get(op.tool);
+    const where = `Change ${index + 1} (${op.tool})`;
+    if(!tool?.batch) throw kzError('invalid_input', `${where}: ${op.tool} cannot run inside apply_changes`);
+    const placeholders = Object.fromEntries([...defined].map(name => [name, 'ref_' + name]));
+    let probe;
+    try{ probe = kzResolveRefs({ ...op.input, board_id: b.id }, placeholders); }
+    catch(e){ throw kzError('invalid_input', `${where}: ${e.message}`); }
+    try{ kzValidateInput(tool, probe); }
+    catch(e){ throw kzError('invalid_input', `${where}: ${e.message}`); }
+    try{ kzCheckRefs({ ...op.input, board_id: b.id }, b); }
+    catch(e){ throw kzError(e.code || 'not_found', `${where}: ${e.message}`); }
+    if(op.as){
+      if(defined.has(op.as)) throw kzError('invalid_input', `${where}: "as" name ${op.as} is used twice`);
+      defined.add(op.as);
+    }
+  });
+}
+async function cmdApplyChanges(input, ctx){
+  const b = kzBoardFor(input);
+  const before = stableJson(b);
+  const refs = {};
+  const results = [];
+  _kzBatchDepth++;
+  let index = 0;
+  try{
+    for(const op of input.operations){
+      const tool = KZ_TOOL_MAP.get(op.tool);
+      if(!tool?.batch) throw kzError('invalid_input', `${op.tool} cannot run inside apply_changes`);
+      const opInput = kzValidateInput(tool, kzResolveRefs({ ...op.input, board_id: b.id }, refs));
+      const result = await tool.run(opInput, ctx);
+      results.push({ tool: op.tool, result });
+      if(op.as) refs[op.as] = kzPrimaryId(result);
+      index++;
+    }
+  }catch(e){
+    S.boards[b.id] = restoreBoardState(S.boards[b.id], JSON.parse(before));
+    renderAll();
+    const op = input.operations[index];
+    throw kzError(e.code || 'batch_failed', `Change ${index + 1} (${op?.tool}) failed: ${e.message}. Nothing was applied.`);
+  }finally{
+    _kzBatchDepth--;
+  }
+  pushHistory();
+  renderAll();
+  return { board_id: b.id, results, refs };
+}
+
+/* ============================================================
+   Tool manifest — one declaration per command, read by every door
+   kind: read        answers at once, changes nothing
+         session     changes only what this tab shows (board, view, filters)
+         write       a change to your data; an agent's call waits for approval
+         destructive removes or replaces data; waits for approval, danger styling
+         person      a non-delegable act: listed for agents, never callable by them
+   scope:'board' adds an optional board_id (default: the open board).
+   batch:true lets the tool run inside apply_changes.
+   ============================================================ */
+
+const KZ_ID = { type:'string', pattern:'^[A-Za-z0-9_-]{1,80}$' };
+const KZ_ID_OR_EMPTY = { type:'string', pattern:'^[A-Za-z0-9_-]{0,80}$' };
+const KZ_IDS = { type:'array', items: KZ_ID, maxItems: 100 };
+const KZ_NAME = { type:'string', minLength:1, maxLength:200 };
+const KZ_HEX = { type:'string', pattern:'^#[0-9a-fA-F]{6}$' };
+const KZ_DATE = { type:'string', pattern:'^\\d{4}-\\d{2}-\\d{2}$' };
+const KZ_POSITION = { type:'integer', minimum:0, maximum:100000, description:'0-based position; omit to append' };
+const KZ_PRIORITY = { type:'string', enum:['none','low','medium','high','urgent'] };
+const KZ_SNAPSHOT_FILE = { type:'string', pattern:'^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$', description:'filename from list_snapshots' };
+const KZ_PROPOSAL_ID = { type:'string', pattern:'^prop_[A-Za-z0-9]{1,40}$' };
+const KZ_BOARD_DATA = { type:['object','string'], description:'a KanZen export: one board object, {boards:{...}}, or the same as a JSON string' };
+
+const kzQ = text => `"${String(text ?? '').slice(0, 60)}"`;
+function kzNameIn(list, id, noun){
+  if(kzIsRef(id)) return `the new ${noun} ${id}`;
+  const item = (list || []).find(x => x.id === id);
+  return item ? kzQ(item.name) : `${noun} ${id}`;
+}
+function kzCardName(b, id){
+  if(kzIsRef(id)) return `the new card ${id}`;
+  return b && Object.hasOwn(b.cards, id) ? kzQ(b.cards[id].title) : `card ${id}`;
+}
+const kzCol = (b, id) => kzNameIn(b?.columns, id, 'column');
+function kzFieldList(input, fields){
+  return fields.filter(([key]) => key in input).map(([key, label, show]) => show ? `${label} → ${show(input[key])}` : label);
+}
+
+const KZ_TOOLS = [
+  /* ---------- read ---------- */
+  { name:'describe_tools', title:'Describe KanZen tools', kind:'read', run: cmdDescribeTools,
+    description:'Every KanZen tool with its kind, input schema and approval rule, plus the person-only acts no agent can perform. Start here.',
+    input:{} },
+  { name:'get_app_state', title:'Get app state', kind:'read', untrusted:true, run: cmdGetAppState,
+    description:'Where boards are stored, the open board, the current view and filters, theme, auto-snapshot settings, and how many agent proposals wait for approval.',
+    input:{} },
+  { name:'list_boards', title:'List boards', kind:'read', untrusted:true, run: cmdListBoards,
+    description:'All boards in the open library, with ids, names and counts. The open board is current_board_id.',
+    input:{} },
+  { name:'get_board', title:'Get board', kind:'read', scope:'board', untrusted:true, run: cmdGetBoard,
+    description:'A board in full: columns in order (with card_ids), labels, members, and every card summarised. Use the ids here in other tools.',
+    input:{ include_descriptions:{ type:'boolean', description:'include each card description' } } },
+  { name:'get_card', title:'Get card', kind:'read', scope:'board', untrusted:true, run: cmdGetCard,
+    description:'One card with description, checklist items, comments, attachment names and sizes, and who last changed it.',
+    input:{ card_id: KZ_ID }, required:['card_id'] },
+  { name:'search_cards', title:'Search cards', kind:'read', scope:'board', untrusted:true, run: cmdSearchCards,
+    description:'Cards matching text (title or description), label, member, priority, due bucket or column. Every filter is optional.',
+    input:{
+      query:{ type:'string', maxLength:200 }, label_id: KZ_ID, member_id: KZ_ID, column_id: KZ_ID, priority: KZ_PRIORITY,
+      due:{ type:'string', enum:['overdue','today','week','none'] },
+      include_descriptions:{ type:'boolean' }, limit:{ type:'integer', minimum:1, maximum:500 },
+    } },
+  { name:'get_activity', title:'Get activity', kind:'read', scope:'board', untrusted:true, run: cmdGetActivity,
+    description:'The board history, newest first. Each entry says whether a person or an agent made it, and through which door.',
+    input:{
+      limit:{ type:'integer', minimum:1, maximum:500 }, user:{ type:'string', maxLength:200 }, action:{ type:'string', maxLength:60 },
+      card_id: KZ_ID, actor:{ type:'string', enum:['person','agent'] },
+    } },
+  { name:'list_snapshots', title:'List snapshots', kind:'read', scope:'board', untrusted:true, run: cmdListSnapshots,
+    description:'Saved snapshots of a board, newest first.',
+    input:{} },
+  { name:'compare_snapshots', title:'Compare snapshots', kind:'read', untrusted:true, run: cmdCompareSnapshots,
+    description:'Card-level differences between two snapshots: added, removed and modified cards. The older snapshot is the base.',
+    input:{ a: KZ_SNAPSHOT_FILE, b: KZ_SNAPSHOT_FILE }, required:['a','b'] },
+  { name:'export_board', title:'Export board', kind:'read', scope:'board', untrusted:true, run: cmdExportBoard,
+    description:'A board as KanZen JSON, CSV or Markdown. Returns the file name and its text; nothing is downloaded.',
+    input:{ format:{ type:'string', enum:['json','csv','markdown'] } }, required:['format'] },
+  { name:'export_all_boards', title:'Export all boards', kind:'read', untrusted:true, run: cmdExportAllBoards,
+    description:'Every board in the library as one KanZen JSON export. Attachments are included, so this can be large.',
+    input:{} },
+  { name:'create_share_link', title:'Create share link', kind:'read', scope:'board', run: cmdCreateShareLink,
+    description:'A URL that carries a board (or a snapshot) in its #fragment, optionally encrypted with a passphrase you choose. Nothing is uploaded. Boards over 64,000 characters return url:null.',
+    input:{ stripped:{ type:'boolean', description:'leave out descriptions, checklists, attachments and comments' },
+      passphrase:{ type:'string', minLength:1, maxLength:200 }, snapshot: KZ_SNAPSHOT_FILE } },
+  { name:'suggest_subtasks', title:'Suggest subtasks', kind:'read', run: cmdSuggestSubtasks,
+    description:'Short subtasks for a task, from the on-device model KanZen has inside NakliOS. Returns items only; add them with add_checklist_items.',
+    input:{ title:{ type:'string', minLength:1, maxLength:500 }, description:{ type:'string', maxLength:5000 } }, required:['title'] },
+  { name:'test_sync_connection', title:'Test sync connection', kind:'read', run: cmdTestSyncConnection,
+    description:'Checks the cloud-sync Worker the person configured. Never returns the token or passphrase.',
+    input:{} },
+  { name:'list_proposals', title:'List proposals', kind:'read', run: cmdListProposals,
+    description:'Agent proposals in this tab, newest first, with their status: pending, applied, rejected, withdrawn or failed.',
+    input:{ status:{ type:'string', enum:['pending','applied','rejected','withdrawn','failed'] }, limit:{ type:'integer', minimum:1, maximum:500 } } },
+  { name:'get_proposal', title:'Get proposal', kind:'read', run: cmdGetProposal,
+    description:'One proposal: its status and, once applied, its result (for example the new card_id).',
+    input:{ proposal_id: KZ_PROPOSAL_ID }, required:['proposal_id'] },
+
+  /* ---------- session ---------- */
+  { name:'switch_board', title:'Switch board', kind:'session', run: cmdSwitchBoard,
+    description:'Open another board in this tab. Unsaved edits on the board being left are saved first.',
+    input:{ board_id: KZ_ID }, required:['board_id'] },
+  { name:'set_view', title:'Set view', kind:'session', run: cmdSetView,
+    description:'Show the open board as board, list or calendar; sort the list; or move the calendar to a month.',
+    input:{ mode:{ type:'string', enum:['board','list','calendar'] },
+      list_sort:{ type:'object', properties:{ field:{ type:'string', enum:['title','column','priority','due_date','updated'] }, direction:{ type:'string', enum:['asc','desc'] } }, required:['field'], additionalProperties:false },
+      calendar_month:{ type:'string', pattern:'^\\d{4}-\\d{2}$', description:'YYYY-MM' } } },
+  { name:'set_filter', title:'Set filter', kind:'session', run: cmdSetFilter,
+    description:'Dim the cards that do not match. Set only the fields to change; an empty string clears a field.',
+    input:{ search:{ type:'string', maxLength:200 }, label_id: KZ_ID_OR_EMPTY, member_id: KZ_ID_OR_EMPTY,
+      priority:{ type:'string', enum:['','none','low','medium','high','urgent'] },
+      due:{ type:'string', enum:['','overdue','today','week','none'] } } },
+  { name:'clear_filters', title:'Clear filters', kind:'session', run: cmdClearFilters,
+    description:'Clear search and every filter.',
+    input:{} },
+  { name:'withdraw_proposal', title:'Withdraw proposal', kind:'session', run: cmdWithdrawProposal,
+    description:'Take back a pending proposal so the person no longer sees it.',
+    input:{ proposal_id: KZ_PROPOSAL_ID }, required:['proposal_id'] },
+
+  /* ---------- write ---------- */
+  { name:'create_board', title:'Create board', kind:'write', run: cmdCreateBoard,
+    description:'A new board with To Do, In Progress and Done columns and three starter labels. It opens when applied.',
+    input:{ name: KZ_NAME }, required:['name'],
+    summary: i => `Create board ${kzQ(i.name)}` },
+  { name:'rename_board', title:'Rename board', kind:'write', scope:'board', batch:true, run: cmdRenameBoard,
+    description:'Rename a board. Its file name on disk stays the same.',
+    input:{ name: KZ_NAME }, required:['name'],
+    summary: (i, b) => `Rename board ${kzQ(b?.name)} to ${kzQ(i.name)}` },
+  { name:'set_board_background', title:'Set board background', kind:'write', scope:'board', batch:true, run: cmdSetBoardBackground,
+    description:`Board background: a gradient by name (${BG_GRADIENTS.map(g => g.name).join(', ')}) or a solid #rrggbb colour.`,
+    input:{ kind:{ type:'string', enum:['gradient','solid'] }, value:{ type:'string', minLength:1, maxLength:120 } }, required:['kind','value'],
+    summary: (i, b) => `Set the background of ${kzQ(b?.name)} to ${i.kind} ${i.value}` },
+  { name:'create_column', title:'Create column', kind:'write', scope:'board', batch:true, run: cmdCreateColumn,
+    description:'Add a column (list). Returns column_id.',
+    input:{ name: KZ_NAME, position: KZ_POSITION }, required:['name'],
+    summary: (i, b) => `Add column ${kzQ(i.name)} to ${kzQ(b?.name)}` },
+  { name:'update_column', title:'Update column', kind:'write', scope:'board', batch:true, run: cmdUpdateColumn,
+    description:'Rename a column, set its soft WIP limit (0 = none), or collapse it.',
+    input:{ column_id: KZ_ID, name: KZ_NAME, wip_limit:{ type:'integer', minimum:0, maximum:999 }, collapsed:{ type:'boolean' } }, required:['column_id'],
+    summary: (i, b) => `Update column ${kzCol(b, i.column_id)}: ` + kzFieldList(i, [['name','name',kzQ],['wip_limit','WIP limit',String],['collapsed','collapsed',String]]).join(', ') },
+  { name:'move_column', title:'Move column', kind:'write', scope:'board', batch:true, run: cmdMoveColumn,
+    description:'Reorder a column to a 0-based position.',
+    input:{ column_id: KZ_ID, position: KZ_POSITION }, required:['column_id','position'],
+    summary: (i, b) => `Move column ${kzCol(b, i.column_id)} to position ${i.position + 1}` },
+  { name:'create_card', title:'Create card', kind:'write', scope:'board', batch:true, run: cmdCreateCard,
+    description:'Add a card to a column, with optional description (markdown), priority, due date, labels and members. Returns card_id.',
+    input:{ column_id: KZ_ID, title:{ type:'string', minLength:1, maxLength:1000 }, description:{ type:'string', maxLength:200000 },
+      priority: KZ_PRIORITY, due_date: KZ_DATE, label_ids: KZ_IDS, member_ids: KZ_IDS, position: KZ_POSITION },
+    required:['column_id','title'],
+    summary: (i, b) => `Create card ${kzQ(i.title)} in ${kzCol(b, i.column_id)}` },
+  { name:'update_card', title:'Update card', kind:'write', scope:'board', batch:true, run: cmdUpdateCard,
+    description:'Change a card. Give only the fields to change. due_date null clears it; label_ids, member_ids and checklist replace the whole list (checklist items keep their id when you pass it).',
+    input:{ card_id: KZ_ID, title:{ type:'string', minLength:1, maxLength:1000 }, description:{ type:'string', maxLength:200000 },
+      priority: KZ_PRIORITY, due_date:{ type:['string','null'], pattern:'^\\d{4}-\\d{2}-\\d{2}$' }, label_ids: KZ_IDS, member_ids: KZ_IDS,
+      checklist:{ type:'array', maxItems:500, items:{ type:'object', properties:{ id: KZ_ID, text:{ type:'string', maxLength:1000 }, done:{ type:'boolean' } }, required:['text'], additionalProperties:false } } },
+    required:['card_id'],
+    summary: (i, b) => `Edit card ${kzCardName(b, i.card_id)}: ` + kzFieldList(i, [
+      ['title','title',kzQ],['description','description'],['priority','priority',String],['due_date','due date',v => v || 'none'],
+      ['label_ids','labels',v => v.map(id => kzNameIn(b?.labels, id, 'label')).join(', ') || 'none'],
+      ['member_ids','members',v => v.map(id => kzNameIn(b?.members, id, 'member')).join(', ') || 'none'],
+      ['checklist','checklist',v => `${v.length} item${v.length===1?'':'s'}`]]).join(', ') },
+  { name:'move_card', title:'Move card', kind:'write', scope:'board', batch:true, run: cmdMoveCard,
+    description:'Move a card to a column, at a 0-based position (default: the end).',
+    input:{ card_id: KZ_ID, column_id: KZ_ID, position: KZ_POSITION }, required:['card_id','column_id'],
+    summary: (i, b) => `Move card ${kzCardName(b, i.card_id)} to ${kzCol(b, i.column_id)}` },
+  { name:'add_checklist_items', title:'Add checklist items', kind:'write', scope:'board', batch:true, run: cmdAddChecklistItems,
+    description:'Append unchecked items to a card checklist. Returns their item_ids.',
+    input:{ card_id: KZ_ID, items:{ type:'array', minItems:1, maxItems:100, items:{ type:'string', minLength:1, maxLength:1000 } } }, required:['card_id','items'],
+    summary: (i, b) => `Add ${i.items.length} checklist item${i.items.length===1?'':'s'} to ${kzCardName(b, i.card_id)}: ${i.items.slice(0,3).map(kzQ).join(', ')}${i.items.length>3?'…':''}` },
+  { name:'update_checklist_item', title:'Update checklist item', kind:'write', scope:'board', batch:true, run: cmdUpdateChecklistItem,
+    description:'Tick, untick or reword one checklist item.',
+    input:{ card_id: KZ_ID, item_id: KZ_ID, text:{ type:'string', minLength:1, maxLength:1000 }, done:{ type:'boolean' } }, required:['card_id','item_id'],
+    summary: (i, b) => {
+      const item = b && Object.hasOwn(b.cards, i.card_id) ? b.cards[i.card_id].checklist.find(x => x.id === i.item_id) : null;
+      return `${'done' in i ? (i.done ? 'Tick' : 'Untick') : 'Edit'} checklist item ${kzQ(item?.text ?? i.item_id)} on ${kzCardName(b, i.card_id)}${'text' in i ? ' → ' + kzQ(i.text) : ''}`;
+    } },
+  { name:'add_comment', title:'Add comment', kind:'write', scope:'board', batch:true, run: cmdAddComment,
+    description:'Comment on a card (markdown). author_member_id names a board member; omit it for an anonymous comment.',
+    input:{ card_id: KZ_ID, text:{ type:'string', minLength:1, maxLength:20000 }, author_member_id: KZ_ID }, required:['card_id','text'],
+    summary: (i, b) => `Comment on ${kzCardName(b, i.card_id)}: ${kzQ(i.text)}` },
+  { name:'add_attachment', title:'Add attachment', kind:'write', scope:'board', batch:true, run: cmdAddAttachment,
+    description:'Embed a file in a card, as base64. HTML, SVG and XML are refused because a browser could run them. 25 MB limit.',
+    input:{ card_id: KZ_ID, name:{ type:'string', minLength:1, maxLength:200 },
+      mime_type:{ type:'string', pattern:'^[A-Za-z0-9!#$&^_.+-]{1,64}/[A-Za-z0-9!#$&^_.+-]{1,100}$' },
+      data_base64:{ type:'string', maxLength:36000000 } },
+    required:['card_id','name','mime_type','data_base64'],
+    summary: (i, b) => `Attach ${kzQ(i.name)} (${formatBytes(Math.floor(i.data_base64.length * 3 / 4))}) to ${kzCardName(b, i.card_id)}` },
+  { name:'create_label', title:'Create label', kind:'write', scope:'board', batch:true, run: cmdCreateLabel,
+    description:'Add a label to a board. Returns label_id.',
+    input:{ name: KZ_NAME, color: KZ_HEX }, required:['name'],
+    summary: (i, b) => `Add label ${kzQ(i.name)} to ${kzQ(b?.name)}` },
+  { name:'update_label', title:'Update label', kind:'write', scope:'board', batch:true, run: cmdUpdateLabel,
+    description:'Rename or recolour a label.',
+    input:{ label_id: KZ_ID, name: KZ_NAME, color: KZ_HEX }, required:['label_id'],
+    summary: (i, b) => `Update label ${kzNameIn(b?.labels, i.label_id, 'label')}: ` + kzFieldList(i, [['name','name',kzQ],['color','colour',String]]).join(', ') },
+  { name:'create_member', title:'Create member', kind:'write', scope:'board', batch:true, run: cmdCreateMember,
+    description:'Add a member to a board. Returns member_id.',
+    input:{ name: KZ_NAME, color: KZ_HEX }, required:['name'],
+    summary: (i, b) => `Add member ${kzQ(i.name)} to ${kzQ(b?.name)}` },
+  { name:'update_member', title:'Update member', kind:'write', scope:'board', batch:true, run: cmdUpdateMember,
+    description:'Rename or recolour a member.',
+    input:{ member_id: KZ_ID, name: KZ_NAME, color: KZ_HEX }, required:['member_id'],
+    summary: (i, b) => `Update member ${kzNameIn(b?.members, i.member_id, 'member')}: ` + kzFieldList(i, [['name','name',kzQ],['color','colour',String]]).join(', ') },
+  { name:'apply_changes', title:'Apply changes', kind:'write', scope:'board', run: cmdApplyChanges,
+    description:'Several board edits as one proposal and one undo step. Each change is {tool, input, as?}; tools must be batchable (see describe_tools). Name a created thing with "as" and use "$name" in a later change\'s id field. If any change fails, none is applied.',
+    input:{ operations:{ type:'array', minItems:1, maxItems:100, items:{ type:'object',
+      properties:{ tool:{ type:'string', maxLength:60 }, input:{ type:'object' }, as:{ type:'string', pattern:'^[A-Za-z][A-Za-z0-9_]{0,30}$' } },
+      required:['tool','input'], additionalProperties:false } } },
+    required:['operations'],
+    check: (i, b) => kzCheckBatch(i, b),
+    summary: (i, b) => `${i.operations.length} change${i.operations.length===1?'':'s'} to ${kzQ(b?.name)}`,
+    details: (i, b) => i.operations.map(op => { const t = KZ_TOOL_MAP.get(op.tool); return t?.summary ? t.summary(op.input, b) : op.tool; }) },
+  { name:'undo', title:'Undo', kind:'write', scope:'board', run: cmdUndo,
+    description:'Step the board back one change (50 steps per board, this tab only).',
+    input:{},
+    summary: (i, b) => `Undo the last change on ${kzQ(b?.name)}` },
+  { name:'redo', title:'Redo', kind:'write', scope:'board', run: cmdRedo,
+    description:'Re-apply the change undo stepped back from.',
+    input:{},
+    summary: (i, b) => `Redo the last undone change on ${kzQ(b?.name)}` },
+  { name:'take_snapshot', title:'Take snapshot', kind:'write', scope:'board', run: cmdTakeSnapshot,
+    description:'Save a named copy of a board that restore_snapshot can bring back.',
+    input:{ name:{ type:'string', maxLength:200 } },
+    summary: (i, b) => `Take a snapshot of ${kzQ(b?.name)}${i.name ? ' named ' + kzQ(i.name) : ''}` },
+  { name:'set_auto_snapshot', title:'Set auto-snapshot', kind:'write', run: cmdSetAutoSnapshot,
+    description:'Turn automatic snapshots on or off: before destructive changes, and once a day.',
+    input:{ before_destructive:{ type:'boolean' }, daily:{ type:'boolean' } },
+    summary: i => 'Auto-snapshot: ' + kzFieldList(i, [['before_destructive','before destructive changes',v => v ? 'on' : 'off'],['daily','daily',v => v ? 'on' : 'off']]).join(', ') },
+  { name:'import_boards', title:'Import boards', kind:'write', run: cmdImportBoards,
+    description:'Add boards from a KanZen JSON export. Existing boards are kept; clashing ids get new ones.',
+    input:{ data: KZ_BOARD_DATA }, required:['data'],
+    check: i => { const prepared = prepareBoardImport(i.data, Object.keys(S.boards)); return `${prepared.length} board${prepared.length===1?'':'s'}: ${prepared.map(b => kzQ(b.name)).join(', ')}`; },
+    summary: () => 'Import boards from a KanZen export' },
+  { name:'import_trello', title:'Import Trello board', kind:'write', run: cmdImportTrello,
+    description:'Create a board from a Trello JSON export: lists, cards, labels, members and checklists. Attachments are skipped.',
+    input:{ data:{ type:['object','string'], description:'the Trello export, or it as a JSON string' } }, required:['data'],
+    check: i => { const r = kzParseTrello(i.data); return `${kzQ(r.board.name)}: ${r.cardCount} cards in ${r.listCount} lists`; },
+    summary: () => 'Import a Trello board' },
+  { name:'import_share_link', title:'Import share link', kind:'write', run: cmdImportShareLink,
+    description:'Create a board from a KanZen share URL (#kz:, #kze: or #e=). Encrypted links need their passphrase.',
+    input:{ url:{ type:'string', minLength:2, maxLength:200000 }, passphrase:{ type:'string', maxLength:200 } }, required:['url'],
+    check: async i => { const json = await decodeSharedBoard(kzShareFromUrl(i.url), i.passphrase || ''); return `Board ${kzQ(json?.name || 'Shared board')}`; },
+    summary: () => 'Import a board from a share link' },
+  { name:'set_team_mode', title:'Set team mode', kind:'write', scope:'board', run: cmdSetTeamMode,
+    description:'Split a board into one file per card for git-friendly collaboration, or join it back into one file. Needs a Folder or Crate. Lossless both ways.',
+    input:{ on:{ type:'boolean' } }, required:['on'],
+    summary: (i, b) => `Turn team mode ${i.on ? 'on' : 'off'} for ${kzQ(b?.name)}` },
+  { name:'set_theme', title:'Set theme', kind:'write', run: cmdSetTheme,
+    description:'Light or dark theme.',
+    input:{ theme:{ type:'string', enum:['light','dark'] } }, required:['theme'],
+    summary: i => `Switch to the ${i.theme} theme` },
+  { name:'set_palette', title:'Set palette', kind:'write', run: cmdSetPalette,
+    description:`Colour palette: ${PALETTES.map(p => p.id).join(', ')}.`,
+    input:{ palette:{ type:'string', enum: PALETTES.map(p => p.id) } }, required:['palette'],
+    summary: i => `Switch to the ${PALETTES.find(p => p.id === i.palette)?.name || i.palette} palette` },
+
+  /* ---------- destructive ---------- */
+  { name:'delete_board', title:'Delete board', kind:'destructive', run: cmdDeleteBoard,
+    description:'Delete a board and its file, and its cloud copy when synced. Cannot be undone.',
+    input:{ board_id: KZ_ID }, required:['board_id'],
+    check: i => { kzBoardFor({ board_id: i.board_id }, false); },
+    summary: i => `Delete board ${kzQ(S.boards[i.board_id]?.name || i.board_id)} — cannot be undone` },
+  { name:'delete_column', title:'Delete column', kind:'destructive', scope:'board', safetySnapshot:true, run: cmdDeleteColumn,
+    description:'Delete a column and every card in it.',
+    input:{ column_id: KZ_ID }, required:['column_id'],
+    summary: (i, b) => { const c = b?.columns.find(x => x.id === i.column_id); return `Delete column ${kzCol(b, i.column_id)} and its ${c?.cardIds.length ?? 0} card${c?.cardIds.length===1?'':'s'}`; } },
+  { name:'delete_card', title:'Delete card', kind:'destructive', scope:'board', safetySnapshot:true, run: cmdDeleteCard,
+    description:'Delete a card.',
+    input:{ card_id: KZ_ID }, required:['card_id'],
+    summary: (i, b) => `Delete card ${kzCardName(b, i.card_id)}` },
+  { name:'remove_checklist_item', title:'Remove checklist item', kind:'destructive', scope:'board', safetySnapshot:true, run: cmdRemoveChecklistItem,
+    description:'Remove one checklist item from a card.',
+    input:{ card_id: KZ_ID, item_id: KZ_ID }, required:['card_id','item_id'],
+    summary: (i, b) => { const item = b && Object.hasOwn(b.cards, i.card_id) ? b.cards[i.card_id].checklist.find(x => x.id === i.item_id) : null; return `Remove checklist item ${kzQ(item?.text ?? i.item_id)} from ${kzCardName(b, i.card_id)}`; } },
+  { name:'delete_comment', title:'Delete comment', kind:'destructive', scope:'board', safetySnapshot:true, run: cmdDeleteComment,
+    description:'Delete one comment from a card.',
+    input:{ card_id: KZ_ID, comment_id: KZ_ID }, required:['card_id','comment_id'],
+    summary: (i, b) => `Delete a comment on ${kzCardName(b, i.card_id)}` },
+  { name:'remove_attachment', title:'Remove attachment', kind:'destructive', scope:'board', safetySnapshot:true, run: cmdRemoveAttachment,
+    description:'Remove an embedded file from a card.',
+    input:{ card_id: KZ_ID, attachment_id: KZ_ID }, required:['card_id','attachment_id'],
+    summary: (i, b) => { const a = b && Object.hasOwn(b.cards, i.card_id) ? b.cards[i.card_id].attachments.find(x => x.id === i.attachment_id) : null; return `Remove attachment ${kzQ(a?.name ?? i.attachment_id)} from ${kzCardName(b, i.card_id)}`; } },
+  { name:'delete_label', title:'Delete label', kind:'destructive', scope:'board', safetySnapshot:true, run: cmdDeleteLabel,
+    description:'Delete a label and take it off every card.',
+    input:{ label_id: KZ_ID }, required:['label_id'],
+    summary: (i, b) => `Delete label ${kzNameIn(b?.labels, i.label_id, 'label')}` },
+  { name:'delete_member', title:'Delete member', kind:'destructive', scope:'board', safetySnapshot:true, run: cmdDeleteMember,
+    description:'Remove a member from a board and from every card.',
+    input:{ member_id: KZ_ID }, required:['member_id'],
+    summary: (i, b) => `Remove member ${kzNameIn(b?.members, i.member_id, 'member')}` },
+  { name:'restore_snapshot', title:'Restore snapshot', kind:'destructive', scope:'board', safetySnapshot:true, run: cmdRestoreSnapshot,
+    description:'Replace a board with a snapshot of it. A safety snapshot is taken first.',
+    input:{ filename: KZ_SNAPSHOT_FILE }, required:['filename'],
+    check: async i => {
+      const row = await kzLoadSnapshot(i.filename);
+      const owner = row.data?._snapshot?.boardId;
+      if(owner && Object.hasOwn(S.boards, owner)) i.board_id = owner;
+      return row.data?._snapshot?.name ? `Snapshot ${kzQ(row.data._snapshot.name)}` : '';
+    },
+    summary: (i, b) => `Restore ${kzQ(b?.name)} from snapshot ${i.filename}` },
+  { name:'delete_snapshot', title:'Delete snapshot', kind:'destructive', run: cmdDeleteSnapshot,
+    description:'Delete a saved snapshot.',
+    input:{ filename: KZ_SNAPSHOT_FILE }, required:['filename'],
+    check: async i => { await kzLoadSnapshot(i.filename); },
+    summary: i => `Delete snapshot ${i.filename}` },
+  { name:'replace_all_boards', title:'Replace all boards', kind:'destructive', run: cmdReplaceAllBoards,
+    description:'Delete every board in the library and import a KanZen export in their place. Cannot be undone.',
+    input:{ data: KZ_BOARD_DATA }, required:['data'],
+    check: i => { const prepared = prepareBoardImport(i.data, []); return `${prepared.length} board${prepared.length===1?'':'s'} replace ${S.boardOrder.length}`; },
+    summary: () => `Delete all ${S.boardOrder.length} boards and import a KanZen export — cannot be undone` },
+
+  /* ---------- person-only: declared, never callable by an agent ---------- */
+  { name:'choose_storage', title:'Choose storage', kind:'person', ui:['handleStorageButton','connectFolder','switchNakliOSBackend','switchToBrowserStorage'],
+    description:'Pick where boards live: this browser, a folder on disk, or a NakliOS Folder or Crate.',
+    reason:'It decides where your data lives, and the folder picker needs your own click.' },
+  { name:'configure_sync', title:'Configure cloud sync', kind:'person', ui:['saveSyncConfig'],
+    description:'Set the cloud-sync Worker URL, token and passphrase.',
+    reason:'These are credentials.' },
+  { name:'set_board_sync', title:'Sync a board to the cloud', kind:'person', ui:['onBoardSyncToggle'],
+    description:'Send a board to your sync Worker.',
+    reason:'It sends a board off this device, which needs your consent.' },
+  { name:'set_your_name', title:'Set your name', kind:'person', ui:['savePrefName','confirmWelcome'],
+    description:'The name stamped on every change you make.',
+    reason:'It is your signature on the board history.' },
+  { name:'install_app', title:'Install KanZen', kind:'person', ui:['triggerInstall'],
+    description:'Install KanZen as an app.',
+    reason:'The browser shows its install prompt only after your own click.' },
+  { name:'set_agent_channel', title:'Open the cross-tab channel', kind:'person', ui:['setAgentChannel'],
+    description:'Let other KanZen tabs and same-origin scripts call these tools.',
+    reason:'It opens a door to callers you did not invite into this tab.' },
+  { name:'approve_proposal', title:'Approve a proposal', kind:'person', ui:['approveProposal','approveAllProposals'],
+    description:'Apply an agent proposal.',
+    reason:'Approval is the point of staging; an agent cannot approve its own change.' },
+  { name:'reject_proposal', title:'Reject a proposal', kind:'person', ui:['rejectProposal','rejectAllProposals'],
+    description:'Discard an agent proposal. (Agents can withdraw their own with withdraw_proposal.)',
+    reason:'The decision on a proposal is yours.' },
+];
+const KZ_BOARD_ID_PARAM = { ...KZ_ID, description:'board to act on; default: the open board' };
+for(const tool of KZ_TOOLS){
+  tool.inputSchema = {
+    type:'object',
+    properties: { ...(tool.scope === 'board' ? { board_id: KZ_BOARD_ID_PARAM } : {}), ...(tool.input || {}) },
+    required: tool.required || [],
+    additionalProperties: false,
+  };
+}
+const KZ_TOOL_MAP = new Map(KZ_TOOLS.map(tool => [tool.name, tool]));
+
+/* ============================================================
+   Agent face — the doors agents use to reach the manifest
+   ┌ document.modelContext / navigator.modelContext → registerTool per entry (WebMCP)
+   ├ window.kanzen.tools[name](input)                → the house door, same entries
+   └ BroadcastChannel('kanzen-agent')                → other tabs; off until the person opens it
+   Read tools answer at once and session tools change only what this tab shows. Write and
+   destructive calls become proposals that apply only when the person approves them here.
+   Every agent call is logged with its door; every applied change lands in the board history
+   with actor:'agent'. Staging governs tool calls only: a script with full page access can do
+   whatever the page can.
+   ============================================================ */
+
+const KZ_AGENT_FACE_VERSION = 1;
+const KZ_AGENT = {
+  tab: 'tab_' + uid(),
+  ready: false,
+  calls: [],                 // this tab's agent calls, newest first
+  proposals: new Map(),      // proposal_id → proposal, oldest first
+  listeners: { change: new Set(), proposal: new Set(), call: new Set() },
+  channel: null,
+  modelContextAbort: null,
+  modelContextTools: [],
+  applying: Promise.resolve(),
+};
+const KZ_MAX_PENDING = 200;
+const KZ_MAX_CALLS = 200;
+const KZ_CHANNEL_NAME = 'kanzen-agent';
+const KZ_CHANNEL_KEY = 'kanzen.agentChannel';
+
+function kzPlain(value){ return value === undefined ? null : JSON.parse(JSON.stringify(value)); }
+function kzStaged(tool){ return tool.kind === 'write' || tool.kind === 'destructive'; }
+function kzPending(){ return [...KZ_AGENT.proposals.values()].filter(p => p.status === 'pending'); }
+function kzManifest(){
+  return {
+    app: 'KanZen',
+    agent_face_version: KZ_AGENT_FACE_VERSION,
+    doors: {
+      modelContext: KZ_AGENT.modelContextTools.length ? 'registered' : 'not available in this browser',
+      window: 'window.kanzen',
+      channel: KZ_AGENT.channel ? `BroadcastChannel("${KZ_CHANNEL_NAME}")` : 'closed; the person can open it in Preferences',
+    },
+    approval: 'read tools answer at once; session tools change only what this tab shows; write and destructive tools return {status:"pending_approval", proposal_id} and apply only after the person approves the proposal in KanZen. Poll get_proposal for the outcome.',
+    tools: KZ_TOOLS.filter(t => t.kind !== 'person').map(t => ({
+      name: t.name, title: t.title, kind: t.kind, staged: kzStaged(t), batchable: !!t.batch,
+      description: t.description, input_schema: t.inputSchema,
+    })),
+    person_only: KZ_TOOLS.filter(t => t.kind === 'person').map(t => ({
+      name: t.name, title: t.title, description: t.description, reason: t.reason,
+    })),
+  };
+}
+function kzToolDescription(tool){
+  let text = tool.description;
+  if(kzStaged(tool)) text += ' Waits for the person\'s approval: returns {status:"pending_approval", proposal_id}; call get_proposal for the outcome.';
+  if(tool.kind === 'destructive') text += ' Destructive.';
+  if(tool.batch) text += ' Batchable in apply_changes.';
+  return text;
+}
+
+/* ---------- dispatch ---------- */
+// The UI's entry point: runs the command at once as the person; errors become a toast.
+async function kzUi(name, input={}){
+  try{ return await kzDispatch(name, input, KZ_PERSON); }
+  catch(e){
+    if(!(e instanceof KzError)) console.error(e);
+    toast(e instanceof KzError ? e.message : 'Something went wrong: ' + (e?.message || e));
+    return null;
+  }
+}
+async function kzDispatch(name, input, ctx){
+  const tool = KZ_TOOL_MAP.get(name);
+  if(!tool || tool.kind === 'person') throw kzError('unknown_tool', `KanZen has no command named "${name}"`);
+  const result = await tool.run(kzValidateInput(tool, input ?? {}), ctx);
+  if(tool.kind !== 'read') kzEmit('change', { tool: name, actor: ctx.actor, door: ctx.door, board_id: S.currentBoardId });
+  return result ?? { ok: true };
+}
+// Every agent door lands here.
+async function kzAgentCall(name, input, door, caller){
+  const ctx = Object.freeze({ actor:'agent', door, caller: caller ? String(caller).slice(0, 80) : null });
+  const entry = { at: now(), tool: String(name).slice(0, 80), door, caller: ctx.caller, outcome: 'running', detail: '' };
+  KZ_AGENT.calls.unshift(entry);
+  if(KZ_AGENT.calls.length > KZ_MAX_CALLS) KZ_AGENT.calls.length = KZ_MAX_CALLS;
+  try{
+    const tool = KZ_TOOL_MAP.get(name);
+    if(!tool) throw kzError('unknown_tool', `KanZen has no tool named "${name}"; call describe_tools for the list`);
+    if(tool.kind === 'person') throw kzError('person_only', `${tool.title} is person-only: ${tool.reason}`);
+    if(!KZ_AGENT.ready) throw kzError('not_ready', 'KanZen is still loading');
+    let clean;
+    try{ clean = input == null ? {} : structuredClone(input); }
+    catch(_){ throw kzError('invalid_input', 'Input must be plain JSON data'); }
+    kzValidateInput(tool, clean);
+    if(!kzStaged(tool)){
+      const result = kzPlain(await tool.run(clean, ctx));
+      if(tool.kind === 'session') kzEmit('change', { tool: tool.name, actor:'agent', door, board_id: S.currentBoardId });
+      entry.outcome = 'ok';
+      return result;
+    }
+    const proposal = await kzStage(tool, clean, ctx);
+    entry.outcome = 'staged';
+    entry.detail = proposal.summary;
+    return {
+      status: 'pending_approval', proposal_id: proposal.id, summary: proposal.summary,
+      message: 'The person must approve this change in KanZen before it applies. Call get_proposal to see the outcome.',
+    };
+  }catch(e){
+    const error = e instanceof KzError ? e : kzError('internal', String(e?.message || e));
+    if(!(e instanceof KzError)) console.error(e);
+    entry.outcome = error.code === 'person_only' ? 'refused' : 'error';
+    entry.detail = error.message;
+    throw error;
+  }finally{
+    kzEmit('call', entry);
+    kzRenderAgentUi();
+  }
+}
+
+/* ---------- proposals ---------- */
+async function kzStage(tool, input, ctx){
+  if(kzPending().length >= KZ_MAX_PENDING) throw kzError('too_many_pending', `${KZ_MAX_PENDING} proposals already wait for the person; withdraw some or wait`);
+  const staged = { ...input };
+  if(tool.scope === 'board' && !staged.board_id){
+    if(!S.currentBoardId) throw kzError('not_found', 'No board is open');
+    staged.board_id = S.currentBoardId;
+  }
+  if(staged.board_id){
+    const b = kzBoardFor({ board_id: staged.board_id }, false);
+    kzCheckRefs(staged, b);
+  }
+  const note = tool.check ? await tool.check(staged, staged.board_id ? S.boards[staged.board_id] : null) : '';
+  const board = staged.board_id && Object.hasOwn(S.boards, staged.board_id) ? S.boards[staged.board_id] : null;
+  const p = {
+    id: 'prop_' + uid() + uid(), tool: tool.name, title: tool.title, kind: tool.kind, input: staged,
+    summary: tool.summary ? tool.summary(staged, board) : tool.title,
+    details: tool.details ? tool.details(staged, board) : [],
+    note: typeof note === 'string' ? note : '',
+    board_id: board?.id || null, board_name: board?.name || null,
+    door: ctx.door, caller: ctx.caller, created_at: now(), status: 'pending', decided_at: null, result: null, error: null,
+  };
+  KZ_AGENT.proposals.set(p.id, p);
+  kzPruneProposals();
+  kzEmit('proposal', kzProposalView(p));
+  toast(`Agent proposal waiting: ${p.summary.slice(0, 80)}`);
+  return p;
+}
+function kzPruneProposals(){
+  const decided = [...KZ_AGENT.proposals.values()].filter(p => p.status !== 'pending');
+  for(const p of decided.slice(0, Math.max(0, decided.length - 500))) KZ_AGENT.proposals.delete(p.id);
+}
+function kzProposalView(p){
+  return {
+    proposal_id: p.id, tool: p.tool, title: p.title, kind: p.kind, status: p.status,
+    summary: p.summary, details: p.details, note: p.note,
+    board_id: p.board_id, board_name: p.board_name, door: p.door, caller: p.caller,
+    created_at: p.created_at, decided_at: p.decided_at, result: p.result, error: p.error,
+  };
+}
+function kzDecide(p, status, fields={}){
+  Object.assign(p, fields, { status, decided_at: now() });
+  kzEmit('proposal', kzProposalView(p));
+  kzRenderAgentUi();
+}
+// Applies approved proposals one at a time, oldest first. A proposal applies to the board it
+// was staged against: KanZen opens that board first. Destructive changes take one safety
+// snapshot per board per approval.
+function kzApplyProposals(ids){
+  const run = KZ_AGENT.applying.then(async () => {
+    const snapshotted = new Set();
+    for(const id of ids){
+      const p = KZ_AGENT.proposals.get(id);
+      if(!p || p.status !== 'pending') continue;
+      const tool = KZ_TOOL_MAP.get(p.tool);
+      try{
+        if(tool.scope === 'board'){
+          if(!Object.hasOwn(S.boards, p.board_id)) throw kzError('not_found', 'The board this proposal changes no longer exists');
+          if(p.board_id !== S.currentBoardId){ await kzActivateBoard(p.board_id); renderAll(); }
+        }
+        let snapshotTaken = false;
+        if(tool.safetySnapshot){
+          if(!snapshotted.has(p.board_id)){
+            await takeSnapshotForBoard(currentBoard(), 'auto-destructive', 'before an agent change');
+            snapshotted.add(p.board_id);
+          }
+          snapshotTaken = true;
+        }
+        const ctx = Object.freeze({ actor:'agent', door: p.door, caller: p.caller, proposalId: p.id, snapshotTaken });
+        const result = await tool.run(p.input, ctx);
+        kzDecide(p, 'applied', { result: kzPlain(result ?? { ok: true }) });
+        kzEmit('change', { tool: p.tool, actor:'agent', door: p.door, board_id: S.currentBoardId, proposal_id: p.id });
+      }catch(e){
+        if(!(e instanceof KzError)) console.error(e);
+        kzDecide(p, 'failed', { error: { code: e.code || 'internal', message: e.message || String(e) } });
+        toast(`Agent change failed: ${e.message || e}`);
+      }
+    }
+  });
+  KZ_AGENT.applying = run.catch(() => {});
+  return run;
+}
+// Person-only acts: approving and rejecting proposals.
+async function approveProposal(id){
+  await kzApplyProposals([id]);
+  const p = KZ_AGENT.proposals.get(id);
+  if(p?.status === 'applied') toast(`Applied: ${p.summary.slice(0, 80)}`);
+}
+async function approveAllProposals(){
+  const ids = kzPending().map(p => p.id);
+  if(!ids.length) return;
+  await kzApplyProposals(ids);
+  const applied = ids.filter(id => KZ_AGENT.proposals.get(id)?.status === 'applied').length;
+  toast(`Applied ${applied} of ${ids.length} proposal${ids.length===1?'':'s'}`);
+}
+function rejectProposal(id){
+  const p = KZ_AGENT.proposals.get(id);
+  if(p?.status === 'pending') kzDecide(p, 'rejected');
+}
+function rejectAllProposals(){
+  for(const p of kzPending()) kzDecide(p, 'rejected');
+}
+
+/* ---------- events ---------- */
+function kzOn(event, fn){
+  const set = KZ_AGENT.listeners[event];
+  if(!set) throw kzError('invalid_input', `Unknown event "${event}"; use change, proposal or call`);
+  if(typeof fn !== 'function') throw kzError('invalid_input', 'on() needs a callback');
+  set.add(fn);
+  return () => set.delete(fn);
+}
+function kzEmit(event, data){
+  const plain = kzPlain(data);
+  for(const fn of KZ_AGENT.listeners[event] || []){
+    try{ fn(plain); }catch(e){ console.warn('kanzen listener failed', e); }
+  }
+  if(KZ_AGENT.channel){
+    try{ KZ_AGENT.channel.postMessage({ type:'kanzen:event', tab: KZ_AGENT.tab, event, data: plain }); }catch(_){}
+  }
+}
+
+/* ---------- doors ---------- */
+function kzModelContext(){
+  try{
+    const mc = (typeof document !== 'undefined' && document.modelContext) || (typeof navigator !== 'undefined' && navigator.modelContext) || null;
+    return mc && typeof mc.registerTool === 'function' ? mc : null;
+  }catch(_){ return null; }
+}
+function kzInstallDoors(){
+  KZ_AGENT.ready = true;
+  kzInstallWindowApi();
+  kzRegisterModelContext();
+  kzOpenChannel(kzChannelSetting());
+  kzRenderAgentUi();
+}
+function kzInstallWindowApi(){
+  if(window.kanzen) return;
+  const tools = {};
+  for(const tool of KZ_TOOLS){
+    if(tool.kind !== 'person') tools[tool.name] = (input={}, opts={}) => kzAgentCall(tool.name, input, 'window', opts?.caller);
+  }
+  const api = Object.freeze({
+    version: KZ_AGENT_FACE_VERSION,
+    tab: KZ_AGENT.tab,
+    manifest: () => kzPlain(kzManifest()),
+    tools: Object.freeze(tools),
+    call: (name, input={}, opts={}) => kzAgentCall(String(name), input, 'window', opts?.caller),
+    on: (event, fn) => kzOn(event, fn),
+  });
+  Object.defineProperty(window, 'kanzen', { value: api, enumerable: true, configurable: false, writable: false });
+}
+// WebMCP: the standard door. Tools registered here are the same entries as window.kanzen.tools.
+function kzRegisterModelContext(){
+  const mc = kzModelContext();
+  if(!mc) return;
+  KZ_AGENT.modelContextAbort?.abort();
+  const controller = new AbortController();
+  KZ_AGENT.modelContextAbort = controller;
+  KZ_AGENT.modelContextTools = [];
+  for(const tool of KZ_TOOLS){
+    if(tool.kind === 'person') continue;
+    const definition = {
+      name: tool.name,
+      title: tool.title,
+      description: kzToolDescription(tool),
+      inputSchema: tool.inputSchema,
+      annotations: { readOnlyHint: tool.kind === 'read', consequentialHint: tool.kind === 'destructive', untrustedContentHint: !!tool.untrusted },
+      execute: input => kzAgentCall(tool.name, input ?? {}, 'modelContext', null),
+    };
+    try{
+      const registered = mc.registerTool(definition, { signal: controller.signal });
+      KZ_AGENT.modelContextTools.push(tool.name);
+      if(registered && typeof registered.then === 'function'){
+        registered.catch(error => console.warn('WebMCP registration failed for', tool.name, error));
+      }
+    }catch(error){ console.warn('WebMCP registration failed for', tool.name, error); }
+  }
+}
+function kzChannelSetting(){
+  try{ return localStorage.getItem(KZ_CHANNEL_KEY) === '1'; }catch(_){ return false; }
+}
+function kzOpenChannel(on){
+  if(KZ_AGENT.channel){ KZ_AGENT.channel.close(); KZ_AGENT.channel = null; }
+  if(!on || typeof BroadcastChannel === 'undefined') return;
+  const channel = new BroadcastChannel(KZ_CHANNEL_NAME);
+  channel.onmessage = event => { kzOnChannelMessage(event.data); };
+  KZ_AGENT.channel = channel;
+}
+// Person-only: open or close the cross-tab channel for this browser.
+function setAgentChannel(on){
+  try{ if(on) localStorage.setItem(KZ_CHANNEL_KEY, '1'); else localStorage.removeItem(KZ_CHANNEL_KEY); }catch(_){}
+  kzOpenChannel(on);
+  toast(on ? 'Other KanZen tabs can now call this tab\'s tools' : 'Cross-tab channel closed');
+  kzRenderAgentUi();
+}
+// Channel protocol. Requests carry an id; replies echo it with this tab's id.
+//   {type:'kanzen:discover', id}                         → {type:'kanzen:here', id, tab, board_id, board_name}
+//   {type:'kanzen:manifest', id, target}                 → {type:'kanzen:manifest-result', id, tab, ok, result}
+//   {type:'kanzen:call', id, target, tool, input, caller} → {type:'kanzen:result', id, tab, ok, result|error}
+// Calls and manifest requests must name this tab as target, so one request never runs twice.
+async function kzOnChannelMessage(msg){
+  const channel = KZ_AGENT.channel;
+  if(!channel || !isPlainRecord(msg) || typeof msg.type !== 'string' || !msg.type.startsWith('kanzen:')) return;
+  const id = typeof msg.id === 'string' ? msg.id.slice(0, 100) : null;
+  const reply = data => { try{ channel.postMessage({ ...data, id, tab: KZ_AGENT.tab }); }catch(e){ console.warn('kanzen channel reply failed', e); } };
+  if(msg.type === 'kanzen:discover'){
+    reply({ type:'kanzen:here', board_id: S.currentBoardId, board_name: currentBoard()?.name || null });
+    return;
+  }
+  if(msg.target !== KZ_AGENT.tab) return;
+  if(msg.type === 'kanzen:manifest'){
+    reply({ type:'kanzen:manifest-result', ok: true, result: kzPlain(kzManifest()) });
+    return;
+  }
+  if(msg.type === 'kanzen:call'){
+    try{
+      const result = await kzAgentCall(String(msg.tool || ''), msg.input ?? {}, 'channel', typeof msg.caller === 'string' ? msg.caller : null);
+      reply({ type:'kanzen:result', ok: true, result });
+    }catch(e){
+      reply({ type:'kanzen:result', ok: false, error: { code: e.code || 'internal', message: e.message || String(e) } });
+    }
+  }
+}
+
+/* ---------- the person's side: indicator, proposals, preferences ---------- */
+function kzRenderAgentUi(){
+  const button = $('agent-indicator');
+  if(!button) return;
+  const pending = kzPending().length;
+  button.style.display = pending || KZ_AGENT.calls.length ? 'inline-flex' : 'none';
+  button.classList.toggle('has-pending', pending > 0);
+  $('agent-count').textContent = pending ? String(pending) : '';
+  button.title = pending ? `${pending} agent change${pending===1?'':'s'} waiting for your approval` : 'Agent activity';
+  if(kzModalOpen('agent-modal')) renderAgentModal();
+  if(kzModalOpen('prefs-modal')) renderAgentPrefs();
+}
+const KZ_KIND_LABELS = { write:'change', destructive:'destructive' };
+function kzEl(tag, className, text){
+  const el = document.createElement(tag);
+  if(className) el.className = className;
+  if(text != null) el.textContent = text;
+  return el;
+}
+function kzProposalMeta(p){
+  const door = KZ_DOOR_LABELS[p.door] || p.door;
+  return [p.board_name ? `board "${p.board_name}"` : '', `via ${door}${p.caller ? ' · ' + p.caller : ''}`, relTime(p.created_at)].filter(Boolean).join(' · ');
+}
+function renderAgentModal(){
+  const pending = kzPending();
+  const list = $('agent-proposals');
+  list.innerHTML = '';
+  if(!pending.length) list.appendChild(kzEl('div', 'agent-empty', 'Nothing waits for your approval.'));
+  for(const p of pending){
+    const row = kzEl('div', 'proposal-row' + (p.kind === 'destructive' ? ' destructive' : ''));
+    const head = kzEl('div', 'proposal-head');
+    head.append(kzEl('span', 'proposal-kind ' + p.kind, KZ_KIND_LABELS[p.kind] || p.kind), kzEl('span', 'proposal-summary', p.summary));
+    row.appendChild(head);
+    if(p.details.length || p.note){
+      const details = kzEl('ul', 'proposal-details');
+      for(const line of p.details) details.appendChild(kzEl('li', '', line));
+      if(p.note) details.appendChild(kzEl('li', 'proposal-note', p.note));
+      row.appendChild(details);
+    }
+    const foot = kzEl('div', 'proposal-foot');
+    foot.appendChild(kzEl('span', 'proposal-meta', kzProposalMeta(p)));
+    const reject = kzEl('button', 'btn-ghost', 'Reject');
+    reject.onclick = () => rejectProposal(p.id);
+    const approve = kzEl('button', p.kind === 'destructive' ? 'btn-danger' : 'btn-primary', 'Approve');
+    approve.onclick = () => approveProposal(p.id);
+    approve.dataset.proposalId = p.id;
+    foot.append(reject, approve);
+    row.appendChild(foot);
+    list.appendChild(row);
+  }
+  const decided = [...KZ_AGENT.proposals.values()].filter(p => p.status !== 'pending').slice(-20).reverse();
+  const done = $('agent-decided');
+  done.innerHTML = '';
+  for(const p of decided){
+    const row = kzEl('div', 'agent-log-row');
+    row.append(kzEl('span', 'agent-status ' + p.status, p.status), kzEl('span', '', p.summary + (p.error ? ` — ${p.error.message}` : '')));
+    done.appendChild(row);
+  }
+  $('agent-decided-wrap').style.display = decided.length ? '' : 'none';
+  const calls = $('agent-calls');
+  calls.innerHTML = '';
+  if(!KZ_AGENT.calls.length) calls.appendChild(kzEl('div', 'agent-empty', 'No agent has called KanZen in this tab yet.'));
+  for(const c of KZ_AGENT.calls.slice(0, 40)){
+    const row = kzEl('div', 'agent-log-row');
+    const door = KZ_DOOR_LABELS[c.door] || c.door;
+    row.append(
+      kzEl('span', 'agent-status ' + c.outcome, c.outcome),
+      kzEl('code', '', c.tool),
+      kzEl('span', 'agent-call-meta', `${door}${c.caller ? ' · ' + c.caller : ''} · ${relTime(c.at)}${c.detail ? ' · ' + c.detail.slice(0, 120) : ''}`),
+    );
+    calls.appendChild(row);
+  }
+  $('agent-approve-all').disabled = !pending.length;
+  $('agent-reject-all').disabled = !pending.length;
+}
+function renderAgentPrefs(){
+  $('prefs-agent-channel').checked = !!KZ_AGENT.channel;
+  const callable = KZ_TOOLS.filter(t => t.kind !== 'person');
+  const personOnly = KZ_TOOLS.filter(t => t.kind === 'person');
+  $('agent-tools-summary').textContent = `${callable.length} tools for agents · ${personOnly.length} acts only you can do`;
+  const root = $('agent-tools-list');
+  root.innerHTML = '';
+  const groups = [
+    ['read','Read — answer at once'], ['session','Session — change only what this tab shows'],
+    ['write','Change — waits for your approval'], ['destructive','Destructive — waits for your approval'],
+  ];
+  for(const [kind, heading] of groups){
+    root.appendChild(kzEl('div', 'agent-tools-heading', heading));
+    const line = kzEl('div', 'agent-tools-names');
+    for(const tool of callable.filter(t => t.kind === kind)){
+      const name = kzEl('code', '', tool.name);
+      name.title = tool.description;
+      line.append(name, ' ');
+    }
+    root.appendChild(line);
+  }
+  root.appendChild(kzEl('div', 'agent-tools-heading', 'Only you'));
+  for(const tool of personOnly) root.appendChild(kzEl('div', 'agent-tools-person', `${tool.title}: ${tool.reason}`));
+}
+
+/* ============================================================
    init
    ============================================================ */
 
@@ -7038,11 +8868,11 @@ async function init(){
 
   // listeners
   $('board-select').addEventListener('change', e => switchBoard(e.target.value));
-  $('search-input').addEventListener('input', e => { S.filter.search = e.target.value; renderBoard(); });
-  $('filter-label').addEventListener('change', e => { S.filter.labelId = e.target.value; renderBoard(); });
-  $('filter-priority').addEventListener('change', e => { S.filter.priority = e.target.value; renderBoard(); });
-  $('filter-due').addEventListener('change', e => { S.filter.due = e.target.value; renderBoard(); });
-  $('filter-member').addEventListener('change', e => { S.filter.memberId = e.target.value; renderBoard(); });
+  $('search-input').addEventListener('input', e => setFilterField('search', e.target.value));
+  $('filter-label').addEventListener('change', e => setFilterField('label_id', e.target.value));
+  $('filter-priority').addEventListener('change', e => setFilterField('priority', e.target.value));
+  $('filter-due').addEventListener('change', e => setFilterField('due', e.target.value));
+  $('filter-member').addEventListener('change', e => setFilterField('member_id', e.target.value));
   $('card-desc-input').addEventListener('input', renderDescPreview);
   document.addEventListener('keydown', onKey);
   naklios.onCapabilitiesChange(caps => {
@@ -7095,6 +8925,9 @@ async function init(){
   window.refreshNakliOSLibraryFromStorage = refreshNakliOSLibraryFromStorage;
   window.mdToHtml = mdToHtml;
   window.safeAttachmentHref = safeAttachmentHref;
+
+  // the agent face: window.kanzen, WebMCP where the browser has it, and the opt-in channel
+  kzInstallDoors();
 }
 
 function notifyNakliOSReady(){
