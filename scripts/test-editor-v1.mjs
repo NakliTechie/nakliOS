@@ -26,6 +26,14 @@ assert.deepEqual(
 );
 assert.equal(Core.searchText('one TWO two', 'two', {}).length, 2);
 assert.deepEqual(JSON.parse(JSON.stringify(Core.lineColumn('one\ntwo', 6))), { line:2, column:3 });
+assert.deepEqual(JSON.parse(JSON.stringify(Core.lineOffsets('one\ntwo\n'))), [0,4,8]);
+assert.deepEqual(JSON.parse(JSON.stringify(Core.lineOffsets(''))), [0]);
+assert.equal(Core.lineForOffset([0,4,8],5),2);
+assert.equal(Core.lineForOffset([0,4,8],8),3);
+const visible=Core.visibleRange(100_000, 50_000, 900, 20, 12);
+assert.ok(visible.start<=2500&&visible.end>2500);
+assert.ok(visible.end-visible.start<=120,'large files mount at most 120 reader rows');
+assert.deepEqual(JSON.parse(JSON.stringify(Core.visibleRange(3, 5000, 900))), {start:0,end:3});
 
 for (const contract of [
   "naklios.files.onOpen",
@@ -44,6 +52,8 @@ for (const contract of [
 }
 assert.doesNotMatch(html, /\b(?:alert|confirm|prompt)\s*\(/, 'Editor uses styled in-app UI');
 assert.match(html, /\.welcome\[hidden\]\{display:none\}/, 'the empty-workspace welcome yields to an open editor tab');
+assert.match(html, /class="reader" id="reader" hidden/, 'Editor has a separate read-only viewer');
+assert.match(html, /loadWorkingReview\(\{fs:rigFs,git,filepath:tab\.path\}\)/, 'Git review reads through the shared Rig-backed diff');
 assert.doesNotMatch(files, /\b(?:alert|confirm|prompt)\s*\(/, 'Files uses styled in-app UI');
 assert.match(files, /id="ctx-edit"[^>]*>Edit in Editor/);
 // Whole-store mode passes editPath (the apps/files-relative path) to the

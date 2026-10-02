@@ -248,16 +248,17 @@ export function reloopMessages(sysMsg, convo, gate = '') { return [sysMsg(gate),
 export async function driveRun({
   mode = 'code', convo, sysMsg, tools, infer, executeTool, rec,
   verify = null, signal = null, onEvent = () => {}, model = () => null,
-  gateNote: gate = '', note = () => {}, onSystemText = () => {}, readiness = null,
+  gateNote: gate = '', note = () => {}, onSystemText = () => {}, readiness = null, lesson = null,
   steer = null, // B2: the run's steer queue — a child's completion lands at the parent's next turn
   compact = null, // C1: the loop's compactor after a context overflow (every loop of the run gets it)
+  firstBudget = null, // test-door override for one bounded loop; normal callers use RUN_BUDGET
 }) {
   let toolCalls = 0;
   const onLoop = (e) => { if (e && e.type === 'tool-call') toolCalls++; onEvent(e); };
   const aborted = () => !!(signal && signal.aborted);
   const loop = async (messages, budget) => {
     onSystemText(messages[0].content); // the budget counts THIS loop's prompt
-    await rec.start({ messages, tools, model: model(), readiness }); // A4: the readiness rows ride run.started when the app supplies them
+    await rec.start({ messages, tools, model: model(), readiness, lesson }); // declared lesson evidence rides the run record
     const result = await runAgentLoop({ messages, tools, infer, executeTool, ...budget, signal, verify, onEvent: onLoop, steer, compact });
     await rec.finish(result);
     return result;
@@ -273,15 +274,15 @@ export async function driveRun({
   // is carried into the next run.
   let carried = convo.slice();
   const reseed = (r) => { carried = (r.messages || []).slice(1); }; // minus the system HEAD only — a carried compaction marker is a system-role message too
-  let result = await loop([sysMsg(gate), ...carried], RUN_BUDGET);
-  if (needsActNudge({ mode, toolCalls, stop: result.stop, aborted: aborted(), ask: ownerAsk(convo) })) {
+  let result = await loop([sysMsg(gate), ...carried], firstBudget || RUN_BUDGET);
+  if (!firstBudget && needsActNudge({ mode, toolCalls, stop: result.stop, aborted: aborted(), ask: ownerAsk(convo) })) {
     note('No tools were used — nudging the agent to make the change, not just describe it.');
     reseed(result); // the loop's convo already ends with the (possibly empty) assistant turn
     carried.push({ role: 'user', content: ACT_NUDGE });
     result = await loop(reloopMessages(sysMsg, carried, gate), RELOOP_BUDGET);
   }
   const abortedAfterFirst = aborted(); // read once, as the inline app did — not again after settling
-  if (mode === 'code' && result.stop !== 'done' && !abortedAfterFirst) {
+  if (!firstBudget && mode === 'code' && result.stop !== 'done' && !abortedAfterFirst) {
     try {
       await rec.settled();
       const stag = foldStagnation(rec.events(), rec.resolve);

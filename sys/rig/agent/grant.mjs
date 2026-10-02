@@ -23,7 +23,7 @@ import { normalizeMountPath } from '../fileops/pathguard.mjs';
  *   `..` traversal — collapses to the same check. A string match on the command line cannot
  *   do that, which is why the boundary lives here and not there.
  */
-export function createGrant({ prefixes = [], scopes = [], readOnlyPrefixes = [] } = {}) {
+export function createGrant({ prefixes = [], scopes = [], readOnlyPrefixes = [], writePaths = null } = {}) {
   let active = true;
   // Normalise prefixes through the same validator; drop any that don't validate.
   const norm = [];
@@ -37,6 +37,9 @@ export function createGrant({ prefixes = [], scopes = [], readOnlyPrefixes = [] 
     const r = normalizeMountPath(p);
     if (r.ok) readOnly.push(r.path);
   }
+  // Optional exact writable paths for an owner-paired native task. Read access
+  // still uses prefixes; an empty path list permits no writes.
+  const writes = writePaths === null ? null : writePaths.map(p => normalizeMountPath(p)).filter(r => r.ok).map(r => r.path);
 
   function allowsPath(input) {
     if (!active) return false;
@@ -56,6 +59,7 @@ export function createGrant({ prefixes = [], scopes = [], readOnlyPrefixes = [] 
   function isReadOnly(input) {
     const r = normalizeMountPath(input);
     if (!r.ok) return true;
+    if (writes !== null && !writes.includes(r.path)) return true;
     return readOnly.some((prefix) =>
       prefix === '' ||
       r.path === prefix ||
@@ -76,7 +80,8 @@ export function createGrant({ prefixes = [], scopes = [], readOnlyPrefixes = [] 
     // A single object describing what is active — for a "grant visible while
     // active" surface (C5) and for the Kiln mount derivation.
     describe() {
-      return { active, prefixes: norm.slice(), scopes: [...scopeSet], readOnlyPrefixes: readOnly.slice() };
+      return { active, prefixes: norm.slice(), scopes: [...scopeSet], readOnlyPrefixes: readOnly.slice(),
+        ...(writes === null ? {} : { writePaths: writes.slice() }) };
     },
   };
 }

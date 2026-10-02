@@ -73,8 +73,8 @@ the ⋯ sheet (`sheet.md`) calls the same ones on narrow layouts. Shared prerequ
 - **Source:** `#learn-btn` → `primeProject`.
 - **Prerequisites:** launch; desktop; an endpoint granted (one run of fuel).
 - **Reach and drive:** click with an endpoint granted.
-- **Observable success:** a priming run in ask mode; facts recorded.
-- **Gotchas:** fuel.
+- **Observable success:** the pass offers only `list`, `read`, and a priming `remember`. Every saved hypothesis cites a read file, its displayed digest, bounded full-file version or explicit unavailability, and a survey ID. The task log links a replayable priming record.
+- **Gotchas:** fuel. A failed read, changed source, or citation to an unread file must record no fact. The pass caps writes at ten facts and exposes Stop on desktop and phone. Folder and Browser list in bounded pages; use the returned cursor to continue. A backend without bounded listing refuses it. A write already in flight can finish after Stop; a linked follow-up record reports its outcome and survey ID. An empty project may yield zero facts.
 
 ### button:home-chip
 - **Goal:** pick the Anvil home folder (same as `sheet:home`).
@@ -113,7 +113,7 @@ the ⋯ sheet (`sheet.md`) calls the same ones on narrow layouts. Shared prerequ
 - **Source:** `#adv-btn` (`aria-haspopup`, `aria-expanded`).
 - **Prerequisites:** launch; desktop.
 - **Reach and drive:** click; press Escape.
-- **Observable success:** `aria-expanded` flips; the menu lists `campaign-btn`; Escape closes and restores focus.
+- **Observable success:** `aria-expanded` flips; the menu lists `campaign-btn` and `lesson-evidence-btn`; Escape closes and restores focus.
 - **Gotchas:** none.
 
 ### button:campaign-btn
@@ -123,6 +123,14 @@ the ⋯ sheet (`sheet.md`) calls the same ones on narrow layouts. Shared prerequ
 - **Reach and drive:** Advanced → click.
 - **Observable success:** the campaign dialog; a demo (offline) run reaches a verdict; a live one needs an endpoint.
 - **Gotchas:** beta.
+
+### button:lesson-evidence-btn
+- **Goal:** declare one exact tool call that would demonstrate a lesson's activation in future runs of this task.
+- **Source:** `#lesson-evidence-btn` → `t.lessonActivation` → `run.started.lesson` → `inspectLessonEvidence`.
+- **Prerequisites:** launch; active task; model-backed run for an observed result.
+- **Reach and drive:** Advanced → Lesson activation evidence; enter `{"tool":"skill","args":{"name":"working-in-anvil"}}`; run the task.
+- **Observable success:** the run record stores the declaration and model identities; the log reports observed, attempted-failed, unobserved, or insufficient activation, fuel freshness, and unmeasured gain.
+- **Gotchas:** an unchanged model selection does not establish full fuel freshness. A changed selection marks the declaration stale. Clear the dialog field to remove the declaration.
 
 ### button:stop
 - **Goal:** stop the run at the next boundary; members in flight drain.

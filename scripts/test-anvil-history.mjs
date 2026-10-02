@@ -12,7 +12,7 @@ assert.match(anvil, /import \{[^}]*\bsearchRecords\b[^}]*\} from '\.\.\/\.\.\/sy
 assert.match(anvil, /async function loadTaskRecords\(scope/, 'a helper loads the task\'s records by scope');
 // forward-pass NAF-02/NAF-07: every scope stays inside the active project, and the CALLER names
 // its task rather than inheriting whatever the UI has selected.
-assert.match(anvil, /if\(p!==proj\) continue;/, 'project scope no longer reads every project');
+assert.match(anvil, /if\(project!==proj \|\| \(scope!=='project' && tk!==task\) \|\| !name\.endsWith\('\.json'\)\) return;/, 'project scope no longer reads every project');
 assert.match(anvil, /const callerTask = runCtx && runCtx\.t && runCtx\.t\.id;/, 'the ASKING task is named once, not inherited from the UI selection');
 // the DEFAULT scope is 'task': defaulting to 'run' would silently hide every earlier run of
 // the caller's own task, and every other anchor here would still match (mutation-tested).
@@ -27,7 +27,7 @@ assert.match(anvil, /searchRecords\(entries,\{ query:/, 'search is served by the
 assert.match(anvil, /searchRecords\(entries,\{[^}]*\bscope\b[^}]*taskId:callerTask/, 'the scope and the asking task reach searchRecords');
 assert.match(anvil, /const scoped=scopeEntries\(entries, scope, callerTask\)/, 'the entries are scoped in the module, not only by the loader');
 assert.match(anvil, /readEvent\(scoped,String\(\(ar&&ar\.id\)\|\|''\)/, 'read is served from the SCOPED set (a read must not reach what a search could not)');
-assert.match(anvil, /entries\.push\(\{ runId:rid, taskId:tk,/, 'the loader tags each entry with its task, or scoping has nothing to match on');
+assert.match(anvil, /found\.set\(key,\{runId:[^\n]+,taskId:tk,record,integrity\}\)/, 'the loader tags each entry with its task, or scoping has nothing to match on');
 // N1: the toolset is the assembly's (sys/ai/run-assembly.mjs); the app sends it (test-run-assembly.mjs).
 for (const mode of ['code', 'plan', 'ask']) assert.ok(runToolset(mode).some((x) => x.function.name === 'history'), `the history tool is offered in ${mode} mode`);
 // history is NOT gated to code mode (read-only): it must not be in the mode!=='code' refusal list

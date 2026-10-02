@@ -281,12 +281,18 @@ await naklios.fs.delete("notes/one.md");
 
 Available methods:
 
-- `read(path)` and `readBinary(path, { maxBytes? })`
-- `stat(path)` returns `{ type, size, mtimeMs }` or `null`. A bounded binary read
-  rejects an oversized Folder snapshot before returning bytes. Crate currently
-  has no bounded object reader, so it does not advertise this capability.
-  Check `naklios.fs.supportsBoundedReads` before relying on this contract; older
-  hosts do not advertise it.
+- `read(path)` and `readBinary(path, { maxBytes?, offset? })`
+- `stat(path)` returns `{ type, size, mtimeMs }` or `null`. A `maxBytes`-only binary read
+  rejects an oversized Folder snapshot before returning bytes.
+  Adding `offset` reads up to `maxBytes` bytes from that byte position using native File slices.
+  Offset requires a non-negative safe integer and an explicit cap no larger than 16 MiB.
+  Reads at or past EOF return an empty byte array; zero caps return no bytes.
+  Paths and backend affinity keep the same app/system permission boundaries.
+  Crate currently has no bounded object reader and refuses capped or offset reads.
+  Check `naklios.fs.supportsBoundedReads` before relying on bounded Folder reads; older hosts do not advertise them.
+  `naklios.capabilities.fsRangeReads` explicitly advertises offset support for the active Folder backend.
+  The SDK refuses offset requests unless this flag is true, including against older hosts.
+  This SDK option does not change Rig shell archive or search limits.
 - `write(path, stringOrBytes)`
 - `append(path, line)`
 - `list(prefix)`
@@ -484,7 +490,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 
 <!-- sdk-reference:begin — rendered by `node scripts/sdk-reference.mjs --write` from docs/sdk-api-audit.md; do not edit by hand -->
 
-80 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
+88 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
 
 ### `version`
 
@@ -504,6 +510,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 | `capabilities.fsBackends` | field | The backends the host offers, as descriptors `[{ id, label, name }]` — ids `fsa` (a picked folder) and `crate`; the browser's own OPFS is not on this list. |
 | `capabilities.fsBackend` | field | The backend in use. |
 | `capabilities.fsBoundedReads` | field | True when the active host storage backend supports a byte-limited read. |
+| `capabilities.fsRangeReads` | field | True when the active host Folder backend supports explicit bounded byte ranges. |
 | `capabilities.system` | field | The app is a system app (same-origin, `kind: system`). |
 | `capabilities.sysFs` | field | Whole-store filesystem granted (system apps only). |
 | `capabilities.ai` | field | Shared host inference granted. |
@@ -522,6 +529,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 | `capabilities.aiSearch` | field | Semantic (local, embedding) search over the app's own namespace granted — not web search. |
 | `capabilities.net` | field | Sovereign egress (`naklios.net.fetch`) granted. |
 | `capabilities.netBackend` | field | Which egress backend the host is configured with: `worker` (the default) · `bridge`; null when none. Never a package name. |
+| `capabilities.review` | field | The host can stage native diffs from this app and return source-bound review decisions. Enabled for Reckon, Draft, and KanZen. |
 
 ### `ready`
 
@@ -574,13 +582,21 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 |---|---|---|
 | `requestCapabilities` | function | Ask the host to re-broadcast capabilities. |
 
+### `review` (namespace)
+
+| member | kind | what it is |
+|---|---|---|
+| `review` | namespace | Host-owned staging queue and person review bridge. The P0 app contract names this stable namespace directly. |
+| `review.stage` | function | Send a native diff without applying it. Returns a proposal ID; standalone returns a fallback marker. |
+| `review.onDecision` | function | Register one app decision handler. The SDK acknowledges a successful commit once and re-acknowledges replays without reapplying. |
+
 ### `fs` (namespace)
 
 | member | kind | what it is |
 |---|---|---|
 | `fs` | namespace | App-scoped filesystem (paths under `apps/<id>/`). |
 | `fs.read` | function | Read text. |
-| `fs.readBinary` | function | Read bytes. |
+| `fs.readBinary` | function | Read bytes; Folder offsets require an explicit bounded cap. |
 | `fs.supportsBoundedReads` | getter | True when the host advertises bounded reads for the active backend. |
 | `fs.stat` | function | Read path type and size without loading file bytes. |
 | `fs.write` | function | Write text or bytes. |
@@ -599,7 +615,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 | `sys` | namespace | System-app surfaces. |
 | `sys.fs` | namespace | Whole-store filesystem (system apps only). |
 | `sys.fs.read` | function | Read text. |
-| `sys.fs.readBinary` | function | Read bytes. |
+| `sys.fs.readBinary` | function | Read bytes; Folder offsets require an explicit bounded cap. |
 | `sys.fs.stat` | function | Read path type and size without loading file bytes. |
 | `sys.fs.write` | function | Write. |
 | `sys.fs.append` | function | Append. |
@@ -612,6 +628,9 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 | member | kind | what it is |
 |---|---|---|
 | `files` | namespace | Exact-file handoff (`docs/file-handoff-v1.md`). |
+| `files.experimental_editInAnvil` | function · **experimental** | Ask the host to stage one selected-file edit in Anvil. |
+| `files.experimental_proposeEdit` | function · **experimental** | Return a snapshot edit without writing its source. |
+| `files.experimental_onEditProposal` | function · **experimental** | Receive the host-authenticated staged proposal. |
 | `files.openWith` | function | Hand a file to another app. |
 | `files.onOpen` | function | Receive a handed file. |
 | `files.read` | function | Read a handed file. |

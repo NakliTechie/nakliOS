@@ -151,9 +151,13 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
         map.set(rel.slice(0, slash), true); // deeper ⇒ a directory at this level
       }
     }
-    return [...map.entries()].map(([name, isDir]) => ({
+    const children=[...map.entries()].map(([name, isDir]) => ({
       safe: base + name, name, type: isDir ? 'dir' : 'file',
     }));
+    children.truncated=raw.truncated===true;
+    children.cursor=raw.cursor||null;
+    children.snapshotConsistent=raw.snapshotConsistent===true;
+    return children;
   }
 
   // Depth-first walk. Returns { files:[safe], dirs:[safe] } for all descendants.
@@ -720,9 +724,15 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
   }
 
   async function list(path, opts = {}) {
+    if (opts.cursor !== undefined && opts.cursor !== null && (typeof opts.cursor!=='string' || !opts.cursor || opts.maxEntries===undefined))
+      return err('EINVAL','cursor requires a bounded listing');
+    if (opts.maxEntries !== undefined && (!Number.isInteger(opts.maxEntries) || opts.maxEntries<1 || opts.maxEntries>1000))
+      return err('EINVAL','maxEntries must be an integer from 1 to 1000');
+    if (opts.maxEntries !== undefined && (opts.recursive || backend.supportsBoundedListing!==true))
+      return err('ENOTSUP','bounded directory listing is unavailable for this backend or recursive mode');
     if (opts.rejectSymlinks !== undefined && typeof opts.rejectSymlinks !== 'boolean') return err('EINVAL', 'rejectSymlinks must be a boolean');
     if (opts.rejectSymlinks && opts.recursive) return err('ENOTSUP', 'recursive listing with rejected symlinks is not supported');
-    return metadataCall(opts, async (options) => {
+    return metadataCall(opts.maxEntries===undefined ? opts : {...opts,metadataOnly:true}, async (options) => {
       if (opts.metadataOnly && opts.recursive) return err('ENOTSUP', 'metadata-only recursive listing is not supported');
       const r = await resolve(path, options, true, opts.rejectSymlinks === true);
       if (!r.ok) return r;
@@ -739,10 +749,12 @@ export function createFileops({ backend, root = '', symlinkDepth = 8, grepCap = 
         const { files, dirs } = await walkAll(r.safe);
         entries = [...dirs.map((d) => toEntry(d, 'dir')), ...files.map((f) => toEntry(f, 'file'))];
       } else {
-        const children = await listChildren(r.safe, options);
+        const children = await listChildren(r.safe, opts.maxEntries===undefined ? options : {...options,maxEntries:opts.maxEntries,cursor:opts.cursor||null});
         entries = children.map((c) => ({
           path: r.path ? r.path + '/' + c.name : c.name, name: c.name, type: c.type,
         }));
+        if (opts.maxEntries !== undefined) return {ok:true,entries,truncated:children.truncated===true,cursor:children.cursor,
+          snapshotConsistent:children.snapshotConsistent};
       }
       entries.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
       return { ok: true, entries };

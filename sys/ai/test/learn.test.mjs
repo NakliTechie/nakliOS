@@ -15,6 +15,7 @@ function assert(c, m) { if (!c) throw new Error(m || 'assertion failed'); }
 function eq(a, b, m) { if (a !== b) throw new Error(`${m || 'ne'}: ${JSON.stringify(a)} !== ${JSON.stringify(b)}`); }
 const call = (name, args, id) => ({ id, type: 'function', function: { name, arguments: JSON.stringify(args) } });
 const scripted = (turns) => { let i = 0; return async () => turns[i++] || { content: 'done', toolCalls: [] }; };
+const grounded = (proposal) => ({ ...proposal, responsibleTurn:0, evidenceIds:['e0'], explanation:'The initial task instructions were available before the first action.' });
 function freshShell() {
   const fs = createFileops({ backend: new MemoryBackend() });
   const registry = buildRigRegistry({ fs });
@@ -66,7 +67,7 @@ await test('B4: parseProposals reads JSON out of prose, a code fence, or after a
 });
 await test('B4: a prose-first reviewer is repaired once with the errors; the report carries the trail; a dead rung hands over to the next', async () => {
   const rec = await recordRun();
-  const replies = ['Here are my thoughts: {"proposals": [{"kind": "note", "name": "x"}]}', '{"proposals": [{"kind": "fact", "name": "x", "content": "c"}]}'];
+  const replies = ['Here are my thoughts: {"proposals": [{"kind": "note", "name": "x"}]}', JSON.stringify({ proposals:[grounded({kind:'fact',name:'x',content:'c'})] })];
   let i = 0; const calls = [];
   const infer = async ({ messages }) => { calls.push(messages); return { content: replies[Math.min(i++, replies.length - 1)], toolCalls: [] }; };
   const staged = [];
@@ -82,17 +83,17 @@ await test('B4: a prose-first reviewer is repaired once with the errors; the rep
   const rep3 = await runLearnReview({ record: rec, infer: async () => ({ content: 'never json', toolCalls: [] }), propose: async () => ({ ok: true }) });
   eq(rep3.answered, false); eq(rep3.rung, null); eq(rep3.proposalCount, 0); eq(rep3.salvaged, false); eq(rep3.attempts.length, 2, 'one try and one repair, then the honest no'); assert(/^no rung answered after 2 attempts/.test(rep3.attemptsLine), rep3.attemptsLine);
   // a reply with one malformed proposal among good ones, twice: not answered, but the good ones are salvaged item by item, as the old parser did
-  const mixed = '{"proposals": [{"kind": "fact", "name": "keep-me", "content": "c"}, {"kind": "note", "name": "junk"}]}';
+  const mixed = JSON.stringify({proposals:[grounded({kind:'fact',name:'keep-me',content:'c'}),grounded({kind:'note',name:'junk'})]});
   const staged4 = [];
   const rep4 = await runLearnReview({ record: rec, infer: async () => ({ content: mixed, toolCalls: [] }), propose: async (p) => { staged4.push(p); return { ok: true }; } });
-  eq(rep4.answered, false); eq(rep4.salvaged, true); eq(rep4.salvagedFrom, 'default', 'the record can say whose reply was salvaged'); eq(rep4.proposalCount, 2, 'the lenient filter keeps kind+name items; the sink drops what it cannot stage'); eq(staged4.length, 2); eq(staged4[0].name, 'keep-me');
+  eq(rep4.answered, false); eq(rep4.salvaged, true); eq(rep4.salvagedFrom, 'default', 'the record can say whose reply was salvaged'); eq(rep4.proposalCount, 2); eq(staged4.length, 1, 'only the valid grounded fact reaches the sink'); eq(rep4.quarantined.length, 1); eq(staged4[0].name, 'keep-me');
 });
 
 await test('runLearnReview: routes every proposal through the sink as STAGED, 0 active writes', async () => {
   const rec = await recordRun();
   const staged = [];
   const propose = async (p) => { staged.push(p); return { ok: true, staged: true }; };
-  const infer = async () => ({ content: '{"proposals":[{"kind":"skill","name":"add-retry","description":"how to add a retry","content":"wrap in a loop","goal":"add retry","steps":["wrap loop"],"paths":["net.js"]},{"kind":"fact","name":"net-lives-here","note":"net.js holds the client","goal":"where net lives"}]}' });
+  const infer = async () => ({ content: JSON.stringify({proposals:[grounded({kind:'skill',name:'add-retry',description:'how to add a retry',content:'wrap in a loop',goal:'add retry',steps:['wrap loop'],paths:['net.js']}),grounded({kind:'fact',name:'net-lives-here',note:'net.js holds the client',goal:'where net lives'})]}) });
   const rep = await runLearnReview({ record: rec, infer, propose });
   eq(rep.activeWrites, 0, 'NOTHING is written active'); eq(rep.proposalCount, 2, 'two proposals'); eq(rep.staged.length, 2, 'both staged via the sink');
   assert(staged.every((p) => p.fp && /^fp:v1:/.test(p.fp)), 'each staged proposal carries a fingerprint');
@@ -104,7 +105,7 @@ await test('runLearnReview: a poisoned fingerprint is dropped, not re-proposed',
   const proposal = { goal: 'add retry', steps: ['wrap loop'], paths: ['net.js'] };
   const fp = await fingerprint(proposal);
   await led.reject({ fp, reason: 'we do not want a retry skill', cooloffDays: 30 }); await led.settled();
-  const infer = async () => ({ content: '{"proposals":[{"kind":"skill","name":"add-retry","description":"d","content":"c","goal":"add retry","steps":["wrap loop"],"paths":["net.js"]}]}' });
+  const infer = async () => ({ content: JSON.stringify({proposals:[grounded({kind:'skill',name:'add-retry',description:'d',content:'c',goal:'add retry',steps:['wrap loop'],paths:['net.js']})]}) });
   const staged = [];
   const rep = await runLearnReview({ record: rec, infer, ledger: led, propose: async (p) => { staged.push(p); return { ok: true }; }, now: 2000 });
   eq(rep.staged.length, 0, 'the poisoned proposal is not staged'); eq(rep.dropped.length, 1, 'it is dropped'); assert(/do not want/.test(rep.dropped[0].reason), 'with the rejection reason');
@@ -138,8 +139,8 @@ await test('NAF-03: same-named proposals keep their OWN fingerprints and content
   await ledger.reject({ fp: await fingerprint(bad), reason: 'destructive' });
   const seen = []; const fps = [];
   const rep = await runLearnReview({
-    record: { events: () => [], resolve: () => ({}) },
-    infer: async () => ({ content: JSON.stringify({ proposals: [bad, good] }) }),
+    record: await recordRun(),
+    infer: async () => ({ content: JSON.stringify({ proposals: [grounded(bad), grounded(good)] }) }),
     ledger,
     propose: async (pr) => { seen.push(pr.content); fps.push(pr.fp); return { ok: true, staged: pr.name }; },
   });

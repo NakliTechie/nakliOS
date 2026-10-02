@@ -15,7 +15,7 @@
 // records that host-wide COEP was tried and reverted 2026-08-26 because it broke
 // every cross-origin embedded app. Keep the local server honest to that.
 //
-// Usage: node scripts/serve-coi.mjs [--port 8947] [--root .]
+// Usage: node scripts/serve-coi.mjs [--port 8947] [--root .] [--books-root ../Books]
 //        binds 127.0.0.1 only.
 
 import http from 'node:http';
@@ -32,6 +32,17 @@ const argOf = (name, fallback) => {
 const PORT = Number(argOf('--port', '8947'));
 const ROOT = path.resolve(argOf('--root', path.join(HERE, '..')));
 const HOST = '127.0.0.1';
+const booksOverride = argOf('--books-root', null);
+const booksCandidates = booksOverride ? [path.resolve(booksOverride)] : [
+  path.resolve(ROOT, '../Books'),               // ordinary naklios checkout
+  path.resolve(ROOT, '../../../Books'),         // managed worktree below naklios/.worktrees
+];
+const BOOKS_ROOT = booksCandidates.find(candidate => {
+  try { return fs.statSync(candidate).isDirectory() && fs.statSync(path.join(candidate, 'index.html')).isFile(); }
+  catch (_) { return false; }
+}) || null;
+if (booksOverride && !BOOKS_ROOT) throw new Error('--books-root needs a Books directory containing index.html');
+const BOOKS_MOUNT = !booksOverride && fs.existsSync(path.join(ROOT, 'Books', 'index.html')) ? null : BOOKS_ROOT;
 
 // Prefixes that get cross-origin isolation, mirroring `_headers`.
 const COI_PREFIXES = ['/apps/forge/', '/apps/anvil/'];
@@ -56,16 +67,24 @@ const TYPES = {
 };
 
 function safeJoin(root, urlPath) {
-  const decoded = decodeURIComponent(urlPath.split('?')[0].split('#')[0]);
+  let decoded;
+  try { decoded = decodeURIComponent(urlPath.split('?')[0].split('#')[0]); }
+  catch (_) { return null; }
   const resolved = path.resolve(root, '.' + path.posix.normalize(decoded));
   // Refuse anything that escapes the root — a served tree is not a file picker.
   if (resolved !== root && !resolved.startsWith(root + path.sep)) return null;
+  // A local preview has no reason to serve repository metadata or dotenv files.
+  if (path.relative(root, resolved).split(path.sep).some(part => part.startsWith('.') || part === 'node_modules')) return null;
   return resolved;
 }
 
 const server = http.createServer((req, res) => {
   const urlPath = req.url || '/';
-  let filePath = safeJoin(ROOT, urlPath);
+  const routePath = urlPath.split('?')[0];
+  // The host's local Lorewell embed is /Books/. Keep its source repository
+  // outside the NakliOS checkout while serving both under one local origin.
+  const booksPath = BOOKS_MOUNT && (routePath === '/Books' || routePath.startsWith('/Books/'));
+  let filePath = booksPath ? safeJoin(BOOKS_MOUNT, routePath.slice('/Books'.length) || '/') : safeJoin(ROOT, urlPath);
   if (!filePath) { res.writeHead(403).end('forbidden'); return; }
 
   try {
@@ -87,7 +106,6 @@ const server = http.createServer((req, res) => {
     'Content-Security-Policy': "frame-ancestors 'self'",
     'X-Frame-Options': 'SAMEORIGIN',
   };
-  const routePath = urlPath.split('?')[0];
   if (COI_PREFIXES.some(p => routePath.startsWith(p))) {
     headers['Cross-Origin-Opener-Policy'] = 'same-origin';
     headers['Cross-Origin-Embedder-Policy'] = 'credentialless';
@@ -98,6 +116,7 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  process.stdout.write(`serve-coi: http://${HOST}:${PORT}  root=${ROOT}\n`);
+  process.stdout.write(`serve-coi: http://${HOST}:${server.address().port}  root=${ROOT}\n`);
   process.stdout.write(`serve-coi: COI on ${COI_PREFIXES.join(' ')}\n`);
+  if (BOOKS_MOUNT) process.stdout.write(`serve-coi: /Books/ from ${BOOKS_MOUNT}\n`);
 });

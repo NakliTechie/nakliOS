@@ -483,6 +483,16 @@ console.log('run-assembly: A4 readiness == the toolset in every mode; A2 episode
   await recB.settled();
   const inB = recB.resolve(recB.events().find((e) => e.tool === 'run.started')).input;
   assert.equal('readiness' in inB, false, 'absent when not given — the record keeps its shape');
+  const recC = mk();
+  const lesson={declaration:{tool:'skill',args:{name:'repair'}},declaredFuelKey:'test/m1',currentFuelKey:'test/m1',fuelIdentityComplete:false};
+  await driveRun({mode:'plan',convo:[{role:'user',content:'go'}],sysMsg,tools,infer,executeTool:async()=>'',rec:recC,lesson});
+  await recC.settled();
+  const inC=recC.resolve(recC.events().find(e=>e.tool==='run.started')).input;
+  assert.deepEqual(inC.lesson,lesson,'the declaration rides the replayable run record');
+  const {inspectLessonEvidence}=await import('../sys/ai/lesson-evidence.mjs');
+  const activation=inspectLessonEvidence(recC,inC.lesson.declaration,inC.lesson);
+  assert.equal(activation.activation,'unobserved','a completed run without the declared call is explicit');
+  assert.equal(activation.gain,'unmeasured','the run does not attribute benefit');
   console.log('run-assembly: A4 readiness rides run.started only when supplied');
 // B2: driveRun hands the steer queue to the loop — a completion pushed while the model waits lands as run.steered on the record
 {
@@ -499,6 +509,26 @@ console.log('run-assembly: A4 readiness == the toolset in every mode; A2 episode
   assert.ok(rec.events().some((e) => e.tool === 'run.steered'), 'the steer is on the record');
   console.log('run-assembly: B2 the steer reaches the loop through driveRun and lands on the record');
 }
+}
+
+// L4: the owner test door can lower one first-loop budget without changing the
+// normal budget or spending a model call when the prompt already exceeds it.
+{
+  const rec=createRunRecorder({app:'anvil',principal:'budget-fixture'});
+  let calls=0;
+  const result=await driveRun({mode:'code',convo:[{role:'user',content:'build a file'}],
+    sysMsg:()=>({role:'system',content:'system prompt'}),tools:[],
+    infer:async()=>{calls++;return {content:'unexpected',toolCalls:[]};},
+    executeTool:async()=>'',rec,
+    firstBudget:{maxSteps:RUN_BUDGET.maxSteps,budget:{tokens:1,wallClockMs:RUN_BUDGET.budget.wallClockMs},maxVerifyRounds:RUN_BUDGET.maxVerifyRounds}});
+  await rec.settled();
+  assert.equal(result.stop,'budget');
+  assert.equal(result.budgetAxis,'tokens');
+  assert.equal(calls,0);
+  assert.equal(rec.events().filter(e=>e.tool==='run.started').length,1,'the test budget cannot escape into a re-loop');
+  const last=rec.events().at(-1);
+  assert.equal(last.tool,'run.stopped');
+  assert.equal(rec.resolve(last).output.axis,'tokens');
 }
 
 // C1: driveRun hands every loop of the run the caller's compactor

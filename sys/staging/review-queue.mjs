@@ -95,6 +95,12 @@ export function createReviewQueue({ now = () => Date.now(), ledger = null, onApp
       }));
     },
 
+    // The DOM reviewer consumes envelopes, not list()'s summarized previews.
+    // Return copies so a view cannot change the staged bytes before commit.
+    envelopes() {
+      return [...pending.values()].map(({ envelope }) => snapshot(envelope));
+    },
+
     // Commit a proposal. Expiry outranks authority. On allowed: dequeue, onApply(envelope) once.
     // Async because applying is: an onApply that rejected used to leave the queue empty while
     // commit reported {ok:true, applied:true} and the error surfaced as an unhandled rejection
@@ -141,6 +147,14 @@ export function createReviewQueue({ now = () => Date.now(), ledger = null, onApp
       if (ledger) {
         try { const fp = await fingerprint(fpInputs(entry.envelope)); await ledger.reject({ fp, reason, ...(cooloffDays != null ? { cooloffDays } : {}) }); await ledger.settled?.(); } catch (_) { /* poison is best-effort; a discard still dequeues */ }
       }
+      return { ok: true };
+    },
+
+    // A frame closing abandons its proposal; it is not a person's rejection.
+    // Remove it without poisoning the diff so reopening can stage it again.
+    cancel(proposal_id) {
+      if (!pending.has(proposal_id)) return { ok: false, reason: 'no such proposal' };
+      pending.delete(proposal_id);
       return { ok: true };
     },
 

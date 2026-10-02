@@ -53,7 +53,8 @@ launch in `../README.md`; code mode; a fresh project.
 - **Source:** `sys/ai/learn.mjs` (`learnReviewTool`, `runLearnReview`, `shouldAutoReview`), `sys/ai/proposal-fingerprint.mjs`, the `nm==='learn_this_run'` branch and `learnThisRun` in the app.
 - **Prerequisites:** launch; a finished run in the task.
 - **Reach and drive:** "Review the run you just did and propose what to keep." Then reject one proposal in the UI and repeat.
-- **Observable success:** proposals appear staged in the reader; the rejected one is not re-proposed (the ledger fingerprint); a local model defers the automatic review (`AUTO_REVIEW_IDLE_MS`) rather than skipping it.
+- **Observable success:** proposals cite an event available before their responsible turn and appear staged in the reader. Later, missing, or unresolved citations are quarantined with their explanations and source references in the task log. The rejected proposal is not re-proposed (the ledger fingerprint). A local model defers the automatic review (`AUTO_REVIEW_IDLE_MS`) rather than skipping it.
+- **Limit:** chronology checks only when an event existed. A person still reviews whether that event supports the proposed lesson.
 - **Gotchas:** the review reads the SAVED record — it runs after `saveRunRecord`.
 
 ### tool:history

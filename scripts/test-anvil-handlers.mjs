@@ -9,8 +9,14 @@
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { inlineModule, extractFunction, extractRegion, evaluate, instantiate, memFs, failingFs } from './anvil-harness.mjs';
-import { searchRecords, scopeEntries, readEvent, createRunRecorder } from '../sys/history/run-record.mjs';
+import { searchRecords, scopeEntries, readEvent, createRunRecorder, foldSkillUsage } from '../sys/history/run-record.mjs';
 import { runToolset } from '../sys/ai/run-assembly.mjs';
+import { codingToolset } from '../sys/ai/agent-tools.mjs';
+import { boundedText } from '../sys/ai/agent-loop.mjs';
+import { digest } from '../sys/ai/change-preimages.mjs';
+import { isSuccessfulReadToolResult } from '../sys/ai/tool-result-kind.mjs';
+import { primeListTool, primeRememberTool, createPrimeReadEvidence } from '../sys/ai/project-context.mjs';
+import { createRememberBudget, budgetSpentReply } from '../sys/ai/memory-store.mjs';
 
 const src = await inlineModule();
 // the whole page — markup and CSS are outside the inline module
@@ -26,7 +32,8 @@ function opfs(tree) {
     async *entries() {
       for (const [k, v] of Object.entries(obj)) {
         yield [k, k.endsWith('.json')
-          ? { kind: 'file', async getFile() { return { async text() { return JSON.stringify(v); } }; } }
+          ? { kind: 'file', async getFile() { return { size:new TextEncoder().encode(JSON.stringify(v)).length,
+            async text() { return JSON.stringify(v); } }; } }
           : dirHandle(v)];
       }
     },
@@ -68,6 +75,83 @@ await test('NAF-07: history binds to the CALLING task, not the selected UI task'
   const got = await fn('task', 'a1');           // the CALLER names its own task
   assert.equal(got.length, 1, 'one task');
   assert.equal(got[0].record.mine, 'a1', `history followed the SELECTED task (a2) instead of the calling task (a1) — got ${got[0].record.mine}`);
+});
+
+await test('project records include home and host tiers when browser storage is unavailable', async () => {
+  const home=await (await opfs({A:{a1:{'home.json':{from:'home'}}}}).storage.getDirectory()).getDirectoryHandle('anvil');
+  let lists=0, reads=0, indexes=0;
+  const fn=instantiate(extractFunction(src,'loadTaskRecords'),'loadTaskRecords',{
+    state:{activeProject:'A'},activeTask:()=>({id:'a1'}),navigator:{storage:{getDirectory:async()=>{throw Error('OPFS unavailable');}}},
+    homeHandle:home,hostFsReady:()=>true,nak:{fs:{}},CrateBackend:class {},TextEncoder,setTimeout,clearTimeout,
+    skillRowsForProject:async()=>{indexes++;return {rows:[{project:'A',task:'a1',name:'host.json',tiers:['Crate']},
+      {project:'B',task:'b1',name:'foreign.json',tiers:['Crate']}],incomplete:false};},
+    createFileops:()=>({list:async()=>{lists++;throw Error('host directory enumeration must not run');},
+      read:async(path,options)=>{reads++; assert.equal(path,'runs/A/a1/host.json');
+        assert.equal(options.maxBytes,1024*1024);return {ok:true,data:JSON.stringify({from:'host'})};}}),
+    loadRecord:d=>d,
+  });
+  const rows=await fn('project');
+  assert.deepEqual(Array.from(rows,row=>row.record.from).sort(),['home','host'],
+    `host tier missing: indexes=${indexes} reads=${reads} lists=${lists} incomplete=${rows.historyIncomplete}`);
+  assert.deepEqual(Array.from(await fn('run','a1'),row=>row.record.from),['host'],'the newest run is selected across tiers');
+  assert.equal(lists,0,'host enumeration uses the bounded index, never recursive list');
+  assert.equal(reads,2,'one exact host record is read per request');
+});
+
+await test('history prefers a verified home copy over a broken browser copy', async () => {
+  const home=await (await opfs({A:{a1:{'same.json':{from:'home',ok:true}}}}).storage.getDirectory()).getDirectoryHandle('anvil');
+  const fn=instantiate(extractFunction(src,'loadTaskRecords'),'loadTaskRecords',{
+    state:{activeProject:'A'},activeTask:()=>({id:'a1'}),
+    navigator:opfs({A:{a1:{'same.json':{from:'browser',ok:false},'broken.json':{from:'browser-only',ok:false}}}}),
+    homeHandle:home,hostFsReady:()=>false,
+    loadRecord:d=>({...d,verify:async()=>({ok:d.ok})}),
+  });
+  const rows=await fn('project');
+  assert.deepEqual(Array.from(rows,row=>row.record.from),['home']);
+  assert.equal(rows.integrityIssues,1,'the all-broken copy is reported, not used as history');
+});
+
+await test('malformed run records make history explicitly incomplete', async () => {
+  const fn=instantiate(extractFunction(src,'loadTaskRecords'),'loadTaskRecords',{
+    state:{activeProject:'A'},activeTask:()=>({id:'a1'}),
+    navigator:opfs({A:{a1:{'good.json':{ok:true},'malformed.json':{bad:true}}}}),
+    loadRecord:d=>{if(d.bad) throw Error('malformed event');return d;},
+  });
+  const rows=await fn('project');
+  assert.equal(rows.length,1);
+  assert.equal(rows.historyIncomplete,true);
+  assert.equal(rows.malformedRecords,1);
+});
+
+await test('unavailable browser and home tiers cannot yield authoritative empty history', async () => {
+  const denied=Object.assign(new Error('permission lost'),{name:'NotAllowedError'});
+  const fn=instantiate(extractFunction(src,'loadTaskRecords'),'loadTaskRecords',{
+    state:{activeProject:'A'},activeTask:()=>({id:'a1'}),
+    navigator:{storage:{getDirectory:async()=>{throw denied;}}},
+    homeHandle:{getDirectoryHandle:async()=>{throw denied;}},hostFsReady:()=>false,
+  });
+  const rows=await fn('project');
+  assert.equal(rows.length,0);
+  assert.equal(rows.historyIncomplete,true);
+});
+
+await test('Advanced closes on Escape and restores focus to its button', async () => {
+  const menu={hidden:true}, button={attributes:{},focused:false,
+    setAttribute(name,value){this.attributes[name]=value;},focus(){this.focused=true;}};
+  const handlers={};
+  const document={addEventListener(name,fn){handlers[name]=fn;}};
+  const $=id=>id==='adv-menu'?menu:button;
+  const code=extractRegion(src,"  $('adv-btn').onclick=", "  $('campaign-btn').onclick=");
+  evaluate(code,{$,document});
+  let prevented=false;
+  button.onclick({stopPropagation(){}});
+  assert.equal(menu.hidden,false);
+  assert.equal(button.attributes['aria-expanded'],'true');
+  handlers.keydown({key:'Escape',preventDefault(){prevented=true;}});
+  assert(prevented);
+  assert.equal(menu.hidden,true);
+  assert.equal(button.attributes['aria-expanded'],'false');
+  assert.equal(button.focused,true);
 });
 
 // ── S-1 — the history HANDLER, driven, not grepped ────────────────────────────────────
@@ -132,8 +216,9 @@ function learnCtx(over = {}) {
       createSkillSession: () => ({}),
       recordFact: async () => 'slug',
       inferViaHost: async () => ({ content: '' }),
-      runLearnReview: async (a) => { if (over.onReview) await over.onReview(a); return over.report || { staged: [], dropped: [] }; },
+      runLearnReview: async (a) => { if (over.onReview) await over.onReview(a); return over.report || { staged: [], dropped: [], quarantined: [] }; },
       renderFiles: () => {}, renderLog: () => {},
+      save: () => {},
       state: { activeProject: 'A' },
       parseSkill: (t) => ({ name: /name:\s*(\S+)/.exec(t || '')?.[1] || '', body: String(t || '') }),
       projectLedger: async () => over.ledger || { reject: async () => {} },
@@ -169,6 +254,385 @@ await test('ESS-4/5: the skill reader renders a document, a new project seeds th
   assert.match(src, /const r=scaffoldSkill\(\{ name:String\(name\)\.trim\(\), now:Date\.now\(\) \}\);[\s\S]*await fs\.write\(r\.path, r\.text\)/, 'the scaffold is written through the owner fs (active at once), never the agent route');
 });
 
+await test('project learning lists and reads before recording at most ten cited hypotheses', async () => {
+  const task={id:'t1',log:[]}, facts=[];
+  const fileops={list:async(path)=>({ok:true,entries:path?[]:[{path:'README.md',type:'file'}]})};
+  let drove=false, savedPrime=null;
+  const fn=instantiate(extractFunction(src,'primeProject'),'primeProject',{
+    nak:{capabilities:{ai:true,aiProvider:'ollama',aiModel:'configured-model'}}, priming:false, primeAbortController:null, running:false,
+    AbortController, boundedText, setTimeout, clearTimeout, createRememberBudget, budgetSpentReply,
+    state:{activeProject:'A',activeTask:'t1'}, setSend:()=>{}, pushSystem:()=>{},
+    activeTask:()=>task, save:()=>{}, renderLog:()=>{}, renderFiles:()=>{}, updateMemChip:async()=>{},
+    shell:{}, face:{}, inferViaHost:async()=>({content:'',model:'actual-model'}),
+    makeToolExecutor:()=>async(name,args)=>name==='read'
+      ? args.path==='README.md'?'    1  # Workspace':'Error reading '+args.path+': ENOENT'
+      : 'unexpected tool',
+    createPrimeReadEvidence, isSuccessfulReadToolResult, readPrimeSourceVersion:async()=>({status:'unavailable',reason:'test backend'}), primeListTool, primeRememberTool, createRunRecorder,
+    saveRunRecord:async(savedTask,rec,opts)=>{ savedPrime={savedTask,rec,opts}; return {tiers:['test'],errors:[]}; },
+    codingToolset, fs:fileops,
+    listFacts:async()=>[], findDuplicate:()=>null,
+    recordFact:async(note,type,status,rel,usedFs,canWrite)=>{ assert.equal(usedFs,fileops); assert(canWrite()); facts.push({note,type,status}); return 'workspace-fact'; },
+    runAgentLoop:async config=>{
+      await config.infer({messages:[]});
+      assert.deepEqual(config.tools.map(tool=>tool.function.name),['read','list','remember']);
+      assert(config.signal instanceof AbortSignal, 'the model loop receives a stop signal');
+      assert.match(config.messages[0].content,/FIRST call list/);
+      assert.doesNotMatch(config.messages[0].content,/FIRST run `ls`/);
+      assert.match(await config.executeTool('remember',{note:'Unobserved claim',sourcePaths:['README.md']}),/Not recorded/);
+      assert.match(await config.executeTool('list',{path:'../'}),/must stay inside this project/);
+      assert.match(await config.executeTool('list',{path:'a\\b'}),/must stay inside this project/);
+      assert.match(await config.executeTool('list',{path:'a\0b'}),/must stay inside this project/);
+      assert.match(await config.executeTool('list',{path:''}),/README.md/);
+      assert.match(await config.executeTool('shell',{command:'pwd'}),/Not available during project learning/);
+      assert.match(await config.executeTool('read',{path:'../README.md'}),/must stay inside this project/);
+      assert.match(await config.executeTool('read',{path:'docs\\README.md'}),/must stay inside this project/);
+      assert.match(await config.executeTool('read',{path:'missing.md'}),/ENOENT/);
+      assert.match(await config.executeTool('remember',{note:'Missing file claim',sourcePaths:['missing.md']}),/Not recorded/);
+      assert.match(await config.executeTool('read',{path:'README.md'}),/# Workspace/);
+      assert.match(await config.executeTool('remember',{note:'Binding rule',type:'rule',sourcePaths:['README.md']}),/Not recorded/);
+      assert.match(await config.executeTool('remember',{note:'Malformed type',type:0,sourcePaths:['README.md']}),/Not recorded/);
+      assert.match(await config.executeTool('remember',{note:'Malformed null type',type:null,sourcePaths:['README.md']}),/Not recorded/);
+      config.onEvent({type:'tool-call',name:'remember',args:{note:'Workspace has a README.',type:'project',sourcePaths:['README.md']},id:'fact-1',step:1});
+      assert.match(await config.executeTool('remember',{note:'Workspace has a README.',type:'project',sourcePaths:['README.md']}),/Recorded workspace-fact/);
+      config.onEvent({type:'tool-result',name:'remember',id:'fact-1',result:'Recorded workspace-fact',step:1});
+      for(let i=1;i<10;i++)
+        assert.match(await config.executeTool('remember',{note:'Cited fact '+i,type:'project',sourcePaths:['README.md']}),/Recorded workspace-fact/);
+      assert.match(await config.executeTool('remember',{note:'Eleventh fact',sourcePaths:['README.md']}),/cap/);
+      drove=true;
+      return {stop:'done'};
+    },
+  });
+  await fn();
+  assert(drove, 'the actual priming handler reached its model loop');
+  assert.equal(facts.length,10, 'the survey cannot exceed ten sourced facts');
+  assert.match(facts[0].note,/Source files read: README.md/);
+  assert.match(facts[0].note,/Source read digests \(displayed text\): README.md=/);
+  assert.match(facts[0].note,/Full source versions \(separately sampled, bounded SHA-256\): README.md=unavailable \(test backend\)/);
+  assert.match(facts[0].note,/not an atomic snapshot or a guarantee of current file contents/);
+  assert.match(facts[0].note,/Priming survey:/);
+  assert.match(facts[0].note,/Learning model: ollama\/configured-model \(responded: actual-model\)/);
+  assert.match(facts[0].note,/Fuel freshness: unknown/);
+  assert.equal(facts[0].status,'hypothesis');
+  assert(task.log.some(row=>/Learned 10 fact/.test(row.text)), 'the count reports saved facts only');
+  assert.equal(savedPrime.savedTask,task,'the survey record belongs to the original task');
+  assert.equal(savedPrime.opts.project,'A','the survey record stays in its project');
+  const primeEvents=savedPrime.rec.events();
+  assert.equal(primeEvents[0].app,'anvil-prime','the record identifies the priming pass');
+  assert.equal(savedPrime.rec.resolve(primeEvents[0]).input.model.id,'configured-model','the configured model rides the record');
+  assert(primeEvents.some(e=>e.tool==='llm.responded' && savedPrime.rec.resolve(e).output.model==='actual-model'),'the responder rides the record');
+  assert(primeEvents.some(e=>e.tool==='tool.responded' && savedPrime.rec.resolve(e).output.result==='Recorded workspace-fact'),'the saved fact slug rides the record');
+  assert(primeEvents.some(e=>e.tool==='run.stopped'),'the priming record settles');
+});
+
+await test('project-learning citation digest names the bounded text actually sent to the model', async () => {
+  const task={id:'t1',log:[]}; let savedFact='', displayed='';
+  const original='    1  '+('source '.repeat(5000));
+  const ctx={
+    nak:{capabilities:{ai:true}},priming:false,primeAbortController:null,running:false,
+    AbortController,boundedText,setTimeout,clearTimeout,createRememberBudget,budgetSpentReply,
+    state:{activeProject:'A',activeTask:'t1'},fs:{},setSend:()=>{},activeTask:()=>task,
+    save:()=>{},renderLog:()=>{},renderFiles:()=>{},updateMemChip:async()=>{},pushSystem:()=>{},
+    shell:{},face:{},inferViaHost:async()=>({content:''}),makeToolExecutor:()=>async()=>original,
+    createPrimeReadEvidence,isSuccessfulReadToolResult,readPrimeSourceVersion:async()=>({status:'unavailable',reason:'test backend'}),
+    primeListTool,primeRememberTool,createRunRecorder,saveRunRecord:async()=>({tiers:['test'],errors:[]}),codingToolset,
+    listFacts:async()=>[],findDuplicate:()=>null,recordFact:async note=>{savedFact=note;return 'bounded-fact';},
+    runAgentLoop:async config=>{
+      displayed=await config.executeTool('read',{path:'README.md'});
+      assert(displayed.length<20000,'the model receives a bounded tool result');
+      assert.match(displayed,/output truncated/);
+      assert.match(await config.executeTool('remember',{note:'A cited fact',sourcePaths:['README.md']}),/Recorded bounded-fact/);
+      return {stop:'done'};
+    },
+  };
+  await instantiate(extractFunction(src,'primeProject'),'primeProject',ctx)();
+  assert(savedFact.includes(digest(displayed)),`the stored citation hashes the displayed text (${digest(displayed)}; ${savedFact.slice(-350)})`);
+  assert(!savedFact.includes(digest(original)),'the stored citation does not mislabel the full executor output');
+});
+
+await test('project learning refuses a citation when source text changes before the fact write', async () => {
+  const task={id:'t1',log:[]};
+  let body='    1  first', writes=0;
+  const ctx={
+    nak:{capabilities:{ai:true}}, priming:false, primeAbortController:null, running:false,
+    AbortController, boundedText, setTimeout, clearTimeout, createRememberBudget, budgetSpentReply,
+    state:{activeProject:'A',activeTask:'t1'}, fs:{}, setSend:()=>{},
+    activeTask:()=>task, save:()=>{}, renderLog:()=>{}, renderFiles:()=>{}, updateMemChip:async()=>{}, pushSystem:()=>{},
+    shell:{}, face:{}, inferViaHost:async()=>({content:''}),
+    makeToolExecutor:()=>async()=>body, createPrimeReadEvidence, isSuccessfulReadToolResult, readPrimeSourceVersion:async()=>({status:'unavailable',reason:'test backend'}), primeListTool, primeRememberTool, createRunRecorder, saveRunRecord:async()=>({tiers:['test'],errors:[]}), codingToolset,
+    listFacts:async()=>[], findDuplicate:()=>null, recordFact:async()=>{ writes++; return 'bad-fact'; },
+    runAgentLoop:async config=>{
+      assert.equal(await config.executeTool('read',{path:'README.md'}),'    1  first');
+      body='    1  second';
+      assert.match(await config.executeTool('remember',{note:'Stale claim',sourcePaths:['README.md']}),/cited source changed/);
+      return {stop:'done'};
+    },
+  };
+  const fn=instantiate(extractFunction(src,'primeProject'),'primeProject',ctx);
+  await fn();
+  assert.equal(writes,0,'changed source cannot support a saved fact');
+});
+
+await test('project learning refuses an unseen full-file change after a displayed read', async () => {
+  const task={id:'t1',log:[]};
+  let version='sha256:before', writes=0;
+  const ctx={
+    nak:{capabilities:{ai:true}}, priming:false, primeAbortController:null, running:false,
+    AbortController, boundedText, setTimeout, clearTimeout, createRememberBudget, budgetSpentReply,
+    state:{activeProject:'A',activeTask:'t1'}, fs:{}, setSend:()=>{},
+    activeTask:()=>task, save:()=>{}, renderLog:()=>{}, renderFiles:()=>{}, updateMemChip:async()=>{}, pushSystem:()=>{},
+    shell:{}, face:{}, inferViaHost:async()=>({content:''}),
+    makeToolExecutor:()=>async()=> '    1  unchanged displayed line',
+    createPrimeReadEvidence, isSuccessfulReadToolResult, readPrimeSourceVersion:async()=>({status:'available',digest:version,bytes:50}),
+    primeListTool, primeRememberTool, createRunRecorder, saveRunRecord:async()=>({tiers:['test'],errors:[]}), codingToolset,
+    listFacts:async()=>[], findDuplicate:()=>null, recordFact:async()=>{ writes++; return 'bad-fact'; },
+    runAgentLoop:async config=>{
+      await config.executeTool('read',{path:'README.md',offset:0,limit:1});
+      version='sha256:after';
+      assert.match(await config.executeTool('remember',{note:'Stale hidden text',sourcePaths:['README.md']}),/file version changed/);
+      return {stop:'done'};
+    },
+  };
+  await instantiate(extractFunction(src,'primeProject'),'primeProject',ctx)();
+  assert.equal(writes,0,'a changed full file cannot support a saved fact when displayed text is unchanged');
+});
+
+await test('project learning refuses a fact when navigation occurs during the fact lookup', async () => {
+  const task={id:'task-A',log:[]}, state={activeProject:'A',activeTask:'task-A'};
+  const fileops={list:async()=>({ok:true,entries:[]})};
+  let writes=0;
+  const fn=instantiate(extractFunction(src,'primeProject'),'primeProject',{
+    nak:{capabilities:{ai:true}}, priming:false, primeAbortController:null, running:false,
+    AbortController, boundedText, setTimeout, clearTimeout, createRememberBudget, budgetSpentReply,
+    state, fs:fileops, setSend:()=>{},
+    activeTask:()=>task, save:()=>{}, renderLog:()=>{}, renderFiles:()=>{}, updateMemChip:async()=>{}, pushSystem:()=>{},
+    shell:{}, face:{}, inferViaHost:async()=>({content:''}),
+    makeToolExecutor:()=>async(name)=>name==='read'?'    1  # Project A':'unexpected',
+    createPrimeReadEvidence, isSuccessfulReadToolResult, readPrimeSourceVersion:async()=>({status:'unavailable',reason:'test backend'}), primeListTool, primeRememberTool, createRunRecorder, saveRunRecord:async()=>({tiers:['test'],errors:[]}), codingToolset,
+    listFacts:async(usedFs)=>{ assert.equal(usedFs,fileops); state.activeProject='B'; return []; },
+    findDuplicate:()=>null, recordFact:async()=>{ writes++; return 'wrong-project'; },
+    runAgentLoop:async config=>{
+      assert.match(await config.executeTool('read',{path:'README.md'}),/# Project A/);
+      await assert.rejects(config.executeTool('remember',{note:'An A fact',sourcePaths:['README.md']}),/Learning stopped/);
+      assert(config.signal.aborted, 'navigation cancels the loop');
+      return {stop:'aborted'};
+    },
+  });
+  await fn();
+  assert.equal(writes,0, 'a fact grounded in A must never reach another workspace');
+  assert(task.log.some(row=>/Learning stopped/.test(row.text)));
+});
+
+await test('project learning Stop aborts its model loop and resets the control state', async () => {
+  const task={id:'task-A',log:[]};
+  let start, sendUpdates=0, system='';
+  const started=new Promise(resolve=>{ start=resolve; });
+  const ctx={
+    nak:{capabilities:{ai:true}}, priming:false, primeAbortController:null, running:false,
+    AbortController, boundedText, setTimeout, clearTimeout, createRememberBudget, budgetSpentReply,
+    state:{activeProject:'A',activeTask:'task-A'}, fs:{}, setSend:()=>{ sendUpdates++; },
+    activeTask:()=>task, save:()=>{}, renderLog:()=>{}, renderFiles:()=>{}, updateMemChip:async()=>{},
+    pushSystem:text=>{ system=text; }, shell:{}, face:{}, inferViaHost:async()=>({content:''}),
+    makeToolExecutor:()=>async()=>'', createPrimeReadEvidence, isSuccessfulReadToolResult, readPrimeSourceVersion:async()=>({status:'unavailable',reason:'test backend'}), primeListTool, primeRememberTool, createRunRecorder, saveRunRecord:async()=>({tiers:['test'],errors:[]}), codingToolset,
+    runAgentLoop:async config=>{
+      start(config.signal);
+      await new Promise(resolve=>config.signal.addEventListener('abort',resolve,{once:true}));
+      return {stop:'aborted'};
+    },
+  };
+  const pair=evaluate(extractFunction(src,'primeProject')+'\n'+extractFunction(src,'stopRun')+'\n;({primeProject,stopRun})',ctx);
+  const pending=pair.primeProject();
+  const signal=await started;
+  assert(!signal.aborted);
+  pair.stopRun();
+  await pending;
+  assert(signal.aborted);
+  assert.equal(sendUpdates,2, 'the control state changed on start and finish');
+  assert.match(system,/Stopping/);
+  assert(task.log.some(row=>/Learning stopped after 0 confirmed fact/.test(row.text)));
+});
+
+await test('project learning Stop releases a hung directory listing', async () => {
+  const task={id:'task-A',log:[]};
+  let entered, sendUpdates=0;
+  const started=new Promise(resolve=>{ entered=resolve; });
+  const fileops={list:()=>{ entered(); return new Promise(()=>{}); }};
+  const ctx={
+    nak:{capabilities:{ai:true}}, priming:false, primeAbortController:null, running:false,
+    AbortController, boundedText, setTimeout, clearTimeout, createRememberBudget, budgetSpentReply,
+    state:{activeProject:'A',activeTask:'task-A'}, fs:fileops, setSend:()=>{ sendUpdates++; },
+    activeTask:()=>task, save:()=>{}, renderLog:()=>{}, renderFiles:()=>{}, updateMemChip:async()=>{}, pushSystem:()=>{},
+    shell:{}, face:{}, inferViaHost:async()=>({content:''}),
+    makeToolExecutor:()=>async()=>'', createPrimeReadEvidence, isSuccessfulReadToolResult, readPrimeSourceVersion:async()=>({status:'unavailable',reason:'test backend'}), primeListTool, primeRememberTool, createRunRecorder, saveRunRecord:async()=>({tiers:['test'],errors:[]}), codingToolset,
+    runAgentLoop:async config=>{
+      const answer=await config.executeTool('list',{path:''});
+      assert.match(answer,/Error listing.*Learning stopped/);
+      return {stop:'aborted'};
+    },
+  };
+  const pair=evaluate(extractFunction(src,'primeProject')+'\n'+extractFunction(src,'stopRun')+'\n;({primeProject,stopRun})',ctx);
+  const pending=pair.primeProject();
+  await started;
+  pair.stopRun();
+  await pending;
+  assert.equal(sendUpdates,2,'the UI releases even when the backend promise never settles');
+  assert(task.log.some(row=>/Learning stopped after 0 confirmed fact/.test(row.text)));
+});
+
+await test('project learning reconciles a fact write after Stop and project navigation', async () => {
+  const task={id:'task-A',log:[]};
+  let entered, release, saved=0;
+  const records=[];
+  let audited;
+  const lateAudit=new Promise(resolve=>{audited=resolve;});
+  const started=new Promise(resolve=>{ entered=resolve; });
+  const writeDone=new Promise(resolve=>{ release=resolve; });
+  const ctx={
+    nak:{capabilities:{ai:true}}, priming:false, primeAbortController:null, running:false,
+    AbortController, boundedText, setTimeout, clearTimeout, createRememberBudget, budgetSpentReply,
+    state:{activeProject:'A',activeTask:'task-A'}, fs:{}, setSend:()=>{},
+    activeTask:()=>task, save:()=>{}, renderLog:()=>{}, renderFiles:()=>{}, updateMemChip:async()=>{}, pushSystem:()=>{},
+    shell:{}, face:{}, inferViaHost:async()=>({content:''}),
+    makeToolExecutor:()=>async()=> '    1  # Workspace',
+    createPrimeReadEvidence, isSuccessfulReadToolResult, readPrimeSourceVersion:async()=>({status:'unavailable',reason:'test backend'}), primeListTool, primeRememberTool, createRunRecorder,
+    saveRunRecord:async(_,rec)=>{ await rec.settled(); records.push(rec.events());
+      if(rec.events().some(event=>event.tool==='prime.fact.settled')) audited();
+      return {tiers:['test'],errors:[]}; }, codingToolset,
+    listFacts:async()=>[], findDuplicate:()=>null,
+    recordFact:async()=>{ entered(); await writeDone; saved++; return 'late-fact'; },
+    runAgentLoop:async config=>{
+      await config.executeTool('read',{path:'README.md'});
+      const reply=await config.executeTool('remember',{note:'Cited fact',sourcePaths:['README.md']});
+      assert.match(reply,/Learning stopped/);
+      return {stop:'aborted'};
+    },
+  };
+  const pair=evaluate(extractFunction(src,'primeProject')+'\n'+extractFunction(src,'stopRun')+'\n;({primeProject,stopRun})',ctx);
+  const pending=pair.primeProject();
+  await started;
+  ctx.state.activeProject='B'; ctx.state.activeTask='task-B'; ctx.fs={};
+  pair.stopRun();
+  await pending;
+  assert.equal(saved,0,'the write is still unresolved when the UI releases');
+  assert(task.log.some(row=>/pending fact write may still finish/.test(row.text)));
+  release();
+  let timeout;
+  try{ await Promise.race([lateAudit,new Promise((_,reject)=>{ timeout=setTimeout(()=>reject(Error('late audit did not settle')),1000); })]); }
+  finally{ clearTimeout(timeout); }
+  assert.equal(saved,1);
+  assert(task.log.some(row=>/pending fact write completed after learning stopped: late-fact/.test(row.text)));
+  assert(task.log.some(row=>/survey .* project A/.test(row.text)),'the original task names the workspace that received the late write');
+  assert(records.some(events=>events.some(event=>event.tool==='prime.fact.settled')),
+    'a separate persisted record audits the late mutation after the stopped run');
+});
+
+await test('a fact write finishing after navigation does not render the new project', async () => {
+  let entered, release, renders=0, current=true;
+  const started=new Promise(resolve=>{entered=resolve;});
+  const pendingWrite=new Promise(resolve=>{release=resolve;});
+  const fileops={stat:async()=>({ok:false}),write:async()=>{entered(); await pendingWrite; return {ok:true};}};
+  const recordFact=instantiate(extractFunction(src,'recordFact'),'recordFact',{
+    fs:fileops,MEMORY_DIR:'.anvil/memory',reservedFactPaths:new Set(),noteToFact:()=>({slug:'survey-fact',file:'name: survey-fact\nbody'}),
+    renderFiles:()=>{renders++;},
+  });
+  const writing=recordFact('body','project','hypothesis',{},fileops,()=>current);
+  await started;
+  current=false;
+  release();
+  assert.equal(await writing,'survey-fact','the pinned workspace reports the completed mutation');
+  assert.equal(renders,0,'completion after navigation never renders the newly selected workspace');
+});
+
+await test('a commit-then-error fact write is identified by exact bounded readback', async () => {
+  const saved=new Map(); let renders=0;
+  const fileops={stat:async()=>({ok:false}),
+    write:async(path,data)=>{saved.set(path,data);throw Error('ack lost');},
+    read:async(path,opts)=>{assert(opts.maxBytes>0 && opts.maxBytes<1024*1024);
+      return {ok:true,data:saved.get(path)};}};
+  const recordFact=instantiate(extractFunction(src,'recordFact'),'recordFact',{
+    fs:fileops,MEMORY_DIR:'.anvil/memory',TextEncoder,reservedFactPaths:new Set(),
+    noteToFact:()=>({slug:'committed-fact',file:'name: committed-fact\nbody'}),
+    renderFiles:()=>{renders++;},
+  });
+  await assert.rejects(recordFact('body','project','hypothesis',{},fileops,()=>true),error=>{
+    assert.equal(error.writeStatus,'saved-with-error');
+    assert.equal(error.committedSlug,'committed-fact');return true;
+  });
+  assert.equal(renders,1,'a confirmed committed fact refreshes its own project');
+});
+
+await test('project learning exposes Stop and disables Send while active', () => {
+  const elements={send:{textContent:'',disabled:false},stop:{hidden:true},
+    dot:{className:''},title:{textContent:''},verify:{textContent:'',classList:{toggle:()=>{}}},
+    mobileStop:{style:{display:'none'}},store:{textContent:''}};
+  const selectors={'#mobilebar .mb-dot':elements.dot,'#mobilebar .mb-title':elements.title,
+    '#mobilebar .mb-verify':elements.verify,'#mobilebar .mb-stop':elements.mobileStop};
+  const setSend=evaluate(extractFunction(src,'renderSwitcher')+'\n'+extractFunction(src,'setSend')+'\n;setSend',{
+    priming:true, running:false, $:id=>elements[id],
+    document:{querySelector:sel=>selectors[sel],getElementById:()=>elements.store},
+    activeTask:()=>({status:'idle',title:'Task',verifyCmd:''}),workspaceLabel:'Browser · Project',
+  });
+  setSend();
+  assert.equal(elements.send.textContent,'Learning…');
+  assert.equal(elements.send.disabled,true);
+  assert.equal(elements.stop.hidden,false);
+  assert.equal(elements.mobileStop.style.display,'inline-flex','the phone bar exposes Stop too');
+});
+
+await test('fact recording checks its pinned workspace before writing', async () => {
+  let allowed=true, writes=0;
+  const pinned={stat:async()=>{ allowed=false; return {ok:false}; },write:async()=>{ writes++; }};
+  const fn=instantiate(extractFunction(src,'recordFact'),'recordFact',{
+    fs:{write:async()=>{ throw new Error('global workspace used'); }},
+    MEMORY_DIR:'.anvil/memory', reservedFactPaths:new Set(),noteToFact:()=>({slug:'test',file:'name: test\nbody'}),
+    renderFiles:()=>{}, listFacts:async()=>[],
+  });
+  assert.equal(await fn('body','project','hypothesis',{},pinned,()=>allowed),null);
+  assert.equal(writes,0, 'navigation during stat must prevent the write');
+});
+
+await test('fact recording does not count a failed write as saved', async () => {
+  const pinned={stat:async()=>({ok:false}),write:async()=>({ok:false,error:'disk full'})};
+  const fn=instantiate(extractFunction(src,'recordFact'),'recordFact',{
+    fs:pinned, MEMORY_DIR:'.anvil/memory',reservedFactPaths:new Set(),
+    noteToFact:()=>({slug:'test',file:'name: test\nbody'}), renderFiles:()=>{ throw new Error('rendered a failed fact'); },
+  });
+  await assert.rejects(fn('body','project'),/Fact write reported an error; outcome unknown: disk full/);
+});
+
+await test('an in-flight late fact reserves its slug against the next run', async () => {
+  let entered,release;
+  const started=new Promise(resolve=>{entered=resolve;});
+  const blocked=new Promise(resolve=>{release=resolve;});
+  const writes=[];
+  const fileops={stat:async()=>({ok:false}),write:async(path,data)=>{
+    writes.push({path,data});
+    if(path.endsWith('/same.md')){entered();await blocked;}
+    return {ok:true};
+  }};
+  const recordFact=instantiate(extractFunction(src,'recordFact'),'recordFact',{
+    fs:fileops,MEMORY_DIR:'.anvil/memory',reservedFactPaths:new Set(),
+    noteToFact:()=>({slug:'same',file:'name: same\nbody'}),renderFiles:()=>{},
+  });
+  const first=recordFact('first','project','hypothesis',{},fileops,()=>true);
+  await started;
+  const second=await recordFact('second','project','hypothesis',{},fileops,()=>true);
+  assert.equal(second,'same-2');
+  release();
+  assert.equal(await first,'same');
+  assert.deepEqual(writes.map(write=>write.path),['.anvil/memory/same.md','.anvil/memory/same-2.md']);
+});
+
+await test('project memory lists source paths saved with learned facts', async () => {
+  const ctx={state:{previewOpen:false},listFacts:async()=>[{
+    name:'workspace-fact',type:'project',status:'hypothesis',description:'Workspace has a README.',
+    body:'Workspace has a README.\n\nSource files read: README.md, docs/setup.md',path:'.anvil/memory/workspace-fact.md',
+  }],activeTask:()=>null,save:()=>{},renderPreview:()=>{}};
+  const view=evaluate('let globalPreview=null;\n'+extractFunction(src,'openProjectMemory')+'\n;({openProjectMemory,preview:()=>globalPreview})',ctx);
+  await view.openProjectMemory();
+  assert.match(view.preview().content,/Source files read: README\.md, docs\/setup\.md/);
+  assert.equal(ctx.state.previewOpen,true);
+});
+
 await test('NAF-09: the rejection ledger is assigned, not permanently null', async () => {
   // The defect is structural: `let learnLedger = null` is declared and only ever READ, so every
   // review runs against an empty ledger and a rejected proposal is re-proposed forever.
@@ -196,6 +660,23 @@ await test('NAF-11: a failed skill write is reported, not swallowed as staged', 
   const fn = instantiate(extractFunction(src, 'learnThisRun'), 'learnThisRun', ctx);
   await fn({ log: [] }, { events: [], resolve: () => ({}) });
   assert.ok(result && result.ok === false, `a failing fs.write must not report success — got ${JSON.stringify(result)}`);
+});
+
+await test('learning quarantine keeps its explanation and source in the task state', async () => {
+  let saves = 0;
+  const report = { staged:[], dropped:[], models:[{id:'model-one'}], quarantined:[{
+    kind:'fact', name:'late-rule', reason:'citation e4 arrived after responsible turn 0 began',
+    responsibleTurn:0, sourceRefs:[{id:'e4',tool:'run.steered',hash:'h4'}], explanation:'Later feedback named the rule.',
+  }] };
+  const { ctx } = learnCtx({ report, ctx:{ save:()=>{ saves++; } } });
+  const fn = instantiate(extractFunction(src, 'learnThisRun'), 'learnThisRun', ctx);
+  const task = { log:[] };
+  await fn(task, { events:[], resolve:()=>({}), head:()=> 'sha256:review-run' });
+  assert.equal(saves,1);
+  assert.equal(task.learnQuarantine[0].recordHead,'sha256:review-run');
+  assert.equal(task.learnQuarantine[0].sourceRefs[0].id,'e4');
+  assert.match(task.learnQuarantine[0].explanation,/Later feedback/);
+  assert.match(task.log.at(-1).text,/Learning proposal quarantined/);
 });
 
 // ── NAF-04 / NAF-08 / NAF-19 — wiring the grep anchors could not see ───────────────────
@@ -378,7 +859,7 @@ await test('WIRE: a reopened record refolds from its checkpoint (resumed), a for
 await test('U6: the run-index row carries anchor and toFirstAction, folded from the record', async () => {
   const { loadRecord, statusUnit, createProjector, foldOrdering, foldRecalled, foldEpisode, foldQuota } = await import('../sys/history/run-record.mjs');
   const fis = instantiate(extractRegion(src, 'async function foldIndexStatus(', '// One index row from one record.'), 'foldIndexStatus', { statusUnit, createProjector });
-  const runIndexRow = instantiate(extractRegion(src, 'async function runIndexRow(', '// The doctor: rebuild the index'), 'runIndexRow', { foldIndexStatus: fis, foldOrdering, foldRecalled, foldEpisode, foldQuota, ROW_SHAPE: Number((src.match(/const ROW_SHAPE=(\d+);/) || [])[1]) });
+  const runIndexRow = instantiate(extractRegion(src, 'async function runIndexRow(', '// The doctor: rebuild the index'), 'runIndexRow', { foldIndexStatus: fis, foldOrdering, foldRecalled, foldEpisode, foldQuota, foldSkillUsage, ROW_SHAPE: Number((src.match(/const ROW_SHAPE=(\d+);/) || [])[1]) });
   const load = (f) => loadRecord(JSON.parse(readFileSync(new URL('../sys/history/corpus/' + f, import.meta.url), 'utf8')));
   const wf = await runIndexRow({ project: 'p', task: 't', name: 'w.json', path: 'x', tiers: ['t'], rec: { ...load('write-a-file.json'), head: () => null }, gated: false });
   assert.equal(wf.anchor, 'shell-write', 'write-a-file went straight to a shell write');
@@ -391,7 +872,7 @@ await test('U6: the run-index row carries anchor and toFirstAction, folded from 
 await test('U6: the doctor groups the ordering number over the records it read — gated and ungated classes, every run counted', async () => {
   const { loadRecord, foldStopReasons, stopReasonsLine, groupOrdering, orderingLine, statusUnit, createProjector, foldOrdering, foldRecalled, foldEpisode, foldQuota, isCorpusRecord } = await import('../sys/history/run-record.mjs');
   const fis = instantiate(extractRegion(src, 'async function foldIndexStatus(', '// One index row from one record.'), 'foldIndexStatus', { statusUnit, createProjector });
-  const runIndexRow = instantiate(extractRegion(src, 'async function runIndexRow(', '// The doctor: rebuild the index'), 'runIndexRow', { foldIndexStatus: fis, foldOrdering, foldRecalled, foldEpisode, foldQuota, ROW_SHAPE: Number((src.match(/const ROW_SHAPE=(\d+);/) || [])[1]) });
+  const runIndexRow = instantiate(extractRegion(src, 'async function runIndexRow(', '// The doctor: rebuild the index'), 'runIndexRow', { foldIndexStatus: fis, foldOrdering, foldRecalled, foldEpisode, foldQuota, foldSkillUsage, ROW_SHAPE: Number((src.match(/const ROW_SHAPE=(\d+);/) || [])[1]) });
   // a fake OPFS: anvil/runs/<project>/<task>/<file>.json over the real corpus dumps, plus one empty record
   const corpusDir = new URL('../sys/history/corpus/', import.meta.url);
   const files = readdirSync(corpusDir).filter(isCorpusRecord).map((f) => [f, readFileSync(new URL(f, corpusDir), 'utf8')]);
@@ -578,7 +1059,7 @@ await test('PG-A3: saveLedger writes only into the project the ledger was loaded
 await test('LX-3: the run index row carries the goal row\'s inputs (gatePassed, tokens, seconds, evidence, axis, reason); the task bar and the door read the goal', async () => {
   const { loadRecord, statusUnit, createProjector, foldOrdering, foldRecalled, foldEpisode, foldQuota } = await import('../sys/history/run-record.mjs');
   const fis = instantiate(extractRegion(src, 'async function foldIndexStatus(', '// One index row from one record.'), 'foldIndexStatus', { statusUnit, createProjector });
-  const runIndexRow = instantiate(extractRegion(src, 'async function runIndexRow(', '// The doctor: rebuild the index'), 'runIndexRow', { foldIndexStatus: fis, foldOrdering, foldRecalled, foldEpisode, foldQuota, ROW_SHAPE: Number((src.match(/const ROW_SHAPE=(\d+);/) || [])[1]) });
+  const runIndexRow = instantiate(extractRegion(src, 'async function runIndexRow(', '// The doctor: rebuild the index'), 'runIndexRow', { foldIndexStatus: fis, foldOrdering, foldRecalled, foldEpisode, foldQuota, foldSkillUsage, ROW_SHAPE: Number((src.match(/const ROW_SHAPE=(\d+);/) || [])[1]) });
   const rec = createRunRecorder({ app: 'anvil', principal: 'p' });
   await rec.start({ messages: [{ role: 'user', content: 'go' }], tools: [] });
   rec.onEvent({ type: 'verify-pass', verdict: { ok: true, exit: 0 }, via: null });

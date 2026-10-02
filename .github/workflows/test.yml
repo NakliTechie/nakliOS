@@ -23,6 +23,9 @@ jobs:
       - name: Verify immutable Unix portability closure without browser globals
         run: node --experimental-vm-modules scripts/test-unix-portability.mjs c3553134571d1d601bfdbf857f6b3df138a6bf4f
 
+      - name: Verify owner-paired native gate authority and cancellation
+        run: node scripts/test-native-gate.mjs
+
       - name: Verify vendored Crate manifest security
         run: node scripts/test-crate-manifest.mjs
 
@@ -50,8 +53,20 @@ jobs:
       - name: Verify Editor recovery and exact-file handoff boundaries
         run: node scripts/test-editor-v1.mjs
 
+      - name: Verify selected-file snapshot bounds and Rig shell isolation
+        run: node sys/ai/test/range-edit.test.mjs
+
+      - name: Verify Editor and Anvil range-edit handler authority
+        run: node scripts/test-range-edit-handlers.mjs
+
+      - name: Verify acknowledged range-edit delivery and bounded retries
+        run: node scripts/test-range-edit-delivery.mjs
+
       - name: Verify Books stays hosted and uses explicit Folder or Crate storage
         run: node scripts/test-books-storage-bridge.mjs
+
+      - name: Verify the local COI server maps the sibling Books source
+        run: node scripts/test-serve-coi-books.mjs
 
       - name: Verify Slate and BOFH open in Immersive NakliOS windows
         run: node scripts/test-immersive-apps.mjs
@@ -62,11 +77,17 @@ jobs:
       - name: Verify filesystem operations remain bound to their selected backend
         run: node scripts/test-fs-backend-affinity.mjs
 
+      - name: Verify bounded Folder byte ranges and filesystem authority
+        run: node scripts/test-fs-binary-ranges.mjs
+
       - name: Verify shared local AI broker and SDK contracts
         run: node scripts/test-local-ai.mjs
 
       - name: Verify SDK-vendoring canonical invariants and splicer round-trip
         run: node scripts/test-vendored-sdk.mjs
+
+      - name: Verify SDK review staging, source-bound decisions, and replay acknowledgements
+        run: node scripts/test-sdk-review-bridge.mjs
 
       - name: Verify every public SDK member has an audit-ledger line with a valid status (B4)
         run: node scripts/test-sdk-audit.mjs
@@ -118,6 +139,12 @@ jobs:
 
       - name: Verify Revert refuses on drift, a dropped pre-image says why, and retention is bounded
         run: node sys/ai/test/change-preimages.test.mjs
+
+      - name: Verify shared review diff anchors, versions, and file states
+        run: node sys/ai/test/review-diff.test.mjs
+
+      - name: Verify shared review highlighting preserves source text
+        run: node sys/ai/test/review-highlight.test.mjs
 
       - name: Verify the transcript render plans noop/append/rebuild and leaves the reader's scroll alone
         run: node sys/ai/test/log-render-plan.test.mjs
@@ -500,11 +527,19 @@ jobs:
       - name: Verify the honest context budget (Ollama num_ctx, usable floor, handoff cap, reminder)
         run: node sys/ai/test/context-budget.test.mjs
 
+      - name: Verify frozen checkpoint handoff cap acceptance
+        run: node sys/ai/test/handoff-cap.test.mjs
+
       - name: Verify predict-then-grade (expect on shell) — grammar, grade, miss recorded
         run: node sys/ai/test/expect.test.mjs
 
       - name: Verify the post-run review fork + auto-review scheduler (learn this run)
         run: node sys/ai/test/learn.test.mjs
+
+      - name: Verify learning proposals cite evidence available before the responsible turn
+        run: node sys/ai/test/learn-grounding.test.mjs
+      - name: Verify lesson activation and model provenance stay observational
+        run: node sys/ai/test/lesson-evidence.test.mjs
 
       - name: Verify generational evolutionary loop (AVO crib)
         run: node sys/ai/test/evolve.test.mjs
@@ -566,6 +601,9 @@ jobs:
       - name: Verify the run record — record a real run, fold it, replay it with zero model calls
         run: node sys/history/test/run-record.test.mjs
 
+      - name: Verify bounded, redacted foreign transcript imports and local search
+        run: node sys/history/test/foreign-transcripts.test.mjs
+
       - name: Verify the incremental fold driver — every prefix of every recorded run
         run: node sys/history/test/projection.test.mjs
 
@@ -580,6 +618,9 @@ jobs:
 
       - name: Verify the host review queue reducer (stage/commit/discard, authority, poison)
         run: node sys/staging/test/review-queue.test.mjs
+
+      - name: Verify host review bridge over native app diffs and source acknowledgements
+        run: node sys/staging/test/review-host.test.mjs
 
       - name: Verify P0 enforcement — agent face capability check
         run: node sys/rig/agent/test/agent-face-capability.test.mjs
@@ -660,3 +701,9 @@ jobs:
 
       - name: Verify native Worker network denials after CPython type-cache invalidation
         run: node scripts/test-kiln-network-denial-browser.mjs
+
+      - name: Verify native IndexedDB range-edit comparison, concurrent writers, and cancellation
+        run: node scripts/test-range-edit-browser.mjs
+
+      - name: Verify range-edit receipt discard races and retry freshness
+        run: node scripts/test-range-edit-receipt-races.mjs

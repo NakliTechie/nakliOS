@@ -195,13 +195,13 @@
       "id": "draft",
       "repo": "NakliTechie/draft",
       "requestedRef": "main",
-      "resolvedCommit": "53d0864707b6accdc05244ae084586e13e17d957",
+      "resolvedCommit": "4226409ea16b286ac384b9fbc48e5d2c95dc37af",
       "files": [
         {
           "source": "draft.html",
           "destination": "index.html",
-          "sha256": "84c6518fd750415b431d8e426c73760bcdc8368cc290209dc69240dedbacee63",
-          "bytes": 633062
+          "sha256": "ed84775e6f62903e82c1f984a37cdd1353186dd539f05c37eea3d44e7ac80a4f",
+          "bytes": 648502
         }
       ]
     },
@@ -209,13 +209,13 @@
       "id": "kanzen",
       "repo": "NakliTechie/KanZen",
       "requestedRef": "main",
-      "resolvedCommit": "c30018b2f4aa024f3a70c6d73efba2e9384e2e65",
+      "resolvedCommit": "bfd59cf15597d9fd48bdb0e36e63ce4044536d72",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "2784a55b6b01eaf8e6175bdca22128d7d67698e64d27d16e3d17291455fb3160",
-          "bytes": 295291
+          "sha256": "893f5a89b7043fc2198ca20b2b4d2302b1cd08f9877fb0539b0ba9ac4d12a451",
+          "bytes": 300479
         }
       ]
     },
@@ -267,13 +267,13 @@
       "id": "nakliamp",
       "repo": "NakliTechie/nakliamp",
       "requestedRef": "main",
-      "resolvedCommit": "e246b18fc0ec24fb8460cd05981183b09155b712",
+      "resolvedCommit": "0fb842be3b4b00aa6982796d8fb5611a36d985b7",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "bb2bab18a9d01f90d0e22e82017572bc64adce444ac132c4873cdc6c5cb80ffc",
-          "bytes": 69159
+          "sha256": "7c0ba3a7d5186cf1025240b2e9633f04ae9dd1a1b82eecd5edef962cfeadf227",
+          "bytes": 69238
         },
         {
           "source": "VENDOR.md",
@@ -427,13 +427,13 @@
       "id": "reckon",
       "repo": "NakliTechie/reckon",
       "requestedRef": "main",
-      "resolvedCommit": "bf135dd7e4106d9147c30a81d7febedb421695c3",
+      "resolvedCommit": "5c9a7bc4fbd2f62ca7679032e039e30bb9e16dca",
       "files": [
         {
           "source": "reckon.html",
           "destination": "index.html",
-          "sha256": "44e993f563677265ae6932655bdd9c7e653285390affcf85e91fb61e2da05270",
-          "bytes": 966812
+          "sha256": "fad66e3a85d61c6266fed033a4dd7fb3ad9d86d680c305694987bda95de59b35",
+          "bytes": 984592
         }
       ]
     },

@@ -13,6 +13,52 @@ import { createShell } from '../../cli/shell.mjs';
 
 const bytes = (value) => new TextEncoder().encode(value);
 const options = { metadataOnly: true };
+test('bounded FSA listing stops enumeration and unsupported backends refuse', async () => {
+  let yielded=0;
+  const root={getDirectoryHandle:async()=>root,
+    async *entries(){for(let i=0;i<100;i++){yielded++; yield ['file-'+i,{kind:'file'}];}}};
+  const fs=createFileops({backend:new FsaBackend(root)});
+  const listed=await fs.list('',{maxEntries:50});
+  assert.equal(listed.ok,true);
+  assert.equal(listed.entries.length,50);
+  assert.equal(listed.truncated,true);
+  assert.equal(listed.snapshotConsistent,false,'bounded FSA pages disclose live-directory semantics');
+  assert.equal(yielded,50,'the provider iterator stops at the page bound');
+  assert(listed.cursor,'the next page is reachable through an opaque cursor');
+  const next=await fs.list('',{maxEntries:50,cursor:listed.cursor});
+  assert.equal(next.entries.length,50);
+  assert.notEqual(next.cursor,listed.cursor,'each page consumes and replaces the cursor');
+  assert.equal((await fs.list('',{maxEntries:50,cursor:listed.cursor})).code,'EINVAL',
+    'an old cursor cannot be replayed');
+  assert.equal(yielded,100,'the second page resumes the same iterator');
+  const end=await fs.list('',{maxEntries:50,cursor:next.cursor});
+  assert.equal(end.entries.length,0);
+  assert.equal(end.truncated,false);
+  assert.equal(end.cursor,null);
+  assert.equal(end.snapshotConsistent,false,'a final page does not certify a coherent snapshot');
+  assert.equal(new Set([...listed.entries,...next.entries].map(e=>e.path)).size,100,
+    'continuation reaches every entry without duplicates');
+  const unsupported=await createFileops({backend:new MemoryBackend()}).list('',{maxEntries:50});
+  assert.equal(unsupported.code,'ENOTSUP');
+});
+
+test('bounded FSA listing reports a provider refusal instead of an empty project', async () => {
+  const root={async getDirectoryHandle(){throw providerError('NotAllowedError');},
+    async getFileHandle(){throw providerError('NotFoundError');},async *entries(){}};
+  const fs=createFileops({backend:new FsaBackend(root)});
+  const result=await fs.list('private',{maxEntries:50});
+  assert.equal(result.ok,false);
+  assert.equal(result.code,'EACCES');
+});
+
+test('bounded FSA listing reports an iterator failure instead of a partial page', async () => {
+  const root={async getDirectoryHandle(){return root;},
+    async *entries(){yield ['visible',{kind:'file'}];throw providerError('NotReadableError');}};
+  const fs=createFileops({backend:new FsaBackend(root)});
+  const result=await fs.list('',{maxEntries:50});
+  assert.equal(result.ok,false);
+  assert.equal(result.code,'EIO');
+});
 function countContent(backend) {
   const original = backend.readBinary.bind(backend); let count = 0;
   backend.readBinary = (...args) => { count++; return original(...args); };

@@ -252,7 +252,7 @@ footer{min-height:48px;border-top:1px solid var(--line);display:flex;align-items
       <input id="seek" type="range" min="0" max="1" step="0.01" value="0" aria-label="Seek through track">
       <span id="duration">0:00</span>
     </div>
-    <label class="volume-wrap"><span aria-hidden="true">◖</span><input id="volume" type="range" min="0" max="1" step="0.02" value="0.8" aria-label="Volume"></label>
+    <label class="volume-wrap"><span aria-hidden="true">◖</span><input id="volume" type="range" min="0" max="1" step="0.01" value="0.8" aria-label="Volume"></label>
     <div class="vis-wrap" id="vis-wrap">
       <canvas id="vis" aria-label="Spectrum visualiser" role="img"></canvas>
     </div>
@@ -602,10 +602,14 @@ $('#seek').addEventListener('change', async () => {
   await engine.seek(Number($('#seek').value));
   seeking = false;
 });
-$('#volume').addEventListener('input', () => {
+function setUiVolume(value) {
+  // Keep the five-percent keyboard increments representable by the slider.
+  const next = Math.round(Math.max(0, Math.min(1, value)) * 100) / 100;
+  $('#volume').value = String(next);
   engine.setVolume(Number($('#volume').value));
   localStorage.setItem('nakliamp:volume', $('#volume').value);
-});
+}
+$('#volume').addEventListener('input', () => setUiVolume(Number($('#volume').value)));
 $('#file-input').addEventListener('change', async event => {
   const [file] = event.target.files;
   if (file) await openMedia(file).catch(() => {});
@@ -678,14 +682,8 @@ const KEYMAP = Object.freeze({
   ' ': () => togglePlay(),
   ArrowLeft: () => engine.state().path && engine.seek(engine.state().clock.positionS - 10),
   ArrowRight: () => engine.state().path && engine.seek(engine.state().clock.positionS + 10),
-  ArrowUp: () => {
-    const next = Math.min(1, Number($('#volume').value) + 0.05);
-    $('#volume').value = String(next); engine.setVolume(next);
-  },
-  ArrowDown: () => {
-    const next = Math.max(0, Number($('#volume').value) - 0.05);
-    $('#volume').value = String(next); engine.setVolume(next);
-  },
+  ArrowUp: () => setUiVolume(Number($('#volume').value) + 0.05),
+  ArrowDown: () => setUiVolume(Number($('#volume').value) - 0.05),
   m: () => engine.setMuted(!engine.state().clock.muted),
   v: () => { const id = visualiser.cycle(1); $('#vis-mode').value = id; localStorage.setItem('nakliamp:visualiser', id); },
   V: () => toggleFullVisualiser(),

@@ -36,6 +36,9 @@ export class FsaBackend {
     }
     this.root = rootHandle;
     this.supportsBoundedReads = true;
+    this.supportsBoundedListing = true;
+    this._listCursors = new Map();
+    this._listCursorSeq = 0;
     this.supportsMetadataOnly = true;
     // Only the OPFS factory supplies this provenance. A picked native folder's
     // handle API does not expose an atomic no-follow path-resolution contract.
@@ -196,21 +199,55 @@ export class FsaBackend {
   }
 
   // Immediate children only, each a full safePath; directories suffixed '/'.
-  async list(prefix, { metadataOnly } = {}) {
+  async list(prefix, { metadataOnly, maxEntries, cursor = null } = {}) {
     const parts = String(prefix).split('/').filter(Boolean);
     let dir;
-    try { dir = await this._dirHandle(parts, false); }
-    catch (error) { if (metadataOnly) throw metadataError(error, 'list', prefix); return []; }
+    try { if(!cursor) dir = await this._dirHandle(parts, false); }
+    catch (error) { if (metadataOnly || maxEntries!==undefined) throw metadataError(error, 'list', prefix); return []; }
     const base = prefix === '' ? '' : prefix + '/';
+    if(maxEntries!==undefined){
+      const now=Date.now();
+      for(const [token,state] of this._listCursors){
+        if(now-state.at>120000){ this._listCursors.delete(token); try{ await state.iterator.return?.(); }catch(_){} }
+      }
+      let state=cursor ? this._listCursors.get(cursor) : null;
+      if(cursor && (!state || state.prefix!==prefix || state.maxEntries!==maxEntries))
+        throw Object.assign(new Error('invalid or expired listing cursor'),{code:'EINVAL'});
+      // Consume before awaiting iterator.next(). A second concurrent or replayed
+      // use of this token fails instead of advancing the same live iterator.
+      if(cursor) this._listCursors.delete(cursor);
+      if(!state){ state={prefix,maxEntries,iterator:dir.entries()[Symbol.asyncIterator](),at:now}; }
+      const out=[]; let done=false;
+      try {
+        for(let i=0;i<maxEntries;i++){
+          const next=await state.iterator.next();
+          if(next.done){done=true;break;}
+          const [name,handle]=next.value;
+          out.push(base+name+(handle.kind==='directory'?'/':''));
+        }
+      } catch(error) { throw metadataError(error,'list',prefix); }
+      const token='page-'+(++this._listCursorSeq)+'-'+Math.random().toString(36).slice(2);
+      if(!done){ state.at=now; this._listCursors.set(token,state); }
+      while(this._listCursors.size>16){ const [old,prior]=this._listCursors.entries().next().value;
+        this._listCursors.delete(old); try{ await prior.iterator.return?.(); }catch(_){} }
+      out.sort(); out.truncated=!done; out.cursor=done?null:token;
+      // FileSystemDirectoryHandle exposes no snapshot or directory version.
+      // A mutation between pages may duplicate or omit an entry.
+      out.snapshotConsistent=false;
+      return out;
+    }
     const out = [];
+    let truncated = false;
     try {
       for await (const [name, handle] of dir.entries()) {
+        if (maxEntries !== undefined && out.length >= maxEntries) { truncated = true; break; }
         out.push(base + name + (handle.kind === 'directory' ? '/' : ''));
       }
     } catch (error) {
       if (metadataOnly) throw metadataError(error, 'list', prefix);
       throw error;
     }
-    return out.sort();
+    out.sort(); if(maxEntries!==undefined) out.truncated = truncated;
+    return out;
   }
 }

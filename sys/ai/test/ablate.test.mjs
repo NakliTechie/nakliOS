@@ -52,6 +52,18 @@ await test('factory order: executeTool sets up the arm, then gate, then loopOpti
   eq(order.join(' '), 'executeTool gate:ready loopOptions:ready', 'loopOptions and the gate see the workspace executeTool made');
 });
 
+await test('a declared activation appears in arm metrics without claiming gain', async () => {
+  const task = fixtureTasks().find(candidate => candidate.id === 'memory-shortcut');
+  task.activationEvidence = { tool:'shell', args:{command:'ls'} };
+  task.validatedFuelKey = 'model-before';
+  task.currentFuelKey = 'model-after';
+  const result = await runAblation({ tasks:[task], capabilities:['memory'], now:()=>1_000 });
+  eq(result.byArm[task.id].full.lessonEvidence.activation, 'unobserved');
+  eq(result.byArm[task.id]['-memory'].lessonEvidence.activation, 'observed');
+  eq(result.byArm[task.id]['-memory'].lessonEvidence.freshness, 'stale');
+  eq(result.byArm[task.id]['-memory'].lessonEvidence.gain, 'unmeasured');
+});
+
 await test('REPLAY: the same matrix from the records makes ZERO live model calls and reproduces every metric', async () => {
   const again = await runAblation({ tasks: fixtureTasks(), capabilities: CAPABILITIES, records: first.records, now: () => 1_000 });
   eq(again.liveCalls, 0, 'reproduced from the record alone');

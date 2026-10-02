@@ -1,6 +1,6 @@
 # The ⋯ sheet
 
-The phone-and-tablet home for the header's orphaned controls: nine rows, each `data-act`, wired in
+The phone-and-tablet home for the header's orphaned controls: eleven rows, each `data-act`, wired in
 `apps/anvil/index.html` (`#sheet .sheet-row` → `row.dataset.act`). Every row calls the same handler
 the desktop control does, so a row's pass is the desktop control's pass on a narrow layout. Shared
 prerequisites: the launch in `../README.md`; a narrow viewport (≤ 978 px, `resize_window` mobile) so
@@ -75,8 +75,8 @@ prerequisites: the launch in `../README.md`; a narrow viewport (≤ 978 px, `res
 - **Source:** `data-act="learn"` → `primeProject()`.
 - **Prerequisites:** narrow layout; an endpoint.
 - **Reach and drive:** ⋯ → 🎓 Learn from this project.
-- **Observable success:** a priming run starts in ask mode with `rememberTool`; its tool calls show in the log; facts land under `.anvil/memory`.
-- **Gotchas:** fuel — one run.
+- **Observable success:** a priming run lists and reads project files before `remember`; saved hypotheses cite read paths and source versions, land under `.anvil/memory`, and carry a survey ID linked to the task's run record.
+- **Gotchas:** fuel — one run. No source read means no fact; the pass has no shell or edit tool. Stop remains available on the phone bar during learning.
 
 ### sheet:home
 - **Goal:** pick the Anvil home folder where run records are kept durably.
@@ -85,3 +85,11 @@ prerequisites: the launch in `../README.md`; a narrow viewport (≤ 978 px, `res
 - **Reach and drive:** ⋯ → 🗄 Anvil home folder.
 - **Observable success:** the directory picker opens; records are then written under `anvil/runs/…` in that folder (the resilience ladder: OPFS → home → Crate).
 - **Gotchas:** ATTENDED (picker); the 0.1 rung in `pending.md`.
+
+### sheet:foreign
+- **Goal:** inspect selected, read-only local-agent transcript copies without merging them into Anvil's own run chain.
+- **Source:** `data-act="foreign"` → `openForeignArchive()`; the foreign archive stores in `apps/anvil/index.html`.
+- **Prerequisites:** narrow layout, an empty disposable archive, and synthetic Claude and Codex JSONL fixtures with known importable row counts. No active Anvil task is required.
+- **Reach and drive:** open ⋯ → Imported conversations; select one fixture file per source; search the copied entries, filter by provider and project, reload, then forget one source.
+- **Observable success:** the stored count matches each fixture's expected importable rows after metadata-only, malformed, oversized, and repeated lines are excluded. Common credential patterns are redacted in displayed text. Search and filters select matching entries after reload. Forget removes only that source's local copy; the selected input file remains unchanged.
+- **Gotchas:** ATTENDED (native file picker); a local result does not establish deployed behavior. Imported records are untrusted evidence. Unrecognized secrets may remain in this browser. Raw text stays separately labeled and source deletion affects only the copied archive. A personal transcript requires an owner-selected file.

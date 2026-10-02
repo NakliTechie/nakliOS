@@ -69,6 +69,28 @@
     return matches;
   }
 
+  function lineOffsets(text) {
+    const source = String(text || ''), starts = [0];
+    for (let i = 0; i < source.length; i++) if (source.charCodeAt(i) === 10) starts.push(i + 1);
+    return starts;
+  }
+
+  function lineForOffset(starts, offset) {
+    let low = 0, high = starts.length;
+    while (low < high) {
+      const mid = (low + high) >>> 1;
+      if (starts[mid] <= offset) low = mid + 1;
+      else high = mid;
+    }
+    return Math.max(1, low);
+  }
+
+  function visibleRange(lineCount, scrollTop, viewportHeight, rowHeight = 20, overscan = 12) {
+    const visible = Math.min(120, Math.ceil(Math.max(0, viewportHeight) / rowHeight) + 2 * overscan);
+    const first = Math.min(Math.max(0, lineCount - visible), Math.max(0, Math.floor(Math.max(0, scrollTop) / rowHeight) - overscan));
+    return { start: first, end: Math.min(lineCount, first + visible) };
+  }
+
   root.EditorCore = Object.freeze({
     LANGUAGE_BY_EXT,
     normalisePath,
@@ -77,5 +99,8 @@
     normaliseWorkspace,
     lineColumn,
     searchText,
+    lineOffsets,
+    lineForOffset,
+    visibleRange,
   });
 })(typeof window !== 'undefined' ? window : globalThis);

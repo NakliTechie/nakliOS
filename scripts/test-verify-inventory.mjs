@@ -17,7 +17,7 @@ let n = 0;
 // 1. the real tree is green, and the enumeration is from the code, not a list
 const surfaces = enumerateSurfaces({ app });
 assert.deepEqual([...surfaces.keys()].sort(), Object.keys(inventory.surfaces).sort(), 'the enumerated set IS the inventory\'s key set — nothing missing, nothing extra');
-for (const id of ['tool:read', 'tool:task_done', 'tool:skill', 'hook:armGate', 'hook:fs', 'file:.anvil/gate', 'file:.anvil/hooks.json', 'sheet:policy', 'button:send', 'button:mode-btn']) assert.ok(surfaces.has(id), `enumerates ${id}`);
+for (const id of ['tool:read', 'tool:task_done', 'tool:skill', 'hook:armGate', 'hook:fs', 'hook:setRunBudget', 'file:.anvil/gate', 'file:.anvil/hooks.json', 'sheet:policy', 'sheet:foreign', 'button:send', 'button:mode-btn']) assert.ok(surfaces.has(id), `enumerates ${id}`);
 assert.equal(surfaces.get('tool:task_done').detail, 'code+gate', 'task_done is offered only with a gate, in code mode');
 assert.match(surfaces.get('tool:skill').detail, /code .*plan .*ask/, 'skill is offered in every mode');
 const green = check({ surfaces, inventory });

@@ -74,7 +74,7 @@ export function carryLimits({ window = null, reserve = DEFAULT_RESERVE, source =
 
 // Cap a handoff at 20,000 chars AND half the usable window (Posthorse's rule). `usable` in tokens.
 export function capHandoff(text, { usable = null } = {}) {
-  const byWindow = Number.isFinite(usable) ? Math.floor((usable / 2) * CHARS_PER_TOKEN) : Infinity;
+  const byWindow = Number.isFinite(usable) ? Math.max(0, Math.floor((usable / 2) * CHARS_PER_TOKEN)) : Infinity;
   const cap = Math.min(HANDOFF_MAX_CHARS, byWindow);
   const s = String(text ?? '');
   if (s.length <= cap) return s;
@@ -82,8 +82,19 @@ export function capHandoff(text, { usable = null } = {}) {
   // cap — it used to append a bare "truncated at N" past the cap, so the next loop could not tell a
   // 21k handoff from a 200k one.
   const marker = (kept) => `\n[handoff truncated: kept the first ${kept} of ${s.length} chars; ${s.length - kept} dropped from the end]`;
+  // The marker's own length moves with the digit counts it prints, so one subtraction off `cap` is
+  // not enough — and a cap too small to hold it at all (a tiny or negative window) must not emit a
+  // marker that runs past the cap. Settle on the largest kept whose prefix + marker both fit, and
+  // say nothing when even the bare marker does not fit: a truncated handoff with no truthful
+  // evidence of what was lost is worse than an empty one.
   let kept = Math.max(0, cap - marker(cap).length);
-  kept = Math.max(0, cap - marker(kept).length); // the count's own digits can shrink the marker by a char or two
+  for (let pass = 0; pass < 4; pass++) {
+    const next = Math.max(0, cap - marker(kept).length);
+    if (next === kept) break;
+    kept = next;
+  }
+  while (kept > 0 && kept + marker(kept).length > cap) kept -= 1; // guard: never exceed the cap
+  if (kept + marker(kept).length > cap) return '';
   return s.slice(0, kept) + marker(kept);
 }
 
