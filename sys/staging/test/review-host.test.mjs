@@ -113,3 +113,43 @@ assert.deepEqual(concurrent.map(result => result.status).sort(), ['fulfilled', '
 assert.equal(concurrentHost.size(), 1, 'concurrent stages from one frame cannot create stale siblings');
 
 console.log('review-host: native previews, immutable staging, source ack, expiry, discard poison, and one-shot commit passed');
+
+// KanZen agent proposals: a second KanZen tool with its own renderable diff.
+{
+  const frame = { name: 'kanzen frame' };
+  let committed = 0;
+  const agentHost = createReviewHost({
+    storage: memoryStorage(), now: () => 1000, record: async () => {},
+    sendDecision(target, message) {
+      if (message.type === 'naklios:review:commit') {
+        committed++;
+        queueMicrotask(() => agentHost.acknowledge({ source: frame, proposal_id: message.proposal_id, ok: true }));
+      }
+    },
+  });
+  const agentDiff = { kind: 'agent', tool: 'apply_changes', summary: '2 changes to "Main"', details: ['Add column "Review"', 'Create card "Check"'],
+    boardName: 'Main', caller: 'planner', door: 'modelContext', destructive: false };
+  await assert.rejects(agentHost.stage({ source: frame, app: 'reckon', tool: 'kanzen.agent', diff: agentDiff }), /does not match/);
+  const proposal = await agentHost.stage({ source: frame, app: 'kanzen', tool: 'kanzen.agent', diff: agentDiff });
+  const card = agentHost.envelopes()[0];
+  assert.equal(card.tool, 'kanzen.agent');
+  const model = buildReviewModel(agentHost.envelopes()[0], { actor: "person", now: 1000 });
+  assert.equal(model.summary, '2 changes to "Main" — agent (planner via modelContext)');
+  assert.deepEqual(model.rows.map(row => row.after), ['Add column "Review"', 'Create card "Check"']);
+  await assert.rejects(agentHost.stage({ source: frame, app: 'kanzen', tool: 'kanzen.agent', diff: agentDiff }), /pending change/);
+  const result = await agentHost.commit(proposal.proposal_id);
+  assert.equal(result.ok, true);
+  assert.equal(committed, 1);
+  // a destructive proposal renders as a removal
+  const removal = await agentHost.stage({ source: frame, app: 'kanzen', tool: 'kanzen.agent',
+    diff: { kind: 'agent', tool: 'delete_card', summary: 'Delete card "Old"', destructive: true } });
+  assert.equal(buildReviewModel(agentHost.envelopes()[0], { actor: "person", now: 1000 }).rows[0].change, 'remove');
+  await agentHost.discard(removal.proposal_id);
+  // the person's card moves still render as before
+  const move = await agentHost.stage({ source: frame, app: 'kanzen', tool: 'kanzen.card-move',
+    diff: { boardId: 'b', card: 'c', cardTitle: 'Card', from: 'a', fromName: 'To Do', fromIndex: 0, to: 'd', toName: 'Done', toIndex: 0 } });
+  assert.equal(buildReviewModel(agentHost.envelopes()[0], { actor: "person", now: 1000 }).summary, 'Card — move card');
+  await agentHost.discard(move.proposal_id);
+  console.log('review host: KanZen agent proposals stage, render, commit once, and leave card moves unchanged');
+}
+

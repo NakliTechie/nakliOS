@@ -147,6 +147,7 @@ export function normalizeProsemirrorSteps(diff) {
 // the visible before/after location. The app rechecks its board revision at
 // commit, so this preview never grants authority to mutate a changed board.
 export function normalizeCardMove(diff) {
+  if (diff?.kind === 'agent') return normalizeKanzenAgent(diff);
   const title = String(diff?.cardTitle || diff?.card || 'Card');
   const before = String(diff?.fromName || diff?.from || '');
   const after = String(diff?.toName || diff?.to || '');
@@ -160,6 +161,21 @@ export function normalizeCardMove(diff) {
       change: 'edit',
     }],
   };
+}
+
+// A KanZen agent proposal: an agent called a write tool through KanZen's agent face
+// (WebMCP, window.kanzen or the cross-tab channel). KanZen sends its own one-line
+// summary and, for a batch, one line per change; it re-validates on commit.
+export function normalizeKanzenAgent(diff) {
+  const summary = String(diff?.summary || diff?.tool || 'Agent change').slice(0, 300);
+  const lines = Array.isArray(diff?.details) && diff.details.length ? diff.details : [summary];
+  const who = [diff?.caller, diff?.door].filter(Boolean).map(String).join(' via ');
+  const change = diff?.destructive ? 'remove' : 'edit';
+  const rows = lines.slice(0, 100).map((line) => ({
+    label: String(diff?.boardName || 'KanZen'), before: '', after: String(line).slice(0, 300), change,
+  }));
+  if (diff?.note) rows.push({ label: 'note', before: '', after: String(diff.note).slice(0, 300), change: 'edit' });
+  return { kind: 'kanzen-agent', summary: who ? `${summary} — agent (${who})` : `${summary} — agent`, rows };
 }
 
 // ----------------------------------------------------------------- anvil ----

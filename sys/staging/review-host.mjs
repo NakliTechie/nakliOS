@@ -10,10 +10,12 @@ const POISON_KEY = 'naklios.review.poison.v1';
 const DEFAULT_TTL_MS = 10 * 60 * 1000;
 const MAX_TTL_MS = 24 * 60 * 60 * 1000;
 const MAX_DIFF_CHARS = 256 * 1024;
+// Each app may stage only its own tools. KanZen stages the person's card moves and,
+// separately, proposals from agents that called its agent face (kanzen.agent).
 const APP_TO_TOOL = Object.freeze({
-  reckon: 'reckon.transaction',
-  draft: 'draft.transaction',
-  kanzen: 'kanzen.card-move',
+  reckon: ['reckon.transaction'],
+  draft: ['draft.transaction'],
+  kanzen: ['kanzen.card-move', 'kanzen.agent'],
 });
 
 function loadLedger(storage, now) {
@@ -70,7 +72,7 @@ export function createReviewHost({
     stagingSources.add(source);
     try {
       if (typeof tool !== 'string' || !tool.trim() || tool.length > 120) throw new Error('invalid review tool');
-      if (APP_TO_TOOL[app] !== tool) throw new Error('review tool does not match its app');
+      if (!(APP_TO_TOOL[app] || []).includes(tool)) throw new Error('review tool does not match its app');
       let text;
       try { text = JSON.stringify(diff); } catch (_) { throw new Error('review diff is not JSON'); }
       if (!text || text.length > MAX_DIFF_CHARS) throw new Error('review diff exceeds the size limit');
