@@ -209,13 +209,13 @@
       "id": "kanzen",
       "repo": "NakliTechie/KanZen",
       "requestedRef": "main",
-      "resolvedCommit": "bfd59cf15597d9fd48bdb0e36e63ce4044536d72",
+      "resolvedCommit": "82b51b575754442c3ddbafd8ff4b4021a14a7802",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "893f5a89b7043fc2198ca20b2b4d2302b1cd08f9877fb0539b0ba9ac4d12a451",
-          "bytes": 300479
+          "sha256": "d7872d50b97a9a94531525199f6554319ecf9465620bd8278854adfb479e655e",
+          "bytes": 421479
         }
       ]
     },
