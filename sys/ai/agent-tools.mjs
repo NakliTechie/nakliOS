@@ -69,7 +69,7 @@ export function editTool() {
 export function applyPatchTool() {
   return { type: 'function', function: {
     name: 'apply_patch',
-    description: 'Apply a patch that can Add, Update, or Delete multiple files in one call. Envelope: "*** Begin Patch" / "*** Add File: p" (+lines) / "*** Update File: p" (@@ hunks with -/+ lines) / "*** Delete File: p" / "*** End Patch".',
+    description: 'Apply a patch that can Add, Update, or Delete multiple files in one call. Envelope: "*** Begin Patch" / "*** Add File: p" (+lines) / "*** Update File: p" (@@ hunks with -/+ lines; insertion-only hunks append complete lines at EOF) / "*** Delete File: p" / "*** End Patch".',
     parameters: { type: 'object', properties: {
       patch: { type: 'string', description: 'The full patch text including the Begin/End Patch envelope.' },
     }, required: ['patch'] },
@@ -438,7 +438,10 @@ export function parseApplyPatch(patch) {
     let m;
     if ((m = /^\*\*\* Add File: (.+)$/.exec(line))) {
       i++; const body = [];
-      while (i < lines.length && !/^\*\*\* /.test(lines[i])) { body.push(lines[i].replace(/^\+/, '')); i++; }
+      while (i < lines.length && !/^\*\*\* /.test(lines[i])) {
+        if (!lines[i].startsWith('+')) return {ok:false,error:`Add File ${m[1]} line ${i+1} must start with + (use + for a blank line)`};
+        body.push(lines[i].slice(1)); i++;
+      }
       // Codex ends every added line with "\n": "+alpha" / "+beta" is "alpha\nbeta\n", and an empty
       // body stays empty. A join('\n') dropped the final newline, so an Add+Delete rename lost
       // a byte (autoharness bench, 2026-10-01).
@@ -455,18 +458,24 @@ export function parseApplyPatch(patch) {
       // edit, so the bytes past the last matched line, the file's final newline or its absence
       // included, are kept as they were. (Codex instead always ends an updated file with "\n".)
       let before = [], after = [];
-      const flush = () => { if (before.length || after.length) { hunks.push({ before: before.join('\n'), after: after.join('\n') }); before = []; after = []; } };
+      const flush = () => { if (before.length || after.length) { hunks.push({ before: before.join('\n'), after: after.join('\n'), ...(before.length === 0 ? {append:true} : {}) }); before = []; after = []; } };
       while (i < lines.length && !/^\*\*\* /.test(lines[i])) {
         const l = lines[i];
         if (/^@@/.test(l)) { flush(); i++; continue; }
         if (l.startsWith('-')) { before.push(l.slice(1)); }
         else if (l.startsWith('+')) { after.push(l.slice(1)); }
-        else { const ctx = l.startsWith(' ') ? l.slice(1) : l; before.push(ctx); after.push(ctx); }
+        else if(l.startsWith(' ')){ const ctx=l.slice(1);before.push(ctx);after.push(ctx); }
+        else return {ok:false,error:`Update File ${updatePath} line ${i+1} must start with space, +, or -`};
         i++;
       }
       flush();
+      if (trim(lines[i] || '') === '*** End of File') {
+        i++;
+        if (i < lines.length && !/^\*\*\* (?:Add File: |Update File: |Delete File: |End Patch)/.test(lines[i]))
+          return {ok:false,error:`Update File ${updatePath}: hunk or row after End of File`};
+      }
       ops.push({ kind: 'update', path: updatePath, moveTo, hunks });
-    } else { i++; }
+    } else { return {ok:false,error:`Unexpected patch row ${i+1}: ${line.slice(0,120)}`}; }
   }
   return { ok: false, error: 'missing "*** End Patch"' };
 }
@@ -793,43 +802,56 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
         const parsed = parseApplyPatch(args?.patch);
         if (!parsed.ok) return `Error: bad patch: ${parsed.error}`;
         const done = [];
-        for (const op of parsed.ops) {
-          if (op.kind === 'add') {
-            const w = await writeFile(op.path, op.content);
-            if (!w.ok) return `Error adding ${op.path}: ${w.error}`;
-            noteSeen(resolve(op.path), asStored(op.content));
-            done.push(`add ${op.path}`);
-          } else if (op.kind === 'delete') {
-            const res = await face.invoke('fs.remove', { path: resolve(op.path) });
-            if (res.staged) await face.accept(res.proposalId);
-            done.push(`delete ${op.path}`);
-          } else if (op.kind === 'update') {
-            const r = await readFile(op.path);
-            if (!r.ok) return `Error updating ${op.path}: ${r.error}`;
-            // An update is an edit: read-before-edit and F8's version check apply to it too. (A
-            // matching hunk applying around a change the model never saw is exactly what F8 refuses.)
-            const up = resolve(op.path);
-            if (!readLedger.has(up)) return `${op.path} has not been read yet. Use the read tool on it first, then patch — this prevents editing content you have not seen.`;
-            const stale = staleReply(op.path, up, r.data);
-            if (stale) return stale;
-            let content = r.data;
-            for (const h of op.hunks) {
-              if (h.before === h.after) continue;
-              const ed = applyEdit(content, h.before, h.after, false);
-              if (!ed.ok) return `Error updating ${op.path}: hunk did not apply (${ed.error})`;
-              content = ed.content;
+        const failed = message => `${message}\nCompleted operations: ${done.length ? done.join(', ') : 'none'}. No rollback was performed.`;
+        const removeFile=async path=>{
+          const res=await face.invoke('fs.remove',{path:resolve(path)});
+          return res.staged ? await face.accept(res.proposalId) : res;
+        };
+        try {
+          for (const op of parsed.ops) {
+            if (op.kind === 'add') {
+              const w = await writeFile(op.path, op.content);
+              if (!w.ok) return failed(`Error adding ${op.path}: ${w.error}`);
+              noteSeen(resolve(op.path), asStored(op.content));
+              done.push(`add ${op.path}`);
+            } else if (op.kind === 'delete') {
+              const res = await removeFile(op.path);
+              if(!res.ok) return failed(`Error deleting ${op.path}: ${res.message || res.code || 'remove rejected'}`);
+              done.push(`delete ${op.path}`);
+            } else if (op.kind === 'update') {
+              const r = await readFile(op.path);
+              if (!r.ok) return failed(`Error updating ${op.path}: ${r.error}`);
+              // An update is an edit: read-before-edit and F8's version check apply to it too. (A
+              // matching hunk applying around a change the model never saw is exactly what F8 refuses.)
+              const up = resolve(op.path);
+              if (!readLedger.has(up)) return failed(`${op.path} has not been read yet. Use the read tool on it first, then patch — this prevents editing content you have not seen.`);
+              const stale = staleReply(op.path, up, r.data);
+              if (stale) return failed(stale);
+              let content = r.data;
+              for (const h of op.hunks) {
+                if (h.append) {
+                  content += (content && !content.endsWith('\n') ? '\n' : '') + h.after + '\n';
+                  continue;
+                }
+                if (h.before === h.after) continue;
+                const ed = applyEdit(content, h.before, h.after, false);
+                if (!ed.ok) return failed(`Error updating ${op.path}: hunk did not apply (${ed.error})`);
+                content = ed.content;
+              }
+              const target = op.moveTo || op.path;
+              const w = await writeFile(target, content);
+              if (!w.ok) return failed(`Error writing ${target}: ${w.error}`);
+              noteSeen(resolve(target), asStored(content));
+              if (op.moveTo && op.moveTo !== op.path) {
+                done.push(`write ${target}`);
+                const res = await removeFile(op.path);
+                if(!res.ok) return failed(`Error deleting rename source ${op.path}: ${res.message || res.code || 'remove rejected'}`);
+                done.pop();
+              }
+              done.push(`update ${op.path}${op.moveTo ? ' → ' + op.moveTo : ''}`);
             }
-            const target = op.moveTo || op.path;
-            const w = await writeFile(target, content);
-            if (!w.ok) return `Error writing ${target}: ${w.error}`;
-            noteSeen(resolve(target), asStored(content));
-            if (op.moveTo && op.moveTo !== op.path) {
-              const res = await face.invoke('fs.remove', { path: resolve(op.path) });
-              if (res.staged) await face.accept(res.proposalId);
-            }
-            done.push(`update ${op.path}${op.moveTo ? ' → ' + op.moveTo : ''}`);
           }
-        }
+        } catch(error) {return failed(`Error applying patch: ${String(error?.message || error)}`);}
         return `Applied patch: ${done.join(', ')}`;
       }
 

@@ -588,6 +588,44 @@ await test('B5: codingToolset drops what the grant cannot honour; no scopes → 
   for (const r of rows) assert(readinessLine([r]).startsWith(r.state + ': '), `the line renders every state, ${r.state} included`);
 });
 
+await test('patch parser refuses unprefixed add rows and hunks after End of File before any writes',async()=>{
+ const {exec,face}=fresh();
+ for(const tail of ['*** Add File: bad.txt\n', '*** Update File: target.txt\n@@\n-old\n+new\n*** End of File\n@@\n+lost']){
+  const patch='*** Begin Patch\n*** Add File: first.txt\n+first\n'+tail+'\n*** End Patch';
+  const result=await exec('apply_patch',{patch});assert(/bad patch/.test(result),result);
+  assert(!(await face.invoke('fs.read',{path:'first.txt',encoding:'utf-8'})).ok,'parse failure writes nothing');
+ }
+ const blank=await exec('apply_patch',{patch:'*** Begin Patch\n*** Add File: blank.txt\n+\n*** End Patch'});
+ assert(/Applied patch/.test(blank),blank);eq((await face.invoke('fs.read',{path:'blank.txt',encoding:'utf-8'})).data,'\n','explicit blank');
+});
+await test('insertion-only patch appends complete rows with read freshness and preserves ordinary endings',async()=>{
+ for(const original of ['', 'old', 'old\n']){
+  const {exec,face}=fresh();await face.invoke('fs.write',{path:'append.txt',data:original});
+  const patch='*** Begin Patch\n*** Update File: append.txt\n@@\n+new\n+\n*** End of File\n*** End Patch';
+  assert(/has not been read/.test(await exec('apply_patch',{patch})),'unread append denied');
+  await exec('read',{path:'append.txt'});assert(/Applied patch/.test(await exec('apply_patch',{patch})),'append applied');
+  eq((await face.invoke('fs.read',{path:'append.txt',encoding:'utf-8'})).data,(original?original.replace(/\n$/,'')+'\n':'')+'new\n\n','append bytes');
+  await face.invoke('fs.write',{path:'append.txt',data:'concurrent'});
+  assert(/changed|stale/i.test(await exec('apply_patch',{patch})),'stale append denied');
+  eq((await face.invoke('fs.read',{path:'append.txt',encoding:'utf-8'})).data,'concurrent','concurrent bytes retained');
+ }
+});
+await test('patch execution reports prior writes and refused delete or rename acceptance',async()=>{
+ const {face,shell}=fresh();
+ await face.invoke('fs.write',{path:'old.txt',data:'old\n'});
+ const restricted={invoke:face.invoke,accept:async()=>({ok:false,message:'fixture remove refused'})};
+ const exec=makeToolExecutor({face:restricted,shell});
+ const patch='*** Begin Patch\n*** Add File: kept.txt\n+kept\n*** Delete File: old.txt\n*** End Patch';
+ const result=await exec('apply_patch',{patch});assert(/Error deleting old.txt/.test(result),result);assert(/Completed operations: add kept.txt/.test(result),result);
+ eq((await face.invoke('fs.read',{path:'kept.txt',encoding:'utf-8'})).data,'kept\n','prior write retained');
+ eq((await face.invoke('fs.read',{path:'old.txt',encoding:'utf-8'})).data,'old\n','delete refused');
+ await exec('read',{path:'old.txt'});
+ const renamed=await exec('apply_patch',{patch:'*** Begin Patch\n*** Update File: old.txt\n*** Move to: new.txt\n@@\n-old\n+new\n*** End Patch'});
+ assert(/Error deleting rename source/.test(renamed),renamed);assert(/Completed operations: write new.txt/.test(renamed),renamed);
+ eq((await face.invoke('fs.read',{path:'new.txt',encoding:'utf-8'})).data,'new\n','rename destination witnessed');
+ eq((await face.invoke('fs.read',{path:'old.txt',encoding:'utf-8'})).data,'old\n','rename source retained');
+});
+
 if (failures.length) {
   console.error(`agent-tools: ${passed} passed, ${failures.length} FAILED`);
   for (const f of failures) console.error(`  FAIL ${f.name}: ${f.message}`);

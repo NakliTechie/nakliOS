@@ -417,7 +417,7 @@
     },
     "tool:apply_patch": {
       "owner": "tools-files.md",
-      "fingerprint": "781a52d1a9a4",
+      "fingerprint": "a0980f9aefad",
       "kind": "tool",
       "detail": "code code+gate"
     },
