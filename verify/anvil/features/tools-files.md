@@ -89,3 +89,16 @@ find disposable -type f -exec rm {} \;
 - **Gotchas:** the tool renders shell stdout/stderr together; pipes carry stdout only. Oversized output spills to `.forge/out-N.txt` with a pointer.
 - **Evidence:** `scripts/test-anvil-unix-integration.mjs` executes real handlers; the retained shell integration suite checks expanded permissions and cancellation boundaries.
 - **B6 structured listings (2026-09-17):** `ls -R` prints directory blocks (`src:` then one entry a line, a blank line between blocks — what coreutils prints to a pipe), never the old flat run of names; a listing (`ls`, `ls -R`, `find`) over 500 entries is cut at the terminal with `[listing truncated: 500 of N entries shown — narrow the path, add -name / -maxdepth, or pipe through grep]` — never inside a pipe (`find … | wc -l` counts every entry). The tool row's tag reads `listing · N entries` or `listing · 500 of N entries (truncated)` (the loop derives it from the text, like a failure `kind`); compaction collapses a stale listing to its real count, including one that was cut. Drive it: a workspace with 600 files, "Run `find . -type f`", then "Run `find . -type f | wc -l`" — the first ends in the trailer with the tag `listing · 500 of 600 entries (truncated)`, the second prints `600`. Also `sleep SECONDS` exists (2026-09-17; capped at 300 s; Stop interrupts it and ends the line). `cd` refuses a missing target or a file (`cd: x: No such file or directory`, exit 1) and stays put — it used to move anywhere and exit 0, so `cd w` twice landed in `w/w` and everything after failed ENOENT (live prod 2026-09-17); bare `cd` returns to the workspace root.
+
+### Interrupted Browser workspace recovery
+
+- **Goal:** recover witnessed Browser changes after interruption without replay or unsafe revert.
+- **Prerequisites:** installed native Chrome and a disposable test profile.
+- **Gotchas:** the offline fixture establishes Browser behavior only. External storage needs its separate identity contract.
+- **Source:** `createWorkspaceCapture`, `recoverInterruptedCapture`, and the app's persisted `changeCapture` checkpoint.
+- **Reach and drive:** run `node scripts/test-anvil-A03-browser.mjs` with disposable Chrome storage.
+- **Observable success:** the fixture writes a file, terminates the iframe before completion, reloads, then verifies the saved chain prefix.
+- **Recovery check:** known differences retain pre-images. Concurrent owner bytes survive. Recovery performs no inference or automatic replay.
+- **Uncertainty:** interrupted rows disable automatic revert. Unknown paths appear in a bounded summary and a complete private report.
+- **Persistence failure:** the injected checkpoint denial refuses the tool before it changes workspace bytes.
+- **Scope:** the fixture uses offline inference and Browser OPFS. It does not establish actual provider acceptance or external-backend identity.

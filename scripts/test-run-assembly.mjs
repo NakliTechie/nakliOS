@@ -39,7 +39,7 @@ function applyPins(text, target, label, mode = null) {
 const expectedPrompts = Object.fromEntries(['code', 'plan', 'ask'].map((mode) =>
   [mode, applyPins(fixture.prompts[mode], 'prompts', mode, mode)]));
 const anvil = await readFile(new URL('../apps/anvil/index.html', import.meta.url), 'utf8');
-const runTask = anvil.slice(anvil.indexOf('async function runTask(t, text){'));
+const runTask = anvil.slice(anvil.indexOf('async function runTask(t, text,'));
 assert.ok(runTask.length > 1000, 'runTask found');
 let n = 0;
 const ok = (label) => { n++; };
@@ -337,7 +337,7 @@ ok('driveRun');
   const fsYes = { read: async () => ({ ok: true, data: JSON.stringify({ preTool: [], postTool: [{ on: 'edit', run: 'fmt' }] }) }) };
   assert.equal((await loadHooks(fsYes)).postTool.length, 1, 'a hooks file loads');
   const fsThrow = { read: async () => { throw new Error('nope'); } };
-  assert.equal(await loadHooks(fsThrow), EMPTY_HOOKS, 'a throwing read is the empty config, not a crash');
+  assert.match(preHookReply(await loadHooks(fsThrow),'write',{}),/Project hooks unavailable/, 'a throwing read blocks tools rather than silently dropping project policy');
 }
 ok('bed helpers');
 
@@ -362,7 +362,8 @@ assert.equal([...runTask.matchAll(/runAgentLoop\(\{/g)].length, 0, 'runTask no l
 assert.ok(!/const nudgeMessages=|const superMessages=|foldStagnation\(rec\.events/.test(runTask), 'no inline copy of the re-loops survives in runTask');
 assert.match(runTask, /hooksCfg = await loadHooks\(fs, hooksCfg\);/, 'hooks load through the module (a missing file keeps the previous config, as before)');
 assert.match(anvil, /const hookReply = preHookReply\(hooksCfg, nm, ar\);\s*\n\s*if\(hookReply!=null\) return hookReply;/, 'the pre-tool guard is the module\'s');
-assert.match(anvil, /const extra = await postHookNotes\(hooksCfg, nm, ar, \(\)=>createShell\(\{ registry, face, beforeCommand: guardCriticalShellInvocation, kiln: kilnRef, js: jsHost, signal: [^}]*\}\)\);/, 'the post-tool notes are the module\'s, over a shell built only when a hook runs (with the run\'s signal since 2026-09-17)');
+assert.ok(anvil.includes("const extra = !hookOptions && !classifyToolResult(nm,res0) ? await postHookNotes"), 'post-hooks run only after successful outer tools');
+assert.ok(anvil.includes("feed:async command=>({output:await executeTool('shell',{command},callObj,{signal})})"), 'hook commands use normal permission checks with the hook signal');
 assert.ok(!/const SYSTEM_HEAD = |const SYSTEM_TAIL = |const MODE_NOTE = |const LESSON_NOTE = |function synthesizeTool\(\)/.test(anvil), 'no second copy of the constants lives in the app');
 ok('app wiring');
 
@@ -391,7 +392,7 @@ assert.match(anvil, /String\(newest\.task\)!==String\(t\.id\)/, 'A2: sent only w
 // the row the next run's salience and episode read (both checkers' red flag, 2026-09-13)
 assert.match(anvil, /const runProject=String\(state\.activeProject\|\|'local'\);/, 'the run project is captured once at run start');
 assert.match(anvil, /runsForProject\(runProject\)/, 'the rows are read for it');
-assert.match(anvil, /saveRunRecord\(t, rec, \{ gated, project: runProject \}\)/, 'and the record is filed under it');
+assert.match(anvil, /saveRunRecord\(t, rec, \{ gated, project: runProject, name:inFlightRecordName \}\)/, 'and the record is filed under it');
 assert.match(anvil, /const rel='runs\/'\+project\+'\/'\+String\(t\.id\);/, 'the record path is under it too — not the live activeProject');
 // CRIB-B B1: the child's turns and tool calls beat on the chain; the feed row's state is typed by the clock
 assert.match(anvil, /if\(event&&\(event\.type==='turn-start'\|\|event\.type==='tool-call'\)&&runCtx&&runCtx\.rec\)\{ try\{ runCtx\.rec\.subagentBeat\(\{ kind, label, tool_call_id, child_step: event\.step, tool: event\.name\|\|'' \}\)/, 'B1: a heartbeat per child turn / tool call, on the parent chain');
@@ -464,7 +465,7 @@ assert.equal(needsSupervisor({ mode: 'code', stop: 'expect-misses', stag: { stal
 assert.equal(needsSupervisor({ mode: 'code', stop: 'max-steps', stag: { stalled: true, signal: 'repeat' } }), true, 'a stalled max-steps still is');
 assert.match(anvil, /else if\(e\.type==='expect-miss'\)\{ t\.log\.push\(\{k:'system',text:expectMissText\(e\)\}\)/, 'D1: a miss is a row as it happens (LV2: composed by expectMissText)');
 assert.match(anvil, /if\(signal\)\{ req\.signal = signal; \}/, 'Stop reaches the host\'s fetch: inferViaHost passes the run\'s signal to the SDK request (2026-09-17)');
-assert.equal((anvil.match(/createShell\(\{[^\n]*signal: \(\)=>abortController \? abortController\.signal : null/g) || []).length, 3, 'the main, hook and verifier shells all take the run\'s signal getter');
+assert.equal((anvil.match(/createShell\(\{[^\n]*signal: \(\)=>abortController \? abortController\.signal : null/g) || []).length, 2, 'the main and verifier shells take the run\'s signal getter; hook cancellation is composed above');
 console.log('run-assembly: A4 readiness == the toolset in every mode; A2 episode rides ungated; B5 the grant projects the catalog; D1 a miss-streak stop stays stopped');
 // …and rides run.started only when the app supplies it: a bed that passes none records the old shape
 {

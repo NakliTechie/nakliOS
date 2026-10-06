@@ -71,7 +71,7 @@ test('binary changes remain visible without a lossy text pre-image or unsafe rev
   assert.equal(planRevert(final.rows[0],'not the binary bytes').reason,'no-preimage');
 });
 
-test('host-backed workspaces capture existing files only through the advertised bounded read contract', async () => {
+test('host bounded reads do not imply bounded workspace listing coverage', async () => {
   const data=new Map([['ws/p/existing.txt',new TextEncoder().encode('before')]]);
   const host={ supportsBoundedReads:true,
     async readBinary(path,{maxBytes}={}) { const bytes=data.get(path); if(!bytes) throw Object.assign(new Error('missing'),{code:'ENOENT'});
@@ -84,16 +84,18 @@ test('host-backed workspaces capture existing files only through the advertised 
   };
   const backend=new CrateBackend(host);
   const fs=createFileops({backend,root:'ws/p'});
+  const read=await fs.read('existing.txt',{maxBytes:64});
+  assert.equal(new TextDecoder().decode(read.data),'before');
+  let unboundedCalls=0;
+  host.list=async()=>{unboundedCalls++;throw new Error('must not download full manifest');};
   const capture=createWorkspaceCapture(fs,12);
-  assert.equal((await capture.start()).complete,true);
+  assert.equal((await capture.start()).complete,false);
   data.set('ws/p/existing.txt',new TextEncoder().encode('after'));
   const result=await capture.finish();
-  assert.equal(result.complete,true,result.problems.join('; '));
-  assert.equal(result.rows.length,1);
-  assert.equal(result.rows[0].pre,'before');
-  assert.equal(result.rows[0].file,'existing.txt');
+  assert.equal(result.complete,false);
+  assert.deepEqual(result.rows,[]);
+  assert.equal(unboundedCalls,0,'capture refuses unsupported bounded listing before downloading metadata');
   assert.equal(backend.supportsConditionalWrite,undefined);
-  assert.equal(planRevert({...result.rows[0],revertUnavailable:true},'after').reason,'unsupported-backend');
   host.supportsBoundedReads=false;
   assert.equal((await snapshotWorkspace(fs)).complete,false,'a legacy host cannot claim bounded coverage');
 });

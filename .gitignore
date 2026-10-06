@@ -22,6 +22,8 @@ plan/
 !sys/**
 !scripts/
 !scripts/*
+!scripts/fixtures/anvil-A04/
+!scripts/fixtures/anvil-A04/**
 !scripts/autoharness/
 !scripts/autoharness/*
 !scripts/native-gate-container/Dockerfile

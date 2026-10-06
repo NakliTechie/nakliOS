@@ -18,7 +18,7 @@ Shared prerequisites: the launch in `../README.md`; `__anvil.test.fs` to seed an
 - **Prerequisites:** launch; seed `{"preTool":[{"on":"write","pathMatch":"secret*","block":"no secrets"}],"postTool":[{"on":"write","run":"ls"}]}`.
 - **Reach and drive:** prompt "Write secret.txt with x" then "Write a.txt with y".
 - **Observable success:** the first is refused `[blocked by a project hook] no secrets` before any write; the second's result carries `[hook] ls` with the listing appended; the ⚓ chip is lit; the Hooks pane shows both rules.
-- **Gotchas:** a missing file keeps the PREVIOUS run's config (`loadHooks(fs, hooksCfg)`) until reload; the post-hook shell is built only when a rule matched.
+- **Gotchas:** a proven missing file keeps the previous run's config until reload. Unavailable, malformed, or oversized configuration blocks tools. Agent grants protect the owner hooks file against writes. Successful tools alone trigger post-hooks. Hook shells pass normal permission rules and action approval. Reads request 64 KiB bounds. Each phase accepts 16 hooks; commands stay within 4 KiB. Post-hook notes stay within 16 KiB. Each command has a five-second deadline; the phase has fifteen seconds. Timeout aborts the shell and skips remaining hooks. Cancellation-ignoring effects remain uncertain. The post-hook shell uses the normal grant and cancellation route.
 
 ### file:.anvil/memory
 - **Goal:** the project's facts, one file each, indexed into the context message every run.

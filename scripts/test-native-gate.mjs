@@ -24,7 +24,7 @@ const exec = promisify(execFile);
 test('actual paired Anvil grant refuses every Git mutation through the real agent face', async () => {
   const source=await inlineModule();
   const declarations=['const AGENT_SCOPES =','const agentGrant ='].map(prefix=>source.split('\n').find(line=>line.trimStart().startsWith(prefix))).join('\n');
-  const grant=vm.runInNewContext(declarations+'\nagentGrant();',{createGrant,nativeGateSession:{mutable:'sys/candidate.mjs'},activeRangeEdit:null,SKILLS_DIR:'.anvil/skills',GATE_DIR:'.anvil/gate',SEARCH_INDEX_PATH:'.anvil/search-index.json'});
+  const grant=vm.runInNewContext(declarations+'\nagentGrant();',{createGrant,nativeGateSession:{mutable:'sys/candidate.mjs'},activeRangeEdit:null,SKILLS_DIR:'.anvil/skills',GATE_DIR:'.anvil/gate',SEARCH_INDEX_PATH:'.anvil/search-index.json',HOOKS_FILE:'.anvil/hooks.json'});
   const fs=createFileops({backend:new MemoryBackend()});
   const git=createGitCore({fs,dir:'/'}), registry=buildRigRegistry({fs,git});
   const face=createAgentFace({registry,grant,opLog:createOpLog({fs:createFileops({backend:new MemoryBackend()})})});
@@ -447,7 +447,7 @@ test('actual pairing revokes the old Kiln face and removes its runtime before gr
   const context={createGrant,createAgentFace,createOpLog,createShell,buildRigRegistry,registry,fs,git,backend:{},state:{activeProject:'project'},grant:oldGrant,
     workspaceLabel:'owned',wsRoot:'',workspaceOptions:{},face:oldFace,opLog:createOpLog({fs:createFileops({backend:new MemoryBackend()})}),nativeGateSession:null,nativeGateTransition:false,nativeGateRecovery:null,
     nativeGatePicker:picker,campaignBusy:false,kilnRef:{close:async()=>closes++},jsHost:null,abortController:null,activeRangeEdit:null,running:false,priming:false,
-    SKILLS_DIR:'.anvil/skills',GATE_DIR:'.anvil/gate',SEARCH_INDEX_PATH:'.anvil/search-index.json',NATIVE_BINDING_PATH:'.anvil/gate/native-binding.json',
+    SKILLS_DIR:'.anvil/skills',GATE_DIR:'.anvil/gate',SEARCH_INDEX_PATH:'.anvil/search-index.json',HOOKS_FILE:'.anvil/hooks.json',NATIVE_BINDING_PATH:'.anvil/gate/native-binding.json',
     guardCriticalShellInvocation(){},createNativeGateClient:()=>client,syncMode(){},pushSystem(){}};
   const runtime=evaluate(declarations+'\n'+extractFunction(source,'rebuildNativeAuthority')+'\n'+source.slice(start,end)+'\n({pair:()=>nativeGatePicker.onchange(),currentKiln:()=>kilnRef,currentFace:()=>face})',context);
   await runtime.pair();assert.equal(closes,1);assert.equal(runtime.currentKiln(),null);

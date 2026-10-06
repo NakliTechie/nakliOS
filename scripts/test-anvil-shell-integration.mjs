@@ -1,3 +1,4 @@
+import {classifyToolResult} from '../sys/ai/tool-result-kind.mjs';
 // Exercise the actual inline Anvil handlers with the real executor and Rig shell.
 // Only the UI/rendering edges are stubbed. No model call or copied executor wrapper.
 import assert from 'node:assert/strict';
@@ -47,7 +48,7 @@ function fixture({ hooksCfg = { preTool: [], postTool: [] }, permissionRules = {
        isAborted: () => abortController.signal.aborted });
   `, {
     AbortController, createShell, makeToolExecutor, registry, face, fs, mode: 'code', t, state, hooksCfg,
-    preHookReply, postHookNotes, gateAction, gateEvent, guardCriticalShellInvocation, applyPolicy, policyGrant, POLICY_HINT,
+    classifyToolResult, preHookReply, postHookNotes, gateAction, gateEvent, guardCriticalShellInvocation, applyPolicy, policyGrant, POLICY_HINT,
     withShellContext, decideByRules, applyMode, explainSkillsRefusal, explainGateRefusal,
     kilnRef: null, jsHost: null,
     runCtx: { t, messages: t.convo, rec: { onEvent: (event) => events.push(event) } },
@@ -140,7 +141,7 @@ test('Anvil project pre-hooks block execution; post-hooks append actual shell ou
   assert.deepEqual(ctx.feeds, []);
   assert.equal((await ctx.fs.stat('keep')).ok, true);
   const output = await ctx.run('echo MAIN');
-  assert.equal(output, 'MAIN\n[exit 0]\n[hook] echo POST > hook-file; cat hook-file\nPOST');
+  assert.equal(output, 'MAIN\n[exit 0]\n[hook] echo POST > hook-file; cat hook-file\nPOST\n[exit 0]');
   assert.equal((await ctx.fs.read('hook-file', { encoding: 'utf-8' })).data, 'POST\n');
 });
 

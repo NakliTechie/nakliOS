@@ -18,15 +18,38 @@
 // deters an honest agent, not a hard sandbox — the agent already reaches the
 // grant-scoped Rig shell via its own `shell` tool.
 
-export const HOOKS_FILE = '.anvil/hooks.json';
+import {utf8ByteLengthWithin} from './text-byte-bound.mjs';
 
-// Parse hooks.json tolerantly → { preTool:[], postTool:[] } (never throws).
+export const HOOKS_FILE = '.anvil/hooks.json';
+export const HOOK_LIMITS = Object.freeze({configBytes:65536,count:16,commandBytes:4096,messageChars:2000,notesChars:16384,notesBytes:16384,commandMs:5000,phaseMs:15000});
+const bytes = s => utf8ByteLengthWithin(s,HOOK_LIMITS.configBytes) ?? Infinity;
+const refused = reason => ({preTool:[{block:'Project hooks refused: '+reason}],postTool:[]});
+
+// Invalid configured guards fail closed; absent configuration remains empty.
 export function parseHooks(text){
   let cfg = {};
-  try { cfg = JSON.parse(String(text == null ? '{}' : text)); } catch (_){ return { preTool: [], postTool: [] }; }
-  if (!cfg || typeof cfg !== 'object') return { preTool: [], postTool: [] };
-  const norm = (arr) => Array.isArray(arr) ? arr.filter(h => h && typeof h === 'object') : [];
-  return { preTool: norm(cfg.preTool), postTool: norm(cfg.postTool) };
+  const raw=String(text == null ? '{}' : text);
+  if(raw.length>HOOK_LIMITS.configBytes || bytes(raw)>HOOK_LIMITS.configBytes) return refused('configuration exceeds 65536 bytes');
+  try { cfg = JSON.parse(raw); } catch (_){ return refused('configuration is not valid JSON'); }
+  if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) return refused('configuration must be an object');
+  const norm = arr => {
+    if(arr==null) return [];
+    if(!Array.isArray(arr)) throw new Error('hook phase must be an array');
+    if(arr.length>HOOK_LIMITS.count) throw new Error('more than 16 hooks in one phase');
+    const out=[];
+    for(const h of arr){
+      if(!h || typeof h!=='object' || Array.isArray(h)) throw new Error('hook entry must be an object');
+      const clean={};
+      for(const [key,limit] of [['on',256],['pathMatch',512],['commandMatch',512],['run',4096],['block',2000]]){
+        if(h[key]==null) continue;
+        if(typeof h[key]!=='string' || h[key].length>limit || bytes(h[key])>limit) throw new Error(key+' exceeds its byte bound or is not text');
+        clean[key]=h[key];
+      }
+      out.push(clean);
+    }
+    return out;
+  };
+  try{return {preTool:norm(cfg.preTool),postTool:norm(cfg.postTool)};}catch(error){return refused(error.message);}
 }
 
 // Glob: * = one segment, ** = any, ? = one char. A pattern with no '/' also
@@ -67,17 +90,34 @@ function shq(s){ return "'" + String(s == null ? '' : s).replace(/'/g, "'\\''") 
 export function hookCommand(hook, args){
   const a = args || {};
   const file = a.path || a.file || '';
-  return String((hook && hook.run) || '')
-    .replace(/\{file\}|\{path\}/g, () => shq(file))
-    .replace(/\{command\}/g, () => shq(a.command || ''));
+  const template=String((hook && hook.run) || '');
+  if(template.length>HOOK_LIMITS.commandBytes || bytes(template)>HOOK_LIMITS.commandBytes) throw new Error('hook command exceeds byte bound');
+  const quoted = value => {
+    const raw=String(value || '');
+    if(raw.length>HOOK_LIMITS.commandBytes) throw new Error('hook substitution exceeds byte bound');
+    let quotes=0;for(const character of raw)if(character==="'")quotes++;
+    if(bytes(raw)+2+quotes*3>HOOK_LIMITS.commandBytes)throw new Error('hook substitution exceeds byte bound');
+    const result=shq(raw);
+    if(bytes(result)>HOOK_LIMITS.commandBytes) throw new Error('hook substitution exceeds byte bound');
+    return result;
+  };
+  let size=bytes(template);
+  const slots=new Map();
+  for(const match of template.matchAll(/\{file\}|\{path\}|\{command\}/g)){
+    const key=match[0];
+    if(!slots.has(key)) slots.set(key,quoted(key==='{command}' ? a.command : file));
+    size += bytes(slots.get(key))-key.length;
+    if(size>HOOK_LIMITS.commandBytes) throw new Error('expanded hook command exceeds byte bound');
+  }
+  return template.replace(/\{file\}|\{path\}|\{command\}/g,key=>slots.get(key));
 }
 
 // The pre-tool decision: the first matching preTool hook with a `block` message
 // refuses the tool. Returns { blocked, message } — blocked:false when nothing matches.
 export function preToolDecision(hooks, toolName, args){
-  for (const h of (hooks && hooks.preTool) || []){
+  for (const h of ((hooks && hooks.preTool) || []).slice(0,HOOK_LIMITS.count)){
     if (hookMatches(h, toolName, args) && h.block){
-      return { blocked: true, message: String(h.block) };
+      return { blocked: true, message: String(h.block).slice(0,HOOK_LIMITS.messageChars) };
     }
   }
   return { blocked: false, message: '' };
@@ -86,7 +126,7 @@ export function preToolDecision(hooks, toolName, args){
 // The postTool commands to run for a tool call, in order (already substituted).
 export function postToolCommands(hooks, toolName, args){
   const out = [];
-  for (const h of (hooks && hooks.postTool) || []){
+  for (const h of ((hooks && hooks.postTool) || []).slice(0,HOOK_LIMITS.count)){
     if (hookMatches(h, toolName, args) && h.run) out.push(hookCommand(h, args));
   }
   return out;

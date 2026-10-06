@@ -11,16 +11,17 @@ function eq(a, b, m){ if (a !== b) throw new Error(`${m || 'ne'}: ${JSON.stringi
 await test('parseHooks: tolerant of junk/absent', () => {
   const empty = parseHooks('');
   assert(Array.isArray(empty.preTool) && Array.isArray(empty.postTool), 'shape on empty');
-  eq(parseHooks('not json').postTool.length, 0, 'bad json → empty');
+  eq(parseHooks('not json').postTool.length, 0, 'bad json never runs post hooks');
   eq(parseHooks(null).preTool.length, 0, 'null → empty');
   const p = parseHooks('{"postTool":[{"on":"write","run":"x"}], "preTool":[{"on":"shell","block":"no"}], "junk":1}');
   eq(p.postTool.length, 1, 'postTool parsed');
   eq(p.preTool.length, 1, 'preTool parsed');
 });
 
-await test('parseHooks: drops non-object entries', () => {
+await test('parseHooks: malformed entries block tools', () => {
   const p = parseHooks('{"postTool":[{"on":"write","run":"x"}, null, 5, "str"]}');
-  eq(p.postTool.length, 1, 'only the object kept');
+  eq(p.postTool.length, 0, 'invalid phase never runs');
+  assert(preToolDecision(p,'write',{}).blocked,'invalid entry refuses tools');
 });
 
 await test('globMatch: segment, basename, **, ?', () => {

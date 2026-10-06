@@ -10,7 +10,7 @@
 //   node scripts/test-anvil-loads.mjs            (the lane)
 //   node scripts/test-anvil-loads.mjs --probe    (print the first error with its stack, for debugging)
 import assert from 'node:assert/strict';
-import { writeFile, mkdtemp } from 'node:fs/promises';
+import { writeFile, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
@@ -20,7 +20,9 @@ const ROOT = pathToFileURL(join(fileURLToPath(new URL('.', import.meta.url)), '.
 
 // A DOM-ish object that accepts anything: property writes are kept, reads of unknown properties return
 // another such object, calls and `new` return one, it iterates as empty, and it converts to '' / 0.
+let stubObjects=0,scheduledCallbacks=0;
 function anything() {
+  if(++stubObjects>10000)throw new Error('whole-module platform stub object limit exceeded');
   const store = new Map();
   const target = function () {};
   return new Proxy(target, {
@@ -63,13 +65,13 @@ Object.assign(win, {
   window: win, self: win, top: win, parent: win,
   document: doc,
   location: { search: '', href: 'http://anvil.test/apps/anvil/index.html', origin: 'http://anvil.test', hash: '', pathname: '/apps/anvil/index.html', reload() {} },
-  localStorage: { getItem: (k) => (ls.has(k) ? ls.get(k) : null), setItem: (k, v) => ls.set(k, String(v)), removeItem: (k) => ls.delete(k), key: () => null, get length() { return ls.size; } },
+  localStorage: { getItem: (k) => (ls.has(k) ? ls.get(k) : null), setItem: (k, v) => {const text=String(v);if(text.length>8*1024*1024 || (!ls.has(k)&&ls.size>=100))throw new Error('platform storage stub limit exceeded');ls.set(k,text);}, removeItem: (k) => ls.delete(k), key: () => null, get length() { return ls.size; } },
   sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
   indexedDB: { open: idbFail, deleteDatabase: idbFail, databases: async () => [] },
   matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {}, addListener() {} }),
   getComputedStyle: () => anything(),
-  requestAnimationFrame: (f) => setTimeout(() => f(0), 0), cancelAnimationFrame: (h) => clearTimeout(h),
-  requestIdleCallback: (f) => setTimeout(() => f({ timeRemaining: () => 0 }), 0),
+  requestAnimationFrame: (f) => {if(++scheduledCallbacks>1000)throw new Error('platform callback limit exceeded');return setTimeout(() => f(0), 0);}, cancelAnimationFrame: (h) => clearTimeout(h),
+  requestIdleCallback: (f) => {if(++scheduledCallbacks>1000)throw new Error('platform callback limit exceeded');return setTimeout(() => f({ timeRemaining: () => 0 }), 0);},
   addEventListener() {}, removeEventListener() {}, postMessage() {}, dispatchEvent() { return true; },
   fetch: async () => { throw new Error('no network in the load lane'); },
   ResizeObserver: class { observe() {} disconnect() {} unobserve() {} },
@@ -95,7 +97,8 @@ const file = join(dir, 'anvil-module.mjs');
 await writeFile(file, src);
 
 let loadError = null;
-try { await import(pathToFileURL(file).href); } catch (e) { loadError = e; }
+let importTimer;
+try {await Promise.race([import(pathToFileURL(file).href),new Promise((_,reject)=>{importTimer=setTimeout(()=>reject(new Error('whole-module import deadline exceeded')),8000);})]);}catch(e){loadError=e;}finally{clearTimeout(importTimer);await rm(dir,{recursive:true,force:true});}
 // the boot runs past the first await; give it the time a real boot gets before its net fires
 const deadline = Date.now() + 8000;
 while (!win.__anvilBoot.ok && !loadError && !errors.length && Date.now() < deadline) await new Promise((r) => setTimeout(r, 50));

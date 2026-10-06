@@ -29,6 +29,9 @@ jobs:
       - name: Verify isolated native gate runtime policy
         run: node scripts/test-native-gate-container.mjs
 
+      - name: Verify authenticated bounded Crate reads and immutable vendor provenance
+        run: node scripts/test-crate-bounded-reads.mjs
+
       - name: Verify vendored Crate manifest security
         run: node scripts/test-crate-manifest.mjs
 
@@ -376,6 +379,15 @@ jobs:
 
       - name: "S2: the Anvil inline module loads — its top level runs and the boot finishes"
         run: node scripts/test-anvil-loads.mjs
+
+      - name: Verify bounded codemode JSON, recording and replay
+        run: node --test scripts/test-anvil-A07-codemode.mjs
+
+      - name: Verify inspected source span grounding
+        run: node --test scripts/test-anvil-A04-learning.mjs
+
+      - name: Verify bounded Anvil hooks, IDs, approvals and recovery evidence
+        run: node --test scripts/test-anvil-A03-reliability.mjs
       - name: anvil handlers run (not just parse)
         run: node scripts/test-anvil-handlers.mjs
 
@@ -699,11 +711,23 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      - name: Verify opt-in codemode limits and authority in Chrome
+        run: node scripts/test-anvil-A07-browser.mjs
+
+      - name: Verify Anvil grounded learning, delayed Stop and comment adjacency in Chrome
+        run: node scripts/test-anvil-A04-browser.mjs
+
+      - name: Verify Anvil interruption recovery and ten-megabyte state behavior in Chrome
+        run: node scripts/test-anvil-A03-browser.mjs
+
       - name: Verify real pinned Pyodide SQLite in Chrome
         run: node scripts/test-sqlite-browser.mjs
 
       - name: Verify native Worker network denials after CPython type-cache invalidation
         run: node scripts/test-kiln-network-denial-browser.mjs
+
+      - name: Verify bounded authenticated Crate reads through native Chrome fetch
+        run: node scripts/test-crate-bounded-browser.mjs
 
       - name: Verify native IndexedDB range-edit comparison, concurrent writers, and cancellation
         run: node scripts/test-range-edit-browser.mjs

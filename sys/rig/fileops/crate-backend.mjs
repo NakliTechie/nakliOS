@@ -21,11 +21,10 @@
 // (flat, object-store style); this adapter derives the IMMEDIATE-children view the
 // fileops layer expects (fileops owns recursion), exactly like MemoryBackend.
 //
-// ── LIVE-USE BLOCK ──────────────────────────────────────────────────────
-// This adapter is wired and unit-tested against a MOCK `naklios.fs`. Live Crate
-// roaming (state.json across devices) is BLOCKED on the parked Crate `SyncClient`
-// manifest-counter fix (see plan/pending.md "Parked"). Do not enable a live Crate
-// workspace until that lands; the Folder path is unaffected.
+// Capability advertisements come from the connected host and its pinned SDK.
+// Unsupported object formats retain an explicit refusal and incomplete capture.
+// Atomic expected-content operations stay unavailable unless the host advertises
+// genuine backend operations; read-then-write checks never supply that guarantee.
 
 const enc = (s) => new TextEncoder().encode(s);
 
@@ -151,8 +150,11 @@ export class CrateBackend {
 export function stringHostAdapter(host) {
   return {
     ...host,
-    async readBinary(path) {
-      if (typeof host.readBinary === 'function') return host.readBinary(path);
+    get supportsBoundedReads() { return typeof host.readBinary === 'function' && host.supportsBoundedReads === true; },
+    async readBinary(path, options = {}) {
+      if (typeof host.readBinary === 'function') return host.readBinary(path, options);
+      if (options.maxBytes !== undefined)
+        throw Object.assign(new Error('String-only host cannot provide bounded reads'), {code:'ENOTSUP'});
       const s = await host.read(path);
       return enc(typeof s === 'string' ? s : '');
     },

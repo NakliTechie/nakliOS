@@ -15,6 +15,8 @@ export function transcriptCallIds(messages) {
   return ids;
 }
 export function withCallIds(toolCalls, step, used) {
+  // Reserve supplied IDs before synthesizing IDs for any sibling call.
+  for(const call of toolCalls) if(call?.id) used.add(String(call.id));
   return toolCalls.map((c, i) => {
     if (c && c.id) { used.add(String(c.id)); return c; }
     const base = `call_${step}_${i}`;

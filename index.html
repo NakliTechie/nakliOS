@@ -2423,7 +2423,7 @@ async function fsHydrateIfNewer(){
 //     folder back to a stale state. See lib/anchor.js in the vendored
 //     v1.0.1.
 
-const CRATE_VENDOR_BASE = './vendor/crate/v1.0.2';
+const CRATE_VENDOR_BASE = './vendor/crate/813d079a2db2b810d231f04146626af20e053b42';
 const SESSION_CREDS_KEY = 'nakliOS.crateSessionCreds';
 
 let _CrateModulePromise = null;
@@ -4850,8 +4850,16 @@ const BACKENDS = {
       return new TextDecoder().decode(bytes);
     },
     async readBinary(safePath, maxBytes, offset){
-      if (maxBytes !== undefined || offset !== undefined) throw new Error('ENOTSUP: Crate does not support bounded reads');
-      return await state.crate.read('/' + safePath);
+      if (offset !== undefined) throw Object.assign(new Error('ENOTSUP: Crate does not support bounded byte ranges'), {code:'ENOTSUP'});
+      if (maxBytes !== undefined && state.crate?.supportsBoundedReads !== true)
+        throw Object.assign(new Error('ENOTSUP: Crate SDK does not advertise bounded object reads'), {code:'ENOTSUP'});
+      try { return await state.crate.read('/' + safePath, {maxBytes}); }
+      catch (error) {
+        // The filesystem RPC serializes error text. Preserve bounded refusal codes.
+        if (['ENOTSUP','EFBIG','EINVAL','EIO'].includes(error?.code))
+          throw Object.assign(new Error(error.code + ': ' + error.message), {code:error.code});
+        throw error;
+      }
     },
     async write(safePath, data){
       const bytes = (data instanceof Uint8Array) ? data
@@ -4886,7 +4894,7 @@ const BACKENDS = {
     // is a no-op because directories are implicit on the object store.
     async stat(safePath){
       const s = await state.crate.stat('/' + safePath);
-      if (s) return { type: s.isDir ? 'dir' : 'file', size: s.size ?? 0, mtimeMs: s.ts ?? 0 };
+      if (s) return { type: s.isDir ? 'dir' : 'file', ...(Number.isSafeInteger(s.size) && s.size >= 0 ? {size:s.size} : {}), mtimeMs: s.ts ?? 0 };
       const kids = await state.crate.list('/' + safePath);
       if (Array.isArray(kids) && kids.length) return { type: 'dir', size: 0, mtimeMs: 0 };
       return null;
@@ -5327,7 +5335,8 @@ async function fileHostHandle(source, msg, targetAppId, op){
     throw new Error('The original storage location disconnected; reopen the file from Files');
   }
   if (op === 'read') {
-    const data = String(await backend.read(grant.safePath));
+    const bytes = await backend.readBinary(grant.safePath, FILE_GRANT_MAX_CHARS);
+    const data = new TextDecoder('utf-8', {fatal:true, ignoreBOM:true}).decode(bytes);
     if (data.length > FILE_GRANT_MAX_CHARS) throw new Error('File grew beyond the 2 MB Editor limit');
     return {
       data,
@@ -7901,7 +7910,7 @@ function capabilitySnapshot(appId){
     fs: fsCap,
     fsBackends,
     fsBackend,
-    fsBoundedReads: fsCap && fsBackend === 'fsa',
+    fsBoundedReads: fsCap && (fsBackend === 'fsa' || (fsBackend === 'crate' && state.crate?.supportsBoundedReads === true)),
     fsRangeReads: fsCap && fsBackend === 'fsa',
     // Same-origin system apps may browse the whole store, not just their own
     // apps/<id>/ namespace — this is what powers the OS-level file manager.

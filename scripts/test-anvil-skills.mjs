@@ -53,7 +53,7 @@ assert.ok(/\*\*s\*\*/.test(buildSkillsIndex([{ name: staged.name, description: s
 // The structured file tools were fenced; the shell was not, so a redirect landed a skill on
 // disk with only the load-path sentinel behind it. Both guards must sit BEFORE the executor.
 const fileGuard = anvil.indexOf("['write','edit','apply_patch','edit_lines','remove','move'].includes(nm)");
-const exec = anvil.indexOf('const raw = await baseExec(nm, ar, callObj)');
+const exec = anvil.indexOf('const raw = await delegated(nm, ar, callObj)');
 assert.ok(fileGuard > 0, 'the file tools are fenced out of the skills dir');
 assert.ok(exec > 0, 'the tool executor is where the guard must precede');
 assert.ok(fileGuard < exec, 'the file fence runs BEFORE the write reaches the executor');

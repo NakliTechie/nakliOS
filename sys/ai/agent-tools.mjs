@@ -24,6 +24,7 @@ import {
   ownershipOverlaps, ownershipsOverlap, outsideOwnership, renderTaskSpec,
   SUBAGENT_SYSTEM, REVIEW_SYSTEM, SUBAGENT_MAX_STEPS, clampSubagentBudget, SUBAGENT_WALL_CLOCK_S, SUBAGENT_MIN_WALL_CLOCK_S } from './subagents.mjs';
 import { renderHashline, applyHashlineBlock, parseHashlineEdit } from './hashline.mjs';
+import {utf8ByteLengthWithin} from './text-byte-bound.mjs';
 import { contentToken, asStored } from './content-token.mjs';
 import { createRunRecorder } from '../history/run-record.mjs';
 
@@ -500,7 +501,8 @@ export function parseApplyPatch(patch) {
 export const SUBAGENT_WALL_CLOCK_MS = 240_000;
 export function makeToolExecutor({ shell, face, mode = 'code', infer = null, subagentDepth = 0, spawnIsolated = null, recordSubagent = null,
                                    signal = null, subagentBudget = null, recordSubagentStart = null, onSubagentEvent = null,
-                                   steer = null, settleMs = DISPATCH_SETTLE_MS, scopes = null }) {
+                                   steer = null, settleMs = DISPATCH_SETTLE_MS, scopes = null, fullResultBytes = 0, sharedReadLedger = null }) {
+  if(!Number.isSafeInteger(fullResultBytes)||fullResultBytes<0||fullResultBytes>256*1024)throw Error('Invalid full-result byte limit');
   if (!face) throw new Error('makeToolExecutor requires a Rig agent face');
   const modeAllow = MODE_TOOLS[mode] || null; // null = all tools
   const subagentsOn = typeof infer === 'function' && subagentDepth < 1; // depth cap 1 (no recursion)
@@ -578,7 +580,7 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
   // under it — the shell, a sibling overlay, a hook — is refused as stale, never applied.
   // The token is held here rather than handed to the model to carry: `edit` re-reads the
   // file anyway, so the check costs nothing and cannot be forgotten.
-  const readLedger = new Map(); // resolved path -> contentToken of the content last seen
+  const readLedger = sharedReadLedger || new Map(); // resolved path -> contentToken of the content last seen
   const noteSeen = (p, content) => { if (p) readLedger.set(p, contentToken(content)); };
   // F8's check, shared by every editor: the version the model last saw must be the version on
   // disk now. Null when current; the refusal text otherwise. `Refused:` — the closed failure-kind
@@ -621,7 +623,7 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
     return 'checked: ' + lines.join('; ');
   }
   async function readFile(path) {
-    const res = await face.invoke('fs.read', { path: resolve(path), encoding: 'utf-8' });
+    const res = await face.invoke('fs.read', { path: resolve(path), encoding: 'utf-8', ...(fullResultBytes>0?{maxBytes:fullResultBytes}:{}) });
     if (!res.ok) return { ok: false, error: `${res.code || 'error'}: ${res.message || 'read failed'}` };
     const data = typeof res.data === 'string' ? res.data : '';
     return { ok: true, data };
@@ -637,6 +639,7 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
   let spillCounter = 0;
   async function capOutput(text, label) {
     const s = String(text == null ? '' : text);
+    if(fullResultBytes>0){if(utf8ByteLengthWithin(s,fullResultBytes)===null)return 'Error: full tool result exceeds its byte limit';return s;}
     const lines = s.split('\n');
     if (lines.length <= READ_MAX_LINES && s.length <= READ_MAX_BYTES) return s;
     const path = `.forge/out-${++spillCounter}.txt`;
@@ -707,14 +710,14 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
         const allLines = r.data.split('\n');
         const total = allLines.length;
         const offset = Number.isInteger(args?.offset) ? Math.max(1, args.offset) : 1;
-        const limit = Number.isInteger(args?.limit) ? args.limit : READ_MAX_LINES;
+        const limit = Number.isInteger(args?.limit) ? args.limit : fullResultBytes>0?fullResultBytes:READ_MAX_LINES;
         const slice = allLines.slice(offset - 1, offset - 1 + limit)
-          .map((l) => (l.length > READ_MAX_LINE_CHARS ? l.slice(0, READ_MAX_LINE_CHARS) + '… (line truncated)' : l));
+          .map((l) => (!fullResultBytes && l.length > READ_MAX_LINE_CHARS ? l.slice(0, READ_MAX_LINE_CHARS) + '… (line truncated)' : l));
         const end = offset - 1 + slice.length;
         let body = slice.map((l, k) => `${String(offset + k).padStart(5)}  ${l}`).join('\n');
-        if (body.length > READ_MAX_BYTES) { body = body.slice(0, READ_MAX_BYTES) + '… (truncated)'; }
+        if (!fullResultBytes && body.length > READ_MAX_BYTES) { body = body.slice(0, READ_MAX_BYTES) + '… (truncated)'; }
         const footer = end < total ? `\n(Showing lines ${offset}–${end} of ${total}. Use offset=${end + 1} to continue.)` : '';
-        return (body || '(empty file)') + footer;
+        const result=(body || '(empty file)') + footer;return fullResultBytes>0&&utf8ByteLengthWithin(result,fullResultBytes)===null?'Error: full read result exceeds its byte limit':result;
       }
 
       // The result IS the check (battery 2026-09-24): after every write/edit the model ran `cat` on the

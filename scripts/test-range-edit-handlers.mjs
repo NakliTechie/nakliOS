@@ -18,7 +18,7 @@ function hostHarness({confirm=()=>true,backend='browser',clock=Date}={}){
     APPS:[{id:'editor',kind:'system'},{id:'anvil',kind:'system'}],
     openWindows:{editor:{querySelector:()=>({contentWindow:source})},anvil:{querySelector:()=>({contentWindow:target})}},
     BACKENDS:{fsa:{isConnected:()=>true,readBinary:async()=>new TextEncoder().encode(req.before)}},
-    Date:clock,TextDecoder,rangeModule,source,target,sent,fsSafePath:(app,path)=>`apps/${app}/${path}`,
+    Date:clock,TextDecoder,FILE_GRANT_MAX_CHARS:2*1024*1024,rangeModule,source,target,sent,fsSafePath:(app,path)=>`apps/${app}/${path}`,
     _dlgEscape:String,nakliosConfirm:confirm,newFileGrantToken:()=>`token-${sent.length}-${Math.random()}`,
     openApp:()=>{},deliverPendingFileGrants:()=>{for(const g of ctx.fileGrants.values())g.targetSource=target}};
   const names=['fileGrantBackendIdentity','revokeFileGrant','assertRangeEditGrant','fileHostEditInAnvil','fileHostProposeEdit','fileHostEditAck','finishRangeEditAck','recheckRangeEditSource','fileHostHandle'];
@@ -69,6 +69,18 @@ for(const mutation of [h=>{h.fileGrants.values().next().value.expires=0},h=>{h.o
   assert.equal(h.fileGrants.size,0);
   assert.ok(h.sent.some(x=>x.msg.grant?.kind==='range-edit-cancelled'));
   assert.ok(h.sent.some(x=>x.msg.proposal?.cancelled));
+}
+
+// Ordinary exact-file grants must preserve UTF-8 bytes and enforce the provider cap.
+{
+  const h=hostHarness({backend:'fsa'});const original='\ufeffcafé\r\n';let cap;
+  h.BACKENDS.fsa.readBinary=async(path,maxBytes)=>{cap=maxBytes;assert.equal(path,'apps/editor/main.js');return new TextEncoder().encode(original)};
+  h.fileGrants.set('exact',{targetSource:h.target,targetAppId:'editor',backendId:'fsa',backendIdentity:h.originalIdentity,safePath:'apps/editor/main.js',sourcePath:'main.js',name:'main.js'});
+  assert.equal((await h.fileHostHandle(h.target,{token:'exact'},'editor','read')).data,original);assert.equal(cap,2*1024*1024);
+  h.BACKENDS.fsa.readBinary=async()=>Uint8Array.of(255);
+  await assert.rejects(h.fileHostHandle(h.target,{token:'exact'},'editor','read'),/encoded data|encoding/i);
+  h.BACKENDS.fsa.readBinary=async()=>{throw Object.assign(new Error('oversized source'),{code:'EFBIG'})};
+  await assert.rejects(h.fileHostHandle(h.target,{token:'exact'},'editor','read'),e=>e.code==='EFBIG');
 }
 
 // Drive the real acceptRangeEdit handler over the production closed backend.
