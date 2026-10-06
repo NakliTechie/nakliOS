@@ -9,7 +9,18 @@ FLUX.2-Klein image worker.
 To update the runtime:
 
 1. update and test LocalMind first;
-2. copy every file listed in `manifest.json` from that tagged commit;
+2. copy every file listed in `manifest.json` from that tagged commit. Since LocalMind's single-file
+   roll-in (`16a7ad4`, 2026-10-06) the app deploys as one `index.html`, but these runtime files are
+   still separate sources there, no longer at the repo root:
+
+   | Vendored file | LocalMind source |
+   |---|---|
+   | `inference-worker.js` | `src/inference-worker.js` |
+   | `lfm2_5.js` | `src/lfm2_5.js` |
+   | `host-model-catalog.js` | `host/host-model-catalog.js` |
+   | `onnx-inference-worker.js` | `host/onnx-inference-worker.js` |
+   | `image-inference-worker.js` | `host/image-inference-worker.js` |
+
 3. update the commit and SHA-256 values in `manifest.json`;
 4. run `node scripts/test-localmind-vendor.mjs` and the NakliOS test suite.
 
