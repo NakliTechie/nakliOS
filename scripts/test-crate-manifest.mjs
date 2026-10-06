@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import {
   Manifest,
   ManifestError,
-} from "../vendor/crate/v1.0.2/manifest.js";
+} from "../vendor/crate/813d079a2db2b810d231f04146626af20e053b42/manifest.js";
 
 const masterKey = crypto.getRandomValues(new Uint8Array(32));
 const manifest = new Manifest();

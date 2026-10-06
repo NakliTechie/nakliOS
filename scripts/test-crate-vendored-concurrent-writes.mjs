@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Ported from crate test/concurrent-writes.test.mjs (crate 5d0a516) to run
-// against naklios's vendored copy at vendor/crate/v1.0.2/.
+// against naklios's vendored copy at vendor/crate/813d079a2db2b810d231f04146626af20e053b42/.
 // Concurrent write()s on one Crate must all land, in one valid chain,
 // without tripping the rollback anchor. Live defect 2026-09-24 (naklios.dev,
 // Anvil writing several files + a run record in quick succession):
@@ -12,9 +12,9 @@
 // a sessionStorage stub so the anchor is live (node has no IndexedDB).
 
 import assert from "node:assert/strict";
-import { Crate } from "../vendor/crate/v1.0.2/crate.js";
-import { Manifest, MANIFEST_PATH } from "../vendor/crate/v1.0.2/manifest.js";
-import * as anchor from "../vendor/crate/v1.0.2/anchor.js";
+import { Crate } from "../vendor/crate/813d079a2db2b810d231f04146626af20e053b42/crate.js";
+import { Manifest, MANIFEST_PATH } from "../vendor/crate/813d079a2db2b810d231f04146626af20e053b42/manifest.js";
+import * as anchor from "../vendor/crate/813d079a2db2b810d231f04146626af20e053b42/anchor.js";
 
 const ss = new Map();
 globalThis.sessionStorage = {

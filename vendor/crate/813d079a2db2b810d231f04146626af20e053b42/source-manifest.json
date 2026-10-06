@@ -1,0 +1,25 @@
+{
+  "repository": "https://github.com/NakliTechie/crate",
+  "commit": "813d079a2db2b810d231f04146626af20e053b42",
+  "files": {
+    "sync-client.js": "ac0f8472043ffa85978fdc187ea1e1cdb9cf386b596dbcf420e4e2e06b7394cc",
+    "manifest.js": "a487f99e7ec222058f7f0fe70b8659b29dd54589fb1602cf784c65397a32a082",
+    "crypto.js": "1225685fdc79566ee0bef5b027f54a507126f18346bf2ac81c303cdeb643b0ad",
+    "anchor.js": "ec26a82d8207e7be86dd74a835d6f9438b19792997e9fc91b62a7f5fd4f3ca5c",
+    "idb.js": "ddd23aa482b66576dfe72c1e42f1776e06f0a92b43dbdbe035868b6a0a3180d4",
+    "offline.js": "cd344ba896b78e9743aadc1a6dcd95096e8a38dc7c89f4165aaec42f57762278",
+    "bucket.js": "ac10f269cb02855155059ca48307968514a86583d896667e49cf0cb824d0510b",
+    "sigv4.js": "d8c35d8268b31806caaf832efbf7c96baf9fef09e837ba3548ab72261c11c133",
+    "read-bound.js": "0daca48d7b8cfba60eee55b60786a07a8e84b3c4f14035ca7f8765df63fc8869",
+    "credsfile.js": "cdb1d20f9e874ddf8e16530cc5b42f6c36595a20992b0243135fc3d5cfa4b164",
+    "crate.js": "600bd3d2495c1ae7ff80552461fbf253b09fc45b3f960b95a9a738ea3223ef35",
+    "manifest-flush.js": "945155526ec5db5232d0911786ba5e2233a63fd47afd6a9d66a1b42e8f9f4f1e",
+    "rekey.js": "de703940e23c14c97d6dd6063b619db1ad8d3be56ada55b4aa57379495b2cb8e",
+    "vault.js": "f7115527d5917865708aef7eafdf1098a4f75436064d6606a6592815cb3639d4",
+    "cratejson.js": "7571ce7118acb69a2f22124bce79d209bc8aef6be1d2554d558c1155447a2e49",
+    "LICENSE": "8486a10c4393cee1c25392769ddd3b2d6c242d6ec7928e1414efff7dfb2f07ef"
+  },
+  "license": "AGPL-3.0-or-later",
+  "method": "Exact git blobs and transitive relative ESM imports from authoritative source",
+  "remotePublication": "Must be verified before delivery"
+}

@@ -69,6 +69,16 @@ await test('Crate refuses both bounded and offset reads before provider I/O',asy
   assert.equal((await sdkReads[0]('owned.bin')).length,64);assert.equal(crateReads,1);
   bound='fsa';context.capabilities.fsBackend='fsa';
 });
+await test('Pinned Crate SDK receives whole-object caps while byte ranges remain unavailable',async()=>{
+  bound='crate';context.capabilities.fsBackend='crate';context.state.crate.supportsBoundedReads=true;
+  const previous=context.state.crate.read;const seen=[];
+  context.state.crate.read=async(path,options)=>{seen.push({path,options});return bytes.slice(0,8)};
+  try {
+    assert.equal((await sdkReads[0]('owned.bin',{maxBytes:8})).length,8);
+    assert.equal(seen.length,1);assert.equal(seen[0].path,'/apps/editor/owned.bin');assert.equal(seen[0].options.maxBytes,8);
+    await assert.rejects(api.BACKENDS.crate.readBinary('owned.bin',8,0),/ENOTSUP/);assert.equal(seen.length,1);
+  } finally {context.state.crate.read=previous;delete context.state.crate.supportsBoundedReads;bound='fsa';context.capabilities.fsBackend='fsa'}
+});
 await test('Large snapshots allocate only the requested native Blob slice',async()=>{
   const count=whole;file={size:2**31,arrayBuffer:async()=>{whole++;throw Error('whole read forbidden')},slice:(a,b)=>new Blob([Uint8Array.from({length:b-a},(_,i)=>(a+i)%256)])};
   assert.deepEqual(Array.from(await sdkReads[0]('large.bin',{offset:2**30+16,maxBytes:8})),[16,17,18,19,20,21,22,23]);assert.equal(whole,count);file=observed;

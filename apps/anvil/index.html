@@ -1742,8 +1742,8 @@
       '('+workspaceLabel+')\n\n'+
       'Anvil can keep a workspace in three places:\n\n'+
       '• Browser — a private store inside this browser (OPFS). Zero setup; the default. Survives reload, but lives only on this device/browser.\n\n'+
-      '• Folder — a real folder on your disk, via "Open folder". The agent edits your actual files. Best when the work is a real project you also open elsewhere.\n\n'+
-      '• Crate — the NakliOS host store (Folder or Crate). Files, tasks, and transcripts ROAM across your devices on the same Crate. Available when Anvil runs inside NakliOS.\n\n'+
+      '• Folder — a real folder on your disk, via "Open folder". The agent edits your actual files. Source proposals need Editor review. Folder cannot atomically protect against external writes. Automatic source apply and revert stay unavailable.\n\n'+
+      '• Crate — the NakliOS host store (Folder or Crate). Files, tasks, and transcripts ROAM across your devices on the same Crate. Available when Anvil runs inside NakliOS. Bounded reads may refuse compressed or unsupported objects. Automatic revert requires an advertised atomic operation.\n\n'+
       'Switch to a disk folder anytime with "Open folder" (top right).';
     globalPreview={ type:'text', file:'Storage', label:'Storage', content };
     { const _t=activeTask(); if(_t) _t.preview=null; }   // a stale task preview would hide this global view

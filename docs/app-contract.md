@@ -289,7 +289,9 @@ Available methods:
   Reads at or past EOF return an empty byte array; zero caps return no bytes.
   Paths and backend affinity keep the same app/system permission boundaries.
   Crate currently has no bounded object reader and refuses capped or offset reads.
-  Check `naklios.fs.supportsBoundedReads` before relying on bounded Folder reads; older hosts do not advertise them.
+  Check `naklios.fs.supportsBoundedReads` before relying on bounded Folder or Crate reads; older hosts do not advertise them.
+  Crate bounds authenticated plaintext size before GET. Compressed objects, excessive chunk counts, and non-BYOB response streams refuse explicitly.
+  Crate does not advertise byte ranges or atomic expected-content writes. Folder proposals require Editor review; automatic apply/revert stays unavailable where atomic protection is required.
   `naklios.capabilities.fsRangeReads` explicitly advertises offset support for the active Folder backend.
   The SDK refuses offset requests unless this flag is true, including against older hosts.
   This SDK option does not change Rig shell archive or search limits.

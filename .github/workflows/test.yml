@@ -29,6 +29,9 @@ jobs:
       - name: Verify isolated native gate runtime policy
         run: node scripts/test-native-gate-container.mjs
 
+      - name: Verify authenticated bounded Crate reads and immutable vendor provenance
+        run: node scripts/test-crate-bounded-reads.mjs
+
       - name: Verify vendored Crate manifest security
         run: node scripts/test-crate-manifest.mjs
 
@@ -722,6 +725,9 @@ jobs:
 
       - name: Verify native Worker network denials after CPython type-cache invalidation
         run: node scripts/test-kiln-network-denial-browser.mjs
+
+      - name: Verify bounded authenticated Crate reads through native Chrome fetch
+        run: node scripts/test-crate-bounded-browser.mjs
 
       - name: Verify native IndexedDB range-edit comparison, concurrent writers, and cancellation
         run: node scripts/test-range-edit-browser.mjs
