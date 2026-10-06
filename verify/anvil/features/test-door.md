@@ -157,3 +157,15 @@ from the host page's console or a browser-automation script against the iframe.
 - **Reach and drive:** `await t.shell("python -c \"open('b.bin','wb').write(bytes(range(256)))\"")`, then `await t.shell('ls')`, then read the file's bytes from OPFS.
 - **Observable success:** `{output, code, awaitingConfirm}`; `code` is the line's exit code; a `python` line's `output` is the interpreter's stdout+stderr in write order.
 - **Gotchas:** a destructive line (`rm`) stages and returns `awaitingConfirm:true` — answer with `t.shell('y')`; the door never auto-confirms (the agent's executor does).
+
+### hook:gitPushWorkspace
+
+- **Goal:** push the owner-approved expected workspace commit while preserving agent push refusal.
+- **Source:** the opt-in owner door's `gitPushWorkspace`; the agent lacks `git:push`.
+- **Prerequisites:** an approved scratch HTTPS remote, host authentication, and the expected main commit OID from a verified run.
+- **Reach and drive:** call `await t.gitPushWorkspace({url:'<approved scratch remote>',expectedOid:'<observed 40-hex commit>'})` while the workspace is idle.
+- **Observable success:** the returned OID matches the expected commit. The remote main object matches that OID. Verify the corresponding persisted run chain separately.
+- **Gotchas:** invalid or stale OID, embedded URL credentials, non-HTTPS URL, active run, restricted workspace, or workspace authority changing during head inspection. None reaches push.
+- **Race:** push uses the literal expected OID, so a later main movement cannot select different bytes. The operation always targets remote main without force.
+- **Cleanup:** retain the remote only for the approved scratch workflow. Never infer permission to delete it.
+- **Regression:** `node scripts/test-anvil-guards.mjs` exercises owner refusals and fresh project task selection. The existing grant-fence suite checks agent push refusal.

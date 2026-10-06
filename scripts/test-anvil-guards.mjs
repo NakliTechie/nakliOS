@@ -194,3 +194,56 @@ assert.ok(!/nm==='remember'/.test(anvil.slice(anvil.indexOf('async function spaw
 }
 
 console.log('anvil-guards: honesty, reachability, hook coverage, single-writer state, bounded inference and run visibility all hold');
+
+// A06: creating a project must detach the previous project's active task.
+{
+  const start=anvil.indexOf("$('new-project').onclick=");
+  const end=anvil.indexOf("$('new-task').onclick=",start);
+  const buttons={'new-project':{}};
+  const oldTask={id:'old-task',title:'Existing owner task',convo:[],log:[]};
+  const state={projects:[{id:'old-project',tasks:[oldTask]}],activeProject:'old-project',activeTask:'old-task'};
+  let ids=0;
+  vm.runInNewContext(anvil.slice(start,end),{
+    $:key=>buttons[key],nativeWorkspaceAction:f=>f,activeRangeEdit:null,
+    askText:async()=> 'New isolated project',nativeGateSession:null,primeAbortController:null,
+    id:()=> 'fresh-'+(++ids),state,save:()=>{},folderMode:false,mountProject:async()=>{},
+    starterSkillFile:()=>({path:'starter',text:'starter'}),fs:{read:async()=>({ok:true})},
+    renderAll:()=>{},Date,
+  });
+  await buttons['new-project'].onclick();
+  const created=state.projects.at(-1);
+  assert.equal(created.tasks.length,1,'new project owns a fresh task');
+  assert.equal(state.activeTask,created.tasks[0].id,'new project selects its own task');
+  assert.notEqual(state.activeTask,oldTask.id,'previous task cannot receive the new project prompt');
+  assert.equal(oldTask.title,'Existing owner task');
+  assert.equal(oldTask.convo.length,0);
+}
+
+// Owner push refuses stale commits and changing authority without widening the agent.
+{
+  const start=anvil.indexOf('gitPushWorkspace:');
+  assert.ok(start>=0,'the opt-in owner door can push an observed workspace commit');
+  const end=anvil.indexOf('    // Isolated push M0:',start);
+  const functionText=anvil.slice(start+'gitPushWorkspace:'.length,end).trim().replace(/,$/,'');
+  const expected='a'.repeat(40);
+  let pushes=0,logMutation=()=>{};
+  const ownerGit={log:async()=>{logMutation();return {commits:[{oid:expected}]};},push:async args=>{pushes++;assert.equal(args.force,false);assert.equal(args.ref,expected);assert.equal(args.remoteRef,'main');return {ok:true};}};
+  const scope={running:false,priming:false,nativeGateTransition:false,nativeGateSession:null,activeRangeEdit:null,git:ownerGit,backend:{},state:{activeProject:'scratch'},URL};
+  const push=vm.runInNewContext('('+functionText+')',scope);
+  const args={url:'https://example.test/scratch.git',expectedOid:expected};
+  assert.equal((await push(null)).ok,false);
+  assert.equal((await push({url:new URL(args.url),expectedOid:expected})).ok,false);
+  assert.equal((await push(args)).ok,true);
+  assert.equal(pushes,1);
+  for(const change of [{expectedOid:'b'.repeat(40)},{expectedOid:''},{url:'http://example.test/scratch.git'},{url:'https://user:secret@example.test/scratch.git'}]){
+    assert.equal((await push({...args,...change})).ok,false);
+  }
+  for(const key of ['running','priming','nativeGateTransition','nativeGateSession','activeRangeEdit']){
+    scope[key]=true;assert.equal((await push(args)).ok,false);scope[key]=false;
+  }
+  logMutation=()=>{scope.state.activeProject='another';};
+  assert.equal((await push(args)).ok,false,'workspace switch while reading the head refuses push');
+  assert.equal(pushes,1,'all refusals happen before network push');
+  assert.ok(!/git:push/.test(/const AGENT_SCOPES = (\[[^\]]*\]);/.exec(anvil)[1]),'agent cannot acquire push authority');
+}
+console.log('A06 new-project isolation and owner workspace push guards passed');
