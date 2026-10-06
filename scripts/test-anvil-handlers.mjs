@@ -1006,7 +1006,7 @@ await test('PG-A3: earnFromRuns promotes a hypothesis recalled in two runs the g
   assert.equal(parseFact(fs.store['.anvil/memory/done.md']).cause, null, 'an already-verified fact is not re-written');
   assert.equal((await earnFromRuns({ rows: [], facts, read: () => ({ ok: false }), write: () => ({ ok: false }) })).length, 0, 'no rows, no evidence, nothing');
   // wiring: the pass runs after the record row lands, and the panes carry the owner's doors
-  assert.match(src, /await saveRunRecord\(t, rec, \{ gated, project: runProject \}\);\n\s*await earnPass\(t, runProject\);/, 'the earn pass follows the row that could be the second verified run');
+  assert.match(src, /await saveRunRecord\(t, rec, \{ gated, project: runProject, name:inFlightRecordName \}\);\n\s*await earnPass\(t, runProject\);/, 'the earn pass follows the row that could be the second verified run');
   assert.match(src, /label:'✓ Activate', onClick: async \(\)=>\{ await activateSkill\(name\)/, 'a staged skill offers Activate');
   assert.match(src, /learnStaged\['skill:'\+name\] \? \[\{ label:'✗ Reject', onClick: async \(\)=>\{ await rejectProposal\(\{ kind:'skill', name \}\)/, 'and Reject — only for a skill the review staged');
   assert.match(src, /gatePassed: ev\.some\(e=>e\.tool==='verify\.passed'\)/, 'the row carries the gate\'s word');
@@ -1078,7 +1078,7 @@ await test('LX-3: the run index row carries the goal row\'s inputs (gatePassed, 
   assert.match(src, /const isLocal = !\(nak && nak\.capabilities && nak\.capabilities\.aiLocal === false\);/, 'isLocal from capabilities.aiLocal');
   assert.doesNotMatch(src, /nak\.ai\.endpoint\)\|\|null; isLocal/, 'the dead endpoint read is gone');
   // G9 (2026-09-24): the agent's shell, the gate's shell and the hook shell all get the JS gate runner
-  assert.equal((src.match(/createShell\(\{[^\n]*js: jsHost,/g) || []).length, 3, 'three shells get the js host: agent (agentShell), gate, hooks');
+  assert.equal((src.match(/createShell\(\{[^\n]*js:\s*jsHost,/g) || []).length, 3, 'three shells get the js host: agent (agentShell), gate, hooks');
   assert.match(src, /spawn:\(url\)=>\{ const w=new Worker\(url, \{ type:'module' \}\);/, 'the browser host spawns a module Worker');
   // U2 (2026-09-24): HOLD / BYPASS has its own element that wraps; the goal line owns #tb-meta
   assert.match(page, /<span class="notice" id="tb-notice" role="status" hidden><\/span>\n\s*<span class="meta" id="tb-meta"><\/span>/, 'the notice is its own element beside the goal line');

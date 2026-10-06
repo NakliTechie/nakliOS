@@ -145,7 +145,7 @@ the ⋯ sheet (`sheet.md`) calls the same ones on narrow layouts. Shared prerequ
 - **Source:** `#send` → `submit`; `qEnqueue`, `admitRun`.
 - **Prerequisites:** launch; desktop; an endpoint.
 - **Reach and drive:** send a prompt; send a second one while the first runs; then, in a task whose last three runs ended in error (seed with three runs against a revoked endpoint grant), press Send once more.
-- **Observable success:** the first starts a run; the second appears in the queue and runs after the first ends; the fourth Send in the three-failures task is held with a visible reason and the prompt kept (AC-8a); a second press runs it.
+- **Observable success:** the first starts a run; the second appears in the queue and runs after the first ends; the fourth Send in the three-failures task is held with a visible reason and the prompt kept (AC-8a); a second press runs it. A failed queued start retains its ID, attempt count, and reason. Retry claims that entry explicitly; Remove clears it. Automatic draining holds failed entries.
 - **Gotchas:** Enter sends; Shift+Enter is a newline.
 
 ### button:mode-btn

@@ -38,7 +38,8 @@ test('bounded FSA listing stops enumeration and unsupported backends refuse', as
   assert.equal(end.snapshotConsistent,false,'a final page does not certify a coherent snapshot');
   assert.equal(new Set([...listed.entries,...next.entries].map(e=>e.path)).size,100,
     'continuation reaches every entry without duplicates');
-  const unsupported=await createFileops({backend:new MemoryBackend()}).list('',{maxEntries:50});
+  const legacy=new MemoryBackend();legacy.supportsBoundedListing=false;
+  const unsupported=await createFileops({backend:legacy}).list('',{maxEntries:50});
   assert.equal(unsupported.code,'ENOTSUP');
 });
 

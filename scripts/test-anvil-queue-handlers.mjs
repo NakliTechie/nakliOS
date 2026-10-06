@@ -14,11 +14,11 @@
 import assert from 'node:assert/strict';
 import { inlineModule, extractFunction, extractRegion, instantiate, evaluate } from './anvil-harness.mjs';
 import { migrateQueue, reconcileQueue, enqueue, removeEntry, moveEntry, editEntry,
-         nextDispatch, completeDispatch, releaseDispatch, admitRun } from '../sys/ai/followup-queue.mjs';
+         nextDispatch, completeDispatch, releaseDispatch, failDispatch, retryDispatch, admitRun } from '../sys/ai/followup-queue.mjs';
 
 const src = await inlineModule();
 const Q = { qEnqueue: enqueue, qRemove: removeEntry, qMove: moveEntry, qEdit: editEntry, migrateQueue, reconcileQueue,
-            nextDispatch, completeDispatch, releaseDispatch, admitRun };
+            nextDispatch, completeDispatch, releaseDispatch, failDispatch, retryDispatch, admitRun };
 let passed = 0; const failures = [];
 async function test(n, fn) { try { await fn(); passed++; } catch (e) { failures.push({ n, message: e.message }); } }
 const texts = (q) => (q || []).map((e) => e.text);
@@ -62,17 +62,19 @@ await test('Send while idle runs; after a stopped run it holds once (the prompt 
 });
 
 // ── the drain (runTask's finally) ───────────────────────────────────────────────────────────
-const drain = extractRegion(src, 'const _out = { aborted: wasAborted', '\n    }\n  }\n  // The coding run queues Send');
-function drainBed({ t, wasAborted = false, runTaskThrows = false, busy = false }) {
+const drain = extractRegion(src, 'const _out = { aborted: wasAborted', '\n    }\n  }\n  function startQueuedEntry');
+function drainBed({ t, wasAborted = false, runTaskThrows = false, busy = false, rejectAfterStart=false, startupDenied=false, deferStart=false }) {
   const calls = { runTask: [], system: [], saved: [], timers: [] };
   const ctx = { ...Q, t, wasAborted,
     save: () => calls.saved.push(JSON.parse(JSON.stringify(t.queued || []))),
     renderLog() {}, pushSystem: (x) => calls.system.push(x),
     // the real runTask: `if(!t||running) return;`, then a synchronous prefix that sets status 'running'
-    runTask: (task, text) => { if (runTaskThrows) throw new Error('boom'); if (busy) return Promise.resolve(); calls.runTask.push(text); task.status = 'running'; return Promise.resolve(); },
+    runTask: (task, text,options={}) => { if (runTaskThrows) throw new Error('boom'); if (busy) return Promise.resolve(); calls.runTask.push(text); if(deferStart)return new Promise(resolve=>{calls.acceptStartup=()=>{task.status='running';options.onStarted?.();resolve();};});task.status = 'running';options.onStarted?.(); return rejectAfterStart?Promise.reject(new Error('late startup failure')):Promise.resolve(startupDenied?{startupFailed:true,error:'reservation denied'}:undefined); },
+    running:false,priming:false,state:{activeProject:'p'},fs:{},workspaceLabel:'Browser · P',activeTask:()=>t,abortController:null,Date,renderAll(){},setSend(){},
     setTimeout: (fn) => calls.timers.push(fn) };
-  evaluate(drain, ctx);
-  return { calls, flush: () => { for (const f of calls.timers.splice(0)) f(); } };
+  const bed=evaluate(extractFunction(src,'startQueuedEntry')+'\n;({drain:()=>{'+drain+'},switch:(kind)=>{if(kind===0)activeTask=()=>({id:"other"});if(kind===1)state.activeProject="other";if(kind===2)fs={};if(kind===3)workspaceLabel="other";}})',ctx);
+  bed.drain();
+  return { calls, switch:bed.switch, flush: () => { for (const f of calls.timers.splice(0)) f(); } };
 }
 const queueOf = (...xs) => xs.reduce((q, x) => enqueue(q, x).queue, []);
 
@@ -110,16 +112,16 @@ await test('failed dispatch: runTask throws → the claim is released, the entry
   b.flush();
   assert.deepEqual(texts(t.queued), ['first'], 'not lost');
   assert.deepEqual(states(t.queued), ['pending'], 'released, not stuck as dispatching');
-  assert.match(b.calls.system.at(-1), /could not start the next follow-up — boom\. It is still queued/);
+  assert.match(t.log.at(-1).text,/attempt 1 failed: boom.*remains queued/);assert.equal(t.queued[0].failedStarts,1);assert.equal(t.queueAttempts[0].id,t.queued[0].id);
 });
 
-await test('another run took the tick: runTask returns without starting → the claim is released, the prompt is not deleted', () => {
+await test('another run took the tick: runTask returns without starting → the claim is released, the prompt is not deleted', async () => {
   const t = { id: 't', status: 'done', lastStop: 'done', log: [], queued: queueOf('first') };
   const b = drainBed({ t, busy: true });
-  b.flush();
+  b.flush();await Promise.resolve();await Promise.resolve();
   assert.deepEqual(texts(t.queued), ['first'], 'still queued (before E1: completed, then runTask returned — gone)');
   assert.deepEqual(states(t.queued), ['pending']);
-  assert.match(b.calls.system.at(-1), /another run is in progress\. It is still queued/);
+  assert.match(t.log.at(-1).text,/attempt 1 failed: another run.*remains queued/);
 });
 
 // ── the load pass: legacy queues and a claim that outlived its tab ─────────────────────────────
@@ -145,6 +147,38 @@ await test('legacy state: a queue of plain strings (pre-AC-4) migrates to id-key
   assert.deepEqual(texts(t.queued), ['one', 'two']);
   assert.ok(t.queued.every((e) => e.id && e.state === 'pending'));
   assert.equal(ctx.queueDropped, 2, 'the empty and the non-string are dropped, and counted');
+});
+
+await test('post-start rejection restores the same prompt as held uncertain work',async()=>{
+ const t={id:'t',status:'done',lastStop:'done',runSeq:4,log:[],queued:queueOf('failed first','second')};
+ const id=t.queued[0].id;const b=drainBed({t,rejectAfterStart:true});b.flush();
+ await Promise.resolve();await Promise.resolve();
+ assert.equal(t.queued[0].id,id);assert.equal(t.queued[0].text,'failed first');
+ assert.equal(t.queued[0].failedStarts,1);assert.match(t.queued[0].failure,/Effects uncertain after startup/);
+ assert.equal(nextDispatch(t.queued,{stop:'done'}).paused,true);
+ assert.deepEqual(Array.from(t.queued,row=>row.text),['failed first','second']);assert.equal(t.queueAttempts[0].status,'failed');
+});
+
+await test('task or workspace switching before dispatch holds the original prompt',()=>{
+ for(const kind of [0,1,2,3]){
+  const t={id:'t',status:'done',lastStop:'done',log:[],queued:queueOf('original')};const b=drainBed({t});b.switch(kind);b.flush();
+  assert.equal(b.calls.runTask.length,0);assert.equal(t.queued[0].text,'original');assert.match(t.queued[0].failure,/task or workspace changed/);
+ }
+});
+
+await test('reservation refusal returns started work to its explicit queue recovery path',async()=>{
+ const t={id:'t',status:'done',lastStop:'done',log:[],queued:queueOf('original','second')};const id=t.queued[0].id;
+ const b=drainBed({t,startupDenied:true});b.flush();await Promise.resolve();await Promise.resolve();
+ assert.equal(t.queued[0].id,id);assert.equal(t.queued[0].failedStarts,1);assert.match(t.queued[0].failure,/reservation denied/);
+ assert.equal(nextDispatch(t.queued,{stop:'done'}).paused,true);assert.deepEqual(Array.from(t.queued,row=>row.text),['original','second']);
+});
+
+await test('queue claims remain recoverable during asynchronous startup until durable acknowledgement',()=>{
+ const t={id:'t',status:'done',lastStop:'done',log:[],queued:queueOf('original','second')},id=t.queued[0].id;
+ const b=drainBed({t,deferStart:true});b.flush();assert.equal(t.queued[0].id,id);assert.equal(t.queued[0].state,'dispatching');
+ const restored=reconcileQueue(migrateQueue(JSON.parse(JSON.stringify(t.queued))).queue).queue;
+ assert.equal(restored[0].id,id);assert.equal(restored[0].text,'original');assert.equal(restored[0].state,'pending');
+ b.calls.acceptStartup();assert.equal(t.queued.length,1);assert.equal(t.queued[0].text,'second');
 });
 
 // ── the queue rows: ↑ ↓ ✎ ✕ are keyed on the entry id ─────────────────────────────────────────

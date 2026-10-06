@@ -53,7 +53,7 @@ assert.match(promptLine, /python /, 'at least one runnable python example remain
 
 // ── every tool passes the hook guard ────────────────────────────────────
 // The guard must sit above the first early-returning Anvil-layer tool.
-const execIdx = anvil.indexOf('const executeTool = async (nm, ar, callObj)=>{');
+const execIdx = anvil.indexOf('const executeTool = async (nm, ar, callObj, hookOptions=null)=>{');
 const guardIdx = anvil.indexOf('preHookReply(hooksCfg, nm, ar)', execIdx);
 const firstToolIdx = anvil.indexOf("if(nm==='skill')", execIdx);
 assert.ok(execIdx >= 0 && guardIdx > execIdx, 'the hook guard is inside executeTool');

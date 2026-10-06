@@ -361,6 +361,9 @@ jobs:
 
       - name: "S2: the Anvil inline module loads — its top level runs and the boot finishes"
         run: node scripts/test-anvil-loads.mjs
+
+      - name: Verify bounded Anvil hooks, IDs, approvals and recovery evidence
+        run: node --test scripts/test-anvil-A03-reliability.mjs
       - name: anvil handlers run (not just parse)
         run: node scripts/test-anvil-handlers.mjs
 
@@ -684,6 +687,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      - name: Verify Anvil interruption recovery and ten-megabyte state behavior in Chrome
+        run: node scripts/test-anvil-A03-browser.mjs
+
       - name: Verify real pinned Pyodide SQLite in Chrome
         run: node scripts/test-sqlite-browser.mjs
 

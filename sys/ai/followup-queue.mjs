@@ -31,9 +31,10 @@
 export const QUEUE_STATES = Object.freeze(['pending', 'dispatching']);
 
 let counter = 0;
-function newId(now) {
+function newId(now, reserved=new Set()) {
   counter = (counter + 1) % 1e6;
-  return `q${now.toString(36)}${counter.toString(36)}`;
+  const base=`q${now.toString(36)}${counter.toString(36)}`;
+  let id=base,suffix=0;while(reserved.has(id))id=base+'_'+(++suffix);reserved.add(id);return id;
 }
 
 /**
@@ -42,18 +43,25 @@ function newId(now) {
  * Anything unrecognisable is dropped and counted, never silently kept as a broken entry.
  */
 export function migrateQueue(raw, { now = Date.now() } = {}) {
+  const items=Array.isArray(raw)?raw:[];
+  const reserved=new Set(items.filter(e=>e&&typeof e==='object'&&typeof e.id==='string'&&e.id).map(e=>e.id));
+  const seen=new Set();
   const out = []; let migrated = 0, dropped = 0;
-  for (const item of Array.isArray(raw) ? raw : []) {
+  for (const item of items) {
     if (typeof item === 'string') {
       if (!item.trim()) { dropped++; continue; }
-      out.push({ id: newId(now), text: item, state: 'pending', at: now });
+      out.push({ id: newId(now,reserved), text: item, state: 'pending', at: now });
       migrated++;
     } else if (item && typeof item === 'object' && typeof item.text === 'string' && item.text.trim()) {
+      const supplied=typeof item.id==='string'&&item.id;
+      const id=supplied&&!seen.has(supplied)?supplied:newId(now,reserved);
+      if(supplied&&id!==supplied)migrated++;seen.add(id);
       out.push({
-        id: typeof item.id === 'string' && item.id ? item.id : newId(now),
+        id,
         text: item.text,
         state: QUEUE_STATES.includes(item.state) ? item.state : 'pending',
         at: Number.isFinite(item.at) ? item.at : now,
+        ...(Number.isSafeInteger(item.failedStarts) && item.failedStarts>0 ? {failedStarts:Math.min(item.failedStarts,1000000),failure:String(item.failure||'start failed').slice(0,500)} : {}),
       });
     } else dropped++;
   }
@@ -78,7 +86,7 @@ export function reconcileQueue(queue, { now = Date.now() } = {}) {
 export function enqueue(queue, text, { now = Date.now() } = {}) {
   const t = String(text ?? '');
   if (!t.trim()) return { queue: queue || [], entry: null };
-  const entry = { id: newId(now), text: t, state: 'pending', at: now };
+  const entry = { id: newId(now,new Set((queue||[]).map(e=>e.id))), text: t, state: 'pending', at: now };
   return { queue: [...(queue || []), entry], entry };
 }
 
@@ -122,6 +130,7 @@ export function nextDispatch(queue, outcome = {}, { now = Date.now() } = {}) {
   const head = q.find((e) => e.state === 'pending');
   if (!head) return { queue: q, entry: null, paused: false, reason: '' };
 
+  if(head.failedStarts) return {queue:q,entry:null,paused:true,reason:'the queued follow-up previously failed to start — use Retry or remove it'};
   if (outcome.aborted) return { queue: q, entry: null, paused: true, reason: 'you stopped the run — the queue is holding' };
   if (outcome.error) return { queue: q, entry: null, paused: true, reason: `the run ended in an error (${String(outcome.error).slice(0, 80)}) — the queue is holding` };
   // An ambiguous end is anything that is not a clean finish. `unverified`, `budget`, `max-steps`
@@ -145,6 +154,16 @@ export function completeDispatch(queue, id) {
 /** The run never started (a throw between claim and start): release the claim, keep the work. */
 export function releaseDispatch(queue, id) {
   return (queue || []).map((e) => (e.id === id ? { ...e, state: 'pending' } : e));
+}
+
+export function failDispatch(queue,id,reason){
+  return releaseDispatch(queue,id).map(entry=>entry.id===id ? {...entry,failedStarts:Math.min((entry.failedStarts||0)+1,1000000),failure:String(reason||'start failed').slice(0,500)} : entry);
+}
+export function retryDispatch(queue,id){
+  const found=(queue||[]).find(entry=>entry.id===id && entry.state==='pending');
+  if(!found) return {queue:queue||[],entry:null};
+  const entry={...found,state:'dispatching'};
+  return {queue:queue.map(row=>row.id===id?entry:row),entry};
 }
 
 /**

@@ -23,6 +23,8 @@ import { mutationError, checkCreateOptions, checkTruncateOptions, truncateSize }
 export class MemoryBackend {
   constructor() {
     this.supportsBoundedReads = true;
+    this.supportsBoundedListing = true;
+    this._listingRevision = 0;
     this.supportsMetadataOnly = true;
     this.supportsExclusiveCreate = true;
     this.supportsTypedRemoval = true;
@@ -55,6 +57,7 @@ export class MemoryBackend {
     }
     const bytes = new Uint8Array(data);
     this.files.set(safePath, { bytes, mtimeMs: this._now() });
+    this._listingRevision++;
   }
 
   _compareOriginal(safePath, expectedData, root) {
@@ -77,11 +80,13 @@ export class MemoryBackend {
     // enter between the expected-content check and this exact-key mutation.
     this._compareOriginal(safePath, expectedData, root);
     this.files.set(safePath, { bytes: new Uint8Array(data), mtimeMs: this._now() });
+    this._listingRevision++;
   }
 
   async conditionalDelete(safePath, { expectedData, root = '' } = {}) {
     this._compareOriginal(safePath, expectedData, root);
     this.files.delete(safePath);
+    this._listingRevision++;
   }
 
   async delete(safePath, { kind, root = '' } = {}) {
@@ -96,6 +101,7 @@ export class MemoryBackend {
       if (type === 'dir' && this._isImplicitDir(safePath)) throw mutationError('ENOTEMPTY', `directory not empty: ${safePath}`);
     }
     this.files.delete(safePath);
+    this._listingRevision++;
     this.dirs.delete(safePath);
     this.symlinks.delete(safePath);
   }
@@ -127,6 +133,7 @@ export class MemoryBackend {
     this._requireMutationParents(safePath, root);
     if (directory) this.dirs.add(safePath);
     else this.files.set(safePath, { bytes: new Uint8Array(0), mtimeMs: this._now() });
+    this._listingRevision++;
   }
 
   async truncate(safePath, options = {}) {
@@ -144,6 +151,7 @@ export class MemoryBackend {
     const bytes = new Uint8Array(size);
     if (previous) bytes.set(previous.subarray(0, Math.min(size, previous.byteLength)));
     this.files.set(safePath, { bytes, mtimeMs: this._now() });
+    this._listingRevision++;
     return { changed: true, size };
   }
 
@@ -159,11 +167,13 @@ export class MemoryBackend {
       if (this.symlinks.has(safePath) || kind && kind !== 'dir') throw mutationError('ENOTSUP', 'no-follow mkdir requires a directory or absent final entry');
     }
     this.dirs.add(safePath);
+    this._listingRevision++;
   }
 
   // Test helper — no live equivalent; models a symlink for escape testing.
   symlink(safePath, target) {
     this.symlinks.set(safePath, { target, mtimeMs: this._now() });
+    this._listingRevision++;
   }
 
   _isImplicitDir(safePath) {
@@ -190,7 +200,41 @@ export class MemoryBackend {
   // directories suffixed '/'. Mirrors the Folder backend's fsList; fileops owns
   // recursion. A key with a deeper segment contributes its first segment as a
   // directory child.
-  async list(prefix) {
+  async list(prefix, { maxEntries, cursor = null } = {}) {
+    if (maxEntries !== undefined) {
+      if (!Number.isInteger(maxEntries) || maxEntries < 1 || maxEntries > 1000) throw mutationError('EINVAL', 'invalid listing bound');
+      let last = '';
+      if (cursor) {
+        let value;
+        try { value = JSON.parse(cursor); } catch (_) { throw mutationError('EINVAL', 'invalid listing cursor'); }
+        if (value.prefix !== prefix || value.maxEntries !== maxEntries || value.revision !== this._listingRevision || typeof value.last !== 'string')
+          throw mutationError('ESTALE', 'listing cursor changed or expired');
+        last = value.last;
+      }
+      const base = prefix ? prefix + '/' : '', selected = new Map();
+      const consider = (key, forceDir) => {
+        if (key === prefix || base && !key.startsWith(base)) return;
+        const rest = key.slice(base.length), slash = rest.indexOf('/');
+        const name = slash < 0 ? rest : rest.slice(0, slash);
+        if (!name || name <= last) return;
+        const isDir = forceDir || slash >= 0;
+        if (selected.has(name)) { if (isDir) selected.set(name, true); return; }
+        selected.set(name, isDir);
+        if (selected.size > maxEntries + 1) {
+          let largest = ''; for (const candidate of selected.keys()) if (candidate > largest) largest = candidate;
+          selected.delete(largest);
+        }
+      };
+      for (const key of this.files.keys()) consider(key, false);
+      for (const key of this.symlinks.keys()) consider(key, false);
+      for (const key of this.dirs) consider(key, true);
+      const names = [...selected.keys()].sort(), truncated = names.length > maxEntries;
+      if (truncated) names.pop();
+      const out = names.map(name => base + name + (selected.get(name) ? '/' : ''));
+      out.truncated = truncated; out.snapshotConsistent = true;
+      out.cursor = truncated ? JSON.stringify({ prefix, maxEntries, revision: this._listingRevision, last: names.at(-1) }) : null;
+      return out;
+    }
     const base = prefix === '' ? '' : prefix + '/';
     const children = new Map(); // childName -> isDir
     const consider = (key, forceDir) => {

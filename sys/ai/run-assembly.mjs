@@ -4,6 +4,7 @@
 // the product (plan/bench-live-bed-2026-09-11.md). The app's behaviour is the contract: same
 // prompt bytes, same tool list per mode, same budgets, same re-loops. scripts/test-run-assembly.mjs
 // holds the byte-equality lane against the inline app.
+import {utf8ByteLengthWithin,utf8Prefix} from './text-byte-bound.mjs';
 import { runAgentLoop } from './agent-loop.mjs';
 import { codingToolset, toolReadiness , scopeAllows, TOOL_SCOPES } from './agent-tools.mjs';
 import { renderProcedural } from './procedural.mjs';
@@ -13,7 +14,7 @@ import { skillManageTool } from './skill-manage.mjs';
 import { contextRemainingTool, checkpointTool } from './context-budget.mjs';
 import { learnReviewTool } from './learn.mjs';
 import { recallTool, reviseTool, LESSON_CONTRACT } from './memory-store.mjs';
-import { HOOKS_FILE, parseHooks, preToolDecision, postToolCommands } from './hooks.mjs';
+import { HOOKS_FILE, HOOK_LIMITS, parseHooks, preToolDecision, postToolCommands } from './hooks.mjs';
 import { historyTool, foldStagnation, stagnationNudge } from '../history/run-record.mjs';
 
 // ── the prompt ────────────────────────────────────────────────────────────────
@@ -145,7 +146,24 @@ export const RELOOP_BUDGET = Object.freeze({ maxSteps: 16, budget: Object.freeze
 // Per-project tool hooks from .anvil/hooks.json: pre-tool guards and post-tool commands.
 export const EMPTY_HOOKS = Object.freeze({ preTool: [], postTool: [] });
 export async function loadHooks(fs, fallback = EMPTY_HOOKS) {
-  try { const r = await fs.read(HOOKS_FILE, { encoding: 'utf-8' }); if (r && r.ok) return parseHooks(r.data); } catch (_) {}
+  try {
+    const r=await fs.read(HOOKS_FILE,{encoding:'utf-8',maxBytes:HOOK_LIMITS.configBytes});
+    if(r?.ok) return parseHooks(r.data);
+    if(r?.code==='ENOTSUP' && typeof fs.list==='function'){
+      // An absent config requires no object download on legacy external backends.
+      const listing=await fs.list('.anvil',{recursive:false,maxEntries:50});
+      const entries=listing?.entries;
+      const covered=listing?.ok && listing.truncated===false && listing.cursor==null && listing.snapshotConsistent===true
+        && Array.isArray(entries) && entries.length<=50 && entries.every(row=>{
+          const path=row?.path,child=typeof path==='string'&&path.startsWith('.anvil/')?path.slice(7):'';
+          return child && child!=='.' && child!=='..' && !/[\/\\\u0000-\u001f\u007f]/.test(child)
+            && utf8ByteLengthWithin(path,4096)!==null && ['file','dir'].includes(row.type)
+            && (row.name==null || row.name===child);
+        });
+      if(listing?.code==='ENOENT' || (covered && !entries.some(row=>row.path===HOOKS_FILE)))return fallback;
+    }
+    if(r?.code && r.code!=='ENOENT') return {preTool:[{block:'Project hooks unavailable: '+String(r.code).slice(0,80)}],postTool:[]};
+  } catch(error) {return {preTool:[{block:'Project hooks unavailable: '+String(error?.code || 'read failed').slice(0,80)}],postTool:[]};}
   return fallback;
 }
 // The guard runs BEFORE anything else the executor does, so a project rule can block every tool.
@@ -156,17 +174,35 @@ export function preHookReply(hooksCfg, name, args) {
 // Post-tool commands run through a shell over the same workspace; their bounded output is fed
 // back to the agent. Empty string when no hook matched, so the tool result stays byte-identical.
 // `shellFor` is a factory: the shell is built only when a hook has a command to run.
-export async function postHookNotes(hooksCfg, name, args, shellFor) {
+export async function postHookNotes(hooksCfg, name, args, shellFor, {signal=null,commandMs=HOOK_LIMITS.commandMs,phaseMs=HOOK_LIMITS.phaseMs}={}) {
   let extra = '';
+  const controller=new AbortController();
+  const stopped=()=>controller.abort();
+  signal?.addEventListener('abort',stopped,{once:true});
+  if(signal?.aborted)controller.abort();
+  const started=Date.now();
   try {
     const cmds = postToolCommands(hooksCfg, name, args);
     if (!cmds.length) return '';
-    const shell = shellFor();
+    const shell = shellFor({signal:controller.signal});
+    let noteBytes=0;
+    const note=text=>{const part=utf8Prefix(text,HOOK_LIMITS.notesBytes-noteBytes);noteBytes+=utf8ByteLengthWithin(part,HOOK_LIMITS.notesBytes)||0;extra+=part;};
     for (const cmd of cmds) {
-      try { const o = await shell.feed(cmd); const out = String((o && o.output) || '').trim().slice(0, 2000); extra += '\n[hook] ' + cmd + (out ? ('\n' + out) : ' (ok)'); }
-      catch (e) { extra += '\n[hook] ' + cmd + ' — error: ' + (e && e.message || e); }
+      if(controller.signal.aborted){note('\n[hook] cancelled; remaining hooks skipped');break;}
+      const remaining=Math.min(HOOK_LIMITS.phaseMs,Math.max(1,phaseMs))-(Date.now()-started);
+      if(remaining<=0){controller.abort();note('\n[hook] phase deadline; remaining hooks skipped');break;}
+      let timer,onAbort;
+      const deadline=new Promise((_,reject)=>{
+        onAbort=()=>reject(new Error('cancelled; pending effects may remain uncertain'));
+        controller.signal.addEventListener('abort',onAbort,{once:true});
+        timer=setTimeout(()=>{reject(new Error('execution deadline; pending effects may remain uncertain'));controller.abort();},Math.min(remaining,HOOK_LIMITS.commandMs,Math.max(1,commandMs)));
+      });
+      try { const o = await Promise.race([Promise.resolve().then(()=>shell.feed(cmd)),deadline]); const out = String((o && o.output) || '').slice(0,2000).trim(); note('\n[hook] ' + cmd + (out ? ('\n' + out) : ' (ok)')); }
+      catch (e) { note('\n[hook] ' + cmd + ' — error: ' + String(e && e.message || e).slice(0,2000)); }
+      finally{clearTimeout(timer);controller.signal.removeEventListener('abort',onAbort);}
     }
-  } catch (_) {}
+  } catch (error) { extra='\n[hook refused] '+String(error?.message || error).slice(0,2000); }
+  finally{signal?.removeEventListener('abort',stopped);controller.abort();}
   return extra;
 }
 // The bed composition: guard, run, annotate. The app wires the same two primitives at its own

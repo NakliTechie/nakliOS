@@ -1,3 +1,5 @@
+import {HOOKS_FILE} from '../sys/ai/hooks.mjs';
+import {classifyToolResult} from '../sys/ai/tool-result-kind.mjs';
 // INERT B12 PLANNING DRAFT. Do not execute, import, or syntax-check before whole-build release.
 // Proposed promotion: scripts/test-anvil-unix-integration.mjs. Relative imports target that location.
 // Ten additional cases supplement the existing 27 actual-Anvil integration cases.
@@ -39,7 +41,7 @@ function fixture({ hooksCfg = { preTool: [], postTool: [] }, permissionRules = {
   const base = buildRigRegistry({ fs, git });
   const registry = stageWrites ? createRegistry(base.commands.map((command) =>
     command.name === 'fs.write' ? { ...command, destructive: true } : command)) : base;
-  const appGrant = evaluate(`${grantSource}\nagentGrant(scopes);`, { createGrant, SKILLS_DIR, GATE_DIR, scopes });
+  const appGrant = evaluate(`${grantSource}\nagentGrant(scopes);`, { createGrant, SKILLS_DIR, GATE_DIR, HOOKS_FILE, scopes });
   const grant = prefixes ? createGrant({ ...appGrant.describe(), prefixes }) : appGrant;
   const face = createAgentFace({ registry, grant,
     opLog: createOpLog({ fs: createFileops({ backend: new MemoryBackend() }) }), actor: 'b12-independent-verifier' });
@@ -61,7 +63,7 @@ function fixture({ hooksCfg = { preTool: [], postTool: [] }, permissionRules = {
        isAborted: () => abortController.signal.aborted });
   `, {
     AbortController, createShell, makeToolExecutor, registry, face, fs, mode: 'code', t, state, hooksCfg,
-    preHookReply, postHookNotes, gateAction, gateEvent, guardCriticalShellInvocation, applyPolicy, policyGrant, POLICY_HINT,
+    classifyToolResult, preHookReply, postHookNotes, gateAction, gateEvent, guardCriticalShellInvocation, applyPolicy, policyGrant, POLICY_HINT,
     withShellContext, decideByRules, applyMode, explainSkillsRefusal, explainGateRefusal,
     kilnRef: null, jsHost: null,
     runCtx: { t, messages: t.convo, rec: { onEvent: (event) => events.push(event) } },
@@ -184,7 +186,7 @@ test('B12 Anvil pre-hooks block supported edits and post-hooks read the actual e
   assert.deepEqual(ctx.feeds, []);
   assert.equal(await ctx.read('input'), 'old\n');
   const output = await ctx.run('sed -i s/old/new/ input');
-  assert.match(output, /\[exit 0\]\n\[hook\] cat input\nnew$/);
+  assert.match(output, /\[exit 0\]\n\[hook\] cat input\nnew\n\[exit 0\]$/);
   assert.equal(await ctx.read('input'), 'new\n');
   settled(ctx);
 });
