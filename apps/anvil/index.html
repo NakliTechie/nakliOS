@@ -381,16 +381,24 @@
 <script>
   window.__anvilBoot = { ok: false, shown: false };
   (function () {
-    function show(what, detail) {
-      if (window.__anvilBoot.ok || window.__anvilBoot.shown) return;
+    var notice = null, noticeKind = null;
+    function show(what, detail, kind) {
+      if (window.__anvilBoot.ok) return;
+      // A real failure supersedes a waiting notice; a second failure keeps the first trace.
+      if (window.__anvilBoot.shown && !(noticeKind === 'timeout' && kind !== 'timeout')) return;
+      if (notice) notice.remove();
       window.__anvilBoot.shown = true;
+      noticeKind = kind || 'error';
       var d = document.createElement('div');
+      notice = d;
       d.setAttribute('role', 'alert');
       d.style.cssText = 'position:fixed;inset:0;z-index:99999;overflow:auto;padding:28px;'
         + 'background:#1b1210;color:#f4d9d2;font:13px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace';
-      d.textContent = 'Anvil did not start.\n\n' + what + '\n\n' + (detail || '')
-        + '\n\nThe interface behind this notice is painted but not wired — nothing in it works.'
-        + '\nReload after fixing, or open the console for the full trace.';
+      d.textContent = noticeKind === 'timeout'
+        ? 'Anvil is still starting.\n\n' + what + '\n\nCheck any storage permission prompt. This notice closes when startup finishes.'
+        : 'Anvil did not start.\n\n' + what + '\n\n' + (detail || '')
+          + '\n\nThe interface behind this notice is painted but not wired — nothing in it works.'
+          + '\nReload after fixing, or open the console for the full trace.';
       d.style.whiteSpace = 'pre-wrap';
       document.documentElement.appendChild(d);
     }
@@ -410,9 +418,24 @@
       var r = e && e.reason;
       show('An unhandled rejection stopped the boot.', r && (r.stack || r.message || String(r)));
     });
-    // A boot that neither finishes nor throws is still a failure, and the one the
-    // listeners above cannot see. Ten seconds is well past a cold module fetch.
-    setTimeout(function () { show('Boot did not finish within 10 seconds.', 'No error was reported.'); }, 10000);
+    // Storage permission prompts can outlast the watchdog without failing startup.
+    var timer = setTimeout(function () { show('Startup has taken more than 10 seconds.', '', 'timeout'); }, 10000);
+    // Keep the module's existing readiness assignment as the completion interface.
+    var ready = false;
+    Object.defineProperty(window.__anvilBoot, 'ok', {
+      get: function () { return ready; },
+      set: function (value) {
+        ready = !!value;
+        if (!ready) return;
+        clearTimeout(timer);
+        if (noticeKind === 'timeout') {
+          notice.remove();
+          notice = null;
+          noticeKind = null;
+          window.__anvilBoot.shown = false;
+        }
+      }
+    });
   })();
 </script>
 

@@ -10,6 +10,7 @@
 //
 // Grep-based, like the other app-contract tests.
 import assert from 'node:assert/strict';
+import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
 
 const anvil = await readFile(new URL('../apps/anvil/index.html', import.meta.url), 'utf8');
@@ -145,6 +146,51 @@ assert.ok(!/nm==='remember'/.test(anvil.slice(anvil.indexOf('async function spaw
   assert.match(net, /setTimeout\(/, 'a boot that neither finishes nor throws is still reported');
   assert.match(anvil, /window\.__anvilBoot\.ok = true/, 'a completed boot stands the net down');
   assert.ok(anvil.indexOf('window.__anvilBoot.ok = true') > moduleAt, 'the stand-down is inside the module, not beside it');
+}
+
+
+// Execute the actual classic boot script with deterministic watchdog time.
+// Late successful boot must uncover controls; genuine failures retain their trace.
+{
+  const bootScript = anvil.slice(anvil.lastIndexOf('<script>', anvil.indexOf('window.__anvilBoot')) + 8,
+    anvil.indexOf('</script>', anvil.indexOf('window.__anvilBoot')));
+  function boot() {
+    const listeners = {}, children = [], timers = new Map();
+    const window = { addEventListener(name, fn) { listeners[name] = fn; } };
+    const document = {
+      createElement() { return { style: {}, setAttribute() {}, remove() {
+        const i = children.indexOf(this); if (i >= 0) children.splice(i, 1);
+      } }; },
+      documentElement: { appendChild(node) { children.push(node); } },
+    };
+    vm.runInNewContext(bootScript, { window, document,
+      setTimeout(fn, ms) { assert.equal(ms, 10000); timers.set(1, fn); return 1; },
+      clearTimeout(id) { timers.delete(id); },
+    });
+    return { window, children, listeners, timers,
+      expire() { for (const fn of [...timers.values()]) fn(); timers.clear(); },
+      finish() { window.__anvilBoot.ok = true; },
+    };
+  }
+  const late = boot(); late.expire();
+  assert.equal(late.children.length, 1, 'a stalled boot remains visible');
+  late.finish();
+  assert.equal(late.children.length, 0, 'successful late boot removes the blocking watchdog notice');
+  assert.equal(late.window.__anvilBoot.shown, false, 'late success clears notice state');
+  const early = boot(); early.finish(); early.expire();
+  assert.equal(early.children.length, 0, 'normal startup cancels the watchdog');
+  assert.equal(early.timers.size, 0, 'the completed boot retains no watchdog timer');
+  for (const type of ['error', 'unhandledrejection', 'load']) {
+    const failed = boot(); failed.expire();
+    if (type === 'error') failed.listeners.error({ target: failed.window, message: 'real script failure' });
+    if (type === 'unhandledrejection') failed.listeners.unhandledrejection({ reason: Error('real rejection') });
+    if (type === 'load') failed.listeners.error({ target: { tagName: 'SCRIPT', src: 'broken.mjs' } });
+    assert.equal(failed.children.length, 1, 'failure replaces the timeout rather than duplicating it');
+    assert.match(failed.children[0].textContent, /Anvil did not start/, 'a real failure supersedes the waiting notice');
+    failed.finish();
+    assert.equal(failed.children.length, 1, 'completion never hides a captured real failure');
+  }
+  console.log('anvil-boot-watchdog: delayed success, timely success, script failure, rejected boot, and load failure pass');
 }
 
 console.log('anvil-guards: honesty, reachability, hook coverage, single-writer state, bounded inference and run visibility all hold');
