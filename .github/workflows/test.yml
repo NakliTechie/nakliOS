@@ -170,6 +170,21 @@ jobs:
       - name: Verify the procedural bed runs the app's assembly end to end (stub model, zero spend)
         run: node scripts/test-bench-procedural.mjs
 
+      - name: Verify every autoharness battery gate passes its reference and fails on the seed and an empty workspace
+        run: node scripts/test-autoharness-battery.mjs
+
+      - name: Verify the autoharness split runner scores passes, counts provider failures as void, and sums tokens (stub model)
+        run: node scripts/test-autoharness-runner.mjs
+
+      - name: Verify an autoharness round commits only the harness and its pins, restores stray edits, and rejects a CI-red edit (stub optimizer)
+        run: node scripts/test-autoharness-round.mjs
+
+      - name: Verify the autoharness loop keeps a paired gain, reverts noise, and stops on patience (stub model and optimizer)
+        run: node scripts/test-autoharness-loop.mjs
+
+      - name: Verify the autoharness test-split comparison reports a paired result and refuses a second look (stub model)
+        run: node scripts/test-autoharness-compare.mjs
+
       - name: Verify ordering metrics — anchored, never zero-for-null, refusing unlike comparisons
         run: node sys/history/test/ordering.test.mjs
 

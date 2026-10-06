@@ -15,10 +15,9 @@ import { SYSTEM_HEAD, SYSTEM_TAIL, systemPrompt } from '../sys/ai/run-assembly.m
 
 const anvil = await readFile(new URL('../apps/anvil/index.html', import.meta.url), 'utf8');
 
-// The exact prose that lived in the literal before this change (git: apps/anvil/index.html@fedf4ec),
-// with deliberate edits since: the read-before-edit exception (2026-09-24), and B12's supported
-// batch-edit guidance (2026-09-30). Historical snapshots remain unchanged.
-const BEFORE = 'Read a file before editing it, unless the exact text to replace is already known — an edit whose old_string occurs exactly once applies without a read. Prefer edit/apply_patch for changes, write for new files; use shell to explore and verify or perform supported batch edits. For work that splits into independent parts, use dispatch to parallelise; after a significant change, consider review before finishing. For a task defined by input→output EXAMPLES (a puzzle), prefer the `synthesize` tool — it evolves and tests candidate solve() programs across generations and writes the best solver.py — over hand-writing one solver.';
+// The approved render — the prose that lived in the app's literal (apps/anvil/index.html@fedf4ec) with
+// its deliberate edits since — is a golden file updated only by a reviewed commit that changes the graph.
+const { render: BEFORE } = JSON.parse(await readFile(new URL('../sys/ai/test/procedural-golden.json', import.meta.url), 'utf8'));
 
 // ── 1. byte-identical, and the literal is really gone ──────────────────────
 assert.equal(renderProcedural(), BEFORE, 'the default graph renders exactly the approved prompt contract');

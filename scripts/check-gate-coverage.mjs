@@ -27,6 +27,7 @@ const WORKFLOW = 'test.yml';
 // path -> why it is not in the gate. Keep this empty if you can.
 const EXCLUDED = Object.freeze({
   // 'sys/foo/test/needs-webgpu.test.mjs': 'requires navigator.gpu; covered by /live-check-nt',
+  'scripts/test-autoharness-python.mjs': 'needs a Pyodide install (AUTOHARNESS_PYODIDE=<dir>) and CI has none; run it locally after a change to scripts/autoharness/python.mjs, the bed\'s kiln wiring or sys/kiln/',
 });
 
 // Where tests live, and what a test looks like there.

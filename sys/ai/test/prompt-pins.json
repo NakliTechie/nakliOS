@@ -1,0 +1,29 @@
+{
+  "about": "Authorized literal edits to the run-assembly prompt bytes since the inline app (e870f0b), applied in order to sys/ai/test/run-assembly-e870f0b.json by scripts/test-run-assembly.mjs. A pin targets prompts (in the listed modes), actNudge or gateNote; its before must occur exactly once at its turn. Pins are recorded literals written at commit time and reviewed in the diff; a test never derives expected bytes from the current SYSTEM_HEAD or renderProcedural().",
+  "pins": [
+    {
+      "id": "B12-shell-capability",
+      "target": "prompts",
+      "modes": [
+        "code",
+        "plan",
+        "ask"
+      ],
+      "why": "B12 (2026-09-30): advertise the implemented Unix surface",
+      "before": "shell (a CURATED bash-like shell, not coreutils: ls cat grep rg sed awk find head tail wc sort uniq cut tr test git python, with pipes, && || ; > >> < and globs. Each builtin implements a documented subset and REFUSES an unsupported flag rather than ignoring it — run `help` to see what each one supports. No loops, subshells, command substitution or heredocs; use python for scripting). ",
+      "after": "shell (a CURATED bash-like workspace shell with pipes, separate stdout/stderr, redirects, globs, quoted heredocs, bounded loops, subshells, functions and command substitution. It runs governed sed -i edits, recursive grep/rg, find-exec, tar/gzip/zip, jq/yq and fd. SQLite requires an available host-authorized Kiln runtime. Supported commands and syntax run through the shell; read/write/edit/apply_patch remain available for focused changes. Run `help` for exact flags and capability refusals. Background jobs and arbitrary host processes are unavailable. Use python for scripting). "
+    },
+    {
+      "id": "B12-shell-guidance",
+      "target": "prompts",
+      "modes": [
+        "code",
+        "plan",
+        "ask"
+      ],
+      "why": "B12 (2026-09-30): supported batch edits",
+      "before": "use shell to explore and verify",
+      "after": "use shell to explore and verify or perform supported batch edits"
+    }
+  ]
+}
