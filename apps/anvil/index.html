@@ -1257,7 +1257,7 @@
     renderAll();
   }
 
-  $('new-project').onclick=nativeWorkspaceAction(async ()=>{ if(activeRangeEdit){pushSystem('Finish or stop the selected-file edit first.');return;} const n=await askText({ title:'New project', label:'Project name', value:'project' }); if(!n) return; if(nativeGateSession)await disconnectNativeAuthority({restoreRuntime:folderMode,internal:true}); if(primeAbortController) primeAbortController.abort(); const p={id:id(),name:n,open:true,tasks:[]}; state.projects.push(p); state.activeProject=p.id; save(); if(!folderMode) await mountProject(p.id,true);
+  $('new-project').onclick=nativeWorkspaceAction(async ()=>{ if(activeRangeEdit){pushSystem('Finish or stop the selected-file edit first.');return;} const n=await askText({ title:'New project', label:'Project name', value:'project' }); if(!n) return; if(nativeGateSession)await disconnectNativeAuthority({restoreRuntime:folderMode,internal:true}); if(primeAbortController) primeAbortController.abort(); const t={id:id(),title:'Untitled task',status:'idle',mode:'code',convo:[],log:[],preview:null}; const p={id:id(),name:n,open:true,tasks:[t]}; state.projects.push(p); state.activeProject=p.id; state.activeTask=t.id; save(); if(!folderMode) await mountProject(p.id,true);
     // ESS-5: a project with no skills should not start empty — one short starter, owner-written
     // so it is active at once. Browser-mounted projects only: a real folder is the owner's.
     if(!folderMode){ try{ const f=starterSkillFile({ now:Date.now() }); const cur=await fs.read(f.path,{encoding:'utf-8'}); if(!(cur&&cur.ok)) await fs.write(f.path, f.text); }catch(_){} }
@@ -4625,6 +4625,26 @@
     // Remote git through the egress transport (probe). References the live `git` binding.
     gitClone:async(url, opts)=>{ try{ const r=await git.clone(Object.assign({ url, singleBranch:true, depth:1 }, opts||{})); return { ok:true, branch:r&&r.branch, hasOid: !!(r&&r.oid) }; }catch(e){ return { ok:false, error:String(e&&e.message||e) }; } },
     gitLsRemote:async(url)=>{ try{ const r=await git.listServerRefs({ url }); return { ok:true, refCount: r&&r.refs?Object.keys(r.refs).length:0 }; }catch(e){ return { ok:false, error:String(e&&e.message||e) }; } },
+    // Owner-only test operation: push the exact workspace commit observed in a
+    // verified run. The agent's grant still withholds git:push.
+    gitPushWorkspace:async(options={})=>{ try{
+      const {url,expectedOid}=options||{};
+      if(typeof url!=='string' || typeof expectedOid!=='string') return {ok:false,error:'A remote URL and expected commit OID are required'};
+      if(running || priming || nativeGateTransition || nativeGateSession || activeRangeEdit)
+        return {ok:false,error:'Workspace is busy or has restricted authority'};
+      if(!/^[0-9a-f]{40}$/.test(String(expectedOid||''))) return {ok:false,error:'An expected commit OID is required'};
+      const target=new URL(url);
+      if(target.protocol!=='https:' || target.username || target.password) return {ok:false,error:'An HTTPS remote without embedded credentials is required'};
+      const ownerGit=git, ownerBackend=backend, ownerProject=state.activeProject;
+      const head=await ownerGit.log({ref:'main',depth:1});
+      const oid=head?.commits?.[0]?.oid;
+      if(oid!==expectedOid) return {ok:false,error:'Workspace main differs from the expected commit',oid:oid||null};
+      if(running || priming || nativeGateTransition || nativeGateSession || activeRangeEdit ||
+        git!==ownerGit || backend!==ownerBackend || state.activeProject!==ownerProject)
+        return {ok:false,error:'Workspace authority changed before push'};
+      const pushed=await ownerGit.push({url:target.href,ref:expectedOid,remoteRef:'main',force:false});
+      return {ok:pushed?.ok!==false,oid,project:ownerProject,pushErr:pushed?.error||null};
+    }catch(e){return {ok:false,error:String(e&&e.message||e)};} },
     // Isolated push M0: a fresh in-memory repo (never the dirty workspace) → commit →
     // push over the egress transport. Auth (PAT) is injected host-side; nothing here.
     gitPushTest:async(url, marker)=>{ try{

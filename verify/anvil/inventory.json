@@ -271,6 +271,12 @@
       "kind": "hook",
       "detail": "__anvil.test.gitPushTest"
     },
+    "hook:gitPushWorkspace": {
+      "owner": "test-door.md",
+      "fingerprint": "265d344c8a52",
+      "kind": "hook",
+      "detail": "__anvil.test.gitPushWorkspace"
+    },
     "hook:goal": {
       "owner": "test-door.md",
       "fingerprint": "07c39a387124",
