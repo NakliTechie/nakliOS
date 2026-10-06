@@ -362,6 +362,9 @@ jobs:
       - name: "S2: the Anvil inline module loads — its top level runs and the boot finishes"
         run: node scripts/test-anvil-loads.mjs
 
+      - name: Verify bounded codemode JSON, recording and replay
+        run: node --test scripts/test-anvil-A07-codemode.mjs
+
       - name: Verify inspected source span grounding
         run: node --test scripts/test-anvil-A04-learning.mjs
 
@@ -690,6 +693,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      - name: Verify opt-in codemode limits and authority in Chrome
+        run: node scripts/test-anvil-A07-browser.mjs
+
       - name: Verify Anvil grounded learning, delayed Stop and comment adjacency in Chrome
         run: node scripts/test-anvil-A04-browser.mjs
 

@@ -26,6 +26,7 @@
 // Pure over ledger.mjs. No storage, no DOM, no loop import — a caller records a
 // run with any loop, and replays through any loop, by wrapping infer/executeTool.
 
+import {codemodeJson} from '../ai/codemode-json.mjs';
 import { appendEvent, contentHash, verifyChain, toNDJSON, fromNDJSON } from './ledger.mjs';
 import { classifyToolResult } from '../ai/tool-result-kind.mjs';
 import { parseExpect, gradeExpect, stripExpect, EXPECT_MARKER } from '../ai/expect.mjs';
@@ -55,6 +56,7 @@ export const RUN_EVENTS = Object.freeze([
   'subagent.ran',     // input: { kind, label, step, tool_call_id } output: { record, stop, steps, text }
   'subagent.started', // input: { kind, label, step, tool_call_id } output: {}  (ESS-1: the claim, before the child runs)
   'subagent.beat',    // input: { kind, label, step, tool_call_id, child_step, tool } output: {}  (CRIB-B B1: a heartbeat — proves liveness, never completion)
+  'codemode.started', 'codemode.called', 'codemode.settled', 'codemode.store.proposed',
   'prime.fact.settled', // input: { surveyId, projectId, taskId } output: { slug, error, status }  (write reconciliation)
 ]);
 
@@ -259,6 +261,21 @@ export function createRunRecorder({ app = 'anvil', principal = 'local', grant_id
         input:{surveyId:String(surveyId),projectId:String(projectId),taskId:String(taskId)},
         output:{slug:slug==null?null:String(slug),error:error==null?null:String(error),status:String(status)},
       }));
+    },
+
+    // Codemode records nested calls without adding hidden turns to the model transcript.
+    codemodeStarted({invocation,code,tools,initialStore}) {
+      const input=JSON.parse(codemodeJson({invocation,code,tools},65536)),values=JSON.parse(codemodeJson(initialStore,65536));
+      return enqueue('codemode.started',()=>({input,output:{initialStore:values}}));
+    },
+    codemodeCalled({invocation,id,name,args}) {
+      const copy=JSON.parse(codemodeJson(args,32768));return enqueue('codemode.called',()=>({input:{invocation,id,name,args:copy},output:{}}));
+    },
+    codemodeSettled({invocation,id,name,result=null,error=null,cancelled=false,late=false}) {
+      const copy=JSON.parse(codemodeJson(result,256*1024));return enqueue('codemode.settled',()=>({input:{invocation,id,name},output:{result:copy,error,cancelled,late}}));
+    },
+    codemodeStoreProposed({invocation,values}) {
+      const copy=JSON.parse(codemodeJson(values,65536));return enqueue('codemode.store.proposed',()=>({input:{invocation},output:{values:copy}}));
     },
 
     // ---- the record ----

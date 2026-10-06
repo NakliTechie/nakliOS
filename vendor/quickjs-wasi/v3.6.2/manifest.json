@@ -1,0 +1,37 @@
+{
+  "package": "quickjs-wasi",
+  "version": "3.6.2",
+  "license": "MIT",
+  "source": "https://registry.npmjs.org/quickjs-wasi/-/quickjs-wasi-3.6.2.tgz",
+  "integrity": "sha512-FCqGtGOrMgzUiIrMNMA2YnsOxCNwo31dzqXvclXUC6xeT35NJLKXQJsvbeCTjvoFAwZgEAPg8U6+KAPDGXn8Mg==",
+  "files": {
+    "dist/index.js": {
+      "sha256": "91fcfc11e7f7372f3aee8d4373c0d4f969baac5cd12648663971550054217ae8",
+      "bytes": 115939
+    },
+    "dist/wasi-shim.js": {
+      "sha256": "79af15cf5158d181d11021158abb22541fd6d35beca569652317859819960eac",
+      "bytes": 4033
+    },
+    "dist/extensions.js": {
+      "sha256": "9662299693f6ddd8d56d6e2f91b4bd2202e2cfebe06e834bf9a2b16fa15c4e08",
+      "bytes": 15720
+    },
+    "dist/version.js": {
+      "sha256": "14dd0021bd1ba1f786a9833abd01b89c90a4175959d3b37b4d3bb62027a0b38d",
+      "bytes": 131
+    },
+    "quickjs.wasm": {
+      "sha256": "d4c9375f2b1ca4dc95f72c8aa2982a7a9951ac8011490d79c6582df732b4bbd9",
+      "bytes": 637405
+    },
+    "LICENSE": {
+      "sha256": "f7735da3b2531ddf451937117343cfadb853fd8054b499e7a70695dc57ffd184",
+      "bytes": 1069
+    },
+    "package.json": {
+      "sha256": "efa1d0d3b440dd7a31f55690d414f9c7f59e6a15395075efee884454c86715c2",
+      "bytes": 2730
+    }
+  }
+}

@@ -493,6 +493,9 @@
   import { runCampaign } from '../../sys/assay/runmode.mjs';
   import { makeCampaignExecutors } from '../../sys/assay/executors.mjs';
   import { verifyWall, verifyTests, replay as replayLineage } from '../../sys/assay/verify.mjs';
+  import {runCodemode} from '../../sys/ai/codemode-runtime.mjs';
+  import {codemodeTool,codemodeCatalog,CODEMODE_TOOL_NAMES,foldCodemodeStore,verifiedCodemodeStore} from '../../sys/ai/codemode-record.mjs';
+  import {eventHash} from '../../sys/history/ledger.mjs';
   import { createRunRecorder, foldSessionContext, foldStatus, foldLog, foldTranscript, loadRecord, foldStopReasons, stopReasonsLine, searchRecords, scopeEntries, readEvent, foldRecovery, recoveryNote, foldOutcome, foldSkillUsage, statusUnit, createProjector, foldOrdering, groupOrdering, orderingLine, foldRecalled, foldQuota, foldGoal, goalLine, foldEpisode } from '../../sys/history/run-record.mjs';
   import { FOREIGN_LIMITS, importForeignJsonl, detectForeignProvider, foreignSourceId, matchesForeignRow, foreignSourceLabel, foreignBloom, foreignBloomMayContain, foreignStoredBytes, redactForeignText } from '../../sys/history/foreign-transcripts.mjs';
 
@@ -2285,6 +2288,7 @@
       + 'allowed= proceeds silently until you revoke it.\n\n'
       + 'This lives in Anvil\'s own settings, not in your project files — so the agent cannot grant itself anything.',
       actions: [
+        {label:activeTask()?.codemodeEnabled?'Disable JavaScript scripts':'Enable JavaScript scripts',onClick:()=>{const t=activeTask();if(!t||running||priming)return;t.codemodeEnabled=!t.codemodeEnabled;save();pushSystem('JavaScript scripts '+(t.codemodeEnabled?'enabled':'disabled')+' for this task.');openPolicy();}},
         // The inverse of bypass: bypass stops Anvil asking, hold stops it starting. Neither
         // touches a run already in flight — that is what makes this a quota and not a fuse.
         { label: state.runsHeld ? '▶ Resume new runs' : '⏸ Hold new runs', onClick: async ()=>{
@@ -3208,6 +3212,14 @@
       throw new Error('Run record reservation collision limit reached');
     });
   }
+  async function loadCodemodeState(t,currentRec){
+    const current=foldCodemodeStore(currentRec.events(),currentRec.resolve);if(current.index!==null)return current.values;
+    const ref=t.codemodeStoreRef;if(!ref)return Object.create(null);
+    if(![ref.project,ref.task].every(value=>typeof value==='string'&&value.length<=200&&/^[A-Za-z0-9_-]+$/.test(value))||typeof ref.name!=='string'||!/^[A-Za-z0-9_-]+\.json$/.test(ref.name))throw Error('Stored script reference is invalid');
+    const store=createFileops({backend:await createOpfsBackend({path:'anvil/runs/'+ref.project+'/'+ref.task})});
+    const read=await store.read(ref.name,{encoding:'utf-8',maxBytes:8*1024*1024});if(!read.ok)throw Error('Stored script record is unavailable; no script ran');
+    return await verifiedCodemodeStore(loadRecord(JSON.parse(read.data)),ref);
+  }
   async function saveRunRecord(t, rec, { gated=false, project=null, name=null, browserOnly=false }={}){
     project = project || String(state.activeProject||'local');
     const rel='runs/'+project+'/'+String(t.id);
@@ -3247,6 +3259,10 @@
     let count=null;
     try{ await runsPut(await runIndexRow({ project, task:String(t.id), name, path, tiers, rec, gated })); count=(await runsForTask(String(t.id))).length; }
     catch(e){ errors.push('index: '+(e&&e.message||e)); }
+    if(t.codemodeEnabled===true&&path&&tiers.some(tier=>tier.startsWith('browser storage'))){
+      const committed=foldCodemodeStore(rec.events(),rec.resolve);
+      if(committed.index!==null){t.codemodeStoreRef={project,task:String(t.id),name,index:committed.index,hash:await eventHash(rec.events()[committed.index]),invocation:committed.invocation};save();}
+    }
     return { path, name, tiers, errors, count };
   }
 
@@ -3485,8 +3501,9 @@
     // substrate's own guarantees stopped at the fan-out. `runCtx.rec` is this run's recorder; a
     // tool call made outside a run (there are none today) simply records nothing.
     // B2: one steer queue per run, shared by the executor (dispatch pushes completions) and the loop (drains them)
+    const runReadLedger=new Map();
     const steer=createSteerQueue();
-    const baseExec = makeToolExecutor({ shell, face, mode, infer: inferViaHost, spawnIsolated, steer, scopes: grant.scopes,
+    const baseExec = makeToolExecutor({ shell, face, mode, infer: inferViaHost, spawnIsolated, steer, scopes: grant.scopes, sharedReadLedger:runReadLedger,
       recordSubagent: async (sub)=>{
         try{ const id=String(sub.tool_call_id||'')+'\u0000'+String(sub.label||''); const row=(t.log||[]).find(r=>r && r.k==='subagent' && r.id===id); if(row){ row.status=String(sub.stop||'done'); row.steps=Math.max(row.steps||0, Number(sub.steps)||0); renderLog(); } }catch(_){}
         try{ if(runCtx && runCtx.rec) await runCtx.rec.subagent(sub); }catch(_){} },
@@ -3527,6 +3544,9 @@
     // into a swallowing catch (NAF-08), and history fell back to the selected task (NAF-07).
     // runTask sets this for the duration of a run and clears it after.
     const executeTool = async (nm, ar, callObj, hookOptions=null)=>{
+      const nestedOptions=hookOptions?.nested?hookOptions:null;if(nestedOptions)hookOptions=null;
+      const callSignal=nestedOptions?.signal||hookOptions?.signal||abortController?.signal;
+      if(callSignal?.aborted)return 'Refused: call cancelled';
       if(hookOptions?.signal?.aborted)return 'Refused: hook cancelled';
       if(rangeRun && (activeRangeEdit!==rangeRun || fs!==rangeRun.fs || activeTask()!==t || rangeRun.cancelled
           || !RANGE_EDIT_TOOLS.has(nm))) return 'Refused: this task grants only its selected-file snapshot.';
@@ -3572,20 +3592,21 @@
           const answer = await askChoice({
             title: 'Allow this?',
             label: (ar && ar.command ? ar.command : nm) + '\n\nThis ' + verdict.why + '. ' + verdict.evidence + '.',
-            timeoutMs: 120000, signal:hookOptions?.signal||abortController?.signal,
+            timeoutMs: 120000, signal:callSignal,
             choices: [
               { label:'Allow once', value:'once', primary:true, title:'Let this one call through' },
               { label:'Always allow', value:'always', title:'Stop asking about "'+verdict.id+'" — revocable in ⋯ → Policy' },
               { label:'No', value:'no', title:'Refuse, and tell the agent why' },
             ],
           });
+          if(callSignal?.aborted)return 'Refused: call cancelled during approval';
           if(answer==='always'){ state.policy = policyGrant(state.policy, verdict.id); save(); verdict = { ...verdict, outcome:'allow', authorization:'medium', liftedBy:'policy-new' }; }
           else if(answer==='once'){ verdict = { ...verdict, outcome:'allow', authorization:'medium', liftedBy:'once' }; }
           else if(answer==='__timeout__'){ verdict = { ...verdict, rationale: verdict.rationale+' (nobody answered the prompt within two minutes, so it was refused.)' }; }
         }
         if(verdict.outcome === 'deny'){
           if(t){ t.log.push({ k:'system', text:'⛔ '+verdict.rationale+' '+POLICY_HINT }); renderLog(); }
-          try{ if(runCtx && runCtx.rec) runCtx.rec.onEvent({ type:'tool-error', id:(callObj&&callObj.id)||'gate', name:nm, error:'action-gate: '+verdict.outcome, gate:gateEvent(nm, verdict) }); }catch(_){}
+          try{ if(!nestedOptions && runCtx && runCtx.rec) runCtx.rec.onEvent({ type:'tool-error', id:(callObj&&callObj.id)||'gate', name:nm, error:'action-gate: '+verdict.outcome, gate:gateEvent(nm, verdict) }); }catch(_){}
           return verdict.rationale+' '+POLICY_HINT;
         }
         if(verdict.liftedBy && t){ t.log.push({ k:'system', text:'✓ Allowed '+(verdict.id||nm)+(verdict.liftedBy==='once'?' (this once)':' — standing permission, change it in ⋯ → Policy') }); renderLog(); }
@@ -3598,6 +3619,26 @@
         return 'Error: the "'+nm+'" tool is not available in '+mode+' mode (read-only).';
       }
       // Skills (progressive disclosure): load one skill's full body on demand.
+      if(nm==='codemode'){
+        if(!t.codemodeEnabled||mode!=='code'||rangeRun||!runCtx?.captureExecute)return 'Refused: JavaScript scripts are not enabled for this task';
+        const ownContext=runCtx,ownRec=runCtx.rec,ownCapture=runCtx.captureExecute,invocation=String(callObj?.id||'');if(!invocation)return 'Error: script invocation lacks a recorded ID';
+        try{
+          const store=await loadCodemodeState(t,ownRec);
+          const allowed=runToolset(mode,{verify:!!verify,scopes:grant.scopes,simple:false}).map(tool=>tool.function.name).filter(name=>CODEMODE_TOOL_NAMES.includes(name));
+          await ownRec.codemodeStarted({invocation,code:ar?.code,tools:allowed,initialStore:store});
+          let nestedQueue=Promise.resolve();
+          const outcome=await runCodemode({code:ar?.code,tools:allowed,store,signal:callSignal,deadlineMs:Math.max(0,(ownContext.deadlineAt||Date.now()+10000)-Date.now()),
+            execute:(name,args,{id,signal})=>{const next=nestedQueue.then(()=>runCtx===ownContext&&!signal.aborted?ownCapture(name,args,{id:invocation+':'+id},{nested:true,signal}):Promise.reject(Error('Owning run ended')));nestedQueue=next.catch(()=>{});return next;},
+            onCall:async({id,name,args})=>{await ownRec.codemodeCalled({invocation,id,name,args});},
+            onSettled:async({id,name,result,error,cancelled,late})=>{
+              if(late){const audit=createRunRecorder({app:'anvil-codemode-late',principal:'anvil:'+runProject});await audit.start({messages:[],tools:[],model:null});await audit.codemodeCalled({invocation,id,name,args:{sourceRecord:inFlightRecordName}});await audit.codemodeSettled({invocation,id,name,result,error,cancelled,late:true});await audit.finish({stop:error?'error':'done'});await audit.settled();await saveRunRecord(t,audit,{project:runProject,browserOnly:true});}
+              else await ownRec.codemodeSettled({invocation,id,name,result,error,cancelled,late:false});
+            }});
+          if(!outcome.ok)return 'Error: codemode '+outcome.error+'\n'+outcome.output+'\nUnsettled nested calls: '+outcome.pending.join(',');
+          await ownRec.codemodeStoreProposed({invocation,values:outcome.store});
+          return 'Codemode completed\n'+outcome.output+(outcome.pending.length?'\nCancelled unawaited calls: '+outcome.pending.join(','):'');
+        }catch(error){return 'Error: codemode '+String(error?.message||error).slice(0,2000);}
+      }
       if(nm==='skill'){
         const name=String((ar&&ar.name)||'').trim();
         // A skill name is a single safe segment — never a path. Guards the
@@ -3820,7 +3861,8 @@
       // says where to go instead. This only ever ANNOTATES a refusal; it cannot cause one,
       // and it runs before the post-tool hooks so their output still rides along.
       if(hookOptions?.signal?.aborted)return 'Refused: hook cancelled';
-      const delegated=hookOptions ? makeToolExecutor({shell:createShell({registry,face,beforeCommand:guardCriticalShellInvocation,kiln:kilnRef,js:jsHost,signal:hookOptions.signal}),face,mode}) : baseExec;
+      if(callSignal?.aborted)return 'Refused: call cancelled before execution';
+      const delegated=(hookOptions||nestedOptions) ? makeToolExecutor({shell:createShell({registry,face,beforeCommand:guardCriticalShellInvocation,kiln:kilnRef,js:jsHost,signal:callSignal}),face,mode,signal:callSignal,scopes:nestedOptions?grant.scopes:undefined,fullResultBytes:nestedOptions?256*1024:0,sharedReadLedger:nestedOptions?runReadLedger:null}) : baseExec;
       const raw = await delegated(nm, ar, callObj);
       // The gate fence annotation rides on EVERY string result, not just the shell's: write/edit
       // reach fileops through the same granted face, so a refusal can arrive by either route.
@@ -3831,7 +3873,7 @@
       // Post-tool hooks: run configured commands (auto-format / lint / verify)
       // after the tool succeeds; their bounded output is fed back to the agent.
       try{
-        const extra = !hookOptions && !classifyToolResult(nm,res0) ? await postHookNotes(hooksCfg, nm, ar, ({signal})=>({feed:async command=>({output:await executeTool('shell',{command},callObj,{signal})})}),{signal:abortController?.signal}) : '';
+        const extra = !hookOptions && !classifyToolResult(nm,res0) ? await postHookNotes(hooksCfg, nm, ar, ({signal})=>({feed:async command=>({output:await executeTool('shell',{command},callObj,{signal})})}),{signal:callSignal}) : '';
         if(extra){ renderFiles(); return String(res==null?'':res)+extra; }
       }catch(_){}
       return res;
@@ -3975,6 +4017,7 @@
     hooksCfg = await loadHooks(fs, hooksCfg);
     const simpleAsk = isSimpleAsk(text); // the memory gate — decided once, from the owner's ask
     const tools = runToolset(mode, { verify: !!verify, scopes: grant.scopes, simple: simpleAsk });
+    tools.splice(0,tools.length,...codemodeCatalog(tools,{enabled:t.codemodeEnabled===true,mode,selectedRange:!!rangeRun}));
     if(rangeRun) tools.splice(0,tools.length,...tools.filter(tool=>RANGE_EDIT_TOOLS.has(tool.function?.name)));
     // A4: why a tool is or is not available in THIS run — into the record (the mode button carries the
     // same sentence, recomputed on every switch in setModeBtn). The fourth state, `unavailable`, has
@@ -4084,19 +4127,21 @@
       // driveRun, the same driver the node beds call: every loop is recorded (rec.start before,
       // rec.finish after) through the recording infer, on the app's budgets. This app owns only
       // what the driver cannot: the model stamp, the budget probe's copy of the prompt, the log.
-      const captureExecute=async (name,args,call)=>{
+      const captureExecute=async (name,args,call,options=null)=>{
         if(!t.changeCapture?.checkpoint)throw new Error('Tool execution refused: interrupted-run baseline could not be persisted');
         await rec.settled();
         const saved=await saveRunRecord(t,rec,{gated:!!verify,project:runProject,name:inFlightRecordName,browserOnly:true});
         t.changeCapture.record={name:saved.name,path:saved.path,tiers:saved.tiers};save();
         if(!saved.tiers.length)throw new Error('Tool execution refused: its run record could not be persisted');
-        try{ return await executeTool(name,args,call); }
+        try{ return await (options ? executeTool(name,args,call,options) : executeTool(name,args,call)); }
         finally{ try{ await runCapture.observe(); }catch(e){ t.changeCapture.complete=false; t.changeCapture.problems.push('observation failed: '+String(e?.message||e)); } }
       };
+      runCtx.captureExecute=captureExecute;
       const armedBudget=testRunBudget; testRunBudget=null;
       if(armedBudget&&(armedBudget.taskId!==t.id||Date.now()>=armedBudget.expiresAt))
         throw new Error('Test budget expired or belongs to another task; rearm before sending. No model call ran.');
       const firstBudget=armedBudget?armedBudget.value:null;
+      runCtx.deadlineAt=Date.now()+(firstBudget?.budget.wallClockMs||RUN_BUDGET.budget.wallClockMs);
       const lesson=t.lessonActivation ? {
         declaration:t.lessonActivation.declaration,
         declaredFuelKey:t.lessonActivation.declaredFuelKey||null,
