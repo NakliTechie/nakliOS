@@ -10,6 +10,7 @@ import os from 'node:os';
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { pathToFileURL } from 'node:url';
+import { containerRuntime } from './native-gate-container.mjs';
 import { load as loadYaml, JSON_SCHEMA } from '../vendor/js-yaml/js-yaml.mjs';
 
 const exec = promisify(execFile);
@@ -126,7 +127,7 @@ export function sandboxProfile({ view, nodePath, runtimeBin }) {
 }
 
 export async function createNativeGateServer({ checkout, mutable, criterion, origin,
-  port = 0, runtimeParent = os.tmpdir(), ttlMs = 60 * 60 * 1000 } = {}) {
+  port = 0, runtimeParent = os.tmpdir(), ttlMs = 60 * 60 * 1000, container = null } = {}) {
   if (process.platform !== 'darwin') throw new Error('This bridge requires the verified macOS execution adapter');
   if(process.versions.node.split('.')[0]!=='24') throw new Error('Native gate requires the workflow Node 24 runtime');
   if (!portable(mutable) || !portable(criterion) || mutable === criterion || mutable === '.github/workflows/test.yml'
@@ -135,7 +136,8 @@ export async function createNativeGateServer({ checkout, mutable, criterion, ori
   if (allowedOrigin.origin !== origin || allowedOrigin.username || allowedOrigin.password
       || !['http:', 'https:'].includes(allowedOrigin.protocol)) throw new Error('Supply one exact browser origin');
   if (!Number.isInteger(port) || port < 0 || port > 65535 || ttlMs < 1000 || ttlMs > 60 * 60 * 1000) throw new Error('Invalid bridge bounds');
-  await fs.access('/usr/bin/sandbox-exec', constants.X_OK);
+  const guest = container ? await containerRuntime(container) : null;
+  if (!guest) await fs.access('/usr/bin/sandbox-exec', constants.X_OK);
   const source = await fs.realpath(checkout);
   const runtime = await fs.mkdtemp(path.join(await fs.realpath(runtimeParent), 'naklios-native-gate-'));
   let binding, bindingOwned=false, server;
@@ -214,17 +216,30 @@ export async function createNativeGateServer({ checkout, mutable, criterion, ori
   async function saveReceipt(job) {
     const receipt = { ...publicJob(job,true), commands: job.results, sourceFiles: Object.fromEntries(expected),
       candidateSha256: job.candidateSha256, mutable, criterion, commandsUnchanged: true,
-      execution: 'macOS sandbox-exec; private copy; no checkout writeback',
+      execution: guest ? guest.description : 'macOS sandbox-exec; private copy; no checkout writeback',
+      ...(guest ? { containerRuntime: guest.evidence } : {}),
       runtimes: { node: nodePath, git: gitPath, python3: pythonPath },
       limits: { commandMs: COMMAND_TIME_MS, executionMs: EXECUTION_TIME_MS, outputBytes: OUTPUT_LIMIT },
       ioLimit: 'Frozen source reads and captured output have byte bounds. Git history cloning and private copying have no explicit byte cap. Setup and receipt I/O have no hard wall deadline. Cancellation acknowledgement awaits these operations.',
-      cancellationLimit: 'Process-group termination. Deliberately detached descendant escape is not claimed.' };
-    await fs.writeFile(path.join(runtime, job.id, 'receipt.json'), JSON.stringify(receipt, null, 2) + '\n', { mode: 0o600 });
+      cancellationLimit: guest ? 'Owned container stop and inactive PID acknowledgement before cancellation response.' : 'Process-group termination. Deliberately detached descendant escape is not claimed.' };
+    const target = path.join(runtime, job.id, 'receipt.json');
+    const temporary = target + '.' + crypto.randomBytes(16).toString('hex') + '.tmp';
+    try {
+      await fs.writeFile(temporary, JSON.stringify(receipt, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
+      await fs.rename(temporary, target);
+    } finally { await fs.rm(temporary, { force: true }); }
   }
-  async function persistJob(job){
+  function persistJob(job){
+    const next = (job.persistence || Promise.resolve()).then(() => persistJobOnce(job));
+    job.persistence = next.catch(() => {});
+    return next;
+  }
+  async function persistJobOnce(job){
     job.receiptReady=false; job.persistenceFailed=false;
     try{
       await fs.mkdir(path.join(runtime,job.id),{recursive:true});
+      // Invalidate the previous verdict before any replacement can fail.
+      await fs.rm(path.join(runtime,job.id,'receipt.json'),{force:true});
       await saveReceipt(job); job.receiptReady=true;
       return true;
     }catch(_){
@@ -233,12 +248,19 @@ export async function createNativeGateServer({ checkout, mutable, criterion, ori
       return false;
     }
   }
-  async function stop(job) {
+  function stop(job) {
+    if (job.stopping) return job.stopping;
+    job.cancelled = true;
+    job.stopping = stopOnce(job);
+    return job.stopping;
+  }
+  async function stopOnce(job) {
     job.cancelled = true;
     job.receiptReady=false; job.persistenceFailed=false;
+    if (guest && job.containerName) await guest.stop(job.containerName);
     kill(job, 'SIGTERM');
     const force = setTimeout(() => { kill(job, 'SIGKILL'); job.child?.stdout.destroy(); job.child?.stderr.destroy(); }, 1000);
-    try { await job.done; } finally { clearTimeout(force); }
+    try { await job.done; if (guest && job.containerName) await guest.stop(job.containerName); } finally { clearTimeout(force); }
     // A terminal positive result racing with Stop cannot become a success.
     job.state = 'cancelled'; job.code = 130;
     job.output = 'native gate: cancelled; no result was applied to the checkout';
@@ -262,15 +284,19 @@ export async function createNativeGateServer({ checkout, mutable, criterion, ori
         if (job.cancelled || Date.now() - started >= EXECUTION_TIME_MS) {
           job.code = job.cancelled ? 130 : 124; break;
         }
+        const invocation = guest ? await guest.command(view, item.argv) : { executable: '/usr/bin/sandbox-exec', args: ['-f', profile, nodePath, ...item.argv] };
+        job.containerName = invocation.name || null;
+        if (job.cancelled) { if (guest) await guest.cleanup(job.containerName); job.containerName = null; job.code = 130; break; }
         const result = await new Promise(resolve => {
           let tail = '', settled = false, limitReached = false, timedOut = false;
-          const child = spawn('/usr/bin/sandbox-exec', ['-f', profile, nodePath, ...item.argv], {
+          const child = spawn(invocation.executable, invocation.args, {
             cwd: view, detached: true, stdio: ['ignore', 'pipe', 'pipe'],
             env: { PATH: runtimeBin + ':/usr/bin:/bin:/usr/sbin:/sbin',
               TMPDIR: path.join(view, '.tmp'), HOME: path.join(view, '.tmp', 'home'), LANG: 'en_US.UTF-8' },
           });
           job.child = child;
           const terminate = () => {
+            if (guest && job.containerName) job.containerStop = guest.stop(job.containerName).catch(error => { job.logError ||= error; });
             kill(job, 'SIGTERM');
             escalation = setTimeout(() => { kill(job, 'SIGKILL'); child.stdout.destroy(); child.stderr.destroy(); }, 1000);
           };
@@ -296,6 +322,11 @@ export async function createNativeGateServer({ checkout, mutable, criterion, ori
           child.once('error', error => finish(1, error));
           child.once('close', (code, signal) => finish(code, signal ? new Error('Native process ended with '+signal) : null));
         });
+        if (guest && job.containerName) {
+          await job.containerStop;
+          await guest.cleanup(job.containerName);
+          job.containerName = null; job.containerStop = null;
+        }
         job.results.push(result); job.code = result.code;
         if (result.code !== 0) break;
       }
@@ -310,7 +341,10 @@ export async function createNativeGateServer({ checkout, mutable, criterion, ori
       job.state = job.code === 0 && job.results.length === job.commands.length ? 'passed' : job.code === 130 ? 'cancelled' : 'failed';
       job.output = `native gate: ${job.state}; ${job.results.filter(row => row.code === 0).length}/${job.commands.length} commands passed\n`
         + job.results.map(row => `${row.code === 0 ? 'PASS' : 'FAIL'} ${row.command}${row.code ? '\n' + row.tail : ''}`).join('\n');
-    } finally { await log.close(); }
+    } finally {
+      try { if (guest && job.containerName) { await guest.cleanup(job.containerName); job.containerName = null; } }
+      finally { await log.close(); }
+    }
   }
   async function start(mode, id) {
     const previous=jobs.get(id);
@@ -326,6 +360,7 @@ export async function createNativeGateServer({ checkout, mutable, criterion, ori
       await sourceValid(); job.candidate = await boundedFile(source, mutable, MUTABLE_LIMIT);
       job.candidateSha256 = digest(job.candidate);
       if(job.cancelled){job.state='cancelled';job.code=130;job.output='native gate: cancelled before execution';return;}
+      if (guest) await guest.prepare();
       await execute(job);
     })().catch(error => {
         job.state = job.cancelled ? 'cancelled' : 'failed'; job.code = job.cancelled ? 130 : 1;
@@ -392,11 +427,12 @@ export async function createNativeGateServer({ checkout, mutable, criterion, ori
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const args = process.argv.slice(2), options = {};
-  const keys = new Map([['--checkout','checkout'],['--mutable','mutable'],['--criterion','criterion'],['--origin','origin'],['--port','port']]);
+  const keys = new Map([['--checkout','checkout'],['--mutable','mutable'],['--criterion','criterion'],['--origin','origin'],['--port','port'],['--container-config','container']]);
   for (let i = 0; i < args.length; i += 2) {
     if (!keys.has(args[i]) || !args[i + 1]) throw new Error('Use --checkout --mutable --criterion --origin and optional --port');
     options[keys.get(args[i])] = args[i] === '--port' ? Number(args[i + 1]) : args[i + 1];
   }
+  if (options.container) options.container = JSON.parse(await fs.readFile(options.container, 'utf8'));
   const gate = await createNativeGateServer(options);
   // Print the connection FILE, never its bearer credential or full descriptor.
   console.log(JSON.stringify({ service: 'naklios-native-gate', endpoint: gate.endpoint,

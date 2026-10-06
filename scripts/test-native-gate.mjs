@@ -531,6 +531,13 @@ test('real native full/criterion gates, source pinning, containment, and cancell
     const stop=new AbortController();const pending=client.run('full',{signal:stop.signal});
     setTimeout(()=>stop.abort(),500);const cancelled=await pending;assert.equal(cancelled.code,130);assert.equal(cancelled.state,'cancelled');
     const receipt=JSON.parse(await fs.readFile(path.join(server.runtime,cancelled.receipt),'utf8'));assert.equal(receipt.code,130);
+    const owner=JSON.parse(await fs.readFile(server.connectionFile,'utf8'));
+    const cancel=()=>fetch(new URL('cancel',server.endpoint),{method:'POST',headers:{Origin:origin,Authorization:'Bearer '+owner.token,'Content-Type':'application/json'},body:JSON.stringify({id:cancelled.id})}).then(r=>r.json());
+    const repeated=await Promise.all(Array.from({length:8},cancel));
+    assert.ok(repeated.every(r=>r.state==='cancelled'&&r.code===130));
+    const finalReceipt=JSON.parse(await fs.readFile(path.join(server.runtime,cancelled.receipt),'utf8'));
+    assert.equal(finalReceipt.state,'cancelled');assert.equal(finalReceipt.code,130);
+    assert.ok(!(await fs.readdir(path.dirname(path.join(server.runtime,cancelled.receipt)))).some(name=>name.endsWith('.tmp')));
     assert.equal(await fs.readFile(sentinel,'utf8'),'PRIVATE SYNTHETIC SENTINEL');
   }finally{if(client)await client.close();if(server)await server.close();await fs.rm(root,{recursive:true,force:true});}
 });

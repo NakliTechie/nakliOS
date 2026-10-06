@@ -26,6 +26,9 @@ jobs:
       - name: Verify owner-paired native gate authority and cancellation
         run: node scripts/test-native-gate.mjs
 
+      - name: Verify isolated native gate runtime policy
+        run: node scripts/test-native-gate-container.mjs
+
       - name: Verify vendored Crate manifest security
         run: node scripts/test-crate-manifest.mjs
 
