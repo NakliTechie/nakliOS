@@ -362,6 +362,9 @@ jobs:
       - name: "S2: the Anvil inline module loads — its top level runs and the boot finishes"
         run: node scripts/test-anvil-loads.mjs
 
+      - name: Verify inspected source span grounding
+        run: node --test scripts/test-anvil-A04-learning.mjs
+
       - name: Verify bounded Anvil hooks, IDs, approvals and recovery evidence
         run: node --test scripts/test-anvil-A03-reliability.mjs
       - name: anvil handlers run (not just parse)
@@ -687,6 +690,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      - name: Verify Anvil grounded learning, delayed Stop and comment adjacency in Chrome
+        run: node scripts/test-anvil-A04-browser.mjs
+
       - name: Verify Anvil interruption recovery and ten-megabyte state behavior in Chrome
         run: node scripts/test-anvil-A03-browser.mjs
 

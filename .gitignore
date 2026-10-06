@@ -22,6 +22,8 @@ plan/
 !sys/**
 !scripts/
 !scripts/*
+!scripts/fixtures/anvil-A04/
+!scripts/fixtures/anvil-A04/**
 !scripts/native-gate-container/Dockerfile
 !scripts/native-gate-container/entry.mjs
 !docs/

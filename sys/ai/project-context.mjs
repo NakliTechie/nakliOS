@@ -102,6 +102,9 @@ export function primeRememberTool() {
     description:'Project fact or reference. Omit for project; a read-only survey cannot create binding rules.' };
   tool.function.parameters.properties.sourcePaths = { type:'array', minItems:1, maxItems:3,
     items:{ type:'string' }, description:'Exact paths from successful read calls that support this note.' };
+  tool.function.parameters.properties.sourceSpans = {type:'array',minItems:1,maxItems:3,items:{type:'object',properties:{
+    path:{type:'string'},startLine:{type:'integer',minimum:1},endLine:{type:'integer',minimum:1},quote:{type:'string',minLength:1,maxLength:2000}
+  },required:['path','startLine','endLine','quote']},description:'One-based inspected line ranges with an exact supporting quote. Cite only numbered lines returned by successful reads.'};
   tool.function.parameters.required.push('sourcePaths');
   return tool;
 }
@@ -123,7 +126,7 @@ export async function readPrimeSourceVersion(fileops, path, maxBytes=1_048_576) 
 export function createPrimeReadEvidence() {
   const reads = new Map();
   const canonical = path => {
-    if (typeof path !== 'string' || !path.trim()) return '';
+    if (typeof path !== 'string' || !path.trim() || path.length>4096) return '';
     if (path.startsWith('/') || path.includes('\\') || /[\u0000-\u001f\u007f]/.test(path)) return '';
     const parts=[];
     for (const part of path.trim().split('/')) {
@@ -139,10 +142,28 @@ export function createPrimeReadEvidence() {
       const raw = typeof input === 'string' ? input.trim() : typeof input?.path === 'string' ? input.path.trim() : '';
       const key = canonical(raw);
       if (!key || memoryPath(key) || !isSuccessfulReadToolResult(result)) return false;
+      if(typeof result!=='string' || result.length>16000 || (!reads.has(key) && reads.size>=64))return false;
+      const lines=new Map();let last=0;
+      for(const line of result.split('\n')){
+        const match=/^\s*(\d+) {2}(.*)$/.exec(line);if(!match)continue;
+        const number=Number(match[1]);
+        if(!Number.isSafeInteger(number)||number<=last||lines.size>=240)return false;
+        last=number;
+        if(match[2].endsWith('… (line truncated)') || match[2].endsWith('… (truncated)'))continue;
+        lines.set(number,match[2]);
+      }
+      if(!lines.size)return false;
+      const spans=[];
+      for(const [number,text] of lines){
+        const previous=spans.at(-1);
+        if(previous && number===previous.endLine+1)previous.endLine=number;
+        else spans.push({path:key,startLine:number,endLine:number,quote:text.slice(0,200)});
+      }
+      if(spans.length>8)return false;
       const args = { path:raw };
       if (Number.isInteger(input?.offset)) args.offset=input.offset;
       if (Number.isInteger(input?.limit)) args.limit=input.limit;
-      reads.set(key, { path:key, args, result, digest:digest(result),
+      reads.set(key, { path:key, args, result, lines, spans, digest:digest(result),
         version:version?.status==='available' ? version : { status:'unavailable', reason:String(version?.reason||'not available') } });
       return true;
     },
@@ -156,7 +177,22 @@ export function createPrimeReadEvidence() {
         return { ok:false, reason:'cite project files rather than memory files or parent paths' };
       const missing = paths.filter(path => !reads.has(path));
       if (missing.length) return { ok:false, reason:'read these files successfully before citing them: '+missing.join(', ') };
-      return { ok:true, paths, snapshots:paths.map(path => reads.get(path)) };
+      let spans=paths.flatMap(path=>reads.get(path).spans);
+      if(args.sourceSpans!==undefined){
+        if(!Array.isArray(args.sourceSpans)||!args.sourceSpans.length||args.sourceSpans.length>3)return {ok:false,reason:'cite one to three inspected source spans'};
+        spans=[];
+        for(const span of args.sourceSpans){
+          const path=canonical(span?.path),start=span?.startLine,end=span?.endLine,quote=span?.quote;
+          if(!paths.includes(path)||!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start<1||end<start||end-start>=200
+            ||typeof quote!=='string'||!quote.trim()||quote.length>2000)return {ok:false,reason:'source span is invalid or does not match cited paths'};
+          const lines=reads.get(path).lines,selected=[];
+          for(let n=start;n<=end;n++){if(!lines.has(n))return {ok:false,reason:'source span includes lines that were not inspected'};selected.push(lines.get(n));}
+          if(!selected.join('\n').includes(quote))return {ok:false,reason:'source quote does not occur in its inspected span'};
+          spans.push({path,startLine:start,endLine:end,quote});
+        }
+        if(paths.some(path=>!spans.some(span=>span.path===path)))return {ok:false,reason:'each cited path needs an inspected source span'};
+      }
+      return { ok:true, paths, spans, snapshots:paths.map(path => reads.get(path)) };
     },
   };
 }
