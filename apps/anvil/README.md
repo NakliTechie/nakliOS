@@ -12,8 +12,8 @@ agent. Three panes:
 Not an IDE. The agent reads and writes your files; you drive it in conversation
 and review what it produced.
 
-No server, no build, no data leaving the device. A naklios app at `apps/anvil/`,
-the GUI sibling of **Forge** (the terminal). Both run the same agent core —
+No build is needed for this browser app. Agent prompts use the endpoint selected
+in NakliOS. Anvil is the GUI sibling of **Forge** (the terminal). Both run the same agent core —
 `sys/ai` (`runAgentLoop` + `codingToolset`) over `sys/rig` (fileops/git/agent).
 
 ## The agent is live inside NakliOS
@@ -26,6 +26,22 @@ model set in Settings → AI and it drives real tool-using runs. Opened standalo
 In-memory scratch by default; **Open folder** points the agent at a real local
 folder (File System Access), remembered across reloads (IndexedDB). Same substrate
 as Forge.
+
+## Imported conversations
+
+Open **⋯ → Imported conversations** to select one Claude Code or Codex JSONL file.
+Anvil reads that selected file and keeps a bounded local copy in a separate
+browser archive. It redacts common credential patterns; unrecognized secrets may
+remain in the copy. It never edits the source file or treats foreign entries as
+verified Anvil run events. Search the copy by text, project, provider, or date.
+Each result opens its copied source line and nearby entries. Imports have a
+32 MiB file cap and a 20,000-entry file cap. The archive holds up to 50 sources,
+50,000 entries, and an estimated 128 MiB. Browser storage limits can stop an
+import earlier. A partial import shows its limit. **Forget a source** removes
+only its local copy, leaving the selected file untouched. If a tab closes during
+import, the source shows as interrupted until you forget that copy. Importing a
+later version of the same file creates a separate copy; forget the older one
+when it is no longer needed.
 
 ## Run (local)
 

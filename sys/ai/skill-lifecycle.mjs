@@ -17,6 +17,35 @@ export const STALE_AFTER_DAYS = 30;
 export const ARCHIVE_AFTER_DAYS = 90;
 const DAY = 86_400_000;
 
+// Review signal only. Failed runs that loaded a skill do not establish that the
+// skill caused the failure, so this never changes a skill's lifecycle status.
+export function skillOutcomeReview(usage, { minFailedRuns=2 }={}) {
+  const out=[];
+  if(!usage || typeof usage.entries!=='function') return out;
+  for(const [name,row] of usage.entries()){
+    if((row?.verifiedFail||0)<minFailedRuns) continue;
+    out.push({name,verifiedFail:row.verifiedFail,verifiedPass:row.verifiedPass||0,
+      unverified:row.unverified||0,reason:'loaded in repeated runs with failing verification; attribution unmeasured'});
+  }
+  return out.sort((a,b)=>b.verifiedFail-a.verifiedFail||a.name.localeCompare(b.name));
+}
+
+// Run-index rows contain only names and outcome counts, never model transcripts.
+// A missing older row shape keeps the review explicitly incomplete.
+export function foldIndexedSkillOutcomes(rows, { shape }={}) {
+  const usage=new Map(); let incomplete=false;
+  for(const row of rows||[]){
+    if(row?.shape!==shape || row?.chainOk===false || !Array.isArray(row.skillOutcomes)){ incomplete=true; continue; }
+    for(const item of row.skillOutcomes){
+      if(typeof item?.name!=='string' || !item.name) continue;
+      const u=usage.get(item.name)||{verifiedPass:0,verifiedFail:0,unverified:0};
+      for(const key of ['verifiedPass','verifiedFail','unverified']) u[key]+=Number.isInteger(item[key])&&item[key]>0?item[key]:0;
+      usage.set(item.name,u);
+    }
+  }
+  return {usage,incomplete};
+}
+
 function ts(v) { const n = typeof v === 'number' ? v : Date.parse(String(v || '')); return Number.isFinite(n) ? n : null; }
 // Stamps are always ISO strings on disk; a numeric clock is converted, never written raw.
 function iso(v) { const n = ts(v); return n == null ? null : new Date(n).toISOString(); }

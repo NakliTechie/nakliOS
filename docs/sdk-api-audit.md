@@ -36,6 +36,7 @@ prefix today.
 | `capabilities.fsBackends` | field | stable | — | The backends the host offers, as descriptors `[{ id, label, name }]` — ids `fsa` (a picked folder) and `crate`; the browser's own OPFS is not on this list. |
 | `capabilities.fsBackend` | field | stable | — | The backend in use. |
 | `capabilities.fsBoundedReads` | field | stable | — | True when the active host storage backend supports a byte-limited read. |
+| `capabilities.fsRangeReads` | field | stable | — | True when the active host Folder backend supports explicit bounded byte ranges. |
 | `capabilities.system` | field | stable | — | The app is a system app (same-origin, `kind: system`). |
 | `capabilities.sysFs` | field | stable | — | Whole-store filesystem granted (system apps only). |
 | `capabilities.ai` | field | stable | — | Shared host inference granted. |
@@ -54,6 +55,7 @@ prefix today.
 | `capabilities.aiSearch` | field | stable | — | Semantic (local, embedding) search over the app's own namespace granted — not web search. |
 | `capabilities.net` | field | stable | — | Sovereign egress (`naklios.net.fetch`) granted. |
 | `capabilities.netBackend` | field | stable | — | Which egress backend the host is configured with: `worker` (the default) · `bridge`; null when none. Never a package name. |
+| `capabilities.review` | field | stable | — | The host can stage native diffs from this app and return source-bound review decisions. Enabled for Reckon, Draft, and KanZen. |
 | `ready` | function | stable | — | Signal "loaded"; carries the feature flags this SDK build supports. |
 | `title` | function | stable | — | Set the host window title. |
 | `close` | function | stable | — | Ask the host to close this window. |
@@ -65,9 +67,12 @@ prefix today.
 | `theme.request` | function | stable | — | Ask the host to re-send the theme. |
 | `onCapabilitiesChange` | function | stable | — | Subscribe to capability changes; replays the current set at registration. |
 | `requestCapabilities` | function | stable | — | Ask the host to re-broadcast capabilities. |
+| `review` | namespace | stable | — | Host-owned staging queue and person review bridge. The P0 app contract names this stable namespace directly. |
+| `review.stage` | function | stable | — | Send a native diff without applying it. Returns a proposal ID; standalone returns a fallback marker. |
+| `review.onDecision` | function | stable | — | Register one app decision handler. The SDK acknowledges a successful commit once and re-acknowledges replays without reapplying. |
 | `fs` | namespace | stable | — | App-scoped filesystem (paths under `apps/<id>/`). |
 | `fs.read` | function | stable | — | Read text. |
-| `fs.readBinary` | function | stable | — | Read bytes. |
+| `fs.readBinary` | function | stable | — | Read bytes; Folder offsets require an explicit bounded cap. |
 | `fs.supportsBoundedReads` | getter | stable | — | True when the host advertises bounded reads for the active backend. |
 | `fs.stat` | function | stable | — | Read path type and size without loading file bytes. |
 | `fs.write` | function | stable | — | Write text or bytes. |
@@ -81,7 +86,7 @@ prefix today.
 | `sys` | namespace | stable | — | System-app surfaces. |
 | `sys.fs` | namespace | stable | — | Whole-store filesystem (system apps only). |
 | `sys.fs.read` | function | stable | — | Read text. |
-| `sys.fs.readBinary` | function | stable | — | Read bytes. |
+| `sys.fs.readBinary` | function | stable | — | Read bytes; Folder offsets require an explicit bounded cap. |
 | `sys.fs.stat` | function | stable | — | Read path type and size without loading file bytes. |
 | `sys.fs.write` | function | stable | — | Write. |
 | `sys.fs.append` | function | stable | — | Append. |
@@ -89,6 +94,9 @@ prefix today.
 | `sys.fs.delete` | function | stable | — | Delete. |
 | `sys.fs.exists` | function | stable | — | Existence check. |
 | `files` | namespace | stable | — | Exact-file handoff (`docs/file-handoff-v1.md`). |
+| `files.experimental_editInAnvil` | function | experimental | Bounded Editor snapshot; exact-file grant and stale-source refusal tested before stabilization. | Ask the host to stage one selected-file edit in Anvil. |
+| `files.experimental_proposeEdit` | function | experimental | One-shot source-bound proposals; real model-to-review flow required before stabilization. | Return a snapshot edit without writing its source. |
+| `files.experimental_onEditProposal` | function | experimental | Editor reviews; transactional Browser apply and concurrent-write refusal required before stabilization. | Receive the host-authenticated staged proposal. |
 | `files.openWith` | function | stable | — | Hand a file to another app. |
 | `files.onOpen` | function | stable | — | Receive a handed file. |
 | `files.read` | function | stable | — | Read a handed file. |

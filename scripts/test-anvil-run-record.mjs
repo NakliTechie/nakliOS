@@ -6,6 +6,7 @@
 // depends on inside apps/anvil/index.html.
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { extractFunction, extractRegion, instantiate } from './anvil-harness.mjs';
 
 const anvil = await readFile(new URL('../apps/anvil/index.html', import.meta.url), 'utf8');
 const assembly = await readFile(new URL('../sys/ai/run-assembly.mjs', import.meta.url), 'utf8');
@@ -96,8 +97,85 @@ assert.match(runTask, /saved\.errors\.join/, 'a failed rung is reported, not swa
 // ── the index: derived, rebuildable, and actually READ ──
 // An index nobody reads is dead code (today's lesson, twice). The closing line
 // reads it back, so the read path is exercised on every run.
-assert.match(anvil, /indexedDB\.open\(DIR_DB,2\)/, 'the IDB schema is v2');
+assert.match(anvil, /indexedDB\.open\(DIR_DB,3\)/, 'the IDB schema opens at v3');
 assert.match(anvil, /createObjectStore\(RUNS_STORE,\{keyPath:'id'\}\)/, 'a runs store keyed by id');
+const upgrade = extractRegion(anvil, 'r.onupgradeneeded=()=>{', 'r.onsuccess=()=>');
+for (const store of ['FOREIGN_STORE', 'FOREIGN_SEARCH']) {
+  assert.match(upgrade, new RegExp(`if\\(!db\\.objectStoreNames\\.contains\\(${store}\\)\\)\\{\\s*const st=db\\.createObjectStore\\(${store},`), `${store} creates the store inside its upgrade guard`);
+}
+for (const store of ['FOREIGN_SOURCES', 'FOREIGN_RAW']) {
+  assert.match(upgrade, new RegExp(`if\\(!db\\.objectStoreNames\\.contains\\(${store}\\)\\) db\\.createObjectStore\\(${store},`), `${store} creates the store inside its upgrade guard`);
+}
+for (const [name, keyPath] of [
+  ['source', "'source.id'"],
+  ['sourceLine', "['source.id','source.line']"],
+  ['fingerprint', "'eventFingerprint'"],
+  ['source', "'sourceId'"],
+  ['ts', "'tsSort'"],
+  ['providerTs', "['provider','tsSort']"],
+]) {
+  assert.ok(upgrade.includes(`st.createIndex('${name}',${keyPath})`), `${name} index uses ${keyPath}`);
+}
+// Replay the real idbOpen upgrade handler against a strict in-memory IDB shape.
+// A separate dated Chrome receipt covers the browser implementation; this lane
+// makes schema drift repeatable in CI without depending on a stored browser origin.
+{
+  const names = { DIR_DB:'anvil-fs', DIR_STORE:'h', RUNS_STORE:'runs',
+    FOREIGN_STORE:'foreign-entries', FOREIGN_SOURCES:'foreign-sources',
+    FOREIGN_RAW:'foreign-raw', FOREIGN_SEARCH:'foreign-search' };
+  function fakeIndexedDB(oldVersion, oldStores) {
+    const stores = new Map(oldStores);
+    const db = {
+      version:oldVersion,
+      objectStoreNames:{ contains:name=>stores.has(name) },
+      createObjectStore(name,{keyPath=null}={}) {
+        if(stores.has(name)) throw new Error(`ConstraintError: duplicate store ${name}`);
+        const store={keyPath,indexes:new Map(),rows:new Map(),createIndex(index,path){
+          if(this.indexes.has(index)) throw new Error(`ConstraintError: duplicate index ${index}`);
+          this.indexes.set(index,path);
+        }};
+        stores.set(name,store); return store;
+      },
+      transaction(name){return {objectStore(){return stores.get(name);}};},
+      close(){},
+    };
+    const indexedDB={open(name,version){
+      assert.equal(name,names.DIR_DB); assert.equal(version,3);
+      const request={result:db,error:null};
+      queueMicrotask(()=>{try{
+        if(version>db.version){request.onupgradeneeded?.();db.version=version;}
+        request.onsuccess?.();
+      }catch(error){request.error=error;request.onerror?.();}});
+      return request;
+    }};
+    return {indexedDB,db,stores};
+  }
+  const seeded={id:'preexisting/p/r.json',project:'preexisting',task:'p',endedAt:'2026-09-30T00:00:00Z'};
+  const existing=new Map([
+    ['h',{keyPath:null,indexes:new Map(),rows:new Map([['workspace-dir','retained']])}],
+    ['runs',{keyPath:'id',indexes:new Map([['project','project'],['task','task'],['endedAt','endedAt']]),rows:new Map([[seeded.id,seeded]])}],
+  ]);
+  for(const [version,initial] of [[2,existing],[0,new Map()]]){
+    const fake=fakeIndexedDB(version,initial);
+    const idbOpen=instantiate(extractFunction(anvil,'idbOpen'),'idbOpen',{indexedDB:fake.indexedDB,...names});
+    const db=await idbOpen();
+    assert.equal(db.version,3, `v${version} opens at v3`);
+    assert.deepEqual([...fake.stores.keys()].sort(),['foreign-entries','foreign-raw','foreign-search','foreign-sources','h','runs']);
+    for(const store of ['foreign-entries','foreign-sources','foreign-raw','foreign-search']){
+      assert.equal(fake.stores.get(store).keyPath,'id',`${store} keys copied rows by id`);
+    }
+    assert.deepEqual(JSON.parse(JSON.stringify([...fake.stores.get('foreign-entries').indexes])), [
+      ['source','source.id'], ['sourceLine',['source.id','source.line']], ['fingerprint','eventFingerprint'],
+    ]);
+    assert.deepEqual(JSON.parse(JSON.stringify([...fake.stores.get('foreign-search').indexes])), [
+      ['source','sourceId'], ['ts','tsSort'], ['providerTs',['provider','tsSort']],
+    ]);
+    if(version===2){
+      assert.deepEqual(fake.stores.get('runs').rows.get(seeded.id),seeded,'v2 run row survives the upgrade');
+      assert.equal(fake.stores.get('h').rows.get('workspace-dir'),'retained','v2 handle slot survives the upgrade');
+    }
+  }
+}
 for (const ix of ['project','task','endedAt']) assert.match(anvil, new RegExp(`createIndex\\('${ix}','${ix}'\\)`), `indexed by ${ix}`);
 assert.match(anvil, /if\(!db\.objectStoreNames\.contains\(DIR_STORE\)\) db\.createObjectStore\(DIR_STORE\)/, 'the v1 store survives the upgrade');
 assert.match(anvil, /function runIndexRow\(/, 'rows are derived by one function');
@@ -195,4 +273,3 @@ assert.match(anvil, /autoReviewTimer=setTimeout/, 'the deferred review is actual
 assert.match(anvil, /if\(decide\(0\)\.review\) learnThisRun\(t, rec, runProject\)\.catch\(\(\)=>\{\}\)/, 'the immediate auto-review stays GATED on the scheduler, not unconditional');
 // and it sits AFTER saveRunRecord (the review reads the saved record)
 assert.ok(anvil.indexOf('const saved=await saveRunRecord') < anvil.indexOf('decide(0).review'), 'the auto-review runs after the record is saved');
-

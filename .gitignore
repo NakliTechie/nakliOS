@@ -24,6 +24,8 @@ plan/
 !scripts/*
 !scripts/autoharness/
 !scripts/autoharness/*
+!scripts/native-gate-container/Dockerfile
+!scripts/native-gate-container/entry.mjs
 !docs/
 !docs/**
 !redirects/

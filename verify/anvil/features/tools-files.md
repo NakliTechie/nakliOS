@@ -32,12 +32,17 @@ Shared prerequisites: the launch in `../README.md`; a fresh project with a seede
 - **Gotchas:** the write is staged through the agent face when the grant says so; the tool result says `Wrote <path>` either way — read the file back, do not trust the line.
 
 ### tool:apply_patch
-- **Goal:** a multi-file patch (Add / Update / Delete) applies atomically per file, with the same read-before-edit and version rules as `edit` on its updates.
+- **Goal:** a multi-file patch (Add / Update / Delete) executes sequentially, with the same read-before-edit and version rules as `edit` on its updates.
 - **Source:** `sys/ai/agent-tools.mjs` (`parseApplyPatch`, the `apply_patch` branch).
 - **Prerequisites:** launch; `b.txt` seeded with `keep\nremove me\n`.
 - **Reach and drive:** "Using apply_patch in one call: add a.txt with hello, update b.txt to drop the line 'remove me', delete old.txt." Then the stale case: read `b.txt`, rewrite it behind the tools, prompt an update.
 - **Observable success:** `Applied patch: add a.txt, update b.txt, delete old.txt`; files as described; the stale update is refused `is stale` and `b.txt` untouched; an update on a never-read file is refused `has not been read yet`.
-- **Gotchas:** an `Add File` body has no trailing newline unless the patch carries one.
+- **Gotchas:** each `Add File` body row ends with a newline; an empty body creates an empty file.
+
+- **Append contract:** insertion-only Update hunks append complete newline-terminated rows after a fresh read. Existing unterminated content receives one separator. Replacement hunks preserve existing endings.
+- **Malformed input:** an unprefixed Add File blank row or a hunk after End of File refuses the entire patch before writes. A `+` row creates one blank line.
+- **Partial failure:** refuse removal after an earlier Add or rename destination write. Inspect the reported completed operations. Confirm earlier bytes remain and the refused source remains. No transaction rollback is claimed.
+- **Automated evidence:** `sys/ai/test/agent-tools.test.mjs` covers append bytes, freshness, malformed late sections, deletion refusal, and rename partial failure.
 
 ### tool:todowrite
 - **Goal:** the model keeps one checklist; at most one item is `in_progress`.

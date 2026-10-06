@@ -46,6 +46,14 @@ from the host page's console or a browser-automation script against the iframe.
 - **Observable success:** returns `{scopes}`; the title has `blocked: edit, write, apply_patch, edit_lines, …`; the shell prints `scope not granted: fs:write`; `run.started` tools hold no write tool; the child's shell is refused the same way and the file is unchanged.
 - **Gotchas:** Kiln keeps the face it booted with (a `python` write is not narrowed); reload to restore the full grant.
 
+### hook:setRunBudget
+- **Goal:** bound the next run to one loop so the budget-limited path can be observed without changing production defaults.
+- **Source:** the opt-in door's `setRunBudget` in `apps/anvil/index.html`; `driveRun` in `sys/ai/run-assembly.mjs`.
+- **Prerequisites:** launch with `?anviltest`; an active task. A usage-bearing live leg needs an authorized model endpoint.
+- **Reach and drive:** `t.setRunBudget({tokens:1,wallClockMs:1000,maxSteps:1})`; send a task; inspect `await t.goal()` and the run row. `t.setRunBudget(null)` clears an unused override.
+- **Observable success:** the run records `run.stopped` with `stop:'budget'` and `axis:'tokens'`; `goal()` reads `budget_limited` after its row lands. The next run uses the normal budget unless another override is set.
+- **Gotchas:** a one-token cap can stop before a model call, so it cannot prove provider usage. Set a cap above the prompt estimate to observe a usage-bearing reply, then a later budget stop. The override binds to the active task, expires after five minutes, and cannot be armed during a run. It accepts tokens 1–120000, wall clock 1000–900000 ms, and steps 1–24.
+
 ### hook:taskState
 - **Goal:** the active task's id, title, status, gate and mode as the UI holds them.
 - **Source:** the door's `taskState`.

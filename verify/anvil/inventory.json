@@ -73,6 +73,12 @@
       "kind": "button",
       "detail": "Learn this project — a read-only pass surveys the repo and records durable facts into project memory, so future tasks (and weaker models) start informed"
     },
+    "button:lesson-evidence-btn": {
+      "owner": "header.md",
+      "fingerprint": "d61d65a71ab2",
+      "kind": "button",
+      "detail": "Declare one exact tool call that would show a lesson was activated in later runs. Observation does not measure benefit."
+    },
     "button:mem-chip": {
       "owner": "header.md",
       "fingerprint": "1b642b1cf0a5",
@@ -90,6 +96,12 @@
       "fingerprint": "1debe24de689",
       "kind": "button",
       "detail": "More"
+    },
+    "button:native-gate-btn": {
+      "owner": "native-gate.md",
+      "fingerprint": "a5a800ef4821",
+      "kind": "button",
+      "detail": "Connect or disconnect an owner-authorized local native gate"
     },
     "button:new-project": {
       "owner": "header.md",
@@ -313,6 +325,12 @@
       "kind": "hook",
       "detail": "__anvil.test.setGate"
     },
+    "hook:setRunBudget": {
+      "owner": "test-door.md",
+      "fingerprint": "a68a0c7319d7",
+      "kind": "hook",
+      "detail": "__anvil.test.setRunBudget"
+    },
     "hook:shell": {
       "owner": "test-door.md",
       "fingerprint": "ee337382308f",
@@ -336,6 +354,12 @@
       "fingerprint": "765d2d0920d4",
       "kind": "sheet",
       "detail": "⚑Proof buildbeta"
+    },
+    "sheet:foreign": {
+      "owner": "sheet.md",
+      "fingerprint": "c171bb885fe2",
+      "kind": "sheet",
+      "detail": "▤Imported conversations"
     },
     "sheet:home": {
       "owner": "sheet.md",
@@ -393,7 +417,7 @@
     },
     "tool:apply_patch": {
       "owner": "tools-files.md",
-      "fingerprint": "781a52d1a9a4",
+      "fingerprint": "a0980f9aefad",
       "kind": "tool",
       "detail": "code code+gate"
     },

@@ -672,6 +672,23 @@ await test('the fixed vocabulary is frozen and complete for the loop', () => {
     assert(RUN_EVENTS.includes(v), `missing verb ${v}`);
 });
 
+await test('late priming writes remain verified and searchable in every history role', async () => {
+  const rec=createRunRecorder({app:'anvil-prime-late',principal:'anvil:A'});
+  await rec.start({messages:[{role:'system',content:'Late write survey-1'}],tools:[]});
+  await rec.primeFactSettled({surveyId:'survey-1',projectId:'A',taskId:'task-A',slug:'fact-1'});
+  await rec.finish({stop:'done'}); await rec.settled();
+  const loaded=loadRecord(rec.export());
+  assert((await loaded.verify()).ok,'the late audit chain verifies after persistence');
+  assert(RUN_EVENTS.includes('prime.fact.settled'),'the late outcome uses a registered verb');
+  for(const role of ['default','reviewer','supervisor']){
+    const hits=searchRecords([{runId:'late-1',taskId:'task-A',record:loaded}],
+      {query:'fact-1',role,scope:'task',taskId:'task-A'});
+    eq(hits.length,1,role+' can find the saved fact');
+    assert(readEvent([{runId:'late-1',record:loaded}],hits[0].id).text.includes('survey-1'),
+      role+' can read its survey link');
+  }
+});
+
 // ─────────────────────────────────────────────── outcome (A4) ──
 // Three recorded fixtures — pass / failing gate / budget — plus an ungated finish and
 // a memory-using run. Every label is derived from the record; strict on success.
@@ -1491,4 +1508,3 @@ await test('F9: replayExecuteTool serves two identical calls in CALL order even 
 
 if (failures.length) { console.error(`history/run-record: ${passed} passed, ${failures.length} FAILED`); for (const f of failures) console.error(`  FAIL ${f.n}: ${f.message}`); process.exit(1); }
 console.log(`history/run-record conformance: ${passed}/${passed} passed`);
-

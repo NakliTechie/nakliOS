@@ -39,7 +39,7 @@ an unexecuted recipe is never a pass by source reading.
 | `features/tools-files.md` | read · edit · write · apply_patch · todowrite · shell |
 | `features/tools-loop.md` | clarify · task · dispatch · review · task_done |
 | `features/tools-store.md` | remember · recall · revise · skill · skill_manage · learn_this_run · history · context_remaining · checkpoint · synthesize |
-| `features/test-door.md` | the 12 `__anvil.test.*` hooks |
-| `features/workspace-files.md` | the 6 `.anvil/` files |
-| `features/sheet.md` | the 9 ⋯ sheet actions |
-| `features/header.md` | the 22 header and pane buttons |
+| `features/test-door.md` | the 19 `__anvil.test.*` hooks |
+| `features/workspace-files.md` | the 8 `.anvil/` files |
+| `features/sheet.md` | the 11 ⋯ sheet actions |
+| `features/header.md` | the 29 header and pane buttons |

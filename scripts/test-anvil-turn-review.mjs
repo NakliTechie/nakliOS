@@ -9,6 +9,8 @@
 import assert from 'node:assert/strict';
 import { inlineModule, extractFunction, extractRegion, instantiate, evaluate, memFs, failingFs } from './anvil-harness.mjs';
 import { buildChangeRow, planRevert, prunePreimages, turnChanges, planTurnRevert } from '../sys/ai/change-preimages.mjs';
+import { buildReviewDiff, reviewVersion, reviewPrompt, MAX_REVIEW_BYTES } from '../sys/ai/review-diff.mjs';
+import { admitRun } from '../sys/ai/followup-queue.mjs';
 
 const src = await inlineModule();
 let passed = 0; const failures = [];
@@ -25,9 +27,11 @@ function task() {
 }
 function bed(t, fs) {
   const calls = { system: [], renders: 0 };
-  const ctx = { turnChanges, planTurnRevert, lineDiff, fs, backend:{supportsConditionalWrite:true,supportsConditionalDelete:true}, state: {}, globalPreview: null,
+  const reviewFs={...fs, read:async(p,opts)=>{ const r=await fs.read(p,opts); return r.ok && opts?.maxBytes && !opts.encoding ? {ok:true,data:new TextEncoder().encode(r.data)} : r; }};
+  const ctx = { turnChanges, planTurnRevert, lineDiff, buildReviewDiff, reviewVersion, MAX_REVIEW_BYTES, TextDecoder, fs:reviewFs, backend:{supportsConditionalWrite:true,supportsConditionalDelete:true}, state: {activeProject:'p'}, workspaceLabel:'folder', previewOpenSeq:0, globalPreview: null,
     activeTask: () => t, pushSystem: (x) => calls.system.push(x), save() {}, renderAll() { calls.renders++; }, renderPreview() {} };
   ctx.atomicRevertAvailable = instantiate(extractFunction(src, 'atomicRevertAvailable'), 'atomicRevertAvailable', ctx);
+  ctx.readReviewState = instantiate(extractFunction(src, 'readReviewState'), 'readReviewState', ctx);
   const openTurn = instantiate(extractFunction(src, 'openTurn'), 'openTurn', ctx);
   ctx.openTurn = openTurn;
   ctx.readRevertState = instantiate(extractFunction(src, 'readRevertState'), 'readRevertState', ctx);
@@ -85,6 +89,42 @@ await test('reload: the turn row, its run tag and the pre-images are plain task 
   const fs = memFs({ 'a.py': 'A2', 'b.py': 'B1' });
   await bed(t, fs).openTurn(t, 2);
   assert.match(t.preview.content, /=== a\.py \(2 edits\) ===/);
+});
+
+await test('review comments: one send for a run, with a current-version check before dispatch', async () => {
+  const t={reviewDrafts:[
+    {id:'a',run:2,project:'p',workspace:'folder',file:'a.py',version:reviewVersion('A2'),anchorLine:3,kind:'delete',text:'Keep the guard.'},
+    {id:'b',run:2,project:'p',workspace:'folder',file:'b.py',version:reviewVersion('B1'),anchorLine:5,kind:'add',text:'Name this value.'},
+  ]};
+  const field={value:''}, calls=[]; let current={ 'a.py':'A2', 'b.py':'B1' };
+  const ctx={activeTask:()=>t,running:false,priming:false,state:{activeProject:'p'},workspaceLabel:'folder',
+    $:()=>field,readReviewState:async(path)=>current[path],reviewVersion,reviewPrompt,
+    autoGrow(){},submit(){calls.push(field.value);field.value='';return true;},save(){},renderPreview(){},pushSystem:(s)=>calls.push('BLOCK '+s)};
+  const send=instantiate(extractFunction(src,'submitReviewDrafts'),'submitReviewDrafts',ctx);
+  await send(2);
+  assert.equal(calls.length,1,'one dispatch');
+  assert.equal(calls[0].split('\n\n')[1].split('\n').length,2,'two JSON-line comments in one prompt');
+  assert.equal(t.reviewDrafts.length,0,'only a dispatched batch clears drafts');
+  t.reviewDrafts=[{id:'c',run:2,project:'p',workspace:'folder',file:'a.py',version:reviewVersion('A2'),anchorLine:1,kind:'context',text:'Review.'}];
+  current={ 'a.py':'changed' };
+  await send(2);
+  assert.equal(calls.length,2); assert.match(calls[1],/^BLOCK Review comment is stale/);
+  assert.equal(t.reviewDrafts.length,1,'stale drafts stay removable');
+  const sendWhileRunning=instantiate(extractFunction(src,'submitReviewDrafts'),'submitReviewDrafts',{...ctx,running:true});
+  await sendWhileRunning(2);
+  assert.match(calls.at(-1),/^BLOCK Wait for the current run/);
+  current={ 'a.py':'A2' };
+  let started=false;
+  const heldState={activeProject:'p',runsHeld:true};
+  const realSubmit=instantiate(extractFunction(src,'submit'),'submit',{
+    activeTask:()=>t,$:()=>field,autoGrow(){},running:false,priming:false,state:heldState,admitRun,
+    pushSystem:(s)=>calls.push('BLOCK '+s),runTask(){started=true},save(){},renderLog(){},qEnqueue(){},
+  });
+  const held=instantiate(extractFunction(src,'submitReviewDrafts'),'submitReviewDrafts',{...ctx,state:heldState,submit:realSubmit});
+  await held(2);
+  assert.equal(started,false,'held admission did not start a task');
+  assert.match(calls.at(-1),/^BLOCK ⏸/);
+  assert.equal(t.reviewDrafts.length,1,'held admission does not consume a draft');
 });
 
 // The app tags every change with its run, leaves one turn row when a run changed files, and wires

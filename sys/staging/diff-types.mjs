@@ -63,36 +63,53 @@ export function normalizeCellRange(diff) {
   const inverse = Array.isArray(diff && diff.inverse) ? diff.inverse : [];
 
   // Fold every inverse setCells into one before-map keyed 'sheet!A1'. The inverse
-  // is emitted undo-order (latest first); a later group holds the OLDER value, so
-  // an existing key is never overwritten — first write wins per key.
+  // is emitted undo-order (latest first); a later group holds the OLDER value.
+  // Overwrite an earlier entry so a repeated cell edit shows its original value.
   const before = new Map();
   for (const op of inverse) {
     if (!op || op.op !== 'setCells' || !op.cells) continue;
     for (const [a1, cell] of Object.entries(op.cells)) {
       const key = `${op.sheet}!${a1}`;
-      if (!before.has(key)) before.set(key, cellText(cell));
+      before.set(key, cellText(cell));
     }
   }
 
   const rows = [];
+  const cellRows = new Map();
+  let operationCount = 0;
   for (const op of ops) {
     if (!op || typeof op !== 'object') continue;
     if (op.op !== 'setCells' || !op.cells) {
-      rows.push({ label: op.op ? `${op.op}` : '(unknown op)', before: '', after: '(structural change)', change: 'edit' });
+      rows.push({ label: op.op ? `${op.op}` : '(unknown op)', before: '', after: JSON.stringify(op), change: 'edit' });
+      operationCount++;
       continue;
     }
     for (const [a1, cell] of Object.entries(op.cells)) {
-      const b = before.get(`${op.sheet}!${a1}`) ?? '';
+      const key = `${op.sheet}!${a1}`;
+      if (!before.has(key)) throw new Error(`Reckon diff lacks an inverse for ${key}`);
+      const b = before.get(key);
       const a = cellText(cell);
-      rows.push({ label: a1, before: b, after: a, change: classify(b, a) });
+      const row = cellRows.get(key);
+      if (row) {
+        row.after = a;
+        row.change = classify(row.before, a);
+      } else {
+        const next = { label: a1, before: b, after: a, change: classify(b, a) };
+        cellRows.set(key, next);
+        rows.push(next);
+      }
     }
   }
 
   const sheet = (diff && (diff.sheetName || diff.sheet)) || '';
-  const cells = rows.filter((r) => r.change !== undefined).length;
+  const cells = cellRows.size;
+  const counts = [];
+  if (cells) counts.push(`${cells} cell${cells === 1 ? '' : 's'}`);
+  if (operationCount) counts.push(`${operationCount} operation${operationCount === 1 ? '' : 's'}`);
+  const summary = counts.join(', ') || '0 changes';
   return {
     kind: 'cells',
-    summary: sheet ? `${sheet} — ${cells} cell${cells === 1 ? '' : 's'}` : `${cells} cell${cells === 1 ? '' : 's'}`,
+    summary: sheet ? `${sheet} — ${summary}` : summary,
     rows,
   };
 }
@@ -126,6 +143,41 @@ export function normalizeProsemirrorSteps(diff) {
   };
 }
 
+// KanZen's native card move keeps the board and column identities alongside
+// the visible before/after location. The app rechecks its board revision at
+// commit, so this preview never grants authority to mutate a changed board.
+export function normalizeCardMove(diff) {
+  if (diff?.kind === 'agent') return normalizeKanzenAgent(diff);
+  const title = String(diff?.cardTitle || diff?.card || 'Card');
+  const before = String(diff?.fromName || diff?.from || '');
+  const after = String(diff?.toName || diff?.to || '');
+  return {
+    kind: 'card-move',
+    summary: `${title} — move card`,
+    rows: [{
+      label: title,
+      before: diff?.fromIndex == null ? before : `${before} · position ${Number(diff.fromIndex) + 1}`,
+      after: diff?.toIndex == null ? after : `${after} · position ${Number(diff.toIndex) + 1}`,
+      change: 'edit',
+    }],
+  };
+}
+
+// A KanZen agent proposal: an agent called a write tool through KanZen's agent face
+// (WebMCP, window.kanzen or the cross-tab channel). KanZen sends its own one-line
+// summary and, for a batch, one line per change; it re-validates on commit.
+export function normalizeKanzenAgent(diff) {
+  const summary = String(diff?.summary || diff?.tool || 'Agent change').slice(0, 300);
+  const lines = Array.isArray(diff?.details) && diff.details.length ? diff.details : [summary];
+  const who = [diff?.caller, diff?.door].filter(Boolean).map(String).join(' via ');
+  const change = diff?.destructive ? 'remove' : 'edit';
+  const rows = lines.slice(0, 100).map((line) => ({
+    label: String(diff?.boardName || 'KanZen'), before: '', after: String(line).slice(0, 300), change,
+  }));
+  if (diff?.note) rows.push({ label: 'note', before: '', after: String(diff.note).slice(0, 300), change: 'edit' });
+  return { kind: 'kanzen-agent', summary: who ? `${summary} — agent (${who})` : `${summary} — agent`, rows };
+}
+
 // ----------------------------------------------------------------- anvil ----
 
 // An Anvil skill write -> review rows (C1). The native diff is what skill-manage
@@ -151,6 +203,7 @@ export function normalizeAnvilSkill(diff) {
 export const APP_DIFF_TYPES = Object.freeze([
   { app: 'reckon', key: 'cell-range', normalize: normalizeCellRange },
   { app: 'draft', key: 'prosemirror-steps', normalize: normalizeProsemirrorSteps },
+  { app: 'kanzen', key: 'card-move', normalize: normalizeCardMove },
   { app: 'anvil', key: 'anvil-skill', normalize: normalizeAnvilSkill },
 ]);
 

@@ -1397,6 +1397,32 @@ body.is-mobile .nw-dock{display:none;}
 @media (max-width: 380px){
   body.is-mobile .icon-area{grid-template-columns:repeat(3, 1fr);}
 }
+#review-btn[hidden]{display:none;}
+#nw-review-dialog{
+  width:min(780px, calc(100vw - 32px)); max-height:min(82vh, 760px);
+  padding:0; border:1px solid var(--line-strong); border-radius:12px;
+  background:var(--panel); color:var(--ink); box-shadow:0 18px 60px #0008;
+}
+#nw-review-dialog::backdrop{background:#0008;}
+.nw-review-header{display:flex; align-items:center; gap:12px; padding:16px 20px; border-bottom:1px solid var(--line);}
+.nw-review-header h2{font-size:17px; margin:0; flex:1;}
+.nw-review-header button{padding:5px 9px; border:1px solid var(--line); border-radius:6px;}
+#nw-review-status{min-height:20px; padding:8px 20px; color:var(--muted);}
+#nw-review-list{max-height:calc(82vh - 100px); overflow:auto; padding:0 20px 20px;}
+.nk-rev{margin:10px 0; padding:12px; border:1px solid var(--line); border-radius:8px; background:var(--row);}
+.nk-rev-head{display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:10px;}
+.nk-rev-app{font-weight:700; text-transform:capitalize;}
+.nk-rev-summary{color:var(--muted);}
+.nk-rev-diff{width:100%; border-collapse:collapse; table-layout:fixed;}
+.nk-rev-diff caption{text-align:left; color:var(--muted); padding-bottom:6px;}
+.nk-rev-diff th,.nk-rev-diff td{padding:7px; text-align:left; vertical-align:top; border:1px solid var(--line); overflow-wrap:anywhere; user-select:text;}
+.nk-rev-diff th:first-child{width:22%;}
+.nk-rev-foot{display:flex; align-items:center; gap:8px; margin-top:12px;}
+.nk-rev-foot button{padding:6px 10px; border:1px solid var(--line-strong); border-radius:6px;}
+.nk-rev-commit{background:var(--brand); color:var(--panel);}
+.nk-rev-foot button[disabled]{opacity:.5; cursor:not-allowed;}
+.nk-rev-why{flex:1; color:var(--muted);}
+.nk-sr{position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%);}
 </style>
 </head>
 <body>
@@ -1423,6 +1449,7 @@ body.is-mobile .nw-dock{display:none;}
       <span class="topbar-chip-icon">☁️</span>
       <span class="topbar-chip-label">Crate</span>
     </button>
+    <button id="review-btn" class="topbar-btn" type="button" hidden aria-label="Review staged changes">Review 0</button>
     <button id="mode-pill" type="button" title="Click Settings to change mode" aria-label="Experience mode: Immersive">Immersive</button>
     <span id="clock">—</span>
     <button id="settings-btn" class="topbar-btn" title="Settings" aria-label="Settings">⚙</button>
@@ -1443,6 +1470,11 @@ body.is-mobile .nw-dock{display:none;}
 
   <div id="overlay-root"></div>
 </div>
+<dialog id="nw-review-dialog" aria-labelledby="nw-review-title">
+  <div class="nw-review-header"><h2 id="nw-review-title">Staged changes</h2><button type="button" id="nw-review-close">Close</button></div>
+  <div id="nw-review-status" role="status"></div>
+  <div id="nw-review-list"></div>
+</dialog>
 
 <script src="vendor/localmind/host-model-catalog.js"></script>
 <script>
@@ -2168,14 +2200,12 @@ async function fsRead(path){
   const file = await fh.getFile();
   return await file.text();
 }
-async function fsReadBinary(path, maxBytes){
+async function fsReadBinary(path, maxBytes, offset){
+  const { checkBinaryRead, readFileBytes } = await import('./sys/storage/binary-read.mjs');
+  const options={maxBytes,offset};checkBinaryRead(options);
   const { dir, name } = await fsGetDir(path);
   const fh = await dir.getFileHandle(name);
-  const file = await fh.getFile();
-  if (maxBytes !== undefined && file.size > maxBytes) throw new Error('EFBIG: file exceeds bounded read limit');
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  if (maxBytes !== undefined && bytes.length > maxBytes) throw new Error('EFBIG: file exceeds bounded read limit');
-  return bytes;
+  return await readFileBytes(await fh.getFile(),options);
 }
 async function fsWrite(path, data){
   const { dir, name } = await fsGetDir(path, true);
@@ -4590,6 +4620,7 @@ function finalizeCloseWindow(win){
     fsHostUnsubscribeSource(iframe.contentWindow);
     releaseFileGrantsForSource(iframe.contentWindow);
     aiHostCancelSource(iframe.contentWindow);
+    if (reviewHostPromise) void reviewHostPromise.then(host => host.detach(iframe.contentWindow));
     knownIframes.delete(iframe.contentWindow);
   }
   win.remove();
@@ -4770,6 +4801,8 @@ function spawnIframeWindow(app, options = {}){
   iframe.addEventListener('load', () => {
     markIframeLaunchPhase(win, 'loaded');
     try {
+      if(iframe._fileGrantLoaded) releaseFileGrantsForSource(iframe.contentWindow);
+      iframe._fileGrantLoaded = true;
       // Belt-and-suspenders: re-add in case the contentWindow identity changed.
       knownIframes.add(iframe.contentWindow);
       // Send the theme so any listening app can apply it
@@ -4777,6 +4810,7 @@ function spawnIframeWindow(app, options = {}){
       iframe.contentWindow.postMessage({ type:'naklios:theme', theme:t.id, colors:t.colors, mood:t.mood }, '*');
       // Push capabilities (fs availability) so the SDK can flip naklios.capabilities.fs
       postCapabilities(iframe, app.id);
+      deliverPendingFileGrants(win);
     } catch(_){}
   });
 }
@@ -4797,7 +4831,7 @@ const BACKENDS = {
     isConnected(){ return !!state.fsHandle; },
     displayName(){ return state.fsFolderName || ''; },
     async read(safePath){ return await fsRead(safePath); },
-    async readBinary(safePath, maxBytes){ return await fsReadBinary(safePath, maxBytes); },
+    async readBinary(safePath, maxBytes, offset){ return await fsReadBinary(safePath, maxBytes, offset); },
     async write(safePath, data){ await fsWrite(safePath, data); },
     async append(safePath, line){ await fsAppend(safePath, line); },
     async delete(safePath){ await fsDelete(safePath); },
@@ -4815,8 +4849,8 @@ const BACKENDS = {
       const bytes = await state.crate.read('/' + safePath);
       return new TextDecoder().decode(bytes);
     },
-    async readBinary(safePath, maxBytes){
-      if (maxBytes !== undefined) throw new Error('ENOTSUP: Crate does not support bounded reads');
+    async readBinary(safePath, maxBytes, offset){
+      if (maxBytes !== undefined || offset !== undefined) throw new Error('ENOTSUP: Crate does not support bounded reads');
       return await state.crate.read('/' + safePath);
     },
     async write(safePath, data){
@@ -5065,6 +5099,14 @@ function fsHostReadLimit(value){
   return value;
 }
 
+function fsHostReadOffset(value,maxBytes){
+  if(value===undefined)return undefined;
+  if(!Number.isSafeInteger(value)||value<0)throw new Error('EINVAL: offset must be a non-negative safe integer');
+  if(maxBytes===undefined)throw new Error('EINVAL: offset requires an explicit maxBytes');
+  if(maxBytes>16*1024*1024)throw new Error('EFBIG: range read exceeds the 16 MiB limit');
+  return value;
+}
+
 // Resolve { dir, name } for fs reply ops. Throws if path unsafe or no handle.
 async function fsHostHandleNow(msg, type, appId){
   const backendId = await fsEnsurePermission(appId);
@@ -5077,7 +5119,7 @@ async function fsHostHandleNow(msg, type, appId){
   const safe = fsSafePath(appId, msg.path || '');
   switch (type){
     case 'read':       return await backend.read(safe);
-    case 'readBinary': return await backend.readBinary(safe, fsHostReadLimit(msg.maxBytes));
+    case 'readBinary': return await backend.readBinary(safe, fsHostReadLimit(msg.maxBytes), fsHostReadOffset(msg.offset,msg.maxBytes));
     case 'stat':       return await backend.stat(safe);
     case 'write':      await backend.write(safe, msg.data); return null;
     case 'append':     await backend.append(safe, String(msg.line ?? '')); return null;
@@ -5133,7 +5175,7 @@ async function fsHostSysHandle(msg, op, appId){
   const safe = fsSysCleanPath(msg.path || '');
   switch (op){
     case 'read':       return await backend.read(safe);
-    case 'readBinary': return await backend.readBinary(safe, fsHostReadLimit(msg.maxBytes));
+    case 'readBinary': return await backend.readBinary(safe, fsHostReadLimit(msg.maxBytes), fsHostReadOffset(msg.offset,msg.maxBytes));
     case 'stat':       return await backend.stat(safe);
     case 'write':      await backend.write(safe, msg.data); return null;
     case 'append':     await backend.append(safe, String(msg.line ?? '')); return null;
@@ -5169,6 +5211,7 @@ function deliverFileGrant(win, token){
   const grant = fileGrants.get(token);
   const iframe = win?.querySelector('iframe');
   if (!grant || !iframe?.contentWindow || win.dataset.id !== grant.targetAppId) return false;
+  if(grant.kind==='range-edit'&&(!iframe._fileGrantLoaded||iframe.contentDocument?.readyState!=='complete'))return false;
   grant.targetSource = iframe.contentWindow;
   try {
     iframe.contentWindow.postMessage({
@@ -5179,6 +5222,7 @@ function deliverFileGrant(win, token){
         path:grant.sourcePath,
         sourceAppId:grant.sourceAppId,
         backend:grant.backendId,
+        kind:grant.kind || 'file',
       },
     }, '*');
     return true;
@@ -5187,13 +5231,23 @@ function deliverFileGrant(win, token){
 
 function deliverPendingFileGrants(win){
   if (!win?._sdkReady) return;
-  for (const token of win._pendingFileGrantTokens || []) deliverFileGrant(win, token);
-  win._pendingFileGrantTokens = [];
+  win._pendingFileGrantTokens = (win._pendingFileGrantTokens || []).filter(token=>fileGrants.has(token)&&!deliverFileGrant(win,token));
 }
 
 function releaseFileGrantsForSource(source){
   for (const [token, grant] of fileGrants){
-    if (grant.targetSource === source) fileGrants.delete(token);
+    if (grant.targetSource === source || grant.sourceSource === source) revokeFileGrant(grant);
+  }
+}
+
+function revokeFileGrant(grant){
+  fileGrants.delete(grant.token);
+  if(grant.delivery){clearInterval(grant.delivery.timer);clearTimeout(grant.delivery.timeout);grant.delivery.reject(new Error('Proposal delivery cancelled before acknowledgement'))}
+  if (grant.kind === 'range-edit') {
+    try { grant.targetSource?.postMessage({ type:'naklios:file:grant',
+      grant:{ token:grant.token, kind:'range-edit-cancelled' } }, '*'); } catch(_){}
+    try { grant.sourceSource?.postMessage({ type:'naklios:file:edit-proposal',
+      proposal:{ token:grant.token, cancelled:true } }, '*'); } catch(_){}
   }
 }
 
@@ -5260,6 +5314,13 @@ async function fileHostHandle(source, msg, targetAppId, op){
   if (!grant || grant.targetSource !== source || grant.targetAppId !== targetAppId) {
     throw new Error('File grant is missing or expired');
   }
+  if (grant.kind === 'range-edit') {
+    assertRangeEditGrant(grant);
+    if(grant.delivery)throw new Error('Snapshot has ended; proposal acknowledgement is pending');
+    if (op !== 'read') throw new Error('Range edits can only propose a staged change');
+    return { data:grant.request.before, name:grant.name, path:grant.sourcePath,
+      sourceAppId:grant.sourceAppId, backend:grant.backendId, kind:grant.kind, request:grant.request, expires:grant.expires };
+  }
   const backend = BACKENDS[grant.backendId];
   if (!backend?.isConnected() || fileGrantBackendIdentity(grant.backendId) !== grant.backendIdentity) {
     fileGrants.delete(token);
@@ -5283,6 +5344,157 @@ async function fileHostHandle(source, msg, targetAppId, op){
     return null;
   }
   throw new Error('Unknown file-grant operation');
+}
+
+function assertRangeEditGrant(grant){
+  const sourceFrame = openWindows.editor?.querySelector('iframe');
+  if (fileGrants.get(grant.token) !== grant || grant.expires <= Date.now()
+      || sourceFrame?.contentWindow !== grant.sourceSource) {
+    revokeFileGrant(grant);
+    throw new Error('Editor range edit expired or its source window closed');
+  }
+  if (grant.backendId !== 'browser'
+      && (!BACKENDS[grant.backendId]?.isConnected()
+        || fileGrantBackendIdentity(grant.backendId) !== grant.backendIdentity
+        || !state.appPermissions.editor?.granted || state.appPermissions.editor.backend !== grant.backendId)) {
+    revokeFileGrant(grant);
+    throw new Error('Range edit storage location changed');
+  }
+}
+
+async function fileHostEditInAnvil(source, msg, sourceAppId){
+  if (sourceAppId !== 'editor') throw new Error('Only Editor can request a range edit');
+  const deadline=Date.now()+25000; // Refuse before the SDK's 30-second request timeout.
+  const target = APPS.find(app => app.id === 'anvil' && app.kind === 'system');
+  if (!target) throw new Error('Anvil is unavailable');
+  const { rangeEditRequest, RANGE_EDIT_LIMITS } = await import('./sys/ai/range-edit.mjs');
+  const request = rangeEditRequest(msg.request);
+  for (const grant of fileGrants.values()) {
+    if (grant.kind==='range-edit' && grant.expires<=Date.now()) revokeFileGrant(grant);
+  }
+  if ([...fileGrants.values()].filter(g=>g.kind==='range-edit' && g.sourceSource===source).length>=16) {
+    throw new Error('Editor has too many pending selected-file edits');
+  }
+  const sourceFrame = openWindows.editor?.querySelector('iframe');
+  if (sourceFrame?.contentWindow !== source) throw new Error('Editor window changed');
+  let backendIdentity = null;
+  if (request.backend !== 'browser') {
+    const binding = state.appPermissions.editor;
+    if (!binding?.granted || binding.backend !== request.backend) throw new Error('Editor storage binding changed');
+    const backend = BACKENDS[request.backend];
+    if (!backend?.isConnected()) throw new Error('Source storage is disconnected');
+    backendIdentity = fileGrantBackendIdentity(request.backend);
+    const bytes = await backend.readBinary(fsSafePath('editor', request.path), RANGE_EDIT_LIMITS.bytes);
+    const current = new TextDecoder('utf-8', { fatal:true,ignoreBOM:true }).decode(bytes);
+    if (current !== request.before) throw new Error('Source changed before the handoff');
+  }
+  const approved = await nakliosConfirm(
+    `Send lines ${request.selection.start}–${request.selection.end} of <code>${_dlgEscape(request.path)}</code> to Anvil?\n\n`
+      + `Anvil receives a bounded snapshot of this file only. Editor reviews the proposal before applying it.`,
+    { title:'Edit selection in Anvil?', okLabel:'Send to Anvil', cancelLabel:'Cancel', allowHtmlBody:true },
+  );
+  if (!approved) return null;
+  if(Date.now()>=deadline) throw new Error('Confirmation expired. Resend the selection from Editor');
+  if (openWindows.editor?.querySelector('iframe')?.contentWindow !== source) throw new Error('Editor window changed');
+  if (request.backend !== 'browser') {
+    if (fileGrantBackendIdentity(request.backend) !== backendIdentity
+        || !state.appPermissions.editor?.granted || state.appPermissions.editor.backend!==request.backend) throw new Error('Source storage changed');
+    const bytes = await BACKENDS[request.backend].readBinary(fsSafePath('editor',request.path),RANGE_EDIT_LIMITS.bytes);
+    if (new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(bytes)!==request.before) throw new Error('Source changed during confirmation');
+    if (openWindows.editor?.querySelector('iframe')?.contentWindow!==source
+        || fileGrantBackendIdentity(request.backend)!==backendIdentity) throw new Error('Source storage changed');
+  }
+  if(Date.now()>=deadline) throw new Error('Confirmation expired. Resend the selection from Editor');
+  const token = newFileGrantToken();
+  const grant = { token, kind:'range-edit', targetAppId:'anvil', sourceAppId:'editor',
+    sourcePath:request.path, name:request.path.split('/').at(-1), request, sourceSource:source,
+    backendId:request.backend, backendIdentity, targetSource:null, expires:Date.now()+15*60*1000 };
+  fileGrants.set(token, grant);
+  openApp(target, { action:'range-edit' });
+  const win = openWindows.anvil;
+  if (!win) { fileGrants.delete(token); throw new Error('Anvil could not be opened'); }
+  win._pendingFileGrantTokens = [...(win._pendingFileGrantTokens || []), token];
+  deliverPendingFileGrants(win);
+  return { token, expires:grant.expires };
+}
+
+async function fileHostProposeEdit(source, msg, appId){
+  const grant = fileGrants.get(String(msg.token || ''));
+  if (!grant || grant.kind !== 'range-edit' || appId !== 'anvil' || grant.targetSource !== source) {
+    throw new Error('No exact-file range edit is granted to this window');
+  }
+  assertRangeEditGrant(grant);
+  const { rangeEditProposal, RANGE_EDIT_LIMITS } = await import('./sys/ai/range-edit.mjs');
+  const proposal = rangeEditProposal(grant.request, msg.after);
+  assertRangeEditGrant(grant);
+  if(grant.backendId!=='browser'){
+    try{
+      const bytes=await BACKENDS[grant.backendId].readBinary(fsSafePath('editor',grant.sourcePath),RANGE_EDIT_LIMITS.bytes);
+      assertRangeEditGrant(grant);
+      if(new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(bytes)!==grant.request.before)throw new Error('Source changed during the Anvil run');
+    }catch(error){revokeFileGrant(grant);throw error;}
+  }
+  const run = msg.run;
+  if (!run || typeof run.task !== 'string' || run.task.length > 128 || typeof run.project !== 'string'
+      || run.project.length > 128 || typeof run.sequence !== 'number' || !Number.isSafeInteger(run.sequence) || run.sequence < 1) {
+    throw new Error('Proposal lacks its Anvil run identity');
+  }
+  const identity=JSON.stringify({after:proposal.after,run:{task:run.task,project:run.project,sequence:run.sequence}});
+  if(grant.delivery){
+    if(grant.delivery.identity!==identity)throw new Error('A different proposal is already being delivered');
+    return grant.delivery.promise;
+  }
+  const delivery={id:newFileGrantToken(),identity,attempts:0,deadline:Date.now()+12000};
+  delivery.promise=new Promise((resolve,reject)=>{delivery.resolve=resolve;delivery.reject=reject});
+  grant.delivery=delivery;
+  const retry=async()=>{
+    if(fileGrants.get(grant.token)!==grant){clearInterval(delivery.timer);return}
+    if(delivery.retrying)return;
+    delivery.retrying=true;
+    try{
+      assertRangeEditGrant(grant);
+      if(grant.backendId!=='browser')await recheckRangeEditSource(grant);
+      if(Date.now()>=delivery.deadline||delivery.attempts>=12)throw new Error('Editor did not acknowledge proposal retention');
+      delivery.attempts++;
+      grant.sourceSource.postMessage({type:'naklios:file:edit-proposal',proposal:{token:grant.token,deliveryId:delivery.id,
+        request:grant.request,after:proposal.after,run:{task:run.task,project:run.project,sequence:run.sequence}}},'*');
+    }catch(error){clearInterval(delivery.timer);delivery.reject(error);revokeFileGrant(grant)}finally{delivery.retrying=false}
+  };
+  delivery.timeout=setTimeout(()=>{delivery.reject(new Error('Editor did not acknowledge proposal retention'));revokeFileGrant(grant)},12000);
+  delivery.timer=setInterval(retry,1000);
+  retry();
+  return delivery.promise;
+}
+
+function fileHostEditAck(source,msg,appId){
+  const grant=fileGrants.get(String(msg.token||''));
+  if(appId!=='editor'||!grant?.delivery||grant.sourceSource!==source||grant.delivery.id!==msg.deliveryId)return false;
+  assertRangeEditGrant(grant);
+  if(grant.backendId!=='browser'){
+    if(!grant.delivery.ackPromise)grant.delivery.ackPromise=(async()=>{
+      try{await recheckRangeEditSource(grant);return finishRangeEditAck(grant)}catch(error){revokeFileGrant(grant);throw error}
+    })();
+    return grant.delivery.ackPromise;
+  }
+  return finishRangeEditAck(grant);
+}
+
+async function recheckRangeEditSource(grant){
+  assertRangeEditGrant(grant);
+  const {RANGE_EDIT_LIMITS}=await import('./sys/ai/range-edit.mjs');
+  const bytes=await BACKENDS[grant.backendId].readBinary(fsSafePath('editor',grant.sourcePath),RANGE_EDIT_LIMITS.bytes);
+  assertRangeEditGrant(grant);
+  if(new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(bytes)!==grant.request.before)throw new Error('Source changed before proposal acknowledgement');
+}
+
+function finishRangeEditAck(grant){
+  assertRangeEditGrant(grant);
+  if(Date.now()>=grant.delivery.deadline){revokeFileGrant(grant);throw new Error('Proposal acknowledgement expired')}
+  clearInterval(grant.delivery.timer);
+  clearTimeout(grant.delivery.timeout);
+  fileGrants.delete(grant.token);
+  grant.delivery.resolve(true);
+  return true;
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -7690,6 +7902,7 @@ function capabilitySnapshot(appId){
     fsBackends,
     fsBackend,
     fsBoundedReads: fsCap && fsBackend === 'fsa',
+    fsRangeReads: fsCap && fsBackend === 'fsa',
     // Same-origin system apps may browse the whole store, not just their own
     // apps/<id>/ namespace — this is what powers the OS-level file manager.
     system: isSystem,
@@ -7712,6 +7925,7 @@ function capabilitySnapshot(appId){
     // configured a backend. Third-party apps never get it (isSystem gate).
     net: isSystem && egressConfigured(),
     netBackend: (isSystem && egressConfigured()) ? egressBackendLabel() : null,
+    review: appId === 'reckon' || appId === 'draft' || appId === 'kanzen',
   };
 }
 
@@ -8069,6 +8283,103 @@ function bindTopbarChips(){
   document.getElementById('crate-chip')?.addEventListener('click', openCrateChipMenu);
 }
 
+let reviewHostPromise = null;
+let reviewRendererPromise = null;
+let reviewHistoryTail = Promise.resolve();
+const reviewDecisionPending = new Set();
+
+function reviewHistoryAppend(tool, input, output){
+  const append = async () => {
+    const ledger = await import('./sys/history/ledger.mjs');
+    const root = await navigator.storage.getDirectory();
+    const dir = await (await root.getDirectoryHandle('naklios', { create:true })).getDirectoryHandle('history', { create:true });
+    const handle = await dir.getFileHandle('review.ndjson', { create:true });
+    const file = await handle.getFile();
+    const lines = (await file.text()).split('\n').filter(Boolean);
+    const prev = lines.length ? await ledger.eventHash(JSON.parse(lines[lines.length - 1])) : null;
+    const { event } = await ledger.appendEvent(prev, {
+      ts:Date.now(), principal:'person', door:'ui', tool,
+      app:input.app, input, output, grant_id:null,
+    });
+    const writer = await handle.createWritable({ keepExistingData:true });
+    await writer.write({ type:'write', position:file.size, data:JSON.stringify(event) + '\n' });
+    await writer.close();
+  };
+  const run = reviewHistoryTail.then(() => navigator.locks?.request
+    ? navigator.locks.request('naklios-review-history', append)
+    : append());
+  reviewHistoryTail = run.catch(() => {});
+  return run;
+}
+
+function sendReviewDecision(source, message){
+  const iframe = Array.from(document.querySelectorAll('.nw-window iframe')).find(f => f.contentWindow === source);
+  const win = iframe?.closest('.nw-window');
+  if (!win) throw new Error('originating app closed');
+  const target = (!win._expectedOrigin || win._expectedOrigin === 'null') ? '*' : win._expectedOrigin;
+  source.postMessage(message, target);
+}
+
+function reviewHost(){
+  if (!reviewHostPromise){
+    reviewHostPromise = import('./sys/staging/review-host.mjs').then(({ createReviewHost }) => createReviewHost({
+      sendDecision:sendReviewDecision,
+      onChange:() => { void renderReviewPanel(false); },
+      record:reviewHistoryAppend,
+    }));
+  }
+  return reviewHostPromise;
+}
+
+function reviewStatus(message){
+  document.getElementById('nw-review-status').textContent = message || '';
+}
+
+async function renderReviewPanel(open = false){
+  const host = await reviewHost();
+  const envelopes = host.envelopes();
+  const button = document.getElementById('review-btn');
+  button.hidden = envelopes.length === 0;
+  button.textContent = `Review ${envelopes.length}`;
+  button.setAttribute('aria-label', `Review ${envelopes.length} staged changes`);
+  const dialog = document.getElementById('nw-review-dialog');
+  if (open && !dialog.open) { reviewStatus(''); dialog.showModal(); }
+  if (!dialog.open) return;
+  if (!reviewRendererPromise) reviewRendererPromise = import('./sys/staging/reviewer.mjs');
+  const { renderReviewQueue } = await reviewRendererPromise;
+  const list = document.getElementById('nw-review-list');
+  list.replaceChildren();
+  if (!envelopes.length){
+    list.textContent = 'No staged changes.';
+    return;
+  }
+  const { element } = renderReviewQueue(envelopes, { actor:'person', now:Date.now() }, {
+    doc:document,
+    onCommit:model => { void decideReview('commit', model.proposalId); },
+    onDiscard:model => { void decideReview('discard', model.proposalId); },
+  });
+  list.appendChild(element);
+}
+
+async function decideReview(action, proposalId){
+  if (reviewDecisionPending.has(proposalId)) return;
+  reviewDecisionPending.add(proposalId);
+  try {
+    const host = await reviewHost();
+    reviewStatus(action === 'commit' ? 'Applying in the app…' : 'Discarding…');
+    const result = action === 'commit' ? await host.commit(proposalId) : await host.discard(proposalId, 'person discarded');
+    reviewStatus(result.historyError ? `Decision saved; History failed: ${result.historyError}` :
+      result.ok ? (action === 'commit' ? 'Change committed.' : 'Change discarded.') : `Decision refused: ${result.reason}`);
+    await renderReviewPanel();
+    if (result.ok && !result.historyError && host.size() === 0) document.getElementById('nw-review-dialog').close();
+  } catch (error) {
+    reviewStatus(`Decision failed: ${String(error?.message || error)}`);
+  } finally { reviewDecisionPending.delete(proposalId); }
+}
+
+document.getElementById('review-btn').addEventListener('click', () => { void renderReviewPanel(true); });
+document.getElementById('nw-review-close').addEventListener('click', () => document.getElementById('nw-review-dialog').close());
+
 window.addEventListener('message', async e => {
   if (!knownIframes.has(e.source)) return;
   const msg = e.data;
@@ -8123,6 +8434,23 @@ window.addEventListener('message', async e => {
   } else if (msg.type === 'naklios:capabilities-request'){
     const iframe = findIframe(); const appId = getAppId();
     if (iframe && appId) postCapabilities(iframe, appId);
+  } else if (msg.type === 'naklios:review:stage'){
+    const reply = { type:'naklios:review:reply', requestId:msg.requestId };
+    try {
+      const appId = getAppId();
+      if (!appId || !capabilitySnapshot(appId).review) throw new Error('Review is unavailable for this app');
+      reply.result = await (await reviewHost()).stage({
+        source:e.source, app:appId, tool:msg.tool, diff:msg.diff,
+        expires:msg.expires, reversible:msg.reversible === true,
+      });
+      if (reply.result.historyError) reviewStatus(`History failed: ${reply.result.historyError}`);
+    } catch (err){ reply.error = String(err?.message || err); }
+    if (msg.requestId) { try { e.source.postMessage(reply, replyTo); } catch(_){} }
+    if (reply.result?.proposal_id) setTimeout(() => { void renderReviewPanel(true); }, 0);
+  } else if (msg.type === 'naklios:review:applied'){
+    if (reviewHostPromise) (await reviewHostPromise).acknowledge({
+      source:e.source, proposal_id:msg.proposal_id, ok:msg.ok, error:msg.error,
+    });
   } else if (msg.type === 'naklios:open-settings'){
     openSettings(typeof msg.section === 'string' ? msg.section : 'storage');
   } else if (typeof msg.type === 'string' && msg.type.startsWith('naklios:file:')){
@@ -8132,10 +8460,13 @@ window.addEventListener('message', async e => {
       if (!appId) throw new Error('Unknown app');
       const op = msg.type.slice('naklios:file:'.length);
       if (op === 'openWith') reply.result = await fileHostOpenWith(e.source, msg, appId);
+      else if (op === 'editInAnvil') reply.result = await fileHostEditInAnvil(e.source, msg, appId);
+      else if (op === 'proposeEdit') reply.result = await fileHostProposeEdit(e.source, msg, appId);
+      else if (op === 'edit-ack') reply.result = await fileHostEditAck(e.source, msg, appId);
       else if (op === 'read' || op === 'write') reply.result = await fileHostHandle(e.source, msg, appId, op);
       else if (op === 'release') {
         const grant = fileGrants.get(String(msg.token || ''));
-        if (grant?.targetSource === e.source) fileGrants.delete(grant.token);
+        if (grant?.targetSource === e.source || grant?.sourceSource === e.source) revokeFileGrant(grant);
         reply.result = true;
       } else throw new Error('Unknown file handoff operation');
     } catch (err){

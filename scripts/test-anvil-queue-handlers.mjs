@@ -28,7 +28,7 @@ const states = (q) => (q || []).map((e) => e.state);
 function submitBed({ running, t }) {
   const prompt = { value: '' };
   const calls = { runTask: [], system: [], saves: 0 };
-  const ctx = { ...Q, running, state: {}, activeTask: () => t, $: (id) => (id === 'prompt' ? prompt : {}),
+  const ctx = { ...Q, running, priming:false, state: {}, activeTask: () => t, $: (id) => (id === 'prompt' ? prompt : {}),
     autoGrow() {}, save() { calls.saves++; }, renderLog() {}, pushSystem: (x) => calls.system.push(x),
     runTask: (task, text) => calls.runTask.push(text) };
   const submit = instantiate(extractFunction(src, 'submit'), 'submit', ctx);
@@ -62,7 +62,7 @@ await test('Send while idle runs; after a stopped run it holds once (the prompt 
 });
 
 // ── the drain (runTask's finally) ───────────────────────────────────────────────────────────
-const drain = extractRegion(src, 'const _out = { aborted: wasAborted', '\n    }\n  }\n  // Never disabled');
+const drain = extractRegion(src, 'const _out = { aborted: wasAborted', '\n    }\n  }\n  // The coding run queues Send');
 function drainBed({ t, wasAborted = false, runTaskThrows = false, busy = false }) {
   const calls = { runTask: [], system: [], saved: [], timers: [] };
   const ctx = { ...Q, t, wasAborted,

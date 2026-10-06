@@ -49,6 +49,7 @@ function fixture({ hooksCfg = { preTool: [], postTool: [] }, permissionRules = {
   const system = [], questions = [], events = [], feeds = [], results = [];
   const runtime = evaluate(`
     let abortController = new AbortController();
+    let priming = false, primeAbortController = null;
     ${agentShellSource}
     const shell = agentShell();
     const baseExec = makeToolExecutor({ shell, face, mode });

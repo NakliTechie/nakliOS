@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-uCSyrR4STulGUEfkfaRwJNbdknn5UGUgM17HDP5pyBw=' 'sha256-3JU06DgRR28pynfouAYlYNACaRNeqdccs6/iVDEktdE=' https://cdn.jsdelivr.net; style-src 'sha256-6gx4dEs/h2kVOsJ6sJN1+SpSW2llPBGHRKSMP0wHaDo=' 'sha256-KCyOLChDzeQmUw0bsRUQbX4zbQzpzoFdBW/gF2kA5vc='; img-src 'self' data: blob:; connect-src 'self' http://127.0.0.1:* https://cdn.jsdelivr.net https://huggingface.co https://*.hf.co https://cdn-lfs.huggingface.co https://api.openai.com https://api.groq.com https://api.mistral.ai https://api.deepseek.com https://openrouter.ai; font-src 'self' data:; worker-src blob:; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-uCSyrR4STulGUEfkfaRwJNbdknn5UGUgM17HDP5pyBw=' 'sha256-EUfhzHmt68Q4WzP4CTtKsqZ9UFsm9TZnDQMek02L05g=' https://cdn.jsdelivr.net; style-src 'sha256-6gx4dEs/h2kVOsJ6sJN1+SpSW2llPBGHRKSMP0wHaDo=' 'sha256-KCyOLChDzeQmUw0bsRUQbX4zbQzpzoFdBW/gF2kA5vc='; img-src 'self' data: blob:; connect-src 'self' http://127.0.0.1:* https://cdn.jsdelivr.net https://huggingface.co https://*.hf.co https://cdn-lfs.huggingface.co https://api.openai.com https://api.groq.com https://api.mistral.ai https://api.deepseek.com https://openrouter.ai; font-src 'self' data:; worker-src blob:; base-uri 'none'">
 <meta name="draft-version" content="1.1.0">
 <title>Draft</title>
 <style>
@@ -950,76 +950,42 @@ a { color: var(--dr-accent); }
 // schema + sanitised ingress + sole-dispatch transactions + storage.
 
 // ==== begin vendor/naklios.js ====
-/*!
- * naklios.js — cooperative SDK for apps hosted inside NakliOS (Immersive mode)
- *
- * Drop this file into your app's <head> or copy its contents inline. The
- * surface is a no-op when the app loads standalone (window.parent === window),
- * so the same source works in both contexts:
- *
- *   <\script src="https://naklios.dev/sdk/naklios.js"><\/script>
- *   <\script>
- *     naklios.ready();                          // signal "I'm loaded"
- *     naklios.title('My app — unlocked');       // update host window title
- *     naklios.close();                          // self-close from a Done button
- *     naklios.theme.onChange(t => paint(t));    // restyle on host theme change
- *
- *     // Filesystem (when hosted with a connected Folder or Crate):
- *     if (naklios.capabilities.fs){
- *       await naklios.fs.write('vault.json', JSON.stringify(vault));
- *       const data = await naklios.fs.read('vault.json');
- *       const stop = await naklios.fs.subscribe('', event => refresh(event));
- *     }
- *
- *     // Shared host inference (when the user grants this app access):
- *     if (naklios.capabilities.ai) {
- *       const stream = await naklios.ai.chat.completions.create({
- *         messages: [{ role: 'user', content: 'Summarise this note.' }],
- *         stream: true,
- *       });
- *       for await (const chunk of stream) {
- *         render(chunk.choices[0].delta.content || '');
- *       }
- *
- *       const image = await naklios.ai.images.generate({
- *         prompt: 'A risograph poster of a city after monsoon rain',
- *         size: '1024x1024',
- *         signal: abortController.signal,
- *       });
- *       preview.src = image.data[0].b64_json
- *         ? 'data:image/png;base64,' + image.data[0].b64_json
- *         : image.data[0].url;
- *     }
- *   <\/script>
- *
- * naklios.capabilities.hosted is true only when running inside NakliOS.
- * naklios.capabilities.fs is true when hosted storage is available to the app.
- * naklios.capabilities.fsBackends lists connected Folder/Crate choices, and
- * naklios.capabilities.fsBackend is the app's current binding (or null).
- * Apps may call naklios.fs.useBackend(id); NakliOS confirms the change.
- * Listen for changes via naklios.onCapabilitiesChange(cb).
- *
- * Paths in fs methods are relative to apps/<your-app-id>/ on the selected backend.
- * Traversal (../) is blocked at the host.
- *
- * Single source of truth: /Users/chiragpatnaik/Code/naklios-universe/naklOS/sdk/naklios.js
- * Vendor it inline in each app to keep the no-network-dependency ethos.
- * License: MIT.
- */
+/*! NakliOS cooperative SDK, vendored from nakliOS/sdk/naklios.js. License: MIT. */
 (function () {
+  // A real host FRAME is what the transports talk to (postMessage to parent), so
+  // it gates every send/rpc — `inNakliOS`. The `?naklios` URL flag is the host's
+  // EXPLICIT signal (it appends it to embed URLs) and a deliberate opt-in for
+  // testing; it sets capabilities.hosted so an app KNOWS to route through NakliOS,
+  // but it never fakes a channel that isn't there — a bare `?naklios` top-level tab
+  // has no host, so fs/ai capabilities stay false (no handshake) and the app's
+  // adapter falls back to its own APIs. No hang, no breakage.
   var inNakliOS = false;
   try { inNakliOS = !!(window.parent && window.parent !== window); } catch (_) {}
+  var naklFlag = false;
+  try { naklFlag = new URLSearchParams(window.location.search).has('naklios'); } catch (_) {}
+  // Targeted postMessage origin, LEARNED on first contact — the NakliOS shell embeds
+  // apps with referrerpolicy="no-referrer", so document.referrer is empty and can't
+  // be used to verify the parent (that path breaks hosted detection — it is the
+  // Lorewell iframe bug). Instead the first `naklios:*` message from window.parent
+  // locks trustedParentOrigin, and every later send targets that origin (not '*').
+  // The only pre-lock send is `ready`, which carries no app data.
+  var trustedParentOrigin = null;
 
   var currentTheme = null;
   var themeListeners = new Set();
   var capListeners = new Set();
   var beforeCloseCb = null;
   var capabilities = {
-    hosted: inNakliOS,
-    version: 1,
+    // hosted honours the ?naklios flag as well as a real embed, so an app can
+    // decide to route through NakliOS; the fs/ai flags below only flip true after
+    // a real host handshake, so the adapter still self-corrects with no channel.
+    hosted: inNakliOS || naklFlag,
+    flagged: naklFlag,
+    version: 2,
     fs: false,
     fsBackends: [],
     fsBackend: null,
+    fsBoundedReads: false,
     // system: this app is a same-origin system app (non-third-party).
     // sysFs: system-scoped filesystem is available — the whole store, not just
     // apps/<your-id>/. Only true for system apps with a connected backend.
@@ -1039,6 +1005,12 @@ a { color: var(--dr-accent); }
     aiImageState: 'idle',
     aiSearchState: 'idle',
     aiSearch: false,
+    // net: a sovereign egress backend (the user's own Worker or local bridge) is
+    // configured + permitted, so naklios.net.fetch can reach cross-origin hosts the
+    // browser blocks. Stays false until a host advertises one — the SDK seam.
+    net: false,
+    netBackend: null,
+    review: false,
   };
 
   // Request/reply correlation for fs RPCs
@@ -1050,12 +1022,15 @@ a { color: var(--dr-accent); }
   var ragSearches = new Map();     // requestId → semantic-search progress callback
   var fileOpenListeners = new Set(); // exact-file grants delivered by the host
   var pendingFileGrants = [];
+  var reviewDecisionHandler = null;
+  var appliedReviewIds = new Set();
+  var applyingReviewIds = new Map();
 
   function send(type, data) {
     if (!inNakliOS) return;
     try {
       var msg = Object.assign({ type: type }, data || {});
-      window.parent.postMessage(msg, '*');
+      window.parent.postMessage(msg, trustedParentOrigin || '*');
     } catch (_) {}
   }
 
@@ -1073,6 +1048,127 @@ a { color: var(--dr-accent); }
         }
       }, timeoutMs || 30000);
     });
+  }
+
+  // Autosave (DUR, 2026-09-24): the SDK owns WHEN an app's state is written; the app owns WHAT and
+  // WHERE through its own save(). `beforeunload` cannot await, so a save that starts there is lost on
+  // close — the reliable moments are visibilitychange → hidden and pagehide, which fire while the page
+  // can still post a message, and the host's beforeclose, which waits. The timing half runs standalone
+  // too (the save is the app's own); only the dirty report to the host needs a frame.
+  var savers = new Set();
+  var reportedDirty = false;
+  var autosaveWired = false;
+  function noop() {}
+  function anyUnsaved() {
+    var out = false;
+    savers.forEach(function (s) { if (s._guard && s.dirty) out = true; });
+    return out;
+  }
+  function reportDirty() {
+    var d = anyUnsaved();
+    if (d === reportedDirty) return;
+    reportedDirty = d;
+    send('naklios:fs:dirty', { dirty: d });
+  }
+  // urgent: issue every unsaved save NOW, in this task — never behind an in-flight one
+  function flushSavers(urgent) {
+    var all = [];
+    savers.forEach(function (s) { all.push(s._flush(urgent).catch(noop)); });
+    return Promise.all(all);
+  }
+  function wireAutosave() {
+    if (autosaveWired) return;
+    autosaveWired = true;
+    try {
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'hidden') flushSavers(true);
+      });
+    } catch (_) {}
+    try {
+      window.addEventListener('pagehide', function () { flushSavers(true); });
+      window.addEventListener('beforeunload', function (e) {
+        if (!anyUnsaved()) return;
+        flushSavers(true);
+        // Hosted, the NakliOS host arms its own guard from the dirty report; a second prompt from
+        // the frame would be noise. Standalone, this is the only thing that can interpose.
+        if (inNakliOS) return;
+        e.preventDefault();
+        e.returnValue = '';
+      });
+    } catch (_) {}
+  }
+  function makeAutosave(opts) {
+    if (!opts || typeof opts.save !== 'function') {
+      throw new Error('naklios.fs.autosave requires { save: function }');
+    }
+    var delay = typeof opts.delay === 'number' && opts.delay >= 0 ? opts.delay : 1000;
+    var onError = typeof opts.onError === 'function' ? opts.onError : null;
+    // guard:false — a background save (a remote push, say) that keeps the timing but never holds a close
+    var guard = opts.guard !== false;
+    // generations: gen counts changes, issuedGen the newest handed to save(), savedGen the newest durable
+    var gen = 0, issuedGen = 0, savedGen = 0;
+    var timer = null, tail = Promise.resolve(), last = Promise.resolve(), queued = null, disposed = false;
+    function issue() {
+      queued = null;
+      if (gen <= issuedGen) return last;
+      var g = gen;
+      issuedGen = g;
+      var p;
+      try { p = Promise.resolve(opts.save()); } catch (err) { p = Promise.reject(err); }
+      p = p.then(function () {
+        if (g > savedGen) savedGen = g;
+        reportDirty();
+      }, function (err) {
+        if (issuedGen === g) issuedGen = savedGen; // the next flush retries
+        reportDirty();
+        if (onError) { try { onError(err); } catch (_) {} }
+        throw err;
+      });
+      last = p;
+      tail = p.catch(noop);
+      return p;
+    }
+    function flush(urgent) {
+      clearTimeout(timer);
+      timer = null;
+      if (gen <= issuedGen) return last;
+      if (urgent) return issue();
+      if (!queued) queued = tail.then(issue);
+      return queued;
+    }
+    var saver = {
+      // State changed. The save runs at most `delay` ms after the first unsaved change.
+      markDirty: function () {
+        if (disposed) return;
+        gen++;
+        reportDirty();
+        if (!timer) timer = setTimeout(function () { timer = null; flush(false).catch(noop); }, delay);
+      },
+      // Save now (after any save already running). Resolves when the state as of this call is durable.
+      flush: function () { return flush(false); },
+      get dirty() { return gen > savedGen; },
+      dispose: function () {
+        disposed = true;
+        clearTimeout(timer);
+        timer = null;
+        savers.delete(saver);
+        reportDirty();
+      },
+      _flush: flush,
+      _guard: guard,
+    };
+    savers.add(saver);
+    wireAutosave();
+    return saver;
+  }
+
+  // Typed egress error so an app can branch (fall back / prompt to connect) rather
+  // than parse a message. code is 'ENOEGRESS' (no backend / not hosted) or 'EINVAL'.
+  function mkEgressErr(code, message) {
+    var e = new Error(message);
+    e.code = code;
+    e.egress = true;
+    return e;
   }
 
   // Bind each operation to the backend visible when it was issued. The host
@@ -1151,23 +1247,30 @@ a { color: var(--dr-accent); }
     var content = '';
     var finishReason = 'stop';
     var toolCalls = null;
+    var usage = null;
+    var model = null;
     for await (var chunk of stream) {
       var choice = chunk.choices && chunk.choices[0];
       if (choice && choice.delta && choice.delta.content) content += choice.delta.content;
       if (choice && choice.delta && choice.delta.tool_calls) toolCalls = choice.delta.tool_calls;
       if (choice && choice.finish_reason) finishReason = choice.finish_reason;
+      if (chunk.usage) usage = chunk.usage;
+      // the last chunk is the done chunk, which names the id that actually answered
+      if (chunk.model) model = chunk.model;
     }
     var message = { role: 'assistant', content: content };
     if (toolCalls) message.tool_calls = toolCalls;
     return {
       id: 'naklios-local',
       object: 'chat.completion',
-      model: capabilities.aiModel || 'localmind',
+      model: model || capabilities.aiModel || 'localmind',
       choices: [{
         index: 0,
         message: message,
         finish_reason: finishReason,
       }],
+      // top level, as the OpenAI completion shape has it; null when the provider said nothing
+      usage: usage,
     };
   }
 
@@ -1222,6 +1325,16 @@ a { color: var(--dr-accent); }
     if (inNakliOS && e.source !== window.parent) return;
     var msg = e.data;
     if (!msg || typeof msg !== 'object') return;
+    // Lock the trusted origin on the first naklios:* message, then verify every
+    // later message against it (no-referrer-safe; see the detection note). This
+    // runs standalone too: a bare/?naklios top-level tab has no window.parent to
+    // pin the source against, so learn-on-contact origin is the only check it can
+    // make — without it the handler would mutate capabilities and fire listeners
+    // for naklios:* messages from ANY origin (opener, child frame, injected page).
+    if (typeof msg.type === 'string' && msg.type.indexOf('naklios:') === 0) {
+      if (!trustedParentOrigin) trustedParentOrigin = e.origin;
+      else if (e.origin !== trustedParentOrigin) return;
+    }
     if (msg.type === 'naklios:theme') {
       currentTheme = { id: msg.theme, colors: msg.colors, mood: msg.mood };
       themeListeners.forEach(function (cb) {
@@ -1230,13 +1343,14 @@ a { color: var(--dr-accent); }
     } else if (msg.type === 'naklios:beforeclose') {
       var closeWork;
       try { closeWork = beforeCloseCb ? beforeCloseCb() : null; } catch (_) { closeWork = null; }
-      Promise.resolve(closeWork).catch(function () {}).then(function () {
+      Promise.all([Promise.resolve(closeWork).catch(function () {}), flushSavers(true)]).then(function () {
         send('naklios:beforeclose-ready', { requestId: msg.requestId });
       });
     } else if (msg.type === 'naklios:capabilities') {
       if (typeof msg.fs === 'boolean') capabilities.fs = msg.fs;
       if (Array.isArray(msg.fsBackends)) capabilities.fsBackends = msg.fsBackends;
       capabilities.fsBackend = typeof msg.fsBackend === 'string' ? msg.fsBackend : null;
+      capabilities.fsBoundedReads = msg.fsBoundedReads === true;
       capabilities.system = msg.system === true;
       capabilities.sysFs = msg.sysFs === true;
       if (typeof msg.ai === 'boolean') capabilities.ai = msg.ai;
@@ -1261,6 +1375,9 @@ a { color: var(--dr-accent); }
         ? msg.aiSearchState
         : 'idle';
       capabilities.aiSearch = msg.aiSearch === true;
+      capabilities.net = msg.net === true;
+      capabilities.netBackend = typeof msg.netBackend === 'string' ? msg.netBackend : null;
+      capabilities.review = msg.review === true;
       capListeners.forEach(function (cb) {
         try { cb(capabilities); } catch (_) {}
       });
@@ -1293,12 +1410,19 @@ a { color: var(--dr-accent); }
         aiRequest.deliver({
           id: msg.requestId,
           object: 'chat.completion.chunk',
-          model: msg.model || capabilities.aiModel || 'localmind',
+          // Who answered, where the OpenAI shape puts it. The host's fallback ladder can
+          // answer from an id other than the configured one; the done chunk is the only
+          // frame that knows, so it names the responder and the token chunks keep the
+          // configured entry.
+          model: msg.answeredModel || msg.model || capabilities.aiModel || 'localmind',
           choices: [{
             index: 0,
             delta: msg.toolCalls && msg.toolCalls.length ? { tool_calls: msg.toolCalls } : {},
             finish_reason: msg.finishReason || 'stop',
           }],
+          // The provider's token count, where the OpenAI shape puts it. An app that budgets
+          // on estimated characters cannot see tool schemas or the host's own preamble.
+          usage: msg.usage || null,
         });
         aiRequests.delete(msg.requestId);
         aiRequest.finish();
@@ -1353,8 +1477,39 @@ a { color: var(--dr-accent); }
       else fileOpenListeners.forEach(function (cb) {
         try { cb(grant); } catch (_) {}
       });
+    } else if (msg.type === 'naklios:review:commit' && msg.proposal_id) {
+      var reviewId = String(msg.proposal_id);
+      if (appliedReviewIds.has(reviewId)) {
+        send('naklios:review:applied', { proposal_id: reviewId, ok: true });
+      } else if (!reviewDecisionHandler) {
+        send('naklios:review:applied', { proposal_id: reviewId, ok: false, error: 'app has no review decision handler' });
+      } else {
+        var application = applyingReviewIds.get(reviewId);
+        if (!application) {
+          application = Promise.resolve().then(function () {
+            return reviewDecisionHandler({ type: 'commit', proposal_id: reviewId });
+          }).then(function (result) {
+            if (result && result.ok === false) throw new Error(result.reason || 'app refused the staged change');
+            appliedReviewIds.add(reviewId);
+          });
+          applyingReviewIds.set(reviewId, application);
+          application.then(function () { applyingReviewIds.delete(reviewId); }, function () { applyingReviewIds.delete(reviewId); });
+        }
+        application.then(function () {
+          send('naklios:review:applied', { proposal_id: reviewId, ok: true });
+        }).catch(function (error) {
+          send('naklios:review:applied', { proposal_id: reviewId, ok: false, error: String(error && error.message || error) });
+        });
+      }
+    } else if (msg.type === 'naklios:review:discard' && msg.proposal_id) {
+      if (reviewDecisionHandler) {
+        Promise.resolve().then(function () {
+          return reviewDecisionHandler({ type: 'discard', proposal_id: String(msg.proposal_id) });
+        }).catch(function () {});
+      }
     } else if ((msg.type === 'naklios:fs:reply' || msg.type === 'naklios:file:reply' ||
-                msg.type === 'naklios:rag:reply') && msg.requestId) {
+                msg.type === 'naklios:review:reply' ||
+                msg.type === 'naklios:rag:reply' || msg.type === 'naklios:net:reply') && msg.requestId) {
       var p = pendingRpc.get(msg.requestId);
       if (!p) return;
       pendingRpc.delete(msg.requestId);
@@ -1375,7 +1530,7 @@ a { color: var(--dr-accent); }
   });
 
   window.naklios = {
-    version: 1,
+    version: 2,
     capabilities: capabilities,   // mutated in place; read fields directly
     ready: function () {
       send('naklios:ready', {
@@ -1411,12 +1566,32 @@ a { color: var(--dr-accent); }
       return function () { capListeners.delete(cb); };
     },
     requestCapabilities: function () { send('naklios:capabilities-request'); },
+    review: {
+      // The host owns normalization and approval. A standalone app receives a
+      // clear fallback marker; its own caller performs the immediate write.
+      stage: function (tool, diff, options) {
+        if (!inNakliOS) return Promise.resolve({ standalone: true, proposal_id: null });
+        if (!capabilities.review) return Promise.reject(new Error('NakliOS review is unavailable'));
+        options = options || {};
+        return rpc('naklios:review:stage', {
+          tool: tool, diff: diff, expires: options.expires,
+          reversible: options.reversible === true,
+        });
+      },
+      onDecision: function (cb) {
+        if (typeof cb !== 'function') throw new Error('naklios.review.onDecision needs a callback');
+        reviewDecisionHandler = cb;
+        return function () { if (reviewDecisionHandler === cb) reviewDecisionHandler = null; };
+      },
+    },
     fs: {
+      get supportsBoundedReads() { return capabilities.fsBoundedReads === true; },
       // All paths are app-relative (under apps/<your-id>/ in the host folder).
       // Returns Promises. Reject if no folder connected, permission denied,
       // or path tries to traverse.
       read:       function (path)       { return rpc('naklios:fs:read', fsPayload({ path: path })); },
-      readBinary: function (path)       { return rpc('naklios:fs:readBinary', fsPayload({ path: path })); },
+      readBinary: function (path, options) { return rpc('naklios:fs:readBinary', fsPayload({ path: path, maxBytes: options && options.maxBytes })); },
+      stat:       function (path)       { return rpc('naklios:fs:stat', fsPayload({ path: path })); },
       write:      function (path, data) { return rpc('naklios:fs:write', fsPayload({ path: path, data: data })); },
       append:     function (path, line) { return rpc('naklios:fs:append', fsPayload({ path: path, line: line })); },
       list:       function (prefix)     { return rpc('naklios:fs:list', fsPayload({ prefix: prefix || '' })); },
@@ -1443,6 +1618,12 @@ a { color: var(--dr-accent); }
       // Explicit backend changes are always confirmed by the NakliOS host.
       // Switching changes the app-scoped view; it never copies or deletes data.
       useBackend: function (backend)    { return rpc('naklios:fs:selectBackend', { backend: backend }); },
+      // Autosave: the app says WHEN state changed (markDirty) and HOW to save it ({ save }); the SDK
+      // owns the timing — a throttled save, an immediate one when the page hides or the host closes
+      // the window, and a close guard only while something is unsaved. Returns
+      // { markDirty, flush, dirty, dispose }. { guard: false } keeps the timing but never holds a
+      // close (a background push, not the user's data). Runs standalone too. See docs/app-contract.md "Durability".
+      autosave: function (opts) { return makeAutosave(opts); },
     },
     // System-scoped filesystem — the WHOLE store on the active backend, not just
     // this app's apps/<id>/ namespace. Available to same-origin system apps only
@@ -1453,7 +1634,8 @@ a { color: var(--dr-accent); }
     sys: {
       fs: {
         read:       function (path)       { return rpc('naklios:sysfs:read', fsPayload({ path: path })); },
-        readBinary: function (path)       { return rpc('naklios:sysfs:readBinary', fsPayload({ path: path })); },
+        readBinary: function (path, options) { return rpc('naklios:sysfs:readBinary', fsPayload({ path: path, maxBytes: options && options.maxBytes })); },
+        stat:       function (path)       { return rpc('naklios:sysfs:stat', fsPayload({ path: path })); },
         write:      function (path, data) { return rpc('naklios:sysfs:write', fsPayload({ path: path, data: data })); },
         append:     function (path, line) { return rpc('naklios:sysfs:append', fsPayload({ path: path, line: line })); },
         list:       function (prefix)     { return rpc('naklios:sysfs:list', fsPayload({ prefix: prefix || '' })); },
@@ -1543,6 +1725,39 @@ a { color: var(--dr-accent); }
         aiImageRequests.forEach(function (_, requestId) {
           send('naklios:ai:cancel', { requestId: requestId });
         });
+      },
+    },
+
+    // Sovereign egress — a cross-origin HTTP request the browser's Same-Origin
+    // Policy blocks (git push, arbitrary-host fetch, no-CORS APIs). The host routes
+    // it to the user-configured backend (their own Worker or the local bridge); it
+    // is NEVER a naklios-hosted proxy. Grant-gated + History-logged host-side.
+    // This is the SDK seam: until a host advertises a backend (capabilities.net),
+    // every call fails fast with a typed ENOEGRESS — no 30s RPC timeout.
+    net: {
+      // Synchronous check an app can gate its UI on.
+      available: function () { return capabilities.net === true; },
+      // { backend: 'worker'|'bridge', roams } — no secrets; null when unavailable.
+      info: function () {
+        if (!inNakliOS || !capabilities.net) return Promise.resolve(null);
+        return rpc('naklios:net:info', {});
+      },
+      // fetch({ url, method, headers, body }) -> { status, statusText, headers, body }.
+      // Binary bodies as ArrayBuffer/Uint8Array; text as string. Buffered in v1.
+      fetch: function (req) {
+        req = req || {};
+        if (!req.url) return Promise.reject(mkEgressErr('EINVAL', 'net.fetch requires a url'));
+        if (!inNakliOS || !capabilities.net) {
+          return Promise.reject(mkEgressErr('ENOEGRESS', inNakliOS
+            ? 'No egress backend configured — connect one in NakliOS settings'
+            : 'Not hosted — naklios.net unavailable standalone'));
+        }
+        return rpc('naklios:net:fetch', {
+          url: String(req.url),
+          method: req.method || 'GET',
+          headers: req.headers || {},
+          body: req.body != null ? req.body : null,
+        }, req.timeoutMs);
       },
     },
   };
@@ -4068,7 +4283,7 @@ function createAdapter(mount) {
   // and footnote editing to the footnote card).
   // `onImportNotes(notes, {source})` lets the paste path itemise what it removed
   // in the same Import-notes card every other ingress reports through.
-  const handlers = { requestLink: null, requestFind: null, requestFootnote: null, requestRewrite: null, requestContinue: null, onImportNotes: null };
+  const handlers = { requestLink: null, requestFind: null, requestFootnote: null, requestRewrite: null, requestContinue: null, onImportNotes: null, onReviewStatus: null };
 
   // Sidecar staging review controls, late-bound after the view exists (like
   // `handlers`). The review keymap plugin and the public `staging` API both
@@ -4233,10 +4448,68 @@ function createAdapter(mount) {
   const updateListeners = new Set(); // fire on EVERY dispatch (selection too)
   let pendingMeta = null; // set around undo/redo/API dispatches
   let lastTxId = null; // txId of the most recent dispatch (null when step-less)
+  let lastReviewRequest = null; // hosted write result, resolved after the host queues it
+  const pendingHostReview = new Map();
+  let applyingHostReview = false;
+
+  function reviewDiff(tr) {
+    const before = view.state.doc.textBetween(0, view.state.doc.content.size, "\n");
+    const after = tr.doc.textBetween(0, tr.doc.content.size, "\n");
+    let delText = before, insText = after;
+    if (before !== after) {
+      let left = 0;
+      while (left < before.length && left < after.length && before[left] === after[left]) left++;
+      let right = 0;
+      while (right < before.length - left && right < after.length - left &&
+             before[before.length - 1 - right] === after[after.length - 1 - right]) right++;
+      delText = before.slice(left, before.length - right);
+      insText = after.slice(left, after.length - right);
+    } else {
+      // A formatting step leaves text unchanged. Show the affected slice with
+      // marks and attributes, not two copies of the entire document.
+      const starts = tr.steps.map(step => step.from).filter(Number.isInteger);
+      const ends = tr.steps.map(step => step.to).filter(Number.isInteger);
+      const from = starts.length ? Math.max(0, Math.min(...starts)) : 0;
+      const to = ends.length ? Math.max(...ends) : from;
+      const affected = doc => {
+        const start = Math.min(from, doc.content.size);
+        const end = Math.min(Math.max(start, to), doc.content.size);
+        return end > start ? doc.slice(start, end).toJSON() : doc.nodeAt(start)?.toJSON();
+      };
+      const before = affected(view.state.doc);
+      const after = affected(tr.doc);
+      delText = JSON.stringify(before ?? view.state.doc.toJSON());
+      insText = JSON.stringify(after ?? tr.doc.toJSON());
+    }
+    const kind = delText && insText ? "replace" : delText ? "delete" : "insert";
+    return {
+      docName: document.title || "Draft document",
+      from: tr.steps[0]?.from ?? 0,
+      to: tr.steps[0]?.to ?? 0,
+      hunks: [{ index: 0, kind, delText, insText }],
+    };
+  }
 
   function dispatchTagged(tr) {
     const actor = tr.getMeta("actor") || (pendingMeta && pendingMeta.actor) || "owner";
     const origin = tr.getMeta("origin") || (pendingMeta && pendingMeta.origin) || "ui";
+    if (tr.steps.length && !applyingHostReview && actor !== "replay" &&
+        window.naklios?.capabilities.review === true) {
+      const base = JSON.stringify(view.state.doc.toJSON());
+      const steps = tr.steps.map((step) => step.toJSON());
+      const diff = reviewDiff(tr);
+      lastTxId = null;
+      lastReviewRequest = window.naklios.review.stage("draft.transaction", diff, { reversible: true }).then(({ proposal_id }) => {
+        pendingHostReview.set(proposal_id, { base, steps, actor, origin });
+        handlers.onReviewStatus?.("Document change staged for review.");
+        return { staged: true, proposal_id };
+      }).catch((error) => {
+        handlers.onReviewStatus?.(`Review staging failed: ${error.message || error}`, true);
+        return { staged: false, error: String(error.message || error) };
+      });
+      return null;
+    }
+    lastReviewRequest = null;
     let txId = null;
     if (tr.steps.length) {
       // Growth cap: fold the log into a checkpoint of the CURRENT doc (the
@@ -4283,6 +4556,29 @@ function createAdapter(mount) {
     attributes: { role: "textbox", "aria-multiline": "true" },
   });
 
+  window.naklios?.review?.onDecision?.(async ({ type, proposal_id }) => {
+    const pending = pendingHostReview.get(proposal_id);
+    if (!pending) throw new Error("Draft has no pending transaction for this proposal");
+    if (type === "discard") {
+      pendingHostReview.delete(proposal_id);
+      handlers.onReviewStatus?.("Document change discarded.");
+      return;
+    }
+    if (type !== "commit") throw new Error("Unknown review decision");
+    if (JSON.stringify(view.state.doc.toJSON()) !== pending.base) {
+      throw new Error("Document changed after review staging");
+    }
+    let tr = view.state.tr;
+    for (const json of pending.steps) tr = tr.step(Step.fromJSON(schema, json));
+    tr.setMeta("actor", pending.actor).setMeta("origin", pending.origin);
+    applyingHostReview = true;
+    try { view.dispatch(tr); }
+    finally { applyingHostReview = false; }
+    pendingHostReview.delete(proposal_id);
+    handlers.onReviewStatus?.("Document change committed.");
+    return { ok: true };
+  });
+
   // Run an editor command, keeping focus on the page.
   function runCommand(cmd) {
     const ok = cmd(view.state, view.dispatch);
@@ -4306,7 +4602,7 @@ function createAdapter(mount) {
     } finally {
       pendingMeta = null;
     }
-    return lastTxId;
+    return lastReviewRequest || lastTxId;
   }
 
   const emptyStaging = { active: false, hunks: [], cursor: 0, from: 0, to: 0, oldText: "", mode: null };
@@ -4555,7 +4851,7 @@ function createAdapter(mount) {
       // The txId actually recorded by this dispatch — null for a step-less
       // transaction (forward-pass fix: this used to return the previous head,
       // implying a recorded transaction that does not exist).
-      return lastTxId;
+      return lastReviewRequest || lastTxId;
     },
 
     // Change subscription (autosave). fn({txId, actor, origin}); returns
@@ -4876,7 +5172,7 @@ function createAdapter(mount) {
       } finally {
         pendingMeta = null;
       }
-      return lastTxId;
+      return lastReviewRequest || lastTxId;
     },
 
     setTextSelection(from, to) {
@@ -7888,6 +8184,10 @@ document.documentElement.lang = getLocale();
 const statusLine = createStatusLine(document.getElementById("status"));
 const pageEl = document.getElementById("page");
 const ed = createAdapter(document.getElementById("editor"));
+ed.handlers.onReviewStatus = (message, isError = false) => {
+  statusLine.error(message);
+  if (!isError) setTimeout(() => { statusLine.clearError(); refreshStatus(); }, 2500);
+};
 
 let savedState = "not saved";
 let docTitle = "untitled";

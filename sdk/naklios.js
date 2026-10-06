@@ -113,6 +113,7 @@
     fsBackends: [],
     fsBackend: null,
     fsBoundedReads: false,
+    fsRangeReads: false,
     // system: this app is a same-origin system app (non-third-party).
     // sysFs: system-scoped filesystem is available — the whole store, not just
     // apps/<your-id>/. Only true for system apps with a connected backend.
@@ -137,6 +138,7 @@
     // browser blocks. Stays false until a host advertises one — the SDK seam.
     net: false,
     netBackend: null,
+    review: false,
   };
 
   // Request/reply correlation for fs RPCs
@@ -148,6 +150,33 @@
   var ragSearches = new Map();     // requestId → semantic-search progress callback
   var fileOpenListeners = new Set(); // exact-file grants delivered by the host
   var pendingFileGrants = [];
+  var fileEditListeners = new Set();
+  var pendingFileEdits = [];
+  var acceptedFileEdits = new Map();
+  var acceptingFileEdits = new Map();
+
+  function deliverFileEdit(proposal) {
+    var id=String(proposal.deliveryId||'');
+    var ack=function(){if(id)send('naklios:file:edit-ack',{token:proposal.token,deliveryId:id});};
+    if(id&&acceptedFileEdits.get(id)===proposal.token){ack();return;}
+    if(id&&acceptingFileEdits.has(id))return;
+    if(!fileEditListeners.size){
+      if(pendingFileEdits.length<16&&!pendingFileEdits.some(function(p){return p.token===proposal.token&&p.deliveryId===proposal.deliveryId;}))pendingFileEdits.push(proposal);
+      return;
+    }
+    var work=Promise.all(Array.from(fileEditListeners).map(function(cb){
+      try{return Promise.resolve(cb(proposal)).catch(function(){return false;});}catch(_){return Promise.resolve(false);}
+    })).then(function(results){
+      if(results.some(function(value){return value===true;})){
+        if(id){acceptedFileEdits.set(id,proposal.token);while(acceptedFileEdits.size>16)acceptedFileEdits.delete(acceptedFileEdits.keys().next().value);}
+        ack();
+      }
+    }).finally(function(){if(id)acceptingFileEdits.delete(id);});
+    if(id)acceptingFileEdits.set(id,work);
+  }
+  var reviewDecisionHandler = null;
+  var appliedReviewIds = new Set();
+  var applyingReviewIds = new Map();
 
   function send(type, data) {
     if (!inNakliOS) return;
@@ -299,6 +328,19 @@
   // prevents a delayed save from crossing Folder/Crate boundaries.
   function fsPayload(data) {
     return Object.assign({ backend: capabilities.fsBackend }, data || {});
+  }
+
+  function fsBinaryRead(type, path, options) {
+    var maxBytes = options && options.maxBytes, offset = options && options.offset;
+    if (offset !== undefined) {
+      var code = null, message = '';
+      if (!Number.isSafeInteger(offset) || offset < 0) { code = 'EINVAL'; message = 'offset must be a non-negative safe integer'; }
+      else if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) { code = 'EINVAL'; message = 'offset requires an explicit non-negative safe maxBytes'; }
+      else if (maxBytes > 16 * 1024 * 1024) { code = 'EFBIG'; message = 'range read exceeds the 16 MiB limit'; }
+      else if (capabilities.fsRangeReads !== true) { code = 'ENOTSUP'; message = 'host does not advertise bounded byte ranges'; }
+      if (code) { var error = new Error(code + ': ' + message); error.code = code; return Promise.reject(error); }
+    }
+    return rpc(type, fsPayload({ path: path, maxBytes: maxBytes, offset: offset }));
   }
 
   function makeAiStream(options) {
@@ -474,6 +516,7 @@
       if (Array.isArray(msg.fsBackends)) capabilities.fsBackends = msg.fsBackends;
       capabilities.fsBackend = typeof msg.fsBackend === 'string' ? msg.fsBackend : null;
       capabilities.fsBoundedReads = msg.fsBoundedReads === true;
+      capabilities.fsRangeReads = msg.fsRangeReads === true;
       capabilities.system = msg.system === true;
       capabilities.sysFs = msg.sysFs === true;
       if (typeof msg.ai === 'boolean') capabilities.ai = msg.ai;
@@ -500,6 +543,7 @@
       capabilities.aiSearch = msg.aiSearch === true;
       capabilities.net = msg.net === true;
       capabilities.netBackend = typeof msg.netBackend === 'string' ? msg.netBackend : null;
+      capabilities.review = msg.review === true;
       capListeners.forEach(function (cb) {
         try { cb(capabilities); } catch (_) {}
       });
@@ -593,13 +637,47 @@
         path: String(msg.grant.path || ''),
         sourceAppId: String(msg.grant.sourceAppId || ''),
         backend: String(msg.grant.backend || ''),
+        kind: String(msg.grant.kind || 'file'),
       };
       if (!grant.token) return;
       if (!fileOpenListeners.size) pendingFileGrants.push(grant);
       else fileOpenListeners.forEach(function (cb) {
         try { cb(grant); } catch (_) {}
       });
+    } else if (msg.type === 'naklios:file:edit-proposal' && msg.proposal) {
+      deliverFileEdit(msg.proposal);
+    } else if (msg.type === 'naklios:review:commit' && msg.proposal_id) {
+      var reviewId = String(msg.proposal_id);
+      if (appliedReviewIds.has(reviewId)) {
+        send('naklios:review:applied', { proposal_id: reviewId, ok: true });
+      } else if (!reviewDecisionHandler) {
+        send('naklios:review:applied', { proposal_id: reviewId, ok: false, error: 'app has no review decision handler' });
+      } else {
+        var application = applyingReviewIds.get(reviewId);
+        if (!application) {
+          application = Promise.resolve().then(function () {
+            return reviewDecisionHandler({ type: 'commit', proposal_id: reviewId });
+          }).then(function (result) {
+            if (result && result.ok === false) throw new Error(result.reason || 'app refused the staged change');
+            appliedReviewIds.add(reviewId);
+          });
+          applyingReviewIds.set(reviewId, application);
+          application.then(function () { applyingReviewIds.delete(reviewId); }, function () { applyingReviewIds.delete(reviewId); });
+        }
+        application.then(function () {
+          send('naklios:review:applied', { proposal_id: reviewId, ok: true });
+        }).catch(function (error) {
+          send('naklios:review:applied', { proposal_id: reviewId, ok: false, error: String(error && error.message || error) });
+        });
+      }
+    } else if (msg.type === 'naklios:review:discard' && msg.proposal_id) {
+      if (reviewDecisionHandler) {
+        Promise.resolve().then(function () {
+          return reviewDecisionHandler({ type: 'discard', proposal_id: String(msg.proposal_id) });
+        }).catch(function () {});
+      }
     } else if ((msg.type === 'naklios:fs:reply' || msg.type === 'naklios:file:reply' ||
+                msg.type === 'naklios:review:reply' ||
                 msg.type === 'naklios:rag:reply' || msg.type === 'naklios:net:reply') && msg.requestId) {
       var p = pendingRpc.get(msg.requestId);
       if (!p) return;
@@ -657,13 +735,31 @@
       return function () { capListeners.delete(cb); };
     },
     requestCapabilities: function () { send('naklios:capabilities-request'); },
+    review: {
+      // The host owns normalization and approval. A standalone app receives a
+      // clear fallback marker; its own caller performs the immediate write.
+      stage: function (tool, diff, options) {
+        if (!inNakliOS) return Promise.resolve({ standalone: true, proposal_id: null });
+        if (!capabilities.review) return Promise.reject(new Error('NakliOS review is unavailable'));
+        options = options || {};
+        return rpc('naklios:review:stage', {
+          tool: tool, diff: diff, expires: options.expires,
+          reversible: options.reversible === true,
+        });
+      },
+      onDecision: function (cb) {
+        if (typeof cb !== 'function') throw new Error('naklios.review.onDecision needs a callback');
+        reviewDecisionHandler = cb;
+        return function () { if (reviewDecisionHandler === cb) reviewDecisionHandler = null; };
+      },
+    },
     fs: {
       get supportsBoundedReads() { return capabilities.fsBoundedReads === true; },
       // All paths are app-relative (under apps/<your-id>/ in the host folder).
       // Returns Promises. Reject if no folder connected, permission denied,
       // or path tries to traverse.
       read:       function (path)       { return rpc('naklios:fs:read', fsPayload({ path: path })); },
-      readBinary: function (path, options) { return rpc('naklios:fs:readBinary', fsPayload({ path: path, maxBytes: options && options.maxBytes })); },
+      readBinary: function (path, options) { return fsBinaryRead('naklios:fs:readBinary', path, options); },
       stat:       function (path)       { return rpc('naklios:fs:stat', fsPayload({ path: path })); },
       write:      function (path, data) { return rpc('naklios:fs:write', fsPayload({ path: path, data: data })); },
       append:     function (path, line) { return rpc('naklios:fs:append', fsPayload({ path: path, line: line })); },
@@ -707,7 +803,7 @@
     sys: {
       fs: {
         read:       function (path)       { return rpc('naklios:sysfs:read', fsPayload({ path: path })); },
-        readBinary: function (path, options) { return rpc('naklios:sysfs:readBinary', fsPayload({ path: path, maxBytes: options && options.maxBytes })); },
+        readBinary: function (path, options) { return fsBinaryRead('naklios:sysfs:readBinary', path, options); },
         stat:       function (path)       { return rpc('naklios:sysfs:stat', fsPayload({ path: path })); },
         write:      function (path, data) { return rpc('naklios:sysfs:write', fsPayload({ path: path, data: data })); },
         append:     function (path, line) { return rpc('naklios:sysfs:append', fsPayload({ path: path, line: line })); },
@@ -717,6 +813,18 @@
       },
     },
     files: {
+      experimental_editInAnvil: function (request) {
+        return rpc('naklios:file:editInAnvil', { request: request });
+      },
+      experimental_proposeEdit: function (token, after, run) {
+        return rpc('naklios:file:proposeEdit', { token: String(token || ''), after: after, run: run });
+      },
+      experimental_onEditProposal: function (cb) {
+        if (typeof cb !== 'function') return function () {};
+        fileEditListeners.add(cb);
+        pendingFileEdits.splice(0).forEach(deliverFileEdit);
+        return function () { fileEditListeners.delete(cb); };
+      },
       // Ask NakliOS to open one app-relative file in another cooperative app.
       // The target gets a window-lifetime token for exactly that file; it does
       // not receive the source app's namespace or a Folder/Crate credential.
