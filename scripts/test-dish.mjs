@@ -65,6 +65,7 @@ test('Dish ships a pinned image, shared broker provider and declared host routin
   assert.match(html, /AI_HOST_AGENT_APPS = new Set\(\['anvil', 'forge', 'dish'\]\)/);
   assert.match(fs.readFileSync(new URL('../apps/dish/profile.yml', import.meta.url),'utf8'), /provider: naklios\n\s+model: shared/);
   const profile = fs.readFileSync(new URL('../apps/dish/profile.yml', import.meta.url),'utf8');
+  assert.match(profile, /documentsDirectory: \/dsh\/workspace/);
   for (const id of ['llm-deepseek', 'deepseek-account', 'product-analytics', 'session-telemetry-otel', 'web-search-deepseek', 'ui-settings-account', 'account-controller']) assert.ok(!profile.includes(`id: ${id}\n`));
   assert.ok(fs.statSync(new URL('../apps/dish/preview/vfs-image.tar.gz', import.meta.url)).size > 0);
 });

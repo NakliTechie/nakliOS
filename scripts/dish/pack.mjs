@@ -15,6 +15,7 @@ function curate(entries) {
   return entries.filter(row => !excluded.test(row.id || '')).map(row => {
     if (Array.isArray(row.config)) row.config = curate(row.config);
     if (row.id === 'agent-default-model') row.config = { provider: 'naklios', model: 'shared' };
+    if (row.id === 'workspace-controller') row.config = { ...row.config, documentsDirectory: '/dsh/workspace' };
     return row;
   });
 }

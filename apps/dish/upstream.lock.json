@@ -8,8 +8,8 @@
       "sha256": "ebb4f09972aee8608be255debaf78451a68e95c290f55c240dec2ecfa16ea6be"
     },
     "README.md": {
-      "bytes": 3976,
-      "sha256": "0d1f368224d7a6394319ef21b61a2a134f397a68b5e166016161b76917615f4f"
+      "bytes": 4127,
+      "sha256": "d7c77552cc550a7dd9bfe7b1353c88b858d802a868064836fdf482bd251da519"
     },
     "assets/c-D24wO31W.js": {
       "bytes": 63,
@@ -860,8 +860,8 @@
       "sha256": "cf11cd89a41d686ba107072c7898ae8edb2e95598bc4423b75c983f29777b4b2"
     },
     "preview/vfs-image.tar.gz": {
-      "bytes": 14279620,
-      "sha256": "ce023431cc6cd7df238b029c4bdbbb3ea619eadac414200747ea668df3bebb10"
+      "bytes": 14279634,
+      "sha256": "4fe82f7178878552470c55bfaa4baf4e5e035d3b44b5f8bbfc12f60cce7be880"
     },
     "preview/worker-747Rweeo.js": {
       "bytes": 291739,
@@ -872,8 +872,8 @@
       "sha256": "26aadc8e586a9e3ad92224b4fb80dd61acf7aa19ebcec35b45e5c2153e1d254c"
     },
     "profile.yml": {
-      "bytes": 44091,
-      "sha256": "9ecf216e32e0b03fd80c58c9fef34155e2d790be478435b876f23cff04945e12"
+      "bytes": 44140,
+      "sha256": "baee1b28d47acba63892ec6600021ed25329856516eb36b3cfa9ddd42202a4da"
     },
     "storage.mjs": {
       "bytes": 3147,

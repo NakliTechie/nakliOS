@@ -386,6 +386,8 @@
   name: '@deepseek-ai/dsh-api-settings-controller'
 - id: workspace-controller
   name: '@deepseek-ai/dsh-api-workspace-controller'
+  config:
+    documentsDirectory: /dsh/workspace
 - id: cordis-host-runner
   name: '@deepseek-ai/dsh-cordis-host-runner'
 - id: cordis-inspect-providers

@@ -13,6 +13,8 @@ It uses the app's selected Folder or Crate backend when NakliOS advertises files
 Otherwise, it uses this browser's IndexedDB.
 A missing host handshake refuses startup instead of opening a different library.
 Each snapshot preserves mutable `home/` and `workspace/` files, binary bytes, directories, and file permissions.
+The default workspace lives under `/dsh/workspace/deepseek-harness/` inside the Worker VFS.
+The profile bypasses native OS Documents-directory lookup.
 The host stores snapshots at `apps/dish/vfs.json` on the selected backend.
 Autosave uses the canonical NakliOS SDK's timing, dirty guard, and close barrier.
 VFS writes complete in memory; autosave commits the snapshot asynchronously.
