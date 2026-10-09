@@ -81,6 +81,20 @@ test('shipped artifact hashes match the immutable provenance record', () => {
   }
 });
 
+test('pack retains valid client bundles and debugger names after minification', () => {
+  const root = new URL('../apps/dish/', import.meta.url);
+  const metrics = JSON.parse(fs.readFileSync(new URL('build-metrics.json', root)));
+  assert.ok(metrics.clientBundles.length > 0);
+  assert.ok(metrics.clientOutputBytes < metrics.clientInputBytes);
+  const image = new URL('preview/vfs-image.tar.gz', root).pathname;
+  assert.equal(fs.statSync(image).size, metrics.imageBytes);
+  for (const name of metrics.clientBundles) {
+    const code = execFileSync('tar', ['-xOf', image, name], { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
+    assert.match(code, /\/\/# sourceURL=\S+\s*$/);
+    assert.doesNotThrow(() => new vm.Script(code, { filename: name }));
+  }
+});
+
 test('DSH developer context retains its role through the shared agent broker', () => {
   const request = toChatRequest({ messages: [
     { role: 'system', content: [{ type: 'text', text: 'system instructions' }] },
