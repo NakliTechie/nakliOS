@@ -52,7 +52,8 @@ It builds upstream host/client libraries, the Worker, and the web UI.
 It packs the curated profile and writes artifact hashes.
 The pack step removes page bundles belonging exclusively to excluded profile plugins.
 It minifies retained client bundles with upstream's pinned esbuild.
-It preserves reflected function names, license comments, and debugger paths.
+It preserves identifiers, function names, license comments, and debugger paths.
+Identifier renaming breaks upstream settings initialization despite `keepNames`.
 `build-metrics.json` records the minifier version, bundle roster, and byte counts.
 Use a fresh extraction for each rebuild.
 

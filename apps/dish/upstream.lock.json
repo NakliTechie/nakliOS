@@ -8,8 +8,8 @@
       "sha256": "ebb4f09972aee8608be255debaf78451a68e95c290f55c240dec2ecfa16ea6be"
     },
     "README.md": {
-      "bytes": 4441,
-      "sha256": "c92f8ee5c2810428e2ea9248cc01431920e7cdcf60737f7192eb951e75934bab"
+      "bytes": 4525,
+      "sha256": "45d8d2ef8d06f5bc8be9930d9eef186f708c46d207d551b8ae0ce3a356842f3c"
     },
     "assets/c-D24wO31W.js": {
       "bytes": 63,
@@ -829,7 +829,7 @@
     },
     "build-metrics.json": {
       "bytes": 5583,
-      "sha256": "3658b51e6fa8c29c548bc3305f33a1311b0f6d207b09b3c82e91f7debca3ac3a"
+      "sha256": "0f4a954fbc8dbbdaacf1530f6ab8758fe52c25f7a85e45acdafa7503be34de73"
     },
     "favicon-dark.svg": {
       "bytes": 3634,
@@ -864,8 +864,8 @@
       "sha256": "cf11cd89a41d686ba107072c7898ae8edb2e95598bc4423b75c983f29777b4b2"
     },
     "preview/vfs-image.tar.gz": {
-      "bytes": 9705413,
-      "sha256": "ba1c823d36b42219a614cb827873d25db95ec71497c04ad1c898f053fb4b0c5b"
+      "bytes": 9906469,
+      "sha256": "7da5bdeb1540c019a7b22f881cf52820bc96beeb68fea1d99d335c350d490ac6"
     },
     "preview/worker-747Rweeo.js": {
       "bytes": 291739,

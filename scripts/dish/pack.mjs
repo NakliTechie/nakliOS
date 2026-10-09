@@ -54,7 +54,8 @@ for (const name of clientBundles) {
   if (!debuggerName) throw new Error(`Missing client debugger name: ${name}`);
   const { code } = esbuild.transformSync(original, {
     loader: 'js', minifyWhitespace: true, minifySyntax: true,
-    minifyIdentifiers: true, keepNames: true, legalComments: 'eof',
+    // Settings bundles reflect lexical binding names beyond Function.name.
+    minifyIdentifiers: false, keepNames: true, legalComments: 'eof',
     target: 'esnext', sourcefile: name,
   });
   files[name] = new TextEncoder().encode(`${code}\n//# sourceURL=${debuggerName}\n`);
