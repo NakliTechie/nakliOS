@@ -209,13 +209,13 @@
       "id": "kanzen",
       "repo": "NakliTechie/KanZen",
       "requestedRef": "main",
-      "resolvedCommit": "202bc784f2ea8823cf79af731259dae89dc09a28",
+      "resolvedCommit": "15055a5e2a4a4803f35ad47e27d6347e15f95044",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "e1a019ee4f8039dda7d7ffa8d768aa06b235acc0210730c776910d60c350d1dc",
-          "bytes": 421980
+          "sha256": "65b1e1ea9edbc667ff26b969b2625b6607dc360329c9846e3c8f8368bae372f6",
+          "bytes": 424963
         }
       ]
     },
@@ -223,13 +223,13 @@
       "id": "menagerie",
       "repo": "NakliTechie/menagerie",
       "requestedRef": "main",
-      "resolvedCommit": "6a46bee8f30798461c96880010bbb071c579c045",
+      "resolvedCommit": "a33b88501cd8ca507657d09062b64522cb06cf4b",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "63071d42ae69b12bda679ac49ebf780d73fc4ace5055c5522246d5d4a4a9af0c",
-          "bytes": 272299
+          "sha256": "ba9f6e9969a327b9de5be8aa27b7a05d58182114be08d916d0a0257bc864b49e",
+          "bytes": 278501
         },
         {
           "source": "manifest.webmanifest",
@@ -407,13 +407,13 @@
       "id": "nakliposter",
       "repo": "NakliTechie/NakliPoster",
       "requestedRef": "main",
-      "resolvedCommit": "97572e7a61da1a7e26f56f5a0bbc0b49828962ef",
+      "resolvedCommit": "a6b6a51e929f7cbf75edfc25b71f20bbf26dbe5c",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "4f10e943b3fa63f00bff324b89a224bba0d2bacadc0f894c7eba8b2d67e64a73",
-          "bytes": 315343
+          "sha256": "13edda6d48992630ad0197258e495fee8ee92559d4806dd13699ff7ade6f43af",
+          "bytes": 321545
         },
         {
           "source": "LICENSE",
@@ -543,13 +543,13 @@
       "id": "tijori",
       "repo": "NakliTechie/Tijori",
       "requestedRef": "main",
-      "resolvedCommit": "57a3c0319b6f712cdcf0d8dedc35f5788a88738b",
+      "resolvedCommit": "b23ccc918bb15d60c99cabb133079dc4305ae893",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "7ecbde4275a51af3c84b0a980b5f8ac130193b587b12d36fd5425599642a454e",
-          "bytes": 575555
+          "sha256": "dd109cd84fdf9fc4141b647fccbf4f61aeab06beb706ea56b3718094f1a654d3",
+          "bytes": 581757
         }
       ]
     },
@@ -557,13 +557,13 @@
       "id": "vaultmind",
       "repo": "NakliTechie/VaultMind",
       "requestedRef": "main",
-      "resolvedCommit": "17253ee1911148b2834a1edc641b6c5beb4ac4de",
+      "resolvedCommit": "f7bfaa3df867f2787f4e561313b1121ed0b3918e",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "b17d904610376ce0f962d58ebd1f197236929d7821711f4c05795acd72d27595",
-          "bytes": 375630
+          "sha256": "75c457fd6a77821f4b362ab7f2735d2799156ad01e7889f77d8e20093b576870",
+          "bytes": 381832
         },
         {
           "source": "LICENSE",
