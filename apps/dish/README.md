@@ -50,8 +50,9 @@ Run `bash scripts/build-dish.sh /path/to/extracted-upstream` from NakliOS.
 The script verifies source inputs before applying the integration.
 It builds upstream host/client libraries, the Worker, and the web UI.
 It packs the curated profile and writes artifact hashes.
-The pack step minifies client bundle syntax and whitespace with upstream's pinned esbuild.
-It preserves identifiers, function names, license comments, and debugger paths.
+The pack step removes page bundles belonging exclusively to excluded profile plugins.
+It minifies retained client bundles with upstream's pinned esbuild.
+It preserves reflected function names, license comments, and debugger paths.
 `build-metrics.json` records the minifier version, bundle roster, and byte counts.
 Use a fresh extraction for each rebuild.
 

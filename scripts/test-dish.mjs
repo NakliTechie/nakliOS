@@ -88,6 +88,11 @@ test('pack retains valid client bundles and debugger names after minification', 
   assert.ok(metrics.clientOutputBytes < metrics.clientInputBytes);
   const image = new URL('preview/vfs-image.tar.gz', root).pathname;
   assert.equal(fs.statSync(image).size, metrics.imageBytes);
+  const archivePaths = execFileSync('tar', ['-tzf', image], { encoding: 'utf8' }).split('\n');
+  assert.ok(metrics.removedClientBundles.includes('node_modules/@deepseek-ai/dsh-client-ui-settings-account/lib/client.js'));
+  for (const name of metrics.removedClientBundles) assert.ok(!archivePaths.includes(name), name);
+  assert.ok(metrics.clientBundles.includes('node_modules/@deepseek-ai/dsh-client-ui-sidebar-documentpreview/lib/client.pdf.js'));
+  assert.ok(metrics.clientBundles.includes('node_modules/@deepseek-ai/dsh-client-ui-sidebar-documentpreview/lib/client.excel.js'));
   for (const name of metrics.clientBundles) {
     const code = execFileSync('tar', ['-xOf', image, name], { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
     assert.match(code, /\/\/# sourceURL=\S+\s*$/);

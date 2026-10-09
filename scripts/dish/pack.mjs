@@ -15,8 +15,13 @@ const { entryListSchema } = await import(pathToFileURL(path.join(source, 'vendor
 const { packVfsImage, composeProfile, configTrees, indexWorkspacePackages } = await import(pathToFileURL(path.join(source, 'packages/experimental/webworker-packer/lib/index.js')));
 const rows = yaml.load(composeProfile(source, 'web'), { schema: entryListSchema });
 const excluded = /(?:deepseek-llm-api-extensions|session-log-deepseek|plugin-package-inventory-deepseek|llm-deepseek(?:-account)?|desktop-product-telemetry|product-analytics|session-telemetry-otel|deepseek-account|llm-pi-ai|web-search-deepseek|ui-settings-account|account-controller)/;
+const removedPackages = new Set();
+const retainedPackages = new Set();
 function curate(entries) {
-  return entries.filter(row => !excluded.test(row.id || '')).map(row => {
+  return entries.filter(row => {
+    if (!excluded.test(row.id || '')) { retainedPackages.add(row.name); return true; }
+    removedPackages.add(row.name); return false;
+  }).map(row => {
     if (Array.isArray(row.config)) row.config = curate(row.config);
     if (row.id === 'agent-default-model') row.config = { provider: 'naklios', model: 'shared' };
     if (row.id === 'workspace-controller') row.config = { ...row.config, documentsDirectory: '/dsh/workspace' };
@@ -33,16 +38,23 @@ const workspaces = indexWorkspacePackages(source); workspaces.set('@naklios/dish
 const result = packVfsImage({ config: yaml.dump(config, { schema: entryListSchema }), profile: 'web', root: '/dsh', workspaces, resolveFrom: source, configTrees: configTrees(source) });
 if (result.missing.length) throw new Error(`Incomplete image: ${JSON.stringify(result.missing)}`);
 // Page bundles are outside the Worker's lowered-module contract. Reduce their
-// parse/transfer cost without changing identifiers or the plugin roster.
+// parse/transfer cost without changing the plugin roster or reflected names.
 const files = { ...result.files };
+// The upstream reachability sweep keeps every collected page asset, including
+// client-only plugins excluded from our profile. Remove only excluded page
+// bundles, preserving host modules and package licenses.
+const removedClientBundles = result.pageBundles.filter(name => [...removedPackages].some(pkg =>
+  !retainedPackages.has(pkg) && name.startsWith(`node_modules/${pkg}/`)));
+for (const name of removedClientBundles) delete files[name];
+const clientBundles = result.pageBundles.filter(name => !removedClientBundles.includes(name));
 let inputBytes = 0, outputBytes = 0;
-for (const name of result.pageBundles) {
+for (const name of clientBundles) {
   const original = new TextDecoder().decode(files[name]);
   const debuggerName = original.match(/\/\/# sourceURL=([^\r\n]+)\s*$/)?.[1];
   if (!debuggerName) throw new Error(`Missing client debugger name: ${name}`);
   const { code } = esbuild.transformSync(original, {
     loader: 'js', minifyWhitespace: true, minifySyntax: true,
-    minifyIdentifiers: false, keepNames: true, legalComments: 'eof',
+    minifyIdentifiers: true, keepNames: true, legalComments: 'eof',
     target: 'esnext', sourcefile: name,
   });
   files[name] = new TextEncoder().encode(`${code}\n//# sourceURL=${debuggerName}\n`);
@@ -54,7 +66,7 @@ fs.mkdirSync(path.join(output, 'preview'), { recursive: true });
 fs.writeFileSync(path.join(output, 'preview/vfs-image.tar.gz'), image);
 fs.writeFileSync(path.join(output, 'profile.yml'), yaml.dump(config, { schema: entryListSchema }));
 fs.writeFileSync(path.join(output, 'build-metrics.json'), JSON.stringify({
-  clientMinifier: `esbuild ${esbuild.version}`, clientBundles: result.pageBundles,
+  clientMinifier: `esbuild ${esbuild.version}`, clientBundles, removedClientBundles,
   clientInputBytes: inputBytes, clientOutputBytes: outputBytes, imageBytes: image.byteLength,
 }, null, 2)+'\n');
 console.log(`Dish image: ${image.byteLength} compressed bytes; client bundles ${inputBytes} → ${outputBytes} bytes`);
