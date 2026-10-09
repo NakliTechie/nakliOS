@@ -49,5 +49,6 @@ try{
   console.log(JSON.stringify({backend:'native Chrome fetch BYOB and authenticated Crate',providerCalls:0,...result}));
 }finally{
   clearTimeout(timer);if(browser?.pid&&browser.exitCode===null){const exited=new Promise(resolve=>browser.once('exit',resolve));browser.kill('SIGTERM');await exited}
-  await new Promise(resolve=>server.close(resolve));await rm(profile,{recursive:true,force:true});
+  // Chrome helpers can briefly retain profile entries after the main process exits.
+  await new Promise(resolve=>server.close(resolve));await rm(profile,{recursive:true,force:true,maxRetries:5,retryDelay:100});
 }
