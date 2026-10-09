@@ -75,3 +75,7 @@ Boot telemetry distinguishes the Worker handshake from the mounted client.
 `window.__dish.bootMs` measures navigation through client mounting and two animation frames.
 The host receives `ready` after this client milestone.
 These fields provide measurement hooks; they are not recorded browser results.
+`window.__dish.metrics` separates SDK handshake, restoration, Worker creation, and image fetch/inflation.
+Append `?dish-cold=1` to the app URL for a measurement with unique Worker/image URLs and a `no-store` image request.
+Also disable page caching when measuring cold page assets.
+Record service-worker control and actual resource transfer sizes before calling the run cold.

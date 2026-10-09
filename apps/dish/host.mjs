@@ -12,22 +12,28 @@ export async function startDish(WorkerClass, connect) {
   }
 }
 async function bootDish(WorkerClass, connect) {
+  const metrics = {};
+  const cold = new URLSearchParams(location.search).get('dish-cold') === '1';
   await new Promise((resolve, reject) => {
     const script = document.createElement('script'); script.src = SDK_URL;
     script.onload = resolve; script.onerror = () => reject(new Error('NakliOS SDK failed to load')); document.head.append(script);
   });
   const sdk = window.naklios;
+  metrics.sdkReadyMs = performance.now();
   const status = document.createElement('aside'); status.id = 'dish-status';
   status.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:10000;background:#17191d;color:#fff;padding:4px 10px;font:12px system-ui;';
   document.body.append(status);
   const say = text => { status.textContent = text; };
   say('Loading Dish…');
   if (window.parent !== window) await waitForCapabilities(sdk);
+  metrics.capabilitiesReadyMs = performance.now();
   const store = sdk.capabilities.fs ? hostStore(sdk) : browserStore();
   const snapshot = new Snapshot(await store.load());
+  metrics.storageRestoredMs = performance.now();
   const saver = sdk.fs.autosave({ save: () => store.save(snapshot.values()), delay: 400,
     onError: error => say(`Unsaved changes: ${error.message}. Reload only after saving succeeds.`) });
   const worker = new WorkerClass({ name: 'dish-host' });
+  metrics.workerCreatedMs = performance.now();
   worker.addEventListener('error', event => say(`Dish stopped: ${event.message}`));
   worker.addEventListener('messageerror', () => say('Dish received an unreadable Worker message'));
   const calls = new Map();
@@ -37,6 +43,7 @@ async function bootDish(WorkerClass, connect) {
     if (data?.t === 'dish-mutation') {
       try { snapshot.apply(data.change); saver.markDirty(); } catch (error) { say(error.message); }
     }
+    if (data?.t === 'dish-image-metrics') metrics.image = data.metrics;
     if (data?.t === 'dish-cancel') calls.get(data.id)?.abort();
     if (data?.t !== 'dish-inference') return;
     const abort = new AbortController(); calls.set(data.id, abort);
@@ -49,7 +56,7 @@ async function bootDish(WorkerClass, connect) {
   });
   // Intercept only the opening frame; retain the upstream tunnel and UI unchanged.
   const post = worker.postMessage.bind(worker);
-  worker.postMessage = (data, ...rest) => post(data?.t === 'init' ? { ...data, snapshot: snapshot.values() } : data, ...rest);
+  worker.postMessage = (data, ...rest) => post(data?.t === 'init' ? { ...data, coldBoot: cold, snapshot: snapshot.values() } : data, ...rest);
   sdk.beforeClose(async () => { await saver.flush(); worker.terminate(); });
   let bound = store.id;
   sdk.onCapabilitiesChange(cap => {
@@ -68,12 +75,14 @@ async function bootDish(WorkerClass, connect) {
   // Retain startup errors even when the HTTP handshake is still pending.
   void uiReady.catch(() => {});
   try {
-    await Promise.race([connect(worker, { image: 'preview/vfs-image.tar.gz' }), uiReady.then(() => new Promise(() => {}))]);
+    const image = new URL('preview/vfs-image.tar.gz', location.href);
+    if (cold) image.searchParams.set('dish-cold', crypto.randomUUID());
+    await Promise.race([connect(worker, { image: image.href }), uiReady.then(() => new Promise(() => {}))]);
     const workerBootMs = performance.now();
     await uiReady;
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     const bootMs = performance.now();
-    window.__dish = { bootMs, workerBootMs, worker, snapshot, flush: () => saver.flush(), store: store.id };
+    window.__dish = { bootMs, workerBootMs, metrics, cold, worker, snapshot, flush: () => saver.flush(), store: store.id };
     say(`Dish · ${store.id} storage · Plugins run with full trust. Worker shell supports browser commands only.`);
     sdk.title('Dish'); sdk.ready();
   } catch (error) { say(`Dish could not start: ${error.message}`); worker.terminate(); throw error; }

@@ -7,11 +7,24 @@ s = worker.read_text(); anchor = 'let host: { handleMessage(data: unknown): void
 assert anchor in s and '__dishInference' not in s
 s = s.replace(anchor, (here/'worker-bridge.txt').read_text()+'\n'+anchor)
 s = s.replace('    const created = createWorkerHost({', '    dishGlobal.__dishSnapshot = data.snapshot || [];\n    const created = createWorkerHost({')
+s = s.replace('    dishGlobal.__dishSnapshot = data.snapshot || [];', '    dishGlobal.__dishSnapshot = data.snapshot || [];\n    (globalThis as typeof globalThis & { __dishColdBoot?: boolean }).__dishColdBoot = data.coldBoot === true;')
 worker.write_text(s)
 host = source / 'packages/experimental/webworker-runtime/src/worker-host.ts'
 s = host.read_text(); anchor = '      setActiveVfs(mounted)'; assert anchor in s
 s = s.replace(anchor, (here/'vfs-bridge.txt').read_text()+'\n'+anchor)
 s = s.replace('mounted.seedFile(target,', 'mounted.seed(target,')
+s = s.replace('  const response = await fetch(image)', '''  const imageStart = performance.now()
+  const cold = (globalThis as typeof globalThis & { __dishColdBoot?: boolean }).__dishColdBoot === true
+  const response = await fetch(image, { cache: cold ? 'no-store' : 'default' })''')
+s = s.replace('  return await inflateImageStream(response.body, image)', '''  const bytes = await inflateImageStream(response.body, image)
+  const resource = performance.getEntriesByName(image).at(-1) as PerformanceResourceTiming | undefined
+  self.postMessage({ t: 'dish-image-metrics', metrics: {
+    cold, fetchAndInflateMs: performance.now() - imageStart, inflatedBytes: bytes.byteLength,
+    resource: resource ? { startTime: resource.startTime, duration: resource.duration,
+      transferSize: resource.transferSize, encodedBodySize: resource.encodedBodySize,
+      decodedBodySize: resource.decodedBodySize } : null,
+  } })
+  return bytes''')
 host.write_text(s)
 (source/'apps/web/src/preview.ts').write_text((here/'preview.ts').read_text())
 
