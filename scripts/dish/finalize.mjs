@@ -6,5 +6,5 @@ const page = path.join(root, 'index.html');
 let html = fs.readFileSync(page, 'utf8');
 const anchor = '<script type="module"';
 if (!html.includes(anchor)) throw new Error('Missing upstream bootstrap');
-html = html.replace(anchor, '<script>globalThis.__DSH_BOOT_READY__ = Promise.withResolvers();</script>\n    '+anchor);
+html = html.replace(anchor, '<script>globalThis.__DSH_BOOT_READY__ = Promise.withResolvers();</script>\n    <script defer src="../../sdk/naklios.js"></script>\n    '+anchor);
 fs.writeFileSync(page, html);

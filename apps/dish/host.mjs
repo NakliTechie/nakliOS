@@ -14,7 +14,7 @@ export async function startDish(WorkerClass, connect) {
 async function bootDish(WorkerClass, connect) {
   const metrics = {};
   const cold = new URLSearchParams(location.search).get('dish-cold') === '1';
-  await new Promise((resolve, reject) => {
+  if (!window.naklios) await new Promise((resolve, reject) => {
     const script = document.createElement('script'); script.src = SDK_URL;
     script.onload = resolve; script.onerror = () => reject(new Error('NakliOS SDK failed to load')); document.head.append(script);
   });

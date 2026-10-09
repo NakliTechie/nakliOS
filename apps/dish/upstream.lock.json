@@ -840,12 +840,12 @@
       "sha256": "9e983b4f649c25c6ca0623a50be1a6e705fd8f49f756638b980fa13b40575ab6"
     },
     "host.mjs": {
-      "bytes": 5465,
-      "sha256": "d16d51ef44da5295a13d00d3caeefc1335cc3cf65ae9e39a86c90d551f8e9770"
+      "bytes": 5486,
+      "sha256": "90f73b2379c8fd609456ca5103addcd14e1c5807ceb9adac9003e86215b400c9"
     },
     "index.html": {
-      "bytes": 1146,
-      "sha256": "4bde0f982975af0726f75db53b20caf52cd55b63ffeba9b72ed62de25b928507"
+      "bytes": 1201,
+      "sha256": "ccea3b03e2f21fd328defd1e19da82108d65f79a9877fa88e7bbad6ac4a42adb"
     },
     "lifecycle.mjs": {
       "bytes": 650,
