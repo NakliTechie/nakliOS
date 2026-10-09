@@ -265,3 +265,15 @@ if (failures.length) {
   process.exit(1);
 }
 console.log(`sys/ai/agent-protocol conformance: ${passed}/${passed} passed`);
+
+await test('developer instructions retain their role through agent normalization', () => {
+  deep(normaliseAgentMessages([
+    { role: 'system', content: 'System instructions' },
+    { role: 'developer', content: 'Workspace instructions' },
+    { role: 'user', content: 'Task' },
+  ]), [
+    { role: 'system', content: 'System instructions' },
+    { role: 'developer', content: 'Workspace instructions' },
+    { role: 'user', content: 'Task' },
+  ], 'developer role survives');
+});

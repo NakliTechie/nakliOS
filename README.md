@@ -25,7 +25,7 @@ cd nakliOS
 node scripts/serve-coi.mjs
 ```
 
-Open `http://127.0.0.1:8947/`; the server supplies the headers needed by Forge and Anvil.
+Open `http://127.0.0.1:8947/`; the server supplies the headers needed by Forge, Anvil, and Dish.
 If a Books checkout sits beside NakliOS, the server serves it at `/Books/` for
 Lorewell's local embed. It also finds that checkout from a NakliOS worktree under
 `.worktrees/`. Use `--books-root /path/to/Books` for another location.
@@ -58,6 +58,12 @@ Anvil applies hooks, permission rules, protected paths, and file grants around s
 Its executor accepts staged operations internally and records confirmation receipts.
 Stop cancels pending work; an already accepted operation can finish.
 The [Kothri handoff](docs/kothri-unix-handoff.md) pins the reusable core; Kothri packaging and public APIs remain future work.
+
+## Dish
+
+Dish hosts the pinned DeepSeek Harness browser Worker beside Anvil.
+It uses NakliOS shared inference and the selected storage backend.
+The [Dish reference](apps/dish/README.md) describes persistence, runtime limits, and reproducible packaging.
 
 ## Add your own tools
 

@@ -1,0 +1,32 @@
+// Dish's page owns credentials and durable storage; this Worker owns the VFS.
+interface DishCall {
+  resolve(value: unknown): void
+  reject(error: Error): void
+  dispose(): void
+}
+const dishCalls = new Map<number, DishCall>();
+let dishCallId = 0;
+const dishGlobal = globalThis as typeof globalThis & {
+  __dishSnapshot?: unknown
+  __dishInference?: (request: unknown, signal?: AbortSignal) => Promise<unknown>
+};
+dishGlobal.__dishInference = (request: unknown, signal?: AbortSignal) => new Promise((resolve, reject) => {
+  const id = ++dishCallId;
+  let timer: ReturnType<typeof setTimeout>;
+  const dispose = () => { clearTimeout(timer); signal?.removeEventListener('abort', abort); };
+  const abort = () => { self.postMessage({ t: 'dish-cancel', id }); dishCalls.delete(id); dispose(); reject(new Error('Inference cancelled')); };
+  if (signal?.aborted) { reject(new Error('Inference cancelled')); return; }
+  signal?.addEventListener('abort', abort, { once: true });
+  timer = setTimeout(() => { abort(); }, 180000);
+  dishCalls.set(id, { resolve, reject, dispose });
+  self.postMessage({ t: 'dish-inference', id, request });
+});
+self.addEventListener('message', event => {
+  const data = event.data;
+  if (data?.t !== 'dish-inference-result') return;
+  event.stopImmediatePropagation();
+  const call = dishCalls.get(data.id);
+  if (!call) return;
+  dishCalls.delete(data.id); call.dispose();
+  if (data.error) call.reject(new Error(data.error)); else call.resolve(data.result);
+});

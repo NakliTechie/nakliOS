@@ -201,6 +201,9 @@ model/provider may change while the app is open.
 
 ## AI
 
+System-app agent requests preserve system, developer, user, assistant, and tool message roles.
+Developer context retains its instruction role when sent to an endpoint.
+
 NakliOS owns one shared inference broker. The user may select a vendored
 LocalMind browser model or a configured OpenAI-compatible endpoint. Apps receive
 a streamed text completion API, not the worker, model memory, endpoint URL or

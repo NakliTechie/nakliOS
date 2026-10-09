@@ -1590,6 +1590,11 @@ const APPS = [
     description:'A bash-style terminal over your files and git, in the browser — the shell for the coming on-device coding agent. Runs on Rig; nothing leaves your device.',
     tags:['tool','developer','terminal','shell','code'],
     svg:`<polyline points="4 8 8 12 4 16"/><line x1="11" y1="16" x2="20" y2="16"/>` },
+  { id:'dish', name:'Dish', kind:'system',
+    url:'./apps/dish/', embedUrl:'./apps/dish/', glyph:'◇', bg:'brand',
+    description:'DeepSeek Harness in a browser Worker, with NakliOS shared inference and persistent workspace storage.',
+    tags:['tool','developer','agent','code'],
+    svg:`<path d="M3 5h18v14H3z"/><path d="m7 9 3 3-3 3M13 15h4"/>` },
   { id:'anvil', name:'Anvil', kind:'system',
     url:'./apps/anvil/',
     embedUrl:'./apps/anvil/',
@@ -5745,7 +5750,7 @@ const aiNano = { checked:false, available:false, downloadable:false };
 // Apps that consume the HOST agent tier (tool-calling coding). They report their
 // configured model and their agent requests never touch Nano. Apps with their
 // own agent stacks are migrated onto this split one at a time.
-const AI_HOST_AGENT_APPS = new Set(['anvil', 'forge']);
+const AI_HOST_AGENT_APPS = new Set(['anvil', 'forge', 'dish']);
 function aiOnDeviceApi(){
   return (typeof self !== 'undefined' && 'LanguageModel' in self) ? self.LanguageModel : null;
 }

@@ -1,0 +1,1 @@
+import{t as e}from"./langs/graphql-CIOO_Y-t.js";export{e as default};

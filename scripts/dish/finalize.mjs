@@ -1,0 +1,10 @@
+import fs from 'node:fs';
+import path from 'node:path';
+const root = process.env.DISH_OUTPUT_ROOT;
+if (!root) throw new Error('DISH_OUTPUT_ROOT is required');
+const page = path.join(root, 'index.html');
+let html = fs.readFileSync(page, 'utf8');
+const anchor = '<script type="module"';
+if (!html.includes(anchor)) throw new Error('Missing upstream bootstrap');
+html = html.replace(anchor, '<script>globalThis.__DSH_BOOT_READY__ = Promise.withResolvers();</script>\n    '+anchor);
+fs.writeFileSync(page, html);

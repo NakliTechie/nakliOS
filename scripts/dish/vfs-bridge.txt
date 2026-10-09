@@ -1,0 +1,15 @@
+      // Restore only mutable data. Never let persistence replace executable modules.
+      const saved = (globalThis as typeof globalThis & {
+        __dishSnapshot?: readonly { path: string; directory?: boolean; bytes?: number[]; mode?: number }[]
+      }).__dishSnapshot || [];
+      for (const entry of saved) {
+        if (!/^(home|workspace)(\/|$)/.test(entry.path) || entry.path.split('/').some((part: string) => !part || part === '.' || part === '..')) throw new Error('Invalid Dish snapshot path');
+        const target = join(root, entry.path);
+        if (entry.directory) mounted.seedDirectory(target);
+        else { mounted.seedDirectory(dirname(target)); mounted.seed(target, new Uint8Array(entry.bytes || []), entry.mode === undefined ? {} : { mode: entry.mode }); }
+      }
+      mounted.subscribe(change => {
+        const relative = change.path.slice(root.length + 1);
+        if (!change.path.startsWith(root + '/') || !/^(home|workspace)(\/|$)/.test(relative)) return;
+        self.postMessage({ t: 'dish-mutation', change: { ...change, path: relative } });
+      });

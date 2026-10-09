@@ -29,7 +29,7 @@ export const AGENT_LIMITS = Object.freeze({
   minOutputTokens: 16,
 });
 
-const CHAT_ROLES = new Set(['system', 'user', 'assistant', 'tool']);
+const CHAT_ROLES = new Set(['system', 'developer', 'user', 'assistant', 'tool']);
 
 // One assistant tool-call entry: { id, type:'function', function:{ name, arguments } }.
 // `arguments` is a JSON *string* on the wire (OpenAI contract), never a parsed object.
@@ -50,7 +50,7 @@ function normaliseToolCall(call, where) {
   return out;
 }
 
-// Validate + normalise an agent transcript. Admits the `tool` role and assistant
+// Validate + normalise an agent transcript. Preserves `developer`, admits `tool` and assistant
 // `tool_calls` that narrow chat rejects; still caps count and total size. Returns
 // a fresh array of clean messages (never mutates the input).
 export function normaliseAgentMessages(messages, limits = AGENT_LIMITS) {

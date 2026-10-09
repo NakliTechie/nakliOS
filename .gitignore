@@ -22,6 +22,8 @@ plan/
 !sys/**
 !scripts/
 !scripts/*
+!scripts/dish/
+!scripts/dish/**
 !scripts/fixtures/anvil-A04/
 !scripts/fixtures/anvil-A04/**
 !scripts/autoharness/

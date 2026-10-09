@@ -1,0 +1,19 @@
+{
+  "commit": "5badb15009ae1756c3afe0ae0cef1faafc290ccc",
+  "archiveSha256": "f5c56da879e9b43f86a3208ba4918ae2c22957c5cf6dfd1c51edc7f28674cccd",
+  "files": {
+    "apps/web/product-isolation.ts": "ac0c91c4aea898a82315422ceb9fdc35b15da3c04686c8b523a5a95e855115c4",
+    "apps/web/src/preview.ts": "6fb2d673b3e66b280d3e6f3d678e65545ccce02fd2672a5acdf8e4f3c3543c31",
+    "apps/web/vite.config.ts": "8695c0cac4ca489211fc3eed751b577ba0a557d8151b81a29cb9898e20c30292",
+    "package.json": "8c8687cb72ce8ce0e959cd97144fe34a52f4bbf1de18366bf2b532eba259764b",
+    "packages/experimental/webworker-packer/src/pack.ts": "9bb61e6fd09d4b03814749741616b77d99c1634dbc261b78acd446fdcd3e416b",
+    "packages/experimental/webworker-packer/src/repository.ts": "008062ea78a0e9e50057b994435b45d69e40dde3385ca783f0d697224688067d",
+    "packages/experimental/webworker-runtime/src/worker-host.ts": "48761e832eb3e343da7263dfe31b0bc15eb7a8e3deeb921c2573a268b36c65a5",
+    "packages/experimental/webworker-runtime/src/worker.ts": "b4116cea01186ad20f81e883679560ac7df9ad5a029d9d5393eb12a881968a60",
+    "packages/experimental/webworker-runtime/tsdown.config.ts": "bbffcd7b9cee527354f6c90dc41bb67ed37984329d4ccef781d028ba237dbda6",
+    "pnpm-lock.yaml": "2893d71a9ef07d2d72d47b2199e581b9e8d90638a15ee151908eebf69dfc637c",
+    "scripts/web-product-bundle-isolation.ts": "5da8c2d324c1167cc001b39e56d2002e58d55882db909f18b45ea3df50d82a1f",
+    "tsdown.config.ts": "45f6dc369ec7e1ca3db7b625a13840a9e0b6942dc9ceb0643c14ce3e6f62b65d",
+    "apps/web/src/main.ts": "fde2d8134e55b2f463c19453e255bb64fda2e46380ff405b6a6d27f1398e208c"
+  }
+}

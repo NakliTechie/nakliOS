@@ -45,7 +45,7 @@ if (booksOverride && !BOOKS_ROOT) throw new Error('--books-root needs a Books di
 const BOOKS_MOUNT = !booksOverride && fs.existsSync(path.join(ROOT, 'Books', 'index.html')) ? null : BOOKS_ROOT;
 
 // Prefixes that get cross-origin isolation, mirroring `_headers`.
-const COI_PREFIXES = ['/apps/forge/', '/apps/anvil/'];
+const COI_PREFIXES = ['/apps/forge/', '/apps/anvil/', '/apps/dish/'];
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
