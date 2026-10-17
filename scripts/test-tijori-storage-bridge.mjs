@@ -53,6 +53,7 @@ const childWindow = {
 };
 vm.runInNewContext(sdk, {
   window: childWindow,
+  URL,
   Set,
   Map,
   Promise,
@@ -64,7 +65,7 @@ vm.runInNewContext(sdk, {
 });
 
 // SDK v2 only honours messages whose source is window.parent and whose origin
-// matches the origin learned on first contact — deliver them the way a real host does.
+// passes the independent host-origin policy — deliver them the way a real host does.
 const HOST_ORIGIN = 'https://naklios.dev';
 const fromHost = (data) => messageListener({ source: childWindow.parent, origin: HOST_ORIGIN, data });
 

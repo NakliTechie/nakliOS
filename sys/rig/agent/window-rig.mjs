@@ -71,7 +71,7 @@ export function wireWindowRig({ getFace, target = window, container = target.doc
       for (const action of ['Accept', 'Reject']) {
         const button = doc.createElement('button'); button.textContent = action;
         button.addEventListener('click', async event => {
-          if (!event.isTrusted || !toggle.checked || current() !== ownerFace) return;
+          if (!event.isTrusted || !toggle.checked || getFace() !== ownerFace) return;
           button.disabled = true;
           try {
             const result = action === 'Accept' ? await ownerFace.accept(id) : ownerFace.reject(id);

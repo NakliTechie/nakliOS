@@ -95,6 +95,9 @@ const target={};installWindowRig({target,enabled:false,face});assert.equal(targe
 installWindowRig({target,enabled:true,face});assert.equal(target.rig.accept,undefined,'operator approval is not on the agent surface');
 const input={path:'keep.txt'};const proposal=await target.rig.invoke('fs.remove',input);
 assert.equal(proposal.staged,true);input.path='other.txt';
+proposal.input.path='other.txt';
+const displayed=face.proposal(proposal.proposalId);displayed.input.path='other.txt';
+assert.equal(face.proposal(proposal.proposalId).input.path,'keep.txt','returned proposals and review details cannot mutate staged authority');
 assert.equal((await fs.stat('keep.txt')).ok,true,'staging does not delete');
 assert.equal((await target.rig.invoke('accept',{id:proposal.proposalId})).ok,false,'approval cannot be invoked as a command');
 await face.accept(proposal.proposalId);

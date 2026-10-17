@@ -103,15 +103,15 @@ const parent={postMessage(msg,origin){
   if(!msg.requestId)return;
   messages.push({type:msg.type,path:msg.path,offset:msg.offset,maxBytes:msg.maxBytes,backend:msg.backend,origin});
   const result=oldHost?bytes.slice(0,8):bytes.slice(msg.offset||0,(msg.offset||0)+(msg.maxBytes??64));
-  listeners.get('message')({source:parent,origin:'http://host.test',data:{type:'naklios:fs:reply',requestId:msg.requestId,result}});
+  listeners.get('message')({source:parent,origin:'https://naklios.dev',data:{type:'naklios:fs:reply',requestId:msg.requestId,result}});
 }};
 win={parent,addEventListener:(type,cb)=>listeners.set(type,cb),removeEventListener(){},
-  location:{search:'?naklios',href:'http://host.test/apps/editor/',origin:'http://host.test'},
+  location:{search:'?naklios',href:'https://naklios.dev/apps/editor/',origin:'https://naklios.dev'},
   document:{referrer:'',addEventListener(){},documentElement:{dataset:{},style:{}},querySelector(){return null}},
-  navigator:{userAgent:''},setTimeout(){return 0},clearTimeout(){},console,URLSearchParams};
+  navigator:{userAgent:''},setTimeout(){return 0},clearTimeout(){},console,URL,URLSearchParams};
 win.window=win;win.self=win;win.top=parent;win.globalThis=win;
 vm.runInNewContext(sdk,win,{filename:'naklios.js'});
-const announce=extra=>listeners.get('message')({source:parent,origin:'http://host.test',data:{type:'naklios:capabilities',fs:true,fsBackend:'fsa',fsBoundedReads:true,...extra}});
+const announce=extra=>listeners.get('message')({source:parent,origin:'https://naklios.dev',data:{type:'naklios:capabilities',fs:true,fsBackend:'fsa',fsBoundedReads:true,...extra}});
 await test('Complete SDK defaults to refusing ranges before a handshake',async()=>{
   assert.equal(win.naklios.capabilities.fsRangeReads,false);
   await assert.rejects(win.naklios.fs.readBinary('owned.bin',{offset:16,maxBytes:8}),/ENOTSUP/);assert.equal(messages.length,0);
@@ -143,7 +143,7 @@ await test('Explicit range advertisement enables actual app and system SDK RPC',
   oldHost=false;announce({fsRangeReads:true});
   for(const [api,type] of [[win.naklios.fs,'naklios:fs:readBinary'],[win.naklios.sys.fs,'naklios:sysfs:readBinary']]){
     assert.deepEqual(Array.from(await api.readBinary('owned.bin',{offset:16,maxBytes:8})),[16,17,18,19,20,21,22,23]);
-    assert.deepEqual(messages.at(-1),{type,path:'owned.bin',offset:16,maxBytes:8,backend:'fsa',origin:'http://host.test'});
+    assert.deepEqual(messages.at(-1),{type,path:'owned.bin',offset:16,maxBytes:8,backend:'fsa',origin:'https://naklios.dev'});
   }
 });
 await test('Backend update clears range advertisement rather than retaining a stale grant',async()=>{

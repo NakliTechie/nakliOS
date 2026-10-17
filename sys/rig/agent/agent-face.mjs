@@ -95,12 +95,11 @@ export function createAgentFace({ registry, grant, opLog, actor = 'agent', calle
     const denied = grantCheck(command, input);
     if (denied) { await logAnd(name, input, denied.code); return denied; }
     if (command.destructive) {
-      input = structuredClone(input);
       const proposalId = 'p' + (++counter);
       staged.set(proposalId, { name, input });
       await logAnd(name, input, 'staged');
       return {
-        ok: false, staged: true, proposalId, command: name, input,
+        ok: false, staged: true, proposalId, command: name, input: structuredClone(input),
         scope: command.scope, summary: command.summary,
         message: `destructive — staged for operator accept (${proposalId})`,
       };
