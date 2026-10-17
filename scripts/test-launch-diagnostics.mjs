@@ -1,34 +1,25 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-
-const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-
-assert.match(html, /const LAUNCH_DIAGNOSTIC_THRESHOLDS = Object\.freeze\(\{/);
-assert.match(html, /loadWarningMs:\s*4000/);
-assert.match(html, /readyWarningMs:\s*8000/);
-assert.match(html, /fallbackMs:\s*15000/);
-assert.match(
-  html,
-  /function launchDiagnosticsSnapshot\(\)[\s\S]*?Object\.values\(openWindows\)[\s\S]*?location:\s*`\$\{origin\}\$\{locationPath\}`[\s\S]*?sandboxed[\s\S]*?loadMs[\s\S]*?readyMs[\s\S]*?fallbackMs[\s\S]*?status/,
-  'launch snapshots expose app identity, isolation, timings, and health without document data',
-);
-assert.match(
-  html,
-  /readyMs == null && loadMs != null && loadMs > LAUNCH_DIAGNOSTIC_THRESHOLDS\.loadWarningMs/,
-  'a late load event does not override an earlier healthy cooperative ready signal',
-);
-assert.match(
-  html,
-  /parsed\.pathname[\s\S]*?location:\s*`\$\{origin\}\$\{locationPath\}`/,
-  'query strings and fragments are omitted from machine-readable launch diagnostics',
-);
-assert.match(html, /return Object\.freeze\(snapshots\)/, 'the snapshot array is immutable too');
-assert.match(html, /launchDiagnostics:\s*launchDiagnosticsSnapshot/);
-assert.match(html, /launchDiagnosticThresholds:\s*LAUNCH_DIAGNOSTIC_THRESHOLDS/);
-assert.doesNotMatch(
-  html.match(/function launchDiagnosticsSnapshot\(\)\{[\s\S]*?\n\}/)?.[0] || '',
-  /credential|passphrase|content|document|localStorage/i,
-  'launch diagnostics do not collect app content or secrets',
-);
-
-console.log('NakliOS read-only launch diagnostics contract: PASS');
+import { extractFunction, instantiate } from './anvil-harness.mjs';
+const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+const constants=html.match(/const LAUNCH_DIAGNOSTIC_THRESHOLDS = Object\.freeze\(\{[\s\S]*?\}\);/)[0];
+const windows={};
+for(const [id,timing] of Object.entries({ready:{loaded:6000,ready:100},slowReady:{ready:9000},slowLoad:{loaded:4500},fallback:{timeout:15000},pending:{}})) {
+  windows[id]={dataset:{id},_app:{id,name:id},_launchTiming:timing,
+    querySelector:()=>({src:'https://naklios.dev/apps/example/?credential=PRIVATE#document',hasAttribute:()=>true})};
+}
+const snapshot=instantiate(constants+'\n'+extractFunction(html,'launchDiagnosticsSnapshot'),'launchDiagnosticsSnapshot',{
+  openWindows:windows,APPS:[],URL,location:{origin:'https://naklios.dev',href:'https://naklios.dev/'},
+});
+const results=snapshot();
+assert.deepEqual(Array.from(results,x=>x.status),['ready','slow-ready','slow-load','fallback','pending']);
+assert.ok(Object.isFrozen(results));
+for(const row of results) {
+  assert.ok(Object.isFrozen(row));assert.equal(row.sandboxed,true);
+  assert.equal(row.location,'https://naklios.dev/apps/example/');
+}
+assert.ok(!JSON.stringify(results).includes('PRIVATE'));
+assert.ok(!JSON.stringify(results).includes('document'));
+assert.equal(results[0].readyMs,100);
+assert.equal(results[0].loadMs,6000,'a late load does not override an earlier usable ready signal');
+console.log('launch-diagnostics: real snapshots classify startup states, redact URL details, and remain immutable');

@@ -98,7 +98,7 @@
     import { FsaBackend } from '../../sys/rig/fileops/fsa-backend.mjs';
     import { createGitCore } from '../../sys/rig/git/git-core.mjs';
     import { buildRigRegistry } from '../../sys/rig/registry/index.mjs';
-    import { createGrant, createOpLog, createAgentFace } from '../../sys/rig/agent/index.mjs';
+    import { createGrant, createOpLog, createAgentFace, wireWindowRig } from '../../sys/rig/agent/index.mjs';
     import { createShell } from '../../sys/rig/cli/shell.mjs';
     import { createLineEditor } from '../../sys/rig/cli/lineeditor.mjs';
     import { createCompleter } from '../../sys/rig/cli/completer.mjs';
@@ -135,6 +135,7 @@
     // these module-scoped bindings, so a remount is transparent to them.
     const pyReady = self.crossOriginIsolated === true;
     let backend, fs, git, registry, grant, opLog, face, kiln, shell;
+    wireWindowRig({ getFace: () => face });
     let workspaceLabel = 'memory · scratch';
     let pyAnnounced = false;
     // The running `agent`'s controller. The shell reads it as its signal, so ^C during an agent

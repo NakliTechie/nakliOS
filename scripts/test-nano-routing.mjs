@@ -8,22 +8,16 @@ import { readFile } from 'node:fs/promises';
 
 const host = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 
-// The resolver exists and is tier-aware.
-assert.match(host, /function aiResolveModel\(wantsAgent\)\s*\{/, 'aiResolveModel(wantsAgent) exists');
-
-// Agent tier returns the user's selection UNCONDITIONALLY (never Nano). We assert
-// the resolver short-circuits on wantsAgent before any Nano branch.
-const resolver = host.match(/function aiResolveModel\(wantsAgent\)\s*\{[\s\S]*?\n\}/)[0];
-assert.match(resolver, /if\s*\(wantsAgent\)\s*return\s+selected;/,
-  'agent tier returns the selected model and never falls through to Nano');
-// Within the resolver, the only aiNanoModel() use sits AFTER the wantsAgent guard.
-const guardIdx = resolver.indexOf('if (wantsAgent)');
-const nanoIdx = resolver.indexOf('aiNanoModel()');
-assert.ok(guardIdx >= 0 && nanoIdx > guardIdx, 'aiNanoModel() is only reachable on the GP path');
-// GP defaults to Nano whenever available (wired in by default), regardless of
-// the agent-tier endpoint selection.
-assert.match(resolver, /if\s*\(aiNano\.available\)\s*return\s+aiNanoModel\(\);/,
-  'GP prefers on-device Nano whenever it is available');
+// Execute the selected-model policy; source wiring pins below are supplemental.
+const {extractFunction,instantiate}=await import('./anvil-harness.mjs');
+const selected={id:'selected-endpoint'}, nano={id:'nano'};
+for(const available of [true,false]) {
+  const resolve=instantiate(extractFunction(host,'aiResolveModel'),'aiResolveModel',{
+    aiSelectedModel:()=>selected,aiNano:{available},aiNanoModel:()=>nano,
+  });
+  assert.equal(resolve(true),selected,'agent requests retain the selected model');
+  assert.equal(resolve(false),available?nano:selected,'general requests use available local Nano');
+}
 
 // Submit path resolves by tier and the ondevice runtime is dispatched + gated.
 assert.match(host, /const model = aiResolveModel\(wantsAgent\)/, 'aiHostSubmit routes by tier');

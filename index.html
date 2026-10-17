@@ -6416,6 +6416,13 @@ function aiAppOwnsSystemFs(appId){
   return appExpectedOrigin(app) === location.origin;
 }
 
+// Egress can attach host-held credentials. Catalog membership is not authority.
+function aiAppOwnsEgress(appId){
+  const app = APPS.find(item => item.id === appId);
+  return !!app && !app.thirdParty && app.kind === 'system' && appExpectedOrigin(app) === location.origin;
+}
+
+
 function aiNormaliseMessages(messages){
   if (!Array.isArray(messages) || messages.length === 0 || messages.length > AI_MAX_MESSAGES) {
     throw new Error(`Local AI requires 1–${AI_MAX_MESSAGES} messages`);
@@ -7816,6 +7823,7 @@ function netHistoryAppend({ appId, host, method, grantId, output }){
 }
 // The whole enforcement point: authorize, fetch, record. Throws with a code the SDK passes through.
 async function netHostFetch(appId, msg){
+  if (!aiAppOwnsEgress(appId)) throw new Error('Egress is available to same-origin system apps only');
   let host = '';
   try { host = new URL(String(msg.url || '')).hostname.toLowerCase(); } catch(_) {}
   if (!host) { const er = new Error('net.fetch needs an absolute URL'); er.code = 'EINVAL'; throw er; }
@@ -7940,7 +7948,7 @@ function capabilitySnapshot(appId){
     aiSearchState:ragHost.state,
     // Egress: a system app may reach blocked cross-origin hosts when the user has
     // configured a backend. Third-party apps never get it (isSystem gate).
-    net: isSystem && egressConfigured(),
+    net: aiAppOwnsEgress(appId) && egressConfigured(),
     netBackend: (isSystem && egressConfigured()) ? egressBackendLabel() : null,
     review: appId === 'reckon' || appId === 'draft' || appId === 'kanzen',
   };
@@ -8410,7 +8418,7 @@ window.addEventListener('message', async e => {
   // does useful work without it, so drop rather than reply into the void.
   const srcWin = findWin();
   if (!srcWin) return;
-  if (srcWin._expectedOrigin && e.origin !== srcWin._expectedOrigin) return;
+  if (!srcWin._expectedOrigin || e.origin !== srcWin._expectedOrigin) return;
   // An opaque origin cannot be a postMessage target, so third-party frames — which
   // have no origin to impersonate in the first place — keep '*'.
   const replyTo = (!srcWin._expectedOrigin || srcWin._expectedOrigin === 'null') ? '*' : srcWin._expectedOrigin;
@@ -8502,7 +8510,7 @@ window.addEventListener('message', async e => {
     aiHostCancel(e.source, msg.requestId);
   } else if (msg.type === 'naklios:net:info'){
     const reply = { type:'naklios:net:reply', requestId: msg.requestId };
-    try { reply.result = egressConfigured() ? { backend: egressBackendLabel(), roams: egressBackendLabel()==='worker' } : null; }
+    try { if (!aiAppOwnsEgress(getAppId())) throw new Error('Egress is available to same-origin system apps only'); reply.result = egressConfigured() ? { backend: egressBackendLabel(), roams: egressBackendLabel()==='worker' } : null; }
     catch(err){ reply.error = String(err?.message || err); }
     if (msg.requestId) { try { e.source.postMessage(reply, replyTo); } catch(_){} }
   } else if (msg.type === 'naklios:net:fetch'){
@@ -8510,7 +8518,7 @@ window.addEventListener('message', async e => {
     try {
       const appId = getAppId();
       if (!appId) throw new Error('Unknown app');
-      if (!aiAppIsSystem(appId)) throw new Error('Egress is a system-app capability');
+      if (!aiAppOwnsEgress(appId)) throw new Error('Egress is available to same-origin system apps only');
       if (!egressConfigured()) { const er = new Error('No egress backend configured'); er.code = 'ENOEGRESS'; throw er; }
       reply.result = await netHostFetch(appId, msg); // S1: Grant-gated, History-logged
     } catch(err){ reply.error = String(err?.message || err); }
@@ -13047,32 +13055,28 @@ if (document.readyState === 'loading'){
   init();
 }
 
-// Expose for debugging / future cross-tab API (per CONV.md).
-// Same-origin "system" apps (like the file explorer) reach into nakliOS.fs.*
-// directly. Third-party apps must go through the postMessage SDK
-// (sdk/naklios.js) — that route is namespace-enforced.
-window.nakliOS = {
-  state, APPS, THEMES, FOLDERS,
-  applyTheme, openApp, openFolder, openSpotlight, openSettings,
-  setMode, getMode, effectiveMode,
-  pinItem, unpinItem, isPinned,
-  moveAppToDesktop, isInFolder,
-  addSticky, deleteSticky, openCheatSheet,
-  minimizeWindow,
-  // Read-only launch telemetry. Values are process-local and contain no
-  // document data, credentials, or cross-session identifiers.
-  launchDiagnostics: launchDiagnosticsSnapshot,
-  launchDiagnosticThresholds: LAUNCH_DIAGNOSTIC_THRESHOLDS,
-  // Dialog primitives — used by the crate flow + reusable elsewhere.
-  alert: nakliosAlert, confirm: nakliosConfirm, passphrase: nakliosPassphrase,
-  // Filesystem — system-app access (no namespace enforcement).
-  fs: {
-    read: fsRead, readBinary: fsReadBinary,
-    write: fsWrite, append: fsAppend,
-    list: fsList, delete: fsDelete, exists: fsExists,
+// The declared desktop command bus. Only the developer opt-in exposes invocation.
+import('./sys/host/agent.mjs').then(({ attachHostAgent }) => attachHostAgent({
+  target:window, diagnosticsThresholds:LAUNCH_DIAGNOSTIC_THRESHOLDS,
+  actions:{
+    apps:() => APPS.map(({id,name,kind}) => ({id,name,kind})),
+    themes:() => THEMES.map(({id,name}) => ({id,name})),
+    folders:() => FOLDERS.map(({id,name}) => ({id,name})),
+    windows:() => Object.values(openWindows).map(w => ({id:w.dataset.id,title:w.querySelector('.nw-title')?.textContent || ''})),
+    openApp:id => { const app=APPS.find(a=>a.id===id); if(!app) throw new Error('Unknown app'); return openApp(app); },
+    openFolder:id => { const folder=FOLDERS.find(f=>f.id===id); if(!folder) throw new Error('Unknown folder'); return openFolder(folder); },
+    closeFolder, openSpotlight, openSettings, closeSettings, openCheatSheet, closeCheatSheet,
+    applyTheme, setMode, getMode, pinItem, unpinItem, isPinned, moveAppToDesktop,
+    addSticky, updateSticky, deleteSticky,
+    minimizeWindow:id => { const w=openWindows[id]; if(!w) throw new Error('Window not open'); minimizeWindow(w); },
+    focusWindow:id => { const w=openWindows[id]; if(!w) throw new Error('Window not open'); focusWindow(w); },
+    maximizeWindow:id => { const w=openWindows[id]; if(!w) throw new Error('Window not open'); toggleFullscreen(w); },
+    closeWindow:id => { const w=openWindows[id]; if(!w) throw new Error('Window not open'); return closeWindow(w); },
+    diagnostics:launchDiagnosticsSnapshot,
+    fsRead, fsReadBinary, fsWrite, fsAppend, fsList, fsDelete, fsExists,
   },
-  fsConnect, fsDisconnect, fsRegrantPending,
-};
+})).catch(error => console.error('Desktop agent interface could not load', error));
+
 </script>
 </body>
 </html>

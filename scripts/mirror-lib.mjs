@@ -20,6 +20,28 @@ export function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
+// A declared host-SDK seam, not a hand edit to an upstream app. Preserve the
+// original source hash separately from the canonical SDK and output hashes.
+export function prepareManagedSdk(bytes, mode, sdk) {
+  if (!mode) return {bytes,sha256:sha256(bytes)};
+  if (!['inline','file'].includes(mode)) throw new Error('Invalid managedSdk mode');
+  const sdkText=sdk.toString('utf8');
+  let output;
+  if(mode==='file')output=Buffer.from(sdk);
+  else {
+    const text=bytes.toString('utf8');
+    if(!Buffer.from(text).equals(bytes))throw new Error('Managed SDK source must be UTF-8');
+    const begins=[...text.matchAll(/\/\*\s*naklios-sdk:begin\b[^*]*\*\//g)];
+    const ends=[...text.matchAll(/\/\*\s*naklios-sdk:end\s*\*\//g)];
+    if(begins.length!==1||ends.length!==1||ends[0].index<=begins[0].index)throw new Error('Managed SDK needs exactly one ordered marker pair');
+    const version=sdkText.match(/@naklios-sdk-version\s+(\d+)/)?.[1];
+    if(!version)throw new Error('Canonical SDK version is missing');
+    const block=`/* naklios-sdk:begin ver=${version} sha256=${sha256(sdk)} */\n${sdkText.replace(/<\/script/gi,'<\\/script')}\n/* naklios-sdk:end */`;
+    output=Buffer.from(text.slice(0,begins[0].index)+block+text.slice(ends[0].index+ends[0][0].length));
+  }
+  return {bytes:output,sha256:sha256(output),originalSourceSha256:sha256(bytes),sdkSha256:sha256(sdk)};
+}
+
 export function normalizeManifest(manifest) {
   if (!manifest || !Array.isArray(manifest.apps)) {
     throw new Error('apps/manifest.json must contain an apps array');
@@ -67,7 +89,9 @@ export function normalizeManifest(manifest) {
         throw new Error(`${label} has duplicate destination: ${destination}`);
       }
       destinations.add(destination);
-      return { source, destination };
+      const managedSdk=typeof rawFile==='object' ? rawFile.managedSdk : undefined;
+      if(managedSdk!==undefined&&!['inline','file'].includes(managedSdk))throw new Error(`${label}: invalid managedSdk mode`);
+      return { source, destination, ...(managedSdk ? {managedSdk} : {}) };
     });
 
     return { id, repo, requestedRef, files };
@@ -118,6 +142,11 @@ export async function validateMirrorState(rootDir, manifest, lock) {
       const artifactPath = path.join(rootDir, 'apps', app.id, ...file.destination.split('/'));
       try {
         const bytes = await readFile(artifactPath);
+        if(file.managedSdk) {
+          const sdk=await readFile(path.join(rootDir,'sdk/naklios.js'));
+          if(!SHA256.test(lockedFile.originalSourceSha256||'')||lockedFile.sdkSha256!==sha256(sdk))errors.push(`${app.id}/${file.destination}: managed SDK provenance is stale`);
+          if(!prepareManagedSdk(bytes,file.managedSdk,sdk).bytes.equals(bytes))errors.push(`${app.id}/${file.destination}: canonical SDK is not installed`);
+        }
         if (sha256(bytes) !== lockedFile.sha256) {
           errors.push(`${app.id}/${file.destination}: artifact differs from locked SHA-256`);
         }

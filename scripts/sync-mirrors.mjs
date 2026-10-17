@@ -3,7 +3,7 @@
 import { mkdir, readFile, rename, writeFile, appendFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { normalizeManifest, sha256 } from './mirror-lib.mjs';
+import { normalizeManifest, sha256, prepareManagedSdk } from './mirror-lib.mjs';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const manifestPath = path.join(rootDir, 'apps', 'manifest.json');
@@ -95,13 +95,33 @@ const allowSkip = new Set(
     .flatMap(a => (a.split('=')[1] || '').split(','))
     .map(s => s.trim()).filter(Boolean),
 );
-const ids = selectedIds(argv.filter(a => a !== '--strict' && !a.startsWith('--allow-skip')));
+const ids = selectedIds(argv.filter(a => a !== '--strict' && a !== '--refresh-sdk' && !a.startsWith('--allow-skip')));
 const manifest = normalizeManifest(await readJson(manifestPath));
 const unknownIds = [...ids].filter(id => !manifest.apps.some(app => app.id === id));
 if (unknownIds.length) throw new Error(`unknown mirror id(s): ${unknownIds.join(', ')}`);
 const targets = ids.size ? manifest.apps.filter(app => ids.has(app.id)) : manifest.apps;
 const oldLock = await readJson(lockPath, { version: 1, apps: [] });
 const lockById = new Map((oldLock.apps || []).map(app => [app.id, app]));
+const needsSdk=targets.some(app=>app.files.some(file=>file.managedSdk));
+const canonicalSdk=needsSdk ? await readFile(path.join(rootDir,'sdk/naklios.js')) : null;
+if(argv.includes('--refresh-sdk')) {
+  let changed=0;
+  for(const app of targets)for(const file of app.files.filter(file=>file.managedSdk)) {
+    const locked=lockById.get(app.id)?.files.find(item=>item.destination===file.destination);
+    if(!locked)throw new Error(`Missing locked source for ${app.id}/${file.destination}`);
+    const destination=path.join(rootDir,'apps',app.id,...file.destination.split('/'));
+    const original=await readFile(destination);
+    if(sha256(original)!==locked.sha256)throw new Error(`Mirror differs from lock: ${app.id}/${file.destination}`);
+    const prepared=prepareManagedSdk(original,file.managedSdk,canonicalSdk);
+    if(await writeIfChanged(destination,prepared.bytes))changed++;
+    Object.assign(locked,{sha256:prepared.sha256,bytes:prepared.bytes.byteLength,
+      originalSourceSha256:locked.originalSourceSha256||prepared.originalSourceSha256,sdkSha256:prepared.sdkSha256});
+  }
+  await writeIfChanged(lockPath,Buffer.from(JSON.stringify(oldLock,null,2)+'\n'));
+  console.log(`Refreshed ${changed} managed SDK artifact(s) at existing upstream pins.`);
+  process.exit(0);
+}
+
 // MIRROR_SYNC_TOKEN first: the workflow's default `github.token` is scoped to THIS repo, so
 // GitHub answers 404 (never 403) for a private source and the sync cannot tell "no such repo"
 // from "not allowed to see it". A PAT with read access to the source repos is what makes a
@@ -126,11 +146,14 @@ for (const app of targets) {
     const files = [];
     for (const file of app.files) {
       const rawUrl = `https://raw.githubusercontent.com/${app.repo}/${commit.sha}/${encodeSourcePath(file.source)}`;
-      const bytes = await fetchBytes(rawUrl, headers);
+      const upstream = await fetchBytes(rawUrl, headers);
+      const prepared = prepareManagedSdk(upstream,file.managedSdk,canonicalSdk);
+      const bytes = prepared.bytes;
       files.push({
         ...file,
         bytes,
         sha256: sha256(bytes),
+        ...(file.managedSdk ? {originalSourceSha256:prepared.originalSourceSha256,sdkSha256:prepared.sdkSha256} : {}),
       });
     }
     resolved.push({ app, commit: commit.sha, files });
@@ -170,6 +193,7 @@ for (const item of resolved) {
       destination: file.destination,
       sha256: file.sha256,
       bytes: file.bytes.byteLength,
+      ...(file.managedSdk ? {originalSourceSha256:file.originalSourceSha256,sdkSha256:file.sdkSha256} : {}),
     })),
   });
 }
