@@ -412,7 +412,7 @@ test('campaign preparation and execution exclude workspace transitions and reche
     const roleReady=new Promise(resolve=>roleEntered=resolve),runReady=new Promise(resolve=>runEntered=resolve);
     let roles=0;
     const context={nativeGateTransition:false,nativeGateRecovery:null,nativeGateSession:null,campaignBusy:false,campaignRun:null,
-      backend:{},state:{activeProject:'owned'},grant:{},nak:null,pushSystem(){},raise(){},id:()=>1,newRootKey:()=>({}),
+      backend:{},wsRoot:'',state:{activeProject:'owned'},grant:{},nak:null,pushSystem(){},raise(){},id:()=>1,newRootKey:()=>({}),
       mintRole:async()=>{if(++roles===1){roleEntered();await new Promise(resolve=>releaseRole=resolve);}if(changed==='preparation-error')throw new Error('role refused');return {};},
       createAssayLedger:()=>({}),demoExecutors:()=>({}),renderCampaign:()=>renders++,runCampaign:async()=>{starts++;runEntered();await new Promise(resolve=>releaseRun=resolve);if(changed==='execution-error')throw new Error('execution failed');return {status:'done'};}};
     const runtime=evaluate(code+'\n({startCampaign,nativeAuthorityTransition,busy:()=>campaignBusy,change:kind=>{if(kind===\'transition\')nativeGateTransition=true;if(kind===\'backend\')backend={};if(kind===\'project\')state.activeProject=\'other\';},campaign:()=>campaignRun})',context);
