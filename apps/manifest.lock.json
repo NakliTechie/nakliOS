@@ -577,7 +577,7 @@
       "id": "vocella",
       "repo": "NakliTechie/vocella",
       "requestedRef": "main",
-      "resolvedCommit": "5c0b48a50de2e734d8b26d795c0250e6b37aa5bf",
+      "resolvedCommit": "107aeb31b14c9049f5ca1f610bdcece042d8f580",
       "files": [
         {
           "source": "index.html",
@@ -600,8 +600,8 @@
         {
           "source": "src/app.js",
           "destination": "src/app.js",
-          "sha256": "870b153facfcc0c48078cec9467409a7dd09549cffc1f9aac1599f47c8105fde",
-          "bytes": 19554
+          "sha256": "19d7e04281ac176625c013bb7682eb9413a3bbf3a56a06d958d160da68a74ee5",
+          "bytes": 20139
         },
         {
           "source": "src/apkg.js",
