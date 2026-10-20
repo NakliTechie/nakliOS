@@ -572,6 +572,158 @@
           "bytes": 1071
         }
       ]
+    },
+    {
+      "id": "vocella",
+      "repo": "NakliTechie/vocella",
+      "requestedRef": "main",
+      "resolvedCommit": "64c674e500c918c9e450c40065443ad0dec5ac16",
+      "files": [
+        {
+          "source": "index.html",
+          "destination": "index.html",
+          "sha256": "d63f9ea46e0a779cafa3e1311cb927e3992ee1170f0e90048036d447c3274426",
+          "bytes": 49174
+        },
+        {
+          "source": "LICENSE",
+          "destination": "LICENSE",
+          "sha256": "bf28226d38739f9e44b49af4c9365109c2d0c360e4a40de9dc2b1ca591b46276",
+          "bytes": 1138
+        },
+        {
+          "source": "social.png",
+          "destination": "social.png",
+          "sha256": "d5e38d09a1d25a0f7bcac12d99674b31a3ae82d73256880efd95a834ef9f8588",
+          "bytes": 74406
+        },
+        {
+          "source": "src/app.js",
+          "destination": "src/app.js",
+          "sha256": "7627eb2a8061c96fc64550c5fbe269ce9732b04157b557c3373f685acb2e84e6",
+          "bytes": 7535
+        },
+        {
+          "source": "src/apkg.js",
+          "destination": "src/apkg.js",
+          "sha256": "8d3ace05f7dcd014110ce4729aa49a3de214e95bd97fb65e04c425f73de533db",
+          "bytes": 7734
+        },
+        {
+          "source": "src/commands.js",
+          "destination": "src/commands.js",
+          "sha256": "834e5bde0c1c5bd662f5a18dd65bc51f6a6989f7f787a7c5c21aa870c47be2bd",
+          "bytes": 3810
+        },
+        {
+          "source": "src/reader.js",
+          "destination": "src/reader.js",
+          "sha256": "4a4b48f96f263ff49543fdaaa2cdcac89a67a48ddb2b78922dea9285d53d5a7c",
+          "bytes": 5951
+        },
+        {
+          "source": "src/render.js",
+          "destination": "src/render.js",
+          "sha256": "331f0a67c772d602922be0a5300ad86f18d32ee187e1e66228f281b86cd0e327",
+          "bytes": 11220
+        },
+        {
+          "source": "vendor/fflate.js",
+          "destination": "vendor/fflate.js",
+          "sha256": "b7ca4450b19559a1d50eb381adcee94b82449674be4cd17789d9beba7e6122a1",
+          "bytes": 90922
+        },
+        {
+          "source": "vendor/fzstd.js",
+          "destination": "vendor/fzstd.js",
+          "sha256": "1a901fc5a58c349bbdb4f2aa1e688637ef56891ec58243a9f0cd863166b0d2a4",
+          "bytes": 24407
+        },
+        {
+          "source": "vendor/sql-wasm.js",
+          "destination": "vendor/sql-wasm.js",
+          "sha256": "f1c84000dbc856c9d87f4f3aabc4d3654bd436165db4be3da13751db3a9c20d7",
+          "bytes": 46535
+        },
+        {
+          "source": "vendor/sql-wasm.wasm",
+          "destination": "vendor/sql-wasm.wasm",
+          "sha256": "38c14f6e379210bc942bdc4ebca44e7bfdb4318ecc1c72ca666a28fdce96670a",
+          "bytes": 658410
+        },
+        {
+          "source": "vendor/LICENSE-fflate",
+          "destination": "vendor/LICENSE-fflate",
+          "sha256": "0a1df3a083d0c010560aa342e87959c8c1070e6fd54545741f083f22d0c8b551",
+          "bytes": 1069
+        },
+        {
+          "source": "vendor/LICENSE-fzstd",
+          "destination": "vendor/LICENSE-fzstd",
+          "sha256": "62249119bb7df6e54300f37a37145c26a6d4420410aac8881a119c5b427cf751",
+          "bytes": 1069
+        },
+        {
+          "source": "vendor/LICENSE-sql.js",
+          "destination": "vendor/LICENSE-sql.js",
+          "sha256": "60a3f6e4d7b29b4321359e683b36cf198d24f58e24582070f56e6fa89d5ee2be",
+          "bytes": 2199
+        },
+        {
+          "source": "vendor/README.md",
+          "destination": "vendor/README.md",
+          "sha256": "4c1c12aa3c7f0fbc5a6646a57b7ee4a1e294b54b68000d85c5dfbcc0bad08b5a",
+          "bytes": 1723
+        },
+        {
+          "source": "decks/catalog.json",
+          "destination": "decks/catalog.json",
+          "sha256": "2536d29680072dc244890de7e3fe8853b57a800c25d7c1709535566da40e98a3",
+          "bytes": 2869
+        },
+        {
+          "source": "decks/NOTICE.md",
+          "destination": "decks/NOTICE.md",
+          "sha256": "23899add90f7c86fae33f7cc4b25cdcb1397669ceb9784cbe2dbe46dc7b169da",
+          "bytes": 1404
+        },
+        {
+          "source": "decks/es-en-core-1.apkg",
+          "destination": "decks/es-en-core-1.apkg",
+          "sha256": "46d89bdf4f36237fff47fdc572ba0f617c3ea0e787d439027dc7b8f052840c87",
+          "bytes": 101865
+        },
+        {
+          "source": "decks/fr-en-core-1.apkg",
+          "destination": "decks/fr-en-core-1.apkg",
+          "sha256": "44f34a59761025526b7c09e65433999f15aa82214e23e00db8a294c5932b98a1",
+          "bytes": 99825
+        },
+        {
+          "source": "decks/de-en-core-1.apkg",
+          "destination": "decks/de-en-core-1.apkg",
+          "sha256": "18e0a0f3a11c9ad0a2ce3faf0a49bd32761ba285ac5985055dca92633f78c994",
+          "bytes": 103594
+        },
+        {
+          "source": "decks/ja-en-core-1.apkg",
+          "destination": "decks/ja-en-core-1.apkg",
+          "sha256": "f5ea95893117a817fb3113ff192fcb74a8117a112a62fe282959ad027cf3dd38",
+          "bytes": 117715
+        },
+        {
+          "source": "decks/zh-en-core-1.apkg",
+          "destination": "decks/zh-en-core-1.apkg",
+          "sha256": "447c6e8d24781190c3cdad9c6dcbc8206f0bb60eac3df84a023aafbb10f172bd",
+          "bytes": 116014
+        },
+        {
+          "source": "decks/ko-en-core-1.apkg",
+          "destination": "decks/ko-en-core-1.apkg",
+          "sha256": "2a46fb555568dd50f5386e16186405569e277795e8f0d41771ee5cb76cdb1a2a",
+          "bytes": 105570
+        }
+      ]
     }
   ]
 }

@@ -404,6 +404,109 @@
           "destination": "LICENSE"
         }
       ]
+    },
+    {
+      "id": "vocella",
+      "repo": "NakliTechie/vocella",
+      "ref": "main",
+      "files": [
+        {
+          "source": "index.html",
+          "destination": "index.html"
+        },
+        {
+          "source": "LICENSE",
+          "destination": "LICENSE"
+        },
+        {
+          "source": "social.png",
+          "destination": "social.png"
+        },
+        {
+          "source": "src/app.js",
+          "destination": "src/app.js"
+        },
+        {
+          "source": "src/apkg.js",
+          "destination": "src/apkg.js"
+        },
+        {
+          "source": "src/commands.js",
+          "destination": "src/commands.js"
+        },
+        {
+          "source": "src/reader.js",
+          "destination": "src/reader.js"
+        },
+        {
+          "source": "src/render.js",
+          "destination": "src/render.js"
+        },
+        {
+          "source": "vendor/fflate.js",
+          "destination": "vendor/fflate.js"
+        },
+        {
+          "source": "vendor/fzstd.js",
+          "destination": "vendor/fzstd.js"
+        },
+        {
+          "source": "vendor/sql-wasm.js",
+          "destination": "vendor/sql-wasm.js"
+        },
+        {
+          "source": "vendor/sql-wasm.wasm",
+          "destination": "vendor/sql-wasm.wasm"
+        },
+        {
+          "source": "vendor/LICENSE-fflate",
+          "destination": "vendor/LICENSE-fflate"
+        },
+        {
+          "source": "vendor/LICENSE-fzstd",
+          "destination": "vendor/LICENSE-fzstd"
+        },
+        {
+          "source": "vendor/LICENSE-sql.js",
+          "destination": "vendor/LICENSE-sql.js"
+        },
+        {
+          "source": "vendor/README.md",
+          "destination": "vendor/README.md"
+        },
+        {
+          "source": "decks/catalog.json",
+          "destination": "decks/catalog.json"
+        },
+        {
+          "source": "decks/NOTICE.md",
+          "destination": "decks/NOTICE.md"
+        },
+        {
+          "source": "decks/es-en-core-1.apkg",
+          "destination": "decks/es-en-core-1.apkg"
+        },
+        {
+          "source": "decks/fr-en-core-1.apkg",
+          "destination": "decks/fr-en-core-1.apkg"
+        },
+        {
+          "source": "decks/de-en-core-1.apkg",
+          "destination": "decks/de-en-core-1.apkg"
+        },
+        {
+          "source": "decks/ja-en-core-1.apkg",
+          "destination": "decks/ja-en-core-1.apkg"
+        },
+        {
+          "source": "decks/zh-en-core-1.apkg",
+          "destination": "decks/zh-en-core-1.apkg"
+        },
+        {
+          "source": "decks/ko-en-core-1.apkg",
+          "destination": "decks/ko-en-core-1.apkg"
+        }
+      ]
     }
   ]
 }
