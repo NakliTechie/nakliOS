@@ -14,8 +14,9 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://vocella.naklitechie.com/social.png">
 <style>
-  /* Light only, by choice: Vocella does not follow the system dark mode. */
-  :root { color-scheme: light; --bg: #fafaf8; --fg: #1c1c1a; --mute: #6b6b66; --line: #dcdcd6; --accent: #2f5fd0; --err: #b3261e; }
+  /* Light by default, by the owner's choice; the system setting is ignored. The header switch picks dark. */
+  :root { color-scheme: light; --bg: #fafaf8; --panel: #fff; --fg: #1c1c1a; --mute: #6b6b66; --line: #dcdcd6; --accent: #2f5fd0; --err: #b3261e; --tint: #f0f4ff; }
+  :root[data-theme="dark"] { color-scheme: dark; --bg: #161615; --panel: #1f1f1d; --fg: #ecece8; --mute: #9a9a93; --line: #34342f; --accent: #8fb0ff; --err: #ff8a80; --tint: #1d2433; }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
   body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
@@ -31,7 +32,7 @@
   #shelf { display: flex; flex-direction: column; gap: 1.25rem; }
   h2 { font-size: 1rem; margin: 0 0 .5rem; }
   .tiles { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); gap: .6rem; }
-  .tiles button { width: 100%; height: 100%; text-align: left; background: #fff; border-radius: 10px; padding: .75rem .9rem; display: flex; flex-direction: column; gap: .1rem; }
+  .tiles button { width: 100%; height: 100%; text-align: left; background: var(--panel); border-radius: 10px; padding: .75rem .9rem; display: flex; flex-direction: column; gap: .1rem; }
   .tiles .native { font-size: 1.35rem; line-height: 1.2; }
   .tiles .title { font-weight: 600; }
   .tiles .meta { color: var(--mute); font-size: .85rem; }
@@ -41,25 +42,37 @@
   #builder .fine { margin: 0; }
   .pick { display: flex; gap: .75rem; flex-wrap: wrap; }
   .pick label { display: flex; flex-direction: column; gap: .2rem; font-size: .85rem; color: var(--mute); }
-  select { font: inherit; color: var(--fg); background: #fff; border: 1px solid var(--line); border-radius: 6px; padding: .35rem .5rem; min-width: 11rem; }
+  select, input[type=number] { font: inherit; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: .35rem .5rem; min-width: 11rem; }
   #pick-topics { width: 100%; }
   #pick-topics summary { cursor: pointer; color: var(--fg); }
   #pick-modules { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: .15rem .75rem; margin-top: .5rem; }
   #pick-modules h3 { grid-column: 1 / -1; font-size: .8rem; color: var(--mute); margin: .5rem 0 0; font-weight: 600; }
   #pick-modules label { font-size: .9rem; display: flex; gap: .4rem; align-items: baseline; }
   #yours { border: 1px dashed var(--line); border-radius: 8px; padding: 1rem 1.25rem; }
-  #yours.drag { border-color: var(--accent); background: #f0f4ff; }
+  #yours.drag { border-color: var(--accent); background: var(--tint); }
   #shelf-empty { color: var(--mute); }
   #decks { list-style: none; margin: .75rem 0 0; padding: 0; }
   #decks button { width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; display: flex; justify-content: space-between; gap: 1rem; }
   #decks .count { color: var(--mute); font-variant-numeric: tabular-nums; }
   #viewer { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: .5rem; }
   #viewer[hidden], #shelf[hidden] { display: none; }
-  #card { background: #fff; }
+  #card { background: var(--panel); }
   .bar { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
   .bar .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--mute); }
   #card { flex: 1; min-height: 16rem; width: 100%; border: 1px solid var(--line); border-radius: 8px; }
   #position { color: var(--mute); font-variant-numeric: tabular-nums; }
+  [aria-pressed="true"] { background: var(--tint); border-color: var(--accent); }
+  .rate { display: flex; gap: .4rem; flex-wrap: wrap; }
+  .rate button { display: flex; flex-direction: column; align-items: center; line-height: 1.2; min-width: 4.5rem; }
+  .rate small { color: var(--mute); font-size: .75rem; font-variant-numeric: tabular-nums; }
+  .rate .primary small { color: inherit; opacity: .85; }
+  #progress { display: flex; flex-direction: column; gap: .5rem; align-items: flex-start; }
+  #progress .bar label { font-size: .9rem; color: var(--mute); display: flex; gap: .4rem; align-items: center; }
+  #progress input[type=number] { width: 5.5rem; min-width: 0; border: 1px solid var(--line); border-radius: 6px; padding: .3rem .4rem; }
+  #decks li { display: flex; gap: .4rem; align-items: stretch; border-bottom: 1px solid var(--line); }
+  #decks li button[data-command="open-deck"] { flex: 1; border: 0; border-radius: 0; }
+  #decks li button[data-command="study-deck"] { border: 0; color: var(--accent); }
+  [hidden] { display: none !important; }
 </style>
 </head>
 <body>
@@ -67,8 +80,10 @@
   <header>
     <h1>Vocella</h1>
     <p>Read Anki cards. Your files stay on this device.</p>
+    <button data-command="toggle-theme" id="theme-btn" aria-label="Switch to dark mode">Dark</button>
     <button class="primary" data-command="import-deck">Open .apkg</button>
     <input id="file" type="file" accept=".apkg,.colpkg" hidden>
+    <input id="progress-file" type="file" accept=".json,application/json" hidden>
   </header>
   <p id="status" role="status" aria-live="polite"></p>
 
@@ -91,6 +106,15 @@
       <button class="primary" data-command="build-deck">Build and open</button>
       <p class="fine">Built on this device from AnkiGen's data, in about a second. 15 languages, 36 topics.</p>
     </section>
+    <section id="progress" aria-labelledby="progress-title">
+      <h2 id="progress-title">Study progress</h2>
+      <p id="stats" class="fine">No reviews yet. Open a deck and press Study.</p>
+      <div class="bar">
+        <label>New cards per day <input id="new-limit" type="number" min="0" max="9999" step="1" value="20"></label>
+        <button data-command="export-progress">Export progress</button>
+        <button data-command="import-progress">Import progress</button>
+      </div>
+    </section>
     <section id="yours" aria-labelledby="yours-title">
       <h2 id="yours-title">Your deck</h2>
       <div id="shelf-empty">Open an Anki package (.apkg), or drop one anywhere on the page.</div>
@@ -102,13 +126,29 @@
     <div class="bar">
       <button data-command="close-deck">Decks</button>
       <span id="deck-name" class="grow"></span>
+      <button data-command="toggle-shuffle" id="shuffle-btn" aria-pressed="false">Shuffle</button>
+      <button data-command="speak-card" id="speak-btn" hidden>Speak</button>
+      <button data-command="download-deck" id="download-btn" hidden>Download .apkg</button>
+      <button data-command="study-deck" id="study-btn">Study</button>
+      <button data-command="open-deck" id="browse-btn" hidden>Browse</button>
     </div>
     <iframe id="card" title="Card" sandbox="allow-same-origin"></iframe>
     <div class="bar">
-      <button data-command="prev-card" aria-keyshortcuts="ArrowLeft">Previous</button>
-      <button class="primary" data-command="flip" aria-keyshortcuts="Space Enter">Flip</button>
-      <button data-command="next-card" aria-keyshortcuts="ArrowRight">Next</button>
+      <button data-command="prev-card" id="prev-btn" aria-keyshortcuts="ArrowLeft">Previous</button>
+      <button class="primary" data-command="flip" id="flip-btn" aria-keyshortcuts="Space Enter">Flip</button>
+      <button data-command="next-card" id="next-btn" aria-keyshortcuts="ArrowRight">Next</button>
+      <div class="rate" id="rate-bar" hidden>
+        <button data-command="rate" data-rating="1" aria-keyshortcuts="1">Again <small id="iv-1"></small></button>
+        <button data-command="rate" data-rating="2" aria-keyshortcuts="2">Hard <small id="iv-2"></small></button>
+        <button class="primary" data-command="rate" data-rating="3" aria-keyshortcuts="3">Good <small id="iv-3"></small></button>
+        <button data-command="rate" data-rating="4" aria-keyshortcuts="4">Easy <small id="iv-4"></small></button>
+      </div>
       <span id="position" class="grow"></span>
+      <span id="study-tools" hidden>
+        <button data-command="flag-card" id="flag-btn">Flag</button>
+        <button data-command="bury-card">Bury</button>
+        <button data-command="suspend-card">Suspend</button>
+      </span>
     </div>
   </section>
 </main>

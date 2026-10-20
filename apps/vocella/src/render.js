@@ -5,7 +5,9 @@
 // Template syntax covered: {{Field}}, {{#Field}}…{{/Field}}, {{^Field}}…{{/Field}}, {{FrontSide}}, the
 // special fields Tags, Type, Deck, Subdeck, Card, CardFlag, and the filters text, cloze, cloze-only, hint,
 // type, furigana, kana, kanji and tts (spoken text is shown as text). Filters apply right to left, as in
-// Anki. [sound:…] tags are dropped, because media is not read yet.
+// Anki. [sound:…] tags become audio players. Image Occlusion cards get their masks drawn as SVG over the
+// image, because Anki's own drawing script never runs here. Media names and formulas are resolved later, by
+// media.js and math.js, once the card's HTML is final.
 
 /** @typedef {import('./apkg.js').Collection} Collection */
 /** @typedef {import('./apkg.js').Card} Card */
@@ -40,9 +42,14 @@ export function renderCard(col, card) {
   };
   const cloze = nt.cloze ? card.ord + 1 : 0;
 
-  const question = render(parse(template.qfmt), { fields, special, cloze, answer: false, frontSide: '' });
+  let question = render(parse(template.qfmt), { fields, special, cloze, answer: false, frontSide: '' });
   const frontSide = question.replace(/<input class="vc-typeans"[^>]*>/g, '');
-  const answer = render(parse(template.afmt), { fields, special, cloze, answer: true, frontSide });
+  let answer = render(parse(template.afmt), { fields, special, cloze, answer: true, frontSide });
+  if (template.qfmt.includes('image-occlusion-container') && 'Occlusion' in fields) {
+    const shapes = occlusions(fields.Occlusion);
+    question = withMasks(question, shapes, cloze, false);
+    answer = withMasks(answer, shapes, cloze, true);
+  }
   return { question, answer, css: nt.css, ord: card.ord };
 }
 
@@ -92,7 +99,9 @@ function render(nodes, ctx) {
       if (nonEmpty(lookup(ctx, n.name) ?? '') !== n.negate) out += render(n.children, ctx);
     } else out += replacement(n.name, ctx);
   }
-  return out.replace(/\[sound:[^\]]*\]/g, '');
+  return out
+    .replace(/\[anki:tts\b([^\]]*)\]([\s\S]*?)\[\/anki:tts\]/gi, (_, opts, text) => speakable(/lang=([\w-]+)/.exec(opts)?.[1] ?? '', text))
+    .replace(/\[sound:([^\]]+)\]/g, (_, name) => `<audio class="vc-sound" controls preload="none" src="${escapeHtml(name.trim())}"></audio>`);
 }
 
 /** @param {Ctx} ctx @param {string} name @returns {string | undefined} */
@@ -140,8 +149,20 @@ function applyFilter(filter, value, ctx) {
     case 'kanji':
       return value.replace(RUBY, (_, base) => base);
     default:
-      return value; // tts and unknown filters: show the field as it is
+      if (filter.startsWith('tts ')) return speakable(filter.split(/\s+/)[1] ?? '', value);
+      return value; // unknown filters: show the field as it is
   }
+}
+
+/**
+ * Text to read aloud, shown as text with a Speak button. The frame runs no scripts, so the page wires the
+ * button to the browser's speech synthesis. lang is Anki's form, e.g. en_US.
+ * @param {string} lang @param {string} html
+ */
+function speakable(lang, html) {
+  const text = stripHtml(html).trim();
+  if (!text) return html;
+  return `<span class="vc-tts">${html}</span> <button type="button" class="vc-speak" data-lang="${escapeHtml(lang)}" data-text="${escapeHtml(text)}">Speak</button>`;
 }
 
 /** Anki's ruby syntax: an optional leading space, the base text, then the reading in brackets. */
@@ -205,12 +226,67 @@ export function renderCloze(value, n, answer) {
     parts
       .map((p) => {
         if (typeof p === 'string') return p;
+        if (isOcclusion(p)) return ''; // Image Occlusion shapes are drawn by withMasks, not shown as text
         if (p.n !== n) return walk(p.content);
         if (answer) return `<span class="cloze">${walk(p.content)}</span>`;
         return `<span class="cloze">[${p.hint || '...'}]</span>`;
       })
       .join('');
   return walk(parseCloze(value));
+}
+
+/** @param {Exclude<ClozePart, string>} p */
+const isOcclusion = (p) => typeof p.content[0] === 'string' && p.content[0].startsWith('image-occlusion:');
+
+/** @typedef {{ n: number, shape: string, props: Record<string, string> }} Occlusion */
+
+/**
+ * The shapes of an Image Occlusion note: each {{cN::image-occlusion:shape:key=value:…}} in its Occlusion
+ * field. Coordinates are fractions of the image's width and height.
+ * @param {string} field
+ * @returns {Occlusion[]}
+ */
+export function occlusions(field) {
+  /** @type {Occlusion[]} */
+  const out = [];
+  /** @param {ClozePart[]} parts */
+  const walk = (parts) => {
+    for (const p of parts) {
+      if (typeof p === 'string') continue;
+      if (isOcclusion(p)) {
+        const [, shape, ...pairs] = String(p.content[0]).split(':');
+        out.push({ n: p.n, shape, props: Object.fromEntries(pairs.map((kv) => kv.split('=')).filter((kv) => kv.length === 2)) });
+      } else walk(p.content);
+    }
+  };
+  walk(parseCloze(field));
+  return out;
+}
+
+/**
+ * Draw the occlusion masks over the image, in place of Anki's canvas. The card's own deletion is masked on
+ * the question and outlined on the answer; the others are masked on both sides when the note hides all
+ * shapes (oi=1), and not drawn otherwise.
+ * @param {string} html @param {Occlusion[]} shapes @param {number} n @param {boolean} answer
+ */
+export function withMasks(html, shapes, n, answer) {
+  const num = (/** @type {string | undefined} */ v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+  const marks = shapes
+    .map((s) => {
+      const active = s.n === n;
+      if (!active && s.props.oi !== '1') return '';
+      const cls = active ? (answer ? 'vc-io-shown' : 'vc-io-active') : 'vc-io-inactive';
+      const p = s.props;
+      if (s.shape === 'rect') return `<rect class="${cls}" x="${num(p.left)}" y="${num(p.top)}" width="${num(p.width)}" height="${num(p.height)}"/>`;
+      if (s.shape === 'ellipse') {
+        return `<ellipse class="${cls}" cx="${num(p.left) + num(p.rx)}" cy="${num(p.top) + num(p.ry)}" rx="${num(p.rx)}" ry="${num(p.ry)}"/>`;
+      }
+      if (s.shape === 'polygon' && p.points) return `<polygon class="${cls}" points="${escapeHtml(p.points)}"/>`;
+      return ''; // text labels and unknown shapes are not drawn
+    })
+    .join('');
+  const svg = `<svg class="vc-io-masks" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true">${marks}</svg>`;
+  return html.replace(/<canvas id="image-occlusion-canvas"><\/canvas>/g, svg).replace(/<script\b[\s\S]*?<\/script>/gi, '');
 }
 
 /** @param {string} value @param {number} n */
@@ -251,7 +327,7 @@ export function stripHtml(s) {
 export const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
 /** Content Security Policy for the card frame: inline styles and data: images only, no scripts, no network. */
-const CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:";
+const CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data: blob:; media-src blob:; font-src data: blob:";
 
 /** Vocella's own styles for what Anki's built-in stylesheet would add. */
 const BASE_CSS = `
@@ -264,6 +340,21 @@ body { padding: 1.25rem; }
 .vc-typeans { font: inherit; width: min(100%, 20em); padding: .25em .4em; }
 .vc-missing { color: #b00; font-family: monospace; font-size: .8em; }
 details.hint summary { cursor: pointer; color: #36c; }
+img { max-width: 100%; height: auto; }
+#image-occlusion-container { position: relative; display: inline-block; }
+#image-occlusion-container img { display: block; }
+.vc-io-masks { position: absolute; inset: 0; width: 100%; height: 100%; }
+.vc-io-masks * { vector-effect: non-scaling-stroke; stroke: #212121; stroke-width: 1px; }
+.vc-io-active { fill: #ff8e8e; }
+.vc-io-inactive { fill: #ffeba2; }
+.vc-io-shown { fill: none; stroke: #ff8e8e; stroke-width: 2px; }
+.vc-math-error { font-family: monospace; color: #b00; }
+.vc-speak { font: inherit; font-size: .75em; padding: .1em .6em; border: 1px solid #c8c8c2; border-radius: 6px; background: #fff; color: #2f5fd0; cursor: pointer; vertical-align: middle; }
+.nightMode .vc-speak { background: #222; color: #8fb0ff; border-color: #444; }
+#typeans { font-family: monospace; }
+.typeGood { background: #afa; color: black; }
+.typeBad { background: #faa; color: black; }
+.typeMissed { background: #ccc; color: black; }
 `;
 
 /**
