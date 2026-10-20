@@ -1,0 +1,97 @@
+{
+  "version": 1,
+  "source": {
+    "repo": "https://github.com/xenohunter/ankigen",
+    "commit": "faab49b542ee88f61e25de1d82677785e95865e7",
+    "now": 1760000000000,
+    "licence": "CC BY-SA 4.0",
+    "attribution": "AnkiGen vocabulary, https://github.com/xenohunter/ankigen",
+    "data": "2026.10.18"
+  },
+  "decks": [
+    {
+      "id": "es-en-core-1",
+      "title": "Spanish",
+      "native": "Español",
+      "level": "Core I",
+      "know": "English",
+      "ankigen": "#v1&l=es&k=en&m=core-1",
+      "file": "decks/es-en-core-1.apkg",
+      "ankiDeck": "AnkiGen::Español (English)",
+      "notes": 483,
+      "cards": 483,
+      "bytes": 101865,
+      "sha256": "46d89bdf4f36237fff47fdc572ba0f617c3ea0e787d439027dc7b8f052840c87"
+    },
+    {
+      "id": "fr-en-core-1",
+      "title": "French",
+      "native": "Français",
+      "level": "Core I",
+      "know": "English",
+      "ankigen": "#v1&l=fr&k=en&m=core-1",
+      "file": "decks/fr-en-core-1.apkg",
+      "ankiDeck": "AnkiGen::Français (English)",
+      "notes": 473,
+      "cards": 473,
+      "bytes": 99825,
+      "sha256": "44f34a59761025526b7c09e65433999f15aa82214e23e00db8a294c5932b98a1"
+    },
+    {
+      "id": "de-en-core-1",
+      "title": "German",
+      "native": "Deutsch",
+      "level": "Core I",
+      "know": "English",
+      "ankigen": "#v1&l=de&k=en&m=core-1",
+      "file": "decks/de-en-core-1.apkg",
+      "ankiDeck": "AnkiGen::Deutsch (English)",
+      "notes": 481,
+      "cards": 481,
+      "bytes": 103594,
+      "sha256": "18e0a0f3a11c9ad0a2ce3faf0a49bd32761ba285ac5985055dca92633f78c994"
+    },
+    {
+      "id": "ja-en-core-1",
+      "title": "Japanese",
+      "native": "日本語",
+      "level": "Core I",
+      "know": "English",
+      "ankigen": "#v1&l=ja&k=en&m=core-1",
+      "file": "decks/ja-en-core-1.apkg",
+      "ankiDeck": "AnkiGen::日本語 (English)",
+      "notes": 489,
+      "cards": 489,
+      "bytes": 117715,
+      "sha256": "f5ea95893117a817fb3113ff192fcb74a8117a112a62fe282959ad027cf3dd38"
+    },
+    {
+      "id": "zh-en-core-1",
+      "title": "Chinese",
+      "native": "中文",
+      "level": "Core I",
+      "know": "English",
+      "ankigen": "#v1&l=zh&k=en&m=core-1",
+      "file": "decks/zh-en-core-1.apkg",
+      "ankiDeck": "AnkiGen::中文 (English)",
+      "notes": 492,
+      "cards": 492,
+      "bytes": 116014,
+      "sha256": "447c6e8d24781190c3cdad9c6dcbc8206f0bb60eac3df84a023aafbb10f172bd"
+    },
+    {
+      "id": "ko-en-core-1",
+      "title": "Korean",
+      "native": "한국어",
+      "level": "Core I",
+      "know": "English",
+      "ankigen": "#v1&l=ko&k=en&m=core-1",
+      "file": "decks/ko-en-core-1.apkg",
+      "ankiDeck": "AnkiGen::한국어 (English)",
+      "notes": 483,
+      "cards": 483,
+      "bytes": 105570,
+      "sha256": "2a46fb555568dd50f5386e16186405569e277795e8f0d41771ee5cb76cdb1a2a"
+    }
+  ]
+}
