@@ -36,6 +36,21 @@ export const COMMANDS = [
     run: (r, a) => r.openShelfDeck(String(a?.id ?? '')),
   },
   {
+    name: 'list-deck-options',
+    description: 'List the languages and topics any AnkiGen deck can be built from. Returns a promise.',
+    params: {},
+    ui: 'The language and topic menus under "Build any AnkiGen deck".',
+    run: (r) => r.deckOptions(),
+  },
+  {
+    name: 'build-deck',
+    description:
+      'Build an AnkiGen deck on the device and show its first card. know is a language code, or "=" for definitions in the learned language. Returns a promise.',
+    params: { learn: 'string, a language code', know: 'string, a language code or "="', modules: 'string[], topic ids from list-deck-options' },
+    ui: 'The "Build and open" button under "Build any AnkiGen deck".',
+    run: (r, a) => r.buildDeck({ learn: String(a?.learn ?? ''), know: String(a?.know ?? ''), modules: Array.isArray(a?.modules) ? a.modules.map(String) : [] }),
+  },
+  {
     name: 'list-decks',
     description: 'List the decks in the open file (yours or an onboarded one), with card counts (a deck counts its subdecks).',
     params: {},

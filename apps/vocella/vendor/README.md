@@ -16,3 +16,5 @@ Licences: `LICENSE-sql.js` (MIT; SQLite itself is public domain), `LICENSE-fflat
 How they load:
 - `sql-wasm.js` is a classic script that defines `initSqlJs`. The page adds it on the first file open (`src/app.js`); the tests load it through `tests/lib/sqljs.mjs`, which is copied from AnkiGen's `tools/lib/sqljs.mjs` (MIT).
 - `fflate.js` and `fzstd.js` are ES modules imported by `src/apkg.js`. fzstd decompresses `collection.anki21b`, the format current Anki exports.
+
+`vendor/ankigen/` is AnkiGen's deck builder and data bundles for the deck picker, copied unmodified by `tools/vendor-ankigen.mjs`; its own `README.md` lists the commit, licences and each file's SHA-256.

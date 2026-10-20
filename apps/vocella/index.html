@@ -37,6 +37,16 @@
   .tiles .meta { color: var(--mute); font-size: .85rem; }
   .fine { color: var(--mute); font-size: .8rem; margin: .6rem 0 0; }
   .fine a { color: inherit; }
+  #builder { display: flex; flex-direction: column; gap: .6rem; align-items: flex-start; }
+  #builder .fine { margin: 0; }
+  .pick { display: flex; gap: .75rem; flex-wrap: wrap; }
+  .pick label { display: flex; flex-direction: column; gap: .2rem; font-size: .85rem; color: var(--mute); }
+  select { font: inherit; color: var(--fg); background: #fff; border: 1px solid var(--line); border-radius: 6px; padding: .35rem .5rem; min-width: 11rem; }
+  #pick-topics { width: 100%; }
+  #pick-topics summary { cursor: pointer; color: var(--fg); }
+  #pick-modules { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: .15rem .75rem; margin-top: .5rem; }
+  #pick-modules h3 { grid-column: 1 / -1; font-size: .8rem; color: var(--mute); margin: .5rem 0 0; font-weight: 600; }
+  #pick-modules label { font-size: .9rem; display: flex; gap: .4rem; align-items: baseline; }
   #yours { border: 1px dashed var(--line); border-radius: 8px; padding: 1rem 1.25rem; }
   #yours.drag { border-color: var(--accent); background: #f0f4ff; }
   #shelf-empty { color: var(--mute); }
@@ -67,6 +77,19 @@
       <h2 id="shelf-title">Language decks</h2>
       <ul id="library" class="tiles"></ul>
       <p class="fine">Vocabulary: <a href="https://github.com/xenohunter/ankigen" rel="noopener">AnkiGen</a>, <a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="noopener">CC BY-SA 4.0</a>. Drafted with an AI model and being reviewed by people, so it may contain errors.</p>
+    </section>
+    <section id="builder" aria-labelledby="builder-title">
+      <h2 id="builder-title">Build any AnkiGen deck</h2>
+      <div class="pick">
+        <label>Learn <select id="pick-learn"></select></label>
+        <label>I know <select id="pick-know"></select></label>
+      </div>
+      <details id="pick-topics">
+        <summary>Topics: <span id="pick-count">Core I</span></summary>
+        <div id="pick-modules"></div>
+      </details>
+      <button class="primary" data-command="build-deck">Build and open</button>
+      <p class="fine">Built on this device from AnkiGen's data, in about a second. 15 languages, 36 topics.</p>
     </section>
     <section id="yours" aria-labelledby="yours-title">
       <h2 id="yours-title">Your deck</h2>

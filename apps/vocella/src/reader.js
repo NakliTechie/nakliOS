@@ -3,6 +3,7 @@
 
 import { openApkg } from './apkg.js';
 import { renderCard, stripHtml } from './render.js';
+import { createBuilder } from './builder.js';
 
 /** @typedef {import('./apkg.js').Collection} Collection */
 /** @typedef {{ id: string, name: string, depth: number, cards: number }} DeckRow */
@@ -20,6 +21,7 @@ export class Reader {
   constructor(loadSql, fetchBytes) {
     this.loadSql = loadSql;
     this.fetchBytes = fetchBytes;
+    this.builder = createBuilder({ fetchBytes, loadSql });
     /** @type {{ source: any, decks: ShelfDeck[] } | null} */
     this.catalog = null;
     /** @type {Collection | null} */
@@ -57,6 +59,23 @@ export class Reader {
     this.shelfId = id;
     const deck = this.col?.decks.find((d) => d.name === entry.ankiDeck);
     if (!deck) throw new Error(`${entry.file} has no deck named "${entry.ankiDeck}".`);
+    return this.openDeck(deck.id);
+  }
+
+  /** Languages and topics the deck picker offers. */
+  deckOptions() {
+    return this.builder.options();
+  }
+
+  /**
+   * Build an AnkiGen deck on the device, open it, and show its first card.
+   * @param {import('./builder.js').DeckRequest} req
+   */
+  async buildDeck(req) {
+    const built = await this.builder.build(req);
+    await this.load(built.bytes, built.fileName);
+    const deck = this.col?.decks.find((d) => d.name === built.deckName);
+    if (!deck) throw new Error(`The built deck has no deck named "${built.deckName}".`);
     return this.openDeck(deck.id);
   }
 

@@ -577,13 +577,13 @@
       "id": "vocella",
       "repo": "NakliTechie/vocella",
       "requestedRef": "main",
-      "resolvedCommit": "64c674e500c918c9e450c40065443ad0dec5ac16",
+      "resolvedCommit": "f7fdc7afb9b31d2a0face2717a55760613d6322f",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "d63f9ea46e0a779cafa3e1311cb927e3992ee1170f0e90048036d447c3274426",
-          "bytes": 49174
+          "sha256": "96872ac43bb3da4bf4964fb553e30d9e8c7235354b4fbcdfe0a8df6f28a19ff0",
+          "bytes": 50707
         },
         {
           "source": "LICENSE",
@@ -600,8 +600,8 @@
         {
           "source": "src/app.js",
           "destination": "src/app.js",
-          "sha256": "7627eb2a8061c96fc64550c5fbe269ce9732b04157b557c3373f685acb2e84e6",
-          "bytes": 7535
+          "sha256": "1e689d6c7f358b855a461bfe2f72206175c87725adf8a18efa0d4e177a0344af",
+          "bytes": 9751
         },
         {
           "source": "src/apkg.js",
@@ -612,14 +612,14 @@
         {
           "source": "src/commands.js",
           "destination": "src/commands.js",
-          "sha256": "834e5bde0c1c5bd662f5a18dd65bc51f6a6989f7f787a7c5c21aa870c47be2bd",
-          "bytes": 3810
+          "sha256": "d4ec85a6c70079227a2fefc660920b622a39b38fccace007c68d9cc67ae563e7",
+          "bytes": 4665
         },
         {
           "source": "src/reader.js",
           "destination": "src/reader.js",
-          "sha256": "4a4b48f96f263ff49543fdaaa2cdcac89a67a48ddb2b78922dea9285d53d5a7c",
-          "bytes": 5951
+          "sha256": "18dac30cc23f8577ab491b56f486ea70d5fabbf42e6ade71d5c4d16ca8f97043",
+          "bytes": 6635
         },
         {
           "source": "src/render.js",
@@ -672,8 +672,8 @@
         {
           "source": "vendor/README.md",
           "destination": "vendor/README.md",
-          "sha256": "4c1c12aa3c7f0fbc5a6646a57b7ee4a1e294b54b68000d85c5dfbcc0bad08b5a",
-          "bytes": 1723
+          "sha256": "1185dbf17142721f03bbf484714c028bcdb8bba272d71b1907b49c92ca192943",
+          "bytes": 1927
         },
         {
           "source": "decks/catalog.json",
@@ -684,8 +684,8 @@
         {
           "source": "decks/NOTICE.md",
           "destination": "decks/NOTICE.md",
-          "sha256": "23899add90f7c86fae33f7cc4b25cdcb1397669ceb9784cbe2dbe46dc7b169da",
-          "bytes": 1404
+          "sha256": "be1d7e0f8762bada7013ce932ecd80b3b6191a292d07f00ffb0ea05029d5ee19",
+          "bytes": 1687
         },
         {
           "source": "decks/es-en-core-1.apkg",
@@ -722,6 +722,240 @@
           "destination": "decks/ko-en-core-1.apkg",
           "sha256": "2a46fb555568dd50f5386e16186405569e277795e8f0d41771ee5cb76cdb1a2a",
           "bytes": 105570
+        },
+        {
+          "source": "src/builder.js",
+          "destination": "src/builder.js",
+          "sha256": "fd56cbbb2cc0b8ae589ae1f017660cad1ea4aaab88dcc72b9a61ae18c89b7095",
+          "bytes": 3767
+        },
+        {
+          "source": "vendor/ankigen/LICENSE",
+          "destination": "vendor/ankigen/LICENSE",
+          "sha256": "f7cb1127b6a0f11409c6daa501dce6727ee281c36c817c1814c7199d236f8f98",
+          "bytes": 1070
+        },
+        {
+          "source": "vendor/ankigen/README.md",
+          "destination": "vendor/ankigen/README.md",
+          "sha256": "18556edecc5367c1ef700138259a292f7aef5721ac28b19a3821f9ee885ef4eb",
+          "bytes": 4283
+        },
+        {
+          "source": "vendor/ankigen/bundles/2026.10.18/concepts.json",
+          "destination": "vendor/ankigen/bundles/2026.10.18/concepts.json",
+          "sha256": "7895df28e4a568108e026025d5c583184af8e55748f7649bdf8a3450defa99a3",
+          "bytes": 219739
+        },
+        {
+          "source": "vendor/ankigen/bundles/2026.10.18/de.json",
+          "destination": "vendor/ankigen/bundles/2026.10.18/de.json",
+          "sha256": "9b07e0fafd1524f1379c6ede76b4de983154856cd9c4960b93d7827c71335ca3",
+          "bytes": 1207123
+        },
+        {
+          "source": "vendor/ankigen/bundles/2026.10.18/el.json",
+          "destination": "vendor/ankigen/bundles/2026.10.18/el.json",
+          "sha256": "07536d31efe0b92d7fb83ba842ab30ed925e29401b57bdfcfb3dc3d8483de51d",
+          "bytes": 1781592
+        },
+        {
+          "source": "vendor/ankigen/bundles/2026.10.18/en.json",
+          "destination": "vendor/ankigen/bundles/2026.10.18/en.json",
+          "sha256": "fc3cd907b32344f13e9debbf85b7ba565a144de460bf57f1657ae67a23d3d5a1",
+          "bytes": 977273
+        },
+        {
+          "source": "vendor/ankigen/bundles/2026.10.18/es.json",
+          "destination": "vendor/ankigen/bundles/2026.10.18/es.json",
+          "sha256": "889ca46d1c2f53a66fbf0cb8df7d43d47894aa6764775febd6fad716b603bd81",
+          "bytes": 1108160
+        },
+        {
+          "source": "vendor/ankigen/bundles/2026.10.18/fr.json",
+          "destination": "vendor/ankigen/bundles/2026.10.18/fr.json",
+          "sha256": "7f6840ad80c6669368d33ea826df9a2cd5d660d3ed5d60209ebcbbe44ef96d6c",
+          "bytes": 1155326
+        },
+        {
+          "source": "vendor/ankigen/bundles/2026.10.18/hy.json",
+          "destination": "vendor/ankigen/bundles/2026.10.18/hy.json",
+          "sha256": "2db742b469be6f03a5bc4853eee6ef8e9f3704ab5fbdf9754316c093f257dbf4",
+          "bytes": 1606912
+        },
+        {
+          "source": "vendor/ankigen/bundles/2026.10.18/ja.json",
+          "destination": "vendor/ankigen/bundles/2026.10.18/ja.json",
+          "sha256": "21957bd046cb28116a71ebc8303055bd2d461a92ea4e118797585c0a9d9fbb54",
+          "bytes": 1611008
+        },
+        {
+          "source": "vendor/ankigen/bundles/2026.10.18/ko.json",
+          "destination": "vendor/ankigen/bundles/2026.10.18/ko.json",
+          "sha256": "471f674710c67f006bbcab8712509f2811411ed95d0d990a3aa2c1528d426ce3",
+          "bytes": 1270139
+        },
+        {
+          "source": "vendor/ankigen/bundles/2026.10.18/meta.json",
+          "destination": "vendor/ankigen/bundles/2026.10.18/meta.json",
+          "sha256": "b3b11428a97f191dbbee19bf0eefc54b50e2a779763b5833c72e932e05524d58",
+          "bytes": 54747
+        },
+        {
+          "source": "vendor/ankigen/bundles/2026.10.18/nl.json",
+          "destination": "vendor/ankigen/bundles/2026.10.18/nl.json",
+          "sha256": "77cd53f3d2b388925cc2c764906ddb295fdf26c2325b49053533774946bf5a01",
+          "bytes": 1147690
+        },
+        {
+          "source": "vendor/ankigen/bundles/2026.10.18/pl.json",
+          "destination": "vendor/ankigen/bundles/2026.10.18/pl.json",
+          "sha256": "227f498ac93cb9de8e21d6916479f2c5801a898a7d4a1c6dcdf42601c7471319",
+          "bytes": 1210678
+        },
+        {
+          "source": "vendor/ankigen/bundles/2026.10.18/pt.json",
+          "destination": "vendor/ankigen/bundles/2026.10.18/pt.json",
+          "sha256": "493464e7e03026147727d82149b20a156e014921f7c74fc5129b9a476877f698",
+          "bytes": 1112363
+        },
+        {
+          "source": "vendor/ankigen/bundles/2026.10.18/ru.json",
+          "destination": "vendor/ankigen/bundles/2026.10.18/ru.json",
+          "sha256": "a85ad94d032dde9ce17023d56d49e55408a2352106a9533fc846c033312ab61d",
+          "bytes": 1754121
+        },
+        {
+          "source": "vendor/ankigen/bundles/2026.10.18/sr.json",
+          "destination": "vendor/ankigen/bundles/2026.10.18/sr.json",
+          "sha256": "fc6f6ee0ab4821a0296f9d3327833e20b961de1c88c2d27faf2154082b4997dd",
+          "bytes": 1619014
+        },
+        {
+          "source": "vendor/ankigen/bundles/2026.10.18/tr.json",
+          "destination": "vendor/ankigen/bundles/2026.10.18/tr.json",
+          "sha256": "26bad0893e5c19e5ae0097372c42cff5dd823627c3c17d48cc490b1d91df5e96",
+          "bytes": 1134318
+        },
+        {
+          "source": "vendor/ankigen/bundles/2026.10.18/zh.json",
+          "destination": "vendor/ankigen/bundles/2026.10.18/zh.json",
+          "sha256": "09e6a22379234175e65e1658af97ded07927c68f7c0030795c541deeefb1e223",
+          "bytes": 1442173
+        },
+        {
+          "source": "vendor/ankigen/css/card.css",
+          "destination": "vendor/ankigen/css/card.css",
+          "sha256": "c2cdc21fa8c59ccc6cab9b8adca8e3f25a0d048b9feabfa9dc22a3f4ca3c44a2",
+          "bytes": 3214
+        },
+        {
+          "source": "vendor/ankigen/data/LICENSE.md",
+          "destination": "vendor/ankigen/data/LICENSE.md",
+          "sha256": "63f0f0f3916b56b44396c16ad63227f6e3e582467fa0e3e7edfa949f4beba831",
+          "bytes": 652
+        },
+        {
+          "source": "vendor/ankigen/data/meta/version.json",
+          "destination": "vendor/ankigen/data/meta/version.json",
+          "sha256": "f26b01849b5dd2ebce73fbdaec70c16445b19cbae81344a8908edc0f23dd599e",
+          "bytes": 179
+        },
+        {
+          "source": "vendor/ankigen/src/config.js",
+          "destination": "vendor/ankigen/src/config.js",
+          "sha256": "c963d6cf775fd187a308f3d66e290ccb0ce858042432eb3ab5eb96c39f28de51",
+          "bytes": 2480
+        },
+        {
+          "source": "vendor/ankigen/src/data/loader.js",
+          "destination": "vendor/ankigen/src/data/loader.js",
+          "sha256": "dd48c61638b5905703a744268bd3d7042c1ec1b5845b96e7418358b5d221e403",
+          "bytes": 7372
+        },
+        {
+          "source": "vendor/ankigen/src/deck/apkg.js",
+          "destination": "vendor/ankigen/src/deck/apkg.js",
+          "sha256": "d35fbe0ae2c6f060680d55cbdb95aa947fcf21ba4a66147afe2dbd8d46c9e975",
+          "bytes": 9803
+        },
+        {
+          "source": "vendor/ankigen/src/deck/deck.js",
+          "destination": "vendor/ankigen/src/deck/deck.js",
+          "sha256": "900c329b2fbb2756be88ca23af1cd318a6216c0849ea34a82afcf8e51779549c",
+          "bytes": 1456
+        },
+        {
+          "source": "vendor/ankigen/src/deck/fields.js",
+          "destination": "vendor/ankigen/src/deck/fields.js",
+          "sha256": "78cf5155388ba1376916523b509cffa05bfa33ee74127970c6449428700dbc65",
+          "bytes": 13912
+        },
+        {
+          "source": "vendor/ankigen/src/deck/ids.js",
+          "destination": "vendor/ankigen/src/deck/ids.js",
+          "sha256": "f02b4c93725a9779a0c6cf1a00be117c08e4a6c7ddf02b467068c1a3b1147278",
+          "bytes": 3206
+        },
+        {
+          "source": "vendor/ankigen/src/deck/names.js",
+          "destination": "vendor/ankigen/src/deck/names.js",
+          "sha256": "4e5aa142f8988c955e4437127e34d7b692ab2ae45d24529f85dd3ac792c554f5",
+          "bytes": 1144
+        },
+        {
+          "source": "vendor/ankigen/src/deck/render.js",
+          "destination": "vendor/ankigen/src/deck/render.js",
+          "sha256": "1a3033c3176c548f82e64bbaf4bc0c7bd29e5918bb4e7e15579f49ac262dc1c1",
+          "bytes": 3063
+        },
+        {
+          "source": "vendor/ankigen/src/deck/select.js",
+          "destination": "vendor/ankigen/src/deck/select.js",
+          "sha256": "d59073a8f9e5052d7ee71fd3179c8411bcade337b10db05036548b37460f5556",
+          "bytes": 9513
+        },
+        {
+          "source": "vendor/ankigen/src/deck/templates.js",
+          "destination": "vendor/ankigen/src/deck/templates.js",
+          "sha256": "63c0c54e9aea510d7d32bd9a59b0acff0d0dd6574089b66c5e288f4dfdd7dbc9",
+          "bytes": 5909
+        },
+        {
+          "source": "vendor/ankigen/src/state.js",
+          "destination": "vendor/ankigen/src/state.js",
+          "sha256": "b69e970885a2d3b1a9a24ebb80425652d494572f593468ddbe25dadb3379c284",
+          "bytes": 11481
+        },
+        {
+          "source": "vendor/ankigen/src/text/furigana.js",
+          "destination": "vendor/ankigen/src/text/furigana.js",
+          "sha256": "a6a6d95d2b20fb02f3bbdcbeafaf21e1c55e7dbf4cc9bf25761a41dffc1116f5",
+          "bytes": 3641
+        },
+        {
+          "source": "vendor/ankigen/src/text/html.js",
+          "destination": "vendor/ankigen/src/text/html.js",
+          "sha256": "85942e28193069482c919f53025aca53dabf5f2070f711047e7b8848c8516580",
+          "bytes": 1105
+        },
+        {
+          "source": "vendor/ankigen/src/text/normalize.js",
+          "destination": "vendor/ankigen/src/text/normalize.js",
+          "sha256": "8c366ada0197d5c47ce4e4f1c1db2c94d930e8c40d72101588943015a28f5312",
+          "bytes": 4361
+        },
+        {
+          "source": "vendor/ankigen/src/text/translit.js",
+          "destination": "vendor/ankigen/src/text/translit.js",
+          "sha256": "3b19180188847efe5952454337fcce39e42fac1bcb34ed010db6531f574923d0",
+          "bytes": 11490
+        },
+        {
+          "source": "vendor/ankigen/vendor/fflate.js",
+          "destination": "vendor/ankigen/vendor/fflate.js",
+          "sha256": "29e604e0e112f3c9698f51151ebc80e6a90caa2dae0d004a6adb9651ebad8a24",
+          "bytes": 127
         }
       ]
     }

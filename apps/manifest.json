@@ -505,6 +505,162 @@
         {
           "source": "decks/ko-en-core-1.apkg",
           "destination": "decks/ko-en-core-1.apkg"
+        },
+        {
+          "source": "src/builder.js",
+          "destination": "src/builder.js"
+        },
+        {
+          "source": "vendor/ankigen/LICENSE",
+          "destination": "vendor/ankigen/LICENSE"
+        },
+        {
+          "source": "vendor/ankigen/README.md",
+          "destination": "vendor/ankigen/README.md"
+        },
+        {
+          "source": "vendor/ankigen/bundles/2026.10.18/concepts.json",
+          "destination": "vendor/ankigen/bundles/2026.10.18/concepts.json"
+        },
+        {
+          "source": "vendor/ankigen/bundles/2026.10.18/de.json",
+          "destination": "vendor/ankigen/bundles/2026.10.18/de.json"
+        },
+        {
+          "source": "vendor/ankigen/bundles/2026.10.18/el.json",
+          "destination": "vendor/ankigen/bundles/2026.10.18/el.json"
+        },
+        {
+          "source": "vendor/ankigen/bundles/2026.10.18/en.json",
+          "destination": "vendor/ankigen/bundles/2026.10.18/en.json"
+        },
+        {
+          "source": "vendor/ankigen/bundles/2026.10.18/es.json",
+          "destination": "vendor/ankigen/bundles/2026.10.18/es.json"
+        },
+        {
+          "source": "vendor/ankigen/bundles/2026.10.18/fr.json",
+          "destination": "vendor/ankigen/bundles/2026.10.18/fr.json"
+        },
+        {
+          "source": "vendor/ankigen/bundles/2026.10.18/hy.json",
+          "destination": "vendor/ankigen/bundles/2026.10.18/hy.json"
+        },
+        {
+          "source": "vendor/ankigen/bundles/2026.10.18/ja.json",
+          "destination": "vendor/ankigen/bundles/2026.10.18/ja.json"
+        },
+        {
+          "source": "vendor/ankigen/bundles/2026.10.18/ko.json",
+          "destination": "vendor/ankigen/bundles/2026.10.18/ko.json"
+        },
+        {
+          "source": "vendor/ankigen/bundles/2026.10.18/meta.json",
+          "destination": "vendor/ankigen/bundles/2026.10.18/meta.json"
+        },
+        {
+          "source": "vendor/ankigen/bundles/2026.10.18/nl.json",
+          "destination": "vendor/ankigen/bundles/2026.10.18/nl.json"
+        },
+        {
+          "source": "vendor/ankigen/bundles/2026.10.18/pl.json",
+          "destination": "vendor/ankigen/bundles/2026.10.18/pl.json"
+        },
+        {
+          "source": "vendor/ankigen/bundles/2026.10.18/pt.json",
+          "destination": "vendor/ankigen/bundles/2026.10.18/pt.json"
+        },
+        {
+          "source": "vendor/ankigen/bundles/2026.10.18/ru.json",
+          "destination": "vendor/ankigen/bundles/2026.10.18/ru.json"
+        },
+        {
+          "source": "vendor/ankigen/bundles/2026.10.18/sr.json",
+          "destination": "vendor/ankigen/bundles/2026.10.18/sr.json"
+        },
+        {
+          "source": "vendor/ankigen/bundles/2026.10.18/tr.json",
+          "destination": "vendor/ankigen/bundles/2026.10.18/tr.json"
+        },
+        {
+          "source": "vendor/ankigen/bundles/2026.10.18/zh.json",
+          "destination": "vendor/ankigen/bundles/2026.10.18/zh.json"
+        },
+        {
+          "source": "vendor/ankigen/css/card.css",
+          "destination": "vendor/ankigen/css/card.css"
+        },
+        {
+          "source": "vendor/ankigen/data/LICENSE.md",
+          "destination": "vendor/ankigen/data/LICENSE.md"
+        },
+        {
+          "source": "vendor/ankigen/data/meta/version.json",
+          "destination": "vendor/ankigen/data/meta/version.json"
+        },
+        {
+          "source": "vendor/ankigen/src/config.js",
+          "destination": "vendor/ankigen/src/config.js"
+        },
+        {
+          "source": "vendor/ankigen/src/data/loader.js",
+          "destination": "vendor/ankigen/src/data/loader.js"
+        },
+        {
+          "source": "vendor/ankigen/src/deck/apkg.js",
+          "destination": "vendor/ankigen/src/deck/apkg.js"
+        },
+        {
+          "source": "vendor/ankigen/src/deck/deck.js",
+          "destination": "vendor/ankigen/src/deck/deck.js"
+        },
+        {
+          "source": "vendor/ankigen/src/deck/fields.js",
+          "destination": "vendor/ankigen/src/deck/fields.js"
+        },
+        {
+          "source": "vendor/ankigen/src/deck/ids.js",
+          "destination": "vendor/ankigen/src/deck/ids.js"
+        },
+        {
+          "source": "vendor/ankigen/src/deck/names.js",
+          "destination": "vendor/ankigen/src/deck/names.js"
+        },
+        {
+          "source": "vendor/ankigen/src/deck/render.js",
+          "destination": "vendor/ankigen/src/deck/render.js"
+        },
+        {
+          "source": "vendor/ankigen/src/deck/select.js",
+          "destination": "vendor/ankigen/src/deck/select.js"
+        },
+        {
+          "source": "vendor/ankigen/src/deck/templates.js",
+          "destination": "vendor/ankigen/src/deck/templates.js"
+        },
+        {
+          "source": "vendor/ankigen/src/state.js",
+          "destination": "vendor/ankigen/src/state.js"
+        },
+        {
+          "source": "vendor/ankigen/src/text/furigana.js",
+          "destination": "vendor/ankigen/src/text/furigana.js"
+        },
+        {
+          "source": "vendor/ankigen/src/text/html.js",
+          "destination": "vendor/ankigen/src/text/html.js"
+        },
+        {
+          "source": "vendor/ankigen/src/text/normalize.js",
+          "destination": "vendor/ankigen/src/text/normalize.js"
+        },
+        {
+          "source": "vendor/ankigen/src/text/translit.js",
+          "destination": "vendor/ankigen/src/text/translit.js"
+        },
+        {
+          "source": "vendor/ankigen/vendor/fflate.js",
+          "destination": "vendor/ankigen/vendor/fflate.js"
         }
       ]
     }
