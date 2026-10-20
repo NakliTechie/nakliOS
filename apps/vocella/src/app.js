@@ -176,6 +176,10 @@ frame.addEventListener('load', () => {
       }
     });
   }
+  // Chrome's media controls keep the arrow keys while the player has focus, and no key or pointer event
+  // reaches the page. Once playback starts, focus leaves the player, so the arrows step cards again; a
+  // keyboard user who only tabs onto a player keeps its own controls.
+  doc.querySelectorAll('audio, video').forEach((m) => m.addEventListener('play', () => setTimeout(() => /** @type {HTMLElement} */ (m).blur(), 0)));
   doc.addEventListener('keydown', onKey);
 });
 
@@ -213,8 +217,9 @@ function drawShelf() {
     );
   }
   const st = reader.stats();
+  const count = (/** @type {number} */ n, /** @type {string} */ one, /** @type {string} */ many) => `${n} ${n === 1 ? one : many}`;
   $('stats').textContent = st.cardsStudied
-    ? `Today: ${st.reviewsToday} reviews, ${st.newToday} new. Streak: ${st.streak} ${st.streak === 1 ? 'day' : 'days'}. ${st.cardsStudied} cards studied.`
+    ? `Today: ${count(st.reviewsToday, 'review', 'reviews')}, ${st.newToday} new. Streak: ${count(st.streak, 'day', 'days')}. ${count(st.cardsStudied, 'card', 'cards')} studied.`
     : 'No reviews yet. Open a deck and press Study.';
   /** @type {HTMLInputElement} */ ($('new-limit')).value = String(st.newPerDay);
   if (reader.col) {
