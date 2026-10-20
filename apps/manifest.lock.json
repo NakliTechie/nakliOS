@@ -424,6 +424,212 @@
       ]
     },
     {
+      "id": "protavia",
+      "repo": "NakliTechie/protavia",
+      "requestedRef": "main",
+      "resolvedCommit": "1deff346a020289c3a782b3cdfc7ad5341c83b34",
+      "files": [
+        {
+          "source": "index.html",
+          "destination": "index.html",
+          "sha256": "971e30d7329fa3f81f1ed97b280cbf506ef70a4934193645591609c2d1dc0dec",
+          "bytes": 55374
+        },
+        {
+          "source": "LICENSE",
+          "destination": "LICENSE",
+          "sha256": "8d5bf298355c136fb57eac95af829c4cc06a8e144cb3f08dc9f6aa5f8a7356ad",
+          "bytes": 1071
+        },
+        {
+          "source": "app/main.js",
+          "destination": "app/main.js",
+          "sha256": "7ce1aa41123eee295a880500cfaa58ceefbee53825d4615d491399441538c65a",
+          "bytes": 13335
+        },
+        {
+          "source": "app/tour.js",
+          "destination": "app/tour.js",
+          "sha256": "b8246ace4fd62d5a0e40c1b416314aba7dec4979b5659420e5e980650748d28f",
+          "bytes": 7793
+        },
+        {
+          "source": "app/search.js",
+          "destination": "app/search.js",
+          "sha256": "938bba81c5d4e17b0ad5d206b733f3b0e160821735cfedec8201abe466931ff7",
+          "bytes": 3928
+        },
+        {
+          "source": "app/status.js",
+          "destination": "app/status.js",
+          "sha256": "3f6e767b28fd2e4dcbba880b53e0b8900d0a46b1799be22f3548d59095fba29b",
+          "bytes": 2233
+        },
+        {
+          "source": "app/viewer.js",
+          "destination": "app/viewer.js",
+          "sha256": "2a4271b942698522ef1068d794722c12eb8d1e92e3020a1f8ae61bb9493e64b7",
+          "bytes": 3347
+        },
+        {
+          "source": "app/structure.js",
+          "destination": "app/structure.js",
+          "sha256": "fb209192d8ea2e96556ee33d6284c60b6501988252753d7ff9339e9c257d666e",
+          "bytes": 6210
+        },
+        {
+          "source": "app/design.js",
+          "destination": "app/design.js",
+          "sha256": "daaf6c09ea03bbabb7a446324d20d94994414728f429c412d9a2b04043f364f6",
+          "bytes": 5754
+        },
+        {
+          "source": "app/ipsae.js",
+          "destination": "app/ipsae.js",
+          "sha256": "e4920c61b870fb9889e923458335879508693d29e610743de689e66d5dd4bc76",
+          "bytes": 6789
+        },
+        {
+          "source": "vendor/README.md",
+          "destination": "vendor/README.md",
+          "sha256": "c100dc3f5fa23819cc86aa775a87c9f2d4d7e24cd1f200d1ef51813cf1fff9cb",
+          "bytes": 7147
+        },
+        {
+          "source": "vendor/molstar/5.13.1/molstar.js",
+          "destination": "vendor/molstar/5.13.1/molstar.js",
+          "sha256": "4fc6493c2471db8834dcc391151b344d7017e4eb8a4eb76c152be5f9dbd23874",
+          "bytes": 5268685
+        },
+        {
+          "source": "vendor/molstar/5.13.1/molstar.css",
+          "destination": "vendor/molstar/5.13.1/molstar.css",
+          "sha256": "22fbf73b75c11ef57687d08437c95dbfe8430ea895264f6da2b9b01e28bacc49",
+          "bytes": 72904
+        },
+        {
+          "source": "vendor/molstar/5.13.1/LICENSE",
+          "destination": "vendor/molstar/5.13.1/LICENSE",
+          "sha256": "aa42900c6ea7bfcf22d25a4c369025e01a526c66501fd9193f9a8aecee7a0753",
+          "bytes": 1088
+        },
+        {
+          "source": "vendor/proteinmpnn-web/0.1.0-10849c13/index.js",
+          "destination": "vendor/proteinmpnn-web/0.1.0-10849c13/index.js",
+          "sha256": "07db9b7399de33a57c6f6b7f316f3300316b08f32663ffa18e48284139c18189",
+          "bytes": 323
+        },
+        {
+          "source": "vendor/proteinmpnn-web/0.1.0-10849c13/types.js",
+          "destination": "vendor/proteinmpnn-web/0.1.0-10849c13/types.js",
+          "sha256": "d4cdd76d13dc5cb189211799ad7d26ff7e9ea4883094e3c6f38d1b8fa79c17f2",
+          "bytes": 151
+        },
+        {
+          "source": "vendor/proteinmpnn-web/0.1.0-10849c13/structure.js",
+          "destination": "vendor/proteinmpnn-web/0.1.0-10849c13/structure.js",
+          "sha256": "6eae01b5255d263ed7b3fc90f2ea4e64f8c89c452c41c20b0db02b9cc2f73612",
+          "bytes": 10156
+        },
+        {
+          "source": "vendor/proteinmpnn-web/0.1.0-10849c13/model.js",
+          "destination": "vendor/proteinmpnn-web/0.1.0-10849c13/model.js",
+          "sha256": "d5cd3e6d91e9b2dcd8db26cc468996842254619e4868aaaabdc1437b0c2b5fbc",
+          "bytes": 14649
+        },
+        {
+          "source": "vendor/proteinmpnn-web/0.1.0-10849c13/onnx.js",
+          "destination": "vendor/proteinmpnn-web/0.1.0-10849c13/onnx.js",
+          "sha256": "5fb3805c618cb11b7caf1c85204dbeb1ce757cb9196f2a55494abfdfe6042053",
+          "bytes": 9987
+        },
+        {
+          "source": "vendor/proteinmpnn-web/0.1.0-10849c13/math.js",
+          "destination": "vendor/proteinmpnn-web/0.1.0-10849c13/math.js",
+          "sha256": "6b618adb44147acedfbb017e00d5d28723b2947c573b93b592897f18d3ba686a",
+          "bytes": 5512
+        },
+        {
+          "source": "vendor/proteinmpnn-web/0.1.0-10849c13/constraints.js",
+          "destination": "vendor/proteinmpnn-web/0.1.0-10849c13/constraints.js",
+          "sha256": "cf55f1b9a46c4e374f2feb7a1451bed276c169230563b3bc8f7aad142280221f",
+          "bytes": 8771
+        },
+        {
+          "source": "vendor/proteinmpnn-web/0.1.0-10849c13/LICENSE",
+          "destination": "vendor/proteinmpnn-web/0.1.0-10849c13/LICENSE",
+          "sha256": "a7a514525fc2f35523006afa0e567da8ea4542952743cafb16d6ddd605a502ab",
+          "bytes": 1085
+        },
+        {
+          "source": "vendor/proteinmpnn-web/0.1.0-10849c13/THIRD_PARTY_NOTICES.md",
+          "destination": "vendor/proteinmpnn-web/0.1.0-10849c13/THIRD_PARTY_NOTICES.md",
+          "sha256": "8c9a5f38b001461aabd2eb1761e051f283c9658f1fd897b10ce41f9b999876aa",
+          "bytes": 1136
+        },
+        {
+          "source": "vendor/proteinmpnn/v_48_020/manifest.json",
+          "destination": "vendor/proteinmpnn/v_48_020/manifest.json",
+          "sha256": "ee5a12437d88a6317d8911d89a74f7f06d35bb139345a9c0a03500e00c67e2f9",
+          "bytes": 994
+        },
+        {
+          "source": "vendor/proteinmpnn/v_48_020/encoder.onnx",
+          "destination": "vendor/proteinmpnn/v_48_020/encoder.onnx",
+          "sha256": "ed5c272055c9ded111df397345ab10dc139f6036019aa59c96d01a07f9613aae",
+          "bytes": 3973770
+        },
+        {
+          "source": "vendor/proteinmpnn/v_48_020/decoder-step.onnx",
+          "destination": "vendor/proteinmpnn/v_48_020/decoder-step.onnx",
+          "sha256": "0ee0d60a92793bb98ee9344d7bc42353144cd6e483916caa7137cb9a20ae0f1b",
+          "bytes": 2811614
+        },
+        {
+          "source": "vendor/proteinmpnn/v_48_020/decoder-full.onnx",
+          "destination": "vendor/proteinmpnn/v_48_020/decoder-full.onnx",
+          "sha256": "093b3bb2eb74601b27365995dd3970692a04d4878620170d8c2f87bbff33a589",
+          "bytes": 2834496
+        },
+        {
+          "source": "vendor/proteinmpnn/v_48_020/embedding.bin",
+          "destination": "vendor/proteinmpnn/v_48_020/embedding.bin",
+          "sha256": "419b47e12874e74d472cd10ab844bda5d560ed3553441111b4f1440375ca8ebd",
+          "bytes": 10752
+        },
+        {
+          "source": "vendor/proteinmpnn/v_48_020/LICENSE.ProteinMPNN",
+          "destination": "vendor/proteinmpnn/v_48_020/LICENSE.ProteinMPNN",
+          "sha256": "82009d25ce585631f452b2b24589bdb29c559ccfefa2f200ef312ed5b501a586",
+          "bytes": 1072
+        },
+        {
+          "source": "vendor/proteinmpnn/v_48_020/THIRD_PARTY_NOTICES.md",
+          "destination": "vendor/proteinmpnn/v_48_020/THIRD_PARTY_NOTICES.md",
+          "sha256": "8c9a5f38b001461aabd2eb1761e051f283c9658f1fd897b10ce41f9b999876aa",
+          "bytes": 1136
+        },
+        {
+          "source": "vendor/onnxruntime-web/1.24.3/ort.webgpu.bundle.min.mjs",
+          "destination": "vendor/onnxruntime-web/1.24.3/ort.webgpu.bundle.min.mjs",
+          "sha256": "4aa071e26a290e5147a07b39834fe923f1e810eb69a26faa7ca66ad811ba8ffd",
+          "bytes": 113927
+        },
+        {
+          "source": "vendor/onnxruntime-web/1.24.3/ort-wasm-simd-threaded.asyncify.mjs",
+          "destination": "vendor/onnxruntime-web/1.24.3/ort-wasm-simd-threaded.asyncify.mjs",
+          "sha256": "dee69056fbfedf946ba0d9026e191c1361c5455895355e03f4346bf9308e58eb",
+          "bytes": 48533
+        },
+        {
+          "source": "vendor/onnxruntime-web/1.24.3/LICENSE",
+          "destination": "vendor/onnxruntime-web/1.24.3/LICENSE",
+          "sha256": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c",
+          "bytes": 1073
+        }
+      ]
+    },
+    {
       "id": "reckon",
       "repo": "NakliTechie/reckon",
       "requestedRef": "main",

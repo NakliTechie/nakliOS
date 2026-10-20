@@ -296,6 +296,145 @@
       ]
     },
     {
+      "id": "protavia",
+      "repo": "NakliTechie/protavia",
+      "ref": "main",
+      "files": [
+        {
+          "source": "index.html",
+          "destination": "index.html"
+        },
+        {
+          "source": "LICENSE",
+          "destination": "LICENSE"
+        },
+        {
+          "source": "app/main.js",
+          "destination": "app/main.js"
+        },
+        {
+          "source": "app/tour.js",
+          "destination": "app/tour.js"
+        },
+        {
+          "source": "app/search.js",
+          "destination": "app/search.js"
+        },
+        {
+          "source": "app/status.js",
+          "destination": "app/status.js"
+        },
+        {
+          "source": "app/viewer.js",
+          "destination": "app/viewer.js"
+        },
+        {
+          "source": "app/structure.js",
+          "destination": "app/structure.js"
+        },
+        {
+          "source": "app/design.js",
+          "destination": "app/design.js"
+        },
+        {
+          "source": "app/ipsae.js",
+          "destination": "app/ipsae.js"
+        },
+        {
+          "source": "vendor/README.md",
+          "destination": "vendor/README.md"
+        },
+        {
+          "source": "vendor/molstar/5.13.1/molstar.js",
+          "destination": "vendor/molstar/5.13.1/molstar.js"
+        },
+        {
+          "source": "vendor/molstar/5.13.1/molstar.css",
+          "destination": "vendor/molstar/5.13.1/molstar.css"
+        },
+        {
+          "source": "vendor/molstar/5.13.1/LICENSE",
+          "destination": "vendor/molstar/5.13.1/LICENSE"
+        },
+        {
+          "source": "vendor/proteinmpnn-web/0.1.0-10849c13/index.js",
+          "destination": "vendor/proteinmpnn-web/0.1.0-10849c13/index.js"
+        },
+        {
+          "source": "vendor/proteinmpnn-web/0.1.0-10849c13/types.js",
+          "destination": "vendor/proteinmpnn-web/0.1.0-10849c13/types.js"
+        },
+        {
+          "source": "vendor/proteinmpnn-web/0.1.0-10849c13/structure.js",
+          "destination": "vendor/proteinmpnn-web/0.1.0-10849c13/structure.js"
+        },
+        {
+          "source": "vendor/proteinmpnn-web/0.1.0-10849c13/model.js",
+          "destination": "vendor/proteinmpnn-web/0.1.0-10849c13/model.js"
+        },
+        {
+          "source": "vendor/proteinmpnn-web/0.1.0-10849c13/onnx.js",
+          "destination": "vendor/proteinmpnn-web/0.1.0-10849c13/onnx.js"
+        },
+        {
+          "source": "vendor/proteinmpnn-web/0.1.0-10849c13/math.js",
+          "destination": "vendor/proteinmpnn-web/0.1.0-10849c13/math.js"
+        },
+        {
+          "source": "vendor/proteinmpnn-web/0.1.0-10849c13/constraints.js",
+          "destination": "vendor/proteinmpnn-web/0.1.0-10849c13/constraints.js"
+        },
+        {
+          "source": "vendor/proteinmpnn-web/0.1.0-10849c13/LICENSE",
+          "destination": "vendor/proteinmpnn-web/0.1.0-10849c13/LICENSE"
+        },
+        {
+          "source": "vendor/proteinmpnn-web/0.1.0-10849c13/THIRD_PARTY_NOTICES.md",
+          "destination": "vendor/proteinmpnn-web/0.1.0-10849c13/THIRD_PARTY_NOTICES.md"
+        },
+        {
+          "source": "vendor/proteinmpnn/v_48_020/manifest.json",
+          "destination": "vendor/proteinmpnn/v_48_020/manifest.json"
+        },
+        {
+          "source": "vendor/proteinmpnn/v_48_020/encoder.onnx",
+          "destination": "vendor/proteinmpnn/v_48_020/encoder.onnx"
+        },
+        {
+          "source": "vendor/proteinmpnn/v_48_020/decoder-step.onnx",
+          "destination": "vendor/proteinmpnn/v_48_020/decoder-step.onnx"
+        },
+        {
+          "source": "vendor/proteinmpnn/v_48_020/decoder-full.onnx",
+          "destination": "vendor/proteinmpnn/v_48_020/decoder-full.onnx"
+        },
+        {
+          "source": "vendor/proteinmpnn/v_48_020/embedding.bin",
+          "destination": "vendor/proteinmpnn/v_48_020/embedding.bin"
+        },
+        {
+          "source": "vendor/proteinmpnn/v_48_020/LICENSE.ProteinMPNN",
+          "destination": "vendor/proteinmpnn/v_48_020/LICENSE.ProteinMPNN"
+        },
+        {
+          "source": "vendor/proteinmpnn/v_48_020/THIRD_PARTY_NOTICES.md",
+          "destination": "vendor/proteinmpnn/v_48_020/THIRD_PARTY_NOTICES.md"
+        },
+        {
+          "source": "vendor/onnxruntime-web/1.24.3/ort.webgpu.bundle.min.mjs",
+          "destination": "vendor/onnxruntime-web/1.24.3/ort.webgpu.bundle.min.mjs"
+        },
+        {
+          "source": "vendor/onnxruntime-web/1.24.3/ort-wasm-simd-threaded.asyncify.mjs",
+          "destination": "vendor/onnxruntime-web/1.24.3/ort-wasm-simd-threaded.asyncify.mjs"
+        },
+        {
+          "source": "vendor/onnxruntime-web/1.24.3/LICENSE",
+          "destination": "vendor/onnxruntime-web/1.24.3/LICENSE"
+        }
+      ]
+    },
+    {
       "id": "reckon",
       "repo": "NakliTechie/reckon",
       "ref": "main",
