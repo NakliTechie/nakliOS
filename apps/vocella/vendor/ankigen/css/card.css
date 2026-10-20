@@ -1,0 +1,117 @@
+/* AnkiGen card styles. Embedded verbatim in the Anki note type and used by the site preview.
+   Night mode: Anki desktop and AnkiMobile set .nightMode, AnkiDroid sets .night_mode. */
+
+.card {
+  --text: #1d1f23;
+  --muted: #6b7079;
+  --rule: #d9dce1;
+  --accent: #2c6db0;
+  --bg: #ffffff;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif,
+    "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji";
+  font-size: 20px;
+  line-height: 1.45;
+  text-align: center;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.nightMode.card,
+.nightMode .card,
+.night_mode.card,
+.night_mode .card {
+  --text: #e6e7ea;
+  --muted: #9da3ad;
+  --rule: #3a3d44;
+  --accent: #82b8f0;
+  --bg: #1e1f22;
+}
+
+:lang(ja) { font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic", Meiryo, "Noto Sans JP", "Noto Sans CJK JP", sans-serif; }
+:lang(zh) { font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", "Noto Sans CJK SC", sans-serif; }
+:lang(ko) { font-family: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", "Noto Sans CJK KR", sans-serif; }
+
+.ag {
+  max-width: 34em;
+  margin: 0 auto;
+  padding: 0.6em 0.5em 1.2em;
+}
+
+.word {
+  font-size: 2.1em;
+  font-weight: 500;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.word .art { color: var(--muted); font-weight: 400; }
+.word .g { color: var(--muted); font-size: 0.42em; font-weight: 400; vertical-align: middle; }
+.word ruby rt { font-size: 0.4em; }
+
+.disambig { color: var(--muted); font-size: 0.75em; margin-top: 0.2em; }
+
+.translation { font-size: 1.35em; }
+.translation.prompt { font-size: 1.6em; margin-top: 0.4em; }
+.translation .hint,
+.translation .alt { color: var(--muted); }
+.translation .alt { font-size: 0.8em; }
+.translation .n { color: var(--muted); }
+.translation .m { display: inline-block; }
+
+hr#answer {
+  border: 0;
+  border-top: 1px solid var(--rule);
+  margin: 1em 0;
+}
+
+.sec { margin-top: 0.9em; }
+.cap {
+  color: var(--muted);
+  font-size: 0.6em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 0.15em;
+}
+.forms .f { white-space: nowrap; }
+.forms .fk,
+.related .syn,
+.related .ant,
+.related .rel { color: var(--muted); }
+
+.examples .val { display: inline-block; text-align: start; max-width: 100%; }
+.ex { margin: 0.45em 0; font-size: 0.85em; }
+.ex-r,
+.ex-tr { color: var(--muted); font-size: 0.9em; }
+b.t { color: var(--accent); font-weight: 600; }
+
+ruby rt { color: var(--muted); font-size: 0.55em; }
+
+.emoji { font-size: 2em; line-height: 1.2; }
+.tag { display: inline-block; margin: 0.6em 0.2em 0; }
+.tag .val {
+  color: var(--muted);
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  font-size: 0.65em;
+  padding: 0.05em 0.6em;
+}
+.ipa .val,
+.etym .val { font-size: 0.85em; }
+.cid .val { color: var(--muted); font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.6em; }
+
+.typeans { margin-top: 0.8em; }
+#typeans { font: inherit; }
+input#typeans {
+  box-sizing: border-box;
+  width: 14em;
+  max-width: 100%;
+  padding: 0.3em 0.5em;
+  text-align: center;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+}
+
+@media (max-width: 480px) {
+  .card { font-size: 18px; }
+}

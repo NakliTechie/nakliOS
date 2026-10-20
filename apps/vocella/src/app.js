@@ -102,13 +102,70 @@ function span(cls, text) {
   return el;
 }
 
+/** Fill the deck picker from AnkiGen's languages and topics. Defaults: Spanish, for English speakers, Core I. */
+async function drawPicker() {
+  const { languages, modules } = await reader.deckOptions();
+  const option = (/** @type {string} */ value, /** @type {string} */ label) => {
+    const o = document.createElement('option');
+    o.value = value;
+    o.textContent = label;
+    return o;
+  };
+  const learn = /** @type {HTMLSelectElement} */ ($('pick-learn'));
+  const know = /** @type {HTMLSelectElement} */ ($('pick-know'));
+  learn.replaceChildren(...languages.map((l) => option(l.code, `${l.name} · ${l.native}`)));
+  know.replaceChildren(...languages.map((l) => option(l.code, l.name)), option('=', 'Same language (definitions)'));
+  learn.value = 'es';
+  know.value = 'en';
+  const box = $('pick-modules');
+  box.replaceChildren();
+  let category = '';
+  for (const m of modules) {
+    if (m.category !== category) {
+      category = m.category;
+      const h = document.createElement('h3');
+      h.textContent = category;
+      box.append(h);
+    }
+    const label = document.createElement('label');
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.value = m.id;
+    input.checked = m.id === 'core-1';
+    input.dataset.name = m.name;
+    label.append(input, `${m.name}${m.adult ? ' (18+)' : ''}`);
+    box.append(label);
+  }
+  box.addEventListener('change', countTopics);
+  countTopics();
+}
+
+function pickedTopics() {
+  return /** @type {HTMLInputElement[]} */ ([...$('pick-modules').querySelectorAll('input:checked')]);
+}
+
+function countTopics() {
+  const picked = pickedTopics();
+  $('pick-count').textContent = picked.length === 0 ? 'none' : picked.length <= 2 ? picked.map((i) => i.dataset.name).join(', ') : `${picked.length} selected`;
+}
+
+function pickerArgs() {
+  return {
+    learn: /** @type {HTMLSelectElement} */ ($('pick-learn')).value,
+    know: /** @type {HTMLSelectElement} */ ($('pick-know')).value,
+    modules: pickedTopics().map((i) => i.value),
+  };
+}
+
 /** Dispatch a UI command through the manifest. @param {string} name @param {any} [args] */
 async function dispatch(name, args) {
   if (name === 'import-deck') return fileInput.click();
+  if (name === 'build-deck') args = pickerArgs();
+  const slow = { 'open-shelf-deck': 'Opening deck…', 'build-deck': 'Building deck…' }[name];
   try {
-    if (name === 'open-shelf-deck') say('Opening deck…');
+    if (slow) say(slow);
     await run(reader, name, args, { person: true });
-    if (name === 'open-shelf-deck') say('');
+    if (slow) say('');
     draw();
   } catch (e) {
     say(/** @type {Error} */ (e).message, true);
@@ -207,6 +264,7 @@ naklios?.theme.onChange(applyTheme);
 reader.loadCatalog().then(
   () => {
     draw();
+    drawPicker().catch((e) => say(`Could not load AnkiGen's languages: ${e.message}`, true));
     naklios?.ready();
     naklios?.theme.request();
   },
