@@ -113,6 +113,7 @@ const windowObject = {
 };
 const context = vm.createContext({
   window:windowObject,
+  URL,
   console,
   Map,
   Set,
@@ -131,7 +132,7 @@ vm.runInContext(sdkSource, context, { filename:'sdk/naklios.js' });
 const dispatch = (data, source = parent) => {
   const listener = listeners.get('message');
   assert.ok(listener, 'SDK message listener is installed');
-  listener({ data, source });
+  listener({ data, source, origin:'https://naklios.dev' });
 };
 
 dispatch({

@@ -18,7 +18,7 @@ function load(hosted, netCap) {
   };
   win.parent = hosted ? { postMessage: () => {} } : win; // real embed → parent !== self
   win.self = win;
-  const ctx = { window: win, self: win, document: { referrer: '' } };
+  const ctx = { window: win, self: win, document: { referrer: '' }, URL };
   vm.createContext(ctx);
   vm.runInContext(src, ctx);
   const nak = win.naklios;
