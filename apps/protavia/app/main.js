@@ -7,6 +7,8 @@ import * as design from './design.js';
 import * as searchApi from './search.js';
 import * as tour from './tour.js';
 import { summarise, extractBackbone } from './structure.js';
+import { DesignTable, allColumns } from './table.js';
+import { createRegistry } from './commands.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -34,12 +36,30 @@ const ui = {
   designSeed: $('design-seed'),
   designRun: $('design-run'),
   designNote: $('design-note'),
+  models: $('models'),
+  designRanking: $('design-ranking'),
   designResults: $('design-results'),
 };
 
-// The backbone currently handed to ProteinMPNN. Cleared whenever the target changes, so a redesign
-// can never be run against the previous structure's coordinates.
-let prepared = null;
+// Every design of this target, whichever checkpoint wrote it, in one orderable table. Its columns
+// are declared in table.js so a score computed later becomes a column rather than an edit here.
+const ranking = new DesignTable(ui.designRanking);
+ranking.onSelect = (row) => {
+  const card = document.getElementById(row.cardId);
+  if (!card) return;
+  for (const picked of ui.designRanking.querySelectorAll('tr.picked')) picked.classList.remove('picked');
+  for (const lit of ui.designResults.querySelectorAll('.design.picked')) lit.classList.remove('picked');
+  card.classList.add('picked');
+  card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+};
+
+// Backbones handed to each checkpoint, keyed by checkpoint id. Each model encodes the structure
+// itself, so a prepared protein belongs to the model that prepared it. Cleared whenever the target
+// changes, so a run can never use the previous structure's coordinates.
+let prepared = new Map();
+
+/** The summary of the structure on screen, so the agent face can read it back. */
+let lastSummary = null;
 
 // The NakliOS host window, when the page is running inside it. The SDK is inlined in index.html and
 // does nothing when the page is standalone, but it is guarded anyway: a failed splice must not stop
@@ -118,7 +138,7 @@ function afterLoad(label) {
   host.title(`Protavia \u2014 ${label}`);
   // The previous target's panel must not survive into a new one, whatever happens below.
   ui.designWrap.hidden = true;
-  prepared = null;
+  prepared.clear();
 
   // The structure is on screen at this point. A summary that cannot be read is worth a warning,
   // never a failure: showing the target is the job, the table beside it is a convenience.
@@ -138,6 +158,7 @@ function afterLoad(label) {
     return;
   }
 
+  lastSummary = summary;
   renderSummary(summary);
   enableDesign(summary);
   const chainWord = summary.chains.length === 1 ? 'chain' : 'chains';
@@ -249,7 +270,7 @@ function renderResults(found, text) {
     button.append(id, title);
     button.addEventListener('click', () => {
       ui.results.replaceChildren();
-      loadPdbId(entry.id);
+      dispatch('open-target', { id: entry.id });
     });
     ui.results.append(button);
   }
@@ -260,7 +281,7 @@ function renderResults(found, text) {
 // --- Redesign ---------------------------------------------------------------------------------
 
 function enableDesign(summary) {
-  prepared = null;
+  prepared.clear();
   ui.designResults.replaceChildren();
 
   const protein = summary.chains.filter((c) => c.kind === 'protein');
@@ -277,58 +298,214 @@ function enableDesign(summary) {
     ui.designChain.append(opt);
   }
 
+  renderModelChoices();
   ui.designNote.textContent =
-    `${design.MODEL_NAME} runs in this browser. About 9 MB of weights load on first use.`;
+    'Everything runs in this browser. Each checkpoint is about 9 MB and loads the first time it '
+    + 'is used.';
   ui.designRun.disabled = false;
   ui.designWrap.hidden = false;
 }
 
-async function runRedesign() {
+/** One checkbox per checkpoint, with a line saying what makes it different. */
+function renderModelChoices() {
+  if (ui.models.children.length > 0) return; // built once; the choice survives a new target
+  for (const m of design.MODELS) {
+    const row = document.createElement('label');
+    row.className = 'model';
+
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.value = m.id;
+    box.checked = m.id === design.MODELS[0].id;
+
+    const text = document.createElement('span');
+    const name = document.createElement('span');
+    name.className = 'model-name';
+    name.textContent = m.label;
+    const note = document.createElement('span');
+    note.className = 'model-note';
+    note.textContent = m.note;
+    text.append(name, note);
+
+    row.append(box, text);
+    ui.models.append(row);
+  }
+}
+
+function chosenModels() {
+  return [...ui.models.querySelectorAll('input:checked')].map((b) => b.value);
+}
+
+/**
+ * Run a redesign. Called with nothing it reads the panel, which is what the button does; called
+ * with values it sets the panel first, so what ran is visible on screen afterwards rather than
+ * hidden in a call an agent made.
+ */
+async function runRedesign(over = {}) {
+  if (over.chain !== undefined) setChain(over.chain);
+  if (over.checkpoints !== undefined) setCheckpoints(over.checkpoints);
+  if (over.temperature !== undefined) ui.designTemp.value = String(over.temperature);
+  if (over.count !== undefined) ui.designCount.value = String(over.count);
+  if (over.seed !== undefined) ui.designSeed.value = String(over.seed);
+
   const chain = ui.designChain.value;
   const temperature = Number(ui.designTemp.value);
   const count = Number(ui.designCount.value);
   const seed = Number(ui.designSeed.value);
+  const ids = chosenModels();
 
   if (!(temperature > 0)) {
     status.fail('Temperature has to be greater than zero.');
-    return;
+    return [];
+  }
+  if (ids.length === 0) {
+    status.fail('Pick at least one checkpoint to run.');
+    return [];
   }
 
   ui.designRun.disabled = true;
+  ui.designResults.replaceChildren();
+  ranking.clear();
   status.clear();
 
-  try {
-    await design.loadModel({ onProgress: status.busy });
+  const residues = extractBackbone(viewer.loadedStructure());
+  const native = [];
+  let ran = 0;
 
-    if (!prepared) {
-      status.busy('Reading the backbone…');
-      const residues = extractBackbone(viewer.loadedStructure());
-      prepared = await design.prepare(residues);
+  try {
+    // Each checkpoint in turn, rendering as it finishes, so the first answer is readable while the
+    // rest are still running. Same chain, temperature and seed throughout, so the only thing that
+    // differs between the groups is the model.
+    for (const id of ids) {
+      const spec = design.modelById(id);
+      await design.loadModel(id, { onProgress: status.busy });
+
+      if (!prepared.has(id)) {
+        status.busy(`Reading the backbone for ${spec.label}\u2026`);
+        prepared.set(id, await design.prepare(residues, id));
+      }
+      const protein = prepared.get(id);
+
+      status.busy(`Designing chain ${chain} with ${spec.label} on ${design.activeBackend()}\u2026`);
+      const started = performance.now();
+      const results = await design.redesign(protein, { chains: [chain], temperature, count, seed });
+      const seconds = (performance.now() - started) / 1000;
+
+      if (native.length === 0) native.push(design.nativeChainSequence(protein, chain));
+      renderGroup(spec, results, native[0], seconds, ids.length > 1);
+      ran++;
     }
 
-    status.busy(`Designing chain ${chain} on ${design.activeBackend()}…`);
-    const started = performance.now();
-    const results = await design.redesign(prepared, { chains: [chain], temperature, count, seed });
-    const seconds = (performance.now() - started) / 1000;
-
-    renderDesigns(results, design.nativeChainSequence(prepared, chain));
-    status.info(
-      `${results.length} sequence${results.length === 1 ? '' : 's'} for chain ${chain} ` +
-      `in ${seconds.toFixed(1)} s on ${design.activeBackend()}.`
-    );
+    const what = ids.length === 1
+      ? design.modelById(ids[0]).label
+      : `${ids.length} checkpoints`;
+    status.info(`Chain ${chain}, ${count} sequence${count === 1 ? '' : 's'} each, ${what}, `
+      + `on ${design.activeBackend()}.`);
   } catch (e) {
-    status.fail('The redesign failed.', e.message);
+    status.fail(ran === 0 ? 'The redesign failed.' : `Stopped after ${ran} of ${ids.length} checkpoints.`,
+      e.message);
   } finally {
     ui.designRun.disabled = false;
   }
+  return ranking.ordered();
 }
 
-function renderDesigns(results, nativeSequence) {
-  ui.designResults.replaceChildren();
+/** Point the panel at one chain, and say so if that chain is not on offer. */
+function setChain(chain) {
+  const wanted = String(chain);
+  const found = [...ui.designChain.options].some((o) => o.value === wanted);
+  if (!found) {
+    const have = [...ui.designChain.options].map((o) => o.value).join(', ') || 'none';
+    throw new Error(`This target has no chain "${wanted}". Chains: ${have}.`);
+  }
+  ui.designChain.value = wanted;
+  return wanted;
+}
 
+/** Tick exactly the given checkpoints. */
+function setCheckpoints(ids) {
+  const wanted = (Array.isArray(ids) ? ids : [ids]).map(String);
+  const known = design.MODELS.map((m) => m.id);
+  const unknown = wanted.filter((id) => !known.includes(id));
+  if (unknown.length) {
+    throw new Error(`No checkpoint called ${unknown.join(', ')}. Known: ${known.join(', ')}.`);
+  }
+  if (wanted.length === 0) throw new Error('Pick at least one checkpoint.');
+  for (const box of ui.models.querySelectorAll('input')) box.checked = wanted.includes(box.value);
+  return wanted;
+}
+
+// --- The agent face ---------------------------------------------------------------------------
+
+// Bound once, at load, so a command declared without an implementation stops the page here rather
+// than on the call that needed it. See app/commands.js for why there is a manifest at all.
+const registry = createRegistry({
+  'open-target': ({ id }) => loadPdbId(id),
+  'search': ({ text }) => findTarget(text),
+  'clear-target': () => clearTarget(),
+  'set-chain': ({ chain }) => setChain(chain),
+  'set-checkpoints': ({ ids }) => setCheckpoints(ids),
+  'list-checkpoints': () => design.MODELS.map((m) => ({ id: m.id, label: m.label, about: m.note })),
+  'redesign': (args) => runRedesign(args),
+  'rank': ({ column, descending }) => {
+    ranking.sortBy(column, descending);
+    return ranking.ordered().map(asPlainDesign);
+  },
+  'list-columns': () => allColumns().map((c) => ({
+    id: c.id,
+    label: c.label,
+    explain: c.explain,
+    rankable: c.rankable !== false,
+    ...(c.rankable === false ? { whyNotRankable: c.whyNotRankable } : {}),
+  })),
+  'designs': () => ranking.ordered().map(asPlainDesign),
+  'target': () => lastSummary,
+  'show-tour': () => { tour.show({ force: true }); return true; },
+});
+
+/** A table row without the page's own bookkeeping, so what comes back is the design and nothing else. */
+function asPlainDesign(row) {
+  const out = { checkpoint: row.checkpointId, sequence: row.chainSequence, score: row.score };
+  for (const c of allColumns()) out[c.id] = c.value(row);
+  return out;
+}
+
+window.protavia = {
+  commands: () => registry.commands(),
+  run: (id, args) => registry.run(id, args),
+};
+
+/** One checkpoint's results, under a heading naming it, so a comparison reads as a comparison. */
+function renderGroup(spec, results, nativeSequence, seconds, showHeading) {
+  if (showHeading) {
+    const head = document.createElement('div');
+    head.className = 'group-head';
+
+    const name = document.createElement('span');
+    name.className = 'group-name';
+    name.textContent = spec.label;
+
+    const best = results.reduce((a, b) =>
+      (b.recovery?.fraction ?? -1) > (a.recovery?.fraction ?? -1) ? b : a, results[0]);
+    const summary = document.createElement('span');
+    summary.className = 'group-summary';
+    summary.textContent = best?.recovery
+      ? `best ${(best.recovery.fraction * 100).toFixed(1)}% \u00b7 ${seconds.toFixed(1)} s`
+      : `${seconds.toFixed(1)} s`;
+
+    head.append(name, summary);
+    ui.designResults.append(head);
+  }
+  renderDesigns(spec, results, nativeSequence);
+}
+
+let cardCount = 0;
+
+function renderDesigns(spec, results, nativeSequence) {
   for (const r of results) {
     const box = document.createElement('div');
     box.className = 'design';
+    box.id = `design-${++cardCount}`;
 
     const head = document.createElement('div');
     head.className = 'head';
@@ -362,6 +539,15 @@ function renderDesigns(results, nativeSequence) {
 
     box.append(head, seq);
     ui.designResults.append(box);
+
+    // The same design, as a row the table can order. `cardId` is how a row points back here.
+    ranking.add({
+      ...r,
+      checkpointId: spec.id,
+      checkpointLabel: spec.label,
+      checkpointShort: spec.short,
+      cardId: box.id,
+    });
   }
 }
 
@@ -372,7 +558,9 @@ async function clearTarget() {
   ui.summaryWrap.hidden = true;
   ui.designWrap.hidden = true;
   ui.designResults.replaceChildren();
-  prepared = null;
+  ranking.clear();
+  prepared.clear();
+  lastSummary = null;
   ui.file.value = '';
   host.title('Protavia');
   status.clear();
@@ -384,15 +572,22 @@ ui.file.addEventListener('change', () => {
   if (file) loadFile(file);
 });
 
-ui.findGo.addEventListener('click', () => findTarget(ui.find.value));
-ui.find.addEventListener('keydown', (e) => { if (e.key === 'Enter') findTarget(ui.find.value); });
-ui.tourOpen.addEventListener('click', () => tour.show({ force: true }));
+// Every control below goes through the registry rather than calling its function, so the buttons
+// and the agent face are the same door. A failed command is a status line, never a thrown error
+// into an event handler.
+const dispatch = (id, args) => registry.run(id, args).catch((e) => status.fail(e.message));
+
+ui.findGo.addEventListener('click', () => dispatch('search', { text: ui.find.value }));
+ui.find.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') dispatch('search', { text: ui.find.value });
+});
+ui.tourOpen.addEventListener('click', () => dispatch('show-tour'));
 
 for (const button of ui.starters.querySelectorAll('.starter')) {
-  button.addEventListener('click', () => loadPdbId(button.dataset.id));
+  button.addEventListener('click', () => dispatch('open-target', { id: button.dataset.id }));
 }
-ui.clear.addEventListener('click', () => clearTarget());
-ui.designRun.addEventListener('click', () => runRedesign());
+ui.clear.addEventListener('click', () => dispatch('clear-target'));
+ui.designRun.addEventListener('click', () => dispatch('redesign'));
 
 // Drag and drop onto the panel.
 for (const type of ['dragenter', 'dragover']) {

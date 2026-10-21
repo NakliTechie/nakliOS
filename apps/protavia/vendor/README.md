@@ -94,6 +94,21 @@ The app sets `numThreads: 1`. Multi-threaded WebAssembly needs cross-origin isol
 `Cross-Origin-Opener-Policy` and `Cross-Origin-Embedder-Policy` response headers), which a plain
 static file server does not send. Raising the thread count means serving those headers first.
 
+
+### Two more checkpoints, for comparison
+
+Added so the app can run one backbone through several models and show the differences. Same
+source, revision and licence as `v_48_020` above; same four files each, and all four hashes in
+each `manifest.json` were checked on vendoring.
+
+| Checkpoint | What differs | Size | Source checkpoint SHA-256 |
+|---|---|---|---|
+| `proteinmpnn/v_48_002` | trained with almost no backbone noise (0.02 Å) rather than 0.20 Å | 9.2 MB | `925f2ca1007bf9b02e0e7f420ff00eb91f50fcc2722f64b42e644ae95adaa131` |
+| `solublempnn/v_48_020` | same noise, trained without membrane proteins | 9.2 MB | `7af52d090172c230c7f0e9d21e02203f6b3a38b16db58d3c7a3960e0a9a6e31a` |
+
+Six further checkpoints exist in the same bundle (other noise levels, another solubleMPNN, and
+three CA-only models). Add one the same way, and list it in `app/design.js`'s `MODELS`.
+
 ## Upgrading
 
 1. Download the new tarball from the registry and record its SHA-256.

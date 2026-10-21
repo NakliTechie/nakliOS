@@ -14,16 +14,14 @@
 }
 </script>
 <style>
+  /* Light, whatever the operating system is set to. A structure is read against a pale
+     background in every journal and every viewer in this field, and a reader comparing this page
+     with a paper should not have to adjust. `color-scheme: light` also keeps the browser's own
+     form controls and scrollbars light, which a dark system theme would otherwise invert. */
   :root {
-    color-scheme: light dark;
+    color-scheme: light;
     --bg: #fafaf8; --panel: #f2f2ee; --fg: #1c1c1a; --mute: #6b6b66;
     --line: #dcdcd6; --accent: #2f6f5f; --warn: #8a4b2a; --err: #9b2c2c;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #161615; --panel: #1f1f1d; --fg: #ecece8; --mute: #9a9a93;
-      --line: #34342f; --accent: #6fbfa6; --warn: #d79a6a; --err: #e08585;
-    }
   }
   * { box-sizing: border-box; }
   /* Several elements below set an explicit `display`, which would otherwise beat `[hidden]`. */
@@ -77,6 +75,26 @@
   select { width: auto; min-width: 4rem; }
   .row label { color: var(--mute); font-size: .8rem; }
 
+  /* Checkpoint chooser: the point of the bench is that the differences are legible, so each one
+     carries a line saying what it was taught differently. */
+  #models { display: grid; gap: .3rem; margin: .5rem 0 .2rem; }
+  .model {
+    display: grid; grid-template-columns: auto 1fr; gap: .45rem;
+    align-items: start; padding: .35rem .45rem;
+    border: 1px solid var(--line); border-radius: 6px; cursor: pointer;
+  }
+  .model:hover { border-color: var(--accent); }
+  .model input { margin-top: .18rem; accent-color: var(--accent); }
+  .model-name { display: block; font-size: .78rem; font-weight: 600; }
+  .model-note { display: block; font-size: .72rem; color: var(--mute); line-height: 1.35; }
+
+  .group-head {
+    display: flex; justify-content: space-between; align-items: baseline; gap: .5rem;
+    margin: .8rem 0 .1rem; padding-bottom: .2rem; border-bottom: 1px solid var(--line);
+  }
+  .group-name { font-size: .78rem; font-weight: 600; }
+  .group-summary { font-size: .72rem; color: var(--accent); font-variant-numeric: tabular-nums; }
+
   .design {
     border: 1px solid var(--line); border-radius: 6px;
     padding: .45rem .55rem; margin-top: .5rem;
@@ -92,6 +110,24 @@
   }
   .design .seq .hit { color: var(--mute); }
   .design .seq .miss { color: var(--fg); font-weight: 600; }
+  .design.picked { border-color: var(--accent); }
+
+  /* The ranking table. Its columns are declared in app/table.js, so nothing here names one. */
+  table.ranking { width: 100%; border-collapse: collapse; font-size: .78rem; margin-top: .6rem; }
+  table.ranking th {
+    text-align: left; font-weight: 600; color: var(--mute);
+    font-size: .68rem; text-transform: uppercase; letter-spacing: .04em;
+    border-bottom: 1px solid var(--line); padding: .25rem .3rem; white-space: nowrap;
+  }
+  table.ranking th.sortable { cursor: pointer; user-select: none; }
+  table.ranking th.sortable:hover { color: var(--fg); }
+  table.ranking th.sorted { color: var(--accent); }
+  table.ranking th.fixed { cursor: help; font-style: italic; }
+  table.ranking td { padding: .25rem .3rem; border-bottom: 1px solid var(--line); }
+  table.ranking th.num, table.ranking td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.ranking tr[tabindex] { cursor: pointer; }
+  table.ranking tr[tabindex]:hover td, table.ranking tr.picked td { background: var(--panel); }
+  table.ranking tr.picked td { box-shadow: inset 2px 0 0 var(--accent); }
 
   .hint { color: var(--mute); font-size: .78rem; margin: .4rem 0 0; }
   .hint code { font-size: .95em; }
@@ -261,10 +297,12 @@
           <label for="design-seed">Seed</label>
           <input type="number" id="design-seed" value="42" min="0" step="1">
         </div>
+        <div id="models"></div>
         <div class="row">
           <button id="design-run">Redesign backbone</button>
         </div>
         <p class="hint" id="design-note"></p>
+        <div id="design-ranking"></div>
         <div id="design-results"></div>
       </div>
     </aside>

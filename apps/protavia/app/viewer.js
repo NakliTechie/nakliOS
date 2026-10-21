@@ -35,21 +35,15 @@ export async function create(host) {
   return viewer;
 }
 
-// Mol*'s own stylesheet is light. Match the viewport to the page so the app reads as one surface.
+// Match the viewport to the page so the app reads as one surface. The page is light whatever the
+// operating system is set to, so this is a fixed colour and not a media query.
 // The bundle does not export Mol*'s `Color` helper, but a `Color` is a plain packed RGB integer.
 function followColourScheme() {
-  const dark = window.matchMedia('(prefers-color-scheme: dark)');
-  const apply = () => {
-    try {
-      viewer.plugin.canvas3d.setProps({
-        renderer: { backgroundColor: dark.matches ? 0x161615 : 0xfafaf8 },
-      });
-    } catch {
-      // A viewport stuck on Mol*'s default background is cosmetic, never worth failing over.
-    }
-  };
-  apply();
-  dark.addEventListener('change', apply);
+  try {
+    viewer.plugin.canvas3d.setProps({ renderer: { backgroundColor: 0xfafaf8 } });
+  } catch {
+    // A viewport stuck on Mol*'s default background is cosmetic, never worth failing over.
+  }
 }
 
 function need() {

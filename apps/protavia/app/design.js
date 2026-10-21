@@ -1,15 +1,14 @@
 // ProteinMPNN inference in the browser.
 //
 // The heavy lifting is proteinmpnn-web (vendored, built from a pinned upstream commit), which runs
-// the ONNX bundles through ONNX Runtime Web. This file owns the policy around it: where the weights
-// live, which backend to ask for, and how to score a design against the native sequence.
+// the ONNX bundles through ONNX Runtime Web. This file owns the policy around it: which checkpoints
+// exist, where their weights live, which backend to ask for, and how to score a design against the
+// native sequence.
 //
 // Everything is served from this origin. No weights, structures or sequences leave the machine.
 
 import { ProteinMPNN } from '../vendor/proteinmpnn-web/0.1.0-10849c13/index.js';
 import { fromResidues } from '../vendor/proteinmpnn-web/0.1.0-10849c13/structure.js';
-
-const MANIFEST = 'vendor/proteinmpnn/v_48_020/manifest.json';
 
 // ONNX Runtime's WebAssembly binary is 25.93 MiB, over Cloudflare's 25 MiB per-file limit, so the
 // NakliOS mirror of this app deliberately does not carry it and takes it from Protavia's own origin
@@ -24,60 +23,113 @@ const ORT_ASSETS = IN_MIRROR
   ? 'https://protavia.naklitechie.com/vendor/onnxruntime-web/1.24.3/'
   : 'vendor/onnxruntime-web/1.24.3/';
 
-/** Which checkpoint is loaded, for the interface to state plainly. */
-export const MODEL_NAME = 'ProteinMPNN v_48_020';
+/**
+ * The checkpoints this app can run, chosen so that comparing them teaches something rather than
+ * just filling a table. All three are the same architecture trained differently, so a difference in
+ * their answers is a difference in what they were taught, not in how they work.
+ *
+ * `short` is the name in the ranking table, where a 19rem panel has no room for the full label.
+ * `note` is shown in the interface. Nine checkpoints exist in the bundle these came from; add one
+ * here with its weights and hashes recorded in `vendor/README.md`.
+ */
+export const MODELS = [
+  {
+    id: 'v_48_020',
+    label: 'ProteinMPNN v_48_020',
+    short: 'MPNN 020',
+    manifest: 'vendor/proteinmpnn/v_48_020/manifest.json',
+    note: 'The default. Trained with 0.20 Å of noise added to the backbone, which makes it tolerant '
+      + 'of imperfect or predicted structures.',
+  },
+  {
+    id: 'v_48_002',
+    label: 'ProteinMPNN v_48_002',
+    short: 'MPNN 002',
+    manifest: 'vendor/proteinmpnn/v_48_002/manifest.json',
+    note: 'The same model trained with almost no backbone noise, 0.02 Å. Sharper on an accurate '
+      + 'structure, less forgiving of a rough one.',
+  },
+  {
+    id: 'soluble_v_48_020',
+    label: 'solubleMPNN v_48_020',
+    short: 'soluble 020',
+    manifest: 'vendor/solublempnn/v_48_020/manifest.json',
+    note: 'Same noise as the default, but trained without membrane proteins, so it avoids designing '
+      + 'the greasy surfaces that make a protein aggregate.',
+  },
+];
 
-let model = null;
-let loading = null;
+export function modelById(id) {
+  return MODELS.find((m) => m.id === id) || null;
+}
+
+/** Loaded models, and loads in flight, both keyed by checkpoint id. */
+const loaded = new Map();
+const loading = new Map();
+
 let backend = null;
 
-/** 'webgpu' or 'wasm' once a model is loaded, else null. */
+/** 'webgpu' or 'wasm' once anything is loaded, else null. */
 export function activeBackend() {
   return backend;
 }
 
+export function isLoaded(id) {
+  return loaded.has(id);
+}
+
 /**
- * Load the model once and keep it. About 9 MB of weights plus the runtime, so this is deliberately
- * deferred to the first redesign rather than paid on page load.
+ * Load one checkpoint and keep it. About 9 MB of weights each, plus the runtime once, so this is
+ * deferred to the first run that needs it rather than paid on page load.
  *
+ * @param {string} id a `MODELS` id
  * @param {{preferred?: 'auto'|'wasm'|'webgpu', onProgress?: (text: string) => void}} options
  */
-export function loadModel({ preferred = 'auto', onProgress } = {}) {
-  if (model) return Promise.resolve(model);
-  if (loading) return loading;
+export function loadModel(id, { preferred = 'auto', onProgress } = {}) {
+  if (loaded.has(id)) return Promise.resolve(loaded.get(id));
+  if (loading.has(id)) return loading.get(id);
+
+  const spec = modelById(id);
+  if (!spec) return Promise.reject(new Error(`No checkpoint called "${id}".`));
 
   const say = onProgress || (() => {});
-  say(`Loading ${MODEL_NAME}…`);
+  say(`Loading ${spec.label}…`);
 
-  backend = preferred === 'auto' ? 'webgpu' : preferred;
+  // The runtime picks its backend once, on the first load; later models join whatever it chose.
+  if (backend === null) backend = preferred === 'auto' ? 'webgpu' : preferred;
 
-  loading = ProteinMPNN.load(new URL(MANIFEST, document.baseURI).href, {
+  const task = ProteinMPNN.load(new URL(spec.manifest, document.baseURI).href, {
     backend: preferred,
     wasmPaths: new URL(ORT_ASSETS, document.baseURI).href,
     numThreads: 1,
-    // The manifest carries SHA-256 for every weight file, so the runtime can confirm the bytes it
-    // got are the bytes the conversion was published with.
+    // Each manifest carries SHA-256 for its four weight files, so the runtime can confirm the bytes
+    // it got are the bytes the conversion was published with.
     verifyIntegrity: true,
     onFallback: (reason) => {
       backend = 'wasm';
       say(`WebGPU unavailable, using WebAssembly: ${reason && reason.message ? reason.message : reason}`);
     },
   }).then((m) => {
-    model = m;
-    loading = null;
+    loaded.set(id, m);
+    loading.delete(id);
     return m;
   }).catch((e) => {
-    loading = null;
-    backend = null;
+    loading.delete(id);
+    if (loaded.size === 0) backend = null;
     throw e;
   });
 
-  return loading;
+  loading.set(id, task);
+  return task;
 }
 
-/** Hand the loaded structure's backbone to the model. Returns a prepared protein. */
-export async function prepare(residues) {
-  if (!model) throw new Error('The model is not loaded.');
+/**
+ * Hand a backbone to one checkpoint. Each one encodes the structure itself, so a prepared protein
+ * belongs to the model that prepared it and cannot be shared.
+ */
+export async function prepare(residues, id) {
+  const model = loaded.get(id);
+  if (!model) throw new Error(`${id} is not loaded.`);
   return model.prepare(fromResidues(residues, { atomMode: 'backbone' }));
 }
 
@@ -146,7 +198,8 @@ export function nativeChainSequence(protein, chain) {
 }
 
 export async function dispose() {
-  if (model) await model.dispose();
-  model = null;
+  for (const model of loaded.values()) await model.dispose();
+  loaded.clear();
+  loading.clear();
   backend = null;
 }
