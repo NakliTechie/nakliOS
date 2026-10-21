@@ -1,0 +1,28 @@
+{
+  "format": "proteinmpnn-onnx",
+  "version": 1,
+  "family": "proteinmpnn",
+  "modelName": "v_48_020",
+  "alphabet": "ACDEFGHIKLMNPQRSTVWYX",
+  "hiddenDim": 128,
+  "decoderLayers": 3,
+  "numEdges": 48,
+  "atomMode": "backbone",
+  "files": {
+    "encoder": "encoder.onnx",
+    "decoderStep": "decoder-step.onnx",
+    "decoderFull": "decoder-full.onnx",
+    "embedding": "embedding.bin"
+  },
+  "sha256": {
+    "encoder.onnx": "ed5c272055c9ded111df397345ab10dc139f6036019aa59c96d01a07f9613aae",
+    "decoder-step.onnx": "0ee0d60a92793bb98ee9344d7bc42353144cd6e483916caa7137cb9a20ae0f1b",
+    "decoder-full.onnx": "093b3bb2eb74601b27365995dd3970692a04d4878620170d8c2f87bbff33a589",
+    "embedding.bin": "419b47e12874e74d472cd10ab844bda5d560ed3553441111b4f1440375ca8ebd"
+  },
+  "provenance": {
+    "upstreamCommit": "8907e6671bfbfc92303b5f79c4b5e6ce47cdef57",
+    "checkpointSha256": "c9cb4a671d79604111231f8dbfc7c590e06f1197453b7a6854ac6661a642f5bd",
+    "exporter": "proteinmpnn-web/0.1.0"
+  }
+}
