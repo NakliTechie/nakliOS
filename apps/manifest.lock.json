@@ -783,13 +783,13 @@
       "id": "vocella",
       "repo": "NakliTechie/vocella",
       "requestedRef": "main",
-      "resolvedCommit": "f7fdc7afb9b31d2a0face2717a55760613d6322f",
+      "resolvedCommit": "107aeb31b14c9049f5ca1f610bdcece042d8f580",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "96872ac43bb3da4bf4964fb553e30d9e8c7235354b4fbcdfe0a8df6f28a19ff0",
-          "bytes": 50707
+          "sha256": "a57468996962426c138de07c435524c12964193bf2c67ab99863b107d89a4823",
+          "bytes": 53981
         },
         {
           "source": "LICENSE",
@@ -806,32 +806,32 @@
         {
           "source": "src/app.js",
           "destination": "src/app.js",
-          "sha256": "1e689d6c7f358b855a461bfe2f72206175c87725adf8a18efa0d4e177a0344af",
-          "bytes": 9751
+          "sha256": "19d7e04281ac176625c013bb7682eb9413a3bbf3a56a06d958d160da68a74ee5",
+          "bytes": 20139
         },
         {
           "source": "src/apkg.js",
           "destination": "src/apkg.js",
-          "sha256": "8d3ace05f7dcd014110ce4729aa49a3de214e95bd97fb65e04c425f73de533db",
-          "bytes": 7734
+          "sha256": "252cd137f14b5da99b261d7fba5cd251d316ff0957b22948d68a3fd3f38ac676",
+          "bytes": 9985
         },
         {
           "source": "src/commands.js",
           "destination": "src/commands.js",
-          "sha256": "d4ec85a6c70079227a2fefc660920b622a39b38fccace007c68d9cc67ae563e7",
-          "bytes": 4665
+          "sha256": "b2cf578e9e7700d65a78389b304af1a454aae5ff93cc629eb3ad80b682f01ddb",
+          "bytes": 8365
         },
         {
           "source": "src/reader.js",
           "destination": "src/reader.js",
-          "sha256": "18dac30cc23f8577ab491b56f486ea70d5fabbf42e6ade71d5c4d16ca8f97043",
-          "bytes": 6635
+          "sha256": "56c555da1fb64cc468020fbefe49958a627013e6e5edc9737548d01a5c560127",
+          "bytes": 22395
         },
         {
           "source": "src/render.js",
           "destination": "src/render.js",
-          "sha256": "331f0a67c772d602922be0a5300ad86f18d32ee187e1e66228f281b86cd0e327",
-          "bytes": 11220
+          "sha256": "3332e4a80b05a91fd9a07367e9893f4768458caec242be559f0e0c181ab22a3c",
+          "bytes": 16149
         },
         {
           "source": "vendor/fflate.js",
@@ -878,8 +878,8 @@
         {
           "source": "vendor/README.md",
           "destination": "vendor/README.md",
-          "sha256": "1185dbf17142721f03bbf484714c028bcdb8bba272d71b1907b49c92ca192943",
-          "bytes": 1927
+          "sha256": "afb2bdaf5d45ca192feb04f59130ef11711cbeeeeadc8f04eba6d2c7b4d7500a",
+          "bytes": 2841
         },
         {
           "source": "decks/catalog.json",
@@ -1162,6 +1162,54 @@
           "destination": "vendor/ankigen/vendor/fflate.js",
           "sha256": "29e604e0e112f3c9698f51151ebc80e6a90caa2dae0d004a6adb9651ebad8a24",
           "bytes": 127
+        },
+        {
+          "source": "src/media.js",
+          "destination": "src/media.js",
+          "sha256": "0f50b8eeead86dec178cb0d14e96fd9605e27ca265b4116f388e91176e5cbff5",
+          "bytes": 2551
+        },
+        {
+          "source": "src/math.js",
+          "destination": "src/math.js",
+          "sha256": "c1307d9a64e94f0466ac5a4934abdd750b7c0f9cf6dc4a96fdf925a29071c13a",
+          "bytes": 2137
+        },
+        {
+          "source": "src/typing.js",
+          "destination": "src/typing.js",
+          "sha256": "52c690afa8d426777972e93daabf70dbd1b244549fb82c33aa208ea998f6b4f2",
+          "bytes": 2419
+        },
+        {
+          "source": "src/store.js",
+          "destination": "src/store.js",
+          "sha256": "11694a2877d83376c43973dcd3424f2f52d844f091a05fb563dc437bb72ca885",
+          "bytes": 1227
+        },
+        {
+          "source": "vendor/katex.mjs",
+          "destination": "vendor/katex.mjs",
+          "sha256": "e5bc26598084ad869939ecaa262673814f26ed586312a409b5f8427c01e4f681",
+          "bytes": 602889
+        },
+        {
+          "source": "vendor/LICENSE-katex",
+          "destination": "vendor/LICENSE-katex",
+          "sha256": "766ccc1f306c885aa45542a9846bbd0a505b27a0374f146778171c2254ce18e3",
+          "bytes": 1107
+        },
+        {
+          "source": "vendor/ts-fsrs.mjs",
+          "destination": "vendor/ts-fsrs.mjs",
+          "sha256": "ad4a4b3b7e259fcbf02764454c8f9db4ea3bf5aae2f473198129ecb7728f1a19",
+          "bytes": 61245
+        },
+        {
+          "source": "vendor/LICENSE-ts-fsrs",
+          "destination": "vendor/LICENSE-ts-fsrs",
+          "sha256": "8b83a73dd2894ff553d6de6113064b3ad9dfad3f839837b61f3b183881131d01",
+          "bytes": 1079
         }
       ]
     }

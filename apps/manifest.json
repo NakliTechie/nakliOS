@@ -800,6 +800,38 @@
         {
           "source": "vendor/ankigen/vendor/fflate.js",
           "destination": "vendor/ankigen/vendor/fflate.js"
+        },
+        {
+          "source": "src/media.js",
+          "destination": "src/media.js"
+        },
+        {
+          "source": "src/math.js",
+          "destination": "src/math.js"
+        },
+        {
+          "source": "src/typing.js",
+          "destination": "src/typing.js"
+        },
+        {
+          "source": "src/store.js",
+          "destination": "src/store.js"
+        },
+        {
+          "source": "vendor/katex.mjs",
+          "destination": "vendor/katex.mjs"
+        },
+        {
+          "source": "vendor/LICENSE-katex",
+          "destination": "vendor/LICENSE-katex"
+        },
+        {
+          "source": "vendor/ts-fsrs.mjs",
+          "destination": "vendor/ts-fsrs.mjs"
+        },
+        {
+          "source": "vendor/LICENSE-ts-fsrs",
+          "destination": "vendor/LICENSE-ts-fsrs"
         }
       ]
     }
