@@ -9,6 +9,8 @@ import * as tour from './tour.js';
 import { summarise, extractBackbone } from './structure.js';
 import { DesignTable, allColumns } from './table.js';
 import { createRegistry } from './commands.js';
+import * as bridge from './bridge.js';
+import { withInterfaceScore } from './score.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -36,6 +38,7 @@ const ui = {
   designSeed: $('design-seed'),
   designRun: $('design-run'),
   designNote: $('design-note'),
+  hostNote: $('host-note'),
   models: $('models'),
   designRanking: $('design-ranking'),
   designResults: $('design-results'),
@@ -449,8 +452,10 @@ const registry = createRegistry({
   'redesign': (args) => runRedesign(args),
   'rank': ({ column, descending }) => {
     ranking.sortBy(column, descending);
-    return ranking.ordered().map(asPlainDesign);
+    return ranking.visible().map(asPlainDesign);
   },
+  'filter': ({ column, value }) => ranking.setFilter(column, value ?? null).map(asPlainDesign),
+  'clear-filters': () => ranking.clearFilters().map(asPlainDesign),
   'list-columns': () => allColumns().map((c) => ({
     id: c.id,
     label: c.label,
@@ -458,10 +463,49 @@ const registry = createRegistry({
     rankable: c.rankable !== false,
     ...(c.rankable === false ? { whyNotRankable: c.whyNotRankable } : {}),
   })),
-  'designs': () => ranking.ordered().map(asPlainDesign),
+  'designs': () => ranking.visible().map(asPlainDesign),
   'target': () => lastSummary,
   'show-tour': () => { tour.show({ force: true }); return true; },
+  'host': () => bridge.detect(),
+  'load-run': ({ runId }) => loadRunDesigns(runId),
 });
+
+/**
+ * Put a compute run's designs into the same table as the browser's own.
+ *
+ * A design from a run carries an interface score the engine computed, and sometimes the predicted
+ * aligned error matrix behind it. Either way it goes through `withInterfaceScore`, which decides
+ * where the number comes from and registers the ipSAE column the first time one exists.
+ */
+async function loadRunDesigns(runId) {
+  const response = await fetch(`/bridge/runs/${encodeURIComponent(runId)}`);
+  if (!response.ok) throw new Error(`The bridge has no run ${runId}.`);
+  const run = await response.json();
+
+  const added = (run.designs || []).map((design) => {
+    const metrics = design.metrics || {};
+    return ranking.add(withInterfaceScore({
+      chainSequence: design.sequence,
+      sequence: design.sequence,
+      score: metrics.i_pTM ?? null,
+      recovery: null,
+      ipsae: metrics.ipSAE ?? null,
+      pae: design.pae,
+      chainIds: design.chainIds,
+      checkpointId: run.engine,
+      checkpointLabel: run.engine,
+      checkpointShort: run.engine,
+      cardId: null,
+      runId: run.runId,
+      structure: design.structure,
+    }));
+  });
+
+  status.info(added.length
+    ? `${added.length} design${added.length === 1 ? '' : 's'} from ${run.engine} on ${run.host}.`
+    : `Run ${runId} is ${run.state} and has accepted nothing yet.`);
+  return added.map(asPlainDesign);
+}
 
 /** A table row without the page's own bookkeeping, so what comes back is the design and nothing else. */
 function asPlainDesign(row) {
@@ -603,5 +647,37 @@ ui.drop.addEventListener('drop', (e) => {
   if (file) loadFile(file);
 });
 
+/**
+ * Say which machine a design run would happen on, or that there is none. Shown once at boot and
+ * never behind a click: the exemption Protavia relies on turns on whose machine the engine is,
+ * so the reader should never have to ask.
+ */
+async function showHost() {
+  const found = await bridge.detect();
+  ui.hostNote.replaceChildren();
+
+  if (!found.present) {
+    ui.hostNote.textContent = found.why;
+    ui.hostNote.hidden = false;
+    return;
+  }
+
+  const where = document.createElement('b');
+  where.textContent = bridge.hostLine(found);
+  ui.hostNote.append('Compute host: ', where);
+
+  const usable = bridge.usableEngines(found);
+  const ready = usable.filter((e) => e.installed);
+  const line = document.createElement('span');
+  line.textContent = ready.length
+    ? ` \u00b7 ${ready.map((e) => e.label).join(', ')} ready.`
+    : ` \u00b7 no design engine installed. ${usable.map((e) => e.why).join(' ')}`;
+  ui.hostNote.append(line);
+  ui.hostNote.hidden = false;
+}
+
 // The page is useless without the viewer, so a boot failure is a hard failure.
 boot().catch((e) => status.fail('The viewer did not start.', e.message));
+
+// The bridge is a separate question from the viewer, so it never blocks the page.
+showHost().catch(() => {});

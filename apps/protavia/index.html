@@ -4,6 +4,23 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Protavia</title>
+<meta name="description" content="Open a protein, redesign a chain of it, and compare what three models make of the same backbone — in a browser tab, in about a second.">
+
+<!-- The card a shared link renders. Crawlers do not resolve relative URLs, so every one of these
+     is absolute and points at the deployed site, whatever host is serving this copy. -->
+<link rel="canonical" href="https://protavia.naklitechie.com/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://protavia.naklitechie.com/">
+<meta property="og:title" content="Protavia — protein binder design in the browser">
+<meta property="og:description" content="Open a protein, redesign a chain of it, and compare what three models make of the same backbone — in a browser tab, in about a second.">
+<meta property="og:image" content="https://protavia.naklitechie.com/marketing/social.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Protavia — protein binder design in the browser">
+<meta name="twitter:description" content="Open a protein, redesign a chain of it, and compare what three models make of the same backbone — in a browser tab, in about a second.">
+<meta name="twitter:image" content="https://protavia.naklitechie.com/marketing/social.png">
+
 <link rel="stylesheet" href="vendor/molstar/5.13.1/molstar.css">
 <script type="importmap">
 {
@@ -125,6 +142,18 @@
   table.ranking th.fixed { cursor: help; font-style: italic; }
   table.ranking td { padding: .25rem .3rem; border-bottom: 1px solid var(--line); }
   table.ranking th.num, table.ranking td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.ranking tr.filters td { padding: .2rem .2rem .35rem; border-bottom: 1px solid var(--line); }
+  table.ranking tr.filters input, table.ranking tr.filters select {
+    width: 100%; min-width: 0; font: inherit; font-size: .72rem;
+    padding: .1rem .2rem; border: 1px solid var(--line); border-radius: 4px;
+    background: var(--bg); color: var(--fg);
+  }
+  table.ranking tr.filters input:focus, table.ranking tr.filters select:focus { border-color: var(--accent); outline: none; }
+  .hint.count { display: flex; align-items: baseline; gap: .3rem; }
+  /* The machine a run would happen on. Never hidden behind a click: the licence Protavia relies
+     on turns on whose machine the engine is, so the answer is always on screen. */
+  #host-note { border-left: 2px solid var(--accent); padding-left: .5rem; margin-top: .6rem; }
+  #host-note b { color: var(--fg); font-weight: 600; }
   table.ranking tr[tabindex] { cursor: pointer; }
   table.ranking tr[tabindex]:hover td, table.ranking tr.picked td { background: var(--panel); }
   table.ranking tr.picked td { box-shadow: inset 2px 0 0 var(--accent); }
@@ -302,6 +331,7 @@
           <button id="design-run">Redesign backbone</button>
         </div>
         <p class="hint" id="design-note"></p>
+        <p class="hint" id="host-note" hidden></p>
         <div id="design-ranking"></div>
         <div id="design-results"></div>
       </div>

@@ -223,7 +223,7 @@
       "id": "menagerie",
       "repo": "NakliTechie/menagerie",
       "requestedRef": "main",
-      "resolvedCommit": "a33b88501cd8ca507657d09062b64522cb06cf4b",
+      "resolvedCommit": "20a8b90f9b6f287355ddc7bac0687a19952ad8c5",
       "files": [
         {
           "source": "index.html",
@@ -427,13 +427,13 @@
       "id": "protavia",
       "repo": "NakliTechie/protavia",
       "requestedRef": "main",
-      "resolvedCommit": "101bcbff4c948ef6e077fbd6855ebbebce93cde4",
+      "resolvedCommit": "a905ec2a314887295495442dd4b1a551bb3c33ad",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "4deb20f1e953decf02117ac5009196f246a25a0cc6743b93da8290a273b15647",
-          "bytes": 57796
+          "sha256": "0692437223fb0c1e370cabc9cd89d0787aaff5d3271e289010f9dc4e163ffa3d",
+          "bytes": 60144
         },
         {
           "source": "vendor/molstar/5.13.1/molstar.css",
@@ -450,8 +450,8 @@
         {
           "source": "app/main.js",
           "destination": "app/main.js",
-          "sha256": "2fe029122823370850f5c17b10552f6ac2d02c8473f4b66f5e5e336c5355450f",
-          "bytes": 21237
+          "sha256": "26da1b3edd8d8062930a18263848c81b704d6ff545a8e5603ed6a228c777e6ab",
+          "bytes": 24083
         },
         {
           "source": "app/status.js",
@@ -534,14 +534,14 @@
         {
           "source": "app/table.js",
           "destination": "app/table.js",
-          "sha256": "bb0804f4df55e99f40e675c6f693c21f4b07e8d708cb24072652c9c558721fa1",
-          "bytes": 8054
+          "sha256": "35c785f708f1807d2bbe14f9a62c40fb22dfeca18d98345b4f33183db0016c93",
+          "bytes": 14487
         },
         {
           "source": "app/commands.js",
           "destination": "app/commands.js",
-          "sha256": "bdb70969a96f383bb536aa71f3d854463fe267565ea2d3bbb8e9d34a6add0886",
-          "bytes": 5840
+          "sha256": "f54bfab1e23a2c07539bfd89d3b2fbb1d510ddd9ae99a555e02cf0ec2d7d4e4b",
+          "bytes": 6611
         },
         {
           "source": "vendor/onnxruntime-web/1.24.3/ort.webgpu.bundle.min.mjs",
