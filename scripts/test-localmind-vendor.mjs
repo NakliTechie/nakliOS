@@ -10,7 +10,7 @@ assert.equal(manifest.protocol, 'localmind.inference.v1');
 assert.equal(manifest.imageProtocol, 'localmind.image.v1');
 assert.match(manifest.upstreamCommit, /^[0-9a-f]{40}$/);
 assert.equal(manifest.defaultModelKey, 'lfm3-1.7b');
-assert.equal(manifest.localPatches, undefined);
+assert.deepEqual(Object.keys(manifest.localPatches ?? {}), ['onnx-inference-worker.js']);
 assert.deepEqual(Object.keys(manifest.olderPins ?? {}), ['inference-worker.js']);
 assert.equal(manifest.defaultImageModelKey, 'flux2-klein-4b-webgpu');
 
@@ -30,6 +30,7 @@ assert.match(onnxWorker, /Gemma4ForConditionalGeneration/);
 assert.match(onnxWorker, /Qwen3_5ForConditionalGeneration/);
 assert.match(onnxWorker, /@huggingface\/transformers@4\.3\.2/);
 assert.match(onnxWorker, /AutoModelForCausalLM/);
+assert.match(onnxWorker, /\.\.\.\(tools \? \{ tools \} : \{\}\)/);
 assert.match(catalog, /LiquidAI\/LFM3-1\.7B-ONNX/);
 assert.match(catalog, /gemma4-e2b/);
 assert.match(catalog, /gemma4-e4b/);

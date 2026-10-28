@@ -32,3 +32,10 @@ Current exception (2026-10-28): `manifest.json` pins LocalMind `e87d28b`, but
 LocalMind now loads LFM2.5 through anyformer from npm; adopting that changes
 how the LFM2.5 230M model loads, so it lands as its own change with a live
 check, after which `olderPins` goes away.
+
+Standing NakliOS patch (2026-10-28): `onnx-inference-worker.js` carries one
+NakliOS-only change, listed under `localPatches`, so coding agents can call
+tools on LFM3 1.7B in the browser: an agent request with `tools` passes them
+and the tool messages to the model's chat template. LocalMind keeps its own
+tool handling, so this patch stays here: every re-vendor of this file must
+re-apply it and update its hash.

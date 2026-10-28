@@ -140,15 +140,21 @@ function normaliseMessages(messages, multimodal = false) {
   });
 }
 
-function causalInputs(messages) {
+// With `tools`, the messages arrive template-ready from the host (assistant
+// tool_calls with object arguments, `tool` results) and the model's own
+// template renders the tool list. A template that cannot render tools fails
+// the request: the hand-built ChatML fallback would silently drop them.
+function causalInputs(messages, tools = null) {
   try {
     // Templates that think by default (LFM3) read enable_thinking; others ignore it.
     return tokenizer.apply_chat_template(messages, {
       add_generation_prompt: true,
       return_dict: true,
       enable_thinking: false,
+      ...(tools ? { tools } : {}),
     });
-  } catch (_) {
+  } catch (error) {
+    if (tools) throw new Error(`This model's chat template cannot render tools: ${error?.message || error}`);
     let prompt = '';
     for (const message of messages) {
       prompt += `<|im_start|>${message.role}\n${message.content}<|im_end|>\n`;
@@ -174,10 +180,12 @@ async function generate(request) {
 
   const config = request.generationConfig || {};
   const multimodal = loadedType === 'multimodal';
-  const messages = normaliseMessages(request.messages, multimodal);
+  const tools = !multimodal && Array.isArray(request.tools) && request.tools.length
+    ? request.tools : null;
+  const messages = tools ? request.messages : normaliseMessages(request.messages, multimodal);
   const inputs = multimodal
     ? await multimodalInputs(messages)
-    : causalInputs(messages);
+    : causalInputs(messages, tools);
   // With thinking off, LFM3 still opens <think> on some prompts. Host apps get
   // answer text only, so drop that span. Each tag is one token and arrives
   // whole in one streamer chunk.

@@ -14,7 +14,7 @@
     "inference-worker.js": "538277d108577f35acfb1548d83c996567d97a62516e0b29cc63c4a7588965b3",
     "lfm2_5.js": "ee6c540df308055347d2c720ec7642ce44c4a8f2fb0328c866fcd52a434d7b39",
     "host-model-catalog.js": "4fbd2381d85251418a0b73cb46aa3def958ae307d731461073c2f1aec7d10c2f",
-    "onnx-inference-worker.js": "8a13f62c3b37f1de91cb26af5b7d928735669bcb8e983843feefa46cbacf9198",
+    "onnx-inference-worker.js": "1e64c90ed7f45622d851ccc30e5c009ba5933f55646467a497eadfb1947c6c57",
     "image-inference-worker.js": "5fe31578362065b676b0962021dd8f54e795fbc20f8d55fb56bb3ee1d02f2eff"
   },
   "olderPins": {
@@ -22,5 +22,8 @@
       "commit": "36bd9d79b3d5be78947ea5e7397b37056debeb3d",
       "reason": "2026-10-28: LocalMind e87d28b loads LFM2.5 through anyformer from npm; adopting that is a separate change with its own live check"
     }
+  },
+  "localPatches": {
+    "onnx-inference-worker.js": "2026-10-28: standing NakliOS patch, re-apply on every re-vendor: agent requests with tools pass `tools` and template-ready tool messages to the chat template (LFM3 renders them natively) and fail rather than drop tools"
   }
 }
