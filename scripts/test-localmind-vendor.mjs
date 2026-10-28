@@ -10,7 +10,8 @@ assert.equal(manifest.protocol, 'localmind.inference.v1');
 assert.equal(manifest.imageProtocol, 'localmind.image.v1');
 assert.match(manifest.upstreamCommit, /^[0-9a-f]{40}$/);
 assert.equal(manifest.defaultModelKey, 'lfm3-1.7b');
-assert.deepEqual(Object.keys(manifest.localPatches ?? {}).sort(), ['host-model-catalog.js', 'onnx-inference-worker.js']);
+assert.equal(manifest.localPatches, undefined);
+assert.deepEqual(Object.keys(manifest.olderPins ?? {}), ['inference-worker.js']);
 assert.equal(manifest.defaultImageModelKey, 'flux2-klein-4b-webgpu');
 
 for (const [name, expected] of Object.entries(manifest.files)) {

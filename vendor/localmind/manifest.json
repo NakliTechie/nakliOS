@@ -1,7 +1,7 @@
 {
   "schemaVersion": 3,
   "upstream": "https://github.com/NakliTechie/LocalMind",
-  "upstreamCommit": "36bd9d79b3d5be78947ea5e7397b37056debeb3d",
+  "upstreamCommit": "e87d28b6738eff9b950f110d1e75778a837528e1",
   "protocol": "localmind.inference.v1",
   "imageProtocol": "localmind.image.v1",
   "defaultModelKey": "lfm3-1.7b",
@@ -17,8 +17,10 @@
     "onnx-inference-worker.js": "8a13f62c3b37f1de91cb26af5b7d928735669bcb8e983843feefa46cbacf9198",
     "image-inference-worker.js": "5fe31578362065b676b0962021dd8f54e795fbc20f8d55fb56bb3ee1d02f2eff"
   },
-  "localPatches": {
-    "host-model-catalog.js": "2026-10-28: adds LFM3 1.7B (LiquidAI/LFM3-1.7B-ONNX) as the default; not yet upstream in LocalMind",
-    "onnx-inference-worker.js": "2026-10-28: Transformers.js 4.2.0 -> 4.3.2 (first release that loads lfm3), logits_to_keep session input and enable_thinking:false with <think> spans dropped, ported from LocalMind 38c4627; not yet upstream"
+  "olderPins": {
+    "inference-worker.js": {
+      "commit": "36bd9d79b3d5be78947ea5e7397b37056debeb3d",
+      "reason": "2026-10-28: LocalMind e87d28b loads LFM2.5 through anyformer from npm; adopting that is a separate change with its own live check"
+    }
   }
 }
