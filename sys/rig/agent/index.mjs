@@ -7,4 +7,4 @@
 export { createGrant } from './grant.mjs';
 export { createOpLog, digestArgs, redactTokens } from './oplog.mjs';
 export { createAgentFace } from './agent-face.mjs';
-export { installWindowRig } from './window-rig.mjs';
+export { installWindowRig, wireWindowRig } from './window-rig.mjs';

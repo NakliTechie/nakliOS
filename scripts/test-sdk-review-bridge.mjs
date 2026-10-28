@@ -14,7 +14,7 @@ function frame(hosted) {
     addEventListener(type, callback) { if (type === 'message') listener = callback; },
   };
   if (!hosted) window.parent = window;
-  vm.runInNewContext(sdk, { window, document: {}, URLSearchParams, Set, Map, Promise,
+  vm.runInNewContext(sdk, { URL, window, document: {}, URLSearchParams, Set, Map, Promise,
     Object, Error, Date, setTimeout: () => 0, clearTimeout: () => {} });
   return { window, sent, parent, fromHost(data, source = parent, origin = 'https://naklios.dev') {
     listener({ data, source, origin });

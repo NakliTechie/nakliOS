@@ -18,10 +18,11 @@ function load({ hosted }) {
   win.parent = hosted ? parent : win;
   win.self = win;
   const doc = { referrer: '', visibilityState: 'visible', addEventListener: on(docL) };
-  const ctx = { window: win, self: win, document: doc, setTimeout, clearTimeout, Promise };
+  const ctx = { URL, window: win, self: win, document: doc, setTimeout, clearTimeout, Promise };
   vm.createContext(ctx);
   vm.runInContext(src, ctx);
   const fire = (m, t, ev = {}) => (m[t] || []).forEach((cb) => cb(ev));
+  if(hosted)fire(winL,'message',{source:parent,origin:HOST,data:{type:'naklios:capabilities'}});
   return {
     nak: win.naklios, sent,
     hide() { doc.visibilityState = 'hidden'; fire(docL, 'visibilitychange'); },

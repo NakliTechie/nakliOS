@@ -19,7 +19,7 @@ const block = host.slice(start, end).replaceAll("import('./sys/", `import('${roo
 
 // the wiring: the handler goes through the enforcement point, after the system-app and backend checks
 const h = host.slice(host.indexOf("} else if (msg.type === 'naklios:net:fetch'){"), host.indexOf("} else if (typeof msg.type === 'string' && msg.type.startsWith('naklios:fs:')){"));
-assert.match(h, /if \(!aiAppIsSystem\(appId\)\) throw[\s\S]*if \(!egressConfigured\(\)\)[\s\S]*reply\.result = await netHostFetch\(appId, msg\);/, 'net:fetch → system app → backend → netHostFetch');
+assert.match(h, /if \(!aiAppOwnsEgress\(appId\)\) throw[\s\S]*if \(!egressConfigured\(\)\)[\s\S]*reply\.result = await netHostFetch\(appId, msg\);/, 'net:fetch → same-origin system app → backend → netHostFetch');
 assert.doesNotMatch(h, /await egressFetch\(/, 'the handler never calls the backend around the grant');
 assert.match(host, /id="net-revoke-grants"[\s\S]{0,400}Reset network decisions/, 'Settings offers revocation');
 
@@ -36,6 +36,7 @@ function load({ answers = [] } = {}) {
   const dir = { getDirectoryHandle: async () => dir, getFileHandle: async () => fileHandle };
   const env = {
     localStorage: { getItem: (k) => (ls.has(k) ? ls.get(k) : null), setItem: (k, v) => ls.set(k, String(v)) },
+    aiAppOwnsEgress: id => id === 'anvil',
     APPS: [{ id: 'anvil', name: 'Anvil' }],
     nakliosConfirm: async (msg) => { prompts.push(msg); return answers.length ? answers.shift() : true; },
     navigator: { storage: { getDirectory: async () => dir } },

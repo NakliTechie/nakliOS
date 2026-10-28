@@ -643,6 +643,9 @@ jobs:
       - name: Verify P0 enforcement — agent face capability check
         run: node sys/rig/agent/test/agent-face-capability.test.mjs
 
+      - name: Verify launch authority and execution-backed campaign behavior
+        run: node scripts/test-launch-blockers.mjs
+
       - name: Verify Assay core — Grant wall, assay.* ledger on History, verifiers
         run: node sys/assay/test/assay-core.test.mjs
 

@@ -7,10 +7,13 @@
 // verify wall — History contains zero `assay.wall.breach`, and no builder access
 // under `assay:*:instrument` was recorded. In this model a denied builder read
 // becomes a breach block, so a clean run has neither.
-export function verifyWall(ledger, { campaign } = {}) {
+export function verifyWall(ledger, { campaign, requireEnforcement = false } = {}) {
   const breaches = ledger.ofType('assay.wall.breach', campaign);
   if (breaches.length) {
     return { ok: false, code: 1, reason: `${breaches.length} wall breach(es)`, breaches };
+  }
+  if (requireEnforcement && !ledger.ofType('assay.access', campaign).length) {
+    return {ok:false,code:1,reason:'No enforced role access recorded'};
   }
   return { ok: true, code: 0, reason: '' };
 }

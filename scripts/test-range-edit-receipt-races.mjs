@@ -52,5 +52,5 @@ try{
 }finally{
   clearTimeout(timer);
   if(browser?.pid&&browser.exitCode===null){const exited=new Promise(resolve=>browser.once('exit',resolve));browser.kill('SIGTERM');await exited}
-  await new Promise(resolve=>server.close(resolve));await rm(profile,{recursive:true,force:true});
+  await new Promise(resolve=>server.close(resolve));await rm(profile,{recursive:true,force:true,maxRetries:5,retryDelay:100});
 }

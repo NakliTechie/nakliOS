@@ -36,6 +36,7 @@
 export const KNOWN_SCOPES = new Set([
   'fs:read', 'fs:write', 'fs:remove',
   'git:read', 'git:write', 'git:remote', 'git:push', 'native:gate',
+  'ui:read', 'ui:write', 'operator:only',
 ]);
 
 // Fields exposed by discovery. `run` is deliberately absent: projecting a
@@ -52,7 +53,7 @@ const META_FIELDS = [
 function project(command) {
   const out = {};
   for (const f of META_FIELDS) out[f] = command[f];
-  return out;
+  return structuredClone(out);
 }
 
 function levenshtein(a, b) {
@@ -139,7 +140,7 @@ export function createRegistry(commands) {
   // Tool-schema JSON emitted FROM the registry (RIG §4 / C4 / K2 consume this).
   // Metadata-only projection; the same source Kiln generates bindings from.
   function toolSchemas() {
-    return commands.map((c) => ({
+    return commands.map((c) => structuredClone({
       name: c.name,
       description: c.summary || c.description,
       inputSchema: c.inputSchema,
