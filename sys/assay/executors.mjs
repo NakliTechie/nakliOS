@@ -11,6 +11,7 @@
 // instrument cannot leak them, independent of the Grant check on any file access.
 
 import { validateBlock } from './ledger.mjs';
+import { sealInstrument, measureInstrument } from './instrument.mjs';
 
 // Condensed role manifests (Anvil amendment §1.1–1.3). The load-bearing constraints,
 // as standing instructions handed to each role's agent.
@@ -32,7 +33,7 @@ export const ROLE_INSTRUCTIONS = {
 const ACTIONS = {
   'build-instrument': {
     role: 'checker',
-    emit: 'Provide {version:int, ratchet_sha:string, areas:[{id,description,weight}], case_count:int}.',
+    emit: 'Provide {version:int, areas:[{id,description,weight}], cases:[{id,area,command,expected:{exitCode:int,stdout?:string,stderr?:string},weight:number}]}. Use exact expected output. The harness seals cases and executes them; you cannot emit a pass rate.',
     build: (a) => ({ type: 'assay.instrument.v1', version: Number(a.version) || 1, ratchet_sha: String(a.ratchet_sha || 'sha256:0'), areas: a.areas || [], case_count: Number(a.case_count) || 0 }),
   },
   'build-candidate': {
@@ -40,18 +41,7 @@ const ACTIONS = {
     emit: 'Provide {git_ref:string, test_count:int, deleted:int, test_change_reason?:string}.',
     build: (a, ctx) => ({ type: 'assay.candidate', round: ctx.round, git_ref: String(a.git_ref || ('c' + ctx.round)), from_directive: ctx.round >= 1 ? String(a.from_directive || '') : null, builder_tests: { count: Number(a.test_count) || 0, deleted: Number(a.deleted) || 0 }, ...(a.test_change_reason ? { test_change_reason: String(a.test_change_reason) } : {}) }),
   },
-  measure: {
-    role: 'checker',
-    emit: 'Provide {pass_mass:0..1, clusters:[{id,area,weight,representative_symptom,repro_hint}]}. clusters is the set of failure groups — an empty list means the candidate passed with nothing to report. NEVER include case ids or raw output.',
-    // Always a measure; a finding block only when there ARE failure clusters (a clean
-    // measurement has none — the candidate passed, so there is no finding to record).
-    build: (a, ctx) => {
-      const clusters = Array.isArray(a.clusters) ? a.clusters : [];
-      const blocks = [{ type: 'assay.measure', round: ctx.round, pass_mass: Number(a.pass_mass) || 0, cluster_count: clusters.length }];
-      if (clusters.length) blocks.push({ type: 'assay.finding.v1', round: ctx.round, clusters });
-      return blocks;
-    },
-  },
+  measure: { role: 'checker' },
   adjudicate: {
     role: 'lead',
     emit: 'Provide {id:string, from_findings:[clusterId], items:[{area,weight,instruction}]}. Never name a case.',
@@ -94,18 +84,36 @@ export function viewFor(role, ledger, C) {
 // emitSpec, view, goal}) → emittedArgs | null` runs the role's agent and returns what it
 // passed to `emit` (or null if it emitted nothing → the campaign pauses). `clock` yields a
 // monotonic ts. campaign.start is the Owner's input, not an agent.
-export function makeCampaignExecutors({ campaign, goal, ship_bar = 0.85, runRole, clock }) {
+export function makeCampaignExecutors({ campaign, goal, ship_bar = 0.85, runRole, clock, access, runCheck }) {
   const C = campaign;
   let t = 0;
   const ts = typeof clock === 'function' ? clock : () => ++t;
+  let instrument;
   const exec = {
     'campaign.start': async () => ({ type: 'assay.campaign', campaign: C, actor: 'actor:human:owner', ts: ts(), goal, ship_bar }),
   };
   for (const [action, spec] of Object.entries(ACTIONS)) {
     exec[action] = async (ctx) => {
+      if (typeof access !== 'function') throw new Error('Campaign needs enforced role access');
+      const authorize = async (resource, tool='read') => {
+        const result=await access(spec.role,resource,tool,ctx);
+        if (!result?.ok) throw new Error(result?.reason || 'Role access denied');
+        return result;
+      };
+      if(action==='measure') {
+        await authorize('instrument','read');
+        const blocks=await measureInstrument(instrument,runCheck,{round:ctx.round});
+        return blocks.map(b=>({...b,campaign:C,actor:ROLE_ACTOR('checker',C),ts:ts()}));
+      }
+      await authorize(spec.role==='builder'?'candidate':spec.role==='checker'?'instrument':'findings',spec.role==='lead'?'read':'write');
       const view = viewFor(spec.role, ctx.ledger, C);
-      const emitted = await runRole({ role: spec.role, action, round: ctx.round, instructions: ROLE_INSTRUCTIONS[spec.role], emitSpec: spec.emit, view, goal });
+      const emitted = await runRole({ role: spec.role, action, round: ctx.round, instructions: ROLE_INSTRUCTIONS[spec.role], emitSpec: spec.emit, view, goal, authorize });
       if (emitted == null) return null;
+      if(action==='build-instrument') {
+        if(instrument)throw new Error('Instrument is already sealed');
+        instrument=await sealInstrument(emitted);
+        emitted.ratchet_sha=instrument.hash;emitted.case_count=instrument.cases.length;
+      }
       const built = [].concat(spec.build(emitted, { round: ctx.round }));
       const actor = ROLE_ACTOR(spec.role, C);
       const blocks = built.map((b) => ({ ...b, campaign: C, actor, ts: ts() }));

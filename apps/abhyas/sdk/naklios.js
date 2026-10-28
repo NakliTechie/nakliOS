@@ -5,6 +5,12 @@
  * surface is a no-op when the app loads standalone (window.parent === window),
  * so the same source works in both contexts:
  *
+ * Vendoring: if your app needs a capability an iframe sandbox blocks — a folder
+ * picker above all — the supported route is a manifest-declared same-origin
+ * MIRROR under naklios.dev/apps/<id>/, not a hand-copied snapshot. See
+ * docs/app-loading.md. Your repo stays authoritative; the mirror is a pinned,
+ * hash-checked deployment artifact refreshed by CI.
+ *
  *   <script src="https://naklios.dev/sdk/naklios.js"></script>
  *   <script>
  *     naklios.ready();                          // signal "I'm loaded"
@@ -64,8 +70,12 @@
  *   syntax is only shown in the docs — never here, so it can't be mistaken for a
  *   real marker once this header is itself inlined.
  *
- *   v2 = learn-on-contact origin + ?naklios flag (no-referrer-safe). v1 (pre-2026-08)
+ *   v2 = approved-parent origin + ?naklios flag (no-referrer-safe). v1 (pre-2026-08)
  *   posted to '*' and skipped inbound-origin checks — a v1 copy is a drift bug.
+ *
+ *   New public members ship as `experimental_<name>` with a line in docs/sdk-api-audit.md
+ *   naming what stabilizes them; stabilizing drops the prefix in one fleet change
+ *   (this file, the host, every vendored copy). fs.autosave was the first, 2026-09-24.
  * License: MIT.
  */
 (function () {
@@ -80,13 +90,27 @@
   try { inNakliOS = !!(window.parent && window.parent !== window); } catch (_) {}
   var naklFlag = false;
   try { naklFlag = new URLSearchParams(window.location.search).has('naklios'); } catch (_) {}
-  // Targeted postMessage origin, LEARNED on first contact — the NakliOS shell embeds
+  // Targeted postMessage origin, pinned only after independently approved contact — the NakliOS shell embeds
   // apps with referrerpolicy="no-referrer", so document.referrer is empty and can't
   // be used to verify the parent (that path breaks hosted detection — it is the
   // Lorewell iframe bug). Instead the first `naklios:*` message from window.parent
-  // locks trustedParentOrigin, and every later send targets that origin (not '*').
-  // The only pre-lock send is `ready`, which carries no app data.
+  // pins an independently approved host origin, and every later send targets that origin (not '*').
+  // Before verification, only content-free ready and capabilities-request messages leave.
   var trustedParentOrigin = null;
+  var queuedHostMessages = [];
+  var queuedHostBytes = 0;
+  // Verify independently of the message and URL flags supplied by a parent.
+  // Inline copies retain the same production host policy; previews are limited
+  // to this project's Workers hostname. Referrers are deliberately unnecessary.
+  function approvedParentOrigin(origin) {
+    try {
+      var url = new URL(origin);
+      if (url.origin !== origin) return false;
+      if (url.protocol === 'https:' && !url.port && (url.hostname === 'naklios.dev' ||
+          /^(?:[a-z0-9-]+-)?nakli-dev\.chirag-patnaik\.workers\.dev$/.test(url.hostname))) return true;
+      return url.protocol === 'http:' && (url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]');
+    } catch (_) { return false; }
+  }
 
   var currentTheme = null;
   var themeListeners = new Set();
@@ -102,6 +126,8 @@
     fs: false,
     fsBackends: [],
     fsBackend: null,
+    fsBoundedReads: false,
+    fsRangeReads: false,
     // system: this app is a same-origin system app (non-third-party).
     // sysFs: system-scoped filesystem is available — the whole store, not just
     // apps/<your-id>/. Only true for system apps with a connected backend.
@@ -126,6 +152,7 @@
     // browser blocks. Stays false until a host advertises one — the SDK seam.
     net: false,
     netBackend: null,
+    review: false,
   };
 
   // Request/reply correlation for fs RPCs
@@ -137,13 +164,49 @@
   var ragSearches = new Map();     // requestId → semantic-search progress callback
   var fileOpenListeners = new Set(); // exact-file grants delivered by the host
   var pendingFileGrants = [];
+  var fileEditListeners = new Set();
+  var pendingFileEdits = [];
+  var acceptedFileEdits = new Map();
+  var acceptingFileEdits = new Map();
+
+  function deliverFileEdit(proposal) {
+    var id=String(proposal.deliveryId||'');
+    var ack=function(){if(id)send('naklios:file:edit-ack',{token:proposal.token,deliveryId:id});};
+    if(id&&acceptedFileEdits.get(id)===proposal.token){ack();return;}
+    if(id&&acceptingFileEdits.has(id))return;
+    if(!fileEditListeners.size){
+      if(pendingFileEdits.length<16&&!pendingFileEdits.some(function(p){return p.token===proposal.token&&p.deliveryId===proposal.deliveryId;}))pendingFileEdits.push(proposal);
+      return;
+    }
+    var work=Promise.all(Array.from(fileEditListeners).map(function(cb){
+      try{return Promise.resolve(cb(proposal)).catch(function(){return false;});}catch(_){return Promise.resolve(false);}
+    })).then(function(results){
+      if(results.some(function(value){return value===true;})){
+        if(id){acceptedFileEdits.set(id,proposal.token);while(acceptedFileEdits.size>16)acceptedFileEdits.delete(acceptedFileEdits.keys().next().value);}
+        ack();
+      }
+    }).finally(function(){if(id)acceptingFileEdits.delete(id);});
+    if(id)acceptingFileEdits.set(id,work);
+  }
+  var reviewDecisionHandler = null;
+  var appliedReviewIds = new Set();
+  var applyingReviewIds = new Map();
 
   function send(type, data) {
     if (!inNakliOS) return;
+    if (!trustedParentOrigin && type !== 'naklios:ready' && type !== 'naklios:capabilities-request') {
+      try {
+        var size = JSON.stringify(data || {}).length;
+        if (queuedHostMessages.length >= 32 || queuedHostBytes + size > 4 * 1024 * 1024) return false;
+        queuedHostMessages.push({ type: type, data: data }); queuedHostBytes += size;
+        return true;
+      } catch (_) { return false; }
+    }
     try {
       var msg = Object.assign({ type: type }, data || {});
       window.parent.postMessage(msg, trustedParentOrigin || '*');
-    } catch (_) {}
+      return true;
+    } catch (_) { return false; }
   }
 
   function rpc(type, payload, timeoutMs) {
@@ -151,7 +214,11 @@
     return new Promise(function (resolve, reject) {
       var requestId = 'r' + (++rpcCounter) + '_' + Date.now();
       pendingRpc.set(requestId, { resolve: resolve, reject: reject });
-      send(type, Object.assign({ requestId: requestId }, payload || {}));
+      if (send(type, Object.assign({ requestId: requestId }, payload || {})) === false) {
+        pendingRpc.delete(requestId);
+        reject(new Error('Wait for a verified NakliOS host before sending more data'));
+        return;
+      }
       // Default 30s safety net; long operations (index building) pass more.
       setTimeout(function () {
         if (pendingRpc.has(requestId)) {
@@ -160,6 +227,118 @@
         }
       }, timeoutMs || 30000);
     });
+  }
+
+  // Autosave (DUR, 2026-09-24): the SDK owns WHEN an app's state is written; the app owns WHAT and
+  // WHERE through its own save(). `beforeunload` cannot await, so a save that starts there is lost on
+  // close — the reliable moments are visibilitychange → hidden and pagehide, which fire while the page
+  // can still post a message, and the host's beforeclose, which waits. The timing half runs standalone
+  // too (the save is the app's own); only the dirty report to the host needs a frame.
+  var savers = new Set();
+  var reportedDirty = false;
+  var autosaveWired = false;
+  function noop() {}
+  function anyUnsaved() {
+    var out = false;
+    savers.forEach(function (s) { if (s._guard && s.dirty) out = true; });
+    return out;
+  }
+  function reportDirty() {
+    var d = anyUnsaved();
+    if (d === reportedDirty) return;
+    reportedDirty = d;
+    send('naklios:fs:dirty', { dirty: d });
+  }
+  // urgent: issue every unsaved save NOW, in this task — never behind an in-flight one
+  function flushSavers(urgent) {
+    var all = [];
+    savers.forEach(function (s) { all.push(s._flush(urgent).catch(noop)); });
+    return Promise.all(all);
+  }
+  function wireAutosave() {
+    if (autosaveWired) return;
+    autosaveWired = true;
+    try {
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'hidden') flushSavers(true);
+      });
+    } catch (_) {}
+    try {
+      window.addEventListener('pagehide', function () { flushSavers(true); });
+      window.addEventListener('beforeunload', function (e) {
+        if (!anyUnsaved()) return;
+        flushSavers(true);
+        // Hosted, the NakliOS host arms its own guard from the dirty report; a second prompt from
+        // the frame would be noise. Standalone, this is the only thing that can interpose.
+        if (inNakliOS) return;
+        e.preventDefault();
+        e.returnValue = '';
+      });
+    } catch (_) {}
+  }
+  function makeAutosave(opts) {
+    if (!opts || typeof opts.save !== 'function') {
+      throw new Error('naklios.fs.autosave requires { save: function }');
+    }
+    var delay = typeof opts.delay === 'number' && opts.delay >= 0 ? opts.delay : 1000;
+    var onError = typeof opts.onError === 'function' ? opts.onError : null;
+    // guard:false — a background save (a remote push, say) that keeps the timing but never holds a close
+    var guard = opts.guard !== false;
+    // generations: gen counts changes, issuedGen the newest handed to save(), savedGen the newest durable
+    var gen = 0, issuedGen = 0, savedGen = 0;
+    var timer = null, tail = Promise.resolve(), last = Promise.resolve(), queued = null, disposed = false;
+    function issue() {
+      queued = null;
+      if (gen <= issuedGen) return last;
+      var g = gen;
+      issuedGen = g;
+      var p;
+      try { p = Promise.resolve(opts.save()); } catch (err) { p = Promise.reject(err); }
+      p = p.then(function () {
+        if (g > savedGen) savedGen = g;
+        reportDirty();
+      }, function (err) {
+        if (issuedGen === g) issuedGen = savedGen; // the next flush retries
+        reportDirty();
+        if (onError) { try { onError(err); } catch (_) {} }
+        throw err;
+      });
+      last = p;
+      tail = p.catch(noop);
+      return p;
+    }
+    function flush(urgent) {
+      clearTimeout(timer);
+      timer = null;
+      if (gen <= issuedGen) return last;
+      if (urgent) return issue();
+      if (!queued) queued = tail.then(issue);
+      return queued;
+    }
+    var saver = {
+      // State changed. The save runs at most `delay` ms after the first unsaved change.
+      markDirty: function () {
+        if (disposed) return;
+        gen++;
+        reportDirty();
+        if (!timer) timer = setTimeout(function () { timer = null; flush(false).catch(noop); }, delay);
+      },
+      // Save now (after any save already running). Resolves when the state as of this call is durable.
+      flush: function () { return flush(false); },
+      get dirty() { return gen > savedGen; },
+      dispose: function () {
+        disposed = true;
+        clearTimeout(timer);
+        timer = null;
+        savers.delete(saver);
+        reportDirty();
+      },
+      _flush: flush,
+      _guard: guard,
+    };
+    savers.add(saver);
+    wireAutosave();
+    return saver;
   }
 
   // Typed egress error so an app can branch (fall back / prompt to connect) rather
@@ -176,6 +355,19 @@
   // prevents a delayed save from crossing Folder/Crate boundaries.
   function fsPayload(data) {
     return Object.assign({ backend: capabilities.fsBackend }, data || {});
+  }
+
+  function fsBinaryRead(type, path, options) {
+    var maxBytes = options && options.maxBytes, offset = options && options.offset;
+    if (offset !== undefined) {
+      var code = null, message = '';
+      if (!Number.isSafeInteger(offset) || offset < 0) { code = 'EINVAL'; message = 'offset must be a non-negative safe integer'; }
+      else if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) { code = 'EINVAL'; message = 'offset requires an explicit non-negative safe maxBytes'; }
+      else if (maxBytes > 16 * 1024 * 1024) { code = 'EFBIG'; message = 'range read exceeds the 16 MiB limit'; }
+      else if (capabilities.fsRangeReads !== true) { code = 'ENOTSUP'; message = 'host does not advertise bounded byte ranges'; }
+      if (code) { var error = new Error(code + ': ' + message); error.code = code; return Promise.reject(error); }
+    }
+    return rpc(type, fsPayload({ path: path, maxBytes: maxBytes, offset: offset }));
   }
 
   function makeAiStream(options) {
@@ -322,18 +514,17 @@
   }
 
   window.addEventListener('message', function (e) {
-    if (inNakliOS && e.source !== window.parent) return;
+    if (!inNakliOS || e.source !== window.parent || !approvedParentOrigin(e.origin)) return;
     var msg = e.data;
     if (!msg || typeof msg !== 'object') return;
-    // Lock the trusted origin on the first naklios:* message, then verify every
-    // later message against it (no-referrer-safe; see the detection note). This
-    // runs standalone too: a bare/?naklios top-level tab has no window.parent to
-    // pin the source against, so learn-on-contact origin is the only check it can
-    // make — without it the handler would mutate capabilities and fire listeners
-    // for naklios:* messages from ANY origin (opener, child frame, injected page).
+    // Pin only an independently approved actual parent, then keep that exact
+    // origin for this frame. Standalone pages never enter this handler.
+    // Flush startup data only after verification, with an explicit target origin.
     if (typeof msg.type === 'string' && msg.type.indexOf('naklios:') === 0) {
       if (!trustedParentOrigin) trustedParentOrigin = e.origin;
       else if (e.origin !== trustedParentOrigin) return;
+      var queued = queuedHostMessages; queuedHostMessages = []; queuedHostBytes = 0;
+      queued.forEach(function (item) { send(item.type, item.data); });
     }
     if (msg.type === 'naklios:theme') {
       currentTheme = { id: msg.theme, colors: msg.colors, mood: msg.mood };
@@ -343,13 +534,15 @@
     } else if (msg.type === 'naklios:beforeclose') {
       var closeWork;
       try { closeWork = beforeCloseCb ? beforeCloseCb() : null; } catch (_) { closeWork = null; }
-      Promise.resolve(closeWork).catch(function () {}).then(function () {
+      Promise.all([Promise.resolve(closeWork).catch(function () {}), flushSavers(true)]).then(function () {
         send('naklios:beforeclose-ready', { requestId: msg.requestId });
       });
     } else if (msg.type === 'naklios:capabilities') {
       if (typeof msg.fs === 'boolean') capabilities.fs = msg.fs;
       if (Array.isArray(msg.fsBackends)) capabilities.fsBackends = msg.fsBackends;
       capabilities.fsBackend = typeof msg.fsBackend === 'string' ? msg.fsBackend : null;
+      capabilities.fsBoundedReads = msg.fsBoundedReads === true;
+      capabilities.fsRangeReads = msg.fsRangeReads === true;
       capabilities.system = msg.system === true;
       capabilities.sysFs = msg.sysFs === true;
       if (typeof msg.ai === 'boolean') capabilities.ai = msg.ai;
@@ -376,6 +569,7 @@
       capabilities.aiSearch = msg.aiSearch === true;
       capabilities.net = msg.net === true;
       capabilities.netBackend = typeof msg.netBackend === 'string' ? msg.netBackend : null;
+      capabilities.review = msg.review === true;
       capListeners.forEach(function (cb) {
         try { cb(capabilities); } catch (_) {}
       });
@@ -469,13 +663,47 @@
         path: String(msg.grant.path || ''),
         sourceAppId: String(msg.grant.sourceAppId || ''),
         backend: String(msg.grant.backend || ''),
+        kind: String(msg.grant.kind || 'file'),
       };
       if (!grant.token) return;
       if (!fileOpenListeners.size) pendingFileGrants.push(grant);
       else fileOpenListeners.forEach(function (cb) {
         try { cb(grant); } catch (_) {}
       });
+    } else if (msg.type === 'naklios:file:edit-proposal' && msg.proposal) {
+      deliverFileEdit(msg.proposal);
+    } else if (msg.type === 'naklios:review:commit' && msg.proposal_id) {
+      var reviewId = String(msg.proposal_id);
+      if (appliedReviewIds.has(reviewId)) {
+        send('naklios:review:applied', { proposal_id: reviewId, ok: true });
+      } else if (!reviewDecisionHandler) {
+        send('naklios:review:applied', { proposal_id: reviewId, ok: false, error: 'app has no review decision handler' });
+      } else {
+        var application = applyingReviewIds.get(reviewId);
+        if (!application) {
+          application = Promise.resolve().then(function () {
+            return reviewDecisionHandler({ type: 'commit', proposal_id: reviewId });
+          }).then(function (result) {
+            if (result && result.ok === false) throw new Error(result.reason || 'app refused the staged change');
+            appliedReviewIds.add(reviewId);
+          });
+          applyingReviewIds.set(reviewId, application);
+          application.then(function () { applyingReviewIds.delete(reviewId); }, function () { applyingReviewIds.delete(reviewId); });
+        }
+        application.then(function () {
+          send('naklios:review:applied', { proposal_id: reviewId, ok: true });
+        }).catch(function (error) {
+          send('naklios:review:applied', { proposal_id: reviewId, ok: false, error: String(error && error.message || error) });
+        });
+      }
+    } else if (msg.type === 'naklios:review:discard' && msg.proposal_id) {
+      if (reviewDecisionHandler) {
+        Promise.resolve().then(function () {
+          return reviewDecisionHandler({ type: 'discard', proposal_id: String(msg.proposal_id) });
+        }).catch(function () {});
+      }
     } else if ((msg.type === 'naklios:fs:reply' || msg.type === 'naklios:file:reply' ||
+                msg.type === 'naklios:review:reply' ||
                 msg.type === 'naklios:rag:reply' || msg.type === 'naklios:net:reply') && msg.requestId) {
       var p = pendingRpc.get(msg.requestId);
       if (!p) return;
@@ -533,12 +761,32 @@
       return function () { capListeners.delete(cb); };
     },
     requestCapabilities: function () { send('naklios:capabilities-request'); },
+    review: {
+      // The host owns normalization and approval. A standalone app receives a
+      // clear fallback marker; its own caller performs the immediate write.
+      stage: function (tool, diff, options) {
+        if (!inNakliOS) return Promise.resolve({ standalone: true, proposal_id: null });
+        if (!capabilities.review) return Promise.reject(new Error('NakliOS review is unavailable'));
+        options = options || {};
+        return rpc('naklios:review:stage', {
+          tool: tool, diff: diff, expires: options.expires,
+          reversible: options.reversible === true,
+        });
+      },
+      onDecision: function (cb) {
+        if (typeof cb !== 'function') throw new Error('naklios.review.onDecision needs a callback');
+        reviewDecisionHandler = cb;
+        return function () { if (reviewDecisionHandler === cb) reviewDecisionHandler = null; };
+      },
+    },
     fs: {
+      get supportsBoundedReads() { return capabilities.fsBoundedReads === true; },
       // All paths are app-relative (under apps/<your-id>/ in the host folder).
       // Returns Promises. Reject if no folder connected, permission denied,
       // or path tries to traverse.
       read:       function (path)       { return rpc('naklios:fs:read', fsPayload({ path: path })); },
-      readBinary: function (path)       { return rpc('naklios:fs:readBinary', fsPayload({ path: path })); },
+      readBinary: function (path, options) { return fsBinaryRead('naklios:fs:readBinary', path, options); },
+      stat:       function (path)       { return rpc('naklios:fs:stat', fsPayload({ path: path })); },
       write:      function (path, data) { return rpc('naklios:fs:write', fsPayload({ path: path, data: data })); },
       append:     function (path, line) { return rpc('naklios:fs:append', fsPayload({ path: path, line: line })); },
       list:       function (prefix)     { return rpc('naklios:fs:list', fsPayload({ prefix: prefix || '' })); },
@@ -565,6 +813,12 @@
       // Explicit backend changes are always confirmed by the NakliOS host.
       // Switching changes the app-scoped view; it never copies or deletes data.
       useBackend: function (backend)    { return rpc('naklios:fs:selectBackend', { backend: backend }); },
+      // Autosave: the app says WHEN state changed (markDirty) and HOW to save it ({ save }); the SDK
+      // owns the timing — a throttled save, an immediate one when the page hides or the host closes
+      // the window, and a close guard only while something is unsaved. Returns
+      // { markDirty, flush, dirty, dispose }. { guard: false } keeps the timing but never holds a
+      // close (a background push, not the user's data). Runs standalone too. See docs/app-contract.md "Durability".
+      autosave: function (opts) { return makeAutosave(opts); },
     },
     // System-scoped filesystem — the WHOLE store on the active backend, not just
     // this app's apps/<id>/ namespace. Available to same-origin system apps only
@@ -575,7 +829,8 @@
     sys: {
       fs: {
         read:       function (path)       { return rpc('naklios:sysfs:read', fsPayload({ path: path })); },
-        readBinary: function (path)       { return rpc('naklios:sysfs:readBinary', fsPayload({ path: path })); },
+        readBinary: function (path, options) { return fsBinaryRead('naklios:sysfs:readBinary', path, options); },
+        stat:       function (path)       { return rpc('naklios:sysfs:stat', fsPayload({ path: path })); },
         write:      function (path, data) { return rpc('naklios:sysfs:write', fsPayload({ path: path, data: data })); },
         append:     function (path, line) { return rpc('naklios:sysfs:append', fsPayload({ path: path, line: line })); },
         list:       function (prefix)     { return rpc('naklios:sysfs:list', fsPayload({ prefix: prefix || '' })); },
@@ -584,6 +839,18 @@
       },
     },
     files: {
+      experimental_editInAnvil: function (request) {
+        return rpc('naklios:file:editInAnvil', { request: request });
+      },
+      experimental_proposeEdit: function (token, after, run) {
+        return rpc('naklios:file:proposeEdit', { token: String(token || ''), after: after, run: run });
+      },
+      experimental_onEditProposal: function (cb) {
+        if (typeof cb !== 'function') return function () {};
+        fileEditListeners.add(cb);
+        pendingFileEdits.splice(0).forEach(deliverFileEdit);
+        return function () { fileEditListeners.delete(cb); };
+      },
       // Ask NakliOS to open one app-relative file in another cooperative app.
       // The target gets a window-lifetime token for exactly that file; it does
       // not receive the source app's namespace or a Folder/Crate credential.

@@ -118,3 +118,12 @@ release. Dispatch needs a narrowly scoped repository secret. If it is absent,
 the source workflow succeeds with a visible explanation and NakliOS discovers
 the release through its six-hour scheduled sync. Credential and repository
 permission changes are always manual stop-lines.
+
+## Declared host SDK seam
+
+A mirror file may declare `managedSdk: "inline"` for a marked SDK block or `managedSdk: "file"` for a dedicated SDK file.
+The build applies the canonical `sdk/naklios.js` at this declared integration seam.
+The lock retains `originalSourceSha256`, `sdkSha256`, and the shipped file hash separately.
+The upstream repository and immutable commit remain authoritative for the app outside that seam.
+Run `node scripts/sync-mirrors.mjs --refresh-sdk` after canonical SDK changes.
+The command verifies the current artifact lock before replacing the SDK and preserves upstream pins.

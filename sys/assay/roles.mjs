@@ -90,6 +90,10 @@ export async function authorize(roleSet, rootKey, ctx) {
 // record an `assay.wall.breach` block. This is the Grant→History wall in one call.
 export async function guardedAccess(roleSet, rootKey, ctx, ledger, { campaign, tool_call_id = null } = {}) {
   const res = await authorize(roleSet, rootKey, ctx);
+  await ledger.append({
+    type:'assay.access', campaign:campaign || roleSet.campaign, actor:ctx.principal,
+    ts:Number(ctx.now)||0, scope:String(ctx.target), tool:String(ctx.tool), allowed:res.ok,
+  });
   if (!res.ok && isInstrumentRaw(ctx.target)) {
     await ledger.append({
       type: 'assay.wall.breach',

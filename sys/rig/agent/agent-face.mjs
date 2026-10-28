@@ -83,6 +83,7 @@ export function createAgentFace({ registry, grant, opLog, actor = 'agent', calle
   }
 
   async function invoke(name, input = {}) {
+    input = structuredClone(input);
     const command = registry.describeCommand(name);
     if (!command) {
       const miss = await registry.invokeCommand(name, input, { actor, caller });
@@ -98,7 +99,7 @@ export function createAgentFace({ registry, grant, opLog, actor = 'agent', calle
       staged.set(proposalId, { name, input });
       await logAnd(name, input, 'staged');
       return {
-        ok: false, staged: true, proposalId, command: name, input,
+        ok: false, staged: true, proposalId, command: name, input: structuredClone(input),
         scope: command.scope, summary: command.summary,
         message: `destructive — staged for operator accept (${proposalId})`,
       };
@@ -146,6 +147,7 @@ export function createAgentFace({ registry, grant, opLog, actor = 'agent', calle
     accept,
     reject,
     pendingProposals: () => [...staged.keys()],
+    proposal: id => staged.has(id) ? structuredClone(staged.get(id)) : null,
     // discovery + tool-schema emit — metadata only, straight from the registry
     searchCommands: (q) => registry.searchCommands(q),
     describeCommand: (n) => registry.describeCommand(n),

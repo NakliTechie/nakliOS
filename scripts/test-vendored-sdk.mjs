@@ -62,3 +62,16 @@ writeFileSync(file, after.slice(0, begin) + '\n/* tampered */' + after.slice(beg
 assert.equal(run(['--check']).code, 1, 'check must flag a hand-edit inside the managed region');
 
 console.log('SDK vendoring: canonical invariants + splicer adopt/check round-trip: PASS');
+
+// The host's declared SDK splice retains upstream app bytes and provenance.
+const {prepareManagedSdk,sha256}=await import('./mirror-lib.mjs');
+const raw=Buffer.from('before();/* naklios-sdk:begin ver=1 sha256=old */old();/* naklios-sdk:end */after();');
+const managed=prepareManagedSdk(raw,'inline',Buffer.from(canonical));
+assert.equal(managed.originalSourceSha256,sha256(raw));
+assert.equal(managed.sdkSha256,sha256(Buffer.from(canonical)));
+assert.ok(managed.bytes.toString().startsWith('before();'));
+assert.ok(managed.bytes.toString().endsWith('after();'));
+assert.ok(prepareManagedSdk(managed.bytes,'inline',Buffer.from(canonical)).bytes.equals(managed.bytes));
+assert.ok(prepareManagedSdk(raw,'file',Buffer.from(canonical)).bytes.equals(Buffer.from(canonical)));
+assert.throws(()=>prepareManagedSdk(Buffer.from('no markers'),'inline',Buffer.from(canonical)),/marker/);
+assert.throws(()=>prepareManagedSdk(Buffer.concat([raw,raw]),'inline',Buffer.from(canonical)),/marker/);

@@ -109,7 +109,8 @@
         },
         {
           "source": "sdk/naklios.js",
-          "destination": "sdk/naklios.js"
+          "destination": "sdk/naklios.js",
+          "managedSdk": "file"
         }
       ]
     },
@@ -128,7 +129,8 @@
         },
         {
           "source": "sdk/naklios.js",
-          "destination": "sdk/naklios.js"
+          "destination": "sdk/naklios.js",
+          "managedSdk": "file"
         }
       ]
     },
@@ -150,7 +152,8 @@
       "files": [
         {
           "source": "index.html",
-          "destination": "index.html"
+          "destination": "index.html",
+          "managedSdk": "inline"
         }
       ]
     },
@@ -161,7 +164,8 @@
       "files": [
         {
           "source": "index.html",
-          "destination": "index.html"
+          "destination": "index.html",
+          "managedSdk": "inline"
         },
         {
           "source": "manifest.webmanifest",
@@ -287,7 +291,8 @@
       "files": [
         {
           "source": "index.html",
-          "destination": "index.html"
+          "destination": "index.html",
+          "managedSdk": "inline"
         },
         {
           "source": "LICENSE",
@@ -589,7 +594,8 @@
       "files": [
         {
           "source": "index.html",
-          "destination": "index.html"
+          "destination": "index.html",
+          "managedSdk": "inline"
         }
       ]
     },
@@ -600,7 +606,8 @@
       "files": [
         {
           "source": "index.html",
-          "destination": "index.html"
+          "destination": "index.html",
+          "managedSdk": "inline"
         },
         {
           "source": "LICENSE",

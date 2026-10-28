@@ -447,7 +447,7 @@
   import { naklHttp, HttpTransport } from '../../sys/rig/git/transport.mjs';
   import { buildRigRegistry } from '../../sys/rig/registry/index.mjs';
   import { createNativeGateClient, NATIVE_BINDING_PATH } from '../../sys/rig/native-gate/client.mjs';
-  import { createGrant, createOpLog, createAgentFace } from '../../sys/rig/agent/index.mjs';
+  import { createGrant, createOpLog, createAgentFace, wireWindowRig } from '../../sys/rig/agent/index.mjs';
   import { createShell } from '../../sys/rig/cli/shell.mjs';
   import { runAgentLoop, boundedText } from '../../sys/ai/agent-loop.mjs';
   import { isSuccessfulReadToolResult, classifyToolResult } from '../../sys/ai/tool-result-kind.mjs';
@@ -511,10 +511,12 @@
   // ledger + verifiers + loop reducer + driver all live in sys/assay; Anvil is the
   // driver's host and renders the campaign view.
   import { newRootKey } from '../../sys/identity/grant.mjs';
-  import { mintRole } from '../../sys/assay/roles.mjs';
+  import { mintRole, guardedAccess } from '../../sys/assay/roles.mjs';
+  import { normalizeMountPath } from '../../sys/rig/fileops/pathguard.mjs';
   import { createAssayLedger } from '../../sys/assay/ledger.mjs';
   import { runCampaign } from '../../sys/assay/runmode.mjs';
   import { makeCampaignExecutors } from '../../sys/assay/executors.mjs';
+  import { createWorkspaceChecker } from '../../sys/assay/checker.mjs';
   import { verifyWall, verifyTests, replay as replayLineage } from '../../sys/assay/verify.mjs';
   import {runCodemode} from '../../sys/ai/codemode-runtime.mjs';
   import {codemodeTool,codemodeCatalog,CODEMODE_TOOL_NAMES,foldCodemodeStore,verifiedCodemodeStore} from '../../sys/ai/codemode-record.mjs';
@@ -585,6 +587,7 @@
       if(restoreRuntime) await mountWorkspace(sourceBackend,workspaceLabel,wsRoot,workspaceOptions,true);
     }catch(error){ pushSystem('Native cancellation or restoration unconfirmed. Retry disconnect before switching.'); throw error; }
   }
+  wireWindowRig({ getFace: () => face });
   async function mountWorkspace(newBackend, label, root='', opts={}, nativeRecovery=false){
     if(!nativeRecovery) return nativeAuthorityTransition(()=>mountWorkspace(newBackend,label,root,opts,true));
     await disconnectNativeAuthority({internal:true});
@@ -2372,7 +2375,7 @@
   // role-scoped view (the wall), and capture the block it emits. Returns the emitted
   // args, or null (no endpoint / emitted nothing → the driver pauses). The executor
   // harness (sys/assay/executors) stamps + validates + splits into ledger blocks.
-  async function runRole({ role, action, round, instructions, emitSpec, view, goal }){
+  async function runRole({ role, action, round, instructions, emitSpec, view, goal, authorize }){
     if(!(nak && nak.ai)) return null;
     let emitted=null;
     const emitTool={type:'function',function:{name:'emit',description:'Emit your role result as one JSON object with the required fields. This is how you FINISH — you are not done until you call it.',parameters:{type:'object',properties:{result:{type:'object'}},required:['result']}}};
@@ -2383,8 +2386,21 @@
     // full coding toolset over the live workspace (its files change on disk like any
     // task). CHECKER / LEAD reason over their role-scoped view (read + emit).
     let tools, execTool, sys, maxSteps, budget, kick;
+    const resourceForPath = path => {
+      const normalized=normalizeMountPath(String(path || ''));
+      if(!normalized.ok) throw new Error('Invalid role path');
+      return normalized.path.startsWith('.assay/') ? 'instrument' : 'candidate';
+    };
+    const checkedFace={...face,invoke:async(name,args={})=>{
+      const command=registry.describeCommand(name);
+      const mode=command?.scope?.endsWith(':read')?'read':'write';
+      for(const key of ['path','from','to','cwd','filepath']) if(typeof args[key]==='string') await authorize(resourceForPath(args[key]),mode);
+      return face.invoke(name,args);
+    }};
+    const roleShell=createShell({registry,face:checkedFace,signal:()=>abortController ? abortController.signal : null});
+
     if(role==='builder'){
-      const codeExec = makeToolExecutor({ shell, face, mode:'code', infer: inferViaHost });
+      const codeExec = makeToolExecutor({ shell:roleShell, face:checkedFace, mode:'code', infer: inferViaHost });
       execTool=async(nm,ar,call)=>{ if(nm==='emit'){ emitted=ar&&ar.result; return 'Recorded — you are done.'; } return await codeExec(nm,ar,call); };
       tools=codingToolset('code',{ scopes: grant.scopes }).concat(emitTool); // B5: the builder role is projected by the grant too
       sys=sysBase + '\n\nUse the coding tools to build the candidate toward the directive, then run your own tests. You FINISH by calling `emit` exactly once — nothing is recorded until you do. '+emitSpec;
@@ -2392,7 +2408,7 @@
       maxSteps=20; budget={tokens:120000, wallClockMs:240000};
     } else {
       const readTool={type:'function',function:{name:'read',description:'Read a workspace file (returns its text).',parameters:{type:'object',properties:{path:{type:'string'}},required:['path']}}};
-      execTool=async(nm,ar)=>{ if(nm==='emit'){ emitted=ar&&ar.result; return 'Recorded — you are done.'; } if(nm==='read'){ try{ const r=await fs.read(String((ar&&ar.path)||''),{encoding:'utf-8'}); return (r&&r.ok)? String(r.data).slice(0,8000):'(not found)'; }catch(_){ return '(error)'; } } return '(no such tool)'; };
+      execTool=async(nm,ar)=>{ if(nm==='emit'){ emitted=ar&&ar.result; return 'Recorded — you are done.'; } if(nm==='read'){ try{ const path=String((ar&&ar.path)||''); await authorize(resourceForPath(path),'read'); const r=await fs.read(path,{encoding:'utf-8'}); return (r&&r.ok)? String(r.data).slice(0,8000):'(not found)'; }catch(_){ return '(error)'; } } return '(no such tool)'; };
       tools=[readTool,emitTool];
       sys=sysBase + '\n\nUse `read` to inspect workspace files if useful. You FINISH by calling `emit` exactly once — nothing is recorded until you do. '+emitSpec;
       kick='Perform action "'+action+'" as the '+role+', then call `emit`.';
@@ -2411,7 +2427,7 @@
   async function startCampaign(goal, opts={}){
     if(typeof nativeGateTransition==='boolean' && nativeGateTransition){pushSystem('Wait for the workspace change before starting a campaign.');return;}
     if(campaignBusy){pushSystem('Wait for the current campaign to finish.');return;}
-    const campaignBackend=backend, campaignProject=state.activeProject;
+    const campaignBackend=backend, campaignProject=state.activeProject, campaignRoot=wsRoot;
     campaignBusy=true;
     try{
     raise('preview');
@@ -2420,13 +2436,21 @@
     // Mint the three role grant sets (the wall lives in which scopes each omits).
     const roleSets={};
     for(const role of ['checker','builder','lead']){
-      roleSets[role]=await mintRole(rk,{campaign:C,role,principal:'actor:agent:'+role+':'+C,now:0,ttlMs:3600000});
+      roleSets[role]=await mintRole(rk,{campaign:C,role,principal:'actor:agent:'+role+':'+C,now:Date.now(),ttlMs:3600000});
     }
     if(nativeGateTransition || backend!==campaignBackend || state.activeProject!==campaignProject){pushSystem('Workspace changed before campaign execution.');return;}
     const L=createAssayLedger();
     const live = !!(opts.live && nak && nak.ai);
     const executors = live
-      ? makeCampaignExecutors({ campaign:C, goal, ship_bar:0.85, runRole })
+      ? makeCampaignExecutors({ campaign:C, goal, ship_bar:0.85, runRole,
+          access:(role,resource,tool)=>guardedAccess(roleSets[role],rk,{
+            principal:roleSets[role].principal,tool,target:`assay:${C}:${resource}`,now:Date.now(),
+          },L,{campaign:C}),
+          runCheck:async testCase=>{
+            if(backend!==campaignBackend || state.activeProject!==campaignProject)throw new Error('Campaign workspace changed');
+            return createWorkspaceChecker({backend:campaignBackend,root:campaignRoot})(testCase);
+          },
+        })
       : demoExecutors(C, goal);
     campaignRun = { C, L, result:{status:'running'}, goal, roleSets, rk, live }; renderCampaign();
     const result = await runCampaign({ ledger:L, campaign:C, executors, config:{weight_floor:5, epsilon:0.01}, maxIters: opts.maxIters||undefined, onStep:()=>{ campaignRun.result={status:'running'}; renderCampaign(); } });
@@ -2450,7 +2474,7 @@
     const finds=L.ofType('assay.finding.v1',C);
     const dirs=L.ofType('assay.directive.v1',C);
     const bar=Number(camp.ship_bar)||0.85;
-    const wall=verifyWall(L,{campaign:C}), tests=verifyTests(L,{campaign:C}), lineage=replayLineage(L,{campaign:C});
+    const wall=verifyWall(L,{campaign:C,requireEnforcement:cs.live}), tests=verifyTests(L,{campaign:C}), lineage=replayLineage(L,{campaign:C});
     const badge=(name,ok,detail)=>`<span class="vb ${ok?'ok':'no'}">${ok?'✓':'✗'} ${name}${detail?(' — '+detail):''}</span>`;
     const e=(s)=>String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
     const lastPM = measures.length? measures[measures.length-1].pass_mass : 0;
@@ -2493,8 +2517,8 @@
     <div class="k" style="color:#8b93a1;font-size:11px;margin:14px 0 2px">ROUNDS</div>
     <table><thead><tr><th>round</th><th>issues found</th><th>fixes asked</th><th>build</th></tr></thead><tbody>${strip||'<tr><td colspan=4>—</td></tr>'}</tbody></table>
     <div class="wall">the divider — the standard is the Checker's; the Builder can't see it. crossings: ${(wall.breaches?wall.breaches.length:0)}</div>
-    <div class="vbs">${badge('divider held',wall.ok,wall.ok?'builder never saw the standard':wall.reason)}${badge('tests kept',tests.ok,tests.ok?'no tests deleted':tests.reason)}${badge('traceable',lineage.ok,lineage.ok?'every fix traces to an issue':lineage.reason)}</div>
-    <div class="note">Beta — this demo run drives the real checker, divider, ledger and the same checks a live build uses. A live build runs a real agent as each role.</div>`;
+    <div class="vbs">${badge('no denied instrument accesses',cs.live && wall.ok,cs.live?(wall.ok?'role grants enforced':wall.reason):'demo only')}${badge('tests kept',tests.ok,tests.ok?'no tests deleted':tests.reason)}${badge('traceable',lineage.ok,lineage.ok?'every fix traces to an issue':lineage.reason)}</div>
+    <div class="note">${cs.live?'Checker cases ran in isolated candidate overlays. Scores come from exact output comparisons, not model claims.':'Demo only: scripted scores illustrate the workflow; they do not verify your project.'}</div>`;
   }
 
   function esc(s){ return String(s==null?'':s).replace(/[&<>]/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }

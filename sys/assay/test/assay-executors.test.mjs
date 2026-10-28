@@ -21,7 +21,7 @@ const WT = (r) => [10, 8, 4, 3][r] ?? 2;
 // only the role-scoped `view` it is handed — the same wall a real agent would see.
 function scriptedRunRole({ action, round, view }) {
   switch (action) {
-    case 'build-instrument': return { version: 1, ratchet_sha: 'sha256:x', areas: [{ id: 'view', description: 'view cmd', weight: 3 }], case_count: 12 };
+    case 'build-instrument': return { version: 1, ratchet_sha: 'sha256:x', areas: [{ id: 'view', description: 'view cmd', weight: 3 }], cases: [6,2,0.6,0.05,1.35].map((weight,id)=>({id:String(id),area:'view',command:'fixture '+id,expected:{exitCode:0,stdout:'ok'},weight})) };
     case 'build-candidate': {
       const d = (view.directives || []).slice(-1)[0];
       return { git_ref: 'c' + round, test_count: 5 + round, deleted: 0, from_directive: d ? d.id : '' };
@@ -35,7 +35,8 @@ function scriptedRunRole({ action, round, view }) {
     default: return {};
   }
 }
-const executors = (runRole = scriptedRunRole) => makeCampaignExecutors({ campaign: C, goal: 'samtools view parity', ship_bar: 0.85, runRole, clock: (() => { let t = 0; return () => ++t; })() });
+const scriptedCheck=(testCase,{round})=>({exitCode:0,stdout:Number(testCase.id)<=round?'ok':'fail',stderr:''});
+const executors = (runRole = scriptedRunRole, runCheck = scriptedCheck) => makeCampaignExecutors({ campaign: C, goal: 'samtools view parity', ship_bar: 0.85, runRole, runCheck, access:async()=>({ok:true}), clock: (() => { let t = 0; return () => ++t; })() });
 
 await test('role instructions carry the load-bearing constraints', () => {
   assert(/never see the instrument/i.test(ROLE_INSTRUCTIONS.builder), 'builder is told it never sees the instrument');
@@ -70,7 +71,8 @@ await test('a clean measurement (no failure clusters) emits only a measure, no f
   // A real Checker legitimately reports zero clusters when the candidate passed —
   // that must produce a valid measure, not an invalid empty finding (live-test bug).
   const clean = (ctx) => (ctx.action === 'measure' ? { pass_mass: 1.0, clusters: [] } : scriptedRunRole(ctx));
-  const ex = executors(clean);
+  const ex = executors(clean,()=>({exitCode:0,stdout:'ok',stderr:''}));
+  await ex['build-instrument']({round:0,ledger:createAssayLedger()});
   const blocks = await ex.measure({ round: 0, ledger: createAssayLedger() });
   eq(blocks.length, 1, 'only the measure block'); eq(blocks[0].type, 'assay.measure', 'a measure');
   eq(blocks[0].cluster_count, 0, 'zero clusters recorded, no finding emitted');
