@@ -661,6 +661,12 @@ jobs:
       - name: Verify vendored LocalMind runtime assets
         run: node scripts/test-localmind-vendor.mjs
 
+      - name: Verify tool calls on in-browser models
+        run: node scripts/test-local-tool-calls.mjs
+
+      - name: Verify Anthropic Messages API shaping
+        run: node scripts/test-anthropic-protocol.mjs
+
       - name: Verify mirrored app artifacts match the immutable lock
         run: node scripts/validate-mirrors.mjs
 

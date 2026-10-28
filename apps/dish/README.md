@@ -2,7 +2,7 @@
 
 Dish hosts DeepSeek Harness inside a NakliOS window.
 Open Dish from desktop search or the app catalog.
-Select an endpoint model through NakliOS Settings → AI before starting an agent task.
+Agent tasks run on the model selected in NakliOS Settings → AI: LFM3 1.7B in this browser, or an OpenAI- or Anthropic-compatible endpoint.
 NakliOS requests destination consent before sending a prompt.
 Dish never receives the endpoint credential.
 
@@ -32,7 +32,7 @@ Plugins are selected during packaging; installation inside the Worker is unavail
 This profile removes DeepSeek account/model routes, wire extensions, package inventory calls, and telemetry exporters.
 The shared inference adapter currently accepts text and tool calls.
 It rejects unsupported image/file blocks explicitly.
-NakliOS's broker requires an endpoint model when a request includes tools.
+NakliOS's broker refuses tools on a browser model that cannot call them (every browser model except LFM3 1.7B).
 Closing the browser stops the Worker.
 
 ## Build and provenance

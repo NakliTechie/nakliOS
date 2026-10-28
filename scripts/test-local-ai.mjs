@@ -259,8 +259,15 @@ assert.match(html, /function aiAppIsSystem\(appId\)/, 'agent tier gates on syste
 assert.match(html, /Agent-tier inference is restricted to system apps/,
   'third-party apps are refused the agent tier');
 assert.match(html, /const wantsAgent = msg\.agent === true/, 'agent tier is opt-in per request');
-assert.match(html, /Tool-calling requires an OpenAI-compatible endpoint model/,
-  'on-device model + tools is refused, not silently dropped');
+assert.match(html, /cannot call tools\. Choose LFM3 1\.7B or an OpenAI- or Anthropic-compatible endpoint/,
+  'a browser model that cannot call tools is refused, not silently dropped');
+assert.match(html, /const AI_LOCAL_TOOL_MODELS = new Set\(\['lfm3-1\.7b'\]\)/,
+  'LFM3 1.7B is the tool-capable browser model');
+assert.match(html, /local\.parseLocalToolCalls\(request\.localText, request\.tools/,
+  'browser-model replies are parsed into tool calls before reaching the app');
+assert.match(html, /if \(request\.model\.protocol === 'anthropic'\) return aiGenerateAnthropic\(request\)/,
+  'Anthropic-compatible endpoints take the Messages API path');
+assert.match(html, /@anthropic-ai\/sdk@0\.134\.0\/\+esm/, 'the Anthropic SDK is pinned');
 assert.match(html, /toolAcc\.absorbDelta\(choice\?\.delta\)/, 'streamed tool-calls are accumulated');
 assert.match(html, /request\.toolCalls\?\.length \? \{ toolCalls:request\.toolCalls \}/,
   'tool-calls ride back on the done event');

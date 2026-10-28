@@ -202,10 +202,14 @@ model/provider may change while the app is open.
 ## AI
 
 System-app agent requests preserve system, developer, user, assistant, and tool message roles.
-Developer context retains its instruction role when sent to an endpoint.
+Developer context retains its instruction role when sent to an OpenAI-compatible
+endpoint; an Anthropic-compatible endpoint receives it in the system prompt.
+Agent requests that carry `tools` run on LFM3 1.7B in the browser or on either
+kind of endpoint, and tool calls come back in the same OpenAI shape from all three.
 
 NakliOS owns one shared inference broker. The user may select a vendored
-LocalMind browser model or a configured OpenAI-compatible endpoint. Apps receive
+LocalMind browser model, a configured OpenAI-compatible endpoint, or a configured
+Anthropic-compatible endpoint. Apps receive
 a streamed text completion API, not the worker, model memory, endpoint URL or
 key, another app's queue, histories, tools, filesystem, or credentials.
 

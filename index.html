@@ -5607,6 +5607,20 @@ const AI_ENDPOINT_PRESETS = Object.freeze({
     baseUrl:'',
     keyRequired:false,
   }),
+  // Anthropic Messages API (POST /v1/messages) through the official SDK. The broker converts
+  // the apps' OpenAI-shaped agent protocol at the edge (sys/ai/anthropic-protocol.mjs).
+  anthropic: Object.freeze({
+    label:'Anthropic (Claude)',
+    baseUrl:'https://api.anthropic.com/v1',
+    keyRequired:true,
+    protocol:'anthropic',
+  }),
+  anthropiccustom: Object.freeze({
+    label:'Anthropic-compatible',
+    baseUrl:'',
+    keyRequired:false,
+    protocol:'anthropic',
+  }),
 });
 const AI_IMAGE_ENDPOINT_PRESETS = Object.freeze({
   openai: Object.freeze({
@@ -5740,6 +5754,7 @@ function aiSelectedModel(){
       baseUrl,
       model,
       preset:aiSettings.endpoint.preset,
+      protocol:preset.protocol || 'openai',
       generationConfig:{},
     };
   }
@@ -5752,10 +5767,14 @@ function aiSelectedModel(){
 // ── On-device model — Chrome's built-in Gemini Nano (Prompt API) ────────
 // GENERAL-PURPOSE ONLY. Nano is the zero-config default for non-agent (GP)
 // completions whenever the browser exposes it. The agent tier (tool-calling,
-// Anvil/Forge) NEVER uses Nano — it resolves to the user's configured endpoint,
-// and the existing "tool-calling requires an endpoint" gate applies from there.
+// Anvil/Forge/Dish) NEVER uses Nano — it resolves to the user's selected model:
+// an in-browser model that can call tools (AI_LOCAL_TOOL_MODELS), or an
+// OpenAI- or Anthropic-compatible endpoint.
 // Availability is async, so it's probed once at boot and cached.
 const aiNano = { checked:false, available:false, downloadable:false };
+// In-browser models whose chat template renders tools and whose replies the broker parses
+// into tool calls (sys/ai/local-tool-calls.mjs). Agent requests with tools run on these.
+const AI_LOCAL_TOOL_MODELS = new Set(['lfm3-1.7b']);
 // Apps that consume the HOST agent tier (tool-calling coding). They report their
 // configured model and their agent requests never touch Nano. Apps with their
 // own agent stacks are migrated onto this split one at a time.
@@ -6206,7 +6225,8 @@ function aiCreateWorker(model){
     const request = aiHost.active;
     if (!request || msg.id !== request.workerRequestId) return;
     if (msg.type === 'token'){
-      aiEmit(request, { event:'token', token:String(msg.token || '') });
+      if (typeof request.localText === 'string') request.localText += String(msg.token || '');
+      else aiEmit(request, { event:'token', token:String(msg.token || '') });
     } else if (msg.type === 'complete'){
       const resolve = aiHost.activeResolve;
       aiHost.activeResolve = null;
@@ -6454,14 +6474,32 @@ function aiNextRequest(){
   return request;
 }
 
-function aiGenerateWorker(request){
+let _aiLocalToolsMod = null;
+async function aiLocalTools(){
+  if (!_aiLocalToolsMod) _aiLocalToolsMod = await import('./sys/ai/local-tool-calls.mjs');
+  return _aiLocalToolsMod;
+}
+
+async function aiGenerateWorker(request){
+  // An agent request with tools: the model's own chat template renders the tools, and the
+  // reply text is held back until it is complete, so tool-call markup never reaches the app
+  // as text. The parsed calls travel on the done event, as an endpoint's do.
+  const local = request.agent && request.tools?.length ? await aiLocalTools() : null;
+  if (local) request.localText = '';
   return new Promise((resolve, reject) => {
-    aiHost.activeResolve = resolve;
+    aiHost.activeResolve = local ? (finishReason) => {
+      const parsed = local.parseLocalToolCalls(request.localText, request.tools,
+        { idPrefix:`call_${request.workerRequestId}` });
+      if (parsed.content) aiEmit(request, { event:'token', token:parsed.content });
+      if (parsed.toolCalls.length) request.toolCalls = parsed.toolCalls;
+      resolve(parsed.toolCalls.length && finishReason !== 'cancelled' ? 'tool_calls' : finishReason);
+    } : resolve;
     aiHost.activeReject = reject;
     aiHost.worker.postMessage({
       type:'generate',
       id:request.workerRequestId,
-      messages:request.messages,
+      messages:local ? local.toLocalTemplateMessages(request.messages) : request.messages,
+      ...(local ? { tools:request.tools } : {}),
       generationConfig:{
         ...(request.model.generationConfig || {}),
         max_tokens:request.maxTokens,
@@ -6604,6 +6642,13 @@ function aiEndpointChatUrl(baseUrl){
 }
 
 async function aiDiscoverEndpointModels(config, apiKey = ''){
+  if (AI_ENDPOINT_PRESETS[config.preset]?.protocol === 'anthropic'){
+    const client = await aiAnthropicClient({ baseUrl:config.baseUrl }, apiKey);
+    const names = [];
+    for await (const info of client.models.list()) names.push(info.id);
+    if (!names.length) throw new Error('The endpoint returned no models');
+    return names;
+  }
   const base = aiNormaliseEndpointBase(config.baseUrl);
   const headers = {};
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
@@ -6646,7 +6691,93 @@ async function aiDiscoverEndpointModels(config, apiKey = ''){
   );
 }
 
+// ── Anthropic-compatible endpoints ─────────────────────────────────────
+// The official SDK, pinned, loaded only when such an endpoint is in use. The key stays in
+// this tab, as every endpoint key does, hence dangerouslyAllowBrowser.
+const AI_ANTHROPIC_SDK_URL = 'https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@0.134.0/+esm';
+let _aiAnthropicSdk = null;
+let _aiAnthropicProtoMod = null;
+// replayKey → the raw content blocks of a reply this tab received, so thinking blocks go
+// back unchanged on the next turn. Bounded; a miss drops earlier thinking (see the module).
+const aiAnthropicReplay = new Map();
+const AI_ANTHROPIC_REPLAY_MAX = 256;
+const AI_ANTHROPIC_MIN_MAX_TOKENS = 16000;
+
+async function aiAnthropicClient(model, apiKey = aiEndpointApiKey(model.baseUrl)){
+  if (!_aiAnthropicSdk) _aiAnthropicSdk = (await import(AI_ANTHROPIC_SDK_URL)).default;
+  // The SDK appends /v1/messages itself; the settings field shows the /v1 form.
+  const baseURL = aiNormaliseEndpointBase(model.baseUrl).replace(/\/v1$/i, '');
+  return new _aiAnthropicSdk({
+    apiKey:apiKey || 'not-set',
+    baseURL,
+    dangerouslyAllowBrowser:true,
+    maxRetries:1,
+  });
+}
+
+function aiAnthropicFirstParty(model){
+  try { return new URL(aiNormaliseEndpointBase(model.baseUrl)).host === 'api.anthropic.com'; }
+  catch(_){ return false; }
+}
+
+async function aiGenerateAnthropic(request){
+  const controller = new AbortController();
+  aiHost.endpointAbort = controller;
+  if (!_aiAnthropicProtoMod) _aiAnthropicProtoMod = await import('./sys/ai/anthropic-protocol.mjs');
+  const proto = _aiAnthropicProtoMod;
+  const client = await aiAnthropicClient(request.model);
+  // Current Claude models always think, and thinking counts against max_tokens, so a chat
+  // budget of a few hundred tokens would end most replies before any text. The floor leaves
+  // room for the thinking; the reply itself is usually far shorter.
+  const body = proto.toAnthropicRequest({
+    messages:request.messages,
+    maxTokens:Math.max(request.maxTokens || 0, AI_ANTHROPIC_MIN_MAX_TOKENS),
+    tools:request.agent ? request.tools : undefined,
+    toolChoice:request.toolChoice,
+    replay:aiAnthropicReplay,
+  });
+  const firstParty = aiAnthropicFirstParty(request.model);
+  let emitted = false;
+  const attemptOn = async (modelId) => {
+    // On Anthropic's own API, a policy decline retries on the model's default fallback;
+    // a model without fallbacks runs alone. Other servers get the plain Messages request.
+    const stream = firstParty
+      ? client.beta.messages.stream({
+          ...body, model:modelId,
+          betas:['server-side-fallback-2026-07-01'], fallbacks:'default',
+        }, { signal:controller.signal })
+      : client.messages.stream({ ...body, model:modelId }, { signal:controller.signal });
+    stream.on('text', (delta) => {
+      if (!delta) return;
+      emitted = true;
+      aiEmit(request, { event:'token', token:delta });
+    });
+    return stream.finalMessage();
+  };
+  const agentProto = await aiAgentProto();
+  const ladder = agentProto.modelLadder(request.model.model, aiSettings.endpoint.fallbacks);
+  let run;
+  try {
+    run = await agentProto.runModelLadder(ladder, attemptOn, { hasEmitted:() => emitted });
+  } catch (error){
+    if (request.cancelled) return 'cancelled';
+    throw error;
+  }
+  const message = run.value;
+  request.answeredModel = message?.model || run.model;
+  const result = proto.fromAnthropicMessage(message);
+  if (result.refusal) throw new Error(`Claude declined this request (${result.refusal})`);
+  if (result.toolCalls.length) request.toolCalls = result.toolCalls;
+  if (result.usage) request.usage = result.usage;
+  aiAnthropicReplay.set(proto.replayKey({ content:result.text, toolCalls:result.toolCalls }), message.content);
+  while (aiAnthropicReplay.size > AI_ANTHROPIC_REPLAY_MAX) {
+    aiAnthropicReplay.delete(aiAnthropicReplay.keys().next().value);
+  }
+  return request.cancelled ? 'cancelled' : result.finishReason;
+}
+
 async function aiGenerateEndpoint(request){
+  if (request.model.protocol === 'anthropic') return aiGenerateAnthropic(request);
   const controller = new AbortController();
   aiHost.endpointAbort = controller;
   // Agent tier: build the body with `tools` and reassemble streamed tool-calls.
@@ -6928,8 +7059,8 @@ async function aiHostSubmit(source, msg, appId){
       tools = proto.normaliseTools(msg.tools);
       toolChoice = proto.normaliseToolChoice(msg.toolChoice ?? msg.tool_choice);
       maxTokens = proto.clampAgentMaxTokens(msg.maxTokens);
-      if (tools && tools.length && model.runtime !== 'endpoint'){
-        throw new Error('Tool-calling requires an OpenAI-compatible endpoint model (Settings → AI)');
+      if (tools && tools.length && model.runtime !== 'endpoint' && !AI_LOCAL_TOOL_MODELS.has(model.key)){
+        throw new Error(`${model.label} cannot call tools. Choose LFM3 1.7B or an OpenAI- or Anthropic-compatible endpoint in Settings → AI`);
       }
     } else {
       messages = aiNormaliseMessages(msg.messages);
@@ -10175,6 +10306,7 @@ function openSettings(section){
     try {
       const models = await aiDiscoverEndpointModels({
         baseUrl:aiEndpointUrl.value,
+        preset:aiEndpointPreset.value,
       }, apiKey);
       const datalist = wrap.querySelector('#ai-endpoint-models');
       datalist.replaceChildren(...models.map(name => {

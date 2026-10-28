@@ -92,8 +92,10 @@ runtimes. LFM3 1.7B (~1.4 GB, Transformers.js 4.3.2/WebGPU) is the default.
 Settings also offers LFM2.5 230M, the fast ~140 MB engine for low-memory
 devices, and Gemma 4 E2B, Gemma 4 E4B, and Qwen3.5 4B through pinned
 Transformers.js 4.3.2/WebGPU, or an
-OpenAI-compatible endpoint: Ollama, LM Studio, llama.cpp, OpenAI, OpenRouter,
-Groq, or a custom provider. Cooperative apps keep one SDK regardless of which
+OpenAI-compatible endpoint (Ollama, LM Studio, llama.cpp, OpenAI, OpenRouter,
+Groq, or a custom provider) or an Anthropic-compatible endpoint (Claude, or a
+custom Messages API server). Coding agents (Anvil, Forge, Dish) call tools on
+LFM3 1.7B in the browser or on any of those endpoints. Cooperative apps keep one SDK regardless of which
 runtime the user chooses. Requests are bounded, queued fairly, reset between
 apps, streamed, and cancellable.
 

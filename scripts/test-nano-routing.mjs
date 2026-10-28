@@ -25,8 +25,8 @@ assert.match(host, /request\.model\.runtime === 'ondevice'\) return aiGenerateOn
   'ondevice dispatches to the on-device generator');
 assert.match(host, /if \(model\.runtime === 'ondevice'\) return aiNano\.available/,
   'ondevice availability is gated on the Nano probe');
-assert.match(host, /Tool-calling requires an OpenAI-compatible endpoint model/,
-  'agent tool-calling still requires an endpoint');
+assert.match(host, /model\.runtime !== 'endpoint' && !AI_LOCAL_TOOL_MODELS\.has\(model\.key\)/,
+  'agent tool-calling runs on an endpoint or a tool-capable in-browser model, never Nano');
 
 // The coding apps that consume the host agent tier are named and excluded from
 // the GP-default display.
