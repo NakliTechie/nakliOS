@@ -26,3 +26,9 @@ To update the runtime:
 
 Do not patch the vendored files only in NakliOS. Runtime changes belong
 upstream in LocalMind so the workbench and operating system cannot drift.
+
+Current exception (2026-10-28): `manifest.json` pins LocalMind `e87d28b`, but
+`inference-worker.js` stays at the older commit listed under `olderPins`.
+LocalMind now loads LFM2.5 through anyformer from npm; adopting that changes
+how the LFM2.5 230M model loads, so it lands as its own change with a live
+check, after which `olderPins` goes away.
