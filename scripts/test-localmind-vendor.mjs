@@ -9,7 +9,8 @@ assert.equal(manifest.schemaVersion, 3);
 assert.equal(manifest.protocol, 'localmind.inference.v1');
 assert.equal(manifest.imageProtocol, 'localmind.image.v1');
 assert.match(manifest.upstreamCommit, /^[0-9a-f]{40}$/);
-assert.equal(manifest.defaultModelKey, 'lfm2-230m-webgpu');
+assert.equal(manifest.defaultModelKey, 'lfm3-1.7b');
+assert.deepEqual(Object.keys(manifest.localPatches ?? {}).sort(), ['host-model-catalog.js', 'onnx-inference-worker.js']);
 assert.equal(manifest.defaultImageModelKey, 'flux2-klein-4b-webgpu');
 
 for (const [name, expected] of Object.entries(manifest.files)) {
@@ -26,8 +27,9 @@ assert.match(worker, /new URL\('\.\/lfm2_5\.js', import\.meta\.url\)/);
 assert.match(worker, /localmind\.inference\.v1/);
 assert.match(onnxWorker, /Gemma4ForConditionalGeneration/);
 assert.match(onnxWorker, /Qwen3_5ForConditionalGeneration/);
-assert.match(onnxWorker, /@huggingface\/transformers@4\.2\.0/);
+assert.match(onnxWorker, /@huggingface\/transformers@4\.3\.2/);
 assert.match(onnxWorker, /AutoModelForCausalLM/);
+assert.match(catalog, /LiquidAI\/LFM3-1\.7B-ONNX/);
 assert.match(catalog, /gemma4-e2b/);
 assert.match(catalog, /gemma4-e4b/);
 assert.match(catalog, /qwen35-4b/);

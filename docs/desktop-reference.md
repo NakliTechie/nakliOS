@@ -88,9 +88,10 @@ explicit, window-lifetime exact-file grant; no app namespace is broadened.
 ## AI
 
 NakliOS has one host-owned inference broker backed by pinned LocalMind
-runtimes. LFM2.5 230M remains the fast ~140 MB default. Settings also offers
-Gemma 4 E2B, Gemma 4 E4B, and Qwen3.5 4B through pinned Transformers.js
-4.2.0/WebGPU, or an
+runtimes. LFM3 1.7B (~1.4 GB, Transformers.js 4.3.2/WebGPU) is the default.
+Settings also offers LFM2.5 230M, the fast ~140 MB engine for low-memory
+devices, and Gemma 4 E2B, Gemma 4 E4B, and Qwen3.5 4B through pinned
+Transformers.js 4.3.2/WebGPU, or an
 OpenAI-compatible endpoint: Ollama, LM Studio, llama.cpp, OpenAI, OpenRouter,
 Groq, or a custom provider. Cooperative apps keep one SDK regardless of which
 runtime the user chooses. Requests are bounded, queued fairly, reset between

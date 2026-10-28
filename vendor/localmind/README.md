@@ -26,3 +26,11 @@ To update the runtime:
 
 Do not patch the vendored files only in NakliOS. Runtime changes belong
 upstream in LocalMind so the workbench and operating system cannot drift.
+
+Current override (2026-10-28): the owner chose to make LFM3 1.7B the NakliOS
+default here first and upstream it later. Two files differ from the pinned
+LocalMind commit, and `manifest.json` lists them under `localPatches`:
+`host-model-catalog.js` (LFM3 1.7B entry and default key) and
+`onnx-inference-worker.js` (Transformers.js 4.3.2, the first release with
+`lfm3`). The next LocalMind update must carry both changes upstream and then
+remove `localPatches`.

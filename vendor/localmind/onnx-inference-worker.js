@@ -7,7 +7,7 @@
 
 const PROTOCOL = 'localmind.inference.v1';
 const TRANSFORMERS_URL =
-  'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0/+esm';
+  'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2/+esm';
 
 let transformers = null;
 let processor = null;
@@ -76,7 +76,7 @@ async function loadModel(request) {
       ? mod.Qwen3_5ForConditionalGeneration
       : mod.Gemma4ForConditionalGeneration;
     if (!ConditionalGenerationModel) {
-      throw new Error(`Transformers.js 4.2.0 does not export ${modelClass}`);
+      throw new Error(`Transformers.js 4.3.2 does not export ${modelClass}`);
     }
     model = await ConditionalGenerationModel.from_pretrained(modelId, {
       dtype,
