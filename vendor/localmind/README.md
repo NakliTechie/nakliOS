@@ -32,5 +32,7 @@ default here first and upstream it later. Two files differ from the pinned
 LocalMind commit, and `manifest.json` lists them under `localPatches`:
 `host-model-catalog.js` (LFM3 1.7B entry and default key) and
 `onnx-inference-worker.js` (Transformers.js 4.3.2, the first release with
-`lfm3`). The next LocalMind update must carry both changes upstream and then
+`lfm3`; the `logits_to_keep` input LFM3's ONNX export needs; thinking off,
+with any `<think>` span dropped from the stream; ported from LocalMind
+`38c4627`). The next LocalMind update must carry both changes upstream and then
 remove `localPatches`.
