@@ -24,6 +24,11 @@ plan/
 !scripts/*
 !scripts/dish/
 !scripts/dish/**
+!scripts/pi/
+!scripts/pi/package.json
+!scripts/pi/package-lock.json
+!scripts/pi/src/
+!scripts/pi/src/*
 !scripts/fixtures/anvil-A04/
 !scripts/fixtures/anvil-A04/**
 !scripts/autoharness/

@@ -30,7 +30,7 @@ assert.match(host, /model\.runtime !== 'endpoint' && !AI_LOCAL_TOOL_MODELS\.has\
 
 // The coding apps that consume the host agent tier are named and excluded from
 // the GP-default display.
-assert.match(host, /const AI_HOST_AGENT_APPS = new Set\(\['anvil', 'forge', 'dish'\]\)/,
+assert.match(host, /const AI_HOST_AGENT_APPS = new Set\(\['anvil', 'forge', 'dish', 'pi'\]\)/,
   'anvil, forge and dish are the host agent-tier apps');
 assert.match(host, /AI_HOST_AGENT_APPS\.has\(appId\) \? aiSelectedModel\(\) : aiResolveModel\(false\)/,
   'agent apps report their configured model; every other app reports the GP model');

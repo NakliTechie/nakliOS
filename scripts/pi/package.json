@@ -1,0 +1,14 @@
+{
+  "name": "naklios-pi-build",
+  "private": true,
+  "description": "Pinned Pi packages bundled into apps/pi/pi-worker.js by scripts/build-pi.mjs",
+  "type": "module",
+  "dependencies": {
+    "@earendil-works/chord": "1.4.0",
+    "@earendil-works/pi-ai": "1.4.0",
+    "@earendil-works/pi-durable": "1.4.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12"
+  }
+}

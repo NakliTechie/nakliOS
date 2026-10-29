@@ -62,7 +62,7 @@ test('host saves commit through app-scoped filesystem and reject a backend rebin
 test('Dish ships a pinned image, shared broker provider and declared host routing', () => {
   const html = fs.readFileSync(new URL('../index.html', import.meta.url),'utf8');
   assert.match(html, /id:'dish', name:'Dish', kind:'system'/);
-  assert.match(html, /AI_HOST_AGENT_APPS = new Set\(\['anvil', 'forge', 'dish'\]\)/);
+  assert.match(html, /AI_HOST_AGENT_APPS = new Set\(\['anvil', 'forge', 'dish', 'pi'\]\)/);
   assert.match(fs.readFileSync(new URL('../apps/dish/profile.yml', import.meta.url),'utf8'), /provider: naklios\n\s+model: shared/);
   const profile = fs.readFileSync(new URL('../apps/dish/profile.yml', import.meta.url),'utf8');
   assert.match(profile, /documentsDirectory: \/dsh\/workspace/);

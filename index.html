@@ -1598,6 +1598,11 @@ const APPS = [
     description:'DeepSeek Harness in a browser Worker, with NakliOS shared inference and persistent workspace storage.',
     tags:['tool','developer','agent','code'],
     svg:`<path d="M3 5h18v14H3z"/><path d="m7 9 3 3-3 3M13 15h4"/>` },
+  { id:'pi', name:'Pi', kind:'system',
+    url:'./apps/pi/', embedUrl:'./apps/pi/', glyph:'π', bg:'brand',
+    description:'The Pi coding agent (pi-durable) in a browser Worker, on NakliOS shared inference and the Rig shell. Spike: files live in memory for now.',
+    tags:['tool','developer','agent','code'],
+    svg:`<path d="M5 7h14"/><path d="M9 7v11"/><path d="M15 7v9a2 2 0 0 0 2 2"/>` },
   { id:'anvil', name:'Anvil', kind:'system',
     url:'./apps/anvil/',
     embedUrl:'./apps/anvil/',
@@ -1870,7 +1875,7 @@ const FOLDERS = [
   { id:'fld-research', kind:'folder', name:'Think & Research', glyph:'🔎', bg:'act',
     apps:['mantra','babellocal','localmind','vaultmind','sansadlocal','protavia'] },
   { id:'fld-work', kind:'folder', name:'Work & Build', glyph:'🧭', bg:'ok',
-    apps:['editor','forge','anvil','dish','kanzen','nakliposter','bofh','mod','naklidata','nemawashi','menagerie'] },
+    apps:['editor','forge','anvil','dish','pi','kanzen','nakliposter','bofh','mod','naklidata','nemawashi','menagerie'] },
   { id:'fld-privacy', kind:'folder', name:'Privacy & Security', glyph:'🔐', bg:'brand',
     apps:['tijori','mehfil'] },
   { id:'fld-games', kind:'folder', name:'Play', glyph:'🎮', bg:'act',
@@ -5779,7 +5784,7 @@ const AI_LOCAL_TOOL_MODELS = new Set(['lfm3-1.7b']);
 // Apps that consume the HOST agent tier (tool-calling coding). They report their
 // configured model and their agent requests never touch Nano. Apps with their
 // own agent stacks are migrated onto this split one at a time.
-const AI_HOST_AGENT_APPS = new Set(['anvil', 'forge', 'dish']);
+const AI_HOST_AGENT_APPS = new Set(['anvil', 'forge', 'dish', 'pi']);
 function aiOnDeviceApi(){
   return (typeof self !== 'undefined' && 'LanguageModel' in self) ? self.LanguageModel : null;
 }
