@@ -370,4 +370,22 @@ run();
   seen.length = 0;
   await kiln.exec('shell', 'x = 2', { cwd: '../escape' });
   ok('a cwd that would leave the root runs at the root', seen.some((c) => /os\.chdir\("([^"]*)"\)/.test(c)) && !seen.some((c) => /escape/.test(c)));
+
+  // CPython's sys.path[0] for a shell invocation (live 2026-10-29: Anvil's check_add.py could not
+  // `import add` from beside it): the script's directory, else the cwd; none for a notebook cell.
+  const heads = () => seen.map((c) => /^import sys\nsys\.path\.insert\(0, "([^"]*)"\)$/.exec(c)?.[1]).filter(Boolean);
+  const drops = () => seen.filter((c) => /del sys\.path\[0\]/.test(c)).length;
+  seen.length = 0;
+  await kiln.exec('shell', 'x = 3', { cwd: '', argv: ['workspace/x.py'], script: 'workspace/x.py' });
+  ok('python workspace/x.py: the script directory goes first on sys.path', heads().some((h) => /\/workspace$/.test(h)));
+  ok('and is taken off again after the run', drops() === 1);
+  seen.length = 0;
+  await kiln.exec('shell', 'x = 4', { cwd: 'sub', argv: ['-c'] });
+  ok('python -c: the cwd goes first on sys.path', heads().some((h) => /\/sub$/.test(h)));
+  seen.length = 0;
+  await kiln.exec('shell', 'x = 5', { cwd: '', argv: ['../../x.py'], script: '../../x.py' });
+  ok('a script path that would leave the root puts the root first', heads().length === 1 && !heads().some((h) => /\.\./.test(h)));
+  seen.length = 0;
+  await kiln.exec('shell', 'x = 6', { cwd: 'sub' });
+  ok('a notebook cell (no argv) gets no sys.path head', heads().length === 0 && drops() === 0);
 }
