@@ -239,7 +239,7 @@ export function createMainThreadKiln({ fs, mount = 'work', loadPyodide = default
             signal: options.signal, loadTimeoutMs: options.loadTimeoutMs, [PRIVATE_SQL_EXEC]: true }));
         sqliteTail = run.catch(() => {}); return run;
       }
-      const { isolate = false, cwd = '', argv = null, stdin = null } = options;
+      const { isolate = false, cwd = '', argv = null, stdin = null, script = null } = options;
       let p;
       try {
         if (options[PRIVATE_SQL_EXEC]) {
@@ -282,6 +282,16 @@ export function createMainThreadKiln({ fs, mount = 'work', loadPyodide = default
         p.runPython(`import os, sys\nos.chdir(${JSON.stringify(dir)})\nif ${JSON.stringify(root)} not in sys.path: sys.path.insert(0, ${JSON.stringify(root)})`
           + (Array.isArray(argv) ? `\nsys.argv = ${JSON.stringify(argv.map(String))}` : ''));
         if (isolate) p.runPython(isolationPreamble(root));
+        // A shell invocation (argv given) gets CPython's sys.path[0]: the script's own directory
+        // for `python dir/x.py`, the working directory for -c, -m and stdin. With only the root
+        // there, a script could not import the module beside it (live 2026-10-29: Anvil's
+        // /workspace/check_add.py → ModuleNotFoundError: add). Inserted after the isolation
+        // preamble, which resets sys.path, and removed after the run so a shared kernel keeps
+        // its baseline.
+        const pathHead = Array.isArray(argv) && !options[PRIVATE_SQL_EXEC]
+          ? (script ? safeCwd(root, String(script).replace(/\\/g, '/').replace(/\/?[^/]*$/, '')) : dir)
+          : null;
+        if (pathHead) p.runPython(`import sys\nsys.path.insert(0, ${JSON.stringify(pathHead)})`);
         // A fresh namespace when isolating, so a name the agent left behind cannot stand in for
         // one the gate expects to import. Degrades to the shared namespace where the runtime
         // does not support the option rather than failing the gate outright.
@@ -304,6 +314,9 @@ export function createMainThreadKiln({ fs, mount = 'work', loadPyodide = default
         try {
           await (freshGlobals ? p.runPythonAsync(code, { globals: freshGlobals }) : p.runPythonAsync(code));
         } finally {
+          if (pathHead) {
+            try { p.runPython(`import sys\nif sys.path and sys.path[0] == ${JSON.stringify(pathHead)}: del sys.path[0]`); } catch (_) {}
+          }
           if (freshGlobals) {
             try { p.runPython('import sys\nsys.modules["__main__"] = __kiln_prev_main\ndel __kiln_prev_main, __kiln_script'); } catch (_) {}
             try { freshGlobals.destroy(); } catch (_) {}
