@@ -2,13 +2,14 @@
 # Rebuild the pinned upstream products, then apply the tracked Dish integration.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-SOURCE=${1:?Usage: bash scripts/build-dish.sh /path/to/extracted-upstream}
-export DSH_CLIENT_COMMIT_HASH=5badb15009ae1756c3afe0ae0cef1faafc290ccc
+SOURCE=${1:?Usage: bash scripts/build-dish.sh /path/to/extracted-upstream (see scripts/dish/fetch-source.sh)}
+# scripts/dish/source.lock.json is the one record of the upstream ref (scripts/dish/pin.mjs writes it).
+export DSH_CLIENT_COMMIT_HASH=$(node -p "require('$ROOT/scripts/dish/source.lock.json').commit")
 export DSH_CLIENT_TITLE=Dish
 node "$ROOT/scripts/dish/verify-source.mjs" "$SOURCE"
 cd "$SOURCE"
-# Install with: pnpm install --frozen-lockfile --ignore-scripts
-node node_modules/typescript/bin/tsc -b tsconfig.host.json
+# Upstream gives the host type build the same heap in its own build:lib:host script.
+node --max-old-space-size=4096 node_modules/typescript/bin/tsc -b tsconfig.host.json
 node node_modules/tsdown/dist/run.mjs --config-loader native --env.DSH_BUILD_FACE host
 node node_modules/typescript/bin/tsc -b tsconfig.client.json
 node node_modules/tsdown/dist/run.mjs --config-loader native --env.DSH_BUILD_FACE client
