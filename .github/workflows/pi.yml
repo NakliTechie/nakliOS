@@ -1,0 +1,29 @@
+# Pi's checks need its pinned npm packages, which the native gate's test.yml contract (node-only
+# steps, no installs) cannot express. So they run here, on the same triggers.
+name: pi
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  pi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install Pi's pinned packages
+        run: npm ci --prefix scripts/pi --ignore-scripts --no-audit --no-fund
+
+      - name: Verify Pi runs on NakliOS seams (broker provider, rig fileops, rig shell)
+        run: node scripts/test-pi-core.mjs
+
+      - name: Verify Pi's Worker bundle matches its sources
+        run: node scripts/build-pi.mjs && git diff --exit-code apps/pi/pi-worker.js apps/pi/build.json

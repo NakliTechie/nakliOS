@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pi</title>
+<script src="../../sdk/naklios.js"></script>
+<style>
+  :root { --bg:#fbfaf7; --panel:#ffffff; --ink:#1d1b18; --muted:#6b665e; --line:#e4e0d8; --brand:#3b5bdb; --ok:#2b8a3e; --bad:#c92a2a; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; display:flex; flex-direction:column; height:100vh; }
+  header { padding:10px 16px; border-bottom:1px solid var(--line); display:flex; gap:10px; align-items:baseline; }
+  header b { font-size:15px; } header span { color:var(--muted); font-size:12px; }
+  #log { flex:1; overflow:auto; padding:16px; display:flex; flex-direction:column; gap:10px; }
+  .msg { max-width:760px; padding:10px 12px; border:1px solid var(--line); border-radius:8px; background:var(--panel); white-space:pre-wrap; word-break:break-word; }
+  .you { align-self:flex-end; background:#eef2ff; border-color:#d0d9ff; }
+  .sys { color:var(--muted); font-size:12px; border-style:dashed; }
+  .err { color:var(--bad); border-color:#f3c4c4; }
+  form { display:flex; gap:8px; padding:12px 16px; border-top:1px solid var(--line); background:var(--panel); }
+  textarea { flex:1; resize:none; height:56px; padding:8px; border:1px solid var(--line); border-radius:6px; font:inherit; }
+  button { padding:0 16px; border:0; border-radius:6px; background:var(--brand); color:#fff; font:inherit; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:default; }
+</style>
+</head>
+<body>
+<header><b>Pi</b><span>pi-durable 1.4.0 in a Worker · model calls go through NakliOS AI · spike</span></header>
+<div id="log"></div>
+<form id="f"><textarea id="q" placeholder="Ask Pi to do something in /workspace"></textarea><button id="send">Send</button></form>
+<script type="module">
+const log = document.getElementById('log');
+const q = document.getElementById('q');
+const send = document.getElementById('send');
+const add = (cls, text) => { const d = document.createElement('div'); d.className = 'msg ' + cls; d.textContent = text; log.appendChild(d); log.scrollTop = log.scrollHeight; return d; };
+
+const worker = new Worker('./pi-worker.js', { type: 'module' });
+worker.addEventListener('error', (e) => add('err', 'Worker error: ' + (e.message || 'failed to load')));
+
+let nextId = 1;
+const waiting = new Map();
+const request = (msg) => new Promise((resolve) => { const id = nextId++; waiting.set(id, resolve); worker.postMessage({ ...msg, id }); });
+const status = add('sys', 'Starting Pi…');
+const trace = []; // every broker round trip, for live checks
+
+worker.onmessage = async (event) => {
+  const msg = event.data || {};
+  if (msg.type === 'ready') { status.textContent = 'Pi is ready.'; return; }
+  if (msg.type === 'fatal') { status.className = 'msg err'; status.textContent = 'Pi failed to start: ' + msg.error; return; }
+  if (msg.type === 'broker') {
+    const t0 = performance.now();
+    const entry = { tools: (msg.request.tools || []).length };
+    trace.push(entry);
+    try {
+      const ai = window.naklios && window.naklios.ai;
+      if (!ai) throw new Error('Pi needs the NakliOS host: open it inside NakliOS and choose a model in Settings → AI.');
+      const completion = await ai.chat.completions.create({ ...msg.request, agent: true, stream: false });
+      entry.ms = Math.round(performance.now() - t0);
+      entry.toolCalls = (completion?.choices?.[0]?.message?.tool_calls || []).map((c) => c.function?.name);
+      const shown = entry.toolCalls.length ? 'Tool call: ' + entry.toolCalls.join(', ') : null;
+      if (shown) add('sys', shown);
+      worker.postMessage({ type: 'broker-reply', id: msg.id, completion });
+    } catch (e) {
+      entry.err = String(e?.message || e);
+      worker.postMessage({ type: 'broker-reply', id: msg.id, error: entry.err });
+    }
+    return;
+  }
+  const resolve = waiting.get(msg.id);
+  if (resolve) { waiting.delete(msg.id); resolve(msg); }
+};
+
+async function ask(text) {
+  add('you', text);
+  const r = await request({ type: 'ask', text });
+  if (r.error) { add('err', r.error); return r; }
+  const s = r.settled || {};
+  if (s.status === 'done') add('', r.answer || '(no text)');
+  else add('err', 'Pi did not answer: ' + JSON.stringify(s).slice(0, 400));
+  return r;
+}
+// Test seam for live checks; read-only besides ask.
+window.__pi = { ask, read: (path) => request({ type: 'read', path }), trace };
+
+document.getElementById('f').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const text = q.value.trim();
+  if (!text) return;
+  q.value = ''; send.disabled = true;
+  try { await ask(text); } finally { send.disabled = false; q.focus(); }
+});
+q.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); document.getElementById('f').requestSubmit(); } });
+</script>
+</body>
+</html>
