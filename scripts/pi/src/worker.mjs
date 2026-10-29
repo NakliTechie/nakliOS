@@ -26,6 +26,11 @@ function request(msg, signal) {
 }
 const callBroker = (req, signal) => request({ type: 'broker', request: req }, signal);
 const callStorage = (method, args) => request({ type: 'fs', method, args });
+// The NakliOS skills library (naklios.experimental_skills on the page): the usable catalogue and one body.
+const skills = {
+  list: () => request({ type: 'skills', op: 'list' }),
+  read: (name) => request({ type: 'skills', op: 'read', name }),
+};
 
 let ready = null;
 function start(backendDesc) {
@@ -34,17 +39,18 @@ function start(backendDesc) {
   const grant = createGrant({ prefixes: [''], scopes: ['fs:read', 'fs:write', 'fs:remove'] });
   const face = createAgentFace({ registry, grant, opLog: createOpLog({ fs: createFileops({ backend: new MemoryBackend() }) }), actor: 'agent' });
   const shell = createShell({ registry, face });
-  return openPi({ fs, shell, callBroker }).then((pi) => ({ pi, fs }));
+  return openPi({ fs, shell, callBroker, skills }).then((pi) => ({ pi, fs }));
 }
 
 self.onmessage = async (event) => {
   const msg = event.data || {};
-  if (msg.type === 'broker-reply' || msg.type === 'fs-reply') {
+  if (msg.type === 'broker-reply' || msg.type === 'fs-reply' || msg.type === 'skills-reply') {
     const waiter = pending.get(msg.id);
     if (!waiter) return;
     pending.delete(msg.id);
-    if (msg.type === 'broker-reply') { if (msg.error) waiter.reject(new Error(msg.error)); else waiter.resolve(msg.completion); }
-    else waiter.resolve(msg.result);
+    if (msg.type === 'fs-reply') waiter.resolve(msg.result);
+    else if (msg.error) waiter.reject(new Error(msg.error));
+    else waiter.resolve(msg.type === 'broker-reply' ? msg.completion : msg.result);
     return;
   }
   if (msg.type === 'init') {

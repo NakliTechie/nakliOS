@@ -499,7 +499,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 
 <!-- sdk-reference:begin — rendered by `node scripts/sdk-reference.mjs --write` from docs/sdk-api-audit.md; do not edit by hand -->
 
-88 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
+92 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
 
 ### `version`
 
@@ -631,6 +631,15 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 | `sys.fs.list` | function | List. |
 | `sys.fs.delete` | function | Delete. |
 | `sys.fs.exists` | function | Existence check. |
+
+### `experimental_skills` (namespace)
+
+| member | kind | what it is |
+|---|---|---|
+| `experimental_skills` | namespace · **experimental** | The user's one skills library, `skills/<name>/SKILL.md` on their Folder or Crate (`sys/ai/skill-library.mjs`; plan `plan/2026-10-29-shared-skills-plan.md`). System apps only. |
+| `experimental_skills.list` | function · **experimental** | The skills an agent may use (Sentinel-clean, active or stale), as `{ name, description, status }` without bodies. Standalone: `[]`. |
+| `experimental_skills.read` | function · **experimental** | One usable skill with its body, or `null`. |
+| `experimental_skills.propose` | function · **experimental** | Write a skill as STAGED (never active); refused if Sentinel refuses it or the name exists. Binds only after a person activates it. |
 
 ### `files` (namespace)
 

@@ -93,6 +93,10 @@ prefix today.
 | `sys.fs.list` | function | stable | — | List. |
 | `sys.fs.delete` | function | stable | — | Delete. |
 | `sys.fs.exists` | function | stable | — | Existence check. |
+| `experimental_skills` | namespace | experimental | Anvil, Dish and Pi all read it live on naklios.dev, and the Settings Skills pane activates a staged skill, before stabilization. | The user's one skills library, `skills/<name>/SKILL.md` on their Folder or Crate (`sys/ai/skill-library.mjs`; plan `plan/2026-10-29-shared-skills-plan.md`). System apps only. |
+| `experimental_skills.list` | function | experimental | As `experimental_skills`. | The skills an agent may use (Sentinel-clean, active or stale), as `{ name, description, status }` without bodies. Standalone: `[]`. |
+| `experimental_skills.read` | function | experimental | As `experimental_skills`. | One usable skill with its body, or `null`. |
+| `experimental_skills.propose` | function | experimental | As `experimental_skills`. | Write a skill as STAGED (never active); refused if Sentinel refuses it or the name exists. Binds only after a person activates it. |
 | `files` | namespace | stable | — | Exact-file handoff (`docs/file-handoff-v1.md`). |
 | `files.experimental_editInAnvil` | function | experimental | Bounded Editor snapshot; exact-file grant and stale-source refusal tested before stabilization. | Ask the host to stage one selected-file edit in Anvil. |
 | `files.experimental_proposeEdit` | function | experimental | One-shot source-bound proposals; real model-to-review flow required before stabilization. | Return a snapshot edit without writing its source. |

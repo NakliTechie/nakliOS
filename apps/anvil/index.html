@@ -3585,6 +3585,7 @@
       } });
     const skillMap = {};
     const skillStatus={}; // name -> lifecycle status: a staged/quarantined skill is never served or listed // skill name -> SKILL.md path, populated below
+    const librarySkills = new Set(); // names served from the NakliOS skills library (no project skill of that name)
     const factMap = {};  // memory-fact name -> .md path, populated below
     let hooksCfg = { preTool:[], postTool:[] }; // .anvil/hooks.json, loaded below
     const safeSeg = (s)=> s && !s.includes('/') && !s.includes('\\') && !s.includes('..');
@@ -3738,6 +3739,17 @@
             try{ const revived=reviveOnUse(r.data,{ now: Date.now() }); if(revived){ const w=await fs.write(p, revived); if(w&&w.ok) skillStatus[name]='active'; } }catch(_){}
           }
           skillSession.noteRead(name); return 'Skill: '+(sk.name||name)+'\n\n'+sk.body; } }catch(_){}
+        // A NakliOS library skill (no project skill of that name). The host gates it (Sentinel, active or
+        // stale); it is re-scanned here too, at the point of use, as every served skill is (NAF-01).
+        if(!skillMap[name] && librarySkills.has(name)){
+          try{ const s = await nak.experimental_skills.read(name);
+            if(s && s.body){
+              const lguard = scanSkill({ name: s.name||name, description: s.description||'', body: s.body });
+              if(lguard.state==='refused' || lguard.state==='quarantined')
+                return 'Skill "'+name+'" from your NakliOS skills library did not pass the sentinel ('+sentinelLine(lguard)+') and will not bind.';
+              skillSession.noteRead(name); return 'Skill: '+(s.name||name)+' (from your NakliOS skills library)\n\n'+s.body; } }catch(_){}
+          return 'Skill "'+name+'" is no longer available in your NakliOS skills library.';
+        }
         const names=Object.keys(skillMap).filter(n=>INJECTED_STATUSES.includes(skillStatus[n]||'active'));
         return 'No skill named "'+name+'".'+(names.length?' Available: '+names.join(', ')+'.':' This project has no skills.');
       }
@@ -3998,10 +4010,12 @@
     // under .anvil/skills/<name>/SKILL.md; the agent loads a skill's full body on
     // demand via the `skill` tool. Cheap + cache-safe.
     let skillsIndex='';
+    let indexMetas=[];
     try{
       const dir = await fs.list(SKILLS_DIR, { recursive:false });
       if(dir && dir.ok){
         const metas=[];
+        indexMetas=metas;
         for(const e of (dir.entries||[])){
           if(e.type!=='dir') continue;
           try{
@@ -4038,6 +4052,17 @@
           }
         }catch(_){}
         skillsIndex = buildSkillsIndex(metas);
+      }
+    }catch(_){}
+    // The NakliOS skills library (skills/ on the user's Folder or Crate), shared with Dish and Pi. The
+    // host returns only Sentinel-clean active or stale skills; a project skill of the same name wins.
+    // Added after aging on purpose: the library's files are the host's, never rewritten from here.
+    try{
+      if(nak && nak.experimental_skills){
+        const lib = await nak.experimental_skills.list();
+        const extra = (lib||[]).filter(s=>s && s.name && safeSeg(s.name) && !skillMap[s.name]);
+        for(const s of extra) librarySkills.add(s.name);
+        if(extra.length) skillsIndex = buildSkillsIndex([...indexMetas, ...extra]);
       }
     }catch(_){}
     // Structured project memory: inject only the fact INDEX (name/type/

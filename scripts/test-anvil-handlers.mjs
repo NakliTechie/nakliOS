@@ -745,7 +745,7 @@ await test('NAF-01: skill activation is ENFORCED, not advisory', async () => {
 
 // Checker A/D survivors (2026-09-11): four `if(false)` / `if(true)` / `false &&` mutations on the
 // skill handler's branches passed every grep anchor. Run the branch.
-async function skillHandler(files, skillStatus = {}) {
+async function skillHandler(files, skillStatus = {}, library = {}) {
   const { SKILLS_DIR, parseSkill, INJECTED_STATUSES } = await import('../sys/ai/skills.mjs');
   const { scanSkill, sentinelLine } = await import('../sys/ai/skill-sentinel.mjs');
   const { reviveOnUse } = await import('../sys/ai/skill-lifecycle.mjs');
@@ -757,6 +757,9 @@ async function skillHandler(files, skillStatus = {}) {
     SKILLS_DIR, parseSkill, INJECTED_STATUSES, scanSkill, sentinelLine, reviveOnUse, fs,
     skillMap: {}, skillStatus, safeSeg: (s) => /^[a-z0-9][a-z0-9_.-]*$/i.test(String(s)),
     skillSession: { noteRead: (n) => reads.push(n) },
+    // The NakliOS skills library (naklios.experimental_skills), as the run built it.
+    librarySkills: new Set(Object.keys(library)),
+    nak: { experimental_skills: { read: async (n) => library[n] || null } },
   });
   return { handle, reads, skillStatus };
 }
@@ -961,6 +964,14 @@ await test('skill handler: an active skill with a hostile support file is quaran
   assert.match(out, /did not pass the sentinel/, `refused: ${out.slice(0, 120)}`);
   assert.equal(skillStatus.k, 'quarantined', 'and marked so');
   assert.equal(reads.length, 0, 'never noted as read');
+});
+await test('skill handler: a NakliOS library skill is served from the SDK, labelled with its source', async () => {
+  const lib = await skillHandler({}, {}, { tone: { name: 'tone', description: 'House tone', status: 'active', body: 'Write plainly.' } });
+  const out = await lib.handle('skill', { name: 'tone' });
+  assert.equal(out, 'Skill: tone (from your NakliOS skills library)\n\nWrite plainly.');
+  assert.deepEqual(lib.reads, ['tone'], 'noted as read like a project skill');
+  const gone = await skillHandler({}, {}, { tone: null });
+  assert.match(await gone.handle('skill', { name: 'tone' }), /no longer available in your NakliOS skills library/);
 });
 await test('skill handler: a staged draft is served labelled; an archived skill does not bind; an active one binds', async () => {
   const st = await skillHandler({ 'k/SKILL.md': SK('staged') });

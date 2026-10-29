@@ -704,7 +704,8 @@
       }
     } else if ((msg.type === 'naklios:fs:reply' || msg.type === 'naklios:file:reply' ||
                 msg.type === 'naklios:review:reply' ||
-                msg.type === 'naklios:rag:reply' || msg.type === 'naklios:net:reply') && msg.requestId) {
+                msg.type === 'naklios:rag:reply' || msg.type === 'naklios:net:reply' ||
+                msg.type === 'naklios:skills:reply') && msg.requestId) {
       var p = pendingRpc.get(msg.requestId);
       if (!p) return;
       pendingRpc.delete(msg.requestId);
@@ -777,6 +778,27 @@
         if (typeof cb !== 'function') throw new Error('naklios.review.onDecision needs a callback');
         reviewDecisionHandler = cb;
         return function () { if (reviewDecisionHandler === cb) reviewDecisionHandler = null; };
+      },
+    },
+    // The user's one skills library (skills/<name>/SKILL.md on their Folder or Crate), shared by every
+    // agent. list() returns the skills an agent may use (Sentinel-clean, active or stale) without bodies;
+    // read(name) returns one with its body; propose() writes a STAGED skill that binds only after a person
+    // activates it. System apps only; standalone it is an empty library.
+    experimental_skills: {
+      list: function () {
+        if (!inNakliOS) return Promise.resolve([]);
+        return rpc('naklios:skills:list', {});
+      },
+      read: function (name) {
+        if (!inNakliOS) return Promise.resolve(null);
+        return rpc('naklios:skills:read', { name: String(name || '') });
+      },
+      propose: function (skill) {
+        if (!inNakliOS) return Promise.reject(new Error('Not hosted — the skills library is unavailable standalone'));
+        skill = skill || {};
+        return rpc('naklios:skills:propose', {
+          name: String(skill.name || ''), description: String(skill.description || ''), body: String(skill.body || ''),
+        });
       },
     },
     fs: {

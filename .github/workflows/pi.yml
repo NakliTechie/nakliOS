@@ -28,5 +28,8 @@ jobs:
       - name: Verify Pi's files and conversation survive a reopen through the page/Worker storage proxy
         run: node scripts/test-pi-persist.mjs
 
+      - name: Verify Pi reads the NakliOS skills library (section and skill tool)
+        run: node scripts/test-pi-skills.mjs
+
       - name: Verify Pi's Worker bundle matches its sources
         run: node scripts/build-pi.mjs && git diff --exit-code apps/pi/pi-worker.js apps/pi/build.json

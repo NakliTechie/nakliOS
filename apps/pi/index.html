@@ -82,6 +82,19 @@ worker.onmessage = async (event) => {
   const msg = event.data || {};
   if (msg.type === 'ready') { status.textContent = `Pi is ready. Files and conversations are saved in ${storage.label}.`; return; }
   if (msg.type === 'fs') { worker.postMessage({ type: 'fs-reply', id: msg.id, result: await serveStorage(msg.method, msg.args) }); return; }
+  if (msg.type === 'skills') {
+    // The NakliOS skills library; an empty library when the host has none to offer.
+    try {
+      const lib = nak && nak.experimental_skills;
+      const result = !lib ? (msg.op === 'list' ? [] : null)
+        : msg.op === 'list' ? await lib.list() : await lib.read(msg.name);
+      if (msg.op === 'read' && result) add('sys', 'Skill loaded: ' + result.name);
+      worker.postMessage({ type: 'skills-reply', id: msg.id, result });
+    } catch (e) {
+      worker.postMessage({ type: 'skills-reply', id: msg.id, result: msg.op === 'list' ? [] : null });
+    }
+    return;
+  }
   if (msg.type === 'fatal') { status.className = 'msg err'; status.textContent = 'Pi failed to start: ' + msg.error; return; }
   if (msg.type === 'broker') {
     const t0 = performance.now();

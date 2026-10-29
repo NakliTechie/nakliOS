@@ -125,6 +125,9 @@ jobs:
       - name: Verify skills parsing, the description index, and the shell half of the skills fence
         run: node sys/ai/test/skills.test.mjs
 
+      - name: Verify the shared skills library gate (Sentinel, status, staged proposals)
+        run: node sys/ai/test/skill-library.test.mjs
+
       - name: Verify the prompt's cache prefix is stable and the tool list does not depend on the store
         run: node scripts/test-anvil-prompt-cache.mjs
 
