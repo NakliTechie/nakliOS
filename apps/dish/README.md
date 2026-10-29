@@ -13,6 +13,7 @@ It uses the app's selected Folder or Crate backend when NakliOS advertises files
 Otherwise, it uses this browser's IndexedDB.
 A missing host handshake refuses startup instead of opening a different library.
 Each snapshot preserves mutable `home/` and `workspace/` files, binary bytes, directories, and file permissions.
+The image owns `home/cordis.patch.yml`: restore skips it and saves never record it, so a new build's curation always applies.
 The default workspace lives under `/dsh/workspace/deepseek-harness/` inside the Worker VFS.
 The profile bypasses native OS Documents-directory lookup.
 The host stores snapshots at `apps/dish/vfs.json` on the selected backend.
@@ -29,7 +30,8 @@ The VFS is a logical filesystem boundary, not a native process sandbox.
 The upstream shell provides browser commands, pipelines, substitutions, and redirects.
 It does not provide git, Node programs, native tools, shell loops, or job control.
 Plugins are selected during packaging; installation inside the Worker is unavailable.
-This profile removes DeepSeek account/model routes, wire extensions, package inventory calls, and telemetry exporters.
+The image's home patch disables DeepSeek account/model routes, wire extensions, package inventory calls, and telemetry exporters.
+The packer leaves their packages out of the image unless a retained row also needs them.
 The shared inference adapter currently accepts text and tool calls.
 It rejects unsupported image/file blocks explicitly.
 NakliOS's broker refuses tools on a browser model that cannot call them (every browser model except LFM3 1.7B).
@@ -37,7 +39,7 @@ Closing the browser stops the Worker.
 
 ## Build and provenance
 
-The upstream release is `dsh-v0.2.1-alpha.1` at commit `5badb15009ae1756c3afe0ae0cef1faafc290ccc`.
+The upstream release is `dsh-v0.2.1-rc.4` at commit `504a01a9578abc2c6f1fb896b1dc322c9fe24f66`.
 `upstream.lock.json` records every shipped file's size and SHA-256.
 The packed image includes upstream dependency licenses.
 `LICENSE-upstream` preserves DeepSeek Harness's MIT license.
@@ -49,7 +51,11 @@ Install its dependencies with `pnpm install --frozen-lockfile --ignore-scripts`.
 Run `bash scripts/build-dish.sh /path/to/extracted-upstream` from NakliOS.
 The script verifies source inputs before applying the integration.
 It builds upstream host/client libraries, the Worker, and the web UI.
-It packs the curated profile and writes artifact hashes.
+It packs the `web` template's bundles plus Dish's provider, and writes artifact hashes.
+The Worker composes the profile at boot from those bundle layers and the image's `home/cordis.patch.yml`.
+That home patch carries Dish's curation: disabled rows, the shared model, the workspace directory, and the `naklios-llm` row.
+`profile.yml` records the resulting composition before any user layer, for review.
+Page chunks loaded on demand ship as `preview/lazy/<sha256>.tar.gz`; the Worker fetches each on first use.
 The pack step removes page bundles belonging exclusively to excluded profile plugins.
 It minifies retained client bundles with upstream's pinned esbuild.
 It preserves identifiers, function names, license comments, and debugger paths.

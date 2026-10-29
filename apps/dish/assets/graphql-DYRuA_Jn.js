@@ -1,0 +1,1 @@
+import{t as e}from"./langs/graphql-BnmoEJ9k.js";export{e as default};

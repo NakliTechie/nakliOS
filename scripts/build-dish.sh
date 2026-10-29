@@ -3,12 +3,13 @@
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 SOURCE=${1:?Usage: bash scripts/build-dish.sh /path/to/extracted-upstream}
-export DSH_CLIENT_COMMIT_HASH=5badb15009ae1756c3afe0ae0cef1faafc290ccc
+export DSH_CLIENT_COMMIT_HASH=504a01a9578abc2c6f1fb896b1dc322c9fe24f66
 export DSH_CLIENT_TITLE=Dish
 node "$ROOT/scripts/dish/verify-source.mjs" "$SOURCE"
 cd "$SOURCE"
 # Install with: pnpm install --frozen-lockfile --ignore-scripts
-node node_modules/typescript/bin/tsc -b tsconfig.host.json
+# Upstream gives the host type build the same heap in its own build:lib:host script.
+node --max-old-space-size=4096 node_modules/typescript/bin/tsc -b tsconfig.host.json
 node node_modules/tsdown/dist/run.mjs --config-loader native --env.DSH_BUILD_FACE host
 node node_modules/typescript/bin/tsc -b tsconfig.client.json
 node node_modules/tsdown/dist/run.mjs --config-loader native --env.DSH_BUILD_FACE client

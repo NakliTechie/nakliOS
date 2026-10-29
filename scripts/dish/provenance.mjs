@@ -14,4 +14,4 @@ function walk(dir) {
   }
 }
 walk(root);
-fs.writeFileSync(path.join(root, 'upstream.lock.json'), JSON.stringify({ repository: 'https://github.com/deepseek-ai/deepseek-harness', tag: 'dsh-v0.2.1-alpha.1', commit: '5badb15009ae1756c3afe0ae0cef1faafc290ccc', files }, null, 2)+'\n');
+fs.writeFileSync(path.join(root, 'upstream.lock.json'), JSON.stringify({ repository: 'https://github.com/deepseek-ai/deepseek-harness', tag: 'dsh-v0.2.1-rc.4', commit: '504a01a9578abc2c6f1fb896b1dc322c9fe24f66', files }, null, 2)+'\n');

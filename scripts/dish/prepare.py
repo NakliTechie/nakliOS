@@ -12,7 +12,10 @@ worker.write_text(s)
 host = source / 'packages/experimental/webworker-runtime/src/worker-host.ts'
 s = host.read_text(); anchor = '      setActiveVfs(mounted)'; assert anchor in s
 s = s.replace(anchor, (here/'vfs-bridge.txt').read_text()+'\n'+anchor)
-s = s.replace('mounted.seedFile(target,', 'mounted.seed(target,')
+# The snapshot bridge seeds parent directories; upstream dropped dirname from this import.
+anchor = "import { join } from './module-system/posix-path.ts'"; assert anchor in s
+s = s.replace(anchor, "import { dirname, join } from './module-system/posix-path.ts'")
+assert '  const response = await fetch(image)' in s and '  return await inflateImageStream(response.body, image)' in s
 s = s.replace('  const response = await fetch(image)', '''  const imageStart = performance.now()
   const cold = (globalThis as typeof globalThis & { __dishColdBoot?: boolean }).__dishColdBoot === true
   const response = await fetch(image, { cache: cold ? 'no-store' : 'default' })''')
