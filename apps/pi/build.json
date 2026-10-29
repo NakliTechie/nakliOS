@@ -1,6 +1,6 @@
 {
-  "bytes": 1344212,
-  "sha256": "d64cc18d4e0a02ca046acba178d286e2428582565a79941ff2d5e19aaa881e13",
+  "bytes": 1357654,
+  "sha256": "18e7476f80ed7163af5313404ef59a244e3e423ed9f93de176dd7672875baf19",
   "packages": {
     "@earendil-works/chord": "1.4.0",
     "@earendil-works/pi-ai": "1.4.0",

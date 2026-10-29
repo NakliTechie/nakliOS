@@ -5,6 +5,7 @@ import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context';
 import { createModels } from '@earendil-works/pi-ai/models';
 import { AssistantEntry, createRegistry, Harness, MemoryStorage } from '@earendil-works/pi-durable';
 import { createCodingTools } from '@earendil-works/pi-durable/tools';
+import { JsonlStorage } from '@earendil-works/pi-durable/storage/jsonl';
 import { createBrokerProvider, PROVIDER_ID, MODEL_ID } from './broker-provider.mjs';
 import { createNakliosEnv } from './naklios-env.mjs';
 
@@ -22,14 +23,24 @@ export function answerText(entry) {
   return parts.filter((p) => p?.type === 'text').map((p) => p.text).join('');
 }
 
-export async function openPi({ fs, shell, callBroker, cwd = '/workspace', storage = new MemoryStorage(), context = BACKGROUND_CONTEXT }) {
+// Where Pi keeps its conversations: JSONL beside the workspace, on the same storage as the files.
+export const SESSIONS_DIR = '/.pi/sessions';
+
+// `storage`: 'files' keeps sessions as JSONL under SESSIONS_DIR through the env, so they persist on
+// whatever backend `fs` sits on (Folder, Crate, OPFS); 'memory' (tests) forgets them; or pass a
+// pi-durable Storage. `harness.resume()` continues a run a reload interrupted.
+export async function openPi({ fs, shell, callBroker, cwd = '/workspace', storage = 'files', context = BACKGROUND_CONTEXT }) {
   const models = createModels();
   models.setProvider(createBrokerProvider(callBroker));
   const registry = createRegistry();
   registry.install(createCodingTools());
   const env = createNakliosEnv({ fs, shell, cwd });
   await fs.mkdir(cwd.replace(/^\/+/, ''), { recursive: true });
-  const harness = await Harness.open(storage, { models, registry, env: () => env }, context);
+  const store = storage === 'memory' ? new MemoryStorage()
+    : storage === 'files' ? await JsonlStorage.open(SESSIONS_DIR, env, context)
+    : storage;
+  const harness = await Harness.open(store, { models, registry, env: () => env }, context);
+  harness.resume();
   const root = await harness.root(context, {
     agent: { model: { provider: PROVIDER_ID, modelId: MODEL_ID }, instructions: PI_INSTRUCTIONS, cwd },
   });
