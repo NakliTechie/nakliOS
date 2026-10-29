@@ -222,7 +222,7 @@ const stream = await naklios.ai.chat.completions.create({
   max_tokens: 384,
   stream: true,
   onStatus(status, progress) {
-    // queued | loading | generating
+    // permission (waiting on the person's "Allow AI?" answer) | queued | loading | generating
   }
 });
 

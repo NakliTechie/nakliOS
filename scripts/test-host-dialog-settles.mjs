@@ -22,6 +22,12 @@ assert.match(host, /aiHost\.permissionPrompts\.set\(promptKey, prompt\)/,
   'the permission prompt is still cached (so a hung promise would still poison it)');
 assert.match(host, /\.finally\(\(\) => aiHost\.permissionPrompts\.delete\(promptKey\)\)/,
   'the cache entry is released only when the promise settles');
+// While the prompt waits on the person, the app is told so (status 'permission'), including when
+// it joins a prompt already open; an app's own deadline pauses on it.
+assert.match(host, /try \{ onWait\?\.\(\); \} catch \(_\) \{\}\n  if \(aiHost\.permissionPrompts\.has\(promptKey\)\)/,
+  'onWait runs for a new prompt and for one already open');
+assert.match(host, /aiEmit\(provisional, \{ event:'status', status:'permission' \}\)/,
+  'aiHostSubmit emits the permission status');
 
 // Extract _nakliosDialog and run it for real.
 const src = host.match(/function _nakliosDialog\(\{[\s\S]*?\n\}/);

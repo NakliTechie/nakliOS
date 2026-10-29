@@ -6102,7 +6102,9 @@ function aiSetImageState(next, error = null){
   try { broadcastCapabilities(); } catch(_){}
 }
 
-async function aiEnsurePermission(appId, capability = 'chat'){
+// `onWait` runs when the answer must come from the person (a new prompt, or one already
+// open for this app and scope), so the caller can tell its app the request is waiting.
+async function aiEnsurePermission(appId, capability = 'chat', onWait = null){
   const image = capability === 'image';
   const model = image ? aiSelectedImageModel() : aiSelectedModel();
   const available = image
@@ -6114,6 +6116,7 @@ async function aiEnsurePermission(appId, capability = 'chat'){
   if (saved?.granted === true) return true;
   if (saved?.granted === false) return false;
   const promptKey = `${appId}:${scope}`;
+  try { onWait?.(); } catch (_) {}
   if (aiHost.permissionPrompts.has(promptKey)) return aiHost.permissionPrompts.get(promptKey);
 
   const prompt = (async () => {
@@ -7068,7 +7071,12 @@ async function aiHostSubmit(source, msg, appId){
       maxTokens = Math.max(16, Math.min(AI_MAX_OUTPUT_TOKENS, Number(msg.maxTokens) || 384));
     }
     if (source._aiCancelled === true) throw new Error('Local AI request was cancelled');
-    const granted = await aiEnsurePermission(appId);
+    // While the consent prompt waits on the person, the app hears `permission`, so a
+    // deadline it keeps can pause. Anvil's 240 s deadline used to run through an unanswered
+    // prompt and fail the turn (live 2026-10-29). `queued` follows once it is answered.
+    const granted = await aiEnsurePermission(appId, 'chat', () => {
+      aiEmit(provisional, { event:'status', status:'permission' });
+    });
     if (!granted) throw new Error('Local AI permission was not granted');
     if (source._aiCancelled === true) throw new Error('Local AI request was cancelled');
     const becameDuplicate = aiHost.active?.source === source && aiHost.active.requestId === requestId ||
