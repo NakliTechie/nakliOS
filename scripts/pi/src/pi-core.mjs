@@ -8,6 +8,7 @@ import { createCodingTools } from '@earendil-works/pi-durable/tools';
 import { JsonlStorage } from '@earendil-works/pi-durable/storage/jsonl';
 import { createBrokerProvider, PROVIDER_ID, MODEL_ID } from './broker-provider.mjs';
 import { createNakliosEnv } from './naklios-env.mjs';
+import { createSkillsExtension } from './skills-extension.mjs';
 
 export const PI_INSTRUCTIONS = [
   'You run inside NakliOS, a desktop in the browser. Your workspace is /workspace.',
@@ -29,11 +30,13 @@ export const SESSIONS_DIR = '/.pi/sessions';
 // `storage`: 'files' keeps sessions as JSONL under SESSIONS_DIR through the env, so they persist on
 // whatever backend `fs` sits on (Folder, Crate, OPFS); 'memory' (tests) forgets them; or pass a
 // pi-durable Storage. `harness.resume()` continues a run a reload interrupted.
-export async function openPi({ fs, shell, callBroker, cwd = '/workspace', storage = 'files', context = BACKGROUND_CONTEXT }) {
+// `skills` ({ list, read }, from naklios.experimental_skills) adds the NakliOS skills library.
+export async function openPi({ fs, shell, callBroker, skills = null, cwd = '/workspace', storage = 'files', context = BACKGROUND_CONTEXT }) {
   const models = createModels();
   models.setProvider(createBrokerProvider(callBroker));
   const registry = createRegistry();
   registry.install(createCodingTools());
+  if (skills) registry.install(createSkillsExtension(skills));
   const env = createNakliosEnv({ fs, shell, cwd });
   await fs.mkdir(cwd.replace(/^\/+/, ''), { recursive: true });
   const store = storage === 'memory' ? new MemoryStorage()

@@ -586,6 +586,12 @@ input{font:inherit; color:inherit;}
   color:var(--muted); font-size:11px; text-decoration:underline;
 }
 .nw-fs-link-btn:hover{color:var(--brand);}
+.nw-skills{display:flex; flex-direction:column; gap:6px; font-size:12px; color:var(--muted);}
+.nw-skill{display:flex; justify-content:space-between; align-items:flex-start; gap:8px; padding:6px 8px; border:1px solid var(--line); border-radius:8px; color:var(--ink);}
+.nw-skill-status{font-size:10px; color:var(--faint); text-transform:uppercase; letter-spacing:.04em;}
+.nw-skill-desc{color:var(--muted); font-size:11px; margin-top:2px;}
+.nw-skill-note{color:var(--warn, #b7791f); font-size:11px; margin-top:2px;}
+.nw-skill-blocked{font-size:11px; color:var(--danger, #c92a2a); white-space:nowrap;}
 .nw-fs-blurb{
   font-size:11px; color:var(--muted); line-height:1.4; margin-top:6px;
 }
@@ -5217,6 +5223,68 @@ async function fsHostSysHandle(msg, op, appId){
   }
   throw new Error('Unknown system fs op: ' + op);
 }
+// ── Skills library ──────────────────────────────────────────────────
+// One library for every agent: skills/<name>/SKILL.md at the root of the user's storage (Folder, else
+// Crate). The gate lives in sys/ai/skill-library.mjs: agents see only Sentinel-clean active or stale
+// skills, and a proposal is written STAGED. Same-origin system apps only, as with the system fs.
+// Plan: plan/2026-10-29-shared-skills-plan.md.
+let _skillLibMod = null;
+function skillLibraryStore(){
+  const id = BACKENDS.fsa.isConnected() ? 'fsa' : BACKENDS.crate.isConnected() ? 'crate' : null;
+  if (!id) return null;
+  const b = BACKENDS[id];
+  return {
+    id,
+    list: (prefix) => b.list(prefix),
+    read: async (path) => ((await b.exists(path)) ? await b.read(path) : null),
+    write: (path, text) => b.write(path, text),
+  };
+}
+async function skillsHostHandle(op, msg, appId){
+  if (!aiAppOwnsSystemFs(appId)) throw new Error('The skills library is available to same-origin system apps only');
+  if (!_skillLibMod) _skillLibMod = await import('./sys/ai/skill-library.mjs');
+  const store = skillLibraryStore();
+  if (op === 'propose'){
+    if (!store) throw new Error('Connect a Folder or Crate in Settings → Storage to keep a skills library');
+    return await _skillLibMod.proposeSkill(store, { name: msg.name, description: msg.description, body: msg.body });
+  }
+  const library = store ? await _skillLibMod.loadLibrary(store) : [];
+  if (op === 'list') return _skillLibMod.agentCatalog(library);
+  if (op === 'read') return _skillLibMod.agentSkill(library, String(msg.name || ''));
+  throw new Error('Unknown skills operation: ' + op);
+}
+
+// Settings → Skills: every skill in the library with its status and Sentinel verdict, and the person's
+// controls (activate / archive). Status changes come only from here, never from an app.
+async function paintSkillsSettings(el){
+  if (!el) return;
+  const store = skillLibraryStore();
+  if (!store){ el.textContent = 'Connect a Folder or Crate above to keep a skills library.'; return; }
+  if (!_skillLibMod) _skillLibMod = await import('./sys/ai/skill-library.mjs');
+  let library = [];
+  try { library = await _skillLibMod.loadLibrary(store); }
+  catch (err){ el.textContent = 'Could not read the skills library: ' + String(err?.message || err); return; }
+  if (!library.length){
+    el.textContent = 'No skills yet. Add skills/<name>/SKILL.md to your storage, or let an agent propose one.';
+    return;
+  }
+  el.innerHTML = library.map(s => {
+    const blocked = s.sentinel === 'refused' || s.sentinel === 'quarantined';
+    const action = blocked ? '<span class="nw-skill-blocked">Blocked by Sentinel</span>'
+      : s.status === 'active' ? `<button class="nw-fs-btn-secondary" type="button" data-skill="${_dlgEscape(s.dir || s.name)}" data-status="archived">Archive</button>`
+        : `<button class="nw-fs-btn-secondary" type="button" data-skill="${_dlgEscape(s.dir || s.name)}" data-status="active">Activate</button>`;
+    const note = s.sentinel && s.sentinel !== 'clean' ? `<div class="nw-skill-note">${_dlgEscape(s.sentinelLine || '')}</div>` : '';
+    return `<div class="nw-skill"><div><b>${_dlgEscape(s.name)}</b> <span class="nw-skill-status">${_dlgEscape(s.status)}</span>` +
+      `<div class="nw-skill-desc">${_dlgEscape(s.description || '')}</div>${note}</div>${action}</div>`;
+  }).join('');
+  el.querySelectorAll('button[data-skill]').forEach(btn => btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    const r = await _skillLibMod.setSkillStatus(store, btn.dataset.skill, btn.dataset.status);
+    if (!r.ok) await nakliosAlert(r.message || 'Could not change the skill', { title: 'Skills' });
+    await paintSkillsSettings(el);
+  }));
+}
+
 async function fsHostSysList(msg, appId){
   const backend = await fsSysBackend(msg, appId);
   const prefix = fsSysCleanPath(msg.prefix || '', { allowEmpty: true });
@@ -8712,6 +8780,18 @@ window.addEventListener('message', async e => {
     if (msg.requestId) {
       try { e.source.postMessage(reply, replyTo); } catch(_){}
     }
+  } else if (typeof msg.type === 'string' && msg.type.startsWith('naklios:skills:')){
+    const reply = { type: 'naklios:skills:reply', requestId: msg.requestId };
+    try {
+      const appId = getAppId();
+      if (!appId) throw new Error('Unknown app');
+      reply.result = await skillsHostHandle(msg.type.slice('naklios:skills:'.length), msg, appId);
+    } catch (err){
+      reply.error = String(err?.message || err);
+    }
+    if (msg.requestId) {
+      try { e.source.postMessage(reply, replyTo); } catch(_){}
+    }
   } else if (typeof msg.type === 'string' && msg.type.startsWith('naklios:rag:')){
     const reply = { type:'naklios:rag:reply', requestId:msg.requestId };
     try {
@@ -10013,6 +10093,11 @@ function openSettings(section){
     ${modeHTML}
     <h4>Theme <span style="color:var(--faint); font-weight:400; text-transform:none; letter-spacing:0;">— wallpaper, tile tints, app chrome</span></h4>
     <div class="nw-wp-grid" id="theme-grid">${themeHTML}</div>
+    <h4 id="settings-skills-heading" tabindex="-1">Skills</h4>
+    <div id="skills-library" class="nw-skills">Loading skills…</div>
+    <div class="nw-fs-blurb">
+      One library for Anvil, Dish and Pi: <code>skills/&lt;name&gt;/SKILL.md</code> in your storage. Agents see a skill only when it is active and passes the safety scan; a skill an agent proposes waits here until you activate it.
+    </div>
     <h4 id="settings-apps-heading" tabindex="-1">Apps</h4>
     ${installedAppsHTML}
     <button class="nw-fs-btn-primary" id="third-party-add" type="button">＋ Add app from manifest…</button>
@@ -10580,6 +10665,7 @@ function openSettings(section){
     aiSettingsResult.textContent = 'App AI decisions were reset.';
   });
 
+  void paintSkillsSettings(wrap.querySelector('#skills-library'));
   wrap.querySelector('#third-party-add')?.addEventListener('click', async () => {
     closeSettings();
     const app = await openAddAppDialog();
