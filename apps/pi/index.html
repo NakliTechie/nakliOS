@@ -23,10 +23,14 @@
 </style>
 </head>
 <body>
-<header><b>Pi</b><span>pi-durable 1.4.0 in a Worker · model calls go through NakliOS AI · spike</span></header>
+<header><b>Pi</b><span>pi-durable 1.4.0 in a Worker · model calls go through NakliOS AI</span></header>
 <div id="log"></div>
 <form id="f"><textarea id="q" placeholder="Ask Pi to do something in /workspace"></textarea><button id="send">Send</button></form>
 <script type="module">
+import { CrateBackend } from '../../sys/rig/fileops/crate-backend.mjs';
+import { createOpfsBackend, opfsAvailable } from '../../sys/rig/fileops/opfs.mjs';
+import { MemoryBackend } from '../../sys/rig/fileops/memory-backend.mjs';
+import { describeBackend, serveBackend } from '../../sys/rig/fileops/remote-backend.mjs';
 const log = document.getElementById('log');
 const q = document.getElementById('q');
 const send = document.getElementById('send');
@@ -41,9 +45,43 @@ const request = (msg) => new Promise((resolve) => { const id = nextId++; waiting
 const status = add('sys', 'Starting Pi…');
 const trace = []; // every broker round trip, for live checks
 
+// Where Pi's files and conversations live, Anvil's order: the host's connected Folder or Crate through
+// naklios.fs (files appear under apps/pi/ in the Files app), else browser storage (OPFS), else memory.
+// The Worker reaches it only through {type:'fs'} messages served here.
+const nak = window.naklios || null;
+async function waitForFsCaps(timeoutMs = 1200) {
+  if (!nak || !nak.capabilities) return;
+  const t0 = Date.now();
+  while (Date.now() - t0 < timeoutMs) { if (nak.capabilities.fs) return; await new Promise((r) => setTimeout(r, 80)); }
+}
+async function chooseStorage() {
+  await waitForFsCaps();
+  if (nak?.capabilities?.fs && nak.fs) {
+    try {
+      const backend = new CrateBackend(nak.fs);
+      // Round-trip probe: commit to the host fs only if a write reads back.
+      await backend.write('.pi-probe', new TextEncoder().encode('ok'));
+      const back = new TextDecoder().decode(await backend.readBinary('.pi-probe'));
+      await backend.delete('.pi-probe').catch(() => {});
+      if (back === 'ok') {
+        const raw = nak.capabilities.fsBackend || 'host';
+        return { backend, label: (raw === 'fsa' ? 'your Folder' : raw === 'crate' ? 'Crate' : 'NakliOS storage') + ' (apps/pi)' };
+      }
+    } catch (_) { /* fall through to browser storage */ }
+  }
+  if (opfsAvailable()) {
+    try { return { backend: await createOpfsBackend({ path: 'pi' }), label: 'browser storage' }; } catch (_) {}
+  }
+  return { backend: new MemoryBackend(), label: 'memory only — files are lost on reload' };
+}
+const storage = await chooseStorage();
+const serveStorage = serveBackend(storage.backend);
+worker.postMessage({ type: 'init', backend: describeBackend(storage.backend) });
+
 worker.onmessage = async (event) => {
   const msg = event.data || {};
-  if (msg.type === 'ready') { status.textContent = 'Pi is ready.'; return; }
+  if (msg.type === 'ready') { status.textContent = `Pi is ready. Files and conversations are saved in ${storage.label}.`; return; }
+  if (msg.type === 'fs') { worker.postMessage({ type: 'fs-reply', id: msg.id, result: await serveStorage(msg.method, msg.args) }); return; }
   if (msg.type === 'fatal') { status.className = 'msg err'; status.textContent = 'Pi failed to start: ' + msg.error; return; }
   if (msg.type === 'broker') {
     const t0 = performance.now();
@@ -78,7 +116,7 @@ async function ask(text) {
   return r;
 }
 // Test seam for live checks; read-only besides ask.
-window.__pi = { ask, read: (path) => request({ type: 'read', path }), trace };
+window.__pi = { ask, read: (path) => request({ type: 'read', path }), trace, storage: storage.label };
 
 document.getElementById('f').addEventListener('submit', async (e) => {
   e.preventDefault();
