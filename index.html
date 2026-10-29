@@ -5612,6 +5612,7 @@ const AI_ENDPOINT_PRESETS = Object.freeze({
   anthropic: Object.freeze({
     label:'Anthropic (Claude)',
     baseUrl:'https://api.anthropic.com/v1',
+    model:'claude-sonnet-5-5',
     keyRequired:true,
     protocol:'anthropic',
   }),
@@ -10282,6 +10283,10 @@ function openSettings(section){
     // 'OpenAI-compatible' is the exception: it has no address of its own, so it
     // leaves whatever you typed alone. That is what it means.
     if (next.baseUrl) aiEndpointUrl.value = next.baseUrl;
+    // The model belongs to the provider too: switching OpenRouter → Anthropic kept
+    // `cohere/north-mini-code:free` as the Claude model (live 2026-10-29). A new
+    // provider gets its default model, or an empty field for Discover models to fill.
+    if (aiEndpointPreset.value !== aiDraftPreset) aiEndpointModel.value = next.model || '';
     aiDraftPreset = aiEndpointPreset.value;
     paintEndpointKeyState();
   });
