@@ -1,0 +1,40 @@
+# Open an issue when deepseek-harness publishes an rc or final tag newer than Dish's pin.
+# Alpha tags are ignored. This workflow only reports; moving the pin is a reviewed PR
+# (scripts/dish/pin.mjs, fetch-source.sh, build-dish.sh).
+name: dish-upstream
+
+on:
+  schedule:
+    - cron: '41 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Open an issue for a newer upstream rc or release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          newer=$(node scripts/dish/check-upstream.mjs)
+          pinned=$(node -p "require('./apps/dish/upstream.lock.json').tag")
+          if [ -z "$newer" ]; then echo "Dish pin $pinned is current"; exit 0; fi
+          title="Dish: upstream $newer is available (pinned $pinned)"
+          if gh issue list --state open --search "in:title \"Dish: upstream $newer\"" --json number --jq '.[].number' | grep -q .; then
+            echo "Issue already open for $newer"; exit 0
+          fi
+          gh issue create --title "$title" --body "deepseek-harness published \`$newer\`; Dish is pinned to \`$pinned\` (apps/dish/upstream.lock.json).
+
+          Release: https://github.com/deepseek-ai/deepseek-harness/releases/tag/$newer
+
+          To move: \`node scripts/dish/pin.mjs $newer\`, \`bash scripts/dish/fetch-source.sh <empty dir>\`, \`bash scripts/build-dish.sh <tree>\`, then \`node scripts/test-dish.mjs\` and the browser acceptance in apps/dish/README.md. Check the release's Node requirement first."

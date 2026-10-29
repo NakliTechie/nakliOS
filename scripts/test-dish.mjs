@@ -101,7 +101,8 @@ test('snapshot restore leaves the image-owned home patch alone', () => {
 test('shipped artifact hashes match the immutable provenance record', () => {
   const root = new URL('../apps/dish/', import.meta.url);
   const lock = JSON.parse(fs.readFileSync(new URL('upstream.lock.json', root)));
-  assert.equal(lock.commit, '504a01a9578abc2c6f1fb896b1dc322c9fe24f66');
+  const source = JSON.parse(fs.readFileSync(new URL('./dish/source.lock.json', import.meta.url)));
+  assert.deepEqual([lock.tag, lock.commit], [source.tag, source.commit]);
   for (const [name, expected] of Object.entries(lock.files)) {
     const bytes = fs.readFileSync(new URL(name, root));
     assert.equal(bytes.length, expected.bytes, name);
@@ -185,4 +186,13 @@ test('packed provider loads its transitive protocol and registers the shared rou
   } } });
   assert.equal(registered.routes[0], 'naklios');
   assert.equal((await registered.adapter.resolveModel('naklios', 'shared')).id, 'shared');
+});
+test('upstream check flags only rc or final tags newer than the pin', async () => {
+  const { newerTrackedTag } = await import('./dish/check-upstream.mjs');
+  const tags = ['dsh-v0.2.2-alpha.2', 'dsh-v0.2.1-rc.4', 'dsh-v0.2.1-rc.3', 'dsh-v0.2.1-alpha.5', 'other'];
+  assert.equal(newerTrackedTag(tags, 'dsh-v0.2.1-rc.4'), undefined);
+  assert.equal(newerTrackedTag([...tags, 'dsh-v0.2.1-rc.10'], 'dsh-v0.2.1-rc.4'), 'dsh-v0.2.1-rc.10');
+  assert.equal(newerTrackedTag([...tags, 'dsh-v0.2.1', 'dsh-v0.2.2-rc.1'], 'dsh-v0.2.1-rc.4'), 'dsh-v0.2.2-rc.1');
+  assert.equal(newerTrackedTag([...tags, 'dsh-v0.2.1'], 'dsh-v0.2.1-rc.4'), 'dsh-v0.2.1');
+  assert.throws(() => newerTrackedTag(tags, 'dsh-v0.2.2-alpha.2'), /not an rc or final/);
 });

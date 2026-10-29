@@ -46,9 +46,11 @@ The packed image includes upstream dependency licenses.
 Build inputs and integration patches live under `scripts/dish/`.
 `source.lock.json` pins the source files used by the build pipeline.
 
-Extract the release archive into a clean temporary directory.
-Install its dependencies with `pnpm install --frozen-lockfile --ignore-scripts`.
+`scripts/dish/source.lock.json` is the one record of the upstream ref: tag, commit, archive hash, and pinned input hashes.
+Run `node scripts/dish/pin.mjs <tag>` to move the pin; the integration patches may then need porting.
+Run `bash scripts/dish/fetch-source.sh /path/to/empty-dir` to download, verify, extract, and install the pinned release.
 Run `bash scripts/build-dish.sh /path/to/extracted-upstream` from NakliOS.
+The `dish-upstream` workflow runs daily and opens an issue when upstream publishes an rc or final tag newer than the pin; it ignores alpha tags and changes nothing.
 The script verifies source inputs before applying the integration.
 It builds upstream host/client libraries, the Worker, and the web UI.
 It packs the `web` template's bundles plus Dish's provider, and writes artifact hashes.
