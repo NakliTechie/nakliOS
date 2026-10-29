@@ -105,7 +105,10 @@ const FINISH = {
 };
 
 // Read a final Messages API message. `usage` keeps the OpenAI names the app's
-// budget reads, with the cache counts alongside.
+// budget reads, with the cache counts alongside. `prompt_tokens_details.cached_tokens`
+// is where OpenAI-shaped clients read cache hits: without it Dish showed "Cache hit 0%"
+// while Anthropic served 12,522 of 12,673 prompt tokens from cache (live 2026-10-29).
+// It is a subset of prompt_tokens, as in OpenAI's shape, so no reader double-counts it.
 export function fromAnthropicMessage(message) {
   const blocks = Array.isArray(message?.content) ? message.content : [];
   const text = blocks.filter((b) => b?.type === 'text').map((b) => b.text || '').join('');
@@ -118,6 +121,7 @@ export function fromAnthropicMessage(message) {
     prompt_tokens: prompt,
     completion_tokens: u.output_tokens || 0,
     total_tokens: prompt + (u.output_tokens || 0),
+    prompt_tokens_details: { cached_tokens: u.cache_read_input_tokens || 0 },
     cache_read_input_tokens: u.cache_read_input_tokens || 0,
     cache_creation_input_tokens: u.cache_creation_input_tokens || 0,
   } : null;

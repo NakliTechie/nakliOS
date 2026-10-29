@@ -2,6 +2,7 @@
 // text, tool calls, finish reason and usage. Pure module, no network.
 import assert from 'node:assert/strict';
 import { toAnthropicRequest, fromAnthropicMessage, replayKey } from '../sys/ai/anthropic-protocol.mjs';
+import { usageInputTokens } from '../sys/ai/usage.mjs';
 
 const tools = [{ type: 'function', function: { name: 'read_file', description: 'Read a file', parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] } } }];
 const call = { id: 'toolu_1', type: 'function', function: { name: 'read_file', arguments: '{"path":"a.md"}' } };
@@ -64,6 +65,9 @@ assert.deepEqual(r.toolCalls, [{ id: 'toolu_9', type: 'function', function: { na
 assert.equal(r.usage.prompt_tokens, 1000);
 assert.equal(r.usage.completion_tokens, 40);
 assert.equal(r.usage.cache_read_input_tokens, 900);
+// OpenAI-shaped clients (Dish) read cache hits here; it is a subset of prompt_tokens.
+assert.equal(r.usage.prompt_tokens_details.cached_tokens, 900);
+assert.equal(usageInputTokens(r.usage), 1000);
 assert.equal(r.refusal, null);
 
 r = fromAnthropicMessage({ stop_reason: 'refusal', stop_details: { type: 'refusal', category: 'cyber' }, content: [] });
