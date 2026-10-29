@@ -88,8 +88,31 @@ assert.match(anvil, /navigator\.locks && navigator\.locks\.request/, 'Web Locks 
 // the loop's wall-clock budget cannot help, because it is only checked between
 // turns. Every inference call is bounded and abortable.
 assert.match(anvil, /const INFER_TIMEOUT_MS = \d+/, 'inference has a deadline');
-assert.match(anvil, /withDeadline\(ai\.chat\.completions\.create\(req\), signal\)/,
+assert.match(anvil, /withDeadline\(ai\.chat\.completions\.create\(req\), signal, hold\)/,
   'the host call runs under the deadline + abort signal');
+assert.match(anvil, /req\.onStatus = \(status\)=>\{ if\(hold\.wait\) hold\.wait\(status==='permission'\); \};/,
+  'the host\'s permission status pauses the deadline');
+// Behaviour, not text: the clock stops while the host waits on consent and restarts in full after.
+{
+  const src = anvil.match(/function withDeadline\(promise, signal, hold\)\{[\s\S]*?\n  \}/);
+  assert.ok(src, 'withDeadline found');
+  const withDeadline = new Function('INFER_TIMEOUT_MS', src[0] + '\nreturn withDeadline;')(60);
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  await assert.rejects(withDeadline(new Promise(() => {}), null, {}), /did not respond within/, 'an unanswered call still times out');
+  const hold = {};
+  let late = false;
+  const slow = new Promise((r) => setTimeout(() => { late = true; r('answered'); }, 200));
+  const p = withDeadline(slow, null, hold);
+  hold.wait(true);                 // the consent prompt is open: 200 ms > the 60 ms deadline
+  await sleep(150); hold.wait(false); // answered: a full 60 ms starts now
+  hold.wait(false);                // a second non-permission status must not restart it again
+  assert.equal(await p, 'answered', 'time spent waiting on consent does not count');
+  assert.ok(late);
+  const h2 = {};
+  const p2 = withDeadline(new Promise(() => {}), null, h2);
+  h2.wait(true); await sleep(20); h2.wait(false);
+  await assert.rejects(p2, /did not respond within/, 'after consent the deadline applies again');
+}
 assert.match(anvil, /async function inferViaHost\(\{ messages, tools, maxTokens, signal \}\)/,
   'inferViaHost accepts the run\'s abort signal');
 assert.match(anvil, /if\(signal && signal\.aborted\) throw new Error\('aborted'\)/,

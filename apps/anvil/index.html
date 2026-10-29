@@ -2845,12 +2845,19 @@
   // cannot help because it is only checked between turns. Bound every call and
   // honour the run's abort signal.
   const INFER_TIMEOUT_MS = 240000;
-  function withDeadline(promise, signal){
+  // `hold`, when given, gets a `wait(waiting)` the caller drives from host status: the clock
+  // stops while the host waits on the person's consent answer and starts again, in full, when
+  // the request moves on. Time spent deciding is not the model being stuck (live 2026-10-29:
+  // an unanswered "Allow AI?" ended a Claude turn at 240 s).
+  function withDeadline(promise, signal, hold){
     return new Promise((resolve, reject)=>{
-      let done=false;
+      let done=false, timer=null;
       const settle=(fn)=>(v)=>{ if(done) return; done=true; clearTimeout(timer); if(onAbort&&signal) signal.removeEventListener('abort', onAbort); fn(v); };
       const ok=settle(resolve), bad=settle(reject);
-      const timer=setTimeout(()=>bad(new Error('the model did not respond within '+Math.round(INFER_TIMEOUT_MS/1000)+'s — the host or endpoint may be stuck')), INFER_TIMEOUT_MS);
+      const arm=()=>{ clearTimeout(timer); timer=setTimeout(()=>bad(new Error('the model did not respond within '+Math.round(INFER_TIMEOUT_MS/1000)+'s — the host or endpoint may be stuck')), INFER_TIMEOUT_MS); };
+      arm();
+      let paused=false;
+      if(hold) hold.wait=(waiting)=>{ if(done || waiting===paused) return; paused=waiting; if(waiting) clearTimeout(timer); else arm(); };
       const onAbort=signal?()=>bad(new Error('aborted')):null;
       if(signal){ if(signal.aborted) return bad(new Error('aborted')); signal.addEventListener('abort', onAbort); }
       promise.then(ok, bad);
@@ -2992,7 +2999,9 @@
         // single-active, so the next Send from any app queued behind it until the endpoint finished
         // (the checker's trace, 2026-09-17; withDeadline alone only made THIS side look stopped).
         if(signal){ req.signal = signal; }
-        const r = await withDeadline(ai.chat.completions.create(req), signal);
+        const hold = {};
+        req.onStatus = (status)=>{ if(hold.wait) hold.wait(status==='permission'); };
+        const r = await withDeadline(ai.chat.completions.create(req), signal, hold);
         const ch=r&&r.choices&&r.choices[0]; const m=(ch&&ch.message)||{};
         // F6: carry the provider's own token count through to the loop. Without it the budget
         // that ENDS runs is chars/4 over the messages, which cannot see the tool schemas — live
