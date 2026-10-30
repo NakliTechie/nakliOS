@@ -676,5 +676,18 @@ await test('lists and notes land in the Notes app\'s own files', async () => {
   assert.equal(JSON.parse(files.get('library.json')).notes.length, 2);
 });
 
+await test('weather with no place named uses the device location, and says how to recover when it is refused', async () => {
+  const urls = [];
+  const canned = async (url) => { urls.push(url); return { current: { weather_code: 61, temperature_2m: 27 }, daily: { time: ['2026-10-30'], weather_code: [61] } }; };
+  const reg = createToolRegistry(lookupTools({ fetchJsonFn: canned, locate: async () => ({ latitude: 19.07, longitude: 72.88 }) }));
+  const r = await reg.run('get_weather', { days: 7 });
+  assert.equal(r.result.location, 'your current location');
+  assert.equal(r.result.current.conditions, 'light rain');
+  assert.match(urls[0], /latitude=19\.07&longitude=72\.88.*forecast_days=7/);
+  assert.equal(urls.length, 1);                    // no geocoding call for coordinates
+  const denied = createToolRegistry(lookupTools({ fetchJsonFn: canned, locate: async () => { throw new Error('the location is not available (permission not given); ask the person which city'); } }));
+  assert.match((await denied.run('get_weather', {})).error, /ask the person which city/);
+});
+
 console.log(`voice + lfm3 adapter: ${pass} passed`);
 

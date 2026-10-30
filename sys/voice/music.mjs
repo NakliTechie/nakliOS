@@ -86,7 +86,7 @@ export function musicTools({ music, host }) {
   return [
     {
       name: 'play_music',
-      description: 'Play the person\'s own music from their NakliOS storage, by artist, album or song words, or shuffle everything when no words are given.',
+      description: 'Play the person\'s own music files from their NakliOS storage, by artist, album or song words, or shuffle everything when no words are given. Only music files: not radio, podcasts, audiobooks or anything that is not a song.',
       parameters: { type: 'object', properties: { query: { type: 'string', description: 'Artist, album or song words (optional)' } }, required: [] },
       run: ({ query = '' }) => music.play(query),
     },
