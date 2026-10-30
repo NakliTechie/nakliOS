@@ -1450,6 +1450,7 @@ body.is-mobile .nw-dock{display:none;}
       <span>Search apps…</span>
       <span class="kbd" id="kbd-hint">⌘K</span>
     </button>
+    <button id="assistant-btn" class="topbar-btn" type="button" title="Voice assistant (⌘.)" aria-label="Voice assistant">🎙</button>
     <button id="fsa-chip" class="topbar-chip" title="Local folder backend" aria-label="Folder — not connected">
       <span class="topbar-chip-dot"></span>
       <span class="topbar-chip-icon">📁</span>
@@ -10760,6 +10761,7 @@ function openCheatSheet(){
     <h3>Keyboard &amp; mouse</h3>
     <div class="nw-cheat-row"><span class="nw-cheat-desc">Spotlight (search apps)</span><span class="nw-cheat-key"><kbd>⌘</kbd><kbd>K</kbd></span></div>
     <div class="nw-cheat-row"><span class="nw-cheat-desc">Close active window</span><span class="nw-cheat-key"><kbd>⌘</kbd><kbd>W</kbd></span></div>
+    <div class="nw-cheat-row"><span class="nw-cheat-desc">Voice assistant</span><span class="nw-cheat-key"><kbd>⌘</kbd><kbd>.</kbd></span></div>
     <div class="nw-cheat-row"><span class="nw-cheat-desc">This help</span><span class="nw-cheat-key"><kbd>⌘</kbd><kbd>/</kbd></span></div>
     <div class="nw-cheat-row"><span class="nw-cheat-desc">Close popovers / exit fullscreen</span><span class="nw-cheat-key"><kbd>Esc</kbd></span></div>
     <div class="nw-cheat-row"><span class="nw-cheat-desc">Drag icon onto another</span><span class="nw-cheat-key">Swap positions</span></div>
@@ -13248,6 +13250,7 @@ async function init(){
   renderIcons();
 
   document.getElementById('spotlight-btn').addEventListener('click', openSpotlight);
+  document.getElementById('assistant-btn').addEventListener('click', toggleAssistant);
   document.getElementById('settings-btn').addEventListener('click', openSettings);
   document.getElementById('mode-pill').addEventListener('click', e => { e.stopPropagation(); openSettings(); });
   maybeStartFirstRunTour();
@@ -13277,6 +13280,10 @@ async function init(){
         if (top){ e.preventDefault(); closeWindow(top); }
       }
     }
+    if ((e.metaKey || e.ctrlKey) && e.key === '.'){
+      e.preventDefault();
+      toggleAssistant();
+    }
     if ((e.metaKey || e.ctrlKey) && e.key === '/'){
       e.preventDefault();
       openCheatSheet();
@@ -13303,8 +13310,35 @@ if (document.readyState === 'loading'){
   init();
 }
 
+// The voice assistant (sys/voice/). It loads on first use and reaches the desktop only through the
+// host command registry below, so its open_app tool and the agent face run the same commands.
+let voiceAssistant = null;
+async function voiceAssistantReady(){
+  if (voiceAssistant) return voiceAssistant;
+  const [{ mountVoiceAssistant }, { registry }] = await Promise.all([import('./sys/voice/overlay.mjs'), hostAgentReady]);
+  const call = async (name, input) => {
+    const out = await registry.invokeCommand(name, input, { caller:'voice-assistant' });
+    if (!out?.ok) throw new Error(out?.message || out?.code || `${name} failed`);
+    return out.result;
+  };
+  voiceAssistant ||= mountVoiceAssistant({ root:document.body, host:{
+    listApps:() => call('apps.list', {}),
+    openApp:id => call('apps.open', { id }),
+  } });
+  return voiceAssistant;
+}
+const openAssistant = async () => (await voiceAssistantReady()).open();
+const closeAssistant = () => voiceAssistant?.close();
+const toggleAssistant = async () => (await voiceAssistantReady()).toggle();
+const askAssistant = async text => { await (await voiceAssistantReady()).ask(text); };
+const listenAssistant = async () => (await voiceAssistantReady()).listen();
+const stopListeningAssistant = () => voiceAssistant?.stopListening();
+const stopAssistant = () => voiceAssistant?.stop();
+const setAssistantHandsFree = async on => (await voiceAssistantReady()).setHandsFree(!!on);
+const assistantState = () => voiceAssistant ? { open:voiceAssistant.isOpen, state:voiceAssistant.state } : { open:false, state:'idle' };
+
 // The declared desktop command bus. Only the developer opt-in exposes invocation.
-import('./sys/host/agent.mjs').then(({ attachHostAgent }) => attachHostAgent({
+const hostAgentReady = import('./sys/host/agent.mjs').then(({ attachHostAgent }) => attachHostAgent({
   target:window, diagnosticsThresholds:LAUNCH_DIAGNOSTIC_THRESHOLDS,
   actions:{
     apps:() => APPS.map(({id,name,kind}) => ({id,name,kind})),
@@ -13322,8 +13356,11 @@ import('./sys/host/agent.mjs').then(({ attachHostAgent }) => attachHostAgent({
     closeWindow:id => { const w=openWindows[id]; if(!w) throw new Error('Window not open'); return closeWindow(w); },
     diagnostics:launchDiagnosticsSnapshot,
     fsRead, fsReadBinary, fsWrite, fsAppend, fsList, fsDelete, fsExists,
+    openAssistant, closeAssistant, askAssistant, listenAssistant, stopListeningAssistant, stopAssistant,
+    setAssistantHandsFree, assistantState,
   },
-})).catch(error => console.error('Desktop agent interface could not load', error));
+}));
+hostAgentReady.catch(error => console.error('Desktop agent interface could not load', error));
 
 </script>
 </body>
