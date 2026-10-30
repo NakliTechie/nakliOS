@@ -11,6 +11,7 @@ function checkArgs(parameters, args) {
     if (!rule) return `unknown argument ${key}`;
     if (rule.type === 'number' && (typeof value !== 'number' || !Number.isFinite(value))) return `${key} must be a number`;
     if (rule.type === 'string' && typeof value !== 'string') return `${key} must be a string`;
+    if (rule.enum && !rule.enum.includes(value)) return `${key} must be one of ${rule.enum.join(', ')}`;
     if (rule.minimum !== undefined && value < rule.minimum) return `${key} must be at least ${rule.minimum}`;
     if (rule.maximum !== undefined && value > rule.maximum) return `${key} must be at most ${rule.maximum}`;
   }
@@ -106,14 +107,17 @@ export function builtinTools({ host, timers, nav = globalThis.navigator, now = (
     },
     {
       name: 'get_time',
-      description: 'Read the current local date and time.',
-      parameters: { type: 'object', properties: {}, required: [] },
-      run() {
+      description: 'Read the current date and time, here or in another time zone.',
+      parameters: { type: 'object', properties: {
+        timezone: { type: 'string', description: 'IANA time zone, e.g. "America/New_York" (default: this device)' },
+      }, required: [] },
+      run({ timezone } = {}) {
         const d = now();
+        const timeZone = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
         return {
           iso: d.toISOString(),
-          local: d.toLocaleString(undefined, { weekday: 'long', hour: 'numeric', minute: '2-digit' }),
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          local: d.toLocaleString(undefined, { weekday: 'long', day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit', timeZone }),
+          timeZone,
         };
       },
     },

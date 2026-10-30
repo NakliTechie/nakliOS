@@ -13324,8 +13324,77 @@ async function voiceAssistantReady(){
   voiceAssistant ||= mountVoiceAssistant({ root:document.body, host:{
     listApps:() => call('apps.list', {}),
     openApp:id => call('apps.open', { id }),
-  } });
+  }, more:voiceAssistantDeps() });
   return voiceAssistant;
+}
+// What the assistant's memory, calendar, page, Python and skill tools reach: the person's own storage and apps.
+function voiceConnectedBackend(){ return BACKENDS.fsa.isConnected() ? 'fsa' : BACKENDS.crate.isConnected() ? 'crate' : null; }
+async function voiceOpfsFile(path, create){
+  const dir = await (await navigator.storage.getDirectory()).getDirectoryHandle('nakli-assistant', { create:true });
+  return dir.getFileHandle(path.replace(/\//g, '__'), { create });
+}
+function voiceAssistantDeps(){
+  // Folder or Crate when connected, so memories sit on the person's disk; this browser's private storage otherwise.
+  const memory = {
+    async read(path){
+      const id = voiceConnectedBackend();
+      if (id) return (await BACKENDS[id].exists(path)) ? await BACKENDS[id].read(path) : null;
+      try { return await (await (await voiceOpfsFile(path, false)).getFile()).text(); } catch { return null; }
+    },
+    async write(path, text){
+      const id = voiceConnectedBackend();
+      if (id) return BACKENDS[id].write(path, text);
+      const w = await (await voiceOpfsFile(path, true)).createWritable(); await w.write(text); await w.close();
+    },
+  };
+  // The Calendar app's own data file, in the place Calendar is set to (apps/calendar/index.html: 'browser' is its
+  // IndexedDB, same origin as this host; Folder and Crate keep apps/calendar/calendar.json).
+  const calIdb = (mode, fn) => new Promise((resolve, reject) => {
+    const open = indexedDB.open('naklios-calendar-v1', 1);
+    open.onupgradeneeded = () => open.result.createObjectStore('files');
+    open.onerror = () => reject(open.error);
+    open.onsuccess = () => { const tx = open.result.transaction('files', mode), req = fn(tx.objectStore('files'));
+      req.onsuccess = () => resolve(req.result); req.onerror = () => reject(req.error); };
+  });
+  const calendarLocation = () => { const id = localStorage.getItem('naklios.calendar.location') || 'browser'; return id !== 'browser' && BACKENDS[id]?.isConnected() ? id : 'browser'; };
+  const calendar = {
+    get label(){ return calendarLocation() === 'browser' ? 'Calendar (this browser)' : `Calendar (${BACKENDS[calendarLocation()].label})`; },
+    async read(){ const id = calendarLocation(); if (id === 'browser') return (await calIdb('readonly', s => s.get('calendar.json'))) ?? null;
+      return (await BACKENDS[id].exists('apps/calendar/calendar.json')) ? await BACKENDS[id].read('apps/calendar/calendar.json') : null; },
+    async write(text){ const id = calendarLocation(); if (id === 'browser') return calIdb('readwrite', s => s.put(String(text), 'calendar.json'));
+      return BACKENDS[id].write('apps/calendar/calendar.json', text); },
+  };
+  // A page is read directly; else through the person's NakliOS web relay; else through Jina Reader (r.jina.ai), which
+  // sees the address, so only after the person allows it once in the panel. (allorigins.win, LocalMind's proxy,
+  // answered HTTP 522 after 20 s on 2026-10-30; Jina answered in 0.4 s with the page as plain text.)
+  async function fetchText(url){
+    try { const r = await fetch(url, { signal:AbortSignal.timeout(8000) }); return { status:r.status, text:await r.text(), via:'direct' }; } catch (_) {}
+    if (egressConfigured()){ const r = await egressFetch({ url }); return { status:r.status, text:new TextDecoder().decode(r.body), via:'NakliOS web relay' }; }
+    const host = new URL(url).host;
+    if (!(await voiceAssistant.consent('page-proxy', `${host} blocks reading from this page. Read it through Jina Reader (r.jina.ai)? That service sees the address.`)))
+      throw new Error(`${host} blocks direct reading and the person did not allow the reader service`);
+    const r = await fetch(`https://r.jina.ai/${url}`, { headers:{ 'X-Return-Format':'text' }, signal:AbortSignal.timeout(15000) });
+    return { status:r.status, text:await r.text(), via:'Jina Reader', plain:true };
+  }
+  let kiln = null;
+  async function python(){
+    if (kiln) return kiln;
+    const [{ createMainThreadKiln }, fo] = await Promise.all([import('./sys/kiln/main-thread-runtime.mjs'), import('./sys/rig/fileops/index.mjs')]);
+    const k = createMainThreadKiln({ fs:fo.createFileops({ backend:new fo.MemoryBackend() }), mount:'voice' });
+    let cell = 0;
+    return (kiln = { runCode:async code => {
+      const out = await k.exec(`voice-${++cell}`, code, { isolate:true });
+      if (out.status === 'unavailable') throw new Error(out.message || 'Python could not load');
+      return out;
+    } });
+  }
+  const skills = { async propose(skill){
+    const store = skillLibraryStore();
+    if (!store) throw new Error('connect a Folder or Crate in Settings → Storage to keep a skills library');
+    if (!_skillLibMod) _skillLibMod = await import('./sys/ai/skill-library.mjs');
+    return _skillLibMod.proposeSkill(store, skill);
+  } };
+  return { memory, calendar, fetchText, python, skills };
 }
 const openAssistant = async () => (await voiceAssistantReady()).open();
 const closeAssistant = () => voiceAssistant?.close();
@@ -13339,6 +13408,7 @@ const assistantState = () => voiceAssistant ? { open:voiceAssistant.isOpen, stat
 const chooseAssistantModel = async id => (await voiceAssistantReady()).chooseModel(id);
 const loadAssistantModel = async () => { await (await voiceAssistantReady()).loadModel(); };
 const setAssistantWebLookups = async on => (await voiceAssistantReady()).setWebLookups(!!on);
+const setAssistantPageProxy = async on => (await voiceAssistantReady()).setConsent('page-proxy', !!on);
 
 // The declared desktop command bus. Only the developer opt-in exposes invocation.
 const hostAgentReady = import('./sys/host/agent.mjs').then(({ attachHostAgent }) => attachHostAgent({
@@ -13360,7 +13430,7 @@ const hostAgentReady = import('./sys/host/agent.mjs').then(({ attachHostAgent })
     diagnostics:launchDiagnosticsSnapshot,
     fsRead, fsReadBinary, fsWrite, fsAppend, fsList, fsDelete, fsExists,
     openAssistant, closeAssistant, askAssistant, listenAssistant, stopListeningAssistant, stopAssistant,
-    setAssistantHandsFree, assistantState, chooseAssistantModel, loadAssistantModel, setAssistantWebLookups,
+    setAssistantHandsFree, assistantState, chooseAssistantModel, loadAssistantModel, setAssistantWebLookups, setAssistantPageProxy,
   },
 }));
 hostAgentReady.catch(error => console.error('Desktop agent interface could not load', error));

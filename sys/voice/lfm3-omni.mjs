@@ -9,8 +9,8 @@
 // With speech: false the panel speaks the text with an on-device system voice instead.
 import { parseLocalToolCalls } from '../ai/local-tool-calls.mjs';
 
-// anyformer 0.4.14 (speech out), the published npm version.
-export const ANYFORMER_URL = 'https://cdn.jsdelivr.net/npm/anyformer@0.4.14/index.js';
+// anyformer 0.4.15 from npm: stopping a reply aborts the engine and waits for it (diskformer 0.6.13 queues replies).
+export const ANYFORMER_URL = 'https://cdn.jsdelivr.net/npm/anyformer@0.4.15/index.js';
 export const DOWNLOAD_BYTES = 2.14e9;
 export const SPEECH_BYTES = 0.515e9;
 // The engine adds this system turn only when the messages have none, and the assistant always sends its own.
@@ -61,6 +61,9 @@ export async function isCached({ cacheStorage = globalThis.caches, speech = true
 // maxNewTokens counts text tokens and 80 ms speech frames together, so a spoken reply needs far more than a text one.
 export function createLfm3OmniModel({ url = ANYFORMER_URL, importer = (u) => import(u), speech = true, maxNewTokens = speech ? 2048 : 384 } = {}) {
   let session = null, loading = null;
+  // One reply at a time on the engine: two replies overlapping on its sessions hang it (LocalMind session's root
+  // cause, 2026-10-30), so a new reply waits until the last one has fully ended, including one that was stopped.
+  let lastReply = Promise.resolve();
   const model = {
     id: 'lfm3-omni-2b',
     label: 'LFM3-Omni 2B',
@@ -81,26 +84,47 @@ export function createLfm3OmniModel({ url = ANYFORMER_URL, importer = (u) => imp
       })().catch((e) => { loading = null; throw e; });
       return loading;
     },
-    async generate({ messages, tools = [], onText, onAudio, signal, speech: speak = speech } = {}) {
+    async generate(opts = {}) {
+      const before = lastReply;
+      let release;
+      lastReply = new Promise((r) => { release = r; });
+      try { await before; return await (speech && (opts.speech ?? true) && opts.tools?.length ? decideThenSpeak(opts) : reply(opts)); }
+      finally { release(); }
+    },
+    dispose() { session?.dispose?.(); session = null; loading = null; model.ready = false; },
+  };
+  // In speech mode LFM3-Omni-2B called tools in 1 of 3 tries with 17 tools offered; in text mode it called one for 6 of 6
+  // requests in about 1.5 s each (headless checks, 2026-10-30). So a spoken turn with tools first decides in text, and
+  // speaks only the final answer, with no tools offered then.
+  async function decideThenSpeak(opts) {
+    const decision = await reply({ ...opts, speech: false, onText: undefined, onAudio: undefined });
+    if (decision.stopReason === 'aborted' || decision.toolCalls.length) return decision;
+    return reply({ ...opts, tools: [] });
+  }
+  async function reply({ messages, tools = [], onText, onAudio, signal, speech: speak = speech } = {}) {
       if (!session) await model.load({ signal });
+      // Stopped while it waited its turn: never reaches the engine.
+      if (signal?.aborted) return { text: '', toolCalls: [], stopReason: 'aborted' };
       let msgs = toTemplateMessages(messages);
       if (speak) msgs = msgs.map((m) => (m.role === 'system' ? { ...m, content: `${m.content}\n${SPEECH_SYSTEM_PROMPT}` } : m));
       // Our own stop: a closed tool call ends the reply, so no time goes to voicing its markup.
       const inner = new AbortController();
       const onAbort = () => inner.abort();
       signal?.addEventListener('abort', onAbort, { once: true });
-      let full = '', shown = 0, tokens = 0, marked = false;
+      let full = '', shown = 0, tokens = 0, marked = false, closed = false;
       try {
         for await (const chunk of session.generate(msgs, {
           signal: inner.signal, maxNewTokens, thinking: false, ...(tools.length ? { tools } : {}), ...(speak && { speech: true }),
         })) {
+          // After a stop, keep reading until the engine has really finished, so the next reply never overlaps it.
+          if (closed || signal?.aborted) continue;
           full = chunk.text ?? full; tokens = chunk.tokens || tokens;
           const end = visibleEnd(full);
           if (end > shown) { onText?.(full.slice(shown, end)); shown = end; }
           marked ||= end < full.length && MARKERS.some((m) => full.includes(m));
           // A copy, because the chunk can be a view of the engine's own buffer.
           if (chunk.audio?.length && !marked && !signal?.aborted) onAudio?.(Float32Array.from(chunk.audio));
-          if (marked && /<\/tool_call>|<\/function>/.test(full)) { inner.abort(); break; }
+          if (marked && /<\/tool_call>|<\/function>/.test(full)) { closed = true; inner.abort(); }
         }
       } finally { signal?.removeEventListener('abort', onAbort); }
       if (signal?.aborted) return { text: full.slice(0, shown), toolCalls: [], stopReason: 'aborted' };
@@ -112,8 +136,6 @@ export function createLfm3OmniModel({ url = ANYFORMER_URL, importer = (u) => imp
         toolCalls: toolCalls.map((c) => ({ name: c.function.name, arguments: JSON.parse(c.function.arguments) })),
         stopReason: toolCalls.length ? 'tool_calls' : tokens >= maxNewTokens ? 'length' : 'stop',
       };
-    },
-    dispose() { session?.dispose?.(); session = null; loading = null; model.ready = false; },
-  };
+  }
   return model;
 }

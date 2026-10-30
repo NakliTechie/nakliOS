@@ -9,11 +9,13 @@ export const STATES = Object.freeze(['idle', 'listening', 'thinking', 'speaking'
 // Firm on tools, because in speech mode LFM3-Omni announced a weather lookup and then answered without calling the
 // tool under a gentler prompt (headless check, 2026-10-30); with this one it spoke a short preface and called it.
 const SYSTEM_PROMPT = 'You are the NakliOS voice assistant. Answer briefly, in plain spoken sentences. You have tools, listed above. '
-  + 'When a question needs live information (weather, time, battery, network, a Wikipedia fact) or an action (timer, opening an app, '
-  + 'a calculation), call the tool first and answer only after its result arrives. Never say you lack a tool that is listed.';
+  + 'When a question needs live information (weather, time, battery, network, a Wikipedia fact, a web page) or an action (timer, '
+  + 'opening an app, a calculation, a calendar event), call the tool first and answer only after its result arrives. '
+  + 'When the person tells you something to remember, call store_memory; when they ask about something they told you before, '
+  + 'call search_memory, because this conversation is forgotten later. Never say you lack a tool that is listed.';
 
 export function createVoiceSession({
-  model, tools, player = null, speech = null, systemPrompt = SYSTEM_PROMPT,
+  model, tools, player = null, speech = null, systemPrompt = SYSTEM_PROMPT, context = async () => '',
   maxToolRounds = 3, keepTurns = 6,
   onState = () => {}, onText = () => {}, onTool = () => {}, onError = () => {},
 } = {}) {
@@ -43,11 +45,15 @@ export function createVoiceSession({
     trim();
     setState('thinking');
     let reply = '';
+    // Standing context for this turn (what the person asked the assistant to remember), read fresh each turn.
+    let extra = '';
+    try { extra = String((await context()) || '').trim(); } catch (_) {}
+    const system = extra ? `${systemPrompt}\n\n${extra}` : systemPrompt;
     const voiceText = model.audioOut === false && speech ? speech : null;
     try {
       for (let round = 0; round <= maxToolRounds; round++) {
         const out = await model.generate({
-          messages: [{ role: 'system', content: systemPrompt }, ...history],
+          messages: [{ role: 'system', content: system }, ...history],
           tools: round < maxToolRounds ? tools.list() : [],
           onText: (delta) => {
             if (signal.aborted) return;
