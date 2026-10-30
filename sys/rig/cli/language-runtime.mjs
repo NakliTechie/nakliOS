@@ -168,7 +168,14 @@ export function createLanguage({ state, io, execution, runCommand, isCurrent, ge
         if (!['0', '-'].includes(value)) throw new LanguageError('input duplication supports descriptor 0 or - only');
         if (value === '-') incoming = { ...reader(), closed: true }; continue;
       }
-      const isNull = io.resolve(value) === 'dev/null';
+      // /dev/stdout and /dev/stderr name the shell's own streams: a redirect to them reuses the channel, it never writes a file.
+      const device = io.resolve(value);
+      if (redirect.op !== '<' && (device === 'dev/stderr' || device === 'dev/stdout')) {
+        outputs[redirect.fd] = outputs[device === 'dev/stderr' ? 2 : 1];
+        if (redirect.op.startsWith('&')) outputs[2] = outputs[redirect.fd];
+        continue;
+      }
+      const isNull = device === 'dev/null';
       if (redirect.op === '<') {
         incoming = reader(isNull ? '' : await readRedirect(await canonical(value, 'existing'))); continue;
       }

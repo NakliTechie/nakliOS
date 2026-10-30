@@ -78,6 +78,15 @@ test('/dev/null remains a virtual source and sink with restricted grants', async
   await absent(ctx, 'dev', 'dev/null');
 });
 
+test('/dev/stdout and /dev/stderr are streams, never workspace files', async () => {
+  const ctx = fresh();
+  const tee = await ctx.run('printf hi | tee /dev/stderr'); assert.equal(tee.code, 0); assert.equal(decode(tee.stdout), 'hi'); assert.equal(decode(tee.stderr), 'hi');
+  const toErr = await ctx.run('printf warn > /dev/stderr'); assert.equal(toErr.code, 0); assert.equal(decode(toErr.stdout), ''); assert.equal(decode(toErr.stderr), 'warn');
+  const toOut = await ctx.run('printf ok 2> /dev/stdout; printf more > /dev/stdout'); assert.equal(decode(toOut.stdout), 'okmore');
+  const sink = await ctx.run('printf gone | tee /dev/null /dev/stdout'); assert.equal(decode(sink.stdout), 'gone');
+  await absent(ctx, 'dev', 'dev/stderr'); await absent(ctx, 'dev', 'dev/stdout'); await absent(ctx, 'dev', 'dev/null');
+});
+
 test('append and separate fd redirects preserve exact byte framing', async () => {
   const ctx = fresh();
   await expect(ctx, 'printf one 1> file; printf two >> file; cat file', 'onetwo');
