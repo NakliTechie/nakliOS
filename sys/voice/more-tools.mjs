@@ -3,6 +3,9 @@
 //
 //   memory     — { read(path) → text|null, write(path, text) } at MEMORY_PATH (Folder or Crate, else browser storage)
 //   calendar   — { read() → text|null, write(text) }: the Calendar app's own calendar.json, wherever Calendar keeps it
+//   calendarCore — () → Promise<CalendarCore>: the Calendar app's own date code (apps/calendar/core.js), for repeats
+//   notes      — { label, read(path) → text|null, write(path, text) }: the Notes app's own files (library.json and
+//                notes/<id>.md|json), wherever Notes keeps them; lists are ordinary notes titled by the list's name
 //   fetchText  — (url) → { status, text, via, plain? }: direct, then the NakliOS web relay, then a reader service the
 //                person allowed once (plain: true when it already returns readable text, not HTML)
 //   search     — () → { provider, key, url }: Brave, Tavily or SearXNG, set by the person in the assistant's settings
@@ -59,6 +62,88 @@ export function calendarEvent(args, { now = new Date(), timeZone = Intl.DateTime
   };
 }
 
+// ── Notes: the app's own library shape (apps/notes/index.html: normaliseLibrary, createNote, writeMetadata) ──
+const NOTES_LIBRARY = 'library.json';
+const notesExcerpt = (text) => String(text || '').replace(/[#>*_`~[\]-]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 180);
+async function readNotesLibrary(notes, now) {
+  let lib; try { lib = JSON.parse((await notes.read(NOTES_LIBRARY)) || 'null'); } catch { lib = null; }
+  const ts = now().getTime();
+  if (!lib || lib.version !== 1) lib = { version: 1, updatedAt: ts, notebooks: [{ id: 'inbox', name: 'Notes', createdAt: ts }], notes: [] };
+  if (!Array.isArray(lib.notes)) lib.notes = [];
+  if (!Array.isArray(lib.notebooks) || !lib.notebooks.some((b) => b.id === 'inbox')) lib.notebooks = [{ id: 'inbox', name: 'Notes', createdAt: ts }, ...(lib.notebooks || [])];
+  return lib;
+}
+// "my shopping list", "the shopping list", "Shopping list" and "shopping" are the same list.
+const listKey = (t) => String(t).trim().toLowerCase().replace(/^(my|the|our)\s+/, '').replace(/\s+list$/, '');
+const sameTitle = (a, b) => listKey(a) === listKey(b);
+async function saveNote(notes, lib, note, body, now) {
+  const ts = now().getTime();
+  Object.assign(note, { excerpt: notesExcerpt(body), updatedAt: ts });
+  await notes.write(`notes/${note.id}.md`, body);
+  await notes.write(`notes/${note.id}.json`, JSON.stringify(note, null, 2));
+  lib.updatedAt = ts;
+  await notes.write(NOTES_LIBRARY, JSON.stringify(lib, null, 2));
+}
+function newNote(lib, title, now) {
+  const ts = now().getTime();
+  const note = { id: `note-${globalThis.crypto?.randomUUID?.() || ts.toString(36)}`, notebookId: 'inbox', title: String(title).slice(0, 180),
+    excerpt: '', pinned: false, trashedAt: null, createdAt: ts, updatedAt: ts };
+  lib.notes.unshift(note);
+  return note;
+}
+const listItems = (body) => String(body || '').split('\n').map((l) => l.match(/^\s*[-*]\s+(?:\[[ x]\]\s+)?(.*\S)/)?.[1]).filter(Boolean);
+
+function notesTools(notes, now) {
+  const findList = (lib, list) => lib.notes.find((n) => !n.trashedAt && sameTitle(n.title, list));
+  const listTitle = (list) => { const t = listKey(list); return `${t[0].toUpperCase() + t.slice(1)} list`; };
+  return [
+    {
+      name: 'add_to_list',
+      description: 'Add items to a list in the Notes app, e.g. "add milk and eggs to my shopping list". Creates the list if it is new.',
+      parameters: { type: 'object', properties: {
+        list: { type: 'string', description: 'List name, e.g. "shopping"' },
+        items: { type: 'string', description: 'The items, separated by commas or "and"' },
+      }, required: ['list', 'items'] },
+      async run({ list, items }) {
+        const add = String(items).split(/,|\band\b/i).map((x) => x.trim()).filter(Boolean).slice(0, 30);
+        if (!add.length) throw new Error('no items to add');
+        const lib = await readNotesLibrary(notes, now);
+        const note = findList(lib, list) || newNote(lib, listTitle(list), now);
+        let body = ''; try { body = (await notes.read(`notes/${note.id}.md`)) || ''; } catch { body = ''; }
+        body = `${body.replace(/\s*$/, '')}${body.trim() ? '\n' : ''}${add.map((x) => `- ${x}`).join('\n')}\n`;
+        await saveNote(notes, lib, note, body, now);
+        return { list: note.title, added: add, count: listItems(body).length, where: notes.label || 'Notes' };
+      },
+    },
+    {
+      name: 'read_list',
+      description: 'Read a list from the Notes app, e.g. "what is on my shopping list".',
+      parameters: { type: 'object', properties: { list: { type: 'string', description: 'List name' } }, required: ['list'] },
+      async run({ list }) {
+        const lib = await readNotesLibrary(notes, now);
+        const note = findList(lib, list);
+        if (!note) return { list, items: [], message: `There is no ${list} list.` };
+        return { list: note.title, items: listItems((await notes.read(`notes/${note.id}.md`)) || '') };
+      },
+    },
+    {
+      name: 'create_note',
+      description: 'Write a new note in the Notes app, e.g. "make a note that the plumber comes on Tuesday".',
+      parameters: { type: 'object', properties: {
+        title: { type: 'string', description: 'A short title' },
+        text: { type: 'string', description: 'The note' },
+      }, required: ['text'] },
+      async run({ title, text }) {
+        const lib = await readNotesLibrary(notes, now);
+        const body = `${String(text).trim()}\n`;
+        const note = newNote(lib, title || String(text).trim().split(/[.\n]/)[0].slice(0, 60) || 'Note', now);
+        await saveNote(notes, lib, note, body, now);
+        return { created: note.title, where: notes.label || 'Notes' };
+      },
+    },
+  ];
+}
+
 // ── web search: LocalMind's three providers ──
 const PROVIDERS = {
   async brave(query, { key }) {
@@ -93,7 +178,7 @@ export function pageText(html, { cap = 3000, parse = (h) => new DOMParser().pars
   return { title: String(doc.title || '').trim(), text: text.length > cap ? text.slice(0, cap) + ' …' : text };
 }
 
-export function moreTools({ memory, calendar, fetchText, search, python, skills, webOn = () => true, now = () => new Date(), parseHtml } = {}) {
+export function moreTools({ memory, calendar, calendarCore, notes, fetchText, search, python, skills, webOn = () => true, now = () => new Date(), parseHtml } = {}) {
   const needWeb = () => { if (!webOn()) throw new Error('web lookups are switched off in the assistant panel'); };
   return [
     {
@@ -161,6 +246,31 @@ export function moreTools({ memory, calendar, fetchText, search, python, skills,
         data.updatedAt = now().toISOString();
         await calendar.write(JSON.stringify(data, null, 2));
         return { created: true, title: event.title, start: event.startLocal, end: event.endLocal, all_day: event.allDay, where: calendar.label || 'Calendar' };
+      },
+    },
+    ...(notes ? notesTools(notes, now) : []),
+    {
+      name: 'get_calendar_events',
+      description: 'Read what is on the NakliOS Calendar for a day or a few days, e.g. "what is on today", "am I free tomorrow".',
+      parameters: { type: 'object', properties: {
+        date: { type: 'string', description: 'First day, "YYYY-MM-DD" (default today); call get_time first for "tomorrow" or a weekday' },
+        days: { type: 'number', description: 'How many days, 1 to 14 (default 1)', minimum: 1, maximum: 14 },
+      }, required: [] },
+      async run({ date, days = 1 }) {
+        const today = now();
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(date ?? '').trim());
+        if (date != null && !m) throw new Error('date must be "YYYY-MM-DD"');
+        const start = m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const end = new Date(start); end.setDate(end.getDate() + Math.round(days));
+        let data; try { data = JSON.parse((await calendar.read()) || 'null'); } catch { data = null; }
+        const events = data?.version === 1 && Array.isArray(data.events) ? data.events : [];
+        const core = await calendarCore();
+        const hits = core.expandEvents(events, start.getTime(), end.getTime()).slice(0, 30).map((o) => ({
+          title: o.event.title, start: o.event.allDay ? `${o.startLocal} (all day)` : o.startLocal.replace('T', ' '),
+          ...(o.event.location ? { location: o.event.location } : {}),
+        }));
+        const label = `${localStamp(start).slice(0, 10)}${days > 1 ? ` for ${Math.round(days)} days` : ''}`;
+        return hits.length ? { range: label, events: hits } : { range: label, events: [], message: 'Nothing on the calendar.' };
       },
     },
     {

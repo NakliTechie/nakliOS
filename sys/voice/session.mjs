@@ -14,7 +14,12 @@ const SYSTEM_PROMPT = 'You are the NakliOS voice assistant. Answer briefly, in p
   + 'an action (a timer, opening an app, a calendar event, a calculation), or something stored about this person. '
   + 'When the person tells you something to remember, call store_memory. '
   + 'For greetings, jokes, opinions, stories and general knowledge, answer directly and call no tool. '
-  + 'If you are not sure of a fact and no tool gave it to you, say you do not know rather than guess.';
+  + 'If you are not sure of a fact and no tool gave it to you, say you do not know rather than guess. '
+  // About a fifth of what people ask voice assistants is outside what this one can do (research note, 2026-10-30).
+  + 'You cannot control smart-home devices, make calls, send email or messages, order taxis, food or shopping, give '
+  + 'turn-by-turn directions, or find places near the person; when asked, say so in one sentence and name something '
+  + 'you can do instead. When a request is missing something you need, such as how long a timer runs or what time a '
+  + 'reminder is for, ask for it in one short question instead of guessing.';
 
 export function createVoiceSession({
   model, tools, player = null, speech = null, systemPrompt = SYSTEM_PROMPT, context = async () => '',
