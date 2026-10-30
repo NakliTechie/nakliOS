@@ -128,6 +128,9 @@ jobs:
       - name: Verify the shared skills library gate (Sentinel, status, staged proposals)
         run: node sys/ai/test/skill-library.test.mjs
 
+      - name: Verify the voice assistant's tools, voice-activity detector and tool loop (stub model)
+        run: node sys/voice/test/voice.test.mjs
+
       - name: Verify the prompt's cache prefix is stable and the tool list does not depend on the store
         run: node scripts/test-anvil-prompt-cache.mjs
 

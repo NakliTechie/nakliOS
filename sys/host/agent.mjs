@@ -40,6 +40,15 @@ export const HOST_COMMANDS = Object.freeze([
   ['fs.write','Write a file in the connected store','fsWrite','fs:write',{path:str,data:{type:'string'}},['path','data'],true],
   ['fs.append','Append to a file in the connected store','fsAppend','fs:write',{path:str,data:{type:'string'}},['path','data'],true],
   ['fs.delete','Delete a file in the connected store','fsDelete','fs:remove',{path:str},['path'],true],
+  ['assistant.open','Open the voice assistant','openAssistant','ui:write',{},[]],
+  ['assistant.close','Close the voice assistant','closeAssistant','ui:write',{},[]],
+  ['assistant.ask','Send a typed message to the voice assistant','askAssistant','ui:write',{text:str},['text']],
+  ['assistant.listen','Open the microphone for one spoken turn','listenAssistant','ui:write',{},[]],
+  ['assistant.endTurn','Close the microphone and send the spoken turn','stopListeningAssistant','ui:write',{},[]],
+  ['assistant.stop','Stop the assistant reply and its audio','stopAssistant','ui:write',{},[]],
+  ['assistant.handsFree','Turn hands-free listening on or off','setAssistantHandsFree','ui:write',{on:{type:'boolean'}},['on']],
+  ['assistant.state','Read whether the assistant is open and its state','assistantState','ui:read',{},[]],
+  ['assistant.model','Choose the assistant model (the first LFM3-Omni load downloads 2.1 GB)','chooseAssistantModel','ui:write',{id:{enum:['lfm3-omni-2b','stub']}},['id']],
 ].map(row => Object.freeze(row)));
 
 const PERSON_ONLY = ['credentials.configure','storage.connect','storage.disconnect','apps.install','apps.uninstall','review.commit','review.discard','ai.select'];
