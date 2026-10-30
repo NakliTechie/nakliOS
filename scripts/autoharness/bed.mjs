@@ -175,6 +175,18 @@ export function liveInferAnthropic({ base = 'https://api.anthropic.com', model, 
     const i = ++n;
     if (budget?.exceeded()) { infer.failures++; throw new Error('spending ceiling reached'); }
     const body = { model, ...toAnthropicRequest({ messages, maxTokens, tools, toolChoice: 'auto', replay }), output_config: { effort } };
+    // Prefix check (Droid's "append-only" measure): the provider caches by prefix in the order tools, system, messages, so a request
+    // is append-only when the previous request's tools and system are unchanged and its messages are an exact prefix of this one's.
+    const cur = { tools: JSON.stringify(body.tools || null), system: JSON.stringify(body.system ?? null), messages: body.messages.map((m) => JSON.stringify(m)) };
+    if (infer.prev) {
+      let part = null;
+      if (infer.prev.tools !== cur.tools) part = 'tools';
+      else if (infer.prev.system !== cur.system) part = 'system';
+      else { for (let k = 0; k < infer.prev.messages.length; k++) if (cur.messages[k] !== infer.prev.messages[k]) { part = `messages[${k}]`; break; } }
+      infer.prefix.calls++;
+      if (part === null) infer.prefix.appendOnly++; else infer.prefix.breaks.push({ call: i, part });
+    }
+    infer.prev = cur;
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), timeoutMs);
     const t0 = Date.now();
@@ -199,12 +211,14 @@ export function liveInferAnthropic({ base = 'https://api.anthropic.com', model, 
     const u = json.usage || {};
     const read = u.cache_read_input_tokens || 0, write = u.cache_creation_input_tokens || 0, fresh = u.input_tokens || 0, out = u.output_tokens || 0;
     const usd = (fresh * price.in + read * price.read + write * price.write + out * price.out) / 1e6;
+    if (infer.firstPrompt === null) infer.firstPrompt = fresh + read + write;
     infer.cost += usd; infer.costSeen = true; infer.cacheRead += read; infer.cacheWrite += write; infer.freshInput += fresh; infer.output += out;
     budget?.add(usd);
     log(`${label} call ${i}: ${Math.round((Date.now() - t0) / 1000)}s, in ${fresh}+${read}r+${write}w out ${out}, ${m.toolCalls.length} tool call(s), $${usd.toFixed(4)}`);
     return { content: m.text, toolCalls: m.toolCalls, finishReason: m.finishReason, model: json.model || model, usage: m.usage };
   };
   infer.failures = 0; infer.cost = 0; infer.costSeen = false; infer.cacheRead = 0; infer.cacheWrite = 0; infer.freshInput = 0; infer.output = 0;
+  infer.prev = null; infer.prefix = { calls: 0, appendOnly: 0, breaks: [] }; infer.firstPrompt = null;
   return infer;
 }
 
@@ -316,7 +330,7 @@ export async function runTask(task, { infer, stamp = null, sysPrior = undefined,
     id: task.id, pass: !!g.ok, why: g.ok ? '' : String(g.why || ''), void: isVoid, crash,
     stop: result?.stop ?? 'crash', steps: metrics.steps, toolCalls: metrics.toolCalls, label: metrics.label,
     script: script ? { on: scriptOn, hint: !!(scriptOn && scriptHint), ...scriptStats } : null,
-    usage: out.usage, costReported: infer.costSeen ? infer.cost : null, cache: infer.cacheRead !== undefined ? { read: infer.cacheRead, write: infer.cacheWrite, fresh: infer.freshInput, output: infer.output } : null, tools: out.toolNames, answer: out.answer.slice(0, 2000), wallMs,
+    usage: out.usage, costReported: infer.costSeen ? infer.cost : null, cache: infer.cacheRead !== undefined ? { read: infer.cacheRead, write: infer.cacheWrite, fresh: infer.freshInput, output: infer.output } : null, prefix: infer.prefix ? { ...infer.prefix, firstPrompt: infer.firstPrompt } : null, tools: out.toolNames, answer: out.answer.slice(0, 2000), wallMs,
     python: ws.kiln ? { ...ws.kiln.stats } : null, // what python cost this run; null in a bed without it
     changed: changedPaths(seedSnap, snapshot(ws.backend)),
     record: rec.export(),

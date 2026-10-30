@@ -132,6 +132,13 @@ const summary = {
   effort: EP.kind === 'anthropic' ? EFFORT : null,
   ceilingUsd: BUDGET ? BUDGET.ceilingUsd : null, ceilingTripped: BUDGET ? BUDGET.tripped : null,
   cache: results.some((r) => r.cache) ? ['read', 'write', 'fresh', 'output'].reduce((o, k) => ({ ...o, [k]: results.reduce((s, r) => s + (r.cache?.[k] || 0), 0) }), {}) : null,
+  prefix: results.some((r) => r.prefix) ? (() => {
+    const rs = results.filter((r) => r.prefix);
+    const calls = rs.reduce((s, r) => s + r.prefix.calls, 0), ok = rs.reduce((s, r) => s + r.prefix.appendOnly, 0);
+    const byPart = {}; for (const r of rs) for (const b of r.prefix.breaks) { const k = b.part.replace(/\[\d+\]/, '[n]'); byPart[k] = (byPart[k] || 0) + 1; }
+    const firsts = rs.map((r) => r.prefix.firstPrompt).filter((x) => x).sort((a, b) => a - b);
+    return { requestsAfterFirst: calls, appendOnly: ok, appendOnlyShare: calls ? Math.round((ok / calls) * 10000) / 100 : null, breaksByPart: byPart, firstPromptTokensMedian: firsts.length ? firsts[Math.floor(firsts.length / 2)] : null };
+  })() : null,
   perTask,
 };
 await writeFile(join(OUT, 'summary.json'), JSON.stringify(summary, null, 2));
