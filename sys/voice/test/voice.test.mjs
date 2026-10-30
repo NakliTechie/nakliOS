@@ -194,11 +194,15 @@ function fakeAnyformer(replies) {
       seen.calls.push({ messages, opts });
       const reply = replies.shift();
       let text = '';
-      for (const piece of reply) { if (opts.signal?.aborted) return; text += piece; yield { text, tokens: text.length }; }
+      for (const piece of reply) {
+        if (opts.signal?.aborted) { seen.aborted = true; return; }
+        if (piece instanceof Float32Array) { yield { text, tokens: text.length, audio: piece, sampleRate: 24000 }; continue; }
+        text += piece; yield { text, tokens: text.length };
+      }
     },
     dispose() {},
   };
-  return { seen, importer: async () => ({ MODELS: { chat: { LFM3_OMNI_2B: 'lfm3' } }, load: async (id, { onProgress }) => { seen.loads++; onProgress?.({ loaded: 1, total: 2 }); return session; } }) };
+  return { seen, importer: async () => ({ MODELS: { chat: { LFM3_OMNI_2B: 'lfm3' } }, load: async (id, { onProgress, speech }) => { seen.loads++; seen.loadSpeech = speech; onProgress?.({ loaded: 1, total: 2 }); return session; } }) };
 }
 
 await test('visibleEnd holds tool markup and partial markers', () => {
@@ -212,7 +216,7 @@ await test('visibleEnd holds tool markup and partial markers', () => {
 await test('LFM3 adapter streams text, hides tool XML and parses calls against the offered tools', async () => {
   const xml = '<tool_call>\n<function=set_timer>\n<parameter=seconds>\n90\n</parameter>\n</function>\n</tool_call>';
   const fake = fakeAnyformer([['One moment. ', ...xml.match(/.{1,5}/gs)], ['Timer ', 'set.']]);
-  const m = createLfm3OmniModel({ importer: fake.importer });
+  const m = createLfm3OmniModel({ importer: fake.importer, speech: false });
   const progress = [];
   await m.load({ onProgress: (p) => progress.push(p) });
   assert.equal(m.ready, true);
@@ -293,7 +297,14 @@ await test('speech fallback reports busy while a sentence is queued', () => {
 await test('isCached finds the decoder from Hugging Face and nothing else', async () => {
   const { isCached } = await import('../lfm3-omni.mjs');
   const store = (urls) => ({ keys: async () => ['diskformer-models'], open: async () => ({ keys: async () => urls.map((url) => ({ url })) }) });
-  assert.equal(await isCached({ cacheStorage: store(['https://huggingface.co/LiquidAI/LFM3-Omni-2B-ONNX/resolve/main/onnx/decoder_q4f16.onnx_data']) }), true);
+  const hf = 'https://huggingface.co/LiquidAI/LFM3-Omni-2B-ONNX/resolve/main/onnx/';
+  assert.equal(await isCached({ cacheStorage: store([hf + 'decoder_q4f16.onnx_data']), speech: false }), true);
+  assert.equal(await isCached({ cacheStorage: store([hf + 'decoder_q4f16.onnx_data']) }), false);
+  assert.equal(await isCached({ cacheStorage: store([hf + 'decoder_q4f16.onnx_data', hf + 'depth_decoder.onnx_data']) }), true);
+  assert.equal(await isCached({ cacheStorage: store(['http://127.0.0.1:8974/onnx/decoder_q4f16.onnx_data']), speech: false }), false);
+  const partial = createLfm3OmniModel();
+  assert.equal(await partial.isCached({ cacheStorage: store([hf + 'decoder_q4f16.onnx_data']) }), false);
+  assert.equal(partial.downloadLabel, '0.5 GB of speech files');
   assert.equal(await isCached({ cacheStorage: store(['https://huggingface.co/LiquidAI/LFM3-Omni-2B-ONNX/resolve/main/config.json']) }), false);
   assert.equal(await isCached({ cacheStorage: { keys: async () => [] } }), false);
   assert.equal(await isCached({ cacheStorage: undefined }), false);
@@ -344,4 +355,42 @@ await test('weather and Wikipedia shape canned replies, and the web switch stops
   assert.deepEqual((await reg.run('calculate', { expression: '2+2' })).result, { result: 4 });
 });
 
+await test('LFM3 speech: audio streams, stops at a tool call, and the call ends the reply', async () => {
+  const pcm = (n) => new Float32Array(n).fill(0.1);
+  const xml = '<tool_call>\n<function=get_time>\n</function>\n</tool_call>';
+  const fake = fakeAnyformer([
+    ['Sure, ', pcm(100), 'one moment. ', pcm(200), '<tool_call>\n<function=get_time>', pcm(300), '\n</function>\n</tool_call>', pcm(400), 'never'],
+    ['It is ', pcm(50), 'ten.', pcm(60)],
+  ]);
+  const m = createLfm3OmniModel({ importer: fake.importer });
+  assert.equal(m.audioOut, true);
+  await m.load();
+  assert.equal(fake.seen.loadSpeech, true);
+  const audio = []; let text = '';
+  const out = await m.generate({ messages: [{ role: 'system', content: 'Be brief.' }, { role: 'user', content: [{ type: 'text', text: 'time?' }] }],
+    tools: makeTools(createTimers()).list(), onText: (d) => { text += d; }, onAudio: (a) => audio.push(a.length) });
+  assert.deepEqual(audio, [100, 200]);
+  assert.equal(text, 'Sure, one moment. ');
+  assert.deepEqual(out.toolCalls, [{ name: 'get_time', arguments: {} }]);
+  assert.equal(fake.seen.calls[0].opts.signal.aborted, true);   // the closed call ended the reply
+  assert.equal(out.text.includes('never'), false);
+  assert.equal(fake.seen.calls[0].opts.speech, true);
+  assert.equal(fake.seen.calls[0].messages[0].content, 'Be brief.\nRespond with interleaved text and audio.');
+  const audio2 = [];
+  const out2 = await m.generate({ messages: [], tools: [], onAudio: (a) => audio2.push(a.length) });
+  assert.equal(out2.text, 'It is ten.');
+  assert.deepEqual(audio2, [50, 60]);
+});
+
+await test('LFM3 speech: a caller abort stops the audio', async () => {
+  const pcm = (n) => new Float32Array(n);
+  const fake = fakeAnyformer([['a', pcm(10), 'b', pcm(20), 'c', pcm(30)]]);
+  const m = createLfm3OmniModel({ importer: fake.importer });
+  const ctl = new AbortController(); const audio = [];
+  const out = await m.generate({ messages: [], tools: [], signal: ctl.signal, onAudio: (a) => { audio.push(a.length); ctl.abort(); } });
+  assert.equal(out.stopReason, 'aborted');
+  assert.deepEqual(audio, [10]);
+});
+
 console.log(`voice + lfm3 adapter: ${pass} passed`);
+
