@@ -13,52 +13,55 @@ import { createVoiceSession } from './session.mjs';
 import { openMic, createVad, createTurnRecorder, createPlayer, createSpeechFallback } from './audio.mjs';
 
 const CSS = `
-.nv-panel{position:fixed; right:20px; bottom:56px; width:min(360px, calc(100vw - 32px)); z-index:1400;
+/* Colours come from the desktop theme (index.html :root tokens), so the panel follows every NakliOS theme. */
+.nv-panel{--nv-raise:color-mix(in srgb, var(--ink) 5%, var(--panel)); --nv-field:color-mix(in srgb, var(--ink) 3%, var(--panel));
+  position:fixed; right:20px; bottom:56px; width:min(360px, calc(100vw - 32px)); z-index:1400;
   max-height:calc(100vh - 96px); box-sizing:border-box;
-  background:#fbfaf7; color:#1f1d1a; border:1px solid #e4e0d8; border-radius:18px;
-  box-shadow:0 18px 50px rgba(30,25,20,.18); font:14px/1.45 system-ui,-apple-system,sans-serif;
+  background:var(--panel); color:var(--ink); border:1px solid var(--line-strong, var(--line)); border-radius:18px;
+  box-shadow:var(--shadow); font:14px/1.45 system-ui,-apple-system,sans-serif;
   display:flex; flex-direction:column; gap:10px; padding:14px 14px 12px;}
-.nv-head{display:flex; align-items:center; gap:8px; font-size:12px; color:#6b665e;}
-.nv-head b{color:#1f1d1a; font-size:13px;}
+.nv-head{display:flex; align-items:center; gap:8px; font-size:12px; color:var(--muted);}
+.nv-head b{color:var(--ink); font-size:13px;}
 .nv-head .nv-sp{flex:1}
-.nv-head select{font:inherit; font-size:12px; color:#1f1d1a; background:#fff; border:1px solid #dcd7cd; border-radius:8px; padding:2px 4px; max-width:190px}
-.nv-x{border:0; background:none; font-size:18px; line-height:1; color:#6b665e; cursor:pointer; padding:2px 6px; border-radius:8px;}
-.nv-x:hover{background:#efece6}
+.nv-x{border:0; background:none; font-size:18px; line-height:1; color:var(--muted); cursor:pointer; padding:2px 6px; border-radius:8px;}
+.nv-x:hover{background:var(--nv-raise); color:var(--ink)}
 .nv-orbwrap{display:flex; flex-direction:column; align-items:center; gap:6px; padding:6px 0 2px;}
-.nv-orb{--lvl:0; width:96px; height:96px; border-radius:50%; border:0; cursor:pointer; touch-action:none;
-  background:radial-gradient(circle at 35% 30%, #fff 0, #c9d8ff 30%, #5b7fe0 75%);
+.nv-orb{--lvl:0; --nv-c:var(--act); width:96px; height:96px; border-radius:50%; border:0; cursor:pointer; touch-action:none;
+  background:radial-gradient(circle at 35% 30%, #fff 0, color-mix(in srgb, var(--nv-c) 35%, #fff) 30%, var(--nv-c) 75%);
   transform:scale(calc(1 + var(--lvl) * .35)); transition:transform .06s linear, filter .2s;
-  box-shadow:0 0 0 calc(var(--lvl) * 18px) rgba(91,127,224,.18);}
-.nv-orb:focus-visible{outline:3px solid #5b7fe0; outline-offset:4px}
-.nv-panel[data-state=listening] .nv-orb{background:radial-gradient(circle at 35% 30%, #fff 0, #ffd3c4 30%, #e0603a 75%); box-shadow:0 0 0 calc(var(--lvl) * 18px) rgba(224,96,58,.2);}
+  box-shadow:0 0 0 calc(var(--lvl) * 18px) color-mix(in srgb, var(--nv-c) 20%, transparent);}
+.nv-orb:focus-visible{outline:3px solid var(--brand); outline-offset:4px}
+.nv-panel[data-state=listening] .nv-orb{--nv-c:var(--brand)}
 .nv-panel[data-state=thinking] .nv-orb{animation:nv-pulse 1.1s ease-in-out infinite}
-.nv-panel[data-state=speaking] .nv-orb{background:radial-gradient(circle at 35% 30%, #fff 0, #c8efd9 30%, #2f9e6a 75%); box-shadow:0 0 0 calc(var(--lvl) * 18px) rgba(47,158,106,.2);}
+.nv-panel[data-state=speaking] .nv-orb{--nv-c:var(--ok)}
 @keyframes nv-pulse{50%{filter:brightness(1.15); transform:scale(1.06)}}
 @media (prefers-reduced-motion: reduce){.nv-orb{transition:none; animation:none !important}}
-.nv-state{font-size:12px; color:#6b665e; min-height:18px}
+.nv-state{font-size:12px; color:var(--muted); min-height:18px}
 .nv-log{flex:0 1 auto; min-height:0; max-height:min(260px, 30vh); overflow:auto; display:flex; flex-direction:column; gap:6px}
-.nv-load{display:flex; flex-direction:column; gap:8px; padding:10px; border:1px solid #e4e0d8; border-radius:12px; background:#fff; font-size:13px}
+.nv-load{display:flex; flex-direction:column; gap:8px; padding:10px; border:1px solid var(--line); border-radius:12px; background:var(--nv-raise); font-size:13px}
 .nv-load[hidden]{display:none}
-.nv-load .nv-btn{align-self:flex-start; background:#5b7fe0; border-color:#5b7fe0; color:#fff}
-.nv-load .nv-btn:hover{background:#4a6dcc}
-.nv-ask{display:flex; flex-direction:column; gap:8px; padding:10px; border:1px solid #f0d9a8; border-radius:12px; background:#fff8e8; font-size:13px}
+.nv-load div{display:flex; gap:6px}
+.nv-load .nv-btn.primary{background:var(--brand); border-color:var(--brand); color:var(--panel)}
+.nv-load .nv-btn.primary:hover{filter:brightness(1.06)}
+.nv-ask{display:flex; flex-direction:column; gap:8px; padding:10px; border:1px solid color-mix(in srgb, var(--brand) 40%, var(--line)); border-radius:12px; background:color-mix(in srgb, var(--brand) 10%, var(--panel)); font-size:13px}
 .nv-ask div{display:flex; gap:6px}
-.nv-set{display:flex; flex-direction:column; gap:6px; padding:10px; border:1px solid #e4e0d8; border-radius:12px; background:#fff; font-size:12px}
+.nv-set{display:flex; flex-direction:column; gap:6px; padding:10px; border:1px solid var(--line); border-radius:12px; background:var(--nv-raise); font-size:12px}
 .nv-set[hidden]{display:none}
 .nv-set label{display:flex; align-items:center; gap:6px}
-.nv-set select,.nv-set input[type=text],.nv-set input[type=password]{flex:1; min-width:0; font:inherit; padding:4px 6px; border:1px solid #dcd7cd; border-radius:8px; background:#fff; color:#1f1d1a}
+.nv-set select,.nv-set input[type=text],.nv-set input[type=password]{flex:1; min-width:0; font:inherit; padding:4px 6px; border:1px solid var(--line); border-radius:8px; background:var(--nv-field); color:var(--ink)}
 .nv-msg{padding:7px 10px; border-radius:12px; white-space:pre-wrap; word-break:break-word}
-.nv-msg.user{align-self:flex-end; background:#e9eefc; max-width:85%}
-.nv-msg.bot{align-self:flex-start; background:#fff; border:1px solid #ebe7df; max-width:92%}
-.nv-msg.tool{align-self:flex-start; font:12px ui-monospace,Menlo,monospace; color:#4d6b3c; background:#eef6e9}
-.nv-msg.err{align-self:stretch; color:#9b2c2c; background:#fdecec}
+.nv-msg.user{align-self:flex-end; background:color-mix(in srgb, var(--brand) 16%, var(--panel)); max-width:85%}
+.nv-msg.bot{align-self:flex-start; background:var(--nv-raise); border:1px solid var(--line); max-width:92%}
+.nv-msg.tool{align-self:flex-start; font:12px ui-monospace,Menlo,monospace; color:var(--ok); background:color-mix(in srgb, var(--ok) 12%, var(--panel))}
+.nv-msg.err{align-self:stretch; color:var(--ink); background:color-mix(in srgb, #d33 16%, var(--panel))}
 .nv-form{display:flex; gap:6px}
-.nv-form input{flex:1; min-width:0; padding:8px 10px; border:1px solid #dcd7cd; border-radius:10px; background:#fff; color:#1f1d1a; font:inherit}
-.nv-form input:focus{outline:2px solid #5b7fe0; outline-offset:0; border-color:transparent}
-.nv-btn{padding:7px 11px; border:1px solid #dcd7cd; border-radius:10px; background:#fff; color:#1f1d1a; cursor:pointer; font:inherit}
-.nv-btn:hover{background:#f3f0ea}
+.nv-form input{flex:1; min-width:0; padding:8px 10px; border:1px solid var(--line); border-radius:10px; background:var(--nv-field); color:var(--ink); font:inherit}
+.nv-form input::placeholder{color:var(--faint)}
+.nv-form input:focus{outline:2px solid var(--brand); outline-offset:0; border-color:transparent}
+.nv-btn{padding:7px 11px; border:1px solid var(--line); border-radius:10px; background:var(--nv-field); color:var(--ink); cursor:pointer; font:inherit}
+.nv-btn:hover{background:var(--nv-raise)}
 .nv-btn[hidden]{display:none}
-.nv-foot{display:flex; align-items:center; gap:8px; font-size:12px; color:#6b665e}
+.nv-foot{display:flex; align-items:center; gap:8px; font-size:12px; color:var(--muted)}
 .nv-foot label{display:flex; align-items:center; gap:5px; cursor:pointer}
 .nv-foot .nv-sp{flex:1}
 `;
@@ -70,9 +73,7 @@ const STATE_TEXT = {
   speaking: 'Speaking — press the orb or Stop to interrupt',
 };
 
-const MODEL_KEY = 'nakli.voice.model';
 const DEFAULT_MODEL = 'lfm3-omni-2b';
-const savedModelId = () => { try { const id = localStorage.getItem(MODEL_KEY); return VOICE_MODELS[id] ? id : DEFAULT_MODEL; } catch { return DEFAULT_MODEL; } };
 // The mic ignores sound while the assistant speaks and this long after: system voices bypass the browser's
 // echo cancellation, so without it the assistant hears itself, interrupts itself and answers its own words.
 const ECHO_TAIL_MS = 600;
@@ -89,8 +90,8 @@ const SEARCH_KEY = 'nakli.voice.search';
 const readJson = (key) => { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; } };
 
 export function mountVoiceAssistant({ root = document.body, host, more = null, model: injected = null } = {}) {
-  let modelId = injected ? injected.id : savedModelId();
-  let model = injected || VOICE_MODELS[modelId].create();
+  const modelId = injected ? injected.id : DEFAULT_MODEL;
+  const model = injected || VOICE_MODELS[modelId].create();
   let loadNote = '';
   if (!document.getElementById('nv-style')) {
     const style = document.createElement('style');
@@ -236,7 +237,7 @@ export function mountVoiceAssistant({ root = document.body, host, more = null, m
     panel.setAttribute('aria-label', 'Voice assistant');
     panel.dataset.state = session.state;
     panel.innerHTML = `
-      <div class="nv-head"><b>Assistant</b><select class="nv-model" aria-label="Model"></select><span class="nv-sp"></span>
+      <div class="nv-head"><b>Assistant</b><span class="nv-model"></span><span class="nv-sp"></span>
         <button class="nv-x nv-gear" type="button" aria-label="Assistant settings">⚙</button>
         <button class="nv-x" type="button" aria-label="Close assistant">×</button></div>
       <div class="nv-set" hidden>
@@ -247,7 +248,8 @@ export function mountVoiceAssistant({ root = document.body, host, more = null, m
       </div>
       <div class="nv-orbwrap"><button class="nv-orb" type="button" aria-label="Hold to talk"></button>
         <div class="nv-state" aria-live="polite"></div></div>
-      <div class="nv-load" hidden><span class="nv-load-text"></span><button class="nv-btn nv-load-btn" type="button">Download and load</button></div>
+      <div class="nv-load" hidden><span class="nv-load-text"></span>
+        <div><button class="nv-btn primary nv-load-btn" type="button">Download and turn on</button><button class="nv-btn nv-load-later" type="button">Not now</button></div></div>
       <div class="nv-log" aria-live="polite"></div>
       <form class="nv-form"><input type="text" placeholder="Type a message…" aria-label="Message" autocomplete="off">
         <button class="nv-btn" type="submit">Send</button><button class="nv-btn nv-stop" type="button" hidden>Stop</button></form>
@@ -261,11 +263,8 @@ export function mountVoiceAssistant({ root = document.body, host, more = null, m
       load: panel.querySelector('.nv-load'), loadText: panel.querySelector('.nv-load-text'),
     };
     panel.querySelector('.nv-load-btn').onclick = () => loadModel();
-    const pick = panel.querySelector('.nv-model');
-    for (const [id, m] of Object.entries(VOICE_MODELS)) pick.add(new Option(`${m.label} · ${m.note}`, id));
-    if (!VOICE_MODELS[modelId]) pick.add(new Option(model.label || model.id, modelId));
-    pick.value = modelId;
-    pick.onchange = () => chooseModel(pick.value);
+    panel.querySelector('.nv-load-later').onclick = () => { els.load.hidden = true; };
+    panel.querySelector('.nv-model').textContent = `· ${model.label || model.id}`;
     els.state.textContent = loadNote || STATE_TEXT[session.state];
     els.hf.checked = handsFree;
     panel.querySelector('.nv-x:not(.nv-gear)').onclick = close;
@@ -306,7 +305,7 @@ export function mountVoiceAssistant({ root = document.body, host, more = null, m
     if (!panel) return;
     const need = !model.ready && !!model.load && !loading;
     els.load.hidden = !need;
-    if (need) els.loadText.textContent = `${model.label} runs on this device. The first load downloads ${model.downloadLabel || 'the model'} once; after that it stays cached in this browser.`;
+    if (need) els.loadText.textContent = `Turn on the voice assistant? ${model.label} runs on this device. It downloads ${model.downloadLabel || 'the model'} once, and then stays in this browser.`;
   }
   function loadModel() {
     if (model.ready || !model.load) return Promise.resolve();
@@ -328,19 +327,6 @@ export function mountVoiceAssistant({ root = document.body, host, more = null, m
     showLoadCard();
     return loading;
   }
-  function chooseModel(id) {
-    if (!VOICE_MODELS[id] || id === modelId) return;
-    model.dispose?.();
-    modelId = id;
-    model = VOICE_MODELS[id].create();
-    loading = null; loadNote = '';
-    try { localStorage.setItem(MODEL_KEY, id); } catch {}
-    session.setModel(model);
-    if (panel) { panel.querySelector('.nv-model').value = id; els.log.textContent = ''; }
-    botBubble = null;
-    ensureLoaded();
-  }
-
   // ⚙ settings: the search provider and its key, and the page proxy. Typed by the person, kept in this browser.
   function wireSettings() {
     const box = panel.querySelector('.nv-set'), prov = box.querySelector('.nv-sp-provider'), key = box.querySelector('.nv-sp-key'),
@@ -395,7 +381,7 @@ export function mountVoiceAssistant({ root = document.body, host, more = null, m
 
   return {
     open, close, toggle: () => (panel ? close() : open()), get isOpen() { return !!panel; },
-    ask, listen, stopListening, stop, setHandsFree, setWebLookups, setConsent, consent, chooseModel, loadModel, get modelId() { return modelId; },
+    ask, listen, stopListening, stop, setHandsFree, setWebLookups, setConsent, consent, loadModel, get modelId() { return modelId; },
     get state() { return session.state; }, session, tools, timers,
   };
 }

@@ -1035,6 +1035,10 @@ body.is-mobile .nw-dock{display:none;}
 #footer-nav a{color:var(--muted);}
 #footer-nav a:hover{color:var(--brand); text-decoration:none;}
 #footer-nav .spacer{flex:1;}
+#footer-agent-tools{color:var(--muted);}
+/* Above the windows while the agent tools are open, because their body opens upward over the desktop. */
+#footer-nav:has(#footer-agent-tools details[open]){z-index:1500;}
+#footer-agent-tools summary:hover{color:var(--brand);}
 
 /* ── CLASSICS ── */
 .cl-mine{padding:10px; font-family:'SF Mono',Consolas,monospace;}
@@ -1478,6 +1482,7 @@ body.is-mobile .nw-dock{display:none;}
     <span class="spacer"></span>
     <a href="https://naklitechie.github.io/" target="_blank" rel="noopener">← More projects</a>
     <a href="https://github.com/NakliTechie/nakli-dev" target="_blank" rel="noopener">⌨ Source</a>
+    <span id="footer-agent-tools"></span>
   </footer>
 
   <div id="overlay-root"></div>
@@ -13405,14 +13410,13 @@ const stopListeningAssistant = () => voiceAssistant?.stopListening();
 const stopAssistant = () => voiceAssistant?.stop();
 const setAssistantHandsFree = async on => (await voiceAssistantReady()).setHandsFree(!!on);
 const assistantState = () => voiceAssistant ? { open:voiceAssistant.isOpen, state:voiceAssistant.state, model:voiceAssistant.modelId } : { open:false, state:'idle' };
-const chooseAssistantModel = async id => (await voiceAssistantReady()).chooseModel(id);
 const loadAssistantModel = async () => { await (await voiceAssistantReady()).loadModel(); };
 const setAssistantWebLookups = async on => (await voiceAssistantReady()).setWebLookups(!!on);
 const setAssistantPageProxy = async on => (await voiceAssistantReady()).setConsent('page-proxy', !!on);
 
 // The declared desktop command bus. Only the developer opt-in exposes invocation.
 const hostAgentReady = import('./sys/host/agent.mjs').then(({ attachHostAgent }) => attachHostAgent({
-  target:window, diagnosticsThresholds:LAUNCH_DIAGNOSTIC_THRESHOLDS,
+  target:window, diagnosticsThresholds:LAUNCH_DIAGNOSTIC_THRESHOLDS, container:document.getElementById('footer-agent-tools'),
   actions:{
     apps:() => APPS.map(({id,name,kind}) => ({id,name,kind})),
     themes:() => THEMES.map(({id,name}) => ({id,name})),
@@ -13430,7 +13434,7 @@ const hostAgentReady = import('./sys/host/agent.mjs').then(({ attachHostAgent })
     diagnostics:launchDiagnosticsSnapshot,
     fsRead, fsReadBinary, fsWrite, fsAppend, fsList, fsDelete, fsExists,
     openAssistant, closeAssistant, askAssistant, listenAssistant, stopListeningAssistant, stopAssistant,
-    setAssistantHandsFree, assistantState, chooseAssistantModel, loadAssistantModel, setAssistantWebLookups, setAssistantPageProxy,
+    setAssistantHandsFree, assistantState, loadAssistantModel, setAssistantWebLookups, setAssistantPageProxy,
   },
 }));
 hostAgentReady.catch(error => console.error('Desktop agent interface could not load', error));
