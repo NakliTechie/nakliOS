@@ -19,6 +19,9 @@ export const ENDPOINTS = Object.freeze({
   'opencode-bunny': Object.freeze({ base: 'https://opencode.ai/zen/v1', model: 'space-bunny-free', keyFrom: 'opencode:opencode' }),
   // DeepSeek V4.1 Flash, the app's configured fuel; the first calibration ran on it.
   'deepseek-flash': Object.freeze({ base: 'https://api.deepseek.com/v1', model: 'deepseek-flash', keyFrom: 'opencode:deepseek' }),
+  // Claude through the native Messages API (kind 'anthropic'; the bed's liveInferAnthropic). Key: the infra secrets file; never printed.
+  'claude-sonnet': Object.freeze({ kind: 'anthropic', base: 'https://api.anthropic.com', model: 'claude-sonnet-5-5', keyFrom: 'file:~/Code/infra/secrets/anthropic-api-key' }),
+  'claude-opus': Object.freeze({ kind: 'anthropic', base: 'https://api.anthropic.com', model: 'claude-opus-5-5', keyFrom: 'file:~/Code/infra/secrets/anthropic-api-key' }),
 });
 export const DEFAULT_ENDPOINT = 'openrouter-bunny';
 
@@ -44,6 +47,7 @@ export async function resolveEndpoint({ endpoint = null, base = null, model = nu
   const spec = keyFrom || (key ? null : preset?.keyFrom) || null;
   return {
     name: name || 'custom',
+    kind: preset?.kind || 'openai',
     base: base || preset?.base,
     model: model || preset?.model,
     key: spec ? await readKey(spec) : (key || process.env.BENCH_KEY || 'local'),

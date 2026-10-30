@@ -26,6 +26,11 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { systemMessage, gateNote, runToolset, driveRun, withHooks, withBedStubs, loadHooks, isSimpleAsk } from '../../sys/ai/run-assembly.mjs';
 import { bedKiln, LIMIT_MS } from './python.mjs';
+import { toAnthropicRequest, fromAnthropicMessage, replayKey } from '../../sys/ai/anthropic-protocol.mjs';
+import { runCodemode } from '../../sys/ai/codemode-runtime.mjs';
+import { codemodeCatalog, CODEMODE_TOOL_NAMES } from '../../sys/ai/codemode-record.mjs';
+import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 
 const decoder = new TextDecoder();
 
@@ -139,6 +144,70 @@ export function liveInfer({ base, model, key, timeoutMs = 180000, log = () => {}
   return infer;
 }
 
+// List prices in USD per million tokens, from the claude-api skill's cached table (2026-10-06; first-party API, prompts
+// up to 100K tokens). Cache writes are priced at 1.25× input (the 5-minute write rate), an ASSUMPTION not re-checked here.
+export const CLAUDE_PRICES = Object.freeze({
+  'claude-opus-5-5': { in: 4, out: 20, read: 0.2, write: 5 },
+  'claude-sonnet-5-5': { in: 2, out: 10, read: 0.2, write: 2.5 },
+  'claude-haiku-5-5': { in: 0.1, out: 0.5, read: 0.01, write: 0.125 },
+});
+
+// A spending ceiling shared by every run of one command. `add` is called with each call's cost; once the total
+// passes the ceiling, `exceeded()` is true, workers stop taking jobs, and any further call throws (its run is VOID).
+export function createBudget(ceilingUsd) {
+  const b = { ceilingUsd, spent: 0, calls: 0, tripped: false };
+  b.add = (usd) => { b.spent += usd; b.calls++; if (b.spent >= b.ceilingUsd) b.tripped = true; };
+  b.exceeded = () => b.tripped;
+  return b;
+}
+
+// One live call to the native Anthropic Messages API (POST /v1/messages), through the app's own protocol module
+// (sys/ai/anthropic-protocol.mjs) so the request carries the same `cache_control` and thinking-block replay the app sends.
+// No retry (a bench that retries measures the retry). No temperature/top_p (the API rejects them). Effort is set
+// explicitly, never left to a model default. Returns the OpenAI-shaped result liveInfer returns, plus cache counts and a
+// cost computed from CLAUDE_PRICES. A refusal makes the call fail, so the run is VOID, never a task failure.
+export function liveInferAnthropic({ base = 'https://api.anthropic.com', model, key, effort = 'medium', maxTokens = 16000, timeoutMs = 300000, budget = null, log = () => {}, label = '' }) {
+  const price = CLAUDE_PRICES[model];
+  if (!price) throw new Error(`no price for ${model}: add it to CLAUDE_PRICES before a paid run`);
+  const replay = new Map();
+  let n = 0;
+  const infer = async ({ messages, tools }) => {
+    const i = ++n;
+    if (budget?.exceeded()) { infer.failures++; throw new Error('spending ceiling reached'); }
+    const body = { model, ...toAnthropicRequest({ messages, maxTokens, tools, toolChoice: 'auto', replay }), output_config: { effort } };
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), timeoutMs);
+    const t0 = Date.now();
+    let res, json;
+    try {
+      res = await fetch(`${base}/v1/messages`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify(body), signal: ac.signal,
+      });
+      json = await res.json().catch(() => null);
+    } catch (err) {
+      clearTimeout(timer); infer.failures++;
+      log(`${label} call ${i} FAILED after ${Math.round((Date.now() - t0) / 1000)}s: ${err.name === 'AbortError' ? `timeout >${timeoutMs / 1000}s` : err.message}`);
+      throw err;
+    }
+    clearTimeout(timer);
+    if (!res.ok) { infer.failures++; log(`${label} call ${i} http ${res.status}`); throw new Error(`http ${res.status}: ${String(json?.error?.message || '').slice(0, 160)}`); }
+    const m = fromAnthropicMessage(json);
+    if (m.refusal) { infer.failures++; log(`${label} call ${i} refusal ${m.refusal}`); throw new Error(`refusal: ${m.refusal}`); }
+    replay.set(replayKey({ content: m.text, toolCalls: m.toolCalls }), json.content);
+    const u = json.usage || {};
+    const read = u.cache_read_input_tokens || 0, write = u.cache_creation_input_tokens || 0, fresh = u.input_tokens || 0, out = u.output_tokens || 0;
+    const usd = (fresh * price.in + read * price.read + write * price.write + out * price.out) / 1e6;
+    infer.cost += usd; infer.costSeen = true; infer.cacheRead += read; infer.cacheWrite += write; infer.freshInput += fresh; infer.output += out;
+    budget?.add(usd);
+    log(`${label} call ${i}: ${Math.round((Date.now() - t0) / 1000)}s, in ${fresh}+${read}r+${write}w out ${out}, ${m.toolCalls.length} tool call(s), $${usd.toFixed(4)}`);
+    return { content: m.text, toolCalls: m.toolCalls, finishReason: m.finishReason, model: json.model || model, usage: m.usage };
+  };
+  infer.failures = 0; infer.cost = 0; infer.costSeen = false; infer.cacheRead = 0; infer.cacheWrite = 0; infer.freshInput = 0; infer.output = 0;
+  return infer;
+}
+
 // A scripted model: one reply per step. A step is `{ tool, args }`, `{ calls: [{tool, args}, …] }`
 // or `{ say: 'text' }` (a no-tool reply). Past the script it says nothing, which ends the loop.
 export function scriptedInfer(steps) {
@@ -170,9 +239,44 @@ function readOut(rec) {
   return { answer, usage: { calls, priced, input, output }, toolNames };
 }
 
+// Script mode (the app's `codemode` tool, opt-in per task in Anvil) in the node bed. The app runs the guest in a browser
+// Worker; here a node worker_threads Worker runs the same module (sys/ai/codemode-worker.mjs) behind a small shim: it gives
+// the module `self`, `postMessage` and `onmessage`, and a `fetch` that reads file: URLs (the guest loads its pinned
+// QuickJS WASM that way and node's fetch refuses file: URLs). Nested tool calls run through the bed's own executor, one at a
+// time, and are counted in `stats.nested`. The guest store is not carried between scripts (the app persists it on the run
+// record; the bed does not), so a script cannot load() a value an earlier script stored.
+function nodeWorkerFactory(url) {
+  const boot = `import { parentPort } from 'node:worker_threads'; import { readFile } from 'node:fs/promises'; import { fileURLToPath } from 'node:url';
+const realFetch = globalThis.fetch;
+globalThis.fetch = async (u, o) => { const s = String(u); if (s.startsWith('file:')) { const b = await readFile(fileURLToPath(s)); return new Response(b, { headers: { 'content-type': s.endsWith('.wasm') ? 'application/wasm' : 'application/octet-stream' } }); } return realFetch(u, o); };
+globalThis.self = globalThis; globalThis.postMessage = (m) => parentPort.postMessage(m);
+parentPort.on('message', (data) => { if (typeof globalThis.onmessage === 'function') globalThis.onmessage({ data }); });
+await import(${JSON.stringify(String(url))});`;
+  const w = new Worker(new URL('data:text/javascript,' + encodeURIComponent(boot)));
+  return {
+    postMessage: (m) => w.postMessage(m), terminate: () => w.terminate(),
+    set onmessage(cb) { w.on('message', (data) => cb({ data })); },
+    set onerror(cb) { w.on('error', (e) => cb({ message: e.message, preventDefault() {} })); },
+  };
+}
+
+export function withScript(executeTool, { allowed, stats }) {
+  let queue = Promise.resolve();
+  return async (name, args, call) => {
+    if (name !== 'codemode') return executeTool(name, args, call);
+    stats.scripts++;
+    const outcome = await runCodemode({
+      code: args?.code, tools: allowed, store: {}, deadlineMs: 10000, workerFactory: nodeWorkerFactory,
+      execute: (n, a) => { stats.nested++; const next = queue.then(() => executeTool(n, a, { id: `${call?.id || 'script'}:${stats.nested}` })); queue = next.catch(() => {}); return next; },
+    });
+    if (!outcome.ok) { stats.failed++; return 'Error: codemode ' + outcome.error + '\n' + outcome.output + '\nUnsettled nested calls: ' + outcome.pending.join(','); }
+    return 'Codemode completed\n' + outcome.output + (outcome.pending.length ? '\nCancelled unawaited calls: ' + outcome.pending.join(',') : '');
+  };
+}
+
 // Run ONE task once. `infer` is the model; `stamp` names it on run.started. Returns the grade, the
 // record's metrics, token usage, and the record itself (exported) for the optimizer to read later.
-export async function runTask(task, { infer, stamp = null, sysPrior = undefined }) {
+export async function runTask(task, { infer, stamp = null, sysPrior = undefined, script = false, scriptHint = '' }) {
   const ws = freshWorkspace(task.seed || {});
   await ws.ready;
   const seedSnap = snapshot(ws.backend);
@@ -184,15 +288,20 @@ export async function runTask(task, { infer, stamp = null, sysPrior = undefined 
     const g = await task.gate(gradeContext(ctx, { answer: '', metrics: null, stop: null }));
     return { ok: !!g.ok, exit: g.ok ? 0 : 1, stdout: '', stderr: g.ok ? '' : String(g.why || 'gate failed') };
   } : null;
-  const exec = withHooks(withBedStubs(makeToolExecutor({ shell: ws.shell, face: ws.face, mode: 'code', infer })), { hooks: () => ws.hooks, shellFor: () => ws.shell });
+  const baseTools = runToolset('code', { verify: gated, simple: isSimpleAsk(task.prompt) });
+  const scriptStats = { scripts: 0, nested: 0, failed: 0 };
+  let exec = withHooks(withBedStubs(makeToolExecutor({ shell: ws.shell, face: ws.face, mode: 'code', infer })), { hooks: () => ws.hooks, shellFor: () => ws.shell });
+  // Script mode needs the app's own gate: scripts are for code mode, never for a simple ask.
+  const scriptOn = !!script && !isSimpleAsk(task.prompt);
+  if (scriptOn) exec = withScript(exec, { allowed: baseTools.map((x) => x.function.name).filter((n) => CODEMODE_TOOL_NAMES.includes(n)), stats: scriptStats });
   const convo = [...(task.carry || []), { role: 'user', content: task.prompt }, ...(task.after || [])];
   const t0 = Date.now();
   let result = null, crash = null;
   try {
     result = await driveRun({
       mode: 'code', convo,
-      sysMsg: (extra) => systemMessage({ mode: 'code', ...(sysPrior !== undefined ? { proceduralPrior: sysPrior } : {}), extra }),
-      tools: runToolset('code', { verify: gated, simple: isSimpleAsk(task.prompt) }),
+      sysMsg: (extra) => systemMessage({ mode: 'code', ...(sysPrior !== undefined ? { proceduralPrior: sysPrior } : {}), extra: [extra, scriptOn && scriptHint].filter(Boolean).join('\n\n') }),
+      tools: scriptOn ? codemodeCatalog(baseTools, { enabled: true, mode: 'code' }) : baseTools,
       infer: rec.wrapInfer(infer), executeTool: exec, rec, verify, onEvent: rec.onEvent,
       gateNote: gated ? gateNote('bench gate: ' + task.id) : '', model: () => stamp,
     });
@@ -206,7 +315,8 @@ export async function runTask(task, { infer, stamp = null, sysPrior = undefined 
   return {
     id: task.id, pass: !!g.ok, why: g.ok ? '' : String(g.why || ''), void: isVoid, crash,
     stop: result?.stop ?? 'crash', steps: metrics.steps, toolCalls: metrics.toolCalls, label: metrics.label,
-    usage: out.usage, costReported: infer.costSeen ? infer.cost : null, tools: out.toolNames, answer: out.answer.slice(0, 2000), wallMs,
+    script: script ? { on: scriptOn, hint: !!(scriptOn && scriptHint), ...scriptStats } : null,
+    usage: out.usage, costReported: infer.costSeen ? infer.cost : null, cache: infer.cacheRead !== undefined ? { read: infer.cacheRead, write: infer.cacheWrite, fresh: infer.freshInput, output: infer.output } : null, tools: out.toolNames, answer: out.answer.slice(0, 2000), wallMs,
     python: ws.kiln ? { ...ws.kiln.stats } : null, // what python cost this run; null in a bed without it
     changed: changedPaths(seedSnap, snapshot(ws.backend)),
     record: rec.export(),
