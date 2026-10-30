@@ -41,6 +41,16 @@ export function toTemplateMessages(messages) {
   });
 }
 
+// Whether the decoder (the largest file) is already in the engine's cache, from any source URL.
+export async function isCached({ cacheStorage = globalThis.caches } = {}) {
+  try {
+    if (!cacheStorage) return false;
+    if (!(await cacheStorage.keys()).includes('diskformer-models')) return false;
+    const keys = await (await cacheStorage.open('diskformer-models')).keys();
+    return keys.some((r) => /LFM3-Omni-2B|omni-2b/i.test(r.url) && r.url.endsWith('decoder_q4f16.onnx_data'));
+  } catch { return false; }
+}
+
 export function createLfm3OmniModel({ url = ANYFORMER_URL, importer = (u) => import(u), maxNewTokens = 384 } = {}) {
   let session = null, loading = null;
   const model = {
@@ -48,6 +58,8 @@ export function createLfm3OmniModel({ url = ANYFORMER_URL, importer = (u) => imp
     label: 'LFM3-Omni 2B',
     ready: false,
     audioOut: false,
+    downloadLabel: `${(DOWNLOAD_BYTES / 1e9).toFixed(1)} GB`,
+    isCached,
     load({ onProgress, signal } = {}) {
       loading ||= (async () => {
         const af = await importer(url);

@@ -48,7 +48,8 @@ export const HOST_COMMANDS = Object.freeze([
   ['assistant.stop','Stop the assistant reply and its audio','stopAssistant','ui:write',{},[]],
   ['assistant.handsFree','Turn hands-free listening on or off','setAssistantHandsFree','ui:write',{on:{type:'boolean'}},['on']],
   ['assistant.state','Read whether the assistant is open and its state','assistantState','ui:read',{},[]],
-  ['assistant.model','Choose the assistant model (the first LFM3-Omni load downloads 2.1 GB)','chooseAssistantModel','ui:write',{id:{enum:['lfm3-omni-2b','stub']}},['id']],
+  ['assistant.model','Choose the assistant model; a cached model loads, an uncached one waits for assistant.loadModel','chooseAssistantModel','ui:write',{id:{enum:['lfm3-omni-2b','stub']}},['id']],
+  ['assistant.loadModel','Load the chosen model (the first LFM3-Omni load downloads 2.1 GB)','loadAssistantModel','ui:write',{},[],true],
 ].map(row => Object.freeze(row)));
 
 const PERSON_ONLY = ['credentials.configure','storage.connect','storage.disconnect','apps.install','apps.uninstall','review.commit','review.discard','ai.select'];

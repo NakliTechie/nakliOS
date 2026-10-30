@@ -18,21 +18,23 @@ export function rms(frame) {
 
 // Energy detector with an adaptive noise floor. Speech starts after minSpeechMs above the threshold;
 // the turn ends after endSilenceMs below it. push(frame) returns 'start', 'end' or null.
-export function createVad({ sampleRate = INPUT_SAMPLE_RATE, threshold = 0.015, ratio = 3, minSpeechMs = 120, endSilenceMs = 800 } = {}) {
+export function createVad({ sampleRate = INPUT_SAMPLE_RATE, threshold = 0.02, ratio = 4, minSpeechMs = 200, endSilenceMs = 800 } = {}) {
   let floor = 0.003, speaking = false, above = 0, below = 0;
   return {
+    // Loud milliseconds since the last 'start', so a caller can drop a turn that was mostly noise.
+    voicedMs: 0,
     get speaking() { return speaking; },
     push(frame) {
       const level = rms(frame);
       const ms = (frame.length / sampleRate) * 1000;
       const loud = level > Math.max(threshold, floor * ratio);
       if (!speaking && !loud) floor = floor * 0.95 + level * 0.05;
-      if (loud) { above += ms; below = 0; } else { below += ms; above = 0; }
-      if (!speaking && above >= minSpeechMs) { speaking = true; return 'start'; }
+      if (loud) { above += ms; below = 0; if (speaking) this.voicedMs += ms; } else { below += ms; above = 0; }
+      if (!speaking && above >= minSpeechMs) { speaking = true; this.voicedMs = above; return 'start'; }
       if (speaking && below >= endSilenceMs) { speaking = false; return 'end'; }
       return null;
     },
-    reset() { speaking = false; above = 0; below = 0; },
+    reset() { speaking = false; above = 0; below = 0; this.voicedMs = 0; },
   };
 }
 
@@ -128,6 +130,8 @@ export function createSpeechFallback({ synth = globalThis.speechSynthesis, Utter
   }
   return {
     get available() { return !!(synth && Utterance && pickVoice()); },
+    // True while a sentence is queued or speaking, so the mic can ignore the assistant's own voice.
+    get busy() { return pending > 0 || !!synth?.speaking; },
     push(delta) {
       buffer += delta;
       let spoke = false, m;
