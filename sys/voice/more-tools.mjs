@@ -166,6 +166,8 @@ export function moreTools({ memory, calendar, fetchText, search, python, skills,
     {
       name: 'web_search',
       description: 'Search the web for current information, such as news or facts you do not know.',
+      // Offered only once the person has set a provider in the panel's settings, as in LocalMind.
+      available: () => { const cfg = search(); return !!(webOn() && cfg && PROVIDERS[cfg.provider] && (cfg.key || cfg.url)); },
       parameters: { type: 'object', properties: { query: { type: 'string', description: 'Search words, 3 to 8' } }, required: ['query'] },
       async run({ query }) {
         needWeb();

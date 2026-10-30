@@ -27,10 +27,12 @@ export function createToolRegistry(tools = []) {
       return reg;
     },
     has: (name) => byName.has(name),
-    list: () => [...byName.values()].map(({ name, description, parameters }) => ({ name, description, parameters })),
+    // A tool with available() → false (web search with no provider set) is not offered, so the model never calls it.
+    list: () => [...byName.values()].filter((t) => !t.available || t.available())
+      .map(({ name, description, parameters }) => ({ name, description, parameters })),
     async run(name, args = {}) {
       const tool = byName.get(name);
-      if (!tool) return { ok: false, error: `unknown tool ${name}` };
+      if (!tool || (tool.available && !tool.available())) return { ok: false, error: `unknown tool ${name}` };
       const bad = checkArgs(tool.parameters, args);
       if (bad) return { ok: false, error: bad };
       try { return { ok: true, result: await tool.run(args) }; }

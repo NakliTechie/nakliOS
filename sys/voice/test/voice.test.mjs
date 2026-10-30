@@ -456,7 +456,7 @@ await test('calendar events land in Calendar\'s own data shape', async () => {
 await test('web search needs a provider; page, Python and skill tools reach their stand-ins', async () => {
   const st = standIns(); let on = true;
   const reg = createToolRegistry(moreTools({ ...st.deps, webOn: () => on }));
-  assert.match((await reg.run('web_search', { query: 'news today' })).error, /no search provider/);
+  assert.equal((await reg.run('web_search', { query: 'news today' })).error, 'unknown tool web_search');   // hidden until a provider is set
   const realFetch = globalThis.fetch;
   globalThis.fetch = async (url) => ({ ok: true, json: async () => ({ results: [{ title: 'A', url: 'https://a', content: 'snip' }] }) });
   try {
@@ -531,6 +531,26 @@ await test('answer_directly is never run: picked alone, the turn goes straight t
   assert.deepEqual(s.history.map((x) => x.role), ['user', 'assistant']);
   assert.equal(fake.seen.calls[1].opts.speech, true);
   assert.equal(fake.seen.calls[1].opts.tools, undefined);
+});
+
+await test('a repeated tool call ends the tool rounds, and web search is hidden until a provider is set', async () => {
+  const st = standIns();
+  const reg = createToolRegistry(moreTools({ ...st.deps, search: () => null }));
+  assert.equal(reg.list().some((t) => t.name === 'web_search'), false);
+  assert.equal((await reg.run('web_search', { query: 'x' })).error, 'unknown tool web_search');
+  const withKey = createToolRegistry(moreTools({ ...st.deps, search: () => ({ provider: 'brave', key: 'k' }) }));
+  assert.equal(withKey.list().some((t) => t.name === 'web_search'), true);
+  const offered = []; let n = 0;
+  const loopy = { id: 'loopy', async generate({ tools }) { offered.push(tools.length); n++;
+    return tools.length && n <= 3 ? { text: '', toolCalls: [{ name: 'list_memories', arguments: {} }], stopReason: 'tool_calls' } : { text: 'I do not know.', toolCalls: [], stopReason: 'stop' }; } };
+  const ran = [];
+  const s = createVoiceSession({ model: loopy, tools: reg, onTool: (e) => ran.push(e.name) });
+  const out = await s.sendText('fastest way from Rome to Mumbai?');
+  assert.deepEqual(ran, ['list_memories']);           // run once, not again
+  assert.equal(offered[2], 0);                        // after the repeat, no tools are offered
+  assert.equal(out.stopReason, 'stop');
+  assert.equal(s.history.at(-1).content[0].text, 'I do not know.');
+  assert.deepEqual(s.history.map((m) => m.role), ['user', 'assistant', 'tool', 'assistant', 'assistant']);
 });
 
 console.log(`voice + lfm3 adapter: ${pass} passed`);

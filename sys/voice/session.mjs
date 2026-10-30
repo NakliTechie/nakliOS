@@ -6,14 +6,15 @@
 
 export const STATES = Object.freeze(['idle', 'listening', 'thinking', 'speaking']);
 
-// Firm on tools, because in speech mode LFM3-Omni announced a weather lookup and then answered without calling the
-// tool under a gentler prompt (headless check, 2026-10-30); with this one it spoke a short preface and called it.
-const SYSTEM_PROMPT = 'You are the NakliOS voice assistant. Answer briefly, in plain spoken sentences. You have tools, listed above. '
-  + 'When a question needs live information (weather, time, battery, network, a web page) or an action (timer, '
-  + 'opening an app, a calculation, a calendar event), call the tool first and answer only after its result arrives. '
-  + 'Answer greetings, chat and general knowledge yourself; look a topic up only when the person asks you to. '
-  + 'When the person tells you something to remember, call store_memory; when they ask about something they told you before, '
-  + 'call search_memory, because this conversation is forgotten later. Never say you lack a tool that is listed.';
+// A restraining rule, LocalMind's: tools are decided in a text pass now (lfm3-omni.mjs), where the model calls something
+// for nearly every request, so the prompt says when not to. The earlier pushing rule ("call the tool first") was for
+// speech mode, which no longer decides tools.
+const SYSTEM_PROMPT = 'You are the NakliOS voice assistant. Answer briefly, in plain spoken sentences. '
+  + 'Call a tool only when the question needs current or live information (weather, time, battery, network, a web page), '
+  + 'an action (a timer, opening an app, a calendar event, a calculation), or something stored about this person. '
+  + 'When the person tells you something to remember, call store_memory. '
+  + 'For greetings, jokes, opinions, stories and general knowledge, answer directly and call no tool. '
+  + 'If you are not sure of a fact and no tool gave it to you, say you do not know rather than guess.';
 
 export function createVoiceSession({
   model, tools, player = null, speech = null, systemPrompt = SYSTEM_PROMPT, context = async () => '',
@@ -52,10 +53,13 @@ export function createVoiceSession({
     const system = extra ? `${systemPrompt}\n\n${extra}` : systemPrompt;
     const voiceText = model.audioOut === false && speech ? speech : null;
     try {
+      const seenCalls = new Set();
+      const callKey = (c) => `${c.name}:${JSON.stringify(c.arguments || {})}`;
+      let repeated = false;
       for (let round = 0; round <= maxToolRounds; round++) {
         const out = await model.generate({
           messages: [{ role: 'system', content: system }, ...history],
-          tools: round < maxToolRounds ? tools.list() : [],
+          tools: round < maxToolRounds && !repeated ? tools.list() : [],
           onText: (delta) => {
             if (signal.aborted) return;
             reply += delta; onText(delta);
@@ -66,9 +70,15 @@ export function createVoiceSession({
         });
         if (signal.aborted || out.stopReason === 'aborted') return { stopReason: 'aborted', text: reply };
         const toolCalls = out.toolCalls || [];
-        history.push({ role: 'assistant', content: [{ type: 'text', text: out.text || '' }], ...(toolCalls.length ? { toolCalls } : {}) });
+        // A call the model already made this turn gets no new result, so the next round answers with no tools offered.
+        // Seen live: web_search with the same query three times, each failing, then an invented answer.
+        const fresh = toolCalls.filter((c) => !seenCalls.has(callKey(c)));
+        if (fresh.length < toolCalls.length) repeated = true;
+        for (const call of fresh) seenCalls.add(callKey(call));
+        history.push({ role: 'assistant', content: [{ type: 'text', text: out.text || '' }], ...(fresh.length ? { toolCalls: fresh } : {}) });
         if (!toolCalls.length) break;
-        for (const call of toolCalls) {
+        if (!fresh.length) continue;
+        for (const call of fresh) {
           const result = await tools.run(call.name, call.arguments);
           onTool({ name: call.name, arguments: call.arguments, result });
           history.push({ role: 'tool', name: call.name, content: JSON.stringify(result) });

@@ -129,7 +129,7 @@ export function lookupTools({ webOn = () => true, fetchJsonFn = fetchJson } = {}
     },
     {
       name: 'wikipedia_lookup',
-      description: 'Look up a person, place, organisation or event on Wikipedia and return a short summary. Answer common knowledge directly.',
+      description: 'Look up a topic on Wikipedia and return a short summary. Use when the person asks to look something up or wants details about a specific person, place, organisation or event; answer common knowledge directly.',
       parameters: { type: 'object', properties: { query: { type: 'string', description: 'Topic to look up, e.g. "Mumbai"' } }, required: ['query'] },
       run: web(wikipediaLookup),
     },
