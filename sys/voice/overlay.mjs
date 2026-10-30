@@ -7,6 +7,7 @@
 // host command (assistant.* in sys/host/agent.mjs), so the agent face and the panel share one list.
 import { VOICE_MODELS, tone } from './adapter.mjs';
 import { createToolRegistry, createTimers, builtinTools } from './tools.mjs';
+import { lookupTools } from './web-tools.mjs';
 import { createVoiceSession } from './session.mjs';
 import { openMic, createVad, createTurnRecorder, createPlayer, createSpeechFallback } from './audio.mjs';
 
@@ -70,6 +71,11 @@ const savedModelId = () => { try { const id = localStorage.getItem(MODEL_KEY); r
 const ECHO_TAIL_MS = 600;
 // A hands-free turn needs this much voiced sound, so a fan or a door does not become a question.
 const MIN_VOICED_MS = 500;
+// Sound kept from before a hold-to-talk press and recorded after its release, so the first and last words survive.
+const PREROLL_FRAMES = 38;   // about 300 ms of 8 ms frames
+const RELEASE_TAIL_MS = 250;
+const WEB_KEY = 'nakli.voice.web';
+const webOn = () => { try { return localStorage.getItem(WEB_KEY) !== 'off'; } catch { return true; } };
 
 export function mountVoiceAssistant({ root = document.body, host, model: injected = null } = {}) {
   let modelId = injected ? injected.id : savedModelId();
@@ -89,7 +95,7 @@ export function mountVoiceAssistant({ root = document.body, host, model: injecte
   const player = createPlayer({ onLevel: (l) => { level = l; } });
   const speech = createSpeechFallback();
   const timers = createTimers({ onDone: ({ seconds, label }) => announce(`Timer done${label ? `: ${label}` : ''} (${seconds} s).`) });
-  const tools = createToolRegistry(builtinTools({ host, timers }));
+  const tools = createToolRegistry([...builtinTools({ host, timers }), ...lookupTools({ webOn })]);
   const session = createVoiceSession({
     model, tools, player, speech,
     onState: (s) => { if (panel) { panel.dataset.state = s; els.state.textContent = STATE_TEXT[s]; els.stop.hidden = !(s === 'thinking' || s === 'speaking'); } },
@@ -132,37 +138,39 @@ export function mountVoiceAssistant({ root = document.body, host, model: injecte
     return micOpening;
   }
   function onFrame(frame) {
-    if (pushing) { if (recorder.push(frame)) endTurn(); return; }
+    if (pushing || (recorder && !handsFree)) { if (recorder.push(frame)) endTurn(); return; }
+    if (!recorder) { preroll.push(frame); if (preroll.length > PREROLL_FRAMES) preroll.shift(); }
     if (!handsFree) return;
     const now = performance.now();
     if (player.playing || speech.busy) quietUntil = now + ECHO_TAIL_MS;
     if (now < quietUntil) { if (recorder) { recorder = null; session.stopListening(); } vad.reset(); preroll = []; return; }
     const ev = vad.push(frame);
-    // Keep about 250 ms before the detector fires, so the first syllable is not cut.
-    if (!recorder) { preroll.push(frame); if (preroll.length > 32) preroll.shift(); }
     if (ev === 'start') { session.startListening(); recorder = createTurnRecorder(); preroll.splice(0).forEach((f) => recorder.push(f)); return; }
     if (session.state === 'listening' && recorder && recorder.push(frame)) { vad.reset(); endTurn(); }
     else if (ev === 'end' && recorder) endTurn();
   }
   async function closeMic() { const m = mic; mic = null; await m?.close(); }
 
+  // The mic stays open while the panel is, after its first use, so a press starts recording at once and keeps the
+  // moment before it. The first press waits for the mic, and "Listening…" shows only once it records.
   async function listen() {
     open();
     player.unlock();
-    session.startListening();
-    recorder = createTurnRecorder();
     pushing = true;
     try { await ensureMic(); }
-    catch (e) { pushing = false; session.stopListening(); addMsg('err', `Microphone: ${e.message || e}`); }
+    catch (e) { pushing = false; addMsg('err', `Microphone: ${e.message || e}`); return; }
+    if (!pushing) return;   // released before the mic opened
+    session.startListening();
+    recorder = createTurnRecorder();
+    recorder.byPress = true;   // a pressed turn is meant, so the noise filter does not apply
+    preroll.splice(0).forEach((f) => recorder.push(f));
   }
   function endTurn() {
-    const wasPushing = pushing;
     pushing = false;
     const rec = recorder; recorder = null;
-    if (!handsFree) closeMic();
     const voiced = vad?.voicedMs ?? Infinity;
     if (vad) vad.voicedMs = 0;
-    if (!rec || rec.seconds < 0.25 || (!wasPushing && voiced < MIN_VOICED_MS)) { session.stopListening(); return; }
+    if (!rec || rec.seconds < 0.25 || (!rec.byPress && voiced < MIN_VOICED_MS)) { session.stopListening(); return; }
     if (!readyForTurn()) { session.stopListening(); return; }
     const secs = rec.seconds;
     const audio = rec.take();
@@ -170,7 +178,13 @@ export function mountVoiceAssistant({ root = document.body, host, model: injecte
     botBubble = null;
     session.sendAudio(audio);
   }
-  const stopListening = () => { if (pushing || recorder) endTurn(); };
+  // Release: keep recording a moment longer, then send.
+  const stopListening = () => {
+    if (!pushing) { if (recorder) endTurn(); return; }
+    pushing = false;
+    if (recorder) setTimeout(() => { if (recorder && !pushing) endTurn(); }, RELEASE_TAIL_MS);
+    else session.stopListening();
+  };
 
   async function setHandsFree(on) {
     handsFree = on;
@@ -179,7 +193,7 @@ export function mountVoiceAssistant({ root = document.body, host, model: injecte
       vad = createVad();
       player.unlock();
       try { await ensureMic(); } catch (e) { handsFree = false; if (els.hf) els.hf.checked = false; addMsg('err', `Microphone: ${e.message || e}`); }
-    } else { recorder = null; session.stopListening(); if (!pushing) closeMic(); }
+    } else { recorder = null; session.stopListening(); }
   }
 
   function ask(text) {
@@ -217,7 +231,9 @@ export function mountVoiceAssistant({ root = document.body, host, model: injecte
       <div class="nv-log" aria-live="polite"></div>
       <form class="nv-form"><input type="text" placeholder="Type a message…" aria-label="Message" autocomplete="off">
         <button class="nv-btn" type="submit">Send</button><button class="nv-btn nv-stop" type="button" hidden>Stop</button></form>
-      <div class="nv-foot"><label><input type="checkbox" class="nv-hf"> Hands-free</label><span class="nv-sp"></span><span>⌘. to toggle</span></div>`;
+      <div class="nv-foot"><label><input type="checkbox" class="nv-hf"> Hands-free</label>
+        <label title="Weather and Wikipedia send only the place or topic to open-meteo.com or wikipedia.org"><input type="checkbox" class="nv-web"> Web lookups</label>
+        <span class="nv-sp"></span><span>⌘. to toggle</span></div>`;
     root.appendChild(panel);
     els = {
       orb: panel.querySelector('.nv-orb'), state: panel.querySelector('.nv-state'), log: panel.querySelector('.nv-log'),
@@ -235,6 +251,9 @@ export function mountVoiceAssistant({ root = document.body, host, model: injecte
     panel.querySelector('.nv-x').onclick = close;
     els.stop.onclick = stop;
     els.hf.onchange = () => setHandsFree(els.hf.checked);
+    const web = panel.querySelector('.nv-web');
+    web.checked = webOn();
+    web.onchange = () => setWebLookups(web.checked);
     panel.querySelector('.nv-form').onsubmit = (e) => { e.preventDefault(); const v = els.input.value; els.input.value = ''; ask(v); };
     els.orb.addEventListener('pointerdown', (e) => {
       e.preventDefault(); els.orb.setPointerCapture?.(e.pointerId);
@@ -301,10 +320,17 @@ export function mountVoiceAssistant({ root = document.body, host, model: injecte
     ensureLoaded();
   }
 
+  function setWebLookups(on) {
+    try { localStorage.setItem(WEB_KEY, on ? 'on' : 'off'); } catch {}
+    const box = panel?.querySelector('.nv-web');
+    if (box) box.checked = !!on;
+  }
+
   function close() {
     if (!panel) return;
     stop();
     setHandsFree(false);
+    closeMic();
     cancelAnimationFrame(raf);
     panel.remove();
     panel = null; els = {}; botBubble = null;
@@ -312,7 +338,7 @@ export function mountVoiceAssistant({ root = document.body, host, model: injecte
 
   return {
     open, close, toggle: () => (panel ? close() : open()), get isOpen() { return !!panel; },
-    ask, listen, stopListening, stop, setHandsFree, chooseModel, loadModel, get modelId() { return modelId; },
+    ask, listen, stopListening, stop, setHandsFree, setWebLookups, chooseModel, loadModel, get modelId() { return modelId; },
     get state() { return session.state; }, session, tools, timers,
   };
 }

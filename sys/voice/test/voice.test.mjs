@@ -299,4 +299,49 @@ await test('isCached finds the decoder from Hugging Face and nothing else', asyn
   assert.equal(await isCached({ cacheStorage: undefined }), false);
 });
 
+// ── lookup tools (canned web replies) ──
+const { lookupTools, calculate } = await import('../web-tools.mjs');
+await test('calculate handles arithmetic, percentages and powers without eval', () => {
+  assert.equal(calculate('15% of 2400'), 360);
+  assert.equal(calculate('(3 + 4) ^ 2'), 49);
+  assert.equal(calculate('2 ^ 3 ^ 2'), 512);
+  assert.equal(calculate('-2 ^ 2'), -4);
+  assert.equal(calculate('1,250 × 4'), 5000);
+  assert.equal(calculate('sqrt(16) + pi - pi'), 4);
+  assert.throws(() => calculate('alert(1)'), /cannot read|needs brackets/);
+  assert.throws(() => calculate('1 / 0'), /finite/);
+  assert.throws(() => calculate('(1 + 2'), /not closed/);
+});
+
+await test('weather and Wikipedia shape canned replies, and the web switch stops them', async () => {
+  const urls = [];
+  const canned = async (url) => {
+    urls.push(url);
+    if (url.includes('geocoding-api')) return { results: [
+      { name: 'Mumbai', admin1: 'Maharashtra', country: 'India', latitude: 19.07, longitude: 72.88, population: 12691836 },
+      { name: 'Mumbai', admin1: 'Somewhere', country: 'Elsewhere', latitude: 1, longitude: 1, population: 10 } ] };
+    if (url.includes('api.open-meteo.com')) return { current: { weather_code: 2, temperature_2m: 31.2, apparent_temperature: 36, relative_humidity_2m: 70, wind_speed_10m: 12 },
+      daily: { time: ['2026-10-30'], weather_code: [61], temperature_2m_max: [33], temperature_2m_min: [26], precipitation_probability_max: [40] } };
+    if (url.includes('wikipedia.org')) return { query: { pages: [{ title: 'Mumbai', fullurl: 'https://en.wikipedia.org/wiki/Mumbai', extract: 'Mumbai is the capital of Maharashtra.\n\nIt is a port.' }] } };
+    throw new Error('unexpected ' + url);
+  };
+  let on = true;
+  const reg = createToolRegistry(lookupTools({ webOn: () => on, fetchJsonFn: canned }));
+  const w = await reg.run('get_weather', { location: 'Bombay' });
+  assert.equal(w.ok, true);
+  assert.match(urls[0], /name=Mumbai/);   // the old name maps to the current one
+  assert.equal(w.result.location, 'Mumbai, Maharashtra, India');
+  assert.equal(w.result.current.conditions, 'partly cloudy');
+  assert.equal(w.result.daily[0].conditions, 'light rain');
+  const k = await reg.run('wikipedia_lookup', { query: 'Mumbai' });
+  assert.equal(k.result.title, 'Mumbai');
+  assert.equal(k.result.summary, 'Mumbai is the capital of Maharashtra. It is a port.');
+  on = false;
+  const off = await reg.run('get_weather', { location: 'Pune' });
+  assert.equal(off.ok, false);
+  assert.match(off.error, /switched off/);
+  assert.equal(urls.length, 3);   // nothing was fetched while the switch was off
+  assert.deepEqual((await reg.run('calculate', { expression: '2+2' })).result, { result: 4 });
+});
+
 console.log(`voice + lfm3 adapter: ${pass} passed`);
