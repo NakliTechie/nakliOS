@@ -49,6 +49,7 @@ export const HOST_COMMANDS = Object.freeze([
   ['assistant.handsFree','Turn hands-free listening on or off','setAssistantHandsFree','ui:write',{on:{type:'boolean'}},['on']],
   ['assistant.state','Read whether the assistant is open and its state','assistantState','ui:read',{},[]],
   ['assistant.model','Choose the assistant model; a cached model loads, an uncached one waits for assistant.loadModel','chooseAssistantModel','ui:write',{id:{enum:['lfm3-omni-2b','stub']}},['id']],
+  ['assistant.webLookups','Allow or stop the weather and Wikipedia lookups (they send the place or topic to open-meteo.com or wikipedia.org)','setAssistantWebLookups','ui:write',{on:{type:'boolean'}},['on']],
   ['assistant.loadModel','Load the chosen model (the first LFM3-Omni load downloads 2.1 GB)','loadAssistantModel','ui:write',{},[],true],
 ].map(row => Object.freeze(row)));
 
