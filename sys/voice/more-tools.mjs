@@ -25,6 +25,14 @@ function rank(memories, query) {
     .filter((x) => x.score > 0).sort((a, b) => b.score - a.score).map((x) => x.m);
 }
 
+// The newest memories as a system-prompt paragraph, so the model answers "who is my dentist" without having to pick a
+// tool: on the real model it looked that up on Wikipedia instead of calling search_memory (headless check, 2026-10-30).
+export async function memoryContext(memory, { max = 30 } = {}) {
+  const list = await readMemories(memory);
+  if (!list.length) return '';
+  return 'What the person asked you to remember:\n' + list.slice(-max).map((m) => `- ${m.content}`).join('\n');
+}
+
 // ── calendar: the Calendar app's event shape (apps/calendar/index.html) ──
 const pad = (n) => String(n).padStart(2, '0');
 const localStamp = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;

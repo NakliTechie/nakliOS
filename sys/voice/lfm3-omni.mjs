@@ -9,8 +9,9 @@
 // With speech: false the panel speaks the text with an on-device system voice instead.
 import { parseLocalToolCalls } from '../ai/local-tool-calls.mjs';
 
-// anyformer 0.4.14 (speech out), the published npm version.
-export const ANYFORMER_URL = 'https://cdn.jsdelivr.net/npm/anyformer@0.4.14/index.js';
+// anyformer 0.4.15 (tag v0.4.15: stopping a reply aborts the engine and waits for it), pinned by commit until the
+// npm package is published.
+export const ANYFORMER_URL = 'https://cdn.jsdelivr.net/gh/NakliTechie/anyformer.js@67e8864670209d29adb7926555fc9a121c0649fd/index.js';
 export const DOWNLOAD_BYTES = 2.14e9;
 export const SPEECH_BYTES = 0.515e9;
 // The engine adds this system turn only when the messages have none, and the assistant always sends its own.
@@ -88,10 +89,19 @@ export function createLfm3OmniModel({ url = ANYFORMER_URL, importer = (u) => imp
       const before = lastReply;
       let release;
       lastReply = new Promise((r) => { release = r; });
-      try { await before; return await reply(opts); } finally { release(); }
+      try { await before; return await (speech && (opts.speech ?? true) && opts.tools?.length ? decideThenSpeak(opts) : reply(opts)); }
+      finally { release(); }
     },
     dispose() { session?.dispose?.(); session = null; loading = null; model.ready = false; },
   };
+  // In speech mode LFM3-Omni-2B called tools in 1 of 3 tries with 17 tools offered; in text mode it called one for 6 of 6
+  // requests in about 1.5 s each (headless checks, 2026-10-30). So a spoken turn with tools first decides in text, and
+  // speaks only the final answer, with no tools offered then.
+  async function decideThenSpeak(opts) {
+    const decision = await reply({ ...opts, speech: false, onText: undefined, onAudio: undefined });
+    if (decision.stopReason === 'aborted' || decision.toolCalls.length) return decision;
+    return reply({ ...opts, tools: [] });
+  }
   async function reply({ messages, tools = [], onText, onAudio, signal, speech: speak = speech } = {}) {
       if (!session) await model.load({ signal });
       // Stopped while it waited its turn: never reaches the engine.

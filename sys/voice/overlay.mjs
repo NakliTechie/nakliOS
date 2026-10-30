@@ -8,7 +8,7 @@
 import { VOICE_MODELS, tone } from './adapter.mjs';
 import { createToolRegistry, createTimers, builtinTools } from './tools.mjs';
 import { lookupTools } from './web-tools.mjs';
-import { moreTools, SEARCH_PROVIDERS } from './more-tools.mjs';
+import { moreTools, memoryContext, SEARCH_PROVIDERS } from './more-tools.mjs';
 import { createVoiceSession } from './session.mjs';
 import { openMic, createVad, createTurnRecorder, createPlayer, createSpeechFallback } from './audio.mjs';
 
@@ -110,6 +110,7 @@ export function mountVoiceAssistant({ root = document.body, host, more = null, m
     ...(more ? moreTools({ ...more, webOn, search: () => readJson(SEARCH_KEY) }) : [])]);
   const session = createVoiceSession({
     model, tools, player, speech,
+    context: () => (more?.memory ? memoryContext(more.memory) : ''),
     onState: (s) => { if (panel) { panel.dataset.state = s; els.state.textContent = STATE_TEXT[s]; els.stop.hidden = !(s === 'thinking' || s === 'speaking'); } },
     onText: (delta) => { botBubble ||= addMsg('bot', ''); botBubble.textContent += delta; scroll(); },
     onTool: ({ name, arguments: args, result }) => { addMsg('tool', `${name}(${JSON.stringify(args)}) → ${result.ok ? 'ok' : result.error}`); botBubble = null; },
