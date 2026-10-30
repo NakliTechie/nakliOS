@@ -13337,6 +13337,7 @@ const stopAssistant = () => voiceAssistant?.stop();
 const setAssistantHandsFree = async on => (await voiceAssistantReady()).setHandsFree(!!on);
 const assistantState = () => voiceAssistant ? { open:voiceAssistant.isOpen, state:voiceAssistant.state, model:voiceAssistant.modelId } : { open:false, state:'idle' };
 const chooseAssistantModel = async id => (await voiceAssistantReady()).chooseModel(id);
+const loadAssistantModel = async () => { await (await voiceAssistantReady()).loadModel(); };
 
 // The declared desktop command bus. Only the developer opt-in exposes invocation.
 const hostAgentReady = import('./sys/host/agent.mjs').then(({ attachHostAgent }) => attachHostAgent({
@@ -13358,7 +13359,7 @@ const hostAgentReady = import('./sys/host/agent.mjs').then(({ attachHostAgent })
     diagnostics:launchDiagnosticsSnapshot,
     fsRead, fsReadBinary, fsWrite, fsAppend, fsList, fsDelete, fsExists,
     openAssistant, closeAssistant, askAssistant, listenAssistant, stopListeningAssistant, stopAssistant,
-    setAssistantHandsFree, assistantState, chooseAssistantModel,
+    setAssistantHandsFree, assistantState, chooseAssistantModel, loadAssistantModel,
   },
 }));
 hostAgentReady.catch(error => console.error('Desktop agent interface could not load', error));

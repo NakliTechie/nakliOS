@@ -11,7 +11,8 @@ import { createVoiceSession } from './session.mjs';
 import { openMic, createVad, createTurnRecorder, createPlayer, createSpeechFallback } from './audio.mjs';
 
 const CSS = `
-.nv-panel{position:fixed; right:20px; bottom:20px; width:min(360px, calc(100vw - 32px)); z-index:1400;
+.nv-panel{position:fixed; right:20px; bottom:56px; width:min(360px, calc(100vw - 32px)); z-index:1400;
+  max-height:calc(100vh - 96px); box-sizing:border-box;
   background:#fbfaf7; color:#1f1d1a; border:1px solid #e4e0d8; border-radius:18px;
   box-shadow:0 18px 50px rgba(30,25,20,.18); font:14px/1.45 system-ui,-apple-system,sans-serif;
   display:flex; flex-direction:column; gap:10px; padding:14px 14px 12px;}
@@ -33,7 +34,11 @@ const CSS = `
 @keyframes nv-pulse{50%{filter:brightness(1.15); transform:scale(1.06)}}
 @media (prefers-reduced-motion: reduce){.nv-orb{transition:none; animation:none !important}}
 .nv-state{font-size:12px; color:#6b665e; min-height:18px}
-.nv-log{max-height:34vh; overflow:auto; display:flex; flex-direction:column; gap:6px}
+.nv-log{flex:0 1 auto; min-height:0; max-height:min(260px, 30vh); overflow:auto; display:flex; flex-direction:column; gap:6px}
+.nv-load{display:flex; flex-direction:column; gap:8px; padding:10px; border:1px solid #e4e0d8; border-radius:12px; background:#fff; font-size:13px}
+.nv-load[hidden]{display:none}
+.nv-load .nv-btn{align-self:flex-start; background:#5b7fe0; border-color:#5b7fe0; color:#fff}
+.nv-load .nv-btn:hover{background:#4a6dcc}
 .nv-msg{padding:7px 10px; border-radius:12px; white-space:pre-wrap; word-break:break-word}
 .nv-msg.user{align-self:flex-end; background:#e9eefc; max-width:85%}
 .nv-msg.bot{align-self:flex-start; background:#fff; border:1px solid #ebe7df; max-width:92%}
@@ -54,11 +59,17 @@ const STATE_TEXT = {
   idle: 'Hold the orb or Space to talk',
   listening: 'Listening…',
   thinking: 'Thinking…',
-  speaking: 'Speaking — talk to interrupt',
+  speaking: 'Speaking — press the orb or Stop to interrupt',
 };
 
 const MODEL_KEY = 'nakli.voice.model';
-const savedModelId = () => { try { const id = localStorage.getItem(MODEL_KEY); return VOICE_MODELS[id] ? id : 'stub'; } catch { return 'stub'; } };
+const DEFAULT_MODEL = 'lfm3-omni-2b';
+const savedModelId = () => { try { const id = localStorage.getItem(MODEL_KEY); return VOICE_MODELS[id] ? id : DEFAULT_MODEL; } catch { return DEFAULT_MODEL; } };
+// The mic ignores sound while the assistant speaks and this long after: system voices bypass the browser's
+// echo cancellation, so without it the assistant hears itself, interrupts itself and answers its own words.
+const ECHO_TAIL_MS = 600;
+// A hands-free turn needs this much voiced sound, so a fan or a door does not become a question.
+const MIN_VOICED_MS = 500;
 
 export function mountVoiceAssistant({ root = document.body, host, model: injected = null } = {}) {
   let modelId = injected ? injected.id : savedModelId();
@@ -72,14 +83,15 @@ export function mountVoiceAssistant({ root = document.body, host, model: injecte
   }
   let panel = null, els = {}, botBubble = null;
   let mic = null, micOpening = null, recorder = null, vad = null, preroll = [];
-  let handsFree = false, pushing = false;
+  let handsFree = false, pushing = false, quietUntil = 0;
   let level = 0, shown = 0, raf = 0;
 
   const player = createPlayer({ onLevel: (l) => { level = l; } });
+  const speech = createSpeechFallback();
   const timers = createTimers({ onDone: ({ seconds, label }) => announce(`Timer done${label ? `: ${label}` : ''} (${seconds} s).`) });
   const tools = createToolRegistry(builtinTools({ host, timers }));
   const session = createVoiceSession({
-    model, tools, player, speech: createSpeechFallback(),
+    model, tools, player, speech,
     onState: (s) => { if (panel) { panel.dataset.state = s; els.state.textContent = STATE_TEXT[s]; els.stop.hidden = !(s === 'thinking' || s === 'speaking'); } },
     onText: (delta) => { botBubble ||= addMsg('bot', ''); botBubble.textContent += delta; scroll(); },
     onTool: ({ name, arguments: args, result }) => { addMsg('tool', `${name}(${JSON.stringify(args)}) → ${result.ok ? 'ok' : result.error}`); botBubble = null; },
@@ -122,6 +134,9 @@ export function mountVoiceAssistant({ root = document.body, host, model: injecte
   function onFrame(frame) {
     if (pushing) { if (recorder.push(frame)) endTurn(); return; }
     if (!handsFree) return;
+    const now = performance.now();
+    if (player.playing || speech.busy) quietUntil = now + ECHO_TAIL_MS;
+    if (now < quietUntil) { if (recorder) { recorder = null; session.stopListening(); } vad.reset(); preroll = []; return; }
     const ev = vad.push(frame);
     // Keep about 250 ms before the detector fires, so the first syllable is not cut.
     if (!recorder) { preroll.push(frame); if (preroll.length > 32) preroll.shift(); }
@@ -141,10 +156,14 @@ export function mountVoiceAssistant({ root = document.body, host, model: injecte
     catch (e) { pushing = false; session.stopListening(); addMsg('err', `Microphone: ${e.message || e}`); }
   }
   function endTurn() {
+    const wasPushing = pushing;
     pushing = false;
     const rec = recorder; recorder = null;
     if (!handsFree) closeMic();
-    if (!rec || rec.seconds < 0.25) { session.stopListening(); return; }
+    const voiced = vad?.voicedMs ?? Infinity;
+    if (vad) vad.voicedMs = 0;
+    if (!rec || rec.seconds < 0.25 || (!wasPushing && voiced < MIN_VOICED_MS)) { session.stopListening(); return; }
+    if (!readyForTurn()) { session.stopListening(); return; }
     const secs = rec.seconds;
     const audio = rec.take();
     addMsg('user', `🎤 ${secs.toFixed(1)} s`);
@@ -167,11 +186,19 @@ export function mountVoiceAssistant({ root = document.body, host, model: injecte
     open();
     const t = String(text || '').trim();
     if (!t) return null;
+    if (!readyForTurn()) return null;
     addMsg('user', t);
     botBubble = null;
     return session.sendText(t);
   }
   function stop() { pushing = false; recorder = null; session.interrupt(); }
+
+  // A turn waits for a loaded model; it never starts a 2 GB download by itself.
+  function readyForTurn() {
+    if (model.ready || !model.load) return true;
+    addMsg('err', loading ? `${model.label} is still loading.` : `Load ${model.label} first (the button above).`);
+    return false;
+  }
 
   // ── panel ──
   function open() {
@@ -186,6 +213,7 @@ export function mountVoiceAssistant({ root = document.body, host, model: injecte
         <button class="nv-x" type="button" aria-label="Close assistant">×</button></div>
       <div class="nv-orbwrap"><button class="nv-orb" type="button" aria-label="Hold to talk"></button>
         <div class="nv-state" aria-live="polite"></div></div>
+      <div class="nv-load" hidden><span class="nv-load-text"></span><button class="nv-btn nv-load-btn" type="button">Download and load</button></div>
       <div class="nv-log" aria-live="polite"></div>
       <form class="nv-form"><input type="text" placeholder="Type a message…" aria-label="Message" autocomplete="off">
         <button class="nv-btn" type="submit">Send</button><button class="nv-btn nv-stop" type="button" hidden>Stop</button></form>
@@ -194,7 +222,9 @@ export function mountVoiceAssistant({ root = document.body, host, model: injecte
     els = {
       orb: panel.querySelector('.nv-orb'), state: panel.querySelector('.nv-state'), log: panel.querySelector('.nv-log'),
       input: panel.querySelector('.nv-form input'), stop: panel.querySelector('.nv-stop'), hf: panel.querySelector('.nv-hf'),
+      load: panel.querySelector('.nv-load'), loadText: panel.querySelector('.nv-load-text'),
     };
+    panel.querySelector('.nv-load-btn').onclick = () => loadModel();
     const pick = panel.querySelector('.nv-model');
     for (const [id, m] of Object.entries(VOICE_MODELS)) pick.add(new Option(`${m.label} · ${m.note}`, id));
     if (!VOICE_MODELS[modelId]) pick.add(new Option(model.label || model.id, modelId));
@@ -206,7 +236,12 @@ export function mountVoiceAssistant({ root = document.body, host, model: injecte
     els.stop.onclick = stop;
     els.hf.onchange = () => setHandsFree(els.hf.checked);
     panel.querySelector('.nv-form').onsubmit = (e) => { e.preventDefault(); const v = els.input.value; els.input.value = ''; ask(v); };
-    els.orb.addEventListener('pointerdown', (e) => { e.preventDefault(); els.orb.setPointerCapture?.(e.pointerId); listen(); });
+    els.orb.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); els.orb.setPointerCapture?.(e.pointerId);
+      // Pressing the orb while the assistant speaks stops the reply; the next press talks.
+      if (session.state === 'speaking' || session.state === 'thinking') { stop(); return; }
+      listen();
+    });
     const up = () => { if (pushing) stopListening(); };
     els.orb.addEventListener('pointerup', up);
     els.orb.addEventListener('pointercancel', up);
@@ -219,30 +254,46 @@ export function mountVoiceAssistant({ root = document.body, host, model: injecte
     els.orb.focus();
     ensureLoaded();
   }
-  // Load the chosen model now, so the first turn does not wait on a 2 GB download without a word.
+  // A cached model loads when the panel opens. An uncached one waits for the person's click, because the
+  // first load downloads 2.1 GB; after that it stays in the browser's cache.
+  let loading = null;
   async function ensureLoaded() {
-    if (model.ready || !model.load) return;
+    if (model.ready || !model.load || loading) return showLoadCard();
+    if (model.isCached && !(await model.isCached())) return showLoadCard();
+    return loadModel();
+  }
+  function showLoadCard() {
+    if (!panel) return;
+    const need = !model.ready && !!model.load && !loading;
+    els.load.hidden = !need;
+    if (need) els.loadText.textContent = `${model.label} runs on this device. The first load downloads ${model.downloadLabel || 'the model'} once; after that it stays cached in this browser.`;
+  }
+  function loadModel() {
+    if (model.ready || !model.load) return Promise.resolve();
+    if (loading) return loading;
     const m = model;
     const show = (text) => { loadNote = text; if (panel && m === model) els.state.textContent = text; };
     show(`Loading ${m.label}…`);
-    try {
-      await m.load({ onProgress: (p) => {
-        if (p?.total) show(`Loading ${m.label}… ${Math.round((p.loaded / p.total) * 100)}%`);
-        else if (p?.file) show(`Loading ${m.label}… ${String(p.file).split('/').pop()}`);
-      } });
+    loading = m.load({ onProgress: (p) => {
+      if (p?.total) show(`Loading ${m.label}… ${Math.round((p.loaded / p.total) * 100)}%`);
+      else if (p?.file) show(`Loading ${m.label}… ${String(p.file).split('/').pop()}`);
+    } }).then(() => {
       if (m === model) { loadNote = ''; if (panel) els.state.textContent = STATE_TEXT[session.state]; }
-    } catch (e) {
+    }, (e) => {
       if (m !== model) return;
       loadNote = '';
-      addMsg('err', `${m.label} could not load: ${e?.message || e}. Switched to the test stub.`);
-      chooseModel('stub');
-    }
+      if (panel) els.state.textContent = STATE_TEXT[session.state];
+      addMsg('err', `${m.label} could not load: ${e?.message || e}.`);
+    }).finally(() => { if (m === model) { loading = null; showLoadCard(); } });
+    showLoadCard();
+    return loading;
   }
   function chooseModel(id) {
     if (!VOICE_MODELS[id] || id === modelId) return;
     model.dispose?.();
     modelId = id;
     model = VOICE_MODELS[id].create();
+    loading = null; loadNote = '';
     try { localStorage.setItem(MODEL_KEY, id); } catch {}
     session.setModel(model);
     if (panel) { panel.querySelector('.nv-model').value = id; els.log.textContent = ''; }
@@ -261,7 +312,7 @@ export function mountVoiceAssistant({ root = document.body, host, model: injecte
 
   return {
     open, close, toggle: () => (panel ? close() : open()), get isOpen() { return !!panel; },
-    ask, listen, stopListening, stop, setHandsFree, chooseModel, get modelId() { return modelId; },
+    ask, listen, stopListening, stop, setHandsFree, chooseModel, loadModel, get modelId() { return modelId; },
     get state() { return session.state; }, session, tools, timers,
   };
 }

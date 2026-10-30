@@ -264,4 +264,39 @@ await test('a session tool round runs end to end on the LFM3 adapter', async () 
   assert.equal(fake.seen.calls[1].messages.at(-2).tool_calls[0].function.name, 'get_battery');
 });
 
+await test('VAD counts voiced time so a short noise burst can be dropped', () => {
+  const vad = createVad({ minSpeechMs: 100, endSilenceMs: 300 });
+  const frame = (amp) => { const f = new Float32Array(160); for (let i = 0; i < f.length; i++) f[i] = amp * Math.sin(i / 3); return f; };
+  for (let i = 0; i < 30; i++) vad.push(frame(0.001));
+  for (let i = 0; i < 25; i++) vad.push(frame(0.2));      // 250 ms loud
+  for (let i = 0; i < 10; i++) vad.push(frame(0.001));
+  for (let i = 0; i < 40; i++) vad.push(frame(0.2));      // 400 ms loud
+  assert.equal(vad.voicedMs, 650);
+  vad.reset();
+  assert.equal(vad.voicedMs, 0);
+  const quiet = createVad();
+  for (let i = 0; i < 30; i++) quiet.push(frame(0.004));  // steady fan-level hum
+  const events = []; for (let i = 0; i < 30; i++) events.push(quiet.push(frame(0.012)));  // louder hum, still under 0.02
+  assert.deepEqual(events.filter(Boolean), []);
+});
+
+await test('speech fallback reports busy while a sentence is queued', () => {
+  const synth = fakeSynth();
+  const sp = createSpeechFallback({ synth, Utterance: FakeUtterance });
+  assert.equal(sp.busy, false);
+  sp.push('Hello there. ');
+  assert.equal(sp.busy, true);
+  synth.finishAll();
+  assert.equal(sp.busy, false);
+});
+
+await test('isCached finds the decoder from Hugging Face and nothing else', async () => {
+  const { isCached } = await import('../lfm3-omni.mjs');
+  const store = (urls) => ({ keys: async () => ['diskformer-models'], open: async () => ({ keys: async () => urls.map((url) => ({ url })) }) });
+  assert.equal(await isCached({ cacheStorage: store(['https://huggingface.co/LiquidAI/LFM3-Omni-2B-ONNX/resolve/main/onnx/decoder_q4f16.onnx_data']) }), true);
+  assert.equal(await isCached({ cacheStorage: store(['https://huggingface.co/LiquidAI/LFM3-Omni-2B-ONNX/resolve/main/config.json']) }), false);
+  assert.equal(await isCached({ cacheStorage: { keys: async () => [] } }), false);
+  assert.equal(await isCached({ cacheStorage: undefined }), false);
+});
+
 console.log(`voice + lfm3 adapter: ${pass} passed`);
