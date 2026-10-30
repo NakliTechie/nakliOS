@@ -319,6 +319,9 @@ await test('calculate handles arithmetic, percentages and powers without eval', 
   assert.equal(calculate('-2 ^ 2'), -4);
   assert.equal(calculate('1,250 × 4'), 5000);
   assert.equal(calculate('sqrt(16) + pi - pi'), 4);
+  assert.equal(calculate('17!'), 355687428096000);
+  assert.equal(calculate('fact(5) + 3!'), 126);
+  assert.throws(() => calculate('2.5!'), /whole number/);
   assert.throws(() => calculate('alert(1)'), /cannot read|needs brackets/);
   assert.throws(() => calculate('1 / 0'), /finite/);
   assert.throws(() => calculate('(1 + 2'), /not closed/);
@@ -390,6 +393,98 @@ await test('LFM3 speech: a caller abort stops the audio', async () => {
   const out = await m.generate({ messages: [], tools: [], signal: ctl.signal, onAudio: (a) => { audio.push(a.length); ctl.abort(); } });
   assert.equal(out.stopReason, 'aborted');
   assert.deepEqual(audio, [10]);
+});
+
+// ── the rest of LocalMind's tools, on stand-ins ──
+const { moreTools, calendarEvent, MEMORY_PATH } = await import('../more-tools.mjs');
+function standIns() {
+  const files = new Map(); let cal = null; const proposed = [];
+  return { files, get cal() { return cal; }, proposed, deps: {
+    memory: { read: async (p) => files.get(p) ?? null, write: async (p, t) => { files.set(p, t); } },
+    calendar: { label: 'Calendar (test)', read: async () => cal, write: async (t) => { cal = t; } },
+    fetchText: async (url) => ({ status: 200, text: '<title>T</title><main>Hello page</main>', via: 'direct' }),
+    parseHtml: () => ({ title: 'T', querySelectorAll: () => [], querySelector: (sel) => (sel === 'main' ? { textContent: '  Hello   page ' } : null), body: { textContent: 'x' } }),
+    python: async () => ({ runCode: async (code) => ({ status: 'ok', stdout: `ran ${code.length} chars\n`, stderr: '' }) }),
+    skills: { propose: async (sk) => { proposed.push(sk); return sk.name === 'bad' ? { ok: false, message: 'refused by Sentinel' } : { ok: true, status: 'staged' }; } },
+    search: () => null,
+    now: () => new Date('2026-10-30T10:00:00'),
+  } };
+}
+
+await test('memory tools store, find, list and forget', async () => {
+  const st = standIns(); const reg = createToolRegistry(moreTools(st.deps));
+  await reg.run('store_memory', { content: 'My dentist is Dr Rao in Bandra', category: 'fact' });
+  await reg.run('store_memory', { content: 'I prefer tea over coffee', category: 'preference' });
+  assert.equal(JSON.parse(st.files.get(MEMORY_PATH)).length, 2);
+  const hit = await reg.run('search_memory', { query: 'who is my dentist' });
+  assert.equal(hit.result.found[0].content, 'My dentist is Dr Rao in Bandra');
+  assert.equal((await reg.run('list_memories')).result.count, 2);
+  assert.equal((await reg.run('delete_memory', { query: 'tea' })).result.deleted, 1);
+  assert.equal(JSON.parse(st.files.get(MEMORY_PATH)).length, 1);
+  assert.equal((await reg.run('store_memory', { content: 'x', category: 'nonsense' })).ok, false);   // enum checked
+});
+
+await test('calendar events land in Calendar\'s own data shape', async () => {
+  const st = standIns(); const reg = createToolRegistry(moreTools(st.deps));
+  const r = await reg.run('create_calendar_event', { title: 'Dentist', start: '2026-11-02T15:00', duration_minutes: 30, location: 'Bandra' });
+  assert.equal(r.ok, true);
+  const data = JSON.parse(st.cal);
+  assert.equal(data.version, 1);
+  assert.deepEqual({ ...data.events[0], id: 'x', timeZone: 'z' }, { id: 'x', title: 'Dentist', description: '', location: 'Bandra',
+    startLocal: '2026-11-02T15:00', endLocal: '2026-11-02T15:30', allDay: false, timeZone: 'z', recurrence: { frequency: 'none', interval: 1, until: null } });
+  await reg.run('create_calendar_event', { title: 'Holiday', start: '2026-11-14' });
+  assert.equal(JSON.parse(st.cal).events[1].allDay, true);
+  assert.match((await reg.run('create_calendar_event', { title: 'Old', start: '2026-01-01T10:00' })).error, /in the past/);
+  assert.match((await reg.run('create_calendar_event', { title: 'Bad', start: '2026-02-30' })).error, /not a real date/);
+});
+
+await test('web search needs a provider; page, Python and skill tools reach their stand-ins', async () => {
+  const st = standIns(); let on = true;
+  const reg = createToolRegistry(moreTools({ ...st.deps, webOn: () => on }));
+  assert.match((await reg.run('web_search', { query: 'news today' })).error, /no search provider/);
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => ({ ok: true, json: async () => ({ results: [{ title: 'A', url: 'https://a', content: 'snip' }] }) });
+  try {
+    const reg2 = createToolRegistry(moreTools({ ...st.deps, search: () => ({ provider: 'searxng', url: 'https://sx.example' }) }));
+    assert.deepEqual((await reg2.run('web_search', { query: 'news' })).result.results, [{ title: 'A', url: 'https://a', snippet: 'snip' }]);
+  } finally { globalThis.fetch = realFetch; }
+  const page = await reg.run('fetch_page', { url: 'https://example.com/x' });
+  assert.equal(page.result.text, 'Hello page');
+  assert.match((await reg.run('fetch_page', { url: 'file:///etc/passwd' })).error, /only http/);
+  on = false;
+  assert.match((await reg.run('fetch_page', { url: 'https://example.com' })).error, /switched off/);
+  assert.equal((await reg.run('run_python', { code: 'print(1)' })).result.stdout, 'ran 8 chars\n');
+  assert.equal((await reg.run('save_skill', { name: 'brief', description: 'd', instructions: 'Be brief.' })).result.status, 'staged');
+  assert.match((await reg.run('save_skill', { name: 'bad', description: 'd', instructions: 'x' })).error, /Sentinel/);
+});
+
+await test('LFM3 replies never overlap on the engine, even after a stop', async () => {
+  let active = 0, maxActive = 0, drained = 0;
+  const session = {
+    async *generate(messages, opts) {
+      active++; maxActive = Math.max(maxActive, active);
+      try {
+        let text = '';
+        for (const piece of ['<tool_call>\n<function=get_time>\n</function>\n</tool_call>', ' tail', ' more']) {
+          await new Promise((r) => setTimeout(r, 5));
+          text += piece; yield { text, tokens: 1 };
+          if (opts.signal?.aborted) { drained++; return; }
+        }
+      } finally { active--; }
+    },
+  };
+  const m = createLfm3OmniModel({ importer: async () => ({ MODELS: { chat: { LFM3_OMNI_2B: 'x' } }, load: async () => session }) });
+  const tools = makeTools(createTimers()).list();
+  const ctl = new AbortController();
+  const a = m.generate({ messages: [], tools, signal: ctl.signal });
+  const b = m.generate({ messages: [], tools });
+  ctl.abort();
+  const [ra, rb] = await Promise.all([a, b]);
+  assert.equal(maxActive, 1);
+  assert.equal(ra.stopReason, 'aborted');
+  assert.deepEqual(rb.toolCalls, [{ name: 'get_time', arguments: {} }]);
+  assert.equal(drained, 1);   // the closed tool call's stream was read to its end after the stop
+  assert.equal(ra.text, '');  // the reply stopped before its turn never ran on the engine
 });
 
 console.log(`voice + lfm3 adapter: ${pass} passed`);

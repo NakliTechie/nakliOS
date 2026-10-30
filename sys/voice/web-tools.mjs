@@ -69,14 +69,18 @@ export async function wikipediaLookup(args, fetchJsonFn = fetchJson) {
   return { found: true, title: page.title, summary, url: page.fullurl, source: 'Wikipedia (CC BY-SA 4.0)' };
 }
 
-// Arithmetic with + - * / % ^, brackets, "x% of y", and a few functions.
-const FUNCS = { sqrt: Math.sqrt, cbrt: Math.cbrt, abs: Math.abs, round: Math.round, floor: Math.floor, ceil: Math.ceil,
+// Arithmetic with + - * / % ^ and n!, brackets, "x% of y", and a few functions.
+function factorial(n) {
+  if (!Number.isInteger(n) || n < 0 || n > 170) throw new Error('factorial needs a whole number from 0 to 170');
+  let v = 1; for (let i = 2; i <= n; i++) v *= i; return v;
+}
+const FUNCS = { fact: factorial, factorial, sqrt: Math.sqrt, cbrt: Math.cbrt, abs: Math.abs, round: Math.round, floor: Math.floor, ceil: Math.ceil,
   sin: Math.sin, cos: Math.cos, tan: Math.tan, log: Math.log10, ln: Math.log, exp: Math.exp };
 const CONSTS = { pi: Math.PI, e: Math.E };
 export function calculate(expression) {
   const s = String(expression ?? '').toLowerCase().replace(/[×✕]/g, '*').replace(/÷/g, '/').replace(/(\d),(?=\d{3}\b)/g, '$1')
     .replace(/(\d+(?:\.\d+)?)\s*%\s*of\b/g, '($1/100)*').replace(/(\d+(?:\.\d+)?)\s*%(?!\s*[\d.(])/g, '($1/100)');
-  const tokens = s.match(/\d+\.?\d*(?:e[+-]?\d+)?|\.\d+|[a-z]+|[-+*/%^()]|\S/g) || [];
+  const tokens = s.match(/\d+\.?\d*(?:e[+-]?\d+)?|\.\d+|[a-z]+|[-+*/%^()!]|\S/g) || [];
   let i = 0;
   const peek = () => tokens[i], take = () => tokens[i++];
   const fail = (m) => { throw new Error(m); };
@@ -91,7 +95,8 @@ export function calculate(expression) {
     if (t in FUNCS) { if (take() !== '(') fail(`${t} needs brackets`); const v = sum(); if (take() !== ')') fail('a bracket is not closed'); return FUNCS[t](v); }
     return fail(`cannot read "${t}"`);
   }
-  function power() { const b = primary(); return peek() === '^' ? (take(), b ** power()) : b; }
+  function postfix() { let v = primary(); while (peek() === '!') { take(); v = factorial(v); } return v; }
+  function power() { const b = postfix(); return peek() === '^' ? (take(), b ** power()) : b; }
   function product() {
     let v = power();
     while (['*', '/', '%'].includes(peek())) { const op = take(), r = power(); v = op === '*' ? v * r : op === '/' ? v / r : v % r; }

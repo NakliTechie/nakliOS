@@ -8,6 +8,7 @@
 import { VOICE_MODELS, tone } from './adapter.mjs';
 import { createToolRegistry, createTimers, builtinTools } from './tools.mjs';
 import { lookupTools } from './web-tools.mjs';
+import { moreTools, SEARCH_PROVIDERS } from './more-tools.mjs';
 import { createVoiceSession } from './session.mjs';
 import { openMic, createVad, createTurnRecorder, createPlayer, createSpeechFallback } from './audio.mjs';
 
@@ -40,6 +41,12 @@ const CSS = `
 .nv-load[hidden]{display:none}
 .nv-load .nv-btn{align-self:flex-start; background:#5b7fe0; border-color:#5b7fe0; color:#fff}
 .nv-load .nv-btn:hover{background:#4a6dcc}
+.nv-ask{display:flex; flex-direction:column; gap:8px; padding:10px; border:1px solid #f0d9a8; border-radius:12px; background:#fff8e8; font-size:13px}
+.nv-ask div{display:flex; gap:6px}
+.nv-set{display:flex; flex-direction:column; gap:6px; padding:10px; border:1px solid #e4e0d8; border-radius:12px; background:#fff; font-size:12px}
+.nv-set[hidden]{display:none}
+.nv-set label{display:flex; align-items:center; gap:6px}
+.nv-set select,.nv-set input[type=text],.nv-set input[type=password]{flex:1; min-width:0; font:inherit; padding:4px 6px; border:1px solid #dcd7cd; border-radius:8px; background:#fff; color:#1f1d1a}
 .nv-msg{padding:7px 10px; border-radius:12px; white-space:pre-wrap; word-break:break-word}
 .nv-msg.user{align-self:flex-end; background:#e9eefc; max-width:85%}
 .nv-msg.bot{align-self:flex-start; background:#fff; border:1px solid #ebe7df; max-width:92%}
@@ -76,8 +83,12 @@ const PREROLL_FRAMES = 38;   // about 300 ms of 8 ms frames
 const RELEASE_TAIL_MS = 250;
 const WEB_KEY = 'nakli.voice.web';
 const webOn = () => { try { return localStorage.getItem(WEB_KEY) !== 'off'; } catch { return true; } };
+// Answers the person gave once and the assistant keeps in this browser (a proxy allowed, a search provider set).
+const CONSENT_KEY = (id) => `nakli.voice.consent.${id}`;
+const SEARCH_KEY = 'nakli.voice.search';
+const readJson = (key) => { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; } };
 
-export function mountVoiceAssistant({ root = document.body, host, model: injected = null } = {}) {
+export function mountVoiceAssistant({ root = document.body, host, more = null, model: injected = null } = {}) {
   let modelId = injected ? injected.id : savedModelId();
   let model = injected || VOICE_MODELS[modelId].create();
   let loadNote = '';
@@ -95,7 +106,8 @@ export function mountVoiceAssistant({ root = document.body, host, model: injecte
   const player = createPlayer({ onLevel: (l) => { level = l; } });
   const speech = createSpeechFallback();
   const timers = createTimers({ onDone: ({ seconds, label }) => announce(`Timer done${label ? `: ${label}` : ''} (${seconds} s).`) });
-  const tools = createToolRegistry([...builtinTools({ host, timers }), ...lookupTools({ webOn })]);
+  const tools = createToolRegistry([...builtinTools({ host, timers }), ...lookupTools({ webOn }),
+    ...(more ? moreTools({ ...more, webOn, search: () => readJson(SEARCH_KEY) }) : [])]);
   const session = createVoiceSession({
     model, tools, player, speech,
     onState: (s) => { if (panel) { panel.dataset.state = s; els.state.textContent = STATE_TEXT[s]; els.stop.hidden = !(s === 'thinking' || s === 'speaking'); } },
@@ -224,7 +236,14 @@ export function mountVoiceAssistant({ root = document.body, host, model: injecte
     panel.dataset.state = session.state;
     panel.innerHTML = `
       <div class="nv-head"><b>Assistant</b><select class="nv-model" aria-label="Model"></select><span class="nv-sp"></span>
+        <button class="nv-x nv-gear" type="button" aria-label="Assistant settings">⚙</button>
         <button class="nv-x" type="button" aria-label="Close assistant">×</button></div>
+      <div class="nv-set" hidden>
+        <label>Web search <select class="nv-sp-provider"><option value="">Off</option>${SEARCH_PROVIDERS.map((p) => `<option value="${p}">${p === 'searxng' ? 'SearXNG' : p[0].toUpperCase() + p.slice(1)}</option>`).join('')}</select></label>
+        <label class="nv-sp-keyrow">Key <input type="password" class="nv-sp-key" autocomplete="off" placeholder="API key (kept in this browser)"></label>
+        <label class="nv-sp-urlrow">URL <input type="text" class="nv-sp-url" autocomplete="off" placeholder="https://your-searxng.example"></label>
+        <label><input type="checkbox" class="nv-proxy"> Read blocked pages through Jina Reader (r.jina.ai sees the address)</label>
+      </div>
       <div class="nv-orbwrap"><button class="nv-orb" type="button" aria-label="Hold to talk"></button>
         <div class="nv-state" aria-live="polite"></div></div>
       <div class="nv-load" hidden><span class="nv-load-text"></span><button class="nv-btn nv-load-btn" type="button">Download and load</button></div>
@@ -248,7 +267,8 @@ export function mountVoiceAssistant({ root = document.body, host, model: injecte
     pick.onchange = () => chooseModel(pick.value);
     els.state.textContent = loadNote || STATE_TEXT[session.state];
     els.hf.checked = handsFree;
-    panel.querySelector('.nv-x').onclick = close;
+    panel.querySelector('.nv-x:not(.nv-gear)').onclick = close;
+    wireSettings();
     els.stop.onclick = stop;
     els.hf.onchange = () => setHandsFree(els.hf.checked);
     const web = panel.querySelector('.nv-web');
@@ -320,6 +340,42 @@ export function mountVoiceAssistant({ root = document.body, host, model: injecte
     ensureLoaded();
   }
 
+  // ⚙ settings: the search provider and its key, and the page proxy. Typed by the person, kept in this browser.
+  function wireSettings() {
+    const box = panel.querySelector('.nv-set'), prov = box.querySelector('.nv-sp-provider'), key = box.querySelector('.nv-sp-key'),
+      url = box.querySelector('.nv-sp-url'), proxy = box.querySelector('.nv-proxy');
+    const cfg = readJson(SEARCH_KEY) || {};
+    prov.value = cfg.provider || ''; key.value = cfg.key || ''; url.value = cfg.url || '';
+    proxy.checked = localStorage.getItem(CONSENT_KEY('page-proxy')) === 'yes';
+    const rows = () => { box.querySelector('.nv-sp-keyrow').hidden = !['brave', 'tavily'].includes(prov.value); box.querySelector('.nv-sp-urlrow').hidden = prov.value !== 'searxng'; };
+    const saveSearch = () => { rows(); try { prov.value ? localStorage.setItem(SEARCH_KEY, JSON.stringify({ provider: prov.value, key: key.value.trim(), url: url.value.trim() })) : localStorage.removeItem(SEARCH_KEY); } catch {} };
+    prov.onchange = saveSearch; key.onchange = saveSearch; url.onchange = saveSearch;
+    proxy.onchange = () => setConsent('page-proxy', proxy.checked);
+    rows();
+    panel.querySelector('.nv-gear').onclick = () => { box.hidden = !box.hidden; };
+  }
+  function setConsent(id, on) {
+    try { on ? localStorage.setItem(CONSENT_KEY(id), 'yes') : localStorage.removeItem(CONSENT_KEY(id)); } catch {}
+    const box = panel?.querySelector(id === 'page-proxy' ? '.nv-proxy' : null);
+    if (box) box.checked = !!on;
+  }
+  // Asks once; "Allow" is kept in this browser, so the next load does not ask again. Unanswered in 60 s counts as no.
+  function consent(id, question) {
+    if (localStorage.getItem(CONSENT_KEY(id)) === 'yes') return Promise.resolve(true);
+    open();
+    return new Promise((resolve) => {
+      const card = document.createElement('div');
+      card.className = 'nv-ask';
+      card.innerHTML = '<span></span><div><button class="nv-btn" type="button">Allow</button><button class="nv-btn" type="button">Not now</button></div>';
+      card.querySelector('span').textContent = question;
+      const [yes, no] = card.querySelectorAll('button');
+      const done = (v) => { clearTimeout(t); card.remove(); if (v) setConsent(id, true); resolve(v); };
+      const t = setTimeout(() => done(false), 60000);
+      yes.onclick = () => done(true); no.onclick = () => done(false);
+      els.log.appendChild(card); scroll();
+    });
+  }
+
   function setWebLookups(on) {
     try { localStorage.setItem(WEB_KEY, on ? 'on' : 'off'); } catch {}
     const box = panel?.querySelector('.nv-web');
@@ -338,7 +394,7 @@ export function mountVoiceAssistant({ root = document.body, host, model: injecte
 
   return {
     open, close, toggle: () => (panel ? close() : open()), get isOpen() { return !!panel; },
-    ask, listen, stopListening, stop, setHandsFree, setWebLookups, chooseModel, loadModel, get modelId() { return modelId; },
+    ask, listen, stopListening, stop, setHandsFree, setWebLookups, setConsent, consent, chooseModel, loadModel, get modelId() { return modelId; },
     get state() { return session.state; }, session, tools, timers,
   };
 }
