@@ -53,8 +53,12 @@ export function createCoreCommands(io) {
     },
     async tee(argv, stdin) {
       const { options, operands } = parseArgs(argv, { append: { short: 'a', long: 'append' } }, { command: 'tee' });
-      const errors = [];
+      const errors = []; let toStderr = false;
       for (const path of operands) {
+        // /dev/null, /dev/stdout and /dev/stderr are streams, never workspace files (a `tee /dev/stderr` used to create dev/stderr).
+        const device = io.resolve(path);
+        if (device === 'dev/null' || device === 'dev/stdout') continue;
+        if (device === 'dev/stderr') { toStderr = true; continue; }
         try {
           let before = '';
           if (options.append) {
@@ -67,6 +71,7 @@ export function createCoreCommands(io) {
           errors.push(`tee: ${path}: ${error.code}: ${error.message}\n`);
         }
       }
+      if (toStderr) return streamResult([{ channel: 1, data: stdin }, { channel: 2, data: concatData([errors.join(''), stdin]) }], errors.length ? 1 : 0);
       return { text: concatData([...errors, stdin]), stdout: stdin, stderr: errors.join(''), code: errors.length ? 1 : 0, raw: true,
         ...(errors.length ? { displayText: errors.join('') + renderData(stdin) } : {}) };
     },
