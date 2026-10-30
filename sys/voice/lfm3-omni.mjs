@@ -9,8 +9,9 @@
 // With speech: false the panel speaks the text with an on-device system voice instead.
 import { parseLocalToolCalls } from '../ai/local-tool-calls.mjs';
 
-// anyformer 0.4.15 from npm: stopping a reply aborts the engine and waits for it (diskformer 0.6.13 queues replies).
-export const ANYFORMER_URL = 'https://cdn.jsdelivr.net/npm/anyformer@0.4.15/index.js';
+// anyformer 0.4.17 from npm: stopping a reply aborts the engine and waits for it (since 0.4.15), and speech out runs
+// faster than real time (diskformer 0.6.14, from 0.4.16).
+export const ANYFORMER_URL = 'https://cdn.jsdelivr.net/npm/anyformer@0.4.17/index.js';
 export const DOWNLOAD_BYTES = 2.14e9;
 export const SPEECH_BYTES = 0.515e9;
 // The engine adds this system turn only when the messages have none, and the assistant always sends its own.
