@@ -110,5 +110,9 @@ export function createStubModel({ wordMs = 60, audioOut = true } = {}) {
   };
 }
 
-// The models the assistant can run. The LFM3-Omni entry joins when the engine passes its browser check.
-export const VOICE_MODELS = Object.freeze({ stub: createStubModel });
+// The models the assistant can run, in picker order. The stub needs no download, so the assistant stands without a model.
+import { createLfm3OmniModel, DOWNLOAD_BYTES } from './lfm3-omni.mjs';
+export const VOICE_MODELS = Object.freeze({
+  'lfm3-omni-2b': { label: 'LFM3-Omni 2B', note: `on device, ${(DOWNLOAD_BYTES / 1e9).toFixed(1)} GB first download`, create: () => createLfm3OmniModel() },
+  stub: { label: 'Test stub', note: 'no model', create: () => createStubModel() },
+});

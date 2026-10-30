@@ -184,4 +184,84 @@ await test('a text-only model is spoken by the fallback and interrupt cancels it
   await t2;
 });
 
-console.log(`voice: ${pass} passed`);
+
+// ── LFM3-Omni adapter over a fake anyformer ──
+const { createLfm3OmniModel, visibleEnd, toTemplateMessages } = await import('../lfm3-omni.mjs');
+function fakeAnyformer(replies) {
+  const seen = { loads: 0, calls: [] };
+  const session = {
+    async *generate(messages, opts) {
+      seen.calls.push({ messages, opts });
+      const reply = replies.shift();
+      let text = '';
+      for (const piece of reply) { if (opts.signal?.aborted) return; text += piece; yield { text, tokens: text.length }; }
+    },
+    dispose() {},
+  };
+  return { seen, importer: async () => ({ MODELS: { chat: { LFM3_OMNI_2B: 'lfm3' } }, load: async (id, { onProgress }) => { seen.loads++; onProgress?.({ loaded: 1, total: 2 }); return session; } }) };
+}
+
+await test('visibleEnd holds tool markup and partial markers', () => {
+  assert.equal(visibleEnd('Sure. <tool_call>\n<function=x>'), 6);
+  assert.equal(visibleEnd('Sure <tool'), 5);
+  assert.equal(visibleEnd('a < b'), 5);
+  assert.equal(visibleEnd('ends with <'), 10);
+  assert.equal(visibleEnd('<function=get_time>'), 0);
+});
+
+await test('LFM3 adapter streams text, hides tool XML and parses calls against the offered tools', async () => {
+  const xml = '<tool_call>\n<function=set_timer>\n<parameter=seconds>\n90\n</parameter>\n</function>\n</tool_call>';
+  const fake = fakeAnyformer([['One moment. ', ...xml.match(/.{1,5}/gs)], ['Timer ', 'set.']]);
+  const m = createLfm3OmniModel({ importer: fake.importer });
+  const progress = [];
+  await m.load({ onProgress: (p) => progress.push(p) });
+  assert.equal(m.ready, true);
+  assert.deepEqual(progress, [{ loaded: 1, total: 2 }]);
+  const tools = makeTools(createTimers()).list();
+  let streamed = '';
+  const out = await m.generate({ messages: [{ role: 'user', content: [{ type: 'audio', audio: new Float32Array(16) }] }], tools, onText: (d) => { streamed += d; } });
+  assert.equal(streamed, 'One moment. ');
+  assert.deepEqual(out.toolCalls, [{ name: 'set_timer', arguments: { seconds: 90 } }]);
+  assert.equal(out.stopReason, 'tool_calls');
+  assert.equal(fake.seen.calls[0].opts.tools.length, 5);
+  assert.equal(fake.seen.calls[0].opts.thinking, false);
+  const again = await m.generate({ messages: [], tools: [] });
+  assert.equal(again.text, 'Timer set.');
+  assert.equal(fake.seen.calls[1].opts.tools, undefined);
+  assert.equal(fake.seen.loads, 1);
+});
+
+await test('LFM3 adapter refuses tools it was not offered and releases a stray "<"', async () => {
+  const fake = fakeAnyformer([['<tool_call><function=rm_rf></function></tool_call>'], ['x <', ' y']]);
+  const m = createLfm3OmniModel({ importer: fake.importer });
+  const bad = await m.generate({ messages: [], tools: makeTools(createTimers()).list() });
+  assert.deepEqual(bad.toolCalls, []);
+  let streamed = '';
+  const ok = await m.generate({ messages: [], tools: [], onText: (d) => { streamed += d; } });
+  assert.equal(streamed, 'x < y');
+  assert.equal(ok.text, 'x < y');
+});
+
+await test('history reaches the chat template with tool_calls and tool results', () => {
+  const msgs = toTemplateMessages([
+    { role: 'system', content: 'sys' },
+    { role: 'user', content: [{ type: 'audio', audio: new Float32Array(4) }] },
+    { role: 'assistant', content: [{ type: 'text', text: '' }], toolCalls: [{ name: 'get_time', arguments: {} }] },
+    { role: 'tool', name: 'get_time', content: '{"ok":true}' },
+  ]);
+  assert.equal(msgs[1].content[0].type, 'audio');
+  assert.deepEqual(msgs[2], { role: 'assistant', content: '', tool_calls: [{ type: 'function', function: { name: 'get_time', arguments: {} } }] });
+  assert.deepEqual(msgs[3], { role: 'tool', content: '{"ok":true}' });
+});
+
+await test('a session tool round runs end to end on the LFM3 adapter', async () => {
+  const xml = '<tool_call>\n<function=get_battery>\n</function>\n</tool_call>';
+  const fake = fakeAnyformer([[xml], ['Battery is at 42 percent.']]);
+  const s = createVoiceSession({ model: createLfm3OmniModel({ importer: fake.importer }), tools: makeTools(createTimers()) });
+  const out = await s.sendText('battery?');
+  assert.equal(out.text, 'Battery is at 42 percent.');
+  assert.equal(fake.seen.calls[1].messages.at(-1).role, 'tool');
+  assert.equal(fake.seen.calls[1].messages.at(-2).tool_calls[0].function.name, 'get_battery');
+});
+
+console.log(`voice + lfm3 adapter: ${pass} passed`);

@@ -93,5 +93,8 @@ export function createVoiceSession({
     stopListening() { if (state === 'listening') setState('idle'); },
     interrupt,
     reset() { interrupt(); history = []; },
+    get model() { return model; },
+    // A new model starts a fresh conversation, because one model's turns are not another's.
+    setModel(next) { interrupt(); model = next; history = []; },
   };
 }

@@ -50,7 +50,8 @@ export function createTimers({ onDone = () => {}, setTimeoutFn = setTimeout, cle
       const endsAt = now() + seconds * 1000;
       const handle = setTimeoutFn(() => { active.delete(id); onDone({ id, seconds, label }); }, seconds * 1000);
       active.set(id, { id, seconds, label, endsAt, handle });
-      return { id, seconds, label, endsAt: new Date(endsAt).toISOString() };
+      // Local clock time, because the model reads the result out loud.
+      return { id, seconds, label, endsAt: new Date(endsAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' }) };
     },
     cancel(id) { const t = active.get(id); if (!t) return false; clearTimeoutFn(t.handle); active.delete(id); return true; },
     list: () => [...active.values()].map(({ id, seconds, label, endsAt }) => ({ id, seconds, label, endsAt })),

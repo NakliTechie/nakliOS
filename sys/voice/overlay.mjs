@@ -5,7 +5,7 @@
 //
 // host: { listApps(), openApp(id) } from the host command registry. Every action here is also a
 // host command (assistant.* in sys/host/agent.mjs), so the agent face and the panel share one list.
-import { createStubModel, tone } from './adapter.mjs';
+import { VOICE_MODELS, tone } from './adapter.mjs';
 import { createToolRegistry, createTimers, builtinTools } from './tools.mjs';
 import { createVoiceSession } from './session.mjs';
 import { openMic, createVad, createTurnRecorder, createPlayer, createSpeechFallback } from './audio.mjs';
@@ -18,6 +18,7 @@ const CSS = `
 .nv-head{display:flex; align-items:center; gap:8px; font-size:12px; color:#6b665e;}
 .nv-head b{color:#1f1d1a; font-size:13px;}
 .nv-head .nv-sp{flex:1}
+.nv-head select{font:inherit; font-size:12px; color:#1f1d1a; background:#fff; border:1px solid #dcd7cd; border-radius:8px; padding:2px 4px; max-width:190px}
 .nv-x{border:0; background:none; font-size:18px; line-height:1; color:#6b665e; cursor:pointer; padding:2px 6px; border-radius:8px;}
 .nv-x:hover{background:#efece6}
 .nv-orbwrap{display:flex; flex-direction:column; align-items:center; gap:6px; padding:6px 0 2px;}
@@ -56,7 +57,13 @@ const STATE_TEXT = {
   speaking: 'Speaking — talk to interrupt',
 };
 
-export function mountVoiceAssistant({ root = document.body, host, model = createStubModel() } = {}) {
+const MODEL_KEY = 'nakli.voice.model';
+const savedModelId = () => { try { const id = localStorage.getItem(MODEL_KEY); return VOICE_MODELS[id] ? id : 'stub'; } catch { return 'stub'; } };
+
+export function mountVoiceAssistant({ root = document.body, host, model: injected = null } = {}) {
+  let modelId = injected ? injected.id : savedModelId();
+  let model = injected || VOICE_MODELS[modelId].create();
+  let loadNote = '';
   if (!document.getElementById('nv-style')) {
     const style = document.createElement('style');
     style.id = 'nv-style';
@@ -175,7 +182,7 @@ export function mountVoiceAssistant({ root = document.body, host, model = create
     panel.setAttribute('aria-label', 'Voice assistant');
     panel.dataset.state = session.state;
     panel.innerHTML = `
-      <div class="nv-head"><b>Assistant</b><span class="nv-model"></span><span class="nv-sp"></span>
+      <div class="nv-head"><b>Assistant</b><select class="nv-model" aria-label="Model"></select><span class="nv-sp"></span>
         <button class="nv-x" type="button" aria-label="Close assistant">×</button></div>
       <div class="nv-orbwrap"><button class="nv-orb" type="button" aria-label="Hold to talk"></button>
         <div class="nv-state" aria-live="polite"></div></div>
@@ -188,8 +195,12 @@ export function mountVoiceAssistant({ root = document.body, host, model = create
       orb: panel.querySelector('.nv-orb'), state: panel.querySelector('.nv-state'), log: panel.querySelector('.nv-log'),
       input: panel.querySelector('.nv-form input'), stop: panel.querySelector('.nv-stop'), hf: panel.querySelector('.nv-hf'),
     };
-    panel.querySelector('.nv-model').textContent = `· ${model.label || model.id}`;
-    els.state.textContent = STATE_TEXT[session.state];
+    const pick = panel.querySelector('.nv-model');
+    for (const [id, m] of Object.entries(VOICE_MODELS)) pick.add(new Option(`${m.label} · ${m.note}`, id));
+    if (!VOICE_MODELS[modelId]) pick.add(new Option(model.label || model.id, modelId));
+    pick.value = modelId;
+    pick.onchange = () => chooseModel(pick.value);
+    els.state.textContent = loadNote || STATE_TEXT[session.state];
     els.hf.checked = handsFree;
     panel.querySelector('.nv-x').onclick = close;
     els.stop.onclick = stop;
@@ -206,7 +217,39 @@ export function mountVoiceAssistant({ root = document.body, host, model = create
     panel.addEventListener('keyup', (e) => { if (e.code === 'Space' && e.target !== els.input && pushing) { e.preventDefault(); stopListening(); } });
     raf = requestAnimationFrame(animate);
     els.orb.focus();
+    ensureLoaded();
   }
+  // Load the chosen model now, so the first turn does not wait on a 2 GB download without a word.
+  async function ensureLoaded() {
+    if (model.ready || !model.load) return;
+    const m = model;
+    const show = (text) => { loadNote = text; if (panel && m === model) els.state.textContent = text; };
+    show(`Loading ${m.label}…`);
+    try {
+      await m.load({ onProgress: (p) => {
+        if (p?.total) show(`Loading ${m.label}… ${Math.round((p.loaded / p.total) * 100)}%`);
+        else if (p?.file) show(`Loading ${m.label}… ${String(p.file).split('/').pop()}`);
+      } });
+      if (m === model) { loadNote = ''; if (panel) els.state.textContent = STATE_TEXT[session.state]; }
+    } catch (e) {
+      if (m !== model) return;
+      loadNote = '';
+      addMsg('err', `${m.label} could not load: ${e?.message || e}. Switched to the test stub.`);
+      chooseModel('stub');
+    }
+  }
+  function chooseModel(id) {
+    if (!VOICE_MODELS[id] || id === modelId) return;
+    model.dispose?.();
+    modelId = id;
+    model = VOICE_MODELS[id].create();
+    try { localStorage.setItem(MODEL_KEY, id); } catch {}
+    session.setModel(model);
+    if (panel) { panel.querySelector('.nv-model').value = id; els.log.textContent = ''; }
+    botBubble = null;
+    ensureLoaded();
+  }
+
   function close() {
     if (!panel) return;
     stop();
@@ -218,7 +261,7 @@ export function mountVoiceAssistant({ root = document.body, host, model = create
 
   return {
     open, close, toggle: () => (panel ? close() : open()), get isOpen() { return !!panel; },
-    ask, listen, stopListening, stop, setHandsFree,
+    ask, listen, stopListening, stop, setHandsFree, chooseModel, get modelId() { return modelId; },
     get state() { return session.state; }, session, tools, timers,
   };
 }
