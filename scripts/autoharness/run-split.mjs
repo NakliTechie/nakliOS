@@ -33,6 +33,8 @@ if (!OUT) { console.error('--out DIR is required'); process.exit(2); }
 const EP = await resolveEndpoint({ endpoint: opt('--endpoint'), base: opt('--base'), model: opt('--model'), keyFrom: opt('--key-from'), key: opt('--key') });
 const { base: BASE, model: MODEL, key: KEY } = EP;
 const EFFORT = opt('--effort', 'medium');
+// --hint-workspace adds a paragraph about the shell's working directory and scratch files (an experiment arm, not an app change).
+const EXTRA_HINT = args.includes('--hint-workspace') ? "The shell keeps its working directory between calls: after `cd`, relative paths are relative to that directory, so prefer paths from the workspace root. Do not leave scratch or temporary files in the workspace: delete any you create before you finish." : '';
 const SCRIPT = args.includes('--script'); // Script mode (the codemode tool) on for every run
 // --script-hint adds one paragraph to the system prompt telling the model when to prefer the codemode tool (Droid tuned this per model).
 const SCRIPT_HINT = args.includes('--script-hint') ? 'You also have a `codemode` tool. When a task needs the same operation on many files (about five or more tool calls), write ONE script with `tools.read`, `tools.write`, `tools.edit` and `tools.shell` instead of calling those tools one at a time; await every call, use `text(...)` to print only a short summary, and check the result before you finish.' : '';
@@ -70,7 +72,7 @@ async function worker() {
     const infer = EP.kind === 'anthropic'
       ? liveInferAnthropic({ base: BASE, model: MODEL, key: KEY, effort: EFFORT, timeoutMs: TIMEOUT, budget: BUDGET, label: `${t.id}#${rep}`, log: () => {} })
       : liveInfer({ base: BASE, model: MODEL, key: KEY, timeoutMs: TIMEOUT, label: `${t.id}#${rep}`, log: () => {} });
-    const r = await runTask(t, { infer, stamp, script: SCRIPT, scriptHint: SCRIPT_HINT });
+    const r = await runTask(t, { infer, stamp, script: SCRIPT, scriptHint: SCRIPT_HINT, extraHint: EXTRA_HINT });
     finished++;
     log(`${String(finished).padStart(3)}/${jobs.length} ${t.id}#${rep}: ${r.void ? 'VOID' : r.pass ? 'pass' : 'FAIL'} — ${r.steps} step(s), ${r.usage.input} in-tok, ${Math.round(r.wallMs / 1000)}s${r.pass || r.void ? '' : ` — ${r.why}`}`);
     await mkdir(join(OUT, 'runs', t.id), { recursive: true });
@@ -125,7 +127,7 @@ const summary = {
   costMeasured: before && after ? Math.round(Math.abs(after.total - before.total) * 1e6) / 1e6 : null,
   // the sum of the per-call costs the provider reported (OpenRouter's usage.cost), null when none did
   costReported: results.some((r) => r.costReported !== null) ? Math.round(results.reduce((s, r) => s + (r.costReported || 0), 0) * 1e6) / 1e6 : null,
-  scriptMode: SCRIPT, scriptHint: SCRIPT_HINT || null,
+  scriptMode: SCRIPT, scriptHint: SCRIPT_HINT || null, extraHint: EXTRA_HINT || null,
   script: SCRIPT ? ['scripts', 'nested', 'failed'].reduce((o, k) => ({ ...o, [k]: results.reduce((s, r) => s + (r.script?.[k] || 0), 0) }), {}) : null,
   effort: EP.kind === 'anthropic' ? EFFORT : null,
   ceilingUsd: BUDGET ? BUDGET.ceilingUsd : null, ceilingTripped: BUDGET ? BUDGET.tripped : null,

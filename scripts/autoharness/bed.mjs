@@ -276,7 +276,7 @@ export function withScript(executeTool, { allowed, stats }) {
 
 // Run ONE task once. `infer` is the model; `stamp` names it on run.started. Returns the grade, the
 // record's metrics, token usage, and the record itself (exported) for the optimizer to read later.
-export async function runTask(task, { infer, stamp = null, sysPrior = undefined, script = false, scriptHint = '' }) {
+export async function runTask(task, { infer, stamp = null, sysPrior = undefined, script = false, scriptHint = '', extraHint = '' }) {
   const ws = freshWorkspace(task.seed || {});
   await ws.ready;
   const seedSnap = snapshot(ws.backend);
@@ -300,7 +300,7 @@ export async function runTask(task, { infer, stamp = null, sysPrior = undefined,
   try {
     result = await driveRun({
       mode: 'code', convo,
-      sysMsg: (extra) => systemMessage({ mode: 'code', ...(sysPrior !== undefined ? { proceduralPrior: sysPrior } : {}), extra: [extra, scriptOn && scriptHint].filter(Boolean).join('\n\n') }),
+      sysMsg: (extra) => systemMessage({ mode: 'code', ...(sysPrior !== undefined ? { proceduralPrior: sysPrior } : {}), extra: [extra, extraHint, scriptOn && scriptHint].filter(Boolean).join('\n\n') }),
       tools: scriptOn ? codemodeCatalog(baseTools, { enabled: true, mode: 'code' }) : baseTools,
       infer: rec.wrapInfer(infer), executeTool: exec, rec, verify, onEvent: rec.onEvent,
       gateNote: gated ? gateNote('bench gate: ' + task.id) : '', model: () => stamp,
