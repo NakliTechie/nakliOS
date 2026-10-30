@@ -1,0 +1,152 @@
+// lfm3-omni.mjs — LFM3-Omni-2B behind the voice assistant's generate() contract (adapter.mjs).
+//
+// anyformer loads the model (diskformer's ONNX engine on onnxruntime-web WebGPU; files cached in Cache Storage
+// 'diskformer-models' after the first 2.7 GB download). Its session streams the reply as cumulative text and leaves
+// tool calls as raw Qwen3-Coder XML, so this adapter holds back everything from the first call marker, parses the
+// calls with the broker's parser (sys/ai/local-tool-calls.mjs) and speaks nothing of them.
+// Speech out (speech: true, the default): the model writes 6 text tokens, then 12 speech frames, in turn, so a call
+// marker shows in the text before its sound; audio stops at the marker and the reply is cut once the call closes.
+// With speech: false the panel speaks the text with an on-device system voice instead.
+import { parseLocalToolCalls } from '../ai/local-tool-calls.mjs';
+
+// anyformer 0.4.15 from npm: stopping a reply aborts the engine and waits for it (diskformer 0.6.13 queues replies).
+export const ANYFORMER_URL = 'https://cdn.jsdelivr.net/npm/anyformer@0.4.15/index.js';
+export const DOWNLOAD_BYTES = 2.14e9;
+export const SPEECH_BYTES = 0.515e9;
+// The engine adds this system turn only when the messages have none, and the assistant always sends its own.
+export const SPEECH_SYSTEM_PROMPT = 'Respond with interleaved text and audio.';
+
+const MARKERS = ['<tool_call>', '<function='];
+// LocalMind's wording (e00f1cc), so both assistants are measured on the same tool.
+export const ANSWER_DIRECTLY = Object.freeze({
+  name: 'answer_directly',
+  description: 'Use this when you can answer by yourself: greetings, chat, jokes, stories, opinions, advice and general knowledge. Call it with no arguments; you will then give the answer aloud.',
+  parameters: { type: 'object', properties: {} },
+});
+
+// Index where visible text must stop: the first call marker, or a trailing partial marker that may grow into one.
+export function visibleEnd(text) {
+  let end = text.length;
+  for (const m of MARKERS) { const i = text.indexOf(m); if (i >= 0) end = Math.min(end, i); }
+  if (end < text.length) return end;
+  for (const m of MARKERS) {
+    for (let k = Math.min(m.length - 1, text.length); k > 0; k--) {
+      if (text.endsWith(m.slice(0, k))) { end = Math.min(end, text.length - k); break; }
+    }
+  }
+  return end;
+}
+
+// The assistant's history (adapter.mjs shapes) into the chat template's messages.
+export function toTemplateMessages(messages) {
+  return messages.map((m) => {
+    if (m.role === 'system') return { role: 'system', content: String(m.content) };
+    if (m.role === 'tool') return { role: 'tool', content: String(m.content) };
+    const parts = Array.isArray(m.content) ? m.content : [{ type: 'text', text: String(m.content ?? '') }];
+    if (m.role === 'assistant') {
+      const out = { role: 'assistant', content: parts.filter((p) => p.type === 'text').map((p) => p.text).join('') };
+      if (m.toolCalls?.length) out.tool_calls = m.toolCalls.map((c) => ({ type: 'function', function: { name: c.name, arguments: c.arguments || {} } }));
+      return out;
+    }
+    return { role: m.role, content: parts };
+  });
+}
+
+// Whether the model's files are already in the engine's cache, from Hugging Face: the decoder (the largest file) and,
+// for speech, the depth decoder, so a cached text model never starts the 515 MB speech download unasked.
+export async function isCached({ cacheStorage = globalThis.caches, speech = true } = {}) {
+  try {
+    if (!cacheStorage) return false;
+    if (!(await cacheStorage.keys()).includes('diskformer-models')) return false;
+    const urls = (await (await cacheStorage.open('diskformer-models')).keys()).map((r) => r.url).filter((u) => /LFM3-Omni-2B/i.test(u));
+    const has = (re) => urls.some((u) => re.test(u));
+    return has(/decoder_q4f16\.onnx_data$/) && (!speech || has(/depth_decoder\.onnx(_data)?$/));
+  } catch { return false; }
+}
+
+// maxNewTokens counts text tokens and 80 ms speech frames together, so a spoken reply needs far more than a text one.
+export function createLfm3OmniModel({ url = ANYFORMER_URL, importer = (u) => import(u), speech = true, maxNewTokens = speech ? 2048 : 384 } = {}) {
+  let session = null, loading = null;
+  // One reply at a time on the engine: two replies overlapping on its sessions hang it (LocalMind session's root
+  // cause, 2026-10-30), so a new reply waits until the last one has fully ended, including one that was stopped.
+  let lastReply = Promise.resolve();
+  const model = {
+    id: 'lfm3-omni-2b',
+    label: 'LFM3-Omni 2B',
+    ready: false,
+    audioOut: speech,
+    downloadLabel: `${((DOWNLOAD_BYTES + (speech ? SPEECH_BYTES : 0)) / 1e9).toFixed(1)} GB`,
+    // Also says how much is left to fetch, so a browser that has the text model hears "0.5 GB", not "2.7 GB".
+    async isCached(opts) {
+      if (await isCached({ ...opts, speech })) return true;
+      if (speech && await isCached({ ...opts, speech: false })) model.downloadLabel = `${(SPEECH_BYTES / 1e9).toFixed(1)} GB of speech files`;
+      return false;
+    },
+    load({ onProgress, signal } = {}) {
+      loading ||= (async () => {
+        const af = await importer(url);
+        session = await af.load(af.MODELS.chat.LFM3_OMNI_2B, { onProgress, signal, ...(speech && { speech: true }) });
+        model.ready = true;
+      })().catch((e) => { loading = null; throw e; });
+      return loading;
+    },
+    async generate(opts = {}) {
+      const before = lastReply;
+      let release;
+      lastReply = new Promise((r) => { release = r; });
+      try { await before; return await (speech && (opts.speech ?? true) && opts.tools?.length ? decideThenSpeak(opts) : reply(opts)); }
+      finally { release(); }
+    },
+    dispose() { session?.dispose?.(); session = null; loading = null; model.ready = false; },
+  };
+  // In speech mode LFM3-Omni-2B called tools in 1 of 3 tries with 17 tools offered; in text mode it called one for 6 of 6
+  // requests in about 1.5 s each (headless checks, 2026-10-30). So a spoken turn with tools first decides in text, and
+  // speaks only the final answer, with no tools offered then.
+  // The decision pass also offers answer_directly, because a small tool-tuned model calls something for nearly every
+  // request (Wikipedia for "hello" and for owls): with it LocalMind's 8-request battery went from 4 to 6 of 8, and to
+  // 7 of 8 with the memories block (LocalMind session, 2026-10-30). It is never run or shown; picked alone, the turn
+  // goes straight to the spoken answer. The pass is capped at 128 tokens, enough for a call.
+  async function decideThenSpeak(opts) {
+    const decision = await reply({ ...opts, tools: [...opts.tools, ANSWER_DIRECTLY], speech: false, onText: undefined, onAudio: undefined, maxTokens: 128 });
+    const calls = decision.toolCalls.filter((c) => c.name !== ANSWER_DIRECTLY.name);
+    if (decision.stopReason === 'aborted' || calls.length) return { ...decision, toolCalls: calls };
+    return reply({ ...opts, tools: [] });
+  }
+  async function reply({ messages, tools = [], onText, onAudio, signal, speech: speak = speech, maxTokens = maxNewTokens } = {}) {
+      if (!session) await model.load({ signal });
+      // Stopped while it waited its turn: never reaches the engine.
+      if (signal?.aborted) return { text: '', toolCalls: [], stopReason: 'aborted' };
+      let msgs = toTemplateMessages(messages);
+      if (speak) msgs = msgs.map((m) => (m.role === 'system' ? { ...m, content: `${m.content}\n${SPEECH_SYSTEM_PROMPT}` } : m));
+      // Our own stop: a closed tool call ends the reply, so no time goes to voicing its markup.
+      const inner = new AbortController();
+      const onAbort = () => inner.abort();
+      signal?.addEventListener('abort', onAbort, { once: true });
+      let full = '', shown = 0, tokens = 0, marked = false, closed = false;
+      try {
+        for await (const chunk of session.generate(msgs, {
+          signal: inner.signal, maxNewTokens: maxTokens, thinking: false, ...(tools.length ? { tools } : {}), ...(speak && { speech: true }),
+        })) {
+          // After a stop, keep reading until the engine has really finished, so the next reply never overlaps it.
+          if (closed || signal?.aborted) continue;
+          full = chunk.text ?? full; tokens = chunk.tokens || tokens;
+          const end = visibleEnd(full);
+          if (end > shown) { onText?.(full.slice(shown, end)); shown = end; }
+          marked ||= end < full.length && MARKERS.some((m) => full.includes(m));
+          // A copy, because the chunk can be a view of the engine's own buffer.
+          if (chunk.audio?.length && !marked && !signal?.aborted) onAudio?.(Float32Array.from(chunk.audio));
+          if (marked && /<\/tool_call>|<\/function>/.test(full)) { closed = true; inner.abort(); }
+        }
+      } finally { signal?.removeEventListener('abort', onAbort); }
+      if (signal?.aborted) return { text: full.slice(0, shown), toolCalls: [], stopReason: 'aborted' };
+      const { content, toolCalls } = parseLocalToolCalls(full, tools, { idPrefix: 'voice' });
+      // A held partial marker that never became a call is ordinary text.
+      if (!toolCalls.length && full.length > shown) { onText?.(full.slice(shown)); shown = full.length; }
+      return {
+        text: toolCalls.length ? content : full,
+        toolCalls: toolCalls.map((c) => ({ name: c.function.name, arguments: JSON.parse(c.function.arguments) })),
+        stopReason: toolCalls.length ? 'tool_calls' : tokens >= maxTokens ? 'length' : 'stop',
+      };
+  }
+  return model;
+}

@@ -2,6 +2,7 @@
 plan/
 !index.html
 !README.md
+!CHANGELOG.md
 !LICENSE
 !llms.txt
 !sitemap.xml

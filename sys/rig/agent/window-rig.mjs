@@ -34,15 +34,26 @@ export function installWindowRig({ target, enabled, face }) {
 export function wireWindowRig({ getFace, target = window, container = target.document.body }) {
   const key = 'naklios.agent.enabled';
   const doc = target.document;
+  // Docked (a container other than <body>, such as the desktop's status bar): a small entry whose body opens
+  // upward in the host's theme colours. Undocked: the floating band apps have always had.
+  const docked = container !== doc.body;
   const panel = doc.createElement('details');
-  panel.style.cssText = 'position:fixed;bottom:8px;right:8px;z-index:10020;background:#20212a;color:white;padding:8px;border-radius:8px;font:12px system-ui;max-width:320px';
-  const label = doc.createElement('summary'); label.textContent = 'Developer agent tools'; panel.append(label);
+  panel.style.cssText = docked ? 'position:relative;font:inherit;color:inherit'
+    : 'position:fixed;bottom:8px;right:8px;z-index:10020;background:#20212a;color:white;padding:8px;border-radius:8px;font:12px system-ui;max-width:320px';
+  const label = doc.createElement('summary'); label.textContent = docked ? 'Agent tools' : 'Developer agent tools'; panel.append(label);
+  if (docked) label.style.cssText = 'cursor:pointer;list-style:none';
+  const body = docked ? doc.createElement('div') : panel;
+  if (docked) {
+    body.style.cssText = 'position:absolute;bottom:calc(100% + 8px);right:0;width:300px;padding:10px;border-radius:10px;font:12px system-ui;'
+      + 'background:var(--panel,#fff);color:var(--ink,#111);border:1px solid var(--line,#ddd);box-shadow:var(--shadow,0 8px 24px rgba(0,0,0,.2));z-index:1600';
+    panel.append(body);
+  }
   const toggle = doc.createElement('input'); toggle.type = 'checkbox';
   const option = doc.createElement('label'); option.append(toggle, doc.createTextNode(' Enable agent tools in this tab'));
-  panel.append(option);
-  const description = doc.createElement('p'); description.textContent = 'Enables declared tools over this workspace or connected store. Destructive requests wait here for your review.'; panel.append(description);
-  const review = doc.createElement('button'); review.textContent = 'Review pending requests'; panel.append(review);
-  const proposals = doc.createElement('div'); panel.append(proposals); container.append(panel);
+  body.append(option);
+  const description = doc.createElement('p'); description.textContent = 'Enables declared tools over this workspace or connected store. Destructive requests wait here for your review.'; body.append(description);
+  const review = doc.createElement('button'); review.textContent = 'Review pending requests'; body.append(review);
+  const proposals = doc.createElement('div'); body.append(proposals); container.append(panel);
   const current = () => { const face=getFace(); if(!face) throw new Error('Workspace is still loading'); return face; };
   const proxy = {
     invoke: (...a) => current().invoke(...a), reject: (...a) => current().reject(...a),

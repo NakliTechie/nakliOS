@@ -39,6 +39,7 @@ assert.match(
 // ── First-run tour replaces the welcome splash ──
 assert.match(host, /const TOUR_KEY = 'nakliOS\.tour\.v1'/, 'tour has its own completion key');
 assert.match(host, /const TOUR_STEPS = \[/, 'tour steps are defined');
+assert.match(host, /const TOUR_STEPS = \[[\s\S]*?target:'#assistant-btn'[\s\S]*?\];/, 'the tour shows the voice assistant');
 assert.match(host, /function startTour\(/, 'startTour exists');
 assert.match(host, /function finishTour\(/, 'finishTour persists completion');
 assert.match(host, /function maybeStartFirstRunTour\(/, 'first-run trigger exists');

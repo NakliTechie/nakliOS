@@ -1035,6 +1035,10 @@ body.is-mobile .nw-dock{display:none;}
 #footer-nav a{color:var(--muted);}
 #footer-nav a:hover{color:var(--brand); text-decoration:none;}
 #footer-nav .spacer{flex:1;}
+#footer-agent-tools{color:var(--muted);}
+/* Above the windows while the agent tools are open, because their body opens upward over the desktop. */
+#footer-nav:has(#footer-agent-tools details[open]){z-index:1500;}
+#footer-agent-tools summary:hover{color:var(--brand);}
 
 /* ── CLASSICS ── */
 .cl-mine{padding:10px; font-family:'SF Mono',Consolas,monospace;}
@@ -1450,6 +1454,7 @@ body.is-mobile .nw-dock{display:none;}
       <span>Search apps…</span>
       <span class="kbd" id="kbd-hint">⌘K</span>
     </button>
+    <button id="assistant-btn" class="topbar-btn" type="button" title="Voice assistant (⌘.)" aria-label="Voice assistant">🎙</button>
     <button id="fsa-chip" class="topbar-chip" title="Local folder backend" aria-label="Folder — not connected">
       <span class="topbar-chip-dot"></span>
       <span class="topbar-chip-icon">📁</span>
@@ -1477,6 +1482,7 @@ body.is-mobile .nw-dock{display:none;}
     <span class="spacer"></span>
     <a href="https://naklitechie.github.io/" target="_blank" rel="noopener">← More projects</a>
     <a href="https://github.com/NakliTechie/nakli-dev" target="_blank" rel="noopener">⌨ Source</a>
+    <span id="footer-agent-tools"></span>
   </footer>
 
   <div id="overlay-root"></div>
@@ -8845,6 +8851,8 @@ const TOUR_KEY = 'nakliOS.tour.v1';
 const TOUR_STEPS = [
   { target:'#spotlight-btn', title:'Welcome to NakliOS',
     body:'Your private browser desktop — every tool runs in this tab and nothing leaves your device. Press ⌘K (or click here) to find any app by name, tag, or plain description.' },
+  { target:'#assistant-btn', title:'Talk to your desktop',
+    body:'Click 🎙 or press ⌘. to open the voice assistant. Ask it to set a timer, add to your calendar or shopping list, remember something, or check the weather. It runs on a speech model inside this tab; the first time, it asks before downloading about 2.7 GB.' },
   { target:'#icon-area', title:'Grouped by task',
     body:'Your tools are organised into folders like Create & Convert, Work & Build, and Play. Click a folder to open it, or an app to launch it in a window.' },
   { target:'#fsa-chip', title:'Storage stays optional',
@@ -10760,6 +10768,7 @@ function openCheatSheet(){
     <h3>Keyboard &amp; mouse</h3>
     <div class="nw-cheat-row"><span class="nw-cheat-desc">Spotlight (search apps)</span><span class="nw-cheat-key"><kbd>⌘</kbd><kbd>K</kbd></span></div>
     <div class="nw-cheat-row"><span class="nw-cheat-desc">Close active window</span><span class="nw-cheat-key"><kbd>⌘</kbd><kbd>W</kbd></span></div>
+    <div class="nw-cheat-row"><span class="nw-cheat-desc">Voice assistant</span><span class="nw-cheat-key"><kbd>⌘</kbd><kbd>.</kbd></span></div>
     <div class="nw-cheat-row"><span class="nw-cheat-desc">This help</span><span class="nw-cheat-key"><kbd>⌘</kbd><kbd>/</kbd></span></div>
     <div class="nw-cheat-row"><span class="nw-cheat-desc">Close popovers / exit fullscreen</span><span class="nw-cheat-key"><kbd>Esc</kbd></span></div>
     <div class="nw-cheat-row"><span class="nw-cheat-desc">Drag icon onto another</span><span class="nw-cheat-key">Swap positions</span></div>
@@ -13248,6 +13257,7 @@ async function init(){
   renderIcons();
 
   document.getElementById('spotlight-btn').addEventListener('click', openSpotlight);
+  document.getElementById('assistant-btn').addEventListener('click', toggleAssistant);
   document.getElementById('settings-btn').addEventListener('click', openSettings);
   document.getElementById('mode-pill').addEventListener('click', e => { e.stopPropagation(); openSettings(); });
   maybeStartFirstRunTour();
@@ -13277,6 +13287,10 @@ async function init(){
         if (top){ e.preventDefault(); closeWindow(top); }
       }
     }
+    if ((e.metaKey || e.ctrlKey) && e.key === '.'){
+      e.preventDefault();
+      toggleAssistant();
+    }
     if ((e.metaKey || e.ctrlKey) && e.key === '/'){
       e.preventDefault();
       openCheatSheet();
@@ -13303,9 +13317,127 @@ if (document.readyState === 'loading'){
   init();
 }
 
+// The voice assistant (sys/voice/). It loads on first use and reaches the desktop only through the
+// host command registry below, so its open_app tool and the agent face run the same commands.
+let voiceAssistant = null;
+async function voiceAssistantReady(){
+  if (voiceAssistant) return voiceAssistant;
+  const [{ mountVoiceAssistant }, { registry }] = await Promise.all([import('./sys/voice/overlay.mjs'), hostAgentReady]);
+  const call = async (name, input) => {
+    const out = await registry.invokeCommand(name, input, { caller:'voice-assistant' });
+    if (!out?.ok) throw new Error(out?.message || out?.code || `${name} failed`);
+    return out.result;
+  };
+  voiceAssistant ||= mountVoiceAssistant({ root:document.body, host:{
+    listApps:() => call('apps.list', {}),
+    openApp:id => call('apps.open', { id }),
+  }, more:voiceAssistantDeps() });
+  return voiceAssistant;
+}
+// What the assistant's memory, calendar, page, Python and skill tools reach: the person's own storage and apps.
+function voiceConnectedBackend(){ return BACKENDS.fsa.isConnected() ? 'fsa' : BACKENDS.crate.isConnected() ? 'crate' : null; }
+async function voiceOpfsFile(path, create){
+  const dir = await (await navigator.storage.getDirectory()).getDirectoryHandle('nakli-assistant', { create:true });
+  return dir.getFileHandle(path.replace(/\//g, '__'), { create });
+}
+function voiceAssistantDeps(){
+  // Folder or Crate when connected, so memories sit on the person's disk; this browser's private storage otherwise.
+  const memory = {
+    async read(path){
+      const id = voiceConnectedBackend();
+      if (id) return (await BACKENDS[id].exists(path)) ? await BACKENDS[id].read(path) : null;
+      try { return await (await (await voiceOpfsFile(path, false)).getFile()).text(); } catch { return null; }
+    },
+    async write(path, text){
+      const id = voiceConnectedBackend();
+      if (id) return BACKENDS[id].write(path, text);
+      const w = await (await voiceOpfsFile(path, true)).createWritable(); await w.write(text); await w.close();
+    },
+  };
+  // An app's own data files, in the place that app is set to keep them (its <app>.location key): 'browser' is the
+  // app's IndexedDB (same origin as this host, store 'files'); Folder and Crate keep apps/<app>/<path>.
+  function appDataStore(app, dbName, appLabel){
+    const idb = (mode, fn) => new Promise((resolve, reject) => {
+      const open = indexedDB.open(dbName, 1);
+      open.onupgradeneeded = () => open.result.createObjectStore('files');
+      open.onerror = () => reject(open.error);
+      open.onsuccess = () => { const tx = open.result.transaction('files', mode), req = fn(tx.objectStore('files'));
+        req.onsuccess = () => { resolve(req.result); open.result.close(); }; req.onerror = () => reject(req.error); };
+    });
+    const where = () => { const id = localStorage.getItem(`naklios.${app}.location`) || 'browser'; return id !== 'browser' && BACKENDS[id]?.isConnected() ? id : 'browser'; };
+    const full = path => `apps/${app}/${path}`;
+    return {
+      get label(){ return where() === 'browser' ? `${appLabel} (this browser)` : `${appLabel} (${BACKENDS[where()].label})`; },
+      async read(path){ const id = where(); if (id === 'browser') { const v = await idb('readonly', s => s.get(path)); return v == null ? null : String(v); }
+        return (await BACKENDS[id].exists(full(path))) ? await BACKENDS[id].read(full(path)) : null; },
+      async write(path, text){ const id = where(); if (id === 'browser') return idb('readwrite', s => s.put(String(text), path));
+        return BACKENDS[id].write(full(path), text); },
+    };
+  }
+  const calendarFiles = appDataStore('calendar', 'naklios-calendar-v1', 'Calendar');
+  const calendar = { get label(){ return calendarFiles.label; }, read:() => calendarFiles.read('calendar.json'), write:text => calendarFiles.write('calendar.json', text) };
+  const notes = appDataStore('notes', 'naklios-notes-v1', 'Notes');
+  // The person's music, from the connected Folder or Crate (the same place the Files app shows).
+  const musicFiles = () => { const id = voiceConnectedBackend(); if (!id) return null; const b = BACKENDS[id];
+    return { list:prefix => b.list(prefix), read:async path => new Uint8Array(await b.readBinary(path)) }; };
+  // A page is read directly; else through the person's NakliOS web relay; else through Jina Reader (r.jina.ai), which
+  // sees the address, so only after the person allows it once in the panel. (allorigins.win, LocalMind's proxy,
+  // answered HTTP 522 after 20 s on 2026-10-30; Jina answered in 0.4 s with the page as plain text.)
+  async function fetchText(url){
+    try { const r = await fetch(url, { signal:AbortSignal.timeout(8000) }); return { status:r.status, text:await r.text(), via:'direct' }; } catch (_) {}
+    if (egressConfigured()){ const r = await egressFetch({ url }); return { status:r.status, text:new TextDecoder().decode(r.body), via:'NakliOS web relay' }; }
+    const host = new URL(url).host;
+    if (!(await voiceAssistant.consent('page-proxy', `${host} blocks reading from this page. Read it through Jina Reader (r.jina.ai)? That service sees the address.`)))
+      throw new Error(`${host} blocks direct reading and the person did not allow the reader service`);
+    const r = await fetch(`https://r.jina.ai/${url}`, { headers:{ 'X-Return-Format':'text' }, signal:AbortSignal.timeout(15000) });
+    return { status:r.status, text:await r.text(), via:'Jina Reader', plain:true };
+  }
+  let kiln = null;
+  async function python(){
+    if (kiln) return kiln;
+    const [{ createMainThreadKiln }, fo] = await Promise.all([import('./sys/kiln/main-thread-runtime.mjs'), import('./sys/rig/fileops/index.mjs')]);
+    const k = createMainThreadKiln({ fs:fo.createFileops({ backend:new fo.MemoryBackend() }), mount:'voice' });
+    let cell = 0;
+    return (kiln = { runCode:async code => {
+      const out = await k.exec(`voice-${++cell}`, code, { isolate:true });
+      if (out.status === 'unavailable') throw new Error(out.message || 'Python could not load');
+      return out;
+    } });
+  }
+  const skills = { async propose(skill){
+    const store = skillLibraryStore();
+    if (!store) throw new Error('connect a Folder or Crate in Settings → Storage to keep a skills library');
+    if (!_skillLibMod) _skillLibMod = await import('./sys/ai/skill-library.mjs');
+    return _skillLibMod.proposeSkill(store, skill);
+  } };
+  // The Calendar app's own date code, loaded once as the classic script it is, for repeating events.
+  let core = null;
+  const calendarCore = () => core ||= (globalThis.CalendarCore ? Promise.resolve(globalThis.CalendarCore) : new Promise((resolve, reject) => {
+    const s = document.createElement('script'); s.src = './apps/calendar/core.js';
+    s.onload = () => (globalThis.CalendarCore ? resolve(globalThis.CalendarCore) : reject(new Error('Calendar code did not load')));
+    s.onerror = () => { core = null; reject(new Error('Calendar code did not load')); };
+    document.head.appendChild(s);
+  }));
+  return { memory, calendar, calendarCore, notes, musicFiles, fetchText, python, skills };
+}
+const openAssistant = async () => (await voiceAssistantReady()).open();
+// A saved reminder needs the assistant running to fire, so a page that has one loads it (the panel stays closed).
+try { if ((JSON.parse(localStorage.getItem('nakli.voice.reminders') || '[]')).length) setTimeout(() => voiceAssistantReady().catch(() => {}), 1500); } catch (_) {}
+const closeAssistant = () => voiceAssistant?.close();
+const toggleAssistant = async () => (await voiceAssistantReady()).toggle();
+const askAssistant = async text => { await (await voiceAssistantReady()).ask(text); };
+const listenAssistant = async () => (await voiceAssistantReady()).listen();
+const stopListeningAssistant = () => voiceAssistant?.stopListening();
+const stopAssistant = () => voiceAssistant?.stop();
+const setAssistantHandsFree = async on => (await voiceAssistantReady()).setHandsFree(!!on);
+const assistantState = () => voiceAssistant ? { open:voiceAssistant.isOpen, state:voiceAssistant.state, model:voiceAssistant.modelId } : { open:false, state:'idle' };
+const loadAssistantModel = async () => { await (await voiceAssistantReady()).loadModel(); };
+const setAssistantWebLookups = async on => (await voiceAssistantReady()).setWebLookups(!!on);
+const setAssistantPageProxy = async on => (await voiceAssistantReady()).setConsent('page-proxy', !!on);
+
 // The declared desktop command bus. Only the developer opt-in exposes invocation.
-import('./sys/host/agent.mjs').then(({ attachHostAgent }) => attachHostAgent({
-  target:window, diagnosticsThresholds:LAUNCH_DIAGNOSTIC_THRESHOLDS,
+const hostAgentReady = import('./sys/host/agent.mjs').then(({ attachHostAgent }) => attachHostAgent({
+  target:window, diagnosticsThresholds:LAUNCH_DIAGNOSTIC_THRESHOLDS, container:document.getElementById('footer-agent-tools'),
   actions:{
     apps:() => APPS.map(({id,name,kind}) => ({id,name,kind})),
     themes:() => THEMES.map(({id,name}) => ({id,name})),
@@ -13322,8 +13454,11 @@ import('./sys/host/agent.mjs').then(({ attachHostAgent }) => attachHostAgent({
     closeWindow:id => { const w=openWindows[id]; if(!w) throw new Error('Window not open'); return closeWindow(w); },
     diagnostics:launchDiagnosticsSnapshot,
     fsRead, fsReadBinary, fsWrite, fsAppend, fsList, fsDelete, fsExists,
+    openAssistant, closeAssistant, askAssistant, listenAssistant, stopListeningAssistant, stopAssistant,
+    setAssistantHandsFree, assistantState, loadAssistantModel, setAssistantWebLookups, setAssistantPageProxy,
   },
-})).catch(error => console.error('Desktop agent interface could not load', error));
+}));
+hostAgentReady.catch(error => console.error('Desktop agent interface could not load', error));
 
 </script>
 </body>
