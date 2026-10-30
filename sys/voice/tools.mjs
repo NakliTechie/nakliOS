@@ -61,11 +61,94 @@ export function createTimers({ onDone = () => {}, setTimeoutFn = setTimeout, cle
   };
 }
 
+// Reminders at a clock time ("remind me at 5 pm", "wake me at 7"). Kept in `store` (this browser's localStorage), so they
+// survive a reload; one that came due while the page was closed fires as soon as the assistant loads, marked late.
+const MAX_DELAY = 2 ** 31 - 1;   // setTimeout's limit (about 24.8 days); longer waits re-arm
+export function createReminders({ onDue = () => {}, store = null, now = Date.now, setTimeoutFn = setTimeout, clearTimeoutFn = clearTimeout } = {}) {
+  let list = [];
+  try { list = (store?.load() || []).filter((r) => r && r.id && Number.isFinite(r.at)); } catch (_) {}
+  const handles = new Map();
+  let seq = 0;
+  const save = () => { try { store?.save(list); } catch (_) {} };
+  function fire(r, late) { handles.delete(r.id); list = list.filter((x) => x.id !== r.id); save(); onDue({ ...r, late }); }
+  function arm(r, first = false) {
+    const wait = r.at - now();
+    if (wait <= 0) return fire(r, first && wait < -60000);
+    handles.set(r.id, setTimeoutFn(() => (r.at - now() > 0 ? arm(r) : fire(r, false)), Math.min(wait, MAX_DELAY)));
+  }
+  const spoken = (at) => new Date(at).toLocaleString(undefined, { weekday: 'long', hour: 'numeric', minute: '2-digit' });
+  list.forEach((r) => arm(r, true));
+  return {
+    add(at, message) {
+      const r = { id: `reminder-${now().toString(36)}-${++seq}`, at, message: String(message || '').slice(0, 200) };
+      list.push(r); save(); arm(r);
+      return { id: r.id, message: r.message, when: spoken(at) };
+    },
+    cancel(id) { const h = handles.get(id); if (h) clearTimeoutFn(h); handles.delete(id); const n = list.length; list = list.filter((r) => r.id !== id); save(); return list.length < n; },
+    list: () => [...list].sort((a, b) => a.at - b.at).map((r) => ({ id: r.id, message: r.message, when: spoken(r.at) })),
+    raw: () => [...list],
+  };
+}
+
+// "17:00", "5 pm", "2026-11-02T17:00" → a time in ms; a bare clock time already past today means tomorrow.
+export function parseReminderTime(text, nowDate = new Date()) {
+  const s = String(text ?? '').trim().toLowerCase();
+  let m = /^(\d{4})-(\d{2})-(\d{2})[t ](\d{1,2}):(\d{2})$/.exec(s);
+  if (m) {
+    const d = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]);
+    if (d.getDate() !== +m[3] || +m[4] > 23 || +m[5] > 59) throw new Error(`${text} is not a real date and time`);
+    return d.getTime();
+  }
+  m = /^(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?$/.exec(s);
+  if (!m) throw new Error('at must be a clock time such as "17:00" or "5 pm", or a local date-time such as "2026-11-02T17:00"');
+  let h = +m[1]; const min = m[2] ? +m[2] : 0; const ap = m[3]?.[0];
+  if (ap && (h < 1 || h > 12)) throw new Error(`${text} is not a clock time`);
+  if (ap === 'p' && h < 12) h += 12;
+  if (ap === 'a' && h === 12) h = 0;
+  if (h > 23 || min > 59) throw new Error(`${text} is not a clock time`);
+  const d = new Date(nowDate); d.setHours(h, min, 0, 0);
+  if (d.getTime() <= nowDate.getTime()) d.setDate(d.getDate() + 1);
+  return d.getTime();
+}
+
+function reminderTools(reminders, now) {
+  return [
+    {
+      name: 'set_reminder',
+      description: 'Remind the person at a clock time, e.g. "remind me at 5 pm to call Mum" or "wake me at 7". For a length of time ("in 10 minutes") use set_timer.',
+      parameters: { type: 'object', properties: {
+        at: { type: 'string', description: 'Clock time ("17:00", "5 pm") or local date-time ("2026-11-02T17:00")' },
+        message: { type: 'string', description: 'What to remind them of' },
+      }, required: ['at'] },
+      run: ({ at, message = '' }) => reminders.add(parseReminderTime(at, now()), message),
+    },
+    {
+      name: 'list_reminders',
+      description: 'List the reminders that are set.',
+      parameters: { type: 'object', properties: {}, required: [] },
+      run: () => ({ reminders: reminders.list() }),
+    },
+    {
+      name: 'cancel_reminder',
+      description: 'Cancel a reminder, by words from its message.',
+      parameters: { type: 'object', properties: { message: { type: 'string', description: 'Words from the reminder' } }, required: ['message'] },
+      run({ message }) {
+        const want = String(message).toLowerCase();
+        const hit = reminders.list().find((r) => r.message.toLowerCase().includes(want) || want.includes(r.message.toLowerCase()));
+        if (!hit) throw new Error(`no reminder matches "${message}"`);
+        reminders.cancel(hit.id);
+        return { cancelled: hit.message, was: hit.when };
+      },
+    },
+  ];
+}
+
 const norm = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
 
 // host: { listApps() → [{id,name}], openApp(id) } — the host passes its command registry's apps.* commands.
-export function builtinTools({ host, timers, nav = globalThis.navigator, now = () => new Date() }) {
+export function builtinTools({ host, timers, reminders = null, nav = globalThis.navigator, now = () => new Date() }) {
   return [
+    ...(reminders ? reminderTools(reminders, now) : []),
     {
       name: 'set_timer',
       description: 'Start a countdown timer. Say when it ends.',

@@ -6,9 +6,10 @@
 // host: { listApps(), openApp(id) } from the host command registry. Every action here is also a
 // host command (assistant.* in sys/host/agent.mjs), so the agent face and the panel share one list.
 import { VOICE_MODELS, tone } from './adapter.mjs';
-import { createToolRegistry, createTimers, builtinTools } from './tools.mjs';
+import { createToolRegistry, createTimers, createReminders, builtinTools } from './tools.mjs';
 import { lookupTools } from './web-tools.mjs';
 import { moreTools, memoryContext, SEARCH_PROVIDERS } from './more-tools.mjs';
+import { createMusic, musicTools } from './music.mjs';
 import { createVoiceSession } from './session.mjs';
 import { openMic, createVad, createTurnRecorder, createPlayer, createSpeechFallback } from './audio.mjs';
 
@@ -87,6 +88,7 @@ const webOn = () => { try { return localStorage.getItem(WEB_KEY) !== 'off'; } ca
 // Answers the person gave once and the assistant keeps in this browser (a proxy allowed, a search provider set).
 const CONSENT_KEY = (id) => `nakli.voice.consent.${id}`;
 const SEARCH_KEY = 'nakli.voice.search';
+export const REMINDER_KEY = 'nakli.voice.reminders';
 const readJson = (key) => { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; } };
 
 export function mountVoiceAssistant({ root = document.body, host, more = null, model: injected = null } = {}) {
@@ -107,12 +109,21 @@ export function mountVoiceAssistant({ root = document.body, host, more = null, m
   const player = createPlayer({ onLevel: (l) => { level = l; } });
   const speech = createSpeechFallback();
   const timers = createTimers({ onDone: ({ seconds, label }) => announce(`Timer done${label ? `: ${label}` : ''} (${seconds} s).`) });
-  const tools = createToolRegistry([...builtinTools({ host, timers }), ...lookupTools({ webOn }),
+  // Reminders chime, open the panel and, when the person has allowed notifications for this site, show one.
+  const reminders = createReminders({
+    onDue: (r) => {
+      announce(`${r.late ? 'Missed reminder' : 'Reminder'}${r.message ? `: ${r.message}` : ''}.`);
+      try { if (globalThis.Notification?.permission === 'granted') new Notification('NakliOS reminder', { body: r.message || 'It is time.' }); } catch (_) {}
+    },
+    store: { load: () => readJson(REMINDER_KEY) || [], save: (list) => localStorage.setItem(REMINDER_KEY, JSON.stringify(list)) },
+  });
+  const music = createMusic({ files: () => more?.musicFiles?.() || null });
+  const tools = createToolRegistry([...builtinTools({ host, timers, reminders }), ...musicTools({ music, host }), ...lookupTools({ webOn }),
     ...(more ? moreTools({ ...more, webOn, search: () => readJson(SEARCH_KEY) }) : [])]);
   const session = createVoiceSession({
     model, tools, player, speech,
     context: () => (more?.memory ? memoryContext(more.memory) : ''),
-    onState: (s) => { if (panel) { panel.dataset.state = s; els.state.textContent = STATE_TEXT[s]; els.stop.hidden = !(s === 'thinking' || s === 'speaking'); } },
+    onState: (s) => { if (s === 'idle') music.duck(false); if (panel) { panel.dataset.state = s; els.state.textContent = STATE_TEXT[s]; els.stop.hidden = !(s === 'thinking' || s === 'speaking'); } },
     onText: (delta) => { botBubble ||= addMsg('bot', ''); botBubble.textContent += delta; scroll(); },
     onTool: ({ name, arguments: args, result }) => { addMsg('tool', `${name}(${JSON.stringify(args)}) → ${result.ok ? 'ok' : result.error}`); botBubble = null; },
     onError: (e) => addMsg('err', String(e?.message || e)),
@@ -156,7 +167,9 @@ export function mountVoiceAssistant({ root = document.body, host, more = null, m
     if (!recorder) { preroll.push(frame); if (preroll.length > PREROLL_FRAMES) preroll.shift(); }
     if (!handsFree) return;
     const now = performance.now();
-    if (player.playing || speech.busy) quietUntil = now + ECHO_TAIL_MS;
+    // The assistant's own voice and its music bypass echo cancellation, so the mic ignores sound while either plays;
+    // pressing the orb still talks over them (music drops to a fifth of its volume while the person speaks).
+    if (player.playing || speech.busy || music.playing) quietUntil = now + ECHO_TAIL_MS;
     if (now < quietUntil) { if (recorder) { recorder = null; session.stopListening(); } vad.reset(); preroll = []; return; }
     const ev = vad.push(frame);
     if (ev === 'start') { session.startListening(); recorder = createTurnRecorder(); preroll.splice(0).forEach((f) => recorder.push(f)); return; }
@@ -174,6 +187,7 @@ export function mountVoiceAssistant({ root = document.body, host, more = null, m
     try { await ensureMic(); }
     catch (e) { pushing = false; addMsg('err', `Microphone: ${e.message || e}`); return; }
     if (!pushing) return;   // released before the mic opened
+    music.duck(true);
     session.startListening();
     recorder = createTurnRecorder();
     recorder.byPress = true;   // a pressed turn is meant, so the noise filter does not apply
@@ -382,6 +396,6 @@ export function mountVoiceAssistant({ root = document.body, host, more = null, m
   return {
     open, close, toggle: () => (panel ? close() : open()), get isOpen() { return !!panel; },
     ask, listen, stopListening, stop, setHandsFree, setWebLookups, setConsent, consent, loadModel, get modelId() { return modelId; },
-    get state() { return session.state; }, session, tools, timers,
+    get state() { return session.state; }, session, tools, timers, reminders, music,
   };
 }

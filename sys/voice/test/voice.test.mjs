@@ -553,5 +553,128 @@ await test('a repeated tool call ends the tool rounds, and web search is hidden 
   assert.deepEqual(s.history.map((m) => m.role), ['user', 'assistant', 'tool', 'assistant', 'assistant']);
 });
 
+// ── reminders, calendar reading ──
+const { createReminders, parseReminderTime } = await import('../tools.mjs');
+await test('reminder times parse clock times, am/pm and dates; a past clock time means tomorrow', () => {
+  const now = new Date(2026, 9, 30, 14, 0);
+  const at = (t) => { const d = new Date(parseReminderTime(t, now)); return `${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; };
+  assert.equal(at('17:00'), '30 17:00');
+  assert.equal(at('5 pm'), '30 17:00');
+  assert.equal(at('7'), '31 7:00');          // 07:00 has passed today
+  assert.equal(at('7:30 am'), '31 7:30');
+  assert.equal(at('12 am'), '31 0:00');
+  assert.equal(at('2026-11-02T09:15'), '2 9:15');
+  assert.throws(() => parseReminderTime('13 pm', now), /not a clock time/);
+  assert.throws(() => parseReminderTime('soon', now), /clock time/);
+});
+
+await test('reminders survive a reload, fire on time, and a missed one fires late', () => {
+  let saved = []; const store = { load: () => saved, save: (l) => { saved = JSON.parse(JSON.stringify(l)); } };
+  let t = 1000; const pending = []; const due = [];
+  const mk = () => createReminders({ onDue: (r) => due.push(r), store, now: () => t, setTimeoutFn: (fn, ms) => { pending.push({ fn, at: t + ms }); return pending.length; }, clearTimeoutFn: () => {} });
+  const r1 = mk();
+  r1.add(5000, 'call Mum'); r1.add(9000, 'stretch');
+  assert.equal(saved.length, 2);
+  const r2 = mk();                           // a reload: both come back from the store
+  assert.deepEqual(r2.list().map((x) => x.message), ['call Mum', 'stretch']);
+  t = 200000;                                // the page was closed past both
+  createReminders({ onDue: (r) => due.push(r), store, now: () => t, setTimeoutFn: () => 0 });
+  assert.deepEqual(due.map((r) => [r.message, r.late]), [['call Mum', true], ['stretch', true]]);
+  assert.equal(saved.length, 0);
+});
+
+await test('set_reminder, list_reminders and cancel_reminder through the registry', async () => {
+  let saved = [];
+  const reminders = createReminders({ store: { load: () => saved, save: (l) => { saved = l; } }, setTimeoutFn: () => 0, clearTimeoutFn: () => {}, now: () => new Date(2026, 9, 30, 14, 0).getTime() });
+  const reg = createToolRegistry(builtinTools({ host, timers: createTimers(), reminders, nav: fakeNav, now: () => new Date(2026, 9, 30, 14, 0) }));
+  assert.equal((await reg.run('set_reminder', { at: '5 pm', message: 'call Mum' })).ok, true);
+  assert.equal((await reg.run('list_reminders')).result.reminders[0].message, 'call Mum');
+  assert.equal((await reg.run('cancel_reminder', { message: 'mum' })).result.cancelled, 'call Mum');
+  assert.equal(saved.length, 0);
+  assert.match((await reg.run('set_reminder', { at: 'later' })).error, /clock time/);
+});
+
+await test('get_calendar_events reads a day with the Calendar app\'s own repeat rules', async () => {
+  await import('../../../apps/calendar/core.js');
+  const core = globalThis.CalendarCore;
+  assert.ok(core?.expandEvents);
+  const st = standIns(); const reg = createToolRegistry(moreTools({ ...st.deps, calendarCore: async () => core }));
+  await reg.run('create_calendar_event', { title: 'Dentist', start: '2026-11-02T15:00', duration_minutes: 30 });
+  const data = JSON.parse(st.cal);
+  data.events.push({ id: 'yoga', title: 'Yoga', description: '', location: '', startLocal: '2026-10-26T07:00', endLocal: '2026-10-26T08:00', allDay: false,
+    timeZone: data.events[0].timeZone, recurrence: { frequency: 'weekly', interval: 1, until: null } });
+  await st.deps.calendar.write(JSON.stringify(data));
+  const mon = await reg.run('get_calendar_events', { date: '2026-11-02' });
+  assert.deepEqual(mon.result.events.map((e) => `${e.title} ${e.start}`), ['Yoga 2026-11-02 07:00', 'Dentist 2026-11-02 15:00']);
+  const today = await reg.run('get_calendar_events', {});        // stand-in clock: Friday 30 October
+  assert.deepEqual(today.result.events, []);
+  assert.equal(today.result.message, 'Nothing on the calendar.');
+  const week = await reg.run('get_calendar_events', { date: '2026-11-01', days: 9 });
+  assert.equal(week.result.events.filter((e) => e.title === 'Yoga').length, 2);
+});
+
+// ── music and Notes ──
+const { createMusic, musicTools, matchTracks } = await import('../music.mjs');
+function fakeStore(paths) {
+  const tree = new Map();
+  for (const p of paths) { const parts = p.split('/'); for (let i = 0; i < parts.length; i++) {
+    const dir = parts.slice(0, i).join('/'); const name = parts.slice(0, i + 1).join('/') + (i < parts.length - 1 ? '/' : '');
+    if (!tree.has(dir)) tree.set(dir, new Set()); tree.get(dir).add(name); } }
+  return { list: async (prefix) => [...(tree.get(prefix) || [])].sort(), read: async (path) => new Uint8Array([1, 2, 3]) };
+}
+const fakeAudio = () => ({ paused: true, ended: false, volume: 1, src: '', async play() { this.paused = false; }, pause() { this.paused = true; }, removeAttribute() {} });
+
+await test('music finds tracks by artist, album or song words and skips app folders', async () => {
+  const paths = ['Music/Arijit Singh/Tum Hi Ho.mp3', 'Music/Arijit Singh/Channa Mereya.m4a', 'Music/Lata/Lag Jaa Gale.flac', 'apps/nakliamp/demo.mp3', 'Music/cover.jpg'];
+  const m = createMusic({ files: () => fakeStore(paths), makeAudio: fakeAudio, shuffle: (x) => x });
+  const r = await m.play('arijit');
+  assert.equal(r.playing, 'Channa Mereya');
+  assert.equal(r.queued, 1);
+  assert.equal(m.playing, true);
+  assert.equal((await m.next()).playing, 'Tum Hi Ho');
+  await assert.rejects(m.next(), /nothing queued/);
+  assert.equal(m.pause().paused, 'Tum Hi Ho');
+  assert.equal(m.playing, false);
+  assert.equal(m.setVolume({ change: 'down' }).volume, 65);
+  assert.equal(m.setVolume({ level: 30 }).volume, 30);
+  assert.equal((await m.play('')).queued, 2);                 // shuffle all three tracks; the app's demo file is skipped
+  await assert.rejects(m.play('beethoven'), /no music matches/);
+  assert.deepEqual(matchTracks(paths, 'play some songs by lata'), ['Music/Lata/Lag Jaa Gale.flac']);
+  const none = createMusic({ files: () => null });
+  await assert.rejects(none.play(''), /connect a Folder or Crate/);
+});
+
+await test('music tools reach the player and open NakliAmp through the host', async () => {
+  const m = createMusic({ files: () => fakeStore(['Songs/A.mp3']), makeAudio: fakeAudio });
+  const reg = createToolRegistry(musicTools({ music: m, host }));
+  assert.equal((await reg.run('play_music', {})).result.playing, 'A');
+  assert.equal((await reg.run('control_music', { action: 'pause' })).result.paused, 'A');
+  assert.equal((await reg.run('control_music', { action: 'skip' })).ok, false);   // enum checked
+  assert.equal((await reg.run('now_playing')).result.playing, null);
+  await reg.run('open_music_player');
+  assert.equal(opened.at(-1), 'nakliamp');
+});
+
+await test('lists and notes land in the Notes app\'s own files', async () => {
+  const files = new Map();
+  const notes = { label: 'Notes (test)', read: async (p) => files.get(p) ?? null, write: async (p, t) => { files.set(p, t); } };
+  const reg = createToolRegistry(moreTools({ ...standIns().deps, notes }));
+  const a = await reg.run('add_to_list', { list: 'shopping', items: 'milk, eggs and bread' });
+  assert.deepEqual(a.result.added, ['milk', 'eggs', 'bread']);
+  assert.equal(a.result.list, 'Shopping list');
+  await reg.run('add_to_list', { list: 'Shopping list', items: 'tea' });
+  assert.deepEqual((await reg.run('read_list', { list: 'my shopping list' })).result.items, ['milk', 'eggs', 'bread', 'tea']);
+  const lib = JSON.parse(files.get('library.json'));
+  assert.equal(lib.version, 1);
+  assert.equal(lib.notes.length, 1);
+  const id = lib.notes[0].id;
+  assert.equal(files.get(`notes/${id}.md`), '- milk\n- eggs\n- bread\n- tea\n');
+  assert.equal(JSON.parse(files.get(`notes/${id}.json`)).excerpt, 'milk eggs bread tea');
+  assert.equal((await reg.run('read_list', { list: 'packing' })).result.message, 'There is no packing list.');
+  const n = await reg.run('create_note', { text: 'The plumber comes on Tuesday. Leave the gate open.' });
+  assert.equal(n.result.created, 'The plumber comes on Tuesday');
+  assert.equal(JSON.parse(files.get('library.json')).notes.length, 2);
+});
+
 console.log(`voice + lfm3 adapter: ${pass} passed`);
 

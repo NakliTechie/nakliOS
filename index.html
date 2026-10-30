@@ -13352,23 +13352,32 @@ function voiceAssistantDeps(){
       const w = await (await voiceOpfsFile(path, true)).createWritable(); await w.write(text); await w.close();
     },
   };
-  // The Calendar app's own data file, in the place Calendar is set to (apps/calendar/index.html: 'browser' is its
-  // IndexedDB, same origin as this host; Folder and Crate keep apps/calendar/calendar.json).
-  const calIdb = (mode, fn) => new Promise((resolve, reject) => {
-    const open = indexedDB.open('naklios-calendar-v1', 1);
-    open.onupgradeneeded = () => open.result.createObjectStore('files');
-    open.onerror = () => reject(open.error);
-    open.onsuccess = () => { const tx = open.result.transaction('files', mode), req = fn(tx.objectStore('files'));
-      req.onsuccess = () => resolve(req.result); req.onerror = () => reject(req.error); };
-  });
-  const calendarLocation = () => { const id = localStorage.getItem('naklios.calendar.location') || 'browser'; return id !== 'browser' && BACKENDS[id]?.isConnected() ? id : 'browser'; };
-  const calendar = {
-    get label(){ return calendarLocation() === 'browser' ? 'Calendar (this browser)' : `Calendar (${BACKENDS[calendarLocation()].label})`; },
-    async read(){ const id = calendarLocation(); if (id === 'browser') return (await calIdb('readonly', s => s.get('calendar.json'))) ?? null;
-      return (await BACKENDS[id].exists('apps/calendar/calendar.json')) ? await BACKENDS[id].read('apps/calendar/calendar.json') : null; },
-    async write(text){ const id = calendarLocation(); if (id === 'browser') return calIdb('readwrite', s => s.put(String(text), 'calendar.json'));
-      return BACKENDS[id].write('apps/calendar/calendar.json', text); },
-  };
+  // An app's own data files, in the place that app is set to keep them (its <app>.location key): 'browser' is the
+  // app's IndexedDB (same origin as this host, store 'files'); Folder and Crate keep apps/<app>/<path>.
+  function appDataStore(app, dbName, appLabel){
+    const idb = (mode, fn) => new Promise((resolve, reject) => {
+      const open = indexedDB.open(dbName, 1);
+      open.onupgradeneeded = () => open.result.createObjectStore('files');
+      open.onerror = () => reject(open.error);
+      open.onsuccess = () => { const tx = open.result.transaction('files', mode), req = fn(tx.objectStore('files'));
+        req.onsuccess = () => { resolve(req.result); open.result.close(); }; req.onerror = () => reject(req.error); };
+    });
+    const where = () => { const id = localStorage.getItem(`naklios.${app}.location`) || 'browser'; return id !== 'browser' && BACKENDS[id]?.isConnected() ? id : 'browser'; };
+    const full = path => `apps/${app}/${path}`;
+    return {
+      get label(){ return where() === 'browser' ? `${appLabel} (this browser)` : `${appLabel} (${BACKENDS[where()].label})`; },
+      async read(path){ const id = where(); if (id === 'browser') { const v = await idb('readonly', s => s.get(path)); return v == null ? null : String(v); }
+        return (await BACKENDS[id].exists(full(path))) ? await BACKENDS[id].read(full(path)) : null; },
+      async write(path, text){ const id = where(); if (id === 'browser') return idb('readwrite', s => s.put(String(text), path));
+        return BACKENDS[id].write(full(path), text); },
+    };
+  }
+  const calendarFiles = appDataStore('calendar', 'naklios-calendar-v1', 'Calendar');
+  const calendar = { get label(){ return calendarFiles.label; }, read:() => calendarFiles.read('calendar.json'), write:text => calendarFiles.write('calendar.json', text) };
+  const notes = appDataStore('notes', 'naklios-notes-v1', 'Notes');
+  // The person's music, from the connected Folder or Crate (the same place the Files app shows).
+  const musicFiles = () => { const id = voiceConnectedBackend(); if (!id) return null; const b = BACKENDS[id];
+    return { list:prefix => b.list(prefix), read:async path => new Uint8Array(await b.readBinary(path)) }; };
   // A page is read directly; else through the person's NakliOS web relay; else through Jina Reader (r.jina.ai), which
   // sees the address, so only after the person allows it once in the panel. (allorigins.win, LocalMind's proxy,
   // answered HTTP 522 after 20 s on 2026-10-30; Jina answered in 0.4 s with the page as plain text.)
@@ -13399,9 +13408,19 @@ function voiceAssistantDeps(){
     if (!_skillLibMod) _skillLibMod = await import('./sys/ai/skill-library.mjs');
     return _skillLibMod.proposeSkill(store, skill);
   } };
-  return { memory, calendar, fetchText, python, skills };
+  // The Calendar app's own date code, loaded once as the classic script it is, for repeating events.
+  let core = null;
+  const calendarCore = () => core ||= (globalThis.CalendarCore ? Promise.resolve(globalThis.CalendarCore) : new Promise((resolve, reject) => {
+    const s = document.createElement('script'); s.src = './apps/calendar/core.js';
+    s.onload = () => (globalThis.CalendarCore ? resolve(globalThis.CalendarCore) : reject(new Error('Calendar code did not load')));
+    s.onerror = () => { core = null; reject(new Error('Calendar code did not load')); };
+    document.head.appendChild(s);
+  }));
+  return { memory, calendar, calendarCore, notes, musicFiles, fetchText, python, skills };
 }
 const openAssistant = async () => (await voiceAssistantReady()).open();
+// A saved reminder needs the assistant running to fire, so a page that has one loads it (the panel stays closed).
+try { if ((JSON.parse(localStorage.getItem('nakli.voice.reminders') || '[]')).length) setTimeout(() => voiceAssistantReady().catch(() => {}), 1500); } catch (_) {}
 const closeAssistant = () => voiceAssistant?.close();
 const toggleAssistant = async () => (await voiceAssistantReady()).toggle();
 const askAssistant = async text => { await (await voiceAssistantReady()).ask(text); };
