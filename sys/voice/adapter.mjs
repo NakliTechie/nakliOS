@@ -110,9 +110,9 @@ export function createStubModel({ wordMs = 60, audioOut = true } = {}) {
   };
 }
 
-// The models the assistant can run, in picker order. The stub needs no download, so the assistant stands without a model.
+// The models the panel offers. The stub stays out of it (Chirag: "no point showing a stub"); tests and checks pass it
+// to mountVoiceAssistant({ model }) directly.
 import { createLfm3OmniModel, DOWNLOAD_BYTES, SPEECH_BYTES } from './lfm3-omni.mjs';
 export const VOICE_MODELS = Object.freeze({
   'lfm3-omni-2b': { label: 'LFM3-Omni 2B', note: `on device, ${((DOWNLOAD_BYTES + SPEECH_BYTES) / 1e9).toFixed(1)} GB first download`, create: () => createLfm3OmniModel() },
-  stub: { label: 'Test stub', note: 'no model', create: () => createStubModel() },
 });
