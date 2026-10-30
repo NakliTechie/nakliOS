@@ -102,10 +102,10 @@ function notesTools(notes, now) {
       description: 'Add items to a list in the Notes app, e.g. "add milk and eggs to my shopping list". Creates the list if it is new.',
       parameters: { type: 'object', properties: {
         list: { type: 'string', description: 'List name, e.g. "shopping"' },
-        items: { type: 'string', description: 'The items, separated by commas or "and"' },
-      }, required: ['list', 'items'] },
-      async run({ list, items }) {
-        const add = String(items).split(/,|\band\b/i).map((x) => x.trim()).filter(Boolean).slice(0, 30);
+        things: { type: 'string', description: 'The things to add, separated by commas or "and"' },
+      }, required: ['list', 'things'] },
+      async run({ list, things }) {
+        const add = String(things).split(/,|\band\b/i).map((x) => x.trim()).filter(Boolean).slice(0, 30);
         if (!add.length) throw new Error('no items to add');
         const lib = await readNotesLibrary(notes, now);
         const note = findList(lib, list) || newNote(lib, listTitle(list), now);

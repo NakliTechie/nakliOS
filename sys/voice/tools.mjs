@@ -18,11 +18,17 @@ function checkArgs(parameters, args) {
   return null;
 }
 
+// The LFM3 chat template loops over a call's arguments with `args.items()`, and the browser's Jinja looks up a key before
+// the method, so an argument named `items` breaks every later turn ("Cannot call something that is not a function").
+const RESERVED_ARGS = new Set(['items', 'keys', 'values', 'get']);
+
 export function createToolRegistry(tools = []) {
   const byName = new Map();
   const reg = {
     add(tool) {
       if (!tool?.name || typeof tool.run !== 'function') throw new Error('A tool needs a name and run()');
+      const clash = Object.keys(tool.parameters?.properties || {}).find((k) => RESERVED_ARGS.has(k));
+      if (clash) throw new Error(`${tool.name}: an argument may not be named "${clash}" (the chat template reads it as a method)`);
       byName.set(tool.name, tool);
       return reg;
     },

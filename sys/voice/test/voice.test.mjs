@@ -659,10 +659,10 @@ await test('lists and notes land in the Notes app\'s own files', async () => {
   const files = new Map();
   const notes = { label: 'Notes (test)', read: async (p) => files.get(p) ?? null, write: async (p, t) => { files.set(p, t); } };
   const reg = createToolRegistry(moreTools({ ...standIns().deps, notes }));
-  const a = await reg.run('add_to_list', { list: 'shopping', items: 'milk, eggs and bread' });
+  const a = await reg.run('add_to_list', { list: 'shopping', things: 'milk, eggs and bread' });
   assert.deepEqual(a.result.added, ['milk', 'eggs', 'bread']);
   assert.equal(a.result.list, 'Shopping list');
-  await reg.run('add_to_list', { list: 'Shopping list', items: 'tea' });
+  await reg.run('add_to_list', { list: 'Shopping list', things: 'tea' });
   assert.deepEqual((await reg.run('read_list', { list: 'my shopping list' })).result.items, ['milk', 'eggs', 'bread', 'tea']);
   const lib = JSON.parse(files.get('library.json'));
   assert.equal(lib.version, 1);
@@ -687,6 +687,13 @@ await test('weather with no place named uses the device location, and says how t
   assert.equal(urls.length, 1);                    // no geocoding call for coordinates
   const denied = createToolRegistry(lookupTools({ fetchJsonFn: canned, locate: async () => { throw new Error('the location is not available (permission not given); ask the person which city'); } }));
   assert.match((await denied.run('get_weather', {})).error, /ask the person which city/);
+});
+
+await test('a tool argument named like a mapping method is refused, because the chat template would call it', () => {
+  const tool = (props) => ({ name: 'x', description: 'x', parameters: { type: 'object', properties: props }, run: () => ({}) });
+  assert.throws(() => createToolRegistry([tool({ items: { type: 'string' } })]), /may not be named "items"/);
+  assert.throws(() => createToolRegistry([tool({ keys: { type: 'string' } })]), /"keys"/);
+  assert.doesNotThrow(() => createToolRegistry([tool({ things: { type: 'string' } })]));
 });
 
 console.log(`voice + lfm3 adapter: ${pass} passed`);
