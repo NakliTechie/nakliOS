@@ -9,8 +9,8 @@
 // With speech: false the panel speaks the text with an on-device system voice instead.
 import { parseLocalToolCalls } from '../ai/local-tool-calls.mjs';
 
-// anyformer 0.4.14 (tag v0.4.14, speech out), pinned by commit until the npm package is published.
-export const ANYFORMER_URL = 'https://cdn.jsdelivr.net/gh/NakliTechie/anyformer.js@52ceaca0c00e885fcdb2f0698b6c06bd0d1579db/index.js';
+// anyformer 0.4.14 (speech out), the published npm version.
+export const ANYFORMER_URL = 'https://cdn.jsdelivr.net/npm/anyformer@0.4.14/index.js';
 export const DOWNLOAD_BYTES = 2.14e9;
 export const SPEECH_BYTES = 0.515e9;
 // The engine adds this system turn only when the messages have none, and the assistant always sends its own.
@@ -58,7 +58,8 @@ export async function isCached({ cacheStorage = globalThis.caches, speech = true
   } catch { return false; }
 }
 
-export function createLfm3OmniModel({ url = ANYFORMER_URL, importer = (u) => import(u), maxNewTokens = 384, speech = true } = {}) {
+// maxNewTokens counts text tokens and 80 ms speech frames together, so a spoken reply needs far more than a text one.
+export function createLfm3OmniModel({ url = ANYFORMER_URL, importer = (u) => import(u), speech = true, maxNewTokens = speech ? 2048 : 384 } = {}) {
   let session = null, loading = null;
   const model = {
     id: 'lfm3-omni-2b',
@@ -80,10 +81,10 @@ export function createLfm3OmniModel({ url = ANYFORMER_URL, importer = (u) => imp
       })().catch((e) => { loading = null; throw e; });
       return loading;
     },
-    async generate({ messages, tools = [], onText, onAudio, signal } = {}) {
+    async generate({ messages, tools = [], onText, onAudio, signal, speech: speak = speech } = {}) {
       if (!session) await model.load({ signal });
       let msgs = toTemplateMessages(messages);
-      if (speech) msgs = msgs.map((m) => (m.role === 'system' ? { ...m, content: `${m.content}\n${SPEECH_SYSTEM_PROMPT}` } : m));
+      if (speak) msgs = msgs.map((m) => (m.role === 'system' ? { ...m, content: `${m.content}\n${SPEECH_SYSTEM_PROMPT}` } : m));
       // Our own stop: a closed tool call ends the reply, so no time goes to voicing its markup.
       const inner = new AbortController();
       const onAbort = () => inner.abort();
@@ -91,13 +92,14 @@ export function createLfm3OmniModel({ url = ANYFORMER_URL, importer = (u) => imp
       let full = '', shown = 0, tokens = 0, marked = false;
       try {
         for await (const chunk of session.generate(msgs, {
-          signal: inner.signal, maxNewTokens, thinking: false, ...(tools.length ? { tools } : {}), ...(speech && { speech: true }),
+          signal: inner.signal, maxNewTokens, thinking: false, ...(tools.length ? { tools } : {}), ...(speak && { speech: true }),
         })) {
           full = chunk.text ?? full; tokens = chunk.tokens || tokens;
           const end = visibleEnd(full);
           if (end > shown) { onText?.(full.slice(shown, end)); shown = end; }
           marked ||= end < full.length && MARKERS.some((m) => full.includes(m));
-          if (chunk.audio?.length && !marked && !signal?.aborted) onAudio?.(chunk.audio);
+          // A copy, because the chunk can be a view of the engine's own buffer.
+          if (chunk.audio?.length && !marked && !signal?.aborted) onAudio?.(Float32Array.from(chunk.audio));
           if (marked && /<\/tool_call>|<\/function>/.test(full)) { inner.abort(); break; }
         }
       } finally { signal?.removeEventListener('abort', onAbort); }

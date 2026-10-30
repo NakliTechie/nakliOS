@@ -353,6 +353,8 @@ await test('weather and Wikipedia shape canned replies, and the web switch stops
   assert.match(off.error, /switched off/);
   assert.equal(urls.length, 3);   // nothing was fetched while the switch was off
   assert.deepEqual((await reg.run('calculate', { expression: '2+2' })).result, { result: 4 });
+});
+
 await test('LFM3 speech: audio streams, stops at a tool call, and the call ends the reply', async () => {
   const pcm = (n) => new Float32Array(n).fill(0.1);
   const xml = '<tool_call>\n<function=get_time>\n</function>\n</tool_call>';
@@ -388,6 +390,7 @@ await test('LFM3 speech: a caller abort stops the audio', async () => {
   const out = await m.generate({ messages: [], tools: [], signal: ctl.signal, onAudio: (a) => { audio.push(a.length); ctl.abort(); } });
   assert.equal(out.stopReason, 'aborted');
   assert.deepEqual(audio, [10]);
-console.log(`voice + lfm3 adapter: ${pass} passed`);
 });
+
+console.log(`voice + lfm3 adapter: ${pass} passed`);
 

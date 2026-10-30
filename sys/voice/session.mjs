@@ -6,7 +6,11 @@
 
 export const STATES = Object.freeze(['idle', 'listening', 'thinking', 'speaking']);
 
-const SYSTEM_PROMPT = 'You are the NakliOS voice assistant. Answer briefly, in plain spoken sentences. Use a tool when the person asks for something a tool does.';
+// Firm on tools, because in speech mode LFM3-Omni announced a weather lookup and then answered without calling the
+// tool under a gentler prompt (headless check, 2026-10-30); with this one it spoke a short preface and called it.
+const SYSTEM_PROMPT = 'You are the NakliOS voice assistant. Answer briefly, in plain spoken sentences. You have tools, listed above. '
+  + 'When a question needs live information (weather, time, battery, network, a Wikipedia fact) or an action (timer, opening an app, '
+  + 'a calculation), call the tool first and answer only after its result arrives. Never say you lack a tool that is listed.';
 
 export function createVoiceSession({
   model, tools, player = null, speech = null, systemPrompt = SYSTEM_PROMPT,
