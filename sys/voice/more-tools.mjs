@@ -30,7 +30,9 @@ function rank(memories, query) {
 export async function memoryContext(memory, { max = 30 } = {}) {
   const list = await readMemories(memory);
   if (!list.length) return '';
-  return 'What the person asked you to remember:\n' + list.slice(-max).map((m) => `- ${m.content}`).join('\n');
+  // The model saw these facts and still searched the web for them, so the rule says plainly not to.
+  return 'What the person asked you to remember (true, and about them personally). When a question is about one of '
+    + 'these, answer from it directly and call no tool:\n' + list.slice(-max).map((m) => `- ${m.content}`).join('\n');
 }
 
 // ── calendar: the Calendar app's event shape (apps/calendar/index.html) ──

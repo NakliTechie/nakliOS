@@ -509,7 +509,7 @@ await test('stored memories reach every turn\'s system prompt', async () => {
   const spy = { id: 'spy', async generate({ messages }) { seen.push(messages[0].content); return { text: 'ok', toolCalls: [], stopReason: 'stop' }; } };
   const s = createVoiceSession({ model: spy, tools: reg, context: () => memoryContext(st.deps.memory) });
   await s.sendText('who is my dentist?');
-  assert.match(seen[0], /What the person asked you to remember:\n- My dentist is Dr Rao in Bandra$/);
+  assert.match(seen[0], /What the person asked you to remember .*call no tool:\n- My dentist is Dr Rao in Bandra$/);
   assert.match(seen[0], /^You are the NakliOS voice assistant/);
 });
 
