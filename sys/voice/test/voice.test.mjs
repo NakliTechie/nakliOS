@@ -227,7 +227,7 @@ await test('LFM3 adapter streams text, hides tool XML and parses calls against t
   assert.equal(streamed, 'One moment. ');
   assert.deepEqual(out.toolCalls, [{ name: 'set_timer', arguments: { seconds: 90 } }]);
   assert.equal(out.stopReason, 'tool_calls');
-  assert.equal(fake.seen.calls[0].opts.tools.length, 5);
+  assert.equal(fake.seen.calls[0].opts.tools.length, 5);   // text-only model: no decision pass, no answer_directly
   assert.equal(fake.seen.calls[0].opts.thinking, false);
   const again = await m.generate({ messages: [], tools: [] });
   assert.equal(again.text, 'Timer set.');
@@ -377,7 +377,9 @@ await test('LFM3 speech with tools: decides in text, then speaks the answer with
   assert.deepEqual(audio, []);              // the decision is never spoken
   assert.equal(text, '');
   assert.equal(fake.seen.calls[0].opts.speech, undefined);
-  assert.equal(fake.seen.calls[0].opts.tools.length, 5);
+  assert.equal(fake.seen.calls[0].opts.tools.length, 6);   // the five tools plus answer_directly
+  assert.equal(fake.seen.calls[0].opts.tools.at(-1).name, 'answer_directly');
+  assert.equal(fake.seen.calls[0].opts.maxNewTokens, 128);
   assert.equal(fake.seen.calls[0].opts.signal.aborted, true);   // the closed call ended the decision
   const out2 = await m.generate({ messages: msgs, tools, onText: (d) => { text += d; }, onAudio: (a) => audio.push(a.length) });
   assert.equal(out2.text, 'It is ten.');
@@ -511,6 +513,24 @@ await test('stored memories reach every turn\'s system prompt', async () => {
   await s.sendText('who is my dentist?');
   assert.match(seen[0], /What the person asked you to remember .*call no tool:\n- My dentist is Dr Rao in Bandra$/);
   assert.match(seen[0], /^You are the NakliOS voice assistant/);
+});
+
+await test('answer_directly is never run: picked alone, the turn goes straight to the spoken answer', async () => {
+  const pcm = (n) => new Float32Array(n).fill(0.1);
+  const fake = fakeAnyformer([
+    ['<tool_call>\n<function=answer_directly>\n</function>\n</tool_call>'],
+    ['Hello there.', pcm(40)],
+  ]);
+  const m = createLfm3OmniModel({ importer: fake.importer });
+  const ran = [];
+  const reg = createToolRegistry(builtinTools({ host, timers: createTimers(), nav: fakeNav }).map((t) => ({ ...t, run: (a) => { ran.push(t.name); return t.run(a); } })));
+  const s = createVoiceSession({ model: m, tools: reg, player: fakePlayer() });
+  const out = await s.sendText('hello');
+  assert.equal(out.text, 'Hello there.');
+  assert.deepEqual(ran, []);
+  assert.deepEqual(s.history.map((x) => x.role), ['user', 'assistant']);
+  assert.equal(fake.seen.calls[1].opts.speech, true);
+  assert.equal(fake.seen.calls[1].opts.tools, undefined);
 });
 
 console.log(`voice + lfm3 adapter: ${pass} passed`);

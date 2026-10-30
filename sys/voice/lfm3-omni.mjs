@@ -17,6 +17,12 @@ export const SPEECH_BYTES = 0.515e9;
 export const SPEECH_SYSTEM_PROMPT = 'Respond with interleaved text and audio.';
 
 const MARKERS = ['<tool_call>', '<function='];
+// LocalMind's wording (e00f1cc), so both assistants are measured on the same tool.
+export const ANSWER_DIRECTLY = Object.freeze({
+  name: 'answer_directly',
+  description: 'Use this when you can answer by yourself: greetings, chat, jokes, stories, opinions, advice and general knowledge. Call it with no arguments; you will then give the answer aloud.',
+  parameters: { type: 'object', properties: {} },
+});
 
 // Index where visible text must stop: the first call marker, or a trailing partial marker that may grow into one.
 export function visibleEnd(text) {
@@ -96,12 +102,17 @@ export function createLfm3OmniModel({ url = ANYFORMER_URL, importer = (u) => imp
   // In speech mode LFM3-Omni-2B called tools in 1 of 3 tries with 17 tools offered; in text mode it called one for 6 of 6
   // requests in about 1.5 s each (headless checks, 2026-10-30). So a spoken turn with tools first decides in text, and
   // speaks only the final answer, with no tools offered then.
+  // The decision pass also offers answer_directly, because a small tool-tuned model calls something for nearly every
+  // request (Wikipedia for "hello" and for owls): with it LocalMind's 8-request battery went from 4 to 6 of 8, and to
+  // 7 of 8 with the memories block (LocalMind session, 2026-10-30). It is never run or shown; picked alone, the turn
+  // goes straight to the spoken answer. The pass is capped at 128 tokens, enough for a call.
   async function decideThenSpeak(opts) {
-    const decision = await reply({ ...opts, speech: false, onText: undefined, onAudio: undefined });
-    if (decision.stopReason === 'aborted' || decision.toolCalls.length) return decision;
+    const decision = await reply({ ...opts, tools: [...opts.tools, ANSWER_DIRECTLY], speech: false, onText: undefined, onAudio: undefined, maxTokens: 128 });
+    const calls = decision.toolCalls.filter((c) => c.name !== ANSWER_DIRECTLY.name);
+    if (decision.stopReason === 'aborted' || calls.length) return { ...decision, toolCalls: calls };
     return reply({ ...opts, tools: [] });
   }
-  async function reply({ messages, tools = [], onText, onAudio, signal, speech: speak = speech } = {}) {
+  async function reply({ messages, tools = [], onText, onAudio, signal, speech: speak = speech, maxTokens = maxNewTokens } = {}) {
       if (!session) await model.load({ signal });
       // Stopped while it waited its turn: never reaches the engine.
       if (signal?.aborted) return { text: '', toolCalls: [], stopReason: 'aborted' };
@@ -114,7 +125,7 @@ export function createLfm3OmniModel({ url = ANYFORMER_URL, importer = (u) => imp
       let full = '', shown = 0, tokens = 0, marked = false, closed = false;
       try {
         for await (const chunk of session.generate(msgs, {
-          signal: inner.signal, maxNewTokens, thinking: false, ...(tools.length ? { tools } : {}), ...(speak && { speech: true }),
+          signal: inner.signal, maxNewTokens: maxTokens, thinking: false, ...(tools.length ? { tools } : {}), ...(speak && { speech: true }),
         })) {
           // After a stop, keep reading until the engine has really finished, so the next reply never overlaps it.
           if (closed || signal?.aborted) continue;
@@ -134,7 +145,7 @@ export function createLfm3OmniModel({ url = ANYFORMER_URL, importer = (u) => imp
       return {
         text: toolCalls.length ? content : full,
         toolCalls: toolCalls.map((c) => ({ name: c.function.name, arguments: JSON.parse(c.function.arguments) })),
-        stopReason: toolCalls.length ? 'tool_calls' : tokens >= maxNewTokens ? 'length' : 'stop',
+        stopReason: toolCalls.length ? 'tool_calls' : tokens >= maxTokens ? 'length' : 'stop',
       };
   }
   return model;
