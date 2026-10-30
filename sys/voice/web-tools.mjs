@@ -19,12 +19,21 @@ export async function fetchJson(url) {
   return res.json();
 }
 
-export async function getWeather(args, fetchJsonFn = fetchJson) {
+// The device's position, for weather with no place named ("do I need an umbrella?"). The browser asks the person once.
+export function browserLocate(geo = globalThis.navigator?.geolocation) {
+  return new Promise((resolve, reject) => {
+    if (!geo) return reject(new Error('this browser cannot tell the location; ask the person which city'));
+    geo.getCurrentPosition((p) => resolve({ latitude: +p.coords.latitude.toFixed(3), longitude: +p.coords.longitude.toFixed(3) }),
+      () => reject(new Error('the location is not available (permission not given); ask the person which city')), { timeout: 10000, maximumAge: 3600e3 });
+  });
+}
+
+export async function getWeather(args, fetchJsonFn = fetchJson, locate = browserLocate) {
   const raw = String(args?.location ?? '').trim();
-  if (!raw) throw new Error('location is required, e.g. "Paris"');
   if (raw.length > 120) throw new Error('location is too long');
   let days = Math.round(Number(args?.days ?? 1));
   days = Number.isFinite(days) ? Math.min(7, Math.max(1, days)) : 1;
+  if (!raw) return forecast({ name: 'your current location', ...(await locate()) }, days, fetchJsonFn);
   const [head, ...rest] = raw.split(',').map((x) => x.trim()).filter(Boolean);
   const name = PLACE_ALIASES[head.toLowerCase()] || head;
   const qualifier = rest.join(' ').toLowerCase();
@@ -35,7 +44,10 @@ export async function getWeather(args, fetchJsonFn = fetchJson) {
     if (match.length) places = match;
   }
   if (!places.length) throw new Error(`no place called "${raw}" was found`);
-  const place = places.reduce((a, b) => ((b.population || 0) > (a.population || 0) ? b : a));
+  return forecast(places.reduce((a, b) => ((b.population || 0) > (a.population || 0) ? b : a)), days, fetchJsonFn);
+}
+
+async function forecast(place, days, fetchJsonFn) {
   const f = await fetchJsonFn(`https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}`
     + '&current=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,wind_speed_10m'
     + '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max'
@@ -115,21 +127,21 @@ export function calculate(expression) {
 }
 
 // webOn() → whether lookups may use the network (the panel's switch).
-export function lookupTools({ webOn = () => true, fetchJsonFn = fetchJson } = {}) {
+export function lookupTools({ webOn = () => true, fetchJsonFn = fetchJson, locate = browserLocate } = {}) {
   const web = (fn) => (args) => { if (!webOn()) throw new Error('web lookups are switched off in the assistant panel'); return fn(args, fetchJsonFn); };
   return [
     {
       name: 'get_weather',
-      description: 'Get the current weather and a short forecast for a place. Use when the person asks about weather, temperature, rain or wind.',
+      description: 'Get the current weather and a forecast. Use for any question about weather, temperature, rain, an umbrella, wind or the week ahead. Leave location out to use where the person is.',
       parameters: { type: 'object', properties: {
-        location: { type: 'string', description: 'City or place name, e.g. "Mumbai" or "Paris, France"' },
-        days: { type: 'number', description: 'Days of forecast, 1 to 7 (default 1)', minimum: 1, maximum: 7 },
-      }, required: ['location'] },
-      run: web(getWeather),
+        location: { type: 'string', description: 'City or place name, e.g. "Mumbai" (leave out for the person\'s own location)' },
+        days: { type: 'number', description: 'Days of forecast, 1 to 7 (default 1; 7 for "this week")', minimum: 1, maximum: 7 },
+      }, required: [] },
+      run: (args) => { if (!webOn()) throw new Error('web lookups are switched off in the assistant panel'); return getWeather(args, fetchJsonFn, locate); },
     },
     {
       name: 'wikipedia_lookup',
-      description: 'Look up a topic on Wikipedia and return a short summary. Use when the person asks to look something up or wants details about a specific person, place, organisation or event; answer common knowledge directly.',
+      description: 'Look up a topic on Wikipedia and return a short summary. Use when the person asks to look something up or wants details about a specific person, place, organisation or event; answer common knowledge directly. Wikipedia is not live: never use it for news, match results, prices, schedules, timetables, release dates or anything about today.',
       parameters: { type: 'object', properties: { query: { type: 'string', description: 'Topic to look up, e.g. "Mumbai"' } }, required: ['query'] },
       run: web(wikipediaLookup),
     },
