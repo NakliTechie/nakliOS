@@ -74,6 +74,19 @@ export const COMMANDS = [
     ],
   },
   {
+    id: 'filter',
+    summary: 'Keep only the designs that are at least this good on one column.',
+    params: [
+      { name: 'column', type: 'string', required: true, note: 'a column id from list-columns' },
+      { name: 'value', type: 'number|string', note: 'a threshold, or omit to drop this filter' },
+    ],
+  },
+  {
+    id: 'clear-filters',
+    summary: 'Show every design again.',
+    params: [],
+  },
+  {
     id: 'list-columns',
     summary: 'List the design table’s columns, and say which of them may order it.',
     params: [],
@@ -87,6 +100,16 @@ export const COMMANDS = [
     id: 'target',
     summary: 'Read the summary of the structure now on screen.',
     params: [],
+  },
+  {
+    id: 'host',
+    summary: 'Read which machine a design run would happen on, and which engines it has.',
+    params: [],
+  },
+  {
+    id: 'load-run',
+    summary: 'Read a compute run\u2019s accepted designs into the table beside the browser\u2019s own.',
+    params: [{ name: 'runId', type: 'string', required: true, note: 'from the bridge' }],
   },
   {
     id: 'show-tour',
