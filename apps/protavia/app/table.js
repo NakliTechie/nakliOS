@@ -11,6 +11,12 @@
 // way: it reads one predicted structure's confidence, and confidence in a single pose is not the
 // same question as whether a binder stays bound. Ranking on it would quietly answer the wrong
 // question, so the table refuses it as a sort key and says why under the table.
+//
+// Filtering is a separate thing and every column allows it, `rankable: false` included. A
+// threshold is how these scores are used in the field — BindCraft2 calls them acceptance filters —
+// and "drop anything under this" is a different claim from "this is what makes a design best".
+// A filter needs no direction of its own either: each column already declares which end is better,
+// so one filter per column means "at least this good", whichever way that column runs.
 
 /**
  * @typedef {object} Column
@@ -22,6 +28,10 @@
  * @property {'asc'|'desc'} better  which end of this column is the better design
  * @property {boolean} [rankable]   false = may be shown, may never order the table
  * @property {string} [whyNotRankable] required when rankable is false; shown under the table
+ * @property {number} [filterScale] what to multiply the stored value by to get the number the
+ *   reader sees and types. Recovery is stored as a fraction and shown as a percentage, so a
+ *   filter box under a column of `55.3%` has to take `55` and not `0.55`.
+ * @property {string} [filterUnit] the unit that number is in, for the line under the table
  * @property {'left'|'right'} [align]
  */
 
@@ -54,6 +64,21 @@ export function rankableColumns() {
   return columns.filter((c) => c.rankable !== false);
 }
 
+/** Trims the float noise a scale multiplication leaves behind, without pinning a precision. */
+function round(n) {
+  return Math.round(n * 1e6) / 1e6;
+}
+
+/** Whether a column holds numbers, read from what it returns rather than declared twice. */
+function isNumeric(column, rows) {
+  for (const row of rows) {
+    const v = column.value(row);
+    if (v === null || v === undefined) continue;
+    return typeof v === 'number';
+  }
+  return true;
+}
+
 // The three columns the bench already produces. A fourth is registered by whatever computes it.
 
 registerColumn({
@@ -73,6 +98,10 @@ registerColumn({
     + 'the backbone, so agreeing with the native sequence is evidence it reads the fold, not '
     + 'evidence the design is good.',
   value: (r) => (r.recovery ? r.recovery.fraction : null),
+  // Stored as a fraction, read as a percentage. Without this pair, a filter box under a column
+  // of `55.3%` would quietly want `0.55`.
+  filterScale: 100,
+  filterUnit: '%',
   format: (r) => (r.recovery ? `${(r.recovery.fraction * 100).toFixed(1)}%` : '—'),
   better: 'desc',
   align: 'right',
@@ -103,6 +132,8 @@ export class DesignTable {
     this.rows = [];
     this.sortId = DEFAULT_SORT;
     this.descending = columnById(DEFAULT_SORT).better === 'desc';
+    /** Column id to threshold or exact value. Empty means every design is shown. */
+    this.filters = new Map();
     this.onSelect = null;
   }
 
@@ -110,6 +141,7 @@ export class DesignTable {
     this.rows = [];
     this.sortId = DEFAULT_SORT;
     this.descending = columnById(DEFAULT_SORT).better === 'desc';
+    this.filters.clear();
     this.host.replaceChildren();
   }
 
@@ -135,7 +167,64 @@ export class DesignTable {
     this.render();
   }
 
-  /** Rows in the current order. Nulls sort last whichever way the column runs. */
+  /**
+   * Keep only designs at least this good on one column. A number is a threshold read in the
+   * column's own better direction; a string is an exact match; `null` drops the filter.
+   */
+  setFilter(id, value) {
+    const column = columnById(id);
+    if (!column) throw new Error(`No column called "${id}".`);
+    if (value === null || value === undefined || value === '') this.filters.delete(id);
+    else this.filters.set(id, value);
+    this.render();
+    return this.visible();
+  }
+
+  clearFilters() {
+    this.filters.clear();
+    this.render();
+    return this.visible();
+  }
+
+  /**
+   * The filters now in force. `value` is in the units the model stores; `meaning` is the sentence
+   * the reader sees, in the units the column displays.
+   */
+  activeFilters() {
+    return [...this.filters].map(([id, value]) => {
+      const column = columnById(id);
+      return {
+        column: id,
+        value,
+        meaning: typeof value === 'number'
+          ? `${column.better === 'desc' ? 'at least' : 'at most'} `
+            + `${round(value * (column.filterScale || 1))}${column.filterUnit || ''}`
+          : `is ${value}`,
+      };
+    });
+  }
+
+  /** Does one design pass every filter in force? A row with no value for a filtered column does not. */
+  passes(row) {
+    for (const [id, want] of this.filters) {
+      const column = columnById(id);
+      const got = column.value(row);
+      if (got === null || got === undefined) return false;
+      if (typeof want === 'number') {
+        if (column.better === 'desc' ? got < want : got > want) return false;
+      } else if (String(got) !== String(want)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /** The designs the reader is looking at: filtered, then in the current order. */
+  visible() {
+    return this.ordered().filter((row) => this.passes(row));
+  }
+
+  /** Rows in the current order, filters ignored. Nulls sort last whichever way the column runs. */
   ordered() {
     const column = columnById(this.sortId);
     const direction = this.descending ? -1 : 1;
@@ -185,7 +274,54 @@ export class DesignTable {
     }
     table.append(headRow);
 
-    for (const row of this.ordered()) {
+    // One filter cell per column, built from the column's own declaration: a number box for a
+    // numeric column, a list of the values actually present for a text one. Nothing here names a
+    // column, so a column registered later gets a filter without this code changing.
+    const filterRow = document.createElement('tr');
+    filterRow.className = 'filters';
+    for (const column of columns) {
+      const td = document.createElement('td');
+      const current = this.filters.get(column.id);
+
+      if (isNumeric(column, this.rows)) {
+        // The box is in the units the column displays; the model keeps the units it stores.
+        const scale = column.filterScale || 1;
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.step = 'any';
+        input.value = current === undefined ? '' : String(round(current * scale));
+        input.placeholder = (column.better === 'desc' ? '\u2265' : '\u2264') + (column.filterUnit || '');
+        input.title = `Show only designs with ${column.label} `
+          + `${column.better === 'desc' ? 'at least' : 'at most'} this${column.filterUnit || ''}.`;
+        input.addEventListener('change', () => {
+          this.setFilter(column.id, input.value === '' ? null : Number(input.value) / scale);
+        });
+        td.append(input);
+      } else {
+        const select = document.createElement('select');
+        const any = document.createElement('option');
+        any.value = '';
+        any.textContent = 'any';
+        select.append(any);
+        for (const value of [...new Set(this.rows.map((r) => column.value(r)))].sort()) {
+          const option = document.createElement('option');
+          option.value = String(value);
+          option.textContent = String(value);
+          select.append(option);
+        }
+        select.value = current === undefined ? '' : String(current);
+        select.title = `Show only designs whose ${column.label} is this.`;
+        select.addEventListener('change', () => {
+          this.setFilter(column.id, select.value === '' ? null : select.value);
+        });
+        td.append(select);
+      }
+      filterRow.append(td);
+    }
+    table.append(filterRow);
+
+    const shown = this.visible();
+    for (const row of shown) {
       const tr = document.createElement('tr');
       tr.tabIndex = 0;
       for (const column of columns) {
@@ -201,6 +337,22 @@ export class DesignTable {
     }
 
     this.host.append(table);
+
+    // Say what is being hidden. A table that silently drops designs is worse than no filter.
+    if (shown.length !== this.rows.length) {
+      const count = document.createElement('p');
+      count.className = 'hint count';
+      const how = this.activeFilters().map((f) => `${columnById(f.column).label} ${f.meaning}`).join(', ');
+      count.textContent = `Showing ${shown.length} of ${this.rows.length} \u00b7 ${how}`;
+      const clear = document.createElement('button');
+      clear.type = 'button';
+      clear.className = 'ghost';
+      clear.textContent = 'Clear';
+      clear.addEventListener('click', () => this.clearFilters());
+      count.append(' ');
+      count.append(clear);
+      this.host.append(count);
+    }
 
     // Any column that is shown but cannot rank explains itself here, once, under the table.
     const fixed = columns.filter((c) => c.rankable === false);

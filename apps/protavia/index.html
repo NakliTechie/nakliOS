@@ -4,6 +4,23 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Protavia</title>
+<meta name="description" content="Open a protein, redesign a chain of it, and compare what three models make of the same backbone — in a browser tab, in about a second.">
+
+<!-- The card a shared link renders. Crawlers do not resolve relative URLs, so every one of these
+     is absolute and points at the deployed site, whatever host is serving this copy. -->
+<link rel="canonical" href="https://protavia.naklitechie.com/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://protavia.naklitechie.com/">
+<meta property="og:title" content="Protavia — protein binder design in the browser">
+<meta property="og:description" content="Open a protein, redesign a chain of it, and compare what three models make of the same backbone — in a browser tab, in about a second.">
+<meta property="og:image" content="https://protavia.naklitechie.com/marketing/social.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Protavia — protein binder design in the browser">
+<meta name="twitter:description" content="Open a protein, redesign a chain of it, and compare what three models make of the same backbone — in a browser tab, in about a second.">
+<meta name="twitter:image" content="https://protavia.naklitechie.com/marketing/social.png">
+
 <link rel="stylesheet" href="vendor/molstar/5.13.1/molstar.css">
 <script type="importmap">
 {
@@ -125,6 +142,18 @@
   table.ranking th.fixed { cursor: help; font-style: italic; }
   table.ranking td { padding: .25rem .3rem; border-bottom: 1px solid var(--line); }
   table.ranking th.num, table.ranking td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.ranking tr.filters td { padding: .2rem .2rem .35rem; border-bottom: 1px solid var(--line); }
+  table.ranking tr.filters input, table.ranking tr.filters select {
+    width: 100%; min-width: 0; font: inherit; font-size: .72rem;
+    padding: .1rem .2rem; border: 1px solid var(--line); border-radius: 4px;
+    background: var(--bg); color: var(--fg);
+  }
+  table.ranking tr.filters input:focus, table.ranking tr.filters select:focus { border-color: var(--accent); outline: none; }
+  .hint.count { display: flex; align-items: baseline; gap: .3rem; }
+  /* The machine a run would happen on. Never hidden behind a click: the licence Protavia relies
+     on turns on whose machine the engine is, so the answer is always on screen. */
+  #host-note { border-left: 2px solid var(--accent); padding-left: .5rem; margin-top: .6rem; }
+  #host-note b { color: var(--fg); font-weight: 600; }
   table.ranking tr[tabindex] { cursor: pointer; }
   table.ranking tr[tabindex]:hover td, table.ranking tr.picked td { background: var(--panel); }
   table.ranking tr.picked td { box-shadow: inset 2px 0 0 var(--accent); }
@@ -302,6 +331,7 @@
           <button id="design-run">Redesign backbone</button>
         </div>
         <p class="hint" id="design-note"></p>
+        <p class="hint" id="host-note" hidden></p>
         <div id="design-ranking"></div>
         <div id="design-results"></div>
       </div>
@@ -324,7 +354,7 @@
      it from https://naklios.dev/sdk/naklios.js, and a daily workflow keeps it in step. Do not
      hand-edit it. -->
 <script>
-/* naklios-sdk:begin ver=2 sha256=c4021a91fcd26a68a59d02a8628aba8ee0d4fa45c46858a3bee05c43bc9087e7 — DO NOT EDIT until :end; run `node scripts/vendor-naklios-sdk.mjs` */
+/* naklios-sdk:begin ver=2 sha256=393979d591d309710e44698e9c168a95edb5982ecb552e34b3a273294b4ef8e5 — DO NOT EDIT until :end; run `node scripts/vendor-naklios-sdk.mjs` */
 /*!
  * naklios.js — cooperative SDK for apps hosted inside NakliOS (Immersive mode)
  *
@@ -397,7 +427,7 @@
  *   syntax is only shown in the docs — never here, so it can't be mistaken for a
  *   real marker once this header is itself inlined.
  *
- *   v2 = learn-on-contact origin + ?naklios flag (no-referrer-safe). v1 (pre-2026-08)
+ *   v2 = approved-parent origin + ?naklios flag (no-referrer-safe). v1 (pre-2026-08)
  *   posted to '*' and skipped inbound-origin checks — a v1 copy is a drift bug.
  *
  *   New public members ship as `experimental_<name>` with a line in docs/sdk-api-audit.md
@@ -417,13 +447,27 @@
   try { inNakliOS = !!(window.parent && window.parent !== window); } catch (_) {}
   var naklFlag = false;
   try { naklFlag = new URLSearchParams(window.location.search).has('naklios'); } catch (_) {}
-  // Targeted postMessage origin, LEARNED on first contact — the NakliOS shell embeds
+  // Targeted postMessage origin, pinned only after independently approved contact — the NakliOS shell embeds
   // apps with referrerpolicy="no-referrer", so document.referrer is empty and can't
   // be used to verify the parent (that path breaks hosted detection — it is the
   // Lorewell iframe bug). Instead the first `naklios:*` message from window.parent
-  // locks trustedParentOrigin, and every later send targets that origin (not '*').
-  // The only pre-lock send is `ready`, which carries no app data.
+  // pins an independently approved host origin, and every later send targets that origin (not '*').
+  // Before verification, only content-free ready and capabilities-request messages leave.
   var trustedParentOrigin = null;
+  var queuedHostMessages = [];
+  var queuedHostBytes = 0;
+  // Verify independently of the message and URL flags supplied by a parent.
+  // Inline copies retain the same production host policy; previews are limited
+  // to this project's Workers hostname. Referrers are deliberately unnecessary.
+  function approvedParentOrigin(origin) {
+    try {
+      var url = new URL(origin);
+      if (url.origin !== origin) return false;
+      if (url.protocol === 'https:' && !url.port && (url.hostname === 'naklios.dev' ||
+          /^(?:[a-z0-9-]+-)?nakli-dev\.chirag-patnaik\.workers\.dev$/.test(url.hostname))) return true;
+      return url.protocol === 'http:' && (url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]');
+    } catch (_) { return false; }
+  }
 
   var currentTheme = null;
   var themeListeners = new Set();
@@ -507,10 +551,19 @@
 
   function send(type, data) {
     if (!inNakliOS) return;
+    if (!trustedParentOrigin && type !== 'naklios:ready' && type !== 'naklios:capabilities-request') {
+      try {
+        var size = JSON.stringify(data || {}).length;
+        if (queuedHostMessages.length >= 32 || queuedHostBytes + size > 4 * 1024 * 1024) return false;
+        queuedHostMessages.push({ type: type, data: data }); queuedHostBytes += size;
+        return true;
+      } catch (_) { return false; }
+    }
     try {
       var msg = Object.assign({ type: type }, data || {});
       window.parent.postMessage(msg, trustedParentOrigin || '*');
-    } catch (_) {}
+      return true;
+    } catch (_) { return false; }
   }
 
   function rpc(type, payload, timeoutMs) {
@@ -518,7 +571,11 @@
     return new Promise(function (resolve, reject) {
       var requestId = 'r' + (++rpcCounter) + '_' + Date.now();
       pendingRpc.set(requestId, { resolve: resolve, reject: reject });
-      send(type, Object.assign({ requestId: requestId }, payload || {}));
+      if (send(type, Object.assign({ requestId: requestId }, payload || {})) === false) {
+        pendingRpc.delete(requestId);
+        reject(new Error('Wait for a verified NakliOS host before sending more data'));
+        return;
+      }
       // Default 30s safety net; long operations (index building) pass more.
       setTimeout(function () {
         if (pendingRpc.has(requestId)) {
@@ -814,18 +871,17 @@
   }
 
   window.addEventListener('message', function (e) {
-    if (inNakliOS && e.source !== window.parent) return;
+    if (!inNakliOS || e.source !== window.parent || !approvedParentOrigin(e.origin)) return;
     var msg = e.data;
     if (!msg || typeof msg !== 'object') return;
-    // Lock the trusted origin on the first naklios:* message, then verify every
-    // later message against it (no-referrer-safe; see the detection note). This
-    // runs standalone too: a bare/?naklios top-level tab has no window.parent to
-    // pin the source against, so learn-on-contact origin is the only check it can
-    // make — without it the handler would mutate capabilities and fire listeners
-    // for naklios:* messages from ANY origin (opener, child frame, injected page).
+    // Pin only an independently approved actual parent, then keep that exact
+    // origin for this frame. Standalone pages never enter this handler.
+    // Flush startup data only after verification, with an explicit target origin.
     if (typeof msg.type === 'string' && msg.type.indexOf('naklios:') === 0) {
       if (!trustedParentOrigin) trustedParentOrigin = e.origin;
       else if (e.origin !== trustedParentOrigin) return;
+      var queued = queuedHostMessages; queuedHostMessages = []; queuedHostBytes = 0;
+      queued.forEach(function (item) { send(item.type, item.data); });
     }
     if (msg.type === 'naklios:theme') {
       currentTheme = { id: msg.theme, colors: msg.colors, mood: msg.mood };
@@ -1005,7 +1061,8 @@
       }
     } else if ((msg.type === 'naklios:fs:reply' || msg.type === 'naklios:file:reply' ||
                 msg.type === 'naklios:review:reply' ||
-                msg.type === 'naklios:rag:reply' || msg.type === 'naklios:net:reply') && msg.requestId) {
+                msg.type === 'naklios:rag:reply' || msg.type === 'naklios:net:reply' ||
+                msg.type === 'naklios:skills:reply') && msg.requestId) {
       var p = pendingRpc.get(msg.requestId);
       if (!p) return;
       pendingRpc.delete(msg.requestId);
@@ -1078,6 +1135,27 @@
         if (typeof cb !== 'function') throw new Error('naklios.review.onDecision needs a callback');
         reviewDecisionHandler = cb;
         return function () { if (reviewDecisionHandler === cb) reviewDecisionHandler = null; };
+      },
+    },
+    // The user's one skills library (skills/<name>/SKILL.md on their Folder or Crate), shared by every
+    // agent. list() returns the skills an agent may use (Sentinel-clean, active or stale) without bodies;
+    // read(name) returns one with its body; propose() writes a STAGED skill that binds only after a person
+    // activates it. System apps only; standalone it is an empty library.
+    experimental_skills: {
+      list: function () {
+        if (!inNakliOS) return Promise.resolve([]);
+        return rpc('naklios:skills:list', {});
+      },
+      read: function (name) {
+        if (!inNakliOS) return Promise.resolve(null);
+        return rpc('naklios:skills:read', { name: String(name || '') });
+      },
+      propose: function (skill) {
+        if (!inNakliOS) return Promise.reject(new Error('Not hosted — the skills library is unavailable standalone'));
+        skill = skill || {};
+        return rpc('naklios:skills:propose', {
+          name: String(skill.name || ''), description: String(skill.description || ''), body: String(skill.body || ''),
+        });
       },
     },
     fs: {
