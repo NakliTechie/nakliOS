@@ -103,3 +103,39 @@ export function createPlayer({ sampleRate = OUTPUT_SAMPLE_RATE, onLevel = () => 
     drained() { return sources.size ? new Promise((r) => waiters.push(r)) : Promise.resolve(); },
   };
 }
+
+// Speaks streamed text with the browser's own voices while a model has no speech out (model.audioOut
+// === false). Only on-device voices (localService) are used, so no text leaves the machine; with none,
+// the reply stays text-only. push(delta) speaks each finished sentence; flush() speaks the rest.
+export function createSpeechFallback({ synth = globalThis.speechSynthesis, Utterance = globalThis.SpeechSynthesisUtterance, lang = 'en' } = {}) {
+  let buffer = '', pending = 0, waiters = [], voice;
+  const pickVoice = () => {
+    if (voice !== undefined) return voice;
+    const local = (synth?.getVoices?.() || []).filter((v) => v.localService);
+    voice = local.find((v) => v.lang?.startsWith(lang) && v.default) || local.find((v) => v.lang?.startsWith(lang)) || local[0] || null;
+    return voice;
+  };
+  const settle = () => { if (!pending) waiters.splice(0).forEach((r) => r()); };
+  function say(text) {
+    const v = pickVoice();
+    if (!text.trim() || !v || !Utterance) return false;
+    const u = new Utterance(text.trim());
+    u.voice = v;
+    pending++;
+    u.onend = u.onerror = () => { pending = Math.max(0, pending - 1); settle(); };
+    synth.speak(u);
+    return true;
+  }
+  return {
+    get available() { return !!(synth && Utterance && pickVoice()); },
+    push(delta) {
+      buffer += delta;
+      let spoke = false, m;
+      while ((m = buffer.match(/^([\s\S]*?[.!?])(\s+)/))) { spoke = say(m[1]) || spoke; buffer = buffer.slice(m[0].length); }
+      return spoke;
+    },
+    flush() { const spoke = say(buffer); buffer = ''; return spoke; },
+    stop() { buffer = ''; if (pending) synth?.cancel(); pending = 0; settle(); },
+    drained() { return pending ? new Promise((r) => waiters.push(r)) : Promise.resolve(); },
+  };
+}

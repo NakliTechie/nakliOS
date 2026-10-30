@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { createStubModel, tone, INPUT_SAMPLE_RATE } from '../adapter.mjs';
 import { createToolRegistry, createTimers, builtinTools } from '../tools.mjs';
 import { createVoiceSession } from '../session.mjs';
-import { createVad, createTurnRecorder, concatFloat32 } from '../audio.mjs';
+import { createVad, createTurnRecorder, concatFloat32, createSpeechFallback } from '../audio.mjs';
 
 let pass = 0;
 const test = async (name, fn) => { await fn(); pass++; console.log('ok', name); };
@@ -139,6 +139,49 @@ await test('tool rounds stop at the cap', async () => {
   const s = createVoiceSession({ model: loopy, tools: makeTools(createTimers()), maxToolRounds: 2 });
   await s.sendText('time');
   assert.equal(calls, 3);
+});
+
+function fakeSynth({ local = true } = {}) {
+  const synth = { spoken: [], cancelled: 0, queue: [],
+    getVoices: () => [{ name: 'Cloud', lang: 'en-US', localService: false }, ...(local ? [{ name: 'Samantha', lang: 'en-US', localService: true, default: true }] : [])],
+    speak(u) { synth.spoken.push([u.text, u.voice.name]); synth.queue.push(u); },
+    cancel() { synth.cancelled++; synth.queue = []; },
+    finishAll() { synth.queue.splice(0).forEach((u) => u.onend()); } };
+  return synth;
+}
+class FakeUtterance { constructor(text) { this.text = text; } }
+
+await test('speech fallback speaks whole sentences with an on-device voice only', () => {
+  const synth = fakeSynth();
+  const sp = createSpeechFallback({ synth, Utterance: FakeUtterance });
+  assert.equal(sp.push('Hello the'), false);
+  assert.equal(sp.push('re. How are'), true);
+  sp.flush(); sp.push(' you'); sp.flush();
+  assert.deepEqual(synth.spoken.map((x) => x[1]), ['Samantha', 'Samantha', 'Samantha']);
+  assert.deepEqual(synth.spoken.map((x) => x[0]), ['Hello there.', 'How are', 'you']);
+  const none = createSpeechFallback({ synth: fakeSynth({ local: false }), Utterance: FakeUtterance });
+  assert.equal(none.available, false);
+  assert.equal(none.push('Nothing leaves the machine. '), false);
+});
+
+await test('a text-only model is spoken by the fallback and interrupt cancels it', async () => {
+  const synth = fakeSynth();
+  const speech = createSpeechFallback({ synth, Utterance: FakeUtterance });
+  const states = [];
+  const s = createVoiceSession({ model: createStubModel({ wordMs: 0, audioOut: false }), tools: makeTools(createTimers()), speech, onState: (x) => states.push(x) });
+  const turn = s.sendText('hello. there');
+  await new Promise((r) => setTimeout(r, 20));
+  assert.deepEqual(synth.spoken.map((x) => x[0]), ['You said: hello.', 'there']);
+  assert.equal(s.state, 'speaking');
+  synth.finishAll();
+  assert.equal((await turn).stopReason, 'stop');
+  assert.deepEqual(states, ['thinking', 'speaking', 'idle']);
+  const slow = createVoiceSession({ model: createStubModel({ wordMs: 0, audioOut: false }), tools: makeTools(createTimers()), speech });
+  const t2 = slow.sendText('a long reply.');
+  await new Promise((r) => setTimeout(r, 20));
+  slow.interrupt();
+  assert.ok(synth.cancelled >= 1);
+  await t2;
 });
 
 console.log(`voice: ${pass} passed`);

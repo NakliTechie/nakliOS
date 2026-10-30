@@ -8,7 +8,7 @@
 import { createStubModel, tone } from './adapter.mjs';
 import { createToolRegistry, createTimers, builtinTools } from './tools.mjs';
 import { createVoiceSession } from './session.mjs';
-import { openMic, createVad, createTurnRecorder, createPlayer } from './audio.mjs';
+import { openMic, createVad, createTurnRecorder, createPlayer, createSpeechFallback } from './audio.mjs';
 
 const CSS = `
 .nv-panel{position:fixed; right:20px; bottom:20px; width:min(360px, calc(100vw - 32px)); z-index:1400;
@@ -72,7 +72,7 @@ export function mountVoiceAssistant({ root = document.body, host, model = create
   const timers = createTimers({ onDone: ({ seconds, label }) => announce(`Timer done${label ? `: ${label}` : ''} (${seconds} s).`) });
   const tools = createToolRegistry(builtinTools({ host, timers }));
   const session = createVoiceSession({
-    model, tools, player,
+    model, tools, player, speech: createSpeechFallback(),
     onState: (s) => { if (panel) { panel.dataset.state = s; els.state.textContent = STATE_TEXT[s]; els.stop.hidden = !(s === 'thinking' || s === 'speaking'); } },
     onText: (delta) => { botBubble ||= addMsg('bot', ''); botBubble.textContent += delta; scroll(); },
     onTool: ({ name, arguments: args, result }) => { addMsg('tool', `${name}(${JSON.stringify(args)}) → ${result.ok ? 'ok' : result.error}`); botBubble = null; },

@@ -76,11 +76,13 @@ function describeResult(name, result) {
   }
 }
 
-export function createStubModel({ wordMs = 60 } = {}) {
+// audioOut: false makes the stub text-only, as the first LFM3-Omni build is, so the speech fallback runs.
+export function createStubModel({ wordMs = 60, audioOut = true } = {}) {
   return {
     id: 'stub',
-    label: 'Test stub (no model)',
+    label: audioOut ? 'Test stub (no model)' : 'Test stub, text only',
     ready: true,
+    audioOut,
     async load({ onProgress } = {}) { onProgress?.({ loaded: 1, total: 1, file: 'stub' }); },
     async generate({ messages, tools = [], onText, onAudio, signal } = {}) {
       const last = messages[messages.length - 1];
@@ -100,7 +102,7 @@ export function createStubModel({ wordMs = 60 } = {}) {
         if (signal?.aborted) return { text: said, toolCalls: [], stopReason: 'aborted' };
         said += word;
         onText?.(word);
-        if (word.trim()) onAudio?.(tone());
+        if (word.trim() && audioOut) onAudio?.(tone());
         await sleep(wordMs, signal);
       }
       return { text: said, toolCalls: [], stopReason: signal?.aborted ? 'aborted' : 'stop' };

@@ -2,13 +2,14 @@
 // No DOM and no audio devices: the overlay hands in a player and the model, so node tests run it.
 //
 // States: idle → listening → thinking → speaking → idle. interrupt() stops the reply and its audio.
+// A model with audioOut === false gets its text spoken by `speech` (createSpeechFallback) instead.
 
 export const STATES = Object.freeze(['idle', 'listening', 'thinking', 'speaking']);
 
 const SYSTEM_PROMPT = 'You are the NakliOS voice assistant. Answer briefly, in plain spoken sentences. Use a tool when the person asks for something a tool does.';
 
 export function createVoiceSession({
-  model, tools, player = null, systemPrompt = SYSTEM_PROMPT,
+  model, tools, player = null, speech = null, systemPrompt = SYSTEM_PROMPT,
   maxToolRounds = 3, keepTurns = 6,
   onState = () => {}, onText = () => {}, onTool = () => {}, onError = () => {},
 } = {}) {
@@ -38,12 +39,17 @@ export function createVoiceSession({
     trim();
     setState('thinking');
     let reply = '';
+    const voiceText = model.audioOut === false && speech ? speech : null;
     try {
       for (let round = 0; round <= maxToolRounds; round++) {
         const out = await model.generate({
           messages: [{ role: 'system', content: systemPrompt }, ...history],
           tools: round < maxToolRounds ? tools.list() : [],
-          onText: (delta) => { if (signal.aborted) return; reply += delta; onText(delta); },
+          onText: (delta) => {
+            if (signal.aborted) return;
+            reply += delta; onText(delta);
+            if (voiceText?.push(delta)) setState('speaking');
+          },
           onAudio: (chunk) => { if (signal.aborted) return; setState('speaking'); player?.enqueue(chunk); },
           signal,
         });
@@ -57,7 +63,9 @@ export function createVoiceSession({
           history.push({ role: 'tool', name: call.name, content: JSON.stringify(result) });
         }
       }
-      if (player && !signal.aborted) { setState('speaking'); await player.drained(); }
+      if (voiceText && !signal.aborted && voiceText.flush()) setState('speaking');
+      if (player && !signal.aborted) await player.drained();
+      if (voiceText && !signal.aborted) await voiceText.drained();
       return { stopReason: signal.aborted ? 'aborted' : 'stop', text: reply };
     } catch (error) {
       if (!signal.aborted) onError(error);
@@ -71,6 +79,7 @@ export function createVoiceSession({
   function interrupt() {
     if (current) { current.controller.abort(); current = null; }
     player?.stop();
+    speech?.stop();
     if (state === 'thinking' || state === 'speaking') setState('idle');
   }
 
