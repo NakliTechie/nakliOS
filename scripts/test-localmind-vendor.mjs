@@ -11,7 +11,7 @@ assert.equal(manifest.imageProtocol, 'localmind.image.v1');
 assert.match(manifest.upstreamCommit, /^[0-9a-f]{40}$/);
 assert.equal(manifest.defaultModelKey, 'lfm3-1.7b');
 assert.deepEqual(Object.keys(manifest.localPatches ?? {}), ['onnx-inference-worker.js']);
-assert.deepEqual(Object.keys(manifest.olderPins ?? {}), ['inference-worker.js']);
+assert.equal(manifest.olderPins, undefined);
 assert.equal(manifest.defaultImageModelKey, 'flux2-klein-4b-webgpu');
 
 for (const [name, expected] of Object.entries(manifest.files)) {
@@ -24,7 +24,9 @@ const worker = await readFile(new URL('vendor/localmind/inference-worker.js', ro
 const onnxWorker = await readFile(new URL('vendor/localmind/onnx-inference-worker.js', root), 'utf8');
 const imageWorker = await readFile(new URL('vendor/localmind/image-inference-worker.js', root), 'utf8');
 const catalog = await readFile(new URL('vendor/localmind/host-model-catalog.js', root), 'utf8');
-assert.match(worker, /new URL\('\.\/lfm2_5\.js', import\.meta\.url\)/);
+assert.match(worker, /anyformer@0\.4\.22\/index\.js/);
+assert.match(worker, /type: 'tool_calls', toolCalls/);
+assert.match(worker, /request\.type === 'setAdapter'/);
 assert.match(worker, /localmind\.inference\.v1/);
 assert.match(onnxWorker, /Gemma4ForConditionalGeneration/);
 assert.match(onnxWorker, /Qwen3_5ForConditionalGeneration/);
@@ -37,6 +39,8 @@ assert.match(catalog, /gemma4-e4b/);
 assert.match(catalog, /qwen35-4b/);
 assert.match(catalog, /onnx-community\/Qwen3\.5-4B-ONNX-OPT/);
 assert.match(catalog, /flux2-klein-4b-webgpu/);
+assert.match(catalog, /key: 'lfm25-24b-pi'/);
+assert.match(catalog, /entry: 'LFM2_5_24B_PI'/);
 assert.match(imageWorker, /localmind\.image\.v1/);
 assert.match(imageWorker, /prism-ml\/bonsai-image-ternary-4B-mlx-2bit/);
 

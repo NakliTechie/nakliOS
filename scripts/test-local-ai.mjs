@@ -57,8 +57,16 @@ const modelKeys = Array.from(
 );
 assert.deepEqual(
   modelKeys,
-  ['lfm3-1.7b', 'lfm2-230m-webgpu', 'gemma4-e2b', 'gemma4-e4b', 'qwen35-4b'],
+  ['lfm3-1.7b', 'lfm2-230m-webgpu', 'lfm25-24b-pi', 'gemma4-e2b', 'gemma4-e4b', 'qwen35-4b'],
 );
+const pi = catalogContext.LocalMindHostCatalog.get('lfm25-24b-pi');
+assert.equal(pi.entry, 'LFM2_5_24B_PI');
+assert.equal(pi.hasAdapter, true);
+assert.equal(pi.worker, 'inference-worker.js');
+assert.match(html, /new Set\(\['lfm3-1\.7b', 'lfm25-24b-pi'\]\)/);
+assert.match(html, /\{ entry:model\.entry, maxCtx:model\.contextTokens \}/);
+assert.match(html, /type:'setAdapter'/);
+assert.match(html, /msg\.type === 'tool_calls'/);
 const qwen35 = catalogContext.LocalMindHostCatalog.get('qwen35-4b');
 assert.equal(qwen35.id, 'onnx-community/Qwen3.5-4B-ONNX-OPT');
 assert.equal(qwen35.modelClass, 'qwen3_5');
@@ -259,10 +267,10 @@ assert.match(html, /function aiAppIsSystem\(appId\)/, 'agent tier gates on syste
 assert.match(html, /Agent-tier inference is restricted to system apps/,
   'third-party apps are refused the agent tier');
 assert.match(html, /const wantsAgent = msg\.agent === true/, 'agent tier is opt-in per request');
-assert.match(html, /cannot call tools\. Choose LFM3 1\.7B or an OpenAI- or Anthropic-compatible endpoint/,
+assert.match(html, /cannot call tools\. Choose LFM3 1\.7B, LFM2\.5 24B-A2B \+ Pi adapter, or an OpenAI- or Anthropic-compatible endpoint/,
   'a browser model that cannot call tools is refused, not silently dropped');
-assert.match(html, /const AI_LOCAL_TOOL_MODELS = new Set\(\['lfm3-1\.7b'\]\)/,
-  'LFM3 1.7B is the tool-capable browser model');
+assert.match(html, /const AI_LOCAL_TOOL_MODELS = new Set\(\['lfm3-1\.7b', 'lfm25-24b-pi'\]\)/,
+  'LFM3 1.7B and LFM2.5 24B-A2B + Pi adapter are the tool-capable browser models');
 assert.match(html, /local\.parseLocalToolCalls\(request\.localText, request\.tools/,
   'browser-model replies are parsed into tool calls before reaching the app');
 assert.match(html, /if \(request\.model\.protocol === 'anthropic'\) return aiGenerateAnthropic\(request\)/,
