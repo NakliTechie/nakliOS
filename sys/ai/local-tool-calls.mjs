@@ -10,7 +10,8 @@
 //   • parseLocalToolCalls — the model's reply text back into OpenAI tool calls.
 //     LFM3 writes `<tool_call><function=NAME><parameter=KEY>VALUE</parameter>
 //     </function></tool_call>` (the form its own template renders); other small
-//     models write `<tool_call>{"name":…,"arguments":…}</tool_call>`. Both parse.
+//     models write `<tool_call>{"name":…,"arguments":…}</tool_call>`; LFM2 and
+//     LFM2.5 write `<|tool_call_start|>[name(key='v')]<|tool_call_end|>`. All parse.
 //
 // Only names in the request's tool list become calls, so a model cannot invent
 // a tool the app did not offer. Pure: no DOM, no worker, no fetch.
@@ -57,6 +58,97 @@ function coerceParam(text, schema) {
   try { return JSON.parse(value.trim()); } catch (_) { return value; }
 }
 
+// LFM2 / LFM2.5 write `<|tool_call_start|>[name(key='text', n=3, obj={"a":1}), other()]<|tool_call_end|>`
+// (the form their chat template renders): strings in single quotes with \\ \' \n \r escapes, lists and
+// objects as JSON, anything else as its plain text. Returns [{ name, args }], or null when the text does
+// not parse, so a malformed block is dropped rather than half-read.
+const LFM2_BLOCK = /<\|tool_call_start\|>([\s\S]*?)(?:<\|tool_call_end\|>|(?=<\|tool_call_start\|>)|$)/g;
+function parseLfm2Calls(body) {
+  let i = 0;
+  const s = body.trim();
+  const ws = () => { while (i < s.length && /\s/.test(s[i])) i++; };
+  const fail = () => { throw new Error('lfm2 call'); };
+  const quoted = () => {
+    const q = s[i++];
+    let out = '';
+    while (i < s.length && s[i] !== q) {
+      if (s[i] === '\\' && i + 1 < s.length) {
+        const c = s[++i];
+        out += c === 'n' ? '\n' : c === 'r' ? '\r' : c === 't' ? '\t' : c;
+      } else out += s[i];
+      i++;
+    }
+    if (s[i] !== q) fail();
+    i++;
+    return out;
+  };
+  const json = () => {   // a balanced {...} or [...] that skips brackets inside JSON strings
+    const start = i;
+    let depth = 0, inStr = false;
+    for (; i < s.length; i++) {
+      const c = s[i];
+      if (inStr) { if (c === '\\') i++; else if (c === '"') inStr = false; continue; }
+      if (c === '"') inStr = true;
+      else if (c === '{' || c === '[') depth++;
+      else if (c === '}' || c === ']') { if (--depth === 0) { i++; break; } }
+    }
+    const text = s.slice(start, i);
+    try { return JSON.parse(text); } catch (_) { fail(); }
+  };
+  const bare = () => {
+    const start = i;
+    while (i < s.length && !/[,)]/.test(s[i])) i++;
+    const text = s.slice(start, i).trim();
+    if (/^(true|false)$/i.test(text)) return text.toLowerCase() === 'true';
+    if (/^(none|null)$/i.test(text)) return null;
+    if (/^-?\d+(\.\d+)?([eE][-+]?\d+)?$/.test(text)) return Number(text);
+    return text;
+  };
+  const value = () => {
+    ws();
+    if (s[i] === "'" || s[i] === '"') return quoted();
+    if (s[i] === '{' || s[i] === '[') return json();
+    return bare();
+  };
+  try {
+    ws();
+    const listed = s[i] === '[';
+    if (listed) i++;
+    const calls = [];
+    for (;;) {
+      ws();
+      if (listed && s[i] === ']') break;
+      if (i >= s.length) break;
+      const m = /^[A-Za-z_][\w.-]*/.exec(s.slice(i));
+      if (!m) fail();
+      i += m[0].length;
+      ws();
+      if (s[i++] !== '(') fail();
+      const args = {};
+      ws();
+      while (s[i] !== ')') {
+        ws();
+        const k = /^[A-Za-z_]\w*/.exec(s.slice(i));
+        if (!k) fail();
+        i += k[0].length;
+        ws();
+        if (s[i++] !== '=') fail();
+        args[k[0]] = value();
+        ws();
+        if (s[i] === ',') i++;
+        else if (s[i] !== ')') fail();
+        ws();
+      }
+      i++;
+      calls.push({ name: m[0], args });
+      ws();
+      if (s[i] === ',') { i++; continue; }
+      if (!listed) break;
+    }
+    return calls;
+  } catch (_) { return null; }
+}
+
 const XML_CALL = /<function=([^>\n]+)>([\s\S]*?)(?:<\/function>|(?=<function=)|$)/g;
 const XML_PARAM = /<parameter=([^>\n]+)>([\s\S]*?)(?:<\/parameter>|(?=<parameter=)|(?=<\/function>)|$)/g;
 const CALL_BLOCK = /<tool_call>([\s\S]*?)(?:<\/tool_call>|(?=<tool_call>)|$)/g;
@@ -99,7 +191,12 @@ export function parseLocalToolCalls(text, tools, { idPrefix = 'call_local' } = {
   };
 
   let content = source;
-  if (source.includes('<tool_call>')) {
+  if (source.includes('<|tool_call_start|>')) {
+    for (const block of source.matchAll(LFM2_BLOCK)) {
+      for (const call of parseLfm2Calls(block[1]) || []) add(call.name, call.args);
+    }
+    content = source.replace(LFM2_BLOCK, '');
+  } else if (source.includes('<tool_call>')) {
     for (const block of source.matchAll(CALL_BLOCK)) {
       const body = block[1].trim();
       if (body.startsWith('{')) {

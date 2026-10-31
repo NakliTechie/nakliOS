@@ -65,4 +65,24 @@ assert.deepEqual(r.toolCalls, []);
 r = parseLocalToolCalls('Paris is the capital of France.', tools);
 assert.deepEqual(r, { content: 'Paris is the capital of France.', toolCalls: [] });
 
+// LFM2 / LFM2.5 Python-call form, as their chat template renders it: quoted strings with escapes,
+// numbers, booleans, JSON objects, two calls in one list, text around the block kept.
+r = parseLocalToolCalls("Let me look.<|tool_call_start|>[read_file(path='it\\'s a\\\\b.md', limit=20), write_file(path='x.js', content='line 1\\nline 2', opts={\"mode\":\"w\",\"note\":\"a)b\"})]<|tool_call_end|>", tools);
+assert.equal(r.content, 'Let me look.');
+assert.deepEqual(r.toolCalls.map((c) => c.function.name), ['read_file', 'write_file']);
+assert.deepEqual(JSON.parse(r.toolCalls[0].function.arguments), { path: "it's a\\b.md", limit: 20 });
+assert.deepEqual(JSON.parse(r.toolCalls[1].function.arguments), { path: 'x.js', content: 'line 1\nline 2', opts: { mode: 'w', note: 'a)b' } });
+
+// No arguments, booleans and None; a reply cut off before the end marker still yields the call.
+r = parseLocalToolCalls('<|tool_call_start|>[read_file()]<|tool_call_end|>', tools);
+assert.deepEqual(JSON.parse(r.toolCalls[0].function.arguments), {});
+r = parseLocalToolCalls("<|tool_call_start|>[write_file(path=\"d.md\", append=True, mode=None)]", tools);
+assert.deepEqual(JSON.parse(r.toolCalls[0].function.arguments), { path: 'd.md', append: true, mode: null });
+
+// A malformed block is dropped whole, and unknown names never become calls.
+r = parseLocalToolCalls("<|tool_call_start|>[read_file(path='open]<|tool_call_end|>", tools);
+assert.deepEqual(r.toolCalls, []);
+r = parseLocalToolCalls("<|tool_call_start|>[rm_rf(path='/')]<|tool_call_end|>", tools);
+assert.deepEqual(r.toolCalls, []);
+
 console.log('Local tool calls: ok');
