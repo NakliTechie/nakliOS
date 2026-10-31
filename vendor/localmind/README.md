@@ -16,7 +16,6 @@ To update the runtime:
    | Vendored file | LocalMind source |
    |---|---|
    | `inference-worker.js` | `src/inference-worker.js` |
-   | `lfm2_5.js` | `src/lfm2_5.js` |
    | `host-model-catalog.js` | `host/host-model-catalog.js` |
    | `onnx-inference-worker.js` | `host/onnx-inference-worker.js` |
    | `image-inference-worker.js` | `host/image-inference-worker.js` |
@@ -27,11 +26,9 @@ To update the runtime:
 Do not patch the vendored files only in NakliOS. Runtime changes belong
 upstream in LocalMind so the workbench and operating system cannot drift.
 
-Current exception (2026-10-28): `manifest.json` pins LocalMind `e87d28b`, but
-`inference-worker.js` stays at the older commit listed under `olderPins`.
-LocalMind now loads LFM2.5 through anyformer from npm; adopting that changes
-how the LFM2.5 230M model loads, so it lands as its own change with a live
-check, after which `olderPins` goes away.
+Since 2026-10-31 (LocalMind `a1615bb`) `inference-worker.js` loads every model through anyformer from npm
+(0.4.22, which also keeps run-time adapters in Cache Storage): LFM2.5 230M by repo id, and catalog entries such as LFM2.5 24B-A2B + Pi adapter by their anyformer
+`entry`. It no longer needs `lfm2_5.js`.
 
 Standing NakliOS patch (2026-10-28): `onnx-inference-worker.js` carries one
 NakliOS-only change, listed under `localPatches`, so coding agents can call

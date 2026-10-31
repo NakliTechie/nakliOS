@@ -5724,6 +5724,9 @@ const AI_IMAGE_ENDPOINT_PRESETS = Object.freeze({
 });
 const AI_DEFAULT_SETTINGS = Object.freeze({
   modelKey:globalThis.LocalMindHostCatalog.defaultKey,
+  // A model with a run-time LoRA (catalog hasAdapter: LFM2.5 24B-A2B + harness-hub's Pi
+  // coding adapter) runs with it switched on unless the person turns it off.
+  adapterOn:true,
   endpoint:Object.freeze({
     preset:'ollama',
     baseUrl:AI_ENDPOINT_PRESETS.ollama.baseUrl,
@@ -5760,6 +5763,7 @@ function aiReadSettings(){
     : AI_DEFAULT_SETTINGS.imageEndpoint.preset;
   return {
     modelKey:validModel ? saved.modelKey : AI_DEFAULT_SETTINGS.modelKey,
+    adapterOn:saved.adapterOn !== false,
     endpoint:{
       preset,
       baseUrl:String(saved.endpoint?.baseUrl || AI_ENDPOINT_PRESETS[preset].baseUrl || ''),
@@ -5860,7 +5864,7 @@ function aiSelectedModel(){
 const aiNano = { checked:false, available:false, downloadable:false };
 // In-browser models whose chat template renders tools and whose replies the broker parses
 // into tool calls (sys/ai/local-tool-calls.mjs). Agent requests with tools run on these.
-const AI_LOCAL_TOOL_MODELS = new Set(['lfm3-1.7b']);
+const AI_LOCAL_TOOL_MODELS = new Set(['lfm3-1.7b', 'lfm25-24b-pi']);
 // Apps that consume the HOST agent tier (tool-calling coding). They report their
 // configured model and their agent requests never touch Nano. Apps with their
 // own agent stacks are migrated onto this split one at a time.
@@ -6122,6 +6126,9 @@ const aiHost = {
   permissionPrompts:new Map(),
   endpointAbort:null,
   onDeviceAbort:null,
+  // The loaded model's run-time adapter: true / false, or null when it has none.
+  adapterState:null,
+  adapterResolve:null,
 };
 
 const aiImageHost = {
@@ -6273,6 +6280,8 @@ function aiFailWorker(error){
   aiHost.activeResolve = null;
   aiHost.activeReject = null;
   aiHost.loadPromise = null;
+  aiHost.adapterResolve?.();
+  aiHost.adapterResolve = null;
   try { aiHost.worker?.terminate(); } catch(_){}
   aiHost.worker = null;
   aiHost.workerModelKey = null;
@@ -6292,6 +6301,7 @@ function aiCreateWorker(model){
     type:'module',
     name:`naklios-localmind-${model.key}`,
   });
+  aiHost.adapterState = null;
   worker.addEventListener('message', event => {
     const msg = event.data || {};
     if (msg.protocol && msg.protocol !== AI_PROTOCOL) return;
@@ -6301,6 +6311,7 @@ function aiCreateWorker(model){
           try { listener(msg.data || {}); } catch(_){}
         });
       } else if (msg.type === 'ready'){
+        aiHost.adapterState = typeof msg.adapter === 'boolean' ? msg.adapter : null;
         const resolve = aiHost.loadResolve;
         aiHost.loadResolve = null;
         aiHost.loadReject = null;
@@ -6311,9 +6322,21 @@ function aiCreateWorker(model){
       }
       return;
     }
+    if (msg.type === 'adapter'){
+      aiHost.adapterState = typeof msg.on === 'boolean' ? msg.on : null;
+      const resolve = aiHost.adapterResolve;
+      aiHost.adapterResolve = null;
+      resolve?.();
+      return;
+    }
     const request = aiHost.active;
     if (!request || msg.id !== request.workerRequestId) return;
-    if (msg.type === 'token'){
+    if (msg.type === 'tool_calls'){
+      // anyformer catalog models parse their own calls; they arrive once, before complete.
+      if (Array.isArray(msg.toolCalls)) request.workerToolCalls = msg.toolCalls;
+    } else if (msg.type === 'reasoning'){
+      // The model's reasoning before its answer: not part of the reply.
+    } else if (msg.type === 'token'){
       if (typeof request.localText === 'string') request.localText += String(msg.token || '');
       else aiEmit(request, { event:'token', token:String(msg.token || '') });
     } else if (msg.type === 'complete'){
@@ -6465,6 +6488,9 @@ async function aiEnsureLoaded(model, onProgress){
         dtype:model.dtype,
         modelType:model.modelType,
         modelClass:model.modelClass,
+        // An anyformer catalog model loads by its entry name, sized to the catalog's context.
+        ...(model.entry ? { entry:model.entry, maxCtx:model.contextTokens } : {}),
+        ...(model.hasAdapter ? { adapter:aiSettings.adapterOn } : {}),
       });
     }
     await aiHost.loadPromise;
@@ -6569,16 +6595,38 @@ async function aiLocalTools(){
   return _aiLocalToolsMod;
 }
 
+// Bring the loaded model's run-time adapter to the person's setting before a reply, so the
+// Settings switch takes effect on the next request with no reload.
+async function aiSyncAdapter(model){
+  if (!model.hasAdapter || aiHost.adapterState === null) return;
+  const on = aiSettings.adapterOn;
+  if (aiHost.adapterState === on) return;
+  await new Promise(resolve => {
+    aiHost.adapterResolve = resolve;
+    aiHost.worker.postMessage({ type:'setAdapter', id:`naklios-ai-adapter-${++aiHost.requestCounter}`, on });
+  });
+}
+
 async function aiGenerateWorker(request){
   // An agent request with tools: the model's own chat template renders the tools, and the
   // reply text is held back until it is complete, so tool-call markup never reaches the app
   // as text. The parsed calls travel on the done event, as an endpoint's do.
   const local = request.agent && request.tools?.length ? await aiLocalTools() : null;
+  // An anyformer catalog model (entry) takes OpenAI messages and tools and parses its own
+  // calls; the text parser stays the fallback for a reply it did not parse.
+  const anyformer = !!request.model.entry;
   if (local) request.localText = '';
+  await aiSyncAdapter(request.model);
   return new Promise((resolve, reject) => {
     aiHost.activeResolve = local ? (finishReason) => {
       const parsed = local.parseLocalToolCalls(request.localText, request.tools,
         { idPrefix:`call_${request.workerRequestId}` });
+      if (request.workerToolCalls?.length){
+        // Worker ids restart at call_0 every reply; agents match results by id across turns.
+        parsed.toolCalls = request.workerToolCalls.map((call, n) => ({
+          ...call, id:`call_${request.workerRequestId}_${n}`,
+        }));
+      }
       if (parsed.content) aiEmit(request, { event:'token', token:parsed.content });
       if (parsed.toolCalls.length) request.toolCalls = parsed.toolCalls;
       resolve(parsed.toolCalls.length && finishReason !== 'cancelled' ? 'tool_calls' : finishReason);
@@ -6587,7 +6635,7 @@ async function aiGenerateWorker(request){
     aiHost.worker.postMessage({
       type:'generate',
       id:request.workerRequestId,
-      messages:local ? local.toLocalTemplateMessages(request.messages) : request.messages,
+      messages:local && !anyformer ? local.toLocalTemplateMessages(request.messages) : request.messages,
       ...(local ? { tools:request.tools } : {}),
       generationConfig:{
         ...(request.model.generationConfig || {}),
@@ -7149,7 +7197,7 @@ async function aiHostSubmit(source, msg, appId){
       toolChoice = proto.normaliseToolChoice(msg.toolChoice ?? msg.tool_choice);
       maxTokens = proto.clampAgentMaxTokens(msg.maxTokens);
       if (tools && tools.length && model.runtime !== 'endpoint' && !AI_LOCAL_TOOL_MODELS.has(model.key)){
-        throw new Error(`${model.label} cannot call tools. Choose LFM3 1.7B or an OpenAI- or Anthropic-compatible endpoint in Settings → AI`);
+        throw new Error(`${model.label} cannot call tools. Choose LFM3 1.7B, LFM2.5 24B-A2B + Pi adapter, or an OpenAI- or Anthropic-compatible endpoint in Settings → AI`);
       }
     } else {
       messages = aiNormaliseMessages(msg.messages);
@@ -9901,6 +9949,12 @@ function openSettings(section){
         ${_dlgEscape(selectedAiModel.description || '')}
         ${selectedAiModel.size ? ` First use: ${_dlgEscape(selectedAiModel.size)}.` : ''}
       </div>
+      <div id="ai-adapter-row" ${selectedAiModel.hasAdapter ? '' : 'hidden'}>
+        <label class="nw-fs-blurb" style="display:flex; gap:6px; align-items:center; margin:0;">
+          <input type="checkbox" id="ai-adapter-toggle" style="width:auto;" ${aiSettings.adapterOn ? 'checked' : ''}>
+          <span>Use the Pi coding adapter (harness-hub's LoRA for coding agents). It switches on the next reply, with no reload.</span>
+        </label>
+      </div>
       <div id="ai-endpoint-fields" ${endpointHidden}>
         <div class="nw-ai-endpoint-grid">
           <label>
@@ -10227,6 +10281,7 @@ function openSettings(section){
   const aiRememberKey = wrap.querySelector('#ai-remember-key');
   const aiSettingsResult = wrap.querySelector('#ai-settings-result');
   const aiModelDetail = wrap.querySelector('#ai-model-detail');
+  const aiAdapterRow = wrap.querySelector('#ai-adapter-row');
   const aiImageModelSelect = wrap.querySelector('#ai-image-model-select');
   const aiImageEndpointFields = wrap.querySelector('#ai-image-endpoint-fields');
   const aiImageEndpointPreset = wrap.querySelector('#ai-image-endpoint-preset');
@@ -10242,6 +10297,7 @@ function openSettings(section){
     const key = aiModelSelect?.value || AI_DEFAULT_SETTINGS.modelKey;
     const endpoint = key === 'endpoint';
     if (aiEndpointFields) aiEndpointFields.hidden = !endpoint;
+    if (aiAdapterRow) aiAdapterRow.hidden = endpoint || !globalThis.LocalMindHostCatalog.get(key).hasAdapter;
     if (!aiModelDetail) return;
     if (endpoint){
       aiModelDetail.textContent =
@@ -10252,6 +10308,10 @@ function openSettings(section){
     aiModelDetail.textContent = `${model.description} First use: ${model.size}.`;
   };
   aiModelSelect?.addEventListener('change', paintAiDraft);
+  wrap.querySelector('#ai-adapter-toggle')?.addEventListener('change', event => {
+    aiSettings = { ...aiSettings, adapterOn:event.currentTarget.checked };
+    localStorage.setItem(AI_SETTINGS_KEY, JSON.stringify(aiSettings));
+  });
   paintAiDraft();
 
   const paintAiImageDraft = () => {

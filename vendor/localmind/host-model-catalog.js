@@ -51,6 +51,37 @@ const LOCALMIND_HOST_MODELS = Object.freeze([
     }),
   }),
   Object.freeze({
+    key: 'lfm25-24b-pi',
+    id: 'LiquidAI/LFM2.5-24B-A2B-GGUF',
+    // anyformer's catalog entry: the load message carries it as `entry`, and it brings the repo, the GPU budget and
+    // harness-hub's Pi coding-agent LoRA, applied at run time (setAdapter switches it with no reload).
+    entry: 'LFM2_5_24B_PI',
+    label: 'LFM2.5 24B-A2B + Pi adapter',
+    family: 'LFM2.5',
+    runtime: 'anyformer-diskformer',
+    worker: 'inference-worker.js',
+    dtype: 'q4_0',
+    size: '~13.6 GB',
+    sizeBytes: 13_578_190_880 + 37_437_888,
+    contextTokens: 16_384,   // 4,096 overflowed Dish's 31-tool prompt (~36k chars); 16,384 adds ~335 MB of KV (NakliOS, 2026-10-31)
+    modelType: 'causal',
+    experimental: true,
+    optIn: true,
+    tools: true,
+    hasAdapter: true,
+    description:
+      'Opt-in, experimental. A 24B mixture-of-experts model whose experts ' +
+      'stream from on-device storage (OPFS): the first load copies 13.6 GB ' +
+      'into browser storage, and it uses about 4 GB of GPU memory. Always ' +
+      'reasons first. Includes the Pi coding-agent adapter (37 MB), which ' +
+      'the host can switch on or off between replies. Licence lfm1.0: ' +
+      'royalty-free commercial use ' +
+      'only below US$10M annual revenue.',
+    generationConfig: Object.freeze({
+      max_new_tokens: 2048,
+    }),
+  }),
+  Object.freeze({
     key: 'gemma4-e2b',
     id: 'onnx-community/gemma-4-E2B-it-ONNX',
     label: 'Gemma 4 E2B',

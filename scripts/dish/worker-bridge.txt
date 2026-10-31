@@ -17,7 +17,10 @@ dishGlobal.__dishInference = (request: unknown, signal?: AbortSignal) => new Pro
   const abort = () => { self.postMessage({ t: 'dish-cancel', id }); dishCalls.delete(id); dispose(); reject(new Error('Inference cancelled')); };
   if (signal?.aborted) { reject(new Error('Inference cancelled')); return; }
   signal?.addEventListener('abort', abort, { once: true });
-  timer = setTimeout(() => { abort(); }, 180000);
+  // A backstop for a provider that never answers; Stop still cancels at once. The request is not streamed, so
+  // nothing arrives while a large in-browser model reads the prompt: LFM2.5 24B-A2B took 292 s to read Dish's
+  // 31-tool prompt before its first token (2026-10-31), and 180 s cancelled every turn.
+  timer = setTimeout(() => { abort(); }, 900000);
   dishCalls.set(id, { resolve, reject, dispose });
   self.postMessage({ t: 'dish-inference', id, request });
 });
