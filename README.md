@@ -41,7 +41,7 @@ Apps keep their standalone entrypoints.
 
 Apps offer storage according to their capabilities: Browser storage, a Folder you select, or encrypted Crate storage on your own Cloudflare R2.
 Switching storage does not copy or delete existing data. Settings → App storage moves an app between a Folder and Crate, or revokes it.
-Immersive mode opens compatible apps in windows; Basic mode opens other web apps in tabs. See the [experience mode policy](docs/experience-modes.md).
+Immersive mode opens compatible apps in windows; Basic mode opens other web apps in tabs. See the [`Experience mode policy`](docs/experience-modes.md).
 
 Local tools need no model. The default model is LFM3 1.7B, which runs in your browser (about 1.4 GB on first use, then cached).
 You can instead point Settings → AI at an OpenAI- or Anthropic-compatible endpoint with your own key; NakliOS holds the key and apps never see it.
