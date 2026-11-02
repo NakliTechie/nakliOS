@@ -1391,13 +1391,19 @@ body.is-mobile .nw-dock{display:none;}
   body.is-mobile .icon-area{
     padding:16px;
     display:grid !important;
-    grid-template-columns:repeat(4, 1fr);
+    /* minmax(0,1fr): a plain 1fr column grows to fit a long label ("Think & Research") and pushed the
+       fourth column off a 393 px phone; the label ellipsis needs the column to stay its share. */
+    grid-template-columns:repeat(4, minmax(0, 1fr));
     gap:12px;
     align-content:start;
   }
   body.is-mobile .nw-icon{
     position:static !important;
-    width:auto; height:auto;
+    width:auto; height:auto; min-width:0;
+  }
+  body.is-mobile .nw-icon-label{
+    max-width:100%; white-space:normal;
+    display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2;
   }
   body.is-mobile .nw-titlebar{
     height:44px; padding:0 4px; gap:2px;
@@ -1410,7 +1416,13 @@ body.is-mobile .nw-dock{display:none;}
   }
 }
 @media (max-width: 380px){
-  body.is-mobile .icon-area{grid-template-columns:repeat(3, 1fr);}
+  body.is-mobile .icon-area{grid-template-columns:repeat(3, minmax(0, 1fr));}
+}
+/* Phone widths: the top bar held 414 px of controls, so Settings fell off a 375-393 px screen.
+   The clock and the brand word go; the brand mark stays. */
+@media (max-width: 440px){
+  body.is-mobile #clock,
+  body.is-mobile .brand-name{display:none;}
 }
 #review-btn[hidden]{display:none;}
 #nw-review-dialog{
@@ -1446,7 +1458,7 @@ body.is-mobile .nw-dock{display:none;}
   <header id="topbar">
     <div class="brand">
       <span class="brand-mark">n</span>
-      <span>NakliOS</span>
+      <span class="brand-name">NakliOS</span>
       <span class="brand-sub">— private browser desktop</span>
     </div>
     <div class="topbar-spacer"></div>
@@ -2939,15 +2951,18 @@ function crateShowNetworkError(diag){
   });
 }
 
-async function crateUnlock(bytes, passphrase){
+// unpacked: the creds object when the caller already unpacked `bytes` with this passphrase, so the 600,000-round
+// PBKDF2 runs once per unlock instead of twice.
+const CRATE_OPEN_TIMEOUT_MS = 45_000;
+async function crateUnlock(bytes, passphrase, unpacked = null){
   const { Crate, credsfile } = await loadCrateModule();
   // credsfile.unpack returns the creds object directly:
   //   { provider, bucket: {name, accountId, region}, credentials: {accessKey, secretKey} }
   // Previous code destructured `const { creds } = ...` which left creds undefined
   // and crashed on the next line with "Cannot read properties of undefined
   // (reading 'bucket')". Pre-v2.22 bug — landed silently in v2.20.
-  let creds;
-  try {
+  let creds = unpacked;
+  if (!creds) try {
     creds = await credsfile.unpack(bytes, passphrase);
   } catch (e){
     // CredsFileError → already user-readable; bubble as-is.
@@ -2957,11 +2972,17 @@ async function crateUnlock(bytes, passphrase){
   }
   let crate;
   try {
-    crate = await Crate.open({
-      bucketConfig: creds.bucket,
-      credentials: creds.credentials,
-      passphrase,
-    });
+    // The bucket request has no deadline of its own, and a stalled one left the unlock dialog waiting forever.
+    let timer;
+    crate = await Promise.race([
+      Crate.open({
+        bucketConfig: creds.bucket,
+        credentials: creds.credentials,
+        passphrase,
+      }),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(
+        `the bucket did not answer within ${CRATE_OPEN_TIMEOUT_MS / 1000} s`)), CRATE_OPEN_TIMEOUT_MS); }),
+    ]).finally(() => clearTimeout(timer));
   } catch (e){
     // Crate.open failures: wrong passphrase (caught by unpack already, but
     // also possible if the bucket itself is in a bad state), bucket
@@ -3197,12 +3218,13 @@ async function crateInteractiveUnlock(){
         // Unpack once to capture the bucket config for potential diagnosis.
         // The throw on wrong passphrase happens here; if we get past it,
         // crateUnlock will re-unpack (cheap) and open the bucket.
+        let creds = null;
         try {
           const { credsfile } = await loadCrateModule();
-          const creds = await credsfile.unpack(blob, pass);
+          creds = await credsfile.unpack(blob, pass);
           lastBucket = { ...creds.bucket, provider: creds.provider };
         } catch(_){ /* let crateUnlock surface the real failure */ }
-        await crateUnlock(blob, pass);
+        await crateUnlock(blob, pass, creds);
       } catch (e){
         await _crateHandleConnectError(e, () => lastBucket);
       }
@@ -3540,16 +3562,32 @@ function nakliosPassphrase(opts = {}){
         closeWith(pass);
         return;
       }
+      // An unlock runs PBKDF2 (600,000 rounds) and a bucket request; on a phone or a slow network that takes
+      // seconds, and a disabled button with no label change looked like "nothing happened" (2026-11-02).
+      const okLabel = submit.textContent;
       submit.disabled = true;
+      submit.textContent = opts.busyLabel || 'Unlocking…';
+      dlg.setAttribute('aria-busy', 'true');
       err.hidden = true; err.textContent = '';
+      const slow = setTimeout(() => {
+        err.textContent = 'Still working: checking the passphrase and opening the bucket.';
+        err.hidden = false;
+      }, 3000);
+      const settle = () => {
+        clearTimeout(slow);
+        submit.textContent = okLabel;
+        dlg.removeAttribute('aria-busy');
+      };
       try {
         const result = await opts.validate(pass);
+        settle();
         // SECURITY: when a validator is supplied, the outer Promise must NOT
         // surface the passphrase to the caller — the validator already had it.
         // Pass back the validator's return value (e.g. an unlocked instance),
         // or `true` as a generic "succeeded" signal. Never the passphrase.
         closeWith(result === undefined ? true : result);
       } catch (validateErr){
+        settle();
         err.textContent = validateErr?.message
           || 'Wrong passphrase, or the credentials file is corrupt.';
         err.hidden = false;
