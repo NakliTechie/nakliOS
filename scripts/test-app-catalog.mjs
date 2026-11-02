@@ -58,14 +58,37 @@ assert.match(
 );
 assert.match(
   html,
-  /const DEFAULT_DESKTOP_APP_IDS = Object\.freeze\(\[\s*'books',\s*'nakliposter',\s*'bofh',\s*'mod',\s*'naklidata',\s*'tijori',\s*'files',\s*'notes',\s*'anvil',\s*'abhyas',\s*'chapters',\s*\]\)/,
-  'core apps, storage utilities, Anvil and the two Learn apps are first-party desktop defaults',
+  /const DEFAULT_DESKTOP_APP_IDS = Object\.freeze\(\[\s*'books',\s*'nakliposter',\s*'bofh',\s*'naklidata',\s*'tijori',\s*'files',\s*'anvil',\s*'dish',\s*'pi',\s*\]\)/,
+  'core apps, storage utilities and the three coding agents are first-party desktop defaults',
 );
 assert.match(
   html,
-  /const DESKTOP_DEFAULTS_VERSION = 4/,
+  /const DESKTOP_DEFAULTS_VERSION = 5/,
   'existing desktops receive each expanded shortcut set once',
 );
+{
+  // Run the migration itself: a version-4 desktop loses the four retired defaults and gains Dish and Pi,
+  // a user's own pull-outs stay, and a migrated layout is left alone afterwards.
+  const pick = re => { const m = html.match(re); assert.ok(m, `missing ${re}`); return m[0]; };
+  const source = [
+    pick(/const DEFAULT_DESKTOP_APP_IDS = Object\.freeze\(\[[\s\S]*?\]\);/),
+    pick(/const DESKTOP_DEFAULTS_VERSION = \d+;/),
+    pick(/const DESKTOP_DEFAULTS_RETIRED = Object\.freeze\(\{[\s\S]*?\}\);/),
+    pick(/function applyDesktopDefaults\(layout\)\{[\s\S]*?\n\}/),
+  ].join('\n');
+  const applyDesktopDefaults = new Function(`${source}\nreturn applyDesktopDefaults;`)();
+  const v4 = { desktopDefaultsVersion: 4, unfoldered: ['books', 'mod', 'notes', 'abhyas', 'chapters', 'anvil', 'reckon'] };
+  assert.equal(applyDesktopDefaults(v4), true);
+  for (const id of ['mod', 'notes', 'abhyas', 'chapters']) assert.ok(!v4.unfoldered.includes(id), `${id} returns to its folder`);
+  for (const id of ['dish', 'pi', 'reckon', 'books']) assert.ok(v4.unfoldered.includes(id), `${id} is on the desktop`);
+  assert.equal(v4.desktopDefaultsVersion, 5);
+  v4.unfoldered.push('mod');
+  assert.equal(applyDesktopDefaults(v4), false, 'a migrated layout is not migrated again');
+  assert.ok(v4.unfoldered.includes('mod'), 'a pull-out made after the migration stays');
+  const fresh = {};
+  applyDesktopDefaults(fresh);
+  assert.deepEqual([...fresh.unfoldered].sort(), ['anvil', 'bofh', 'books', 'dish', 'files', 'naklidata', 'nakliposter', 'pi', 'tijori']);
+}
 assert.match(
   html,
   /function applyDesktopDefaults\(layout\)[\s\S]*?layout\.unfoldered\.push\(appId\)[\s\S]*?layout\.desktopDefaultsVersion = DESKTOP_DEFAULTS_VERSION/,
@@ -78,8 +101,8 @@ assert.match(
 );
 assert.match(
   html,
-  /id:'naklidata'[\s\S]*?url:'https:\/\/naklidata\.naklitechie\.com\/'[\s\S]*?maxMode:'basic'[\s\S]*?desktopAlign:'right', desktopOrder:5/,
-  'NakliData launches top-level and occupies the fifth right-side desktop slot',
+  /id:'naklidata'[\s\S]*?url:'https:\/\/naklidata\.naklitechie\.com\/'[\s\S]*?maxMode:'basic'[\s\S]*?desktopAlign:'right', desktopOrder:6/,
+  'NakliData launches top-level and occupies the seventh right-side desktop slot',
 );
 assert.match(
   html,
