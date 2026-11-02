@@ -8,8 +8,9 @@ export DSH_CLIENT_COMMIT_HASH=$(node -p "require('$ROOT/scripts/dish/source.lock
 export DSH_CLIENT_TITLE=Dish
 node "$ROOT/scripts/dish/verify-source.mjs" "$SOURCE"
 cd "$SOURCE"
-# Upstream gives the host type build the same heap in its own build:lib:host script.
-node --max-old-space-size=4096 node_modules/typescript/bin/tsc -b tsconfig.host.json
+# Upstream's own build:lib:host script gives the host type build 4 GB; on this build it ran out of memory at 4 GB
+# (2026-10-31), so it gets 8 GB.
+node --max-old-space-size=8192 node_modules/typescript/bin/tsc -b tsconfig.host.json
 node node_modules/tsdown/dist/run.mjs --config-loader native --env.DSH_BUILD_FACE host
 node node_modules/typescript/bin/tsc -b tsconfig.client.json
 node node_modules/tsdown/dist/run.mjs --config-loader native --env.DSH_BUILD_FACE client
