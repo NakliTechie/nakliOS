@@ -276,8 +276,8 @@
     "node_modules/@deepseek-ai/dsh-client-ui-sidebar-terminal/lib/client.terminal.js"
   ],
   "removedLazyChunks": [],
-  "clientInputBytes": 8038832,
-  "clientOutputBytes": 5911429,
-  "imageBytes": 6031115,
-  "lazyBytes": 4664082
+  "clientInputBytes": 8040599,
+  "clientOutputBytes": 5912486,
+  "imageBytes": 6031357,
+  "lazyBytes": 4664089
 }

@@ -39,7 +39,7 @@ Closing the browser stops the Worker.
 
 ## Build and provenance
 
-The upstream release is `dsh-v0.2.1-rc.4` at commit `504a01a9578abc2c6f1fb896b1dc322c9fe24f66`.
+The upstream release is `dsh-v0.2.1-rc.5` at commit `b830ec950faba0a46dda564be3e2d854afed94f1`.
 `upstream.lock.json` records every shipped file's size and SHA-256.
 The packed image includes upstream dependency licenses.
 `LICENSE-upstream` preserves DeepSeek Harness's MIT license.

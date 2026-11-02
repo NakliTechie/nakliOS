@@ -1,7 +1,7 @@
 {
   "repository": "https://github.com/deepseek-ai/deepseek-harness",
-  "tag": "dsh-v0.2.1-rc.4",
-  "commit": "504a01a9578abc2c6f1fb896b1dc322c9fe24f66",
+  "tag": "dsh-v0.2.1-rc.5",
+  "commit": "b830ec950faba0a46dda564be3e2d854afed94f1",
   "files": {
     "LICENSE-upstream": {
       "bytes": 1065,
@@ -9,7 +9,7 @@
     },
     "README.md": {
       "bytes": 6035,
-      "sha256": "3083ef8c7be31e87a0831e1b834472d5f2bb30755accb2292c302e3bc3c7cb5c"
+      "sha256": "ea32e8282cc55a0462822af0b595d9cd89c30fa603d7b868fd594e995109b746"
     },
     "assets/c-D24wO31W.js": {
       "bytes": 63,
@@ -669,7 +669,7 @@
     },
     "build-metrics.json": {
       "bytes": 13756,
-      "sha256": "71f752487ba25926ce5d9f07085c26ceeecc494803063d0733814e11e4832a73"
+      "sha256": "dddffac6968c3820bed873f1873333f6023e21d03caf7ef16a280e2e2ded1404"
     },
     "favicon-dark.svg": {
       "bytes": 3634,
@@ -703,25 +703,25 @@
       "bytes": 50912,
       "sha256": "42cd8241924c0a5a9ecfb068b77876e8826d6880fdb8e8bcecbad16fad67fe03"
     },
-    "preview/lazy/2671fbdf8e78fa3e64576bf0dd210325821519e5d939c575a74eeaa9e063bfb8.tar.gz": {
-      "bytes": 48421,
-      "sha256": "2671fbdf8e78fa3e64576bf0dd210325821519e5d939c575a74eeaa9e063bfb8"
-    },
-    "preview/lazy/762cfc60b2d1a6a59caf289efb68c43cbbaba50ffbb9710d0db7d6952deb27f1.tar.gz": {
-      "bytes": 1458913,
-      "sha256": "762cfc60b2d1a6a59caf289efb68c43cbbaba50ffbb9710d0db7d6952deb27f1"
-    },
-    "preview/lazy/cf5b2be195639857d580e0c5f98f4998c4de3635d4e0a6e1135113027167e657.tar.gz": {
-      "bytes": 140862,
-      "sha256": "cf5b2be195639857d580e0c5f98f4998c4de3635d4e0a6e1135113027167e657"
-    },
-    "preview/lazy/ff8f0d531fbf9c99f20fc00d84910173bf835c3f1eaf8733bed284e4c12451ee.tar.gz": {
+    "preview/lazy/1382742330d6b81ba92624b3eebdc738254027e29c6ba1f78dfb51112ba25be3.tar.gz": {
       "bytes": 3015886,
-      "sha256": "ff8f0d531fbf9c99f20fc00d84910173bf835c3f1eaf8733bed284e4c12451ee"
+      "sha256": "1382742330d6b81ba92624b3eebdc738254027e29c6ba1f78dfb51112ba25be3"
+    },
+    "preview/lazy/19cd408a64886a8234cf4ae56eb59a048e705d12c16927c8a95f63e33003badc.tar.gz": {
+      "bytes": 140864,
+      "sha256": "19cd408a64886a8234cf4ae56eb59a048e705d12c16927c8a95f63e33003badc"
+    },
+    "preview/lazy/65452715cf919eef25e36526a437c5e5f3d885f217080ac30f8ce7d0d20867b3.tar.gz": {
+      "bytes": 48426,
+      "sha256": "65452715cf919eef25e36526a437c5e5f3d885f217080ac30f8ce7d0d20867b3"
+    },
+    "preview/lazy/b5cb09ad888f7ca73754ca859d149c429ea21acaa66911cef463efd5b597b530.tar.gz": {
+      "bytes": 1458913,
+      "sha256": "b5cb09ad888f7ca73754ca859d149c429ea21acaa66911cef463efd5b597b530"
     },
     "preview/vfs-image.tar.gz": {
-      "bytes": 6031115,
-      "sha256": "7c674f477622c66f89ad7af1338c93ae708d35abf13da6276ba22f03b632f1cf"
+      "bytes": 6031357,
+      "sha256": "ef9719c0c08cf4081f92078492900d930724860faebe53c16648e9815a8512b9"
     },
     "preview/worker-CzZYoCvU.js": {
       "bytes": 300421,
