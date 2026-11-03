@@ -37,6 +37,8 @@ export const KNOWN_SCOPES = new Set([
   'fs:read', 'fs:write', 'fs:remove',
   'git:read', 'git:write', 'git:remote', 'git:push', 'native:gate',
   'ui:read', 'ui:write', 'operator:only',
+  // Commands an app registers on the common rail (sys/host/catalog.mjs).
+  'app:read', 'app:write',
 ]);
 
 // Fields exposed by discovery. `run` is deliberately absent: projecting a

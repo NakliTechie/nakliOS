@@ -4705,6 +4705,8 @@ function finalizeCloseWindow(win){
     releaseFileGrantsForSource(iframe.contentWindow);
     aiHostCancelSource(iframe.contentWindow);
     if (reviewHostPromise) void reviewHostPromise.then(host => host.detach(iframe.contentWindow));
+    const closedSource = iframe.contentWindow;
+    void hostAgentReady.then(host => host.catalog.unregister(id, closedSource)).catch(() => {});
     knownIframes.delete(iframe.contentWindow);
   }
   win.remove();
@@ -8775,6 +8777,22 @@ window.addEventListener('message', async e => {
   } else if (msg.type === 'naklios:close'){
     const win = findWin();
     if (win) closeWindow(win);
+  } else if (msg.type === 'naklios:commands:register'){
+    // Common rail step 1: the app declares its commands; callers reach them only through the
+    // desktop catalog, whose agent face applies the grant, the op-log and staging.
+    const appId = getAppId(); const source = e.source;
+    const reply = { type:'naklios:commands:reply', requestId:msg.requestId };
+    try {
+      const { catalog } = await hostAgentReady;
+      const out = catalog.register(appId, source, msg.commands, call => {
+        source.postMessage({ type:'naklios:commands:invoke', ...call }, replyTo);
+      });
+      if (out.ok) reply.result = out; else reply.error = out.error;
+    } catch (error){ reply.error = String(error?.message || error); }
+    try { source.postMessage(reply, replyTo); } catch(_){}
+  } else if (msg.type === 'naklios:commands:result' && typeof msg.invokeId === 'string'){
+    const { catalog } = await hostAgentReady;
+    catalog.settle(getAppId(), e.source, msg.invokeId, { result:msg.result, error:typeof msg.error === 'string' ? msg.error : undefined });
   } else if (msg.type === 'naklios:title' && typeof msg.title === 'string'){
     const win = findWin();
     if (win) win.querySelector('.nw-title').textContent = msg.title;
