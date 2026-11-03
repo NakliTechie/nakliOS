@@ -491,6 +491,108 @@ Crash recoveries remain in a Browser-only IndexedDB store, keyed independently
 by storage location and file identity. A recovery is removed only after that
 file saves successfully or the user explicitly discards it.
 
+## Common rail — protocol v3 (proposed)
+
+**Status: proposed, 2026-11-03. Nothing in this section is built yet.** It is the plan for SDK v3, recorded here so
+the contract stays one document. Members it names ship as `experimental_<name>` with a ledger line, per the rule in
+[`sdk-api-audit.md`](sdk-api-audit.md), and move into the Reference when they exist. Plan and build order:
+`plan/2026-11-03-common-rail-spec-plan.md`.
+
+The common rail is the one channel between the host and an app. Files, AI, commands and events all ride it; no
+service opens a channel of its own. Every caller of an app (the person's UI, the voice assistant, Anvil, an outside
+agent, a test) reaches it through the host, and the host applies one set of checks: the caller's Grant, the History
+ledger, and Staging for destructive changes.
+
+### Rail
+
+The rail is today's message format, written down and versioned:
+
+- **Request:** `{ type: "naklios:<service>:<op>", requestId, ...args }` from app to host, or host to app.
+- **Reply:** `{ type: "naklios:<service>:reply", requestId, result }` or `{ ..., error }`.
+- **Event:** `{ type: "naklios:<service>:event", requestId | subscriptionId, ... }` for streams and subscriptions.
+- **Cancel:** `{ type: "naklios:<service>:cancel", requestId }`.
+- **Origins:** the SDK accepts messages only from its approved parent (see `docs/agent-interface.md`); the host
+  accepts messages only from the window it opened at the origin it expects.
+- **Deadlines:** every request has one. The SDK's default stays 30 s; the host also times out an app handler that
+  never answers and reports it to the caller as an error, not a hang.
+- **Handshake:** `naklios:ready` carries `features` today. In v3 it also carries `protocol: 3` and the services and
+  versions the app speaks, for example `{ fs: 1, files: 2, ai: 1, commands: 1 }`. The host answers through
+  `naklios:capabilities` with what it grants. `naklios.version` becomes 3 and both sides compare it; a v2 app keeps
+  working unchanged.
+
+### Files
+
+`naklios.fs` is unchanged. `naklios.files` handoff v2 adds:
+
+- typed and binary files, and several files in one handoff;
+- an app manifest field `accepts`: MIME types plus actions (`open`, `import`, `attach`), so the host builds
+  "Open with" and "Send to" from what apps declare instead of naming Editor;
+- every write through a handoff token records an actor (person, app, agent) and, where the backend supports it,
+  the content it expects to replace, so a stale write comes back as a proposal instead of overwriting.
+
+### AI
+
+`naklios.ai.chat.completions` and `naklios.ai.images.generate` are unchanged. v3 adds, each behind its own consent:
+
+- `tools` for any app the person grants, not only system apps;
+- `embeddings` for an app's own search;
+- `transcribe` and `speak`, from the host's voice stack.
+
+Model choice, endpoints and keys stay host settings; apps receive results only.
+
+### Commands
+
+`naklios.experimental_commands.register(list)` declares what an app can do. Each command has:
+
+| field | meaning |
+|---|---|
+| `name` | `<app>.<verb>` or `<app>.<noun>.<verb>`, for example `notes.list.add` |
+| `description` | one sentence a person and a model can both read |
+| `input` | JSON Schema for the arguments a caller passes |
+| `scope` | `read`, `write`, or `destructive` |
+| `handler` | `async (args, context) → result`, run inside the app |
+
+The host keeps one catalog: the desktop's own commands (`sys/host/agent.mjs`) and every running app's. A caller lists
+and invokes through the host, never the app directly. The host checks the caller's Grant for that command and scope,
+records the call and its outcome in History, and sends a `destructive` command through `naklios.review` for the
+person to accept. The app's handler runs only after those checks. Person-only operations (credentials, storage
+connection, model choice, review decisions) are never commands.
+
+The app's own buttons call the same commands, so a command is the one path to a change whether a person, the
+assistant, Anvil or a test asks for it (doctrine rule 6, "two doors, one core"). Reckon's, Sheaf's and Draft's
+in-page agent faces become thin adapters over `register`.
+
+### Assistant
+
+The voice assistant has no service of its own. It is a caller of the command catalog, like Anvil and an outside
+agent. An app the assistant can reach is an app that registered commands; the assistant does not read or write any
+app's files directly.
+
+### Events
+
+`naklios.experimental_events` comes last, only when a named feature needs it. Events are host-mediated, numbered, and
+grouped by topic; each subscriber keeps its own read position, and a `once` key stops the same work running twice.
+A subscriber needs a Grant for the topic.
+
+### Grants on the rail
+
+| Caller | May list | May invoke `read` | May invoke `write` | May invoke `destructive` |
+|---|---|---|---|---|
+| The app's own UI | its own commands | yes | yes | through review |
+| Voice assistant, Anvil | every registered command | yes | after the person allows it once per app per session | through review |
+| Outside agent (`window.nakliOS.tools()`) | when the person turns the door on for the tab | yes | after the person allows it | through review |
+| Another app | only commands it holds a Grant for | with a Grant | with a Grant | through review |
+
+Cross-origin catalog apps may register commands; the same checks apply, because the rail already carries their `fs`
+and `ai` calls.
+
+### Prior art
+
+Compos (`svs/compos`, GPL-3.0; ideas only, no code): a command is a name, a description and a function that a key,
+`M-x`, an agent and a test all run by name; events live in one durable numbered log with per-consumer positions and
+`once` keys; every change carries an actor and an intent, and stale concurrent work is kept as a proposal; and the
+unit of an agent's authority is its operational context (resources, identities, lifetimes), not a tool list.
+
 ## Reference — every public member
 
 This is the one SDK document: the sections above are the guide (loading, vendoring, the host, the
