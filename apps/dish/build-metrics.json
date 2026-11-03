@@ -89,8 +89,6 @@
     "@deepseek-ai/dsh-fs-sandbox",
     "@deepseek-ai/dsh-message-feedback",
     "@deepseek-ai/dsh-session-log-export",
-    "@deepseek-ai/dsh-host-open-in-app",
-    "@deepseek-ai/dsh-client-ui-open-in-app",
     "@deepseek-ai/dsh-workspace",
     "@deepseek-ai/dsh-session-reference",
     "@deepseek-ai/dsh-file-reference-local",
@@ -128,7 +126,6 @@
     "@deepseek-ai/dsh-office-to-pdf",
     "@deepseek-ai/dsh-client-ui-sidebar-documentpreview",
     "@deepseek-ai/dsh-client-ui-sidebar-browser",
-    "@deepseek-ai/dsh-client-ui-sidebar-terminal",
     "@deepseek-ai/dsh-client-ui-sidebar-files",
     "@deepseek-ai/dsh-client-ui-settings",
     "@deepseek-ai/dsh-client-ui-settings-general",
@@ -186,8 +183,11 @@
     "llm-deepseek-account",
     "desktop-product-telemetry",
     "product-analytics",
+    "open-in-app",
+    "ui-open-in-app",
     "ui-settings-account",
-    "account-controller"
+    "account-controller",
+    "ui-sidebar-terminal"
   ],
   "clientBundles": [
     "node_modules/@deepseek-ai/dsh-typert-registry/lib/client.browser.js",
@@ -196,7 +196,6 @@
     "node_modules/@deepseek-ai/dsh-api-gateway/lib/client.node.js",
     "node_modules/@deepseek-ai/dsh-api-remote-access/lib/client.js",
     "node_modules/@deepseek-ai/dsh-session-log-export/lib/client.js",
-    "node_modules/@deepseek-ai/dsh-client-ui-open-in-app/lib/client.js",
     "node_modules/@deepseek-ai/dsh-api-session-controller/lib/client.js",
     "node_modules/@deepseek-ai/dsh-api-job-controller/lib/client.js",
     "node_modules/@deepseek-ai/dsh-api-terminal-controller/lib/client.js",
@@ -221,7 +220,6 @@
     "node_modules/@deepseek-ai/dsh-client-ui-sidebar-right/lib/client.js",
     "node_modules/@deepseek-ai/dsh-client-ui-sidebar-documentpreview/lib/client.js",
     "node_modules/@deepseek-ai/dsh-client-ui-sidebar-browser/lib/client.js",
-    "node_modules/@deepseek-ai/dsh-client-ui-sidebar-terminal/lib/client.js",
     "node_modules/@deepseek-ai/dsh-client-ui-sidebar-files/lib/client.js",
     "node_modules/@deepseek-ai/dsh-client-ui-settings/lib/client.js",
     "node_modules/@deepseek-ai/dsh-client-ui-settings-general/lib/client.js",
@@ -266,18 +264,21 @@
     "node_modules/@deepseek-ai/dsh-client-ui-directory-picker-native/lib/client.js"
   ],
   "removedClientBundles": [
+    "node_modules/@deepseek-ai/dsh-client-ui-open-in-app/lib/client.js",
+    "node_modules/@deepseek-ai/dsh-client-ui-sidebar-terminal/lib/client.js",
     "node_modules/@deepseek-ai/dsh-client-ui-settings-account/lib/client.js",
     "node_modules/@deepseek-ai/dsh-client-product-analytics/lib/client.js"
   ],
   "lazyChunks": [
     "node_modules/@deepseek-ai/dsh-client-ui-sidebar-documentpreview/lib/client.excel.js",
     "node_modules/@deepseek-ai/dsh-client-ui-sidebar-documentpreview/lib/client.frontmatter-fields.js",
-    "node_modules/@deepseek-ai/dsh-client-ui-sidebar-documentpreview/lib/client.pdf.js",
+    "node_modules/@deepseek-ai/dsh-client-ui-sidebar-documentpreview/lib/client.pdf.js"
+  ],
+  "removedLazyChunks": [
     "node_modules/@deepseek-ai/dsh-client-ui-sidebar-terminal/lib/client.terminal.js"
   ],
-  "removedLazyChunks": [],
-  "clientInputBytes": 8040599,
-  "clientOutputBytes": 5912486,
-  "imageBytes": 6031357,
-  "lazyBytes": 4664089
+  "clientInputBytes": 7985759,
+  "clientOutputBytes": 5874226,
+  "imageBytes": 6019266,
+  "lazyBytes": 4523217
 }

@@ -39,6 +39,25 @@ p.write_text(p.read_text().replace('...item.implicitlyLoadedBefore', '...(item.i
 p.write_text(p.read_text().replace('...item.referencedFiles', '...(item.referencedFiles ?? [])'))
 p.write_text(p.read_text().replace('      const info = moduleInfo(id)', "      if (id === '\\0rolldown/runtime.js') return\n      const info = moduleInfo(id)"))
 
+# The Worker's node:os has no userInfo, so dsh's terminal (`process.env.SHELL || userInfo().shell`) threw when Dish
+# opened a terminal (2026-11-04). A browser user has no OS account: the values are fixed, the shell is the Worker's.
+p = source / 'packages/experimental/webworker-runtime/src/node/builtin_modules/implemented/os.ts'
+s = p.read_text()
+anchor = '  networkInterfaces, constants,\n} satisfies NodeFace'
+assert anchor in s and 'userInfo' not in s
+# Node types userInfo with Buffer overloads; this one answers the string form only, which is what dsh asks for.
+s = s.replace(anchor, '  networkInterfaces, constants, userInfo: userInfo as unknown as typeof import(\'node:os\').userInfo,\n} satisfies NodeFace')
+s = s.replace('/** CommonJS default export:', '''/**
+ * The current user.
+ * @returns a fixed browser user whose home is `$DSH_HOME` and whose shell is the Worker's.
+ */
+export function userInfo(): { username: string, uid: number, gid: number, shell: string, homedir: string } {
+  return { username: 'dish', uid: -1, gid: -1, shell: '/bin/sh', homedir: DSH_HOME }
+}
+
+/** CommonJS default export:''', 1)
+p.write_text(s)
+
 # Signal readiness only after the unchanged client has activated and mounted.
 p = source / 'apps/web/src/main.ts'
 s = p.read_text()

@@ -369,6 +369,8 @@ export async function runAgentLoop({
   steer = null,            // CRIB-B B2: a steer queue (sys/ai/steer.mjs) — what arrives mid-turn lands at the next turn
   waitCapMs = WAIT_CAP_MS, // B2: how long one waiting turn may wait when there is no wall clock to bound it
   expectMissStreak = EXPECT_MISS_STREAK, // D1: consecutive missed predictions that stop the run (0 = never)
+  prepareRequest = null,   // (messages) => { messages, pruned, saved } — shrinks the COPY each request sends
+                           // (sys/ai/supersede-prune.mjs); the transcript keeps every result
   compact = null,          // C1: async (messages) => { messages, method } | null — shrinks the transcript after a context overflow
 }) {
   if (typeof infer !== 'function') throw new Error('runAgentLoop needs an infer function');
@@ -470,7 +472,12 @@ export async function runAgentLoop({
       // ignores both the abort and the wall-clock budget (which is also only
       // checked between turns) — the run becomes uninterruptible.
       requestLen = convo.length;
-      reply = await infer({ messages: convo, tools, signal });
+      let sent = convo;
+      if (prepareRequest) {
+        const p = prepareRequest(convo);
+        if (p && p.pruned) { sent = p.messages; onEvent({ type: 'pruned', step, pruned: p.pruned, saved: p.saved }); }
+      }
+      reply = await infer({ messages: sent, tools, signal });
     } catch (e) {
       // A cancelled inference throws — that is the Stop button working, not a
       // fault. Report it as the abort it is; 'error' is for the model or the host

@@ -9,6 +9,7 @@ import { JsonlStorage } from '@earendil-works/pi-durable/storage/jsonl';
 import { createBrokerProvider, PROVIDER_ID, MODEL_ID } from './broker-provider.mjs';
 import { createNakliosEnv } from './naklios-env.mjs';
 import { createSkillsExtension } from './skills-extension.mjs';
+import { createPruneExtension } from './prune-extension.mjs';
 
 export const PI_INSTRUCTIONS = [
   'You run inside NakliOS, a desktop in the browser. Your workspace is /workspace.',
@@ -31,12 +32,14 @@ export const SESSIONS_DIR = '/.pi/sessions';
 // whatever backend `fs` sits on (Folder, Crate, OPFS); 'memory' (tests) forgets them; or pass a
 // pi-durable Storage. `harness.resume()` continues a run a reload interrupted.
 // `skills` ({ list, read }, from naklios.experimental_skills) adds the NakliOS skills library.
-export async function openPi({ fs, shell, callBroker, skills = null, cwd = '/workspace', storage = 'files', context = BACKGROUND_CONTEXT }) {
+export async function openPi({ fs, shell, callBroker, skills = null, prune = undefined, cwd = '/workspace', storage = 'files', context = BACKGROUND_CONTEXT }) {
   const models = createModels();
   models.setProvider(createBrokerProvider(callBroker));
   const registry = createRegistry();
   registry.install(createCodingTools());
   if (skills) registry.install(createSkillsExtension(skills));
+  // Superseded reads and empty results shrink in what each request sends (sys/ai/supersede-prune.mjs).
+  registry.install(createPruneExtension(prune));
   const env = createNakliosEnv({ fs, shell, cwd });
   await fs.mkdir(cwd.replace(/^\/+/, ''), { recursive: true });
   const store = storage === 'memory' ? new MemoryStorage()
