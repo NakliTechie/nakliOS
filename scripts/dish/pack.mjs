@@ -36,7 +36,12 @@ const findRow = (rows, id) => {
   }
 };
 
-const excluded = /(?:deepseek-llm-api-extensions|session-log-deepseek|plugin-package-inventory-deepseek|llm-deepseek(?:-account)?|desktop-product-telemetry|product-analytics|session-telemetry-otel|deepseek-account|llm-pi-ai|web-search-deepseek|ui-settings-account|account-controller)/;
+// open-in-app (and ui-open-in-app) lists local desktop editors through dsh's web server; Dish has no server, so
+// its client asked for open-in-app/apps and got a 404 at every boot (2026-11-04).
+// ui-sidebar-terminal opens an interactive terminal through subprocess-local, which needs an OS shell binary; the
+// Worker has none (the agent's bash tool runs through the Worker's own interpreter and stays), so the panel only
+// ever showed an error (2026-11-04). The terminal controller stays: dsh's remotes plugin depends on it.
+const excluded = /(?:deepseek-llm-api-extensions|session-log-deepseek|plugin-package-inventory-deepseek|llm-deepseek(?:-account)?|desktop-product-telemetry|product-analytics|session-telemetry-otel|deepseek-account|llm-pi-ai|web-search-deepseek|ui-settings-account|account-controller|open-in-app|ui-sidebar-terminal)/;
 const packageOf = name => name.startsWith('@') ? name.split('/').slice(0, 2).join('/') : name.split('/')[0];
 const removedPackages = new Set();
 const retainedPackages = new Set();

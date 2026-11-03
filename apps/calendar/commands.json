@@ -22,7 +22,7 @@
       "input": {
         "type": "object",
         "properties": {
-          "date": { "type": "string", "description": "First day, \"YYYY-MM-DD\" (default today); call get_time first for \"tomorrow\" or a weekday" },
+          "date": { "type": "string", "description": "Leave this out for today. Otherwise the first day as \"YYYY-MM-DD\"; call get_time first for \"tomorrow\" or a weekday" },
           "days": { "type": "number", "description": "How many days, 1 to 14 (default 1)" }
         },
         "required": []

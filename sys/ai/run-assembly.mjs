@@ -6,6 +6,7 @@
 // holds the byte-equality lane against the inline app.
 import {utf8ByteLengthWithin,utf8Prefix} from './text-byte-bound.mjs';
 import { runAgentLoop } from './agent-loop.mjs';
+import { pruneOpenAIMessages } from './supersede-prune.mjs';
 import { codingToolset, toolReadiness , scopeAllows, TOOL_SCOPES } from './agent-tools.mjs';
 import { renderProcedural } from './procedural.mjs';
 import { rememberTool } from './project-context.mjs';
@@ -287,6 +288,8 @@ export async function driveRun({
   gateNote: gate = '', note = () => {}, onSystemText = () => {}, readiness = null, lesson = null,
   steer = null, // B2: the run's steer queue — a child's completion lands at the parent's next turn
   compact = null, // C1: the loop's compactor after a context overflow (every loop of the run gets it)
+  // Superseded reads and empty results shrink in what each request sends (omp's pruning pass); null turns it off.
+  prepareRequest = (messages) => pruneOpenAIMessages(messages),
   firstBudget = null, // test-door override for one bounded loop; normal callers use RUN_BUDGET
 }) {
   let toolCalls = 0;
@@ -295,7 +298,7 @@ export async function driveRun({
   const loop = async (messages, budget) => {
     onSystemText(messages[0].content); // the budget counts THIS loop's prompt
     await rec.start({ messages, tools, model: model(), readiness, lesson }); // declared lesson evidence rides the run record
-    const result = await runAgentLoop({ messages, tools, infer, executeTool, ...budget, signal, verify, onEvent: onLoop, steer, compact });
+    const result = await runAgentLoop({ messages, tools, infer, executeTool, ...budget, signal, verify, onEvent: onLoop, steer, compact, prepareRequest });
     await rec.finish(result);
     return result;
   };

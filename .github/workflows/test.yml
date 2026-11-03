@@ -655,6 +655,9 @@ jobs:
       - name: Verify the common rail's command catalog (app commands, grants, staging, SDK round trip)
         run: node scripts/test-commands-rail.mjs
 
+      - name: Verify superseded-read and empty-result pruning (Anvil and Pi share the core)
+        run: node sys/ai/test/supersede-prune.test.mjs
+
       - name: Verify Assay core — Grant wall, assay.* ledger on History, verifiers
         run: node sys/assay/test/assay-core.test.mjs
 

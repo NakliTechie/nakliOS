@@ -15,6 +15,7 @@
     "pnpm-lock.yaml": "911b049924e8256d8d6e684235cf935ca75b28fd0dd46f0c3b316a51c2cf5dc1",
     "scripts/web-product-bundle-isolation.ts": "5da8c2d324c1167cc001b39e56d2002e58d55882db909f18b45ea3df50d82a1f",
     "tsdown.config.ts": "5629c4b5baa03232241f086f4ef02aa7c8e54f86d977a514b3412eca3f0f0080",
-    "apps/web/src/main.ts": "fde2d8134e55b2f463c19453e255bb64fda2e46380ff405b6a6d27f1398e208c"
+    "apps/web/src/main.ts": "fde2d8134e55b2f463c19453e255bb64fda2e46380ff405b6a6d27f1398e208c",
+    "packages/experimental/webworker-runtime/src/node/builtin_modules/implemented/os.ts": "50f3bd1b55f3ab3437497ec1719f314a7b41e8bd55ec3e6c15691389e4aa2a0c"
   }
 }
