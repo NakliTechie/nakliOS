@@ -93,6 +93,8 @@ prefix today.
 | `sys.fs.list` | function | stable | — | List. |
 | `sys.fs.delete` | function | stable | — | Delete. |
 | `sys.fs.exists` | function | stable | — | Existence check. |
+| `experimental_commands` | namespace | experimental | Notes and Calendar register commands, and the voice assistant calls them live on naklios.dev through the desktop catalog (common rail step 2), before stabilization. | The app's commands on the common rail (`docs/app-contract.md`, "Common rail"); the desktop lists them as `<app-id>.<name>` in `sys/host/catalog.mjs`, checks each caller's grant and stages `destructive` ones. |
+| `experimental_commands.register` | function | experimental | As `experimental_commands`. | Declare the app's commands `{ name, description, input, scope, handler }`; replaces the whole set. Standalone: keeps the handlers and sends nothing. |
 | `experimental_skills` | namespace | experimental | Anvil, Dish and Pi all read it live on naklios.dev, and the Settings Skills pane activates a staged skill, before stabilization. | The user's one skills library, `skills/<name>/SKILL.md` on their Folder or Crate (`sys/ai/skill-library.mjs`; plan `plan/2026-10-29-shared-skills-plan.md`). System apps only. |
 | `experimental_skills.list` | function | experimental | As `experimental_skills`. | The skills an agent may use (Sentinel-clean, active or stale), as `{ name, description, status }` without bodies. Standalone: `[]`. |
 | `experimental_skills.read` | function | experimental | As `experimental_skills`. | One usable skill with its body, or `null`. |

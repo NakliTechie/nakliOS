@@ -493,7 +493,7 @@ file saves successfully or the user explicitly discards it.
 
 ## Common rail — protocol v3 (proposed)
 
-**Status: proposed, 2026-11-03. Nothing in this section is built yet.** It is the plan for SDK v3, recorded here so
+**Status: proposed 2026-11-03; step 1 built 2026-11-03.** Built: `naklios.experimental_commands.register` and the desktop catalog (`sys/host/catalog.mjs`), reachable through the developer agent door. Everything else in this section is not built yet. It is the plan for SDK v3, recorded here so
 the contract stays one document. Members it names ship as `experimental_<name>` with a ledger line, per the rule in
 [`sdk-api-audit.md`](sdk-api-audit.md), and move into the Reference when they exist. Plan and build order:
 `plan/2026-11-03-common-rail-spec-plan.md`.
@@ -601,7 +601,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 
 <!-- sdk-reference:begin — rendered by `node scripts/sdk-reference.mjs --write` from docs/sdk-api-audit.md; do not edit by hand -->
 
-92 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
+94 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
 
 ### `version`
 
@@ -733,6 +733,13 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 | `sys.fs.list` | function | List. |
 | `sys.fs.delete` | function | Delete. |
 | `sys.fs.exists` | function | Existence check. |
+
+### `experimental_commands` (namespace)
+
+| member | kind | what it is |
+|---|---|---|
+| `experimental_commands` | namespace · **experimental** | The app's commands on the common rail (`docs/app-contract.md`, "Common rail"); the desktop lists them as `<app-id>.<name>` in `sys/host/catalog.mjs`, checks each caller's grant and stages `destructive` ones. |
+| `experimental_commands.register` | function · **experimental** | Declare the app's commands `{ name, description, input, scope, handler }`; replaces the whole set. Standalone: keeps the handlers and sends nothing. |
 
 ### `experimental_skills` (namespace)
 

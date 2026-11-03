@@ -3,6 +3,7 @@
 import { createRegistry } from '../rig/registry/registry.mjs';
 import { createGrant, createOpLog, createAgentFace, wireWindowRig } from '../rig/agent/index.mjs';
 import { createFileops, MemoryBackend } from '../rig/fileops/index.mjs';
+import { createCatalog } from './catalog.mjs';
 
 const str = { type:'string', minLength:1 };
 export const HOST_COMMANDS = Object.freeze([
@@ -90,13 +91,14 @@ export function createHostRegistry(actions) {
 }
 
 export function attachHostAgent({target,actions,diagnosticsThresholds={},container}) {
-  const registry=createHostRegistry(actions);
-  const grant=createGrant({prefixes:[''],scopes:['ui:read','ui:write','fs:read','fs:write','fs:remove']});
+  // One catalog: the desktop's commands plus each open app's (common rail step 1).
+  const registry=createCatalog({base:createHostRegistry(actions)});
+  const grant=createGrant({prefixes:[''],scopes:['ui:read','ui:write','fs:read','fs:write','fs:remove','app:read','app:write']});
   const opLog=createOpLog({fs:createFileops({backend:new MemoryBackend()})});
   const face=createAgentFace({registry,grant,opLog,actor:'agent',caller:'desktop-developer'});
   // Public metadata is available while execution remains off by default.
   target.nakliOS=Object.freeze({manifest:()=>registry.list(),tools:()=>registry.toolSchemas(),
     launchDiagnostics:()=>actions.diagnostics(),launchDiagnosticThresholds:Object.freeze({...diagnosticsThresholds})});
   const control=wireWindowRig({target,getFace:()=>face,...(container?{container}:{})});
-  return {registry,face,opLog,control};
+  return {registry,catalog:registry,face,opLog,control};
 }
