@@ -100,5 +100,8 @@ export function attachHostAgent({target,actions,diagnosticsThresholds={},contain
   target.nakliOS=Object.freeze({manifest:()=>registry.list(),tools:()=>registry.toolSchemas(),
     launchDiagnostics:()=>actions.diagnostics(),launchDiagnosticThresholds:Object.freeze({...diagnosticsThresholds})});
   const control=wireWindowRig({target,getFace:()=>face,...(container?{container}:{})});
-  return {registry,catalog:registry,face,opLog,control};
+  // A caller other than the developer door (the voice assistant, Anvil) gets its own face on the same catalog
+  // and op-log: its own name in History and only the scopes it is given.
+  const faceFor=(caller,scopes)=>createAgentFace({registry,grant:createGrant({prefixes:[''],scopes}),opLog,actor:caller,caller});
+  return {registry,catalog:registry,face,faceFor,opLog,control};
 }

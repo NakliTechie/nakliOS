@@ -102,6 +102,7 @@ const $=id=>document.getElementById(id);const Core=window.CalendarCore;
 const DATA_FILE='calendar.json',LOCATION_KEY='naklios.calendar.location',VIEW_KEY='naklios.calendar.view';
 let data={version:1,updatedAt:Date.now(),events:[]},activeLocation='browser',activeAdapter=null;
 let view=localStorage.getItem(VIEW_KEY)||'month',cursor=new Date(),saveQueue=Promise.resolve();
+let resolveLoaded;const loaded=new Promise(resolve=>{resolveLoaded=resolve});
 let capabilitiesReady=false,unsubscribeFs=null,toastTimer=null,ownWrites=new Map(),remoteTimer=null;
 const defaultZone=Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC';
 function now(){return Date.now()}function uid(){return globalThis.crypto?.randomUUID?.()||`event-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`}
@@ -124,7 +125,7 @@ async function waitBackend(id,timeout=1800){if(naklios.capabilities.fsBackend===
 async function activate(id,{initial=false}={}){if(id!=='browser'){if(!available().includes(id))throw new Error(`${locationLabel(id)} is not connected`);if(naklios.capabilities.fsBackend!==id){if(!await naklios.fs.useBackend(id))throw new Error('Storage switch cancelled');if(!await waitBackend(id))throw new Error('NakliOS did not finish binding storage')}}activeLocation=id;activeAdapter=id==='browser'?browserAdapter:hostedAdapter;localStorage.setItem(LOCATION_KEY,id);renderLocations();await load();await subscribe();if(!initial)showToast(`Opened the separate ${locationLabel(id)} calendar. Nothing was copied.`)}
 async function switchLocation(id){if(id===activeLocation)return;try{await saveQueue;setSave(`Opening ${locationLabel(id)}…`);await activate(id)}catch(error){setSave('Storage switch cancelled');showToast(error.message);renderLocations()}}
 async function chooseInitial(){const choices=available(),stored=localStorage.getItem(LOCATION_KEY);let preferred=choices.includes(stored)?stored:(choices.includes(naklios.capabilities.fsBackend)?naklios.capabilities.fsBackend:null);if(!preferred)preferred=choices.includes('crate')?'crate':choices.includes('fsa')?'fsa':'browser';try{await activate(preferred,{initial:true})}catch(_){await activate('browser',{initial:true});if(preferred!=='browser')showToast(`${locationLabel(preferred)} was not opened. Using Browser.`)}}
-async function load(){setSave(`Loading ${locationLabel(activeLocation)}…`);try{data=normalise(JSON.parse(await activeAdapter.read(DATA_FILE)))}catch(_){data=normalise(null);await save()}render();setSave(`Saved to ${locationLabel(activeLocation)}`);naklios.title(`Calendar — ${locationLabel(activeLocation)}`)}
+async function load(){setSave(`Loading ${locationLabel(activeLocation)}…`);try{data=normalise(JSON.parse(await activeAdapter.read(DATA_FILE)))}catch(_){data=normalise(null);await save()}render();setSave(`Saved to ${locationLabel(activeLocation)}`);naklios.title(`Calendar — ${locationLabel(activeLocation)}`);resolveLoaded()}
 function save(){data.updatedAt=now();const snapshot=JSON.stringify(data,null,2),location=activeLocation;setSave(`Saving to ${locationLabel(location)}…`);saveQueue=saveQueue.catch(()=>{}).then(async()=>{if(location!==activeLocation)return;ownWrites.set(DATA_FILE,now());await activeAdapter.write(DATA_FILE,snapshot);setSave(`Saved to ${locationLabel(activeLocation)}`)}).catch(error=>{setSave('Save failed');showToast(`Could not save: ${error.message}`)});return saveQueue}
 
 function rangeForView(){if(view==='month'){const first=new Date(cursor.getFullYear(),cursor.getMonth(),1),start=addDays(first,-((first.getDay()+6)%7)),end=addDays(start,42);return{start,end}}if(view==='week'){const start=addDays(startOfDay(cursor),-((cursor.getDay()+6)%7));return{start,end:addDays(start,7)}}const start=startOfDay(cursor);return{start,end:addDays(start,1)}}
@@ -150,6 +151,49 @@ function applyTheme(theme){const colors=theme?.colors;if(!colors)return;const st
 
 zoneOptions();$('event-all-day').addEventListener('change',setAllDayInputs);$('event-form').addEventListener('submit',async event=>{event.preventDefault();if(await commitEvent())$('event-dialog').close()});$('delete-event').addEventListener('click',()=> $('confirm-dialog').showModal());$('confirm-cancel').addEventListener('click',()=> $('confirm-dialog').close());$('confirm-delete').addEventListener('click',()=>void deleteCurrent());$('new-event').addEventListener('click',()=>openEvent());$('import').addEventListener('click',()=> $('import-file').click());$('import-file').addEventListener('change',event=>event.target.files[0]&&void importIcs(event.target.files[0]));$('export').addEventListener('click',exportIcs);$('today').addEventListener('click',()=>{cursor=new Date();render()});$('previous').addEventListener('click',()=>{if(view==='month')cursor.setMonth(cursor.getMonth()-1);else cursor.setDate(cursor.getDate()-(view==='week'?7:1));render()});$('next').addEventListener('click',()=>{if(view==='month')cursor.setMonth(cursor.getMonth()+1);else cursor.setDate(cursor.getDate()+(view==='week'?7:1));render()});document.querySelectorAll('[data-view]').forEach(button=>button.addEventListener('click',()=>{view=button.dataset.view;localStorage.setItem(VIEW_KEY,view);render()}));document.addEventListener('keydown',event=>{if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='n'){event.preventDefault();openEvent()}if(event.key==='Escape'&&$('confirm-dialog').open)$('confirm-dialog').close()});
 naklios.beforeClose(()=>saveQueue);naklios.theme.onChange(applyTheme);naklios.theme.request();let boot=setTimeout(()=>{if(!capabilitiesReady){capabilitiesReady=true;void chooseInitial()}},650);naklios.onCapabilitiesChange(capabilities=>{renderLocations();if(!capabilitiesReady&&(capabilities.fsBackends.length||!capabilities.hosted)){clearTimeout(boot);capabilitiesReady=true;void chooseInitial()}else if(capabilitiesReady&&activeLocation!=='browser'&&!available().includes(activeLocation)){void activate('browser',{initial:true});showToast('Storage disconnected. Opened Browser calendar.')}});naklios.requestCapabilities();naklios.ready();render();
+
+// ── Commands on the common rail (commands.json): the voice assistant and other callers reach the calendar through
+// the desktop catalog, which checks their grant; Calendar alone writes calendar.json. ──
+function commandEvent(args){
+  const title=String(args?.title??'').trim();
+  if(!title)throw new Error('title is required');
+  const m=/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?$/.exec(String(args?.start??'').trim());
+  if(!m)throw new Error('start must be a local date-time such as "2026-11-02T15:00", or a date for an all-day event');
+  const allDay=m[4]===undefined,start=new Date(+m[1],+m[2]-1,+m[3],allDay?0:+m[4],allDay?0:+m[5]);
+  if(start.getMonth()!==+m[2]-1||start.getDate()!==+m[3])throw new Error(`start ${args.start} is not a real date`);
+  if(start.getTime()<now()-(allDay?86400e3:3600e3))throw new Error(`start ${args.start} is in the past; call get_time for today's date`);
+  const minutes=args?.duration_minutes==null?60:Math.round(Number(args.duration_minutes));
+  if(!Number.isFinite(minutes)||minutes<1||minutes>10080)throw new Error('duration_minutes must be between 1 and 10080');
+  const end=allDay?addDays(start,1):new Date(start.getTime()+minutes*60e3);
+  return{id:uid(),title:title.slice(0,180),description:'',location:String(args?.location??'').slice(0,240),
+    startLocal:allDay?localDate(start):localDateTime(start),endLocal:allDay?localDate(end):localDateTime(end),
+    allDay,timeZone:defaultZone,recurrence:{frequency:'none',interval:1,until:null}};
+}
+const COMMAND_HANDLERS={
+  async 'events.create'(args){
+    await loaded;
+    const event=commandEvent(args);
+    data.events.push(event);save();await saveQueue;render();
+    return{created:true,title:event.title,start:event.startLocal,end:event.endLocal,all_day:event.allDay,where:locationLabel(activeLocation)};
+  },
+  async 'events.list'({date,days=1}){
+    await loaded;
+    const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(date??'').trim());
+    if(date!=null&&!m)throw new Error('date must be "YYYY-MM-DD"');
+    const count=Math.min(14,Math.max(1,Math.round(Number(days)||1)));
+    const start=m?new Date(+m[1],+m[2]-1,+m[3]):startOfDay(new Date()),end=addDays(start,count);
+    const hits=Core.expandEvents(data.events,start.getTime(),end.getTime()).slice(0,30).map(o=>({
+      title:o.event.title,start:o.event.allDay?`${o.startLocal} (all day)`:o.startLocal.replace('T',' '),
+      ...(o.event.location?{location:o.event.location}:{})}));
+    const range=`${localDate(start)}${count>1?` for ${count} days`:''}`;
+    return hits.length?{range,events:hits}:{range,events:[],message:'Nothing on the calendar.'};
+  },
+};
+if(naklios.experimental_commands){
+  fetch('./commands.json').then(response=>response.json()).then(manifest=>
+    naklios.experimental_commands.register(manifest.commands.map(command=>({...command,handler:COMMAND_HANDLERS[command.name]})))
+  ).catch(error=>console.warn('[calendar] commands could not register',error));
+}
 })();
 </script>
 </body>

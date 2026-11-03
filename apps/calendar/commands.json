@@ -1,0 +1,32 @@
+{
+  "commands": [
+    {
+      "name": "events.create",
+      "description": "Add an event to the NakliOS Calendar. For a relative day (\"next Friday\") call get_time first.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string", "minLength": 1, "description": "Event title, e.g. \"Dentist\"" },
+          "start": { "type": "string", "minLength": 1, "description": "Local start, e.g. \"2026-11-02T15:00\", or \"2026-11-02\" for all day" },
+          "duration_minutes": { "type": "number", "description": "Length in minutes (default 60)" },
+          "location": { "type": "string", "description": "Where (optional)" }
+        },
+        "required": ["title", "start"]
+      }
+    },
+    {
+      "name": "events.list",
+      "description": "Read what is on the NakliOS Calendar for a day or a few days, e.g. \"what is on today\", \"am I free tomorrow\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "date": { "type": "string", "description": "First day, \"YYYY-MM-DD\" (default today); call get_time first for \"tomorrow\" or a weekday" },
+          "days": { "type": "number", "description": "How many days, 1 to 14 (default 1)" }
+        },
+        "required": []
+      }
+    }
+  ]
+}

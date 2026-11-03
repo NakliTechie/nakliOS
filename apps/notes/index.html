@@ -323,6 +323,9 @@ let remoteReloadTimer = null;
 let handlingDisconnect = false;
 let launchActionConsumed = false;
 const ownWrites = new Map();
+// Resolves once the first library has loaded, so a command that arrives while Notes opens waits for its data.
+let resolveLibraryReady;
+const libraryReady = new Promise(resolve => { resolveLibraryReady = resolve; });
 
 function now(){ return Date.now(); }
 function uid(prefix){
@@ -610,6 +613,7 @@ async function loadLibrary(){
   else clearEditor();
   setSaveState(`Saved to ${locationLabel(activeLocation)}`);
   naklios.title(`Notes — ${locationLabel(activeLocation)}`);
+  resolveLibraryReady();
 }
 
 function notesForCollection(){
@@ -1130,6 +1134,69 @@ naklios.onCapabilitiesChange(capabilities => {
     void handleActiveLocationDisconnect();
   }
 });
+// ── Commands on the common rail (commands.json): the voice assistant and other callers reach Notes through the
+// desktop catalog, which checks their grant; Notes alone writes its own library. A list is an ordinary note whose
+// title is the list's name and whose lines are "- item".
+const listKey = title => String(title).trim().toLowerCase().replace(/^(my|the|our)\s+/, '').replace(/\s+list$/, '');
+const listTitle = list => { const key = listKey(list); return `${key[0].toUpperCase()}${key.slice(1)} list`; };
+const listItems = body => String(body || '').split('\n').map(line => line.match(/^\s*[-*]\s+(?:\[[ x]\]\s+)?(.*\S)/)?.[1]).filter(Boolean);
+const findList = list => library.notes.find(note => !note.trashedAt && listKey(note.title) === listKey(list));
+function addNoteRecord(title){
+  const ts = now();
+  const note = { id:uid('note'), notebookId:DEFAULT_NOTEBOOK_ID, title:String(title).slice(0,180), excerpt:'', pinned:false,
+    trashedAt:null, createdAt:ts, updatedAt:ts };
+  library.notes.unshift(note);
+  bodyCache.set(note.id, '');
+  return note;
+}
+// One write path for commands, queued behind the editor's own saves.
+async function writeNoteBody(note, body){
+  await flushNow();
+  saveQueue = saveQueue.catch(() => {}).then(async () => {
+    note.excerpt = excerpt(body);
+    note.updatedAt = now();
+    bodyCache.set(note.id, body);
+    ownWrites.set(notePath(note.id,'md'), now());
+    await activeAdapter.write(notePath(note.id,'md'), body);
+    await writeMetadata(note);
+    await writeLibrary();
+    if (selectedId === note.id && !dirty) $('note-body').value = body;
+    renderSidebar();
+    await renderNoteList({ skipHydrate:true });
+  });
+  await saveQueue;
+}
+const COMMAND_HANDLERS = {
+  async 'list.add'({ list, things }){
+    await libraryReady;
+    const add = String(things).split(/,|\band\b/i).map(item => item.trim()).filter(Boolean).slice(0, 30);
+    if (!add.length) throw new Error('no items to add');
+    const note = findList(list) || addNoteRecord(listTitle(list));
+    const old = await readNoteBody(note.id);
+    const body = `${old.replace(/\s*$/, '')}${old.trim() ? '\n' : ''}${add.map(item => `- ${item}`).join('\n')}\n`;
+    await writeNoteBody(note, body);
+    return { list:note.title, added:add, count:listItems(body).length, where:locationLabel(activeLocation) };
+  },
+  async 'list.read'({ list }){
+    await libraryReady;
+    const note = findList(list);
+    if (!note) return { list, items:[], message:`There is no ${list} list.` };
+    return { list:note.title, items:listItems(await readNoteBody(note.id)) };
+  },
+  async 'note.create'({ title, text }){
+    await libraryReady;
+    const body = `${String(text).trim()}\n`;
+    const note = addNoteRecord(String(title || '').trim() || String(text).trim().split(/[.\n]/)[0].slice(0, 60) || 'Note');
+    await writeNoteBody(note, body);
+    return { created:note.title, where:locationLabel(activeLocation) };
+  },
+};
+if (naklios.experimental_commands){
+  fetch('./commands.json').then(response => response.json()).then(manifest =>
+    naklios.experimental_commands.register(manifest.commands.map(command => ({ ...command, handler:COMMAND_HANDLERS[command.name] })))
+  ).catch(error => console.warn('[notes] commands could not register', error));
+}
+
 naklios.requestCapabilities();
 naklios.ready();
 })();
