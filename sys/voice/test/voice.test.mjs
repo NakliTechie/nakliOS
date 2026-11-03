@@ -411,12 +411,11 @@ await test('LFM3 speech: a caller abort stops the audio', async () => {
 });
 
 // ── the rest of LocalMind's tools, on stand-ins ──
-const { moreTools, calendarEvent, MEMORY_PATH } = await import('../more-tools.mjs');
+const { moreTools, MEMORY_PATH } = await import('../more-tools.mjs');
 function standIns() {
-  const files = new Map(); let cal = null; const proposed = [];
-  return { files, get cal() { return cal; }, proposed, deps: {
+  const files = new Map(); const proposed = [];
+  return { files, proposed, deps: {
     memory: { read: async (p) => files.get(p) ?? null, write: async (p, t) => { files.set(p, t); } },
-    calendar: { label: 'Calendar (test)', read: async () => cal, write: async (t) => { cal = t; } },
     fetchText: async (url) => ({ status: 200, text: '<title>T</title><main>Hello page</main>', via: 'direct' }),
     parseHtml: () => ({ title: 'T', querySelectorAll: () => [], querySelector: (sel) => (sel === 'main' ? { textContent: '  Hello   page ' } : null), body: { textContent: 'x' } }),
     python: async () => ({ runCode: async (code) => ({ status: 'ok', stdout: `ran ${code.length} chars\n`, stderr: '' }) }),
@@ -439,18 +438,26 @@ await test('memory tools store, find, list and forget', async () => {
   assert.equal((await reg.run('store_memory', { content: 'x', category: 'nonsense' })).ok, false);   // enum checked
 });
 
-await test('calendar events land in Calendar\'s own data shape', async () => {
-  const st = standIns(); const reg = createToolRegistry(moreTools(st.deps));
-  const r = await reg.run('create_calendar_event', { title: 'Dentist', start: '2026-11-02T15:00', duration_minutes: 30, location: 'Bandra' });
-  assert.equal(r.ok, true);
-  const data = JSON.parse(st.cal);
-  assert.equal(data.version, 1);
-  assert.deepEqual({ ...data.events[0], id: 'x', timeZone: 'z' }, { id: 'x', title: 'Dentist', description: '', location: 'Bandra',
-    startLocal: '2026-11-02T15:00', endLocal: '2026-11-02T15:30', allDay: false, timeZone: 'z', recurrence: { frequency: 'none', interval: 1, until: null } });
-  await reg.run('create_calendar_event', { title: 'Holiday', start: '2026-11-14' });
-  assert.equal(JSON.parse(st.cal).events[1].allDay, true);
-  assert.match((await reg.run('create_calendar_event', { title: 'Old', start: '2026-01-01T10:00' })).error, /in the past/);
-  assert.match((await reg.run('create_calendar_event', { title: 'Bad', start: '2026-02-30' })).error, /not a real date/);
+await test('app commands become the tuned tool names and run only through apps.invoke', async () => {
+  const declared = [];
+  for (const app of ['notes', 'calendar']) {
+    const manifest = JSON.parse(await (await import('node:fs/promises')).readFile(new URL(`../../../apps/${app}/commands.json`, import.meta.url), 'utf8'));
+    for (const c of manifest.commands) declared.push({ name: `${app}.${c.name}`, description: c.description, inputSchema: c.input });
+  }
+  const calls = [];
+  const apps = { tools: declared, async invoke(name, args) {
+    calls.push([name, args]);
+    return name === 'notes.list.read' ? { ok: true, result: { list: 'Shopping list', items: ['milk'] } } : { ok: false, code: 'EDENIED', message: 'the person did not allow changes to Notes' };
+  } };
+  const reg = createToolRegistry(moreTools({ ...standIns().deps, apps }));
+  const names = reg.list().map((t) => t.name);
+  for (const n of ['add_to_list', 'read_list', 'create_note', 'create_calendar_event', 'get_calendar_events']) assert.ok(names.includes(n), n);
+  assert.equal(reg.list().find((t) => t.name === 'add_to_list').description, declared.find((c) => c.name === 'notes.list.add').description);
+  assert.deepEqual((await reg.run('read_list', { list: 'shopping' })).result.items, ['milk']);
+  assert.match((await reg.run('add_to_list', { list: 'shopping', things: 'tea' })).error, /did not allow/);
+  assert.deepEqual(calls.map((c) => c[0]), ['notes.list.read', 'notes.list.add']);
+  const none = createToolRegistry(moreTools(standIns().deps));
+  assert.equal(none.list().some((t) => t.name === 'add_to_list'), false, 'no catalog, no app tools');
 });
 
 await test('web search needs a provider; page, Python and skill tools reach their stand-ins', async () => {
@@ -594,25 +601,6 @@ await test('set_reminder, list_reminders and cancel_reminder through the registr
   assert.match((await reg.run('set_reminder', { at: 'later' })).error, /clock time/);
 });
 
-await test('get_calendar_events reads a day with the Calendar app\'s own repeat rules', async () => {
-  await import('../../../apps/calendar/core.js');
-  const core = globalThis.CalendarCore;
-  assert.ok(core?.expandEvents);
-  const st = standIns(); const reg = createToolRegistry(moreTools({ ...st.deps, calendarCore: async () => core }));
-  await reg.run('create_calendar_event', { title: 'Dentist', start: '2026-11-02T15:00', duration_minutes: 30 });
-  const data = JSON.parse(st.cal);
-  data.events.push({ id: 'yoga', title: 'Yoga', description: '', location: '', startLocal: '2026-10-26T07:00', endLocal: '2026-10-26T08:00', allDay: false,
-    timeZone: data.events[0].timeZone, recurrence: { frequency: 'weekly', interval: 1, until: null } });
-  await st.deps.calendar.write(JSON.stringify(data));
-  const mon = await reg.run('get_calendar_events', { date: '2026-11-02' });
-  assert.deepEqual(mon.result.events.map((e) => `${e.title} ${e.start}`), ['Yoga 2026-11-02 07:00', 'Dentist 2026-11-02 15:00']);
-  const today = await reg.run('get_calendar_events', {});        // stand-in clock: Friday 30 October
-  assert.deepEqual(today.result.events, []);
-  assert.equal(today.result.message, 'Nothing on the calendar.');
-  const week = await reg.run('get_calendar_events', { date: '2026-11-01', days: 9 });
-  assert.equal(week.result.events.filter((e) => e.title === 'Yoga').length, 2);
-});
-
 // ── music and Notes ──
 const { createMusic, musicTools, matchTracks } = await import('../music.mjs');
 function fakeStore(paths) {
@@ -653,27 +641,6 @@ await test('music tools reach the player and open NakliAmp through the host', as
   assert.equal((await reg.run('now_playing')).result.playing, null);
   await reg.run('open_music_player');
   assert.equal(opened.at(-1), 'nakliamp');
-});
-
-await test('lists and notes land in the Notes app\'s own files', async () => {
-  const files = new Map();
-  const notes = { label: 'Notes (test)', read: async (p) => files.get(p) ?? null, write: async (p, t) => { files.set(p, t); } };
-  const reg = createToolRegistry(moreTools({ ...standIns().deps, notes }));
-  const a = await reg.run('add_to_list', { list: 'shopping', things: 'milk, eggs and bread' });
-  assert.deepEqual(a.result.added, ['milk', 'eggs', 'bread']);
-  assert.equal(a.result.list, 'Shopping list');
-  await reg.run('add_to_list', { list: 'Shopping list', things: 'tea' });
-  assert.deepEqual((await reg.run('read_list', { list: 'my shopping list' })).result.items, ['milk', 'eggs', 'bread', 'tea']);
-  const lib = JSON.parse(files.get('library.json'));
-  assert.equal(lib.version, 1);
-  assert.equal(lib.notes.length, 1);
-  const id = lib.notes[0].id;
-  assert.equal(files.get(`notes/${id}.md`), '- milk\n- eggs\n- bread\n- tea\n');
-  assert.equal(JSON.parse(files.get(`notes/${id}.json`)).excerpt, 'milk eggs bread tea');
-  assert.equal((await reg.run('read_list', { list: 'packing' })).result.message, 'There is no packing list.');
-  const n = await reg.run('create_note', { text: 'The plumber comes on Tuesday. Leave the gate open.' });
-  assert.equal(n.result.created, 'The plumber comes on Tuesday');
-  assert.equal(JSON.parse(files.get('library.json')).notes.length, 2);
 });
 
 await test('weather with no place named uses the device location, and says how to recover when it is refused', async () => {

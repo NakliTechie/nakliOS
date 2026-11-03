@@ -120,6 +120,42 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
 }
 assert.equal(validateInput({ type: 'object', properties: { n: { type: 'integer' } }, required: [], additionalProperties: false }, { n: 1.5 }), 'n must be integer');
 
+// ── step 2: declared commands are listed while the app is closed; a call opens it and waits for it to register ──
+{
+  const catalog = createCatalog({ base: base() });
+  const launched = []; let app;
+  const manifest = [
+    { name: 'greet', description: 'Say hello to someone', scope: 'read', input: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
+    { name: 'wipe', description: 'Delete every list', scope: 'destructive' },
+  ];
+  assert.deepEqual(catalog.declare('standin', manifest, id => { launched.push(id); setImmediate(() => { app = standIn(catalog); }); }),
+    { ok: true, declared: ['standin.greet', 'standin.wipe'] });
+  assert.equal(catalog.describeCommand('standin.greet').annotations.opensApp, true, 'listed while the app is closed');
+  assert.equal((await catalog.invokeCommand('standin.greet', {})).code, 'EINVAL', 'arguments are checked before the app opens');
+  assert.deepEqual(launched, []);
+  const waiting = catalog.invokeCommand('standin.greet', { name: 'Om' });
+  await tick(); await tick();
+  assert.deepEqual(launched, ['standin'], 'the first call opens the app once');
+  assert.match(app.out.error, /not in standin's commands\.json/, 'an app may register only what it declared');
+  const ok = catalog.register('standin', app.owner, manifest.map(c => ({ ...c, description: 'changed text' })), call => app.calls.push(call));
+  assert.equal(ok.ok, true);
+  assert.equal(catalog.describeCommand('standin.greet').description, 'Say hello to someone', 'the manifest\'s text is the one listed');
+  await tick();
+  answer(catalog, app, { result: 'Hello, Om' });
+  assert.deepEqual(await waiting, { ok: true, result: 'Hello, Om' });
+  assert.match(catalog.register('standin', app.owner, [{ ...manifest[0], scope: 'write' }], () => {}).error, /differs from the declared read/);
+  catalog.unregister('standin', app.owner);
+  assert.ok(catalog.describeCommand('standin.greet'), 'closing the app keeps its declared commands listed');
+}
+{
+  let fire;
+  const catalog = createCatalog({ base: base(), launchTimeoutMs: 1000, setTimeoutFn: fn => { fire = fn; return 1; }, clearTimeoutFn: () => {} });
+  catalog.declare('standin', [{ name: 'greet', description: 'Say hello', scope: 'read' }], () => {});
+  const waiting = catalog.invokeCommand('standin.greet', {});
+  await tick(); fire();
+  assert.equal((await waiting).code, 'ELAUNCH', 'an app that never registers fails the call instead of hanging');
+}
+
 // ── the SDK: register and answer an invoke ──
 const sdk = await readFile(new URL('../sdk/naklios.js', import.meta.url), 'utf8');
 function sdkFrame({ hosted = true } = {}) {

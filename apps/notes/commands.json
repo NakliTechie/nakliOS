@@ -1,0 +1,40 @@
+{
+  "commands": [
+    {
+      "name": "list.add",
+      "description": "Add items to a list in the Notes app, e.g. \"add milk and eggs to my shopping list\". Creates the list if it is new.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "list": { "type": "string", "minLength": 1, "description": "List name, e.g. \"shopping\"" },
+          "things": { "type": "string", "minLength": 1, "description": "The things to add, separated by commas or \"and\"" }
+        },
+        "required": ["list", "things"]
+      }
+    },
+    {
+      "name": "list.read",
+      "description": "Read a list from the Notes app, e.g. \"what is on my shopping list\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": { "list": { "type": "string", "minLength": 1, "description": "List name" } },
+        "required": ["list"]
+      }
+    },
+    {
+      "name": "note.create",
+      "description": "Write a new note in the Notes app, e.g. \"make a note that the plumber comes on Tuesday\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string", "description": "A short title" },
+          "text": { "type": "string", "minLength": 1, "description": "The note" }
+        },
+        "required": ["text"]
+      }
+    }
+  ]
+}

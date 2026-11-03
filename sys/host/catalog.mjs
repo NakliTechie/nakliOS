@@ -6,6 +6,8 @@
 
 export const APP_SCOPES = Object.freeze({ read: 'app:read', write: 'app:write', destructive: 'app:write' });
 export const COMMAND_TIMEOUT_MS = 30000;
+// How long a call to a declared command waits for its app to open and register.
+export const LAUNCH_TIMEOUT_MS = 20000;
 const MAX_COMMANDS = 64;
 const NAME = /^[a-z][a-z0-9_-]*(\.[a-z][a-z0-9_-]*){0,3}$/;
 const APP_ID = /^[a-z0-9][a-z0-9_-]*$/;
@@ -51,16 +53,92 @@ export function validateInput(schema, input) {
  * @param {number} [opts.timeoutMs] how long a caller waits for an app's handler
  * @param {Function} [opts.setTimeoutFn]
  */
-export function createCatalog({ base, timeoutMs = COMMAND_TIMEOUT_MS, setTimeoutFn = setTimeout, clearTimeoutFn = clearTimeout }) {
+export function createCatalog({ base, timeoutMs = COMMAND_TIMEOUT_MS, launchTimeoutMs = LAUNCH_TIMEOUT_MS, setTimeoutFn = setTimeout, clearTimeoutFn = clearTimeout }) {
   if (!base) throw new Error('createCatalog requires the desktop registry');
   const apps = new Map(); // appId -> { owner, dispatch, commands: Map(fullName -> command) }
+  // An app's manifest (apps/<id>/commands.json) declares its commands ahead of time, so they are listed while the
+  // app is closed; a call opens the app, waits for it to register, then runs inside it.
+  const declared = new Map(); // appId -> { commands: Map(fullName -> command), launch }
+  const launching = new Map(); // appId -> Promise<boolean>
+  const waiters = new Map(); // appId -> [resolve]
   const pending = new Map(); // invokeId -> { resolve, timer, appId }
   let invokeCounter = 0;
 
-  function appCommands() { return [...apps.values()].flatMap(entry => [...entry.commands.values()]); }
+  function appCommands() {
+    const live = [...apps.values()].flatMap(entry => [...entry.commands.values()]);
+    const idle = [...declared].filter(([appId]) => !apps.has(appId)).flatMap(([, d]) => [...d.commands.values()]);
+    return [...live, ...idle];
+  }
   function find(name) {
     for (const entry of apps.values()) if (entry.commands.has(name)) return entry.commands.get(name);
+    for (const [appId, d] of declared) if (!apps.has(appId) && d.commands.has(name)) return d.commands.get(name);
     return null;
+  }
+
+  // One parser for declarations and registrations: a Map(fullName -> { name, description, scope, input }).
+  function parse(appId, defs) {
+    if (typeof appId !== 'string' || !APP_ID.test(appId)) return { error: 'invalid app id' };
+    if (!Array.isArray(defs)) return { error: 'commands must be a list' };
+    if (defs.length > MAX_COMMANDS) return { error: `at most ${MAX_COMMANDS} commands` };
+    const out = new Map();
+    for (const raw of defs) {
+      if (!raw || typeof raw !== 'object') return { error: 'each command must be an object' };
+      const { name, description, scope } = raw;
+      if (typeof name !== 'string' || !NAME.test(name)) return { error: `invalid command name: ${String(name)}` };
+      if (typeof description !== 'string' || !description.trim()) return { error: `${name}: description is required` };
+      if (!Object.hasOwn(APP_SCOPES, scope)) return { error: `${name}: scope must be read, write or destructive` };
+      const input = checkSchema(raw.input);
+      if (!input) return { error: `${name}: input must be an object schema` };
+      const full = `${appId}.${name}`;
+      if (base.describeCommand(full)) return { error: `${full} is a desktop command` };
+      if (out.has(full)) return { error: `duplicate command: ${full}` };
+      out.set(full, { name, description: description.trim(), scope, input });
+    }
+    return { defs: out };
+  }
+
+  function ensureOpen(appId) {
+    if (apps.has(appId)) return Promise.resolve(true);
+    if (launching.has(appId)) return launching.get(appId);
+    const d = declared.get(appId);
+    const started = new Promise(resolve => {
+      let done = false;
+      const finish = ok => { if (done) return; done = true; clearTimeoutFn(timer); launching.delete(appId); resolve(ok); };
+      const timer = setTimeoutFn(() => finish(false), launchTimeoutMs);
+      const list = waiters.get(appId) || [];
+      list.push(() => finish(true));
+      waiters.set(appId, list);
+      Promise.resolve().then(() => d.launch(appId)).catch(() => finish(false));
+    });
+    launching.set(appId, started);
+    return started;
+  }
+
+  function declaredCommand(appId, def) {
+    const name = `${appId}.${def.name}`;
+    return {
+      name, summary: def.description, description: def.description,
+      scope: APP_SCOPES[def.scope], destructive: def.scope === 'destructive',
+      inputSchema: def.input, returnSchema: { type: 'object' },
+      annotations: { readOnlyHint: def.scope === 'read', app: appId, opensApp: true },
+      async run(input, ctx) {
+        const problem = validateInput(def.input, input);
+        if (problem) return { ok: false, code: 'EINVAL', message: problem };
+        if (!(await ensureOpen(appId))) return { ok: false, code: 'ELAUNCH', message: `${appId} did not open and register within ${launchTimeoutMs / 1000} s` };
+        const live = apps.get(appId)?.commands.get(name);
+        return live ? live.run(input, ctx) : { ok: false, code: 'EGONE', message: `${appId} did not register ${name}` };
+      },
+    };
+  }
+
+  // Declares an app's commands from its manifest. `launch(appId)` opens the app (the host opens it minimized).
+  function declare(appId, defs, launch) {
+    if (typeof launch !== 'function') return fail('missing launch');
+    const parsed = parse(appId, defs);
+    if (parsed.error) return fail(parsed.error);
+    const commands = new Map([...parsed.defs].map(([full, def]) => [full, declaredCommand(appId, def)]));
+    declared.set(appId, { commands, defs: parsed.defs, launch });
+    return { ok: true, declared: [...commands.keys()] };
   }
 
   function makeCommand(appId, def, entry) {
@@ -96,28 +174,24 @@ export function createCatalog({ base, timeoutMs = COMMAND_TIMEOUT_MS, setTimeout
     };
   }
 
-  // Replaces the app's whole set: a reload or a second register call never leaves stale commands.
+  // Replaces the app's whole set: a reload or a second register call never leaves stale commands. An app with a
+  // manifest may register only what it declared, at the declared scope; the manifest's text and schema are used.
   function register(appId, owner, defs, dispatch) {
-    if (typeof appId !== 'string' || !APP_ID.test(appId)) return fail('invalid app id');
     if (typeof dispatch !== 'function') return fail('missing dispatch');
-    if (!Array.isArray(defs)) return fail('commands must be a list');
-    if (defs.length > MAX_COMMANDS) return fail(`at most ${MAX_COMMANDS} commands`);
+    const parsed = parse(appId, defs);
+    if (parsed.error) return fail(parsed.error);
+    const manifest = declared.get(appId);
     const entry = { owner, dispatch, commands: new Map() };
-    for (const raw of defs) {
-      if (!raw || typeof raw !== 'object') return fail('each command must be an object');
-      const { name, description, scope } = raw;
-      if (typeof name !== 'string' || !NAME.test(name)) return fail(`invalid command name: ${String(name)}`);
-      if (typeof description !== 'string' || !description.trim()) return fail(`${name}: description is required`);
-      if (!Object.hasOwn(APP_SCOPES, scope)) return fail(`${name}: scope must be read, write or destructive`);
-      const input = checkSchema(raw.input);
-      if (!input) return fail(`${name}: input must be an object schema`);
-      const full = `${appId}.${name}`;
-      if (base.describeCommand(full)) return fail(`${full} is a desktop command`);
-      if (entry.commands.has(full)) return fail(`duplicate command: ${full}`);
-      entry.commands.set(full, makeCommand(appId, { name, description: description.trim(), scope, input }, entry));
+    for (const [full, def] of parsed.defs) {
+      const promised = manifest?.defs.get(full);
+      if (manifest && !promised) return fail(`${full} is not in ${appId}'s commands.json`);
+      if (promised && promised.scope !== def.scope) return fail(`${full}: scope ${def.scope} differs from the declared ${promised.scope}`);
+      entry.commands.set(full, makeCommand(appId, promised || def, entry));
     }
     unregister(appId);
     apps.set(appId, entry);
+    for (const resolve of waiters.get(appId) || []) resolve();
+    waiters.delete(appId);
     return { ok: true, registered: [...entry.commands.keys()] };
   }
 
@@ -157,7 +231,7 @@ export function createCatalog({ base, timeoutMs = COMMAND_TIMEOUT_MS, setTimeout
   });
 
   return {
-    register, unregister, settle,
+    declare, register, unregister, settle,
     apps: () => [...apps.keys()],
     get commands() { return Object.freeze([...base.commands, ...appCommands()]); },
     list: () => [...base.list(), ...appCommands().map(project)],

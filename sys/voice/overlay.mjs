@@ -361,8 +361,10 @@ export function mountVoiceAssistant({ root = document.body, host, more = null, m
     if (box) box.checked = !!on;
   }
   // Asks once; "Allow" is kept in this browser, so the next load does not ask again. Unanswered in 60 s counts as no.
-  function consent(id, question) {
-    if (localStorage.getItem(CONSENT_KEY(id)) === 'yes') return Promise.resolve(true);
+  // With { remember: false } the answer lasts only until the page reloads (an app change: once per app per visit).
+  const allowedThisVisit = new Set();
+  function consent(id, question, { remember = true } = {}) {
+    if (remember ? localStorage.getItem(CONSENT_KEY(id)) === 'yes' : allowedThisVisit.has(id)) return Promise.resolve(true);
     open();
     return new Promise((resolve) => {
       const card = document.createElement('div');
@@ -370,7 +372,7 @@ export function mountVoiceAssistant({ root = document.body, host, more = null, m
       card.innerHTML = '<span></span><div><button class="nv-btn" type="button">Allow</button><button class="nv-btn" type="button">Not now</button></div>';
       card.querySelector('span').textContent = question;
       const [yes, no] = card.querySelectorAll('button');
-      const done = (v) => { clearTimeout(t); card.remove(); if (v) setConsent(id, true); resolve(v); };
+      const done = (v) => { clearTimeout(t); card.remove(); if (v) { if (remember) setConsent(id, true); else allowedThisVisit.add(id); } resolve(v); };
       const t = setTimeout(() => done(false), 60000);
       yes.onclick = () => done(true); no.onclick = () => done(false);
       els.log.appendChild(card); scroll();

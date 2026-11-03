@@ -493,7 +493,7 @@ file saves successfully or the user explicitly discards it.
 
 ## Common rail — protocol v3 (proposed)
 
-**Status: proposed 2026-11-03; step 1 built 2026-11-03.** Built: `naklios.experimental_commands.register` and the desktop catalog (`sys/host/catalog.mjs`), reachable through the developer agent door. Everything else in this section is not built yet. It is the plan for SDK v3, recorded here so
+**Status: proposed 2026-11-03; steps 1 and 2 built 2026-11-03.** Built: `naklios.experimental_commands.register`; the desktop catalog (`sys/host/catalog.mjs`), reachable through the developer agent door; app manifests (`apps/<id>/commands.json`) that list an app's commands while it is closed, where a call opens the app minimized and waits for it to register; Notes and Calendar commands; and the voice assistant calling them on its own face (`app:read`, `app:write`), asking once per app per visit before a change. Everything else in this section is not built yet. It is the plan for SDK v3, recorded here so
 the contract stays one document. Members it names ship as `experimental_<name>` with a ledger line, per the rule in
 [`sdk-api-audit.md`](sdk-api-audit.md), and move into the Reference when they exist. Plan and build order:
 `plan/2026-11-03-common-rail-spec-plan.md`.

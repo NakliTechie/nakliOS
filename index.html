@@ -1597,6 +1597,7 @@ const APPS = [
   { id:'notes', name:'Notes', kind:'system',
     url:'./apps/notes/',
     embedUrl:'./apps/notes/',
+    commands:'./apps/notes/commands.json',
     glyph:'✎', bg:'brand',
     description:'A private notebook library with autosave, search, pinning, and separate Browser, Folder, or encrypted Crate storage.',
     tags:['tool','notes','writing','productivity'],
@@ -1604,6 +1605,7 @@ const APPS = [
   { id:'calendar', name:'Calendar', kind:'system',
     url:'./apps/calendar/',
     embedUrl:'./apps/calendar/',
+    commands:'./apps/calendar/commands.json',
     glyph:'31', bg:'act',
     description:'Private month, week, and day calendar with recurring events, ICS exchange, and separate Browser, Folder, or Crate calendars.',
     tags:['tool','calendar','events','productivity'],
@@ -13447,25 +13449,47 @@ if (document.readyState === 'loading'){
 let voiceAssistant = null;
 async function voiceAssistantReady(){
   if (voiceAssistant) return voiceAssistant;
-  const [{ mountVoiceAssistant }, { registry }] = await Promise.all([import('./sys/voice/overlay.mjs'), hostAgentReady]);
+  const [{ mountVoiceAssistant }, { registry, catalog, faceFor }] = await Promise.all([import('./sys/voice/overlay.mjs'), hostAgentReady, appCommandsDeclared]);
   const call = async (name, input) => {
     const out = await registry.invokeCommand(name, input, { caller:'voice-assistant' });
     if (!out?.ok) throw new Error(out?.message || out?.code || `${name} failed`);
     return out.result;
   };
+  // App commands (common rail step 2): the assistant calls Notes, Calendar and any app with a commands.json through
+  // the catalog, on its own face with only the app scopes. A change asks the person once per app per visit.
+  const face = faceFor('voice-assistant', ['app:read', 'app:write']);
+  const allowedWrites = new Set();
+  const apps = {
+    tools:catalog.toolSchemas().filter(t => APPS.find(a => a.id === t.annotations?.app)?.commands)
+      .map(({ name, description, inputSchema }) => ({ name, description, inputSchema })),
+    async invoke(name, args){
+      const command = catalog.describeCommand(name);
+      const appId = command?.annotations?.app;
+      if (command?.scope === 'app:write' && !allowedWrites.has(appId)){
+        const label = APPS.find(a => a.id === appId)?.name || appId;
+        if (!(await voiceAssistant.consent(`app-write:${appId}`, `Let the assistant change ${label}? It asks again on your next visit.`, { remember:false })))
+          return { ok:false, code:'EDENIED', message:`the person did not allow changes to ${label}` };
+        allowedWrites.add(appId);
+      }
+      const out = await face.invoke(name, args);
+      if (out?.staged) return { ok:false, code:'ESTAGED', message:'waiting for the person to accept it in the review queue' };
+      return out;
+    },
+  };
   voiceAssistant ||= mountVoiceAssistant({ root:document.body, host:{
     listApps:() => call('apps.list', {}),
     openApp:id => call('apps.open', { id }),
-  }, more:voiceAssistantDeps() });
+  }, more:voiceAssistantDeps(apps) });
   return voiceAssistant;
 }
-// What the assistant's memory, calendar, page, Python and skill tools reach: the person's own storage and apps.
+// What the assistant's memory, page, Python and skill tools reach: the person's own storage. Apps are reached only
+// through their commands (`apps`, above).
 function voiceConnectedBackend(){ return BACKENDS.fsa.isConnected() ? 'fsa' : BACKENDS.crate.isConnected() ? 'crate' : null; }
 async function voiceOpfsFile(path, create){
   const dir = await (await navigator.storage.getDirectory()).getDirectoryHandle('nakli-assistant', { create:true });
   return dir.getFileHandle(path.replace(/\//g, '__'), { create });
 }
-function voiceAssistantDeps(){
+function voiceAssistantDeps(apps){
   // Folder or Crate when connected, so memories sit on the person's disk; this browser's private storage otherwise.
   const memory = {
     async read(path){
@@ -13479,29 +13503,6 @@ function voiceAssistantDeps(){
       const w = await (await voiceOpfsFile(path, true)).createWritable(); await w.write(text); await w.close();
     },
   };
-  // An app's own data files, in the place that app is set to keep them (its <app>.location key): 'browser' is the
-  // app's IndexedDB (same origin as this host, store 'files'); Folder and Crate keep apps/<app>/<path>.
-  function appDataStore(app, dbName, appLabel){
-    const idb = (mode, fn) => new Promise((resolve, reject) => {
-      const open = indexedDB.open(dbName, 1);
-      open.onupgradeneeded = () => open.result.createObjectStore('files');
-      open.onerror = () => reject(open.error);
-      open.onsuccess = () => { const tx = open.result.transaction('files', mode), req = fn(tx.objectStore('files'));
-        req.onsuccess = () => { resolve(req.result); open.result.close(); }; req.onerror = () => reject(req.error); };
-    });
-    const where = () => { const id = localStorage.getItem(`naklios.${app}.location`) || 'browser'; return id !== 'browser' && BACKENDS[id]?.isConnected() ? id : 'browser'; };
-    const full = path => `apps/${app}/${path}`;
-    return {
-      get label(){ return where() === 'browser' ? `${appLabel} (this browser)` : `${appLabel} (${BACKENDS[where()].label})`; },
-      async read(path){ const id = where(); if (id === 'browser') { const v = await idb('readonly', s => s.get(path)); return v == null ? null : String(v); }
-        return (await BACKENDS[id].exists(full(path))) ? await BACKENDS[id].read(full(path)) : null; },
-      async write(path, text){ const id = where(); if (id === 'browser') return idb('readwrite', s => s.put(String(text), path));
-        return BACKENDS[id].write(full(path), text); },
-    };
-  }
-  const calendarFiles = appDataStore('calendar', 'naklios-calendar-v1', 'Calendar');
-  const calendar = { get label(){ return calendarFiles.label; }, read:() => calendarFiles.read('calendar.json'), write:text => calendarFiles.write('calendar.json', text) };
-  const notes = appDataStore('notes', 'naklios-notes-v1', 'Notes');
   // The person's music, from the connected Folder or Crate (the same place the Files app shows).
   const musicFiles = () => { const id = voiceConnectedBackend(); if (!id) return null; const b = BACKENDS[id];
     return { list:prefix => b.list(prefix), read:async path => new Uint8Array(await b.readBinary(path)) }; };
@@ -13535,15 +13536,7 @@ function voiceAssistantDeps(){
     if (!_skillLibMod) _skillLibMod = await import('./sys/ai/skill-library.mjs');
     return _skillLibMod.proposeSkill(store, skill);
   } };
-  // The Calendar app's own date code, loaded once as the classic script it is, for repeating events.
-  let core = null;
-  const calendarCore = () => core ||= (globalThis.CalendarCore ? Promise.resolve(globalThis.CalendarCore) : new Promise((resolve, reject) => {
-    const s = document.createElement('script'); s.src = './apps/calendar/core.js';
-    s.onload = () => (globalThis.CalendarCore ? resolve(globalThis.CalendarCore) : reject(new Error('Calendar code did not load')));
-    s.onerror = () => { core = null; reject(new Error('Calendar code did not load')); };
-    document.head.appendChild(s);
-  }));
-  return { memory, calendar, calendarCore, notes, musicFiles, fetchText, python, skills };
+  return { memory, apps, musicFiles, fetchText, python, skills };
 }
 const openAssistant = async () => (await voiceAssistantReady()).open();
 // A saved reminder needs the assistant running to fire, so a page that has one loads it (the panel stays closed).
@@ -13584,6 +13577,23 @@ const hostAgentReady = import('./sys/host/agent.mjs').then(({ attachHostAgent })
   },
 }));
 hostAgentReady.catch(error => console.error('Desktop agent interface could not load', error));
+// Apps whose manifest (apps/<id>/commands.json) declares commands are listed in the catalog while closed. A call
+// opens the app minimized, so the command runs inside the app's own code on the app's own storage.
+function launchAppForCommand(appId){
+  const app = APPS.find(a => a.id === appId);
+  if (!app) throw new Error(`Unknown app: ${appId}`);
+  if (openWindows[appId]) return;
+  openApp(app);
+  const win = openWindows[appId];
+  if (win) minimizeWindow(win);
+}
+const appCommandsDeclared = hostAgentReady.then(({ catalog }) => Promise.all(APPS.filter(app => app.commands).map(async app => {
+  try {
+    const manifest = await (await fetch(app.commands)).json();
+    const out = catalog.declare(app.id, manifest.commands, launchAppForCommand);
+    if (!out.ok) console.warn(`[commands] ${app.id}: ${out.error}`);
+  } catch (error) { console.warn(`[commands] ${app.id}: manifest could not load`, error); }
+})));
 
 </script>
 </body>
