@@ -2076,7 +2076,8 @@ const state = {
   crate: null,             // unlocked Crate instance (memory only — lost on lock/reload)
   crateBucketName: null,   // display name from .crate-creds hint (also when locked)
   crateLocked: false,      // true: creds blob present in IDB but not yet unlocked
-  crateStayUnlocked: localStorage.getItem('nakliOS.crateStayUnlocked') === '1',
+  // Unlock once for all tabs (2026-11-04): on by default; see crateShare below.
+  crateShareUnlock: localStorage.getItem('nakliOS.crateShareUnlock') !== '0',
 };
 
 function isCoarse(){ return matchMedia('(pointer: coarse)').matches; }
@@ -2431,7 +2432,9 @@ async function fsHydrateIfNewer(){
 //     v1.0.1.
 
 const CRATE_VENDOR_BASE = './vendor/crate/813d079a2db2b810d231f04146626af20e053b42';
-const SESSION_CREDS_KEY = 'nakliOS.crateSessionCreds';
+// "Stay unlocked in this tab" kept only the encrypted blob in sessionStorage and still asked for the passphrase;
+// "Unlock once for all tabs" (crateShare) replaces it, so its two keys are dropped once.
+try { localStorage.removeItem('nakliOS.crateStayUnlocked'); sessionStorage.removeItem('nakliOS.crateSessionCreds'); } catch (_){}
 
 let _CrateModulePromise = null;
 async function loadCrateModule(){
@@ -2962,19 +2965,7 @@ async function crateUnlock(bytes, passphrase, unpacked = null){
   state.crate = crate;
   state.crateBucketName = creds.bucket?.name || credsfile.peekHint(bytes) || '(crate)';
   state.crateLocked = false;
-  // Stay-unlocked-in-this-tab: stash the encrypted blob in sessionStorage
-  // so a reload picks up where we left off. The passphrase still gates
-  // the unlock — sessionStorage is just a stand-in for the file picker.
-  if (state.crateStayUnlocked){
-    try {
-      // Re-pack so we always store the canonical bytes (handles the
-      // case where the user picked a different file or rotated creds).
-      sessionStorage.setItem(SESSION_CREDS_KEY,
-        btoa(String.fromCharCode(...bytes)));
-    } catch (_){}
-  } else {
-    try { sessionStorage.removeItem(SESSION_CREDS_KEY); } catch (_){}
-  }
+  crateRememberPass(passphrase);
   if (typeof broadcastCapabilities === 'function') broadcastCapabilities();
   return crate;
 }
@@ -3029,15 +3020,44 @@ async function crateReconnect(){
 
 // crateLock — zero the master key, drop the live instance. Encrypted
 // blob stays in IDB so the user can re-unlock without re-picking the file.
-function crateLock(){
+// A lock in one tab locks every naklios.dev tab (`broadcast:false` is the
+// receiving side, so a lock is never echoed back).
+function crateLock({ broadcast = true } = {}){
   if (state.crate){
     try { state.crate.close(); } catch (_){}
   }
   state.crate = null;
   state.crateLocked = true;
-  try { sessionStorage.removeItem(SESSION_CREDS_KEY); } catch (_){}
+  crateShare.pass = null;
+  if (broadcast) { try { crateShare.channel?.postMessage({ type:'lock' }); } catch (_){} }
   if (typeof broadcastCapabilities === 'function') broadcastCapabilities();
+  if (typeof renderTopbarChips === 'function') renderTopbarChips();
 }
+
+// ── Unlock once for all tabs (Chirag, 2026-11-04) ──
+// A Crate unlock used to live in one tab, so every new naklios.dev tab asked for the passphrase again. Now an
+// unlocked tab keeps the passphrase IN MEMORY ONLY and hands it, over a same-origin BroadcastChannel, to a tab
+// that opens locked with the same encrypted credentials in IndexedDB; that tab unlocks itself (a wrong or
+// different Crate simply fails and stays locked). Nothing is written to localStorage, sessionStorage or disk;
+// closing the last tab drops it, and Lock in any tab locks them all. This exposes nothing a page could not
+// already reach: mirrored apps run on this origin, and the unlocked Crate already sits in each tab's memory.
+// The Settings switch "Unlock once for all tabs" turns it off.
+const crateShare = { pass: null, channel: typeof BroadcastChannel === 'function' ? new BroadcastChannel('nakliOS.crate-unlock') : null };
+function crateRememberPass(pass){ crateShare.pass = state.crateShareUnlock ? String(pass) : null; }
+crateShare.channel?.addEventListener('message', async (event) => {
+  const msg = event.data || {};
+  if (!state.crateShareUnlock) return;
+  if (msg.type === 'ask' && state.crate && crateShare.pass) {
+    crateShare.channel.postMessage({ type:'share', pass:crateShare.pass });
+  } else if (msg.type === 'share' && typeof msg.pass === 'string' && !state.crate && state.crateLocked) {
+    try {
+      const blob = await crateLoadCredsBlob();
+      if (blob && !state.crate) await crateUnlock(blob, msg.pass);
+    } catch (_){ /* a different or changed Crate: stay locked, the person can unlock by hand */ }
+  } else if (msg.type === 'lock' && state.crate) {
+    crateLock({ broadcast:false });
+  }
+});
 
 // crateDisconnect — full teardown: lock + clear blob from IDB. The user
 // will have to re-pick the file to use this Crate again.
@@ -3058,12 +3078,10 @@ async function crateDisconnect(){
   if (typeof broadcastCapabilities === 'function') broadcastCapabilities();
 }
 
-function setCrateStayUnlocked(on){
-  state.crateStayUnlocked = !!on;
-  localStorage.setItem('nakliOS.crateStayUnlocked', on ? '1' : '0');
-  if (!on){
-    try { sessionStorage.removeItem(SESSION_CREDS_KEY); } catch (_){}
-  }
+function setCrateShareUnlock(on){
+  state.crateShareUnlock = !!on;
+  localStorage.setItem('nakliOS.crateShareUnlock', on ? '1' : '0');
+  if (!on) crateShare.pass = null;
 }
 
 // ── Interactive wrappers ─────────────────────────────────────────────
@@ -9819,7 +9837,7 @@ function openSettings(section){
   const crateUnlocked = !!state.crate;
   const crateLocked = !crateUnlocked && state.crateLocked;
   const crateName = state.crateBucketName || '';
-  const stayChecked = state.crateStayUnlocked ? 'checked' : '';
+  const shareChecked = state.crateShareUnlock ? 'checked' : '';
   const crateHTML = `
     ${crateUnlocked ? `
       <div class="nw-fs-connected">
@@ -9850,8 +9868,8 @@ function openSettings(section){
       ? `Encrypted multi-device folder. Apps see the same <code>apps/&lt;id&gt;/</code> layout — pick which backend (folder or crate) per app on first use. <a class="nw-foot-link" href="https://crate.naklios.dev/guide/" target="_blank">Guide →</a>`
       : `BYOK encrypted cloud folder on your own Cloudflare R2 — apps that opt in get end-to-end-encrypted multi-device sync. <strong>Set up Crate</strong> walks you through Cloudflare on <a class="nw-foot-link" href="https://crate.naklios.dev/" target="_blank">crate.naklios.dev</a> and hands the encrypted setup back; only an encrypted envelope ever returns to NakliOS.`}</div>
     <label class="nw-fs-blurb" style="display:flex; gap:6px; align-items:center; margin-top:6px;">
-      <input type="checkbox" id="crate-stay" ${stayChecked} />
-      <span>Stay unlocked in this tab (cleared on tab close)</span>
+      <input type="checkbox" id="crate-share" ${shareChecked} />
+      <span>Unlock once for all tabs (the passphrase stays in memory; closing the last tab or Lock forgets it)</span>
     </label>
   `;
 
@@ -10255,8 +10273,8 @@ function openSettings(section){
       closeSettings(); openSettings('storage');
     });
   });
-  wrap.querySelector('#crate-stay')?.addEventListener('change', (e) => {
-    setCrateStayUnlocked(e.target.checked);
+  wrap.querySelector('#crate-share')?.addEventListener('change', (e) => {
+    setCrateShareUnlock(e.target.checked);
   });
 
   // --- AI model/provider handlers ---
@@ -13268,20 +13286,11 @@ async function init(){
   }).catch(e => console.warn('fs boot reconnect failed:', e));
 
   // Crate (cloud) backend — surface "locked, needs unlock" state if a creds
-  // blob exists. Auto-unlock if "Stay unlocked in this tab" is on AND the
-  // session has a stashed blob from earlier this tab session.
+  // blob exists, then ask any unlocked naklios.dev tab to share its unlock.
   crateReconnect().then(async (haveBlob) => {
     renderTopbarChips();
-    if (!haveBlob) return;
-    if (!state.crateStayUnlocked) return;
-    const stashed = sessionStorage.getItem(SESSION_CREDS_KEY);
-    if (!stashed) return;
-    // sessionStorage holds the encrypted blob but NOT the passphrase. The
-    // 'stay unlocked' toggle today means "skip the file-picker on reload" —
-    // user still types the passphrase. This is the honest reading of the
-    // toggle label and matches the threat model: nothing secret in
-    // sessionStorage that wouldn't be in IDB anyway.
-    // (A real "remember passphrase for N days" feature is a v2 decision.)
+    if (!haveBlob || !state.crateShareUnlock || state.crate) return;
+    try { crateShare.channel?.postMessage({ type:'ask' }); } catch (_){}
   }).catch(e => console.warn('crate boot reconnect failed:', e));
 
   // One-time sanity pass: drop any saved icon positions that fall outside the

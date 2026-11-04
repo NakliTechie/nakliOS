@@ -652,6 +652,9 @@ jobs:
       - name: Verify launch authority and execution-backed campaign behavior
         run: node scripts/test-launch-blockers.mjs
 
+      - name: Verify one Crate unlock is shared by every naklios.dev tab, in memory only
+        run: node scripts/test-crate-share-unlock.mjs
+
       - name: Verify the common rail's command catalog (app commands, grants, staging, SDK round trip)
         run: node scripts/test-commands-rail.mjs
 
