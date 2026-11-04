@@ -6,14 +6,11 @@ Detailed usage and integration documentation. Start with the [README](../README.
 [redirect Worker](../redirects/naklios-com/) preserves paths and queries from
 `naklios.com` and `www.naklios.com`.
 
-## Modes
+## Opening apps
 
-- **Immersive** — the default for new profiles. Compatible apps open in responsive NakliOS windows on desktop and mobile; apps that cannot embed still open in a tab.
-- **Basic** — built-ins and storage-dependent system apps stay hosted; other web apps open in new tabs. An existing explicit Basic preference is preserved.
-
-Basic is a compatibility and user-choice fallback, not a second desktop
-generation. The [`Experience mode policy`](../docs/experience-modes.md) records
-the keep decision, invariants, and historical-key migration.
+Apps open in responsive NakliOS windows on desktop and mobile; an app that cannot run inside one opens in a new
+tab. Basic mode was retired on 2026-11-04. [How NakliOS opens apps](../docs/experience-modes.md) records the rule
+and the compatibility notes.
 
 Every NakliOS window has an **App Info** button in its titlebar. It shows the
 actual loaded URL and origin, iframe sandbox tokens, load/SDK-ready timings,
@@ -43,7 +40,7 @@ One line in the `APPS` array at the top of `index.html`:
   tags:['tool','ai'] }
 ```
 
-Optional fields: `maxMode:'basic'`, `iframeable:false`, `private:true`, `kind:'classic'`, `desktopAlign:'right'` + `desktopOrder:N`, `svg:'<path d=…>'`, `embedUrl:'https://naklios.dev/apps/<id>/'` (same-origin mirror for FSA-needing apps; see `apps/manifest.json`).
+Optional fields: `opensInNewTab:true`, `iframeable:false`, `private:true`, `kind:'classic'`, `desktopAlign:'right'` + `desktopOrder:N`, `svg:'<path d=…>'`, `embedUrl:'https://naklios.dev/apps/<id>/'` (same-origin mirror for FSA-needing apps; see `apps/manifest.json`).
 
 Apps retain one predictable task-folder home. NakliOS also places Lorewell,
 NakliPoster, BOFH, MoD, NakliData, Tijori, Files, and Notes on the right side
@@ -138,7 +135,7 @@ NakliOS ships two coding agents built on **Rig**, its browser-based file, Git,
 and shell runtime. Their tools execute in the tab against the selected workspace.
 Agent inference sends requests to the endpoint configured in Settings → AI.
 Both are same-origin system apps (`apps/forge/`, `apps/anvil/`), with File System
-Access and cross-origin isolation available inside Immersive mode.
+Access and cross-origin isolation available inside NakliOS windows.
 
 - **Forge** — a bash-style terminal over your files and git (`ls`, `cat`,
   `grep`, `sed`, pipes, globs, `git`, and more) with a real agent loop:
@@ -298,7 +295,7 @@ Setup guide:
 
 ## Mirroring an app for same-origin embedding
 
-Cross-origin iframes can't invoke `showDirectoryPicker()`. To embed a File-System-Access-using app inside Immersive mode, mirror it under `apps/<id>/` so it loads from `naklios.dev` itself.
+Cross-origin iframes can't invoke `showDirectoryPicker()`. To embed a File-System-Access-using app inside a NakliOS window, mirror it under `apps/<id>/` so it loads from `naklios.dev` itself.
 
 ### One-time per app
 
@@ -393,4 +390,4 @@ Convert — Draft a private browser word processor for rich-text documents, Reck
 a private browser spreadsheet with formulas, sorting, and charts, and Sheaf a
 private browser PDF editor (merge, split, reorder, and on-device OCR). All keep
 files on your device via the File System Access API and are mirrored under
-`apps/` for same-origin embedding in Immersive mode.
+`apps/` for same-origin embedding in NakliOS windows.

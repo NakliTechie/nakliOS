@@ -14,12 +14,12 @@ for (const id of ['bofh', 'bolo', 'mantra', 'books']){
   const entry = html.slice(start, end);
   assert.doesNotMatch(
     entry,
-    /maxMode:'basic'/,
+    /opensInNewTab:true/,
     `${id} must use NakliOS's Immersive iframe window instead of forcing a browser tab`,
   );
 }
 
-// A File-System-Access app must open TOP-LEVEL (maxMode:'basic') *while it is cross-origin* —
+// A File-System-Access app must open TOP-LEVEL (opensInNewTab:true) *while it is cross-origin* —
 // showDirectoryPicker() is blocked in a cross-origin iframe, so it cannot run embedded
 // (decision 2026-08-27). The cap is a consequence of being cross-origin, never a goal: an app
 // MIRRORED same-origin under apps/<id>/ has no such block, and capping it there would cost the
@@ -40,23 +40,23 @@ for (const id of ['vaultmind', 'nakliposter', 'slate']){
   if (mirrored.has(id)) {
     assert.doesNotMatch(
       entry,
-      /maxMode:'basic'/,
+      /opensInNewTab:true/,
       `${id} is mirrored same-origin, so FSA works embedded — the top-level cap is obsolete for it`,
     );
     assert.match(entry, /embedUrl:'\.\/apps\//, `${id} is mirrored, so it must embed relatively`);
   } else {
     assert.match(
       entry,
-      /maxMode:'basic'/,
-      `${id} is a CROSS-ORIGIN FSA app — it must open top-level (maxMode:'basic'), not embedded`,
+      /opensInNewTab:true/,
+      `${id} is a CROSS-ORIGIN FSA app — it must open top-level (opensInNewTab:true), not embedded`,
     );
   }
 }
 
 assert.match(
   html,
-  /if \(m === 'immersive'\)[\s\S]*?return spawnIframeWindow\(app, options\);/,
-  'Immersive apps must launch in NakliOS iframe windows',
+  /if \(app\.opensInNewTab === true \|\| app\.iframeable === false\)[\s\S]*?return spawnIframeWindow\(app, options\);/,
+  'apps launch in NakliOS iframe windows unless they cannot embed',
 );
 assert.match(
   html,

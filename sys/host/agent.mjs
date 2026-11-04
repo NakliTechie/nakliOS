@@ -24,8 +24,6 @@ export const HOST_COMMANDS = Object.freeze([
   ['settings.close','Close settings','closeSettings','ui:write',{},[]],
   ['help.open','Open keyboard help','openCheatSheet','ui:write',{},[]],
   ['help.close','Close keyboard help','closeCheatSheet','ui:write',{},[]],
-  ['mode.get','Read experience mode','getMode','ui:read',{},[]],
-  ['mode.set','Change experience mode','setMode','ui:write',{id:{enum:['basic','immersive']}},['id'],true],
   ['pins.add','Pin an app or folder','pinItem','ui:write',{id:str},['id'],true],
   ['pins.remove','Unpin an app or folder','unpinItem','ui:write',{id:str},['id'],true],
   ['pins.has','Check whether an item is pinned','isPinned','ui:read',{id:str},['id']],

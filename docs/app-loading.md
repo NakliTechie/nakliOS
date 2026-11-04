@@ -19,7 +19,7 @@ Use the smallest trust level that works:
    integration. Performance alone is not a reason to remove the sandbox.
 3. **System app:** only for host-critical surfaces maintained in the NakliOS
    repository, such as Files and Notes.
-4. **New tab / Basic mode:** for apps that cannot safely or reliably run in an
+4. **New tab (`opensInNewTab:true`):** for apps that cannot safely or reliably run in an
    iframe.
 
 **Future escape hatch.** A same-origin mirror still runs inside an iframe. If a
@@ -66,7 +66,7 @@ Four things the sync will not catch for you:
    job output the workflow fails on, and fatal under `--strict`; before then it was a
    `console.warn` on a green run, and one mirror sat stale for two weeks.
 
-If the app was capped to `maxMode:'basic'` *because* a cross-origin iframe blocked
+If the app was marked `opensInNewTab:true` *because* a cross-origin iframe blocked
 `showDirectoryPicker()`, lift the cap once it is mirrored — same-origin removes the block.
 `scripts/test-immersive-apps.mjs` derives that rule from the manifest, so a newly mirrored
 app is required to drop its cap and an unmirrored one is required to keep it.

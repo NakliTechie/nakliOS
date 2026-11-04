@@ -85,9 +85,8 @@ v1 supports two optional permissions:
   memory, another app's prompts, host tools, files, or credentials.
 
 Both permissions require `display:"window"` because a normal top-level tab has
-no NakliOS bridge. Basic mode routes even a window manifest to its canonical
-tab, so host services remain unavailable there; switching to Immersive opens
-the opaque hosted window and allows the separate first-use grants.
+no NakliOS bridge. A window manifest opens in the opaque hosted window, where
+the separate first-use grants apply.
 
 No permission grants access to another app, NakliOS state, credentials, the
 parent DOM, arbitrary local files, or a same-origin execution context.
@@ -129,10 +128,7 @@ conflict behavior.
 Because the opaque sandbox intentionally removes origin storage, a windowed
 third-party app must not depend on its own cookies, localStorage, IndexedDB, or
 service worker while hosted. Choose `display:"tab"` when that origin state or
-an authentication flow is essential. Basic mode is itself a canonical-tab
-compatibility policy, so it also opens a manifest requesting `window` in a
-normal top-level tab. The saved manifest is unchanged; switching back to
-Immersive restores the opaque NakliOS window.
+an authentication flow is essential.
 
 ## Accessibility and acceptance
 
