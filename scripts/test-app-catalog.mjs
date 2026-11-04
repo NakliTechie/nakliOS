@@ -101,7 +101,7 @@ assert.match(
 );
 assert.match(
   html,
-  /id:'naklidata'[\s\S]*?url:'https:\/\/naklidata\.naklitechie\.com\/'[\s\S]*?maxMode:'basic'[\s\S]*?desktopAlign:'right', desktopOrder:6/,
+  /id:'naklidata'[\s\S]*?url:'https:\/\/naklidata\.naklitechie\.com\/'[\s\S]*?opensInNewTab:true[\s\S]*?desktopAlign:'right', desktopOrder:6/,
   'NakliData launches top-level and occupies the seventh right-side desktop slot',
 );
 assert.match(

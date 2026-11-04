@@ -1,51 +1,24 @@
-# NakliOS experience modes
+# How NakliOS opens apps
 
-NakliOS has two user-facing experience modes. They are launch policies, not
-separate products or generations of the desktop.
+NakliOS has one way to open apps. Basic mode, which opened most web apps in browser tabs, was retired on
+2026-11-04: it worked against the point of a desktop in the browser, and the windowed experience covers every
+case it served.
 
-## Immersive
+## The rule
 
-Immersive is the default and recommended mode. Compatible apps open in NakliOS
-windows, inherit the current theme, expose App Info, and may use the cooperative
-SDK. An app marked `maxMode:'basic'` or `iframeable:false` still opens in a new
-tab; NakliOS does not weaken its sandbox or pretend an incompatible app embeds.
+- **System apps** (Files, Notes, Calendar, Anvil, Dish, Pi and the rest) open in NakliOS windows.
+- **Host-native classics** (Minesweeper, Solitaire and the other built-ins) open as inline windows.
+- **Every other app** opens in a NakliOS window, inherits the theme, shows App Info, and may use the
+  cooperative SDK.
+- **An app that cannot run inside a window** opens at its canonical URL in a new tab. The catalog marks it with
+  `opensInNewTab:true` (it needs a top-level page, for example a folder picker blocked in a cross-origin frame)
+  or `iframeable:false` (it refuses to be framed). NakliOS does not weaken its sandbox or pretend such an app
+  embeds.
 
-## Basic
+## Compatibility
 
-Basic is a retained compatibility and user-choice mode. Host-native classics
-and the storage-dependent system apps Files, Notes, and Lorewell remain in NakliOS
-windows. Other standalone web apps open at their canonical URL in a new tab.
-
-Basic remains useful when:
-
-- a browser, extension, authentication flow, or app does not behave reliably
-  inside an iframe;
-- a user wants the origin and browser chrome of the standalone app to remain
-  visible;
-- an app has not adopted the NakliOS cooperative contract yet.
-
-It is intentionally not the default and should not acquire its own feature
-fork. New host functionality must work in Immersive; Basic only preserves the
-safe hosted core and the canonical new-tab fallback.
-
-## Compatibility contract
-
-- New profiles default to Immersive.
-- An existing explicit Basic preference is preserved.
-- Files, Notes, Lorewell, and host-native classics stay hosted in both modes.
-- App catalog compatibility flags override Immersive without changing the
-  user's saved preference.
-- Switching modes does not migrate, copy, delete, or rebind app data.
-- Cross-origin apps stay sandboxed whenever embedded. A mode switch never
-  grants same-origin privilege.
-
-The historical internal values `A`, `B`, and `C` are migration inputs only:
-`A`/`B` map to Basic and `C` maps to Immersive. “Mode C” is not current product
-terminology.
-
-## Decision
-
-**Keep Basic.** Revisit only if browser support and the entire maintained app
-catalog make the compatibility route genuinely unused. Until then, removing it
-would turn known iframe incompatibilities into regressions for no meaningful
-reduction in the maintained host surface.
+- A profile that had saved Basic drops that preference once, on its next visit; nothing else changes.
+- Opening an app in a window or in a tab never migrates, copies, deletes, or rebinds app data.
+- Cross-origin apps stay sandboxed whenever they are embedded. Opening one never grants same-origin privilege.
+- The desktop no longer offers the `mode.get` and `mode.set` agent commands, and `state.json` no longer
+  carries a mode.

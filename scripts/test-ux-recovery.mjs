@@ -19,7 +19,6 @@ for (const label of [
   'aria-label="Search apps"',
   'aria-label="Folder — not connected"',
   'aria-label="Crate — not connected"',
-  'aria-label="Experience mode: Immersive"',
   'aria-label="Settings"',
 ]) {
   assert.ok(host.includes(label), `host control must include ${label}`);
@@ -51,8 +50,8 @@ assert.match(host, /'Saved · This browser'/,
   'ordinary browser autosave must say Saved');
 assert.doesNotMatch(host, /\? 'Recovered · This browser'/,
   'ordinary browser autosave must not be presented as crash recovery');
-assert.match(host, /function getDefaultMode\(\)\{ return 'immersive'; \}/,
-  'new profiles must open compatible apps inside NakliOS');
+assert.match(host, /if \(app\.opensInNewTab === true \|\| app\.iframeable === false\)[\s\S]*?return spawnIframeWindow\(app, options\);/,
+  'every profile opens compatible apps inside NakliOS');
 assert.doesNotMatch(host, /if \(isMobile\(\)\) return 'basic'/,
   'mobile profiles must retain the selected windowed experience now that windows fit');
 assert.match(host, /const HAD_EXISTING_PROFILE = Object\.keys\(localStorage\)/,

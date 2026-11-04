@@ -132,7 +132,7 @@ const actions=Object.fromEntries(HOST_COMMANDS.map(row=>[row[2],()=>null]));
 const hostRegistry=createHostRegistry(actions);
 assert.equal(hostRegistry.list().length,HOST_COMMANDS.length+8);
 assert.deepEqual(hostRegistry.list().map(x=>x.name),hostRegistry.toolSchemas().map(x=>x.name),'manifest and bus parity');
-assert.equal((await hostRegistry.invokeCommand('mode.set',{id:'unsafe'})).ok,false);
+assert.equal((await hostRegistry.invokeCommand('themes.set',{id:7})).ok,false);
 assert.equal((await hostRegistry.invokeCommand('credentials.configure',{})).ok,false);
 assert.throws(()=>createHostRegistry({...actions,unlisted:()=>{}}),/Undeclared/,'an undeclared host action fails parity');
 

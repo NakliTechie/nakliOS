@@ -123,8 +123,8 @@ assert.match(html, /delete state\.aiPermissions\[review\.existing\.appId\]/);
 assert.match(html, /delete state\.aiPermissions\[appId\]/);
 assert.match(
   html,
-  /getMode\(\) === 'basic'[\s\S]*?NakliOS storage stays unavailable until the app is opened in Immersive/,
-  'Basic-mode consent accurately explains that top-level tabs have no host storage bridge',
+  /'May ask for app-scoped Folder or Crate storage\. NakliOS asks again on first use\.'/,
+  'storage consent names Folder or Crate and the first-use prompt',
 );
 assert.match(html, /dlg\.setAttribute\('aria-labelledby', titleId\)/);
 assert.match(html, /dlg\.setAttribute\('aria-label', 'NakliOS dialog'\)/);

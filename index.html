@@ -109,10 +109,6 @@ input{font:inherit; color:inherit;}
 #spotlight-btn{min-width:200px; justify-content:flex-start; color:var(--faint);}
 #spotlight-btn:hover{color:var(--ink);}
 #clock{font-variant-numeric:tabular-nums; color:var(--muted); padding:0 4px;}
-#mode-pill{
-  padding:3px 8px; border-radius:999px; background:var(--row);
-  font-size:11px; color:var(--muted); border:1px solid var(--line);
-}
 
 /* ── BACKEND STATUS CHIPS (topbar, between Search and mode pill) ── */
 /* Two pills indicating connection status for each backend.
@@ -476,21 +472,6 @@ input{font:inherit; color:inherit;}
   color:var(--muted); font-weight:600;
 }
 .nw-settings h4:not(:first-child){margin-top:18px;}
-.nw-mode-opt{
-  display:flex; gap:10px; padding:8px 10px;
-  border:1px solid var(--line); border-radius:8px;
-  cursor:pointer; margin-bottom:6px;
-  transition:background 0.12s;
-}
-.nw-mode-opt:hover{background:var(--row);}
-.nw-mode-opt.is-active{
-  border-color:var(--brand);
-  background:color-mix(in srgb, var(--brand) 12%, var(--panel));
-}
-.nw-mode-opt input{margin-top:2px;}
-.nw-mode-label{flex:1;}
-.nw-mode-name{font-weight:600; font-size:13px;}
-.nw-mode-desc{font-size:11px; color:var(--muted); margin-top:2px;}
 .nw-badge{
   font-size:9px; padding:1px 5px; border-radius:4px;
   background:color-mix(in srgb, var(--brand) 30%, transparent);
@@ -1374,7 +1355,6 @@ body.is-mobile .nw-dock{display:none;}
 /* ── MOBILE ── */
 @media (max-width: 720px), (pointer: coarse) {
   body.is-mobile #spotlight-btn .kbd,
-  body.is-mobile #mode-pill,
   body.is-mobile .brand-sub,
   body.is-mobile .topbar-chip-label{display:none;}
   body.is-mobile .topbar-chip,
@@ -1478,7 +1458,6 @@ body.is-mobile .nw-dock{display:none;}
       <span class="topbar-chip-label">Crate</span>
     </button>
     <button id="review-btn" class="topbar-btn" type="button" hidden aria-label="Review staged changes">Review 0</button>
-    <button id="mode-pill" type="button" title="Click Settings to change mode" aria-label="Experience mode: Immersive">Immersive</button>
     <span id="clock">—</span>
     <button id="settings-btn" class="topbar-btn" title="Settings" aria-label="Settings">⚙</button>
   </header>
@@ -1512,7 +1491,7 @@ body.is-mobile .nw-dock{display:none;}
 // ════════════════════════════════════════════════════════════════════
 // APPS
 // ════════════════════════════════════════════════════════════════════
-// Heavy apps with maxMode:'basic' fall back to a new tab when user picks Immersive mode.
+// Apps with opensInNewTab:true (or iframeable:false) cannot run in a NakliOS window and open in a new tab.
 // kind:'classic' apps are built into this file and always open as inline windows.
 // embedUrl is the same-origin mirror under naklios.dev/apps/<id>/ (see apps/manifest.json).
 // Iframes use embedUrl when present (drops sandbox + unlocks FSA picker); standalone /
@@ -1578,7 +1557,7 @@ const APPS = [
     description:'Type a prompt once and see how Claude, GPT, Gemini, and local models answer — side by side. Your API keys never leave your browser.', tags:['ai','developer','tool'],
     svg:`<circle cx="4" cy="12" r="1.5" fill="currentColor" stroke="none"/><path d="M5.5 12L20 6"/><path d="M5.5 12L20 12"/><path d="M5.5 12L20 18"/>` },
   { id:'sansadlocal', name:'SansadLocal', url:'https://sansadlocal.naklitechie.com', glyph:'🏛️', bg:'act',
-    description:'Browse, search, and summarise reports from India\'s 24 Parliamentary Standing Committees. AI in your browser.', tags:['ai','civic','research'], maxMode:'basic',
+    description:'Browse, search, and summarise reports from India\'s 24 Parliamentary Standing Committees. AI in your browser.', tags:['ai','civic','research'], opensInNewTab:true,
     svg:`<line x1="3" y1="21" x2="21" y2="21"/><line x1="4" y1="21" x2="4" y2="9"/><line x1="8" y1="21" x2="8" y2="9"/><line x1="12" y1="21" x2="12" y2="9"/><line x1="16" y1="21" x2="16" y2="9"/><line x1="20" y1="21" x2="20" y2="9"/><polygon points="3 9 12 4 21 9"/>` },
   { id:'slate', name:'Slate', url:'https://slate.naklitechie.com', embedUrl:'./apps/slate/', glyph:'🖼️', bg:'ok',
     description:'A complete image editor in a single HTML file. Crop, redact, blur, annotate, resize.', tags:['image','privacy','productivity'],
@@ -1670,10 +1649,10 @@ const APPS = [
     svg:`<circle cx="6" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/><line x1="6" y1="8" x2="6" y2="16"/><path d="M6 6h6c3 0 6 3 6 6v4"/>` },
   { id:'naklidata', name:'NakliData', url:'https://naklidata.naklitechie.com/', glyph:'▦', bg:'act',
     description:'Browser-native semantic data workbench for local files and governed extracts, with DuckDB SQL, deterministic checks, and portable exports.',
-    tags:['tool','data','analytics','developer'], maxMode:'basic', desktopAlign:'right', desktopOrder:6,
+    tags:['tool','data','analytics','developer'], opensInNewTab:true, desktopAlign:'right', desktopOrder:6,
     svg:`<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v7c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 12v7c0 1.7 3.6 3 8 3s8-1.3 8-3v-7"/>` },
   { id:'mehfil', name:'Mehfil', url:'https://naklitechie.github.io/mehfil/', glyph:'💬', bg:'ok',
-    description:'Encrypted team chat in a single HTML file. No accounts, no central server.', tags:['tool','privacy','security'], maxMode:'basic',
+    description:'Encrypted team chat in a single HTML file. No accounts, no central server.', tags:['tool','privacy','security'], opensInNewTab:true,
     svg:`<path d="M4 6c0-1.5 1.5-3 3-3h10c1.5 0 3 1.5 3 3v6c0 1.5-1.5 3-3 3h-6l-4 4v-4H7c-1.5 0-3-1.5-3-3z"/>` },
   { id:'bolo', name:'Bolo', url:'https://naklitechie.github.io/bolo/', glyph:'🎙️', bg:'brand',
     description:'Record screen, webcam, mic — transcribes locally with Whisper, trims clips, burns captions.', tags:['tool','media'], iframeAllow:'camera; microphone; display-capture',
@@ -1703,7 +1682,7 @@ const APPS = [
     description:'Play Go (Baduk) against an AI opponent. Supports 9×9, 13×13, and 19×19 boards.', tags:['game','ai'],
     svg:`<rect x="3" y="3" width="18" height="18" rx="1"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><circle cx="9" cy="9" r="2" fill="currentColor" stroke="none"/><circle cx="15" cy="15" r="2"/>` },
   { id:'localmind', name:'LocalMind', url:'https://naklitechie.github.io/LocalMind/', glyph:'🧭', bg:'brand',
-    description:'Private AI research agent — web search, document ingestion, RAG memory. Runs in your browser.', tags:['ai','chat'], maxMode:'basic',
+    description:'Private AI research agent — web search, document ingestion, RAG memory. Runs in your browser.', tags:['ai','chat'], opensInNewTab:true,
     svg:`<circle cx="12" cy="12" r="9"/><polygon points="12 5 14 12 12 13 10 12"/><polygon points="12 19 14 12 12 11 10 12"/>` },
   { id:'blurlocal', name:'BlurLocal', url:'https://naklitechie.github.io/blurlocal/', glyph:'😶', bg:'act',
     description:'Detect and blur faces in photos and videos. Gaussian and pixelate modes, fully local.', tags:['ai','media','tool'],
@@ -2000,7 +1979,7 @@ function sanitizeLayout(layout){
 // ════════════════════════════════════════════════════════════════════
 // THEMES — the OS color scheme. Each theme bundles a palette (UI tints)
 // with a wallpaper gradient (desktop bg). One picker, no fragmentation.
-// Apps in Immersive mode inherit the theme via ?naklios-theme=<id> on the iframe URL.
+// Apps in NakliOS windows inherit the theme via ?naklios-theme=<id> on the iframe URL.
 // ════════════════════════════════════════════════════════════════════
 const THEMES = [
   { id:'aurora', name:'Aurora', mood:'dark',
@@ -2077,15 +2056,11 @@ const HAD_EXISTING_PROFILE = Object.keys(localStorage)
   localStorage.removeItem('nakliOS.wallpaper');
 })();
 
-// Migrate v2.10.x mode key: 'A'|'B' → 'basic', 'C' → 'immersive'
-(function migrateModeKey(){
-  const v = localStorage.getItem(LS_KEY.mode);
-  if (v === 'A' || v === 'B') localStorage.setItem(LS_KEY.mode, 'basic');
-  else if (v === 'C') localStorage.setItem(LS_KEY.mode, 'immersive');
-})();
+// Basic mode was retired on 2026-11-04 (Chirag: "Having a basic mode is redundant"): every profile now opens apps
+// in NakliOS windows, so a saved mode preference is dropped once.
+try { localStorage.removeItem(LS_KEY.mode); } catch (_) {}
 
 const state = {
-  mode: localStorage.getItem(LS_KEY.mode) || null,
   theme: localStorage.getItem(LS_KEY.theme) || 'aurora',
   layout: sanitizeLayout(JSON.parse(localStorage.getItem(LS_KEY.layout) || '{"version":1,"positions":{},"hidden":[]}')),
   // appPermissions[appId] shape evolved with the v2.x Crate backend:
@@ -2106,28 +2081,6 @@ const state = {
 
 function isCoarse(){ return matchMedia('(pointer: coarse)').matches; }
 function isMobile(){ return isCoarse() || innerWidth < 720; }
-function getDefaultMode(){ return 'immersive'; }
-function getMode(){ return state.mode || getDefaultMode(); }
-
-function renderModePill(m = getMode()){
-  const label = m === 'immersive' ? 'Immersive' : 'Basic';
-  const pill = document.getElementById('mode-pill');
-  if (!pill) return;
-  pill.textContent = label;
-  pill.setAttribute('aria-label', `Experience mode: ${label}`);
-}
-
-function setMode(m){
-  state.mode = m;
-  localStorage.setItem(LS_KEY.mode, m);
-  renderModePill(m);
-  fsScheduleStateWrite();
-}
-function effectiveMode(app){
-  let m = getMode();
-  if (m === 'immersive' && app && app.maxMode === 'basic') m = 'basic';
-  return m;
-}
 
 function saveLayout(){
   localStorage.setItem(LS_KEY.layout, JSON.stringify(state.layout));
@@ -2188,7 +2141,7 @@ state.layout.stickies = state.layout.stickies || [];
 // ════════════════════════════════════════════════════════════════════
 // NakliOS owns one folder handle (picked once via showDirectoryPicker, stored
 // in IndexedDB). NakliOS shadow-writes its state.json there; cooperative apps
-// in Immersive mode read/write under apps/<id>/ via the naklios.fs.* SDK.
+// in NakliOS windows read/write under apps/<id>/ via the naklios.fs.* SDK.
 
 const IDB_NAME = 'nakliOS';
 const IDB_STORE = 'handles';
@@ -2409,7 +2362,6 @@ function serializeState(){
   return {
     version: 1,
     savedAt: Date.now(),
-    mode: state.mode,
     theme: state.theme,
     layout: state.layout,
     appPermissions: state.appPermissions,
@@ -2441,7 +2393,6 @@ async function fsHydrateIfNewer(){
   const localSync = parseInt(localStorage.getItem('nakliOS.lastSync') || '0', 10);
   if (!remote.savedAt || remote.savedAt <= localSync) return false;
   // Newer-than-local → hydrate everything
-  if (remote.mode != null) { state.mode = remote.mode; localStorage.setItem(LS_KEY.mode, remote.mode); }
   if (remote.theme != null) { state.theme = remote.theme; localStorage.setItem(LS_KEY.theme, remote.theme); }
   if (remote.layout) {
     state.layout = sanitizeLayout(remote.layout);
@@ -8944,18 +8895,12 @@ function recordRecent(appId){
 function openApp(app, options = {}){
   recordRecent(app.id);
   if (openWindows[app.id]) { focusWindow(openWindows[app.id]); return; }
-  // System apps depend on the host bridge and must remain inside NakliOS
-  // even when the desktop is in Basic mode.
+  // Every app opens in a NakliOS window, except one that cannot run inside one: it opens at its own URL in a
+  // new tab, with no weaker sandbox and no pretence that it embeds.
   if (app.kind === 'system') return spawnIframeWindow(app, options);
-  const m = effectiveMode(app);
-  if (m === 'immersive') {
-    if (app.kind === 'classic') return spawnInlineWindow(app);
-    if (app.iframeable === false) return window.open(app.url, '_blank', 'noopener');
-    return spawnIframeWindow(app, options);
-  }
-  // Basic
   if (app.kind === 'classic') return spawnInlineWindow(app);
-  return window.open(app.url, '_blank', 'noopener');
+  if (app.opensInNewTab === true || app.iframeable === false) return window.open(app.url, '_blank', 'noopener');
+  return spawnIframeWindow(app, options);
 }
 
 // A guided spotlight tour replaces the old welcome modal: new users land
@@ -9648,9 +9593,7 @@ async function consentThirdPartyInstall(manifest, manifestSource){
   );
   if (sourceChanged) changes.push('<strong>Manifest source changed.</strong> Future update checks will use the new source shown here.');
   const storageLine = manifest.permissions.includes('storage')
-    ? getMode() === 'basic'
-      ? 'Requested for its hosted window. Basic mode currently opens it in a top-level tab, so NakliOS storage stays unavailable until the app is opened in Immersive; NakliOS then asks again on first use.'
-      : 'May ask for app-scoped Folder or Crate storage. NakliOS asks again on first use.'
+    ? 'May ask for app-scoped Folder or Crate storage. NakliOS asks again on first use.'
     : 'No NakliOS storage access requested.';
   const inferenceLine = manifest.permissions.includes('inference')
     ? 'May ask to use the shared on-device LocalMind model. NakliOS asks again on first use and never shares prompts between apps.'
@@ -9835,20 +9778,6 @@ function openSettings(section){
   wrap.setAttribute('aria-labelledby', 'settings-title');
   wrap.tabIndex = -1;
 
-  const curMode = getMode();
-  const modes = [
-    { id:'basic', name:'Basic', desc:'Built-ins stay in NakliOS; web apps open in new tabs.' },
-    { id:'immersive', name:'Immersive', desc:'Compatible apps open in NakliOS windows. Apps that cannot embed still open in a tab.', badge:'RECOMMENDED' },
-  ];
-  const modeHTML = modes.map(m => `
-    <label class="nw-mode-opt ${m.id === curMode ? 'is-active' : ''}">
-      <input type="radio" name="nw-mode" value="${m.id}" ${m.id === curMode ? 'checked' : ''}>
-      <div class="nw-mode-label">
-        <div class="nw-mode-name">${m.name}${m.badge ? `<span class="nw-badge">${m.badge}</span>` : ''}</div>
-        <div class="nw-mode-desc">${m.desc}</div>
-      </div>
-    </label>
-  `).join('');
 
   const themeHTML = THEMES.map(t => {
     const order = ['BRAND','ACT','OK','INK'];
@@ -9882,7 +9811,7 @@ function openSettings(section){
       <button class="nw-fs-btn-primary" id="fs-connect">📁 Connect folder…</button>
     `}
     <div class="nw-fs-blurb">${connected
-      ? 'NakliOS shadow-writes state to <code>state.json</code> in this folder. Cooperative apps in Immersive can read/write under <code>apps/&lt;id&gt;/</code>.'
+      ? 'NakliOS shadow-writes state to <code>state.json</code> in this folder. Cooperative apps in NakliOS windows can read/write under <code>apps/&lt;id&gt;/</code>.'
       : 'Connect a folder (iCloud Drive, Dropbox, or local) and NakliOS will mirror its state there. Cooperative apps can use the same folder for multi-device sync.'}</div>
   `;
 
@@ -10218,8 +10147,6 @@ function openSettings(section){
     ${appStorageHTML}
     <h4 id="settings-ai-heading" tabindex="-1">AI</h4>
     ${aiHTML}
-    <h4>Mode</h4>
-    ${modeHTML}
     <h4>Theme <span style="color:var(--faint); font-weight:400; text-transform:none; letter-spacing:0;">— wallpaper, tile tints, app chrome</span></h4>
     <div class="nw-wp-grid" id="theme-grid">${themeHTML}</div>
     <h4 id="settings-skills-heading" tabindex="-1">Skills</h4>
@@ -10248,12 +10175,6 @@ function openSettings(section){
     else wrap.focus();
   }, 0);
 
-  wrap.querySelectorAll('input[name="nw-mode"]').forEach(r => {
-    r.addEventListener('change', () => {
-      setMode(r.value);
-      wrap.querySelectorAll('.nw-mode-opt').forEach(o => o.classList.toggle('is-active', o.contains(r) && r.checked));
-    });
-  });
   wrap.querySelector('#theme-grid').addEventListener('click', e => {
     const el = e.target.closest('.nw-wp');
     if (!el) return;
@@ -10859,9 +10780,8 @@ function pickFile(accept){
 function outsideHandler(e){
   const pop = document.getElementById('settings-pop');
   const btn = document.getElementById('settings-btn');
-  const mode = document.getElementById('mode-pill');
   if (!pop) return;
-  if (pop.contains(e.target) || btn.contains(e.target) || mode.contains(e.target) ||
+  if (pop.contains(e.target) || btn.contains(e.target) ||
       e.target.closest?.('.nw-dlg')) return;
   closeSettings();
 }
@@ -13323,7 +13243,6 @@ async function init(){
     }
   } catch(_){}
   updateDock();
-  renderModePill();
 
   // Topbar backend chips — wire click handlers once, then paint based on
   // whatever the boot reconnects below land at.
@@ -13340,7 +13259,6 @@ async function init(){
     const hydrated = await fsHydrateIfNewer();
     if (hydrated){
       applyTheme(state.theme);
-      renderModePill();
       renderIcons();
       updateDock();
     } else {
@@ -13386,7 +13304,6 @@ async function init(){
   document.getElementById('spotlight-btn').addEventListener('click', openSpotlight);
   document.getElementById('assistant-btn').addEventListener('click', toggleAssistant);
   document.getElementById('settings-btn').addEventListener('click', openSettings);
-  document.getElementById('mode-pill').addEventListener('click', e => { e.stopPropagation(); openSettings(); });
   maybeStartFirstRunTour();
 
   // Right-click on empty desktop → "New sticky note"
@@ -13564,7 +13481,7 @@ const hostAgentReady = import('./sys/host/agent.mjs').then(({ attachHostAgent })
     openApp:id => { const app=APPS.find(a=>a.id===id); if(!app) throw new Error('Unknown app'); return openApp(app); },
     openFolder:id => { const folder=FOLDERS.find(f=>f.id===id); if(!folder) throw new Error('Unknown folder'); return openFolder(folder); },
     closeFolder, openSpotlight, openSettings, closeSettings, openCheatSheet, closeCheatSheet,
-    applyTheme, setMode, getMode, pinItem, unpinItem, isPinned, moveAppToDesktop,
+    applyTheme, pinItem, unpinItem, isPinned, moveAppToDesktop,
     addSticky, updateSticky, deleteSticky,
     minimizeWindow:id => { const w=openWindows[id]; if(!w) throw new Error('Window not open'); minimizeWindow(w); },
     focusWindow:id => { const w=openWindows[id]; if(!w) throw new Error('Window not open'); focusWindow(w); },
