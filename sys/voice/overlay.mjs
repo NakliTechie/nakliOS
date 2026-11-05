@@ -397,7 +397,7 @@ export function mountVoiceAssistant({ root = document.body, host, more = null, m
 
   return {
     open, close, toggle: () => (panel ? close() : open()), get isOpen() { return !!panel; },
-    ask, listen, stopListening, stop, setHandsFree, setWebLookups, setConsent, consent, loadModel, get modelId() { return modelId; },
+    ask, listen, stopListening, stop, setHandsFree, setWebLookups, setConsent, consent, loadModel, get modelId() { return modelId; }, get model() { return model; },
     get state() { return session.state; }, session, tools, timers, reminders, music,
   };
 }

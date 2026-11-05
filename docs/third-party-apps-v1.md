@@ -79,6 +79,9 @@ v1 supports two optional permissions:
   does not grant access: NakliOS asks again on first use. Apps that omit this
   permission receive `naklios.capabilities.fs === false`, even when storage is
   connected.
+- `tools` — needs `inference`. The app may send `tools` on a chat request, and the model may answer with
+  tool calls the app itself runs, inside the normal input and token limits. Anthropic routes keep their
+  16,000-token floor, because thinking needs it. It needs a model that can call tools.
 - `inference` — the app may ask to use the shared on-device LocalMind text
   model. The manifest request does not grant access: NakliOS asks again on
   first use. The app receives streamed text only, never the worker, model
