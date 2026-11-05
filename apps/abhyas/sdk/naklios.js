@@ -843,6 +843,14 @@
         return rpc('naklios:commands:call', { name: String(name || ''), input: input || {} }, COMMAND_CALL_TIMEOUT_MS);
       },
     },
+    experimental_widgets: {
+      // One snapshot for a widget the app declares in commands.json; `null` removes the card. `persist: false`
+      // keeps it in memory only, for data the desktop must not copy to disk (Crate). Standalone: does nothing.
+      update: function (id, data, options) {
+        if (!inNakliOS) return false;
+        return send('naklios:widgets:update', { id: String(id || ''), data: data === undefined ? null : data, persist: !options || options.persist !== false }) !== false;
+      },
+    },
     experimental_skills: {
       list: function () {
         if (!inNakliOS) return Promise.resolve([]);

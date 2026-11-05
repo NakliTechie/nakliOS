@@ -125,8 +125,8 @@ async function waitBackend(id,timeout=1800){if(naklios.capabilities.fsBackend===
 async function activate(id,{initial=false}={}){if(id!=='browser'){if(!available().includes(id))throw new Error(`${locationLabel(id)} is not connected`);if(naklios.capabilities.fsBackend!==id){if(!await naklios.fs.useBackend(id))throw new Error('Storage switch cancelled');if(!await waitBackend(id))throw new Error('NakliOS did not finish binding storage')}}activeLocation=id;activeAdapter=id==='browser'?browserAdapter:hostedAdapter;localStorage.setItem(LOCATION_KEY,id);renderLocations();await load();await subscribe();if(!initial)showToast(`Opened the separate ${locationLabel(id)} calendar. Nothing was copied.`)}
 async function switchLocation(id){if(id===activeLocation)return;try{await saveQueue;setSave(`Opening ${locationLabel(id)}…`);await activate(id)}catch(error){setSave('Storage switch cancelled');showToast(error.message);renderLocations()}}
 async function chooseInitial(){const choices=available(),stored=localStorage.getItem(LOCATION_KEY);let preferred=choices.includes(stored)?stored:(choices.includes(naklios.capabilities.fsBackend)?naklios.capabilities.fsBackend:null);if(!preferred)preferred=choices.includes('crate')?'crate':choices.includes('fsa')?'fsa':'browser';try{await activate(preferred,{initial:true})}catch(_){await activate('browser',{initial:true});if(preferred!=='browser')showToast(`${locationLabel(preferred)} was not opened. Using Browser.`)}}
-async function load(){setSave(`Loading ${locationLabel(activeLocation)}…`);try{data=normalise(JSON.parse(await activeAdapter.read(DATA_FILE)))}catch(_){data=normalise(null);await save()}render();setSave(`Saved to ${locationLabel(activeLocation)}`);naklios.title(`Calendar — ${locationLabel(activeLocation)}`);resolveLoaded()}
-function save(){data.updatedAt=now();const snapshot=JSON.stringify(data,null,2),location=activeLocation;setSave(`Saving to ${locationLabel(location)}…`);saveQueue=saveQueue.catch(()=>{}).then(async()=>{if(location!==activeLocation)return;ownWrites.set(DATA_FILE,now());await activeAdapter.write(DATA_FILE,snapshot);setSave(`Saved to ${locationLabel(activeLocation)}`)}).catch(error=>{setSave('Save failed');showToast(`Could not save: ${error.message}`)});return saveQueue}
+async function load(){setSave(`Loading ${locationLabel(activeLocation)}…`);try{data=normalise(JSON.parse(await activeAdapter.read(DATA_FILE)))}catch(_){data=normalise(null);await save()}render();setSave(`Saved to ${locationLabel(activeLocation)}`);naklios.title(`Calendar — ${locationLabel(activeLocation)}`);publishTodayWidget();resolveLoaded()}
+function save(){data.updatedAt=now();const snapshot=JSON.stringify(data,null,2),location=activeLocation;setSave(`Saving to ${locationLabel(location)}…`);saveQueue=saveQueue.catch(()=>{}).then(async()=>{if(location!==activeLocation)return;ownWrites.set(DATA_FILE,now());await activeAdapter.write(DATA_FILE,snapshot);setSave(`Saved to ${locationLabel(activeLocation)}`);publishTodayWidget()}).catch(error=>{setSave('Save failed');showToast(`Could not save: ${error.message}`)});return saveQueue}
 
 function rangeForView(){if(view==='month'){const first=new Date(cursor.getFullYear(),cursor.getMonth(),1),start=addDays(first,-((first.getDay()+6)%7)),end=addDays(start,42);return{start,end}}if(view==='week'){const start=addDays(startOfDay(cursor),-((cursor.getDay()+6)%7));return{start,end:addDays(start,7)}}const start=startOfDay(cursor);return{start,end:addDays(start,1)}}
 function occurrences(){const range=rangeForView();return Core.expandEvents(data.events,range.start.getTime(),range.end.getTime())}
@@ -168,6 +168,13 @@ function commandEvent(args){
   return{id:uid(),title:title.slice(0,180),description:'',location:String(args?.location??'').slice(0,240),
     startLocal:allDay?localDate(start):localDateTime(start),endLocal:allDay?localDate(end):localDateTime(end),
     allDay,timeZone:defaultZone,recurrence:{frequency:'none',interval:1,until:null}};
+}
+// The desktop card shows today, and says so plainly once the day has passed. Crate data is shown from memory only.
+function publishTodayWidget(){
+  if(!naklios.experimental_widgets)return;
+  const start=startOfDay(new Date()),end=addDays(start,1);
+  const items=Core.expandEvents(data.events,start.getTime(),end.getTime()).map(o=>({time:o.event.allDay?'All day':o.startLocal.slice(11,16),title:o.event.title}));
+  naklios.experimental_widgets.update('today',{items,empty:'Nothing today',expires:end.getTime()},{persist:activeLocation!=='crate'});
 }
 const COMMAND_HANDLERS={
   async 'events.create'(args){

@@ -1,4 +1,7 @@
 {
+  "widgets": [
+    { "id": "today", "title": "Today", "display": "agenda" }
+  ],
   "commands": [
     {
       "name": "events.create",

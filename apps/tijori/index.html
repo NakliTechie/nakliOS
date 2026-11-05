@@ -1622,7 +1622,7 @@ textarea { resize: vertical; min-height: 80px; }
 <!-- naklios.js SDK — vendored inline. Standalone-safe (no-op when window === window.parent).
      Canonical source: https://github.com/NakliTechie/nakli-dev/blob/main/sdk/naklios.js -->
 <script>
-/* naklios-sdk:begin ver=2 sha256=a8d17ad1230d824c0ee6b589e76062c08fb72038bf2a975a700c8cbb6160c397 */
+/* naklios-sdk:begin ver=2 sha256=9fe2ed70fd43e9ce8102400b833014b2d0f71ca6d24fd274ddbbc22c6fe978de */
 /*!
  * naklios.js — cooperative SDK for apps hosted inside NakliOS (Immersive mode)
  *
@@ -2466,6 +2466,14 @@ textarea { resize: vertical; min-height: 80px; }
       call: function (name, input) {
         if (!inNakliOS) return Promise.reject(new Error('Not hosted — app commands are unavailable standalone'));
         return rpc('naklios:commands:call', { name: String(name || ''), input: input || {} }, COMMAND_CALL_TIMEOUT_MS);
+      },
+    },
+    experimental_widgets: {
+      // One snapshot for a widget the app declares in commands.json; `null` removes the card. `persist: false`
+      // keeps it in memory only, for data the desktop must not copy to disk (Crate). Standalone: does nothing.
+      update: function (id, data, options) {
+        if (!inNakliOS) return false;
+        return send('naklios:widgets:update', { id: String(id || ''), data: data === undefined ? null : data, persist: !options || options.persist !== false }) !== false;
       },
     },
     experimental_skills: {

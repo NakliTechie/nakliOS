@@ -468,6 +468,7 @@ async function writeLibrary(){
   library.updatedAt = now();
   ownWrites.set(LIBRARY_FILE, now());
   await activeAdapter.write(LIBRARY_FILE, JSON.stringify(library, null, 2));
+  void publishListWidget();
 }
 async function writeMetadata(note){
   const path = notePath(note.id, 'json');
@@ -1141,6 +1142,13 @@ const listKey = title => String(title).trim().toLowerCase().replace(/^(my|the|ou
 const listTitle = list => { const key = listKey(list); return `${key[0].toUpperCase()}${key.slice(1)} list`; };
 const listItems = body => String(body || '').split('\n').map(line => line.match(/^\s*[-*]\s+(?:\[[ x]\]\s+)?(.*\S)/)?.[1]).filter(Boolean);
 const findList = list => library.notes.find(note => !note.trashedAt && listKey(note.title) === listKey(list));
+// The desktop card shows the list changed most recently. Crate data is shown from memory only.
+async function publishListWidget(){
+  if (!naklios.experimental_widgets) return;
+  const note = library.notes.filter(item => !item.trashedAt && / list$/i.test(item.title)).sort((a, b) => b.updatedAt - a.updatedAt)[0];
+  const items = note ? listItems(await readNoteBody(note.id)) : [];
+  naklios.experimental_widgets.update('list', note ? { heading:note.title, items, empty:'This list is empty' } : null, { persist:activeLocation !== 'crate' });
+}
 function addNoteRecord(title){
   const ts = now();
   const note = { id:uid('note'), notebookId:DEFAULT_NOTEBOOK_ID, title:String(title).slice(0,180), excerpt:'', pinned:false,
