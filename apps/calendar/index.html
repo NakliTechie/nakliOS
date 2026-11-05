@@ -176,12 +176,34 @@ function publishTodayWidget(){
   const items=Core.expandEvents(data.events,start.getTime(),end.getTime()).map(o=>({time:eventTime(o),title:o.event.title}));
   naklios.experimental_widgets.update('today',{items,empty:'Nothing today',expires:end.getTime()},{persist:activeLocation!=='crate'});
 }
+function namedEvent(title){
+  const key=String(title).trim().toLowerCase(),hits=data.events.filter(event=>event.title.toLowerCase()===key);
+  if(!hits.length)throw new Error(`There is no event called ${title}.`);
+  if(hits.length>1)throw new Error(`${hits.length} events are called ${title}; change them in Calendar.`);
+  return hits[0];
+}
 const COMMAND_HANDLERS={
   async 'events.create'(args){
     await loaded;
     const event=commandEvent(args);
     data.events.push(event);save();await saveQueue;render();
     return{created:true,title:event.title,start:event.startLocal,end:event.endLocal,all_day:event.allDay,where:locationLabel(activeLocation)};
+  },
+  async 'events.update'({title,new_title,start,duration_minutes,location}){
+    await loaded;
+    const event=namedEvent(title);
+    if(start!=null){const next=commandEvent({title:event.title,start,duration_minutes});Object.assign(event,{startLocal:next.startLocal,endLocal:next.endLocal,allDay:next.allDay})}
+    if(new_title!=null)event.title=String(new_title).slice(0,180);
+    if(location!=null)event.location=String(location).slice(0,240);
+    save();await saveQueue;render();
+    return{updated:event.title,start:event.startLocal,end:event.endLocal};
+  },
+  async 'events.delete'({title}){
+    await loaded;
+    const event=namedEvent(title);
+    data.events=data.events.filter(item=>item!==event);
+    save();await saveQueue;render();
+    return{deleted:event.title,repeating:event.recurrence?.frequency!=='none'};
   },
   async 'events.list'({date,days=1}){
     await loaded;
