@@ -191,7 +191,7 @@ function sdkFrame({ hosted = true } = {}) {
   const parent = { postMessage: message => sent.push(message) };
   const window = { location: { search: '?naklios' }, parent, addEventListener: (type, fn) => { if (type === 'message') receive = fn; } };
   if (!hosted) window.parent = window;
-  vm.runInNewContext(sdk, { window, document: {}, URL, URLSearchParams, Map, Set, Promise, Date, Error, Object, setTimeout: () => 0, clearTimeout: () => {} });
+  vm.runInNewContext(sdk, { window, document: {}, URL, URLSearchParams, AbortController, Map, Set, Promise, Date, Error, Object, setTimeout: () => 0, clearTimeout: () => {} });
   // The SDK runs in its own realm; plain() brings its values over for deep comparison.
   return { api: window.naklios, sent, send: data => receive({ origin: 'https://naklios.dev', data, source: parent }) };
 }
@@ -214,6 +214,8 @@ function sdkFrame({ hosted = true } = {}) {
   app.send({ type: 'naklios:commands:invoke', invokeId: 'c1', name: 'greet', args: { name: 'Om' } });
   await tick(); await tick();
   assert.deepEqual(plain(app.sent.find(m => m.type === 'naklios:commands:result' && m.invokeId === 'c1')), { type: 'naklios:commands:result', invokeId: 'c1', result: 'Hello, Om' });
+  app.send({ type: 'naklios:commands:invoke', invokeId: 'c0', name: 'greet', args: { name: 'Om' }, caller: 'anvil' });
+  await tick(); await tick();
   app.send({ type: 'naklios:commands:invoke', invokeId: 'c2', name: 'boom', args: {} });
   await tick(); await tick();
   assert.equal(app.sent.find(m => m.invokeId === 'c2').error, 'nope', 'a throw comes back as the error');
