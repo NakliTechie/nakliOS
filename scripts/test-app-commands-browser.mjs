@@ -119,7 +119,7 @@ try {
   assert.ok(!evaluated.exceptionDetails, JSON.stringify(evaluated.exceptionDetails));
   const r = evaluated.result.value;
 
-  assert.deepEqual(r.listed, ['calendar.events.create', 'calendar.events.list', 'notes.list.add', 'notes.list.read', 'notes.note.create'],
+  assert.deepEqual(r.listed, ['calendar.events.create', 'calendar.events.delete', 'calendar.events.list', 'calendar.events.update', 'notes.list.add', 'notes.list.read', 'notes.note.create', 'notes.note.pin', 'notes.note.replace', 'notes.note.trash', 'notes.note.update', 'notes.notebook.create'],
     'the catalog lists both apps\' declared commands while they are closed');
   assert.equal(r.notesOpenBefore, false);
   assert.equal(r.add.ok, true, JSON.stringify(r.add));
