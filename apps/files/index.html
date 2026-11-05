@@ -596,7 +596,6 @@ function showContextMenu(x, y, path, isDir){
   const inner = [];
   if (!isDir){
     inner.push(`<button id="ctx-open">Open / preview</button>`);
-    if (editable) inner.push(`<button id="ctx-edit">Edit in Editor</button>`);
     inner.push(`<button id="ctx-download">Download…</button>`);
     inner.push(`<div class="sep"></div>`);
   }
@@ -608,13 +607,23 @@ function showContextMenu(x, y, path, isDir){
     closeContextMenu();
     previewFile(path);
   });
-  menu.querySelector('#ctx-edit')?.addEventListener('click', async () => {
-    closeContextMenu();
-    try {
-      const opened = await naklios.files.openWith('editor', editPath);
-      setStatus(opened ? `Opened ${basename(path)} in Editor` : 'Open With cancelled');
-    } catch (e){ showToast('Could not open in Editor: ' + e.message); }
-  });
+  // "Open with" and "Send to" come from what apps declare; the menu grows when the answer arrives.
+  if (!isDir && editable) void naklios.files.experimental_targets?.(editPath).then(targets => {
+    const anchor = menu.querySelector('#ctx-open');
+    for (const target of [...targets].reverse()) {
+      const button = document.createElement('button');
+      button.textContent = target.label;
+      button.dataset.target = target.appId;
+      button.addEventListener('click', async () => {
+        closeContextMenu();
+        try {
+          const done = target.action === 'edit' ? await naklios.files.openWith(target.appId, editPath) : await naklios.files.experimental_sendTo(target.appId, [editPath]);
+          setStatus(done ? `${target.label}: ${basename(path)}` : 'Cancelled');
+        } catch (e){ showToast(`${target.label} failed: ${e.message}`); }
+      });
+      anchor?.after(button);
+    }
+  }).catch(() => {});
   menu.querySelector('#ctx-download')?.addEventListener('click', async () => {
     closeContextMenu();
     try {

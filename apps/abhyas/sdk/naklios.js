@@ -669,6 +669,7 @@
         sourceAppId: String(msg.grant.sourceAppId || ''),
         backend: String(msg.grant.backend || ''),
         kind: String(msg.grant.kind || 'file'),
+        type: msg.grant.type ? String(msg.grant.type) : undefined,
       };
       if (!grant.token) return;
       if (!fileOpenListeners.size) pendingFileGrants.push(grant);
@@ -947,6 +948,19 @@
         return rpc('naklios:file:openWith', fsPayload({
           appId: String(appId || ''),
           path: String(path || ''),
+        }));
+      },
+      // Which apps declared they take this file (`accepts` in their commands.json), as `{ appId, name, action, label }`.
+      experimental_targets: function (path) {
+        if (!inNakliOS) return Promise.resolve([]);
+        return rpc('naklios:file:targets', { path: String(path || '') });
+      },
+      // Send copies of app-relative files to an app that imports them. The target gets one read-only token per file;
+      // `read(token)` answers `{ bytes, name, path, type, sourceAppId, backend }`.
+      experimental_sendTo: function (appId, paths) {
+        return rpc('naklios:file:sendTo', fsPayload({
+          appId: String(appId || ''),
+          paths: (Array.isArray(paths) ? paths : [paths]).map(String),
         }));
       },
       onOpen: function (cb) {
