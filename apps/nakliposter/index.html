@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="author" content="Chirag Patnaik">
 <title>NakliPoster — Local-First API Client</title>
+<meta name="description" content="Your own API tester, in one HTML file. REST, GraphQL and WebSocket. No account, no server.">
+<meta property="og:title" content="NakliPoster">
+<meta property="og:description" content="Your own API tester, in one HTML file. REST, GraphQL and WebSocket. No account, no server.">
+<meta property="og:image" content="https://nakliposter.naklitechie.com/marketing/social.png">
+<meta property="og:url" content="https://nakliposter.naklitechie.com/">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://nakliposter.naklitechie.com/marketing/social.png">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23ff6c37'/%3E%3Ctext x='16' y='22' font-family='-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif' font-size='14' font-weight='700' fill='white' text-anchor='middle'%3ENP%3C/text%3E%3C/svg%3E">
 <style>
 /* Rangrez · india_east-12 · KANCHENJUNGA PRE-DAWN — first light from Tiger Hill */
@@ -887,7 +895,7 @@ mark{background:transparent;color:var(--accent);font-weight:600}
     <div id="resize-handle"></div>
 
     <div id="response-section">
-      <div id="res-empty">Hit <strong>Send</strong> to get a response</div>
+      <div id="res-empty"><span>Hit <strong>Send</strong> to get a response</span></div>
       <div id="res-content" style="display:none">
         <div id="res-meta">
           <span id="res-status-badge" class="st-badge"></span>
@@ -1148,7 +1156,7 @@ mark{background:transparent;color:var(--accent);font-weight:600}
         <button class="share-type-btn" id="share-type-collection">Entire Collection</button>
       </div>
       <div id="share-warning-secrets" class="share-warning" style="display:none">
-        ⚠ This request contains auth credentials. Use a passphrase to encrypt the link before sharing.
+        ⚠ This link will contain saved credentials or variables. Use a passphrase to encrypt it before sharing.
       </div>
       <div class="share-toggle-row">
         <input type="checkbox" id="share-use-passphrase">
@@ -4825,12 +4833,14 @@ function bindEvents(){
     $('share-type-request').classList.add('active');
     $('share-type-collection').classList.remove('active');
     _shareType='request';
+    updateShareWarning();
     generateShareLink();
   };
   $('share-type-collection').onclick=()=>{
     $('share-type-collection').classList.add('active');
     $('share-type-request').classList.remove('active');
     _shareType='collection';
+    updateShareWarning();
     generateShareLink();
   };
   // Link import
@@ -5479,7 +5489,7 @@ async function parseDataFile(file){
 
 // ── Tier 3: Encrypted Link Sharing ──
 
-// lz-string loaded via CDN below; accessed as window.LZString
+// lz-string loads from the CDN on first share or share-link open; accessed as window.LZString
 // Prefix scheme:
 //   #np:<lz-compressed-base64url>            (unencrypted)
 //   #npe:<b64salt>.<b64iv>.<b64ciphertext>   (AES-256-GCM)
@@ -5494,17 +5504,8 @@ function b64ToArr(b64){ return Uint8Array.from(atob(b64),c=>c.charCodeAt(0)); }
 function arrToB64(arr){ return btoa(String.fromCharCode(...new Uint8Array(arr))); }
 
 // ── Compress / Decompress via lz-string ──
-function lzCompress(str){
-  return window.LZString
-    ? LZString.compressToEncodedURIComponent(str)
-    : btoa(encodeURIComponent(str)); // fallback if CDN not yet loaded
-}
-function lzDecompress(str){
-  if(window.LZString){
-    return LZString.decompressFromEncodedURIComponent(str);
-  }
-  try{ return decodeURIComponent(atob(str)); }catch{ return null; }
-}
+function lzCompress(str){ return LZString.compressToEncodedURIComponent(str); }
+function lzDecompress(str){ return LZString.decompressFromEncodedURIComponent(str); }
 
 // ── Key derivation (PBKDF2 SHA-256, 200k rounds) ──
 async function deriveKey(passphrase, salt){
@@ -5566,13 +5567,26 @@ function buildSharePayload(type, tab, collId){
 }
 
 // ── Detect if request has credentials ──
+const CREDENTIAL_HEADER=/^(authorization|proxy-authorization|cookie|x-api-key|api-key|x-auth-token)$/i;
 function hasCredentials(tab){
   if(!tab) return false;
   const a=tab.auth||{};
   if(a.type==='bearer'&&a.bearer) return true;
   if(a.type==='basic'&&(a.basicUser||a.basicPass)) return true;
   if(a.type==='apikey'&&a.apiKeyValue) return true;
-  return false;
+  if(a.type==='oauth2'&&(a.clientSecret||a.accessToken)) return true;
+  return (tab.headers||[]).some(h=>h.value&&CREDENTIAL_HEADER.test(h.key||''));
+}
+function collectionHasCredentials(coll){
+  if(!coll) return false;
+  const walk=items=>(items||[]).some(item=>item.items?walk(item.items):hasCredentials(item));
+  return walk(coll.items)||(coll.variable||[]).some(v=>v.value);
+}
+function updateShareWarning(tab){
+  const warn=_shareType==='collection'
+    ?collectionHasCredentials(S.collections.find(c=>c.id===_shareCollId)||S.collections[0])
+    :hasCredentials(tab||getActiveTab());
+  $('share-warning-secrets').style.display=warn?'':'none';
 }
 
 // ── Open share modal ──
@@ -5591,8 +5605,7 @@ function openShareModal(type='request', tab=null, collId=null){
   $('share-type-collection').disabled=!S.collections.length;
 
   // Credentials warning
-  const warn=type==='request'&&hasCredentials(currentTab);
-  $('share-warning-secrets').style.display=warn?'':'none';
+  updateShareWarning(currentTab);
 
   // Reset passphrase UI
   $('share-use-passphrase').checked=false;
@@ -5617,6 +5630,8 @@ async function generateShareLink(){
   btn.textContent='Generating…'; btn.disabled=true;
 
   try{
+    await loadShareLibs();
+    if(!window.LZString) throw new Error('could not load the compression library');
     const json=JSON.stringify(payload);
     const usePassphrase=$('share-use-passphrase').checked;
     const passphrase=$('share-passphrase').value;
@@ -5652,7 +5667,8 @@ async function generateShareLink(){
 // ── On load: check for #np: or #npe: fragment ──
 async function checkShareLink(){
   const hash=location.hash;
-  if(!hash) return;
+  if(!hash.startsWith('#np')) return;
+  await loadShareLibs();
 
   if(hash.startsWith('#np:')){
     const compressed=hash.slice(4);
@@ -6323,8 +6339,7 @@ async function init(){
   const npUrl = location.origin + location.pathname;
   $('np-bookmarklet').href = "javascript:void(function(){var t=window.getSelection().toString()||document.body.innerText;try{var j=JSON.parse(t),w=window.open('"+npUrl+"','nakliposter');var n=0,iv=setInterval(function(){w.postMessage({type:'np_import',collection:j},'*');if(++n>30)clearInterval(iv)},500);window.addEventListener('message',function h(e){if(e.data&&(e.data.type==='np_import_ack'||e.data.type==='np_import_err')){clearInterval(iv);window.removeEventListener('message',h)}})}catch(e){var d=document.createElement('div');d.textContent='NakliPoster: no valid collection JSON selected';d.style.cssText='position:fixed;z-index:2147483647;left:50%;bottom:24px;transform:translateX(-50%);padding:10px 14px;border-radius:6px;background:#1f2937;color:#fff;font:13px system-ui;box-shadow:0 8px 24px #0006';document.body.appendChild(d);setTimeout(function(){d.remove()},3500)}}())";
 
-  // Load CDN libs then check for share link in fragment
-  loadShareLibs().then(()=>checkShareLink());
+  checkShareLink();
 }
 
 // ── Global Search ──
@@ -6829,16 +6844,11 @@ function submitCookieAdd(){
 // ── Git History ──
 let gitLib=null;
 
-function loadIsomorphicGit(){
-  if(gitLib) return Promise.resolve(gitLib);
-  return new Promise(resolve=>{
-    if(window.git){ gitLib=window.git; resolve(gitLib); return; }
-    const s=document.createElement('script');
-    s.src='https://cdn.jsdelivr.net/npm/isomorphic-git@1/index.umd.min.js';
-    s.onload=()=>{ gitLib=window.git; resolve(gitLib); };
-    s.onerror=()=>resolve(null);
-    document.head.appendChild(s);
-  });
+async function loadIsomorphicGit(){
+  if(gitLib) return gitLib;
+  if(!window.git) await loadCdnScript('https://cdn.jsdelivr.net/npm/isomorphic-git@1.44.10/index.umd.min.js','sha384-Wxk2dtqOBluke3GhrQwx1GcmJNRHng3vTyMwEneJbLscFGunnoWymslzn0yi2ph+');
+  gitLib=window.git||null;
+  return gitLib;
 }
 
 function makeGitFs(){
@@ -6983,21 +6993,18 @@ async function showGitVersion(git, fs, commit, filename, coll){
   };
 }
 
-function loadShareLibs(){
+// Exact versions with integrity hashes: this code runs in the page, next to saved tokens.
+function loadCdnScript(src,integrity){
   return new Promise(resolve=>{
-    if(window.LZString&&window.QRCode){ resolve(); return; }
-    const lz=document.createElement('script');
-    lz.src='https://cdn.jsdelivr.net/npm/lz-string@1/libs/lz-string.min.js';
-    lz.onload=()=>{
-      const qr=document.createElement('script');
-      qr.src='https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js';
-      qr.onload=resolve;
-      qr.onerror=resolve; // QR is optional, lz-string is the critical one
-      document.head.appendChild(qr);
-    };
-    lz.onerror=resolve;
-    document.head.appendChild(lz);
+    const s=document.createElement('script');
+    s.src=src; s.integrity=integrity; s.crossOrigin='anonymous';
+    s.onload=s.onerror=()=>resolve();
+    document.head.appendChild(s);
   });
+}
+async function loadShareLibs(){
+  if(!window.LZString) await loadCdnScript('https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js','sha384-0d+Gr7vM4Drod8E3hXKgciWJSWbjD/opKLLygI9ktiWbuvlDwQLzU46wJ9s5gsp7');
+  if(!window.QRCode) await loadCdnScript('https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js','sha384-3zSEDfvllQohrq0PHL1fOXJuC/jSOO34H46t6UQfobFOmxE5BpjjaIJY5F2/bMnU'); // QR is optional
 }
 
 // ── JavaScript API (window.nakliposter) ──
