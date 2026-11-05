@@ -22,9 +22,9 @@ assert.deepEqual(parseWidgets(undefined), { widgets: [] });
 const clean = cleanSnapshot('list', { items: Array(12).fill('<img src=x onerror=alert(1)>'), html: '<b>', heading: 'H' });
 assert.equal(clean.items.length, MAX_ITEMS); assert.equal(clean.more, 4); assert.ok(!('html' in clean));
 
-let saved = null; let opened = null; let clock = 1000;
+let saved = {}; let opened = null; let clock = 1000;
 const make = () => { const root = element('div'); return { root, board: createWidgetBoard({
-  root, load: async () => saved, save: async all => { saved = structuredClone(all); }, open: id => { opened = id; }, now: () => clock }) }; };
+  root, load: async () => saved, save: async (key, value) => { if (value) saved[key] = structuredClone(value); else delete saved[key]; }, open: id => { opened = id; }, now: () => clock }) }; };
 
 {
   const { root, board } = make();
@@ -56,5 +56,14 @@ const make = () => { const root = element('div'); return { root, board: createWi
   board.setEnabled(false); await board.flush();
   assert.deepEqual(saved, {}, 'turning widgets off removes the saved copies');
   assert.equal(root.hidden, true);
+}
+{
+  // Two tabs: each writes only its own key, so neither loses the other's widget.
+  saved = { 'notes/list': { data: { heading: 'From the other tab', items: [] }, at: 1 } };
+  const { board } = make();
+  board.declare('calendar', 'Calendar', [{ id: 'today', title: 'Today', display: 'agenda' }]);
+  board.update('calendar', 'today', { items: [] }); await board.flush();
+  assert.ok(saved['notes/list'] && saved['calendar/today']);
+  board.setEnabled(false);
 }
 console.log('widgets: PASS');

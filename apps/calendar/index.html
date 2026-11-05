@@ -173,7 +173,7 @@ function commandEvent(args){
 function publishTodayWidget(){
   if(!naklios.experimental_widgets)return;
   const start=startOfDay(new Date()),end=addDays(start,1);
-  const items=Core.expandEvents(data.events,start.getTime(),end.getTime()).map(o=>({time:o.event.allDay?'All day':o.startLocal.slice(11,16),title:o.event.title}));
+  const items=Core.expandEvents(data.events,start.getTime(),end.getTime()).map(o=>({time:eventTime(o),title:o.event.title}));
   naklios.experimental_widgets.update('today',{items,empty:'Nothing today',expires:end.getTime()},{persist:activeLocation!=='crate'});
 }
 const COMMAND_HANDLERS={

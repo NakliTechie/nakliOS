@@ -56,6 +56,10 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
   const big = catalog.invokeCommand('standin.greet', { name: 'y' });
   catalog.settle('standin', app.owner, app.calls.at(-1).invokeId, { result: 'x'.repeat(300000) });
   assert.equal((await big).code, 'ETOOBIG');
+  const cyclic = {}; cyclic.self = cyclic;
+  const odd = catalog.invokeCommand('standin.greet', { name: 'z' });
+  catalog.settle('standin', app.owner, app.calls.at(-1).invokeId, { result: cyclic });
+  assert.equal((await odd).code, 'EAPP', 'a value JSON cannot hold still answers the caller');
   assert.equal(catalog.searchCommands('add list item').find(c => c.annotations?.app)?.name, 'standin.list.add', 'each word counts');
 }
 

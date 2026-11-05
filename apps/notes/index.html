@@ -608,6 +608,7 @@ async function loadLibrary(){
   const remembered = localStorage.getItem(SELECTION_PREFIX + activeLocation);
   selectedId = library.notes.some(note => note.id === remembered) ? remembered : null;
   if (!(await activeAdapter.exists(LIBRARY_FILE).catch(() => false))) await writeLibrary();
+  void publishListWidget();
   renderSidebar();
   await renderNoteList();
   if (selectedId) await selectNote(selectedId, { skipFlush:true });
@@ -1143,11 +1144,20 @@ const listTitle = list => { const key = listKey(list); return `${key[0].toUpperC
 const listItems = body => String(body || '').split('\n').map(line => line.match(/^\s*[-*]\s+(?:\[[ x]\]\s+)?(.*\S)/)?.[1]).filter(Boolean);
 const findList = list => library.notes.find(note => !note.trashedAt && listKey(note.title) === listKey(list));
 // The desktop card shows the list changed most recently. Crate data is shown from memory only.
+// Only the newest publish counts, and one that outlived a location switch is dropped, so a slow Crate read cannot land
+// as Browser data. An unchanged card is not sent again, because the editor saves every half second.
+let widgetRun = 0, lastWidget = '';
 async function publishListWidget(){
   if (!naklios.experimental_widgets) return;
+  const run = ++widgetRun, location = activeLocation;
   const note = library.notes.filter(item => !item.trashedAt && / list$/i.test(item.title)).sort((a, b) => b.updatedAt - a.updatedAt)[0];
   const items = note ? listItems(await readNoteBody(note.id)) : [];
-  naklios.experimental_widgets.update('list', note ? { heading:note.title, items, empty:'This list is empty' } : null, { persist:activeLocation !== 'crate' });
+  if (run !== widgetRun || location !== activeLocation) return;
+  const data = note ? { heading:note.title, items, empty:'This list is empty' } : null;
+  const fingerprint = JSON.stringify([location, data]);
+  if (fingerprint === lastWidget) return;
+  lastWidget = fingerprint;
+  naklios.experimental_widgets.update('list', data, { persist:location !== 'crate' });
 }
 function addNoteRecord(title){
   const ts = now();

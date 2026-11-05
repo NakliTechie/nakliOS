@@ -42,8 +42,9 @@ export function cleanSnapshot(display, data) {
 /**
  * @param {object} opts
  * @param {HTMLElement} opts.root            the element the cards go in
- * @param {() => Promise<object|null>} opts.load   the saved snapshots
- * @param {(all: object) => Promise<void>} opts.save
+ * @param {() => Promise<object|null>} opts.load   every saved snapshot, by key
+ * @param {(key: string, value: object|null) => Promise<void>} opts.save  one key at a time, so two tabs never overwrite
+ *   each other's widgets; null removes it
  * @param {(appId: string) => void} opts.open
  * @param {() => number} [opts.now]
  */
@@ -52,10 +53,11 @@ export function createWidgetBoard({ root, load, save, open, now = Date.now }) {
   const snapshots = new Map(); // same key -> { data, persist, at }
   let enabled = true;
   let saving = Promise.resolve();
+  let expiry = null;
 
-  function persist() {
-    const all = Object.fromEntries([...snapshots].filter(([, s]) => s.persist).map(([key, s]) => [key, { data: s.data, at: s.at }]));
-    saving = saving.catch(() => {}).then(() => save(all));
+  function persist(key) {
+    const s = snapshots.get(key);
+    saving = saving.catch(() => {}).then(() => save(key, s?.persist ? { data: s.data, at: s.at } : null));
     return saving;
   }
 
@@ -75,7 +77,7 @@ export function createWidgetBoard({ root, load, save, open, now = Date.now }) {
     };
     add(el, 'span', 'nw-widget-title', widget.title);
     const data = snapshot.data;
-    if (data.expires != null && now() > data.expires) {
+    if (data.expires != null && now() >= data.expires) {
       add(el, 'span', 'nw-widget-empty', `Open ${widget.appName} to update`);
       return el;
     }
@@ -99,6 +101,10 @@ export function createWidgetBoard({ root, load, save, open, now = Date.now }) {
     const cards = enabled ? [...declared].filter(([key]) => snapshots.has(key)).map(([key, widget]) => card(widget, snapshots.get(key))) : [];
     root.replaceChildren(...cards);
     root.hidden = !cards.length;
+    // A card must not go on showing yesterday in a tab left open overnight.
+    clearTimeout(expiry);
+    const next = Math.min(...[...snapshots.values()].map(s => s.data.expires).filter(at => at != null && at > now()));
+    if (enabled && Number.isFinite(next)) { expiry = setTimeout(render, Math.min(next - now(), 2 ** 31 - 1)); expiry.unref?.(); }
   }
 
   return {
@@ -121,7 +127,7 @@ export function createWidgetBoard({ root, load, save, open, now = Date.now }) {
         snapshots.set(key, { data: clean, persist: keep === true, at: now() });
       }
       render();
-      void persist();
+      void persist(key);
       return { ok: true };
     },
     async restore() {
@@ -141,7 +147,7 @@ export function createWidgetBoard({ root, load, save, open, now = Date.now }) {
     },
     setEnabled(on) {
       enabled = !!on;
-      if (!enabled) { snapshots.clear(); void persist(); }
+      if (!enabled) { snapshots.clear(); for (const key of declared.keys()) void persist(key); }
       render();
     },
     flush: () => saving,
