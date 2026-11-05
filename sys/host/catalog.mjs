@@ -9,7 +9,7 @@ export const COMMAND_TIMEOUT_MS = 30000;
 // How long a call to a declared command waits for its app to open and register.
 export const LAUNCH_TIMEOUT_MS = 20000;
 // A result crosses the rail whole, so one that large is an app defect, not an answer a caller can use.
-export const MAX_RESULT_CHARS = 262144;
+export const MAX_RESULT_BYTES = 262144;
 const MAX_COMMANDS = 64;
 const NAME = /^[a-z][a-z0-9_-]*(\.[a-z][a-z0-9_-]*){0,3}$/;
 const APP_ID = /^[a-z0-9][a-z0-9_-]*$/;
@@ -219,8 +219,14 @@ export function createCatalog({ base, timeoutMs = COMMAND_TIMEOUT_MS, launchTime
     if (!call || call.appId !== appId || !entry || entry.owner !== owner) return false;
     clearTimeoutFn(call.timer); pending.delete(invokeId);
     if (outcome && typeof outcome.error === 'string') call.resolve({ ok: false, code: 'EAPP', message: outcome.error });
-    else if ((JSON.stringify(outcome?.result) || '').length > MAX_RESULT_CHARS) call.resolve({ ok: false, code: 'ETOOBIG', message: `${appId} answered with more than ${MAX_RESULT_CHARS} characters` });
-    else call.resolve({ ok: true, result: outcome ? outcome.result : undefined });
+    else {
+      // A cyclic value or a BigInt clones across postMessage and then cannot be serialized for a caller.
+      let bytes;
+      try { bytes = new TextEncoder().encode(JSON.stringify(outcome?.result) ?? '').length; }
+      catch { call.resolve({ ok: false, code: 'EAPP', message: `${appId} answered with something that is not JSON` }); return true; }
+      if (bytes > MAX_RESULT_BYTES) call.resolve({ ok: false, code: 'ETOOBIG', message: `${appId} answered with more than ${MAX_RESULT_BYTES} bytes` });
+      else call.resolve({ ok: true, result: outcome ? outcome.result : undefined });
+    }
     return true;
   }
 

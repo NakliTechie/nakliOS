@@ -54,7 +54,7 @@ function fitResult(result) {
 async function runAppCommand(apps, name, args) {
   const out = await apps.invoke(name, args);
   if (!out || !out.ok) throw new Error(out?.message || out?.code || `${name} did not answer`);
-  return out.result;
+  return fitResult(out.result);
 }
 function appTools(apps) {
   const commands = apps.tools || [];
@@ -82,7 +82,7 @@ function appTools(apps) {
     parameters: { type: 'object', properties: { name: { type: 'string' }, input: { type: 'object' } }, required: ['name'] },
     run({ name, input }) {
       if (!others.some((command) => command.name === name)) throw new Error(`no app action named ${name}; call find_app_action first`);
-      return runAppCommand(apps, name, input || {}).then(fitResult);
+      return runAppCommand(apps, name, input || {});
     },
   }];
 }

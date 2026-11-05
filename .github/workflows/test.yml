@@ -660,6 +660,8 @@ jobs:
 
       - name: Verify superseded-read and empty-result pruning (Anvil and Pi share the core)
         run: node sys/ai/test/supersede-prune.test.mjs
+      - name: Desktop widgets
+        run: node sys/host/test/widgets.test.mjs
       - name: Anvil app command tool
         run: node sys/ai/test/app-command-tool.test.mjs
 

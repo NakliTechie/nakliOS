@@ -1,4 +1,7 @@
 {
+  "widgets": [
+    { "id": "list", "title": "Latest list", "display": "list" }
+  ],
   "commands": [
     {
       "name": "list.add",

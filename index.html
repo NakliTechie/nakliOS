@@ -156,6 +156,28 @@ input{font:inherit; color:inherit;}
   position:relative; width:100%; height:100%;
   padding:24px;
 }
+/* Widgets: fixed templates over text the desktop cleaned (sys/host/widgets.mjs). */
+#widget-area{
+  position:absolute; top:calc(var(--topbar-h) + 20px); left:50%; transform:translateX(-50%);
+  width:min(260px, 34vw); display:flex; flex-direction:column; gap:10px; z-index:3;
+}
+#widget-area[hidden]{display:none;}
+.nw-widget{
+  display:flex; flex-direction:column; gap:4px; width:100%; min-width:0; padding:10px 12px;
+  text-align:left; font:inherit; color:var(--ink); cursor:pointer;
+  background:color-mix(in srgb, var(--panel) 78%, transparent);
+  backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+  border:1px solid var(--line); border-radius:12px;
+}
+.nw-widget:hover{border-color:var(--brand);}
+.nw-widget:focus-visible{outline:2px solid var(--brand); outline-offset:2px;}
+.nw-widget-title{font-size:11px; font-weight:650; color:var(--muted);}
+.nw-widget-heading{font-size:13px; font-weight:650;}
+.nw-widget-row{display:flex; gap:8px; font-size:12px; min-width:0;}
+.nw-widget-time{flex:none; color:var(--muted); font-variant-numeric:tabular-nums;}
+.nw-widget-text{min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.nw-widget-value{font-size:22px; font-weight:650;}
+.nw-widget-empty{font-size:12px; color:var(--muted);}
 .nw-icon{
   position:absolute;
   width:var(--icon-cell); height:118px;
@@ -1368,6 +1390,9 @@ body.is-mobile .nw-dock{display:none;}
   body.is-mobile #topbar{padding:0 10px; gap:8px;}
   body.is-mobile .brand{font-size:13px;}
   body.is-mobile #footer-nav .moat{display:none;}
+  body.is-mobile #widget-area{
+    position:static; transform:none; width:auto; padding:16px 16px 0;
+  }
   body.is-mobile .icon-area{
     padding:16px;
     display:grid !important;
@@ -1463,6 +1488,7 @@ body.is-mobile .nw-dock{display:none;}
   </header>
 
   <main id="icon-grid">
+    <div id="widget-area" hidden></div>
     <div class="icon-area" id="icon-area"></div>
   </main>
 
@@ -2078,6 +2104,7 @@ const state = {
   crateLocked: false,      // true: creds blob present in IDB but not yet unlocked
   // Unlock once for all tabs (2026-11-04): on by default; see crateShare below.
   crateShareUnlock: localStorage.getItem('nakliOS.crateShareUnlock') !== '0',
+  widgetsOn: localStorage.getItem('nakliOS.widgets') !== '0',
 };
 
 function isCoarse(){ return matchMedia('(pointer: coarse)').matches; }
@@ -3030,6 +3057,7 @@ function crateLock({ broadcast = true } = {}){
   state.crateLocked = true;
   crateShare.pass = null;
   if (broadcast) { try { crateShare.channel?.postMessage({ type:'lock' }); } catch (_){} }
+  void widgetBoard.then(board => board.dropMemoryOnly());
   if (typeof broadcastCapabilities === 'function') broadcastCapabilities();
   if (typeof renderTopbarChips === 'function') renderTopbarChips();
 }
@@ -3046,6 +3074,8 @@ const crateShare = { pass: null, channel: typeof BroadcastChannel === 'function'
 function crateRememberPass(pass){ crateShare.pass = state.crateShareUnlock ? String(pass) : null; }
 crateShare.channel?.addEventListener('message', async (event) => {
   const msg = event.data || {};
+  // Lock always reaches every tab; the setting covers only sharing the passphrase.
+  if (msg.type === 'lock') { if (state.crate) crateLock({ broadcast:false }); return; }
   if (!state.crateShareUnlock) return;
   if (msg.type === 'ask' && state.crate && crateShare.pass) {
     crateShare.channel.postMessage({ type:'share', pass:crateShare.pass });
@@ -3054,8 +3084,6 @@ crateShare.channel?.addEventListener('message', async (event) => {
       const blob = await crateLoadCredsBlob();
       if (blob && !state.crate) await crateUnlock(blob, msg.pass);
     } catch (_){ /* a different or changed Crate: stay locked, the person can unlock by hand */ }
-  } else if (msg.type === 'lock' && state.crate) {
-    crateLock({ broadcast:false });
   }
 });
 
@@ -8761,13 +8789,17 @@ window.addEventListener('message', async e => {
       if (out.ok) reply.result = out; else reply.error = out.error;
     } catch (error){ reply.error = String(error?.message || error); }
     try { source.postMessage(reply, replyTo); } catch(_){}
+  } else if (msg.type === 'naklios:widgets:update' && typeof msg.id === 'string'){
+    const keep = msg.persist !== false;
+    // A memory-only snapshot that lands after Crate locked must not bring the card back.
+    if (state.widgetsOn && (keep || !state.crateLocked)) (await widgetBoard).update(getAppId(), msg.id, msg.data, { persist:keep });
   } else if (msg.type === 'naklios:commands:search' || msg.type === 'naklios:commands:call'){
     // A system app (Anvil) reaching other apps' commands: its own face, its own name in History.
     const appId = getAppId(); const source = e.source;
     const reply = { type:'naklios:commands:reply', requestId:msg.requestId };
     try {
       if (!aiAppOwnsEgress(appId)) throw new Error('Only system apps may call app commands');
-      reply.result = msg.type === 'naklios:commands:search' ? await searchAppCommands(msg.query) : await callAppCommand(appId, msg.name, msg.input);
+      reply.result = msg.type === 'naklios:commands:search' ? await searchAppCommands(msg.query) : await callAppCommand(appId, source, msg.name, msg.input);
     } catch (error){ reply.error = String(error?.message || error); }
     try { source.postMessage(reply, replyTo); } catch(_){}
   } else if (msg.type === 'naklios:commands:result' && typeof msg.invokeId === 'string'){
@@ -9880,6 +9912,10 @@ function openSettings(section){
       <input type="checkbox" id="crate-share" ${shareChecked} />
       <span>Unlock once for all tabs (the passphrase stays in memory; closing the last tab or Lock forgets it)</span>
     </label>
+    <label class="nw-fs-blurb" style="display:flex; gap:6px; align-items:center; margin-top:6px;">
+      <input type="checkbox" id="widgets-on" ${state.widgetsOn ? 'checked' : ''} />
+      <span>Show app widgets on the desktop (a copy of what they show stays in this browser; from Crate, only until it locks)</span>
+    </label>
   `;
 
   // Per-app storage (2026-09-24). The first-use dialog promised "You can revoke or switch backends
@@ -10284,6 +10320,11 @@ function openSettings(section){
   });
   wrap.querySelector('#crate-share')?.addEventListener('change', (e) => {
     setCrateShareUnlock(e.target.checked);
+  });
+  wrap.querySelector('#widgets-on')?.addEventListener('change', (e) => {
+    state.widgetsOn = e.target.checked;
+    localStorage.setItem('nakliOS.widgets', e.target.checked ? '1' : '0');
+    void widgetBoard.then(board => board.setEnabled(e.target.checked));
   });
 
   // --- AI model/provider handlers ---
@@ -13521,7 +13562,7 @@ const appCommandWriteConsent = new Set();
 const appCommandFaces = new Map();
 // The SDK's call waits 300 s and the app may take 50 s more to open and answer, so a later Allow must not run the call.
 const COMMAND_CONSENT_MS = 240000;
-async function runAppCommandFor(callerId, name, input, ask){
+async function runAppCommandFor(callerId, name, input, ask, stillWanted = () => true){
   const [{ catalog, faceFor, opLog }] = await Promise.all([hostAgentReady, appCommandsDeclared]);
   const command = catalog.describeCommand(name);
   const target = command?.annotations?.app;
@@ -13531,7 +13572,8 @@ async function runAppCommandFor(callerId, name, input, ask){
     await opLog.append({ actor:callerId, caller:callerId, command:name, args:input, status:'EDENIED' });
     return { ok:false, code:'EDENIED', message:`the person did not allow changes to ${label(target)}` };
   };
-  const answered = async question => { const asked = Date.now(); return (await question()) && Date.now() - asked < COMMAND_CONSENT_MS; };
+  // A late Allow, or one given after the caller's window closed, runs nothing.
+  const answered = async question => { const asked = Date.now(); return (await question()) && Date.now() - asked < COMMAND_CONSENT_MS && stillWanted(); };
   const key = `${callerId}:${target}`;
   if (command.scope === 'app:write' && !command.destructive && !appCommandWriteConsent.has(key)){
     if (!(await answered(() => ask(target, label(target))))) return refused();
@@ -13547,19 +13589,59 @@ async function runAppCommandFor(callerId, name, input, ask){
   face.reject(out.proposalId);
   return refused();
 }
-function callAppCommand(callerId, name, input){
+function callAppCommand(callerId, source, name, input){
   return runAppCommandFor(callerId, name, input, (appId, label) => {
     const caller = APPS.find(a => a.id === callerId)?.name || callerId;
     return nakliosConfirm(`Let ${caller} change ${label}? It asks again on your next visit.`, { title:'Allow this change?', okLabel:'Allow' });
-  });
+  }, () => openWindows[callerId]?.querySelector('iframe')?.contentWindow === source);
 }
+const appManifests = new Map();
 const appCommandsDeclared = hostAgentReady.then(({ catalog }) => Promise.all(APPS.filter(app => app.commands).map(async app => {
   try {
     const manifest = await (await fetch(app.commands)).json();
+    appManifests.set(app.id, manifest);
     const out = catalog.declare(app.id, manifest.commands, launchAppForCommand);
     if (!out.ok) console.warn(`[commands] ${app.id}: ${out.error}`);
   } catch (error) { console.warn(`[commands] ${app.id}: manifest could not load`, error); }
 })));
+// Widgets (common rail step 3b): the saved snapshots sit in this browser's private storage, so the cards show with
+// every app closed and no window opens at boot.
+async function widgetDir(){ return (await navigator.storage.getDirectory()).getDirectoryHandle('nakli-widgets', { create:true }); }
+const widgetFile = key => `${key.replace('/', '__')}.json`;
+const widgetBoard = appCommandsDeclared.then(async () => {
+  const { createWidgetBoard } = await import('./sys/host/widgets.mjs');
+  const board = createWidgetBoard({
+    root:document.getElementById('widget-area'),
+    async load(){
+      const dir = await widgetDir(); const all = {};
+      for await (const [name, handle] of dir.entries()){
+        if (handle.kind === 'file') try { all[name.replace(/\.json$/, '').replace('__', '/')] = JSON.parse(await (await handle.getFile()).text()); } catch (_){}
+      }
+      return all;
+    },
+    async save(key, value){
+      const dir = await widgetDir();
+      if (value === null) { await dir.removeEntry(widgetFile(key)).catch(() => {}); return; }
+      const writable = await (await dir.getFileHandle(widgetFile(key), { create:true })).createWritable();
+      await writable.write(JSON.stringify(value)); await writable.close();
+    },
+    open(appId){ const app = APPS.find(a => a.id === appId); if (app) openApp(app); },
+  });
+  for (const [appId, manifest] of appManifests){
+    const out = board.declare(appId, APPS.find(a => a.id === appId)?.name || appId, manifest.widgets);
+    if (!out.ok) console.warn(`[widgets] ${appId}: ${out.error}`);
+  }
+  board.setEnabled(state.widgetsOn);
+  if (state.widgetsOn) await board.restore();
+  return board;
+});
+widgetBoard.catch(error => console.warn('[widgets] could not start', error));
+// The switch applies in every tab, so a tab left open cannot write back what another tab removed.
+addEventListener('storage', event => {
+  if (event.key !== 'nakliOS.widgets') return;
+  state.widgetsOn = event.newValue !== '0';
+  void widgetBoard.then(async board => { board.setEnabled(state.widgetsOn); if (state.widgetsOn) await board.restore(); });
+});
 
 </script>
 </body>

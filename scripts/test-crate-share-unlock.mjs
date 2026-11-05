@@ -38,6 +38,7 @@ function tab(name, { unlocked = false, share = true } = {}) {
       state.crate = { close() {} }; state.crateLocked = false; ctx.crateRememberPass(pass);
     },
   };
+  ctx.widgetBoard = Promise.resolve({ dropMemoryOnly() {} });
   vm.createContext(ctx);
   vm.runInContext(`${block}\nthis.crateLock = crateLock; this.crateShare = crateShare; this.crateRememberPass = crateRememberPass;`, ctx);
   if (unlocked) ctx.crateRememberPass(RIGHT);
