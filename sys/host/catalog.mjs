@@ -8,6 +8,8 @@ export const APP_SCOPES = Object.freeze({ read: 'app:read', write: 'app:write', 
 export const COMMAND_TIMEOUT_MS = 30000;
 // How long a call to a declared command waits for its app to open and register.
 export const LAUNCH_TIMEOUT_MS = 20000;
+// A result crosses the rail whole, so one that large is an app defect, not an answer a caller can use.
+export const MAX_RESULT_CHARS = 262144;
 const MAX_COMMANDS = 64;
 const NAME = /^[a-z][a-z0-9_-]*(\.[a-z][a-z0-9_-]*){0,3}$/;
 const APP_ID = /^[a-z0-9][a-z0-9_-]*$/;
@@ -153,7 +155,7 @@ export function createCatalog({ base, timeoutMs = COMMAND_TIMEOUT_MS, launchTime
       inputSchema,
       returnSchema: { type: 'object' },
       annotations: { readOnlyHint: def.scope === 'read', app: appId },
-      run(input) {
+      run(input, ctx) {
         const problem = validateInput(inputSchema, input);
         if (problem) return Promise.resolve({ ok: false, code: 'EINVAL', message: problem });
         if (apps.get(appId) !== entry) return Promise.resolve({ ok: false, code: 'EGONE', message: `${appId} is not open` });
@@ -161,10 +163,11 @@ export function createCatalog({ base, timeoutMs = COMMAND_TIMEOUT_MS, launchTime
         return new Promise(resolve => {
           const timer = setTimeoutFn(() => {
             pending.delete(invokeId);
-            resolve({ ok: false, code: 'ETIMEOUT', message: `${name} did not answer within ${timeoutMs / 1000} s` });
+            try { entry.dispatch({ invokeId, cancel: true }); } catch { /* the window has gone */ }
+            resolve({ ok: false, code: 'ETIMEOUT', message: `${name} did not answer within ${timeoutMs / 1000} s; it was told to stop, but work already started may finish` });
           }, timeoutMs);
           pending.set(invokeId, { resolve, timer, appId });
-          try { entry.dispatch({ invokeId, name: def.name, args: structuredClone(input) }); }
+          try { entry.dispatch({ invokeId, name: def.name, args: structuredClone(input), caller: ctx?.caller ?? null }); }
           catch (error) {
             clearTimeoutFn(timer); pending.delete(invokeId);
             resolve({ ok: false, code: 'EGONE', message: String(error?.message || error) });
@@ -216,6 +219,7 @@ export function createCatalog({ base, timeoutMs = COMMAND_TIMEOUT_MS, launchTime
     if (!call || call.appId !== appId || !entry || entry.owner !== owner) return false;
     clearTimeoutFn(call.timer); pending.delete(invokeId);
     if (outcome && typeof outcome.error === 'string') call.resolve({ ok: false, code: 'EAPP', message: outcome.error });
+    else if ((JSON.stringify(outcome?.result) || '').length > MAX_RESULT_CHARS) call.resolve({ ok: false, code: 'ETOOBIG', message: `${appId} answered with more than ${MAX_RESULT_CHARS} characters` });
     else call.resolve({ ok: true, result: outcome ? outcome.result : undefined });
     return true;
   }
@@ -236,8 +240,11 @@ export function createCatalog({ base, timeoutMs = COMMAND_TIMEOUT_MS, launchTime
     get commands() { return Object.freeze([...base.commands, ...appCommands()]); },
     list: () => [...base.list(), ...appCommands().map(project)],
     searchCommands(query) {
-      const q = String(query || '').trim().toLowerCase();
-      const mine = appCommands().filter(c => !q || `${c.name}\n${c.description}`.toLowerCase().includes(q)).map(project);
+      // Every word counts on its own, so "add kanzen card" finds kanzen.card.add; the best match comes first.
+      const words = String(query || '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+      const score = c => words.filter(word => `${c.name}\n${c.description}`.toLowerCase().includes(word)).length;
+      const mine = appCommands().map(c => [score(c), c]).filter(([s]) => !words.length || s > 0)
+        .sort((a, b) => b[0] - a[0]).map(([, c]) => project(c));
       return [...base.searchCommands(query), ...mine];
     },
     describeCommand: name => { const c = find(name); return c ? project(c) : base.describeCommand(name); },

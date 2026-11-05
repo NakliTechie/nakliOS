@@ -36,10 +36,27 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
   const host = await readFile(new URL('../index.html', import.meta.url), 'utf8');
   const sdk = await readFile(new URL('../sdk/naklios.js', import.meta.url), 'utf8');
   assert.match(host, /if \(!aiAppOwnsEgress\(appId\)\) throw new Error\('Only system apps may call app commands'\)/, 'other apps cannot call commands');
-  assert.match(host, /faceFor\(callerId, \['app:read', 'app:write'\]\)\.invoke\(name, input\)/, 'a caller runs on its own face, with app scopes only');
+  assert.match(host, /appCommandFaces\.set\(callerId, faceFor\(callerId, \['app:read', 'app:write'\]\)\)/, 'a caller runs on its own face, with app scopes only');
+  assert.match(host, /return face\.accept\(out\.proposalId\)/, 'a destructive command runs only after the person allows it');
+  assert.match(host, /invoke:\(name, args\) => runAppCommandFor\('voice-assistant'/, 'the assistant uses the same path');
   assert.match(sdk, /naklios:commands:search/); assert.match(sdk, /naklios:commands:call/);
   assert.deepEqual(['stickies.add', 'stickies.update', 'stickies.delete'].filter(n => HOST_COMMANDS.some(row => row[0] === n)).length, 3, 'stickies have their own names');
   assert.ok(!HOST_COMMANDS.some(row => /^notes\./.test(row[0])), 'the Notes app owns notes.*');
+}
+
+// ── cancellation, caller, size, search ──
+{
+  let fire; const catalog = createCatalog({ base: base(), timeoutMs: 5, setTimeoutFn: fn => { fire = fn; return 1; }, clearTimeoutFn: () => {} });
+  const app = standIn(catalog);
+  const late = catalog.invokeCommand('standin.greet', { name: 'x' }, { caller: 'anvil' });
+  assert.equal(app.calls.at(-1).caller, 'anvil', 'the trusted caller reaches the app');
+  fire();
+  assert.equal((await late).code, 'ETIMEOUT');
+  assert.equal(app.calls.at(-1).cancel, true, 'a timed-out call tells the app to stop');
+  const big = catalog.invokeCommand('standin.greet', { name: 'y' });
+  catalog.settle('standin', app.owner, app.calls.at(-1).invokeId, { result: 'x'.repeat(300000) });
+  assert.equal((await big).code, 'ETOOBIG');
+  assert.equal(catalog.searchCommands('add list item').find(c => c.annotations?.app)?.name, 'standin.list.add', 'each word counts');
 }
 
 // ── catalog rules ──

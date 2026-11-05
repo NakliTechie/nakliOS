@@ -45,6 +45,12 @@ const APP_TOOL_NAMES = {
   'notes.list.add': 'add_to_list', 'notes.list.read': 'read_list', 'notes.note.create': 'create_note',
   'calendar.events.create': 'create_calendar_event', 'calendar.events.list': 'get_calendar_events',
 };
+// A small model reads a tool result whole, so a large one is cut with a note saying so.
+const RESULT_MAX_CHARS = 4000;
+function fitResult(result) {
+  const text = JSON.stringify(result);
+  return text && text.length > RESULT_MAX_CHARS ? `${text.slice(0, RESULT_MAX_CHARS)} … (cut; ask for a smaller part)` : result;
+}
 async function runAppCommand(apps, name, args) {
   const out = await apps.invoke(name, args);
   if (!out || !out.ok) throw new Error(out?.message || out?.code || `${name} did not answer`);
@@ -76,7 +82,7 @@ function appTools(apps) {
     parameters: { type: 'object', properties: { name: { type: 'string' }, input: { type: 'object' } }, required: ['name'] },
     run({ name, input }) {
       if (!others.some((command) => command.name === name)) throw new Error(`no app action named ${name}; call find_app_action first`);
-      return runAppCommand(apps, name, input || {});
+      return runAppCommand(apps, name, input || {}).then(fitResult);
     },
   }];
 }

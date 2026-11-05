@@ -8756,7 +8756,7 @@ window.addEventListener('message', async e => {
     try {
       const { catalog } = await hostAgentReady;
       const out = catalog.register(appId, source, msg.commands, call => {
-        source.postMessage({ type:'naklios:commands:invoke', ...call }, replyTo);
+        source.postMessage({ type:call.cancel ? 'naklios:commands:cancel' : 'naklios:commands:invoke', ...call }, replyTo);
       });
       if (out.ok) reply.result = out; else reply.error = out.error;
     } catch (error){ reply.error = String(error?.message || error); }
@@ -13384,7 +13384,7 @@ if (document.readyState === 'loading'){
 let voiceAssistant = null;
 async function voiceAssistantReady(){
   if (voiceAssistant) return voiceAssistant;
-  const [{ mountVoiceAssistant }, { registry, catalog, faceFor }] = await Promise.all([import('./sys/voice/overlay.mjs'), hostAgentReady, appCommandsDeclared]);
+  const [{ mountVoiceAssistant }, { registry, catalog }] = await Promise.all([import('./sys/voice/overlay.mjs'), hostAgentReady, appCommandsDeclared]);
   const call = async (name, input) => {
     const out = await registry.invokeCommand(name, input, { caller:'voice-assistant' });
     if (!out?.ok) throw new Error(out?.message || out?.code || `${name} failed`);
@@ -13392,24 +13392,11 @@ async function voiceAssistantReady(){
   };
   // App commands (common rail): the assistant calls Notes, Calendar and any app with a commands.json through
   // the catalog, on its own face with only the app scopes. A change asks the person once per app per visit.
-  const face = faceFor('voice-assistant', ['app:read', 'app:write']);
-  const allowedWrites = new Set();
   const apps = {
     tools:catalog.toolSchemas().filter(t => APPS.find(a => a.id === t.annotations?.app)?.commands)
       .map(({ name, description, inputSchema }) => ({ name, description, inputSchema })),
-    async invoke(name, args){
-      const command = catalog.describeCommand(name);
-      const appId = command?.annotations?.app;
-      if (command?.scope === 'app:write' && !allowedWrites.has(appId)){
-        const label = APPS.find(a => a.id === appId)?.name || appId;
-        if (!(await voiceAssistant.consent(`app-write:${appId}`, `Let the assistant change ${label}? It asks again on your next visit.`, { remember:false })))
-          return { ok:false, code:'EDENIED', message:`the person did not allow changes to ${label}` };
-        allowedWrites.add(appId);
-      }
-      const out = await face.invoke(name, args);
-      if (out?.staged) return { ok:false, code:'ESTAGED', message:'waiting for the person to accept it in the review queue' };
-      return out;
-    },
+    invoke:(name, args) => runAppCommandFor('voice-assistant', name, args, (appId, label) =>
+      voiceAssistant.consent(`app-write:${appId}`, `Let the assistant change ${label}? It asks again on your next visit.`, { remember:false })),
   };
   voiceAssistant ||= mountVoiceAssistant({ root:document.body, host:{
     listApps:() => call('apps.list', {}),
@@ -13528,21 +13515,43 @@ async function searchAppCommands(query){
   return catalog.searchCommands(query).filter(c => c.annotations?.app).slice(0, 20)
     .map(({ name, description, inputSchema, destructive }) => ({ name, description, input:inputSchema, destructive }));
 }
-// A change asks the person once per caller, per app, per visit, as the voice assistant does.
+// One path for every caller of app commands, on the caller's own face. A change asks the person once per caller, per
+// app, per visit; a destructive command asks every time, showing what it would do. A refusal is written to History.
 const appCommandWriteConsent = new Set();
-async function callAppCommand(callerId, name, input){
-  const [{ catalog, faceFor }] = await Promise.all([hostAgentReady, appCommandsDeclared]);
+const appCommandFaces = new Map();
+// The SDK's call waits 300 s and the app may take 50 s more to open and answer, so a later Allow must not run the call.
+const COMMAND_CONSENT_MS = 240000;
+async function runAppCommandFor(callerId, name, input, ask){
+  const [{ catalog, faceFor, opLog }] = await Promise.all([hostAgentReady, appCommandsDeclared]);
   const command = catalog.describeCommand(name);
   const target = command?.annotations?.app;
   if (!target) return { ok:false, code:'ENOENT', message:`no app command named ${name}` };
+  const label = id => APPS.find(a => a.id === id)?.name || id;
+  const refused = async () => {
+    await opLog.append({ actor:callerId, caller:callerId, command:name, args:input, status:'EDENIED' });
+    return { ok:false, code:'EDENIED', message:`the person did not allow changes to ${label(target)}` };
+  };
+  const answered = async question => { const asked = Date.now(); return (await question()) && Date.now() - asked < COMMAND_CONSENT_MS; };
   const key = `${callerId}:${target}`;
-  if (command.scope === 'app:write' && !appCommandWriteConsent.has(key)){
-    const label = id => APPS.find(a => a.id === id)?.name || id;
-    if (!(await nakliosConfirm(`Let ${label(callerId)} change ${label(target)}? It asks again on your next visit.`, { title:'Allow this change?', okLabel:'Allow' })))
-      return { ok:false, code:'EDENIED', message:`the person did not allow changes to ${label(target)}` };
+  if (command.scope === 'app:write' && !command.destructive && !appCommandWriteConsent.has(key)){
+    if (!(await answered(() => ask(target, label(target))))) return refused();
     appCommandWriteConsent.add(key);
   }
-  return faceFor(callerId, ['app:read', 'app:write']).invoke(name, input);
+  if (!appCommandFaces.has(callerId)) appCommandFaces.set(callerId, faceFor(callerId, ['app:read', 'app:write']));
+  const face = appCommandFaces.get(callerId);
+  const out = await face.invoke(name, input);
+  if (!out?.staged) return out;
+  const detail = JSON.stringify(input ?? {}).slice(0, 300);
+  if (await answered(() => nakliosConfirm(`${label(callerId)} wants to run this in ${label(target)}: ${command.description} ${detail}`, { title:'This change is hard to undo', okLabel:'Allow once', danger:true })))
+    return face.accept(out.proposalId);
+  face.reject(out.proposalId);
+  return refused();
+}
+function callAppCommand(callerId, name, input){
+  return runAppCommandFor(callerId, name, input, (appId, label) => {
+    const caller = APPS.find(a => a.id === callerId)?.name || callerId;
+    return nakliosConfirm(`Let ${caller} change ${label}? It asks again on your next visit.`, { title:'Allow this change?', okLabel:'Allow' });
+  });
 }
 const appCommandsDeclared = hostAgentReady.then(({ catalog }) => Promise.all(APPS.filter(app => app.commands).map(async app => {
   try {
