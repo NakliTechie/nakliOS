@@ -487,6 +487,7 @@
   import { readinessLine } from '../../sys/ai/agent-tools.mjs';
   import { asStored } from '../../sys/ai/content-token.mjs';
   import { HOOKS_FILE, HOOK_LIMITS, parseHooks } from '../../sys/ai/hooks.mjs';
+  import { runAppCommand } from '../../sys/ai/app-command-tool.mjs';
   import { systemPrompt as assembledSystemPrompt, systemMessage, gateNote as assembledGateNote, runToolset, runReadiness, isSimpleAsk, synthesizeTool, driveRun, RUN_BUDGET, loadHooks, preHookReply, postHookNotes, contextMessage } from '../../sys/ai/run-assembly.mjs';
   import { gateAction, gateEvent, actionClasses, guardCriticalShellInvocation } from '../../sys/ai/action-gate.mjs';
   import { applyPolicy, grant as policyGrant, revoke as policyRevoke, policyRows, normalisePolicy, POLICY_HINT } from '../../sys/ai/action-policy.mjs';
@@ -3753,6 +3754,8 @@
         const names=Object.keys(skillMap).filter(n=>INJECTED_STATUSES.includes(skillStatus[n]||'active'));
         return 'No skill named "'+name+'".'+(names.length?' Available: '+names.join(', ')+'.':' This project has no skills.');
       }
+      // Common rail: other apps' commands, through the host catalog.
+      if(nm==='app_command') return runAppCommand(ar, nak && nak.experimental_commands);
       // History (B2): search and read this project's own run records — the retrieval half
       // of the substrate. Read-only, offered in every mode. Reads persisted records; the
       // in-flight run is searchable only after it is saved.

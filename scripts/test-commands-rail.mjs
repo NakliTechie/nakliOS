@@ -31,6 +31,34 @@ const answer = (catalog, app, value) => {
 const plain = value => JSON.parse(JSON.stringify(value));
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
+// ── system apps calling other apps ──
+{
+  const host = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  const sdk = await readFile(new URL('../sdk/naklios.js', import.meta.url), 'utf8');
+  assert.match(host, /if \(!aiAppOwnsEgress\(appId\)\) throw new Error\('Only system apps may call app commands'\)/, 'other apps cannot call commands');
+  assert.match(host, /appCommandFaces\.set\(callerId, faceFor\(callerId, \['app:read', 'app:write'\]\)\)/, 'a caller runs on its own face, with app scopes only');
+  assert.match(host, /return face\.accept\(out\.proposalId\)/, 'a destructive command runs only after the person allows it');
+  assert.match(host, /invoke:\(name, args\) => runAppCommandFor\('voice-assistant'/, 'the assistant uses the same path');
+  assert.match(sdk, /naklios:commands:search/); assert.match(sdk, /naklios:commands:call/);
+  assert.deepEqual(['stickies.add', 'stickies.update', 'stickies.delete'].filter(n => HOST_COMMANDS.some(row => row[0] === n)).length, 3, 'stickies have their own names');
+  assert.ok(!HOST_COMMANDS.some(row => /^notes\./.test(row[0])), 'the Notes app owns notes.*');
+}
+
+// ── cancellation, caller, size, search ──
+{
+  let fire; const catalog = createCatalog({ base: base(), timeoutMs: 5, setTimeoutFn: fn => { fire = fn; return 1; }, clearTimeoutFn: () => {} });
+  const app = standIn(catalog);
+  const late = catalog.invokeCommand('standin.greet', { name: 'x' }, { caller: 'anvil' });
+  assert.equal(app.calls.at(-1).caller, 'anvil', 'the trusted caller reaches the app');
+  fire();
+  assert.equal((await late).code, 'ETIMEOUT');
+  assert.equal(app.calls.at(-1).cancel, true, 'a timed-out call tells the app to stop');
+  const big = catalog.invokeCommand('standin.greet', { name: 'y' });
+  catalog.settle('standin', app.owner, app.calls.at(-1).invokeId, { result: 'x'.repeat(300000) });
+  assert.equal((await big).code, 'ETOOBIG');
+  assert.equal(catalog.searchCommands('add list item').find(c => c.annotations?.app)?.name, 'standin.list.add', 'each word counts');
+}
+
 // ── catalog rules ──
 {
   const catalog = createCatalog({ base: base() });
@@ -163,7 +191,7 @@ function sdkFrame({ hosted = true } = {}) {
   const parent = { postMessage: message => sent.push(message) };
   const window = { location: { search: '?naklios' }, parent, addEventListener: (type, fn) => { if (type === 'message') receive = fn; } };
   if (!hosted) window.parent = window;
-  vm.runInNewContext(sdk, { window, document: {}, URL, URLSearchParams, Map, Set, Promise, Date, Error, Object, setTimeout: () => 0, clearTimeout: () => {} });
+  vm.runInNewContext(sdk, { window, document: {}, URL, URLSearchParams, AbortController, Map, Set, Promise, Date, Error, Object, setTimeout: () => 0, clearTimeout: () => {} });
   // The SDK runs in its own realm; plain() brings its values over for deep comparison.
   return { api: window.naklios, sent, send: data => receive({ origin: 'https://naklios.dev', data, source: parent }) };
 }
@@ -186,6 +214,8 @@ function sdkFrame({ hosted = true } = {}) {
   app.send({ type: 'naklios:commands:invoke', invokeId: 'c1', name: 'greet', args: { name: 'Om' } });
   await tick(); await tick();
   assert.deepEqual(plain(app.sent.find(m => m.type === 'naklios:commands:result' && m.invokeId === 'c1')), { type: 'naklios:commands:result', invokeId: 'c1', result: 'Hello, Om' });
+  app.send({ type: 'naklios:commands:invoke', invokeId: 'c0', name: 'greet', args: { name: 'Om' }, caller: 'anvil' });
+  await tick(); await tick();
   app.send({ type: 'naklios:commands:invoke', invokeId: 'c2', name: 'boom', args: {} });
   await tick(); await tick();
   assert.equal(app.sent.find(m => m.invokeId === 'c2').error, 'nope', 'a throw comes back as the error');

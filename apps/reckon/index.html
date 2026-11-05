@@ -5580,7 +5580,86 @@ postMessage({ event: 'boot', payload: { ok: true } });
      vendor/naklios.js by scripts/inline-sync.mjs. -->
 <script>
 /*__RK_VENDOR_BEGIN vendor/naklios.js*/
-/*! NakliOS cooperative SDK, vendored from nakliOS/sdk/naklios.js. License: MIT. */
+/*!
+ * naklios.js — cooperative SDK for apps hosted inside NakliOS (Immersive mode)
+ *
+ * Drop this file into your app's <head> or copy its contents inline. The
+ * surface is a no-op when the app loads standalone (window.parent === window),
+ * so the same source works in both contexts:
+ *
+ * Vendoring: if your app needs a capability an iframe sandbox blocks — a folder
+ * picker above all — the supported route is a manifest-declared same-origin
+ * MIRROR under naklios.dev/apps/<id>/, not a hand-copied snapshot. See
+ * docs/app-loading.md. Your repo stays authoritative; the mirror is a pinned,
+ * hash-checked deployment artifact refreshed by CI.
+ *
+ *   <script src="https://naklios.dev/sdk/naklios.js"><\/script>
+ *   <script>
+ *     naklios.ready();                          // signal "I'm loaded"
+ *     naklios.title('My app — unlocked');       // update host window title
+ *     naklios.close();                          // self-close from a Done button
+ *     naklios.theme.onChange(t => paint(t));    // restyle on host theme change
+ *
+ *     // Filesystem (when hosted with a connected Folder or Crate):
+ *     if (naklios.capabilities.fs){
+ *       await naklios.fs.write('vault.json', JSON.stringify(vault));
+ *       const data = await naklios.fs.read('vault.json');
+ *       const stop = await naklios.fs.subscribe('', event => refresh(event));
+ *     }
+ *
+ *     // Shared host inference (when the user grants this app access):
+ *     if (naklios.capabilities.ai) {
+ *       const stream = await naklios.ai.chat.completions.create({
+ *         messages: [{ role: 'user', content: 'Summarise this note.' }],
+ *         stream: true,
+ *       });
+ *       for await (const chunk of stream) {
+ *         render(chunk.choices[0].delta.content || '');
+ *       }
+ *
+ *       const image = await naklios.ai.images.generate({
+ *         prompt: 'A risograph poster of a city after monsoon rain',
+ *         size: '1024x1024',
+ *         signal: abortController.signal,
+ *       });
+ *       preview.src = image.data[0].b64_json
+ *         ? 'data:image/png;base64,' + image.data[0].b64_json
+ *         : image.data[0].url;
+ *     }
+ *   <\/script>
+ *
+ * naklios.capabilities.hosted is true only when running inside NakliOS.
+ * naklios.capabilities.fs is true when hosted storage is available to the app.
+ * naklios.capabilities.fsBackends lists connected Folder/Crate choices, and
+ * naklios.capabilities.fsBackend is the app's current binding (or null).
+ * Apps may call naklios.fs.useBackend(id); NakliOS confirms the change.
+ * Listen for changes via naklios.onCapabilitiesChange(cb).
+ *
+ * Paths in fs methods are relative to apps/<your-app-id>/ on the selected backend.
+ * Traversal (../) is blocked at the host.
+ *
+ * Single source of truth: https://naklios.dev/sdk/naklios.js
+ *   (repo: NakliTechie/nakliOS → sdk/naklios.js)
+ * Vendor it inline in each app to keep the no-network-dependency ethos.
+ *
+ * @naklios-sdk-version 2
+ *   Vendored copies are spliced between two HTML comment markers and kept fresh
+ *   by each app's own CI — never hand-edited. See docs/app-contract.md "Vendoring
+ *   the SDK" and plan/sdk-vendoring.md. In the app's HTML, an "naklios-sdk:begin"
+ *   comment (carrying ver= and sha256=) and an "naklios-sdk:end" comment bracket
+ *   the inlined <script>; scripts/vendor-naklios-sdk.mjs rewrites everything
+ *   between them (escaping this file's closing script tags). The literal marker
+ *   syntax is only shown in the docs — never here, so it can't be mistaken for a
+ *   real marker once this header is itself inlined.
+ *
+ *   v2 = approved-parent origin + ?naklios flag (no-referrer-safe). v1 (pre-2026-08)
+ *   posted to '*' and skipped inbound-origin checks — a v1 copy is a drift bug.
+ *
+ *   New public members ship as `experimental_<name>` with a line in docs/sdk-api-audit.md
+ *   naming what stabilizes them; stabilizing drops the prefix in one fleet change
+ *   (this file, the host, every vendored copy). fs.autosave was the first, 2026-09-24.
+ * License: MIT.
+ */
 (function () {
   // A real host FRAME is what the transports talk to (postMessage to parent), so
   // it gates every send/rpc — `inNakliOS`. The `?naklios` URL flag is the host's
@@ -5593,13 +5672,27 @@ postMessage({ event: 'boot', payload: { ok: true } });
   try { inNakliOS = !!(window.parent && window.parent !== window); } catch (_) {}
   var naklFlag = false;
   try { naklFlag = new URLSearchParams(window.location.search).has('naklios'); } catch (_) {}
-  // Targeted postMessage origin, LEARNED on first contact — the NakliOS shell embeds
+  // Targeted postMessage origin, pinned only after independently approved contact — the NakliOS shell embeds
   // apps with referrerpolicy="no-referrer", so document.referrer is empty and can't
   // be used to verify the parent (that path breaks hosted detection — it is the
   // Lorewell iframe bug). Instead the first `naklios:*` message from window.parent
-  // locks trustedParentOrigin, and every later send targets that origin (not '*').
-  // The only pre-lock send is `ready`, which carries no app data.
+  // pins an independently approved host origin, and every later send targets that origin (not '*').
+  // Before verification, only content-free ready and capabilities-request messages leave.
   var trustedParentOrigin = null;
+  var queuedHostMessages = [];
+  var queuedHostBytes = 0;
+  // Verify independently of the message and URL flags supplied by a parent.
+  // Inline copies retain the same production host policy; previews are limited
+  // to this project's Workers hostname. Referrers are deliberately unnecessary.
+  function approvedParentOrigin(origin) {
+    try {
+      var url = new URL(origin);
+      if (url.origin !== origin) return false;
+      if (url.protocol === 'https:' && !url.port && (url.hostname === 'naklios.dev' ||
+          /^(?:[a-z0-9-]+-)?nakli-dev\.chirag-patnaik\.workers\.dev$/.test(url.hostname))) return true;
+      return url.protocol === 'http:' && (url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]');
+    } catch (_) { return false; }
+  }
 
   var currentTheme = null;
   var themeListeners = new Set();
@@ -5616,6 +5709,7 @@ postMessage({ event: 'boot', payload: { ok: true } });
     fsBackends: [],
     fsBackend: null,
     fsBoundedReads: false,
+    fsRangeReads: false,
     // system: this app is a same-origin system app (non-third-party).
     // sysFs: system-scoped filesystem is available — the whole store, not just
     // apps/<your-id>/. Only true for system apps with a connected backend.
@@ -5651,25 +5745,67 @@ postMessage({ event: 'boot', payload: { ok: true } });
   var aiImageRequests = new Map(); // requestId → image request state
   var ragSearches = new Map();     // requestId → semantic-search progress callback
   var fileOpenListeners = new Set(); // exact-file grants delivered by the host
+  var commandHandlers = new Map(); // command name → handler (common rail step 1)
+  var commandCalls = new Map(); // invokeId → AbortController of a running handler
   var pendingFileGrants = [];
+  var fileEditListeners = new Set();
+  var pendingFileEdits = [];
+  var acceptedFileEdits = new Map();
+  var acceptingFileEdits = new Map();
+
+  function deliverFileEdit(proposal) {
+    var id=String(proposal.deliveryId||'');
+    var ack=function(){if(id)send('naklios:file:edit-ack',{token:proposal.token,deliveryId:id});};
+    if(id&&acceptedFileEdits.get(id)===proposal.token){ack();return;}
+    if(id&&acceptingFileEdits.has(id))return;
+    if(!fileEditListeners.size){
+      if(pendingFileEdits.length<16&&!pendingFileEdits.some(function(p){return p.token===proposal.token&&p.deliveryId===proposal.deliveryId;}))pendingFileEdits.push(proposal);
+      return;
+    }
+    var work=Promise.all(Array.from(fileEditListeners).map(function(cb){
+      try{return Promise.resolve(cb(proposal)).catch(function(){return false;});}catch(_){return Promise.resolve(false);}
+    })).then(function(results){
+      if(results.some(function(value){return value===true;})){
+        if(id){acceptedFileEdits.set(id,proposal.token);while(acceptedFileEdits.size>16)acceptedFileEdits.delete(acceptedFileEdits.keys().next().value);}
+        ack();
+      }
+    }).finally(function(){if(id)acceptingFileEdits.delete(id);});
+    if(id)acceptingFileEdits.set(id,work);
+  }
   var reviewDecisionHandler = null;
   var appliedReviewIds = new Set();
   var applyingReviewIds = new Map();
 
   function send(type, data) {
     if (!inNakliOS) return;
+    if (!trustedParentOrigin && type !== 'naklios:ready' && type !== 'naklios:capabilities-request') {
+      try {
+        var size = JSON.stringify(data || {}).length;
+        if (queuedHostMessages.length >= 32 || queuedHostBytes + size > 4 * 1024 * 1024) return false;
+        queuedHostMessages.push({ type: type, data: data }); queuedHostBytes += size;
+        return true;
+      } catch (_) { return false; }
+    }
     try {
       var msg = Object.assign({ type: type }, data || {});
       window.parent.postMessage(msg, trustedParentOrigin || '*');
-    } catch (_) {}
+      return true;
+    } catch (_) { return false; }
   }
+
+  // A call can wait on the person's answer, on the app opening, and on its handler.
+  var COMMAND_CALL_TIMEOUT_MS = 300000;
 
   function rpc(type, payload, timeoutMs) {
     if (!inNakliOS) return Promise.reject(new Error('Not hosted — naklios.* unavailable standalone'));
     return new Promise(function (resolve, reject) {
       var requestId = 'r' + (++rpcCounter) + '_' + Date.now();
       pendingRpc.set(requestId, { resolve: resolve, reject: reject });
-      send(type, Object.assign({ requestId: requestId }, payload || {}));
+      if (send(type, Object.assign({ requestId: requestId }, payload || {})) === false) {
+        pendingRpc.delete(requestId);
+        reject(new Error('Wait for a verified NakliOS host before sending more data'));
+        return;
+      }
       // Default 30s safety net; long operations (index building) pass more.
       setTimeout(function () {
         if (pendingRpc.has(requestId)) {
@@ -5806,6 +5942,19 @@ postMessage({ event: 'boot', payload: { ok: true } });
   // prevents a delayed save from crossing Folder/Crate boundaries.
   function fsPayload(data) {
     return Object.assign({ backend: capabilities.fsBackend }, data || {});
+  }
+
+  function fsBinaryRead(type, path, options) {
+    var maxBytes = options && options.maxBytes, offset = options && options.offset;
+    if (offset !== undefined) {
+      var code = null, message = '';
+      if (!Number.isSafeInteger(offset) || offset < 0) { code = 'EINVAL'; message = 'offset must be a non-negative safe integer'; }
+      else if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) { code = 'EINVAL'; message = 'offset requires an explicit non-negative safe maxBytes'; }
+      else if (maxBytes > 16 * 1024 * 1024) { code = 'EFBIG'; message = 'range read exceeds the 16 MiB limit'; }
+      else if (capabilities.fsRangeReads !== true) { code = 'ENOTSUP'; message = 'host does not advertise bounded byte ranges'; }
+      if (code) { var error = new Error(code + ': ' + message); error.code = code; return Promise.reject(error); }
+    }
+    return rpc(type, fsPayload({ path: path, maxBytes: maxBytes, offset: offset }));
   }
 
   function makeAiStream(options) {
@@ -5952,18 +6101,17 @@ postMessage({ event: 'boot', payload: { ok: true } });
   }
 
   window.addEventListener('message', function (e) {
-    if (inNakliOS && e.source !== window.parent) return;
+    if (!inNakliOS || e.source !== window.parent || !approvedParentOrigin(e.origin)) return;
     var msg = e.data;
     if (!msg || typeof msg !== 'object') return;
-    // Lock the trusted origin on the first naklios:* message, then verify every
-    // later message against it (no-referrer-safe; see the detection note). This
-    // runs standalone too: a bare/?naklios top-level tab has no window.parent to
-    // pin the source against, so learn-on-contact origin is the only check it can
-    // make — without it the handler would mutate capabilities and fire listeners
-    // for naklios:* messages from ANY origin (opener, child frame, injected page).
+    // Pin only an independently approved actual parent, then keep that exact
+    // origin for this frame. Standalone pages never enter this handler.
+    // Flush startup data only after verification, with an explicit target origin.
     if (typeof msg.type === 'string' && msg.type.indexOf('naklios:') === 0) {
       if (!trustedParentOrigin) trustedParentOrigin = e.origin;
       else if (e.origin !== trustedParentOrigin) return;
+      var queued = queuedHostMessages; queuedHostMessages = []; queuedHostBytes = 0;
+      queued.forEach(function (item) { send(item.type, item.data); });
     }
     if (msg.type === 'naklios:theme') {
       currentTheme = { id: msg.theme, colors: msg.colors, mood: msg.mood };
@@ -5981,6 +6129,7 @@ postMessage({ event: 'boot', payload: { ok: true } });
       if (Array.isArray(msg.fsBackends)) capabilities.fsBackends = msg.fsBackends;
       capabilities.fsBackend = typeof msg.fsBackend === 'string' ? msg.fsBackend : null;
       capabilities.fsBoundedReads = msg.fsBoundedReads === true;
+      capabilities.fsRangeReads = msg.fsRangeReads === true;
       capabilities.system = msg.system === true;
       capabilities.sysFs = msg.sysFs === true;
       if (typeof msg.ai === 'boolean') capabilities.ai = msg.ai;
@@ -6101,12 +6250,15 @@ postMessage({ event: 'boot', payload: { ok: true } });
         path: String(msg.grant.path || ''),
         sourceAppId: String(msg.grant.sourceAppId || ''),
         backend: String(msg.grant.backend || ''),
+        kind: String(msg.grant.kind || 'file'),
       };
       if (!grant.token) return;
       if (!fileOpenListeners.size) pendingFileGrants.push(grant);
       else fileOpenListeners.forEach(function (cb) {
         try { cb(grant); } catch (_) {}
       });
+    } else if (msg.type === 'naklios:file:edit-proposal' && msg.proposal) {
+      deliverFileEdit(msg.proposal);
     } else if (msg.type === 'naklios:review:commit' && msg.proposal_id) {
       var reviewId = String(msg.proposal_id);
       if (appliedReviewIds.has(reviewId)) {
@@ -6131,6 +6283,29 @@ postMessage({ event: 'boot', payload: { ok: true } });
           send('naklios:review:applied', { proposal_id: reviewId, ok: false, error: String(error && error.message || error) });
         });
       }
+    } else if (msg.type === 'naklios:commands:invoke' && typeof msg.invokeId === 'string') {
+      // A caller reached one of this app's commands through the desktop catalog, which already
+      // checked its grant. The handler's value goes back as the result; a throw as the error.
+      var invokeId = msg.invokeId;
+      var handler = commandHandlers.get(msg.name);
+      if (!handler) { send('naklios:commands:result', { invokeId: invokeId, error: 'unknown command: ' + String(msg.name) }); return; }
+      var controller = new AbortController();
+      commandCalls.set(invokeId, controller);
+      Promise.resolve().then(function () { return handler(msg.args || {}, { caller: msg.caller || null, signal: controller.signal }); }).then(
+        function (result) {
+          commandCalls.delete(invokeId);
+          // send() reports a value that cannot be cloned by returning false.
+          if (send('naklios:commands:result', { invokeId: invokeId, result: result === undefined ? null : result }) === false)
+            send('naklios:commands:result', { invokeId: invokeId, error: 'the command result could not be sent' });
+        },
+        function (error) {
+          commandCalls.delete(invokeId);
+          send('naklios:commands:result', { invokeId: invokeId, error: String(error && error.message || error) });
+        });
+    } else if (msg.type === 'naklios:commands:cancel' && typeof msg.invokeId === 'string') {
+      // The caller stopped waiting. A handler reads this through its `signal`; work already done stays done.
+      var running = commandCalls.get(msg.invokeId);
+      if (running) { commandCalls.delete(msg.invokeId); running.abort(); }
     } else if (msg.type === 'naklios:review:discard' && msg.proposal_id) {
       if (reviewDecisionHandler) {
         Promise.resolve().then(function () {
@@ -6138,8 +6313,9 @@ postMessage({ event: 'boot', payload: { ok: true } });
         }).catch(function () {});
       }
     } else if ((msg.type === 'naklios:fs:reply' || msg.type === 'naklios:file:reply' ||
-                msg.type === 'naklios:review:reply' ||
-                msg.type === 'naklios:rag:reply' || msg.type === 'naklios:net:reply') && msg.requestId) {
+                msg.type === 'naklios:review:reply' || msg.type === 'naklios:commands:reply' ||
+                msg.type === 'naklios:rag:reply' || msg.type === 'naklios:net:reply' ||
+                msg.type === 'naklios:skills:reply') && msg.requestId) {
       var p = pendingRpc.get(msg.requestId);
       if (!p) return;
       pendingRpc.delete(msg.requestId);
@@ -6214,13 +6390,65 @@ postMessage({ event: 'boot', payload: { ok: true } });
         return function () { if (reviewDecisionHandler === cb) reviewDecisionHandler = null; };
       },
     },
+    // The user's one skills library (skills/<name>/SKILL.md on their Folder or Crate), shared by every
+    // agent. list() returns the skills an agent may use (Sentinel-clean, active or stale) without bodies;
+    // read(name) returns one with its body; propose() writes a STAGED skill that binds only after a person
+    // activates it. System apps only; standalone it is an empty library.
+    // Common rail step 1 (docs/app-contract.md, "Common rail"): the app declares what it can do. Each
+    // command is { name, description, input (JSON Schema object), scope: 'read'|'write'|'destructive',
+    // handler(args, context) }. The desktop lists them as `<app-id>.<name>`, checks every caller's grant,
+    // and stages `destructive` ones for the person; the handler runs only after that. A later call
+    // replaces the whole set. Standalone, the handlers are kept and nothing is sent.
+    experimental_commands: {
+      register: function (list) {
+        if (!Array.isArray(list)) return Promise.reject(new Error('naklios.experimental_commands.register needs a list'));
+        var meta = [];
+        var handlers = new Map();
+        for (var i = 0; i < list.length; i++) {
+          var c = list[i] || {};
+          if (typeof c.handler !== 'function') return Promise.reject(new Error('command ' + String(c.name) + ' needs a handler'));
+          if (handlers.has(c.name)) return Promise.reject(new Error('duplicate command: ' + String(c.name)));
+          handlers.set(c.name, c.handler);
+          meta.push({ name: c.name, description: c.description, input: c.input, scope: c.scope });
+        }
+        commandHandlers = handlers;
+        if (!inNakliOS) return Promise.resolve({ standalone: true, registered: [] });
+        return rpc('naklios:commands:register', { commands: meta });
+      },
+      // System apps only: find and call other apps' commands. The host applies the caller's grant and asks the person.
+      search: function (query) {
+        if (!inNakliOS) return Promise.resolve([]);
+        return rpc('naklios:commands:search', { query: String(query || '') });
+      },
+      call: function (name, input) {
+        if (!inNakliOS) return Promise.reject(new Error('Not hosted — app commands are unavailable standalone'));
+        return rpc('naklios:commands:call', { name: String(name || ''), input: input || {} }, COMMAND_CALL_TIMEOUT_MS);
+      },
+    },
+    experimental_skills: {
+      list: function () {
+        if (!inNakliOS) return Promise.resolve([]);
+        return rpc('naklios:skills:list', {});
+      },
+      read: function (name) {
+        if (!inNakliOS) return Promise.resolve(null);
+        return rpc('naklios:skills:read', { name: String(name || '') });
+      },
+      propose: function (skill) {
+        if (!inNakliOS) return Promise.reject(new Error('Not hosted — the skills library is unavailable standalone'));
+        skill = skill || {};
+        return rpc('naklios:skills:propose', {
+          name: String(skill.name || ''), description: String(skill.description || ''), body: String(skill.body || ''),
+        });
+      },
+    },
     fs: {
       get supportsBoundedReads() { return capabilities.fsBoundedReads === true; },
       // All paths are app-relative (under apps/<your-id>/ in the host folder).
       // Returns Promises. Reject if no folder connected, permission denied,
       // or path tries to traverse.
       read:       function (path)       { return rpc('naklios:fs:read', fsPayload({ path: path })); },
-      readBinary: function (path, options) { return rpc('naklios:fs:readBinary', fsPayload({ path: path, maxBytes: options && options.maxBytes })); },
+      readBinary: function (path, options) { return fsBinaryRead('naklios:fs:readBinary', path, options); },
       stat:       function (path)       { return rpc('naklios:fs:stat', fsPayload({ path: path })); },
       write:      function (path, data) { return rpc('naklios:fs:write', fsPayload({ path: path, data: data })); },
       append:     function (path, line) { return rpc('naklios:fs:append', fsPayload({ path: path, line: line })); },
@@ -6264,7 +6492,7 @@ postMessage({ event: 'boot', payload: { ok: true } });
     sys: {
       fs: {
         read:       function (path)       { return rpc('naklios:sysfs:read', fsPayload({ path: path })); },
-        readBinary: function (path, options) { return rpc('naklios:sysfs:readBinary', fsPayload({ path: path, maxBytes: options && options.maxBytes })); },
+        readBinary: function (path, options) { return fsBinaryRead('naklios:sysfs:readBinary', path, options); },
         stat:       function (path)       { return rpc('naklios:sysfs:stat', fsPayload({ path: path })); },
         write:      function (path, data) { return rpc('naklios:sysfs:write', fsPayload({ path: path, data: data })); },
         append:     function (path, line) { return rpc('naklios:sysfs:append', fsPayload({ path: path, line: line })); },
@@ -6274,6 +6502,18 @@ postMessage({ event: 'boot', payload: { ok: true } });
       },
     },
     files: {
+      experimental_editInAnvil: function (request) {
+        return rpc('naklios:file:editInAnvil', { request: request });
+      },
+      experimental_proposeEdit: function (token, after, run) {
+        return rpc('naklios:file:proposeEdit', { token: String(token || ''), after: after, run: run });
+      },
+      experimental_onEditProposal: function (cb) {
+        if (typeof cb !== 'function') return function () {};
+        fileEditListeners.add(cb);
+        pendingFileEdits.splice(0).forEach(deliverFileEdit);
+        return function () { fileEditListeners.delete(cb); };
+      },
       // Ask NakliOS to open one app-relative file in another cooperative app.
       // The target gets a window-lifetime token for exactly that file; it does
       // not receive the source app's namespace or a Folder/Crate credential.
@@ -11073,6 +11313,70 @@ export function createAgentFace(deps) {
 const NSaf = (globalThis.Reckon ||= {});
 Object.assign(NSaf, { createAgentFace });
 //__RK_INLINE_END ui/agent-face.mjs
+//__RK_INLINE_BEGIN ui/commands.mjs
+// Reckon — the NakliOS common-rail commands (naklios docs/app-contract.md,
+// "Common rail"). commands.json declares what callers see; this module maps each
+// declared name onto the same adapters window.reckon uses, so the two doors share
+// one core. It performs NO writes itself: range.write reaches the single write
+// path (applyTransaction, actor:"api") through the app's setRange adapter, and the
+// host's grant, not the Developer setting, decides who may call. Every result is
+// plain data, because it crosses the rail by structured clone.
+//
+// Module contract (single-file doctrine): no imports; uses globalThis; registers
+// on globalThis.Reckon.
+
+export function createCommandHandlers(deps) {
+  const {
+    sheets,        // () -> [{id,name}]
+    activeSheet,   // () -> {id,name}
+    getRange,      // (ref) -> Promise<{values, formulas}>
+    setRange,      // (ref, values) -> Promise<txId | {staged,proposal_id}>
+    evalFormula,   // (formula, {sheet}) -> Promise<value | {error}>   (no commit)
+    recalc,        // () -> Promise<void>
+  } = deps;
+
+  return {
+    'sheets.list': () => ({ sheets: sheets(), active: activeSheet() }),
+    'range.read': ({ ref }) => getRange(ref),
+    // A staged write has changed nothing yet: the caller gets the proposal, and
+    // the workbook changes only if the host's review commits it.
+    'range.write': async ({ ref, values }) => {
+      const result = await setRange(ref, values);
+      return result?.staged ? result : { txId: result };
+    },
+    // A formula that evaluates to an error is an answer, not a failed call.
+    'formula.eval': async ({ formula, sheet }) => {
+      const value = await evalFormula(formula, { sheet });
+      return value && typeof value === 'object' && 'error' in value ? value : { value };
+    },
+    recalc: async () => { await recalc(); return { recalculated: true }; },
+  };
+}
+
+// Resolves on the host's next capabilities answer, so the review flag is known
+// before a caller can reach a write: a write that ran earlier would commit instead
+// of staging. onCapabilitiesChange replays the current state synchronously when
+// the listener is added, and that replay is not an answer, so it is skipped.
+export function waitForCapabilities(naklios, { timeoutMs = 5000 } = {}) {
+  return new Promise((resolve, reject) => {
+    let replaying = true;
+    let off = () => {};
+    const timer = setTimeout(() => { off(); reject(new Error(`no capabilities answer within ${timeoutMs} ms`)); }, timeoutMs);
+    off = naklios.onCapabilitiesChange(() => {
+      if (replaying) return;
+      clearTimeout(timer);
+      off();
+      resolve();
+    });
+    replaying = false;
+    naklios.requestCapabilities();
+  });
+}
+
+// single-file composition: register on the shared namespace
+const NScm = (globalThis.Reckon ||= {});
+Object.assign(NScm, { createCommandHandlers, waitForCapabilities });
+//__RK_INLINE_END ui/commands.mjs
 //__RK_INLINE_BEGIN ui/sidecar.mjs
 // Reckon — the sidecar (Batch G): AI that PROPOSES, never acts (L5). Two
 // features (handoff §7): `=?` formula-from-description (proposed formula text
@@ -14238,9 +14542,11 @@ export function createApp({ client, params = new URLSearchParams() }) {
     return { sheetName, range };
   };
   const API_MAX_CELLS = 500000; // bound getRange so an unclamped A1:XFD... can't walk the worker to death
+  const COMMAND_MAX_CELLS = 2000; // a command result goes to a model, so the rail's read is far tighter than the API's
+  const cellsIn = (range) => (range.end.row - range.start.row + 1) * (range.end.col - range.start.col + 1);
   const apiGetRange = async (ref) => {
     const { sheetName, range } = parseRef(ref);
-    const cellCount = (range.end.row - range.start.row + 1) * (range.end.col - range.start.col + 1);
+    const cellCount = cellsIn(range);
     if (cellCount > API_MAX_CELLS) throw new Error(`getRange too large: ${cellCount} cells > ${API_MAX_CELLS}`);
     const rangeA1 = `${a1Of(range.start.row, range.start.col)}:${a1Of(range.end.row, range.end.col)}`;
     const { values } = await client.regionValues(sheetName, rangeA1);
@@ -14290,11 +14596,33 @@ export function createApp({ client, params = new URLSearchParams() }) {
   const MIME = { json: 'application/json', csv: 'text/csv;charset=utf-8', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
   const apiExportBlob = async (kind) => { const k = ['xlsx', 'csv', 'json'].includes(kind) ? kind : 'json'; const bytes = await ioBytes(k); return new Blob([bytes], { type: MIME[k] }); };
 
+  const apiSheets = () => sheets.map((s) => ({ id: s.id, name: s.name }));
+
+  // The common-rail door (ui/commands.mjs) on the same adapters. Installed face or
+  // not, it runs; when the face is on it announces these calls as its own, because
+  // the face's setRange/recalc wrappers are not in this path.
+  const commandHandlers = RK.createCommandHandlers({
+    sheets: apiSheets,
+    activeSheet: () => ({ id: activeId, name: activeName() }),
+    getRange: async (ref) => {
+      const cellCount = cellsIn(parseRef(ref).range);
+      if (cellCount > COMMAND_MAX_CELLS) throw new Error(`range too large: ${cellCount} cells, and range.read returns at most ${COMMAND_MAX_CELLS}; ask for a smaller range`);
+      return apiGetRange(ref);
+    },
+    setRange: async (ref, values) => {
+      const result = await apiSetRange(ref, values);
+      if (!result?.staged) agentFace?.notify('change', { ref, txId: result, actor: 'api' });
+      return result;
+    },
+    evalFormula: apiEval,
+    recalc: async () => { await apiRecalc(); agentFace?.notify('recalc', {}); },
+  });
+
   const installAgentFace = () => {
     if (agentFace) return;
     agentFace = RK.createAgentFace({
       version: VERSION,
-      sheets: () => sheets.map((s) => ({ id: s.id, name: s.name })),
+      sheets: apiSheets,
       activeSheet: () => ({ ...activeSheet() }),
       getRange: apiGetRange,
       setRange: apiSetRange,
@@ -15358,6 +15686,15 @@ export function createApp({ client, params = new URLSearchParams() }) {
         nak.ready();
         updateHostTitle();
       } catch { /* standalone / older host — stay inert */ }
+      // Common rail: offer the commands in commands.json to the host. The host's
+      // grant gates callers, so this does not wait on the Developer setting. It does
+      // wait for the host's capabilities answer: with no answer in 5 s it warns and
+      // stays unregistered, because a write could otherwise skip review.
+      if (nak.experimental_commands && window.parent !== window) {
+        RK.waitForCapabilities(nak).then(() => fetch('./commands.json')).then((response) => response.json()).then((manifest) =>
+          nak.experimental_commands.register(manifest.commands.map((command) => ({ ...command, handler: commandHandlers[command.name] }))),
+        ).catch((error) => console.warn('[reckon] commands could not register', error));
+      }
     }
 
     // restore the Developer setting (window.reckon is off by default). In

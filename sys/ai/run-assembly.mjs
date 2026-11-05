@@ -13,6 +13,7 @@ import { rememberTool } from './project-context.mjs';
 import { skillTool } from './skills.mjs';
 import { skillManageTool } from './skill-manage.mjs';
 import { contextRemainingTool, checkpointTool } from './context-budget.mjs';
+import { appCommandTool } from './app-command-tool.mjs';
 import { learnReviewTool } from './learn.mjs';
 import { recallTool, reviseTool, LESSON_CONTRACT } from './memory-store.mjs';
 import { HOOKS_FILE, HOOK_LIMITS, parseHooks, preToolDecision, postToolCommands } from './hooks.mjs';
@@ -117,6 +118,7 @@ export function runToolset(mode = 'code', { verify = false, scopes = null, simpl
   tools.push(historyTool()); // read-only: search/read past runs, every mode
   tools.push(contextRemainingTool()); // read-only: the honest budget, every mode
   if (code) { tools.push(checkpointTool()); tools.push(learnReviewTool()); }
+  if (code) tools.push(appCommandTool()); // other apps, through the host catalog
   tools.push(skillTool());
   tools.push(recallTool());
   if (code) tools.push(reviseTool()); // belief revision over existing facts
@@ -127,7 +129,7 @@ export function runToolset(mode = 'code', { verify = false, scopes = null, simpl
 // Tools the app hands the model that a node bed has no store or Kiln behind. A bed answers
 // these with `bedStub` — an honest "nothing here" the record shows — instead of letting the
 // base executor call them unknown, which would make the shared tool list look like a lie.
-export const BED_UNWIRED = Object.freeze(['remember', 'skill_manage', 'synthesize', 'history', 'context_remaining', 'checkpoint', 'learn_this_run', 'skill', 'recall', 'revise']);
+export const BED_UNWIRED = Object.freeze(['remember', 'skill_manage', 'synthesize', 'history', 'context_remaining', 'checkpoint', 'learn_this_run', 'skill', 'recall', 'revise', 'app_command']);
 export function bedStub(name) {
   return '(the "' + name + '" tool has no store behind it in this bed — nothing was recorded; continue with the file tools)';
 }

@@ -421,6 +421,12 @@
       "kind": "sheet",
       "detail": "📏Context window"
     },
+    "tool:app_command": {
+      "owner": "tools-store.md",
+      "fingerprint": "0ad6cbafa571",
+      "kind": "tool",
+      "detail": "code code+gate"
+    },
     "tool:apply_patch": {
       "owner": "tools-files.md",
       "fingerprint": "a0980f9aefad",

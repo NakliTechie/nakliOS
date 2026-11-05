@@ -493,7 +493,7 @@ file saves successfully or the user explicitly discards it.
 
 ## Common rail — protocol v3 (proposed)
 
-**Status: proposed 2026-11-03; steps 1 and 2 built 2026-11-03.** Built: `naklios.experimental_commands.register`; the desktop catalog (`sys/host/catalog.mjs`), reachable through the developer agent door; app manifests (`apps/<id>/commands.json`) that list an app's commands while it is closed, where a call opens the app minimized and waits for it to register; Notes and Calendar commands; and the voice assistant calling them on its own face (`app:read`, `app:write`), asking once per app per visit before a change. Everything else in this section is not built yet. It is the plan for SDK v3, recorded here so
+**Status: proposed 2026-11-03; steps 1 and 2 built 2026-11-03; step 3 built 2026-11-05 (Reckon, Draft, Sheaf and KanZen declare commands; Anvil calls them through `experimental_commands.search` and `.call`, which only system apps may use; the voice assistant reaches every app beyond its tuned tools through two fixed tools, so its tool list does not grow with the catalog; the desktop's sticky-note commands are `stickies.*`; a destructive command asks the person every time, in a dialog that shows what it would do; a handler's second argument is `{ caller, signal }`, and `signal` aborts when the caller stops waiting; a result over 256 KB is refused).** Built: `naklios.experimental_commands.register`; the desktop catalog (`sys/host/catalog.mjs`), reachable through the developer agent door; app manifests (`apps/<id>/commands.json`) that list an app's commands while it is closed, where a call opens the app minimized and waits for it to register; Notes and Calendar commands; and the voice assistant calling them on its own face (`app:read`, `app:write`), asking once per app per visit before a change. Everything else in this section is not built yet. It is the plan for SDK v3, recorded here so
 the contract stays one document. Members it names ship as `experimental_<name>` with a ledger line, per the rule in
 [`sdk-api-audit.md`](sdk-api-audit.md), and move into the Reference when they exist. Plan and build order:
 `plan/2026-11-03-common-rail-spec-plan.md`.
@@ -601,7 +601,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 
 <!-- sdk-reference:begin — rendered by `node scripts/sdk-reference.mjs --write` from docs/sdk-api-audit.md; do not edit by hand -->
 
-94 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
+96 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
 
 ### `version`
 
@@ -740,6 +740,8 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 |---|---|---|
 | `experimental_commands` | namespace · **experimental** | The app's commands on the common rail (`docs/app-contract.md`, "Common rail"); the desktop lists them as `<app-id>.<name>` in `sys/host/catalog.mjs`, checks each caller's grant and stages `destructive` ones. |
 | `experimental_commands.register` | function · **experimental** | Declare the app's commands `{ name, description, input, scope, handler }`; replaces the whole set. Standalone: keeps the handlers and sends nothing. |
+| `experimental_commands.search` | function · **experimental** | System apps: find other apps' commands by words, with the input each one takes. Standalone: `[]`. |
+| `experimental_commands.call` | function · **experimental** | System apps: call another app's command; the host applies the caller's grant and asks the person before a change. Standalone: rejects. |
 
 ### `experimental_skills` (namespace)
 

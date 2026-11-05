@@ -39,22 +39,52 @@ export async function memoryContext(memory, { max = 30 } = {}) {
 
 // ── app commands on the common rail ──
 // The model was tuned on these tool names (the 95-question battery, 2026-10-30), so the catalog names map onto them;
-// any other app command is offered as <app>_<name>.
+// every other app command is reached through two fixed tools, because a small model's accuracy falls as its tool list
+// grows and the catalog keeps growing.
 const APP_TOOL_NAMES = {
   'notes.list.add': 'add_to_list', 'notes.list.read': 'read_list', 'notes.note.create': 'create_note',
   'calendar.events.create': 'create_calendar_event', 'calendar.events.list': 'get_calendar_events',
 };
+// A small model reads a tool result whole, so a large one is cut with a note saying so.
+const RESULT_MAX_CHARS = 4000;
+function fitResult(result) {
+  const text = JSON.stringify(result);
+  return text && text.length > RESULT_MAX_CHARS ? `${text.slice(0, RESULT_MAX_CHARS)} … (cut; ask for a smaller part)` : result;
+}
+async function runAppCommand(apps, name, args) {
+  const out = await apps.invoke(name, args);
+  if (!out || !out.ok) throw new Error(out?.message || out?.code || `${name} did not answer`);
+  return out.result;
+}
 function appTools(apps) {
-  return (apps.tools || []).map((command) => ({
-    name: APP_TOOL_NAMES[command.name] || command.name.replace(/[.-]/g, '_'),
+  const commands = apps.tools || [];
+  const tuned = commands.filter((command) => APP_TOOL_NAMES[command.name]).map((command) => ({
+    name: APP_TOOL_NAMES[command.name],
     description: command.description,
     parameters: command.inputSchema,
-    async run(args) {
-      const out = await apps.invoke(command.name, args);
-      if (!out || !out.ok) throw new Error(out?.message || out?.code || `${command.name} did not answer`);
-      return out.result;
-    },
+    run: (args) => runAppCommand(apps, command.name, args),
   }));
+  const others = commands.filter((command) => !APP_TOOL_NAMES[command.name]);
+  if (!others.length) return tuned;
+  return [...tuned, {
+    name: 'find_app_action',
+    description: 'Find what another app can do, such as Reckon sheets, Draft documents, KanZen boards or Sheaf PDFs. Call this first, then run_app_action.',
+    parameters: { type: 'object', properties: { about: { type: 'string', description: 'The app or the task, e.g. "kanzen card"' } }, required: ['about'] },
+    async run({ about }) {
+      const words = String(about || '').toLowerCase().split(/\W+/).filter(Boolean);
+      const score = (command) => words.filter((word) => `${command.name} ${command.description}`.toLowerCase().includes(word)).length;
+      return others.map((command) => [score(command), command]).filter(([s]) => s > 0).sort((a, b) => b[0] - a[0]).slice(0, 5)
+        .map(([, { name, description, inputSchema }]) => ({ name, description, input: inputSchema }));
+    },
+  }, {
+    name: 'run_app_action',
+    description: 'Run an action that find_app_action returned, by its exact name.',
+    parameters: { type: 'object', properties: { name: { type: 'string' }, input: { type: 'object' } }, required: ['name'] },
+    run({ name, input }) {
+      if (!others.some((command) => command.name === name)) throw new Error(`no app action named ${name}; call find_app_action first`);
+      return runAppCommand(apps, name, input || {}).then(fitResult);
+    },
+  }];
 }
 
 // ── web search: LocalMind's three providers ──

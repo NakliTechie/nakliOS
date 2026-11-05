@@ -142,6 +142,10 @@
         {
           "source": "draft.html",
           "destination": "index.html"
+        },
+        {
+          "source": "commands.json",
+          "destination": "commands.json"
         }
       ]
     },
@@ -154,6 +158,10 @@
           "source": "index.html",
           "destination": "index.html",
           "managedSdk": "inline"
+        },
+        {
+          "source": "commands.json",
+          "destination": "commands.json"
         }
       ]
     },
@@ -511,6 +519,10 @@
         {
           "source": "reckon.html",
           "destination": "index.html"
+        },
+        {
+          "source": "commands.json",
+          "destination": "commands.json"
         }
       ]
     },
@@ -569,6 +581,10 @@
         {
           "source": "engines/tesseract/7.0.0/worker.min.js",
           "destination": "engines/tesseract/7.0.0/worker.min.js"
+        },
+        {
+          "source": "commands.json",
+          "destination": "commands.json"
         }
       ]
     },

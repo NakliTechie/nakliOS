@@ -65,6 +65,14 @@ launch in `../README.md`; code mode; a fresh project.
 - **Observable success:** the search result lists entries with run ids and the calling task's scope by default; the read returns the event's payload; a `scope:'project'` search never lists another project's runs.
 - **Gotchas:** history excludes the active run; the persisted OPFS records are what it reads.
 
+### tool:app_command
+- **Goal:** the model finds and calls other NakliOS apps' commands through the host catalog, under the host's grant and consent.
+- **Source:** `sys/ai/app-command-tool.mjs` (`appCommandTool`, `runAppCommand`), the `nm==='app_command'` branch, `callAppCommand` in the host `index.html`.
+- **Prerequisites:** launch inside NakliOS; a declared app such as Calendar.
+- **Reach and drive:** "List today's calendar events."
+- **Observable success:** a search result names `calendar.events.list`; the call returns the app's events; a write asks the person once per app per visit; a destructive command asks every time.
+- **Gotchas:** standalone Anvil answers that app commands need NakliOS; code mode only.
+
 ### tool:context_remaining
 - **Goal:** the honest budget — the window, its source, what is usable and what is left — counted from what was actually sent (system prompt + live transcript).
 - **Source:** `sys/ai/context-budget.mjs` (`contextRemainingTool`, `contextBudget`, `windowForPreset`), `currentBudget` in the app.

@@ -1,0 +1,74 @@
+{
+  "commands": [
+    {
+      "name": "documents.list",
+      "description": "List the documents in the Draft editor, e.g. \"what documents do I have\".",
+      "scope": "read",
+      "input": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "document.active",
+      "description": "Say which document is open in the Draft editor, e.g. \"which document am I working on\".",
+      "scope": "read",
+      "input": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "document.open",
+      "description": "Open a document in the Draft editor by name, e.g. \"open my budget document\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "minLength": 1, "description": "Document name, e.g. \"budget\"" }
+        },
+        "required": ["name"]
+      }
+    },
+    {
+      "name": "text.read",
+      "description": "Read the text of the open document in the Draft editor, e.g. \"read my document to me\". A long document comes in parts: when truncated is true, call again with from set to next.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "from": { "type": "integer", "description": "Start position, to read only part. Leave out to start at the beginning" },
+          "to": { "type": "integer", "description": "End position, to read only part. Leave out to read to the end" }
+        }
+      }
+    },
+    {
+      "name": "outline.read",
+      "description": "List the headings of the open document in the Draft editor, e.g. \"what are the sections of this document\".",
+      "scope": "read",
+      "input": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "text.find",
+      "description": "Find words in the open document in the Draft editor, e.g. \"where does this document mention the budget\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "query": { "type": "string", "minLength": 1, "description": "The words to look for" },
+          "caseSensitive": { "type": "boolean", "description": "True to match capital letters exactly. Leave out to ignore case" }
+        },
+        "required": ["query"]
+      }
+    },
+    {
+      "name": "text.replace",
+      "description": "Replace words in the open document in the Draft editor, e.g. \"change Tuesday to Wednesday in my document\". The person may need to accept the change first.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "find": { "type": "string", "minLength": 1, "description": "The words to replace" },
+          "replace": { "type": "string", "description": "The new words. Empty text deletes the words" },
+          "occurrence": { "type": "integer", "description": "Which match to change, counting from 1. Needed when the words appear more than once" },
+          "caseSensitive": { "type": "boolean", "description": "True to match capital letters exactly. Leave out to ignore case" }
+        },
+        "required": ["find", "replace"]
+      }
+    }
+  ]
+}

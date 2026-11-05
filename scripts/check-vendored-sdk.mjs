@@ -38,6 +38,7 @@ const APPS = [
   { id: 'tijori',      local: 'Tijori/index.html',      remote: 'https://naklitechie.github.io/Tijori/' },
   { id: 'kanzen',      local: 'KanZen/index.html',      remote: 'https://naklitechie.github.io/KanZen/' },
   { id: 'nakliposter', local: 'NakliPoster/index.html', remote: 'https://naklitechie.github.io/NakliPoster/' },
+  { id: 'sheaf',       local: '../sheaf/index.html',    remote: 'https://sheaf.naklitechie.com/' },
 ];
 
 const BEGIN_RE = /\/\*\s*naklios-sdk:begin\b([^*]*)\*\//;

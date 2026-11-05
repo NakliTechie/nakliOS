@@ -24,6 +24,7 @@
       "context_remaining",
       "checkpoint",
       "learn_this_run",
+      "app_command",
       "skill",
       "recall",
       "revise"
@@ -47,6 +48,7 @@
       "context_remaining",
       "checkpoint",
       "learn_this_run",
+      "app_command",
       "skill",
       "recall",
       "revise"
