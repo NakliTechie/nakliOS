@@ -42,6 +42,21 @@ naklios.files.onOpen(async grant => {
 The host derives both source and target identities from iframe windows it
 created. App-supplied IDs never establish authority.
 
+## Send to (v2)
+
+An app declares what it takes in `commands.json`:
+
+```json
+{ "accepts": [{ "action": "import", "label": "Add to Notes", "extensions": [".md", ".txt"] }] }
+```
+
+`naklios.files.experimental_targets(path)` lists the apps that take a file, and Files builds its menu from the
+answer. `action: "edit"` is the write-back grant above, which only Editor holds. `action: "import"` is a copy:
+`naklios.files.experimental_sendTo(appId, paths)` asks the person, then gives the target one read-only token per
+file, up to 10 files of 64 MB. `onOpen` delivers each grant with `kind: "send"` and `type`; `read(token)` answers
+`{ bytes, name, path, type, sourceAppId, backend }`; a write is refused. Only same-origin apps receive tokens.
+Extensions are the match because Folder and Crate keep no MIME type.
+
 ## Recovery rule
 
 Editor keeps a separate Browser recovery record per project path or granted

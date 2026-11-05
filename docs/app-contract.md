@@ -493,7 +493,7 @@ file saves successfully or the user explicitly discards it.
 
 ## Common rail — protocol v3 (proposed)
 
-**Status: proposed 2026-11-03; steps 1 and 2 built 2026-11-03; step 3 built 2026-11-05 (Reckon, Draft, Sheaf and KanZen declare commands; Anvil calls them through `experimental_commands.search` and `.call`, which only system apps may use; the voice assistant reaches every app beyond its tuned tools through two fixed tools, so its tool list does not grow with the catalog; the desktop's sticky-note commands are `stickies.*`; a destructive command asks the person every time, in a dialog that shows what it would do; a handler's second argument is `{ caller, signal }`, and `signal` aborts when the caller stops waiting; a result over 256 KB is refused; step 3b built 2026-11-05: `commands.json` may declare `widgets` `{ id, title, display }` with display `list`, `agenda` or `value`, the app publishes through `experimental_widgets.update`, and the desktop draws text-only cards that open the app on a tap and keep the last snapshot in this browser, except snapshots marked `persist: false`, which go when Crate locks).** Built: `naklios.experimental_commands.register`; the desktop catalog (`sys/host/catalog.mjs`), reachable through the developer agent door; app manifests (`apps/<id>/commands.json`) that list an app's commands while it is closed, where a call opens the app minimized and waits for it to register; Notes and Calendar commands; and the voice assistant calling them on its own face (`app:read`, `app:write`), asking once per app per visit before a change. Everything else in this section is not built yet. It is the plan for SDK v3, recorded here so
+**Status: proposed 2026-11-03; steps 1 and 2 built 2026-11-03; step 3 built 2026-11-05 (Reckon, Draft, Sheaf and KanZen declare commands; Anvil calls them through `experimental_commands.search` and `.call`, which only system apps may use; the voice assistant reaches every app beyond its tuned tools through two fixed tools, so its tool list does not grow with the catalog; the desktop's sticky-note commands are `stickies.*`; a destructive command asks the person every time, in a dialog that shows what it would do; a handler's second argument is `{ caller, signal }`, and `signal` aborts when the caller stops waiting; a result over 256 KB is refused; step 3b built 2026-11-05: `commands.json` may declare `widgets` `{ id, title, display }` with display `list`, `agenda` or `value`, the app publishes through `experimental_widgets.update`, and the desktop draws text-only cards that open the app on a tap and keep the last snapshot in this browser, except snapshots marked `persist: false`, which go when Crate locks; step 4 built 2026-11-05: `accepts` in `commands.json`, `files.experimental_targets` and `files.experimental_sendTo`, see `docs/file-handoff-v1.md`).** Built: `naklios.experimental_commands.register`; the desktop catalog (`sys/host/catalog.mjs`), reachable through the developer agent door; app manifests (`apps/<id>/commands.json`) that list an app's commands while it is closed, where a call opens the app minimized and waits for it to register; Notes and Calendar commands; and the voice assistant calling them on its own face (`app:read`, `app:write`), asking once per app per visit before a change. Everything else in this section is not built yet. It is the plan for SDK v3, recorded here so
 the contract stays one document. Members it names ship as `experimental_<name>` with a ledger line, per the rule in
 [`sdk-api-audit.md`](sdk-api-audit.md), and move into the Reference when they exist. Plan and build order:
 `plan/2026-11-03-common-rail-spec-plan.md`.
@@ -601,7 +601,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 
 <!-- sdk-reference:begin — rendered by `node scripts/sdk-reference.mjs --write` from docs/sdk-api-audit.md; do not edit by hand -->
 
-98 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
+100 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
 
 ### `version`
 
@@ -750,19 +750,12 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 | `experimental_widgets` | namespace · **experimental** | Small snapshots the desktop draws from fixed templates. |
 | `experimental_widgets.update` | function · **experimental** | Publish a declared widget's snapshot; `null` removes the card; `{ persist: false }` keeps it in memory only. Standalone: returns false. |
 
-### `experimental_skills` (namespace)
-
-| member | kind | what it is |
-|---|---|---|
-| `experimental_skills` | namespace · **experimental** | The user's one skills library, `skills/<name>/SKILL.md` on their Folder or Crate (`sys/ai/skill-library.mjs`; plan `plan/2026-10-29-shared-skills-plan.md`). System apps only. |
-| `experimental_skills.list` | function · **experimental** | The skills an agent may use (Sentinel-clean, active or stale), as `{ name, description, status }` without bodies. Standalone: `[]`. |
-| `experimental_skills.read` | function · **experimental** | One usable skill with its body, or `null`. |
-| `experimental_skills.propose` | function · **experimental** | Write a skill as STAGED (never active); refused if Sentinel refuses it or the name exists. Binds only after a person activates it. |
-
 ### `files` (namespace)
 
 | member | kind | what it is |
 |---|---|---|
+| `files.experimental_targets` | function · **experimental** | Which apps take a file, from their declared `accepts`. Standalone: `[]`. |
+| `files.experimental_sendTo` | function · **experimental** | Send read-only copies of up to 10 files, 64 MB each, to an app that imports them, after the person allows it. Standalone: rejects. |
 | `files` | namespace | Exact-file handoff (`docs/file-handoff-v1.md`). |
 | `files.experimental_editInAnvil` | function · **experimental** | Ask the host to stage one selected-file edit in Anvil. |
 | `files.experimental_proposeEdit` | function · **experimental** | Return a snapshot edit without writing its source. |
@@ -772,6 +765,15 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 | `files.read` | function | Read a handed file. |
 | `files.write` | function | Write it back. |
 | `files.release` | function | Release the handle. |
+
+### `experimental_skills` (namespace)
+
+| member | kind | what it is |
+|---|---|---|
+| `experimental_skills` | namespace · **experimental** | The user's one skills library, `skills/<name>/SKILL.md` on their Folder or Crate (`sys/ai/skill-library.mjs`; plan `plan/2026-10-29-shared-skills-plan.md`). System apps only. |
+| `experimental_skills.list` | function · **experimental** | The skills an agent may use (Sentinel-clean, active or stale), as `{ name, description, status }` without bodies. Standalone: `[]`. |
+| `experimental_skills.read` | function · **experimental** | One usable skill with its body, or `null`. |
+| `experimental_skills.propose` | function · **experimental** | Write a skill as STAGED (never active); refused if Sentinel refuses it or the name exists. Binds only after a person activates it. |
 
 ### `ai` (namespace)
 

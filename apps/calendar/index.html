@@ -196,6 +196,13 @@ const COMMAND_HANDLERS={
     return hits.length?{range,events:hits}:{range,events:[],message:'Nothing on the calendar.'};
   },
 };
+// A file sent from Files is a read-only copy, imported the same way as one picked by hand.
+naklios.files.onOpen(async grant=>{
+  if(grant.kind!=='send')return;
+  try{const{bytes}=await naklios.files.read(grant.token);await loaded;await importIcs({text:async()=>new TextDecoder().decode(bytes)})}
+  catch(error){showToast(`Could not import ${grant.name}: ${error.message}`)}
+  finally{naklios.files.release(grant.token)}
+});
 if(naklios.experimental_commands){
   fetch('./commands.json').then(response=>response.json()).then(manifest=>
     naklios.experimental_commands.register(manifest.commands.map(command=>({...command,handler:COMMAND_HANDLERS[command.name]})))

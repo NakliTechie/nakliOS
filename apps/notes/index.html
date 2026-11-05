@@ -1209,6 +1209,18 @@ const COMMAND_HANDLERS = {
     return { created:note.title, where:locationLabel(activeLocation) };
   },
 };
+// A file sent from Files is a read-only copy; it becomes a new note.
+naklios.files.onOpen(async grant => {
+  if (grant.kind !== 'send') return;
+  try {
+    const { bytes } = await naklios.files.read(grant.token);
+    await libraryReady;
+    const note = addNoteRecord(String(grant.name).replace(/\.[^.]+$/, ''));
+    await writeNoteBody(note, new TextDecoder().decode(bytes));
+    showToast(`Added ${grant.name}`);
+  } catch (error) { showToast(`Could not add ${grant.name}: ${error.message}`); }
+  finally { naklios.files.release(grant.token); }
+});
 if (naklios.experimental_commands){
   fetch('./commands.json').then(response => response.json()).then(manifest =>
     naklios.experimental_commands.register(manifest.commands.map(command => ({ ...command, handler:COMMAND_HANDLERS[command.name] })))

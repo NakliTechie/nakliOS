@@ -1,4 +1,7 @@
 {
+  "accepts": [
+    { "action": "import", "label": "Add to Notes", "extensions": [".md", ".markdown", ".txt"] }
+  ],
   "widgets": [
     { "id": "list", "title": "Latest list", "display": "list" }
   ],

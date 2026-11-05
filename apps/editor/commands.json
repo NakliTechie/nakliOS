@@ -1,0 +1,10 @@
+{
+  "accepts": [
+    {
+      "action": "edit",
+      "label": "Edit in Editor",
+      "extensions": [".txt", ".md", ".markdown", ".json", ".jsonl", ".js", ".mjs", ".ts", ".tsx", ".jsx", ".css", ".html", ".htm", ".xml", ".svg", ".yaml", ".yml", ".toml", ".csv", ".tsv", ".sql", ".sh", ".py", ".rb", ".go", ".rs", ".c", ".h"]
+    }
+  ],
+  "commands": []
+}

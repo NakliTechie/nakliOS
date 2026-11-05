@@ -1,4 +1,7 @@
 {
+  "accepts": [
+    { "action": "import", "label": "Import to Calendar", "extensions": [".ics"] }
+  ],
   "widgets": [
     { "id": "today", "title": "Today", "display": "agenda" }
   ],

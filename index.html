@@ -1615,7 +1615,7 @@ const APPS = [
     description:'Private month, week, and day calendar with recurring events, ICS exchange, and separate Browser, Folder, or Crate calendars.',
     tags:['tool','calendar','events','productivity'],
     svg:`<rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/><path d="M8 13h3v4H8z"/>` },
-  { id:'editor', name:'Editor', kind:'system',
+  { id:'editor', name:'Editor', kind:'system', commands:'./apps/editor/commands.json',
     url:'./apps/editor/',
     embedUrl:'./apps/editor/',
     glyph:'</>', bg:'ok',
@@ -4065,6 +4065,8 @@ const openWindows = Object.create(null);
 const knownIframes = new Set();
 const fileGrants = new Map();
 const FILE_GRANT_MAX_CHARS = 2 * 1024 * 1024;
+const FILE_SEND_MAX_BYTES = 64 * 1024 * 1024;
+const FILE_SEND_MAX_COUNT = 10;
 const EDITABLE_FILE_RE = /\.(?:txt|md|markdown|json|jsonl|js|mjs|cjs|ts|tsx|jsx|css|scss|less|html?|xml|svg|yaml|yml|toml|ini|conf|env|csv|tsv|sql|sh|zsh|bash|py|rb|php|java|kt|kts|go|rs|c|h|cc|cpp|hpp|cs|swift|dart|vue|svelte|astro|graphql|gql|properties|gitignore|editorconfig)$/i;
 let appInfoWindow = null;
 let appInfoRenderToken = 0;
@@ -5378,6 +5380,7 @@ function deliverFileGrant(win, token){
         sourceAppId:grant.sourceAppId,
         backend:grant.backendId,
         kind:grant.kind || 'file',
+        type:grant.type,
       },
     }, '*');
     return true;
@@ -5404,6 +5407,56 @@ function revokeFileGrant(grant){
     try { grant.sourceSource?.postMessage({ type:'naklios:file:edit-proposal',
       proposal:{ token:grant.token, cancelled:true } }, '*'); } catch(_){}
   }
+}
+
+// Who takes this file, from what same-origin apps declare. A grant token never goes to an app on another origin.
+async function fileHostTargets(path, sourceAppId){
+  const [{ targetsFor, parseAccepts }] = await Promise.all([import('./sys/host/file-targets.mjs'), appCommandsDeclared]);
+  const apps = [...appManifests].map(([id, manifest]) => ({ app:APPS.find(a => a.id === id), id, accepts:parseAccepts(manifest.accepts).accepts || [] }))
+    .filter(({ app, id }) => app && id !== sourceAppId && appExpectedOrigin(app) === location.origin)
+    .map(({ app, id, accepts }) => ({ id, name:app.name, accepts:accepts.filter(accept => accept.action !== 'edit' || id === 'editor') }));
+  return targetsFor(path, apps);
+}
+
+async function fileHostSendTo(source, msg, sourceAppId){
+  const targetAppId = String(msg.appId || '');
+  const paths = (Array.isArray(msg.paths) ? msg.paths : []).map(path => String(path || '').replace(/^\/+/, '')).filter(Boolean);
+  if (!paths.length || paths.length > FILE_SEND_MAX_COUNT) throw new Error(`Send between 1 and ${FILE_SEND_MAX_COUNT} files`);
+  const { mimeOf } = await import('./sys/host/file-targets.mjs');
+  for (const path of paths) {
+    if (!(await fileHostTargets(path, sourceAppId)).some(item => item.appId === targetAppId && item.action === 'import'))
+      throw new Error(`${targetAppId} does not take ${path.split('/').at(-1)}`);
+  }
+  const target = APPS.find(app => app.id === targetAppId);
+  const backendId = await fsEnsurePermission(sourceAppId);
+  if (!backendId) throw new Error('Storage permission denied');
+  if (msg.backend && msg.backend !== backendId) throw new Error('Storage backend changed before Send To completed');
+  const backend = BACKENDS[backendId];
+  const files = [];
+  for (const path of paths) {
+    const safePath = fsSafePath(sourceAppId, path);
+    const bytes = await backend.readBinary(safePath, FILE_SEND_MAX_BYTES + 1);
+    if (bytes.length > FILE_SEND_MAX_BYTES) throw new Error(`${path} is larger than ${FILE_SEND_MAX_BYTES / 1048576} MB`);
+    files.push({ sourcePath:path, safePath, name:path.split('/').at(-1), type:mimeOf(path) });
+  }
+  const sourceName = APPS.find(app => app.id === sourceAppId)?.name || sourceAppId;
+  const list = files.map(file => `<code>${_dlgEscape(file.name)}</code>`).join(', ');
+  const allowed = await nakliosConfirm(`Send ${list} from <strong>${_dlgEscape(sourceName)}</strong> to ${_dlgEscape(target.name)}?\n\n` +
+    `${_dlgEscape(target.name)} receives a copy and cannot change the original.`,
+    { title:`Send to ${target.name}?`, okLabel:'Send', cancelLabel:'Cancel', allowHtmlBody:true });
+  if (!allowed) return false;
+  const tokens = files.map(file => {
+    const token = newFileGrantToken();
+    fileGrants.set(token, { ...file, token, kind:'send', targetAppId, sourceAppId, backendId,
+      backendIdentity:fileGrantBackendIdentity(backendId), targetSource:null });
+    return token;
+  });
+  openApp(target, { action:'open-file' });
+  const win = openWindows[targetAppId];
+  if (!win) { tokens.forEach(token => fileGrants.delete(token)); throw new Error(`${target.name} could not be opened`); }
+  win._pendingFileGrantTokens = [...(win._pendingFileGrantTokens || []), ...tokens];
+  deliverPendingFileGrants(win);
+  return true;
 }
 
 async function fileHostOpenWith(source, msg, sourceAppId){
@@ -5480,6 +5533,12 @@ async function fileHostHandle(source, msg, targetAppId, op){
   if (!backend?.isConnected() || fileGrantBackendIdentity(grant.backendId) !== grant.backendIdentity) {
     fileGrants.delete(token);
     throw new Error('The original storage location disconnected; reopen the file from Files');
+  }
+  if (grant.kind === 'send') {
+    if (op !== 'read') throw new Error('A sent file is a read-only copy');
+    const bytes = await backend.readBinary(grant.safePath, FILE_SEND_MAX_BYTES + 1);
+    if (bytes.length > FILE_SEND_MAX_BYTES) throw new Error('The file grew past the Send To limit');
+    return { bytes, name:grant.name, path:grant.sourcePath, type:grant.type, sourceAppId:grant.sourceAppId, backend:grant.backendId };
   }
   if (op === 'read') {
     const bytes = await backend.readBinary(grant.safePath, FILE_GRANT_MAX_CHARS);
@@ -8841,6 +8900,8 @@ window.addEventListener('message', async e => {
       if (!appId) throw new Error('Unknown app');
       const op = msg.type.slice('naklios:file:'.length);
       if (op === 'openWith') reply.result = await fileHostOpenWith(e.source, msg, appId);
+      else if (op === 'targets') reply.result = await fileHostTargets(String(msg.path || ''), appId);
+      else if (op === 'sendTo') reply.result = await fileHostSendTo(e.source, msg, appId);
       else if (op === 'editInAnvil') reply.result = await fileHostEditInAnvil(e.source, msg, appId);
       else if (op === 'proposeEdit') reply.result = await fileHostProposeEdit(e.source, msg, appId);
       else if (op === 'edit-ack') reply.result = await fileHostEditAck(e.source, msg, appId);
