@@ -197,11 +197,15 @@ const COMMAND_HANDLERS={
   },
 };
 // A file sent from Files is a read-only copy, imported the same way as one picked by hand.
-naklios.files.onOpen(async grant=>{
-  if(grant.kind!=='send')return;
-  try{const{bytes}=await naklios.files.read(grant.token);await loaded;await importIcs({text:async()=>new TextDecoder().decode(bytes)})}
-  catch(error){showToast(`Could not import ${grant.name}: ${error.message}`)}
-  finally{naklios.files.release(grant.token)}
+const receivedGrants=new Set();let receiving=Promise.resolve();
+naklios.files.onOpen(grant=>{
+  if(grant.kind!=='send'||receivedGrants.has(grant.token))return;
+  receivedGrants.add(grant.token);
+  receiving=receiving.then(async()=>{
+    try{const{bytes}=await naklios.files.read(grant.token);await loaded;await importIcs({text:async()=>new TextDecoder().decode(bytes)})}
+    catch(error){showToast(`Could not import ${grant.name}: ${error.message}`)}
+    finally{naklios.files.release(grant.token)}
+  });
 });
 if(naklios.experimental_commands){
   fetch('./commands.json').then(response=>response.json()).then(manifest=>

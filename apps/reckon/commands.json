@@ -1,4 +1,7 @@
 {
+  "accepts": [
+    { "action": "import", "label": "Open in Reckon", "extensions": [".csv", ".xlsx"] }
+  ],
   "commands": [
     {
       "name": "sheets.list",

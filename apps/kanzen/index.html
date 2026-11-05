@@ -2064,7 +2064,7 @@
    Single-file local-first kanban
    ============================================================ */
 
-/* naklios-sdk:begin ver=2 sha256=1bc1c75cfc9c69114c35af35a32fd18d6fa6c35f8f9af4a6144d9501d14634d2 */
+/* naklios-sdk:begin ver=2 sha256=4014143370c2953d5d2df9c566ca6fd88f9cd62afcc6ae7d5b988ede6366e8f2 */
 /*!
  * naklios.js — cooperative SDK for apps hosted inside NakliOS (Immersive mode)
  *
@@ -2736,6 +2736,7 @@
         sourceAppId: String(msg.grant.sourceAppId || ''),
         backend: String(msg.grant.backend || ''),
         kind: String(msg.grant.kind || 'file'),
+        type: msg.grant.type ? String(msg.grant.type) : undefined,
       };
       if (!grant.token) return;
       if (!fileOpenListeners.size) pendingFileGrants.push(grant);

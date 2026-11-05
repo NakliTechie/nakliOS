@@ -160,10 +160,10 @@
         {
           "source": "sdk/naklios.js",
           "destination": "sdk/naklios.js",
-          "sha256": "1bc1c75cfc9c69114c35af35a32fd18d6fa6c35f8f9af4a6144d9501d14634d2",
-          "bytes": 51346,
+          "sha256": "4014143370c2953d5d2df9c566ca6fd88f9cd62afcc6ae7d5b988ede6366e8f2",
+          "bytes": 51413,
           "originalSourceSha256": "9390489a66446f7d78a72863ca8c2ed71cce1760b395d5d500e4c86a43a7fa52",
-          "sdkSha256": "1bc1c75cfc9c69114c35af35a32fd18d6fa6c35f8f9af4a6144d9501d14634d2"
+          "sdkSha256": "4014143370c2953d5d2df9c566ca6fd88f9cd62afcc6ae7d5b988ede6366e8f2"
         }
       ]
     },
@@ -188,10 +188,10 @@
         {
           "source": "sdk/naklios.js",
           "destination": "sdk/naklios.js",
-          "sha256": "1bc1c75cfc9c69114c35af35a32fd18d6fa6c35f8f9af4a6144d9501d14634d2",
-          "bytes": 51346,
+          "sha256": "4014143370c2953d5d2df9c566ca6fd88f9cd62afcc6ae7d5b988ede6366e8f2",
+          "bytes": 51413,
           "originalSourceSha256": "9390489a66446f7d78a72863ca8c2ed71cce1760b395d5d500e4c86a43a7fa52",
-          "sdkSha256": "1bc1c75cfc9c69114c35af35a32fd18d6fa6c35f8f9af4a6144d9501d14634d2"
+          "sdkSha256": "4014143370c2953d5d2df9c566ca6fd88f9cd62afcc6ae7d5b988ede6366e8f2"
         }
       ]
     },
@@ -224,10 +224,10 @@
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "3d3f5ba183b173086393daf1fb903e29db8c9fe7bcb72b289dc17571b483bb72",
-          "bytes": 438027,
+          "sha256": "e58c3ded97e9ad1286237d3682ba9d9f7c2f2a81e49a40e8ad2cc293a2fc7b5d",
+          "bytes": 438094,
           "originalSourceSha256": "4f5c76fc2d13378f03661fbceee41751df230fab4fa4d090586a8d14af0e41ef",
-          "sdkSha256": "1bc1c75cfc9c69114c35af35a32fd18d6fa6c35f8f9af4a6144d9501d14634d2"
+          "sdkSha256": "4014143370c2953d5d2df9c566ca6fd88f9cd62afcc6ae7d5b988ede6366e8f2"
         },
         {
           "source": "commands.json",
@@ -246,10 +246,10 @@
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "d68b76efc8640d7d81ea3d5bb79735504de83fa55d5abe9b0217966672af5a36",
-          "bytes": 286258,
+          "sha256": "4ed65d86e06c9a2748772b163dbc96c66b7776f399c5f40539017a22ab3a5cb8",
+          "bytes": 286325,
           "originalSourceSha256": "b686cd6446696850d8326bf6ca80789e66e25dc5d0fadfdd70e6f2223e5e711e",
-          "sdkSha256": "1bc1c75cfc9c69114c35af35a32fd18d6fa6c35f8f9af4a6144d9501d14634d2"
+          "sdkSha256": "4014143370c2953d5d2df9c566ca6fd88f9cd62afcc6ae7d5b988ede6366e8f2"
         },
         {
           "source": "manifest.webmanifest",
@@ -432,10 +432,10 @@
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "f2e17eb9241cdf39735d928999daca000b1f016dd01f6d6a9a43383642cf7446",
-          "bytes": 330648,
+          "sha256": "56ac6fee404054d300126a1d9a099c868b019628b9add699bb544258a609800d",
+          "bytes": 330715,
           "originalSourceSha256": "a0eb44a88f0d331a3a36224cc5cd3d04c2e1b8bd6fe31a385d8342057a3af4b2",
-          "sdkSha256": "1bc1c75cfc9c69114c35af35a32fd18d6fa6c35f8f9af4a6144d9501d14634d2"
+          "sdkSha256": "4014143370c2953d5d2df9c566ca6fd88f9cd62afcc6ae7d5b988ede6366e8f2"
         },
         {
           "source": "LICENSE",
@@ -751,19 +751,19 @@
       "id": "reckon",
       "repo": "NakliTechie/reckon",
       "requestedRef": "main",
-      "resolvedCommit": "5e89edf9d7a9f2705b39d64494344950c86f4233",
+      "resolvedCommit": "e02ca6baaf63e5d5c5384d70081542211cf15015",
       "files": [
         {
           "source": "reckon.html",
           "destination": "index.html",
-          "sha256": "b4aae031058816f0ba362687017462903d9786df604b9124ff120b1ac0a8f27e",
-          "bytes": 1002946
+          "sha256": "254bf76f0a856108131c560ab5a4030d65ccba90a795f414b4909fd2f989327d",
+          "bytes": 1005243
         },
         {
           "source": "commands.json",
           "destination": "commands.json",
-          "sha256": "a1797c4635bcf631d22e1aa5901345a341c578b9b3e3caca53120e4aa4e4a72e",
-          "bytes": 2167
+          "sha256": "4378852059ad9d25c854da70d409b2453b114e63c849d89ac9f37df0b273e786",
+          "bytes": 2274
         }
       ]
     },
@@ -797,13 +797,13 @@
       "id": "sheaf",
       "repo": "NakliTechie/sheaf",
       "requestedRef": "main",
-      "resolvedCommit": "47f8c68d3120bf72c60e9ba69f7616ba715ac6fc",
+      "resolvedCommit": "af3f549181eac82df055a7ad12e78bcbb5ea12d2",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "70dedcde3f844cccdfbaf5d651aba4377eb583f24caea06bbd65018594c7cc4a",
-          "bytes": 382058
+          "sha256": "23a2f0f2ce339c5e89f088da05f6ce803abe80c3af7aca9fdfb7f4178689a512",
+          "bytes": 385216
         },
         {
           "source": "engines/pdf-lib/2.9.1/pdf-lib.esm.js",
@@ -850,8 +850,8 @@
         {
           "source": "commands.json",
           "destination": "commands.json",
-          "sha256": "1dec4af4342d51668ffb2b770d8597085d5ac7dc2c6f425535ef7830dcc2bf5f",
-          "bytes": 3214
+          "sha256": "3183bad21dd02bef14826e1a5faccfd497c1ed1a4159308d8c154fcc3d82a652",
+          "bytes": 3303
         }
       ]
     },
@@ -884,10 +884,10 @@
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "567aee5ec7803e3c85acc56db937a8337c0591edb1e5b75bdf3c5a4bfbf97c90",
-          "bytes": 589514,
+          "sha256": "6adf34ef7f4d68005a61934c3f8b4d6ad973a923e5a39aed7b8687cff58f5bad",
+          "bytes": 589581,
           "originalSourceSha256": "dc70570aa2eb4a65a3bb489d6f7fadeadbd14a3a7b4114bfd3066525c54fb302",
-          "sdkSha256": "1bc1c75cfc9c69114c35af35a32fd18d6fa6c35f8f9af4a6144d9501d14634d2"
+          "sdkSha256": "4014143370c2953d5d2df9c566ca6fd88f9cd62afcc6ae7d5b988ede6366e8f2"
         }
       ]
     },
@@ -900,10 +900,10 @@
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "2b22a158d5fb4dbb88b38e5bb9a2af35fdecf96c09acfb666569ed6c73be0be4",
-          "bytes": 389589,
+          "sha256": "40bf8545ed8de1dd6e0e51c47c1e6b880524c545b911244739fc4b7ffcf832c1",
+          "bytes": 389656,
           "originalSourceSha256": "9d8214862e06004d1f9cfd98674af09f349932f8cea2ea747a69c82a47bd02f8",
-          "sdkSha256": "1bc1c75cfc9c69114c35af35a32fd18d6fa6c35f8f9af4a6144d9501d14634d2"
+          "sdkSha256": "4014143370c2953d5d2df9c566ca6fd88f9cd62afcc6ae7d5b988ede6366e8f2"
         },
         {
           "source": "LICENSE",

@@ -9,6 +9,7 @@ import { parseAccepts, targetsFor, extensionOf, mimeOf } from '../file-targets.m
 assert.equal(extensionOf('a/b/Report.PDF'), '.pdf');
 assert.equal(extensionOf('noext'), '');
 assert.equal(mimeOf('x.csv'), 'text/csv');
+assert.equal(mimeOf('x.markdown'), 'text/markdown');
 assert.equal(mimeOf('x.bin'), 'application/octet-stream');
 assert.match(parseAccepts([{ action: 'run', extensions: ['.x'], label: 'x' }]).error, /action/);
 assert.match(parseAccepts([{ action: 'import', extensions: ['pdf'], label: 'x' }]).error, /extensions/);

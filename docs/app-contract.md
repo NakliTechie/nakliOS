@@ -755,7 +755,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 | member | kind | what it is |
 |---|---|---|
 | `files.experimental_targets` | function · **experimental** | Which apps take a file, from their declared `accepts`. Standalone: `[]`. |
-| `files.experimental_sendTo` | function · **experimental** | Send read-only copies of up to 10 files, 64 MB each, to an app that imports them, after the person allows it. Standalone: rejects. |
+| `files.experimental_sendTo` | function · **experimental** | Send read-only copies of up to 10 files, 64 MB each and 128 MB in all, to an app that imports them, after the person allows it. Standalone: rejects. |
 | `files` | namespace | Exact-file handoff (`docs/file-handoff-v1.md`). |
 | `files.experimental_editInAnvil` | function · **experimental** | Ask the host to stage one selected-file edit in Anvil. |
 | `files.experimental_proposeEdit` | function · **experimental** | Return a snapshot edit without writing its source. |

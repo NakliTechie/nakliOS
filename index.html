@@ -4066,6 +4066,7 @@ const knownIframes = new Set();
 const fileGrants = new Map();
 const FILE_GRANT_MAX_CHARS = 2 * 1024 * 1024;
 const FILE_SEND_MAX_BYTES = 64 * 1024 * 1024;
+const FILE_SEND_MAX_TOTAL_BYTES = 128 * 1024 * 1024;
 const FILE_SEND_MAX_COUNT = 10;
 const EDITABLE_FILE_RE = /\.(?:txt|md|markdown|json|jsonl|js|mjs|cjs|ts|tsx|jsx|css|scss|less|html?|xml|svg|yaml|yml|toml|ini|conf|env|csv|tsv|sql|sh|zsh|bash|py|rb|php|java|kt|kts|go|rs|c|h|cc|cpp|hpp|cs|swift|dart|vue|svelte|astro|graphql|gql|properties|gitignore|editorconfig)$/i;
 let appInfoWindow = null;
@@ -4697,6 +4698,8 @@ function finalizeCloseWindow(win){
   clearTimeout(win._closeAckTimer);
   try { win._beforeClose?.(); } catch(_){}
   delete openWindows[id];
+  // A grant still waiting for this window would otherwise outlive it.
+  for (const token of win._pendingFileGrantTokens || []) { const grant = fileGrants.get(token); if (grant && !grant.targetSource) revokeFileGrant(grant); }
   const iframe = win.querySelector('iframe');
   if (iframe){
     if (!win._sdkFeatures?.beforeCloseAck) {
@@ -5370,6 +5373,8 @@ function deliverFileGrant(win, token){
   if (!grant || !iframe?.contentWindow || win.dataset.id !== grant.targetAppId) return false;
   if(grant.kind==='range-edit'&&(!iframe._fileGrantLoaded||iframe.contentDocument?.readyState!=='complete'))return false;
   grant.targetSource = iframe.contentWindow;
+  // A frame that navigated away keeps its contentWindow, so the token goes only to the origin the app launched at.
+  const deliverTo = (!win._expectedOrigin || win._expectedOrigin === 'null') ? '*' : win._expectedOrigin;
   try {
     iframe.contentWindow.postMessage({
       type:'naklios:file:grant',
@@ -5382,7 +5387,7 @@ function deliverFileGrant(win, token){
         kind:grant.kind || 'file',
         type:grant.type,
       },
-    }, '*');
+    }, deliverTo);
     return true;
   } catch(_){ return false; }
 }
@@ -5432,23 +5437,28 @@ async function fileHostSendTo(source, msg, sourceAppId){
   if (!backendId) throw new Error('Storage permission denied');
   if (msg.backend && msg.backend !== backendId) throw new Error('Storage backend changed before Send To completed');
   const backend = BACKENDS[backendId];
+  // The identity is taken before anything is read: a Folder swapped while the dialog is open must not receive the grant.
+  const backendIdentity = fileGrantBackendIdentity(backendId);
   const files = [];
+  let total = 0;
   for (const path of paths) {
     const safePath = fsSafePath(sourceAppId, path);
-    const bytes = await backend.readBinary(safePath, FILE_SEND_MAX_BYTES + 1);
-    if (bytes.length > FILE_SEND_MAX_BYTES) throw new Error(`${path} is larger than ${FILE_SEND_MAX_BYTES / 1048576} MB`);
+    const size = Number((await backend.stat(safePath))?.size) || 0;
+    if (size > FILE_SEND_MAX_BYTES) throw new Error(`${path} is larger than ${FILE_SEND_MAX_BYTES / 1048576} MB`);
+    total += size;
     files.push({ sourcePath:path, safePath, name:path.split('/').at(-1), type:mimeOf(path) });
   }
+  if (total > FILE_SEND_MAX_TOTAL_BYTES) throw new Error(`Send at most ${FILE_SEND_MAX_TOTAL_BYTES / 1048576} MB at once`);
   const sourceName = APPS.find(app => app.id === sourceAppId)?.name || sourceAppId;
-  const list = files.map(file => `<code>${_dlgEscape(file.name)}</code>`).join(', ');
-  const allowed = await nakliosConfirm(`Send ${list} from <strong>${_dlgEscape(sourceName)}</strong> to ${_dlgEscape(target.name)}?\n\n` +
+  const list = files.map(file => `<code>${_dlgEscape(file.sourcePath)}</code>`).join(', ');
+  const allowed = await nakliosConfirm(`Send ${list} from <strong>${_dlgEscape(sourceName)}</strong> on ${_dlgEscape(backend.label)} to ${_dlgEscape(target.name)}?\n\n` +
     `${_dlgEscape(target.name)} receives a copy and cannot change the original.`,
     { title:`Send to ${target.name}?`, okLabel:'Send', cancelLabel:'Cancel', allowHtmlBody:true });
   if (!allowed) return false;
+  if (!backend.isConnected() || fileGrantBackendIdentity(backendId) !== backendIdentity) throw new Error('The storage location changed before the file was sent');
   const tokens = files.map(file => {
     const token = newFileGrantToken();
-    fileGrants.set(token, { ...file, token, kind:'send', targetAppId, sourceAppId, backendId,
-      backendIdentity:fileGrantBackendIdentity(backendId), targetSource:null });
+    fileGrants.set(token, { ...file, token, kind:'send', targetAppId, sourceAppId, backendId, backendIdentity, targetSource:null });
     return token;
   });
   openApp(target, { action:'open-file' });
@@ -5474,6 +5484,7 @@ async function fileHostOpenWith(source, msg, sourceAppId){
     throw new Error('Storage backend changed before Open With completed');
   }
   const backend = BACKENDS[backendId];
+  const backendIdentity = fileGrantBackendIdentity(backendId);
   const safePath = fsSafePath(sourceAppId, sourcePath);
   const data = await backend.read(safePath);
   if (String(data).length > FILE_GRANT_MAX_CHARS) {
@@ -5492,6 +5503,7 @@ async function fileHostOpenWith(source, msg, sourceAppId){
     },
   );
   if (!allowed) return false;
+  if (!backend.isConnected() || fileGrantBackendIdentity(backendId) !== backendIdentity) throw new Error('The storage location changed before the file opened');
 
   const token = newFileGrantToken();
   fileGrants.set(token, {
@@ -5502,7 +5514,7 @@ async function fileHostOpenWith(source, msg, sourceAppId){
     safePath,
     name,
     backendId,
-    backendIdentity:fileGrantBackendIdentity(backendId),
+    backendIdentity,
     targetSource:null,
   });
   openApp(target, { action:'open-file' });

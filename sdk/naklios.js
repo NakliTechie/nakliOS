@@ -669,6 +669,7 @@
         sourceAppId: String(msg.grant.sourceAppId || ''),
         backend: String(msg.grant.backend || ''),
         kind: String(msg.grant.kind || 'file'),
+        type: msg.grant.type ? String(msg.grant.type) : undefined,
       };
       if (!grant.token) return;
       if (!fileOpenListeners.size) pendingFileGrants.push(grant);

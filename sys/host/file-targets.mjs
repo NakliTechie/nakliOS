@@ -5,7 +5,7 @@ export const ACCEPT_ACTIONS = Object.freeze(['edit', 'import']);
 const EXTENSION = /^\.[a-z0-9]{1,12}$/;
 
 const MIME = Object.freeze({
-  '.pdf': 'application/pdf', '.csv': 'text/csv', '.tsv': 'text/tab-separated-values', '.md': 'text/markdown', '.txt': 'text/plain',
+  '.pdf': 'application/pdf', '.csv': 'text/csv', '.tsv': 'text/tab-separated-values', '.md': 'text/markdown', '.markdown': 'text/markdown', '.txt': 'text/plain',
   '.json': 'application/json', '.ics': 'text/calendar', '.html': 'text/html', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
   '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',

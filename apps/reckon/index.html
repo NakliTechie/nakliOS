@@ -6425,6 +6425,14 @@ postMessage({ event: 'boot', payload: { ok: true } });
         return rpc('naklios:commands:call', { name: String(name || ''), input: input || {} }, COMMAND_CALL_TIMEOUT_MS);
       },
     },
+    experimental_widgets: {
+      // One snapshot for a widget the app declares in commands.json; `null` removes the card. `persist: false`
+      // keeps it in memory only, for data the desktop must not copy to disk (Crate). Standalone: does nothing.
+      update: function (id, data, options) {
+        if (!inNakliOS) return false;
+        return send('naklios:widgets:update', { id: String(id || ''), data: data === undefined ? null : data, persist: !options || options.persist !== false }) !== false;
+      },
+    },
     experimental_skills: {
       list: function () {
         if (!inNakliOS) return Promise.resolve([]);
@@ -6521,6 +6529,19 @@ postMessage({ event: 'boot', payload: { ok: true } });
         return rpc('naklios:file:openWith', fsPayload({
           appId: String(appId || ''),
           path: String(path || ''),
+        }));
+      },
+      // Which apps declared they take this file (`accepts` in their commands.json), as `{ appId, name, action, label }`.
+      experimental_targets: function (path) {
+        if (!inNakliOS) return Promise.resolve([]);
+        return rpc('naklios:file:targets', { path: String(path || '') });
+      },
+      // Send copies of app-relative files to an app that imports them. The target gets one read-only token per file;
+      // `read(token)` answers `{ bytes, name, path, type, sourceAppId, backend }`.
+      experimental_sendTo: function (appId, paths) {
+        return rpc('naklios:file:sendTo', fsPayload({
+          appId: String(appId || ''),
+          paths: (Array.isArray(paths) ? paths : [paths]).map(String),
         }));
       },
       onOpen: function (cb) {
@@ -14327,7 +14348,7 @@ export function createApp({ client, params = new URLSearchParams() }) {
     const cells = {};
     values2d.forEach((row, r) => row.forEach((v, c) => { if (v === null) return; cells[`${idxToCol(c)}${r + 1}`] = (typeof v === 'string' && v.startsWith('=')) ? { f: v } : { v }; }));
     const res = await txApply([{ op: 'sheetAdd', id, name }, { op: 'setCells', sheet: id, cells }], { origin: 'io:csv' });
-    if (res) { activeId = id; await refreshSheets(); await loadActiveSheet(); toast(`Imported ${rows.length} row${rows.length === 1 ? '' : 's'} into ${name}`); }
+    if (res && !res.staged) { activeId = id; await refreshSheets(); await loadActiveSheet(); toast(`Imported ${rows.length} row${rows.length === 1 ? '' : 's'} into ${name}`); }
     lastImportNotes = [];
     return res;
   };
@@ -14364,9 +14385,9 @@ export function createApp({ client, params = new URLSearchParams() }) {
     }
     for (const [nm, ref] of Object.entries(parsed.names)) { if (!(nm in definedNames)) ops.push({ op: 'nameSet', name: nm, ref }); }
     const res = await txApply(ops, { origin: 'io:xlsx' });
-    if (res) { activeId = candSheets[0].id; await refreshSheets(); await loadActiveSheet(); }
+    if (res && !res.staged) { activeId = candSheets[0].id; await refreshSheets(); await loadActiveSheet(); }
     lastImportNotes = parsed.notes;
-    toast(`Imported ${candSheets.length} sheet${candSheets.length === 1 ? '' : 's'} from ${cleanName(fileName)}`);
+    if (!res?.staged) toast(`Imported ${candSheets.length} sheet${candSheets.length === 1 ? '' : 's'} from ${cleanName(fileName)}`);
     if (parsed.notes.length) showImportNotes(parsed.notes);
     return res;
   };
@@ -14475,23 +14496,39 @@ export function createApp({ client, params = new URLSearchParams() }) {
   fileInput.style.display = 'none';
   fileInput.setAttribute('aria-hidden', 'true');
   els.app.appendChild(fileInput);
+  // The one path for file bytes, picked or sent from NakliOS Files. An import adds
+  // sheets in one undoable transaction and replaces nothing, so it needs no
+  // unsaved-work prompt.
+  const importFileBytes = async (bytes, fileName, kind) => {
+    if (kind === 'csv' || (kind !== 'xlsx' && fileName.toLowerCase().endsWith('.csv'))) {
+      // content sniff, not extension trust — the picker's `accept` filter is
+      // advisory and the user can pick any file through "All Files"
+      const what = RK.sniffNotText(bytes);
+      if (what) { toast(`CSV rejected: ${cleanName(fileName)} is ${what}`, { kind: 'error', ms: 7000 }); return; }
+      await importCsvText(new TextDecoder('utf-8').decode(bytes), fileName);
+    } else await importXlsxBytes(bytes, fileName);
+  };
   fileInput.addEventListener('change', async () => {
     const file = fileInput.files && fileInput.files[0];
     const kind = fileInput.dataset.kind;
     fileInput.value = '';
     if (!file) return;
-    try {
-      const lower = file.name.toLowerCase();
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      if (kind === 'csv' || (kind !== 'xlsx' && lower.endsWith('.csv'))) {
-        // content sniff, not extension trust — the picker's `accept` filter is
-        // advisory and the user can pick any file through "All Files"
-        const what = RK.sniffNotText(bytes);
-        if (what) { toast(`CSV rejected: ${cleanName(file.name)} is ${what}`, { kind: 'error', ms: 7000 }); return; }
-        await importCsvText(new TextDecoder('utf-8').decode(bytes), file.name);
-      } else await importXlsxBytes(bytes, file.name);
-    } catch (e) { toast(`Import failed: ${e.message ?? e}`, { kind: 'error', ms: 6000 }); }
+    try { await importFileBytes(new Uint8Array(await file.arrayBuffer()), file.name, kind); }
+    catch (e) { toast(`Import failed: ${e.message ?? e}`, { kind: 'error', ms: 6000 }); }
   });
+  // A file sent from NakliOS Files arrives as a read-only grant, one per file. They
+  // import one at a time, because each import reads the sheet names the last added.
+  let sentFiles = Promise.resolve();
+  const importSentFile = (grant) => {
+    if (grant.kind !== 'send') return;
+    sentFiles = sentFiles.then(async () => {
+      try {
+        const { bytes, name } = await window.naklios.files.read(grant.token);
+        await importFileBytes(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes), name);
+      } catch (e) { toast(`Import failed: ${e.message ?? e}`, { kind: 'error', ms: 6000 }); }
+      finally { window.naklios.files.release(grant.token); }
+    });
+  };
   const pickFile = (kind, accept) => { fileInput.dataset.kind = kind; fileInput.accept = accept; fileInput.click(); };
 
   // export the workbook (or active sheet) to bytes WITHOUT downloading —
@@ -15686,6 +15723,7 @@ export function createApp({ client, params = new URLSearchParams() }) {
         nak.ready();
         updateHostTitle();
       } catch { /* standalone / older host — stay inert */ }
+      if (window.parent !== window) nak.files?.onOpen(importSentFile);
       // Common rail: offer the commands in commands.json to the host. The host's
       // grant gates callers, so this does not wait on the Developer setting. It does
       // wait for the host's capabilities answer: with no answer in 5 s it warns and
