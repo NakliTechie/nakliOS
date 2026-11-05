@@ -751,19 +751,19 @@
       "id": "reckon",
       "repo": "NakliTechie/reckon",
       "requestedRef": "main",
-      "resolvedCommit": "5e89edf9d7a9f2705b39d64494344950c86f4233",
+      "resolvedCommit": "e02ca6baaf63e5d5c5384d70081542211cf15015",
       "files": [
         {
           "source": "reckon.html",
           "destination": "index.html",
-          "sha256": "b4aae031058816f0ba362687017462903d9786df604b9124ff120b1ac0a8f27e",
-          "bytes": 1002946
+          "sha256": "254bf76f0a856108131c560ab5a4030d65ccba90a795f414b4909fd2f989327d",
+          "bytes": 1005243
         },
         {
           "source": "commands.json",
           "destination": "commands.json",
-          "sha256": "a1797c4635bcf631d22e1aa5901345a341c578b9b3e3caca53120e4aa4e4a72e",
-          "bytes": 2167
+          "sha256": "4378852059ad9d25c854da70d409b2453b114e63c849d89ac9f37df0b273e786",
+          "bytes": 2274
         }
       ]
     },
@@ -797,13 +797,13 @@
       "id": "sheaf",
       "repo": "NakliTechie/sheaf",
       "requestedRef": "main",
-      "resolvedCommit": "47f8c68d3120bf72c60e9ba69f7616ba715ac6fc",
+      "resolvedCommit": "af3f549181eac82df055a7ad12e78bcbb5ea12d2",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "70dedcde3f844cccdfbaf5d651aba4377eb583f24caea06bbd65018594c7cc4a",
-          "bytes": 382058
+          "sha256": "23a2f0f2ce339c5e89f088da05f6ce803abe80c3af7aca9fdfb7f4178689a512",
+          "bytes": 385216
         },
         {
           "source": "engines/pdf-lib/2.9.1/pdf-lib.esm.js",
@@ -850,8 +850,8 @@
         {
           "source": "commands.json",
           "destination": "commands.json",
-          "sha256": "1dec4af4342d51668ffb2b770d8597085d5ac7dc2c6f425535ef7830dcc2bf5f",
-          "bytes": 3214
+          "sha256": "3183bad21dd02bef14826e1a5faccfd497c1ed1a4159308d8c154fcc3d82a652",
+          "bytes": 3303
         }
       ]
     },
