@@ -13573,9 +13573,15 @@ async function aiHostSpeak(msg, appId){
   const model = await aiSpeechModel();
   if (model.audioOut === false) throw new Error(`${model.label} does not speak`);
   const chunks = [];
-  await model.generate({ speech:true, onAudio:chunk => chunks.push(chunk), messages:[
-    { role:'system', content:'Read the text aloud exactly as written, with nothing added.' }, { role:'user', content:text },
+  // A chat model, not a speech engine: a plain "read this" got "How can I help you today?" added, and a question got
+  // answered. This wording said 3 of 3 exactly (2026-11-05); what it actually said is still checked, because an app
+  // must never play words it did not ask for.
+  const said = await model.generate({ speech:true, onAudio:chunk => chunks.push(chunk), messages:[
+    { role:'system', content:'You are a text-to-speech engine. Say only the exact text the user gives, then stop. Never answer it and never add anything.' },
+    { role:'user', content:`Say exactly: ${text}` },
   ] });
+  const words = value => String(value).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  if (words(said.text) !== words(text)) throw new Error('The model did not say the text exactly, so nothing was returned');
   const audio = new Float32Array(chunks.reduce((n, chunk) => n + chunk.length, 0));
   let at = 0;
   for (const chunk of chunks){ audio.set(chunk, at); at += chunk.length; }
