@@ -4894,6 +4894,7 @@ function spawnIframeWindow(app, options = {}){
     try {
       if(iframe._fileGrantLoaded) releaseFileGrantsForSource(iframe.contentWindow);
       iframe._fileGrantLoaded = true;
+      iframe._loadCount = (iframe._loadCount || 0) + 1;
       // Belt-and-suspenders: re-add in case the contentWindow identity changed.
       knownIframes.add(iframe.contentWindow);
       // Send the theme so any listening app can apply it
@@ -6991,7 +6992,8 @@ async function aiGenerateAnthropic(request){
     maxTokens:Math.max(request.maxTokens || 0, AI_ANTHROPIC_MIN_MAX_TOKENS),
     tools:request.agent ? request.tools : undefined,
     toolChoice:request.toolChoice,
-    replay:aiAnthropicReplay,
+    // Hidden thinking is replayed by content match, so it stays among first-party apps.
+    replay:aiAppIsSystem(request.appId) ? aiAnthropicReplay : new Map(),
   });
   const firstParty = aiAnthropicFirstParty(request.model);
   let emitted = false;
@@ -7026,7 +7028,7 @@ async function aiGenerateAnthropic(request){
   if (result.refusal) throw new Error(`Claude declined this request (${result.refusal})`);
   if (result.toolCalls.length) request.toolCalls = result.toolCalls;
   if (result.usage) request.usage = result.usage;
-  aiAnthropicReplay.set(proto.replayKey({ content:result.text, toolCalls:result.toolCalls }), message.content);
+  if (aiAppIsSystem(request.appId)) aiAnthropicReplay.set(proto.replayKey({ content:result.text, toolCalls:result.toolCalls }), message.content);
   while (aiAnthropicReplay.size > AI_ANTHROPIC_REPLAY_MAX) {
     aiAnthropicReplay.delete(aiAnthropicReplay.keys().next().value);
   }
@@ -7307,13 +7309,16 @@ async function aiHostSubmit(source, msg, appId){
     // third-party app can never reach it (its manifest cannot express it), so a
     // request with agent:true from one is refused rather than silently downgraded.
     const appHasTools = (APPS.find(app => app.id === appId)?.permissions || []).includes('tools');
-    if (wantsAgent && !aiAppIsSystem(appId) && !appHasTools) {
+    // A third-party app gets tool calls and nothing else of the agent tier: tools must be present, and its input stays
+    // inside the normal limits.
+    if (wantsAgent && !aiAppIsSystem(appId) && !(appHasTools && Array.isArray(msg.tools) && msg.tools.length)) {
       throw new Error('Agent-tier inference is restricted to system apps and apps with the tools permission');
     }
     let messages, tools, toolChoice, maxTokens;
     if (wantsAgent){
       const proto = await aiAgentProto();
       messages = proto.normaliseAgentMessages(msg.messages);
+      if (!aiAppIsSystem(appId) && (messages.length > AI_MAX_MESSAGES || JSON.stringify(messages).length > AI_MAX_INPUT_CHARS)) throw new Error('Local AI input is too large');
       tools = proto.normaliseTools(msg.tools);
       toolChoice = proto.normaliseToolChoice(msg.toolChoice ?? msg.tool_choice);
       maxTokens = aiAppIsSystem(appId) ? proto.clampAgentMaxTokens(msg.maxTokens) : Math.min(AI_MAX_OUTPUT_TOKENS, proto.clampAgentMaxTokens(msg.maxTokens));
@@ -8934,11 +8939,16 @@ window.addEventListener('message', async e => {
   } else if (msg.type === 'naklios:ai:embed' || msg.type === 'naklios:ai:transcribe' || msg.type === 'naklios:ai:speak'){
     const appId = getAppId(); const source = e.source;
     const reply = { type:'naklios:ai:reply', requestId:msg.requestId };
+    // A frame that reloaded or navigated while this ran is a different document: it gets no answer.
+    const frame = findIframe(); const loaded = frame?._loadCount;
     try {
       if (!aiManifestAllows(appId)) throw new Error('This app did not declare the inference permission');
-      reply.result = await (msg.type === 'naklios:ai:embed' ? aiHostEmbed : msg.type === 'naklios:ai:transcribe' ? aiHostTranscribe : aiHostSpeak)(msg, appId);
+      if (aiLocalBusy.has(appId)) throw new Error('This app already has an on-device request running');
+      aiLocalBusy.add(appId);
+      try { reply.result = await (msg.type === 'naklios:ai:embed' ? aiHostEmbed : msg.type === 'naklios:ai:transcribe' ? aiHostTranscribe : aiHostSpeak)(msg, appId); }
+      finally { aiLocalBusy.delete(appId); }
     } catch (error){ reply.error = String(error?.message || error); }
-    try { source.postMessage(reply, replyTo); } catch(_){}
+    if (frame?._loadCount === loaded) { try { source.postMessage(reply, replyTo); } catch(_){} }
   } else if (msg.type === 'naklios:ai:chat'){
     const appId = getAppId();
     if (appId) void aiHostSubmit(e.source, msg, appId);
@@ -13533,6 +13543,8 @@ async function voiceAssistantReady(){
 // through their commands (`apps`, above).
 // On-device helpers for apps (common rail step 5). Nothing leaves the browser, so one Allow per app per visit is enough.
 const aiLocalConsent = new Set();
+const aiLocalBusy = new Set(); // one on-device request per app at a time, so an app cannot queue up work ahead of the person
+const AI_LOCAL_EMBED_MS = 180000;
 async function aiAskLocal(appId, what){
   const key = `${appId}:${what}`;
   if (aiLocalConsent.has(key)) return;
@@ -13542,22 +13554,24 @@ async function aiAskLocal(appId, what){
   aiLocalConsent.add(key);
 }
 async function aiHostEmbed(msg, appId){
-  const input = Array.isArray(msg.input) ? msg.input.map(String) : [];
-  if (!input.length || input.length > 64 || input.some(text => text.length > 2000)) throw new Error('Send 1 to 64 texts of at most 2,000 characters');
+  const input = msg.input;
+  if (!Array.isArray(input) || !input.length || input.length > 64 || input.some(text => typeof text !== 'string' || text.length > 2000)) throw new Error('Send 1 to 64 texts of at most 2,000 characters');
   await aiAskLocal(appId, 'on-device text embeddings');
-  const embeddings = await ragEmbed(input);
+  // The worker's first load has no deadline of its own, and this app's busy flag must clear either way.
+  let timer;
+  const embeddings = await Promise.race([ragEmbed(input), new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Embeddings did not answer in time')), AI_LOCAL_EMBED_MS); })]).finally(() => clearTimeout(timer));
   return { embeddings, dimensions:embeddings[0]?.length || 0 };
 }
-// The speech model is the assistant's. An app never starts its 2.7 GB download: that stays the person's click.
+// The speech model is the assistant's, and an app uses it only once the person has turned it on, so an app can never
+// start a download.
 async function aiSpeechModel(){
   const { model } = await voiceAssistantReady();
-  if (!model.ready && model.isCached && await model.isCached()) await model.load();
   if (!model.ready) throw new Error(`Turn on the voice assistant (${model.label}) first`);
   return model;
 }
 async function aiHostTranscribe(msg, appId){
   const audio = msg.audio;
-  if (!(audio instanceof Float32Array) || !audio.length || audio.length > 16000 * 30) throw new Error('Send 16 kHz mono samples as a Float32Array, at most 30 s');
+  if (!(audio instanceof Float32Array) || !audio.length || audio.length > 16000 * 30 || audio.byteLength !== audio.buffer.byteLength) throw new Error('Send 16 kHz mono samples as a Float32Array, at most 30 s');
   await aiAskLocal(appId, 'on-device speech recognition');
   const model = await aiSpeechModel();
   const out = await model.generate({ speech:false, maxTokens:512, messages:[
@@ -13567,8 +13581,8 @@ async function aiHostTranscribe(msg, appId){
   return { text:String(out.text || '').trim() };
 }
 async function aiHostSpeak(msg, appId){
-  const text = String(msg.text || '').trim();
-  if (!text || text.length > 1000) throw new Error('Send 1 to 1,000 characters');
+  const text = typeof msg.text === 'string' && msg.text.length <= 1000 ? msg.text.trim() : '';
+  if (!text) throw new Error('Send 1 to 1,000 characters');
   await aiAskLocal(appId, 'on-device speech');
   const model = await aiSpeechModel();
   if (model.audioOut === false) throw new Error(`${model.label} does not speak`);
