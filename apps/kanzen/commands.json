@@ -1,0 +1,79 @@
+{
+  "commands": [
+    {
+      "name": "board.list",
+      "description": "List the boards in KanZen, e.g. \"what boards do I have\".",
+      "scope": "read",
+      "input": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "board.read",
+      "description": "Read a KanZen board with its columns and cards, e.g. \"what is on my work board\". Without a board it reads the open one.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "board": { "type": "string", "minLength": 1, "description": "Board name; leave out for the open board" }
+        }
+      }
+    },
+    {
+      "name": "card.list",
+      "description": "Find cards on a KanZen board, e.g. \"what is overdue\" or \"what is in the doing column\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "board": { "type": "string", "minLength": 1, "description": "Board name; leave out for the open board" },
+          "column": { "type": "string", "minLength": 1, "description": "Column name, e.g. \"Doing\"" },
+          "text": { "type": "string", "minLength": 1, "description": "Words to look for in card titles and descriptions" },
+          "due": { "type": "string", "enum": ["overdue", "today", "week", "none"], "description": "Due date filter" },
+          "priority": { "type": "string", "enum": ["none", "low", "medium", "high", "urgent"], "description": "Priority filter" },
+          "limit": { "type": "integer", "description": "Most cards to return, at most 50; 20 if left out" }
+        }
+      }
+    },
+    {
+      "name": "card.add",
+      "description": "Add a card to a KanZen board, e.g. \"add a card to call the plumber to my to do column\". The person approves it before it appears.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string", "minLength": 1, "description": "The card's title" },
+          "column": { "type": "string", "minLength": 1, "description": "Column name; leave out for the board's first column" },
+          "board": { "type": "string", "minLength": 1, "description": "Board name; leave out for the open board" },
+          "description": { "type": "string", "description": "Longer notes for the card" },
+          "due_date": { "type": "string", "description": "Due date as YYYY-MM-DD" },
+          "priority": { "type": "string", "enum": ["none", "low", "medium", "high", "urgent"], "description": "Priority" }
+        },
+        "required": ["title"]
+      }
+    },
+    {
+      "name": "card.move",
+      "description": "Move a KanZen card to another column, e.g. \"move the plumber card to done\". The person approves it before it moves.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "card": { "type": "string", "minLength": 1, "description": "The card's title, or part of it" },
+          "column": { "type": "string", "minLength": 1, "description": "Column to move it to" },
+          "board": { "type": "string", "minLength": 1, "description": "Board name; leave out for the open board" }
+        },
+        "required": ["card", "column"]
+      }
+    },
+    {
+      "name": "proposal.status",
+      "description": "Check KanZen changes waiting for approval, e.g. \"did my card get added\". Give a proposal_id for one change, or nothing for all that wait.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "proposal_id": { "type": "string", "minLength": 1, "description": "The proposal_id that card.add or card.move returned" }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "commands": [
+    {
+      "name": "sheets.list",
+      "description": "List the sheets in the open Reckon workbook, e.g. \"what sheets are in my spreadsheet\".",
+      "scope": "read",
+      "input": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "range.read",
+      "description": "Read the values and formulas in a range of the Reckon spreadsheet, e.g. \"what is in A1 to C10 on Sheet1\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ref": { "type": "string", "minLength": 1, "description": "Sheet name and A1 range of at most 2,000 cells, e.g. \"Sheet1!A1:C10\"" }
+        },
+        "required": ["ref"]
+      }
+    },
+    {
+      "name": "range.write",
+      "description": "Write values or formulas into the Reckon spreadsheet, e.g. \"put 42 in B2 on Sheet1\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ref": { "type": "string", "minLength": 1, "description": "Sheet name and top-left cell, e.g. \"Sheet1!B2\"" },
+          "values": {
+            "type": "array",
+            "items": { "type": "array", "items": {} },
+            "description": "Rows of cells, e.g. [[1, 2], [3, \"=A1+B1\"]]. Text that starts with = is a formula; null clears the cell."
+          }
+        },
+        "required": ["ref", "values"]
+      }
+    },
+    {
+      "name": "formula.eval",
+      "description": "Work out a formula without changing the Reckon spreadsheet, e.g. \"what is the sum of A1 to A9 on Sheet1\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "formula": { "type": "string", "minLength": 1, "description": "The formula, e.g. \"=SUM(A1:A9)\"" },
+          "sheet": { "type": "string", "minLength": 1, "description": "The sheet its cell references read from, e.g. \"Sheet1\"" }
+        },
+        "required": ["formula"]
+      }
+    },
+    {
+      "name": "recalc",
+      "description": "Recompute every formula in the Reckon workbook, e.g. \"recalculate my spreadsheet\".",
+      "scope": "write",
+      "input": { "type": "object", "properties": {} }
+    }
+  ]
+}

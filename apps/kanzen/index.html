@@ -6106,7 +6106,7 @@ const ACTION_META = {
 function actionIcon(a){
   return (ACTION_META[a.action] || ACTION_META.legacy).icon;
 }
-const KZ_DOOR_LABELS = { modelContext:'WebMCP', window:'window API', channel:'cross-tab channel' };
+const KZ_DOOR_LABELS = { modelContext:'WebMCP', window:'window API', channel:'cross-tab channel', commands:'NakliOS commands' };
 function activityRowText(a){
   const text = activityRowBaseText(a);
   if(a.actor !== 'agent') return text;
@@ -8799,7 +8799,8 @@ const KZ_TOOL_MAP = new Map(KZ_TOOLS.map(tool => [tool.name, tool]));
    Agent face — the doors agents use to reach the manifest
    ┌ document.modelContext / navigator.modelContext → registerTool per entry (WebMCP)
    ├ window.kanzen.tools[name](input)                → the house door, same entries
-   └ BroadcastChannel('kanzen-agent')                → other tabs; off until the person opens it
+   ├ BroadcastChannel('kanzen-agent')                → other tabs; off until the person opens it
+   └ naklios.experimental_commands (commands.json)   → NakliOS callers, by name; the host's grant is the gate
    Read tools answer at once and session tools change only what this tab shows. Write and
    destructive calls become proposals that apply only when the person approves them here.
    Every agent call is logged with its door; every applied change lands in the board history
@@ -8817,6 +8818,7 @@ const KZ_AGENT = {
   channel: null,
   modelContextAbort: null,
   modelContextTools: [],
+  commandNames: [],          // what NakliOS accepted from commands.json
   applying: Promise.resolve(),
   hostQueue: [],             // proposal ids waiting their turn in NakliOS review
   hostActive: null,          // {localId, hostId} of the one proposal NakliOS holds
@@ -8839,6 +8841,7 @@ function kzManifest(){
       modelContext: KZ_AGENT.modelContextTools.length ? 'registered' : 'not available in this browser',
       window: 'window.kanzen',
       channel: KZ_AGENT.channel ? `BroadcastChannel("${KZ_CHANNEL_NAME}")` : 'closed; the person can open it in Preferences',
+      ...(KZ_AGENT.commandNames.length ? { commands: 'registered with NakliOS' } : {}),
     },
     approval: 'read tools answer at once; session tools change only what this tab shows; write and destructive tools return {status:"pending_approval", proposal_id} and apply only after the person approves the proposal, in KanZen or, when KanZen runs inside NakliOS, in NakliOS review. Poll get_proposal for the outcome.',
     tools: KZ_TOOLS.filter(t => t.kind !== 'person').map(t => ({
@@ -8875,8 +8878,8 @@ async function kzDispatch(name, input, ctx){
   if(tool.kind !== 'read') kzEmit('change', { tool: name, actor: ctx.actor, door: ctx.door, board_id: S.currentBoardId });
   return result ?? { ok: true };
 }
-// Every agent door lands here.
-async function kzAgentCall(name, input, door, caller){
+// Every agent door lands here. `prepare` turns a door's own input into the tool's, inside the call log.
+async function kzAgentCall(name, input, door, caller, prepare){
   const ctx = Object.freeze({ actor:'agent', door, caller: caller ? String(caller).slice(0, 80) : null });
   const entry = { at: now(), tool: String(name).slice(0, 80), door, caller: ctx.caller, outcome: 'running', detail: '' };
   KZ_AGENT.calls.unshift(entry);
@@ -8889,6 +8892,7 @@ async function kzAgentCall(name, input, door, caller){
     let clean;
     try{ clean = input == null ? {} : structuredClone(input); }
     catch(_){ throw kzError('invalid_input', 'Input must be plain JSON data'); }
+    if(prepare) clean = prepare(clean);
     kzValidateInput(tool, clean);
     if(!kzStaged(tool)){
       const result = kzPlain(await tool.run(clean, ctx));
@@ -9123,6 +9127,7 @@ function kzInstallDoors(){
   kzInstallWindowApi();
   kzRegisterModelContext();
   kzOpenChannel(kzChannelSetting());
+  kzRegisterCommands();
   kzRenderAgentUi();
 }
 function kzInstallWindowApi(){
@@ -9167,6 +9172,80 @@ function kzRegisterModelContext(){
       }
     }catch(error){ console.warn('WebMCP registration failed for', tool.name, error); }
   }
+}
+// NakliOS commands: the door commands.json declares. The desktop lists them as kanzen.<name>, checks each caller's
+// grant and opens KanZen minimized when it is closed. Callers speak names, not ids, so a handler resolves the board,
+// column or card, then runs the same KZ_TOOLS entry as every other door: writes stay proposals, in NakliOS review.
+const KZ_COMMAND_LIMIT = 20;        // cards per answer by default: a small model reads these
+const KZ_COMMAND_MAX_LIMIT = 50;    // the most any caller gets in one answer; `total` still counts every match
+const KZ_COMMAND_COLUMN_CARDS = 10; // cards shown per column in board.read; card.list reaches the rest
+// An id or exact name wins; otherwise the name must match one row only, so a vague phrase cannot pick the wrong card.
+function kzCommandPick(rows, query, label, noun, where){
+  const wanted = String(query).trim().toLowerCase();
+  const byId = rows.find(row => row.id === query);
+  if(byId) return byId;
+  const exact = rows.filter(row => label(row).trim().toLowerCase() === wanted);
+  const hits = exact.length ? exact : rows.filter(row => label(row).toLowerCase().includes(wanted));
+  if(hits.length === 1) return hits[0];
+  if(hits.length) throw kzError('ambiguous', `More than one ${noun} on ${where} matches "${query}": ${hits.slice(0, 5).map(row => `"${label(row)}" (${row.id})`).join(', ')}`);
+  throw kzError('not_found', `No ${noun} on ${where} matches "${query}"`);
+}
+function kzCommandBoard(args){
+  if(!args.board) return kzBoardFor({}, false);
+  return kzCommandPick(S.boardOrder.map(id => S.boards[id]), args.board, b => b.name, 'board', 'KanZen');
+}
+function kzCommandColumn(b, name){ return kzCommandPick(b.columns, name, c => c.name, 'column', `board "${b.name}"`); }
+function kzCommandCard(card){
+  return { id: card.id, title: card.title, column: card.column_name, priority: card.priority, due_date: card.due_date };
+}
+function kzCommandStaged(out){
+  return { ...out, message: 'Waiting for the person to approve this change. Call proposal.status with this proposal_id for the outcome.' };
+}
+function kzCommand(tool, prepare, shape = out => out){
+  return async (args, context) => shape(await kzAgentCall(tool, args, 'commands', context?.caller, prepare));
+}
+const KZ_COMMANDS = {
+  'board.list': kzCommand('list_boards'),
+  'board.read': kzCommand('get_board', args => ({ board_id: kzCommandBoard(args).id }), out => ({
+    id: out.id, name: out.name, is_open: out.is_open,
+    columns: out.columns.map(column => {
+      const cards = out.cards.filter(card => card.column_id === column.id);
+      return { id: column.id, name: column.name, card_count: cards.length, cards: cards.slice(0, KZ_COMMAND_COLUMN_CARDS).map(kzCommandCard) };
+    }),
+  })),
+  'card.list': kzCommand('search_cards', args => {
+    const b = kzCommandBoard(args);
+    const input = { board_id: b.id, limit: Math.min(args.limit ?? KZ_COMMAND_LIMIT, KZ_COMMAND_MAX_LIMIT) };
+    if(args.column) input.column_id = kzCommandColumn(b, args.column).id;
+    if(args.text) input.query = args.text;
+    if(args.due) input.due = args.due;
+    if(args.priority) input.priority = args.priority;
+    return input;
+  }, out => ({ board_id: out.board_id, total: out.total, cards: out.cards.map(kzCommandCard) })),
+  'card.add': kzCommand('create_card', args => {
+    const b = kzCommandBoard(args);
+    const column = args.column ? kzCommandColumn(b, args.column) : b.columns[0];
+    if(!column) throw kzError('not_found', `Board "${b.name}" has no columns`);
+    const input = { board_id: b.id, column_id: column.id, title: args.title };
+    for(const key of ['description', 'due_date', 'priority']) if(args[key]) input[key] = args[key];
+    return input;
+  }, kzCommandStaged),
+  'card.move': kzCommand('move_card', args => {
+    const b = kzCommandBoard(args);
+    const card = kzCommandPick(Object.values(b.cards), args.card, c => c.title, 'card', `board "${b.name}"`);
+    return { board_id: b.id, card_id: card.id, column_id: kzCommandColumn(b, args.column).id };
+  }, kzCommandStaged),
+  'proposal.status': (args, context) => args.proposal_id
+    ? kzAgentCall('get_proposal', { proposal_id: args.proposal_id }, 'commands', context?.caller)
+    : kzAgentCall('list_proposals', { status: 'pending' }, 'commands', context?.caller),
+};
+// Hosted only, and independent of the Preferences channel switch. A failure leaves the other doors as they were.
+function kzRegisterCommands(){
+  if(window.parent === window || !naklios.experimental_commands) return;
+  fetch('./commands.json').then(response => response.json()).then(manifest =>
+    naklios.experimental_commands.register(manifest.commands.map(command => ({ ...command, handler: KZ_COMMANDS[command.name] })))
+  ).then(out => { KZ_AGENT.commandNames = out?.registered || []; })
+    .catch(error => console.warn('[kanzen] commands could not register', error));
 }
 function kzChannelSetting(){
   try{ return localStorage.getItem(KZ_CHANNEL_KEY) === '1'; }catch(_){ return false; }
