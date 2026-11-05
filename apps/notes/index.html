@@ -1192,9 +1192,21 @@ async function writeNoteBody(note, body){
 async function namedNote(title){
   await libraryReady;
   const key = String(title).trim().toLowerCase();
-  const note = library.notes.find(item => !item.trashedAt && item.title.toLowerCase() === key);
-  if (!note) throw new Error(`There is no note called ${title}.`);
+  const hits = library.notes.filter(item => !item.trashedAt && item.title.toLowerCase() === key);
+  if (!hits.length) throw new Error(`There is no note called ${title}.`);
+  if (hits.length > 1) throw new Error(`${hits.length} notes are called ${title}; change them in Notes.`);
+  return hits[0];
+}
+// A command never races what the person is typing: the note must be saved first, or the next keystroke would undo it.
+async function settledNote(title){
+  const note = await namedNote(title);
+  if (selectedId === note.id && dirty) throw new Error(`${note.title} is open with unsaved typing. Try again in a moment.`);
   return note;
+}
+function showNoteFields(note){
+  if (selectedId !== note.id) return;
+  $('note-title').value = note.title;
+  $('notebook-select').value = note.notebookId;
 }
 const COMMAND_HANDLERS = {
   async 'list.add'({ list, things }){
@@ -1213,26 +1225,30 @@ const COMMAND_HANDLERS = {
     if (!note) return { list, items:[], message:`There is no ${list} list.` };
     return { list:note.title, items:listItems(await readNoteBody(note.id)) };
   },
-  async 'note.update'({ title, new_title, text, notebook }){
-    const note = await namedNote(title);
-    await flushNow();
+  async 'note.update'({ title, new_title, notebook }){
+    const note = await settledNote(title);
     if (new_title != null) note.title = String(new_title).slice(0,180);
     if (notebook != null) {
       const book = library.notebooks.find(item => item.name.toLowerCase() === String(notebook).trim().toLowerCase());
       if (!book) throw new Error(`There is no notebook called ${notebook}.`);
       note.notebookId = book.id;
     }
-    await writeNoteBody(note, text == null ? await readNoteBody(note.id) : String(text));
+    await writeNoteBody(note, await readNoteBody(note.id));
+    showNoteFields(note);
     return { updated:note.title, where:locationLabel(activeLocation) };
   },
+  async 'note.replace'({ title, text }){
+    const note = await settledNote(title);
+    await writeNoteBody(note, String(text));
+    return { replaced:note.title, where:locationLabel(activeLocation) };
+  },
   async 'note.pin'({ title, pinned = true }){
-    const note = await namedNote(title);
+    const note = await settledNote(title);
     await setPinned(note, pinned === true);
     return { note:note.title, pinned:note.pinned };
   },
   async 'note.trash'({ title }){
-    const note = await namedNote(title);
-    await flushNow();
+    const note = await settledNote(title);
     await moveToTrash(note);
     return { trashed:note.title };
   },
