@@ -229,14 +229,14 @@
       "id": "menagerie",
       "repo": "NakliTechie/menagerie",
       "requestedRef": "main",
-      "resolvedCommit": "b3023437c4ca20c992ee4f4940e50e3f59350cbf",
+      "resolvedCommit": "800b8330dd28bb199360f589316f06dd6f4b99a6",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
           "sha256": "af153d16a553504e0ada021a213a40b32dfd74253f211aa5012604db1bb68b2d",
           "bytes": 283622,
-          "originalSourceSha256": "74a19d967ea997b8c8fb29f43ac7f58773572bbb70ad0a47d442b10bf9ef53bb",
+          "originalSourceSha256": "b686cd6446696850d8326bf6ca80789e66e25dc5d0fadfdd70e6f2223e5e711e",
           "sdkSha256": "1f0fad3e29d482d50b86fa08f836dadf49287dd6f7158b11adf8b0e95e911ea7"
         },
         {
@@ -415,14 +415,14 @@
       "id": "nakliposter",
       "repo": "NakliTechie/NakliPoster",
       "requestedRef": "main",
-      "resolvedCommit": "58a8921e15ccc2232c5814676c279a3e3d34972c",
+      "resolvedCommit": "c16247384933f6d28fa84e50928b76bcfce05772",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "0e75d055dca58caad019d7561d5f6efa81706df677bd35e7dba3bfefebf938d4",
-          "bytes": 326666,
-          "originalSourceSha256": "6fad4dcdc1c8ac6b872cc879d6a18b7650fa3c95fe053200a8df67c87b86e433",
+          "sha256": "9934a3ac3fefa270f943771ac0277915484a9358945d8ff2130e3c2dfda00399",
+          "bytes": 328012,
+          "originalSourceSha256": "a0eb44a88f0d331a3a36224cc5cd3d04c2e1b8bd6fe31a385d8342057a3af4b2",
           "sdkSha256": "1f0fad3e29d482d50b86fa08f836dadf49287dd6f7158b11adf8b0e95e911ea7"
         },
         {
@@ -437,13 +437,13 @@
       "id": "protavia",
       "repo": "NakliTechie/protavia",
       "requestedRef": "main",
-      "resolvedCommit": "991360fdaa525e1493276d758db8d9235ddb0886",
+      "resolvedCommit": "2bee2326eb1c79095c17523c20166c6d683fbc85",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "febdec5d8f4ba17cd8b0254baf7dde99e6c492211929c1551ff9ea3bda327f07",
-          "bytes": 62704
+          "sha256": "d2a8b735eef0a7842eb99224527528cc92931ed513b9370eee1d584c4b0658dc",
+          "bytes": 65335
         },
         {
           "source": "vendor/molstar/5.13.1/molstar.css",
@@ -855,14 +855,14 @@
       "id": "tijori",
       "repo": "NakliTechie/Tijori",
       "requestedRef": "main",
-      "resolvedCommit": "cf452b2dd909029bb4e0f145462fda70f8a33351",
+      "resolvedCommit": "12a5b9fc837f83f6e848704e82eb8c7b12f00444",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
           "sha256": "182669a318dd000263f2a36b1e45bcc0a6a61e53e3e9d397a4f20bd698f8efac",
           "bytes": 586878,
-          "originalSourceSha256": "9ea0b9b9aec77ec1805e1e98d28d5b023ee4d462f1f4d5c330725249efbfe1e5",
+          "originalSourceSha256": "dc70570aa2eb4a65a3bb489d6f7fadeadbd14a3a7b4114bfd3066525c54fb302",
           "sdkSha256": "1f0fad3e29d482d50b86fa08f836dadf49287dd6f7158b11adf8b0e95e911ea7"
         }
       ]
@@ -871,14 +871,14 @@
       "id": "vaultmind",
       "repo": "NakliTechie/VaultMind",
       "requestedRef": "main",
-      "resolvedCommit": "753d64aa1682771657c9500b15fddb057bce3c53",
+      "resolvedCommit": "55d39543bff2142ce5b5657852dde22e518906b7",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
           "sha256": "f98cc014cf191cd7ba9c33430af3fb8e1446fa16f561a968ea0b5df9b19d9e06",
           "bytes": 386953,
-          "originalSourceSha256": "c7a5014c34d73b472b24451de27d4b5c883af3eb21fd5806aae4db516a5c8872",
+          "originalSourceSha256": "9d8214862e06004d1f9cfd98674af09f349932f8cea2ea747a69c82a47bd02f8",
           "sdkSha256": "1f0fad3e29d482d50b86fa08f836dadf49287dd6f7158b11adf8b0e95e911ea7"
         },
         {
@@ -893,13 +893,13 @@
       "id": "vocella",
       "repo": "NakliTechie/vocella",
       "requestedRef": "main",
-      "resolvedCommit": "107aeb31b14c9049f5ca1f610bdcece042d8f580",
+      "resolvedCommit": "69aac31e4916ca446ada75d9fabaab1ac2e6ad7f",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "a57468996962426c138de07c435524c12964193bf2c67ab99863b107d89a4823",
-          "bytes": 53981
+          "sha256": "499a610fdec3e5d41140f0b58d7174775d760e9cb1bad8775fb49ea076204aea",
+          "bytes": 59172
         },
         {
           "source": "LICENSE",
