@@ -884,7 +884,7 @@ body {
 <!-- naklios.js — cooperative SDK, vendored inline (single-file / no-network ethos).
      Canonical source: https://naklios.dev/sdk/naklios.js (MIT). -->
 <script>
-/* naklios-sdk:begin ver=2 sha256=1f0fad3e29d482d50b86fa08f836dadf49287dd6f7158b11adf8b0e95e911ea7 */
+/* naklios-sdk:begin ver=2 sha256=6b3a6daa02698c5a2e8c18a879c63fa4f9483c763372275cef8a1c955a834bcf */
 /*!
  * naklios.js — cooperative SDK for apps hosted inside NakliOS (Immersive mode)
  *
@@ -1096,6 +1096,9 @@ body {
       return true;
     } catch (_) { return false; }
   }
+
+  // A call can wait on the person's answer, on the app opening, and on its handler.
+  var COMMAND_CALL_TIMEOUT_MS = 300000;
 
   function rpc(type, payload, timeoutMs) {
     if (!inNakliOS) return Promise.reject(new Error('Not hosted — naklios.* unavailable standalone'));
@@ -1704,6 +1707,15 @@ body {
         commandHandlers = handlers;
         if (!inNakliOS) return Promise.resolve({ standalone: true, registered: [] });
         return rpc('naklios:commands:register', { commands: meta });
+      },
+      // System apps only: find and call other apps' commands. The host applies the caller's grant and asks the person.
+      search: function (query) {
+        if (!inNakliOS) return Promise.resolve([]);
+        return rpc('naklios:commands:search', { query: String(query || '') });
+      },
+      call: function (name, input) {
+        if (!inNakliOS) return Promise.reject(new Error('Not hosted — app commands are unavailable standalone'));
+        return rpc('naklios:commands:call', { name: String(name || ''), input: input || {} }, COMMAND_CALL_TIMEOUT_MS);
       },
     },
     experimental_skills: {

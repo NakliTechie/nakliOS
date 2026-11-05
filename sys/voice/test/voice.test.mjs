@@ -460,6 +460,26 @@ await test('app commands become the tuned tool names and run only through apps.i
   assert.equal(none.list().some((t) => t.name === 'add_to_list'), false, 'no catalog, no app tools');
 });
 
+await test('other apps come through two fixed tools, so the tool list does not grow with the catalog', async () => {
+  const calls = [];
+  const tools = [
+    { name: 'notes.list.read', description: 'Read a list', inputSchema: { type: 'object', properties: {} } },
+    { name: 'kanzen.card.add', description: 'Add a card to a board', inputSchema: { type: 'object', properties: {} } },
+    { name: 'reckon.range.read', description: 'Read cells from a sheet', inputSchema: { type: 'object', properties: {} } },
+  ];
+  const apps = { tools, async invoke(name, args) { calls.push([name, args]); return { ok: true, result: { done: name } }; } };
+  const reg = createToolRegistry(moreTools({ ...standIns().deps, apps }));
+  const names = reg.list().map((t) => t.name);
+  assert.ok(names.includes('find_app_action') && names.includes('run_app_action') && names.includes('read_list'));
+  assert.ok(!names.some((n) => n.startsWith('kanzen') || n.startsWith('reckon')), 'no per-command tools');
+  const found = (await reg.run('find_app_action', { about: 'kanzen card' })).result;
+  assert.equal(found[0].name, 'kanzen.card.add');
+  assert.ok(!found.some((c) => c.name === 'notes.list.read'), 'tuned tools are not offered twice');
+  assert.equal((await reg.run('run_app_action', { name: 'kanzen.card.add', input: { title: 'x' } })).result.done, 'kanzen.card.add');
+  assert.match((await reg.run('run_app_action', { name: 'fs.delete' })).error, /no app action/);
+  assert.deepEqual(calls, [['kanzen.card.add', { title: 'x' }]]);
+});
+
 await test('web search needs a provider; page, Python and skill tools reach their stand-ins', async () => {
   const st = standIns(); let on = true;
   const reg = createToolRegistry(moreTools({ ...st.deps, webOn: () => on }));

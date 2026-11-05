@@ -210,6 +210,9 @@
     } catch (_) { return false; }
   }
 
+  // A call can wait on the person's answer, on the app opening, and on its handler.
+  var COMMAND_CALL_TIMEOUT_MS = 300000;
+
   function rpc(type, payload, timeoutMs) {
     if (!inNakliOS) return Promise.reject(new Error('Not hosted — naklios.* unavailable standalone'));
     return new Promise(function (resolve, reject) {
@@ -817,6 +820,15 @@
         commandHandlers = handlers;
         if (!inNakliOS) return Promise.resolve({ standalone: true, registered: [] });
         return rpc('naklios:commands:register', { commands: meta });
+      },
+      // System apps only: find and call other apps' commands. The host applies the caller's grant and asks the person.
+      search: function (query) {
+        if (!inNakliOS) return Promise.resolve([]);
+        return rpc('naklios:commands:search', { query: String(query || '') });
+      },
+      call: function (name, input) {
+        if (!inNakliOS) return Promise.reject(new Error('Not hosted — app commands are unavailable standalone'));
+        return rpc('naklios:commands:call', { name: String(name || ''), input: input || {} }, COMMAND_CALL_TIMEOUT_MS);
       },
     },
     experimental_skills: {

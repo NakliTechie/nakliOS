@@ -31,6 +31,17 @@ const answer = (catalog, app, value) => {
 const plain = value => JSON.parse(JSON.stringify(value));
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
+// ── system apps calling other apps ──
+{
+  const host = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  const sdk = await readFile(new URL('../sdk/naklios.js', import.meta.url), 'utf8');
+  assert.match(host, /if \(!aiAppOwnsEgress\(appId\)\) throw new Error\('Only system apps may call app commands'\)/, 'other apps cannot call commands');
+  assert.match(host, /faceFor\(callerId, \['app:read', 'app:write'\]\)\.invoke\(name, input\)/, 'a caller runs on its own face, with app scopes only');
+  assert.match(sdk, /naklios:commands:search/); assert.match(sdk, /naklios:commands:call/);
+  assert.deepEqual(['stickies.add', 'stickies.update', 'stickies.delete'].filter(n => HOST_COMMANDS.some(row => row[0] === n)).length, 3, 'stickies have their own names');
+  assert.ok(!HOST_COMMANDS.some(row => /^notes\./.test(row[0])), 'the Notes app owns notes.*');
+}
+
 // ── catalog rules ──
 {
   const catalog = createCatalog({ base: base() });

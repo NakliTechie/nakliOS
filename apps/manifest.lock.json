@@ -160,10 +160,10 @@
         {
           "source": "sdk/naklios.js",
           "destination": "sdk/naklios.js",
-          "sha256": "1f0fad3e29d482d50b86fa08f836dadf49287dd6f7158b11adf8b0e95e911ea7",
-          "bytes": 48710,
+          "sha256": "6b3a6daa02698c5a2e8c18a879c63fa4f9483c763372275cef8a1c955a834bcf",
+          "bytes": 49411,
           "originalSourceSha256": "9390489a66446f7d78a72863ca8c2ed71cce1760b395d5d500e4c86a43a7fa52",
-          "sdkSha256": "1f0fad3e29d482d50b86fa08f836dadf49287dd6f7158b11adf8b0e95e911ea7"
+          "sdkSha256": "6b3a6daa02698c5a2e8c18a879c63fa4f9483c763372275cef8a1c955a834bcf"
         }
       ]
     },
@@ -188,10 +188,10 @@
         {
           "source": "sdk/naklios.js",
           "destination": "sdk/naklios.js",
-          "sha256": "1f0fad3e29d482d50b86fa08f836dadf49287dd6f7158b11adf8b0e95e911ea7",
-          "bytes": 48710,
+          "sha256": "6b3a6daa02698c5a2e8c18a879c63fa4f9483c763372275cef8a1c955a834bcf",
+          "bytes": 49411,
           "originalSourceSha256": "9390489a66446f7d78a72863ca8c2ed71cce1760b395d5d500e4c86a43a7fa52",
-          "sdkSha256": "1f0fad3e29d482d50b86fa08f836dadf49287dd6f7158b11adf8b0e95e911ea7"
+          "sdkSha256": "6b3a6daa02698c5a2e8c18a879c63fa4f9483c763372275cef8a1c955a834bcf"
         }
       ]
     },
@@ -218,10 +218,10 @@
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "96a816ba9a45151c0c19c9dcb525907e86684c9c4cb7a2bc9122fcfd669b1921",
-          "bytes": 430084,
+          "sha256": "3b788a034f4a2f73ff0eb0b7e1b294044dde9b168ca338b59d769d0d83a93467",
+          "bytes": 430785,
           "originalSourceSha256": "65b1e1ea9edbc667ff26b969b2625b6607dc360329c9846e3c8f8368bae372f6",
-          "sdkSha256": "1f0fad3e29d482d50b86fa08f836dadf49287dd6f7158b11adf8b0e95e911ea7"
+          "sdkSha256": "6b3a6daa02698c5a2e8c18a879c63fa4f9483c763372275cef8a1c955a834bcf"
         }
       ]
     },
@@ -234,10 +234,10 @@
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "af153d16a553504e0ada021a213a40b32dfd74253f211aa5012604db1bb68b2d",
-          "bytes": 283622,
+          "sha256": "59ec157f0db6fb8e18300a5f69f5bd613c894b3825b60bcc859f40374189a86a",
+          "bytes": 284323,
           "originalSourceSha256": "b686cd6446696850d8326bf6ca80789e66e25dc5d0fadfdd70e6f2223e5e711e",
-          "sdkSha256": "1f0fad3e29d482d50b86fa08f836dadf49287dd6f7158b11adf8b0e95e911ea7"
+          "sdkSha256": "6b3a6daa02698c5a2e8c18a879c63fa4f9483c763372275cef8a1c955a834bcf"
         },
         {
           "source": "manifest.webmanifest",
@@ -420,10 +420,10 @@
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "9934a3ac3fefa270f943771ac0277915484a9358945d8ff2130e3c2dfda00399",
-          "bytes": 328012,
+          "sha256": "59fbe5cac444bc3bb199d5217c475fef20801e85c550c6c3c14d8050a5b875da",
+          "bytes": 328713,
           "originalSourceSha256": "a0eb44a88f0d331a3a36224cc5cd3d04c2e1b8bd6fe31a385d8342057a3af4b2",
-          "sdkSha256": "1f0fad3e29d482d50b86fa08f836dadf49287dd6f7158b11adf8b0e95e911ea7"
+          "sdkSha256": "6b3a6daa02698c5a2e8c18a879c63fa4f9483c763372275cef8a1c955a834bcf"
         },
         {
           "source": "LICENSE",
@@ -860,10 +860,10 @@
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "182669a318dd000263f2a36b1e45bcc0a6a61e53e3e9d397a4f20bd698f8efac",
-          "bytes": 586878,
+          "sha256": "f0b2cf95aa8434e4b0ecaf42be58749ac68e99624e3543c1331c2f6e07a156e0",
+          "bytes": 587579,
           "originalSourceSha256": "dc70570aa2eb4a65a3bb489d6f7fadeadbd14a3a7b4114bfd3066525c54fb302",
-          "sdkSha256": "1f0fad3e29d482d50b86fa08f836dadf49287dd6f7158b11adf8b0e95e911ea7"
+          "sdkSha256": "6b3a6daa02698c5a2e8c18a879c63fa4f9483c763372275cef8a1c955a834bcf"
         }
       ]
     },
@@ -876,10 +876,10 @@
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "f98cc014cf191cd7ba9c33430af3fb8e1446fa16f561a968ea0b5df9b19d9e06",
-          "bytes": 386953,
+          "sha256": "a3b64fd403acb82cccc4df82396a55423e6c4394bcd4c66ae28c3af65f285a62",
+          "bytes": 387654,
           "originalSourceSha256": "9d8214862e06004d1f9cfd98674af09f349932f8cea2ea747a69c82a47bd02f8",
-          "sdkSha256": "1f0fad3e29d482d50b86fa08f836dadf49287dd6f7158b11adf8b0e95e911ea7"
+          "sdkSha256": "6b3a6daa02698c5a2e8c18a879c63fa4f9483c763372275cef8a1c955a834bcf"
         },
         {
           "source": "LICENSE",
