@@ -2064,7 +2064,7 @@
    Single-file local-first kanban
    ============================================================ */
 
-/* naklios-sdk:begin ver=2 sha256=6b3a6daa02698c5a2e8c18a879c63fa4f9483c763372275cef8a1c955a834bcf */
+/* naklios-sdk:begin ver=2 sha256=a8d17ad1230d824c0ee6b589e76062c08fb72038bf2a975a700c8cbb6160c397 */
 /*!
  * naklios.js — cooperative SDK for apps hosted inside NakliOS (Immersive mode)
  *
@@ -2231,6 +2231,7 @@
   var ragSearches = new Map();     // requestId → semantic-search progress callback
   var fileOpenListeners = new Set(); // exact-file grants delivered by the host
   var commandHandlers = new Map(); // command name → handler (common rail step 1)
+  var commandCalls = new Map(); // invokeId → AbortController of a running handler
   var pendingFileGrants = [];
   var fileEditListeners = new Set();
   var pendingFileEdits = [];
@@ -2773,12 +2774,23 @@
       var invokeId = msg.invokeId;
       var handler = commandHandlers.get(msg.name);
       if (!handler) { send('naklios:commands:result', { invokeId: invokeId, error: 'unknown command: ' + String(msg.name) }); return; }
-      Promise.resolve().then(function () { return handler(msg.args || {}, { caller: msg.caller || null }); }).then(
+      var controller = new AbortController();
+      commandCalls.set(invokeId, controller);
+      Promise.resolve().then(function () { return handler(msg.args || {}, { caller: msg.caller || null, signal: controller.signal }); }).then(
         function (result) {
-          try { send('naklios:commands:result', { invokeId: invokeId, result: result === undefined ? null : result }); }
-          catch (error) { send('naklios:commands:result', { invokeId: invokeId, error: 'result could not be sent: ' + String(error && error.message || error) }); }
+          commandCalls.delete(invokeId);
+          // send() reports a value that cannot be cloned by returning false.
+          if (send('naklios:commands:result', { invokeId: invokeId, result: result === undefined ? null : result }) === false)
+            send('naklios:commands:result', { invokeId: invokeId, error: 'the command result could not be sent' });
         },
-        function (error) { send('naklios:commands:result', { invokeId: invokeId, error: String(error && error.message || error) }); });
+        function (error) {
+          commandCalls.delete(invokeId);
+          send('naklios:commands:result', { invokeId: invokeId, error: String(error && error.message || error) });
+        });
+    } else if (msg.type === 'naklios:commands:cancel' && typeof msg.invokeId === 'string') {
+      // The caller stopped waiting. A handler reads this through its `signal`; work already done stays done.
+      var running = commandCalls.get(msg.invokeId);
+      if (running) { commandCalls.delete(msg.invokeId); running.abort(); }
     } else if (msg.type === 'naklios:review:discard' && msg.proposal_id) {
       if (reviewDecisionHandler) {
         Promise.resolve().then(function () {

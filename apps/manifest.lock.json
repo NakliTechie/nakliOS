@@ -160,10 +160,10 @@
         {
           "source": "sdk/naklios.js",
           "destination": "sdk/naklios.js",
-          "sha256": "6b3a6daa02698c5a2e8c18a879c63fa4f9483c763372275cef8a1c955a834bcf",
-          "bytes": 49411,
+          "sha256": "a8d17ad1230d824c0ee6b589e76062c08fb72038bf2a975a700c8cbb6160c397",
+          "bytes": 50081,
           "originalSourceSha256": "9390489a66446f7d78a72863ca8c2ed71cce1760b395d5d500e4c86a43a7fa52",
-          "sdkSha256": "6b3a6daa02698c5a2e8c18a879c63fa4f9483c763372275cef8a1c955a834bcf"
+          "sdkSha256": "a8d17ad1230d824c0ee6b589e76062c08fb72038bf2a975a700c8cbb6160c397"
         }
       ]
     },
@@ -188,10 +188,10 @@
         {
           "source": "sdk/naklios.js",
           "destination": "sdk/naklios.js",
-          "sha256": "6b3a6daa02698c5a2e8c18a879c63fa4f9483c763372275cef8a1c955a834bcf",
-          "bytes": 49411,
+          "sha256": "a8d17ad1230d824c0ee6b589e76062c08fb72038bf2a975a700c8cbb6160c397",
+          "bytes": 50081,
           "originalSourceSha256": "9390489a66446f7d78a72863ca8c2ed71cce1760b395d5d500e4c86a43a7fa52",
-          "sdkSha256": "6b3a6daa02698c5a2e8c18a879c63fa4f9483c763372275cef8a1c955a834bcf"
+          "sdkSha256": "a8d17ad1230d824c0ee6b589e76062c08fb72038bf2a975a700c8cbb6160c397"
         }
       ]
     },
@@ -218,10 +218,10 @@
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "3b788a034f4a2f73ff0eb0b7e1b294044dde9b168ca338b59d769d0d83a93467",
-          "bytes": 430785,
+          "sha256": "7b07edf4cc40465790dffc0b1667f913d07f330c75470bd1ae37358ebcbf897c",
+          "bytes": 431455,
           "originalSourceSha256": "65b1e1ea9edbc667ff26b969b2625b6607dc360329c9846e3c8f8368bae372f6",
-          "sdkSha256": "6b3a6daa02698c5a2e8c18a879c63fa4f9483c763372275cef8a1c955a834bcf"
+          "sdkSha256": "a8d17ad1230d824c0ee6b589e76062c08fb72038bf2a975a700c8cbb6160c397"
         }
       ]
     },
@@ -234,10 +234,10 @@
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "59ec157f0db6fb8e18300a5f69f5bd613c894b3825b60bcc859f40374189a86a",
-          "bytes": 284323,
+          "sha256": "4b7e48fccf499a9f35b2e857c6e50a1034e0e5f4be9ba8ecd697f73de5b39137",
+          "bytes": 284993,
           "originalSourceSha256": "b686cd6446696850d8326bf6ca80789e66e25dc5d0fadfdd70e6f2223e5e711e",
-          "sdkSha256": "6b3a6daa02698c5a2e8c18a879c63fa4f9483c763372275cef8a1c955a834bcf"
+          "sdkSha256": "a8d17ad1230d824c0ee6b589e76062c08fb72038bf2a975a700c8cbb6160c397"
         },
         {
           "source": "manifest.webmanifest",
@@ -420,10 +420,10 @@
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "59fbe5cac444bc3bb199d5217c475fef20801e85c550c6c3c14d8050a5b875da",
-          "bytes": 328713,
+          "sha256": "870da9ffb8cbe4e69d82cbab98e3c47cd4d0f3e6a944bab92e7d129420366597",
+          "bytes": 329383,
           "originalSourceSha256": "a0eb44a88f0d331a3a36224cc5cd3d04c2e1b8bd6fe31a385d8342057a3af4b2",
-          "sdkSha256": "6b3a6daa02698c5a2e8c18a879c63fa4f9483c763372275cef8a1c955a834bcf"
+          "sdkSha256": "a8d17ad1230d824c0ee6b589e76062c08fb72038bf2a975a700c8cbb6160c397"
         },
         {
           "source": "LICENSE",
@@ -779,13 +779,13 @@
       "id": "sheaf",
       "repo": "NakliTechie/sheaf",
       "requestedRef": "main",
-      "resolvedCommit": "327865c5f54484615230b0cc5d35c579e1839aed",
+      "resolvedCommit": "47f8c68d3120bf72c60e9ba69f7616ba715ac6fc",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "acc20c52f4760ef7706abf6dd5dce5c9a45ef2d8e2dba74815f6d0fca37c9171",
-          "bytes": 325852
+          "sha256": "70dedcde3f844cccdfbaf5d651aba4377eb583f24caea06bbd65018594c7cc4a",
+          "bytes": 382058
         },
         {
           "source": "engines/pdf-lib/2.9.1/pdf-lib.esm.js",
@@ -828,6 +828,12 @@
           "destination": "engines/tesseract/7.0.0/worker.min.js",
           "sha256": "576b7df7e3393e137e51849357c9adb53fe7ac1bb69bfa06cf3d61520f182c6d",
           "bytes": 111307
+        },
+        {
+          "source": "commands.json",
+          "destination": "commands.json",
+          "sha256": "1dec4af4342d51668ffb2b770d8597085d5ac7dc2c6f425535ef7830dcc2bf5f",
+          "bytes": 3214
         }
       ]
     },
@@ -860,10 +866,10 @@
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "f0b2cf95aa8434e4b0ecaf42be58749ac68e99624e3543c1331c2f6e07a156e0",
-          "bytes": 587579,
+          "sha256": "273ee60bb7688894bac175bd66262fa1d083f9fbddcb997ca45238aef0605809",
+          "bytes": 588249,
           "originalSourceSha256": "dc70570aa2eb4a65a3bb489d6f7fadeadbd14a3a7b4114bfd3066525c54fb302",
-          "sdkSha256": "6b3a6daa02698c5a2e8c18a879c63fa4f9483c763372275cef8a1c955a834bcf"
+          "sdkSha256": "a8d17ad1230d824c0ee6b589e76062c08fb72038bf2a975a700c8cbb6160c397"
         }
       ]
     },
@@ -876,10 +882,10 @@
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "a3b64fd403acb82cccc4df82396a55423e6c4394bcd4c66ae28c3af65f285a62",
-          "bytes": 387654,
+          "sha256": "915bac690c344be9922ca14f8b9ad8764c4c9732a3e97879e90af1470a7e37b7",
+          "bytes": 388324,
           "originalSourceSha256": "9d8214862e06004d1f9cfd98674af09f349932f8cea2ea747a69c82a47bd02f8",
-          "sdkSha256": "6b3a6daa02698c5a2e8c18a879c63fa4f9483c763372275cef8a1c955a834bcf"
+          "sdkSha256": "a8d17ad1230d824c0ee6b589e76062c08fb72038bf2a975a700c8cbb6160c397"
         },
         {
           "source": "LICENSE",

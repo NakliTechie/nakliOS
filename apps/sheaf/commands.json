@@ -1,0 +1,92 @@
+{
+  "commands": [
+    {
+      "name": "operations.list",
+      "description": "List what the Sheaf PDF editor can change in the open PDF, e.g. \"what can you do to this PDF\".",
+      "scope": "read",
+      "input": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "document.read",
+      "description": "Say which PDF is open in the Sheaf PDF editor and how many pages it has, e.g. \"how many pages does my PDF have\".",
+      "scope": "read",
+      "input": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "operation.run",
+      "description": "Change the PDF open in the Sheaf PDF editor without removing anything, e.g. \"rotate the first page of my PDF\", and the file on disk stays as it was until the person saves.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "description": "The operation id from operations.list, e.g. \"pages.rotate\"",
+            "enum": [
+              "pages.rotate",
+              "pages.orient",
+              "pages.addMargin",
+              "pages.insertBlank",
+              "pages.scale",
+              "marks.watermark",
+              "marks.pageNumbers",
+              "marks.bates",
+              "marks.text",
+              "marks.border",
+              "annotate.line",
+              "annotate.pencil",
+              "annotate.textbox"
+            ]
+          },
+          "params": {
+            "type": "object",
+            "description": "The operation's params from operations.list, e.g. {\"pages\":[0],\"angle\":90}. Page numbers count from 0, so the first page is 0"
+          }
+        },
+        "required": ["op"]
+      }
+    },
+    {
+      "name": "operation.run_destructive",
+      "description": "Remove, replace or hide content in the PDF open in the Sheaf PDF editor, e.g. \"delete the second page of my PDF\", after the person agrees to this one change.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "description": "The operation id from operations.list, e.g. \"pages.delete\"",
+            "enum": [
+              "pages.crop",
+              "pages.delete",
+              "pages.reorder",
+              "pages.keepRange",
+              "pages.nUp",
+              "pages.reverse",
+              "pages.duplicate",
+              "pages.extract",
+              "metadata.set",
+              "annotate.highlight",
+              "annotate.rect",
+              "forms.fill",
+              "forms.flatten",
+              "text.whiteout",
+              "redact.region"
+            ]
+          },
+          "params": {
+            "type": "object",
+            "description": "The operation's params from operations.list, e.g. {\"pages\":[1]}. Page numbers count from 0, so the first page is 0"
+          }
+        },
+        "required": ["op"]
+      }
+    },
+    {
+      "name": "operation.undo",
+      "description": "Undo the last change to the PDF open in the Sheaf PDF editor, e.g. \"undo that change to my PDF\".",
+      "scope": "write",
+      "input": { "type": "object", "properties": {} }
+    }
+  ]
+}
