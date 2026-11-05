@@ -1,9 +1,21 @@
 {
   "accepts": [
-    { "action": "import", "label": "Add to Notes", "extensions": [".md", ".markdown", ".txt"] }
+    {
+      "action": "import",
+      "label": "Add to Notes",
+      "extensions": [
+        ".md",
+        ".markdown",
+        ".txt"
+      ]
+    }
   ],
   "widgets": [
-    { "id": "list", "title": "Latest list", "display": "list" }
+    {
+      "id": "list",
+      "title": "Latest list",
+      "display": "list"
+    }
   ],
   "commands": [
     {
@@ -13,10 +25,21 @@
       "input": {
         "type": "object",
         "properties": {
-          "list": { "type": "string", "minLength": 1, "description": "List name, e.g. \"shopping\"" },
-          "things": { "type": "string", "minLength": 1, "description": "The things to add, separated by commas or \"and\"" }
+          "list": {
+            "type": "string",
+            "minLength": 1,
+            "description": "List name, e.g. \"shopping\""
+          },
+          "things": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The things to add, separated by commas or \"and\""
+          }
         },
-        "required": ["list", "things"]
+        "required": [
+          "list",
+          "things"
+        ]
       }
     },
     {
@@ -25,8 +48,16 @@
       "scope": "read",
       "input": {
         "type": "object",
-        "properties": { "list": { "type": "string", "minLength": 1, "description": "List name" } },
-        "required": ["list"]
+        "properties": {
+          "list": {
+            "type": "string",
+            "minLength": 1,
+            "description": "List name"
+          }
+        },
+        "required": [
+          "list"
+        ]
       }
     },
     {
@@ -36,11 +67,137 @@
       "input": {
         "type": "object",
         "properties": {
-          "title": { "type": "string", "description": "A short title" },
-          "text": { "type": "string", "minLength": 1, "description": "The note" }
+          "title": {
+            "type": "string",
+            "description": "A short title"
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The note"
+          }
         },
-        "required": ["text"]
+        "required": [
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "note.update",
+      "description": "Rename a note in the Notes app or move it to another notebook, e.g. \"rename my trip note to Goa\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The note's title"
+          },
+          "new_title": {
+            "type": "string"
+          },
+          "notebook": {
+            "type": "string",
+            "description": "The notebook to move it to"
+          }
+        },
+        "required": [
+          "title"
+        ]
+      }
+    },
+    {
+      "name": "note.replace",
+      "description": "Replace the whole text of a note in the Notes app, e.g. \"rewrite my trip note to say we leave on Friday\".",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "text": {
+            "type": "string",
+            "description": "The whole new text"
+          }
+        },
+        "required": [
+          "title",
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "note.pin",
+      "description": "Pin or unpin a note in the Notes app, e.g. \"pin my trip note\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "pinned": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "title"
+        ]
+      }
+    },
+    {
+      "name": "note.trash",
+      "description": "Move a note in the Notes app to Recently Deleted, e.g. \"delete my trip note\".",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "title"
+        ]
+      }
+    },
+    {
+      "name": "notebook.create",
+      "description": "Make a new notebook in the Notes app, e.g. \"make a notebook called Work\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "name"
+        ]
       }
     }
-  ]
+  ],
+  "parity": {
+    "search": "view",
+    "new-note": "note.create",
+    "new-notebook": "notebook.create",
+    "mobile-back": "view",
+    "notebook-select": "note.update",
+    "pin-note": "note.pin",
+    "trash-note": "note.trash",
+    "note-title": "note.update",
+    "note-body": "note.replace",
+    "remote-change": "view",
+    "text-dialog-input": "notebook.create",
+    "confirm-dialog-cancel": "view",
+    "confirm-dialog-keep": "view",
+    "confirm-dialog-ok": "person: deleting forever from Recently Deleted stays the person's act"
+  }
 }

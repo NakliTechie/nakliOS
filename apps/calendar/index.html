@@ -176,12 +176,58 @@ function publishTodayWidget(){
   const items=Core.expandEvents(data.events,start.getTime(),end.getTime()).map(o=>({time:eventTime(o),title:o.event.title}));
   naklios.experimental_widgets.update('today',{items,empty:'Nothing today',expires:end.getTime()},{persist:activeLocation!=='crate'});
 }
+function namedEvent(title){
+  const key=String(title).trim().toLowerCase(),hits=data.events.filter(event=>event.title.toLowerCase()===key);
+  if(!hits.length)throw new Error(`There is no event called ${title}.`);
+  if(hits.length>1)throw new Error(`${hits.length} events are called ${title}; change them in Calendar.`);
+  return hits[0];
+}
+// An open event dialog would write its stale form over the command, or bring a deleted event back.
+function settledEvent(title){
+  const event=namedEvent(title);
+  if($('event-dialog').open&&$('event-id').value===event.id)throw new Error(`${event.title} is open in Calendar. Close it first.`);
+  return event;
+}
+// Times stay in the event's own zone, and a move keeps the event's length unless a new one is given.
+function movedTimes(event,start,minutes){
+  if(event.allDay){
+    if(minutes!=null)throw new Error('An all-day event has no duration in minutes');
+    const day=/^\d{4}-\d{2}-\d{2}$/.exec(String(start??'').trim())?.[0];
+    if(!day)throw new Error('start must be "YYYY-MM-DD" for an all-day event');
+    const span=Math.round((Date.parse(`${event.endLocal}T00:00:00Z`)-Date.parse(`${event.startLocal}T00:00:00Z`))/864e5);
+    const[year,month,date]=day.split('-').map(Number);
+    return{startLocal:day,endLocal:localDate(addDays(new Date(year,month-1,date),span))};
+  }
+  const zone=event.timeZone||defaultZone,wall=String(start??event.startLocal).trim();
+  if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(wall))throw new Error('start must be "YYYY-MM-DDTHH:MM"');
+  const utc=value=>Date.parse(Core.wallToUtc(value,zone));
+  const length=minutes==null?(utc(event.endLocal)-utc(event.startLocal))/6e4:Math.round(Number(minutes));
+  if(!Number.isFinite(length)||length<1||length>10080)throw new Error('duration_minutes must be between 1 and 10080');
+  return{startLocal:wall,endLocal:Core.utcToWall(new Date(utc(wall)+length*6e4).toISOString(),zone)};
+}
 const COMMAND_HANDLERS={
   async 'events.create'(args){
     await loaded;
     const event=commandEvent(args);
     data.events.push(event);save();await saveQueue;render();
     return{created:true,title:event.title,start:event.startLocal,end:event.endLocal,all_day:event.allDay,where:locationLabel(activeLocation)};
+  },
+  async 'events.update'({title,new_title,start,duration_minutes,location}){
+    await loaded;
+    const event=settledEvent(title);
+    if(event.recurrence?.frequency!=='none')throw new Error(`${event.title} repeats; change the series in Calendar.`);
+    if(start!=null||duration_minutes!=null)Object.assign(event,movedTimes(event,start,duration_minutes));
+    if(new_title!=null)event.title=String(new_title).slice(0,180);
+    if(location!=null)event.location=String(location).slice(0,240);
+    save();await saveQueue;render();
+    return{updated:event.title,start:event.startLocal,end:event.endLocal};
+  },
+  async 'events.delete'({title}){
+    await loaded;
+    const event=settledEvent(title);
+    data.events=data.events.filter(item=>item!==event);
+    save();await saveQueue;render();
+    return{deleted:event.title,repeating:event.recurrence?.frequency!=='none'};
   },
   async 'events.list'({date,days=1}){
     await loaded;

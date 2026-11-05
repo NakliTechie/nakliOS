@@ -930,30 +930,35 @@ async function createNotebook(){
   renderSidebar();
   await renderNoteList();
 }
-async function togglePin(){
-  const note = selectedNote();
-  if (!note || note.trashedAt) return;
-  note.pinned = !note.pinned;
+async function setPinned(note, pinned){
+  note.pinned = pinned;
   note.updatedAt = now();
   await writeMetadata(note);
   await writeLibrary();
-  $('pin-note').textContent = note.pinned ? 'Unpin' : 'Pin';
+  if (selectedId === note.id) $('pin-note').textContent = note.pinned ? 'Unpin' : 'Pin';
   renderSidebar();
   await renderNoteList({ skipHydrate:true });
+}
+async function togglePin(){
+  const note = selectedNote();
+  if (!note || note.trashedAt) return;
+  await setPinned(note, !note.pinned);
+}
+async function moveToTrash(note){
+  note.trashedAt = now();
+  note.updatedAt = now();
+  await writeMetadata(note);
+  await writeLibrary();
+  if (selectedId === note.id){ selectedId = null; clearEditor(); }
+  renderSidebar();
+  await renderNoteList();
 }
 async function trashOrDelete(){
   await flushNow();
   const note = selectedNote();
   if (!note) return;
   if (!note.trashedAt){
-    note.trashedAt = now();
-    note.updatedAt = now();
-    await writeMetadata(note);
-    await writeLibrary();
-    selectedId = null;
-    clearEditor();
-    renderSidebar();
-    await renderNoteList();
+    await moveToTrash(note);
     showToast('Moved to Recently Deleted');
     return;
   }
@@ -1184,6 +1189,25 @@ async function writeNoteBody(note, body){
   });
   await saveQueue;
 }
+async function namedNote(title){
+  await libraryReady;
+  const key = String(title).trim().toLowerCase();
+  const hits = library.notes.filter(item => !item.trashedAt && item.title.toLowerCase() === key);
+  if (!hits.length) throw new Error(`There is no note called ${title}.`);
+  if (hits.length > 1) throw new Error(`${hits.length} notes are called ${title}; change them in Notes.`);
+  return hits[0];
+}
+// A command never races what the person is typing: the note must be saved first, or the next keystroke would undo it.
+async function settledNote(title){
+  const note = await namedNote(title);
+  if (selectedId === note.id && dirty) throw new Error(`${note.title} is open with unsaved typing. Try again in a moment.`);
+  return note;
+}
+function showNoteFields(note){
+  if (selectedId !== note.id) return;
+  $('note-title').value = note.title;
+  $('notebook-select').value = note.notebookId;
+}
 const COMMAND_HANDLERS = {
   async 'list.add'({ list, things }){
     await libraryReady;
@@ -1200,6 +1224,41 @@ const COMMAND_HANDLERS = {
     const note = findList(list);
     if (!note) return { list, items:[], message:`There is no ${list} list.` };
     return { list:note.title, items:listItems(await readNoteBody(note.id)) };
+  },
+  async 'note.update'({ title, new_title, notebook }){
+    const note = await settledNote(title);
+    if (new_title != null) note.title = String(new_title).slice(0,180);
+    if (notebook != null) {
+      const book = library.notebooks.find(item => item.name.toLowerCase() === String(notebook).trim().toLowerCase());
+      if (!book) throw new Error(`There is no notebook called ${notebook}.`);
+      note.notebookId = book.id;
+    }
+    await writeNoteBody(note, await readNoteBody(note.id));
+    showNoteFields(note);
+    return { updated:note.title, where:locationLabel(activeLocation) };
+  },
+  async 'note.replace'({ title, text }){
+    const note = await settledNote(title);
+    await writeNoteBody(note, String(text));
+    return { replaced:note.title, where:locationLabel(activeLocation) };
+  },
+  async 'note.pin'({ title, pinned = true }){
+    const note = await settledNote(title);
+    await setPinned(note, pinned === true);
+    return { note:note.title, pinned:note.pinned };
+  },
+  async 'note.trash'({ title }){
+    const note = await settledNote(title);
+    await moveToTrash(note);
+    return { trashed:note.title };
+  },
+  async 'notebook.create'({ name }){
+    await libraryReady;
+    const notebook = { id:uid('book'), name:String(name).slice(0,80), createdAt:now() };
+    library.notebooks.push(notebook);
+    await writeLibrary();
+    renderSidebar();
+    return { created:notebook.name };
   },
   async 'note.create'({ title, text }){
     await libraryReady;

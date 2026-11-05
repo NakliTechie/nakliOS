@@ -1,9 +1,19 @@
 {
   "accepts": [
-    { "action": "import", "label": "Import to Calendar", "extensions": [".ics"] }
+    {
+      "action": "import",
+      "label": "Import to Calendar",
+      "extensions": [
+        ".ics"
+      ]
+    }
   ],
   "widgets": [
-    { "id": "today", "title": "Today", "display": "agenda" }
+    {
+      "id": "today",
+      "title": "Today",
+      "display": "agenda"
+    }
   ],
   "commands": [
     {
@@ -13,12 +23,29 @@
       "input": {
         "type": "object",
         "properties": {
-          "title": { "type": "string", "minLength": 1, "description": "Event title, e.g. \"Dentist\"" },
-          "start": { "type": "string", "minLength": 1, "description": "Local start, e.g. \"2026-11-02T15:00\", or \"2026-11-02\" for all day" },
-          "duration_minutes": { "type": "number", "description": "Length in minutes (default 60)" },
-          "location": { "type": "string", "description": "Where (optional)" }
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Event title, e.g. \"Dentist\""
+          },
+          "start": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Local start, e.g. \"2026-11-02T15:00\", or \"2026-11-02\" for all day"
+          },
+          "duration_minutes": {
+            "type": "number",
+            "description": "Length in minutes (default 60)"
+          },
+          "location": {
+            "type": "string",
+            "description": "Where (optional)"
+          }
         },
-        "required": ["title", "start"]
+        "required": [
+          "title",
+          "start"
+        ]
       }
     },
     {
@@ -28,11 +55,88 @@
       "input": {
         "type": "object",
         "properties": {
-          "date": { "type": "string", "description": "Leave this out for today. Otherwise the first day as \"YYYY-MM-DD\"; call get_time first for \"tomorrow\" or a weekday" },
-          "days": { "type": "number", "description": "How many days, 1 to 14 (default 1)" }
+          "date": {
+            "type": "string",
+            "description": "Leave this out for today. Otherwise the first day as \"YYYY-MM-DD\"; call get_time first for \"tomorrow\" or a weekday"
+          },
+          "days": {
+            "type": "number",
+            "description": "How many days, 1 to 14 (default 1)"
+          }
         },
         "required": []
       }
+    },
+    {
+      "name": "events.update",
+      "description": "Change an event in the Calendar app by its title, e.g. \"move the dentist to 4 pm tomorrow\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "new_title": {
+            "type": "string"
+          },
+          "start": {
+            "type": "string",
+            "description": "The new start as \"YYYY-MM-DDTHH:MM\""
+          },
+          "duration_minutes": {
+            "type": "number"
+          },
+          "location": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ]
+      }
+    },
+    {
+      "name": "events.delete",
+      "description": "Delete an event in the Calendar app by its title, e.g. \"cancel the dentist\". A repeating event goes with its whole series.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "title"
+        ]
+      }
     }
-  ]
+  ],
+  "parity": {
+    "import": "person: picks a file; callers send one through Files",
+    "import-file": "person: picks a file; callers send one through Files",
+    "export": "view",
+    "new-event": "events.create",
+    "previous": "view",
+    "today": "view",
+    "next": "view",
+    "event-form": "events.update",
+    "event-id": "view",
+    "event-title": "events.update",
+    "event-all-day": "events.update",
+    "event-start": "events.update",
+    "event-end": "events.update",
+    "event-timezone": "person: the time zone of one event stays in the event editor",
+    "event-repeat": "person: repeat rules stay in the event editor",
+    "event-until": "person: repeat rules stay in the event editor",
+    "event-location": "events.update",
+    "event-description": "person: long descriptions stay in the event editor",
+    "delete-event": "events.delete",
+    "save-event": "events.update",
+    "confirm-cancel": "view",
+    "confirm-delete": "events.delete"
+  }
 }
