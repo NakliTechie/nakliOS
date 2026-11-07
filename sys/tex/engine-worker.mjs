@@ -18,8 +18,11 @@ const handlers = {
     return true;
   },
   async compile({ files, main, driver }) {
-    const { pdf, synctex, log, exitCode } = await runner.compile(files, main, null, null, null, null, 'silent', driver, null, undefined, false, []);
-    return { pdf, synctex, log, exitCode };
+    const { pdf, synctex, log, exitCode, logs = [] } = await runner.compile(files, main, null, null, null, null, 'silent', driver, null, undefined, false, []);
+    // Each step's entry keeps its side file: the bibliography step's is the .bbl, the last TeX pass's is the .aux.
+    const bibliography = logs.findLast(entry => /^(bibtex|biber)/.test(entry.cmd));
+    const tex = logs.findLast(entry => !/^(bibtex|biber|makeindex|xdvipdfmx)/.test(entry.cmd));
+    return { pdf, synctex, log, exitCode, bbl:bibliography?.aux || '', blg:bibliography?.log || '', aux:tex?.aux || '' };
   },
   async cached({ base, packs }) {
     const { isPackageCached } = await loadPackage(base);

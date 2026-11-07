@@ -11,9 +11,21 @@ function missingFile(text) {
     /^! I can't find file `([^']+)'/.exec(text)?.[1] || null;
 }
 
+// TeX breaks log lines at 79 columns, which can split a file name and lose track of the open file. Only a line ending
+// inside a file name is rejoined, so a full-width line of another kind never swallows the error after it.
+function rejoinLines(lines) {
+  const out = [];
+  for (const line of lines) {
+    const last = out.at(-1) ?? '';
+    if (last.length && last.length % 79 === 0 && /\([^\s()]+$/.test(last) && !line.startsWith('!')) out[out.length - 1] += line;
+    else out.push(line);
+  }
+  return out;
+}
+
 // `stack` holds each open file (or null for a plain parenthesis), so an error belongs to the innermost file.
 export function parseTexLog(log, main) {
-  const diagnostics = [], stack = [], lines = String(log || '').split(/\r?\n/);
+  const diagnostics = [], stack = [], lines = rejoinLines(String(log || '').split(/\r?\n/));
   const where = () => {
     const open = stack.filter(Boolean);
     const inner = open.at(-1);

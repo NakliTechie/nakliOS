@@ -179,6 +179,8 @@ try {
   assert.ok(r.synctexInputs.includes('main.tex') && r.synctexInputs.includes('sections/two.tex'), `SyncTeX paths: ${r.synctexInputs}`);
   assert.equal(r.warm.ok, true);
   assert.equal(r.bib.ok, true, JSON.stringify(r.bib));
+  assert.equal(r.bib.bbl, 'bib/.tex-build/main.bbl', 'the bibliography output is saved');
+  assert.equal(r.bib.aux, 'bib/.tex-build/main.aux', 'the aux file is saved');
   assert.equal(r.bib.diagnostics.filter(d => /undefined/i.test(d.message)).length, 0, 'the citation resolves');
   assert.equal(r.typo.ok, false);
   assert.deepEqual(r.typo.diagnostics.filter(d => d.severity === 'error').map(d => [d.file, d.line, d.message])[0], ['main.tex', 4, 'Undefined control sequence.']);
