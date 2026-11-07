@@ -8230,7 +8230,7 @@ function netHistoryAppend({ appId, host, method, grantId, output }){
 // The whole enforcement point: authorize, fetch, record. Throws with a code the SDK passes through.
 // ── TeX service (naklios.experimental_tex) ────────────────────────────────────────
 // sys/tex/service.mjs holds the queue. This wires it to the host's storage, consent and History. The first compile
-// asks once, because the TeX Live packs are about 680 MB; the /tex/ route streams them from the engine's GitHub Release.
+// asks once, because the TeX Live packs are about 680 MB; the /tex/ route sends the browser to Hugging Face for them.
 const TEX_ENGINE_INFO = Object.freeze({ texLive:'2026', license:'AGPL-3.0-or-later', source:'https://github.com/NakliTechie/naklios-tex', downloadBytes:681700000 });
 let texHostPromise = null;
 function texHost(){
