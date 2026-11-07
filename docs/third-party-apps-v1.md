@@ -72,7 +72,7 @@ app origin or under Folder/Crate.
 
 ## Permissions
 
-v1 supports two optional permissions:
+v1 supports four optional permissions:
 
 - `storage` — the app may ask for its own `apps/<installed-id>/` namespace in
   the user's currently connected NakliOS Folder or Crate. The manifest request
@@ -87,7 +87,10 @@ v1 supports two optional permissions:
   first use. The app receives streamed text only, never the worker, model
   memory, another app's prompts, host tools, files, or credentials.
 
-Both permissions require `display:"window"` because a normal top-level tab has
+- `tex` — needs `storage`. The app may compile LaTeX projects in its own namespace with the shared TeX
+  service. The app receives paths and diagnostics, never the engine or another app's files.
+
+Host permissions require `display:"window"` because a normal top-level tab has
 no NakliOS bridge. A window manifest opens in the opaque hosted window, where
 the separate first-use grants apply.
 

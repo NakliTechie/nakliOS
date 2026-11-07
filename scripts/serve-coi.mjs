@@ -21,7 +21,9 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
+import { texAsset } from '../worker/index.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const argv = process.argv.slice(2);
@@ -78,9 +80,19 @@ function safeJoin(root, urlPath) {
   return resolved;
 }
 
+// The same route as production's Worker, so a local serve loads the real TeX engine files.
+async function serveTexAsset(req, res) {
+  try {
+    const answer = await texAsset(new Request(`http://${HOST}:${PORT}${req.url}`, { method:req.method, headers:req.headers.range ? { Range:req.headers.range } : {} }));
+    res.writeHead(answer.status, Object.fromEntries(answer.headers));
+    if (answer.body) Readable.fromWeb(answer.body).pipe(res); else res.end();
+  } catch (error) { res.writeHead(502).end(String(error.message || error)); }
+}
+
 const server = http.createServer((req, res) => {
   const urlPath = req.url || '/';
   const routePath = urlPath.split('?')[0];
+  if (routePath.startsWith('/tex/')) { serveTexAsset(req, res); return; }
   // The host's local Lorewell embed is /Books/. Keep its source repository
   // outside the NakliOS checkout while serving both under one local origin.
   const booksPath = BOOKS_MOUNT && (routePath === '/Books' || routePath.startsWith('/Books/'));

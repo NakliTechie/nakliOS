@@ -12,7 +12,8 @@ import { sha256Hex } from '../identity/crypto.mjs';
 
 // 'net' is the sovereign-egress door — a distinct authority surface with its own
 // Grant (scope net:<host-glob>, tools ['net.fetch']); see plan/egress-transport-spec.md §6.
-export const DOORS = Object.freeze(['ui', 'call', 'brief', 'net']);
+// 'tex' is the shared TeX service: one event per compile, with the project path and outcome.
+export const DOORS = Object.freeze(['ui', 'call', 'brief', 'net', 'tex']);
 
 // Canonical JSON (sorted keys) so a hash is stable across engines.
 function stable(v) {
