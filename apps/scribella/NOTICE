@@ -1,0 +1,8 @@
+Scribella
+Copyright 2026 Chirag Patnaik. MIT licence, see LICENSE.
+
+src/explain.js and the rules in src/lint.js are derived from Lattice
+(https://github.com/leo1oel/lattice, commit 325406c),
+Copyright 2026 Leonardo and the Lattice contributors, under the Apache License 2.0.
+The licence text is in vendor/LICENSE-lattice. Changes: rewritten in plain JavaScript,
+translation calls removed, and the failing token read from the TeX log.
