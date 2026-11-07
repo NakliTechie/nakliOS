@@ -219,14 +219,14 @@
       "id": "kanzen",
       "repo": "NakliTechie/KanZen",
       "requestedRef": "main",
-      "resolvedCommit": "04e7865d9a98567bc2dfdd516a3aef3ec7dc8ff4",
+      "resolvedCommit": "12f7d07266ce237d95e1f5d8b987fb9e6d2c79bf",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
           "sha256": "856222ea2dac7146fd7686a9c6d6dd363fa19dcfa4a937edd49a35141d3cb61c",
           "bytes": 441734,
-          "originalSourceSha256": "4f5c76fc2d13378f03661fbceee41751df230fab4fa4d090586a8d14af0e41ef",
+          "originalSourceSha256": "ed1adabea625f8d308a9664f203478d02f66b4d5df299f113d12838038d17080",
           "sdkSha256": "1261fcfbaee5d059dae732fc5a8a6de5f6a67e199a53ae3588f3de206c7411cf"
         },
         {
@@ -241,14 +241,14 @@
       "id": "menagerie",
       "repo": "NakliTechie/menagerie",
       "requestedRef": "main",
-      "resolvedCommit": "800b8330dd28bb199360f589316f06dd6f4b99a6",
+      "resolvedCommit": "87c650197a606e92fcddf1832884b5e01e6abb36",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
           "sha256": "1ad0d84859147cf89bb90e700fb38683efc59c063df229edfd244521b953db1f",
           "bytes": 289965,
-          "originalSourceSha256": "b686cd6446696850d8326bf6ca80789e66e25dc5d0fadfdd70e6f2223e5e711e",
+          "originalSourceSha256": "126287a5f1eaa44e94bcfd959d384793deed47811ef787ffa9a5504a21536751",
           "sdkSha256": "1261fcfbaee5d059dae732fc5a8a6de5f6a67e199a53ae3588f3de206c7411cf"
         },
         {
@@ -427,14 +427,14 @@
       "id": "nakliposter",
       "repo": "NakliTechie/NakliPoster",
       "requestedRef": "main",
-      "resolvedCommit": "c16247384933f6d28fa84e50928b76bcfce05772",
+      "resolvedCommit": "ea68bf8cc2a7dc401aaa29f9efd697dfe939a400",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
           "sha256": "aa59b63835c605049d743f37a2df7c506a03ff204c7a073d05b3d531f9c4e4f2",
           "bytes": 334355,
-          "originalSourceSha256": "a0eb44a88f0d331a3a36224cc5cd3d04c2e1b8bd6fe31a385d8342057a3af4b2",
+          "originalSourceSha256": "7163712b3fd85b96012aa217dea0936ea6f2ba53fd51de5046af87339b67ae7f",
           "sdkSha256": "1261fcfbaee5d059dae732fc5a8a6de5f6a67e199a53ae3588f3de206c7411cf"
         },
         {
@@ -449,13 +449,13 @@
       "id": "protavia",
       "repo": "NakliTechie/protavia",
       "requestedRef": "main",
-      "resolvedCommit": "2bee2326eb1c79095c17523c20166c6d683fbc85",
+      "resolvedCommit": "e656655f7b0bf8bdff38b428b16449927db2fb1f",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "d2a8b735eef0a7842eb99224527528cc92931ed513b9370eee1d584c4b0658dc",
-          "bytes": 65335
+          "sha256": "9042a3999f6598ae040f70529b9218489872285194d021d5913c9def5d2b5add",
+          "bytes": 71678
         },
         {
           "source": "vendor/molstar/5.13.1/molstar.css",
@@ -797,13 +797,13 @@
       "id": "sheaf",
       "repo": "NakliTechie/sheaf",
       "requestedRef": "main",
-      "resolvedCommit": "af3f549181eac82df055a7ad12e78bcbb5ea12d2",
+      "resolvedCommit": "e3375d440dc507fadf14fee52cc59ccc9e5f1162",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "23a2f0f2ce339c5e89f088da05f6ce803abe80c3af7aca9fdfb7f4178689a512",
-          "bytes": 385216
+          "sha256": "256058342899edafde76d05870c307d6daa161d7132d959fbee25a0705ac1d03",
+          "bytes": 388923
         },
         {
           "source": "engines/pdf-lib/2.9.1/pdf-lib.esm.js",
@@ -879,14 +879,14 @@
       "id": "tijori",
       "repo": "NakliTechie/Tijori",
       "requestedRef": "main",
-      "resolvedCommit": "12a5b9fc837f83f6e848704e82eb8c7b12f00444",
+      "resolvedCommit": "7e2fdc900c120cec013f4414fee1c61b9f15be33",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
           "sha256": "1e977c5600bcb8c1ad7de27a5d9ac8baedee02cb392bba889fdecdfbff5eaa81",
           "bytes": 593221,
-          "originalSourceSha256": "dc70570aa2eb4a65a3bb489d6f7fadeadbd14a3a7b4114bfd3066525c54fb302",
+          "originalSourceSha256": "220fbdf55335d66a6f5931f7b24f04e47091a4b29ddedffde032a564982dac0c",
           "sdkSha256": "1261fcfbaee5d059dae732fc5a8a6de5f6a67e199a53ae3588f3de206c7411cf"
         }
       ]
@@ -895,14 +895,14 @@
       "id": "vaultmind",
       "repo": "NakliTechie/VaultMind",
       "requestedRef": "main",
-      "resolvedCommit": "55d39543bff2142ce5b5657852dde22e518906b7",
+      "resolvedCommit": "a1df4108771d48e10d9f73e24f40f739b2ea21b1",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
           "sha256": "fea0919f077e98d2513c80119aa47d335a3676b5f52e366b72808429f46787ba",
           "bytes": 393296,
-          "originalSourceSha256": "9d8214862e06004d1f9cfd98674af09f349932f8cea2ea747a69c82a47bd02f8",
+          "originalSourceSha256": "88a12557e262cd7d13ab78532570cf1ecaf1aea5f2c6ecc35bdd253b284cf38a",
           "sdkSha256": "1261fcfbaee5d059dae732fc5a8a6de5f6a67e199a53ae3588f3de206c7411cf"
         },
         {
@@ -917,13 +917,13 @@
       "id": "vocella",
       "repo": "NakliTechie/vocella",
       "requestedRef": "main",
-      "resolvedCommit": "69aac31e4916ca446ada75d9fabaab1ac2e6ad7f",
+      "resolvedCommit": "6f0cc99363aa3fc7876ec7267fa58bc4b2df644a",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "499a610fdec3e5d41140f0b58d7174775d760e9cb1bad8775fb49ea076204aea",
-          "bytes": 59172
+          "sha256": "bd10e8c002c2f4dd1b5d2cd58bcc155e8aafd91498d56f7c44760df89e2a22e5",
+          "bytes": 65515
         },
         {
           "source": "LICENSE",
