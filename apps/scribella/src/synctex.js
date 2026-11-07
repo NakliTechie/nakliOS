@@ -2,6 +2,9 @@
 // this point of the PDF. Positions are PDF points from the top left of the page.
 const SP_PER_BP = 65781.76;
 const MAX_LINE = 30;
+const MAX_WIDTH = 480;
+const TEXT_HEIGHT = 9;
+const TEXT_BAND = 10;
 
 const number = (text, previous) => (text === '=' ? previous : Number(text));
 
@@ -61,10 +64,10 @@ export function forward(sync, file, line) {
   const text = all.filter(record => 'hxkg$'.includes(record.kind) && record.height <= MAX_LINE);
   const onLine = text.length ? text : all;
   const left = Math.min(...onLine.map(record => record.x));
-  const top = Math.max(0, Math.min(...onLine.map(record => record.y - Math.min(record.height, MAX_LINE))));
+  const top = Math.max(0, Math.min(...onLine.map(record => record.y - Math.min(Math.max(record.height, TEXT_HEIGHT), MAX_LINE))));
   const bottom = Math.max(...onLine.map(record => record.y + Math.min(record.depth, MAX_LINE)));
   const right = Math.max(left, ...onLine.map(record => record.x + record.width));
-  return { page:best.page, file, line:best.line, x:left, y:top, width:right - left, height:Math.min(Math.max(bottom - top, 10), MAX_LINE * 2) };
+  return { page:best.page, file, line:best.line, x:left, y:top, width:Math.min(right - left, MAX_WIDTH), height:Math.min(Math.max(bottom - top, 10), MAX_LINE * 2) };
 }
 
 // The smallest box around the point, else the nearest record on the page. Generated files such as the .bbl are skipped.
@@ -75,6 +78,12 @@ export function inverse(sync, page, x, y, files = null) {
   };
   const records = (sync.pages.get(page) || []).filter(record => known(record) && record.line > 0);
   if (!records.length) return null;
+  // Text records carry the line a word was typed on; a paragraph's boxes carry the line it ended on.
+  const words = records.filter(record => 'xkg$'.includes(record.kind) && Math.abs(record.y - y) <= TEXT_BAND);
+  if (words.length) {
+    const near = words.reduce((best, record) => (Math.abs(record.x - x) < Math.abs(best.x - x) ? record : best));
+    return { file:sync.inputs.get(near.tag).replace(/^\.\//, ''), line:near.line };
+  }
   const inside = records.filter(record => record.width > 0 && x >= record.x && x <= record.x + record.width && y >= record.y - record.height && y <= record.y + record.depth)
     .sort((a, b) => a.width * (a.height + a.depth) - b.width * (b.height + b.depth));
   const pick = inside.find(record => record.kind === 'h' || record.kind === '(') || inside[0]

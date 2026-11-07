@@ -78,9 +78,22 @@ export function citeAt(text, pos) {
   return null;
 }
 
-export function createEditor(parent, { onChange, onSave, onDrop, onShow, onSelect = () => {}, describeCite = () => '', project, path, keys = 'default' }) {
+export function refAt(text, pos) {
+  const line = text.lastIndexOf('\n', pos - 1) + 1, end = text.indexOf('\n', pos);
+  for (const match of text.slice(line, end < 0 ? text.length : end).matchAll(/\\(?:eq|auto|c|C|page|name)?ref\*?\{([^}]*)\}/g)) {
+    const from = line + match.index + match[0].indexOf('{') + 1, to = from + match[1].length;
+    if (pos >= from && pos <= to) return { from, to, key:match[1] };
+  }
+  return null;
+}
+
+export function createEditor(parent, { onChange, onSave, onDrop, onShow, onSelect = () => {}, describeCite = () => '', describeRef = () => '', spell = null, project, path, keys = 'default' }) {
   let quiet = false;
-  const keyMode = new Compartment();
+  const keyMode = new Compartment(), spellMode = new Compartment();
+  const spellLinter = () => linter(async current => (await spell(current.state.doc.toString())).map(item => ({
+    from:item.from, to:item.to, severity:'hint', message:item.message,
+    actions:item.suggestions.map(name => ({ name, apply(target, from, to) { target.dispatch({ changes:{ from, to, insert:name } }); } })),
+  })), { delay:1500 });
   const keysFor = mode => (mode === 'vim' ? vim() : mode === 'emacs' ? emacs() : []);
   const view = new EditorView({
     parent,
@@ -88,10 +101,12 @@ export function createEditor(parent, { onChange, onSave, onDrop, onShow, onSelec
       doc:'',
       extensions:[
         keyMode.of(keysFor(keys)),
+        spellMode.of([]),
         basicSetup,
         mathHover,
         hoverTooltip((current, pos) => {
-          const cite = citeAt(current.state.doc.toString(), pos), text = cite && describeCite(cite.key);
+          const source = current.state.doc.toString();
+          const ref = refAt(source, pos), cite = ref || citeAt(source, pos), text = ref ? describeRef(ref.key) : cite && describeCite(cite.key);
           if (!text) return null;
           return { pos:cite.from, end:cite.to, above:true, create() {
             const dom = document.createElement('div');
@@ -139,6 +154,7 @@ export function createEditor(parent, { onChange, onSave, onDrop, onShow, onSelec
     slice:(from, to) => view.state.sliceDoc(from, to),
     replaceRange(from, to, text) { view.dispatch({ changes:{ from, to, insert:text } }); },
     select(from, to) { view.dispatch({ selection:{ anchor:from, head:to }, effects:EditorView.scrollIntoView(from, { y:'center' }) }); view.focus(); },
+    setSpell(on) { view.dispatch({ effects:spellMode.reconfigure(on ? spellLinter() : []) }); },
     setKeys(mode) { view.dispatch({ effects:keyMode.reconfigure(keysFor(mode)) }); },
     insert(text, at = view.state.selection.main.head) {
       view.dispatch({ changes:{ from:at, to:at === view.state.selection.main.head ? view.state.selection.main.to : at, insert:text }, selection:{ anchor:at + text.length } });

@@ -37,7 +37,8 @@ export function parseReply(text) {
   return { revision:revision.replace(/^\n|\n$/g, ''), reason:(between(text, 'reason') || '').trim() };
 }
 
-const isNewCite = edit => edit.from === edit.to && /^\s*\\cite[a-z]*\{[^{}]*\}\s*$/.test(edit.insert);
+const CITE = /\\[A-Za-z]*cite[A-Za-z]*\*?(?:\[[^\]]*\])*\{([^{}]*)\}/g;
+const isNewCite = edit => edit.from === edit.to && edit.insert.replace(CITE, '').trim() === '' && edit.insert.trim() !== '';
 
 // Word-level edits as { from, to, insert, held }. Edits only whitespace apart merge into one phrase.
 export function wordEdits(before, after) {
@@ -76,8 +77,7 @@ export function applyEdits(before, edits) {
 // citation note add \cite commands for those keys; every other protected piece must still match.
 export function safeResult(before, edits, { citeKeys = [] } = {}) {
   const text = applyEdits(before, edits), known = new Set(citeKeys);
-  const added = /\\(?:cite|citep|citet|autocite|parencite|textcite)\{([^{}]*)\}/g;
-  const withoutNew = !citeKeys.length ? text : text.replace(added, (whole, keys) => (before.includes(whole) || !keys.split(',').every(key => known.has(key.trim())) ? whole : ''));
+  const withoutNew = !citeKeys.length ? text : text.replace(CITE, (whole, keys) => (before.includes(whole) || !keys.split(',').every(key => known.has(key.trim())) ? whole : ''));
   if (!keepsProtected(before, withoutNew)) throw new Error('These edits would change math, a citation or a command, so they were not applied.');
   return text;
 }

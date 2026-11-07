@@ -13,3 +13,5 @@ The `.bst` file carries its own license grant in its header: it derives from Pat
 The `.sty` file carries only its authors' credits in its header comments and no license grant.
 Both files ship unmodified, so every notice and credit in them reaches users intact; do not edit or strip their header comments.
 Lattice's `main.tex` is a short project skeleton that uses the official package API; it is not the conference example paper.
+
+`algorithm.sty` and `algorithmic.sty` are copied unchanged from the TeX Live `algorithms` package (LGPL), because the browser TeX packs do not include them and `icml2026.sty` requires them.
