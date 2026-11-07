@@ -11,11 +11,13 @@ function missingFile(text) {
     /^! I can't find file `([^']+)'/.exec(text)?.[1] || null;
 }
 
-// TeX breaks log lines at 79 columns, which can split a file name and lose track of the open file.
+// TeX breaks log lines at 79 columns, which can split a file name and lose track of the open file. Only a line ending
+// inside a file name is rejoined, so a full-width line of another kind never swallows the error after it.
 function rejoinLines(lines) {
   const out = [];
   for (const line of lines) {
-    if (out.length && out.at(-1).length % 79 === 0 && out.at(-1).length > 0 && !out.at(-1).startsWith('! ')) out[out.length - 1] += line;
+    const last = out.at(-1) ?? '';
+    if (last.length && last.length % 79 === 0 && /\([^\s()]+$/.test(last) && !line.startsWith('!')) out[out.length - 1] += line;
     else out.push(line);
   }
   return out;

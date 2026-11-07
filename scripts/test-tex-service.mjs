@@ -216,6 +216,7 @@ assert.equal((await service(fakeEngine(), { record:async () => { throw new Error
   const broken = ('(./main.tex (' + name).padEnd(0);
   const wrapped = parseTexLog(broken.slice(0, 79) + '\n' + broken.slice(79) + '\n! Missing $ inserted.\nl.3 x_y\n)\n)\n', 'main.tex');
   assert.equal(wrapped[0].file, 'x'.repeat(60) + '/deep.tex', 'a file name split at 79 columns is rejoined');
+  assert.equal(parseTexLog('x'.repeat(79) + '\n! Missing $ inserted.\nl.3 x_y\n', 'main.tex')[0].message, 'Missing $ inserted.', 'a full-width line keeps the error after it');
   const nested = parseTexLog('(./main.tex (/home/web_user/project_dir/sections/a.tex\n! Missing $ inserted.\nl.3 x_y\n)\n)\n', 'main.tex');
   assert.equal(nested[0].file, 'sections/a.tex');
   const style = parseTexLog('(./main.tex (/texlive/texmf-dist/tex/latex/foo.sty\n! Bad thing.\nl.900 y\n)\n)\n', 'main.tex');
