@@ -78,7 +78,8 @@ export function createTexService({ engine, confirmDownload, record = async () =>
       check();
       stage('download', { percent:0 });
       job.engineBusy = true;
-      await untilCancelled(job, engine.start(progress => stage('download', progress)));
+      let shown = 0; // the engine reports every network read, so the rail carries one message per percent
+      await untilCancelled(job, engine.start(progress => { if (progress.percent !== shown) { shown = progress.percent; stage('download', progress); } }));
       job.engineBusy = false;
     }
     check();
