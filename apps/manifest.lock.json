@@ -1351,7 +1351,7 @@
       "id": "scribella",
       "repo": "NakliTechie/scribella",
       "requestedRef": "main",
-      "resolvedCommit": "166ce0b4f865cb64b0a06473559808a49a068c8a",
+      "resolvedCommit": "39261d43808c2cedea8d245a17846c8c06a194db",
       "files": [
         {
           "source": "LICENSE",
@@ -1386,8 +1386,8 @@
         {
           "source": "src/app.js",
           "destination": "src/app.js",
-          "sha256": "9c4bfe2a7849ba9e5334142ca12c4cfad8a1497e0c4e493b3dd5234b0547cc13",
-          "bytes": 63637
+          "sha256": "7f7012186ab77db2552d736872dbb94f72c5363dedd0bdf554eb18bcd155e6f2",
+          "bytes": 63866
         },
         {
           "source": "src/arxiv.js",
@@ -1554,14 +1554,14 @@
         {
           "source": "templates/acl/main.tex",
           "destination": "templates/acl/main.tex",
-          "sha256": "7c56f40a465990a5af5102a9d2bd498775c97a034d9364255804e9541580c188",
-          "bytes": 1253
+          "sha256": "5ea4a0f24d648c8f071bc8604646d5a58323ee896f9e689f064b3404d34d21b5",
+          "bytes": 1331
         },
         {
           "source": "templates/acl/references.bib",
           "destination": "templates/acl/references.bib",
-          "sha256": "483790b9ddc5cf5273bfbfff2d46540a25f8d50d9e41e45f8f436b19ec7fb6f1",
-          "bytes": 49
+          "sha256": "189cabab776cf204ef959168f4b31e51b7733a08f85c7f045c9ed7fb6b1caa6b",
+          "bytes": 126
         },
         {
           "source": "templates/cvpr-2027/UPSTREAM.md",
@@ -1584,14 +1584,14 @@
         {
           "source": "templates/cvpr-2027/main.tex",
           "destination": "templates/cvpr-2027/main.tex",
-          "sha256": "f12a0441dd7c97d48f4b3a12cccae7fa25d5de7585436bca6f72f7474f96213f",
-          "bytes": 1055
+          "sha256": "8c331ad5f76e7db4a72a8d5afcc742843cb812708a5bbf7b9756e71826da9659",
+          "bytes": 1133
         },
         {
           "source": "templates/cvpr-2027/references.bib",
           "destination": "templates/cvpr-2027/references.bib",
-          "sha256": "483790b9ddc5cf5273bfbfff2d46540a25f8d50d9e41e45f8f436b19ec7fb6f1",
-          "bytes": 49
+          "sha256": "189cabab776cf204ef959168f4b31e51b7733a08f85c7f045c9ed7fb6b1caa6b",
+          "bytes": 126
         },
         {
           "source": "templates/iclr-2026/UPSTREAM.md",
@@ -1614,14 +1614,14 @@
         {
           "source": "templates/iclr-2026/main.tex",
           "destination": "templates/iclr-2026/main.tex",
-          "sha256": "5b1a17ee610269aff0aa1ed0644a53b4b854cded86e919a13b2fc58cee56eadf",
-          "bytes": 1090
+          "sha256": "a0345af6bd9113d8d239d74935c62811f21020a04491a923fb212f27d856b3e8",
+          "bytes": 1168
         },
         {
           "source": "templates/iclr-2026/references.bib",
           "destination": "templates/iclr-2026/references.bib",
-          "sha256": "483790b9ddc5cf5273bfbfff2d46540a25f8d50d9e41e45f8f436b19ec7fb6f1",
-          "bytes": 49
+          "sha256": "189cabab776cf204ef959168f4b31e51b7733a08f85c7f045c9ed7fb6b1caa6b",
+          "bytes": 126
         },
         {
           "source": "templates/icml-2026/UPSTREAM.md",
@@ -1656,14 +1656,14 @@
         {
           "source": "templates/icml-2026/main.tex",
           "destination": "templates/icml-2026/main.tex",
-          "sha256": "b67d9f3605ef7a87b175a0a377c214950be6f86f56baaf84ea0189bb8ad86614",
-          "bytes": 1300
+          "sha256": "68e662d1b15f0bf13733f4f7d836b04751a61f4f130567464e13474e0925a681",
+          "bytes": 1378
         },
         {
           "source": "templates/icml-2026/references.bib",
           "destination": "templates/icml-2026/references.bib",
-          "sha256": "483790b9ddc5cf5273bfbfff2d46540a25f8d50d9e41e45f8f436b19ec7fb6f1",
-          "bytes": 49
+          "sha256": "189cabab776cf204ef959168f4b31e51b7733a08f85c7f045c9ed7fb6b1caa6b",
+          "bytes": 126
         },
         {
           "source": "templates/ieee/IEEEtran.bst",
@@ -1686,14 +1686,14 @@
         {
           "source": "templates/ieee/main.tex",
           "destination": "templates/ieee/main.tex",
-          "sha256": "335d74c7050c764d988c32777c894c88fc19a8409cb68476283cdcf65c0c7d13",
-          "bytes": 435
+          "sha256": "716ab069405b6989b69e1e2db794e9910e92597b3738819e9125e926c254b21c",
+          "bytes": 513
         },
         {
           "source": "templates/ieee/references.bib",
           "destination": "templates/ieee/references.bib",
-          "sha256": "483790b9ddc5cf5273bfbfff2d46540a25f8d50d9e41e45f8f436b19ec7fb6f1",
-          "bytes": 49
+          "sha256": "189cabab776cf204ef959168f4b31e51b7733a08f85c7f045c9ed7fb6b1caa6b",
+          "bytes": 126
         },
         {
           "source": "templates/index.json",
@@ -1710,8 +1710,8 @@
         {
           "source": "templates/neurips-2026/main.tex",
           "destination": "templates/neurips-2026/main.tex",
-          "sha256": "0360207625a28e2f0a49d022891319911c11fef8a2b1c8548b1c538d4f49d3f1",
-          "bytes": 1081
+          "sha256": "a2781704bc885235bcb62d34239e3556b5f9b3eb482a5e34ab57dbdcd9f98497",
+          "bytes": 1159
         },
         {
           "source": "templates/neurips-2026/neurips_2026.sty",
@@ -1722,8 +1722,8 @@
         {
           "source": "templates/neurips-2026/references.bib",
           "destination": "templates/neurips-2026/references.bib",
-          "sha256": "483790b9ddc5cf5273bfbfff2d46540a25f8d50d9e41e45f8f436b19ec7fb6f1",
-          "bytes": 49
+          "sha256": "189cabab776cf204ef959168f4b31e51b7733a08f85c7f045c9ed7fb6b1caa6b",
+          "bytes": 126
         },
         {
           "source": "vendor/LICENSE-fflate",

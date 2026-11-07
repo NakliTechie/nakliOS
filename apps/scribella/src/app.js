@@ -295,6 +295,9 @@ async function goToSource({ page, x, y }) {
   if (!syncReady()) return null;
   const place = inverse(state.sync, page, x, y, new Set(state.files));
   if (!place) { say('Nothing in your project made this spot.'); return null; }
+  // TeX closes a paragraph on the blank line after it, so a click can arrive one line low.
+  const lines = (state.texts[place.file] || '').split('\n');
+  while (place.line > 1 && !lines[place.line - 1]?.trim()) place.line -= 1;
   await jump(place.file, place.line);
   return place;
 }
