@@ -49,7 +49,7 @@ function devtools(url) {
 
 // Runs in the desktop page. Each step records what the caller saw.
 const SCRIPT = `(async () => {
-  const out = {};
+  const out = window.texTestOut = {};
   const wait = async (test, label, ms = 30000) => {
     for (const end = Date.now() + ms; Date.now() < end; await new Promise(r => setTimeout(r, 50))) { const value = test(); if (value) return value; }
     throw new Error('timed out: ' + label);
@@ -161,6 +161,10 @@ try {
     if (!ready) await pause(200);
   }
   const evaluated = await ws.send('Runtime.evaluate', { expression: SCRIPT, awaitPromise: true, returnByValue: true }, sessionId, 20 * 60 * 1000);
+  if (evaluated.exceptionDetails) {
+    const reached = await ws.send('Runtime.evaluate', { expression:'JSON.stringify(window.texTestOut, (key, value) => (key === "diagnostics" || key === "history" ? undefined : value))', returnByValue:true }, sessionId);
+    console.error('The run reached:', reached.result.value);
+  }
   assert.ok(!evaluated.exceptionDetails, JSON.stringify(evaluated.exceptionDetails));
   const r = evaluated.result.value;
 

@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { compileRequest, createTexService, TEX_ENGINES } from '../sys/tex/service.mjs';
 import { mapSynctex, parseTexLog } from '../sys/tex/log.mjs';
-import { texAsset } from '../worker/index.mjs';
+import { TEX_FILES, texAsset } from '../worker/index.mjs';
 import { createHostRegistry, HOST_COMMANDS } from '../sys/host/agent.mjs';
 import { createAgentFace, createGrant, createOpLog } from '../sys/rig/agent/index.mjs';
 import { createFileops, MemoryBackend } from '../sys/rig/fileops/index.mjs';
@@ -228,23 +228,27 @@ assert.equal((await service(fakeEngine(), { record:async () => { throw new Error
   assert.match(text, /Input:2:\/texlive\/article\.cls/);
 }
 
-// The /tex/ route: this version's release only, right types, length and range carried, no open proxy.
+// The /tex/ route: this version's files only, large files by redirect, scripts same-origin, no open proxy.
 {
   const calls = [];
   const load = async (url, init) => { calls.push({ url, init }); return new Response('body', { status:init.headers.Range ? 206 : 200, headers:{ 'Content-Length':'4', 'Content-Range':'bytes 0-3/4' } }); };
   const get = (path, init) => texAsset(new Request(`https://naklios.dev${path}`, init), load);
   const wasm = await get('/tex/1.4.1/busytex.wasm');
-  assert.equal(calls[0].url, 'https://github.com/NakliTechie/naklios-tex/releases/download/engine-1.4.1/busytex.wasm');
-  assert.equal(wasm.headers.get('Content-Type'), 'application/wasm');
-  assert.equal(wasm.headers.get('Content-Length'), '4');
-  assert.match(wasm.headers.get('Cache-Control'), /immutable/);
-  assert.equal((await get('/tex/1.4.1/texlive-extra.js')).headers.get('Content-Type'), 'text/javascript; charset=utf-8');
-  assert.equal((await get('/tex/1.4.1/texlive-extra.data', { headers:{ Range:'bytes=0-3' } })).status, 206);
+  assert.equal(wasm.status, 302);
+  assert.equal(wasm.headers.get('Location'), `${TEX_FILES}busytex.wasm`);
+  assert.equal((await get('/tex/1.4.1/texlive-extra.data')).headers.get('Location'), `${TEX_FILES}texlive-extra.data`);
+  assert.equal(calls.length, 0, 'large files never pass through the Worker');
+  const script = await get('/tex/1.4.1/texlive-extra.js');
+  assert.equal(calls[0].url, `${TEX_FILES}texlive-extra.js`);
+  assert.equal(script.headers.get('Content-Type'), 'text/javascript; charset=utf-8');
+  assert.equal(script.headers.get('Content-Length'), '4');
+  assert.match(script.headers.get('Cache-Control'), /immutable/);
+  assert.equal((await get('/tex/1.4.1/index.js', { headers:{ Range:'bytes=0-3' } })).status, 206);
   const count = calls.length;
   for (const path of ['/tex/9.9.9/busytex.wasm', '/tex/1.4.1/../secret.js', '/tex/1.4.1/a/b.js', '/tex/1.4.1/x.exe', '/tex/1.4.1/.env'])
     assert.equal((await get(path)).status, 404, path);
   assert.equal((await get('/tex/1.4.1/busytex.wasm', { method:'POST' })).status, 405);
-  assert.equal(calls.length, count, 'a refused path never reaches GitHub');
+  assert.equal(calls.length, count, 'a refused path never reaches Hugging Face');
   assert.equal((await texAsset(new Request('https://naklios.dev/tex/1.4.1/gone.js'), async () => new Response('', { status:404 }))).status, 404);
   assert.equal((await texAsset(new Request('https://naklios.dev/tex/1.4.1/x.js'), async () => new Response('', { status:503 }))).status, 502);
 }

@@ -396,8 +396,9 @@ verify.
 `naklios.experimental_tex` compiles a LaTeX project in the app's own storage. The engine is
 `texlyre-busytex` (TeX Live 2026, AGPL-3.0-or-later), which runs in a Worker owned by the host. The app
 talks to it by messages, so the AGPL stays on that component. Its files and source are in
-[`NakliTechie/naklios-tex`](https://github.com/NakliTechie/naklios-tex), and `naklios.dev/tex/` streams them from
-that repository's release. `capabilities.experimental_tex` says whether the app may call it.
+[`NakliTechie/naklios-tex`](https://github.com/NakliTechie/naklios-tex). The browser downloads the large files from
+[Hugging Face](https://huggingface.co/datasets/naklitechie/naklios-tex) through a redirect at `naklios.dev/tex/`, and that
+route serves the scripts on the page's own origin. `capabilities.experimental_tex` says whether the app may call it.
 
 ```js
 const job = naklios.experimental_tex.compile({
@@ -412,7 +413,7 @@ naklios.experimental_tex.cancel(job.id);                   // the compile reject
   rail and a caller can compile only its own storage. Without a connected Folder or Crate the call fails. Third-party
   apps also declare the `tex` permission.
 - **First use.** The first compile asks the person once and downloads about 680 MB, shared by every app and kept in this
-  browser. That took 15 minutes through Cloudflare on one connection, so show the `download` progress chunks. Biber adds about 30 MB on first use. Later compiles need the engine loaded, which took about 7 s in the spike.
+  browser. That took under two minutes on one connection, and 15 on a slow day, so show the `download` progress chunks. Biber adds about 30 MB on first use. Later compiles need the engine loaded, which took about 7 s in the spike.
 - **Outputs.** `<folder>/.tex-build/<name>.pdf`, `.log` and `.synctex.gz`. A build is kept after the app closes. Files and
   folders whose names start with a dot are not sent to TeX. SyncTeX paths are relative to `folder`.
 - **A TeX error is an answer.** `ok` is false and `diagnostics` lists `{ severity, kind, file, line, message }`. The call
