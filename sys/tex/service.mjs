@@ -49,9 +49,9 @@ async function readProject(store, folder, check) {
 // `engine` runs TeX, `confirmDownload` asks the person once before the first download, `record` writes the op log.
 export function createTexService({ engine, confirmDownload, record = async () => {}, now = Date.now }) {
   const queue = [];
-  let running = null, clearing = false;
+  let running = null, clearing = null;
 
-  // A failed History write never fails the compile it records.
+  // A failed or stuck History write never fails or holds up the compile it records.
   const log = (job, output) => Promise.resolve().then(() => record(job, output)).catch(error => console.error('[naklios] TeX History append failed', error));
 
   function cancelJob(job, code = 'ECANCELED', message = 'the compile was cancelled') {
@@ -70,7 +70,7 @@ export function createTexService({ engine, confirmDownload, record = async () =>
   }
 
   async function run(job) {
-    const { request, store, emit } = job;
+    const { request, emit } = job;
     const check = () => { if (job.cancelled) throw job.cancelled; };
     const stage = (name, extra = {}) => emit({ kind:'progress', stage:name, ...extra });
     if (!await engine.isReady()) {
@@ -83,6 +83,8 @@ export function createTexService({ engine, confirmDownload, record = async () =>
     }
     check();
     stage('reading');
+    const store = await untilCancelled(job, job.openStore());
+    check();
     const files = await untilCancelled(job, readProject(store, request.folder, check));
     if (!files.some(file => file.path === request.main)) throw fail('ENOENT', `${request.main} is not in the project`);
     stage('compiling');
@@ -110,12 +112,12 @@ export function createTexService({ engine, confirmDownload, record = async () =>
     const started = now();
     try {
       const result = await run(job);
-      await log(job, { ok:result.ok, exitCode:result.exitCode, errors:result.diagnostics.filter(d => d.severity === 'error').length, ms:now() - started });
+      log(job, { ok:result.ok, exitCode:result.exitCode, errors:result.diagnostics.filter(d => d.severity === 'error').length, ms:now() - started });
       job.resolve(result);
     } catch (error) {
       // A stopped or failed engine may hold a half-finished run, so the next compile starts a fresh one.
       if (job.engineBusy) engine.stop();
-      await log(job, { ok:false, error:String(error.code || error.message).slice(0, 200), ms:now() - started });
+      log(job, { ok:false, error:String(error.code || error.message).slice(0, 200), ms:now() - started });
       job.reject(error);
     } finally {
       running = null;
@@ -125,30 +127,32 @@ export function createTexService({ engine, confirmDownload, record = async () =>
   }
 
   return {
-    // `store` is { list, readBinary, write } already scoped to the caller. `id` names the job for cancel.
-    compile({ id, caller, store, onChunk = () => {} }, options) {
+    // `openStore` answers { list, readBinary, write } scoped to the caller. It runs inside the job, so a cancel covers
+    // any permission question it asks. `id` names the job for cancel.
+    compile({ id, caller, openStore, onChunk = () => {} }, options) {
       const request = compileRequest(options);
       const same = job => job.caller === caller && job.request.folder === request.folder && job.request.main === request.main;
       for (const job of [running, ...queue].filter(Boolean).filter(same)) cancelJob(job, 'ECANCELED', 'a newer compile of this project replaced it');
       return new Promise((resolve, reject) => {
         const emit = chunk => { try { onChunk(chunk); } catch (_) {} };
-        queue.push({ id, caller, store, request, emit, resolve, reject, cancelled:null });
+        queue.push({ id, caller, openStore, request, emit, resolve, reject, cancelled:null });
         emit({ kind:'progress', stage:'queued' });
         pump();
       });
     },
     // Every job ends first, so nothing is using the engine when the cache goes. A compile sent meanwhile waits.
-    async clearCache() {
-      clearing = true;
-      try {
-        const active = running;
-        for (const job of [running, ...queue].filter(Boolean)) cancelJob(job, 'ECANCELED', 'TeX Live was deleted');
-        await active?.finished;
-        await engine.clear();
-      } finally {
-        clearing = false;
-        pump();
-      }
+    clearCache() {
+      return clearing ||= (async () => {
+        try {
+          const active = running;
+          for (const job of [running, ...queue].filter(Boolean)) cancelJob(job, 'ECANCELED', 'TeX Live was deleted');
+          await active?.finished;
+          await engine.clear();
+        } finally {
+          clearing = null;
+          pump();
+        }
+      })();
     },
     cancel(caller, id) {
       const job = [running, ...queue].find(item => item?.caller === caller && item.id === id);

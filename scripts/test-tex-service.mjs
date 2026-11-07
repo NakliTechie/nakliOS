@@ -42,13 +42,14 @@ assert.deepEqual(Object.keys(TEX_ENGINES), ['pdflatex', 'xelatex', 'lualatex']);
 {
   const engine = fakeEngine(), events = [], chunks = [], store = paper();
   const result = await service(engine, { record:async (job, output) => events.push({ request:job.request, caller:job.caller, output }) })
-    .compile({ id:'a', caller:'app', store, onChunk:chunk => chunks.push(chunk) }, { folder:'paper', main:'main.tex' });
+    .compile({ id:'a', caller:'app', openStore:async () => store, onChunk:chunk => chunks.push(chunk) }, { folder:'paper', main:'main.tex' });
   assert.deepEqual(engine.compiled[0].files.map(file => file.path).sort(), ['fig/a.png', 'main.tex']);
   assert.equal(engine.compiled[0].driver, 'pdftex_bibtex8');
   assert.deepEqual(result, { ok:true, exitCode:0, pdf:'paper/.tex-build/main.pdf', log:'paper/.tex-build/main.log', synctex:'paper/.tex-build/main.synctex.gz', diagnostics:[] });
   assert.deepEqual(Object.keys(store.written).sort(), ['paper/.tex-build/main.log', 'paper/.tex-build/main.pdf', 'paper/.tex-build/main.synctex.gz']);
   assert.match(gunzipSync(store.written['paper/.tex-build/main.synctex.gz']).toString(), /^Input:1:main\.tex$/m);
   assert.deepEqual(chunks.filter(c => c.kind === 'progress').map(c => c.stage), ['queued', 'download', 'download', 'reading', 'compiling', 'writing']);
+  await new Promise(resolve => setTimeout(resolve));
   assert.equal(events.length, 1);
   assert.equal(events[0].output.ok, true);
   assert.ok(!JSON.stringify(events).includes('%PDF'));
@@ -58,7 +59,7 @@ assert.deepEqual(Object.keys(TEX_ENGINES), ['pdflatex', 'xelatex', 'lualatex']);
 {
   const log = '(./main.tex\n! Undefined control sequence.\nl.7 \\oops\n)\n';
   const store = paper();
-  const result = await service(fakeEngine(async () => ({ pdf:null, log, exitCode:1 }))).compile({ id:'a', caller:'app', store }, { folder:'paper', main:'main.tex' });
+  const result = await service(fakeEngine(async () => ({ pdf:null, log, exitCode:1 }))).compile({ id:'a', caller:'app', openStore:async () => store }, { folder:'paper', main:'main.tex' });
   assert.equal(result.ok, false);
   assert.equal(result.pdf, null);
   assert.deepEqual(result.diagnostics, [{ severity:'error', kind:'tex', file:'main.tex', line:7, message:'Undefined control sequence.' }]);
@@ -68,11 +69,11 @@ assert.deepEqual(Object.keys(TEX_ENGINES), ['pdflatex', 'xelatex', 'lualatex']);
 // Refusals: no download without the person's yes, a main file that is not there, a project over the limit.
 {
   const engine = fakeEngine();
-  await assert.rejects(createTexService({ engine, confirmDownload:async () => false }).compile({ id:'a', caller:'app', store:paper() }, { folder:'paper', main:'main.tex' }), /EPERM/);
+  await assert.rejects(createTexService({ engine, confirmDownload:async () => false }).compile({ id:'a', caller:'app', openStore:async () => paper() }, { folder:'paper', main:'main.tex' }), /EPERM/);
   assert.equal(engine.starts, 0);
-  await assert.rejects(service(fakeEngine()).compile({ id:'a', caller:'app', store:paper() }, { folder:'paper', main:'missing.tex' }), /ENOENT/);
+  await assert.rejects(service(fakeEngine()).compile({ id:'a', caller:'app', openStore:async () => paper() }, { folder:'paper', main:'missing.tex' }), /ENOENT/);
   const big = memoryStore(Object.fromEntries(Array.from({ length:5001 }, (_, i) => [`f${i}.tex`, 'x'])));
-  await assert.rejects(service(fakeEngine()).compile({ id:'a', caller:'app', store:big }, { main:'f0.tex' }), /EFBIG/);
+  await assert.rejects(service(fakeEngine()).compile({ id:'a', caller:'app', openStore:async () => big }, { main:'f0.tex' }), /EFBIG/);
 }
 
 // Cancel: a running compile stops the engine and frees the queue; only the owner can cancel; a queued one never starts.
@@ -80,9 +81,9 @@ assert.deepEqual(Object.keys(TEX_ENGINES), ['pdflatex', 'xelatex', 'lualatex']);
   let release;
   const engine = fakeEngine(() => new Promise(resolve => { release = resolve; }));
   const tex = service(engine);
-  const first = tex.compile({ id:'a', caller:'app', store:paper() }, { folder:'paper', main:'main.tex' });
-  const second = tex.compile({ id:'b', caller:'app', store:paper() }, { folder:'other', main:'secret.tex' });
-  const third = tex.compile({ id:'c', caller:'app', store:paper() }, { folder:'paper', main:'fig.tex' });
+  const first = tex.compile({ id:'a', caller:'app', openStore:async () => paper() }, { folder:'paper', main:'main.tex' });
+  const second = tex.compile({ id:'b', caller:'app', openStore:async () => paper() }, { folder:'other', main:'secret.tex' });
+  const third = tex.compile({ id:'c', caller:'app', openStore:async () => paper() }, { folder:'paper', main:'fig.tex' });
   while (!engine.compiled.length) await new Promise(resolve => setTimeout(resolve));
   assert.equal(tex.cancel('someone-else', 'a'), false);
   assert.equal(tex.cancel('app', 'c'), true);
@@ -102,15 +103,15 @@ assert.deepEqual(Object.keys(TEX_ENGINES), ['pdflatex', 'xelatex', 'lualatex']);
   let release;
   const engine = fakeEngine(request => engine.compiled.length === 1 ? new Promise(resolve => { release = resolve; }) : { pdf:bytes('%PDF'), log:'', exitCode:0 });
   const tex = service(engine);
-  const older = tex.compile({ id:'a', caller:'app', store:paper() }, { folder:'paper', main:'main.tex' });
+  const older = tex.compile({ id:'a', caller:'app', openStore:async () => paper() }, { folder:'paper', main:'main.tex' });
   while (!engine.compiled.length) await new Promise(resolve => setTimeout(resolve));
-  const newer = tex.compile({ id:'b', caller:'app', store:paper() }, { folder:'paper', main:'main.tex' });
+  const newer = tex.compile({ id:'b', caller:'app', openStore:async () => paper() }, { folder:'paper', main:'main.tex' });
   await assert.rejects(older, /replaced/);
   assert.equal((await newer).ok, true);
   void release;
   const broken = fakeEngine(async () => { throw new Error('Compilation timeout'); });
   const after = service(broken);
-  await assert.rejects(after.compile({ id:'c', caller:'app', store:paper() }, { folder:'paper', main:'main.tex' }), /timeout/);
+  await assert.rejects(after.compile({ id:'c', caller:'app', openStore:async () => paper() }, { folder:'paper', main:'main.tex' }), /timeout/);
   assert.equal(broken.stops, 1);
 }
 
@@ -118,7 +119,7 @@ assert.deepEqual(Object.keys(TEX_ENGINES), ['pdflatex', 'xelatex', 'lualatex']);
 {
   const engine = fakeEngine();
   const asking = createTexService({ engine, confirmDownload:() => new Promise(() => {}) });
-  const job = asking.compile({ id:'a', caller:'app', store:paper() }, { folder:'paper', main:'main.tex' });
+  const job = asking.compile({ id:'a', caller:'app', openStore:async () => paper() }, { folder:'paper', main:'main.tex' });
   await new Promise(resolve => setTimeout(resolve));
   asking.cancel('app', 'a');
   await assert.rejects(job, /ECANCELED/);
@@ -126,7 +127,7 @@ assert.deepEqual(Object.keys(TEX_ENGINES), ['pdflatex', 'xelatex', 'lualatex']);
   let wrote = 0;
   store.write = async (path, data) => { wrote += 1; await new Promise(() => {}); return write(path, data); };
   const writing = service(fakeEngine());
-  const slow = writing.compile({ id:'b', caller:'app', store }, { folder:'paper', main:'main.tex' });
+  const slow = writing.compile({ id:'b', caller:'app', openStore:async () => store }, { folder:'paper', main:'main.tex' });
   while (!wrote) await new Promise(resolve => setTimeout(resolve));
   writing.cancel('app', 'b');
   await assert.rejects(slow, /ECANCELED/);
@@ -141,15 +142,15 @@ assert.deepEqual(Object.keys(TEX_ENGINES), ['pdflatex', 'xelatex', 'lualatex']);
   let finishClear;
   engine.clear = () => { order.push('clear'); return new Promise(resolve => { finishClear = resolve; }); };
   const tex = service(engine);
-  const active = tex.compile({ id:'a', caller:'app', store:paper() }, { folder:'paper', main:'main.tex' });
-  const queued = tex.compile({ id:'b', caller:'app', store:paper() }, { folder:'other', main:'secret.tex' });
+  const active = tex.compile({ id:'a', caller:'app', openStore:async () => paper() }, { folder:'paper', main:'main.tex' });
+  const queued = tex.compile({ id:'b', caller:'app', openStore:async () => paper() }, { folder:'other', main:'secret.tex' });
   while (!engine.compiled.length) await new Promise(resolve => setTimeout(resolve));
   const clearing = tex.clearCache();
   await assert.rejects(active, /deleted/);
   await assert.rejects(queued, /deleted/);
   while (!finishClear) await new Promise(resolve => setTimeout(resolve));
   assert.deepEqual(order, ['stop', 'clear'], 'the engine stops before the cache goes, never after');
-  const later = tex.compile({ id:'c', caller:'app', store:paper() }, { folder:'paper', main:'main.tex' });
+  const later = tex.compile({ id:'c', caller:'app', openStore:async () => paper() }, { folder:'paper', main:'main.tex' });
   await new Promise(resolve => setTimeout(resolve));
   assert.equal(engine.compiled.length, 1, 'a compile waits for the clear');
   engine.compile = async () => ({ pdf:bytes('%PDF'), log:'', exitCode:0 });
@@ -157,6 +158,27 @@ assert.deepEqual(Object.keys(TEX_ENGINES), ['pdflatex', 'xelatex', 'lualatex']);
   await clearing;
   assert.equal((await later).ok, true);
 }
+
+// A cancel during the permission question ends the job, and a late yes starts nothing. Two clears are one clear.
+{
+  const engine = fakeEngine();
+  let answer;
+  const tex = service(engine);
+  const job = tex.compile({ id:'a', caller:'app', openStore:() => new Promise(resolve => { answer = resolve; }) }, { folder:'paper', main:'main.tex' });
+  while (!answer) await new Promise(resolve => setTimeout(resolve));
+  tex.cancel('app', 'a');
+  await assert.rejects(job, /ECANCELED/);
+  answer(paper());
+  await new Promise(resolve => setTimeout(resolve));
+  assert.equal(engine.compiled.length, 0);
+  let clears = 0;
+  engine.clear = async () => { clears += 1; };
+  await Promise.all([tex.clearCache(), tex.clearCache()]);
+  assert.equal(clears, 1);
+}
+
+// A stuck History write does not hold the queue.
+assert.equal((await service(fakeEngine(), { record:() => new Promise(() => {}) }).compile({ id:'a', caller:'app', openStore:async () => paper() }, { folder:'paper', main:'main.tex' })).ok, true);
 
 // The desktop command obeys a caller's path grant, as the fs commands do.
 {
@@ -169,7 +191,7 @@ assert.deepEqual(Object.keys(TEX_ENGINES), ['pdflatex', 'xelatex', 'lualatex']);
 }
 
 // A failed History write does not fail the compile.
-assert.equal((await service(fakeEngine(), { record:async () => { throw new Error('disk'); } }).compile({ id:'a', caller:'app', store:paper() }, { folder:'paper', main:'main.tex' })).ok, true);
+assert.equal((await service(fakeEngine(), { record:async () => { throw new Error('disk'); } }).compile({ id:'a', caller:'app', openStore:async () => paper() }, { folder:'paper', main:'main.tex' })).ok, true);
 
 // Log reading: the missing package message, the innermost project file, errors inside a style, warnings.
 {
