@@ -956,6 +956,10 @@
           "destination": "src/arxiv.js"
         },
         {
+          "source": "src/aux.js",
+          "destination": "src/aux.js"
+        },
+        {
           "source": "src/bib.js",
           "destination": "src/bib.js"
         },
@@ -978,6 +982,10 @@
         {
           "source": "src/explain.js",
           "destination": "src/explain.js"
+        },
+        {
+          "source": "src/format.js",
+          "destination": "src/format.js"
         },
         {
           "source": "src/insert.js",
@@ -1016,6 +1024,10 @@
           "destination": "src/search.js"
         },
         {
+          "source": "src/spell.js",
+          "destination": "src/spell.js"
+        },
+        {
           "source": "src/storage.js",
           "destination": "src/storage.js"
         },
@@ -1030,22 +1042,6 @@
         {
           "source": "src/zip.js",
           "destination": "src/zip.js"
-        },
-        {
-          "source": "templates/aaai-2027/UPSTREAM.md",
-          "destination": "templates/aaai-2027/UPSTREAM.md"
-        },
-        {
-          "source": "templates/aaai-2027/aaai2027.bst",
-          "destination": "templates/aaai-2027/aaai2027.bst"
-        },
-        {
-          "source": "templates/aaai-2027/aaai2027.sty",
-          "destination": "templates/aaai-2027/aaai2027.sty"
-        },
-        {
-          "source": "templates/aaai-2027/main.tex",
-          "destination": "templates/aaai-2027/main.tex"
         },
         {
           "source": "templates/acl/UPSTREAM.md",
@@ -1100,6 +1096,14 @@
           "destination": "templates/icml-2026/UPSTREAM.md"
         },
         {
+          "source": "templates/icml-2026/algorithm.sty",
+          "destination": "templates/icml-2026/algorithm.sty"
+        },
+        {
+          "source": "templates/icml-2026/algorithmic.sty",
+          "destination": "templates/icml-2026/algorithmic.sty"
+        },
+        {
           "source": "templates/icml-2026/icml2026.bst",
           "destination": "templates/icml-2026/icml2026.bst"
         },
@@ -1128,72 +1132,12 @@
           "destination": "templates/neurips-2026/neurips_2026.sty"
         },
         {
-          "source": "templates/thuthesis/UPSTREAM.md",
-          "destination": "templates/thuthesis/UPSTREAM.md"
-        },
-        {
-          "source": "templates/thuthesis/main.tex",
-          "destination": "templates/thuthesis/main.tex"
-        },
-        {
-          "source": "templates/thuthesis/thu-fig-logo.pdf",
-          "destination": "templates/thuthesis/thu-fig-logo.pdf"
-        },
-        {
-          "source": "templates/thuthesis/thu-text-logo.pdf",
-          "destination": "templates/thuthesis/thu-text-logo.pdf"
-        },
-        {
-          "source": "templates/thuthesis/thuthesis-author-year.bst",
-          "destination": "templates/thuthesis/thuthesis-author-year.bst"
-        },
-        {
-          "source": "templates/thuthesis/thuthesis-numeric.bst",
-          "destination": "templates/thuthesis/thuthesis-numeric.bst"
-        },
-        {
-          "source": "templates/thuthesis/thuthesis.cls",
-          "destination": "templates/thuthesis/thuthesis.cls"
-        },
-        {
-          "source": "templates/ustcthesis/UPSTREAM.md",
-          "destination": "templates/ustcthesis/UPSTREAM.md"
-        },
-        {
-          "source": "templates/ustcthesis/figures/ustc-logo.pdf",
-          "destination": "templates/ustcthesis/figures/ustc-logo.pdf"
-        },
-        {
-          "source": "templates/ustcthesis/figures/ustc-name-stxingkai.pdf",
-          "destination": "templates/ustcthesis/figures/ustc-name-stxingkai.pdf"
-        },
-        {
-          "source": "templates/ustcthesis/figures/ustc-name.pdf",
-          "destination": "templates/ustcthesis/figures/ustc-name.pdf"
-        },
-        {
-          "source": "templates/ustcthesis/figures/ustc-title-page-heading.pdf",
-          "destination": "templates/ustcthesis/figures/ustc-title-page-heading.pdf"
-        },
-        {
-          "source": "templates/ustcthesis/main.tex",
-          "destination": "templates/ustcthesis/main.tex"
-        },
-        {
-          "source": "templates/ustcthesis/ustcthesis-authoryear.bst",
-          "destination": "templates/ustcthesis/ustcthesis-authoryear.bst"
-        },
-        {
-          "source": "templates/ustcthesis/ustcthesis-numeric.bst",
-          "destination": "templates/ustcthesis/ustcthesis-numeric.bst"
-        },
-        {
-          "source": "templates/ustcthesis/ustcthesis.cls",
-          "destination": "templates/ustcthesis/ustcthesis.cls"
-        },
-        {
           "source": "vendor/LICENSE-fflate",
           "destination": "vendor/LICENSE-fflate"
+        },
+        {
+          "source": "vendor/LICENSE-harper",
+          "destination": "vendor/LICENSE-harper"
         },
         {
           "source": "vendor/LICENSE-katex",
@@ -1214,6 +1158,14 @@
         {
           "source": "vendor/fflate.js",
           "destination": "vendor/fflate.js"
+        },
+        {
+          "source": "vendor/harper/BinaryModule-S5UABkWQ.js",
+          "destination": "vendor/harper/BinaryModule-S5UABkWQ.js"
+        },
+        {
+          "source": "vendor/harper/index.js",
+          "destination": "vendor/harper/index.js"
         },
         {
           "source": "vendor/katex.mjs",

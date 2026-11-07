@@ -1,5 +1,7 @@
 // Projects are folders under `projects/`. Build output and hidden files stay out of the tree, and `.scribella.json`
 // holds the settings a project carries with it.
+import { escapeText } from './insert.js';
+
 const ROOT = 'projects';
 const SETTINGS = '.scribella.json';
 const TEXT = /\.(tex|ltx|bib|sty|cls|bst|bbx|cbx|txt|md|csv|tsv)$/i;
@@ -43,6 +45,94 @@ Start writing here. Cite a paper like this~\\cite{knuth1984}, and refer to Secti
 }
 `,
   } },
+  beamer:{ label:'Slides (Beamer)', main:'main.tex', files:{
+    'main.tex':`\\documentclass{beamer}
+\\usetheme{default}
+\\title{Your talk}
+\\author{Your name}
+\\date{\\today}
+
+\\begin{document}
+\\frame{\\titlepage}
+
+\\begin{frame}{First point}
+  \\begin{itemize}
+    \\item One idea per slide.
+    \\item Numbers on the slide, reasons in your words.
+  \\end{itemize}
+\\end{frame}
+\\end{document}
+`,
+  } },
+  ieee:{ label:'IEEE conference', main:'main.tex', files:{
+    'main.tex':`\\documentclass[conference]{IEEEtran}
+\\usepackage{amsmath}
+\\usepackage{graphicx}
+\\usepackage{cite}
+
+\\begin{document}
+\\title{Your title}
+\\author{\\IEEEauthorblockN{Your name}\\IEEEauthorblockA{Your institution}}
+\\maketitle
+
+\\begin{abstract}
+One paragraph that says what you did and what you found.
+\\end{abstract}
+
+\\section{Introduction}
+Start writing here.
+\\end{document}
+`,
+  } },
+  acm:{ label:'ACM article', main:'main.tex', files:{
+    'main.tex':`\\documentclass[sigconf,nonacm]{acmart}
+
+\\begin{document}
+\\title{Your title}
+\\author{Your name}
+\\affiliation{\\institution{Your institution}\\country{Your country}}
+\\begin{abstract}
+One paragraph that says what you did and what you found.
+\\end{abstract}
+\\maketitle
+
+\\section{Introduction}
+Start writing here.
+\\end{document}
+`,
+  } },
+  thesis:{ label:'Thesis', main:'main.tex', files:{
+    'main.tex':`\\documentclass[12pt,a4paper]{report}
+\\usepackage{amsmath}
+\\usepackage{graphicx}
+\\usepackage{hyperref}
+
+\\title{Your thesis}
+\\author{Your name}
+\\date{\\today}
+
+\\begin{document}
+\\maketitle
+\\tableofcontents
+
+\\input{chapters/introduction}
+
+\\bibliographystyle{plain}
+\\bibliography{references}
+\\end{document}
+`,
+    'chapters/introduction.tex':`\\chapter{Introduction}
+\\label{ch:intro}
+Start writing here. Cite a paper like this~\\cite{knuth1984}.
+`,
+    'references.bib':`@book{knuth1984,
+  title = {The {\\TeX}book},
+  author = {Knuth, Donald E.},
+  publisher = {Addison-Wesley},
+  year = {1984}
+}
+`,
+  } },
   blank:{ label:'Blank document', main:'main.tex', files:{
     'main.tex':`\\documentclass{article}
 
@@ -66,13 +156,19 @@ export async function loadVenues(load = path => fetch(path).then(reply => { if (
   } }]));
 }
 
+// Venue mains carry a placeholder where the title goes, and its underscores would stop TeX.
+function namedMain(data, title) {
+  const text = typeof data === 'string' ? data : new TextDecoder().decode(data);
+  return text.replaceAll('LATTICE_PROJECT_TITLE', escapeText(title));
+}
+
 export async function createProject(store, name, templateId = 'article', venues = {}) {
   const clean = safeName(name), template = TEMPLATES[templateId] || venues[templateId];
   if (!clean) throw new Error('Give the project a name.');
   if (!template) throw new Error(`There is no template ${templateId}.`);
   if (await store.exists(projectFolder(clean))) throw new Error(`A project called ${clean} already exists.`);
   const files = template.read ? await template.read() : template.files;
-  for (const [path, data] of Object.entries(files)) await store.write(`${projectFolder(clean)}/${path}`, data);
+  for (const [path, data] of Object.entries(files)) await store.write(`${projectFolder(clean)}/${path}`, path === template.main ? namedMain(data, clean) : data);
   await writeSettings(store, clean, { main:template.main, engine:template.engine || 'pdflatex' });
   return clean;
 }

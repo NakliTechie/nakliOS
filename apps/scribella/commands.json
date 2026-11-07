@@ -38,7 +38,7 @@
           },
           "template": {
             "type": "string",
-            "description": "article, blank, neurips-2026, icml-2026, iclr-2026, acl, cvpr-2027, aaai-2027, thuthesis or ustcthesis"
+            "description": "article, beamer, ieee, acm, thesis, blank, neurips-2026, icml-2026, iclr-2026, acl or cvpr-2027"
           }
         },
         "required": [
@@ -373,6 +373,24 @@
         "type": "object",
         "properties": {}
       }
+    },
+    {
+      "name": "file.format",
+      "description": "Tidy the indentation of the open Scribella LaTeX file.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "setup.check",
+      "description": "Check Scribella's storage, TeX and AI setup.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
     }
   ],
   "parity": {
@@ -433,6 +451,9 @@
     "check-blind": "submission.check",
     "check-go": "view",
     "check-fix": "person: applying a bibliography change is the person's own decision",
-    "tab-checks": "view"
+    "tab-checks": "view",
+    "format": "file.format",
+    "check-setup": "setup.check",
+    "spell": "view"
   }
 }

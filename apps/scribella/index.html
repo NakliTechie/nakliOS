@@ -22,7 +22,7 @@ ul{list-style:none;margin:0;padding:0}.row{display:block;width:100%;text-align:l
 body[data-view=home] #project-view,body[data-view=project] #home-view,body:not([data-view]) #project-view{display:none}
 header{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
 header strong{margin-right:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}header label{display:flex;gap:4px;align-items:center;color:var(--soft);font-size:13px}
-main{display:grid;grid-template-columns:210px minmax(0,1fr) minmax(0,1fr);min-height:0}
+main{display:grid;grid-template-columns:var(--rail,210px) 5px var(--source,minmax(0,1fr)) 5px minmax(0,1fr);min-height:0}.split{cursor:col-resize;background:var(--line);touch-action:none}.split:hover{background:var(--soft)}
 #rail{border-right:1px solid var(--line);overflow:auto;background:var(--panel);padding-bottom:12px}.rail-actions{display:flex;gap:6px;padding:0 8px}
 .file-pick{position:relative;overflow:hidden}.file-pick input{position:absolute;inset:0;opacity:0;cursor:pointer}
 .rail-actions{flex-wrap:wrap}#search-box{padding:0 8px;display:grid;gap:4px}#search-box input[type=search],#search-box input[type=text]{width:100%}#search-box label{font-size:12px;color:var(--soft);display:inline-flex;gap:3px;align-items:center;margin-right:8px}#search-count{font-size:12px;color:var(--soft)}#search-results .row{font-size:12px}
@@ -33,6 +33,7 @@ dialog{border:1px solid var(--line);border-radius:8px;padding:16px;width:min(560
 #proposal{padding:8px 10px;border-bottom:2px solid var(--brand);background:#fff}#proposal-edits li{padding:2px 0;font-size:13px;border:0}del{color:var(--bad)}ins{color:var(--brand);text-decoration:underline}.note{padding:2px 10px 8px;border-bottom:1px solid var(--line)}.note.resolved{opacity:.6}.note.rejected strong{color:var(--warn)}
 .note-note{background:#f2c94c44}.note-check{background:#fff3a8}.note-keep{background:#c8efc8}.note-cite{background:#c8dfff}.note-rewrite{background:#ffd0e0}.note-question{background:#ffe0b8}.note-idea{background:#e4d4ff}
 .check{padding:2px 10px 6px;border-bottom:1px solid var(--line)}.check.bad strong,.check.conflict strong{color:var(--bad)}.check.warn strong,.check.update strong{color:var(--warn)}.cite-tip{padding:4px 8px;max-width:420px;font-size:13px}
+.step{margin-left:10px}.step.done{color:var(--brand)}
 #new-file-form{padding:6px 8px}#new-file-form input{width:100%}
 #centre{display:grid;grid-template-rows:auto auto minmax(0,1fr) minmax(90px,32%);min-width:0;border-right:1px solid var(--line)}
 #file-name{padding:4px 10px;border-bottom:1px solid var(--line);color:var(--soft);font-size:13px}
@@ -46,7 +47,7 @@ dialog{border:1px solid var(--line);border-radius:8px;padding:16px;width:min(560
 .mark{position:absolute;pointer-events:none}.mark.sync{background:#f2c94c66;outline:1px solid #c79a00}
 footer{display:flex;gap:16px;padding:4px 10px;border-top:1px solid var(--line);background:var(--panel);font-size:13px;color:var(--soft)}#status{margin-right:auto}#status.bad{color:var(--bad)}
 body[data-building] #status::before{content:"● ";color:var(--brand)}
-@media (max-width:900px){body{overflow:auto}#project-view{height:auto;min-height:100%}main{grid-template-columns:1fr}#rail{border-right:0;border-bottom:1px solid var(--line);max-height:30vh}#centre{height:80vh;border-right:0}#pdf-side{height:80vh}}
+@media (max-width:900px){body{overflow:auto}#project-view{height:auto;min-height:100%}main{grid-template-columns:1fr}.split{display:none}#rail{border-right:0;border-bottom:1px solid var(--line);max-height:30vh}#centre{height:80vh;border-right:0}#pdf-side{height:80vh}}
 </style>
 </head>
 <body>
@@ -73,14 +74,16 @@ body[data-building] #status::before{content:"● ";color:var(--brand)}
     <label>Engine <select id="engine" data-command="engine"><option value="pdflatex">pdfLaTeX</option><option value="xelatex">XeLaTeX</option><option value="lualatex">LuaLaTeX</option></select></label>
     <select id="insert" data-command="insert" aria-label="Insert"><option value="">Insert…</option><option value="figure">Figure</option><option value="table">Table from data</option><option value="symbol">Symbol</option></select>
     <select id="keys" data-command="keys" aria-label="Keys"><option value="default">Standard keys</option><option value="vim">Vim</option><option value="emacs">Emacs</option></select>
+    <label><input id="spell" type="checkbox" data-command="spell"> Spelling</label>
     <label><input id="auto" type="checkbox" checked data-command="toggle-auto"> Build on save</label>
+    <button id="format" class="btn" data-command="format">Format</button>
     <button id="save-version" class="btn" data-command="save-version">Save version</button>
     <button id="arxiv" class="btn" data-command="arxiv">arXiv pack</button>
     <button id="export" class="btn" data-command="export">Export</button>
     <button id="build" class="btn primary" data-command="build">Build</button>
     <button id="cancel" class="btn" data-command="cancel-build" hidden>Stop</button>
   </header>
-  <main>
+  <main id="workspace">
     <nav id="rail" aria-label="Project">
       <h2>Files</h2>
       <ul id="files"></ul>
@@ -105,6 +108,7 @@ body[data-building] #status::before{content:"● ";color:var(--brand)}
       </div>
       <ul id="search-results"></ul>
     </nav>
+    <div class="split" data-column="--rail" role="separator" aria-label="Resize the file list"></div>
     <section id="centre" aria-label="Source">
       <div id="file-name"></div>
       <div id="sel-bar" hidden>
@@ -118,7 +122,7 @@ body[data-building] #status::before{content:"● ";color:var(--brand)}
         <div class="tabs"><button id="tab-problems" class="tab" aria-pressed="true" data-command="tab-problems"><span id="problem-count">No problems</span></button><button id="tab-notes" class="tab" aria-pressed="false" data-command="tab-notes"><span id="notes-tab">Notes (0)</span></button><button id="tab-checks" class="tab" aria-pressed="false" data-command="tab-checks">Checks</button><button id="revise-all" class="btn small" data-command="revise-all" hidden>Revise all notes</button></div>
         <div id="problems-list"><ul id="problems"></ul></div>
         <div id="checks" hidden>
-          <div class="rail-actions" style="padding:6px 10px"><button id="add-paper" class="btn small" data-command="add-paper">Add a paper</button><button id="check-references" class="btn small" data-command="check-references">Check references</button><button id="check-blind" class="btn small" data-command="check-blind">Double-blind check</button></div>
+          <div class="rail-actions" style="padding:6px 10px"><button id="add-paper" class="btn small" data-command="add-paper">Add a paper</button><button id="check-setup" class="btn small" data-command="check-setup">Check setup</button><button id="check-references" class="btn small" data-command="check-references">Check references</button><button id="check-blind" class="btn small" data-command="check-blind">Double-blind check</button></div>
           <strong id="checks-title" style="padding:0 10px"></strong>
           <ul id="checks-list"></ul>
         </div>
@@ -132,12 +136,13 @@ body[data-building] #status::before{content:"● ";color:var(--brand)}
         </div>
       </div>
     </section>
+    <div class="split" data-column="--source" role="separator" aria-label="Resize the source"></div>
     <section id="pdf-side" aria-label="PDF">
       <div id="pdf-bar"><span id="pages"></span><span id="pdf-hits"></span><input id="pdf-find" type="search" placeholder="Find in PDF" aria-label="Find in PDF" data-command="pdf-find" style="width:130px"><button id="show-in-pdf" class="btn small" data-command="show-in-pdf" title="Ctrl or Cmd + Enter. Double-click the PDF to jump back.">Show in PDF</button><button id="zoom-out" class="btn small" data-command="zoom-out" aria-label="Zoom out">−</button><button id="zoom-in" class="btn small" data-command="zoom-in" aria-label="Zoom in">+</button></div>
       <div id="pdf"></div>
     </section>
   </main>
-  <footer><span id="status" role="status"></span><span id="words"></span></footer>
+  <footer><span id="status" role="status"></span><span id="steps" hidden></span><span id="words"></span></footer>
 </div>
 <input id="figure-file" type="file" accept=".png,.jpg,.jpeg,.pdf,.eps" hidden>
 <dialog id="table-dialog"><form id="table-form">
