@@ -5,7 +5,8 @@
   "files": [
    "UPSTREAM.md",
    "main.tex",
-   "neurips_2026.sty"
+   "neurips_2026.sty",
+   "references.bib"
   ]
  },
  "icml-2026": {
@@ -17,7 +18,8 @@
    "algorithmic.sty",
    "icml2026.bst",
    "icml2026.sty",
-   "main.tex"
+   "main.tex",
+   "references.bib"
   ]
  },
  "iclr-2026": {
@@ -27,7 +29,8 @@
    "UPSTREAM.md",
    "iclr2026_conference.bst",
    "iclr2026_conference.sty",
-   "main.tex"
+   "main.tex",
+   "references.bib"
   ]
  },
  "acl": {
@@ -37,7 +40,8 @@
    "UPSTREAM.md",
    "acl.sty",
    "acl_natbib.bst",
-   "main.tex"
+   "main.tex",
+   "references.bib"
   ]
  },
  "cvpr-2027": {
@@ -47,7 +51,19 @@
    "UPSTREAM.md",
    "cvpr.sty",
    "ieeenat_fullname.bst",
-   "main.tex"
+   "main.tex",
+   "references.bib"
+  ]
+ },
+ "ieee": {
+  "label": "IEEE conference",
+  "main": "main.tex",
+  "files": [
+   "IEEEtran.bst",
+   "IEEEtran.cls",
+   "UPSTREAM.md",
+   "main.tex",
+   "references.bib"
   ]
  }
 }

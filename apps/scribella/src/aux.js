@@ -10,7 +10,7 @@ export function parseBlg(blg) {
   for (const line of (blg || '').split('\n')) {
     const warning = /^Warning--(.+)$/.exec(line.trim());
     if (warning) found.push({ severity:'warning', kind:'bib', message:warning[1] });
-    else if (/^(I couldn't open|I found no|Repeated entry|You're missing|This database file appears)/.test(line.trim())) found.push({ severity:'error', kind:'bib', message:line.trim() });
+    else if (/^(Repeated entry|This database file appears|You're missing|I couldn't open database file|I was expecting)/.test(line.trim())) found.push({ severity:'error', kind:'bib', message:line.trim() });
   }
   return found;
 }

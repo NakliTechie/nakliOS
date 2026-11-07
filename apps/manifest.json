@@ -1016,6 +1016,10 @@
           "destination": "src/protected.js"
         },
         {
+          "source": "src/review-pdf.js",
+          "destination": "src/review-pdf.js"
+        },
+        {
           "source": "src/revise.js",
           "destination": "src/revise.js"
         },
@@ -1060,6 +1064,10 @@
           "destination": "templates/acl/main.tex"
         },
         {
+          "source": "templates/acl/references.bib",
+          "destination": "templates/acl/references.bib"
+        },
+        {
           "source": "templates/cvpr-2027/UPSTREAM.md",
           "destination": "templates/cvpr-2027/UPSTREAM.md"
         },
@@ -1076,6 +1084,10 @@
           "destination": "templates/cvpr-2027/main.tex"
         },
         {
+          "source": "templates/cvpr-2027/references.bib",
+          "destination": "templates/cvpr-2027/references.bib"
+        },
+        {
           "source": "templates/iclr-2026/UPSTREAM.md",
           "destination": "templates/iclr-2026/UPSTREAM.md"
         },
@@ -1090,6 +1102,10 @@
         {
           "source": "templates/iclr-2026/main.tex",
           "destination": "templates/iclr-2026/main.tex"
+        },
+        {
+          "source": "templates/iclr-2026/references.bib",
+          "destination": "templates/iclr-2026/references.bib"
         },
         {
           "source": "templates/icml-2026/UPSTREAM.md",
@@ -1116,6 +1132,30 @@
           "destination": "templates/icml-2026/main.tex"
         },
         {
+          "source": "templates/icml-2026/references.bib",
+          "destination": "templates/icml-2026/references.bib"
+        },
+        {
+          "source": "templates/ieee/IEEEtran.bst",
+          "destination": "templates/ieee/IEEEtran.bst"
+        },
+        {
+          "source": "templates/ieee/IEEEtran.cls",
+          "destination": "templates/ieee/IEEEtran.cls"
+        },
+        {
+          "source": "templates/ieee/UPSTREAM.md",
+          "destination": "templates/ieee/UPSTREAM.md"
+        },
+        {
+          "source": "templates/ieee/main.tex",
+          "destination": "templates/ieee/main.tex"
+        },
+        {
+          "source": "templates/ieee/references.bib",
+          "destination": "templates/ieee/references.bib"
+        },
+        {
           "source": "templates/index.json",
           "destination": "templates/index.json"
         },
@@ -1130,6 +1170,10 @@
         {
           "source": "templates/neurips-2026/neurips_2026.sty",
           "destination": "templates/neurips-2026/neurips_2026.sty"
+        },
+        {
+          "source": "templates/neurips-2026/references.bib",
+          "destination": "templates/neurips-2026/references.bib"
         },
         {
           "source": "vendor/LICENSE-fflate",
@@ -1170,6 +1214,10 @@
         {
           "source": "vendor/katex.mjs",
           "destination": "vendor/katex.mjs"
+        },
+        {
+          "source": "vendor/pdf-lib/pdf-lib.esm.js",
+          "destination": "vendor/pdf-lib/pdf-lib.esm.js"
         },
         {
           "source": "vendor/pdfjs/pdf.min.mjs",

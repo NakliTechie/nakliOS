@@ -14,6 +14,13 @@ export function maskLatex(text) {
   return out + text.slice(at);
 }
 
+// Blanked-out LaTeX looks like odd spacing and a sentence start, so findings beside it are dropped.
+export function keepProse(text, found) {
+  const spans = protectedSpans(text);
+  const artefact = item => /capital|space/i.test(item.message || '');
+  return found.filter(item => !spans.some(span => (item.from < span.to && item.to > span.from) || (artefact(item) && item.from <= span.to + 2 && item.to >= span.from)));
+}
+
 async function engine() {
   if (!linter) {
     const { LocalLinter, createBinaryModuleFromUrl } = await import('../vendor/harper/index.js');
@@ -25,8 +32,8 @@ async function engine() {
 
 export async function checkSpelling(text) {
   const lints = await (await engine()).lint(maskLatex(text), { language:'plaintext' });
-  return lints.map(lint => {
+  return keepProse(text, lints.map(lint => {
     const { start, end } = lint.span();
     return { from:start, to:end, message:lint.message(), suggestions:lint.suggestions().map(item => item.get_replacement_text()).filter(Boolean).slice(0, 3) };
-  });
+  }));
 }

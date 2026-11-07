@@ -64,43 +64,6 @@ Start writing here. Cite a paper like this~\\cite{knuth1984}, and refer to Secti
 \\end{document}
 `,
   } },
-  ieee:{ label:'IEEE conference', main:'main.tex', files:{
-    'main.tex':`\\documentclass[conference]{IEEEtran}
-\\usepackage{amsmath}
-\\usepackage{graphicx}
-\\usepackage{cite}
-
-\\begin{document}
-\\title{Your title}
-\\author{\\IEEEauthorblockN{Your name}\\IEEEauthorblockA{Your institution}}
-\\maketitle
-
-\\begin{abstract}
-One paragraph that says what you did and what you found.
-\\end{abstract}
-
-\\section{Introduction}
-Start writing here.
-\\end{document}
-`,
-  } },
-  acm:{ label:'ACM article', main:'main.tex', files:{
-    'main.tex':`\\documentclass[sigconf,nonacm]{acmart}
-
-\\begin{document}
-\\title{Your title}
-\\author{Your name}
-\\affiliation{\\institution{Your institution}\\country{Your country}}
-\\begin{abstract}
-One paragraph that says what you did and what you found.
-\\end{abstract}
-\\maketitle
-
-\\section{Introduction}
-Start writing here.
-\\end{document}
-`,
-  } },
   thesis:{ label:'Thesis', main:'main.tex', files:{
     'main.tex':`\\documentclass[12pt,a4paper]{report}
 \\usepackage{amsmath}

@@ -119,10 +119,10 @@ body[data-building] #status::before{content:"● ";color:var(--brand)}
       <div id="editor"></div>
       <div id="not-text" hidden>This file is not text, so it opens only in the build.</div>
       <div id="problems-pane">
-        <div class="tabs"><button id="tab-problems" class="tab" aria-pressed="true" data-command="tab-problems"><span id="problem-count">No problems</span></button><button id="tab-notes" class="tab" aria-pressed="false" data-command="tab-notes"><span id="notes-tab">Notes (0)</span></button><button id="tab-checks" class="tab" aria-pressed="false" data-command="tab-checks">Checks</button><button id="revise-all" class="btn small" data-command="revise-all" hidden>Revise all notes</button></div>
+        <div class="tabs"><button id="tab-problems" class="tab" aria-pressed="true" data-command="tab-problems"><span id="problem-count">No problems</span></button><button id="tab-notes" class="tab" aria-pressed="false" data-command="tab-notes"><span id="notes-tab">Notes (0)</span></button><button id="tab-checks" class="tab" aria-pressed="false" data-command="tab-checks">Checks</button><button id="revise-all" class="btn small" data-command="revise-all" hidden>Revise all notes</button><button id="review-pdf" class="btn small" data-command="review-pdf">Review PDF</button></div>
         <div id="problems-list"><ul id="problems"></ul></div>
         <div id="checks" hidden>
-          <div class="rail-actions" style="padding:6px 10px"><button id="add-paper" class="btn small" data-command="add-paper">Add a paper</button><button id="check-setup" class="btn small" data-command="check-setup">Check setup</button><button id="check-references" class="btn small" data-command="check-references">Check references</button><button id="check-blind" class="btn small" data-command="check-blind">Double-blind check</button></div>
+          <div class="rail-actions" style="padding:6px 10px"><button id="add-paper" class="btn small" data-command="add-paper">Add a paper</button><button id="discover" class="btn small" data-command="discover">Find papers</button><button id="check-setup" class="btn small" data-command="check-setup">Check setup</button><button id="check-references" class="btn small" data-command="check-references">Check references</button><button id="check-blind" class="btn small" data-command="check-blind">Double-blind check</button></div>
           <strong id="checks-title" style="padding:0 10px"></strong>
           <ul id="checks-list"></ul>
         </div>
