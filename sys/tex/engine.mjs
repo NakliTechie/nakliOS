@@ -1,6 +1,8 @@
 // The host's handle on the engine Worker. `stop` ends the Worker, and the next call starts a fresh one.
 import { TEX_PACKS } from './service.mjs';
 
+const CLEAR_LIMIT_MS = 60000;
+
 export function createTexEngine({ base, workerUrl }) {
   let worker = null, started = false, nextId = 0;
   const waiting = new Map();
@@ -45,7 +47,13 @@ export function createTexEngine({ base, workerUrl }) {
     },
     compile:({ files, main, driver }) => call('compile', { files, main, driver }, files.map(file => file.content.buffer)),
     cached:() => call('cached'),
-    clear:async () => { dropWorker(new Error('The TeX cache was cleared')); await call('clear'); dropWorker(new Error('The TeX cache was cleared')); },
+    async clear() {
+      dropWorker(new Error('The TeX cache was cleared'));
+      // Compiles wait for a clear, so a clear that never answers must end on its own.
+      const stuck = setTimeout(() => dropWorker(new Error('The TeX cache did not clear')), CLEAR_LIMIT_MS);
+      try { await call('clear'); } finally { clearTimeout(stuck); }
+      dropWorker(new Error('The TeX cache was cleared'));
+    },
     stop:() => dropWorker(new Error('The TeX engine stopped')),
   };
 }

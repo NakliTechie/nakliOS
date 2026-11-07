@@ -8249,15 +8249,17 @@ function texManifestAllows(appId){
 function texCapabilityForApp(appId){
   return typeof Worker !== 'undefined' && backendsAvailable().length > 0 && texManifestAllows(appId);
 }
+let texConsentEpoch = 0; // a clear outdates any download dialog still open
 async function texEnsureDownload(caller){
   try { if (JSON.parse(localStorage.getItem('nakliOS.tex.v1') || 'null')?.granted === true) return true; } catch(_){}
   const label = APPS.find(app => app.id === caller)?.name || 'NakliOS';
+  const epoch = texConsentEpoch;
   const ok = await nakliosConfirm(
     `${label} wants to compile LaTeX. NakliOS needs TeX Live for that: about 680&nbsp;MB once, kept in this browser and shared by every app.\n\n` +
     `Your project stays on this device. The download comes from <code>${_dlgEscape(location.host)}/tex/</code>, and a paper that uses Biber adds about 30&nbsp;MB.`,
     { title:'Download TeX Live?', okLabel:'Download', cancelLabel:'Not now', allowHtmlBody:true },
   );
-  if (ok) localStorage.setItem('nakliOS.tex.v1', JSON.stringify({ granted:true }));
+  if (ok && epoch === texConsentEpoch) localStorage.setItem('nakliOS.tex.v1', JSON.stringify({ granted:true }));
   return ok;
 }
 // History: every compile is one hash-chained event (door 'tex') in naklios/history/tex.ndjson. It names the project and
@@ -8275,8 +8277,13 @@ function texHistoryAppend(job, output){
     const input = { ...job.request };
     const { event } = await ledger.appendEvent(prev, { ts:Date.now(), principal:'app:' + job.caller, door:'tex', tool:'tex.compile', app:job.caller, input, output, grant_id:null });
     const writer = await handle.createWritable({ keepExistingData:true });
-    await writer.write({ type:'write', position:file.size, data:JSON.stringify({ ...event, input, output }) + '\n' });
-    await writer.close();
+    try {
+      await writer.write({ type:'write', position:file.size, data:JSON.stringify({ ...event, input, output }) + '\n' });
+      await writer.close();
+    } catch (error) {
+      await writer.abort().catch(() => {});
+      throw error;
+    }
   };
   const run = texHistoryTail.then(() => navigator.locks?.request ? navigator.locks.request('naklios-tex-history', append) : append());
   texHistoryTail = run.catch(() => {});
@@ -8292,6 +8299,7 @@ async function texClearCache(){
     { title:'Delete TeX Live?', okLabel:'Delete', cancelLabel:'Keep' });
   if (!ok) return false;
   // Consent goes first, so a compile waiting on the clear asks again before it downloads.
+  texConsentEpoch += 1;
   localStorage.removeItem('nakliOS.tex.v1');
   await (await texHost()).service.clearCache();
   return true;

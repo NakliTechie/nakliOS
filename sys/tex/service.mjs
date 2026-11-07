@@ -99,7 +99,8 @@ export function createTexService({ engine, confirmDownload, record = async () =>
     const diagnostics = parseTexLog(result.log, request.main);
     for (const diagnostic of diagnostics) emit({ kind:'diagnostic', ...diagnostic });
     emit({ kind:'log', text:result.log });
-    const save = async (path, data) => { check(); await untilCancelled(job, Promise.resolve(data).then(bytes => store.write(path, bytes))); return path; };
+    // The check sits between preparing and writing, so a cancelled job cannot overwrite the build that replaced it.
+    const save = async (path, data) => { const bytes = await untilCancelled(job, Promise.resolve(data)); check(); await untilCancelled(job, store.write(path, bytes)); return path; };
     const written = { pdf:null, log:await save(output(`${stem}.log`), new TextEncoder().encode(result.log)), synctex:null };
     if (result.pdf?.byteLength) written.pdf = await save(output(`${stem}.pdf`), result.pdf);
     if (result.synctex?.byteLength) written.synctex = await save(output(`${stem}.synctex.gz`), mapSynctex(result.synctex));
