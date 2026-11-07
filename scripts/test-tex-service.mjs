@@ -134,6 +134,18 @@ assert.deepEqual(Object.keys(TEX_ENGINES), ['pdflatex', 'xelatex', 'lualatex']);
   assert.equal(wrote, 1, 'no output starts after a cancel');
 }
 
+// A compile cancelled while its SyncTeX file is being prepared writes nothing more, so it cannot overwrite a newer build.
+{
+  const store = paper(), write = store.write, tex = service(fakeEngine());
+  store.write = async function (path, data) {
+    await write.call(this, path, data);
+    if (path.endsWith('.pdf')) setImmediate(() => tex.cancel('app', 'a'));
+  };
+  await assert.rejects(tex.compile({ id:'a', caller:'app', openStore:async () => store }, { folder:'paper', main:'main.tex' }), /ECANCELED/);
+  await new Promise(resolve => setTimeout(resolve, 50));
+  assert.ok(!('paper/.tex-build/main.synctex.gz' in store.written));
+}
+
 // Clearing the cache ends every job first, and a compile sent meanwhile runs afterwards.
 {
   const order = [];
