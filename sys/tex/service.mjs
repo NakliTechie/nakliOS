@@ -104,6 +104,9 @@ export function createTexService({ engine, confirmDownload, record = async () =>
     const written = { pdf:null, log:await save(output(`${stem}.log`), new TextEncoder().encode(result.log)), synctex:null };
     if (result.pdf?.byteLength) written.pdf = await save(output(`${stem}.pdf`), result.pdf);
     if (result.synctex?.byteLength) written.synctex = await save(output(`${stem}.synctex.gz`), mapSynctex(result.synctex));
+    for (const side of ['aux', 'bbl', 'blg']) {
+      if (result[side]) written[side] = await save(output(`${stem}.${side}`), new TextEncoder().encode(result[side]));
+    }
     return { ok:result.exitCode === 0, exitCode:result.exitCode, ...written, diagnostics };
   }
 

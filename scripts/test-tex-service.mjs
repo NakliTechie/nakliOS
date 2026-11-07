@@ -212,6 +212,10 @@ assert.equal((await service(fakeEngine(), { record:async () => { throw new Error
   assert.equal(missing[0].name, 'algorithm2e.sty');
   assert.equal(missing[0].line, 5);
   assert.match(missing[0].message, /Add the file to your project folder/);
+  const name = '/home/web_user/project_dir/' + 'x'.repeat(60) + '/deep.tex';
+  const broken = ('(./main.tex (' + name).padEnd(0);
+  const wrapped = parseTexLog(broken.slice(0, 79) + '\n' + broken.slice(79) + '\n! Missing $ inserted.\nl.3 x_y\n)\n)\n', 'main.tex');
+  assert.equal(wrapped[0].file, 'x'.repeat(60) + '/deep.tex', 'a file name split at 79 columns is rejoined');
   const nested = parseTexLog('(./main.tex (/home/web_user/project_dir/sections/a.tex\n! Missing $ inserted.\nl.3 x_y\n)\n)\n', 'main.tex');
   assert.equal(nested[0].file, 'sections/a.tex');
   const style = parseTexLog('(./main.tex (/texlive/texmf-dist/tex/latex/foo.sty\n! Bad thing.\nl.900 y\n)\n)\n', 'main.tex');
