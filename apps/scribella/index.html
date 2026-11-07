@@ -24,15 +24,26 @@ header{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1p
 header strong{margin-right:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}header label{display:flex;gap:4px;align-items:center;color:var(--soft);font-size:13px}
 main{display:grid;grid-template-columns:210px minmax(0,1fr) minmax(0,1fr);min-height:0}
 #rail{border-right:1px solid var(--line);overflow:auto;background:var(--panel);padding-bottom:12px}.rail-actions{display:flex;gap:6px;padding:0 8px}
+.file-pick{position:relative;overflow:hidden}.file-pick input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.rail-actions{flex-wrap:wrap}#search-box{padding:0 8px;display:grid;gap:4px}#search-box input[type=search],#search-box input[type=text]{width:100%}#search-box label{font-size:12px;color:var(--soft);display:inline-flex;gap:3px;align-items:center;margin-right:8px}#search-count{font-size:12px;color:var(--soft)}#search-results .row{font-size:12px}
+dialog{border:1px solid var(--line);border-radius:8px;padding:16px;width:min(560px,92vw);color:var(--ink)}dialog::backdrop{background:#0004}dialog h1{font-size:16px}dialog textarea{width:100%;height:180px;font:12px ui-monospace,monospace;border:1px solid var(--line);border-radius:5px;padding:6px}dialog .end{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}#symbols{max-height:50vh;overflow:auto;display:flex;flex-wrap:wrap;gap:4px}#symbols h2{width:100%;margin:8px 0 2px}.math-tip{padding:6px 10px;font-size:15px;background:#fff}
+.version{padding:3px 8px;font-size:12px;display:flex;flex-wrap:wrap;gap:4px;align-items:center}.version span{width:100%;color:var(--soft)}
+.tabs{position:sticky;top:0;background:var(--bg);display:flex;gap:4px;align-items:center;padding:4px 8px;border-bottom:1px solid var(--line);z-index:1}.tab{border:0;background:none;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:13px}.tab[aria-pressed=true]{background:var(--sel);font-weight:600}
+#sel-bar{padding:4px 10px;border-bottom:1px solid var(--line);display:flex;gap:6px;align-items:center;background:var(--bg)}#sel-bar select{font-size:12px;padding:2px}
+#proposal{padding:8px 10px;border-bottom:2px solid var(--brand);background:#fff}#proposal-edits li{padding:2px 0;font-size:13px;border:0}del{color:var(--bad)}ins{color:var(--brand);text-decoration:underline}.note{padding:2px 10px 8px;border-bottom:1px solid var(--line)}.note.resolved{opacity:.6}.note.rejected strong{color:var(--warn)}
+.note-note{background:#f2c94c44}.note-check{background:#fff3a8}.note-keep{background:#c8efc8}.note-cite{background:#c8dfff}.note-rewrite{background:#ffd0e0}.note-question{background:#ffe0b8}.note-idea{background:#e4d4ff}
+.check{padding:2px 10px 6px;border-bottom:1px solid var(--line)}.check.bad strong,.check.conflict strong{color:var(--bad)}.check.warn strong,.check.update strong{color:var(--warn)}.cite-tip{padding:4px 8px;max-width:420px;font-size:13px}
 #new-file-form{padding:6px 8px}#new-file-form input{width:100%}
-#centre{display:grid;grid-template-rows:auto minmax(0,1fr) minmax(90px,32%);min-width:0;border-right:1px solid var(--line)}
+#centre{display:grid;grid-template-rows:auto auto minmax(0,1fr) minmax(90px,32%);min-width:0;border-right:1px solid var(--line)}
 #file-name{padding:4px 10px;border-bottom:1px solid var(--line);color:var(--soft);font-size:13px}
 #editor{min-height:0;overflow:hidden;background:#fff}#editor .cm-editor{height:100%}#editor .cm-scroller{font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
 #not-text{padding:24px;color:var(--soft)}
 #problems-pane{border-top:1px solid var(--line);overflow:auto;background:var(--bg)}#problems-pane h2{position:sticky;top:0;background:var(--bg);margin:0;padding:6px 10px;text-transform:none;letter-spacing:0;font-size:13px}
 #problems li{padding:2px 10px 8px;border-bottom:1px solid var(--line)}.problem{display:block;width:100%;text-align:left;border:0;background:none;padding:4px 0;cursor:pointer}.problem strong{display:block}.error strong{color:var(--bad)}.warning strong{color:var(--warn)}.place{color:var(--soft);font-size:12px}.problem p{margin:2px 0 0}
-#pdf-side{display:grid;grid-template-rows:auto minmax(0,1fr);min-width:0}#pdf-bar{display:flex;gap:6px;align-items:center;padding:4px 10px;border-bottom:1px solid var(--line);color:var(--soft);font-size:13px}#pdf-bar span{margin-right:auto}
-#pdf{overflow:auto;background:#e6e3db;position:relative;padding:12px}.pdf-page{background:#fff;margin:0 auto 12px;box-shadow:0 1px 3px #0003}.pdf-page canvas{display:block}
+#pdf-side{display:grid;grid-template-rows:auto minmax(0,1fr);min-width:0}#pdf-bar{display:flex;gap:6px;align-items:center;padding:4px 10px;border-bottom:1px solid var(--line);color:var(--soft);font-size:13px}#pdf-bar #pages{margin-right:auto}
+#pdf{overflow:auto;background:#e6e3db;position:relative;padding:12px}.pdf-page{background:#fff;margin:0 auto 12px;box-shadow:0 1px 3px #0003;position:relative}.pdf-page canvas{display:block}
+.textLayer{position:absolute;inset:0;overflow:clip;opacity:1;line-height:1;text-size-adjust:none;forced-color-adjust:none;transform-origin:0 0;caret-color:CanvasText}.textLayer span,.textLayer br{color:transparent;position:absolute;white-space:pre;cursor:text;transform-origin:0% 0%}.textLayer ::selection{background:#2f5d5040}
+.mark{position:absolute;pointer-events:none}.mark.sync{background:#f2c94c66;outline:1px solid #c79a00}
 footer{display:flex;gap:16px;padding:4px 10px;border-top:1px solid var(--line);background:var(--panel);font-size:13px;color:var(--soft)}#status{margin-right:auto}#status.bad{color:var(--bad)}
 body[data-building] #status::before{content:"● ";color:var(--brand)}
 @media (max-width:900px){body{overflow:auto}#project-view{height:auto;min-height:100%}main{grid-template-columns:1fr}#rail{border-right:0;border-bottom:1px solid var(--line);max-height:30vh}#centre{height:80vh;border-right:0}#pdf-side{height:80vh}}
@@ -47,6 +58,7 @@ body[data-building] #status::before{content:"● ";color:var(--brand)}
     <input id="project-title" aria-label="Project name" placeholder="Project name" required>
     <select id="template" aria-label="Starter"></select>
     <button class="btn primary" data-command="new-project">Create</button>
+    <label class="btn file-pick">Import a zip<input id="import-zip" type="file" accept=".zip" data-command="import-zip" aria-label="Import a zip"></label>
   </form>
   <h2>Projects</h2>
   <p id="where" class="lede"></p>
@@ -59,7 +71,12 @@ body[data-building] #status::before{content:"● ";color:var(--brand)}
     <strong id="project-name"></strong>
     <label>Main file <select id="main-file" data-command="main-file"></select></label>
     <label>Engine <select id="engine" data-command="engine"><option value="pdflatex">pdfLaTeX</option><option value="xelatex">XeLaTeX</option><option value="lualatex">LuaLaTeX</option></select></label>
+    <select id="insert" data-command="insert" aria-label="Insert"><option value="">Insert…</option><option value="figure">Figure</option><option value="table">Table from data</option><option value="symbol">Symbol</option></select>
+    <select id="keys" data-command="keys" aria-label="Keys"><option value="default">Standard keys</option><option value="vim">Vim</option><option value="emacs">Emacs</option></select>
     <label><input id="auto" type="checkbox" checked data-command="toggle-auto"> Build on save</label>
+    <button id="save-version" class="btn" data-command="save-version">Save version</button>
+    <button id="arxiv" class="btn" data-command="arxiv">arXiv pack</button>
+    <button id="export" class="btn" data-command="export">Export</button>
     <button id="build" class="btn primary" data-command="build">Build</button>
     <button id="cancel" class="btn" data-command="cancel-build" hidden>Stop</button>
   </header>
@@ -70,24 +87,77 @@ body[data-building] #status::before{content:"● ";color:var(--brand)}
       <form id="new-file-form" hidden><input id="new-file-name" aria-label="New file name" placeholder="sections/intro.tex"></form>
       <div class="rail-actions">
         <button id="add-file" class="btn small" data-command="new-file">New file</button>
-        <button id="delete-file" class="btn small" data-command="delete-file">Delete file</button>
+        <button id="rename-file" class="btn small" data-command="rename-file">Rename</button>
+        <button id="delete-file" class="btn small" data-command="delete-file">Delete</button>
+        <label class="btn small file-pick">Add files<input id="add-files" type="file" multiple data-command="add-files" aria-label="Add files"></label>
       </div>
       <h2>Outline</h2>
       <ul id="outline"></ul>
+      <h2>Versions</h2>
+      <ul id="versions"></ul>
+      <h2>Search</h2>
+      <div id="search-box">
+        <input id="search-query" type="search" placeholder="Find in project" aria-label="Find in project" data-command="search-query">
+        <input id="search-replace" type="text" placeholder="Replace with" aria-label="Replace with">
+        <div><label><input id="search-regex" type="checkbox" data-command="search-regex"> Regex</label><label><input id="search-case" type="checkbox" data-command="search-case"> Case</label></div>
+        <div class="rail-actions" style="padding:0"><button id="replace-all" class="btn small" data-command="replace-all">Replace all</button><button id="search-todos" class="btn small" data-command="search-todos">TODOs</button></div>
+        <span id="search-count"></span>
+      </div>
+      <ul id="search-results"></ul>
     </nav>
     <section id="centre" aria-label="Source">
       <div id="file-name"></div>
+      <div id="sel-bar" hidden>
+        <button id="annotate" class="btn small" data-command="annotate">Annotate</button>
+        <select id="highlight" data-command="highlight" aria-label="Highlight"><option value="">Highlight…</option></select>
+        <span id="ai-tools" hidden><button id="proofread" class="btn small" data-command="proofread">Proofread</button> <button id="polish" class="btn small" data-command="polish">Polish</button> <button id="rewrite" class="btn small" data-command="rewrite">Rewrite…</button></span>
+      </div>
       <div id="editor"></div>
       <div id="not-text" hidden>This file is not text, so it opens only in the build.</div>
-      <div id="problems-pane"><h2 id="problem-count">No problems</h2><ul id="problems"></ul></div>
+      <div id="problems-pane">
+        <div class="tabs"><button id="tab-problems" class="tab" aria-pressed="true" data-command="tab-problems"><span id="problem-count">No problems</span></button><button id="tab-notes" class="tab" aria-pressed="false" data-command="tab-notes"><span id="notes-tab">Notes (0)</span></button><button id="tab-checks" class="tab" aria-pressed="false" data-command="tab-checks">Checks</button><button id="revise-all" class="btn small" data-command="revise-all" hidden>Revise all notes</button></div>
+        <div id="problems-list"><ul id="problems"></ul></div>
+        <div id="checks" hidden>
+          <div class="rail-actions" style="padding:6px 10px"><button id="add-paper" class="btn small" data-command="add-paper">Add a paper</button><button id="check-references" class="btn small" data-command="check-references">Check references</button><button id="check-blind" class="btn small" data-command="check-blind">Double-blind check</button></div>
+          <strong id="checks-title" style="padding:0 10px"></strong>
+          <ul id="checks-list"></ul>
+        </div>
+        <div id="notes-list" hidden>
+          <div id="proposal" hidden>
+            <strong id="proposal-reason"></strong>
+            <ul id="proposal-edits"></ul>
+            <button id="proposal-accept" class="btn small primary" data-command="proposal-accept">Accept</button> <button id="proposal-reject" class="btn small" data-command="proposal-reject">Reject</button> <button id="proposal-again" class="btn small" data-command="proposal-again">Try again</button>
+          </div>
+          <ul id="notes"></ul>
+        </div>
+      </div>
     </section>
     <section id="pdf-side" aria-label="PDF">
-      <div id="pdf-bar"><span id="pages"></span><button id="zoom-out" class="btn small" data-command="zoom-out" aria-label="Zoom out">−</button><button id="zoom-in" class="btn small" data-command="zoom-in" aria-label="Zoom in">+</button></div>
+      <div id="pdf-bar"><span id="pages"></span><span id="pdf-hits"></span><input id="pdf-find" type="search" placeholder="Find in PDF" aria-label="Find in PDF" data-command="pdf-find" style="width:130px"><button id="show-in-pdf" class="btn small" data-command="show-in-pdf" title="Ctrl or Cmd + Enter. Double-click the PDF to jump back.">Show in PDF</button><button id="zoom-out" class="btn small" data-command="zoom-out" aria-label="Zoom out">−</button><button id="zoom-in" class="btn small" data-command="zoom-in" aria-label="Zoom in">+</button></div>
       <div id="pdf"></div>
     </section>
   </main>
   <footer><span id="status" role="status"></span><span id="words"></span></footer>
 </div>
+<input id="figure-file" type="file" accept=".png,.jpg,.jpeg,.pdf,.eps" hidden>
+<dialog id="table-dialog"><form id="table-form">
+  <h1>Table from data</h1>
+  <textarea id="table-data" aria-label="Table data" placeholder="Paste CSV or tab-separated rows. The first row is the header."></textarea>
+  <input id="table-caption" aria-label="Caption" placeholder="Caption" style="width:100%;margin-top:6px">
+  <div class="end"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary" data-command="insert-table">Insert</button></div>
+</form></dialog>
+<dialog id="note-dialog"><form id="note-form">
+  <h1>Add a note</h1>
+  <textarea id="note-body" aria-label="Note" style="height:90px" required></textarea>
+  <select id="note-intent" aria-label="Intent" style="margin-top:6px"></select>
+  <div class="end"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary" data-command="note-save">Save</button></div>
+</form></dialog>
+<dialog id="palette-dialog">
+  <h1>Symbols</h1>
+  <input id="symbol-filter" aria-label="Filter symbols" placeholder="Filter" data-command="symbol-filter" style="width:100%;margin-bottom:6px">
+  <div id="symbols"></div>
+  <div class="end"><button type="button" class="btn" data-close>Close</button></div>
+</dialog>
 <script>
 /* naklios-sdk:begin ver=2 sha256=3f108f13a29ae2d4fde8f8a0e5bb3f21e80877cf1de7a56fe7be3623402f0c26 — DO NOT EDIT until :end; run `node scripts/vendor-naklios-sdk.mjs` */
 /*!

@@ -944,12 +944,32 @@
           "destination": "index.html"
         },
         {
+          "source": "src/annotations.js",
+          "destination": "src/annotations.js"
+        },
+        {
           "source": "src/app.js",
           "destination": "src/app.js"
         },
         {
+          "source": "src/arxiv.js",
+          "destination": "src/arxiv.js"
+        },
+        {
+          "source": "src/bib.js",
+          "destination": "src/bib.js"
+        },
+        {
+          "source": "src/blind.js",
+          "destination": "src/blind.js"
+        },
+        {
           "source": "src/build.js",
           "destination": "src/build.js"
+        },
+        {
+          "source": "src/changes.js",
+          "destination": "src/changes.js"
         },
         {
           "source": "src/editor.js",
@@ -960,8 +980,16 @@
           "destination": "src/explain.js"
         },
         {
+          "source": "src/insert.js",
+          "destination": "src/insert.js"
+        },
+        {
           "source": "src/lint.js",
           "destination": "src/lint.js"
+        },
+        {
+          "source": "src/lookup.js",
+          "destination": "src/lookup.js"
         },
         {
           "source": "src/outline.js",
@@ -976,8 +1004,200 @@
           "destination": "src/project.js"
         },
         {
+          "source": "src/protected.js",
+          "destination": "src/protected.js"
+        },
+        {
+          "source": "src/revise.js",
+          "destination": "src/revise.js"
+        },
+        {
+          "source": "src/search.js",
+          "destination": "src/search.js"
+        },
+        {
           "source": "src/storage.js",
           "destination": "src/storage.js"
+        },
+        {
+          "source": "src/synctex.js",
+          "destination": "src/synctex.js"
+        },
+        {
+          "source": "src/versions.js",
+          "destination": "src/versions.js"
+        },
+        {
+          "source": "src/zip.js",
+          "destination": "src/zip.js"
+        },
+        {
+          "source": "templates/aaai-2027/UPSTREAM.md",
+          "destination": "templates/aaai-2027/UPSTREAM.md"
+        },
+        {
+          "source": "templates/aaai-2027/aaai2027.bst",
+          "destination": "templates/aaai-2027/aaai2027.bst"
+        },
+        {
+          "source": "templates/aaai-2027/aaai2027.sty",
+          "destination": "templates/aaai-2027/aaai2027.sty"
+        },
+        {
+          "source": "templates/aaai-2027/main.tex",
+          "destination": "templates/aaai-2027/main.tex"
+        },
+        {
+          "source": "templates/acl/UPSTREAM.md",
+          "destination": "templates/acl/UPSTREAM.md"
+        },
+        {
+          "source": "templates/acl/acl.sty",
+          "destination": "templates/acl/acl.sty"
+        },
+        {
+          "source": "templates/acl/acl_natbib.bst",
+          "destination": "templates/acl/acl_natbib.bst"
+        },
+        {
+          "source": "templates/acl/main.tex",
+          "destination": "templates/acl/main.tex"
+        },
+        {
+          "source": "templates/cvpr-2027/UPSTREAM.md",
+          "destination": "templates/cvpr-2027/UPSTREAM.md"
+        },
+        {
+          "source": "templates/cvpr-2027/cvpr.sty",
+          "destination": "templates/cvpr-2027/cvpr.sty"
+        },
+        {
+          "source": "templates/cvpr-2027/ieeenat_fullname.bst",
+          "destination": "templates/cvpr-2027/ieeenat_fullname.bst"
+        },
+        {
+          "source": "templates/cvpr-2027/main.tex",
+          "destination": "templates/cvpr-2027/main.tex"
+        },
+        {
+          "source": "templates/iclr-2026/UPSTREAM.md",
+          "destination": "templates/iclr-2026/UPSTREAM.md"
+        },
+        {
+          "source": "templates/iclr-2026/iclr2026_conference.bst",
+          "destination": "templates/iclr-2026/iclr2026_conference.bst"
+        },
+        {
+          "source": "templates/iclr-2026/iclr2026_conference.sty",
+          "destination": "templates/iclr-2026/iclr2026_conference.sty"
+        },
+        {
+          "source": "templates/iclr-2026/main.tex",
+          "destination": "templates/iclr-2026/main.tex"
+        },
+        {
+          "source": "templates/icml-2026/UPSTREAM.md",
+          "destination": "templates/icml-2026/UPSTREAM.md"
+        },
+        {
+          "source": "templates/icml-2026/icml2026.bst",
+          "destination": "templates/icml-2026/icml2026.bst"
+        },
+        {
+          "source": "templates/icml-2026/icml2026.sty",
+          "destination": "templates/icml-2026/icml2026.sty"
+        },
+        {
+          "source": "templates/icml-2026/main.tex",
+          "destination": "templates/icml-2026/main.tex"
+        },
+        {
+          "source": "templates/index.json",
+          "destination": "templates/index.json"
+        },
+        {
+          "source": "templates/neurips-2026/UPSTREAM.md",
+          "destination": "templates/neurips-2026/UPSTREAM.md"
+        },
+        {
+          "source": "templates/neurips-2026/main.tex",
+          "destination": "templates/neurips-2026/main.tex"
+        },
+        {
+          "source": "templates/neurips-2026/neurips_2026.sty",
+          "destination": "templates/neurips-2026/neurips_2026.sty"
+        },
+        {
+          "source": "templates/thuthesis/UPSTREAM.md",
+          "destination": "templates/thuthesis/UPSTREAM.md"
+        },
+        {
+          "source": "templates/thuthesis/main.tex",
+          "destination": "templates/thuthesis/main.tex"
+        },
+        {
+          "source": "templates/thuthesis/thu-fig-logo.pdf",
+          "destination": "templates/thuthesis/thu-fig-logo.pdf"
+        },
+        {
+          "source": "templates/thuthesis/thu-text-logo.pdf",
+          "destination": "templates/thuthesis/thu-text-logo.pdf"
+        },
+        {
+          "source": "templates/thuthesis/thuthesis-author-year.bst",
+          "destination": "templates/thuthesis/thuthesis-author-year.bst"
+        },
+        {
+          "source": "templates/thuthesis/thuthesis-numeric.bst",
+          "destination": "templates/thuthesis/thuthesis-numeric.bst"
+        },
+        {
+          "source": "templates/thuthesis/thuthesis.cls",
+          "destination": "templates/thuthesis/thuthesis.cls"
+        },
+        {
+          "source": "templates/ustcthesis/UPSTREAM.md",
+          "destination": "templates/ustcthesis/UPSTREAM.md"
+        },
+        {
+          "source": "templates/ustcthesis/figures/ustc-logo.pdf",
+          "destination": "templates/ustcthesis/figures/ustc-logo.pdf"
+        },
+        {
+          "source": "templates/ustcthesis/figures/ustc-name-stxingkai.pdf",
+          "destination": "templates/ustcthesis/figures/ustc-name-stxingkai.pdf"
+        },
+        {
+          "source": "templates/ustcthesis/figures/ustc-name.pdf",
+          "destination": "templates/ustcthesis/figures/ustc-name.pdf"
+        },
+        {
+          "source": "templates/ustcthesis/figures/ustc-title-page-heading.pdf",
+          "destination": "templates/ustcthesis/figures/ustc-title-page-heading.pdf"
+        },
+        {
+          "source": "templates/ustcthesis/main.tex",
+          "destination": "templates/ustcthesis/main.tex"
+        },
+        {
+          "source": "templates/ustcthesis/ustcthesis-authoryear.bst",
+          "destination": "templates/ustcthesis/ustcthesis-authoryear.bst"
+        },
+        {
+          "source": "templates/ustcthesis/ustcthesis-numeric.bst",
+          "destination": "templates/ustcthesis/ustcthesis-numeric.bst"
+        },
+        {
+          "source": "templates/ustcthesis/ustcthesis.cls",
+          "destination": "templates/ustcthesis/ustcthesis.cls"
+        },
+        {
+          "source": "vendor/LICENSE-fflate",
+          "destination": "vendor/LICENSE-fflate"
+        },
+        {
+          "source": "vendor/LICENSE-katex",
+          "destination": "vendor/LICENSE-katex"
         },
         {
           "source": "vendor/LICENSE-lattice",
@@ -990,6 +1210,14 @@
         {
           "source": "vendor/codemirror.mjs",
           "destination": "vendor/codemirror.mjs"
+        },
+        {
+          "source": "vendor/fflate.js",
+          "destination": "vendor/fflate.js"
+        },
+        {
+          "source": "vendor/katex.mjs",
+          "destination": "vendor/katex.mjs"
         },
         {
           "source": "vendor/pdfjs/pdf.min.mjs",
