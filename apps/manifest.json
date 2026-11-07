@@ -921,6 +921,85 @@
           "destination": "vendor/LICENSE-ts-fsrs"
         }
       ]
+    },
+    {
+      "id": "scribella",
+      "repo": "NakliTechie/scribella",
+      "ref": "main",
+      "files": [
+        {
+          "source": "LICENSE",
+          "destination": "LICENSE"
+        },
+        {
+          "source": "NOTICE",
+          "destination": "NOTICE"
+        },
+        {
+          "source": "commands.json",
+          "destination": "commands.json"
+        },
+        {
+          "source": "index.html",
+          "destination": "index.html"
+        },
+        {
+          "source": "src/app.js",
+          "destination": "src/app.js"
+        },
+        {
+          "source": "src/build.js",
+          "destination": "src/build.js"
+        },
+        {
+          "source": "src/editor.js",
+          "destination": "src/editor.js"
+        },
+        {
+          "source": "src/explain.js",
+          "destination": "src/explain.js"
+        },
+        {
+          "source": "src/lint.js",
+          "destination": "src/lint.js"
+        },
+        {
+          "source": "src/outline.js",
+          "destination": "src/outline.js"
+        },
+        {
+          "source": "src/pdf-view.js",
+          "destination": "src/pdf-view.js"
+        },
+        {
+          "source": "src/project.js",
+          "destination": "src/project.js"
+        },
+        {
+          "source": "src/storage.js",
+          "destination": "src/storage.js"
+        },
+        {
+          "source": "vendor/LICENSE-lattice",
+          "destination": "vendor/LICENSE-lattice"
+        },
+        {
+          "source": "vendor/README.md",
+          "destination": "vendor/README.md"
+        },
+        {
+          "source": "vendor/codemirror.mjs",
+          "destination": "vendor/codemirror.mjs"
+        },
+        {
+          "source": "vendor/pdfjs/pdf.min.mjs",
+          "destination": "vendor/pdfjs/pdf.min.mjs"
+        },
+        {
+          "source": "vendor/pdfjs/pdf.worker.min.mjs",
+          "destination": "vendor/pdfjs/pdf.worker.min.mjs"
+        }
+      ]
     }
   ]
 }

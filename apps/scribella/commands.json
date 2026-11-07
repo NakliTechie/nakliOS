@@ -1,0 +1,29 @@
+{
+  "commands": [
+    { "name": "projects.list", "description": "List the LaTeX projects in Scribella, e.g. \"what papers do I have\".", "scope": "read", "input": { "type": "object", "properties": {} } },
+    { "name": "project.open", "description": "Open a LaTeX project in Scribella by name.", "scope": "write", "input": { "type": "object", "properties": { "name": { "type": "string", "description": "A name from projects.list" } }, "required": ["name"] } },
+    { "name": "project.create", "description": "Create a LaTeX project in Scribella from a starter and open it.", "scope": "write", "input": { "type": "object", "properties": { "name": { "type": "string" }, "template": { "type": "string", "enum": ["article", "blank"] } }, "required": ["name"] } },
+    { "name": "files.list", "description": "List the files of the open Scribella project.", "scope": "read", "input": { "type": "object", "properties": {} } },
+    { "name": "file.read", "description": "Read a text file of the open Scribella project.", "scope": "read", "input": { "type": "object", "properties": { "path": { "type": "string" } }, "required": ["path"] } },
+    { "name": "file.write", "description": "Replace the text of a file in the open Scribella project, creating it if needed.", "scope": "write", "input": { "type": "object", "properties": { "path": { "type": "string" }, "text": { "type": "string" } }, "required": ["path", "text"] } },
+    { "name": "build.run", "description": "Compile the open Scribella project and report whether it built, with its errors.", "scope": "write", "input": { "type": "object", "properties": {} } },
+    { "name": "problems.list", "description": "List the errors and warnings from the last Scribella build in plain words.", "scope": "read", "input": { "type": "object", "properties": {} } }
+  ],
+  "parity": {
+    "new-project": "project.create",
+    "open-project": "project.open",
+    "open-file": "file.read",
+    "new-file": "file.write",
+    "delete-file": "person: deleting a file is the person's own choice",
+    "build": "build.run",
+    "cancel-build": "person: stopping a build is the person's own choice",
+    "toggle-auto": "view",
+    "engine": "view",
+    "main-file": "view",
+    "zoom-in": "view",
+    "zoom-out": "view",
+    "problem": "view",
+    "apply-fix": "file.write",
+    "outline-item": "view"
+  }
+}
