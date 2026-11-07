@@ -1,13 +1,379 @@
 {
   "commands": [
-    { "name": "projects.list", "description": "List the LaTeX projects in Scribella, e.g. \"what papers do I have\".", "scope": "read", "input": { "type": "object", "properties": {} } },
-    { "name": "project.open", "description": "Open a LaTeX project in Scribella by name.", "scope": "write", "input": { "type": "object", "properties": { "name": { "type": "string", "description": "A name from projects.list" } }, "required": ["name"] } },
-    { "name": "project.create", "description": "Create a LaTeX project in Scribella from a starter and open it.", "scope": "write", "input": { "type": "object", "properties": { "name": { "type": "string" }, "template": { "type": "string", "enum": ["article", "blank"] } }, "required": ["name"] } },
-    { "name": "files.list", "description": "List the files of the open Scribella project.", "scope": "read", "input": { "type": "object", "properties": {} } },
-    { "name": "file.read", "description": "Read a text file of the open Scribella project.", "scope": "read", "input": { "type": "object", "properties": { "path": { "type": "string" } }, "required": ["path"] } },
-    { "name": "file.write", "description": "Replace the text of a file in the open Scribella project, creating it if needed.", "scope": "write", "input": { "type": "object", "properties": { "path": { "type": "string" }, "text": { "type": "string" } }, "required": ["path", "text"] } },
-    { "name": "build.run", "description": "Compile the open Scribella project and report whether it built, with its errors.", "scope": "write", "input": { "type": "object", "properties": {} } },
-    { "name": "problems.list", "description": "List the errors and warnings from the last Scribella build in plain words.", "scope": "read", "input": { "type": "object", "properties": {} } }
+    {
+      "name": "projects.list",
+      "description": "List the LaTeX projects in Scribella, e.g. \"what papers do I have\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "project.open",
+      "description": "Open a LaTeX project in Scribella by name.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "A name from projects.list"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      }
+    },
+    {
+      "name": "project.create",
+      "description": "Create a LaTeX project in Scribella from a starter and open it.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "template": {
+            "type": "string",
+            "description": "article, blank, neurips-2026, icml-2026, iclr-2026, acl, cvpr-2027, aaai-2027, thuthesis or ustcthesis"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      }
+    },
+    {
+      "name": "files.list",
+      "description": "List the files of the open Scribella project.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "file.read",
+      "description": "Read a text file of the open Scribella project.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ]
+      }
+    },
+    {
+      "name": "file.write",
+      "description": "Replace the text of a file in the open Scribella project, creating it if needed.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "build.run",
+      "description": "Compile the open Scribella project and report whether it built, with its errors.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "problems.list",
+      "description": "List the errors and warnings from the last Scribella build in plain words.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "file.rename",
+      "description": "Rename a file in the open Scribella project.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ]
+      }
+    },
+    {
+      "name": "search.find",
+      "description": "Search the text files of the open Scribella project.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "regex": {
+            "type": "boolean"
+          },
+          "matchCase": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    {
+      "name": "search.todos",
+      "description": "List TODO, FIXME and \\todo notes in the open Scribella project.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "search.replace",
+      "description": "Replace text across the open Scribella project.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "replacement": {
+            "type": "string"
+          },
+          "regex": {
+            "type": "boolean"
+          },
+          "matchCase": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "query",
+          "replacement"
+        ]
+      }
+    },
+    {
+      "name": "pdf.locate",
+      "description": "Find where a source line of the open Scribella project lands in the PDF.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "line": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "path",
+          "line"
+        ]
+      }
+    },
+    {
+      "name": "pdf.source",
+      "description": "Find the source line behind a point of the Scribella PDF, in PDF points from the top left of the page.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number"
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "page",
+          "x",
+          "y"
+        ]
+      }
+    },
+    {
+      "name": "versions.list",
+      "description": "List the saved versions of the open Scribella project.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "versions.save",
+      "description": "Save a named version of the open Scribella project.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "label"
+        ]
+      }
+    },
+    {
+      "name": "versions.changes",
+      "description": "Show a PDF of what changed since a saved Scribella version.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    {
+      "name": "arxiv.pack",
+      "description": "Make an arXiv zip of the open Scribella project, with comments removed, and check that it builds alone.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "notes.list",
+      "description": "List the notes and highlights in the open Scribella project.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "notes.add",
+      "description": "Add a note on a quoted passage of a Scribella file.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string"
+          },
+          "quote": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "intent": {
+            "type": "string",
+            "enum": [
+              "",
+              "rewrite",
+              "shorten",
+              "clarify",
+              "cite",
+              "fix"
+            ]
+          }
+        },
+        "required": [
+          "file",
+          "quote",
+          "body"
+        ]
+      }
+    },
+    {
+      "name": "notes.resolve",
+      "description": "Mark a Scribella note resolved.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    {
+      "name": "references.add",
+      "description": "Add a paper to the Scribella bibliography by arXiv id, DOI or exact title.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    {
+      "name": "references.check",
+      "description": "Check the Scribella bibliography against Crossref, with retraction notices.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "submission.check",
+      "description": "Check a Scribella paper for anything that reveals its authors before double-blind submission.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    }
   ],
   "parity": {
     "new-project": "project.create",
@@ -24,6 +390,49 @@
     "zoom-out": "view",
     "problem": "view",
     "apply-fix": "file.write",
-    "outline-item": "view"
+    "outline-item": "view",
+    "rename-file": "file.rename",
+    "add-files": "person: choosing files from disk is the person's own act",
+    "export": "person: saving a file to disk is the person's own act",
+    "import-zip": "person: choosing a file from disk is the person's own act",
+    "search-query": "search.find",
+    "search-result": "view",
+    "search-regex": "view",
+    "search-case": "view",
+    "search-todos": "search.todos",
+    "replace-all": "search.replace",
+    "insert": "file.write",
+    "insert-symbol": "file.write",
+    "symbol-filter": "view",
+    "insert-table": "file.write",
+    "keys": "view",
+    "show-in-pdf": "pdf.locate",
+    "pdf-find": "view",
+    "save-version": "versions.save",
+    "version-changes": "versions.changes",
+    "version-restore": "person: restoring replaces the person's text, so it stays their choice",
+    "arxiv": "arxiv.pack",
+    "proposal-accept": "person: accepting or rejecting an edit is the person's own decision",
+    "proposal-reject": "person: accepting or rejecting an edit is the person's own decision",
+    "proposal-again": "person: accepting or rejecting an edit is the person's own decision",
+    "annotate": "notes.add",
+    "note-save": "notes.add",
+    "highlight": "notes.add",
+    "note-go": "view",
+    "note-revise": "person: a revision waits on the person's decision",
+    "note-resolve": "notes.resolve",
+    "note-delete": "person: deleting a note is the person's own choice",
+    "proofread": "person: a revision waits on the person's decision",
+    "polish": "person: a revision waits on the person's decision",
+    "rewrite": "person: a revision waits on the person's decision",
+    "revise-all": "person: a round waits on the person's decisions",
+    "tab-problems": "view",
+    "tab-notes": "view",
+    "add-paper": "references.add",
+    "check-references": "references.check",
+    "check-blind": "submission.check",
+    "check-go": "view",
+    "check-fix": "person: applying a bibliography change is the person's own decision",
+    "tab-checks": "view"
   }
 }

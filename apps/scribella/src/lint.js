@@ -81,7 +81,9 @@ export function lintSource(source, project = null, path = '') {
     const folder = path.includes('/') ? path.replace(/[^/]*$/, '') : '';
     for (const input of inputs) {
       const name = /\.[a-z]+$/i.test(input.key) ? input.key : `${input.key}.tex`;
-      if (!project.files.has(name) && !project.files.has(folder + name)) add(input.from, input.to, 'error', `${name} is not in this project.`);
+      if (project.files.has(name) || project.files.has(folder + name)) continue;
+      const wrongCase = [...project.files].find(file => file.toLowerCase() === name.toLowerCase());
+      add(input.from, input.to, 'error', wrongCase ? `The letter case differs: the file is ${wrongCase}.` : `${name} is not in this project.`);
     }
   }
   return found;

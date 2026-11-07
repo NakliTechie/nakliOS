@@ -1,0 +1,91 @@
+{
+ "neurips-2026": {
+  "label": "NeurIPS 2026",
+  "main": "main.tex",
+  "files": [
+   "UPSTREAM.md",
+   "main.tex",
+   "neurips_2026.sty"
+  ]
+ },
+ "icml-2026": {
+  "label": "ICML 2026",
+  "main": "main.tex",
+  "files": [
+   "UPSTREAM.md",
+   "icml2026.bst",
+   "icml2026.sty",
+   "main.tex"
+  ]
+ },
+ "iclr-2026": {
+  "label": "ICLR 2026",
+  "main": "main.tex",
+  "files": [
+   "UPSTREAM.md",
+   "iclr2026_conference.bst",
+   "iclr2026_conference.sty",
+   "main.tex"
+  ]
+ },
+ "acl": {
+  "label": "ACL",
+  "main": "main.tex",
+  "files": [
+   "UPSTREAM.md",
+   "acl.sty",
+   "acl_natbib.bst",
+   "main.tex"
+  ]
+ },
+ "cvpr-2027": {
+  "label": "CVPR 2027",
+  "main": "main.tex",
+  "files": [
+   "UPSTREAM.md",
+   "cvpr.sty",
+   "ieeenat_fullname.bst",
+   "main.tex"
+  ]
+ },
+ "aaai-2027": {
+  "label": "AAAI 2027",
+  "main": "main.tex",
+  "files": [
+   "UPSTREAM.md",
+   "aaai2027.bst",
+   "aaai2027.sty",
+   "main.tex"
+  ]
+ },
+ "thuthesis": {
+  "label": "Tsinghua thesis",
+  "main": "main.tex",
+  "files": [
+   "UPSTREAM.md",
+   "main.tex",
+   "thu-fig-logo.pdf",
+   "thu-text-logo.pdf",
+   "thuthesis-author-year.bst",
+   "thuthesis-numeric.bst",
+   "thuthesis.cls"
+  ],
+  "engine": "xelatex"
+ },
+ "ustcthesis": {
+  "label": "USTC thesis",
+  "main": "main.tex",
+  "files": [
+   "UPSTREAM.md",
+   "figures/ustc-logo.pdf",
+   "figures/ustc-name-stxingkai.pdf",
+   "figures/ustc-name.pdf",
+   "figures/ustc-title-page-heading.pdf",
+   "main.tex",
+   "ustcthesis-authoryear.bst",
+   "ustcthesis-numeric.bst",
+   "ustcthesis.cls"
+  ],
+  "engine": "xelatex"
+ }
+}
