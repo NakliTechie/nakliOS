@@ -1753,7 +1753,7 @@ const APPS = [
 const THIRD_PARTY_SCHEMA = 'https://naklios.dev/app-manifest/v1';
 const THIRD_PARTY_APPS_KEY = 'nakliOS.thirdPartyApps.v1';
 const THIRD_PARTY_MANIFEST_MAX_BYTES = 32768;
-const THIRD_PARTY_PERMISSIONS = new Set(['storage', 'inference', 'tools']);
+const THIRD_PARTY_PERMISSIONS = new Set(['storage', 'inference', 'tools', 'tex']);
 
 function isPlainRecord(value){
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -1817,8 +1817,9 @@ function normalizeThirdPartyManifest(raw){
   const permissions = raw.permissions == null ? [] : raw.permissions;
   if (!Array.isArray(permissions) || new Set(permissions).size !== permissions.length ||
       permissions.some(permission => !THIRD_PARTY_PERMISSIONS.has(permission))) {
-    throw new Error('permissions may contain only the unique values "storage", "inference" and "tools"');
+    throw new Error('permissions may contain only the unique values "storage", "inference", "tools" and "tex"');
   }
+  if (permissions.includes('tex') && !permissions.includes('storage')) throw new Error('the "tex" permission needs "storage"');
   if (permissions.includes('tools') && !permissions.includes('inference')) throw new Error('the "tools" permission needs "inference"');
   const display = raw.display == null ? 'window' : raw.display;
   if (display !== 'window' && display !== 'tab') {
@@ -8227,6 +8228,116 @@ function netHistoryAppend({ appId, host, method, grantId, output }){
   return _netTail;
 }
 // The whole enforcement point: authorize, fetch, record. Throws with a code the SDK passes through.
+// ── TeX service (naklios.experimental_tex) ────────────────────────────────────────
+// sys/tex/service.mjs holds the queue. This wires it to the host's storage, consent and History. The first compile
+// asks once, because the TeX Live packs are about 680 MB; the /tex/ route streams them from the engine's GitHub Release.
+const TEX_ENGINE_INFO = Object.freeze({ texLive:'2026', license:'AGPL-3.0-or-later', source:'https://github.com/NakliTechie/naklios-tex', downloadBytes:681700000 });
+let texHostPromise = null;
+function texHost(){
+  return texHostPromise ||= Promise.all([import('./sys/tex/service.mjs'), import('./sys/tex/engine.mjs')]).then(([service, { createTexEngine }]) => {
+    const engine = createTexEngine({
+      base:new URL(`tex/${service.TEX_VERSION}`, document.baseURI).href,
+      workerUrl:new URL('sys/tex/engine-worker.mjs', document.baseURI),
+    });
+    return { module:service, engine, service:service.createTexService({ engine, confirmDownload:texEnsureDownload, record:texHistoryAppend }) };
+  });
+}
+function texManifestAllows(appId){
+  const app = APPS.find(item => item.id === appId);
+  return !app?.thirdParty || (app.permissions || []).includes('tex');
+}
+function texCapabilityForApp(appId){
+  return typeof Worker !== 'undefined' && backendsAvailable().length > 0 && texManifestAllows(appId);
+}
+async function texEnsureDownload(caller){
+  try { if (JSON.parse(localStorage.getItem('nakliOS.tex.v1') || 'null')?.granted === true) return true; } catch(_){}
+  const label = APPS.find(app => app.id === caller)?.name || 'NakliOS';
+  const ok = await nakliosConfirm(
+    `${label} wants to compile LaTeX. NakliOS needs TeX Live for that: about 680&nbsp;MB once, kept in this browser and shared by every app.\n\n` +
+    `Your project stays on this device. The download comes from <code>${_dlgEscape(location.host)}/tex/</code>, and a paper that uses Biber adds about 30&nbsp;MB.`,
+    { title:'Download TeX Live?', okLabel:'Download', cancelLabel:'Not now', allowHtmlBody:true },
+  );
+  if (ok) localStorage.setItem('nakliOS.tex.v1', JSON.stringify({ granted:true }));
+  return ok;
+}
+// History: every compile is one hash-chained event (door 'tex') in naklios/history/tex.ndjson. It names the project and
+// the outcome, never file contents.
+let texHistoryTail = Promise.resolve();
+function texHistoryAppend(job, output){
+  const append = async () => {
+    const ledger = await import('./sys/history/ledger.mjs');
+    const root = await navigator.storage.getDirectory();
+    const dir = await (await root.getDirectoryHandle('naklios', { create:true })).getDirectoryHandle('history', { create:true });
+    const handle = await dir.getFileHandle('tex.ndjson', { create:true });
+    const file = await handle.getFile();
+    const lines = (await file.text()).split('\n').filter(Boolean);
+    const prev = lines.length ? await ledger.eventHash(JSON.parse(lines[lines.length - 1])) : null;
+    const input = { ...job.request };
+    const { event } = await ledger.appendEvent(prev, { ts:Date.now(), principal:'app:' + job.caller, door:'tex', tool:'tex.compile', app:job.caller, input, output, grant_id:null });
+    const writer = await handle.createWritable({ keepExistingData:true });
+    await writer.write({ type:'write', position:file.size, data:JSON.stringify({ ...event, input, output }) + '\n' });
+    await writer.close();
+  };
+  const run = texHistoryTail.then(() => navigator.locks?.request ? navigator.locks.request('naklios-tex-history', append) : append());
+  texHistoryTail = run.catch(() => {});
+  return run;
+}
+async function texCache(){
+  const { module, engine } = await texHost();
+  const cached = await engine.cached();
+  return { version:module.TEX_VERSION, packs:module.TEX_PACKS.map((name, index) => ({ name, cached:cached[index] === true })) };
+}
+async function texClearCache(){
+  const ok = await nakliosConfirm('Delete the TeX Live packs from this browser? Every app that compiles LaTeX needs them, and the next compile downloads about 680 MB again.',
+    { title:'Delete TeX Live?', okLabel:'Delete', cancelLabel:'Keep' });
+  if (!ok) return false;
+  // Consent goes first, so a compile waiting on the clear asks again before it downloads.
+  localStorage.removeItem('nakliOS.tex.v1');
+  await (await texHost()).service.clearCache();
+  return true;
+}
+async function texEngines(){
+  const { module } = await texHost();
+  return { engines:Object.keys(module.TEX_ENGINES), version:module.TEX_VERSION, ...TEX_ENGINE_INFO };
+}
+// An app reaches only apps/<id>/ through the same calls as naklios.fs, so its storage permission is the folder grant.
+// A job stays on the backend it started on: a switch mid-compile fails it rather than mixing a Crate with a Folder.
+async function texAppStore(appId){
+  const backend = await fsEnsurePermission(appId);
+  if (!backend) throw new Error('Permission denied');
+  return {
+    list:prefix => fsHostList({ prefix, backend }, appId),
+    readBinary:path => fsHostHandle({ path, backend }, 'readBinary', appId),
+    write:(path, data) => fsHostHandle({ path, data, backend }, 'write', appId),
+  };
+}
+async function texHostHandle(source, replyTo, msg, op, appId){
+  if (!texManifestAllows(appId)) throw new Error('This app did not declare the tex permission');
+  if (op === 'engines') return texEngines();
+  if (op === 'cache') return texCache();
+  if (op === 'clearCache') return texClearCache();
+  if (op !== 'compile') throw new Error('Unknown TeX operation');
+  if (typeof msg.requestId !== 'string') throw new Error('A compile needs a request id');
+  const { service } = await texHost();
+  return service.compile({
+    id:msg.requestId, caller:appId, openStore:() => texAppStore(appId),
+    onChunk:chunk => { try { source.postMessage({ type:'naklios:tex:event', requestId:msg.requestId, event:'chunk', chunk }, replyTo); } catch(_){} },
+  }, { folder:msg.folder, main:msg.main, engine:msg.engine });
+}
+// The desktop's own door: paths are from the store root, and the caller's scope comes from its command grant.
+async function texCompile(folder, main, engine){
+  const id = backendsAvailable()[0];
+  if (!id) throw new Error('No Folder or Crate is connected');
+  const backend = BACKENDS[id];
+  const { service } = await texHost();
+  return service.compile({ id:'host', caller:'host', openStore:async () => ({
+    list:prefix => backend.list(prefix),
+    readBinary:path => backend.readBinary(path),
+    write:(path, data) => backend.write(path, data),
+  }) }, { folder, main, engine });
+}
+async function texCancel(){ return (await texHost()).service.cancel('host', 'host'); }
+
 async function netHostFetch(appId, msg){
   if (!aiAppOwnsEgress(appId)) throw new Error('Egress is available to same-origin system apps only');
   let host = '';
@@ -8351,6 +8462,7 @@ function capabilitySnapshot(appId){
     aiImageState:aiImageHost.state,
     aiSearch: ragCapabilityForApp(appId),
     aiSearchState:ragHost.state,
+    experimental_tex:texCapabilityForApp(appId),
     // Egress: a system app may reach blocked cross-origin hosts when the user has
     // configured a backend. Third-party apps never get it (isSystem gate).
     net: aiAppOwnsEgress(appId) && egressConfigured(),
@@ -9010,6 +9122,22 @@ window.addEventListener('message', async e => {
       const appId = getAppId();
       if (!appId) throw new Error('Unknown app');
       reply.result = await skillsHostHandle(msg.type.slice('naklios:skills:'.length), msg, appId);
+    } catch (err){
+      reply.error = String(err?.message || err);
+    }
+    if (msg.requestId) {
+      try { e.source.postMessage(reply, replyTo); } catch(_){}
+    }
+  } else if (msg.type === 'naklios:tex:cancel'){
+    // The compile's own reply settles the call, so a cancel sends none.
+    const appId = getAppId();
+    if (appId) texHost().then(({ service }) => service.cancel(appId, msg.requestId)).catch(() => {});
+  } else if (typeof msg.type === 'string' && msg.type.startsWith('naklios:tex:')){
+    const reply = { type:'naklios:tex:reply', requestId:msg.requestId };
+    try {
+      const appId = getAppId();
+      if (!appId) throw new Error('Unknown app');
+      reply.result = await texHostHandle(e.source, replyTo, msg, msg.type.slice('naklios:tex:'.length), appId);
     } catch (err){
       reply.error = String(err?.message || err);
     }
@@ -9751,6 +9879,9 @@ async function consentThirdPartyInstall(manifest, manifestSource){
     ? 'May ask to use the shared on-device LocalMind model. NakliOS asks again on first use and never shares prompts between apps.' +
       (manifest.permissions.includes('tools') ? ' May also ask the model to call tools the app itself runs.' : '')
     : 'No NakliOS AI access requested.';
+  const texLine = manifest.permissions.includes('tex')
+    ? 'May compile LaTeX projects in its own storage with the shared TeX service.'
+    : 'No NakliOS TeX access requested.';
   const answer = await _nakliosDialog({
     title: existing ? `Review update for ${manifest.name}` : `Install ${manifest.name}?`,
     body:
@@ -9763,7 +9894,8 @@ async function consentThirdPartyInstall(manifest, manifestSource){
       `<strong>Isolation</strong> · Windowed apps always run in an opaque-origin sandbox. ` +
       `They never become a same-origin system app or mirror.<br>` +
       `<strong>Storage</strong> · ${_dlgEscape(storageLine)}<br>` +
-      `<strong>AI</strong> · ${_dlgEscape(inferenceLine)}<br><br>` +
+      `<strong>AI</strong> · ${_dlgEscape(inferenceLine)}<br>` +
+      `<strong>TeX</strong> · ${_dlgEscape(texLine)}<br><br>` +
       `Installation is local to this browser profile. Uninstalling later removes the registration, not app data.`,
     buttons: [
       { value:'cancel', label:'Cancel' },
@@ -13691,6 +13823,7 @@ const hostAgentReady = import('./sys/host/agent.mjs').then(({ attachHostAgent })
     fsRead, fsReadBinary, fsWrite, fsAppend, fsList, fsDelete, fsExists,
     openAssistant, closeAssistant, askAssistant, listenAssistant, stopListeningAssistant, stopAssistant,
     setAssistantHandsFree, assistantState, loadAssistantModel, setAssistantWebLookups, setAssistantPageProxy,
+    texEngines, texCompile, texCancel, texCache, texClearCache,
   },
 }));
 hostAgentReady.catch(error => console.error('Desktop agent interface could not load', error));

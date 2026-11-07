@@ -391,6 +391,38 @@ whether a backend is configured.
 A refused request rejects with the reason in the message: not allowed, or did not
 verify.
 
+## TeX
+
+`naklios.experimental_tex` compiles a LaTeX project in the app's own storage. The engine is
+`texlyre-busytex` (TeX Live 2026, AGPL-3.0-or-later), which runs in a Worker owned by the host. The app
+talks to it by messages, so the AGPL stays on that component. Its files and source are in
+[`NakliTechie/naklios-tex`](https://github.com/NakliTechie/naklios-tex), and `naklios.dev/tex/` streams them from
+that repository's release. `capabilities.experimental_tex` says whether the app may call it.
+
+```js
+const job = naklios.experimental_tex.compile({
+  folder: 'paper', main: 'main.tex', engine: 'pdflatex',   // or 'xelatex', 'lualatex'
+  onChunk: chunk => { /* { kind:'progress', stage } · { kind:'diagnostic', ... } · { kind:'log', text } */ },
+});
+const { ok, pdf, log, synctex, diagnostics } = await job;  // pdf, log and synctex are paths
+naklios.experimental_tex.cancel(job.id);                   // the compile rejects with ECANCELED
+```
+
+- **Folder grant.** The host reads the project through the app's own `apps/<id>/` scope, so no file bytes cross the
+  rail and a caller can compile only its own storage. Without a connected Folder or Crate the call fails. Third-party
+  apps also declare the `tex` permission.
+- **First use.** The first compile asks the person once and downloads about 680 MB, shared by every app and kept in this
+  browser. That took 15 minutes through Cloudflare on one connection, so show the `download` progress chunks. Biber adds about 30 MB on first use. Later compiles need the engine loaded, which took about 7 s in the spike.
+- **Outputs.** `<folder>/.tex-build/<name>.pdf`, `.log` and `.synctex.gz`. A build is kept after the app closes. Files and
+  folders whose names start with a dot are not sent to TeX. SyncTeX paths are relative to `folder`.
+- **A TeX error is an answer.** `ok` is false and `diagnostics` lists `{ severity, kind, file, line, message }`. The call
+  rejects only for refusals, a cancel or an engine failure. A package outside the packs (`algorithm2e` is one) gives
+  `kind:'missing-file'`; add the file to the project folder.
+- **Queue.** One compile runs at a time across all apps. A new compile of the same project replaces the old one. Log text
+  arrives when the run ends, because the engine does not stream it. A single run stops after 180 s.
+- **History.** Every compile appends one hash-chained event (door `tex`) with the project path, engine and outcome, never
+  file contents. Shell escape is always off.
+
 ## Storage locations are separate
 
 Browser, Folder, and Crate are distinct libraries:
@@ -601,7 +633,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 
 <!-- sdk-reference:begin — rendered by `node scripts/sdk-reference.mjs --write` from docs/sdk-api-audit.md; do not edit by hand -->
 
-103 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
+110 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
 
 ### `version`
 
@@ -638,6 +670,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 | `capabilities.aiImageState` | field | State of the image runtime. |
 | `capabilities.aiSearchState` | field | State of the local semantic-search rung (`idle` · `loading` · `ready` · `error`). |
 | `capabilities.aiSearch` | field | Semantic (local, embedding) search over the app's own namespace granted — not web search. |
+| `capabilities.experimental_tex` | field · **experimental** | The app may compile LaTeX projects in its own storage. |
 | `capabilities.net` | field | Sovereign egress (`naklios.net.fetch`) granted. |
 | `capabilities.netBackend` | field | Which egress backend the host is configured with: `worker` (the default) · `bridge`; null when none. Never a package name. |
 | `capabilities.review` | field | The host can stage native diffs from this app and return source-bound review decisions. Enabled for Reckon, Draft, and KanZen. |
@@ -733,6 +766,17 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 | `sys.fs.list` | function | List. |
 | `sys.fs.delete` | function | Delete. |
 | `sys.fs.exists` | function | Existence check. |
+
+### `experimental_tex` (namespace)
+
+| member | kind | what it is |
+|---|---|---|
+| `experimental_tex` | namespace · **experimental** | The shared TeX service (`docs/app-contract.md`, "TeX"): one queue in the host, the engine in a Worker, outputs in `.tex-build/`. |
+| `experimental_tex.engines` | function · **experimental** | The engines, the TeX Live version, the licence, the source link and the download size. |
+| `experimental_tex.compile` | function · **experimental** | Compile `{ folder, main, engine, onChunk }` from the app's own storage. Answers `{ ok, exitCode, pdf, log, synctex, diagnostics }`, where the three file values are paths; the returned promise carries `id`. |
+| `experimental_tex.cancel` | function · **experimental** | Stop a queued or running compile by the promise's `id`; the compile rejects with `ECANCELED`. |
+| `experimental_tex.cache` | function · **experimental** | Which TeX packs are in this browser. |
+| `experimental_tex.clearCache` | function · **experimental** | Asks the person, then deletes the TeX packs from this browser. |
 
 ### `experimental_commands` (namespace)
 

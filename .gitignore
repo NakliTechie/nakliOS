@@ -21,6 +21,8 @@ plan/
 !apps/**
 !sys/
 !sys/**
+!worker/
+!worker/*
 !scripts/
 !scripts/*
 !scripts/dish/

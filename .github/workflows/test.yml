@@ -104,6 +104,9 @@ jobs:
       - name: Verify the SDK reference cannot drift from the ledger (U1 teeth)
         run: node scripts/test-sdk-reference.mjs
 
+      - name: TeX service (queue, refusals, cancel, log diagnostics, SyncTeX paths, the /tex/ route, the SDK envelope)
+        run: node scripts/test-tex-service.mjs
+
       - name: Verify naklios.net egress SDK seam (ENOEGRESS until a backend is advertised)
         run: node scripts/test-net-seam.mjs
 
@@ -757,6 +760,9 @@ jobs:
 
       - name: Verify real pinned Pyodide SQLite in Chrome
         run: node scripts/test-sqlite-browser.mjs
+
+      - name: Compile real LaTeX through the desktop's TeX service in Chrome (downloads the engine release)
+        run: node scripts/test-tex-browser.mjs
 
       - name: Verify Notes and Calendar commands run from closed apps through the catalog in Chrome
         run: node scripts/test-app-commands-browser.mjs

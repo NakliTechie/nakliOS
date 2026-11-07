@@ -53,6 +53,7 @@ prefix today.
 | `capabilities.aiImageState` | field | stable | — | State of the image runtime. |
 | `capabilities.aiSearchState` | field | stable | — | State of the local semantic-search rung (`idle` · `loading` · `ready` · `error`). |
 | `capabilities.aiSearch` | field | stable | — | Semantic (local, embedding) search over the app's own namespace granted — not web search. |
+| `capabilities.experimental_tex` | field | experimental | As `experimental_tex`. | The app may compile LaTeX projects in its own storage. |
 | `capabilities.net` | field | stable | — | Sovereign egress (`naklios.net.fetch`) granted. |
 | `capabilities.netBackend` | field | stable | — | Which egress backend the host is configured with: `worker` (the default) · `bridge`; null when none. Never a package name. |
 | `capabilities.review` | field | stable | — | The host can stage native diffs from this app and return source-bound review decisions. Enabled for Reckon, Draft, and KanZen. |
@@ -93,6 +94,12 @@ prefix today.
 | `sys.fs.list` | function | stable | — | List. |
 | `sys.fs.delete` | function | stable | — | Delete. |
 | `sys.fs.exists` | function | stable | — | Existence check. |
+| `experimental_tex` | namespace | experimental | The LaTeX writing app ships on it and it runs on naklios.dev, before stabilization as `tex`. | The shared TeX service (`docs/app-contract.md`, "TeX"): one queue in the host, the engine in a Worker, outputs in `.tex-build/`. |
+| `experimental_tex.engines` | function | experimental | As `experimental_tex`. | The engines, the TeX Live version, the licence, the source link and the download size. |
+| `experimental_tex.compile` | function | experimental | As `experimental_tex`. | Compile `{ folder, main, engine, onChunk }` from the app's own storage. Answers `{ ok, exitCode, pdf, log, synctex, diagnostics }`, where the three file values are paths; the returned promise carries `id`. |
+| `experimental_tex.cancel` | function | experimental | As `experimental_tex`. | Stop a queued or running compile by the promise's `id`; the compile rejects with `ECANCELED`. |
+| `experimental_tex.cache` | function | experimental | As `experimental_tex`. | Which TeX packs are in this browser. |
+| `experimental_tex.clearCache` | function | experimental | As `experimental_tex`. | Asks the person, then deletes the TeX packs from this browser. |
 | `experimental_commands` | namespace | experimental | Notes and Calendar register commands, and the voice assistant calls them live on naklios.dev through the desktop catalog (common rail step 2), before stabilization. | The app's commands on the common rail (`docs/app-contract.md`, "Common rail"); the desktop lists them as `<app-id>.<name>` in `sys/host/catalog.mjs`, checks each caller's grant and stages `destructive` ones. |
 | `experimental_commands.register` | function | experimental | As `experimental_commands`. | Declare the app's commands `{ name, description, input, scope, handler }`; replaces the whole set. Standalone: keeps the handlers and sends nothing. |
 | `experimental_commands.search` | function | experimental | Anvil finds app commands through it (common rail step 3), before stabilization. | System apps: find other apps' commands by words, with the input each one takes. Standalone: `[]`. |
