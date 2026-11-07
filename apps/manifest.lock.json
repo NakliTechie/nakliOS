@@ -1351,7 +1351,7 @@
       "id": "scribella",
       "repo": "NakliTechie/scribella",
       "requestedRef": "main",
-      "resolvedCommit": "5dae097790d2de801a164196134ba9af96cd956b",
+      "resolvedCommit": "166ce0b4f865cb64b0a06473559808a49a068c8a",
       "files": [
         {
           "source": "LICENSE",
@@ -1368,14 +1368,14 @@
         {
           "source": "commands.json",
           "destination": "commands.json",
-          "sha256": "c6b887ee1c61394cf4b1ec9709e80749b32f67ed41c1e575e31b9a90e9ae10be",
-          "bytes": 11704
+          "sha256": "3d61f3db4e784211bbfe1716a38ffd72986bde7d5ae1fd25a24c26496b94a466",
+          "bytes": 12366
         },
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "21bcc20e56b2e22f79004bfbd127c73014efe096b90a25bb374ac70f14294d33",
-          "bytes": 71723
+          "sha256": "d2d0da73c4c4c6ee1231539bc3214f988db457b97c16bf0e9fac1f1cce0d1be2",
+          "bytes": 71894
         },
         {
           "source": "src/annotations.js",
@@ -1386,8 +1386,8 @@
         {
           "source": "src/app.js",
           "destination": "src/app.js",
-          "sha256": "da29459517e545584e789f5e36a4f0d4e28058979334be03201a7ebda6be5560",
-          "bytes": 61075
+          "sha256": "9c4bfe2a7849ba9e5334142ca12c4cfad8a1497e0c4e493b3dd5234b0547cc13",
+          "bytes": 63637
         },
         {
           "source": "src/arxiv.js",
@@ -1398,8 +1398,8 @@
         {
           "source": "src/aux.js",
           "destination": "src/aux.js",
-          "sha256": "ca41da22c7be1a7737d202f3ae16317fc7f7f4d49b17b9933a7a4a1736ee3286",
-          "bytes": 794
+          "sha256": "2f5f2ea740ecf0accd8938a02df58dab91a6a612a9c816afda79ae6800d95c3a",
+          "bytes": 813
         },
         {
           "source": "src/bib.js",
@@ -1458,8 +1458,8 @@
         {
           "source": "src/lookup.js",
           "destination": "src/lookup.js",
-          "sha256": "c358af4adf4c1bd62c73737b5f6fa3a6600885b46365b1446d2115fd029c53a1",
-          "bytes": 5799
+          "sha256": "af562563d71d0051ad1446d82ac1445e8cb8c3150e3e1b812ae60da5f8684448",
+          "bytes": 6689
         },
         {
           "source": "src/outline.js",
@@ -1476,14 +1476,20 @@
         {
           "source": "src/project.js",
           "destination": "src/project.js",
-          "sha256": "e894afeae0885a5424aae863dac55cad9f03127c0c2681209cb4c738c98fcfb9",
-          "bytes": 6879
+          "sha256": "e777b9cff86eaec11471394a94d7c31195cdb4cff69d2c246d4b221724340486",
+          "bytes": 5999
         },
         {
           "source": "src/protected.js",
           "destination": "src/protected.js",
           "sha256": "4247a751c54ecf1bc3590d055a5ecfead508101292b86afceac7856c9c852684",
           "bytes": 2069
+        },
+        {
+          "source": "src/review-pdf.js",
+          "destination": "src/review-pdf.js",
+          "sha256": "069b0eb21bc737c399219bae4165327c1c3d73d483446255b2f4b5d5325dc828",
+          "bytes": 1039
         },
         {
           "source": "src/revise.js",
@@ -1500,8 +1506,8 @@
         {
           "source": "src/spell.js",
           "destination": "src/spell.js",
-          "sha256": "ae146b605348322fd85d2f657380d4859ac0e70d2b23aafba28c80ce739a655f",
-          "bytes": 1319
+          "sha256": "12b0ea1c1e85067e6f4ea151898fd0316e1df9d57c4217467d9fad739f369edb",
+          "bytes": 1759
         },
         {
           "source": "src/storage.js",
@@ -1552,6 +1558,12 @@
           "bytes": 1253
         },
         {
+          "source": "templates/acl/references.bib",
+          "destination": "templates/acl/references.bib",
+          "sha256": "483790b9ddc5cf5273bfbfff2d46540a25f8d50d9e41e45f8f436b19ec7fb6f1",
+          "bytes": 49
+        },
+        {
           "source": "templates/cvpr-2027/UPSTREAM.md",
           "destination": "templates/cvpr-2027/UPSTREAM.md",
           "sha256": "e0388d0fc6e4070e188d6db6132c8c366e07e7b79b7b9553451727e97bcb14b2",
@@ -1576,6 +1588,12 @@
           "bytes": 1055
         },
         {
+          "source": "templates/cvpr-2027/references.bib",
+          "destination": "templates/cvpr-2027/references.bib",
+          "sha256": "483790b9ddc5cf5273bfbfff2d46540a25f8d50d9e41e45f8f436b19ec7fb6f1",
+          "bytes": 49
+        },
+        {
           "source": "templates/iclr-2026/UPSTREAM.md",
           "destination": "templates/iclr-2026/UPSTREAM.md",
           "sha256": "87f907f7dff0668f10e460f444b4dea8ec5bd4d7e1e59d40c2935758e4a9310b",
@@ -1598,6 +1616,12 @@
           "destination": "templates/iclr-2026/main.tex",
           "sha256": "5b1a17ee610269aff0aa1ed0644a53b4b854cded86e919a13b2fc58cee56eadf",
           "bytes": 1090
+        },
+        {
+          "source": "templates/iclr-2026/references.bib",
+          "destination": "templates/iclr-2026/references.bib",
+          "sha256": "483790b9ddc5cf5273bfbfff2d46540a25f8d50d9e41e45f8f436b19ec7fb6f1",
+          "bytes": 49
         },
         {
           "source": "templates/icml-2026/UPSTREAM.md",
@@ -1636,10 +1660,46 @@
           "bytes": 1300
         },
         {
+          "source": "templates/icml-2026/references.bib",
+          "destination": "templates/icml-2026/references.bib",
+          "sha256": "483790b9ddc5cf5273bfbfff2d46540a25f8d50d9e41e45f8f436b19ec7fb6f1",
+          "bytes": 49
+        },
+        {
+          "source": "templates/ieee/IEEEtran.bst",
+          "destination": "templates/ieee/IEEEtran.bst",
+          "sha256": "314f0ece704568faf827011bac498650691b2b5ee06320720830e782416d5a5f",
+          "bytes": 57748
+        },
+        {
+          "source": "templates/ieee/IEEEtran.cls",
+          "destination": "templates/ieee/IEEEtran.cls",
+          "sha256": "da751920a317ed318b7b5cd7fa585a6cc7d28502d457856382e9be24b10a3bd7",
+          "bytes": 281957
+        },
+        {
+          "source": "templates/ieee/UPSTREAM.md",
+          "destination": "templates/ieee/UPSTREAM.md",
+          "sha256": "2fe5c84af840cba1fe3787214fed9907fb0b6863d8c09fd7af1fd43e726a1fe8",
+          "bytes": 163
+        },
+        {
+          "source": "templates/ieee/main.tex",
+          "destination": "templates/ieee/main.tex",
+          "sha256": "335d74c7050c764d988c32777c894c88fc19a8409cb68476283cdcf65c0c7d13",
+          "bytes": 435
+        },
+        {
+          "source": "templates/ieee/references.bib",
+          "destination": "templates/ieee/references.bib",
+          "sha256": "483790b9ddc5cf5273bfbfff2d46540a25f8d50d9e41e45f8f436b19ec7fb6f1",
+          "bytes": 49
+        },
+        {
           "source": "templates/index.json",
           "destination": "templates/index.json",
-          "sha256": "2e0e8056f00a60e089bd75ebaab2668c2db2d800ddedbeb83f9e2d33f0e21772",
-          "bytes": 811
+          "sha256": "97d6a564a9c88e8cf1c07ddb2ffad4817e464e22d5dc909cc11f695ced5e59bf",
+          "bytes": 1091
         },
         {
           "source": "templates/neurips-2026/UPSTREAM.md",
@@ -1658,6 +1718,12 @@
           "destination": "templates/neurips-2026/neurips_2026.sty",
           "sha256": "c3fc2894e83d2517ca18b66741d6c595986d97957dc08ec08bb2125a7ec4555a",
           "bytes": 13704
+        },
+        {
+          "source": "templates/neurips-2026/references.bib",
+          "destination": "templates/neurips-2026/references.bib",
+          "sha256": "483790b9ddc5cf5273bfbfff2d46540a25f8d50d9e41e45f8f436b19ec7fb6f1",
+          "bytes": 49
         },
         {
           "source": "vendor/LICENSE-fflate",
@@ -1686,8 +1752,8 @@
         {
           "source": "vendor/README.md",
           "destination": "vendor/README.md",
-          "sha256": "606ec01805f25cdaa01ea0e811cdeefb37dd2b55b0690b83c174538af2c48d72",
-          "bytes": 829
+          "sha256": "d02c9c213f7de0ca5dd445212859e6b5226ad80c4b1acbf661b49e4059bf94b4",
+          "bytes": 887
         },
         {
           "source": "vendor/codemirror.mjs",
@@ -1718,6 +1784,12 @@
           "destination": "vendor/katex.mjs",
           "sha256": "e5bc26598084ad869939ecaa262673814f26ed586312a409b5f8427c01e4f681",
           "bytes": 602889
+        },
+        {
+          "source": "vendor/pdf-lib/pdf-lib.esm.js",
+          "destination": "vendor/pdf-lib/pdf-lib.esm.js",
+          "sha256": "23a36609cf4633e10e486095c151dabb8d75a8a667402d092f47dbde7f7d52b5",
+          "bytes": 1517515
         },
         {
           "source": "vendor/pdfjs/pdf.min.mjs",

@@ -38,7 +38,7 @@
           },
           "template": {
             "type": "string",
-            "description": "article, beamer, ieee, acm, thesis, blank, neurips-2026, icml-2026, iclr-2026, acl or cvpr-2027"
+            "description": "article, beamer, thesis, blank, neurips-2026, icml-2026, iclr-2026, acl, cvpr-2027 or ieee"
           }
         },
         "required": [
@@ -391,6 +391,31 @@
         "type": "object",
         "properties": {}
       }
+    },
+    {
+      "name": "references.discover",
+      "description": "Find papers on a topic through OpenAlex for the Scribella bibliography.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    {
+      "name": "review.pdf",
+      "description": "Save the Scribella PDF with open notes as real PDF annotations.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
     }
   ],
   "parity": {
@@ -454,6 +479,8 @@
     "tab-checks": "view",
     "format": "file.format",
     "check-setup": "setup.check",
-    "spell": "view"
+    "spell": "view",
+    "discover": "references.discover",
+    "review-pdf": "review.pdf"
   }
 }

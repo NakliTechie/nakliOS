@@ -17,7 +17,7 @@ import { markChanges } from './changes.js';
 import { stripComments, usedFiles } from './arxiv.js';
 import { HIGHLIGHTS, INTENTS, NOTES_PATH, locate, makeAnchor, parseNotes } from './annotations.js';
 import { addFields, parseBib, sameWork, scanEntries, writeEntry } from './bib.js';
-import { auditEntry, findPaper } from './lookup.js';
+import { auditEntry, discover, findPaper } from './lookup.js';
 import { checkPdf, checkSource } from './blind.js';
 import { formatLatex } from './format.js';
 import { checkSpelling } from './spell.js';
@@ -652,6 +652,53 @@ async function addPaper(input) {
   const entry = await findPaper(input);
   if (state.project !== project) return null;
   if (!entry) { say('No record found for that.', true); return null; }
+  return addEntry(entry);
+}
+
+async function discoverPapers(query) {
+  say('Searching OpenAlex…');
+  const project = state.project;
+  const found = await discover(query);
+  if (state.project !== project) return [];
+  showChecks(`${found.length} papers for "${query}"`, found.map(entry => ({
+    title:entry.fields.title, detail:`${entry.fields.author.split(' and ')[0]} · ${entry.fields.year} · cited ${entry.cited} times`,
+    fixLabel:'Add', fix:() => { if (state.project !== project) throw new Error('This list belongs to another project.'); return addEntry(entry); },
+  })));
+  say('Ready.');
+  return found.map(({ key, fields, cited }) => ({ key, title:fields.title, year:fields.year, cited }));
+}
+
+async function reviewPdf() {
+  if (!state.sync || state.builtRevision !== state.revision) { say('Build the paper first, so notes land in the right place.'); return null; }
+  const placed = [];
+  for (const note of review.notes.filter(item => item.status !== 'resolved' && item.body)) {
+    const place = whereIs(note);
+    const line = place ? state.texts[note.file].slice(0, place.from).split('\n').length : 0;
+    const box = line && forward(state.sync, note.file, line);
+    if (box) placed.push({ page:box.page, x:box.x, y:box.y, text:note.body });
+  }
+  if (!placed.length) { say('No open notes have a place in the PDF.'); return null; }
+  const { annotatePdf } = await import('./review-pdf.js');
+  const stem = state.settings.main.replace(/^.*\//, '').replace(/\.[^.]+$/, '');
+  const bytes = await annotatePdf(await store.readBinary(`${projectRoot()}/.tex-build/${stem}.pdf`), placed);
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(new Blob([bytes], { type:'application/pdf' }));
+  link.download = `${safeName(state.project)}-review.pdf`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+  say(`Review PDF saved with ${placed.length} notes.`);
+  return { notes:placed.length };
+}
+
+// One add at a time, because each builds on the bibliography the last one left.
+let addQueue = Promise.resolve();
+function addEntry(entry) {
+  const run = addQueue.then(() => addEntryNow(entry));
+  addQueue = run.catch(() => {});
+  return run;
+}
+
+async function addEntryNow(entry) {
   const file = bibFiles()[0] || 'references.bib', existing = bibEntries();
   const newDoi = entry.fields.doi?.toLowerCase();
   const same = existing.find(item => {
@@ -1079,6 +1126,8 @@ function bindPage() {
   $('check-setup').addEventListener('click', () => checkSetup().catch(fail));
   $('format').addEventListener('click', () => formatFile().catch(fail));
   renderSteps();
+  $('discover').addEventListener('click', () => { const query = prompt('Find papers about'); if (query) discoverPapers(query).catch(fail); });
+  $('review-pdf').addEventListener('click', () => reviewPdf().catch(fail));
   $('check-references').addEventListener('click', () => auditReferences().catch(fail));
   $('check-blind').addEventListener('click', () => submissionCheck().catch(fail));
   $('add-paper').addEventListener('click', () => { const input = prompt('arXiv id, DOI or exact title'); if (input) addPaper(input).catch(fail); });
@@ -1162,6 +1211,8 @@ const commands = {
   'arxiv.pack':() => arxivPack(),
   'file.format':() => formatFile().then(() => ({ formatted:state.path })),
   'setup.check':() => checkSetup(),
+  'references.discover':({ query }) => discoverPapers(query),
+  'review.pdf':() => reviewPdf(),
   'references.add':({ query }) => addPaper(query).then(entry => entry && { key:entry.key }),
   'references.check':() => auditReferences().then(results => results.map(({ key, status, notices, message }) => ({ key, status, notices, message }))),
   'submission.check':() => submissionCheck().then(rows => rows.map(({ title, detail }) => ({ title, detail }))),
