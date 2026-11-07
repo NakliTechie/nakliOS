@@ -7,6 +7,9 @@ import vm from 'node:vm';
 import { compileRequest, createTexService, TEX_ENGINES } from '../sys/tex/service.mjs';
 import { mapSynctex, parseTexLog } from '../sys/tex/log.mjs';
 import { texAsset } from '../worker/index.mjs';
+import { createHostRegistry, HOST_COMMANDS } from '../sys/host/agent.mjs';
+import { createAgentFace, createGrant, createOpLog } from '../sys/rig/agent/index.mjs';
+import { createFileops, MemoryBackend } from '../sys/rig/fileops/index.mjs';
 
 const bytes = text => new TextEncoder().encode(text);
 const memoryStore = files => ({
@@ -111,6 +114,60 @@ assert.deepEqual(Object.keys(TEX_ENGINES), ['pdflatex', 'xelatex', 'lualatex']);
   assert.equal(broken.stops, 1);
 }
 
+// Cancel reaches every wait: the download question and a slow output write.
+{
+  const engine = fakeEngine();
+  const asking = createTexService({ engine, confirmDownload:() => new Promise(() => {}) });
+  const job = asking.compile({ id:'a', caller:'app', store:paper() }, { folder:'paper', main:'main.tex' });
+  await new Promise(resolve => setTimeout(resolve));
+  asking.cancel('app', 'a');
+  await assert.rejects(job, /ECANCELED/);
+  const store = paper(), write = store.write.bind(store);
+  let wrote = 0;
+  store.write = async (path, data) => { wrote += 1; await new Promise(() => {}); return write(path, data); };
+  const writing = service(fakeEngine());
+  const slow = writing.compile({ id:'b', caller:'app', store }, { folder:'paper', main:'main.tex' });
+  while (!wrote) await new Promise(resolve => setTimeout(resolve));
+  writing.cancel('app', 'b');
+  await assert.rejects(slow, /ECANCELED/);
+  assert.equal(wrote, 1, 'no output starts after a cancel');
+}
+
+// Clearing the cache ends every job first, and a compile sent meanwhile runs afterwards.
+{
+  const order = [];
+  const engine = fakeEngine(() => new Promise(() => {}));
+  engine.stop = () => { order.push('stop'); engine.ready = false; };
+  let finishClear;
+  engine.clear = () => { order.push('clear'); return new Promise(resolve => { finishClear = resolve; }); };
+  const tex = service(engine);
+  const active = tex.compile({ id:'a', caller:'app', store:paper() }, { folder:'paper', main:'main.tex' });
+  const queued = tex.compile({ id:'b', caller:'app', store:paper() }, { folder:'other', main:'secret.tex' });
+  while (!engine.compiled.length) await new Promise(resolve => setTimeout(resolve));
+  const clearing = tex.clearCache();
+  await assert.rejects(active, /deleted/);
+  await assert.rejects(queued, /deleted/);
+  while (!finishClear) await new Promise(resolve => setTimeout(resolve));
+  assert.deepEqual(order, ['stop', 'clear'], 'the engine stops before the cache goes, never after');
+  const later = tex.compile({ id:'c', caller:'app', store:paper() }, { folder:'paper', main:'main.tex' });
+  await new Promise(resolve => setTimeout(resolve));
+  assert.equal(engine.compiled.length, 1, 'a compile waits for the clear');
+  engine.compile = async () => ({ pdf:bytes('%PDF'), log:'', exitCode:0 });
+  finishClear();
+  await clearing;
+  assert.equal((await later).ok, true);
+}
+
+// The desktop command obeys a caller's path grant, as the fs commands do.
+{
+  const registry = createHostRegistry(Object.fromEntries(HOST_COMMANDS.map(row => [row[2], async () => 'ran'])));
+  const face = createAgentFace({ registry, grant:createGrant({ prefixes:['allowed'], scopes:['fs:write'] }), opLog:createOpLog({ fs:createFileops({ backend:new MemoryBackend() }) }) });
+  const input = path => ({ path, main:'main.tex', engine:'pdflatex' });
+  assert.equal((await face.invoke('tex.compile', input('apps/other/private'))).code, 'EGRANT');
+  assert.equal((await face.invoke('tex.compile', input(''))).code, 'EGRANT');
+  assert.equal((await face.invoke('tex.compile', input('allowed/paper'))).ok, true);
+}
+
 // A failed History write does not fail the compile.
 assert.equal((await service(fakeEngine(), { record:async () => { throw new Error('disk'); } }).compile({ id:'a', caller:'app', store:paper() }, { folder:'paper', main:'main.tex' })).ok, true);
 
@@ -181,7 +238,7 @@ assert.equal((await service(fakeEngine(), { record:async () => { throw new Error
   deliver({ type:'naklios:tex:reply', requestId:job.id, result:{ ok:true } });
   assert.equal((await job).ok, true);
   assert.equal(chunks[0].stage, 'compiling');
+  // A settled compile leaves no timer: this script exits on its own only if that holds.
 }
 
 console.log('TeX service: PASS');
-process.exit(0); // the SDK's two-hour compile timer would hold node open

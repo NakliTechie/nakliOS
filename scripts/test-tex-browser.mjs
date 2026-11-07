@@ -127,7 +127,7 @@ const SCRIPT = `(async () => {
   const { face } = await hostAgentReady;
   out.engines = await face.invoke('tex.engines', {});
   out.cache = await face.invoke('tex.cache', {});
-  out.door = await face.invoke('tex.compile', { folder:'apps/notes/paper', main:'main.tex', engine:'pdflatex' });
+  out.door = await face.invoke('tex.compile', { path:'apps/notes/paper', main:'main.tex', engine:'pdflatex' });
 
   const history = await (await (await (await (await navigator.storage.getDirectory()).getDirectoryHandle('naklios')).getDirectoryHandle('history')).getFileHandle('tex.ndjson')).getFile();
   out.history = (await history.text()).trim().split('\\n');

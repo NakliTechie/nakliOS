@@ -1000,6 +1000,7 @@
         if (!capabilities.experimental_tex) return Promise.reject(new Error('The NakliOS TeX service is unavailable or not permitted'));
         options = options || {};
         var requestId = 't' + (++rpcCounter) + '_' + Date.now();
+        var timer;
         var compile = new Promise(function (resolve, reject) {
           if (typeof options.onChunk === 'function') texCompiles.set(requestId, options.onChunk);
           pendingRpc.set(requestId, { resolve: resolve, reject: reject });
@@ -1010,13 +1011,14 @@
             reject(new Error('Wait for a verified NakliOS host before sending more data'));
             return;
           }
-          setTimeout(function () {
+          timer = setTimeout(function () {
             if (pendingRpc.has(requestId)) {
               pendingRpc.delete(requestId);
+              send('naklios:tex:cancel', { requestId: requestId });
               reject(new Error('naklios RPC timeout: naklios:tex:compile'));
             }
           }, 2 * 60 * 60 * 1000);
-        }).finally(function () { texCompiles.delete(requestId); });
+        }).finally(function () { clearTimeout(timer); texCompiles.delete(requestId); });
         compile.id = requestId;
         return compile;
       },

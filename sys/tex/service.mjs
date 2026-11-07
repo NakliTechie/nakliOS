@@ -49,7 +49,7 @@ async function readProject(store, folder, check) {
 // `engine` runs TeX, `confirmDownload` asks the person once before the first download, `record` writes the op log.
 export function createTexService({ engine, confirmDownload, record = async () => {}, now = Date.now }) {
   const queue = [];
-  let running = null;
+  let running = null, clearing = false;
 
   // A failed History write never fails the compile it records.
   const log = (job, output) => Promise.resolve().then(() => record(job, output)).catch(error => console.error('[naklios] TeX History append failed', error));
@@ -74,7 +74,7 @@ export function createTexService({ engine, confirmDownload, record = async () =>
     const check = () => { if (job.cancelled) throw job.cancelled; };
     const stage = (name, extra = {}) => emit({ kind:'progress', stage:name, ...extra });
     if (!await engine.isReady()) {
-      if (!await confirmDownload(job.caller)) throw fail('EPERM', 'the person did not allow the TeX download');
+      if (!await untilCancelled(job, confirmDownload(job.caller))) throw fail('EPERM', 'the person did not allow the TeX download');
       check();
       stage('download', { percent:0 });
       job.engineBusy = true;
@@ -96,16 +96,17 @@ export function createTexService({ engine, confirmDownload, record = async () =>
     const diagnostics = parseTexLog(result.log, request.main);
     for (const diagnostic of diagnostics) emit({ kind:'diagnostic', ...diagnostic });
     emit({ kind:'log', text:result.log });
-    const written = { pdf:null, log:output(`${stem}.log`), synctex:null };
-    await store.write(written.log, new TextEncoder().encode(result.log));
-    if (result.pdf?.byteLength) { written.pdf = output(`${stem}.pdf`); await store.write(written.pdf, result.pdf); }
-    if (result.synctex?.byteLength) { written.synctex = output(`${stem}.synctex.gz`); await store.write(written.synctex, await mapSynctex(result.synctex)); }
+    const save = async (path, data) => { check(); await untilCancelled(job, Promise.resolve(data).then(bytes => store.write(path, bytes))); return path; };
+    const written = { pdf:null, log:await save(output(`${stem}.log`), new TextEncoder().encode(result.log)), synctex:null };
+    if (result.pdf?.byteLength) written.pdf = await save(output(`${stem}.pdf`), result.pdf);
+    if (result.synctex?.byteLength) written.synctex = await save(output(`${stem}.synctex.gz`), mapSynctex(result.synctex));
     return { ok:result.exitCode === 0, exitCode:result.exitCode, ...written, diagnostics };
   }
 
   async function pump() {
-    if (running || !queue.length) return;
+    if (running || clearing || !queue.length) return;
     const job = running = queue.shift();
+    job.finished = new Promise(resolve => { job.finish = resolve; });
     const started = now();
     try {
       const result = await run(job);
@@ -118,6 +119,7 @@ export function createTexService({ engine, confirmDownload, record = async () =>
       job.reject(error);
     } finally {
       running = null;
+      job.finish();
       pump();
     }
   }
@@ -134,6 +136,19 @@ export function createTexService({ engine, confirmDownload, record = async () =>
         emit({ kind:'progress', stage:'queued' });
         pump();
       });
+    },
+    // Every job ends first, so nothing is using the engine when the cache goes. A compile sent meanwhile waits.
+    async clearCache() {
+      clearing = true;
+      try {
+        const active = running;
+        for (const job of [running, ...queue].filter(Boolean)) cancelJob(job, 'ECANCELED', 'TeX Live was deleted');
+        await active?.finished;
+        await engine.clear();
+      } finally {
+        clearing = false;
+        pump();
+      }
     },
     cancel(caller, id) {
       const job = [running, ...queue].find(item => item?.caller === caller && item.id === id);

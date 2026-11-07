@@ -8291,7 +8291,7 @@ async function texClearCache(){
   const ok = await nakliosConfirm('Delete the TeX Live packs from this browser? Every app that compiles LaTeX needs them, and the next compile downloads about 680 MB again.',
     { title:'Delete TeX Live?', okLabel:'Delete', cancelLabel:'Keep' });
   if (!ok) return false;
-  await (await texHost()).engine.clear();
+  await (await texHost()).service.clearCache();
   localStorage.removeItem('nakliOS.tex.v1');
   return true;
 }
@@ -8300,11 +8300,14 @@ async function texEngines(){
   return { engines:Object.keys(module.TEX_ENGINES), version:module.TEX_VERSION, ...TEX_ENGINE_INFO };
 }
 // An app reaches only apps/<id>/ through the same calls as naklios.fs, so its storage permission is the folder grant.
-function texAppStore(appId){
+// A job stays on the backend it started on: a switch mid-compile fails it rather than mixing a Crate with a Folder.
+async function texAppStore(appId){
+  const backend = await fsEnsurePermission(appId);
+  if (!backend) throw new Error('Permission denied');
   return {
-    list:prefix => fsHostList({ prefix }, appId),
-    readBinary:path => fsHostHandle({ path }, 'readBinary', appId),
-    write:(path, data) => fsHostHandle({ path, data }, 'write', appId),
+    list:prefix => fsHostList({ prefix, backend }, appId),
+    readBinary:path => fsHostHandle({ path, backend }, 'readBinary', appId),
+    write:(path, data) => fsHostHandle({ path, data, backend }, 'write', appId),
   };
 }
 async function texHostHandle(source, replyTo, msg, op, appId){
@@ -8316,7 +8319,7 @@ async function texHostHandle(source, replyTo, msg, op, appId){
   if (typeof msg.requestId !== 'string') throw new Error('A compile needs a request id');
   const { service } = await texHost();
   return service.compile({
-    id:msg.requestId, caller:appId, store:texAppStore(appId),
+    id:msg.requestId, caller:appId, store:await texAppStore(appId),
     onChunk:chunk => { try { source.postMessage({ type:'naklios:tex:event', requestId:msg.requestId, event:'chunk', chunk }, replyTo); } catch(_){} },
   }, { folder:msg.folder, main:msg.main, engine:msg.engine });
 }
