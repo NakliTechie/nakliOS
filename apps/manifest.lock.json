@@ -1351,7 +1351,7 @@
       "id": "scribella",
       "repo": "NakliTechie/scribella",
       "requestedRef": "main",
-      "resolvedCommit": "dfdabd322b37f54011b20c122cee33506aac9dfd",
+      "resolvedCommit": "56180aa16bedceaf247b958725dd679e3e8eb3b8",
       "files": [
         {
           "source": "LICENSE",
@@ -1374,8 +1374,8 @@
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "b875407471ecfbed6680868f03c083ec5a3f6eddd65c40e8bf36fd6f9feff1ad",
-          "bytes": 77978
+          "sha256": "2ab3a96b499f0f7563381ccab8ab7d84e57d5ec2b0accd165a17470eaf701584",
+          "bytes": 78097
         },
         {
           "source": "src/agent.js",
