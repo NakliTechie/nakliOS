@@ -1,3 +1,5 @@
+import { blankComments } from './lint.js';
+
 // A paper's source as arXiv wants it: only the files the paper uses, comments gone, and the .bbl alongside because arXiv
 // does not run BibTeX. A comment is a note to co-authors, and arXiv publishes the source it receives.
 const VERBATIM = /\\begin\{(verbatim|lstlisting|minted)\*?\}/;
@@ -39,7 +41,7 @@ export function usedFiles({ files, texts, main }) {
     if (used.has(file)) continue;
     used.add(file);
     if (!/\.(tex|ltx|sty|cls)$/i.test(file)) continue;
-    const source = texts[file] || '';
+    const source = blankComments(texts[file] || '');
     for (const [, name] of source.matchAll(/\\(?:input|include|subfile)\{([^}]+)\}/g)) {
       const found = resolve(name, ['', '.tex'], file);
       if (found) pending.push(found); else missing.add(name);
