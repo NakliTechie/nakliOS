@@ -1351,7 +1351,7 @@
       "id": "scribella",
       "repo": "NakliTechie/scribella",
       "requestedRef": "main",
-      "resolvedCommit": "4d6ef3a7249a84bd9524e4183938a9e593e585e0",
+      "resolvedCommit": "e6d4a89f693257228f27aa0791b66e323bea4c01",
       "files": [
         {
           "source": "LICENSE",
@@ -1392,14 +1392,14 @@
         {
           "source": "src/app.js",
           "destination": "src/app.js",
-          "sha256": "3a967a57e9fb5ffd2c38565bd249f03c8491ce1bc9e5c3980faaba2a62c5afb5",
-          "bytes": 87397
+          "sha256": "9dbbd515544601138179b30414fccf63cf338d378199ad3c042b82a8a90706e1",
+          "bytes": 87714
         },
         {
           "source": "src/arxiv.js",
           "destination": "src/arxiv.js",
-          "sha256": "b018eef0ced46ea2a8627743a4e52dad277ef591148955ac90e8005b19798619",
-          "bytes": 3530
+          "sha256": "8402e617fe5320e06e68bffdc648167fee79a5ee6b38cf01a1404321c7f21ec7",
+          "bytes": 3589
         },
         {
           "source": "src/aux.js",
@@ -1506,8 +1506,8 @@
         {
           "source": "src/overleaf.js",
           "destination": "src/overleaf.js",
-          "sha256": "6a30edff187749af5b66a83d3c8deca8474b982a226d5dd05f418ba25bd995a0",
-          "bytes": 5973
+          "sha256": "832bde784d701a60ac0479de3c82f7fb63121c601c564ef5f4e5ebf856b0e7e3",
+          "bytes": 6663
         },
         {
           "source": "src/papers.js",

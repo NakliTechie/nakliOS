@@ -11,6 +11,7 @@ const BRANCH = 'master';
 const decode = bytes => new TextDecoder().decode(bytes);
 const sameBytes = (a, b) => a?.length === b?.length && a.every((byte, index) => byte === b[index]);
 const TEXT = /\.(tex|ltx|bib|sty|cls|bst|bbx|cbx|txt|md|csv|tsv|board)$/i;
+const fingerprint = bytes => (bytes ? `${bytes.length}:${bytes.reduce((hash, byte) => (Math.imul(hash, 31) + byte) >>> 0, 7)}` : 'absent');
 const HIDDEN = path => path.split('/').some(part => part.startsWith('.'));
 
 export function overleafProjectId(input) {
@@ -86,14 +87,20 @@ export function overleafSync({ store, root, link, proxy, transport = http, url =
         if (merged.conflicts) conflicts.push(path);
       }
       await git.writeRef({ ...base, ref:`refs/heads/${BRANCH}`, value:fetchHead, force:true });
-      await writeState({ ...saved, synced:fetchHead });
+      // Each conflict is kept with a fingerprint of the local copy; it counts as resolved once that copy changes.
+      const after = await localFiles(), open = { ...(saved.open || {}) };
+      for (const path of conflicts) open[path] = fingerprint(after[path]);
+      await writeState({ ...saved, synced:fetchHead, open });
       return { changed, conflicts, head:fetchHead };
     },
     // Pulls first, so the commit builds on Overleaf's latest; answers what was sent.
     async push(message = 'Changes from Scribella', now = Date.now()) {
       const pulled = await this.pull();
       if (pulled.conflicts.length) return { pushed:false, conflicts:pulled.conflicts };
-      const marked = Object.entries(await localFiles()).filter(([, bytes]) => /^<<<<<<< yours$/m.test(decode(bytes))).map(([path]) => path);
+      const files = await localFiles(), saved = await readState();
+      const unresolved = Object.entries(saved.open || {}).filter(([path, mark]) => fingerprint(files[path]) === mark).map(([path]) => path);
+      if (unresolved.length) return { pushed:false, conflicts:unresolved };
+      const marked = Object.entries(files).filter(([, bytes]) => /^<<<<<<< yours$/m.test(decode(bytes))).map(([path]) => path);
       if (marked.length) return { pushed:false, conflicts:marked };
       let staged = 0;
       for (const [file, head, work] of await git.statusMatrix(base)) {
@@ -106,7 +113,7 @@ export function overleafSync({ store, root, link, proxy, transport = http, url =
       const oid = await git.commit({ ...base, message, author, committer:author });
       const result = await git.push({ ...remote, ref:BRANCH, remoteRef:BRANCH });
       if (!result.ok) throw new Error(`Overleaf refused the push: ${JSON.stringify(result.refs || result.error)}`);
-      await writeState({ ...(await readState()), synced:oid });
+      await writeState({ ...(await readState()), synced:oid, open:{} });
       return { pushed:true, files:staged, oid };
     },
   };
