@@ -4,7 +4,7 @@ import { escapeText } from './insert.js';
 
 const ROOT = 'projects';
 const SETTINGS = '.scribella.json';
-const TEXT = /\.(tex|ltx|bib|sty|cls|bst|bbx|cbx|txt|md|csv|tsv)$/i;
+const TEXT = /\.(tex|ltx|bib|sty|cls|bst|bbx|cbx|txt|md|csv|tsv|board)$/i;
 
 export const isText = path => TEXT.test(path);
 export const isImage = path => /\.(png|jpe?g|pdf|eps)$/i.test(path);

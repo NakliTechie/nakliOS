@@ -416,6 +416,141 @@
         "type": "object",
         "properties": {}
       }
+    },
+    {
+      "name": "project.definition",
+      "description": "Find where a Scribella label, citation key or input file is defined, or every use of a label.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "ref",
+              "cite",
+              "input",
+              "label"
+            ]
+          }
+        },
+        "required": [
+          "key",
+          "kind"
+        ]
+      }
+    },
+    {
+      "name": "papers.fulltext",
+      "description": "Save the full text of an arXiv paper in the Scribella bibliography as Markdown.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ]
+      }
+    },
+    {
+      "name": "papers.search",
+      "description": "Search the full texts saved in a Scribella project.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    {
+      "name": "board.new",
+      "description": "Make a new whiteboard figure in the open Scribella project and open it.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "board.figure",
+      "description": "Save the open Scribella whiteboard as a PDF figure beside it.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "git.commit",
+      "description": "Commit every change in the open Scribella project to its local Git history.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ]
+      }
+    },
+    {
+      "name": "git.log",
+      "description": "List the local Git history of the open Scribella project.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "agent.ask",
+      "description": "Ask Scribella's agent about the open paper; edits it proposes wait for the person.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "question": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "question"
+        ]
+      }
+    },
+    {
+      "name": "overleaf.pull",
+      "description": "Pull changes from the linked Overleaf project into Scribella, merging with local edits.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "overleaf.push",
+      "description": "Send Scribella's changes to the linked Overleaf project.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
     }
   ],
   "parity": {
@@ -481,6 +616,25 @@
     "check-setup": "setup.check",
     "spell": "view",
     "discover": "references.discover",
-    "review-pdf": "review.pdf"
+    "review-pdf": "review.pdf",
+    "wrap": "file.write",
+    "definition": "project.definition",
+    "link-bib": "person: choosing a file from disk is the person's own act",
+    "preview": "view",
+    "search-papers": "papers.search",
+    "sheet-row": "file.write",
+    "sheet-column": "file.write",
+    "sheet-table": "view",
+    "board-tool": "view",
+    "board-undo": "file.write",
+    "board-figure": "board.figure",
+    "git-commit": "git.commit",
+    "git-commit-open": "view",
+    "tab-agent": "view",
+    "agent-ask": "agent.ask",
+    "overleaf-link": "view",
+    "overleaf-save": "person: a Git token is the person's own credential",
+    "overleaf-pull": "overleaf.pull",
+    "overleaf-push": "overleaf.push"
   }
 }

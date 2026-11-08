@@ -7,5 +7,6 @@
 | `katex.mjs` | KaTeX, from Vocella's vendor folder | 0.19.0 | MIT |
 | `harper/` | Harper spellcheck, JavaScript only; its wasm loads from Hugging Face at a pinned commit | 3.0.0 | Apache-2.0 |
 | `pdf-lib/` | pdf-lib, copied from Sheaf | 2.9.1 | MIT |
+| `isomorphic-git/` | isomorphic-git, copied from NakliOS | 1.40.0 | MIT |
 | `pdfjs/` | pdf.js, copied from Sheaf | 6.2.108 | Apache-2.0 |
 | `LICENSE-lattice` | Licence of the code derived from Lattice, see `NOTICE` | `325406c` | Apache-2.0 |

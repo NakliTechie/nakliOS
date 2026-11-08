@@ -34,6 +34,12 @@ dialog{border:1px solid var(--line);border-radius:8px;padding:16px;width:min(560
 .note-note{background:#f2c94c44}.note-check{background:#fff3a8}.note-keep{background:#c8efc8}.note-cite{background:#c8dfff}.note-rewrite{background:#ffd0e0}.note-question{background:#ffe0b8}.note-idea{background:#e4d4ff}
 .check{padding:2px 10px 6px;border-bottom:1px solid var(--line)}.check.bad strong,.check.conflict strong{color:var(--bad)}.check.warn strong,.check.update strong{color:var(--warn)}.cite-tip{padding:4px 8px;max-width:420px;font-size:13px}
 .step{margin-left:10px}.step.done{color:var(--brand)}
+#preview{border-bottom:1px solid var(--line);padding:4px 10px;font-size:13px}#preview summary{cursor:pointer;color:var(--soft)}#preview-body{max-height:30vh;overflow:auto;font:15px/1.5 Georgia,serif;padding:6px 0}
+#sheet-view,#board-view{min-height:0;overflow:auto;background:#fff}.sheet-scroll{overflow:auto}#sheet{border-collapse:collapse;font:13px ui-monospace,monospace}#sheet td,#sheet th{border:1px solid var(--line);padding:3px 8px;min-width:60px}#sheet th{background:var(--panel)}
+#board{display:block;width:calc(100% - 20px);margin:0 10px;background:#fff;border:1px solid var(--line);touch-action:none;cursor:crosshair}[data-tool][aria-pressed=true]{background:var(--sel)}
+#preview-body h1,#preview-body h2,#preview-body h3{font-size:15px}
+#agent-log li{padding:4px 10px;font-size:13px;white-space:pre-wrap}.agent-you{font-weight:600}.agent-step{color:var(--soft);font-size:12px}#git-log .row{font-size:12px}
+body[data-locked] #sheet-view,body[data-locked] #board-view{pointer-events:none;opacity:.6}
 #new-file-form{padding:6px 8px}#new-file-form input{width:100%}
 #centre{display:grid;grid-template-rows:auto auto minmax(0,1fr) minmax(90px,32%);min-width:0;border-right:1px solid var(--line)}
 #file-name{padding:4px 10px;border-bottom:1px solid var(--line);color:var(--soft);font-size:13px}
@@ -41,7 +47,7 @@ dialog{border:1px solid var(--line);border-radius:8px;padding:16px;width:min(560
 #not-text{padding:24px;color:var(--soft)}
 #problems-pane{border-top:1px solid var(--line);overflow:auto;background:var(--bg)}#problems-pane h2{position:sticky;top:0;background:var(--bg);margin:0;padding:6px 10px;text-transform:none;letter-spacing:0;font-size:13px}
 #problems li{padding:2px 10px 8px;border-bottom:1px solid var(--line)}.problem{display:block;width:100%;text-align:left;border:0;background:none;padding:4px 0;cursor:pointer}.problem strong{display:block}.error strong{color:var(--bad)}.warning strong{color:var(--warn)}.place{color:var(--soft);font-size:12px}.problem p{margin:2px 0 0}
-#pdf-side{display:grid;grid-template-rows:auto minmax(0,1fr);min-width:0}#pdf-bar{display:flex;gap:6px;align-items:center;padding:4px 10px;border-bottom:1px solid var(--line);color:var(--soft);font-size:13px}#pdf-bar #pages{margin-right:auto}
+#pdf-side{display:grid;grid-template-rows:auto auto minmax(0,1fr);min-width:0}#pdf-bar{display:flex;gap:6px;align-items:center;padding:4px 10px;border-bottom:1px solid var(--line);color:var(--soft);font-size:13px}#pdf-bar #pages{margin-right:auto}
 #pdf{overflow:auto;background:#e6e3db;position:relative;padding:12px}.pdf-page{background:#fff;margin:0 auto 12px;box-shadow:0 1px 3px #0003;position:relative}.pdf-page canvas{display:block}
 .textLayer{position:absolute;inset:0;overflow:clip;opacity:1;line-height:1;text-size-adjust:none;forced-color-adjust:none;transform-origin:0 0;caret-color:CanvasText}.textLayer span,.textLayer br{color:transparent;position:absolute;white-space:pre;cursor:text;transform-origin:0% 0%}.textLayer ::selection{background:#2f5d5040}
 .mark{position:absolute;pointer-events:none}.mark.sync{background:#f2c94c66;outline:1px solid #c79a00}
@@ -72,7 +78,7 @@ body[data-building] #status::before{content:"● ";color:var(--brand)}
     <strong id="project-name"></strong>
     <label>Main file <select id="main-file" data-command="main-file"></select></label>
     <label>Engine <select id="engine" data-command="engine"><option value="pdflatex">pdfLaTeX</option><option value="xelatex">XeLaTeX</option><option value="lualatex">LuaLaTeX</option></select></label>
-    <select id="insert" data-command="insert" aria-label="Insert"><option value="">Insert…</option><option value="figure">Figure</option><option value="table">Table from data</option><option value="symbol">Symbol</option></select>
+    <select id="insert" data-command="insert" aria-label="Insert"><option value="">Insert…</option><option value="figure">Figure</option><option value="table">Table from data</option><option value="symbol">Symbol</option><option value="board">New whiteboard</option></select>
     <select id="keys" data-command="keys" aria-label="Keys"><option value="default">Standard keys</option><option value="vim">Vim</option><option value="emacs">Emacs</option></select>
     <label><input id="spell" type="checkbox" data-command="spell"> Spelling</label>
     <label><input id="auto" type="checkbox" checked data-command="toggle-auto"> Build on save</label>
@@ -96,6 +102,12 @@ body[data-building] #status::before{content:"● ";color:var(--brand)}
       </div>
       <h2>Outline</h2>
       <ul id="outline"></ul>
+      <h2>Overleaf</h2>
+      <div style="padding:0 8px;font-size:12px;color:var(--soft)" id="overleaf-state"></div>
+      <div class="rail-actions"><button id="overleaf-link" class="btn small" data-command="overleaf-link">Link</button><button id="overleaf-pull" class="btn small" data-command="overleaf-pull" hidden>Pull</button><button id="overleaf-push" class="btn small" data-command="overleaf-push" hidden>Push</button></div>
+      <h2>Git history</h2>
+      <div class="rail-actions"><button id="git-commit" class="btn small" data-command="git-commit">Commit</button></div>
+      <ul id="git-log"></ul>
       <h2>Versions</h2>
       <ul id="versions"></ul>
       <h2>Search</h2>
@@ -103,7 +115,7 @@ body[data-building] #status::before{content:"● ";color:var(--brand)}
         <input id="search-query" type="search" placeholder="Find in project" aria-label="Find in project" data-command="search-query">
         <input id="search-replace" type="text" placeholder="Replace with" aria-label="Replace with">
         <div><label><input id="search-regex" type="checkbox" data-command="search-regex"> Regex</label><label><input id="search-case" type="checkbox" data-command="search-case"> Case</label></div>
-        <div class="rail-actions" style="padding:0"><button id="replace-all" class="btn small" data-command="replace-all">Replace all</button><button id="search-todos" class="btn small" data-command="search-todos">TODOs</button></div>
+        <div class="rail-actions" style="padding:0"><button id="replace-all" class="btn small" data-command="replace-all">Replace all</button><button id="search-todos" class="btn small" data-command="search-todos">TODOs</button><button id="search-papers" class="btn small" data-command="search-papers">In papers</button></div>
         <span id="search-count"></span>
       </div>
       <ul id="search-results"></ul>
@@ -114,17 +126,24 @@ body[data-building] #status::before{content:"● ";color:var(--brand)}
       <div id="sel-bar" hidden>
         <button id="annotate" class="btn small" data-command="annotate">Annotate</button>
         <select id="highlight" data-command="highlight" aria-label="Highlight"><option value="">Highlight…</option></select>
+        <select id="wrap" data-command="wrap" aria-label="Environment"><option value="">Environment…</option><option value="itemize">Wrap in itemize</option><option value="enumerate">Wrap in enumerate</option><option value="center">Wrap in center</option><option value="quote">Wrap in quote</option><option value="equation">Wrap in equation</option><option value="rename">Rename the one around the cursor</option></select>
         <span id="ai-tools" hidden><button id="proofread" class="btn small" data-command="proofread">Proofread</button> <button id="polish" class="btn small" data-command="polish">Polish</button> <button id="rewrite" class="btn small" data-command="rewrite">Rewrite…</button></span>
       </div>
       <div id="editor"></div>
+      <div id="sheet-view" hidden><div class="rail-actions" style="padding:6px 10px"><button class="btn small" data-sheet="row" data-command="sheet-row">Add row</button><button class="btn small" data-sheet="column" data-command="sheet-column">Add column</button><button class="btn small" data-sheet="table" data-command="sheet-table">Use as a table</button></div><div class="sheet-scroll"><table id="sheet"></table></div></div>
+      <div id="board-view" hidden><div class="rail-actions" style="padding:6px 10px"><button class="btn small" data-tool="pen" aria-pressed="true" data-command="board-tool">Pen</button><button class="btn small" data-tool="rect" aria-pressed="false" data-command="board-tool">Box</button><button class="btn small" data-tool="ellipse" aria-pressed="false" data-command="board-tool">Ellipse</button><button class="btn small" data-tool="arrow" aria-pressed="false" data-command="board-tool">Arrow</button><button class="btn small" data-tool="text" aria-pressed="false" data-command="board-tool">Text</button><button id="board-undo" class="btn small" data-command="board-undo">Undo</button><button id="board-figure" class="btn small primary" data-command="board-figure">Save as figure PDF</button></div><svg id="board" xmlns="http://www.w3.org/2000/svg"></svg></div>
       <div id="not-text" hidden>This file is not text, so it opens only in the build.</div>
       <div id="problems-pane">
-        <div class="tabs"><button id="tab-problems" class="tab" aria-pressed="true" data-command="tab-problems"><span id="problem-count">No problems</span></button><button id="tab-notes" class="tab" aria-pressed="false" data-command="tab-notes"><span id="notes-tab">Notes (0)</span></button><button id="tab-checks" class="tab" aria-pressed="false" data-command="tab-checks">Checks</button><button id="revise-all" class="btn small" data-command="revise-all" hidden>Revise all notes</button><button id="review-pdf" class="btn small" data-command="review-pdf">Review PDF</button></div>
+        <div class="tabs"><button id="tab-problems" class="tab" aria-pressed="true" data-command="tab-problems"><span id="problem-count">No problems</span></button><button id="tab-notes" class="tab" aria-pressed="false" data-command="tab-notes"><span id="notes-tab">Notes (0)</span></button><button id="tab-checks" class="tab" aria-pressed="false" data-command="tab-checks">Checks</button><button id="tab-agent" class="tab" aria-pressed="false" data-command="tab-agent">Agent</button><button id="revise-all" class="btn small" data-command="revise-all" hidden>Revise all notes</button><button id="review-pdf" class="btn small" data-command="review-pdf">Review PDF</button></div>
         <div id="problems-list"><ul id="problems"></ul></div>
         <div id="checks" hidden>
-          <div class="rail-actions" style="padding:6px 10px"><button id="add-paper" class="btn small" data-command="add-paper">Add a paper</button><button id="discover" class="btn small" data-command="discover">Find papers</button><button id="check-setup" class="btn small" data-command="check-setup">Check setup</button><button id="check-references" class="btn small" data-command="check-references">Check references</button><button id="check-blind" class="btn small" data-command="check-blind">Double-blind check</button></div>
+          <div class="rail-actions" style="padding:6px 10px"><button id="add-paper" class="btn small" data-command="add-paper">Add a paper</button><label class="btn small file-pick">Link a .bib<input id="link-bib" type="file" accept=".bib" data-command="link-bib" aria-label="Link a .bib file"></label><button id="discover" class="btn small" data-command="discover">Find papers</button><button id="check-setup" class="btn small" data-command="check-setup">Check setup</button><button id="check-references" class="btn small" data-command="check-references">Check references</button><button id="check-blind" class="btn small" data-command="check-blind">Double-blind check</button></div>
           <strong id="checks-title" style="padding:0 10px"></strong>
           <ul id="checks-list"></ul>
+        </div>
+        <div id="agent" hidden>
+          <ul id="agent-log"></ul>
+          <form id="agent-form" class="stack" style="padding:6px 10px"><input id="agent-input" aria-label="Ask the agent" placeholder="Ask about your paper, or ask for a change" data-command="agent-ask"><button class="btn small primary">Ask</button></form>
         </div>
         <div id="notes-list" hidden>
           <div id="proposal" hidden>
@@ -138,7 +157,8 @@ body[data-building] #status::before{content:"● ";color:var(--brand)}
     </section>
     <div class="split" data-column="--source" role="separator" aria-label="Resize the source"></div>
     <section id="pdf-side" aria-label="PDF">
-      <div id="pdf-bar"><span id="pages"></span><span id="pdf-hits"></span><input id="pdf-find" type="search" placeholder="Find in PDF" aria-label="Find in PDF" data-command="pdf-find" style="width:130px"><button id="show-in-pdf" class="btn small" data-command="show-in-pdf" title="Ctrl or Cmd + Enter. Double-click the PDF to jump back.">Show in PDF</button><button id="zoom-out" class="btn small" data-command="zoom-out" aria-label="Zoom out">−</button><button id="zoom-in" class="btn small" data-command="zoom-in" aria-label="Zoom in">+</button></div>
+      <div id="pdf-bar"><span id="pages"></span><span id="pdf-hits"></span><input id="pdf-find" type="search" placeholder="Find in PDF" aria-label="Find in PDF" data-command="pdf-find" style="width:130px"><button id="definition" class="btn small" data-command="definition" title="F12">Definition</button><button id="show-in-pdf" class="btn small" data-command="show-in-pdf" title="Ctrl or Cmd + Enter. Double-click the PDF to jump back.">Show in PDF</button><button id="zoom-out" class="btn small" data-command="zoom-out" aria-label="Zoom out">−</button><button id="zoom-in" class="btn small" data-command="zoom-in" aria-label="Zoom in">+</button></div>
+      <details id="preview" data-command="preview"><summary>Paragraph preview</summary><div id="preview-body"></div></details>
       <div id="pdf"></div>
     </section>
   </main>
@@ -156,6 +176,13 @@ body[data-building] #status::before{content:"● ";color:var(--brand)}
   <textarea id="note-body" aria-label="Note" style="height:90px" required></textarea>
   <select id="note-intent" aria-label="Intent" style="margin-top:6px"></select>
   <div class="end"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary" data-command="note-save">Save</button></div>
+</form></dialog>
+<dialog id="overleaf-dialog"><form id="overleaf-form">
+  <h1>Link an Overleaf project</h1>
+  <p class="lede" style="margin:0 0 8px">Uses Overleaf's Git integration, which needs a Git token from Overleaf's account settings. The token stays in this project's hidden settings file, and Git traffic passes through scribella.naklitechie.com, which stores nothing.</p>
+  <input id="overleaf-address" aria-label="Overleaf project address" placeholder="https://www.overleaf.com/project/…" style="width:100%" required>
+  <input id="overleaf-token" type="password" autocomplete="off" aria-label="Overleaf Git token" placeholder="Git token" style="width:100%;margin-top:6px" required>
+  <div class="end"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary" data-command="overleaf-save">Link and pull</button></div>
 </form></dialog>
 <dialog id="palette-dialog">
   <h1>Symbols</h1>

@@ -20,6 +20,16 @@ import { addFields, parseBib, sameWork, scanEntries, writeEntry } from './bib.js
 import { auditEntry, discover, findPaper } from './lookup.js';
 import { checkPdf, checkSource } from './blind.js';
 import { formatLatex } from './format.js';
+import { merge3 } from './merge.js';
+import { paragraphAt, renderParagraph } from './preview.js';
+import { arxivMarkdown } from './papers.js';
+import { readSheet, writeSheet } from './sheet.js';
+import { blankBoard, boardPdf, boardSvg, readBoard, shapeSvg } from './board.js';
+import { renderMarkdown } from './markdown.js';
+import { projectGit } from './git.js';
+import { SYSTEM, agentTurn } from './agent.js';
+import { STATE_PATH, overleafProjectId, overleafSync } from './overleaf.js';
+import { definitionOf, detectVenue, tokenAt, usesOf } from './latex-edit.js';
 import { checkSpelling } from './spell.js';
 import { parseBlg, parseLabels } from './aux.js';
 import { MAX_PASSAGE, buildMessages, parseReply, safeResult, wordEdits } from './revise.js';
@@ -36,7 +46,7 @@ const COMPILE_HINT = () => (naklios?.capabilities?.hosted
   : 'Writing works here. To compile, open Scribella inside NakliOS, where the TeX engine runs.');
 
 let store = null, storeKind = null;
-const state = { sync:null, builtRevision:null, findHits:[], findIndex:-1, project:null, settings:{}, files:[], texts:{}, path:null, dirty:false, revision:0, problems:[], log:'', job:null, auto:true };
+const state = { saved:{}, sync:null, builtRevision:null, findHits:[], findIndex:-1, project:null, settings:{}, files:[], texts:{}, path:null, dirty:false, revision:0, problems:[], log:'', job:null, auto:true };
 let venues = {}, marksTimer = null;
 const review = { notes:[], rounds:0, proposal:null };
 const aiReady = () => naklios?.capabilities?.ai === true;
@@ -68,6 +78,7 @@ const editor = createEditor($('editor'), {
   project:projectIndex,
   keys:readKeys(),
   onShow:() => showInPdf(),
+  onDefinition:at => goToDefinition(at).catch(fail),
   spell:text => (/\.(tex|ltx|md|txt)$/i.test(state.path || '') ? checkSpelling(text).catch(error => { say(`Spellcheck failed: ${error.message}`, true); return []; }) : Promise.resolve([])),
   describeRef:key => {
     const label = state.labels?.get(key);
@@ -101,14 +112,19 @@ const fullPath = path => `${projectFolder(state.project)}/${path}`;
 const writeFile = (path, data) => store.write(fullPath(path), data);
 const sameName = (a, b) => a.toLowerCase() === b.toLowerCase();
 const fileExists = path => state.files.find(file => sameName(file, path));
-const editingText = () => !!state.path && isText(state.path);
+const isSheet = path => /\.(csv|tsv)$/i.test(path || '');
+const isBoard = path => /\.board$/i.test(path || '');
+const editingText = () => !!state.path && isText(state.path) && !isSheet(state.path) && !isBoard(state.path);
 
 async function saveNow() {
   clearTimeout(saveTimer);
   if (!state.dirty || !state.path) return;
   state.dirty = false;
   try {
-    await writeFile(state.path, state.texts[state.path]);
+    // The text is taken before the write, so keystrokes typed while it runs are not marked as saved.
+    const path = state.path, text = state.texts[path];
+    await writeFile(path, text);
+    state.saved[path] = text;
   } catch (error) {
     state.dirty = true;
     say(`Saving failed: ${error.message}`, true);
@@ -118,7 +134,8 @@ async function saveNow() {
 
 function showCounts() {
   const main = state.texts[state.settings.main];
-  $('words').textContent = main ? `About ${wordCount(main).toLocaleString('en')} words` : '';
+  const venue = main && detectVenue(main);
+  $('words').textContent = main ? `${venue ? `${venue} · ` : ''}About ${wordCount(main).toLocaleString('en')} words` : '';
   renderOutline();
 }
 
@@ -291,14 +308,15 @@ function showInPdf() {
   return box;
 }
 
-async function goToSource({ page, x, y }) {
+async function goToSource({ page, x, y, word = '' }) {
   if (!syncReady()) return null;
   const place = inverse(state.sync, page, x, y, new Set(state.files));
   if (!place) { say('Nothing in your project made this spot.'); return null; }
   // TeX closes a paragraph on the blank line after it, so a click can arrive one line low.
   const lines = (state.texts[place.file] || '').split('\n');
   while (place.line > 1 && !lines[place.line - 1]?.trim()) place.line -= 1;
-  await jump(place.file, place.line);
+  const onLine = word.length > 2 && (lines[place.line - 1] || '').includes(word) ? word : undefined;
+  await jump(place.file, place.line, onLine);
   return place;
 }
 
@@ -318,15 +336,16 @@ async function openFile(path) {
   clearTimeout(saveTimer);
   state.path = path;
   $('file-name').textContent = path;
-  const text = isText(path);
-  $('editor').hidden = !text;
-  $('not-text').hidden = text;
-  if (text) {
-    state.texts[path] ??= await store.read(fullPath(path));
-    editor.load(state.texts[path]);
-    showNoteMarks();
-  }
+  const text = isText(path), view = isSheet(path) ? 'sheet' : isBoard(path) ? 'board' : text ? 'editor' : 'none';
+  for (const [id, name] of [['editor', 'editor'], ['sheet-view', 'sheet'], ['board-view', 'board']]) $(id).hidden = view !== name;
+  $('not-text').hidden = view !== 'none';
+  if (text) state.texts[path] ??= await store.read(fullPath(path));
+  if (view === 'editor') { editor.load(state.texts[path]); showNoteMarks(); }
+  if (view === 'sheet') { state.sheet = readSheet(state.texts[path], path); renderSheet(); }
+  if (view === 'board') { state.board = readBoard(state.texts[path]); renderBoard(); }
+  $('preview').hidden = view !== 'editor';
   renderTree();
+  showPreview().catch(() => {});
 }
 
 // Edits from outside the page, such as an agent or another tab, reach the editor and start a build.
@@ -339,7 +358,25 @@ async function outsideChange(event) {
     const text = await store.read(fullPath(path));
     // Our own saves arrive here too; they match what we hold.
     if (text === state.texts[path]) return;
-    if (path === state.path && state.dirty) {
+    if (path === state.path && (isSheet(path) || isBoard(path))) {
+      // Our own queued saves also arrive here; while any wait, the newer text in memory wins.
+      if (structuredPending.get(path) > 0) return;
+      state.texts[path] = text;
+      state.saved[path] = text;
+      if (isSheet(path)) { state.sheet = readSheet(text, path); renderSheet(); } else { state.board = readBoard(text); renderBoard(); }
+      say(`${path} changed outside and is shown as it is now.`);
+      return;
+    }
+    const merged = path === state.path && state.dirty && state.saved[path] != null ? merge3(state.saved[path], editor.text, text) : null;
+    if (merged && !merged.conflicts) {
+      state.saved[path] = text;
+      state.texts[path] = merged.text;
+      editor.load(merged.text);
+      state.dirty = true;
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => saveNow().catch(fail), AUTOSAVE_MS);
+      say(`${path} changed outside. Both sets of changes are kept.`);
+    } else if (path === state.path && state.dirty) {
       const copy = `${path}.outside-${Date.now()}.txt`;
       await writeFile(copy, text);
       state.files = await listFiles(store, state.project);
@@ -347,6 +384,7 @@ async function outsideChange(event) {
       say(`${path} changed outside while you were typing. Your text stays here, and the other version is in ${copy}.`, true);
     } else {
       state.texts[path] = text;
+      state.saved[path] = text;
       if (path === state.path) editor.load(text);
     }
   } else if (!state.files.includes(path)) delete state.texts[path];
@@ -374,6 +412,7 @@ async function openProject(name) {
   state.files = await listFiles(store, name);
   state.texts = {};
   for (const path of state.files.filter(isText)) state.texts[path] = await store.read(fullPath(path));
+  state.saved = { ...state.texts };
   state.settings.main = state.files.includes(state.settings.main) ? state.settings.main : findMain(state.files, state.texts);
   state.problems = [];
   state.sync = null;
@@ -387,6 +426,10 @@ async function openProject(name) {
   await openFile(state.settings.main || state.files[0]);
   showCounts();
   await renderVersions();
+  await renderGit();
+  await renderOverleaf();
+  agent.history = [{ role:'system', content:SYSTEM }];
+  $('agent-log').replaceChildren();
   Object.assign(review, { notes:[], rounds:0, proposal:null });
   if (await store.exists(notesFile())) Object.assign(review, parseNotes(await store.read(notesFile())));
   renderProposal();
@@ -502,6 +545,350 @@ async function dropFiles(files, at) {
   if (others.length) await addFiles(others);
 }
 
+// Data sheets and boards save through the same path as text, so the outside-edit check and versions cover them.
+let structuredQueue = Promise.resolve();
+const structuredPending = new Map();
+function saveStructured(text) {
+  const path = state.path;
+  state.texts[path] = text;
+  state.revision += 1;
+  // Saves run in order, so an older one cannot land after a newer one; a failure says so and the next edit retries.
+  structuredPending.set(path, (structuredPending.get(path) || 0) + 1);
+  const run = structuredQueue.then(async () => {
+    if (state.texts[path] !== text) return;
+    await writeFile(path, text);
+    state.saved[path] = text;
+  }).finally(() => structuredPending.set(path, structuredPending.get(path) - 1));
+  structuredQueue = run.catch(error => say(`Saving ${path} failed: ${error.message}. Your next change tries again.`, true));
+  return run;
+}
+
+function renderSheet() {
+  const { rows } = state.sheet;
+  $('sheet').replaceChildren(...rows.map((row, r) => {
+    const tr = document.createElement('tr');
+    tr.append(...row.map((cell, c) => {
+      const td = document.createElement(r ? 'td' : 'th');
+      td.contentEditable = 'plaintext-only';
+      td.textContent = cell;
+      td.addEventListener('blur', () => {
+        if (rows[r][c] === td.textContent) return;
+        rows[r][c] = td.textContent;
+        saveStructured(writeSheet(state.sheet)).catch(fail);
+      });
+      return td;
+    }));
+    return tr;
+  }));
+}
+
+function sheetEdit(action) {
+  const { rows } = state.sheet;
+  if (action === 'row') rows.push(Array(rows[0].length).fill(''));
+  if (action === 'column') rows.forEach(row => row.push(''));
+  if (action === 'table') {
+    if (!state.settings.main) throw new Error('This project has no main file.');
+    const name = state.path.replace(/^.*\//, '');
+    state.pendingInsert = tableBlock(rows, { caption:name, label:slug(name) });
+    say(`Open a .tex file and use Insert, Table from data, to place this table. It is copied to the table box.`);
+    $('table-data').value = writeSheet(state.sheet);
+    return;
+  }
+  renderSheet();
+  saveStructured(writeSheet(state.sheet)).catch(fail);
+}
+
+const board = { tool:'pen', drawing:null };
+
+function renderBoard() {
+  const svg = $('board');
+  svg.setAttribute('viewBox', `0 0 ${state.board.width} ${state.board.height}`);
+  svg.innerHTML = state.board.shapes.map(shapeSvg).join('') + (board.drawing ? shapeSvg(board.drawing) : '');
+}
+
+function boardPoint(event) {
+  const box = $('board').getBoundingClientRect();
+  return [(event.clientX - box.left) * state.board.width / box.width, (event.clientY - box.top) * state.board.height / box.height];
+}
+
+function bindBoard() {
+  const svg = $('board');
+  svg.addEventListener('pointerdown', event => {
+    const [x, y] = boardPoint(event);
+    if (board.tool === 'text') {
+      const text = prompt('Text');
+      if (text) { state.board.shapes.push({ kind:'text', x, y, text }); renderBoard(); saveStructured(JSON.stringify(state.board)).catch(fail); }
+      return;
+    }
+    svg.setPointerCapture(event.pointerId);
+    board.drawing = board.tool === 'pen' ? { kind:'pen', points:[[x, y]] } : board.tool === 'arrow' ? { kind:'arrow', x1:x, y1:y, x2:x, y2:y } : { kind:board.tool, x, y, w:0, h:0 };
+  });
+  svg.addEventListener('pointermove', event => {
+    const shape = board.drawing;
+    if (!shape) return;
+    const [x, y] = boardPoint(event);
+    if (shape.kind === 'pen') shape.points.push([x, y]);
+    else if (shape.kind === 'arrow') Object.assign(shape, { x2:x, y2:y });
+    else Object.assign(shape, { w:x - shape.x, h:y - shape.y });
+    renderBoard();
+  });
+  svg.addEventListener('pointerup', () => {
+    if (!board.drawing) return;
+    state.board.shapes.push(board.drawing);
+    board.drawing = null;
+    renderBoard();
+    saveStructured(JSON.stringify(state.board)).catch(fail);
+  });
+  for (const button of document.querySelectorAll('[data-tool]')) button.addEventListener('click', () => {
+    board.tool = button.dataset.tool;
+    for (const other of document.querySelectorAll('[data-tool]')) other.setAttribute('aria-pressed', String(other === button));
+  });
+  $('board-undo').addEventListener('click', () => { state.board.shapes.pop(); renderBoard(); saveStructured(JSON.stringify(state.board)).catch(fail); });
+  $('board-figure').addEventListener('click', () => boardFigure().catch(fail));
+}
+
+// Saves the board as a PDF beside it, ready for \includegraphics.
+async function boardFigure() {
+  const pdfPath = state.path.replace(/\.board$/i, '.pdf');
+  await writeFile(pdfPath, await boardPdf(state.board));
+  state.files = await listFiles(store, state.project);
+  renderTree();
+  say(`Saved ${pdfPath}. Include it with \\includegraphics{${pdfPath}}.`);
+  return { pdf:pdfPath };
+}
+
+async function newBoard() {
+  let index = 1;
+  while (fileExists(`figures/board-${index}.board`)) index += 1;
+  const path = `figures/board-${index}.board`;
+  await writeFile(path, JSON.stringify(blankBoard()));
+  state.texts[path] = JSON.stringify(blankBoard());
+  state.files = await listFiles(store, state.project);
+  await openFile(path);
+  return path;
+}
+
+let katex = null;
+async function showPreview() {
+  if (!$('preview').open) return;
+  if (/\.md$/i.test(state.path || '')) { $('preview-body').innerHTML = renderMarkdown(editor.text); return; }
+  katex ||= (await import('../vendor/katex.mjs')).default;
+  const source = paragraphAt(editor.text, editor.cursor);
+  $('preview-body').innerHTML = renderParagraph(source, {
+    labels:state.labels || new Map(),
+    math:(tex, display) => katex.renderToString(tex, { displayMode:display, output:'mathml', throwOnError:false }),
+  });
+}
+
+const paperPath = key => `${projectRoot()}/.scribella/papers/${key.replace(/[^\w.-]/g, '_')}.md`;
+
+async function fetchFullText(key) {
+  const entry = bibEntries().find(item => item.key === key);
+  const id = entry?.fields.eprint || /arxiv\.(.+)$/i.exec(entry?.fields.doi || '')?.[1];
+  if (!id) throw new Error(`${key} has no arXiv id, and only arXiv papers have a full text route here.`);
+  const project = state.project;
+  say(`Reading ${key} from arXiv…`);
+  const markdown = await arxivMarkdown(id);
+  if (state.project !== project) return null;
+  await store.write(paperPath(key), `# ${entry.fields.title}\n\n${markdown}\n`);
+  say(`Saved the full text of ${key}.`);
+  return { key, characters:markdown.length };
+}
+
+async function searchPapers(query) {
+  const folder = `${projectRoot()}/.scribella/papers`;
+  if (!await store.exists(folder)) return [];
+  const texts = {};
+  for (const entry of await store.list(folder)) if (entry.endsWith('.md')) texts[entry.replace(/^.*\//, '').replace(/\.md$/, '')] = await store.read(entry);
+  return findAll(texts, query);
+}
+
+const gitOf = () => projectGit(store, projectRoot());
+
+async function renderGit() {
+  const commits = await gitOf().log().catch(() => []);
+  $('git-log').replaceChildren(...commits.map(item => {
+    const row = document.createElement('li');
+    const go = document.createElement('button');
+    go.type = 'button'; go.className = 'row'; go.dataset.command = 'git-commit-open';
+    go.textContent = `${item.message} · ${new Date(item.at).toLocaleString()}`;
+    go.addEventListener('click', () => showCommit(item).catch(fail));
+    row.append(go);
+    return row;
+  }));
+  return commits;
+}
+
+async function commitProject(message) {
+  await saveNow();
+  const result = await gitOf().commitAll(message || 'Snapshot');
+  say(result ? `Committed ${result.changed} ${result.changed === 1 ? 'file' : 'files'}.` : 'Nothing changed since the last commit.');
+  await renderGit();
+  return result;
+}
+
+async function showCommit(item) {
+  const project = state.project, repo = gitOf(), files = await repo.changed(item.oid);
+  const rows = await Promise.all(files.map(async path => {
+    const bytes = await repo.readAt(item.oid, path).catch(() => null);
+    if (!bytes) return { title:path, detail:'Deleted in this commit' };
+    return {
+      title:path, detail:'Changed in this commit',
+      fixLabel:'Restore this version', fix:async () => {
+        if (state.project !== project) throw new Error('This commit belongs to another project.');
+        if (!confirm(`Replace ${path} with its version from "${item.message}"? Commit first if you want to keep the current one.`)) return;
+        if (isText(path)) await setText(path, new TextDecoder().decode(bytes));
+        else { await writeFile(path, bytes); state.files = await listFiles(store, state.project); renderTree(); }
+      },
+    };
+  }));
+  showChecks(`${item.message}: ${files.length} ${files.length === 1 ? 'file' : 'files'}`, rows);
+}
+
+const OVERLEAF_PROXY = 'https://scribella.naklitechie.com/git-proxy';
+const overleafFile = () => `${projectRoot()}/${STATE_PATH}`;
+const overleafLink = async () => (await store.exists(overleafFile()) ? JSON.parse(await store.read(overleafFile())) : {});
+
+async function renderOverleaf() {
+  const link = await overleafLink();
+  $('overleaf-state').textContent = link.id ? `Linked to Overleaf project ${link.id.slice(0, 6)}…` : 'Not linked.';
+  $('overleaf-pull').hidden = $('overleaf-push').hidden = !link.id;
+}
+
+async function linkOverleaf(address, token) {
+  const id = overleafProjectId(address);
+  if (!id) throw new Error('Paste the Overleaf project address, which holds a 24-character id.');
+  if (!token) throw new Error('Paste a Git token from Overleaf: Account settings, Git integration.');
+  // A different project starts its sync history over, so the old project's files are never the merge base.
+  const old = await overleafLink();
+  if (old.id && old.id !== id) await store.remove(`${projectRoot()}/.scribella/overleaf-git`).catch(() => {});
+  await store.write(overleafFile(), JSON.stringify(old.id === id ? { ...old, token } : { id, token }));
+  await renderOverleaf();
+  return overleafRun('pull');
+}
+
+async function overleafRun(direction) {
+  await saveNow();
+  const link = await overleafLink();
+  if (!link.id) throw new Error('Link an Overleaf project first.');
+  const project = state.project;
+  say(direction === 'pull' ? 'Pulling from Overleaf…' : 'Sending to Overleaf…');
+  const sync = overleafSync({ store, root:projectRoot(), link, proxy:OVERLEAF_PROXY });
+  // Editing waits while files change underneath, so nothing typed meanwhile is lost.
+  editor.setLocked(true);
+  document.body.dataset.locked = 'true';
+  let result;
+  try { result = direction === 'pull' ? await sync.pull() : await sync.push(); }
+  finally { editor.setLocked(false); delete document.body.dataset.locked; }
+  if (state.project !== project) return result;
+  state.files = await listFiles(store, state.project);
+  for (const path of state.files.filter(isText)) { state.texts[path] = await store.read(fullPath(path)); state.saved[path] = state.texts[path]; }
+  state.revision += 1;
+  if (state.path) { const keep = state.path; state.path = null; await openFile(state.files.includes(keep) ? keep : state.settings.main); }
+  renderTree();
+  showCounts();
+  if (result.conflicts?.length) say(`Both sides changed ${result.conflicts.join(', ')}. Resolve the marked lines, or for a deleted or binary file decide which copy to keep, then push again.`, true);
+  else if (direction === 'pull') say(result.changed.length ? `Pulled ${result.changed.length} changed ${result.changed.length === 1 ? 'file' : 'files'} from Overleaf.` : 'Overleaf has nothing new.');
+  else say(result.pushed ? `Sent ${result.files} ${result.files === 1 ? 'file' : 'files'} to Overleaf.` : 'Nothing to send.');
+  return result;
+}
+
+const agent = { history:[{ role:'system', content:SYSTEM }] };
+
+function agentLine(role, text) {
+  const item = document.createElement('li');
+  item.className = `agent-${role}`;
+  item.textContent = text;
+  $('agent-log').append(item);
+  item.scrollIntoView({ block:'nearest' });
+}
+
+async function agentTool(name, args) {
+  if (name === 'list_files') return state.files;
+  if (name === 'read_file') { if (!(args.path in state.texts)) throw new Error(`${args.path} is not a text file here.`); return state.texts[args.path]; }
+  if (name === 'search') return findAll(state.texts, args.query).slice(0, 40).map(item => `${item.file}:${item.line}: ${item.text}`).join('\n') || 'No matches.';
+  if (name === 'build') {
+    if (!canCompile()) return 'Compiling is not available here.';
+    const { ok, problems } = await commands['build.run']();
+    return ok ? 'Built with no errors.' : `Build failed:\n${problems.map(item => `${item.file}:${item.line} ${item.headline}`).join('\n')}`;
+  }
+  if (name === 'propose_edit') {
+    const text = state.texts[args.path];
+    if (text == null) throw new Error(`${args.path} is not in the project.`);
+    const at = text.indexOf(args.find);
+    if (at < 0 || text.indexOf(args.find, at + 1) >= 0) throw new Error('`find` must appear exactly once in the file.');
+    if (args.path !== state.path) await openFile(args.path);
+    const decision = await showProposal({ file:args.path, from:at, to:at + args.find.length, revision:args.replace, reason:args.reason || 'The agent proposes an edit.' });
+    return `The researcher ${decision} this edit.`;
+  }
+  throw new Error(`Unknown tool ${name}.`);
+}
+
+async function askAgent(question) {
+  if (!aiReady()) throw new Error('Set up AI in NakliOS to use the agent.');
+  await saveNow();
+  agentLine('you', question);
+  agent.history.push({ role:'user', content:question });
+  const project = state.project;
+  const { messages, text } = await agentTurn(agent.history, {
+    ask:async (history, tools) => (await naklios.ai.chat.completions.create({ messages:history, tools, max_tokens:2048, stream:false })).choices[0].message,
+    run:(name, args) => { if (state.project !== project) throw new Error('The project changed.'); return agentTool(name, args); },
+    onStep:name => agentLine('step', `Using ${name.replace('_', ' ')}…`),
+  });
+  agent.history = messages;
+  agentLine('agent', text);
+  return text;
+}
+
+async function goToDefinition(at) {
+  const token = tokenAt(editor.text, at);
+  if (!token) { say('Put the cursor on a \\ref, \\cite, \\label or \\input key.'); return null; }
+  if (token.kind === 'label') {
+    const uses = usesOf(token.key, state.texts);
+    showChecks(`${uses.length} ${uses.length === 1 ? 'use' : 'uses'} of ${token.key}`, uses.map(use => ({ title:use.text, detail:`${use.file}:${use.line}`, go:() => jump(use.file, use.line) })));
+    return uses;
+  }
+  const place = definitionOf(token, state.texts);
+  if (!place) { say(`No definition of ${token.key} in this project.`); return null; }
+  await jump(place.file, place.line);
+  return place;
+}
+
+function linkBib(file) {
+  const run = addQueue.then(() => linkBibNow(file));
+  addQueue = run.catch(() => {});
+  return run;
+}
+
+// Entries already present by key and paper are skipped. A key taken by a different paper gets a letter, and the
+// person is told, because citations written against the other file still use the old key.
+async function linkBibNow(file) {
+  const text = await file.text(), incoming = parseBib(text).entries;
+  if (!incoming.length) throw new Error('That file holds no BibTeX entries.');
+  const target = bibFiles()[0] || 'references.bib', existing = bibEntries();
+  const fresh = [], renamed = [];
+  for (const entry of incoming) {
+    const same = existing.find(item => item.key === entry.key);
+    if (same && sameWork(same.fields, entry.fields)) continue;
+    let raw = entry.raw;
+    if (same) {
+      let key = entry.key;
+      for (let letter = 98; existing.some(item => item.key === key) || fresh.some(item => item.key === key); letter += 1) key = `${entry.key}${String.fromCharCode(letter)}`;
+      raw = raw.replace(/^(@\w+\s*\{\s*)[^,\s]+/, `$1${key}`);
+      renamed.push(`${entry.key} → ${key}`);
+      fresh.push({ key, raw });
+    } else fresh.push({ key:entry.key, raw });
+  }
+  const current = state.texts[target] || '';
+  // @string and @preamble blocks carry definitions entries may use; new ones come along.
+  const definitions = [...text.matchAll(/@(string|preamble)\s*\{[^@]*?\}\s*(?=@|$)/gi)].map(match => match[0].trim()).filter(block => !current.includes(block));
+  if (!fresh.length && !definitions.length) { say(`All ${incoming.length} entries are already in ${target}.`); return { added:0 }; }
+  if (!confirm(`Add ${fresh.length} entries from ${file.name} to ${target}?${renamed.length ? ` ${renamed.length} keys are taken by other papers and get a letter: ${renamed.join(', ')}.` : ''}`)) return { added:0 };
+  await setText(target, `${definitions.join('\n')}${definitions.length ? '\n\n' : ''}${current.trimEnd()}\n\n${fresh.map(entry => entry.raw).join('\n\n')}\n`.trimStart());
+  say(`Added ${fresh.length} entries to ${target}.${renamed.length ? ` Renamed: ${renamed.join(', ')}.` : ''}`);
+  return { added:fresh.length, renamed };
+}
+
 async function formatFile() {
   if (!editingText() || !/\.(tex|ltx)$/i.test(state.path)) throw new Error('Open a LaTeX file first.');
   const next = formatLatex(editor.text);
@@ -593,6 +980,7 @@ function runSearch() {
 }
 
 async function replaceEverywhere(query, replacement, options) {
+  if (Object.values(state.texts).some(text => findAll({ x:text }, query, options).length)) await keepVersion('Before replace all');
   let total = 0;
   for (const path of Object.keys(state.texts)) {
     const { text, count } = replaceAllIn(state.texts[path], query, replacement, options);
@@ -768,6 +1156,8 @@ async function auditReferences() {
   const rows = results.map((result, index) => {
     const notice = result.notices?.length ? `Notice: ${result.notices.join(', ')}. ` : '';
     const row = { title:`${result.key}: ${labels[result.status]}`, detail:`${notice}${result.message || ''}`, status:result.notices?.length ? 'bad' : result.status };
+    const entry = entries[index];
+    if (!result.additions && (entry.fields.eprint || /arxiv/i.test(entry.fields.doi || ''))) Object.assign(row, { fixLabel:'Save full text', fix:() => fetchFullText(entry.key) });
     if (result.additions) Object.assign(row, { fixLabel:'Add the details', fix:() => addEntryDetails(project, entries[index], result.additions) });
     return row;
   });
@@ -900,6 +1290,14 @@ async function propose({ file, from, to, task = '', note = null, instruction = '
   // A citation note may add \\cite commands for keys in the bibliography, and nothing else protected.
   const citeKeys = note?.intent === 'cite' ? keys : [];
   review.proposal = { project, file, from, to, passage, task, note, instruction, citeKeys, ...reply, edits:reply.revision === undefined ? null : wordEdits(passage, reply.revision) };
+  renderProposal();
+  return new Promise(resolve => { review.proposal.done = resolve; });
+}
+
+// A proposal that already has its replacement, from the agent. It waits on the same Accept and Reject.
+function showProposal({ file, from, to, revision, reason }) {
+  const passage = state.texts[file].slice(from, to);
+  review.proposal = { project:state.project, file, from, to, passage, task:'', note:null, citeKeys:[], revision, reason, edits:wordEdits(passage, revision) };
   renderProposal();
   return new Promise(resolve => { review.proposal.done = resolve; });
 }
@@ -1118,7 +1516,7 @@ function bindPage() {
   $('proposal-reject').addEventListener('click', () => rejectProposal().catch(fail));
   $('proposal-again').addEventListener('click', () => tryAgain().catch(fail));
   $('revise-all').addEventListener('click', () => reviseRound().catch(fail));
-  const tabs = [['tab-problems', 'problems-list'], ['tab-notes', 'notes-list'], ['tab-checks', 'checks']];
+  const tabs = [['tab-problems', 'problems-list'], ['tab-notes', 'notes-list'], ['tab-checks', 'checks'], ['tab-agent', 'agent']];
   for (const [tab, pane] of tabs) $(tab).addEventListener('click', () => {
     for (const [, other] of tabs) $(other).hidden = other !== pane;
     for (const [other] of tabs) $(other).setAttribute('aria-pressed', String(other === tab));
@@ -1129,6 +1527,35 @@ function bindPage() {
   $('check-setup').addEventListener('click', () => checkSetup().catch(fail));
   $('format').addEventListener('click', () => formatFile().catch(fail));
   renderSteps();
+  bindBoard();
+  for (const button of document.querySelectorAll('[data-sheet]')) button.addEventListener('click', () => { try { sheetEdit(button.dataset.sheet); } catch (error) { fail(error); } });
+  $('overleaf-form').addEventListener('submit', event => {
+    event.preventDefault();
+    linkOverleaf($('overleaf-address').value, $('overleaf-token').value.trim()).then(() => { $('overleaf-token').value = ''; $('overleaf-dialog').close(); }).catch(fail);
+  });
+  $('overleaf-link').addEventListener('click', () => $('overleaf-dialog').showModal());
+  $('overleaf-pull').addEventListener('click', () => overleafRun('pull').catch(fail));
+  $('overleaf-push').addEventListener('click', () => overleafRun('push').catch(fail));
+  $('git-commit').addEventListener('click', () => { const message = prompt('Describe this snapshot', 'Snapshot'); if (message) commitProject(message).catch(fail); });
+  $('agent-form').addEventListener('submit', event => {
+    event.preventDefault();
+    const question = $('agent-input').value.trim();
+    if (!question) return;
+    $('agent-input').value = '';
+    askAgent(question).catch(error => { agentLine('step', error.message); fail(error); });
+  });
+  $('preview').addEventListener('toggle', () => showPreview().catch(fail));
+  editor.view.dom.addEventListener('keyup', () => { clearTimeout(state.previewTimer); state.previewTimer = setTimeout(() => showPreview().catch(() => {}), 300); });
+  editor.view.dom.addEventListener('click', () => showPreview().catch(() => {}));
+  $('search-papers').addEventListener('click', () => searchPapers($('search-query').value).then(matches => { showMatches([]); showChecks(`${matches.length} matches in saved papers`, matches.map(item => ({ title:item.text, detail:`${item.file}, line ${item.line}` }))); }).catch(fail));
+  $('link-bib').addEventListener('change', event => { const [file] = event.target.files; event.target.value = ''; if (file) linkBib(file).catch(fail); });
+  $('wrap').addEventListener('change', event => {
+    const pick = event.target.value; event.target.value = '';
+    if (!pick || !editingText()) return;
+    if (pick === 'rename') { const name = prompt('New environment name'); if (name && !editor.renameEnvironment(name.trim())) say('The cursor is not inside an environment.'); }
+    else editor.wrapIn(pick);
+  });
+  $('definition').addEventListener('click', () => goToDefinition(editor.cursor).catch(fail));
   $('discover').addEventListener('click', () => { const query = prompt('Find papers about'); if (query) discoverPapers(query).catch(fail); });
   $('review-pdf').addEventListener('click', () => reviewPdf().catch(fail));
   $('check-references').addEventListener('click', () => auditReferences().catch(fail));
@@ -1162,10 +1589,11 @@ function bindPage() {
   $('insert').addEventListener('change', event => {
     const pick = event.target.value;
     event.target.value = '';
-    if (pick && !editingText()) { say('Open a text file first.', true); return; }
+    if (pick && pick !== 'board' && !editingText()) { say('Open a text file first.', true); return; }
     if (pick === 'table') $('table-dialog').showModal();
     if (pick === 'symbol') { openPalette(); $('palette-dialog').showModal(); }
     if (pick === 'figure') $('figure-file').click();
+    if (pick === 'board') newBoard().catch(fail);
   });
   $('figure-file').addEventListener('change', event => { const files = [...event.target.files]; event.target.value = ''; dropFiles(files, editor.view.state.selection.main.head).catch(fail); });
   $('symbol-filter').addEventListener('input', openPalette);
@@ -1212,6 +1640,16 @@ const commands = {
   'versions.save':({ label }) => keepVersion(label),
   async 'versions.changes'({ id }) { const version = (await listVersions(store, projectRoot())).find(item => item.id === id); return changesPdf(version); },
   'arxiv.pack':() => arxivPack(),
+  'overleaf.pull':() => overleafRun('pull'),
+  'overleaf.push':() => overleafRun('push'),
+  'git.commit':({ message }) => commitProject(message),
+  'git.log':() => gitOf().log(),
+  'agent.ask':({ question }) => askAgent(question),
+  'board.new':() => newBoard().then(path => ({ path })),
+  'board.figure':() => (isBoard(state.path) ? boardFigure() : Promise.reject(new Error('Open a board first.'))),
+  'papers.fulltext':({ key }) => fetchFullText(key),
+  'papers.search':({ query }) => searchPapers(query),
+  'project.definition':({ path, key, kind }) => definitionOf({ key, kind }, state.texts) ?? (kind === 'label' ? usesOf(key, state.texts) : null),
   'file.format':() => formatFile().then(() => ({ formatted:state.path })),
   'setup.check':() => checkSetup(),
   'references.discover':({ query }) => discoverPapers(query),

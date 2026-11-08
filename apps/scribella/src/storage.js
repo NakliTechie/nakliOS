@@ -15,6 +15,10 @@ export function hostStore(fs) {
     write:(path, data) => fs.write(path, data),
     remove:path => fs.delete(path),
     exists:path => fs.exists(path),
+    async stat(path) {
+      const found = await fs.stat(path);
+      return found && { type:found.type === 'file' ? 'file' : 'dir', size:found.size || 0, mtimeMs:found.mtimeMs || 0 };
+    },
   };
 }
 
@@ -52,15 +56,21 @@ export function browserStore(root = navigator.storage.getDirectory().then(top =>
       try { await fileOf(path, false); return true; } catch (_) {}
       try { await folderOf(clean(path), false); return true; } catch (_) { return false; }
     },
+    async stat(path) {
+      try { const file = await (await fileOf(path, false)).getFile(); return { type:'file', size:file.size, mtimeMs:file.lastModified }; } catch (_) {}
+      try { await folderOf(clean(path), false); return { type:'dir', size:0, mtimeMs:0 }; } catch (_) { return null; }
+    },
+    async mkdir(path) { await folderOf(clean(path), true); },
   };
 }
 
 export function memoryStore(files = {}) {
-  const map = new Map(Object.entries(files));
+  const map = new Map(Object.entries(files)), dirs = new Set();
   const bytes = data => (typeof data === 'string' ? new TextEncoder().encode(data) : data);
   return {
     async list(folder = '') {
       const prefix = clean(folder).join('/'), lead = prefix ? `${prefix}/` : '', out = new Set();
+      for (const dir of dirs) if (dir.startsWith(lead) && dir !== prefix) out.add(lead + dir.slice(lead.length).split('/')[0] + '/');
       for (const path of map.keys()) {
         if (!path.startsWith(lead)) continue;
         const [first, ...rest] = path.slice(lead.length).split('/');
@@ -73,5 +83,10 @@ export function memoryStore(files = {}) {
     write:async (path, data) => { map.set(path, data); },
     remove:async path => { for (const key of [...map.keys()]) if (key === path || key.startsWith(`${path}/`)) map.delete(key); },
     exists:async path => map.has(path) || [...map.keys()].some(key => key.startsWith(`${path}/`)),
+    async stat(path) {
+      if (map.has(path)) return { type:'file', size:bytes(map.get(path)).byteLength, mtimeMs:0 };
+      return [...map.keys()].some(key => key.startsWith(`${path}/`)) || dirs.has(path) ? { type:'dir', size:0, mtimeMs:0 } : null;
+    },
+    async mkdir(path) { dirs.add(path); },
   };
 }
