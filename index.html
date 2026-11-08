@@ -8260,7 +8260,7 @@ async function texEnsureDownload(caller){
   const epoch = texConsentEpoch;
   const ok = await nakliosConfirm(
     `${label} wants to compile LaTeX. NakliOS needs TeX Live for that: about 680&nbsp;MB once, kept in this browser and shared by every app.\n\n` +
-    `Your project stays on this device. The download comes from <code>${_dlgEscape(location.host)}/tex/</code>, and a paper that uses Biber adds about 30&nbsp;MB.`,
+    `Your project stays on this device. The download comes from Hugging Face through <code>${_dlgEscape(location.host)}/tex/</code>, and a paper that uses Biber adds about 30&nbsp;MB.`,
     { title:'Download TeX Live?', okLabel:'Download', cancelLabel:'Not now', allowHtmlBody:true },
   );
   if (ok && epoch === texConsentEpoch) localStorage.setItem('nakliOS.tex.v1', JSON.stringify({ granted:true }));
