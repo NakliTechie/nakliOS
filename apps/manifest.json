@@ -944,6 +944,10 @@
           "destination": "index.html"
         },
         {
+          "source": "src/agent.js",
+          "destination": "src/agent.js"
+        },
+        {
           "source": "src/annotations.js",
           "destination": "src/annotations.js"
         },
@@ -968,6 +972,10 @@
           "destination": "src/blind.js"
         },
         {
+          "source": "src/board.js",
+          "destination": "src/board.js"
+        },
+        {
           "source": "src/build.js",
           "destination": "src/build.js"
         },
@@ -988,8 +996,16 @@
           "destination": "src/format.js"
         },
         {
+          "source": "src/git.js",
+          "destination": "src/git.js"
+        },
+        {
           "source": "src/insert.js",
           "destination": "src/insert.js"
+        },
+        {
+          "source": "src/latex-edit.js",
+          "destination": "src/latex-edit.js"
         },
         {
           "source": "src/lint.js",
@@ -1000,12 +1016,32 @@
           "destination": "src/lookup.js"
         },
         {
+          "source": "src/markdown.js",
+          "destination": "src/markdown.js"
+        },
+        {
+          "source": "src/merge.js",
+          "destination": "src/merge.js"
+        },
+        {
           "source": "src/outline.js",
           "destination": "src/outline.js"
         },
         {
+          "source": "src/overleaf.js",
+          "destination": "src/overleaf.js"
+        },
+        {
+          "source": "src/papers.js",
+          "destination": "src/papers.js"
+        },
+        {
           "source": "src/pdf-view.js",
           "destination": "src/pdf-view.js"
+        },
+        {
+          "source": "src/preview.js",
+          "destination": "src/preview.js"
         },
         {
           "source": "src/project.js",
@@ -1026,6 +1062,10 @@
         {
           "source": "src/search.js",
           "destination": "src/search.js"
+        },
+        {
+          "source": "src/sheet.js",
+          "destination": "src/sheet.js"
         },
         {
           "source": "src/spell.js",
@@ -1184,6 +1224,10 @@
           "destination": "vendor/LICENSE-harper"
         },
         {
+          "source": "vendor/LICENSE-isomorphic-git",
+          "destination": "vendor/LICENSE-isomorphic-git"
+        },
+        {
           "source": "vendor/LICENSE-katex",
           "destination": "vendor/LICENSE-katex"
         },
@@ -1210,6 +1254,14 @@
         {
           "source": "vendor/harper/index.js",
           "destination": "vendor/harper/index.js"
+        },
+        {
+          "source": "vendor/isomorphic-git/http-web.mjs",
+          "destination": "vendor/isomorphic-git/http-web.mjs"
+        },
+        {
+          "source": "vendor/isomorphic-git/isomorphic-git.mjs",
+          "destination": "vendor/isomorphic-git/isomorphic-git.mjs"
         },
         {
           "source": "vendor/katex.mjs",

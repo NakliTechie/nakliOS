@@ -81,7 +81,11 @@ export function createPdfView(scroller, { onPages = () => {}, onPoint = () => {}
     const holder = event.target.closest?.('.pdf-page');
     if (!holder) return;
     const box = holder.getBoundingClientRect(), scale = Number(holder.dataset.scale);
-    onPoint({ page:Number(holder.dataset.page), x:(event.clientX - box.left) / scale, y:(event.clientY - box.top) / scale });
+    // The word under the pointer, read from the text layer, lets the cursor land on it rather than at the line start.
+    const range = document.caretRangeFromPoint?.(event.clientX, event.clientY);
+    const text = range?.startContainer?.textContent || '', at = range?.startOffset ?? 0;
+    const word = /[\p{L}\p{N}'-]*$/u.exec(text.slice(0, at))[0] + /^[\p{L}\p{N}'-]*/u.exec(text.slice(at))[0];
+    onPoint({ page:Number(holder.dataset.page), x:(event.clientX - box.left) / scale, y:(event.clientY - box.top) / scale, word });
   });
 
   function mark(holder, box, className) {

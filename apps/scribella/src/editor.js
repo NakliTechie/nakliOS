@@ -1,6 +1,7 @@
 // The source editor: CodeMirror with LaTeX highlighting, the linter and project-aware completion.
 import { Compartment, Decoration, EditorView, EditorState, StateEffect, StateField, StreamLanguage, autocompletion, basicSetup, emacs, hoverTooltip, indentWithTab, keymap, lintGutter, linter, stex, vim } from '../vendor/codemirror.mjs';
 import { lintSource } from './lint.js';
+import { enterAddition, environmentAt, wrap } from './latex-edit.js';
 
 const COMMANDS = ['section', 'subsection', 'subsubsection', 'paragraph', 'label', 'ref', 'eqref', 'cite', 'citep', 'citet', 'caption', 'centering', 'includegraphics', 'usepackage', 'textbf', 'textit', 'emph', 'texttt', 'footnote', 'item', 'input', 'include', 'bibliography', 'bibliographystyle', 'newcommand', 'renewcommand', 'frac', 'sqrt', 'sum', 'int', 'mathbb', 'mathbf', 'mathcal', 'mathrm', 'left', 'right', 'url', 'href', 'maketitle', 'tableofcontents', 'appendix'];
 const ENVIRONMENTS = ['figure', 'table', 'tabular', 'equation', 'align', 'itemize', 'enumerate', 'abstract', 'center', 'theorem', 'proof', 'document'];
@@ -87,9 +88,16 @@ export function refAt(text, pos) {
   return null;
 }
 
-export function createEditor(parent, { onChange, onSave, onDrop, onShow, onSelect = () => {}, describeCite = () => '', describeRef = () => '', spell = null, project, path, keys = 'default' }) {
+function wrapCommand(view, name) {
+  const { from, to } = view.state.selection.main;
+  const text = view.state.sliceDoc(from, to);
+  view.dispatch({ changes:{ from, to, insert:`\\${name}{${text}}` }, selection:{ anchor:from + name.length + 2, head:from + name.length + 2 + text.length } });
+  return true;
+}
+
+export function createEditor(parent, { onChange, onSave, onDrop, onShow, onDefinition = () => {}, onSelect = () => {}, describeCite = () => '', describeRef = () => '', spell = null, project, path, keys = 'default' }) {
   let quiet = false;
-  const keyMode = new Compartment(), spellMode = new Compartment();
+  const keyMode = new Compartment(), spellMode = new Compartment(), lockMode = new Compartment();
   const spellLinter = () => linter(async current => (await spell(current.state.doc.toString())).map(item => ({
     from:item.from, to:item.to, severity:'hint', message:item.message,
     actions:item.suggestions.map(name => ({ name, apply(target, from, to) { target.dispatch({ changes:{ from, to, insert:name } }); } })),
@@ -101,7 +109,24 @@ export function createEditor(parent, { onChange, onSave, onDrop, onShow, onSelec
       doc:'',
       extensions:[
         keyMode.of(keysFor(keys)),
+        lockMode.of([]),
         spellMode.of([]),
+        keymap.of([
+          { key:'Enter', run:current => {
+            const { head, empty } = current.state.selection.main;
+            const line = current.state.doc.lineAt(head);
+            if (!empty || head !== line.to) return false;
+            const addition = enterAddition(line.text);
+            if (addition === null) return false;
+            // An empty \item ends the list on a second Enter.
+            if (addition === '') { current.dispatch({ changes:{ from:line.from, to:line.to, insert:'' } }); return true; }
+            current.dispatch({ changes:{ from:head, insert:addition }, selection:{ anchor:head + addition.length } });
+            return true;
+          } },
+          { key:'F12', preventDefault:true, run:current => { onDefinition(current.state.selection.main.head); return true; } },
+          { key:'Mod-b', preventDefault:true, run:current => wrapCommand(current, 'textbf') },
+          { key:'Mod-i', preventDefault:true, run:current => wrapCommand(current, 'emph') },
+        ]),
         basicSetup,
         mathHover,
         hoverTooltip((current, pos) => {
@@ -154,6 +179,18 @@ export function createEditor(parent, { onChange, onSave, onDrop, onShow, onSelec
     slice:(from, to) => view.state.sliceDoc(from, to),
     replaceRange(from, to, text) { view.dispatch({ changes:{ from, to, insert:text } }); },
     select(from, to) { view.dispatch({ selection:{ anchor:from, head:to }, effects:EditorView.scrollIntoView(from, { y:'center' }) }); view.focus(); },
+    wrapIn(name) {
+      const { from, to } = view.state.selection.main;
+      view.dispatch({ changes:{ from, to, insert:wrap(view.state.sliceDoc(from, to), name) } });
+    },
+    renameEnvironment(name) {
+      const found = environmentAt(view.state.doc.toString(), view.state.selection.main.head);
+      if (!found) return false;
+      view.dispatch({ changes:[{ from:found.open[0], to:found.open[1], insert:name }, { from:found.close[0], to:found.close[1], insert:name }] });
+      return true;
+    },
+    get cursor() { return view.state.selection.main.head; },
+    setLocked(on) { view.dispatch({ effects:lockMode.reconfigure(on ? EditorView.editable.of(false) : []) }); },
     setSpell(on) { view.dispatch({ effects:spellMode.reconfigure(on ? spellLinter() : []) }); },
     setKeys(mode) { view.dispatch({ effects:keyMode.reconfigure(keysFor(mode)) }); },
     insert(text, at = view.state.selection.main.head) {

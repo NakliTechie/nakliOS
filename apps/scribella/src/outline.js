@@ -2,6 +2,7 @@
 import { blankComments } from './lint.js';
 
 const LEVELS = { part:0, chapter:1, section:2, subsection:3, subsubsection:4, paragraph:5 };
+// Beamer frames sit under their sections as level-3 items.
 const MAX_DEPTH = 8;
 
 // `read(path)` answers the text of a project file, or null.
@@ -13,7 +14,13 @@ export function buildOutline(read, main) {
     const source = read(path);
     if (source == null) return;
     const text = blankComments(source);
-    for (const match of text.matchAll(/\\(part|chapter|section|subsection|subsubsection|paragraph)\*?(?:\[[^\]]*\])?\{([^}]*)\}|\\(?:input|include)\{([^}]+)\}/g)) {
+    for (const match of text.matchAll(/\\(part|chapter|section|subsection|subsubsection|paragraph)\*?(?:\[[^\]]*\])?\{([^}]*)\}|\\(?:input|include)\{([^}]+)\}|\\begin\{frame\}(?:\[[^\]]*\])?(?:\{([^}]*)\})?|\\frametitle\{([^}]*)\}/g)) {
+      if (match[0].startsWith('\\begin{frame}') || match[5] !== undefined) {
+        const title = match[4] ?? match[5];
+        if (match[5] !== undefined && items.at(-1)?.frame && !items.at(-1).named) { Object.assign(items.at(-1), { title, named:true }); continue; }
+        items.push({ level:3, title:title || 'Untitled frame', frame:true, named:!!title, file:path, line:source.slice(0, match.index).split('\n').length });
+        continue;
+      }
       if (match[3]) {
         walk(/\.tex$/.test(match[3]) ? match[3] : `${match[3]}.tex`, depth + 1);
         continue;

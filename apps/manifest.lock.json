@@ -1351,7 +1351,7 @@
       "id": "scribella",
       "repo": "NakliTechie/scribella",
       "requestedRef": "main",
-      "resolvedCommit": "2de78617a1bbfe6580fd3789ff817bb50f7e1cbf",
+      "resolvedCommit": "4d6ef3a7249a84bd9524e4183938a9e593e585e0",
       "files": [
         {
           "source": "LICENSE",
@@ -1368,14 +1368,20 @@
         {
           "source": "commands.json",
           "destination": "commands.json",
-          "sha256": "3d61f3db4e784211bbfe1716a38ffd72986bde7d5ae1fd25a24c26496b94a466",
-          "bytes": 12366
+          "sha256": "16024df4ae5f39c198fb77aef209153ed85a3205bdca22d1c95b0f13b3b5574b",
+          "bytes": 16259
         },
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "d2d0da73c4c4c6ee1231539bc3214f988db457b97c16bf0e9fac1f1cce0d1be2",
-          "bytes": 71894
+          "sha256": "9340305f6742fece742df782372e696ee5e9d2216dbcb4ffcf33f86360c80f16",
+          "bytes": 77043
+        },
+        {
+          "source": "src/agent.js",
+          "destination": "src/agent.js",
+          "sha256": "c4e673efac6436a4a6b0fab9239694d37b9d18e2a786071a993c9ddb0ab0326e",
+          "bytes": 2489
         },
         {
           "source": "src/annotations.js",
@@ -1386,8 +1392,8 @@
         {
           "source": "src/app.js",
           "destination": "src/app.js",
-          "sha256": "7f7012186ab77db2552d736872dbb94f72c5363dedd0bdf554eb18bcd155e6f2",
-          "bytes": 63866
+          "sha256": "3a967a57e9fb5ffd2c38565bd249f03c8491ce1bc9e5c3980faaba2a62c5afb5",
+          "bytes": 87397
         },
         {
           "source": "src/arxiv.js",
@@ -1414,6 +1420,12 @@
           "bytes": 2929
         },
         {
+          "source": "src/board.js",
+          "destination": "src/board.js",
+          "sha256": "61e19e7ec1e88e1b542d1687890613f4c0592d1e6001cfbc536a0b13aeb6f04f",
+          "bytes": 4259
+        },
+        {
           "source": "src/build.js",
           "destination": "src/build.js",
           "sha256": "b5c4d969d2e3d0be9407f6dd23b778745ff2fefd0c2a3d533c36b60dac859e4c",
@@ -1428,8 +1440,8 @@
         {
           "source": "src/editor.js",
           "destination": "src/editor.js",
-          "sha256": "64994b5b91bade8184dfcd696fa52c67ef17677bfe6d289a87460b97d3e814dc",
-          "bytes": 9688
+          "sha256": "396e508c2b5d6d4666e143bd92cf4ce9cad7ce280bdb899b16f190a090ff85a0",
+          "bytes": 11847
         },
         {
           "source": "src/explain.js",
@@ -1444,10 +1456,22 @@
           "bytes": 1249
         },
         {
+          "source": "src/git.js",
+          "destination": "src/git.js",
+          "sha256": "842d00b4c61c09b7771f9e7a77dbad61a78f3449ca7b80372961ea7c80080fbd",
+          "bytes": 7242
+        },
+        {
           "source": "src/insert.js",
           "destination": "src/insert.js",
           "sha256": "c0de1901c9c05f1f62e3c2ff2ec0a6676ca769fdad4a6c7496cfae216c263fce",
           "bytes": 3066
+        },
+        {
+          "source": "src/latex-edit.js",
+          "destination": "src/latex-edit.js",
+          "sha256": "759e123d918bea8c83f59a4ce2022c8626e070e02eb29360ec452e8d9c5965fb",
+          "bytes": 4250
         },
         {
           "source": "src/lint.js",
@@ -1462,22 +1486,52 @@
           "bytes": 6689
         },
         {
+          "source": "src/markdown.js",
+          "destination": "src/markdown.js",
+          "sha256": "dd4b29006f43648b59b8bde4bf6a9181bfffc4778395461ffda4256c45ca36bc",
+          "bytes": 1649
+        },
+        {
+          "source": "src/merge.js",
+          "destination": "src/merge.js",
+          "sha256": "47d8788e4cbed989e140511db7417cd5d171636cca5573d313fc2c30068cf04c",
+          "bytes": 2512
+        },
+        {
           "source": "src/outline.js",
           "destination": "src/outline.js",
-          "sha256": "bed60e26fd849224bc6b05381b3d7b1ba279e065e8bd9a5ddbc4dd1f270a9c4b",
-          "bytes": 1657
+          "sha256": "39358d891ba1980dc7d14c35fa03f2cdd8b8474ab9aa955ce7e319a8f8cd8daf",
+          "bytes": 2242
+        },
+        {
+          "source": "src/overleaf.js",
+          "destination": "src/overleaf.js",
+          "sha256": "6a30edff187749af5b66a83d3c8deca8474b982a226d5dd05f418ba25bd995a0",
+          "bytes": 5973
+        },
+        {
+          "source": "src/papers.js",
+          "destination": "src/papers.js",
+          "sha256": "d852ba1b7b2e7cb33aa67967efcf6dae31b389a7c7bb8220721e86b9cf996767",
+          "bytes": 1597
         },
         {
           "source": "src/pdf-view.js",
           "destination": "src/pdf-view.js",
-          "sha256": "5587d62af6a4ff69ffc054079aa244082f13b31010d9792ef5aab0fa4ab5f890",
-          "bytes": 8022
+          "sha256": "b86c05c6893bbe562a90c2e067f8edf27ca07b57b9a3eb76aa71782be3763aca",
+          "bytes": 8427
+        },
+        {
+          "source": "src/preview.js",
+          "destination": "src/preview.js",
+          "sha256": "ca458aba13407142e9c581457472239b572447bea6b8bac61ce366a86032c9c3",
+          "bytes": 1979
         },
         {
           "source": "src/project.js",
           "destination": "src/project.js",
-          "sha256": "e777b9cff86eaec11471394a94d7c31195cdb4cff69d2c246d4b221724340486",
-          "bytes": 5999
+          "sha256": "702640d3828721c0a372f37757bd22822fcefa7281f5441bcfa705708a1c4b02",
+          "bytes": 6005
         },
         {
           "source": "src/protected.js",
@@ -1504,6 +1558,12 @@
           "bytes": 1734
         },
         {
+          "source": "src/sheet.js",
+          "destination": "src/sheet.js",
+          "sha256": "3bf3596dc6be474f2fc75316828384c698391319662fcf711491783ff852874d",
+          "bytes": 1522
+        },
+        {
           "source": "src/spell.js",
           "destination": "src/spell.js",
           "sha256": "12b0ea1c1e85067e6f4ea151898fd0316e1df9d57c4217467d9fad739f369edb",
@@ -1512,8 +1572,8 @@
         {
           "source": "src/storage.js",
           "destination": "src/storage.js",
-          "sha256": "c5abef7183a05c2ad64b4f0f9f351ca279d7261a9a7d887c30f3e615ec067af4",
-          "bytes": 3609
+          "sha256": "5726d9cf08bda8683eb95565f5e55a2077882157e23d9293880bee42c5e4d6c1",
+          "bytes": 4618
         },
         {
           "source": "src/synctex.js",
@@ -1738,6 +1798,12 @@
           "bytes": 11345
         },
         {
+          "source": "vendor/LICENSE-isomorphic-git",
+          "destination": "vendor/LICENSE-isomorphic-git",
+          "sha256": "b916888fb16893c3a1df138543f994b96bb6892d74b6777c3a080d9cd2520c48",
+          "bytes": 1073
+        },
+        {
           "source": "vendor/LICENSE-katex",
           "destination": "vendor/LICENSE-katex",
           "sha256": "766ccc1f306c885aa45542a9846bbd0a505b27a0374f146778171c2254ce18e3",
@@ -1752,8 +1818,8 @@
         {
           "source": "vendor/README.md",
           "destination": "vendor/README.md",
-          "sha256": "d02c9c213f7de0ca5dd445212859e6b5226ad80c4b1acbf661b49e4059bf94b4",
-          "bytes": 887
+          "sha256": "2f83c60d45bed0d5d5572180ec4c6ada6b0c9e9e7939d474bdfde9c415acd0d4",
+          "bytes": 962
         },
         {
           "source": "vendor/codemirror.mjs",
@@ -1778,6 +1844,18 @@
           "destination": "vendor/harper/index.js",
           "sha256": "889c87eaeec733f9508f619f72537839a53ec7c999132583552c5d3046af360f",
           "bytes": 152598
+        },
+        {
+          "source": "vendor/isomorphic-git/http-web.mjs",
+          "destination": "vendor/isomorphic-git/http-web.mjs",
+          "sha256": "3a639c6dc50adf219aaeaece17bc3fe0108a73c30edb60f309909b3f93f0c8da",
+          "bytes": 2184
+        },
+        {
+          "source": "vendor/isomorphic-git/isomorphic-git.mjs",
+          "destination": "vendor/isomorphic-git/isomorphic-git.mjs",
+          "sha256": "2a814cf84cb6f14d29c0a5727843738e2a33de3fdef341e5285d31c190e7b898",
+          "bytes": 608158
         },
         {
           "source": "vendor/katex.mjs",
