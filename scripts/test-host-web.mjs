@@ -4,10 +4,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWebService, WEB_TEXT_CAP, localNetworkHost } from '../sys/host/web.mjs';
 
-function bed({ config = null, allow = () => true, routes = {}, relay = null } = {}) {
+function bed({ config = null, allow = () => true, routes = {}, relay = null, key = '' } = {}) {
   const asked = [], records = [], fetched = [];
   const fetchFn = async (url, init = {}) => {
-    fetched.push({ url, redirect: init.redirect });
+    fetched.push({ url, redirect: init.redirect, init });
     const route = Object.entries(routes).find(([prefix]) => url.startsWith(prefix));
     if (!route) throw new TypeError('Failed to fetch');
     const { status = 200, json, text = json ? JSON.stringify(json) : '', type = '' } = route[1];
@@ -19,6 +19,7 @@ function bed({ config = null, allow = () => true, routes = {}, relay = null } = 
     searchConfig: () => config,
     searchWith: async (query, cfg) => [{ title: `${cfg.provider}:${query}`, url: 'https://example.org/a', snippet: 's' }],
     egress: async url => relay ? relay(url) : null,
+    deepseekKey: () => key,
     fetchFn,
   });
   return { service, asked, records, fetched };
@@ -118,4 +119,35 @@ test('only http and https pages are read', async () => {
   const { service } = bed();
   await assert.rejects(service.fetch('file:///etc/passwd'), { code: 'EINVAL' });
   await assert.rejects(service.fetch('not a url'), { code: 'EINVAL' });
+});
+
+const DEEPSEEK_REPLY = { content: [
+  { type: 'server_tool_use', name: 'web_search' },
+  { type: 'web_search_tool_result', content: [
+    { type: 'web_search_result', url: 'https://douk-audio.example/manual', title: 'Manual', page_age: '2026-01-02' },
+    { type: 'web_search_result', url: 'https://douk-audio.example/manual', title: 'Duplicate' },
+    { type: 'web_search_result', url: 'https://forum.example/clock', title: 'Clock thread' } ] },
+  { type: 'text', text: 'x', citations: [{ url: 'https://douk-audio.example/manual', cited_text: 'Hold SET for 3 s' }] } ] };
+
+test('a saved DeepSeek key makes DeepSeek the search provider, with its native web_search tool', async () => {
+  const { service, asked, fetched, records } = bed({ key: 'sk-test-123', routes: { 'https://api.deepseek.com/anthropic/v1/messages': { json: DEEPSEEK_REPLY } } });
+  const out = await service.search('douk clock', { maxResults: 5 });
+  assert.equal(out.provider, 'deepseek');
+  assert.deepEqual(out.results.map(r => r.url), ['https://douk-audio.example/manual', 'https://forum.example/clock']);
+  assert.equal(out.results[0].snippet, 'Hold SET for 3 s');
+  assert.deepEqual(asked, ['search the web through api.deepseek.com']);
+  const body = JSON.parse(fetched[0].init.body);
+  assert.equal(body.tools[0].type, 'web_search_20250305');
+  assert.equal(fetched[0].init.headers['x-api-key'], 'sk-test-123');
+  assert.equal(JSON.stringify(records).includes('sk-test-123'), false, 'History never holds the key');
+});
+
+test('the panel provider still wins over a saved DeepSeek key', async () => {
+  const { service } = bed({ key: 'sk-test', config: { provider: 'brave', key: 'b' } });
+  assert.equal((await service.search('q')).provider, 'brave');
+});
+
+test('a DeepSeek reply without search results is an error, not an empty answer', async () => {
+  const { service } = bed({ key: 'sk', routes: { 'https://api.deepseek.com/anthropic/v1/messages': { json: { content: [{ type: 'text', text: 'no' }] } } } });
+  await assert.rejects(service.search('q'), /no web search results/);
 });

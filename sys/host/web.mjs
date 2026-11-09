@@ -4,8 +4,9 @@
 // "configured web provider deepseek-official is not registered" and "node:dns/promises.lookup is not
 // available in the worker host" (2026-11-09). The host reads for them instead.
 //
-// Search: the person's provider from the assistant panel (Brave, Tavily or SearXNG; the key stays in the
-// host), else Wikipedia search, which needs no key or account.
+// Search: the person's provider from the assistant panel (Brave, Tavily or SearXNG); else DeepSeek's native web search
+// when a DeepSeek key is saved in Settings → AI (the same call dsh's deepseek-official provider makes); else Wikipedia
+// search, which needs no key or account. Keys stay in the host.
 // Fetch (GET only): the page directly, refusing redirects; else the person's own web relay, without the Git
 // token; else Jina Reader (r.jina.ai), which sees the address. Local-network addresses are refused. Every host
 // contacted, the reader included, needs the person's one-time consent for that app (a web.read Grant, separate
@@ -16,12 +17,31 @@
 //   authorize(host, how) → grant id; throws when the person declines
 //   record(host, grantId, output) → appends one History event
 //   searchConfig() → { provider, key, url } | null
+//   deepseekKey() → the DeepSeek API key saved in Settings → AI, or ''
 //   searchWith(query, config) → [{ title, url, snippet }]   (sys/voice/more-tools.mjs searchWeb; config.signal set)
 //   egress(url) → { status, headers, body: Uint8Array } | null when no relay is configured
 //   fetchFn — fetch, injectable for tests
 export const WEB_TEXT_CAP = 200000;
 export const WEB_BYTE_CAP = 2 * 1024 * 1024;
 const SEARCH_HOSTS = { brave: () => 'api.search.brave.com', tavily: () => 'api.tavily.com', searxng: config => new URL(config.url).hostname };
+export const DEEPSEEK_SEARCH = Object.freeze({ endpoint: 'https://api.deepseek.com/anthropic/v1/messages', model: 'deepseek-v4-flash', maxTokens: 4096, maxUses: 5 });
+
+// DeepSeek answers through its Anthropic-compatible API with web_search_tool_result blocks; citations carry snippets.
+export function deepseekSources(response, max) {
+  const blocks = Array.isArray(response?.content) ? response.content : [];
+  const results = blocks.filter(block => block?.type === 'web_search_tool_result');
+  if (!results.length) throw new Error('DeepSeek returned no web search results');
+  const snippets = new Map();
+  for (const block of blocks) if (block?.type === 'text') for (const cite of block.citations || [])
+    if (cite?.url && cite.cited_text && !snippets.has(cite.url)) snippets.set(cite.url, cite.cited_text);
+  const seen = new Set(), out = [];
+  for (const block of results) for (const item of block.content || []) {
+    if (item?.type !== 'web_search_result' || !item.url || seen.has(item.url)) continue;
+    seen.add(item.url);
+    out.push({ title: item.title || item.url, url: item.url, snippet: snippets.get(item.url) || '', ...item.page_age ? { publishedAt: item.page_age } : {} });
+  }
+  return out.slice(0, max);
+}
 
 // Loopback, private, link-local and unique-local addresses, plus names that only resolve on this network.
 export function localNetworkHost(host) {
@@ -53,7 +73,7 @@ export async function readCapped(response, max = WEB_BYTE_CAP) {
 
 const failure = error => ({ error: error?.code === 'ENOGRANT' ? 'declined' : error?.name === 'TimeoutError' || error?.name === 'AbortError' ? 'timeout' : 'failed' });
 
-export function createWebService({ authorize, record, searchConfig, searchWith, egress, fetchFn = fetch }) {
+export function createWebService({ authorize, record, searchConfig, searchWith, egress, deepseekKey = () => '', fetchFn = fetch }) {
   async function guarded(host, how, run) {
     const grantId = await authorize(host, how);
     try {
@@ -79,15 +99,29 @@ export function createWebService({ authorize, record, searchConfig, searchWith, 
     }));
   }
 
+  async function deepseek(query, max, key) {
+    const response = await fetchFn(DEEPSEEK_SEARCH.endpoint, {
+      method: 'POST', redirect: 'error', signal: AbortSignal.timeout(60000),
+      headers: { 'x-api-key': key, authorization: `Bearer ${key}`, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: DEEPSEEK_SEARCH.model, max_tokens: DEEPSEEK_SEARCH.maxTokens, thinking: { type: 'disabled' },
+        messages: [{ role: 'user', content: [{ type: 'text', text: `Perform a web search for the query: ${query}` }] }],
+        tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: DEEPSEEK_SEARCH.maxUses }] }),
+    });
+    if (!response.ok) throw new Error(`DeepSeek search answered HTTP ${response.status}`);
+    return deepseekSources(JSON.parse((await readCapped(response)).text), max);
+  }
+
   async function search(query, { maxResults = 5 } = {}) {
     query = String(query || '').trim();
     if (!query) throw Object.assign(new Error('web search needs a query'), { code: 'EINVAL' });
     const max = Math.max(1, Math.min(10, Number(maxResults) || 5));
     const config = searchConfig();
-    const provider = config && SEARCH_HOSTS[config.provider] && (config.key || config.url) ? config.provider : 'wikipedia';
-    const host = provider === 'wikipedia' ? 'en.wikipedia.org' : SEARCH_HOSTS[provider](config);
+    const key = String(deepseekKey() || '');
+    const provider = config && SEARCH_HOSTS[config.provider] && (config.key || config.url) ? config.provider : key ? 'deepseek' : 'wikipedia';
+    const host = provider === 'wikipedia' ? 'en.wikipedia.org' : provider === 'deepseek' ? 'api.deepseek.com' : SEARCH_HOSTS[provider](config);
     const results = await guarded(host, 'search the web through', async () => {
       const found = provider === 'wikipedia' ? await wikipedia(query, max)
+        : provider === 'deepseek' ? await deepseek(query, max, key)
         : (await searchWith(query, { ...config, signal: AbortSignal.timeout(15000) })).slice(0, max);
       return { result: found, output: { status: 200, results: found.length } };
     });

@@ -8258,6 +8258,8 @@ async function webService(appId){
     searchWith: searchWeb,
     // GET only, and never with the Git token: reading a page must not reach what the token unlocks.
     egress: url => egressConfigured() ? egressFetch({ url, gitAuth:false }) : null,
+    // DeepSeek is a trusted provider (2026-11-09): its native web search runs when a DeepSeek key is saved in Settings → AI.
+    deepseekKey: () => aiEndpointApiKey(AI_ENDPOINT_PRESETS?.deepseek?.baseUrl || 'https://api.deepseek.com/v1'),
   });
   webServices.set(appId, service);
   return service;
