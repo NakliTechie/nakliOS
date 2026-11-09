@@ -65,7 +65,16 @@ async function bootDish(WorkerClass, connect) {
       try { snapshot.apply(data.change); saver.markDirty(); } catch (error) { say(error.message); }
     }
     if (data?.t === 'dish-image-metrics') metrics.image = data.metrics;
+    if (data?.t === 'dish-console') { const log = window.__dishConsole ??= []; log.push(`${data.level}: ${data.text}`); if (log.length > 300) log.shift(); }
     if (data?.t === 'dish-cancel') calls.get(data.id)?.abort();
+    if (data?.t === 'dish-speech') {
+      // Voice input: scripts/dish/speech.mjs sends 16 kHz mono samples; NakliOS transcribes on the assistant's model.
+      const [port] = event.ports;
+      try { port?.postMessage({ result: await sdk.ai.experimental_transcribe(data.samples) }); }
+      catch (error) { port?.postMessage({ error: error.message }); }
+      port?.close();
+      return;
+    }
     if (data?.t === 'dish-web') {
       // Web search and page reading through NakliOS (scripts/dish/web.mjs asks from the Worker).
       // The answer goes back on the request's own port: the Worker's channel belongs to dsh's tunnel.

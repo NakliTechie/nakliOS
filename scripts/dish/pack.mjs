@@ -54,10 +54,9 @@ const findRow = (rows, id) => {
 
 // open-in-app (and ui-open-in-app) lists local desktop editors through dsh's web server; Dish has no server, so
 // its client asked for open-in-app/apps and got a 404 at every boot (2026-11-04).
-// ui-sidebar-terminal opens an interactive terminal through subprocess-local, which needs an OS shell binary; the
-// Worker has none (the agent's bash tool runs through the Worker's own interpreter and stays), so the panel only
-// ever showed an error (2026-11-04). The terminal controller stays: dsh's remotes plugin depends on it.
-const excluded = /(?:deepseek-llm-api-extensions|session-log-deepseek|plugin-package-inventory-deepseek|llm-deepseek(?:-account)?|desktop-product-telemetry|product-analytics|session-telemetry-otel|deepseek-account|llm-pi-ai|web-search-deepseek|ui-settings-account|account-controller|open-in-app|ui-sidebar-terminal)/;
+// ui-sidebar-terminal needs an OS shell; Dish's stand-in (scripts/dish/node-pty.ts, DISH_TERMINAL=1) is held because a
+// live terminal froze the tab (2026-11-09). The terminal controller stays: dsh's remotes plugin depends on it.
+const excluded = new RegExp(`(?:deepseek-llm-api-extensions|session-log-deepseek|plugin-package-inventory-deepseek|llm-deepseek(?:-account)?|desktop-product-telemetry|product-analytics|session-telemetry-otel|deepseek-account|llm-pi-ai|web-search-deepseek|ui-settings-account|account-controller|open-in-app${process.env.DISH_TERMINAL === '1' ? '' : '|ui-sidebar-terminal'})`);
 const packageOf = name => name.startsWith('@') ? name.split('/').slice(0, 2).join('/') : name.split('/')[0];
 const removedPackages = new Set();
 const retainedPackages = new Set();
@@ -88,6 +87,11 @@ const homePatch = [
   // Web search and fetch through NakliOS (web.mjs): the Worker has no DNS, so dsh's own providers cannot run.
   { insert: [{ id: 'naklios-web', name: '@naklios/dish-llm/web' }] },
   configured('web', { searchProvider: 'naklios', fetchProvider: 'naklios' }),
+  // Voice input, once the person switches DeepSeek's voice bundle on: NakliOS transcribes (speech.mjs) instead of
+  // SenseVoice, a native process the Worker cannot start. Patches for rows that are not mounted are ignored.
+  { insert: [{ id: 'naklios-speech', name: '@naklios/dish-llm/speech' }] },
+  { id: 'speech-to-text-sensevoice', disabled: true },
+  { id: 'speech-to-text', config: { defaultProvider: 'naklios', language: 'auto' } },
   // The Worker composes from the template's bundle list plus this home patch, so allow-listed
   // third-party rows ride here; DeepSeek's official bundles stay switchable (off) on the Plugins page.
   ...pluginBundles.flatMap(plugin => plugin.patches),
@@ -104,18 +108,22 @@ for (const { name } of pluginBundles) if (!roster.includes(name)) roster.push(na
 
 const dshVersion = JSON.parse(fs.readFileSync(path.join(source, 'packages/llm/llm/package.json'), 'utf8')).version;
 const plugin = path.join(source, 'dish-plugin'); fs.mkdirSync(path.join(plugin, 'lib'), { recursive: true });
-fs.writeFileSync(path.join(plugin, 'package.json'), JSON.stringify({ name: '@naklios/dish-llm', version: '1.0.0', type: 'module', main: 'lib/index.js', exports: { '.': './lib/index.js', './web': './lib/web.mjs' }, files: ['lib'], dependencies: { '@deepseek-ai/dsh-llm': dshVersion } }));
+fs.writeFileSync(path.join(plugin, 'package.json'), JSON.stringify({ name: '@naklios/dish-llm', version: '1.0.0', type: 'module', main: 'lib/index.js', exports: { '.': './lib/index.js', './web': './lib/web.mjs', './speech': './lib/speech.mjs' }, files: ['lib'], dependencies: { '@deepseek-ai/dsh-llm': dshVersion } }));
 fs.copyFileSync(new URL('./provider.mjs', import.meta.url), path.join(plugin, 'lib/index.js'));
 fs.copyFileSync(new URL('./protocol.mjs', import.meta.url), path.join(plugin, 'lib/protocol.mjs'));
 fs.copyFileSync(new URL('./web.mjs', import.meta.url), path.join(plugin, 'lib/web.mjs'));
+fs.copyFileSync(new URL('./speech.mjs', import.meta.url), path.join(plugin, 'lib/speech.mjs'));
 const workspaces = indexWorkspacePackages(source); workspaces.set('@naklios/dish-llm', plugin);
 // The sweep keeps only modules reachable from its seeds and workspace packages. Allow-listed plugins are neither,
 // so their host modules were dropped and failed at boot ("cannot resolve @dfy-plugins/dsh-appearance", 2026-11-09).
 // Seed each plugin row by name, on top of upstream's own seeds (exported only from its compiled rules module).
 const { IMAGE_ENTRY_SEEDS } = await import(pathToFileURL(path.join(source, 'packages/experimental/webworker-packer/lib/types/rules.js')));
 const pluginEntries = [...new Set(pluginBundles.flatMap(plugin => collectRowNames(plugin.patches)))];
+// Terminals load @xterm/headless and @xterm/addon-serialize through lazy requires the sweep cannot see (2026-11-09: "cannot resolve
+// @xterm/headless" when a terminal opened), so it is seeded by name too.
+const lazyEntries = ['@xterm/headless', '@xterm/addon-serialize'];
 const result = packVfsImage({ profile: PROFILE, roster, installation, root: '/dsh', workspaces, resolveFrom: source, configTrees: configTrees(source), homePatch,
-  ...(pluginEntries.length ? { entries: [...IMAGE_ENTRY_SEEDS, ...pluginEntries] } : {}) });
+  entries: [...IMAGE_ENTRY_SEEDS, ...pluginEntries, ...lazyEntries] });
 if (result.missing.length) throw new Error(`Incomplete image: ${JSON.stringify(result.missing)}`);
 
 const files = { ...result.files };

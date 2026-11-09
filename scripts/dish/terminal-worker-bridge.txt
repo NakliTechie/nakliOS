@@ -1,0 +1,3 @@
+// dsh's terminals ask an OS process inspector about their shells; scripts/dish/node-pty.ts answers for its sessions.
+import { dishProcessInspector } from './node/external_packages/node-pty.ts'
+(globalThis as typeof globalThis & { __dishProcessInspector?: unknown }).__dishProcessInspector = dishProcessInspector;

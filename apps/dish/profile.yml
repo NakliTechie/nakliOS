@@ -1226,3 +1226,5 @@
   name: '@naklios/dish-llm'
 - id: naklios-web
   name: '@naklios/dish-llm/web'
+- id: naklios-speech
+  name: '@naklios/dish-llm/speech'

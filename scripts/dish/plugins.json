@@ -21,13 +21,18 @@
     {
       "name": "@deepseek-ai/dsh-experimental-ralph-bundle",
       "why": "repeated work with fresh agents over the workflow runtime"
+    },
+    {
+      "name": "@deepseek-ai/dsh-experimental-session-search",
+      "why": "search earlier sessions; node:sqlite is SQLite's WebAssembly build (scripts/dish/sqlite.ts)"
+    },
+    {
+      "name": "@deepseek-ai/dsh-experimental-voice-input-bundle",
+      "why": "dictation; NakliOS transcribes on the voice assistant's on-device model (scripts/dish/speech.mjs) in place of SenseVoice"
     }
   ],
   "officialLeftOut": {
-    "voice-input-bundle": "needs the native sherpa-onnx process",
-    "session-search": "needs node:sqlite",
     "tool-worktree": "spawns git",
-    "terminal-bundle": "keeps OS shell processes alive; the Worker has no OS shell",
     "inspector-profile": "its CDP hub needs node net, http and inspector",
     "plugin-market-bundle": "installs plugins at run time, which Dish does not allow",
     "cot-translation-bundle": "sends expanded reasoning to an outside translation service (Bing by default) without NakliOS consent or History"
@@ -62,5 +67,8 @@
       "integrity": "sha512-ae295uBxG0QgREQDXlppSYSDnqFjwWSm9OQYV4S1r90EsU7RFop9XpB5dZhhgdH0fMXUj9Wavd7txVWDNiPXBQ==",
       "reaches": "settings only"
     }
+  },
+  "heldUntilFixed": {
+    "terminal-bundle": "built with DISH_TERMINAL=1 only: a live terminal froze the whole tab on 2026-11-09, cause not yet found (scripts/dish/node-pty.ts)"
   }
 }
