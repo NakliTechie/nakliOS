@@ -1,0 +1,6 @@
+      // dsh checks that a terminal's shell is an executable file before starting it. These stand in for the Worker's
+      // own shell (scripts/dish/node-pty.ts runs the commands); they sit outside the saved home/ and workspace/.
+      mounted.seedDirectory('/bin');
+      for (const shell of ['/bin/sh', '/bin/bash']) {
+        mounted.seed(shell, new TextEncoder().encode("#!/bin/sh\n# Dish: the Worker's own shell runs this terminal.\n"), { mode: 0o755 });
+      }

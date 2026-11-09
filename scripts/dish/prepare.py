@@ -1,6 +1,6 @@
 """Apply the tracked integration to an extracted, immutable upstream release."""
 from pathlib import Path
-import sys
+import os, sys
 source = Path(sys.argv[1]); here = Path(__file__).resolve().parent
 worker = source / 'packages/experimental/webworker-runtime/src/worker.ts'
 s = worker.read_text(); anchor = 'let host: { handleMessage(data: unknown): void } | undefined'
@@ -57,6 +57,34 @@ export function userInfo(): { username: string, uid: number, gid: number, shell:
 
 /** CommonJS default export:''', 1)
 p.write_text(s)
+
+# dsh's session search needs node:sqlite. Upstream's Worker stubs it; Dish puts SQLite's WebAssembly build behind it.
+p = source / 'packages/experimental/webworker-runtime/src/node/builtin_modules/mock/sqlite.ts'
+assert "notImplementedFail(MODULE, 'DatabaseSync')" in p.read_text()
+p.write_text((here/'sqlite.ts').read_text())
+
+# Terminals are held (2026-11-09): with a live terminal the whole tab froze, cause not found. DISH_TERMINAL=1 builds
+# them for debugging: node-pty over the Worker's shell, the process inspector, and /bin/sh, /bin/bash stand-ins.
+if os.environ.get('DISH_TERMINAL') == '1':
+    # dsh's terminals spawn through node-pty. Upstream's Worker stubs it; Dish's stands in a line-oriented terminal over the
+    # Worker's own shell (scripts/dish/node-pty.ts).
+    p = source / 'packages/experimental/webworker-runtime/src/node/external_packages/node-pty.ts'
+    assert "notImplementedFail(MODULE, 'spawn')" in p.read_text()
+    p.write_text((here/'node-pty.ts').read_text())
+
+    # ...and its terminal handle inspects OS processes, which the Worker has none of; the stand-in answers instead.
+    matches = list((source / 'packages/subprocess/subprocess-local/lib').glob('runner-launch-*.js'))
+    assert len(matches) == 1
+    p = matches[0]; s = p.read_text()
+    anchor = 'function createProcessInspector(platform = process.platform, arch = process.arch, internals = DEFAULT_INTERNALS) {'
+    assert anchor in s and '__dishProcessInspector' not in s
+    p.write_text(s.replace(anchor, anchor + '\n\tif (globalThis.__dishProcessInspector) return globalThis.__dishProcessInspector;', 1))
+    w = source / 'packages/experimental/webworker-runtime/src/worker.ts'
+    s = w.read_text(); anchor = 'let host: { handleMessage(data: unknown): void } | undefined'; assert anchor in s
+    w.write_text(s.replace(anchor, (here/'terminal-worker-bridge.txt').read_text() + anchor, 1))
+    h = source / 'packages/experimental/webworker-runtime/src/worker-host.ts'
+    s = h.read_text(); anchor = '      mounted.subscribe(change => {'; assert anchor in s
+    h.write_text(s.replace(anchor, (here/'terminal-vfs-bridge.txt').read_text() + anchor, 1))
 
 # Signal readiness only after the unchanged client has activated and mounted.
 p = source / 'apps/web/src/main.ts'

@@ -33,3 +33,30 @@ self.addEventListener('message', event => {
   dishCalls.delete(data.id); call.dispose();
   if (data.error) call.reject(new Error(data.error)); else call.resolve(data.result);
 });
+// dsh's session search opens SQLite synchronously right after importing node:sqlite, so SQLite (WebAssembly, FTS5)
+// loads here, in the background a few seconds after start, never in the way of boot. scripts/dish/sqlite.ts reads it.
+setTimeout(() => {
+  const url = new URL('../vendor/sqlite/index.mjs', import.meta.url).href
+  const sqliteGlobal = globalThis as typeof globalThis & { __dishSqlite3?: unknown, __dishSqlite3Error?: string }
+  import(/* @vite-ignore */ url)
+    .then((module: { default: () => Promise<unknown> }) => module.default())
+    .then(sqlite3 => { sqliteGlobal.__dishSqlite3 = sqlite3 })
+    .catch((error: unknown) => { sqliteGlobal.__dishSqlite3Error = error instanceof Error ? error.message : String(error) })
+}, 4000);
+// Worker warnings and errors are invisible from Dish's page, so a copy goes there (host.mjs keeps the last 300 in
+// window.__dishConsole). Capped at 50 a second, so a noisy loop cannot flood the page.
+{
+  let budget = 50
+  setInterval(() => { budget = 50 }, 1000)
+  for (const level of ['warn', 'error'] as const) {
+    const original = console[level].bind(console)
+    console[level] = (...args: unknown[]) => {
+      original(...args)
+      if (budget-- <= 0) return
+      try {
+        const text = args.map(arg => arg instanceof Error ? `${arg.message}\n${arg.stack ?? ''}` : typeof arg === 'string' ? arg : JSON.stringify(arg)).join(' ').slice(0, 2000)
+        self.postMessage({ t: 'dish-console', level, text })
+      } catch { /* an unserialisable argument is dropped */ }
+    }
+  }
+}

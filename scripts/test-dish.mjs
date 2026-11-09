@@ -196,3 +196,28 @@ test('upstream check flags only rc or final tags newer than the pin', async () =
   assert.equal(newerTrackedTag([...tags, 'dsh-v0.2.1'], 'dsh-v0.2.1-rc.4'), 'dsh-v0.2.1');
   assert.throws(() => newerTrackedTag(tags, 'dsh-v0.2.2-alpha.2'), /not an rc or final/);
 });
+
+test('voice input decodes dsh recordings (16 kHz mono 16-bit WAV) and refuses other audio', async () => {
+  const { wavSamples } = await import('./dish/speech.mjs');
+  const wav = (samples, rate = 16000, channels = 1) => {
+    const bytes = new Uint8Array(44 + samples.length * 2), view = new DataView(bytes.buffer);
+    const tag = (at, text) => { for (let i = 0; i < 4; i++) bytes[at + i] = text.charCodeAt(i); };
+    tag(0, 'RIFF'); view.setUint32(4, bytes.length - 8, true); tag(8, 'WAVE'); tag(12, 'fmt ');
+    view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, channels, true);
+    view.setUint32(24, rate, true); view.setUint32(28, rate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+    tag(36, 'data'); view.setUint32(40, samples.length * 2, true);
+    samples.forEach((x, i) => view.setInt16(44 + i * 2, Math.round(x * (x < 0 ? 32768 : 32767)), true));
+    return bytes;
+  };
+  assert.deepEqual([...wavSamples(wav([0, -1, 0.5]))].map(x => Math.round(x * 100) / 100), [0, -1, 0.5]);
+  assert.throws(() => wavSamples(wav([0], 44100)), /16 kHz mono/);
+  assert.throws(() => wavSamples(new Uint8Array(10)), /WAV/);
+});
+
+test('the allow-list ships DeepSeek bundles only, with a reason for each left out', () => {
+  const list = JSON.parse(fs.readFileSync(new URL('./dish/plugins.json', import.meta.url), 'utf8'));
+  assert.deepEqual(list.plugins, []);
+  assert.ok(list.official.every(bundle => bundle.name.startsWith('@deepseek-ai/dsh-experimental-') && bundle.why));
+  assert.ok(Object.values(list.officialLeftOut).every(Boolean));
+  assert.ok(Object.values(list.heldUntilIsolated).every(entry => entry.integrity?.startsWith('sha512-')));
+});
