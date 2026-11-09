@@ -160,10 +160,10 @@
         {
           "source": "sdk/naklios.js",
           "destination": "sdk/naklios.js",
-          "sha256": "1261fcfbaee5d059dae732fc5a8a6de5f6a67e199a53ae3588f3de206c7411cf",
-          "bytes": 55053,
+          "sha256": "72926633f519ea6740cf18f9a84a0933adf525ca5694cd25b127513ed50a3541",
+          "bytes": 56285,
           "originalSourceSha256": "9390489a66446f7d78a72863ca8c2ed71cce1760b395d5d500e4c86a43a7fa52",
-          "sdkSha256": "1261fcfbaee5d059dae732fc5a8a6de5f6a67e199a53ae3588f3de206c7411cf"
+          "sdkSha256": "72926633f519ea6740cf18f9a84a0933adf525ca5694cd25b127513ed50a3541"
         }
       ]
     },
@@ -188,10 +188,10 @@
         {
           "source": "sdk/naklios.js",
           "destination": "sdk/naklios.js",
-          "sha256": "1261fcfbaee5d059dae732fc5a8a6de5f6a67e199a53ae3588f3de206c7411cf",
-          "bytes": 55053,
+          "sha256": "72926633f519ea6740cf18f9a84a0933adf525ca5694cd25b127513ed50a3541",
+          "bytes": 56285,
           "originalSourceSha256": "9390489a66446f7d78a72863ca8c2ed71cce1760b395d5d500e4c86a43a7fa52",
-          "sdkSha256": "1261fcfbaee5d059dae732fc5a8a6de5f6a67e199a53ae3588f3de206c7411cf"
+          "sdkSha256": "72926633f519ea6740cf18f9a84a0933adf525ca5694cd25b127513ed50a3541"
         }
       ]
     },
@@ -219,15 +219,15 @@
       "id": "kanzen",
       "repo": "NakliTechie/KanZen",
       "requestedRef": "main",
-      "resolvedCommit": "04e7865d9a98567bc2dfdd516a3aef3ec7dc8ff4",
+      "resolvedCommit": "12f7d07266ce237d95e1f5d8b987fb9e6d2c79bf",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "856222ea2dac7146fd7686a9c6d6dd363fa19dcfa4a937edd49a35141d3cb61c",
-          "bytes": 441734,
-          "originalSourceSha256": "4f5c76fc2d13378f03661fbceee41751df230fab4fa4d090586a8d14af0e41ef",
-          "sdkSha256": "1261fcfbaee5d059dae732fc5a8a6de5f6a67e199a53ae3588f3de206c7411cf"
+          "sha256": "b780c6ce0f6f56dd7e9d7f46d9404733353aa876caece7e83d159f1870f21ae1",
+          "bytes": 442966,
+          "originalSourceSha256": "ed1adabea625f8d308a9664f203478d02f66b4d5df299f113d12838038d17080",
+          "sdkSha256": "72926633f519ea6740cf18f9a84a0933adf525ca5694cd25b127513ed50a3541"
         },
         {
           "source": "commands.json",
@@ -241,15 +241,15 @@
       "id": "menagerie",
       "repo": "NakliTechie/menagerie",
       "requestedRef": "main",
-      "resolvedCommit": "800b8330dd28bb199360f589316f06dd6f4b99a6",
+      "resolvedCommit": "87c650197a606e92fcddf1832884b5e01e6abb36",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "1ad0d84859147cf89bb90e700fb38683efc59c063df229edfd244521b953db1f",
-          "bytes": 289965,
-          "originalSourceSha256": "b686cd6446696850d8326bf6ca80789e66e25dc5d0fadfdd70e6f2223e5e711e",
-          "sdkSha256": "1261fcfbaee5d059dae732fc5a8a6de5f6a67e199a53ae3588f3de206c7411cf"
+          "sha256": "50f7a1fbc3c87e7bd06358b1a82948d891602813658dee10d45f2bba948868f7",
+          "bytes": 291197,
+          "originalSourceSha256": "126287a5f1eaa44e94bcfd959d384793deed47811ef787ffa9a5504a21536751",
+          "sdkSha256": "72926633f519ea6740cf18f9a84a0933adf525ca5694cd25b127513ed50a3541"
         },
         {
           "source": "manifest.webmanifest",
@@ -427,15 +427,15 @@
       "id": "nakliposter",
       "repo": "NakliTechie/NakliPoster",
       "requestedRef": "main",
-      "resolvedCommit": "c16247384933f6d28fa84e50928b76bcfce05772",
+      "resolvedCommit": "ea68bf8cc2a7dc401aaa29f9efd697dfe939a400",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "aa59b63835c605049d743f37a2df7c506a03ff204c7a073d05b3d531f9c4e4f2",
-          "bytes": 334355,
-          "originalSourceSha256": "a0eb44a88f0d331a3a36224cc5cd3d04c2e1b8bd6fe31a385d8342057a3af4b2",
-          "sdkSha256": "1261fcfbaee5d059dae732fc5a8a6de5f6a67e199a53ae3588f3de206c7411cf"
+          "sha256": "cf318b91272a7eda4cb5eeaf8eda85fda256d3d0dd733d7329b59790bcdd3ffa",
+          "bytes": 335587,
+          "originalSourceSha256": "7163712b3fd85b96012aa217dea0936ea6f2ba53fd51de5046af87339b67ae7f",
+          "sdkSha256": "72926633f519ea6740cf18f9a84a0933adf525ca5694cd25b127513ed50a3541"
         },
         {
           "source": "LICENSE",
@@ -879,15 +879,15 @@
       "id": "tijori",
       "repo": "NakliTechie/Tijori",
       "requestedRef": "main",
-      "resolvedCommit": "12a5b9fc837f83f6e848704e82eb8c7b12f00444",
+      "resolvedCommit": "7e2fdc900c120cec013f4414fee1c61b9f15be33",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "1e977c5600bcb8c1ad7de27a5d9ac8baedee02cb392bba889fdecdfbff5eaa81",
-          "bytes": 593221,
-          "originalSourceSha256": "dc70570aa2eb4a65a3bb489d6f7fadeadbd14a3a7b4114bfd3066525c54fb302",
-          "sdkSha256": "1261fcfbaee5d059dae732fc5a8a6de5f6a67e199a53ae3588f3de206c7411cf"
+          "sha256": "d283d34e926b39263e06be5debbe403c2f7537ad312c39d635cad461fd2b87af",
+          "bytes": 594453,
+          "originalSourceSha256": "220fbdf55335d66a6f5931f7b24f04e47091a4b29ddedffde032a564982dac0c",
+          "sdkSha256": "72926633f519ea6740cf18f9a84a0933adf525ca5694cd25b127513ed50a3541"
         }
       ]
     },
@@ -895,15 +895,15 @@
       "id": "vaultmind",
       "repo": "NakliTechie/VaultMind",
       "requestedRef": "main",
-      "resolvedCommit": "55d39543bff2142ce5b5657852dde22e518906b7",
+      "resolvedCommit": "a1df4108771d48e10d9f73e24f40f739b2ea21b1",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "fea0919f077e98d2513c80119aa47d335a3676b5f52e366b72808429f46787ba",
-          "bytes": 393296,
-          "originalSourceSha256": "9d8214862e06004d1f9cfd98674af09f349932f8cea2ea747a69c82a47bd02f8",
-          "sdkSha256": "1261fcfbaee5d059dae732fc5a8a6de5f6a67e199a53ae3588f3de206c7411cf"
+          "sha256": "2d4289046aa172a74d3ff02cdcc6536383af282f7922d017f66b5a9f6a85ae78",
+          "bytes": 394528,
+          "originalSourceSha256": "88a12557e262cd7d13ab78532570cf1ecaf1aea5f2c6ecc35bdd253b284cf38a",
+          "sdkSha256": "72926633f519ea6740cf18f9a84a0933adf525ca5694cd25b127513ed50a3541"
         },
         {
           "source": "LICENSE",

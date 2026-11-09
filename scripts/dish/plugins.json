@@ -1,0 +1,66 @@
+{
+  "note": "Plugins allowed into the Dish image. npm plugins must be pinned by version and npm tarball integrity; fetch-plugins.mjs refuses any download whose hash differs. DeepSeek is a trusted provider (Chirag, 2026-11-09): its official experimental bundles ship from the pinned upstream tree and stay off until switched on in the Plugins page. Third-party npm plugins are held: Dish runs on the naklios.dev origin, so any plugin code there can read the host's storage (web relay secret, Git token) whatever its hash; they wait for an isolated runtime (cold review, 2026-11-09).",
+  "plugins": [],
+  "official": [
+    {
+      "name": "@deepseek-ai/dsh-experimental-agent-team-profile",
+      "why": "teammates with direct messages and a shared task board inside one session"
+    },
+    {
+      "name": "@deepseek-ai/dsh-experimental-auto-review",
+      "why": "per-tool model review for the Auto permission preset"
+    },
+    {
+      "name": "@deepseek-ai/dsh-experimental-session-titles-bundle",
+      "why": "refresh session titles from every prompt"
+    },
+    {
+      "name": "@deepseek-ai/dsh-experimental-badge-skill-bundle",
+      "why": "powered-by badge skill"
+    },
+    {
+      "name": "@deepseek-ai/dsh-experimental-ralph-bundle",
+      "why": "repeated work with fresh agents over the workflow runtime"
+    }
+  ],
+  "officialLeftOut": {
+    "voice-input-bundle": "needs the native sherpa-onnx process",
+    "session-search": "needs node:sqlite",
+    "tool-worktree": "spawns git",
+    "terminal-bundle": "keeps OS shell processes alive; the Worker has no OS shell",
+    "inspector-profile": "its CDP hub needs node net, http and inspector",
+    "plugin-market-bundle": "installs plugins at run time, which Dish does not allow",
+    "cot-translation-bundle": "sends expanded reasoning to an outside translation service (Bing by default) without NakliOS consent or History"
+  },
+  "leftOut": {
+    "dsh-claude-style@0.20.1": "its host module uses top-level await, which the Worker's module loader refuses at pack time; it also declares dsh >=0.2.2-rc.1",
+    "@nanmicoder/dsh-agent-teams@0.1.29": "DeepSeek's own Agent Teams bundle covers it, and DeepSeek is a trusted provider"
+  },
+  "heldUntilIsolated": {
+    "dsh-palimpsest@0.2.1": {
+      "license": "MIT",
+      "tarball": "https://registry.npmjs.org/dsh-palimpsest/-/dsh-palimpsest-0.2.1.tgz",
+      "integrity": "sha512-C0UFhdMddKJMVI7rt1Gvzpb9s/Um/igkFuLJNseDBuFztuH+LP/xs4dm/ytsT4kp9EFehYyvGNJpIck+OCul0g==",
+      "reaches": "workspace files (reads earlier session logs)"
+    },
+    "dsh-genui@0.3.3": {
+      "license": "MIT",
+      "tarball": "https://registry.npmjs.org/dsh-genui/-/dsh-genui-0.3.3.tgz",
+      "integrity": "sha512-DD87XTVTIt5G7wQ/T2+3qxIU+SHCBYfyZRyDANwYlXlnPwhMqJNrQimOtVHn7jAyvjhQW+64n01O6uDGbD0kzg==",
+      "reaches": "system prompt; renders model-written UI in the page",
+      "why": "also loads a 6.3 MB runtime from /dsh-genui/runtime.js, an absolute path Dish's Worker does not serve, so its cards cannot render"
+    },
+    "@dfy-plugins/dsh-visualize@0.1.5": {
+      "license": "MIT",
+      "tarball": "https://registry.npmjs.org/@dfy-plugins/dsh-visualize/-/dsh-visualize-0.1.5.tgz",
+      "integrity": "sha512-vhqfmljDJxivnbNisww0xglvMWmUP8tUBNUKR5eqsBVtFo/BgcB4HHx93km55hHY2NTThmI04YwXSOT7uDqy4A==",
+      "reaches": "session files; renders model-written HTML in a sandboxed frame"
+    },
+    "@dfy-plugins/dsh-appearance@0.1.7": {
+      "license": "MIT",
+      "tarball": "https://registry.npmjs.org/@dfy-plugins/dsh-appearance/-/dsh-appearance-0.1.7.tgz",
+      "integrity": "sha512-ae295uBxG0QgREQDXlppSYSDnqFjwWSm9OQYV4S1r90EsU7RFop9XpB5dZhhgdH0fMXUj9Wavd7txVWDNiPXBQ==",
+      "reaches": "settings only"
+    }
+  }
+}

@@ -7,6 +7,8 @@ SOURCE=${1:?Usage: bash scripts/build-dish.sh /path/to/extracted-upstream (see s
 export DSH_CLIENT_COMMIT_HASH=$(node -p "require('$ROOT/scripts/dish/source.lock.json').commit")
 export DSH_CLIENT_TITLE=Dish
 node "$ROOT/scripts/dish/verify-source.mjs" "$SOURCE"
+# The allow-listed third-party plugins (scripts/dish/plugins.json), each verified by its npm integrity hash.
+node "$ROOT/scripts/dish/fetch-plugins.mjs" "$SOURCE"
 cd "$SOURCE"
 # Upstream's own build:lib:host script gives the host type build 4 GB; on this build it ran out of memory at 4 GB
 # (2026-10-31), so it gets 8 GB.

@@ -8175,33 +8175,37 @@ function revokeNetGrants(){
 const netPrompts = new Map();
 // The app's Grant for this host: the stored one, or — once, with the owner's consent — a new one.
 // null when the owner declined (remembered until revoked in Settings).
-async function netEnsureGrant(appId, host){
-  const have = (netGrants()[appId] || {})[host];
+// `how` set → a web.read Grant (page reading and search, GET only), stored apart from the net.fetch Grant for the host.
+async function netEnsureGrant(appId, host, how){
+  const slot = how ? 'web:' + host : host;
+  const have = (netGrants()[appId] || {})[slot];
   if (have && have.denied) return null;
   if (have && have.identifier) return have;
-  const key = appId + '\0' + host;
+  const key = appId + '\0' + slot;
   if (netPrompts.has(key)) return netPrompts.get(key);
   const p = (async () => {
     const app = APPS.find(a => a.id === appId); const name = app?.name || appId;
-    const ok = await nakliosConfirm(
-      `${name} wants to send requests to ${host} through your egress backend.\n\n` +
+    const ok = await nakliosConfirm(how
+      ? `${name} wants to ${how} ${host}.\n\nRequests leave this device for ${host}. ` +
+        `NakliOS records each request's host and status in History, never the page address or its contents.`
+      : `${name} wants to send requests to ${host} through your egress backend.\n\n` +
       `Requests leave this device for ${host}. NakliOS keeps the backend secret and any git token hidden from the app, ` +
       `and records each request's host, method and status in History — never its body.`,
       { title:'Allow network access?', okLabel:'Allow', cancelLabel:'Not now' });
     const all = netGrants(); all[appId] = all[appId] || {};
-    if (!ok) { all[appId][host] = { denied:true, decidedAt: Date.now() }; saveNetGrants(all); return null; }
+    if (!ok) { all[appId][slot] = { denied:true, decidedAt: Date.now() }; saveNetGrants(all); return null; }
     const { g } = await netMods();
-    const grant = await g.issueGrant(await netRootKey(), { caveats: [g.caveat.principal('app:' + appId), g.caveat.tools(['net.fetch']), g.caveat.scope('net:' + host)] });
-    all[appId][host] = grant; saveNetGrants(all); return grant;
+    const grant = await g.issueGrant(await netRootKey(), { caveats: [g.caveat.principal('app:' + appId), g.caveat.tools([how ? 'web.read' : 'net.fetch']), g.caveat.scope((how ? 'web:' : 'net:') + host)] });
+    all[appId][slot] = grant; saveNetGrants(all); return grant;
   })().finally(() => netPrompts.delete(key));
   netPrompts.set(key, p);
   return p;
 }
-async function netAuthorize(appId, host){
-  const grant = await netEnsureGrant(appId, host);
+async function netAuthorize(appId, host, how){
+  const grant = await netEnsureGrant(appId, host, how);
   if (!grant) return { ok:false, grant:null, reason:`network access to ${host} was not allowed` };
   const { g } = await netMods();
-  const v = await g.verifyGrant(grant, await netRootKey(), { principal:'app:' + appId, tool:'net.fetch', target:'net:' + host, now: Date.now(), revocationList: netRevoked() });
+  const v = await g.verifyGrant(grant, await netRootKey(), { principal:'app:' + appId, tool: how ? 'web.read' : 'net.fetch', target:(how ? 'web:' : 'net:') + host, now: Date.now(), revocationList: netRevoked() });
   return { ok: v.ok, grant, reason: v.ok ? '' : `the network grant for ${host} did not verify (${v.reason})` };
 }
 // History: one serialized append chain per origin. A failed write never fails the request it records,
@@ -8232,6 +8236,33 @@ function netHistoryAppend({ appId, host, method, grantId, output }){
   return _netTail;
 }
 // The whole enforcement point: authorize, fetch, record. Throws with a code the SDK passes through.
+// ── Web search and page reading (naklios.experimental_web) ──────────────────────────
+// sys/host/web.mjs reads for agent apps whose Worker has no DNS and meets CORS. Each site needs the person's
+// one-time consent per app (the same network Grant as naklios.net), and every request lands in History.
+const webServices = new Map();
+async function webService(appId){
+  if (!aiAppOwnsEgress(appId)) throw new Error('Web search and page reading are available to same-origin system apps only');
+  if (webServices.has(appId)) return webServices.get(appId);
+  const [{ createWebService }, { searchWeb }] = await Promise.all([import('./sys/host/web.mjs'), import('./sys/voice/more-tools.mjs')]);
+  const service = createWebService({
+    async authorize(host, how){
+      const auth = await netAuthorize(appId, host, how);
+      if (!auth.ok) {
+        await netHistoryAppend({ appId, host, method:'GET', grantId: auth.grant?.identifier, output:{ refused: auth.reason } });
+        throw Object.assign(new Error(auth.reason), { code:'ENOGRANT' });
+      }
+      return auth.grant.identifier;
+    },
+    record: (host, grantId, output) => netHistoryAppend({ appId, host, method:'GET', grantId, output }),
+    searchConfig: () => { try { return JSON.parse(localStorage.getItem('nakli.voice.search') || 'null'); } catch(_) { return null; } },
+    searchWith: searchWeb,
+    // GET only, and never with the Git token: reading a page must not reach what the token unlocks.
+    egress: url => egressConfigured() ? egressFetch({ url, gitAuth:false }) : null,
+  });
+  webServices.set(appId, service);
+  return service;
+}
+
 // ── TeX service (naklios.experimental_tex) ────────────────────────────────────────
 // sys/tex/service.mjs holds the queue. This wires it to the host's storage, consent and History. The first compile
 // asks once, because the TeX Live packs are about 680 MB; the /tex/ route sends the browser to Hugging Face for them.
@@ -8371,12 +8402,12 @@ async function netHostFetch(appId, msg){
   }
 }
 
-async function egressFetch({url, method='GET', headers={}, body=null}){
+async function egressFetch({url, method='GET', headers={}, body=null, gitAuth=true}){
   const s = egressSettings();
   if(!s || !s.workerUrl || !s.secret){ const e=new Error('No egress backend configured'); e.code='ENOEGRESS'; throw e; }
   // Inject host-held git auth (the PAT never came from the app) for git hosts.
   headers = Object.assign({}, headers || {});
-  const ga = gitAuthFor(url);
+  const ga = gitAuth ? gitAuthFor(url) : null;
   const hasAuth = Object.keys(headers).some(k=>String(k).toLowerCase()==='authorization');
   if(ga && !hasAuth){ headers['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(ga.username + ':' + ga.token))); }
   const bytes = _egBytes(body);
@@ -8475,6 +8506,7 @@ function capabilitySnapshot(appId){
     aiSearch: ragCapabilityForApp(appId),
     aiSearchState:ragHost.state,
     experimental_tex:texCapabilityForApp(appId),
+    experimental_web:aiAppOwnsEgress(appId),
     // Egress: a system app may reach blocked cross-origin hosts when the user has
     // configured a backend. Third-party apps never get it (isSystem gate).
     net: aiAppOwnsEgress(appId) && egressConfigured(),
@@ -9095,6 +9127,15 @@ window.addEventListener('message', async e => {
       if (!egressConfigured()) { const er = new Error('No egress backend configured'); er.code = 'ENOEGRESS'; throw er; }
       reply.result = await netHostFetch(appId, msg); // S1: Grant-gated, History-logged
     } catch(err){ reply.error = String(err?.message || err); }
+    if (msg.requestId) { try { e.source.postMessage(reply, replyTo); } catch(_){} }
+  } else if (msg.type === 'naklios:web:search' || msg.type === 'naklios:web:fetch'){
+    const reply = { type:'naklios:web:reply', requestId: msg.requestId };
+    try {
+      const appId = getAppId();
+      if (!appId) throw new Error('Unknown app');
+      const web = await webService(appId);
+      reply.result = msg.type === 'naklios:web:search' ? await web.search(msg.query, { maxResults: msg.maxResults }) : await web.fetch(msg.url);
+    } catch(err){ reply.error = String(err?.message || err); if (err?.code) reply.code = err.code; }
     if (msg.requestId) { try { e.source.postMessage(reply, replyTo); } catch(_){} }
   } else if (typeof msg.type === 'string' && msg.type.startsWith('naklios:fs:')){
     const reply = { type: 'naklios:fs:reply', requestId: msg.requestId };

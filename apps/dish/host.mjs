@@ -66,6 +66,18 @@ async function bootDish(WorkerClass, connect) {
     }
     if (data?.t === 'dish-image-metrics') metrics.image = data.metrics;
     if (data?.t === 'dish-cancel') calls.get(data.id)?.abort();
+    if (data?.t === 'dish-web') {
+      // Web search and page reading through NakliOS (scripts/dish/web.mjs asks from the Worker).
+      // The answer goes back on the request's own port: the Worker's channel belongs to dsh's tunnel.
+      const [port] = event.ports;
+      try {
+        const web = sdk.experimental_web;
+        const result = data.op === 'search' ? await web.search(data.request.query, { maxResults: data.request.maxResults }) : await web.fetch(data.request.url);
+        port?.postMessage({ result });
+      } catch (error) { port?.postMessage({ error: error.message }); }
+      port?.close();
+      return;
+    }
     if (data?.t !== 'dish-inference') return;
     const abort = new AbortController(); calls.set(data.id, abort);
     try {

@@ -89,28 +89,34 @@ function appTools(apps) {
 
 // ── web search: LocalMind's three providers ──
 const PROVIDERS = {
-  async brave(query, { key }) {
+  async brave(query, { key, signal }) {
     const res = await fetch(`https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=5`,
-      { headers: { Accept: 'application/json', 'X-Subscription-Token': key } });
+      { headers: { Accept: 'application/json', 'X-Subscription-Token': key }, signal });
     if (!res.ok) throw new Error(`Brave Search answered HTTP ${res.status}`);
     const d = await res.json();
     return (d.web?.results || []).slice(0, 5).map((r) => ({ title: r.title, url: r.url, snippet: r.description || '' }));
   },
-  async tavily(query, { key }) {
-    const res = await fetch('https://api.tavily.com/search', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+  async tavily(query, { key, signal }) {
+    const res = await fetch('https://api.tavily.com/search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal,
       body: JSON.stringify({ api_key: key, query, search_depth: 'basic', max_results: 5 }) });
     if (!res.ok) throw new Error(`Tavily answered HTTP ${res.status}`);
     const d = await res.json();
     return (d.results || []).map((r) => ({ title: r.title, url: r.url, snippet: r.content || '' }));
   },
-  async searxng(query, { url }) {
-    const res = await fetch(`${String(url).replace(/\/+$/, '')}/search?q=${encodeURIComponent(query)}&format=json&categories=general`);
+  async searxng(query, { url, signal }) {
+    const res = await fetch(`${String(url).replace(/\/+$/, '')}/search?q=${encodeURIComponent(query)}&format=json&categories=general`, { signal });
     if (!res.ok) throw new Error(`SearXNG answered HTTP ${res.status}`);
     const d = await res.json();
     return (d.results || []).slice(0, 5).map((r) => ({ title: r.title, url: r.url, snippet: r.content || '' }));
   },
 };
 export const SEARCH_PROVIDERS = Object.keys(PROVIDERS);
+// The same providers for the host's web service (sys/host/web.mjs), so apps search with the person's one setting.
+export function searchWeb(query, config) {
+  const run = PROVIDERS[config?.provider];
+  if (!run) throw new Error(`unknown search provider ${config?.provider}`);
+  return run(query, config);
+}
 
 // Readable text from HTML: drops scripts, styles and navigation, prefers <article> or <main>.
 export function pageText(html, { cap = 3000, parse = (h) => new DOMParser().parseFromString(h, 'text/html') } = {}) {

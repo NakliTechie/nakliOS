@@ -348,8 +348,8 @@
 - id: web
   name: '@deepseek-ai/dsh-web'
   config:
-    searchProvider: deepseek-official
-    fetchProvider: http
+    searchProvider: naklios
+    fetchProvider: naklios
 - id: web-search-deepseek
   name: '@deepseek-ai/dsh-web-search-deepseek'
   config:
@@ -1224,3 +1224,5 @@
         disabled: !!js '!ctx.get(''profileContext'')'
 - id: naklios-llm
   name: '@naklios/dish-llm'
+- id: naklios-web
+  name: '@naklios/dish-llm/web'

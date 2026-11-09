@@ -424,6 +424,27 @@ naklios.experimental_tex.cancel(job.id);                   // the compile reject
 - **History.** Every compile appends one hash-chained event (door `tex`) with the project path, engine and outcome, never
   file contents. Shell escape is always off.
 
+## Web
+
+`naklios.experimental_web` searches the web and reads pages for agent apps. A browser Worker has no DNS and meets CORS
+on most sites, so the host reads for it. System apps only; `capabilities.experimental_web` says whether the app may call it.
+
+```js
+const { provider, results } = await naklios.experimental_web.search('wasm tex engine', { maxResults: 5 });
+const page = await naklios.experimental_web.fetch(results[0].url);  // { url, status, kind, content, truncated, via }
+```
+
+- **Search.** The host uses the provider the person set in the assistant panel (Brave, Tavily or SearXNG); the key stays
+  in the host. With none set it searches Wikipedia, which needs no key or account.
+- **Reading.** GET only. The page directly with redirects refused, else the person's own web relay (`naklios.net`'s
+  backend, without the Git token), else Jina Reader (`r.jina.ai`), which sees the address. Local-network addresses are
+  refused. `kind` follows the `Content-Type`; the body stops at 2 MB and the content at 200,000 characters.
+- **Consent and History.** Each host, the search provider and the reader included, asks the person once per app, through
+  a `web.read` Grant kept apart from `naklios.net`'s `net.fetch` Grant. Every request appends one History event (door
+  `net`) with the host, status and size, or an error category; never the page address, the contents or error text.
+- **Limit.** Stopping the calling tool does not yet stop a request the host has started; each provider call times out
+  after 10 to 20 s.
+
 ## Storage locations are separate
 
 Browser, Folder, and Crate are distinct libraries:
@@ -634,7 +655,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 
 <!-- sdk-reference:begin — rendered by `node scripts/sdk-reference.mjs --write` from docs/sdk-api-audit.md; do not edit by hand -->
 
-110 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
+114 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
 
 ### `version`
 
@@ -672,6 +693,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 | `capabilities.aiSearchState` | field | State of the local semantic-search rung (`idle` · `loading` · `ready` · `error`). |
 | `capabilities.aiSearch` | field | Semantic (local, embedding) search over the app's own namespace granted — not web search. |
 | `capabilities.experimental_tex` | field · **experimental** | The app may compile LaTeX projects in its own storage. |
+| `capabilities.experimental_web` | field · **experimental** | The app may search the web and read pages through the host. |
 | `capabilities.net` | field | Sovereign egress (`naklios.net.fetch`) granted. |
 | `capabilities.netBackend` | field | Which egress backend the host is configured with: `worker` (the default) · `bridge`; null when none. Never a package name. |
 | `capabilities.review` | field | The host can stage native diffs from this app and return source-bound review decisions. Enabled for Reckon, Draft, and KanZen. |
@@ -778,6 +800,14 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 | `experimental_tex.cancel` | function · **experimental** | Stop a queued or running compile by the promise's `id`; the compile rejects with `ECANCELED`. |
 | `experimental_tex.cache` | function · **experimental** | Which TeX packs are in this browser. |
 | `experimental_tex.clearCache` | function · **experimental** | Asks the person, then deletes the TeX packs from this browser. |
+
+### `experimental_web` (namespace)
+
+| member | kind | what it is |
+|---|---|---|
+| `experimental_web` | namespace · **experimental** | Web search and page reading for agents whose Worker has no DNS and meets CORS (`docs/app-contract.md`, "Web"). System apps only. |
+| `experimental_web.search` | function · **experimental** | Search with the person's provider from the assistant panel (Brave, Tavily or SearXNG), else Wikipedia. Answers `{ provider, results }`. |
+| `experimental_web.fetch` | function · **experimental** | Read one http(s) page directly, through the person's web relay, or through Jina Reader. Answers `{ url, status, kind, content, truncated, via }`. |
 
 ### `experimental_commands` (namespace)
 
