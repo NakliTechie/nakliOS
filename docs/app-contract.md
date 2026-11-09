@@ -434,8 +434,9 @@ const { provider, results } = await naklios.experimental_web.search('wasm tex en
 const page = await naklios.experimental_web.fetch(results[0].url);  // { url, status, kind, content, truncated, via }
 ```
 
-- **Search.** The host uses the provider the person set in the assistant panel (Brave, Tavily or SearXNG); the key stays
-  in the host. With none set it searches Wikipedia, which needs no key or account.
+- **Search.** The host uses the provider the person set in the assistant panel (Brave, Tavily or SearXNG); else DeepSeek's
+  native web search when a DeepSeek key is saved in Settings → AI; else Wikipedia, which needs no key or account. Keys stay
+  in the host. `provider` in the answer says which ran.
 - **Reading.** GET only. The page directly with redirects refused, else the person's own web relay (`naklios.net`'s
   backend, without the Git token), else Jina Reader (`r.jina.ai`), which sees the address. Local-network addresses are
   refused. `kind` follows the `Content-Type`; the body stops at 2 MB and the content at 200,000 characters.
@@ -806,7 +807,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 | member | kind | what it is |
 |---|---|---|
 | `experimental_web` | namespace · **experimental** | Web search and page reading for agents whose Worker has no DNS and meets CORS (`docs/app-contract.md`, "Web"). System apps only. |
-| `experimental_web.search` | function · **experimental** | Search with the person's provider from the assistant panel (Brave, Tavily or SearXNG), else Wikipedia. Answers `{ provider, results }`. |
+| `experimental_web.search` | function · **experimental** | Search with the person's provider from the assistant panel (Brave, Tavily or SearXNG), else DeepSeek when its key is saved, else Wikipedia. Answers `{ provider, results }`. |
 | `experimental_web.fetch` | function · **experimental** | Read one http(s) page directly, through the person's web relay, or through Jina Reader. Answers `{ url, status, kind, content, truncated, via }`. |
 
 ### `experimental_commands` (namespace)
