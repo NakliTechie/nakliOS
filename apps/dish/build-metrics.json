@@ -1,15 +1,9 @@
 {
   "clientMinifier": "esbuild 0.28.1",
-  "plugins": [
-    "dsh-palimpsest",
-    "dsh-genui",
-    "@dfy-plugins/dsh-visualize",
-    "@dfy-plugins/dsh-appearance"
-  ],
+  "plugins": [],
   "official": [
     "@deepseek-ai/dsh-experimental-agent-team-profile",
     "@deepseek-ai/dsh-experimental-auto-review",
-    "@deepseek-ai/dsh-experimental-cot-translation-bundle",
     "@deepseek-ai/dsh-experimental-session-titles-bundle",
     "@deepseek-ai/dsh-experimental-badge-skill-bundle",
     "@deepseek-ai/dsh-experimental-ralph-bundle"
@@ -19,7 +13,6 @@
     "@deepseek-ai/dsh-web-app",
     "@deepseek-ai/dsh-experimental-agent-team-profile",
     "@deepseek-ai/dsh-experimental-auto-review",
-    "@deepseek-ai/dsh-experimental-cot-translation-bundle",
     "@deepseek-ai/dsh-experimental-session-titles-bundle",
     "@deepseek-ai/dsh-experimental-badge-skill-bundle",
     "@deepseek-ai/dsh-experimental-ralph-bundle",
@@ -192,16 +185,10 @@
     "@deepseek-ai/dsh-experimental-agent-team",
     "@deepseek-ai/dsh-experimental-tool-agent-team",
     "@deepseek-ai/dsh-experimental-client-ui-agent-team",
-    "@deepseek-ai/dsh-experimental-translator",
-    "@deepseek-ai/dsh-experimental-client-ui-cot-translation",
     "@deepseek-ai/dsh-session-title-all-prompts-llm",
     "@deepseek-ai/dsh-skill-badge",
     "@deepseek-ai/dsh-tool-ralph",
-    "@naklios/dish-llm",
-    "dsh-palimpsest",
-    "dsh-genui",
-    "@dfy-plugins/dsh-visualize",
-    "@dfy-plugins/dsh-appearance"
+    "@naklios/dish-llm"
   ],
   "disabledIds": [
     "deepseek-llm-api-extensions",
@@ -293,10 +280,6 @@
     "node_modules/@deepseek-ai/dsh-client-ui-user-questions/lib/client.js",
     "node_modules/@deepseek-ai/dsh-client-ui-trajectory/lib/client.js",
     "node_modules/@deepseek-ai/dsh-experimental-client-ui-agent-team/lib/client.js",
-    "node_modules/@deepseek-ai/dsh-experimental-client-ui-cot-translation/lib/client.js",
-    "node_modules/dsh-genui/lib/client.js",
-    "node_modules/@dfy-plugins/dsh-visualize/lib/client.js",
-    "node_modules/@dfy-plugins/dsh-appearance/lib/client.js",
     "node_modules/@deepseek-ai/dsh-client-ui-directory-picker-browse/lib/client.js",
     "node_modules/@deepseek-ai/dsh-client-ui-directory-picker-native/lib/client.js"
   ],
@@ -314,8 +297,8 @@
   "removedLazyChunks": [
     "node_modules/@deepseek-ai/dsh-client-ui-sidebar-terminal/lib/client.terminal.js"
   ],
-  "clientInputBytes": 8155018,
-  "clientOutputBytes": 6008948,
-  "imageBytes": 6264630,
+  "clientInputBytes": 8010746,
+  "clientOutputBytes": 5894389,
+  "imageBytes": 6082818,
   "lazyBytes": 4523205
 }

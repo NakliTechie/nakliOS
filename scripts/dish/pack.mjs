@@ -24,14 +24,18 @@ const installation = installationManifest(source);
 // plugins.json is the allow-list: npm plugins pinned by integrity (fetch-plugins.mjs verifies them into the source tree)
 // and DeepSeek's official bundles, which ship switched off on the Plugins page.
 const allowList = JSON.parse(fs.readFileSync(new URL('./plugins.json', import.meta.url), 'utf8'));
-// DeepSeek's own experimental bundles ship in the pinned upstream tree, so they mount like template bundles.
-const bundles = [...appBoot.PROFILE_TEMPLATES[PROFILE].bundles, ...allowList.official.map(bundle => bundle.name)];
-const bundlePatches = bundles.flatMap(bundle => {
+const bundles = appBoot.PROFILE_TEMPLATES[PROFILE].bundles;
+// DeepSeek's own experimental bundles ship in the image but outside the boot composition: the Worker composes only the
+// template's bundles and the home patch, so these stay off until the person switches them on in the Plugins page.
+const officialBundles = allowList.official.map(bundle => bundle.name);
+const patchesOf = list => list.flatMap(bundle => {
   const dir = appBoot.resolveBundleDir('dish-pack', bundle, installation.manifest, path.join(source, 'apps/cli'));
   const declaration = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')).dsh?.bundle;
   if (!declaration) throw new Error(`Bundle ${bundle} declares no dsh.bundle`);
   return appBoot.bundlePatchPaths(dir, declaration).flatMap(file => appBoot.loadOverlayPatches('dish-pack', file));
 });
+const bundlePatches = patchesOf(bundles);
+const officialPatches = patchesOf(officialBundles);
 const pluginBundles = allowList.plugins.flatMap(({ name, version }) => {
     const dir = path.join(source, 'node_modules', name);
     const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'));
@@ -92,7 +96,7 @@ const homePatch = [
 // Materialize the template's bundles and the packages their rows name. Dish
 // offers no optional bundles, so upstream's profileRoster (template plus every
 // optional bundle) would only add bytes the profile never mounts.
-const names = new Set(bundles); collectModuleNames(bundlePatches, names);
+const names = new Set([...bundles, ...officialBundles]); collectModuleNames([...bundlePatches, ...officialPatches], names);
 const roster = [...names].filter(name => !removedPackages.has(name) || retainedPackages.has(name));
 roster.push('@naklios/dish-llm');
 // collectModuleNames keeps only scoped or path names, so unscoped plugins (dsh-genui) would mount a row with no package.
@@ -156,7 +160,7 @@ const dump = rows => yaml.dump(rows, { schema: entryListSchema, noRefs: true });
 // profile.yml records the composition the Worker boots before any user layer, for review and tests.
 fs.writeFileSync(path.join(output, 'profile.yml'), dump(appBoot.composeEntries([bundlePatches, homePatch])));
 fs.writeFileSync(path.join(output, 'build-metrics.json'), JSON.stringify({
-  clientMinifier: `esbuild ${esbuild.version}`, plugins: pluginBundles.map(plugin => plugin.name), official: allowList.official.map(bundle => bundle.name), roster, disabledIds, clientBundles, removedClientBundles,
+  clientMinifier: `esbuild ${esbuild.version}`, plugins: pluginBundles.map(plugin => plugin.name), official: officialBundles, roster, disabledIds, clientBundles, removedClientBundles,
   lazyChunks: lazyArchives.flatMap(archive => archive.files), removedLazyChunks,
   clientInputBytes: inputBytes, clientOutputBytes: outputBytes, imageBytes: image.byteLength,
   lazyBytes: lazyArchives.reduce((sum, archive) => sum + archive.image.byteLength, 0),

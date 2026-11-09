@@ -8175,11 +8175,13 @@ function revokeNetGrants(){
 const netPrompts = new Map();
 // The app's Grant for this host: the stored one, or — once, with the owner's consent — a new one.
 // null when the owner declined (remembered until revoked in Settings).
+// `how` set → a web.read Grant (page reading and search, GET only), stored apart from the net.fetch Grant for the host.
 async function netEnsureGrant(appId, host, how){
-  const have = (netGrants()[appId] || {})[host];
+  const slot = how ? 'web:' + host : host;
+  const have = (netGrants()[appId] || {})[slot];
   if (have && have.denied) return null;
   if (have && have.identifier) return have;
-  const key = appId + '\0' + host;
+  const key = appId + '\0' + slot;
   if (netPrompts.has(key)) return netPrompts.get(key);
   const p = (async () => {
     const app = APPS.find(a => a.id === appId); const name = app?.name || appId;
@@ -8191,10 +8193,10 @@ async function netEnsureGrant(appId, host, how){
       `and records each request's host, method and status in History — never its body.`,
       { title:'Allow network access?', okLabel:'Allow', cancelLabel:'Not now' });
     const all = netGrants(); all[appId] = all[appId] || {};
-    if (!ok) { all[appId][host] = { denied:true, decidedAt: Date.now() }; saveNetGrants(all); return null; }
+    if (!ok) { all[appId][slot] = { denied:true, decidedAt: Date.now() }; saveNetGrants(all); return null; }
     const { g } = await netMods();
-    const grant = await g.issueGrant(await netRootKey(), { caveats: [g.caveat.principal('app:' + appId), g.caveat.tools(['net.fetch']), g.caveat.scope('net:' + host)] });
-    all[appId][host] = grant; saveNetGrants(all); return grant;
+    const grant = await g.issueGrant(await netRootKey(), { caveats: [g.caveat.principal('app:' + appId), g.caveat.tools([how ? 'web.read' : 'net.fetch']), g.caveat.scope((how ? 'web:' : 'net:') + host)] });
+    all[appId][slot] = grant; saveNetGrants(all); return grant;
   })().finally(() => netPrompts.delete(key));
   netPrompts.set(key, p);
   return p;
@@ -8203,7 +8205,7 @@ async function netAuthorize(appId, host, how){
   const grant = await netEnsureGrant(appId, host, how);
   if (!grant) return { ok:false, grant:null, reason:`network access to ${host} was not allowed` };
   const { g } = await netMods();
-  const v = await g.verifyGrant(grant, await netRootKey(), { principal:'app:' + appId, tool:'net.fetch', target:'net:' + host, now: Date.now(), revocationList: netRevoked() });
+  const v = await g.verifyGrant(grant, await netRootKey(), { principal:'app:' + appId, tool: how ? 'web.read' : 'net.fetch', target:(how ? 'web:' : 'net:') + host, now: Date.now(), revocationList: netRevoked() });
   return { ok: v.ok, grant, reason: v.ok ? '' : `the network grant for ${host} did not verify (${v.reason})` };
 }
 // History: one serialized append chain per origin. A failed write never fails the request it records,
@@ -8254,7 +8256,8 @@ async function webService(appId){
     record: (host, grantId, output) => netHistoryAppend({ appId, host, method:'GET', grantId, output }),
     searchConfig: () => { try { return JSON.parse(localStorage.getItem('nakli.voice.search') || 'null'); } catch(_) { return null; } },
     searchWith: searchWeb,
-    egress: url => egressConfigured() ? egressFetch({ url }) : null,
+    // GET only, and never with the Git token: reading a page must not reach what the token unlocks.
+    egress: url => egressConfigured() ? egressFetch({ url, gitAuth:false }) : null,
   });
   webServices.set(appId, service);
   return service;
@@ -8399,12 +8402,12 @@ async function netHostFetch(appId, msg){
   }
 }
 
-async function egressFetch({url, method='GET', headers={}, body=null}){
+async function egressFetch({url, method='GET', headers={}, body=null, gitAuth=true}){
   const s = egressSettings();
   if(!s || !s.workerUrl || !s.secret){ const e=new Error('No egress backend configured'); e.code='ENOEGRESS'; throw e; }
   // Inject host-held git auth (the PAT never came from the app) for git hosts.
   headers = Object.assign({}, headers || {});
-  const ga = gitAuthFor(url);
+  const ga = gitAuth ? gitAuthFor(url) : null;
   const hasAuth = Object.keys(headers).some(k=>String(k).toLowerCase()==='authorization');
   if(ga && !hasAuth){ headers['Authorization'] = 'Basic ' + btoa(unescape(encodeURIComponent(ga.username + ':' + ga.token))); }
   const bytes = _egBytes(body);

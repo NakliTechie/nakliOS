@@ -436,11 +436,14 @@ const page = await naklios.experimental_web.fetch(results[0].url);  // { url, st
 
 - **Search.** The host uses the provider the person set in the assistant panel (Brave, Tavily or SearXNG); the key stays
   in the host. With none set it searches Wikipedia, which needs no key or account.
-- **Reading.** The page directly, else the person's own web relay (`naklios.net`'s backend), else Jina Reader
-  (`r.jina.ai`), which sees the address. `kind` is `html` or `text`; content stops at 200,000 characters.
+- **Reading.** GET only. The page directly with redirects refused, else the person's own web relay (`naklios.net`'s
+  backend, without the Git token), else Jina Reader (`r.jina.ai`), which sees the address. Local-network addresses are
+  refused. `kind` follows the `Content-Type`; the body stops at 2 MB and the content at 200,000 characters.
 - **Consent and History.** Each host, the search provider and the reader included, asks the person once per app, through
-  the same network Grant as `naklios.net`. Every request appends one History event (door `net`) with the host and status,
-  never the page address or its contents.
+  a `web.read` Grant kept apart from `naklios.net`'s `net.fetch` Grant. Every request appends one History event (door
+  `net`) with the host, status and size, or an error category; never the page address, the contents or error text.
+- **Limit.** Stopping the calling tool does not yet stop a request the host has started; each provider call times out
+  after 10 to 20 s.
 
 ## Storage locations are separate
 

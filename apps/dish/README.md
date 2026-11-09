@@ -31,10 +31,10 @@ The upstream shell provides browser commands, pipelines, substitutions, and redi
 It does not provide git, Node programs, native tools, shell loops, or job control.
 Plugins are selected during packaging; installation inside the Worker is unavailable.
 `scripts/dish/plugins.json` is the allow-list.
-Each npm plugin on it is pinned by version and npm integrity hash, and `scripts/dish/fetch-plugins.mjs` refuses a download whose hash differs.
-The image carries dsh-palimpsest, dsh-genui, @dfy-plugins/dsh-visualize and @dfy-plugins/dsh-appearance switched on.
-DeepSeek's own experimental bundles that run in the Worker ship switched off on the Plugins page: Agent Teams, Auto Authorization Review, reasoning translation, conversation-following titles, the badge skill and Ralph loops.
-The list records why each other plugin stays out: native processes, `node:sqlite`, git, OS shells, top-level await, or run-time installs.
+DeepSeek's own experimental bundles that run in the Worker ship switched off on the Plugins page: Agent Teams, Auto Authorization Review, conversation-following titles, the badge skill and Ralph loops.
+Third-party npm plugins are held until they can run isolated: Dish shares the naklios.dev origin, so any plugin code could read the host's storage whatever its hash.
+When one is added, it is pinned by version and npm integrity hash, and `scripts/dish/fetch-plugins.mjs` refuses a download whose hash differs.
+The list records why each other plugin stays out: native processes, `node:sqlite`, git, OS shells, outside translation services, or run-time installs.
 Web search and page reading go through NakliOS (`naklios.experimental_web`), because the Worker has no DNS and meets CORS.
 NakliOS searches with the provider set in the assistant panel, or Wikipedia, and asks once per site before any request leaves the device.
 The image's home patch disables DeepSeek account/model routes, wire extensions, package inventory calls, and telemetry exporters.

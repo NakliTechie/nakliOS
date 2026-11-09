@@ -2,16 +2,16 @@
 // ladder (direct → relay → reader) and History records that carry no page address or contents.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createWebService, WEB_TEXT_CAP } from '../sys/host/web.mjs';
+import { createWebService, WEB_TEXT_CAP, localNetworkHost } from '../sys/host/web.mjs';
 
 function bed({ config = null, allow = () => true, routes = {}, relay = null } = {}) {
   const asked = [], records = [], fetched = [];
-  const fetchFn = async (url) => {
-    fetched.push(url);
+  const fetchFn = async (url, init = {}) => {
+    fetched.push({ url, redirect: init.redirect });
     const route = Object.entries(routes).find(([prefix]) => url.startsWith(prefix));
     if (!route) throw new TypeError('Failed to fetch');
-    const { status = 200, text = '', json } = route[1];
-    return { ok: status < 400, status, text: async () => text, json: async () => json };
+    const { status = 200, json, text = json ? JSON.stringify(json) : '', type = '' } = route[1];
+    return { ok: status < 400, status, headers: { get: () => type }, text: async () => text };
   };
   const service = createWebService({
     authorize: async (host, how) => { asked.push(`${how} ${host}`); if (!allow(host)) throw Object.assign(new Error(`network access to ${host} was not allowed`), { code: 'ENOGRANT' }); return `grant:${host}`; },
@@ -41,6 +41,44 @@ test('search uses the person\'s provider and asks for its host', async () => {
   assert.deepEqual(asked, ['search the web through api.search.brave.com']);
 });
 
+test('Content-Type decides html, so markup after a long preamble is still html', async () => {
+  const { service } = bed({ routes: { 'https://example.org/': { text: '<?xml version="1.0"?>' + ' '.repeat(5000) + '<html><script>x</script></html>', type: 'text/html; charset=utf-8' } } });
+  assert.equal((await service.fetch('https://example.org/')).kind, 'html');
+});
+
+test('direct reads refuse redirects, and local-network addresses are never read', async () => {
+  const { service, fetched } = bed({ routes: { 'https://example.org/': { text: 'ok' } } });
+  await service.fetch('https://example.org/');
+  assert.equal(fetched[0].redirect, 'error');
+  for (const host of ['localhost', '127.0.0.1', '10.0.0.5', '192.168.1.1', '172.20.0.1', '169.254.169.254', 'router', 'nas.local', '[::1]', '[fd00::1]'])
+    await assert.rejects(service.fetch(`http://${host}/`), { code: 'EINVAL' }, host);
+  assert.equal(localNetworkHost('example.org'), false);
+  assert.equal(localNetworkHost('172.32.0.1'), false);
+});
+
+test('History holds an error category, never the error text', async () => {
+  const { service, records } = bed({ routes: { 'https://en.wikipedia.org/w/api.php': { text: '<html>login page with secret</html>' } } });
+  await assert.rejects(service.search('q'));
+  assert.deepEqual(records.at(-1).output, { error: 'failed' });
+});
+
+test('a relay that fails still falls through to the reader', async () => {
+  const { service, asked } = bed({ relay: async () => { throw new Error('egress: host not allowed'); }, routes: { 'https://r.jina.ai/': { text: 'plain' } } });
+  const page = await service.fetch('https://blocked.example/a');
+  assert.equal(page.via, 'Jina Reader');
+  assert.equal(asked.length, 2);
+});
+
+test('a page body is read only up to the byte cap', async () => {
+  const { readCapped, WEB_BYTE_CAP } = await import('../sys/host/web.mjs');
+  let pulled = 0;
+  const stream = new ReadableStream({ pull(controller) { pulled++; controller.enqueue(new Uint8Array(1024 * 1024).fill(97)); } });
+  const { text, cut } = await readCapped(new Response(stream));
+  assert.equal(cut, true);
+  assert.equal(text.length, WEB_BYTE_CAP);
+  assert.ok(pulled <= 4, `stopped after ${pulled} chunks`);
+});
+
 test('a declined host sends nothing', async () => {
   const { service, fetched } = bed({ allow: () => false });
   await assert.rejects(service.search('q'), { code: 'ENOGRANT' });
@@ -51,7 +89,7 @@ test('fetch reads directly, labels html, caps content, and records no path', asy
   const big = '<!doctype html><title>x</title>' + 'a'.repeat(WEB_TEXT_CAP);
   const { service, records } = bed({ routes: { 'https://example.org/': { text: big } } });
   const page = await service.fetch('https://example.org/secret/path?q=1');
-  assert.equal(page.kind, 'html');
+  assert.equal(page.kind, 'html', 'a doctype with no Content-Type still reads as html');
   assert.equal(page.via, 'direct');
   assert.equal(page.truncated, true);
   assert.equal(page.content.length, WEB_TEXT_CAP);
