@@ -8,8 +8,8 @@
       "sha256": "ebb4f09972aee8608be255debaf78451a68e95c290f55c240dec2ecfa16ea6be"
     },
     "README.md": {
-      "bytes": 6035,
-      "sha256": "ea32e8282cc55a0462822af0b595d9cd89c30fa603d7b868fd594e995109b746"
+      "bytes": 6966,
+      "sha256": "f5fc2580e91436bc4bc985abe7caa2ede2431dec28fefb1ebb6d28b255e28dff"
     },
     "assets/c-D24wO31W.js": {
       "bytes": 63,
@@ -668,8 +668,8 @@
       "sha256": "81be3183f9ca6206f4e7cdead796dfec02a30199a98ecde87d90f5c7d484e0dc"
     },
     "build-metrics.json": {
-      "bytes": 13688,
-      "sha256": "3217bd9a7fe4252331c96d5c64dfa249a86e0b782de72121d6ae9eb5b8fc35ed"
+      "bytes": 15340,
+      "sha256": "851e6e367631133dee0376d2fe7916c18cb34d59b3c5b20a042a5a3add670624"
     },
     "favicon-dark.svg": {
       "bytes": 3634,
@@ -680,12 +680,12 @@
       "sha256": "9e983b4f649c25c6ca0623a50be1a6e705fd8f49f756638b980fa13b40575ab6"
     },
     "host.mjs": {
-      "bytes": 7148,
-      "sha256": "8c80a014b563515a179350f5bce12c4e06c6d769ef1f57d5872b80f44246f09d"
+      "bytes": 7783,
+      "sha256": "6ba2283698d796419ab4c92306dedf4dbff5d5137a80892c65a81426f2061bd8"
     },
     "index.html": {
-      "bytes": 1201,
-      "sha256": "9ac20b6f6a266424068ba15e0043940e5ca4fdbd11c03230f1c729177c730881"
+      "bytes": 2132,
+      "sha256": "2194257539b269914cd5363c058c2ba65897cd693f0cbe23d2f628c79df3600b"
     },
     "lifecycle.mjs": {
       "bytes": 650,
@@ -703,21 +703,21 @@
       "bytes": 50912,
       "sha256": "c0c8a991a5368cfe3f5eaebf78ac54ba364aca3bfe709a34779367c18a6559a3"
     },
-    "preview/lazy/053a58fb5742c67580cec9bb55647e95363f0faaa467058d0e7b847aa32fda6b.tar.gz": {
-      "bytes": 1458913,
-      "sha256": "053a58fb5742c67580cec9bb55647e95363f0faaa467058d0e7b847aa32fda6b"
+    "preview/lazy/43d7a5b3ca16bde74dd018384435d531e4d23ef49e35e7e8ab6e6dea01bc711e.tar.gz": {
+      "bytes": 1458909,
+      "sha256": "43d7a5b3ca16bde74dd018384435d531e4d23ef49e35e7e8ab6e6dea01bc711e"
     },
-    "preview/lazy/890ea7ead15ee2f6a47c06f4be922f3471f20ce4a20571162e205e5443aea762.tar.gz": {
-      "bytes": 48421,
-      "sha256": "890ea7ead15ee2f6a47c06f4be922f3471f20ce4a20571162e205e5443aea762"
+    "preview/lazy/b076866d3a93da8db85ac85526f93cac61aceb73525618e82113a9dd64be6dee.tar.gz": {
+      "bytes": 48420,
+      "sha256": "b076866d3a93da8db85ac85526f93cac61aceb73525618e82113a9dd64be6dee"
     },
-    "preview/lazy/a718f0aac4f582606d0b494c4872289c658a43a2ba94f62072412f2c14924e93.tar.gz": {
-      "bytes": 3015883,
-      "sha256": "a718f0aac4f582606d0b494c4872289c658a43a2ba94f62072412f2c14924e93"
+    "preview/lazy/cdf30bfa890d5a00aafd25b7bc84a083c93a56824189922036f1fd33752343a8.tar.gz": {
+      "bytes": 3015876,
+      "sha256": "cdf30bfa890d5a00aafd25b7bc84a083c93a56824189922036f1fd33752343a8"
     },
     "preview/vfs-image.tar.gz": {
-      "bytes": 6019266,
-      "sha256": "155562bb32fb89235dc27fc1ceac621edffb4c72df04b4cfde086c1e364e2e3e"
+      "bytes": 6264630,
+      "sha256": "352b99b6c1d6309da2177e20efc653e9fcaa1b69a492e6e489ff73c5f4a18a52"
     },
     "preview/worker-DFxkeqQ4.js": {
       "bytes": 300519,
@@ -728,8 +728,8 @@
       "sha256": "031da561c04f95a3e179c097105ed70a5214f4c6358239ed90bb504c881b5234"
     },
     "profile.yml": {
-      "bytes": 43830,
-      "sha256": "de4f72e721a25928adc48870c8c3f98562ee1115825026a93b572dad79a889f2"
+      "bytes": 45428,
+      "sha256": "43f510c1de0466f7e74aff42f39dbf2d6925448d235ae510a8b0caa76d6c64de"
     },
     "storage.mjs": {
       "bytes": 3147,

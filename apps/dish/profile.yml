@@ -43,6 +43,7 @@
     maxInputBytes: 4096
     maxOutputTokens: 4096
     timeoutMs: 60000
+  disabled: true
 - id: user-questions
   name: '@deepseek-ai/dsh-user-questions'
 - id: agent
@@ -348,8 +349,8 @@
 - id: web
   name: '@deepseek-ai/dsh-web'
   config:
-    searchProvider: deepseek-official
-    fetchProvider: http
+    searchProvider: naklios
+    fetchProvider: naklios
 - id: web-search-deepseek
   name: '@deepseek-ai/dsh-web-search-deepseek'
   config:
@@ -1222,5 +1223,66 @@
       - id: tool-plugin-market
         name: '@deepseek-ai/dsh-plugin-market/tools'
         disabled: !!js '!ctx.get(''profileContext'')'
+- id: agent-team
+  name: '@deepseek-ai/dsh-experimental-agent-team'
+  config:
+    maxMembers: 8
+    maxTasks: 256
+    maxMessageBytes: 65536
+    disposalTimeoutMs: 5000
+- id: tool-agent-team
+  name: '@deepseek-ai/dsh-experimental-tool-agent-team'
+  config:
+    freshProvider: spawn
+    forkProvider: fork
+- id: ui-agent-team
+  name: '@deepseek-ai/dsh-experimental-client-ui-agent-team'
+- id: auto-review
+  name: '@deepseek-ai/dsh-experimental-auto-review'
+- id: translator
+  name: '@deepseek-ai/dsh-experimental-translator'
+- id: cot-translation
+  name: '@deepseek-ai/dsh-experimental-client-ui-cot-translation'
+  config:
+    provider: bing
+    targetLanguage: auto
+- id: optional-session-title-all-prompts
+  name: '@deepseek-ai/dsh-session-title-all-prompts-llm'
+  config:
+    targetWords: 5
+    targetCjkCharacters: 10
+    maxInputBytes: 4096
+    maxOutputTokens: 64
+    timeoutMs: 60000
+- id: skill-badge
+  name: '@deepseek-ai/dsh-skill-badge'
+- id: optional-ralph
+  name: cordis:group
+  group: true
+  isolate:
+    workflowEngine: true
+  config:
+    - id: optional-ralph-workflow
+      name: '@deepseek-ai/dsh-workflow-ptc'
+      config:
+        provider: spawn
+    - id: tool-ralph
+      name: '@deepseek-ai/dsh-tool-ralph'
+      config:
+        subagentProvider: spawn
+        maxRounds: 64
 - id: naklios-llm
   name: '@naklios/dish-llm'
+- id: naklios-web
+  name: '@naklios/dish-llm/web'
+- id: dsh-palimpsest
+  name: dsh-palimpsest
+- id: genui
+  name: dsh-genui
+  config:
+    sectionOrder: 80
+    sectionName: genui:cards
+- id: visualize
+  name: '@dfy-plugins/dsh-visualize'
+- id: appearance
+  name: '@dfy-plugins/dsh-appearance'

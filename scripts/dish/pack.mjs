@@ -21,14 +21,26 @@ const { packVfsImage, collectModuleNames, configTrees, indexWorkspacePackages, i
 // curation is expressed as home-patch rows over exactly what the Worker sees.
 const PROFILE = 'web';
 const installation = installationManifest(source);
-const bundles = appBoot.PROFILE_TEMPLATES[PROFILE].bundles;
+// plugins.json is the allow-list: npm plugins pinned by integrity (fetch-plugins.mjs verifies them into the source tree)
+// and DeepSeek's official bundles, which ship switched off on the Plugins page.
+const allowList = JSON.parse(fs.readFileSync(new URL('./plugins.json', import.meta.url), 'utf8'));
+// DeepSeek's own experimental bundles ship in the pinned upstream tree, so they mount like template bundles.
+const bundles = [...appBoot.PROFILE_TEMPLATES[PROFILE].bundles, ...allowList.official.map(bundle => bundle.name)];
 const bundlePatches = bundles.flatMap(bundle => {
   const dir = appBoot.resolveBundleDir('dish-pack', bundle, installation.manifest, path.join(source, 'apps/cli'));
   const declaration = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')).dsh?.bundle;
   if (!declaration) throw new Error(`Bundle ${bundle} declares no dsh.bundle`);
   return appBoot.bundlePatchPaths(dir, declaration).flatMap(file => appBoot.loadOverlayPatches('dish-pack', file));
 });
+const pluginBundles = allowList.plugins.flatMap(({ name, version }) => {
+    const dir = path.join(source, 'node_modules', name);
+    const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'));
+    if (manifest.version !== version) throw new Error(`${name}: found ${manifest.version}, pinned ${version}`);
+    return manifest.dsh?.bundle ? [{ name, patches: appBoot.bundlePatchPaths(dir, manifest.dsh.bundle).flatMap(file => appBoot.loadOverlayPatches('dish-pack', file)) }] : [];
+  });
 const composed = appBoot.composeEntries([bundlePatches]);
+const collectRowNames = rows => (Array.isArray(rows) ? rows : []).flatMap(row => [
+  ...(typeof row.name === 'string' ? [row.name] : []), ...collectRowNames(row.insert), ...collectRowNames(row.config)]);
 const findRow = (rows, id) => {
   for (const row of Array.isArray(rows) ? rows : []) {
     if (row.id === id) return row;
@@ -69,6 +81,12 @@ const homePatch = [
   { id: 'agent-default-model', config: { provider: 'naklios', model: 'shared' } },
   configured('workspace-controller', { documentsDirectory: '/dsh/workspace' }),
   { insert: [{ id: 'naklios-llm', name: '@naklios/dish-llm' }] },
+  // Web search and fetch through NakliOS (web.mjs): the Worker has no DNS, so dsh's own providers cannot run.
+  { insert: [{ id: 'naklios-web', name: '@naklios/dish-llm/web' }] },
+  configured('web', { searchProvider: 'naklios', fetchProvider: 'naklios' }),
+  // The Worker composes from the template's bundle list plus this home patch, so allow-listed
+  // third-party rows ride here; DeepSeek's official bundles stay switchable (off) on the Plugins page.
+  ...pluginBundles.flatMap(plugin => plugin.patches),
 ];
 
 // Materialize the template's bundles and the packages their rows name. Dish
@@ -77,14 +95,23 @@ const homePatch = [
 const names = new Set(bundles); collectModuleNames(bundlePatches, names);
 const roster = [...names].filter(name => !removedPackages.has(name) || retainedPackages.has(name));
 roster.push('@naklios/dish-llm');
+// collectModuleNames keeps only scoped or path names, so unscoped plugins (dsh-genui) would mount a row with no package.
+for (const { name } of pluginBundles) if (!roster.includes(name)) roster.push(name);
 
 const dshVersion = JSON.parse(fs.readFileSync(path.join(source, 'packages/llm/llm/package.json'), 'utf8')).version;
 const plugin = path.join(source, 'dish-plugin'); fs.mkdirSync(path.join(plugin, 'lib'), { recursive: true });
-fs.writeFileSync(path.join(plugin, 'package.json'), JSON.stringify({ name: '@naklios/dish-llm', version: '1.0.0', type: 'module', main: 'lib/index.js', exports: { '.': './lib/index.js' }, files: ['lib'], dependencies: { '@deepseek-ai/dsh-llm': dshVersion } }));
+fs.writeFileSync(path.join(plugin, 'package.json'), JSON.stringify({ name: '@naklios/dish-llm', version: '1.0.0', type: 'module', main: 'lib/index.js', exports: { '.': './lib/index.js', './web': './lib/web.mjs' }, files: ['lib'], dependencies: { '@deepseek-ai/dsh-llm': dshVersion } }));
 fs.copyFileSync(new URL('./provider.mjs', import.meta.url), path.join(plugin, 'lib/index.js'));
 fs.copyFileSync(new URL('./protocol.mjs', import.meta.url), path.join(plugin, 'lib/protocol.mjs'));
+fs.copyFileSync(new URL('./web.mjs', import.meta.url), path.join(plugin, 'lib/web.mjs'));
 const workspaces = indexWorkspacePackages(source); workspaces.set('@naklios/dish-llm', plugin);
-const result = packVfsImage({ profile: PROFILE, roster, installation, root: '/dsh', workspaces, resolveFrom: source, configTrees: configTrees(source), homePatch });
+// The sweep keeps only modules reachable from its seeds and workspace packages. Allow-listed plugins are neither,
+// so their host modules were dropped and failed at boot ("cannot resolve @dfy-plugins/dsh-appearance", 2026-11-09).
+// Seed each plugin row by name, on top of upstream's own seeds (exported only from its compiled rules module).
+const { IMAGE_ENTRY_SEEDS } = await import(pathToFileURL(path.join(source, 'packages/experimental/webworker-packer/lib/types/rules.js')));
+const pluginEntries = [...new Set(pluginBundles.flatMap(plugin => collectRowNames(plugin.patches)))];
+const result = packVfsImage({ profile: PROFILE, roster, installation, root: '/dsh', workspaces, resolveFrom: source, configTrees: configTrees(source), homePatch,
+  ...(pluginEntries.length ? { entries: [...IMAGE_ENTRY_SEEDS, ...pluginEntries] } : {}) });
 if (result.missing.length) throw new Error(`Incomplete image: ${JSON.stringify(result.missing)}`);
 
 const files = { ...result.files };
@@ -129,7 +156,7 @@ const dump = rows => yaml.dump(rows, { schema: entryListSchema, noRefs: true });
 // profile.yml records the composition the Worker boots before any user layer, for review and tests.
 fs.writeFileSync(path.join(output, 'profile.yml'), dump(appBoot.composeEntries([bundlePatches, homePatch])));
 fs.writeFileSync(path.join(output, 'build-metrics.json'), JSON.stringify({
-  clientMinifier: `esbuild ${esbuild.version}`, roster, disabledIds, clientBundles, removedClientBundles,
+  clientMinifier: `esbuild ${esbuild.version}`, plugins: pluginBundles.map(plugin => plugin.name), official: allowList.official.map(bundle => bundle.name), roster, disabledIds, clientBundles, removedClientBundles,
   lazyChunks: lazyArchives.flatMap(archive => archive.files), removedLazyChunks,
   clientInputBytes: inputBytes, clientOutputBytes: outputBytes, imageBytes: image.byteLength,
   lazyBytes: lazyArchives.reduce((sum, archive) => sum + archive.image.byteLength, 0),

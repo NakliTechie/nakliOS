@@ -149,6 +149,8 @@
     aiSearch: false,
     // experimental_tex: this app may compile LaTeX projects in its own storage.
     experimental_tex: false,
+    // experimental_web: this app may search the web and read pages through the host.
+    experimental_web: false,
     // net: a sovereign egress backend (the user's own Worker or local bridge) is
     // configured + permitted, so naklios.net.fetch can reach cross-origin hosts the
     // browser blocks. Stays false until a host advertises one — the SDK seam.
@@ -577,6 +579,7 @@
         : 'idle';
       capabilities.aiSearch = msg.aiSearch === true;
       capabilities.experimental_tex = msg.experimental_tex === true;
+      capabilities.experimental_web = msg.experimental_web === true;
       capabilities.net = msg.net === true;
       capabilities.netBackend = typeof msg.netBackend === 'string' ? msg.netBackend : null;
       capabilities.review = msg.review === true;
@@ -742,7 +745,7 @@
     } else if ((msg.type === 'naklios:fs:reply' || msg.type === 'naklios:file:reply' ||
                 msg.type === 'naklios:review:reply' || msg.type === 'naklios:commands:reply' ||
                 msg.type === 'naklios:rag:reply' || msg.type === 'naklios:net:reply' ||
-                msg.type === 'naklios:tex:reply' ||
+                msg.type === 'naklios:tex:reply' || msg.type === 'naklios:web:reply' ||
                 msg.type === 'naklios:skills:reply' || msg.type === 'naklios:ai:reply') && msg.requestId) {
       var p = pendingRpc.get(msg.requestId);
       if (!p) return;
@@ -1093,6 +1096,21 @@
         aiImageRequests.forEach(function (_, requestId) {
           send('naklios:ai:cancel', { requestId: requestId });
         });
+      },
+    },
+
+    // Web search and page reading for agents. The host searches with the person's provider (or Wikipedia) and reads
+    // pages directly, through the person's web relay, or through Jina Reader; each site asks the person once.
+    experimental_web: {
+      // search(query, { maxResults }) -> { provider, results: [{ title, url, snippet }] }
+      search: function (query, options) {
+        if (!inNakliOS || !capabilities.experimental_web) return Promise.reject(new Error('NakliOS web search is unavailable to this app'));
+        return rpc('naklios:web:search', { query: String(query || ''), maxResults: options && options.maxResults }, 120000);
+      },
+      // fetch(url) -> { url, status, kind: 'html'|'text', content, truncated, via }
+      fetch: function (url) {
+        if (!inNakliOS || !capabilities.experimental_web) return Promise.reject(new Error('NakliOS page reading is unavailable to this app'));
+        return rpc('naklios:web:fetch', { url: String(url || '') }, 120000);
       },
     },
 

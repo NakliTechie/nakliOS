@@ -107,6 +107,9 @@ jobs:
       - name: TeX service (queue, refusals, cancel, log diagnostics, SyncTeX paths, the /tex/ route, the SDK envelope)
         run: node scripts/test-tex-service.mjs
 
+      - name: Web search and page reading for agent apps (provider choice, consent per host, reading order, History without addresses)
+        run: node scripts/test-host-web.mjs
+
       - name: Verify naklios.net egress SDK seam (ENOEGRESS until a backend is advertised)
         run: node scripts/test-net-seam.mjs
 

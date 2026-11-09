@@ -54,6 +54,7 @@ prefix today.
 | `capabilities.aiSearchState` | field | stable | — | State of the local semantic-search rung (`idle` · `loading` · `ready` · `error`). |
 | `capabilities.aiSearch` | field | stable | — | Semantic (local, embedding) search over the app's own namespace granted — not web search. |
 | `capabilities.experimental_tex` | field | experimental | As `experimental_tex`. | The app may compile LaTeX projects in its own storage. |
+| `capabilities.experimental_web` | field | experimental | As `experimental_web`. | The app may search the web and read pages through the host. |
 | `capabilities.net` | field | stable | — | Sovereign egress (`naklios.net.fetch`) granted. |
 | `capabilities.netBackend` | field | stable | — | Which egress backend the host is configured with: `worker` (the default) · `bridge`; null when none. Never a package name. |
 | `capabilities.review` | field | stable | — | The host can stage native diffs from this app and return source-bound review decisions. Enabled for Reckon, Draft, and KanZen. |
@@ -100,6 +101,9 @@ prefix today.
 | `experimental_tex.cancel` | function | experimental | As `experimental_tex`. | Stop a queued or running compile by the promise's `id`; the compile rejects with `ECANCELED`. |
 | `experimental_tex.cache` | function | experimental | As `experimental_tex`. | Which TeX packs are in this browser. |
 | `experimental_tex.clearCache` | function | experimental | As `experimental_tex`. | Asks the person, then deletes the TeX packs from this browser. |
+| `experimental_web` | namespace | experimental | Dish's web tools ship on it, before stabilization as `web`. | Web search and page reading for agents whose Worker has no DNS and meets CORS (`docs/app-contract.md`, "Web"). System apps only. |
+| `experimental_web.search` | function | experimental | As `experimental_web`. | Search with the person's provider from the assistant panel (Brave, Tavily or SearXNG), else Wikipedia. Answers `{ provider, results }`. |
+| `experimental_web.fetch` | function | experimental | As `experimental_web`. | Read one http(s) page directly, through the person's web relay, or through Jina Reader. Answers `{ url, status, kind, content, truncated, via }`. |
 | `experimental_commands` | namespace | experimental | Notes and Calendar register commands, and the voice assistant calls them live on naklios.dev through the desktop catalog (common rail step 2), before stabilization. | The app's commands on the common rail (`docs/app-contract.md`, "Common rail"); the desktop lists them as `<app-id>.<name>` in `sys/host/catalog.mjs`, checks each caller's grant and stages `destructive` ones. |
 | `experimental_commands.register` | function | experimental | As `experimental_commands`. | Declare the app's commands `{ name, description, input, scope, handler }`; replaces the whole set. Standalone: keeps the handlers and sends nothing. |
 | `experimental_commands.search` | function | experimental | Anvil finds app commands through it (common rail step 3), before stabilization. | System apps: find other apps' commands by words, with the input each one takes. Standalone: `[]`. |

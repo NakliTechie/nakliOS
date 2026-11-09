@@ -111,6 +111,12 @@ const PROVIDERS = {
   },
 };
 export const SEARCH_PROVIDERS = Object.keys(PROVIDERS);
+// The same providers for the host's web service (sys/host/web.mjs), so apps search with the person's one setting.
+export function searchWeb(query, config) {
+  const run = PROVIDERS[config?.provider];
+  if (!run) throw new Error(`unknown search provider ${config?.provider}`);
+  return run(query, config);
+}
 
 // Readable text from HTML: drops scripts, styles and navigation, prefers <article> or <main>.
 export function pageText(html, { cap = 3000, parse = (h) => new DOMParser().parseFromString(h, 'text/html') } = {}) {
