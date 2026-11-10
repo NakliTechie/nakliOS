@@ -535,7 +535,7 @@ console.log('run-assembly: A4 readiness == the toolset in every mode; A2 episode
 // C1: driveRun hands every loop of the run the caller's compactor
 {
   const src = await (await import('node:fs/promises')).readFile(new URL('../sys/ai/run-assembly.mjs', import.meta.url), 'utf8');
-  assert.match(src, /runAgentLoop\(\{ messages, tools, infer, executeTool, \.\.\.budget, signal, verify, onEvent: onLoop, steer, compact, prepareRequest \}\)/, 'the loop gets compact and the request pruner');
+  assert.match(src, /runAgentLoop\(\{ messages, tools, infer, executeTool, \.\.\.budget, signal, verify, onEvent: onLoop, steer, compact, compactAbove, prepareRequest \}\)/, 'the loop gets compact and the request pruner');
   assert.match(src, /prepareRequest = \(messages\) => pruneOpenAIMessages\(messages\)/, 'pruning is on by default in Anvil runs');
 }
 console.log(`run-assembly: ${n} groups green — prompt bytes match e870f0b plus two approved B12 spans; tool list, budgets and other texts match e870f0b; driveRun records every loop; the app is wired through the module`);
