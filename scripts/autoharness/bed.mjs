@@ -25,6 +25,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { systemMessage, gateNote, runToolset, driveRun, withHooks, withBedStubs, loadHooks, isSimpleAsk } from '../../sys/ai/run-assembly.mjs';
+import { compactConversation } from '../../sys/ai/compaction.mjs';
+import { makeSummarizer } from '../../sys/ai/compaction-summary.mjs';
 import { bedKiln, LIMIT_MS } from './python.mjs';
 import { toAnthropicRequest, fromAnthropicMessage, replayKey } from '../../sys/ai/anthropic-protocol.mjs';
 import { runCodemode } from '../../sys/ai/codemode-runtime.mjs';
@@ -239,18 +241,20 @@ export function scriptedInfer(steps) {
 
 // What the run produced that a grade can read. `answer` is the last non-empty assistant text.
 function readOut(rec) {
-  let answer = '', input = 0, output = 0, priced = 0, calls = 0;
+  let answer = '', input = 0, output = 0, priced = 0, calls = 0, maxInput = 0, compactions = 0, summaryTokens = 0;
   const toolNames = [];
   for (const e of rec.events()) {
     if (e.tool === 'llm.responded') {
       const o = rec.resolve(e).output || {};
       calls++;
       if (typeof o.content === 'string' && o.content.trim()) answer = o.content;
-      if (o.usage) { priced++; input += Number(o.usage.prompt) || 0; output += Number(o.usage.completion) || 0; }
+      if (o.usage) { priced++; const p = Number(o.usage.prompt) || 0; input += p; maxInput = Math.max(maxInput, p); output += Number(o.usage.completion) || 0; }
     }
+    // In-run compactions and what their summary calls cost (outside the recorded turns).
+    if (e.tool === 'run.compacted') { compactions++; const u = rec.resolve(e).output?.usage; if (u) summaryTokens += Number(u.total) || 0; }
     if (e.tool === 'tool.called') toolNames.push(rec.resolve(e).input?.name);
   }
-  return { answer, usage: { calls, priced, input, output }, toolNames };
+  return { answer, usage: { calls, priced, input, output, maxInput, compactions, summaryTokens }, toolNames };
 }
 
 // Script mode (the app's `codemode` tool, opt-in per task in Anvil) in the node bed. The app runs the guest in a browser
@@ -290,7 +294,23 @@ export function withScript(executeTool, { allowed, stats }) {
 
 // Run ONE task once. `infer` is the model; `stamp` names it on run.started. Returns the grade, the
 // record's metrics, token usage, and the record itself (exported) for the optimizer to read later.
-export async function runTask(task, { infer, stamp = null, sysPrior = undefined, script = false, scriptHint = '', extraHint = '' }) {
+// `compaction` (an experiment arm, parsed by parseCompactionOverride): in-run compaction as Anvil's
+// localStorage['anvil-compaction'] turns it on, with the summary written by the run's own model.
+function bedCompactor(infer, ov) {
+  return async (msgs, opts = {}) => {
+    const head = msgs[0] && msgs[0].role === 'system' ? [msgs[0]] : [];
+    const body = msgs.slice(head.length);
+    let usage = null;
+    const summarize = ov.summarize ? makeSummarizer(infer, { onUsage: (u) => { usage = u; } }) : null;
+    const now = Math.ceil(JSON.stringify(body).length / 4);
+    const threshold = opts.reason === 'threshold' ? ov.threshold : Math.max(1000, Math.floor(now / 2));
+    const keepRecentTokens = opts.reason === 'threshold' ? ov.keepRecentTokens : Math.floor(threshold * 0.4);
+    const r = await compactConversation(body, { threshold, keepRecentTokens, retrievable: true, summarize });
+    return r.compacted ? { method: r.method, messages: [...head, ...r.messages], usage } : null;
+  };
+}
+
+export async function runTask(task, { infer, stamp = null, sysPrior = undefined, script = false, scriptHint = '', extraHint = '', compaction = null }) {
   const ws = freshWorkspace(task.seed || {});
   await ws.ready;
   const seedSnap = snapshot(ws.backend);
@@ -318,6 +338,7 @@ export async function runTask(task, { infer, stamp = null, sysPrior = undefined,
       tools: scriptOn ? codemodeCatalog(baseTools, { enabled: true, mode: 'code' }) : baseTools,
       infer: rec.wrapInfer(infer), executeTool: exec, rec, verify, onEvent: rec.onEvent,
       gateNote: gated ? gateNote('bench gate: ' + task.id) : '', model: () => stamp,
+      ...(compaction ? { compact: bedCompactor(infer, compaction), compactAbove: compaction.compactAbove } : {}),
     });
   } catch (e) { crash = String(e && e.message || e); }
   await rec.settled();
