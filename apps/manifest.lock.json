@@ -1882,6 +1882,34 @@
           "bytes": 1262398
         }
       ]
+    },
+    {
+      "id": "figger",
+      "repo": "NakliTechie/figger",
+      "requestedRef": "main",
+      "resolvedCommit": "941d21defee50685749e887a2dc368a8ca6b34f2",
+      "files": [
+        {
+          "source": "index.html",
+          "destination": "index.html",
+          "sha256": "34c1d01888f7bc58f39d1b46c0dfbd2f325da684453cda7dbaa514aeb5a8e965",
+          "bytes": 552205,
+          "originalSourceSha256": "e2658f1a8f8093023a55211e4acd2050ec4abe71e2baca4e062b091a8ae67a75",
+          "sdkSha256": "86b983f977ff00364fb853f7edc51f6ef6ed9bfedfd0cc18009e128d048e74a9"
+        },
+        {
+          "source": "commands.json",
+          "destination": "commands.json",
+          "sha256": "2d1c4331bdf320d796f3040a239dba287970b4624e603056b4e940ceb87e0e5d",
+          "bytes": 20477
+        },
+        {
+          "source": "NOTICE",
+          "destination": "NOTICE",
+          "sha256": "3f45808a38fbc9676fe82829fd3b3decc5c12f64b461b97df0753fcb6feb2a82",
+          "bytes": 1318
+        }
+      ]
     }
   ]
 }
