@@ -25,6 +25,18 @@ export function answerText(entry) {
   return parts.filter((p) => p?.type === 'text').map((p) => p.text).join('');
 }
 
+function modelMessages(entry) {
+  return Array.isArray(entry?.model) ? entry.model : entry?.model ? [entry.model] : [];
+}
+function userText(entry) {
+  return modelMessages(entry).map((m) => (typeof m?.content === 'string' ? m.content
+    : (Array.isArray(m?.content) ? m.content : []).filter((p) => p?.type === 'text').map((p) => p.text).join(''))).join('');
+}
+function toolCallNames(entry) {
+  return modelMessages(entry).flatMap((m) => (Array.isArray(m?.content) ? m.content : []))
+    .filter((p) => p?.type === 'toolCall' && p.name).map((p) => p.name);
+}
+
 // Where Pi keeps its conversations: JSONL beside the workspace, on the same storage as the files.
 export const SESSIONS_DIR = '/.pi/sessions';
 
@@ -64,5 +76,26 @@ export async function openPi({ fs, shell, callBroker, skills = null, prune = und
     return { settled, answer };
   }
 
-  return { harness, root, env, ask, close: () => harness.close(context) };
+  // The conversation so far, as the page draws it, so a reload shows what was said before
+  // (the session itself always survived; only the window forgot it).
+  async function transcript() {
+    const view = await root.viewState(context);
+    try {
+      const rows = [];
+      for (const entry of view.value?.entries || []) {
+        if (entry.kind === 'pi.user') {
+          const text = userText(entry);
+          if (text) rows.push({ role: 'you', text });
+        } else if (entry.kind === 'pi.assistant') {
+          const calls = toolCallNames(entry);
+          if (calls.length) rows.push({ role: 'sys', text: 'Tool call: ' + calls.join(', ') });
+          const text = answerText(entry);
+          if (text) rows.push({ role: 'assistant', text });
+        }
+      }
+      return rows;
+    } finally { view.dispose?.(); }
+  }
+
+  return { harness, root, env, ask, transcript, close: () => harness.close(context) };
 }

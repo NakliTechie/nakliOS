@@ -52,6 +52,12 @@ assert.ok(sessions.ok && sessions.entries.some((e) => e.type === 'file'), 'Pi\'s
 // Load 2: a fresh Pi on the same storage sees the file and the earlier conversation.
 const second = [];
 const pi2 = await load(async (req) => { second.push(req); return { choices: [{ message: { content: 'The word was PELICAN.' }, finish_reason: 'stop' }] }; });
+// The window redraws the earlier conversation from the reopened session (it used to start empty after a reload).
+const shown = await pi2.transcript();
+assert.deepEqual(shown.map((row) => row.role), ['you', 'sys', 'assistant'], 'the earlier turn, its tool call and its answer');
+assert.match(shown[0].text, /Remember the word PELICAN/);
+assert.equal(shown[1].text, 'Tool call: write');
+assert.equal(shown[2].text, 'Saved keep.txt.');
 const r2 = await pi2.ask('What word did I ask you to remember?');
 await pi2.close();
 assert.equal(r2.settled.status, 'done');

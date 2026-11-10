@@ -189,6 +189,11 @@ dialog::backdrop{background:rgba(20,12,8,.46);backdrop-filter:blur(2px)}
   .editor.mobile-open{display:flex}
   #mobile-back{display:inline-block}
   .search-wrap{display:none}
+  .wide-only{display:none}
+  .topbar{gap:6px;padding-inline:6px}
+  .location-switch{flex:1 1 auto;overflow-x:auto}
+  .location-switch button{padding-inline:5px}
+  #new-note{flex:none;margin-left:auto}
 }
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
 </style>
@@ -203,7 +208,7 @@ dialog::backdrop{background:rgba(20,12,8,.46);backdrop-filter:blur(2px)}
       <span class="sr-only">Search notes</span>
       <input id="search" type="search" placeholder="Search every note" autocomplete="off">
     </label>
-    <button class="primary" id="new-note">＋ New note</button>
+    <button class="primary" id="new-note" aria-label="New note">＋<span class="wide-only"> New note</span></button>
   </header>
 
   <main class="workspace">
@@ -490,7 +495,10 @@ function renderLocations(){
   for (const location of locations){
     const button = document.createElement('button');
     button.type = 'button';
-    button.textContent = location.enabled ? location.label : `Connect ${location.label}`;
+    // On a phone the word "Connect" goes (CSS .wide-only), so all three tabs and New note fit at 375 px.
+    if (!location.enabled){ const word = document.createElement('span'); word.className = 'wide-only'; word.textContent = 'Connect '; button.append(word); }
+    button.append(location.label);
+    if (!location.enabled) button.setAttribute('aria-label', `Connect ${location.label}`);
     button.dataset.location = location.id;
     button.classList.toggle('needs-connection', !location.enabled);
     button.classList.toggle('active', activeLocation === location.id);

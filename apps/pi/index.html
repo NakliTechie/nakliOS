@@ -80,7 +80,13 @@ worker.postMessage({ type: 'init', backend: describeBackend(storage.backend) });
 
 worker.onmessage = async (event) => {
   const msg = event.data || {};
-  if (msg.type === 'ready') { status.textContent = `Pi is ready. Files and conversations are saved in ${storage.label}.`; return; }
+  if (msg.type === 'ready') {
+    // Redraw the saved conversation after a reload, above the ready line.
+    for (const row of msg.transcript || []) log.insertBefore(Object.assign(document.createElement('div'), { className: 'msg ' + (row.role === 'assistant' ? '' : row.role), textContent: row.text }), status);
+    status.textContent = `Pi is ready. Files and conversations are saved in ${storage.label}.`;
+    log.scrollTop = log.scrollHeight;
+    return;
+  }
   if (msg.type === 'fs') { worker.postMessage({ type: 'fs-reply', id: msg.id, result: await serveStorage(msg.method, msg.args) }); return; }
   if (msg.type === 'skills') {
     // The NakliOS skills library; an empty library when the host has none to offer.
