@@ -197,7 +197,8 @@
     "@deepseek-ai/dsh-experimental-speech-to-text-sensevoice",
     "@deepseek-ai/dsh-experimental-api-speech-to-text",
     "@deepseek-ai/dsh-experimental-client-ui-voice-input",
-    "@naklios/dish-llm"
+    "@naklios/dish-llm",
+    "dsh-parallax"
   ],
   "disabledIds": [
     "deepseek-llm-api-extensions",
@@ -309,6 +310,6 @@
   ],
   "clientInputBytes": 8130683,
   "clientOutputBytes": 5985460,
-  "imageBytes": 6190770,
+  "imageBytes": 6214067,
   "lazyBytes": 4523215
 }

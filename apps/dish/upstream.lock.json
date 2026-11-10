@@ -668,8 +668,8 @@
       "sha256": "81be3183f9ca6206f4e7cdead796dfec02a30199a98ecde87d90f5c7d484e0dc"
     },
     "build-metrics.json": {
-      "bytes": 15209,
-      "sha256": "19998e7155d2f5d3277710e41f213dd4262317e6c54571b86691fc7070998487"
+      "bytes": 15229,
+      "sha256": "8ebb82ba4c347cbf1a8227941bbed27579cab271f5080d540cceac262ac2b9fa"
     },
     "favicon-dark.svg": {
       "bytes": 3634,
@@ -716,8 +716,8 @@
       "sha256": "e321d19e1bf439cf2e2cd85f767ca783ba4750e1bfadf74b866b26ccf247fac3"
     },
     "preview/vfs-image.tar.gz": {
-      "bytes": 6190770,
-      "sha256": "7b8fd6032e9f43bf4b28c8e7efac00f20855de4f56cd6185f3cd365fb9d7fc6d"
+      "bytes": 6214067,
+      "sha256": "64c1ee366accf07e0a0d0073e148c7732d14c6861f231606a8b00e106024809e"
     },
     "preview/worker-_QgRBu9h.js": {
       "bytes": 302338,
@@ -728,8 +728,8 @@
       "sha256": "b6a3c29f34c9efafdf15a60f533d38257b471c963597f8b231bcb84fb4093c90"
     },
     "profile.yml": {
-      "bytes": 43929,
-      "sha256": "3059fdbba2585ddffea7db18ec96bd386d0086756ddfa425a2d505dac2a8b8f8"
+      "bytes": 43969,
+      "sha256": "f4689bbf3259772c98cbf6effc8bc808d54eb17f98997f3cf4e21c6db6b6659d"
     },
     "storage.mjs": {
       "bytes": 3147,
