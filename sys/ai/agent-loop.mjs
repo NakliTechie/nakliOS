@@ -372,6 +372,10 @@ export async function runAgentLoop({
   prepareRequest = null,   // (messages) => { messages, pruned, saved } — shrinks the COPY each request sends
                            // (sys/ai/supersede-prune.mjs); the transcript keeps every result
   compact = null,          // C1: async (messages) => { messages, method } | null — shrinks the transcript after a context overflow
+  // In-run compaction (an experiment, off by default): before each request whose context is above
+  // this many tokens, call compact(messages, { reason: 'threshold' }) and continue on the result.
+  // 0 compacts before every request. null keeps the old behaviour: compact only after an overflow.
+  compactAbove = null,
 }) {
   if (typeof infer !== 'function') throw new Error('runAgentLoop needs an infer function');
   if (typeof executeTool !== 'function') throw new Error('runAgentLoop needs an executeTool function');
@@ -433,6 +437,20 @@ export async function runAgentLoop({
     return anchor.input + estimateTokens(convo.slice(anchor.len));
   }
 
+  // Replace the transcript (minus its system head) with a compactor's result, record the replacement
+  // so the run record's fold rebuilds the next request, and forget the usage anchor: its prefix length
+  // no longer describes this transcript. Returns false when the result is empty or changes nothing.
+  function applyCompaction(r, step, reason) {
+    const head = convo[0] && convo[0].role === 'system' ? 1 : 0;
+    if (!r || !Array.isArray(r.messages) || !r.messages.length || JSON.stringify(r.messages) === JSON.stringify(convo)) return false;
+    const before = convo.length - head;
+    const body = r.messages[0] && r.messages[0].role === 'system' && head ? r.messages.slice(1) : r.messages;
+    convo.splice(head, before, ...body);
+    anchor = null;
+    onEvent({ type: 'compacted', step, method: String(r.method || 'shake'), from: 0, to: before, replacement: body, reason });
+    return true;
+  }
+
   function budgetTripped(step) {
     if (!budget) return null;
     if (Number.isFinite(budget.turns) && step >= budget.turns) return 'turns';
@@ -464,6 +482,12 @@ export async function runAgentLoop({
     // A turn can be long (a slow local model thinks for minutes) and until it
     // returns there is NOTHING on screen, so a working run and a wedged one look
     // identical. Announce the turn before blocking on it.
+    if (compact && Number.isFinite(compactAbove) && tokensUsed() > compactAbove) {
+      let r = null;
+      try { r = await compact(convo.slice(), { reason: 'threshold' }); } catch (_) { r = null; }
+      if (aborted()) return abortReturn(step);
+      applyCompaction(r, step, compactAbove === 0 ? 'every-action' : `context above ${compactAbove} tokens`);
+    }
     onEvent({ type: 'turn-start', step });
     let reply;
     try {
@@ -490,13 +514,8 @@ export async function runAgentLoop({
       if (compact && isContextOverflow(e) && overflowRecoveries < OVERFLOW_RECOVERIES) {
         overflowRecoveries++;
         let r = null;
-        try { r = await compact(convo.slice()); } catch (_) { r = null; }
-        const head = convo[0] && convo[0].role === 'system' ? 1 : 0;
-        if (r && Array.isArray(r.messages) && r.messages.length && JSON.stringify(r.messages) !== JSON.stringify(convo)) {
-          const before = convo.length - head;
-          const body = r.messages[0] && r.messages[0].role === 'system' && head ? r.messages.slice(1) : r.messages;
-          convo.splice(head, before, ...body);
-          onEvent({ type: 'compacted', step, method: String(r.method || 'shake'), from: 0, to: before, replacement: body, reason: String(e?.message || e).slice(0, 200) });
+        try { r = await compact(convo.slice(), { reason: 'overflow' }); } catch (_) { r = null; }
+        if (applyCompaction(r, step, String(e?.message || e).slice(0, 200))) {
           step--; // retry this step on the smaller transcript
           continue;
         }
