@@ -111,16 +111,27 @@ export function liveInfer({ base, model, key, timeoutMs = 180000, log = () => {}
   const infer = async ({ messages, tools }) => {
     const i = ++n;
     const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), timeoutMs);
+    let timer = setTimeout(() => ac.abort(), timeoutMs);
     const t0 = Date.now();
     let res, json;
     try {
-      res = await fetch(`${base}/chat/completions`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
-        body: JSON.stringify({ model, messages, tools, tool_choice: 'auto', stream: false, temperature: 0, ...extraBody }),
-        signal: ac.signal,
-      });
+      // A free tier answers 429 when it is rate-limited: wait (Retry-After, else 15 s doubling to 2 min)
+      // and try again, up to 8 times, so a rate limit slows a run instead of voiding it. The wait does
+      // not count against the call's own timeout clock below, which starts per attempt.
+      for (let attempt = 0; ; attempt++) {
+        res = await fetch(`${base}/chat/completions`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
+          body: JSON.stringify({ model, messages, tools, tool_choice: 'auto', stream: false, temperature: 0, ...extraBody }),
+          signal: ac.signal,
+        });
+        if (res.status !== 429 || attempt >= 8) break;
+        const after = Number(res.headers.get('retry-after'));
+        const waitMs = Number.isFinite(after) && after > 0 ? after * 1000 : Math.min(120000, 15000 * 2 ** attempt);
+        infer.rateLimited = (infer.rateLimited || 0) + 1;
+        log(`${label} call ${i} rate-limited (429), waiting ${Math.round(waitMs / 1000)}s`);
+        clearTimeout(timer); await new Promise((r) => setTimeout(r, waitMs)); timer = setTimeout(() => ac.abort(), timeoutMs);
+      }
       json = await res.json().catch(() => null);
     } catch (err) {
       clearTimeout(timer);
