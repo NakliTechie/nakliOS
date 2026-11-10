@@ -380,6 +380,9 @@ jobs:
       - name: Verify Anvil carries tool results + gate verdict into the next run
         run: node scripts/test-anvil-convo-carry.mjs
 
+      - name: Verify Anvil's in-run compaction experiment (override, summariser, record rebuild)
+        run: node scripts/test-anvil-compaction.mjs
+
       - name: Verify Forge survives the agent-loop contract (signal + turn-start)
         run: node scripts/test-forge-loop-contract.mjs
 

@@ -24,6 +24,13 @@ import { listingShape } from './tool-result-kind.mjs';
 import { estimateTokens } from './agent-loop.mjs';
 
 // How many leading messages are the pinned system preamble (never compacted).
+// A summarizing compaction leaves ONE user turn starting with this head, where the older region was:
+// a loop-authored [coordination] note, not the owner speaking. It is a user turn, not a system
+// message, because the request must still open with a user turn (Anthropic requires it) and the run
+// record rebuilds user turns but drops system messages. A later compaction finds it at the start of
+// the older region and folds it into the next summary, so summaries never stack.
+export const SUMMARY_HEAD = '[coordination] Earlier context (compacted):';
+
 function systemPrefixLen(messages) {
   let n = 0;
   while (n < messages.length && messages[n]?.role === 'system') n++;
@@ -233,7 +240,7 @@ export async function compactConversation(messages, {
     let summary;
     try { summary = await summarize(older); }
     catch (e) { summary = `[compaction summary unavailable: ${String(e?.message || e)}]`; }
-    const summaryMsg = { role: 'system', content: `Earlier context (compacted):\n${summary}` };
+    const summaryMsg = { role: 'user', content: `${SUMMARY_HEAD}\n${summary}` };
     next = [...system, summaryMsg, ...kept];
     return { messages: next, compacted: true, method: 'summarize', artifacts: shaken.artifacts, droppedTokens: olderTokens };
   }

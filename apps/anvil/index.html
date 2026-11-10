@@ -493,6 +493,7 @@
   import { applyPolicy, grant as policyGrant, revoke as policyRevoke, policyRows, normalisePolicy, POLICY_HINT } from '../../sys/ai/action-policy.mjs';
   import { withShellContext, decideByRules, invalidRules, applyMode, MODES as PERM_MODES, MODE_LABEL as PERM_MODE_LABEL, modeIsLoud } from '../../sys/ai/permission-rules.mjs';
   import { compactConversation } from '../../sys/ai/compaction.mjs';
+  import { makeSummarizer, parseCompactionOverride } from '../../sys/ai/compaction-summary.mjs';
   import { evolve } from '../../sys/ai/evolve.mjs';
   import { createKiln, createWorkerRuntime } from '../../sys/kiln/index.mjs';
   // G9 (2026-09-24): the browser host for `node file.mjs` gates (sys/kiln/js-runner.mjs): blob-URL modules
@@ -2896,14 +2897,33 @@
   // compaction the carry uses; the target is the smaller of half the usable window and HALF the current
   // transcript — "under the carry threshold" can still be too big for the model that just refused it.
   // The loop records the replacement (run.compacted), so the retry's request reconstructs.
-  async function compactForOverflow(msgs){
+  // In-run compaction experiment (research/2026-11-10-compaction-plugin.md): off unless
+  // localStorage['anvil-compaction'] holds an override, e.g. {"mode":"threshold","total":24000,"threshold":18000,"keep":0}
+  // or {"mode":"every-action","keep":0}. With it, the loop compacts before a request whose context is
+  // above `total` (every request for every-action), folding the older turns into a checkpoint summary
+  // written by the run's own model. Read once per run, so a change applies from the next run.
+  function compactionOverride(){ try{ return parseCompactionOverride(localStorage.getItem('anvil-compaction')); }catch(_){ return null; } }
+  async function compactForOverflow(msgs, opts = {}, ov = null, signal = null){
     const head = msgs[0] && msgs[0].role==='system' ? [msgs[0]] : [];
     const body = msgs.slice(head.length);
-    const L = carryLimits(await resolveWindow());
-    const now = Math.ceil(JSON.stringify(body).length/4);
-    const threshold = Math.max(1000, Math.min(L.threshold, Math.floor(now/2)));
-    const r = await compactConversation(body, { threshold, keepRecentTokens: Math.min(L.keepRecentTokens, Math.floor(threshold*0.4)), retrievable: true });
+    const summarize = ov && ov.summarize ? makeSummarizer(inferViaHost, { signal }) : null;
+    let threshold, keepRecentTokens;
+    if (opts.reason === 'threshold' && ov) {
+      threshold = ov.threshold; keepRecentTokens = ov.keepRecentTokens;
+    } else {
+      const L = carryLimits(await resolveWindow());
+      const now = Math.ceil(JSON.stringify(body).length/4);
+      threshold = Math.max(1000, Math.min(L.threshold, Math.floor(now/2)));
+      keepRecentTokens = Math.min(L.keepRecentTokens, Math.floor(threshold*0.4));
+    }
+    const r = await compactConversation(body, { threshold, keepRecentTokens, retrievable: true, summarize });
     return r.compacted ? { method: r.method, messages: [...head, ...r.messages] } : null;
+  }
+  // The carry between runs follows the same override in threshold mode, so both compactions agree.
+  async function carryLimitsNow(){
+    const ov = compactionOverride();
+    if (ov && ov.mode === 'threshold') return { threshold: ov.threshold, keepRecentTokens: ov.keepRecentTokens, maxChars: Math.floor(ov.compactAbove*4*1.25), source: 'compaction experiment override' };
+    return carryLimits(await resolveWindow());
   }
   // The fixed limits, kept as the fallback when no window is known (X1: carryLimits in context-budget.mjs).
   const CARRY_FALLBACK = { threshold: 24000, keepRecentTokens: 10000, maxChars: CONVO_MAX_CHARS };
@@ -4139,7 +4159,7 @@
           // B2: the owner sees the wait and each completion as it steers the run
           else if(e.type==='waiting'){ clearThinking(); t.log.push({k:'system',text:'waiting for '+e.inFlight+' subagent'+(e.inFlight===1?'':'s')+' — '+(e.inFlight===1?'its':'their')+' completion will steer the run'}); renderLog(); }
           else if(e.type==='steer'){ clearThinking(); t.log.push({k:'system',text:'⇆ '+String(e.content||'').replace(/^\[coordination\] /,'')}); renderLog(); }
-          else if(e.type==='compacted'){ clearThinking(); t.log.push({k:'system',text:'↺ the model refused the request as too long — the transcript was compacted ('+String(e.method||'shake')+') and the turn retried'}); renderLog(); } // C1
+          else if(e.type==='compacted'){ clearThinking(); t.log.push({k:'system',text: /^(every-action|context above)/.test(String(e.reason||'')) ? '↺ compacted the transcript ('+String(e.method||'shake')+'; '+e.reason+')' : '↺ the model refused the request as too long — the transcript was compacted ('+String(e.method||'shake')+') and the turn retried'}); renderLog(); } // C1
           // D1: a missed prediction is visible as it happens — three in a row stop the run
           else if(e.type==='expect-miss'){ t.log.push({k:'system',text:expectMissText(e)}); renderLog(); }
       };
@@ -4231,10 +4251,12 @@
         declaredFuelKey:t.lessonActivation.declaredFuelKey||null,
         currentFuelKey:modelSelectionKey()||'unconfigured', fuelIdentityComplete:false,
       } : null;
+      const runCompaction=compactionOverride();
+      if(runCompaction){ t.log.push({k:'system',text:'Compaction experiment on: '+(runCompaction.mode==='every-action'?'before every request':'above '+runCompaction.compactAbove+' tokens, down to '+runCompaction.threshold)+(runCompaction.summarize?', with a summary':', older turns dropped')+' (localStorage anvil-compaction).'}); renderLog(); }
       let result = await driveRun({
         steer, firstBudget, // B2: completions land at the next turn; a turn with nothing to do while a child runs waits
         mode, convo, sysMsg, tools, infer: recInfer, executeTool:captureExecute, rec,
-        verify, signal: abortController.signal, onEvent: recEvent, model: runModel, gateNote, readiness, lesson, compact: compactForOverflow,
+        verify, signal: abortController.signal, onEvent: recEvent, model: runModel, gateNote, readiness, lesson, compact: (m, o)=>compactForOverflow(m, o, runCompaction, abortController && abortController.signal), compactAbove: runCompaction ? runCompaction.compactAbove : null,
         note: (text)=>{ t.log.push({k:'system', text}); renderLog(); },
         onSystemText: (s)=>{ liveSystemText = s; }, // so the budget counts the prompt actually sent
       });
@@ -4257,7 +4279,7 @@
           +' · gain '+evidence.gain+' · configured '+(evidence.configuredModels.map(m=>m.id||m.provider).join(', ')||'unreported')
           +' · responded '+(evidence.answeredModels.join(', ')||'unreported')+'. '+evidence.reason});
       }
-      try{ t.convo = await carryForward(foldTranscript(recEvents, rec.resolve), rec, carryLimits(await resolveWindow())); }
+      try{ t.convo = await carryForward(foldTranscript(recEvents, rec.resolve), rec, await carryLimitsNow()); }
       catch(_){ if(finalAssistant) convo.push({role:'assistant', content:finalAssistant.text}); }
       // B3: the recovery note the NEXT run is prefaced with — a pure fold of THIS run's record,
       // so it never re-applies a steer a gate already verified and never reads coordination as

@@ -30,7 +30,7 @@ assert.match(anvil, /t\.convo = await carryForward\(foldTranscript\(recEvents, r
 // (mutation-tested by a cross-family review).
 assert.match(anvil, /rec\.compacted\(\{ method:'carry-forward'/,
   'a lossy carry is put ON THE CHAIN, not just stored — otherwise the record and the surface drift');
-assert.match(anvil, /await carryForward\(foldTranscript\(recEvents, rec\.resolve\), rec, carryLimits\(await resolveWindow\(\)\)\)/,
+assert.match(anvil, /await carryForward\(foldTranscript\(recEvents, rec\.resolve\), rec, await carryLimitsNow\(\)\)/,
   'and the CALL SITE actually hands carryForward the recorder — without it the recording is dead code');
 {
   const sig = anvil.match(/async function carryForward\(([^)]*)\)/);
@@ -58,7 +58,9 @@ const sys = { role: 'system', content: 'you are a coding agent' };
   assert.equal(r.messages[0], sys, 'the system head is kept as it was');
   assert.ok(JSON.stringify(r.messages).length < JSON.stringify(big).length / 1.5, 'and the result is materially smaller');
   assert.equal(await compactForOverflow([sys, { role: 'user', content: 'hi' }]), null, 'nothing to compact → null, and the loop stops as before');
-  assert.match(anvil, /readiness, lesson, compact: compactForOverflow,/, 'the run hands the loop the lesson declaration and compactor');
+  assert.match(anvil, /readiness, lesson, compact: \(m, o\)=>compactForOverflow\(m, o, runCompaction, abortController && abortController\.signal\),/, 'the run hands the loop the lesson declaration and compactor');
+  // Without the compaction experiment the carry keeps the window-sized limits.
+  assert.match(anvil, /async function carryLimitsNow\(\)\{[\s\S]{0,400}?return carryLimits\(await resolveWindow\(\)\);\s*\}/, 'no override → carryLimits of the resolved window, as before');
   assert.match(anvil, /e\.type==='compacted'\)\{[^\n]*compacted \('\+String\(e\.method/, 'and the log says it happened');
 }
 

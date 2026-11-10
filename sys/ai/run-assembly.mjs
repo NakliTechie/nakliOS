@@ -290,6 +290,7 @@ export async function driveRun({
   gateNote: gate = '', note = () => {}, onSystemText = () => {}, readiness = null, lesson = null,
   steer = null, // B2: the run's steer queue — a child's completion lands at the parent's next turn
   compact = null, // C1: the loop's compactor after a context overflow (every loop of the run gets it)
+  compactAbove = null, // in-run compaction threshold in tokens (0 = every request); null = after an overflow only
   // Superseded reads and empty results shrink in what each request sends (omp's pruning pass); null turns it off.
   prepareRequest = (messages) => pruneOpenAIMessages(messages),
   firstBudget = null, // test-door override for one bounded loop; normal callers use RUN_BUDGET
@@ -300,7 +301,7 @@ export async function driveRun({
   const loop = async (messages, budget) => {
     onSystemText(messages[0].content); // the budget counts THIS loop's prompt
     await rec.start({ messages, tools, model: model(), readiness, lesson }); // declared lesson evidence rides the run record
-    const result = await runAgentLoop({ messages, tools, infer, executeTool, ...budget, signal, verify, onEvent: onLoop, steer, compact, prepareRequest });
+    const result = await runAgentLoop({ messages, tools, infer, executeTool, ...budget, signal, verify, onEvent: onLoop, steer, compact, compactAbove, prepareRequest });
     await rec.finish(result);
     return result;
   };
