@@ -11755,6 +11755,28 @@ ${xo}
     { id: "file.save", label: "Save", group: "File", keys: ["Mod+S"], personOnly: true, run: () => saveFile(false) },
     { id: "file.saveAs", label: "Save as…", group: "File", keys: ["Shift+Mod+S"], personOnly: true, run: () => saveFile(true) }
   );
+  async function openGrant(grant, files) {
+    const name = grant && grant.name || "file";
+    console.info("[figger] open grant", { name, kind: grant && grant.kind });
+    toast(`Opening ${name}…`);
+    try {
+      const f2 = await files.read(grant.token);
+      const text = typeof f2 === "string" ? f2 : f2 && typeof f2.data === "string" ? f2.data : f2 && f2.bytes ? new TextDecoder().decode(f2.bytes instanceof Uint8Array ? f2.bytes : new Uint8Array(f2.bytes)) : null;
+      if (text == null) throw new Error("NakliOS sent no file contents");
+      const fileName = f2 && f2.name || name;
+      console.info("[figger] read", fileName, text.length, "characters");
+      if (/\.figger\.json$/i.test(fileName) || !await importText(text, fileName)) await loadText(text, fileName);
+    } catch (err) {
+      console.error("[figger] open grant failed", err);
+      toast(`Could not open ${name}: ${err.message || err}`, "error");
+    } finally {
+      try {
+        files.release && files.release(grant.token);
+      } catch {
+      }
+    }
+  }
+  app.openGrant = openGrant;
   async function loadText(text, name) {
     const d = validateDoc(JSON.parse(text));
     run("doc.load", { doc: d });
@@ -12159,23 +12181,7 @@ ${xo}
       if (what.has("doc") && !what.has("preview")) document.title = `${state.doc.name} · Figger`;
     });
     const files = globalThis.naklios && globalThis.naklios.files;
-    if (files && typeof files.onOpen === "function") {
-      files.onOpen(async (grant) => {
-        try {
-          const f2 = await files.read(grant.token);
-          const text = typeof f2 === "string" ? f2 : f2.text != null ? f2.text : new TextDecoder().decode(f2.bytes);
-          const name = f2 && f2.name || "file";
-          if (/\.figger\.json$/i.test(name) || !await importText(text, name)) await loadText(text, name);
-        } catch (err) {
-          report(err);
-        } finally {
-          try {
-            files.release && files.release(grant.token);
-          } catch {
-          }
-        }
-      });
-    }
+    if (files && typeof files.onOpen === "function") files.onOpen((grant) => openGrant(grant, files));
     window.addEventListener("dragover", (e) => {
       if ([...e.dataTransfer?.items || []].some((i) => i.kind === "file")) e.preventDefault();
     });

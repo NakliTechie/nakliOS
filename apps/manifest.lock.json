@@ -1887,14 +1887,14 @@
       "id": "figger",
       "repo": "NakliTechie/figger",
       "requestedRef": "main",
-      "resolvedCommit": "941d21defee50685749e887a2dc368a8ca6b34f2",
+      "resolvedCommit": "d3760783a8d25ba4c43662eafc3fac278dfa563a",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "34c1d01888f7bc58f39d1b46c0dfbd2f325da684453cda7dbaa514aeb5a8e965",
-          "bytes": 552205,
-          "originalSourceSha256": "e2658f1a8f8093023a55211e4acd2050ec4abe71e2baca4e062b091a8ae67a75",
+          "sha256": "2641e36e367f9f9795d752a3c97990a121b0fac8346d851f6409d5c97f19de2d",
+          "bytes": 552754,
+          "originalSourceSha256": "d61bdd70d87dc38208cae9f76c9dfa3710d2bf8df0be22e369114b4ea5ab5226",
           "sdkSha256": "86b983f977ff00364fb853f7edc51f6ef6ed9bfedfd0cc18009e128d048e74a9"
         },
         {
