@@ -57,6 +57,10 @@ async function waitForFsCaps(timeoutMs = 1200) {
 async function chooseStorage() {
   await waitForFsCaps();
   if (nak?.capabilities?.fs && nak.fs) {
+    // The first write asks NakliOS for storage. The host holds the call until you answer its
+    // "Allow Pi?" prompt (the SDK's clock stops), so Pi waits for the answer instead of falling
+    // back to browser storage while the prompt is open (live 2026-10-29); the status line says so.
+    const waitNote = setTimeout(() => { status.textContent = 'Waiting for you to allow Pi\'s storage in NakliOS…'; }, 1500);
     try {
       const backend = new CrateBackend(nak.fs);
       // Round-trip probe: commit to the host fs only if a write reads back.
@@ -68,6 +72,7 @@ async function chooseStorage() {
         return { backend, label: (raw === 'fsa' ? 'your Folder' : raw === 'crate' ? 'Crate' : 'NakliOS storage') + ' (apps/pi)' };
       }
     } catch (_) { /* fall through to browser storage */ }
+    finally { clearTimeout(waitNote); }
   }
   if (opfsAvailable()) {
     try { return { backend: await createOpfsBackend({ path: 'pi' }), label: 'browser storage' }; } catch (_) {}

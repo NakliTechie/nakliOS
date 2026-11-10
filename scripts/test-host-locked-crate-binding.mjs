@@ -10,7 +10,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const host = await readFile(new URL('../index.html', import.meta.url), 'utf8');
-const src = host.match(/async function fsEnsurePermission\(appId\)\{[\s\S]*?\n\}\n/);
+// The prompt is shared per app: the region runs from its map to the end of fsEnsurePermissionOnce.
+const src = host.match(/const fsPermissionPrompts = new Map\(\);[\s\S]*?async function fsEnsurePermissionOnce\(appId\)\{[\s\S]*?\n\}\n/);
 assert.ok(src, 'fsEnsurePermission found in index.html');
 
 function bed({ crateLocked, crateConnected = false, fsaConnected = true, perm, answer, unlockOk = true }) {
@@ -31,8 +32,8 @@ function bed({ crateLocked, crateConnected = false, fsaConnected = true, perm, a
     saveAppPermissions: () => { calls.saves++; },
     broadcastCapabilities: () => { calls.broadcasts++; },
   };
-  const fn = new Function(...Object.keys(env), `${src[0]}; return fsEnsurePermission;`)(...Object.values(env));
-  return { fn, state, calls };
+  const made = new Function(...Object.keys(env), `${src[0]}; return { fsEnsurePermission, fsPromptWaiters };`)(...Object.values(env));
+  return { fn: made.fsEnsurePermission, waiters: made.fsPromptWaiters, state, calls, env };
 }
 
 const bound = { backend: 'crate', granted: true };
@@ -91,3 +92,35 @@ assert.match(host, /querySelectorAll\('\.app-storage-select'\)[\s\S]{0,400}await
 assert.match(host, /sel\.value === 'revoke'\) \{\s*delete state\.appPermissions\[appId\];/, 'and revoke removes the binding');
 
 console.log('host-locked-crate-binding: a locked Crate asks unlock / move / cancel; the binding moves only on an explicit choice; Settings switches or revokes it per app');
+
+// One prompt per app (live 2026-10-29: three stacked "Allow Anvil?" prompts). Calls that arrive while
+// it is open share its answer, and every waiting call hears that the person is being asked.
+{
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const b2 = bed({ crateLocked: false, fsaConnected: true, perm: undefined });
+  // Rebuild with a confirm that waits until released, so three calls overlap the open prompt.
+  const confirms = [];
+  const env = { ...b2.env, nakliosConfirm: async () => { confirms.push(1); await gate; return true; } };
+  const made = new Function(...Object.keys(env), `${src[0]}; return { fsEnsurePermission, fsPromptWaiters };`)(...Object.values(env));
+  const heard = [];
+  made.fsPromptWaiters.set('anvil', new Set([() => heard.push('a'), () => heard.push('b')]));
+  const calls = [made.fsEnsurePermission('anvil'), made.fsEnsurePermission('anvil'), made.fsEnsurePermission('anvil')];
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(confirms.length, 1, 'three overlapping file calls raise ONE prompt');
+  assert.ok(heard.includes('a') && heard.includes('b'), 'every waiting call hears that the person is being asked');
+  release();
+  assert.deepEqual(await Promise.all(calls), ['fsa', 'fsa', 'fsa'], 'all three get the one answer');
+  assert.equal(await made.fsEnsurePermission('anvil'), 'fsa', 'a later call uses the saved grant');
+  assert.equal(confirms.length, 1, 'and asks nothing');
+}
+
+// The wire: the host tells the SDK a call is waiting, and the SDK stops that call's clock.
+{
+  assert.match(host, /type: 'naklios:rpc:waiting', requestId: msg\.requestId/, 'the fs dispatch tells the app its call waits');
+  const sdk = await readFile(new URL('../sdk/naklios.js', import.meta.url), 'utf8');
+  assert.match(sdk, /msg\.type === 'naklios:rpc:waiting' && msg\.requestId\)[\s\S]{0,200}clearTimeout\(w\.timer\)/, 'the SDK stops the 30 s clock for that call');
+  const pi = await readFile(new URL('../apps/pi/index.html', import.meta.url), 'utf8');
+  assert.match(pi, /Waiting for you to allow Pi\\'s storage in NakliOS/, 'Pi names the wait in its status line');
+}
+console.log('test-host-locked-crate-binding: ok (shared prompt + waiting wire)');
