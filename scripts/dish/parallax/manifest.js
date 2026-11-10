@@ -26,7 +26,7 @@ export const TOOLS = Object.freeze([
       urgent: { type: 'boolean', description: 'Deliver at the peer\'s next step, while it is working, and wake it if idle.' },
       wake: { type: 'boolean', description: 'false: queue the message without starting a turn in an idle peer.' },
       supersedes: { type: 'string', description: 'A message id of yours to this peer; replaced in place if the peer has not taken it yet.' },
-      status: { type: 'string', enum: ['working', 'done', 'failed', 'needs_parent'], description: 'Only when reporting to the conversation that delegated your task: working, done, failed, or needs_parent when you need a decision or a permission you do not have.' },
+      status: { type: 'string', enum: ['working', 'done', 'failed', 'needs_parent'], description: 'Only when reporting to the conversation that delegated your task: working (queued quietly, no turn started), done, failed, or needs_parent when you need a decision or a permission you do not have.' },
       key: { type: 'string', description: 'Idempotency key: a resend with the same key to the same peer returns the first result and sends nothing.' },
     },
   },

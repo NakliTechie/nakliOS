@@ -429,7 +429,10 @@ export class Parallax {
       ...(superseding ? { supersedes: superseding.id } : {}), ...(args.status ? { status: args.status } : {}),
     }
     const setting = this.#wakeOf(peer.id)
-    const wakeup = args.urgent ? true : args.wake === false ? false : setting === 'always' || (setting === 'replies' && kind === 'reply')
+    // A child's `working` report is progress, not news: it waits for the parent's next turn instead of starting one
+    // (each such wake cost the parent a turn that did nothing, seen in dsh, 2026-11-10). done, failed and needs_parent wake.
+    const quietProgress = args.status === 'working' && !args.urgent && args.wake !== true
+    const wakeup = args.urgent ? true : args.wake === false || quietProgress ? false : setting === 'always' || (setting === 'replies' && kind === 'reply')
     const meta = { parallaxId: id, kind, from: caller.sessionId, requestId, replyTo: answering?.id, hop }
     let delivered
     let superseded = false
