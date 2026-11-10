@@ -1228,3 +1228,5 @@
   name: '@naklios/dish-llm/web'
 - id: naklios-speech
   name: '@naklios/dish-llm/speech'
+- id: dsh-parallax
+  name: dsh-parallax

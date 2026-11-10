@@ -92,6 +92,8 @@ const homePatch = [
   { insert: [{ id: 'naklios-speech', name: '@naklios/dish-llm/speech' }] },
   { id: 'speech-to-text-sensevoice', disabled: true },
   { id: 'speech-to-text', config: { defaultProvider: 'naklios', language: 'auto' } },
+  // Parallax (scripts/dish/parallax): conversations in Dish message each other and delegate tasks.
+  { insert: [{ id: 'dsh-parallax', name: 'dsh-parallax' }] },
   // The Worker composes from the template's bundle list plus this home patch, so allow-listed
   // third-party rows ride here; DeepSeek's official bundles stay switchable (off) on the Plugins page.
   ...pluginBundles.flatMap(plugin => plugin.patches),
@@ -102,7 +104,7 @@ const homePatch = [
 // optional bundle) would only add bytes the profile never mounts.
 const names = new Set([...bundles, ...officialBundles]); collectModuleNames([...bundlePatches, ...officialPatches], names);
 const roster = [...names].filter(name => !removedPackages.has(name) || retainedPackages.has(name));
-roster.push('@naklios/dish-llm');
+roster.push('@naklios/dish-llm', 'dsh-parallax');
 // collectModuleNames keeps only scoped or path names, so unscoped plugins (dsh-genui) would mount a row with no package.
 for (const { name } of pluginBundles) if (!roster.includes(name)) roster.push(name);
 
@@ -114,6 +116,13 @@ fs.copyFileSync(new URL('./protocol.mjs', import.meta.url), path.join(plugin, 'l
 fs.copyFileSync(new URL('./web.mjs', import.meta.url), path.join(plugin, 'lib/web.mjs'));
 fs.copyFileSync(new URL('./speech.mjs', import.meta.url), path.join(plugin, 'lib/speech.mjs'));
 const workspaces = indexWorkspacePackages(source); workspaces.set('@naklios/dish-llm', plugin);
+// Parallax is its own package (the packer copies a workspace package's lib/), so dsh's Plugins page lists it under its own name and licence.
+const parallax = path.join(source, 'dish-parallax'); fs.rmSync(parallax, { recursive: true, force: true }); fs.mkdirSync(path.join(parallax, 'lib'), { recursive: true });
+fs.writeFileSync(path.join(parallax, 'package.json'), JSON.stringify({ name: 'dsh-parallax', version: '0.1.0', type: 'module', main: 'lib/dsh.js', exports: { '.': './lib/dsh.js' }, files: ['lib', 'LICENSE'], license: 'MIT',
+  dependencies: { '@deepseek-ai/dsh-llm': dshVersion, '@deepseek-ai/dsh-tools': dshVersion, '@deepseek-ai/dsh-session': dshVersion, '@deepseek-ai/dsh-sandbox-policy': dshVersion, '@deepseek-ai/dsh-user-approval': dshVersion } }));
+for (const file of ['core.js', 'dsh.js', 'manifest.js', 'stamp.js']) fs.copyFileSync(new URL(`./parallax/${file}`, import.meta.url), path.join(parallax, 'lib', file));
+fs.copyFileSync(new URL('./parallax/LICENSE', import.meta.url), path.join(parallax, 'LICENSE'));
+workspaces.set('dsh-parallax', parallax);
 // The sweep keeps only modules reachable from its seeds and workspace packages. Allow-listed plugins are neither,
 // so their host modules were dropped and failed at boot ("cannot resolve @dfy-plugins/dsh-appearance", 2026-11-09).
 // Seed each plugin row by name, on top of upstream's own seeds (exported only from its compiled rules module).
@@ -123,7 +132,7 @@ const pluginEntries = [...new Set(pluginBundles.flatMap(plugin => collectRowName
 // @xterm/headless" when a terminal opened), so it is seeded by name too.
 const lazyEntries = ['@xterm/headless', '@xterm/addon-serialize'];
 const result = packVfsImage({ profile: PROFILE, roster, installation, root: '/dsh', workspaces, resolveFrom: source, configTrees: configTrees(source), homePatch,
-  entries: [...IMAGE_ENTRY_SEEDS, ...pluginEntries, ...lazyEntries] });
+  entries: [...IMAGE_ENTRY_SEEDS, ...pluginEntries, ...lazyEntries, 'dsh-parallax'] });
 if (result.missing.length) throw new Error(`Incomplete image: ${JSON.stringify(result.missing)}`);
 
 const files = { ...result.files };
