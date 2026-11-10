@@ -97,6 +97,12 @@ const SCRIPT = `(async () => {
   out.stages = [...new Set(chunks.filter(c => c.kind === 'progress').map(c => c.stage))];
   out.logChunk = chunks.some(c => c.kind === 'log' && c.text.includes('This is pdfTeX'));
   const read = async file => new Uint8Array(await BACKENDS.fsa.readBinary('apps/notes/' + file));
+  // The first compile fails now and then on CI (exit 1, no PDF; seen 2026-11-08 and 2026-11-10). Stop here
+  // with the end of its log, so the failure names its cause instead of a NotFoundError on the missing PDF.
+  if (!out.paper.ok) {
+    out.paperLog = out.paper.log ? new TextDecoder().decode(await read(out.paper.log)).slice(-3000) : '(no log file)';
+    return out;
+  }
   out.pdfHeader = new TextDecoder().decode((await read(out.paper.pdf)).slice(0, 5));
   const synctex = new TextDecoder().decode(await new Response(new Blob([await read(out.paper.synctex)]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
   out.synctexInputs = synctex.split('\\n').filter(line => line.startsWith('Input:') && !line.includes(':/')).map(line => line.split(':')[2]);
@@ -171,7 +177,7 @@ try {
   assert.equal(r.noStoreCapability, false, 'no connected storage, no TeX');
   assert.match(r.noStore, /not permitted/);
   assert.match(r.refused, /EPERM/, 'Not now refuses the download');
-  assert.equal(r.paper.ok, true, JSON.stringify(r.paper));
+  assert.equal(r.paper.ok, true, `the first compile failed (exit ${r.paper.exitCode}); end of its TeX log:\n${r.paperLog}`);
   assert.equal(r.paper.pdf, 'paper/.tex-build/main.pdf');
   assert.equal(r.pdfHeader, '%PDF-');
   assert.deepEqual(r.stages, ['queued', 'download', 'reading', 'compiling', 'writing']);

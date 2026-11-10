@@ -12,6 +12,7 @@
 // scored (plan/bench-playbook.md §2). The summary names the bed (with or without python), the endpoint
 // and model, the harness fingerprint and the git head, because a number without them cannot be compared
 // with the next one.
+import { parseCompactionOverride } from '../../sys/ai/compaction-summary.mjs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -36,6 +37,11 @@ const EFFORT = opt('--effort', 'medium');
 // --hint-workspace adds a paragraph about the shell's working directory and scratch files (an experiment arm, not an app change).
 const EXTRA_HINT = args.includes('--hint-workspace') ? "The shell keeps its working directory between calls: after `cd`, relative paths are relative to that directory, so prefer paths from the workspace root. Do not leave scratch or temporary files in the workspace: delete any you create before you finish." : '';
 const SCRIPT = args.includes('--script'); // Script mode (the codemode tool) on for every run
+// --compaction '<json>' turns in-run compaction on for every run, as localStorage['anvil-compaction'] does in the app
+// (e.g. '{"mode":"threshold","total":16000,"threshold":12000,"keep":0}' or '{"mode":"every-action","keep":0}').
+const COMPACTION_RAW = (() => { const i = args.indexOf('--compaction'); return i >= 0 ? args[i + 1] : null; })();
+const COMPACTION = COMPACTION_RAW ? parseCompactionOverride(COMPACTION_RAW) : null;
+if (COMPACTION_RAW && !COMPACTION) { console.error('--compaction: not a valid setting: ' + COMPACTION_RAW); process.exit(2); }
 // --script-hint adds one paragraph to the system prompt telling the model when to prefer the codemode tool (Droid tuned this per model).
 const SCRIPT_HINT = args.includes('--script-hint') ? 'You also have a `codemode` tool. When a task needs the same operation on many files (about five or more tool calls), write ONE script with `tools.read`, `tools.write`, `tools.edit` and `tools.shell` instead of calling those tools one at a time; await every call, use `text(...)` to print only a short summary, and check the result before you finish.' : '';
 const CEILING = opt('--ceiling-usd'); // required for a paid (anthropic) endpoint
@@ -72,7 +78,7 @@ async function worker() {
     const infer = EP.kind === 'anthropic'
       ? liveInferAnthropic({ base: BASE, model: MODEL, key: KEY, effort: EFFORT, timeoutMs: TIMEOUT, budget: BUDGET, label: `${t.id}#${rep}`, log: () => {} })
       : liveInfer({ base: BASE, model: MODEL, key: KEY, timeoutMs: TIMEOUT, label: `${t.id}#${rep}`, log: () => {} });
-    const r = await runTask(t, { infer, stamp, script: SCRIPT, scriptHint: SCRIPT_HINT, extraHint: EXTRA_HINT });
+    const r = await runTask(t, { infer, stamp, script: SCRIPT, scriptHint: SCRIPT_HINT, extraHint: EXTRA_HINT, compaction: COMPACTION });
     finished++;
     log(`${String(finished).padStart(3)}/${jobs.length} ${t.id}#${rep}: ${r.void ? 'VOID' : r.pass ? 'pass' : 'FAIL'} — ${r.steps} step(s), ${r.usage.input} in-tok, ${Math.round(r.wallMs / 1000)}s${r.pass || r.void ? '' : ` — ${r.why}`}`);
     await mkdir(join(OUT, 'runs', t.id), { recursive: true });
@@ -95,6 +101,8 @@ const perTask = tasks.map((t) => {
     passes, passRate: scored.length ? r2(passes / scored.length) : null,
     meanSteps: r2(mean(scored.map((r) => r.steps))), meanInputTokens: Math.round(mean(scored.map((r) => r.usage.input)) || 0),
     meanOutputTokens: Math.round(mean(scored.map((r) => r.usage.output)) || 0), meanWallS: r2(mean(scored.map((r) => r.wallMs / 1000))),
+    meanMaxInput: Math.round(mean(scored.map((r) => r.usage.maxInput || 0)) || 0), meanCompactions: r2(mean(scored.map((r) => r.usage.compactions || 0))),
+    meanSummaryTokens: Math.round(mean(scored.map((r) => r.usage.summaryTokens || 0)) || 0),
     outcomes: rs.map((r) => (r.void ? 'void' : r.pass ? 'pass' : 'fail')),
     whys: [...new Set(scored.filter((r) => !r.pass).map((r) => r.why))],
   };
@@ -112,7 +120,7 @@ const python = PY ? {
 const summary = {
   bed: bedDescription(PY), python,
   split: ONLY.length ? 'custom' : SPLIT, tasks: tasks.length, reps: REPS, endpoint: EP.name, model: MODEL, base: BASE, concurrency: CONC,
-  harness: harnessFingerprint(), git: gitHead(),
+  harness: harnessFingerprint(), git: gitHead(), compaction: COMPACTION_RAW,
   started: ist(t0), ended: ist(Date.now()), wallS: Math.round(wallMs / 1000),
   runs: results.length, voids: results.length - scored.length, scored: scored.length,
   passes: scored.filter((r) => r.pass).length,

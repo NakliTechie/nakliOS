@@ -194,7 +194,7 @@ export function createRunRecorder({ app = 'anvil', principal = 'local', grant_id
         case 'run.steered': enqueue(verb, () => ({ input: { step: s }, output: { content: String(e.content ?? '') } })); break;
         // C1: the loop replaced its transcript after a context overflow — the same verb (and the same fold) as
         // a caller's compacted(), so the retry's request reconstructs.
-        case 'run.compacted': enqueue(verb, () => ({ input: { method: String(e.method || 'shake'), from: Number(e.from) || 0, to: Number(e.to) || 0, step: s }, output: { replacement: Array.isArray(e.replacement) ? e.replacement : null } })); break;
+        case 'run.compacted': enqueue(verb, () => ({ input: { method: String(e.method || 'shake'), from: Number(e.from) || 0, to: Number(e.to) || 0, step: s }, output: { replacement: Array.isArray(e.replacement) ? e.replacement : null, ...(e.usage ? { usage: e.usage } : {}) } })); break;
         case 'expect.missed': enqueue(verb, () => ({ input: { step: s, id: e.id ?? null, misses: Number(e.misses) || 0, streak: Number(e.streak) || 0, limit: Number(e.limit) || 0 }, output: {} })); break; // D1 (LV2: the limit the run applied)
       }
     },
@@ -1703,7 +1703,7 @@ export function foldSessionContext(events, resolve) {
 // CRIB-A A1: the fact names a run recalled, each once, in first-recall order — what the run-index
 // row carries and `factUsage` folds into salience. Pure.
 // LX-3 (decided 2026-09-17: the state kernel is a projection in Anvil) — the QUOTA a run spent, folded
-// from the chain: tokens from every llm.responded that carried a count, model calls, wall seconds
+// from the chain: tokens from every llm.responded (and every summarizing compaction) that carried a count, model calls, wall seconds
 // from the first event to the last, and the hash of the passing verdict when the gate passed. A
 // subagent's whole record rides this chain as `subagent.ran.output.record` (crib #1), so its spend
 // is this run's spend: tokens and calls descend into every child; seconds do not (a child's wall
@@ -1713,6 +1713,9 @@ export function foldQuota(events, resolve) {
   let tokens = 0, calls = 0, counted = 0, evidence = null;
   for (const e of ev) {
     if (e.tool === 'llm.responded') { calls++; const u = e.output?.usage; if (u && Number(u.total) > 0) { tokens += Number(u.total); counted++; } }
+    // A summarizing compaction's model call runs outside the recorded turns; its usage rides the
+    // compaction event, so it is a call and its tokens are this run's spend.
+    else if (e.tool === 'run.compacted' && e.output?.usage) { calls++; const u = e.output.usage; if (Number(u.total) > 0) { tokens += Number(u.total); counted++; } }
     else if (e.tool === 'subagent.ran' && e.output?.record) {
       try { const child = loadRecord(e.output.record); const q = foldQuota(child.events(), child.resolve); tokens += q.tokens; calls += q.calls; counted += q.counted; } catch (_) { /* an unreadable child adds nothing */ }
     }

@@ -78,16 +78,19 @@
     const rec = JSON.parse(await (await (await r.h.getFileHandle(r.name)).getFile()).text());
     const evs = rec.events.split('\n').filter(Boolean).map(JSON.parse);
     const body = (h) => { const b = rec.blobs[h]; return typeof b === 'string' ? (() => { try { return JSON.parse(b); } catch (_) { return b; } })() : b; };
-    const calls = []; let tokens = 0; let stop = null;
+    // compactions: each in-run compaction's method; summaryTokens: what its summary call cost (it runs
+    // outside the recorded turns, so `tokens` alone undercounts a run that compacts).
+    const calls = []; let tokens = 0; let input = 0; let maxInput = 0; let summaryTokens = 0; let stop = null; const compactions = [];
     for (const e of evs) {
-      if (e.tool === 'llm.responded') { const o = body(e.output_hash) || {}; tokens += (o.usage && o.usage.total) || 0; for (const c of o.toolCalls || []) calls.push({ name: c.name || c.function?.name, args: c.arguments || c.function?.arguments || c.args }); }
+      if (e.tool === 'run.compacted') { const i = body(e.input_hash) || {}; const o = body(e.output_hash) || {}; compactions.push(i.method || '?'); summaryTokens += (o.usage && o.usage.total) || 0; }
+      if (e.tool === 'llm.responded') { const o = body(e.output_hash) || {}; tokens += (o.usage && o.usage.total) || 0; const inp = (o.usage && o.usage.prompt) || 0; input += inp; if (inp > maxInput) maxInput = inp; for (const c of o.toolCalls || []) calls.push({ name: c.name || c.function?.name, args: c.arguments || c.function?.arguments || c.args }); }
       if (e.tool === 'run.stopped') stop = (body(e.output_hash) || {}).stop;
     }
     const steps = evs.filter((e) => e.tool === 'llm.requested').length;
     const wallMs = evs.length ? evs.at(-1).ts - evs[0].ts : 0;
     const writes = calls.filter((c) => WRITE_TOOLS.has(c.name)).map((c) => { let a = c.args; if (typeof a === 'string') { try { a = JSON.parse(a); } catch (_) {} } return (a && (a.path || a.from || a.to)) || '(patch)'; });
     const shellWrites = calls.filter((c) => c.name === 'shell').map((c) => { let a = c.args; if (typeof a === 'string') { try { a = JSON.parse(a); } catch (_) {} } return String((a && a.command) || ''); }).filter((cmd) => /(^|[;&|]\s*)(rm|mv|cp|touch|mkdir|tee)\b|>\s*\S/.test(cmd));
-    return { steps, tokens, wallMs, stop, tools: calls.map((c) => c.name), writes, shellWrites };
+    return { steps, tokens, input, maxInput, compactions, summaryTokens, wallMs, stop, tools: calls.map((c) => c.name), writes, shellWrites };
   }
 
   const SEED = 'alpha\nbeta\n';

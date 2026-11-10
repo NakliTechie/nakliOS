@@ -383,6 +383,12 @@ jobs:
       - name: Verify Anvil's in-run compaction experiment (override, summariser, record rebuild)
         run: node scripts/test-anvil-compaction.mjs
 
+      - name: Verify Pi's window (module parses, tool cards, streamed replies)
+        run: node scripts/test-pi-ui.mjs
+
+      - name: Verify Anvil's AI slots keep a 4-way dispatch under the host's per-app cap
+        run: node sys/ai/test/slots.test.mjs
+
       - name: Verify Forge survives the agent-loop contract (signal + turn-start)
         run: node scripts/test-forge-loop-contract.mjs
 

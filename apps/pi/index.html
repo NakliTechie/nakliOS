@@ -20,6 +20,12 @@
   textarea { flex:1; resize:none; height:56px; padding:8px; border:1px solid var(--line); border-radius:6px; font:inherit; }
   button { padding:0 16px; border:0; border-radius:6px; background:var(--brand); color:#fff; font:inherit; cursor:pointer; }
   button:disabled { opacity:.5; cursor:default; }
+  .tool { max-width:760px; border:1px solid var(--line); border-radius:8px; background:#f6f5f1; font-size:12px; }
+  .tool summary { padding:6px 10px; cursor:pointer; color:var(--ink); }
+  .tool summary code { font:12px ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .tool .state { color:var(--muted); margin-left:6px; }
+  .tool pre { margin:0; padding:6px 10px; border-top:1px solid var(--line); white-space:pre-wrap; word-break:break-word; font:11px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; max-height:220px; overflow:auto; }
+  .working { color:var(--muted); font-size:12px; }
 </style>
 </head>
 <body>
@@ -45,6 +51,41 @@ const request = (msg) => new Promise((resolve) => { const id = nextId++; waiting
 const status = add('sys', 'Starting Pi…');
 const trace = []; // every broker round trip, for live checks
 
+// Tool cards: one per tool call the model makes, filled with its result when the next request
+// carries it back (the tool runs in the Worker; its result reaches the page in that request).
+const toolCards = new Map(); // tool_call_id → { card, state, out }
+const brief = (s, n = 90) => { s = String(s ?? '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
+function addToolCard(call) {
+  const name = call.function?.name || call.name || 'tool';
+  let args = call.function?.arguments ?? call.arguments ?? '';
+  if (typeof args !== 'string') args = JSON.stringify(args);
+  let shown = args; try { const a = JSON.parse(args); shown = a.command || a.path || a.pattern || a.query || args; } catch (_) {}
+  const card = document.createElement('details'); card.className = 'tool';
+  const sum = document.createElement('summary');
+  sum.append(Object.assign(document.createElement('code'), { textContent: name + ' ' + brief(shown) }));
+  const state = Object.assign(document.createElement('span'), { className: 'state', textContent: 'running…' });
+  sum.append(state); card.append(sum);
+  card.append(Object.assign(document.createElement('pre'), { textContent: args }));
+  const out = Object.assign(document.createElement('pre'), { textContent: '' }); out.hidden = true; card.append(out);
+  log.appendChild(card); log.scrollTop = log.scrollHeight;
+  toolCards.set(call.id || ('card-' + toolCards.size + '-' + Date.now()), { card, state, out });
+}
+// When a run settles, a card whose result never came back (no call id, a step limit, an error) says so.
+function closeToolCards() {
+  for (const c of toolCards.values()) { if (c.state.textContent === 'running…') c.state.textContent = 'no result'; }
+  toolCards.clear();
+}
+function fillToolResults(messages) {
+  for (const m of messages || []) {
+    if (m.role !== 'tool' || !toolCards.has(m.tool_call_id)) continue;
+    const c = toolCards.get(m.tool_call_id); toolCards.delete(m.tool_call_id);
+    const text = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
+    c.state.textContent = /^(error|Error)\b/.test(text) ? 'failed' : 'done';
+    c.out.textContent = text.length > 4000 ? text.slice(0, 4000) + '\n…' : text; c.out.hidden = false;
+  }
+}
+let lastLive = null; // the bubble the final reply streamed into
+
 // Where Pi's files and conversations live, Anvil's order: the host's connected Folder or Crate through
 // naklios.fs (files appear under apps/pi/ in the Files app), else browser storage (OPFS), else memory.
 // The Worker reaches it only through {type:'fs'} messages served here.
@@ -57,6 +98,10 @@ async function waitForFsCaps(timeoutMs = 1200) {
 async function chooseStorage() {
   await waitForFsCaps();
   if (nak?.capabilities?.fs && nak.fs) {
+    // The first write asks NakliOS for storage. The host holds the call until you answer its
+    // "Allow Pi?" prompt (the SDK's clock stops), so Pi waits for the answer instead of falling
+    // back to browser storage while the prompt is open (live 2026-10-29); the status line says so.
+    const waitNote = setTimeout(() => { status.textContent = 'Waiting for you to allow Pi\'s storage in NakliOS…'; }, 1500);
     try {
       const backend = new CrateBackend(nak.fs);
       // Round-trip probe: commit to the host fs only if a write reads back.
@@ -68,6 +113,7 @@ async function chooseStorage() {
         return { backend, label: (raw === 'fsa' ? 'your Folder' : raw === 'crate' ? 'Crate' : 'NakliOS storage') + ' (apps/pi)' };
       }
     } catch (_) { /* fall through to browser storage */ }
+    finally { clearTimeout(waitNote); }
   }
   if (opfsAvailable()) {
     try { return { backend: await createOpfsBackend({ path: 'pi' }), label: 'browser storage' }; } catch (_) {}
@@ -109,11 +155,34 @@ worker.onmessage = async (event) => {
     try {
       const ai = window.naklios && window.naklios.ai;
       if (!ai) throw new Error('Pi needs the NakliOS host: open it inside NakliOS and choose a model in Settings → AI.');
-      const completion = await ai.chat.completions.create({ ...msg.request, agent: true, stream: false });
+      fillToolResults(msg.request.messages);
+      // Stream the reply into the window as it arrives; a "thinking" line counts the wait until the
+      // first text. The Worker still gets one whole completion, assembled the way the SDK does it.
+      const working = add('sys working', 'Pi is thinking…');
+      const tick = setInterval(() => { working.textContent = `Pi is thinking… ${Math.round((performance.now() - t0) / 1000)} s`; }, 1000);
+      let content = '', toolCalls = null, finishReason = 'stop', usage = null, model = null, live = null;
+      try {
+        const stream = await ai.chat.completions.create({ ...msg.request, agent: true, stream: true });
+        for await (const chunk of stream) {
+          const choice = chunk.choices && chunk.choices[0];
+          if (choice?.delta?.content) {
+            content += choice.delta.content;
+            if (!live) { working.remove(); live = add('', ''); }
+            live.textContent = content; log.scrollTop = log.scrollHeight;
+          }
+          if (choice?.delta?.tool_calls) toolCalls = choice.delta.tool_calls;
+          if (choice?.finish_reason) finishReason = choice.finish_reason;
+          if (chunk.usage) usage = chunk.usage;
+          if (chunk.model) model = chunk.model;
+        }
+      } finally { clearInterval(tick); working.remove(); }
+      const message = { role: 'assistant', content };
+      if (toolCalls) message.tool_calls = toolCalls;
+      const completion = { id: 'naklios-local', object: 'chat.completion', model: model || 'localmind', choices: [{ index: 0, message, finish_reason: finishReason }], usage };
       entry.ms = Math.round(performance.now() - t0);
-      entry.toolCalls = (completion?.choices?.[0]?.message?.tool_calls || []).map((c) => c.function?.name);
-      const shown = entry.toolCalls.length ? 'Tool call: ' + entry.toolCalls.join(', ') : null;
-      if (shown) add('sys', shown);
+      entry.toolCalls = (toolCalls || []).map((c) => c.function?.name);
+      for (const c of toolCalls || []) addToolCard(c);
+      lastLive = toolCalls && toolCalls.length ? null : live;
       worker.postMessage({ type: 'broker-reply', id: msg.id, completion });
     } catch (e) {
       entry.err = String(e?.message || e);
@@ -127,10 +196,14 @@ worker.onmessage = async (event) => {
 
 async function ask(text) {
   add('you', text);
+  lastLive = null;
   const r = await request({ type: 'ask', text });
-  if (r.error) { add('err', r.error); return r; }
+  if (r.error) { closeToolCards(); add('err', r.error); return r; }
   const s = r.settled || {};
-  if (s.status === 'done') add('', r.answer || '(no text)');
+  closeToolCards();
+  // The final reply already streamed into its bubble: that bubble takes the Worker's answer text
+  // (which may differ from the raw stream), so the reply is never shown twice.
+  if (s.status === 'done') { if (lastLive) { lastLive.textContent = r.answer || lastLive.textContent || '(no text)'; lastLive = null; } else add('', r.answer || '(no text)'); }
   else add('err', 'Pi did not answer: ' + JSON.stringify(s).slice(0, 400));
   return r;
 }

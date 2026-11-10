@@ -447,7 +447,11 @@ export async function runAgentLoop({
     const body = r.messages[0] && r.messages[0].role === 'system' && head ? r.messages.slice(1) : r.messages;
     convo.splice(head, before, ...body);
     anchor = null;
-    onEvent({ type: 'compacted', step, method: String(r.method || 'shake'), from: 0, to: before, replacement: body, reason });
+    // A summarizing compaction calls the model outside the recorded infer; its token usage rides here,
+    // normalised like a turn's, so a run's cost counts it.
+    const u = r.usage ? { prompt: usageInputTokens(r.usage), completion: usageOutputTokens(r.usage) } : null;
+    if (u) u.total = (u.prompt || 0) + (u.completion || 0);
+    onEvent({ type: 'compacted', step, method: String(r.method || 'shake'), from: 0, to: before, replacement: body, reason, ...(u ? { usage: u } : {}) });
     return true;
   }
 

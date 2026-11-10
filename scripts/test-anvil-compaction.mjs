@@ -6,7 +6,7 @@ import { readFile } from 'node:fs/promises';
 import { runAgentLoop, shellTool } from '../sys/ai/agent-loop.mjs';
 import { compactConversation, SUMMARY_HEAD } from '../sys/ai/compaction.mjs';
 import { parseCompactionOverride, makeSummarizer, serializeForSummary, CHECKPOINT_PROMPT } from '../sys/ai/compaction-summary.mjs';
-import { createRunRecorder } from '../sys/history/run-record.mjs';
+import { createRunRecorder, joined, foldQuota } from '../sys/history/run-record.mjs';
 
 // ── the override: off unless well formed ──
 assert.equal(parseCompactionOverride(null), null);
@@ -111,12 +111,41 @@ async function runWith({ compactAbove, usageInput = null }) {
   assert.deepEqual(at.divergences, []);
 }
 
+// ── the summary call's cost reaches the run record ──
+{
+  const seen = [];
+  const sum = makeSummarizer(async () => ({ content: 'S', usage: { prompt_tokens: 900, completion_tokens: 100 } }), { onUsage: (u) => seen.push(u) });
+  await sum([{ role: 'user', content: 'x' }]);
+  assert.equal(seen.length, 1, 'onUsage receives the summary call\'s usage');
+
+  const rec = createRunRecorder({ app: 'anvil', principal: 'test' });
+  const messages = [{ role: 'system', content: 's' }, { role: 'user', content: 'go' }];
+  await rec.start({ messages, tools: [shellTool()], model: 'm' });
+  let i = 0;
+  const turns = [{ content: '', toolCalls: [{ id: 'k1', name: 'shell', arguments: { command: 'ls' } }] }, { content: 'done' }];
+  const compact = async (msgs) => {
+    const r = await compactConversation(msgs.slice(1), { threshold: 0, keepRecentTokens: 0, summarize: async () => 'sum' });
+    return r.compacted ? { method: r.method, messages: [msgs[0], ...r.messages], usage: { prompt_tokens: 900, completion_tokens: 100 } } : null;
+  };
+  const result = await runAgentLoop({ messages, tools: [shellTool()], infer: rec.wrapInfer(async () => turns[i++]), executeTool: async () => 'z'.repeat(4000),
+    onEvent: rec.onEvent, maxSteps: 4, compact, compactAbove: 0 });
+  await rec.finish(result); await rec.settled();
+  const c = joined(rec.events(), rec.resolve).filter((e) => e.tool === 'run.compacted');
+  assert.ok(c.length >= 1, 'the run compacted');
+  assert.deepEqual(c[0].output.usage, { prompt: 900, completion: 100, total: 1000 }, 'the record keeps the summary call\'s usage, normalised');
+  const q = foldQuota(rec.events(), rec.resolve);
+  assert.equal(q.tokens, 1000 * c.length, 'the run\'s token total counts every summary call');
+  assert.equal(q.calls, 2 + c.length, 'and each summary is a model call');
+}
+
 // ── Anvil wires it: off by default, read from localStorage once per run ──
 {
   const anvil = await readFile(new URL('../apps/anvil/index.html', import.meta.url), 'utf8');
   assert.match(anvil, /parseCompactionOverride\(localStorage\.getItem\('anvil-compaction'\)\)/);
   assert.match(anvil, /compactAbove: runCompaction \? runCompaction\.compactAbove : null/);
   assert.match(anvil, /rec, await carryLimitsNow\(\)\)/, 'the carry follows the same override');
+  assert.match(anvil, /makeSummarizer\(inferViaHost, \{ signal, onUsage: \(u\)=>\{ usage = u; \} \}\)/, 'Anvil collects the summary call\'s usage');
+  assert.match(anvil, /messages: \[\.\.\.head, \.\.\.r\.messages\], usage \}/, 'and hands it to the loop');
 }
 
 console.log('test-anvil-compaction: ok');
