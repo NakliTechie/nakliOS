@@ -494,6 +494,7 @@
   import { withShellContext, decideByRules, invalidRules, applyMode, MODES as PERM_MODES, MODE_LABEL as PERM_MODE_LABEL, modeIsLoud } from '../../sys/ai/permission-rules.mjs';
   import { compactConversation } from '../../sys/ai/compaction.mjs';
   import { makeSummarizer, parseCompactionOverride } from '../../sys/ai/compaction-summary.mjs';
+  import { createSlots } from '../../sys/ai/slots.mjs';
   import { evolve } from '../../sys/ai/evolve.mjs';
   import { createKiln, createWorkerRuntime } from '../../sys/kiln/index.mjs';
   // G9 (2026-09-24): the browser host for `node file.mjs` gates (sys/kiln/js-runner.mjs): blob-URL modules
@@ -3006,6 +3007,14 @@
   }
 
   async function inferViaHost({ messages, tools, maxTokens, signal }){
+    const release = await aiSlots.acquire(signal);
+    try { return await inferViaHostCall({ messages, tools, maxTokens, signal }); } finally { release(); }
+  }
+  // The host takes at most 3 pending AI requests per app (AI_MAX_QUEUE_PER_APP in the host) and
+  // refuses the fourth outright, so a 4-way dispatch lost a child. Every host call holds one of
+  // 3 slots; a fourth waits here for its turn (sys/ai/slots.mjs).
+  const aiSlots = createSlots(3);
+  async function inferViaHostCall({ messages, tools, maxTokens, signal }){
     const ai = nak && nak.ai;
     if(!ai) throw new Error('Agent needs the NakliOS host — open Anvil inside NakliOS (naklios.dev), and set a model in Settings → AI.');
     let lastErr;
