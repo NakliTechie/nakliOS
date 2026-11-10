@@ -224,14 +224,17 @@
     if (!inNakliOS) return Promise.reject(new Error('Not hosted — naklios.* unavailable standalone'));
     return new Promise(function (resolve, reject) {
       var requestId = 'r' + (++rpcCounter) + '_' + Date.now();
-      pendingRpc.set(requestId, { resolve: resolve, reject: reject });
+      var entry = { resolve: resolve, reject: reject, timer: null };
+      pendingRpc.set(requestId, entry);
       if (send(type, Object.assign({ requestId: requestId }, payload || {})) === false) {
         pendingRpc.delete(requestId);
         reject(new Error('Wait for a verified NakliOS host before sending more data'));
         return;
       }
-      // Default 30s safety net; long operations (index building) pass more.
-      setTimeout(function () {
+      // Default 30s safety net; long operations (index building) pass more. A call the host holds
+      // for the person's answer (a storage prompt) stops this clock: the host sends
+      // naklios:rpc:waiting, and the reply comes once the person answers.
+      entry.timer = setTimeout(function () {
         if (pendingRpc.has(requestId)) {
           pendingRpc.delete(requestId);
           reject(new Error('naklios RPC timeout: ' + type));
@@ -750,8 +753,13 @@
       var p = pendingRpc.get(msg.requestId);
       if (!p) return;
       pendingRpc.delete(msg.requestId);
+      if (p.timer) clearTimeout(p.timer);
       if (msg.error) p.reject(new Error(msg.error));
       else p.resolve(msg.result);
+    } else if (msg.type === 'naklios:rpc:waiting' && msg.requestId) {
+      // The host holds this call until the person answers a prompt; the safety clock stops.
+      var w = pendingRpc.get(msg.requestId);
+      if (w && w.timer) { clearTimeout(w.timer); w.timer = null; }
     } else if (msg.type === 'naklios:fs:event' && msg.subscriptionId) {
       var listener = fsSubscriptions.get(msg.subscriptionId);
       if (listener) {

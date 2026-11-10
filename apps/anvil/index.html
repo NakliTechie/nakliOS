@@ -3029,10 +3029,20 @@
         // from options.signal, and without it the orphaned request stayed aiHost.active — the host is
         // single-active, so the next Send from any app queued behind it until the endpoint finished
         // (the checker's trace, 2026-09-17; withDeadline alone only made THIS side look stopped).
-        if(signal){ req.signal = signal; }
+        // Each attempt gets its own controller, tied to the run's: when Anvil's own deadline gives up
+        // on a call, it aborts this one, so the SDK sends naklios:ai:cancel and the host drops the
+        // request. Without it the host kept the orphan pending and counted it toward the app's cap
+        // of 3 while this side had already freed its slot (review, 2026-11-11).
+        const attempt = new AbortController();
+        const forward = ()=>attempt.abort();
+        if(signal){ if(signal.aborted) attempt.abort(); else signal.addEventListener('abort', forward, { once:true }); }
+        req.signal = attempt.signal;
         const hold = {};
         req.onStatus = (status)=>{ if(hold.wait) hold.wait(status==='permission'); };
-        const r = await withDeadline(ai.chat.completions.create(req), signal, hold);
+        let r;
+        try { r = await withDeadline(ai.chat.completions.create(req), signal, hold); }
+        catch(err){ attempt.abort(); throw err; }
+        finally { if(signal) signal.removeEventListener('abort', forward); }
         const ch=r&&r.choices&&r.choices[0]; const m=(ch&&ch.message)||{};
         // F6: carry the provider's own token count through to the loop. Without it the budget
         // that ENDS runs is chars/4 over the messages, which cannot see the tool schemas — live

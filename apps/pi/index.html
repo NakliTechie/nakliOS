@@ -68,7 +68,12 @@ function addToolCard(call) {
   card.append(Object.assign(document.createElement('pre'), { textContent: args }));
   const out = Object.assign(document.createElement('pre'), { textContent: '' }); out.hidden = true; card.append(out);
   log.appendChild(card); log.scrollTop = log.scrollHeight;
-  if (call.id) toolCards.set(call.id, { card, state, out });
+  toolCards.set(call.id || ('card-' + toolCards.size + '-' + Date.now()), { card, state, out });
+}
+// When a run settles, a card whose result never came back (no call id, a step limit, an error) says so.
+function closeToolCards() {
+  for (const c of toolCards.values()) { if (c.state.textContent === 'running…') c.state.textContent = 'no result'; }
+  toolCards.clear();
 }
 function fillToolResults(messages) {
   for (const m of messages || []) {
@@ -193,10 +198,12 @@ async function ask(text) {
   add('you', text);
   lastLive = null;
   const r = await request({ type: 'ask', text });
-  if (r.error) { add('err', r.error); return r; }
+  if (r.error) { closeToolCards(); add('err', r.error); return r; }
   const s = r.settled || {};
-  // The final reply already streamed into its bubble; add it only when it did not.
-  if (s.status === 'done') { if (lastLive && lastLive.textContent.trim() === String(r.answer || '').trim()) lastLive = null; else add('', r.answer || '(no text)'); }
+  closeToolCards();
+  // The final reply already streamed into its bubble: that bubble takes the Worker's answer text
+  // (which may differ from the raw stream), so the reply is never shown twice.
+  if (s.status === 'done') { if (lastLive) { lastLive.textContent = r.answer || lastLive.textContent || '(no text)'; lastLive = null; } else add('', r.answer || '(no text)'); }
   else add('err', 'Pi did not answer: ' + JSON.stringify(s).slice(0, 400));
   return r;
 }

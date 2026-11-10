@@ -464,7 +464,7 @@ assert.match(anvil, /changes: \(\)=>\{ const c=overlay\.changes\(\); return \{ w
 assert.equal(needsSupervisor({ mode: 'code', stop: 'expect-misses', stag: { stalled: true, signal: 'repeat' } }), false, 'a prediction-streak stop is never re-looped');
 assert.equal(needsSupervisor({ mode: 'code', stop: 'max-steps', stag: { stalled: true, signal: 'repeat' } }), true, 'a stalled max-steps still is');
 assert.match(anvil, /else if\(e\.type==='expect-miss'\)\{ t\.log\.push\(\{k:'system',text:expectMissText\(e\)\}\)/, 'D1: a miss is a row as it happens (LV2: composed by expectMissText)');
-assert.match(anvil, /if\(signal\)\{ req\.signal = signal; \}/, 'Stop reaches the host\'s fetch: inferViaHost passes the run\'s signal to the SDK request (2026-09-17)');
+assert.match(anvil, /if\(signal\)\{ if\(signal\.aborted\) attempt\.abort\(\); else signal\.addEventListener\('abort', forward, \{ once:true \}\); \}\s*req\.signal = attempt\.signal;/, 'Stop reaches the host\'s fetch: the run\'s signal aborts each attempt\'s own signal, which the SDK request carries (2026-09-17; per-attempt since 2026-11-11 so a deadline also cancels at the host)');
 assert.equal((anvil.match(/createShell\(\{[^\n]*signal: \(\)=>abortController \? abortController\.signal : null/g) || []).length, 2, 'the main and verifier shells take the run\'s signal getter; hook cancellation is composed above');
 console.log('run-assembly: A4 readiness == the toolset in every mode; A2 episode rides ungated; B5 the grant projects the catalog; D1 a miss-streak stop stays stopped');
 // …and rides run.started only when the app supplies it: a bed that passes none records the old shape

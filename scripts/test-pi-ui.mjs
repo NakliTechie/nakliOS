@@ -28,8 +28,8 @@ const document = { createElement: el };
 const start = mod[1].indexOf('const toolCards = new Map();');
 const end = mod[1].indexOf('let lastLive = null;');
 assert.ok(start > 0 && end > start, 'the tool-card block is found');
-const { addToolCard, fillToolResults, toolCards } = new Function('document', 'log',
-  `${mod[1].slice(start, end)}; return { addToolCard, fillToolResults, toolCards };`)(document, log);
+const { addToolCard, fillToolResults, closeToolCards, toolCards } = new Function('document', 'log',
+  `${mod[1].slice(start, end)}; return { addToolCard, fillToolResults, closeToolCards, toolCards };`)(document, log);
 
 addToolCard({ id: 'c1', type: 'function', function: { name: 'bash', arguments: '{"command":"ls /workspace"}' } });
 addToolCard({ id: 'c2', type: 'function', function: { name: 'read', arguments: '{"path":"a.txt"}' } });
@@ -44,9 +44,14 @@ assert.equal(card.children[0].children[1].textContent, 'done', 'the result marks
 assert.equal(card.children[2].textContent, 'a.txt\nb.txt');
 assert.equal(card.children[2].hidden, false);
 assert.ok(toolCards.has('c2') && !toolCards.has('c1'), 'only the answered card is closed');
+addToolCard({ type: 'function', function: { name: 'ls', arguments: '{}' } }); // a call with no id
+closeToolCards();
+assert.equal(log.children[1].children[0].children[1].textContent, 'no result', 'a card whose result never came says so when the run settles');
+assert.equal(log.children[2].children[0].children[1].textContent, 'no result', 'including a call that had no id');
+assert.equal(toolCards.size, 0);
 
 // The page streams and assembles one completion for the Worker, and skips a duplicate final bubble.
 assert.match(mod[1], /ai\.chat\.completions\.create\(\{ \.\.\.msg\.request, agent: true, stream: true \}\)/, 'Pi asks for a stream');
 assert.match(mod[1], /worker\.postMessage\(\{ type: 'broker-reply', id: msg\.id, completion \}\)/, 'the Worker still gets one completion');
-assert.match(mod[1], /lastLive\.textContent\.trim\(\) === String\(r\.answer \|\| ''\)\.trim\(\)/, 'a streamed final reply is not added twice');
+assert.match(mod[1], /if \(lastLive\) \{ lastLive\.textContent = r\.answer \|\| lastLive\.textContent/, 'a streamed final reply takes the answer text and is not added twice');
 console.log('pi-ui: the module parses; tool cards fill with results; replies stream once');

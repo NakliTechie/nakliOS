@@ -5072,20 +5072,35 @@ function migrateAppPermission(appId){
 // on grant, or null on deny / no available backend / cancelled prompt.
 // One storage prompt per app: file calls that arrive while it is open wait on the same answer,
 // so a burst of calls no longer stacks one "Allow?" dialog per call (live 2026-10-29: three
-// "Allow Anvil?" prompts). Each waiting call's app hears naklios:rpc:waiting (fsPromptWaiters),
-// so the SDK stops that call's 30 s clock instead of failing while the person reads the prompt.
-const fsPermissionPrompts = new Map();   // appId → Promise<backend id | null>
-const fsPromptWaiters = new Map();       // appId → Set<() => void>
-function fsNotifyWaiting(appId){
-  for (const fn of fsPromptWaiters.get(appId) || []) { try { fn(); } catch(_){} }
+// "Allow Anvil?" prompts). `onWait` runs for a call only while its answer must come from the
+// person (the prompt is open), so its app can stop that call's 30 s clock (naklios:rpc:waiting);
+// a call that is already past the check, or one whose grant is saved, never hears it.
+const fsPermissionPrompts = new Map();   // appId → { promise, prompting, waiters: Set<() => void> }
+function fsPromptStarts(entry){
+  entry.prompting = true;
+  for (const fn of entry.waiters) { try { fn(); } catch(_){} }
+  entry.waiters.clear();
 }
-async function fsEnsurePermission(appId){
-  if (fsPermissionPrompts.has(appId)) { fsNotifyWaiting(appId); return fsPermissionPrompts.get(appId); }
-  const p = fsEnsurePermissionOnce(appId);
-  fsPermissionPrompts.set(appId, p);
-  try { return await p; } finally { if (fsPermissionPrompts.get(appId) === p) fsPermissionPrompts.delete(appId); }
+function fsEnsurePermission(appId, onWait = null){
+  let entry = fsPermissionPrompts.get(appId);
+  if (!entry){
+    entry = { promise: null, prompting: false, waiters: new Set() };
+    entry.promise = fsEnsurePermissionOnce(appId, entry);
+    fsPermissionPrompts.set(appId, entry);
+    entry.promise.then(() => {}, () => {}).then(() => { if (fsPermissionPrompts.get(appId) === entry) fsPermissionPrompts.delete(appId); });
+  }
+  if (typeof onWait === 'function'){
+    if (entry.prompting) { try { onWait(); } catch(_){} }
+    else entry.waiters.add(onWait);
+  }
+  return entry.promise;
 }
-async function fsEnsurePermissionOnce(appId){
+// The waiting notice for one RPC: the reply of that call is held until the person answers.
+function fsWaitNotice(source, requestId, replyTo){
+  if (!requestId) return null;
+  return () => { try { source.postMessage({ type: 'naklios:rpc:waiting', requestId }, replyTo); } catch(_){} };
+}
+async function fsEnsurePermissionOnce(appId, entry = { waiters: new Set() }){
   const app = APPS.find(a => a.id === appId);
   if (app?.thirdParty && !(app.permissions || []).includes('storage')) return null;
   migrateAppPermission(appId);
@@ -5100,7 +5115,7 @@ async function fsEnsurePermissionOnce(appId){
     // Crate binding (live 2026-09-24: Anvil bound to Crate, a reload locked it, one Allow later it
     // was on the Folder and unlocking did not bring it back). Ask to unlock; moving is explicit.
     if (v.backend === 'crate' && state.crateLocked){
-      fsNotifyWaiting(appId);
+      fsPromptStarts(entry);
       const buttons = [{ value: 'cancel', label: 'Cancel' }];
       if (BACKENDS.fsa.isConnected()) buttons.push({ value: 'fsa', label: 'Use Folder instead' });
       buttons.push({ value: 'unlock', label: 'Unlock Crate', primary: true });
@@ -5122,7 +5137,7 @@ async function fsEnsurePermissionOnce(appId){
   }
   const avail = backendsAvailable();
   if (avail.length === 0) return null;
-  fsNotifyWaiting(appId); // the answer now comes from the person
+  fsPromptStarts(entry); // the answer now comes from the person
 
   let chosen = null;
   if (avail.length === 1){
@@ -5231,7 +5246,7 @@ function fsHostReadOffset(value,maxBytes){
 
 // Resolve { dir, name } for fs reply ops. Throws if path unsafe or no handle.
 async function fsHostHandleNow(msg, type, appId){
-  const backendId = await fsEnsurePermission(appId);
+  const backendId = await fsEnsurePermission(appId, msg._onWait);
   if (!backendId) throw new Error('Permission denied');
   if (msg.backend && msg.backend !== backendId) {
     throw new Error('Storage backend changed before the operation completed; retry on the active backend');
@@ -5252,7 +5267,7 @@ async function fsHostHandleNow(msg, type, appId){
 }
 // list() is the only op that scopes to apps/<id>/ even when path is empty
 async function fsHostList(msg, appId){
-  const backendId = await fsEnsurePermission(appId);
+  const backendId = await fsEnsurePermission(appId, msg._onWait);
   if (!backendId) throw new Error('Permission denied');
   if (msg.backend && msg.backend !== backendId) {
     throw new Error('Storage backend changed before the operation completed; retry on the active backend');
@@ -5283,7 +5298,7 @@ function fsSysCleanPath(path, { allowEmpty = false } = {}){
 }
 async function fsSysBackend(msg, appId){
   if (!aiAppOwnsSystemFs(appId)) throw new Error('System filesystem is available to same-origin system apps only');
-  const backendId = await fsEnsurePermission(appId);
+  const backendId = await fsEnsurePermission(appId, msg && msg._onWait);
   if (!backendId) throw new Error('Permission denied');
   if (msg.backend && msg.backend !== backendId) {
     throw new Error('Storage backend changed before the operation completed; retry on the active backend');
@@ -5457,7 +5472,7 @@ async function fileHostSendTo(source, msg, sourceAppId){
       throw new Error(`${targetAppId} does not take ${path.split('/').at(-1)}`);
   }
   const target = APPS.find(app => app.id === targetAppId);
-  const backendId = await fsEnsurePermission(sourceAppId);
+  const backendId = await fsEnsurePermission(sourceAppId, msg._onWait);
   if (!backendId) throw new Error('Storage permission denied');
   if (msg.backend && msg.backend !== backendId) throw new Error('Storage backend changed before Send To completed');
   const backend = BACKENDS[backendId];
@@ -5502,7 +5517,7 @@ async function fileHostOpenWith(source, msg, sourceAppId){
   if (!sourcePath || !EDITABLE_FILE_RE.test(sourcePath)) {
     throw new Error('Editor opens text and source-code files up to 2 MB');
   }
-  const backendId = await fsEnsurePermission(sourceAppId);
+  const backendId = await fsEnsurePermission(sourceAppId, msg._onWait);
   if (!backendId) throw new Error('Storage permission denied');
   if (msg.backend && msg.backend !== backendId) {
     throw new Error('Storage backend changed before Open With completed');
@@ -8751,7 +8766,7 @@ function pruneStaleFsSubscriptions(){
 }
 
 async function fsHostSubscribe(source, msg, appId){
-  const backendId = await fsEnsurePermission(appId);
+  const backendId = await fsEnsurePermission(appId, msg._onWait);
   if (!backendId) throw new Error('Permission denied');
   if (msg.backend && msg.backend !== backendId) {
     throw new Error('Storage backend changed before the subscription was created');
@@ -9093,6 +9108,7 @@ window.addEventListener('message', async e => {
       const appId = getAppId();
       if (!appId) throw new Error('Unknown app');
       const op = msg.type.slice('naklios:file:'.length);
+      Object.defineProperty(msg, '_onWait', { value: fsWaitNotice(e.source, msg.requestId, replyTo) });
       if (op === 'openWith') reply.result = await fileHostOpenWith(e.source, msg, appId);
       else if (op === 'targets') reply.result = await fileHostTargets(String(msg.path || ''), appId);
       else if (op === 'sendTo') reply.result = await fileHostSendTo(e.source, msg, appId);
@@ -9158,17 +9174,11 @@ window.addEventListener('message', async e => {
     if (msg.requestId) { try { e.source.postMessage(reply, replyTo); } catch(_){} }
   } else if (typeof msg.type === 'string' && msg.type.startsWith('naklios:fs:')){
     const reply = { type: 'naklios:fs:reply', requestId: msg.requestId };
-    let waitApp = null, waiter = null;
     try {
       const appId = getAppId();
       if (!appId) throw new Error('Unknown app');
       const op = msg.type.slice('naklios:fs:'.length);
-      if (msg.requestId) {
-        waitApp = appId;
-        waiter = () => { try { e.source.postMessage({ type: 'naklios:rpc:waiting', requestId: msg.requestId }, replyTo); } catch(_){} };
-        if (!fsPromptWaiters.has(appId)) fsPromptWaiters.set(appId, new Set());
-        fsPromptWaiters.get(appId).add(waiter);
-      }
+      Object.defineProperty(msg, '_onWait', { value: fsWaitNotice(e.source, msg.requestId, replyTo) });
       if (op === 'selectBackend') reply.result = await fsHostSelectBackend(appId, msg.backend);
       else if (op === 'subscribe') reply.result = await fsHostSubscribe(e.source, msg, appId);
       else if (op === 'unsubscribe') reply.result = fsHostUnsubscribe(e.source, msg.subscriptionId);
@@ -9176,8 +9186,6 @@ window.addEventListener('message', async e => {
       else reply.result = await fsHostHandle(msg, op, appId);
     } catch (err){
       reply.error = String(err?.message || err);
-    } finally {
-      if (waiter) { const set = fsPromptWaiters.get(waitApp); set?.delete(waiter); if (set && !set.size) fsPromptWaiters.delete(waitApp); }
     }
     if (msg.requestId) {
       try { e.source.postMessage(reply, replyTo); } catch(_){}
@@ -9189,6 +9197,7 @@ window.addEventListener('message', async e => {
       const appId = getAppId();
       if (!appId) throw new Error('Unknown app');
       const op = msg.type.slice('naklios:sysfs:'.length);
+      Object.defineProperty(msg, '_onWait', { value: fsWaitNotice(e.source, msg.requestId, replyTo) });
       if (op === 'list') reply.result = await fsHostSysList(msg, appId);
       else reply.result = await fsHostSysHandle(msg, op, appId);
     } catch (err){

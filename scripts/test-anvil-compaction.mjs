@@ -6,7 +6,7 @@ import { readFile } from 'node:fs/promises';
 import { runAgentLoop, shellTool } from '../sys/ai/agent-loop.mjs';
 import { compactConversation, SUMMARY_HEAD } from '../sys/ai/compaction.mjs';
 import { parseCompactionOverride, makeSummarizer, serializeForSummary, CHECKPOINT_PROMPT } from '../sys/ai/compaction-summary.mjs';
-import { createRunRecorder, joined } from '../sys/history/run-record.mjs';
+import { createRunRecorder, joined, foldQuota } from '../sys/history/run-record.mjs';
 
 // ── the override: off unless well formed ──
 assert.equal(parseCompactionOverride(null), null);
@@ -133,6 +133,9 @@ async function runWith({ compactAbove, usageInput = null }) {
   const c = joined(rec.events(), rec.resolve).filter((e) => e.tool === 'run.compacted');
   assert.ok(c.length >= 1, 'the run compacted');
   assert.deepEqual(c[0].output.usage, { prompt: 900, completion: 100, total: 1000 }, 'the record keeps the summary call\'s usage, normalised');
+  const q = foldQuota(rec.events(), rec.resolve);
+  assert.equal(q.tokens, 1000 * c.length, 'the run\'s token total counts every summary call');
+  assert.equal(q.calls, 2 + c.length, 'and each summary is a model call');
 }
 
 // ── Anvil wires it: off by default, read from localStorage once per run ──
