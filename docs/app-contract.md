@@ -553,8 +553,8 @@ the contract stays one document. Members it names ship as `experimental_<name>` 
 [`sdk-api-audit.md`](sdk-api-audit.md), and move into the Reference when they exist. Plan and build order:
 `plan/2026-11-03-common-rail-spec-plan.md`.
 
-The common rail is the one channel between the host and an app. Files, AI, commands and events all ride it; no
-service opens a channel of its own. Every caller of an app (the person's UI, the voice assistant, Anvil, an outside
+The common rail is the one channel between the host and an app. Files, AI, commands and widgets all ride it; no
+service opens a channel of its own. Events (below) are not built; they join the rail only if a feature needs them. Every caller of an app (the person's UI, the voice assistant, Anvil, an outside
 agent, a test) reaches it through the host, and the host applies one set of checks: the caller's Grant, the History
 ledger, and Staging for destructive changes.
 
@@ -623,7 +623,7 @@ The voice assistant has no service of its own. It is a caller of the command cat
 agent. An app the assistant can reach is an app that registered commands; the assistant does not read or write any
 app's files directly.
 
-### Events
+### Events (not built)
 
 `naklios.experimental_events` comes last, only when a named feature needs it. Events are host-mediated, numbered, and
 grouped by topic; each subscriber keeps its own read position, and a `once` key stops the same work running twice.

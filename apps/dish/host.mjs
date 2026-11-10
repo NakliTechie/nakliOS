@@ -128,7 +128,9 @@ async function bootDish(WorkerClass, connect) {
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     const bootMs = performance.now();
     window.__dish = { bootMs, workerBootMs, metrics, cold, worker, snapshot, flush: () => saver.flush(), store: store.id };
-    say(`Dish · ${store.id} storage · Plugins run with full trust. Worker shell supports browser commands only.`);
+    // The host's own label for the backend ("Folder", "Crate"), not its id ("fsa").
+    const where = store.id === 'browser' ? 'this browser' : (sdk.capabilities.fsBackends || []).find(b => b.id === store.id)?.label || store.id;
+    say(`Dish · saved in ${where} · Plugins run with full trust. Worker shell supports browser commands only.`);
     sdk.title('Dish'); sdk.ready();
   } catch (error) { say(`Dish could not start: ${error.message}`); worker.terminate(); throw error; }
   finally { clearTimeout(uiTimer); document.removeEventListener('dish-ui-mounted', mountedListener); document.removeEventListener('dish-ui-error', failedListener); }

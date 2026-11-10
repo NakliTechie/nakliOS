@@ -55,7 +55,11 @@ self.onmessage = async (event) => {
   }
   if (msg.type === 'init') {
     ready = start(msg.backend || {});
-    ready.then(() => self.postMessage({ type: 'ready' }), (e) => self.postMessage({ type: 'fatal', error: String(e?.stack || e) }));
+    ready.then(async ({ pi }) => {
+      let transcript = [];
+      try { transcript = await pi.transcript(); } catch (_) { /* the session still works; the window just starts empty */ }
+      self.postMessage({ type: 'ready', transcript });
+    }, (e) => self.postMessage({ type: 'fatal', error: String(e?.stack || e) }));
     return;
   }
   if (!ready) { self.postMessage({ type: 'answer', id: msg.id, error: 'Pi is not initialised' }); return; }
