@@ -1280,6 +1280,26 @@
           "destination": "vendor/pdfjs/pdf.worker.min.mjs"
         }
       ]
+    },
+    {
+      "id": "figger",
+      "repo": "NakliTechie/figger",
+      "ref": "main",
+      "files": [
+        {
+          "source": "index.html",
+          "destination": "index.html",
+          "managedSdk": "inline"
+        },
+        {
+          "source": "commands.json",
+          "destination": "commands.json"
+        },
+        {
+          "source": "NOTICE",
+          "destination": "NOTICE"
+        }
+      ]
     }
   ]
 }
