@@ -2906,7 +2906,8 @@
   async function compactForOverflow(msgs, opts = {}, ov = null, signal = null){
     const head = msgs[0] && msgs[0].role==='system' ? [msgs[0]] : [];
     const body = msgs.slice(head.length);
-    const summarize = ov && ov.summarize ? makeSummarizer(inferViaHost, { signal }) : null;
+    let usage = null;
+    const summarize = ov && ov.summarize ? makeSummarizer(inferViaHost, { signal, onUsage: (u)=>{ usage = u; } }) : null;
     let threshold, keepRecentTokens;
     if (opts.reason === 'threshold' && ov) {
       threshold = ov.threshold; keepRecentTokens = ov.keepRecentTokens;
@@ -2917,7 +2918,7 @@
       keepRecentTokens = Math.min(L.keepRecentTokens, Math.floor(threshold*0.4));
     }
     const r = await compactConversation(body, { threshold, keepRecentTokens, retrievable: true, summarize });
-    return r.compacted ? { method: r.method, messages: [...head, ...r.messages] } : null;
+    return r.compacted ? { method: r.method, messages: [...head, ...r.messages], usage } : null;
   }
   // The carry between runs follows the same override in threshold mode, so both compactions agree.
   async function carryLimitsNow(){

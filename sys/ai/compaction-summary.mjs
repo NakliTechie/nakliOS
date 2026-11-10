@@ -78,7 +78,9 @@ export function serializeForSummary(messages, { toolMax = TOOL_RESULT_MAX_CHARS 
 
 // (olderMessages) => summary text, through the given infer ({ messages, tools, signal } => { content }).
 // An empty reply throws, so compactConversation records "summary unavailable" instead of an empty summary.
-export function makeSummarizer(infer, { signal = null } = {}) {
+// `onUsage(usage)` receives the summary call's reported token usage, so the caller can put it on the
+// run record next to the compaction (the call goes around the recorded infer).
+export function makeSummarizer(infer, { signal = null, onUsage = null } = {}) {
   return async (older) => {
     const reply = await infer({
       messages: [
@@ -88,6 +90,7 @@ export function makeSummarizer(infer, { signal = null } = {}) {
       tools: [],
       signal,
     });
+    if (typeof onUsage === 'function' && reply && reply.usage) { try { onUsage(reply.usage); } catch (_) {} }
     const text = typeof reply?.content === 'string' ? reply.content.trim() : '';
     if (!text) throw new Error('the model returned an empty summary');
     return text;

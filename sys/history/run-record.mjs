@@ -194,7 +194,7 @@ export function createRunRecorder({ app = 'anvil', principal = 'local', grant_id
         case 'run.steered': enqueue(verb, () => ({ input: { step: s }, output: { content: String(e.content ?? '') } })); break;
         // C1: the loop replaced its transcript after a context overflow — the same verb (and the same fold) as
         // a caller's compacted(), so the retry's request reconstructs.
-        case 'run.compacted': enqueue(verb, () => ({ input: { method: String(e.method || 'shake'), from: Number(e.from) || 0, to: Number(e.to) || 0, step: s }, output: { replacement: Array.isArray(e.replacement) ? e.replacement : null } })); break;
+        case 'run.compacted': enqueue(verb, () => ({ input: { method: String(e.method || 'shake'), from: Number(e.from) || 0, to: Number(e.to) || 0, step: s }, output: { replacement: Array.isArray(e.replacement) ? e.replacement : null, ...(e.usage ? { usage: e.usage } : {}) } })); break;
         case 'expect.missed': enqueue(verb, () => ({ input: { step: s, id: e.id ?? null, misses: Number(e.misses) || 0, streak: Number(e.streak) || 0, limit: Number(e.limit) || 0 }, output: {} })); break; // D1 (LV2: the limit the run applied)
       }
     },
