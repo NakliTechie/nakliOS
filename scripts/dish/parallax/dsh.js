@@ -142,7 +142,7 @@ export function apply(ctx, config = {}) {
     },
 
     // A new top-level conversation with the caller's permission preset, read back before its first turn.
-    async delegate(callerId, { task, title, permission }) {
+    async delegate(callerId, { task, title, permission, model, agentPreset, acceptance = [], dueAt }) {
       const presets = ctx.get('permissionPresets')
       if (!presets) return { refused: 'This host has no permission presets, so Parallax cannot clamp a new conversation\'s permissions.' }
       const caller = await liveAgent(callerId)
@@ -162,7 +162,16 @@ export function apply(ctx, config = {}) {
         if (!narrower) return { refused: `Preset "${permission}" is not narrower than this conversation's ("${callerPreset}").` }
         preset = permission
       }
-      const created = await ctx.sessionController.create({ cwd: caller.session.header?.cwd })
+      // A model per task (Atomic Agent's Fusion roles), from the profile's `models` list when it sets one.
+      const allowed = Array.isArray(config.models) ? config.models.map(String) : undefined
+      let selection
+      if (model !== undefined) {
+        if (allowed && !allowed.includes(model)) return { refused: `Model "${model}" is not allowed here. Allowed: ${allowed.join(', ') || 'none'}.` }
+        const [provider, ...rest] = model.split('/')
+        if (!provider || !rest.length) return { refused: 'model is "provider/model", such as "deepseek/deepseek-v4-flash".' }
+        selection = { provider, model: rest.join('/') }
+      }
+      const created = await ctx.sessionController.create({ cwd: caller.session.header?.cwd, ...(agentPreset ? { agentPreset } : {}) })
       const child = await liveAgent(created.sessionId)
       presets.set(child.session, preset)
       // The caller's own overrides (dsh's access-mode picker sets them) carry over, narrowed to the chosen preset's sandbox.
@@ -177,17 +186,47 @@ export function apply(ctx, config = {}) {
         && (childSandbox === undefined || sandboxPolicy?.overrideOf?.(child.session) === childSandbox)
         && (approvalOverride === undefined || approval?.overrideOf?.(child.session) === approvalOverride)
       if (!readBack) return { refused: 'The new conversation\'s permissions did not read back as no wider than this conversation\'s, so it was not started.' }
+      let chosenModel
+      if (selection) {
+        // dsh's selectModel also saves the choice as the person's default model, so the previous default is put back.
+        const defaults = ctx.get('agentDefaultModel')
+        const before = defaults?.currentSelection?.()
+        try {
+          const { selected } = await ctx.sessionController.selectModel({ sessionId: created.sessionId, ...selection })
+          chosenModel = `${selected.provider}/${selected.model}`
+        } catch (error) {
+          return { refused: `The new conversation could not use model "${model}": ${clip(error?.message ?? error, 200)}` }
+        } finally {
+          if (before) await defaults.saveSelection(before).catch(() => {})
+        }
+      }
       const callerTitle = (await host.list(callerId)).find(row => row.id === callerId)?.title ?? 'a conversation'
       child.followup(createUserMessage({
         content: [{ type: 'text', text: [
           `[parallax · delegated task · started by "${callerTitle}" (${aliasOf(callerId)}), with permissions no wider than its own]`,
           `Title: ${title}`, '', task, '',
-          `When you finish or need a decision, report with peer_send to "${aliasOf(callerId)}".`,
+          ...(acceptance.length ? ['Done means (checked by the conversation that delegated this):', ...acceptance.map(item => `- ${item}`), ''] : []),
+          ...(dueAt ? [`Report by: ${new Date(dueAt).toISOString()}`, ''] : []),
+          `Report with peer_send to "${aliasOf(callerId)}", setting status: "working" for progress, "done" or "failed" at the end, and "needs_parent" when you need a decision or a permission you do not have.`,
         ].join('\n') }],
         source: { kind: SOURCE_KIND, form: 'relay', senderSessionId: callerId, peerKind: 'delegate' },
       }))
       try { await ctx.sessions.flush(child.session) } catch { /* followup already queued */ }
-      return { childId: created.sessionId, permission: childSandbox ? `${preset} (sandbox ${childSandbox})` : preset }
+      return { childId: created.sessionId, permission: childSandbox ? `${preset} (sandbox ${childSandbox})` : preset, ...(chosenModel ? { model: chosenModel } : {}) }
+    },
+
+    // Mid-turn, or a person's message is waiting: a human-first receiver holds peer messages until then.
+    async busy(toId) {
+      const agent = ctx.agents.get(toId)
+      if (!agent) return false
+      if (agent.status === 'running') return true
+      return [...agent.inbox.nextTurn, ...agent.inbox.nextStep].some(m => m.source?.kind === 'user')
+    },
+
+    async stats(toId) {
+      const projections = await ctx.sessionController.projections({ sessionId: toId }, AbortSignal.timeout(10_000))
+      const stats = projections?.values?.sessionStats
+      return stats ? { turns: stats.turns, outputTokens: stats.decodeTokens } : undefined
     },
 
     async record(sessionId, data) {
@@ -238,10 +277,41 @@ export function apply(ctx, config = {}) {
     })), `${name}: ${tool.name}`)
   }
 
+  // A human-first receiver gets one held peer message each time it goes idle.
+  // Agent events are dispatched to the agent's own scope; `global` receives every conversation's (seen in dsh, 2026-11-10).
+  ctx.on('agent/status', ({ agent, status }) => {
+    if (status === 'idle') void core.release(agent.id).catch(() => {})
+  }, { global: true })
+
+  // A delegated conversation's permission prompt is shown to the person in the parent conversation, where an automated
+  // run is watched. Only a person answers it; with no answer there, the child's own prompt decides (next()).
+  // Off with `approvalRelay: false`.
+  if (config.approvalRelay !== false) {
+    ctx.on('approval/request', async (req, next) => {
+      const route = core.approvalRoute(req.agent?.id)
+      if (!route || !ctx.agents.get(route.parentId)) return next()
+      const pending = { toolName: req.toolName, ...(req.reason ? { reason: clip(req.reason, 300) } : {}) }
+      core.noteApproval(req.agent.id, pending)
+      try {
+        const choice = await host.askPerson(route.parentId, {
+          header: 'Delegated conversation needs approval',
+          question: `Allow "${route.title}" (${route.alias}) to run ${req.toolName}?`,
+          detail: `${req.reason ? `Reason given: ${clip(req.reason, 600)}\n\n` : ''}This conversation delegated that task. Allow it once, or reject it. Close this card to answer in the delegated conversation instead.`,
+          options: ['Allow once', 'Reject'],
+        }, req.signal)
+        if (choice === 'Allow once') return 'allowed-once'
+        if (choice === 'Reject') return 'rejected'
+      } catch { /* the parent cannot show a card now; the child's own prompt decides */ } finally { core.noteApproval(req.agent.id, undefined) }
+      return next()
+    }, { global: true, prepend: true })
+  }
+
   // Person-only acts. Commands come from the composer, never from the model's tool registry.
   ctx.effect(() => ctx.commands.register({
     name: 'peer',
-    description: 'Peer conversations: /peer connect <peer> [once|session] · /peer revoke <peer> · /peer wake <always|replies|never>',
+    // Without an input hint, dsh's composer runs the command as soon as it is picked, with no arguments (seen in dsh, 2026-11-10).
+    input: { hint: 'connect <peer> [once|session] · revoke <peer> · wake <always|replies|never> · busy <queue|human-first>' },
+    description: 'Peer conversations: /peer connect <peer> [once|session] · /peer revoke <peer> · /peer wake <always|replies|never> · /peer busy <queue|human-first>',
     async handler({ agent, rawInput }) {
       await hydrateAll()
       const [verb, ...rest] = String(rawInput ?? '').trim().split(/\s+/)
@@ -251,7 +321,8 @@ export function apply(ctx, config = {}) {
         result = await core.personConnect(agent.id, rest.join(' '), tier)
       } else if (verb === 'revoke') result = await core.personRevoke(agent.id, rest.join(' '))
       else if (verb === 'wake') result = await core.personSetWake(agent.id, rest[0])
-      else return { kind: 'error', text: 'Use /peer connect <peer> [once|session], /peer revoke <peer> or /peer wake <always|replies|never>.' }
+      else if (verb === 'busy') result = await core.personSetBusy(agent.id, rest[0])
+      else return { kind: 'error', text: 'Use /peer connect <peer> [once|session], /peer revoke <peer>, /peer wake <always|replies|never> or /peer busy <queue|human-first>.' }
       return result.ok ? { kind: 'success', text: JSON.stringify(result) } : { kind: 'error', text: result.message }
     },
   }), `${name}: /peer`)

@@ -17,6 +17,8 @@
 //   context(toId, {view, maxMessages}): Promise<{goal?, todos?: {text, done}[], messages?: {role, text}[], activity?: string[]}>
 //   delegate(callerId, {task, title, permission?}): Promise<{childId} | {refused: string}>   permissions clamped and read back
 //   record(sessionId, data): void | Promise<void>   append a durable record to that conversation's log
+//   busy?(toId): Promise<boolean>                   optional: the receiver is mid-turn or has a person's message waiting
+//   stats?(toId): Promise<{turns, outputTokens}>    optional: a delegated conversation's usage, for peer_list
 // }
 //
 // Every tool call passes `caller = {sessionId, root, signal}`. `root` is false for subagents, which are refused.
@@ -28,6 +30,9 @@ const HOP_MEMORY_MS = 15 * 60_000
 const BROADCAST_MAX = 20
 const CHOICE = Object.freeze({ once: 'Allow once', session: 'Allow for this session', decline: 'Decline' })
 const WAKE = new Set(['always', 'replies', 'never'])
+const BUSY = new Set(['queue', 'human-first'])
+const STATUS = new Set(['working', 'done', 'failed', 'needs_parent'])
+const IDEMPOTENCY_MS = 24 * 60 * 60_000
 
 const refuse = (code, message) => ({ ok: false, refused: code, message })
 const pairKey = (a, b) => (a < b ? `${a}\u0000${b}` : `${b}\u0000${a}`)
@@ -55,6 +60,9 @@ export class Parallax {
     this.wake = new Map() // session id -> always | replies | never
     this.children = new Map() // child id -> {parent, title, startedAt, lastReportAt, reports}
     this.waiters = new Map() // request id -> Set(resolve)
+    this.busyMode = new Map() // session id -> queue | human-first
+    this.held = new Map() // session id -> [{id, text, target, wakeup, meta}] waiting for a human-first receiver to go idle
+    this.sent = new Map() // `${from}\u0000${to}\u0000${key}` -> {result, at}, for idempotent resends
   }
 
   // ---- persistence -------------------------------------------------------------------------------------------
@@ -76,8 +84,11 @@ export class Parallax {
       } else if (data.type === 'request' && data.asker === sessionId && typeof data.id === 'string') {
         if (data.op === 'open') this.requests.set(data.id, { id: data.id, asker: data.asker, target: data.target, messageId: data.messageId, dueAt: data.dueAt, answer: undefined, cancelled: false })
         else this.requests.delete(data.id)
+      } else if (data.type === 'busy' && data.session === sessionId) {
+        this.busyMode.set(sessionId, BUSY.has(data.setting) ? data.setting : 'queue')
       } else if (data.type === 'child' && typeof data.childId === 'string') {
-        this.children.set(data.childId, { parent: sessionId, title: data.title, startedAt: data.at, lastReportAt: undefined, reports: 0 })
+        this.children.set(data.childId, { parent: sessionId, title: data.title, startedAt: data.at, lastReportAt: undefined, reports: 0,
+          acceptance: Array.isArray(data.acceptance) ? data.acceptance : [], dueAt: data.dueAt, tags: Array.isArray(data.tags) ? data.tags : [], model: data.model, status: 'working' })
       }
     }
   }
@@ -230,6 +241,46 @@ export class Parallax {
     return { ok: true, wake: setting }
   }
 
+  // Human first (pi-intercom busyDelivery): peer messages wait while the receiver runs a turn or has a person's message
+  // pending, then go in one per idle moment. `queue` (default) delivers at once behind whatever is queued.
+  async personSetBusy(sessionId, setting) {
+    if (!BUSY.has(setting)) return refuse('bad_setting', 'Setting is queue or human-first.')
+    this.busyMode.set(sessionId, setting)
+    await this.#record(sessionId, { type: 'busy', session: sessionId, setting, at: this.host.now() })
+    if (setting === 'queue') while ((this.held.get(sessionId) ?? []).length) await this.release(sessionId, { force: true })
+    return { ok: true, busy: setting }
+  }
+
+  // Deliver the oldest held message for this receiver; the host calls it when the receiver goes idle.
+  async release(sessionId, { force = false } = {}) {
+    const queue = this.held.get(sessionId) ?? []
+    if (!queue.length) return false
+    if (!force && this.host.busy && await this.host.busy(sessionId)) return false
+    const next = queue.shift()
+    const message = this.messages.get(next.id)
+    if (!message || message.cancelled) return this.release(sessionId, { force })
+    try {
+      const delivered = await this.host.deliver(sessionId, { text: next.text, target: next.target, wakeup: next.wakeup, meta: next.meta })
+      message.hostMessageId = delivered?.messageId
+      message.held = false
+    } catch { queue.unshift(next); return false }
+    return true
+  }
+
+  // A delegated conversation's approval prompt, raised to its parent's person (never to a model).
+  approvalRoute(childId) {
+    const child = this.children.get(childId)
+    return child ? { parentId: child.parent, title: child.title, alias: aliasOf(childId) } : undefined
+  }
+
+  noteApproval(childId, pending) {
+    const child = this.children.get(childId)
+    if (!child) return
+    child.waitingApproval = pending
+    if (pending) { child.status = 'needs_parent'; child.statusAt = this.host.now() }
+    else if (child.status === 'needs_parent') child.status = 'working'
+  }
+
   // ---- tools -------------------------------------------------------------------------------------------------
 
   #gate(caller) {
@@ -251,9 +302,17 @@ export class Parallax {
       id: r.id, direction: r.asker === caller.sessionId ? 'you asked' : 'you owe an answer',
       peer: aliasOf(r.asker === caller.sessionId ? r.target : r.asker), state: this.#requestState(r, now),
     }))
-    const delegated = [...this.children].filter(([, child]) => child.parent === caller.sessionId).map(([id, child]) => ({
-      peer: aliasOf(id), title: child.title, state: byId.get(id) ? (byId.get(id).running ? 'running' : 'idle') : 'gone',
-      startedAt: new Date(child.startedAt).toISOString(), reports: child.reports, ...(child.lastReportAt ? { lastReportAt: new Date(child.lastReportAt).toISOString() } : {}),
+    const delegated = await Promise.all([...this.children].filter(([, child]) => child.parent === caller.sessionId).map(async ([id, child]) => {
+      let usage
+      try { usage = await this.host.stats?.(id) } catch { /* usage unavailable */ }
+      return {
+        peer: aliasOf(id), title: child.title, state: byId.get(id) ? (byId.get(id).running ? 'running' : 'idle') : 'gone',
+        status: child.status ?? 'working', ...(child.waitingApproval ? { waitingApproval: child.waitingApproval } : {}),
+        ...(child.dueAt ? { reportBy: new Date(child.dueAt).toISOString(), ...(now > child.dueAt && !['done', 'failed'].includes(child.status) ? { overdue: true } : {}) } : {}),
+        ...(child.acceptance?.length ? { acceptance: child.acceptance } : {}), ...(child.tags?.length ? { tags: child.tags } : {}),
+        ...(child.model ? { model: child.model } : {}), ...(usage ? { usage } : {}),
+        startedAt: new Date(child.startedAt).toISOString(), reports: child.reports, ...(child.lastReportAt ? { lastReportAt: new Date(child.lastReportAt).toISOString() } : {}),
+      }
     }))
     const parent = this.children.get(caller.sessionId)?.parent
     return {
@@ -261,7 +320,7 @@ export class Parallax {
       conversations: rows.map(row => ({ peer: row.alias, id: row.id, title: row.title, state: row.running ? 'running' : 'idle' })),
       channels, requests, delegated, ...(parent ? { delegatedBy: aliasOf(parent) } : {}),
       blocked: [...this.blocked].map(key => key.split('\u0000')).filter(pair => pair.includes(caller.sessionId)).map(pair => aliasOf(pair[0] === caller.sessionId ? pair[1] : pair[0])),
-      hop: `${this.#hopFor(caller.sessionId, now)}/${this.maxHops}`, wake: this.#wakeOf(caller.sessionId), consent: this.consent,
+      hop: `${this.#hopFor(caller.sessionId, now)}/${this.maxHops}`, wake: this.#wakeOf(caller.sessionId), busy: this.busyMode.get(caller.sessionId) ?? 'queue', consent: this.consent,
     }
   }
 
@@ -281,6 +340,22 @@ export class Parallax {
   }
 
   async #sendOne(caller, args) {
+    // A repeated key returns the first result instead of sending again (pi-intercom idempotence).
+    const key = args.key === undefined ? undefined : String(args.key).slice(0, 200)
+    if (key) {
+      const now = this.host.now()
+      for (const [k, entry] of this.sent) if (now - entry.at > IDEMPOTENCY_MS) this.sent.delete(k)
+      const found = await this.#resolve(caller.sessionId, args.to)
+      const earlier = found.peer && this.sent.get(`${caller.sessionId}\u0000${found.peer.id}\u0000${key}`)
+      if (earlier) return { ...earlier.result, duplicate: true, note: 'Already sent with this key; nothing was sent again.' }
+      const result = await this.#sendFresh(caller, args)
+      if (result.ok && found.peer) this.sent.set(`${caller.sessionId}\u0000${found.peer.id}\u0000${key}`, { result, at: now })
+      return result
+    }
+    return this.#sendFresh(caller, args)
+  }
+
+  async #sendFresh(caller, args) {
     const kind = args.kind
     if (!['notice', 'request', 'reply'].includes(kind)) return refuse('bad_kind', 'kind is notice, request or reply.')
     const summary = String(args.summary ?? '').trim()
@@ -289,11 +364,14 @@ export class Parallax {
     if (summary.length > LIMITS.summary) return refuse('summary_too_long', `The summary is ${summary.length} characters; the limit is ${LIMITS.summary}.`)
     if (byteLength(body) > LIMITS.body) return refuse('body_too_long', `The body is over ${LIMITS.body} bytes. Pass file paths instead of contents.`)
     if (containsMarker(summary, body)) return refuse('marker', `The message contains the text "${MARKER}", which only Parallax may write. Remove it.`)
+    if (args.status !== undefined && !STATUS.has(args.status)) return refuse('bad_status', 'status is working, done, failed or needs_parent.')
     if (args.urgent && args.wake === false) return refuse('bad_options', 'urgent delivers at the peer\'s next step and wakes it; it cannot be combined with wake: false.')
     const found = await this.#resolve(caller.sessionId, args.to)
     if (found.error) return found.error
     const peer = found.peer
     const now = this.host.now()
+    const child = this.children.get(caller.sessionId)
+    if (args.status !== undefined && !(child && child.parent === peer.id)) return refuse('bad_status', 'status is for a delegated conversation reporting to the conversation that delegated it.')
 
     // Replies are accepted only along the asker-to-target edge. With no replyTo, the one open request from this peer is meant.
     let answering
@@ -348,7 +426,7 @@ export class Parallax {
     const message = {
       id, kind, from: caller.sessionId, to: peer.id, fromTitle: self?.title ?? 'a conversation', fromAlias: aliasOf(caller.sessionId),
       summary, body, requestId, replyTo: answering?.id, dueAt, hop, maxHops: this.maxHops, sentAt: now, hostMessageId: undefined, cancelled: false,
-      ...(superseding ? { supersedes: superseding.id } : {}),
+      ...(superseding ? { supersedes: superseding.id } : {}), ...(args.status ? { status: args.status } : {}),
     }
     const setting = this.#wakeOf(peer.id)
     const wakeup = args.urgent ? true : args.wake === false ? false : setting === 'always' || (setting === 'replies' && kind === 'reply')
@@ -359,10 +437,25 @@ export class Parallax {
     // only. Queuing it as well would start a second turn that rereads the same answer (seen in dsh, 2026-11-10).
     const inline = Boolean(answering && this.waiters.get(answering.id)?.size)
     try {
-      if (inline) delivered = { messageId: undefined }
-      else if (superseding?.hostMessageId) {
+      if (inline) { delivered = { messageId: undefined }; message.inline = true }
+      else if (superseding?.held) {
+        const queue = this.held.get(peer.id) ?? []
+        const slot = queue.findIndex(entry => entry.id === superseding.id)
+        if (slot >= 0) {
+          queue[slot] = { id, text: formatDelivered(message), target: args.urgent ? 'next-step' : 'next-turn', wakeup, meta }
+          message.held = true; superseding.held = false; superseded = true
+          delivered = { messageId: undefined }
+        }
+      } else if (superseding?.hostMessageId) {
         delivered = await this.host.replace(peer.id, superseding.hostMessageId, { text: formatDelivered(message), meta })
         superseded = Boolean(delivered)
+      }
+      if (!delivered && !inline && this.busyMode.get(peer.id) === 'human-first' && this.host.busy && await this.host.busy(peer.id)) {
+        const queue = this.held.get(peer.id) ?? []
+        queue.push({ id, text: formatDelivered(message), target: args.urgent ? 'next-step' : 'next-turn', wakeup, meta })
+        this.held.set(peer.id, queue)
+        message.held = true
+        delivered = { messageId: undefined }
       }
       if (!delivered) delivered = await this.host.deliver(peer.id, { text: formatDelivered(message), target: args.urgent ? 'next-step' : 'next-turn', wakeup, meta })
     } catch (error) {
@@ -386,8 +479,10 @@ export class Parallax {
       const old = superseding.requestId && this.requests.get(superseding.requestId)
       if (old) { old.cancelled = true; await this.#record(old.asker, { type: 'request', op: 'cancelled', id: old.id, asker: old.asker }) }
     }
-    const child = this.children.get(caller.sessionId)
-    if (child && child.parent === peer.id) { child.reports += 1; child.lastReportAt = now }
+    if (child && child.parent === peer.id) {
+      child.reports += 1; child.lastReportAt = now
+      if (args.status) { child.status = args.status; child.statusAt = now }
+    }
 
     let request
     if (requestId) {
@@ -403,7 +498,7 @@ export class Parallax {
     }
     await this.#spend(channel, kind, requestId)
     const out = {
-      ok: true, id, ...(requestId ? { requestId } : {}), ...(answering ? { replyTo: answering.id } : {}), to: peer.alias, state: inline ? 'returned to the waiting asker' : 'accepted', woke: inline ? false : wakeup,
+      ok: true, id, ...(requestId ? { requestId } : {}), ...(answering ? { replyTo: answering.id } : {}), to: peer.alias, state: inline ? 'returned to the waiting asker' : message.held ? 'held until the peer is idle (human first)' : 'accepted', woke: inline || message.held ? false : wakeup,
       delivery: args.urgent ? 'next step' : 'next turn', hop: `${hop}/${this.maxHops}`,
       ...(superseding ? { superseded: superseded ? superseding.id : `not replaced: ${superseding.id} was already claimed, so this was sent as a new message` } : {}),
     }
@@ -451,7 +546,7 @@ export class Parallax {
     const message = this.messages.get(request ? request.messageId : ref)
     if (!message || message.from !== caller.sessionId) return refuse('unknown_message', 'No message or request you sent has that id.')
     const report = async (timedOut) => {
-      const delivery = message.cancelled ? 'discarded' : message.hostMessageId ? await this.host.deliveryState(message.to, message.hostMessageId) : 'unknown'
+      const delivery = message.cancelled ? 'discarded' : message.held ? 'held' : message.inline ? 'returned to the waiting asker' : message.hostMessageId ? await this.host.deliveryState(message.to, message.hostMessageId) : 'unknown'
       const out = { ok: true, id: message.id, to: aliasOf(message.to), delivery }
       if (request) {
         out.requestId = request.id
@@ -464,8 +559,17 @@ export class Parallax {
 
     if (args.cancel) {
       if (message.cancelled) return { ok: true, id: message.id, result: 'cancelled' }
-      const withdrawn = message.hostMessageId ? await this.host.withdraw(message.to, message.hostMessageId) : false
-      if (!withdrawn) return { ok: true, id: message.id, result: 'already_claimed' }
+      if (message.inline) return { ok: true, id: message.id, result: 'already_claimed' }
+      if (message.held) {
+        // Still in Parallax's own queue, so withdrawing it needs nothing from the host.
+        this.held.set(message.to, (this.held.get(message.to) ?? []).filter(entry => entry.id !== message.id))
+        message.held = false
+        message.cancelled = true
+        if (request) { request.cancelled = true; await this.#record(request.asker, { type: 'request', op: 'cancelled', id: request.id, asker: request.asker }) }
+        return { ok: true, id: message.id, result: 'cancelled' }
+      }
+      const withdrawnLive = message.hostMessageId ? await this.host.withdraw(message.to, message.hostMessageId) : false
+      if (!withdrawnLive) return { ok: true, id: message.id, result: 'already_claimed' }
       message.cancelled = true
       if (request) {
         request.cancelled = true
@@ -525,6 +629,20 @@ export class Parallax {
     if (byteLength(task) > LIMITS.delegateTask) return refuse('task_too_long', `The task is over ${LIMITS.delegateTask} bytes. Pass file paths instead of contents.`)
     if (containsMarker(task, title)) return refuse('marker', `The task contains the text "${MARKER}", which only Parallax may write. Remove it.`)
     const permission = args.permission === undefined ? undefined : String(args.permission)
+    const model = args.model === undefined ? undefined : String(args.model)
+    const agentPreset = args.agentPreset === undefined ? undefined : String(args.agentPreset)
+    const tags = Array.isArray(args.tags) ? [...new Set(args.tags.map(tag => clip(String(tag).trim(), 40)).filter(Boolean))] : []
+    if (tags.length > 5) return refuse('too_many_tags', 'At most 5 tags.')
+    // An acceptance list (Atomic Agent's Fusion judge): what done means, shown read-only to the child. The parent checks it.
+    const acceptance = Array.isArray(args.acceptance) ? args.acceptance.map(item => clip(String(item).trim(), 300)).filter(Boolean) : []
+    if (acceptance.length > 10) return refuse('too_many_criteria', 'At most 10 acceptance items.')
+    if (containsMarker(...acceptance, ...tags)) return refuse('marker', `The task contains the text "${MARKER}", which only Parallax may write. Remove it.`)
+    let dueAt
+    if (args.reportWithin !== undefined) {
+      const ms = parseDuration(args.reportWithin)
+      if (!ms) return refuse('bad_deadline', 'reportWithin is a duration such as "30m" or "4h" (at most 7 days).')
+      dueAt = this.host.now() + ms
+    }
     if (this.delegateApproval === 'ask') {
       const choice = await this.host.askPerson(caller.sessionId, {
         header: 'Delegate a task',
@@ -535,17 +653,21 @@ export class Parallax {
       if (choice !== 'Start it') return refuse('declined', 'The person did not approve the delegation.')
     }
     let result
-    try { result = await this.host.delegate(caller.sessionId, { task, title, ...(permission ? { permission } : {}) }) } catch (error) {
+    try {
+      result = await this.host.delegate(caller.sessionId, { task, title, acceptance, ...(dueAt ? { dueAt } : {}),
+        ...(permission ? { permission } : {}), ...(model ? { model } : {}), ...(agentPreset ? { agentPreset } : {}) })
+    } catch (error) {
       return refuse('not_started', `The new conversation did not start: ${clip(error?.message ?? error, 200)}`)
     }
     if (!result?.childId) return refuse('not_started', result?.refused ?? 'The host did not start the new conversation.')
     const now = this.host.now()
     const channel = { a: caller.sessionId, b: result.childId, tier: 'session', remaining: LIMITS.sessionChannelBudget, createdBy: caller.sessionId, openRequest: undefined, auto: true }
     this.channels.set(pairKey(caller.sessionId, result.childId), channel)
-    this.children.set(result.childId, { parent: caller.sessionId, title, startedAt: now, lastReportAt: undefined, reports: 0 })
+    this.children.set(result.childId, { parent: caller.sessionId, title, startedAt: now, lastReportAt: undefined, reports: 0, acceptance, dueAt, tags, model: result.model, status: 'working' })
     await this.#record(caller.sessionId, { type: 'channel', op: 'grant', a: channel.a, b: channel.b, tier: 'session', remaining: channel.remaining, auto: true, at: now })
-    await this.#record(caller.sessionId, { type: 'child', childId: result.childId, title, at: now })
-    return { ok: true, child: aliasOf(result.childId), childId: result.childId, title, ...(result.permission ? { permission: result.permission } : {}),
+    await this.#record(caller.sessionId, { type: 'child', childId: result.childId, title, at: now, acceptance, dueAt, tags, model: result.model })
+    return { ok: true, child: aliasOf(result.childId), childId: result.childId, title, ...(result.permission ? { permission: result.permission } : {}), ...(result.model ? { model: result.model } : {}),
+      ...(acceptance.length ? { acceptance } : {}), ...(dueAt ? { reportBy: new Date(dueAt).toISOString() } : {}), ...(tags.length ? { tags } : {}),
       note: 'Started. It reports back with peer_send; peer_list shows it under delegated, and peer_context reads its progress.' }
   }
 }

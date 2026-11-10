@@ -26,6 +26,8 @@ export const TOOLS = Object.freeze([
       urgent: { type: 'boolean', description: 'Deliver at the peer\'s next step, while it is working, and wake it if idle.' },
       wake: { type: 'boolean', description: 'false: queue the message without starting a turn in an idle peer.' },
       supersedes: { type: 'string', description: 'A message id of yours to this peer; replaced in place if the peer has not taken it yet.' },
+      status: { type: 'string', enum: ['working', 'done', 'failed', 'needs_parent'], description: 'Only when reporting to the conversation that delegated your task: working, done, failed, or needs_parent when you need a decision or a permission you do not have.' },
+      key: { type: 'string', description: 'Idempotency key: a resend with the same key to the same peer returns the first result and sends nothing.' },
     },
   },
   {
@@ -62,6 +64,11 @@ export const TOOLS = Object.freeze([
       task: { type: 'string', required: true, description: 'The task for the new conversation, written so it stands alone, including how and when to report back.' },
       title: { type: 'string', description: 'A short title for the new conversation.' },
       permission: { type: 'string', description: 'Optional permission preset no wider than yours, such as a read-only preset.' },
+      acceptance: { type: 'array', items: { type: 'string' }, description: 'What done means, as up to 10 checkable items. The child sees them; you check them when it reports done.' },
+      reportWithin: { type: 'string', description: 'When the child must report done or failed, such as "30m"; peer_list marks it overdue after that.' },
+      model: { type: 'string', description: 'Optional model for the child as "provider/model"; the profile may limit which are allowed.' },
+      agentPreset: { type: 'string', description: 'Optional dsh agent preset for the child.' },
+      tags: { type: 'array', items: { type: 'string' }, description: 'Up to 5 short labels, shown in peer_list.' },
     },
   },
 ])
@@ -72,6 +79,8 @@ export const PERSON_ACTS = Object.freeze([
   { command: '/peer connect <peer> [once|session]', act: 'open, or reopen, a channel between this conversation and a peer' },
   { command: '/peer revoke <peer>', act: 'close the channel to a peer and keep it closed until /peer connect' },
   { command: '/peer wake <always|replies|never>', act: 'set whether peer messages may start a turn in this conversation' },
+  { command: '/peer busy <queue|human-first>', act: 'hold peer messages while this conversation runs a turn or has a person\'s message waiting' },
+  { command: '(approval card in the parent)', act: 'allow or reject a permission prompt raised by a delegated conversation' },
   { command: '/peers', act: 'list channels, requests and delegated conversations for this conversation' },
-  { command: 'plugin config: consent, delegateApproval', act: 'require a consent card before a first message or a delegation (default: automatic)' },
+  { command: 'plugin config: consent, delegateApproval, approvalRelay, models, scope', act: 'require consent cards, turn off the approval relay, limit child models, widen the peer scope' },
 ])

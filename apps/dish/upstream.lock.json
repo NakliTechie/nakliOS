@@ -669,7 +669,7 @@
     },
     "build-metrics.json": {
       "bytes": 15229,
-      "sha256": "a523640b20e92e28b7ac01c41826d3f8b0e6a16280a7f7188c89e6f75b1d56cb"
+      "sha256": "8ebb82ba4c347cbf1a8227941bbed27579cab271f5080d540cceac262ac2b9fa"
     },
     "favicon-dark.svg": {
       "bytes": 3634,
@@ -716,8 +716,8 @@
       "sha256": "e321d19e1bf439cf2e2cd85f767ca783ba4750e1bfadf74b866b26ccf247fac3"
     },
     "preview/vfs-image.tar.gz": {
-      "bytes": 6211633,
-      "sha256": "f6c030560a58f622a341aca06966dfd7e2b2012691ef7cf0eabf6abeca59d6e9"
+      "bytes": 6214067,
+      "sha256": "64c1ee366accf07e0a0d0073e148c7732d14c6861f231606a8b00e106024809e"
     },
     "preview/worker-_QgRBu9h.js": {
       "bytes": 302338,
