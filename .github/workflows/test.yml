@@ -711,6 +711,9 @@ jobs:
       - name: Verify mirrored apps use only the canonical SDK
         run: node scripts/test-sdk-canonical-only.mjs
 
+      - name: Verify the Browser extension's sender check, tokens, session rules and manifest
+        run: node scripts/test-browser-extension.mjs
+
       - name: Verify a skipped mirror cannot be read as a successful sync
         run: node scripts/test-mirror-skip-is-loud.mjs
 

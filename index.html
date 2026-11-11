@@ -1639,6 +1639,13 @@ const APPS = [
     description:'The Pi coding agent (pi-durable) in a browser Worker, on NakliOS shared inference and the Rig shell. Its files and conversations are saved in NakliOS storage.',
     tags:['tool','developer','agent','code'], desktopAlign:'right', desktopOrder:2,
     svg:`<path d="M5 7h14"/><path d="M9 7v11"/><path d="M15 7v9a2 2 0 0 0 2 2"/>` },
+  { id:'browser', name:'Browser', kind:'system',
+    url:'./apps/browser/',
+    embedUrl:'./apps/browser/',
+    glyph:'🌐', bg:'act',
+    description:'Open sites in a desktop window with the sign-ins you already have in Chrome. Needs the companion extension; without it, addresses open in a new tab.',
+    tags:['tool','browser','web'],
+    svg:`<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.5 2.5 3.8 5.5 3.8 9s-1.3 6.5-3.8 9c-2.5-2.5-3.8-5.5-3.8-9s1.3-6.5 3.8-9z"/>` },
   { id:'anvil', name:'Anvil', kind:'system',
     url:'./apps/anvil/',
     embedUrl:'./apps/anvil/',
@@ -1918,7 +1925,7 @@ const FOLDERS = [
   { id:'fld-create', kind:'folder', name:'Create & Convert', glyph:'🎨', bg:'ok',
     apps:['reckon','draft','sheaf','slate','contorina','kagaz','rangrez','sniplocal','blurlocal','striplocal','scanlocal','voicevault','bolo'] },
   { id:'fld-research', kind:'folder', name:'Think & Research', glyph:'🔎', bg:'act',
-    apps:['mantra','babellocal','localmind','vaultmind','sansadlocal','protavia','scribella'] },
+    apps:['browser','mantra','babellocal','localmind','vaultmind','sansadlocal','protavia','scribella'] },
   { id:'fld-work', kind:'folder', name:'Work & Build', glyph:'🧭', bg:'ok',
     apps:['editor','forge','anvil','dish','pi','kanzen','nakliposter','bofh','mod','naklidata','nemawashi','menagerie'] },
   { id:'fld-privacy', kind:'folder', name:'Privacy & Security', glyph:'🔐', bg:'brand',
@@ -9265,11 +9272,24 @@ function recordRecent(appId){
   saveLayout();
 }
 
+// The Browser window (sys/browser/window.mjs). options.url opens that address; History keeps the host only.
+let _browserMod = null;
+async function openBrowserWindow(options = {}){
+  if (!_browserMod) _browserMod = await import('./sys/browser/window.mjs');
+  return _browserMod.openBrowser({
+    makeWindow,
+    record: (host, output) => { Promise.resolve().then(() => netHistoryAppend({ appId:'browser', host, method:'OPEN', output })).catch(() => {}); },
+    notify: text => { nakliosAlert(text).catch(() => {}); },
+  }, { url: options.url || '' });
+}
+
 function openApp(app, options = {}){
   recordRecent(app.id);
   if (openWindows[app.id]) { focusWindow(openWindows[app.id]); return; }
   // Every app opens in a NakliOS window, except one that cannot run inside one: it opens at its own URL in a
   // new tab, with no weaker sandbox and no pretence that it embeds.
+  // The Browser is host code (sys/browser/window.mjs): its extension answers only the desktop's top frame.
+  if (app.id === 'browser') return openBrowserWindow(options);
   if (app.kind === 'system') return spawnIframeWindow(app, options);
   if (app.kind === 'classic') return spawnInlineWindow(app);
   if (app.opensInNewTab === true || app.iframeable === false) return window.open(app.url, '_blank', 'noopener');

@@ -1,0 +1,87 @@
+// The NakliOS Browser: the companion extension's decisions (extension/lib.mjs) and the host window's
+// address handling (sys/browser/window.mjs). Pure functions only; the live behaviour needs the
+// extension loaded in Chrome and is checked there.
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import {
+  checkDesktopSender, parseSiteUrl, originPattern, isSignInUrl, buildSessionRules, ruleIdsFor,
+  mintToken, redeemToken, pruneTokens, checkAncestors, historyEntry, TOKEN_TTL_MS,
+} from '../extension/lib.mjs';
+import { normaliseAddress } from '../sys/browser/window.mjs';
+
+const tab = id => ({ id });
+// Only the desktop: top frame, path '/', trusted origin.
+assert.equal(checkDesktopSender({ tab: tab(7), frameId: 0, url: 'https://naklios.dev/', origin: 'https://naklios.dev' }).ok, true);
+assert.equal(checkDesktopSender({ tab: tab(7), frameId: 0, url: 'https://naklios.dev/index.html?x=1' }).ok, true);
+assert.equal(checkDesktopSender({ tab: tab(7), frameId: 3, url: 'https://naklios.dev/apps/notes/' }).reason, 'not-top-frame', 'a mirrored app frame is refused');
+assert.equal(checkDesktopSender({ tab: tab(7), frameId: 0, url: 'https://naklios.dev/apps/notes/' }).reason, 'not-desktop-path', 'a mirrored app opened top-level is refused');
+assert.equal(checkDesktopSender({ tab: tab(7), frameId: 0, url: 'https://naklios.dev.evil.example/' }).reason, 'untrusted-origin');
+assert.equal(checkDesktopSender({ tab: tab(7), frameId: 0, url: 'http://naklios.dev/' }).reason, 'untrusted-origin', 'plain http is not the desktop');
+assert.equal(checkDesktopSender({ tab: tab(7), frameId: 0, url: 'https://naklios.dev/', origin: 'https://other.example' }).reason, 'origin-mismatch');
+assert.equal(checkDesktopSender({ frameId: 0, url: 'https://naklios.dev/' }).reason, 'no-tab');
+assert.equal(checkDesktopSender({ tab: tab(7), frameId: 0, url: 'http://127.0.0.1:8964/' }).reason, 'untrusted-origin', 'a local serve is trusted only by the dev build');
+assert.equal(checkDesktopSender({ tab: tab(7), frameId: 0, url: 'http://127.0.0.1:8964/' }, { dev: true }).ok, true);
+
+// Addresses.
+assert.equal(parseSiteUrl('javascript:alert(1)'), null);
+assert.equal(parseSiteUrl('https://user:pw@github.com/'), null, 'no credentials in the URL');
+assert.equal(originPattern(parseSiteUrl('https://github.com/a/b?c')), 'https://github.com/*');
+assert.equal(isSignInUrl('https://accounts.google.com/v3/signin'), true);
+assert.equal(isSignInUrl('https://www.facebook.com/login/?next=x'), true);
+assert.equal(isSignInUrl('https://www.facebook.com/'), false);
+assert.equal(normaliseAddress('github.com'), 'https://github.com/');
+assert.equal(normaliseAddress('  https://github.com/x  '), 'https://github.com/x');
+assert.equal(normaliseAddress('hello world'), null);
+assert.equal(normaliseAddress('ftp://x.example'), null);
+assert.equal(normaliseAddress('intranet'), null, 'a bare word is not an address');
+
+// Session rules: one tab, sub-frames only, the desktop's own frames excluded.
+const rules = buildSessionRules(7, 'naklios.dev');
+assert.equal(rules.length, 1);
+assert.deepEqual(rules[0].condition.tabIds, [7]);
+assert.deepEqual(rules[0].condition.resourceTypes, ['sub_frame']);
+assert.deepEqual(rules[0].condition.excludedInitiatorDomains, ['naklios.dev']);
+assert.ok(rules[0].condition.responseHeaders.length > 0, 'fires only on responses that carry a framing header');
+assert.deepEqual(rules[0].action.responseHeaders.map(h => h.header).sort(), ['content-security-policy', 'x-frame-options']);
+assert.ok(rules.every(r => ruleIdsFor(7).includes(r.id)));
+assert.equal(new Set([...ruleIdsFor(7), ...ruleIdsFor(8)]).size, 4, 'rule ids never collide across tabs');
+const nested = buildSessionRules(7, 'naklios.dev', { nested: true });
+assert.equal(nested.length, 2);
+assert.deepEqual(nested[1].condition.requestDomains, ['naklios.dev']);
+
+// Tokens: once, in their own tab, before they expire.
+let n = 0;
+const random = () => `tok${++n}`;
+let { token, store } = mintToken({}, { tabId: 7, url: 'https://github.com/', random, now: 1000 });
+assert.equal(redeemToken(store, token, { tabId: 8, now: 1001 }).reason, 'wrong-tab');
+({ token, store } = mintToken({}, { tabId: 7, url: 'https://github.com/', random, now: 1000 }));
+const first = redeemToken(store, token, { tabId: 7, now: 1001 });
+assert.equal(first.ok, true);
+assert.equal(first.url, 'https://github.com/');
+assert.equal(redeemToken(first.store, token, { tabId: 7, now: 1002 }).reason, 'unknown-token', 'a token works once');
+({ token, store } = mintToken({}, { tabId: 7, url: 'https://github.com/', random, now: 1000 }));
+assert.equal(redeemToken(store, token, { tabId: 7, now: 1000 + TOKEN_TTL_MS + 1 }).reason, 'expired');
+assert.deepEqual(Object.keys(pruneTokens({ a: { expires: 5 }, b: { expires: 50 } }, 10)), ['b']);
+
+// frame.html runs only when the desktop frames it directly.
+assert.equal(checkAncestors(['https://naklios.dev']).ok, true);
+assert.equal(checkAncestors(['https://naklios.dev', 'https://naklios.dev']).reason, 'too-deep', 'an app iframe that frames frame.html is refused');
+assert.equal(checkAncestors([]).reason, 'not-framed');
+assert.equal(checkAncestors(['https://evil.example']).reason, 'untrusted-parent');
+assert.equal(checkAncestors(['http://127.0.0.1:8964'], { dev: true }).ok, true);
+
+// History keeps the host only.
+assert.deepEqual(Object.keys(historyEntry('https://github.com/secret/path?q=1', 0)), ['host', 'at']);
+assert.equal(historyEntry('https://github.com/secret/path?q=1', 0).host, 'github.com');
+
+// The manifest: no blanket host permission at install, the dev build named as such, no inline script.
+const manifest = JSON.parse(await readFile(new URL('../extension/manifest.json', import.meta.url), 'utf8'));
+assert.equal(manifest.manifest_version, 3);
+assert.ok(!(manifest.host_permissions || []).length, 'host access is asked per site at first use');
+assert.ok(manifest.permissions.includes('declarativeNetRequestWithHostAccess'));
+assert.ok(!manifest.permissions.includes('declarativeNetRequest'), 'the with-host-access variant shows no install warning');
+const frameHtml = await readFile(new URL('../extension/frame.html', import.meta.url), 'utf8');
+assert.ok(!/<script(?![^>]*\bsrc=)[^>]*>/.test(frameHtml), 'MV3 pages carry no inline script');
+// The deployed site never ships the extension.
+assert.match(await readFile(new URL('../.assetsignore', import.meta.url), 'utf8'), /^extension\/$/m);
+console.log('browser-extension: sender check, tokens, session rules, ancestors, addresses, history and manifest pass');
