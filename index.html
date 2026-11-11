@@ -3,23 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<script>
-// A desktop inside the NakliOS Browser (the acceptance demo) shares this origin's storage with the outer
-// desktop, so it writes nothing: no localStorage, no Folder, no state file, no IndexedDB handle. Set before
-// any other script runs.
-var NAKLIOS_NESTED = window.top !== window;
-if (NAKLIOS_NESTED) {
-  for (const k of ['setItem', 'removeItem', 'clear']) Storage.prototype[k] = function(){};
-  document.addEventListener('DOMContentLoaded', () => {
-    const b = document.createElement('div');
-    b.id = 'nested-badge';
-    b.textContent = 'Nested desktop: nothing is saved';
-    b.setAttribute('role', 'status');
-    b.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:2147483000;padding:4px 10px;border-radius:999px;background:#1d1d1f;color:#fff;font:12px system-ui;opacity:.85;pointer-events:none';
-    document.body.appendChild(b);
-  });
-}
-</script>
 <title>NakliOS — a private browser desktop</title>
 <!-- PWA (2026-09-24): installable, so the browser treats NakliOS as an app — the strongest signal for
      navigator.storage.persist(), which the Durability contract leans on (docs/app-contract.md). -->
@@ -1529,6 +1512,21 @@ body.is-mobile .nw-dock{display:none;}
 
 <script src="vendor/localmind/host-model-catalog.js"></script>
 <script>
+// A desktop inside the NakliOS Browser (the acceptance demo) shares this origin's storage with the outer
+// desktop, so it writes nothing: no localStorage, no Folder, no state file, no IndexedDB handle. These are the
+// first statements of the application script, so nothing writes before them.
+var NAKLIOS_NESTED = globalThis.NAKLIOS_NESTED = typeof window !== 'undefined' && window.top !== window;
+if (NAKLIOS_NESTED) {
+  for (const k of ['setItem', 'removeItem', 'clear']) Storage.prototype[k] = function(){};
+  document.addEventListener('DOMContentLoaded', () => {
+    const b = document.createElement('div');
+    b.id = 'nested-badge';
+    b.textContent = 'Nested desktop: nothing is saved';
+    b.setAttribute('role', 'status');
+    b.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:2147483000;padding:4px 10px;border-radius:999px;background:#1d1d1f;color:#fff;font:12px system-ui;opacity:.85;pointer-events:none';
+    document.body.appendChild(b);
+  });
+}
 'use strict';
 
 // ════════════════════════════════════════════════════════════════════
@@ -2225,7 +2223,7 @@ async function idbGet(key){
   });
 }
 async function idbSet(key, val){
-  if (NAKLIOS_NESTED) return;
+  if (globalThis.NAKLIOS_NESTED === true) return;
   const db = await idbOpen();
   return new Promise((res, rej) => {
     const tx = db.transaction(IDB_STORE, 'readwrite');
@@ -2370,7 +2368,7 @@ async function fsConnect(){
   }
 }
 async function fsReconnect(){
-  if (NAKLIOS_NESTED) return false;
+  if (globalThis.NAKLIOS_NESTED === true) return false;
   const stored = await idbGet('fsHandle').catch(() => null);
   if (!stored) return false;
   try {
@@ -2417,7 +2415,7 @@ async function fsDisconnect(){
 // becomes one write.
 let _stateWriteTimer = null;
 function fsScheduleStateWrite(){
-  if (NAKLIOS_NESTED || !state.fsHandle) return;
+  if (globalThis.NAKLIOS_NESTED === true || !state.fsHandle) return;
   clearTimeout(_stateWriteTimer);
   _stateWriteTimer = setTimeout(() => fsWriteState().catch(e => console.warn('state write failed:', e)), 500);
 }
@@ -9360,7 +9358,7 @@ function openApp(app, options = {}){
   if (app.id === 'browser') return openBrowserWindow(options);
   // A nested desktop opens only apps that cannot reach this origin's storage: cross-origin apps and the
   // built-in classics. Two desktops writing one store would break its one-writer event log.
-  if (NAKLIOS_NESTED && app.kind !== 'classic' && (app.kind === 'system' || appExpectedOrigin(app) === location.origin)) {
+  if (globalThis.NAKLIOS_NESTED === true && app.kind !== 'classic' && (app.kind === 'system' || appExpectedOrigin(app) === location.origin)) {
     nakliosAlert(`${app.name} saves to this browser's storage, so it does not open in a desktop inside the Browser.`, { title:'Nested desktop' }).catch(() => {});
     return null;
   }
