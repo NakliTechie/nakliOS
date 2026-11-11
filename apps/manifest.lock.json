@@ -219,14 +219,14 @@
       "id": "kanzen",
       "repo": "NakliTechie/KanZen",
       "requestedRef": "main",
-      "resolvedCommit": "12f7d07266ce237d95e1f5d8b987fb9e6d2c79bf",
+      "resolvedCommit": "cd5548472c64d74fc360c755711d7c5a0a52e0bf",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
           "sha256": "fe590499d5e6ce2630fe5de076a2f9e83cc55fac7dc4fff87908485076cd9d24",
           "bytes": 443517,
-          "originalSourceSha256": "ed1adabea625f8d308a9664f203478d02f66b4d5df299f113d12838038d17080",
+          "originalSourceSha256": "2a808e3437509a8d37fa847f0b9bf9092d4bcea4af6cfbbad08270698edfd520",
           "sdkSha256": "86b983f977ff00364fb853f7edc51f6ef6ed9bfedfd0cc18009e128d048e74a9"
         },
         {
@@ -241,14 +241,14 @@
       "id": "menagerie",
       "repo": "NakliTechie/menagerie",
       "requestedRef": "main",
-      "resolvedCommit": "87c650197a606e92fcddf1832884b5e01e6abb36",
+      "resolvedCommit": "03b485a5bdcd756bcc95410435e71abc252c8429",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "95e438d9b9a681df727331fa3666112e0779cecf81a968ec25557e6c1c08f913",
-          "bytes": 291748,
-          "originalSourceSha256": "126287a5f1eaa44e94bcfd959d384793deed47811ef787ffa9a5504a21536751",
+          "sha256": "cac67130e2d403cef815eb7871f36cb57b481a52766c8a6bcea8e04b16531134",
+          "bytes": 344185,
+          "originalSourceSha256": "260f75728a9ff5ab85b8e83c2038d78a694d4819d169dc39cf488a87e4e153b6",
           "sdkSha256": "86b983f977ff00364fb853f7edc51f6ef6ed9bfedfd0cc18009e128d048e74a9"
         },
         {
@@ -427,14 +427,14 @@
       "id": "nakliposter",
       "repo": "NakliTechie/NakliPoster",
       "requestedRef": "main",
-      "resolvedCommit": "ea68bf8cc2a7dc401aaa29f9efd697dfe939a400",
+      "resolvedCommit": "a660f9947956d8a6bbce9a0b3c97e6e0e2ad0569",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
           "sha256": "6cff1536914be5e38ec9c3bd876981ee5a844bb155f49848d11406d0a81d5956",
           "bytes": 336138,
-          "originalSourceSha256": "7163712b3fd85b96012aa217dea0936ea6f2ba53fd51de5046af87339b67ae7f",
+          "originalSourceSha256": "17beccca797c73315744264cbdaa3e9447c4f73c711144359068360d74e668fb",
           "sdkSha256": "86b983f977ff00364fb853f7edc51f6ef6ed9bfedfd0cc18009e128d048e74a9"
         },
         {
@@ -449,13 +449,13 @@
       "id": "protavia",
       "repo": "NakliTechie/protavia",
       "requestedRef": "main",
-      "resolvedCommit": "2bee2326eb1c79095c17523c20166c6d683fbc85",
+      "resolvedCommit": "2c4f988ae3ab9915d3c5ef3a829e01d37653eeb6",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "d2a8b735eef0a7842eb99224527528cc92931ed513b9370eee1d584c4b0658dc",
-          "bytes": 65335
+          "sha256": "187331a68e246909bc0d58fb5e818e16a31a599eb8f28f48c09656f834aa941e",
+          "bytes": 73461
         },
         {
           "source": "vendor/molstar/5.13.1/molstar.css",
@@ -797,13 +797,13 @@
       "id": "sheaf",
       "repo": "NakliTechie/sheaf",
       "requestedRef": "main",
-      "resolvedCommit": "af3f549181eac82df055a7ad12e78bcbb5ea12d2",
+      "resolvedCommit": "0c839b54b4aa31063dda931e4422a6588f0bfba8",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "23a2f0f2ce339c5e89f088da05f6ce803abe80c3af7aca9fdfb7f4178689a512",
-          "bytes": 385216
+          "sha256": "bfa6fd80e06ee431163547f5c73f6b984766b609818fa59728d858c9e8415cbf",
+          "bytes": 390706
         },
         {
           "source": "engines/pdf-lib/2.9.1/pdf-lib.esm.js",
@@ -879,14 +879,14 @@
       "id": "tijori",
       "repo": "NakliTechie/Tijori",
       "requestedRef": "main",
-      "resolvedCommit": "7e2fdc900c120cec013f4414fee1c61b9f15be33",
+      "resolvedCommit": "d6cb76e50341d44c1fc6f1f81a91e21c6ee87f85",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
           "sha256": "23a52ec5b388f486fff2f300fe2be4e1fc0bcb0b29d3a92546ed953895243763",
           "bytes": 595004,
-          "originalSourceSha256": "220fbdf55335d66a6f5931f7b24f04e47091a4b29ddedffde032a564982dac0c",
+          "originalSourceSha256": "d1e70d11e24592e01517d7e544e87ba7ca6fb61e435d8bc8597ec4edb76b8e36",
           "sdkSha256": "86b983f977ff00364fb853f7edc51f6ef6ed9bfedfd0cc18009e128d048e74a9"
         }
       ]
@@ -895,14 +895,14 @@
       "id": "vaultmind",
       "repo": "NakliTechie/VaultMind",
       "requestedRef": "main",
-      "resolvedCommit": "a1df4108771d48e10d9f73e24f40f739b2ea21b1",
+      "resolvedCommit": "fde4d65a1350621add3f2c043d7b36eab0cce420",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
           "sha256": "0fd98123990d444f32c9ecff64ae7bf3bc3fb665720ae06956672267385c3d20",
           "bytes": 395079,
-          "originalSourceSha256": "88a12557e262cd7d13ab78532570cf1ecaf1aea5f2c6ecc35bdd253b284cf38a",
+          "originalSourceSha256": "53d585d6ccd89c094531ac7929cf707dc9b3ec7a9b237d70330ba4e0a3fc19fd",
           "sdkSha256": "86b983f977ff00364fb853f7edc51f6ef6ed9bfedfd0cc18009e128d048e74a9"
         },
         {
@@ -917,13 +917,13 @@
       "id": "vocella",
       "repo": "NakliTechie/vocella",
       "requestedRef": "main",
-      "resolvedCommit": "69aac31e4916ca446ada75d9fabaab1ac2e6ad7f",
+      "resolvedCommit": "2ab382c72cfd80e7f7bc33f6d86b640f7c0af371",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "499a610fdec3e5d41140f0b58d7174775d760e9cb1bad8775fb49ea076204aea",
-          "bytes": 59172
+          "sha256": "ed3f0fb06f6b7125248d97ef8fc97603615f1e9f4728a5f515821d1060784c94",
+          "bytes": 67298
         },
         {
           "source": "LICENSE",
@@ -1351,7 +1351,7 @@
       "id": "scribella",
       "repo": "NakliTechie/scribella",
       "requestedRef": "main",
-      "resolvedCommit": "56180aa16bedceaf247b958725dd679e3e8eb3b8",
+      "resolvedCommit": "a1e80a3bbe2baaf14e94e734de435f14a23cb617",
       "files": [
         {
           "source": "LICENSE",
@@ -1374,8 +1374,8 @@
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "2ab3a96b499f0f7563381ccab8ab7d84e57d5ec2b0accd165a17470eaf701584",
-          "bytes": 78097
+          "sha256": "630366b53c7a4378d98513fda6682b548bf11e2889325ff63bfe67c3c59199df",
+          "bytes": 80240
         },
         {
           "source": "src/agent.js",
