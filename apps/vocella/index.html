@@ -153,7 +153,7 @@
   </section>
 </main>
 <script>
-/* naklios-sdk:begin ver=2 sha256=4090343621c72c98d16cf53f0fe95174797e32724a73826c12757ced2b262bd4 — DO NOT EDIT until :end; run `node scripts/vendor-naklios-sdk.mjs` */
+/* naklios-sdk:begin ver=2 sha256=11cabad477515b27cb818c3109bcf0f06a92c9f0dd2212d40c1b8fc1b87cb90b — DO NOT EDIT until :end; run `node scripts/vendor-naklios-sdk.mjs` */
 /*!
  * naklios.js — cooperative SDK for apps hosted inside NakliOS (Immersive mode)
  *
@@ -303,6 +303,10 @@
     aiImageState: 'idle',
     aiSearchState: 'idle',
     aiSearch: false,
+    // experimental_tex: this app may compile LaTeX projects in its own storage.
+    experimental_tex: false,
+    // experimental_web: this app may search the web and read pages through the host.
+    experimental_web: false,
     // net: a sovereign egress backend (the user's own Worker or local bridge) is
     // configured + permitted, so naklios.net.fetch can reach cross-origin hosts the
     // browser blocks. Stays false until a host advertises one — the SDK seam.
@@ -318,8 +322,10 @@
   var aiRequests = new Map(); // requestId → streamed request state
   var aiImageRequests = new Map(); // requestId → image request state
   var ragSearches = new Map();     // requestId → semantic-search progress callback
+  var texCompiles = new Map();     // requestId → TeX compile chunk callback
   var fileOpenListeners = new Set(); // exact-file grants delivered by the host
   var commandHandlers = new Map(); // command name → handler (common rail step 1)
+  var commandCalls = new Map(); // invokeId → AbortController of a running handler
   var pendingFileGrants = [];
   var fileEditListeners = new Set();
   var pendingFileEdits = [];
@@ -366,18 +372,25 @@
     } catch (_) { return false; }
   }
 
+  // A call can wait on the person's answer, on the app opening, and on its handler.
+  var COMMAND_CALL_TIMEOUT_MS = 300000;
+  var AI_LOCAL_TIMEOUT_MS = 300000;
+
   function rpc(type, payload, timeoutMs) {
     if (!inNakliOS) return Promise.reject(new Error('Not hosted — naklios.* unavailable standalone'));
     return new Promise(function (resolve, reject) {
       var requestId = 'r' + (++rpcCounter) + '_' + Date.now();
-      pendingRpc.set(requestId, { resolve: resolve, reject: reject });
+      var entry = { resolve: resolve, reject: reject, timer: null };
+      pendingRpc.set(requestId, entry);
       if (send(type, Object.assign({ requestId: requestId }, payload || {})) === false) {
         pendingRpc.delete(requestId);
         reject(new Error('Wait for a verified NakliOS host before sending more data'));
         return;
       }
-      // Default 30s safety net; long operations (index building) pass more.
-      setTimeout(function () {
+      // Default 30s safety net; long operations (index building) pass more. A call the host holds
+      // for the person's answer (a storage prompt) stops this clock: the host sends
+      // naklios:rpc:waiting, and the reply comes once the person answers.
+      entry.timer = setTimeout(function () {
         if (pendingRpc.has(requestId)) {
           pendingRpc.delete(requestId);
           reject(new Error('naklios RPC timeout: ' + type));
@@ -576,8 +589,8 @@
       messages: Array.isArray(options.messages) ? options.messages : [],
       maxTokens: options.max_tokens || options.maxTokens,
     };
-    // Agent tier (system apps only): raised caps + tool-calling. The host
-    // refuses agent:true from a third-party app, so passing it is harmless.
+    // Agent tier: tool-calling for first-party apps, with raised caps, and for a third-party
+    // app that declared the "tools" permission, at the normal caps. The host refuses the rest.
     if (options.agent === true) chatMsg.agent = true;
     if (options.tools != null) chatMsg.tools = options.tools;
     if (options.tool_choice != null) chatMsg.tool_choice = options.tool_choice;
@@ -724,12 +737,17 @@
         ? msg.aiSearchState
         : 'idle';
       capabilities.aiSearch = msg.aiSearch === true;
+      capabilities.experimental_tex = msg.experimental_tex === true;
+      capabilities.experimental_web = msg.experimental_web === true;
       capabilities.net = msg.net === true;
       capabilities.netBackend = typeof msg.netBackend === 'string' ? msg.netBackend : null;
       capabilities.review = msg.review === true;
       capListeners.forEach(function (cb) {
         try { cb(capabilities); } catch (_) {}
       });
+    } else if (msg.type === 'naklios:tex:event' && msg.requestId) {
+      var texChunk = texCompiles.get(msg.requestId);
+      if (texChunk && msg.event === 'chunk') { try { texChunk(msg.chunk); } catch (_) {} }
     } else if (msg.type === 'naklios:rag:event' && msg.requestId) {
       var ragRequest = ragSearches.get(msg.requestId);
       if (ragRequest && msg.event === 'indexing') {
@@ -821,6 +839,7 @@
         sourceAppId: String(msg.grant.sourceAppId || ''),
         backend: String(msg.grant.backend || ''),
         kind: String(msg.grant.kind || 'file'),
+        type: msg.grant.type ? String(msg.grant.type) : undefined,
       };
       if (!grant.token) return;
       if (!fileOpenListeners.size) pendingFileGrants.push(grant);
@@ -859,12 +878,23 @@
       var invokeId = msg.invokeId;
       var handler = commandHandlers.get(msg.name);
       if (!handler) { send('naklios:commands:result', { invokeId: invokeId, error: 'unknown command: ' + String(msg.name) }); return; }
-      Promise.resolve().then(function () { return handler(msg.args || {}, { caller: msg.caller || null }); }).then(
+      var controller = new AbortController();
+      commandCalls.set(invokeId, controller);
+      Promise.resolve().then(function () { return handler(msg.args || {}, { caller: msg.caller || null, signal: controller.signal }); }).then(
         function (result) {
-          try { send('naklios:commands:result', { invokeId: invokeId, result: result === undefined ? null : result }); }
-          catch (error) { send('naklios:commands:result', { invokeId: invokeId, error: 'result could not be sent: ' + String(error && error.message || error) }); }
+          commandCalls.delete(invokeId);
+          // send() reports a value that cannot be cloned by returning false.
+          if (send('naklios:commands:result', { invokeId: invokeId, result: result === undefined ? null : result }) === false)
+            send('naklios:commands:result', { invokeId: invokeId, error: 'the command result could not be sent' });
         },
-        function (error) { send('naklios:commands:result', { invokeId: invokeId, error: String(error && error.message || error) }); });
+        function (error) {
+          commandCalls.delete(invokeId);
+          send('naklios:commands:result', { invokeId: invokeId, error: String(error && error.message || error) });
+        });
+    } else if (msg.type === 'naklios:commands:cancel' && typeof msg.invokeId === 'string') {
+      // The caller stopped waiting. A handler reads this through its `signal`; work already done stays done.
+      var running = commandCalls.get(msg.invokeId);
+      if (running) { commandCalls.delete(msg.invokeId); running.abort(); }
     } else if (msg.type === 'naklios:review:discard' && msg.proposal_id) {
       if (reviewDecisionHandler) {
         Promise.resolve().then(function () {
@@ -874,12 +904,18 @@
     } else if ((msg.type === 'naklios:fs:reply' || msg.type === 'naklios:file:reply' ||
                 msg.type === 'naklios:review:reply' || msg.type === 'naklios:commands:reply' ||
                 msg.type === 'naklios:rag:reply' || msg.type === 'naklios:net:reply' ||
-                msg.type === 'naklios:skills:reply') && msg.requestId) {
+                msg.type === 'naklios:tex:reply' || msg.type === 'naklios:web:reply' ||
+                msg.type === 'naklios:skills:reply' || msg.type === 'naklios:ai:reply') && msg.requestId) {
       var p = pendingRpc.get(msg.requestId);
       if (!p) return;
       pendingRpc.delete(msg.requestId);
+      if (p.timer) clearTimeout(p.timer);
       if (msg.error) p.reject(new Error(msg.error));
       else p.resolve(msg.result);
+    } else if (msg.type === 'naklios:rpc:waiting' && msg.requestId) {
+      // The host holds this call until the person answers a prompt; the safety clock stops.
+      var w = pendingRpc.get(msg.requestId);
+      if (w && w.timer) { clearTimeout(w.timer); w.timer = null; }
     } else if (msg.type === 'naklios:fs:event' && msg.subscriptionId) {
       var listener = fsSubscriptions.get(msg.subscriptionId);
       if (listener) {
@@ -973,6 +1009,23 @@
         commandHandlers = handlers;
         if (!inNakliOS) return Promise.resolve({ standalone: true, registered: [] });
         return rpc('naklios:commands:register', { commands: meta });
+      },
+      // System apps only: find and call other apps' commands. The host applies the caller's grant and asks the person.
+      search: function (query) {
+        if (!inNakliOS) return Promise.resolve([]);
+        return rpc('naklios:commands:search', { query: String(query || '') });
+      },
+      call: function (name, input) {
+        if (!inNakliOS) return Promise.reject(new Error('Not hosted — app commands are unavailable standalone'));
+        return rpc('naklios:commands:call', { name: String(name || ''), input: input || {} }, COMMAND_CALL_TIMEOUT_MS);
+      },
+    },
+    experimental_widgets: {
+      // One snapshot for a widget the app declares in commands.json; `null` removes the card. `persist: false`
+      // keeps it in memory only, for data the desktop must not copy to disk (Crate). Standalone: does nothing.
+      update: function (id, data, options) {
+        if (!inNakliOS) return false;
+        return send('naklios:widgets:update', { id: String(id || ''), data: data === undefined ? null : data, persist: !options || options.persist !== false }) !== false;
       },
     },
     experimental_skills: {
@@ -1073,6 +1126,19 @@
           path: String(path || ''),
         }));
       },
+      // Which apps declared they take this file (`accepts` in their commands.json), as `{ appId, name, action, label }`.
+      experimental_targets: function (path) {
+        if (!inNakliOS) return Promise.resolve([]);
+        return rpc('naklios:file:targets', { path: String(path || '') });
+      },
+      // Send copies of app-relative files to an app that imports them. The target gets one read-only token per file;
+      // `read(token)` answers `{ bytes, name, path, type, sourceAppId, backend }`.
+      experimental_sendTo: function (appId, paths) {
+        return rpc('naklios:file:sendTo', fsPayload({
+          appId: String(appId || ''),
+          paths: (Array.isArray(paths) ? paths : [paths]).map(String),
+        }));
+      },
       onOpen: function (cb) {
         if (typeof cb !== 'function') return function () {};
         fileOpenListeners.add(cb);
@@ -1091,6 +1157,42 @@
       release: function (token) {
         send('naklios:file:release', { token: String(token || '') });
       },
+    },
+    // The shared TeX service. The host reads the project itself, so no file bytes cross the rail. A first compile asks
+    // the person once and downloads TeX Live, so it waits up to two hours; later compiles take seconds.
+    experimental_tex: {
+      engines: function () { return rpc('naklios:tex:engines', {}); },
+      compile: function (options) {
+        if (!inNakliOS) return Promise.reject(new Error('Not hosted — naklios.experimental_tex unavailable standalone'));
+        if (!capabilities.experimental_tex) return Promise.reject(new Error('The NakliOS TeX service is unavailable or not permitted'));
+        options = options || {};
+        var requestId = 't' + (++rpcCounter) + '_' + Date.now();
+        var timer;
+        var compile = new Promise(function (resolve, reject) {
+          if (typeof options.onChunk === 'function') texCompiles.set(requestId, options.onChunk);
+          pendingRpc.set(requestId, { resolve: resolve, reject: reject });
+          if (send('naklios:tex:compile', {
+            requestId: requestId, folder: options.folder, main: options.main, engine: options.engine,
+          }) === false) {
+            pendingRpc.delete(requestId);
+            reject(new Error('Wait for a verified NakliOS host before sending more data'));
+            return;
+          }
+          timer = setTimeout(function () {
+            if (pendingRpc.has(requestId)) {
+              pendingRpc.delete(requestId);
+              send('naklios:tex:cancel', { requestId: requestId });
+              reject(new Error('naklios RPC timeout: naklios:tex:compile'));
+            }
+          }, 2 * 60 * 60 * 1000);
+        }).finally(function () { clearTimeout(timer); texCompiles.delete(requestId); });
+        compile.id = requestId;
+        return compile;
+      },
+      cancel: function (id) { send('naklios:tex:cancel', { requestId: String(id) }); },
+      cache: function () { return rpc('naklios:tex:cache', {}); },
+      // Waits for the person to answer the host's dialog.
+      clearCache: function () { return rpc('naklios:tex:clearCache', {}, 10 * 60 * 1000); },
     },
     ai: {
       chat: {
@@ -1138,6 +1240,19 @@
       searchStatus: function () {
         return rpc('naklios:rag:status', {});
       },
+      // On-device helpers (common rail step 5). Nothing leaves this browser; the person allows each app once per visit.
+      // Embeddings: up to 64 texts, answered as `{ embeddings, dimensions }`.
+      experimental_embeddings: function (input) {
+        return rpc('naklios:ai:embed', { input: Array.isArray(input) ? input : [input] }, AI_LOCAL_TIMEOUT_MS);
+      },
+      // Speech to text: 16 kHz mono samples, at most 30 s, answered as `{ text }`. Needs the assistant's model turned on.
+      experimental_transcribe: function (audio) {
+        return rpc('naklios:ai:transcribe', { audio: audio }, AI_LOCAL_TIMEOUT_MS);
+      },
+      // Text to speech: at most 1,000 characters, answered as `{ audio, sampleRate }`. Needs the assistant's model turned on.
+      experimental_speak: function (text) {
+        return rpc('naklios:ai:speak', { text: String(text || '') }, AI_LOCAL_TIMEOUT_MS);
+      },
       cancelAll: function () {
         aiRequests.forEach(function (_, requestId) {
           send('naklios:ai:cancel', { requestId: requestId });
@@ -1145,6 +1260,21 @@
         aiImageRequests.forEach(function (_, requestId) {
           send('naklios:ai:cancel', { requestId: requestId });
         });
+      },
+    },
+
+    // Web search and page reading for agents. The host searches with the person's provider (or Wikipedia) and reads
+    // pages directly, through the person's web relay, or through Jina Reader; each site asks the person once.
+    experimental_web: {
+      // search(query, { maxResults }) -> { provider, results: [{ title, url, snippet }] }
+      search: function (query, options) {
+        if (!inNakliOS || !capabilities.experimental_web) return Promise.reject(new Error('NakliOS web search is unavailable to this app'));
+        return rpc('naklios:web:search', { query: String(query || ''), maxResults: options && options.maxResults }, 120000);
+      },
+      // fetch(url) -> { url, status, kind: 'html'|'text', content, truncated, via }
+      fetch: function (url) {
+        if (!inNakliOS || !capabilities.experimental_web) return Promise.reject(new Error('NakliOS page reading is unavailable to this app'));
+        return rpc('naklios:web:fetch', { url: String(url || '') }, 120000);
       },
     },
 
