@@ -2336,6 +2336,52 @@
           "bytes": 1071
         }
       ]
+    },
+    {
+      "id": "sonella",
+      "repo": "NakliTechie/sonella",
+      "requestedRef": "main",
+      "resolvedCommit": "de0c454af9a9826e0a1ca4063664847ff2ce17a2",
+      "files": [
+        {
+          "source": "index.html",
+          "destination": "index.html",
+          "sha256": "172249b3602bb390f2e2eb3dd29595b3bfeae604da6b75279084339279447f19",
+          "bytes": 2075958,
+          "originalSourceSha256": "aa021c3f07e7cc449f3c7850ee82af3b4ac0434c50b909df95eec7d8de5ec9c3",
+          "sdkSha256": "6e19a30f5e07c94b4089c617a3e21c6525717444880ddfbebc4e81e2ab5e6acc"
+        },
+        {
+          "source": "commands.json",
+          "destination": "commands.json",
+          "sha256": "ac5f33f4cd1dfab6d327dc3e3392aaa6a64e2c287bd154b547238b4fca2fef00",
+          "bytes": 16154
+        },
+        {
+          "source": "LICENSE",
+          "destination": "LICENSE",
+          "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+          "bytes": 34523
+        },
+        {
+          "source": "social.png",
+          "destination": "social.png",
+          "sha256": "7f83aa3316295129ac6f8b90ddee605de8115beedbb275234f5e136b444e21ed",
+          "bytes": 56039
+        },
+        {
+          "source": "ai/rnnoise-2025.1.5.js",
+          "destination": "ai/rnnoise-2025.1.5.js",
+          "sha256": "e6958293a0118bf9860cb2753332f7562531cc987c914552c426cd7d7180a63e",
+          "bytes": 4827304
+        },
+        {
+          "source": "ai/rnnoise-LICENSE-Apache-2.0.txt",
+          "destination": "ai/rnnoise-LICENSE-Apache-2.0.txt",
+          "sha256": "a6cba85bc92e0cff7a450b1d873c0eaa2e9fc96bf472df0247a26bec77bf3ff9",
+          "bytes": 10173
+        }
+      ]
     }
   ]
 }

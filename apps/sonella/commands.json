@@ -1,0 +1,468 @@
+{
+  "accepts": [
+    {
+      "action": "import",
+      "label": "Open in Sonella",
+      "extensions": [
+        ".wav",
+        ".mp3",
+        ".flac",
+        ".ogg",
+        ".oga",
+        ".opus",
+        ".naklidoc"
+      ]
+    }
+  ],
+  "commands": [
+    {
+      "name": "file.destructive",
+      "description": "Sonella file (destructive). Pass command and params; commands: file.open-path (Open audio by path), file.load-bytes (Load audio from base64), file.new (New project). Call help.read for a command's parameters.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "file.open-path",
+              "file.load-bytes",
+              "file.new"
+            ],
+            "description": "Which Sonella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "file.write",
+      "description": "Sonella file (write). Pass command and params; commands: file.save (Save project), file.save-project (Save project to a path), file.export (Export audio), file.export-audio (Export audio), file.metadata (Edit metadata). Call help.read for a command's parameters.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "file.save",
+              "file.save-project",
+              "file.export",
+              "file.export-audio",
+              "file.metadata"
+            ],
+            "description": "Which Sonella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "file.read",
+      "description": "Sonella file (read). Pass command and params; commands: doc.state (Read project state), doc.history (Read undo history). Call help.read for a command's parameters.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "doc.state",
+              "doc.history"
+            ],
+            "description": "Which Sonella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "edit.write",
+      "description": "Sonella edit (write). Pass command and params; commands: edit.undo (Undo), edit.redo (Redo), edit.cut (Cut), edit.paste (Paste), edit.delete (Delete), edit.silence (Silence audio), edit.trim (Trim to selection), edit.duplicate (Duplicate to new track), edit.split (Split at cursor or selection), edit.split-delete (Split delete), edit.split-new (Split to new track), clip.move (Move clip), label.add (Add label at selection), label.set (Edit label), label.remove (Remove label), edit.history-goto (Go to a history step). Call help.read for a command's parameters.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "edit.undo",
+              "edit.redo",
+              "edit.cut",
+              "edit.paste",
+              "edit.delete",
+              "edit.silence",
+              "edit.trim",
+              "edit.duplicate",
+              "edit.split",
+              "edit.split-delete",
+              "edit.split-new",
+              "clip.move",
+              "label.add",
+              "label.set",
+              "label.remove",
+              "edit.history-goto"
+            ],
+            "description": "Which Sonella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "edit.read",
+      "description": "Sonella edit (read). Pass command and params; commands: edit.copy (Copy). Call help.read for a command's parameters.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "edit.copy"
+            ],
+            "description": "Which Sonella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "select.read",
+      "description": "Sonella select (read). Pass command and params; commands: select.set (Set selection), select.all (Select all), select.none (Select none), select.zero-crossings (Snap selection to zero crossings), label.select (Select a label's span). Call help.read for a command's parameters.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "select.set",
+              "select.all",
+              "select.none",
+              "select.zero-crossings",
+              "label.select"
+            ],
+            "description": "Which Sonella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "view.read",
+      "description": "Sonella view (read). Pass command and params; commands: view.zoom-in (Zoom in), view.zoom-out (Zoom out), view.fit (Fit project in window), view.zoom-selection (Zoom to selection), view.envelope-tool (Envelope tool on or off), view.track-height (Set track height), view.db-scale (Waveform in dB on or off), view.vertical-zoom (Vertical zoom), view.time-format (Time format). Call help.read for a command's parameters.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "view.zoom-in",
+              "view.zoom-out",
+              "view.fit",
+              "view.zoom-selection",
+              "view.envelope-tool",
+              "view.track-height",
+              "view.db-scale",
+              "view.vertical-zoom",
+              "view.time-format"
+            ],
+            "description": "Which Sonella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "transport.read",
+      "description": "Sonella transport (read). Pass command and params; commands: transport.play (Play / Stop), transport.pause (Pause), transport.stop (Stop), transport.loop (Loop selection on or off), transport.home (Cursor to start), transport.end (Cursor to end), transport.seek (Move the playback cursor), transport.state (Read playback state). Call help.read for a command's parameters.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "transport.play",
+              "transport.pause",
+              "transport.stop",
+              "transport.loop",
+              "transport.home",
+              "transport.end",
+              "transport.seek",
+              "transport.state"
+            ],
+            "description": "Which Sonella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "tracks.write",
+      "description": "Sonella tracks (write). Pass command and params; commands: track.new (New stereo track), track.remove (Remove track), track.set (Set track gain, pan, mute or solo), track.mix-render (Mix and render to new track), track.resample (Change project sample rate), track.to-mono (Stereo track to mono), track.split-stereo (Split stereo to mono tracks), track.swap-channels (Swap stereo channels), clip.envelope (Set a clip's volume envelope). Call help.read for a command's parameters.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "track.new",
+              "track.remove",
+              "track.set",
+              "track.mix-render",
+              "track.resample",
+              "track.to-mono",
+              "track.split-stereo",
+              "track.swap-channels",
+              "clip.envelope"
+            ],
+            "description": "Which Sonella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "effect.write",
+      "description": "Sonella effect (write). Pass command and params; commands: effect.amplify (Amplify), effect.normalize (Normalize), effect.loudness-normalization (Loudness Normalization), effect.fade-in (Fade In), effect.fade-out (Fade Out), effect.adjustable-fade (Adjustable Fade), effect.studio-fade-out (Studio Fade Out), effect.compressor (Compressor), effect.limiter (Limiter), effect.noise-gate (Noise Gate), effect.filter-curve (Filter Curve EQ), effect.graphic-eq (Graphic EQ), effect.bass-treble (Bass and Treble), effect.high-pass (High-Pass Filter), effect.low-pass (Low-Pass Filter), effect.notch (Notch Filter), effect.noise-reduction (Noise Reduction), effect.click-removal (Click Removal), effect.clip-fix (Clip Fix), effect.repair (Repair), effect.invert (Invert), effect.reverse (Reverse), effect.repeat (Repeat), effect.truncate-silence (Truncate Silence), effect.crossfade-clips (Crossfade Clips), effect.ai-noise-suppression (AI Noise Suppression (RNNoise)). Call help.read for a command's parameters.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "effect.amplify",
+              "effect.normalize",
+              "effect.loudness-normalization",
+              "effect.fade-in",
+              "effect.fade-out",
+              "effect.adjustable-fade",
+              "effect.studio-fade-out",
+              "effect.compressor",
+              "effect.limiter",
+              "effect.noise-gate",
+              "effect.filter-curve",
+              "effect.graphic-eq",
+              "effect.bass-treble",
+              "effect.high-pass",
+              "effect.low-pass",
+              "effect.notch",
+              "effect.noise-reduction",
+              "effect.click-removal",
+              "effect.clip-fix",
+              "effect.repair",
+              "effect.invert",
+              "effect.reverse",
+              "effect.repeat",
+              "effect.truncate-silence",
+              "effect.crossfade-clips",
+              "effect.ai-noise-suppression"
+            ],
+            "description": "Which Sonella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "effect.read",
+      "description": "Sonella effect (read). Pass command and params; commands: effect.noise-profile (Get Noise Profile), effect.preview (Preview effect). Call help.read for a command's parameters.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "effect.noise-profile",
+              "effect.preview"
+            ],
+            "description": "Which Sonella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "generate.write",
+      "description": "Sonella generate (write). Pass command and params; commands: generate.silence (Silence). Call help.read for a command's parameters.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "generate.silence"
+            ],
+            "description": "Which Sonella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "analyze.read",
+      "description": "Sonella analyze (read). Pass command and params; commands: analyze.loudness (Measure loudness (EBU R128)). Call help.read for a command's parameters.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "analyze.loudness"
+            ],
+            "description": "Which Sonella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "analyze.write",
+      "description": "Sonella analyze (write). Pass command and params; commands: analyze.find-clipping (Find Clipping). Call help.read for a command's parameters.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "analyze.find-clipping"
+            ],
+            "description": "Which Sonella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "ai.read",
+      "description": "Sonella ai (read). Pass command and params; commands: ai.status (AI model status). Call help.read for a command's parameters.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "ai.status"
+            ],
+            "description": "Which Sonella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "help.read",
+      "description": "List Sonella commands with their parameter schemas and scopes, or describe one command. Start with doc.state (file.read) to see the project: tracks, clips, labels and selection.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "description": "A Sonella command id; omit to list all"
+          }
+        }
+      }
+    }
+  ]
+}

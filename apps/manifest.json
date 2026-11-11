@@ -1588,6 +1588,38 @@
           "destination": "LICENSE"
         }
       ]
+    },
+    {
+      "id": "sonella",
+      "repo": "NakliTechie/sonella",
+      "ref": "main",
+      "files": [
+        {
+          "source": "index.html",
+          "destination": "index.html",
+          "managedSdk": "inline"
+        },
+        {
+          "source": "commands.json",
+          "destination": "commands.json"
+        },
+        {
+          "source": "LICENSE",
+          "destination": "LICENSE"
+        },
+        {
+          "source": "social.png",
+          "destination": "social.png"
+        },
+        {
+          "source": "ai/rnnoise-2025.1.5.js",
+          "destination": "ai/rnnoise-2025.1.5.js"
+        },
+        {
+          "source": "ai/rnnoise-LICENSE-Apache-2.0.txt",
+          "destination": "ai/rnnoise-LICENSE-Apache-2.0.txt"
+        }
+      ]
     }
   ]
 }
