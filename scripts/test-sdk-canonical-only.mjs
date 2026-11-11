@@ -15,9 +15,7 @@ const MARKED = /\/\*\s*naklios-sdk:begin\b[^*]*\*\/[\s\S]*?\/\*\s*naklios-sdk:en
 // Apps still on a private SDK, each waiting to be converted in its own repo. The list only shrinks:
 // the test fails when a listed app is clean, so remove it here when its conversion lands.
 const WAITING = {
-  draft: 'own window.naklios copy (NakliTechie/draft)',
-  reckon: 'loads the canonical SDK, then replaces window.naklios with its own copy (NakliTechie/reckon)',
-  slate: "posts naklios:ready by hand to '*' instead of calling naklios.ready()",
+  // Draft, Reckon and Slate moved to the canonical SDK on 2026-11-11.
 };
 
 function privateSdkMarks(text) {
