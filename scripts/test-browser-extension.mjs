@@ -88,3 +88,14 @@ assert.ok(!/<script(?![^>]*\bsrc=)[^>]*>/.test(frameHtml), 'MV3 pages carry no i
 // The deployed site never ships the extension.
 assert.match(await readFile(new URL('../.assetsignore', import.meta.url), 'utf8'), /^extension\/$/m);
 console.log('browser-extension: sender check, tokens, session rules, ancestors, addresses, history and manifest pass');
+
+// The store build: no local hosts, no plain-http sites, no blanket host permission, the same files.
+const storeManifest = JSON.parse(await readFile(new URL('../extension/manifest.store.json', import.meta.url), 'utf8'));
+const storeText = JSON.stringify(storeManifest);
+assert.ok(!/127\.0\.0\.1|localhost/.test(storeText), 'the store build trusts no local host');
+assert.ok(!/<all_urls>/.test(storeText) && !(storeManifest.host_permissions || []).length, 'no host access at install');
+assert.deepEqual(storeManifest.optional_host_permissions, ['https://*/*']);
+assert.ok(!storeManifest.name.includes('(dev)'), 'the store build is not the dev build');
+assert.deepEqual(storeManifest.permissions, manifest.permissions, 'the store build asks for what the dev build asks for');
+assert.equal(storeManifest.version, manifest.version);
+console.log('browser-extension: the store manifest trusts naklios.dev only');
