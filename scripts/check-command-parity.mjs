@@ -41,7 +41,7 @@ for (const id of ['notes', 'calendar']) {
   for (const name of names) if (!html.includes(`'${name}'`)) problems.push(`${id}: ${name} has no handler`);
 }
 
-for (const id of ['reckon', 'draft', 'kanzen', 'sheaf']) {
+for (const id of ['reckon', 'draft', 'kanzen', 'sheaf', 'contorina']) {
   const manifest = manifestOf(id);
   const html = read(`apps/${id}/index.html`);
   for (const { name } of manifest.commands) if (!html.includes(name)) problems.push(`${id}: ${name} has no handler in the mirror`);
@@ -49,4 +49,4 @@ for (const id of ['reckon', 'draft', 'kanzen', 'sheaf']) {
 
 assert.deepEqual(controlIds('<button class="a" id="x">X</button><div id="y"></div><input id="z">'), ['x', 'z']);
 if (problems.length) { console.error(problems.join('\n')); process.exit(1); }
-console.log('command parity: every Notes and Calendar control is accounted for, and all six manifests are valid: PASS');
+console.log('command parity: every Notes and Calendar control is accounted for, and all seven manifests are valid: PASS');

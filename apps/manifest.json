@@ -1280,6 +1280,30 @@
           "destination": "vendor/pdfjs/pdf.worker.min.mjs"
         }
       ]
+    },
+    {
+      "id": "contorina",
+      "repo": "NakliTechie/contorina",
+      "ref": "main",
+      "files": [
+        {
+          "source": "index.html",
+          "destination": "index.html",
+          "managedSdk": "inline"
+        },
+        {
+          "source": "commands.json",
+          "destination": "commands.json"
+        },
+        {
+          "source": "NOTICE",
+          "destination": "NOTICE"
+        },
+        {
+          "source": "LICENSE",
+          "destination": "LICENSE"
+        }
+      ]
     }
   ]
 }
