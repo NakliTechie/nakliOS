@@ -35,7 +35,11 @@ function originMatches(origin, allowed) {
 
 /**
  * Only the NakliOS desktop document may open a signed-in frame: the top frame of a tab, at path '/',
- * on a trusted origin. Mirrored apps run in iframes under /apps/<id>/ and fail both tests.
+ * on a trusted origin. An app frame that sends its own message fails both tests.
+ * Limit (2026-11-12 review): apps mirrored same-origin under /apps/<id>/ can run code in the top
+ * document, so this check does not stand between them and a signed-in frame. Those apps are
+ * first-party code vendored through apps/manifest.json; third-party apps run at an opaque origin and
+ * cannot. Moving mirrors to their own origin would close the gap; see plan/2026-11-12-autopilot.md.
  * Returns { ok:true } or { ok:false, reason }.
  */
 export function checkDesktopSender(sender, { dev = false } = {}) {

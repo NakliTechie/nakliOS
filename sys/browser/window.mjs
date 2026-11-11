@@ -151,11 +151,12 @@ function build(win, deps, windowId) {
       btn('back').disabled = !m.canBack;
       btn('forward').disabled = !m.canForward;
       status.textContent = m.cookies == null ? '' : m.cookies > 0 ? 'signed in' : 'signed out';
-      // No cookies for the site: either it has none, or third-party cookies are blocked (or this is
-      // Incognito). Offer the two ways out that keep the person's session.
-      offer.hidden = m.cookies !== 0;
+      // chrome.cookies counts the person's unpartitioned cookies even when third-party cookies are
+      // blocked, so the count cannot detect that case: the two ways out stay visible while a site shows.
+      offer.hidden = false;
+      offer.classList.toggle('nb-offer-hint', m.cookies === 0);
     } else if (m.type === 'nakli-browser:needs-open') {
-      go(m.url);
+      go(m.url, { fresh: true });
     } else if (m.type === 'nakli-browser:signin') {
       status.textContent = `signing in to ${m.host} in a popup`;
     } else if (m.type === 'nakli-browser:error') {
@@ -164,7 +165,7 @@ function build(win, deps, windowId) {
   };
   window.addEventListener('message', onMessage);
 
-  async function go(raw) {
+  async function go(raw, { fresh = false } = {}) {
     const target = normaliseAddress(raw);
     if (!target) { notify('That is not a web address.'); return; }
     input.value = target;
@@ -176,7 +177,7 @@ function build(win, deps, windowId) {
       return;
     }
     // The same host in this window: the frame navigates without a new token.
-    if (frame && frame.dataset.host === new URL(target).hostname) {
+    if (!fresh && frame && frame.dataset.host === new URL(target).hostname) {
       frame.contentWindow.postMessage({ type: 'nakli-browser:navigate', url: target }, `chrome-extension://${ext.id}`);
       return;
     }

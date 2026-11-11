@@ -11,7 +11,8 @@ let parentOrigin = null;
 let sessionId = null;   // the redeemed token, used to route background messages to this frame
 let current = null;     // the URL the inner frame last committed
 const back = [], fwd = [];
-let pending = false;    // the next commit answers our own load (it may be a redirect): replace, do not push
+let pending = false;
+let beforeSignIn = null; // the site address to return to after a sign-in popup closes    // the next commit answers our own load (it may be a redirect): replace, do not push
 
 function showGate(text, { grant = false, url = null, note = '' } = {}) {
   site.hidden = true;
@@ -101,8 +102,10 @@ chrome.runtime.onMessage.addListener(m => {
     else if (m.url !== current) { if (current) back.push(current); fwd.length = 0; }
     current = m.url; report();
   } else if (m.type === 'bg:signin-opened') {
+    beforeSignIn = current;
     tell('nakli-browser:signin', { host: new URL(m.url).hostname });
   } else if (m.type === 'bg:signin-closed') {
+    if (beforeSignIn) { current = beforeSignIn; beforeSignIn = null; }
     pending = true; site.src = current; report();
   }
 });

@@ -5,7 +5,7 @@
   "description": "Opens sites inside the NakliOS desktop with your existing Chrome sign-ins. Removes framing headers only inside the NakliOS tab.",
   "minimum_chrome_version": "128",
   "background": { "service_worker": "background.js", "type": "module" },
-  "permissions": ["declarativeNetRequestWithHostAccess", "webNavigation", "storage", "tabs", "cookies"],
+  "permissions": ["declarativeNetRequestWithHostAccess", "webNavigation", "storage", "cookies"],
   "optional_host_permissions": ["https://*/*", "http://*/*"],
   "externally_connectable": { "matches": ["https://naklios.dev/*", "http://127.0.0.1/*", "http://localhost/*"] },
   "content_scripts": [{

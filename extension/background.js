@@ -8,6 +8,10 @@ import {
 const DEV = chrome.runtime.getManifest().name.includes('(dev)');
 const HISTORY_MAX = 200;
 
+// Every read-modify-write of session state runs through this one chain, so two quick opens (Enter,
+// then Go) cannot overwrite each other's token.
+let chain = Promise.resolve();
+const locked = fn => { const run = chain.then(fn, fn); chain = run.catch(() => {}); return run; };
 const getTokens = async () => (await chrome.storage.session.get('tokens')).tokens || {};
 const setTokens = tokens => chrome.storage.session.set({ tokens });
 // Tabs that hold an open Browser window, with the desktop host each one trusts and its open windows.
@@ -72,7 +76,6 @@ async function handle(msg, sender) {
       await installRules(tabId, desktopHost, tabs[tabId].nested);
       const minted = mintToken(pruneTokens(await getTokens(), Date.now()), { tabId, url: url.href, random: randomToken, now: Date.now() });
       await setTokens(minted.store);
-      if (granted) await recordOpen(url.href);
       return { ok: true, token: minted.token, needsPermission: !granted, pattern, frame: chrome.runtime.getURL('frame.html') };
     }
     case 'nakli-browser:closed': {
@@ -103,13 +106,13 @@ async function handle(msg, sender) {
 }
 
 chrome.runtime.onMessageExternal.addListener((msg, sender, reply) => {
-  handle(msg, sender).then(reply, e => reply({ ok: false, error: String(e && e.message || e) }));
+  locked(() => handle(msg, sender)).then(reply, e => reply({ ok: false, error: String(e && e.message || e) }));
   return true; // reply asynchronously
 });
 
 // Messages from frame.html (inside the extension): redeem the token for the URL to frame.
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
-  (async () => {
+  locked(async () => {
     if (sender.id !== chrome.runtime.id || !sender.tab) return { ok: false, error: 'not-extension-frame' };
     if (msg && msg.type === 'frame:redeem') {
       const out = redeemToken(await getTokens(), msg.token, { tabId: sender.tab.id, now: Date.now() });
@@ -149,39 +152,47 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       return { ok: true, count: cookies.length };
     }
     return { ok: false, error: 'unknown-message' };
-  })().then(reply, e => reply({ ok: false, error: String(e && e.message || e) }));
+  }).then(reply, e => reply({ ok: false, error: String(e && e.message || e) }));
   return true;
 });
 
 // The rules live only as long as the desktop that asked for them.
-chrome.tabs.onRemoved.addListener(tabId => { removeRules(tabId); });
+chrome.tabs.onRemoved.addListener(tabId => { locked(() => removeRules(tabId)); });
 chrome.webNavigation.onCommitted.addListener(d => {
-  if (d.frameId === 0) getTabs().then(tabs => { if (tabs[d.tabId]) removeRules(d.tabId); });
+  if (d.frameId === 0) locked(async () => { const tabs = await getTabs(); if (tabs[d.tabId]) await removeRules(d.tabId); });
 });
 
 // The site's own navigations: tell its frame.html the new address (for the toolbar and its history).
-chrome.webNavigation.onCommitted.addListener(async d => {
+chrome.webNavigation.onCommitted.addListener(d => locked(async () => {
   if (d.frameId === 0) return;
   const sid = await sessionForChild(d.tabId, d.parentFrameId);
-  if (sid) chrome.runtime.sendMessage({ type: 'bg:committed', sessionId: sid, url: d.url }).catch(() => {});
-});
+  if (!sid) return;
+  if (isSignInUrl(d.url)) return signInPopup(d); // a redirect landed on a sign-in page
+  chrome.runtime.sendMessage({ type: 'bg:committed', sessionId: sid, url: d.url }).catch(() => {});
+}));
 
 // Sign-in pages refuse frames; open them in a top-level popup, then reload the frame when it closes.
-chrome.webNavigation.onBeforeNavigate.addListener(async d => {
+// A site usually reaches the sign-in host through a redirect, which onBeforeNavigate does not show, so
+// the committed (refused) URL and the error URL are checked too. One popup per session at a time.
+async function signInPopup(d) {
   if (d.frameId === 0 || !isSignInUrl(d.url)) return;
   const sid = await sessionForChild(d.tabId, d.parentFrameId);
   if (!sid) return;
+  const open = await getPopups();
+  if (Object.values(open).includes(sid)) return;
   const win = await chrome.windows.create({ url: d.url, type: 'popup', width: 520, height: 720, focused: true });
   const popups = await getPopups();
   popups[win.id] = sid;
   await setPopups(popups);
   chrome.runtime.sendMessage({ type: 'bg:signin-opened', sessionId: sid, url: d.url }).catch(() => {});
-});
-chrome.windows.onRemoved.addListener(async windowId => {
+}
+chrome.webNavigation.onBeforeNavigate.addListener(d => locked(() => signInPopup(d)));
+chrome.webNavigation.onErrorOccurred.addListener(d => locked(() => signInPopup(d)));
+chrome.windows.onRemoved.addListener(windowId => locked(async () => {
   const popups = await getPopups();
   const sid = popups[windowId];
   if (!sid) return;
   delete popups[windowId];
   await setPopups(popups);
   chrome.runtime.sendMessage({ type: 'bg:signin-closed', sessionId: sid }).catch(() => {});
-});
+}));

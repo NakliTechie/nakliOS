@@ -37,7 +37,7 @@ globalThis.chrome = {
   },
   cookies: { getAll: async () => [{ name: 'a' }, { name: 'b' }] },
   tabs: { onRemoved: ev() },
-  webNavigation: { onCommitted: ev(), onBeforeNavigate: ev() },
+  webNavigation: { onCommitted: ev(), onBeforeNavigate: ev(), onErrorOccurred: ev() },
   windows: { create: async o => { popups.push(o); return { id: 900 + popups.length }; }, onRemoved: ev() },
 };
 
@@ -121,6 +121,22 @@ assert.equal(other.pattern, 'https://example.com/*');
 assert.deepEqual((await external({ type: 'nakli-browser:sites' }, desktop)).sites, ['https://github.com/*']);
 assert.equal((await external({ type: 'nakli-browser:forget', pattern: 'https://github.com/*' }, desktop)).removed, true);
 assert.deepEqual((await external({ type: 'nakli-browser:sites' }, desktop)).sites, []);
+// Review fixes (2026-11-12): two quick opens both keep valid tokens; a redirect that lands on a sign-in
+// page opens one popup; History gets one line per open (on redeem).
+granted.add('https://github.com/*');
+const [q1, q2] = await Promise.all([
+  external({ type: 'nakli-browser:open', url: 'https://github.com/' }, desktop),
+  external({ type: 'nakli-browser:open', url: 'https://github.com/' }, desktop),
+]);
+const before = localStore.history.length;
+assert.equal((await internal({ type: 'frame:redeem', token: q1.token }, frameSender)).ok, true, 'the first of two quick opens is still valid');
+assert.equal((await internal({ type: 'frame:redeem', token: q2.token }, { ...frameSender, frameId: 5 })).ok, true, 'and so is the second');
+assert.equal(localStore.history.length, before + 2, 'one History line per redeemed open');
+popups.length = 0;
+await Promise.all(chrome.webNavigation.onCommitted.fire({ tabId: 7, frameId: 11, parentFrameId: 5, url: 'https://accounts.google.com/ServiceLogin?continue=x' }));
+await Promise.all(chrome.webNavigation.onErrorOccurred.fire({ tabId: 7, frameId: 11, parentFrameId: 5, url: 'https://accounts.google.com/ServiceLogin?continue=x' }));
+assert.equal(popups.length, 1, 'a redirect to a sign-in page opens one popup, not two');
+
 // The full-tab fallback: only with permission, and only page.html may ask for its tab's rules.
 chrome.tabs.create = async ({ url }) => ({ id: 31, url });
 granted.add('https://github.com/*');
