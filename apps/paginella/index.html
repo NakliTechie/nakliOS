@@ -13441,11 +13441,13 @@ ${[...report.errors, ...report.warnings].map((x) => `- ${x.message}`).join("\n")
   function placeText(text, name2 = "text") {
     let paras;
     if (/\.json$/i.test(name2)) {
+      let j;
       try {
-        paras = draftToParagraphs(JSON.parse(text));
+        j = JSON.parse(text);
       } catch {
         throw fail("BAD_PARAM", `${name2} is not a Draft document`);
       }
+      paras = draftToParagraphs(j);
     } else if (/\.md$/i.test(name2)) {
       paras = text.split(/\n{2,}/).map((b) => b.trim()).filter(Boolean).map((b) => {
         const h2 = /^(#{1,2})\s+(.*)$/.exec(b);
@@ -13481,6 +13483,7 @@ ${[...report.errors, ...report.warnings].map((x) => `- ${x.message}`).join("\n")
   }
   function draftToParagraphs(j) {
     const root = j.doc ?? j.content ?? j;
+    if (root?.type !== "doc" || !Array.isArray(root.content)) throw fail("BAD_PARAM", "That JSON file is not a Draft document (.draft.json); Paginella places Draft documents, Markdown and plain text");
     const out = [];
     const textOf = (n) => (n.content ?? []).map((c) => ({ text: c.text ?? "", cs: (c.marks ?? []).some((m) => m.type === "strong" || m.type === "bold") ? "Strong" : (c.marks ?? []).some((m) => m.type === "em" || m.type === "italic") ? "Emphasis" : null, ov: {} })).filter((r) => r.text);
     const walk = (n, list2) => {

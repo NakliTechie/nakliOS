@@ -16,7 +16,7 @@
       "extensions": [
         ".md",
         ".txt",
-        ".draft.json"
+        ".json"
       ],
       "mime": [
         "text/markdown",

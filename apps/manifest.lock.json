@@ -2313,21 +2313,21 @@
       "id": "paginella",
       "repo": "NakliTechie/paginella",
       "requestedRef": "main",
-      "resolvedCommit": "4117a468a6b1ae33ce58fa285180d62aaf562799",
+      "resolvedCommit": "a23ba482fe0ca84b5e7be71eecc4587256e184db",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "ed742928dd16f0a3909ae429405748f3bc717cb662006fccc7fbafd28ab7fbef",
-          "bytes": 4390237,
-          "originalSourceSha256": "ebd86e3ac4a70ee63e2a9ceaf8262958572da8b325e79f139c94623504f75551",
+          "sha256": "8738ecb61a9865411e303dac788598b0bda19777b713e327dde3bff9920a2305",
+          "bytes": 4390465,
+          "originalSourceSha256": "e590e30bf2395140cb9e673aba077e00dc82a79c421079e558bbd4ae4999a9b1",
           "sdkSha256": "6e19a30f5e07c94b4089c617a3e21c6525717444880ddfbebc4e81e2ab5e6acc"
         },
         {
           "source": "commands.json",
           "destination": "commands.json",
-          "sha256": "1c5fefb9bd1e844d2daec6879744681caaa25e4ac00840f948143fffc240bf0d",
-          "bytes": 21513
+          "sha256": "d2bcf421a70a170867fb8519d3bc9ee5a7f44b86bca60f105614f117a43b9849",
+          "bytes": 21507
         },
         {
           "source": "LICENSE",
