@@ -98,7 +98,9 @@ export function buildSessionRules(tabId, desktopHost, { nested = false } = {}) {
     condition: {
       tabIds: [tabId],
       resourceTypes: ['sub_frame'],
-      excludedInitiatorDomains: [desktopHost],
+      // The desktop's own app frames keep their headers. A full-tab extension page (layout C) has no
+      // desktop, so it passes null and nothing is excluded.
+      ...(desktopHost ? { excludedInitiatorDomains: [desktopHost] } : {}),
       responseHeaders: [
         { header: 'x-frame-options' },
         { header: 'content-security-policy', values: ['*frame-ancestors*'] },

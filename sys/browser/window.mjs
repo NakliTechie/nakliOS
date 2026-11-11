@@ -68,6 +68,8 @@ const STYLE = `
 .nb-bar button:disabled{opacity:.4;cursor:default}
 .nb-bar input{flex:1;min-width:0;height:28px;border-radius:6px;border:1px solid var(--line,#0003);padding:0 8px;font:inherit;background:var(--body,#fff);color:inherit}
 .nb-status{font-size:12px;opacity:.75;white-space:nowrap}
+.nb-offer{display:flex;gap:4px}
+.nb-offer[hidden]{display:none}
 .nb-view{position:relative;flex:1;min-height:0}
 .nb-view iframe{border:0;width:100%;height:100%;display:block;background:#fff}
 .nb-note{padding:24px;max-width:36rem;line-height:1.5}
@@ -117,6 +119,10 @@ function build(win, deps, windowId) {
       <input type="url" aria-label="Address" placeholder="Type an address, for example github.com" spellcheck="false" autocomplete="off">
       <button type="button" data-act="go">Go</button>
       <span class="nb-status" aria-live="polite"></span>
+      <span class="nb-offer" hidden>
+        <button type="button" data-act="full" title="Open this site as a full extension tab, which keeps your sign-in when third-party cookies are blocked">Full tab</button>
+        <button type="button" data-act="tab" title="Open this site in a normal tab">New tab</button>
+      </span>
     </div>
     <div class="nb-view"><div class="nb-note"></div></div>`;
   body.appendChild(wrap);
@@ -124,6 +130,7 @@ function build(win, deps, windowId) {
   const status = wrap.querySelector('.nb-status');
   const view = wrap.querySelector('.nb-view');
   const btn = act => wrap.querySelector(`[data-act="${act}"]`);
+  const offer = wrap.querySelector('.nb-offer');
   let ext = null, frame = null, mode = 'window';
 
   const note = text => { view.innerHTML = '<div class="nb-note"></div>'; view.firstChild.textContent = text; frame = null; };
@@ -144,6 +151,9 @@ function build(win, deps, windowId) {
       btn('back').disabled = !m.canBack;
       btn('forward').disabled = !m.canForward;
       status.textContent = m.cookies == null ? '' : m.cookies > 0 ? 'signed in' : 'signed out';
+      // No cookies for the site: either it has none, or third-party cookies are blocked (or this is
+      // Incognito). Offer the two ways out that keep the person's session.
+      offer.hidden = m.cookies !== 0;
     } else if (m.type === 'nakli-browser:needs-open') {
       go(m.url);
     } else if (m.type === 'nakli-browser:signin') {
@@ -189,6 +199,8 @@ function build(win, deps, windowId) {
   btn('forward').onclick = () => post('nakli-browser:forward');
   btn('reload').onclick = () => post('nakli-browser:reload');
   btn('go').onclick = () => go(input.value);
+  btn('full').onclick = () => post('nakli-browser:open-full');
+  btn('tab').onclick = () => { const u = normaliseAddress(input.value); if (u) window.open(u, '_blank', 'noopener'); };
   input.addEventListener('keydown', e => { if (e.key === 'Enter') go(input.value); });
 
   const prevClose = win._beforeClose;

@@ -45,6 +45,7 @@ assert.ok(rules[0].condition.responseHeaders.length > 0, 'fires only on response
 assert.deepEqual(rules[0].action.responseHeaders.map(h => h.header).sort(), ['content-security-policy', 'x-frame-options']);
 assert.ok(rules.every(r => ruleIdsFor(7).includes(r.id)));
 assert.equal(new Set([...ruleIdsFor(7), ...ruleIdsFor(8)]).size, 4, 'rule ids never collide across tabs');
+assert.equal(buildSessionRules(9, null)[0].condition.excludedInitiatorDomains, undefined, 'the full-tab page excludes no initiator');
 const nested = buildSessionRules(7, 'naklios.dev', { nested: true });
 assert.equal(nested.length, 2);
 assert.deepEqual(nested[1].condition.requestDomains, ['naklios.dev']);
@@ -80,6 +81,8 @@ assert.equal(manifest.manifest_version, 3);
 assert.ok(!(manifest.host_permissions || []).length, 'host access is asked per site at first use');
 assert.ok(manifest.permissions.includes('declarativeNetRequestWithHostAccess'));
 assert.ok(!manifest.permissions.includes('declarativeNetRequest'), 'the with-host-access variant shows no install warning');
+const exposed = manifest.web_accessible_resources.flatMap(w => w.resources);
+assert.ok(!exposed.includes('page.html'), 'only the extension opens the full-tab page');
 const frameHtml = await readFile(new URL('../extension/frame.html', import.meta.url), 'utf8');
 assert.ok(!/<script(?![^>]*\bsrc=)[^>]*>/.test(frameHtml), 'MV3 pages carry no inline script');
 // The deployed site never ships the extension.

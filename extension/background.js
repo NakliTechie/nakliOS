@@ -123,6 +123,24 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       if (granted) await recordOpen(out.url);
       return { ok: true, url: out.url, granted, pattern: originPattern(url) };
     }
+    if (msg && msg.type === 'frame:open-full') {
+      // Layout C: the whole tab is an extension page, so third-party cookie blocking does not apply.
+      const url = parseSiteUrl(msg.url);
+      if (!url) return { ok: false, error: 'bad-url' };
+      if (!(await chrome.permissions.contains({ origins: [originPattern(url)] }))) return { ok: false, error: 'no-permission' };
+      const tab = await chrome.tabs.create({ url: chrome.runtime.getURL(`page.html?u=${encodeURIComponent(url.href)}`) });
+      return { ok: true, tabId: tab.id };
+    }
+    if (msg && msg.type === 'page:ready') {
+      // page.html asks for the header rules in its own tab. Only extension pages reach onMessage, and
+      // the tab must be showing page.html itself.
+      if (!sender.url || !sender.url.startsWith(chrome.runtime.getURL('page.html'))) return { ok: false, error: 'not-page' };
+      await installRules(sender.tab.id, null, false);
+      const tabs = await getTabs();
+      tabs[sender.tab.id] = { desktopHost: null, windows: ['page'], nested: false };
+      await setTabs(tabs);
+      return { ok: true };
+    }
     if (msg && msg.type === 'frame:cookie-count') {
       const url = parseSiteUrl(msg.url);
       if (!url) return { ok: false, error: 'bad-url' };

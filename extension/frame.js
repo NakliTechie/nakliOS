@@ -86,6 +86,8 @@ window.addEventListener('message', e => {
     fwd.push(current); current = back.pop(); pending = true; site.src = current; report();
   } else if (m.type === 'nakli-browser:forward' && fwd.length) {
     back.push(current); current = fwd.pop(); pending = true; site.src = current; report();
+  } else if (m.type === 'nakli-browser:open-full' && current) {
+    chrome.runtime.sendMessage({ type: 'frame:open-full', url: current }).then(r => { if (!r || !r.ok) tell('nakli-browser:error', { error: r ? r.error : 'no-answer' }); });
   } else if (m.type === 'nakli-browser:reload' && current) {
     pending = true; site.src = current; report();
   }

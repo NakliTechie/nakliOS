@@ -121,4 +121,12 @@ assert.equal(other.pattern, 'https://example.com/*');
 assert.deepEqual((await external({ type: 'nakli-browser:sites' }, desktop)).sites, ['https://github.com/*']);
 assert.equal((await external({ type: 'nakli-browser:forget', pattern: 'https://github.com/*' }, desktop)).removed, true);
 assert.deepEqual((await external({ type: 'nakli-browser:sites' }, desktop)).sites, []);
+// The full-tab fallback: only with permission, and only page.html may ask for its tab's rules.
+chrome.tabs.create = async ({ url }) => ({ id: 31, url });
+granted.add('https://github.com/*');
+assert.equal((await internal({ type: 'frame:open-full', url: 'https://example.com/' }, frameSender)).error, 'no-permission');
+assert.equal((await internal({ type: 'frame:open-full', url: 'https://github.com/' }, frameSender)).tabId, 31);
+assert.equal((await internal({ type: 'page:ready' }, { ...frameSender, url: chrome.runtime.getURL('frame.html#t=x') })).error, 'not-page');
+assert.equal((await internal({ type: 'page:ready' }, { id: chrome.runtime.id, tab: { id: 31 }, url: chrome.runtime.getURL('page.html?u=https%3A%2F%2Fgithub.com%2F') })).ok, true);
+assert.deepEqual(rules.find(r => r.condition.tabIds[0] === 31).condition.excludedInitiatorDomains, undefined);
 console.log('browser-extension-background: open, token, rules, navigation, sign-in popup, history, cleanup and settings pass');
