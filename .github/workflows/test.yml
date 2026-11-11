@@ -714,6 +714,9 @@ jobs:
       - name: Verify the Browser extension's sender check, tokens, session rules and manifest
         run: node scripts/test-browser-extension.mjs
 
+      - name: Verify the Browser extension's background flow against a stand-in chrome
+        run: node scripts/test-browser-extension-background.mjs
+
       - name: Verify a skipped mirror cannot be read as a successful sync
         run: node scripts/test-mirror-skip-is-loud.mjs
 
