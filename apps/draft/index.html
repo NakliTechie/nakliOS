@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-uCSyrR4STulGUEfkfaRwJNbdknn5UGUgM17HDP5pyBw=' 'sha256-EhaFMBWlPR5NCsUU5d4+eS3yyuBXhydzOL0164nt9k8=' https://cdn.jsdelivr.net; style-src 'sha256-6gx4dEs/h2kVOsJ6sJN1+SpSW2llPBGHRKSMP0wHaDo=' 'sha256-KCyOLChDzeQmUw0bsRUQbX4zbQzpzoFdBW/gF2kA5vc='; img-src 'self' data: blob:; connect-src 'self' http://127.0.0.1:* https://cdn.jsdelivr.net https://huggingface.co https://*.hf.co https://cdn-lfs.huggingface.co https://api.openai.com https://api.groq.com https://api.mistral.ai https://api.deepseek.com https://openrouter.ai; font-src 'self' data:; worker-src blob:; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-uCSyrR4STulGUEfkfaRwJNbdknn5UGUgM17HDP5pyBw=' 'sha256-diUhrbosFfVMlkfhG5kHZm7Im6TcezWKuX6kj8tu9mg=' https://cdn.jsdelivr.net; style-src 'sha256-6gx4dEs/h2kVOsJ6sJN1+SpSW2llPBGHRKSMP0wHaDo=' 'sha256-KCyOLChDzeQmUw0bsRUQbX4zbQzpzoFdBW/gF2kA5vc='; img-src 'self' data: blob:; connect-src 'self' http://127.0.0.1:* https://cdn.jsdelivr.net https://huggingface.co https://*.hf.co https://cdn-lfs.huggingface.co https://api.openai.com https://api.groq.com https://api.mistral.ai https://api.deepseek.com https://openrouter.ai; font-src 'self' data:; worker-src blob:; base-uri 'none'">
 <meta name="draft-version" content="1.1.0">
 <title>Draft</title>
 <style>
@@ -949,8 +949,99 @@ a { color: var(--dr-accent); }
 // The page UI arrives with the next chunk; this shell proves the spine:
 // schema + sanitised ingress + sole-dispatch transactions + storage.
 
-// ==== begin vendor/naklios.js ====
-/*! NakliOS cooperative SDK, vendored from nakliOS/sdk/naklios.js. License: MIT. */
+/* naklios-sdk:begin ver=2 sha256=3fb0c7a88cbd09de7e509aa11894b17d0d4b8759dfd5de49fc01a897a111db1a — DO NOT EDIT until :end; run `node scripts/vendor-naklios-sdk.mjs` */
+/*!
+ * naklios.js — cooperative SDK for apps hosted inside NakliOS (Immersive mode)
+ *
+ * Load this file in your app's <head>. The surface is a no-op when the app
+ * loads standalone (window.parent === window), so the same source works in both
+ * contexts.
+ *
+ * Use this canonical file, unedited, and nothing else. There are three supported
+ * ways: a <script src> to https://naklios.dev/sdk/naklios.js, this file shipped
+ * beside your page, or this file inlined between the naklios-sdk markers by
+ * scripts/vendor-naklios-sdk.mjs, refreshed by the daily vendor-sdk workflow.
+ * Do not write your own window.naklios, do not edit a copy, and do not post
+ * naklios:* messages by hand. A private copy misses every later host change:
+ * Draft and Reckon kept their own copies and missed the 2026-11-10 fix that keeps
+ * a file call alive while the host shows a storage prompt. If your app needs
+ * something the SDK lacks, add it to sdk/naklios.js in the NakliOS repo, so that
+ * every app receives it. The NakliOS gate (scripts/test-sdk-canonical-only.mjs)
+ * refuses a mirrored app that talks to the host any other way.
+ *
+ * Vendoring: if your app needs a capability an iframe sandbox blocks — a folder
+ * picker above all — the supported route is a manifest-declared same-origin
+ * MIRROR under naklios.dev/apps/<id>/, not a hand-copied snapshot. See
+ * docs/app-loading.md. Your repo stays authoritative; the mirror is a pinned,
+ * hash-checked deployment artifact refreshed by CI.
+ *
+ *   <script src="https://naklios.dev/sdk/naklios.js"><\/script>
+ *   <script>
+ *     naklios.ready();                          // signal "I'm loaded"
+ *     naklios.title('My app — unlocked');       // update host window title
+ *     naklios.close();                          // self-close from a Done button
+ *     naklios.theme.onChange(t => paint(t));    // restyle on host theme change
+ *
+ *     // Filesystem (when hosted with a connected Folder or Crate):
+ *     if (naklios.capabilities.fs){
+ *       await naklios.fs.write('vault.json', JSON.stringify(vault));
+ *       const data = await naklios.fs.read('vault.json');
+ *       const stop = await naklios.fs.subscribe('', event => refresh(event));
+ *     }
+ *
+ *     // Shared host inference (when the user grants this app access):
+ *     if (naklios.capabilities.ai) {
+ *       const stream = await naklios.ai.chat.completions.create({
+ *         messages: [{ role: 'user', content: 'Summarise this note.' }],
+ *         stream: true,
+ *       });
+ *       for await (const chunk of stream) {
+ *         render(chunk.choices[0].delta.content || '');
+ *       }
+ *
+ *       const image = await naklios.ai.images.generate({
+ *         prompt: 'A risograph poster of a city after monsoon rain',
+ *         size: '1024x1024',
+ *         signal: abortController.signal,
+ *       });
+ *       preview.src = image.data[0].b64_json
+ *         ? 'data:image/png;base64,' + image.data[0].b64_json
+ *         : image.data[0].url;
+ *     }
+ *   <\/script>
+ *
+ * naklios.capabilities.hosted is true only when running inside NakliOS.
+ * naklios.capabilities.fs is true when hosted storage is available to the app.
+ * naklios.capabilities.fsBackends lists connected Folder/Crate choices, and
+ * naklios.capabilities.fsBackend is the app's current binding (or null).
+ * Apps may call naklios.fs.useBackend(id); NakliOS confirms the change.
+ * Listen for changes via naklios.onCapabilitiesChange(cb).
+ *
+ * Paths in fs methods are relative to apps/<your-app-id>/ on the selected backend.
+ * Traversal (../) is blocked at the host.
+ *
+ * Single source of truth: https://naklios.dev/sdk/naklios.js
+ *   (repo: NakliTechie/nakliOS → sdk/naklios.js)
+ * Vendor it inline in each app to keep the no-network-dependency ethos.
+ *
+ * @naklios-sdk-version 2
+ *   Vendored copies are spliced between two HTML comment markers and kept fresh
+ *   by each app's own CI — never hand-edited. See docs/app-contract.md "Vendoring
+ *   the SDK" and plan/sdk-vendoring.md. In the app's HTML, an "naklios-sdk:begin"
+ *   comment (carrying ver= and sha256=) and an "naklios-sdk:end" comment bracket
+ *   the inlined <script>; scripts/vendor-naklios-sdk.mjs rewrites everything
+ *   between them (escaping this file's closing script tags). The literal marker
+ *   syntax is only shown in the docs — never here, so it can't be mistaken for a
+ *   real marker once this header is itself inlined.
+ *
+ *   v2 = approved-parent origin + ?naklios flag (no-referrer-safe). v1 (pre-2026-08)
+ *   posted to '*' and skipped inbound-origin checks — a v1 copy is a drift bug.
+ *
+ *   New public members ship as `experimental_<name>` with a line in docs/sdk-api-audit.md
+ *   naming what stabilizes them; stabilizing drops the prefix in one fleet change
+ *   (this file, the host, every vendored copy). fs.autosave was the first, 2026-09-24.
+ * License: MIT.
+ */
 (function () {
   // A real host FRAME is what the transports talk to (postMessage to parent), so
   // it gates every send/rpc — `inNakliOS`. The `?naklios` URL flag is the host's
@@ -1020,6 +1111,10 @@ a { color: var(--dr-accent); }
     aiImageState: 'idle',
     aiSearchState: 'idle',
     aiSearch: false,
+    // experimental_tex: this app may compile LaTeX projects in its own storage.
+    experimental_tex: false,
+    // experimental_web: this app may search the web and read pages through the host.
+    experimental_web: false,
     // net: a sovereign egress backend (the user's own Worker or local bridge) is
     // configured + permitted, so naklios.net.fetch can reach cross-origin hosts the
     // browser blocks. Stays false until a host advertises one — the SDK seam.
@@ -1035,6 +1130,7 @@ a { color: var(--dr-accent); }
   var aiRequests = new Map(); // requestId → streamed request state
   var aiImageRequests = new Map(); // requestId → image request state
   var ragSearches = new Map();     // requestId → semantic-search progress callback
+  var texCompiles = new Map();     // requestId → TeX compile chunk callback
   var fileOpenListeners = new Set(); // exact-file grants delivered by the host
   var commandHandlers = new Map(); // command name → handler (common rail step 1)
   var commandCalls = new Map(); // invokeId → AbortController of a running handler
@@ -1086,19 +1182,23 @@ a { color: var(--dr-accent); }
 
   // A call can wait on the person's answer, on the app opening, and on its handler.
   var COMMAND_CALL_TIMEOUT_MS = 300000;
+  var AI_LOCAL_TIMEOUT_MS = 300000;
 
   function rpc(type, payload, timeoutMs) {
     if (!inNakliOS) return Promise.reject(new Error('Not hosted — naklios.* unavailable standalone'));
     return new Promise(function (resolve, reject) {
       var requestId = 'r' + (++rpcCounter) + '_' + Date.now();
-      pendingRpc.set(requestId, { resolve: resolve, reject: reject });
+      var entry = { resolve: resolve, reject: reject, timer: null };
+      pendingRpc.set(requestId, entry);
       if (send(type, Object.assign({ requestId: requestId }, payload || {})) === false) {
         pendingRpc.delete(requestId);
         reject(new Error('Wait for a verified NakliOS host before sending more data'));
         return;
       }
-      // Default 30s safety net; long operations (index building) pass more.
-      setTimeout(function () {
+      // Default 30s safety net; long operations (index building) pass more. A call the host holds
+      // for the person's answer (a storage prompt) stops this clock: the host sends
+      // naklios:rpc:waiting, and the reply comes once the person answers.
+      entry.timer = setTimeout(function () {
         if (pendingRpc.has(requestId)) {
           pendingRpc.delete(requestId);
           reject(new Error('naklios RPC timeout: ' + type));
@@ -1297,8 +1397,8 @@ a { color: var(--dr-accent); }
       messages: Array.isArray(options.messages) ? options.messages : [],
       maxTokens: options.max_tokens || options.maxTokens,
     };
-    // Agent tier (system apps only): raised caps + tool-calling. The host
-    // refuses agent:true from a third-party app, so passing it is harmless.
+    // Agent tier: tool-calling for first-party apps, with raised caps, and for a third-party
+    // app that declared the "tools" permission, at the normal caps. The host refuses the rest.
     if (options.agent === true) chatMsg.agent = true;
     if (options.tools != null) chatMsg.tools = options.tools;
     if (options.tool_choice != null) chatMsg.tool_choice = options.tool_choice;
@@ -1445,12 +1545,17 @@ a { color: var(--dr-accent); }
         ? msg.aiSearchState
         : 'idle';
       capabilities.aiSearch = msg.aiSearch === true;
+      capabilities.experimental_tex = msg.experimental_tex === true;
+      capabilities.experimental_web = msg.experimental_web === true;
       capabilities.net = msg.net === true;
       capabilities.netBackend = typeof msg.netBackend === 'string' ? msg.netBackend : null;
       capabilities.review = msg.review === true;
       capListeners.forEach(function (cb) {
         try { cb(capabilities); } catch (_) {}
       });
+    } else if (msg.type === 'naklios:tex:event' && msg.requestId) {
+      var texChunk = texCompiles.get(msg.requestId);
+      if (texChunk && msg.event === 'chunk') { try { texChunk(msg.chunk); } catch (_) {} }
     } else if (msg.type === 'naklios:rag:event' && msg.requestId) {
       var ragRequest = ragSearches.get(msg.requestId);
       if (ragRequest && msg.event === 'indexing') {
@@ -1542,6 +1647,7 @@ a { color: var(--dr-accent); }
         sourceAppId: String(msg.grant.sourceAppId || ''),
         backend: String(msg.grant.backend || ''),
         kind: String(msg.grant.kind || 'file'),
+        type: msg.grant.type ? String(msg.grant.type) : undefined,
       };
       if (!grant.token) return;
       if (!fileOpenListeners.size) pendingFileGrants.push(grant);
@@ -1606,12 +1712,18 @@ a { color: var(--dr-accent); }
     } else if ((msg.type === 'naklios:fs:reply' || msg.type === 'naklios:file:reply' ||
                 msg.type === 'naklios:review:reply' || msg.type === 'naklios:commands:reply' ||
                 msg.type === 'naklios:rag:reply' || msg.type === 'naklios:net:reply' ||
-                msg.type === 'naklios:skills:reply') && msg.requestId) {
+                msg.type === 'naklios:tex:reply' || msg.type === 'naklios:web:reply' ||
+                msg.type === 'naklios:skills:reply' || msg.type === 'naklios:ai:reply') && msg.requestId) {
       var p = pendingRpc.get(msg.requestId);
       if (!p) return;
       pendingRpc.delete(msg.requestId);
+      if (p.timer) clearTimeout(p.timer);
       if (msg.error) p.reject(new Error(msg.error));
       else p.resolve(msg.result);
+    } else if (msg.type === 'naklios:rpc:waiting' && msg.requestId) {
+      // The host holds this call until the person answers a prompt; the safety clock stops.
+      var w = pendingRpc.get(msg.requestId);
+      if (w && w.timer) { clearTimeout(w.timer); w.timer = null; }
     } else if (msg.type === 'naklios:fs:event' && msg.subscriptionId) {
       var listener = fsSubscriptions.get(msg.subscriptionId);
       if (listener) {
@@ -1716,6 +1828,14 @@ a { color: var(--dr-accent); }
         return rpc('naklios:commands:call', { name: String(name || ''), input: input || {} }, COMMAND_CALL_TIMEOUT_MS);
       },
     },
+    experimental_widgets: {
+      // One snapshot for a widget the app declares in commands.json; `null` removes the card. `persist: false`
+      // keeps it in memory only, for data the desktop must not copy to disk (Crate). Standalone: does nothing.
+      update: function (id, data, options) {
+        if (!inNakliOS) return false;
+        return send('naklios:widgets:update', { id: String(id || ''), data: data === undefined ? null : data, persist: !options || options.persist !== false }) !== false;
+      },
+    },
     experimental_skills: {
       list: function () {
         if (!inNakliOS) return Promise.resolve([]);
@@ -1814,6 +1934,19 @@ a { color: var(--dr-accent); }
           path: String(path || ''),
         }));
       },
+      // Which apps declared they take this file (`accepts` in their commands.json), as `{ appId, name, action, label }`.
+      experimental_targets: function (path) {
+        if (!inNakliOS) return Promise.resolve([]);
+        return rpc('naklios:file:targets', { path: String(path || '') });
+      },
+      // Send copies of app-relative files to an app that imports them. The target gets one read-only token per file;
+      // `read(token)` answers `{ bytes, name, path, type, sourceAppId, backend }`.
+      experimental_sendTo: function (appId, paths) {
+        return rpc('naklios:file:sendTo', fsPayload({
+          appId: String(appId || ''),
+          paths: (Array.isArray(paths) ? paths : [paths]).map(String),
+        }));
+      },
       onOpen: function (cb) {
         if (typeof cb !== 'function') return function () {};
         fileOpenListeners.add(cb);
@@ -1832,6 +1965,42 @@ a { color: var(--dr-accent); }
       release: function (token) {
         send('naklios:file:release', { token: String(token || '') });
       },
+    },
+    // The shared TeX service. The host reads the project itself, so no file bytes cross the rail. A first compile asks
+    // the person once and downloads TeX Live, so it waits up to two hours; later compiles take seconds.
+    experimental_tex: {
+      engines: function () { return rpc('naklios:tex:engines', {}); },
+      compile: function (options) {
+        if (!inNakliOS) return Promise.reject(new Error('Not hosted — naklios.experimental_tex unavailable standalone'));
+        if (!capabilities.experimental_tex) return Promise.reject(new Error('The NakliOS TeX service is unavailable or not permitted'));
+        options = options || {};
+        var requestId = 't' + (++rpcCounter) + '_' + Date.now();
+        var timer;
+        var compile = new Promise(function (resolve, reject) {
+          if (typeof options.onChunk === 'function') texCompiles.set(requestId, options.onChunk);
+          pendingRpc.set(requestId, { resolve: resolve, reject: reject });
+          if (send('naklios:tex:compile', {
+            requestId: requestId, folder: options.folder, main: options.main, engine: options.engine,
+          }) === false) {
+            pendingRpc.delete(requestId);
+            reject(new Error('Wait for a verified NakliOS host before sending more data'));
+            return;
+          }
+          timer = setTimeout(function () {
+            if (pendingRpc.has(requestId)) {
+              pendingRpc.delete(requestId);
+              send('naklios:tex:cancel', { requestId: requestId });
+              reject(new Error('naklios RPC timeout: naklios:tex:compile'));
+            }
+          }, 2 * 60 * 60 * 1000);
+        }).finally(function () { clearTimeout(timer); texCompiles.delete(requestId); });
+        compile.id = requestId;
+        return compile;
+      },
+      cancel: function (id) { send('naklios:tex:cancel', { requestId: String(id) }); },
+      cache: function () { return rpc('naklios:tex:cache', {}); },
+      // Waits for the person to answer the host's dialog.
+      clearCache: function () { return rpc('naklios:tex:clearCache', {}, 10 * 60 * 1000); },
     },
     ai: {
       chat: {
@@ -1879,6 +2048,19 @@ a { color: var(--dr-accent); }
       searchStatus: function () {
         return rpc('naklios:rag:status', {});
       },
+      // On-device helpers (common rail step 5). Nothing leaves this browser; the person allows each app once per visit.
+      // Embeddings: up to 64 texts, answered as `{ embeddings, dimensions }`.
+      experimental_embeddings: function (input) {
+        return rpc('naklios:ai:embed', { input: Array.isArray(input) ? input : [input] }, AI_LOCAL_TIMEOUT_MS);
+      },
+      // Speech to text: 16 kHz mono samples, at most 30 s, answered as `{ text }`. Needs the assistant's model turned on.
+      experimental_transcribe: function (audio) {
+        return rpc('naklios:ai:transcribe', { audio: audio }, AI_LOCAL_TIMEOUT_MS);
+      },
+      // Text to speech: at most 1,000 characters, answered as `{ audio, sampleRate }`. Needs the assistant's model turned on.
+      experimental_speak: function (text) {
+        return rpc('naklios:ai:speak', { text: String(text || '') }, AI_LOCAL_TIMEOUT_MS);
+      },
       cancelAll: function () {
         aiRequests.forEach(function (_, requestId) {
           send('naklios:ai:cancel', { requestId: requestId });
@@ -1886,6 +2068,21 @@ a { color: var(--dr-accent); }
         aiImageRequests.forEach(function (_, requestId) {
           send('naklios:ai:cancel', { requestId: requestId });
         });
+      },
+    },
+
+    // Web search and page reading for agents. The host searches with the person's provider (or Wikipedia) and reads
+    // pages directly, through the person's web relay, or through Jina Reader; each site asks the person once.
+    experimental_web: {
+      // search(query, { maxResults }) -> { provider, results: [{ title, url, snippet }] }
+      search: function (query, options) {
+        if (!inNakliOS || !capabilities.experimental_web) return Promise.reject(new Error('NakliOS web search is unavailable to this app'));
+        return rpc('naklios:web:search', { query: String(query || ''), maxResults: options && options.maxResults }, 120000);
+      },
+      // fetch(url) -> { url, status, kind: 'html'|'text', content, truncated, via }
+      fetch: function (url) {
+        if (!inNakliOS || !capabilities.experimental_web) return Promise.reject(new Error('NakliOS page reading is unavailable to this app'));
+        return rpc('naklios:web:fetch', { url: String(url || '') }, 120000);
       },
     },
 
@@ -1923,7 +2120,8 @@ a { color: var(--dr-accent); }
     },
   };
 })();
-// ==== end vendor/naklios.js ====
+
+/* naklios-sdk:end */
 
 // ==== begin engine/schema-spec.mjs ====
 // Draft schema v1 — engine-agnostic node/mark specs (plain data + DOM functions).
