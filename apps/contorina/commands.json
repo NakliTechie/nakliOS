@@ -2,7 +2,7 @@
   "accepts": [
     {
       "action": "import",
-      "label": "Open in Figger",
+      "label": "Open in Contorina",
       "extensions": [
         ".json",
         ".svg"
@@ -12,7 +12,7 @@
   "commands": [
     {
       "name": "insert.write",
-      "description": "Figger insert (write). Pass command and params; commands: node.create (Create layer), asset.add (Add image asset), image.place (Place image), vector.create (Create vector). Call help.read for a command's parameters.",
+      "description": "Contorina insert (write). Pass command and params; commands: node.create (Create layer), asset.add (Add image asset), image.place (Place image), vector.create (Create vector). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -25,7 +25,7 @@
               "image.place",
               "vector.create"
             ],
-            "description": "Which Figger command to run"
+            "description": "Which Contorina command to run"
           },
           "params": {
             "type": "object",
@@ -39,7 +39,7 @@
     },
     {
       "name": "edit.write",
-      "description": "Figger edit (write). Pass command and params; commands: node.set (Set layer properties), node.move (Move layers), node.nudge (Nudge selection), node.reparent (Move layers into), node.rename (Rename layer), edit.duplicate (Duplicate), node.insertTree (Insert layers), node.setVisible (Show or hide layers), node.setLocked (Lock or unlock layers), vector.setPath (Edit vector path). Call help.read for a command's parameters.",
+      "description": "Contorina edit (write). Pass command and params; commands: node.set (Set layer properties), node.move (Move layers), node.nudge (Nudge selection), node.reparent (Move layers into), node.rename (Rename layer), edit.duplicate (Duplicate), node.insertTree (Insert layers), node.setVisible (Show or hide layers), node.setLocked (Lock or unlock layers), vector.setPath (Edit vector path). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -58,7 +58,7 @@
               "node.setLocked",
               "vector.setPath"
             ],
-            "description": "Which Figger command to run"
+            "description": "Which Contorina command to run"
           },
           "params": {
             "type": "object",
@@ -72,7 +72,7 @@
     },
     {
       "name": "edit.destructive",
-      "description": "Figger edit (destructive). Pass command and params; commands: edit.delete (Delete). Call help.read for a command's parameters.",
+      "description": "Contorina edit (destructive). Pass command and params; commands: edit.delete (Delete). Call help.read for a command's parameters.",
       "scope": "destructive",
       "input": {
         "type": "object",
@@ -82,7 +82,7 @@
             "enum": [
               "edit.delete"
             ],
-            "description": "Which Figger command to run"
+            "description": "Which Contorina command to run"
           },
           "params": {
             "type": "object",
@@ -96,7 +96,7 @@
     },
     {
       "name": "arrange.write",
-      "description": "Figger arrange (write). Pass command and params; commands: node.order (Arrange layers), arrange.front (Bring to front), arrange.back (Send to back), arrange.forward (Bring forward), arrange.backward (Send backward), node.frameSelection (Frame selection), node.ungroup (Remove frame (keep contents)), node.flatten (Flatten to vector), boolean.apply (Boolean operation), boolean.group (Boolean group (live)), boolean.setOp (Change boolean operation), boolean.union (Boolean: Union), boolean.subtract (Boolean: Subtract), boolean.intersect (Boolean: Intersect), boolean.exclude (Boolean: Exclude). Call help.read for a command's parameters.",
+      "description": "Contorina arrange (write). Pass command and params; commands: node.order (Arrange layers), arrange.front (Bring to front), arrange.back (Send to back), arrange.forward (Bring forward), arrange.backward (Send backward), node.frameSelection (Frame selection), node.ungroup (Remove frame (keep contents)), node.flatten (Flatten to vector), boolean.apply (Boolean operation), boolean.group (Boolean group (live)), boolean.setOp (Change boolean operation), boolean.union (Boolean: Union), boolean.subtract (Boolean: Subtract), boolean.intersect (Boolean: Intersect), boolean.exclude (Boolean: Exclude). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -120,7 +120,7 @@
               "boolean.intersect",
               "boolean.exclude"
             ],
-            "description": "Which Figger command to run"
+            "description": "Which Contorina command to run"
           },
           "params": {
             "type": "object",
@@ -134,7 +134,7 @@
     },
     {
       "name": "layout.write",
-      "description": "Figger layout (write). Pass command and params; commands: layout.add (Add auto layout), layout.remove (Remove auto layout), layout.set (Set auto layout), node.setSizing (Set resizing (hug, fill, fixed)), node.setConstraints (Set constraints), layout.setGrids (Set layout grids), node.setMinMax (Set min and max size). Call help.read for a command's parameters.",
+      "description": "Contorina layout (write). Pass command and params; commands: layout.add (Add auto layout), layout.remove (Remove auto layout), layout.set (Set auto layout), node.setSizing (Set resizing (hug, fill, fixed)), node.setConstraints (Set constraints), layout.setGrids (Set layout grids), node.setMinMax (Set min and max size). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -150,7 +150,7 @@
               "layout.setGrids",
               "node.setMinMax"
             ],
-            "description": "Which Figger command to run"
+            "description": "Which Contorina command to run"
           },
           "params": {
             "type": "object",
@@ -164,7 +164,7 @@
     },
     {
       "name": "text.write",
-      "description": "Figger text (write). Pass command and params; commands: text.set (Set text), text.styleRange (Style part of a text). Call help.read for a command's parameters.",
+      "description": "Contorina text (write). Pass command and params; commands: text.set (Set text), text.styleRange (Style part of a text). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -175,7 +175,7 @@
               "text.set",
               "text.styleRange"
             ],
-            "description": "Which Figger command to run"
+            "description": "Which Contorina command to run"
           },
           "params": {
             "type": "object",
@@ -189,7 +189,7 @@
     },
     {
       "name": "file.write",
-      "description": "Figger file (write). Pass command and params; commands: doc.rename (Rename document). Call help.read for a command's parameters.",
+      "description": "Contorina file (write). Pass command and params; commands: doc.rename (Rename document). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -199,7 +199,7 @@
             "enum": [
               "doc.rename"
             ],
-            "description": "Which Figger command to run"
+            "description": "Which Contorina command to run"
           },
           "params": {
             "type": "object",
@@ -213,7 +213,7 @@
     },
     {
       "name": "components.write",
-      "description": "Figger components (write). Pass command and params; commands: component.create (Create component), component.instance (Create instance), component.detach (Detach instance), component.combineVariants (Combine as variants), instance.setVariant (Set variant property), instance.swap (Swap instance), instance.reset (Reset all overrides), component.addProp (Add component property), component.removeProp (Remove component property), instance.setProp (Set instance property). Call help.read for a command's parameters.",
+      "description": "Contorina components (write). Pass command and params; commands: component.create (Create component), component.instance (Create instance), component.detach (Detach instance), component.combineVariants (Combine as variants), instance.setVariant (Set variant property), instance.swap (Swap instance), instance.reset (Reset all overrides), component.addProp (Add component property), component.removeProp (Remove component property), instance.setProp (Set instance property). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -232,7 +232,7 @@
               "component.removeProp",
               "instance.setProp"
             ],
-            "description": "Which Figger command to run"
+            "description": "Which Contorina command to run"
           },
           "params": {
             "type": "object",
@@ -246,7 +246,7 @@
     },
     {
       "name": "styles.write",
-      "description": "Figger styles (write). Pass command and params; commands: style.create (Create style), style.fromSelection (Create style from selection), style.update (Edit style), node.applyStyle (Apply style). Call help.read for a command's parameters.",
+      "description": "Contorina styles (write). Pass command and params; commands: style.create (Create style), style.fromSelection (Create style from selection), style.update (Edit style), node.applyStyle (Apply style). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -259,7 +259,7 @@
               "style.update",
               "node.applyStyle"
             ],
-            "description": "Which Figger command to run"
+            "description": "Which Contorina command to run"
           },
           "params": {
             "type": "object",
@@ -273,7 +273,7 @@
     },
     {
       "name": "styles.destructive",
-      "description": "Figger styles (destructive). Pass command and params; commands: style.delete (Delete style). Call help.read for a command's parameters.",
+      "description": "Contorina styles (destructive). Pass command and params; commands: style.delete (Delete style). Call help.read for a command's parameters.",
       "scope": "destructive",
       "input": {
         "type": "object",
@@ -283,7 +283,7 @@
             "enum": [
               "style.delete"
             ],
-            "description": "Which Figger command to run"
+            "description": "Which Contorina command to run"
           },
           "params": {
             "type": "object",
@@ -297,7 +297,7 @@
     },
     {
       "name": "variables.write",
-      "description": "Figger variables (write). Pass command and params; commands: variable.createCollection (New variable collection), variable.addMode (Add variable mode), variable.renameMode (Rename variable mode), variable.create (Create variable), variable.set (Set variable value), variable.rename (Rename variable), node.bindVariable (Bind variable), node.setMode (Set variable mode). Call help.read for a command's parameters.",
+      "description": "Contorina variables (write). Pass command and params; commands: variable.createCollection (New variable collection), variable.addMode (Add variable mode), variable.renameMode (Rename variable mode), variable.create (Create variable), variable.set (Set variable value), variable.rename (Rename variable), node.bindVariable (Bind variable), node.setMode (Set variable mode). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -314,7 +314,7 @@
               "node.bindVariable",
               "node.setMode"
             ],
-            "description": "Which Figger command to run"
+            "description": "Which Contorina command to run"
           },
           "params": {
             "type": "object",
@@ -328,7 +328,7 @@
     },
     {
       "name": "variables.destructive",
-      "description": "Figger variables (destructive). Pass command and params; commands: variable.delete (Delete variable). Call help.read for a command's parameters.",
+      "description": "Contorina variables (destructive). Pass command and params; commands: variable.delete (Delete variable). Call help.read for a command's parameters.",
       "scope": "destructive",
       "input": {
         "type": "object",
@@ -338,7 +338,7 @@
             "enum": [
               "variable.delete"
             ],
-            "description": "Which Figger command to run"
+            "description": "Which Contorina command to run"
           },
           "params": {
             "type": "object",
@@ -352,7 +352,7 @@
     },
     {
       "name": "prototype.write",
-      "description": "Figger prototype (write). Pass command and params; commands: proto.set (Set prototype interaction), proto.setStart (Set as prototype start). Call help.read for a command's parameters.",
+      "description": "Contorina prototype (write). Pass command and params; commands: proto.set (Set prototype interaction), proto.setStart (Set as prototype start). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -363,7 +363,7 @@
               "proto.set",
               "proto.setStart"
             ],
-            "description": "Which Figger command to run"
+            "description": "Which Contorina command to run"
           },
           "params": {
             "type": "object",
@@ -377,7 +377,7 @@
     },
     {
       "name": "pages.write",
-      "description": "Figger pages (write). Pass command and params; commands: page.add (New page), page.open (Go to page), page.rename (Rename page), node.moveToPage (Move to page). Call help.read for a command's parameters.",
+      "description": "Contorina pages (write). Pass command and params; commands: page.add (New page), page.open (Go to page), page.rename (Rename page), node.moveToPage (Move to page). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -390,7 +390,7 @@
               "page.rename",
               "node.moveToPage"
             ],
-            "description": "Which Figger command to run"
+            "description": "Which Contorina command to run"
           },
           "params": {
             "type": "object",
@@ -404,7 +404,7 @@
     },
     {
       "name": "pages.destructive",
-      "description": "Figger pages (destructive). Pass command and params; commands: page.delete (Delete page). Call help.read for a command's parameters.",
+      "description": "Contorina pages (destructive). Pass command and params; commands: page.delete (Delete page). Call help.read for a command's parameters.",
       "scope": "destructive",
       "input": {
         "type": "object",
@@ -414,7 +414,7 @@
             "enum": [
               "page.delete"
             ],
-            "description": "Which Figger command to run"
+            "description": "Which Contorina command to run"
           },
           "params": {
             "type": "object",
@@ -428,7 +428,7 @@
     },
     {
       "name": "import.write",
-      "description": "Figger import (write). Pass command and params; commands: import.svg (Import SVG), import.figma (Import Figma JSON). Call help.read for a command's parameters.",
+      "description": "Contorina import (write). Pass command and params; commands: import.svg (Import SVG), import.figma (Import Figma JSON). Call help.read for a command's parameters.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -439,7 +439,7 @@
               "import.svg",
               "import.figma"
             ],
-            "description": "Which Figger command to run"
+            "description": "Which Contorina command to run"
           },
           "params": {
             "type": "object",
@@ -453,7 +453,7 @@
     },
     {
       "name": "export.read",
-      "description": "Figger export (read). Pass command and params; commands: export.code (Export code), export.avd (Export Android Vector Drawable), export.svg (Export SVG), export.png (Export PNG (2x)), export.jpg (Export JPG (2x)), export.webp (Export WebP (2x)), export.pdf (Export PDF). Call help.read for a command's parameters.",
+      "description": "Contorina export (read). Pass command and params; commands: export.code (Export code), export.avd (Export Android Vector Drawable), export.svg (Export SVG), export.png (Export PNG (2x)), export.jpg (Export JPG (2x)), export.webp (Export WebP (2x)), export.pdf (Export PDF). Call help.read for a command's parameters.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -469,7 +469,7 @@
               "export.webp",
               "export.pdf"
             ],
-            "description": "Which Figger command to run"
+            "description": "Which Contorina command to run"
           },
           "params": {
             "type": "object",
@@ -483,7 +483,7 @@
     },
     {
       "name": "select.read",
-      "description": "Figger select (read). Pass command and params; commands: select.set (Select layers), select.all (Select all), select.none (Select none), select.parent (Select parent), select.children (Select children). Call help.read for a command's parameters.",
+      "description": "Contorina select (read). Pass command and params; commands: select.set (Select layers), select.all (Select all), select.none (Select none), select.parent (Select parent), select.children (Select children). Call help.read for a command's parameters.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -497,7 +497,7 @@
               "select.parent",
               "select.children"
             ],
-            "description": "Which Figger command to run"
+            "description": "Which Contorina command to run"
           },
           "params": {
             "type": "object",
@@ -511,7 +511,7 @@
     },
     {
       "name": "view.read",
-      "description": "Figger view (read). Pass command and params; commands: view.zoomIn (Zoom in), view.zoomOut (Zoom out), view.zoom100 (Zoom to 100%), view.fit (Zoom to fit), view.fitSelection (Zoom to selection). Call help.read for a command's parameters.",
+      "description": "Contorina view (read). Pass command and params; commands: view.zoomIn (Zoom in), view.zoomOut (Zoom out), view.zoom100 (Zoom to 100%), view.fit (Zoom to fit), view.fitSelection (Zoom to selection). Call help.read for a command's parameters.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -525,7 +525,7 @@
               "view.fit",
               "view.fitSelection"
             ],
-            "description": "Which Figger command to run"
+            "description": "Which Contorina command to run"
           },
           "params": {
             "type": "object",
@@ -539,7 +539,7 @@
     },
     {
       "name": "components.read",
-      "description": "Figger components (read). Pass command and params; commands: component.goToMain (Go to main component). Call help.read for a command's parameters.",
+      "description": "Contorina components (read). Pass command and params; commands: component.goToMain (Go to main component). Call help.read for a command's parameters.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -549,7 +549,7 @@
             "enum": [
               "component.goToMain"
             ],
-            "description": "Which Figger command to run"
+            "description": "Which Contorina command to run"
           },
           "params": {
             "type": "object",
@@ -563,7 +563,7 @@
     },
     {
       "name": "file.read",
-      "description": "Figger file (read). Pass command and params; commands: doc.get (Get document). Call help.read for a command's parameters.",
+      "description": "Contorina file (read). Pass command and params; commands: doc.get (Get document). Call help.read for a command's parameters.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -573,7 +573,7 @@
             "enum": [
               "doc.get"
             ],
-            "description": "Which Figger command to run"
+            "description": "Which Contorina command to run"
           },
           "params": {
             "type": "object",
@@ -587,7 +587,7 @@
     },
     {
       "name": "file.destructive",
-      "description": "Figger file (destructive). Pass command and params; commands: doc.load (Replace document). Call help.read for a command's parameters.",
+      "description": "Contorina file (destructive). Pass command and params; commands: doc.load (Replace document). Call help.read for a command's parameters.",
       "scope": "destructive",
       "input": {
         "type": "object",
@@ -597,7 +597,7 @@
             "enum": [
               "doc.load"
             ],
-            "description": "Which Figger command to run"
+            "description": "Which Contorina command to run"
           },
           "params": {
             "type": "object",
@@ -611,14 +611,14 @@
     },
     {
       "name": "help.read",
-      "description": "List Figger commands with their parameter schemas and scopes, or describe one command.",
+      "description": "List Contorina commands with their parameter schemas and scopes, or describe one command.",
       "scope": "read",
       "input": {
         "type": "object",
         "properties": {
           "command": {
             "type": "string",
-            "description": "A Figger command id; omit to list all"
+            "description": "A Contorina command id; omit to list all"
           }
         }
       }

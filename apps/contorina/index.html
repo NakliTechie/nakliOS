@@ -3,17 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Figger</title>
+<title>Contorina</title>
 <meta name="description" content="A design tool in one HTML file: frames, auto layout, components and styles. Your files stay on your disk.">
-<meta property="og:title" content="Figger">
+<meta property="og:title" content="Contorina">
 <meta property="og:description" content="A design tool in one HTML file: frames, auto layout, components and styles. Your files stay on your disk.">
-<meta property="og:url" content="https://figger.naklitechie.com/">
+<meta property="og:url" content="https://contorina.naklitechie.com/">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary">
 <meta name="color-scheme" content="light">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230D99FF'/%3E%3Cpath d='M10 8h12v4H14v4h7v4h-7v4h-4z' fill='white'/%3E%3C/svg%3E">
 <style>
-/* Figger: Dense direction, light by default; it does not follow the system dark mode.
+/* Contorina: Dense direction, light by default; it does not follow the system dark mode.
    A NakliOS host theme overrides these tokens through applyHostTheme(). */
 :root {
   --bg: #ffffff;
@@ -201,8 +201,8 @@ pre.code.small { max-height: 40vh; margin: 0; }
 </style>
 </head>
 <body>
-<div id="app"><p class="booting">Loading Figger…</p></div>
-<noscript>Figger needs JavaScript.</noscript>
+<div id="app"><p class="booting">Loading Contorina…</p></div>
+<noscript>Contorina needs JavaScript.</noscript>
 <script>
 /* naklios-sdk:begin ver=2 sha256=86b983f977ff00364fb853f7edc51f6ef6ed9bfedfd0cc18009e128d048e74a9 */
 /*!
@@ -3833,9 +3833,9 @@ pre.code.small { max-height: 40vh; margin: 0; }
   var NUM_KEYS = ["x", "y", "w", "h", "rotation", "opacity", "strokeWidth", "fontSize", "fontWeight", "lineHeight", "letterSpacing", "minW", "maxW", "minH", "maxH", "vw", "vh", "sides", "points", "inner"];
   var finite = (v, d = 0) => typeof v === "number" && Number.isFinite(v) ? v : d;
   function validateDoc(d) {
-    if (!d || typeof d !== "object") throw new Error("Not a Figger document");
+    if (!d || typeof d !== "object") throw new Error("Not a Contorina document");
     if (!Array.isArray(d.children) || !d.nodes || typeof d.nodes !== "object") throw new Error("Document lacks children or nodes");
-    if (d.version > FORMAT_VERSION) throw new Error(`Document format ${d.version} is newer than this Figger (${FORMAT_VERSION})`);
+    if (d.version > FORMAT_VERSION) throw new Error(`Document format ${d.version} is newer than this Contorina (${FORMAT_VERSION})`);
     for (const id of d.children) if (!d.nodes[id]) throw new Error(`Missing node ${id}`);
     const nodes = {};
     for (const [id, raw] of Object.entries(d.nodes)) {
@@ -7921,7 +7921,7 @@ ${kids}${pad}</group>
       const n = doc.nodes[id];
       return walk2(id, mul(shift, n.parent ? worldMatrix(doc, n.parent) : IDENT), 1, "  ");
     }).join("");
-    const note = skipped.size ? `<!-- Figger: ${[...skipped].join(" and ")} skipped; Vector Drawables cannot hold them. -->
+    const note = skipped.size ? `<!-- Contorina: ${[...skipped].join(" and ")} skipped; Vector Drawables cannot hold them. -->
 ` : "";
     return `<?xml version="1.0" encoding="utf-8"?>
 ${note}<vector xmlns:android="http://schemas.android.com/apk/res/android"
@@ -7933,10 +7933,10 @@ ${body}</vector>
 
   // src/storage.js
   var DIR = "documents/";
-  var WORKING = "working.figger.json";
-  var LS_KEY = "figger.working";
+  var WORKING = "working.contorina.json";
+  var LS_KEY = "contorina.working";
   var nak = () => globalThis.naklios;
-  var EXT = ".figger.json";
+  var EXT = ".contorina.json";
   function safeName(name) {
     return (String(name || "Untitled").replace(/[\\/:*?"<>|\u0000-\u001f]+/g, "-").trim().slice(0, 80) || "Untitled") + EXT;
   }
@@ -7974,7 +7974,7 @@ ${body}</vector>
   function localStore() {
     let handle = null;
     const hasFSA = typeof showSaveFilePicker === "function";
-    const types = [{ description: "Figger document", accept: { "application/json": [EXT, ".json"] } }];
+    const types = [{ description: "Contorina document", accept: { "application/json": [EXT, ".json"] } }];
     return {
       kind: "local",
       label: () => "This browser",
@@ -8113,7 +8113,7 @@ ${body}</vector>
         const doc = env2.state.doc;
         const ids = p.ids && p.ids.length ? p.ids : env2.selection.length ? env2.selection : doc.children;
         const xml = toAVD(doc, ids);
-        if (!(o && o.source === "agent") && p.download !== false && typeof document !== "undefined") download(new Blob([xml], { type: "application/xml" }), (doc.name || "figger").replace(/[^\w.-]+/g, "_").toLowerCase() + ".xml");
+        if (!(o && o.source === "agent") && p.download !== false && typeof document !== "undefined") download(new Blob([xml], { type: "application/xml" }), (doc.name || "contorina").replace(/[^\w.-]+/g, "_").toLowerCase() + ".xml");
         return xml;
       }
     },
@@ -8644,7 +8644,7 @@ stream
 0000000000 65535 f 
 ${xref.map((x) => String(x).padStart(10, "0") + " 00000 n \n").join("")}`);
     push(`trailer
-<< /Size ${objs.length + 1} /Root ${catalog} 0 R /Info << /Producer (Figger) >> >>
+<< /Size ${objs.length + 1} /Root ${catalog} 0 R /Info << /Producer (Contorina) >> >>
 startxref
 ${xo}
 %%EOF
@@ -9179,7 +9179,7 @@ ${xo}
       } catch (err) {
         if (!app2.renderError) {
           app2.renderError = err;
-          console.error("[figger] render failed", err);
+          console.error("[contorina] render failed", err);
           app2.toast?.(`A layer could not be drawn: ${err.message}`, "error");
         }
       }
@@ -11100,7 +11100,7 @@ ${xo}
   }
 
   // src/ui/palette.js
-  var KEY = "figger.recent";
+  var KEY = "contorina.recent";
   var recent = () => {
     try {
       return JSON.parse(localStorage.getItem(KEY) || "[]");
@@ -11270,11 +11270,11 @@ ${xo}
     const entries = [...groups.values()].map((g) => ({
       name: g.name,
       scope: g.scope,
-      description: `Figger ${g.group.toLowerCase()} (${g.scope}). Pass command and params; commands: ${g.list.map((c) => `${c.id} (${c.label})`).join(", ")}. Call help.read for a command's parameters.`,
+      description: `Contorina ${g.group.toLowerCase()} (${g.scope}). Pass command and params; commands: ${g.list.map((c) => `${c.id} (${c.label})`).join(", ")}. Call help.read for a command's parameters.`,
       input: {
         type: "object",
         properties: {
-          command: { type: "string", enum: g.list.map((c) => c.id), description: "Which Figger command to run" },
+          command: { type: "string", enum: g.list.map((c) => c.id), description: "Which Contorina command to run" },
           params: { type: "object", description: "The command's own parameters (see help.read)" }
         },
         required: ["command"]
@@ -11282,7 +11282,7 @@ ${xo}
       commands: g.list.map((c) => c.id)
     }));
     for (const e of entries) if (!RAIL_NAMES.includes(e.name)) throw new Error(`Rail entry ${e.name} is missing from RAIL_NAMES in src/host.js`);
-    if (!groups.has("help.read")) entries.push({ name: "help.read", scope: "read", description: "List Figger commands with their parameter schemas and scopes, or describe one command.", input: { type: "object", properties: { command: { type: "string", description: "A Figger command id; omit to list all" } } }, commands: [] });
+    if (!groups.has("help.read")) entries.push({ name: "help.read", scope: "read", description: "List Contorina commands with their parameter schemas and scopes, or describe one command.", input: { type: "object", properties: { command: { type: "string", description: "A Contorina command id; omit to list all" } } }, commands: [] });
     return entries;
   }
   function railCommands(run2) {
@@ -11316,7 +11316,7 @@ ${xo}
       n.requestCapabilities?.();
       if (title) n.title(title);
     } catch (e) {
-      console.warn("[figger] NakliOS wiring failed", e);
+      console.warn("[contorina] NakliOS wiring failed", e);
     }
   }
   function applyHostTheme(t) {
@@ -11332,7 +11332,7 @@ ${xo}
 
   // src/seed.js
   function seedDoc() {
-    const tx = new Tx(emptyDoc("Welcome to Figger"));
+    const tx = new Tx(emptyDoc("Welcome to Contorina"));
     tx.setStyle("sBrand", { type: "color", name: "Brand", value: "#0D99FF" });
     tx.setStyle("sInk", { type: "color", name: "Ink", value: "#1E1E1E" });
     tx.setStyle("sTitle", { type: "text", name: "Title", fontSize: 22, fontFamily: "Inter", fontWeight: 700, lineHeight: 1.25 });
@@ -11540,7 +11540,7 @@ ${xo}
       if (clip) {
         clip.pasted = 0;
         try {
-          navigator.clipboard?.writeText(JSON.stringify({ figger: 1, ...clip }));
+          navigator.clipboard?.writeText(JSON.stringify({ contorina: 1, ...clip }));
         } catch {
         }
       }
@@ -11559,7 +11559,7 @@ ${xo}
         }
         try {
           const t = JSON.parse(text);
-          if (t && t.figger) tree = t;
+          if (t && t.contorina) tree = t;
         } catch {
         }
         if (!tree && text && await importText(text, "Pasted SVG")) return;
@@ -11629,7 +11629,7 @@ ${xo}
       group: "File",
       hidden: true,
       scope: "destructive",
-      description: "Replace the open document with a Figger document object (undoable).",
+      description: "Replace the open document with a Contorina document object (undoable).",
       params: { doc: { type: "object", required: true } },
       doc(tx, p) {
         const d = validateDoc(structuredClone(p.doc));
@@ -11757,17 +11757,17 @@ ${xo}
   );
   async function openGrant(grant, files) {
     const name = grant && grant.name || "file";
-    console.info("[figger] open grant", { name, kind: grant && grant.kind });
+    console.info("[contorina] open grant", { name, kind: grant && grant.kind });
     toast(`Opening ${name}…`);
     try {
       const f2 = await files.read(grant.token);
       const text = typeof f2 === "string" ? f2 : f2 && typeof f2.data === "string" ? f2.data : f2 && f2.bytes ? new TextDecoder().decode(f2.bytes instanceof Uint8Array ? f2.bytes : new Uint8Array(f2.bytes)) : null;
       if (text == null) throw new Error("NakliOS sent no file contents");
       const fileName = f2 && f2.name || name;
-      console.info("[figger] read", fileName, text.length, "characters");
-      if (/\.figger\.json$/i.test(fileName) || !await importText(text, fileName)) await loadText(text, fileName);
+      console.info("[contorina] read", fileName, text.length, "characters");
+      if (/\.contorina\.json$/i.test(fileName) || !await importText(text, fileName)) await loadText(text, fileName);
     } catch (err) {
-      console.error("[figger] open grant failed", err);
+      console.error("[contorina] open grant failed", err);
       toast(`Could not open ${name}: ${err.message || err}`, "error");
     } finally {
       try {
@@ -12032,7 +12032,7 @@ ${xo}
     const redoB = h("button.icon", { type: "button", title: `Redo (${keyLabel("Shift+Mod+Z")})`, "aria-label": "Redo", on: { click: () => run("edit.redo") } }, "↷");
     const zoom = h("button.zoom", { type: "button", title: "Zoom to 100% (Shift+0); Shift+1 fits", on: { click: () => run("view.zoom100") } }, "100%");
     const pal = h("button.icon", { type: "button", title: `Search commands (${keyLabel("Mod+K")})`, on: { click: () => run("palette.open") } }, `${keyLabel("Mod+K")}`);
-    bar.append(h("div.tb-left", menuBtn, h("span.brand", "Figger"), h("div.tools", { role: "toolbar", "aria-label": "Tools" }, toolBtns)), h("div.tb-mid", name), h("div.tb-right", undoB, redoB, zoom, pal));
+    bar.append(h("div.tb-left", menuBtn, h("span.brand", "Contorina"), h("div.tools", { role: "toolbar", "aria-label": "Tools" }, toolBtns)), h("div.tb-mid", name), h("div.tb-right", undoB, redoB, zoom, pal));
     subscribe((what) => {
       toolBtns.forEach((b) => b.classList.toggle("on", b.dataset.tool === state.tool));
       if (document.activeElement !== name) name.value = state.doc.name;
@@ -12170,7 +12170,7 @@ ${xo}
     buildStatus(status);
     createLayers(layers, app);
     createProps(props, app);
-    connectHost({ run: (id, p, o) => run(id, p, o), onTheme: applyHostTheme, onCapabilities: () => onCapabilities(), title: "Figger" });
+    connectHost({ run: (id, p, o) => run(id, p, o), onTheme: applyHostTheme, onCapabilities: () => onCapabilities(), title: "Contorina" });
     await waitForHostStorage(1500);
     backendKey = keyOfBackend();
     store = pickStore();
@@ -12178,7 +12178,7 @@ ${xo}
     await loadWorking();
     nextFrame(() => run("view.fit"));
     subscribe((what) => {
-      if (what.has("doc") && !what.has("preview")) document.title = `${state.doc.name} · Figger`;
+      if (what.has("doc") && !what.has("preview")) document.title = `${state.doc.name} · Contorina`;
     });
     const files = globalThis.naklios && globalThis.naklios.files;
     if (files && typeof files.onOpen === "function") files.onOpen((grant) => openGrant(grant, files));
@@ -12201,23 +12201,23 @@ ${xo}
       try {
         const text = await f2.text();
         const r = app.canvas.el.getBoundingClientRect();
-        if (!/\.figger\.json$/i.test(f2.name) && await importText(text, f2.name, app.canvas.toWorld(e.clientX - r.left, e.clientY - r.top))) return;
+        if (!/\.contorina\.json$/i.test(f2.name) && await importText(text, f2.name, app.canvas.toWorld(e.clientX - r.left, e.clientY - r.top))) return;
         await loadText(text, f2.name);
       } catch (err) {
         toast(`Could not open ${f2.name}: ${err.message}`, "error");
       }
     });
   }
-  globalThis.figger = Object.freeze({
+  globalThis.contorina = Object.freeze({
     version: VERSION,
     commands: () => manifest(),
     run: (id, params) => run(id, params || {}, { source: "agent" }),
     state: () => structuredClone({ doc: state.doc, selection: state.selection, view: state.view }),
-    help: () => "figger.commands() lists every command with its params and scope; figger.run(id, params) runs one. Person-only commands (file pickers) are refused; use doc.get and doc.load."
+    help: () => "contorina.commands() lists every command with its params and scope; contorina.run(id, params) runs one. Person-only commands (file pickers) are refused; use doc.get and doc.load."
   });
   if (hasDOM) boot().catch((e) => {
     console.error(e);
-    toast(`Figger failed to start: ${e.message}`, "error");
+    toast(`Contorina failed to start: ${e.message}`, "error");
   });
 })();
 

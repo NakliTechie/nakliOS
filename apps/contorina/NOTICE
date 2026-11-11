@@ -1,4 +1,4 @@
-Figger
+Contorina
 
 This project ports ideas and designs from FigCraft (https://github.com/storytold/figcraft),
 Copyright the ArtCraft team, licensed MIT OR Apache-2.0: the single command registry, the
@@ -13,7 +13,7 @@ The number-field behaviours (drag to scrub, Shift for precision, Ctrl to snap, t
 Backspace to reset) follow the behaviour of Blender's number fields as described by
 ppmpreetham/BUI. No code from Blender or BUI (both GPL) is used.
 
-Figger is a clean-room design tool. It uses no Figma assets, icons or proprietary format code.
+Contorina is a clean-room design tool. It uses no Figma assets, icons or proprietary format code.
 
 Bundled into index.html by the build (pinned in package-lock.json):
 - polygon-clipping 0.15.7, MIT, https://github.com/mfogel/polygon-clipping (boolean operations)

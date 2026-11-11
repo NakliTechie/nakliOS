@@ -1884,30 +1884,30 @@
       ]
     },
     {
-      "id": "figger",
-      "repo": "NakliTechie/figger",
+      "id": "contorina",
+      "repo": "NakliTechie/contorina",
       "requestedRef": "main",
-      "resolvedCommit": "d3760783a8d25ba4c43662eafc3fac278dfa563a",
+      "resolvedCommit": "66a0a2fdf54d0396fc11960ab148bd3ed50e1d63",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "2641e36e367f9f9795d752a3c97990a121b0fac8346d851f6409d5c97f19de2d",
-          "bytes": 552754,
-          "originalSourceSha256": "d61bdd70d87dc38208cae9f76c9dfa3710d2bf8df0be22e369114b4ea5ab5226",
+          "sha256": "7d3479409ba2c246a5600f3d98b475bba5c66a0ed997d828878a23811ae0c3ca",
+          "bytes": 552868,
+          "originalSourceSha256": "5556834f26f4faef0f344333efed2e14c4ab39084e04fee9464d3f147eff00d7",
           "sdkSha256": "86b983f977ff00364fb853f7edc51f6ef6ed9bfedfd0cc18009e128d048e74a9"
         },
         {
           "source": "commands.json",
           "destination": "commands.json",
-          "sha256": "2d1c4331bdf320d796f3040a239dba287970b4624e603056b4e940ceb87e0e5d",
-          "bytes": 20477
+          "sha256": "82f820e42bb36b5493a66e76357e5741d81bc2c41c2d429b82fd48f14a125883",
+          "bytes": 20618
         },
         {
           "source": "NOTICE",
           "destination": "NOTICE",
-          "sha256": "3f45808a38fbc9676fe82829fd3b3decc5c12f64b461b97df0753fcb6feb2a82",
-          "bytes": 1318
+          "sha256": "e2919a2f4ebfee9510da80cd5ffca5e1e2f84e495d49a575f9177ecdecf0093c",
+          "bytes": 1324
         }
       ]
     }

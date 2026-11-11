@@ -41,7 +41,7 @@ for (const id of ['notes', 'calendar']) {
   for (const name of names) if (!html.includes(`'${name}'`)) problems.push(`${id}: ${name} has no handler`);
 }
 
-for (const id of ['reckon', 'draft', 'kanzen', 'sheaf', 'figger']) {
+for (const id of ['reckon', 'draft', 'kanzen', 'sheaf', 'contorina']) {
   const manifest = manifestOf(id);
   const html = read(`apps/${id}/index.html`);
   for (const { name } of manifest.commands) if (!html.includes(name)) problems.push(`${id}: ${name} has no handler in the mirror`);
