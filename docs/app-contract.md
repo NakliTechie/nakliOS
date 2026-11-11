@@ -66,8 +66,19 @@ never a hand-edit:
    no cross-repo tokens — freshness lands within a day, not on the same push.
 
 The nakliOS repo runs `scripts/check-vendored-sdk.mjs` as a fleet drift report across
-every vendoring app. An app that keeps its **own** protocol-compatible SDK (not the
-canonical file) shows as `BESPOKE` there until it's converted to vendor canonical.
+every vendoring app.
+
+**Rule: one SDK, the canonical one.** An app reaches the host only through
+`sdk/naklios.js`, unedited. You can load it with `<script src>`, ship it as a file the
+mirror refreshes, or inline it between the markers above. An app does not define its own
+`window.naklios`, does not patch a copy, and does not post `naklios:*` messages by hand. A
+private copy misses every later host change. Draft and Reckon kept their own copies and
+missed the 2026-11-10 change that keeps a file call alive while the host shows a storage
+prompt. If an app needs something the SDK lacks, add it to `sdk/naklios.js`, so every app
+gets it. The gate enforces the rule for mirrored apps: `scripts/test-sdk-canonical-only.mjs`
+fails when a mirrored file defines `window.naklios` or posts a `naklios:*` message outside
+the canonical code. The only exceptions are listed apps still waiting to be converted, and
+the test fails once a listed app is clean, so the list only shrinks.
 
 Full record and rollout status: `plan/sdk-vendoring.md`.
 
