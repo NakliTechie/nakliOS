@@ -9112,6 +9112,26 @@ window.addEventListener('message', async e => {
     });
   } else if (msg.type === 'naklios:open-settings'){
     openSettings(typeof msg.section === 'string' ? msg.section : 'storage');
+  } else if (msg.type === 'naklios:browser:open'){
+    // An app asks to open a web address in the Browser window. The person answers first, because the
+    // window shows the site with their Chrome sign-in.
+    const reply = { type:'naklios:browser:reply', requestId:msg.requestId };
+    try {
+      const appId = getAppId();
+      if (!appId) throw new Error('Unknown app');
+      const app = APPS.find(a => a.id === appId);
+      let target;
+      try { target = new URL(String(msg.url || '')); } catch(_) { throw new Error('Not a web address'); }
+      if (target.protocol !== 'https:' && target.protocol !== 'http:') throw new Error('Not a web address');
+      fsWaitNotice(e.source, msg.requestId, replyTo)?.();
+      const ok = await nakliosConfirm(`${app?.name || appId} wants to open ${target.hostname} in the Browser, with your Chrome sign-in for that site.`,
+        { title:'Open in Browser?', okLabel:'Open', cancelLabel:'Cancel' });
+      if (!ok) reply.result = false;
+      else { const r = await openBrowserWindow({ url: target.href }); reply.result = !!r?.ok; }
+    } catch (err){
+      reply.error = String(err?.message || err);
+    }
+    try { e.source.postMessage(reply, replyTo); } catch(_){}
   } else if (typeof msg.type === 'string' && msg.type.startsWith('naklios:file:')){
     const reply = { type:'naklios:file:reply', requestId:msg.requestId };
     try {
@@ -9274,6 +9294,35 @@ function recordRecent(appId){
 
 // The Browser window (sys/browser/window.mjs). options.url opens that address; History keeps the host only.
 let _browserMod = null;
+// Settings → Browser: whether the companion extension is installed, and the sites it may reach.
+async function renderBrowserSettings(el){
+  if (!el) return;
+  if (!_browserMod) _browserMod = await import('./sys/browser/window.mjs');
+  const info = await _browserMod.browserSettings();
+  if (!el.isConnected) return;
+  el.textContent = '';
+  if (!info.installed){ el.textContent = _browserMod.EXTENSION_HELP; return; }
+  const head = document.createElement('div');
+  head.textContent = `Extension ${info.version} installed. ${info.sites.length ? 'Sites it may open signed in:' : 'No site granted yet; the Browser asks the first time you open one.'}`;
+  el.appendChild(head);
+  for (const pattern of info.sites){
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-top:4px';
+    const name = document.createElement('span');
+    name.textContent = pattern.replace(/^https?:\/\//, '').replace(/\/\*$/, '');
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'nw-fs-btn'; btn.textContent = 'Remove';
+    btn.onclick = async () => { await info.forget(pattern); renderBrowserSettings(el); };
+    row.append(name, btn);
+    el.appendChild(row);
+  }
+}
+function browserControl(op){
+  const b = openWindows.browser?._browser;
+  if (!b) throw new Error('The Browser window is not open');
+  b[op]();
+  return b.state();
+}
 async function openBrowserWindow(options = {}){
   if (!_browserMod) _browserMod = await import('./sys/browser/window.mjs');
   return _browserMod.openBrowser({
@@ -10556,6 +10605,8 @@ function openSettings(section){
     <div class="nw-fs-blurb">
       One library for Anvil, Dish and Pi: <code>skills/&lt;name&gt;/SKILL.md</code> in your storage. Agents see a skill only when it is active and passes the safety scan; a skill an agent proposes waits here until you activate it.
     </div>
+    <h4 id="settings-browser-heading" tabindex="-1">Browser</h4>
+    <div id="settings-browser" class="nw-fs-blurb">Checking for the Browser extension…</div>
     <h4 id="settings-apps-heading" tabindex="-1">Apps</h4>
     ${installedAppsHTML}
     <button class="nw-fs-btn-primary" id="third-party-add" type="button">＋ Add app from manifest…</button>
@@ -10572,6 +10623,7 @@ function openSettings(section){
     <button class="nw-fs-btn-primary" id="replay-tour" type="button" style="margin-top:12px;">↻ Replay welcome tour</button>
   `;
   root.appendChild(wrap);
+  renderBrowserSettings(wrap.querySelector('#settings-browser'));
   setTimeout(() => {
     if (requestedSection) focusSettingsSection(requestedSection);
     else wrap.focus();
@@ -13937,6 +13989,11 @@ const hostAgentReady = import('./sys/host/agent.mjs').then(({ attachHostAgent })
     openAssistant, closeAssistant, askAssistant, listenAssistant, stopListeningAssistant, stopAssistant,
     setAssistantHandsFree, assistantState, loadAssistantModel, setAssistantWebLookups, setAssistantPageProxy,
     texEngines, texCompile, texCancel, texCache, texClearCache,
+    browserOpen: url => openBrowserWindow({ url }),
+    browserBack: () => browserControl('back'),
+    browserForward: () => browserControl('forward'),
+    browserReload: () => browserControl('reload'),
+    browserState: () => openWindows.browser?._browser?.state() || { open:false },
   },
 }));
 hostAgentReady.catch(error => console.error('Desktop agent interface could not load', error));
