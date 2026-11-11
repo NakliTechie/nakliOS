@@ -1,0 +1,686 @@
+{
+  "accepts": [
+    {
+      "action": "import",
+      "label": "Open in Paginella",
+      "extensions": [
+        ".naklidoc"
+      ],
+      "mime": [
+        "application/zip"
+      ]
+    },
+    {
+      "action": "import",
+      "label": "Place in Paginella",
+      "extensions": [
+        ".md",
+        ".txt",
+        ".draft.json"
+      ],
+      "mime": [
+        "text/markdown",
+        "text/plain",
+        "application/json"
+      ]
+    },
+    {
+      "action": "import",
+      "label": "Place image in Paginella",
+      "extensions": [
+        ".jpg",
+        ".jpeg",
+        ".png",
+        ".webp",
+        ".svg"
+      ],
+      "mime": [
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "image/svg+xml"
+      ]
+    }
+  ],
+  "commands": [
+    {
+      "name": "file.destructive",
+      "description": "Paginella file (destructive). Pass command and params; commands: file.new (New document), file.open-doc (Open document by id), file.load (Load .naklidoc data), file.close (Close document). Call help.read for a command's parameters.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "file.new",
+              "file.open-doc",
+              "file.load",
+              "file.close"
+            ],
+            "description": "Which Paginella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "file.read",
+      "description": "Paginella file (read). Pass command and params; commands: file.list (List documents), file.download (Download .naklidoc), links.list (Links), font.list (List fonts). Call help.read for a command's parameters.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "file.list",
+              "file.download",
+              "links.list",
+              "font.list"
+            ],
+            "description": "Which Paginella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "file.write",
+      "description": "Paginella file (write). Pass command and params; commands: file.save (Save), file.save-as (Save as), file.place-data (Place image data), file.package (Package), links.relink-data (Relink image data), font.add-data (Add font data). Call help.read for a command's parameters.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "file.save",
+              "file.save-as",
+              "file.place-data",
+              "file.package",
+              "links.relink-data",
+              "font.add-data"
+            ],
+            "description": "Which Paginella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "export.read",
+      "description": "Paginella export (read). Pass command and params; commands: export.pdf (Export PDF), export.png (Export page as PNG), export.sheaf (Open PDF in Sheaf). Call help.read for a command's parameters.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "export.pdf",
+              "export.png",
+              "export.sheaf"
+            ],
+            "description": "Which Paginella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "export.write",
+      "description": "Paginella export (write). Pass command and params; commands: export.profile-data (Set CMYK output profile data). Call help.read for a command's parameters.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "export.profile-data"
+            ],
+            "description": "Which Paginella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "document.read",
+      "description": "Paginella document (read). Pass command and params; commands: doc.outline (Read document outline), doc.read (Read document JSON), doc.preflight (Preflight), doc.history (Read undo history). Call help.read for a command's parameters.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "doc.outline",
+              "doc.read",
+              "doc.preflight",
+              "doc.history"
+            ],
+            "description": "Which Paginella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "document.write",
+      "description": "Paginella document (write). Pass command and params; commands: doc.setup (Document setup). Call help.read for a command's parameters.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "doc.setup"
+            ],
+            "description": "Which Paginella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "edit.write",
+      "description": "Paginella edit (write). Pass command and params; commands: edit.undo (Undo), edit.redo (Redo), edit.paste (Paste), edit.duplicate (Duplicate), text.replace (Change text). Call help.read for a command's parameters.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "edit.undo",
+              "edit.redo",
+              "edit.paste",
+              "edit.duplicate",
+              "text.replace"
+            ],
+            "description": "Which Paginella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "edit.destructive",
+      "description": "Paginella edit (destructive). Pass command and params; commands: edit.cut (Cut), edit.delete (Delete). Call help.read for a command's parameters.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "edit.cut",
+              "edit.delete"
+            ],
+            "description": "Which Paginella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "edit.read",
+      "description": "Paginella edit (read). Pass command and params; commands: edit.copy (Copy), edit.select-all (Select all on page), edit.deselect (Deselect), select.set (Select frames), edit.find (Find and change), text.find (Find text). Call help.read for a command's parameters.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "edit.copy",
+              "edit.select-all",
+              "edit.deselect",
+              "select.set",
+              "edit.find",
+              "text.find"
+            ],
+            "description": "Which Paginella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "pages.write",
+      "description": "Paginella pages (write). Pass command and params; commands: page.add (Add page), page.duplicate (Duplicate page), page.move (Move page), page.apply-master (Apply master), section.set (Numbering and section), master.new (New master), master.rename (Rename master), master.override (Override master item). Call help.read for a command's parameters.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "page.add",
+              "page.duplicate",
+              "page.move",
+              "page.apply-master",
+              "section.set",
+              "master.new",
+              "master.rename",
+              "master.override"
+            ],
+            "description": "Which Paginella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "pages.destructive",
+      "description": "Paginella pages (destructive). Pass command and params; commands: page.delete (Delete page), section.remove (Remove section start), master.delete (Delete master). Call help.read for a command's parameters.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "page.delete",
+              "section.remove",
+              "master.delete"
+            ],
+            "description": "Which Paginella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "pages.read",
+      "description": "Paginella pages (read). Pass command and params; commands: page.go (Go to page), page.next (Next page), page.prev (Previous page), master.edit (Edit master). Call help.read for a command's parameters.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "page.go",
+              "page.next",
+              "page.prev",
+              "master.edit"
+            ],
+            "description": "Which Paginella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "object.write",
+      "description": "Paginella object (write). Pass command and params; commands: frame.text (Text frame), frame.rect (Rectangle), frame.ellipse (Ellipse), frame.line (Line), frame.image (Image frame), frame.update (Frame options), frame.link (Thread text frames), frame.unlink (Break thread after frame), frame.autoflow (Autoflow story), frame.align (Align), frame.distribute (Distribute), frame.group (Group), frame.ungroup (Ungroup), frame.lock (Lock or unlock), frame.front (Bring to front), frame.back (Send to back), frame.fit (Fit image). Call help.read for a command's parameters.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "frame.text",
+              "frame.rect",
+              "frame.ellipse",
+              "frame.line",
+              "frame.image",
+              "frame.update",
+              "frame.link",
+              "frame.unlink",
+              "frame.autoflow",
+              "frame.align",
+              "frame.distribute",
+              "frame.group",
+              "frame.ungroup",
+              "frame.lock",
+              "frame.front",
+              "frame.back",
+              "frame.fit"
+            ],
+            "description": "Which Paginella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "type.read",
+      "description": "Paginella type (read). Pass command and params; commands: text.read (Read story text), text.edit (Edit story), text.glyphs (Glyphs), style.list (List styles). Call help.read for a command's parameters.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "text.read",
+              "text.edit",
+              "text.glyphs",
+              "style.list"
+            ],
+            "description": "Which Paginella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "type.write",
+      "description": "Paginella type (write). Pass command and params; commands: text.set (Set story text), text.append (Append paragraphs), text.para-style (Apply paragraph style), text.char-style (Apply character style), text.char-format (Character overrides), text.para-format (Paragraph overrides), text.insert-var (Insert variable), text.clear-overrides (Clear overrides), style.para-set (Paragraph style), style.char-set (Character style). Call help.read for a command's parameters.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "text.set",
+              "text.append",
+              "text.para-style",
+              "text.char-style",
+              "text.char-format",
+              "text.para-format",
+              "text.insert-var",
+              "text.clear-overrides",
+              "style.para-set",
+              "style.char-set"
+            ],
+            "description": "Which Paginella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "type.destructive",
+      "description": "Paginella type (destructive). Pass command and params; commands: style.para-delete (Delete paragraph style), style.char-delete (Delete character style). Call help.read for a command's parameters.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "style.para-delete",
+              "style.char-delete"
+            ],
+            "description": "Which Paginella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "swatches.write",
+      "description": "Paginella swatches (write). Pass command and params; commands: swatch.set (Swatch), swatch.palette (Add Rangrez palette). Call help.read for a command's parameters.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "swatch.set",
+              "swatch.palette"
+            ],
+            "description": "Which Paginella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "swatches.destructive",
+      "description": "Paginella swatches (destructive). Pass command and params; commands: swatch.delete (Delete swatch). Call help.read for a command's parameters.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "swatch.delete"
+            ],
+            "description": "Which Paginella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "swatches.read",
+      "description": "Paginella swatches (read). Pass command and params; commands: swatch.palettes (List palettes). Call help.read for a command's parameters.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "swatch.palettes"
+            ],
+            "description": "Which Paginella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "view.read",
+      "description": "Paginella view (read). Pass command and params; commands: view.zoom-in (Zoom in), view.zoom-out (Zoom out), view.fit (Fit page), view.actual (Actual size), view.toggle (Show or hide), view.preview (Preview mode). Call help.read for a command's parameters.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "view.zoom-in",
+              "view.zoom-out",
+              "view.fit",
+              "view.actual",
+              "view.toggle",
+              "view.preview"
+            ],
+            "description": "Which Paginella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "view.write",
+      "description": "Paginella view (write). Pass command and params; commands: guide.add (Add guide). Call help.read for a command's parameters.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "guide.add"
+            ],
+            "description": "Which Paginella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "view.destructive",
+      "description": "Paginella view (destructive). Pass command and params; commands: guide.clear (Clear guides). Call help.read for a command's parameters.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "guide.clear"
+            ],
+            "description": "Which Paginella command to run"
+          },
+          "params": {
+            "type": "object",
+            "description": "The command's own parameters (see help.read)"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "help.read",
+      "description": "List Paginella commands with their parameter schemas and scopes, or describe one command. Start with doc.outline (document.read) to see pages, frames and stories.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "description": "A Paginella command id; omit to list all"
+          }
+        }
+      }
+    }
+  ]
+}

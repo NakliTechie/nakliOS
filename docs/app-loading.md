@@ -97,7 +97,9 @@ least once. Check them before opening the mirror pull request.
    needs no detection code of its own.
 2. **An accepts action is `edit` or `import`, nothing else.** Atelier declared `"open"`, and the host
    rejected its whole Files declaration (`parseAccepts` in `sys/host/file-targets.mjs`). Use `import` when
-   the app works on a copy and `edit` when it writes back to the person's file.
+   the app works on a copy and `edit` when it writes back to the person's file. Each extension is one dot and
+   up to 12 letters or digits (`.png`, never `.draft.json`): the host compares only a file's last extension,
+   and one bad entry makes it refuse the app's whole list (Paginella, 2026-11-12).
 3. **Save through `naklios.fs.autosave({ save })`.** A direct `naklios.fs.write` on each change fails
    acceptance item 3, because nothing saves on hide or close.
 4. **No native dialogs, including in vendored code.** Emscripten glue calls `alert()` on unsupported

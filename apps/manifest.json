@@ -1568,6 +1568,26 @@
           "destination": "vendor/tessella/vendor/libraw-wasm/worker.js"
         }
       ]
+    },
+    {
+      "id": "paginella",
+      "repo": "NakliTechie/paginella",
+      "ref": "main",
+      "files": [
+        {
+          "source": "index.html",
+          "destination": "index.html",
+          "managedSdk": "inline"
+        },
+        {
+          "source": "commands.json",
+          "destination": "commands.json"
+        },
+        {
+          "source": "LICENSE",
+          "destination": "LICENSE"
+        }
+      ]
     }
   ]
 }

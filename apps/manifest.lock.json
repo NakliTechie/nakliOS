@@ -2308,6 +2308,34 @@
           "bytes": 69537
         }
       ]
+    },
+    {
+      "id": "paginella",
+      "repo": "NakliTechie/paginella",
+      "requestedRef": "main",
+      "resolvedCommit": "4117a468a6b1ae33ce58fa285180d62aaf562799",
+      "files": [
+        {
+          "source": "index.html",
+          "destination": "index.html",
+          "sha256": "ed742928dd16f0a3909ae429405748f3bc717cb662006fccc7fbafd28ab7fbef",
+          "bytes": 4390237,
+          "originalSourceSha256": "ebd86e3ac4a70ee63e2a9ceaf8262958572da8b325e79f139c94623504f75551",
+          "sdkSha256": "6e19a30f5e07c94b4089c617a3e21c6525717444880ddfbebc4e81e2ab5e6acc"
+        },
+        {
+          "source": "commands.json",
+          "destination": "commands.json",
+          "sha256": "1c5fefb9bd1e844d2daec6879744681caaa25e4ac00840f948143fffc240bf0d",
+          "bytes": 21513
+        },
+        {
+          "source": "LICENSE",
+          "destination": "LICENSE",
+          "sha256": "8d5bf298355c136fb57eac95af829c4cc06a8e144cb3f08dc9f6aa5f8a7356ad",
+          "bytes": 1071
+        }
+      ]
     }
   ]
 }
