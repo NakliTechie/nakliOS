@@ -1298,6 +1298,10 @@
         {
           "source": "NOTICE",
           "destination": "NOTICE"
+        },
+        {
+          "source": "LICENSE",
+          "destination": "LICENSE"
         }
       ]
     }
