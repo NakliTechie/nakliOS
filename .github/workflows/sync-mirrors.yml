@@ -36,6 +36,11 @@ jobs:
       - name: Verify mirror lock and artifact hashes
         run: node scripts/validate-mirrors.mjs
 
+      # A sync PR is opened with the workflow token, so test.yml does not run on it; this is the
+      # only gate that sees a source app switch to a private SDK before its mirror is proposed.
+      - name: Verify mirrored apps use only the canonical SDK
+        run: node scripts/test-sdk-canonical-only.mjs
+
       - name: Create pull request if anything changed
         uses: peter-evans/create-pull-request@v8
         with:
