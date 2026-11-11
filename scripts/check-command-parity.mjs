@@ -41,12 +41,18 @@ for (const id of ['notes', 'calendar']) {
   for (const name of names) if (!html.includes(`'${name}'`)) problems.push(`${id}: ${name} has no handler`);
 }
 
-for (const id of ['reckon', 'draft', 'kanzen', 'sheaf', 'contorina']) {
+// Every mirrored app that ships a commands.json: read from apps/manifest.json, so a new mirror is
+// checked without an edit here.
+const mirrored = JSON.parse(read('apps/manifest.json')).apps
+  .filter(app => app.files.some(f => f.destination === 'commands.json')).map(app => app.id);
+const mirrorFiles = Object.fromEntries(JSON.parse(read('apps/manifest.json')).apps.map(app => [app.id, app.files.map(f => f.destination)]));
+for (const id of mirrored) {
   const manifest = manifestOf(id);
-  const html = read(`apps/${id}/index.html`);
+  // A multi-file app keeps its handlers in its modules, so read every mirrored page and script.
+  const html = mirrorFiles[id].filter(f => /\.(?:html?|m?js)$/i.test(f)).map(f => read(`apps/${id}/${f}`)).join('\n');
   for (const { name } of manifest.commands) if (!html.includes(name)) problems.push(`${id}: ${name} has no handler in the mirror`);
 }
 
 assert.deepEqual(controlIds('<button class="a" id="x">X</button><div id="y"></div><input id="z">'), ['x', 'z']);
 if (problems.length) { console.error(problems.join('\n')); process.exit(1); }
-console.log('command parity: every Notes and Calendar control is accounted for, and all seven manifests are valid: PASS');
+console.log(`command parity: every Notes and Calendar control is accounted for, and ${mirrored.length + 2} manifests are valid (${mirrored.join(', ')}): PASS`);

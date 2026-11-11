@@ -1304,6 +1304,30 @@
           "destination": "LICENSE"
         }
       ]
+    },
+    {
+      "id": "ductella",
+      "repo": "NakliTechie/ductella",
+      "ref": "main",
+      "files": [
+        {
+          "source": "index.html",
+          "destination": "index.html",
+          "managedSdk": "inline"
+        },
+        {
+          "source": "commands.json",
+          "destination": "commands.json"
+        },
+        {
+          "source": "social.png",
+          "destination": "social.png"
+        },
+        {
+          "source": "LICENSE",
+          "destination": "LICENSE"
+        }
+      ]
     }
   ]
 }

@@ -1892,10 +1892,10 @@
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "183eb1d21097457067f9bf9096dd6be74b29bb8009802f5ed2e69f4e4ba9f3e0",
-          "bytes": 552920,
+          "sha256": "6dd42dc1c4dea07b29f92b42bf7f9966ecd0022a55193fd7417cc28a9c76c5df",
+          "bytes": 553755,
           "originalSourceSha256": "d1da3aa445930dcaba67c4b338daa95b168bc48607d07e556f74345fd4aaeb52",
-          "sdkSha256": "86b983f977ff00364fb853f7edc51f6ef6ed9bfedfd0cc18009e128d048e74a9"
+          "sdkSha256": "6e19a30f5e07c94b4089c617a3e21c6525717444880ddfbebc4e81e2ab5e6acc"
         },
         {
           "source": "commands.json",
@@ -1908,6 +1908,40 @@
           "destination": "NOTICE",
           "sha256": "e2919a2f4ebfee9510da80cd5ffca5e1e2f84e495d49a575f9177ecdecf0093c",
           "bytes": 1324
+        },
+        {
+          "source": "LICENSE",
+          "destination": "LICENSE",
+          "sha256": "bf28226d38739f9e44b49af4c9365109c2d0c360e4a40de9dc2b1ca591b46276",
+          "bytes": 1138
+        }
+      ]
+    },
+    {
+      "id": "ductella",
+      "repo": "NakliTechie/ductella",
+      "requestedRef": "main",
+      "resolvedCommit": "a5cf9269a29eab0076243c0859279fc6b2f244cb",
+      "files": [
+        {
+          "source": "index.html",
+          "destination": "index.html",
+          "sha256": "d9f88e43cc78c17c49bde0f61fa877c77c2c57a6db963458e71438040a022212",
+          "bytes": 1456187,
+          "originalSourceSha256": "ac609b38a33acd0ba741db1666122ffa4bff009061c0b8234a64864beddd1dc6",
+          "sdkSha256": "6e19a30f5e07c94b4089c617a3e21c6525717444880ddfbebc4e81e2ab5e6acc"
+        },
+        {
+          "source": "commands.json",
+          "destination": "commands.json",
+          "sha256": "9786ae52edfa3d880c6099787eae7b95d07815b58145fce2fc4ba458153e8eb4",
+          "bytes": 23491
+        },
+        {
+          "source": "social.png",
+          "destination": "social.png",
+          "sha256": "556d6d25091927af2ef8919745550081598c8e0e8c8d8d406439f48bfa989ac4",
+          "bytes": 185026
         },
         {
           "source": "LICENSE",

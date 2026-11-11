@@ -48,7 +48,11 @@ for(const app of mirrorManifest.apps)for(const file of app.files.filter(f=>f.man
   copy.send('https://naklios.dev',{type:'naklios:capabilities',fs:true});assert.equal(copy.api.capabilities.fs,true);
   managedCopies++;
 }
-assert.equal(managedCopies,8,'every declared hosted SDK copy is exercised');
+// Count from the manifest, so a newly mirrored app needs no edit here; the floor catches a manifest
+// that silently loses its managed copies.
+const declaredCopies=mirrorManifest.apps.reduce((n,app)=>n+app.files.filter(f=>f.managedSdk).length,0);
+assert.equal(managedCopies,declaredCopies,'every declared hosted SDK copy is exercised');
+assert.ok(declaredCopies>=8,'the manifest still declares the hosted SDK copies it had on 2026-11-12');
 const alone=sdkFrame({hosted:false});
 alone.send('https://naklios.dev',{type:'naklios:capabilities',fs:true});
 assert.equal(alone.api.capabilities.fs,false,'standalone query flags do not create host authority');
