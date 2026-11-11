@@ -1921,14 +1921,14 @@
       "id": "ductella",
       "repo": "NakliTechie/ductella",
       "requestedRef": "main",
-      "resolvedCommit": "a5cf9269a29eab0076243c0859279fc6b2f244cb",
+      "resolvedCommit": "118be4d1071a341559221495ff5d1788a6c94013",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "d9f88e43cc78c17c49bde0f61fa877c77c2c57a6db963458e71438040a022212",
-          "bytes": 1456187,
-          "originalSourceSha256": "ac609b38a33acd0ba741db1666122ffa4bff009061c0b8234a64864beddd1dc6",
+          "sha256": "df8124afee91884197e4288f0d93165cf76fac5375969206403bc99cb5392aa6",
+          "bytes": 1456259,
+          "originalSourceSha256": "67fd6508fca1bae57fb3ec98436a78d5a26bca702d1e93d35289f1c9b46fb65b",
           "sdkSha256": "6e19a30f5e07c94b4089c617a3e21c6525717444880ddfbebc4e81e2ab5e6acc"
         },
         {
