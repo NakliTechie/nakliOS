@@ -36,6 +36,12 @@ function splitSettings(all) {
   return { develop, objects };
 }
 
+// The last document or photo opened or saved, so a reopened window returns to the person's work.
+export const STATE_FILE = '.atelier-state.json';
+async function remember(s, path) {
+  try { await s.write(STATE_FILE, new TextEncoder().encode(JSON.stringify({ format: 'atelier-state', version: 1, last: path, at: new Date().toISOString() }) + '\n')); } catch { /* best effort */ }
+}
+
 export function register(bus, ctx) {
   const ranges = (() => {
     const p = bus.manifest.tools.find((t) => t.name === 'set_develop')?.inputSchema.properties.params.properties || {};
@@ -91,7 +97,7 @@ const singleRaw = (d) => {
     if (!(await s.exists(a.path))) fail('invalid', `no file ${a.path} in the workspace`, 'fix_argument', 'list_folder');
     if (e === 'atelier') {
       if (a.asLayer) fail('unsupported', 'a saved document opens as a document, not as a layer', 'fix_argument', 'open_photo');
-      return loadDocument(s, a.path);
+      const loaded = await loadDocument(s, a.path); await remember(s, a.path); return loaded;
     }
     if (['tif', 'tiff', 'psd'].includes(e)) {
       const bytes = await s.readBinary(a.path);
@@ -130,6 +136,7 @@ const singleRaw = (d) => {
       await ctx.sync();
     }
     ctx.activePhoto = a.path;
+    if (!a.asLayer) await remember(s, a.path);
     return { document: summary(ctx.store.doc), layer: layerRow(layer), sidecar: side.exists, ...cull };
   });
 
@@ -179,6 +186,7 @@ const singleRaw = (d) => {
       const photo = d.photo?.path === raw.file ? d.photo : null;
       const out = photo ? applyCull(next, photo) : next;
       await writeSidecar(s, raw.file, out);
+      await remember(s, raw.file);
       return { kind: 'sidecar', path: sidecarPath(raw.file), develop: out.develop, objects: STRUCT.filter((k) => out[k]), rating: out.rating ?? 0, flag: out.flag ?? 'none', label: out.label ?? 'none' };
     }
     if (a.path && !a.path.endsWith('.atelier')) fail('invalid', 'a document path ends with .atelier', 'fix_argument', 'save_document');
@@ -205,6 +213,7 @@ const singleRaw = (d) => {
     const body = json({ format: 'atelier-document', version: 1, savedAt: new Date().toISOString(), document: structuredClone(d), buffers, editList: ctx.bus?.state.editList ?? [] });
     await s.write(path, body);
     d.savedPaths = [...new Set([...(d.savedPaths || []), path])];
+    await remember(s, path);
     return { kind: 'document', path, buffers: Object.keys(buffers).length, bytes: body.length };
   }
 

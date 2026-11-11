@@ -2,6 +2,7 @@
 // window.atelier.tools, navigator.modelContext, the NakliOS rail), plus the NakliOS lifecycle
 // (spec 002 §9.2). naklios.* is called here and in the durability adapter (src/autosave.js) only.
 
+import { STATE_FILE } from './handlers/files.js';
 import { createBus } from './bus.js';
 import { registerAll } from './handlers/index.js';
 import { runStaged } from './handlers/util.js';
@@ -49,6 +50,7 @@ const ctx = {
     await durability?.storageChanged();
     mounted?.refreshFolder().catch(() => {});
     mounted?.render();
+    if (booted) await restoreLast();
     return storage;
   },
   onStaged: () => mounted?.render(),
@@ -80,11 +82,27 @@ async function grantFolder() {
   try { ctx.folder = await window.showDirectoryPicker({ mode: 'readwrite' }); await ctx.pickStorage(); } catch { /* the person cancelled */ }
 }
 
+// Reopen the last document or photo when a window starts (or storage first becomes available) with nothing open.
+let booted = false; let restoring = false;
+async function restoreLast() {
+  if (restoring || store.doc || !storage || !engine) return;
+  restoring = true;
+  try {
+    if (!(await storage.exists(STATE_FILE))) return;
+    const last = JSON.parse(await storage.readText(STATE_FILE))?.last;
+    if (typeof last !== 'string' || !(await storage.exists(last))) return;
+    const r = await bus.dispatch('open_photo', { path: last }, { door: 'ui', caller: 'restore' });
+    if (r.status !== 'ok') console.warn('[atelier] could not reopen', last, r.error?.message);
+  } catch (e) { console.warn('[atelier] restore failed', e); } finally { restoring = false; }
+}
+
 mounted = mountUI({ bus, ctx, manifest, engineError, grantFolder, runStaged: (id) => runStaged(ctx, id), hostCaps });
 const { ui } = mounted;
 durability = createDurability({ naklios, bus, ctx, dialogs: ui.dialogs, notice: (t, a) => ui.notice(t, a), onState: (s, info) => ui.saveState(s, info) });
 await ctx.pickStorage().catch((e) => { console.warn('[atelier] storage unavailable', e); });
 await durability.start();
+booted = true;
+await restoreLast();
 
 window.atelier = {
   manifest,

@@ -1955,7 +1955,7 @@
       "id": "atelier",
       "repo": "NakliTechie/atelier",
       "requestedRef": "main",
-      "resolvedCommit": "ad2503965e75e55e25a0e59b92573f0439f7fc91",
+      "resolvedCommit": "8bb9bdcc3276f03f2d7e2a3a7adfc2f556326572",
       "files": [
         {
           "source": "LICENSE",
@@ -1986,8 +1986,8 @@
         {
           "source": "src/app.js",
           "destination": "src/app.js",
-          "sha256": "23ee07f77e72a957f39a4ac5db7119733dedc28ca073697d0f0150343987895d",
-          "bytes": 8871
+          "sha256": "938437d502b34e6bc985effe9ff013149fa1087fc2934139c980f936ec69ae17",
+          "bytes": 9761
         },
         {
           "source": "src/autosave.js",
@@ -2064,8 +2064,8 @@
         {
           "source": "src/handlers/files.js",
           "destination": "src/handlers/files.js",
-          "sha256": "9efb2ca42ebbb4fbee16ff875f14743a69f8f086bded919e169d61820de40f42",
-          "bytes": 36794
+          "sha256": "26f4156c03d4ab034750ce75d6b4dd70226f1ef06bc141e5d8d6cd541ce71ada",
+          "bytes": 37343
         },
         {
           "source": "src/handlers/index.js",
