@@ -48,7 +48,7 @@ for(const app of mirrorManifest.apps)for(const file of app.files.filter(f=>f.man
   copy.send('https://naklios.dev',{type:'naklios:capabilities',fs:true});assert.equal(copy.api.capabilities.fs,true);
   managedCopies++;
 }
-assert.equal(managedCopies,7,'every declared hosted SDK copy is exercised');
+assert.equal(managedCopies,8,'every declared hosted SDK copy is exercised');
 const alone=sdkFrame({hosted:false});
 alone.send('https://naklios.dev',{type:'naklios:capabilities',fs:true});
 assert.equal(alone.api.capabilities.fs,false,'standalone query flags do not create host authority');
