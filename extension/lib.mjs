@@ -112,13 +112,14 @@ export function buildSessionRules(tabId, desktopHost, { nested = false } = {}) {
     },
   }];
   if (nested) {
-    // NakliOS inside the NakliOS Browser: the inner desktop at naklios.dev opens its own app frames,
-    // whose initiator is naklios.dev, so the main rule's exclusion would leave them refused.
+    // NakliOS inside the NakliOS Browser: the inner desktop opens its own app frames, whose initiator is
+    // the desktop's host, so the main rule's exclusion would leave them refused. It lives only while a
+    // window that shows the desktop is open (background.js tracks that per window).
     rules.push({
       id: nestId,
       priority: 1,
       action: strip,
-      condition: { tabIds: [tabId], resourceTypes: ['sub_frame'], requestDomains: ['naklios.dev'] },
+      condition: { tabIds: [tabId], resourceTypes: ['sub_frame'], requestDomains: [desktopHost] },
     });
   }
   return rules;

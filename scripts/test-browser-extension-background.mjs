@@ -137,6 +137,18 @@ await Promise.all(chrome.webNavigation.onCommitted.fire({ tabId: 7, frameId: 11,
 await Promise.all(chrome.webNavigation.onErrorOccurred.fire({ tabId: 7, frameId: 11, parentFrameId: 5, url: 'https://accounts.google.com/ServiceLogin?continue=x' }));
 assert.equal(popups.length, 1, 'a redirect to a sign-in page opens one popup, not two');
 
+// The nested demo: opening the desktop's own host adds the second rule for that window only.
+await external({ type: 'nakli-browser:closed', windowId: 'browser' }, desktop);
+await external({ type: 'nakli-browser:open', url: 'https://github.com/', windowId: 'browser' }, desktop);
+assert.equal(rules.filter(r => r.condition.tabIds[0] === 7).length, 1);
+await external({ type: 'nakli-browser:open', url: 'http://127.0.0.1:8966/', windowId: 'demo' }, desktop);
+const nestRule = rules.find(r => r.condition.tabIds[0] === 7 && r.condition.requestDomains);
+assert.deepEqual(nestRule.condition.requestDomains, ['127.0.0.1'], 'the nested rule names the desktop host');
+await external({ type: 'nakli-browser:closed', windowId: 'demo' }, desktop);
+assert.equal(rules.filter(r => r.condition.tabIds[0] === 7).length, 1, 'the nested rule goes with the demo window');
+await external({ type: 'nakli-browser:closed', windowId: 'browser' }, desktop);
+assert.equal(rules.filter(r => r.condition.tabIds[0] === 7).length, 0);
+
 // The full-tab fallback: only with permission, and only page.html may ask for its tab's rules.
 chrome.tabs.create = async ({ url }) => ({ id: 31, url });
 granted.add('https://github.com/*');

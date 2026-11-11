@@ -71,9 +71,15 @@ async function handle(msg, sender) {
       const pattern = originPattern(url);
       const granted = await chrome.permissions.contains({ origins: [pattern] });
       const tabs = await getTabs();
-      tabs[tabId] = { desktopHost, windows: Array.from(new Set([...(tabs[tabId]?.windows || []), msg.windowId || 'browser'])), nested: !!(tabs[tabId]?.nested || msg.nested) };
+      const windowId = msg.windowId || 'browser';
+      const prev = tabs[tabId] || { windows: [], nestedWindows: [] };
+      // Opening the desktop's own host inside the Browser is the nested demo; that window adds the
+      // nested rule until it closes or opens something else.
+      const nestedHere = url.hostname === desktopHost;
+      const nestedWindows = prev.nestedWindows.filter(w => w !== windowId).concat(nestedHere ? [windowId] : []);
+      tabs[tabId] = { desktopHost, windows: Array.from(new Set([...prev.windows, windowId])), nestedWindows };
       await setTabs(tabs);
-      await installRules(tabId, desktopHost, tabs[tabId].nested);
+      await installRules(tabId, desktopHost, nestedWindows.length > 0);
       const minted = mintToken(pruneTokens(await getTokens(), Date.now()), { tabId, url: url.href, random: randomToken, now: Date.now() });
       await setTokens(minted.store);
       return { ok: true, token: minted.token, needsPermission: !granted, pattern, frame: chrome.runtime.getURL('frame.html') };
@@ -82,9 +88,11 @@ async function handle(msg, sender) {
       const tabs = await getTabs();
       const entry = tabs[tabId];
       if (!entry) return { ok: true };
-      entry.windows = entry.windows.filter(w => w !== (msg.windowId || 'browser'));
+      const windowId = msg.windowId || 'browser';
+      entry.windows = entry.windows.filter(w => w !== windowId);
+      entry.nestedWindows = (entry.nestedWindows || []).filter(w => w !== windowId);
       if (entry.windows.length === 0) await removeRules(tabId);
-      else { tabs[tabId] = entry; await setTabs(tabs); }
+      else { tabs[tabId] = entry; await setTabs(tabs); await installRules(tabId, entry.desktopHost, entry.nestedWindows.length > 0); }
       return { ok: true };
     }
     case 'nakli-browser:sites': {
@@ -140,7 +148,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       if (!sender.url || !sender.url.startsWith(chrome.runtime.getURL('page.html'))) return { ok: false, error: 'not-page' };
       await installRules(sender.tab.id, null, false);
       const tabs = await getTabs();
-      tabs[sender.tab.id] = { desktopHost: null, windows: ['page'], nested: false };
+      tabs[sender.tab.id] = { desktopHost: null, windows: ['page'], nestedWindows: [] };
       await setTabs(tabs);
       return { ok: true };
     }
