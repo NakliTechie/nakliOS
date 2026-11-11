@@ -2313,14 +2313,14 @@
       "id": "paginella",
       "repo": "NakliTechie/paginella",
       "requestedRef": "main",
-      "resolvedCommit": "a23ba482fe0ca84b5e7be71eecc4587256e184db",
+      "resolvedCommit": "e94ea5555ac391701c1dd21f2f4ff8545abe7590",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "8738ecb61a9865411e303dac788598b0bda19777b713e327dde3bff9920a2305",
-          "bytes": 4390465,
-          "originalSourceSha256": "e590e30bf2395140cb9e673aba077e00dc82a79c421079e558bbd4ae4999a9b1",
+          "sha256": "41c36ccca0417704532ca2f92a414960a711499590833b8e435c0a4fb5e6d69f",
+          "bytes": 4390595,
+          "originalSourceSha256": "356c056d7fc70f5b0e35a7e205ba89681337b5e716a0d5fab05e776dca605a3e",
           "sdkSha256": "6e19a30f5e07c94b4089c617a3e21c6525717444880ddfbebc4e81e2ab5e6acc"
         },
         {

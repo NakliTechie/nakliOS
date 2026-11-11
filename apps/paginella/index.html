@@ -15571,8 +15571,13 @@ ${[...report.errors, ...report.warnings].map((x) => `- ${x.message}`).join("\n")
       beforeClose: () => saver ? saver.flush() : saveNow(),
       title: `${app.doc.name} · Paginella`,
       onFile: async (grant) => {
+        const token = grant.token ?? grant;
         try {
-          const f = await globalThis.naklios.files.read(grant.token ?? grant);
+          const f = await globalThis.naklios.files.read(token);
+          try {
+            globalThis.naklios.files.release(token);
+          } catch {
+          }
           const bytes = f.bytes instanceof Uint8Array ? f.bytes : new Uint8Array(f.bytes);
           if (/\.naklidoc$/i.test(f.name)) await exec("file.load", { base64: bytesB64(bytes) });
           else if (/^image\//.test(f.type ?? "") || /\.(jpe?g|png|webp)$/i.test(f.name)) await exec("file.place-data", { base64: bytesB64(bytes), name: f.name });
