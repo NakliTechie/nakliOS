@@ -13,8 +13,8 @@
  * naklios:* messages by hand. A private copy misses every later host change:
  * Draft and Reckon kept their own copies and missed the 2026-11-10 fix that keeps
  * a file call alive while the host shows a storage prompt. If your app needs
- * something the SDK lacks, add it to sdk/naklios.js in the nakliOS repo, so that
- * every app receives it. The nakliOS gate (scripts/test-sdk-canonical-only.mjs)
+ * something the SDK lacks, add it to sdk/naklios.js in the NakliOS repo, so that
+ * every app receives it. The NakliOS gate (scripts/test-sdk-canonical-only.mjs)
  * refuses a mirrored app that talks to the host any other way.
  *
  * Vendoring: if your app needs a capability an iframe sandbox blocks — a folder
