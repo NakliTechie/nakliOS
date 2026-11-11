@@ -1328,6 +1328,246 @@
           "destination": "LICENSE"
         }
       ]
+    },
+    {
+      "id": "atelier",
+      "repo": "NakliTechie/atelier",
+      "ref": "main",
+      "files": [
+        {
+          "source": "LICENSE",
+          "destination": "LICENSE"
+        },
+        {
+          "source": "agent/tools.manifest.json",
+          "destination": "agent/tools.manifest.json"
+        },
+        {
+          "source": "commands.json",
+          "destination": "commands.json"
+        },
+        {
+          "source": "index.html",
+          "destination": "index.html",
+          "managedSdk": "inline"
+        },
+        {
+          "source": "src/app.js",
+          "destination": "src/app.js"
+        },
+        {
+          "source": "src/autosave.js",
+          "destination": "src/autosave.js"
+        },
+        {
+          "source": "src/bus.js",
+          "destination": "src/bus.js"
+        },
+        {
+          "source": "src/document.js",
+          "destination": "src/document.js"
+        },
+        {
+          "source": "src/files/icc.js",
+          "destination": "src/files/icc.js"
+        },
+        {
+          "source": "src/files/layered.js",
+          "destination": "src/files/layered.js"
+        },
+        {
+          "source": "src/files/png.js",
+          "destination": "src/files/png.js"
+        },
+        {
+          "source": "src/files/psd.js",
+          "destination": "src/files/psd.js"
+        },
+        {
+          "source": "src/files/tiff.js",
+          "destination": "src/files/tiff.js"
+        },
+        {
+          "source": "src/files/workspace.js",
+          "destination": "src/files/workspace.js"
+        },
+        {
+          "source": "src/files/xmp.js",
+          "destination": "src/files/xmp.js"
+        },
+        {
+          "source": "src/handlers/core.js",
+          "destination": "src/handlers/core.js"
+        },
+        {
+          "source": "src/handlers/develop.js",
+          "destination": "src/handlers/develop.js"
+        },
+        {
+          "source": "src/handlers/files.js",
+          "destination": "src/handlers/files.js"
+        },
+        {
+          "source": "src/handlers/index.js",
+          "destination": "src/handlers/index.js"
+        },
+        {
+          "source": "src/handlers/layers.js",
+          "destination": "src/handlers/layers.js"
+        },
+        {
+          "source": "src/handlers/look.js",
+          "destination": "src/handlers/look.js"
+        },
+        {
+          "source": "src/handlers/select.js",
+          "destination": "src/handlers/select.js"
+        },
+        {
+          "source": "src/handlers/util.js",
+          "destination": "src/handlers/util.js"
+        },
+        {
+          "source": "src/rail.js",
+          "destination": "src/rail.js"
+        },
+        {
+          "source": "src/renderer.js",
+          "destination": "src/renderer.js"
+        },
+        {
+          "source": "src/select/paint.js",
+          "destination": "src/select/paint.js"
+        },
+        {
+          "source": "src/select/quickmask.js",
+          "destination": "src/select/quickmask.js"
+        },
+        {
+          "source": "src/select/raster.js",
+          "destination": "src/select/raster.js"
+        },
+        {
+          "source": "src/select/retouch.js",
+          "destination": "src/select/retouch.js"
+        },
+        {
+          "source": "src/storage.js",
+          "destination": "src/storage.js"
+        },
+        {
+          "source": "src/ui/develop.js",
+          "destination": "src/ui/develop.js"
+        },
+        {
+          "source": "src/ui/dialog.js",
+          "destination": "src/ui/dialog.js"
+        },
+        {
+          "source": "src/ui/dom.js",
+          "destination": "src/ui/dom.js"
+        },
+        {
+          "source": "src/ui/export.js",
+          "destination": "src/ui/export.js"
+        },
+        {
+          "source": "src/ui/filmstrip.js",
+          "destination": "src/ui/filmstrip.js"
+        },
+        {
+          "source": "src/ui/geometry.js",
+          "destination": "src/ui/geometry.js"
+        },
+        {
+          "source": "src/ui/index.js",
+          "destination": "src/ui/index.js"
+        },
+        {
+          "source": "src/ui/layers.js",
+          "destination": "src/ui/layers.js"
+        },
+        {
+          "source": "src/ui/parity.js",
+          "destination": "src/ui/parity.js"
+        },
+        {
+          "source": "src/ui/send.js",
+          "destination": "src/ui/send.js"
+        },
+        {
+          "source": "src/ui/slider.js",
+          "destination": "src/ui/slider.js"
+        },
+        {
+          "source": "src/ui/tools.js",
+          "destination": "src/ui/tools.js"
+        },
+        {
+          "source": "vendor/ag-psd/LICENSE",
+          "destination": "vendor/ag-psd/LICENSE"
+        },
+        {
+          "source": "vendor/ag-psd/NOTICE",
+          "destination": "vendor/ag-psd/NOTICE"
+        },
+        {
+          "source": "vendor/ag-psd/ag-psd.mjs",
+          "destination": "vendor/ag-psd/ag-psd.mjs"
+        },
+        {
+          "source": "vendor/tessella/LICENSE",
+          "destination": "vendor/tessella/LICENSE"
+        },
+        {
+          "source": "vendor/tessella/VENDOR.json",
+          "destination": "vendor/tessella/VENDOR.json"
+        },
+        {
+          "source": "vendor/tessella/src/engine.js",
+          "destination": "vendor/tessella/src/engine.js"
+        },
+        {
+          "source": "vendor/tessella/src/gpu.js",
+          "destination": "vendor/tessella/src/gpu.js"
+        },
+        {
+          "source": "vendor/tessella/src/lut.js",
+          "destination": "vendor/tessella/src/lut.js"
+        },
+        {
+          "source": "vendor/tessella/src/model.js",
+          "destination": "vendor/tessella/src/model.js"
+        },
+        {
+          "source": "vendor/tessella/src/raw.js",
+          "destination": "vendor/tessella/src/raw.js"
+        },
+        {
+          "source": "vendor/tessella/src/shaders.js",
+          "destination": "vendor/tessella/src/shaders.js"
+        },
+        {
+          "source": "vendor/tessella/vendor/libraw-wasm/NOTICE.md",
+          "destination": "vendor/tessella/vendor/libraw-wasm/NOTICE.md"
+        },
+        {
+          "source": "vendor/tessella/vendor/libraw-wasm/index.js",
+          "destination": "vendor/tessella/vendor/libraw-wasm/index.js"
+        },
+        {
+          "source": "vendor/tessella/vendor/libraw-wasm/libraw.js",
+          "destination": "vendor/tessella/vendor/libraw-wasm/libraw.js"
+        },
+        {
+          "source": "vendor/tessella/vendor/libraw-wasm/libraw.wasm",
+          "destination": "vendor/tessella/vendor/libraw-wasm/libraw.wasm"
+        },
+        {
+          "source": "vendor/tessella/vendor/libraw-wasm/worker.js",
+          "destination": "vendor/tessella/vendor/libraw-wasm/worker.js"
+        }
+      ]
     }
   ]
 }
