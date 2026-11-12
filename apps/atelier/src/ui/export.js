@@ -4,7 +4,7 @@
 
 import { h } from './dom.js';
 
-const FORMATS = [['jpeg', 'JPEG'], ['png', 'PNG'], ['webp', 'WebP'], ['avif', 'AVIF'], ['tiff16', 'TIFF 16-bit']];
+const FORMATS = [['jpeg', 'JPEG'], ['png', 'PNG'], ['webp', 'WebP'], ['avif', 'AVIF'], ['tiff16', 'TIFF 16-bit'], ['cmyk-tiff', 'TIFF CMYK 8-bit (built-in press)']];
 const SPACES = [['srgb', 'sRGB'], ['display-p3', 'Display P3'], ['rec2020', 'Rec. 2020']];
 
 export function exportFields(doc, last = {}) {
@@ -22,6 +22,25 @@ export function exportArgs(v) {
   return args;
 }
 
+// Form values → export_cmyk_tiff arguments (without revision): the path takes .tif when it has no TIFF extension.
+export function cmykArgs(v) {
+  let path = String(v.name).trim();
+  if (!path) throw new Error('Name the file.');
+  if (!/\.tiff?$/i.test(path)) path += '.tif';
+  const profile = String(v.profile ?? '').trim();
+  let args;
+  if (profile) {   // through the person's CMYK ICC profile (a workspace .icc or .icm file): no ink limit, 8 or 16 bits
+    if (!/\.(icc|icm)$/i.test(profile)) throw new Error('The profile is a workspace path ending in .icc or .icm.');
+    args = { path, profile, bits: Number(v.bits) === 16 ? 16 : 8 };
+  } else {
+    const tac = Math.round(Number(v.tac) || 300);
+    if (!(tac >= 100 && tac <= 400)) throw new Error('Total ink is 100 to 400 percent.');
+    args = { path, tac };
+  }
+  if (v.maxEdge !== '' && v.maxEdge != null) { const m = Math.round(Number(v.maxEdge)); if (!(m >= 64)) throw new Error('Long edge is at least 64 px for CMYK, or empty for full size.'); args.maxEdge = m; }
+  return args;
+}
+
 export function createExport(ui) {
   let last = {};
   return async function openExport() {
@@ -33,23 +52,30 @@ export function createExport(ui) {
     const quality = h('input', { type: 'number', min: 1, max: 100, value: v.quality, 'aria-label': 'Quality' });
     const maxEdge = h('input', { type: 'number', min: 16, placeholder: `${Math.max(doc.width, doc.height)} (full size)`, value: v.maxEdge, 'aria-label': 'Long edge in pixels' });
     const space = h('select', { 'aria-label': 'Colour space' }, SPACES.map(([k, t]) => h('option', { value: k, selected: k === v.colorSpace }, t)));
+    const spaceRow = h('label', { class: 'field' }, h('span', {}, 'Colour space'), space);
     const qRow = h('label', { class: 'field' }, h('span', {}, 'Quality'), quality);
-    const sync = () => { qRow.hidden = !['jpeg', 'webp', 'avif'].includes(format.value); };
+    const tac = h('input', { type: 'number', min: 100, max: 400, step: 10, value: last.tac ?? 300, 'aria-label': 'Total ink limit' });
+    const tacRow = h('label', { class: 'field', dataset: { command: 'export_cmyk_tiff' } }, h('span', {}, 'Total ink (%)'), tac);
+    const profile = h('input', { type: 'text', value: last.profile ?? '', placeholder: 'empty: built-in press', 'aria-label': 'CMYK ICC profile (workspace path)' });
+    const bits = h('select', { 'aria-label': 'Bits per ink' }, h('option', { value: '8' }, '8-bit'), h('option', { value: '16', selected: String(last.bits) === '16' }, '16-bit (needs a profile)'));
+    const profRow = h('label', { class: 'field', dataset: { command: 'export_cmyk_tiff' } }, h('span', {}, 'ICC profile'), profile, bits);
+    const sync = () => { qRow.hidden = !['jpeg', 'webp', 'avif'].includes(format.value); tacRow.hidden = profRow.hidden = format.value !== 'cmyk-tiff'; spaceRow.hidden = format.value === 'cmyk-tiff'; };
     format.addEventListener('change', sync); sync();
     const body = h('div', { class: 'form', dataset: { command: 'export_image' } },
       h('label', { class: 'field' }, h('span', {}, 'File'), name),
       h('label', { class: 'field' }, h('span', {}, 'Format'), format), qRow,
       h('label', { class: 'field' }, h('span', {}, 'Long edge (px)'), maxEdge),
-      h('label', { class: 'field' }, h('span', {}, 'Colour space'), space),
+      spaceRow, tacRow, profRow,
       h('p', { class: 'hint' }, `${doc.width} × ${doc.height} px. Files go to the workspace's exports folder unless the name says otherwise.`));
-    const answer = await ui.dialogs.raw({ title: 'Export', body, actions: [{ label: 'Cancel', value: null }, { label: 'Export', primary: true, value: () => ({ name: name.value, format: format.value, quality: quality.value, maxEdge: maxEdge.value, colorSpace: space.value }) }] });
+    const answer = await ui.dialogs.raw({ title: 'Export', body, actions: [{ label: 'Cancel', value: null }, { label: 'Export', primary: true, value: () => ({ name: name.value, format: format.value, quality: quality.value, maxEdge: maxEdge.value, colorSpace: space.value, tac: tac.value, profile: profile.value, bits: bits.value }) }] });
     if (!answer) return null;
     last = answer;
+    const cmyk = answer.format === 'cmyk-tiff';
     let args;
-    try { args = exportArgs(answer); } catch (e) { await ui.dialogs.info('Export', e.message); return null; }
+    try { args = cmyk ? cmykArgs(answer) : exportArgs(answer); } catch (e) { await ui.dialogs.info('Export', e.message); return null; }
     await ui.flush?.();
     ui.say('Exporting…');
-    const r = await ui.send('export_image', args);
+    const r = cmyk ? await ui.send('export_cmyk_tiff', args) : await ui.send('export_image', args);
     if (r.status === 'ok') ui.say(`Exported ${r.result.path} (${r.result.width} × ${r.result.height}, ${Math.round(r.result.bytes / 1024)} KB).`);
     else if (r.status === 'staged') ui.say('The export replaces a file that exists: confirm or discard it in the bar below.');
     else await ui.dialogs.info('Export did not run', `${r.status}: ${r.error?.message ?? ''}`);

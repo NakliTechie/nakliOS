@@ -6,7 +6,7 @@ export const CURVE_N = 256;
 export const MIXER_BANDS = Object.freeze(['red', 'orange', 'yellow', 'green', 'aqua', 'blue', 'purple', 'magenta']);
 export const GRADE_WHEELS = Object.freeze(['shadows', 'midtones', 'highlights', 'global']);
 
-export const MASK_KINDS = Object.freeze(['bitmap', 'linear', 'radial', 'luminance-range', 'colour-range']);
+export const MASK_KINDS = Object.freeze(['bitmap', 'linear', 'radial', 'luminance-range', 'colour-range', 'depth']);
 export const MASK_OPS = Object.freeze(['add', 'subtract', 'intersect']);
 
 // Develop settings the engine renders, in displayed units (Lightroom-style names and ranges).
@@ -24,14 +24,18 @@ export const DEVELOP_DEFAULTS = Object.freeze({
   texture: 0, clarity: 0, dehaze: 0,
   // Lens (manual): distortion -100..100 (+ corrects barrel), lateral CA scale of red and blue -100..100,
   // defringe 0 or 1 (ca_remove), lens vignette amount -100..100 (+ brightens corners) and midpoint 0..100.
-  // lens_profile 0 only: profile corrections need a lens database the engine does not have.
+  // lens_profile 0 or 1: 1 applies the layer's lensProfile (lensProfilePlan below; the caller resolves it from lens data
+  // the person supplies); lens_profile_distortion and lens_profile_vignetting scale its corrections, 0..200 percent.
   distortion: 0, ca_red: 0, ca_blue: 0, ca_remove: 0, lens_vignette_amount: 0, lens_vignette_midpoint: 50, lens_profile: 0,
+  lens_profile_distortion: 100, lens_profile_vignetting: 100,
   // Transform: upright vertical and horizontal -100..100, straighten angle -45..45 degrees (+ clockwise).
   upright_vertical: 0, upright_horizontal: 0, straighten_angle: 0,
   // Calibration: primary hue and saturation -100..100.
   calib_red_hue: 0, calib_red_sat: 0, calib_green_hue: 0, calib_green_sat: 0, calib_blue_hue: 0, calib_blue_sat: 0,
   // Grain: amount 0..100, size 0..100, roughness 0..100.
   grain_amount: 0, grain_size: 25, grain_roughness: 50,
+  // Film effects: halation (red-orange glow around highlights) and bloom (diffusion), amount and size 0..100.
+  halation_amount: 0, halation_size: 25, bloom_amount: 0, bloom_size: 25,
 });
 export const DEVELOP_RENDERED = Object.freeze(Object.keys(DEVELOP_DEFAULTS));
 const WHITE_POINT = 4; // tone mapper white point, scene-linear
@@ -46,10 +50,16 @@ export const DEV_SLOTS = Object.freeze([
   ['cam', 3],    // camera RGB (white-balanced) → linear Rec.2020 rows
   ['cal', 3],    // calibration matrix rows (identity when off)
   ['lens', 1],   // lens vignette amount (EV), midpoint, _, _
+  ['lpd', 2],    // lens profile distortion g(r) = Σ c_i r^i, c0..c6 | unit radius px
+  ['lpr', 2],    // lens profile TCA, red: c0..c6 | unit radius px
+  ['lpb', 2],    // lens profile TCA, blue: c0..c6 | vignette amount
+  ['lpv', 1],    // lens profile vignetting k1, k2, k3, unit radius px
+  ['lpf', 1],    // lens profile on: distortion, TCA, vignetting (0 or 1 each), _
   ['det', 2],    // nrLum, nrColor, defringe, sharpenAmount | sharpenSigma, detailDamp, maskingThreshold, _
   ['local', 1],  // texture k, clarity k, dehaze amount, _
   ['tone', 3],   // whitePoint, contrast, highlights, shadows | whites, blacks, vibrance, saturation | vignette, vigMid, hasCurve, _
   ['fx', 1],     // grain amount, grain size px, roughness, seed
+  ['glow', 1],   // halation k, halation sigma (cells), bloom k, bloom sigma (cells)
   ['lut', 3],    // kind (0 off, 1 1D, 2 3D), size, amount, _ | domain min | domain max
   ['mixv', 6],   // HSL mixer, 8 bands × hue, sat, lum
   ['grade', 4],  // colour grading wheels
@@ -163,12 +173,19 @@ export function developPlan(d0, extras, src) {
   const cell = Math.max(4, Math.round(Math.max(W, H) / 256)); // local-contrast grid cell, px
   put('size', 0, [W, H, cell, 0]);
   put('geo', 0, [0, 0, 1, 1]);
-  if (d.lens_profile) throw Object.assign(new Error('lens profile corrections are not available (no lens database)'), { code: 'unsupported' });
+  if (d.lens_profile !== 0 && d.lens_profile !== 1) throw err('invalid', 'lens_profile is 0 or 1');
+  for (const k of ['lens_profile_distortion', 'lens_profile_vignetting']) if (!(d[k] >= 0 && d[k] <= 200)) throw err('invalid', `${k} is 0..200`);
+  let prof = null;
+  if (d.lens_profile === 1) {
+    if (!extras?.lensProfile) throw err('unsupported', 'lens_profile is on but the layer has no lens profile; load lens data and pick a profile');
+    prof = lensProfilePlan(extras.lensProfile, W, H, d.lens_profile_distortion / 100, d.lens_profile_vignetting / 100);
+    u.set(prof.lpd, DEV_OFFSETS.lpd); u.set(prof.lpr, DEV_OFFSETS.lpr); u.set(prof.lpb, DEV_OFFSETS.lpb); u.set(prof.lpv, DEV_OFFSETS.lpv); u.set(prof.lpf, DEV_OFFSETS.lpf);
+  }
   // Geometry (DEV_LIN_WGSL): H = [[1,0,0],[0,1,0],[ph,pv,1]] · Rot(-angle); k1 = -0.2 × distortion/100;
   // CA scales s = 1 + 0.003 × ca/100; ph, pv = 0.3 × upright/100.
   const th = d.straighten_angle * Math.PI / 180; const co = Math.cos(th); const si = Math.sin(th);
   const ph = 0.3 * d.upright_horizontal / 100; const pv = 0.3 * d.upright_vertical / 100;
-  const geometry = !!(d.distortion || d.ca_red || d.ca_blue || d.upright_vertical || d.upright_horizontal || d.straighten_angle);
+  const geometry = !!(d.distortion || d.ca_red || d.ca_blue || d.upright_vertical || d.upright_horizontal || d.straighten_angle || prof?.lpf[0] || prof?.lpf[1]);
   put('geo', 0, [geometry ? 1 : 0, -0.2 * d.distortion / 100, 1 + 0.003 * d.ca_red / 100, 1 + 0.003 * d.ca_blue / 100]);
   put('h', 0, [co, si, 0, 0]); put('h', 1, [-si, co, 0, 0]); put('h', 2, [ph * co - pv * si, ph * si + pv * co, 1, 0]);
   put('lens', 0, [d.lens_vignette_amount / 100, d.lens_vignette_midpoint / 100, 0, 0]);
@@ -185,6 +202,10 @@ export function developPlan(d0, extras, src) {
   src.camToRec2020.forEach((row, i) => put('cam', i, [...row, 0]));
   calibrationMatrix(d).forEach((row, i) => put('cal', i, [...row, 0]));
   put('fx', 0, [d.grain_amount / 100, 1 + 3 * d.grain_size / 100, d.grain_roughness / 100, 0]);
+  // Glow (DEV_GLOW_WGSL): halation k = 3 amount/100, sigma 0.6 + 1.4 size/100 cells; bloom k = 1.5 amount/100,
+  // sigma 0.8 + 2.2 size/100 cells (cells of the local-contrast grid).
+  for (const k of ['halation_amount', 'halation_size', 'bloom_amount', 'bloom_size']) if (!(d[k] >= 0 && d[k] <= 100)) throw err('invalid', `${k} is 0..100`);
+  put('glow', 0, [3 * d.halation_amount / 100, 0.6 + 1.4 * d.halation_size / 100, 1.5 * d.bloom_amount / 100, 0.8 + 2.2 * d.bloom_size / 100]);
   const n = (k) => d[k] / 100;
   put('tone', 0, [WHITE_POINT, n('contrast'), n('highlights'), n('shadows')]);
   put('tone', 1, [n('whites'), n('blacks'), n('vibrance'), n('saturation')]);
@@ -203,8 +224,51 @@ export function developPlan(d0, extras, src) {
     put('lut', 0, [L.kind === '1d' ? 1 : 2, L.size, L.amount ?? 1, 0]);
     put('lut', 1, [...L.domainMin, 0]); put('lut', 2, [...L.domainMax, 0]);
   }
-  const passes = { geometry, detail: d.nr_luminance > 0 || d.nr_color > 0 || !!d.ca_remove, lens: !!extras?.lens, sharpen: d.sharpen_amount > 0, grid: d.clarity !== 0 || d.dehaze !== 0, lut: !!L };
+  const passes = { geometry, detail: d.nr_luminance > 0 || d.nr_color > 0 || !!d.ca_remove, lens: !!extras?.lens, sharpen: d.sharpen_amount > 0, grid: d.clarity !== 0 || d.dehaze !== 0, glow: d.halation_amount > 0 || d.bloom_amount > 0, lut: !!L };
   return { u, passes, curveLut: hasCurve ? curveLuts(extras?.curve, param) : null, settings: d, lens: extras?.lens || null };
+}
+
+// ---- lens profiles ----------------------------------------------------------------------------------
+// A resolved profile for one photo (Atelier resolves it from a lensfun database or Adobe LCP files the person
+// supplies; tessella ships no lens data):
+//   { distortion?: { unit, c: [c0..c6] }, tca?: { unit, red: [c0..c6], blue: [c0..c6] }, vignette?: { unit, k: [k1, k2, k3] } }
+// unit: { norm: 'halfShort' | 'halfDiag' | 'long', scale } → unit radius px = scale × (min(W, H) / 2 | hypot(W, H) / 2 | max(W, H)).
+// Formulas (DEV_LIN_WGSL), with P the output position relative to the image centre after the manual geometry, in px:
+//   distortion: r = |P| / unitD, P_s = P · g(r), g(r) = 1 + a (Σ c_i r^i - 1) (a = lens_profile_distortion / 100;
+//     g maps an undistorted radius to the sensor radius: lensfun poly3 c = [1 - k1, 0, k1], poly5 [1, 0, k1, 0, k2],
+//     ptlens [1 - a - b - c, c, b, a], LCP [1, 0, k1, 0, k2, 0, k3]);
+//   TCA on the sensor position: red reads P_s · t_r(|P_s| / unitT), blue P_s · t_b(...), t = Σ c_i r^i (green is P_s);
+//   vignetting at the sensor position: V = 1 + k1 r² + k2 r⁴ + k3 r⁶, r = |P_s| / unitV; gain × max(V, 1e-3)^(-v)
+//     (v = lens_profile_vignetting / 100).
+const UNIT_NORMS = ['halfShort', 'halfDiag', 'long'];
+export function lensUnitPx(unit, W, H) {
+  if (!unit || !UNIT_NORMS.includes(unit.norm) || !(unit.scale > 0)) throw err('invalid', `lens profile unit must be { norm: ${UNIT_NORMS.join(' | ')}, scale > 0 }`);
+  const base = unit.norm === 'halfShort' ? Math.min(W, H) / 2 : unit.norm === 'halfDiag' ? Math.hypot(W, H) / 2 : Math.max(W, H);
+  return unit.scale * base;
+}
+const poly7 = (c, name) => {
+  if (!Array.isArray(c) || c.length < 1 || c.length > 7 || !c.every(Number.isFinite)) throw err('invalid', `lens profile ${name}: 1..7 finite polynomial coefficients`);
+  return [...c, 0, 0, 0, 0, 0, 0, 0].slice(0, 7);
+};
+export function lensProfilePlan(p, W, H, amountD = 1, amountV = 1) {
+  if (!p || typeof p !== 'object') throw err('invalid', 'lens profile must be an object');
+  for (const k of Object.keys(p)) if (!['distortion', 'tca', 'vignette', 'name'].includes(k)) throw err('unsupported', `lens profile part ${k}`);
+  const lpd = new Float32Array(8); const lpr = new Float32Array(8); const lpb = new Float32Array(8); const lpv = new Float32Array(4); const lpf = new Float32Array(4);
+  lpd[0] = 1; lpr[0] = 1; lpb[0] = 1;
+  if (p.distortion) {
+    const c = poly7(p.distortion.c, 'distortion').map((v, i) => (i === 0 ? 1 + amountD * (v - 1) : amountD * v));
+    lpd.set(c); lpd[7] = lensUnitPx(p.distortion.unit, W, H); lpf[0] = 1;
+  }
+  if (p.tca) {
+    lpr.set(poly7(p.tca.red, 'tca.red')); lpb.set(poly7(p.tca.blue, 'tca.blue')); lpr[7] = lensUnitPx(p.tca.unit, W, H); lpf[1] = 1;
+  }
+  if (p.vignette) {
+    const k = p.vignette.k;
+    if (!Array.isArray(k) || k.length !== 3 || !k.every(Number.isFinite)) throw err('invalid', 'lens profile vignette.k is [k1, k2, k3]');
+    lpv.set([...k, lensUnitPx(p.vignette.unit, W, H)]); lpf[2] = 1;
+  }
+  lpb[7] = amountV;
+  return { lpd, lpr, lpb, lpv, lpf };
 }
 
 // Monotone cubic (Fritsch–Carlson) through points in 0..255 display space → CURVE_N samples in 0..1.
@@ -319,7 +383,7 @@ export function colourUniform(mixer, grading) {
 // space 0: the adjustment reads display-encoded values (sRGB transfer on the working Rec.2020 primaries) in a
 // 'compatible' document and linear values in a 'linear' one; space 1: always linear (exposure and develop are
 // defined in linear light). The application maths lives in shaders.js (adjust) and its twin in reference.js.
-export const ADJUSTMENT_TYPES = Object.freeze(['levels', 'curves', 'hue-saturation', 'exposure', 'colour-balance', 'black-and-white', 'develop']);
+export const ADJUSTMENT_TYPES = Object.freeze(['levels', 'curves', 'hue-saturation', 'exposure', 'colour-balance', 'black-and-white', 'develop', 'proof', 'duotone']);
 export const BW_DEFAULTS = Object.freeze({ reds: 40, yellows: 60, greens: 40, cyans: 60, blues: 20, magentas: 80 });
 // Develop settings a develop adjustment renders (per-pixel stages only); every other setting must stay at its default.
 export const DEVELOP_ADJUSTMENT_KEYS = Object.freeze(['exposure', 'contrast', 'highlights', 'shadows', 'whites', 'blacks', 'vibrance', 'saturation',
@@ -374,8 +438,151 @@ export function adjustmentPlan(adj, layerExtras = {}) {
     const plan = developPlan(d, { curve: P.curve, mixer: P.mixer, grading: P.grading }, { width: 1, height: 1, asShot: null, camXyz: null, camToRec2020: [[1, 0, 0], [0, 1, 0], [0, 0, 1]] });
     dev = plan.u; dev[DEV_OFFSETS.tone] = 0; // white point 0: no scene tone mapper, so defaults are the identity
     curve = plan.curveLut;
+  } else if (adj.type === 'proof') {
+    // Soft proof: p = [warning on, tac, size, _, warning colour r, g, b]. model 'naive-press' (default) builds the
+    // table from the built-in press (pressInverse below); model 'icc' takes a caller-built table of the same layout
+    // (an ICC output profile's round trip, made with a CMS outside the engine): table Float32Array size³ × 4 over
+    // sRGB-encoded Rec.709 inputs, red fastest, each the proofed colour sRGB-encoded and a gamut flag 0..1.
+    const model = P.model ?? 'naive-press';
+    const allowed = model === 'icc' ? ['table', 'size', 'warning', 'warningColour', 'model'] : ['tac', 'warning', 'warningColour', 'model'];
+    for (const k of Object.keys(P)) if (!allowed.includes(k)) throw err('unsupported', `proof setting ${k}${model === 'icc' ? ' (an ICC proof takes table and size)' : ''}`);
+    if (model !== 'naive-press' && model !== 'icc') throw err('unsupported', `proof model ${model}; use 'naive-press' or 'icc'`);
+    const wc = P.warningColour ?? [0.5, 0.5, 0.5];
+    if (!Array.isArray(wc) || wc.length !== 3 || !wc.every((v) => Number.isFinite(v) && v >= 0 && v <= 1)) throw err('invalid', 'warningColour is [r, g, b] linear Rec.2020, 0..1');
+    space = 1;
+    if (model === 'icc') {
+      const N = P.size;
+      if (!Number.isInteger(N) || N < 2 || N > 65) throw err('invalid', 'an ICC proof table size is an integer 2..65');
+      if (!(P.table instanceof Float32Array) || P.table.length !== N * N * N * 4) throw err('invalid', `an ICC proof table is a Float32Array of size³ × 4 = ${N * N * N * 4} values`);
+      p.set([P.warning ? 1 : 0, 0, N, 0, ...wc]);
+      return { type, space, p, curve, dev, table: P.table, tableKey: `proof-icc:${tableId(P.table)}`, ...layerExtras };
+    }
+    const tac = num(P.tac, 300, 100, 400, 'tac');
+    p.set([P.warning ? 1 : 0, tac, PROOF_N, 0, ...wc]);
+    return { type, space, p, curve, dev, table: proofTable(tac), tableKey: `proof:${tac}`, ...layerExtras };
+  } else if (adj.type === 'duotone') {
+    // inks: 1..4 { colour: [r, g, b] linear Rec.2020 0..1, curve?: [[x, y] 0..255] (darkness → ink coverage) }.
+    for (const k of Object.keys(P)) if (k !== 'inks') throw err('unsupported', `duotone setting ${k}`);
+    const inks = P.inks;
+    if (!Array.isArray(inks) || inks.length < 1 || inks.length > 4) throw err('invalid', 'duotone needs 1..4 inks');
+    const c = {};
+    inks.forEach((ink, i) => {
+      const col = ink?.colour;
+      if (!Array.isArray(col) || col.length !== 3 || !col.every((v) => Number.isFinite(v) && v >= 0 && v <= 1)) throw err('invalid', `inks[${i}].colour is [r, g, b] linear Rec.2020, 0..1`);
+      p.set(col, i * 3);
+      c[['rgb', 'red', 'green', 'blue'][i]] = ink.curve;
+    });
+    p[12] = inks.length;
+    curve = curveLuts(c);
+    space = 1;
   }
   return { type, space, p, curve, dev, ...layerExtras };
+}
+
+// ---- built-in naive press (soft proof, CMYK readouts and export) -------------------------------------------
+// Atelier's own four-ink model in linear Rec.709: printed = PAPER ⊙ Π_i (1 - a_i (1 - T_i)), a_i the coverage 0..1
+// of cyan, magenta, yellow, black, T_i the ink's transmittance at full coverage. It is a stand-in press, not a
+// characterised one: it gives a plausible gamut (no saturated RGB primaries, a limited black) for soft proofing.
+export const PRESS = Object.freeze({
+  paper: [0.92, 0.92, 0.9],
+  inks: [[0.12, 0.62, 0.9], [0.85, 0.15, 0.55], [0.95, 0.85, 0.08], [0.04, 0.04, 0.045]],
+});
+export function pressForward(cmyk) {
+  return PRESS.paper.map((w, ch) => cmyk.reduce((t, a, i) => t * (1 - a * (1 - PRESS.inks[i][ch])), w));
+}
+const oklabDist = (a, b) => { const p = oklab(a.map((v) => Math.max(v, 0))); const q = oklab(b.map((v) => Math.max(v, 0))); return Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]); };
+// CMY for a target with black k fixed: Gauss–Newton on log transmittance, coverages clamped 0..1 (24 steps).
+function solveCmy(t, k) {
+  const target = t.map((v, ch) => Math.log(Math.max(v, 1e-4) / PRESS.paper[ch]) - Math.log(1 - k * (1 - PRESS.inks[3][ch])));
+  let a = [0.3, 0.3, 0.3];
+  for (let it = 0; it < 24; it++) {
+    const f = [0, 1, 2].map((ch) => a.reduce((s, x, i) => s + Math.log(1 - x * (1 - PRESS.inks[i][ch])), 0) - target[ch]);
+    const J = [0, 1, 2].map((ch) => [0, 1, 2].map((i) => -(1 - PRESS.inks[i][ch]) / (1 - a[i] * (1 - PRESS.inks[i][ch]))));
+    const d = mv(inv3(J), f);
+    a = a.map((x, i) => Math.min(1, Math.max(0, x - d[i])));
+  }
+  return a;
+}
+// Linear Rec.709 target → { cmyk (0..1), printed (linear Rec.709), deltaE (Oklab distance), inGamut }.
+// Black generation: k = min(c, m, y) above 0.35, rescaled (k = clamp((min - 0.35) / 0.65, 0, 1) × min), then CMY re-solved;
+// total ink above tac/100 scales C, M, Y down. Out of gamut when the printed colour misses by more than 0.02 Oklab.
+// Relative colorimetric: the target is scaled to the paper white before solving, and printed is reported divided by
+// the paper colour (so paper white shows as white).
+export function pressInverse(rgb, tac = 300) {
+  const t = rgb.map((v) => Math.min(1, Math.max(0, v)));
+  const tp = t.map((v, ch) => v * PRESS.paper[ch]);
+  const a0 = solveCmy(tp, 0);
+  const mn = Math.min(...a0);
+  const k = Math.min(1, Math.max(0, (mn - 0.35) / 0.65)) * mn;
+  let a = k > 0 ? solveCmy(tp, k) : a0;
+  const sum = a[0] + a[1] + a[2] + k; const lim = tac / 100;
+  if (sum > lim) { const s = Math.max(0, lim - k) / (a[0] + a[1] + a[2]); a = a.map((x) => x * s); }
+  const cmyk = [...a, k]; const printed = pressForward(cmyk).map((v, ch) => v / PRESS.paper[ch]);
+  const deltaE = oklabDist(t, printed);
+  return { cmyk, printed, deltaE, inGamut: deltaE <= 0.02 };
+}
+// Proof table: PROOF_N³ entries over sRGB-encoded Rec.709 inputs (red fastest), each the printed colour sRGB-encoded
+// and a gamut flag smoothstep(0.02, 0.12, deltaE) (the overlay strengthens with the distance out of gamut). Cached per tac.
+export const PROOF_N = 17;
+// Identity of a caller-built proof table (the engine uploads each table object once; reuse the object).
+const tableIds = new WeakMap(); let nextTable = 1;
+const tableId = (t) => { if (!tableIds.has(t)) tableIds.set(t, nextTable++); return tableIds.get(t); };
+const proofCache = new Map();
+const enc1 = (x) => (x <= 0.0031308 ? 12.92 * x : 1.055 * Math.pow(x, 1 / 2.4) - 0.055);
+const dec1 = (x) => (x <= 0.04045 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4));
+export function proofTable(tac = 300) {
+  if (proofCache.has(tac)) return proofCache.get(tac);
+  const N = PROOF_N; const out = new Float32Array(N * N * N * 4);
+  for (let b = 0; b < N; b++) for (let g = 0; g < N; g++) for (let r = 0; r < N; r++) {
+    const res = pressInverse([r, g, b].map((v) => dec1(v / (N - 1))), tac);
+    const o = ((b * N + g) * N + r) * 4;
+    out.set([...res.printed.map((v) => enc1(Math.min(1, Math.max(0, v)))), (() => { const x = Math.min(1, Math.max(0, (res.deltaE - 0.02) / 0.1)); return x * x * (3 - 2 * x); })()], o);
+  }
+  proofCache.set(tac, out);
+  return out;
+}
+
+// ---- layer styles -------------------------------------------------------------------------------------
+// styles (image, text and raster layers): { dropShadow?, innerShadow?: { colour, opacity, angle, distance, size },
+// stroke?: { colour, opacity, size, position: 'outside' | 'inside' | 'centre' }, gradientOverlay?: { from, to, angle,
+// opacity } }. Colours are linear Rec.2020 0..1; angle in degrees (the light's direction, as Photoshop: 120 puts the
+// shadow lower right); distance and size in source px. The engine renders the styled layer into a texture padded by
+// M px on every side (M = max(shadow distance + size, stroke size) + 1) and maps it with the layer matrix moved by -M.
+// Formulas (shaders.js styleWgsl): A = source alpha (0 outside); offset o = round(distance (-cos θ, sin θ)) px;
+//   B_σ = Gaussian blur of A, sigma = size / 3, window ±ceil(size) (no blur when size < 1);
+//   gradient overlay: t = clamp(0.5 + ((q - centre) · (cos θ, -sin θ)) / (|W cos θ| + |H sin θ|), 0, 1),
+//     c = mix(c, mix(from, to, t), opacity);
+//   inner shadow: c = mix(c, colour, opacity (1 - B(q - o)));
+//   stroke: dilation D(q) = max over |d| <= r of A(q + d) cov(d), cov = clamp(r + 0.5 - |d|, 0, 1); erosion
+//     E(q) = 1 - max (1 - A(q + d)) cov(d); outside ring = D_s - A, inside ring = A - E_s, centre = D_{s/2} - E_{s/2};
+//     stroke premultiplied S = (colour, 1) · opacity · ring; outside goes under the layer, inside and centre over it;
+//   drop shadow: premultiplied (colour, 1) · opacity · B(q - o), under everything.
+export const STYLE_KEYS = Object.freeze(['dropShadow', 'innerShadow', 'stroke', 'gradientOverlay']);
+const colour3 = (c, name) => { if (!Array.isArray(c) || c.length !== 3 || !c.every((v) => Number.isFinite(v) && v >= 0 && v <= 1)) throw err('invalid', `${name} is [r, g, b] linear Rec.2020, 0..1`); return c; };
+export function stylePlan(st) {
+  if (!st || typeof st !== 'object') throw err('invalid', 'styles must be an object');
+  for (const k of Object.keys(st)) if (!STYLE_KEYS.includes(k)) throw err('unsupported', `layer style ${k}; use ${STYLE_KEYS.join(', ')}`);
+  const u = new Float32Array(48); // 12 vec4: size, drop, dcol, inner, icol, stroke, scol, grad, g0, g1, flags, _
+  const sh = (s, name) => {
+    const d = num(s.distance, 5, 0, 100, `${name}.distance`); const size = num(s.size, 5, 0, 40, `${name}.size`); const th = num(s.angle, 120, -360, 360, `${name}.angle`) * Math.PI / 180;
+    return { op: num(s.opacity, 0.75, 0, 1, `${name}.opacity`), sigma: size / 3, R: size >= 1 ? Math.ceil(size) : 0, ox: Math.round(-d * Math.cos(th)), oy: Math.round(d * Math.sin(th)), col: colour3(s.colour ?? [0, 0, 0], `${name}.colour`), reach: d + size };
+  };
+  let M = 1;
+  if (st.dropShadow) { const s = sh(st.dropShadow, 'dropShadow'); u.set([s.op, s.sigma, s.ox, s.oy], 4); u.set([...s.col, s.R], 8); u[40] = 1; M = Math.max(M, Math.ceil(s.reach) + 1); }
+  if (st.innerShadow) { const s = sh(st.innerShadow, 'innerShadow'); u.set([s.op, s.sigma, s.ox, s.oy], 12); u.set([...s.col, s.R], 16); u[41] = 1; }
+  if (st.stroke) {
+    const k = st.stroke; const pos = ['outside', 'inside', 'centre'].indexOf(k.position ?? 'outside');
+    if (pos < 0) throw err('invalid', "stroke.position is 'outside', 'inside' or 'centre'");
+    const size = num(k.size, 3, 1, 30, 'stroke.size');
+    u.set([num(k.opacity, 1, 0, 1, 'stroke.opacity'), size, pos, 0], 20); u.set([...colour3(k.colour ?? [0, 0, 0], 'stroke.colour'), 0], 24); u[42] = 1;
+    M = Math.max(M, Math.ceil(size) + 2);
+  }
+  if (st.gradientOverlay) {
+    const g = st.gradientOverlay; const th = num(g.angle, 90, -360, 360, 'gradientOverlay.angle') * Math.PI / 180;
+    u.set([num(g.opacity, 1, 0, 1, 'gradientOverlay.opacity'), Math.cos(th), -Math.sin(th), 0], 28);
+    u.set([...colour3(g.from ?? [0, 0, 0], 'gradientOverlay.from'), 0], 32); u.set([...colour3(g.to ?? [1, 1, 1], 'gradientOverlay.to'), 0], 36); u[43] = 1;
+  }
+  return { u, M };
 }
 
 // ---- perspective quads ------------------------------------------------------------------------------
@@ -410,6 +617,26 @@ export function quadInverse(quad, w, h) {
 export function quadBounds(quad) {
   const xs = quad.map((q) => q[0]); const ys = quad.map((q) => q[1]);
   return [Math.floor(Math.min(...xs)), Math.floor(Math.min(...ys)), Math.ceil(Math.max(...xs)), Math.ceil(Math.max(...ys))];
+}
+
+// ---- depth masks -------------------------------------------------------------------------------------
+// A depth component { kind: 'depth', op, depth: <mask bitmap id>, p0: [near, far, feather] } reads a depth bitmap
+// (values 0..1 after /255; the lens-blur convention is disparity, 1 nearest, but the range is order-free). Coverage
+// c = smoothstep(lo - feather, lo, d) × (1 - smoothstep(hi, hi + feather, d)), lo = min(near, far),
+// hi = max(near, far); feather 0 gives a hard 0/1 range. d is read bilinearly with the bitmap stretched over the
+// layer's source (image and RAW layers) or over the document (adjustment layers, groups, solid layers).
+export function depthComponentCheck(c) {
+  const p = c.p0;
+  if (typeof c.depth !== 'string') throw err('invalid', "depth component needs depth: the id of a depth bitmap");
+  if (!(Array.isArray(p) && p.length >= 3 && p.slice(0, 3).every(Number.isFinite))) throw err('invalid', 'depth component needs p0 [near, far, feather]');
+  if (!(p[0] >= 0 && p[0] <= 1 && p[1] >= 0 && p[1] <= 1 && p[2] >= 0 && p[2] <= 1)) throw err('invalid', 'depth near, far and feather lie in 0..1');
+  return [Math.min(p[0], p[1]), Math.max(p[0], p[1]), p[2], 0];
+}
+// The coverage formula above, for tests and callers that preview a range on the CPU.
+export function depthCoverage(d, near, far, feather) {
+  const lo = Math.min(near, far); const hi = Math.max(near, far);
+  const ss = (a, b, x) => { if (b <= a) return x >= b ? 1 : 0; const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+  return ss(lo - feather, lo, d) * (1 - ss(hi, hi + feather, d));
 }
 
 // ---- lens blur ----------------------------------------------------------------------------------------

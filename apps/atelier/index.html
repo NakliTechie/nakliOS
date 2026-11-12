@@ -56,10 +56,13 @@
   #stage { background: var(--surround); position: relative; min-width: 0; min-height: 0; overflow: hidden; }
   #canvas, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
   #overlay { touch-action: none; cursor: crosshair; }
+  #vector-overlay { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; touch-action: none; } #vector-overlay.active { pointer-events: auto; cursor: crosshair; }
+  #vector-panel { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 6px; } #vector-panel .vec-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; padding: 2px 0; } #vector-panel .vec-row .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } #vector-panel input[type=number] { width: 4.5em; } #vector-panel summary { cursor: pointer; padding: 4px 0; } #vector-panel button.on { outline: 2px solid var(--accent); } #vector-panel .vec-item { border-bottom: 1px solid var(--line); padding: 2px 0; }
   #stage[data-tool=hand] #overlay { cursor: grab; } #stage[data-tool=zoom] #overlay { cursor: zoom-in; } #stage[data-tool=move] #overlay { cursor: move; } #stage[data-tool=text] #overlay { cursor: text; }
   #gpu-msg { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; padding: 24px; background: var(--body); color: var(--i1); }
   #gpu-msg h2 { font-size: 18px; margin: 0 0 8px; }
   aside { background: var(--panel); border-left: 1px solid var(--line); overflow: auto; padding: 6px 10px 16px; min-width: 0; }
+  #ai-panel { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 6px; } #ai-panel .ai-model { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: center; padding: 4px 0; } #ai-panel .ai-model > div:first-child { grid-column: 1 / -1; } #ai-panel .ai-buttons, #ai-panel .ai-depth { margin-top: 6px; } #ai-panel button.on { outline: 2px solid var(--accent); }
   details { border-bottom: 1px solid var(--line); padding: 4px 0 8px; }
   summary { font-weight: 600; cursor: pointer; padding: 6px 0; list-style-position: inside; }
   h4 { font-size: 11px; font-weight: 600; color: var(--i2); text-transform: uppercase; letter-spacing: .06em; margin: 10px 0 2px; }
@@ -117,6 +120,79 @@
   @media (max-width: 900px) { main, body[data-mode=develop] main { grid-template-columns: 40px minmax(0, 1fr) 240px; } }
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
 </style>
+<style>
+  /* views: scopes, palette, compare, preset previews, node view, slideshow, print, map (src/ui/views.js) */
+  .views-bar button { padding: 4px 8px; }
+  .views-section { border-top: 1px solid var(--line); padding: 6px 0; }
+  .views-section summary { cursor: pointer; font-weight: 600; padding: 2px 0; }
+  .scope-canvas { width: 100%; aspect-ratio: 16 / 10; display: block; border-radius: 4px; background: #111; }
+  .palette { width: min(560px, calc(100vw - 32px)); }
+  .palette input { width: 100%; font-size: 15px; padding: 6px 8px; }
+  .palette-list { list-style: none; margin: 8px 0 0; padding: 0; max-height: 50vh; overflow: auto; }
+  .palette-list li { display: flex; justify-content: space-between; gap: 10px; padding: 5px 8px; border-radius: 4px; cursor: pointer; }
+  .palette-list li.on { background: var(--fill2); box-shadow: inset 2px 0 0 var(--accent); }
+  .palette-flash { outline: 2px solid var(--accent) !important; outline-offset: 2px; }
+  .view-overlay { position: absolute; inset: 0; z-index: 5; display: grid; grid-template-rows: auto minmax(0, 1fr); background: var(--surround); }
+  .cmp-bar { display: flex; gap: 8px; align-items: center; padding: 4px 10px; background: var(--panel); border-bottom: 1px solid var(--line); min-width: 0; overflow-x: auto; }
+  .cmp-area { display: grid; gap: 2px; min-height: 0; }
+  .cmp-cell { position: relative; min-width: 0; min-height: 0; }
+  .cmp-pane { width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+  .cmp-label { position: absolute; left: 6px; top: 6px; background: rgba(0,0,0,.55); color: #fff; font-size: 11px; padding: 1px 6px; border-radius: 3px; }
+  .pp-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .pp-cell { display: grid; gap: 2px; padding: 3px; text-align: left; min-width: 0; }
+  .pp-cell canvas { width: 100%; height: auto; display: block; }
+  .pp-cell span { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nodes-body { display: grid; grid-template-columns: minmax(0, 1fr) 240px; min-height: 0; }
+  .nodes-graph { overflow: auto; background: var(--body); }
+  .nodes-inspector { background: var(--panel); border-left: 1px solid var(--line); padding: 8px 10px; overflow: auto; display: grid; gap: 8px; align-content: start; }
+  .nodes-inspector .field { grid-template-columns: 70px minmax(0, 1fr); }
+  .nodes-edge { fill: none; stroke: var(--i3); stroke-width: 2; }
+  .nodes-node rect { fill: var(--panel); stroke: var(--i3); }
+  .nodes-node { cursor: pointer; } .nodes-node.on rect { stroke: var(--accent); stroke-width: 2; } .nodes-node.off { opacity: .45; }
+  .nodes-node.k-adjustment rect { fill: color-mix(in srgb, var(--accent) 8%, var(--panel)); }
+  .nodes-node.k-input rect, .nodes-node.k-output rect { fill: var(--fill2); }
+  .nodes-title { font-size: 12px; font-weight: 600; fill: var(--i1); } .nodes-sub { font-size: 11px; fill: var(--i2); }
+  .slideshow { position: fixed; inset: 0; z-index: 50; background: #000; display: grid; place-items: center; }
+  .ss-canvas { max-width: 100vw; max-height: 100vh; object-fit: contain; }
+  .ss-cap { position: absolute; bottom: 10px; left: 0; right: 0; text-align: center; color: #ccc; font-size: 12px; }
+  .map-box { min-height: 0; background: #f4f3ef; }
+  .map-grid { stroke: rgba(0,0,0,.12); } .map-label { font-size: 10px; fill: rgba(0,0,0,.45); }
+  .map-dot { cursor: pointer; } .map-dot circle { fill: var(--accent); stroke: #fff; stroke-width: 2; } .map-dot text { font-size: 11px; fill: #222; }
+  #print-sheet { display: none; }
+  @media print {
+    body { display: block; height: auto; overflow: visible; background: #fff; }
+    body > *:not(#print-sheet) { display: none !important; }
+    #print-sheet { display: block !important; color: #000; }
+    #print-sheet figure { margin: 0; break-inside: avoid; }
+    #print-sheet figcaption { font: 9pt/1.3 var(--font); margin-top: 2pt; }
+    #print-sheet img { display: block; max-width: 100%; }
+    #print-sheet.print-contact { display: grid !important; grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr)); gap: 8pt; align-items: start; }
+    #print-sheet.print-contact img { width: 100%; height: auto; }
+    #print-sheet.print-single figure { break-after: page; height: 95vh; display: grid; grid-template-rows: minmax(0, 1fr) auto; }
+    #print-sheet.print-single img { max-height: 100%; object-fit: contain; margin: auto; }
+  }
+</style>
+<style>
+  /* library: keywords, collections, EXIF filter, virtual copies (src/ui/filmstrip.js) */
+  .tile.vcopy { border-style: dashed; }
+  .tile { grid-template-rows: auto auto auto 1fr auto; height: auto; min-height: 74px; }
+  .tile .kw { font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tile .sug { color: var(--accent); }
+  header select[aria-label="Smart objects"] { width: auto; max-width: 11em; }
+  .strip-bar button.on { border-color: var(--accent); }
+  .dlg .rules { display: grid; gap: 6px; }
+  .dlg .rule { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr) minmax(0, 1fr) auto; gap: 6px; align-items: center; }
+  /* brush engine and timeline panels (src/ui/brushes.js, src/ui/timeline.js) */
+  .brush-panel, .timeline-panel { padding: 6px 8px; border-top: 1px solid var(--line, #8884); }
+  .brush-panel summary, .timeline-panel summary { cursor: pointer; font-weight: 600; }
+  .brush-panel .row, .timeline-panel .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0; }
+  .brush-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(9em, 1fr)); gap: 4px 8px; }
+  .brush-grid .opt { display: flex; justify-content: space-between; gap: 4px; }
+  .brush-grid input[type=number] { width: 4.5em; }
+  .timeline-panel input[type=range] { flex: 1; min-width: 8em; }
+  .timeline-panel input[type=number] { width: 4.5em; }
+  .tl-keys { font-size: 12px; max-height: 8em; overflow: auto; }
+</style>
 <script>
 // First paint in the host's theme: NakliOS puts ?naklios-theme=<id> on the window's URL, so a hosted
 // window never flashes light before naklios.theme.onChange arrives (src/app.js takes over from there).
@@ -142,9 +218,9 @@
   <nav id="toolbar" aria-label="Tools"></nav>
   <section id="center">
     <div id="options" aria-label="Tool options"></div>
-    <div id="stage"><canvas id="canvas"></canvas><canvas id="overlay" aria-label="Photo canvas"></canvas><div id="gpu-msg" hidden></div></div>
+    <div id="stage"><canvas id="canvas"></canvas><canvas id="overlay" aria-label="Photo canvas"></canvas><canvas id="vector-overlay" aria-label="Pen tool canvas"></canvas><div id="gpu-msg" hidden></div></div>
   </section>
-  <aside aria-label="Panels"><div id="develop-panel"></div><div id="layers-panel" hidden></div></aside>
+  <aside aria-label="Panels"><div id="develop-panel"></div><div id="layers-panel" hidden></div><section id="ai-panel" aria-label="AI masks and models"></section><section id="vector-panel" aria-label="Vector: pen, paths, shapes, type, artboards"></section><section id="brush-panel" aria-label="Brush engine and presets"></section><section id="timeline-panel" aria-label="Timeline and animation"></section></aside>
 </main>
 <section id="filmstrip" aria-label="Filmstrip"></section>
 <div id="notice" role="status" hidden></div>

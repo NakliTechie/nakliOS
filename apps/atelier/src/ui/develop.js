@@ -15,16 +15,16 @@ const GROUPS = [
   ['Tone', ['exposure', 'contrast', 'highlights', 'shadows', 'whites', 'blacks']],
   ['Presence', ['texture', 'clarity', 'dehaze', 'vibrance', 'saturation']],
 ];
-const EFFECTS = ['vignette_amount', 'vignette_midpoint', 'grain_amount', 'grain_size', 'grain_roughness'];
+const EFFECTS = ['vignette_amount', 'vignette_midpoint', 'grain_amount', 'grain_size', 'grain_roughness', 'halation_amount', 'halation_size', 'bloom_amount', 'bloom_size'];
 // Panels for the rest of the rendered develop settings (spec 002 §3.1, matrix L12, L15, L20–L26, L29).
 const PANELS = [
   ['Parametric curve', ['parametric_shadows', 'parametric_darks', 'parametric_lights', 'parametric_highlights', 'parametric_split_shadows', 'parametric_split_midtones', 'parametric_split_highlights']],
   ['Detail', ['sharpen_amount', 'sharpen_radius', 'sharpen_detail', 'sharpen_masking', 'nr_luminance', 'nr_color']],
-  ['Lens', ['distortion', 'ca_red', 'ca_blue', 'lens_vignette_amount', 'lens_vignette_midpoint']],
+  ['Lens', ['distortion', 'ca_red', 'ca_blue', 'lens_vignette_amount', 'lens_vignette_midpoint', 'lens_profile_distortion', 'lens_profile_vignetting']],
   ['Transform', ['upright_vertical', 'upright_horizontal', 'straighten_angle']],
   ['Calibration', ['calib_red_hue', 'calib_red_sat', 'calib_green_hue', 'calib_green_sat', 'calib_blue_hue', 'calib_blue_sat']],
 ];
-const LABELS = { vignette_amount: 'Vignette', vignette_midpoint: 'Midpoint', grain_amount: 'Grain', grain_size: 'Grain size' };
+const LABELS = { vignette_amount: 'Vignette', vignette_midpoint: 'Midpoint', grain_amount: 'Grain', grain_size: 'Grain size', halation_amount: 'Halation', halation_size: 'Halation size', bloom_amount: 'Bloom', bloom_size: 'Bloom size', lens_profile_distortion: 'Profile distortion', lens_profile_vignetting: 'Profile vignetting' };
 const LOCAL = ['exposure', 'contrast', 'highlights', 'shadows', 'whites', 'blacks', 'vibrance', 'saturation'];
 const ASPECTS = { original: null, '1:1': [1, 1], '4:5': [4, 5], '5:4': [5, 4], '3:2': [3, 2], '2:3': [2, 3], '16:9': [16, 9] };
 const title = (k) => LABELS[k] || k.charAt(0).toUpperCase() + k.slice(1).replace(/_/g, ' ');
@@ -144,8 +144,48 @@ export function createDevelopPanel(root, ui) {
   const grading = h('details', {}, h('summary', {}, 'Colour grading'), h('div', { class: 'wheels' }, WHEELS.map(wheelUI)), blend.el, balance.el);
 
   // ---- Effects ----
-  const effects = h('details', {}, h('summary', {}, 'Effects'), EFFECTS.map((k) => mk(k, { vignette_midpoint: 50, grain_size: 25, grain_roughness: 50 })));
-  const more = PANELS.map(([name, keys]) => h('details', {}, h('summary', {}, name), keys.map((k) => mk(k, { sharpen_radius: 1, sharpen_detail: 25, lens_vignette_midpoint: 50, parametric_split_shadows: 25, parametric_split_midtones: 50, parametric_split_highlights: 75 }))));
+  const effects = h('details', {}, h('summary', {}, 'Effects'), EFFECTS.map((k) => mk(k, { vignette_midpoint: 50, grain_size: 25, grain_roughness: 50, halation_size: 25, bloom_size: 25 })));
+  // Lens profile (load_lens_data, list_lens_profiles, set_lens_profile): lens data is a lensfun .xml or Adobe .lcp file the
+  // person owns; Atelier ships none. The profile list comes from the open photo's lens metadata.
+  let lensKey = '';
+  const lensNote = h('p', { class: 'hint' }, 'No lens data loaded. Load a lensfun .xml or Adobe .lcp file from your folder.');
+  const lensSel = h('select', { 'aria-label': 'Lens profile', dataset: { command: 'set_lens_profile' }, onchange: async (e) => {
+    const v = e.target.value; if (!layer || !v) return;
+    const r = await send('set_lens_profile', { layerId: layerId(), profile: v });
+    if (r.status === 'ok') ui.say(v === 'none' ? 'Lens profile off.' : `Lens profile: ${r.result.lensProfile.name}.`);
+    lensKey = ''; update();
+  } }, h('option', { value: '' }, 'Lens profile…'));
+  async function loadLensData() {
+    const s = ui.ctx.storage();
+    if (!s) { ui.say('Open a folder first: lens data is read from it.'); return; }
+    let files = [];
+    try { files = (await s.list('')).filter((f) => f.type === 'file' && /\.(xml|lcp)$/i.test(f.path)).map((f) => f.path); } catch { /* the folder cannot be listed; the text field below still works */ }
+    const sel = h('select', { 'aria-label': 'Lens data file' }, files.map((f) => h('option', { value: f }, f)));
+    const txt = h('input', { type: 'text', placeholder: 'lens/lensfun.xml', 'aria-label': 'Lens data path' });
+    const path = await ui.dialogs.raw({ title: 'Load lens data', body: h('div', { class: 'form' },
+      files.length ? h('label', { class: 'field' }, h('span', {}, 'File'), sel) : null,
+      h('label', { class: 'field' }, h('span', {}, files.length ? 'Or a path' : 'Path'), txt),
+      h('p', { class: 'hint' }, 'A lensfun database (.xml) or Adobe lens profile (.lcp) that you own, inside your folder. Atelier ships no lens data.')),
+    actions: [{ label: 'Cancel', value: null }, { label: 'Load', primary: true, value: () => txt.value.trim() || sel.value || null }] });
+    if (!path) return;
+    const r = await send('load_lens_data', { path });
+    if (r.status === 'ok') { ui.say(`Loaded ${r.result.path}.`); lensKey = ''; update(); }
+  }
+  const lensBlock = h('div', { class: 'lens-profile' },
+    h('div', { class: 'row wrap' }, h('button', { dataset: { command: 'load_lens_data' }, onclick: loadLensData }, 'Load lens data…'),
+      h('button', { dataset: { command: 'set_lens_profile', profile: 'auto' }, onclick: async () => { if (!layer) return; const r = await send('set_lens_profile', { layerId: layerId(), profile: 'auto' }); if (r.status === 'ok') ui.say(`Lens profile: ${r.result.lensProfile.name}.`); lensKey = ''; update(); } }, 'Auto')),
+    lensSel, lensNote);
+  async function refreshLens() {
+    const key = `${layer.id}|${layer.lensProfile?.id ?? ''}`;
+    if (key === lensKey) return; lensKey = key;
+    const r = await ui.read('list_lens_profiles', { layerId: layer.id });
+    const cur = layer.lensProfile?.id ?? '';
+    if (r.status !== 'ok') { lensNote.textContent = r.status === 'unsupported' ? (r.error?.message || 'Lens profiles need a RAW photo.') : 'No lens data loaded. Load a lensfun .xml or Adobe .lcp file from your folder.'; lensSel.replaceChildren(h('option', { value: '' }, 'Lens profile…'), ...(cur ? [h('option', { value: 'none' }, 'None (turn off)')] : [])); return; }
+    const c = r.result.candidates;
+    lensNote.textContent = c.length ? `${r.result.exif.lens || 'Unknown lens'}: ${c.length} matching profile${c.length > 1 ? 's' : ''} in ${r.result.loaded.length} file${r.result.loaded.length > 1 ? 's' : ''}.` : `No loaded profile matches ${r.result.exif.lens || 'this lens'}.`;
+    lensSel.replaceChildren(h('option', { value: '' }, cur ? `Current: ${r.result.current?.name ?? cur}` : 'Choose a profile…'), ...c.map((p) => h('option', { value: p.id }, p.name)), h('option', { value: 'none' }, 'None (turn off)'));
+  }
+  const more = PANELS.map(([name, keys]) => h('details', {}, h('summary', {}, name), name === 'Lens' ? lensBlock : null, keys.map((k) => mk(k, { sharpen_radius: 1, sharpen_detail: 25, lens_vignette_midpoint: 50, lens_profile_distortion: 100, lens_profile_vignetting: 100, parametric_split_shadows: 25, parametric_split_midtones: 50, parametric_split_highlights: 75 }))));
 
   // ---- Crop ----
   const cropLane = latest('crop', 'set_crop', (v) => ({ layerId: layerId(), ...v }));
@@ -202,6 +242,7 @@ export function createDevelopPanel(root, ui) {
       const v = settings[k] ?? (k === 'temperature' ? asShot.temperature : k === 'tint' ? asShot.tint : null);
       if (v !== null && v !== undefined) sl.set(Math.round(v * 100) / 100);
     }
+    refreshLens();
     if (dragI < 0) { pts = curveFor(channel); drawCurve(); }
     for (const [b, sl] of bandSliders) sl.set(bandValue(b));
     const g = layer.grading || {};

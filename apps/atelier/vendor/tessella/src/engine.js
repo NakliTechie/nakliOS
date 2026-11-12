@@ -7,8 +7,8 @@
 import { createGpu, computePipeline, EngineError } from './gpu.js';
 import { parseCube } from './lut.js';
 import { decodeRaw, colourInfo } from './raw.js';
-import { TILE, MAX_MASK, CURVE_N, U_SIZE, BLEND_MODES, UPLOAD_WGSL, COMPOSITE_WGSL, DISPLAY_WGSL, DEV_LIN_WGSL, DEV_NR_WGSL, DEV_SHARP_WGSL, DEV_GRID_WGSL, DEV_GBLUR_WGSL, DEV_TONE_WGSL, lensWgsl } from './shaders.js';
-import { curveLuts, developPlan, DEV_FLOATS, DEVELOP_RENDERED, invertAffine, layerBounds, MASK_KINDS, MASK_OPS, adjustmentPlan, quadInverse, quadBounds, lensPlan } from './model.js';
+import { TILE, MAX_MASK, CURVE_N, U_SIZE, BLEND_MODES, UPLOAD_WGSL, UPLOAD_F32_WGSL, COMPOSITE_WGSL, DISPLAY_WGSL, DEV_LIN_WGSL, DEV_NR_WGSL, DEV_SHARP_WGSL, DEV_GRID_WGSL, DEV_GBLUR_WGSL, DEV_TONE_WGSL, DEV_GLOW_GRID_WGSL, DEV_GLOW_BLUR_WGSL, lensWgsl, STYLE_BLUR_H_WGSL, STYLE_BLUR_V_WGSL, STYLE_FINAL_WGSL } from './shaders.js';
+import { curveLuts, developPlan, DEV_FLOATS, DEVELOP_RENDERED, invertAffine, layerBounds, MASK_KINDS, MASK_OPS, adjustmentPlan, quadInverse, quadBounds, lensPlan, depthComponentCheck, stylePlan, solveAsShot } from './model.js';
 
 export { BLEND_MODES };
 export const MAX_LOD = 5;
@@ -25,6 +25,7 @@ export async function createEngine({ canvas } = {}) {
 
   const pipes = {
     upload: computePipeline(device, UPLOAD_WGSL, 'upload'),
+    uploadF32: computePipeline(device, UPLOAD_F32_WGSL, 'upload-f32'),
     composite: computePipeline(device, COMPOSITE_WGSL, 'composite'),
   };
   // Develop passes use explicit layouts: their rgba32float inputs are unfilterable.
@@ -49,9 +50,14 @@ export async function createEngine({ canvas } = {}) {
     sharp: explicitPipe(DEV_SHARP_WGSL, 'dev-sharp', ['tex', 'st32', 'uni']),
     grid: explicitPipe(DEV_GRID_WGSL, 'dev-grid', ['tex', 'st32', 'uni']),
     gblur: explicitPipe(DEV_GBLUR_WGSL, 'dev-gblur', ['tex', 'st32', 'uni']),
-    tone: explicitPipe(DEV_TONE_WGSL, 'dev-tone', ['tex', 'st16', 'uni', 'ro', 'tex', 'ro']),
+    tone: explicitPipe(DEV_TONE_WGSL, 'dev-tone', ['tex', 'st16', 'uni', 'ro', 'tex', 'ro', 'tex']),
+    glowGrid: explicitPipe(DEV_GLOW_GRID_WGSL, 'dev-glow-grid', ['tex', 'st32', 'uni']),
+    glowBlur: explicitPipe(DEV_GLOW_BLUR_WGSL, 'dev-glow-blur', ['tex', 'st32', 'uni']),
     lens: explicitPipe(lensWgsl('rgba32float'), 'dev-lens', ['tex', 'st32', 'uni', 'tex']),
     lensImg: explicitPipe(lensWgsl('rgba16float'), 'image-lens', ['tex', 'st16', 'uni', 'tex']),
+    styleH: explicitPipe(STYLE_BLUR_H_WGSL, 'style-blur-h', ['tex', 'st32', 'uni']),
+    styleV: explicitPipe(STYLE_BLUR_V_WGSL, 'style-blur-v', ['tex', 'st32', 'uni']),
+    styleF: explicitPipe(STYLE_FINAL_WGSL, 'style-final', ['tex', 'st16', 'uni', 'tex']),
   };
   let ctx = null; let display = null;
   if (canvas) {
@@ -73,6 +79,7 @@ export async function createEngine({ canvas } = {}) {
   const viewB = tilesB.createView({ dimension: '2d-array' });
   const dummyTex = device.createTexture({ size: [1, 1], format: 'rgba8unorm', usage: TU.TEXTURE_BINDING });
   const dummyMask = device.createTexture({ size: [1, 1], format: 'r8unorm', usage: TU.TEXTURE_BINDING });
+  const dummyDisp = device.createTexture({ size: [1, 1], format: 'rgba16float', usage: TU.TEXTURE_BINDING });
   const dummyGrid = device.createTexture({ size: [1, 1], format: 'rgba32float', usage: TU.TEXTURE_BINDING });
   const dummyTiles = device.createTexture({ size: [1, 1, 1], format: 'rgba16float', usage: TU.TEXTURE_BINDING }).createView({ dimension: '2d-array' });
   // Scratch tile arrays for group nesting level d (1-based), allocated on first use: BATCH slices each.
@@ -102,6 +109,8 @@ export async function createEngine({ canvas } = {}) {
   const SB = GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST; const UB = GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST;
   const adjPool = pool(64 * 4, SB); const adjCurvePool = pool(4 * CURVE_N * 4, SB); const adjDevPool = pool(DEV_FLOATS * 4, UB);
   const dummyAdj = device.createBuffer({ size: 64 * 4, usage: SB });
+  const tables = new Map(); // adjustment table key (proof) → storage buffer
+  const tableBuf = (key, data) => { if (!tables.has(key)) { const b = device.createBuffer({ size: data.byteLength, usage: SB }); device.queue.writeBuffer(b, 0, data); tables.set(key, b); } return tables.get(key); };
   const dummyDev = device.createBuffer({ size: DEV_FLOATS * 4, usage: UB });
   const identityCurve = device.createBuffer({ size: 4 * CURVE_N * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
   device.queue.writeBuffer(identityCurve, 0, curveLuts(null));
@@ -117,6 +126,7 @@ export async function createEngine({ canvas } = {}) {
     sources: new Map(),   // id → { id, kind, width, height, tex, data?, scale?, color?, pixels? }
     masks: new Map(),     // id → { id, width, height, tex, data: Uint8Array }
     developed: new Map(), // develop key (source + settings) → { tex, used }
+    disps: new Map(),     // id → displacement map { id, width, height, tex, data: Float32Array (dx, dy pairs, f16-rounded) }
     luts: new Map(),      // id → parsed .cube ({ kind, size, domainMin, domainMax, data, title }) + buf
     layers: [],           // render layers, bottom first (see model.js)
     view: { fit: true },
@@ -127,20 +137,20 @@ export async function createEngine({ canvas } = {}) {
   const newId = (p) => `${p}${S.nextId++}`;
 
   // ---- sources ----------------------------------------------------------------------------------
-  async function createRawSource(bytes) {
-    const dec = await decodeRaw(bytes);
-    const { width, height, data } = dec;
-    const colour = colourInfo(dec.meta);
-    const tex = device.createTexture({ size: [width, height], format: 'rgba16float', usage: TU.TEXTURE_BINDING | TU.STORAGE_BINDING, label: 'raw' });
-    const scale = 1 / 65535;
-    const rowsPerBand = Math.max(1, Math.floor((32 << 20) / (width * 6)));
+  // Uploads interleaved RGB samples (Uint16Array: 16-bit, Float32Array: float) × scale into an rgba16float
+  // texture, one band of rows (≤ 32 MB of samples) per dispatch.
+  async function uploadRgb(data, width, height, scale, label) {
+    const f32 = data instanceof Float32Array; const bps = f32 ? 4 : 2;
+    const tex = device.createTexture({ size: [width, height], format: 'rgba16float', usage: TU.TEXTURE_BINDING | TU.STORAGE_BINDING, label });
+    const pipe = f32 ? pipes.uploadF32 : pipes.upload;
+    const rowsPerBand = Math.max(1, Math.floor((32 << 20) / (width * 3 * bps)));
     const ubuf = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     let sbuf = null;
     for (let row = 0; row < height; row += rowsPerBand) {
       const rows = Math.min(rowsPerBand, height - row);
       const n = width * rows * 3;
       let band = data.subarray(row * width * 3, row * width * 3 + n);
-      if (n & 1) { const padded = new Uint16Array(n + 1); padded.set(band); band = padded; }
+      if (!f32 && (n & 1)) { const padded = new Uint16Array(n + 1); padded.set(band); band = padded; }
       if (!sbuf || sbuf.size < band.byteLength) {
         sbuf?.destroy();
         sbuf = device.createBuffer({ size: band.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
@@ -152,9 +162,9 @@ export async function createEngine({ canvas } = {}) {
       device.queue.writeBuffer(ubuf, 0, u);
       const enc = device.createCommandEncoder();
       const pass = enc.beginComputePass();
-      pass.setPipeline(pipes.upload);
+      pass.setPipeline(pipe);
       pass.setBindGroup(0, device.createBindGroup({
-        layout: pipes.upload.getBindGroupLayout(0),
+        layout: pipe.getBindGroupLayout(0),
         entries: [{ binding: 0, resource: { buffer: sbuf } }, { binding: 1, resource: tex.createView() }, { binding: 2, resource: { buffer: ubuf } }],
       }));
       pass.dispatchWorkgroups(Math.ceil(width / 16), Math.ceil(rows / 16));
@@ -163,11 +173,46 @@ export async function createEngine({ canvas } = {}) {
     }
     await device.queue.onSubmittedWorkDone();
     sbuf?.destroy(); ubuf.destroy();
+    return tex;
+  }
+
+  async function createRawSource(bytes) {
+    const dec = await decodeRaw(bytes);
+    const { width, height, data } = dec;
+    const colour = colourInfo(dec.meta);
+    const scale = 1 / 65535;
+    const tex = await uploadRgb(data, width, height, scale, 'raw');
     const id = newId('raw');
     S.sources.set(id, { id, kind: 'raw', width, height, tex, data, scale, ...colour });
     // asShot: the camera's white balance as kelvin and tint (null when the camera has no cam_xyz matrix), and
     // its camera-space gains (min-normalised). camToRec2020 is LibRaw's own camera → Rec.2020 matrix.
     return { id, kind: 'raw', width, height, meta: dec.meta, decodeMs: dec.decodeMs, asShot: colour.asShot, camToRec2020: colour.camToRec2020 };
+  }
+
+  // Linear float source: float32 linear RGB the caller already has (an HDR merge, a float TIFF, a saved
+  // document), developed like a RAW layer. data: Float32Array RGB interleaved, width × height × 3, values
+  // unbounded (above 1.0 allowed, finite, ≥ 0 after clamping negatives to 0).
+  // camToRec2020: 3 × 3 matrix from the data's RGB to linear Rec.2020 (default identity: the data is linear
+  // working RGB). gains: the white-balance gains already applied to the data (camera RGB, min-normalised;
+  // default [1, 1, 1]); with camXyz (XYZ → camera) they give the as-shot temperature and tint.
+  // scale: multiplier into the develop input. The develop pass clips each channel at 1.0 after white balance
+  // (the RAW sensor clip), so a caller with values above 1.0 passes scale = 1 / max and restores brightness
+  // with exposure; data keeps the caller's values unscaled. The GPU copy is half float (data × scale).
+  async function createLinearSource({ width, height, data, camToRec2020 = null, camXyz = null, gains = null, scale = 1 } = {}) {
+    if (!(Number.isInteger(width) && Number.isInteger(height) && width > 0 && height > 0)) throw new EngineError('invalid', `linear source size ${width} × ${height}`, 'pass positive integer width and height');
+    if (!(data instanceof Float32Array) || data.length !== width * height * 3) throw new EngineError('invalid', `linear source data must be a Float32Array of ${width * height * 3} samples`, 'pass RGB interleaved float32');
+    if (!(scale > 0 && Number.isFinite(scale))) throw new EngineError('invalid', `linear source scale ${scale}`, 'pass a positive finite scale');
+    for (let i = 0; i < data.length; i++) { const v = data[i]; if (!(v >= 0)) data[i] = 0; else if (v === Infinity) throw new EngineError('invalid', 'linear source data holds an infinite value', 'pass finite values'); }
+    const M = camToRec2020 ? camToRec2020.map((r) => Array.from(r).slice(0, 3)) : [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+    const cx = camXyz ? camXyz.map((r) => Array.from(r).slice(0, 3)) : null;
+    const g = gains ? Array.from(gains).slice(0, 3) : [1, 1, 1];
+    const gm = Math.min(...g); const gn = g.map((v) => v / gm);
+    const solved = cx ? solveAsShot(cx, gn) : null;
+    const asShot = { gains: gn, temperature: solved ? solved.temperature : null, tint: solved ? solved.tint : null, residual: solved ? solved.residual : null };
+    const tex = await uploadRgb(data, width, height, scale, 'linear');
+    const id = newId('lin');
+    S.sources.set(id, { id, kind: 'raw', linear: true, width, height, tex, data, scale, camToRec2020: M, camXyz: cx, asShot });
+    return { id, kind: 'raw', linear: true, width, height, asShot, camToRec2020: M };
   }
 
   // Image sources keep an 8-bit sRGB copy on the CPU for the reference and for merges.
@@ -315,6 +360,32 @@ export async function createEngine({ canvas } = {}) {
     return m;
   }
 
+  // A depth bitmap from a depth model's output: { width, height, data } with data a Float32Array in 0..1 (or a
+  // Uint8Array 0..255), disparity by convention (1 nearest), stored as an 8-bit mask bitmap (value = round(255 d)).
+  // Lens blur (lensBlur.depthMask) and depth mask components (depth) both read it. Returns { id, width, height }.
+  function createDepthMap({ width, height, data }) {
+    if (!(width > 0 && height > 0) || !data || data.length !== width * height) throw new EngineError('invalid', 'depth map needs width × height values', 'pass { width, height, data }');
+    const m = createMaskBitmap(width, height, 0);
+    const q = data instanceof Uint8Array ? data : Uint8Array.from(data, (v) => Math.round(255 * Math.min(1, Math.max(0, Number.isFinite(v) ? v : 0))));
+    writeMaskBitmap(m.id, q);
+    return m;
+  }
+  // Displacement map for warps and liquify: { width, height, data } with data a Float32Array of (dx, dy) pairs in
+  // source pixels (inverse map: output position q reads the source at q + D(q)); stored as rgba16float (values rounded
+  // to half, kept on the CPU as rounded). A layer uses it with displace: { map: id } (image and RAW layers).
+  function createDisplacementMap({ width, height, data }) {
+    if (!(width > 0 && height > 0) || !data || data.length !== width * height * 2) throw new EngineError('invalid', 'displacement map needs width × height × 2 values', 'pass { width, height, data: Float32Array }');
+    const tex = device.createTexture({ size: [width, height], format: 'rgba16float', usage: TU.TEXTURE_BINDING | TU.COPY_DST, label: 'displacement' });
+    const half = new Uint16Array(width * height * 4); const kept = new Float32Array(width * height * 2);
+    for (let i = 0; i < width * height; i++) for (let c = 0; c < 2; c++) { const h = floatToHalf(data[i * 2 + c]); half[i * 4 + c] = h; kept[i * 2 + c] = halfToFloat(h); }
+    device.queue.writeTexture({ texture: tex }, half, { bytesPerRow: width * 8 }, [width, height]);
+    const id = newId('disp');
+    S.disps.set(id, { id, width, height, tex, data: kept });
+    return { id, width, height };
+  }
+  function dropDisplacementMap(id) { S.disps.get(id)?.tex.destroy(); S.disps.delete(id); }
+  function dropMask(id) { S.masks.get(id)?.tex.destroy(); S.masks.delete(id); }
+
   // ---- document and layers ----------------------------------------------------------------------
   function setDocument({ width, height, blendSpace = 'compatible' }) {
     const sized = !S.doc || S.doc.width !== width || S.doc.height !== height;
@@ -343,8 +414,15 @@ export async function createEngine({ canvas } = {}) {
       if (c.kind === 'colour-range' && !(Array.isArray(c.p0) && c.p0.length === 4 && c.p0.every(Number.isFinite) && c.p0[3] >= 0 && Number.isFinite(c.p1?.[0]) && c.p1[0] >= 0)) {
         throw new EngineError('invalid', `layer ${l.id}: colour-range needs p0 [L, a, b, tolerance >= 0] and p1 [feather >= 0]`, 'Oklab values of the target colour');
       }
+      if (c.kind === 'depth') {
+        try { depthComponentCheck(c); } catch (e) { throw new EngineError(e.code, `layer ${l.id}: ${e.message}`, 'p0 [near, far, feather] in 0..1 and a depth bitmap id'); }
+        if (!S.masks.has(c.depth)) throw new EngineError('invalid', `layer ${l.id}: no depth bitmap ${c.depth}`, 'create it with createDepthMap or createMaskBitmap');
+      }
     }
+    if ((mask?.components || []).filter((c) => c.kind === 'depth').length > 1) throw new EngineError('unsupported', `layer ${l.id}: one depth component per mask`, 'combine the depth ranges into one');
   }
+  // Versions of the bitmaps a mask reads (painted and depth), so a repaint invalidates the tiles.
+  const maskVersions = (mask) => (mask?.components || []).filter((c) => c.kind === 'bitmap' || c.kind === 'depth').map((c) => S.masks.get(c.kind === 'depth' ? c.depth : c.bitmap).version);
   function linkClips(list) {
     let base = null;
     for (const l of list) {
@@ -366,7 +444,7 @@ export async function createEngine({ canvas } = {}) {
         if (mask && mask.components.filter((c) => c.kind === 'bitmap').length > 1) throw new EngineError('unsupported', 'one bitmap component per mask', 'merge painted components');
         let adj;
         try { adj = adjustmentPlan(l.adjustment); } catch (e) { throw new EngineError(e.code || 'invalid', `layer ${l.id}: ${e.message}`, 'check the adjustment parameters'); }
-        const sig = JSON.stringify({ ...l, maskVersions: (mask?.components || []).filter((c) => c.kind === 'bitmap').map((c) => S.masks.get(c.bitmap).version) });
+        const sig = JSON.stringify({ ...l, maskVersions: maskVersions(mask) });
         return { ...l, mask, sig, adj, bounds: null, unbounded: true };
       }
       if (l.group) {
@@ -377,7 +455,7 @@ export async function createEngine({ canvas } = {}) {
         if (mask?.components.some((c) => c.kind === 'bitmap')) throw new EngineError('unsupported', `group ${l.id}: bitmap mask components on groups`, 'use linear, radial or luminance-range components, or mask the children');
         const children = linkClips(l.children.map((c) => prep(c, depth + 1)));
         const { children: _c, ...own } = l;
-        const sig = JSON.stringify({ ...own, isolation });
+        const sig = JSON.stringify({ ...own, isolation, maskVersions: maskVersions(mask) });
         const bs = children.map((c) => c.bounds).filter(Boolean);
         const bounds = bs.length ? [Math.min(...bs.map((b) => b[0])), Math.min(...bs.map((b) => b[1])), Math.max(...bs.map((b) => b[2])), Math.max(...bs.map((b) => b[3]))] : null;
         return { ...l, isolation, children, mask, sig, bounds };
@@ -399,6 +477,25 @@ export async function createEngine({ canvas } = {}) {
         try { lens = { ...lensPlan(l.lensBlur, depth, src.width, src.height), depth: depth.id, depthVersion: depth.version }; } catch (e) { throw new EngineError(e.code || 'invalid', `layer ${l.id}: ${e.message}`, 'check the lens blur settings'); }
         if (src.kind === 'image') devKey = `${src.id}|lens|${src.version || 0}|${JSON.stringify(lens)}`;
       }
+      if (l.displace) {
+        if (src.kind !== 'image' && src.kind !== 'raw') throw new EngineError('unsupported', `layer ${l.id}: displacement on ${src.kind} layers`, 'use an image, text, raster or RAW layer');
+        if (!S.disps.has(l.displace.map)) throw new EngineError('invalid', `layer ${l.id}: no displacement map ${l.displace.map}`, 'create it with createDisplacementMap');
+        if (quadInv || l.styles) throw new EngineError('unsupported', `layer ${l.id}: displacement with a perspective quad or layer styles`, 'warp the layer before styling it, or put it in a group');
+      }
+      if (l.styles) {
+        if (src.kind !== 'image') throw new EngineError('unsupported', `layer ${l.id}: layer styles on ${src.kind} layers`, 'use an image, text or raster layer');
+        if (l.lensBlur || quadInv) throw new EngineError('unsupported', `layer ${l.id}: layer styles with lens blur or a perspective quad`, 'apply the style to a group instead');
+        if ((mask?.components || []).some((c) => c.kind === 'bitmap' || c.kind === 'depth')) throw new EngineError('unsupported', `layer ${l.id}: layer styles with a painted or depth mask on the same layer`, 'put the styled layer in a group and mask the group');
+        let st;
+        try { st = stylePlan(l.styles); } catch (e) { throw new EngineError(e.code || 'invalid', `layer ${l.id}: ${e.message}`, 'check the style settings'); }
+        const M = st.M; const [a, b, c, d, e, f] = l.matrix || [1, 0, 0, 1, 0, 0];
+        const styled = { u: st.u, M, srcId: src.id };
+        const padded = { ...src, width: src.width + 2 * M, height: src.height + 2 * M };
+        const key = `${src.id}|styles|${src.version || 0}|${JSON.stringify(l.styles)}`;
+        const ls = { ...l, matrix: [a, b, c, d, e - a * M - c * M, f - b * M - d * M] };
+        const sig = JSON.stringify({ ...ls, srcVersion: src.version || 0, maskVersions: maskVersions(mask) });
+        return { ...ls, src: padded, mask, sig, plan: null, devKey: key, quadInv: null, lens: null, styled, bounds: layerBounds(ls.matrix, padded.width, padded.height) };
+      }
       if (src.kind === 'raw') {
         const bad = Object.entries(l.develop || {}).filter(([k, v]) => v !== null && v !== undefined && !DEVELOP_RENDERED.includes(k)).map(([k]) => k);
         if (bad.length) throw new EngineError('unsupported', `layer ${l.id}: develop settings not rendered: ${bad.join(', ')}`, `use ${DEVELOP_RENDERED.join(', ')}`);
@@ -410,10 +507,10 @@ export async function createEngine({ canvas } = {}) {
           if (!(amount >= 0 && amount <= 1)) throw new EngineError('invalid', `layer ${l.id}: LUT amount ${amount}`, 'use 0..1');
           lut = { ...lut, amount };
         }
-        try { plan = developPlan(l.develop, { curve: l.curve, mixer: l.mixer, grading: l.grading, lut, lens }, src); } catch (e) { throw new EngineError(e.code || 'invalid', `layer ${l.id}: ${e.message}`, 'check the develop settings'); }
-        devKey = `${src.id}|${JSON.stringify({ d: plan.settings, c: l.curve || null, m: l.mixer || null, g: l.grading || null, l: l.lut || null, b: lens })}`;
+        try { plan = developPlan(l.develop, { curve: l.curve, mixer: l.mixer, grading: l.grading, lut, lens, lensProfile: l.lensProfile }, src); } catch (e) { throw new EngineError(e.code || 'invalid', `layer ${l.id}: ${e.message}`, 'check the develop settings'); }
+        devKey = `${src.id}|${JSON.stringify({ d: plan.settings, c: l.curve || null, m: l.mixer || null, g: l.grading || null, l: l.lut || null, b: lens, p: l.lensProfile || null })}`;
       }
-      const sig = JSON.stringify({ ...l, srcVersion: src.version || 0, maskVersions: (mask?.components || []).filter((c) => c.kind === 'bitmap').map((c) => S.masks.get(c.bitmap).version), solid: src.color, lens });
+      const sig = JSON.stringify({ ...l, srcVersion: src.version || 0, maskVersions: maskVersions(mask), solid: src.color, lens });
       const bounds = src.kind === 'solid' ? [0, 0, S.doc.width, S.doc.height] : quadInv ? quadBounds(l.quad) : layerBounds(l.matrix, src.width, src.height);
       return { ...l, src, mask, sig, plan, devKey, quadInv, lens, bounds };
     };
@@ -484,7 +581,7 @@ export async function createEngine({ canvas } = {}) {
     let n = 0;
     for (const [k, l] of need) {
       if (S.developed.has(k)) continue;
-      S.developed.set(k, { tex: l.src.kind === 'raw' ? await runDevelop(l.src, l.plan, l.lut?.id) : await runLensImage(l.src, l.lens) });
+      S.developed.set(k, { tex: l.styled ? await runStyled(l.styled) : l.src.kind === 'raw' ? await runDevelop(l.src, l.plan, l.lut?.id) : await runLensImage(l.src, l.lens) });
       n++; S.developCount++;
     }
     return n;
@@ -524,7 +621,15 @@ export async function createEngine({ canvas } = {}) {
       pass(devPipes.grid, [cur, g0, ub], Math.ceil(gw / 16), Math.ceil(gh / 16));
       pass(devPipes.gblur, [g0, grid, ub], Math.ceil(gw / 16), Math.ceil(gh / 16));
     }
-    pass(devPipes.tone, [cur, out, ub, cb, grid, plan.passes.lut ? S.luts.get(lutId).buf : identityCurve]);
+    let glow = dummyGrid;
+    if (plan.passes.glow) {
+      const C = plan.u[2]; const gw = Math.ceil(W / C); const gh = Math.ceil(H / C);
+      const mk = () => { const t = device.createTexture({ size: [gw, gh], format: 'rgba32float', usage: TU.TEXTURE_BINDING | TU.STORAGE_BINDING, label: 'develop glow' }); tmp.push(t); return t; };
+      const g0 = mk(); glow = mk();
+      pass(devPipes.glowGrid, [cur, g0, ub], Math.ceil(gw / 16), Math.ceil(gh / 16));
+      pass(devPipes.glowBlur, [g0, glow, ub], Math.ceil(gw / 16), Math.ceil(gh / 16));
+    }
+    pass(devPipes.tone, [cur, out, ub, cb, grid, plan.passes.lut ? S.luts.get(lutId).buf : identityCurve, glow]);
     device.queue.submit([enc.finish()]);
     await device.queue.onSubmittedWorkDone();
     tmp.forEach((t) => t.destroy());
@@ -549,6 +654,25 @@ export async function createEngine({ canvas } = {}) {
     device.queue.submit([enc.finish()]);
     await device.queue.onSubmittedWorkDone();
     lu.destroy();
+    return out;
+  }
+  // Layer styles: the styled image in a padded straight linear Rec.2020 texture (composited as kind 0).
+  async function runStyled({ u, M, srcId }) {
+    const src = S.sources.get(srcId); const W = src.width + 2 * M; const H = src.height + 2 * M;
+    const uu = u.slice(); uu.set([src.width, src.height, M, 0], 0);
+    const ub = device.createBuffer({ size: uu.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST }); device.queue.writeBuffer(ub, 0, uu);
+    const mk = (format, label) => device.createTexture({ size: [W, H], format, usage: TU.TEXTURE_BINDING | TU.STORAGE_BINDING | TU.COPY_SRC, label });
+    const h = mk('rgba32float', 'style h'); const v = mk('rgba32float', 'style v'); const out = mk('rgba16float', 'styled layer');
+    const enc = device.createCommandEncoder();
+    const run = (p, res) => {
+      const cp = enc.beginComputePass(); cp.setPipeline(p.pipeline);
+      cp.setBindGroup(0, device.createBindGroup({ layout: p.layout, entries: res.map((r, binding) => ({ binding, resource: r instanceof GPUBuffer ? { buffer: r } : r.createView() })) }));
+      cp.dispatchWorkgroups(Math.ceil(W / 16), Math.ceil(H / 16)); cp.end();
+    };
+    run(devPipes.styleH, [src.tex, h, ub]); run(devPipes.styleV, [h, v, ub]); run(devPipes.styleF, [src.tex, out, ub, v]);
+    device.queue.submit([enc.finish()]);
+    await device.queue.onSubmittedWorkDone();
+    ub.destroy(); h.destroy(); v.destroy();
     return out;
   }
   const layerTexture = (l) => (l.devKey ? S.developed.get(l.devKey).tex : l.src?.tex);
@@ -588,12 +712,13 @@ export async function createEngine({ canvas } = {}) {
     f32(64, inv[4]); f32(68, inv[5]); f32(72, l.opacity ?? 1); f32(76, l.group ? 1 : (l.fill ?? 1));
     (src.color || [0, 0, 0, 0]).forEach((v, i) => f32(80 + 4 * i, v));
     if (l.quadInv) { l.quadInv.flat().forEach((v, i) => f32(96 + 4 * i, v)); f32(132, 1); }
+    if (l.displace) f32(140, 1);
     if (l.adjustment) f32(136, l.adj.type);
     f32(148, mask ? (mask.density ?? 1) : 1);
     (mask?.components || []).forEach((c, k) => {
       const o = 160 + 48 * k;
       f32(o, MASK_KINDS.indexOf(c.kind)); f32(o + 4, MASK_OPS.indexOf(c.op));
-      (c.p0 || [0, 0, 0, 0]).forEach((v, i) => f32(o + 16 + 4 * i, v));
+      (c.kind === 'depth' ? depthComponentCheck(c) : c.p0 || [0, 0, 0, 0]).forEach((v, i) => f32(o + 16 + 4 * i, v));
       (c.p1 || [0, 0, 0, 0]).forEach((v, i) => f32(o + 32 + 4 * i, v));
     });
     device.queue.writeBuffer(buf, 0, dv.buffer);
@@ -672,12 +797,14 @@ export async function createEngine({ canvas } = {}) {
         const ub = uniformAt(uc.u++);
         writeLayerUniform(ub, l, lod, first);
         const maskComp = l.group ? null : (l.mask?.components || []).find((c) => c.kind === 'bitmap');
-        let adjBuf = dummyAdj; let curveBuf = identityCurve; let devBuf = dummyDev;
+        const depthComp = (l.mask?.components || []).find((c) => c.kind === 'depth');
+        let adjBuf = dummyAdj; let curveBuf = identityCurve; let devBuf = dummyDev; let tabBuf = dummyAdj;
         if (l.adjustment) {
           const i = uc.a++;
           adjBuf = adjPool(i); device.queue.writeBuffer(adjBuf, 0, l.adj.p);
           if (l.adj.curve) { curveBuf = adjCurvePool(i); device.queue.writeBuffer(curveBuf, 0, l.adj.curve); }
           if (l.adj.dev) { devBuf = adjDevPool(i); device.queue.writeBuffer(devBuf, 0, l.adj.dev); }
+          if (l.adj.table) tabBuf = tableBuf(l.adj.tableKey, l.adj.table);
         }
         const clipMode = l.clipped ? 2 : l.hasClipped ? 1 : 0;
         const pass = enc.beginComputePass();
@@ -697,6 +824,9 @@ export async function createEngine({ canvas } = {}) {
             { binding: 9, resource: { buffer: curveBuf } },
             { binding: 10, resource: clipMode === 1 ? clipLevel(d) : dummyClipW },
             { binding: 11, resource: clipMode === 2 ? clipLevel(d) : dummyTiles },
+            { binding: 12, resource: (depthComp ? S.masks.get(depthComp.depth).tex : dummyMask).createView() },
+            { binding: 13, resource: { buffer: tabBuf } },
+            { binding: 14, resource: (l.displace ? S.disps.get(l.displace.map).tex : dummyDisp).createView() },
           ],
         }));
         pass.dispatchWorkgroups(TILE / 16, TILE / 16, tiles.length);
@@ -812,21 +942,35 @@ export async function createEngine({ canvas } = {}) {
       gpu: { ...gpu.info, isFallback: gpu.isFallback, lost: !!lost },
       sources: [...S.sources.values()].map(({ id, kind, width, height }) => ({ id, kind, width, height })),
       developCount: S.developCount, developedTextures: S.developed.size,
-      layers: (function strip(list) { return list.map(({ src, sig, plan, devKey, adj, quadInv, ...l }) => (l.group ? { ...l, children: strip(l.children) } : l)); })(S.layers),
+      layers: (function strip(list) { return list.map(({ src, sig, plan, devKey, adj, quadInv, styled, ...l }) => (l.group ? { ...l, children: strip(l.children) } : l)); })(S.layers),
       cachedTiles: S.cache.size,
     };
   }
 
   return {
-    createRawSource, createImageSource, createTextSource, createSolidSource, dropSource,
+    createRawSource, createLinearSource, createImageSource, createTextSource, createSolidSource, dropSource,
     createPixelSource: imageSourceFromPixels, updatePixelSource,
-    createMaskBitmap, writeMaskBitmap, paintMask, createDepthRamp, createLut, dropLut,
+    createMaskBitmap, writeMaskBitmap, paintMask, createDepthRamp, createDepthMap, dropMask, createDisplacementMap, dropDisplacementMap, createLut, dropLut,
     setDocument, setLayers, setView, render, schedule, readTile, readDeveloped, renderImage, getState, computeView, viewFor, layersFor,
-    source: (id) => S.sources.get(id), mask: (id) => S.masks.get(id), lut: (id) => S.luts.get(id),
+    source: (id) => S.sources.get(id), mask: (id) => S.masks.get(id), displacement: (id) => S.disps.get(id), lut: (id) => S.luts.get(id),
     get layers() { return S.layers; }, get doc() { return S.doc; },
   };
 }
 
+export function floatToHalf(x) {
+  // round to nearest even, via the reference's f16 rounding
+  if (Number.isNaN(x)) return 0x7e00;
+  const s = x < 0 || Object.is(x, -0) ? 0x8000 : 0; const a = Math.abs(x);
+  if (a >= 65520) return s | 0x7c00;
+  if (a < 2 ** -24 / 2) return s;
+  let e = Math.floor(Math.log2(a)); if (2 ** e > a) e--; else if (2 ** (e + 1) <= a) e++;
+  if (e < -14) { const m = Math.round(a / 2 ** -24); const r = a / 2 ** -24; const mm = (r - Math.floor(r) === 0.5 && Math.floor(r) % 2 === 0) ? Math.floor(r) : m; return s | mm; }
+  const t = a / 2 ** (e - 10); let n = Math.floor(t); const d = t - n;
+  if (d > 0.5 || (d === 0.5 && n % 2 === 1)) n++;
+  if (n === 2048) { n = 1024; e++; }
+  if (e > 15) return s | 0x7c00;
+  return s | ((e + 15) << 10) | (n - 1024);
+}
 export function halfToFloat(h) {
   const s = (h & 0x8000) ? -1 : 1; const e = (h >> 10) & 0x1f; const f = h & 0x3ff;
   if (e === 0) return s * 2 ** -14 * (f / 1024);

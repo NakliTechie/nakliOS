@@ -8,9 +8,12 @@ import { MAX_MASK } from '../../vendor/tessella/src/shaders.js';
 import * as R from '../select/raster.js';
 import * as P from '../select/paint.js';
 import * as RT from '../select/retouch.js';
+import { ARTISTIC } from '../select/artistic.js';
 import { createQuickMask } from '../select/quickmask.js';
 import { makeLayer } from '../document.js';
 import { needDoc, needLayer, fail, change, layerRow } from './util.js';
+import { resolveBrush } from './brush.js';
+import { frameDoc } from '../motion/timeline.js';
 
 const apply = (m, x, y) => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
@@ -51,8 +54,19 @@ export function register(bus, ctx) {
     return im.data;
   }
 
+  // Vector selection source: path_to_selection (src/handlers/vector.js) hands a document-size coverage here.
+  ctx.selectionWrite = (label, shape, op) => writeSelection(label, R.combine(selData(needDoc(ctx)), shape, op));
+
   // The selection resampled into a layer's local grid (null when nothing is selected).
-  const localCoverage = (doc, l, w, h) => (doc.selection ? R.resampleToLocal(selData(doc), doc.width, doc.height, l.matrix, w, h) : null);
+  // The matrix a layer shows with at the current timeline frame (motion.js keeps ctx.motion): an animated
+  // layer's pixels are edited through the place the person sees it, not through its base matrix.
+  const shownMatrix = (doc, l) => {
+    const f = ctx.motion?.docId === doc.id ? ctx.motion.frame : 0;
+    return doc.timeline ? (frameDoc(doc, f).layers.find((x) => x.id === l.id)?.matrix ?? l.matrix) : l.matrix;
+  };
+  const localCoverage = (doc, l, w, h) => (doc.selection ? R.resampleToLocal(selData(doc), doc.width, doc.height, shownMatrix(doc, l), w, h) : null);
+  // A video layer's pixels are replaced by the video frame on every timeline move, so an edit would vanish.
+  const notVideo = (l, tool) => { if (l.video) fail('unsupported', `${l.name} is a video layer: its pixels are replaced by the video frame on every frame, so ${tool} would be lost; edit a raster layer above it or use an adjustment layer`, 'change_target', 'add_layer'); };
 
   bus.register('selection.set', async (a) => {
     const doc = needDoc(ctx); const T = 'set_selection'; const p = a.params || {};
@@ -148,6 +162,8 @@ export function register(bus, ctx) {
     const comps = [];
     for (const [i, c] of a.components.entries()) {
       const p = c.params || {}; const at = (k) => num(p, k, T);
+      // A depth component reads the photo's depth map, which only ai_mask makes (without this the bitmap branch below would take it).
+      if (c.kind === 'depth' || c.kind === 'depth-range') fail('unsupported', 'a depth mask component needs the photo\'s depth map, which set_mask cannot make; add it with ai_mask target depth-range (near, far)', 'fix_argument', 'ai_mask');
       if (!MASK_KINDS.includes(c.kind)) fail('unsupported', `${c.kind} mask components are not built yet; built: ${MASK_KINDS.join(', ')}`, 'fix_argument', T);
       if (c.kind === 'linear') comps.push({ op: c.op, kind: 'linear', p0: [at('x0'), at('y0'), at('x1'), at('y1')] });
       else if (c.kind === 'radial') {
@@ -223,6 +239,7 @@ export function register(bus, ctx) {
   function rasterLayer(a, tool) {
     const l = needLayer(ctx, a.layerId);
     if (l.kind !== 'raster') fail('unsupported', `${tool} paints raster layers only; ${l.name} is ${l.kind}`, 'change_target', 'add_layer');
+    notVideo(l, tool);
     const b = rd().buffers.get(l.buffer);
     return { l, w: b.width, h: b.height };
   }
@@ -241,11 +258,11 @@ export function register(bus, ctx) {
     } else if (a.mode === 'gradient') {
       const g = a.gradient || {};
       const spec = { x0: num(g, 'x0', T), y0: num(g, 'y0', T), x1: num(g, 'x1', T), y1: num(g, 'y1', T), c0: colour(g.from ?? a.color, T, 'gradient.from'), c1: colour(g.to, T, 'gradient.to') };
-      await editPixels('gradient', l, (px) => P.fillGradient(px, w, h, spec, l.matrix, covg));
+      await editPixels('gradient', l, (px) => P.fillGradient(px, w, h, spec, shownMatrix(doc, l), covg));
     } else if (a.mode === 'bucket') {
       if (!Array.isArray(a.point)) fail('invalid', 'bucket fill needs point: [x, y] in document pixels', 'fix_argument', 'fill');
       const c = colour(a.color, T);
-      const [sx, sy] = apply(invertAffine(l.matrix), a.point[0], a.point[1]);
+      const [sx, sy] = apply(invertAffine(shownMatrix(doc, l)), a.point[0], a.point[1]);
       if (sx < 0 || sy < 0 || sx >= w || sy >= h) fail('invalid', 'point is outside the layer', 'fix_argument', T);
       await editPixels('bucket fill', l, (px) => {
         const region = R.floodRegion(px, w, h, sx, sy, a.tolerance ?? 32, true);
@@ -271,13 +288,14 @@ export function register(bus, ctx) {
       if (extra.length) fail('invalid', `source.${extra[0]} does not apply to ${a.tool}; ${a.tool} takes ${keys.length ? `source {${keys.join(', ')}}` : 'no source'}`, 'fix_argument', TL);
     }
     const opacity = a.opacity ?? 100; const hardness = a.hardness ?? 100; const flow = a.flow ?? 100;
+    const brush = await resolveBrush(ctx, a);   // brush engine v2 (P26), null for the v1 round brush
 
     // Quick mask: the selection is the canvas being painted.
     if (qm?.on) {
       if (a.tool !== 'brush' && a.tool !== 'eraser') fail('unsupported', `quick mask is on: only brush and eraser paint, and they edit the selection; toggle quick mask off to use ${a.tool}`, 'change_target', 'refine_selection');
       const c = a.tool === 'brush' ? colour(a.color ?? '#ffffff', TL) : null;
-      const pts = a.points.map(([x, y]) => [x, y]);
-      const { coverage: S, stamps } = P.strokeCoverage(doc.width, doc.height, pts, Math.max(1, a.size ?? 20), hardness, flow);
+      const pts = a.points.map(([x, y, ...dyn]) => [x, y, ...dyn]);
+      const { coverage: S, stamps } = P.strokeCoverage(doc.width, doc.height, pts, Math.max(1, a.size ?? 20), hardness, flow, brush);
       const sel = rd().bufferData(qm.buffer).slice();
       RT.paintSelection(sel, S, c ? { value: Math.round(0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]), alpha: c[3] / 255, opacity } : { value: 0, opacity });
       const out = await writeSelection(`quick mask ${a.tool}`, sel);
@@ -300,13 +318,15 @@ export function register(bus, ctx) {
         l = created.layer;
       }
     }
+    if (l.smart) fail('unsupported', `${l.name} is a smart object: painting would edit its cached pixels, which the next update replaces; paint on a new layer above it`, 'change_target', 'add_layer');
     if (l.kind !== 'raster') fail('unsupported', `${a.tool} paints raster layers${retouch ? ' (and RAW photos, through a retouch layer)' : ''}; ${l.name} is ${l.kind}`, 'change_target', 'add_layer');
+    notVideo(l, a.tool);
     const { width: w, height: h } = rd().buffers.get(l.buffer);
-    const M = l.matrix; const inv = invertAffine(M);
+    const M = shownMatrix(doc, l); const inv = invertAffine(M);
     const scale = Math.sqrt(Math.abs(inv[0] * inv[3] - inv[1] * inv[2]));
-    const pts = a.points.map(([x, y]) => apply(inv, x, y));
+    const pts = a.points.map(([x, y, ...dyn]) => [...apply(inv, x, y), ...dyn]);   // dyn: pressure, tilt, time
     const size = Math.max(1, (a.size ?? 20) * scale);
-    const { coverage: S, stamps } = P.strokeCoverage(w, h, pts, size, hardness, flow);
+    const { coverage: S, stamps } = P.strokeCoverage(w, h, pts, size, hardness, flow, brush);
     const covg = localCoverage(doc, l, w, h);
     const orig = rd().bufferData(l.buffer).slice();
     let run; let info = {};
@@ -382,7 +402,14 @@ export function register(bus, ctx) {
       const o = { amount: num(p, 'amount', T, { min: 0, max: 500, def: 100 }), radius: num(p, 'radius', T, { min: 0.1, max: 250, def: 1 }), threshold: num(p, 'threshold', T, { min: 0, max: 255, def: 0 }) };
       run = (px) => P.unsharpMask(px, w, h, o, covg);
     } else if (a.filter === 'high-pass') { const r = num(p, 'radius', T, { min: 0.1, max: 250 }); run = (px) => P.highPass(px, w, h, r, covg); }
-    else {
+    else if (ARTISTIC[a.filter]) {   // artistic filters (src/select/artistic.js)
+      const o = a.filter === 'posterise' ? { levels: num(p, 'levels', T, { min: 2, max: 64, def: 4 }) }
+        : a.filter === 'halftone' ? { size: num(p, 'size', T, { min: 2, max: 128, def: 8 }), angle: num(p, 'angle', T, { min: -360, max: 360, def: 45 }), mode: p.mode === 'colour' ? 'colour' : 'mono' }
+          : a.filter === 'watercolour' ? { radius: num(p, 'radius', T, { min: 1, max: 30, def: 4 }), strength: num(p, 'strength', T, { min: 0, max: 100, def: 50 }) }
+            : { radius: num(p, 'radius', T, { min: 1, max: 30, def: a.filter === 'sketch' ? 6 : 4 }) };
+      if (a.filter === 'halftone' && p.mode !== undefined && !['mono', 'colour'].includes(p.mode)) fail('invalid', "halftone mode is 'mono' or 'colour'", 'fix_argument', T);
+      run = (px) => ARTISTIC[a.filter](px, w, h, o, covg);
+    } else {
       const o = { amount: num(p, 'amount', T, { min: 0, max: 100, def: 10 }), monochromatic: !!p.monochromatic, seed: num(p, 'seed', T, { min: 0, def: 1 }) };
       run = (px) => P.addNoise(px, w, h, o, covg);
     }

@@ -45,6 +45,20 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
   textureStore(dst, vec2u(id.x, id.y + p.rowOffset), vec4f(c, 1.0));
 }`;
 
+// Float32 RGB → rgba16float (linear float sources), one band of rows per dispatch.
+export const UPLOAD_F32_WGSL = /* wgsl */`
+struct P { width: u32, rowOffset: u32, rows: u32, scale: f32 };
+@group(0) @binding(0) var<storage, read> src: array<f32>;
+@group(0) @binding(1) var dst: texture_storage_2d<rgba16float, write>;
+@group(0) @binding(2) var<uniform> p: P;
+@compute @workgroup_size(16, 16)
+fn main(@builtin(global_invocation_id) id: vec3u) {
+  if (id.x >= p.width || id.y >= p.rows) { return; }
+  let b = (id.y * p.width + id.x) * 3u;
+  let c = vec3f(src[b], src[b + 1u], src[b + 2u]) * p.scale;
+  textureStore(dst, vec2u(id.x, id.y + p.rowOffset), vec4f(c, 1.0));
+}`;
+
 // Uniform layout, byte offsets (engine.js writeLayerUniform mirrors these):
 //   0 lod first blend blendSpace | 16 kind (0 raw, 1 image, 2 solid, 3 isolated group, 4 pass-through group, 5 adjustment) srcW srcH docW
 //   32 docH maskCount maskInvert clipMode (0 none, 1 clipping base: write its alpha, 2 clipped: read the base alpha)
@@ -236,6 +250,11 @@ fn toneColour(x0: vec3f, pos: vec2f) -> vec3f {
 //   black and white: grey = min + (mid - min) W[secondary] + (max - mid) W[primary] on clamp(v, 0, 1)
 //     (primary = largest channel: reds, greens, blues; secondary = largest two: yellows, cyans, magentas).
 //   develop: x' = toneColour(x · 2^exposure) with the scene tone mapper off (the per-pixel develop stages).
+//   proof (linear): v = sRGB-encoded clamp(M2020_709 x, 0, 1); (rgb, flag) = trilinear read of the press table
+//     (model.js proofTable, N³ entries, red fastest); x' = M709_2020 · decode(rgb); with the warning on,
+//     x' = mix(x', warning colour, flag).
+//   duotone (linear): t = 1 - sRGB-encoded clamp(luma(x), 0, 1) (darkness); x' = Π_i (1 - curve_i(t) (1 - ink_i)), inks
+//     linear Rec.2020 (paper white 1), curve_i the i-th curve table (identity by default).
 const ADJUST_FNS = /* wgsl */`
 fn levels1(x: f32, k: u32) -> f32 {
   let o = k * 5u;
@@ -261,8 +280,33 @@ fn hsl1(n: f32, h: vec3f) -> f32 {
   return h.z - a * max(-1.0, min(min(k - 3.0, 9.0 - k), 1.0));
 }
 fn hsl2rgb(h: vec3f) -> vec3f { return vec3f(hsl1(0.0, h), hsl1(8.0, h), hsl1(4.0, h)); }
+fn proofAt(i: u32) -> vec4f { return vec4f(adjL[i * 4u], adjL[i * 4u + 1u], adjL[i * 4u + 2u], adjL[i * 4u + 3u]); }
 fn adjust(cb: vec3f) -> vec3f {
   let ty = u32(u.q2.z);
+  if (ty == 7u) {
+    let N = u32(adjP[2]); let nf = f32(N - 1u);
+    let v = oetf(clamp(M2020_709 * cb, vec3f(0.0), vec3f(1.0)));
+    let t = v * nf;
+    let i = min(vec3u(floor(t)), vec3u(N - 2u)); let f = t - vec3f(i);
+    let k = (i.z * N + i.y) * N + i.x;
+    let c00 = mix(proofAt(k), proofAt(k + 1u), f.x);
+    let c10 = mix(proofAt(k + N), proofAt(k + N + 1u), f.x);
+    let c01 = mix(proofAt(k + N * N), proofAt(k + N * N + 1u), f.x);
+    let c11 = mix(proofAt(k + N * N + N), proofAt(k + N * N + N + 1u), f.x);
+    let o = mix(mix(c00, c10, f.y), mix(c01, c11, f.y), f.z);
+    var x = M709_2020 * eotf(clamp(o.rgb, vec3f(0.0), vec3f(1.0)));
+    if (adjP[0] == 1.0) { x = mix(x, vec3f(adjP[4], adjP[5], adjP[6]), clamp(o.a, 0.0, 1.0)); }
+    return x;
+  }
+  if (ty == 8u) {
+    let t = 1.0 - oetf1(clamp(dot(cb, LUMA), 0.0, 1.0));
+    var x = vec3f(1.0);
+    for (var i = 0u; i < u32(adjP[12]); i++) {
+      let ink = vec3f(adjP[i * 3u], adjP[i * 3u + 1u], adjP[i * 3u + 2u]);
+      x = x * (vec3f(1.0) - curveAt(i, t) * (vec3f(1.0) - ink));
+    }
+    return x;
+  }
   if (ty == 6u) { return toneColour(cb * dv.wb.w, vec2f(0.5)); }
   if (ty == 3u) {
     let y = max(cb * exp2(adjP[0]) + vec3f(adjP[1]), vec3f(0.0));
@@ -338,6 +382,9 @@ struct U {
 @group(0) @binding(9) var<storage, read> adjC: array<f32>;  // curves / develop adjustment: 4 × ${CURVE_N} curve table
 @group(0) @binding(10) var clipW: texture_storage_2d_array<rgba16float, write>; // clipping base alpha (written)
 @group(0) @binding(11) var clipR: texture_2d_array<f32>;    // clipping base alpha (read by clipped layers)
+@group(0) @binding(12) var depthT: texture_2d<f32>;         // depth mask component's bitmap (model.js depth masks)
+@group(0) @binding(13) var<storage, read> adjL: array<f32>; // proof adjustment: the press table (model.js proofTable)
+@group(0) @binding(14) var dispT: texture_2d<f32>;          // displacement map (rg = source px), stretched over the source
 
 ${COLOUR_WGSL}
 ${DEV_TONE_FNS.replace(/\bu\./g, 'dv.').replace(/\bcurve\[/g, 'adjC[')}
@@ -363,6 +410,21 @@ fn sampleSrc(local: vec2f) -> vec4f {
   return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 
+// Depth bitmap read bilinearly at q px of a domain sz px (the bitmap stretched over it), edges repeated.
+fn depthRead(q: vec2f, sz: vec2f) -> f32 {
+  let ds = vec2f(textureDimensions(depthT));
+  let g = q / sz * ds - vec2f(0.5);
+  let i = vec2i(floor(g)); let f = g - floor(g);
+  let mx = vec2i(ds) - vec2i(1);
+  let a = textureLoad(depthT, clamp(i, vec2i(0), mx), 0).r;
+  let b = textureLoad(depthT, clamp(i + vec2i(1, 0), vec2i(0), mx), 0).r;
+  let c = textureLoad(depthT, clamp(i + vec2i(0, 1), vec2i(0), mx), 0).r;
+  let d = textureLoad(depthT, clamp(i + vec2i(1, 1), vec2i(0), mx), 0).r;
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+// smoothstep that is a hard step when the edges meet (feather 0).
+fn sstep(a: f32, b: f32, x: f32) -> f32 { if (b <= a) { return select(0.0, 1.0, x >= b); } return smoothstep(a, b, x); }
+
 fn maskAt(doc: vec2f, local: vec2f, col: vec3f) -> f32 {
   if (u.maskCount == 0u) { return 1.0; }
   var m = 0.0;
@@ -384,6 +446,11 @@ fn maskAt(doc: vec2f, local: vec2f, col: vec3f) -> f32 {
     } else if (kind == 4u) { // colour range in Oklab: full within tolerance p0.w of p0.xyz, none beyond p0.w + feather p1.x
       let o = toOklab(M2020_709 * col);
       c = 1.0 - smoothstep(mc.p0.w, mc.p0.w + max(mc.p1.x, 1e-4), distance(o, mc.p0.xyz));
+    } else if (kind == 5u) { // depth range: full within [p0.x, p0.y], feather p0.z (layer source or document domain)
+      var d = 0.0;
+      if (u.kind <= 1u) { d = depthRead(local, vec2f(f32(u.srcW), f32(u.srcH))); }
+      else { d = depthRead(doc, vec2f(f32(u.docW), f32(u.docH))); }
+      c = sstep(mc.p0.x - mc.p0.z, mc.p0.x, d) * (1.0 - sstep(mc.p0.y, mc.p0.y + mc.p0.z, d));
     }
     if (op == 0u) { m = max(m, c); } else if (op == 1u) { m = m * (1.0 - c); } else { m = m * c; }
   }
@@ -544,6 +611,15 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
       }
       var inside = local.x >= 0.0 && local.y >= 0.0 && local.x < f32(u.srcW) && local.y < f32(u.srcH);
       if (u.kind == 2u) { inside = true; }
+      if (inside && u.q2.w == 1.0) { // displacement (warp, liquify): read the source at local + D(local); the layer keeps its rectangle
+        let ds = vec2f(textureDimensions(dispT)); let sz = vec2f(f32(u.srcW), f32(u.srcH));
+        let g = local / sz * ds - vec2f(0.5);
+        let i = vec2i(floor(g)); let f = g - floor(g); let mx = vec2i(ds) - vec2i(1);
+        let D = mix(mix(textureLoad(dispT, clamp(i, vec2i(0), mx), 0).rg, textureLoad(dispT, clamp(i + vec2i(1, 0), vec2i(0), mx), 0).rg, f.x),
+                    mix(textureLoad(dispT, clamp(i + vec2i(0, 1), vec2i(0), mx), 0).rg, textureLoad(dispT, clamp(i + vec2i(1, 1), vec2i(0), mx), 0).rg, f.x), f.y);
+        local = local + D;
+        inside = local.x >= 0.0 && local.y >= 0.0 && local.x < sz.x && local.y < sz.y;
+      }
       if (inside) {
         let v = sampleSrc(local);
         let m = maskAt(dc, local, v.rgb);
@@ -583,12 +659,19 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
 //   n_raw = n_u (1 + k1 |n_u|^2) (radial distortion); channel c reads n_raw × s_c (CA: s_r, 1, s_b), bilinear.
 //   Alpha is 0 where the green sample falls outside the photo (rgb 0 there).
 // Lens vignette: gain 2^(amount × smoothstep(mid, 1, |n_raw|)).
+// Lens profile (model.js lensProfilePlan): after the manual distortion, P = n_raw × hd px from the centre;
+//   P_s = P g(|P| / unitD) (green), red P_s t_r(|P_s| / unitT), blue P_s t_b(...), then the manual CA scales about the
+//   centre; vignetting gain × max(1 + k1 r² + k2 r⁴ + k3 r⁶, 1e-3)^(-v), r = |P_s| / unitV (texel centre when no geometry).
 export const DEV_LIN_WGSL = /* wgsl */`
 ${DEV_STRUCT}
 @group(0) @binding(0) var rawT: texture_2d<f32>;
 @group(0) @binding(1) var outT: texture_storage_2d<rgba32float, write>;
 @group(0) @binding(2) var<uniform> u: DevU;
 ${COLOUR_WGSL}
+fn poly7(a: array<vec4f, 2>, r: f32) -> f32 {
+  let r2 = r * r; let r3 = r2 * r;
+  return a[0].x + a[0].y * r + a[0].z * r2 + a[0].w * r3 + a[1].x * r2 * r2 + a[1].y * r2 * r3 + a[1].z * r3 * r3;
+}
 // Bilinear read of one camera channel at source position q (px), edge texels repeated.
 fn chan(q: vec2f, c: u32) -> f32 {
   let t = q - vec2f(0.5);
@@ -608,6 +691,7 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
   let hd = length(ctr);
   let n = (vec2f(id.xy) + vec2f(0.5) - ctr) / hd;
   var cam: vec3f; var a = 1.0; var rho = length(n);
+  var ps = vec2f(id.xy) + vec2f(0.5) - ctr; // sensor position of green, px from the centre (lens profile vignetting)
   if (u.geo.x == 0.0) {
     cam = textureLoad(rawT, vec2i(id.xy), 0).rgb;
   } else {
@@ -615,17 +699,25 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
     let nu = hp.xy / hp.z;
     let nr = nu * (1.0 + u.geo.y * dot(nu, nu));
     rho = length(nr);
-    let qg = ctr + nr * hd;
+    ps = nr * hd;
+    if (u.lpf.x != 0.0) { ps = ps * poly7(u.lpd, length(ps) / u.lpd[1].w); }
+    var pr = ps; var pb = ps;
+    if (u.lpf.y != 0.0) { let rt = length(ps) / u.lpr[1].w; pr = ps * poly7(u.lpr, rt); pb = ps * poly7(u.lpb, rt); }
+    let qg = ctr + ps;
     if (hp.z <= 0.0 || qg.x < 0.0 || qg.y < 0.0 || qg.x >= f32(W) || qg.y >= f32(H)) {
       textureStore(outT, vec2i(id.xy), vec4f(0.0)); return;
     }
-    cam = vec3f(chan(ctr + nr * u.geo.z * hd, 0u), chan(qg, 1u), chan(ctr + nr * u.geo.w * hd, 2u));
+    cam = vec3f(chan(ctr + pr * u.geo.z, 0u), chan(qg, 1u), chan(ctr + pb * u.geo.w, 2u));
   }
   let v = min(cam * u.wb.xyz, vec3f(1.0));
   var x = clamp(vec3f(dot(u.cam[0].xyz, v), dot(u.cam[1].xyz, v), dot(u.cam[2].xyz, v)), vec3f(0.0), vec3f(1.0));
   x = vec3f(dot(u.cal[0].xyz, x), dot(u.cal[1].xyz, x), dot(u.cal[2].xyz, x));
   var gain = u.wb.w;
   if (u.lens.x != 0.0) { gain = gain * exp2(u.lens.x * smoothstep(u.lens.y, 1.0, rho)); }
+  if (u.lpf.z != 0.0) {
+    let r2 = dot(ps, ps) / (u.lpv.w * u.lpv.w);
+    gain = gain * pow(max(1.0 + u.lpv.x * r2 + u.lpv.y * r2 * r2 + u.lpv.z * r2 * r2 * r2, 1e-3), -u.lpb[1].w);
+  }
   textureStore(outT, vec2i(id.xy), vec4f(x * gain, a));
 }`;
 
@@ -828,6 +920,55 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
   textureStore(outT, vec2i(id.xy), vec4f(s / sw, 0.0, 1.0));
 }`;
 
+// GLOW (film effects), on the same C × C cells as GRID, from the image before local contrast (scene-linear):
+//   cell source: rgb = mean of x · smoothstep(0.25, 1, Y) (bloom), a = mean of max(Y - 0.5, 0) (halation);
+//   blur: Gaussian over cells, sigma glow.y (halation, alpha) and glow.w (bloom, rgb), window ±min(ceil(3 max sigma), 9)
+//   cells, weights renormalised over in-grid cells. TONE adds, after local contrast and before tone and colour:
+//   x += glow.z · B + glow.x · H · HAL, HAL = M709_2020 · (1, 0.25, 0.04) (red-orange), B and H read bilinearly.
+export const DEV_GLOW_GRID_WGSL = /* wgsl */`
+${DEV_STRUCT}
+@group(0) @binding(0) var inT: texture_2d<f32>;
+@group(0) @binding(1) var outT: texture_storage_2d<rgba32float, write>;
+@group(0) @binding(2) var<uniform> u: DevU;
+${COLOUR_WGSL}
+@compute @workgroup_size(16, 16)
+fn main(@builtin(global_invocation_id) id: vec3u) {
+  let W = i32(u.size.x); let H = i32(u.size.y); let C = i32(u.size.z);
+  let gw = (W + C - 1) / C; let gh = (H + C - 1) / C;
+  if (i32(id.x) >= gw || i32(id.y) >= gh) { return; }
+  let x0 = i32(id.x) * C; let y0 = i32(id.y) * C;
+  var b = vec3f(0.0); var h = 0.0; var n = 0.0;
+  for (var y = y0; y < min(y0 + C, H); y++) { for (var x = x0; x < min(x0 + C, W); x++) {
+    let c = textureLoad(inT, vec2i(x, y), 0).rgb;
+    let Y = dot(c, LUMA);
+    b += c * smoothstep(0.25, 1.0, Y); h += max(Y - 0.5, 0.0); n += 1.0;
+  } }
+  textureStore(outT, vec2i(id.xy), vec4f(b / n, h / n));
+}`;
+export const DEV_GLOW_BLUR_WGSL = /* wgsl */`
+${DEV_STRUCT}
+@group(0) @binding(0) var inT: texture_2d<f32>;
+@group(0) @binding(1) var outT: texture_storage_2d<rgba32float, write>;
+@group(0) @binding(2) var<uniform> u: DevU;
+@compute @workgroup_size(16, 16)
+fn main(@builtin(global_invocation_id) id: vec3u) {
+  let C = i32(u.size.z);
+  let gw = (i32(u.size.x) + C - 1) / C; let gh = (i32(u.size.y) + C - 1) / C;
+  if (i32(id.x) >= gw || i32(id.y) >= gh) { return; }
+  let sh = u.glow.y; let sb = u.glow.w;
+  let R = min(i32(ceil(3.0 * max(sh, sb))), 9);
+  var b = vec3f(0.0); var h = 0.0; var wbs = 0.0; var whs = 0.0;
+  for (var dy = -R; dy <= R; dy++) { for (var dx = -R; dx <= R; dx++) {
+    let q = vec2i(id.xy) + vec2i(dx, dy);
+    if (q.x < 0 || q.y < 0 || q.x >= gw || q.y >= gh) { continue; }
+    let d2 = f32(dx * dx + dy * dy);
+    let wb = exp(-d2 / (2.0 * sb * sb)); let wh = exp(-d2 / (2.0 * sh * sh));
+    let t = textureLoad(inT, q, 0);
+    b += wb * t.rgb; h += wh * t.a; wbs += wb; whs += wh;
+  } }
+  textureStore(outT, vec2i(id.xy), vec4f(b / wbs, h / whs));
+}`;
+
 // TONE: local contrast, then tone and colour per texel; writes the developed texture.
 // Local contrast (local = texture k, clarity k, dehaze amount):
 //   dehaze > 0: t = max(1 - 0.95 dz h, 0.1), x = max((x - (1 - t)) / t, 0), h = blurred dark channel, airlight 1;
@@ -843,6 +984,7 @@ ${DEV_STRUCT}
 @group(0) @binding(3) var<storage, read> curve: array<f32>;  // 4 × ${CURVE_N}: master, r, g, b
 @group(0) @binding(4) var gridT: texture_2d<f32>;
 @group(0) @binding(5) var<storage, read> lutD: array<f32>;  // .cube table, RGB triplets, red fastest
+@group(0) @binding(6) var glowT: texture_2d<f32>;           // blurred glow grid (DEV_GLOW_BLUR_WGSL)
 ${COLOUR_WGSL}
 // LUT (lut = kind 1 1D / 2 3D, size, amount | domain min | domain max), last in the develop: the input is
 // linear Rec.2020 → Rec.709 primaries, clamped 0..1, sRGB-encoded, mapped to the LUT domain; the table is read
@@ -878,6 +1020,18 @@ fn gridAt(p: vec2f) -> vec2f {
   let b = textureLoad(gridT, clamp(i + vec2i(1, 0), vec2i(0), mx), 0).xy;
   let c = textureLoad(gridT, clamp(i + vec2i(0, 1), vec2i(0), mx), 0).xy;
   let d = textureLoad(gridT, clamp(i + vec2i(1, 1), vec2i(0), mx), 0).xy;
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+fn glowAt(p: vec2f) -> vec4f {
+  let C = u.size.z;
+  let gw = (i32(u.size.x) + i32(C) - 1) / i32(C); let gh = (i32(u.size.y) + i32(C) - 1) / i32(C);
+  let g = p / C - vec2f(0.5);
+  let i = vec2i(floor(g)); let f = g - floor(g);
+  let mx = vec2i(gw - 1, gh - 1);
+  let a = textureLoad(glowT, clamp(i, vec2i(0), mx), 0);
+  let b = textureLoad(glowT, clamp(i + vec2i(1, 0), vec2i(0), mx), 0);
+  let c = textureLoad(glowT, clamp(i + vec2i(0, 1), vec2i(0), mx), 0);
+  let d = textureLoad(glowT, clamp(i + vec2i(1, 1), vec2i(0), mx), 0);
   return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 fn lyAt(p: vec2i) -> f32 { return log2(dot(textureLoad(inT, clamp(p, vec2i(0), vec2i(i32(u.size.x) - 1, i32(u.size.y) - 1)), 0).rgb, LUMA) + 1e-4); }
@@ -918,6 +1072,10 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
   let pos = (vec2f(id.xy) + vec2f(0.5)) / vec2f(f32(W), f32(H));
   var x = c.rgb;
   if (u.local.x != 0.0 || u.local.y != 0.0 || u.local.z != 0.0) { x = localContrast(x, vec2i(id.xy)); }
+  if (u.glow.x != 0.0 || u.glow.z != 0.0) {
+    let g = glowAt(vec2f(id.xy) + vec2f(0.5));
+    x = x + u.glow.z * g.rgb + u.glow.x * g.a * (M709_2020 * vec3f(1.0, 0.25, 0.04));
+  }
   x = toneColour(x, pos);
   if (u.fx.x != 0.0) { x = grain(x, vec2f(id.xy) + vec2f(0.5)); }
   if (u.lut[0].x != 0.0) { x = applyLut(x); }
@@ -961,4 +1119,113 @@ fn fs(@builtin(position) pos: vec4f) -> @location(0) vec4f {
   let m = mat3x3f(vec3f(1.6605, -0.1246, -0.0182), vec3f(-0.5876, 1.1329, -0.1006), vec3f(-0.0728, -0.0083, 1.1187));
   let s = clamp(m * rgb, vec3f(0.0), vec3f(1.0));
   return vec4f(oetf1(s.r), oetf1(s.g), oetf1(s.b), 1.0);
+}`;
+
+// ---- layer styles (model.js stylePlan) ------------------------------------------------------------------------
+// Three passes over the padded texture (Wp × Hp = (W + 2M) × (H + 2M)): a horizontal then vertical Gaussian of the
+// source alpha (r: drop shadow, g: inner shadow; weights normalised over the full window, alpha 0 outside the
+// source), then the composition (stylePlan's formulas). Output: straight linear Rec.2020 colour and alpha.
+const STYLE_HEAD = /* wgsl */`
+struct StyleU { size: vec4f, drop: vec4f, dcol: vec4f, inner: vec4f, icol: vec4f, stroke: vec4f, scol: vec4f, grad: vec4f, g0: vec4f, g1: vec4f, flags: vec4f, pad: vec4f };
+@group(0) @binding(2) var<uniform> S: StyleU;
+fn gw(d: i32, sigma: f32) -> f32 { if (sigma <= 0.0) { return select(0.0, 1.0, d == 0); } return exp(-f32(d * d) / (2.0 * sigma * sigma)); }
+fn gsum(R: i32, sigma: f32) -> f32 { var s = 0.0; for (var d = -R; d <= R; d++) { s += gw(d, sigma); } return s; }
+`;
+export const STYLE_BLUR_H_WGSL = /* wgsl */`
+@group(0) @binding(0) var srcT: texture_2d<f32>;
+@group(0) @binding(1) var outT: texture_storage_2d<rgba32float, write>;
+${STYLE_HEAD}
+fn A(p: vec2i) -> f32 {
+  let q = p - vec2i(i32(S.size.z));
+  if (q.x < 0 || q.y < 0 || q.x >= i32(S.size.x) || q.y >= i32(S.size.y)) { return 0.0; }
+  return textureLoad(srcT, q, 0).a;
+}
+@compute @workgroup_size(16, 16)
+fn main(@builtin(global_invocation_id) id: vec3u) {
+  let M = i32(S.size.z); let Wp = i32(S.size.x) + 2 * M; let Hp = i32(S.size.y) + 2 * M;
+  if (i32(id.x) >= Wp || i32(id.y) >= Hp) { return; }
+  let p = vec2i(id.xy);
+  let Rd = i32(S.dcol.w); let Ri = i32(S.icol.w);
+  var d = 0.0; var i = 0.0;
+  for (var k = -Rd; k <= Rd; k++) { d += gw(k, S.drop.y) * A(p + vec2i(k, 0)); }
+  for (var k = -Ri; k <= Ri; k++) { i += gw(k, S.inner.y) * A(p + vec2i(k, 0)); }
+  textureStore(outT, p, vec4f(d / gsum(Rd, S.drop.y), i / gsum(Ri, S.inner.y), 0.0, 1.0));
+}`;
+export const STYLE_BLUR_V_WGSL = /* wgsl */`
+@group(0) @binding(0) var hT: texture_2d<f32>;
+@group(0) @binding(1) var outT: texture_storage_2d<rgba32float, write>;
+${STYLE_HEAD}
+@compute @workgroup_size(16, 16)
+fn main(@builtin(global_invocation_id) id: vec3u) {
+  let M = i32(S.size.z); let Wp = i32(S.size.x) + 2 * M; let Hp = i32(S.size.y) + 2 * M;
+  if (i32(id.x) >= Wp || i32(id.y) >= Hp) { return; }
+  let p = vec2i(id.xy);
+  let Rd = i32(S.dcol.w); let Ri = i32(S.icol.w);
+  var d = 0.0; var i = 0.0;
+  for (var k = -Rd; k <= Rd; k++) { let q = p + vec2i(0, k); if (q.y >= 0 && q.y < Hp) { d += gw(k, S.drop.y) * textureLoad(hT, q, 0).r; } }
+  for (var k = -Ri; k <= Ri; k++) { let q = p + vec2i(0, k); if (q.y >= 0 && q.y < Hp) { i += gw(k, S.inner.y) * textureLoad(hT, q, 0).g; } }
+  textureStore(outT, p, vec4f(d / gsum(Rd, S.drop.y), i / gsum(Ri, S.inner.y), 0.0, 1.0));
+}`;
+export const STYLE_FINAL_WGSL = /* wgsl */`
+@group(0) @binding(0) var srcT: texture_2d<f32>;
+@group(0) @binding(1) var outT: texture_storage_2d<rgba16float, write>;
+${STYLE_HEAD}
+@group(0) @binding(3) var bT: texture_2d<f32>;
+${COLOUR_WGSL}
+fn texAt(p: vec2i) -> vec4f {
+  let q = p - vec2i(i32(S.size.z));
+  if (q.x < 0 || q.y < 0 || q.x >= i32(S.size.x) || q.y >= i32(S.size.y)) { return vec4f(0.0); }
+  let t = textureLoad(srcT, q, 0);
+  return vec4f(M709_2020 * t.rgb, t.a);
+}
+fn B(p: vec2i) -> vec2f {
+  let M = i32(S.size.z); let Wp = i32(S.size.x) + 2 * M; let Hp = i32(S.size.y) + 2 * M;
+  if (p.x < 0 || p.y < 0 || p.x >= Wp || p.y >= Hp) { return vec2f(0.0); }
+  return textureLoad(bT, p, 0).rg;
+}
+// dilation (max of A · cov) and erosion (1 - max of (1 - A) · cov) over a disc of radius r
+fn morph(p: vec2i, r: f32) -> vec2f {
+  let R = i32(ceil(r));
+  var dil = 0.0; var ero = 0.0;
+  for (var dy = -R; dy <= R; dy++) { for (var dx = -R; dx <= R; dx++) {
+    let cov = clamp(r + 0.5 - length(vec2f(f32(dx), f32(dy))), 0.0, 1.0);
+    if (cov <= 0.0) { continue; }
+    let a = texAt(p + vec2i(dx, dy)).a;
+    dil = max(dil, a * cov); ero = max(ero, (1.0 - a) * cov);
+  } }
+  return vec2f(dil, 1.0 - ero);
+}
+fn over(top: vec4f, bot: vec4f) -> vec4f { return top + bot * (1.0 - top.a); }
+@compute @workgroup_size(16, 16)
+fn main(@builtin(global_invocation_id) id: vec3u) {
+  let M = i32(S.size.z); let Wp = i32(S.size.x) + 2 * M; let Hp = i32(S.size.y) + 2 * M;
+  if (i32(id.x) >= Wp || i32(id.y) >= Hp) { return; }
+  let p = vec2i(id.xy);
+  let t = texAt(p);
+  var c = t.rgb; let a = t.a;
+  if (S.flags.w != 0.0) {
+    let q = vec2f(p - vec2i(M)) + vec2f(0.5) - 0.5 * S.size.xy;
+    let ext = abs(S.size.x * S.grad.y) + abs(S.size.y * S.grad.z);
+    let g = clamp(0.5 + dot(q, S.grad.yz) / ext, 0.0, 1.0);
+    c = mix(c, mix(S.g0.rgb, S.g1.rgb, g), S.grad.x);
+  }
+  if (S.flags.y != 0.0) { c = mix(c, S.icol.rgb, S.inner.x * (1.0 - B(p - vec2i(i32(S.inner.z), i32(S.inner.w))).y)); }
+  var res = vec4f(c * a, a);
+  if (S.flags.z != 0.0) {
+    let pos = S.stroke.z;
+    var ring = 0.0;
+    if (pos == 0.0) { ring = morph(p, S.stroke.y).x - a; }
+    else if (pos == 1.0) { ring = a - morph(p, S.stroke.y).y; }
+    else { let m = morph(p, 0.5 * S.stroke.y); ring = m.x - m.y; }
+    let sa = S.stroke.x * clamp(ring, 0.0, 1.0);
+    let sp = vec4f(S.scol.rgb * sa, sa);
+    if (pos == 0.0) { res = over(res, sp); } else { res = over(sp, res); }
+  }
+  if (S.flags.x != 0.0) {
+    let da = S.drop.x * B(p - vec2i(i32(S.drop.z), i32(S.drop.w))).x;
+    res = over(res, vec4f(S.dcol.rgb * da, da));
+  }
+  var o = vec3f(0.0);
+  if (res.a > 0.0) { o = res.rgb / res.a; }
+  textureStore(outT, p, vec4f(o, res.a));
 }`;

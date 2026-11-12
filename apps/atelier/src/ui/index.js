@@ -12,6 +12,17 @@ import { createLayersPanel } from './layers.js';
 import { createTools, isTyping } from './tools.js';
 import { createExport } from './export.js';
 import { zoomAt } from './geometry.js';
+import { createFillButton, createSmartMenu } from './heal.js';
+import { mountViews } from './views.js';
+import { createAiPixelsPanel } from './ai-pixels.js';
+import { createAiPortraitPanel } from './ai-portrait.js';
+import { createAIPanel } from './ai.js';
+import { createMergeButton } from './merge.js';
+import { createTetherControls } from './tether.js';
+import { createVectorPanel } from './vector.js';
+import { createBrushPanel } from './brushes.js';
+import { createTimelinePanel } from './timeline.js';
+import { createEngineUI } from './engine-ui.js';
 
 const COPY_PANELS = [['basic', 'Basic'], ['curve', 'Tone curve'], ['mixer', 'Colour mixer'], ['grading', 'Colour grading'], ['effects', 'Effects']];
 
@@ -52,6 +63,7 @@ export function mountUI({ bus, ctx, manifest, engineError, grantFolder, runStage
     h('button', { class: 'primary', dataset: { command: 'export_image' }, onclick: () => openExport() }, 'Export…'),
   );
 
+  header.insertBefore(createFillButton(ui), header.querySelector('.grow'));   // content-aware fill (P41)
   async function setMode(mode) { await sender.send('set_view', { mode }); tools.drawBar(); render(); }
 
   async function newDocument() {
@@ -107,8 +119,18 @@ export function mountUI({ bus, ctx, manifest, engineError, grantFolder, runStage
   const devRoot = $('#develop-panel'); const layRoot = $('#layers-panel');
   const develop = createDevelopPanel(devRoot, ui); ui.develop = develop;
   const layers = createLayersPanel(layRoot, ui);
+  const engineUI = createEngineUI(layRoot, ui);   // layer styles, adjustments, filters, soft proof
+  header.insertBefore(createSmartMenu(ui, () => layers.picked), header.querySelector('.grow'));   // smart objects (P12, P13)
+  ui.aiPixels = createAiPixelsPanel($('aside'), ui);
+  ui.aiPortrait = createAiPortraitPanel($('aside'), ui);   // portrait and colour filters, hair and skin masks (P61, L61)
+  const aiMasks = createAIPanel($('#ai-panel'), ui); ui.aiMasks = aiMasks;
+  ui.vector = createVectorPanel($('#vector-panel'), ui);   // pen, paths, vector masks, shapes, rich type, artboards (P08, P32–P35, P56)
   const filmstrip = createFilmstrip($('#filmstrip'), ui); ui.filmstrip = filmstrip;
+  header.insertBefore(createMergeButton(ui), header.querySelector('.grow'));   // HDR, panorama, focus stack (L44–L46)
+  { const t = createTetherControls(ui); if (t) header.insertBefore(t, header.querySelector('.grow')); }   // tethered capture (L50)
   const tools = createTools({ bar: $('#toolbar'), options: $('#options'), stage: $('#stage'), canvas: $('#canvas'), overlay: $('#overlay'), ui });
+  ui.brushes = createBrushPanel($('#brush-panel'), ui, tools);   // brush engine v2 and presets (P26)
+  ui.timeline = createTimelinePanel($('#timeline-panel'), ui);   // timeline, animation, video layers (P58)
 
   // ---- staged actions (the person's Confirm or Discard) and notices ----
   const stagedBar = $('#staged');
@@ -171,6 +193,8 @@ export function mountUI({ bus, ctx, manifest, engineError, grantFolder, runStage
     const t = { v: 'move', m: e.shiftKey ? 'marquee-ellipse' : 'marquee-rect', l: 'lasso', w: 'wand', b: 'brush', e: 'eraser', g: e.shiftKey ? 'gradient' : 'fill', t: 'text', c: 'crop', h: 'hand', z: 'zoom' }[k];
     if (t) return run(() => tools.setTool(t));
     if (e.key === '[' || e.key === ']' || e.key === '{' || e.key === '}') return run(() => tools.nudge(e.key === '{' ? '[' : e.key === '}' ? ']' : e.key, e.shiftKey));
+    const t2 = { i: 'eyedropper', u: 'warp', q: 'liquify' }[k];
+    if (t2) return run(() => tools.setTool(t2));
     if (k === 'd') return run(() => tools.defaultColours());
     if (k === 'x') return run(() => tools.swapColours());
   });
@@ -187,8 +211,11 @@ export function mountUI({ bus, ctx, manifest, engineError, grantFolder, runStage
     const s = ctx.storage();
     storageLabel.textContent = s ? `Storage: ${s.label}` : 'No storage';
     devRoot.hidden = !dev; layRoot.hidden = dev;
-    if (dev) develop.update(); else layers.render();
+    if (dev) develop.update(); else { layers.render(); engineUI.render(); }
+    aiMasks.render();
+    ui.vector?.render();
     filmstrip.draw();
+    ui.views?.render();
     tools.paintOverlay();
     stagedBar.replaceChildren(...[...ctx.staged.values()].map((st) => h('div', {}, h('span', {}, st.summary),
       h('button', { class: 'primary', dataset: { staged: st.id, decision: 'confirm', person: 'confirm_staged' } }, 'Confirm'),
@@ -207,6 +234,7 @@ export function mountUI({ bus, ctx, manifest, engineError, grantFolder, runStage
   }
 
   tools.drawBar();
+  ui.views = mountViews(ui);
   addEventListener('resize', () => { tools.sizeOverlay(); render(); });
   tools.sizeOverlay();
   return { ui, render, refreshFolder: () => filmstrip.refresh().then(() => develop.refreshPresets()), say };

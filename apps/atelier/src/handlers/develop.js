@@ -10,9 +10,9 @@ export const PANELS = {
   basic: ['exposure', 'contrast', 'highlights', 'shadows', 'whites', 'blacks', 'texture', 'clarity', 'dehaze', 'vibrance', 'saturation'],
   curve: ['parametric_shadows', 'parametric_darks', 'parametric_lights', 'parametric_highlights', 'parametric_split_shadows', 'parametric_split_midtones', 'parametric_split_highlights'],
   detail: ['sharpen_amount', 'sharpen_radius', 'sharpen_detail', 'sharpen_masking', 'nr_luminance', 'nr_color'],
-  lens: ['distortion', 'ca_remove', 'ca_red', 'ca_blue', 'lens_vignette_amount', 'lens_vignette_midpoint'],
+  lens: ['distortion', 'ca_remove', 'ca_red', 'ca_blue', 'lens_vignette_amount', 'lens_vignette_midpoint', 'lens_profile', 'lens_profile_distortion', 'lens_profile_vignetting'],
   transform: ['upright_vertical', 'upright_horizontal', 'straighten_angle'],
-  effects: ['vignette_amount', 'vignette_midpoint', 'grain_amount', 'grain_size', 'grain_roughness'],
+  effects: ['vignette_amount', 'vignette_midpoint', 'grain_amount', 'grain_size', 'grain_roughness', 'halation_amount', 'halation_size', 'bloom_amount', 'bloom_size'],
   calibration: ['calib_red_hue', 'calib_red_sat', 'calib_green_hue', 'calib_green_sat', 'calib_blue_hue', 'calib_blue_sat'],
   mixer: [], grading: [],
 };
@@ -35,6 +35,9 @@ export function settingsOf(l, panels = KNOWN_PANELS) {
     if (p === 'mixer') { if (l.mixer) out.mixer = structuredClone(l.mixer); continue; }
     if (p === 'grading') { if (l.grading) out.grading = structuredClone(l.grading); continue; }
     if (p === 'calibration' && l.lut) out.lut = structuredClone(l.lut);
+    // The lens profile flag (lens_profile) travels with the resolved profile it switches on; a flag without
+    // its profile would make the target fail to render. The coefficients are the ones resolved for this photo.
+    if (p === 'lens' && l.lensProfile) out.lensProfile = structuredClone(l.lensProfile);
     for (const k of PANELS[p] || []) if (l.develop?.[k] !== undefined) out[k] = l.develop[k];
   }
   return out;
@@ -51,7 +54,7 @@ export function register(bus, ctx) {
   bus.register('develop.set', async (a) => {
     const l = rawLayer(ctx, a.layerId);
     const unrendered = Object.keys(a.params).filter((k) => !DEVELOP_RENDERED.includes(k));
-    if (a.params.lens_profile === 1) fail('unsupported', 'lens profiles need a lens database; none with a permissive licence is available', 'fix_argument', 'set_develop');
+    if (a.params.lens_profile === 1 && !l.lensProfile) fail('unsupported', 'this layer has no lens profile; open lens data you own with load_lens_data, then pick a profile with set_lens_profile', 'fix_argument', 'set_lens_profile');
     const merged = { ...DEVELOP_DEFAULTS, ...l.develop, ...a.params };
     const sp = [merged.parametric_split_shadows, merged.parametric_split_midtones, merged.parametric_split_highlights];
     if (!(sp[0] + 5 <= sp[1] && sp[1] + 5 <= sp[2])) fail('invalid', `parametric splits must ascend at least 5 apart (shadows < midtones < highlights); would be ${sp.join(', ')}`, 'fix_argument', 'set_develop');
@@ -161,6 +164,7 @@ export function register(bus, ctx) {
         if (p === 'mixer') delete x.mixer;
         if (p === 'grading') delete x.grading;
         if (p === 'calibration') delete x.lut;
+        if (p === 'lens') delete x.lensProfile;
         for (const k of PANELS[p] || []) delete x.develop?.[k];
       }
     });

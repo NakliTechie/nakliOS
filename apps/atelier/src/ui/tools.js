@@ -11,6 +11,7 @@ export const COMPOSITE_TOOLS = [
   ['move', 'Move', 'V'], ['marquee-rect', 'Rectangle select', 'M'], ['marquee-ellipse', 'Ellipse select', 'Shift+M'], ['lasso', 'Lasso', 'L'], ['wand', 'Magic wand', 'W'],
   ['brush', 'Brush', 'B'], ['eraser', 'Eraser', 'E'], ['fill', 'Fill bucket', 'G'], ['gradient', 'Gradient', 'Shift+G'],
   ['text', 'Type', 'T'], ['crop', 'Crop', 'C'], ['hand', 'Hand', 'H'], ['zoom', 'Zoom', 'Z'],
+  ['eyedropper', 'Eyedropper (CMYK readout)', 'I'], ['warp', 'Warp (pins)', 'U'], ['liquify', 'Liquify', 'Q'],
 ];
 export const DEVELOP_TOOLS = [['crop', 'Crop', 'R'], ['mask-linear', 'Linear mask', 'M'], ['mask-radial', 'Radial mask', 'Shift+M'], ['mask-brush', 'Brush mask', 'K'], ['hand', 'Hand', 'H'], ['zoom', 'Zoom', 'Z']];
 // The command each tool's gesture sends (the parity table reads this).
@@ -18,12 +19,13 @@ export const TOOL_COMMAND = {
   move: 'transform_layer', 'marquee-rect': 'set_selection', 'marquee-ellipse': 'set_selection', lasso: 'set_selection', wand: 'set_selection',
   brush: 'paint_stroke', eraser: 'paint_stroke', fill: 'fill', gradient: 'fill', text: 'add_layer', crop: 'crop_document', hand: 'set_view', zoom: 'set_view',
   'mask-linear': 'set_mask', 'mask-radial': 'set_mask', 'mask-brush': 'paint_mask',
+  eyedropper: 'sample_print_color', warp: 'warp_layer', liquify: 'liquify_layer',
 };
-const GLYPH = { move: '✥', 'marquee-rect': '▭', 'marquee-ellipse': '◯', lasso: '➰', wand: '✦', brush: '✎', eraser: '⌫', fill: '◧', gradient: '▤', text: 'T', crop: '⛶', hand: '✋', zoom: '⌕', 'mask-linear': '▥', 'mask-radial': '◎', 'mask-brush': '✎' };
+const GLYPH = { move: '✥', 'marquee-rect': '▭', 'marquee-ellipse': '◯', lasso: '➰', wand: '✦', brush: '✎', eraser: '⌫', fill: '◧', gradient: '▤', text: 'T', crop: '⛶', hand: '✋', zoom: '⌕', 'mask-linear': '▥', 'mask-radial': '◎', 'mask-brush': '✎', eyedropper: '⌖', warp: '⌗', liquify: '≈' };
 
 export function createTools({ bar, options, stage, canvas, overlay, ui }) {
   const { send } = ui;
-  const opt = { size: 40, hardness: 80, opacity: 100, flow: 100, fg: '#000000', bg: '#ffffff', tolerance: 32, contiguous: true, op: 'replace', fontSize: 120, font: 'Helvetica Neue', square: false };
+  const opt = { size: 40, hardness: 80, opacity: 100, flow: 100, fg: '#000000', bg: '#ffffff', tolerance: 32, contiguous: true, op: 'replace', fontSize: 120, font: 'Helvetica Neue', square: false, strength: 50, liquifyMode: 'push', radius: 0, tac: 300 };
   let tool = 'move'; let spaceHand = false;
   const engine = () => ui.ctx.engine;
   const view = () => engine()?.computeView();
@@ -64,6 +66,10 @@ export function createTools({ bar, options, stage, canvas, overlay, ui }) {
       h('button', { dataset: { command: 'refine_selection' }, onclick: () => send('refine_selection', { action: 'invert' }) }, 'Invert'),
       h('button', { dataset: { command: 'refine_selection' }, onclick: async () => { const v = await ui.dialogs.promptText('Feather selection', 'Radius in pixels', '10'); if (v != null && Number(v) >= 0) send('refine_selection', { action: 'feather', amount: Number(v) }); } }, 'Feather…'));
     if (t === 'text') o.push(num('Size', 'fontSize', 1, 2000));
+    if (t === 'liquify') o.push(h('label', { class: 'opt' }, 'Mode', h('select', { 'aria-label': 'Liquify mode', dataset: { view: 'option:liquifyMode' }, onchange: (e) => { opt.liquifyMode = e.target.value; } }, ['push', 'bloat', 'pinch'].map((v) => h('option', { value: v, selected: v === opt.liquifyMode }, v)))),
+      num('Size', 'size', 2, 2000), num('Strength', 'strength', 1, 100), resetWarp(), h('span', { class: 'dim' }, 'Drag to push; click to bloat or pinch.'));
+    if (t === 'warp') o.push(resetWarp(), h('span', { class: 'dim' }, 'Drag from a point to where it should move (a pin). Up to 64 pins.'));
+    if (t === 'eyedropper') o.push(num('Radius', 'radius', 0, 50), num('Total ink %', 'tac', 100, 400), h('span', { class: 'readout', role: 'status', 'aria-label': 'CMYK readout', dataset: { view: 'cmyk-readout' } }, readout));
     if (t === 'brush' || t === 'eraser') o.push(h('span', { class: 'dim' }, '[ ] size · Shift+[ ] hardness · D default colours · X swap'));
     if (t === 'move') o.push(h('span', { class: 'dim' }, 'Drag to move the active layer (one undo step per drag).'));
     if (t === 'hand' || t === 'zoom') o.push(h('button', { dataset: { command: 'set_view' }, onclick: () => send('set_view', fitView()) }, 'Fit'), h('button', { dataset: { command: 'set_view' }, onclick: () => send('set_view', { zoom: ratio(), center: centre() }) }, '100%'), h('span', { class: 'dim' }, 'Alt-click zooms out · Ctrl+wheel zooms · Space pans'));
@@ -72,6 +78,8 @@ export function createTools({ bar, options, stage, canvas, overlay, ui }) {
     options.replaceChildren(...o);
   }
 
+  let readout = 'Click the photo to read its CMYK (built-in press).';
+  const resetWarp = () => h('button', { dataset: { command: 'reset_warp' }, onclick: () => { const l = ui.store.doc?.layers.find((q) => q.id === activeLayer()); if (l) send('reset_warp', { layerId: l.id }); } }, 'Reset warp');
   function setTool(id) { tool = id; drawBar(); paintOverlay(); }
 
   // ---- overlay ----
@@ -106,7 +114,7 @@ export function createTools({ bar, options, stage, canvas, overlay, ui }) {
     overlay.setPointerCapture(e.pointerId);
     const t = current(); const p = toDoc(e);
     const g = { tool: t, a: p, b: p, pts: [withPressure(p, e)], screen: [e.clientX, e.clientY], alt: e.altKey, shift: e.shiftKey };
-    g.kind = { 'marquee-rect': 'rect', 'marquee-ellipse': 'ellipse', lasso: 'lasso', crop: 'crop', brush: 'stroke', eraser: 'stroke', 'mask-brush': 'stroke', gradient: 'line', 'mask-linear': 'line', 'mask-radial': 'radial', move: 'move' }[t] || t;
+    g.kind = { 'marquee-rect': 'rect', 'marquee-ellipse': 'ellipse', lasso: 'lasso', crop: 'crop', brush: 'stroke', eraser: 'stroke', 'mask-brush': 'stroke', gradient: 'line', 'mask-linear': 'line', 'mask-radial': 'radial', move: 'move', liquify: 'stroke', warp: 'line' }[t] || t;
     g.size = opt.size;
     gesture = g; paintOverlay();
   });
@@ -164,6 +172,28 @@ export function createTools({ bar, options, stage, canvas, overlay, ui }) {
           return send('set_crop', { layerId: l.id, rect: cropFromView(l.crop?.rect, doc.width, doc.height, r) });
         }
         return send('crop_document', { rect: r });
+      }
+      case 'eyedropper': {
+        const r = await ui.read('sample_print_color', { x: R(clampTo(x, doc.width)), y: R(clampTo(y, doc.height)), radius: opt.radius, tac: opt.tac });
+        readout = r.status === 'ok'
+          ? `C ${r.result.cmyk[0]}  M ${r.result.cmyk[1]}  Y ${r.result.cmyk[2]}  K ${r.result.cmyk[3]} %${r.result.inGamut === false ? ' · out of gamut' : ''}`
+          : `No reading: ${r.error?.message ?? r.status}`;
+        const el = options.querySelector('.readout'); if (el) el.textContent = readout;
+        ui.lastCmyk = r;
+        return r;
+      }
+      case 'warp': case 'liquify': {
+        const l = doc.layers.find((q) => q.id === activeLayer());
+        if (!l) return null;
+        // Layer-source pixels: the inverse of the layer matrix [a b c d e f] applied to document points.
+        const [ma, mb, mc, md, me, mf] = l.matrix; const det = ma * md - mb * mc; const k = Math.sqrt(Math.abs(det)) || 1;
+        const toSrc = ([px, py]) => { const dx = px - me; const dy = py - mf; return [Math.round(((md * dx - mc * dy) / det) * 10) / 10, Math.round(((-mb * dx + ma * dy) / det) * 10) / 10]; };
+        if (t === 'warp') {
+          if (!moved) return null;
+          const pins = [...(l.warp?.pins || []), { from: toSrc(g.a), to: toSrc(g.b) }].slice(-64);
+          return send('warp_layer', { layerId: l.id, pins });
+        }
+        return send('liquify_layer', { layerId: l.id, strokes: [{ mode: opt.liquifyMode, points: g.pts.map((p) => toSrc(p)), size: Math.max(2, Math.round(opt.size / k)), strength: opt.strength / 100 }] });
       }
       case 'mask-linear': case 'mask-radial': {
         const base = ui.develop.layer; if (!base || !moved) return;
