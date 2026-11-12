@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 80" role="img" aria-labelledby="title desc">
+  <title id="title">Lorewell</title>
+  <desc id="desc">A living open book with a connected idea node beside the Lorewell wordmark.</desc>
+  <rect x="4" y="4" width="72" height="72" rx="18" fill="#f3e7c4"/>
+  <g transform="translate(10 9) scale(.94)">
+    <path d="M7 19c9-4 18-2 25 4v31c-7-6-16-8-25-4V19Z" fill="#2c3e3a"/>
+    <path d="M57 19c-9-4-18-2-25 4v31c7-6 16-8 25-4V19Z" fill="#2c3e3a"/>
+    <path d="M12 24c6-2 11-1 16 3v17c-5-3-10-4-16-2V24Z" fill="#f3e7c4"/>
+    <path d="M37 27c4-3 9-4 15-2v8c-5-1-10 0-15 3v-9Zm0 13c5-3 10-4 15-2v6c-6-1-11 0-15 3v-7Z" fill="#f3e7c4"/>
+    <path d="M32 17v8" fill="none" stroke="#b85c3a" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="32" cy="12" r="5" fill="#b85c3a"/>
+  </g>
+  <text x="94" y="53" fill="#2c3e3a" font-family="Georgia, 'Times New Roman', serif" font-size="48" font-weight="700" letter-spacing="-.8">Lorewell</text>
+</svg>

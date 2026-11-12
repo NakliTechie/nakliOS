@@ -45,8 +45,13 @@ const g = loadGate();
 const byId = (id) => g.APPS.find(a => a.id === id);
 
 // The premise: these apps really are shaped the way the finding says.
-assert.equal(byId('books').kind, 'system', 'Lorewell is still declared a system app');
-assert.notEqual(g.appExpectedOrigin(byId('books')), ORIGIN, 'Lorewell still loads cross-origin');
+// Lorewell (books) was the real cross-origin system app until 2026-11-12, when it became a same-origin
+// mirror without kind:'system'. A stand-in keeps the case under test: kind:'system' served from elsewhere.
+g.APPS.push({ id:'xsys', name:'Cross-origin system app', kind:'system', url:'https://elsewhere.example/', embedUrl:'https://elsewhere.example/' });
+assert.equal(byId('xsys').kind, 'system');
+assert.notEqual(g.appExpectedOrigin(byId('xsys')), ORIGIN, 'the stand-in loads cross-origin');
+assert.notEqual(byId('books').kind, 'system', 'Lorewell is a mirrored catalog app, not a system app');
+assert.equal(g.appExpectedOrigin(byId('books')), ORIGIN, 'Lorewell is served from this origin');
 assert.equal(byId('files').kind, 'system');
 assert.equal(g.appExpectedOrigin(byId('files')), ORIGIN, 'Files is served from this origin');
 
@@ -55,9 +60,10 @@ for (const id of ['files', 'anvil', 'forge', 'editor', 'notes', 'calendar']) {
   assert.equal(g.aiAppOwnsSystemFs(id), true, `${id} is a same-origin system app and keeps the system filesystem`);
 }
 // A cross-origin app never reaches the whole store, whatever tier it is declared at.
-assert.equal(g.aiAppOwnsSystemFs('books'), false,
-  'Lorewell is kind:system but cross-origin — refused (this is the case a kind-only check misses)');
-for (const id of ['mod', 'mehfil', 'bolo', 'reckon', 'draft', 'tijori']) {
+assert.equal(g.aiAppOwnsSystemFs('xsys'), false,
+  'a kind:system app served cross-origin is refused (this is the case a kind-only check misses)');
+assert.equal(g.aiAppOwnsSystemFs('books'), false, 'Lorewell is same-origin but not a system app: refused');
+for (const id of ['mod', 'mehfil', 'bolo', 'reckon', 'draft', 'tijori', 'books']) {
   if (!byId(id)) continue;
   assert.equal(g.aiAppOwnsSystemFs(id), false, `${id} is a catalog app and stays clamped to its namespace`);
 }
@@ -73,8 +79,8 @@ assert.equal(g.appExpectedOrigin({ id:'x', thirdParty:true, url:'https://evil.ex
 assert.equal(g.appExpectedOrigin({ id:'y', url:'./apps/y/' }), ORIGIN, 'a relative embed resolves to this origin');
 
 // The two tiers are genuinely separate questions now, not one answer shared.
-assert.equal(g.aiAppIsSystem('books'), true, 'the AI tier still keys on !thirdParty (deliberate)');
-assert.equal(g.aiAppOwnsSystemFs('books'), false, 'the file tier does not');
+assert.equal(g.aiAppIsSystem('xsys'), true, 'the AI tier still keys on !thirdParty (deliberate)');
+assert.equal(g.aiAppOwnsSystemFs('xsys'), false, 'the file tier does not');
 
 // The sysfs route and the capability broadcast both ride the new predicate.
 assert.match(host, /if \(!aiAppOwnsSystemFs\(appId\)\) throw new Error\('System filesystem is available to same-origin system apps only'\);/,

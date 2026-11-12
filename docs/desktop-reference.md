@@ -373,8 +373,9 @@ The Crate ESM modules are vendored under [`vendor/crate/`](../vendor/crate/) and
 ID. It uses the current storage SDK, keeps Folder and Crate libraries isolated,
 and adds filtering, sorting, duplicate protection, modal-confirmed removal,
 reader appearance preferences, and a Local AI reading companion scoped to the
-visible selection, page, or passage. Local development loads the sibling
-`Books/` checkout; production uses `lorewell.naklitechie.com`.
+visible selection, page, or passage. Since 2026-11-12 it loads from the same-origin
+mirror `./apps/books/` in local development and production alike; `lorewell.naklitechie.com`
+is retired.
 
 **Notes v1** is a bundled three-pane notebook app that stays hosted in both
 desktop modes. Browser, Folder, and encrypted Crate are visibly separate

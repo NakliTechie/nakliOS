@@ -1646,11 +1646,9 @@ const APPS = [
     description:'A coding-agent desktop — projects and tasks, a chat with the on-device agent and its live tool-call trace, and a preview pane. The GUI sibling of Forge. Runs on Rig; nothing leaves your device.',
     tags:['tool','developer','agent','code','editor'], desktopAlign:'right', desktopOrder:0,
     svg:`<rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="9" x2="18" y2="9"/><line x1="15" y1="13" x2="18" y2="13"/>` },
-  { id:'books', name:'Lorewell', kind:'system',
-    url:'https://lorewell.naklitechie.com/',
-    embedUrl:/^(localhost|127\.0\.0\.1)$/.test(location.hostname)
-      ? '../Books/'
-      : 'https://lorewell.naklitechie.com/',
+  { id:'books', name:'Lorewell',
+    url:'./apps/books/',
+    embedUrl:'./apps/books/',
     glyph:'📖', bg:'act',
     description:'A private semantic library for the books you own. Read, connect, and remember across ePub, PDF, MOBI, AZW3, FB2, and text using Browser storage or your Folder or Crate.',
     tags:['tool','reading'], desktopAlign:'right', desktopOrder:3,
