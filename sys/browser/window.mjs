@@ -26,6 +26,17 @@ export function normaliseAddress(input) {
 }
 
 /** True when this document is a desktop inside another desktop (the acceptance demo). */
+/**
+ * True when a site shown in the window should move to the Full tab. Inside the desktop, a site's own
+ * requests go without its session cookies, so a signed-in site loads its first page and then fails
+ * (GitHub, Gmail and X, live in Chrome 157, 2026-11-12). The Full tab keeps them. "Signed in" is the
+ * extension's cookie count for the site, so a site that only sets cookies moves too. The desktop's own
+ * host stays in the window: that is NakliOS inside its own Browser, which needs no sign-in.
+ */
+export function shouldOpenFull({ cookies, host, desktopHost }) {
+  return cookies > 0 && host !== desktopHost;
+}
+
 export const isNested = (win = globalThis.window) => !!win && win.top !== win;
 
 /**
@@ -131,7 +142,7 @@ function build(win, deps, windowId) {
   const view = wrap.querySelector('.nb-view');
   const btn = act => wrap.querySelector(`[data-act="${act}"]`);
   const offer = wrap.querySelector('.nb-offer');
-  let ext = null, frame = null, mode = 'window';
+  let ext = null, frame = null, mode = 'window', movedFull = false;
 
   const note = text => { view.innerHTML = '<div class="nb-note"></div>'; view.firstChild.textContent = text; frame = null; };
   note('Type an address to open a site with your Chrome sign-in.');
@@ -155,6 +166,18 @@ function build(win, deps, windowId) {
       // blocked, so the count cannot detect that case: the two ways out stay visible while a site shows.
       offer.hidden = false;
       offer.classList.toggle('nb-offer-hint', m.cookies === 0);
+      let host = '';
+      try { host = new URL(m.url).hostname; } catch (_) {}
+      // The frame opens the Full tab and confirms with full-opened; it must stay until then.
+      if (!movedFull && shouldOpenFull({ cookies: m.cookies, host, desktopHost: location.hostname })) {
+        movedFull = true;
+        post('nakli-browser:open-full');
+      }
+    } else if (m.type === 'nakli-browser:full-opened') {
+      let host = '';
+      try { host = new URL(m.url).hostname; } catch (_) {}
+      mode = 'full';
+      note(`Opened ${host} in its own tab, signed in. Sites you are signed in to open there, because inside the desktop their pages cannot load their own data.`);
     } else if (m.type === 'nakli-browser:needs-open') {
       go(m.url, { fresh: true });
     } else if (m.type === 'nakli-browser:signin') {
@@ -169,6 +192,7 @@ function build(win, deps, windowId) {
     const target = normaliseAddress(raw);
     if (!target) { notify('That is not a web address.'); return; }
     input.value = target;
+    movedFull = false;
     await extReady;
     if (!ext) {
       mode = 'tab';

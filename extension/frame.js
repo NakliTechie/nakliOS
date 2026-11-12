@@ -88,7 +88,11 @@ window.addEventListener('message', e => {
   } else if (m.type === 'nakli-browser:forward' && fwd.length) {
     back.push(current); current = fwd.pop(); pending = true; site.src = current; report();
   } else if (m.type === 'nakli-browser:open-full' && current) {
-    chrome.runtime.sendMessage({ type: 'frame:open-full', url: current }).then(r => { if (!r || !r.ok) tell('nakli-browser:error', { error: r ? r.error : 'no-answer' }); });
+    const url = current;
+    chrome.runtime.sendMessage({ type: 'frame:open-full', url }).then(r => {
+      if (!r || !r.ok) tell('nakli-browser:error', { error: r ? r.error : 'no-answer' });
+      else tell('nakli-browser:full-opened', { url });
+    });
   } else if (m.type === 'nakli-browser:reload' && current) {
     pending = true; site.src = current; report();
   }

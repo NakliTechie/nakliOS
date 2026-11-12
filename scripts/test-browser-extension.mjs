@@ -7,7 +7,7 @@ import {
   checkDesktopSender, parseSiteUrl, originPattern, isSignInUrl, buildSessionRules, ruleIdsFor, freeRuleIds,
   mintToken, redeemToken, pruneTokens, checkAncestors, historyEntry, TOKEN_TTL_MS,
 } from '../extension/lib.mjs';
-import { normaliseAddress } from '../sys/browser/window.mjs';
+import { normaliseAddress, shouldOpenFull } from '../sys/browser/window.mjs';
 
 const tab = id => ({ id });
 // Only the desktop: top frame, path '/', trusted origin.
@@ -30,6 +30,11 @@ assert.equal(isSignInUrl('https://accounts.google.com/v3/signin'), true);
 assert.equal(isSignInUrl('https://www.facebook.com/login/?next=x'), true);
 assert.equal(isSignInUrl('https://www.facebook.com/'), false);
 assert.equal(normaliseAddress('github.com'), 'https://github.com/');
+// Signed-in sites move to the Full tab; the desktop's own host (NakliOS inside its Browser) stays.
+assert.equal(shouldOpenFull({ cookies: 12, host: 'github.com', desktopHost: 'naklios.dev' }), true);
+assert.equal(shouldOpenFull({ cookies: 0, host: 'example.com', desktopHost: 'naklios.dev' }), false);
+assert.equal(shouldOpenFull({ cookies: null, host: 'example.com', desktopHost: 'naklios.dev' }), false, 'no count yet: stay');
+assert.equal(shouldOpenFull({ cookies: 3, host: 'naklios.dev', desktopHost: 'naklios.dev' }), false, 'the nested desktop stays in the window');
 assert.equal(normaliseAddress('  https://github.com/x  '), 'https://github.com/x');
 assert.equal(normaliseAddress('hello world'), null);
 assert.equal(normaliseAddress('ftp://x.example'), null);

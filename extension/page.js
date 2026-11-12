@@ -19,6 +19,13 @@ else {
       const site = document.getElementById('site');
       site.hidden = false;
       site.src = url.href;
+      // A site whose service worker answers the navigation (X does) keeps its framing headers, because
+      // Chrome's header rules do not touch service-worker responses. Chrome then shows its refused-frame
+      // page. Give the tab to the site itself: a normal tab is top-level, so the sign-in still holds.
+      site.addEventListener('load', async () => {
+        const frames = await chrome.webNavigation.getAllFrames({ tabId: (await chrome.tabs.getCurrent()).id });
+        if (frames.some(f => f.parentFrameId === 0 && f.errorOccurred)) location.replace(url.href);
+      });
     }
   }
 }

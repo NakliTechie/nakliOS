@@ -17,7 +17,7 @@ Settings → Browser in NakliOS lists the sites you allowed, with **Remove** for
 - It gives the desktop a one-time token bound to that tab and adds Chrome session rules **for that tab only** that remove `X-Frame-Options` and `Content-Security-Policy` from framed responses that carry a framing header. Other tabs keep every site's framing protection. The rules go when the window closes, the tab closes, or the desktop reloads.
 - The desktop frames `frame.html`, an extension page. It checks that the desktop framed it directly and redeems the token, then frames the site. Chrome sends your existing cookies because the request comes from an extension page with permission for that site.
 - Sign-in pages that refuse frames (Google, Facebook, Instagram, Microsoft, Apple) open in a popup; the window reloads the site when the popup closes.
-- When third-party cookies are blocked, a framed site is signed out. **Full tab** opens it as an extension tab, which keeps the sign-in; **New tab** opens it normally.
+- A site you are signed in to moves to the **Full tab**, an extension tab that keeps the sign-in. Inside the desktop, only the first page load carries your cookies: the site's own later requests go without them, so GitHub, Gmail and X showed a signed-in page whose data failed to load (Chrome 157, 2026-11-12). If the Full tab's frame is refused (X answers from its service worker, which Chrome's header rules do not touch), the tab becomes the site itself, a normal tab that keeps the sign-in. Sites with no cookies, and NakliOS inside its own Browser, stay in the window. **New tab** opens a site normally.
 
 ## Privacy
 
