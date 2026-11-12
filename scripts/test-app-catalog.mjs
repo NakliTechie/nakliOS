@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
 for (const retiredId of [
-  'bahi',
+  // bahi: back in the catalog 2026-11-12 (Chirag: \"bahi into the catalog\"), replacing the 2026-07-28 exclusion.
   'fretlocal',
   'clacker',
   'mechanikon',
@@ -143,7 +143,7 @@ assert.match(
 );
 assert.match(
   html,
-  /id:'fld-work'[\s\S]*?apps:\['editor','forge','anvil','dish','pi','kanzen','nakliposter','bofh','mod','naklidata','nemawashi','menagerie'\]/,
+  /id:'fld-work'[\s\S]*?apps:\['editor','forge','anvil','dish','pi','kanzen','nakliposter','bofh','mod','naklidata','nemawashi','menagerie','bahi'\]/,
   'Editor, Forge, Anvil, Dish and Pi have predictable homes in Work & Build',
 );
 assert.match(
@@ -177,3 +177,5 @@ assert.match(
 );
 
 console.log('NakliOS app catalog exclusions: PASS');
+
+assert.match(html, /id:'bahi'[\s\S]*?url:'https:\/\/bahi\.naklitechie\.com\/'[\s\S]*?opensInNewTab:true/, 'Bahi opens its own site in a tab, because its file pickers are blocked in a cross-origin frame');
