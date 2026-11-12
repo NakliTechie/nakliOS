@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // The TeX service in real Chrome through the desktop: Notes stands in for a calling app, the engine files come from the
 // real release through the same /tex/ route as production, and each compile goes SDK → host → engine → storage. It
-// downloads about 680 MB into a disposable profile. No npm browser driver (as test-app-commands-browser).
+// downloads about 390 MB into a disposable profile. No npm browser driver (as test-app-commands-browser).
 import assert from 'node:assert/strict';
 import { access, mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { constants } from 'node:fs';
@@ -199,7 +199,7 @@ try {
   assert.match(r.otherApp, /ENOENT/, 'Calendar cannot compile Notes\' project');
   assert.match(r.escape, /EINVAL/);
   assert.deepEqual(r.engines.result.engines, ['pdflatex', 'xelatex', 'lualatex']);
-  assert.deepEqual(r.cache.result.packs.map(pack => pack.cached), [true, true, true]);
+  assert.deepEqual(r.cache.result.packs.map(pack => pack.cached), [true]);
   assert.equal(r.door.result?.ok, true, JSON.stringify(r.door));
   assert.ok(r.history.length >= 10, `History holds ${r.history.length} events`);
   assert.equal(JSON.parse(r.history[0]).door, 'tex');

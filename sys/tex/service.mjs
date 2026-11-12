@@ -4,7 +4,10 @@ import { mapSynctex, parseTexLog } from './log.mjs';
 export { TEX_VERSION } from './version.mjs';
 
 export const TEX_ENGINES = Object.freeze({ pdflatex:'pdftex_bibtex8', xelatex:'xetex_bibtex8_dvipdfmx', lualatex:'luahbtex_bibtex8' });
-export const TEX_PACKS = Object.freeze(['texlive-basic', 'texlive-recommended', 'texlive-extra']);
+// One pack. texlive-extra holds every file of texlive-basic and texlive-recommended, and each pack ships its own
+// TeX index at the same path (/texlive/texmf-dist/ls-R) and its own font maps. Loading all three let whichever pack
+// unpacked last overwrite the index, so a compile found environ.sty on some runs and not others (CI, 2026-11-12).
+export const TEX_PACKS = Object.freeze(['texlive-extra']);
 export const TEX_BUILD_DIR = '.tex-build';
 const MAX_FILES = 5000;
 const MAX_BYTES = 256 * 1024 * 1024;

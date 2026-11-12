@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { gzipSync, gunzipSync } from 'node:zlib';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-import { compileRequest, createTexService, TEX_ENGINES } from '../sys/tex/service.mjs';
+import { compileRequest, createTexService, TEX_ENGINES, TEX_PACKS } from '../sys/tex/service.mjs';
 import { mapSynctex, parseTexLog } from '../sys/tex/log.mjs';
 import { TEX_FILES, texAsset } from '../worker/index.mjs';
 import { createHostRegistry, HOST_COMMANDS } from '../sys/host/agent.mjs';
@@ -232,6 +232,10 @@ assert.equal((await service(fakeEngine(), { record:async () => { throw new Error
   assert.match(text, /Input:1:main\.tex/);
   assert.match(text, /Input:2:\/texlive\/article\.cls/);
 }
+
+// One pack only: texlive-extra contains the other two, and every pack ships its own TeX index (ls-R) at the same path,
+// so loading several let the last one unpacked hide environ.sty from TeX on some runs.
+assert.deepEqual([...TEX_PACKS], ['texlive-extra'], 'load one TeX Live pack, so no pack overwrites another\'s index');
 
 // The /tex/ route: this version's files only, large files by redirect, scripts same-origin, no open proxy.
 {
