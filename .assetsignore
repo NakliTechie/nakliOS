@@ -19,3 +19,4 @@ apps/forge/forge-mockup.html
 wrangler.jsonc
 nakli-egress/
 worker/
+extension/

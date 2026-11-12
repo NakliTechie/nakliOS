@@ -761,7 +761,8 @@
                 msg.type === 'naklios:review:reply' || msg.type === 'naklios:commands:reply' ||
                 msg.type === 'naklios:rag:reply' || msg.type === 'naklios:net:reply' ||
                 msg.type === 'naklios:tex:reply' || msg.type === 'naklios:web:reply' ||
-                msg.type === 'naklios:skills:reply' || msg.type === 'naklios:ai:reply') && msg.requestId) {
+                msg.type === 'naklios:skills:reply' || msg.type === 'naklios:ai:reply' ||
+                msg.type === 'naklios:browser:reply') && msg.requestId) {
       var p = pendingRpc.get(msg.requestId);
       if (!p) return;
       pendingRpc.delete(msg.requestId);
@@ -959,6 +960,18 @@
         delete:     function (path)       { return rpc('naklios:sysfs:delete', fsPayload({ path: path })); },
         exists:     function (path)       { return rpc('naklios:sysfs:exists', fsPayload({ path: path })); },
       },
+    },
+    // Ask the host to open a web address in its Browser window, signed in with the person's Chrome
+    // sessions when the companion extension is installed. The host asks the person first. Answers true
+    // when it opened (in the window or, without the extension, a new tab). Standalone: opens a new tab.
+    experimental_openUrl: function (url) {
+      var href = String(url || '');
+      if (!/^https?:\/\//i.test(href)) return Promise.reject(new Error('openUrl takes an http(s) address'));
+      if (!inNakliOS) {
+        try { window.open(href, '_blank', 'noopener'); } catch (_) {}
+        return Promise.resolve(true);
+      }
+      return rpc('naklios:browser:open', { url: href });
     },
     files: {
       experimental_editInAnvil: function (request) {

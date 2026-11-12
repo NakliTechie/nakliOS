@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NakliOS Browser frame</title>
+<link rel="stylesheet" href="frame.css">
+</head>
+<body>
+<main id="gate" hidden>
+  <p id="gate-text"></p>
+  <div class="row">
+    <button id="grant" type="button" hidden>Open signed in</button>
+    <a id="newtab" target="_blank" rel="noopener" hidden>Open in a new tab instead</a>
+  </div>
+  <p id="gate-note" class="note"></p>
+</main>
+<iframe id="site" hidden
+  allow="publickey-credentials-get; publickey-credentials-create; clipboard-write; clipboard-read; fullscreen"
+  referrerpolicy="strict-origin-when-cross-origin"></iframe>
+<script type="module" src="frame.js"></script>
+</body>
+</html>

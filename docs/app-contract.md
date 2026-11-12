@@ -667,7 +667,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 
 <!-- sdk-reference:begin — rendered by `node scripts/sdk-reference.mjs --write` from docs/sdk-api-audit.md; do not edit by hand -->
 
-114 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
+115 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
 
 ### `version`
 
@@ -852,6 +852,12 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 | `files.read` | function | Read a handed file. |
 | `files.write` | function | Write it back. |
 | `files.release` | function | Release the handle. |
+
+### `experimental_openUrl`
+
+| member | kind | what it is |
+|---|---|---|
+| `experimental_openUrl` | function · **experimental** | Ask the host to open an http(s) address in the Browser window, signed in with the person's Chrome sessions when the companion extension is installed, after the person allows it. Answers true when opened. Standalone: opens a new tab. |
 
 ### `ai` (namespace)
 

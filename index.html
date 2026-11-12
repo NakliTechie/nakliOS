@@ -1512,6 +1512,21 @@ body.is-mobile .nw-dock{display:none;}
 
 <script src="vendor/localmind/host-model-catalog.js"></script>
 <script>
+// A desktop inside the NakliOS Browser (the acceptance demo) shares this origin's storage with the outer
+// desktop, so it writes nothing: no localStorage, no Folder, no state file, no IndexedDB handle. These are the
+// first statements of the application script, so nothing writes before them.
+var NAKLIOS_NESTED = globalThis.NAKLIOS_NESTED = typeof window !== 'undefined' && window.top !== window;
+if (NAKLIOS_NESTED) {
+  for (const k of ['setItem', 'removeItem', 'clear']) Storage.prototype[k] = function(){};
+  document.addEventListener('DOMContentLoaded', () => {
+    const b = document.createElement('div');
+    b.id = 'nested-badge';
+    b.textContent = 'Nested desktop: nothing is saved';
+    b.setAttribute('role', 'status');
+    b.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:2147483000;padding:4px 10px;border-radius:999px;background:#1d1d1f;color:#fff;font:12px system-ui;opacity:.85;pointer-events:none';
+    document.body.appendChild(b);
+  });
+}
 'use strict';
 
 // ════════════════════════════════════════════════════════════════════
@@ -1636,6 +1651,13 @@ const APPS = [
     description:'The Pi coding agent (pi-durable) in a browser Worker, on NakliOS shared inference and the Rig shell. Its files and conversations are saved in NakliOS storage.',
     tags:['tool','developer','agent','code'], desktopAlign:'right', desktopOrder:2,
     svg:`<path d="M5 7h14"/><path d="M9 7v11"/><path d="M15 7v9a2 2 0 0 0 2 2"/>` },
+  { id:'browser', name:'Browser', kind:'system',
+    url:'./apps/browser/',
+    embedUrl:'./apps/browser/',
+    glyph:'🌐', bg:'act',
+    description:'Open sites in a desktop window with the sign-ins you already have in Chrome. Needs the companion extension; without it, addresses open in a new tab.',
+    tags:['tool','browser','web'],
+    svg:`<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.5 2.5 3.8 5.5 3.8 9s-1.3 6.5-3.8 9c-2.5-2.5-3.8-5.5-3.8-9s1.3-6.5 3.8-9z"/>` },
   { id:'anvil', name:'Anvil', kind:'system',
     url:'./apps/anvil/',
     embedUrl:'./apps/anvil/',
@@ -1930,7 +1952,7 @@ const FOLDERS = [
   { id:'fld-create', kind:'folder', name:'Create & Convert', glyph:'🎨', bg:'ok',
     apps:['reckon','draft','sheaf','slate','contorina','ductella','atelier','paginella','sonella','kagaz','rangrez','sniplocal','blurlocal','striplocal','scanlocal','voicevault','bolo'] },
   { id:'fld-research', kind:'folder', name:'Think & Research', glyph:'🔎', bg:'act',
-    apps:['mantra','babellocal','localmind','vaultmind','protavia','scribella'] },
+    apps:['browser','mantra','babellocal','localmind','vaultmind','protavia','scribella'] },
   { id:'fld-work', kind:'folder', name:'Work & Build', glyph:'🧭', bg:'ok',
     apps:['editor','forge','anvil','dish','pi','kanzen','nakliposter','bofh','mod','naklidata','nemawashi','menagerie','bahi'] },
   { id:'fld-privacy', kind:'folder', name:'Privacy & Security', glyph:'🔐', bg:'brand',
@@ -2213,6 +2235,7 @@ async function idbGet(key){
   });
 }
 async function idbSet(key, val){
+  if (globalThis.NAKLIOS_NESTED === true) return;
   const db = await idbOpen();
   return new Promise((res, rej) => {
     const tx = db.transaction(IDB_STORE, 'readwrite');
@@ -2357,6 +2380,7 @@ async function fsConnect(){
   }
 }
 async function fsReconnect(){
+  if (globalThis.NAKLIOS_NESTED === true) return false;
   const stored = await idbGet('fsHandle').catch(() => null);
   if (!stored) return false;
   try {
@@ -2403,7 +2427,7 @@ async function fsDisconnect(){
 // becomes one write.
 let _stateWriteTimer = null;
 function fsScheduleStateWrite(){
-  if (!state.fsHandle) return;
+  if (globalThis.NAKLIOS_NESTED === true || !state.fsHandle) return;
   clearTimeout(_stateWriteTimer);
   _stateWriteTimer = setTimeout(() => fsWriteState().catch(e => console.warn('state write failed:', e)), 500);
 }
@@ -9117,6 +9141,26 @@ window.addEventListener('message', async e => {
     });
   } else if (msg.type === 'naklios:open-settings'){
     openSettings(typeof msg.section === 'string' ? msg.section : 'storage');
+  } else if (msg.type === 'naklios:browser:open'){
+    // An app asks to open a web address in the Browser window. The person answers first, because the
+    // window shows the site with their Chrome sign-in.
+    const reply = { type:'naklios:browser:reply', requestId:msg.requestId };
+    try {
+      const appId = getAppId();
+      if (!appId) throw new Error('Unknown app');
+      const app = APPS.find(a => a.id === appId);
+      let target;
+      try { target = new URL(String(msg.url || '')); } catch(_) { throw new Error('Not a web address'); }
+      if (target.protocol !== 'https:' && target.protocol !== 'http:') throw new Error('Not a web address');
+      fsWaitNotice(e.source, msg.requestId, replyTo)?.();
+      const ok = await nakliosConfirm(`${app?.name || appId} wants to open ${target.hostname} in the Browser, with your Chrome sign-in for that site.`,
+        { title:'Open in Browser?', okLabel:'Open', cancelLabel:'Cancel' });
+      if (!ok) reply.result = false;
+      else { const r = await openBrowserWindow({ url: target.href }); reply.result = !!r?.ok; }
+    } catch (err){
+      reply.error = String(err?.message || err);
+    }
+    try { e.source.postMessage(reply, replyTo); } catch(_){}
   } else if (typeof msg.type === 'string' && msg.type.startsWith('naklios:file:')){
     const reply = { type:'naklios:file:reply', requestId:msg.requestId };
     try {
@@ -9277,11 +9321,59 @@ function recordRecent(appId){
   saveLayout();
 }
 
+// The Browser window (sys/browser/window.mjs). options.url opens that address; History keeps the host only.
+let _browserMod = null;
+// Settings → Browser: whether the companion extension is installed, and the sites it may reach.
+async function renderBrowserSettings(el){
+  if (!el) return;
+  if (!_browserMod) _browserMod = await import('./sys/browser/window.mjs');
+  const info = await _browserMod.browserSettings();
+  if (!el.isConnected) return;
+  el.textContent = '';
+  if (!info.installed){ el.textContent = _browserMod.EXTENSION_HELP; return; }
+  const head = document.createElement('div');
+  head.textContent = `Extension ${info.version} installed. ${info.sites.length ? 'Sites it may open signed in:' : 'No site granted yet; the Browser asks the first time you open one.'}`;
+  el.appendChild(head);
+  for (const pattern of info.sites){
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-top:4px';
+    const name = document.createElement('span');
+    name.textContent = pattern.replace(/^https?:\/\//, '').replace(/\/\*$/, '');
+    const btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'nw-fs-btn'; btn.textContent = 'Remove';
+    btn.onclick = async () => { await info.forget(pattern); renderBrowserSettings(el); };
+    row.append(name, btn);
+    el.appendChild(row);
+  }
+}
+function browserControl(op){
+  const b = openWindows.browser?._browser;
+  if (!b) throw new Error('The Browser window is not open');
+  b[op]();
+  return b.state();
+}
+async function openBrowserWindow(options = {}){
+  if (!_browserMod) _browserMod = await import('./sys/browser/window.mjs');
+  return _browserMod.openBrowser({
+    makeWindow,
+    record: (host, output) => { Promise.resolve().then(() => netHistoryAppend({ appId:'browser', host, method:'OPEN', output })).catch(() => {}); },
+    notify: text => { nakliosAlert(text).catch(() => {}); },
+  }, { url: options.url || '' });
+}
+
 function openApp(app, options = {}){
   recordRecent(app.id);
   if (openWindows[app.id]) { focusWindow(openWindows[app.id]); return; }
   // Every app opens in a NakliOS window, except one that cannot run inside one: it opens at its own URL in a
   // new tab, with no weaker sandbox and no pretence that it embeds.
+  // The Browser is host code (sys/browser/window.mjs): its extension answers only the desktop's top frame.
+  if (app.id === 'browser') return openBrowserWindow(options);
+  // A nested desktop opens only apps that cannot reach this origin's storage: cross-origin apps and the
+  // built-in classics. Two desktops writing one store would break its one-writer event log.
+  if (globalThis.NAKLIOS_NESTED === true && app.kind !== 'classic' && (app.kind === 'system' || appExpectedOrigin(app) === location.origin)) {
+    nakliosAlert(`${app.name} saves to this browser's storage, so it does not open in a desktop inside the Browser.`, { title:'Nested desktop' }).catch(() => {});
+    return null;
+  }
   if (app.kind === 'system') return spawnIframeWindow(app, options);
   if (app.kind === 'classic') return spawnInlineWindow(app);
   if (app.opensInNewTab === true || app.iframeable === false) return window.open(app.url, '_blank', 'noopener');
@@ -10548,6 +10640,8 @@ function openSettings(section){
     <div class="nw-fs-blurb">
       One library for Anvil, Dish and Pi: <code>skills/&lt;name&gt;/SKILL.md</code> in your storage. Agents see a skill only when it is active and passes the safety scan; a skill an agent proposes waits here until you activate it.
     </div>
+    <h4 id="settings-browser-heading" tabindex="-1">Browser</h4>
+    <div id="settings-browser" class="nw-fs-blurb">Checking for the Browser extension…</div>
     <h4 id="settings-apps-heading" tabindex="-1">Apps</h4>
     ${installedAppsHTML}
     <button class="nw-fs-btn-primary" id="third-party-add" type="button">＋ Add app from manifest…</button>
@@ -10564,6 +10658,7 @@ function openSettings(section){
     <button class="nw-fs-btn-primary" id="replay-tour" type="button" style="margin-top:12px;">↻ Replay welcome tour</button>
   `;
   root.appendChild(wrap);
+  renderBrowserSettings(wrap.querySelector('#settings-browser'));
   setTimeout(() => {
     if (requestedSection) focusSettingsSection(requestedSection);
     else wrap.focus();
@@ -13929,6 +14024,11 @@ const hostAgentReady = import('./sys/host/agent.mjs').then(({ attachHostAgent })
     openAssistant, closeAssistant, askAssistant, listenAssistant, stopListeningAssistant, stopAssistant,
     setAssistantHandsFree, assistantState, loadAssistantModel, setAssistantWebLookups, setAssistantPageProxy,
     texEngines, texCompile, texCancel, texCache, texClearCache,
+    browserOpen: url => openBrowserWindow({ url }),
+    browserBack: () => browserControl('back'),
+    browserForward: () => browserControl('forward'),
+    browserReload: () => browserControl('reload'),
+    browserState: () => openWindows.browser?._browser?.state() || { open:false },
   },
 }));
 hostAgentReady.catch(error => console.error('Desktop agent interface could not load', error));
