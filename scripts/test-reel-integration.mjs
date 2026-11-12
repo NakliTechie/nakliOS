@@ -15,7 +15,7 @@ assert.equal(declared.files.length, 3, 'Reel mirror declares the app, decoder ru
 // Same-origin embed, either spelling: `./apps/<id>/` and `https://naklios.dev/apps/<id>/` both
 // resolve to /apps/<id>/. Relative is the house default because it is what makes a mirrored app
 // verifiable on a LOCAL serve before deploy (plan/history.md 2026-09-09, 2026-09-10).
-assert.match(host, /id:'reel'[\s\S]*?url:'https:\/\/reel\.naklitechie\.com\/'/, 'Reel keeps its canonical host');
+assert.match(host, /id:'reel'[\s\S]*?url:'\.\/apps\/reel\/'/, 'Reel opens from NakliOS (NakliOS-only since 2026-11-12)');
 const reelEmbed = host.match(/id:'reel'[\s\S]*?embedUrl:'([^']+)'/);
 assert.ok(reelEmbed && ['./apps/reel/', 'https://naklios.dev/apps/reel/'].includes(reelEmbed[1]),
   `Reel uses a same-origin Immersive mirror (got ${reelEmbed && reelEmbed[1]})`);

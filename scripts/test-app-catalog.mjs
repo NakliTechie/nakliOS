@@ -122,7 +122,7 @@ assert.match(
 // Same-origin embed, either spelling: `./apps/<id>/` and `https://naklios.dev/apps/<id>/` both
 // resolve to /apps/<id>/. Relative is the house default because it is what makes a mirrored app
 // verifiable on a LOCAL serve before deploy (plan/history.md 2026-09-09, 2026-09-10).
-assert.match(html, /id:'reel'[\s\S]*?url:'https:\/\/reel\.naklitechie\.com\/'/, 'Reel keeps its canonical host');
+assert.match(html, /id:'reel'[\s\S]*?url:'\.\/apps\/reel\/'/, 'Reel opens from NakliOS (NakliOS-only since 2026-11-12)');
 const reelEmbed = html.match(/id:'reel'[\s\S]*?embedUrl:'([^']+)'/);
 assert.ok(reelEmbed && ['./apps/reel/', 'https://naklios.dev/apps/reel/'].includes(reelEmbed[1]),
   `Reel uses a same-origin Immersive mirror (got ${reelEmbed && reelEmbed[1]})`);
@@ -131,8 +131,8 @@ assert.ok(reelEmbed && ['./apps/reel/', 'https://naklios.dev/apps/reel/'].includ
 // local serve, which is what makes a mirrored app verifiable before deploy (Menagerie set this
 // precedent, plan/history.md 2026-09-09). Pinning the absolute spelling made this test fail on
 // a change that strictly improved the property it guards.
-assert.match(html, /id:'nakliamp'[\s\S]*?url:'https:\/\/nakliamp\.naklitechie\.com\/'/,
-  'NakliAmp keeps its canonical host');
+assert.match(html, /id:'nakliamp'[\s\S]*?url:'\.\/apps\/nakliamp\/'/,
+  'NakliAmp opens from NakliOS (NakliOS-only since 2026-11-12)');
 const ampEmbed = html.match(/id:'nakliamp'[\s\S]*?embedUrl:'([^']+)'/);
 assert.ok(ampEmbed && ['./apps/nakliamp/', 'https://naklios.dev/apps/nakliamp/'].includes(ampEmbed[1]),
   `NakliAmp uses a same-origin Immersive mirror (got ${ampEmbed && ampEmbed[1]})`);

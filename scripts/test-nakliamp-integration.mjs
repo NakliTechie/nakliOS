@@ -59,7 +59,7 @@ assert.ok(declaredSet.has('index.html') && declaredSet.has('VENDOR.md'), 'the en
 // the Menagerie mirror uses it (plan/history.md, 2026-09-09). Pin the property, not the spelling.
 const entry = host.match(/\{ id:'nakliamp'[\s\S]*?embedUrl:'([^']+)'/);
 assert.ok(entry, 'NakliOS catalogs NakliAmp');
-assert.match(host, /id:'nakliamp'[\s\S]*?url:'https:\/\/nakliamp\.naklitechie\.com\/'/, 'NakliAmp keeps its canonical standalone URL');
+assert.match(host, /id:'nakliamp'[\s\S]*?url:'\.\/apps\/nakliamp\/'/, 'NakliAmp opens from NakliOS (NakliOS-only since 2026-11-12)');
 assert.ok(
   entry[1] === './apps/nakliamp/' || entry[1] === 'https://naklios.dev/apps/nakliamp/',
   `NakliAmp embeds same-origin under /apps/nakliamp/ (got ${entry[1]})`,
