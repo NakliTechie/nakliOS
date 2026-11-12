@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import {
-  checkDesktopSender, parseSiteUrl, originPattern, isSignInUrl, buildSessionRules, ruleIdsFor,
+  checkDesktopSender, parseSiteUrl, originPattern, isSignInUrl, buildSessionRules, ruleIdsFor, freeRuleIds,
   mintToken, redeemToken, pruneTokens, checkAncestors, historyEntry, TOKEN_TTL_MS,
 } from '../extension/lib.mjs';
 import { normaliseAddress } from '../sys/browser/window.mjs';
@@ -43,8 +43,14 @@ assert.deepEqual(rules[0].condition.resourceTypes, ['sub_frame']);
 assert.deepEqual(rules[0].condition.excludedInitiatorDomains, ['naklios.dev']);
 assert.ok(rules[0].condition.responseHeaders.length > 0, 'fires only on responses that carry a framing header');
 assert.deepEqual(rules[0].action.responseHeaders.map(h => h.header).sort(), ['content-security-policy', 'x-frame-options']);
-assert.ok(rules.every(r => ruleIdsFor(7).includes(r.id)));
-assert.equal(new Set([...ruleIdsFor(7), ...ruleIdsFor(8)]).size, 4, 'rule ids never collide across tabs');
+assert.deepEqual(ruleIdsFor(rules, 7), rules.map(r => r.id));
+assert.deepEqual(ruleIdsFor(rules, 8), [], 'another tab owns none of these rules');
+// Real Chrome tab ids reach billions (1660080632 seen live); rule ids must stay 32-bit integers.
+const bigTab = 1660080632;
+const big = buildSessionRules(bigTab, 'naklios.dev', { nested: true, ids: freeRuleIds(rules, 2) });
+assert.ok(big.every(r => Number.isInteger(r.id) && r.id > 0 && r.id <= 2 ** 31 - 1), 'rule ids fit a 32-bit integer for any tab id');
+assert.equal(new Set([...rules, ...big].map(r => r.id)).size, rules.length + big.length, 'rule ids never collide across tabs');
+assert.deepEqual(freeRuleIds([{ id: 1 }, { id: 3 }], 2), [2, 4]);
 assert.equal(buildSessionRules(9, null)[0].condition.excludedInitiatorDomains, undefined, 'the full-tab page excludes no initiator');
 const nested = buildSessionRules(7, 'naklios.dev', { nested: true });
 assert.equal(nested.length, 2);

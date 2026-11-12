@@ -28,7 +28,16 @@ globalThis.chrome = {
     local: { get: async k => ({ [k]: localStore[k] }), set: async o => Object.assign(localStore, structuredClone(o)) },
   },
   declarativeNetRequest: {
-    updateSessionRules: async ({ removeRuleIds = [], addRules = [] }) => { rules = rules.filter(r => !removeRuleIds.includes(r.id)).concat(addRules); },
+    getSessionRules: async () => structuredClone(rules),
+    updateSessionRules: async ({ removeRuleIds = [], addRules = [] }) => {
+      // Chrome refuses a rule id that is not a positive 32-bit integer, or one already in use.
+      for (const id of [...removeRuleIds, ...addRules.map(r => r.id)]) {
+        if (!Number.isInteger(id) || id < 1 || id > 2 ** 31 - 1) throw new Error(`Invalid type: expected integer, found number (${id})`);
+      }
+      const kept = rules.filter(r => !removeRuleIds.includes(r.id));
+      if (addRules.some(a => kept.some(r => r.id === a.id))) throw new Error('Rule id already in use');
+      rules = kept.concat(addRules);
+    },
   },
   permissions: {
     contains: async ({ origins }) => origins.every(o => granted.has(o)),
@@ -53,14 +62,14 @@ try {
 
 const external = (msg, sender) => new Promise(r => chrome.runtime.onMessageExternal.fire(msg, sender, r));
 const internal = (msg, sender) => new Promise(r => chrome.runtime.onMessage.fire(msg, sender, r));
-const desktop = { tab: { id: 7 }, frameId: 0, url: 'http://127.0.0.1:8966/', origin: 'http://127.0.0.1:8966' };
-const frameSender = { id: chrome.runtime.id, tab: { id: 7 }, frameId: 4 };
+const desktop = { tab: { id: 1660080632 }, frameId: 0, url: 'http://127.0.0.1:8966/', origin: 'http://127.0.0.1:8966' };
+const frameSender = { id: chrome.runtime.id, tab: { id: 1660080632 }, frameId: 4 };
 
 // A mirrored app cannot open a signed-in frame.
 assert.equal((await external({ type: 'nakli-browser:open', url: 'https://github.com/' }, { ...desktop, frameId: 2, url: 'http://127.0.0.1:8966/apps/notes/' })).error, 'not-top-frame');
 assert.equal(rules.length, 0);
 
-// The desktop opens GitHub: rules for tab 7, a token, the frame URL.
+// The desktop opens GitHub: rules for tab 1660080632 (a real Chrome tab id is this large), a token, the frame URL.
 const hello = await external({ type: 'nakli-browser:hello' }, desktop);
 assert.equal(hello.ok, true);
 assert.equal(hello.dev, true);
@@ -69,7 +78,7 @@ assert.equal(open.ok, true);
 assert.equal(open.needsPermission, false);
 assert.match(open.frame, /frame\.html$/);
 assert.equal(rules.length, 1);
-assert.deepEqual(rules[0].condition.tabIds, [7]);
+assert.deepEqual(rules[0].condition.tabIds, [1660080632]);
 assert.deepEqual(rules[0].condition.excludedInitiatorDomains, ['127.0.0.1']);
 
 // frame.html in another tab cannot use the token; in its own tab it can, once.
@@ -84,17 +93,17 @@ assert.equal((await internal({ type: 'frame:redeem', token: 'x' }, { ...frameSen
 
 // The site navigates: its frame hears the new address. A sign-in page opens in a popup instead.
 broadcasts.length = 0;
-await Promise.all(chrome.webNavigation.onCommitted.fire({ tabId: 7, frameId: 9, parentFrameId: 4, url: 'https://github.com/NakliTechie' }));
+await Promise.all(chrome.webNavigation.onCommitted.fire({ tabId: 1660080632, frameId: 9, parentFrameId: 4, url: 'https://github.com/NakliTechie' }));
 assert.deepEqual(broadcasts.map(b => b.type), ['bg:committed']);
 assert.equal(broadcasts[0].sessionId, open2.token);
-await Promise.all(chrome.webNavigation.onBeforeNavigate.fire({ tabId: 7, frameId: 9, parentFrameId: 4, url: 'https://accounts.google.com/v3/signin' }));
+await Promise.all(chrome.webNavigation.onBeforeNavigate.fire({ tabId: 1660080632, frameId: 9, parentFrameId: 4, url: 'https://accounts.google.com/v3/signin' }));
 assert.equal(popups.length, 1);
 assert.equal(popups[0].type, 'popup');
 await Promise.all(chrome.windows.onRemoved.fire(901));
 assert.ok(broadcasts.some(b => b.type === 'bg:signin-closed'), 'the frame reloads when the popup closes');
 // An unrelated frame in the tab is ignored.
 broadcasts.length = 0;
-await Promise.all(chrome.webNavigation.onCommitted.fire({ tabId: 7, frameId: 12, parentFrameId: 0, url: 'https://elsewhere.example/' }));
+await Promise.all(chrome.webNavigation.onCommitted.fire({ tabId: 1660080632, frameId: 12, parentFrameId: 0, url: 'https://elsewhere.example/' }));
 assert.equal(broadcasts.length, 0);
 
 // History keeps the host only.
@@ -106,11 +115,11 @@ assert.equal((await external({ type: 'nakli-browser:closed', windowId: 'browser'
 assert.equal(rules.length, 0, 'rules gone with the window');
 await external({ type: 'nakli-browser:open', url: 'https://github.com/' }, desktop);
 assert.equal(rules.length, 1);
-await Promise.all(chrome.tabs.onRemoved.fire(7));
+await Promise.all(chrome.tabs.onRemoved.fire(1660080632));
 await new Promise(r => setTimeout(r, 10));
 assert.equal(rules.length, 0, 'rules gone with the tab');
 await external({ type: 'nakli-browser:open', url: 'https://github.com/' }, desktop);
-await Promise.all(chrome.webNavigation.onCommitted.fire({ tabId: 7, frameId: 0, url: 'http://127.0.0.1:8966/' }));
+await Promise.all(chrome.webNavigation.onCommitted.fire({ tabId: 1660080632, frameId: 0, url: 'http://127.0.0.1:8966/' }));
 await new Promise(r => setTimeout(r, 10));
 assert.equal(rules.length, 0, 'rules gone when the desktop reloads or navigates');
 
@@ -133,21 +142,21 @@ assert.equal((await internal({ type: 'frame:redeem', token: q1.token }, frameSen
 assert.equal((await internal({ type: 'frame:redeem', token: q2.token }, { ...frameSender, frameId: 5 })).ok, true, 'and so is the second');
 assert.equal(localStore.history.length, before + 2, 'one History line per redeemed open');
 popups.length = 0;
-await Promise.all(chrome.webNavigation.onCommitted.fire({ tabId: 7, frameId: 11, parentFrameId: 5, url: 'https://accounts.google.com/ServiceLogin?continue=x' }));
-await Promise.all(chrome.webNavigation.onErrorOccurred.fire({ tabId: 7, frameId: 11, parentFrameId: 5, url: 'https://accounts.google.com/ServiceLogin?continue=x' }));
+await Promise.all(chrome.webNavigation.onCommitted.fire({ tabId: 1660080632, frameId: 11, parentFrameId: 5, url: 'https://accounts.google.com/ServiceLogin?continue=x' }));
+await Promise.all(chrome.webNavigation.onErrorOccurred.fire({ tabId: 1660080632, frameId: 11, parentFrameId: 5, url: 'https://accounts.google.com/ServiceLogin?continue=x' }));
 assert.equal(popups.length, 1, 'a redirect to a sign-in page opens one popup, not two');
 
 // The nested demo: opening the desktop's own host adds the second rule for that window only.
 await external({ type: 'nakli-browser:closed', windowId: 'browser' }, desktop);
 await external({ type: 'nakli-browser:open', url: 'https://github.com/', windowId: 'browser' }, desktop);
-assert.equal(rules.filter(r => r.condition.tabIds[0] === 7).length, 1);
+assert.equal(rules.filter(r => r.condition.tabIds[0] === 1660080632).length, 1);
 await external({ type: 'nakli-browser:open', url: 'http://127.0.0.1:8966/', windowId: 'demo' }, desktop);
-const nestRule = rules.find(r => r.condition.tabIds[0] === 7 && r.condition.requestDomains);
+const nestRule = rules.find(r => r.condition.tabIds[0] === 1660080632 && r.condition.requestDomains);
 assert.deepEqual(nestRule.condition.requestDomains, ['127.0.0.1'], 'the nested rule names the desktop host');
 await external({ type: 'nakli-browser:closed', windowId: 'demo' }, desktop);
-assert.equal(rules.filter(r => r.condition.tabIds[0] === 7).length, 1, 'the nested rule goes with the demo window');
+assert.equal(rules.filter(r => r.condition.tabIds[0] === 1660080632).length, 1, 'the nested rule goes with the demo window');
 await external({ type: 'nakli-browser:closed', windowId: 'browser' }, desktop);
-assert.equal(rules.filter(r => r.condition.tabIds[0] === 7).length, 0);
+assert.equal(rules.filter(r => r.condition.tabIds[0] === 1660080632).length, 0);
 
 // The full-tab fallback: only with permission, and only page.html may ask for its tab's rules.
 chrome.tabs.create = async ({ url }) => ({ id: 31, url });

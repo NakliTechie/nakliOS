@@ -21,7 +21,6 @@ export const SIGN_IN_HOSTS = Object.freeze([
   { host: 'appleid.apple.com' },
 ]);
 
-const RULE_BASE = 1000; // session rule ids: RULE_BASE + tabId * 4 + slot
 
 /** The origin a desktop origin entry matches, ignoring the port for the dev hosts. */
 function originMatches(origin, allowed) {
@@ -75,9 +74,21 @@ export function isSignInUrl(raw) {
   return SIGN_IN_HOSTS.some(s => u.hostname === s.host && (!s.path || u.pathname === s.path || u.pathname.startsWith(s.path + '/')));
 }
 
-/** The session rule ids a tab's rules use, so cleanup removes exactly those. */
-export function ruleIdsFor(tabId) {
-  return [RULE_BASE + tabId * 4, RULE_BASE + tabId * 4 + 1];
+/**
+ * The ids of the session rules that belong to one tab, read from the rules Chrome holds, so cleanup
+ * removes exactly those. Ids cannot be derived from the tab id: Chrome tab ids reach billions, and a rule
+ * id must fit a 32-bit integer (a 1.66e9 tab id times 4 was refused live, 2026-11-12).
+ */
+export function ruleIdsFor(rules, tabId) {
+  return rules.filter(r => r.condition?.tabIds?.includes(tabId)).map(r => r.id);
+}
+
+/** The `n` smallest positive rule ids that no rule in `rules` uses. */
+export function freeRuleIds(rules, n) {
+  const used = new Set(rules.map(r => r.id));
+  const out = [];
+  for (let id = 1; out.length < n; id++) if (!used.has(id)) out.push(id);
+  return out;
 }
 
 /**
@@ -86,8 +97,8 @@ export function ruleIdsFor(tabId) {
  * `desktopHost` is the desktop's hostname (naklios.dev, or 127.0.0.1 for a dev serve).
  * `nested` adds the acceptance-demo rule: the inner desktop's own app frames may load too.
  */
-export function buildSessionRules(tabId, desktopHost, { nested = false } = {}) {
-  const [mainId, nestId] = ruleIdsFor(tabId);
+export function buildSessionRules(tabId, desktopHost, { nested = false, ids = [1, 2] } = {}) {
+  const [mainId, nestId] = ids;
   const strip = {
     type: 'modifyHeaders',
     responseHeaders: [

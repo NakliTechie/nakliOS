@@ -1,7 +1,7 @@
 // Service worker for the NakliOS Browser companion. Every decision lives in lib.mjs (node-tested);
 // this file wires those decisions to chrome.* events.
 import {
-  checkDesktopSender, parseSiteUrl, originPattern, buildSessionRules, ruleIdsFor,
+  checkDesktopSender, parseSiteUrl, originPattern, buildSessionRules, ruleIdsFor, freeRuleIds,
   mintToken, redeemToken, pruneTokens, historyEntry, isSignInUrl,
 } from './lib.mjs';
 
@@ -36,14 +36,18 @@ function randomToken() {
 }
 
 async function installRules(tabId, desktopHost, nested) {
+  const current = await chrome.declarativeNetRequest.getSessionRules();
+  const mine = ruleIdsFor(current, tabId);
+  const others = current.filter(r => !mine.includes(r.id));
   await chrome.declarativeNetRequest.updateSessionRules({
-    removeRuleIds: ruleIdsFor(tabId),
-    addRules: buildSessionRules(tabId, desktopHost, { nested }),
+    removeRuleIds: mine,
+    addRules: buildSessionRules(tabId, desktopHost, { nested, ids: freeRuleIds(others, 2) }),
   });
 }
 
 async function removeRules(tabId) {
-  await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: ruleIdsFor(tabId) });
+  const current = await chrome.declarativeNetRequest.getSessionRules();
+  await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: ruleIdsFor(current, tabId) });
   const tabs = await getTabs();
   if (tabs[tabId]) { delete tabs[tabId]; await setTabs(tabs); }
   const frames = await getFrames();
