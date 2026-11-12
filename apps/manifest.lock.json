@@ -1955,7 +1955,7 @@
       "id": "atelier",
       "repo": "NakliTechie/atelier",
       "requestedRef": "main",
-      "resolvedCommit": "b4a9502164a9f0c5a609815c59c25bcdf4c9429b",
+      "resolvedCommit": "a05b1e9bbb7c1c0baeb62f60f7b808a1b01aec43",
       "files": [
         {
           "source": "LICENSE",
@@ -2328,8 +2328,8 @@
         {
           "source": "src/handlers/merge.js",
           "destination": "src/handlers/merge.js",
-          "sha256": "cffe40da2ba72ab493cdf730bb538ee3071c1c159aca0bf2879620e011a0f936",
-          "bytes": 12160
+          "sha256": "abd5a04958022933fb809288402eceb48eff57e080ca74f428450a330cab413a",
+          "bytes": 12215
         },
         {
           "source": "src/handlers/motion.js",

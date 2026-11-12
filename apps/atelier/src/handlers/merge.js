@@ -21,9 +21,9 @@ import { photoKind, baseName, stem } from '../files/workspace.js';
 import { fail, stageOrRun } from './util.js';
 
 const OPS = {
-  merge_hdr: { op: 'hdr', suffix: 'HDR', min: 2 },
-  merge_panorama: { op: 'panorama', suffix: 'Pano', min: 2 },
-  merge_focus_stack: { op: 'focus', suffix: 'Stack', min: 2 },
+  merge_hdr: { op: 'hdr', name: 'merge.hdr', suffix: 'HDR', min: 2 },
+  merge_panorama: { op: 'panorama', name: 'merge.panorama', suffix: 'Pano', min: 2 },
+  merge_focus_stack: { op: 'focus', name: 'merge.focus', suffix: 'Stack', min: 2 },
 };
 
 // Runs a merge in a module worker (browser) or inline (node tests).
@@ -104,7 +104,7 @@ export function register(bus, ctx) {
   }
 
   for (const [tool, spec] of Object.entries(OPS)) {
-    bus.register(`merge.${spec.op}`, async (a, opts) => {
+    bus.register(spec.name, async (a, opts) => {
       const s = store(); engine();
       const paths = [...new Set(a.paths)];
       if (paths.length < spec.min) fail('invalid', `${tool} needs at least ${spec.min} different photos`, 'fix_argument', tool);
