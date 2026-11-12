@@ -83,6 +83,66 @@ The second command also rejects catalog/URL drift, undeclared on-disk apps, and
 extra files left in a mirrored directory. The scheduled sync workflow opens a
 reviewable pull request; it never treats the checked-in copy as the source.
 
+## Onboarding a new app: the checklist, and what tripped us
+
+The Contorina, Ductella and Atelier onboarding on 2026-11-11 and 2026-11-12 hit each item below at
+least once. Check them before opening the mirror pull request.
+
+**In the app's own repo**
+
+1. **Use the canonical SDK only.** Inline `sdk/naklios.js` between the `naklios-sdk` markers with
+   `scripts/vendor-naklios-sdk.mjs`, and add the daily `vendor-sdk.yml` workflow. Do not write your own
+   `window.naklios` or post `naklios:*` messages by hand; `scripts/test-sdk-canonical-only.mjs` refuses
+   that. The SDK handles `?naklios` itself (`capabilities.hosted`, `capabilities.flagged`), so the app
+   needs no detection code of its own.
+2. **An accepts action is `edit` or `import`, nothing else.** Atelier declared `"open"`, and the host
+   rejected its whole Files declaration (`parseAccepts` in `sys/host/file-targets.mjs`). Use `import` when
+   the app works on a copy and `edit` when it writes back to the person's file. Each extension is one dot and
+   up to 12 letters or digits (`.png`, never `.draft.json`): the host compares only a file's last extension,
+   and one bad entry makes it refuse the app's whole list (Paginella, 2026-11-12).
+3. **Save through `naklios.fs.autosave({ save })`.** A direct `naklios.fs.write` on each change fails
+   acceptance item 3, because nothing saves on hide or close.
+4. **No native dialogs, including in vendored code.** Emscripten glue calls `alert()` on unsupported
+   paths (Ductella's libwebp build has nine). Build such glue with `alert` replaced by `console.error`.
+5. **Spell the product NakliOS in any text the page inlines.** Tijori's spelling test reads the inlined
+   SDK, so a stray "nakliOS" in the SDK header turned CI red on 2026-11-11.
+6. **Keep deploy workflows in `docs/workflows/` until go-live,** so merging a build run does not switch on
+   scheduled CI or a deploy (Ductella's pattern, `docs/naklios-shipping.md` in its repo).
+
+**In this repo**
+
+7. **Declare every file the page loads, fetched data included.** A static `import` graph is not the whole
+   list: Atelier also fetches `agent/tools.manifest.json`, starts a Worker with
+   `new URL('./worker.js', import.meta.url)`, and loads a `.wasm`. Each one is a mirror file.
+8. **Mark the page that inlines the SDK `"managedSdk": "inline"`.** The sync then re-splices the canonical
+   SDK into the mirror, so the mirror never waits for the app's own daily refresh. Without it, the
+   Protavia and Vocella mirrors ran 10 SDK versions behind on 2026-11-11.
+9. **Refresh the managed SDK on the branch after main's SDK moves.** PR 97 merged after PR 98 had changed
+   the SDK, so its mirror kept the old copy and main's `validate-mirrors` failed. Before merging a mirror
+   pull request, run `node scripts/sync-mirrors.mjs --refresh-sdk` on a branch that contains current main.
+10. **Give the catalog entry exactly one task-folder home** (`apps:[…]` of an `fld-*` folder);
+    `test-app-catalog.mjs` fails otherwise.
+11. **Nothing else needs a manual edit.** Since 2026-11-12, `check-command-parity.mjs` checks every mirrored
+    app that ships a `commands.json` (read from `apps/manifest.json`, with handlers searched in every mirrored
+    script), and `test-launch-blockers.mjs` counts managed SDK copies from the manifest. Before that, each new
+    mirror needed a hand edit in both, and Contorina's PR failed CI on the stale count.
+12. **A private source repo needs `MIRROR_SYNC_TOKEN` access; a public one needs nothing.** The fine-grained
+    token selects repositories by id, so a repo rename keeps its access. Locally, run the sync with
+    `MIRROR_SYNC_TOKEN=$(gh auth token)`.
+
+**Checking it**
+
+13. **Judge behaviour with the hosted gate, not by searching the built file.** Bundlers rename calls, so
+    a search for `naklios.fs.autosave` in Ductella's built page found nothing, though its source uses it.
+    Run `scripts/hosted-app-gate.js` (usage in its header) against a local serve
+    (`node scripts/serve-coi.mjs --port <free port>`), in a foreground tab of the logged-in Chrome over
+    the CDP daemon. In a background tab, host dialogs never fire their close event and calls hang.
+14. **The host writes its own `state.json` at the Folder root.** It is not the app's file, so a namespace
+    check excludes it.
+15. **A stand-in desktop page in the app's own tests is not the hosted gate.** Ductella's 15 hosted checks
+    ran against its own fake host. Only the real host shows rail registration, host theme switching and
+    storage prompts as they are.
+
 ## Measuring launch readiness
 
 Each open window records process-local `load`, cooperative `naklios:ready`, and

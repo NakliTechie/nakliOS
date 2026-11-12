@@ -1,0 +1,1343 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atelier</title>
+<meta name="description" content="A layered photo editor and RAW developer in the browser. Files stay on your disk.">
+<style>
+  /* Mono direction (DIRECTIONS.md): an alpha ladder of one ink over a white canvas, no tinted neutral;
+     one accent, used only for the active tool, the active selection and the primary action. Light by
+     default and not following the system dark mode; host themes map onto these variables when hosted.
+     The canvas surround stays 18% grey in every theme, because a tinted surround changes judged colour. */
+  :root {
+    --body: #fafafa; --panel: #ffffff; --ink: #000000; --accent: #0a5cff;
+    --i1: color-mix(in srgb, var(--ink) 88%, transparent); --i2: color-mix(in srgb, var(--ink) 58%, transparent);
+    --i3: color-mix(in srgb, var(--ink) 34%, transparent); --line: color-mix(in srgb, var(--ink) 10%, transparent);
+    --fill: color-mix(in srgb, var(--ink) 5%, transparent); --fill2: color-mix(in srgb, var(--ink) 9%, transparent);
+    --surround: #777777;
+    --font: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--body); color: var(--i1); font: 13px/1.4 var(--font); font-variant-numeric: tabular-nums; height: 100vh; overflow: hidden;
+    display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto auto auto; }
+  header, footer { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--panel); border-bottom: 1px solid var(--line); min-width: 0; }
+  footer { border-top: 1px solid var(--line); border-bottom: 0; color: var(--i2); font-size: 12px; gap: 12px; }
+  footer #status { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  h1 { font-size: 14px; font-weight: 600; margin: 0 8px 0 0; letter-spacing: .01em; }
+  button, select, input { font: inherit; color: var(--i1); }
+  button { background: var(--panel); border: 1px solid var(--line); border-radius: 5px; padding: 4px 10px; cursor: pointer; white-space: nowrap; }
+  button:hover { border-color: var(--i3); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.danger { color: #b00020; }
+  button:focus-visible, select:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  select, input[type=text], input[type=number] { background: var(--panel); border: 1px solid var(--line); border-radius: 5px; padding: 3px 6px; min-width: 0; }
+  input[type=number] { width: 64px; }
+  input[type=range] { accent-color: #555; min-width: 0; }
+  .grow { flex: 1; }
+  .dim { color: var(--i2); font-size: 12px; }
+  .hint { color: var(--i2); font-size: 12px; margin: 6px 4px; }
+  .row { display: flex; gap: 6px; align-items: center; margin: 6px 0; min-width: 0; }
+  .row.wrap { flex-wrap: wrap; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .seg button { border: 0; border-radius: 0; background: none; }
+  .seg button.on { background: var(--fill2); color: var(--ink); font-weight: 600; }
+  main { display: grid; grid-template-columns: 44px minmax(0, 1fr) 300px; min-height: 0; }
+  body[data-mode=develop] main { grid-template-columns: 44px minmax(0, 1fr) 320px; }
+  #toolbar { background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; padding: 6px 4px; overflow: auto; }
+  #toolbar .tool { width: 34px; height: 32px; padding: 0; border: 0; background: none; font-size: 15px; }
+  #toolbar .tool.on { background: var(--fill2); box-shadow: inset 2px 0 0 var(--accent); }
+  #center { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; min-height: 0; }
+  #options { display: flex; gap: 10px; align-items: center; padding: 4px 10px; min-height: 34px; background: var(--panel); border-bottom: 1px solid var(--line); overflow-x: auto; }
+  .opt { display: inline-flex; gap: 4px; align-items: center; color: var(--i2); font-size: 12px; white-space: nowrap; }
+  .opt input[type=color] { width: 28px; height: 22px; padding: 0; border: 1px solid var(--line); border-radius: 4px; background: none; }
+  #stage { background: var(--surround); position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+  #canvas, #overlay { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #overlay { touch-action: none; cursor: crosshair; }
+  #stage[data-tool=hand] #overlay { cursor: grab; } #stage[data-tool=zoom] #overlay { cursor: zoom-in; } #stage[data-tool=move] #overlay { cursor: move; } #stage[data-tool=text] #overlay { cursor: text; }
+  #gpu-msg { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; padding: 24px; background: var(--body); color: var(--i1); }
+  #gpu-msg h2 { font-size: 18px; margin: 0 0 8px; }
+  aside { background: var(--panel); border-left: 1px solid var(--line); overflow: auto; padding: 6px 10px 16px; min-width: 0; }
+  details { border-bottom: 1px solid var(--line); padding: 4px 0 8px; }
+  summary { font-weight: 600; cursor: pointer; padding: 6px 0; list-style-position: inside; }
+  h4 { font-size: 11px; font-weight: 600; color: var(--i2); text-transform: uppercase; letter-spacing: .06em; margin: 10px 0 2px; }
+  .sl { display: grid; grid-template-columns: 82px minmax(0, 1fr) 42px; gap: 6px; align-items: center; height: 24px; }
+  .sl-name { color: var(--i2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; user-select: none; }
+  .sl output { text-align: right; color: var(--i1); }
+  .sl.off { opacity: .45; }
+  .curve { width: 100%; max-width: 240px; display: block; margin: 6px auto; touch-action: none; cursor: crosshair; }
+  .curve-bg { fill: var(--fill); } .grid { stroke: var(--line); } .diag { stroke: var(--line); stroke-dasharray: 3 3; }
+  .curve-line { stroke: var(--i1); stroke-width: 1.5; } .pt { fill: var(--panel); stroke: var(--i1); stroke-width: 1.5; } .pt.on { fill: var(--accent); stroke: var(--accent); }
+  .wheels { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .wheel-box { display: grid; justify-items: center; gap: 2px; }
+  .wheel-box .sl { grid-template-columns: minmax(0, 1fr) 26px; width: 100%; } .wheel-box .sl-name { display: none; }
+  .wheel-name { color: var(--i2); font-size: 12px; }
+  .wheel { width: 88px; height: 88px; border-radius: 50%; position: relative; touch-action: none; cursor: crosshair;
+    background: radial-gradient(closest-side, #fff, rgba(255,255,255,0)), conic-gradient(from 90deg, #f00, #f0f, #00f, #0ff, #0f0, #ff0, #f00); }
+  .knob { position: absolute; left: 50%; top: 50%; width: 10px; height: 10px; margin: -5px; border-radius: 50%; border: 2px solid #000; background: #fff; pointer-events: none; }
+  .masks, .layers { list-style: none; margin: 4px 0; padding: 0; }
+  .masks li, .layers li { display: flex; align-items: center; gap: 4px; padding: 2px 4px; border-radius: 4px; min-width: 0; }
+  .masks li.active, .layers li.active { background: var(--fill2); box-shadow: inset 2px 0 0 var(--accent); }
+  .layers li.picked { background: var(--fill); }
+  .layers li.drop-above { box-shadow: inset 0 2px 0 var(--accent); } .layers li.drop-below { box-shadow: inset 0 -2px 0 var(--accent); }
+  .masks button, .layers button { border: 0; background: none; padding: 2px 4px; }
+  .layers .ico { width: 22px; color: var(--i2); }
+  .masks .name, .layers .name { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .layers small { color: var(--i2); font-size: 11px; white-space: nowrap; }
+  .layers li.group .name { font-weight: 600; }
+  .dev-foot { padding-top: 8px; }
+  #filmstrip { background: var(--panel); border-top: 1px solid var(--line); min-width: 0; }
+  .strip-bar { display: flex; gap: 8px; align-items: center; padding: 4px 10px; overflow-x: auto; }
+  .strip { display: flex; gap: 6px; padding: 4px 10px 8px; overflow-x: auto; min-height: 76px; }
+  .tile { flex: 0 0 196px; height: 74px; border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; display: grid; grid-template-rows: auto 1fr auto; cursor: pointer; background: var(--fill); min-width: 0; }
+  .tile.sel { border-color: var(--i2); } .tile.active { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); } .tile.rejected { opacity: .5; }
+  .tile .kind { font-size: 10px; color: var(--i2); letter-spacing: .06em; } .tile .fname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tile .meta { display: flex; align-items: center; gap: 2px; flex-wrap: nowrap; white-space: nowrap; }
+  .stars { display: inline-flex; }
+  .stars button, .flag { border: 0; background: none; padding: 0 1px; color: var(--i3); font-size: 12px; }
+  .stars button.on, .flag.on { color: var(--i1); }
+  .lab { font-size: 11px; padding: 0 2px; margin-left: auto; }
+  .lab-red { box-shadow: inset 3px 0 0 #d33; } .lab-yellow { box-shadow: inset 3px 0 0 #db0; } .lab-green { box-shadow: inset 3px 0 0 #3a3; } .lab-blue { box-shadow: inset 3px 0 0 #36d; } .lab-purple { box-shadow: inset 3px 0 0 #93c; }
+  #notice { display: flex; gap: 10px; align-items: center; padding: 6px 12px; background: #fff7d6; border-top: 1px solid var(--line); color: #000; }
+  #staged div { display: flex; gap: 8px; align-items: center; padding: 6px 12px; background: var(--panel); border-top: 1px solid var(--line); }
+  #staged span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  #save-state[data-state=unsaved], #save-state[data-state=saving] { color: var(--i1); }
+  #save-state[data-state=paused], #save-state[data-state=error] { color: #b00020; }
+  .dlg { border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; background: var(--panel); color: var(--i1); min-width: 320px; max-width: min(520px, calc(100vw - 32px)); box-shadow: 0 8px 28px rgba(0,0,0,.18); }
+  .dlg::backdrop { background: rgba(0,0,0,.25); }
+  .dlg h3 { margin: 0 0 10px; font-size: 15px; }
+  .dlg p { margin: 0 0 10px; }
+  .dlg-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+  .form { display: grid; gap: 8px; }
+  .field { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 8px; align-items: center; }
+  .field span { color: var(--i2); }
+  .check { display: flex; gap: 6px; align-items: center; }
+  @media (max-width: 900px) { main, body[data-mode=develop] main { grid-template-columns: 40px minmax(0, 1fr) 240px; } }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
+</style>
+<script>
+// First paint in the host's theme: NakliOS puts ?naklios-theme=<id> on the window's URL, so a hosted
+// window never flashes light before naklios.theme.onChange arrives (src/app.js takes over from there).
+// Tokens copied from naklios.dev's THEMES table (BODY, PANEL, INK, ACT); unknown ids keep the light default.
+(function () {
+  var id = new URLSearchParams(location.search).get('naklios-theme');
+  var T = {
+    aurora: ['#1a1428', '#251a3a', '#ede8f5', '#8fa8d8'], karewa: ['#2a1820', '#3a2030', '#f5e6d4', '#c87080'],
+    indigo: ['#0c1428', '#1a2440', '#e0e8f5', '#6080d0'], monsoon: ['#0e1c24', '#1a2e36', '#f0e6d4', '#50a0b0'],
+    sand: ['#faf2e2', '#fdf8ec', '#2c1810', '#2a4a8a'], porcelain: ['#f4f7fc', '#ffffff', '#0a1a40', '#1a4090'],
+  }[id];
+  if (!T) return;
+  var s = document.documentElement.style;
+  s.setProperty('--body', T[0]); s.setProperty('--panel', T[1]); s.setProperty('--ink', T[2]); s.setProperty('--accent', T[3]);
+  var h = T[0].slice(1); var lum = (parseInt(h.slice(0, 2), 16) * 299 + parseInt(h.slice(2, 4), 16) * 587 + parseInt(h.slice(4, 6), 16) * 114) / 255000;
+  s.colorScheme = lum < 0.5 ? 'dark' : 'light';
+})();
+</script>
+</head>
+<body data-mode="develop">
+<header></header>
+<main>
+  <nav id="toolbar" aria-label="Tools"></nav>
+  <section id="center">
+    <div id="options" aria-label="Tool options"></div>
+    <div id="stage"><canvas id="canvas"></canvas><canvas id="overlay" aria-label="Photo canvas"></canvas><div id="gpu-msg" hidden></div></div>
+  </section>
+  <aside aria-label="Panels"><div id="develop-panel"></div><div id="layers-panel" hidden></div></aside>
+</main>
+<section id="filmstrip" aria-label="Filmstrip"></section>
+<div id="notice" role="status" hidden></div>
+<div id="staged" aria-label="Actions waiting for your confirmation"></div>
+<footer><span id="mode">Develop</span><span id="status">Starting…</span><span class="grow"></span><span id="save-state"></span><span id="version"></span></footer>
+<script>
+/* naklios-sdk:begin ver=2 sha256=81b1d68a7b20067791a51dd79c29d015c98204236db626bf2dbb25f66bd5e59f */
+/*!
+ * naklios.js — cooperative SDK for apps hosted inside NakliOS (Immersive mode)
+ *
+ * Load this file in your app's <head>. The surface is a no-op when the app
+ * loads standalone (window.parent === window), so the same source works in both
+ * contexts.
+ *
+ * Use this canonical file, unedited, and nothing else. There are three supported
+ * ways: a <script src> to https://naklios.dev/sdk/naklios.js, this file shipped
+ * beside your page, or this file inlined between the naklios-sdk markers by
+ * scripts/vendor-naklios-sdk.mjs, refreshed by the daily vendor-sdk workflow.
+ * Do not write your own window.naklios, do not edit a copy, and do not post
+ * naklios:* messages by hand. A private copy misses every later host change:
+ * Draft and Reckon kept their own copies and missed the 2026-11-10 fix that keeps
+ * a file call alive while the host shows a storage prompt. If your app needs
+ * something the SDK lacks, add it to sdk/naklios.js in the NakliOS repo, so that
+ * every app receives it. The NakliOS gate (scripts/test-sdk-canonical-only.mjs)
+ * refuses a mirrored app that talks to the host any other way.
+ *
+ * Vendoring: if your app needs a capability an iframe sandbox blocks — a folder
+ * picker above all — the supported route is a manifest-declared same-origin
+ * MIRROR under naklios.dev/apps/<id>/, not a hand-copied snapshot. See
+ * docs/app-loading.md. Your repo stays authoritative; the mirror is a pinned,
+ * hash-checked deployment artifact refreshed by CI.
+ *
+ *   <script src="https://naklios.dev/sdk/naklios.js"><\/script>
+ *   <script>
+ *     naklios.ready();                          // signal "I'm loaded"
+ *     naklios.title('My app — unlocked');       // update host window title
+ *     naklios.close();                          // self-close from a Done button
+ *     naklios.theme.onChange(t => paint(t));    // restyle on host theme change
+ *
+ *     // Filesystem (when hosted with a connected Folder or Crate):
+ *     if (naklios.capabilities.fs){
+ *       await naklios.fs.write('vault.json', JSON.stringify(vault));
+ *       const data = await naklios.fs.read('vault.json');
+ *       const stop = await naklios.fs.subscribe('', event => refresh(event));
+ *     }
+ *
+ *     // Shared host inference (when the user grants this app access):
+ *     if (naklios.capabilities.ai) {
+ *       const stream = await naklios.ai.chat.completions.create({
+ *         messages: [{ role: 'user', content: 'Summarise this note.' }],
+ *         stream: true,
+ *       });
+ *       for await (const chunk of stream) {
+ *         render(chunk.choices[0].delta.content || '');
+ *       }
+ *
+ *       const image = await naklios.ai.images.generate({
+ *         prompt: 'A risograph poster of a city after monsoon rain',
+ *         size: '1024x1024',
+ *         signal: abortController.signal,
+ *       });
+ *       preview.src = image.data[0].b64_json
+ *         ? 'data:image/png;base64,' + image.data[0].b64_json
+ *         : image.data[0].url;
+ *     }
+ *   <\/script>
+ *
+ * naklios.capabilities.hosted is true only when running inside NakliOS.
+ * naklios.capabilities.fs is true when hosted storage is available to the app.
+ * naklios.capabilities.fsBackends lists connected Folder/Crate choices, and
+ * naklios.capabilities.fsBackend is the app's current binding (or null).
+ * Apps may call naklios.fs.useBackend(id); NakliOS confirms the change.
+ * Listen for changes via naklios.onCapabilitiesChange(cb).
+ *
+ * Paths in fs methods are relative to apps/<your-app-id>/ on the selected backend.
+ * Traversal (../) is blocked at the host.
+ *
+ * Single source of truth: https://naklios.dev/sdk/naklios.js
+ *   (repo: NakliTechie/nakliOS → sdk/naklios.js)
+ * Vendor it inline in each app to keep the no-network-dependency ethos.
+ *
+ * @naklios-sdk-version 2
+ *   Vendored copies are spliced between two HTML comment markers and kept fresh
+ *   by each app's own CI — never hand-edited. See docs/app-contract.md "Vendoring
+ *   the SDK" and plan/sdk-vendoring.md. In the app's HTML, an "naklios-sdk:begin"
+ *   comment (carrying ver= and sha256=) and an "naklios-sdk:end" comment bracket
+ *   the inlined <script>; scripts/vendor-naklios-sdk.mjs rewrites everything
+ *   between them (escaping this file's closing script tags). The literal marker
+ *   syntax is only shown in the docs — never here, so it can't be mistaken for a
+ *   real marker once this header is itself inlined.
+ *
+ *   v2 = approved-parent origin + ?naklios flag (no-referrer-safe). v1 (pre-2026-08)
+ *   posted to '*' and skipped inbound-origin checks — a v1 copy is a drift bug.
+ *
+ *   New public members ship as `experimental_<name>` with a line in docs/sdk-api-audit.md
+ *   naming what stabilizes them; stabilizing drops the prefix in one fleet change
+ *   (this file, the host, every vendored copy). fs.autosave was the first, 2026-09-24.
+ * License: MIT.
+ */
+(function () {
+  // A real host FRAME is what the transports talk to (postMessage to parent), so
+  // it gates every send/rpc — `inNakliOS`. The `?naklios` URL flag is the host's
+  // EXPLICIT signal (it appends it to embed URLs) and a deliberate opt-in for
+  // testing; it sets capabilities.hosted so an app KNOWS to route through NakliOS,
+  // but it never fakes a channel that isn't there — a bare `?naklios` top-level tab
+  // has no host, so fs/ai capabilities stay false (no handshake) and the app's
+  // adapter falls back to its own APIs. No hang, no breakage.
+  var inNakliOS = false;
+  try { inNakliOS = !!(window.parent && window.parent !== window); } catch (_) {}
+  var naklFlag = false;
+  try { naklFlag = new URLSearchParams(window.location.search).has('naklios'); } catch (_) {}
+  // Targeted postMessage origin, pinned only after independently approved contact — the NakliOS shell embeds
+  // apps with referrerpolicy="no-referrer", so document.referrer is empty and can't
+  // be used to verify the parent (that path breaks hosted detection — it is the
+  // Lorewell iframe bug). Instead the first `naklios:*` message from window.parent
+  // pins an independently approved host origin, and every later send targets that origin (not '*').
+  // Before verification, only content-free ready and capabilities-request messages leave.
+  var trustedParentOrigin = null;
+  var queuedHostMessages = [];
+  var queuedHostBytes = 0;
+  // Verify independently of the message and URL flags supplied by a parent.
+  // Inline copies retain the same production host policy; previews are limited
+  // to this project's Workers hostname. Referrers are deliberately unnecessary.
+  function approvedParentOrigin(origin) {
+    try {
+      var url = new URL(origin);
+      if (url.origin !== origin) return false;
+      if (url.protocol === 'https:' && !url.port && (url.hostname === 'naklios.dev' ||
+          /^(?:[a-z0-9-]+-)?nakli-dev\.chirag-patnaik\.workers\.dev$/.test(url.hostname))) return true;
+      return url.protocol === 'http:' && (url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]');
+    } catch (_) { return false; }
+  }
+
+  var currentTheme = null;
+  var themeListeners = new Set();
+  var capListeners = new Set();
+  var beforeCloseCb = null;
+  var capabilities = {
+    // hosted honours the ?naklios flag as well as a real embed, so an app can
+    // decide to route through NakliOS; the fs/ai flags below only flip true after
+    // a real host handshake, so the adapter still self-corrects with no channel.
+    hosted: inNakliOS || naklFlag,
+    flagged: naklFlag,
+    version: 2,
+    fs: false,
+    fsBackends: [],
+    fsBackend: null,
+    fsBoundedReads: false,
+    fsRangeReads: false,
+    // system: this app is a same-origin system app (non-third-party).
+    // sysFs: system-scoped filesystem is available — the whole store, not just
+    // apps/<your-id>/. Only true for system apps with a connected backend.
+    system: false,
+    sysFs: false,
+    ai: false,
+    aiModel: null,
+    aiModelLabel: null,
+    aiProvider: null,
+    aiLocal: true,
+    aiState: 'idle',
+    aiImages: false,
+    aiImageModel: null,
+    aiImageModelLabel: null,
+    aiImageProvider: null,
+    aiImageLocal: true,
+    aiImageState: 'idle',
+    aiSearchState: 'idle',
+    aiSearch: false,
+    // experimental_tex: this app may compile LaTeX projects in its own storage.
+    experimental_tex: false,
+    // experimental_web: this app may search the web and read pages through the host.
+    experimental_web: false,
+    // net: a sovereign egress backend (the user's own Worker or local bridge) is
+    // configured + permitted, so naklios.net.fetch can reach cross-origin hosts the
+    // browser blocks. Stays false until a host advertises one — the SDK seam.
+    net: false,
+    netBackend: null,
+    review: false,
+  };
+
+  // Request/reply correlation for fs RPCs
+  var pendingRpc = new Map();   // requestId → { resolve, reject }
+  var rpcCounter = 0;
+  var fsSubscriptions = new Map(); // subscriptionId → callback
+  var aiRequests = new Map(); // requestId → streamed request state
+  var aiImageRequests = new Map(); // requestId → image request state
+  var ragSearches = new Map();     // requestId → semantic-search progress callback
+  var texCompiles = new Map();     // requestId → TeX compile chunk callback
+  var fileOpenListeners = new Set(); // exact-file grants delivered by the host
+  var commandHandlers = new Map(); // command name → handler (common rail step 1)
+  var commandCalls = new Map(); // invokeId → AbortController of a running handler
+  var pendingFileGrants = [];
+  var fileEditListeners = new Set();
+  var pendingFileEdits = [];
+  var acceptedFileEdits = new Map();
+  var acceptingFileEdits = new Map();
+
+  function deliverFileEdit(proposal) {
+    var id=String(proposal.deliveryId||'');
+    var ack=function(){if(id)send('naklios:file:edit-ack',{token:proposal.token,deliveryId:id});};
+    if(id&&acceptedFileEdits.get(id)===proposal.token){ack();return;}
+    if(id&&acceptingFileEdits.has(id))return;
+    if(!fileEditListeners.size){
+      if(pendingFileEdits.length<16&&!pendingFileEdits.some(function(p){return p.token===proposal.token&&p.deliveryId===proposal.deliveryId;}))pendingFileEdits.push(proposal);
+      return;
+    }
+    var work=Promise.all(Array.from(fileEditListeners).map(function(cb){
+      try{return Promise.resolve(cb(proposal)).catch(function(){return false;});}catch(_){return Promise.resolve(false);}
+    })).then(function(results){
+      if(results.some(function(value){return value===true;})){
+        if(id){acceptedFileEdits.set(id,proposal.token);while(acceptedFileEdits.size>16)acceptedFileEdits.delete(acceptedFileEdits.keys().next().value);}
+        ack();
+      }
+    }).finally(function(){if(id)acceptingFileEdits.delete(id);});
+    if(id)acceptingFileEdits.set(id,work);
+  }
+  var reviewDecisionHandler = null;
+  var appliedReviewIds = new Set();
+  var applyingReviewIds = new Map();
+
+  function send(type, data) {
+    if (!inNakliOS) return;
+    if (!trustedParentOrigin && type !== 'naklios:ready' && type !== 'naklios:capabilities-request') {
+      try {
+        var size = JSON.stringify(data || {}).length;
+        if (queuedHostMessages.length >= 32 || queuedHostBytes + size > 4 * 1024 * 1024) return false;
+        queuedHostMessages.push({ type: type, data: data }); queuedHostBytes += size;
+        return true;
+      } catch (_) { return false; }
+    }
+    try {
+      var msg = Object.assign({ type: type }, data || {});
+      window.parent.postMessage(msg, trustedParentOrigin || '*');
+      return true;
+    } catch (_) { return false; }
+  }
+
+  // A call can wait on the person's answer, on the app opening, and on its handler.
+  var COMMAND_CALL_TIMEOUT_MS = 300000;
+  var AI_LOCAL_TIMEOUT_MS = 300000;
+
+  function rpc(type, payload, timeoutMs) {
+    if (!inNakliOS) return Promise.reject(new Error('Not hosted — naklios.* unavailable standalone'));
+    return new Promise(function (resolve, reject) {
+      var requestId = 'r' + (++rpcCounter) + '_' + Date.now();
+      var entry = { resolve: resolve, reject: reject, timer: null };
+      pendingRpc.set(requestId, entry);
+      if (send(type, Object.assign({ requestId: requestId }, payload || {})) === false) {
+        pendingRpc.delete(requestId);
+        reject(new Error('Wait for a verified NakliOS host before sending more data'));
+        return;
+      }
+      // Default 30s safety net; long operations (index building) pass more. A call the host holds
+      // for the person's answer (a storage prompt) stops this clock: the host sends
+      // naklios:rpc:waiting, and the reply comes once the person answers.
+      entry.timer = setTimeout(function () {
+        if (pendingRpc.has(requestId)) {
+          pendingRpc.delete(requestId);
+          reject(new Error('naklios RPC timeout: ' + type));
+        }
+      }, timeoutMs || 30000);
+    });
+  }
+
+  // Autosave (DUR, 2026-09-24): the SDK owns WHEN an app's state is written; the app owns WHAT and
+  // WHERE through its own save(). `beforeunload` cannot await, so a save that starts there is lost on
+  // close — the reliable moments are visibilitychange → hidden and pagehide, which fire while the page
+  // can still post a message, and the host's beforeclose, which waits. The timing half runs standalone
+  // too (the save is the app's own); only the dirty report to the host needs a frame.
+  var savers = new Set();
+  var reportedDirty = false;
+  var autosaveWired = false;
+  function noop() {}
+  function anyUnsaved() {
+    var out = false;
+    savers.forEach(function (s) { if (s._guard && s.dirty) out = true; });
+    return out;
+  }
+  function reportDirty() {
+    var d = anyUnsaved();
+    if (d === reportedDirty) return;
+    reportedDirty = d;
+    send('naklios:fs:dirty', { dirty: d });
+  }
+  // urgent: issue every unsaved save NOW, in this task — never behind an in-flight one
+  function flushSavers(urgent) {
+    var all = [];
+    savers.forEach(function (s) { all.push(s._flush(urgent).catch(noop)); });
+    return Promise.all(all);
+  }
+  function wireAutosave() {
+    if (autosaveWired) return;
+    autosaveWired = true;
+    try {
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'hidden') flushSavers(true);
+      });
+    } catch (_) {}
+    try {
+      window.addEventListener('pagehide', function () { flushSavers(true); });
+      window.addEventListener('beforeunload', function (e) {
+        if (!anyUnsaved()) return;
+        flushSavers(true);
+        // Hosted, the NakliOS host arms its own guard from the dirty report; a second prompt from
+        // the frame would be noise. Standalone, this is the only thing that can interpose.
+        if (inNakliOS) return;
+        e.preventDefault();
+        e.returnValue = '';
+      });
+    } catch (_) {}
+  }
+  function makeAutosave(opts) {
+    if (!opts || typeof opts.save !== 'function') {
+      throw new Error('naklios.fs.autosave requires { save: function }');
+    }
+    var delay = typeof opts.delay === 'number' && opts.delay >= 0 ? opts.delay : 1000;
+    var onError = typeof opts.onError === 'function' ? opts.onError : null;
+    // guard:false — a background save (a remote push, say) that keeps the timing but never holds a close
+    var guard = opts.guard !== false;
+    // generations: gen counts changes, issuedGen the newest handed to save(), savedGen the newest durable
+    var gen = 0, issuedGen = 0, savedGen = 0;
+    var timer = null, tail = Promise.resolve(), last = Promise.resolve(), queued = null, disposed = false;
+    function issue() {
+      queued = null;
+      if (gen <= issuedGen) return last;
+      var g = gen;
+      issuedGen = g;
+      var p;
+      try { p = Promise.resolve(opts.save()); } catch (err) { p = Promise.reject(err); }
+      p = p.then(function () {
+        if (g > savedGen) savedGen = g;
+        reportDirty();
+      }, function (err) {
+        if (issuedGen === g) issuedGen = savedGen; // the next flush retries
+        reportDirty();
+        if (onError) { try { onError(err); } catch (_) {} }
+        throw err;
+      });
+      last = p;
+      tail = p.catch(noop);
+      return p;
+    }
+    function flush(urgent) {
+      clearTimeout(timer);
+      timer = null;
+      if (gen <= issuedGen) return last;
+      if (urgent) return issue();
+      if (!queued) queued = tail.then(issue);
+      return queued;
+    }
+    var saver = {
+      // State changed. The save runs at most `delay` ms after the first unsaved change.
+      markDirty: function () {
+        if (disposed) return;
+        gen++;
+        reportDirty();
+        if (!timer) timer = setTimeout(function () { timer = null; flush(false).catch(noop); }, delay);
+      },
+      // Save now (after any save already running). Resolves when the state as of this call is durable.
+      flush: function () { return flush(false); },
+      get dirty() { return gen > savedGen; },
+      dispose: function () {
+        disposed = true;
+        clearTimeout(timer);
+        timer = null;
+        savers.delete(saver);
+        reportDirty();
+      },
+      _flush: flush,
+      _guard: guard,
+    };
+    savers.add(saver);
+    wireAutosave();
+    return saver;
+  }
+
+  // Typed egress error so an app can branch (fall back / prompt to connect) rather
+  // than parse a message. code is 'ENOEGRESS' (no backend / not hosted) or 'EINVAL'.
+  function mkEgressErr(code, message) {
+    var e = new Error(message);
+    e.code = code;
+    e.egress = true;
+    return e;
+  }
+
+  // Bind each operation to the backend visible when it was issued. The host
+  // rejects it if the app is rebound before the message is processed, which
+  // prevents a delayed save from crossing Folder/Crate boundaries.
+  function fsPayload(data) {
+    return Object.assign({ backend: capabilities.fsBackend }, data || {});
+  }
+
+  function fsBinaryRead(type, path, options) {
+    var maxBytes = options && options.maxBytes, offset = options && options.offset;
+    if (offset !== undefined) {
+      var code = null, message = '';
+      if (!Number.isSafeInteger(offset) || offset < 0) { code = 'EINVAL'; message = 'offset must be a non-negative safe integer'; }
+      else if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) { code = 'EINVAL'; message = 'offset requires an explicit non-negative safe maxBytes'; }
+      else if (maxBytes > 16 * 1024 * 1024) { code = 'EFBIG'; message = 'range read exceeds the 16 MiB limit'; }
+      else if (capabilities.fsRangeReads !== true) { code = 'ENOTSUP'; message = 'host does not advertise bounded byte ranges'; }
+      if (code) { var error = new Error(code + ': ' + message); error.code = code; return Promise.reject(error); }
+    }
+    return rpc(type, fsPayload({ path: path, maxBytes: maxBytes, offset: offset }));
+  }
+
+  function makeAiStream(options) {
+    if (!inNakliOS) throw new Error('Not hosted — naklios.ai unavailable standalone');
+    if (!capabilities.ai) throw new Error('NakliOS Local AI is unavailable or not permitted');
+    options = options || {};
+    var requestId = 'a' + (++rpcCounter) + '_' + Date.now();
+    var queued = [];
+    var waiters = [];
+    var complete = false;
+    var failure = null;
+
+    function deliver(item) {
+      if (waiters.length) waiters.shift().resolve({ value: item, done: false });
+      else queued.push(item);
+    }
+    function finish() {
+      complete = true;
+      while (waiters.length) waiters.shift().resolve({ value: undefined, done: true });
+    }
+    function fail(error) {
+      failure = error;
+      complete = true;
+      while (waiters.length) waiters.shift().reject(error);
+    }
+
+    var stream = {
+      next: function () {
+        if (queued.length) return Promise.resolve({ value: queued.shift(), done: false });
+        if (failure) return Promise.reject(failure);
+        if (complete) return Promise.resolve({ value: undefined, done: true });
+        return new Promise(function (resolve, reject) {
+          waiters.push({ resolve: resolve, reject: reject });
+        });
+      },
+      cancel: function () {
+        send('naklios:ai:cancel', { requestId: requestId });
+      },
+    };
+    stream[Symbol.asyncIterator] = function () { return stream; };
+    aiRequests.set(requestId, {
+      deliver: deliver,
+      finish: finish,
+      fail: fail,
+      onStatus: typeof options.onStatus === 'function' ? options.onStatus : null,
+    });
+    var chatMsg = {
+      requestId: requestId,
+      messages: Array.isArray(options.messages) ? options.messages : [],
+      maxTokens: options.max_tokens || options.maxTokens,
+    };
+    // Agent tier: tool-calling for first-party apps, with raised caps, and for a third-party
+    // app that declared the "tools" permission, at the normal caps. The host refuses the rest.
+    if (options.agent === true) chatMsg.agent = true;
+    if (options.tools != null) chatMsg.tools = options.tools;
+    if (options.tool_choice != null) chatMsg.tool_choice = options.tool_choice;
+    send('naklios:ai:chat', chatMsg);
+    if (options.signal) {
+      if (options.signal.aborted) stream.cancel();
+      else options.signal.addEventListener('abort', function () { stream.cancel(); }, { once: true });
+    }
+    return stream;
+  }
+
+  async function createAiCompletion(options) {
+    options = options || {};
+    var stream = makeAiStream(options);
+    if (options.stream === true) return stream;
+    var content = '';
+    var finishReason = 'stop';
+    var toolCalls = null;
+    var usage = null;
+    var model = null;
+    for await (var chunk of stream) {
+      var choice = chunk.choices && chunk.choices[0];
+      if (choice && choice.delta && choice.delta.content) content += choice.delta.content;
+      if (choice && choice.delta && choice.delta.tool_calls) toolCalls = choice.delta.tool_calls;
+      if (choice && choice.finish_reason) finishReason = choice.finish_reason;
+      if (chunk.usage) usage = chunk.usage;
+      // the last chunk is the done chunk, which names the id that actually answered
+      if (chunk.model) model = chunk.model;
+    }
+    var message = { role: 'assistant', content: content };
+    if (toolCalls) message.tool_calls = toolCalls;
+    return {
+      id: 'naklios-local',
+      object: 'chat.completion',
+      model: model || capabilities.aiModel || 'localmind',
+      choices: [{
+        index: 0,
+        message: message,
+        finish_reason: finishReason,
+      }],
+      // top level, as the OpenAI completion shape has it; null when the provider said nothing
+      usage: usage,
+    };
+  }
+
+  function createAiImage(options) {
+    if (!inNakliOS) {
+      return Promise.reject(new Error('Not hosted — naklios.ai unavailable standalone'));
+    }
+    if (!capabilities.aiImages) {
+      return Promise.reject(new Error('NakliOS image generation is unavailable or not permitted'));
+    }
+    options = options || {};
+    var requestId = 'i' + (++rpcCounter) + '_' + Date.now();
+    return new Promise(function (resolve, reject) {
+      var abortHandler = function () {
+        send('naklios:ai:cancel', { requestId: requestId });
+      };
+      aiImageRequests.set(requestId, {
+        resolve: resolve,
+        reject: reject,
+        onStatus: typeof options.onStatus === 'function' ? options.onStatus : null,
+        signal: options.signal || null,
+        abortHandler: abortHandler,
+      });
+      send('naklios:ai:image', {
+        requestId: requestId,
+        prompt: String(options.prompt || ''),
+        size: options.size,
+        quality: options.quality,
+        n: options.n,
+        seed: options.seed,
+        steps: options.steps,
+      });
+      if (options.signal) {
+        if (options.signal.aborted) abortHandler();
+        else options.signal.addEventListener('abort', abortHandler, { once: true });
+      }
+    });
+  }
+
+  function settleAiImage(requestId, callback) {
+    var request = aiImageRequests.get(requestId);
+    if (!request) return null;
+    aiImageRequests.delete(requestId);
+    if (request.signal && request.abortHandler) {
+      request.signal.removeEventListener('abort', request.abortHandler);
+    }
+    callback(request);
+    return request;
+  }
+
+  window.addEventListener('message', function (e) {
+    if (!inNakliOS || e.source !== window.parent || !approvedParentOrigin(e.origin)) return;
+    var msg = e.data;
+    if (!msg || typeof msg !== 'object') return;
+    // Pin only an independently approved actual parent, then keep that exact
+    // origin for this frame. Standalone pages never enter this handler.
+    // Flush startup data only after verification, with an explicit target origin.
+    if (typeof msg.type === 'string' && msg.type.indexOf('naklios:') === 0) {
+      if (!trustedParentOrigin) trustedParentOrigin = e.origin;
+      else if (e.origin !== trustedParentOrigin) return;
+      var queued = queuedHostMessages; queuedHostMessages = []; queuedHostBytes = 0;
+      queued.forEach(function (item) { send(item.type, item.data); });
+    }
+    if (msg.type === 'naklios:theme') {
+      currentTheme = { id: msg.theme, colors: msg.colors, mood: msg.mood };
+      themeListeners.forEach(function (cb) {
+        try { cb(currentTheme); } catch (_) {}
+      });
+    } else if (msg.type === 'naklios:beforeclose') {
+      var closeWork;
+      try { closeWork = beforeCloseCb ? beforeCloseCb() : null; } catch (_) { closeWork = null; }
+      Promise.all([Promise.resolve(closeWork).catch(function () {}), flushSavers(true)]).then(function () {
+        send('naklios:beforeclose-ready', { requestId: msg.requestId });
+      });
+    } else if (msg.type === 'naklios:capabilities') {
+      if (typeof msg.fs === 'boolean') capabilities.fs = msg.fs;
+      if (Array.isArray(msg.fsBackends)) capabilities.fsBackends = msg.fsBackends;
+      capabilities.fsBackend = typeof msg.fsBackend === 'string' ? msg.fsBackend : null;
+      capabilities.fsBoundedReads = msg.fsBoundedReads === true;
+      capabilities.fsRangeReads = msg.fsRangeReads === true;
+      capabilities.system = msg.system === true;
+      capabilities.sysFs = msg.sysFs === true;
+      if (typeof msg.ai === 'boolean') capabilities.ai = msg.ai;
+      capabilities.aiModel = typeof msg.aiModel === 'string' ? msg.aiModel : null;
+      capabilities.aiModelLabel = typeof msg.aiModelLabel === 'string' ? msg.aiModelLabel : null;
+      capabilities.aiProvider = typeof msg.aiProvider === 'string' ? msg.aiProvider : null;
+      capabilities.aiLocal = msg.aiLocal !== false;
+      capabilities.aiState = typeof msg.aiState === 'string' ? msg.aiState : 'idle';
+      capabilities.aiImages = msg.aiImages === true;
+      capabilities.aiImageModel = typeof msg.aiImageModel === 'string' ? msg.aiImageModel : null;
+      capabilities.aiImageModelLabel = typeof msg.aiImageModelLabel === 'string'
+        ? msg.aiImageModelLabel
+        : null;
+      capabilities.aiImageProvider = typeof msg.aiImageProvider === 'string'
+        ? msg.aiImageProvider
+        : null;
+      capabilities.aiImageLocal = msg.aiImageLocal !== false;
+      capabilities.aiImageState = typeof msg.aiImageState === 'string'
+        ? msg.aiImageState
+        : 'idle';
+      capabilities.aiSearchState = typeof msg.aiSearchState === 'string'
+        ? msg.aiSearchState
+        : 'idle';
+      capabilities.aiSearch = msg.aiSearch === true;
+      capabilities.experimental_tex = msg.experimental_tex === true;
+      capabilities.experimental_web = msg.experimental_web === true;
+      capabilities.net = msg.net === true;
+      capabilities.netBackend = typeof msg.netBackend === 'string' ? msg.netBackend : null;
+      capabilities.review = msg.review === true;
+      capListeners.forEach(function (cb) {
+        try { cb(capabilities); } catch (_) {}
+      });
+    } else if (msg.type === 'naklios:tex:event' && msg.requestId) {
+      var texChunk = texCompiles.get(msg.requestId);
+      if (texChunk && msg.event === 'chunk') { try { texChunk(msg.chunk); } catch (_) {} }
+    } else if (msg.type === 'naklios:rag:event' && msg.requestId) {
+      var ragRequest = ragSearches.get(msg.requestId);
+      if (ragRequest && msg.event === 'indexing') {
+        try {
+          ragRequest.onIndexing && ragRequest.onIndexing({
+            done: msg.done, total: msg.total, path: msg.path,
+          });
+        } catch (_) {}
+      }
+    } else if (msg.type === 'naklios:ai:event' && msg.requestId) {
+      var aiRequest = aiRequests.get(msg.requestId);
+      if (!aiRequest) return;
+      if (msg.event === 'status') {
+        try { aiRequest.onStatus && aiRequest.onStatus(msg.status, msg.progress || null); } catch (_) {}
+      } else if (msg.event === 'token') {
+        aiRequest.deliver({
+          id: msg.requestId,
+          object: 'chat.completion.chunk',
+          model: msg.model || capabilities.aiModel || 'localmind',
+          choices: [{
+            index: 0,
+            delta: { content: String(msg.token || '') },
+            finish_reason: null,
+          }],
+        });
+      } else if (msg.event === 'done') {
+        aiRequest.deliver({
+          id: msg.requestId,
+          object: 'chat.completion.chunk',
+          // Who answered, where the OpenAI shape puts it. The host's fallback ladder can
+          // answer from an id other than the configured one; the done chunk is the only
+          // frame that knows, so it names the responder and the token chunks keep the
+          // configured entry.
+          model: msg.answeredModel || msg.model || capabilities.aiModel || 'localmind',
+          choices: [{
+            index: 0,
+            delta: msg.toolCalls && msg.toolCalls.length ? { tool_calls: msg.toolCalls } : {},
+            finish_reason: msg.finishReason || 'stop',
+          }],
+          // The provider's token count, where the OpenAI shape puts it. An app that budgets
+          // on estimated characters cannot see tool schemas or the host's own preamble.
+          usage: msg.usage || null,
+        });
+        aiRequests.delete(msg.requestId);
+        aiRequest.finish();
+      } else if (msg.event === 'error') {
+        aiRequests.delete(msg.requestId);
+        aiRequest.fail(new Error(msg.error || 'NakliOS Local AI failed'));
+      }
+    } else if (msg.type === 'naklios:ai:image:event' && msg.requestId) {
+      var imageRequest = aiImageRequests.get(msg.requestId);
+      if (!imageRequest) return;
+      if (msg.event === 'status') {
+        try {
+          imageRequest.onStatus && imageRequest.onStatus(msg.status, msg.progress || null);
+        } catch (_) {}
+      } else if (msg.event === 'result' && msg.image) {
+        settleAiImage(msg.requestId, function (request) {
+          request.resolve({
+            created: Number(msg.image.created) || Math.floor(Date.now() / 1000),
+            model: msg.model || capabilities.aiImageModel || 'localmind-image',
+            data: [{
+              b64_json: msg.image.b64_json || null,
+              url: msg.image.url || null,
+              revised_prompt: msg.image.revised_prompt || null,
+              mime_type: msg.image.mime_type || 'image/png',
+              width: Number(msg.image.width) || null,
+              height: Number(msg.image.height) || null,
+              seed: msg.image.seed == null ? null : Number(msg.image.seed),
+            }],
+          });
+        });
+      } else if (msg.event === 'done' && msg.finishReason === 'cancelled') {
+        settleAiImage(msg.requestId, function (request) {
+          var error = new Error('Image generation cancelled');
+          error.name = 'AbortError';
+          request.reject(error);
+        });
+      } else if (msg.event === 'error') {
+        settleAiImage(msg.requestId, function (request) {
+          request.reject(new Error(msg.error || 'NakliOS image generation failed'));
+        });
+      }
+    } else if (msg.type === 'naklios:file:grant' && msg.grant) {
+      var grant = {
+        token: String(msg.grant.token || ''),
+        name: String(msg.grant.name || 'Untitled'),
+        path: String(msg.grant.path || ''),
+        sourceAppId: String(msg.grant.sourceAppId || ''),
+        backend: String(msg.grant.backend || ''),
+        kind: String(msg.grant.kind || 'file'),
+        type: msg.grant.type ? String(msg.grant.type) : undefined,
+      };
+      if (!grant.token) return;
+      if (!fileOpenListeners.size) pendingFileGrants.push(grant);
+      else fileOpenListeners.forEach(function (cb) {
+        try { cb(grant); } catch (_) {}
+      });
+    } else if (msg.type === 'naklios:file:edit-proposal' && msg.proposal) {
+      deliverFileEdit(msg.proposal);
+    } else if (msg.type === 'naklios:review:commit' && msg.proposal_id) {
+      var reviewId = String(msg.proposal_id);
+      if (appliedReviewIds.has(reviewId)) {
+        send('naklios:review:applied', { proposal_id: reviewId, ok: true });
+      } else if (!reviewDecisionHandler) {
+        send('naklios:review:applied', { proposal_id: reviewId, ok: false, error: 'app has no review decision handler' });
+      } else {
+        var application = applyingReviewIds.get(reviewId);
+        if (!application) {
+          application = Promise.resolve().then(function () {
+            return reviewDecisionHandler({ type: 'commit', proposal_id: reviewId });
+          }).then(function (result) {
+            if (result && result.ok === false) throw new Error(result.reason || 'app refused the staged change');
+            appliedReviewIds.add(reviewId);
+          });
+          applyingReviewIds.set(reviewId, application);
+          application.then(function () { applyingReviewIds.delete(reviewId); }, function () { applyingReviewIds.delete(reviewId); });
+        }
+        application.then(function () {
+          send('naklios:review:applied', { proposal_id: reviewId, ok: true });
+        }).catch(function (error) {
+          send('naklios:review:applied', { proposal_id: reviewId, ok: false, error: String(error && error.message || error) });
+        });
+      }
+    } else if (msg.type === 'naklios:commands:invoke' && typeof msg.invokeId === 'string') {
+      // A caller reached one of this app's commands through the desktop catalog, which already
+      // checked its grant. The handler's value goes back as the result; a throw as the error.
+      var invokeId = msg.invokeId;
+      var handler = commandHandlers.get(msg.name);
+      if (!handler) { send('naklios:commands:result', { invokeId: invokeId, error: 'unknown command: ' + String(msg.name) }); return; }
+      var controller = new AbortController();
+      commandCalls.set(invokeId, controller);
+      Promise.resolve().then(function () { return handler(msg.args || {}, { caller: msg.caller || null, signal: controller.signal }); }).then(
+        function (result) {
+          commandCalls.delete(invokeId);
+          // send() reports a value that cannot be cloned by returning false.
+          if (send('naklios:commands:result', { invokeId: invokeId, result: result === undefined ? null : result }) === false)
+            send('naklios:commands:result', { invokeId: invokeId, error: 'the command result could not be sent' });
+        },
+        function (error) {
+          commandCalls.delete(invokeId);
+          send('naklios:commands:result', { invokeId: invokeId, error: String(error && error.message || error) });
+        });
+    } else if (msg.type === 'naklios:commands:cancel' && typeof msg.invokeId === 'string') {
+      // The caller stopped waiting. A handler reads this through its `signal`; work already done stays done.
+      var running = commandCalls.get(msg.invokeId);
+      if (running) { commandCalls.delete(msg.invokeId); running.abort(); }
+    } else if (msg.type === 'naklios:review:discard' && msg.proposal_id) {
+      if (reviewDecisionHandler) {
+        Promise.resolve().then(function () {
+          return reviewDecisionHandler({ type: 'discard', proposal_id: String(msg.proposal_id) });
+        }).catch(function () {});
+      }
+    } else if ((msg.type === 'naklios:fs:reply' || msg.type === 'naklios:file:reply' ||
+                msg.type === 'naklios:review:reply' || msg.type === 'naklios:commands:reply' ||
+                msg.type === 'naklios:rag:reply' || msg.type === 'naklios:net:reply' ||
+                msg.type === 'naklios:tex:reply' || msg.type === 'naklios:web:reply' ||
+                msg.type === 'naklios:skills:reply' || msg.type === 'naklios:ai:reply' ||
+                msg.type === 'naklios:browser:reply') && msg.requestId) {
+      var p = pendingRpc.get(msg.requestId);
+      if (!p) return;
+      pendingRpc.delete(msg.requestId);
+      if (p.timer) clearTimeout(p.timer);
+      if (msg.error) p.reject(new Error(msg.error));
+      else p.resolve(msg.result);
+    } else if (msg.type === 'naklios:rpc:waiting' && msg.requestId) {
+      // The host holds this call until the person answers a prompt; the safety clock stops.
+      var w = pendingRpc.get(msg.requestId);
+      if (w && w.timer) { clearTimeout(w.timer); w.timer = null; }
+    } else if (msg.type === 'naklios:fs:event' && msg.subscriptionId) {
+      var listener = fsSubscriptions.get(msg.subscriptionId);
+      if (listener) {
+        try { listener(msg.event || {}); } catch (_) {}
+      }
+    } else if (msg.type === 'naklios:fs:subscription-ended' && msg.subscriptionId) {
+      var endedListener = fsSubscriptions.get(msg.subscriptionId);
+      fsSubscriptions.delete(msg.subscriptionId);
+      if (endedListener) {
+        try { endedListener({ op: 'disconnected', reason: msg.reason || 'Storage subscription ended' }); } catch (_) {}
+      }
+    }
+  });
+
+  window.naklios = {
+    version: 2,
+    capabilities: capabilities,   // mutated in place; read fields directly
+    ready: function () {
+      send('naklios:ready', {
+        features: {
+          beforeCloseAck: true,
+          fsSubscribe: true,
+          aiStream: true,
+          aiImages: true,
+          aiSearch: true,
+        },
+      });
+    },
+    title: function (s) { send('naklios:title', { title: String(s) }); },
+    close: function () { send('naklios:close'); },
+    openSettings: function (section) {
+      send('naklios:open-settings', { section: String(section || '') });
+    },
+    beforeClose: function (cb) { beforeCloseCb = typeof cb === 'function' ? cb : null; },
+    theme: {
+      get current() { return currentTheme; },
+      onChange: function (cb) {
+        if (typeof cb !== 'function') return function () {};
+        themeListeners.add(cb);
+        if (currentTheme) { try { cb(currentTheme); } catch (_) {} }
+        return function () { themeListeners.delete(cb); };
+      },
+      request: function () { send('naklios:theme-request'); },
+    },
+    onCapabilitiesChange: function (cb) {
+      if (typeof cb !== 'function') return function () {};
+      capListeners.add(cb);
+      try { cb(capabilities); } catch (_) {}
+      return function () { capListeners.delete(cb); };
+    },
+    requestCapabilities: function () { send('naklios:capabilities-request'); },
+    review: {
+      // The host owns normalization and approval. A standalone app receives a
+      // clear fallback marker; its own caller performs the immediate write.
+      stage: function (tool, diff, options) {
+        if (!inNakliOS) return Promise.resolve({ standalone: true, proposal_id: null });
+        if (!capabilities.review) return Promise.reject(new Error('NakliOS review is unavailable'));
+        options = options || {};
+        return rpc('naklios:review:stage', {
+          tool: tool, diff: diff, expires: options.expires,
+          reversible: options.reversible === true,
+        });
+      },
+      onDecision: function (cb) {
+        if (typeof cb !== 'function') throw new Error('naklios.review.onDecision needs a callback');
+        reviewDecisionHandler = cb;
+        return function () { if (reviewDecisionHandler === cb) reviewDecisionHandler = null; };
+      },
+    },
+    // The user's one skills library (skills/<name>/SKILL.md on their Folder or Crate), shared by every
+    // agent. list() returns the skills an agent may use (Sentinel-clean, active or stale) without bodies;
+    // read(name) returns one with its body; propose() writes a STAGED skill that binds only after a person
+    // activates it. System apps only; standalone it is an empty library.
+    // Common rail step 1 (docs/app-contract.md, "Common rail"): the app declares what it can do. Each
+    // command is { name, description, input (JSON Schema object), scope: 'read'|'write'|'destructive',
+    // handler(args, context) }. The desktop lists them as `<app-id>.<name>`, checks every caller's grant,
+    // and stages `destructive` ones for the person; the handler runs only after that. A later call
+    // replaces the whole set. Standalone, the handlers are kept and nothing is sent.
+    experimental_commands: {
+      register: function (list) {
+        if (!Array.isArray(list)) return Promise.reject(new Error('naklios.experimental_commands.register needs a list'));
+        var meta = [];
+        var handlers = new Map();
+        for (var i = 0; i < list.length; i++) {
+          var c = list[i] || {};
+          if (typeof c.handler !== 'function') return Promise.reject(new Error('command ' + String(c.name) + ' needs a handler'));
+          if (handlers.has(c.name)) return Promise.reject(new Error('duplicate command: ' + String(c.name)));
+          handlers.set(c.name, c.handler);
+          meta.push({ name: c.name, description: c.description, input: c.input, scope: c.scope });
+        }
+        commandHandlers = handlers;
+        if (!inNakliOS) return Promise.resolve({ standalone: true, registered: [] });
+        return rpc('naklios:commands:register', { commands: meta });
+      },
+      // System apps only: find and call other apps' commands. The host applies the caller's grant and asks the person.
+      search: function (query) {
+        if (!inNakliOS) return Promise.resolve([]);
+        return rpc('naklios:commands:search', { query: String(query || '') });
+      },
+      call: function (name, input) {
+        if (!inNakliOS) return Promise.reject(new Error('Not hosted — app commands are unavailable standalone'));
+        return rpc('naklios:commands:call', { name: String(name || ''), input: input || {} }, COMMAND_CALL_TIMEOUT_MS);
+      },
+    },
+    experimental_widgets: {
+      // One snapshot for a widget the app declares in commands.json; `null` removes the card. `persist: false`
+      // keeps it in memory only, for data the desktop must not copy to disk (Crate). Standalone: does nothing.
+      update: function (id, data, options) {
+        if (!inNakliOS) return false;
+        return send('naklios:widgets:update', { id: String(id || ''), data: data === undefined ? null : data, persist: !options || options.persist !== false }) !== false;
+      },
+    },
+    experimental_skills: {
+      list: function () {
+        if (!inNakliOS) return Promise.resolve([]);
+        return rpc('naklios:skills:list', {});
+      },
+      read: function (name) {
+        if (!inNakliOS) return Promise.resolve(null);
+        return rpc('naklios:skills:read', { name: String(name || '') });
+      },
+      propose: function (skill) {
+        if (!inNakliOS) return Promise.reject(new Error('Not hosted — the skills library is unavailable standalone'));
+        skill = skill || {};
+        return rpc('naklios:skills:propose', {
+          name: String(skill.name || ''), description: String(skill.description || ''), body: String(skill.body || ''),
+        });
+      },
+    },
+    fs: {
+      get supportsBoundedReads() { return capabilities.fsBoundedReads === true; },
+      // All paths are app-relative (under apps/<your-id>/ in the host folder).
+      // Returns Promises. Reject if no folder connected, permission denied,
+      // or path tries to traverse.
+      read:       function (path)       { return rpc('naklios:fs:read', fsPayload({ path: path })); },
+      readBinary: function (path, options) { return fsBinaryRead('naklios:fs:readBinary', path, options); },
+      stat:       function (path)       { return rpc('naklios:fs:stat', fsPayload({ path: path })); },
+      write:      function (path, data) { return rpc('naklios:fs:write', fsPayload({ path: path, data: data })); },
+      append:     function (path, line) { return rpc('naklios:fs:append', fsPayload({ path: path, line: line })); },
+      list:       function (prefix)     { return rpc('naklios:fs:list', fsPayload({ prefix: prefix || '' })); },
+      delete:     function (path)       { return rpc('naklios:fs:delete', fsPayload({ path: path })); },
+      exists:     function (path)       { return rpc('naklios:fs:exists', fsPayload({ path: path })); },
+      // Watch an app-relative path or directory. Crate events are immediate;
+      // Folder changes are detected by a lightweight host poll. Resolves to
+      // an unsubscribe function.
+      subscribe: async function (path, cb) {
+        if (typeof cb !== 'function') throw new Error('naklios.fs.subscribe requires a callback');
+        var subscriptionId = await rpc(
+          'naklios:fs:subscribe',
+          fsPayload({ path: path || '' }),
+        );
+        fsSubscriptions.set(subscriptionId, cb);
+        var active = true;
+        return function () {
+          if (!active) return;
+          active = false;
+          fsSubscriptions.delete(subscriptionId);
+          send('naklios:fs:unsubscribe', { subscriptionId: subscriptionId });
+        };
+      },
+      // Explicit backend changes are always confirmed by the NakliOS host.
+      // Switching changes the app-scoped view; it never copies or deletes data.
+      useBackend: function (backend)    { return rpc('naklios:fs:selectBackend', { backend: backend }); },
+      // Autosave: the app says WHEN state changed (markDirty) and HOW to save it ({ save }); the SDK
+      // owns the timing — a throttled save, an immediate one when the page hides or the host closes
+      // the window, and a close guard only while something is unsaved. Returns
+      // { markDirty, flush, dirty, dispose }. { guard: false } keeps the timing but never holds a
+      // close (a background push, not the user's data). Runs standalone too. See docs/app-contract.md "Durability".
+      autosave: function (opts) { return makeAutosave(opts); },
+    },
+    // System-scoped filesystem — the WHOLE store on the active backend, not just
+    // this app's apps/<id>/ namespace. Available to same-origin system apps only
+    // (capabilities.sysFs); the host rejects the call otherwise. Paths are
+    // full-from-store-root (e.g. 'apps/anvil/ws/demo/main.py', 'state.json'),
+    // and list() returns full paths. This is the primitive behind the OS-level
+    // file manager: one app can see every other app's files.
+    sys: {
+      fs: {
+        read:       function (path)       { return rpc('naklios:sysfs:read', fsPayload({ path: path })); },
+        readBinary: function (path, options) { return fsBinaryRead('naklios:sysfs:readBinary', path, options); },
+        stat:       function (path)       { return rpc('naklios:sysfs:stat', fsPayload({ path: path })); },
+        write:      function (path, data) { return rpc('naklios:sysfs:write', fsPayload({ path: path, data: data })); },
+        append:     function (path, line) { return rpc('naklios:sysfs:append', fsPayload({ path: path, line: line })); },
+        list:       function (prefix)     { return rpc('naklios:sysfs:list', fsPayload({ prefix: prefix || '' })); },
+        delete:     function (path)       { return rpc('naklios:sysfs:delete', fsPayload({ path: path })); },
+        exists:     function (path)       { return rpc('naklios:sysfs:exists', fsPayload({ path: path })); },
+      },
+    },
+    // Ask the host to open a web address in its Browser window, signed in with the person's Chrome
+    // sessions when the companion extension is installed. The host asks the person first. Answers true
+    // when it opened (in the window or, without the extension, a new tab). Standalone: opens a new tab.
+    experimental_openUrl: function (url) {
+      var href = String(url || '');
+      if (!/^https?:\/\//i.test(href)) return Promise.reject(new Error('openUrl takes an http(s) address'));
+      if (!inNakliOS) {
+        try { window.open(href, '_blank', 'noopener'); } catch (_) {}
+        return Promise.resolve(true);
+      }
+      return rpc('naklios:browser:open', { url: href });
+    },
+    files: {
+      experimental_editInAnvil: function (request) {
+        return rpc('naklios:file:editInAnvil', { request: request });
+      },
+      experimental_proposeEdit: function (token, after, run) {
+        return rpc('naklios:file:proposeEdit', { token: String(token || ''), after: after, run: run });
+      },
+      experimental_onEditProposal: function (cb) {
+        if (typeof cb !== 'function') return function () {};
+        fileEditListeners.add(cb);
+        pendingFileEdits.splice(0).forEach(deliverFileEdit);
+        return function () { fileEditListeners.delete(cb); };
+      },
+      // Ask NakliOS to open one app-relative file in another cooperative app.
+      // The target gets a window-lifetime token for exactly that file; it does
+      // not receive the source app's namespace or a Folder/Crate credential.
+      openWith: function (appId, path) {
+        return rpc('naklios:file:openWith', fsPayload({
+          appId: String(appId || ''),
+          path: String(path || ''),
+        }));
+      },
+      // Which apps declared they take this file (`accepts` in their commands.json), as `{ appId, name, action, label }`.
+      experimental_targets: function (path) {
+        if (!inNakliOS) return Promise.resolve([]);
+        return rpc('naklios:file:targets', { path: String(path || '') });
+      },
+      // Send copies of app-relative files to an app that imports them. The target gets one read-only token per file;
+      // `read(token)` answers `{ bytes, name, path, type, sourceAppId, backend }`.
+      experimental_sendTo: function (appId, paths) {
+        return rpc('naklios:file:sendTo', fsPayload({
+          appId: String(appId || ''),
+          paths: (Array.isArray(paths) ? paths : [paths]).map(String),
+        }));
+      },
+      onOpen: function (cb) {
+        if (typeof cb !== 'function') return function () {};
+        fileOpenListeners.add(cb);
+        var queued = pendingFileGrants.splice(0);
+        queued.forEach(function (grant) {
+          try { cb(grant); } catch (_) {}
+        });
+        return function () { fileOpenListeners.delete(cb); };
+      },
+      read: function (token) {
+        return rpc('naklios:file:read', { token: String(token || '') });
+      },
+      write: function (token, data) {
+        return rpc('naklios:file:write', { token: String(token || ''), data: data });
+      },
+      release: function (token) {
+        send('naklios:file:release', { token: String(token || '') });
+      },
+    },
+    // The shared TeX service. The host reads the project itself, so no file bytes cross the rail. A first compile asks
+    // the person once and downloads TeX Live, so it waits up to two hours; later compiles take seconds.
+    experimental_tex: {
+      engines: function () { return rpc('naklios:tex:engines', {}); },
+      compile: function (options) {
+        if (!inNakliOS) return Promise.reject(new Error('Not hosted — naklios.experimental_tex unavailable standalone'));
+        if (!capabilities.experimental_tex) return Promise.reject(new Error('The NakliOS TeX service is unavailable or not permitted'));
+        options = options || {};
+        var requestId = 't' + (++rpcCounter) + '_' + Date.now();
+        var timer;
+        var compile = new Promise(function (resolve, reject) {
+          if (typeof options.onChunk === 'function') texCompiles.set(requestId, options.onChunk);
+          pendingRpc.set(requestId, { resolve: resolve, reject: reject });
+          if (send('naklios:tex:compile', {
+            requestId: requestId, folder: options.folder, main: options.main, engine: options.engine,
+          }) === false) {
+            pendingRpc.delete(requestId);
+            reject(new Error('Wait for a verified NakliOS host before sending more data'));
+            return;
+          }
+          timer = setTimeout(function () {
+            if (pendingRpc.has(requestId)) {
+              pendingRpc.delete(requestId);
+              send('naklios:tex:cancel', { requestId: requestId });
+              reject(new Error('naklios RPC timeout: naklios:tex:compile'));
+            }
+          }, 2 * 60 * 60 * 1000);
+        }).finally(function () { clearTimeout(timer); texCompiles.delete(requestId); });
+        compile.id = requestId;
+        return compile;
+      },
+      cancel: function (id) { send('naklios:tex:cancel', { requestId: String(id) }); },
+      cache: function () { return rpc('naklios:tex:cache', {}); },
+      // Waits for the person to answer the host's dialog.
+      clearCache: function () { return rpc('naklios:tex:clearCache', {}, 10 * 60 * 1000); },
+    },
+    ai: {
+      chat: {
+        completions: {
+          create: createAiCompletion,
+        },
+      },
+      images: {
+        generate: createAiImage,
+      },
+      // Semantic search over the app's own namespace on the connected
+      // backend. The host builds/refreshes a local embedding index on first
+      // use (one consent prompt) and returns ranked chunks.
+      search: function (options) {
+        if (!inNakliOS) {
+          return Promise.reject(new Error('Not hosted — naklios.ai unavailable standalone'));
+        }
+        if (!capabilities.aiSearch) {
+          return Promise.reject(new Error('NakliOS semantic search is unavailable or not permitted'));
+        }
+        options = options || {};
+        var requestId = 's' + (++rpcCounter) + '_' + Date.now();
+        return new Promise(function (resolve, reject) {
+          ragSearches.set(requestId, {
+            onIndexing: typeof options.onIndexing === 'function' ? options.onIndexing : null,
+          });
+          pendingRpc.set(requestId, { resolve: resolve, reject: reject });
+          send('naklios:rag:search', {
+            requestId: requestId,
+            query: String(options.query || ''),
+            limit: options.limit,
+            prefix: options.prefix,
+          });
+          // Index building embeds every changed chunk locally; allow 15 min.
+          setTimeout(function () {
+            if (pendingRpc.has(requestId)) {
+              pendingRpc.delete(requestId);
+              reject(new Error('naklios RPC timeout: naklios:rag:search'));
+            }
+          }, 15 * 60 * 1000);
+        }).finally(function () {
+          ragSearches.delete(requestId);
+        });
+      },
+      searchStatus: function () {
+        return rpc('naklios:rag:status', {});
+      },
+      // On-device helpers (common rail step 5). Nothing leaves this browser; the person allows each app once per visit.
+      // Embeddings: up to 64 texts, answered as `{ embeddings, dimensions }`.
+      experimental_embeddings: function (input) {
+        return rpc('naklios:ai:embed', { input: Array.isArray(input) ? input : [input] }, AI_LOCAL_TIMEOUT_MS);
+      },
+      // Speech to text: 16 kHz mono samples, at most 30 s, answered as `{ text }`. Needs the assistant's model turned on.
+      experimental_transcribe: function (audio) {
+        return rpc('naklios:ai:transcribe', { audio: audio }, AI_LOCAL_TIMEOUT_MS);
+      },
+      // Text to speech: at most 1,000 characters, answered as `{ audio, sampleRate }`. Needs the assistant's model turned on.
+      experimental_speak: function (text) {
+        return rpc('naklios:ai:speak', { text: String(text || '') }, AI_LOCAL_TIMEOUT_MS);
+      },
+      cancelAll: function () {
+        aiRequests.forEach(function (_, requestId) {
+          send('naklios:ai:cancel', { requestId: requestId });
+        });
+        aiImageRequests.forEach(function (_, requestId) {
+          send('naklios:ai:cancel', { requestId: requestId });
+        });
+      },
+    },
+
+    // Web search and page reading for agents. The host searches with the person's provider (or Wikipedia) and reads
+    // pages directly, through the person's web relay, or through Jina Reader; each site asks the person once.
+    experimental_web: {
+      // search(query, { maxResults }) -> { provider, results: [{ title, url, snippet }] }
+      search: function (query, options) {
+        if (!inNakliOS || !capabilities.experimental_web) return Promise.reject(new Error('NakliOS web search is unavailable to this app'));
+        return rpc('naklios:web:search', { query: String(query || ''), maxResults: options && options.maxResults }, 120000);
+      },
+      // fetch(url) -> { url, status, kind: 'html'|'text', content, truncated, via }
+      fetch: function (url) {
+        if (!inNakliOS || !capabilities.experimental_web) return Promise.reject(new Error('NakliOS page reading is unavailable to this app'));
+        return rpc('naklios:web:fetch', { url: String(url || '') }, 120000);
+      },
+    },
+
+    // Sovereign egress — a cross-origin HTTP request the browser's Same-Origin
+    // Policy blocks (git push, arbitrary-host fetch, no-CORS APIs). The host routes
+    // it to the user-configured backend (their own Worker or the local bridge); it
+    // is NEVER a naklios-hosted proxy. Grant-gated + History-logged host-side.
+    // This is the SDK seam: until a host advertises a backend (capabilities.net),
+    // every call fails fast with a typed ENOEGRESS — no 30s RPC timeout.
+    net: {
+      // Synchronous check an app can gate its UI on.
+      available: function () { return capabilities.net === true; },
+      // { backend: 'worker'|'bridge', roams } — no secrets; null when unavailable.
+      info: function () {
+        if (!inNakliOS || !capabilities.net) return Promise.resolve(null);
+        return rpc('naklios:net:info', {});
+      },
+      // fetch({ url, method, headers, body }) -> { status, statusText, headers, body }.
+      // Binary bodies as ArrayBuffer/Uint8Array; text as string. Buffered in v1.
+      fetch: function (req) {
+        req = req || {};
+        if (!req.url) return Promise.reject(mkEgressErr('EINVAL', 'net.fetch requires a url'));
+        if (!inNakliOS || !capabilities.net) {
+          return Promise.reject(mkEgressErr('ENOEGRESS', inNakliOS
+            ? 'No egress backend configured — connect one in NakliOS settings'
+            : 'Not hosted — naklios.net unavailable standalone'));
+        }
+        return rpc('naklios:net:fetch', {
+          url: String(req.url),
+          method: req.method || 'GET',
+          headers: req.headers || {},
+          body: req.body != null ? req.body : null,
+        }, req.timeoutMs);
+      },
+    },
+  };
+})();
+
+/* naklios-sdk:end */
+</script>
+<script type="module" src="./src/app.js"></script>
+</body>
+</html>
