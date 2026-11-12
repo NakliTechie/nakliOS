@@ -5,6 +5,7 @@ const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
 for (const retiredId of [
   // bahi: back in the catalog 2026-11-12 (Chirag: \"bahi into the catalog\"), replacing the 2026-07-28 exclusion.
+  'sansadlocal', // moved to IndiaVotes 2026-11-12 (Chirag: "sansadsaar we can remove from naklios altogether")
   'fretlocal',
   'clacker',
   'mechanikon',
