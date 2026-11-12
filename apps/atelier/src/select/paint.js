@@ -4,6 +4,7 @@
 // (0..255) per pixel, the selection resampled into the layer's grid; null means everywhere.
 
 import { gaussBlur } from './raster.js';
+import { brushStrokeCoverage } from '../brush/engine.js';
 
 export function parseHex(hex) {
   const h = String(hex).replace('#', '');
@@ -49,7 +50,10 @@ export function fillGradient(px, width, height, { x0, y0, x1, y1, c0, c1 }, matr
 
 // Round-brush coverage of a stroke, like the engine's paintMask: stamps every 25% of the size,
 // hardness and flow in percent, each stamp adding a·(1 − v). Returns Float32Array (0..1) and bounds.
-export function strokeCoverage(width, height, points, size, hardness = 100, flow = 100) {
+// brush: a resolved brush engine v2 setting (src/handlers/brush.js resolveBrush) routes the stroke
+// through src/brush/engine.js (dynamics, tip image, scatter, angle, roundness); null keeps this v1 path.
+export function strokeCoverage(width, height, points, size, hardness = 100, flow = 100, brush = null) {
+  if (brush) return brushStrokeCoverage(width, height, points, size, hardness, flow, brush);
   const S = new Float32Array(width * height);
   const r = size / 2; const hard = Math.min(0.999, hardness / 100); const fl = flow / 100;
   const stamps = [];

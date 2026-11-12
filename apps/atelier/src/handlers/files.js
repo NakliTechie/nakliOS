@@ -6,7 +6,7 @@ import { parseCube } from '../../vendor/tessella/src/lut.js';
 import { cropGeometry } from './develop.js';
 import { localId } from './select.js';
 import { newDocument, makeLayer } from '../document.js';
-import { extOf } from '../storage.js';
+import { extOf, serial } from '../storage.js';
 import { DEVELOP_RENDERED } from '../../vendor/tessella/src/model.js';
 import { PANELS, settingsOf } from './develop.js';
 import { needDoc, needLayer, fail, change, layerRow, stageOrRun } from './util.js';
@@ -19,7 +19,10 @@ import {
 } from '../files/workspace.js';
 import { readPsdPlan, writePsdPlan } from '../files/psd.js';
 import { readTiff, writeTiff } from '../files/tiff.js';
+import { encodeLinear, decodeLinear } from '../files/linear.js';
 import { SPACES, convertFloat, makeIcc, tagPng, tagJpeg, tagWebp } from '../files/icc.js';
+import { describePng, describeJpeg, describeWebp } from '../files/describe.js';
+import { editedNote } from '../ai/scene.js';
 import { planToLayers, documentToPsdPlan, documentToLayeredTiff, tiffToPlan, alone, renderLayers } from '../files/layered.js';
 
 const enc = new TextEncoder();
@@ -40,6 +43,46 @@ function splitSettings(all) {
 export const STATE_FILE = '.atelier-state.json';
 async function remember(s, path) {
   try { await s.write(STATE_FILE, new TextEncoder().encode(JSON.stringify({ format: 'atelier-state', version: 1, last: path, at: new Date().toISOString() }) + '\n')); } catch { /* best effort */ }
+}
+
+// A photo as a document, the way open_photo opens it: the RAW or image layer with its sidecar's develop
+// settings (or a virtual copy's, with copy), crop and straighten, and local adjustments. Nothing is
+// opened: the caller decides whether this becomes the open document (open_photo), a layer (asLayer), or
+// a temporary render (views). doc.photo carries the path, cull values and the virtual copy id.
+export async function photoDocument(ctx, path, { copy = null } = {}) {
+  const s = ctx.storage();
+  if (!s) fail('unsupported', 'no workspace storage; grant a folder or allow browser storage', 'use_ui_control', 'grant_folder');
+  const kind = photoKind(path);
+  if (!kind) fail('unsupported', `${path} is not a RAW or browser image`, 'fix_argument', 'list_folder');
+  if (!(await s.exists(path))) fail('invalid', `no file ${path} in the workspace`, 'fix_argument', 'list_folder');
+  if (!ctx.renderer) fail('unsupported', 'this command needs the WebGPU engine, which did not start', 'get_state', 'get_capabilities');
+  if (copy && kind !== 'raw') fail('unsupported', 'virtual copies hold develop settings, which only RAW photos have', 'fix_argument', 'open_photo');
+  const layer = makeLayer(kind, { name: baseName(path), file: path, ...(kind === 'raw' ? { develop: {} } : {}) });
+  const size = await ctx.renderer.sourceSize(layer);
+  let side = { exists: false, sidecar: normalizeSidecar({}, DEVELOP_RENDERED) };
+  if (kind === 'raw' && await s.exists(sidecarPath(path))) {
+    let raw; try { raw = JSON.parse(await s.readText(sidecarPath(path))); } catch { raw = {}; }
+    side = { exists: true, sidecar: normalizeSidecar(raw, DEVELOP_RENDERED) };
+  }
+  let settings = side.sidecar; let title = baseName(path);
+  if (copy) {
+    settings = (side.sidecar.copies || []).find((c) => c.id === copy);
+    if (!settings) fail('invalid', `${path} has no virtual copy ${copy}`, 'fix_argument', 'list_folder');
+    title = `${baseName(path)} · ${settings.name}`;
+  }
+  if (kind === 'raw') developInto(layer, settings);
+  const doc = newDocument({ width: size.width, height: size.height, background: 'transparent', title });
+  if (layer.crop) {   // restore crop and straighten from the sidecar
+    const g = cropGeometry(size.width, size.height, layer.crop.rect, layer.crop.angle);
+    doc.width = g.width; doc.height = g.height; layer.matrix = g.matrix;
+  }
+  doc.layers.push(layer); doc.activeLayerId = layer.id;
+  for (const loc of settings.locals || []) {
+    doc.layers.push({ ...structuredClone(layer), id: localId(layer.id, loc.maskId), name: `${layer.name} · ${loc.maskId}`, localOf: layer.id, localDelta: loc.delta || {}, mask: loc.mask, visible: loc.visible !== false });
+  }
+  const cull = { rating: side.sidecar.rating ?? 0, flag: side.sidecar.flag ?? 'none', label: side.sidecar.label ?? 'none' };
+  doc.photo = { path, ...cull, ...(copy ? { copy } : {}) };
+  return { doc, layer, size, sidecarExists: side.exists, cull };
 }
 
 export function register(bus, ctx) {
@@ -78,20 +121,13 @@ export function register(bus, ctx) {
   // (its local adjustments with shader-evaluated masks travel in the sidecar too; painted masks need a .atelier document).
 const singleRaw = (d) => {
   const raws = d.layers.filter((l) => l.kind === 'raw' && !l.localOf);
-  if (raws.length !== 1) return null;
+  if (raws.length !== 1 || raws[0].buffer) return null;   // a linear float source (HDR merge) has no photo file: .atelier only
   const others = d.layers.filter((l) => l !== raws[0]);
   const ok = others.every((l) => l.localOf === raws[0].id && !(l.mask?.components || []).some((c) => c.kind === 'bitmap'));
   return ok ? raws[0] : null;
 };
 
   // ---- open --------------------------------------------------------------------------------------
-  async function photoLayer(path) {
-    const kind = photoKind(path);
-    const layer = makeLayer(kind, { name: baseName(path), file: path, ...(kind === 'raw' ? { develop: {} } : {}) });
-    const size = await renderer().sourceSize(layer);
-    return { layer, size };
-  }
-
   bus.register('file.open', async (a) => {
     const s = store(); const e = extOf(a.path);
     if (!(await s.exists(a.path))) fail('invalid', `no file ${a.path} in the workspace`, 'fix_argument', 'list_folder');
@@ -106,38 +142,23 @@ const singleRaw = (d) => {
       return openPlan(a.path, plan, a.asLayer);
     }
     if (!photoKind(a.path)) fail('unsupported', `cannot open .${e} files`, 'change_target', 'open_photo');
-    const { layer, size } = await photoLayer(a.path);
-    let side = { exists: false, sidecar: normalizeSidecar({}, DEVELOP_RENDERED) };
-    if (layer.kind === 'raw') {
-      side = await readSidecar(s, a.path);
-      developInto(layer, side.sidecar);
-    }
-    const cull = { rating: side.sidecar.rating ?? 0, flag: side.sidecar.flag ?? 'none', label: side.sidecar.label ?? 'none' };
+    renderer();
+    const { doc, layer, size, sidecarExists, cull } = await photoDocument(ctx, a.path, { copy: a.copy ?? null });
     if (a.asLayer) {
       const d = needDoc(ctx);
       layer.matrix = [1, 0, 0, 1, Math.round((d.width - size.width) / 2), Math.round((d.height - size.height) / 2)];
-      await change(ctx, 'open_photo as layer', (doc) => {
-        const i = doc.layers.findIndex((l) => l.id === doc.activeLayerId);
-        doc.layers.splice(i < 0 ? doc.layers.length : i + 1, 0, layer);
-        doc.activeLayerId = layer.id;
+      await change(ctx, 'open_photo as layer', (dd) => {
+        const k = dd.layers.findIndex((l) => l.id === dd.activeLayerId);
+        dd.layers.splice(k < 0 ? dd.layers.length : k + 1, 0, layer);
+        dd.activeLayerId = layer.id;
       });
     } else {
-      const doc = newDocument({ width: size.width, height: size.height, background: 'transparent', title: baseName(a.path) });
-      if (layer.crop) {   // restore crop and straighten from the sidecar
-        const g = cropGeometry(size.width, size.height, layer.crop.rect, layer.crop.angle);
-        doc.width = g.width; doc.height = g.height; layer.matrix = g.matrix;
-      }
-      doc.layers.push(layer); doc.activeLayerId = layer.id;
-      for (const loc of side.sidecar.locals || []) {
-        doc.layers.push({ ...structuredClone(layer), id: localId(layer.id, loc.maskId), name: `${layer.name} · ${loc.maskId}`, localOf: layer.id, localDelta: loc.delta || {}, mask: loc.mask, visible: loc.visible !== false });
-      }
-      doc.photo = { path: a.path, ...cull };
       ctx.store.replace(doc);
       await ctx.sync();
     }
     ctx.activePhoto = a.path;
     if (!a.asLayer) await remember(s, a.path);
-    return { document: summary(ctx.store.doc), layer: layerRow(layer), sidecar: side.exists, ...cull };
+    return { document: summary(ctx.store.doc), layer: layerRow(layer), sidecar: sidecarExists, ...cull, ...(a.copy ? { copy: a.copy } : {}) };
   });
 
   // A PSD or TIFF layer plan opens as a new document, or (asLayer) as a group of layers centred in the
@@ -178,16 +199,32 @@ const singleRaw = (d) => {
     const asDocument = a.path ? a.path.endsWith('.atelier') : !raw;
     if (!asDocument) {
       if (a.path && a.path !== sidecarPath(raw.file)) fail('invalid', `a single RAW photo saves to its sidecar ${sidecarPath(raw.file)}, or pass a path ending .atelier`, 'fix_argument', 'save_document');
+      // One read-modify-write of the sidecar at a time: library commands (set_keywords, set_rating…) take
+      // the same lock, so an autosave never writes back a sidecar it read before their change.
+      return serial(sidecarPath(raw.file), async () => {
       const { sidecar } = await readSidecar(s, raw.file);
       const next = { ...sidecar, develop: Object.fromEntries(Object.entries(raw.develop || {}).filter(([k]) => DEVELOP_RENDERED.includes(k))) };
       for (const k of STRUCT) { if (raw[k]) next[k] = structuredClone(raw[k]); else delete next[k]; }
       const locals = d.layers.filter((l) => l.localOf === raw.id).map((l) => ({ maskId: l.id.slice(raw.id.length + 1), mask: structuredClone(l.mask), delta: structuredClone(l.localDelta || {}), visible: l.visible }));
       if (locals.length) next.locals = locals; else delete next.locals;
       const photo = d.photo?.path === raw.file ? d.photo : null;
-      const out = photo ? applyCull(next, photo) : next;
+      let out;
+      if (photo?.copy) {
+        // An open virtual copy saves into its own entry; the photo's settings stay as they are on disk.
+        const copies = [...(sidecar.copies || [])]; const k = copies.findIndex((c) => c.id === photo.copy);
+        if (k < 0) fail('invalid', `virtual copy ${photo.copy} of ${raw.file} was deleted; nothing saved (make a new virtual copy and open it)`, 'change_target', 'create_virtual_copy');
+        const entry = { id: copies[k].id, name: copies[k].name, develop: next.develop, ...Object.fromEntries(STRUCT.filter((x) => next[x]).map((x) => [x, next[x]])), ...(next.locals ? { locals: next.locals } : {}), ...(copies[k].created ? { created: copies[k].created } : {}) };
+        copies[k] = entry;
+        out = { ...sidecar, copies };
+      } else out = next;
+      // Rating, flag and label are the sidecar's on disk: every cull command (set_rating, import_xmp,
+      // import_lightroom_catalog, accept_cull_suggestions) writes them there, and the open document's copy
+      // in doc.photo may be older. The document takes the disk's values instead of writing its own back.
+      if (photo) Object.assign(photo, { rating: out.rating ?? 0, flag: out.flag ?? 'none', label: out.label ?? 'none' });
       await writeSidecar(s, raw.file, out);
       await remember(s, raw.file);
       return { kind: 'sidecar', path: sidecarPath(raw.file), develop: out.develop, objects: STRUCT.filter((k) => out[k]), rating: out.rating ?? 0, flag: out.flag ?? 'none', label: out.label ?? 'none' };
+      });
     }
     if (a.path && !a.path.endsWith('.atelier')) fail('invalid', 'a document path ends with .atelier', 'fix_argument', 'save_document');
     const path = a.path || `documents/${d.id}.atelier`;
@@ -205,6 +242,12 @@ const singleRaw = (d) => {
     for (const id of bufferIds(d)) {   // binaries first, then the JSON that advertises them (§9.3)
       const b = r.buffers.get(id);
       if (!b) fail('outcome_unknown', `buffer ${id} is missing from the renderer`, 'get_state', 'get_state');
+      if (b.kind === 'linear') {   // float32 linear RGB (HDR merge): a 32-bit float TIFF keeps values above 1.0
+        const file = `${dir}${id}.tif`;
+        await s.write(file, await encodeLinear(r.bufferData(id), b.width, b.height));
+        buffers[id] = { kind: 'linear', width: b.width, height: b.height, file, colour: b.colour };
+        continue;
+      }
       const channels = b.kind === 'mask' ? 1 : 4;
       const file = `${dir}${id}.png`;
       await s.write(file, await encodePng(r.bufferData(id), b.width, b.height, channels));
@@ -225,6 +268,12 @@ const singleRaw = (d) => {
     const r = entries.length || doc.layers.some((l) => l.kind === 'raw' || l.kind === 'image') ? renderer() : ctx.renderer;
     const remap = {};
     for (const [oldId, b] of entries) {
+      if (b.kind === 'linear') {
+        let lin; try { lin = await decodeLinear(await s.readBinary(b.file)); } catch (err) { fail('invalid', `${b.file}: ${err.message}`, 'fix_argument'); }
+        if (lin.width !== b.width || lin.height !== b.height) fail('invalid', `${b.file} is ${lin.width}x${lin.height}, expected ${b.width}x${b.height}`, 'fix_argument');
+        remap[oldId] = await r.newLinear(b.width, b.height, lin.data, b.colour || {});
+        continue;
+      }
       const png = await decodePng(await s.readBinary(b.file));
       if (png.width !== b.width || png.height !== b.height) fail('invalid', `${b.file} is ${png.width}x${png.height}, expected ${b.width}x${b.height}`, 'fix_argument');
       if (b.kind === 'mask') {
@@ -238,7 +287,7 @@ const singleRaw = (d) => {
     for (const l of doc.layers) {
       if (l.buffer) { if (!remap[l.buffer]) fail('invalid', `layer ${l.name} names buffer ${l.buffer}, which the file lacks`, 'fix_argument'); l.buffer = remap[l.buffer]; }
       for (const c of l.mask?.components || []) if (c.bitmap) { if (!remap[c.bitmap]) fail('invalid', `a mask on ${l.name} names buffer ${c.bitmap}, which the file lacks`, 'fix_argument'); c.bitmap = remap[c.bitmap]; }
-      if ((l.kind === 'raw' || l.kind === 'image') && !(await s.exists(l.file))) fail('invalid', `layer ${l.name} needs ${l.file}, which is not in the workspace`, 'fix_argument', 'list_folder');
+      if ((l.kind === 'raw' || l.kind === 'image') && !l.buffer && !(await s.exists(l.file))) fail('invalid', `layer ${l.name} needs ${l.file}, which is not in the workspace`, 'fix_argument', 'list_folder');
     }
     ctx.store.replace(doc);
     await ctx.sync();
@@ -274,7 +323,8 @@ const singleRaw = (d) => {
 
   // Encodes one rendered image. render(background) returns image8's result (8-bit sRGB plus .float,
   // premultiplied linear Rec.2020). Non-sRGB spaces convert from the float data (src/files/icc.js).
-  async function encodeRendered(render, { format, quality = 90, maxEdge, colorSpace }) {
+  // note: the "edited" label (editedNote) when AI-edited layers are in the export; written as the file's description.
+  async function encodeRendered(render, { format, quality = 90, maxEdge, colorSpace, note = null }) {
     const r = renderer(); const cs = colorSpace || 'srgb';
     if (format === 'tiff16') {
       const im = await render(null);
@@ -284,7 +334,7 @@ const singleRaw = (d) => {
       for (let i = 3; i < f.data.length; i += 4) if (f.data[i] < 0.9999) { alpha = true; break; }
       const rgba = convertFloat(f, cs, 16);
       const data = alpha ? rgba : rgba.filter((_, i) => (i & 3) !== 3);
-      return { bytes: await writeTiff([{ width: f.width, height: f.height, bits: 16, channels: alpha ? 4 : 3, data, icc: makeIcc(cs) }]), width: f.width, height: f.height };
+      return { bytes: await writeTiff([{ width: f.width, height: f.height, bits: 16, channels: alpha ? 4 : 3, data, icc: makeIcc(cs), ...(note ? { description: note } : {}) }]), width: f.width, height: f.height };
     }
     let im;
     if (cs === 'srgb') {
@@ -307,6 +357,7 @@ const singleRaw = (d) => {
     if (format === 'png') bytes = await tagPng(bytes, cs);
     else if (format === 'jpeg') bytes = tagJpeg(bytes, cs);
     else if (format === 'webp') bytes = tagWebp(bytes, cs);
+    if (note) bytes = format === 'png' ? describePng(bytes, note) : format === 'jpeg' ? describeJpeg(bytes, note) : format === 'webp' ? describeWebp(bytes, note) : bytes;
     return { bytes, width: im.width, height: im.height };
   }
 
@@ -324,7 +375,7 @@ const singleRaw = (d) => {
       return { bytes: t.bytes, width: doc.width, height: doc.height, pages: t.pages, notes: t.notes };
     }
     const lod = maxEdge ? Math.max(0, Math.floor(Math.log2(Math.max(doc.width, doc.height) / maxEdge))) : 0;
-    return encodeRendered((bg) => r.image8(lod, null, bg), settings);
+    return encodeRendered((bg) => r.image8(lod, null, bg), { ...settings, note: editedNote(doc) });
   }
 
   // Export layers as files (P54): each visible top-level layer (a group as its composite, a RAW layer with
@@ -341,7 +392,7 @@ const singleRaw = (d) => {
         n++;
         const path = exportPath(`${folder}/${String(n).padStart(2, '0')}-${fileSafe(l.name)}`, settings.format);
         const list = alone(doc, l, { keepOpacity: true, includeLocals: true });
-        const out = await encodeRendered((bg) => renderLayers(r, doc, list, bg), settings);
+        const out = await encodeRendered((bg) => renderLayers(r, doc, list, bg), { ...settings, note: editedNote({ layers: list }) });
         await store().write(path, out.bytes);
         files.push({ layer: l.name, path, bytes: out.bytes.length, width: out.width, height: out.height });
       }

@@ -46,3 +46,14 @@
 /apps/dish/*
   Cross-Origin-Opener-Policy: same-origin
   Cross-Origin-Embedder-Policy: credentialless
+
+# Atelier's own Content-Security-Policy, copied from its repo's _headers (NakliTechie/atelier b4a9502).
+# Cloudflare reads only this root file, so a mirrored apps/atelier/_headers would be ignored. Both
+# this policy and the site-wide frame-ancestors 'self' apply, and the browser enforces each.
+# connect-src * lets the AI features download models from Hugging Face and the CDN.
+/apps/atelier/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob: https://cdn.jsdelivr.net; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob: data:; font-src 'self' data:; connect-src * blob: data:; frame-src 'none'; form-action 'none'; object-src 'none'; base-uri 'self'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+/apps/atelier/vendor/tessella/vendor/libraw-wasm/libraw.wasm
+  Content-Type: application/wasm

@@ -3,6 +3,7 @@
 import { makeLayer } from '../document.js';
 import { BLEND_MODES } from '../../vendor/tessella/src/shaders.js';
 import { needDoc, needLayer, fail, change, layerRow } from './util.js';
+import { richText, placeRichText } from './vector.js';
 
 // Engine checks ranges for most adjustment types; curves params are point lists it would otherwise ignore.
 function checkAdjustment(adj, tool) {
@@ -224,11 +225,13 @@ export function register(bus, ctx) {
   bus.register('layer.text', async (a) => {
     const l = needLayer(ctx, a.layerId);
     if (l.kind !== 'text') fail('unsupported', 'not a text layer', 'change_target', 'set_text');
-    await change(ctx, 'set_text', (doc) => {
-      const x = doc.layers.find((y) => y.id === l.id);
-      if (a.content !== undefined) x.text.content = a.content;
-      if (a.style) x.text.style = { ...x.text.style, ...a.style };
-    });
+    // Rich fields (runs, features, path, warp; src/handlers/vector.js) render through src/vector/text.js.
+    const x = structuredClone(l);
+    if (a.content !== undefined) x.text.content = a.content;
+    if (a.style) x.text.style = { ...x.text.style, ...a.style };
+    x.text = richText(ctx, x, a);
+    await placeRichText(ctx, x);
+    await change(ctx, 'set_text', (doc) => { doc.layers[doc.layers.findIndex((y) => y.id === l.id)] = x; });
     return { layer: layerRow(ctx.store.doc.layers.find((y) => y.id === l.id)) };
   });
 }

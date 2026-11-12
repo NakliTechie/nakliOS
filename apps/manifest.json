@@ -1352,12 +1352,76 @@
           "managedSdk": "inline"
         },
         {
+          "source": "src/ai/clip.js",
+          "destination": "src/ai/clip.js"
+        },
+        {
+          "source": "src/ai/faces.js",
+          "destination": "src/ai/faces.js"
+        },
+        {
+          "source": "src/ai/guard.js",
+          "destination": "src/ai/guard.js"
+        },
+        {
+          "source": "src/ai/image-edit.js",
+          "destination": "src/ai/image-edit.js"
+        },
+        {
+          "source": "src/ai/masks.js",
+          "destination": "src/ai/masks.js"
+        },
+        {
+          "source": "src/ai/models-pixels.js",
+          "destination": "src/ai/models-pixels.js"
+        },
+        {
+          "source": "src/ai/pixels-ort.js",
+          "destination": "src/ai/pixels-ort.js"
+        },
+        {
+          "source": "src/ai/pixels.js",
+          "destination": "src/ai/pixels.js"
+        },
+        {
+          "source": "src/ai/portrait.js",
+          "destination": "src/ai/portrait.js"
+        },
+        {
+          "source": "src/ai/registry.js",
+          "destination": "src/ai/registry.js"
+        },
+        {
+          "source": "src/ai/runtime.js",
+          "destination": "src/ai/runtime.js"
+        },
+        {
+          "source": "src/ai/scene.js",
+          "destination": "src/ai/scene.js"
+        },
+        {
+          "source": "src/ai/text.js",
+          "destination": "src/ai/text.js"
+        },
+        {
+          "source": "src/ai/vision-ort.js",
+          "destination": "src/ai/vision-ort.js"
+        },
+        {
+          "source": "src/ai/worker-src.js",
+          "destination": "src/ai/worker-src.js"
+        },
+        {
           "source": "src/app.js",
           "destination": "src/app.js"
         },
         {
           "source": "src/autosave.js",
           "destination": "src/autosave.js"
+        },
+        {
+          "source": "src/brush/engine.js",
+          "destination": "src/brush/engine.js"
         },
         {
           "source": "src/bus.js",
@@ -1368,6 +1432,26 @@
           "destination": "src/document.js"
         },
         {
+          "source": "src/files/book.js",
+          "destination": "src/files/book.js"
+        },
+        {
+          "source": "src/files/cms.js",
+          "destination": "src/files/cms.js"
+        },
+        {
+          "source": "src/files/cullassist.js",
+          "destination": "src/files/cullassist.js"
+        },
+        {
+          "source": "src/files/describe.js",
+          "destination": "src/files/describe.js"
+        },
+        {
+          "source": "src/files/exif.js",
+          "destination": "src/files/exif.js"
+        },
+        {
           "source": "src/files/icc.js",
           "destination": "src/files/icc.js"
         },
@@ -1376,16 +1460,48 @@
           "destination": "src/files/layered.js"
         },
         {
+          "source": "src/files/lensdb.js",
+          "destination": "src/files/lensdb.js"
+        },
+        {
+          "source": "src/files/linear.js",
+          "destination": "src/files/linear.js"
+        },
+        {
+          "source": "src/files/lrcat.js",
+          "destination": "src/files/lrcat.js"
+        },
+        {
           "source": "src/files/png.js",
           "destination": "src/files/png.js"
+        },
+        {
+          "source": "src/files/print.js",
+          "destination": "src/files/print.js"
         },
         {
           "source": "src/files/psd.js",
           "destination": "src/files/psd.js"
         },
         {
+          "source": "src/files/recipes.js",
+          "destination": "src/files/recipes.js"
+        },
+        {
+          "source": "src/files/smart.js",
+          "destination": "src/files/smart.js"
+        },
+        {
+          "source": "src/files/sync.js",
+          "destination": "src/files/sync.js"
+        },
+        {
           "source": "src/files/tiff.js",
           "destination": "src/files/tiff.js"
+        },
+        {
+          "source": "src/files/warp.js",
+          "destination": "src/files/warp.js"
         },
         {
           "source": "src/files/workspace.js",
@@ -1394,6 +1510,38 @@
         {
           "source": "src/files/xmp.js",
           "destination": "src/files/xmp.js"
+        },
+        {
+          "source": "src/handlers/actions.js",
+          "destination": "src/handlers/actions.js"
+        },
+        {
+          "source": "src/handlers/ai-library.js",
+          "destination": "src/handlers/ai-library.js"
+        },
+        {
+          "source": "src/handlers/ai-pixels.js",
+          "destination": "src/handlers/ai-pixels.js"
+        },
+        {
+          "source": "src/handlers/ai-portrait.js",
+          "destination": "src/handlers/ai-portrait.js"
+        },
+        {
+          "source": "src/handlers/ai-scene.js",
+          "destination": "src/handlers/ai-scene.js"
+        },
+        {
+          "source": "src/handlers/ai.js",
+          "destination": "src/handlers/ai.js"
+        },
+        {
+          "source": "src/handlers/assist.js",
+          "destination": "src/handlers/assist.js"
+        },
+        {
+          "source": "src/handlers/brush.js",
+          "destination": "src/handlers/brush.js"
         },
         {
           "source": "src/handlers/core.js",
@@ -1408,6 +1556,10 @@
           "destination": "src/handlers/files.js"
         },
         {
+          "source": "src/handlers/heal.js",
+          "destination": "src/handlers/heal.js"
+        },
+        {
           "source": "src/handlers/index.js",
           "destination": "src/handlers/index.js"
         },
@@ -1416,16 +1568,136 @@
           "destination": "src/handlers/layers.js"
         },
         {
+          "source": "src/handlers/lens.js",
+          "destination": "src/handlers/lens.js"
+        },
+        {
+          "source": "src/handlers/library.js",
+          "destination": "src/handlers/library.js"
+        },
+        {
           "source": "src/handlers/look.js",
           "destination": "src/handlers/look.js"
+        },
+        {
+          "source": "src/handlers/merge.js",
+          "destination": "src/handlers/merge.js"
+        },
+        {
+          "source": "src/handlers/motion.js",
+          "destination": "src/handlers/motion.js"
+        },
+        {
+          "source": "src/handlers/plugins.js",
+          "destination": "src/handlers/plugins.js"
+        },
+        {
+          "source": "src/handlers/print.js",
+          "destination": "src/handlers/print.js"
+        },
+        {
+          "source": "src/handlers/recipes.js",
+          "destination": "src/handlers/recipes.js"
         },
         {
           "source": "src/handlers/select.js",
           "destination": "src/handlers/select.js"
         },
         {
+          "source": "src/handlers/share.js",
+          "destination": "src/handlers/share.js"
+        },
+        {
+          "source": "src/handlers/smart.js",
+          "destination": "src/handlers/smart.js"
+        },
+        {
+          "source": "src/handlers/styles.js",
+          "destination": "src/handlers/styles.js"
+        },
+        {
+          "source": "src/handlers/tether.js",
+          "destination": "src/handlers/tether.js"
+        },
+        {
           "source": "src/handlers/util.js",
           "destination": "src/handlers/util.js"
+        },
+        {
+          "source": "src/handlers/vector.js",
+          "destination": "src/handlers/vector.js"
+        },
+        {
+          "source": "src/handlers/views.js",
+          "destination": "src/handlers/views.js"
+        },
+        {
+          "source": "src/handlers/warp.js",
+          "destination": "src/handlers/warp.js"
+        },
+        {
+          "source": "src/merge/align.js",
+          "destination": "src/merge/align.js"
+        },
+        {
+          "source": "src/merge/dng.js",
+          "destination": "src/merge/dng.js"
+        },
+        {
+          "source": "src/merge/features.js",
+          "destination": "src/merge/features.js"
+        },
+        {
+          "source": "src/merge/focus.js",
+          "destination": "src/merge/focus.js"
+        },
+        {
+          "source": "src/merge/geometry.js",
+          "destination": "src/merge/geometry.js"
+        },
+        {
+          "source": "src/merge/hdr.js",
+          "destination": "src/merge/hdr.js"
+        },
+        {
+          "source": "src/merge/image.js",
+          "destination": "src/merge/image.js"
+        },
+        {
+          "source": "src/merge/pano.js",
+          "destination": "src/merge/pano.js"
+        },
+        {
+          "source": "src/merge/ptp.js",
+          "destination": "src/merge/ptp.js"
+        },
+        {
+          "source": "src/merge/worker.js",
+          "destination": "src/merge/worker.js"
+        },
+        {
+          "source": "src/motion/gif.js",
+          "destination": "src/motion/gif.js"
+        },
+        {
+          "source": "src/motion/timeline.js",
+          "destination": "src/motion/timeline.js"
+        },
+        {
+          "source": "src/motion/video.js",
+          "destination": "src/motion/video.js"
+        },
+        {
+          "source": "src/motion/webm.js",
+          "destination": "src/motion/webm.js"
+        },
+        {
+          "source": "src/motion/webp.js",
+          "destination": "src/motion/webp.js"
+        },
+        {
+          "source": "src/plugins/host.js",
+          "destination": "src/plugins/host.js"
         },
         {
           "source": "src/rail.js",
@@ -1436,8 +1708,16 @@
           "destination": "src/renderer.js"
         },
         {
+          "source": "src/select/artistic.js",
+          "destination": "src/select/artistic.js"
+        },
+        {
           "source": "src/select/paint.js",
           "destination": "src/select/paint.js"
+        },
+        {
+          "source": "src/select/patchmatch.js",
+          "destination": "src/select/patchmatch.js"
         },
         {
           "source": "src/select/quickmask.js",
@@ -1456,6 +1736,26 @@
           "destination": "src/storage.js"
         },
         {
+          "source": "src/ui/ai-pixels.js",
+          "destination": "src/ui/ai-pixels.js"
+        },
+        {
+          "source": "src/ui/ai-portrait.js",
+          "destination": "src/ui/ai-portrait.js"
+        },
+        {
+          "source": "src/ui/ai.js",
+          "destination": "src/ui/ai.js"
+        },
+        {
+          "source": "src/ui/brushes.js",
+          "destination": "src/ui/brushes.js"
+        },
+        {
+          "source": "src/ui/compare.js",
+          "destination": "src/ui/compare.js"
+        },
+        {
           "source": "src/ui/develop.js",
           "destination": "src/ui/develop.js"
         },
@@ -1466,6 +1766,10 @@
         {
           "source": "src/ui/dom.js",
           "destination": "src/ui/dom.js"
+        },
+        {
+          "source": "src/ui/engine-ui.js",
+          "destination": "src/ui/engine-ui.js"
         },
         {
           "source": "src/ui/export.js",
@@ -1480,6 +1784,10 @@
           "destination": "src/ui/geometry.js"
         },
         {
+          "source": "src/ui/heal.js",
+          "destination": "src/ui/heal.js"
+        },
+        {
           "source": "src/ui/index.js",
           "destination": "src/ui/index.js"
         },
@@ -1488,8 +1796,36 @@
           "destination": "src/ui/layers.js"
         },
         {
+          "source": "src/ui/merge.js",
+          "destination": "src/ui/merge.js"
+        },
+        {
+          "source": "src/ui/modules.js",
+          "destination": "src/ui/modules.js"
+        },
+        {
+          "source": "src/ui/nodes.js",
+          "destination": "src/ui/nodes.js"
+        },
+        {
+          "source": "src/ui/palette.js",
+          "destination": "src/ui/palette.js"
+        },
+        {
           "source": "src/ui/parity.js",
           "destination": "src/ui/parity.js"
+        },
+        {
+          "source": "src/ui/presetpreview.js",
+          "destination": "src/ui/presetpreview.js"
+        },
+        {
+          "source": "src/ui/recipes.js",
+          "destination": "src/ui/recipes.js"
+        },
+        {
+          "source": "src/ui/scopes.js",
+          "destination": "src/ui/scopes.js"
         },
         {
           "source": "src/ui/send.js",
@@ -1500,8 +1836,44 @@
           "destination": "src/ui/slider.js"
         },
         {
+          "source": "src/ui/tether.js",
+          "destination": "src/ui/tether.js"
+        },
+        {
+          "source": "src/ui/timeline.js",
+          "destination": "src/ui/timeline.js"
+        },
+        {
           "source": "src/ui/tools.js",
           "destination": "src/ui/tools.js"
+        },
+        {
+          "source": "src/ui/vector.js",
+          "destination": "src/ui/vector.js"
+        },
+        {
+          "source": "src/ui/views.js",
+          "destination": "src/ui/views.js"
+        },
+        {
+          "source": "src/vector/booleans.js",
+          "destination": "src/vector/booleans.js"
+        },
+        {
+          "source": "src/vector/geom.js",
+          "destination": "src/vector/geom.js"
+        },
+        {
+          "source": "src/vector/raster.js",
+          "destination": "src/vector/raster.js"
+        },
+        {
+          "source": "src/vector/render.js",
+          "destination": "src/vector/render.js"
+        },
+        {
+          "source": "src/vector/text.js",
+          "destination": "src/vector/text.js"
         },
         {
           "source": "vendor/ag-psd/LICENSE",
@@ -1514,6 +1886,54 @@
         {
           "source": "vendor/ag-psd/ag-psd.mjs",
           "destination": "vendor/ag-psd/ag-psd.mjs"
+        },
+        {
+          "source": "vendor/lcms-wasm/LICENSE.md",
+          "destination": "vendor/lcms-wasm/LICENSE.md"
+        },
+        {
+          "source": "vendor/lcms-wasm/VENDOR.md",
+          "destination": "vendor/lcms-wasm/VENDOR.md"
+        },
+        {
+          "source": "vendor/lcms-wasm/lcms.js",
+          "destination": "vendor/lcms-wasm/lcms.js"
+        },
+        {
+          "source": "vendor/lcms-wasm/lcms.wasm",
+          "destination": "vendor/lcms-wasm/lcms.wasm"
+        },
+        {
+          "source": "vendor/path-bool/LICENSE",
+          "destination": "vendor/path-bool/LICENSE"
+        },
+        {
+          "source": "vendor/path-bool/VENDOR.md",
+          "destination": "vendor/path-bool/VENDOR.md"
+        },
+        {
+          "source": "vendor/path-bool/path-bool.js",
+          "destination": "vendor/path-bool/path-bool.js"
+        },
+        {
+          "source": "vendor/sql.js/LICENSE",
+          "destination": "vendor/sql.js/LICENSE"
+        },
+        {
+          "source": "vendor/sql.js/VENDOR.md",
+          "destination": "vendor/sql.js/VENDOR.md"
+        },
+        {
+          "source": "vendor/sql.js/package.json",
+          "destination": "vendor/sql.js/package.json"
+        },
+        {
+          "source": "vendor/sql.js/sql-wasm.js",
+          "destination": "vendor/sql.js/sql-wasm.js"
+        },
+        {
+          "source": "vendor/sql.js/sql-wasm.wasm",
+          "destination": "vendor/sql.js/sql-wasm.wasm"
         },
         {
           "source": "vendor/tessella/LICENSE",

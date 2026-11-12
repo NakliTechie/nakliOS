@@ -1,7 +1,7 @@
 {
   "app": "atelier",
   "manifestVersion": "0.1.0",
-  "status": "draft (spec 002 \u00a76); no command bus exists yet",
+  "status": "draft (spec 002 §6); no command bus exists yet",
   "doors": [
     "navigator.modelContext",
     "window.atelier.tools",
@@ -218,8 +218,8 @@
     },
     {
       "name": "list_folder",
-      "description": "List the photos in the granted workspace folder with ratings, flags, labels and whether a sidecar exists.",
-      "handler": "query.folder",
+      "description": "List the photos and virtual copies in the workspace with rating, flag, label, keywords, cached EXIF (camera, lens, ISO, focal length, date) and whether Atelier and XMP sidecars exist; filter by any of them or by a collection. EXIF is read once per photo (only the file's start where storage allows) and cached in library.json.",
+      "handler": "library.folder",
       "effect": "read",
       "inputSchema": {
         "type": "object",
@@ -242,8 +242,49 @@
               },
               "label": {
                 "type": "string"
+              },
+              "keyword": {
+                "type": "string"
+              },
+              "collection": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string",
+                "description": "Path contains."
+              },
+              "camera": {
+                "type": "string"
+              },
+              "lens": {
+                "type": "string"
+              },
+              "isoMin": {
+                "type": "number"
+              },
+              "isoMax": {
+                "type": "number"
+              },
+              "focalMin": {
+                "type": "number"
+              },
+              "focalMax": {
+                "type": "number"
+              },
+              "dateFrom": {
+                "type": "string",
+                "description": "YYYY-MM-DD"
+              },
+              "dateTo": {
+                "type": "string",
+                "description": "YYYY-MM-DD"
               }
-            }
+            },
+            "additionalProperties": false
+          },
+          "exif": {
+            "type": "boolean",
+            "description": "Read EXIF for photos not yet cached (EXIF filters do this on their own)."
           },
           "page": {
             "type": "integer",
@@ -284,7 +325,7 @@
     },
     {
       "name": "open_photo",
-      "description": "Open a photo from the workspace (RAW, JPEG, PNG, WebP, layered TIFF, PSD, or a saved .atelier document) as a new document, or as a layer (a group for PSD and TIFF) in the current one.",
+      "description": "Open a photo from the workspace (RAW, JPEG, PNG, WebP, layered TIFF, PSD, or a saved .atelier document) as a new document, or as a layer (a group for PSD and TIFF) in the current one. copy opens a RAW photo's virtual copy; its saves go to that copy's sidecar entry.",
       "handler": "file.open",
       "effect": "mutate",
       "inputSchema": {
@@ -295,6 +336,10 @@
           },
           "asLayer": {
             "type": "boolean"
+          },
+          "copy": {
+            "type": "string",
+            "description": "Virtual copy id from list_folder, e.g. vc1."
           }
         },
         "required": [
@@ -477,8 +522,8 @@
     },
     {
       "name": "set_rating",
-      "description": "Set rating, flag or colour label on photos in the folder; stored in sidecars.",
-      "handler": "cull.set",
+      "description": "Set rating, flag or colour label on photos in the folder; stored in sidecars, and mirrored to standard XMP sidecars (<stem>.xmp: xmp:Rating, xmp:Label) for proprietary RAW files.",
+      "handler": "library.cull",
       "effect": "mutate",
       "inputSchema": {
         "type": "object",
@@ -716,9 +761,10 @@
                 "maximum": 100
               },
               "lens_profile": {
-                "type": "number",
+                "type": "integer",
                 "minimum": 0,
-                "maximum": 1
+                "maximum": 1,
+                "description": "1 applies the lens profile picked with set_lens_profile; 0 turns it off."
               },
               "parametric_shadows": {
                 "type": "number",
@@ -779,9 +825,39 @@
                 "type": "number",
                 "minimum": 0,
                 "maximum": 100
+              },
+              "lens_profile_distortion": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 200
+              },
+              "lens_profile_vignetting": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 200
+              },
+              "halation_amount": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "halation_size": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "bloom_amount": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "bloom_size": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
               }
             },
-            "description": "Displayed units: temperature in kelvin and tint (as shot until set; reset_develop wb returns to as shot), exposure in EV, sliders -100..100 unless stated. Parametric curve regions -100..100 with splits 5..95 ascending; ca_remove and lens_profile are 0 or 1 (lens_profile is not available: no permissive lens database)."
+            "description": "Displayed units: temperature in kelvin and tint (as shot until set; reset_develop wb returns to as shot), exposure in EV, sliders -100..100 unless stated. Parametric curve regions -100..100 with splits 5..95 ascending; ca_remove and lens_profile are 0 or 1 (lens_profile needs a profile from set_lens_profile); lens_profile_distortion and lens_profile_vignetting 0..200 percent; halation_amount, halation_size, bloom_amount, bloom_size 0..100 (film glow: red-orange halation around highlights, bloom in the image colour)."
           },
           "revision": {
             "type": "integer",
@@ -1549,7 +1625,7 @@
     },
     {
       "name": "transform_layer",
-      "description": "Apply a free transform: an affine matrix (composed with the current one), or corners [[x,y]\u00d74] clockwise from top-left for a perspective map of the layer's source rectangle.",
+      "description": "Apply a free transform: an affine matrix (composed with the current one), or corners [[x,y]×4] clockwise from top-left for a perspective map of the layer's source rectangle.",
       "handler": "layer.transform",
       "effect": "mutate",
       "inputSchema": {
@@ -1754,7 +1830,7 @@
     },
     {
       "name": "paint_stroke",
-      "description": "Paint a stroke: brush or eraser on a raster layer (or on the selection while quick mask is on); clone and heal (on a RAW photo they paint a retouch layer above it); dodge, burn and sponge on raster layers.",
+      "description": "Paint a stroke: brush or eraser on a raster layer (or on the selection while quick mask is on); clone and heal (on a RAW photo they paint a retouch layer above it); dodge, burn and sponge on raster layers. Brush engine v2 (brush or set_brush): pressure, tilt and velocity dynamics, seeded jitter, scatter, angle, roundness and preset tip images.",
       "handler": "paint.stroke",
       "effect": "mutate",
       "inputSchema": {
@@ -1784,9 +1860,10 @@
                 "type": "number"
               },
               "minItems": 2,
-              "maxItems": 3
+              "maxItems": 6
             },
-            "minItems": 1
+            "minItems": 1,
+            "description": "Stroke points in document pixels: [x, y, pressure 0..1?, tiltX°?, tiltY°?, time ms?]; the extra values drive brush dynamics."
           },
           "size": {
             "type": "number",
@@ -1859,6 +1936,152 @@
             "type": "integer",
             "minimum": 0,
             "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "brush": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Brush engine v2 settings for this stroke (dynamics, scatter, angle, roundness, tip image). Omitted: the brush set with set_brush, else the round brush. The edit list records the resolved brush.",
+            "properties": {
+              "preset": {
+                "type": "string",
+                "description": "Brush preset name from list_brushes (its settings and tip image apply; fields given here override them)."
+              },
+              "spacing": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 1000,
+                "description": "Distance between dabs, % of the dab size (default 25)."
+              },
+              "angle": {
+                "type": "number",
+                "minimum": -360,
+                "maximum": 360,
+                "description": "Tip angle in degrees."
+              },
+              "roundness": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 100,
+                "description": "Tip roundness, % (100 = circle)."
+              },
+              "scatter": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1000,
+                "description": "Random offset across the stroke, % of the size."
+              },
+              "scatterBoth": {
+                "type": "boolean",
+                "description": "Scatter along the stroke as well."
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 16,
+                "description": "Dabs per spacing step."
+              },
+              "jitter": {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "Random variation per dab, %.",
+                "properties": {
+                  "size": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "opacity": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "flow": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "angle": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "roundness": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  }
+                }
+              },
+              "control": {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "What drives size, opacity and flow (pressure, tilt, velocity) and the tip angle (direction of travel, pen tilt).",
+                "properties": {
+                  "size": {
+                    "type": "string",
+                    "enum": [
+                      "off",
+                      "pressure",
+                      "tilt",
+                      "velocity"
+                    ]
+                  },
+                  "opacity": {
+                    "type": "string",
+                    "enum": [
+                      "off",
+                      "pressure",
+                      "tilt",
+                      "velocity"
+                    ]
+                  },
+                  "flow": {
+                    "type": "string",
+                    "enum": [
+                      "off",
+                      "pressure",
+                      "tilt",
+                      "velocity"
+                    ]
+                  },
+                  "angle": {
+                    "type": "string",
+                    "enum": [
+                      "off",
+                      "direction",
+                      "tilt"
+                    ]
+                  }
+                }
+              },
+              "min": {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "Smallest value a control reaches, % of the setting.",
+                "properties": {
+                  "size": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "opacity": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "flow": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  }
+                }
+              },
+              "seed": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Jitter seed; default derives from the stroke points, so a stroke replays identically."
+              }
+            }
           }
         },
         "required": [
@@ -1926,7 +2149,7 @@
     },
     {
       "name": "apply_filter",
-      "description": "Apply a filter to a raster layer: gaussian-blur, unsharp-mask, high-pass, add-noise.",
+      "description": "Apply a filter to a raster layer: gaussian-blur, unsharp-mask, high-pass, add-noise; artistic: oil-paint { radius 1..30 } (Kuwahara), watercolour { radius, strength 0..100 }, sketch { radius } (pencil), posterise { levels 2..64 }, halftone { size 2..128 px, angle, mode mono | colour }.",
       "handler": "filter.apply",
       "effect": "mutate",
       "inputSchema": {
@@ -1942,7 +2165,12 @@
               "gaussian-blur",
               "unsharp-mask",
               "high-pass",
-              "add-noise"
+              "add-noise",
+              "oil-paint",
+              "watercolour",
+              "sketch",
+              "posterise",
+              "halftone"
             ]
           },
           "params": {
@@ -2188,7 +2416,7 @@
     },
     {
       "name": "set_text",
-      "description": "Edit a type layer's content and style: font, size, colour, alignment, line height, bold, italic.",
+      "description": "Edit a type layer: content and style (font, size, colour, alignment, line height, bold, italic, tracking, baseline shift); per-character runs; OpenType features (liga, kern, smcp, onum and more); type on a path (pathId or d in document pixels, startOffset percent, flip); warp (arc, arch, bulge, flag, wave with bend -100..100). clear lists the rich fields to remove.",
       "handler": "layer.text",
       "effect": "mutate",
       "inputSchema": {
@@ -2237,8 +2465,234 @@
               },
               "italic": {
                 "type": "boolean"
+              },
+              "tracking": {
+                "type": "number",
+                "minimum": -1000,
+                "maximum": 10000,
+                "description": "Thousandths of an em (Photoshop tracking)."
+              },
+              "baselineShift": {
+                "type": "number",
+                "minimum": -10000,
+                "maximum": 10000,
+                "description": "Pixels, positive up."
               }
             },
+            "additionalProperties": false
+          },
+          "runs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "start": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "end": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "font": {
+                  "type": "string"
+                },
+                "size": {
+                  "type": "number",
+                  "minimum": 1
+                },
+                "color": {
+                  "type": "string"
+                },
+                "tracking": {
+                  "type": "number",
+                  "minimum": -1000,
+                  "maximum": 10000,
+                  "description": "Thousandths of an em (Photoshop tracking)."
+                },
+                "baselineShift": {
+                  "type": "number",
+                  "minimum": -10000,
+                  "maximum": 10000,
+                  "description": "Pixels, positive up."
+                },
+                "bold": {
+                  "type": "boolean"
+                },
+                "italic": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "start",
+                "end"
+              ],
+              "additionalProperties": false
+            },
+            "description": "Per-character formatting over code-point ranges [start, end); later runs win. [] clears."
+          },
+          "clear": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "runs",
+                "features",
+                "path",
+                "warp"
+              ]
+            }
+          },
+          "features": {
+            "type": "object",
+            "properties": {
+              "liga": {
+                "type": "boolean"
+              },
+              "kern": {
+                "type": "boolean"
+              },
+              "smcp": {
+                "type": "boolean"
+              },
+              "onum": {
+                "type": "boolean"
+              },
+              "dlig": {
+                "type": "boolean"
+              },
+              "lnum": {
+                "type": "boolean"
+              },
+              "tnum": {
+                "type": "boolean"
+              },
+              "frac": {
+                "type": "boolean"
+              },
+              "c2sc": {
+                "type": "boolean"
+              },
+              "swsh": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false,
+            "description": "OpenType features on (true) or off (false), written as CSS font-feature-settings; a font without a feature ignores it."
+          },
+          "path": {
+            "type": "object",
+            "properties": {
+              "pathId": {
+                "type": "string",
+                "description": "Path id from list_paths."
+              },
+              "d": {
+                "type": "string",
+                "description": "SVG path data in document pixels (M, L, H, V, C, S, Q, T, A, Z)."
+              },
+              "subpaths": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "closed": {
+                      "type": "boolean"
+                    },
+                    "anchors": {
+                      "type": "array",
+                      "minItems": 2,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "x": {
+                            "type": "number"
+                          },
+                          "y": {
+                            "type": "number"
+                          },
+                          "hIn": {
+                            "type": "object",
+                            "properties": {
+                              "x": {
+                                "type": "number"
+                              },
+                              "y": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "x",
+                              "y"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "hOut": {
+                            "type": "object",
+                            "properties": {
+                              "x": {
+                                "type": "number"
+                              },
+                              "y": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "x",
+                              "y"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "x",
+                          "y"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "anchors"
+                  ],
+                  "additionalProperties": false
+                },
+                "description": "Bezier subpaths in document pixels; handles hIn/hOut are relative to their anchor (zero or absent = corner)."
+              },
+              "startOffset": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "flip": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          },
+          "warp": {
+            "type": "object",
+            "properties": {
+              "style": {
+                "type": "string",
+                "enum": [
+                  "arc",
+                  "arch",
+                  "bulge",
+                  "flag",
+                  "wave"
+                ]
+              },
+              "bend": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100
+              }
+            },
+            "required": [
+              "style"
+            ],
             "additionalProperties": false
           }
         },
@@ -2351,7 +2805,7 @@
     },
     {
       "name": "set_adjustment",
-      "description": "Change an adjustment layer: its type (levels, curves, hue-saturation, exposure, colour-balance, black-and-white, develop) and its params, merged over the current ones (type change replaces them).",
+      "description": "Change an adjustment layer: its type (levels, curves, hue-saturation, exposure, colour-balance, black-and-white, develop, proof, duotone) and its params, merged over the current ones (type change replaces them). proof: { tac, warning, warningColour } on the built-in naive press; duotone: { inks: [{ colour: [r, g, b] linear Rec.2020, curve?: [[x, y] 0..255] }] }, 1..4 inks.",
       "handler": "layer.adjust",
       "effect": "mutate",
       "inputSchema": {
@@ -2375,7 +2829,9 @@
               "exposure",
               "colour-balance",
               "black-and-white",
-              "develop"
+              "develop",
+              "proof",
+              "duotone"
             ]
           },
           "params": {
@@ -2462,6 +2918,4788 @@
         "required": [
           "revision",
           "layerId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get_scopes",
+      "description": "Colour scopes of the rendered preview (the composite, one layer, or before develop): per-channel histogram, luma and RGB parade waveforms, and a Rec. 709 vectorscope grid with hue-angle counts and the angles of pure primaries. Bounded arrays; read only.",
+      "handler": "query.scopes",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state; omit for the composite."
+          },
+          "before": {
+            "type": "boolean",
+            "description": "Scope the photo without develop settings."
+          },
+          "columns": {
+            "type": "integer",
+            "minimum": 8,
+            "maximum": 256,
+            "description": "Waveform columns across the image (default 64)."
+          },
+          "levels": {
+            "type": "integer",
+            "minimum": 8,
+            "maximum": 256,
+            "description": "Value levels for the histogram and waveform rows (default 64)."
+          },
+          "vectorGrid": {
+            "type": "integer",
+            "minimum": 8,
+            "maximum": 128,
+            "description": "Vectorscope grid cells per side (default 32)."
+          },
+          "maxEdge": {
+            "type": "integer",
+            "minimum": 64,
+            "maximum": 1024,
+            "description": "Longest edge of the preview the scopes read (default 512)."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "search_commands",
+      "description": "Find commands, panel controls, develop sliders and tools by task, with synonyms (\"remove object\", \"background blur\", \"white balance\"). Returns ranked matches with the command each one sends.",
+      "handler": "query.search",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "render_photos",
+      "description": "Render 1 to 4 workspace photos as they would open (sidecar develop, crop, local adjustments) and return each as a JPEG, without opening them. For compare, slideshow and print. The open document is unchanged.",
+      "handler": "query.photos",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 4
+          },
+          "maxEdge": {
+            "type": "integer",
+            "minimum": 64,
+            "maximum": 2048,
+            "description": "Longest edge in pixels (default 1024)."
+          }
+        },
+        "required": [
+          "paths"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "preview_presets",
+      "description": "Render up to 8 develop presets on the current photo as thumbnails before applying any. Each preset is applied to a scratch copy; the document, its history and its revision are unchanged.",
+      "handler": "query.preset-previews",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "presets": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 8,
+            "description": "Preset names or paths from list_presets."
+          },
+          "layerId": {
+            "type": "string",
+            "description": "RAW layer id; default the active RAW layer."
+          },
+          "maxEdge": {
+            "type": "integer",
+            "minimum": 64,
+            "maximum": 512,
+            "description": "Thumbnail longest edge (default 256)."
+          }
+        },
+        "required": [
+          "presets"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list_photo_locations",
+      "description": "List where workspace photos were taken, from EXIF GPS (JPEG and TIFF-based RAW: ARW, NEF, DNG, CR2, ORF, RW2, RAF preview), 50 photos per page. Photos without GPS are listed as missing.",
+      "handler": "query.locations",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "export_web_gallery",
+      "description": "Write a static web gallery of workspace photos to a folder: index.html (no scripts), images/<name>.jpg and thumbs/<name>.jpg, each photo rendered as it would open. Staged: the person confirms before files are written; replacing a gallery is person-confirmed every time.",
+      "handler": "file.web-gallery",
+      "effect": "irreversible",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 200
+          },
+          "folder": {
+            "type": "string",
+            "description": "Workspace folder (default exports/gallery)."
+          },
+          "title": {
+            "type": "string"
+          },
+          "maxEdge": {
+            "type": "integer",
+            "minimum": 256,
+            "maximum": 4096,
+            "description": "Longest edge of each full image (default 2048)."
+          },
+          "quality": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "paths"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ai_denoise",
+      "description": "AI noise reduction (also removes JPEG artefacts) with the on-device SCUNet model: writes a new 'Denoised' raster layer above the photo, image or raster layer; the source is untouched. Needs the model downloaded (download_model scunet-denoise, person-only); without it answers unsupported.",
+      "handler": "ai.denoise",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state; default the active layer."
+          },
+          "strength": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Percent of the model's change to keep; default 100."
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ai_upscale",
+      "description": "AI ×2 upscale of the visible composite with the on-device Swin2SR model, written as a new PNG file in the workspace (default exports/<title>-upscaled-x2.png); the document is unchanged. Up to 8 MP input. Staged: the person confirms before the file is written. Needs download_model swin2sr-x2 (person-only).",
+      "handler": "ai.upscale",
+      "effect": "irreversible",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Workspace path ending in .png."
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ai_remove",
+      "description": "Generative remove (prompt-free fill): the on-device LaMa model fills the current selection from the visible layers; the result is a new 'Removed' layer at the top of the stack, feathered 2 px past the selection. Select first (set_selection or an AI mask). Needs download_model lama-inpaint (person-only).",
+      "handler": "ai.remove",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ai_expand",
+      "description": "Generative expand (prompt-free): grows the canvas by percent along each axis with a named side, keeps every layer in place, and fills the new border with the on-device LaMa model as a new 'Expanded' layer at the top. The fill runs at up to 1,024 px on the long side, so it is softer than the photo on a large canvas. Needs download_model lama-inpaint (person-only).",
+      "handler": "ai.expand",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "percent": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "Growth per axis in percent of the canvas; default 25."
+          },
+          "sides": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 4,
+            "items": {
+              "type": "string",
+              "enum": [
+                "top",
+                "right",
+                "bottom",
+                "left"
+              ]
+            },
+            "description": "Sides that grow; default all four (each axis's growth split evenly)."
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ai_restore",
+      "description": "Photo restoration for a scanned print: fade restores faded colour (per-channel levels, no model); dust finds dust and thin scratches (median test) and fills them with the on-device LaMa model. Writes a new 'Restored' layer above the source. dust needs download_model lama-inpaint (person-only); fade alone works with no model.",
+      "handler": "ai.restore",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state; default the active layer."
+          },
+          "dust": {
+            "type": "boolean",
+            "description": "Remove dust and scratches; default true."
+          },
+          "fade": {
+            "type": "boolean",
+            "description": "Restore faded colour; default true."
+          },
+          "sensitivity": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Dust detection sensitivity; default 50."
+          },
+          "fadeAmount": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Percent of the colour restore to apply; default 100."
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list_models",
+      "description": "List the on-device AI models (masks, depth, pixel tools): id, download name, licence and its source, approximate size, and status absent | downloading | ready | failed. Also says whether the NakliOS host offers segmentation or depth (it does not today, so Atelier uses its own models).",
+      "handler": "model.list",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "remove_model",
+      "description": "Remove a downloaded on-device model: deletes its files from this browser's Cache Storage and the consent record. Irreversible (getting it back is a new download by the person), so a call from an agent is staged until the person confirms; the AI panel's Remove button removes at once. The features that need it hide again.",
+      "handler": "model.remove",
+      "effect": "irreversible",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "model": {
+            "type": "string",
+            "description": "Model id from list_models."
+          }
+        },
+        "required": [
+          "revision",
+          "model"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ai_mask",
+      "description": "Add an AI mask component to a photo layer, computed by an on-device model from the unedited photo: subject or background (IS-Net general use), people or sky (DETR, one call answers both and is reused for the same photo), object (SlimSAM; needs point, a click in document pixels) or depth-range (near and far in 0..1 of the depth map, 1 nearest). On a RAW layer it goes into a local adjustment (maskId; a new one is made when omitted); on an image layer into the layer mask. The result is a new soft bitmap mask component the person can delete; it never replaces existing components. Answers unsupported naming the model to download when that model is absent.",
+      "handler": "ai.mask",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          },
+          "maskId": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string",
+            "enum": [
+              "subject",
+              "background",
+              "people",
+              "sky",
+              "object",
+              "depth-range"
+            ]
+          },
+          "op": {
+            "type": "string",
+            "enum": [
+              "add",
+              "subtract",
+              "intersect"
+            ]
+          },
+          "point": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "near": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "far": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "feather": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        },
+        "required": [
+          "revision",
+          "layerId",
+          "target"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ai_select",
+      "description": "Select subject, background, people, sky or an object (point: a click in document pixels) with an on-device model reading the composite, combined with the current selection by op (default replace). Answers unsupported naming the model to download when that model is absent.",
+      "handler": "ai.select",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "target": {
+            "type": "string",
+            "enum": [
+              "subject",
+              "background",
+              "people",
+              "sky",
+              "object"
+            ]
+          },
+          "op": {
+            "type": "string",
+            "enum": [
+              "replace",
+              "add",
+              "subtract",
+              "intersect"
+            ]
+          },
+          "point": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          }
+        },
+        "required": [
+          "revision",
+          "target"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ai_depth",
+      "description": "Make a depth map of a RAW or image layer with the on-device depth model (from the unedited photo), saved once beside the photo as <photo>.depth.png, and use it as the lens blur depth (lensBlur false makes only the map). aperture is required the first time lens blur is turned on; focus 0..1 or focusPoint in document pixels; recompute replaces an existing map.",
+      "handler": "ai.depth",
+      "effect": "mutate",
+      "writesWorkspace": "Writes <photo>.depth.png in the workspace (temp file, then rename); the lens blur change is undoable, the file stays.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          },
+          "lensBlur": {
+            "type": "boolean"
+          },
+          "aperture": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "maxRadius": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 32
+          },
+          "focus": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "focusPoint": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "recompute": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "revision",
+          "layerId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "smart_select",
+      "description": "Smart selection from a rough outline: snaps a rough polygon (outline, document pixels) or the current rough selection to the photo's edges with a guided filter (classical, no model). band is the width in pixels around the rough edge that may change (default 8); radius the filter window (default 8). With an outline, op combines the result with the current selection (default replace).",
+      "handler": "ai.smart-select",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "outline": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "minItems": 3
+          },
+          "op": {
+            "type": "string",
+            "enum": [
+              "replace",
+              "add",
+              "subtract",
+              "intersect"
+            ]
+          },
+          "band": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 64
+          },
+          "radius": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 64
+          },
+          "eps": {
+            "type": "number",
+            "minimum": 0.000001,
+            "maximum": 1
+          }
+        },
+        "required": [
+          "revision"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "load_lens_data",
+      "description": "Load lens correction data the person owns from the workspace: a lensfun database (.xml) or Adobe lens profiles (.lcp). Atelier ships no lens data. The data stays in this session; set_lens_profile stores the resolved coefficients on the layer.",
+      "handler": "lens.load",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Workspace path of a lensfun .xml or an .lcp file."
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list_lens_profiles",
+      "description": "List lens profiles in the loaded lens data that match a RAW layer's lens (from its metadata), best first, with the layer's current profile.",
+      "handler": "lens.list",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          }
+        },
+        "required": [
+          "layerId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "set_lens_profile",
+      "description": "Apply lens profile corrections (distortion, lateral chromatic aberration, vignetting) to a RAW layer from loaded lens data: profile 'auto' picks the best match for the photo's lens, an id from list_lens_profiles picks one, 'none' removes it. Coefficients interpolate to the photo's focal length. amount scales distortion and vignetting corrections (percent, 0..200).",
+      "handler": "lens.set",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          },
+          "profile": {
+            "type": "string",
+            "description": "'auto', 'none', or a candidate id from list_lens_profiles."
+          },
+          "amount": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 200
+          },
+          "distortionAmount": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 200
+          },
+          "vignettingAmount": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 200
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "layerId",
+          "profile"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "content_aware_fill",
+      "description": "Fill the selection (or a layer's bitmap mask) from the surrounding image by classical PatchMatch, no model. Writes a new raster layer of filled pixels above the target layer; nothing authored is overwritten.",
+      "handler": "retouch.content-aware-fill",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "layerId": {
+            "type": "string",
+            "description": "Layer the fill sits above (default: the active layer)."
+          },
+          "hole": {
+            "type": "string",
+            "enum": [
+              "selection",
+              "mask"
+            ],
+            "description": "selection (default) or the bitmap mask of maskLayerId; white is filled."
+          },
+          "maskLayerId": {
+            "type": "string"
+          },
+          "patchSize": {
+            "type": "integer",
+            "enum": [
+              5,
+              7,
+              9,
+              11,
+              13
+            ],
+            "description": "Patch side in pixels (default 7)."
+          },
+          "seed": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "revision"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "set_keywords",
+      "description": "Set, add or remove keywords on photos; stored in sidecars and mirrored to XMP sidecars (dc:subject) for proprietary RAW files. Keywords are shared by a photo's virtual copies.",
+      "handler": "library.keywords",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          },
+          "keywords": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "set",
+              "add",
+              "remove"
+            ]
+          }
+        },
+        "required": [
+          "revision",
+          "paths",
+          "keywords"
+        ],
+        "additionalProperties": false
+      },
+      "writesWorkspace": "Writes files in the workspace at once (temp file, then rename). Not on the undo stack: undo changes the document, not files already written."
+    },
+    {
+      "name": "list_keywords",
+      "description": "Every keyword in the workspace with the number of photos that carry it.",
+      "handler": "library.list-keywords",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list_collections",
+      "description": "Collections in the workspace (collections/<name>.json): name, manual or smart, member count, smart rules.",
+      "handler": "library.list-collections",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "create_collection",
+      "description": "Create a manual collection, or a smart one when rules are given.",
+      "handler": "library.create-collection",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "name": {
+            "type": "string"
+          },
+          "rules": {
+            "type": "object",
+            "description": "Smart rules { match: 'all'|'any', rules: [{ field, op, value }] }. Fields: rating, iso, focalLength (ops =, !=, >=, <=); flag, label, kind (=, !=); keyword, camera, lens, path (contains, notContains, =); date YYYY[-MM[-DD]] (>=, <=, =).",
+            "properties": {
+              "match": {
+                "type": "string",
+                "enum": [
+                  "all",
+                  "any"
+                ]
+              },
+              "rules": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object"
+                }
+              }
+            },
+            "required": [
+              "rules"
+            ]
+          }
+        },
+        "required": [
+          "revision",
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "writesWorkspace": "Writes files in the workspace at once (temp file, then rename). Not on the undo stack: undo changes the document, not files already written."
+    },
+    {
+      "name": "add_to_collection",
+      "description": "Add photos or virtual copies ('path' or 'path#vc1', from list_folder) to a manual collection, or remove them (op remove).",
+      "handler": "library.collection-items",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "name": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          },
+          "op": {
+            "type": "string",
+            "enum": [
+              "add",
+              "remove"
+            ]
+          }
+        },
+        "required": [
+          "revision",
+          "name",
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "writesWorkspace": "Writes files in the workspace at once (temp file, then rename). Not on the undo stack: undo changes the document, not files already written."
+    },
+    {
+      "name": "set_smart_collection",
+      "description": "Create a smart collection or replace its rules; members are every photo and virtual copy the rules match.",
+      "handler": "library.smart-collection",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "name": {
+            "type": "string"
+          },
+          "rules": {
+            "type": "object",
+            "description": "Smart rules { match: 'all'|'any', rules: [{ field, op, value }] }. Fields: rating, iso, focalLength (ops =, !=, >=, <=); flag, label, kind (=, !=); keyword, camera, lens, path (contains, notContains, =); date YYYY[-MM[-DD]] (>=, <=, =).",
+            "properties": {
+              "match": {
+                "type": "string",
+                "enum": [
+                  "all",
+                  "any"
+                ]
+              },
+              "rules": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object"
+                }
+              }
+            },
+            "required": [
+              "rules"
+            ]
+          }
+        },
+        "required": [
+          "revision",
+          "name",
+          "rules"
+        ],
+        "additionalProperties": false
+      },
+      "writesWorkspace": "Writes files in the workspace at once (temp file, then rename). Not on the undo stack: undo changes the document, not files already written."
+    },
+    {
+      "name": "delete_collection",
+      "description": "Delete a collection file. The photos stay. Staged: the person confirms.",
+      "handler": "library.delete-collection",
+      "effect": "irreversible",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "revisionExempt": "Deletes a collection file only after the person confirms; the document is not touched."
+    },
+    {
+      "name": "create_virtual_copy",
+      "description": "Make a virtual copy of a RAW photo: a second entry in its sidecar with its own develop settings (a copy of the photo's, or of another copy's with from), listed as its own filmstrip tile.",
+      "handler": "library.create-copy",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "path": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string",
+            "description": "Copy id to duplicate, e.g. vc1."
+          }
+        },
+        "required": [
+          "revision",
+          "path"
+        ],
+        "additionalProperties": false
+      },
+      "writesWorkspace": "Writes files in the workspace at once (temp file, then rename). Not on the undo stack: undo changes the document, not files already written."
+    },
+    {
+      "name": "open_virtual_copy",
+      "description": "Open a photo's virtual copy as the document; its saves go to the copy's sidecar entry, not the photo's.",
+      "handler": "library.open-copy",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "copy": {
+            "type": "string",
+            "description": "Copy id from list_folder, e.g. vc1."
+          }
+        },
+        "required": [
+          "path",
+          "copy"
+        ],
+        "additionalProperties": false
+      },
+      "revisionExempt": "Creates a new document like open_photo; nothing it could overwrite is stale."
+    },
+    {
+      "name": "delete_virtual_copy",
+      "description": "Delete a virtual copy and its develop settings. Staged: the person confirms.",
+      "handler": "library.delete-copy",
+      "effect": "irreversible",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "copy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "copy"
+        ],
+        "additionalProperties": false
+      },
+      "revisionExempt": "Changes one sidecar only after the person confirms; the document is not touched."
+    },
+    {
+      "name": "import_xmp",
+      "description": "Read rating, label, keywords (and, with develop, Camera Raw develop settings) from XMP sidecars that Lightroom, Bridge or another tool wrote beside the photos, into Atelier sidecars.",
+      "handler": "library.import-xmp",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "develop": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "revision"
+        ],
+        "additionalProperties": false
+      },
+      "writesWorkspace": "Writes files in the workspace at once (temp file, then rename). Not on the undo stack: undo changes the document, not files already written."
+    },
+    {
+      "name": "import_lightroom_catalog",
+      "description": "Import a Lightroom Classic catalog (.lrcat): ratings, picks, colour labels, keywords, virtual copies, collections and develop settings for the photos it finds in the workspace; reports unmatched paths. Develop settings fill only photos without Atelier settings. dryRun reports without writing. Staged: the person confirms.",
+      "handler": "library.import-lrcat",
+      "effect": "irreversible",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "A .lrcat file in the workspace; omit to use the catalog the person picked in the UI."
+          },
+          "dryRun": {
+            "type": "boolean"
+          },
+          "develop": {
+            "type": "boolean"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "revisionExempt": "Writes sidecars and collections only after the person confirms; the open document is not touched."
+    },
+    {
+      "name": "record_action",
+      "description": "Record the commands that follow (from any door) as a replayable action: start, then stop to save actions/<name>.json (layer ids become $active, $layer:<i> and $new<n> tokens), or cancel. Reads, file, view and history commands are not recorded.",
+      "handler": "action.record",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "start",
+              "stop",
+              "cancel"
+            ]
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "additionalProperties": false
+      },
+      "revisionExempt": "Recording state; the saved file is the only write."
+    },
+    {
+      "name": "list_actions",
+      "description": "List the recorded actions in actions/ with their command lists, and the recording in progress.",
+      "handler": "query.actions",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "run_action",
+      "description": "Replay a recorded action through the command bus: on the open document, or with paths as a batch (open each photo, replay, save its sidecar or document). Stops a photo at its first failing step and reports per photo.",
+      "handler": "action.run",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 500
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "name"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "make_book",
+      "description": "Make a Paginella photo book: books/<title>.naklidoc (one photo per page, A4) plus the rendered JPEGs in books/<title>/, then hand it to Paginella when NakliOS offers the exact-file handoff. Staged: the person confirms before files are written.",
+      "handler": "file.book",
+      "effect": "irreversible",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 200
+          },
+          "title": {
+            "type": "string"
+          },
+          "maxEdge": {
+            "type": "integer",
+            "minimum": 512,
+            "maximum": 6000
+          },
+          "open": {
+            "type": "boolean",
+            "description": "Hand the book to Paginella (default true; the host asks the person)."
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "paths"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "install_looks",
+      "description": "Write Atelier's film looks pack (12 .cube LUTs generated from Atelier's own formula, MIT) to presets/looks/; existing files are kept. The looks then appear in list_presets and the preset menu.",
+      "handler": "looks.install",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "revisionExempt": "Writes preset files only; the document is unchanged."
+    },
+    {
+      "name": "auto_develop",
+      "description": "Auto white balance (grey world in camera space, solved to temperature and tint) and auto tone (exposure, contrast, highlights, shadows, whites, blacks from histogram targets), applied to a RAW layer as one undoable step. Atelier's own targets; not fitted to Lightroom.",
+      "handler": "develop.auto",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          },
+          "tone": {
+            "type": "boolean"
+          },
+          "whiteBalance": {
+            "type": "boolean"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "fix_red_eye",
+      "description": "Find the red pupil inside a box (or around a click with a radius) by redness ratio and add a retouch layer that darkens and desaturates it.",
+      "handler": "retouch.red-eye",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "rect": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "number"
+              },
+              "y": {
+                "type": "number"
+              },
+              "w": {
+                "type": "number",
+                "minimum": 3
+              },
+              "h": {
+                "type": "number",
+                "minimum": 3
+              }
+            },
+            "required": [
+              "x",
+              "y",
+              "w",
+              "h"
+            ],
+            "additionalProperties": false
+          },
+          "point": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "radius": {
+            "type": "number",
+            "minimum": 3,
+            "maximum": 500
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "frequency_separation",
+      "description": "Split a pixel layer into a group with a low-frequency layer (Gaussian blur, colour and tone) and a high-frequency layer (texture, linear light); the group's composite equals the layer within 1/255.",
+      "handler": "retouch.frequency",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          },
+          "radius": {
+            "type": "number",
+            "minimum": 0.5,
+            "maximum": 100
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "layerId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get_channels",
+      "description": "The composite's red, green, blue and alpha channels as grey thumbnails with their means, plus each saved selection as an alpha channel (save and load them with refine_selection).",
+      "handler": "query.channels",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "maxEdge": {
+            "type": "integer",
+            "minimum": 32,
+            "maximum": 1024
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "red",
+              "green",
+              "blue",
+              "alpha"
+            ]
+          },
+          "images": {
+            "type": "boolean"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ai_describe",
+      "description": "Ask the AI (NakliOS host AI, or the person's own key when they turned it on) for a caption, keywords and a 1 to 5 rating of a photo. Returns a suggestion only. Unsupported when no AI is set up.",
+      "handler": "ai.describe",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Workspace photo; default the open document."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "set_caption",
+      "description": "Write a caption for photos into each photo's sidecar (<photo>.atelier.json, field caption; an empty caption removes it).",
+      "handler": "library.caption",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          },
+          "caption": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "paths",
+          "caption"
+        ],
+        "additionalProperties": false
+      },
+      "writesWorkspace": "Writes each photo's sidecar at once."
+    },
+    {
+      "name": "ai_suggest_develop",
+      "description": "Ask the AI for develop settings for the photo (optionally with an instruction), validate them against set_develop's schema and apply them as one undoable set_develop. Unsupported when no AI is set up.",
+      "handler": "ai.develop",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          },
+          "instruction": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list_plugins",
+      "description": "List the plugins in plugins/<name>/plugin.json with the commands each one may call.",
+      "handler": "query.plugins",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "run_plugin",
+      "description": "Run a workspace plugin in a locked-down Web Worker that can only call the commands its plugin.json lists, through the command bus (door 'plugin': revision checks and staging apply).",
+      "handler": "plugin.run",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "timeoutSeconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 600
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "name"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "set_soft_proof",
+      "description": "Soft-proof the document: on adds (or updates) a 'proof' adjustment layer on top that shows the printed colour; warning mixes a warning colour where colours fall outside the gamut; off removes it. Press: Atelier's built-in naive four-ink press (tac = total ink limit in percent, 100..400, default 300), or a CMYK ICC output profile from the workspace (profile: path to a .icc or .icm file the person supplies; intent: relative (default), perceptual, saturation or absolute), read with LittleCMS; profile null returns to the naive press. Colours are clipped to Rec.709 before proofing.",
+      "handler": "print.proof",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "on": {
+            "type": "boolean"
+          },
+          "tac": {
+            "type": "number",
+            "minimum": 100,
+            "maximum": 400
+          },
+          "warning": {
+            "type": "boolean"
+          },
+          "warningColour": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "Linear Rec.2020 0..1; default mid grey."
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "profile": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Workspace path of a CMYK ICC output profile (.icc or .icm); null returns to the naive press. Kept from the current proof when omitted."
+          },
+          "intent": {
+            "type": "string",
+            "enum": [
+              "relative",
+              "perceptual",
+              "saturation",
+              "absolute"
+            ],
+            "description": "Rendering intent into the profile (default relative colorimetric, black point compensation on)."
+          }
+        },
+        "required": [
+          "revision",
+          "on"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "sample_print_color",
+      "description": "Read the document colour at a point (before any soft proof) as CMYK coverages in percent on Atelier's built-in naive press, with the printed colour, the Oklab distance between them and whether it is in gamut.",
+      "handler": "print.sample",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "integer"
+          },
+          "y": {
+            "type": "integer"
+          },
+          "radius": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 50
+          },
+          "tac": {
+            "type": "number",
+            "minimum": 100,
+            "maximum": 400
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "export_cmyk_tiff",
+      "description": "Export the composite (without the soft-proof layer) as a CMYK TIFF: separated on Atelier's built-in naive press (8-bit, no ICC profile, tac total ink), or through a CMYK ICC output profile from the workspace (profile; 8- or 16-bit, the profile embedded, LittleCMS, black point compensation on). Colours are clipped to Rec.709 before separation. Staged: the person confirms before the file is written.",
+      "handler": "print.export",
+      "effect": "irreversible",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Workspace path ending in .tif or .tiff."
+          },
+          "tac": {
+            "type": "number",
+            "minimum": 100,
+            "maximum": 400
+          },
+          "maxEdge": {
+            "type": "integer",
+            "minimum": 64
+          },
+          "profile": {
+            "type": "string",
+            "description": "Workspace path of a CMYK ICC output profile (.icc or .icm)."
+          },
+          "intent": {
+            "type": "string",
+            "enum": [
+              "relative",
+              "perceptual",
+              "saturation",
+              "absolute"
+            ],
+            "description": "Rendering intent (default relative colorimetric); needs profile."
+          },
+          "bits": {
+            "type": "integer",
+            "enum": [
+              8,
+              16
+            ],
+            "description": "Bits per ink (default 8); 16 needs profile."
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "analyze_culling",
+      "description": "Culling assist (classical, no model): measure sharpness (variance of the Laplacian), highlight and shadow clipping, and near-duplicate groups (difference hash) on each photo as developed, and write suggestions to the sidecars. A suggested reject is only a suggestion until accept_cull_suggestions. Closed-eye detection is not part of this command.",
+      "handler": "library.analyze-culling",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "blurBelow": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Sharpness under this is blurry (default 30)."
+          },
+          "maxDistance": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 32,
+            "description": "dHash Hamming distance for near-duplicates (default 10)."
+          }
+        },
+        "required": [
+          "revision"
+        ],
+        "additionalProperties": false
+      },
+      "writesWorkspace": "Writes files in the workspace at once (temp file, then rename). Not on the undo stack: undo changes the document, not files already written."
+    },
+    {
+      "name": "accept_cull_suggestions",
+      "description": "Apply the culling-assist suggestions for these photos: a suggested reject becomes the reject flag (also in XMP sidecars); the suggestion is marked accepted.",
+      "handler": "library.accept-culling",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          }
+        },
+        "required": [
+          "revision",
+          "paths"
+        ],
+        "additionalProperties": false
+      },
+      "writesWorkspace": "Writes files in the workspace at once (temp file, then rename). Not on the undo stack: undo changes the document, not files already written."
+    },
+    {
+      "name": "set_sync_folder",
+      "description": "Name the shared folder this device syncs its library with: a path in the NakliOS Folder or Crate, or in the folder the person chose (Choose sync folder…). No Atelier account or server is involved.",
+      "handler": "share.set-folder",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "root": {
+            "type": "string",
+            "description": "e.g. shared/atelier-library"
+          },
+          "deviceName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "revision",
+          "root"
+        ],
+        "additionalProperties": false
+      },
+      "writesWorkspace": "Writes files in the workspace at once (temp file, then rename). Not on the undo stack: undo changes the document, not files already written."
+    },
+    {
+      "name": "get_sync_status",
+      "description": "Library sync on this device: the shared folder, device name, items synced, last sync and open conflicts.",
+      "handler": "share.status",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "sync_library",
+      "description": "Sync the library (photo sidecars, collections, presets and LUTs, shared assets) with the shared folder. Items changed on both sides since the last sync are reported as conflicts and left untouched.",
+      "handler": "share.sync",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision"
+        ],
+        "additionalProperties": false
+      },
+      "writesWorkspace": "Writes files in the workspace at once (temp file, then rename). Not on the undo stack: undo changes the document, not files already written."
+    },
+    {
+      "name": "resolve_sync_conflict",
+      "description": "Settle one sync conflict: mine (this device wins), theirs (the shared version wins) or both (a sidecar keeps theirs as a virtual copy; another file keeps theirs beside it, renamed).",
+      "handler": "share.resolve",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "path": {
+            "type": "string"
+          },
+          "choice": {
+            "type": "string",
+            "enum": [
+              "mine",
+              "theirs",
+              "both"
+            ]
+          }
+        },
+        "required": [
+          "revision",
+          "path",
+          "choice"
+        ],
+        "additionalProperties": false
+      },
+      "writesWorkspace": "Writes files in the workspace at once (temp file, then rename). Not on the undo stack: undo changes the document, not files already written."
+    },
+    {
+      "name": "list_library_assets",
+      "description": "The shared asset library: presets and LUTs (presets/), colours, brushes and placed images (library/). Place an image with open_photo asLayer.",
+      "handler": "share.assets",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "add_library_asset",
+      "description": "Add a colour, brush, image or LUT to the shared asset library (images and LUTs copy a workspace file, fromPath, or the file the person picked). Presets come from save_preset.",
+      "handler": "share.add-asset",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "colour",
+              "brush",
+              "image",
+              "lut"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "color": {
+            "type": "string"
+          },
+          "brush": {
+            "type": "object",
+            "properties": {
+              "size": {
+                "type": "number"
+              },
+              "hardness": {
+                "type": "number"
+              },
+              "flow": {
+                "type": "number"
+              },
+              "opacity": {
+                "type": "number"
+              }
+            },
+            "additionalProperties": false
+          },
+          "fromPath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "revision",
+          "kind",
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "writesWorkspace": "Writes files in the workspace at once (temp file, then rename). Not on the undo stack: undo changes the document, not files already written."
+    },
+    {
+      "name": "delete_library_asset",
+      "description": "Delete a library asset (a colour by name, or a file by path). Staged: the person confirms.",
+      "handler": "share.delete-asset",
+      "effect": "irreversible",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "colour",
+              "file"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "additionalProperties": false
+      },
+      "revisionExempt": "Deletes a library file only after the person confirms; the document is not touched."
+    },
+    {
+      "name": "convert_to_smart_object",
+      "description": "Turn layers into one embedded smart object: a layer holding them as a nested document, rendered flattened; transforms then resample that source. PSD export writes it as a flattened pixel layer.",
+      "handler": "smart.convert",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "layerIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          }
+        },
+        "required": [
+          "revision",
+          "layerIds"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "place_smart_object",
+      "description": "Place a workspace photo as a smart object: embedded (its source carried in the layer) or linked (the photo and its sidecar followed by hash; check_smart_objects finds changes).",
+      "handler": "smart.place",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "path": {
+            "type": "string"
+          },
+          "linked": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "revision",
+          "path"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "check_smart_objects",
+      "description": "Smart objects in the document; for linked ones, whether the photo or its develop settings changed since the last update, or the file is missing.",
+      "handler": "smart.check",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "update_smart_object",
+      "description": "Re-render a smart object from its source (a linked one from the photo as it is now); placement and transforms stay.",
+      "handler": "smart.update",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "layerId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "revision",
+          "layerId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "set_layer_style",
+      "description": "Set layer styles on an image, text or raster layer: dropShadow and innerShadow { colour, opacity 0..1, angle (light direction, degrees; 120 = shadow lower right), distance px, size px }, stroke { colour, opacity, size 1..30 px, position outside | inside | centre }, gradientOverlay { from, to, angle, opacity }. Colours are '#rrggbb' or linear Rec.2020 [r, g, b]. Each style given replaces that style; null removes it.",
+      "handler": "layer.style",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          },
+          "styles": {
+            "type": "object",
+            "properties": {
+              "dropShadow": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "colour": {
+                    "description": "'#rrggbb' or [r, g, b] linear Rec.2020"
+                  },
+                  "opacity": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "angle": {
+                    "type": "number",
+                    "minimum": -360,
+                    "maximum": 360
+                  },
+                  "distance": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "size": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 40
+                  }
+                },
+                "additionalProperties": false
+              },
+              "innerShadow": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "colour": {
+                    "description": "'#rrggbb' or [r, g, b] linear Rec.2020"
+                  },
+                  "opacity": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "angle": {
+                    "type": "number",
+                    "minimum": -360,
+                    "maximum": 360
+                  },
+                  "distance": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "size": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 40
+                  }
+                },
+                "additionalProperties": false
+              },
+              "stroke": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "colour": {},
+                  "opacity": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "size": {
+                    "type": "number",
+                    "minimum": 1,
+                    "maximum": 30
+                  },
+                  "position": {
+                    "type": "string",
+                    "enum": [
+                      "outside",
+                      "inside",
+                      "centre"
+                    ]
+                  }
+                },
+                "additionalProperties": false
+              },
+              "gradientOverlay": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "from": {},
+                  "to": {},
+                  "angle": {
+                    "type": "number",
+                    "minimum": -360,
+                    "maximum": 360
+                  },
+                  "opacity": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "additionalProperties": false
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "layerId",
+          "styles"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ai_suggest_keywords",
+      "description": "Propose keywords for photos from a fixed vocabulary of 100 subjects and scenes, scored zero-shot by the on-device CLIP model (cached image embeddings in library/embeddings-clip-b32.json). Proposals only: nothing is written to the photos; accept them with set_keywords (mode add). Needs download_model clip-b32 (person-only).",
+      "handler": "ai.keywords",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 50
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20,
+            "description": "Most keywords per photo; default 5."
+          },
+          "minScore": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Least zero-shot probability in percent; default 5."
+          }
+        },
+        "required": [
+          "paths"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ai_find_similar",
+      "description": "Rank every photo in the workspace by visual similarity to one photo (cosine of on-device CLIP image embeddings, cached in library/embeddings-clip-b32.json). Needs download_model clip-b32 (person-only).",
+      "handler": "ai.similar",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200,
+            "description": "Default 20."
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ai_find_faces",
+      "description": "Find faces with the on-device MediaPipe face mesh, on a workspace photo (path) or on a layer of the open document (layerId, document pixels): box, score, and eye aspect ratios with a closed-eyes flag. Needs download_model mediapipe-face (person-only).",
+      "handler": "ai.faces",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state; default the active layer."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ai_face_mask",
+      "description": "Mask a face or portrait part on a layer, then make it a bitmap component of the layer mask or develop mask (set_mask, from the selection). face, skin, eyes, brows, lips, mouth: polygons from the on-device face mesh (download_model mediapipe-face). hair, body-skin, face-skin, skin-all, clothes, accessories: the on-device person-parsing model (MediaPipe selfie multiclass, download_model mediapipe-multiclass), whose 256 x 256 answer is scaled to the layer; refine runs refine_edge on its edge first. Both downloads are person-only.",
+      "handler": "ai.face-mask",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state; default the active layer."
+          },
+          "part": {
+            "type": "string",
+            "enum": [
+              "face",
+              "skin",
+              "eyes",
+              "brows",
+              "lips",
+              "mouth",
+              "hair",
+              "body-skin",
+              "face-skin",
+              "skin-all",
+              "clothes",
+              "accessories"
+            ]
+          },
+          "face": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Face index from ai_find_faces; default all faces."
+          },
+          "maskId": {
+            "type": "string",
+            "description": "Develop mask id (RAW layers), as set_mask takes it."
+          },
+          "feather": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Feather the selection by this many pixels first."
+          },
+          "selectOnly": {
+            "type": "boolean",
+            "description": "Stop at the selection; make no mask."
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "refine": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 200
+              }
+            ],
+            "description": "Hair and other parsed parts: refine the edge with refine_edge (true = 12 px band, or a band in px); uses the matting model when downloaded."
+          }
+        },
+        "required": [
+          "revision",
+          "part"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ai_group_faces",
+      "description": "Group the faces in workspace photos by identity (on-device face mesh plus SFace vectors, cached in library/faces-sface.json) and list photos with closed eyes. Name a group by adding a keyword to its photos with set_keywords. Needs download_model mediapipe-face and sface (person-only).",
+      "handler": "ai.group-faces",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Default every photo in the workspace."
+          },
+          "threshold": {
+            "type": "number",
+            "minimum": -1,
+            "maximum": 1,
+            "description": "Cosine for the same person; default 0.363."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ai_replace_sky",
+      "description": "Replace the sky: ai_select target sky finds it (needs the People and sky finder model), refined to sky-coloured pixels, the replacement photo from the workspace fills it with a feathered edge as a new layer \"Sky (edited)\", and the foreground takes part of the new sky colour as \"Sky colour match (edited)\". The photo is untouched.",
+      "handler": "ai.sky",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "skyPath": {
+            "type": "string",
+            "description": "Workspace photo to use as the sky."
+          },
+          "match": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Foreground colour match; default 50, 0 adds no match layer."
+          },
+          "feather": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Edge feather in pixels; default long edge / 400."
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "tolerance": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 255,
+            "description": "How far (8-bit RGB distance) a pixel's colour may be from the sky's colour on its row and stay sky; default 40."
+          }
+        },
+        "required": [
+          "revision",
+          "skyPath"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ai_relight",
+      "description": "Relight a photo with a movable point light: normals from the depth map (the photo's saved <photo>.depth.png, else the on-device depth model) shade a new grey \"Relight (edited)\" layer in soft-light blend. Needs download_model depth-anything-v2-small (person-only) when no depth map is saved.",
+      "handler": "ai.relight",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state; default the active layer."
+          },
+          "light": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "description": "Light position [x, y] in document pixels."
+          },
+          "height": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 500,
+            "description": "Light height above the photo in percent of its width; default 50."
+          },
+          "strength": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Default 60."
+          },
+          "relief": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "Depth relief in percent of the width; default 15."
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "light"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "merge_hdr",
+      "description": "Merge bracketed exposures (2-9 workspace photos of one scene, RAW or JPEG/PNG/WebP) into one high-dynamic-range photo: MTB translation alignment, exposure ratios measured from the frames, a hat-weighted merge in linear light, optional deghosting. By default writes an Atelier document (.atelier) next to the first photo whose layer develops the merge as a float32 linear source (stored as a 32-bit float TIFF beside it, values above 1.0 kept); an output ending .dng writes a 16-bit linear DNG (camera colour matrix) instead. Opens the result with the exposure that matches the middle bracket, ready to tone in Develop. No model. Staged: the person confirms before the file is written.",
+      "handler": "merge.hdr",
+      "effect": "irreversible",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 2,
+            "maxItems": 9,
+            "description": "Workspace paths of the brackets (any order)."
+          },
+          "align": {
+            "type": "boolean",
+            "description": "Align hand-held frames by translation (default true)."
+          },
+          "deghost": {
+            "type": "string",
+            "enum": [
+              "off",
+              "low",
+              "medium",
+              "high"
+            ],
+            "description": "Take moving objects from the middle exposure only (default off)."
+          },
+          "output": {
+            "type": "string",
+            "description": "Output path ending in .atelier (float document, default <first>-HDR.atelier beside the first photo) or .dng (16-bit linear DNG)."
+          },
+          "open": {
+            "type": "boolean",
+            "description": "Open the result as a new document (default true)."
+          }
+        },
+        "required": [
+          "paths"
+        ],
+        "additionalProperties": false
+      },
+      "revisionExempt": "Reads photo files and writes a new file after the person confirms; the open document is not read or edited (the result opens as a new document)."
+    },
+    {
+      "name": "merge_panorama",
+      "description": "Stitch overlapping photos (2-12, RAW or JPEG/PNG/WebP) into a panorama: Harris corners with oriented binary descriptors, RANSAC homographies, a spanning tree from the best-connected frame, perspective, cylindrical or spherical projection (focal length estimated from the homographies), exposure gains and feathered blending. RAW inputs write a linear DNG, browser images a 16-bit TIFF with transparent uncovered corners; the result opens as a new document. No model. Staged: the person confirms before the file is written.",
+      "handler": "merge.panorama",
+      "effect": "irreversible",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 2,
+            "maxItems": 12,
+            "description": "Workspace paths of the frames (any order; neighbours should overlap by about a third)."
+          },
+          "projection": {
+            "type": "string",
+            "enum": [
+              "perspective",
+              "cylindrical",
+              "spherical"
+            ],
+            "description": "Default cylindrical. Perspective keeps straight lines and suits few, narrow frames."
+          },
+          "output": {
+            "type": "string",
+            "description": "Output path ending in .dng (RAW inputs) or .tif (default <first>-Pano beside the first photo)."
+          },
+          "open": {
+            "type": "boolean",
+            "description": "Open the result as a new document (default true)."
+          }
+        },
+        "required": [
+          "paths"
+        ],
+        "additionalProperties": false
+      },
+      "revisionExempt": "Reads photo files and writes a new file after the person confirms; the open document is not read or edited (the result opens as a new document)."
+    },
+    {
+      "name": "merge_focus_stack",
+      "description": "Focus-stack photos of one scene focused at different distances (2-30, RAW or JPEG/PNG/WebP): MTB translation alignment, per-pixel sharpness from the smoothed Laplacian energy, and a soft blend that favours the sharpest frame. RAW inputs write a linear DNG, browser images a 16-bit TIFF; the result opens as a new document. No model. Staged: the person confirms before the file is written.",
+      "handler": "merge.focus",
+      "effect": "irreversible",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 2,
+            "maxItems": 30,
+            "description": "Workspace paths of the frames."
+          },
+          "align": {
+            "type": "boolean",
+            "description": "Align frames by translation (default true)."
+          },
+          "smoothing": {
+            "type": "number",
+            "minimum": 0.5,
+            "maximum": 50,
+            "description": "Sharpness smoothing radius in pixels (default 0.3% of the long edge, at least 2)."
+          },
+          "output": {
+            "type": "string",
+            "description": "Output path ending in .dng (RAW inputs) or .tif (default <first>-Stack beside the first photo)."
+          },
+          "open": {
+            "type": "boolean",
+            "description": "Open the result as a new document (default true)."
+          }
+        },
+        "required": [
+          "paths"
+        ],
+        "additionalProperties": false
+      },
+      "revisionExempt": "Reads photo files and writes a new file after the person confirms; the open document is not read or edited (the result opens as a new document)."
+    },
+    {
+      "name": "camera_status",
+      "description": "Tethered capture state: whether this browser has WebUSB, the connected camera (maker, model, serial, firmware) and whether it accepts the generic PTP capture operation, and the last 20 captured files.",
+      "handler": "tether.status",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "connect_camera",
+      "description": "Connect a camera over USB (PTP) for tethered capture. The browser's USB device chooser needs the person's click, so an agent cannot call it; the person uses Connect camera.",
+      "handler": "tether.connect",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "personOnly": true,
+      "personOnlyReason": "WebUSB device access needs a user gesture in the browser's device chooser, and picking the camera is the person's authorisation.",
+      "revisionExempt": "Person-only device connection; not a document edit.",
+      "agentVisible": "listed so the agent knows the act exists; a call returns status person_only and names the UI control"
+    },
+    {
+      "name": "tether_capture",
+      "description": "Fire the connected camera's shutter (PTP InitiateCapture), download each new picture, save it in the workspace under tether/<date>/ (or folder; existing files are never replaced) and open the last one. Built to the device boundary and tested against a simulated camera; not yet exercised on a real camera. Staged: the person confirms before the shutter fires.",
+      "handler": "tether.capture",
+      "effect": "irreversible",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "folder": {
+            "type": "string",
+            "description": "Workspace folder for the captures (default tether/YYYY-MM-DD)."
+          },
+          "timeoutSeconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 300,
+            "description": "How long to wait for the picture (default 30)."
+          },
+          "open": {
+            "type": "boolean",
+            "description": "Open the captured photo (default true)."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "revisionExempt": "Writes new capture files after the person confirms; the open document is not edited (the capture opens as a new document)."
+    },
+    {
+      "name": "disconnect_camera",
+      "description": "Close the PTP session and release the USB camera.",
+      "handler": "tether.disconnect",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "revisionExempt": "Releases the device; does not edit the document."
+    },
+    {
+      "name": "warp_layer",
+      "description": "Puppet or mesh warp an image, text, raster or RAW layer: pins move the point at from to to (layer-source pixels); the rest follows smoothly (moving-least-squares similarity). Replaces the layer's pins; liquify strokes stay. An empty list removes the pins.",
+      "handler": "layer.warp",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          },
+          "pins": {
+            "type": "array",
+            "maxItems": 64,
+            "items": {
+              "type": "object",
+              "properties": {
+                "from": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 2,
+                  "maxItems": 2
+                },
+                "to": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 2,
+                  "maxItems": 2
+                }
+              },
+              "required": [
+                "from",
+                "to"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "layerId",
+          "pins"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "liquify_layer",
+      "description": "Liquify an image, text, raster or RAW layer with brush strokes, appended to its earlier strokes: push moves content along the stroke, bloat enlarges and pinch shrinks around it. points in layer-source pixels; size is the brush diameter in px; strength 0..1.",
+      "handler": "layer.liquify",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          },
+          "strokes": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 64,
+            "items": {
+              "type": "object",
+              "properties": {
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "push",
+                    "bloat",
+                    "pinch"
+                  ]
+                },
+                "points": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 512,
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 2,
+                    "maxItems": 2
+                  }
+                },
+                "size": {
+                  "type": "number",
+                  "minimum": 2,
+                  "maximum": 2000
+                },
+                "strength": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                }
+              },
+              "required": [
+                "mode",
+                "points",
+                "size"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "layerId",
+          "strokes"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "reset_warp",
+      "description": "Remove a layer's warp pins and liquify strokes.",
+      "handler": "layer.warp-reset",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "layerId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "set_brush",
+      "description": "Set the brush engine v2 settings (or a brush preset) that paint_stroke uses when a stroke names none; reset returns to the round brush. Session state; each stroke records the brush it used.",
+      "handler": "brush.set",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "preset": {
+            "type": "string"
+          },
+          "brush": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Brush engine fields; override the preset.",
+            "properties": {
+              "preset": {
+                "type": "string",
+                "description": "Brush preset name from list_brushes (its settings and tip image apply; fields given here override them)."
+              },
+              "spacing": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 1000,
+                "description": "Distance between dabs, % of the dab size (default 25)."
+              },
+              "angle": {
+                "type": "number",
+                "minimum": -360,
+                "maximum": 360,
+                "description": "Tip angle in degrees."
+              },
+              "roundness": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 100,
+                "description": "Tip roundness, % (100 = circle)."
+              },
+              "scatter": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1000,
+                "description": "Random offset across the stroke, % of the size."
+              },
+              "scatterBoth": {
+                "type": "boolean",
+                "description": "Scatter along the stroke as well."
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 16,
+                "description": "Dabs per spacing step."
+              },
+              "jitter": {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "Random variation per dab, %.",
+                "properties": {
+                  "size": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "opacity": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "flow": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "angle": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "roundness": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  }
+                }
+              },
+              "control": {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "What drives size, opacity and flow (pressure, tilt, velocity) and the tip angle (direction of travel, pen tilt).",
+                "properties": {
+                  "size": {
+                    "type": "string",
+                    "enum": [
+                      "off",
+                      "pressure",
+                      "tilt",
+                      "velocity"
+                    ]
+                  },
+                  "opacity": {
+                    "type": "string",
+                    "enum": [
+                      "off",
+                      "pressure",
+                      "tilt",
+                      "velocity"
+                    ]
+                  },
+                  "flow": {
+                    "type": "string",
+                    "enum": [
+                      "off",
+                      "pressure",
+                      "tilt",
+                      "velocity"
+                    ]
+                  },
+                  "angle": {
+                    "type": "string",
+                    "enum": [
+                      "off",
+                      "direction",
+                      "tilt"
+                    ]
+                  }
+                }
+              },
+              "min": {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "Smallest value a control reaches, % of the setting.",
+                "properties": {
+                  "size": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "opacity": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "flow": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  }
+                }
+              },
+              "seed": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Jitter seed; default derives from the stroke points, so a stroke replays identically."
+              }
+            }
+          },
+          "reset": {
+            "type": "boolean"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "revisionExempt": "Tool setting; does not edit the document."
+    },
+    {
+      "name": "list_brushes",
+      "description": "List brush presets in the shared asset library (library/brushes/) with their engine settings and tip size, and the active brush.",
+      "handler": "brush.list",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "save_brush_preset",
+      "description": "Save a brush preset (size, hardness, flow, opacity and engine v2 settings) to library/brushes/<name>.json. fromSelection makes a custom brush: the selected pixels of a raster layer become the tip image (dark, opaque pixels paint).",
+      "handler": "brush.save",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "name": {
+            "type": "string"
+          },
+          "size": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 5000
+          },
+          "hardness": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "flow": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "opacity": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "brush": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "spacing": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 1000,
+                "description": "Distance between dabs, % of the dab size (default 25)."
+              },
+              "angle": {
+                "type": "number",
+                "minimum": -360,
+                "maximum": 360,
+                "description": "Tip angle in degrees."
+              },
+              "roundness": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 100,
+                "description": "Tip roundness, % (100 = circle)."
+              },
+              "scatter": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1000,
+                "description": "Random offset across the stroke, % of the size."
+              },
+              "scatterBoth": {
+                "type": "boolean",
+                "description": "Scatter along the stroke as well."
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 16,
+                "description": "Dabs per spacing step."
+              },
+              "jitter": {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "Random variation per dab, %.",
+                "properties": {
+                  "size": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "opacity": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "flow": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "angle": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "roundness": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  }
+                }
+              },
+              "control": {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "What drives size, opacity and flow (pressure, tilt, velocity) and the tip angle (direction of travel, pen tilt).",
+                "properties": {
+                  "size": {
+                    "type": "string",
+                    "enum": [
+                      "off",
+                      "pressure",
+                      "tilt",
+                      "velocity"
+                    ]
+                  },
+                  "opacity": {
+                    "type": "string",
+                    "enum": [
+                      "off",
+                      "pressure",
+                      "tilt",
+                      "velocity"
+                    ]
+                  },
+                  "flow": {
+                    "type": "string",
+                    "enum": [
+                      "off",
+                      "pressure",
+                      "tilt",
+                      "velocity"
+                    ]
+                  },
+                  "angle": {
+                    "type": "string",
+                    "enum": [
+                      "off",
+                      "direction",
+                      "tilt"
+                    ]
+                  }
+                }
+              },
+              "min": {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "Smallest value a control reaches, % of the setting.",
+                "properties": {
+                  "size": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "opacity": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "flow": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  }
+                }
+              },
+              "seed": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Jitter seed; default derives from the stroke points, so a stroke replays identically."
+              }
+            }
+          },
+          "fromSelection": {
+            "type": "boolean"
+          },
+          "layerId": {
+            "type": "string",
+            "description": "Raster layer the tip comes from (default the active layer)."
+          },
+          "replace": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "revision",
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "writesWorkspace": "Writes library/brushes/<name>.json at once; replace: true overwrites a preset of that name."
+    },
+    {
+      "name": "set_timeline",
+      "description": "Create or change the document timeline: frame rate, length in frames, loop count (0 = forever); clear removes every keyframe.",
+      "handler": "motion.timeline",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "fps": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 60
+          },
+          "frames": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3600
+          },
+          "loop": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "clear": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "revision"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "set_keyframe",
+      "description": "Set a keyframe on a layer property: visible (hold), opacity (0-100), x and y (document px offset), scale (factor), rotation (degrees, about the layer centre). Values between keys interpolate linearly, ease in-out, or hold.",
+      "handler": "motion.key",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "layerId": {
+            "type": "string"
+          },
+          "property": {
+            "type": "string",
+            "enum": [
+              "visible",
+              "opacity",
+              "x",
+              "y",
+              "scale",
+              "rotation"
+            ]
+          },
+          "frame": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "value": {
+            "description": "A number; true or false for visible."
+          },
+          "ease": {
+            "type": "string",
+            "enum": [
+              "linear",
+              "hold",
+              "ease"
+            ]
+          }
+        },
+        "required": [
+          "revision",
+          "layerId",
+          "property",
+          "frame",
+          "value"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "delete_keyframe",
+      "description": "Delete a layer keyframe at a frame (one property, or every property when omitted).",
+      "handler": "motion.unkey",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "layerId": {
+            "type": "string"
+          },
+          "property": {
+            "type": "string",
+            "enum": [
+              "visible",
+              "opacity",
+              "x",
+              "y",
+              "scale",
+              "rotation"
+            ]
+          },
+          "frame": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "revision",
+          "layerId",
+          "frame"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "capture_frame",
+      "description": "Frame animation: record every top-level layer's visibility and opacity at a frame as hold keys, with optional per-layer overrides, so the frame shows exactly that set of layer states.",
+      "handler": "motion.capture",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "frame": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "layers": {
+            "type": "object",
+            "description": "{ layerId: { visible?, opacity? 0-100 } } states for this frame.",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "visible": {
+                  "type": "boolean"
+                },
+                "opacity": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 100
+                }
+              }
+            }
+          }
+        },
+        "required": [
+          "revision",
+          "frame"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "go_to_frame",
+      "description": "Show a timeline frame in the canvas (video layers seek to it). View state only.",
+      "handler": "motion.go",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "frame": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "frame"
+        ],
+        "additionalProperties": false
+      },
+      "revisionExempt": "View state; does not edit the document."
+    },
+    {
+      "name": "play_timeline",
+      "description": "Play the timeline in the canvas at its frame rate, looping, or stop.",
+      "handler": "motion.play",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "play": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "play"
+        ],
+        "additionalProperties": false
+      },
+      "revisionExempt": "View state; does not edit the document."
+    },
+    {
+      "name": "get_timeline",
+      "description": "Read the timeline: frame rate, length, keyframes per layer, the current frame and each animated layer's state at it.",
+      "handler": "motion.get",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "import_video",
+      "description": "Add a workspace video file (mp4, webm, mov, m4v, ogv the browser decodes) as a video layer whose frame follows the timeline; adjustment layers, masks and styles apply to every frame. Opens a new document at the video size when none is open.",
+      "handler": "motion.video",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "path": {
+            "type": "string"
+          },
+          "offset": {
+            "type": "integer",
+            "description": "Timeline frame where the video starts (default 0)."
+          }
+        },
+        "required": [
+          "revision",
+          "path"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "export_animation",
+      "description": "Export timeline frames as an animated GIF, animated WebP, or WebM (VP8) video through WebCodecs. Staged: the person confirms before the file is written.",
+      "handler": "motion.export",
+      "effect": "irreversible",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "path": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "gif",
+              "webp",
+              "webm"
+            ]
+          },
+          "from": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "to": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "maxEdge": {
+            "type": "integer",
+            "minimum": 16
+          },
+          "quality": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "bitrate": {
+            "type": "integer",
+            "minimum": 100000
+          }
+        },
+        "required": [
+          "revision",
+          "path",
+          "format"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list_paths",
+      "description": "The document paths (pen tool and path booleans): id, name, SVG path data, bounds.",
+      "handler": "vector.path-list",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "add_path",
+      "description": "Add a Bezier path to the document paths (what the pen tool draws): SVG path data or subpaths of anchors with handles, in document pixels.",
+      "handler": "vector.path-add",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "name": {
+            "type": "string"
+          },
+          "d": {
+            "type": "string",
+            "description": "SVG path data in document pixels (M, L, H, V, C, S, Q, T, A, Z)."
+          },
+          "subpaths": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "properties": {
+                "closed": {
+                  "type": "boolean"
+                },
+                "anchors": {
+                  "type": "array",
+                  "minItems": 2,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "x": {
+                        "type": "number"
+                      },
+                      "y": {
+                        "type": "number"
+                      },
+                      "hIn": {
+                        "type": "object",
+                        "properties": {
+                          "x": {
+                            "type": "number"
+                          },
+                          "y": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "x",
+                          "y"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "hOut": {
+                        "type": "object",
+                        "properties": {
+                          "x": {
+                            "type": "number"
+                          },
+                          "y": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "x",
+                          "y"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "x",
+                      "y"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "anchors"
+              ],
+              "additionalProperties": false
+            },
+            "description": "Bezier subpaths in document pixels; handles hIn/hOut are relative to their anchor (zero or absent = corner)."
+          },
+          "fillRule": {
+            "type": "string",
+            "enum": [
+              "nonzero",
+              "evenodd"
+            ]
+          }
+        },
+        "required": [
+          "revision"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "set_path",
+      "description": "Replace a path's geometry, rename it or change its fill rule.",
+      "handler": "vector.path-set",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "pathId": {
+            "type": "string",
+            "description": "Path id from list_paths."
+          },
+          "name": {
+            "type": "string"
+          },
+          "d": {
+            "type": "string",
+            "description": "SVG path data in document pixels (M, L, H, V, C, S, Q, T, A, Z)."
+          },
+          "subpaths": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "properties": {
+                "closed": {
+                  "type": "boolean"
+                },
+                "anchors": {
+                  "type": "array",
+                  "minItems": 2,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "x": {
+                        "type": "number"
+                      },
+                      "y": {
+                        "type": "number"
+                      },
+                      "hIn": {
+                        "type": "object",
+                        "properties": {
+                          "x": {
+                            "type": "number"
+                          },
+                          "y": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "x",
+                          "y"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "hOut": {
+                        "type": "object",
+                        "properties": {
+                          "x": {
+                            "type": "number"
+                          },
+                          "y": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "x",
+                          "y"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "x",
+                      "y"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "anchors"
+              ],
+              "additionalProperties": false
+            },
+            "description": "Bezier subpaths in document pixels; handles hIn/hOut are relative to their anchor (zero or absent = corner)."
+          },
+          "fillRule": {
+            "type": "string",
+            "enum": [
+              "nonzero",
+              "evenodd"
+            ]
+          }
+        },
+        "required": [
+          "revision",
+          "pathId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "delete_path",
+      "description": "Delete a path from the document paths (vector masks and shapes made from it keep their own copy).",
+      "handler": "vector.path-delete",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "pathId": {
+            "type": "string",
+            "description": "Path id from list_paths."
+          }
+        },
+        "required": [
+          "revision",
+          "pathId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "combine_paths",
+      "description": "Path booleans: union, subtract (the first path minus the others), intersect or exclude, over paths listed bottom first. Adds the result as a new path; replace: true removes the inputs.",
+      "handler": "vector.path-combine",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "op": {
+            "type": "string",
+            "enum": [
+              "union",
+              "subtract",
+              "intersect",
+              "exclude"
+            ]
+          },
+          "pathIds": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "type": "string"
+            }
+          },
+          "name": {
+            "type": "string"
+          },
+          "replace": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "revision",
+          "op",
+          "pathIds"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "path_to_selection",
+      "description": "Make a selection from a path (anti-aliased), replacing or combining with the current selection, with an optional feather (Gaussian sigma in pixels).",
+      "handler": "vector.path-select",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "pathId": {
+            "type": "string",
+            "description": "Path id from list_paths."
+          },
+          "op": {
+            "type": "string",
+            "enum": [
+              "replace",
+              "add",
+              "subtract",
+              "intersect"
+            ]
+          },
+          "feather": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 500
+          }
+        },
+        "required": [
+          "revision",
+          "pathId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "set_vector_mask",
+      "description": "Give a layer a vector mask from a path (pathId, d or subpaths in document pixels), rasterised with anti-aliasing at the layer's resolution and multiplied with its raster mask. feather: Gaussian sigma in pixels; invert; off: true removes it. The mask moves with the layer.",
+      "handler": "vector.mask",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          },
+          "pathId": {
+            "type": "string",
+            "description": "Path id from list_paths."
+          },
+          "d": {
+            "type": "string",
+            "description": "SVG path data in document pixels (M, L, H, V, C, S, Q, T, A, Z)."
+          },
+          "subpaths": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "properties": {
+                "closed": {
+                  "type": "boolean"
+                },
+                "anchors": {
+                  "type": "array",
+                  "minItems": 2,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "x": {
+                        "type": "number"
+                      },
+                      "y": {
+                        "type": "number"
+                      },
+                      "hIn": {
+                        "type": "object",
+                        "properties": {
+                          "x": {
+                            "type": "number"
+                          },
+                          "y": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "x",
+                          "y"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "hOut": {
+                        "type": "object",
+                        "properties": {
+                          "x": {
+                            "type": "number"
+                          },
+                          "y": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "x",
+                          "y"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "x",
+                      "y"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "anchors"
+              ],
+              "additionalProperties": false
+            },
+            "description": "Bezier subpaths in document pixels; handles hIn/hOut are relative to their anchor (zero or absent = corner)."
+          },
+          "feather": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 500
+          },
+          "invert": {
+            "type": "boolean"
+          },
+          "off": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "revision"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "add_shape_layer",
+      "description": "Add a shape layer: rectangle, rounded rectangle, ellipse, polygon, line or a custom path, with a fill colour and a stroke (colour, width, align center/inside/outside, dash, join, cap). The shape stays editable and re-rasterises on every edit.",
+      "handler": "vector.shape-add",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "name": {
+            "type": "string"
+          },
+          "shape": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "rect",
+                  "rounded-rect",
+                  "ellipse",
+                  "polygon",
+                  "line",
+                  "path"
+                ]
+              },
+              "x": {
+                "type": "number"
+              },
+              "y": {
+                "type": "number"
+              },
+              "width": {
+                "type": "number"
+              },
+              "height": {
+                "type": "number"
+              },
+              "radius": {
+                "type": "number",
+                "minimum": 0
+              },
+              "cx": {
+                "type": "number"
+              },
+              "cy": {
+                "type": "number"
+              },
+              "sides": {
+                "type": "integer",
+                "minimum": 3,
+                "maximum": 100
+              },
+              "rotation": {
+                "type": "number"
+              },
+              "x1": {
+                "type": "number"
+              },
+              "y1": {
+                "type": "number"
+              },
+              "x2": {
+                "type": "number"
+              },
+              "y2": {
+                "type": "number"
+              },
+              "d": {
+                "type": "string",
+                "description": "SVG path data in document pixels (M, L, H, V, C, S, Q, T, A, Z)."
+              },
+              "subpaths": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "closed": {
+                      "type": "boolean"
+                    },
+                    "anchors": {
+                      "type": "array",
+                      "minItems": 2,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "x": {
+                            "type": "number"
+                          },
+                          "y": {
+                            "type": "number"
+                          },
+                          "hIn": {
+                            "type": "object",
+                            "properties": {
+                              "x": {
+                                "type": "number"
+                              },
+                              "y": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "x",
+                              "y"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "hOut": {
+                            "type": "object",
+                            "properties": {
+                              "x": {
+                                "type": "number"
+                              },
+                              "y": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "x",
+                              "y"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "x",
+                          "y"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "anchors"
+                  ],
+                  "additionalProperties": false
+                },
+                "description": "Bezier subpaths in document pixels; handles hIn/hOut are relative to their anchor (zero or absent = corner)."
+              },
+              "pathId": {
+                "type": "string",
+                "description": "Path id from list_paths."
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "additionalProperties": false,
+            "description": "Document pixels. rect, ellipse: x, y, width, height; rounded-rect: plus radius; polygon: cx, cy, radius, sides, rotation (degrees); line: x1, y1, x2, y2; path: d, subpaths or pathId."
+          },
+          "fill": {
+            "type": "string",
+            "description": "#rrggbb, #rrggbbaa or 'none'. Default #808080 ('none' for a line)."
+          },
+          "stroke": {
+            "type": "object",
+            "properties": {
+              "color": {
+                "type": "string",
+                "description": "#rrggbb or #rrggbbaa (sRGB)."
+              },
+              "width": {
+                "type": "number",
+                "minimum": 0.01
+              },
+              "align": {
+                "type": "string",
+                "enum": [
+                  "center",
+                  "inside",
+                  "outside"
+                ]
+              },
+              "dash": {
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "description": "On and off lengths in pixels; [] or absent = solid."
+              },
+              "dashOffset": {
+                "type": "number"
+              },
+              "join": {
+                "type": "string",
+                "enum": [
+                  "miter",
+                  "round",
+                  "bevel"
+                ]
+              },
+              "cap": {
+                "type": "string",
+                "enum": [
+                  "butt",
+                  "round",
+                  "square"
+                ]
+              },
+              "miterLimit": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 100
+              }
+            },
+            "additionalProperties": false
+          },
+          "fillRule": {
+            "type": "string",
+            "enum": [
+              "nonzero",
+              "evenodd"
+            ]
+          }
+        },
+        "required": [
+          "revision",
+          "shape"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "set_shape",
+      "description": "Edit a shape layer: new geometry (document pixels), fill ('none' removes it), stroke (given keys merge; noStroke: true removes it).",
+      "handler": "vector.shape-set",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          },
+          "shape": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "rect",
+                  "rounded-rect",
+                  "ellipse",
+                  "polygon",
+                  "line",
+                  "path"
+                ]
+              },
+              "x": {
+                "type": "number"
+              },
+              "y": {
+                "type": "number"
+              },
+              "width": {
+                "type": "number"
+              },
+              "height": {
+                "type": "number"
+              },
+              "radius": {
+                "type": "number",
+                "minimum": 0
+              },
+              "cx": {
+                "type": "number"
+              },
+              "cy": {
+                "type": "number"
+              },
+              "sides": {
+                "type": "integer",
+                "minimum": 3,
+                "maximum": 100
+              },
+              "rotation": {
+                "type": "number"
+              },
+              "x1": {
+                "type": "number"
+              },
+              "y1": {
+                "type": "number"
+              },
+              "x2": {
+                "type": "number"
+              },
+              "y2": {
+                "type": "number"
+              },
+              "d": {
+                "type": "string",
+                "description": "SVG path data in document pixels (M, L, H, V, C, S, Q, T, A, Z)."
+              },
+              "subpaths": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "closed": {
+                      "type": "boolean"
+                    },
+                    "anchors": {
+                      "type": "array",
+                      "minItems": 2,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "x": {
+                            "type": "number"
+                          },
+                          "y": {
+                            "type": "number"
+                          },
+                          "hIn": {
+                            "type": "object",
+                            "properties": {
+                              "x": {
+                                "type": "number"
+                              },
+                              "y": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "x",
+                              "y"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "hOut": {
+                            "type": "object",
+                            "properties": {
+                              "x": {
+                                "type": "number"
+                              },
+                              "y": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "x",
+                              "y"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "x",
+                          "y"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "anchors"
+                  ],
+                  "additionalProperties": false
+                },
+                "description": "Bezier subpaths in document pixels; handles hIn/hOut are relative to their anchor (zero or absent = corner)."
+              },
+              "pathId": {
+                "type": "string",
+                "description": "Path id from list_paths."
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "additionalProperties": false,
+            "description": "Document pixels. rect, ellipse: x, y, width, height; rounded-rect: plus radius; polygon: cx, cy, radius, sides, rotation (degrees); line: x1, y1, x2, y2; path: d, subpaths or pathId."
+          },
+          "fill": {
+            "type": "string",
+            "description": "#rrggbb, #rrggbbaa or 'none'."
+          },
+          "stroke": {
+            "type": "object",
+            "properties": {
+              "color": {
+                "type": "string",
+                "description": "#rrggbb or #rrggbbaa (sRGB)."
+              },
+              "width": {
+                "type": "number",
+                "minimum": 0.01
+              },
+              "align": {
+                "type": "string",
+                "enum": [
+                  "center",
+                  "inside",
+                  "outside"
+                ]
+              },
+              "dash": {
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "description": "On and off lengths in pixels; [] or absent = solid."
+              },
+              "dashOffset": {
+                "type": "number"
+              },
+              "join": {
+                "type": "string",
+                "enum": [
+                  "miter",
+                  "round",
+                  "bevel"
+                ]
+              },
+              "cap": {
+                "type": "string",
+                "enum": [
+                  "butt",
+                  "round",
+                  "square"
+                ]
+              },
+              "miterLimit": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 100
+              }
+            },
+            "additionalProperties": false
+          },
+          "noStroke": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "revision",
+          "layerId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list_artboards",
+      "description": "The document artboards (name, rectangle, background) and the layers on each.",
+      "handler": "vector.artboard-list",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "add_artboard",
+      "description": "Add an artboard: a named rectangle with its own background that clips the layers on it. grow: true enlarges the document to fit. layerIds puts top-level layers on it.",
+      "handler": "vector.artboard-add",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "name": {
+            "type": "string"
+          },
+          "x": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "y": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "width": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "background": {
+            "type": "string",
+            "description": "'#rrggbb' or 'transparent' (default #ffffff)."
+          },
+          "grow": {
+            "type": "boolean"
+          },
+          "layerIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "revision",
+          "x",
+          "y",
+          "width",
+          "height"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "set_artboard",
+      "description": "Rename, move, resize or recolour an artboard. Moving it moves its layers unless moveLayers is false.",
+      "handler": "vector.artboard-set",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "artboardId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "x": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "y": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "width": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "background": {
+            "type": "string"
+          },
+          "grow": {
+            "type": "boolean"
+          },
+          "moveLayers": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "revision",
+          "artboardId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "delete_artboard",
+      "description": "Delete an artboard; its layers stay in the document outside any artboard.",
+      "handler": "vector.artboard-delete",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "artboardId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "revision",
+          "artboardId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "set_layer_artboard",
+      "description": "Put a top-level layer on an artboard, or take it off (artboardId empty).",
+      "handler": "vector.artboard-assign",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          },
+          "artboardId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "revision",
+          "layerId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "export_artboards",
+      "description": "Export one artboard (artboardId) or all of them, each as its own PNG or JPEG named after the artboard, rendered with only its own layers and cropped to its rectangle. Writes files: waits for the person to confirm unless sent from the person's own click.",
+      "handler": "vector.artboard-export",
+      "effect": "irreversible",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "artboardId": {
+            "type": "string"
+          },
+          "folder": {
+            "type": "string",
+            "description": "Workspace folder, e.g. exports/artboards."
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "png",
+              "jpeg"
+            ]
+          },
+          "quality": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "required": [
+          "folder"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ai_generative_fill",
+      "description": "Text-prompted generative fill of the selection through the person's own image-edit endpoint (OpenAI-compatible /images/edits; their key from AI settings and an image model set in the AI pixel tools panel; off by default). Sends a 1,024 px square around the selection and its mask to that endpoint; the result is a new 'Generated (edited)' layer at the top. Unsupported until the person sets it up; prompt-free fill on device is ai_remove.",
+      "handler": "ai.fill",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "description": "What to paint into the selection."
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "prompt"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "refine_edge",
+      "description": "Select and mask: refines the current selection edge into a soft matte for hair, fur and fine edges. A trimap is built from the selection (band pixels either side of its edge are unknown; default 12) and the unknown band is solved by the on-device matting model (ViTMatte small) when it is downloaded, else classically (local foreground and background colour estimates cleaned by a colour guided filter of radius and eps). method: auto (model when downloaded, default), model (answers unsupported naming the download when absent) or classical. Pixels outside the band keep their selection values.",
+      "handler": "ai.refine-edge",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status stale."
+          },
+          "band": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 128,
+            "description": "Half-width in document pixels of the unknown strip around the selection edge."
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "model",
+              "classical"
+            ]
+          },
+          "radius": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 64,
+            "description": "Classical guided filter radius in document pixels (default 2)."
+          },
+          "eps": {
+            "type": "number",
+            "minimum": 1e-7,
+            "maximum": 1,
+            "description": "Classical guided filter regularisation (default 0.001)."
+          }
+        },
+        "required": [
+          "revision"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ai_smooth_skin",
+      "description": "Skin smoothing (P61 neural filter, on device): the person-parsing model (MediaPipe selfie multiclass, download_model mediapipe-multiclass, person-only) finds skin, then frequency separation smooths blotches and uneven tone while keeping fine texture. Writes a new \"Skin smoothing (edited)\" layer above the source whose alpha is the skin mask; the photo is untouched.",
+      "handler": "ai.smooth-skin",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state; default the active layer."
+          },
+          "amount": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "How much of the middle frequencies to remove (default 60)."
+          },
+          "radius": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200,
+            "description": "Low-pass radius in px (default from the skin area)."
+          },
+          "areas": {
+            "type": "string",
+            "enum": [
+              "face-skin",
+              "skin-all"
+            ],
+            "description": "Face skin only, or face and body skin (default)."
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "colour_transfer",
+      "description": "Colour transfer (P61 neural filter list, classical, no model): matches the layer's CIELAB mean and spread to a reference photo in the workspace (Reinhard et al. 2001). Writes a new \"Colour transfer (Reinhard)\" layer above the source.",
+      "handler": "ai.colour-transfer",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state; default the active layer."
+          },
+          "referencePath": {
+            "type": "string",
+            "description": "Workspace path of the reference photo."
+          },
+          "amount": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Mix toward the transferred colours (default 100)."
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "referencePath"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ai_colourize",
+      "description": "Colourize (P61 neural filter, on device): DDColor tiny (Apache-2.0, download_model ddcolor-tiny, person-only) predicts colour (CIELAB a, b) from the layer's lightness; the photo's own lightness and detail are kept. Writes a new \"Colourized (edited)\" layer above the source.",
+      "handler": "ai.colourize",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state; default the active layer."
+          },
+          "strength": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Chroma strength (default 100)."
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ai_style_transfer",
+      "description": "Style transfer (P61 neural filter, on device): a fast neural style network repaints the layer in one style (udnie: Picabia, 1913; BSD-3-Clause, download_model style-udnie, person-only). Works at edge px on the long side, then scales to the canvas. Writes a new \"Style: Udnie (edited)\" layer above the source.",
+      "handler": "ai.style",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state; default the active layer."
+          },
+          "style": {
+            "type": "string",
+            "enum": [
+              "udnie"
+            ]
+          },
+          "strength": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Mix with the photo (default 100)."
+          },
+          "edge": {
+            "type": "integer",
+            "minimum": 224,
+            "maximum": 2048,
+            "description": "Working long edge in px (default 1024); smaller gives larger strokes."
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision"
         ],
         "additionalProperties": false
       }

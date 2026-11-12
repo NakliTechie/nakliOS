@@ -24,7 +24,7 @@ export async function change(ctx, label, fn, touched = []) {
   return out;
 }
 export const layerRow = (l) => ({
-  id: l.id, name: l.name, kind: l.kind, ...(l.clipped ? { clipped: true } : {}), ...(l.adjustment ? { adjustment: l.adjustment } : {}), ...(l.quad ? { corners: l.quad } : {}), ...(l.lensBlur ? { lensBlur: l.lensBlur } : {}), ...(l.parentId ? { parentId: l.parentId } : {}), ...(l.kind === 'group' ? { isolation: l.isolation } : {}), ...(l.localOf ? { localOf: l.localOf } : {}), visible: l.visible, locked: l.locked, opacity: Math.round(l.opacity * 100), fill: Math.round(l.fill * 100), blendMode: l.blend,
+  id: l.id, name: l.name, kind: l.kind, ...(l.clipped ? { clipped: true } : {}), ...(l.adjustment ? { adjustment: l.adjustment } : {}), ...(l.quad ? { corners: l.quad } : {}), ...(l.lensBlur ? { lensBlur: l.lensBlur } : {}), ...(l.parentId ? { parentId: l.parentId } : {}), ...(l.kind === 'group' ? { isolation: l.isolation } : {}), ...(l.localOf ? { localOf: l.localOf } : {}), ...(l.smart ? { smart: { kind: l.smart.kind, ...(l.smart.path ? { path: l.smart.path } : {}) } } : {}), visible: l.visible, locked: l.locked, opacity: Math.round(l.opacity * 100), fill: Math.round(l.fill * 100), blendMode: l.blend,
   mask: l.mask ? { components: l.mask.components.map((c) => `${c.op}:${c.kind}`), invert: !!l.mask.invert } : null,
   ...(l.kind === 'raw' ? { develop: Object.fromEntries(Object.entries(l.develop || {}).filter(([, v]) => v !== 0)), curve: !!l.curve } : {}),
   ...(l.kind === 'text' ? { text: l.text.content.slice(0, 80) } : {}),

@@ -57,7 +57,7 @@ const isTranslate = (m) => m[0] === 1 && m[1] === 0 && m[2] === 0 && m[3] === 1 
 // A raster layer whose pixels can be written straight from its buffer: integer translation and either
 // no mask or one painted (bitmap) component, op add, full density. Returns { pixels, mask } or null.
 export function directRaster(l, r) {
-  if (l.kind !== 'raster' || !isTranslate(l.matrix || IDENTITY)) return null;
+  if (l.kind !== 'raster' || l.vectorMask || !isTranslate(l.matrix || IDENTITY)) return null;   // a vector mask is rasterised with the layer
   const m = l.mask; let mask = null;
   if (m) {
     const c = m.components || [];
@@ -129,7 +129,7 @@ export async function documentToPsdPlan(r, doc) {
         const im = await renderLayers(r, doc, alone(doc, l));
         const box = alphaBox(im.data, im.width, im.height);
         Object.assign(e, box ? { left: box.x, top: box.y, width: box.width, height: box.height, pixels: crop(im.data, im.width, box) } : { left: 0, top: 0, width: 0, height: 0, pixels: null });
-        notes.push({ layer: l.name, note: `${l.localOf ? 'local adjustment' : l.kind} layer written as 8-bit pixels${l.mask ? ' with its mask applied to the pixels' : ''}` });
+        notes.push({ layer: l.name, note: `${l.localOf ? 'local adjustment' : l.kind} layer written as 8-bit pixels${l.mask ? ' with its mask applied to the pixels' : ''}${l.vectorMask ? ' with its vector mask rasterised into the pixels (PSD vector masks are not written)' : ''}${l.kind === 'shape' ? ' (rasterised; the editable shape stays in the .atelier document)' : ''}` });
       }
       layers.push(e);
     }

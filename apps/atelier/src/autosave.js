@@ -12,9 +12,12 @@
 import { sidecarPath } from './files/workspace.js';
 
 // Commands that never change the open document (or that write their own files): they do not mark it dirty.
-export const NON_DOC = new Set(['save_document', 'set_view', 'set_active', 'export_image', 'export_batch', 'save_export_preset', 'save_preset', 'set_rating', 'grant_folder', 'enable_channel', 'confirm_staged', 'overwrite_file', 'download_model', 'copy_settings']);
+export const NON_DOC = new Set(['save_document', 'set_view', 'set_active', 'export_image', 'export_batch', 'save_export_preset', 'save_preset', 'set_rating', 'grant_folder', 'enable_channel', 'confirm_staged', 'overwrite_file', 'download_model', 'copy_settings',
+  // library commands write sidecars, collections, assets or the sync folder, never the open document
+  'set_keywords', 'create_collection', 'add_to_collection', 'set_smart_collection', 'delete_collection', 'create_virtual_copy', 'delete_virtual_copy',
+  'import_xmp', 'import_lightroom_catalog', 'sync_library', 'resolve_sync_conflict', 'add_library_asset', 'delete_library_asset', 'analyze_culling', 'accept_cull_suggestions']);
 // Commands that replace the open document: the old one is flushed first.
-export const REPLACES = (name, args) => (name === 'open_photo' && !args?.asLayer) || name === 'new_document';
+export const REPLACES = (name, args) => (name === 'open_photo' && !args?.asLayer) || name === 'open_virtual_copy' || name === 'new_document';
 
 export function changesDocument(name, args, reply, effectOf) {
   if (reply?.status !== 'ok') return false;
@@ -26,13 +29,24 @@ export function changesDocument(name, args, reply, effectOf) {
 
 // Where a document saves before its first save answers with the real path: a document whose content is
 // one RAW photo (and its local adjustments) saves as that photo's sidecar; anything else as .atelier.
+// An open virtual copy reopens as that copy (copy), not as the master photo.
 export function guessTarget(doc) {
   if (!doc) return null;
   const raws = doc.layers.filter((l) => l.kind === 'raw' && !l.localOf);
-  if (raws.length === 1 && doc.layers.every((l) => l === raws[0] || l.localOf === raws[0].id)) return { path: sidecarPath(raws[0].file), reopen: raws[0].file };
+  if (raws.length === 1 && doc.layers.every((l) => l === raws[0] || l.localOf === raws[0].id)) {
+    const copy = doc.photo?.path === raws[0].file ? doc.photo.copy : null;
+    return { path: sidecarPath(raws[0].file), reopen: raws[0].file, ...(copy ? { copy } : {}) };
+  }
   const p = `documents/${doc.id}.atelier`;
   return { path: p, reopen: p };
 }
+
+// Library commands this window runs that write the open photo's sidecar without touching what the
+// document holds (rating, keywords, copies, suggestions, caption): the new text is this window's own, not
+// a change made elsewhere. import_xmp with develop and import_lightroom_catalog (which may fill develop
+// settings) are left out: they change settings the open document shows, so they count as outside changes.
+export const OWN_SIDECAR_WRITES = (name, args) => ['set_rating', 'sync_settings', 'set_keywords', 'create_virtual_copy', 'delete_virtual_copy', 'analyze_culling', 'accept_cull_suggestions', 'set_caption'].includes(name)
+  || (name === 'import_xmp' && !args?.develop) || (name === 'import_lightroom_catalog' && args?.develop === false && !args?.dryRun);
 
 // What to do when the watched file's text differs from what this window last wrote or read.
 export function decide({ text, known, dirty }) {
@@ -90,7 +104,8 @@ export function createDurability({ naklios, bus, ctx, dialogs, notice = () => {}
     try {
       const r = await bus.dispatch('save_document', { revision: bus.state.revision }, { door: 'ui', caller: 'autosave' });
       if (r.status !== 'ok') throw new Error(`${r.status}${r.error?.message ? `: ${r.error.message}` : ''}`);
-      watch = { path: r.result.path, reopen: r.result.kind === 'document' ? r.result.path : (watch?.reopen ?? guessTarget(ctx.store.doc)?.reopen) };
+      const g = guessTarget(ctx.store.doc);
+      watch = r.result.kind === 'document' ? { path: r.result.path, reopen: r.result.path } : { path: r.result.path, reopen: watch?.reopen ?? g?.reopen, ...((watch?.copy ?? g?.copy) ? { copy: watch?.copy ?? g?.copy } : {}) };
       known = await readText(watch.path);
       lastError = null;
     } finally { saving = false; report(); setTimer(report, 0); }   // again once the saver has counted the save as durable
@@ -128,7 +143,7 @@ export function createDurability({ naklios, bus, ctx, dialogs, notice = () => {}
   async function reload(text) {
     known = text;
     saver?.dispose(); saver = null;
-    return bus.dispatch('open_photo', { path: watch.reopen }, { door: 'ui', caller: 'change-subscription' });
+    return bus.dispatch('open_photo', { path: watch.reopen, ...(watch.copy ? { copy: watch.copy } : {}) }, { door: 'ui', caller: 'change-subscription' });
   }
 
   // Compares the watched file with what this window last saw; acts on a difference.
@@ -186,7 +201,7 @@ export function createDurability({ naklios, bus, ctx, dialogs, notice = () => {}
       const doc = ctx.store.doc;
       if ((doc?.id ?? null) !== docId) { await bind(); return; }
       if (changesDocument(name, args, reply, effectOf)) { saver?.markDirty(); report(); }
-      if (reply?.status === 'ok' && (name === 'set_rating' || name === 'sync_settings') && watch) known = await readText(watch.path);
+      if (reply?.status === 'ok' && OWN_SIDECAR_WRITES(name, args) && watch) known = await readText(watch.path);
     },
     // Called before a command runs: a command that replaces the document saves the old one first.
     async before(name, args, opts) {

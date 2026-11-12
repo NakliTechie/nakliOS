@@ -1,9 +1,11 @@
 // Baseline TIFF reader and writer (P53, P48). Reader: little- or big-endian, strips or tiles,
 // compression none (1), LZW (5), Deflate (8, 32946) and PackBits (32773), horizontal predictor (2),
 // 8 or 16 bits, grayscale (photometric 0, 1) or RGB (2), with or without an alpha extra sample,
-// every page (reduced-resolution thumbnails skipped). Writer: 8- or 16-bit RGB(A), Deflate with the
-// horizontal predictor, one page per entry, PageName, ImageDescription, X/YPosition and an ICC
-// profile (tag 34675). Pure code: node and browser (CompressionStream for Deflate).
+// every page (reduced-resolution thumbnails skipped); 32-bit IEEE float samples (SampleFormat 3) only when
+// the caller asks ({ float: true }), returned as a Float32Array. Writer: 8- or 16-bit RGB(A), Deflate with the
+// horizontal predictor, or 32-bit float RGB(A) (SampleFormat 3, Deflate, no predictor), one page per entry,
+// PageName, ImageDescription, X/YPosition and an ICC profile (tag 34675). Pure code: node and browser
+// (CompressionStream for Deflate).
 
 const T = {
   NewSubfileType: 254, ImageWidth: 256, ImageLength: 257, BitsPerSample: 258, Compression: 259, Photometric: 262,
@@ -57,7 +59,7 @@ function packBits(src, expected) {
 }
 
 // ---- reader ---------------------------------------------------------------------------------------
-export async function readTiff(bytes) {
+export async function readTiff(bytes, { float = false } = {}) {
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const le = dv.getUint16(0) === 0x4949;
   if (!le && dv.getUint16(0) !== 0x4d4d) throw new Error('not a TIFF');
@@ -85,7 +87,7 @@ export async function readTiff(bytes) {
     ifd = u32(ifd + 2 + n * 12);
     const sub = tags[T.NewSubfileType]?.[0] ?? 0;
     if (sub & 1) continue;   // reduced-resolution copy of another page
-    pages.push(await decodePage(bytes, tags, le));
+    pages.push(await decodePage(bytes, tags, le, float));
   }
   if (!pages.length) throw new Error('TIFF holds no full-resolution page');
   return { pages };
@@ -93,15 +95,17 @@ export async function readTiff(bytes) {
 
 const text = (b) => (b ? new TextDecoder().decode(b).replace(/\0+$/, '') : null);
 
-async function decodePage(bytes, tags, le) {
+async function decodePage(bytes, tags, le, allowFloat = false) {
   const W = tags[T.ImageWidth][0]; const H = tags[T.ImageLength][0];
   const spp = tags[T.SamplesPerPixel]?.[0] ?? 1;
   const bits = tags[T.BitsPerSample]?.[0] ?? 1;
   const comp = tags[T.Compression]?.[0] ?? 1; const photo = tags[T.Photometric]?.[0] ?? 1;
   const pred = tags[T.Predictor]?.[0] ?? 1; const planar = tags[T.PlanarConfig]?.[0] ?? 1;
   const fmt = tags[T.SampleFormat]?.[0] ?? 1;
-  if (bits !== 8 && bits !== 16) throw new Error(`${bits}-bit TIFF samples are not supported (8 or 16)`);
-  if (fmt !== 1) throw new Error('only unsigned integer TIFF samples are supported');
+  const isFloat = allowFloat && bits === 32 && fmt === 3;
+  if (!isFloat && bits !== 8 && bits !== 16) throw new Error(`${bits}-bit TIFF samples are not supported (8 or 16)`);
+  if (!isFloat && fmt !== 1) throw new Error('only unsigned integer TIFF samples are supported');
+  if (isFloat && pred !== 1) throw new Error(`float TIFF predictor ${pred} is not supported (none)`);
   if (![0, 1, 2].includes(photo)) throw new Error(`TIFF photometric ${photo} (palette, CMYK, YCbCr or other) is not supported`);
   if (planar !== 1 && spp > 1) throw new Error('planar (separate-plane) TIFF is not supported');
   if (![1, 5, 8, 32946, 32773].includes(comp)) throw new Error(`TIFF compression ${comp} is not supported (none, LZW, Deflate, PackBits)`);
@@ -112,8 +116,9 @@ async function decodePage(bytes, tags, le) {
   const tiled = !!tags[T.TileWidth];
   const bw = tiled ? tags[T.TileWidth][0] : W; const bh = tiled ? tags[T.TileLength][0] : (tags[T.RowsPerStrip]?.[0] ?? H);
   const offs = tags[tiled ? T.TileOffsets : T.StripOffsets]; const counts = tags[tiled ? T.TileByteCounts : T.StripByteCounts];
-  const bps = bits / 8; const max = bits === 16 ? 65535 : 255;
-  const samples = bits === 16 ? new Uint16Array(W * H * spp) : new Uint8Array(W * H * spp);
+  const bps = bits / 8; const max = isFloat ? 1 : bits === 16 ? 65535 : 255;
+  const Arr = isFloat ? Float32Array : bits === 16 ? Uint16Array : Uint8Array;
+  const samples = new Arr(W * H * spp);
   const across = Math.ceil(W / bw);
   for (let b = 0; b < offs.length; b++) {
     const bx = tiled ? (b % across) * bw : 0; const by = tiled ? Math.floor(b / across) * bh : b * bh;
@@ -127,8 +132,8 @@ async function decodePage(bytes, tags, le) {
     else if (comp === 32773) raw = packBits(src, expected);
     else raw = await inflate(src);
     const dvr = new DataView(raw.buffer, raw.byteOffset, raw.byteLength);
-    const blk = bits === 16 ? new Uint16Array(bw * rows * spp) : new Uint8Array(bw * rows * spp);
-    for (let i = 0; i < blk.length && (i + 1) * bps <= raw.length; i++) blk[i] = bits === 16 ? dvr.getUint16(i * 2, le) : raw[i];
+    const blk = new Arr(bw * rows * spp);
+    for (let i = 0; i < blk.length && (i + 1) * bps <= raw.length; i++) blk[i] = isFloat ? dvr.getFloat32(i * 4, le) : bits === 16 ? dvr.getUint16(i * 2, le) : raw[i];
     if (pred === 2) for (let y = 0; y < rows; y++) for (let x = spp; x < bw * spp; x++) { const i = y * bw * spp + x; blk[i] = (blk[i] + blk[i - spp]) & max; }
     for (let y = 0; y < rows && by + y < H; y++) {
       const w = Math.min(bw, W - bx);
@@ -136,28 +141,30 @@ async function decodePage(bytes, tags, le) {
     }
   }
   // → straight-alpha RGBA in the file's bit depth
-  const data = bits === 16 ? new Uint16Array(W * H * 4) : new Uint8Array(W * H * 4);
+  const data = new Arr(W * H * 4);
   for (let i = 0; i < W * H; i++) {
     const s = i * spp; const a = hasAlpha ? samples[s + color] : max;
     for (let c = 0; c < 3; c++) {
       let v = samples[s + (color === 3 ? c : 0)];
       if (photo === 0) v = max - v;
-      if (premult) v = a > 0 ? Math.min(max, Math.round((v * max) / a)) : 0;
+      if (premult) v = a > 0 ? (isFloat ? v / a : Math.min(max, Math.round((v * max) / a))) : 0;
       data[i * 4 + c] = v;
     }
     data[i * 4 + 3] = a;
   }
   const xres = tags[T.XResolution]?.[0] || 72; const yres = tags[T.YResolution]?.[0] || 72;
   return {
-    width: W, height: H, bits, data, hasAlpha, name: text(tags[T.PageName]), description: text(tags[T.ImageDescription]),
+    width: W, height: H, bits, float: isFloat, data, hasAlpha, name: text(tags[T.PageName]), description: text(tags[T.ImageDescription]),
     icc: tags[T.ICC] ? tags[T.ICC].slice() : null, photoshopLayers: !!tags[37724],
     x: Math.round((tags[T.XPosition]?.[0] ?? 0) * xres), y: Math.round((tags[T.YPosition]?.[0] ?? 0) * yres),
   };
 }
 
 // ---- writer ---------------------------------------------------------------------------------------
-// pages: [{ width, height, bits: 8 | 16, channels: 3 | 4, data (interleaved samples), name?, description?,
-// icc?, x?, y? }]. Returns the file bytes (little-endian).
+// pages: [{ width, height, bits: 8 | 16 | 32, channels: 3 | 4, data (interleaved samples; bits 32 takes a
+// Float32Array and writes IEEE floats, SampleFormat 3, no predictor), name?, description?, icc?, x?, y?,
+// photometric? }]. photometric 5 writes separated CMYK (channels 4, InkSet 1); otherwise RGB.
+// Returns the file bytes (little-endian).
 export async function writeTiff(pages, { software = 'Atelier' } = {}) {
   const enc = new TextEncoder();
   const prepared = [];
@@ -173,7 +180,9 @@ export async function writeTiff(pages, { software = 'Atelier' } = {}) {
       for (let y = 0; y < rows; y++) {   // horizontal predictor: each sample minus the same sample one pixel left
         const base = (y0 + y) * W * spp;
         for (let x = 0; x < W * spp; x++) {
-          const v = data[base + x]; const d = x >= spp ? (v - data[base + x - spp]) : v;
+          const v = data[base + x];
+          if (bits === 32) { dv.setFloat32((y * W * spp + x) * 4, v, true); continue; }
+          const d = x >= spp ? (v - data[base + x - spp]) : v;
           if (bits === 16) dv.setUint16((y * W * spp + x) * 2, d & 0xffff, true); else raw[y * W * spp + x] = d & 255;
         }
       }
@@ -189,15 +198,15 @@ export async function writeTiff(pages, { software = 'Atelier' } = {}) {
     const spp = p.channels;
     const entries = [
       [T.NewSubfileType, 4, [pages.length > 1 ? 2 : 0]], [T.ImageWidth, 4, [p.width]], [T.ImageLength, 4, [p.height]],
-      [T.BitsPerSample, 3, Array(spp).fill(p.bits)], [T.Compression, 3, [8]], [T.Photometric, 3, [2]],
+      [T.BitsPerSample, 3, Array(spp).fill(p.bits)], [T.Compression, 3, [8]], [T.Photometric, 3, [p.photometric === 5 ? 5 : 2]],
       ...(p.description ? [[T.ImageDescription, 2, enc.encode(`${p.description}\0`)]] : []),
       [T.StripOffsets, 4, strips.map(() => 0)], [T.SamplesPerPixel, 3, [spp]], [T.RowsPerStrip, 4, [rps]],
       [T.StripByteCounts, 4, strips.map((s) => s.length)], [T.XResolution, 5, [[72, 1]]], [T.YResolution, 5, [[72, 1]]],
       [T.PlanarConfig, 3, [1]], ...(p.name ? [[T.PageName, 2, enc.encode(`${p.name}\0`)]] : []),
       ...(p.x || p.y ? [[T.XPosition, 5, [[Math.max(0, p.x || 0), 72]]], [T.YPosition, 5, [[Math.max(0, p.y || 0), 72]]]] : []),
       [T.ResolutionUnit, 3, [2]], ...(pages.length > 1 ? [[T.PageNumber, 3, [idx, pages.length]]] : []),
-      [T.Software, 2, enc.encode(`${software}\0`)], [T.Predictor, 3, [2]],
-      ...(spp === 4 ? [[T.ExtraSamples, 3, [2]]] : []), [T.SampleFormat, 3, Array(spp).fill(1)],
+      [T.Software, 2, enc.encode(`${software}\0`)], [T.Predictor, 3, [p.bits === 32 ? 1 : 2]],
+      ...(spp === 4 && p.photometric !== 5 ? [[T.ExtraSamples, 3, [2]]] : []), ...(p.photometric === 5 ? [[332, 3, [1]]] : []), [T.SampleFormat, 3, Array(spp).fill(p.bits === 32 ? 3 : 1)],
       ...(p.icc ? [[T.ICC, 7, p.icc]] : []),
     ].sort((a, b) => a[0] - b[0]);
     const ifdSize = 2 + entries.length * 12 + 4;

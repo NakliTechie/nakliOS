@@ -9,7 +9,8 @@ import { needDoc, fail, change, layerRow } from './util.js';
 export function register(bus, ctx) {
   bus.register('query.capabilities', () => ({
     app: 'atelier', manifestVersion: bus.manifest.manifestVersion,
-    built: bus.built(),
+    // Person-only acts are listed in neither: a handler may exist (download_model's UI button) but no door calls it.
+    built: bus.built().filter((n) => !bus.manifest.tools.find((t) => t.name === n)?.personOnly),
     notBuilt: bus.manifest.tools.filter((t) => !t.personOnly && !bus.has(t.handler)).map((t) => t.name),
     host: ctx.host(),
     storage: ctx.storage() ? { kind: ctx.storage().kind, label: ctx.storage().label } : null,
@@ -96,8 +97,14 @@ export function register(bus, ctx) {
   });
 
   bus.register('view.set', async (a, { viewOnly }) => {
-    if (a.beforeAfter && a.beforeAfter !== 'off') fail('unsupported', 'before and after views are not drawn yet; render_preview with before:true shows the photo without develop', 'fix_argument', 'render_preview');
+    // before and after is drawn by the UI's compare viewer (src/ui/compare.js), which registers ctx.showBeforeAfter
+    if (a.beforeAfter && a.beforeAfter !== 'off' && !ctx.showBeforeAfter) fail('unsupported', 'before and after needs the app window; render_preview with before:true shows the photo without develop', 'fix_argument', 'render_preview');
+    if (a.beforeAfter && a.beforeAfter !== 'off') needDoc(ctx);
     viewOnly();
+    if (a.beforeAfter) {
+      const shown = await ctx.showBeforeAfter?.(a.beforeAfter);
+      a.beforeAfter = shown ?? 'off';
+    }
     if (a.fit) { delete a.fit; a.zoom = null; a.center = null; }
     ctx.view = { ...ctx.view, ...a };
     ctx.setView(ctx.view);
