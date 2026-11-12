@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="A searchable, role-driven visual guide to Lorewell.">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<title>Lorewell — Visual Guide</title>
+<style>
+:root {
+  --body:#e8d9b3; --panel:#f3e7c4; --ink:#2c3e3a; --brand:#99472f;
+  --row:#ddc89a; --muted:#6d5944; --line:#c9b582;
+  --shadow:0 20px 55px rgba(44,62,58,.13);
+}
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body {
+  margin:0; color:var(--ink); background:
+    linear-gradient(rgba(184,92,58,.045) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(184,92,58,.045) 1px,transparent 1px),
+    var(--body);
+  background-size:36px 36px;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Helvetica Neue",sans-serif;
+}
+a { color:inherit; }
+.hero {
+  min-height:68vh; display:grid; align-content:end; padding:clamp(28px,7vw,96px);
+  border-bottom:1px solid var(--line); position:relative; overflow:hidden;
+}
+.hero::after {
+  content:"L"; position:absolute; right:-.04em; top:-.28em;
+  font:900 min(70vw,720px)/1 Georgia,serif; color:rgba(184,92,58,.075);
+  pointer-events:none;
+}
+.hero-inner { position:relative; z-index:1; max-width:970px; }
+.kicker,.eyebrow {
+  color:var(--brand); font-size:11px; font-weight:750; letter-spacing:.13em;
+  text-transform:uppercase;
+}
+h1 { margin:.2em 0 .22em; max-width:900px; font:700 clamp(52px,8vw,112px)/.9 Georgia,serif; }
+.lede { max-width:760px; margin:0; color:var(--muted); font:400 clamp(17px,2vw,25px)/1.5 Georgia,serif; }
+.hero-meta { display:flex; gap:8px; flex-wrap:wrap; margin-top:28px; }
+.hero-meta span { padding:7px 10px; border:1px solid var(--line); border-radius:999px; background:rgba(243,231,196,.62); font-size:12px; }
+.search-wrap {
+  position:sticky; top:0; z-index:20; padding:12px clamp(18px,5vw,72px);
+  border-bottom:1px solid var(--line); background:rgba(243,231,196,.94);
+  backdrop-filter:blur(18px); display:flex; align-items:center; gap:12px;
+}
+.search-wrap label { flex:1; position:relative; }
+.search-wrap input {
+  width:100%; min-height:46px; padding:10px 44px 10px 15px;
+  border:1px solid var(--line); border-radius:9px; background:var(--body);
+  color:var(--ink); font:15px inherit; outline:none;
+}
+.search-wrap input:focus { border-color:var(--brand); box-shadow:0 0 0 3px rgba(184,92,58,.14); }
+.search-wrap kbd { position:absolute; right:12px; top:12px; border:1px solid var(--line); border-radius:4px; padding:2px 6px; color:var(--muted); background:var(--panel); }
+.app-link { white-space:nowrap; text-decoration:none; padding:11px 14px; border-radius:8px; background:var(--brand); color:var(--panel); font-weight:700; font-size:13px; }
+main { max-width:1540px; margin:0 auto; padding:clamp(28px,6vw,84px); }
+.toc { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:8px; margin-bottom:clamp(60px,9vw,120px); }
+.toc a { display:flex; justify-content:space-between; gap:12px; text-decoration:none; border:1px solid var(--line); border-radius:10px; padding:14px; background:var(--panel); }
+.toc a:hover { border-color:var(--brand); transform:translateY(-1px); }
+.toc span { font-weight:700; } .toc small { color:var(--muted); }
+.role-section { scroll-margin-top:90px; margin:0 0 clamp(80px,12vw,150px); }
+.role-heading { display:grid; grid-template-columns:52px minmax(0,700px); gap:18px; margin-bottom:28px; }
+.role-number { margin:4px 0 0; font:700 13px/1 ui-monospace,SFMono-Regular,monospace; color:var(--brand); }
+.role-heading h2 { margin:0; font:700 clamp(31px,4vw,54px)/1 Georgia,serif; }
+.role-heading p:not(.role-number) { margin:12px 0 0; color:var(--muted); font-size:16px; line-height:1.55; }
+.feature-grid { display:grid; grid-template-columns:repeat(12,1fr); gap:24px; }
+.feature-card { grid-column:span 6; min-width:0; background:var(--panel); border:1px solid var(--line); border-radius:15px; overflow:hidden; box-shadow:var(--shadow); }
+.feature-card:nth-child(3n+1) { grid-column:span 7; }
+.feature-card:nth-child(3n+2) { grid-column:span 5; }
+.shot-link { display:block; aspect-ratio:14/9; background:var(--row); overflow:hidden; }
+.shot-link img { display:block; width:100%; height:100%; object-fit:cover; object-position:top center; transition:transform .24s ease; }
+.feature-card:hover img { transform:scale(1.012); }
+.feature-copy { padding:20px 22px 24px; }
+.feature-copy .eyebrow { margin:0 0 8px; }
+.feature-copy h3 { margin:0 0 8px; font:700 24px/1.15 Georgia,serif; }
+.feature-copy p:last-child { margin:0; color:var(--muted); line-height:1.55; }
+.hidden { display:none !important; }
+.no-matches { display:none; margin:60px auto; max-width:520px; text-align:center; padding:34px; background:var(--panel); border:1px solid var(--line); border-radius:14px; }
+.no-matches.visible { display:block; }
+footer { border-top:1px solid var(--line); padding:26px clamp(28px,6vw,84px) 50px; color:var(--muted); font-size:12px; }
+@media (max-width:800px) {
+  .hero { min-height:56vh; } .search-wrap { align-items:stretch; } .app-link { display:none; }
+  .feature-card,.feature-card:nth-child(n) { grid-column:1/-1; }
+  .role-heading { grid-template-columns:36px minmax(0,1fr); }
+}
+@media (prefers-reduced-motion:reduce) { * { scroll-behavior:auto !important; transition:none !important; } }
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-inner">
+    <p class="kicker">Lorewell · visual product guide</p>
+    <h1>Your files. An active private library.</h1>
+    <p class="lede">The modern take is not “Calibre in a browser.” Lorewell helps
+    you read, understand, connect, and remember what is inside—without taking
+    ownership away from you.</p>
+    <div class="hero-meta"><span>5 usage contexts</span><span>21 feature screens</span><span>Standalone + NakliOS</span><span>Local-first AI</span></div>
+  </div>
+</header>
+<div class="search-wrap">
+  <label><span hidden>Search the guide</span><input id="guide-search" type="search" placeholder="Search roles, features, and captions…" autocomplete="off"><kbd>/</kbd></label>
+  <a class="app-link" href="../index.html">Open Lorewell →</a>
+</div>
+<main>
+  <nav class="toc" aria-label="Guide contents"><a href="#visitor"><span>Anonymous visitor</span><small>1 feature</small></a><a href="#first-run"><span>Brand-new reader</span><small>2 features</small></a><a href="#library-owner"><span>Library owner</span><small>9 features</small></a><a href="#active-reader"><span>Active reader</span><small>7 features</small></a><a href="#naklios-reader"><span>NakliOS reader</span><small>2 features</small></a></nav>
+  <div id="no-matches" class="no-matches"><h2>No matching screens</h2><p>Try “AI”, “notes”, “storage”, “Native”, or a reader context.</p></div>
+
+            <section class="role-section" id="visitor">
+              <div class="role-heading">
+                <p class="role-number">01</p>
+                <div><h2>Anonymous visitor</h2><p>Lorewell is useful before sign-in because there is no sign-in. The browser is the private boundary.</p></div>
+              </div>
+              <div class="feature-grid">
+                <article class="feature-card" id="private-start"
+                         data-search="anonymous visitor private from the first screen lorewell has no account gate: an anonymous visitor starts with a local, empty library and a clear statement of what stays on this device. private-start">
+                  <a class="shot-link" href="screenshots/visitor/01-private-start.png"
+                     aria-label="Open full-size screenshot: Private from the first screen">
+                    <img src="screenshots/visitor/01-private-start.png"
+                         alt="Private from the first screen in Lorewell"
+                         loading="lazy" width="1400" height="900">
+                  </a>
+                  <div class="feature-copy">
+                    <p class="eyebrow">Anonymous visitor</p>
+                    <h3>Private from the first screen</h3>
+                    <p>Lorewell has no account gate: an anonymous visitor starts with a local, empty library and a clear statement of what stays on this device.</p>
+                  </div>
+                </article>
+                </div>
+            </section>
+
+            <section class="role-section" id="first-run">
+              <div class="role-heading">
+                <p class="role-number">02</p>
+                <div><h2>Brand-new reader</h2><p>The first-run path explains both the fastest start and the more durable folder-backed library.</p></div>
+              </div>
+              <div class="feature-grid">
+                <article class="feature-card" id="add-your-library"
+                         data-search="brand-new reader add a book or an entire folder start with individual files, drag-and-drop, or grant a folder so lorewell can discover supported formats recursively. add-your-library">
+                  <a class="shot-link" href="screenshots/first-run/01-add-your-library.png"
+                     aria-label="Open full-size screenshot: Add a book or an entire folder">
+                    <img src="screenshots/first-run/01-add-your-library.png"
+                         alt="Add a book or an entire folder in Lorewell"
+                         loading="lazy" width="1400" height="900">
+                  </a>
+                  <div class="feature-copy">
+                    <p class="eyebrow">Brand-new reader</p>
+                    <h3>Add a book or an entire folder</h3>
+                    <p>Start with individual files, drag-and-drop, or grant a folder so Lorewell can discover supported formats recursively.</p>
+                  </div>
+                </article>
+
+                <article class="feature-card" id="choose-library-location"
+                         data-search="brand-new reader choose where the library lives browser storage, a durable folder sidecar, and naklios storage remain explicit, isolated libraries—switching never silently copies or deletes. choose-library-location">
+                  <a class="shot-link" href="screenshots/first-run/02-choose-library-location.png"
+                     aria-label="Open full-size screenshot: Choose where the library lives">
+                    <img src="screenshots/first-run/02-choose-library-location.png"
+                         alt="Choose where the library lives in Lorewell"
+                         loading="lazy" width="1400" height="900">
+                  </a>
+                  <div class="feature-copy">
+                    <p class="eyebrow">Brand-new reader</p>
+                    <h3>Choose where the library lives</h3>
+                    <p>Browser storage, a durable Folder sidecar, and NakliOS storage remain explicit, isolated libraries—switching never silently copies or deletes.</p>
+                  </div>
+                </article>
+                </div>
+            </section>
+
+            <section class="role-section" id="library-owner">
+              <div class="role-heading">
+                <p class="role-number">03</p>
+                <div><h2>Library owner</h2><p>Once populated, the collection becomes an active private knowledge space rather than a grid of inert files.</p></div>
+              </div>
+              <div class="feature-grid">
+                <article class="feature-card" id="library-home"
+                         data-search="library owner a work-centred library continue reading, one search, and add lead; saved views and library-wide maintenance stay one deliberate step away. library-home">
+                  <a class="shot-link" href="screenshots/library-owner/01-library-home.png"
+                     aria-label="Open full-size screenshot: A work-centred library">
+                    <img src="screenshots/library-owner/01-library-home.png"
+                         alt="A work-centred library in Lorewell"
+                         loading="lazy" width="1400" height="900">
+                  </a>
+                  <div class="feature-copy">
+                    <p class="eyebrow">Library owner</p>
+                    <h3>A work-centred library</h3>
+                    <p>Continue Reading, one search, and Add lead; saved views and library-wide maintenance stay one deliberate step away.</p>
+                  </div>
+                </article>
+
+                <article class="feature-card" id="views-and-filtering"
+                         data-search="library owner views that remember how you think combine reading state, shelves, tags, text filtering, and sort order, then save that view inside the active library. views-and-filtering">
+                  <a class="shot-link" href="screenshots/library-owner/02-views-and-filtering.png"
+                     aria-label="Open full-size screenshot: Views that remember how you think">
+                    <img src="screenshots/library-owner/02-views-and-filtering.png"
+                         alt="Views that remember how you think in Lorewell"
+                         loading="lazy" width="1400" height="900">
+                  </a>
+                  <div class="feature-copy">
+                    <p class="eyebrow">Library owner</p>
+                    <h3>Views that remember how you think</h3>
+                    <p>Combine reading state, shelves, tags, text filtering, and sort order, then save that view inside the active library.</p>
+                  </div>
+                </article>
+
+                <article class="feature-card" id="book-details"
+                         data-search="library owner metadata with provenance edit title, authors, isbn, tags, shelves, rating, formats, concepts, and processing state without modifying the original book. book-details">
+                  <a class="shot-link" href="screenshots/library-owner/03-book-details.png"
+                     aria-label="Open full-size screenshot: Metadata with provenance">
+                    <img src="screenshots/library-owner/03-book-details.png"
+                         alt="Metadata with provenance in Lorewell"
+                         loading="lazy" width="1400" height="900">
+                  </a>
+                  <div class="feature-copy">
+                    <p class="eyebrow">Library owner</p>
+                    <h3>Metadata with provenance</h3>
+                    <p>Edit title, authors, ISBN, tags, shelves, rating, formats, concepts, and processing state without modifying the original book.</p>
+                  </div>
+                </article>
+
+                <article class="feature-card" id="safety-and-portability"
+                         data-search="library owner inspectable, repairable storage validate canonical records, rebuild disposable indexes, export a portable library, inspect background work, and recover books from trash. safety-and-portability">
+                  <a class="shot-link" href="screenshots/library-owner/04-safety-and-portability.png"
+                     aria-label="Open full-size screenshot: Inspectable, repairable storage">
+                    <img src="screenshots/library-owner/04-safety-and-portability.png"
+                         alt="Inspectable, repairable storage in Lorewell"
+                         loading="lazy" width="1400" height="900">
+                  </a>
+                  <div class="feature-copy">
+                    <p class="eyebrow">Library owner</p>
+                    <h3>Inspectable, repairable storage</h3>
+                    <p>Validate canonical records, rebuild disposable indexes, export a portable library, inspect background work, and recover books from Trash.</p>
+                  </div>
+                </article>
+
+                <article class="feature-card" id="ask-the-library"
+                         data-search="library owner ask across your own sources lorewell retrieves passages locally first and requires the answer to cite the exact excerpts supplied to the chosen provider. ask-the-library">
+                  <a class="shot-link" href="screenshots/library-owner/05-ask-the-library.png"
+                     aria-label="Open full-size screenshot: Ask across your own sources">
+                    <img src="screenshots/library-owner/05-ask-the-library.png"
+                         alt="Ask across your own sources in Lorewell"
+                         loading="lazy" width="1400" height="900">
+                  </a>
+                  <div class="feature-copy">
+                    <p class="eyebrow">Library owner</p>
+                    <h3>Ask across your own sources</h3>
+                    <p>Lorewell retrieves passages locally first and requires the answer to cite the exact excerpts supplied to the chosen provider.</p>
+                  </div>
+                </article>
+
+                <article class="feature-card" id="ai-providers"
+                         data-search="library owner local ai, local endpoints, or byok use the built-in on-device model, ollama, lm studio, or an explicit remote endpoint with session-only keys and destination-specific consent. ai-providers">
+                  <a class="shot-link" href="screenshots/library-owner/06-ai-providers.png"
+                     aria-label="Open full-size screenshot: Local AI, local endpoints, or BYOK">
+                    <img src="screenshots/library-owner/06-ai-providers.png"
+                         alt="Local AI, local endpoints, or BYOK in Lorewell"
+                         loading="lazy" width="1400" height="900">
+                  </a>
+                  <div class="feature-copy">
+                    <p class="eyebrow">Library owner</p>
+                    <h3>Local AI, local endpoints, or BYOK</h3>
+                    <p>Use the built-in on-device model, Ollama, LM Studio, or an explicit remote endpoint with session-only keys and destination-specific consent.</p>
+                  </div>
+                </article>
+
+                <article class="feature-card" id="ideas-and-connections"
+                         data-search="library owner build ideas and connections quietly semantic indexing ingestion embeddings graph concepts scenes processing queue opt into local semantic indexing, inspect each queued book, and add richer provider-assisted concepts only when you choose; originals and authored metadata remain independent. ideas-and-connections">
+                  <a class="shot-link" href="screenshots/library-owner/07-ideas-and-connections.png"
+                     aria-label="Open full-size screenshot: Build ideas and connections quietly">
+                    <img src="screenshots/library-owner/07-ideas-and-connections.png"
+                         alt="Build ideas and connections quietly in Lorewell"
+                         loading="lazy" width="1400" height="900">
+                  </a>
+                  <div class="feature-copy">
+                    <p class="eyebrow">Library owner</p>
+                    <h3>Build ideas and connections quietly</h3>
+                    <p>Opt into local semantic indexing, inspect each queued book, and add richer provider-assisted concepts only when you choose; originals and authored metadata remain independent.</p>
+                  </div>
+                </article>
+
+                <article class="feature-card" id="connections-explorer"
+                         data-search="library owner follow an idea across the whole library semantic library graph themes explorer cross-book fiction nonfiction evidence ideas &amp; connections ranks recurring themes by the books and grounded links they touch, then lets you inspect the evidence trail or open either source without leaving the private library. connections-explorer">
+                  <a class="shot-link" href="screenshots/library-owner/08-connections-explorer.png"
+                     aria-label="Open full-size screenshot: Follow an idea across the whole library">
+                    <img src="screenshots/library-owner/08-connections-explorer.png"
+                         alt="Follow an idea across the whole library in Lorewell"
+                         loading="lazy" width="1400" height="900">
+                  </a>
+                  <div class="feature-copy">
+                    <p class="eyebrow">Library owner</p>
+                    <h3>Follow an idea across the whole library</h3>
+                    <p>Ideas &amp; connections ranks recurring themes by the books and grounded links they touch, then lets you inspect the evidence trail or open either source without leaving the private library.</p>
+                  </div>
+                </article>
+
+                <article class="feature-card" id="connections-review"
+                         data-search="library owner calibrate connections against the sources calibration review queue judgments quality confidence provenance evidence search checks a resumable, stratified review queue places both excerpts side by side with relation, confidence, spoiler risk, provenance, and durable judgments; thresholds remain advisory until a human approves rollout. connections-review">
+                  <a class="shot-link" href="screenshots/library-owner/09-connections-review.png"
+                     aria-label="Open full-size screenshot: Calibrate connections against the sources">
+                    <img src="screenshots/library-owner/09-connections-review.png"
+                         alt="Calibrate connections against the sources in Lorewell"
+                         loading="lazy" width="1400" height="900">
+                  </a>
+                  <div class="feature-copy">
+                    <p class="eyebrow">Library owner</p>
+                    <h3>Calibrate connections against the sources</h3>
+                    <p>A resumable, stratified review queue places both excerpts side by side with relation, confidence, spoiler risk, provenance, and durable judgments; thresholds remain advisory until a human approves rollout.</p>
+                  </div>
+                </article>
+                </div>
+            </section>
+
+            <section class="role-section" id="active-reader">
+              <div class="role-heading">
+                <p class="role-number">04</p>
+                <div><h2>Active reader</h2><p>The reading surfaces keep source fidelity, personal memory, reflow, and optional assistance in one continuous workspace.</p></div>
+              </div>
+              <div class="feature-grid">
+                <article class="feature-card" id="faithful-reader"
+                         data-search="active reader read the authored source faithfully the primary reader preserves the book’s own structure on a full canvas while keeping the library available from the top bar. faithful-reader">
+                  <a class="shot-link" href="screenshots/active-reader/01-faithful-reader.png"
+                     aria-label="Open full-size screenshot: Read the authored source faithfully">
+                    <img src="screenshots/active-reader/01-faithful-reader.png"
+                         alt="Read the authored source faithfully in Lorewell"
+                         loading="lazy" width="1400" height="900">
+                  </a>
+                  <div class="feature-copy">
+                    <p class="eyebrow">Active reader</p>
+                    <h3>Read the authored source faithfully</h3>
+                    <p>The primary reader preserves the book’s own structure on a full canvas while keeping the library available from the top bar.</p>
+                  </div>
+                </article>
+
+                <article class="feature-card" id="native-reader"
+                         data-search="active reader a lorewell native reflow echoes connections concepts scenes plots native mode reflows indexed passages into an accessible reading surface with stable references, source-grounded concepts, and optional cross-book echoes. native-reader">
+                  <a class="shot-link" href="screenshots/active-reader/02-native-reader.png"
+                     aria-label="Open full-size screenshot: A Lorewell native reflow">
+                    <img src="screenshots/active-reader/02-native-reader.png"
+                         alt="A Lorewell native reflow in Lorewell"
+                         loading="lazy" width="1400" height="900">
+                  </a>
+                  <div class="feature-copy">
+                    <p class="eyebrow">Active reader</p>
+                    <h3>A Lorewell native reflow</h3>
+                    <p>Native mode reflows indexed passages into an accessible reading surface with stable references and source-grounded concepts. A quiet optional Echo indicator can reveal grounded connections to another book, conceal spoilers, speak on request, open the exact related paragraph, and return you here.</p>
+                  </div>
+                </article>
+
+                <article class="feature-card" id="find-in-book"
+                         data-search="active reader one search gesture across formats find in book uses engine-aware anchors for epub, pdf, and reflowable text while retaining a common keyboard and result interface. find-in-book">
+                  <a class="shot-link" href="screenshots/active-reader/03-find-in-book.png"
+                     aria-label="Open full-size screenshot: One search gesture across formats">
+                    <img src="screenshots/active-reader/03-find-in-book.png"
+                         alt="One search gesture across formats in Lorewell"
+                         loading="lazy" width="1400" height="900">
+                  </a>
+                  <div class="feature-copy">
+                    <p class="eyebrow">Active reader</p>
+                    <h3>One search gesture across formats</h3>
+                    <p>Find in book uses engine-aware anchors for EPUB, PDF, and reflowable text while retaining a common keyboard and result interface.</p>
+                  </div>
+                </article>
+
+                <article class="feature-card" id="notes-and-bookmarks"
+                         data-search="active reader reading memory beside the page bookmarks, portable highlights, a table of contents, and per-book notes stay attached to the source and survive derived-index rebuilds. notes-and-bookmarks">
+                  <a class="shot-link" href="screenshots/active-reader/04-notes-and-bookmarks.png"
+                     aria-label="Open full-size screenshot: Reading memory beside the page">
+                    <img src="screenshots/active-reader/04-notes-and-bookmarks.png"
+                         alt="Reading memory beside the page in Lorewell"
+                         loading="lazy" width="1400" height="900">
+                  </a>
+                  <div class="feature-copy">
+                    <p class="eyebrow">Active reader</p>
+                    <h3>Reading memory beside the page</h3>
+                    <p>Bookmarks, portable highlights, a table of contents, and per-book notes stay attached to the source and survive derived-index rebuilds.</p>
+                  </div>
+                </article>
+
+                <article class="feature-card" id="reading-appearance"
+                         data-search="active reader typography tuned for sustained reading adjust typeface, size, rhythm, width, alignment, spacing, and colour profile without changing the book itself. reading-appearance">
+                  <a class="shot-link" href="screenshots/active-reader/05-reading-appearance.png"
+                     aria-label="Open full-size screenshot: Typography tuned for sustained reading">
+                    <img src="screenshots/active-reader/05-reading-appearance.png"
+                         alt="Typography tuned for sustained reading in Lorewell"
+                         loading="lazy" width="1400" height="900">
+                  </a>
+                  <div class="feature-copy">
+                    <p class="eyebrow">Active reader</p>
+                    <h3>Typography tuned for sustained reading</h3>
+                    <p>Adjust typeface, size, rhythm, width, alignment, spacing, and colour profile without changing the book itself.</p>
+                  </div>
+                </article>
+
+                <article class="feature-card" id="ai-reading-companion"
+                         data-search="active reader a private passage sidecar explain, summarize, extract key points, or ask a question about the current passage without turning ai into a blocking reader modal. ai-reading-companion">
+                  <a class="shot-link" href="screenshots/active-reader/06-ai-reading-companion.png"
+                     aria-label="Open full-size screenshot: A private passage sidecar">
+                    <img src="screenshots/active-reader/06-ai-reading-companion.png"
+                         alt="A private passage sidecar in Lorewell"
+                         loading="lazy" width="1400" height="900">
+                  </a>
+                  <div class="feature-copy">
+                    <p class="eyebrow">Active reader</p>
+                    <h3>A private passage sidecar</h3>
+                    <p>Explain, summarize, extract key points, or ask a question about the current passage without turning AI into a blocking reader modal.</p>
+                  </div>
+                </article>
+
+                <article class="feature-card" id="source-grounded-echo"
+                         data-search="active reader hear when another book answers echoes cross-book fiction nonfiction concepts plot snippets related passage a discreet paragraph indicator opens an evidence card with both source excerpts, relationship direction, spoiler controls, feedback, and an exact route into the related work. source-grounded-echo">
+                  <a class="shot-link" href="screenshots/active-reader/07-source-grounded-echo.png"
+                     aria-label="Open full-size screenshot: Hear when another book answers">
+                    <img src="screenshots/active-reader/07-source-grounded-echo.png"
+                         alt="Hear when another book answers in Lorewell"
+                         loading="lazy" width="1400" height="900">
+                  </a>
+                  <div class="feature-copy">
+                    <p class="eyebrow">Active reader</p>
+                    <h3>Hear when another book answers</h3>
+                    <p>A discreet paragraph indicator opens an evidence card with both source excerpts, relationship direction, spoiler controls, feedback, and an exact route into the related work.</p>
+                  </div>
+                </article>
+                </div>
+            </section>
+
+            <section class="role-section" id="naklios-reader">
+              <div class="role-heading">
+                <p class="role-number">05</p>
+                <div><h2>NakliOS reader</h2><p>Inside NakliOS, Lorewell adopts host capabilities without losing the standalone product or crossing storage boundaries.</p></div>
+              </div>
+              <div class="feature-grid">
+                <article class="feature-card" id="hosted-library"
+                         data-search="naklios reader the same app inside naklios lorewell keeps its standalone reading model when hosted, while storage, theme, and ai capabilities arrive through the naklios boundary. hosted-library">
+                  <a class="shot-link" href="screenshots/naklios-reader/01-hosted-library.png"
+                     aria-label="Open full-size screenshot: The same app inside NakliOS">
+                    <img src="screenshots/naklios-reader/01-hosted-library.png"
+                         alt="The same app inside NakliOS in Lorewell"
+                         loading="lazy" width="1400" height="900">
+                  </a>
+                  <div class="feature-copy">
+                    <p class="eyebrow">NakliOS reader</p>
+                    <h3>The same app inside NakliOS</h3>
+                    <p>Lorewell keeps its standalone reading model when hosted, while storage, theme, and AI capabilities arrive through the NakliOS boundary.</p>
+                  </div>
+                </article>
+
+                <article class="feature-card" id="isolated-storage"
+                         data-search="naklios reader folder and crate stay separate hosted readers can switch between connected backends after pending reading state is saved; neither library is merged implicitly. isolated-storage">
+                  <a class="shot-link" href="screenshots/naklios-reader/02-isolated-storage.png"
+                     aria-label="Open full-size screenshot: Folder and Crate stay separate">
+                    <img src="screenshots/naklios-reader/02-isolated-storage.png"
+                         alt="Folder and Crate stay separate in Lorewell"
+                         loading="lazy" width="1400" height="900">
+                  </a>
+                  <div class="feature-copy">
+                    <p class="eyebrow">NakliOS reader</p>
+                    <h3>Folder and Crate stay separate</h3>
+                    <p>Hosted readers can switch between connected backends after pending reading state is saved; neither library is merged implicitly.</p>
+                  </div>
+                </article>
+                </div>
+            </section>
+
+</main>
+<footer>Generated from <code>guide/capture.py</code> and <code>guide/build_index.py</code>. Screens show the production Lorewell surface with a fictional local library.</footer>
+<script>
+(() => {
+  const input = document.getElementById('guide-search');
+  const cards = [...document.querySelectorAll('.feature-card')];
+  const sections = [...document.querySelectorAll('.role-section')];
+  const noMatches = document.getElementById('no-matches');
+  function filter() {
+    const query = input.value.trim().toLowerCase();
+    let visible = 0;
+    for (const card of cards) {
+      const match = !query || card.dataset.search.includes(query);
+      card.classList.toggle('hidden', !match);
+      if (match) visible += 1;
+    }
+    for (const section of sections) {
+      section.classList.toggle('hidden', !section.querySelector('.feature-card:not(.hidden)'));
+    }
+    noMatches.classList.toggle('visible', visible === 0);
+  }
+  input.addEventListener('input', filter);
+  document.addEventListener('keydown', event => {
+    if (event.key === '/' && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) {
+      event.preventDefault(); input.focus(); input.select();
+    }
+    if (event.key === 'Escape') { input.value = ''; filter(); input.blur(); }
+  });
+})();
+</script>
+</body>
+</html>

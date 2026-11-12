@@ -1620,6 +1620,1054 @@
           "destination": "ai/rnnoise-LICENSE-Apache-2.0.txt"
         }
       ]
+    },
+    {
+      "id": "books",
+      "repo": "NakliTechie/Books",
+      "ref": "main",
+      "files": [
+        {
+          "source": "apple-touch-icon.png",
+          "destination": "apple-touch-icon.png"
+        },
+        {
+          "source": "echo-review.js",
+          "destination": "echo-review.js"
+        },
+        {
+          "source": "echoes.js",
+          "destination": "echoes.js"
+        },
+        {
+          "source": "embedding-binary.js",
+          "destination": "embedding-binary.js"
+        },
+        {
+          "source": "favicon.svg",
+          "destination": "favicon.svg"
+        },
+        {
+          "source": "folder-library.js",
+          "destination": "folder-library.js"
+        },
+        {
+          "source": "guide/index.html",
+          "destination": "guide/index.html"
+        },
+        {
+          "source": "guide/screenshots/active-reader/01-faithful-reader.png",
+          "destination": "guide/screenshots/active-reader/01-faithful-reader.png"
+        },
+        {
+          "source": "guide/screenshots/active-reader/02-native-reader.png",
+          "destination": "guide/screenshots/active-reader/02-native-reader.png"
+        },
+        {
+          "source": "guide/screenshots/active-reader/03-find-in-book.png",
+          "destination": "guide/screenshots/active-reader/03-find-in-book.png"
+        },
+        {
+          "source": "guide/screenshots/active-reader/04-notes-and-bookmarks.png",
+          "destination": "guide/screenshots/active-reader/04-notes-and-bookmarks.png"
+        },
+        {
+          "source": "guide/screenshots/active-reader/05-reading-appearance.png",
+          "destination": "guide/screenshots/active-reader/05-reading-appearance.png"
+        },
+        {
+          "source": "guide/screenshots/active-reader/06-ai-reading-companion.png",
+          "destination": "guide/screenshots/active-reader/06-ai-reading-companion.png"
+        },
+        {
+          "source": "guide/screenshots/active-reader/07-source-grounded-echo.png",
+          "destination": "guide/screenshots/active-reader/07-source-grounded-echo.png"
+        },
+        {
+          "source": "guide/screenshots/first-run/01-add-your-library.png",
+          "destination": "guide/screenshots/first-run/01-add-your-library.png"
+        },
+        {
+          "source": "guide/screenshots/first-run/02-choose-library-location.png",
+          "destination": "guide/screenshots/first-run/02-choose-library-location.png"
+        },
+        {
+          "source": "guide/screenshots/library-owner/01-library-home.png",
+          "destination": "guide/screenshots/library-owner/01-library-home.png"
+        },
+        {
+          "source": "guide/screenshots/library-owner/02-views-and-filtering.png",
+          "destination": "guide/screenshots/library-owner/02-views-and-filtering.png"
+        },
+        {
+          "source": "guide/screenshots/library-owner/03-book-details.png",
+          "destination": "guide/screenshots/library-owner/03-book-details.png"
+        },
+        {
+          "source": "guide/screenshots/library-owner/04-safety-and-portability.png",
+          "destination": "guide/screenshots/library-owner/04-safety-and-portability.png"
+        },
+        {
+          "source": "guide/screenshots/library-owner/05-ask-the-library.png",
+          "destination": "guide/screenshots/library-owner/05-ask-the-library.png"
+        },
+        {
+          "source": "guide/screenshots/library-owner/06-ai-providers.png",
+          "destination": "guide/screenshots/library-owner/06-ai-providers.png"
+        },
+        {
+          "source": "guide/screenshots/library-owner/07-ideas-and-connections.png",
+          "destination": "guide/screenshots/library-owner/07-ideas-and-connections.png"
+        },
+        {
+          "source": "guide/screenshots/library-owner/08-connections-explorer.png",
+          "destination": "guide/screenshots/library-owner/08-connections-explorer.png"
+        },
+        {
+          "source": "guide/screenshots/library-owner/09-connections-review.png",
+          "destination": "guide/screenshots/library-owner/09-connections-review.png"
+        },
+        {
+          "source": "guide/screenshots/naklios-reader/01-hosted-library.png",
+          "destination": "guide/screenshots/naklios-reader/01-hosted-library.png"
+        },
+        {
+          "source": "guide/screenshots/naklios-reader/02-isolated-storage.png",
+          "destination": "guide/screenshots/naklios-reader/02-isolated-storage.png"
+        },
+        {
+          "source": "guide/screenshots/visitor/01-private-start.png",
+          "destination": "guide/screenshots/visitor/01-private-start.png"
+        },
+        {
+          "source": "icon-192.png",
+          "destination": "icon-192.png"
+        },
+        {
+          "source": "icon-512.png",
+          "destination": "icon-512.png"
+        },
+        {
+          "source": "idea-graph.js",
+          "destination": "idea-graph.js"
+        },
+        {
+          "source": "index.html",
+          "destination": "index.html",
+          "managedSdk": "inline"
+        },
+        {
+          "source": "library-report.js",
+          "destination": "library-report.js"
+        },
+        {
+          "source": "local-ai-sidecar.js",
+          "destination": "local-ai-sidecar.js"
+        },
+        {
+          "source": "logo-lockup.svg",
+          "destination": "logo-lockup.svg"
+        },
+        {
+          "source": "logo-mark.svg",
+          "destination": "logo-mark.svg"
+        },
+        {
+          "source": "open-library-metadata.js",
+          "destination": "open-library-metadata.js"
+        },
+        {
+          "source": "semantic-ai.js",
+          "destination": "semantic-ai.js"
+        },
+        {
+          "source": "semantic-embedding-sidecar.js",
+          "destination": "semantic-embedding-sidecar.js"
+        },
+        {
+          "source": "semantic-library.js",
+          "destination": "semantic-library.js"
+        },
+        {
+          "source": "semantic-processing.js",
+          "destination": "semantic-processing.js"
+        },
+        {
+          "source": "site.webmanifest",
+          "destination": "site.webmanifest"
+        },
+        {
+          "source": "tex-source.js",
+          "destination": "tex-source.js"
+        },
+        {
+          "source": "vendor/foliate-js@1.0.1/.github/FUNDING.yml",
+          "destination": "vendor/foliate-js-1.0.1/.github/FUNDING.yml"
+        },
+        {
+          "source": "vendor/foliate-js@1.0.1/LICENSE",
+          "destination": "vendor/foliate-js-1.0.1/LICENSE"
+        },
+        {
+          "source": "vendor/foliate-js@1.0.1/README.md",
+          "destination": "vendor/foliate-js-1.0.1/README.md"
+        },
+        {
+          "source": "vendor/foliate-js@1.0.1/comic-book.js",
+          "destination": "vendor/foliate-js-1.0.1/comic-book.js"
+        },
+        {
+          "source": "vendor/foliate-js@1.0.1/dict.js",
+          "destination": "vendor/foliate-js-1.0.1/dict.js"
+        },
+        {
+          "source": "vendor/foliate-js@1.0.1/epub.js",
+          "destination": "vendor/foliate-js-1.0.1/epub.js"
+        },
+        {
+          "source": "vendor/foliate-js@1.0.1/epubcfi.js",
+          "destination": "vendor/foliate-js-1.0.1/epubcfi.js"
+        },
+        {
+          "source": "vendor/foliate-js@1.0.1/fb2.js",
+          "destination": "vendor/foliate-js-1.0.1/fb2.js"
+        },
+        {
+          "source": "vendor/foliate-js@1.0.1/fixed-layout.js",
+          "destination": "vendor/foliate-js-1.0.1/fixed-layout.js"
+        },
+        {
+          "source": "vendor/foliate-js@1.0.1/footnotes.js",
+          "destination": "vendor/foliate-js-1.0.1/footnotes.js"
+        },
+        {
+          "source": "vendor/foliate-js@1.0.1/mobi.js",
+          "destination": "vendor/foliate-js-1.0.1/mobi.js"
+        },
+        {
+          "source": "vendor/foliate-js@1.0.1/opds.js",
+          "destination": "vendor/foliate-js-1.0.1/opds.js"
+        },
+        {
+          "source": "vendor/foliate-js@1.0.1/overlayer.js",
+          "destination": "vendor/foliate-js-1.0.1/overlayer.js"
+        },
+        {
+          "source": "vendor/foliate-js@1.0.1/package.json",
+          "destination": "vendor/foliate-js-1.0.1/package.json"
+        },
+        {
+          "source": "vendor/foliate-js@1.0.1/paginator.js",
+          "destination": "vendor/foliate-js-1.0.1/paginator.js"
+        },
+        {
+          "source": "vendor/foliate-js@1.0.1/progress.js",
+          "destination": "vendor/foliate-js-1.0.1/progress.js"
+        },
+        {
+          "source": "vendor/foliate-js@1.0.1/quote-image.js",
+          "destination": "vendor/foliate-js-1.0.1/quote-image.js"
+        },
+        {
+          "source": "vendor/foliate-js@1.0.1/reader.html",
+          "destination": "vendor/foliate-js-1.0.1/reader.html"
+        },
+        {
+          "source": "vendor/foliate-js@1.0.1/reader.js",
+          "destination": "vendor/foliate-js-1.0.1/reader.js"
+        },
+        {
+          "source": "vendor/foliate-js@1.0.1/search.js",
+          "destination": "vendor/foliate-js-1.0.1/search.js"
+        },
+        {
+          "source": "vendor/foliate-js@1.0.1/text-walker.js",
+          "destination": "vendor/foliate-js-1.0.1/text-walker.js"
+        },
+        {
+          "source": "vendor/foliate-js@1.0.1/tts.js",
+          "destination": "vendor/foliate-js-1.0.1/tts.js"
+        },
+        {
+          "source": "vendor/foliate-js@1.0.1/ui/menu.js",
+          "destination": "vendor/foliate-js-1.0.1/ui/menu.js"
+        },
+        {
+          "source": "vendor/foliate-js@1.0.1/ui/tree.js",
+          "destination": "vendor/foliate-js-1.0.1/ui/tree.js"
+        },
+        {
+          "source": "vendor/foliate-js@1.0.1/uri-template.js",
+          "destination": "vendor/foliate-js-1.0.1/uri-template.js"
+        },
+        {
+          "source": "vendor/foliate-js@1.0.1/vendor/fflate.js",
+          "destination": "vendor/foliate-js-1.0.1/vendor/fflate.js"
+        },
+        {
+          "source": "vendor/foliate-js@1.0.1/vendor/zip.js",
+          "destination": "vendor/foliate-js-1.0.1/vendor/zip.js"
+        },
+        {
+          "source": "vendor/foliate-js@1.0.1/view.js",
+          "destination": "vendor/foliate-js-1.0.1/view.js"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/LICENSE",
+          "destination": "vendor/pdfjs-dist-5.7.284/LICENSE"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/README.md",
+          "destination": "vendor/pdfjs-dist-5.7.284/README.md"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/build/pdf.min.mjs",
+          "destination": "vendor/pdfjs-dist-5.7.284/build/pdf.min.mjs"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/build/pdf.worker.min.mjs",
+          "destination": "vendor/pdfjs-dist-5.7.284/build/pdf.worker.min.mjs"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/78-EUC-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/78-EUC-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/78-EUC-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/78-EUC-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/78-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/78-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/78-RKSJ-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/78-RKSJ-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/78-RKSJ-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/78-RKSJ-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/78-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/78-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/78ms-RKSJ-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/78ms-RKSJ-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/78ms-RKSJ-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/78ms-RKSJ-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/83pv-RKSJ-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/83pv-RKSJ-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/90ms-RKSJ-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/90ms-RKSJ-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/90ms-RKSJ-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/90ms-RKSJ-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/90msp-RKSJ-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/90msp-RKSJ-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/90msp-RKSJ-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/90msp-RKSJ-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/90pv-RKSJ-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/90pv-RKSJ-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/90pv-RKSJ-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/90pv-RKSJ-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Add-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Add-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Add-RKSJ-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Add-RKSJ-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Add-RKSJ-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Add-RKSJ-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Add-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Add-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Adobe-CNS1-0.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Adobe-CNS1-0.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Adobe-CNS1-1.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Adobe-CNS1-1.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Adobe-CNS1-2.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Adobe-CNS1-2.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Adobe-CNS1-3.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Adobe-CNS1-3.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Adobe-CNS1-4.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Adobe-CNS1-4.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Adobe-CNS1-5.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Adobe-CNS1-5.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Adobe-CNS1-6.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Adobe-CNS1-6.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Adobe-CNS1-UCS2.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Adobe-CNS1-UCS2.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Adobe-GB1-0.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Adobe-GB1-0.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Adobe-GB1-1.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Adobe-GB1-1.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Adobe-GB1-2.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Adobe-GB1-2.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Adobe-GB1-3.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Adobe-GB1-3.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Adobe-GB1-4.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Adobe-GB1-4.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Adobe-GB1-5.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Adobe-GB1-5.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Adobe-GB1-UCS2.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Adobe-GB1-UCS2.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Adobe-Japan1-0.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Adobe-Japan1-0.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Adobe-Japan1-1.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Adobe-Japan1-1.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Adobe-Japan1-2.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Adobe-Japan1-2.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Adobe-Japan1-3.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Adobe-Japan1-3.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Adobe-Japan1-4.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Adobe-Japan1-4.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Adobe-Japan1-5.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Adobe-Japan1-5.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Adobe-Japan1-6.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Adobe-Japan1-6.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Adobe-Japan1-UCS2.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Adobe-Japan1-UCS2.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Adobe-Korea1-0.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Adobe-Korea1-0.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Adobe-Korea1-1.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Adobe-Korea1-1.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Adobe-Korea1-2.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Adobe-Korea1-2.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Adobe-Korea1-UCS2.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Adobe-Korea1-UCS2.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/B5-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/B5-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/B5-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/B5-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/B5pc-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/B5pc-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/B5pc-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/B5pc-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/CNS-EUC-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/CNS-EUC-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/CNS-EUC-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/CNS-EUC-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/CNS1-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/CNS1-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/CNS1-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/CNS1-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/CNS2-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/CNS2-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/CNS2-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/CNS2-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/ETHK-B5-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/ETHK-B5-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/ETHK-B5-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/ETHK-B5-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/ETen-B5-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/ETen-B5-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/ETen-B5-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/ETen-B5-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/ETenms-B5-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/ETenms-B5-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/ETenms-B5-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/ETenms-B5-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/EUC-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/EUC-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/EUC-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/EUC-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Ext-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Ext-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Ext-RKSJ-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Ext-RKSJ-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Ext-RKSJ-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Ext-RKSJ-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Ext-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Ext-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/GB-EUC-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/GB-EUC-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/GB-EUC-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/GB-EUC-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/GB-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/GB-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/GB-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/GB-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/GBK-EUC-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/GBK-EUC-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/GBK-EUC-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/GBK-EUC-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/GBK2K-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/GBK2K-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/GBK2K-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/GBK2K-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/GBKp-EUC-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/GBKp-EUC-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/GBKp-EUC-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/GBKp-EUC-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/GBT-EUC-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/GBT-EUC-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/GBT-EUC-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/GBT-EUC-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/GBT-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/GBT-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/GBT-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/GBT-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/GBTpc-EUC-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/GBTpc-EUC-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/GBTpc-EUC-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/GBTpc-EUC-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/GBpc-EUC-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/GBpc-EUC-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/GBpc-EUC-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/GBpc-EUC-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/HKdla-B5-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/HKdla-B5-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/HKdla-B5-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/HKdla-B5-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/HKdlb-B5-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/HKdlb-B5-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/HKdlb-B5-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/HKdlb-B5-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/HKgccs-B5-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/HKgccs-B5-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/HKgccs-B5-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/HKgccs-B5-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/HKm314-B5-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/HKm314-B5-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/HKm314-B5-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/HKm314-B5-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/HKm471-B5-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/HKm471-B5-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/HKm471-B5-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/HKm471-B5-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/HKscs-B5-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/HKscs-B5-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/HKscs-B5-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/HKscs-B5-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Hankaku.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Hankaku.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Hiragana.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Hiragana.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/KSC-EUC-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/KSC-EUC-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/KSC-EUC-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/KSC-EUC-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/KSC-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/KSC-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/KSC-Johab-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/KSC-Johab-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/KSC-Johab-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/KSC-Johab-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/KSC-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/KSC-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/KSCms-UHC-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/KSCms-UHC-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/KSCms-UHC-HW-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/KSCms-UHC-HW-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/KSCms-UHC-HW-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/KSCms-UHC-HW-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/KSCms-UHC-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/KSCms-UHC-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/KSCpc-EUC-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/KSCpc-EUC-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/KSCpc-EUC-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/KSCpc-EUC-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Katakana.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Katakana.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/LICENSE",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/LICENSE"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/NWP-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/NWP-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/NWP-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/NWP-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/RKSJ-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/RKSJ-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/RKSJ-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/RKSJ-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/Roman.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/Roman.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniCNS-UCS2-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniCNS-UCS2-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniCNS-UCS2-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniCNS-UCS2-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniCNS-UTF16-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniCNS-UTF16-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniCNS-UTF16-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniCNS-UTF16-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniCNS-UTF32-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniCNS-UTF32-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniCNS-UTF32-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniCNS-UTF32-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniCNS-UTF8-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniCNS-UTF8-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniCNS-UTF8-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniCNS-UTF8-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniGB-UCS2-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniGB-UCS2-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniGB-UCS2-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniGB-UCS2-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniGB-UTF16-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniGB-UTF16-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniGB-UTF16-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniGB-UTF16-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniGB-UTF32-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniGB-UTF32-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniGB-UTF32-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniGB-UTF32-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniGB-UTF8-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniGB-UTF8-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniGB-UTF8-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniGB-UTF8-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniJIS-UCS2-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniJIS-UCS2-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniJIS-UCS2-HW-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniJIS-UCS2-HW-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniJIS-UCS2-HW-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniJIS-UCS2-HW-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniJIS-UCS2-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniJIS-UCS2-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniJIS-UTF16-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniJIS-UTF16-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniJIS-UTF16-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniJIS-UTF16-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniJIS-UTF32-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniJIS-UTF32-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniJIS-UTF32-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniJIS-UTF32-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniJIS-UTF8-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniJIS-UTF8-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniJIS-UTF8-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniJIS-UTF8-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniJIS2004-UTF16-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniJIS2004-UTF16-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniJIS2004-UTF16-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniJIS2004-UTF16-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniJIS2004-UTF32-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniJIS2004-UTF32-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniJIS2004-UTF32-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniJIS2004-UTF32-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniJIS2004-UTF8-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniJIS2004-UTF8-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniJIS2004-UTF8-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniJIS2004-UTF8-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniJISPro-UCS2-HW-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniJISPro-UCS2-HW-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniJISPro-UCS2-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniJISPro-UCS2-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniJISPro-UTF8-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniJISPro-UTF8-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniJISX0213-UTF32-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniJISX0213-UTF32-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniJISX0213-UTF32-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniJISX0213-UTF32-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniJISX02132004-UTF32-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniJISX02132004-UTF32-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniJISX02132004-UTF32-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniJISX02132004-UTF32-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniKS-UCS2-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniKS-UCS2-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniKS-UCS2-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniKS-UCS2-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniKS-UTF16-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniKS-UTF16-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniKS-UTF16-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniKS-UTF16-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniKS-UTF32-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniKS-UTF32-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniKS-UTF32-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniKS-UTF32-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniKS-UTF8-H.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniKS-UTF8-H.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/UniKS-UTF8-V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/UniKS-UTF8-V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/V.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/V.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/cmaps/WP-Symbol.bcmap",
+          "destination": "vendor/pdfjs-dist-5.7.284/cmaps/WP-Symbol.bcmap"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/standard_fonts/FoxitDingbats.pfb",
+          "destination": "vendor/pdfjs-dist-5.7.284/standard_fonts/FoxitDingbats.pfb"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/standard_fonts/FoxitFixed.pfb",
+          "destination": "vendor/pdfjs-dist-5.7.284/standard_fonts/FoxitFixed.pfb"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/standard_fonts/FoxitFixedBold.pfb",
+          "destination": "vendor/pdfjs-dist-5.7.284/standard_fonts/FoxitFixedBold.pfb"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/standard_fonts/FoxitFixedBoldItalic.pfb",
+          "destination": "vendor/pdfjs-dist-5.7.284/standard_fonts/FoxitFixedBoldItalic.pfb"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/standard_fonts/FoxitFixedItalic.pfb",
+          "destination": "vendor/pdfjs-dist-5.7.284/standard_fonts/FoxitFixedItalic.pfb"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/standard_fonts/FoxitSerif.pfb",
+          "destination": "vendor/pdfjs-dist-5.7.284/standard_fonts/FoxitSerif.pfb"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/standard_fonts/FoxitSerifBold.pfb",
+          "destination": "vendor/pdfjs-dist-5.7.284/standard_fonts/FoxitSerifBold.pfb"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/standard_fonts/FoxitSerifBoldItalic.pfb",
+          "destination": "vendor/pdfjs-dist-5.7.284/standard_fonts/FoxitSerifBoldItalic.pfb"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/standard_fonts/FoxitSerifItalic.pfb",
+          "destination": "vendor/pdfjs-dist-5.7.284/standard_fonts/FoxitSerifItalic.pfb"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/standard_fonts/FoxitSymbol.pfb",
+          "destination": "vendor/pdfjs-dist-5.7.284/standard_fonts/FoxitSymbol.pfb"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/standard_fonts/LICENSE_FOXIT",
+          "destination": "vendor/pdfjs-dist-5.7.284/standard_fonts/LICENSE_FOXIT"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/standard_fonts/LICENSE_LIBERATION",
+          "destination": "vendor/pdfjs-dist-5.7.284/standard_fonts/LICENSE_LIBERATION"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/standard_fonts/LiberationSans-Bold.ttf",
+          "destination": "vendor/pdfjs-dist-5.7.284/standard_fonts/LiberationSans-Bold.ttf"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/standard_fonts/LiberationSans-BoldItalic.ttf",
+          "destination": "vendor/pdfjs-dist-5.7.284/standard_fonts/LiberationSans-BoldItalic.ttf"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/standard_fonts/LiberationSans-Italic.ttf",
+          "destination": "vendor/pdfjs-dist-5.7.284/standard_fonts/LiberationSans-Italic.ttf"
+        },
+        {
+          "source": "vendor/pdfjs-dist@5.7.284/standard_fonts/LiberationSans-Regular.ttf",
+          "destination": "vendor/pdfjs-dist-5.7.284/standard_fonts/LiberationSans-Regular.ttf"
+        }
+      ]
     }
   ]
 }
