@@ -8314,7 +8314,7 @@ async function webService(appId){
 
 // ── TeX service (naklios.experimental_tex) ────────────────────────────────────────
 // sys/tex/service.mjs holds the queue. This wires it to the host's storage, consent and History. The first compile
-// asks once, because the TeX Live packs are about 680 MB; the /tex/ route sends the browser to Hugging Face for them.
+// asks once, because the TeX Live pack is about 390 MB; the /tex/ route sends the browser to Hugging Face for them.
 const TEX_ENGINE_INFO = Object.freeze({ texLive:'2026', license:'AGPL-3.0-or-later', source:'https://github.com/NakliTechie/naklios-tex', downloadBytes:681700000 });
 let texHostPromise = null;
 function texHost(){
@@ -8379,7 +8379,7 @@ async function texCache(){
   return { version:module.TEX_VERSION, packs:module.TEX_PACKS.map((name, index) => ({ name, cached:cached[index] === true })) };
 }
 async function texClearCache(){
-  const ok = await nakliosConfirm('Delete the TeX Live packs from this browser? Every app that compiles LaTeX needs them, and the next compile downloads about 680 MB again.',
+  const ok = await nakliosConfirm('Delete the TeX Live pack from this browser? Every app that compiles LaTeX needs it, and the next compile downloads about 390 MB again.',
     { title:'Delete TeX Live?', okLabel:'Delete', cancelLabel:'Keep' });
   if (!ok) return false;
   // Consent goes first, so a compile waiting on the clear asks again before it downloads.
