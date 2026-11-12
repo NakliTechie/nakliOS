@@ -1,0 +1,18 @@
+{
+  "repo": "NakliTechie/tessella",
+  "commit": "48339cf70543ad1d2d1384bb914f1767211c9325",
+  "files": {
+    "LICENSE": "2a207501f6a7346fd6d37bbd2394079ac2034c73354fe3ce17e7636826276591",
+    "src/gpu.js": "f7acaef2b25f2189d17e133f597d25b72e99345440894d7d4cf2077a0361dfc2",
+    "src/raw.js": "5d67baa0181fd319501219509aeba052a89000c1cbab1d56265aad0ec81805f2",
+    "src/shaders.js": "41590bb1586831bf2d6547a4baa5117be538bfe13f81dbfbbca8ed794c4e219c",
+    "src/model.js": "3751b1fe20b84865ace591a5a831d509f27dddfc53989a8325e2e4d6fe985ad9",
+    "src/lut.js": "0a4d8bfc15269e98462ce05afe1ea35720375dc25d6a11a90b67b70bf1980b3f",
+    "src/engine.js": "63063ee1f5b2029263c24f7a3360db90cfdeeb31cf4eec7e40a80113eb59d69c",
+    "vendor/libraw-wasm/index.js": "3eb710aa5473c58c3b9dec74457b2ad2095d15b9a6df0056c96a3a011b720ca6",
+    "vendor/libraw-wasm/worker.js": "af074781439ddf9c47fcbd3b3f115049ab884fdf61ec49ab358f28a8c42a4d4c",
+    "vendor/libraw-wasm/libraw.js": "e23952fca5b268550af1f84619af5c0c035e5db3bde0e4d5a20300f1614a9487",
+    "vendor/libraw-wasm/libraw.wasm": "8947f7e668e488461c3e9defe7007583aa8477b4886aa603b36b407f2f0846ff",
+    "vendor/libraw-wasm/NOTICE.md": "e8cb4e7cd4dc4e7f866821aca70d8ad50b54bd0d99d66c79845d23b38b2a9db6"
+  }
+}

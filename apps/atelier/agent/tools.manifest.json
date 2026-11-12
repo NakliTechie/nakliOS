@@ -1,0 +1,2549 @@
+{
+  "app": "atelier",
+  "manifestVersion": "0.1.0",
+  "status": "draft (spec 002 \u00a76); no command bus exists yet",
+  "doors": [
+    "navigator.modelContext",
+    "window.atelier.tools",
+    "broadcast-channel (opt-in)"
+  ],
+  "statuses": [
+    "ok",
+    "stale",
+    "invalid",
+    "unsupported",
+    "staged",
+    "person_only",
+    "busy",
+    "outcome_unknown"
+  ],
+  "tools": [
+    {
+      "name": "get_capabilities",
+      "description": "List engine and browser capabilities: WebGPU adapter, float formats, decoders loaded, manifest version, which doors are open.",
+      "handler": "query.capabilities",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get_state",
+      "description": "One bounded read of the whole situation: document, revision, layer tree summary, active layer, selection bounds, non-default develop settings, undo depth, staged actions. Never returns pixels.",
+      "handler": "query.state",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list_layers",
+      "description": "Page through the layer tree below a group, 100 rows per page.",
+      "handler": "query.layers",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "groupId": {
+            "type": "string"
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get_develop",
+      "description": "Return every develop setting of a RAW layer, defaults included, in displayed units.",
+      "handler": "query.develop",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          }
+        },
+        "required": [
+          "layerId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "render_preview",
+      "description": "Render the composite or one layer and return a JPEG (max edge 2048 px), or a 1:1 region capped at 1024 x 1024.",
+      "handler": "query.render",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          },
+          "region": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "integer"
+              },
+              "y": {
+                "type": "integer"
+              },
+              "w": {
+                "type": "integer",
+                "maximum": 1024
+              },
+              "h": {
+                "type": "integer",
+                "maximum": 1024
+              }
+            }
+          },
+          "maxEdge": {
+            "type": "integer",
+            "minimum": 64,
+            "maximum": 2048
+          },
+          "before": {
+            "type": "boolean"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get_histogram",
+      "description": "Return a 256-bin histogram per channel of the composite or one layer, with clipped-pixel counts.",
+      "handler": "query.histogram",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "sample_color",
+      "description": "Return the colour at a point or the mean of a box, in linear Rec.2020, sRGB and Lab.",
+      "handler": "query.sample",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "integer"
+          },
+          "y": {
+            "type": "integer"
+          },
+          "radius": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 50
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get_history",
+      "description": "Page through the edit list: each entry's command, door, arguments and resulting revision, 50 per page.",
+      "handler": "query.history",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get_staged",
+      "description": "List staged actions waiting for the person's confirmation.",
+      "handler": "query.staged",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "get_job",
+      "description": "Return the state of a render or export job.",
+      "handler": "query.job",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "jobId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "jobId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list_folder",
+      "description": "List the photos in the granted workspace folder with ratings, flags, labels and whether a sidecar exists.",
+      "handler": "query.folder",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "filter": {
+            "type": "object",
+            "properties": {
+              "minRating": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 5
+              },
+              "flag": {
+                "type": "string",
+                "enum": [
+                  "pick",
+                  "reject",
+                  "none"
+                ]
+              },
+              "label": {
+                "type": "string"
+              }
+            }
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "list_presets",
+      "description": "List develop presets and LUTs in the workspace folder.",
+      "handler": "query.presets",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "grant_folder",
+      "description": "Ask the person to pick a workspace folder. The browser requires a user gesture, so an agent cannot call it.",
+      "handler": "workspace.grant",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "personOnly": true,
+      "personOnlyReason": "File System Access needs a user gesture and the grant is the person's authorisation.",
+      "revisionExempt": "Person-only workspace grant; not a document edit.",
+      "agentVisible": "listed so the agent knows the act exists; a call returns status person_only and names the UI control"
+    },
+    {
+      "name": "open_photo",
+      "description": "Open a photo from the workspace (RAW, JPEG, PNG, WebP, layered TIFF, PSD, or a saved .atelier document) as a new document, or as a layer (a group for PSD and TIFF) in the current one.",
+      "handler": "file.open",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "asLayer": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "additionalProperties": false
+      },
+      "revisionExempt": "Creates a new document or appends a layer; nothing it could overwrite is stale. When asLayer is true the layer joins at the top and the new revision is returned."
+    },
+    {
+      "name": "new_document",
+      "description": "Create an empty document.",
+      "handler": "doc.new",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "width": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "background": {
+            "type": "string",
+            "enum": [
+              "white",
+              "black",
+              "transparent"
+            ]
+          }
+        },
+        "required": [
+          "width",
+          "height"
+        ],
+        "additionalProperties": false
+      },
+      "revisionExempt": "Creates a new document; there is no prior revision."
+    },
+    {
+      "name": "save_document",
+      "description": "Save the document as .atelier, or a RAW photo's develop sidecar, in the workspace folder. Writes by temp file plus rename; never touches originals.",
+      "handler": "file.save",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision"
+        ],
+        "additionalProperties": false
+      },
+      "writesWorkspace": "Writes files in the workspace at once (temp file, then rename). Not on the undo stack: undo changes the document, not files already written. Replacing a preset that exists waits for the person."
+    },
+    {
+      "name": "export_image",
+      "description": "Export the composite (or each layer with layers: true) as jpeg, png, webp, avif, tiff16, tiff-layered or psd. Display P3 works for png, jpeg, webp and tiff16; rec2020 for tiff16 only; psd and tiff-layered are sRGB at full size. Staged: the person confirms before the file is written.",
+      "handler": "file.export",
+      "effect": "irreversible",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "jpeg",
+              "png",
+              "webp",
+              "avif",
+              "tiff16",
+              "tiff-layered",
+              "psd"
+            ]
+          },
+          "quality": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "maxEdge": {
+            "type": "integer",
+            "minimum": 16
+          },
+          "colorSpace": {
+            "type": "string",
+            "enum": [
+              "srgb",
+              "display-p3",
+              "rec2020"
+            ]
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "layers": {
+            "type": "boolean",
+            "description": "Write each visible top-level layer (a group as its composite) to its own file at canvas size; path names the folder; files are <folder>/<nn>-<layer name>.<ext>. Not with psd or tiff-layered."
+          }
+        },
+        "required": [
+          "revision",
+          "path",
+          "format"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "confirm_staged",
+      "description": "Confirm a staged action. Only the person can confirm.",
+      "handler": "staged.confirm",
+      "effect": "irreversible",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "stagedId": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "stagedId"
+        ],
+        "additionalProperties": false
+      },
+      "personOnly": true,
+      "personOnlyReason": "Confirming a staged write is the person's decision by design.",
+      "agentVisible": "listed so the agent knows the act exists; a call returns status person_only and names the UI control"
+    },
+    {
+      "name": "overwrite_file",
+      "description": "Allow an export to replace an existing file.",
+      "handler": "file.overwrite",
+      "effect": "irreversible",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "path"
+        ],
+        "additionalProperties": false
+      },
+      "personOnly": true,
+      "personOnlyReason": "Replacing a file on disk is irreversible.",
+      "agentVisible": "listed so the agent knows the act exists; a call returns status person_only and names the UI control"
+    },
+    {
+      "name": "set_rating",
+      "description": "Set rating, flag or colour label on photos in the folder; stored in sidecars.",
+      "handler": "cull.set",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Folder revision from list_folder; a sidecar changed since then returns 'stale'."
+          },
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          },
+          "rating": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5
+          },
+          "flag": {
+            "type": "string",
+            "enum": [
+              "pick",
+              "reject",
+              "none"
+            ]
+          },
+          "label": {
+            "type": "string",
+            "enum": [
+              "red",
+              "yellow",
+              "green",
+              "blue",
+              "purple",
+              "none"
+            ]
+          }
+        },
+        "required": [
+          "revision",
+          "paths"
+        ],
+        "additionalProperties": false
+      },
+      "writesWorkspace": "Writes files in the workspace at once (temp file, then rename). Not on the undo stack: undo changes the document, not files already written. Replacing a preset that exists waits for the person."
+    },
+    {
+      "name": "set_develop",
+      "description": "Set one or more develop parameters on a RAW layer, in displayed units (EV, kelvin, -100..100).",
+      "handler": "develop.set",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          },
+          "params": {
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": false,
+            "properties": {
+              "temperature": {
+                "type": "number",
+                "minimum": 2000,
+                "maximum": 50000
+              },
+              "tint": {
+                "type": "number",
+                "minimum": -150,
+                "maximum": 150
+              },
+              "exposure": {
+                "type": "number",
+                "minimum": -5,
+                "maximum": 5
+              },
+              "contrast": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100
+              },
+              "highlights": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100
+              },
+              "shadows": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100
+              },
+              "whites": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100
+              },
+              "blacks": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100
+              },
+              "texture": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100
+              },
+              "clarity": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100
+              },
+              "dehaze": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100
+              },
+              "vibrance": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100
+              },
+              "saturation": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100
+              },
+              "sharpen_amount": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 150
+              },
+              "sharpen_radius": {
+                "type": "number",
+                "minimum": 0.5,
+                "maximum": 3
+              },
+              "sharpen_detail": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "sharpen_masking": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "nr_luminance": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "nr_color": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "vignette_amount": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100
+              },
+              "vignette_midpoint": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "grain_amount": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "grain_size": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "ca_remove": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "distortion": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100
+              },
+              "upright_vertical": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100
+              },
+              "upright_horizontal": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100
+              },
+              "straighten_angle": {
+                "type": "number",
+                "minimum": -45,
+                "maximum": 45
+              },
+              "calib_red_hue": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100
+              },
+              "calib_red_sat": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100
+              },
+              "calib_green_hue": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100
+              },
+              "calib_green_sat": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100
+              },
+              "calib_blue_hue": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100
+              },
+              "calib_blue_sat": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100
+              },
+              "lens_profile": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "parametric_shadows": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100
+              },
+              "parametric_darks": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100
+              },
+              "parametric_lights": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100
+              },
+              "parametric_highlights": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100
+              },
+              "parametric_split_shadows": {
+                "type": "number",
+                "minimum": 5,
+                "maximum": 95
+              },
+              "parametric_split_midtones": {
+                "type": "number",
+                "minimum": 5,
+                "maximum": 95
+              },
+              "parametric_split_highlights": {
+                "type": "number",
+                "minimum": 5,
+                "maximum": 95
+              },
+              "ca_red": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100
+              },
+              "ca_blue": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100
+              },
+              "lens_vignette_amount": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100
+              },
+              "lens_vignette_midpoint": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "grain_roughness": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              }
+            },
+            "description": "Displayed units: temperature in kelvin and tint (as shot until set; reset_develop wb returns to as shot), exposure in EV, sliders -100..100 unless stated. Parametric curve regions -100..100 with splits 5..95 ascending; ca_remove and lens_profile are 0 or 1 (lens_profile is not available: no permissive lens database)."
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "layerId",
+          "params"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "set_tone_curve",
+      "description": "Set a parametric or point tone curve on a RAW layer or curves adjustment layer.",
+      "handler": "develop.curve",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "rgb",
+              "red",
+              "green",
+              "blue"
+            ]
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 255
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "minItems": 2
+          },
+          "parametric": {
+            "type": "object",
+            "properties": {
+              "highlights": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100
+              },
+              "lights": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100
+              },
+              "darks": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100
+              },
+              "shadows": {
+                "type": "number",
+                "minimum": -100,
+                "maximum": 100
+              }
+            }
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "layerId",
+          "channel"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "set_color_mixer",
+      "description": "Set HSL or black-and-white mix values per colour band.",
+      "handler": "develop.mixer",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "hsl",
+              "bw"
+            ]
+          },
+          "bands": {
+            "type": "object",
+            "propertyNames": {
+              "enum": [
+                "red",
+                "orange",
+                "yellow",
+                "green",
+                "aqua",
+                "blue",
+                "purple",
+                "magenta"
+              ]
+            }
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "layerId",
+          "mode",
+          "bands"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "set_color_grading",
+      "description": "Set 3-way colour grading: hue, saturation, luminance for shadows, midtones, highlights and global; blending and balance.",
+      "handler": "develop.grading",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          },
+          "wheels": {
+            "type": "object"
+          },
+          "blending": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "balance": {
+            "type": "number",
+            "minimum": -100,
+            "maximum": 100
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "layerId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "set_crop",
+      "description": "Set crop rectangle, aspect and straighten angle.",
+      "handler": "develop.crop",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          },
+          "rect": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "y": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "w": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "h": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            }
+          },
+          "angle": {
+            "type": "number",
+            "minimum": -45,
+            "maximum": 45
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "layerId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "apply_preset",
+      "description": "Apply a preset, Lightroom XMP preset or .cube LUT to RAW layers. Returns the settings skipped as unsupported.",
+      "handler": "develop.preset",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          },
+          "preset": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "layerIds",
+          "preset"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "copy_settings",
+      "description": "Copy a chosen subset of develop settings from a photo to the settings clipboard.",
+      "handler": "develop.copy",
+      "effect": "read",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          },
+          "panels": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "wb",
+                "basic",
+                "curve",
+                "mixer",
+                "grading",
+                "detail",
+                "lens",
+                "transform",
+                "effects",
+                "calibration",
+                "masks",
+                "crop"
+              ]
+            }
+          }
+        },
+        "required": [
+          "layerId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "sync_settings",
+      "description": "Apply the copied subset to photos in the folder; one command per photo.",
+      "handler": "develop.sync",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "paths"
+        ],
+        "additionalProperties": false
+      },
+      "writesWorkspace": "Writes files in the workspace at once (temp file, then rename). Not on the undo stack: undo changes the document, not files already written. Replacing a preset that exists waits for the person."
+    },
+    {
+      "name": "reset_develop",
+      "description": "Reset all or some develop panels to defaults.",
+      "handler": "develop.reset",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          },
+          "panels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "layerId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "save_preset",
+      "description": "Save the current develop settings subset as a preset in the workspace folder.",
+      "handler": "develop.save-preset",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          },
+          "name": {
+            "type": "string"
+          },
+          "panels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "layerId",
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "writesWorkspace": "Writes files in the workspace at once (temp file, then rename). Not on the undo stack: undo changes the document, not files already written. Replacing a preset that exists waits for the person."
+    },
+    {
+      "name": "set_mask",
+      "description": "Create or replace a layer's mask (develop local mask or composite layer mask) from components combined by add, subtract, intersect.",
+      "handler": "mask.set",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          },
+          "maskId": {
+            "type": "string"
+          },
+          "components": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "op": {
+                  "type": "string",
+                  "enum": [
+                    "add",
+                    "subtract",
+                    "intersect"
+                  ]
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "bitmap",
+                    "linear",
+                    "radial",
+                    "colour-range",
+                    "luminance-range",
+                    "depth-range"
+                  ]
+                },
+                "params": {
+                  "type": "object"
+                }
+              },
+              "required": [
+                "op",
+                "kind",
+                "params"
+              ]
+            }
+          },
+          "invert": {
+            "type": "boolean"
+          },
+          "feather": {
+            "type": "number",
+            "minimum": 0
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "layerId",
+          "components"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "set_mask_adjustments",
+      "description": "Set the local develop adjustments a mask applies.",
+      "handler": "mask.adjust",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          },
+          "maskId": {
+            "type": "string"
+          },
+          "params": {
+            "type": "object"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "layerId",
+          "maskId",
+          "params"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "paint_mask",
+      "description": "Paint or erase a brush stroke into a mask's bitmap component.",
+      "handler": "mask.paint",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          },
+          "maskId": {
+            "type": "string"
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 3
+            },
+            "minItems": 1
+          },
+          "size": {
+            "type": "number",
+            "minimum": 1
+          },
+          "hardness": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "flow": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "erase": {
+            "type": "boolean"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "layerId",
+          "points",
+          "size"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "download_model",
+      "description": "Consent to download an on-device model (AI masks, depth). Network use needs the person's consent.",
+      "handler": "model.download",
+      "effect": "irreversible",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "model"
+        ],
+        "additionalProperties": false
+      },
+      "personOnly": true,
+      "personOnlyReason": "A download uses the network and disk; the person consents.",
+      "agentVisible": "listed so the agent knows the act exists; a call returns status person_only and names the UI control"
+    },
+    {
+      "name": "add_layer",
+      "description": "Add a raster, group, text or adjustment layer above the active layer.",
+      "handler": "layer.add",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "raster",
+              "group",
+              "text",
+              "adjustment"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "adjustment": {
+            "type": "object"
+          },
+          "text": {
+            "type": "object"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "kind"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "delete_layer",
+      "description": "Delete a layer (undoable).",
+      "handler": "layer.delete",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "layerId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "move_layer",
+      "description": "Move a layer to a new index, optionally into a group.",
+      "handler": "layer.move",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          },
+          "parentId": {
+            "type": "string",
+            "description": "Group id to move into; an empty string moves the layer to the top level."
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "layerId",
+          "index"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "set_layer",
+      "description": "Set layer properties: name, visible, locked, opacity, fill, blendMode, clipped (clip to the nearest unclipped layer below).",
+      "handler": "layer.set",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          },
+          "name": {
+            "type": "string"
+          },
+          "visible": {
+            "type": "boolean"
+          },
+          "locked": {
+            "type": "boolean"
+          },
+          "opacity": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "fill": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "blendMode": {
+            "type": "string",
+            "enum": [
+              "normal",
+              "dissolve",
+              "darken",
+              "multiply",
+              "color-burn",
+              "linear-burn",
+              "darker-color",
+              "lighten",
+              "screen",
+              "color-dodge",
+              "linear-dodge",
+              "lighter-color",
+              "overlay",
+              "soft-light",
+              "hard-light",
+              "vivid-light",
+              "linear-light",
+              "pin-light",
+              "hard-mix",
+              "difference",
+              "exclusion",
+              "subtract",
+              "divide",
+              "hue",
+              "saturation",
+              "color",
+              "luminosity"
+            ]
+          },
+          "clipped": {
+            "type": "boolean"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "layerId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "transform_layer",
+      "description": "Apply a free transform: an affine matrix (composed with the current one), or corners [[x,y]\u00d74] clockwise from top-left for a perspective map of the layer's source rectangle.",
+      "handler": "layer.transform",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          },
+          "matrix": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 6,
+            "maxItems": 6
+          },
+          "corners": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            },
+            "minItems": 4,
+            "maxItems": 4
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "layerId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "merge_layers",
+      "description": "Merge down, merge selected or merge visible (undoable).",
+      "handler": "layer.merge",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "down",
+              "selected",
+              "visible"
+            ]
+          },
+          "layerIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "mode"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "set_document",
+      "description": "Set document settings: blend space, canvas size, working colour space.",
+      "handler": "doc.set",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "blendSpace": {
+            "type": "string",
+            "enum": [
+              "compatible",
+              "linear"
+            ]
+          },
+          "width": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "anchor": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "set_selection",
+      "description": "Create, add to, subtract from or intersect the selection with a rectangle, ellipse, polygon, magic wand seed or colour range.",
+      "handler": "selection.set",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "replace",
+              "add",
+              "subtract",
+              "intersect"
+            ]
+          },
+          "shape": {
+            "type": "string",
+            "enum": [
+              "rect",
+              "ellipse",
+              "polygon",
+              "wand",
+              "colour-range",
+              "all",
+              "none"
+            ]
+          },
+          "params": {
+            "type": "object"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "op",
+          "shape"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "refine_selection",
+      "description": "Feather, expand, contract or smooth the selection; save it; convert it to a mask.",
+      "handler": "selection.refine",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "feather",
+              "expand",
+              "contract",
+              "smooth",
+              "save",
+              "load",
+              "to-mask",
+              "invert",
+              "quick-mask-toggle"
+            ]
+          },
+          "amount": {
+            "type": "number",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "action"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "paint_stroke",
+      "description": "Paint a stroke: brush or eraser on a raster layer (or on the selection while quick mask is on); clone and heal (on a RAW photo they paint a retouch layer above it); dodge, burn and sponge on raster layers.",
+      "handler": "paint.stroke",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          },
+          "tool": {
+            "type": "string",
+            "enum": [
+              "brush",
+              "eraser",
+              "clone",
+              "heal",
+              "dodge",
+              "burn",
+              "sponge"
+            ]
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 3
+            },
+            "minItems": 1
+          },
+          "size": {
+            "type": "number",
+            "minimum": 1
+          },
+          "hardness": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "opacity": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "flow": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "color": {
+            "type": "string"
+          },
+          "source": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Tool settings: clone/heal source anchor {x, y} in document pixels and sample layer|all (heal without x, y picks a source automatically); dodge/burn range and exposure; sponge mode and amount.",
+            "properties": {
+              "x": {
+                "type": "number"
+              },
+              "y": {
+                "type": "number"
+              },
+              "sample": {
+                "type": "string",
+                "enum": [
+                  "layer",
+                  "all"
+                ]
+              },
+              "range": {
+                "type": "string",
+                "enum": [
+                  "shadows",
+                  "midtones",
+                  "highlights"
+                ]
+              },
+              "exposure": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "desaturate",
+                  "saturate"
+                ]
+              },
+              "amount": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              }
+            }
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "layerId",
+          "tool",
+          "points"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "fill",
+      "description": "Fill the selection or a connected region with a colour or gradient.",
+      "handler": "paint.fill",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "solid",
+              "bucket",
+              "gradient"
+            ]
+          },
+          "color": {
+            "type": "string"
+          },
+          "gradient": {
+            "type": "object"
+          },
+          "tolerance": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "point": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "description": "Seed point [x, y] in document pixels for mode bucket."
+          }
+        },
+        "required": [
+          "revision",
+          "layerId",
+          "mode"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "apply_filter",
+      "description": "Apply a filter to a raster layer: gaussian-blur, unsharp-mask, high-pass, add-noise.",
+      "handler": "filter.apply",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          },
+          "filter": {
+            "type": "string",
+            "enum": [
+              "gaussian-blur",
+              "unsharp-mask",
+              "high-pass",
+              "add-noise"
+            ]
+          },
+          "params": {
+            "type": "object"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision",
+          "layerId",
+          "filter"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "undo",
+      "description": "Undo the last command.",
+      "handler": "history.undo",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "redo",
+      "description": "Redo the last undone command.",
+      "handler": "history.redo",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "enable_channel",
+      "description": "Turn on the cross-tab BroadcastChannel door for callers outside this tab.",
+      "handler": "settings.channel",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "on": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "on"
+        ],
+        "additionalProperties": false
+      },
+      "personOnly": true,
+      "personOnlyReason": "That door is open to callers the person did not invite into the tab.",
+      "revisionExempt": "Person-only app setting; not a document edit.",
+      "agentVisible": "listed so the agent knows the act exists; a call returns status person_only and names the UI control"
+    },
+    {
+      "name": "set_active",
+      "description": "Set the active layer, or the active photo in the filmstrip.",
+      "handler": "doc.active",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "revisionExempt": "UI selection state; does not edit the document."
+    },
+    {
+      "name": "set_view",
+      "description": "Switch between Develop and Composite, set zoom and pan, toggle before and after. View state only; no revision change.",
+      "handler": "view.set",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "develop",
+              "composite"
+            ]
+          },
+          "zoom": {
+            "type": "number",
+            "minimum": 0.01,
+            "maximum": 64
+          },
+          "center": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "beforeAfter": {
+            "type": "string",
+            "enum": [
+              "off",
+              "split",
+              "side-by-side",
+              "toggle"
+            ]
+          },
+          "fit": {
+            "type": "boolean",
+            "description": "Fit the document in the window (clears zoom and centre)."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "revisionExempt": "View state; does not edit the document."
+    },
+    {
+      "name": "snapshot",
+      "description": "Create, restore or delete a named snapshot of the develop settings or document.",
+      "handler": "history.snapshot",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "create",
+              "restore",
+              "delete"
+            ]
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "revision",
+          "action",
+          "name"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "duplicate_layer",
+      "description": "Duplicate a layer above itself.",
+      "handler": "layer.duplicate",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          }
+        },
+        "required": [
+          "revision",
+          "layerId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "group_layers",
+      "description": "Group the given layers, or ungroup a group.",
+      "handler": "layer.group",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "group",
+              "ungroup"
+            ]
+          },
+          "layerIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          }
+        },
+        "required": [
+          "revision",
+          "action",
+          "layerIds"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "set_text",
+      "description": "Edit a type layer's content and style: font, size, colour, alignment, line height, bold, italic.",
+      "handler": "layer.text",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          },
+          "content": {
+            "type": "string"
+          },
+          "style": {
+            "type": "object",
+            "properties": {
+              "font": {
+                "type": "string"
+              },
+              "size": {
+                "type": "number",
+                "minimum": 1
+              },
+              "color": {
+                "type": "string"
+              },
+              "align": {
+                "type": "string",
+                "enum": [
+                  "left",
+                  "center",
+                  "right",
+                  "justify"
+                ]
+              },
+              "lineHeight": {
+                "type": "number",
+                "minimum": 0.5
+              },
+              "bold": {
+                "type": "boolean"
+              },
+              "italic": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "revision",
+          "layerId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "crop_document",
+      "description": "Crop or resize the composite canvas to a rectangle.",
+      "handler": "doc.crop",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "rect": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "integer"
+              },
+              "y": {
+                "type": "integer"
+              },
+              "w": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "h": {
+                "type": "integer",
+                "minimum": 1
+              }
+            },
+            "required": [
+              "x",
+              "y",
+              "w",
+              "h"
+            ]
+          }
+        },
+        "required": [
+          "revision",
+          "rect"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "export_batch",
+      "description": "Export several photos with one export preset. Staged: the person confirms before files are written. Returns a job id.",
+      "handler": "file.export-batch",
+      "effect": "irreversible",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1
+          },
+          "preset": {
+            "type": "string"
+          },
+          "folder": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "paths",
+          "preset"
+        ],
+        "additionalProperties": false
+      },
+      "revisionExempt": "Reads sidecars of many photos; each photo's own revision is checked when the job runs, and a changed sidecar fails that photo with 'stale'."
+    },
+    {
+      "name": "save_export_preset",
+      "description": "Save export settings (format, quality, size, colour space, output sharpening, metadata) as a named preset.",
+      "handler": "file.export-preset",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "settings": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "name",
+          "settings"
+        ],
+        "additionalProperties": false
+      },
+      "revisionExempt": "Writes a preset file, not the document.",
+      "writesWorkspace": "Writes files in the workspace at once (temp file, then rename). Not on the undo stack: undo changes the document, not files already written. Replacing a preset that exists waits for the person."
+    },
+    {
+      "name": "set_adjustment",
+      "description": "Change an adjustment layer: its type (levels, curves, hue-saturation, exposure, colour-balance, black-and-white, develop) and its params, merged over the current ones (type change replaces them).",
+      "handler": "layer.adjust",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "levels",
+              "curves",
+              "hue-saturation",
+              "exposure",
+              "colour-balance",
+              "black-and-white",
+              "develop"
+            ]
+          },
+          "params": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "revision",
+          "layerId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "set_lens_blur",
+      "description": "Lens blur (depth of field) on a RAW or image layer: depth as a linear ramp between two document points (far at from, near at to), focus by depth 0..1 or by a document point, aperture as the blur slope, maxRadius in source pixels. off: true removes it.",
+      "handler": "layer.lens-blur",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state."
+          },
+          "off": {
+            "type": "boolean"
+          },
+          "depth": {
+            "type": "object",
+            "properties": {
+              "from": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "to": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              }
+            },
+            "required": [
+              "from",
+              "to"
+            ],
+            "additionalProperties": false
+          },
+          "focus": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "focusPoint": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "aperture": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "maxRadius": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 32
+          }
+        },
+        "required": [
+          "revision",
+          "layerId"
+        ],
+        "additionalProperties": false
+      }
+    }
+  ],
+  "resultEnvelope": {
+    "type": "object",
+    "required": [
+      "status"
+    ],
+    "additionalProperties": false,
+    "properties": {
+      "status": {
+        "enum": [
+          "ok",
+          "stale",
+          "invalid",
+          "unsupported",
+          "staged",
+          "person_only",
+          "busy",
+          "outcome_unknown"
+        ]
+      },
+      "revision": {
+        "type": "integer",
+        "description": "Document revision after the call (ok) or the current one (stale)."
+      },
+      "result": {
+        "description": "Tool-specific payload for ok."
+      },
+      "jobId": {
+        "type": "string"
+      },
+      "stagedId": {
+        "type": "string"
+      },
+      "error": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "allowed": {},
+          "sent": {},
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "remedy": {
+        "type": "object",
+        "required": [
+          "action"
+        ],
+        "properties": {
+          "action": {
+            "enum": [
+              "get_state",
+              "retry_with_revision",
+              "fix_argument",
+              "change_target",
+              "get_staged",
+              "use_ui_control",
+              "get_job"
+            ]
+          },
+          "tool": {
+            "type": "string"
+          },
+          "uiControl": {
+            "type": "string"
+          }
+        }
+      },
+      "skipped": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Settings not applied (apply_preset)."
+      }
+    }
+  }
+}
