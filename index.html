@@ -1597,9 +1597,6 @@ const APPS = [
   { id:'mantra', name:'Mantra', url:'https://mantra.naklitechie.com/', glyph:'📿', bg:'act',
     description:'Type a prompt once and see how Claude, GPT, Gemini, and local models answer — side by side. Your API keys never leave your browser.', tags:['ai','developer','tool'],
     svg:`<circle cx="4" cy="12" r="1.5" fill="currentColor" stroke="none"/><path d="M5.5 12L20 6"/><path d="M5.5 12L20 12"/><path d="M5.5 12L20 18"/>` },
-  { id:'sansadlocal', name:'SansadLocal', url:'https://sansadlocal.naklitechie.com', glyph:'🏛️', bg:'act',
-    description:'Browse, search, and summarise reports from India\'s 24 Parliamentary Standing Committees. AI in your browser.', tags:['ai','civic','research'], opensInNewTab:true,
-    svg:`<line x1="3" y1="21" x2="21" y2="21"/><line x1="4" y1="21" x2="4" y2="9"/><line x1="8" y1="21" x2="8" y2="9"/><line x1="12" y1="21" x2="12" y2="9"/><line x1="16" y1="21" x2="16" y2="9"/><line x1="20" y1="21" x2="20" y2="9"/><polygon points="3 9 12 4 21 9"/>` },
   { id:'slate', name:'Slate', url:'https://slate.naklitechie.com', embedUrl:'./apps/slate/', glyph:'🖼️', bg:'ok',
     description:'A complete image editor in a single HTML file. Crop, redact, blur, annotate, resize.', tags:['image','privacy','productivity'],
     svg:`<rect x="3" y="4" width="18" height="14" rx="2"/><circle cx="8" cy="9" r="1.5"/><polyline points="21 14 14 9 4 16"/><path d="M16 19l-1 2 3-1z"/><path d="M16 19l4-4"/>` },
@@ -1955,7 +1952,7 @@ const FOLDERS = [
   { id:'fld-create', kind:'folder', name:'Create & Convert', glyph:'🎨', bg:'ok',
     apps:['reckon','draft','sheaf','slate','contorina','ductella','atelier','paginella','sonella','kagaz','rangrez','sniplocal','blurlocal','striplocal','scanlocal','voicevault','bolo'] },
   { id:'fld-research', kind:'folder', name:'Think & Research', glyph:'🔎', bg:'act',
-    apps:['browser','mantra','babellocal','localmind','vaultmind','sansadlocal','protavia','scribella'] },
+    apps:['browser','mantra','babellocal','localmind','vaultmind','protavia','scribella'] },
   { id:'fld-work', kind:'folder', name:'Work & Build', glyph:'🧭', bg:'ok',
     apps:['editor','forge','anvil','dish','pi','kanzen','nakliposter','bofh','mod','naklidata','nemawashi','menagerie','bahi'] },
   { id:'fld-privacy', kind:'folder', name:'Privacy & Security', glyph:'🔐', bg:'brand',
@@ -8341,7 +8338,7 @@ async function webService(appId){
 
 // ── TeX service (naklios.experimental_tex) ────────────────────────────────────────
 // sys/tex/service.mjs holds the queue. This wires it to the host's storage, consent and History. The first compile
-// asks once, because the TeX Live packs are about 680 MB; the /tex/ route sends the browser to Hugging Face for them.
+// asks once, because the TeX Live pack is about 390 MB; the /tex/ route sends the browser to Hugging Face for them.
 const TEX_ENGINE_INFO = Object.freeze({ texLive:'2026', license:'AGPL-3.0-or-later', source:'https://github.com/NakliTechie/naklios-tex', downloadBytes:681700000 });
 let texHostPromise = null;
 function texHost(){
@@ -8406,7 +8403,7 @@ async function texCache(){
   return { version:module.TEX_VERSION, packs:module.TEX_PACKS.map((name, index) => ({ name, cached:cached[index] === true })) };
 }
 async function texClearCache(){
-  const ok = await nakliosConfirm('Delete the TeX Live packs from this browser? Every app that compiles LaTeX needs them, and the next compile downloads about 680 MB again.',
+  const ok = await nakliosConfirm('Delete the TeX Live pack from this browser? Every app that compiles LaTeX needs it, and the next compile downloads about 390 MB again.',
     { title:'Delete TeX Live?', okLabel:'Delete', cancelLabel:'Keep' });
   if (!ok) return false;
   // Consent goes first, so a compile waiting on the clear asks again before it downloads.

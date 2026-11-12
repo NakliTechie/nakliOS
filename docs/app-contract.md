@@ -423,7 +423,7 @@ naklios.experimental_tex.cancel(job.id);                   // the compile reject
 - **Folder grant.** The host reads the project through the app's own `apps/<id>/` scope, so no file bytes cross the
   rail and a caller can compile only its own storage. Without a connected Folder or Crate the call fails. Third-party
   apps also declare the `tex` permission.
-- **First use.** The first compile asks the person once and downloads about 680 MB, shared by every app and kept in this
+- **First use.** The first compile asks the person once and downloads about 390 MB, shared by every app and kept in this
   browser. That took under two minutes on one connection, and 15 on a slow day, so show the `download` progress chunks. Biber adds about 30 MB on first use. Later compiles need the engine loaded, which took about 7 s in the spike.
 - **Outputs.** `<folder>/.tex-build/<name>.pdf`, `.log` and `.synctex.gz`, plus `.aux`, and `.bbl` and `.blg` when a bibliography ran; the reply names each path that was written. A build is kept after the app closes. Files and
   folders whose names start with a dot are not sent to TeX. SyncTeX paths are relative to `folder`.
