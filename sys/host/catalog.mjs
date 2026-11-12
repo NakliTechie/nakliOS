@@ -10,9 +10,10 @@ export const COMMAND_TIMEOUT_MS = 30000;
 export const LAUNCH_TIMEOUT_MS = 20000;
 // A result crosses the rail whole, so one that large is an app defect, not an answer a caller can use.
 export const MAX_RESULT_BYTES = 262144;
-// Per app. 128 leaves room for a design app's full command set (Figger plans about 100, Chirag raised the
-// cap from 64 on 2026-11-11); search returns at most 20, so the cap never sizes a prompt.
-const MAX_COMMANDS = 128;
+// Per app. Search returns at most 20, so the cap never sizes a prompt; it only bounds one app's registry.
+// Chirag raised it from 64 to 128 on 2026-11-11 for a design app's full command set (Figger plans about 100);
+// raised to 256 on 2026-11-13 because Atelier's v1.x manifest declares 168.
+const MAX_COMMANDS = 256;
 const NAME = /^[a-z][a-z0-9_-]*(\.[a-z][a-z0-9_-]*){0,3}$/;
 const APP_ID = /^[a-z0-9][a-z0-9_-]*$/;
 

@@ -82,8 +82,8 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
   assert.match(catalog.register('x', {}, [{ name: 'a', description: 'x', scope: 'admin' }], () => {}).error, /scope/);
   assert.match(catalog.register('x', {}, [{ name: 'a', description: '', scope: 'read' }], () => {}).error, /description/);
   assert.match(catalog.register('x', {}, [{ name: 'a', description: 'x', scope: 'read', input: { type: 'array' } }], () => {}).error, /object schema/);
-  assert.equal(catalog.register('x', {}, Array.from({ length: 128 }, (_, i) => ({ name: `c${i}`, description: 'x', scope: 'read' })), () => {}).ok, true, 'one app may register 128 commands');
-  assert.match(catalog.register('x', {}, Array.from({ length: 129 }, (_, i) => ({ name: `c${i}`, description: 'x', scope: 'read' })), () => {}).error, /at most 128/, 'the 129th is refused');
+  assert.equal(catalog.register('x', {}, Array.from({ length: 256 }, (_, i) => ({ name: `c${i}`, description: 'x', scope: 'read' })), () => {}).ok, true, 'one app may register 256 commands');
+  assert.match(catalog.register('x', {}, Array.from({ length: 257 }, (_, i) => ({ name: `c${i}`, description: 'x', scope: 'read' })), () => {}).error, /at most 256/, 'the 257th is refused');
   catalog.unregister('x');
 
   // replace, owner checks, unregister
