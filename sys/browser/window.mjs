@@ -1,5 +1,5 @@
-// The NakliOS Browser: a host window that shows sites signed in with the person's own Chrome sessions,
-// through the companion extension in extension/ (design: plan/research/2026-11-10-browser-in-naklios-round2.md).
+// The NakliOS Browser: a host window for light browsing. It shows sites inside the desktop without the
+// person's sign-ins (a credentialless frame, no cookies), through the companion extension in extension/ (design: plan/research/2026-11-10-browser-in-naklios-round2.md).
 //
 // The window is host code on purpose: the extension only answers the top frame of the desktop
 // (frameId 0, path '/'), and frame.html only runs when the desktop frames it directly. Without the
@@ -10,7 +10,7 @@
 //   record(host, output) → appends one History event (host only, never the address)
 //   notify(text) → a short message to the person
 
-export const EXTENSION_HELP = 'Load the NakliOS Browser extension once (chrome://extensions → Developer mode → Load unpacked → the extension folder of the nakliOS repo) to open sites here with your Chrome sign-ins.';
+export const EXTENSION_HELP = 'Load the NakliOS Browser extension once (chrome://extensions → Developer mode → Load unpacked → the extension folder of the nakliOS repo) to show sites inside this window.';
 
 /** What the person typed, as an address: adds https:// when no scheme is given. Returns a URL string or null. */
 export function normaliseAddress(input) {
@@ -26,17 +26,6 @@ export function normaliseAddress(input) {
 }
 
 /** True when this document is a desktop inside another desktop (the acceptance demo). */
-/**
- * True when a site shown in the window should move to the Full tab. Inside the desktop, a site's own
- * requests go without its session cookies, so a signed-in site loads its first page and then fails
- * (GitHub, Gmail and X, live in Chrome 157, 2026-11-12). The Full tab keeps them. "Signed in" is the
- * extension's cookie count for the site, so a site that only sets cookies moves too. The desktop's own
- * host stays in the window: that is NakliOS inside its own Browser, which needs no sign-in.
- */
-export function shouldOpenFull({ cookies, host, desktopHost }) {
-  return cookies > 0 && host !== desktopHost;
-}
-
 export const isNested = (win = globalThis.window) => !!win && win.top !== win;
 
 /**
@@ -79,8 +68,6 @@ const STYLE = `
 .nb-bar button:disabled{opacity:.4;cursor:default}
 .nb-bar input{flex:1;min-width:0;height:28px;border-radius:6px;border:1px solid var(--line,#0003);padding:0 8px;font:inherit;background:var(--body,#fff);color:inherit}
 .nb-status{font-size:12px;opacity:.75;white-space:nowrap}
-.nb-offer{display:flex;gap:4px}
-.nb-offer[hidden]{display:none}
 .nb-view{position:relative;flex:1;min-height:0}
 .nb-view iframe{border:0;width:100%;height:100%;display:block;background:#fff}
 .nb-note{padding:24px;max-width:36rem;line-height:1.5}
@@ -130,10 +117,7 @@ function build(win, deps, windowId) {
       <input type="url" aria-label="Address" placeholder="Type an address, for example github.com" spellcheck="false" autocomplete="off">
       <button type="button" data-act="go">Go</button>
       <span class="nb-status" aria-live="polite"></span>
-      <span class="nb-offer" hidden>
-        <button type="button" data-act="full" title="Open this site as a full extension tab, which keeps your sign-in when third-party cookies are blocked">Full tab</button>
-        <button type="button" data-act="tab" title="Open this site in a normal tab">New tab</button>
-      </span>
+      <button type="button" data-act="tab" title="Sites show here without your sign-in. Open this one in a normal Chrome tab to use your account.">Open in Chrome</button>
     </div>
     <div class="nb-view"><div class="nb-note"></div></div>`;
   body.appendChild(wrap);
@@ -141,11 +125,10 @@ function build(win, deps, windowId) {
   const status = wrap.querySelector('.nb-status');
   const view = wrap.querySelector('.nb-view');
   const btn = act => wrap.querySelector(`[data-act="${act}"]`);
-  const offer = wrap.querySelector('.nb-offer');
-  let ext = null, frame = null, mode = 'window', movedFull = false;
+  let ext = null, frame = null, mode = 'window';
 
   const note = text => { view.innerHTML = '<div class="nb-note"></div>'; view.firstChild.textContent = text; frame = null; };
-  note('Type an address to open a site with your Chrome sign-in.');
+  note('Type an address to read a site here. Sites show without your sign-in; use Open in Chrome for your accounts.');
 
   const extReady = detectExtension().then(found => {
     ext = found;
@@ -161,27 +144,9 @@ function build(win, deps, windowId) {
       input.value = m.url;
       btn('back').disabled = !m.canBack;
       btn('forward').disabled = !m.canForward;
-      status.textContent = m.cookies == null ? '' : m.cookies > 0 ? 'signed in' : 'signed out';
-      // chrome.cookies counts the person's unpartitioned cookies even when third-party cookies are
-      // blocked, so the count cannot detect that case: the two ways out stay visible while a site shows.
-      offer.hidden = false;
-      offer.classList.toggle('nb-offer-hint', m.cookies === 0);
-      let host = '';
-      try { host = new URL(m.url).hostname; } catch (_) {}
-      // The frame opens the Full tab and confirms with full-opened; it must stay until then.
-      if (!movedFull && shouldOpenFull({ cookies: m.cookies, host, desktopHost: location.hostname })) {
-        movedFull = true;
-        post('nakli-browser:open-full');
-      }
-    } else if (m.type === 'nakli-browser:full-opened') {
-      let host = '';
-      try { host = new URL(m.url).hostname; } catch (_) {}
-      mode = 'full';
-      note(`Opened ${host} in its own tab, signed in. Sites you are signed in to open there, because inside the desktop their pages cannot load their own data.`);
+      status.textContent = 'not signed in';
     } else if (m.type === 'nakli-browser:needs-open') {
       go(m.url, { fresh: true });
-    } else if (m.type === 'nakli-browser:signin') {
-      status.textContent = `signing in to ${m.host} in a popup`;
     } else if (m.type === 'nakli-browser:error') {
       status.textContent = m.error;
     }
@@ -192,7 +157,6 @@ function build(win, deps, windowId) {
     const target = normaliseAddress(raw);
     if (!target) { notify('That is not a web address.'); return; }
     input.value = target;
-    movedFull = false;
     await extReady;
     if (!ext) {
       mode = 'tab';
@@ -211,7 +175,7 @@ function build(win, deps, windowId) {
     view.innerHTML = '';
     frame = document.createElement('iframe');
     frame.dataset.host = new URL(target).hostname;
-    frame.setAttribute('allow', 'publickey-credentials-get; publickey-credentials-create; clipboard-write; clipboard-read; fullscreen');
+    frame.setAttribute('allow', 'clipboard-write; fullscreen');
     frame.setAttribute('title', `Browser: ${frame.dataset.host}`);
     frame.src = `${r.frame}#t=${encodeURIComponent(r.token)}`;
     view.appendChild(frame);
@@ -224,7 +188,6 @@ function build(win, deps, windowId) {
   btn('forward').onclick = () => post('nakli-browser:forward');
   btn('reload').onclick = () => post('nakli-browser:reload');
   btn('go').onclick = () => go(input.value);
-  btn('full').onclick = () => post('nakli-browser:open-full');
   btn('tab').onclick = () => { const u = normaliseAddress(input.value); if (u) window.open(u, '_blank', 'noopener'); };
   input.addEventListener('keydown', e => { if (e.key === 'Enter') go(input.value); });
 

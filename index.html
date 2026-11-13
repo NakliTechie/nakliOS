@@ -1655,7 +1655,7 @@ const APPS = [
     url:'./apps/browser/',
     embedUrl:'./apps/browser/',
     glyph:'🌐', bg:'act',
-    description:'Open sites in a desktop window with the sign-ins you already have in Chrome. Needs the companion extension; without it, addresses open in a new tab.',
+    description:'Read sites in a desktop window, without your sign-ins; Open in Chrome takes a site to a normal tab for your accounts. Needs the companion extension; without it, addresses open in a new tab.',
     tags:['tool','browser','web'],
     svg:`<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.5 2.5 3.8 5.5 3.8 9s-1.3 6.5-3.8 9c-2.5-2.5-3.8-5.5-3.8-9s1.3-6.5 3.8-9z"/>` },
   { id:'anvil', name:'Anvil', kind:'system',
@@ -9142,8 +9142,8 @@ window.addEventListener('message', async e => {
   } else if (msg.type === 'naklios:open-settings'){
     openSettings(typeof msg.section === 'string' ? msg.section : 'storage');
   } else if (msg.type === 'naklios:browser:open'){
-    // An app asks to open a web address in the Browser window. The person answers first, because the
-    // window shows the site with their Chrome sign-in.
+    // An app asks to open a web address in the Browser window. The person answers first, because an app
+    // chooses which site appears on their desktop.
     const reply = { type:'naklios:browser:reply', requestId:msg.requestId };
     try {
       const appId = getAppId();
@@ -9153,7 +9153,7 @@ window.addEventListener('message', async e => {
       try { target = new URL(String(msg.url || '')); } catch(_) { throw new Error('Not a web address'); }
       if (target.protocol !== 'https:' && target.protocol !== 'http:') throw new Error('Not a web address');
       fsWaitNotice(e.source, msg.requestId, replyTo)?.();
-      const ok = await nakliosConfirm(`${app?.name || appId} wants to open ${target.hostname} in the Browser, with your Chrome sign-in for that site.`,
+      const ok = await nakliosConfirm(`${app?.name || appId} wants to open ${target.hostname} in the Browser.`,
         { title:'Open in Browser?', okLabel:'Open', cancelLabel:'Cancel' });
       if (!ok) reply.result = false;
       else { const r = await openBrowserWindow({ url: target.href }); reply.result = !!r?.ok; }
@@ -9332,7 +9332,7 @@ async function renderBrowserSettings(el){
   el.textContent = '';
   if (!info.installed){ el.textContent = _browserMod.EXTENSION_HELP; return; }
   const head = document.createElement('div');
-  head.textContent = `Extension ${info.version} installed. ${info.sites.length ? 'Sites it may open signed in:' : 'No site granted yet; the Browser asks the first time you open one.'}`;
+  head.textContent = `Extension ${info.version} installed. ${info.sites.length ? 'Sites it may show in the Browser window:' : 'No site granted yet; the Browser asks the first time you open one.'}`;
   el.appendChild(head);
   for (const pattern of info.sites){
     const row = document.createElement('div');

@@ -1,11 +1,11 @@
 {
   "manifest_version": 3,
   "name": "NakliOS Browser (dev)",
-  "version": "0.1.0",
-  "description": "Opens sites inside the NakliOS desktop with your existing Chrome sign-ins. Removes framing headers only inside the NakliOS tab.",
+  "version": "0.2.0",
+  "description": "Shows sites inside the NakliOS desktop for light browsing, without your sign-ins. Removes framing headers only inside the NakliOS tab.",
   "minimum_chrome_version": "128",
   "background": { "service_worker": "background.js", "type": "module" },
-  "permissions": ["declarativeNetRequestWithHostAccess", "webNavigation", "storage", "cookies"],
+  "permissions": ["declarativeNetRequestWithHostAccess", "webNavigation", "storage"],
   "optional_host_permissions": ["https://*/*", "http://*/*"],
   "externally_connectable": { "matches": ["https://naklios.dev/*", "http://127.0.0.1/*", "http://localhost/*"] },
   "content_scripts": [{

@@ -10,13 +10,13 @@
 <main id="gate" hidden>
   <p id="gate-text"></p>
   <div class="row">
-    <button id="grant" type="button" hidden>Open signed in</button>
-    <a id="newtab" target="_blank" rel="noopener" hidden>Open in a new tab instead</a>
+    <button id="grant" type="button" hidden>Allow this site</button>
+    <a id="newtab" target="_blank" rel="noopener" hidden>Open in Chrome instead</a>
   </div>
   <p id="gate-note" class="note"></p>
 </main>
-<iframe id="site" hidden
-  allow="publickey-credentials-get; publickey-credentials-create; clipboard-write; clipboard-read; fullscreen"
+<iframe id="site" hidden credentialless
+  allow="clipboard-write; fullscreen"
   referrerpolicy="strict-origin-when-cross-origin"></iframe>
 <script type="module" src="frame.js"></script>
 </body>

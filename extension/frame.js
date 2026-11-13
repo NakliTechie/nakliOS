@@ -1,7 +1,7 @@
 // frame.html: the extension page the NakliOS desktop frames. It checks that the desktop framed it
 // directly, redeems the one-time token for the site URL, asks for host permission on a click when
-// needed, and frames the site. It relays location and signed-in state to the desktop, and takes
-// back / forward / reload / navigate commands from it.
+// needed, and frames the site in a credentialless iframe (no cookies, no sign-in). It relays the
+// location to the desktop and takes back / forward / reload / navigate commands from it.
 import { checkAncestors, parseSiteUrl } from './lib.mjs';
 
 const DEV = chrome.runtime.getManifest().name.includes('(dev)');
@@ -11,8 +11,7 @@ let parentOrigin = null;
 let sessionId = null;   // the redeemed token, used to route background messages to this frame
 let current = null;     // the URL the inner frame last committed
 const back = [], fwd = [];
-let pending = false;
-let beforeSignIn = null; // the site address to return to after a sign-in popup closes    // the next commit answers our own load (it may be a redirect): replace, do not push
+let pending = false;    // the next commit answers our own load (it may be a redirect): replace, do not push
 
 function showGate(text, { grant = false, url = null, note = '' } = {}) {
   site.hidden = true;
@@ -29,11 +28,6 @@ function tell(type, data = {}) {
   if (parentOrigin) window.parent.postMessage({ type, ...data }, parentOrigin);
 }
 
-async function cookieCount(url) {
-  const r = await chrome.runtime.sendMessage({ type: 'frame:cookie-count', url });
-  return r && r.ok ? r.count : null;
-}
-
 function load(url, { push = true } = {}) {
   if (push && current) { back.push(current); fwd.length = 0; }
   current = url;
@@ -44,9 +38,8 @@ function load(url, { push = true } = {}) {
   report();
 }
 
-async function report() {
-  if (!current) return;
-  tell('nakli-browser:location', { url: current, canBack: back.length > 0, canForward: fwd.length > 0, cookies: await cookieCount(current) });
+function report() {
+  if (current) tell('nakli-browser:location', { url: current, canBack: back.length > 0, canForward: fwd.length > 0 });
 }
 
 async function start() {
@@ -61,9 +54,9 @@ async function start() {
   const url = r.url;
   if (r.granted) { load(url, { push: false }); return; }
   const host = new URL(url).hostname;
-  showGate(`Open ${host} with your Chrome sign-in? Chrome asks once for this site.`, {
+  showGate(`Show ${host} in this window? Chrome asks once for this site.`, {
     grant: true, url,
-    note: 'NakliOS sees only the address and whether you are signed in, never the page or your cookies.',
+    note: 'Sites open here without your sign-in: no cookies are sent. To use your account, open the site in Chrome.',
   });
   $('grant').onclick = async () => {
     const ok = await chrome.permissions.request({ origins: [r.pattern] });
@@ -87,12 +80,6 @@ window.addEventListener('message', e => {
     fwd.push(current); current = back.pop(); pending = true; site.src = current; report();
   } else if (m.type === 'nakli-browser:forward' && fwd.length) {
     back.push(current); current = fwd.pop(); pending = true; site.src = current; report();
-  } else if (m.type === 'nakli-browser:open-full' && current) {
-    const url = current;
-    chrome.runtime.sendMessage({ type: 'frame:open-full', url }).then(r => {
-      if (!r || !r.ok) tell('nakli-browser:error', { error: r ? r.error : 'no-answer' });
-      else tell('nakli-browser:full-opened', { url });
-    });
   } else if (m.type === 'nakli-browser:reload' && current) {
     pending = true; site.src = current; report();
   }
@@ -100,18 +87,10 @@ window.addEventListener('message', e => {
 
 // Navigations inside the site, seen by the background through webNavigation.
 chrome.runtime.onMessage.addListener(m => {
-  if (!m || m.sessionId !== sessionId) return;
-  if (m.type === 'bg:committed') {
-    if (pending) pending = false;
-    else if (m.url !== current) { if (current) back.push(current); fwd.length = 0; }
-    current = m.url; report();
-  } else if (m.type === 'bg:signin-opened') {
-    beforeSignIn = current;
-    tell('nakli-browser:signin', { host: new URL(m.url).hostname });
-  } else if (m.type === 'bg:signin-closed') {
-    if (beforeSignIn) { current = beforeSignIn; beforeSignIn = null; }
-    pending = true; site.src = current; report();
-  }
+  if (!m || m.sessionId !== sessionId || m.type !== 'bg:committed') return;
+  if (pending) pending = false;
+  else if (m.url !== current) { if (current) back.push(current); fwd.length = 0; }
+  current = m.url; report();
 });
 
 start();

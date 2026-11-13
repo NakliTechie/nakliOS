@@ -5,21 +5,13 @@
 // frame of a NakliOS tab) asks to open a site; the extension checks who asked, mints a one-time token
 // bound to that tab, and installs session rules that remove the site's framing headers in that tab
 // only. frame.html, framed directly by the desktop, checks the token and its ancestors, then frames
-// the site. Requests from an extension page with host permission count as same-site, so the site
-// gets the person's existing Chrome cookies.
+// the site in a credentialless iframe: light browsing, with no cookies sent and no sign-in carried.
+// A site that needs the person signed in opens in a normal Chrome tab instead (decided 2026-11-13,
+// after signed-in framing broke Kaggle and needed a Full-tab detour for GitHub, Gmail and X).
 
 export const DESKTOP_ORIGINS = Object.freeze(['https://naklios.dev']);
 // The unpacked dev build also trusts a local serve (scripts/serve-coi.mjs). The store build drops it.
 export const DEV_ORIGINS = Object.freeze(['http://127.0.0.1', 'http://localhost']);
-
-// Sign-in pages that refuse frames by reading Sec-Fetch-*; they open in a top-level popup instead.
-export const SIGN_IN_HOSTS = Object.freeze([
-  { host: 'accounts.google.com' },
-  { host: 'www.facebook.com', path: '/login' },
-  { host: 'www.instagram.com', path: '/accounts/login' },
-  { host: 'login.microsoftonline.com' },
-  { host: 'appleid.apple.com' },
-]);
 
 
 /** The origin a desktop origin entry matches, ignoring the port for the dev hosts. */
@@ -33,10 +25,10 @@ function originMatches(origin, allowed) {
 }
 
 /**
- * Only the NakliOS desktop document may open a signed-in frame: the top frame of a tab, at path '/',
+ * Only the NakliOS desktop document may open a site frame: the top frame of a tab, at path '/',
  * on a trusted origin. An app frame that sends its own message fails both tests.
  * Limit (2026-11-12 review): apps mirrored same-origin under /apps/<id>/ can run code in the top
- * document, so this check does not stand between them and a signed-in frame. Those apps are
+ * document, so this check does not stand between them and a site frame. Those apps are
  * first-party code vendored through apps/manifest.json; third-party apps run at an opaque origin and
  * cannot. Moving mirrors to their own origin would close the gap; see plan/2026-11-12-autopilot.md.
  * Returns { ok:true } or { ok:false, reason }.
@@ -65,13 +57,6 @@ export function parseSiteUrl(raw) {
 /** The permission pattern Chrome asks the person to grant for a site, e.g. https://github.com/* */
 export function originPattern(url) {
   return `${url.protocol}//${url.hostname}/*`;
-}
-
-/** True when a URL is a sign-in page that must open in a top-level popup. */
-export function isSignInUrl(raw) {
-  const u = parseSiteUrl(raw);
-  if (!u) return false;
-  return SIGN_IN_HOSTS.some(s => u.hostname === s.host && (!s.path || u.pathname === s.path || u.pathname.startsWith(s.path + '/')));
 }
 
 /**
@@ -113,9 +98,8 @@ export function buildSessionRules(tabId, desktopHost, { nested = false, ids = [1
     condition: {
       tabIds: [tabId],
       resourceTypes: ['sub_frame'],
-      // The desktop's own app frames keep their headers. A full-tab extension page (layout C) has no
-      // desktop, so it passes null and nothing is excluded.
-      ...(desktopHost ? { excludedInitiatorDomains: [desktopHost] } : {}),
+      // The desktop's own app frames keep their headers.
+      excludedInitiatorDomains: [desktopHost],
       responseHeaders: [
         { header: 'x-frame-options' },
         { header: 'content-security-policy', values: ['*frame-ancestors*'] },
@@ -175,7 +159,7 @@ export function checkAncestors(ancestorOrigins, { dev = false } = {}) {
   return { ok: true };
 }
 
-/** The history line for a signed-in open: host and time, never the full address. */
+/** The history line for an open: host and time, never the full address. */
 export function historyEntry(url, now) {
   const u = parseSiteUrl(url);
   return { host: u ? u.hostname : 'invalid', at: new Date(now).toISOString() };

@@ -857,7 +857,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 
 | member | kind | what it is |
 |---|---|---|
-| `experimental_openUrl` | function · **experimental** | Ask the host to open an http(s) address in the Browser window, signed in with the person's Chrome sessions when the companion extension is installed, after the person allows it. Answers true when opened. Standalone: opens a new tab. |
+| `experimental_openUrl` | function · **experimental** | Ask the host to open an http(s) address in the Browser window (light browsing, without the person's sign-ins) when the companion extension is installed, after the person allows it. Answers true when opened. Standalone: opens a new tab. |
 
 ### `ai` (namespace)
 
