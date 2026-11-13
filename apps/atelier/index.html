@@ -129,8 +129,29 @@
   #empty .empty-actions button:not(.primary) { background: rgba(255,255,255,.92); }
   #empty dl { display: grid; grid-template-columns: auto minmax(0, 360px); gap: 4px 12px; text-align: left; margin: 8px 0; font-size: 12px; }
   #empty dt { font-weight: 600; } #empty dd { margin: 0; color: rgba(255,255,255,.85); }
-  #empty .hint { color: rgba(255,255,255,.75); }
+  #empty .hint { color: rgba(255,255,255,.75); min-height: 1.4em; }
   #stage.drop-target { outline: 3px dashed var(--accent); outline-offset: -6px; }
+  /* Header menus (src/ui/index.js groupHeader): Edit, View, Share and print, Camera. */
+  details.hmenu { position: relative; border: 0; padding: 0; flex: none; }
+  details.hmenu > summary { list-style: none; font-weight: 400; padding: 4px 10px; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); cursor: pointer; white-space: nowrap; }
+  details.hmenu > summary::-webkit-details-marker { display: none; }
+  details.hmenu > summary::after { content: ' ▾'; color: var(--i2); }
+  details.hmenu[open] > summary { border-color: var(--i3); background: var(--fill2); }
+  .hmenu-list { position: absolute; top: calc(100% + 4px); left: 0; z-index: 40; display: flex; flex-direction: column; align-items: stretch; gap: 2px; min-width: 200px; padding: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.14); }
+  .hmenu-list > button, .hmenu-list > select { text-align: left; border-color: transparent; }
+  .hmenu-list > button:hover { background: var(--fill2); }
+  .hmenu-list .tether { display: flex; flex-direction: column; gap: 2px; }
+  header .hhelp { width: 28px; padding: 4px 0; border-radius: 50%; }
+  .help ol { margin: 0 0 8px; padding-left: 20px; display: grid; gap: 4px; }
+  .help-row { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 8px; font-size: 12px; }
+  .help-row kbd { font: 11px/1.6 ui-monospace, Menlo, monospace; color: var(--i2); }
+  #ai-panel > h2.panel-title { font-size: 15px; margin: 6px 0; }
+  /* Reserved sizes, so nothing jumps while the modules mount (UX review M8: CLS 1.643 before). The header
+     is one row at desktop widths; the filmstrip bar plus its strip is 113 px; the brush and timeline
+     sections are one closed <details> each. */
+  header { min-height: 41px; }
+  #filmstrip { min-height: 113px; }
+  #brush-panel:empty, #timeline-panel:empty { min-height: 44px; }
   #loading { position: absolute; inset: 0; z-index: 4; display: grid; place-content: center; color: #fff; font-size: 15px; }
   /* A short message beside the control that was just used (src/ui/index.js toast). */
   #toast { position: fixed; z-index: 60; max-width: min(420px, calc(100vw - 16px)); padding: 6px 10px; border-radius: 6px; background: #1d1d1f; color: #fff; font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.2); pointer-events: none; }
@@ -239,11 +260,11 @@
     <div id="options" aria-label="Tool options"></div>
     <div id="stage"><canvas id="canvas"></canvas><canvas id="overlay" aria-label="Photo canvas"></canvas><canvas id="vector-overlay" aria-label="Pen tool canvas"></canvas><div id="gpu-msg" hidden></div></div>
   </section>
-  <aside aria-label="Panels"><div id="develop-panel"></div><div id="layers-panel" hidden></div><section id="ai-panel" aria-label="AI masks and models"></section><section id="vector-panel" aria-label="Vector: pen, paths, shapes, type, artboards"></section><section id="brush-panel" aria-label="Brush engine and presets"></section><section id="timeline-panel" aria-label="Timeline and animation"></section></aside>
+  <aside aria-label="Panels"><div id="develop-panel"></div><div id="layers-panel" hidden></div><section id="ai-panel" aria-label="AI masks and models" hidden></section><section id="vector-panel" aria-label="Vector: pen, paths, shapes, type, artboards" hidden></section><section id="brush-panel" aria-label="Brush engine and presets"></section><section id="timeline-panel" aria-label="Timeline and animation"></section></aside>
 </main>
 <section id="filmstrip" aria-label="Filmstrip"></section>
 <div id="notice" role="status" hidden></div>
-<div id="staged" aria-label="Actions waiting for your confirmation"></div>
+<div id="staged" role="region" aria-label="Actions waiting for your confirmation"></div>
 <footer><span id="mode">Develop</span><span id="status">Starting…</span><span class="grow"></span><span id="save-state"></span><span id="version"></span></footer>
 <script>
 /* naklios-sdk:begin ver=2 sha256=81b1d68a7b20067791a51dd79c29d015c98204236db626bf2dbb25f66bd5e59f */

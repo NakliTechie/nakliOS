@@ -13,6 +13,7 @@ plan/
 !wrangler.jsonc
 !_headers
 !manifest.webmanifest
+!favicon.ico
 !icons/
 !icons/*
 !sdk/

@@ -1955,7 +1955,7 @@
       "id": "atelier",
       "repo": "NakliTechie/atelier",
       "requestedRef": "main",
-      "resolvedCommit": "b53cdc1600ca97ea4a4c2ba604a76720246c53f0",
+      "resolvedCommit": "72bc379c3bcad311f3e31b3012ac4ece5f1ca664",
       "files": [
         {
           "source": "LICENSE",
@@ -1978,9 +1978,9 @@
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "c81cac4cc9fb119807821003930de55aae8765b9df480699d63c4442b09863ab",
-          "bytes": 80688,
-          "originalSourceSha256": "102f5cae4735ca6790d5d83fe7fedf025236ccf889f4e7fe13392f2c2443baa4",
+          "sha256": "a4122cc45be8e92fd80ed96079c77dea67750128a8e6ff0f07fc73896cca1a69",
+          "bytes": 82647,
+          "originalSourceSha256": "d722ba2ef8fe2dcec5faae798e21b8c9c7b72105faf8e3a7c517c3875904c16d",
           "sdkSha256": "81b1d68a7b20067791a51dd79c29d015c98204236db626bf2dbb25f66bd5e59f"
         },
         {
@@ -2574,8 +2574,8 @@
         {
           "source": "src/ui/ai.js",
           "destination": "src/ui/ai.js",
-          "sha256": "445942e00af574ee75bbccafbd912742222ce60ee47894225a5a29004c08d135",
-          "bytes": 9187
+          "sha256": "aa2919fa4bc9c4e1a6fee8e5b28afbcbf96c89b7ed0724d1878f4a841b36a244",
+          "bytes": 9209
         },
         {
           "source": "src/ui/brushes.js",
@@ -2622,8 +2622,8 @@
         {
           "source": "src/ui/filmstrip.js",
           "destination": "src/ui/filmstrip.js",
-          "sha256": "470e8eacb682eb1d763761e5bd35ee188020571dc3ff80759a2be5886c82722b",
-          "bytes": 30914
+          "sha256": "756ecf7d604b55ed532770cfed031c73cd9050db3eff48190b4555a7e271b886",
+          "bytes": 31197
         },
         {
           "source": "src/ui/geometry.js",
@@ -2640,8 +2640,8 @@
         {
           "source": "src/ui/index.js",
           "destination": "src/ui/index.js",
-          "sha256": "4e3d82f0bb20b24f9982a994de4e3eb6e7a1e33d80f533a1d8770b216ed1f63a",
-          "bytes": 22189
+          "sha256": "284ff4b0e8ecd03b470473e6ed830715bf1451aeeb7a476fcde32834d5f22903",
+          "bytes": 26199
         },
         {
           "source": "src/ui/layers.js",
