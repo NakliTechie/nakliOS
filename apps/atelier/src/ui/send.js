@@ -43,3 +43,20 @@ export function createSender({ bus, onReply = () => {} }) {
   }
   return { send, read, latest, guarded };
 }
+
+// A reply as a sentence for the person: the error's own message, capitalised, without the command name or
+// status code (agents read those from the reply itself).
+const PLAIN = {
+  stale: 'The document changed before that could run. Try again.',
+  busy: 'Atelier is busy with another task. Try again when it finishes.',
+  denied: 'NakliOS did not allow that.',
+  unsupported: 'That is not available here.',
+  invalid: 'That could not be done.',
+  outcome_unknown: 'That did not finish, and Atelier cannot tell whether anything changed.',
+};
+export function plainError(r) {
+  const m = String(r?.error?.message ?? '').trim();
+  if (!m) return PLAIN[r?.status] ?? 'That did not work.';
+  const s = m[0].toUpperCase() + m.slice(1);
+  return /[.!?)]$/.test(s) ? s : `${s}.`;
+}

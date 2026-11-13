@@ -115,6 +115,7 @@
     "Duotone dialog: inks (edit an existing duotone)": "set_adjustment",
     "Adjustment settings (selected adjustment layer): levels, curves, hue and saturation, exposure, colour balance, black and white sliders": "set_adjustment",
     "Rasterise (Style, filters and print), and Rasterise and continue in a filter dialog": "rasterize_layer",
+    "Shared library dialog: Remove (click twice) on a colour, brush, image or LUT": "delete_library_asset",
     "Filter menu: artistic (oil paint, watercolour, sketch, posterise, halftone) and blur, sharpen, noise": "apply_filter",
     "Soft proof toggle, gamut warning and total ink": "set_soft_proof",
     "Soft proof: CMYK ICC profile path": "set_soft_proof",

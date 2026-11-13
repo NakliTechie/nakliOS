@@ -131,6 +131,10 @@
   #empty dt { font-weight: 600; } #empty dd { margin: 0; color: rgba(255,255,255,.85); }
   #empty .hint { color: rgba(255,255,255,.75); }
   #stage.drop-target { outline: 3px dashed var(--accent); outline-offset: -6px; }
+  #loading { position: absolute; inset: 0; z-index: 4; display: grid; place-content: center; color: #fff; font-size: 15px; }
+  /* A short message beside the control that was just used (src/ui/index.js toast). */
+  #toast { position: fixed; z-index: 60; max-width: min(420px, calc(100vw - 16px)); padding: 6px 10px; border-radius: 6px; background: #1d1d1f; color: #fff; font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.2); pointer-events: none; }
+  .dlg .asset-row { grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) auto auto; }
   #stage.drop-target #empty h2::after { content: ' (drop to open)'; }
   @media (max-width: 900px) { main, body[data-mode=develop] main { grid-template-columns: 40px minmax(0, 1fr) 240px; } }
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }

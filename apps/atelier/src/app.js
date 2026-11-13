@@ -107,9 +107,10 @@ async function restoreLast() {
     if (!(await storage.exists(STATE_FILE))) return;
     const last = JSON.parse(await storage.readText(STATE_FILE))?.last;
     if (typeof last !== 'string' || !(await storage.exists(last))) return;
+    mounted?.ui.loading(`Opening ${last.split('/').pop()}…`);
     const r = await bus.dispatch('open_photo', { path: last }, { door: 'ui', caller: 'restore' });
     if (r.status !== 'ok') console.warn('[atelier] could not reopen', last, r.error?.message);
-  } catch (e) { console.warn('[atelier] restore failed', e); } finally { restoring = false; }
+  } catch (e) { console.warn('[atelier] restore failed', e); } finally { restoring = false; mounted?.ui.loading(null); }
 }
 
 mounted = mountUI({ bus, ctx, manifest, engineError, grantFolder, importFiles: (f) => importFiles(f), runStaged: (id) => runStaged(ctx, id), hostCaps });

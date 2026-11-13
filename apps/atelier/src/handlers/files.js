@@ -227,7 +227,7 @@ const singleRaw = (d) => {
       });
     }
     if (a.path && !a.path.endsWith('.atelier')) fail('invalid', 'a document path ends with .atelier', 'fix_argument', 'save_document');
-    const path = a.path || `documents/${d.id}.atelier`;
+    const path = a.path || d.path || `documents/${d.id}.atelier`;   // d.path: the name the person gave on first save
     // Writing over a file that belongs to another document is replacing it: the person confirms.
     if (a.path && a.path !== `documents/${d.id}.atelier` && !(d.savedPaths || []).includes(a.path) && await s.exists(a.path)) {
       return stageOrRun(ctx, { door }, 'save_document', `REPLACE ${a.path} with "${d.title}"`, () => writeDocument(s, d, path), { force: true });
@@ -253,6 +253,7 @@ const singleRaw = (d) => {
       await s.write(file, await encodePng(r.bufferData(id), b.width, b.height, channels));
       buffers[id] = { kind: b.kind, width: b.width, height: b.height, file };
     }
+    if (path !== `documents/${d.id}.atelier`) d.path = path;
     const body = json({ format: 'atelier-document', version: 1, savedAt: new Date().toISOString(), document: structuredClone(d), buffers, editList: ctx.bus?.state.editList ?? [] });
     await s.write(path, body);
     d.savedPaths = [...new Set([...(d.savedPaths || []), path])];

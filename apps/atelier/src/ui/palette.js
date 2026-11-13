@@ -35,7 +35,7 @@ export function createPalette(ui) {
   }
   function draw() {
     list.replaceChildren(...results.map((r, i) => h('li', { role: 'option', 'aria-selected': String(i === at), class: i === at ? 'on' : null, onclick: () => { at = i; run(); } },
-      h('span', {}, r.label), h('span', { class: 'dim' }, r.person ? 'person only' : r.command ? r.command : r.tool ? `${r.mode} tool` : 'view'))));
+      h('span', {}, r.label), h('span', { class: 'dim' }, r.person ? 'you do this yourself' : r.kind === 'tool' ? `${r.mode[0].toUpperCase()}${r.mode.slice(1)} tool` : r.kind === 'parameter' ? 'Develop setting' : ''))));
     if (!results.length && input.value.trim()) list.append(h('li', { class: 'dim' }, 'No command matches that task.'));
   }
   async function ensureMode(mode) {
@@ -53,11 +53,11 @@ export function createPalette(ui) {
     const reach = () => { const el = findControl(document, r); for (let p = el?.parentElement; p; p = p.parentElement) if (p.tagName === 'DETAILS') p.open = true; return el; };
     let el = reach();
     if (!el?.offsetParent) { for (const m of [ui.ctx.view.mode === 'develop' ? 'composite' : 'develop']) { await ensureMode(m); el = reach(); } }
-    if (!el?.offsetParent) { ui.say(`${r.label} has no visible panel control here${r.command ? `; agents call ${r.command} as a command` : ''}.`); return; }
+    if (!el?.offsetParent) { ui.say(`${r.label} has no control on screen right now. Open a photo or switch mode, then try again.`); return; }
     el.scrollIntoView({ block: 'nearest' });
     el.classList.add('palette-flash'); setTimeout(() => el.classList.remove('palette-flash'), 1200);
     if (el.tagName === 'DETAILS') { el.open = true; el.querySelector('summary')?.focus(); } else if (el.tagName === 'BUTTON' || el.tagName === 'SUMMARY') el.click(); else el.focus();
-    ui.say(`${r.label}${r.command ? ` (${r.command})` : ''}.`);
+    ui.say(`${r.label}.`);
   }
 
   input.addEventListener('input', () => search().catch(() => {}));

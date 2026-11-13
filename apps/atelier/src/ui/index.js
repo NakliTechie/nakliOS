@@ -5,7 +5,7 @@
 
 import { h, $ } from './dom.js';
 import { createDialogs } from './dialog.js';
-import { createSender } from './send.js';
+import { createSender, plainError } from './send.js';
 import { createDevelopPanel } from './develop.js';
 import { createFilmstrip } from './filmstrip.js';
 import { createLayersPanel } from './layers.js';
@@ -30,11 +30,30 @@ export function mountUI({ bus, ctx, manifest, engineError, grantFolder, importFi
   const dialogs = createDialogs();
   const status = $('#status');
   let lastNote = '';
-  const say = (t) => { lastNote = t; status.textContent = t; };
+  // Feedback goes to the status bar and, within 4 s of a click or key press on a control, also to a short
+  // toast beside that control, so the answer appears where the person is looking.
+  let lastControl = null; let lastAt = 0;
+  const mark = (c) => { if (c) { lastControl = c; lastAt = performance.now(); } };
+  addEventListener('pointerdown', (e) => mark(e.target.closest?.('button, select, summary, label, [role=option]')), true);
+  addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') mark(document.activeElement?.closest?.('button, select, summary')); }, true);
+  const toastEl = h('div', { id: 'toast', role: 'status', 'aria-live': 'polite', hidden: true });
+  document.body.append(toastEl);
+  let toastTimer = 0;
+  function toast(t) {
+    const c = lastControl;
+    if (!t || !c?.isConnected || performance.now() - lastAt > 4000 || !c.getClientRects().length) return;
+    toastEl.textContent = t; toastEl.hidden = false;
+    const r = c.getBoundingClientRect(); const w = toastEl.offsetWidth; const hgt = toastEl.offsetHeight;
+    const below = r.bottom + 6 + hgt < innerHeight;
+    toastEl.style.left = `${Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2))}px`;
+    toastEl.style.top = `${below ? r.bottom + 6 : Math.max(8, r.top - hgt - 6)}px`;
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => { toastEl.hidden = true; }, 5000);
+  }
+  const say = (t) => { lastNote = t; status.textContent = t; toast(t); };
   const sender = createSender({ bus, onReply: (name, r, { quiet }) => {
     if (r.status === 'ok') { if (!quiet) lastNote = ''; return; }
-    if (r.status === 'staged') { say(`${name} waits for your Confirm below.`); return; }
-    if (!quiet || r.status !== 'unsupported') say(`${name}: ${r.status}${r.error?.message ? ` (${r.error.message})` : ''}`);
+    if (r.status === 'staged') { say('This waits for your Confirm in the bar below.'); return; }
+    if (!quiet || r.status !== 'unsupported') say(plainError(r));
   } });
 
   const ui = {
@@ -82,10 +101,23 @@ export function mountUI({ bus, ctx, manifest, engineError, grantFolder, importFi
     const r = await sender.send('new_document', v);
     if (r.status === 'ok' && ctx.view.mode !== 'composite') await setMode('composite');
   }
+  // The first Save of a document asks for its name (a single RAW photo saves to its sidecar instead);
+  // after that, Save and autosave write to that name.
   async function saveNow() {
-    if (!ctx.store.doc) { say('Nothing to save: no document is open.'); return; }
+    const doc = ctx.store.doc;
+    if (!doc) { say('Nothing to save: no document is open.'); return; }
+    const sidecar = doc.layers.length === 1 && doc.layers[0].kind === 'raw';
+    let args = {};
+    if (!sidecar && !doc.path) {
+      const name = h('input', { type: 'text', value: (doc.title || 'Untitled').replace(/\.[^.]+$/, ''), 'aria-label': 'Document name', autofocus: true });
+      const v = await dialogs.raw({ title: 'Save document', body: h('div', { class: 'form' }, h('label', { class: 'field' }, h('span', {}, 'Name'), name), h('p', { class: 'hint' }, `Saved as documents/<name>.atelier in ${ctx.storage()?.label ?? 'your storage'}. Atelier keeps saving it there as you work.`)),
+        actions: [{ label: 'Cancel', value: null }, { label: 'Save', primary: true, value: () => name.value.trim().replace(/[\\/:*?"<>|]/g, '_') }] });
+      if (v == null) return;
+      if (!v) { say('Give the document a name to save it.'); return; }
+      args = { path: `documents/${v}.atelier` };
+    }
     try { await ctx.flush?.(); } catch (e) { say(`Save failed: ${e.message}`); return; }
-    const r = await sender.send('save_document');
+    const r = await sender.send('save_document', args);
     if (r.status === 'ok') say(`Saved ${r.result.path}.`);
   }
   const openExport = createExport(ui);
@@ -145,7 +177,7 @@ export function mountUI({ bus, ctx, manifest, engineError, grantFolder, importFi
     if (b.dataset.decision === 'confirm') {
       const job = await runStaged(b.dataset.staged);
       if (job?.state === 'done' && /^export_/.test(job.tool) && job.result?.path) await ui.downloadExport(job.result.path);
-      say(job ? `${job.tool}: ${job.state}${job.error ? ` (${job.error})` : job.result?.path ? ` → ${job.result.path}` : ''}` : 'That action is gone.');
+      say(!job ? 'That action is gone.' : job.state === 'done' ? `Done${job.result?.path ? `: ${job.result.path}` : ''}.` : `That did not finish${job.error ? `: ${job.error}` : ''}.`);
     } else { ctx.staged.delete(b.dataset.staged); say('Discarded.'); }
     render();
   });
@@ -172,7 +204,9 @@ export function mountUI({ bus, ctx, manifest, engineError, grantFolder, importFi
       h('dt', {}, 'Develop'), h('dd', {}, 'Adjust one photo: exposure, white balance, colour, tone curve and lens. Best with camera RAW files.'),
       h('dt', {}, 'Composite'), h('dd', {}, 'Build a picture from layers, masks, adjustments and type.')),
     h('p', { class: 'hint', id: 'empty-storage' }));
-  stage.append(empty);
+  const loadingEl = h('div', { id: 'loading', role: 'status', hidden: true });
+  stage.append(empty, loadingEl);
+  ui.loading = (text) => { loadingEl.textContent = text || ''; loadingEl.hidden = !text; render(); };
   const hasFiles = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
   stage.addEventListener('dragover', (e) => { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; stage.classList.add('drop-target'); });
   stage.addEventListener('dragleave', (e) => { if (!stage.contains(e.relatedTarget)) stage.classList.remove('drop-target'); });
@@ -241,7 +275,7 @@ export function mountUI({ bus, ctx, manifest, engineError, grantFolder, importFi
     storageLabel.textContent = s ? `Storage: ${s.label}` : 'No storage';
     devRoot.hidden = !dev; layRoot.hidden = dev;
     if (dev) develop.update(); else { layers.render(); engineUI.render(); }
-    empty.hidden = !!doc || !!engineError;
+    empty.hidden = !!doc || !!engineError || !loadingEl.hidden;
     if (!doc) $('#empty-storage').textContent = s ? `Photos you open are copied to ${s.kind === 'browser' ? 'this browser’s own storage' : s.label}. Nothing is uploaded.` : 'Nothing is uploaded.';
     // AI tools act on an open photo, so their panels (and model downloads) wait until one is open.
     for (const el of [$('#ai-panel'), document.querySelector('aside .ai-pixels'), document.querySelector('aside .ai-portrait')]) if (el) el.hidden = !doc;

@@ -103,7 +103,7 @@ const TOOL_KEYS = new Map([...COMPOSITE_TOOLS.map((t) => [t, 'composite']), ...D
 // Entries: manifest tools (person-only ones too, flagged), parity controls, set_develop parameters and tool bar tools.
 export function buildSearchIndex(manifest, parity = PARITY) {
   const out = [];
-  for (const t of manifest.tools) out.push({ kind: 'command', id: t.name, command: t.name, label: t.name.replace(/_/g, ' '), text: `${t.name} ${t.description}`, personOnly: !!t.personOnly });
+  for (const t of manifest.tools) out.push({ kind: 'command', id: t.name, command: t.name, label: t.name[0].toUpperCase() + t.name.slice(1).replace(/_/g, ' '), text: `${t.name} ${t.description}`, personOnly: !!t.personOnly });
   for (const [label, cmd] of parity) out.push({ kind: 'control', id: `control:${label}`, command: cmd.startsWith('person:') ? null : cmd === 'view' ? null : cmd, label, text: label, person: cmd.startsWith('person:') ? cmd.slice(8) : undefined });
   const dev = manifest.tools.find((t) => t.name === 'set_develop');
   for (const p of Object.keys(dev?.inputSchema.properties.params?.properties || {})) out.push({ kind: 'parameter', id: `set_develop.${p}`, command: 'set_develop', param: p, label: `${p.replace(/_/g, ' ')} (develop slider)`, text: `${p} ${p.replace(/_/g, ' ')}` });

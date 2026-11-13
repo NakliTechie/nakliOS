@@ -144,6 +144,7 @@ export function createModules(ui, { selection }) {
       if (r.status !== 'ok') { ui.say(`Map: ${r.error?.message ?? r.status}`); return r; }
       placed.push(...r.result.placed); missing += r.result.missing.length; total = r.result.total; pages = r.result.pages;
     }
+    if (!total) { ui.say('Map: no photos yet. Open photos or a folder; photos with GPS positions appear on the map.'); return { placed, missing, total }; }
     mapRoot.hidden = false;
     mapNote.textContent = `${placed.length} of ${total} photos have GPS${missing ? `; ${missing} without` : ''}. Plain grid, no online map.`;
     const rect = mapBox.getBoundingClientRect(); const W = Math.max(300, rect.width); const H = Math.max(200, rect.height);
