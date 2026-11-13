@@ -28,7 +28,7 @@ export function createAIPanel(root, ui) {
   const depthRow = h('div', { class: 'row wrap ai-depth' });
   const edgeBand = h('input', { type: 'number', min: 1, max: 128, step: 1, value: 12, 'aria-label': 'Refine edge band (document pixels)', style: 'width:4.5em' });
   const note = h('p', { class: 'hint ai-note' });
-  root.replaceChildren(h('h3', {}, 'AI (on this device)'), list, buttons, depthRow, note);
+  root.replaceChildren(h('h2', { class: 'panel-title' }, 'AI (on this device)'), list, buttons, depthRow, note);
 
   const doc = () => ui.store.doc;
   const dev = () => ctx.view.mode === 'develop';

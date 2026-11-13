@@ -106,6 +106,8 @@ export function createFilmstrip(root, ui) {
 
   function draw() {
     strip.replaceChildren(...(photos.length ? photos.map(tile) : [h('p', { class: 'hint' }, ui.ctx.storage() ? 'No photos match. Add RAW or JPEG files to the folder, open a folder, or clear the filters.' : 'No storage yet.')]));
+    // a listbox needs options, so the empty strip (a hint) is a plain region
+    if (photos.length) { strip.setAttribute('role', 'listbox'); strip.setAttribute('aria-multiselectable', 'true'); } else { strip.removeAttribute('role'); strip.removeAttribute('aria-multiselectable'); }
     count.textContent = `${total} photo${total === 1 ? '' : 's'}${selected.size > 1 ? ` · ${selected.size} selected` : ''}`;
     more.hidden = pages < 2; more.textContent = `Page ${page + 1} of ${pages}`;
     const nExif = Object.keys(exifFilter).length;

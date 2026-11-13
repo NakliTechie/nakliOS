@@ -88,7 +88,7 @@ export function mountUI({ bus, ctx, manifest, engineError, grantFolder, importFi
     h('button', { class: 'primary', dataset: { command: 'export_image' }, onclick: () => openExport() }, 'Export…'),
   );
 
-  header.insertBefore(createFillButton(ui), header.querySelector('.grow'));   // content-aware fill (P41)
+  const fillBtn = createFillButton(ui); header.insertBefore(fillBtn, header.querySelector('.grow'));   // content-aware fill (P41)
   async function setMode(mode) { await sender.send('set_view', { mode }); tools.drawBar(); render(); }
 
   async function newDocument() {
@@ -158,14 +158,14 @@ export function mountUI({ bus, ctx, manifest, engineError, grantFolder, importFi
   const develop = createDevelopPanel(devRoot, ui); ui.develop = develop;
   const layers = createLayersPanel(layRoot, ui);
   const engineUI = createEngineUI(layRoot, ui);   // layer styles, adjustments, filters, soft proof
-  header.insertBefore(createSmartMenu(ui, () => layers.picked), header.querySelector('.grow'));   // smart objects (P12, P13)
+  const smartSel = createSmartMenu(ui, () => layers.picked); header.insertBefore(smartSel, header.querySelector('.grow'));   // smart objects (P12, P13)
   ui.aiPixels = createAiPixelsPanel($('aside'), ui);
   ui.aiPortrait = createAiPortraitPanel($('aside'), ui);   // portrait and colour filters, hair and skin masks (P61, L61)
   const aiMasks = createAIPanel($('#ai-panel'), ui); ui.aiMasks = aiMasks;
   ui.vector = createVectorPanel($('#vector-panel'), ui);   // pen, paths, vector masks, shapes, rich type, artboards (P08, P32–P35, P56)
   const filmstrip = createFilmstrip($('#filmstrip'), ui); ui.filmstrip = filmstrip;
-  header.insertBefore(createMergeButton(ui), header.querySelector('.grow'));   // HDR, panorama, focus stack (L44–L46)
-  { const t = createTetherControls(ui); if (t) header.insertBefore(t, header.querySelector('.grow')); }   // tethered capture (L50)
+  const mergeBtn = createMergeButton(ui); header.insertBefore(mergeBtn, header.querySelector('.grow'));   // HDR, panorama, focus stack (L44–L46)
+  const tetherEl = createTetherControls(ui); if (tetherEl) header.insertBefore(tetherEl, header.querySelector('.grow'));   // tethered capture (L50)
   const tools = createTools({ bar: $('#toolbar'), options: $('#options'), stage: $('#stage'), canvas: $('#canvas'), overlay: $('#overlay'), ui });
   ui.brushes = createBrushPanel($('#brush-panel'), ui, tools);   // brush engine v2 and presets (P26)
   ui.timeline = createTimelinePanel($('#timeline-panel'), ui);   // timeline, animation, video layers (P58)
@@ -272,7 +272,7 @@ export function mountUI({ bus, ctx, manifest, engineError, grantFolder, importFi
     document.body.dataset.mode = dev ? 'develop' : 'composite';
     for (const b of modes.children) { const on = b.dataset.mode === ctx.view.mode; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); }
     const s = ctx.storage();
-    storageLabel.textContent = s ? `Storage: ${s.label}` : 'No storage';
+    storageLabel.textContent = s ? s.label : 'No storage'; storageLabel.title = 'Where Atelier keeps your photos and documents';
     devRoot.hidden = !dev; layRoot.hidden = dev;
     if (dev) develop.update(); else { layers.render(); engineUI.render(); }
     empty.hidden = !!doc || !!engineError || !loadingEl.hidden;
@@ -302,6 +302,57 @@ export function mountUI({ bus, ctx, manifest, engineError, grantFolder, importFi
 
   tools.drawBar();
   ui.views = mountViews(ui);
+  groupHeader();
+
+  // ---- header menus (UX review M7) ----
+  // The header keeps File actions, the mode switch, Undo and Redo in view and puts the rest in four menus
+  // grouped by task. A menu is a <details>, so the command palette's reach() opens it to show a control.
+  function menu(label, items, title) {
+    const list = h('div', { class: 'hmenu-list', role: 'group', 'aria-label': label }, items);
+    const d = h('details', { class: 'hmenu' }, h('summary', { title }, label), list);
+    // a click on a button in the list runs it, then the menu closes; selects and inputs keep it open
+    list.addEventListener('click', (e) => { if (e.target.closest('button')) setTimeout(() => { d.open = false; }, 0); });
+    d.addEventListener('toggle', () => { if (d.open) for (const o of header.querySelectorAll('details.hmenu[open]')) if (o !== d) o.open = false; });
+    return d;
+  }
+  function groupHeader() {
+    const v = (prefix) => [...header.querySelectorAll('.views-bar button')].find((b) => (b.dataset.viewLabel || '').startsWith(prefix));
+    const bar = header.querySelector('.views-bar');
+    const viewItems = ['Compare view', 'Before and after', 'Node view'].map(v).filter(Boolean);
+    const shareItems = ['Slideshow', 'Print', 'Web gallery', 'Map of photos', 'Book'].map(v).filter(Boolean);
+    const search = v('Command palette');
+    if (search) { search.textContent = 'Search ⌘K'; search.classList.add('hsearch'); }
+    const menus = [
+      menu('Edit', [fillBtn, mergeBtn, smartSel], 'Content-aware fill, merge photos, smart objects'),
+      menu('View', viewItems, 'Compare, before and after, node view'),
+      menu('Share', shareItems, 'Slideshow, print, web gallery, map, book'),
+      ...(tetherEl ? [menu('Camera', [tetherEl], 'Tethered capture from a USB camera')] : []),
+    ];
+    const help = h('button', { class: 'hhelp', dataset: { view: 'help' }, title: 'How to start, and keyboard shortcuts', 'aria-label': 'Help', onclick: () => openHelp() }, '?');
+    const redo = header.querySelector('[data-command="redo"]');
+    redo.after(...menus, ...(search ? [search] : []), help);
+    bar?.remove();
+  }
+
+  // ---- help sheet (UX review L2) ----
+  function openHelp() {
+    const row = (k, t) => h('div', { class: 'help-row' }, h('kbd', {}, k), h('span', {}, t));
+    return dialogs.raw({ title: 'Getting started', body: h('div', { class: 'form help' },
+      h('ol', {},
+        h('li', {}, 'Open photo… or drop photos on the canvas. Photos are copied into Atelier’s storage; your originals stay as they are.'),
+        h('li', {}, 'Develop adjusts one photo (exposure, colour, tone curve, lens). Composite builds a picture from layers.'),
+        h('li', {}, 'In Composite, Add adjustment adds a layer whose sliders appear above the panel when you select it.'),
+        h('li', {}, 'Atelier saves as you work. The first Save asks for a name.'),
+        h('li', {}, 'Export… writes a JPEG, PNG, WebP, AVIF or TIFF; with this browser’s storage it also downloads a copy.')),
+      h('h4', {}, 'Keyboard'),
+      row('Ctrl+1 / Ctrl+2', 'Develop / Composite'), row('Ctrl+Z / Ctrl+Shift+Z', 'Undo / Redo'), row('Ctrl+S', 'Save'), row('Ctrl+K', 'Search commands'),
+      row('Ctrl+0, Ctrl+= , Ctrl+-', 'Fit, zoom in, zoom out'), row('\\', 'Before and after'),
+      row('V M L W B E T C H Z', 'Move, marquee, lasso, wand, brush, eraser, type, crop, hand, zoom (Composite)'),
+      row('R M K', 'Crop, linear mask, brush mask (Develop)')),
+    actions: [{ label: 'Close', value: null, primary: true }] });
+  }
+  addEventListener('keydown', (e) => { if (e.key === 'Escape') for (const o of header.querySelectorAll('details.hmenu[open]')) o.open = false; });
+  addEventListener('pointerdown', (e) => { if (!e.target.closest('details.hmenu')) for (const o of header.querySelectorAll('details.hmenu[open]')) o.open = false; });
   addEventListener('resize', () => { tools.sizeOverlay(); render(); });
   tools.sizeOverlay();
   return { ui, render, refreshFolder: () => filmstrip.refresh().then(() => develop.refreshPresets()), say };
