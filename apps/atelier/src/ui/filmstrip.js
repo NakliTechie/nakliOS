@@ -98,7 +98,8 @@ export function createFilmstrip(root, ui) {
   }
 
   async function placeSelected() {
-    const key = anchor || [...selected][0];
+    // the anchor can be a tile the person just deselected (Cmd-click); place only what is selected
+    const key = anchor && selected.has(anchor) ? anchor : [...selected][0];
     if (!key) { ui.say('Select a photo in the filmstrip first.'); return; }
     if (!ui.store.doc) { ui.say('Open or create a document first; Place adds the photo as a layer.'); return; }
     await send('open_photo', { path: key.replace(/#vc\d+$/, ''), asLayer: true });

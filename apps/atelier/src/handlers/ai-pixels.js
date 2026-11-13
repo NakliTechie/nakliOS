@@ -95,7 +95,7 @@ export function register(bus, ctx) {
     if (!s) fail('unsupported', 'no workspace storage to write the upscaled file to; grant a folder', 'use_ui_control', 'grant_folder');
     const m = await needModel('swin2sr-x2', T);
     if (d.width * d.height > UPSCALE_MAX_PIXELS) fail('unsupported', `the ×2 upscale takes up to ${UPSCALE_MAX_PIXELS / 1e6} MP; this document is ${(d.width * d.height / 1e6).toFixed(1)} MP. Crop it (crop_document) or export a smaller copy first`, 'change_target', 'crop_document');
-    const path = (a.path || `exports/${fileSafe(d.title)}-upscaled-x2.png`).replace(/^\/+/, '');
+    const path = (a.path || `exports/${fileSafe(d.title).replace(/\.(jpe?g|png|webp|avif|gif|tiff?|heic|psd|dng|cr2|cr3|nef|arw|raf|orf|rw2|atelier)$/i, '') || 'image'}-upscaled-x2.png`).replace(/^\/+/, '');
     if (!/\.png$/i.test(path)) fail('invalid', 'path must end in .png', 'fix_argument', T);
     const replaces = await s.exists(path);
     return stageOrRun(ctx, { door }, T, `${replaces ? 'REPLACE' : 'write'} ${path}: "${d.title}" upscaled ×2 to ${d.width * 2} × ${d.height * 2} by ${m.label}`, () => holding(T, async (onTile) => {

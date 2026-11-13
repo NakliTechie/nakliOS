@@ -1955,7 +1955,7 @@
       "id": "atelier",
       "repo": "NakliTechie/atelier",
       "requestedRef": "main",
-      "resolvedCommit": "111bb77bcf0f27234ed773e680abbecedf443467",
+      "resolvedCommit": "54bf7c6ca159d8340185a9ccbeff62f95156b6d1",
       "files": [
         {
           "source": "LICENSE",
@@ -2238,8 +2238,8 @@
         {
           "source": "src/handlers/ai-pixels.js",
           "destination": "src/handlers/ai-pixels.js",
-          "sha256": "ce7d42125f1324a892de2fdbcd4ee3fc20777a8ef24584a4fe1ab974935e5875",
-          "bytes": 17736
+          "sha256": "8449f352b760f1681ff100f96e8e64bd5ff803f928ac022d7e0ee982852bea25",
+          "bytes": 17847
         },
         {
           "source": "src/handlers/ai-portrait.js",
@@ -2562,8 +2562,8 @@
         {
           "source": "src/ui/ai-pixels.js",
           "destination": "src/ui/ai-pixels.js",
-          "sha256": "6d45ca07935b0df91735c6e271fee71c772471d33cf7472ff143451f86459a8a",
-          "bytes": 11775
+          "sha256": "92b981ed2cbf0f602be5d8fd6008a8ab8e7d2512e56176d308ea2205ab5c3674",
+          "bytes": 12446
         },
         {
           "source": "src/ui/ai-portrait.js",
@@ -2622,8 +2622,8 @@
         {
           "source": "src/ui/filmstrip.js",
           "destination": "src/ui/filmstrip.js",
-          "sha256": "756ecf7d604b55ed532770cfed031c73cd9050db3eff48190b4555a7e271b886",
-          "bytes": 31197
+          "sha256": "3a0fa2a7f7f6afbd05855665c6ee5c67bf06aaae87d8a5bcab4a101e19690cfb",
+          "bytes": 31329
         },
         {
           "source": "src/ui/geometry.js",
@@ -2640,8 +2640,8 @@
         {
           "source": "src/ui/index.js",
           "destination": "src/ui/index.js",
-          "sha256": "dec0391bc9d2988d79ac18cd89b2903871d7b6a57538ce5bf855020261ed0f53",
-          "bytes": 26228
+          "sha256": "66a433a9b8e51be938fc493ba3505e1a811486dfdffc19a73cd8d88556f79c25",
+          "bytes": 26259
         },
         {
           "source": "src/ui/layers.js",
@@ -2730,8 +2730,8 @@
         {
           "source": "src/ui/vector.js",
           "destination": "src/ui/vector.js",
-          "sha256": "074bd56de05d27bbfc685fed1d57b063e3b7f390e9e8ec84d32ad40b59394fea",
-          "bytes": 19640
+          "sha256": "7c224164924d51fda9fb299520d93b45bbc5ce78460878a5d0d238d7644068fb",
+          "bytes": 20255
         },
         {
           "source": "src/ui/views.js",

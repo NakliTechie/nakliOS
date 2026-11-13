@@ -159,11 +159,16 @@ export function createVectorPanel(root, ui) {
     const f = { name: h('input', { type: 'text', value: `Artboard ${boards.length + 1}`, 'aria-label': 'Name' }), x: num('x', boards.length ? Math.max(...boards.map((b) => b.x + b.width)) + 100 : 0), y: num('y', 0),
       width: num('Width', 1080, { min: 1 }), height: num('Height', 1080, { min: 1 }), bg: h('input', { type: 'text', value: '#ffffff', 'aria-label': 'Background (#rrggbb or transparent)' }) };
     const grow = h('input', { type: 'checkbox', checked: true });
-    const v = await ui.dialogs.raw({ title: 'New artboard', body: h('div', { class: 'form' }, ...Object.entries(f).map(([k, el]) => h('label', { class: 'field' }, h('span', {}, k), el)), h('label', { class: 'check' }, grow, 'Grow the document to fit')),
-      actions: [{ label: 'Cancel', value: null }, { label: 'Add', primary: true, value: () => ({ name: f.name.value, x: Math.round(+f.x.value), y: Math.round(+f.y.value), width: Math.round(+f.width.value), height: Math.round(+f.height.value), background: f.bg.value.trim(), grow: grow.checked }) }] });
+    // Moving the selected layer onto the board is the person's explicit choice: an artboard draws below every
+    // layer outside it, so a silent move hid a shape under the photo (filming defect, 2026-11-13).
+    const sel = active() && !active().parentId && !active().localOf ? active() : null;
+    const move = h('input', { type: 'checkbox' });
+    const v = await ui.dialogs.raw({ title: 'New artboard', body: h('div', { class: 'form' }, ...Object.entries(f).map(([k, el]) => h('label', { class: 'field' }, h('span', {}, k), el)), h('label', { class: 'check' }, grow, 'Grow the document to fit'),
+      sel ? h('label', { class: 'check', title: 'An artboard draws below the layers outside it' }, move, `Move "${sel.name}" onto this artboard`) : null),
+      actions: [{ label: 'Cancel', value: null }, { label: 'Add', primary: true, value: () => ({ name: f.name.value, x: Math.round(+f.x.value), y: Math.round(+f.y.value), width: Math.round(+f.width.value), height: Math.round(+f.height.value), background: f.bg.value.trim(), grow: grow.checked, move: move.checked }) }] });
     if (!v) return;
-    const lid = active() && !active().parentId ? [active().id] : [];
-    ok(await send('add_artboard', { ...v, layerIds: lid }), (r) => `Added ${r.artboard.name}.`);
+    const { move: moveSel, ...args } = v;
+    ok(await send('add_artboard', { ...args, layerIds: moveSel && sel ? [sel.id] : [] }), (r) => `Added ${r.artboard.name}.${moveSel && sel ? ` ${sel.name} is on it; layers outside artboards draw above it.` : ''}`);
   }
   async function exportBoards(artboardId) {
     const folder = await ui.dialogs.promptText('Export artboards', 'Folder in the workspace', 'exports/artboards');
