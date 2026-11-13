@@ -65,10 +65,26 @@ addEventListener('pointerup', () => store.endGesture(), true);
 
 // Every door's reply passes the durability observer (an edit from an agent autosaves like one from the
 // person) and redraws the UI. A command that replaces the document saves the old one first.
+// The mode a document was last in (Develop or Composite), per workspace path, so reopening a composite
+// returns to Composite. A per-viewer convenience in localStorage; a missing or blocked store is ignored.
+const MODES_KEY = 'atelier.modeByPath';
+let docPath = null;
+const modes = { read() { try { return JSON.parse(localStorage.getItem(MODES_KEY)) || {}; } catch { return {}; } },
+  get(path) { return path ? this.read()[path] ?? null : null; },
+  set(path, mode) { if (!path) return; const m = this.read(); delete m[path]; m[path] = mode; const keys = Object.keys(m); for (const k of keys.slice(0, Math.max(0, keys.length - 200))) delete m[k]; try { localStorage.setItem(MODES_KEY, JSON.stringify(m)); } catch { /* storage blocked */ } } };
 const dispatch = bus.dispatch;
 bus.dispatch = async (name, args = {}, opts = {}) => {
   await durability?.before(name, args, opts);
   const reply = await dispatch(name, args, opts);
+  if (reply.status === 'ok') {
+    if (name === 'open_photo' && !args.asLayer) {
+      docPath = args.path ?? null;
+      const want = modes.get(docPath);
+      if (want && want !== ctx.view.mode) await dispatch('set_view', { mode: want }, { ...opts, caller: 'remembered mode' });
+    } else if (name === 'new_document') docPath = null;
+    else if (name === 'save_document' && reply.result?.path) { docPath = reply.result.path; modes.set(docPath, ctx.view.mode); }
+    else if (name === 'set_view' && args.mode) modes.set(docPath, ctx.view.mode);
+  }
   try { await durability?.observe(name, args, reply); } catch (e) { console.warn('[atelier] durability observer', e); }
   if (bus.manifest.tools.find((t) => t.name === name)?.effect !== 'read') mounted?.render();
   return reply;
