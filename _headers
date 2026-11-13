@@ -51,8 +51,9 @@
 # Cloudflare reads only this root file, so a mirrored apps/atelier/_headers would be ignored. Both
 # this policy and the site-wide frame-ancestors 'self' apply, and the browser enforces each.
 # connect-src * lets the AI features download models from Hugging Face and the CDN.
+# 'unsafe-eval' is needed by the RAW decoder: libraw-wasm's Emscripten glue builds functions with new Function.
 /apps/atelier/*
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob: https://cdn.jsdelivr.net; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob: data:; font-src 'self' data:; connect-src * blob: data:; frame-src 'none'; form-action 'none'; object-src 'none'; base-uri 'self'
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: https://cdn.jsdelivr.net; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob: data:; font-src 'self' data:; connect-src * blob: data:; frame-src 'none'; form-action 'none'; object-src 'none'; base-uri 'self'
   X-Content-Type-Options: nosniff
   Referrer-Policy: no-referrer
 /apps/atelier/vendor/tessella/vendor/libraw-wasm/libraw.wasm
