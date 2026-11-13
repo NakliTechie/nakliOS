@@ -10,6 +10,7 @@
 // and add_library_asset kind lut), colours in library/colours.json, brushes in library/brushes/<name>.json
 // and placed images in library/images/<name>.<ext> (placed with open_photo asLayer).
 
+import { parseCube } from '../../vendor/tessella/src/lut.js';
 import { DEVELOP_RENDERED } from '../../vendor/tessella/src/model.js';
 import { fail, stageOrRun } from './util.js';
 import { safeName, normalizeSidecar } from '../files/workspace.js';
@@ -134,11 +135,13 @@ export function register(bus, ctx) {
     else fail('invalid', 'pass fromPath (a file in the workspace), or pick a file with the Add to library control', 'fix_argument', T);
     if (a.kind === 'image') {
       if (!IMAGE_EXT.includes(ext)) fail('unsupported', `library images are ${IMAGE_EXT.join(', ')}`, 'fix_argument', T);
+      if (!(await looksLikeImage(bytes, ext))) fail('invalid', `${ctx.pickedAsset?.name ?? a.fromPath} is not a readable ${ext.toUpperCase()} image`, 'fix_argument', T);
       const p = `library/images/${name.replace(/\.[^.]+$/, '')}.${ext}`; await exists(p);
       await s.write(p, bytes); return { kind: 'image', name, path: p };
     }
     if (a.kind === 'lut') {
       if (ext !== 'cube') fail('unsupported', 'a LUT is a .cube file', 'fix_argument', T);
+      try { parseCube(new TextDecoder().decode(bytes)); } catch (e) { fail('invalid', `${ctx.pickedAsset?.name ?? a.fromPath} is not a usable .cube LUT: ${e.message}`, 'fix_argument', T); }
       const p = `presets/${name.replace(/\.cube$/i, '')}.cube`; await exists(p);
       await s.write(p, bytes); return { kind: 'lut', name, path: p };
     }
@@ -158,4 +161,19 @@ export function register(bus, ctx) {
     if (!p || !/^(library\/(brushes|images)\/|presets\/)[^/]+$/.test(p) || !(await s.exists(p))) fail('invalid', 'path names a library asset from list_library_assets', 'fix_argument', 'list_library_assets');
     return stageOrRun(ctx, { door }, 'delete_library_asset', `DELETE library asset ${p}`, async () => { await s.delete(p); return { deleted: p }; });
   });
+}
+
+// An image the library can place: its first bytes match the extension's format, and where the browser can
+// decode that format (everything but TIFF and PSD), it decodes. A renamed text file or random bytes fail.
+const SIGNATURES = { jpg: [[0xff, 0xd8, 0xff]], jpeg: [[0xff, 0xd8, 0xff]], png: [[0x89, 0x50, 0x4e, 0x47]], gif: [[0x47, 0x49, 0x46, 0x38]],
+  webp: [[0x52, 0x49, 0x46, 0x46]], tif: [[0x49, 0x49, 0x2a, 0x00], [0x4d, 0x4d, 0x00, 0x2a]], tiff: [[0x49, 0x49, 0x2a, 0x00], [0x4d, 0x4d, 0x00, 0x2a]], psd: [[0x38, 0x42, 0x50, 0x53]] };
+export async function looksLikeImage(bytes, ext) {
+  const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  if (b.length < 12) return false;
+  const sigs = SIGNATURES[ext];
+  if (ext === 'avif') { if (String.fromCharCode(...b.subarray(4, 8)) !== 'ftyp') return false; }
+  else if (sigs && !sigs.some((sig) => sig.every((v, i) => b[i] === v))) return false;
+  if (ext === 'webp' && String.fromCharCode(...b.subarray(8, 12)) !== 'WEBP') return false;
+  if (['tif', 'tiff', 'psd'].includes(ext) || typeof createImageBitmap !== 'function') return true;
+  try { (await createImageBitmap(new Blob([b]))).close(); return true; } catch { return false; }
 }

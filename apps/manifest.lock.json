@@ -1955,7 +1955,7 @@
       "id": "atelier",
       "repo": "NakliTechie/atelier",
       "requestedRef": "main",
-      "resolvedCommit": "f898c83f43d01ab8f5a618258b67f9a83849d38e",
+      "resolvedCommit": "b53cdc1600ca97ea4a4c2ba604a76720246c53f0",
       "files": [
         {
           "source": "LICENSE",
@@ -1972,15 +1972,15 @@
         {
           "source": "commands.json",
           "destination": "commands.json",
-          "sha256": "0bac9d253ea259699ce9f0e709883159a4778510b4a372db66dd1e8284127a67",
-          "bytes": 242046
+          "sha256": "c52e0a4463586d5c0f020cb1517891b3f3734716b5cde0e671d44d55ce0d55b0",
+          "bytes": 242154
         },
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "be4b526fbd3f887cc3011e08fbc36f7b1252dc812f59018d48b0e1b34309aacf",
-          "bytes": 80148,
-          "originalSourceSha256": "e31b683f513b486acd3c4a2028051c802026ef1c86c87cdf80f7a64fdf4168b1",
+          "sha256": "c81cac4cc9fb119807821003930de55aae8765b9df480699d63c4442b09863ab",
+          "bytes": 80688,
+          "originalSourceSha256": "102f5cae4735ca6790d5d83fe7fedf025236ccf889f4e7fe13392f2c2443baa4",
           "sdkSha256": "81b1d68a7b20067791a51dd79c29d015c98204236db626bf2dbb25f66bd5e59f"
         },
         {
@@ -2076,8 +2076,8 @@
         {
           "source": "src/app.js",
           "destination": "src/app.js",
-          "sha256": "d0d2d5a23b69c07aa3cc8c727ddf8f5859cae516825644db8b1748354d8a9fbb",
-          "bytes": 13096
+          "sha256": "ef274ec93a4146f09b1353feccad36d5f5c42fdfbd2424c2b63064ec24b09c9d",
+          "bytes": 13187
         },
         {
           "source": "src/autosave.js",
@@ -2286,8 +2286,8 @@
         {
           "source": "src/handlers/files.js",
           "destination": "src/handlers/files.js",
-          "sha256": "fd859b31583f6454ebb6b16c8339956d4df7e9ae7e577bd8523f716dbd531909",
-          "bytes": 42037
+          "sha256": "dd8c6de5ae88b9ada81d9993118696ac0cdff48dc6d215f29f1082225a389a09",
+          "bytes": 42160
         },
         {
           "source": "src/handlers/heal.js",
@@ -2364,8 +2364,8 @@
         {
           "source": "src/handlers/share.js",
           "destination": "src/handlers/share.js",
-          "sha256": "73340052def8bd8719caa0d9e373a4bfbb62d9790cca9c5e45e6352f31494948",
-          "bytes": 11199
+          "sha256": "f57b054a81a9b4a0be821dd43ed41bb6cd089a8e960aa64310611e91f951f90a",
+          "bytes": 12834
         },
         {
           "source": "src/handlers/smart.js",
@@ -2400,8 +2400,8 @@
         {
           "source": "src/handlers/views.js",
           "destination": "src/handlers/views.js",
-          "sha256": "ece98f9b57a370dc0a5d8dd6e156c0ca1bd8e6804d8c11eee7c01da3d0d07edc",
-          "bytes": 28168
+          "sha256": "209cd306f13a9847b9dbe147055de91aed5b3d500fad72d35f96f2b362dbc908",
+          "bytes": 28203
         },
         {
           "source": "src/handlers/warp.js",
@@ -2616,14 +2616,14 @@
         {
           "source": "src/ui/export.js",
           "destination": "src/ui/export.js",
-          "sha256": "5a9b373a13e1337161620365dc3ab2e099064b8dbba8411b8f1b03f2bac59b11",
-          "bytes": 7737
+          "sha256": "38d8b89fae6bb320e0b65b38320105a5a0fbd53caf82497af96f1db561ce98e3",
+          "bytes": 7750
         },
         {
           "source": "src/ui/filmstrip.js",
           "destination": "src/ui/filmstrip.js",
-          "sha256": "7acdafcde5b796df4bb8d28a0f4d0a9c548529684c357af601096862c42deb6f",
-          "bytes": 29877
+          "sha256": "470e8eacb682eb1d763761e5bd35ee188020571dc3ff80759a2be5886c82722b",
+          "bytes": 30914
         },
         {
           "source": "src/ui/geometry.js",
@@ -2640,8 +2640,8 @@
         {
           "source": "src/ui/index.js",
           "destination": "src/ui/index.js",
-          "sha256": "a2c02530c752a2b32c6bb397bf729bf5546a254fdeab332694cc00e8ae2bfe9c",
-          "bytes": 19488
+          "sha256": "4e3d82f0bb20b24f9982a994de4e3eb6e7a1e33d80f533a1d8770b216ed1f63a",
+          "bytes": 22189
         },
         {
           "source": "src/ui/layers.js",
@@ -2658,8 +2658,8 @@
         {
           "source": "src/ui/modules.js",
           "destination": "src/ui/modules.js",
-          "sha256": "e917d20c1d793c5673d528a89b8934d41ba2fbd913f9af6433c03420921fef03",
-          "bytes": 11734
+          "sha256": "a45bf9e3ba86e9dbec77523dff75de968b13da51cc3cc6935b3f97def65148fd",
+          "bytes": 11890
         },
         {
           "source": "src/ui/nodes.js",
@@ -2670,14 +2670,14 @@
         {
           "source": "src/ui/palette.js",
           "destination": "src/ui/palette.js",
-          "sha256": "772dc1feb01c8b95ddddc9cc6eb59a0e28b5e7be5a29920a8bb6722a828ad5cf",
-          "bytes": 4907
+          "sha256": "dd51bb090784a70c284352c4379217f95bce59036715783888745efa2c486da7",
+          "bytes": 4927
         },
         {
           "source": "src/ui/parity.js",
           "destination": "src/ui/parity.js",
-          "sha256": "f84c836705a942a4fadd6cb7b70dfad0e64c809d0c5056650c9d82d8723ec511",
-          "bytes": 15309
+          "sha256": "9cb3705092367d5cd58a9a4464d10e413a50359f86b84da61524923282469c0f",
+          "bytes": 15417
         },
         {
           "source": "src/ui/presetpreview.js",
@@ -2700,8 +2700,8 @@
         {
           "source": "src/ui/send.js",
           "destination": "src/ui/send.js",
-          "sha256": "62ef5a3e100bc50aeeccfc825e30b5a456464c81616faac27a72231bdc55f384",
-          "bytes": 2410
+          "sha256": "513924a9190b517bf83b5ef8667fe70fc327abe787f46ee4a7ef55433d9d7621",
+          "bytes": 3186
         },
         {
           "source": "src/ui/slider.js",

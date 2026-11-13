@@ -256,11 +256,24 @@ export function createFilmstrip(root, ui) {
     try { const r = await send('add_library_asset', { kind: pendingAsset, name: file.name.replace(/\.[^.]+$/, '') }); if (r.status === 'ok') ui.say(`Added ${r.result.path} to the library.`); }
     finally { ui.ctx.pickedAsset = null; pendingAsset = null; }
   }
+  // Remove asks twice in place (the library dialog is open, so no second dialog): the first click arms
+  // the button, the second deletes. Presets are saved from Develop and removed there, so they have none.
+  function removeButton(a) {
+    if (a.kind === 'preset') return h('span', {});
+    let armed = false;
+    return h('button', { type: 'button', dataset: { command: 'delete_library_asset' }, title: `Remove ${a.name} from the library`, onclick: async (e) => {
+      const b = e.currentTarget;
+      if (!armed) { armed = true; b.textContent = 'Confirm remove'; b.classList.add('danger'); setTimeout(() => { if (b.isConnected) { armed = false; b.textContent = 'Remove'; b.classList.remove('danger'); } }, 4000); return; }
+      const r = await send('delete_library_asset', a.kind === 'colour' ? { kind: 'colour', name: a.name } : { kind: 'file', path: a.path });
+      if (r.status === 'ok') { b.closest('.rule')?.remove(); ui.say(`Removed ${a.name} from the library.`); }
+    } }, 'Remove');
+  }
   async function openAssets() {
     const r = await ui.read('list_library_assets', {}); if (r.status !== 'ok') return;
-    const rows = r.result.assets.map((a) => h('div', { class: 'rule' }, h('span', {}, a.kind), h('span', {}, a.name), a.kind === 'colour' ? h('span', { style: `background:${a.hex}`, 'aria-label': a.hex }, a.hex) : h('span', { class: 'dim' }, a.path),
+    const rows = r.result.assets.map((a) => h('div', { class: 'rule asset-row' }, h('span', {}, a.kind), h('span', {}, a.name), a.kind === 'colour' ? h('span', { style: `background:${a.hex}`, 'aria-label': a.hex }, a.hex) : h('span', { class: 'dim' }, a.path),
       a.kind === 'image' ? h('button', { type: 'button', dataset: { command: 'open_photo' }, onclick: async (e) => { if (!ui.store.doc) { ui.say('Open a document first.'); return; } const dlg = e.currentTarget.closest('dialog'); const r = await send('open_photo', { path: a.path, asLayer: true }); if (r.status === 'ok') { ui.say(`Placed ${a.name} as a layer.`); dlg?.querySelector('[data-answer="Close"]')?.click(); } } }, 'Place')
-        : a.kind === 'preset' || a.kind === 'lut' ? h('span', { class: 'dim' }, 'Develop › Presets') : h('span', {})));
+        : a.kind === 'preset' || a.kind === 'lut' ? h('span', { class: 'dim' }, 'Develop › Presets') : h('span', {}),
+      removeButton(a)));
     const v = await ui.dialogs.raw({ title: 'Shared library', body: h('div', { class: 'form' }, h('div', { class: 'rules' }, rows.length ? rows : h('p', { class: 'hint' }, 'Nothing yet.')), h('p', { class: 'hint' }, 'The library syncs with Sync library… to your other devices.')),
       actions: [{ label: 'Close', value: null }, { label: 'Add colour…', value: 'colour' }, { label: 'Add brush…', value: 'brush' }, { label: 'Add image…', value: 'image' }, { label: 'Add LUT…', value: 'lut' }] });
     if (v === 'image' || v === 'lut') { pendingAsset = v; assetInput.accept = v === 'lut' ? '.cube' : '.png,.jpg,.jpeg,.webp'; assetInput.click(); }

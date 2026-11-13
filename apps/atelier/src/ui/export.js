@@ -3,6 +3,7 @@
 // `staged` and waits in the staged-actions bar for the person's Confirm.
 
 import { h } from './dom.js';
+import { plainError } from './send.js';
 
 const FORMATS = [['jpeg', 'JPEG'], ['png', 'PNG'], ['webp', 'WebP'], ['avif', 'AVIF'], ['tiff16', 'TIFF 16-bit'], ['cmyk-tiff', 'TIFF CMYK 8-bit (built-in press)']];
 const SPACES = [['srgb', 'sRGB'], ['display-p3', 'Display P3'], ['rec2020', 'Rec. 2020']];
@@ -98,7 +99,7 @@ export function createExport(ui) {
       ui.say(`Exported ${r.result.path} (${r.result.width} × ${r.result.height}, ${Math.round(r.result.bytes / 1024)} KB)${got ? '; your browser is downloading a copy' : ''}.`);
     }
     else if (r.status === 'staged') ui.say('The export replaces a file that exists: confirm or discard it in the bar below.');
-    else await ui.dialogs.info('Export did not run', `${r.status}: ${r.error?.message ?? ''}`);
+    else await ui.dialogs.info('Export did not run', plainError(r));
     return r;
   };
 }
