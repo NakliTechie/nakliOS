@@ -42,7 +42,7 @@ export function cmykArgs(v) {
   return args;
 }
 
-const MIME = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', avif: 'image/avif', tif: 'image/tiff', tiff: 'image/tiff', psd: 'image/vnd.adobe.photoshop' };
+const MIME = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', avif: 'image/avif', tif: 'image/tiff', tiff: 'image/tiff', psd: 'image/vnd.adobe.photoshop', gif: 'image/gif', webm: 'video/webm' };
 
 // With "This browser" storage an exported file sits in the browser's private storage, where no other app
 // can reach it, so Atelier also hands the person a copy as a download. A folder or NakliOS storage already

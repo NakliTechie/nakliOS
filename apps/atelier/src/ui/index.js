@@ -281,6 +281,7 @@ export function mountUI({ bus, ctx, manifest, engineError, grantFolder, importFi
     for (const el of [$('#ai-panel'), document.querySelector('aside .ai-pixels'), document.querySelector('aside .ai-portrait')]) if (el) el.hidden = !doc;
     aiMasks.render();
     ui.vector?.render();
+    ui.timeline?.render?.();
     filmstrip.draw();
     ui.views?.render();
     tools.paintOverlay();

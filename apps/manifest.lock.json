@@ -1955,7 +1955,7 @@
       "id": "atelier",
       "repo": "NakliTechie/atelier",
       "requestedRef": "main",
-      "resolvedCommit": "72bc379c3bcad311f3e31b3012ac4ece5f1ca664",
+      "resolvedCommit": "111bb77bcf0f27234ed773e680abbecedf443467",
       "files": [
         {
           "source": "LICENSE",
@@ -2616,8 +2616,8 @@
         {
           "source": "src/ui/export.js",
           "destination": "src/ui/export.js",
-          "sha256": "38d8b89fae6bb320e0b65b38320105a5a0fbd53caf82497af96f1db561ce98e3",
-          "bytes": 7750
+          "sha256": "1f2cef18dc579165996632c974dcc949f46bef534a4f9d01ae69c79d4c275860",
+          "bytes": 7788
         },
         {
           "source": "src/ui/filmstrip.js",
@@ -2640,8 +2640,8 @@
         {
           "source": "src/ui/index.js",
           "destination": "src/ui/index.js",
-          "sha256": "284ff4b0e8ecd03b470473e6ed830715bf1451aeeb7a476fcde32834d5f22903",
-          "bytes": 26199
+          "sha256": "dec0391bc9d2988d79ac18cd89b2903871d7b6a57538ce5bf855020261ed0f53",
+          "bytes": 26228
         },
         {
           "source": "src/ui/layers.js",
@@ -2718,8 +2718,8 @@
         {
           "source": "src/ui/timeline.js",
           "destination": "src/ui/timeline.js",
-          "sha256": "2655a16c0c117b4925b9779f89a1a67762b9228ec8265ab89b7d8386c84fc276",
-          "bytes": 6373
+          "sha256": "efaa6b093b62e757c5852457479674de2c416d180452886ea8b07f13ab1740cc",
+          "bytes": 6999
         },
         {
           "source": "src/ui/tools.js",
