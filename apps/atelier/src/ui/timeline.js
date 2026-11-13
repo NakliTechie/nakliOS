@@ -48,7 +48,10 @@ export function createTimelinePanel(root, ui) {
     if (!name) return;
     ui.say(`Exporting ${fmt.value.toUpperCase()}…`);
     const r = await ui.send('export_animation', { path: name, format: fmt.value });
-    if (r.status === 'ok') ui.say(`Wrote ${r.result.path}: ${r.result.frames} frames, ${r.result.width} × ${r.result.height}, ${r.result.bytes} bytes.`);
+    if (r.status === 'ok') {
+      const got = await ui.downloadExport?.(r.result.path);
+      ui.say(`Wrote ${r.result.path}: ${r.result.frames} frames, ${r.result.width} × ${r.result.height}, ${Math.round(r.result.bytes / 1024)} KB${got ? '; your browser is downloading a copy' : ''}.`);
+    }
   }
   async function importVideo() {
     const p = ui.filmstrip?.selected?.[0] || (await ui.dialogs.promptText('Import video as a layer', 'Workspace path of the video file'))?.trim();
@@ -57,7 +60,7 @@ export function createTimelinePanel(root, ui) {
     if (r.status === 'ok') { ui.say(`Video layer ${r.result.layer.name}: ${r.result.video.width} × ${r.result.video.height}, ${r.result.video.duration.toFixed(2)} s.`); await refresh(); ui.render(); }
   }
 
-  root.replaceChildren(h('details', { class: 'timeline-panel' },
+  const panel = h('details', { class: 'timeline-panel' },
     h('summary', { dataset: { view: 'timeline-panel' }, onclick: () => refresh() }, 'Timeline'),
     h('div', { class: 'row' }, h('label', { class: 'opt' }, 'fps', fps), h('label', { class: 'opt' }, 'Frames', frames),
       h('button', { dataset: { command: 'set_timeline' }, onclick: async () => { const r = await ui.send('set_timeline', { fps: +fps.value, frames: Math.round(+frames.value) }); if (r.status === 'ok') refresh(); } }, 'Create / update')),
@@ -71,6 +74,15 @@ export function createTimelinePanel(root, ui) {
       h('button', { dataset: { command: 'capture_frame' }, title: 'Frame animation: record every layer\'s visibility and opacity at this frame', onclick: async () => { const r = await ui.send('capture_frame', { frame: frame() }); if (r.status === 'ok') { ui.say(`Captured frame ${frame()}.`); refresh(); } } }, 'Capture frame'),
       h('button', { dataset: { command: 'import_video' }, onclick: importVideo }, 'Video layer…')),
     keys,
-    h('div', { class: 'row' }, fmt, h('button', { class: 'primary', dataset: { command: 'export_animation' }, onclick: exportAnim }, 'Export animation…'))));
-  return { refresh };
+    h('div', { class: 'row' }, fmt, h('button', { class: 'primary', dataset: { command: 'export_animation' }, onclick: exportAnim }, 'Export animation…')));
+  root.replaceChildren(panel);
+  // The UI redraws after every change from any door (a person, an agent, the NakliOS rail), so the open panel
+  // re-reads the timeline then; one read at a time, and a closed panel reads nothing.
+  let reading = null; let again = false;
+  function render() {
+    if (!panel.open) return;
+    if (reading) { again = true; return; }
+    reading = refresh().catch(() => {}).finally(() => { reading = null; if (again) { again = false; render(); } });
+  }
+  return { refresh, render };
 }
