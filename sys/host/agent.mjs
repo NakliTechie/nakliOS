@@ -55,7 +55,7 @@ export const HOST_COMMANDS = Object.freeze([
   ['assistant.webLookups','Allow or stop the weather and Wikipedia lookups (they send the place or topic to open-meteo.com or wikipedia.org)','setAssistantWebLookups','ui:write',{on:{type:'boolean'}},['on']],
   ['assistant.pageProxy','Allow or stop reading blocked pages through Jina Reader (r.jina.ai sees the address)','setAssistantPageProxy','ui:write',{on:{type:'boolean'}},['on']],
   ['assistant.loadModel','Download and turn on the assistant model (LFM3-Omni 2B, 2.7 GB the first time)','loadAssistantModel','ui:write',{},[],true],
-  ['browser.open','Open a web address in the Browser window, signed in with the person\'s Chrome sessions through the companion extension (a new tab without it)','browserOpen','ui:write',{url:str},['url']],
+  ['browser.open','Open a web address in the Browser window for light browsing, without the person\'s sign-ins, through the companion extension (a new tab without it)','browserOpen','ui:write',{url:str},['url']],
   ['browser.back','Go back in the Browser window','browserBack','ui:write',{},[]],
   ['browser.forward','Go forward in the Browser window','browserForward','ui:write',{},[]],
   ['browser.reload','Reload the page in the Browser window','browserReload','ui:write',{},[]],

@@ -4,10 +4,12 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import {
-  checkDesktopSender, parseSiteUrl, originPattern, isSignInUrl, buildSessionRules, ruleIdsFor, freeRuleIds,
+  checkDesktopSender, parseSiteUrl, originPattern, buildSessionRules, ruleIdsFor, freeRuleIds,
   mintToken, redeemToken, pruneTokens, checkAncestors, historyEntry, TOKEN_TTL_MS,
 } from '../extension/lib.mjs';
-import { normaliseAddress, shouldOpenFull } from '../sys/browser/window.mjs';
+import { normaliseAddress } from '../sys/browser/window.mjs';
+import * as lib from '../extension/lib.mjs';
+import * as win from '../sys/browser/window.mjs';
 
 const tab = id => ({ id });
 // Only the desktop: top frame, path '/', trusted origin.
@@ -26,15 +28,10 @@ assert.equal(checkDesktopSender({ tab: tab(7), frameId: 0, url: 'http://127.0.0.
 assert.equal(parseSiteUrl('javascript:alert(1)'), null);
 assert.equal(parseSiteUrl('https://user:pw@github.com/'), null, 'no credentials in the URL');
 assert.equal(originPattern(parseSiteUrl('https://github.com/a/b?c')), 'https://github.com/*');
-assert.equal(isSignInUrl('https://accounts.google.com/v3/signin'), true);
-assert.equal(isSignInUrl('https://www.facebook.com/login/?next=x'), true);
-assert.equal(isSignInUrl('https://www.facebook.com/'), false);
 assert.equal(normaliseAddress('github.com'), 'https://github.com/');
-// Signed-in sites move to the Full tab; the desktop's own host (NakliOS inside its Browser) stays.
-assert.equal(shouldOpenFull({ cookies: 12, host: 'github.com', desktopHost: 'naklios.dev' }), true);
-assert.equal(shouldOpenFull({ cookies: 0, host: 'example.com', desktopHost: 'naklios.dev' }), false);
-assert.equal(shouldOpenFull({ cookies: null, host: 'example.com', desktopHost: 'naklios.dev' }), false, 'no count yet: stay');
-assert.equal(shouldOpenFull({ cookies: 3, host: 'naklios.dev', desktopHost: 'naklios.dev' }), false, 'the nested desktop stays in the window');
+// Light browsing (2026-11-13): no sign-in handling is left to call.
+assert.equal(lib.isSignInUrl, undefined, 'no sign-in popup list');
+assert.equal(win.shouldOpenFull, undefined, 'no Full tab');
 assert.equal(normaliseAddress('  https://github.com/x  '), 'https://github.com/x');
 assert.equal(normaliseAddress('hello world'), null);
 assert.equal(normaliseAddress('ftp://x.example'), null);
@@ -56,7 +53,6 @@ const big = buildSessionRules(bigTab, 'naklios.dev', { nested: true, ids: freeRu
 assert.ok(big.every(r => Number.isInteger(r.id) && r.id > 0 && r.id <= 2 ** 31 - 1), 'rule ids fit a 32-bit integer for any tab id');
 assert.equal(new Set([...rules, ...big].map(r => r.id)).size, rules.length + big.length, 'rule ids never collide across tabs');
 assert.deepEqual(freeRuleIds([{ id: 1 }, { id: 3 }], 2), [2, 4]);
-assert.equal(buildSessionRules(9, null)[0].condition.excludedInitiatorDomains, undefined, 'the full-tab page excludes no initiator');
 const nested = buildSessionRules(7, 'naklios.dev', { nested: true });
 assert.equal(nested.length, 2);
 assert.deepEqual(nested[1].condition.requestDomains, ['naklios.dev']);
@@ -93,8 +89,14 @@ assert.ok(!(manifest.host_permissions || []).length, 'host access is asked per s
 assert.ok(manifest.permissions.includes('declarativeNetRequestWithHostAccess'));
 assert.ok(!manifest.permissions.includes('declarativeNetRequest'), 'the with-host-access variant shows no install warning');
 const exposed = manifest.web_accessible_resources.flatMap(w => w.resources);
-assert.ok(!exposed.includes('page.html'), 'only the extension opens the full-tab page');
+assert.ok(!manifest.permissions.includes('cookies'), 'light browsing reads no cookies');
+assert.deepEqual(exposed.sort(), ['frame.css', 'frame.html', 'frame.js', 'lib.mjs']);
+await assert.rejects(readFile(new URL('../extension/page.html', import.meta.url)), 'the Full tab page is gone');
 const frameHtml = await readFile(new URL('../extension/frame.html', import.meta.url), 'utf8');
+assert.match(frameHtml, /<iframe id="site"[^>]*\bcredentialless\b/, 'the site frame sends no cookies');
+assert.ok(!/publickey-credentials/.test(frameHtml), 'no passkeys inside the window');
+const winSrc = await readFile(new URL('../sys/browser/window.mjs', import.meta.url), 'utf8');
+assert.ok(/data-act="tab"[^>]*>Open in Chrome</.test(winSrc), 'the window offers Open in Chrome');
 assert.ok(!/<script(?![^>]*\bsrc=)[^>]*>/.test(frameHtml), 'MV3 pages carry no inline script');
 // The deployed site never ships the extension.
 assert.match(await readFile(new URL('../.assetsignore', import.meta.url), 'utf8'), /^extension\/$/m);

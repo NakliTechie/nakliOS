@@ -1,7 +1,7 @@
 // The Browser extension's background flow, run in node against a stand-in `chrome`: the desktop's
 // open → rules installed for that tab → frame.html redeems the token once → the window closes →
 // rules gone. Also: a mirrored app is refused, tab close and desktop navigation remove the rules,
-// and a sign-in navigation inside the site opens a popup. The live version needs the extension in
+// and the removed sign-in messages (cookie count, Full tab) answer unknown-message. The live version needs the extension in
 // Chrome; this pins the wiring between lib.mjs and chrome.* so a refactor cannot drop a step.
 import assert from 'node:assert/strict';
 import { readFile, writeFile, mkdtemp, rm } from 'node:fs/promises';
@@ -13,7 +13,6 @@ const ev = () => { const fns = []; return { addListener: f => fns.push(f), fire:
 const sessionStore = {}, localStore = {};
 let rules = [];
 const granted = new Set(['https://github.com/*']);
-const popups = [];
 const broadcasts = [];
 globalThis.chrome = {
   runtime: {
@@ -44,10 +43,8 @@ globalThis.chrome = {
     getAll: async () => ({ origins: [...granted] }),
     remove: async ({ origins }) => { origins.forEach(o => granted.delete(o)); return true; },
   },
-  cookies: { getAll: async () => [{ name: 'a' }, { name: 'b' }] },
   tabs: { onRemoved: ev() },
   webNavigation: { onCommitted: ev(), onBeforeNavigate: ev(), onErrorOccurred: ev() },
-  windows: { create: async o => { popups.push(o); return { id: 900 + popups.length }; }, onRemoved: ev() },
 };
 
 // Load background.js as a module with its lib import pointed at the real file.
@@ -88,19 +85,17 @@ const redeemed = await internal({ type: 'frame:redeem', token: open2.token }, fr
 assert.equal(redeemed.ok, true);
 assert.equal(redeemed.url, 'https://github.com/');
 assert.equal((await internal({ type: 'frame:redeem', token: open2.token }, frameSender)).error, 'unknown-token');
-assert.equal((await internal({ type: 'frame:cookie-count', url: 'https://github.com/' }, frameSender)).count, 2, 'a count, never values');
+for (const type of ['frame:cookie-count', 'frame:open-full', 'page:ready']) assert.equal((await internal({ type, url: 'https://github.com/' }, frameSender)).error, 'unknown-message', `${type} is gone`);
 assert.equal((await internal({ type: 'frame:redeem', token: 'x' }, { ...frameSender, id: 'someone-else' })).error, 'not-extension-frame');
 
-// The site navigates: its frame hears the new address. A sign-in page opens in a popup instead.
+// The site navigates: its frame hears the new address, sign-in pages included (no popup any more).
 broadcasts.length = 0;
 await Promise.all(chrome.webNavigation.onCommitted.fire({ tabId: 1660080632, frameId: 9, parentFrameId: 4, url: 'https://github.com/NakliTechie' }));
 assert.deepEqual(broadcasts.map(b => b.type), ['bg:committed']);
 assert.equal(broadcasts[0].sessionId, open2.token);
-await Promise.all(chrome.webNavigation.onBeforeNavigate.fire({ tabId: 1660080632, frameId: 9, parentFrameId: 4, url: 'https://accounts.google.com/v3/signin' }));
-assert.equal(popups.length, 1);
-assert.equal(popups[0].type, 'popup');
-await Promise.all(chrome.windows.onRemoved.fire(901));
-assert.ok(broadcasts.some(b => b.type === 'bg:signin-closed'), 'the frame reloads when the popup closes');
+broadcasts.length = 0;
+await Promise.all(chrome.webNavigation.onCommitted.fire({ tabId: 1660080632, frameId: 9, parentFrameId: 4, url: 'https://accounts.google.com/v3/signin' }));
+assert.deepEqual(broadcasts.map(b => b.type), ['bg:committed'], 'a sign-in page is an ordinary navigation');
 // An unrelated frame in the tab is ignored.
 broadcasts.length = 0;
 await Promise.all(chrome.webNavigation.onCommitted.fire({ tabId: 1660080632, frameId: 12, parentFrameId: 0, url: 'https://elsewhere.example/' }));
@@ -130,8 +125,7 @@ assert.equal(other.pattern, 'https://example.com/*');
 assert.deepEqual((await external({ type: 'nakli-browser:sites' }, desktop)).sites, ['https://github.com/*']);
 assert.equal((await external({ type: 'nakli-browser:forget', pattern: 'https://github.com/*' }, desktop)).removed, true);
 assert.deepEqual((await external({ type: 'nakli-browser:sites' }, desktop)).sites, []);
-// Review fixes (2026-11-12): two quick opens both keep valid tokens; a redirect that lands on a sign-in
-// page opens one popup; History gets one line per open (on redeem).
+// Review fixes (2026-11-12): two quick opens both keep valid tokens; History gets one line per open (on redeem).
 granted.add('https://github.com/*');
 const [q1, q2] = await Promise.all([
   external({ type: 'nakli-browser:open', url: 'https://github.com/' }, desktop),
@@ -141,10 +135,6 @@ const before = localStore.history.length;
 assert.equal((await internal({ type: 'frame:redeem', token: q1.token }, frameSender)).ok, true, 'the first of two quick opens is still valid');
 assert.equal((await internal({ type: 'frame:redeem', token: q2.token }, { ...frameSender, frameId: 5 })).ok, true, 'and so is the second');
 assert.equal(localStore.history.length, before + 2, 'one History line per redeemed open');
-popups.length = 0;
-await Promise.all(chrome.webNavigation.onCommitted.fire({ tabId: 1660080632, frameId: 11, parentFrameId: 5, url: 'https://accounts.google.com/ServiceLogin?continue=x' }));
-await Promise.all(chrome.webNavigation.onErrorOccurred.fire({ tabId: 1660080632, frameId: 11, parentFrameId: 5, url: 'https://accounts.google.com/ServiceLogin?continue=x' }));
-assert.equal(popups.length, 1, 'a redirect to a sign-in page opens one popup, not two');
 
 // The nested demo: opening the desktop's own host adds the second rule for that window only.
 await external({ type: 'nakli-browser:closed', windowId: 'browser' }, desktop);
@@ -158,12 +148,4 @@ assert.equal(rules.filter(r => r.condition.tabIds[0] === 1660080632).length, 1, 
 await external({ type: 'nakli-browser:closed', windowId: 'browser' }, desktop);
 assert.equal(rules.filter(r => r.condition.tabIds[0] === 1660080632).length, 0);
 
-// The full-tab fallback: only with permission, and only page.html may ask for its tab's rules.
-chrome.tabs.create = async ({ url }) => ({ id: 31, url });
-granted.add('https://github.com/*');
-assert.equal((await internal({ type: 'frame:open-full', url: 'https://example.com/' }, frameSender)).error, 'no-permission');
-assert.equal((await internal({ type: 'frame:open-full', url: 'https://github.com/' }, frameSender)).tabId, 31);
-assert.equal((await internal({ type: 'page:ready' }, { ...frameSender, url: chrome.runtime.getURL('frame.html#t=x') })).error, 'not-page');
-assert.equal((await internal({ type: 'page:ready' }, { id: chrome.runtime.id, tab: { id: 31 }, url: chrome.runtime.getURL('page.html?u=https%3A%2F%2Fgithub.com%2F') })).ok, true);
-assert.deepEqual(rules.find(r => r.condition.tabIds[0] === 31).condition.excludedInitiatorDomains, undefined);
-console.log('browser-extension-background: open, token, rules, navigation, sign-in popup, history, cleanup and settings pass');
+console.log('browser-extension-background: open, token, rules, navigation, history, cleanup and settings pass; no sign-in paths');
