@@ -9,7 +9,7 @@ import { runStaged } from './handlers/util.js';
 import { registerRail } from './rail.js';
 import { createStore } from './document.js';
 import { createRenderer } from './renderer.js';
-import { pickStore } from './storage.js';
+import { pickStore, RAW_EXT, IMAGE_EXT, extOf } from './storage.js';
 import { createEngine } from '../vendor/tessella/src/engine.js';
 import { mountUI } from './ui/index.js';
 import { createDurability } from './autosave.js';
@@ -96,7 +96,7 @@ async function restoreLast() {
   } catch (e) { console.warn('[atelier] restore failed', e); } finally { restoring = false; }
 }
 
-mounted = mountUI({ bus, ctx, manifest, engineError, grantFolder, runStaged: (id) => runStaged(ctx, id), hostCaps });
+mounted = mountUI({ bus, ctx, manifest, engineError, grantFolder, importFiles: (f) => importFiles(f), runStaged: (id) => runStaged(ctx, id), hostCaps });
 const { ui } = mounted;
 durability = createDurability({ naklios, bus, ctx, dialogs: ui.dialogs, notice: (t, a) => ui.notice(t, a), onState: (s, info) => ui.saveState(s, info) });
 await ctx.pickStorage().catch((e) => { console.warn('[atelier] storage unavailable', e); });
@@ -134,24 +134,56 @@ function applyTheme(theme) {
   document.documentElement.style.colorScheme = luma < 0.5 ? 'dark' : 'light';
 }
 
+// Copies one photo's bytes into Atelier's own storage under photos/imported/ (never writing to the source)
+// and opens the copy through the bus. Used by Open photo, a drop on the canvas and the host's file handoff.
+// A RAW photo opens in Develop; any other image opens in Composite, where its layer can be edited.
+async function importBytes(fileName, bytes, caller, { open = true } = {}) {
+  const s = ctx.storage();
+  if (!s) throw new Error('Atelier has no storage to copy the photo into');
+  const name = String(fileName || 'photo').split('/').pop().replace(/[\\:*?"<>|]/g, '_') || 'photo';
+  const dot = name.lastIndexOf('.'); const stemName = dot > 0 ? name.slice(0, dot) : name; const ext = dot > 0 ? name.slice(dot) : '';
+  let path = `photos/imported/${name}`;
+  for (let i = 2; await s.exists(path); i++) path = `photos/imported/${stemName}-${i}${ext}`;
+  await s.write(path, bytes);
+  if (!open) { mounted.refreshFolder().catch(() => {}); return { path, name, reply: null }; }
+  const r = await bus.dispatch('open_photo', { path }, { door: 'ui', caller });
+  if (r.status === 'ok') {
+    const mode = RAW_EXT.includes(extOf(path)) ? 'develop' : 'composite';
+    if (ctx.view.mode !== mode) await bus.dispatch('set_view', { mode }, { door: 'ui', caller });
+  }
+  mounted.refreshFolder().catch(() => {});
+  return { path, name, reply: r };
+}
+
+// Open photo… and a drop on the canvas: the person's own files, chosen in the browser's file picker.
+async function importFiles(files) {
+  const list = [...(files || [])];
+  const ok = list.filter((f) => [...RAW_EXT, ...IMAGE_EXT].includes(extOf(f.name)));
+  const skipped = list.filter((f) => !ok.includes(f));
+  if (!ok.length) { mounted.say(list.length ? `${skipped.map((f) => f.name).join(', ')}: Atelier opens JPEG, PNG, WebP, AVIF, GIF, TIFF, PSD and camera RAW files.` : 'No file was chosen.'); return null; }
+  let first = null;
+  try {
+    for (const f of ok) {   // copy every photo; open the first, the rest wait in the filmstrip
+      const r = await importBytes(f.name, new Uint8Array(await f.arrayBuffer()), 'open photo', { open: !first });
+      first ??= r;
+    }
+  } catch (e) { mounted.say(`Could not open the photo: ${e.message}`); return null; }
+  const extra = ok.length > 1 ? ` The other ${ok.length - 1} are in the filmstrip.` : '';
+  const skip = skipped.length ? ` Skipped ${skipped.map((f) => f.name).join(', ')}: not a photo.` : '';
+  mounted.say(first.reply.status === 'ok' ? `Opened ${first.name}.${extra}${skip}` : `Copied ${first.name} but could not open it: ${first.reply.error?.message ?? first.reply.status}.${skip}`);
+  return first;
+}
+
 // File handoff (commands.json `accepts`, action import): the host's Files app sends one read-only token per
-// file. Atelier copies the bytes into its own storage under photos/imported/ (never writing to the source),
-// releases the token and opens the copy through the bus. Standalone no grant ever arrives.
+// file. Atelier copies the bytes and opens the copy (importBytes), then releases the token.
+// Standalone no grant ever arrives.
 async function receiveHandoff(grant) {
   try {
     const file = await naklios.files.read(grant.token);
     const raw = file.bytes ?? file.data;
     const bytes = raw instanceof Uint8Array ? raw : raw instanceof ArrayBuffer ? new Uint8Array(raw) : ArrayBuffer.isView(raw) ? new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength) : new TextEncoder().encode(String(raw ?? ''));
-    const s = ctx.storage();
-    if (!s) throw new Error('Atelier has no storage to copy the photo into');
-    const name = String(file.name || file.path || 'photo').split('/').pop().replace(/[\\:*?"<>|]/g, '_') || 'photo';
-    const dot = name.lastIndexOf('.'); const stemName = dot > 0 ? name.slice(0, dot) : name; const ext = dot > 0 ? name.slice(dot) : '';
-    let path = `photos/imported/${name}`;
-    for (let i = 2; await s.exists(path); i++) path = `photos/imported/${stemName}-${i}${ext}`;
-    await s.write(path, bytes);
-    const r = await bus.dispatch('open_photo', { path }, { door: 'ui', caller: `handoff from ${file.sourceAppId ?? 'NakliOS'}` });
-    mounted.say(r.status === 'ok' ? `Imported ${name} as ${path}.` : `Copied ${name} to ${path}; open_photo answered ${r.status}${r.error?.message ? ` (${r.error.message})` : ''}.`);
-    mounted.refreshFolder().catch(() => {});
+    const { path, name, reply: r } = await importBytes(file.name || file.path, bytes, `handoff from ${file.sourceAppId ?? 'NakliOS'}`);
+    mounted.say(r.status === 'ok' ? `Imported ${name} as ${path}.` : `Copied ${name} to ${path}, but it did not open${r.error?.message ? `: ${r.error.message}` : '.'}`);
   } catch (e) { mounted.say(`Import failed: ${e.message}`); }
   finally { try { naklios.files.release(grant.token); } catch { /* the host already ended it */ } }
 }

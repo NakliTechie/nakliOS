@@ -1955,7 +1955,7 @@
       "id": "atelier",
       "repo": "NakliTechie/atelier",
       "requestedRef": "main",
-      "resolvedCommit": "a05b1e9bbb7c1c0baeb62f60f7b808a1b01aec43",
+      "resolvedCommit": "5003c12e9ea45c16741ef09d2acc628bdc23ef7e",
       "files": [
         {
           "source": "LICENSE",
@@ -1978,9 +1978,9 @@
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "7970ce0c7acab630d0657ff5aeb1d226e47e9a01794feb6d66ccd0ed51ff696a",
-          "bytes": 78924,
-          "originalSourceSha256": "fd15dac3f363e22359494e6c049e7372ad04cb79710647de9d17ab2760ee883b",
+          "sha256": "be4b526fbd3f887cc3011e08fbc36f7b1252dc812f59018d48b0e1b34309aacf",
+          "bytes": 80148,
+          "originalSourceSha256": "e31b683f513b486acd3c4a2028051c802026ef1c86c87cdf80f7a64fdf4168b1",
           "sdkSha256": "81b1d68a7b20067791a51dd79c29d015c98204236db626bf2dbb25f66bd5e59f"
         },
         {
@@ -2076,8 +2076,8 @@
         {
           "source": "src/app.js",
           "destination": "src/app.js",
-          "sha256": "938437d502b34e6bc985effe9ff013149fa1087fc2934139c980f936ec69ae17",
-          "bytes": 9761
+          "sha256": "912fd55c5ff6d5b628af7be40b9bf5afa3660df7e6af377db213829c176b0274",
+          "bytes": 11798
         },
         {
           "source": "src/autosave.js",
@@ -2616,8 +2616,8 @@
         {
           "source": "src/ui/export.js",
           "destination": "src/ui/export.js",
-          "sha256": "2b777264c783c4e3950d5804520f9a6ad03f051b81c7b7b40d6e3222e7044c59",
-          "bytes": 6312
+          "sha256": "5a9b373a13e1337161620365dc3ab2e099064b8dbba8411b8f1b03f2bac59b11",
+          "bytes": 7737
         },
         {
           "source": "src/ui/filmstrip.js",
@@ -2640,8 +2640,8 @@
         {
           "source": "src/ui/index.js",
           "destination": "src/ui/index.js",
-          "sha256": "ba1e6e3ffe31a0a65dcae8ed7357bd5939fc3f498e4027842078007867b1c362",
-          "bytes": 16179
+          "sha256": "a2c02530c752a2b32c6bb397bf729bf5546a254fdeab332694cc00e8ae2bfe9c",
+          "bytes": 19488
         },
         {
           "source": "src/ui/layers.js",

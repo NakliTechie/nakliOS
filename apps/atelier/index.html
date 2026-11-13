@@ -117,6 +117,21 @@
   .field { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 8px; align-items: center; }
   .field span { color: var(--i2); }
   .check { display: flex; gap: 6px; align-items: center; }
+  /* The header wraps onto a second row instead of clipping; the title and the mode switch never shrink. */
+  header { flex-wrap: wrap; row-gap: 4px; }
+  header > h1, header > .seg { flex: none; }
+  header .seg button { padding: 4px 12px; }
+  /* Empty state: what a newcomer sees with nothing open (src/ui/index.js). Sits over the grey canvas. */
+  #empty { position: absolute; inset: 0; z-index: 4; display: grid; align-content: center; justify-items: center; gap: 4px; padding: 24px; text-align: center; color: #fff; }
+  #empty h2 { font-size: 20px; font-weight: 600; margin: 0; }
+  #empty p { margin: 0; color: rgba(255,255,255,.85); }
+  #empty .empty-actions { justify-content: center; margin: 12px 0; }
+  #empty .empty-actions button:not(.primary) { background: rgba(255,255,255,.92); }
+  #empty dl { display: grid; grid-template-columns: auto minmax(0, 360px); gap: 4px 12px; text-align: left; margin: 8px 0; font-size: 12px; }
+  #empty dt { font-weight: 600; } #empty dd { margin: 0; color: rgba(255,255,255,.85); }
+  #empty .hint { color: rgba(255,255,255,.75); }
+  #stage.drop-target { outline: 3px dashed var(--accent); outline-offset: -6px; }
+  #stage.drop-target #empty h2::after { content: ' (drop to open)'; }
   @media (max-width: 900px) { main, body[data-mode=develop] main { grid-template-columns: 40px minmax(0, 1fr) 240px; } }
   @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; } }
 </style>

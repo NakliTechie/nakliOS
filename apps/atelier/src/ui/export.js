@@ -41,7 +41,24 @@ export function cmykArgs(v) {
   return args;
 }
 
+const MIME = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', avif: 'image/avif', tif: 'image/tiff', tiff: 'image/tiff', psd: 'image/vnd.adobe.photoshop' };
+
+// With "This browser" storage an exported file sits in the browser's private storage, where no other app
+// can reach it, so Atelier also hands the person a copy as a download. A folder or NakliOS storage already
+// puts the file on their disk. Returns true when a download was started.
+export async function downloadExport(ui, path) {
+  const s = ui.ctx.storage();
+  if (!s || s.kind !== 'browser') return false;
+  const bytes = await s.readBinary(path);
+  const name = path.split('/').pop();
+  const url = URL.createObjectURL(new Blob([bytes], { type: MIME[name.split('.').pop().toLowerCase()] || 'application/octet-stream' }));
+  const a = document.createElement('a'); a.href = url; a.download = name; document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  return true;
+}
+
 export function createExport(ui) {
+  ui.downloadExport = (path) => downloadExport(ui, path).catch((e) => { ui.say(`Exported ${path}, but the download failed: ${e.message}`); return false; });
   let last = {};
   return async function openExport() {
     const doc = ui.store.doc;
@@ -66,7 +83,7 @@ export function createExport(ui) {
       h('label', { class: 'field' }, h('span', {}, 'Format'), format), qRow,
       h('label', { class: 'field' }, h('span', {}, 'Long edge (px)'), maxEdge),
       spaceRow, tacRow, profRow,
-      h('p', { class: 'hint' }, `${doc.width} × ${doc.height} px. Files go to the workspace's exports folder unless the name says otherwise.`));
+      h('p', { class: 'hint' }, `${doc.width} × ${doc.height} px. ${ui.ctx.storage()?.kind === 'browser' ? 'Your browser also downloads a copy.' : `The file is saved in ${ui.ctx.storage()?.label ?? 'your storage'}, in the exports folder unless the name says otherwise.`}`));
     const answer = await ui.dialogs.raw({ title: 'Export', body, actions: [{ label: 'Cancel', value: null }, { label: 'Export', primary: true, value: () => ({ name: name.value, format: format.value, quality: quality.value, maxEdge: maxEdge.value, colorSpace: space.value, tac: tac.value, profile: profile.value, bits: bits.value }) }] });
     if (!answer) return null;
     last = answer;
@@ -76,7 +93,10 @@ export function createExport(ui) {
     await ui.flush?.();
     ui.say('Exporting…');
     const r = cmyk ? await ui.send('export_cmyk_tiff', args) : await ui.send('export_image', args);
-    if (r.status === 'ok') ui.say(`Exported ${r.result.path} (${r.result.width} × ${r.result.height}, ${Math.round(r.result.bytes / 1024)} KB).`);
+    if (r.status === 'ok') {
+      const got = await ui.downloadExport(r.result.path);
+      ui.say(`Exported ${r.result.path} (${r.result.width} × ${r.result.height}, ${Math.round(r.result.bytes / 1024)} KB)${got ? '; your browser is downloading a copy' : ''}.`);
+    }
     else if (r.status === 'staged') ui.say('The export replaces a file that exists: confirm or discard it in the bar below.');
     else await ui.dialogs.info('Export did not run', `${r.status}: ${r.error?.message ?? ''}`);
     return r;
