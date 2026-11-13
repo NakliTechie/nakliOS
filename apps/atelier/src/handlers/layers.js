@@ -161,6 +161,29 @@ export function register(bus, ctx) {
     return { layer: layerRow(merged), merged: ids.length, note: 'merged to 8-bit sRGB pixels; the merged layers are rendered on transparency, as Photoshop does, so a blend mode that depended on layers outside the merge can change the look' };
   });
 
+  // Rasterise: render one layer on its own (its mask, style and local adjustments, at full opacity and
+  // normal blend) into 8-bit sRGB pixels, and replace it with a raster layer that keeps its name, opacity,
+  // blend mode, visibility and parent. Filters, brushes and the eraser need a raster layer.
+  bus.register('layer.rasterize', async (a) => {
+    const d = needDoc(ctx);
+    const l = needLayer(ctx, a.layerId);
+    if (l.kind === 'raster') return { layer: layerRow(l), rasterized: false, note: `${l.name} is already a raster layer` };
+    if (l.kind === 'group' || l.kind === 'adjustment') fail('unsupported', `a ${l.kind} layer has no pixels of its own to rasterise; merge it with the layers below instead`, 'change_target', 'merge_layers');
+    const variant = { ...structuredClone(d), layers: d.layers.filter((x) => x.id === l.id || x.localOf === l.id).map((x) => (x.id === l.id ? { ...x, opacity: 1, fill: 1, blend: 'normal', visible: true, parentId: undefined } : x)) };
+    await ctx.renderer.sync(variant);
+    let im;
+    try { im = await ctx.renderer.image8(0); } finally { await ctx.renderer.sync(d); }
+    const buffer = ctx.renderer.newPixels(d.width, d.height, new Uint8Array(im.data.buffer));
+    const raster = makeLayer('raster', { name: l.name, buffer, width: d.width, height: d.height, opacity: l.opacity, blend: l.blend, visible: l.visible, ...(l.parentId ? { parentId: l.parentId } : {}) });
+    await change(ctx, 'rasterize_layer', (doc) => {
+      const at = doc.layers.findIndex((x) => x.id === l.id);
+      doc.layers = doc.layers.filter((x) => x.id !== l.id && x.localOf !== l.id);
+      doc.layers.splice(at, 0, raster);
+      doc.activeLayerId = raster.id;
+    });
+    return { layer: layerRow(raster), rasterized: true, from: l.kind, note: 'rendered to 8-bit sRGB pixels; its mask, style and local adjustments are now part of the pixels' };
+  });
+
   bus.register('layer.group', async (a) => {
     const d = needDoc(ctx);
     const chosen = d.layers.filter((l) => a.layerIds.includes(l.id));

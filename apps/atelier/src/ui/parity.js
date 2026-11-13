@@ -101,6 +101,8 @@ export const PARITY = [
   ['Layer style dialog: drop shadow, inner shadow, stroke, gradient overlay', 'set_layer_style'],
   ['Add adjustment menu: levels, curves, hue and saturation, exposure, colour balance, black and white, duotone', 'add_layer'],
   ['Duotone dialog: inks (edit an existing duotone)', 'set_adjustment'],
+  ['Adjustment settings (selected adjustment layer): levels, curves, hue and saturation, exposure, colour balance, black and white sliders', 'set_adjustment'],
+  ['Rasterise (Style, filters and print), and Rasterise and continue in a filter dialog', 'rasterize_layer'],
   ['Filter menu: artistic (oil paint, watercolour, sketch, posterise, halftone) and blur, sharpen, noise', 'apply_filter'],
   ['Soft proof toggle, gamut warning and total ink', 'set_soft_proof'],
   ['Soft proof: CMYK ICC profile path', 'set_soft_proof'],

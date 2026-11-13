@@ -259,7 +259,7 @@ export function createFilmstrip(root, ui) {
   async function openAssets() {
     const r = await ui.read('list_library_assets', {}); if (r.status !== 'ok') return;
     const rows = r.result.assets.map((a) => h('div', { class: 'rule' }, h('span', {}, a.kind), h('span', {}, a.name), a.kind === 'colour' ? h('span', { style: `background:${a.hex}`, 'aria-label': a.hex }, a.hex) : h('span', { class: 'dim' }, a.path),
-      a.kind === 'image' ? h('button', { type: 'button', dataset: { command: 'open_photo' }, onclick: async () => { if (!ui.store.doc) { ui.say('Open a document first.'); return; } await send('open_photo', { path: a.path, asLayer: true }); } }, 'Place')
+      a.kind === 'image' ? h('button', { type: 'button', dataset: { command: 'open_photo' }, onclick: async (e) => { if (!ui.store.doc) { ui.say('Open a document first.'); return; } const dlg = e.currentTarget.closest('dialog'); const r = await send('open_photo', { path: a.path, asLayer: true }); if (r.status === 'ok') { ui.say(`Placed ${a.name} as a layer.`); dlg?.querySelector('[data-answer="Close"]')?.click(); } } }, 'Place')
         : a.kind === 'preset' || a.kind === 'lut' ? h('span', { class: 'dim' }, 'Develop › Presets') : h('span', {})));
     const v = await ui.dialogs.raw({ title: 'Shared library', body: h('div', { class: 'form' }, h('div', { class: 'rules' }, rows.length ? rows : h('p', { class: 'hint' }, 'Nothing yet.')), h('p', { class: 'hint' }, 'The library syncs with Sync library… to your other devices.')),
       actions: [{ label: 'Close', value: null }, { label: 'Add colour…', value: 'colour' }, { label: 'Add brush…', value: 'brush' }, { label: 'Add image…', value: 'image' }, { label: 'Add LUT…', value: 'lut' }] });

@@ -6,6 +6,8 @@
 
 import { h } from './dom.js';
 import { hexToLinear2020 } from '../document.js';
+import { BW_DEFAULTS } from '../../vendor/tessella/src/model.js';
+import { slider } from './slider.js';
 
 // [key, label, fields]. A field is [name, kind, default, min, max]; kind: colour | pct (0..1 shown as 0..100) | num | select.
 const SHADOW = [['colour', 'colour', '#000000'], ['opacity', 'pct', 0.6, 0, 100], ['angle', 'num', 120, -360, 360], ['distance', 'num', 8, 0, 100], ['size', 'num', 8, 0, 40]];
@@ -32,6 +34,43 @@ export const FILTER_DEFS = [
 // Adjustment layers added with the engine's defaults (empty params); Duotone opens its ink dialog.
 const ADJUSTMENTS = [['levels', 'Levels'], ['curves', 'Curves'], ['hue-saturation', 'Hue and saturation'], ['exposure', 'Exposure'], ['colour-balance', 'Colour balance'], ['black-and-white', 'Black and white'], ['duotone', 'Duotone…']];
 const DUO_DEFAULT = ['#1b2a6b', '#e8b04a', '#8a2d2d', '#2d6a4f'];
+
+// Controls for the selected adjustment layer. Each field: [key, label, min, max, step, default]; read(params)
+// gives the slider values from the layer's params, build(values) the params set_adjustment receives. The
+// engine merges params over the current ones, so every call sends the whole set for that type.
+const CURVE_X = [64, 128, 192];
+export const ADJ_FIELDS = {
+  levels: {
+    fields: [['inBlack', 'Input black', 0, 253, 1, 0], ['gamma', 'Midtones', 0.1, 9.99, 0.01, 1], ['inWhite', 'Input white', 2, 255, 1, 255], ['outBlack', 'Output black', 0, 255, 1, 0], ['outWhite', 'Output white', 0, 255, 1, 255]],
+    read: (p) => ({ ...p.rgb }),
+    build: (v) => { const inBlack = Math.min(v.inBlack, 253); return { rgb: { inBlack, inWhite: Math.max(v.inWhite, inBlack + 2), gamma: v.gamma, outBlack: v.outBlack, outWhite: v.outWhite } }; },
+  },
+  curves: {
+    fields: [['s', 'Shadows', 0, 255, 1, 64], ['m', 'Midtones', 0, 255, 1, 128], ['h', 'Highlights', 0, 255, 1, 192]],
+    read: (p) => { const pts = p.rgb || []; const at = (x) => pts.find((q) => q[0] === x)?.[1]; return { s: at(64), m: at(128), h: at(192) }; },
+    build: (v) => ({ rgb: [[0, 0], [CURVE_X[0], v.s], [CURVE_X[1], v.m], [CURVE_X[2], v.h], [255, 255]] }),
+  },
+  'hue-saturation': {
+    fields: [['hue', 'Hue', -180, 180, 1, 0], ['saturation', 'Saturation', -100, 100, 1, 0], ['lightness', 'Lightness', -100, 100, 1, 0]],
+    colourize: true,
+    read: (p) => ({ ...p }),
+    build: (v) => ({ hue: v.hue, saturation: v.saturation, lightness: v.lightness, colourize: !!v.colourize }),
+  },
+  exposure: {
+    fields: [['exposure', 'Exposure', -5, 5, 0.01, 0], ['offset', 'Offset', -0.5, 0.5, 0.005, 0], ['gamma', 'Gamma', 0.1, 3, 0.01, 1]],
+    read: (p) => ({ ...p }),
+    build: (v) => ({ exposure: v.exposure, offset: v.offset, gamma: v.gamma }),
+  },
+  'colour-balance': {
+    tones: ['shadows', 'midtones', 'highlights'],
+    fields: [['cr', 'Cyan – red', -100, 100, 1, 0], ['mg', 'Magenta – green', -100, 100, 1, 0], ['yb', 'Yellow – blue', -100, 100, 1, 0]],
+  },
+  'black-and-white': {
+    fields: Object.entries(BW_DEFAULTS).map(([k, d]) => [k, k[0].toUpperCase() + k.slice(1), -200, 300, 1, d]),
+    read: (p) => ({ ...p }),
+    build: (v) => ({ ...v }),
+  },
+};
 
 // '#rrggbb' → linear Rec.2020 [r, g, b] (the engine's ink colour), and back for prefilling the dialog.
 export const inkFromHex = (hex) => Array.from(hexToLinear2020(hex)).slice(0, 3);
@@ -108,11 +147,28 @@ export function createEngineUI(root, ui) {
     return send('add_layer', { kind: 'adjustment', name: 'Duotone', adjustment: { type: 'duotone', params: { inks } } });
   }
 
+  // ---- rasterise ----
+  const rasterisable = (l) => !!l && !['raster', 'group', 'adjustment'].includes(l.kind);
+  async function rasterize() {
+    const l = active(); if (!rasterisable(l)) return null;
+    const r = await send('rasterize_layer', { layerId: l.id });
+    if (r.status === 'ok') ui.say(`${l.name} is now a raster layer.`);
+    return r;
+  }
+
   // ---- filter ----
   async function filterDialog(filter) {
     const l = active();
-    if (!l || l.kind !== 'raster') { ui.say('Choose a raster layer to filter (filters change its pixels).'); return null; }
     const def = FILTER_DEFS.find((f) => f[0] === filter);
+    if (l && rasterisable(l)) {
+      const ok = await ui.dialogs.raw({ title: def[1], body: h('p', {}, `Filters change pixels, and “${l.name}” is ${l.kind === 'image' ? 'a placed photo' : `a ${l.kind} layer`}. Rasterise it first? It becomes a pixel layer with the same name and look; Undo (Ctrl+Z) takes it back.`),
+        actions: [{ label: 'Cancel', value: null }, { label: 'Rasterise and continue', primary: true, value: true }] });
+      if (!ok) return null;
+      const r = await rasterize();
+      if (r?.status !== 'ok') return r;
+      return filterDialog(filter);
+    }
+    if (!l || l.kind !== 'raster') { ui.say('Choose a layer with pixels to filter. Groups and adjustment layers have none.'); return null; }
     const inputs = def[2].map(([name, label, min, max, d, step]) => [name, h('input', { type: 'number', min, max, step: step ?? 1, value: d, 'aria-label': label })]);
     const extra = [];
     let mode = null; let mono = null;
@@ -132,6 +188,45 @@ export function createEngineUI(root, ui) {
     const r = await send('apply_filter', { layerId: l.id, filter, params });
     if (r.status === 'ok') ui.say(`${def[1]} applied.`);
     return r;
+  }
+
+  // ---- the selected adjustment layer's controls ----
+  const adjBox = h('section', { class: 'adj-box', 'aria-label': 'Adjustment settings', dataset: { command: 'set_adjustment' } });
+  let adjKey = ''; let adjSync = () => {};
+  function buildAdjBox(l) {
+    const type = l.adjustment.type; const spec = ADJ_FIELDS[type];
+    const lane = ui.latest(`adj:${l.id}:${type}`, 'set_adjustment', (params) => ({ layerId: l.id, type, params }));
+    const kind = type.replace(/-/g, ' '); const title = h('h4', {}, l.name.toLowerCase().replace(/ and /g, ' ') === kind ? l.name : `${l.name} (${kind})`);
+    if (!spec) { adjBox.replaceChildren(title, h('p', { class: 'hint' }, type === 'duotone' ? 'Use Edit duotone… below to change the inks.' : 'This adjustment has no controls here.')); adjSync = () => {}; return; }
+    if (type === 'colour-balance') {
+      const tone = h('select', { 'aria-label': 'Tonal range' }, spec.tones.map((t) => h('option', { value: t }, t[0].toUpperCase() + t.slice(1))));
+      const keep = h('input', { type: 'checkbox', 'aria-label': 'Preserve luminosity' });
+      const cur = () => { const p = active()?.adjustment?.params || {}; return { ...Object.fromEntries(spec.tones.map((t) => [t, [...(p[t] || [0, 0, 0])]])), preserveLuminosity: p.preserveLuminosity !== false }; };
+      let vals = cur();
+      const push = () => lane.push({ ...vals });
+      const rows = spec.fields.map(([, label, min, max, step, def], i) => slider({ label, min, max, step, value: vals[tone.value][i], def, command: 'set_adjustment', onInput: (x) => { vals[tone.value][i] = x; push(); } }));
+      tone.addEventListener('change', () => rows.forEach((r, i) => r.set(vals[tone.value][i])));
+      keep.checked = vals.preserveLuminosity; keep.addEventListener('change', () => { vals.preserveLuminosity = keep.checked; push(); });
+      adjBox.replaceChildren(title, h('div', { class: 'row' }, tone), ...rows.map((r) => r.el), h('label', { class: 'check' }, keep, 'Preserve luminosity'));
+      adjSync = () => { if (rows.some((r) => r.dragging)) return; vals = cur(); keep.checked = vals.preserveLuminosity; rows.forEach((r, i) => r.set(vals[tone.value][i])); };
+      return;
+    }
+    const cur = () => { const r = spec.read(active()?.adjustment?.params || {}); return Object.fromEntries(spec.fields.map(([k, , , , , d]) => [k, r[k] ?? d]).concat(spec.colourize ? [['colourize', !!r.colourize]] : [])); };
+    let vals = cur();
+    const push = () => lane.push(spec.build(vals));
+    const rows = spec.fields.map(([k, label, min, max, step, def]) => slider({ label, min, max, step, value: vals[k], def, command: 'set_adjustment', param: k, onInput: (x) => { vals[k] = x; push(); } }));
+    const extra = [];
+    if (spec.colourize) {
+      const box = h('input', { type: 'checkbox', checked: vals.colourize, 'aria-label': 'Colourise' });
+      // Colourise tints the whole layer with one hue: hue 0..360 and saturation 0..100 then.
+      const ranges = (on) => { rows[0].input.min = on ? 0 : -180; rows[0].input.max = on ? 360 : 180; rows[1].input.min = on ? 0 : -100; };
+      ranges(vals.colourize);
+      box.addEventListener('change', () => { vals.colourize = box.checked; vals.hue = box.checked ? 30 : 0; vals.saturation = box.checked ? 25 : 0; ranges(box.checked); rows[0].set(vals.hue); rows[1].set(vals.saturation); push(); });
+      extra.push(h('label', { class: 'check' }, box, 'Colourise'));
+    }
+    const hint = type === 'curves' ? [h('p', { class: 'hint' }, 'Moves three points on the RGB curve. Double-click a name to reset it.')] : [h('p', { class: 'hint' }, 'Double-click a name to reset it.')];
+    adjBox.replaceChildren(title, ...rows.map((r) => r.el), ...extra, ...hint);
+    adjSync = () => { if (rows.some((r) => r.dragging)) return; vals = cur(); rows.forEach((r, i) => r.set(vals[spec.fields[i][0]])); };
   }
 
   // ---- soft proof ----
@@ -163,18 +258,24 @@ export function createEngineUI(root, ui) {
   const duoBtn = h('button', { dataset: { command: 'set_adjustment' }, hidden: true, onclick: () => duotoneDialog() }, 'Edit duotone…');
   const filSel = h('select', { 'aria-label': 'Filter', dataset: { command: 'apply_filter' }, onchange: async (e) => { const f = e.target.value; e.target.value = ''; if (f) await filterDialog(f); } },
     h('option', { value: '' }, 'Filter…'), h('optgroup', { label: 'Artistic' }, FILTER_DEFS.slice(4).map(([k, t]) => h('option', { value: k }, t))), h('optgroup', { label: 'Blur, sharpen, noise' }, FILTER_DEFS.slice(0, 4).map(([k, t]) => h('option', { value: k }, t))));
+  const rasterBtn = h('button', { dataset: { command: 'rasterize_layer' }, title: 'Turn this layer into pixels so filters, brushes and the eraser can change it', onclick: () => rasterize() }, 'Rasterise');
   const panel = h('details', { class: 'engine-ui', open: true }, h('summary', {}, 'Style, filters and print'),
-    h('div', { class: 'row wrap' }, styleBtn, duoBtn), h('div', { class: 'row wrap' }, adjSel, filSel),
+    h('div', { class: 'row wrap' }, styleBtn, duoBtn, rasterBtn), h('div', { class: 'row wrap' }, adjSel, filSel),
     h('div', { class: 'row wrap' }, h('label', { class: 'check' }, proofOn, 'Soft proof'), h('label', { class: 'check', title: 'Paints colours the press cannot print in grey' }, proofWarn, 'Gamut warning'), h('label', {}, 'Ink ', proofTac, ' %')),
     h('div', { class: 'row wrap' }, proofProfile),
     h('p', { class: 'hint' }, 'Soft proof previews the built-in four-ink press (not a characterised printing condition), or the CMYK ICC profile you name.'));
-  root.append(panel);
+  root.append(adjBox, panel);
 
   function render() {
     const doc = ui.store.doc; const l = active();
     styleBtn.disabled = !l || !['image', 'text', 'raster'].includes(l.kind);
     duoBtn.hidden = !(l?.kind === 'adjustment' && l.adjustment?.type === 'duotone');
-    adjSel.disabled = filSel.disabled = !doc; filSel.disabled = !l || l.kind !== 'raster';
+    adjSel.disabled = !doc;
+    filSel.disabled = !l || !(l.kind === 'raster' || rasterisable(l));
+    rasterBtn.hidden = !rasterisable(l);
+    const adj = l?.kind === 'adjustment' && l.adjustment?.type !== 'proof' ? l : null;
+    adjBox.hidden = !adj;
+    if (adj) { const k = `${adj.id}:${adj.adjustment.type}`; if (k !== adjKey) { adjKey = k; buildAdjBox(adj); } else adjSync(); } else adjKey = '';
     const p = proofLayer();
     proofOn.disabled = proofWarn.disabled = proofTac.disabled = proofProfile.disabled = !doc;
     proofOn.checked = !!p;
@@ -183,5 +284,5 @@ export function createEngineUI(root, ui) {
     proofTac.disabled ||= !!proofProfile.value.trim();
   }
   render();
-  return { render, layerStyleDialog, duotoneDialog, filterDialog };
+  return { render, layerStyleDialog, duotoneDialog, filterDialog, rasterize };
 }

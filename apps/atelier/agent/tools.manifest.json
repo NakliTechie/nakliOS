@@ -7703,6 +7703,30 @@
         ],
         "additionalProperties": false
       }
+    },
+    {
+      "name": "rasterize_layer",
+      "description": "Turn an image, RAW, text, shape or smart object layer into a raster (pixel) layer, so filters, brushes and the eraser can change it. The layer is rendered on its own at full opacity, with its mask, style and local adjustments baked in, and keeps its name, opacity, blend mode and visibility (undoable). A raster layer is returned unchanged; groups and adjustment layers are refused.",
+      "handler": "layer.rasterize",
+      "effect": "mutate",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state; the active layer when left out."
+          }
+        },
+        "required": [
+          "revision"
+        ],
+        "additionalProperties": false
+      }
     }
   ],
   "resultEnvelope": {

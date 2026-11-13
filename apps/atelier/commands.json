@@ -113,6 +113,8 @@
     "Layer style dialog: drop shadow, inner shadow, stroke, gradient overlay": "set_layer_style",
     "Add adjustment menu: levels, curves, hue and saturation, exposure, colour balance, black and white, duotone": "add_layer",
     "Duotone dialog: inks (edit an existing duotone)": "set_adjustment",
+    "Adjustment settings (selected adjustment layer): levels, curves, hue and saturation, exposure, colour balance, black and white sliders": "set_adjustment",
+    "Rasterise (Style, filters and print), and Rasterise and continue in a filter dialog": "rasterize_layer",
     "Filter menu: artistic (oil paint, watercolour, sketch, posterise, halftone) and blur, sharpen, noise": "apply_filter",
     "Soft proof toggle, gamut warning and total ink": "set_soft_proof",
     "Soft proof: CMYK ICC profile path": "set_soft_proof",
@@ -7568,6 +7570,29 @@
             "type": "integer",
             "minimum": 0,
             "description": "Document revision this call was planned against; stale values return status 'stale'."
+          }
+        },
+        "required": [
+          "revision"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "layer.rasterize",
+      "description": "Turn an image, RAW, text, shape or smart object layer into a raster (pixel) layer, so filters, brushes and the eraser can change it. The layer is rendered on its own at full opacity, with its mask, style and local adjustments baked in, and keeps its name, opacity, blend mode and visibility (undoable). A raster layer is returned unchanged; groups and adjustment layers are refused.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Document revision this call was planned against; stale values return status 'stale'."
+          },
+          "layerId": {
+            "type": "string",
+            "description": "Layer id from get_state; the active layer when left out."
           }
         },
         "required": [

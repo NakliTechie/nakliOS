@@ -1955,7 +1955,7 @@
       "id": "atelier",
       "repo": "NakliTechie/atelier",
       "requestedRef": "main",
-      "resolvedCommit": "5003c12e9ea45c16741ef09d2acc628bdc23ef7e",
+      "resolvedCommit": "f898c83f43d01ab8f5a618258b67f9a83849d38e",
       "files": [
         {
           "source": "LICENSE",
@@ -1966,14 +1966,14 @@
         {
           "source": "agent/tools.manifest.json",
           "destination": "agent/tools.manifest.json",
-          "sha256": "0f58aa55c2eb2ae79cafdfdd5976944378b9d48e4f48d0060e2b092d801672d8",
-          "bytes": 246529
+          "sha256": "f93486cc5b340b9e17e843dfb6c29b14956516b58de34845a6684be1a780c176",
+          "bytes": 247587
         },
         {
           "source": "commands.json",
           "destination": "commands.json",
-          "sha256": "894dc0e350cb5488acbd0c059c6faec41cab6cc4c104e683a0174033d09bae43",
-          "bytes": 240762
+          "sha256": "0bac9d253ea259699ce9f0e709883159a4778510b4a372db66dd1e8284127a67",
+          "bytes": 242046
         },
         {
           "source": "index.html",
@@ -2076,8 +2076,8 @@
         {
           "source": "src/app.js",
           "destination": "src/app.js",
-          "sha256": "912fd55c5ff6d5b628af7be40b9bf5afa3660df7e6af377db213829c176b0274",
-          "bytes": 11798
+          "sha256": "d0d2d5a23b69c07aa3cc8c727ddf8f5859cae516825644db8b1748354d8a9fbb",
+          "bytes": 13096
         },
         {
           "source": "src/autosave.js",
@@ -2304,8 +2304,8 @@
         {
           "source": "src/handlers/layers.js",
           "destination": "src/handlers/layers.js",
-          "sha256": "3c8a91175ad79ca456aee66d3c217b12653b7bd76f10a696223ca164b7c82cc6",
-          "bytes": 15561
+          "sha256": "462b3915932237b571676936a954dd675766ca3960308f30bf8071c44c8e8c85",
+          "bytes": 17449
         },
         {
           "source": "src/handlers/lens.js",
@@ -2610,8 +2610,8 @@
         {
           "source": "src/ui/engine-ui.js",
           "destination": "src/ui/engine-ui.js",
-          "sha256": "128c8822a5255906e80ecdb9fe1a24fd6d2b2d11cea341142492d999d95765bf",
-          "bytes": 15325
+          "sha256": "cd2d8a849759fa737f8d445135cedb38cbd0ec0590957baf6dafbfa98072e6a6",
+          "bytes": 23041
         },
         {
           "source": "src/ui/export.js",
@@ -2622,8 +2622,8 @@
         {
           "source": "src/ui/filmstrip.js",
           "destination": "src/ui/filmstrip.js",
-          "sha256": "712f1474e97a7178cb4d8b2d6c656f7c7f29c6298d247e3bebb1248ec18b0cec",
-          "bytes": 29698
+          "sha256": "7acdafcde5b796df4bb8d28a0f4d0a9c548529684c357af601096862c42deb6f",
+          "bytes": 29877
         },
         {
           "source": "src/ui/geometry.js",
@@ -2676,8 +2676,8 @@
         {
           "source": "src/ui/parity.js",
           "destination": "src/ui/parity.js",
-          "sha256": "3741d77dbd5119013ba4b8b00b8f8ae2563d3a7ef208271051967b3991181612",
-          "bytes": 15039
+          "sha256": "f84c836705a942a4fadd6cb7b70dfad0e64c809d0c5056650c9d82d8723ec511",
+          "bytes": 15309
         },
         {
           "source": "src/ui/presetpreview.js",
