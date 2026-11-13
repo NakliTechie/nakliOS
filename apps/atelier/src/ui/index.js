@@ -26,7 +26,7 @@ import { createEngineUI } from './engine-ui.js';
 
 const COPY_PANELS = [['basic', 'Basic'], ['curve', 'Tone curve'], ['mixer', 'Colour mixer'], ['grading', 'Colour grading'], ['effects', 'Effects']];
 
-export function mountUI({ bus, ctx, manifest, engineError, grantFolder, runStaged, hostCaps }) {
+export function mountUI({ bus, ctx, manifest, engineError, grantFolder, importFiles, runStaged, hostCaps }) {
   const dialogs = createDialogs();
   const status = $('#status');
   let lastNote = '';
@@ -52,12 +52,18 @@ export function mountUI({ bus, ctx, manifest, engineError, grantFolder, runStage
   const storageLabel = h('span', { class: 'dim', id: 'storage' });
   const saveState = $('#save-state');
   const header = $('header');
+  // Open photo…: the browser's file picker for one or more photos, copied into Atelier's storage and opened.
+  const ACCEPT = '.jpg,.jpeg,.png,.webp,.avif,.gif,.tif,.tiff,.psd,.arw,.nef,.cr2,.cr3,.dng,.raf,.orf,.rw2,image/*';
+  const photoInput = h('input', { type: 'file', accept: ACCEPT, multiple: true, hidden: true, 'aria-label': 'Photo file', onchange: async (e) => { const f = [...e.target.files]; e.target.value = ''; if (f.length) await importFiles(f); render(); } });
+  const openPhotoPicker = () => photoInput.click();
+  const folderLabel = () => (hostCaps().hosted && hostCaps().fs ? 'Storage…' : 'Open folder');
   header.replaceChildren(
     h('h1', {}, 'Atelier'), modes,
     h('button', { dataset: { command: 'undo' }, title: 'Ctrl+Z', onclick: () => sender.send('undo') }, 'Undo'),
     h('button', { dataset: { command: 'redo' }, title: 'Ctrl+Shift+Z', onclick: () => sender.send('redo') }, 'Redo'),
     h('span', { class: 'grow' }), storageLabel,
-    h('button', { dataset: { person: 'grant_folder' }, title: 'Choose a folder on your disk for photos and documents', onclick: () => grantFolder() }, hostCaps().hosted && hostCaps().fs ? 'Storage…' : 'Open folder'),
+    h('button', { dataset: { command: 'open_photo' }, title: 'Open one or more photos from your disk (or drop them on the canvas)', onclick: openPhotoPicker }, 'Open photo…'), photoInput,
+    h('button', { dataset: { person: 'grant_folder' }, title: 'Choose a folder on your disk for photos and documents', onclick: () => grantFolder() }, folderLabel()),
     h('button', { dataset: { command: 'new_document' }, onclick: newDocument }, 'New'),
     h('button', { dataset: { command: 'save_document' }, title: 'Ctrl+S (Atelier also saves on its own)', onclick: () => saveNow() }, 'Save'),
     h('button', { class: 'primary', dataset: { command: 'export_image' }, onclick: () => openExport() }, 'Export…'),
@@ -138,6 +144,7 @@ export function mountUI({ bus, ctx, manifest, engineError, grantFolder, runStage
     const b = e.target.closest('[data-staged]'); if (!b) return;
     if (b.dataset.decision === 'confirm') {
       const job = await runStaged(b.dataset.staged);
+      if (job?.state === 'done' && /^export_/.test(job.tool) && job.result?.path) await ui.downloadExport(job.result.path);
       say(job ? `${job.tool}: ${job.state}${job.error ? ` (${job.error})` : job.result?.path ? ` → ${job.result.path}` : ''}` : 'That action is gone.');
     } else { ctx.staged.delete(b.dataset.staged); say('Discarded.'); }
     render();
@@ -151,6 +158,28 @@ export function mountUI({ bus, ctx, manifest, engineError, grantFolder, runStage
     saveState.textContent = { saved: 'Saved', unsaved: 'Unsaved changes', saving: 'Saving…', paused: 'Saving paused', error: 'Save failed, retrying' }[s] || '';
     saveState.dataset.state = s; saveState.title = info?.error || info?.path || '';
   };
+
+  // ---- empty state and dropping photos on the canvas ----
+  const stage = $('#stage');
+  const empty = h('div', { id: 'empty', role: 'region', 'aria-label': 'Start' },
+    h('h2', {}, 'Open a photo to start'),
+    h('p', {}, 'Drop photos here, or choose one.'),
+    h('div', { class: 'row wrap empty-actions' },
+      h('button', { class: 'primary', dataset: { command: 'open_photo' }, onclick: openPhotoPicker }, 'Open photo…'),
+      h('button', { dataset: { person: 'grant_folder' }, onclick: () => grantFolder() }, folderLabel()),
+      h('button', { dataset: { command: 'new_document' }, onclick: newDocument }, 'New document')),
+    h('dl', {},
+      h('dt', {}, 'Develop'), h('dd', {}, 'Adjust one photo: exposure, white balance, colour, tone curve and lens. Best with camera RAW files.'),
+      h('dt', {}, 'Composite'), h('dd', {}, 'Build a picture from layers, masks, adjustments and type.')),
+    h('p', { class: 'hint', id: 'empty-storage' }));
+  stage.append(empty);
+  const hasFiles = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
+  stage.addEventListener('dragover', (e) => { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; stage.classList.add('drop-target'); });
+  stage.addEventListener('dragleave', (e) => { if (!stage.contains(e.relatedTarget)) stage.classList.remove('drop-target'); });
+  stage.addEventListener('drop', async (e) => { if (!hasFiles(e)) return; e.preventDefault(); stage.classList.remove('drop-target'); await importFiles(e.dataTransfer.files); render(); });
+  // A file dropped anywhere else would make the browser navigate away from Atelier; refuse it there.
+  addEventListener('dragover', (e) => { if (hasFiles(e) && !stage.contains(e.target)) { e.preventDefault(); e.dataTransfer.dropEffect = 'none'; } });
+  addEventListener('drop', (e) => { if (hasFiles(e) && !stage.contains(e.target)) e.preventDefault(); });
 
   // ---- keyboard ----
   addEventListener('keydown', async (e) => {
@@ -212,6 +241,10 @@ export function mountUI({ bus, ctx, manifest, engineError, grantFolder, runStage
     storageLabel.textContent = s ? `Storage: ${s.label}` : 'No storage';
     devRoot.hidden = !dev; layRoot.hidden = dev;
     if (dev) develop.update(); else { layers.render(); engineUI.render(); }
+    empty.hidden = !!doc || !!engineError;
+    if (!doc) $('#empty-storage').textContent = s ? `Photos you open are copied to ${s.kind === 'browser' ? 'this browser’s own storage' : s.label}. Nothing is uploaded.` : 'Nothing is uploaded.';
+    // AI tools act on an open photo, so their panels (and model downloads) wait until one is open.
+    for (const el of [$('#ai-panel'), document.querySelector('aside .ai-pixels'), document.querySelector('aside .ai-portrait')]) if (el) el.hidden = !doc;
     aiMasks.render();
     ui.vector?.render();
     filmstrip.draw();
