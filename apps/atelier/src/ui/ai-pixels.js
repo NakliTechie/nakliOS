@@ -22,12 +22,16 @@ export function createAiPixelsPanel(root, ui) {
   const status = new Map(PIXEL_MODELS.map((m) => [m.id, 'absent']));
   ui.ctx.aiProgress = (tool, n, total) => ui.say(`${tool}: tile ${n} of ${total}`);
 
+  // Redraw only when a model's status changed: the window focus event fires when a click enters the NakliOS
+  // iframe, and a redraw between mousedown and mouseup swallowed the first click on a tool (filming defect).
+  const busy = new Map();
+  let drawn = '';
+  const sig = () => JSON.stringify([...status, ...busy, imageEditRoute()?.label ?? null]);
   async function refresh() {
     try { const r = await runtime(); await r.refresh(); for (const m of PIXEL_MODELS) status.set(m.id, r.modelStatus(m.id)); for (const id of ['detr-panoptic', 'depth-anything-v2-small']) status.set(id, r.modelStatus(id)); } catch { /* no Cache Storage: every model stays absent */ }
-    draw();
+    if (sig() !== drawn) draw();
   }
 
-  const busy = new Map();
   async function download(m) {
     busy.set(m.id, 'starting'); draw();
     try {
@@ -103,7 +107,16 @@ export function createAiPixelsPanel(root, ui) {
     ];
   }
 
+  async function upscale() {
+    ui.say('Upscaling ×2…');
+    const r = await send('ai_upscale', {}); if (r.status !== 'ok') return;
+    const { path, width, height } = r.result;
+    const got = await ui.downloadExport?.(path);
+    ui.say(`Wrote ${path} (${width} × ${height})${got ? ' and downloaded it' : ''}.`);
+  }
+
   function draw() {
+    drawn = sig();
     body.replaceChildren(
       h('p', { class: 'dim' }, 'Each tool writes a new layer (or, for ×2, a new file) and leaves your pixels alone. Models download only when you click Download and run on this device.'),
       ...PIXEL_MODELS.map((m) => h('div', { class: 'row wrap', dataset: { model: m.id } },
@@ -111,7 +124,7 @@ export function createAiPixelsPanel(root, ui) {
         ready(m.id) ? h('button', { dataset: { command: 'remove_model', model: m.id }, onclick: () => remove(m) }, 'Remove')
           : h('button', { dataset: { person: 'download_model', model: m.id }, disabled: busy.has(m.id), title: `Downloads ${Math.round(m.bytes / 1e6)} MB from huggingface.co/${m.repo}`, onclick: () => download(m) }, busy.has(m.id) ? `Downloading ${busy.get(m.id)}` : 'Download'))),
       h('div', { class: 'row wrap' }, ready('scunet-denoise') ? [btn('Denoise', 'ai_denoise', () => send('ai_denoise', { layerId: active(), strength: Number(strength.value) }), 'Noise reduction and JPEG artefact removal on the active layer'), strength] : need('scunet-denoise')),
-      h('div', { class: 'row wrap' }, ready('swin2sr-x2') ? btn('Upscale ×2 to file', 'ai_upscale', () => send('ai_upscale', {}), 'Writes exports/<title>-upscaled-x2.png') : need('swin2sr-x2')),
+      h('div', { class: 'row wrap' }, ready('swin2sr-x2') ? btn('Upscale ×2 to file', 'ai_upscale', upscale, 'Writes exports/<title>-upscaled-x2.png') : need('swin2sr-x2')),
       h('div', { class: 'row wrap' }, ready('lama-inpaint') ? [
         btn('Remove selection', 'ai_remove', () => send('ai_remove', {}), 'Fills the selection from its surroundings'),
         btn('Expand canvas', 'ai_expand', () => send('ai_expand', { percent: Number(pct.value) }), 'Grows the canvas and fills the new border'), pct, '%',

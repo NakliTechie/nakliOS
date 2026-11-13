@@ -176,7 +176,7 @@ export function mountUI({ bus, ctx, manifest, engineError, grantFolder, importFi
     const b = e.target.closest('[data-staged]'); if (!b) return;
     if (b.dataset.decision === 'confirm') {
       const job = await runStaged(b.dataset.staged);
-      if (job?.state === 'done' && /^export_/.test(job.tool) && job.result?.path) await ui.downloadExport(job.result.path);
+      if (job?.state === 'done' && (/^export_/.test(job.tool) || job.tool === 'ai_upscale') && job.result?.path) await ui.downloadExport(job.result.path);
       say(!job ? 'That action is gone.' : job.state === 'done' ? `Done${job.result?.path ? `: ${job.result.path}` : ''}.` : `That did not finish${job.error ? `: ${job.error}` : ''}.`);
     } else { ctx.staged.delete(b.dataset.staged); say('Discarded.'); }
     render();
