@@ -501,7 +501,8 @@ export function parseApplyPatch(patch) {
 export const SUBAGENT_WALL_CLOCK_MS = 240_000;
 export function makeToolExecutor({ shell, face, mode = 'code', infer = null, subagentDepth = 0, spawnIsolated = null, recordSubagent = null,
                                    signal = null, subagentBudget = null, recordSubagentStart = null, onSubagentEvent = null,
-                                   steer = null, settleMs = DISPATCH_SETTLE_MS, scopes = null, fullResultBytes = 0, sharedReadLedger = null }) {
+                                   steer = null, settleMs = DISPATCH_SETTLE_MS, scopes = null, fullResultBytes = 0, sharedReadLedger = null,
+                                   roleInfer = null }) {
   if(!Number.isSafeInteger(fullResultBytes)||fullResultBytes<0||fullResultBytes>256*1024)throw Error('Invalid full-result byte limit');
   if (!face) throw new Error('makeToolExecutor requires a Rig agent face');
   const modeAllow = MODE_TOOLS[mode] || null; // null = all tools
@@ -524,12 +525,23 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
   // and `dispatch` runs up to four workers concurrently, so interleaved appends would order
   // nondeterministically and break replay. Recording is best-effort: a recorder that throws must
   // not fail a subagent that did its work.
+  // Models by role (2026-11-14): `roleInfer` is { build, review, label? } — `review` children run
+  // on the review model, every other child kind on the build model; either missing falls back to
+  // `infer`. `label(role)` names the role's model when it differs from the main one (else null),
+  // so the claim and the digest row can say where a child ran.
+  const roleOf = (kind) => (kind === 'review' ? 'review' : 'build');
+  const inferFor = (kind) => (roleInfer && typeof roleInfer[roleOf(kind)] === 'function' ? roleInfer[roleOf(kind)] : infer);
+  const ranOnFor = (kind) => { try { return roleInfer && typeof roleInfer.label === 'function' ? (roleInfer.label(roleOf(kind)) || null) : null; } catch (_) { return null; } };
   async function runRecorded({ kind, label, tool_call_id, messages, tools, executeTool, maxSteps, budget: callBudget = null }) {
     // Precedence: the call's own budget (ESS-3) > the executor's configured budget > the default.
     const budget = callBudget || subagentBudget || { wallClockMs: SUBAGENT_WALL_CLOCK_MS };
+    const childInfer = inferFor(kind);
+    const ranOn = ranOnFor(kind);
     // The claim first: on the chain before the child has done anything, so a child that dies
     // in flight (tab closed, page reloaded) leaves a `subagent.started` with no `subagent.ran`.
-    if (recordSubagentStart) { try { await recordSubagentStart({ kind, label, tool_call_id }); } catch (_) {} }
+    // The role and its model ride the claim only when a role model differs from the main one,
+    // so a run without roles records the same bytes as before.
+    if (recordSubagentStart) { try { await recordSubagentStart({ kind, label, tool_call_id, ...(ranOn ? { role: roleOf(kind), model: ranOn } : {}) }); } catch (_) {} }
     // (An already-stopped run needs no guard here: the loop checks the signal before its first
     // model call and returns stop:'aborted' with zero calls.)
     let rec = null;
@@ -553,9 +565,10 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
     };
     const res = await runAgentLoop({
       messages, tools, maxSteps, executeTool, signal, budget,
-      infer: rec ? rec.wrapInfer(infer) : infer,
+      infer: rec ? rec.wrapInfer(childInfer) : childInfer,
       onEvent: (rec || onSubagentEvent) ? tap : undefined,
     });
+    if (ranOn && res && typeof res === 'object') res.ranOn = `${ranOn} (${roleOf(kind)})`;
     if (rec) {
       try {
         await rec.finish(res);
@@ -926,7 +939,7 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
               maxSteps: budget.maxSteps,
               budget: budget.explicit.secs ? { wallClockMs: budget.wallClockMs } : null,
             });
-            return { label: t.label, ownership: t.ownership || [], ok: res.stop === 'done', stop: res.stop, text: res.text || `(stopped: ${res.stop})`, changes: iso.changes(), iso };
+            return { label: t.label, ownership: t.ownership || [], ok: res.stop === 'done', stop: res.stop, text: res.text || `(stopped: ${res.stop})`, changes: iso.changes(), iso, ...(res.ranOn ? { ranOn: res.ranOn } : {}) };
           } catch (e) {
             return { label: t.label, ownership: t.ownership || [], ok: false, stop: 'error', text: `Subagent error: ${String(e && e.message || e)}`, changes: iso.changes ? iso.changes() : { written: [], deleted: [] }, iso };
           }
@@ -1051,7 +1064,7 @@ export function makeToolExecutor({ shell, face, mode = 'code', infer = null, sub
         // owner's edits, a sibling's merge), its verdict may rest on stale content — say so under it.
         let stale = '';
         try { const mv = (iso && typeof iso.moved === 'function') ? await iso.moved() : null; const read = mv ? [...mv.read, ...mv.wrote] : []; if (read.length) stale = `\n\n[review read ${read.length} file${read.length === 1 ? '' : 's'} that changed under it since (${read.join(', ')}) — its verdict may rest on stale content]`; } catch (_) {}
-        return (res.text || `(review finished: ${res.stop})`) + stale;
+        return (res.text || `(review finished: ${res.stop})`) + stale + (res.ranOn ? `\n\n[review ran on ${res.ranOn}]` : '');
       }
 
       if (name === 'todowrite') {

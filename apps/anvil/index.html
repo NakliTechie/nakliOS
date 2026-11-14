@@ -810,7 +810,7 @@
       head: rec.head ? rec.head() : null, events: ev.length,
       stop: st.stop, status: st.status, verified: st.verified, steps: st.steps,
       gatePassed: ev.some(e=>e.tool==='verify.passed'), // PG-A3: the gate's word, not the loop's flag — what a fact can earn on
-      ...(()=>{ const q=foldQuota(ev, rec.resolve); return { tokens:q.tokens, calls:q.calls, seconds:q.seconds, evidence:q.evidence, axis: st.axis||null, reason: st.reason||null }; })(), // LX-3: the goal row's quota and evidence, per run
+      ...(()=>{ const q=foldQuota(ev, rec.resolve); return { tokens:q.tokens, calls:q.calls, seconds:q.seconds, evidence:q.evidence, axis: st.axis||null, reason: st.reason||null, ...(Object.keys(q.repeats||{}).length?{ repeats:q.repeats }:{}) }; })(), // repeats: replies the host's repeat guard stopped, per model (2026-11-14) // LX-3: the goal row's quota and evidence, per run
       startedAt: ev.length ? ev[0].ts : null, endedAt: ev.length ? ev[ev.length-1].ts : null,
       checkpoint, resumed, anchor: ord.anchor, toFirstAction: ord.toFirstAction, recalled, episode, skillOutcomes };
   }
@@ -1606,11 +1606,17 @@
     }catch(e){ return { score:-1, detail:{ error:String(e&&e.message||e) } }; }
   }
   // The evolutionary synthesis run, shared by the `synthesize` tool + the test hook.
-  async function runSynthesize({ goal, examples, popSize=3, maxGen=3, onGen=null }){
+  async function runSynthesize({ goal, examples, popSize=3, maxGen=3, onGen=null, parents=2 }){
     const pop=Math.min(4, Math.max(1, popSize|0||3)); const gens=Math.min(4, Math.max(1, maxGen|0||3));
     const exJson=JSON.stringify(examples).slice(0,12000);
     const generate=async(ctx)=>{
-      const repair = ctx.best
+      // Two parents (RSA K = 2): each fails different examples, so the prompt asks to combine
+      // them; with one parent it is the original repair prompt.
+      const ps=(ctx.parents||[]).filter(p=>p&&p.candidate!=null);
+      const failsOf=(p)=>JSON.stringify((p.detail&&p.detail.failed)||[]);
+      const repair = ps.length>=2
+        ? ('\n\nTwo candidate solvers follow. Each fails different example indices. Combine what each gets right into ONE function that passes every example, or write a different rule:\n'+ps.map((p,k)=>'Candidate '+(k+1)+' (fitness '+p.score.toFixed(2)+', FAILS '+failsOf(p)+'):\n```python\n'+String(p.candidate).slice(0,3000)+'\n```').join('\n'))
+        : ctx.best
         ? ('\n\nThe current best (fitness '+ctx.bestScore.toFixed(2)+') FAILS example indices '+JSON.stringify((ctx.bestDetail&&ctx.bestDetail.failed)||[])+'. Repair it, or try a DIFFERENT rule:\n```python\n'+String(ctx.best).slice(0,4000)+'\n```')
         : (ctx.index ? '\n\n(Try a different rule than the other candidates.)' : '');
       // Softened prompt: brief reasoning is allowed (a hard "code only" made weak
@@ -1626,7 +1632,7 @@
       ]); }catch(_){ return null; }
       const txt=String((res&&res.content)||''); const all=[...txt.matchAll(/```(?:python|py)?\s*\n([\s\S]*?)```/g)]; return all.length?all[all.length-1][1]:txt;
     };
-    const res=await evolve({ generate, score:(src)=>scoreSolver(src, examples), popSize:pop, maxGen:gens, target:1, onGen });
+    const res=await evolve({ generate, score:(src)=>scoreSolver(src, examples), popSize:pop, maxGen:gens, target:1, onGen, parents:Math.min(3, Math.max(1, parents|0||2)) });
     if(res.best){ try{ await fs.write('solver.py', String(res.best)+'\n\n# synthesize: best '+res.bestScore.toFixed(3)+' over '+res.generations+' gen(s)'); renderFiles(); }catch(_){} }
     return res;
   }
@@ -2423,7 +2429,8 @@
     const convo=[{role:'system',content:sys},{role:'user',content:kick}];
     for(let attempt=0; attempt<2 && emitted==null; attempt++){
       if(attempt>0) convo.push({role:'user',content:'You have not called `emit` yet, so nothing was recorded. Call the `emit` tool now with your result JSON and nothing else.'});
-      try{ await runAgentLoop({ messages:convo, tools, infer:inferViaHost, executeTool:execTool, maxSteps: attempt===0?maxSteps:4, budget }); }catch(_){}
+      // Models by role: the builder runs on the build model, the checker and lead on the review model.
+      try{ await runAgentLoop({ messages:convo, tools, infer:inferAs(role==='builder'?'build':'review'), executeTool:execTool, maxSteps: attempt===0?maxSteps:4, budget }); }catch(_){}
     }
     return emitted;
   }
@@ -3006,15 +3013,23 @@
     return out;
   }
 
-  async function inferViaHost({ messages, tools, maxTokens, signal }){
+  async function inferViaHost({ messages, tools, maxTokens, signal, agentRole }){
     const release = await aiSlots.acquire(signal);
-    try { return await inferViaHostCall({ messages, tools, maxTokens, signal }); } finally { release(); }
+    try { return await inferViaHostCall({ messages, tools, maxTokens, signal, agentRole }); } finally { release(); }
   }
+  // Models by role (Settings → AI → Models by role): a child names its role and the host runs it
+  // on that role's model. `label` names the role's model only when it differs from the main one.
+  const inferAs = (role)=> (r)=> inferViaHost({ ...r, agentRole:role });
+  function roleModelLabel(role){
+    try{ const c=(nak&&nak.capabilities)||{}; const m=c.aiRoleModels&&c.aiRoleModels[role];
+      return m && m.id && m.same===false ? String(m.label||m.id) : null; }catch(_){ return null; }
+  }
+  const roleInfer = { build:inferAs('build'), review:inferAs('review'), label:roleModelLabel };
   // The host takes at most 3 pending AI requests per app (AI_MAX_QUEUE_PER_APP in the host) and
   // refuses the fourth outright, so a 4-way dispatch lost a child. Every host call holds one of
   // 3 slots; a fourth waits here for its turn (sys/ai/slots.mjs).
   const aiSlots = createSlots(3);
-  async function inferViaHostCall({ messages, tools, maxTokens, signal }){
+  async function inferViaHostCall({ messages, tools, maxTokens, signal, agentRole }){
     const ai = nak && nak.ai;
     if(!ai) throw new Error('Agent needs the NakliOS host — open Anvil inside NakliOS (naklios.dev), and set a model in Settings → AI.');
     let lastErr;
@@ -3025,6 +3040,7 @@
         // can hit the default output cap and return empty (finishReason "length").
         const req = { agent:true, messages, tools, tool_choice:'auto', stream:false };
         if(maxTokens){ req.max_tokens = maxTokens; }
+        if(agentRole){ req.agentRole = agentRole; }
         // Stop must reach the HOST's fetch, not only this promise: the SDK sends naklios:ai:cancel only
         // from options.signal, and without it the orphaned request stayed aiHost.active — the host is
         // single-active, so the next Send from any app queued behind it until the endpoint finished
@@ -3078,6 +3094,11 @@
 
   let running=false;
   let testRunBudget=null; // one-shot, opt-in owner test door only
+  // The after-run review's reply cap: proposals are a few short JSON items. On an Anthropic-protocol
+  // endpoint the host raises any request to AI_ANTHROPIC_MIN_MAX_TOKENS (16,000), because current
+  // Claude models always think and a smaller cap ends the reply before any text; there the host's
+  // repeat guard, not this number, is what stops a looping review.
+  const LEARN_REVIEW_MAX_TOKENS=2048;
   let autoReviewTimer=null; // the idle-deferred post-run review (C5)
   let abortController=null;   // aborts the in-flight run (the Stop button)
   // Enter sends; while a run is in flight, Enter/Send QUEUES the prompt (Codex-
@@ -3242,6 +3263,11 @@
   async function learnThisRun(t, rec, projectId = null){
     if(t?.rangeEdit) return null; // Snapshot records never gain authority over a later mount.
     if(!(nak && nak.capabilities && nak.capabilities.ai)) return null;
+    // The review is a convenience; it must never hold the host's single-active AI queue. On
+    // 2026-10-31 it looped twice on LFM2.5 24B-A2B (in the browser) for minutes, so it runs only
+    // on an endpoint, with its reply capped (LEARN_REVIEW_MAX_TOKENS). The host's repeat guard
+    // stops a loop on any model; this keeps a slow in-browser model free for the person.
+    { const provider = nak.capabilities.aiProvider; if(provider && provider !== 'endpoint') return null; }
     // The review is async and `fs` follows whatever project is MOUNTED, so switching project
     // mid-review wrote this run's skills into the other project (forward-pass NAF-06). Pin it:
     // the review belongs to the project it started in, and abandons its writes if that changed.
@@ -3273,7 +3299,7 @@
       }catch(_){}
       return { ok:false };
     };
-    const rep = await runLearnReview({ record:{ events:rec.events, resolve:rec.resolve }, infer:inferViaHost, ledger:await projectLedger(), propose, now:Date.now() });
+    const rep = await runLearnReview({ record:{ events:rec.events, resolve:rec.resolve }, infer:(r)=>inferViaHost({ ...r, maxTokens:(r&&r.maxTokens)||LEARN_REVIEW_MAX_TOKENS }), ledger:await projectLedger(), propose, now:Date.now() });
     if(!sameProject()) return rep; // do not narrate into a task that is no longer on screen
     if(rep.staged.length) await saveLedger(); // the staged skills' fingerprints ride with the ledger
     if(rep.staged.length) (t.log=t.log||[]).push({ k:'system', text:'Learned from this run — staged for your approval: '+rep.staged.map(x=>x.staged).join(', ')+'. Nothing was saved active — keep or reject each from the Skills / Memory panes.' });
@@ -3600,7 +3626,7 @@
     // B2: one steer queue per run, shared by the executor (dispatch pushes completions) and the loop (drains them)
     const runReadLedger=new Map();
     const steer=createSteerQueue();
-    const baseExec = makeToolExecutor({ shell, face, mode, infer: inferViaHost, spawnIsolated, steer, scopes: grant.scopes, sharedReadLedger:runReadLedger,
+    const baseExec = makeToolExecutor({ shell, face, mode, infer: inferViaHost, roleInfer, spawnIsolated, steer, scopes: grant.scopes, sharedReadLedger:runReadLedger,
       recordSubagent: async (sub)=>{
         try{ const id=String(sub.tool_call_id||'')+'\u0000'+String(sub.label||''); const row=(t.log||[]).find(r=>r && r.k==='subagent' && r.id===id); if(row){ row.status=String(sub.stop||'done'); row.steps=Math.max(row.steps||0, Number(sub.steps)||0); renderLog(); } }catch(_){}
         try{ if(runCtx && runCtx.rec) await runCtx.rec.subagent(sub); }catch(_){} },
@@ -3615,7 +3641,7 @@
         try{
           const id = String(tool_call_id||'')+'\u0000'+String(label||'');
           let row = (t.log||[]).find(r=>r && r.k==='subagent' && r.id===id);
-          if(!row){ row = { ...subagentFeedRow(null, {}), id, kind, label }; (t.log=t.log||[]).push(row); }
+          if(!row){ const on=roleModelLabel(kind==='review'?'review':'build'); row = { ...subagentFeedRow(null, {}), id, kind, label, ...(on?{ ranOn:on }:{}) }; (t.log=t.log||[]).push(row); }
           Object.assign(row, subagentFeedRow(row, event));
           // B1: the child's turns and tool calls as heartbeats on the chain — liveness, never completion —
           // so the fleet's live / unverifiable / exited state replays from the record (foldSubagentFleet)
@@ -4722,7 +4748,7 @@
     shell:async(line)=>{ if(!shell) return { output:'no shell — the workspace is not mounted', code:1 }; const r=await shell.feed(String(line||'')); return { output:(r&&r.output)||'', code:shell.lastCode|0, awaitingConfirm:!!shell.awaitingConfirm }; },
     demoCampaign:(g)=>startCampaign(g||'samtools view parity',{live:false}),
     liveCampaign:(g,maxIters)=>startCampaign(g||'samtools view parity',{live:true, maxIters:maxIters||8}),
-    synthesize:(goal, examples, popSize, maxGen)=>runSynthesize({goal, examples, popSize, maxGen}),
+    synthesize:(goal, examples, popSize, maxGen, parents)=>runSynthesize({goal, examples, popSize, maxGen, ...(parents?{ parents }:{})}), // parents: 1 = repair the best, 2 = combine two (the A/B)
     score:(src, examples)=>scoreSolver(src, examples),
     infer:async(prompt, maxTokens)=>{ try{ const r=await inferViaHost({ messages:[{role:'user',content:String(prompt||'Say OK.')}], tools:[], maxTokens }); return { ok:true, contentLen:(r&&r.content||'').length, content:(r&&r.content||'').slice(0,400), finishReason:r&&r.finishReason, toolCalls:(r&&r.toolCalls||[]).length }; }catch(e){ return { ok:false, error:String(e&&e.message||e) }; } },
     // Remote git through the egress transport (probe). References the live `git` binding.

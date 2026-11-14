@@ -345,7 +345,7 @@
     },
     "hook:synthesize": {
       "owner": "test-door.md",
-      "fingerprint": "72ff6dad9df0",
+      "fingerprint": "cca1b644f267",
       "kind": "hook",
       "detail": "__anvil.test.synthesize"
     },

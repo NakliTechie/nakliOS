@@ -20,7 +20,7 @@ for(const available of [true,false]) {
 }
 
 // Submit path resolves by tier and the ondevice runtime is dispatched + gated.
-assert.match(host, /const model = aiResolveModel\(wantsAgent\)/, 'aiHostSubmit routes by tier');
+assert.match(host, /const model = aiResolveModel\(wantsAgent, msg\.agentRole \?\? null\)/, 'aiHostSubmit routes by tier (and by agent role)');
 assert.match(host, /request\.model\.runtime === 'ondevice'\) return aiGenerateOnDevice/,
   'ondevice dispatches to the on-device generator');
 assert.match(host, /if \(model\.runtime === 'ondevice'\) return aiNano\.available/,

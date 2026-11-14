@@ -200,7 +200,7 @@ addEventListener('unhandledrejection', (e) => report(e.reason?.message ?? e.reas
 globalThis.__SONELLA_WORKERS = {"blockstore":"(() => {\n  // src/workers/blockstore.js\n  var handle = null;\n  var root = null;\n  var fileName = null;\n  var size = 0;\n  var index = /* @__PURE__ */ new Map();\n  var reply = (rid, body, transfer) => self.postMessage({ rid, ...body }, transfer || []);\n  self.onmessage = async (e) => {\n    const { rid, op } = e.data;\n    try {\n      if (op === \"open\") {\n        root = await navigator.storage.getDirectory();\n        fileName = e.data.name;\n        const fh = await root.getFileHandle(fileName, { create: true });\n        handle = await fh.createSyncAccessHandle();\n        handle.truncate(0);\n        size = 0;\n        reply(rid, { ok: true });\n      } else if (op === \"write\") {\n        const bytes = new Uint8Array(e.data.buf);\n        handle.write(bytes, { at: size });\n        index.set(e.data.id, [size, bytes.byteLength]);\n        size += bytes.byteLength;\n        reply(rid, { ok: true, size });\n      } else if (op === \"read\") {\n        const loc = index.get(e.data.id);\n        if (!loc) throw new Error(`Block ${e.data.id} is not in the pool`);\n        const buf = new ArrayBuffer(loc[1]);\n        handle.read(new Uint8Array(buf), { at: loc[0] });\n        reply(rid, { ok: true, buf }, [buf]);\n      } else if (op === \"sweep\") {\n        const removed = [];\n        root ??= await navigator.storage.getDirectory();\n        for await (const [name] of root.entries()) {\n          if (!name.startsWith(\".sonella-blocks-\") || name === fileName) continue;\n          const session = name.slice(\".sonella-blocks-\".length).replace(/\\.bin$/, \"\");\n          const free = await navigator.locks.request(`sonella-blocks-${session}`, { ifAvailable: true }, (lock) => !!lock);\n          if (free) {\n            await root.removeEntry(name).catch(() => {\n            });\n            removed.push(name);\n          }\n        }\n        reply(rid, { ok: true, removed });\n      } else if (op === \"close\") {\n        handle?.close();\n        handle = null;\n        if (fileName) await root.removeEntry(fileName).catch(() => {\n        });\n        reply(rid, { ok: true });\n      }\n    } catch (err) {\n      reply(rid, { ok: false, error: String(err?.message || err) });\n    }\n  };\n})();\n","probe":"(() => {\n  // src/workers/probe.js\n  self.onmessage = async (e) => {\n    const { op } = e.data || {};\n    if (op === \"ping\") {\n      self.postMessage({ pong: \"pong\" });\n      return;\n    }\n    if (op === \"opfs\") {\n      const name = \".sonella-probe.bin\";\n      try {\n        const root = await navigator.storage.getDirectory();\n        const fh = await root.getFileHandle(name, { create: true });\n        const h = await fh.createSyncAccessHandle();\n        const data = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]);\n        h.truncate(0);\n        h.write(data, { at: 0 });\n        h.flush();\n        const back = new Uint8Array(8);\n        const n = h.read(back, { at: 0 });\n        h.close();\n        await root.removeEntry(name);\n        self.postMessage({ ok: n === 8 && back[7] === 8, bytes: n, error: n === 8 ? null : `read ${n} bytes` });\n      } catch (err) {\n        self.postMessage({ ok: false, error: String(err && err.message || err) });\n      }\n    }\n  };\n})();\n"};
 globalThis.__SONELLA_WORKLETS = {"player":"(() => {\n  // src/worklets/player.js\n  var SonellaPlayer = class extends AudioWorkletProcessor {\n    constructor() {\n      super();\n      this.queue = [];\n      this.pos = 0;\n      this.played = 0;\n      this.gen = 0;\n      this.ended = false;\n      this.tick = 0;\n      this.port.onmessage = (e) => {\n        const m = e.data;\n        if (m.type === \"chunk\") {\n          if (m.gen === this.gen) {\n            this.queue.push(m);\n            this.ended = false;\n          }\n        } else if (m.type === \"reset\") {\n          this.queue = [];\n          this.pos = 0;\n          this.played = 0;\n          this.gen = m.gen;\n          this.ended = false;\n        } else if (m.type === \"end\") {\n          if (m.gen === this.gen) this.queue.push({ end: true });\n        }\n      };\n    }\n    process(_inputs, outputs) {\n      const out = outputs[0];\n      const L = out[0], R = out[1] ?? out[0];\n      let w = 0;\n      while (w < L.length && this.queue.length) {\n        const c = this.queue[0];\n        if (c.end) {\n          this.queue.shift();\n          if (!this.ended) {\n            this.ended = true;\n            this.port.postMessage({ type: \"ended\", gen: this.gen, played: this.played + w });\n          }\n          continue;\n        }\n        const k = Math.min(L.length - w, c.L.length - this.pos);\n        L.set(c.L.subarray(this.pos, this.pos + k), w);\n        R.set((c.R ?? c.L).subarray(this.pos, this.pos + k), w);\n        w += k;\n        this.pos += k;\n        if (this.pos >= c.L.length) {\n          this.queue.shift();\n          this.pos = 0;\n        }\n      }\n      if (w < L.length) {\n        L.fill(0, w);\n        if (R !== L) R.fill(0, w);\n      }\n      this.played += w;\n      let queued = -this.pos;\n      for (const c of this.queue) if (!c.end) queued += c.L.length;\n      if (++this.tick % 8 === 0 || w < L.length) this.port.postMessage({ type: \"pos\", gen: this.gen, played: this.played, queued, time: currentTime });\n      return true;\n    }\n  };\n  registerProcessor(\"sonella-player\", SonellaPlayer);\n})();\n","probe":"(() => {\n  // src/worklets/probe.js\n  var SonellaProbe = class extends AudioWorkletProcessor {\n    process(_inputs, outputs) {\n      for (const ch of outputs[0]) ch.fill(0.25);\n      return true;\n    }\n  };\n  registerProcessor(\"sonella-probe\", SonellaProbe);\n})();\n","recorder":"(() => {\n  // src/worklets/recorder.js\n  var SonellaRecorder = class extends AudioWorkletProcessor {\n    process(inputs) {\n      const inp = inputs[0];\n      if (inp && inp.length) this.port.postMessage(inp.map((ch) => ch.slice()));\n      return true;\n    }\n  };\n  registerProcessor(\"sonella-recorder\", SonellaRecorder);\n})();\n"};</script>
 <script>
-/* naklios-sdk:begin ver=2 sha256=81b1d68a7b20067791a51dd79c29d015c98204236db626bf2dbb25f66bd5e59f */
+/* naklios-sdk:begin ver=2 sha256=8fc03960ebc00b1f0fc958d7fdadd0960bfb98e48ebff91dfeda387ed6294b10 */
 /*!
  * naklios.js — cooperative SDK for apps hosted inside NakliOS (Immersive mode)
  *
@@ -653,6 +653,9 @@ globalThis.__SONELLA_WORKLETS = {"player":"(() => {\n  // src/worklets/player.js
     if (options.agent === true) chatMsg.agent = true;
     if (options.tools != null) chatMsg.tools = options.tools;
     if (options.tool_choice != null) chatMsg.tool_choice = options.tool_choice;
+    // Models by role: 'build' or 'review' runs the request on that role's model (Settings → AI).
+    // The host refuses an unknown role; omitted means the selected model.
+    if (typeof options.agentRole === 'string') chatMsg.agentRole = options.agentRole;
     send('naklios:ai:chat', chatMsg);
     if (options.signal) {
       if (options.signal.aborted) stream.cancel();
@@ -670,7 +673,9 @@ globalThis.__SONELLA_WORKLETS = {"player":"(() => {\n  // src/worklets/player.js
     var toolCalls = null;
     var usage = null;
     var model = null;
+    var truncateAt = null;
     for await (var chunk of stream) {
+      if (typeof chunk.naklios_truncate_at === 'number') truncateAt = chunk.naklios_truncate_at;
       var choice = chunk.choices && chunk.choices[0];
       if (choice && choice.delta && choice.delta.content) content += choice.delta.content;
       if (choice && choice.delta && choice.delta.tool_calls) toolCalls = choice.delta.tool_calls;
@@ -679,6 +684,7 @@ globalThis.__SONELLA_WORKLETS = {"player":"(() => {\n  // src/worklets/player.js
       // the last chunk is the done chunk, which names the id that actually answered
       if (chunk.model) model = chunk.model;
     }
+    if (truncateAt != null && content.length > truncateAt) content = content.slice(0, truncateAt);
     var message = { role: 'assistant', content: content };
     if (toolCalls) message.tool_calls = toolCalls;
     return {
@@ -849,6 +855,9 @@ globalThis.__SONELLA_WORKLETS = {"player":"(() => {\n  // src/worklets/player.js
           // The provider's token count, where the OpenAI shape puts it. An app that budgets
           // on estimated characters cannot see tool schemas or the host's own preamble.
           usage: msg.usage || null,
+          // finish_reason 'repetition': the host's repeat guard stopped a reply that was looping.
+          // The streamed text ran past the loop's start; keep this many characters of it.
+          naklios_truncate_at: typeof msg.truncateAt === 'number' ? msg.truncateAt : null,
         });
         aiRequests.delete(msg.requestId);
         aiRequest.finish();
