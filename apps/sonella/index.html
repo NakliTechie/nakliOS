@@ -3202,7 +3202,7 @@ globalThis.__SONELLA_WORKLETS = {"player":"(() => {\n  // src/worklets/player.js
     }
     return out;
   }
-  var P3, map2, peakOf2, amplify, normalize, CURVES, fadeIn, fadeOut, adjustableFade, studioFadeOut, loudnessNormalization, compressor, limiter, noiseGate, bassTreble, highPass, lowPass, notch, GRAPHIC_BANDS, filterCurve, graphicEq, WIN, HOP, hann, noiseReduction, clickRemoval, clipFix, repair, invert, reverse, repeat, band, spectralEdit, spectralRepairFx, EFFECTS, effectById;
+  var P3, map2, peakOf2, amplify, normalize, CURVES, fadeIn, fadeOut, adjustableFade, studioFadeOut, LOUDNESS_NOTE, loudnessNormalization, compressor, limiter, noiseGate, bassTreble, highPass, lowPass, notch, GRAPHIC_BANDS, filterCurve, graphicEq, WIN, HOP, hann, noiseReduction, clickRemoval, clipFix, repair, invert, reverse, repeat, band, spectralEdit, spectralRepairFx, EFFECTS, effectById;
   var init_effects = __esm({
     "src/effects/effects.js"() {
       init_loudness();
@@ -3297,26 +3297,44 @@ globalThis.__SONELLA_WORKLETS = {"player":"(() => {\n  // src/worklets/player.js
           });
         }
       };
+      LOUDNESS_NOTE = "With the limiter on, Sonella reaches the target even when a peak is in the way. If the target still cannot be reached under the ceiling, or the limiter is off, Sonella says so after applying.";
       loudnessNormalization = {
         id: "loudness-normalization",
         label: "Loudness Normalization",
         row: "X3",
-        params: { target: P3("number", "Target loudness (LUFS)", -23, { min: -145, max: 0, step: 0.1 }), ceiling: P3("number", "True-peak ceiling (dBTP)", -1, { min: -10, max: 0, step: 0.1 }), limit: P3("boolean", "Reach the target with a limiter when the ceiling is in the way", false), dualMono: P3("boolean", "Treat mono as dual-mono", true) },
+        note: LOUDNESS_NOTE,
+        params: { target: P3("number", "Target loudness (LUFS)", -23, { min: -145, max: 0, step: 0.1 }), ceiling: P3("number", "True-peak ceiling (dBTP)", -1, { min: -10, max: 0, step: 0.1 }), limit: P3("boolean", "Reach the target with a limiter when the ceiling is in the way", true), dualMono: P3("boolean", "Treat mono as dual-mono", true) },
         process(planes, rate, p, ctx) {
           const m = measure(planes, rate, { dualMono: p.dualMono });
           if (m.integrated == null) throw Object.assign(new Error("The selection is too quiet to measure (below −70 LUFS)"), { code: "REFUSED" });
-          let gain = p.target - m.integrated;
-          const room = p.ceiling - m.truePeak;
-          let limited = false;
-          if (gain > room) {
-            if (p.limit) limited = true;
-            else gain = room;
+          const base = p.target - m.integrated, room = p.ceiling - m.truePeak;
+          let limited = base > room && !!p.limit;
+          const render2 = (gain2, ceil2) => {
+            const g = dbToLin(gain2), y = map2(planes, (x) => x.map((v) => v * g));
+            return limited ? limiter.process(y, rate, { type: "hard", limit: ceil2, lookahead: 5, release: 50, makeup: false }) : y;
+          };
+          let gain = limited ? base : Math.min(base, room), ceil = p.ceiling - 0.5;
+          let out = render2(gain, ceil), after = measure(out, rate, { dualMono: p.dualMono });
+          for (let k = 0; k < 4 && limited; k++) {
+            const over = after.truePeak - p.ceiling;
+            if (Math.abs(after.integrated - p.target) <= 0.2 && over <= 0) break;
+            gain = Math.min(base + 6, gain + p.target - after.integrated);
+            if (over > 0) ceil -= over + 0.1;
+            out = render2(gain, ceil);
+            after = measure(out, rate, { dualMono: p.dualMono });
           }
-          const g = dbToLin(gain);
-          let out = map2(planes, (x) => x.map((v) => v * g));
-          if (limited) out = limiter.process(out, rate, { type: "hard", limit: p.ceiling - 0.5, lookahead: 5, release: 50, makeup: false });
-          const after = measure(out, rate, { dualMono: p.dualMono });
-          if (ctx) ctx.report = { measured: m.integrated, truePeak: m.truePeak, gain: Math.round(gain * 10) / 10, result: after.integrated, resultTruePeak: after.truePeak, reachedTarget: Math.abs(after.integrated - p.target) <= 0.5 };
+          if (limited && Math.abs(after.integrated - p.target) > 0.5) {
+            const g = dbToLin(room), plain = map2(planes, (x) => x.map((v) => v * g)), pm = measure(plain, rate, { dualMono: p.dualMono });
+            if (pm.integrated > after.integrated) {
+              out = plain;
+              after = pm;
+              gain = room;
+              limited = false;
+            }
+          }
+          const short = Math.round((p.target - after.integrated) * 10) / 10, reachedTarget = Math.abs(after.integrated - p.target) <= 0.5;
+          const reason = reachedTarget ? void 0 : !p.limit && base > room ? `the true-peak ceiling of ${p.ceiling} dBTP allows only ${Math.round(room * 10) / 10} dB of gain and the limiter is off; turn the limiter on to reach ${p.target} LUFS` : `the limiter cannot reach ${p.target} LUFS under the ${p.ceiling} dBTP ceiling (Sonella adds at most 6 dB of gain past the plain target gain to make up for limiting); lower the target or raise the ceiling`;
+          if (ctx) ctx.report = { measured: m.integrated, truePeak: m.truePeak, gain: Math.round(gain * 10) / 10, limited, result: after.integrated, resultTruePeak: after.truePeak, target: p.target, reachedTarget, ...reachedTarget ? {} : { shortBy: short, reason } };
           return out;
         }
       };
@@ -3858,9 +3876,10 @@ globalThis.__SONELLA_WORKLETS = {"player":"(() => {\n  // src/worklets/player.js
       add("preset.list", "List effect presets", "Effect", { scope: "read", menu: false, params: { effect: str("Effect id (default: all effects)") }, row: "X24" });
       add("preset.apply", "Apply effect preset", "Effect", { menu: false, params: { ...range, effect: str("Effect id", { required: true }), name: str("Preset name", { required: true }) }, row: "X24" });
       add("preset.remove", "Remove effect preset", "Effect", { scope: "view", menu: false, params: { effect: str("Effect id", { required: true }), name: str("Preset name", { required: true }) }, row: "X24" });
-      add("macro.save", "Save macro", "Macros", { scope: "view", menu: false, params: { name: str("Macro name", { required: true }), steps: { ...steps, required: true } }, row: "X27" });
+      add("macro.save", "Save chain as macro…", "Macros", { scope: "view", params: { name: str("Macro name (required with steps; from the menu, a dialog asks)"), steps: { ...steps, description: `${steps.description} (from the menu: the effects applied in this project)` } }, row: "X27" });
       add("macro.list", "List macros", "Macros", { scope: "read", params: {}, row: "X27" });
-      add("macro.remove", "Remove macro", "Macros", { scope: "view", menu: false, params: { name: str("Macro name", { required: true }) }, row: "X27" });
+      add("macro.rename", "Rename macro…", "Macros", { scope: "view", params: { name: str("Macro name"), to: str("New name") }, row: "X27" });
+      add("macro.remove", "Remove macro…", "Macros", { scope: "view", params: { name: str("Macro name") }, row: "X27" });
       add("macro.run", "Run macro on selection…", "Macros", { params: { ...range, name: str("Macro name (or give steps)"), steps }, row: "X27" });
       add("macro.batch", "Batch: run macro on files…", "Macros", { params: { name: str("Macro name (or give steps)"), steps, paths: arr("Audio paths in the open folder or NakliOS storage"), files: arr("Files as [{ name, base64 }] (for agents without a folder)"), format: str("Output format (default wav)", { enum: ["wav", "mp3", "flac"] }), bitDepth: num("WAV only: 16, 24 or 32 (default 16)", { enum: [16, 24, 32] }), bitrate: num("MP3 only: kbit/s (default 192)"), suffix: str('Added to each output name (default "-processed")'), download: bool("false returns each file as base64 instead of writing it") }, row: "X27" });
       add("cleanup.analyse", "Analyse speech for cleanup", "Effect", { scope: "read", menu: false, params: range, row: "X28" });
@@ -6946,9 +6965,10 @@ ${text}`;
   }
   function startLog() {
     const scopes = new Map(list().map((c) => [c.id, c.scope]));
-    onRun((id, params, source) => {
+    onRun((id, params, source, result) => {
       const scope = scopes.get(id);
       if (scope !== "write" && scope !== "destructive") return;
+      if (result === null) return;
       if (/^file\.(export|save)/.test(id)) return;
       const clean = JSON.parse(JSON.stringify(params ?? {}, (_k, v) => typeof v === "string" && v.length > 512 ? `[${v.length} characters]` : v));
       const entry = { command: id, params: clean, origin: source === "agent" || source === "rail" ? "agent" : "person", at: (/* @__PURE__ */ new Date()).toISOString() };
@@ -6956,6 +6976,7 @@ ${text}`;
       log.push(entry);
     });
   }
+  var editLog = () => log;
   async function sourceAsWav(src) {
     const parts = [wavHeader({ sampleRate: src.sampleRate, channels: src.channels, bitDepth: 32, frames: src.length })];
     const STEP2 = 1 << 17;
@@ -9027,12 +9048,17 @@ ${text}`;
         const { start, end: end2, tracks, ...rest } = p;
         let params = def.spectral ? { ...bandOfSelection(), ...rest } : rest;
         if (def.spectral && (params.low == null || params.high == null)) throw fail("NO_SELECTION", `${def.label} needs a frequency band: drag a box on a spectrogram (View › Spectrogram view), or pass low and high in Hz`);
-        if (source === "ui" || source === "key" || source === "palette") {
+        const ui = source === "ui" || source === "key" || source === "palette";
+        if (ui) {
           const v = await effectDialog(def, params);
           if (!v) return null;
           params = v;
+          Object.assign(p, v);
         }
-        return applyEffect(def, withDefaults(def, params), { start, end: end2, tracks });
+        const r = await applyEffect(def, withDefaults(def, params), { start, end: end2, tracks });
+        const missed = (r?.reports ?? []).filter((x) => x.reachedTarget === false);
+        if (ui && missed.length) Toast.show(`${def.label}: reached ${missed[0].result} LUFS, not ${missed[0].target} LUFS, because ${missed[0].reason}.`, { kind: "error", duration: 8e3 });
+        return r;
       });
     }
     bind("effect.noise-profile", async (p) => {
@@ -9213,7 +9239,7 @@ ${text}`;
     };
     return formDialog(def.label, fields, {
       confirmLabel: "Apply",
-      intro: fields.length ? "" : "This effect has no settings.",
+      intro: def.note ?? (fields.length ? "" : "This effect has no settings."),
       extra: [
         { label: "Preview", onClick: (vals) => Promise.resolve().then(() => preview(def, withDefaults(def, parse(vals)))).catch((e) => Toast.show(e.message, { kind: "error", duration: 4e3 })) },
         ...Object.keys(def.params).length ? [{ label: "Save preset…", onClick: (vals) => Promise.resolve().then(() => run("preset.save", { effect: def.id, params: parse(vals) }, "ui")).then((r) => r && Toast.show(`Preset "${r.name}" saved for ${def.label}`, { duration: 2500 })).catch((e) => Toast.show(e.message, { kind: "error", duration: 4e3 })) }] : []
@@ -10099,11 +10125,11 @@ ${text}`;
   var decodeEntities = (t) => t.replace(/&(#\d+|[a-z]+);/gi, (m, e) => e[0] === "#" ? String.fromCodePoint(Number(e.slice(1))) : ENTITIES[e.toLowerCase()] ?? m);
   var FILLERS = ["um", "umm", "uh", "uhh", "uhm", "er", "erm", "ah", "ahh", "hmm", "mm", "mhm"];
   var isFiller = (word, list2 = FILLERS) => list2.includes(String(word).toLowerCase().replace(/[^\p{L}]/gu, ""));
-  function findCoughs(x, rate, { minS = 0.06, maxS = 0.7, flatness: flatness2 = 0.3, aboveDb = 6 } = {}) {
-    const n = Math.round(FRAME_S * rate), lv = frameLevels(x, rate);
-    const top = toDb2(lv.reduce((m, v) => Math.max(m, v), 0)), active = Array.from(lv).filter((v) => toDb2(v) > top - 40);
+  function findCoughs(x, rate, { minS = 0.08, maxS = 0.7, flatness: flatness2 = 0.3, periodic = 0.5, aboveDb = 6, attackDb = 12, belowVowels = 6, headS = 0.08 } = {}) {
+    const n = Math.round(FRAME_S * rate), lv = frameLevels(x, rate), L = Array.from(lv, toDb2);
+    const top = L.reduce((m, v) => Math.max(m, v), -200), active = Array.from(lv).filter((v) => toDb2(v) > top - 40);
     if (!active.length) return [];
-    const median2 = toDb2(pct(active, 0.5));
+    const median2 = toDb2(pct(active, 0.5)), vowels = toDb2(pct(active, 0.75)), floor = toDb2(pct(lv, 0.1));
     const N = 1 << Math.ceil(Math.log2(n)), re = new Float64Array(N), im = new Float64Array(N);
     const flat = (f) => {
       re.fill(0);
@@ -10119,15 +10145,56 @@ ${text}`;
       const cnt = k1 - k0;
       return Math.exp(lg / cnt) / (ar / cnt);
     };
-    const hit = Array.from(lv, (v, f) => toDb2(v) >= median2 + aboveDb && flat(f) >= flatness2);
+    const lag0 = Math.round(25e-4 * rate), lag1 = Math.round(0.02 * rate), W = n;
+    const period = (f) => {
+      const a = f * n;
+      if (a + W + lag1 > x.length) return 1;
+      let best = 0;
+      for (let lag = lag0; lag <= lag1; lag++) {
+        let s = 0, e0 = 0, e1 = 0;
+        for (let i = 0; i < W; i++) {
+          const u = x[a + i], v = x[a + i + lag];
+          s += u * v;
+          e0 += u * u;
+          e1 += v * v;
+        }
+        best = Math.max(best, s / Math.sqrt(e0 * e1 + 1e-20));
+      }
+      return best;
+    };
+    const head = Math.max(1, Math.round(headS / FRAME_S)), minF = Math.round(minS / FRAME_S), maxF = Math.round(maxS / FRAME_S);
+    const mean = (fn, f) => {
+      let s = 0, w = 0;
+      const k = Math.min(head, L.length - f);
+      for (let i = 0; i < k; i++) {
+        const e = lv[f + i] ** 2;
+        s += e * fn(f + i);
+        w += e;
+      }
+      return w ? s / w : 0;
+    };
     const out = [];
-    for (let f = 0; f < hit.length; f++) {
-      if (!hit[f]) continue;
-      let e = f;
-      while (e < hit.length && (hit[e] || hit[e + 1])) e++;
-      const dur = (e - f) * FRAME_S;
-      if (dur >= minS && dur <= maxS) out.push([f * n, Math.min(x.length, e * n)]);
-      f = e;
+    for (let f = 0; f < L.length; f++) {
+      if (L[f] < floor + 6) continue;
+      const before = f ? Math.min(L[f - 1], L[f - 2] ?? L[f - 1]) : -200;
+      let peak = -200;
+      for (let i = f; i < Math.min(L.length, f + 3); i++) peak = Math.max(peak, L[i]);
+      const attack = L[f] - before >= attackDb && peak >= vowels - belowVowels, loud = L[f] >= median2 + aboveDb;
+      if (!attack && !loud) continue;
+      const broadband = mean(flat, f) >= flatness2;
+      if (!(broadband || attack && mean(period, f) < periodic)) continue;
+      let e = f + 1;
+      while (e < L.length && L[e] >= peak - 25 && L[e] > floor + 6 && (e - f < 3 || L[e] <= L[e - 1] + 6)) {
+        peak = Math.max(peak, L[e]);
+        e++;
+      }
+      if (e - f > maxF) {
+        f = e - 1;
+        continue;
+      }
+      if (e - f < minF) continue;
+      out.push([f * n, Math.min(x.length, e * n)]);
+      f = e - 1;
     }
     return out;
   }
@@ -10690,11 +10757,59 @@ ${text}`;
     const r = await applyEffect(def, {}, { start: p.start, end: p.end, tracks: p.tracks });
     return { ...r, steps: steps2.map(({ effect, params, reason }) => ({ effect, params, ...reason ? { reason } : {} })) };
   }
-  async function askMacro(title) {
+  async function askMacro(title, confirmLabel = "Continue") {
     const names = Object.keys(macros.get());
-    if (!names.length) throw fail("NOT_FOUND", "No macros saved yet; save one with macro.save (steps of effect ids and parameters)");
-    const v = await formDialog(title, [{ key: "name", label: "Macro", type: "select", value: names[0], options: names.map((n) => [n, n]) }], { confirmLabel: "Continue" });
+    if (!names.length) throw fail("NOT_FOUND", "No macros saved yet; apply effects, then choose Macros › Save chain as macro (agents: macro.save)");
+    const v = await formDialog(title, [{ key: "name", label: "Macro", type: "select", value: names[0], options: names.map((n) => [n, n]) }], { confirmLabel });
     return v ? v.name : null;
+  }
+  var RANGE_KEYS = /* @__PURE__ */ new Set(["start", "end", "tracks"]);
+  function chainFromLog(entries) {
+    const done = [], undone = [];
+    for (const e of entries) {
+      if (typeof e?.command !== "string") continue;
+      if (e.command === "edit.undo") {
+        if (done.length) undone.push(done.pop());
+        continue;
+      }
+      if (e.command === "edit.redo") {
+        if (undone.length) done.push(undone.pop());
+        continue;
+      }
+      done.push(e);
+      undone.length = 0;
+    }
+    const out = [];
+    for (const e of done) {
+      const p = e.params ?? {};
+      const steps2 = (e.command === "macro.run" || e.command === "cleanup.apply") && Array.isArray(p.steps) ? p.steps : e.command.startsWith("effect.") ? [{ effect: e.command.slice(7), params: Object.fromEntries(Object.entries(p).filter(([k]) => !RANGE_KEYS.has(k))) }] : [];
+      for (const s of steps2) {
+        try {
+          checkSteps([s]);
+          out.push({ effect: s.effect, params: s.params ?? {} });
+        } catch {
+        }
+      }
+    }
+    return out;
+  }
+  var describeStep = ({ effect, params }) => {
+    const def = stepDef(effect), shown2 = Object.entries(params ?? {}).filter(([, v]) => typeof v !== "object").slice(0, 3);
+    return `${def?.label ?? effect}${shown2.length ? ` (${shown2.map(([k, v]) => `${def?.params?.[k]?.label ?? k} ${v}`).join(", ")})` : ""}`;
+  };
+  var MAX_STEPS = 24;
+  async function askChain() {
+    const found = chainFromLog(editLog()), all = found.slice(-MAX_STEPS);
+    if (!all.length) throw fail("NOT_FOUND", "No effects applied in this project yet; apply the effects you want in the macro, then save the chain");
+    const v = await formDialog("Save chain as macro", [
+      { key: "name", label: "Macro name", type: "text", value: "" },
+      ...all.map((s, i) => ({ key: `s${i}`, label: `${i + 1}. ${describeStep(s)}`, type: "checkbox", value: true }))
+    ], { confirmLabel: "Save", intro: `The effects applied in this project, in order, with their settings${found.length > all.length ? ` (the last ${MAX_STEPS} of ${found.length})` : ""}. Untick any you do not want. A macro with the same name is replaced.` });
+    if (!v) return null;
+    const steps2 = all.filter((_s, i) => v[`s${i}`]);
+    if (!String(v.name ?? "").trim()) throw fail("BAD_PARAM", "Give the macro a name");
+    if (!steps2.length) throw fail("BAD_PARAM", "Tick at least one step");
+    return { name: String(v.name).trim(), steps: steps2 };
   }
   function initChains() {
     bind("preset.save", async (p, source) => {
@@ -10732,18 +10847,48 @@ ${text}`;
       presets.set(all);
       return { removed: p.name };
     });
-    bind("macro.save", (p) => {
+    bind("macro.save", async (p, source) => {
+      if (isUi4(source) && !p.steps) {
+        const v = await askChain();
+        if (!v) return null;
+        p = { ...p, ...v, name: p.name ?? v.name };
+      }
+      if (!p.name) throw fail("BAD_PARAM", "Give the macro a name");
       checkSteps(p.steps);
       const steps2 = p.steps.map(({ effect, params }) => ({ effect, params: params ?? {} }));
       const kept = macros.set({ ...macros.get(), [p.name]: steps2 });
+      if (isUi4(source)) Toast.show(`Macro "${p.name}" saved with ${steps2.length} step${steps2.length === 1 ? "" : "s"}`, { duration: 2500 });
       return { name: p.name, steps: steps2.length, stored: kept };
     });
     bind("macro.list", () => ({ macros: macros.get() }));
-    bind("macro.remove", (p) => {
+    bind("macro.rename", async (p, source) => {
+      if (isUi4(source) && (!p.name || !p.to)) {
+        const names = Object.keys(macros.get());
+        if (!names.length) throw fail("NOT_FOUND", "No macros saved yet");
+        const v = await formDialog("Rename macro", [{ key: "name", label: "Macro", type: "select", value: p.name ?? names[0], options: names.map((n) => [n, n]) }, { key: "to", label: "New name", type: "text", value: "" }], { confirmLabel: "Rename" });
+        if (!v) return null;
+        p = { ...p, name: v.name, to: String(v.to ?? "").trim() };
+      }
+      p = { ...p, to: String(p.to ?? "").trim() };
+      if (!p.name || !p.to) throw fail("BAD_PARAM", "Give the macro name and the new name");
+      const all = macros.get();
+      if (!own(all, p.name)) throw fail("NOT_FOUND", `No macro named "${p.name}"; macro.list shows the saved ones`);
+      if (p.to !== p.name && own(all, p.to)) throw fail("REFUSED", `A macro named "${p.to}" exists; remove it first or pick another name`);
+      const kept = macros.set(Object.fromEntries(Object.entries(all).map(([k, v]) => [k === p.name ? p.to : k, v])));
+      return { renamed: p.name, to: p.to, stored: kept };
+    });
+    bind("macro.remove", async (p, source) => {
+      if (isUi4(source) && !p.name) {
+        const name = await askMacro("Remove macro", "Remove");
+        if (name === null) return null;
+        p = { ...p, name };
+      }
+      if (!p.name) throw fail("BAD_PARAM", "Give the macro name");
       const all = macros.get();
       if (!own(all, p.name)) throw fail("NOT_FOUND", `No macro named "${p.name}"`);
       delete all[p.name];
       macros.set(all);
+      if (isUi4(source)) Toast.show(`Macro "${p.name}" removed`, { duration: 2500 });
       return { removed: p.name };
     });
     bind("macro.run", async (p, source) => {
@@ -11334,27 +11479,28 @@ ${text}`;
     const files = [];
     for (const tg of targets) {
       const base0 = tg.lufs - m.integrated;
-      let gain = base0, ceiling = tg.peak - 0.5, c = chain2(gain, tg, ceiling), reached = !c.limit;
+      let gain = base0, ceiling = tg.peak - 0.5, c = chain2(gain, tg, ceiling);
       for (let k = 0; k < 4 && c.limit; k++) {
         const mm = new LoudnessMeter(app.rate(), 2, { dualMono: true });
         for (let pos = a; pos < b; pos += STEP2) mm.push(await c.fn(await renderMix(app.project, pos, Math.min(STEP2, b - pos)), pos));
-        const got = mm.summary();
-        if (got.integrated == null) break;
-        const over = got.truePeak - tg.peak;
-        if (Math.abs(got.integrated - tg.lufs) <= 0.2 && over <= 0) {
-          reached = true;
-          break;
-        }
-        gain = Math.min(base0 + 6, gain + tg.lufs - got.integrated);
+        const got2 = mm.summary();
+        if (got2.integrated == null) break;
+        const over = got2.truePeak - tg.peak;
+        if (Math.abs(got2.integrated - tg.lufs) <= 0.2 && over <= 0) break;
+        gain = Math.min(base0 + 6, gain + tg.lufs - got2.integrated);
         if (over > 0) ceiling -= over + 0.1;
         c = chain2(gain, tg, ceiling);
       }
       c = chain2(gain, tg, ceiling);
       const out = await renderExport({ a, b, format, bitDepth: p.bitDepth, bitrate: p.bitrate, transform: c.fn, label: tg.name });
+      const got = out.report.integratedLufs, reachedTarget = Math.abs((got ?? -99) - tg.lufs) <= 0.5;
+      const reason = reachedTarget ? void 0 : c.limit ? `the limiter cannot reach ${tg.lufs} LUFS under the ${tg.peak} dBTP ceiling (Sonella adds at most 6 dB of gain past the plain target gain to make up for limiting)` : `the exported mix measured ${got ?? "too quiet to measure"} LUFS after a plain gain of ${Math.round(gain * 10) / 10} dB`;
+      out.report = { ...out.report, target: { id: tg.id, lufs: tg.lufs, peak: tg.peak }, reachedTarget, ...reachedTarget ? {} : { shortBy: Math.round((tg.lufs - (got ?? -99)) * 10) / 10, reason } };
       const r = await deliverExport(out, `${base}-${tg.id}.${EXPORT_EXT[format]}`, { format, download: p.download, quiet: true });
-      files.push({ ...r, target: { id: tg.id, lufs: tg.lufs, peak: tg.peak }, gainDb: Math.round(gain * 10) / 10, limited: c.limit, reachedTarget: reached || Math.abs((r.report.integratedLufs ?? -99) - tg.lufs) <= 0.5 });
+      files.push({ ...r, target: { id: tg.id, lufs: tg.lufs, peak: tg.peak }, gainDb: Math.round(gain * 10) / 10, limited: c.limit, reachedTarget, ...reachedTarget ? {} : { reason } });
     }
-    Toast.show(`Exported ${files.length} files: ${files.map((f) => `${f.target.id} ${f.report.integratedLufs} LUFS`).join(", ")}`, { duration: 4e3, kind: "success" });
+    const missed = files.filter((f) => !f.reachedTarget);
+    Toast.show(`Exported ${files.length} files: ${files.map((f) => `${f.target.id} ${f.report.integratedLufs} LUFS`).join(", ")}${missed.length ? `. Missed: ${missed.map((f) => `${f.target.id} (target ${f.target.lufs} LUFS), because ${f.reason}`).join("; ")}` : ""}`, { duration: missed.length ? 8e3 : 4e3, kind: missed.length ? "error" : "success" });
     return { measured: { integratedLufs: m.integrated, truePeakDbtp: m.truePeak }, files };
   }
   function registerOffline() {
