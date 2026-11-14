@@ -4725,21 +4725,21 @@
       "id": "sonella",
       "repo": "NakliTechie/sonella",
       "requestedRef": "main",
-      "resolvedCommit": "d801acb0a57195882b3200c2026121904520d488",
+      "resolvedCommit": "230827504b69723245e266baff73d76ad164c1bd",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "5fcb883896d5989b4a6b4899b3da2d254bd861641ce3ec809c8982292de41ccc",
-          "bytes": 2930998,
-          "originalSourceSha256": "8f8fb4e20f5e339c6039ac0fffc3d221a87f15fbc828796bd86c85ad2e01c69a",
+          "sha256": "2c764a096086672512da17e3c9b65a3fae3258be75591960c38388b828ea12b8",
+          "bytes": 2940226,
+          "originalSourceSha256": "4228aafda3880469690cdfd0a5cf500b665d73c77bafdd8c8baa8f98021947c2",
           "sdkSha256": "8fc03960ebc00b1f0fc958d7fdadd0960bfb98e48ebff91dfeda387ed6294b10"
         },
         {
           "source": "commands.json",
           "destination": "commands.json",
-          "sha256": "a052351e801debe85e6b9a684f6d84a5b746d624b0998b2082b54c1857f7fe8e",
-          "bytes": 23125
+          "sha256": "e77794a040afe2000270e78bdbd0e8c442e359236bdfa8406553c01c83ba4a96",
+          "bytes": 23193
         },
         {
           "source": "sw.js",

@@ -504,7 +504,7 @@
     },
     {
       "name": "macros.read",
-      "description": "Sonella macros (read). Pass command and params; commands: macro.save (Save macro), macro.list (List macros), macro.remove (Remove macro). Call help.read for a command's parameters.",
+      "description": "Sonella macros (read). Pass command and params; commands: macro.save (Save chain as macro), macro.list (List macros), macro.rename (Rename macro), macro.remove (Remove macro). Call help.read for a command's parameters.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -514,6 +514,7 @@
             "enum": [
               "macro.save",
               "macro.list",
+              "macro.rename",
               "macro.remove"
             ],
             "description": "Which Sonella command to run"
