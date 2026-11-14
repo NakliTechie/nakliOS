@@ -9,7 +9,7 @@
        naklios-sdk markers by scripts/vendor-naklios-sdk.mjs and kept fresh by
        .github/workflows/vendor-sdk.yml. Never edit it here. -->
   <script>
-/* naklios-sdk:begin ver=2 sha256=3fb0c7a88cbd09de7e509aa11894b17d0d4b8759dfd5de49fc01a897a111db1a — DO NOT EDIT until :end; run `node scripts/vendor-naklios-sdk.mjs` */
+/* naklios-sdk:begin ver=2 sha256=763a27e34efd56720b4af4fed7180794b99d48ab8bb3dae885d38609726c7cf0 — DO NOT EDIT until :end; run `node scripts/vendor-naklios-sdk.mjs` */
 /*!
  * naklios.js — cooperative SDK for apps hosted inside NakliOS (Immersive mode)
  *
@@ -462,6 +462,9 @@
     if (options.agent === true) chatMsg.agent = true;
     if (options.tools != null) chatMsg.tools = options.tools;
     if (options.tool_choice != null) chatMsg.tool_choice = options.tool_choice;
+    // Models by role: 'build' or 'review' runs the request on that role's model (Settings → AI).
+    // The host refuses an unknown role; omitted means the selected model.
+    if (typeof options.agentRole === 'string') chatMsg.agentRole = options.agentRole;
     send('naklios:ai:chat', chatMsg);
     if (options.signal) {
       if (options.signal.aborted) stream.cancel();
@@ -479,7 +482,9 @@
     var toolCalls = null;
     var usage = null;
     var model = null;
+    var truncateAt = null;
     for await (var chunk of stream) {
+      if (typeof chunk.naklios_truncate_at === 'number') truncateAt = chunk.naklios_truncate_at;
       var choice = chunk.choices && chunk.choices[0];
       if (choice && choice.delta && choice.delta.content) content += choice.delta.content;
       if (choice && choice.delta && choice.delta.tool_calls) toolCalls = choice.delta.tool_calls;
@@ -488,6 +493,7 @@
       // the last chunk is the done chunk, which names the id that actually answered
       if (chunk.model) model = chunk.model;
     }
+    if (truncateAt != null && content.length > truncateAt) content = content.slice(0, truncateAt);
     var message = { role: 'assistant', content: content };
     if (toolCalls) message.tool_calls = toolCalls;
     return {
@@ -658,6 +664,9 @@
           // The provider's token count, where the OpenAI shape puts it. An app that budgets
           // on estimated characters cannot see tool schemas or the host's own preamble.
           usage: msg.usage || null,
+          // finish_reason 'repetition': the host's repeat guard stopped a reply that was looping.
+          // The streamed text ran past the loop's start; keep this many characters of it.
+          naklios_truncate_at: typeof msg.truncateAt === 'number' ? msg.truncateAt : null,
         });
         aiRequests.delete(msg.requestId);
         aiRequest.finish();
@@ -773,7 +782,8 @@
                 msg.type === 'naklios:review:reply' || msg.type === 'naklios:commands:reply' ||
                 msg.type === 'naklios:rag:reply' || msg.type === 'naklios:net:reply' ||
                 msg.type === 'naklios:tex:reply' || msg.type === 'naklios:web:reply' ||
-                msg.type === 'naklios:skills:reply' || msg.type === 'naklios:ai:reply') && msg.requestId) {
+                msg.type === 'naklios:skills:reply' || msg.type === 'naklios:ai:reply' ||
+                msg.type === 'naklios:browser:reply') && msg.requestId) {
       var p = pendingRpc.get(msg.requestId);
       if (!p) return;
       pendingRpc.delete(msg.requestId);
@@ -971,6 +981,18 @@
         delete:     function (path)       { return rpc('naklios:sysfs:delete', fsPayload({ path: path })); },
         exists:     function (path)       { return rpc('naklios:sysfs:exists', fsPayload({ path: path })); },
       },
+    },
+    // Ask the host to open a web address in its Browser window, signed in with the person's Chrome
+    // sessions when the companion extension is installed. The host asks the person first. Answers true
+    // when it opened (in the window or, without the extension, a new tab). Standalone: opens a new tab.
+    experimental_openUrl: function (url) {
+      var href = String(url || '');
+      if (!/^https?:\/\//i.test(href)) return Promise.reject(new Error('openUrl takes an http(s) address'));
+      if (!inNakliOS) {
+        try { window.open(href, '_blank', 'noopener'); } catch (_) {}
+        return Promise.resolve(true);
+      }
+      return rpc('naklios:browser:open', { url: href });
     },
     files: {
       experimental_editInAnvil: function (request) {
