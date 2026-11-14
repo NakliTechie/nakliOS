@@ -3195,6 +3195,10 @@
           "destination": "commands.json"
         },
         {
+          "source": "sw.js",
+          "destination": "sw.js"
+        },
+        {
           "source": "LICENSE",
           "destination": "LICENSE"
         },
