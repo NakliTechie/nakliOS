@@ -4725,21 +4725,21 @@
       "id": "sonella",
       "repo": "NakliTechie/sonella",
       "requestedRef": "main",
-      "resolvedCommit": "de0c454af9a9826e0a1ca4063664847ff2ce17a2",
+      "resolvedCommit": "afd7dec9baba6976fbc098227db322b0b3173826",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "4ab9cbb14798063dffe00b8482a8b0054127648ace46fd60a8ccc478f5c4d4a4",
-          "bytes": 2077480,
-          "originalSourceSha256": "aa021c3f07e7cc449f3c7850ee82af3b4ac0434c50b909df95eec7d8de5ec9c3",
+          "sha256": "4cdb68ac49d322a6d1bb2e51d9edcec2ec53e7ab2031febd36a6ea1ab5ecbe95",
+          "bytes": 2192807,
+          "originalSourceSha256": "93b88668d3e8b8f9b44dda0b2adbccdc0ef5c7d29bab89bf74d4cd65ce9f2794",
           "sdkSha256": "8fc03960ebc00b1f0fc958d7fdadd0960bfb98e48ebff91dfeda387ed6294b10"
         },
         {
           "source": "commands.json",
           "destination": "commands.json",
-          "sha256": "ac5f33f4cd1dfab6d327dc3e3392aaa6a64e2c287bd154b547238b4fca2fef00",
-          "bytes": 16154
+          "sha256": "77486f56f41de4c224f1c072efe8b8915829dff4367cc1fd26dcef8f530f6dff",
+          "bytes": 20980
         },
         {
           "source": "LICENSE",
@@ -4764,6 +4764,96 @@
           "destination": "ai/rnnoise-LICENSE-Apache-2.0.txt",
           "sha256": "a6cba85bc92e0cff7a450b1d873c0eaa2e9fc96bf472df0247a26bec77bf3ff9",
           "bytes": 10173
+        },
+        {
+          "source": "ai/transformers-4.3.2.min.js",
+          "destination": "ai/transformers-4.3.2.min.js",
+          "sha256": "8b5a3171f8876bab2b1820a7d65eb87628e3d30bb5ea85b9dd398e76eb34decb",
+          "bytes": 587917
+        },
+        {
+          "source": "ai/transformers-LICENSE-Apache-2.0.txt",
+          "destination": "ai/transformers-LICENSE-Apache-2.0.txt",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+          "bytes": 11358
+        },
+        {
+          "source": "ai/ort-wasm-simd-threaded-1.31.0-dev.20260914.mjs",
+          "destination": "ai/ort-wasm-simd-threaded-1.31.0-dev.20260914.mjs",
+          "sha256": "c57ca56328877353a575e51bbca6f18450027d6c9bf2307a2cb2c41363b4de9f",
+          "bytes": 24381
+        },
+        {
+          "source": "ai/ort-wasm-simd-threaded-1.31.0-dev.20260914.wasm",
+          "destination": "ai/ort-wasm-simd-threaded-1.31.0-dev.20260914.wasm",
+          "sha256": "06ba057753da3847e4c24f02d91ab133455b0817c69a44993a9a53a2146df9e3",
+          "bytes": 14264838
+        },
+        {
+          "source": "ai/onnxruntime-LICENSE-MIT.txt",
+          "destination": "ai/onnxruntime-LICENSE-MIT.txt",
+          "sha256": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c",
+          "bytes": 1073
+        },
+        {
+          "source": "ai/whisper-LICENSE-MIT.txt",
+          "destination": "ai/whisper-LICENSE-MIT.txt",
+          "sha256": "b5d65a59060e68c4ff940e1eddfa6f94b2d68fdf58ed7f4dd57721c997e35e9d",
+          "bytes": 1063
+        },
+        {
+          "source": "ai/whisper-tiny-ff41770/NOTICE.md",
+          "destination": "ai/whisper-tiny-ff41770/NOTICE.md",
+          "sha256": "0696632e4bdd06d4d0a6f92a5a7a742929477d39728d6efe6484b30fa67f6394",
+          "bytes": 1283
+        },
+        {
+          "source": "ai/whisper-tiny-ff41770/config.json",
+          "destination": "ai/whisper-tiny-ff41770/config.json",
+          "sha256": "46aeea0a406afbeb563fc8e59ca10609203df4299af6a83f73752fef369efd2d",
+          "bytes": 2243
+        },
+        {
+          "source": "ai/whisper-tiny-ff41770/generation_config.json",
+          "destination": "ai/whisper-tiny-ff41770/generation_config.json",
+          "sha256": "f5c67e5a4f7102f8cb4d058bc95da276bbc19eeec997267c3bb0f25ef68facd1",
+          "bytes": 3772
+        },
+        {
+          "source": "ai/whisper-tiny-ff41770/preprocessor_config.json",
+          "destination": "ai/whisper-tiny-ff41770/preprocessor_config.json",
+          "sha256": "a6a76d28c93edb273669eb9e0b0636a2bddbb1272c3261e47b7ca6dfdbac1b8d",
+          "bytes": 339
+        },
+        {
+          "source": "ai/whisper-tiny-ff41770/tokenizer.json",
+          "destination": "ai/whisper-tiny-ff41770/tokenizer.json",
+          "sha256": "27fc476bfe7f17299480be2273fc0608e4d5a99aba2ab5dec5374b4482d1a566",
+          "bytes": 2480466
+        },
+        {
+          "source": "ai/whisper-tiny-ff41770/tokenizer_config.json",
+          "destination": "ai/whisper-tiny-ff41770/tokenizer_config.json",
+          "sha256": "2a4c4281cf9f51ac6ccc406fdc711a087afe6530f671fa7b80953edc498275ce",
+          "bytes": 282683
+        },
+        {
+          "source": "ai/whisper-tiny-ff41770/encoder_model_quantized.onnx",
+          "destination": "ai/whisper-tiny-ff41770/encoder_model_quantized.onnx",
+          "sha256": "2af4a414ca47aa30f61246017e5fe82b0a8d229281d1255ba666a2a7f6b84d19",
+          "bytes": 10124990
+        },
+        {
+          "source": "ai/whisper-tiny-ff41770/decoder_model_merged_quantized.onnx.part0",
+          "destination": "ai/whisper-tiny-ff41770/decoder_model_merged_quantized.onnx.part0",
+          "sha256": "bd18ee4a9d493b9cfc98c0aba763db18ad7e7cb84ff94cdef7da214551df37f8",
+          "bytes": 16000000
+        },
+        {
+          "source": "ai/whisper-tiny-ff41770/decoder_model_merged_quantized.onnx.part1",
+          "destination": "ai/whisper-tiny-ff41770/decoder_model_merged_quantized.onnx.part1",
+          "sha256": "c75cf63199bdc0a2af14b62f8f99b223de27847e2301366e7b6354ad82855d8c",
+          "bytes": 14719241
         }
       ]
     },
