@@ -2038,6 +2038,66 @@
         {
           "source": "ai/rnnoise-LICENSE-Apache-2.0.txt",
           "destination": "ai/rnnoise-LICENSE-Apache-2.0.txt"
+        },
+        {
+          "source": "ai/transformers-4.3.2.min.js",
+          "destination": "ai/transformers-4.3.2.min.js"
+        },
+        {
+          "source": "ai/transformers-LICENSE-Apache-2.0.txt",
+          "destination": "ai/transformers-LICENSE-Apache-2.0.txt"
+        },
+        {
+          "source": "ai/ort-wasm-simd-threaded-1.31.0-dev.20260914.mjs",
+          "destination": "ai/ort-wasm-simd-threaded-1.31.0-dev.20260914.mjs"
+        },
+        {
+          "source": "ai/ort-wasm-simd-threaded-1.31.0-dev.20260914.wasm",
+          "destination": "ai/ort-wasm-simd-threaded-1.31.0-dev.20260914.wasm"
+        },
+        {
+          "source": "ai/onnxruntime-LICENSE-MIT.txt",
+          "destination": "ai/onnxruntime-LICENSE-MIT.txt"
+        },
+        {
+          "source": "ai/whisper-LICENSE-MIT.txt",
+          "destination": "ai/whisper-LICENSE-MIT.txt"
+        },
+        {
+          "source": "ai/whisper-tiny-ff41770/NOTICE.md",
+          "destination": "ai/whisper-tiny-ff41770/NOTICE.md"
+        },
+        {
+          "source": "ai/whisper-tiny-ff41770/config.json",
+          "destination": "ai/whisper-tiny-ff41770/config.json"
+        },
+        {
+          "source": "ai/whisper-tiny-ff41770/generation_config.json",
+          "destination": "ai/whisper-tiny-ff41770/generation_config.json"
+        },
+        {
+          "source": "ai/whisper-tiny-ff41770/preprocessor_config.json",
+          "destination": "ai/whisper-tiny-ff41770/preprocessor_config.json"
+        },
+        {
+          "source": "ai/whisper-tiny-ff41770/tokenizer.json",
+          "destination": "ai/whisper-tiny-ff41770/tokenizer.json"
+        },
+        {
+          "source": "ai/whisper-tiny-ff41770/tokenizer_config.json",
+          "destination": "ai/whisper-tiny-ff41770/tokenizer_config.json"
+        },
+        {
+          "source": "ai/whisper-tiny-ff41770/encoder_model_quantized.onnx",
+          "destination": "ai/whisper-tiny-ff41770/encoder_model_quantized.onnx"
+        },
+        {
+          "source": "ai/whisper-tiny-ff41770/decoder_model_merged_quantized.onnx.part0",
+          "destination": "ai/whisper-tiny-ff41770/decoder_model_merged_quantized.onnx.part0"
+        },
+        {
+          "source": "ai/whisper-tiny-ff41770/decoder_model_merged_quantized.onnx.part1",
+          "destination": "ai/whisper-tiny-ff41770/decoder_model_merged_quantized.onnx.part1"
         }
       ]
     },
