@@ -1,0 +1,25 @@
+{
+  "domain": "generic-logs",
+  "label": "Generic logs",
+  "types": [
+    "email",
+    "url",
+    "ip_v4",
+    "ip_v6",
+    "phone_e164",
+    "iso_country_code",
+    "http_status",
+    "log_level",
+    "http_method",
+    "duration_ms",
+    "request_id",
+    "service_name",
+    "endpoint",
+    "record_id",
+    "yes_no_flag"
+  ],
+  "report_templates": [
+    "error_frequency",
+    "p95_p99_latency"
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "domain": "media",
+  "label": "Media and content",
+  "types": [
+    "content_title",
+    "credited_person",
+    "content_rating",
+    "genre",
+    "release_year",
+    "media_type"
+  ],
+  "report_templates": [
+    "content_catalog"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "domain": "risk-fraud",
+  "label": "Risk, fraud and security",
+  "types": [
+    "fraud_flag",
+    "risk_score",
+    "auth_result",
+    "device_id",
+    "card_last4"
+  ],
+  "report_templates": [
+    "fraud_review"
+  ]
+}

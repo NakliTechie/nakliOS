@@ -1,0 +1,14 @@
+{
+  "domain": "energy",
+  "label": "Energy and utilities",
+  "types": [
+    "meter_id",
+    "usage_kwh",
+    "demand_kw",
+    "tariff_code",
+    "outage_minutes"
+  ],
+  "report_templates": [
+    "consumption_summary"
+  ]
+}

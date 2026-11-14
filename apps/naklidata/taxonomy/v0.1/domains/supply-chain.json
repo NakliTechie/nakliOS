@@ -1,0 +1,15 @@
+{
+  "domain": "supply-chain",
+  "label": "Supply chain and procurement",
+  "types": [
+    "purchase_order_id",
+    "warehouse_id",
+    "inventory_quantity",
+    "lead_time_days",
+    "unit_cost",
+    "vendor_id"
+  ],
+  "report_templates": [
+    "inventory_health"
+  ]
+}

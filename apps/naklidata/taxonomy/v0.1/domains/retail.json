@@ -1,0 +1,23 @@
+{
+  "domain": "retail",
+  "label": "Retail and transactions",
+  "types": [
+    "order_id",
+    "sku",
+    "quantity",
+    "customer_id",
+    "order_status",
+    "order_purchase_timestamp",
+    "order_approval_timestamp",
+    "order_carrier_handoff_timestamp",
+    "order_delivery_timestamp",
+    "order_promised_delivery_timestamp",
+    "payment_installment_count",
+    "product_category",
+    "product_weight",
+    "product_length",
+    "product_height",
+    "product_width"
+  ],
+  "report_templates": ["retail_sales"]
+}

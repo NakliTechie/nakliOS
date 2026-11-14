@@ -1,0 +1,14 @@
+{
+  "domain": "product-analytics",
+  "label": "Product analytics",
+  "types": [
+    "event_name",
+    "user_id",
+    "session_id",
+    "event_properties_json",
+    "utm_source",
+    "utm_medium",
+    "utm_campaign"
+  ],
+  "report_templates": ["dau", "top_events_by_user", "funnel_a_b_c", "retention_30d", "conversion_by_source"]
+}

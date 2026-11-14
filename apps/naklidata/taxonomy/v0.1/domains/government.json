@@ -1,0 +1,14 @@
+{
+  "domain": "government",
+  "label": "Government operations",
+  "types": [
+    "agency_name",
+    "program_name",
+    "application_status",
+    "processing_days",
+    "benefit_amount"
+  ],
+  "report_templates": [
+    "gov_services"
+  ]
+}

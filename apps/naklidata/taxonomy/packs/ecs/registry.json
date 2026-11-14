@@ -1,0 +1,2282 @@
+{
+ "source": "https://github.com/elastic/ecs@2179e785ff1fa42b32997954878eca3adaaa239e",
+ "extraction": "scripts/pin-taxonomy-pack-registry.py",
+ "schema_version": "main@2179e78 (9.6.0-dev)",
+ "snapshot": "2026-09-12",
+ "license": "Apache-2.0",
+ "count": 347,
+ "fields": [
+  {
+   "id": "@timestamp",
+   "type": "date",
+   "short": "Date/time when the event originated.",
+   "example": "2016-05-23T08:05:34.853Z"
+  },
+  {
+   "id": "agent.build.original",
+   "type": "keyword",
+   "short": "Extended build information for the agent.",
+   "example": "metricbeat version 7.6.0 (amd64), libbeat 7.6.0 [6a23e8f8f30f5001ba344e4e54d8d9cb82cb107c built 2020-02-05 23:10:10 +000"
+  },
+  {
+   "id": "agent.id",
+   "type": "keyword",
+   "short": "Unique identifier of this agent.",
+   "example": "8a4f500d"
+  },
+  {
+   "id": "agent.name",
+   "type": "keyword",
+   "short": "Custom name of the agent.",
+   "example": "foo"
+  },
+  {
+   "id": "agent.type",
+   "type": "keyword",
+   "short": "Type of the agent.",
+   "example": "filebeat"
+  },
+  {
+   "id": "agent.version",
+   "type": "keyword",
+   "short": "Version of the agent.",
+   "example": "6.0.0-rc2"
+  },
+  {
+   "id": "client.bytes",
+   "type": "long",
+   "short": "Bytes sent from the client to the server.",
+   "example": "184"
+  },
+  {
+   "id": "client.domain",
+   "type": "keyword",
+   "short": "The domain name of the client.",
+   "example": "foo.example.com"
+  },
+  {
+   "id": "client.geo.city_name",
+   "type": "keyword",
+   "short": "City name.",
+   "example": "Montreal"
+  },
+  {
+   "id": "client.geo.continent_code",
+   "type": "keyword",
+   "short": "Continent code.",
+   "example": "NA"
+  },
+  {
+   "id": "client.geo.continent_name",
+   "type": "keyword",
+   "short": "Name of the continent.",
+   "example": "North America"
+  },
+  {
+   "id": "client.geo.country_iso_code",
+   "type": "keyword",
+   "short": "Country ISO code.",
+   "example": "CA"
+  },
+  {
+   "id": "client.geo.country_name",
+   "type": "keyword",
+   "short": "Country name.",
+   "example": "Canada"
+  },
+  {
+   "id": "client.geo.location",
+   "type": "geo_point",
+   "short": "Longitude and latitude.",
+   "example": "{ \"lon\": -73.614830, \"lat\": 45.505918 }"
+  },
+  {
+   "id": "client.geo.postal_code",
+   "type": "keyword",
+   "short": "Postal code.",
+   "example": "94040"
+  },
+  {
+   "id": "client.geo.region_iso_code",
+   "type": "keyword",
+   "short": "Region ISO code.",
+   "example": "CA-QC"
+  },
+  {
+   "id": "client.geo.region_name",
+   "type": "keyword",
+   "short": "Region name.",
+   "example": "Quebec"
+  },
+  {
+   "id": "client.geo.timezone",
+   "type": "keyword",
+   "short": "Time zone.",
+   "example": "America/Argentina/Buenos_Aires"
+  },
+  {
+   "id": "client.ip",
+   "type": "ip",
+   "short": "IP address of the client."
+  },
+  {
+   "id": "client.mac",
+   "type": "keyword",
+   "short": "MAC address of the client.",
+   "example": "00-00-5E-00-53-23"
+  },
+  {
+   "id": "client.packets",
+   "type": "long",
+   "short": "Packets sent from the client to the server.",
+   "example": "12"
+  },
+  {
+   "id": "client.port",
+   "type": "long",
+   "short": "Port of the client."
+  },
+  {
+   "id": "client.user.id",
+   "type": "keyword",
+   "short": "Unique identifier of the user.",
+   "example": "S-1-5-21-202424912787-2692429404-2351956786-1000"
+  },
+  {
+   "id": "client.user.name",
+   "type": "keyword",
+   "short": "Short name or login of the user.",
+   "example": "a.einstein"
+  },
+  {
+   "id": "cloud.entity.id",
+   "type": "keyword",
+   "short": "Unique identifier for the entity."
+  },
+  {
+   "id": "cloud.entity.name",
+   "type": "keyword",
+   "short": "The name of the entity."
+  },
+  {
+   "id": "cloud.entity.source",
+   "type": "keyword",
+   "short": "Source module or integration that provided the entity data."
+  },
+  {
+   "id": "cloud.entity.type",
+   "type": "keyword",
+   "short": "Standardized high-level classification of the entity.",
+   "example": "host",
+   "allowed": [
+    "bucket",
+    "database",
+    "container",
+    "function",
+    "queue",
+    "host",
+    "user",
+    "application",
+    "service",
+    "session",
+    "cloud",
+    "orchestrator"
+   ]
+  },
+  {
+   "id": "cloud.origin.entity.id",
+   "type": "keyword",
+   "short": "Unique identifier for the entity."
+  },
+  {
+   "id": "cloud.origin.entity.name",
+   "type": "keyword",
+   "short": "The name of the entity."
+  },
+  {
+   "id": "cloud.origin.entity.source",
+   "type": "keyword",
+   "short": "Source module or integration that provided the entity data."
+  },
+  {
+   "id": "cloud.origin.entity.type",
+   "type": "keyword",
+   "short": "Standardized high-level classification of the entity.",
+   "example": "host",
+   "allowed": [
+    "bucket",
+    "database",
+    "container",
+    "function",
+    "queue",
+    "host",
+    "user",
+    "application",
+    "service",
+    "session",
+    "cloud",
+    "orchestrator"
+   ]
+  },
+  {
+   "id": "cloud.target.entity.id",
+   "type": "keyword",
+   "short": "Unique identifier for the entity."
+  },
+  {
+   "id": "cloud.target.entity.name",
+   "type": "keyword",
+   "short": "The name of the entity."
+  },
+  {
+   "id": "cloud.target.entity.source",
+   "type": "keyword",
+   "short": "Source module or integration that provided the entity data."
+  },
+  {
+   "id": "cloud.target.entity.type",
+   "type": "keyword",
+   "short": "Standardized high-level classification of the entity.",
+   "example": "host",
+   "allowed": [
+    "bucket",
+    "database",
+    "container",
+    "function",
+    "queue",
+    "host",
+    "user",
+    "application",
+    "service",
+    "session",
+    "cloud",
+    "orchestrator"
+   ]
+  },
+  {
+   "id": "container.id",
+   "type": "keyword",
+   "short": "Unique container id."
+  },
+  {
+   "id": "destination.bytes",
+   "type": "long",
+   "short": "Bytes sent from the destination to the source.",
+   "example": "184"
+  },
+  {
+   "id": "destination.domain",
+   "type": "keyword",
+   "short": "The domain name of the destination.",
+   "example": "foo.example.com"
+  },
+  {
+   "id": "destination.geo.city_name",
+   "type": "keyword",
+   "short": "City name.",
+   "example": "Montreal"
+  },
+  {
+   "id": "destination.geo.continent_code",
+   "type": "keyword",
+   "short": "Continent code.",
+   "example": "NA"
+  },
+  {
+   "id": "destination.geo.continent_name",
+   "type": "keyword",
+   "short": "Name of the continent.",
+   "example": "North America"
+  },
+  {
+   "id": "destination.geo.country_iso_code",
+   "type": "keyword",
+   "short": "Country ISO code.",
+   "example": "CA"
+  },
+  {
+   "id": "destination.geo.country_name",
+   "type": "keyword",
+   "short": "Country name.",
+   "example": "Canada"
+  },
+  {
+   "id": "destination.geo.location",
+   "type": "geo_point",
+   "short": "Longitude and latitude.",
+   "example": "{ \"lon\": -73.614830, \"lat\": 45.505918 }"
+  },
+  {
+   "id": "destination.geo.postal_code",
+   "type": "keyword",
+   "short": "Postal code.",
+   "example": "94040"
+  },
+  {
+   "id": "destination.geo.region_iso_code",
+   "type": "keyword",
+   "short": "Region ISO code.",
+   "example": "CA-QC"
+  },
+  {
+   "id": "destination.geo.region_name",
+   "type": "keyword",
+   "short": "Region name.",
+   "example": "Quebec"
+  },
+  {
+   "id": "destination.geo.timezone",
+   "type": "keyword",
+   "short": "Time zone.",
+   "example": "America/Argentina/Buenos_Aires"
+  },
+  {
+   "id": "destination.ip",
+   "type": "ip",
+   "short": "IP address of the destination."
+  },
+  {
+   "id": "destination.mac",
+   "type": "keyword",
+   "short": "MAC address of the destination.",
+   "example": "00-00-5E-00-53-23"
+  },
+  {
+   "id": "destination.packets",
+   "type": "long",
+   "short": "Packets sent from the destination to the source.",
+   "example": "12"
+  },
+  {
+   "id": "destination.port",
+   "type": "long",
+   "short": "Port of the destination."
+  },
+  {
+   "id": "destination.user.id",
+   "type": "keyword",
+   "short": "Unique identifier of the user.",
+   "example": "S-1-5-21-202424912787-2692429404-2351956786-1000"
+  },
+  {
+   "id": "destination.user.name",
+   "type": "keyword",
+   "short": "Short name or login of the user.",
+   "example": "a.einstein"
+  },
+  {
+   "id": "device.serial_number",
+   "type": "keyword",
+   "short": "Serial Number of the device",
+   "example": "DJGAQS4CW5"
+  },
+  {
+   "id": "dll.code_signature.exists",
+   "type": "boolean",
+   "short": "Boolean to capture if a signature is present.",
+   "example": "true"
+  },
+  {
+   "id": "dll.code_signature.subject_name",
+   "type": "keyword",
+   "short": "Subject name of the code signer",
+   "example": "Microsoft Corporation"
+  },
+  {
+   "id": "dll.name",
+   "type": "keyword",
+   "short": "Name of the library.",
+   "example": "kernel32.dll"
+  },
+  {
+   "id": "ecs.version",
+   "type": "keyword",
+   "short": "ECS version this event conforms to.",
+   "example": "1.0.0"
+  },
+  {
+   "id": "entity.id",
+   "type": "keyword",
+   "short": "Unique identifier for the entity."
+  },
+  {
+   "id": "entity.name",
+   "type": "keyword",
+   "short": "The name of the entity."
+  },
+  {
+   "id": "entity.source",
+   "type": "keyword",
+   "short": "Source module or integration that provided the entity data."
+  },
+  {
+   "id": "entity.target.id",
+   "type": "keyword",
+   "short": "Unique identifier for the entity."
+  },
+  {
+   "id": "entity.target.name",
+   "type": "keyword",
+   "short": "The name of the entity."
+  },
+  {
+   "id": "entity.target.source",
+   "type": "keyword",
+   "short": "Source module or integration that provided the entity data."
+  },
+  {
+   "id": "entity.target.type",
+   "type": "keyword",
+   "short": "Standardized high-level classification of the entity.",
+   "example": "host",
+   "allowed": [
+    "bucket",
+    "database",
+    "container",
+    "function",
+    "queue",
+    "host",
+    "user",
+    "application",
+    "service",
+    "session",
+    "cloud",
+    "orchestrator"
+   ]
+  },
+  {
+   "id": "entity.type",
+   "type": "keyword",
+   "short": "Standardized high-level classification of the entity.",
+   "example": "host",
+   "allowed": [
+    "bucket",
+    "database",
+    "container",
+    "function",
+    "queue",
+    "host",
+    "user",
+    "application",
+    "service",
+    "session",
+    "cloud",
+    "orchestrator"
+   ]
+  },
+  {
+   "id": "error.code",
+   "type": "keyword",
+   "short": "Error code describing the error."
+  },
+  {
+   "id": "error.id",
+   "type": "keyword",
+   "short": "Unique identifier for the error."
+  },
+  {
+   "id": "error.message",
+   "type": "match_only_text",
+   "short": "Error message."
+  },
+  {
+   "id": "event.action",
+   "type": "keyword",
+   "short": "The action captured by the event.",
+   "example": "user-password-change"
+  },
+  {
+   "id": "event.category",
+   "type": "keyword",
+   "short": "Event category. The second categorization field in the hierarchy.",
+   "example": "authentication",
+   "allowed": [
+    "api",
+    "authentication",
+    "configuration",
+    "database",
+    "driver",
+    "email",
+    "file",
+    "host",
+    "iam",
+    "intrusion_detection",
+    "library",
+    "malware",
+    "network",
+    "package",
+    "process",
+    "registry",
+    "session",
+    "threat",
+    "vulnerability",
+    "web"
+   ]
+  },
+  {
+   "id": "event.created",
+   "type": "date",
+   "short": "Time when the event was first read by an agent or by your pipeline.",
+   "example": "2016-05-23T08:05:34.857Z"
+  },
+  {
+   "id": "event.dataset",
+   "type": "keyword",
+   "short": "Name of the dataset.",
+   "example": "apache.access"
+  },
+  {
+   "id": "event.duration",
+   "type": "long",
+   "short": "Duration of the event in nanoseconds."
+  },
+  {
+   "id": "event.id",
+   "type": "keyword",
+   "short": "Unique ID to describe the event.",
+   "example": "8a4f500d"
+  },
+  {
+   "id": "event.ingested",
+   "type": "date",
+   "short": "Timestamp when an event arrived in the central data store.",
+   "example": "2016-05-23T08:05:35.101Z"
+  },
+  {
+   "id": "event.kind",
+   "type": "keyword",
+   "short": "The kind of the event. The highest categorization field in the hierarchy.",
+   "example": "alert",
+   "allowed": [
+    "alert",
+    "asset",
+    "enrichment",
+    "event",
+    "metric",
+    "state",
+    "pipeline_error",
+    "signal"
+   ]
+  },
+  {
+   "id": "event.module",
+   "type": "keyword",
+   "short": "Name of the module this data is coming from.",
+   "example": "apache"
+  },
+  {
+   "id": "event.original",
+   "type": "keyword",
+   "short": "Raw text message of entire event.",
+   "example": "Sep 19 08:26:10 host CEF:0&#124;Security&#124; threatmanager&#124;1.0&#124;100&#124; worm successfully stopped&#124;10&#"
+  },
+  {
+   "id": "event.outcome",
+   "type": "keyword",
+   "short": "The outcome of the event. The lowest level categorization field in the hierarchy.",
+   "example": "success",
+   "allowed": [
+    "failure",
+    "success",
+    "unknown"
+   ]
+  },
+  {
+   "id": "event.risk_score",
+   "type": "float",
+   "short": "Risk score or priority of the event (e.g. security solutions). Use your system's original value here."
+  },
+  {
+   "id": "event.severity",
+   "type": "long",
+   "short": "Numeric severity of the event.",
+   "example": "7"
+  },
+  {
+   "id": "event.type",
+   "type": "keyword",
+   "short": "Event type. The third categorization field in the hierarchy.",
+   "allowed": [
+    "access",
+    "admin",
+    "allowed",
+    "change",
+    "connection",
+    "creation",
+    "deletion",
+    "denied",
+    "device",
+    "end",
+    "error",
+    "group",
+    "indicator",
+    "info",
+    "installation",
+    "protocol",
+    "start",
+    "user"
+   ]
+  },
+  {
+   "id": "file.code_signature.exists",
+   "type": "boolean",
+   "short": "Boolean to capture if a signature is present.",
+   "example": "true"
+  },
+  {
+   "id": "file.code_signature.subject_name",
+   "type": "keyword",
+   "short": "Subject name of the code signer",
+   "example": "Microsoft Corporation"
+  },
+  {
+   "id": "host.architecture",
+   "type": "keyword",
+   "short": "Operating system architecture.",
+   "example": "x86_64"
+  },
+  {
+   "id": "host.entity.id",
+   "type": "keyword",
+   "short": "Unique identifier for the entity."
+  },
+  {
+   "id": "host.entity.name",
+   "type": "keyword",
+   "short": "The name of the entity."
+  },
+  {
+   "id": "host.entity.source",
+   "type": "keyword",
+   "short": "Source module or integration that provided the entity data."
+  },
+  {
+   "id": "host.entity.type",
+   "type": "keyword",
+   "short": "Standardized high-level classification of the entity.",
+   "example": "host",
+   "allowed": [
+    "bucket",
+    "database",
+    "container",
+    "function",
+    "queue",
+    "host",
+    "user",
+    "application",
+    "service",
+    "session",
+    "cloud",
+    "orchestrator"
+   ]
+  },
+  {
+   "id": "host.geo.city_name",
+   "type": "keyword",
+   "short": "City name.",
+   "example": "Montreal"
+  },
+  {
+   "id": "host.geo.continent_code",
+   "type": "keyword",
+   "short": "Continent code.",
+   "example": "NA"
+  },
+  {
+   "id": "host.geo.continent_name",
+   "type": "keyword",
+   "short": "Name of the continent.",
+   "example": "North America"
+  },
+  {
+   "id": "host.geo.country_iso_code",
+   "type": "keyword",
+   "short": "Country ISO code.",
+   "example": "CA"
+  },
+  {
+   "id": "host.geo.country_name",
+   "type": "keyword",
+   "short": "Country name.",
+   "example": "Canada"
+  },
+  {
+   "id": "host.geo.location",
+   "type": "geo_point",
+   "short": "Longitude and latitude.",
+   "example": "{ \"lon\": -73.614830, \"lat\": 45.505918 }"
+  },
+  {
+   "id": "host.geo.postal_code",
+   "type": "keyword",
+   "short": "Postal code.",
+   "example": "94040"
+  },
+  {
+   "id": "host.geo.region_iso_code",
+   "type": "keyword",
+   "short": "Region ISO code.",
+   "example": "CA-QC"
+  },
+  {
+   "id": "host.geo.region_name",
+   "type": "keyword",
+   "short": "Region name.",
+   "example": "Quebec"
+  },
+  {
+   "id": "host.geo.timezone",
+   "type": "keyword",
+   "short": "Time zone.",
+   "example": "America/Argentina/Buenos_Aires"
+  },
+  {
+   "id": "host.hostname",
+   "type": "keyword",
+   "short": "Hostname of the host."
+  },
+  {
+   "id": "host.id",
+   "type": "keyword",
+   "short": "Unique host id."
+  },
+  {
+   "id": "host.ip",
+   "type": "ip",
+   "short": "Host ip addresses."
+  },
+  {
+   "id": "host.mac",
+   "type": "keyword",
+   "short": "Host MAC addresses.",
+   "example": "[\"00-00-5E-00-53-23\", \"00-00-5E-00-53-24\"]"
+  },
+  {
+   "id": "host.name",
+   "type": "keyword",
+   "short": "Name of the host."
+  },
+  {
+   "id": "host.target.architecture",
+   "type": "keyword",
+   "short": "Operating system architecture.",
+   "example": "x86_64"
+  },
+  {
+   "id": "host.target.entity.id",
+   "type": "keyword",
+   "short": "Unique identifier for the entity."
+  },
+  {
+   "id": "host.target.entity.name",
+   "type": "keyword",
+   "short": "The name of the entity."
+  },
+  {
+   "id": "host.target.entity.source",
+   "type": "keyword",
+   "short": "Source module or integration that provided the entity data."
+  },
+  {
+   "id": "host.target.entity.type",
+   "type": "keyword",
+   "short": "Standardized high-level classification of the entity.",
+   "example": "host",
+   "allowed": [
+    "bucket",
+    "database",
+    "container",
+    "function",
+    "queue",
+    "host",
+    "user",
+    "application",
+    "service",
+    "session",
+    "cloud",
+    "orchestrator"
+   ]
+  },
+  {
+   "id": "host.target.geo.city_name",
+   "type": "keyword",
+   "short": "City name.",
+   "example": "Montreal"
+  },
+  {
+   "id": "host.target.geo.continent_code",
+   "type": "keyword",
+   "short": "Continent code.",
+   "example": "NA"
+  },
+  {
+   "id": "host.target.geo.continent_name",
+   "type": "keyword",
+   "short": "Name of the continent.",
+   "example": "North America"
+  },
+  {
+   "id": "host.target.geo.country_iso_code",
+   "type": "keyword",
+   "short": "Country ISO code.",
+   "example": "CA"
+  },
+  {
+   "id": "host.target.geo.country_name",
+   "type": "keyword",
+   "short": "Country name.",
+   "example": "Canada"
+  },
+  {
+   "id": "host.target.geo.location",
+   "type": "geo_point",
+   "short": "Longitude and latitude.",
+   "example": "{ \"lon\": -73.614830, \"lat\": 45.505918 }"
+  },
+  {
+   "id": "host.target.geo.postal_code",
+   "type": "keyword",
+   "short": "Postal code.",
+   "example": "94040"
+  },
+  {
+   "id": "host.target.geo.region_iso_code",
+   "type": "keyword",
+   "short": "Region ISO code.",
+   "example": "CA-QC"
+  },
+  {
+   "id": "host.target.geo.region_name",
+   "type": "keyword",
+   "short": "Region name.",
+   "example": "Quebec"
+  },
+  {
+   "id": "host.target.geo.timezone",
+   "type": "keyword",
+   "short": "Time zone.",
+   "example": "America/Argentina/Buenos_Aires"
+  },
+  {
+   "id": "host.target.hostname",
+   "type": "keyword",
+   "short": "Hostname of the host."
+  },
+  {
+   "id": "host.target.id",
+   "type": "keyword",
+   "short": "Unique host id."
+  },
+  {
+   "id": "host.target.ip",
+   "type": "ip",
+   "short": "Host ip addresses."
+  },
+  {
+   "id": "host.target.mac",
+   "type": "keyword",
+   "short": "Host MAC addresses.",
+   "example": "[\"00-00-5E-00-53-23\", \"00-00-5E-00-53-24\"]"
+  },
+  {
+   "id": "host.target.name",
+   "type": "keyword",
+   "short": "Name of the host."
+  },
+  {
+   "id": "host.target.type",
+   "type": "keyword",
+   "short": "Type of host."
+  },
+  {
+   "id": "host.type",
+   "type": "keyword",
+   "short": "Type of host."
+  },
+  {
+   "id": "labels",
+   "type": "object",
+   "short": "Custom key/value pairs.",
+   "example": "{\"application\": \"foo-bar\", \"env\": \"production\"}"
+  },
+  {
+   "id": "log.level",
+   "type": "keyword",
+   "short": "Log level of the log event.",
+   "example": "error"
+  },
+  {
+   "id": "log.logger",
+   "type": "keyword",
+   "short": "Name of the logger.",
+   "example": "org.elasticsearch.bootstrap.Bootstrap"
+  },
+  {
+   "id": "message",
+   "type": "match_only_text",
+   "short": "Log message optimized for viewing in a log viewer.",
+   "example": "Hello World"
+  },
+  {
+   "id": "network.bytes",
+   "type": "long",
+   "short": "Total bytes transferred in both directions.",
+   "example": "368"
+  },
+  {
+   "id": "network.direction",
+   "type": "keyword",
+   "short": "Direction of the network traffic.",
+   "example": "inbound"
+  },
+  {
+   "id": "network.forwarded_ip",
+   "type": "ip",
+   "short": "Host IP address when the source IP address is the proxy.",
+   "example": "192.1.1.2"
+  },
+  {
+   "id": "network.packets",
+   "type": "long",
+   "short": "Total packets transferred in both directions.",
+   "example": "24"
+  },
+  {
+   "id": "network.protocol",
+   "type": "keyword",
+   "short": "Application protocol name.",
+   "example": "http"
+  },
+  {
+   "id": "network.transport",
+   "type": "keyword",
+   "short": "Protocol Name corresponding to the field `iana_number`.",
+   "example": "tcp"
+  },
+  {
+   "id": "network.type",
+   "type": "keyword",
+   "short": "In the OSI Model this would be the Network Layer. ipv4, ipv6, ipsec, pim, etc",
+   "example": "ipv4"
+  },
+  {
+   "id": "observer.geo.city_name",
+   "type": "keyword",
+   "short": "City name.",
+   "example": "Montreal"
+  },
+  {
+   "id": "observer.geo.continent_code",
+   "type": "keyword",
+   "short": "Continent code.",
+   "example": "NA"
+  },
+  {
+   "id": "observer.geo.continent_name",
+   "type": "keyword",
+   "short": "Name of the continent.",
+   "example": "North America"
+  },
+  {
+   "id": "observer.geo.country_iso_code",
+   "type": "keyword",
+   "short": "Country ISO code.",
+   "example": "CA"
+  },
+  {
+   "id": "observer.geo.country_name",
+   "type": "keyword",
+   "short": "Country name.",
+   "example": "Canada"
+  },
+  {
+   "id": "observer.geo.location",
+   "type": "geo_point",
+   "short": "Longitude and latitude.",
+   "example": "{ \"lon\": -73.614830, \"lat\": 45.505918 }"
+  },
+  {
+   "id": "observer.geo.postal_code",
+   "type": "keyword",
+   "short": "Postal code.",
+   "example": "94040"
+  },
+  {
+   "id": "observer.geo.region_iso_code",
+   "type": "keyword",
+   "short": "Region ISO code.",
+   "example": "CA-QC"
+  },
+  {
+   "id": "observer.geo.region_name",
+   "type": "keyword",
+   "short": "Region name.",
+   "example": "Quebec"
+  },
+  {
+   "id": "observer.geo.timezone",
+   "type": "keyword",
+   "short": "Time zone.",
+   "example": "America/Argentina/Buenos_Aires"
+  },
+  {
+   "id": "observer.hostname",
+   "type": "keyword",
+   "short": "Hostname of the observer."
+  },
+  {
+   "id": "observer.ip",
+   "type": "ip",
+   "short": "IP addresses of the observer."
+  },
+  {
+   "id": "observer.mac",
+   "type": "keyword",
+   "short": "MAC addresses of the observer.",
+   "example": "[\"00-00-5E-00-53-23\", \"00-00-5E-00-53-24\"]"
+  },
+  {
+   "id": "observer.type",
+   "type": "keyword",
+   "short": "The type of the observer the data is coming from.",
+   "example": "firewall"
+  },
+  {
+   "id": "observer.vendor",
+   "type": "keyword",
+   "short": "Vendor name of the observer.",
+   "example": "Symantec"
+  },
+  {
+   "id": "observer.version",
+   "type": "keyword",
+   "short": "Observer version."
+  },
+  {
+   "id": "orchestrator.entity.id",
+   "type": "keyword",
+   "short": "Unique identifier for the entity."
+  },
+  {
+   "id": "orchestrator.entity.name",
+   "type": "keyword",
+   "short": "The name of the entity."
+  },
+  {
+   "id": "orchestrator.entity.source",
+   "type": "keyword",
+   "short": "Source module or integration that provided the entity data."
+  },
+  {
+   "id": "orchestrator.entity.type",
+   "type": "keyword",
+   "short": "Standardized high-level classification of the entity.",
+   "example": "host",
+   "allowed": [
+    "bucket",
+    "database",
+    "container",
+    "function",
+    "queue",
+    "host",
+    "user",
+    "application",
+    "service",
+    "session",
+    "cloud",
+    "orchestrator"
+   ]
+  },
+  {
+   "id": "process.code_signature.exists",
+   "type": "boolean",
+   "short": "Boolean to capture if a signature is present.",
+   "example": "true"
+  },
+  {
+   "id": "process.code_signature.subject_name",
+   "type": "keyword",
+   "short": "Subject name of the code signer",
+   "example": "Microsoft Corporation"
+  },
+  {
+   "id": "process.entry_leader.attested_user.id",
+   "type": "keyword",
+   "short": "Unique identifier of the user.",
+   "example": "S-1-5-21-202424912787-2692429404-2351956786-1000"
+  },
+  {
+   "id": "process.entry_leader.attested_user.name",
+   "type": "keyword",
+   "short": "Short name or login of the user.",
+   "example": "a.einstein"
+  },
+  {
+   "id": "process.entry_leader.entry_meta.source.ip",
+   "type": "ip",
+   "short": "IP address of the source."
+  },
+  {
+   "id": "process.entry_leader.parent.pid",
+   "type": "long",
+   "short": "Process id.",
+   "example": "4242"
+  },
+  {
+   "id": "process.entry_leader.parent.session_leader.pid",
+   "type": "long",
+   "short": "Process id.",
+   "example": "4242"
+  },
+  {
+   "id": "process.entry_leader.parent.session_leader.vpid",
+   "type": "long",
+   "short": "Virtual process id.",
+   "example": "4242"
+  },
+  {
+   "id": "process.entry_leader.parent.vpid",
+   "type": "long",
+   "short": "Virtual process id.",
+   "example": "4242"
+  },
+  {
+   "id": "process.entry_leader.pid",
+   "type": "long",
+   "short": "Process id.",
+   "example": "4242"
+  },
+  {
+   "id": "process.entry_leader.real_user.id",
+   "type": "keyword",
+   "short": "Unique identifier of the user.",
+   "example": "S-1-5-21-202424912787-2692429404-2351956786-1000"
+  },
+  {
+   "id": "process.entry_leader.real_user.name",
+   "type": "keyword",
+   "short": "Short name or login of the user.",
+   "example": "a.einstein"
+  },
+  {
+   "id": "process.entry_leader.saved_user.id",
+   "type": "keyword",
+   "short": "Unique identifier of the user.",
+   "example": "S-1-5-21-202424912787-2692429404-2351956786-1000"
+  },
+  {
+   "id": "process.entry_leader.saved_user.name",
+   "type": "keyword",
+   "short": "Short name or login of the user.",
+   "example": "a.einstein"
+  },
+  {
+   "id": "process.entry_leader.user.id",
+   "type": "keyword",
+   "short": "Unique identifier of the user.",
+   "example": "S-1-5-21-202424912787-2692429404-2351956786-1000"
+  },
+  {
+   "id": "process.entry_leader.user.name",
+   "type": "keyword",
+   "short": "Short name or login of the user.",
+   "example": "a.einstein"
+  },
+  {
+   "id": "process.entry_leader.vpid",
+   "type": "long",
+   "short": "Virtual process id.",
+   "example": "4242"
+  },
+  {
+   "id": "process.group_leader.pid",
+   "type": "long",
+   "short": "Process id.",
+   "example": "4242"
+  },
+  {
+   "id": "process.group_leader.real_user.id",
+   "type": "keyword",
+   "short": "Unique identifier of the user.",
+   "example": "S-1-5-21-202424912787-2692429404-2351956786-1000"
+  },
+  {
+   "id": "process.group_leader.real_user.name",
+   "type": "keyword",
+   "short": "Short name or login of the user.",
+   "example": "a.einstein"
+  },
+  {
+   "id": "process.group_leader.saved_user.id",
+   "type": "keyword",
+   "short": "Unique identifier of the user.",
+   "example": "S-1-5-21-202424912787-2692429404-2351956786-1000"
+  },
+  {
+   "id": "process.group_leader.saved_user.name",
+   "type": "keyword",
+   "short": "Short name or login of the user.",
+   "example": "a.einstein"
+  },
+  {
+   "id": "process.group_leader.user.id",
+   "type": "keyword",
+   "short": "Unique identifier of the user.",
+   "example": "S-1-5-21-202424912787-2692429404-2351956786-1000"
+  },
+  {
+   "id": "process.group_leader.user.name",
+   "type": "keyword",
+   "short": "Short name or login of the user.",
+   "example": "a.einstein"
+  },
+  {
+   "id": "process.group_leader.vpid",
+   "type": "long",
+   "short": "Virtual process id.",
+   "example": "4242"
+  },
+  {
+   "id": "process.parent.code_signature.exists",
+   "type": "boolean",
+   "short": "Boolean to capture if a signature is present.",
+   "example": "true"
+  },
+  {
+   "id": "process.parent.code_signature.subject_name",
+   "type": "keyword",
+   "short": "Subject name of the code signer",
+   "example": "Microsoft Corporation"
+  },
+  {
+   "id": "process.parent.group_leader.pid",
+   "type": "long",
+   "short": "Process id.",
+   "example": "4242"
+  },
+  {
+   "id": "process.parent.group_leader.vpid",
+   "type": "long",
+   "short": "Virtual process id.",
+   "example": "4242"
+  },
+  {
+   "id": "process.parent.pid",
+   "type": "long",
+   "short": "Process id.",
+   "example": "4242"
+  },
+  {
+   "id": "process.parent.real_user.id",
+   "type": "keyword",
+   "short": "Unique identifier of the user.",
+   "example": "S-1-5-21-202424912787-2692429404-2351956786-1000"
+  },
+  {
+   "id": "process.parent.real_user.name",
+   "type": "keyword",
+   "short": "Short name or login of the user.",
+   "example": "a.einstein"
+  },
+  {
+   "id": "process.parent.saved_user.id",
+   "type": "keyword",
+   "short": "Unique identifier of the user.",
+   "example": "S-1-5-21-202424912787-2692429404-2351956786-1000"
+  },
+  {
+   "id": "process.parent.saved_user.name",
+   "type": "keyword",
+   "short": "Short name or login of the user.",
+   "example": "a.einstein"
+  },
+  {
+   "id": "process.parent.user.id",
+   "type": "keyword",
+   "short": "Unique identifier of the user.",
+   "example": "S-1-5-21-202424912787-2692429404-2351956786-1000"
+  },
+  {
+   "id": "process.parent.user.name",
+   "type": "keyword",
+   "short": "Short name or login of the user.",
+   "example": "a.einstein"
+  },
+  {
+   "id": "process.parent.vpid",
+   "type": "long",
+   "short": "Virtual process id.",
+   "example": "4242"
+  },
+  {
+   "id": "process.pid",
+   "type": "long",
+   "short": "Process id.",
+   "example": "4242"
+  },
+  {
+   "id": "process.real_user.id",
+   "type": "keyword",
+   "short": "Unique identifier of the user.",
+   "example": "S-1-5-21-202424912787-2692429404-2351956786-1000"
+  },
+  {
+   "id": "process.real_user.name",
+   "type": "keyword",
+   "short": "Short name or login of the user.",
+   "example": "a.einstein"
+  },
+  {
+   "id": "process.saved_user.id",
+   "type": "keyword",
+   "short": "Unique identifier of the user.",
+   "example": "S-1-5-21-202424912787-2692429404-2351956786-1000"
+  },
+  {
+   "id": "process.saved_user.name",
+   "type": "keyword",
+   "short": "Short name or login of the user.",
+   "example": "a.einstein"
+  },
+  {
+   "id": "process.session_leader.parent.pid",
+   "type": "long",
+   "short": "Process id.",
+   "example": "4242"
+  },
+  {
+   "id": "process.session_leader.parent.session_leader.pid",
+   "type": "long",
+   "short": "Process id.",
+   "example": "4242"
+  },
+  {
+   "id": "process.session_leader.parent.session_leader.vpid",
+   "type": "long",
+   "short": "Virtual process id.",
+   "example": "4242"
+  },
+  {
+   "id": "process.session_leader.parent.vpid",
+   "type": "long",
+   "short": "Virtual process id.",
+   "example": "4242"
+  },
+  {
+   "id": "process.session_leader.pid",
+   "type": "long",
+   "short": "Process id.",
+   "example": "4242"
+  },
+  {
+   "id": "process.session_leader.real_user.id",
+   "type": "keyword",
+   "short": "Unique identifier of the user.",
+   "example": "S-1-5-21-202424912787-2692429404-2351956786-1000"
+  },
+  {
+   "id": "process.session_leader.real_user.name",
+   "type": "keyword",
+   "short": "Short name or login of the user.",
+   "example": "a.einstein"
+  },
+  {
+   "id": "process.session_leader.saved_user.id",
+   "type": "keyword",
+   "short": "Unique identifier of the user.",
+   "example": "S-1-5-21-202424912787-2692429404-2351956786-1000"
+  },
+  {
+   "id": "process.session_leader.saved_user.name",
+   "type": "keyword",
+   "short": "Short name or login of the user.",
+   "example": "a.einstein"
+  },
+  {
+   "id": "process.session_leader.user.id",
+   "type": "keyword",
+   "short": "Unique identifier of the user.",
+   "example": "S-1-5-21-202424912787-2692429404-2351956786-1000"
+  },
+  {
+   "id": "process.session_leader.user.name",
+   "type": "keyword",
+   "short": "Short name or login of the user.",
+   "example": "a.einstein"
+  },
+  {
+   "id": "process.session_leader.vpid",
+   "type": "long",
+   "short": "Virtual process id.",
+   "example": "4242"
+  },
+  {
+   "id": "process.user.id",
+   "type": "keyword",
+   "short": "Unique identifier of the user.",
+   "example": "S-1-5-21-202424912787-2692429404-2351956786-1000"
+  },
+  {
+   "id": "process.user.name",
+   "type": "keyword",
+   "short": "Short name or login of the user.",
+   "example": "a.einstein"
+  },
+  {
+   "id": "process.vpid",
+   "type": "long",
+   "short": "Virtual process id.",
+   "example": "4242"
+  },
+  {
+   "id": "registry.data.strings",
+   "type": "wildcard",
+   "short": "List of strings representing what was written to the registry.",
+   "example": "[\"C:\\rta\\red_ttp\\bin\\myapp.exe\"]"
+  },
+  {
+   "id": "registry.data.type",
+   "type": "keyword",
+   "short": "Standard registry type for encoding contents",
+   "example": "REG_SZ"
+  },
+  {
+   "id": "registry.hive",
+   "type": "keyword",
+   "short": "Abbreviated name for the hive.",
+   "example": "HKLM"
+  },
+  {
+   "id": "registry.key",
+   "type": "keyword",
+   "short": "Hive-relative path of keys.",
+   "example": "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\winword.exe"
+  },
+  {
+   "id": "registry.path",
+   "type": "keyword",
+   "short": "Full path, including hive, key and value",
+   "example": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\winword.exe\\Debugger"
+  },
+  {
+   "id": "registry.value",
+   "type": "keyword",
+   "short": "Name of the value written.",
+   "example": "Debugger"
+  },
+  {
+   "id": "server.bytes",
+   "type": "long",
+   "short": "Bytes sent from the server to the client.",
+   "example": "184"
+  },
+  {
+   "id": "server.domain",
+   "type": "keyword",
+   "short": "The domain name of the server.",
+   "example": "foo.example.com"
+  },
+  {
+   "id": "server.geo.city_name",
+   "type": "keyword",
+   "short": "City name.",
+   "example": "Montreal"
+  },
+  {
+   "id": "server.geo.continent_code",
+   "type": "keyword",
+   "short": "Continent code.",
+   "example": "NA"
+  },
+  {
+   "id": "server.geo.continent_name",
+   "type": "keyword",
+   "short": "Name of the continent.",
+   "example": "North America"
+  },
+  {
+   "id": "server.geo.country_iso_code",
+   "type": "keyword",
+   "short": "Country ISO code.",
+   "example": "CA"
+  },
+  {
+   "id": "server.geo.country_name",
+   "type": "keyword",
+   "short": "Country name.",
+   "example": "Canada"
+  },
+  {
+   "id": "server.geo.location",
+   "type": "geo_point",
+   "short": "Longitude and latitude.",
+   "example": "{ \"lon\": -73.614830, \"lat\": 45.505918 }"
+  },
+  {
+   "id": "server.geo.postal_code",
+   "type": "keyword",
+   "short": "Postal code.",
+   "example": "94040"
+  },
+  {
+   "id": "server.geo.region_iso_code",
+   "type": "keyword",
+   "short": "Region ISO code.",
+   "example": "CA-QC"
+  },
+  {
+   "id": "server.geo.region_name",
+   "type": "keyword",
+   "short": "Region name.",
+   "example": "Quebec"
+  },
+  {
+   "id": "server.geo.timezone",
+   "type": "keyword",
+   "short": "Time zone.",
+   "example": "America/Argentina/Buenos_Aires"
+  },
+  {
+   "id": "server.ip",
+   "type": "ip",
+   "short": "IP address of the server."
+  },
+  {
+   "id": "server.mac",
+   "type": "keyword",
+   "short": "MAC address of the server.",
+   "example": "00-00-5E-00-53-23"
+  },
+  {
+   "id": "server.packets",
+   "type": "long",
+   "short": "Packets sent from the server to the client.",
+   "example": "12"
+  },
+  {
+   "id": "server.port",
+   "type": "long",
+   "short": "Port of the server."
+  },
+  {
+   "id": "server.user.id",
+   "type": "keyword",
+   "short": "Unique identifier of the user.",
+   "example": "S-1-5-21-202424912787-2692429404-2351956786-1000"
+  },
+  {
+   "id": "server.user.name",
+   "type": "keyword",
+   "short": "Short name or login of the user.",
+   "example": "a.einstein"
+  },
+  {
+   "id": "service.entity.id",
+   "type": "keyword",
+   "short": "Unique identifier for the entity."
+  },
+  {
+   "id": "service.entity.name",
+   "type": "keyword",
+   "short": "The name of the entity."
+  },
+  {
+   "id": "service.entity.source",
+   "type": "keyword",
+   "short": "Source module or integration that provided the entity data."
+  },
+  {
+   "id": "service.entity.type",
+   "type": "keyword",
+   "short": "Standardized high-level classification of the entity.",
+   "example": "host",
+   "allowed": [
+    "bucket",
+    "database",
+    "container",
+    "function",
+    "queue",
+    "host",
+    "user",
+    "application",
+    "service",
+    "session",
+    "cloud",
+    "orchestrator"
+   ]
+  },
+  {
+   "id": "service.id",
+   "type": "keyword",
+   "short": "Unique identifier of the running service.",
+   "example": "d37e5ebfe0ae6c4972dbe9f0174a1637bb8247f6"
+  },
+  {
+   "id": "service.name",
+   "type": "keyword",
+   "short": "Name of the service.",
+   "example": "elasticsearch-metrics"
+  },
+  {
+   "id": "service.origin.entity.id",
+   "type": "keyword",
+   "short": "Unique identifier for the entity."
+  },
+  {
+   "id": "service.origin.entity.name",
+   "type": "keyword",
+   "short": "The name of the entity."
+  },
+  {
+   "id": "service.origin.entity.source",
+   "type": "keyword",
+   "short": "Source module or integration that provided the entity data."
+  },
+  {
+   "id": "service.origin.entity.type",
+   "type": "keyword",
+   "short": "Standardized high-level classification of the entity.",
+   "example": "host",
+   "allowed": [
+    "bucket",
+    "database",
+    "container",
+    "function",
+    "queue",
+    "host",
+    "user",
+    "application",
+    "service",
+    "session",
+    "cloud",
+    "orchestrator"
+   ]
+  },
+  {
+   "id": "service.origin.id",
+   "type": "keyword",
+   "short": "Unique identifier of the running service.",
+   "example": "d37e5ebfe0ae6c4972dbe9f0174a1637bb8247f6"
+  },
+  {
+   "id": "service.origin.name",
+   "type": "keyword",
+   "short": "Name of the service.",
+   "example": "elasticsearch-metrics"
+  },
+  {
+   "id": "service.origin.state",
+   "type": "keyword",
+   "short": "Current state of the service."
+  },
+  {
+   "id": "service.origin.type",
+   "type": "keyword",
+   "short": "The type of the service.",
+   "example": "elasticsearch"
+  },
+  {
+   "id": "service.origin.version",
+   "type": "keyword",
+   "short": "Version of the service.",
+   "example": "3.2.4"
+  },
+  {
+   "id": "service.state",
+   "type": "keyword",
+   "short": "Current state of the service."
+  },
+  {
+   "id": "service.target.entity.id",
+   "type": "keyword",
+   "short": "Unique identifier for the entity."
+  },
+  {
+   "id": "service.target.entity.name",
+   "type": "keyword",
+   "short": "The name of the entity."
+  },
+  {
+   "id": "service.target.entity.source",
+   "type": "keyword",
+   "short": "Source module or integration that provided the entity data."
+  },
+  {
+   "id": "service.target.entity.type",
+   "type": "keyword",
+   "short": "Standardized high-level classification of the entity.",
+   "example": "host",
+   "allowed": [
+    "bucket",
+    "database",
+    "container",
+    "function",
+    "queue",
+    "host",
+    "user",
+    "application",
+    "service",
+    "session",
+    "cloud",
+    "orchestrator"
+   ]
+  },
+  {
+   "id": "service.target.id",
+   "type": "keyword",
+   "short": "Unique identifier of the running service.",
+   "example": "d37e5ebfe0ae6c4972dbe9f0174a1637bb8247f6"
+  },
+  {
+   "id": "service.target.name",
+   "type": "keyword",
+   "short": "Name of the service.",
+   "example": "elasticsearch-metrics"
+  },
+  {
+   "id": "service.target.state",
+   "type": "keyword",
+   "short": "Current state of the service."
+  },
+  {
+   "id": "service.target.type",
+   "type": "keyword",
+   "short": "The type of the service.",
+   "example": "elasticsearch"
+  },
+  {
+   "id": "service.target.version",
+   "type": "keyword",
+   "short": "Version of the service.",
+   "example": "3.2.4"
+  },
+  {
+   "id": "service.type",
+   "type": "keyword",
+   "short": "The type of the service.",
+   "example": "elasticsearch"
+  },
+  {
+   "id": "service.version",
+   "type": "keyword",
+   "short": "Version of the service.",
+   "example": "3.2.4"
+  },
+  {
+   "id": "source.bytes",
+   "type": "long",
+   "short": "Bytes sent from the source to the destination.",
+   "example": "184"
+  },
+  {
+   "id": "source.domain",
+   "type": "keyword",
+   "short": "The domain name of the source.",
+   "example": "foo.example.com"
+  },
+  {
+   "id": "source.geo.city_name",
+   "type": "keyword",
+   "short": "City name.",
+   "example": "Montreal"
+  },
+  {
+   "id": "source.geo.continent_code",
+   "type": "keyword",
+   "short": "Continent code.",
+   "example": "NA"
+  },
+  {
+   "id": "source.geo.continent_name",
+   "type": "keyword",
+   "short": "Name of the continent.",
+   "example": "North America"
+  },
+  {
+   "id": "source.geo.country_iso_code",
+   "type": "keyword",
+   "short": "Country ISO code.",
+   "example": "CA"
+  },
+  {
+   "id": "source.geo.country_name",
+   "type": "keyword",
+   "short": "Country name.",
+   "example": "Canada"
+  },
+  {
+   "id": "source.geo.location",
+   "type": "geo_point",
+   "short": "Longitude and latitude.",
+   "example": "{ \"lon\": -73.614830, \"lat\": 45.505918 }"
+  },
+  {
+   "id": "source.geo.postal_code",
+   "type": "keyword",
+   "short": "Postal code.",
+   "example": "94040"
+  },
+  {
+   "id": "source.geo.region_iso_code",
+   "type": "keyword",
+   "short": "Region ISO code.",
+   "example": "CA-QC"
+  },
+  {
+   "id": "source.geo.region_name",
+   "type": "keyword",
+   "short": "Region name.",
+   "example": "Quebec"
+  },
+  {
+   "id": "source.geo.timezone",
+   "type": "keyword",
+   "short": "Time zone.",
+   "example": "America/Argentina/Buenos_Aires"
+  },
+  {
+   "id": "source.ip",
+   "type": "ip",
+   "short": "IP address of the source."
+  },
+  {
+   "id": "source.mac",
+   "type": "keyword",
+   "short": "MAC address of the source.",
+   "example": "00-00-5E-00-53-23"
+  },
+  {
+   "id": "source.packets",
+   "type": "long",
+   "short": "Packets sent from the source to the destination.",
+   "example": "12"
+  },
+  {
+   "id": "source.port",
+   "type": "long",
+   "short": "Port of the source."
+  },
+  {
+   "id": "source.user.id",
+   "type": "keyword",
+   "short": "Unique identifier of the user.",
+   "example": "S-1-5-21-202424912787-2692429404-2351956786-1000"
+  },
+  {
+   "id": "source.user.name",
+   "type": "keyword",
+   "short": "Short name or login of the user.",
+   "example": "a.einstein"
+  },
+  {
+   "id": "tags",
+   "type": "keyword",
+   "short": "List of keywords used to tag each event.",
+   "example": "[\"production\", \"env2\"]"
+  },
+  {
+   "id": "threat.enrichments.indicator.file.code_signature.exists",
+   "type": "boolean",
+   "short": "Boolean to capture if a signature is present.",
+   "example": "true"
+  },
+  {
+   "id": "threat.enrichments.indicator.file.code_signature.subject_name",
+   "type": "keyword",
+   "short": "Subject name of the code signer",
+   "example": "Microsoft Corporation"
+  },
+  {
+   "id": "threat.enrichments.indicator.geo.city_name",
+   "type": "keyword",
+   "short": "City name.",
+   "example": "Montreal"
+  },
+  {
+   "id": "threat.enrichments.indicator.geo.continent_code",
+   "type": "keyword",
+   "short": "Continent code.",
+   "example": "NA"
+  },
+  {
+   "id": "threat.enrichments.indicator.geo.continent_name",
+   "type": "keyword",
+   "short": "Name of the continent.",
+   "example": "North America"
+  },
+  {
+   "id": "threat.enrichments.indicator.geo.country_iso_code",
+   "type": "keyword",
+   "short": "Country ISO code.",
+   "example": "CA"
+  },
+  {
+   "id": "threat.enrichments.indicator.geo.country_name",
+   "type": "keyword",
+   "short": "Country name.",
+   "example": "Canada"
+  },
+  {
+   "id": "threat.enrichments.indicator.geo.location",
+   "type": "geo_point",
+   "short": "Longitude and latitude.",
+   "example": "{ \"lon\": -73.614830, \"lat\": 45.505918 }"
+  },
+  {
+   "id": "threat.enrichments.indicator.geo.postal_code",
+   "type": "keyword",
+   "short": "Postal code.",
+   "example": "94040"
+  },
+  {
+   "id": "threat.enrichments.indicator.geo.region_iso_code",
+   "type": "keyword",
+   "short": "Region ISO code.",
+   "example": "CA-QC"
+  },
+  {
+   "id": "threat.enrichments.indicator.geo.region_name",
+   "type": "keyword",
+   "short": "Region name.",
+   "example": "Quebec"
+  },
+  {
+   "id": "threat.enrichments.indicator.geo.timezone",
+   "type": "keyword",
+   "short": "Time zone.",
+   "example": "America/Argentina/Buenos_Aires"
+  },
+  {
+   "id": "threat.enrichments.indicator.registry.data.strings",
+   "type": "wildcard",
+   "short": "List of strings representing what was written to the registry.",
+   "example": "[\"C:\\rta\\red_ttp\\bin\\myapp.exe\"]"
+  },
+  {
+   "id": "threat.enrichments.indicator.registry.data.type",
+   "type": "keyword",
+   "short": "Standard registry type for encoding contents",
+   "example": "REG_SZ"
+  },
+  {
+   "id": "threat.enrichments.indicator.registry.hive",
+   "type": "keyword",
+   "short": "Abbreviated name for the hive.",
+   "example": "HKLM"
+  },
+  {
+   "id": "threat.enrichments.indicator.registry.key",
+   "type": "keyword",
+   "short": "Hive-relative path of keys.",
+   "example": "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\winword.exe"
+  },
+  {
+   "id": "threat.enrichments.indicator.registry.path",
+   "type": "keyword",
+   "short": "Full path, including hive, key and value",
+   "example": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\winword.exe\\Debugger"
+  },
+  {
+   "id": "threat.enrichments.indicator.registry.value",
+   "type": "keyword",
+   "short": "Name of the value written.",
+   "example": "Debugger"
+  },
+  {
+   "id": "threat.indicator.file.code_signature.exists",
+   "type": "boolean",
+   "short": "Boolean to capture if a signature is present.",
+   "example": "true"
+  },
+  {
+   "id": "threat.indicator.file.code_signature.subject_name",
+   "type": "keyword",
+   "short": "Subject name of the code signer",
+   "example": "Microsoft Corporation"
+  },
+  {
+   "id": "threat.indicator.geo.city_name",
+   "type": "keyword",
+   "short": "City name.",
+   "example": "Montreal"
+  },
+  {
+   "id": "threat.indicator.geo.continent_code",
+   "type": "keyword",
+   "short": "Continent code.",
+   "example": "NA"
+  },
+  {
+   "id": "threat.indicator.geo.continent_name",
+   "type": "keyword",
+   "short": "Name of the continent.",
+   "example": "North America"
+  },
+  {
+   "id": "threat.indicator.geo.country_iso_code",
+   "type": "keyword",
+   "short": "Country ISO code.",
+   "example": "CA"
+  },
+  {
+   "id": "threat.indicator.geo.country_name",
+   "type": "keyword",
+   "short": "Country name.",
+   "example": "Canada"
+  },
+  {
+   "id": "threat.indicator.geo.location",
+   "type": "geo_point",
+   "short": "Longitude and latitude.",
+   "example": "{ \"lon\": -73.614830, \"lat\": 45.505918 }"
+  },
+  {
+   "id": "threat.indicator.geo.postal_code",
+   "type": "keyword",
+   "short": "Postal code.",
+   "example": "94040"
+  },
+  {
+   "id": "threat.indicator.geo.region_iso_code",
+   "type": "keyword",
+   "short": "Region ISO code.",
+   "example": "CA-QC"
+  },
+  {
+   "id": "threat.indicator.geo.region_name",
+   "type": "keyword",
+   "short": "Region name.",
+   "example": "Quebec"
+  },
+  {
+   "id": "threat.indicator.geo.timezone",
+   "type": "keyword",
+   "short": "Time zone.",
+   "example": "America/Argentina/Buenos_Aires"
+  },
+  {
+   "id": "threat.indicator.registry.data.strings",
+   "type": "wildcard",
+   "short": "List of strings representing what was written to the registry.",
+   "example": "[\"C:\\rta\\red_ttp\\bin\\myapp.exe\"]"
+  },
+  {
+   "id": "threat.indicator.registry.data.type",
+   "type": "keyword",
+   "short": "Standard registry type for encoding contents",
+   "example": "REG_SZ"
+  },
+  {
+   "id": "threat.indicator.registry.hive",
+   "type": "keyword",
+   "short": "Abbreviated name for the hive.",
+   "example": "HKLM"
+  },
+  {
+   "id": "threat.indicator.registry.key",
+   "type": "keyword",
+   "short": "Hive-relative path of keys.",
+   "example": "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\winword.exe"
+  },
+  {
+   "id": "threat.indicator.registry.path",
+   "type": "keyword",
+   "short": "Full path, including hive, key and value",
+   "example": "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\winword.exe\\Debugger"
+  },
+  {
+   "id": "threat.indicator.registry.value",
+   "type": "keyword",
+   "short": "Name of the value written.",
+   "example": "Debugger"
+  },
+  {
+   "id": "user.changes.entity.id",
+   "type": "keyword",
+   "short": "Unique identifier for the entity."
+  },
+  {
+   "id": "user.changes.entity.name",
+   "type": "keyword",
+   "short": "The name of the entity."
+  },
+  {
+   "id": "user.changes.entity.source",
+   "type": "keyword",
+   "short": "Source module or integration that provided the entity data."
+  },
+  {
+   "id": "user.changes.entity.type",
+   "type": "keyword",
+   "short": "Standardized high-level classification of the entity.",
+   "example": "host",
+   "allowed": [
+    "bucket",
+    "database",
+    "container",
+    "function",
+    "queue",
+    "host",
+    "user",
+    "application",
+    "service",
+    "session",
+    "cloud",
+    "orchestrator"
+   ]
+  },
+  {
+   "id": "user.changes.id",
+   "type": "keyword",
+   "short": "Unique identifier of the user.",
+   "example": "S-1-5-21-202424912787-2692429404-2351956786-1000"
+  },
+  {
+   "id": "user.changes.name",
+   "type": "keyword",
+   "short": "Short name or login of the user.",
+   "example": "a.einstein"
+  },
+  {
+   "id": "user.effective.entity.id",
+   "type": "keyword",
+   "short": "Unique identifier for the entity."
+  },
+  {
+   "id": "user.effective.entity.name",
+   "type": "keyword",
+   "short": "The name of the entity."
+  },
+  {
+   "id": "user.effective.entity.source",
+   "type": "keyword",
+   "short": "Source module or integration that provided the entity data."
+  },
+  {
+   "id": "user.effective.entity.type",
+   "type": "keyword",
+   "short": "Standardized high-level classification of the entity.",
+   "example": "host",
+   "allowed": [
+    "bucket",
+    "database",
+    "container",
+    "function",
+    "queue",
+    "host",
+    "user",
+    "application",
+    "service",
+    "session",
+    "cloud",
+    "orchestrator"
+   ]
+  },
+  {
+   "id": "user.effective.id",
+   "type": "keyword",
+   "short": "Unique identifier of the user.",
+   "example": "S-1-5-21-202424912787-2692429404-2351956786-1000"
+  },
+  {
+   "id": "user.effective.name",
+   "type": "keyword",
+   "short": "Short name or login of the user.",
+   "example": "a.einstein"
+  },
+  {
+   "id": "user.entity.id",
+   "type": "keyword",
+   "short": "Unique identifier for the entity."
+  },
+  {
+   "id": "user.entity.name",
+   "type": "keyword",
+   "short": "The name of the entity."
+  },
+  {
+   "id": "user.entity.source",
+   "type": "keyword",
+   "short": "Source module or integration that provided the entity data."
+  },
+  {
+   "id": "user.entity.type",
+   "type": "keyword",
+   "short": "Standardized high-level classification of the entity.",
+   "example": "host",
+   "allowed": [
+    "bucket",
+    "database",
+    "container",
+    "function",
+    "queue",
+    "host",
+    "user",
+    "application",
+    "service",
+    "session",
+    "cloud",
+    "orchestrator"
+   ]
+  },
+  {
+   "id": "user.id",
+   "type": "keyword",
+   "short": "Unique identifier of the user.",
+   "example": "S-1-5-21-202424912787-2692429404-2351956786-1000"
+  },
+  {
+   "id": "user.name",
+   "type": "keyword",
+   "short": "Short name or login of the user.",
+   "example": "a.einstein"
+  },
+  {
+   "id": "user.target.entity.id",
+   "type": "keyword",
+   "short": "Unique identifier for the entity."
+  },
+  {
+   "id": "user.target.entity.name",
+   "type": "keyword",
+   "short": "The name of the entity."
+  },
+  {
+   "id": "user.target.entity.source",
+   "type": "keyword",
+   "short": "Source module or integration that provided the entity data."
+  },
+  {
+   "id": "user.target.entity.type",
+   "type": "keyword",
+   "short": "Standardized high-level classification of the entity.",
+   "example": "host",
+   "allowed": [
+    "bucket",
+    "database",
+    "container",
+    "function",
+    "queue",
+    "host",
+    "user",
+    "application",
+    "service",
+    "session",
+    "cloud",
+    "orchestrator"
+   ]
+  },
+  {
+   "id": "user.target.id",
+   "type": "keyword",
+   "short": "Unique identifier of the user.",
+   "example": "S-1-5-21-202424912787-2692429404-2351956786-1000"
+  },
+  {
+   "id": "user.target.name",
+   "type": "keyword",
+   "short": "Short name or login of the user.",
+   "example": "a.einstein"
+  }
+ ]
+}

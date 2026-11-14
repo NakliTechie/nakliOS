@@ -1,0 +1,619 @@
+<!doctype html>
+<html lang="en">
+<head>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256' fill='%23B5371C'%3E%3Cpath d='M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Z'/%3E%3C/svg%3E" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NakliData — Field Guide</title>
+<style>
+  :root {
+    --bg:#FAF8F3; --surface:#FFFFFF; --surface-alt:#F1ECE3;
+    --border:#D9D2C4; --border-strong:#A9A091;
+    --text:#1F1B16; --muted:#6B6358; --accent:#B5371C;
+    --focus:#436A8A; --success:#2F6E5A;
+    --font:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; --mono:'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; font-family: var(--font); color: var(--text); background: var(--bg); line-height: 1.5; }
+  * { box-sizing: border-box; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px 96px; }
+
+  header.masthead { border-bottom: 1px solid var(--border); background: var(--surface); }
+  .masthead-inner { max-width: 1080px; margin: 0 auto; padding: 28px 24px 22px; }
+  .brand { display: flex; align-items: baseline; gap: 10px; }
+  .brand-mark { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  .brand-mark .accent { color: var(--accent); }
+  .brand-tag { color: var(--muted); font-size: 13px; }
+  .masthead p.lede { margin: 12px 0 0; max-width: 70ch; color: var(--muted); font-size: 14px; }
+
+  .searchbar { position: sticky; top: 0; z-index: 20; background: var(--bg); border-bottom: 1px solid var(--border); }
+  .searchbar-inner { max-width: 1080px; margin: 0 auto; padding: 12px 24px; display: flex; align-items: center; gap: 12px; }
+  #q {
+    flex: 1; font: inherit; font-size: 14px; padding: 10px 14px; border: 1px solid var(--border-strong);
+    border-radius: 8px; background: var(--surface); color: var(--text);
+  }
+  #q:focus { outline: 2px solid var(--focus); outline-offset: 1px; border-color: var(--focus); }
+  .searchbar .hint { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .searchbar kbd {
+    font-family: var(--mono); font-size: 11px; background: var(--surface-alt);
+    border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px;
+  }
+
+  nav.toc { margin: 28px 0 8px; }
+  nav.toc h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 10px; }
+  nav.toc ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+  nav.toc a {
+    display: inline-block; text-decoration: none; color: var(--text); font-size: 13px;
+    padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface);
+  }
+  nav.toc a:hover { border-color: var(--accent); color: var(--accent); }
+
+  .guide-section { margin: 44px 0 0; scroll-margin-top: 68px; }
+  .guide-section h2 { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 8px; padding-bottom: 8px; border-bottom: 2px solid var(--accent); display: inline-block; }
+  .section-intro { max-width: 78ch; color: var(--text); font-size: 14px; margin: 8px 0 22px; }
+
+  .cards { display: grid; grid-template-columns: 1fr; gap: 28px; }
+  .card { margin: 0; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--surface); box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+  .card .shot { display: block; background: var(--surface-alt); border-bottom: 1px solid var(--border); cursor: zoom-in; }
+  .card img { display: block; width: 100%; height: auto; }
+  /* Narrow rail clips: show near native size, centred on the backdrop. */
+  .card.narrow .shot { padding: 28px 16px; text-align: center; }
+  .card.narrow img { width: 340px; max-width: 100%; height: auto; margin: 0 auto; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .card figcaption { padding: 16px 18px 18px; }
+  .card figcaption h3 { margin: 0 0 6px; font-size: 15px; font-weight: 600; }
+  .card figcaption p { margin: 0; color: var(--muted); font-size: 13.5px; }
+
+  .card.hidden { display: none; }
+  .guide-section.hidden { display: none; }
+  #nomatch { display: none; margin: 48px 0; text-align: center; color: var(--muted); font-size: 14px; }
+  #nomatch.show { display: block; }
+
+  footer.foot { margin-top: 64px; padding-top: 20px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; }
+  footer.foot a { color: var(--accent); }
+
+  @media (min-width: 720px) { .card { display: grid; grid-template-columns: 1fr; } }
+
+  /* ── Lightbox ────────────────────────────────────────────────────────── */
+  .lightbox { position: fixed; inset: 0; z-index: 100; display: none; background: rgba(20,18,15,0.90); }
+  .lightbox.open { display: flex; flex-direction: column; }
+  .lb-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 56px 68px 8px; overflow: auto; }
+  .lb-stage img { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; border-radius: 8px; box-shadow: 0 10px 44px rgba(0,0,0,0.5); background: var(--surface); }
+  .lb-cap { padding: 12px 24px 22px; text-align: center; max-width: 82ch; margin: 0 auto; }
+  .lb-cap h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; color: #f4efe6; }
+  .lb-cap p { margin: 0; font-size: 13px; color: #cbc3b4; }
+  .lb-btn { position: fixed; top: 50%; transform: translateY(-50%); width: 46px; height: 46px; border-radius: 50%;
+    background: rgba(255,255,255,0.12); color: #fff; border: 1px solid rgba(255,255,255,0.28); font-size: 26px; line-height: 1;
+    cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .lb-btn:hover { background: rgba(255,255,255,0.24); }
+  .lb-prev { left: 16px; } .lb-next { right: 16px; }
+  .lb-close { position: fixed; top: 16px; right: 18px; width: 40px; height: 40px; border-radius: 50%;
+    background: rgba(255,255,255,0.12); color: #fff; border: 1px solid rgba(255,255,255,0.28); font-size: 18px; cursor: pointer; }
+  .lb-close:hover { background: rgba(255,255,255,0.24); }
+  .lb-counter { position: fixed; top: 22px; left: 22px; color: #cbc3b4; font-family: var(--mono); font-size: 12px; }
+  .lb-hint { position: fixed; bottom: 10px; left: 0; right: 0; text-align: center; color: #9a927f; font-size: 11px; }
+  @media (max-width: 640px) {
+    .wrap { padding-left: 14px; padding-right: 14px; }
+    .masthead-inner, .searchbar-inner { padding-left: 14px; padding-right: 14px; }
+    .searchbar .hint { display: none; }
+    .lb-stage { padding: 52px 12px 8px; }
+    .lb-btn, .lb-close { width: 44px; height: 44px; }
+    .lb-btn { font-size: 22px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead-inner">
+    <div class="brand">
+      <span class="brand-mark"><span class="accent">Nakli</span>Data</span>
+      <span class="brand-tag">field guide</span>
+    </div>
+    <p class="lede">A screen-by-screen tour of the browser-native semantic data workbench — how to bring data in, read the schema, drive the notebook, resolve entities, and use the AI sidecar. Every shot is captured from the running app. Search to jump to any feature; click any screenshot to zoom, then step through with <kbd>←</kbd>/<kbd>→</kbd> (or <kbd>↑</kbd>/<kbd>↓</kbd>).</p>
+  </div>
+</header>
+
+<div class="searchbar">
+  <div class="searchbar-inner">
+    <input id="q" type="search" placeholder="Search features — try “schema”, “override”, “cluster”, “embedding”…" autocomplete="off" aria-label="Search the guide">
+    <span class="hint"><kbd>/</kbd> focus · <kbd>Esc</kbd> clear</span>
+  </div>
+</div>
+
+<div class="wrap">
+  <nav class="toc">
+    <h2>Contents</h2>
+    <ul><li><a href="#getting-started">Getting started — bring your data in</a></li><li><a href="#data-and-schema">Your data &amp; the schema panel</a></li><li><a href="#notebook">The notebook — query, chart, build</a></li><li><a href="#reports">Reports from real datasets</a></li><li><a href="#resolve">Resolve — clean &amp; unify entities</a></li><li><a href="#lineage">Lineage &amp; provenance</a></li><li><a href="#facet">Facet — visual exploration</a></li><li><a href="#ai-sidecar">AI sidecar (bring your own key)</a></li><li><a href="#more-cells">The full cell palette</a></li></ul>
+  </nav>
+
+  
+      <section id="getting-started" class="guide-section">
+        <h2>Getting started — bring your data in</h2>
+        <p class="section-intro">NakliData is a browser-native data workbench: local data and compute stay in this tab by default, with no NakliData account or relay server. Remote sources, OSM tiles, and cloud sidecar actions are explicit. You start with a local folder or file, a public URL, or a remote store. If you just want to look around, use “Try the demo”, which is what every screenshot in this guide is built on.</p>
+        <div class="cards">
+        <figure class="card" data-search="getting started — bring your data in first-run welcome a one-time splash on your first visit — the three steps (bring data in, read the schema, query &amp; build), a jump straight to the example data, and a link to this guide. it never appears again once dismissed. getting-started/00-welcome">
+          <a class="shot" href="screenshots/getting-started/00-welcome.png" target="_blank" rel="noopener">
+            <img width="2800" height="1800" src="screenshots/getting-started/00-welcome.png" alt="First-run welcome">
+          </a>
+          <figcaption>
+            <h3>First-run welcome</h3>
+            <p>A one-time splash on your first visit — the three steps (bring data in, read the schema, query &amp; build), a jump straight to the example data, and a link to this guide. It never appears again once dismissed.</p>
+          </figcaption>
+        </figure>
+        <figure class="card" data-search="getting started — bring your data in the arrival screen — “what do you have?” the first thing a new user sees. sources are grouped by readiness: local files and folders, https and s3-compatible storage, disabled iceberg options, and the advanced bring-your-own compute bridge. “try the demo” loads the deterministic dataset used throughout this guide. getting-started/01-empty-state">
+          <a class="shot" href="screenshots/getting-started/01-empty-state.png" target="_blank" rel="noopener">
+            <img width="2800" height="1800" src="screenshots/getting-started/01-empty-state.png" alt="The arrival screen — “What do you have?”">
+          </a>
+          <figcaption>
+            <h3>The arrival screen — “What do you have?”</h3>
+            <p>The first thing a new user sees. Sources are grouped by readiness: local files and folders, HTTPS and S3-compatible storage, disabled Iceberg options, and the advanced bring-your-own Compute Bridge. “Try the demo” loads the deterministic dataset used throughout this guide.</p>
+          </figcaption>
+        </figure>
+        <figure class="card" data-search="getting started — bring your data in mount a public url paste an https link to a csv or parquet file and naklidata reads it directly in-tab — no download step, no server round-trip. getting-started/02-mount-url">
+          <a class="shot" href="screenshots/getting-started/02-mount-url.png" target="_blank" rel="noopener">
+            <img width="2800" height="1800" src="screenshots/getting-started/02-mount-url.png" alt="Mount a public URL">
+          </a>
+          <figcaption>
+            <h3>Mount a public URL</h3>
+            <p>Paste an HTTPS link to a CSV or Parquet file and NakliData reads it directly in-tab — no download step, no server round-trip.</p>
+          </figcaption>
+        </figure>
+        <figure class="card" data-search="getting started — bring your data in mount an s3-compatible bucket point at object storage by bucket + path. this is an explicit remote connection; access keys stay session-default unless you opt into persistence. getting-started/03-mount-s3">
+          <a class="shot" href="screenshots/getting-started/03-mount-s3.png" target="_blank" rel="noopener">
+            <img width="2800" height="1800" src="screenshots/getting-started/03-mount-s3.png" alt="Mount an S3-compatible bucket">
+          </a>
+          <figcaption>
+            <h3>Mount an S3-compatible bucket</h3>
+            <p>Point at object storage by bucket + path. This is an explicit remote connection; access keys stay session-default unless you opt into persistence.</p>
+          </figcaption>
+        </figure></div>
+      </section>
+      <section id="data-and-schema" class="guide-section">
+        <h2>Your data &amp; the schema panel</h2>
+        <p class="section-intro">Once a source is mounted, the left rail lists your tables and the right rail — the Schema panel — is the heart of NakliData. It classifies every column into a semantic type (Vendor name, GSTIN, PAN, GST state code, bank account no., …) with a confidence score, tags PII / FINANCIAL columns, and lets you accept or override any guess. This is the single most important surface in the app: get the types right and everything downstream (templates, resolve, sinks) follows.</p>
+        <div class="cards">
+        <figure class="card" data-search="your data &amp; the schema panel sources rail after mounting the demo mounts three source groups — smb finance (vendors, invoices, payments), access logs, and product events — each showing its tables and row counts. click the × to unmount. data-and-schema/01-sources-mounted">
+          <a class="shot" href="screenshots/data-and-schema/01-sources-mounted.png" target="_blank" rel="noopener">
+            <img width="2800" height="1800" src="screenshots/data-and-schema/01-sources-mounted.png" alt="Sources rail after mounting">
+          </a>
+          <figcaption>
+            <h3>Sources rail after mounting</h3>
+            <p>The demo mounts three source groups — SMB Finance (vendors, invoices, payments), Access logs, and Product events — each showing its tables and row counts. Click the × to unmount.</p>
+          </figcaption>
+        </figure>
+        <figure class="card narrow" data-search="your data &amp; the schema panel the schema panel — classified columns each column gets a semantic type + confidence % (e.g. gstin 100%, vendor name 90%), a pii / financial sensitivity tag, and accept / override / quick-chart / evidence / profile actions. the auto-accept threshold slider + “bulk accept” apply high-confidence guesses in one go. data-and-schema/02-schema-panel">
+          <a class="shot" href="screenshots/data-and-schema/02-schema-panel.png" target="_blank" rel="noopener">
+            <img width="640" height="1656" src="screenshots/data-and-schema/02-schema-panel.png" alt="The Schema panel — classified columns">
+          </a>
+          <figcaption>
+            <h3>The Schema panel — classified columns</h3>
+            <p>Each column gets a semantic type + confidence % (e.g. GSTIN 100%, Vendor name 90%), a PII / FINANCIAL sensitivity tag, and Accept / Override / Quick-chart / Evidence / Profile actions. The auto-accept threshold slider + “Bulk accept” apply high-confidence guesses in one go.</p>
+          </figcaption>
+        </figure>
+        <figure class="card narrow" data-search="your data &amp; the schema panel overriding a column’s type click override to open the type picker — filter by name and choose from compatible types (gstin, pan, hsn/sac code, ifsc, gst state code, …). an override is remembered and marks the column as user-set, not machine-guessed. data-and-schema/03-type-override">
+          <a class="shot" href="screenshots/data-and-schema/03-type-override.png" target="_blank" rel="noopener">
+            <img width="752" height="1656" src="screenshots/data-and-schema/03-type-override.png" alt="Overriding a column’s type">
+          </a>
+          <figcaption>
+            <h3>Overriding a column’s type</h3>
+            <p>Click Override to open the type picker — filter by name and choose from Compatible Types (GSTIN, PAN, HSN/SAC code, IFSC, GST state code, …). An override is remembered and marks the column as user-set, not machine-guessed.</p>
+          </figcaption>
+        </figure></div>
+      </section>
+      <section id="notebook" class="guide-section">
+        <h2>The notebook — query, chart, build</h2>
+        <p class="section-intro">The centre column is a notebook of cells. Suggested reports (right rail) are one-click templates matched to your columns; adding one drops in Markdown + SQL + chart cells you can run and edit. SQL runs locally in DuckDB-wasm — nothing is auto-executed until you press Run. The add-cell row gives you every cell kind the workbench offers.</p>
+        <div class="cards">
+        <figure class="card" data-search="the notebook — query, chart, build suggested reports (templates) the right rail matches ready-made reports to your columns — ar aging, vendor concentration, gstin spend by state, dau, funnels. “matched columns” shows why each was suggested; “+ add” drops its cells into the notebook. notebook/01-templates">
+          <a class="shot" href="screenshots/notebook/01-templates.png" target="_blank" rel="noopener">
+            <img width="2800" height="1800" src="screenshots/notebook/01-templates.png" alt="Suggested reports (templates)">
+          </a>
+          <figcaption>
+            <h3>Suggested reports (templates)</h3>
+            <p>The right rail matches ready-made reports to your columns — AR aging, Vendor concentration, GSTIN spend by state, DAU, funnels. “Matched columns” shows why each was suggested; “+ Add” drops its cells into the notebook.</p>
+          </figcaption>
+        </figure>
+        <figure class="card" data-search="the notebook — query, chart, build a sql cell and its result templates expand into real, editable sql running in duckdb-wasm. here “vendor concentration” sums taxable_amount per vendor; the result table renders inline directly below the query. notebook/02-sql-cell-result">
+          <a class="shot" href="screenshots/notebook/02-sql-cell-result.png" target="_blank" rel="noopener">
+            <img width="2800" height="1800" src="screenshots/notebook/02-sql-cell-result.png" alt="A SQL cell and its result">
+          </a>
+          <figcaption>
+            <h3>A SQL cell and its result</h3>
+            <p>Templates expand into real, editable SQL running in DuckDB-wasm. Here “Vendor concentration” sums taxable_amount per vendor; the result table renders inline directly below the query.</p>
+          </figcaption>
+        </figure>
+        <figure class="card" data-search="the notebook — query, chart, build export to excel — fresh or template-led a result can become a fresh local workbook with a frozen header, named table, filters, and semantic formats. or choose a local .xlsx template, select one named table, inspect column differences, and explicitly proceed if renamed columns could affect structured formulas, charts, pivots, or slicers. notebook/05-excel-export">
+          <a class="shot" href="screenshots/notebook/05-excel-export.png" target="_blank" rel="noopener">
+            <img width="2800" height="1800" src="screenshots/notebook/05-excel-export.png" alt="Export to Excel — fresh or template-led">
+          </a>
+          <figcaption>
+            <h3>Export to Excel — fresh or template-led</h3>
+            <p>A result can become a fresh local workbook with a frozen header, named table, filters, and semantic formats. Or choose a local .xlsx template, select one named table, inspect column differences, and explicitly proceed if renamed columns could affect structured formulas, charts, pivots, or slicers.</p>
+          </figcaption>
+        </figure>
+        <figure class="card" data-search="the notebook — query, chart, build a chart cell chart cells bind to a named sql result and render locally. pick the mark (bar/line/…) and the x / y shelves; the palette is naklidata’s brickwork categorical colours. notebook/03-chart-cell">
+          <a class="shot" href="screenshots/notebook/03-chart-cell.png" target="_blank" rel="noopener">
+            <img width="2800" height="1800" src="screenshots/notebook/03-chart-cell.png" alt="A chart cell">
+          </a>
+          <figcaption>
+            <h3>A chart cell</h3>
+            <p>Chart cells bind to a named SQL result and render locally. Pick the mark (bar/line/…) and the x / y shelves; the palette is NakliData’s Brickwork categorical colours.</p>
+          </figcaption>
+        </figure>
+        <figure class="card" data-search="the notebook — query, chart, build the add-cell palette every cell kind at a glance: sql, markdown, chart, pivot, map, embedding, cohort, assertion, input, dashboard, stats, and report. notebook/04-add-cell-row">
+          <a class="shot" href="screenshots/notebook/04-add-cell-row.png" target="_blank" rel="noopener">
+            <img width="2800" height="1800" src="screenshots/notebook/04-add-cell-row.png" alt="The add-cell palette">
+          </a>
+          <figcaption>
+            <h3>The add-cell palette</h3>
+            <p>Every cell kind at a glance: SQL, Markdown, Chart, Pivot, Map, Embedding, Cohort, Assertion, Input, Dashboard, Stats, and Report.</p>
+          </figcaption>
+        </figure></div>
+      </section>
+      <section id="reports" class="guide-section">
+        <h2>Reports from real datasets</h2>
+        <p class="section-intro">The workbench earns its keep on real management data. Below are three board-ready cuts a junior analyst can produce in seconds — each mounted the way you would (“+ Add source” → Add file) from a different format: a Superstore orders CSV, Microsoft’s Financial Sample workbook (XLSX), and the Chinook business database (SQLite). Mount → the schema panel types the columns → one GROUP BY → a result you can chart, export, or drop into a report cell. SQLite is read in-browser via sql.js, so a whole .sqlite file becomes queryable tables with no server.</p>
+        <div class="cards">
+        <figure class="card" data-search="reports from real datasets superstore (csv) — profit &amp; margin by region a superstore orders csv mounted as one table, then aggregated: sales, profit, and profit-margin % per region, worst margin last. the classic exec cut — revenue is not profit — straight out of a raw csv. reports/01-superstore-region-margin">
+          <a class="shot" href="screenshots/reports/01-superstore-region-margin.png" target="_blank" rel="noopener">
+            <img width="1552" height="652" src="screenshots/reports/01-superstore-region-margin.png" alt="Superstore (CSV) — profit &amp; margin by region">
+          </a>
+          <figcaption>
+            <h3>Superstore (CSV) — profit &amp; margin by region</h3>
+            <p>A Superstore orders CSV mounted as one table, then aggregated: sales, profit, and profit-margin % per region, worst margin last. The classic exec cut — revenue is not profit — straight out of a raw CSV.</p>
+          </figcaption>
+        </figure>
+        <figure class="card" data-search="reports from real datasets financial sample (xlsx) — profit &amp; margin by segment microsoft’s financial sample workbook, parsed in-tab (sheetjs → the csv path). the same report shape over a spreadsheet: profit and margin by business segment, so a loss-making segment jumps out at a glance. reports/02-financial-segment-margin">
+          <a class="shot" href="screenshots/reports/02-financial-segment-margin.png" target="_blank" rel="noopener">
+            <img width="1552" height="706" src="screenshots/reports/02-financial-segment-margin.png" alt="Financial Sample (XLSX) — profit &amp; margin by segment">
+          </a>
+          <figcaption>
+            <h3>Financial Sample (XLSX) — profit &amp; margin by segment</h3>
+            <p>Microsoft’s Financial Sample workbook, parsed in-tab (SheetJS → the CSV path). The same report shape over a spreadsheet: profit and margin by business segment, so a loss-making segment jumps out at a glance.</p>
+          </figcaption>
+        </figure>
+        <figure class="card" data-search="reports from real datasets chinook (sqlite) — revenue by country the canonical chinook sqlite database, read in-browser via sql.js (duckdb-wasm can’t open a registered sqlite file), then a revenue-by-country ranking over its invoice table. a whole .sqlite file becomes queryable tables — no server, no conversion. reports/03-chinook-revenue-country">
+          <a class="shot" href="screenshots/reports/03-chinook-revenue-country.png" target="_blank" rel="noopener">
+            <img width="1552" height="868" src="screenshots/reports/03-chinook-revenue-country.png" alt="Chinook (SQLite) — revenue by country">
+          </a>
+          <figcaption>
+            <h3>Chinook (SQLite) — revenue by country</h3>
+            <p>The canonical Chinook SQLite database, read in-browser via sql.js (DuckDB-wasm can’t open a registered SQLite file), then a revenue-by-country ranking over its Invoice table. A whole .sqlite file becomes queryable tables — no server, no conversion.</p>
+          </figcaption>
+        </figure></div>
+      </section>
+      <section id="resolve" class="guide-section">
+        <h2>Resolve — clean &amp; unify entities</h2>
+        <p class="section-intro">Resolve is NakliData’s entity-resolution toolkit for messy real-world data: cluster near-duplicate values (fuzzy merge), define reusable measures / dimensions / segments in the Semantic layer, and export a golden table that collapses to one row per canonical entity with survivorship rules. None of these mutate your source — they emit SQL you can read before running.</p>
+        <div class="cards">
+        <figure class="card" data-search="resolve — clean &amp; unify entities cluster (fuzzy merge) from any sql result, “cluster” groups near-duplicate values (e.g. vendor-name spelling variants) and emits a case expression aliased …__merged. you choose the column and the match method; the sql preview updates live and is never auto-run. resolve/01-cluster-modal">
+          <a class="shot" href="screenshots/resolve/01-cluster-modal.png" target="_blank" rel="noopener">
+            <img width="2800" height="1800" src="screenshots/resolve/01-cluster-modal.png" alt="Cluster (fuzzy merge)">
+          </a>
+          <figcaption>
+            <h3>Cluster (fuzzy merge)</h3>
+            <p>From any SQL result, “Cluster” groups near-duplicate values (e.g. vendor-name spelling variants) and emits a CASE expression aliased …__merged. You choose the column and the match method; the SQL preview updates live and is never auto-run.</p>
+          </figcaption>
+        </figure>
+        <figure class="card" data-search="resolve — clean &amp; unify entities the semantic layer define reusable measures, dimensions, and segments once and reference them across cells. segments compile to a segment(name) macro; the add-forms let you build each without hand-writing the sql. resolve/02-semantic-panel">
+          <a class="shot" href="screenshots/resolve/02-semantic-panel.png" target="_blank" rel="noopener">
+            <img width="2800" height="1800" src="screenshots/resolve/02-semantic-panel.png" alt="The Semantic layer">
+          </a>
+          <figcaption>
+            <h3>The Semantic layer</h3>
+            <p>Define reusable measures, dimensions, and segments once and reference them across cells. Segments compile to a SEGMENT(name) macro; the add-forms let you build each without hand-writing the SQL.</p>
+          </figcaption>
+        </figure>
+        <figure class="card" data-search="resolve — clean &amp; unify entities golden-table export collapse a result to one row per canonical entity with survivorship rules (which value wins per column). pick the entity key; the modal shows the group by survivorship sql it will generate before you export. resolve/03-golden-table">
+          <a class="shot" href="screenshots/resolve/03-golden-table.png" target="_blank" rel="noopener">
+            <img width="2800" height="1800" src="screenshots/resolve/03-golden-table.png" alt="Golden-table export">
+          </a>
+          <figcaption>
+            <h3>Golden-table export</h3>
+            <p>Collapse a result to one row per canonical entity with survivorship rules (which value wins per column). Pick the entity key; the modal shows the GROUP BY survivorship SQL it will generate before you export.</p>
+          </figcaption>
+        </figure></div>
+      </section>
+      <section id="lineage" class="guide-section">
+        <h2>Lineage &amp; provenance</h2>
+        <p class="section-intro">Every cell records where its data came from. The Lineage panel shows the source→cell graph — which mounted tables feed which cells — so you can trace any result back to the files it was built from.</p>
+        <div class="cards">
+        <figure class="card" data-search="lineage &amp; provenance the lineage panel the provenance graph for the notebook: it shows which mounted sources (invoices, vendors, …) feed which cells, so any result is traceable back to its inputs. lineage/01-lineage-panel">
+          <a class="shot" href="screenshots/lineage/01-lineage-panel.png" target="_blank" rel="noopener">
+            <img width="2800" height="1800" src="screenshots/lineage/01-lineage-panel.png" alt="The Lineage panel">
+          </a>
+          <figcaption>
+            <h3>The Lineage panel</h3>
+            <p>The provenance graph for the notebook: it shows which mounted sources (invoices, vendors, …) feed which cells, so any result is traceable back to its inputs.</p>
+          </figcaption>
+        </figure></div>
+      </section>
+      <section id="facet" class="guide-section">
+        <h2>Facet — visual exploration</h2>
+        <p class="section-intro">Facet turns a query result into a visual view — pick a cell kind, point it at a SQL cell, choose the columns, and the view renders in-tab. One data shape, many views: an embedding column becomes a semantic map, an edge list becomes a force graph, a date column becomes a timeline. The Temporal and Distribution views (SVG) are shown fully rendered below. The Embedding and Network views draw with deck.gl (WebGL) and render live in your browser — the shots below show each one configured (input + columns picked), with the live scatter / graph painting into the canvas beneath the controls.</p>
+        <div class="cards">
+        <figure class="card" data-search="facet — visual exploration embedding map — semantic scatter the embedding cell configured against a sql result with an embedding (float[]) column — it projects the vectors to 2-d with in-browser pca, colouring points by a category, and the deck.gl scatter paints into the canvas below the picker. click a point in the live view to find its nearest neighbours; precomputed x / y columns are used directly when present. facet/01-embedding-map">
+          <a class="shot" href="screenshots/facet/01-embedding-map.png" target="_blank" rel="noopener">
+            <img width="2800" height="1800" src="screenshots/facet/01-embedding-map.png" alt="Embedding map — semantic scatter">
+          </a>
+          <figcaption>
+            <h3>Embedding map — semantic scatter</h3>
+            <p>The Embedding cell configured against a SQL result with an embedding (FLOAT[]) column — it projects the vectors to 2-D with in-browser PCA, colouring points by a category, and the deck.gl scatter paints into the canvas below the picker. Click a point in the live view to find its nearest neighbours; precomputed x / y columns are used directly when present.</p>
+          </figcaption>
+        </figure>
+        <figure class="card" data-search="facet — visual exploration network — force-directed graph the network cell configured from an edge list (a source-id and target-id column): distinct ids become nodes sized by degree, laid out by an in-browser force simulation and drawn with deck.gl in the canvas below. click a node in the live view to highlight its immediate neighbourhood. facet/02-network-graph">
+          <a class="shot" href="screenshots/facet/02-network-graph.png" target="_blank" rel="noopener">
+            <img width="2800" height="1800" src="screenshots/facet/02-network-graph.png" alt="Network — force-directed graph">
+          </a>
+          <figcaption>
+            <h3>Network — force-directed graph</h3>
+            <p>The Network cell configured from an edge list (a source-id and target-id column): distinct ids become nodes sized by degree, laid out by an in-browser force simulation and drawn with deck.gl in the canvas below. Click a node in the live view to highlight its immediate neighbourhood.</p>
+          </figcaption>
+        </figure>
+        <figure class="card" data-search="facet — visual exploration knowledge graph — typed &amp; weighted edges the same network cell with an edge-type column set to colour edges by relationship (with a legend — click a swatch to filter to that type) and a weight column to scale edge width — a typed, weighted knowledge graph. facet/03-knowledge-graph">
+          <a class="shot" href="screenshots/facet/03-knowledge-graph.png" target="_blank" rel="noopener">
+            <img width="2800" height="1800" src="screenshots/facet/03-knowledge-graph.png" alt="Knowledge graph — typed &amp; weighted edges">
+          </a>
+          <figcaption>
+            <h3>Knowledge graph — typed &amp; weighted edges</h3>
+            <p>The same Network cell with an edge-type column set to colour edges by relationship (with a legend — click a swatch to filter to that type) and a weight column to scale edge width — a typed, weighted knowledge graph.</p>
+          </figcaption>
+        </figure>
+        <figure class="card" data-search="facet — visual exploration temporal — brushable timeline a date / timestamp column bucketed into a histogram over time. drag across the timeline to brush a window; the readout reports the selected range and the number of rows inside it. facet/04-temporal-timeline">
+          <a class="shot" href="screenshots/facet/04-temporal-timeline.png" target="_blank" rel="noopener">
+            <img width="2800" height="1800" src="screenshots/facet/04-temporal-timeline.png" alt="Temporal — brushable timeline">
+          </a>
+          <figcaption>
+            <h3>Temporal — brushable timeline</h3>
+            <p>A date / timestamp column bucketed into a histogram over time. Drag across the timeline to brush a window; the readout reports the selected range and the number of rows inside it.</p>
+          </figcaption>
+        </figure>
+        <figure class="card" data-search="facet — visual exploration distribution — histogram &amp; category bars summarize one column: numeric columns become an equal-width histogram, categorical columns become top-value bars. click a bar to select it and read its share of rows. facet/05-distribution">
+          <a class="shot" href="screenshots/facet/05-distribution.png" target="_blank" rel="noopener">
+            <img width="2800" height="1800" src="screenshots/facet/05-distribution.png" alt="Distribution — histogram &amp; category bars">
+          </a>
+          <figcaption>
+            <h3>Distribution — histogram &amp; category bars</h3>
+            <p>Summarize one column: numeric columns become an equal-width histogram, categorical columns become top-value bars. Click a bar to select it and read its share of rows.</p>
+          </figcaption>
+        </figure></div>
+      </section>
+      <section id="ai-sidecar" class="guide-section">
+        <h2>AI sidecar (bring your own key)</h2>
+        <p class="section-intro">The optional AI sidecar proposes SQL, column types, and charts using your own API key (BYOK). Enable it in Settings. Keys default to the current session; persistence is optional. Generated SQL waits for review unless you explicitly start a bounded SQL task for this session. Each task permits at most ten attempts and shows every statement in its audit trail.</p>
+        <div class="cards">
+        <figure class="card" data-search="ai sidecar (bring your own key) settings — enable the sidecar (byok) the ai sidecar is opt-in. toggle it on and paste your own provider key (anthropic / openai). keys are held in session storage only and there is no telemetry — this is bring-your-own-key by design. ai-sidecar/01-settings-byok">
+          <a class="shot" href="screenshots/ai-sidecar/01-settings-byok.png" target="_blank" rel="noopener">
+            <img width="2800" height="1800" src="screenshots/ai-sidecar/01-settings-byok.png" alt="Settings — enable the sidecar (BYOK)">
+          </a>
+          <figcaption>
+            <h3>Settings — enable the sidecar (BYOK)</h3>
+            <p>The AI sidecar is opt-in. Toggle it on and paste your own provider key (Anthropic / OpenAI). Keys are held in session storage only and there is no telemetry — this is bring-your-own-key by design.</p>
+          </figcaption>
+        </figure>
+        <figure class="card" data-search="ai sidecar (bring your own key) ai chips on a result with the sidecar enabled, each sql result grows summarise (one-line observation) and propose chart chips. they describe or suggest — they never mutate data or auto-run sql. ai-sidecar/02-result-ai-chips">
+          <a class="shot" href="screenshots/ai-sidecar/02-result-ai-chips.png" target="_blank" rel="noopener">
+            <img width="2800" height="1800" src="screenshots/ai-sidecar/02-result-ai-chips.png" alt="AI chips on a result">
+          </a>
+          <figcaption>
+            <h3>AI chips on a result</h3>
+            <p>With the sidecar enabled, each SQL result grows Summarise (one-line observation) and Propose chart chips. They describe or suggest — they never mutate data or auto-run SQL.</p>
+          </figcaption>
+        </figure>
+        <figure class="card" data-search="ai sidecar (bring your own key) ask in plain english (nl→sql) type a question in plain language and the sidecar drafts a sql cell for it. the draft is inserted, not executed — you review it and press run yourself. ai-sidecar/03-nl-to-sql">
+          <a class="shot" href="screenshots/ai-sidecar/03-nl-to-sql.png" target="_blank" rel="noopener">
+            <img width="2800" height="1800" src="screenshots/ai-sidecar/03-nl-to-sql.png" alt="Ask in plain English (NL→SQL)">
+          </a>
+          <figcaption>
+            <h3>Ask in plain English (NL→SQL)</h3>
+            <p>Type a question in plain language and the sidecar drafts a SQL cell for it. The draft is inserted, not executed — you review it and press Run yourself.</p>
+          </figcaption>
+        </figure></div>
+      </section>
+      <section id="more-cells" class="guide-section">
+        <h2>The full cell palette</h2>
+        <p class="section-intro">Beyond SQL and charts, the notebook offers cells for parameterising, dashboarding, validating, and reporting on your data. Each renders inline and runs locally.</p>
+        <div class="cards">
+        <figure class="card" data-search="the full cell palette input cell a named parameter widget (text / number / select) other cells can reference — turn a notebook into a small interactive tool without editing sql each time. more-cells/01-input-cell">
+          <a class="shot" href="screenshots/more-cells/01-input-cell.png" target="_blank" rel="noopener">
+            <img width="2800" height="1800" src="screenshots/more-cells/01-input-cell.png" alt="Input cell">
+          </a>
+          <figcaption>
+            <h3>Input cell</h3>
+            <p>A named parameter widget (text / number / select) other cells can reference — turn a notebook into a small interactive tool without editing SQL each time.</p>
+          </figcaption>
+        </figure>
+        <figure class="card" data-search="the full cell palette dashboard cell compose a grid of existing chart/result cells by name into a single dashboard view for presenting or exporting. more-cells/02-dashboard-cell">
+          <a class="shot" href="screenshots/more-cells/02-dashboard-cell.png" target="_blank" rel="noopener">
+            <img width="2800" height="1800" src="screenshots/more-cells/02-dashboard-cell.png" alt="Dashboard cell">
+          </a>
+          <figcaption>
+            <h3>Dashboard cell</h3>
+            <p>Compose a grid of existing chart/result cells by name into a single dashboard view for presenting or exporting.</p>
+          </figcaption>
+        </figure>
+        <figure class="card" data-search="the full cell palette stats cell run descriptive statistics over a result — distributions and summaries — with a single run, rendered inline. more-cells/03-stats-cell">
+          <a class="shot" href="screenshots/more-cells/03-stats-cell.png" target="_blank" rel="noopener">
+            <img width="2800" height="1800" src="screenshots/more-cells/03-stats-cell.png" alt="Stats cell">
+          </a>
+          <figcaption>
+            <h3>Stats cell</h3>
+            <p>Run descriptive statistics over a result — distributions and summaries — with a single Run, rendered inline.</p>
+          </figcaption>
+        </figure>
+        <figure class="card" data-search="the full cell palette report cell a print-ready “paper” surface that assembles notebook output into a document, with print-to-pdf for sharing offline. more-cells/04-report-cell">
+          <a class="shot" href="screenshots/more-cells/04-report-cell.png" target="_blank" rel="noopener">
+            <img width="2800" height="1800" src="screenshots/more-cells/04-report-cell.png" alt="Report cell">
+          </a>
+          <figcaption>
+            <h3>Report cell</h3>
+            <p>A print-ready “paper” surface that assembles notebook output into a document, with Print-to-PDF for sharing offline.</p>
+          </figcaption>
+        </figure>
+        <figure class="card" data-search="the full cell palette assertion cell data-quality checks that pass or fail against a result (e.g. “no null vendor”, “amounts ≥ 0”) — a lightweight test you can keep in the notebook. more-cells/05-assertion-cell">
+          <a class="shot" href="screenshots/more-cells/05-assertion-cell.png" target="_blank" rel="noopener">
+            <img width="2800" height="1800" src="screenshots/more-cells/05-assertion-cell.png" alt="Assertion cell">
+          </a>
+          <figcaption>
+            <h3>Assertion cell</h3>
+            <p>Data-quality checks that pass or fail against a result (e.g. “no null vendor”, “amounts ≥ 0”) — a lightweight test you can keep in the notebook.</p>
+          </figcaption>
+        </figure>
+        <figure class="card" data-search="the full cell palette cohort cell build cohort / retention style breakdowns from an event stream, grouping rows into buckets over time. more-cells/06-cohort-cell">
+          <a class="shot" href="screenshots/more-cells/06-cohort-cell.png" target="_blank" rel="noopener">
+            <img width="2800" height="1800" src="screenshots/more-cells/06-cohort-cell.png" alt="Cohort cell">
+          </a>
+          <figcaption>
+            <h3>Cohort cell</h3>
+            <p>Build cohort / retention style breakdowns from an event stream, grouping rows into buckets over time.</p>
+          </figcaption>
+        </figure></div>
+      </section>
+
+  <p id="nomatch">No features match that search.</p>
+
+  <div class="lightbox" id="lightbox" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Screenshot viewer">
+    <span class="lb-counter" id="lb-counter"></span>
+    <button class="lb-close" id="lb-close" type="button" aria-label="Close (Esc)">✕</button>
+    <button class="lb-btn lb-prev" id="lb-prev" type="button" aria-label="Previous (Left arrow)">‹</button>
+    <div class="lb-stage" id="lb-stage"><img id="lb-img" src="" alt=""></div>
+    <button class="lb-btn lb-next" id="lb-next" type="button" aria-label="Next (Right arrow)">›</button>
+    <div class="lb-cap"><h3 id="lb-title"></h3><p id="lb-desc"></p></div>
+    <div class="lb-hint">← → or ↑ ↓ to move · Esc to close</div>
+  </div>
+
+  <footer class="foot">
+    <a href="../">Open NakliData</a> · 33 screens · generated from <code>guide/capture.mjs</code> + <code>guide/build.mjs</code> · this is a build artifact — edit the generator and re-run, don’t hand-edit this file.
+  </footer>
+</div>
+
+<script>
+(function () {
+  var q = document.getElementById('q');
+  var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));
+  var sections = Array.prototype.slice.call(document.querySelectorAll('.guide-section'));
+  var noMatch = document.getElementById('nomatch');
+
+  function apply() {
+    var query = q.value.trim().toLowerCase();
+    var anyVisible = false;
+    cards.forEach(function (c) {
+      var show = !query || (c.getAttribute('data-search') || '').indexOf(query) !== -1;
+      c.classList.toggle('hidden', !show);
+      if (show) anyVisible = true;
+    });
+    sections.forEach(function (s) {
+      var visible = s.querySelectorAll('.card:not(.hidden)').length > 0;
+      s.classList.toggle('hidden', !visible);
+    });
+    noMatch.classList.toggle('show', !anyVisible);
+  }
+
+  q.addEventListener('input', apply);
+  document.addEventListener('keydown', function (e) {
+    if (LB.isOpen()) return; // lightbox owns the keyboard while open
+    if (e.key === '/' && document.activeElement !== q) { e.preventDefault(); q.focus(); }
+    else if (e.key === 'Escape' && document.activeElement === q) { q.value = ''; apply(); q.blur(); }
+  });
+})();
+
+// ── Lightbox: click a shot to zoom; arrow keys step through visible shots. ──
+var LB = (function () {
+  var lb = document.getElementById('lightbox');
+  var img = document.getElementById('lb-img');
+  var titleEl = document.getElementById('lb-title');
+  var descEl = document.getElementById('lb-desc');
+  var counter = document.getElementById('lb-counter');
+  var stage = document.getElementById('lb-stage');
+  var current = -1;
+  var openScrollY = 0;
+  var touchStart = null;
+
+  function visibleCards() {
+    return Array.prototype.slice
+      .call(document.querySelectorAll('.card'))
+      .filter(function (c) { return !c.classList.contains('hidden'); });
+  }
+  function render(idx) {
+    var cards = visibleCards();
+    if (!cards.length) return;
+    idx = (idx + cards.length) % cards.length; // wrap both ends
+    current = idx;
+    var card = cards[idx];
+    var cImg = card.querySelector('.shot img');
+    var h3 = card.querySelector('figcaption h3');
+    var p = card.querySelector('figcaption p');
+    img.setAttribute('src', cImg ? cImg.getAttribute('src') : '');
+    img.setAttribute('alt', h3 ? h3.textContent : '');
+    titleEl.textContent = h3 ? h3.textContent : '';
+    descEl.textContent = p ? p.textContent : '';
+    var sectionTitle = card.closest('.guide-section')?.querySelector('h2')?.textContent || 'Feature';
+    counter.textContent = sectionTitle + ' — ' + (idx + 1) + ' / ' + cards.length;
+    stage.scrollTop = 0;
+  }
+  function open(card) {
+    var cards = visibleCards();
+    var idx = cards.indexOf(card);
+    openScrollY = window.scrollY;
+    render(idx === -1 ? 0 : idx);
+    lb.classList.add('open');
+    lb.setAttribute('aria-hidden', 'false');
+  }
+  function close() {
+    lb.classList.remove('open');
+    lb.setAttribute('aria-hidden', 'true');
+    current = -1;
+    window.scrollTo(0, openScrollY);
+  }
+  function step(delta) { if (current !== -1) render(current + delta); }
+  function jumpSection(delta) {
+    var cards = visibleCards();
+    var currentCard = cards[current];
+    if (!currentCard) return;
+    var sections = Array.prototype.slice
+      .call(document.querySelectorAll('.guide-section'))
+      .filter(function (section) { return !section.classList.contains('hidden'); });
+    var sectionIndex = sections.indexOf(currentCard.closest('.guide-section'));
+    if (sectionIndex === -1 || !sections.length) return;
+    var targetSection = sections[(sectionIndex + delta + sections.length) % sections.length];
+    var targetCard = targetSection.querySelector('.card:not(.hidden)');
+    render(cards.indexOf(targetCard));
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll('.card .shot'), function (a) {
+    a.addEventListener('click', function (e) { e.preventDefault(); open(a.closest('.card')); });
+  });
+  document.getElementById('lb-close').addEventListener('click', close);
+  document.getElementById('lb-prev').addEventListener('click', function () { step(-1); });
+  document.getElementById('lb-next').addEventListener('click', function () { step(1); });
+  lb.addEventListener('click', function (e) {
+    // Backdrop / empty stage click closes; clicking the image or a button does not.
+    if (e.target === lb || e.target === stage) close();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (!lb.classList.contains('open')) return;
+    if (e.key === 'Escape') { e.preventDefault(); close(); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); step(-1); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); step(1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); jumpSection(-1); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); jumpSection(1); }
+  });
+  stage.addEventListener('touchstart', function (e) {
+    if (e.touches.length !== 1) { touchStart = null; return; }
+    touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  }, { passive: true });
+  stage.addEventListener('touchend', function (e) {
+    if (!touchStart || e.changedTouches.length !== 1) return;
+    var dx = e.changedTouches[0].clientX - touchStart.x;
+    var dy = e.changedTouches[0].clientY - touchStart.y;
+    touchStart = null;
+    if (Math.abs(dx) < 48 && Math.abs(dy) < 64) return;
+    if (Math.abs(dx) > Math.abs(dy)) step(dx < 0 ? 1 : -1);
+    else if (dy > 0) close();
+  }, { passive: true });
+
+  return { isOpen: function () { return lb.classList.contains('open'); } };
+})();
+</script>
+</body>
+</html>

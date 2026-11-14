@@ -1,0 +1,14 @@
+{
+  "domain": "agriculture",
+  "label": "Agriculture and food systems",
+  "types": [
+    "farm_id",
+    "crop_type",
+    "yield_amount",
+    "acreage",
+    "market_price"
+  ],
+  "report_templates": [
+    "agri_yield"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "domain": "research",
+  "label": "Research and scholarly",
+  "types": [
+    "paper_id",
+    "paper_title",
+    "publication_year",
+    "citation_count",
+    "venue_name"
+  ],
+  "report_templates": [
+    "research_output"
+  ]
+}

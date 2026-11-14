@@ -1,0 +1,442 @@
+{
+  "relationships": [
+    {
+      "from": "gstin",
+      "to": "vendor_name",
+      "kind": "identifies"
+    },
+    {
+      "from": "gstin",
+      "to": "gst_state_code",
+      "kind": "embeds",
+      "note": "First 2 chars of GSTIN are the state code."
+    },
+    {
+      "from": "pan",
+      "to": "vendor_name",
+      "kind": "identifies"
+    },
+    {
+      "from": "hsn_code",
+      "to": "gst_rate",
+      "kind": "implies"
+    },
+    {
+      "from": "ifsc",
+      "to": "indian_bank_account",
+      "kind": "pairs_with"
+    },
+    {
+      "from": "request_id",
+      "to": "service_name",
+      "kind": "scopes"
+    },
+    {
+      "from": "iso_datetime",
+      "to": "duration_ms",
+      "kind": "contextualizes"
+    },
+    {
+      "from": "user_id",
+      "to": "event_name",
+      "kind": "performs",
+      "note": "Each event row has a user_id and an event_name."
+    },
+    {
+      "from": "session_id",
+      "to": "user_id",
+      "kind": "scopes"
+    },
+    {
+      "from": "user_id",
+      "to": "session_id",
+      "kind": "pairs_with"
+    },
+    {
+      "from": "event_name",
+      "to": "iso_datetime",
+      "kind": "contextualizes"
+    },
+    {
+      "from": "event_name",
+      "to": "event_properties_json",
+      "kind": "embeds"
+    },
+    {
+      "from": "utm_source",
+      "to": "utm_medium",
+      "kind": "pairs_with"
+    },
+    {
+      "from": "utm_medium",
+      "to": "utm_campaign",
+      "kind": "pairs_with"
+    },
+    {
+      "from": "gstin",
+      "to": "pan",
+      "kind": "confusable_with",
+      "note": "PAN is 10 chars (AAAAA9999A); GSTIN is 15 and embeds a PAN at positions 3-12. Length + gstin_checksum separate them."
+    },
+    {
+      "from": "gstin",
+      "to": "cin",
+      "kind": "confusable_with",
+      "note": "CIN is 21 chars starting with L/U; GSTIN is 15 starting with a 2-digit state code."
+    },
+    {
+      "from": "pan",
+      "to": "cin",
+      "kind": "confusable_with",
+      "note": "CIN is 21 chars starting with L/U; PAN is 10 chars ending in a letter."
+    },
+    {
+      "from": "pan",
+      "to": "udyam_id",
+      "kind": "confusable_with",
+      "note": "Udyam is UDYAM-XX-00-0000000; PAN is 10 alphanumerics."
+    },
+    {
+      "from": "ifsc",
+      "to": "swift_bic",
+      "kind": "confusable_with",
+      "note": "IFSC is 11 chars with 0 at position 5 (e.g. HDFC0001234); SWIFT/BIC is 8 or 11 chars with a 2-letter ISO country at 5-6."
+    },
+    {
+      "from": "indian_bank_account",
+      "to": "iban",
+      "kind": "confusable_with",
+      "note": "IBAN starts with a 2-letter country code + 2 check digits and passes mod-97; Indian account numbers are all digits."
+    },
+    {
+      "from": "iban",
+      "to": "crypto_wallet_address",
+      "kind": "confusable_with",
+      "note": "IBAN passes mod-97 and starts with a country code; wallet addresses are base58/hex and 26-62 chars."
+    },
+    {
+      "from": "hsn_code",
+      "to": "sac_code",
+      "kind": "confusable_with",
+      "note": "SAC codes are 6 digits starting with 99; HSN chapters run 01-98."
+    },
+    {
+      "from": "gst_state_code",
+      "to": "postal_code",
+      "kind": "confusable_with",
+      "note": "GST state codes are 2 digits 01-38; PIN codes are 6 digits."
+    },
+    {
+      "from": "gst_state_code",
+      "to": "pin_code",
+      "kind": "confusable_with",
+      "note": "GST state codes are 2 digits 01-38; PIN codes are 6 digits starting 1-9."
+    },
+    {
+      "from": "pin_code",
+      "to": "postal_code",
+      "kind": "confusable_with",
+      "note": "pin_code is the India-specific 6-digit PIN; postal_code is the generic international form. Prefer pin_code when every value is 6 digits starting 1-9."
+    },
+    {
+      "from": "gst_rate",
+      "to": "percentage",
+      "kind": "confusable_with",
+      "note": "GST rates are a fixed value set (0, 0.25, 3, 5, 12, 18, 28); a generic percentage is any 0-100 value."
+    },
+    {
+      "from": "percentage",
+      "to": "probability",
+      "kind": "confusable_with",
+      "note": "Probabilities lie in 0-1; percentages in 0-100. A column entirely within 0-1 is a probability."
+    },
+    {
+      "from": "percentage",
+      "to": "score_percent",
+      "kind": "confusable_with",
+      "note": "score_percent needs a score/marks/result header; percentage is the generic form."
+    },
+    {
+      "from": "amount",
+      "to": "transaction_amount",
+      "kind": "confusable_with",
+      "note": "transaction_amount needs a txn/transaction header; amount is the generic form."
+    },
+    {
+      "from": "amount",
+      "to": "claim_amount",
+      "kind": "confusable_with",
+      "note": "claim_amount needs a claim header; amount is the generic form."
+    },
+    {
+      "from": "amount",
+      "to": "donation_amount",
+      "kind": "confusable_with",
+      "note": "donation_amount needs a donation/gift header; amount is the generic form."
+    },
+    {
+      "from": "amount",
+      "to": "premium_amount",
+      "kind": "confusable_with",
+      "note": "premium_amount needs a premium header; amount is the generic form."
+    },
+    {
+      "from": "amount",
+      "to": "benefit_amount",
+      "kind": "confusable_with",
+      "note": "benefit_amount needs a benefit header; amount is the generic form."
+    },
+    {
+      "from": "unit_cost",
+      "to": "market_price",
+      "kind": "confusable_with",
+      "note": "unit_cost needs a cost header; market_price needs a price/market header."
+    },
+    {
+      "from": "sale_price",
+      "to": "fare_amount",
+      "kind": "confusable_with",
+      "note": "fare_amount needs a fare header; sale_price needs a sale/price header."
+    },
+    {
+      "from": "invoice_number",
+      "to": "order_id",
+      "kind": "confusable_with",
+      "note": "Invoice numbers carry INV/invoice prefixes or headers; order ids carry order/ord."
+    },
+    {
+      "from": "order_id",
+      "to": "purchase_order_id",
+      "kind": "confusable_with",
+      "note": "purchase_order_id needs a PO/purchase header; order_id is the generic sales-order form."
+    },
+    {
+      "from": "order_id",
+      "to": "transaction_amount",
+      "kind": "confusable_with",
+      "note": "order_id is an identifier (high cardinality, no arithmetic); transaction_amount is a numeric measure. SQL type separates them."
+    },
+    {
+      "from": "customer_id",
+      "to": "user_id",
+      "kind": "confusable_with",
+      "note": "customer_id needs a customer/cust header; user_id needs user/uid. Both are opaque identifiers."
+    },
+    {
+      "from": "user_id",
+      "to": "employee_id",
+      "kind": "confusable_with",
+      "note": "employee_id needs an emp/employee/staff header; user_id needs user/uid."
+    },
+    {
+      "from": "user_id",
+      "to": "session_id",
+      "kind": "confusable_with",
+      "note": "session_id needs a session/sess header and is typically higher-cardinality than user_id."
+    },
+    {
+      "from": "record_id",
+      "to": "uuid",
+      "kind": "confusable_with",
+      "note": "uuid requires the 8-4-4-4-12 hex shape on every value; record_id is any row identifier."
+    },
+    {
+      "from": "request_id",
+      "to": "uuid",
+      "kind": "confusable_with",
+      "note": "request_id needs a request/req/trace header; uuid is by shape alone."
+    },
+    {
+      "from": "city",
+      "to": "district_neighbourhood",
+      "kind": "confusable_with",
+      "note": "district_neighbourhood needs a district/neighbourhood/locality header; city needs city/town."
+    },
+    {
+      "from": "city",
+      "to": "state_region",
+      "kind": "confusable_with",
+      "note": "state_region needs a state/region/province header; city needs city/town. Value cardinality is lower for states."
+    },
+    {
+      "from": "state_region",
+      "to": "country_name",
+      "kind": "confusable_with",
+      "note": "country_name values match the ISO country-name list; state_region values do not."
+    },
+    {
+      "from": "country_name",
+      "to": "iso_country_code",
+      "kind": "confusable_with",
+      "note": "ISO codes are exactly 2 uppercase letters; country names are words."
+    },
+    {
+      "from": "iso_date",
+      "to": "iso_datetime",
+      "kind": "confusable_with",
+      "note": "iso_datetime values carry a time component (T or HH:MM); iso_date values are YYYY-MM-DD only."
+    },
+    {
+      "from": "unix_timestamp_s",
+      "to": "unix_timestamp_ms",
+      "kind": "confusable_with",
+      "note": "Milliseconds are 13 digits; seconds are 10 digits."
+    },
+    {
+      "from": "iso_date",
+      "to": "date_of_birth",
+      "kind": "confusable_with",
+      "note": "date_of_birth needs a dob/birth header and values decades in the past; iso_date is the generic form."
+    },
+    {
+      "from": "iso_date",
+      "to": "hire_date",
+      "kind": "confusable_with",
+      "note": "hire_date needs a hire/joining/start header; iso_date is the generic form."
+    },
+    {
+      "from": "phone_e164",
+      "to": "credit_card_number",
+      "kind": "confusable_with",
+      "note": "Card numbers pass Luhn and are 13-19 digits; E.164 phones start with + and are at most 15 digits."
+    },
+    {
+      "from": "ssn",
+      "to": "national_id",
+      "kind": "confusable_with",
+      "note": "ssn requires the 3-2-4 US shape; national_id is any government identifier."
+    },
+    {
+      "from": "national_id",
+      "to": "passport_number",
+      "kind": "confusable_with",
+      "note": "passport_number needs a passport header; national_id needs national/aadhaar/id."
+    },
+    {
+      "from": "ip_v4",
+      "to": "ip_v6",
+      "kind": "confusable_with",
+      "note": "IPv6 values contain colons; IPv4 values are dotted quads."
+    },
+    {
+      "from": "email",
+      "to": "url",
+      "kind": "confusable_with",
+      "note": "URLs start with a scheme (http/https); emails contain a single @ and no scheme."
+    },
+    {
+      "from": "api_key",
+      "to": "jwt",
+      "kind": "confusable_with",
+      "note": "JWTs are three base64url segments separated by dots; API keys are single tokens."
+    },
+    {
+      "from": "credential_secret",
+      "to": "api_key",
+      "kind": "confusable_with",
+      "note": "api_key needs an api/key header; credential_secret is the generic secret/token/password form."
+    },
+    {
+      "from": "device_id",
+      "to": "mac_address",
+      "kind": "confusable_with",
+      "note": "MAC addresses are six hex pairs separated by : or -; device_id is any device identifier."
+    },
+    {
+      "from": "sku",
+      "to": "hsn_code",
+      "kind": "confusable_with",
+      "note": "HSN codes are 4/6/8 digits only; SKUs are mixed alphanumerics."
+    },
+    {
+      "from": "quantity",
+      "to": "inventory_quantity",
+      "kind": "confusable_with",
+      "note": "inventory_quantity needs a stock/inventory/on_hand header; quantity is the generic form."
+    },
+    {
+      "from": "quantity",
+      "to": "produced_quantity",
+      "kind": "confusable_with",
+      "note": "produced_quantity needs a produced/output header; quantity is the generic form."
+    },
+    {
+      "from": "employee_id",
+      "to": "manager_id",
+      "kind": "confusable_with",
+      "note": "manager_id needs a manager/supervisor/reports_to header; employee_id needs emp/employee."
+    },
+    {
+      "from": "person_name",
+      "to": "vendor_name",
+      "kind": "confusable_with",
+      "note": "vendor_name needs a vendor/supplier/party header; person_name needs name/person/contact."
+    },
+    {
+      "from": "person_name",
+      "to": "host_name",
+      "kind": "confusable_with",
+      "note": "host_name needs a host header; person_name is the generic form."
+    },
+    {
+      "from": "person_name",
+      "to": "manager_name",
+      "kind": "confusable_with",
+      "note": "manager_name needs a manager/supervisor header; person_name is the generic form."
+    },
+    {
+      "from": "payment_status",
+      "to": "order_status",
+      "kind": "confusable_with",
+      "note": "order_status needs an order header; payment_status needs a payment/pay header. Value sets differ (paid/unpaid vs shipped/delivered)."
+    },
+    {
+      "from": "payment_mode",
+      "to": "payment_method",
+      "kind": "confusable_with",
+      "note": "payment_mode is the India-specific value set (UPI/NEFT/RTGS/IMPS); payment_method is the generic form (card/cash/wallet)."
+    },
+    {
+      "from": "ticket_status",
+      "to": "claim_status",
+      "kind": "confusable_with",
+      "note": "claim_status needs a claim header; ticket_status needs a ticket/case header."
+    },
+    {
+      "from": "latitude",
+      "to": "longitude",
+      "kind": "confusable_with",
+      "note": "Longitude ranges -180..180; latitude -90..90. A column with any |value| > 90 is longitude."
+    },
+    {
+      "from": "temperature",
+      "to": "humidity",
+      "kind": "confusable_with",
+      "note": "humidity is bounded 0-100 with a humidity/rh header; temperature needs a temp header and may be negative."
+    },
+    {
+      "from": "risk_score",
+      "to": "probability",
+      "kind": "confusable_with",
+      "note": "probability is bounded 0-1; risk_score needs a risk header and may use any scale."
+    },
+    {
+      "from": "csat_score",
+      "to": "nps_score",
+      "kind": "confusable_with",
+      "note": "NPS is -100..100 or 0..10 with an nps header; CSAT needs a csat/satisfaction header."
+    },
+    {
+      "from": "calendar_year",
+      "to": "release_year",
+      "kind": "confusable_with",
+      "note": "release_year needs a release/published header; calendar_year is the generic year form."
+    },
+    {
+      "from": "calendar_year",
+      "to": "publication_year",
+      "kind": "confusable_with",
+      "note": "publication_year needs a publication/published header; calendar_year is the generic year form."
+    }
+  ]
+}

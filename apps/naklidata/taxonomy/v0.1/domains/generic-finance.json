@@ -1,0 +1,19 @@
+{
+  "domain": "generic-finance",
+  "label": "Generic finance",
+  "types": [
+    "payment_status",
+    "payment_mode",
+    "amount",
+    "currency_iso",
+    "iban",
+    "swift_bic",
+    "iso_date",
+    "iso_datetime",
+    "unix_timestamp_ms",
+    "unix_timestamp_s",
+    "percentage",
+    "probability"
+  ],
+  "report_templates": ["column_profile"]
+}

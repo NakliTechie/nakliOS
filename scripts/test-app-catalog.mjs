@@ -102,8 +102,8 @@ assert.match(
 );
 assert.match(
   html,
-  /id:'naklidata'[\s\S]*?url:'https:\/\/naklidata\.naklitechie\.com\/'[\s\S]*?opensInNewTab:true[\s\S]*?desktopAlign:'right', desktopOrder:6/,
-  'NakliData launches top-level and occupies the seventh right-side desktop slot',
+  /id:'naklidata'[\s\S]*?url:'https:\/\/naklidata\.naklitechie\.com\/', embedUrl:'\.\/apps\/naklidata\/'[\s\S]*?tags:\['tool','data','analytics','developer'\], desktopAlign:'right', desktopOrder:6/,
+  'NakliData opens as a window from its same-origin mirror and occupies the seventh right-side desktop slot',
 );
 assert.match(
   html,

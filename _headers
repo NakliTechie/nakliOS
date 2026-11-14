@@ -58,3 +58,10 @@
   Referrer-Policy: no-referrer
 /apps/atelier/vendor/tessella/vendor/libraw-wasm/libraw.wasm
   Content-Type: application/wasm
+
+# NakliData's R cell (WebR) needs SharedArrayBuffer. As a top-level tab the
+# mirror isolates itself and R runs; as a NakliOS window it is not isolated and
+# the R cell shows an "Open in its own tab" notice instead.
+/apps/naklidata/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: credentialless

@@ -1,0 +1,14 @@
+{
+  "domain": "manufacturing",
+  "label": "Manufacturing and quality",
+  "types": [
+    "work_order_id",
+    "produced_quantity",
+    "defect_count",
+    "yield_rate",
+    "quality_result"
+  ],
+  "report_templates": [
+    "production_quality"
+  ]
+}

@@ -1,0 +1,107 @@
+{
+ "pack": "ecs",
+ "schema_version": "main@2179e78 (9.6.0-dev)",
+ "aliases": [
+  {
+   "type": "iso_datetime",
+   "patterns": [
+    "timestamp"
+   ],
+   "from": "@timestamp"
+  },
+  {
+   "type": "ip_v4",
+   "patterns": [
+    "client.ip",
+    "client_ip"
+   ],
+   "from": "client.ip"
+  },
+  {
+   "type": "ip_v4",
+   "patterns": [
+    "destination.ip",
+    "destination_ip"
+   ],
+   "from": "destination.ip"
+  },
+  {
+   "type": "record_id",
+   "patterns": [
+    "entity.id",
+    "entity_id"
+   ],
+   "from": "entity.id"
+  },
+  {
+   "type": "event_name",
+   "patterns": [
+    "event.type",
+    "event_type"
+   ],
+   "from": "event.type"
+  },
+  {
+   "type": "log_level",
+   "patterns": [
+    "log.level",
+    "log_level"
+   ],
+   "from": "log.level"
+  },
+  {
+   "type": "ip_v4",
+   "patterns": [
+    "server.ip",
+    "server_ip"
+   ],
+   "from": "server.ip"
+  },
+  {
+   "type": "service_name",
+   "patterns": [
+    "service.name",
+    "service_name"
+   ],
+   "from": "service.name"
+  },
+  {
+   "type": "ip_v4",
+   "patterns": [
+    "source.ip",
+    "source_ip"
+   ],
+   "from": "source.ip"
+  },
+  {
+   "type": "user_id",
+   "patterns": [
+    "user.id",
+    "user_id"
+   ],
+   "from": "user.id"
+  },
+  {
+   "type": "person_name",
+   "patterns": [
+    "user.name",
+    "user_name"
+   ],
+   "from": "user.name"
+  }
+ ],
+ "skipped": [
+  {
+   "from": "labels",
+   "why": "bare generic word — the house keeps it unassigned"
+  },
+  {
+   "from": "message",
+   "why": "bare generic word — the house keeps it unassigned"
+  },
+  {
+   "from": "tags",
+   "why": "bare generic word — the house keeps it unassigned"
+  }
+ ]
+}

@@ -1,0 +1,63 @@
+{
+ "pack": "otel-semconv",
+ "schema_version": "main@22b6cbb (after v1.44.0)",
+ "aliases": [
+  {
+   "type": "http_method",
+   "patterns": [
+    "http.request.method",
+    "http_request_method"
+   ],
+   "from": "http.request.method"
+  },
+  {
+   "type": "http_method",
+   "patterns": [
+    "http.request.method_original",
+    "http_request_method_original"
+   ],
+   "from": "http.request.method_original"
+  },
+  {
+   "type": "http_status",
+   "patterns": [
+    "http.response.status_code",
+    "http_response_status_code"
+   ],
+   "from": "http.response.status_code"
+  },
+  {
+   "type": "endpoint",
+   "patterns": [
+    "http.route",
+    "http_route"
+   ],
+   "from": "http.route"
+  },
+  {
+   "type": "service_name",
+   "patterns": [
+    "service.name",
+    "service_name"
+   ],
+   "from": "service.name"
+  },
+  {
+   "type": "url",
+   "patterns": [
+    "url.full",
+    "url_full"
+   ],
+   "from": "url.full"
+  },
+  {
+   "type": "endpoint",
+   "patterns": [
+    "url.path",
+    "url_path"
+   ],
+   "from": "url.path"
+  }
+ ],
+ "skipped": []
+}

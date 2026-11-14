@@ -1,0 +1,16 @@
+{
+  "id": "otel-semconv",
+  "label": "OpenTelemetry semantic conventions",
+  "source": "https://github.com/open-telemetry/semantic-conventions@22b6cbb2bd2ae458fe636470838daa428865ed09",
+  "schema_version": "main@22b6cbb (after v1.44.0)",
+  "snapshot": "2026-09-12",
+  "license": "Apache-2.0",
+  "license_url": "https://github.com/open-telemetry/semantic-conventions/blob/main/LICENSE",
+  "registry_file": "registry.json",
+  "registry_sha384": "sha384-7b9786f424c9386d2e66616e1d150ee474861248cacd32bbbf4451866c50030f2f698b75e19b9ce3ff8dd9bc75c09675",
+  "entries": 122,
+  "edition": "stable",
+  "excluded": "821 of 943 entries outside the stable edition \u2014 generatable, unshipped",
+  "upstream_commit": "22b6cbb2bd2ae458fe636470838daa428865ed09",
+  "extraction": "scripts/pin-taxonomy-pack-registry.py"
+}
