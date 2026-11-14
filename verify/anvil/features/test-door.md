@@ -90,9 +90,9 @@ from the host page's console or a browser-automation script against the iframe.
 - **Goal:** run the evolutionary synthesis directly.
 - **Source:** the door's `synthesize` → `runSynthesize`.
 - **Prerequisites:** launch on the COI serve; a real endpoint.
-- **Reach and drive:** `await t.synthesize('double it', [{input:1,output:2},{input:3,output:6}], 2, 2)`.
+- **Reach and drive:** `await t.synthesize('double it', [{input:1,output:2},{input:3,output:6}], 2, 2)`; a fifth argument sets `parents` (1 = repair the best, 2 = combine two, the default since 2026-11-14; clamped to 3).
 - **Observable success:** returns the best program and fitness; `solver.py` written; `t.score` on it → 1.
-- **Gotchas:** `popSize`/`maxGen` are clamped to 4.
+- **Gotchas:** `popSize`/`maxGen` are clamped to 4. With `parents` 2, generation 1 onward sends two parents per call, so each prompt is longer.
 
 ### hook:score
 - **Goal:** score a `solve(x)` source against examples in the Kiln.

@@ -409,7 +409,7 @@ assert.match(anvil, /^  let runCtx = null;$/m, 'runCtx is module-scoped (the tic
 assert.ok(!/^    let runCtx = null;$/m.test(anvil), 'and not shadowed inside runTask');
 assert.match(anvil, /const lv = e\.status==='running' \? subagentLiveness\(e\)\.state : 'exited';/, 'B1: the row is rendered by its typed state');
 // CRIB-B B2: one steer queue per run, shared by the executor and the loop
-assert.match(anvil, /const steer=createSteerQueue\(\);\n\s*const baseExec = makeToolExecutor\(\{ shell, face, mode, infer: inferViaHost, spawnIsolated, steer,/, 'B2: the executor gets the run\'s steer queue');
+assert.match(anvil, /const steer=createSteerQueue\(\);\n\s*const baseExec = makeToolExecutor\(\{ shell, face, mode, infer: inferViaHost, roleInfer, spawnIsolated, steer,/, 'B2: the executor gets the run\'s steer queue');
 assert.match(anvil, /await driveRun\(\{\n\s*steer,/, 'B2: and so does the loop, through driveRun');
 assert.ok(!/async function saveRunRecord[\s\S]{0,400}runIndexRow\(\{ project:String\(state\.activeProject/.test(anvil), 'the row never reads the live activeProject at save time');
 // B5: the grant projects the run's toolset — extras included — and the readiness says blocked, by scope
@@ -449,7 +449,7 @@ assert.match(anvil, /const readiness = runReadiness\(mode, \{ verify: !!verify, 
   const rows = runReadiness('code', { simple: true });
   for (const m of MEMORY_TOOLS) { const r = rows.find((x) => x.name === m); assert.ok(r && r.state === 'off' && /simple ask/.test(r.why), `readiness names why ${m} is off: ${JSON.stringify(r)}`); }
 }
-assert.match(anvil, /makeToolExecutor\(\{ shell, face, mode, infer: inferViaHost, spawnIsolated, steer, scopes: grant\.scopes,/, 'B5: the children\'s catalogs are projected by the grant too');
+assert.match(anvil, /makeToolExecutor\(\{ shell, face, mode, infer: inferViaHost, roleInfer, spawnIsolated, steer, scopes: grant\.scopes,/, 'B5: the children\'s catalogs are projected by the grant too');
 assert.match(anvil, /tools=codingToolset\('code',\{ scopes: grant\.scopes \}\)\.concat\(emitTool\);/, 'B5: and the builder role');
 // CRIB-D D2: the memory index is scoped to the task at injection; a run that did not finish leaves a task-scoped stall note
 assert.match(anvil, /memoryIndex = buildMemoryIndex\(facts, \{ usage, scope: 'task:'\+String\(t\.id\) \}\);/, 'D2: the index is built for THIS task (its notes and the project\'s, never another task\'s)');

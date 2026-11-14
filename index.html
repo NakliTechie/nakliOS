@@ -5943,6 +5943,9 @@ const AI_DEFAULT_SETTINGS = Object.freeze({
   }),
 });
 
+// The roles an agent request may name (agentRole). `build`: dispatch and task children;
+// `review`: the read-only reviewer. The main agent always runs on the selected model.
+const AI_AGENT_ROLES = ['build', 'review'];
 function aiReadSettings(){
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem(AI_SETTINGS_KEY) || '{}') || {}; } catch(_){}
@@ -5955,6 +5958,9 @@ function aiReadSettings(){
     globalThis.LocalMindHostCatalog.imageModels.some(
       model => model.key === saved.imageModelKey
     );
+  const endpoint2Preset = AI_ENDPOINT_PRESETS[saved.endpoint2?.preset]
+    ? saved.endpoint2.preset
+    : AI_DEFAULT_SETTINGS.endpoint.preset;
   const imagePreset = AI_IMAGE_ENDPOINT_PRESETS[saved.imageEndpoint?.preset]
     ? saved.imageEndpoint.preset
     : AI_DEFAULT_SETTINGS.imageEndpoint.preset;
@@ -5970,6 +5976,18 @@ function aiReadSettings(){
         : [],
       rememberKey:saved.endpoint?.rememberKey === true,
     },
+    // Models by role (2026-11-14): Anvil's subagents can run on a second endpoint. A role is
+    // 'selected' (the model above) or 'endpoint2'; anything else, or 'endpoint2' while the second
+    // endpoint has no URL and model, reads as 'selected', so a fresh install behaves as before.
+    endpoint2:{
+      preset:endpoint2Preset,
+      baseUrl:String(saved.endpoint2?.baseUrl || ''),
+      model:String(saved.endpoint2?.model || ''),
+      rememberKey:saved.endpoint2?.rememberKey === true,
+    },
+    agentRoles:Object.fromEntries(AI_AGENT_ROLES.map(role => [role,
+      saved.agentRoles?.[role] === 'endpoint2' && saved.endpoint2?.baseUrl && saved.endpoint2?.model
+        ? 'endpoint2' : 'selected'])),
     imageModelKey:validImageModel
       ? saved.imageModelKey
       : AI_DEFAULT_SETTINGS.imageModelKey,
@@ -6022,15 +6040,17 @@ function aiEndpointIsLocal(baseUrl){
   }
 }
 
-function aiSelectedModel(){
-  if (aiSettings.modelKey === 'endpoint'){
+// One endpoint block ({ preset, baseUrl, model }) as a model the broker can run. `fallbacks` is
+// the ordered model-id ladder tried on a 5xx; only the main endpoint has one.
+function aiEndpointModel(block, key = 'endpoint', fallbacks = []){
     let baseUrl = '';
-    try { baseUrl = aiNormaliseEndpointBase(aiSettings.endpoint.baseUrl); } catch(_){}
-    const preset = AI_ENDPOINT_PRESETS[aiSettings.endpoint.preset] || AI_ENDPOINT_PRESETS.custom;
-    const model = String(aiSettings.endpoint.model || '').trim();
+    try { baseUrl = aiNormaliseEndpointBase(block.baseUrl); } catch(_){}
+    const preset = AI_ENDPOINT_PRESETS[block.preset] || AI_ENDPOINT_PRESETS.custom;
+    const model = String(block.model || '').trim();
     const local = aiEndpointIsLocal(baseUrl);
     return {
-      key:'endpoint',
+      key,
+      fallbacks,
       id:model || 'endpoint',
       label:model ? `${preset.label} · ${model}` : `${preset.label} endpoint`,
       description:local
@@ -6040,15 +6060,27 @@ function aiSelectedModel(){
       scope:local ? 'local-endpoint' : 'external',
       baseUrl,
       model,
-      preset:aiSettings.endpoint.preset,
+      preset:block.preset,
       protocol:preset.protocol || 'openai',
       generationConfig:{},
     };
-  }
+}
+
+function aiSelectedModel(){
+  if (aiSettings.modelKey === 'endpoint') return aiEndpointModel(aiSettings.endpoint, 'endpoint', aiSettings.endpoint.fallbacks);
   return {
     ...globalThis.LocalMindHostCatalog.get(aiSettings.modelKey),
     scope:'device',
   };
+}
+
+// The model an agent role runs on. An unknown role is refused with the known list, so a typo in
+// an app never silently lands on the selected model.
+function aiRoleModel(role){
+  if (!AI_AGENT_ROLES.includes(role)) throw new Error(`Unknown agent role "${String(role).slice(0, 40)}"; known roles: ${AI_AGENT_ROLES.join(', ')}`);
+  return aiSettings.agentRoles?.[role] === 'endpoint2'
+    ? aiEndpointModel(aiSettings.endpoint2, 'endpoint2')
+    : aiSelectedModel();
 }
 
 // ── On-device model — Chrome's built-in Gemini Nano (Prompt API) ────────
@@ -6091,7 +6123,11 @@ function aiNanoModel(){
 // wired in by default — and only falls back to the selected model when Nano
 // isn't there. (A separate GP-tier model selector, to let a user point GP at an
 // endpoint too, is a clean follow-up.) Agent → the selection, never Nano.
-function aiResolveModel(wantsAgent){
+function aiResolveModel(wantsAgent, role = null){
+  if (role != null){
+    if (!wantsAgent) throw new Error('agentRole is only for agent requests');
+    return aiRoleModel(role);
+  }
   const selected = aiSelectedModel();
   if (wantsAgent) return selected;
   if (aiNano.available) return aiNanoModel();
@@ -6151,6 +6187,15 @@ void aiProbeNano().then(() => { try { broadcastCapabilities(); } catch(_){} });
 
 function aiCredentialId(baseUrl){
   try { return new URL(aiNormaliseEndpointBase(baseUrl)).origin; } catch(_) { return ''; }
+}
+// Keys are stored per origin, and up to three settings can share one (the main endpoint, the
+// image endpoint, the second endpoint for roles). A key is remembered while ANY of them that uses
+// its origin asks to remember it, so saving one block never forgets a key another still wants.
+function aiRememberedBy(settings, baseUrl){
+  const id = aiCredentialId(baseUrl);
+  if (!id) return false;
+  return [settings?.endpoint, settings?.imageEndpoint, settings?.endpoint2]
+    .some(block => block?.rememberKey === true && block.baseUrl && aiCredentialId(block.baseUrl) === id);
 }
 
 function aiReadCredentialStore(storage, key){
@@ -6260,28 +6305,14 @@ function aiPersistCredential(baseUrl, rememberKey, apiKey = null){
 }
 
 function aiPersistSettings(next, apiKey = null){
-  const sharedImageCredential = next.imageEndpoint?.rememberKey === true &&
-    aiCredentialId(next.imageEndpoint.baseUrl) ===
-      aiCredentialId(next.endpoint.baseUrl);
-  aiPersistCredential(
-    next.endpoint.baseUrl,
-    next.endpoint.rememberKey || sharedImageCredential,
-    apiKey,
-  );
+  aiPersistCredential(next.endpoint.baseUrl, aiRememberedBy(next, next.endpoint.baseUrl), apiKey);
   aiSettings = next;
   localStorage.setItem(AI_SETTINGS_KEY, JSON.stringify(aiSettings));
   aiRefreshSelectedModel();
 }
 
 function aiPersistImageSettings(next, apiKey = null){
-  const sharedChatCredential = next.endpoint?.rememberKey === true &&
-    aiCredentialId(next.endpoint.baseUrl) ===
-      aiCredentialId(next.imageEndpoint.baseUrl);
-  aiPersistCredential(
-    next.imageEndpoint.baseUrl,
-    next.imageEndpoint.rememberKey || sharedChatCredential,
-    apiKey,
-  );
+  aiPersistCredential(next.imageEndpoint.baseUrl, aiRememberedBy(next, next.imageEndpoint.baseUrl), apiKey);
   aiSettings = next;
   localStorage.setItem(AI_SETTINGS_KEY, JSON.stringify(aiSettings));
   aiRefreshSelectedModel();
@@ -6393,9 +6424,11 @@ function aiSetImageState(next, error = null){
 
 // `onWait` runs when the answer must come from the person (a new prompt, or one already
 // open for this app and scope), so the caller can tell its app the request is waiting.
-async function aiEnsurePermission(appId, capability = 'chat', onWait = null){
+async function aiEnsurePermission(appId, capability = 'chat', onWait = null, forModel = null){
   const image = capability === 'image';
-  const model = image ? aiSelectedImageModel() : aiSelectedModel();
+  // The model that will answer decides the consent scope: a role on a second endpoint asks for
+  // that endpoint's origin, never riding on the selected model's grant.
+  const model = forModel || (image ? aiSelectedImageModel() : aiSelectedModel());
   const available = image
     ? aiImageRuntimeAvailable(model)
     : aiRuntimeAvailable(model);
@@ -6413,6 +6446,8 @@ async function aiEnsurePermission(appId, capability = 'chat', onWait = null){
     const name = app?.name || appId;
     const action = image ? 'generate images with NakliOS AI' : 'use NakliOS AI';
     const contentName = image ? 'Image prompts and generated images' : 'Prompts and replies';
+    // The model that will answer names itself: a role on a second endpoint must not borrow the
+    // selected model's label (review 2026-11-14).
     let boundary;
     if (model.scope === 'device'){
       boundary =
@@ -6422,12 +6457,12 @@ async function aiEnsurePermission(appId, capability = 'chat', onWait = null){
     } else if (model.scope === 'local-endpoint'){
       boundary =
         `${contentName} will be sent to the configured ` +
-        `${image ? AI_IMAGE_MODEL_LABEL : AI_MODEL_LABEL} service at ${model.baseUrl}. ` +
+        `${model.label || (image ? AI_IMAGE_MODEL_LABEL : AI_MODEL_LABEL)} service at ${model.baseUrl}. ` +
         `NakliOS keeps the endpoint and any credential hidden from apps.`;
     } else {
       boundary =
         `${contentName} will leave this device and be sent to ` +
-        `${image ? AI_IMAGE_MODEL_LABEL : AI_MODEL_LABEL} at ${model.baseUrl}. ` +
+        `${model.label || (image ? AI_IMAGE_MODEL_LABEL : AI_MODEL_LABEL)} at ${model.baseUrl}. ` +
         `NakliOS keeps your API key hidden from apps.`;
     }
     const granted = await nakliosConfirm(
@@ -6452,6 +6487,31 @@ async function aiEnsurePermission(appId, capability = 'chat', onWait = null){
   })().finally(() => aiHost.permissionPrompts.delete(promptKey));
   aiHost.permissionPrompts.set(promptKey, prompt);
   return prompt;
+}
+
+// Repeat guard (sys/ai/repeat-guard.mjs, 2026-11-14). Every chat request gets two guards, one
+// for the reply and one for the model's reasoning. A reply that starts looping is stopped where
+// it stands, so it stops holding the single-active queue; it ends with finishReason
+// 'repetition', and the done event says how much of the streamed reply to keep (truncateAt).
+let _aiRepeatGuardMod = null;
+async function aiRepeatGuardModule(){
+  if (!_aiRepeatGuardMod) _aiRepeatGuardMod = await import('./sys/ai/repeat-guard.mjs');
+  return _aiRepeatGuardMod;
+}
+function aiGuardDelta(request, delta, reasoning = false){
+  const guard = reasoning ? request.reasonGuard : request.replyGuard;
+  if (!guard || request.repeatStopped || request.cancelled || !guard.push(delta)) return false;
+  request.repeatStopped = { reasoning, keepChars:reasoning ? null : guard.keepChars, period:guard.period };
+  aiStopActiveGeneration(request);
+  return true;
+}
+// Stop the active generation without marking the request cancelled (the guard's stop is not
+// the person's): each runtime ends its stream and the queue moves on.
+function aiStopActiveGeneration(request){
+  if (aiHost.active !== request) return;
+  if (request.model?.runtime === 'endpoint') aiHost.endpointAbort?.abort();
+  else if (request.model?.runtime === 'ondevice') aiHost.onDeviceAbort?.abort();
+  else if (aiHost.state === 'ready') aiHost.worker?.postMessage({ type:'stop', id:request.workerRequestId });
 }
 
 function aiEmit(request, event){
@@ -6532,10 +6592,13 @@ function aiCreateWorker(model){
       // anyformer catalog models parse their own calls; they arrive once, before complete.
       if (Array.isArray(msg.toolCalls)) request.workerToolCalls = msg.toolCalls;
     } else if (msg.type === 'reasoning'){
-      // The model's reasoning before its answer: not part of the reply.
+      // The model's reasoning before its answer: not part of the reply, but a loop in it is a loop.
+      aiGuardDelta(request, String(msg.token || ''), true);
     } else if (msg.type === 'token'){
+      if (request.repeatStopped) return; // the guard stopped this reply; ignore what was still in flight
       if (typeof request.localText === 'string') request.localText += String(msg.token || '');
       else aiEmit(request, { event:'token', token:String(msg.token || '') });
+      aiGuardDelta(request, String(msg.token || ''));
     } else if (msg.type === 'complete'){
       const resolve = aiHost.activeResolve;
       aiHost.activeResolve = null;
@@ -6816,6 +6879,12 @@ async function aiGenerateWorker(request){
   await aiSyncAdapter(request.model);
   return new Promise((resolve, reject) => {
     aiHost.activeResolve = local ? (finishReason) => {
+      // A reply the repeat guard stopped keeps one copy of the repeated block; the held text is
+      // trimmed here, before it is parsed and emitted, so nothing needs cutting app-side.
+      if (request.repeatStopped?.keepChars != null){
+        request.localText = request.localText.slice(0, request.repeatStopped.keepChars);
+        request.repeatStopped.trimmed = true;
+      }
       const parsed = local.parseLocalToolCalls(request.localText, request.tools,
         { idPrefix:`call_${request.workerRequestId}` });
       if (request.workerToolCalls?.length){
@@ -7074,6 +7143,9 @@ async function aiGenerateAnthropic(request){
   const firstParty = aiAnthropicFirstParty(request.model);
   let emitted = false;
   const attemptOn = async (modelId) => {
+    // Attribute the attempt before streaming: a reply the repeat guard stops never reaches the
+    // provider's own model field, and must not be credited to the model that failed before it.
+    request.answeredModel = modelId;
     // On Anthropic's own API, a policy decline retries on the model's default fallback;
     // a model without fallbacks runs alone. Other servers get the plain Messages request.
     const stream = firstParty
@@ -7083,14 +7155,16 @@ async function aiGenerateAnthropic(request){
         }, { signal:controller.signal })
       : client.messages.stream({ ...body, model:modelId }, { signal:controller.signal });
     stream.on('text', (delta) => {
-      if (!delta) return;
+      if (!delta || request.repeatStopped) return;
       emitted = true;
       aiEmit(request, { event:'token', token:delta });
+      aiGuardDelta(request, delta);
     });
+    stream.on('thinking', (delta) => { if (delta) aiGuardDelta(request, delta, true); });
     return stream.finalMessage();
   };
   const agentProto = await aiAgentProto();
-  const ladder = agentProto.modelLadder(request.model.model, aiSettings.endpoint.fallbacks);
+  const ladder = agentProto.modelLadder(request.model.model, request.model.fallbacks || []);
   let run;
   try {
     run = await agentProto.runModelLadder(ladder, attemptOn, { hasEmitted:() => emitted });
@@ -7155,7 +7229,7 @@ async function aiGenerateEndpoint(request){
   // ok, so a retry cannot splice two models into one turn. The policy (which statuses are
   // worth another id, ordering, dedupe) lives in agent-protocol.mjs and is tested headlessly.
   const ladderProto = proto || await aiAgentProto();
-  const ladder = ladderProto.modelLadder(request.model.model, aiSettings.endpoint.fallbacks);
+  const ladder = ladderProto.modelLadder(request.model.model, request.model.fallbacks || []);
   let response;
   let answeredWith = request.model.model;
   const attemptOn = async (modelId) => {
@@ -7215,9 +7289,13 @@ async function aiGenerateEndpoint(request){
       try { data = JSON.parse(payload); } catch(_) { continue; }
       const choice = data?.choices?.[0];
       const token = choice?.delta?.content;
-      if (typeof token === 'string' && token) {
+      if (typeof token === 'string' && token && !request.repeatStopped) {
         aiEmit(request, { event:'token', token });
+        aiGuardDelta(request, token);
       }
+      // DeepSeek-style reasoning streams beside the reply; a loop there is guarded too.
+      const thought = choice?.delta?.reasoning_content ?? choice?.delta?.reasoning;
+      if (typeof thought === 'string' && thought) aiGuardDelta(request, thought, true);
       if (toolAcc) toolAcc.absorbDelta(choice?.delta);
       if (choice?.finish_reason) finishReason = choice.finish_reason;
       // the usage chunk carries no choice at all — read it off the frame, not off `choice`
@@ -7234,6 +7312,7 @@ async function aiGenerate(request){
       return await aiGenerateEndpoint(request);
     } catch (error){
       if (request.cancelled && error?.name === 'AbortError') return 'cancelled';
+      if (request.repeatStopped && !request.cancelled) return 'repetition'; // the guard aborted the stream
       throw error;
     } finally {
       aiHost.endpointAbort = null;
@@ -7280,10 +7359,11 @@ async function aiGenerateOnDevice(request){
       let delta;
       if (full.startsWith(emitted)) { delta = full.slice(emitted.length); emitted = full; }
       else { delta = full; emitted += full; }
-      if (delta) aiEmit(request, { event:'token', token: delta });
+      if (delta && !request.repeatStopped){ aiEmit(request, { event:'token', token: delta }); aiGuardDelta(request, delta); }
     }
     return request.cancelled ? 'cancelled' : 'stop';
   } catch (error){
+    if (request.repeatStopped && !request.cancelled) return 'repetition';
     if (request.cancelled || error?.name === 'AbortError') return 'cancelled';
     throw new Error('On-device model failed: ' + (error?.message || error));
   } finally {
@@ -7313,6 +7393,11 @@ async function aiProcessQueue(){
       return;
     }
     aiEmit(request, { event:'status', status:'generating' });
+    if (request.kind !== 'image'){
+      const guards = await aiRepeatGuardModule();
+      request.replyGuard = guards.createRepeatGuard();
+      request.reasonGuard = guards.createRepeatGuard();
+    }
     if (request.kind === 'image'){
       const image = await aiGenerateImage(request);
       if (!request.cancelled) aiEmit(request, { event:'result', image });
@@ -7321,10 +7406,17 @@ async function aiProcessQueue(){
         finishReason:request.cancelled ? 'cancelled' : 'stop',
       });
     } else {
-      const finishReason = await aiGenerate(request);
+      const generated = await aiGenerate(request);
+      // A stopped loop says so, unless what was kept still parsed into tool calls.
+      const finishReason = request.repeatStopped && !request.cancelled && generated !== 'tool_calls'
+        ? 'repetition' : generated;
+      const keep = request.repeatStopped?.keepChars;
       aiEmit(request, {
         event:'done',
         finishReason:request.cancelled ? 'cancelled' : finishReason,
+        // How much of the streamed reply to keep: one copy of the repeated block. Absent when
+        // the held text was already trimmed host-side (the in-browser tool path).
+        ...(finishReason === 'repetition' && keep != null && !request.repeatStopped.trimmed ? { truncateAt:keep } : {}),
         ...(request.toolCalls?.length ? { toolCalls:request.toolCalls } : {}),
         // The provider's own token count. The app's budget ends runs on this number; the
         // estimate it replaces is a character count that cannot see tool schemas at all.
@@ -7362,7 +7454,7 @@ async function aiHostSubmit(source, msg, appId){
     // Tier-aware routing: agent requests use the user's configured model (never
     // Nano); general-purpose requests default to on-device Nano when available.
     const wantsAgent = msg.agent === true;
-    const model = aiResolveModel(wantsAgent);
+    const model = aiResolveModel(wantsAgent, msg.agentRole ?? null);
     if (!requestId) throw new Error('Local AI requestId is required');
     if (!aiRuntimeAvailable(model)){
       if (model.runtime === 'endpoint') {
@@ -7411,7 +7503,7 @@ async function aiHostSubmit(source, msg, appId){
     // prompt and fail the turn (live 2026-10-29). `queued` follows once it is answered.
     const granted = await aiEnsurePermission(appId, 'chat', () => {
       aiEmit(provisional, { event:'status', status:'permission' });
-    });
+    }, model);
     if (!granted) throw new Error('Local AI permission was not granted');
     if (source._aiCancelled === true) throw new Error('Local AI request was cancelled');
     const becameDuplicate = aiHost.active?.source === source && aiHost.active.requestId === requestId ||
@@ -7637,7 +7729,9 @@ function aiHostChatNative(appId, messages, options = {}){
         } else if (message.event === 'done'){
           settled = true;
           if (options.signal && abortHandler) options.signal.removeEventListener('abort', abortHandler);
-          resolve({ content:text, finishReason:message.finishReason || 'stop' });
+          // A reply the repeat guard stopped keeps only the text before the loop.
+          const kept = typeof message.truncateAt === 'number' ? text.slice(0, message.truncateAt) : text;
+          resolve({ content:kept, finishReason:message.finishReason || 'stop' });
         } else if (message.event === 'error'){
           settled = true;
           if (options.signal && abortHandler) options.signal.removeEventListener('abort', abortHandler);
@@ -8569,6 +8663,14 @@ function capabilitySnapshot(appId){
     aiModelLabel: aiModel.label,
     aiProvider: aiModel.runtime,
     aiLocal: aiModel.scope !== 'external',
+    // Who each agent role runs on (no URLs, no keys), so an app can label a child's row.
+    ...(AI_HOST_AGENT_APPS.has(appId) ? { aiRoleModels:Object.fromEntries(AI_AGENT_ROLES.map(role => {
+      const m = aiRoleModel(role), sel = aiSelectedModel();
+      // `same`: the role runs on the selected binding (same entry, URL and model), compared here
+      // because two endpoints can serve the same model id.
+      const same = m.key === sel.key && (m.baseUrl || '') === (sel.baseUrl || '') && (m.model || m.id) === (sel.model || sel.id);
+      return [role, { id:m.id, label:m.label, provider:m.runtime, same }];
+    })) } : {}),
     aiState: aiHost.state,
     aiImages: aiImageCapabilityForApp(appId),
     aiImageModel:aiImageModel.id,
@@ -10380,6 +10482,16 @@ function openSettings(section){
     </option>
   `).join('');
   const endpointHidden = aiSettings.modelKey === 'endpoint' ? '' : 'hidden';
+  const roleEndpoint = aiSettings.endpoint2 || { preset:'custom', baseUrl:'', model:'', rememberKey:false };
+  const rolePresetOptions = Object.entries(AI_ENDPOINT_PRESETS).map(([key, preset]) =>
+    `<option value="${_dlgEscape(key)}" ${roleEndpoint.preset === key ? 'selected' : ''}>${_dlgEscape(preset.label)}</option>`).join('');
+  const roleSelect = (role, label) => `
+    <label>${label}
+      <select id="ai-role-${role}">
+        <option value="selected" ${aiSettings.agentRoles?.[role] !== 'endpoint2' ? 'selected' : ''}>Same as the selected model</option>
+        <option value="endpoint2" ${aiSettings.agentRoles?.[role] === 'endpoint2' ? 'selected' : ''}>Second endpoint</option>
+      </select>
+    </label>`;
   const endpointKeySaved = !!aiEndpointApiKey();
   const selectedEndpointPreset = AI_ENDPOINT_PRESETS[aiSettings.endpoint.preset] ||
     AI_ENDPOINT_PRESETS.custom;
@@ -10437,6 +10549,27 @@ function openSettings(section){
           <span>Use the Pi coding adapter (harness-hub's LoRA for coding agents). It switches on the next reply, with no reload.</span>
         </label>
       </div>
+      <details id="ai-roles" style="margin:0;" ${Object.values(aiSettings.agentRoles || {}).includes('endpoint2') ? 'open' : ''}>
+        <summary class="nw-fs-blurb" style="cursor:pointer; margin:0;">Models by role (Anvil's subagents)</summary>
+        <div class="nw-fs-blurb" style="margin:6px 0;">Anvil's sub-tasks (build) and its reviewer (review) can run on a second endpoint, for example a cheaper model for sub-tasks. The main agent always uses the model above. Keep the reviewer on a model at least as strong as the builder.</div>
+        <div class="nw-ai-endpoint-grid">${roleSelect('build', 'Build (sub-tasks)')}${roleSelect('review', 'Review (reviewer)')}</div>
+        <div class="nw-ai-endpoint-grid" style="margin-top:8px;">
+          <label>Second endpoint provider <select id="ai-role-preset">${rolePresetOptions}</select></label>
+          <label>Base URL <input id="ai-role-url" inputmode="url" autocomplete="url" value="${_dlgEscape(roleEndpoint.baseUrl)}" placeholder="https://api.deepseek.com/v1"></label>
+        </div>
+        <div class="nw-ai-endpoint-grid" style="margin-top:8px;">
+          <label>Model <input id="ai-role-model" value="${_dlgEscape(roleEndpoint.model)}" placeholder="Model ID"></label>
+          <label>API key <input id="ai-role-key" type="password" autocomplete="off" placeholder="${roleEndpoint.baseUrl && aiEndpointApiKey(roleEndpoint.baseUrl) ? 'Key already available — leave blank to keep it' : 'Leave blank if it shares the main endpoint key'}"></label>
+        </div>
+        <label class="nw-fs-blurb" style="display:flex; gap:6px; align-items:center; margin:8px 0 0;">
+          <input type="checkbox" id="ai-role-remember" style="width:auto;" ${roleEndpoint.rememberKey ? 'checked' : ''}>
+          <span>Remember this key on this device</span>
+        </label>
+        <div class="nw-fs-connect-actions" style="margin-top:8px;">
+          <button class="nw-fs-btn-secondary" id="ai-roles-save" type="button">Save roles</button>
+          <span class="nw-fs-blurb" id="ai-roles-result" style="margin:0;"></span>
+        </div>
+      </details>
       <div id="ai-endpoint-fields" ${endpointHidden}>
         <div class="nw-ai-endpoint-grid">
           <label>
@@ -11084,6 +11217,45 @@ function openSettings(section){
       aiSettingsResult.textContent = `Using ${AI_MODEL_LABEL}.`;
     } catch (error){
       aiSettingsResult.textContent = error?.message || String(error);
+    }
+  });
+
+  wrap.querySelector('#ai-role-preset')?.addEventListener('change', () => {
+    const preset = AI_ENDPOINT_PRESETS[wrap.querySelector('#ai-role-preset').value];
+    const url = wrap.querySelector('#ai-role-url');
+    if (preset?.baseUrl && !url.value.trim()) url.value = preset.baseUrl;
+  });
+  wrap.querySelector('#ai-roles-save')?.addEventListener('click', () => {
+    const out = wrap.querySelector('#ai-roles-result');
+    try {
+      const roles = Object.fromEntries(AI_AGENT_ROLES.map(role => [role, wrap.querySelector(`#ai-role-${role}`).value === 'endpoint2' ? 'endpoint2' : 'selected']));
+      const endpoint2 = {
+        preset:wrap.querySelector('#ai-role-preset').value,
+        baseUrl:wrap.querySelector('#ai-role-url').value.trim(),
+        model:wrap.querySelector('#ai-role-model').value.trim(),
+        rememberKey:wrap.querySelector('#ai-role-remember').checked,
+      };
+      const key = wrap.querySelector('#ai-role-key').value.trim();
+      if (Object.values(roles).includes('endpoint2')){
+        endpoint2.baseUrl = aiNormaliseEndpointBase(endpoint2.baseUrl);
+        if (!endpoint2.model) throw new Error('Enter the second endpoint\'s model ID');
+        const preset = AI_ENDPOINT_PRESETS[endpoint2.preset] || AI_ENDPOINT_PRESETS.custom;
+        if (preset.keyRequired && !key && !aiEndpointApiKey(endpoint2.baseUrl)) throw new Error(`${preset.label} requires an API key`);
+      }
+      // A key is stored per base URL, so a second endpoint on the main endpoint's URL shares its key.
+      // Reconcile by origin: the new second endpoint's key, and the old one's if its URL changed,
+      // are remembered exactly while some setting using that origin asks to remember it.
+      const next = { ...aiSettings, endpoint2, agentRoles:roles };
+      const oldUrl = aiSettings.endpoint2?.baseUrl || '';
+      if (endpoint2.baseUrl) aiPersistCredential(endpoint2.baseUrl, aiRememberedBy(next, endpoint2.baseUrl), key || null);
+      if (oldUrl && aiCredentialId(oldUrl) !== aiCredentialId(endpoint2.baseUrl)) aiPersistCredential(oldUrl, aiRememberedBy(next, oldUrl), null);
+      aiSettings = next;
+      localStorage.setItem(AI_SETTINGS_KEY, JSON.stringify(aiSettings));
+      wrap.querySelector('#ai-role-key').value = '';
+      broadcastCapabilities();
+      out.textContent = AI_AGENT_ROLES.map(role => `${role}: ${aiRoleModel(role).label}`).join(' · ');
+    } catch (error){
+      out.textContent = error?.message || String(error);
     }
   });
 

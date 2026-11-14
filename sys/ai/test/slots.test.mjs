@@ -63,6 +63,6 @@ function fakeHost(cap) {
   const cap = Number((host.match(/const AI_MAX_QUEUE_PER_APP = (\d+);/) || [])[1]);
   const n = Number((anvil.match(/const aiSlots = createSlots\((\d+)\);/) || [])[1]);
   assert.ok(cap > 0 && n === cap, `Anvil's slots (${n}) equal the host's per-app cap (${cap})`);
-  assert.match(anvil, /async function inferViaHost\(\{ messages, tools, maxTokens, signal \}\)\{\s*const release = await aiSlots\.acquire\(signal\);/, 'every host call takes a slot');
+  assert.match(anvil, /async function inferViaHost\(\{ messages, tools, maxTokens, signal, agentRole \}\)\{\s*const release = await aiSlots\.acquire\(signal\);/, 'every host call takes a slot');
 }
 console.log('slots: a 4-way fan-out lands all calls under the host cap of 3; aborts leave the line');

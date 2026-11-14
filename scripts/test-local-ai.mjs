@@ -348,4 +348,17 @@ assert.deepEqual(
   assert.ok(Object.entries(presets).filter(([, v]) => v.note).length === 1, 'only Ferrule carries a note today');
 }
 
+// Models by role (2026-11-14): the role's model decides consent, its own label names it, and a key
+// shared by origin is remembered while any setting using that origin asks.
+{
+  assert.match(html, /const model = aiResolveModel\(wantsAgent, msg\.agentRole \?\? null\);/, 'the request resolves its role model');
+  assert.match(html, /aiEnsurePermission\(appId, 'chat', \(\) => \{[\s\S]{0,120}\}, model\);/, 'consent is asked for the model that will answer');
+  assert.match(html, /const model = forModel \|\| \(image \? aiSelectedImageModel\(\) : aiSelectedModel\(\)\);/, 'aiEnsurePermission uses the passed model');
+  assert.equal((html.match(/\$\{model\.label \|\| \(image \? AI_IMAGE_MODEL_LABEL : AI_MODEL_LABEL\)\}/g) || []).length, 2, 'both endpoint consent texts name the answering model');
+  assert.match(html, /function aiRememberedBy\(settings, baseUrl\)/, 'one rule for remembering a shared key');
+  assert.ok(!/sharedImageCredential|sharedChatCredential/.test(html), 'the two-way pairwise rule is gone');
+  assert.match(html, /throw new Error\(`Unknown agent role/, 'an unknown role is refused');
+  assert.match(sdkSource, /if \(typeof options\.agentRole === 'string'\) chatMsg\.agentRole = options\.agentRole;/, 'the SDK forwards agentRole');
+}
+
 console.log('NakliOS AI broker, providers, model catalog, and SDK contract: PASS');

@@ -54,7 +54,7 @@ export const RUN_EVENTS = Object.freeze([
   'expect.missed',    // input: { step, id, misses, streak, limit }    output: {}  (CRIB-D D1: a graded prediction missed — the streak that stops the run; limit = the run's configured streak, 0 = never)
   'tool.spilled',     // input: { id, name, step, chars }       output: { sent }  (F5: the capped form the model actually saw)
   'subagent.ran',     // input: { kind, label, step, tool_call_id } output: { record, stop, steps, text }
-  'subagent.started', // input: { kind, label, step, tool_call_id } output: {}  (ESS-1: the claim, before the child runs)
+  'subagent.started', // input: { kind, label, step, tool_call_id, role?, model? } output: {}  (ESS-1: the claim, before the child runs)
   'subagent.beat',    // input: { kind, label, step, tool_call_id, child_step, tool } output: {}  (CRIB-B B1: a heartbeat — proves liveness, never completion)
   'codemode.started', 'codemode.called', 'codemode.settled', 'codemode.store.proposed',
   'prime.fact.settled', // input: { surveyId, projectId, taskId } output: { slug, error, status }  (write reconciliation)
@@ -321,10 +321,13 @@ export function createRunRecorder({ app = 'anvil', principal = 'local', grant_id
     // deterministic and each child independently verifiable.
     // ESS-1: the claim. Appended before the child runs, so a child that never reports back
     // (tab closed mid-dispatch, page reloaded) is visible: a started with no ran is an orphan.
-    subagentStarted({ kind, label, tool_call_id }) {
+    subagentStarted({ kind, label, tool_call_id, role = null, model = null }) {
       const s = step;
       return enqueue('subagent.started', () => ({
-        input: { kind: String(kind || 'task'), label: String(label || ''), step: s, tool_call_id: tool_call_id ?? null },
+        // `role` and `model` (models by role, 2026-11-14) only when the child ran on a role model
+        // other than the main one — absent otherwise, so older records and role-less runs match.
+        input: { kind: String(kind || 'task'), label: String(label || ''), step: s, tool_call_id: tool_call_id ?? null,
+          ...(role ? { role: String(role), model: String(model || '') } : {}) },
         output: {},
       }));
     },
@@ -766,7 +769,8 @@ export function foldSubagentFleet(events, resolve, { now = null, staleMs = SUBAG
     else if (e.tool === 'run.stopped') stoppedAt = ts || last;
     else if (e.tool === 'subagent.started') {
       const i = e.input || {};
-      const r = { kind: i.kind || 'task', label: i.label || '', tool_call_id: i.tool_call_id ?? null, lastSeen: ts, beats: 0, state: 'live', why: '', stop: null, ageMs: 0 };
+      const r = { kind: i.kind || 'task', label: i.label || '', tool_call_id: i.tool_call_id ?? null, lastSeen: ts, beats: 0, state: 'live', why: '', stop: null, ageMs: 0,
+        ...(i.role ? { role: i.role, model: i.model || '' } : {}) }; // models by role: where the child ran, as the live row shows it
       rows.push(r); const k = key(i); if (!open.has(k)) open.set(k, []); open.get(k).push(r);
     } else if (e.tool === 'subagent.beat') {
       const q = open.get(key(e.input || {})); const r = q && q[q.length - 1];
@@ -1711,19 +1715,25 @@ export function foldSessionContext(events, resolve) {
 export function foldQuota(events, resolve) {
   const ev = joined(events, resolve);
   let tokens = 0, calls = 0, counted = 0, evidence = null;
+  // Replies the host's repeat guard stopped (finishReason 'repetition'), per answering model —
+  // the count that says which models loop (sys/ai/repeat-guard.mjs, 2026-11-14).
+  const repeats = Object.create(null); // keyed by model id; no prototype, so an id like __proto__ counts
   for (const e of ev) {
-    if (e.tool === 'llm.responded') { calls++; const u = e.output?.usage; if (u && Number(u.total) > 0) { tokens += Number(u.total); counted++; } }
+    if (e.tool === 'llm.responded') {
+      calls++; const u = e.output?.usage; if (u && Number(u.total) > 0) { tokens += Number(u.total); counted++; }
+      if (e.output?.finishReason === 'repetition') { const m = e.output.model || 'unknown'; repeats[m] = (repeats[m] || 0) + 1; }
+    }
     // A summarizing compaction's model call runs outside the recorded turns; its usage rides the
     // compaction event, so it is a call and its tokens are this run's spend.
     else if (e.tool === 'run.compacted' && e.output?.usage) { calls++; const u = e.output.usage; if (Number(u.total) > 0) { tokens += Number(u.total); counted++; } }
     else if (e.tool === 'subagent.ran' && e.output?.record) {
-      try { const child = loadRecord(e.output.record); const q = foldQuota(child.events(), child.resolve); tokens += q.tokens; calls += q.calls; counted += q.counted; } catch (_) { /* an unreadable child adds nothing */ }
+      try { const child = loadRecord(e.output.record); const q = foldQuota(child.events(), child.resolve); tokens += q.tokens; calls += q.calls; counted += q.counted; for (const [m, n] of Object.entries(q.repeats)) repeats[m] = (repeats[m] || 0) + n; } catch (_) { /* an unreadable child adds nothing */ }
     }
     if (e.tool === 'verify.passed' && !evidence) evidence = e.output_hash || null;
   }
   const t0 = Number(ev[0]?.ts), t1 = Number(ev[ev.length - 1]?.ts);
   const seconds = Number.isFinite(t0) && Number.isFinite(t1) ? Math.max(0, Math.round((t1 - t0) / 1000)) : 0;
-  return { tokens, calls, counted, seconds, evidence };
+  return { tokens, calls, counted, seconds, evidence, repeats };
 }
 
 // LX-3 — the GOAL ROW of a task: Codex's shape (objective · a status with re-entry first-class · the

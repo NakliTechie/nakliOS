@@ -64,6 +64,41 @@ await test('evolve rejects a missing generator/scorer', async () => {
   assert(threw, 'a missing score() is refused');
 });
 
+// Multi-parent (RSA K = 2). A toy where neither parent alone holds the answer: a candidate is a
+// set of solved example indices; combining two parents unions them.
+await test('parents: 1 (the default) hands every candidate the best alone, as before', async () => {
+  const seen = [];
+  await evolve({ generate: (ctx) => { seen.push(ctx.parents.length); return ctx.index; }, score: (c) => c / 10, popSize: 3, maxGen: 2, target: 99 });
+  eq(seen.slice(0, 3).join(','), '0,0,0', 'gen 0 has no parents');
+  eq(seen.slice(3).join(','), '1,1,1', 'gen 1: one parent each');
+});
+
+await test('parents: 2 hands each candidate the best plus a different runner-up, best first', async () => {
+  const seen = [];
+  const gen = (ctx) => { if (ctx.gen === 1) seen.push(ctx.parents.map((p) => p.candidate)); return ctx.gen === 0 ? [10, 30, 20][ctx.index] : 0; };
+  await evolve({ generate: gen, score: (c) => c / 100, popSize: 3, maxGen: 2, target: 99, parents: 2 });
+  eq(seen.length, 3, 'three gen-1 candidates');
+  assert(seen.every((ps) => ps.length === 2 && ps[0] === 30), 'every candidate gets the best (30) first');
+  eq(new Set(seen.map((ps) => ps[1])).size, 2, 'siblings are paired with different runners-up (20 and 10)');
+  assert(seen.every((ps) => typeof ps[0] === 'number'), 'parents carry the candidate itself');
+});
+
+await test('parents: 2 lets a combine operator solve what repair of the best alone cannot', async () => {
+  // Candidates are sorted arrays of solved indices out of [0..3]. Gen 0 makes {0,1} and {2,3}.
+  // "Repair" (K = 1) can only keep the best; "combine" (K = 2) unions two parents.
+  const score = (c) => c.length / 4;
+  const seeds = [[0, 1], [2, 3]];
+  const generate = (ctx) => {
+    if (ctx.gen === 0) return seeds[ctx.index];
+    return [...new Set(ctx.parents.flatMap((p) => p.candidate))].sort();
+  };
+  const one = await evolve({ generate, score, popSize: 2, maxGen: 3, target: 1, parents: 1 });
+  const two = await evolve({ generate, score, popSize: 2, maxGen: 3, target: 1, parents: 2 });
+  assert(!one.solved, 'K = 1 never gets past half');
+  assert(two.solved && two.generations === 2, `K = 2 solves in gen 1 (took ${two.generations})`);
+  eq(two.best.join(','), '0,1,2,3', 'the union of both parents');
+});
+
 if (failures.length) {
   console.error(`evolve: ${passed} passed, ${failures.length} FAILED`);
   for (const f of failures) console.error(`  ✗ ${f.n}: ${f.message}`);

@@ -583,6 +583,9 @@ jobs:
       - name: Verify generational evolutionary loop (AVO crib)
         run: node sys/ai/test/evolve.test.mjs
 
+      - name: Verify the repeat guard and the loop's answer to a stopped reply
+        run: node sys/ai/test/repeat-guard.test.mjs
+
       - name: Verify proposal fingerprints (P1–P5 stability) and the poison ledger
         run: node sys/ai/test/proposal-fingerprint.test.mjs
 

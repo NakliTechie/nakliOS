@@ -58,6 +58,9 @@ export function shellTool() {
 // retry instead of ending the run. "done", "ok", "finished", an empty string, a few characters —
 // none of them say what was done or how it was checked, which is the only thing the summary is
 // for. Pure; the loop calls it before it runs the gate, so a placeholder never costs a gate run.
+// A reply the host's repeat guard stopped gets this many short-answer nudges before the run stops.
+export const REPETITION_RETRIES = 2;
+export const REPETITION_NUDGE = '[coordination] Your last reply started repeating the same text and was stopped. Do not repeat it. Give a short, direct answer now, or make the next tool call.';
 export const PLACEHOLDER_SUMMARY_RE = /^(?:done|ok|okay|finished|complete|completed|task (?:is )?(?:done|complete|completed)|all done|success|✓|yes)[.! ]*$/i;
 export function placeholderSummary(summary) {
   const t = String(summary ?? '').trim();
@@ -394,6 +397,7 @@ export async function runAgentLoop({
   let scannedTo = 0;         // how much of convo has been checked for an owner interjection
   let requestLen = 0;        // convo length at the moment the in-flight request was sent (F6)
   let verifyRounds = 0;
+  let repetitionStops = 0; // replies the host's repeat guard stopped this run (finishReason 'repetition')
   let expectMisses = 0, expectStreak = 0; // D1: missed predictions this run, and in a row
   const startedAt = now();
 
@@ -551,6 +555,22 @@ export async function runAgentLoop({
     // fed back so the model fixes it; only a passing verdict (exit 0) completes.
     if (!toolCalls.length) {
       convo.push(assistantTurn(content, null));
+      // The host's repeat guard stopped a reply that was looping (sys/ai/repeat-guard.mjs). That is
+      // not the model saying it is finished: ask once or twice for a short answer, then stop with
+      // its own reason. The nudge rides a `repeat-nudge` event (times: null) so the record's fold
+      // replays the exact words.
+      if (reply?.finishReason === 'repetition') {
+        repetitionStops++;
+        if (repetitionStops <= REPETITION_RETRIES) {
+          const note = { role: 'user', content: REPETITION_NUDGE };
+          loopAuthored.add(note);
+          convo.push(note);
+          onEvent({ type: 'repeat-nudge', step, times: null, signature: null, denied: false, content: note.content });
+          continue;
+        }
+        onEvent({ type: 'done', reason: 'repetition', step });
+        return { messages: convo, steps: step + 1, stop: 'repetition', reason: 'the model kept repeating the same text', text: lastText };
+      }
       // B2: nothing to do while children are still in flight is WAITING, not done — the next
       // completion steers the run on, and the gate does not run over a half-finished fan-out.
       // Wakes on a steer, on the last child settling, on abort, or when the wall clock runs out.

@@ -450,6 +450,9 @@
     if (options.agent === true) chatMsg.agent = true;
     if (options.tools != null) chatMsg.tools = options.tools;
     if (options.tool_choice != null) chatMsg.tool_choice = options.tool_choice;
+    // Models by role: 'build' or 'review' runs the request on that role's model (Settings → AI).
+    // The host refuses an unknown role; omitted means the selected model.
+    if (typeof options.agentRole === 'string') chatMsg.agentRole = options.agentRole;
     send('naklios:ai:chat', chatMsg);
     if (options.signal) {
       if (options.signal.aborted) stream.cancel();
@@ -467,7 +470,9 @@
     var toolCalls = null;
     var usage = null;
     var model = null;
+    var truncateAt = null;
     for await (var chunk of stream) {
+      if (typeof chunk.naklios_truncate_at === 'number') truncateAt = chunk.naklios_truncate_at;
       var choice = chunk.choices && chunk.choices[0];
       if (choice && choice.delta && choice.delta.content) content += choice.delta.content;
       if (choice && choice.delta && choice.delta.tool_calls) toolCalls = choice.delta.tool_calls;
@@ -476,6 +481,7 @@
       // the last chunk is the done chunk, which names the id that actually answered
       if (chunk.model) model = chunk.model;
     }
+    if (truncateAt != null && content.length > truncateAt) content = content.slice(0, truncateAt);
     var message = { role: 'assistant', content: content };
     if (toolCalls) message.tool_calls = toolCalls;
     return {
@@ -646,6 +652,9 @@
           // The provider's token count, where the OpenAI shape puts it. An app that budgets
           // on estimated characters cannot see tool schemas or the host's own preamble.
           usage: msg.usage || null,
+          // finish_reason 'repetition': the host's repeat guard stopped a reply that was looping.
+          // The streamed text ran past the loop's start; keep this many characters of it.
+          naklios_truncate_at: typeof msg.truncateAt === 'number' ? msg.truncateAt : null,
         });
         aiRequests.delete(msg.requestId);
         aiRequest.finish();

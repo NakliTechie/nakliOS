@@ -113,7 +113,7 @@ assert.match(anvil, /req\.onStatus = \(status\)=>\{ if\(hold\.wait\) hold\.wait\
   h2.wait(true); await sleep(20); h2.wait(false);
   await assert.rejects(p2, /did not respond within/, 'after consent the deadline applies again');
 }
-assert.match(anvil, /async function inferViaHost\(\{ messages, tools, maxTokens, signal \}\)/,
+assert.match(anvil, /async function inferViaHost\(\{ messages, tools, maxTokens, signal, agentRole \}\)/,
   'inferViaHost accepts the run\'s abort signal');
 assert.match(anvil, /if\(signal && signal\.aborted\) throw new Error\('aborted'\)/,
   'a retry loop re-checks abort before each attempt');

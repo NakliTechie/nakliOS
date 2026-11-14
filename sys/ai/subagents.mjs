@@ -299,6 +299,7 @@ export function formatDispatchDigest({ results, status, conflicts, dropped, budg
     if (r.readMoved && r.readMoved.length) tag += ` · read ${r.readMoved.length} file${r.readMoved.length === 1 ? '' : 's'} that changed under it since (${r.readMoved.join(', ')}) — its result may rest on stale content`; // #9
     if (r.fenceError) tag += ` · (fence unavailable: ${r.fenceError} — merged unfenced; the base may have moved under it)`; // #9
     if (s === 'outside' && r.outside && r.outside.length) tag += ` (${r.outside.join(', ')})`;
+    if (r.ranOn) tag += ` · ran on ${r.ranOn}`; // models by role: only when the role's model differs from the main one
     lines.push('');
     lines.push(`### [${num(i)}] ${r.label} — ${tag}`);
     if (touched.length) {
@@ -411,6 +412,7 @@ export function subagentLiveness(row, { now = Date.now(), staleMs = SUBAGENT_STA
 export function subagentFeedLine(row, opts = {}) {
   const r = row || {};
   const where = r.lastTool ? ` · last: ${r.lastTool}${r.lastDetail ? '(' + r.lastDetail + ')' : ''}` : '';
-  if (r.status === 'running') { const lv = subagentLiveness(r, opts); return `${r.kind || 'task'} · ${r.label || ''} — ${lv.state} (${lv.why}) · step ${r.steps || 0} · ${r.tools || 0} tool call${r.tools === 1 ? '' : 's'}${where}`; }
-  return `${r.kind || 'task'} · ${r.label || ''} — ${r.status} (${r.steps || 0} step${r.steps === 1 ? '' : 's'}, ${r.tools || 0} tool call${r.tools === 1 ? '' : 's'})`;
+  const on = r.ranOn ? ` · on ${r.ranOn}` : ''; // models by role: the child's model, when it is not the main one
+  if (r.status === 'running') { const lv = subagentLiveness(r, opts); return `${r.kind || 'task'} · ${r.label || ''} — ${lv.state} (${lv.why}) · step ${r.steps || 0} · ${r.tools || 0} tool call${r.tools === 1 ? '' : 's'}${where}${on}`; }
+  return `${r.kind || 'task'} · ${r.label || ''} — ${r.status} (${r.steps || 0} step${r.steps === 1 ? '' : 's'}, ${r.tools || 0} tool call${r.tools === 1 ? '' : 's'})${on}`;
 }

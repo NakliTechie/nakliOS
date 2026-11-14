@@ -689,6 +689,42 @@ await test('D1: an intercepted command with an expect gets NO verdict line — i
   assert(/\[expect\] MET \(contains a\)/.test(ran), 'a command that ran is graded: ' + ran.slice(0, 160));
 });
 
+// Models by role (2026-11-14): dispatch and task children call the build model, the reviewer
+// calls the review model, and the claim and the digest say where a child ran.
+await test('roles: dispatch children run on the build infer, the reviewer on the review infer, the digest names the model', async () => {
+  const base = new MemoryBackend();
+  const calls = [];
+  const plan = (p) => /alpha/i.test(p) ? { write: { file: 'alpha.txt', content: 'ALPHA' } } : { done: 'ok' };
+  const main = scriptedInfer(plan, 'MAIN REVIEW');
+  const tagged = (tag, review) => { const f = scriptedInfer(plan, review); return async (req) => { calls.push(tag); return f(req); }; };
+  const starts = [];
+  const exec = topExecutorWith(base, async (req) => { calls.push('main'); return main(req); }, {
+    roleInfer: { build: tagged('build', 'x'), review: tagged('review', 'ROLE REVIEW'), label: (role) => (role === 'build' ? 'Cheap · flash' : null) },
+    recordSubagentStart: async (sub) => { starts.push(sub); },
+  });
+  const out = await exec('dispatch', { tasks: [{ description: 'make alpha', prompt: 'Create alpha.txt' }] });
+  eq(dec(await base.readBinary('alpha.txt')), 'ALPHA', 'the build child merged');
+  assert(calls.length && calls.every((c) => c === 'build'), `dispatch called only the build infer (got ${calls.join(',')})`);
+  assert(/ran on Cheap · flash \(build\)/.test(out), 'the digest row names the build model');
+  eq(starts[0].role, 'build', 'the claim carries the role'); eq(starts[0].model, 'Cheap · flash', 'and the model label');
+  calls.length = 0;
+  const rv = await exec('review', { prompt: 'review alpha.txt' });
+  assert(calls.length && calls.every((c) => c === 'review'), `review called only the review infer (got ${calls.join(',')})`);
+  assert(/ROLE REVIEW/.test(rv) && !/ran on/.test(rv), 'the review model answered; no label when it matches the main model');
+  eq(starts[1].role, undefined, 'a child on the main model records no role (same bytes as before)');
+});
+
+await test('roles: without roleInfer every child uses infer, as before', async () => {
+  const base = new MemoryBackend();
+  const calls = [];
+  const plan = (p) => ({ write: { file: 'a.txt', content: 'A' } });
+  const f = scriptedInfer(plan);
+  const exec = topExecutor(base, async (req) => { calls.push('main'); return f(req); });
+  const out = await exec('dispatch', { tasks: [{ description: 'a', prompt: 'Create a.txt' }] });
+  assert(calls.length && calls.every((c) => c === 'main'), 'the main infer ran the child');
+  assert(!/ran on/.test(out), 'no model label without roles');
+});
+
 if (failures.length){
   console.error(`subagents-integration: ${passed} passed, ${failures.length} FAILED`);
   for (const f of failures) console.error(`  FAIL ${f.n}: ${f.message}`);
