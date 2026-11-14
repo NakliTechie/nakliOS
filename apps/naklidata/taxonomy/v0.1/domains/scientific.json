@@ -1,0 +1,14 @@
+{
+  "domain": "scientific",
+  "label": "Scientific and measurements",
+  "types": [
+    "sensor_id",
+    "temperature",
+    "humidity",
+    "pressure",
+    "measurement_unit"
+  ],
+  "report_templates": [
+    "sensor_readings"
+  ]
+}

@@ -1,0 +1,301 @@
+[
+  {
+    "section": "getting-started",
+    "slug": "00-welcome",
+    "backend": "browser",
+    "hero": false,
+    "status": "ok",
+    "errors": 0,
+    "warnings": []
+  },
+  {
+    "section": "getting-started",
+    "slug": "01-empty-state",
+    "backend": "browser",
+    "hero": false,
+    "status": "ok",
+    "errors": 0,
+    "warnings": []
+  },
+  {
+    "section": "getting-started",
+    "slug": "02-mount-url",
+    "backend": "browser",
+    "hero": false,
+    "status": "ok",
+    "errors": 0,
+    "warnings": []
+  },
+  {
+    "section": "getting-started",
+    "slug": "03-mount-s3",
+    "backend": "browser",
+    "hero": false,
+    "status": "ok",
+    "errors": 0,
+    "warnings": []
+  },
+  {
+    "section": "data-and-schema",
+    "slug": "01-sources-mounted",
+    "backend": "browser",
+    "hero": true,
+    "status": "ok",
+    "errors": 0,
+    "warnings": []
+  },
+  {
+    "section": "data-and-schema",
+    "slug": "02-schema-panel",
+    "status": "ok",
+    "errors": 0
+  },
+  {
+    "section": "data-and-schema",
+    "slug": "03-type-override",
+    "status": "ok",
+    "errors": 0
+  },
+  {
+    "section": "notebook",
+    "slug": "01-templates",
+    "backend": "browser",
+    "hero": true,
+    "status": "ok",
+    "errors": 0,
+    "warnings": []
+  },
+  {
+    "section": "notebook",
+    "slug": "02-sql-cell-result",
+    "backend": "browser",
+    "hero": true,
+    "status": "ok",
+    "errors": 0,
+    "warnings": []
+  },
+  {
+    "section": "notebook",
+    "slug": "05-excel-export",
+    "backend": "browser",
+    "hero": false,
+    "status": "ok",
+    "errors": 0,
+    "warnings": []
+  },
+  {
+    "section": "notebook",
+    "slug": "03-chart-cell",
+    "backend": "browser",
+    "hero": false,
+    "status": "ok",
+    "errors": 0,
+    "warnings": []
+  },
+  {
+    "section": "notebook",
+    "slug": "04-add-cell-row",
+    "backend": "browser",
+    "hero": false,
+    "status": "ok",
+    "errors": 0,
+    "warnings": []
+  },
+  {
+    "section": "resolve",
+    "slug": "01-cluster-modal",
+    "backend": "browser",
+    "hero": false,
+    "status": "ok",
+    "errors": 0,
+    "warnings": []
+  },
+  {
+    "section": "resolve",
+    "slug": "02-semantic-panel",
+    "backend": "browser",
+    "hero": false,
+    "status": "ok",
+    "errors": 0,
+    "warnings": []
+  },
+  {
+    "section": "resolve",
+    "slug": "03-golden-table",
+    "backend": "browser",
+    "hero": false,
+    "status": "ok",
+    "errors": 0,
+    "warnings": []
+  },
+  {
+    "section": "lineage",
+    "slug": "01-lineage-panel",
+    "backend": "browser",
+    "hero": false,
+    "status": "ok",
+    "errors": 0,
+    "warnings": []
+  },
+  {
+    "section": "facet",
+    "slug": "01-embedding-map",
+    "backend": "browser",
+    "hero": false,
+    "status": "ok",
+    "errors": 0,
+    "warnings": [
+      "[.WebGL-0x12c00501000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+      "[.WebGL-0x12c00501000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+      "[.WebGL-0x12c00501000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+      "[.WebGL-0x12c00501000]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)"
+    ],
+    "pixels": {
+      "colored": 12203,
+      "total": 1114560
+    }
+  },
+  {
+    "section": "facet",
+    "slug": "02-network-graph",
+    "backend": "browser",
+    "hero": false,
+    "status": "ok",
+    "errors": 0,
+    "warnings": [],
+    "pixels": {
+      "colored": 59586,
+      "total": 1114560
+    }
+  },
+  {
+    "section": "facet",
+    "slug": "03-knowledge-graph",
+    "backend": "browser",
+    "hero": false,
+    "status": "ok",
+    "errors": 0,
+    "warnings": [],
+    "pixels": {
+      "colored": 128653,
+      "total": 1114560
+    }
+  },
+  {
+    "section": "facet",
+    "slug": "04-temporal-timeline",
+    "backend": "browser",
+    "hero": false,
+    "status": "ok",
+    "errors": 0,
+    "warnings": []
+  },
+  {
+    "section": "facet",
+    "slug": "05-distribution",
+    "backend": "browser",
+    "hero": false,
+    "status": "ok",
+    "errors": 0,
+    "warnings": []
+  },
+  {
+    "section": "reports",
+    "slug": "01-superstore-region-margin",
+    "status": "ok",
+    "errors": 0
+  },
+  {
+    "section": "reports",
+    "slug": "02-financial-segment-margin",
+    "status": "ok",
+    "errors": 0
+  },
+  {
+    "section": "reports",
+    "slug": "03-chinook-revenue-country",
+    "status": "ok",
+    "errors": 0
+  },
+  {
+    "section": "ai-sidecar",
+    "slug": "01-settings-byok",
+    "backend": "browser",
+    "hero": false,
+    "status": "ok",
+    "errors": 0,
+    "warnings": []
+  },
+  {
+    "section": "ai-sidecar",
+    "slug": "02-result-ai-chips",
+    "backend": "browser",
+    "hero": false,
+    "status": "ok",
+    "errors": 0,
+    "warnings": []
+  },
+  {
+    "section": "ai-sidecar",
+    "slug": "03-nl-to-sql",
+    "backend": "browser",
+    "hero": false,
+    "status": "ok",
+    "errors": 0,
+    "warnings": []
+  },
+  {
+    "section": "more-cells",
+    "slug": "01-input-cell",
+    "backend": "browser",
+    "hero": false,
+    "status": "ok",
+    "errors": 0,
+    "warnings": []
+  },
+  {
+    "section": "more-cells",
+    "slug": "02-dashboard-cell",
+    "backend": "browser",
+    "hero": false,
+    "status": "ok",
+    "errors": 0,
+    "warnings": []
+  },
+  {
+    "section": "more-cells",
+    "slug": "03-stats-cell",
+    "backend": "browser",
+    "hero": false,
+    "status": "ok",
+    "errors": 0,
+    "warnings": []
+  },
+  {
+    "section": "more-cells",
+    "slug": "04-report-cell",
+    "backend": "browser",
+    "hero": false,
+    "status": "ok",
+    "errors": 0,
+    "warnings": []
+  },
+  {
+    "section": "more-cells",
+    "slug": "05-assertion-cell",
+    "backend": "browser",
+    "hero": false,
+    "status": "ok",
+    "errors": 0,
+    "warnings": []
+  },
+  {
+    "section": "more-cells",
+    "slug": "06-cohort-cell",
+    "backend": "browser",
+    "hero": false,
+    "status": "ok",
+    "errors": 0,
+    "warnings": []
+  }
+]

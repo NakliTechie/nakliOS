@@ -1,0 +1,482 @@
+{
+  "format": "naklidata-taxonomy-candidate-register",
+  "version": 1,
+  "created": "2026-09-27",
+  "status": "logged-not-installed",
+  "runtimeEffect": "none",
+  "sourceManifest": "eval/semantic-classifier/wave2-source-manifest.json",
+  "policy": {
+    "purpose": "Retain reusable semantic meanings exposed by the fresh classifier sources for later addition to NakliData's house taxonomy.",
+    "evaluationBoundary": "Do not install these candidates before preserving the wave-2 detector, TF-IDF, and MiniLM baseline. Installation would change the evaluated label space.",
+    "promotionGate": "Require a reviewed definition, sensitivity and universal crosswalk, collision review, representative values, regression coverage, and either a second source or a validated product workflow.",
+    "proposalPath": "After the gate, convert one accepted candidate at a time into taxonomy/v0.x/proposed/<id>.json and follow taxonomy/v0.x/proposed/README.md."
+  },
+  "candidates": [
+    {
+      "id": "phone_number",
+      "displayName": "Phone number",
+      "priority": "A",
+      "suggestedDomain": "sensitive-data",
+      "suggestedUniversalTerm": "ut:phone_number",
+      "evidence": ["nces_schools_2021_22/nces_public_schools/PHONE"],
+      "reason": "The shipped phone_e164 type excludes common national and formatted telephone numbers."
+    },
+    {
+      "id": "date_of_death",
+      "displayName": "Date of death",
+      "priority": "A",
+      "suggestedDomain": "sensitive-data",
+      "suggestedUniversalTerm": "ut:temporal_instant",
+      "evidence": ["synthea_100/synthea_patients/DEATHDATE"],
+      "reason": "A death date is sensitive person data and should not collapse into a public generic date."
+    },
+    {
+      "id": "drivers_license_number",
+      "displayName": "Driver's license number",
+      "priority": "A",
+      "suggestedDomain": "sensitive-data",
+      "suggestedUniversalTerm": "ut:government_identifier",
+      "evidence": ["synthea_100/synthea_patients/DRIVERS"],
+      "reason": "The identifier is common, personal, and absent from the current government-identifier leaves."
+    },
+    {
+      "id": "claim_id",
+      "displayName": "Healthcare claim identifier",
+      "priority": "A",
+      "suggestedDomain": "healthcare",
+      "suggestedUniversalTerm": "ut:case_identifier",
+      "evidence": ["synthea_100/synthea_claims/Id"],
+      "reason": "A claim identifier is neither a generic row id nor an encounter identifier."
+    },
+    {
+      "id": "healthcare_provider_id",
+      "displayName": "Healthcare provider identifier",
+      "priority": "A",
+      "suggestedDomain": "healthcare",
+      "suggestedUniversalTerm": "ut:person_identifier",
+      "evidence": [
+        "synthea_100/synthea_encounters/PROVIDER",
+        "synthea_100/synthea_claims/PROVIDERID",
+        "synthea_100/synthea_claims/REFERRINGPROVIDERID",
+        "synthea_100/synthea_claims/SUPERVISINGPROVIDERID"
+      ],
+      "reason": "Provider references recur across healthcare tables and need a consistent sensitive identity role."
+    },
+    {
+      "id": "insurance_payer_id",
+      "displayName": "Insurance payer identifier",
+      "priority": "A",
+      "suggestedDomain": "insurance",
+      "suggestedUniversalTerm": "ut:identifier",
+      "evidence": [
+        "synthea_100/synthea_encounters/PAYER",
+        "synthea_100/synthea_claims/PRIMARYPATIENTINSURANCEID",
+        "synthea_100/synthea_claims/SECONDARYPATIENTINSURANCEID"
+      ],
+      "reason": "Payer references identify organizations and are confusable with patient policy identifiers."
+    },
+    {
+      "id": "healthcare_organization_id",
+      "displayName": "Healthcare organization identifier",
+      "priority": "A",
+      "suggestedDomain": "healthcare",
+      "suggestedUniversalTerm": "ut:identifier",
+      "evidence": ["synthea_100/synthea_encounters/ORGANIZATION"],
+      "reason": "Encounter organizations need an entity key distinct from facilities, providers, and payers."
+    },
+    {
+      "id": "school_id",
+      "displayName": "School identifier",
+      "priority": "A",
+      "suggestedDomain": "education",
+      "suggestedUniversalTerm": "ut:facility_identifier",
+      "evidence": ["nces_schools_2021_22/nces_public_schools/NCESSCH"],
+      "reason": "A school identifier is a durable education entity key rather than a student or generic record id."
+    },
+    {
+      "id": "education_agency_id",
+      "displayName": "Education agency identifier",
+      "priority": "A",
+      "suggestedDomain": "education",
+      "suggestedUniversalTerm": "ut:identifier",
+      "evidence": [
+        "nces_schools_2021_22/nces_public_schools/LEAID",
+        "nces_schools_2021_22/nces_public_schools/ST_LEAID"
+      ],
+      "reason": "Local education agency identifiers recur in official education data and scope schools."
+    },
+    {
+      "id": "school_name",
+      "displayName": "School name",
+      "priority": "A",
+      "suggestedDomain": "education",
+      "suggestedUniversalTerm": "ut:organization_name",
+      "evidence": ["nces_schools_2021_22/nces_public_schools/SCH_NAME"],
+      "reason": "School names are organization names with useful education-specific header evidence."
+    },
+    {
+      "id": "academic_year",
+      "displayName": "Academic year",
+      "priority": "A",
+      "suggestedDomain": "education",
+      "suggestedUniversalTerm": "ut:year",
+      "evidence": ["nces_schools_2021_22/nces_public_schools/SURVYEAR"],
+      "reason": "Values such as 2021-2022 are periods and must not be classified as a single calendar year."
+    },
+    {
+      "id": "student_count",
+      "displayName": "Student count",
+      "priority": "A",
+      "suggestedDomain": "education",
+      "suggestedUniversalTerm": "ut:count",
+      "evidence": [
+        "nces_schools_2021_22/nces_public_schools/TOTFRL",
+        "nces_schools_2021_22/nces_public_schools/FRELCH",
+        "nces_schools_2021_22/nces_public_schools/REDLCH",
+        "nces_schools_2021_22/nces_public_schools/DIRECTCERT",
+        "nces_schools_2021_22/nces_public_schools/PK",
+        "nces_schools_2021_22/nces_public_schools/KG",
+        "nces_schools_2021_22/nces_public_schools/G01",
+        "nces_schools_2021_22/nces_public_schools/G02",
+        "nces_schools_2021_22/nces_public_schools/G03",
+        "nces_schools_2021_22/nces_public_schools/G04",
+        "nces_schools_2021_22/nces_public_schools/G05",
+        "nces_schools_2021_22/nces_public_schools/G06",
+        "nces_schools_2021_22/nces_public_schools/G07",
+        "nces_schools_2021_22/nces_public_schools/G08",
+        "nces_schools_2021_22/nces_public_schools/G09",
+        "nces_schools_2021_22/nces_public_schools/G10",
+        "nces_schools_2021_22/nces_public_schools/G11",
+        "nces_schools_2021_22/nces_public_schools/G12",
+        "nces_schools_2021_22/nces_public_schools/G13",
+        "nces_schools_2021_22/nces_public_schools/UG",
+        "nces_schools_2021_22/nces_public_schools/AE",
+        "nces_schools_2021_22/nces_public_schools/TOTMENROL",
+        "nces_schools_2021_22/nces_public_schools/TOTFENROL",
+        "nces_schools_2021_22/nces_public_schools/TOTAL",
+        "nces_schools_2021_22/nces_public_schools/MEMBER",
+        "nces_schools_2021_22/nces_public_schools/AMALM",
+        "nces_schools_2021_22/nces_public_schools/AMALF",
+        "nces_schools_2021_22/nces_public_schools/AM",
+        "nces_schools_2021_22/nces_public_schools/ASALM",
+        "nces_schools_2021_22/nces_public_schools/ASALF",
+        "nces_schools_2021_22/nces_public_schools/AS",
+        "nces_schools_2021_22/nces_public_schools/BLALM",
+        "nces_schools_2021_22/nces_public_schools/BLALF",
+        "nces_schools_2021_22/nces_public_schools/BL",
+        "nces_schools_2021_22/nces_public_schools/HPALM",
+        "nces_schools_2021_22/nces_public_schools/HPALF",
+        "nces_schools_2021_22/nces_public_schools/HP",
+        "nces_schools_2021_22/nces_public_schools/HIALM",
+        "nces_schools_2021_22/nces_public_schools/HIALF",
+        "nces_schools_2021_22/nces_public_schools/HI",
+        "nces_schools_2021_22/nces_public_schools/TRALM",
+        "nces_schools_2021_22/nces_public_schools/TRALF",
+        "nces_schools_2021_22/nces_public_schools/TR",
+        "nces_schools_2021_22/nces_public_schools/WHALM",
+        "nces_schools_2021_22/nces_public_schools/WHALF",
+        "nces_schools_2021_22/nces_public_schools/WH"
+      ],
+      "reason": "The schema contains many student counts split by grade, sex, race, ethnicity, and program status."
+    },
+    {
+      "id": "student_teacher_ratio",
+      "displayName": "Student-teacher ratio",
+      "priority": "A",
+      "suggestedDomain": "education",
+      "suggestedUniversalTerm": "ut:ratio",
+      "evidence": ["nces_schools_2021_22/nces_public_schools/STUTERATIO"],
+      "reason": "This is a unitless ratio, not a percentage or generic score."
+    },
+    {
+      "id": "teacher_fte",
+      "displayName": "Teacher full-time equivalent",
+      "priority": "A",
+      "suggestedDomain": "education",
+      "suggestedUniversalTerm": "ut:quantity",
+      "evidence": ["nces_schools_2021_22/nces_public_schools/FTE"],
+      "reason": "Teacher FTE may be fractional and must not be treated as a whole-person count."
+    },
+    {
+      "id": "parcel_id",
+      "displayName": "Land parcel identifier",
+      "priority": "A",
+      "suggestedDomain": "real-estate",
+      "suggestedUniversalTerm": "ut:facility_identifier",
+      "evidence": ["nyc_311/nyc_311_service_requests/bbl"],
+      "reason": "NYC BBL identifies land parcels and is not an address or generic row identifier."
+    },
+    {
+      "id": "support_channel",
+      "displayName": "Support channel",
+      "priority": "A",
+      "suggestedDomain": "customer-support",
+      "suggestedUniversalTerm": "ut:category",
+      "evidence": ["nyc_311/nyc_311_service_requests/open_data_channel_type"],
+      "reason": "Phone, online, and mobile identify how a support request entered the service."
+    },
+    {
+      "id": "encounter_class",
+      "displayName": "Encounter class",
+      "priority": "B",
+      "suggestedDomain": "healthcare",
+      "suggestedUniversalTerm": "ut:category",
+      "evidence": ["synthea_100/synthea_encounters/ENCOUNTERCLASS"],
+      "reason": "Encounter settings such as wellness, ambulatory, emergency, and inpatient are reusable clinical categories."
+    },
+    {
+      "id": "clinical_procedure_code",
+      "displayName": "Clinical procedure code",
+      "priority": "B",
+      "suggestedDomain": "healthcare",
+      "suggestedUniversalTerm": "ut:categorical",
+      "evidence": ["synthea_100/synthea_encounters/CODE"],
+      "reason": "Encounter procedure codes are clinical codes but are not diagnosis codes."
+    },
+    {
+      "id": "healthcare_cost_amount",
+      "displayName": "Healthcare cost amount",
+      "priority": "B",
+      "suggestedDomain": "healthcare",
+      "suggestedUniversalTerm": "ut:monetary_amount",
+      "evidence": [
+        "synthea_100/synthea_encounters/BASE_ENCOUNTER_COST",
+        "synthea_100/synthea_patients/HEALTHCARE_EXPENSES"
+      ],
+      "reason": "Healthcare costs differ from insurance claim amounts and payer coverage."
+    },
+    {
+      "id": "insurance_coverage_amount",
+      "displayName": "Insurance coverage amount",
+      "priority": "B",
+      "suggestedDomain": "insurance",
+      "suggestedUniversalTerm": "ut:monetary_amount",
+      "evidence": [
+        "synthea_100/synthea_patients/HEALTHCARE_COVERAGE",
+        "synthea_100/synthea_encounters/PAYER_COVERAGE"
+      ],
+      "reason": "Coverage paid by an insurer is distinct from total claim and patient cost amounts."
+    },
+    {
+      "id": "outstanding_claim_amount",
+      "displayName": "Outstanding claim amount",
+      "priority": "B",
+      "suggestedDomain": "insurance",
+      "suggestedUniversalTerm": "ut:monetary_amount",
+      "evidence": [
+        "synthea_100/synthea_claims/OUTSTANDING1",
+        "synthea_100/synthea_claims/OUTSTANDING2",
+        "synthea_100/synthea_claims/OUTSTANDINGP"
+      ],
+      "reason": "Outstanding balances should not be conflated with paid or originally claimed amounts."
+    },
+    {
+      "id": "healthcare_claim_type",
+      "displayName": "Healthcare claim type",
+      "priority": "B",
+      "suggestedDomain": "healthcare",
+      "suggestedUniversalTerm": "ut:category",
+      "evidence": [
+        "synthea_100/synthea_claims/HEALTHCARECLAIMTYPEID1",
+        "synthea_100/synthea_claims/HEALTHCARECLAIMTYPEID2"
+      ],
+      "reason": "Claim type codes classify healthcare claim records."
+    },
+    {
+      "id": "place_of_birth",
+      "displayName": "Place of birth",
+      "priority": "B",
+      "suggestedDomain": "sensitive-data",
+      "suggestedUniversalTerm": "ut:location",
+      "evidence": ["synthea_100/synthea_patients/BIRTHPLACE"],
+      "reason": "Birthplace is sensitive person-linked geography rather than a current address."
+    },
+    {
+      "id": "fips_code",
+      "displayName": "FIPS geographic code",
+      "priority": "B",
+      "suggestedDomain": "geography",
+      "suggestedUniversalTerm": "ut:geographic_region",
+      "evidence": ["synthea_100/synthea_patients/FIPS"],
+      "reason": "FIPS codes are stable United States geographic identifiers."
+    },
+    {
+      "id": "income_amount",
+      "displayName": "Income amount",
+      "priority": "B",
+      "suggestedDomain": "sensitive-data",
+      "suggestedUniversalTerm": "ut:monetary_amount",
+      "evidence": ["synthea_100/synthea_patients/INCOME"],
+      "reason": "Individual income is financial person data and is not equivalent to compensation or median income."
+    },
+    {
+      "id": "virtual_school_status",
+      "displayName": "Virtual school status",
+      "priority": "B",
+      "suggestedDomain": "education",
+      "suggestedUniversalTerm": "ut:status",
+      "evidence": ["nces_schools_2021_22/nces_public_schools/VIRTUAL"],
+      "reason": "Virtual, supplemental virtual, and not virtual form an education delivery status."
+    },
+    {
+      "id": "school_level",
+      "displayName": "School level",
+      "priority": "B",
+      "suggestedDomain": "education",
+      "suggestedUniversalTerm": "ut:category",
+      "evidence": ["nces_schools_2021_22/nces_public_schools/SCHOOL_LEVEL"],
+      "reason": "Elementary, middle, high, and other describe institutions rather than a student's grade."
+    },
+    {
+      "id": "school_status",
+      "displayName": "School operating status",
+      "priority": "B",
+      "suggestedDomain": "education",
+      "suggestedUniversalTerm": "ut:status",
+      "evidence": [
+        "nces_schools_2021_22/nces_public_schools/STATUS",
+        "nces_schools_2021_22/nces_public_schools/SY_STATUS_TEXT"
+      ],
+      "reason": "Operating status should not collapse into a generic completion or application status."
+    },
+    {
+      "id": "school_type",
+      "displayName": "School type",
+      "priority": "B",
+      "suggestedDomain": "education",
+      "suggestedUniversalTerm": "ut:category",
+      "evidence": ["nces_schools_2021_22/nces_public_schools/SCHOOL_TYPE_TEXT"],
+      "reason": "Regular, special education, vocational, and alternative schools are institution types."
+    },
+    {
+      "id": "education_program_status",
+      "displayName": "Education program status",
+      "priority": "B",
+      "suggestedDomain": "education",
+      "suggestedUniversalTerm": "ut:status",
+      "evidence": [
+        "nces_schools_2021_22/nces_public_schools/TITLEI_TEXT",
+        "nces_schools_2021_22/nces_public_schools/TITLEI",
+        "nces_schools_2021_22/nces_public_schools/STITLEI"
+      ],
+      "reason": "Program eligibility and participation need a status separate from school operations."
+    },
+    {
+      "id": "locale_classification",
+      "displayName": "Locale classification",
+      "priority": "B",
+      "suggestedDomain": "geography",
+      "suggestedUniversalTerm": "ut:geographic_region",
+      "evidence": ["nces_schools_2021_22/nces_public_schools/ULOCALE"],
+      "reason": "City, suburban, town, and rural locale codes classify settlement context."
+    },
+    {
+      "id": "location_type",
+      "displayName": "Location type",
+      "priority": "B",
+      "suggestedDomain": "geography",
+      "suggestedUniversalTerm": "ut:category",
+      "evidence": [
+        "nyc_311/nyc_311_service_requests/location_type",
+        "nyc_311/nyc_311_service_requests/address_type"
+      ],
+      "reason": "A location's kind or address representation is distinct from the location value."
+    },
+    {
+      "id": "facility_name",
+      "displayName": "Facility name",
+      "priority": "B",
+      "suggestedDomain": "government",
+      "suggestedUniversalTerm": "ut:organization_name",
+      "evidence": [
+        "nyc_311/nyc_311_service_requests/landmark",
+        "nyc_311/nyc_311_service_requests/park_facility_name"
+      ],
+      "reason": "Named parks and public facilities are entities rather than free-form address lines."
+    },
+    {
+      "id": "facility_type",
+      "displayName": "Facility type",
+      "priority": "B",
+      "suggestedDomain": "government",
+      "suggestedUniversalTerm": "ut:category",
+      "evidence": ["nyc_311/nyc_311_service_requests/facility_type"],
+      "reason": "The facility category scopes a public service request."
+    },
+    {
+      "id": "ticket_resolution_text",
+      "displayName": "Ticket resolution text",
+      "priority": "B",
+      "suggestedDomain": "customer-support",
+      "suggestedUniversalTerm": "ut:label",
+      "evidence": ["nyc_311/nyc_311_service_requests/resolution_description"],
+      "reason": "Resolution prose is support-case content and may require sensitivity-aware export handling."
+    },
+    {
+      "id": "projected_coordinate",
+      "displayName": "Projected coordinate",
+      "priority": "B",
+      "suggestedDomain": "geography",
+      "suggestedUniversalTerm": "ut:geo_coordinate",
+      "evidence": [
+        "nyc_311/nyc_311_service_requests/x_coordinate_state_plane",
+        "nyc_311/nyc_311_service_requests/y_coordinate_state_plane"
+      ],
+      "reason": "State-plane coordinates must not be interpreted as decimal latitude or longitude."
+    },
+    {
+      "id": "geospatial_point",
+      "displayName": "Geospatial point",
+      "priority": "B",
+      "suggestedDomain": "geography",
+      "suggestedUniversalTerm": "ut:geo_coordinate",
+      "evidence": ["nyc_311/nyc_311_service_requests/location"],
+      "reason": "A compound point value differs from either scalar coordinate."
+    },
+    {
+      "id": "government_agency_code",
+      "displayName": "Government agency code",
+      "priority": "C",
+      "suggestedDomain": "government",
+      "suggestedUniversalTerm": "ut:identifier",
+      "evidence": ["nyc_311/nyc_311_service_requests/agency"],
+      "reason": "Acronyms such as DPR identify agencies but are not agency names."
+    },
+    {
+      "id": "vehicle_type",
+      "displayName": "Vehicle type",
+      "priority": "C",
+      "suggestedDomain": "customer-support",
+      "suggestedUniversalTerm": "ut:category",
+      "evidence": ["nyc_311/nyc_311_service_requests/vehicle_type"],
+      "reason": "Vehicle categories appear in taxi and transport service requests."
+    },
+    {
+      "id": "road_name",
+      "displayName": "Road or bridge name",
+      "priority": "C",
+      "suggestedDomain": "geography",
+      "suggestedUniversalTerm": "ut:location",
+      "evidence": ["nyc_311/nyc_311_service_requests/bridge_highway_name"],
+      "reason": "Named road infrastructure is a location entity rather than a complete street address."
+    },
+    {
+      "id": "road_direction",
+      "displayName": "Road direction",
+      "priority": "C",
+      "suggestedDomain": "geography",
+      "suggestedUniversalTerm": "ut:category",
+      "evidence": ["nyc_311/nyc_311_service_requests/bridge_highway_direction"],
+      "reason": "Road direction is a categorical location qualifier."
+    },
+    {
+      "id": "road_segment",
+      "displayName": "Road segment",
+      "priority": "C",
+      "suggestedDomain": "geography",
+      "suggestedUniversalTerm": "ut:location",
+      "evidence": ["nyc_311/nyc_311_service_requests/bridge_highway_segment"],
+      "reason": "A named infrastructure segment is more specific than an address line."
+    }
+  ]
+}

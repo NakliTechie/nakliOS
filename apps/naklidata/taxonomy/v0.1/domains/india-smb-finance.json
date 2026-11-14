@@ -1,0 +1,22 @@
+{
+  "domain": "india-smb-finance",
+  "label": "Indian SMB finance",
+  "types": [
+    "gstin",
+    "pan",
+    "hsn_code",
+    "sac_code",
+    "ifsc",
+    "gst_state_code",
+    "gst_rate",
+    "indian_bank_account",
+    "pin_code",
+    "cin",
+    "udyam_id",
+    "invoice_number",
+    "vendor_name",
+    "gl_account",
+    "tds_section"
+  ],
+  "report_templates": ["ar_aging", "vendor_concentration", "gst_recon"]
+}

@@ -1,0 +1,69 @@
+{"id":"ut:identifier","prefLabel":"Identifier","roleFamily":"entity","sensitivity":"public","exactMatch":["schema:identifier"]}
+{"id":"ut:quantity","prefLabel":"Quantity","roleFamily":"measure","sensitivity":"public","closeMatch":["schema:QuantitativeValue"]}
+{"id":"ut:ratio","prefLabel":"Ratio","roleFamily":"metric","sensitivity":"public"}
+{"id":"ut:temporal","prefLabel":"Temporal","roleFamily":"dimension","sensitivity":"public","closeMatch":["schema:Date"]}
+{"id":"ut:categorical","prefLabel":"Categorical attribute","roleFamily":"dimension","sensitivity":"public","exactMatch":["dbt:dimension"],"closeMatch":["schema:DefinedTerm"]}
+{"id":"ut:label","prefLabel":"Label","roleFamily":"dimension","sensitivity":"public","closeMatch":["schema:Text"]}
+{"id":"ut:location","prefLabel":"Location","roleFamily":"dimension","sensitivity":"public","exactMatch":["schema:Place"]}
+{"id":"ut:contact","prefLabel":"Contact point","roleFamily":"dimension","sensitivity":"pii","exactMatch":["schema:ContactPoint"]}
+{"id":"ut:person_identifier","prefLabel":"Person identifier","broader":["ut:identifier"],"roleFamily":"entity","sensitivity":"pii","exactMatch":["schema:identifier"]}
+{"id":"ut:patient_identifier","prefLabel":"Patient identifier","broader":["ut:person_identifier"],"roleFamily":"entity","sensitivity":"secret","exactMatch":["fhir:Patient"]}
+{"id":"ut:record_identifier","prefLabel":"Record identifier","broader":["ut:identifier"],"roleFamily":"entity","sensitivity":"public","closeMatch":["schema:identifier"]}
+{"id":"ut:session_identifier","prefLabel":"Session identifier","broader":["ut:record_identifier"],"roleFamily":"entity","sensitivity":"pii","closeMatch":["schema:identifier"]}
+{"id":"ut:transaction_identifier","prefLabel":"Transaction identifier","broader":["ut:identifier"],"roleFamily":"entity","sensitivity":"financial","exactMatch":["ocds:contract"],"closeMatch":["iso20022:TransactionIdentification","schema:orderNumber"]}
+{"id":"ut:case_identifier","prefLabel":"Case identifier","broader":["ut:identifier"],"roleFamily":"entity","sensitivity":"public","exactMatch":["fhir:Encounter"],"closeMatch":["schema:identifier"]}
+{"id":"ut:policy_identifier","prefLabel":"Policy identifier","broader":["ut:identifier"],"roleFamily":"entity","sensitivity":"financial","closeMatch":["schema:identifier"]}
+{"id":"ut:listing_identifier","prefLabel":"Listing identifier","broader":["ut:identifier"],"roleFamily":"entity","sensitivity":"public","closeMatch":["schema:identifier"]}
+{"id":"ut:product_identifier","prefLabel":"Product identifier","broader":["ut:identifier"],"roleFamily":"entity","sensitivity":"public","exactMatch":["schema:productID"]}
+{"id":"ut:device_identifier","prefLabel":"Device identifier","broader":["ut:identifier"],"roleFamily":"entity","sensitivity":"pii","closeMatch":["schema:serialNumber"]}
+{"id":"ut:tax_registration_id","prefLabel":"Tax registration id","broader":["ut:identifier"],"roleFamily":"entity","sensitivity":"financial","exactMatch":["schema:taxID"]}
+{"id":"ut:financial_account_id","prefLabel":"Financial account id","broader":["ut:identifier"],"roleFamily":"entity","sensitivity":"financial","closeMatch":["iso20022:AccountIdentification4Choice","schema:accountId"]}
+{"id":"ut:government_identifier","prefLabel":"Government identifier","broader":["ut:person_identifier"],"roleFamily":"entity","sensitivity":"pii","closeMatch":["schema:identifier"]}
+{"id":"ut:credential","prefLabel":"Credential / secret","broader":["ut:identifier"],"roleFamily":"entity","sensitivity":"secret","closeMatch":["schema:accessCode"]}
+{"id":"ut:payment_card","prefLabel":"Payment card","broader":["ut:identifier"],"roleFamily":"entity","sensitivity":"financial","closeMatch":["iso20022:PaymentCard","schema:CreditCard"]}
+{"id":"ut:crypto_address","prefLabel":"Crypto wallet address","broader":["ut:identifier"],"roleFamily":"entity","sensitivity":"pii","closeMatch":["schema:identifier"]}
+{"id":"ut:monetary_amount","prefLabel":"Monetary amount","broader":["ut:quantity"],"roleFamily":"measure","sensitivity":"financial","exactMatch":["schema:MonetaryAmount","dbt:measure"],"closeMatch":["iso20022:ActiveOrHistoricCurrencyAndAmount"]}
+{"id":"ut:tax_rate","prefLabel":"Tax rate","broader":["ut:ratio"],"roleFamily":"metric","sensitivity":"financial","closeMatch":["iso20022:PercentageRate"]}
+{"id":"ut:interest_rate","prefLabel":"Interest rate","broader":["ut:ratio"],"roleFamily":"metric","sensitivity":"financial","closeMatch":["iso20022:PercentageRate","schema:interestRate"]}
+{"id":"ut:currency_code","prefLabel":"Currency code","broader":["ut:categorical"],"roleFamily":"dimension","sensitivity":"financial","exactMatch":["schema:currency"],"closeMatch":["iso20022:ActiveOrHistoricCurrencyCode"]}
+{"id":"ut:tax_code","prefLabel":"Tax code","broader":["ut:categorical"],"roleFamily":"dimension","sensitivity":"financial","closeMatch":["iso20022:TaxType"]}
+{"id":"ut:ledger_account","prefLabel":"Ledger account","broader":["ut:categorical"],"roleFamily":"dimension","sensitivity":"financial","closeMatch":["iso20022:CashAccount"]}
+{"id":"ut:count","prefLabel":"Count","broader":["ut:quantity"],"roleFamily":"measure","sensitivity":"public","exactMatch":["dbt:measure"],"closeMatch":["schema:Integer"]}
+{"id":"ut:duration","prefLabel":"Duration","broader":["ut:quantity"],"roleFamily":"measure","sensitivity":"public","closeMatch":["schema:Duration"]}
+{"id":"ut:physical_measurement","prefLabel":"Physical measurement","broader":["ut:quantity"],"roleFamily":"measure","sensitivity":"public","closeMatch":["schema:QuantitativeValue"]}
+{"id":"ut:spatial_dimension","prefLabel":"Spatial dimension","broader":["ut:quantity"],"roleFamily":"measure","sensitivity":"public","closeMatch":["schema:Distance"]}
+{"id":"ut:percentage","prefLabel":"Percentage","broader":["ut:ratio"],"roleFamily":"metric","sensitivity":"public","closeMatch":["schema:Number"]}
+{"id":"ut:probability","prefLabel":"Probability","broader":["ut:ratio"],"roleFamily":"metric","sensitivity":"public","closeMatch":["schema:Number"]}
+{"id":"ut:score","prefLabel":"Score","broader":["ut:ratio"],"roleFamily":"metric","sensitivity":"public","closeMatch":["schema:Rating"]}
+{"id":"ut:rate_per_period","prefLabel":"Rate per period","broader":["ut:ratio"],"roleFamily":"metric","sensitivity":"public","closeMatch":["schema:Number"]}
+{"id":"ut:temporal_instant","prefLabel":"Temporal instant","broader":["ut:temporal"],"roleFamily":"dimension","sensitivity":"public","exactMatch":["schema:DateTime","dbt:time_dimension"]}
+{"id":"ut:year","prefLabel":"Year","broader":["ut:temporal"],"roleFamily":"dimension","sensitivity":"public","closeMatch":["schema:Date"]}
+{"id":"ut:birth_date","prefLabel":"Birth date","broader":["ut:temporal_instant"],"roleFamily":"dimension","sensitivity":"pii","exactMatch":["schema:birthDate"]}
+{"id":"ut:category","prefLabel":"Category","broader":["ut:categorical"],"roleFamily":"dimension","sensitivity":"public","exactMatch":["dbt:dimension"]}
+{"id":"ut:status","prefLabel":"Status","broader":["ut:categorical"],"roleFamily":"dimension","sensitivity":"public","closeMatch":["schema:StatusEnumeration"]}
+{"id":"ut:flag","prefLabel":"Boolean flag","broader":["ut:categorical"],"roleFamily":"dimension","sensitivity":"public"}
+{"id":"ut:priority","prefLabel":"Priority","broader":["ut:categorical"],"roleFamily":"dimension","sensitivity":"public","closeMatch":["schema:DefinedTerm"]}
+{"id":"ut:event_type","prefLabel":"Event type","broader":["ut:categorical"],"roleFamily":"dimension","sensitivity":"public","closeMatch":["schema:Event"]}
+{"id":"ut:endpoint","prefLabel":"Service endpoint","broader":["ut:categorical"],"roleFamily":"dimension","sensitivity":"public","closeMatch":["schema:url"]}
+{"id":"ut:job_role","prefLabel":"Job role","broader":["ut:categorical"],"roleFamily":"dimension","sensitivity":"public","closeMatch":["schema:jobTitle"]}
+{"id":"ut:org_unit","prefLabel":"Organizational unit","broader":["ut:categorical"],"roleFamily":"dimension","sensitivity":"public","closeMatch":["schema:department"]}
+{"id":"ut:diagnosis_code","prefLabel":"Diagnosis code","broader":["ut:categorical"],"roleFamily":"dimension","sensitivity":"secret","exactMatch":["fhir:Condition"]}
+{"id":"ut:gender","prefLabel":"Gender","broader":["ut:categorical"],"roleFamily":"dimension","sensitivity":"pii","exactMatch":["schema:gender"]}
+{"id":"ut:measurement_unit","prefLabel":"Measurement unit","broader":["ut:categorical"],"roleFamily":"dimension","sensitivity":"public","exactMatch":["schema:unitCode"]}
+{"id":"ut:marketing_attribution","prefLabel":"Marketing attribution","broader":["ut:categorical"],"roleFamily":"dimension","sensitivity":"public","closeMatch":["schema:DefinedTerm"]}
+{"id":"ut:person_name","prefLabel":"Person name","broader":["ut:label"],"roleFamily":"dimension","sensitivity":"pii","exactMatch":["schema:name"]}
+{"id":"ut:organization_name","prefLabel":"Organization name","broader":["ut:label"],"roleFamily":"dimension","sensitivity":"pii","exactMatch":["schema:legalName","ocds:Organization"]}
+{"id":"ut:title","prefLabel":"Title","broader":["ut:label"],"roleFamily":"dimension","sensitivity":"public","exactMatch":["schema:name"]}
+{"id":"ut:json_document","prefLabel":"JSON document","broader":["ut:label"],"roleFamily":"dimension","sensitivity":"pii","closeMatch":["schema:Text"]}
+{"id":"ut:geo_coordinate","prefLabel":"Geo coordinate","broader":["ut:location"],"roleFamily":"dimension","sensitivity":"public","exactMatch":["schema:GeoCoordinates"]}
+{"id":"ut:geographic_region","prefLabel":"Geographic region","broader":["ut:location"],"roleFamily":"dimension","sensitivity":"public","exactMatch":["schema:addressRegion"]}
+{"id":"ut:postal_code","prefLabel":"Postal code","broader":["ut:location"],"roleFamily":"dimension","sensitivity":"public","exactMatch":["schema:postalCode"]}
+{"id":"ut:street_address","prefLabel":"Street address","broader":["ut:location"],"roleFamily":"dimension","sensitivity":"pii","exactMatch":["schema:streetAddress"]}
+{"id":"ut:country","prefLabel":"Country","broader":["ut:geographic_region"],"roleFamily":"dimension","sensitivity":"public","exactMatch":["schema:Country"]}
+{"id":"ut:email_address","prefLabel":"Email address","broader":["ut:contact"],"roleFamily":"dimension","sensitivity":"pii","exactMatch":["schema:email"]}
+{"id":"ut:phone_number","prefLabel":"Phone number","broader":["ut:contact"],"roleFamily":"dimension","sensitivity":"pii","exactMatch":["schema:telephone"]}
+{"id":"ut:ip_address","prefLabel":"IP address","broader":["ut:contact"],"roleFamily":"dimension","sensitivity":"pii","closeMatch":["schema:Text"]}
+{"id":"ut:web_address","prefLabel":"Web address","broader":["ut:label"],"roleFamily":"dimension","sensitivity":"public","exactMatch":["schema:url"]}
+{"id":"ut:rating","prefLabel":"Rating","broader":["ut:ratio"],"roleFamily":"metric","sensitivity":"public","exactMatch":["schema:Rating"]}
+{"id":"ut:facility_identifier","prefLabel":"Facility identifier","broader":["ut:identifier"],"roleFamily":"entity","sensitivity":"public","closeMatch":["schema:identifier"]}
+{"id":"ut:protected_attribute","prefLabel":"Protected demographic attribute","broader":["ut:categorical"],"roleFamily":"dimension","sensitivity":"pii","closeMatch":["schema:DefinedTerm"]}

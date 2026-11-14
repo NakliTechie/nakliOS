@@ -293,6 +293,1177 @@
       ]
     },
     {
+      "id": "naklidata",
+      "repo": "NakliTechie/NakliData",
+      "ref": "naklios-dist",
+      "files": [
+        {
+          "source": "chunks/_demo.js",
+          "destination": "chunks/_demo.js"
+        },
+        {
+          "source": "chunks/agent-surface.js",
+          "destination": "chunks/agent-surface.js"
+        },
+        {
+          "source": "chunks/arrow-reader.js",
+          "destination": "chunks/arrow-reader.js"
+        },
+        {
+          "source": "chunks/bridge-client.js",
+          "destination": "chunks/bridge-client.js"
+        },
+        {
+          "source": "chunks/cleaning.js",
+          "destination": "chunks/cleaning.js"
+        },
+        {
+          "source": "chunks/codemirror.js",
+          "destination": "chunks/codemirror.js"
+        },
+        {
+          "source": "chunks/compare-tables.js",
+          "destination": "chunks/compare-tables.js"
+        },
+        {
+          "source": "chunks/contract-export.js",
+          "destination": "chunks/contract-export.js"
+        },
+        {
+          "source": "chunks/cytoscape-graph.js",
+          "destination": "chunks/cytoscape-graph.js"
+        },
+        {
+          "source": "chunks/data-quality.js",
+          "destination": "chunks/data-quality.js"
+        },
+        {
+          "source": "chunks/deckgl.js",
+          "destination": "chunks/deckgl.js"
+        },
+        {
+          "source": "chunks/demo-workbook.js",
+          "destination": "chunks/demo-workbook.js"
+        },
+        {
+          "source": "chunks/facet-charts.js",
+          "destination": "chunks/facet-charts.js"
+        },
+        {
+          "source": "chunks/facet-network.js",
+          "destination": "chunks/facet-network.js"
+        },
+        {
+          "source": "chunks/iceberg-catalog-mount.js",
+          "destination": "chunks/iceberg-catalog-mount.js"
+        },
+        {
+          "source": "chunks/iceberg-modals.js",
+          "destination": "chunks/iceberg-modals.js"
+        },
+        {
+          "source": "chunks/iceberg-rest-client.js",
+          "destination": "chunks/iceberg-rest-client.js"
+        },
+        {
+          "source": "chunks/link-paths.js",
+          "destination": "chunks/link-paths.js"
+        },
+        {
+          "source": "chunks/map-data.js",
+          "destination": "chunks/map-data.js"
+        },
+        {
+          "source": "chunks/maplibre-gl-worker.js",
+          "destination": "chunks/maplibre-gl-worker.js"
+        },
+        {
+          "source": "chunks/maplibre-map.js",
+          "destination": "chunks/maplibre-map.js"
+        },
+        {
+          "source": "chunks/observable-plot.js",
+          "destination": "chunks/observable-plot.js"
+        },
+        {
+          "source": "chunks/onboarding-tour.js",
+          "destination": "chunks/onboarding-tour.js"
+        },
+        {
+          "source": "chunks/persistence-validation.js",
+          "destination": "chunks/persistence-validation.js"
+        },
+        {
+          "source": "chunks/pyodide-runtime.js",
+          "destination": "chunks/pyodide-runtime.js"
+        },
+        {
+          "source": "chunks/query-builder.js",
+          "destination": "chunks/query-builder.js"
+        },
+        {
+          "source": "chunks/readstat-reader.js",
+          "destination": "chunks/readstat-reader.js"
+        },
+        {
+          "source": "chunks/reference-enrich.js",
+          "destination": "chunks/reference-enrich.js"
+        },
+        {
+          "source": "chunks/remote-delimited.js",
+          "destination": "chunks/remote-delimited.js"
+        },
+        {
+          "source": "chunks/report-templates.js",
+          "destination": "chunks/report-templates.js"
+        },
+        {
+          "source": "chunks/result-facets.js",
+          "destination": "chunks/result-facets.js"
+        },
+        {
+          "source": "chunks/review-tray.js",
+          "destination": "chunks/review-tray.js"
+        },
+        {
+          "source": "chunks/schema-override.js",
+          "destination": "chunks/schema-override.js"
+        },
+        {
+          "source": "chunks/selection-explain.js",
+          "destination": "chunks/selection-explain.js"
+        },
+        {
+          "source": "chunks/semantic-classifier.js",
+          "destination": "chunks/semantic-classifier.js"
+        },
+        {
+          "source": "chunks/semantic-model.js",
+          "destination": "chunks/semantic-model.js"
+        },
+        {
+          "source": "chunks/sheetjs.js",
+          "destination": "chunks/sheetjs.js"
+        },
+        {
+          "source": "chunks/sidecar-ontology.js",
+          "destination": "chunks/sidecar-ontology.js"
+        },
+        {
+          "source": "chunks/sink-execution.js",
+          "destination": "chunks/sink-execution.js"
+        },
+        {
+          "source": "chunks/sqlite-reader.js",
+          "destination": "chunks/sqlite-reader.js"
+        },
+        {
+          "source": "chunks/standards-interchange.js",
+          "destination": "chunks/standards-interchange.js"
+        },
+        {
+          "source": "chunks/standards-owl.js",
+          "destination": "chunks/standards-owl.js"
+        },
+        {
+          "source": "chunks/standards-prov.js",
+          "destination": "chunks/standards-prov.js"
+        },
+        {
+          "source": "chunks/standards-reasoning.js",
+          "destination": "chunks/standards-reasoning.js"
+        },
+        {
+          "source": "chunks/standards-shacl.js",
+          "destination": "chunks/standards-shacl.js"
+        },
+        {
+          "source": "chunks/standards-skos.js",
+          "destination": "chunks/standards-skos.js"
+        },
+        {
+          "source": "chunks/standards-workbench.js",
+          "destination": "chunks/standards-workbench.js"
+        },
+        {
+          "source": "chunks/standards-workbook.js",
+          "destination": "chunks/standards-workbook.js"
+        },
+        {
+          "source": "chunks/static-export.js",
+          "destination": "chunks/static-export.js"
+        },
+        {
+          "source": "chunks/transformers.js",
+          "destination": "chunks/transformers.js"
+        },
+        {
+          "source": "chunks/type-proposals.js",
+          "destination": "chunks/type-proposals.js"
+        },
+        {
+          "source": "chunks/webr-runtime.js",
+          "destination": "chunks/webr-runtime.js"
+        },
+        {
+          "source": "chunks/xlsx-export.js",
+          "destination": "chunks/xlsx-export.js"
+        },
+        {
+          "source": "examples/events/events.jsonl",
+          "destination": "examples/events/events.jsonl"
+        },
+        {
+          "source": "examples/finance/invoices.csv",
+          "destination": "examples/finance/invoices.csv"
+        },
+        {
+          "source": "examples/finance/payments.csv",
+          "destination": "examples/finance/payments.csv"
+        },
+        {
+          "source": "examples/finance/vendors.csv",
+          "destination": "examples/finance/vendors.csv"
+        },
+        {
+          "source": "examples/logs/access.jsonl",
+          "destination": "examples/logs/access.jsonl"
+        },
+        {
+          "source": "examples/manifest.json",
+          "destination": "examples/manifest.json"
+        },
+        {
+          "source": "graph-metrics.worker.js",
+          "destination": "graph-metrics.worker.js"
+        },
+        {
+          "source": "guide/index.html",
+          "destination": "guide/index.html"
+        },
+        {
+          "source": "guide/screenshots/ai-sidecar/01-settings-byok.png",
+          "destination": "guide/screenshots/ai-sidecar/01-settings-byok.png"
+        },
+        {
+          "source": "guide/screenshots/ai-sidecar/02-result-ai-chips.png",
+          "destination": "guide/screenshots/ai-sidecar/02-result-ai-chips.png"
+        },
+        {
+          "source": "guide/screenshots/ai-sidecar/03-nl-to-sql.png",
+          "destination": "guide/screenshots/ai-sidecar/03-nl-to-sql.png"
+        },
+        {
+          "source": "guide/screenshots/data-and-schema/01-sources-mounted.png",
+          "destination": "guide/screenshots/data-and-schema/01-sources-mounted.png"
+        },
+        {
+          "source": "guide/screenshots/data-and-schema/02-schema-panel.png",
+          "destination": "guide/screenshots/data-and-schema/02-schema-panel.png"
+        },
+        {
+          "source": "guide/screenshots/data-and-schema/03-type-override.png",
+          "destination": "guide/screenshots/data-and-schema/03-type-override.png"
+        },
+        {
+          "source": "guide/screenshots/facet/01-embedding-map.png",
+          "destination": "guide/screenshots/facet/01-embedding-map.png"
+        },
+        {
+          "source": "guide/screenshots/facet/02-network-graph.png",
+          "destination": "guide/screenshots/facet/02-network-graph.png"
+        },
+        {
+          "source": "guide/screenshots/facet/03-knowledge-graph.png",
+          "destination": "guide/screenshots/facet/03-knowledge-graph.png"
+        },
+        {
+          "source": "guide/screenshots/facet/04-temporal-timeline.png",
+          "destination": "guide/screenshots/facet/04-temporal-timeline.png"
+        },
+        {
+          "source": "guide/screenshots/facet/05-distribution.png",
+          "destination": "guide/screenshots/facet/05-distribution.png"
+        },
+        {
+          "source": "guide/screenshots/getting-started/00-welcome.png",
+          "destination": "guide/screenshots/getting-started/00-welcome.png"
+        },
+        {
+          "source": "guide/screenshots/getting-started/01-empty-state.png",
+          "destination": "guide/screenshots/getting-started/01-empty-state.png"
+        },
+        {
+          "source": "guide/screenshots/getting-started/02-mount-url.png",
+          "destination": "guide/screenshots/getting-started/02-mount-url.png"
+        },
+        {
+          "source": "guide/screenshots/getting-started/03-mount-s3.png",
+          "destination": "guide/screenshots/getting-started/03-mount-s3.png"
+        },
+        {
+          "source": "guide/screenshots/lineage/01-lineage-panel.png",
+          "destination": "guide/screenshots/lineage/01-lineage-panel.png"
+        },
+        {
+          "source": "guide/screenshots/manifest.json",
+          "destination": "guide/screenshots/manifest.json"
+        },
+        {
+          "source": "guide/screenshots/more-cells/01-input-cell.png",
+          "destination": "guide/screenshots/more-cells/01-input-cell.png"
+        },
+        {
+          "source": "guide/screenshots/more-cells/02-dashboard-cell.png",
+          "destination": "guide/screenshots/more-cells/02-dashboard-cell.png"
+        },
+        {
+          "source": "guide/screenshots/more-cells/03-stats-cell.png",
+          "destination": "guide/screenshots/more-cells/03-stats-cell.png"
+        },
+        {
+          "source": "guide/screenshots/more-cells/04-report-cell.png",
+          "destination": "guide/screenshots/more-cells/04-report-cell.png"
+        },
+        {
+          "source": "guide/screenshots/more-cells/05-assertion-cell.png",
+          "destination": "guide/screenshots/more-cells/05-assertion-cell.png"
+        },
+        {
+          "source": "guide/screenshots/more-cells/06-cohort-cell.png",
+          "destination": "guide/screenshots/more-cells/06-cohort-cell.png"
+        },
+        {
+          "source": "guide/screenshots/notebook/01-templates.png",
+          "destination": "guide/screenshots/notebook/01-templates.png"
+        },
+        {
+          "source": "guide/screenshots/notebook/02-sql-cell-result.png",
+          "destination": "guide/screenshots/notebook/02-sql-cell-result.png"
+        },
+        {
+          "source": "guide/screenshots/notebook/03-chart-cell.png",
+          "destination": "guide/screenshots/notebook/03-chart-cell.png"
+        },
+        {
+          "source": "guide/screenshots/notebook/04-add-cell-row.png",
+          "destination": "guide/screenshots/notebook/04-add-cell-row.png"
+        },
+        {
+          "source": "guide/screenshots/notebook/05-excel-export.png",
+          "destination": "guide/screenshots/notebook/05-excel-export.png"
+        },
+        {
+          "source": "guide/screenshots/reports/01-superstore-region-margin.png",
+          "destination": "guide/screenshots/reports/01-superstore-region-margin.png"
+        },
+        {
+          "source": "guide/screenshots/reports/02-financial-segment-margin.png",
+          "destination": "guide/screenshots/reports/02-financial-segment-margin.png"
+        },
+        {
+          "source": "guide/screenshots/reports/03-chinook-revenue-country.png",
+          "destination": "guide/screenshots/reports/03-chinook-revenue-country.png"
+        },
+        {
+          "source": "guide/screenshots/resolve/01-cluster-modal.png",
+          "destination": "guide/screenshots/resolve/01-cluster-modal.png"
+        },
+        {
+          "source": "guide/screenshots/resolve/02-semantic-panel.png",
+          "destination": "guide/screenshots/resolve/02-semantic-panel.png"
+        },
+        {
+          "source": "guide/screenshots/resolve/03-golden-table.png",
+          "destination": "guide/screenshots/resolve/03-golden-table.png"
+        },
+        {
+          "source": "icon.svg",
+          "destination": "icon.svg"
+        },
+        {
+          "source": "index.html",
+          "destination": "index.html"
+        },
+        {
+          "source": "manifest.webmanifest",
+          "destination": "manifest.webmanifest"
+        },
+        {
+          "source": "pyodide/integrity.json",
+          "destination": "pyodide/integrity.json"
+        },
+        {
+          "source": "pyodide/numpy-2.0.2-cp312-cp312-pyodide_2024_0_wasm32.whl",
+          "destination": "pyodide/numpy-2.0.2-cp312-cp312-pyodide_2024_0_wasm32.whl"
+        },
+        {
+          "source": "pyodide/pandas-2.2.3-cp312-cp312-pyodide_2024_0_wasm32.whl",
+          "destination": "pyodide/pandas-2.2.3-cp312-cp312-pyodide_2024_0_wasm32.whl"
+        },
+        {
+          "source": "pyodide/pyarrow-18.1.0-cp312-cp312-pyodide_2024_0_wasm32.whl",
+          "destination": "pyodide/pyarrow-18.1.0-cp312-cp312-pyodide_2024_0_wasm32.whl"
+        },
+        {
+          "source": "pyodide/pyodide-lock.json",
+          "destination": "pyodide/pyodide-lock.json"
+        },
+        {
+          "source": "pyodide/pyodide.asm.js",
+          "destination": "pyodide/pyodide.asm.js"
+        },
+        {
+          "source": "pyodide/pyodide.asm.wasm",
+          "destination": "pyodide/pyodide.asm.wasm"
+        },
+        {
+          "source": "pyodide/pyodide.mjs",
+          "destination": "pyodide/pyodide.mjs"
+        },
+        {
+          "source": "pyodide/pyodide_unix_timezones-1.0.0-py3-none-any.whl",
+          "destination": "pyodide/pyodide_unix_timezones-1.0.0-py3-none-any.whl"
+        },
+        {
+          "source": "pyodide/python_dateutil-2.9.0.post0-py2.py3-none-any.whl",
+          "destination": "pyodide/python_dateutil-2.9.0.post0-py2.py3-none-any.whl"
+        },
+        {
+          "source": "pyodide/python_stdlib.zip",
+          "destination": "pyodide/python_stdlib.zip"
+        },
+        {
+          "source": "pyodide/pytz-2024.1-py2.py3-none-any.whl",
+          "destination": "pyodide/pytz-2024.1-py2.py3-none-any.whl"
+        },
+        {
+          "source": "pyodide/six-1.16.0-py2.py3-none-any.whl",
+          "destination": "pyodide/six-1.16.0-py2.py3-none-any.whl"
+        },
+        {
+          "source": "readstat-wasm/readstat.wasm",
+          "destination": "readstat-wasm/readstat.wasm"
+        },
+        {
+          "source": "reference/gst-state-codes.json",
+          "destination": "reference/gst-state-codes.json"
+        },
+        {
+          "source": "reference/hsn-chapters.json",
+          "destination": "reference/hsn-chapters.json"
+        },
+        {
+          "source": "reference/iso-4217.json",
+          "destination": "reference/iso-4217.json"
+        },
+        {
+          "source": "reference/manifest.json",
+          "destination": "reference/manifest.json"
+        },
+        {
+          "source": "social.png",
+          "destination": "social.png"
+        },
+        {
+          "source": "sqlite-wasm/sql-wasm.wasm",
+          "destination": "sqlite-wasm/sql-wasm.wasm"
+        },
+        {
+          "source": "standards-reasoning.worker.js",
+          "destination": "standards-reasoning.worker.js"
+        },
+        {
+          "source": "sw.js",
+          "destination": "sw.js"
+        },
+        {
+          "source": "taxonomy.worker.js",
+          "destination": "taxonomy.worker.js"
+        },
+        {
+          "source": "taxonomy/MIGRATIONS.md",
+          "destination": "taxonomy/MIGRATIONS.md"
+        },
+        {
+          "source": "taxonomy/README.md",
+          "destination": "taxonomy/README.md"
+        },
+        {
+          "source": "taxonomy/candidates/README.md",
+          "destination": "taxonomy/candidates/README.md"
+        },
+        {
+          "source": "taxonomy/candidates/dataset-wave2-2026-09-27.json",
+          "destination": "taxonomy/candidates/dataset-wave2-2026-09-27.json"
+        },
+        {
+          "source": "taxonomy/candidates/dataset-wave2-independent-review.json",
+          "destination": "taxonomy/candidates/dataset-wave2-independent-review.json"
+        },
+        {
+          "source": "taxonomy/packs/ecs/manifest.json",
+          "destination": "taxonomy/packs/ecs/manifest.json"
+        },
+        {
+          "source": "taxonomy/packs/ecs/registry.json",
+          "destination": "taxonomy/packs/ecs/registry.json"
+        },
+        {
+          "source": "taxonomy/packs/otel-semconv/manifest.json",
+          "destination": "taxonomy/packs/otel-semconv/manifest.json"
+        },
+        {
+          "source": "taxonomy/packs/otel-semconv/registry.json",
+          "destination": "taxonomy/packs/otel-semconv/registry.json"
+        },
+        {
+          "source": "taxonomy/v0.1/domains/agriculture.json",
+          "destination": "taxonomy/v0.1/domains/agriculture.json"
+        },
+        {
+          "source": "taxonomy/v0.1/domains/banking.json",
+          "destination": "taxonomy/v0.1/domains/banking.json"
+        },
+        {
+          "source": "taxonomy/v0.1/domains/customer-support.json",
+          "destination": "taxonomy/v0.1/domains/customer-support.json"
+        },
+        {
+          "source": "taxonomy/v0.1/domains/ecs.json",
+          "destination": "taxonomy/v0.1/domains/ecs.json"
+        },
+        {
+          "source": "taxonomy/v0.1/domains/education.json",
+          "destination": "taxonomy/v0.1/domains/education.json"
+        },
+        {
+          "source": "taxonomy/v0.1/domains/energy.json",
+          "destination": "taxonomy/v0.1/domains/energy.json"
+        },
+        {
+          "source": "taxonomy/v0.1/domains/generic-finance.json",
+          "destination": "taxonomy/v0.1/domains/generic-finance.json"
+        },
+        {
+          "source": "taxonomy/v0.1/domains/generic-logs.json",
+          "destination": "taxonomy/v0.1/domains/generic-logs.json"
+        },
+        {
+          "source": "taxonomy/v0.1/domains/geography.json",
+          "destination": "taxonomy/v0.1/domains/geography.json"
+        },
+        {
+          "source": "taxonomy/v0.1/domains/government.json",
+          "destination": "taxonomy/v0.1/domains/government.json"
+        },
+        {
+          "source": "taxonomy/v0.1/domains/healthcare.json",
+          "destination": "taxonomy/v0.1/domains/healthcare.json"
+        },
+        {
+          "source": "taxonomy/v0.1/domains/hr-people.json",
+          "destination": "taxonomy/v0.1/domains/hr-people.json"
+        },
+        {
+          "source": "taxonomy/v0.1/domains/india-smb-finance.json",
+          "destination": "taxonomy/v0.1/domains/india-smb-finance.json"
+        },
+        {
+          "source": "taxonomy/v0.1/domains/insurance.json",
+          "destination": "taxonomy/v0.1/domains/insurance.json"
+        },
+        {
+          "source": "taxonomy/v0.1/domains/legal.json",
+          "destination": "taxonomy/v0.1/domains/legal.json"
+        },
+        {
+          "source": "taxonomy/v0.1/domains/manufacturing.json",
+          "destination": "taxonomy/v0.1/domains/manufacturing.json"
+        },
+        {
+          "source": "taxonomy/v0.1/domains/marketplace.json",
+          "destination": "taxonomy/v0.1/domains/marketplace.json"
+        },
+        {
+          "source": "taxonomy/v0.1/domains/media.json",
+          "destination": "taxonomy/v0.1/domains/media.json"
+        },
+        {
+          "source": "taxonomy/v0.1/domains/nonprofit.json",
+          "destination": "taxonomy/v0.1/domains/nonprofit.json"
+        },
+        {
+          "source": "taxonomy/v0.1/domains/otel-semconv.json",
+          "destination": "taxonomy/v0.1/domains/otel-semconv.json"
+        },
+        {
+          "source": "taxonomy/v0.1/domains/product-analytics.json",
+          "destination": "taxonomy/v0.1/domains/product-analytics.json"
+        },
+        {
+          "source": "taxonomy/v0.1/domains/public-sector.json",
+          "destination": "taxonomy/v0.1/domains/public-sector.json"
+        },
+        {
+          "source": "taxonomy/v0.1/domains/real-estate.json",
+          "destination": "taxonomy/v0.1/domains/real-estate.json"
+        },
+        {
+          "source": "taxonomy/v0.1/domains/research.json",
+          "destination": "taxonomy/v0.1/domains/research.json"
+        },
+        {
+          "source": "taxonomy/v0.1/domains/retail.json",
+          "destination": "taxonomy/v0.1/domains/retail.json"
+        },
+        {
+          "source": "taxonomy/v0.1/domains/risk-fraud.json",
+          "destination": "taxonomy/v0.1/domains/risk-fraud.json"
+        },
+        {
+          "source": "taxonomy/v0.1/domains/sample-datasets.json",
+          "destination": "taxonomy/v0.1/domains/sample-datasets.json"
+        },
+        {
+          "source": "taxonomy/v0.1/domains/scientific.json",
+          "destination": "taxonomy/v0.1/domains/scientific.json"
+        },
+        {
+          "source": "taxonomy/v0.1/domains/sensitive-data.json",
+          "destination": "taxonomy/v0.1/domains/sensitive-data.json"
+        },
+        {
+          "source": "taxonomy/v0.1/domains/sports.json",
+          "destination": "taxonomy/v0.1/domains/sports.json"
+        },
+        {
+          "source": "taxonomy/v0.1/domains/supply-chain.json",
+          "destination": "taxonomy/v0.1/domains/supply-chain.json"
+        },
+        {
+          "source": "taxonomy/v0.1/index.json",
+          "destination": "taxonomy/v0.1/index.json"
+        },
+        {
+          "source": "taxonomy/v0.1/packs/ecs.aliases.json",
+          "destination": "taxonomy/v0.1/packs/ecs.aliases.json"
+        },
+        {
+          "source": "taxonomy/v0.1/packs/ecs.crosswalk.jsonl",
+          "destination": "taxonomy/v0.1/packs/ecs.crosswalk.jsonl"
+        },
+        {
+          "source": "taxonomy/v0.1/packs/ecs.jsonl",
+          "destination": "taxonomy/v0.1/packs/ecs.jsonl"
+        },
+        {
+          "source": "taxonomy/v0.1/packs/otel-semconv.aliases.json",
+          "destination": "taxonomy/v0.1/packs/otel-semconv.aliases.json"
+        },
+        {
+          "source": "taxonomy/v0.1/packs/otel-semconv.crosswalk.jsonl",
+          "destination": "taxonomy/v0.1/packs/otel-semconv.crosswalk.jsonl"
+        },
+        {
+          "source": "taxonomy/v0.1/packs/otel-semconv.jsonl",
+          "destination": "taxonomy/v0.1/packs/otel-semconv.jsonl"
+        },
+        {
+          "source": "taxonomy/v0.1/relationships.json",
+          "destination": "taxonomy/v0.1/relationships.json"
+        },
+        {
+          "source": "taxonomy/v0.1/semantic-vectors.json",
+          "destination": "taxonomy/v0.1/semantic-vectors.json"
+        },
+        {
+          "source": "taxonomy/v0.1/types.jsonl",
+          "destination": "taxonomy/v0.1/types.jsonl"
+        },
+        {
+          "source": "taxonomy/v0.1/universal/crosswalk.jsonl",
+          "destination": "taxonomy/v0.1/universal/crosswalk.jsonl"
+        },
+        {
+          "source": "taxonomy/v0.1/universal/universal-terms.jsonl",
+          "destination": "taxonomy/v0.1/universal/universal-terms.jsonl"
+        },
+        {
+          "source": "taxonomy/v0.x/proposed/README.md",
+          "destination": "taxonomy/v0.x/proposed/README.md"
+        },
+        {
+          "source": "webr/LICENSE.md",
+          "destination": "webr/LICENSE.md"
+        },
+        {
+          "source": "webr/R.js",
+          "destination": "webr/R.js"
+        },
+        {
+          "source": "webr/R.wasm",
+          "destination": "webr/R.wasm"
+        },
+        {
+          "source": "webr/libRblas.so",
+          "destination": "webr/libRblas.so"
+        },
+        {
+          "source": "webr/libRlapack.so",
+          "destination": "webr/libRlapack.so"
+        },
+        {
+          "source": "webr/naklidata-runtime.json",
+          "destination": "webr/naklidata-runtime.json"
+        },
+        {
+          "source": "webr/vfs/etc/fonts/fonts.conf",
+          "destination": "webr/vfs/etc/fonts/fonts.conf"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/doc.data.gz",
+          "destination": "webr/vfs/usr/lib/R/doc.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/doc.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/doc.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/base/demo.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/base/demo.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/base/demo.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/base/demo.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/base/help.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/base/help.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/base/help.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/base/help.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/base/html.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/base/html.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/base/html.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/base/html.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/compiler/help.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/compiler/help.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/compiler/help.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/compiler/help.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/compiler/html.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/compiler/html.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/compiler/html.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/compiler/html.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/datasets/help.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/datasets/help.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/datasets/help.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/datasets/help.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/datasets/html.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/datasets/html.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/datasets/html.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/datasets/html.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grDevices/afm.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/grDevices/afm.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grDevices/afm.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/grDevices/afm.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grDevices/demo.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/grDevices/demo.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grDevices/demo.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/grDevices/demo.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grDevices/enc.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/grDevices/enc.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grDevices/enc.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/grDevices/enc.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grDevices/fonts.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/grDevices/fonts.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grDevices/fonts.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/grDevices/fonts.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grDevices/help.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/grDevices/help.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grDevices/help.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/grDevices/help.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grDevices/html.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/grDevices/html.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grDevices/html.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/grDevices/html.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grDevices/libs.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/grDevices/libs.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grDevices/libs.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/grDevices/libs.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/graphics/demo.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/graphics/demo.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/graphics/demo.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/graphics/demo.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/graphics/help.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/graphics/help.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/graphics/help.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/graphics/help.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/graphics/html.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/graphics/html.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/graphics/html.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/graphics/html.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grid/doc.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/grid/doc.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grid/doc.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/grid/doc.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grid/help.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/grid/help.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grid/help.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/grid/help.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grid/html.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/grid/html.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grid/html.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/grid/html.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/methods/help.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/methods/help.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/methods/help.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/methods/help.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/methods/html.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/methods/html.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/methods/html.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/methods/html.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/parallel.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/parallel.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/parallel.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/parallel.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/splines/help.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/splines/help.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/splines/help.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/splines/help.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/splines/html.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/splines/html.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/splines/html.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/splines/html.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/stats/demo.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/stats/demo.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/stats/demo.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/stats/demo.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/stats/doc.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/stats/doc.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/stats/doc.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/stats/doc.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/stats/help.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/stats/help.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/stats/help.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/stats/help.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/stats/html.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/stats/html.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/stats/html.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/stats/html.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/stats4/help.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/stats4/help.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/stats4/help.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/stats4/help.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/stats4/html.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/stats4/html.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/stats4/html.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/stats4/html.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/tcltk.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/tcltk.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/tcltk.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/tcltk.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/tools/help.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/tools/help.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/tools/help.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/tools/help.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/tools/html.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/tools/html.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/tools/html.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/tools/html.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/tools/misc.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/tools/misc.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/tools/misc.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/tools/misc.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/translations.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/translations.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/translations.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/translations.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/translations/DESCRIPTION",
+          "destination": "webr/vfs/usr/lib/R/library/translations/DESCRIPTION"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/utils/doc.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/utils/doc.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/utils/doc.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/utils/doc.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/utils/help.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/utils/help.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/utils/help.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/utils/help.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/utils/html.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/utils/html.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/utils/html.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/utils/html.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/utils/misc.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/utils/misc.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/utils/misc.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/utils/misc.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/webr/help.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/webr/help.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/webr/help.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/webr/help.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/webr/html.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/webr/html.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/webr/html.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/webr/html.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/share.data.gz",
+          "destination": "webr/vfs/usr/lib/R/share.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/share.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/share.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/share/fonts/NotoSans-Bold.ttf",
+          "destination": "webr/vfs/usr/share/fonts/NotoSans-Bold.ttf"
+        },
+        {
+          "source": "webr/vfs/usr/share/fonts/NotoSans-BoldItalic.ttf",
+          "destination": "webr/vfs/usr/share/fonts/NotoSans-BoldItalic.ttf"
+        },
+        {
+          "source": "webr/vfs/usr/share/fonts/NotoSans-Italic.ttf",
+          "destination": "webr/vfs/usr/share/fonts/NotoSans-Italic.ttf"
+        },
+        {
+          "source": "webr/vfs/usr/share/fonts/NotoSans-Regular.ttf",
+          "destination": "webr/vfs/usr/share/fonts/NotoSans-Regular.ttf"
+        },
+        {
+          "source": "webr/vfs/usr/share/fonts/NotoSansMono-Bold.ttf",
+          "destination": "webr/vfs/usr/share/fonts/NotoSansMono-Bold.ttf"
+        },
+        {
+          "source": "webr/vfs/usr/share/fonts/NotoSansMono-Regular.ttf",
+          "destination": "webr/vfs/usr/share/fonts/NotoSansMono-Regular.ttf"
+        },
+        {
+          "source": "webr/vfs/usr/share/fonts/NotoSerif-Bold.ttf",
+          "destination": "webr/vfs/usr/share/fonts/NotoSerif-Bold.ttf"
+        },
+        {
+          "source": "webr/vfs/usr/share/fonts/NotoSerif-BoldItalic.ttf",
+          "destination": "webr/vfs/usr/share/fonts/NotoSerif-BoldItalic.ttf"
+        },
+        {
+          "source": "webr/vfs/usr/share/fonts/NotoSerif-Italic.ttf",
+          "destination": "webr/vfs/usr/share/fonts/NotoSerif-Italic.ttf"
+        },
+        {
+          "source": "webr/vfs/usr/share/fonts/NotoSerif-Regular.ttf",
+          "destination": "webr/vfs/usr/share/fonts/NotoSerif-Regular.ttf"
+        },
+        {
+          "source": "webr/vfs/usr/share/gdal.data.gz",
+          "destination": "webr/vfs/usr/share/gdal.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/share/gdal.js.metadata",
+          "destination": "webr/vfs/usr/share/gdal.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/share/proj.data.gz",
+          "destination": "webr/vfs/usr/share/proj.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/share/proj.js.metadata",
+          "destination": "webr/vfs/usr/share/proj.js.metadata"
+        },
+        {
+          "source": "webr/vfs/usr/share/udunits.data.gz",
+          "destination": "webr/vfs/usr/share/udunits.data.gz"
+        },
+        {
+          "source": "webr/vfs/usr/share/udunits.js.metadata",
+          "destination": "webr/vfs/usr/share/udunits.js.metadata"
+        },
+        {
+          "source": "webr/vfs/var/cache/fontconfig/3830d5c3ddfd5cd38a049b759396e72e-le32d8.cache-9",
+          "destination": "webr/vfs/var/cache/fontconfig/3830d5c3ddfd5cd38a049b759396e72e-le32d8.cache-9"
+        },
+        {
+          "source": "webr/vfs/var/cache/fontconfig/CACHEDIR.TAG",
+          "destination": "webr/vfs/var/cache/fontconfig/CACHEDIR.TAG"
+        },
+        {
+          "source": "webr/webr-worker.js",
+          "destination": "webr/webr-worker.js"
+        },
+        {
+          "source": "webr/webr.js",
+          "destination": "webr/webr.js"
+        },
+        {
+          "source": "LICENSE",
+          "destination": "LICENSE"
+        }
+      ]
+    },
+    {
       "id": "nakliposter",
       "repo": "NakliTechie/NakliPoster",
       "ref": "main",

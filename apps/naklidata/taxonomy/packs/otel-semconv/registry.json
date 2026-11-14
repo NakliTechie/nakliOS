@@ -1,0 +1,1196 @@
+{
+ "source": "https://github.com/open-telemetry/semantic-conventions@22b6cbb2bd2ae458fe636470838daa428865ed09",
+ "extraction": "scripts/pin-taxonomy-pack-registry.py",
+ "schema_version": "main@22b6cbb (after v1.44.0)",
+ "snapshot": "2026-09-12",
+ "license": "Apache-2.0",
+ "count": 122,
+ "attributes": [
+  {
+   "id": "aspnetcore.diagnostics.exception.result",
+   "type": "enum",
+   "brief": "ASP.NET Core exception middleware handling result.",
+   "examples": [
+    "handled",
+    "unhandled"
+   ],
+   "members": [
+    "handled",
+    "unhandled",
+    "skipped",
+    "aborted"
+   ]
+  },
+  {
+   "id": "aspnetcore.diagnostics.handler.type",
+   "type": "string",
+   "brief": "Full type name of the [`IExceptionHandler`](https://learn.microsoft.com/dotnet/api/microsoft.aspnetcore.diagnostics.iexceptionhandler) implementation that handled the exception.",
+   "examples": [
+    "Contoso.MyHandler"
+   ]
+  },
+  {
+   "id": "aspnetcore.rate_limiting.policy",
+   "type": "string",
+   "brief": "Rate limiting policy name.",
+   "examples": [
+    "fixed",
+    "sliding",
+    "token"
+   ]
+  },
+  {
+   "id": "aspnetcore.rate_limiting.result",
+   "type": "enum",
+   "brief": "Rate-limiting result, shows whether the lease was acquired or contains a rejection reason",
+   "examples": [
+    "acquired",
+    "request_canceled"
+   ],
+   "members": [
+    "acquired",
+    "endpoint_limiter",
+    "global_limiter",
+    "request_canceled"
+   ]
+  },
+  {
+   "id": "aspnetcore.request.is_unhandled",
+   "type": "boolean",
+   "brief": "Flag indicating if request was handled by the application pipeline.",
+   "examples": [
+    "True"
+   ]
+  },
+  {
+   "id": "aspnetcore.routing.is_fallback",
+   "type": "boolean",
+   "brief": "A value that indicates whether the matched route is a fallback route.",
+   "examples": [
+    "True"
+   ]
+  },
+  {
+   "id": "aspnetcore.routing.match_status",
+   "type": "enum",
+   "brief": "Match result - success or failure",
+   "examples": [
+    "success",
+    "failure"
+   ],
+   "members": [
+    "success",
+    "failure"
+   ]
+  },
+  {
+   "id": "aspnetcore.user.is_authenticated",
+   "type": "boolean",
+   "brief": "A value that indicates whether the user is authenticated.",
+   "examples": [
+    "True"
+   ]
+  },
+  {
+   "id": "client.address",
+   "type": "string",
+   "brief": "Client address - domain name if available without reverse DNS lookup; otherwise, IP address or UNIX domain socket name.",
+   "examples": [
+    "client.example.com",
+    "10.1.2.80",
+    "/tmp/my.sock"
+   ]
+  },
+  {
+   "id": "client.port",
+   "type": "int",
+   "brief": "Client port number.",
+   "examples": [
+    "65123"
+   ]
+  },
+  {
+   "id": "code.column.number",
+   "type": "int",
+   "brief": "The column number in `code.file.path` best representing the operation. It SHOULD point within the code unit named in `code.function.name`. This attribute MUST NOT be used on the Profile signal since the data is already captured in 'message ",
+   "examples": [
+    "16"
+   ]
+  },
+  {
+   "id": "code.file.path",
+   "type": "string",
+   "brief": "The source code filename that identifies the code unit as uniquely as possible (preferably an absolute file path). This attribute MUST NOT be used on the Profile signal since the data is already captured in 'message Function'. This constrai",
+   "examples": [
+    "/usr/local/MyApplication/content_root/app/index.php"
+   ]
+  },
+  {
+   "id": "code.function.name",
+   "type": "string",
+   "brief": "The method or function fully-qualified name without arguments. The value should fit the natural representation of the language runtime, which is also likely the same used within `code.stacktrace` attribute value. This attribute MUST NOT be ",
+   "examples": [
+    "com.example.MyHttpService.serveRequest",
+    "GuzzleHttp\\Client::transfer",
+    "fopen"
+   ]
+  },
+  {
+   "id": "code.line.number",
+   "type": "int",
+   "brief": "The line number in `code.file.path` best representing the operation. It SHOULD point within the code unit named in `code.function.name`. This attribute MUST NOT be used on the Profile signal since the data is already captured in 'message Li",
+   "examples": [
+    "42"
+   ]
+  },
+  {
+   "id": "code.stacktrace",
+   "type": "string",
+   "brief": "A stacktrace as a string in the natural representation for the language runtime. The representation is identical to [`exception.stacktrace`](/docs/exceptions/exceptions-spans.md#stacktrace-representation). This attribute MUST NOT be used on",
+   "examples": [
+    "at com.example.GenerateTrace.methodB(GenerateTrace.java:13)\\n at com.example.GenerateTrace.methodA(GenerateTrace.java:9)\\n at com.example.GenerateTrace.main(GenerateTrace.java:5)\n"
+   ]
+  },
+  {
+   "id": "container.id",
+   "type": "string",
+   "brief": "Container ID. Usually a UUID, as for example used to [identify Docker containers](https://docs.docker.com/engine/containers/run/#container-identification). The UUID might be abbreviated.",
+   "examples": [
+    "a3bf90e006b2"
+   ]
+  },
+  {
+   "id": "container.image.name",
+   "type": "string",
+   "brief": "Name of the image the container was built on.",
+   "examples": [
+    "gcr.io/opentelemetry/operator"
+   ]
+  },
+  {
+   "id": "container.image.repo_digests",
+   "type": "string[]",
+   "brief": "Repository digests of the container image as provided by the container runtime.",
+   "examples": [
+    "['example@sha256:afcc7f1ac1b49db317a7196c902e61c6c3c4607d63599ee1a82d702d249a0ccb', 'internal.registry.example.com:5000/example@sha256:b69959407d21e8a062e0416bf13405bb2b71ed7a84dde4158ebafacfa06f5578']"
+   ]
+  },
+  {
+   "id": "container.image.tags",
+   "type": "string[]",
+   "brief": "Container image tags. An example can be found in [Docker Image Inspect](https://docs.docker.com/reference/api/engine/version/v1.52/#tag/Image/operation/ImageInspect). Should be only the `<tag>` section of the full name for example from `reg",
+   "examples": [
+    "['v1.27.1', '3.5.7-0']"
+   ]
+  },
+  {
+   "id": "db.collection.name",
+   "type": "string",
+   "brief": "The name of a collection (table, container) within the database.",
+   "examples": [
+    "public.users",
+    "customers"
+   ]
+  },
+  {
+   "id": "db.namespace",
+   "type": "string",
+   "brief": "The name of the database, fully qualified within the server address and port.",
+   "examples": [
+    "customers",
+    "test.users"
+   ]
+  },
+  {
+   "id": "db.operation.batch.size",
+   "type": "int",
+   "brief": "The number of database operations included in a batch operation.",
+   "examples": [
+    "2",
+    "3",
+    "4"
+   ]
+  },
+  {
+   "id": "db.operation.name",
+   "type": "string",
+   "brief": "The name of the operation or command being executed.",
+   "examples": [
+    "findAndModify",
+    "HMSET",
+    "SELECT"
+   ]
+  },
+  {
+   "id": "db.query.summary",
+   "type": "string",
+   "brief": "Low cardinality summary of a database query.",
+   "examples": [
+    "SELECT wuser_table",
+    "INSERT shipping_details SELECT orders",
+    "get user by id"
+   ]
+  },
+  {
+   "id": "db.query.text",
+   "type": "string",
+   "brief": "The database query being executed.",
+   "examples": [
+    "SELECT * FROM wuser_table where username = ?",
+    "SET mykey ?"
+   ]
+  },
+  {
+   "id": "db.response.status_code",
+   "type": "string",
+   "brief": "Database response status code.",
+   "examples": [
+    "102",
+    "ORA-17002",
+    "08P01",
+    "404"
+   ]
+  },
+  {
+   "id": "db.stored_procedure.name",
+   "type": "string",
+   "brief": "The name of a stored procedure within the database.",
+   "examples": [
+    "GetCustomer"
+   ]
+  },
+  {
+   "id": "db.system.name",
+   "type": "enum",
+   "brief": "The database management system (DBMS) product as identified by the client instrumentation.",
+   "examples": [],
+   "members": [
+    "other_sql",
+    "softwareag.adabas",
+    "actian.ingres",
+    "aws.dynamodb",
+    "aws.redshift",
+    "azure.cosmosdb",
+    "intersystems.cache",
+    "cassandra",
+    "clickhouse",
+    "cockroachdb",
+    "couchbase",
+    "couchdb",
+    "derby",
+    "elasticsearch",
+    "firebirdsql",
+    "gcp.spanner",
+    "geode",
+    "h2database",
+    "hbase",
+    "hive",
+    "hsqldb",
+    "ibm.db2",
+    "ibm.informix",
+    "ibm.netezza",
+    "influxdb",
+    "instantdb",
+    "mariadb",
+    "memcached",
+    "mongodb",
+    "microsoft.sql_server",
+    "mysql",
+    "neo4j",
+    "opensearch",
+    "oracle.db",
+    "postgresql",
+    "redis",
+    "sap.hana",
+    "sap.maxdb",
+    "sqlite",
+    "teradata",
+    "trino"
+   ]
+  },
+  {
+   "id": "deployment.environment.name",
+   "type": "enum",
+   "brief": "Name of the [deployment environment](https://wikipedia.org/wiki/Deployment_environment) (aka deployment tier).",
+   "examples": [
+    "staging",
+    "production"
+   ],
+   "members": [
+    "production",
+    "staging",
+    "test",
+    "development"
+   ]
+  },
+  {
+   "id": "dotnet.gc.heap.generation",
+   "type": "enum",
+   "brief": "Name of the garbage collector managed heap generation.",
+   "examples": [
+    "gen0",
+    "gen1",
+    "gen2"
+   ],
+   "members": [
+    "gen0",
+    "gen1",
+    "gen2",
+    "loh",
+    "poh"
+   ]
+  },
+  {
+   "id": "error.type",
+   "type": "enum",
+   "brief": "Describes a class of error the operation ended with.",
+   "examples": [
+    "timeout",
+    "java.net.UnknownHostException",
+    "server_certificate_invalid",
+    "500"
+   ],
+   "members": [
+    "_OTHER"
+   ]
+  },
+  {
+   "id": "exception.escaped",
+   "type": "boolean",
+   "brief": "Indicates that the exception is escaping the scope of the span.",
+   "examples": []
+  },
+  {
+   "id": "exception.message",
+   "type": "string",
+   "brief": "The exception message.",
+   "examples": [
+    "Division by zero",
+    "Can't convert 'int' object to str implicitly"
+   ]
+  },
+  {
+   "id": "exception.stacktrace",
+   "type": "string",
+   "brief": "A stacktrace as a string in the natural representation for the language runtime. The representation is to be determined and documented by each language SIG.",
+   "examples": [
+    "Exception in thread \"main\" java.lang.RuntimeException: Test exception\\n at com.example.GenerateTrace.methodB(GenerateTrace.java:13)\\n at com.example.GenerateTrace.methodA(GenerateTrace.java:9)\\n at com.example.GenerateTrace.main(GenerateTrace.java:5)\n"
+   ]
+  },
+  {
+   "id": "exception.type",
+   "type": "string",
+   "brief": "The type of the exception (its fully-qualified class name, if applicable). The dynamic type of the exception should be preferred over the static type in languages that support it.",
+   "examples": [
+    "java.net.ConnectException",
+    "OSError"
+   ]
+  },
+  {
+   "id": "http.request.header",
+   "type": "template[string[]]",
+   "brief": "HTTP request headers, `<key>` being the normalized HTTP Header name (lowercase), the value being the header values.",
+   "examples": [
+    "['application/json']",
+    "['1.2.3.4', '1.2.3.5']"
+   ]
+  },
+  {
+   "id": "http.request.method",
+   "type": "enum",
+   "brief": "HTTP request method.",
+   "examples": [
+    "GET",
+    "POST",
+    "HEAD"
+   ],
+   "members": [
+    "CONNECT",
+    "DELETE",
+    "GET",
+    "HEAD",
+    "OPTIONS",
+    "PATCH",
+    "POST",
+    "PUT",
+    "TRACE",
+    "QUERY",
+    "_OTHER"
+   ]
+  },
+  {
+   "id": "http.request.method_original",
+   "type": "string",
+   "brief": "Original HTTP method sent by the client in the request line.",
+   "examples": [
+    "GeT",
+    "ACL",
+    "foo"
+   ]
+  },
+  {
+   "id": "http.request.resend_count",
+   "type": "int",
+   "brief": "The ordinal number of request resending attempt (for any reason, including redirects).",
+   "examples": [
+    "3"
+   ]
+  },
+  {
+   "id": "http.response.header",
+   "type": "template[string[]]",
+   "brief": "HTTP response headers, `<key>` being the normalized HTTP Header name (lowercase), the value being the header values.",
+   "examples": [
+    "['application/json']",
+    "['abc', 'def']"
+   ]
+  },
+  {
+   "id": "http.response.status_code",
+   "type": "int",
+   "brief": "[HTTP response status code](https://tools.ietf.org/html/rfc7231#section-6).",
+   "examples": [
+    "200"
+   ]
+  },
+  {
+   "id": "http.route",
+   "type": "string",
+   "brief": "The matched route template for the request. This MUST be low-cardinality and include all static path segments, with dynamic path segments represented with placeholders.",
+   "examples": [
+    "/users/:userID?",
+    "my-controller/my-action/{id?}"
+   ]
+  },
+  {
+   "id": "jvm.gc.action",
+   "type": "string",
+   "brief": "Name of the garbage collector action.",
+   "examples": [
+    "end of minor GC",
+    "end of major GC"
+   ]
+  },
+  {
+   "id": "jvm.gc.name",
+   "type": "string",
+   "brief": "Name of the garbage collector.",
+   "examples": [
+    "G1 Young Generation",
+    "G1 Old Generation"
+   ]
+  },
+  {
+   "id": "jvm.memory.pool.name",
+   "type": "string",
+   "brief": "Name of the memory pool.",
+   "examples": [
+    "G1 Old Gen",
+    "G1 Eden space",
+    "G1 Survivor Space"
+   ]
+  },
+  {
+   "id": "jvm.memory.type",
+   "type": "enum",
+   "brief": "The type of memory.",
+   "examples": [
+    "heap",
+    "non_heap"
+   ],
+   "members": [
+    "heap",
+    "non_heap"
+   ]
+  },
+  {
+   "id": "jvm.thread.daemon",
+   "type": "boolean",
+   "brief": "Whether the thread is daemon or not.",
+   "examples": []
+  },
+  {
+   "id": "jvm.thread.state",
+   "type": "enum",
+   "brief": "State of the thread.",
+   "examples": [
+    "runnable",
+    "blocked"
+   ],
+   "members": [
+    "new",
+    "runnable",
+    "blocked",
+    "waiting",
+    "timed_waiting",
+    "terminated"
+   ]
+  },
+  {
+   "id": "k8s.cluster.name",
+   "type": "string",
+   "brief": "The name of the cluster.",
+   "examples": [
+    "opentelemetry-cluster"
+   ]
+  },
+  {
+   "id": "k8s.cluster.uid",
+   "type": "string",
+   "brief": "A pseudo-ID for the cluster, set to the UID of the `kube-system` namespace.",
+   "examples": [
+    "218fc5a9-a5f1-4b54-aa05-46717d0ab26d"
+   ]
+  },
+  {
+   "id": "k8s.container.name",
+   "type": "string",
+   "brief": "The name of the Container from Pod specification, must be unique within a Pod. Container runtime usually uses different globally unique name (`container.name`).",
+   "examples": [
+    "redis"
+   ]
+  },
+  {
+   "id": "k8s.container.restart_count",
+   "type": "int",
+   "brief": "Number of times the container was restarted. This attribute can be used to identify a particular container (running or stopped) within a container spec.",
+   "examples": []
+  },
+  {
+   "id": "k8s.cronjob.annotation",
+   "type": "template[string]",
+   "brief": "The cronjob annotation placed on the CronJob, the `<key>` being the annotation name, the value being the annotation value.",
+   "examples": [
+    "4",
+    ""
+   ]
+  },
+  {
+   "id": "k8s.cronjob.label",
+   "type": "template[string]",
+   "brief": "The label placed on the CronJob, the `<key>` being the label name, the value being the label value.",
+   "examples": [
+    "weekly",
+    ""
+   ]
+  },
+  {
+   "id": "k8s.cronjob.name",
+   "type": "string",
+   "brief": "The name of the CronJob.",
+   "examples": [
+    "opentelemetry"
+   ]
+  },
+  {
+   "id": "k8s.cronjob.uid",
+   "type": "string",
+   "brief": "The UID of the CronJob.",
+   "examples": [
+    "275ecb36-5aa8-4c2a-9c47-d8bb681b9aff"
+   ]
+  },
+  {
+   "id": "k8s.daemonset.annotation",
+   "type": "template[string]",
+   "brief": "The annotation placed on the DaemonSet, the `<key>` being the annotation name, the value being the annotation value, even if the value is empty.",
+   "examples": [
+    "1",
+    ""
+   ]
+  },
+  {
+   "id": "k8s.daemonset.label",
+   "type": "template[string]",
+   "brief": "The label placed on the DaemonSet, the `<key>` being the label name, the value being the label value, even if the value is empty.",
+   "examples": [
+    "guestbook",
+    ""
+   ]
+  },
+  {
+   "id": "k8s.daemonset.name",
+   "type": "string",
+   "brief": "The name of the DaemonSet.",
+   "examples": [
+    "opentelemetry"
+   ]
+  },
+  {
+   "id": "k8s.daemonset.uid",
+   "type": "string",
+   "brief": "The UID of the DaemonSet.",
+   "examples": [
+    "275ecb36-5aa8-4c2a-9c47-d8bb681b9aff"
+   ]
+  },
+  {
+   "id": "k8s.deployment.annotation",
+   "type": "template[string]",
+   "brief": "The annotation placed on the Deployment, the `<key>` being the annotation name, the value being the annotation value, even if the value is empty.",
+   "examples": [
+    "1",
+    ""
+   ]
+  },
+  {
+   "id": "k8s.deployment.label",
+   "type": "template[string]",
+   "brief": "The label placed on the Deployment, the `<key>` being the label name, the value being the label value, even if the value is empty.",
+   "examples": [
+    "guestbook",
+    ""
+   ]
+  },
+  {
+   "id": "k8s.deployment.name",
+   "type": "string",
+   "brief": "The name of the Deployment.",
+   "examples": [
+    "opentelemetry"
+   ]
+  },
+  {
+   "id": "k8s.deployment.uid",
+   "type": "string",
+   "brief": "The UID of the Deployment.",
+   "examples": [
+    "275ecb36-5aa8-4c2a-9c47-d8bb681b9aff"
+   ]
+  },
+  {
+   "id": "k8s.job.annotation",
+   "type": "template[string]",
+   "brief": "The annotation placed on the Job, the `<key>` being the annotation name, the value being the annotation value, even if the value is empty.",
+   "examples": [
+    "1",
+    ""
+   ]
+  },
+  {
+   "id": "k8s.job.label",
+   "type": "template[string]",
+   "brief": "The label placed on the Job, the `<key>` being the label name, the value being the label value, even if the value is empty.",
+   "examples": [
+    "ci",
+    ""
+   ]
+  },
+  {
+   "id": "k8s.job.name",
+   "type": "string",
+   "brief": "The name of the Job.",
+   "examples": [
+    "opentelemetry"
+   ]
+  },
+  {
+   "id": "k8s.job.uid",
+   "type": "string",
+   "brief": "The UID of the Job.",
+   "examples": [
+    "275ecb36-5aa8-4c2a-9c47-d8bb681b9aff"
+   ]
+  },
+  {
+   "id": "k8s.namespace.annotation",
+   "type": "template[string]",
+   "brief": "The annotation placed on the Namespace, the `<key>` being the annotation name, the value being the annotation value, even if the value is empty.",
+   "examples": [
+    "0",
+    ""
+   ]
+  },
+  {
+   "id": "k8s.namespace.label",
+   "type": "template[string]",
+   "brief": "The label placed on the Namespace, the `<key>` being the label name, the value being the label value, even if the value is empty.",
+   "examples": [
+    "default",
+    ""
+   ]
+  },
+  {
+   "id": "k8s.namespace.name",
+   "type": "string",
+   "brief": "The name of the namespace that the pod is running in.",
+   "examples": [
+    "default"
+   ]
+  },
+  {
+   "id": "k8s.node.annotation",
+   "type": "template[string]",
+   "brief": "The annotation placed on the Node, the `<key>` being the annotation name, the value being the annotation value, even if the value is empty.",
+   "examples": [
+    "0",
+    ""
+   ]
+  },
+  {
+   "id": "k8s.node.label",
+   "type": "template[string]",
+   "brief": "The label placed on the Node, the `<key>` being the label name, the value being the label value, even if the value is empty.",
+   "examples": [
+    "arm64",
+    ""
+   ]
+  },
+  {
+   "id": "k8s.node.name",
+   "type": "string",
+   "brief": "The name of the Node.",
+   "examples": [
+    "node-1"
+   ]
+  },
+  {
+   "id": "k8s.node.uid",
+   "type": "string",
+   "brief": "The UID of the Node.",
+   "examples": [
+    "1eb3a0c6-0477-4080-a9cb-0cb7db65c6a2"
+   ]
+  },
+  {
+   "id": "k8s.pod.annotation",
+   "type": "template[string]",
+   "brief": "The annotation placed on the Pod, the `<key>` being the annotation name, the value being the annotation value.",
+   "examples": [
+    "true",
+    "x64",
+    ""
+   ]
+  },
+  {
+   "id": "k8s.pod.hostname",
+   "type": "string",
+   "brief": "Specifies the hostname of the Pod.",
+   "examples": [
+    "collector-gateway"
+   ]
+  },
+  {
+   "id": "k8s.pod.ip",
+   "type": "string",
+   "brief": "IP address allocated to the Pod.",
+   "examples": [
+    "172.18.0.2"
+   ]
+  },
+  {
+   "id": "k8s.pod.label",
+   "type": "template[string]",
+   "brief": "The label placed on the Pod, the `<key>` being the label name, the value being the label value.",
+   "examples": [
+    "my-app",
+    "x64",
+    ""
+   ]
+  },
+  {
+   "id": "k8s.pod.name",
+   "type": "string",
+   "brief": "The name of the Pod.",
+   "examples": [
+    "opentelemetry-pod-autoconf"
+   ]
+  },
+  {
+   "id": "k8s.pod.start_time",
+   "type": "string",
+   "brief": "The start timestamp of the Pod.",
+   "examples": [
+    "2025-12-04T08:41:03Z"
+   ]
+  },
+  {
+   "id": "k8s.pod.uid",
+   "type": "string",
+   "brief": "The UID of the Pod.",
+   "examples": [
+    "275ecb36-5aa8-4c2a-9c47-d8bb681b9aff"
+   ]
+  },
+  {
+   "id": "k8s.replicaset.annotation",
+   "type": "template[string]",
+   "brief": "The annotation placed on the ReplicaSet, the `<key>` being the annotation name, the value being the annotation value, even if the value is empty.",
+   "examples": [
+    "0",
+    ""
+   ]
+  },
+  {
+   "id": "k8s.replicaset.label",
+   "type": "template[string]",
+   "brief": "The label placed on the ReplicaSet, the `<key>` being the label name, the value being the label value, even if the value is empty.",
+   "examples": [
+    "guestbook",
+    ""
+   ]
+  },
+  {
+   "id": "k8s.replicaset.name",
+   "type": "string",
+   "brief": "The name of the ReplicaSet.",
+   "examples": [
+    "opentelemetry"
+   ]
+  },
+  {
+   "id": "k8s.replicaset.uid",
+   "type": "string",
+   "brief": "The UID of the ReplicaSet.",
+   "examples": [
+    "275ecb36-5aa8-4c2a-9c47-d8bb681b9aff"
+   ]
+  },
+  {
+   "id": "k8s.statefulset.annotation",
+   "type": "template[string]",
+   "brief": "The annotation placed on the StatefulSet, the `<key>` being the annotation name, the value being the annotation value, even if the value is empty.",
+   "examples": [
+    "1",
+    ""
+   ]
+  },
+  {
+   "id": "k8s.statefulset.label",
+   "type": "template[string]",
+   "brief": "The label placed on the StatefulSet, the `<key>` being the label name, the value being the label value, even if the value is empty.",
+   "examples": [
+    "guestbook",
+    ""
+   ]
+  },
+  {
+   "id": "k8s.statefulset.name",
+   "type": "string",
+   "brief": "The name of the StatefulSet.",
+   "examples": [
+    "opentelemetry"
+   ]
+  },
+  {
+   "id": "k8s.statefulset.uid",
+   "type": "string",
+   "brief": "The UID of the StatefulSet.",
+   "examples": [
+    "275ecb36-5aa8-4c2a-9c47-d8bb681b9aff"
+   ]
+  },
+  {
+   "id": "network.local.address",
+   "type": "string",
+   "brief": "Local address of the network connection - IP address or UNIX domain socket name.",
+   "examples": [
+    "10.1.2.80",
+    "/tmp/my.sock"
+   ]
+  },
+  {
+   "id": "network.local.port",
+   "type": "int",
+   "brief": "Local port number of the network connection.",
+   "examples": [
+    "65123"
+   ]
+  },
+  {
+   "id": "network.peer.address",
+   "type": "string",
+   "brief": "Peer address of the network connection - IP address or UNIX domain socket name.",
+   "examples": [
+    "10.1.2.80",
+    "/tmp/my.sock"
+   ]
+  },
+  {
+   "id": "network.peer.port",
+   "type": "int",
+   "brief": "Peer port number of the network connection.",
+   "examples": [
+    "65123"
+   ]
+  },
+  {
+   "id": "network.protocol.name",
+   "type": "string",
+   "brief": "[OSI application layer](https://wikipedia.org/wiki/Application_layer) or non-OSI equivalent.",
+   "examples": [
+    "amqp",
+    "http",
+    "mqtt"
+   ]
+  },
+  {
+   "id": "network.protocol.version",
+   "type": "string",
+   "brief": "The actual version of the protocol used for network communication.",
+   "examples": [
+    "1.1",
+    "2"
+   ]
+  },
+  {
+   "id": "network.transport",
+   "type": "enum",
+   "brief": "[OSI transport layer](https://wikipedia.org/wiki/Transport_layer) or [inter-process communication method](https://wikipedia.org/wiki/Inter-process_communication).",
+   "examples": [
+    "tcp",
+    "udp"
+   ],
+   "members": [
+    "tcp",
+    "udp",
+    "pipe",
+    "unix",
+    "quic"
+   ]
+  },
+  {
+   "id": "network.type",
+   "type": "enum",
+   "brief": "[OSI network layer](https://wikipedia.org/wiki/Network_layer) or non-OSI equivalent.",
+   "examples": [
+    "ipv4",
+    "ipv6"
+   ],
+   "members": [
+    "ipv4",
+    "ipv6"
+   ]
+  },
+  {
+   "id": "otel.event.name",
+   "type": "string",
+   "brief": "Identifies the class / type of event.",
+   "examples": [
+    "browser.mouse.click",
+    "device.app.lifecycle"
+   ]
+  },
+  {
+   "id": "otel.scope.name",
+   "type": "string",
+   "brief": "The name of the instrumentation scope - (`InstrumentationScope.Name` in OTLP).",
+   "examples": [
+    "io.opentelemetry.contrib.mongodb"
+   ]
+  },
+  {
+   "id": "otel.scope.version",
+   "type": "string",
+   "brief": "The version of the instrumentation scope - (`InstrumentationScope.Version` in OTLP).",
+   "examples": [
+    "1.0.0"
+   ]
+  },
+  {
+   "id": "otel.status_code",
+   "type": "enum",
+   "brief": "Name of the code, either \"OK\" or \"ERROR\". MUST NOT be set if the status code is UNSET.",
+   "examples": [],
+   "members": [
+    "OK",
+    "ERROR"
+   ]
+  },
+  {
+   "id": "otel.status_description",
+   "type": "string",
+   "brief": "Description of the Status if it has a value, otherwise not set.",
+   "examples": [
+    "resource not found"
+   ]
+  },
+  {
+   "id": "server.address",
+   "type": "string",
+   "brief": "Server domain name if available without reverse DNS lookup; otherwise, IP address or UNIX domain socket name.",
+   "examples": [
+    "example.com",
+    "10.1.2.80",
+    "/tmp/my.sock"
+   ]
+  },
+  {
+   "id": "server.port",
+   "type": "int",
+   "brief": "Server port number.",
+   "examples": [
+    "80",
+    "8080",
+    "443"
+   ]
+  },
+  {
+   "id": "service.instance.id",
+   "type": "string",
+   "brief": "The string ID of the service instance.",
+   "examples": [
+    "627cc493-f310-47de-96bd-71410b7dec09"
+   ]
+  },
+  {
+   "id": "service.name",
+   "type": "string",
+   "brief": "Logical name of the service.",
+   "examples": [
+    "shoppingcart"
+   ]
+  },
+  {
+   "id": "service.namespace",
+   "type": "string",
+   "brief": "A namespace for `service.name`.",
+   "examples": [
+    "Shop"
+   ]
+  },
+  {
+   "id": "service.version",
+   "type": "string",
+   "brief": "The version string of the service component. The format is not defined by these conventions.",
+   "examples": [
+    "2.0.0",
+    "a01dbef8a"
+   ]
+  },
+  {
+   "id": "signalr.connection.status",
+   "type": "enum",
+   "brief": "SignalR HTTP connection closure status.",
+   "examples": [
+    "app_shutdown",
+    "timeout"
+   ],
+   "members": [
+    "normal_closure",
+    "timeout",
+    "app_shutdown"
+   ]
+  },
+  {
+   "id": "signalr.transport",
+   "type": "enum",
+   "brief": "[SignalR transport type](https://github.com/dotnet/aspnetcore/blob/main/src/SignalR/docs/specs/TransportProtocols.md)",
+   "examples": [
+    "web_sockets",
+    "long_polling"
+   ],
+   "members": [
+    "server_sent_events",
+    "long_polling",
+    "web_sockets"
+   ]
+  },
+  {
+   "id": "telemetry.distro.name",
+   "type": "string",
+   "brief": "The name of the auto instrumentation agent or distribution, if used.",
+   "examples": [
+    "parts-unlimited-java"
+   ]
+  },
+  {
+   "id": "telemetry.distro.version",
+   "type": "string",
+   "brief": "The version string of the auto instrumentation agent or distribution, if used.",
+   "examples": [
+    "1.2.3"
+   ]
+  },
+  {
+   "id": "telemetry.sdk.language",
+   "type": "enum",
+   "brief": "The language of the telemetry SDK.",
+   "examples": [],
+   "members": [
+    "cpp",
+    "dotnet",
+    "erlang",
+    "go",
+    "java",
+    "kotlin",
+    "nodejs",
+    "php",
+    "python",
+    "ruby",
+    "rust",
+    "swift",
+    "webjs"
+   ]
+  },
+  {
+   "id": "telemetry.sdk.name",
+   "type": "string",
+   "brief": "The name of the telemetry SDK as defined above.",
+   "examples": [
+    "opentelemetry"
+   ]
+  },
+  {
+   "id": "telemetry.sdk.version",
+   "type": "string",
+   "brief": "The version string of the telemetry SDK.",
+   "examples": [
+    "1.2.3"
+   ]
+  },
+  {
+   "id": "url.fragment",
+   "type": "string",
+   "brief": "The [URI fragment](https://www.rfc-editor.org/rfc/rfc3986#section-3.5) component",
+   "examples": [
+    "SemConv"
+   ]
+  },
+  {
+   "id": "url.full",
+   "type": "string",
+   "brief": "Absolute URL describing a network resource according to [RFC3986](https://www.rfc-editor.org/rfc/rfc3986)",
+   "examples": [
+    "https://www.foo.bar/search?q=OpenTelemetry#SemConv",
+    "//localhost"
+   ]
+  },
+  {
+   "id": "url.path",
+   "type": "string",
+   "brief": "The [URI path](https://www.rfc-editor.org/rfc/rfc3986#section-3.3) component",
+   "examples": [
+    "/search"
+   ]
+  },
+  {
+   "id": "url.query",
+   "type": "string",
+   "brief": "The [URI query](https://www.rfc-editor.org/rfc/rfc3986#section-3.4) component",
+   "examples": [
+    "q=OpenTelemetry"
+   ]
+  },
+  {
+   "id": "url.scheme",
+   "type": "string",
+   "brief": "The [URI scheme](https://www.rfc-editor.org/rfc/rfc3986#section-3.1) component identifying the used protocol.",
+   "examples": [
+    "https",
+    "ftp",
+    "telnet"
+   ]
+  },
+  {
+   "id": "user_agent.original",
+   "type": "string",
+   "brief": "Value of the [HTTP User-Agent](https://www.rfc-editor.org/rfc/rfc9110.html#field.user-agent) header sent by the client.",
+   "examples": [
+    "CERN-LineMode/2.15 libwww/2.17b3",
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 14_7_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.2 Mobile/15E148 Safari/604.1",
+    "YourApp/1.0.0 grpc-java-okhttp/1.27.2"
+   ]
+  }
+ ]
+}

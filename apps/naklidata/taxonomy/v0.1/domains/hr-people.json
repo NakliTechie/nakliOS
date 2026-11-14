@@ -1,0 +1,29 @@
+{
+  "domain": "hr-people",
+  "label": "HR and people",
+  "types": [
+    "employee_id",
+    "job_title",
+    "department",
+    "compensation",
+    "tenure_years",
+    "hire_date",
+    "termination_date",
+    "employment_status",
+    "termination_reason",
+    "manager_name",
+    "manager_id",
+    "recruitment_source",
+    "performance_rating",
+    "employee_engagement_score",
+    "employee_satisfaction",
+    "special_projects_count",
+    "late_days_count",
+    "absence_count",
+    "travel_frequency",
+    "job_level"
+  ],
+  "report_templates": [
+    "hr_workforce"
+  ]
+}

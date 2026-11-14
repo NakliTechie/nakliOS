@@ -1,0 +1,14 @@
+{
+  "domain": "sports",
+  "label": "Sports and events",
+  "types": [
+    "match_id",
+    "team_name",
+    "score_for",
+    "attendance_count",
+    "win_loss_result"
+  ],
+  "report_templates": [
+    "sports_results"
+  ]
+}

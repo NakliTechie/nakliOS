@@ -1,0 +1,12 @@
+{
+  "domain": "real-estate",
+  "label": "Real estate",
+  "types": [
+    "property_type",
+    "bedrooms",
+    "bathrooms",
+    "square_feet",
+    "sale_price"
+  ],
+  "report_templates": ["real_estate_inventory"]
+}

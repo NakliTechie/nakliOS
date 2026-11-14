@@ -1,0 +1,14 @@
+{
+  "domain": "banking",
+  "label": "Banking, payments and lending",
+  "types": [
+    "transaction_amount",
+    "transaction_fee",
+    "debit_credit",
+    "interest_rate",
+    "principal_amount"
+  ],
+  "report_templates": [
+    "banking_flows"
+  ]
+}

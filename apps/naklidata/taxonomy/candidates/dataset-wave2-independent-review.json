@@ -1,0 +1,2046 @@
+{
+  "format": "naklidata-taxonomy-independent-candidate-review",
+  "version": 1,
+  "reviewed": "2026-09-27",
+  "reviewer": {
+    "identity": "fresh-context AI",
+    "task": "candidate_checker",
+    "method": "Independent candidate review using the register, shipped definitions, universal terms, relationships, frozen dictionaries, and sampled representations.",
+    "limitations": "Reviewer saw the register and prior label review. This is not blinded review or human review. No classifier predictions were inspected."
+  },
+  "candidateRegister": "taxonomy/candidates/dataset-wave2-2026-09-27.json",
+  "candidateRegisterSha256": "3b2b0e4d00ed3d28eeaaddd2b4909a8220fb1a774551411dd1ea3c8aa2272214",
+  "runtimeEffect": "none",
+  "promotionAuthorized": false,
+  "recommendationMeaning": {
+    "proposal-ready": "Ready to draft a proposal after resolving listed drafting details. This does not authorize installation.",
+    "needs-definition": "Resolve semantic boundaries, mapping, or source ambiguity before drafting a proposal.",
+    "defer": "Existing coverage or inadequate sampled evidence does not presently justify a new proposal."
+  },
+  "evidencePolicy": "Each candidate has one independent source group. Multiple Synthea tables or NCES columns do not constitute a second source. Non-null counts describe the frozen first-100-row corpus only.",
+  "sensitivityPolicy": "Suggested sensitivity is a proposed role default for real equivalents. Synthetic data does not lower that default. Public fields do not authorize disclosure of linked records.",
+  "sharedBlockerDefinitions": {
+    "human-review": "A human must review the definition, crosswalk, sensitivity, examples, and collision handling before promotion.",
+    "second-source-or-workflow": "Provide either an independent second source or a validated product workflow, as required by the register.",
+    "proposal-definition-and-detectors": "Author a reviewed definition, representative and negative values, detector scope, role family, domain, and explicit sensitivity overrides.",
+    "regression-gates": "Run representative collision and sensitivity regressions plus normal repository smoke, unit, bundle, and final check gates after implementation.",
+    "promotion-packaging": "Follow taxonomy/v0.x/proposed/README.md for domain membership, types, crosswalk, relationships, migrations, edition, and proposal lifecycle."
+  },
+  "reviewedArtifacts": [
+    "taxonomy/v0.1/types.jsonl",
+    "taxonomy/v0.1/universal/universal-terms.jsonl",
+    "taxonomy/v0.1/universal/crosswalk.jsonl",
+    "taxonomy/v0.1/relationships.json",
+    "taxonomy/v0.x/proposed/README.md",
+    "eval/semantic-classifier/wave2-review.md",
+    "eval/semantic-classifier/wave2-source-manifest.json",
+    ".realdata/semantic-eval-wave2/synthea-dictionary.md",
+    ".realdata/semantic-eval-wave2/nyc-311-metadata.json",
+    ".realdata/semantic-eval-wave2/nces-schools-metadata.json",
+    ".realdata/semantic-eval-wave2/wave2-corpus.json"
+  ],
+  "counts": {
+    "proposal-ready": 17,
+    "needs-definition": 18,
+    "defer": 7
+  },
+  "reviews": [
+    {
+      "id": "phone_number",
+      "reviewer": "fresh-context AI",
+      "recommendation": "proposal-ready",
+      "rationale": "Formatted NCES telephone values fall outside phone_e164. The existing universal term fits; institutional publication does not justify a public default.",
+      "suggestedSensitivity": "pii",
+      "suggestedUniversalTerm": "ut:phone_number",
+      "collisionCandidates": [
+        "phone_e164",
+        "credit_card_number",
+        "indian_bank_account"
+      ],
+      "evidence": [
+        "nces_schools_2021_22/nces_public_schools/PHONE"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "nces_schools_2021_22"
+        ],
+        "sampledFields": [
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/PHONE",
+            "nonNull": 100,
+            "distinct": 99,
+            "broadType": null
+          }
+        ]
+      },
+      "blockers": [
+        "Define country context, extensions, short codes, and precedence for E.164 values.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "date_of_death",
+      "reviewer": "fresh-context AI",
+      "recommendation": "proposal-ready",
+      "rationale": "iso_date covers the nine sampled dates. The narrower role adds person-linked sensitivity; temporal_instant fits with an explicit sensitivity override.",
+      "suggestedSensitivity": "pii",
+      "suggestedUniversalTerm": "ut:temporal_instant",
+      "collisionCandidates": [
+        "iso_date",
+        "date_of_birth",
+        "iso_datetime"
+      ],
+      "evidence": [
+        "synthea_100/synthea_patients/DEATHDATE"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "synthea_100"
+        ],
+        "sampledFields": [
+          {
+            "id": "synthea_100/synthea_patients/DEATHDATE",
+            "nonNull": 9,
+            "distinct": 9,
+            "broadType": "iso_date"
+          }
+        ]
+      },
+      "blockers": [
+        "Require death-specific headers and preserve date-only semantics.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "drivers_license_number",
+      "reviewer": "fresh-context AI",
+      "recommendation": "needs-definition",
+      "rationale": "Synthetic license identifiers establish meaning but not jurisdictional format coverage. national_id overlaps government-issued personal identity semantics; passport_number requires separation.",
+      "suggestedSensitivity": "pii",
+      "suggestedUniversalTerm": "ut:government_identifier",
+      "collisionCandidates": [
+        "national_id",
+        "passport_number",
+        "ssn"
+      ],
+      "evidence": [
+        "synthea_100/synthea_patients/DRIVERS"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "synthea_100"
+        ],
+        "sampledFields": [
+          {
+            "id": "synthea_100/synthea_patients/DRIVERS",
+            "nonNull": 83,
+            "distinct": 83,
+            "broadType": null
+          }
+        ]
+      },
+      "blockers": [
+        "Decide subtype precedence against national_id and collect jurisdiction-varied license examples.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "claim_id",
+      "reviewer": "fresh-context AI",
+      "recommendation": "proposal-ready",
+      "rationale": "uuid covers the sampled representation. A healthcare claim role distinguishes claims from encounters; the public case_identifier default needs a secret override.",
+      "suggestedSensitivity": "secret",
+      "suggestedUniversalTerm": "ut:case_identifier",
+      "collisionCandidates": [
+        "uuid",
+        "record_id",
+        "encounter_id",
+        "ticket_id",
+        "policy_id"
+      ],
+      "evidence": [
+        "synthea_100/synthea_claims/Id"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "synthea_100"
+        ],
+        "sampledFields": [
+          {
+            "id": "synthea_100/synthea_claims/Id",
+            "nonNull": 100,
+            "distinct": 100,
+            "broadType": "uuid"
+          }
+        ]
+      },
+      "blockers": [
+        "Limit the generic-looking ID to healthcare claims or rename it; require healthcare context for bare Id.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "healthcare_provider_id",
+      "reviewer": "fresh-context AI",
+      "recommendation": "needs-definition",
+      "rationale": "vendor_id already explicitly covers service providers. A person_identifier mapping fits individual clinicians but excludes organizational providers; one referring-provider field is entirely null.",
+      "suggestedSensitivity": "pii",
+      "suggestedUniversalTerm": "ut:person_identifier",
+      "collisionCandidates": [
+        "vendor_id",
+        "uuid",
+        "healthcare_organization_id"
+      ],
+      "evidence": [
+        "synthea_100/synthea_encounters/PROVIDER",
+        "synthea_100/synthea_claims/PROVIDERID",
+        "synthea_100/synthea_claims/REFERRINGPROVIDERID",
+        "synthea_100/synthea_claims/SUPERVISINGPROVIDERID"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "synthea_100"
+        ],
+        "sampledFields": [
+          {
+            "id": "synthea_100/synthea_encounters/PROVIDER",
+            "nonNull": 100,
+            "distinct": 10,
+            "broadType": "vendor_id"
+          },
+          {
+            "id": "synthea_100/synthea_claims/PROVIDERID",
+            "nonNull": 100,
+            "distinct": 9,
+            "broadType": "vendor_id"
+          },
+          {
+            "id": "synthea_100/synthea_claims/REFERRINGPROVIDERID",
+            "nonNull": 0,
+            "distinct": 0,
+            "broadType": "vendor_id"
+          },
+          {
+            "id": "synthea_100/synthea_claims/SUPERVISINGPROVIDERID",
+            "nonNull": 100,
+            "distinct": 9,
+            "broadType": "vendor_id"
+          }
+        ]
+      },
+      "blockers": [
+        "Define whether this role covers individuals only; justify specialization and obtain non-null referral evidence.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "insurance_payer_id",
+      "reviewer": "fresh-context AI",
+      "recommendation": "proposal-ready",
+      "rationale": "The frozen dictionary identifies all three fields as payer keys, including misleading patient-insurance headers. uuid covers their representation; identifier fits organization identity.",
+      "suggestedSensitivity": "public",
+      "suggestedUniversalTerm": "ut:identifier",
+      "collisionCandidates": [
+        "uuid",
+        "policy_id",
+        "vendor_id",
+        "healthcare_organization_id"
+      ],
+      "evidence": [
+        "synthea_100/synthea_encounters/PAYER",
+        "synthea_100/synthea_claims/PRIMARYPATIENTINSURANCEID",
+        "synthea_100/synthea_claims/SECONDARYPATIENTINSURANCEID"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "synthea_100"
+        ],
+        "sampledFields": [
+          {
+            "id": "synthea_100/synthea_encounters/PAYER",
+            "nonNull": 100,
+            "distinct": 6,
+            "broadType": "uuid"
+          },
+          {
+            "id": "synthea_100/synthea_claims/PRIMARYPATIENTINSURANCEID",
+            "nonNull": 95,
+            "distinct": 5,
+            "broadType": "uuid"
+          },
+          {
+            "id": "synthea_100/synthea_claims/SECONDARYPATIENTINSURANCEID",
+            "nonNull": 12,
+            "distinct": 1,
+            "broadType": "uuid"
+          }
+        ]
+      },
+      "blockers": [
+        "Require dictionary or contextual evidence before treating patient-insurance headers as payer IDs; preserve linked-record sensitivity separately.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "healthcare_organization_id",
+      "reviewer": "fresh-context AI",
+      "recommendation": "needs-definition",
+      "rationale": "uuid covers the sample. identifier fits legal organizations; facility_code and vendor_id may overlap when organizations operate sites or supply care.",
+      "suggestedSensitivity": "public",
+      "suggestedUniversalTerm": "ut:identifier",
+      "collisionCandidates": [
+        "uuid",
+        "facility_code",
+        "vendor_id",
+        "healthcare_provider_id"
+      ],
+      "evidence": [
+        "synthea_100/synthea_encounters/ORGANIZATION"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "synthea_100"
+        ],
+        "sampledFields": [
+          {
+            "id": "synthea_100/synthea_encounters/ORGANIZATION",
+            "nonNull": 100,
+            "distinct": 10,
+            "broadType": "uuid"
+          }
+        ]
+      },
+      "blockers": [
+        "Define organization versus physical facility versus provider boundaries and demonstrate a workflow needing this distinction.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "school_id",
+      "reviewer": "fresh-context AI",
+      "recommendation": "needs-definition",
+      "rationale": "NCESSCH identifies an institution; facility_code may already cover physical schools. Virtual schools make facility_identifier narrower than the proposed school-entity meaning.",
+      "suggestedSensitivity": "public",
+      "suggestedUniversalTerm": "ut:identifier",
+      "collisionCandidates": [
+        "facility_code",
+        "record_id",
+        "student_id",
+        "education_agency_id"
+      ],
+      "evidence": [
+        "nces_schools_2021_22/nces_public_schools/NCESSCH"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "nces_schools_2021_22"
+        ],
+        "sampledFields": [
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/NCESSCH",
+            "nonNull": 100,
+            "distinct": 100,
+            "broadType": null
+          }
+        ]
+      },
+      "blockers": [
+        "Choose institution versus campus scope; prefer identifier for institutions and preserve leading zeros.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "education_agency_id",
+      "reviewer": "fresh-context AI",
+      "recommendation": "proposal-ready",
+      "rationale": "NCES and state agency codes identify administrative organizations. identifier fits; record_id lacks this business meaning and student_id identifies people.",
+      "suggestedSensitivity": "public",
+      "suggestedUniversalTerm": "ut:identifier",
+      "collisionCandidates": [
+        "record_id",
+        "school_id",
+        "government_agency_code"
+      ],
+      "evidence": [
+        "nces_schools_2021_22/nces_public_schools/LEAID",
+        "nces_schools_2021_22/nces_public_schools/ST_LEAID"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "nces_schools_2021_22"
+        ],
+        "sampledFields": [
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/LEAID",
+            "nonNull": 100,
+            "distinct": 14,
+            "broadType": null
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/ST_LEAID",
+            "nonNull": 100,
+            "distinct": 14,
+            "broadType": null
+          }
+        ]
+      },
+      "blockers": [
+        "Retain issuing-authority and jurisdiction context; do not assume NCES and state identifiers share a namespace.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "school_name",
+      "reviewer": "fresh-context AI",
+      "recommendation": "proposal-ready",
+      "rationale": "School names describe institutions, outside vendor_name and government agency_name definitions. organization_name fits but inherits PII without an explicit public override.",
+      "suggestedSensitivity": "public",
+      "suggestedUniversalTerm": "ut:organization_name",
+      "collisionCandidates": [
+        "vendor_name",
+        "agency_name",
+        "facility_name"
+      ],
+      "evidence": [
+        "nces_schools_2021_22/nces_public_schools/SCH_NAME"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "nces_schools_2021_22"
+        ],
+        "sampledFields": [
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/SCH_NAME",
+            "nonNull": 100,
+            "distinct": 100,
+            "broadType": null
+          }
+        ]
+      },
+      "blockers": [
+        "Define institution-name scope and distinguish campuses or buildings from organizations.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "academic_year",
+      "reviewer": "fresh-context AI",
+      "recommendation": "needs-definition",
+      "rationale": "The sole sampled value spans 2021-2022. calendar_year excludes this range; temporal is safer than a year mapping that might imply a single year.",
+      "suggestedSensitivity": "public",
+      "suggestedUniversalTerm": "ut:temporal",
+      "collisionCandidates": [
+        "calendar_year",
+        "publication_year",
+        "release_year"
+      ],
+      "evidence": [
+        "nces_schools_2021_22/nces_public_schools/SURVYEAR"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "nces_schools_2021_22"
+        ],
+        "sampledFields": [
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/SURVYEAR",
+            "nonNull": 100,
+            "distinct": 1,
+            "broadType": null
+          }
+        ]
+      },
+      "blockers": [
+        "Define academic periods, start/end conventions, shortened forms, and ordering; review temporal versus a dedicated period term.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "student_count",
+      "reviewer": "fresh-context AI",
+      "recommendation": "defer",
+      "rationale": "population explicitly covers counts for a group and covers these student aggregates. Many headers from one NCES table do not establish independent source diversity.",
+      "suggestedSensitivity": "public",
+      "suggestedUniversalTerm": "ut:count",
+      "collisionCandidates": [
+        "population",
+        "quantity",
+        "attendance_count"
+      ],
+      "evidence": [
+        "nces_schools_2021_22/nces_public_schools/TOTFRL",
+        "nces_schools_2021_22/nces_public_schools/FRELCH",
+        "nces_schools_2021_22/nces_public_schools/REDLCH",
+        "nces_schools_2021_22/nces_public_schools/DIRECTCERT",
+        "nces_schools_2021_22/nces_public_schools/PK",
+        "nces_schools_2021_22/nces_public_schools/KG",
+        "nces_schools_2021_22/nces_public_schools/G01",
+        "nces_schools_2021_22/nces_public_schools/G02",
+        "nces_schools_2021_22/nces_public_schools/G03",
+        "nces_schools_2021_22/nces_public_schools/G04",
+        "nces_schools_2021_22/nces_public_schools/G05",
+        "nces_schools_2021_22/nces_public_schools/G06",
+        "nces_schools_2021_22/nces_public_schools/G07",
+        "nces_schools_2021_22/nces_public_schools/G08",
+        "nces_schools_2021_22/nces_public_schools/G09",
+        "nces_schools_2021_22/nces_public_schools/G10",
+        "nces_schools_2021_22/nces_public_schools/G11",
+        "nces_schools_2021_22/nces_public_schools/G12",
+        "nces_schools_2021_22/nces_public_schools/G13",
+        "nces_schools_2021_22/nces_public_schools/UG",
+        "nces_schools_2021_22/nces_public_schools/AE",
+        "nces_schools_2021_22/nces_public_schools/TOTMENROL",
+        "nces_schools_2021_22/nces_public_schools/TOTFENROL",
+        "nces_schools_2021_22/nces_public_schools/TOTAL",
+        "nces_schools_2021_22/nces_public_schools/MEMBER",
+        "nces_schools_2021_22/nces_public_schools/AMALM",
+        "nces_schools_2021_22/nces_public_schools/AMALF",
+        "nces_schools_2021_22/nces_public_schools/AM",
+        "nces_schools_2021_22/nces_public_schools/ASALM",
+        "nces_schools_2021_22/nces_public_schools/ASALF",
+        "nces_schools_2021_22/nces_public_schools/AS",
+        "nces_schools_2021_22/nces_public_schools/BLALM",
+        "nces_schools_2021_22/nces_public_schools/BLALF",
+        "nces_schools_2021_22/nces_public_schools/BL",
+        "nces_schools_2021_22/nces_public_schools/HPALM",
+        "nces_schools_2021_22/nces_public_schools/HPALF",
+        "nces_schools_2021_22/nces_public_schools/HP",
+        "nces_schools_2021_22/nces_public_schools/HIALM",
+        "nces_schools_2021_22/nces_public_schools/HIALF",
+        "nces_schools_2021_22/nces_public_schools/HI",
+        "nces_schools_2021_22/nces_public_schools/TRALM",
+        "nces_schools_2021_22/nces_public_schools/TRALF",
+        "nces_schools_2021_22/nces_public_schools/TR",
+        "nces_schools_2021_22/nces_public_schools/WHALM",
+        "nces_schools_2021_22/nces_public_schools/WHALF",
+        "nces_schools_2021_22/nces_public_schools/WH"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "nces_schools_2021_22"
+        ],
+        "sampledFields": [
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/TOTFRL",
+            "nonNull": 82,
+            "distinct": 72,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/FRELCH",
+            "nonNull": 82,
+            "distinct": 77,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/REDLCH",
+            "nonNull": 82,
+            "distinct": 46,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/DIRECTCERT",
+            "nonNull": 85,
+            "distinct": 75,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/PK",
+            "nonNull": 38,
+            "distinct": 28,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/KG",
+            "nonNull": 36,
+            "distinct": 33,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/G01",
+            "nonNull": 38,
+            "distinct": 35,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/G02",
+            "nonNull": 39,
+            "distinct": 35,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/G03",
+            "nonNull": 41,
+            "distinct": 36,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/G04",
+            "nonNull": 36,
+            "distinct": 32,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/G05",
+            "nonNull": 37,
+            "distinct": 33,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/G06",
+            "nonNull": 21,
+            "distinct": 20,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/G07",
+            "nonNull": 22,
+            "distinct": 20,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/G08",
+            "nonNull": 22,
+            "distinct": 20,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/G09",
+            "nonNull": 22,
+            "distinct": 20,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/G10",
+            "nonNull": 24,
+            "distinct": 19,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/G11",
+            "nonNull": 24,
+            "distinct": 19,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/G12",
+            "nonNull": 24,
+            "distinct": 20,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/G13",
+            "nonNull": 0,
+            "distinct": 0,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/UG",
+            "nonNull": 0,
+            "distinct": 0,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/AE",
+            "nonNull": 0,
+            "distinct": 0,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/TOTMENROL",
+            "nonNull": 0,
+            "distinct": 0,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/TOTFENROL",
+            "nonNull": 0,
+            "distinct": 0,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/TOTAL",
+            "nonNull": 91,
+            "distinct": 83,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/MEMBER",
+            "nonNull": 91,
+            "distinct": 83,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/AMALM",
+            "nonNull": 91,
+            "distinct": 8,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/AMALF",
+            "nonNull": 91,
+            "distinct": 8,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/AM",
+            "nonNull": 91,
+            "distinct": 13,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/ASALM",
+            "nonNull": 91,
+            "distinct": 32,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/ASALF",
+            "nonNull": 91,
+            "distinct": 33,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/AS",
+            "nonNull": 91,
+            "distinct": 41,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/BLALM",
+            "nonNull": 91,
+            "distinct": 64,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/BLALF",
+            "nonNull": 91,
+            "distinct": 58,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/BL",
+            "nonNull": 91,
+            "distinct": 68,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/HPALM",
+            "nonNull": 91,
+            "distinct": 6,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/HPALF",
+            "nonNull": 91,
+            "distinct": 6,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/HP",
+            "nonNull": 91,
+            "distinct": 9,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/HIALM",
+            "nonNull": 91,
+            "distinct": 60,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/HIALF",
+            "nonNull": 91,
+            "distinct": 56,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/HI",
+            "nonNull": 91,
+            "distinct": 72,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/TRALM",
+            "nonNull": 91,
+            "distinct": 33,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/TRALF",
+            "nonNull": 91,
+            "distinct": 30,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/TR",
+            "nonNull": 91,
+            "distinct": 48,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/WHALM",
+            "nonNull": 91,
+            "distinct": 80,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/WHALF",
+            "nonNull": 91,
+            "distinct": 77,
+            "broadType": "population"
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/WH",
+            "nonNull": 91,
+            "distinct": 80,
+            "broadType": "population"
+          }
+        ]
+      },
+      "blockers": [
+        "Demonstrate a distinct workflow benefit; specify sentinel handling, overlapping groups, and small-cell disclosure safeguards.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "student_teacher_ratio",
+      "reviewer": "fresh-context AI",
+      "recommendation": "proposal-ready",
+      "rationale": "Values represent students per teacher, not percentages or probabilities. ratio is appropriate; no shipped role covers this unitless education ratio.",
+      "suggestedSensitivity": "public",
+      "suggestedUniversalTerm": "ut:ratio",
+      "collisionCandidates": [
+        "percentage",
+        "probability",
+        "score_percent",
+        "teacher_fte"
+      ],
+      "evidence": [
+        "nces_schools_2021_22/nces_public_schools/STUTERATIO"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "nces_schools_2021_22"
+        ],
+        "sampledFields": [
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/STUTERATIO",
+            "nonNull": 83,
+            "distinct": 82,
+            "broadType": null
+          }
+        ]
+      },
+      "blockers": [
+        "Define denominator basis, zero-denominator handling, and missing sentinels; forbid summing ratios.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "teacher_fte",
+      "reviewer": "fresh-context AI",
+      "recommendation": "proposal-ready",
+      "rationale": "Fractional values support an FTE measure. quantity as a runtime type describes inventory or production counts; the universal quantity term is broader.",
+      "suggestedSensitivity": "public",
+      "suggestedUniversalTerm": "ut:quantity",
+      "collisionCandidates": [
+        "quantity",
+        "population",
+        "available_capacity",
+        "student_teacher_ratio"
+      ],
+      "evidence": [
+        "nces_schools_2021_22/nces_public_schools/FTE"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "nces_schools_2021_22"
+        ],
+        "sampledFields": [
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/FTE",
+            "nonNull": 83,
+            "distinct": 70,
+            "broadType": null
+          }
+        ]
+      },
+      "blockers": [
+        "Confirm FTE basis from a source definition beyond the Total Teachers alias; distinguish headcount and fractional staffing.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "parcel_id",
+      "reviewer": "fresh-context AI",
+      "recommendation": "needs-definition",
+      "rationale": "BBL identifies land parcels, not necessarily facilities. identifier fits better than facility_identifier; incident-linked parcels require the adjudicated PII treatment.",
+      "suggestedSensitivity": "pii",
+      "suggestedUniversalTerm": "ut:identifier",
+      "collisionCandidates": [
+        "farm_id",
+        "facility_code",
+        "address_line",
+        "record_id"
+      ],
+      "evidence": [
+        "nyc_311/nyc_311_service_requests/bbl"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "nyc_311"
+        ],
+        "sampledFields": [
+          {
+            "id": "nyc_311/nyc_311_service_requests/bbl",
+            "nonNull": 88,
+            "distinct": 87,
+            "broadType": null
+          }
+        ]
+      },
+      "blockers": [
+        "Define cadastral namespaces, leading zeros, parcel splits, and contextual sensitivity for public cadastral catalogs.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "support_channel",
+      "reviewer": "fresh-context AI",
+      "recommendation": "proposal-ready",
+      "rationale": "PHONE, ONLINE, and MOBILE classify intake channels. category fits; marketing attribution and payment method types describe different processes.",
+      "suggestedSensitivity": "public",
+      "suggestedUniversalTerm": "ut:category",
+      "collisionCandidates": [
+        "utm_medium",
+        "payment_method",
+        "topic_label"
+      ],
+      "evidence": [
+        "nyc_311/nyc_311_service_requests/open_data_channel_type"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "nyc_311"
+        ],
+        "sampledFields": [
+          {
+            "id": "nyc_311/nyc_311_service_requests/open_data_channel_type",
+            "nonNull": 100,
+            "distinct": 4,
+            "broadType": null
+          }
+        ]
+      },
+      "blockers": [
+        "Define unknown-channel sentinels and require support-intake context.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "encounter_class",
+      "reviewer": "fresh-context AI",
+      "recommendation": "proposal-ready",
+      "rationale": "The dictionary describes care settings. admission_type describes admission circumstances and does not cover wellness or ambulatory settings; category needs a secret override.",
+      "suggestedSensitivity": "secret",
+      "suggestedUniversalTerm": "ut:category",
+      "collisionCandidates": [
+        "admission_type",
+        "healthcare_claim_type"
+      ],
+      "evidence": [
+        "synthea_100/synthea_encounters/ENCOUNTERCLASS"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "synthea_100"
+        ],
+        "sampledFields": [
+          {
+            "id": "synthea_100/synthea_encounters/ENCOUNTERCLASS",
+            "nonNull": 100,
+            "distinct": 5,
+            "broadType": null
+          }
+        ]
+      },
+      "blockers": [
+        "Define encounter-setting vocabulary and resolve overlapping emergency headers against admission_type.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "clinical_procedure_code",
+      "reviewer": "fresh-context AI",
+      "recommendation": "needs-definition",
+      "rationale": "The cited CODE field is explicitly an encounter SNOMED code, not documented as a procedure code. diagnosis_code does not cover arbitrary SNOMED concepts.",
+      "suggestedSensitivity": "secret",
+      "suggestedUniversalTerm": "ut:categorical",
+      "collisionCandidates": [
+        "diagnosis_code",
+        "medical_condition",
+        "encounter_class"
+      ],
+      "evidence": [
+        "synthea_100/synthea_encounters/CODE"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "synthea_100"
+        ],
+        "sampledFields": [
+          {
+            "id": "synthea_100/synthea_encounters/CODE",
+            "nonNull": 100,
+            "distinct": 13,
+            "broadType": null
+          }
+        ]
+      },
+      "blockers": [
+        "Rename or narrow to encounter code, or add actual procedure evidence; require code-system and clinical-context guards.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "healthcare_cost_amount",
+      "reviewer": "fresh-context AI",
+      "recommendation": "needs-definition",
+      "rationale": "amount covers both fields. Base encounter cost and lifetime patient-paid expenses differ in payer perspective and aggregation grain; monetary_amount fits both.",
+      "suggestedSensitivity": "financial",
+      "suggestedUniversalTerm": "ut:monetary_amount",
+      "collisionCandidates": [
+        "amount",
+        "claim_amount",
+        "insurance_coverage_amount"
+      ],
+      "evidence": [
+        "synthea_100/synthea_encounters/BASE_ENCOUNTER_COST",
+        "synthea_100/synthea_patients/HEALTHCARE_EXPENSES"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "synthea_100"
+        ],
+        "sampledFields": [
+          {
+            "id": "synthea_100/synthea_encounters/BASE_ENCOUNTER_COST",
+            "nonNull": 100,
+            "distinct": 4,
+            "broadType": "amount"
+          },
+          {
+            "id": "synthea_100/synthea_patients/HEALTHCARE_EXPENSES",
+            "nonNull": 100,
+            "distinct": 100,
+            "broadType": "amount"
+          }
+        ]
+      },
+      "blockers": [
+        "Define cost versus charge versus patient payment, currency, time basis, and aggregation grain before combining these fields.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "insurance_coverage_amount",
+      "reviewer": "fresh-context AI",
+      "recommendation": "needs-definition",
+      "rationale": "claim_amount already includes amounts paid on medical claims and covers PAYER_COVERAGE. amount covers lifetime coverage totals; sum_insured means a policy limit.",
+      "suggestedSensitivity": "financial",
+      "suggestedUniversalTerm": "ut:monetary_amount",
+      "collisionCandidates": [
+        "amount",
+        "claim_amount",
+        "sum_insured",
+        "healthcare_cost_amount"
+      ],
+      "evidence": [
+        "synthea_100/synthea_patients/HEALTHCARE_COVERAGE",
+        "synthea_100/synthea_encounters/PAYER_COVERAGE"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "synthea_100"
+        ],
+        "sampledFields": [
+          {
+            "id": "synthea_100/synthea_patients/HEALTHCARE_COVERAGE",
+            "nonNull": 100,
+            "distinct": 95,
+            "broadType": "amount"
+          },
+          {
+            "id": "synthea_100/synthea_encounters/PAYER_COVERAGE",
+            "nonNull": 100,
+            "distinct": 63,
+            "broadType": "claim_amount"
+          }
+        ]
+      },
+      "blockers": [
+        "Rename or define paid coverage versus entitlement limits; preserve per-encounter versus lifetime grain.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "outstanding_claim_amount",
+      "reviewer": "fresh-context AI",
+      "recommendation": "defer",
+      "rationale": "amount covers outstanding balances. Every non-null sampled value is zero, so the sample cannot establish nonzero behavior or balance-sign conventions.",
+      "suggestedSensitivity": "financial",
+      "suggestedUniversalTerm": "ut:monetary_amount",
+      "collisionCandidates": [
+        "amount",
+        "claim_amount",
+        "insurance_coverage_amount"
+      ],
+      "evidence": [
+        "synthea_100/synthea_claims/OUTSTANDING1",
+        "synthea_100/synthea_claims/OUTSTANDING2",
+        "synthea_100/synthea_claims/OUTSTANDINGP"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "synthea_100"
+        ],
+        "sampledFields": [
+          {
+            "id": "synthea_100/synthea_claims/OUTSTANDING1",
+            "nonNull": 100,
+            "distinct": 1,
+            "broadType": "amount"
+          },
+          {
+            "id": "synthea_100/synthea_claims/OUTSTANDING2",
+            "nonNull": 88,
+            "distinct": 1,
+            "broadType": "amount"
+          },
+          {
+            "id": "synthea_100/synthea_claims/OUTSTANDINGP",
+            "nonNull": 100,
+            "distinct": 1,
+            "broadType": "amount"
+          }
+        ]
+      },
+      "blockers": [
+        "Obtain nonzero balances; distinguish owed, originally claimed, and paid amounts with a demonstrated workflow.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "healthcare_claim_type",
+      "reviewer": "fresh-context AI",
+      "recommendation": "needs-definition",
+      "rationale": "The dictionary maps 1 and 2 to professional and institutional claims. Samples also contain 0; category fits but the extra code remains undefined.",
+      "suggestedSensitivity": "financial",
+      "suggestedUniversalTerm": "ut:category",
+      "collisionCandidates": [
+        "claim_status",
+        "insurance_status",
+        "encounter_class"
+      ],
+      "evidence": [
+        "synthea_100/synthea_claims/HEALTHCARECLAIMTYPEID1",
+        "synthea_100/synthea_claims/HEALTHCARECLAIMTYPEID2"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "synthea_100"
+        ],
+        "sampledFields": [
+          {
+            "id": "synthea_100/synthea_claims/HEALTHCARECLAIMTYPEID1",
+            "nonNull": 100,
+            "distinct": 2,
+            "broadType": null
+          },
+          {
+            "id": "synthea_100/synthea_claims/HEALTHCARECLAIMTYPEID2",
+            "nonNull": 100,
+            "distinct": 3,
+            "broadType": null
+          }
+        ]
+      },
+      "blockers": [
+        "Resolve code 0 and missing-value semantics; specify institutional versus professional claim scope.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "place_of_birth",
+      "reviewer": "fresh-context AI",
+      "recommendation": "proposal-ready",
+      "rationale": "city covers the dictionary's town meaning. Compound sampled place strings support a broader birthplace role; location needs an explicit PII override.",
+      "suggestedSensitivity": "pii",
+      "suggestedUniversalTerm": "ut:location",
+      "collisionCandidates": [
+        "city",
+        "country_name",
+        "address_line"
+      ],
+      "evidence": [
+        "synthea_100/synthea_patients/BIRTHPLACE"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "synthea_100"
+        ],
+        "sampledFields": [
+          {
+            "id": "synthea_100/synthea_patients/BIRTHPLACE",
+            "nonNull": 100,
+            "distinct": 71,
+            "broadType": "city"
+          }
+        ]
+      },
+      "blockers": [
+        "Define town versus compound place representations and require birth-specific context.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "fips_code",
+      "reviewer": "fresh-context AI",
+      "recommendation": "needs-definition",
+      "rationale": "The evidence specifically covers five-digit county codes. geographic_region fits county geography; generic FIPS is broader than this evidence.",
+      "suggestedSensitivity": "public",
+      "suggestedUniversalTerm": "ut:geographic_region",
+      "collisionCandidates": [
+        "postal_code",
+        "gst_state_code",
+        "location_zone_id"
+      ],
+      "evidence": [
+        "synthea_100/synthea_patients/FIPS"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "synthea_100"
+        ],
+        "sampledFields": [
+          {
+            "id": "synthea_100/synthea_patients/FIPS",
+            "nonNull": 72,
+            "distinct": 11,
+            "broadType": null
+          }
+        ]
+      },
+      "blockers": [
+        "Narrow to geographic county/state identifiers; preserve zero padding and distinguish jurisdiction levels and non-geographic FIPS uses.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "income_amount",
+      "reviewer": "fresh-context AI",
+      "recommendation": "proposal-ready",
+      "rationale": "amount covers numeric income. compensation covers employment pay; median_income covers group medians. Individual annual income merits explicit scope and financial handling.",
+      "suggestedSensitivity": "financial",
+      "suggestedUniversalTerm": "ut:monetary_amount",
+      "collisionCandidates": [
+        "amount",
+        "compensation",
+        "median_income",
+        "income_band"
+      ],
+      "evidence": [
+        "synthea_100/synthea_patients/INCOME"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "synthea_100"
+        ],
+        "sampledFields": [
+          {
+            "id": "synthea_100/synthea_patients/INCOME",
+            "nonNull": 100,
+            "distinct": 91,
+            "broadType": "amount"
+          }
+        ]
+      },
+      "blockers": [
+        "Define person versus household income, annual basis, gross/net treatment, currency, and bracket exclusion.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "virtual_school_status",
+      "reviewer": "fresh-context AI",
+      "recommendation": "proposal-ready",
+      "rationale": "Virtual delivery mode is an institutional status, not a boolean. Sampled Not Reported requires missingness treatment; status fits.",
+      "suggestedSensitivity": "public",
+      "suggestedUniversalTerm": "ut:status",
+      "collisionCandidates": [
+        "yes_no_flag",
+        "school_type",
+        "school_status"
+      ],
+      "evidence": [
+        "nces_schools_2021_22/nces_public_schools/VIRTUAL"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "nces_schools_2021_22"
+        ],
+        "sampledFields": [
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/VIRTUAL",
+            "nonNull": 100,
+            "distinct": 3,
+            "broadType": null
+          }
+        ]
+      },
+      "blockers": [
+        "Specify full, supplemental, nonvirtual, and unknown states without converting all nonzero codes to true.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "school_level",
+      "reviewer": "fresh-context AI",
+      "recommendation": "proposal-ready",
+      "rationale": "Institutional levels differ from student grade_level and attained education_level. category fits elementary, middle, high, and prekindergarten institutions.",
+      "suggestedSensitivity": "public",
+      "suggestedUniversalTerm": "ut:category",
+      "collisionCandidates": [
+        "grade_level",
+        "education_level",
+        "school_type"
+      ],
+      "evidence": [
+        "nces_schools_2021_22/nces_public_schools/SCHOOL_LEVEL"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "nces_schools_2021_22"
+        ],
+        "sampledFields": [
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/SCHOOL_LEVEL",
+            "nonNull": 100,
+            "distinct": 6,
+            "broadType": null
+          }
+        ]
+      },
+      "blockers": [
+        "Define combined and ungraded schools; require institutional headers to avoid student-level collisions.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "school_status",
+      "reviewer": "fresh-context AI",
+      "recommendation": "proposal-ready",
+      "rationale": "The fields encode start-of-year operations, including future opening. status fits; course completion and application status are different processes.",
+      "suggestedSensitivity": "public",
+      "suggestedUniversalTerm": "ut:status",
+      "collisionCandidates": [
+        "completion_status",
+        "application_status",
+        "school_type"
+      ],
+      "evidence": [
+        "nces_schools_2021_22/nces_public_schools/STATUS",
+        "nces_schools_2021_22/nces_public_schools/SY_STATUS_TEXT"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "nces_schools_2021_22"
+        ],
+        "sampledFields": [
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/STATUS",
+            "nonNull": 100,
+            "distinct": 2,
+            "broadType": null
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/SY_STATUS_TEXT",
+            "nonNull": 100,
+            "distinct": 2,
+            "broadType": null
+          }
+        ]
+      },
+      "blockers": [
+        "Preserve effective academic year and code-label equivalence; obtain additional operating states.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "school_type",
+      "reviewer": "fresh-context AI",
+      "recommendation": "proposal-ready",
+      "rationale": "Regular, alternative, technical, and special education describe school institutions. category fits; school_level and property_type describe different dimensions.",
+      "suggestedSensitivity": "public",
+      "suggestedUniversalTerm": "ut:category",
+      "collisionCandidates": [
+        "school_level",
+        "property_type",
+        "education_program_status"
+      ],
+      "evidence": [
+        "nces_schools_2021_22/nces_public_schools/SCHOOL_TYPE_TEXT"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "nces_schools_2021_22"
+        ],
+        "sampledFields": [
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/SCHOOL_TYPE_TEXT",
+            "nonNull": 100,
+            "distinct": 4,
+            "broadType": null
+          }
+        ]
+      },
+      "blockers": [
+        "Define institution type independently from grade span, delivery mode, and program participation.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "education_program_status",
+      "reviewer": "fresh-context AI",
+      "recommendation": "needs-definition",
+      "rationale": "The cited fields mix Title I eligibility, schoolwide eligibility, and participation descriptions. status fits broadly but a single role may discard these distinctions.",
+      "suggestedSensitivity": "public",
+      "suggestedUniversalTerm": "ut:status",
+      "collisionCandidates": [
+        "yes_no_flag",
+        "school_status",
+        "school_type"
+      ],
+      "evidence": [
+        "nces_schools_2021_22/nces_public_schools/TITLEI_TEXT",
+        "nces_schools_2021_22/nces_public_schools/TITLEI",
+        "nces_schools_2021_22/nces_public_schools/STITLEI"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "nces_schools_2021_22"
+        ],
+        "sampledFields": [
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/TITLEI_TEXT",
+            "nonNull": 100,
+            "distinct": 4,
+            "broadType": null
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/TITLEI",
+            "nonNull": 100,
+            "distinct": 3,
+            "broadType": null
+          },
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/STITLEI",
+            "nonNull": 100,
+            "distinct": 3,
+            "broadType": null
+          }
+        ]
+      },
+      "blockers": [
+        "Separate eligibility from participation and schoolwide scope; define N and numbered text codes before broadening beyond Title I.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "locale_classification",
+      "reviewer": "fresh-context AI",
+      "recommendation": "needs-definition",
+      "rationale": "NCES locale values classify settlement type and remoteness rather than identify a geographic region. category fits better than geographic_region.",
+      "suggestedSensitivity": "public",
+      "suggestedUniversalTerm": "ut:category",
+      "collisionCandidates": [
+        "district_neighbourhood",
+        "city",
+        "economic_tier"
+      ],
+      "evidence": [
+        "nces_schools_2021_22/nces_public_schools/ULOCALE"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "nces_schools_2021_22"
+        ],
+        "sampledFields": [
+          {
+            "id": "nces_schools_2021_22/nces_public_schools/ULOCALE",
+            "nonNull": 100,
+            "distinct": 8,
+            "broadType": null
+          }
+        ]
+      },
+      "blockers": [
+        "Define settlement-category scope, NCES code hierarchy, and geography-independent classification boundaries.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "location_type",
+      "reviewer": "fresh-context AI",
+      "recommendation": "needs-definition",
+      "rationale": "Park and Recreation Center identify venue kinds; INTERSECTION and ADDRESS identify address representations. Combining them conflates two dimensions.",
+      "suggestedSensitivity": "public",
+      "suggestedUniversalTerm": "ut:category",
+      "collisionCandidates": [
+        "facility_type",
+        "property_type",
+        "address_line"
+      ],
+      "evidence": [
+        "nyc_311/nyc_311_service_requests/location_type",
+        "nyc_311/nyc_311_service_requests/address_type"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "nyc_311"
+        ],
+        "sampledFields": [
+          {
+            "id": "nyc_311/nyc_311_service_requests/location_type",
+            "nonNull": 12,
+            "distinct": 2,
+            "broadType": null
+          },
+          {
+            "id": "nyc_311/nyc_311_service_requests/address_type",
+            "nonNull": 89,
+            "distinct": 2,
+            "broadType": null
+          }
+        ]
+      },
+      "blockers": [
+        "Split venue kind from address representation or provide an explicit discriminated definition.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "facility_name",
+      "reviewer": "fresh-context AI",
+      "recommendation": "needs-definition",
+      "rationale": "Named parks denote places rather than legal organizations. organization_name is inappropriate for many facilities; the landmark evidence is entirely null.",
+      "suggestedSensitivity": "public",
+      "suggestedUniversalTerm": "ut:title",
+      "collisionCandidates": [
+        "school_name",
+        "agency_name",
+        "listing_name",
+        "road_name"
+      ],
+      "evidence": [
+        "nyc_311/nyc_311_service_requests/landmark",
+        "nyc_311/nyc_311_service_requests/park_facility_name"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "nyc_311"
+        ],
+        "sampledFields": [
+          {
+            "id": "nyc_311/nyc_311_service_requests/landmark",
+            "nonNull": 0,
+            "distinct": 0,
+            "broadType": null
+          },
+          {
+            "id": "nyc_311/nyc_311_service_requests/park_facility_name",
+            "nonNull": 100,
+            "distinct": 9,
+            "broadType": null
+          }
+        ]
+      },
+      "blockers": [
+        "Use title or review a place-name term; bound landmark coverage and handle Unspecified as a sentinel.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "facility_type",
+      "reviewer": "fresh-context AI",
+      "recommendation": "defer",
+      "rationale": "The frozen dictionary supports facility category semantics but the sampled column is entirely null. category fits; overlap with location_type remains unresolved.",
+      "suggestedSensitivity": "public",
+      "suggestedUniversalTerm": "ut:category",
+      "collisionCandidates": [
+        "location_type",
+        "property_type",
+        "school_type"
+      ],
+      "evidence": [
+        "nyc_311/nyc_311_service_requests/facility_type"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "nyc_311"
+        ],
+        "sampledFields": [
+          {
+            "id": "nyc_311/nyc_311_service_requests/facility_type",
+            "nonNull": 0,
+            "distinct": 0,
+            "broadType": null
+          }
+        ]
+      },
+      "blockers": [
+        "Collect non-null values and resolve facility-kind versus location-kind scope before drafting detectors.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "ticket_resolution_text",
+      "reviewer": "fresh-context AI",
+      "recommendation": "needs-definition",
+      "rationale": "The dictionary includes last actions and future steps, not only final resolutions. label broadly covers text; narratives can contain personal information.",
+      "suggestedSensitivity": "pii",
+      "suggestedUniversalTerm": "ut:label",
+      "collisionCandidates": [
+        "topic_label",
+        "ticket_status"
+      ],
+      "evidence": [
+        "nyc_311/nyc_311_service_requests/resolution_description"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "nyc_311"
+        ],
+        "sampledFields": [
+          {
+            "id": "nyc_311/nyc_311_service_requests/resolution_description",
+            "nonNull": 100,
+            "distinct": 2,
+            "broadType": null
+          }
+        ]
+      },
+      "blockers": [
+        "Define action/update versus final-resolution scope; add diverse narrative examples and sensitivity-aware handling beyond two boilerplate samples.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "projected_coordinate",
+      "reviewer": "fresh-context AI",
+      "recommendation": "needs-definition",
+      "rationale": "State-plane X/Y values fall outside decimal latitude/longitude semantics. geo_coordinate is plausible with CRS metadata; precise incident locations need a PII override.",
+      "suggestedSensitivity": "pii",
+      "suggestedUniversalTerm": "ut:geo_coordinate",
+      "collisionCandidates": [
+        "latitude",
+        "longitude",
+        "distance",
+        "geospatial_point"
+      ],
+      "evidence": [
+        "nyc_311/nyc_311_service_requests/x_coordinate_state_plane",
+        "nyc_311/nyc_311_service_requests/y_coordinate_state_plane"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "nyc_311"
+        ],
+        "sampledFields": [
+          {
+            "id": "nyc_311/nyc_311_service_requests/x_coordinate_state_plane",
+            "nonNull": 89,
+            "distinct": 89,
+            "broadType": null
+          },
+          {
+            "id": "nyc_311/nyc_311_service_requests/y_coordinate_state_plane",
+            "nonNull": 89,
+            "distinct": 89,
+            "broadType": null
+          }
+        ]
+      },
+      "blockers": [
+        "Specify coordinate reference system, units, axis identity, pairing, and missing-CRS behavior; do not infer latitude/longitude from scalar ranges.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "geospatial_point",
+      "reviewer": "fresh-context AI",
+      "recommendation": "proposal-ready",
+      "rationale": "WKT POINT values combine longitude and latitude; scalar coordinate roles do not cover the representation. geo_coordinate fits with incident-location PII handling.",
+      "suggestedSensitivity": "pii",
+      "suggestedUniversalTerm": "ut:geo_coordinate",
+      "collisionCandidates": [
+        "latitude",
+        "longitude",
+        "projected_coordinate",
+        "event_properties_json"
+      ],
+      "evidence": [
+        "nyc_311/nyc_311_service_requests/location"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "nyc_311"
+        ],
+        "sampledFields": [
+          {
+            "id": "nyc_311/nyc_311_service_requests/location",
+            "nonNull": 89,
+            "distinct": 89,
+            "broadType": null
+          }
+        ]
+      },
+      "blockers": [
+        "Define supported WKT or structured forms, coordinate order, CRS, and rejection of non-point geometries.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "government_agency_code",
+      "reviewer": "fresh-context AI",
+      "recommendation": "needs-definition",
+      "rationale": "DPR and DOB are agency acronyms. agency_name may cover acronyms as names; identifier requires a stable namespace or lookup rather than brevity alone.",
+      "suggestedSensitivity": "public",
+      "suggestedUniversalTerm": "ut:identifier",
+      "collisionCandidates": [
+        "agency_name",
+        "education_agency_id",
+        "vendor_id"
+      ],
+      "evidence": [
+        "nyc_311/nyc_311_service_requests/agency"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "nyc_311"
+        ],
+        "sampledFields": [
+          {
+            "id": "nyc_311/nyc_311_service_requests/agency",
+            "nonNull": 100,
+            "distinct": 2,
+            "broadType": null
+          }
+        ]
+      },
+      "blockers": [
+        "Establish code-versus-abbreviated-name policy and jurisdiction-scoped identity; two acronyms do not justify a general detector.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "vehicle_type",
+      "reviewer": "fresh-context AI",
+      "recommendation": "defer",
+      "rationale": "The dictionary describes TLC vehicle categories, but the sampled column is entirely null. category fits; a general vehicle type exceeds taxi evidence.",
+      "suggestedSensitivity": "public",
+      "suggestedUniversalTerm": "ut:category",
+      "collisionCandidates": [
+        "property_type",
+        "media_type"
+      ],
+      "evidence": [
+        "nyc_311/nyc_311_service_requests/vehicle_type"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "nyc_311"
+        ],
+        "sampledFields": [
+          {
+            "id": "nyc_311/nyc_311_service_requests/vehicle_type",
+            "nonNull": 0,
+            "distinct": 0,
+            "broadType": null
+          }
+        ]
+      },
+      "blockers": [
+        "Collect non-null transport examples and choose taxi-specific versus general vehicle scope; reconsider the customer-support domain.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "road_name",
+      "reviewer": "fresh-context AI",
+      "recommendation": "defer",
+      "rationale": "The dictionary describes bridge/highway names but this field is entirely null in the sample. location fits; address_line partially overlaps street-name usage.",
+      "suggestedSensitivity": "public",
+      "suggestedUniversalTerm": "ut:location",
+      "collisionCandidates": [
+        "address_line",
+        "facility_name",
+        "road_segment"
+      ],
+      "evidence": [
+        "nyc_311/nyc_311_service_requests/bridge_highway_name"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "nyc_311"
+        ],
+        "sampledFields": [
+          {
+            "id": "nyc_311/nyc_311_service_requests/bridge_highway_name",
+            "nonNull": 0,
+            "distinct": 0,
+            "broadType": null
+          }
+        ]
+      },
+      "blockers": [
+        "Collect named infrastructure values; define roads versus bridges and assess street-name fields as additional evidence.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "road_direction",
+      "reviewer": "fresh-context AI",
+      "recommendation": "defer",
+      "rationale": "The dictionary describes direction at an incident, but all sampled values are null. category fits; direction is neither a road identity nor a coordinate.",
+      "suggestedSensitivity": "public",
+      "suggestedUniversalTerm": "ut:category",
+      "collisionCandidates": [
+        "road_segment",
+        "road_name"
+      ],
+      "evidence": [
+        "nyc_311/nyc_311_service_requests/bridge_highway_direction"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "nyc_311"
+        ],
+        "sampledFields": [
+          {
+            "id": "nyc_311/nyc_311_service_requests/bridge_highway_direction",
+            "nonNull": 0,
+            "distinct": 0,
+            "broadType": null
+          }
+        ]
+      },
+      "blockers": [
+        "Collect cardinal and traffic-direction examples; distinguish heading, bound direction, and carriageway side.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    },
+    {
+      "id": "road_segment",
+      "reviewer": "fresh-context AI",
+      "recommendation": "defer",
+      "rationale": "The dictionary says additional information about a section, not necessarily a named segment identifier. All sampled values are null; precise incident context warrants PII.",
+      "suggestedSensitivity": "pii",
+      "suggestedUniversalTerm": "ut:location",
+      "collisionCandidates": [
+        "road_name",
+        "address_line",
+        "location_zone_id"
+      ],
+      "evidence": [
+        "nyc_311/nyc_311_service_requests/bridge_highway_segment"
+      ],
+      "evidenceCoverage": {
+        "independentSourceGroups": [
+          "nyc_311"
+        ],
+        "sampledFields": [
+          {
+            "id": "nyc_311/nyc_311_service_requests/bridge_highway_segment",
+            "nonNull": 0,
+            "distinct": 0,
+            "broadType": null
+          }
+        ]
+      },
+      "blockers": [
+        "Obtain values and define named segment versus free-text location detail; reconsider sensitivity for public infrastructure catalogs.",
+        "human-review",
+        "second-source-or-workflow",
+        "proposal-definition-and-detectors",
+        "regression-gates",
+        "promotion-packaging"
+      ]
+    }
+  ]
+}

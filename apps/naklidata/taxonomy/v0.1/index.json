@@ -1,0 +1,211 @@
+{
+  "format": "nakli-taxonomy",
+  "version": "0.1",
+  "released": "2026-05-15",
+  "edition": "2026-09-22",
+  "edition_note": "Yes/no flags now admit integer SQL columns for review; generic numeric 0/1 values alone do not auto-assign.",
+  "domain_prior": {
+    "weight": 0.15,
+    "note": "T4 — applied to every type without its own domain_prior detector; shown as \"prior\" in the score breakdown, never counted as evidence; max 0.2."
+  },
+  "domains": [
+    {
+      "id": "india-smb-finance",
+      "label": "Indian SMB finance",
+      "description": "GSTIN, PAN, HSN, IFSC, GL accounts and adjacent Indian finance fields.",
+      "domain_file": "domains/india-smb-finance.json"
+    },
+    {
+      "id": "generic-finance",
+      "label": "Generic finance",
+      "description": "Amount, currency, dates, identifiers shared across finance domains.",
+      "domain_file": "domains/generic-finance.json"
+    },
+    {
+      "id": "generic-logs",
+      "label": "Generic logs",
+      "description": "Log levels, services, endpoints, latency, HTTP status, IDs.",
+      "domain_file": "domains/generic-logs.json"
+    },
+    {
+      "id": "product-analytics",
+      "label": "Product analytics",
+      "description": "Event-stream columns from Mixpanel / Amplitude / PostHog exports: event names, user/session IDs, properties, UTM attribution.",
+      "domain_file": "domains/product-analytics.json"
+    },
+    {
+      "id": "geography",
+      "label": "Geography and location",
+      "description": "Latitude/longitude, city, state/region, district, postal code, address.",
+      "domain_file": "domains/geography.json"
+    },
+    {
+      "id": "marketplace",
+      "label": "Marketplace and listings",
+      "description": "Listing/host IDs, room type, availability, reviews, minimum stay — Airbnb-style short-let and marketplace exports.",
+      "domain_file": "domains/marketplace.json"
+    },
+    {
+      "id": "sample-datasets",
+      "label": "Public sample datasets",
+      "description": "Outcome/demographic roles from common teaching datasets (Titanic): survival, passenger class, sex, age, fare, embarkation.",
+      "domain_file": "domains/sample-datasets.json"
+    },
+    {
+      "id": "retail",
+      "label": "Retail and transactions",
+      "description": "Order/invoice IDs, lifecycle status/timestamps, payment installments, product categories/dimensions, SKU, quantity, and customer IDs — retail and e-commerce exports.",
+      "domain_file": "domains/retail.json"
+    },
+    {
+      "id": "media",
+      "label": "Media and content",
+      "description": "Titles, credits (director/cast), content rating, genre, release year, media type — catalog / streaming exports.",
+      "domain_file": "domains/media.json"
+    },
+    {
+      "id": "hr-people",
+      "label": "HR and people",
+      "description": "Employee identity, lifecycle, management, recruiting, performance, engagement, attendance, compensation, and tenure — HRIS and people-analytics exports.",
+      "domain_file": "domains/hr-people.json"
+    },
+    {
+      "id": "sensitive-data",
+      "label": "Sensitive data (PII / secrets)",
+      "description": "Credentials + sensitive identifiers (API keys, tokens, private keys, AWS keys, credit cards, SSN, passport, national ID, DOB, MAC, crypto wallets) — from Purview/GCP/Presidio detector families. Drives sensitivity badges + anonymize-sink defaults (secret→redact, pii→hash, financial→bucket).",
+      "domain_file": "domains/sensitive-data.json"
+    },
+    {
+      "id": "real-estate",
+      "label": "Real estate",
+      "description": "Property type, bedrooms/bathrooms, square footage and sale price — real-estate listing and transaction exports.",
+      "domain_file": "domains/real-estate.json"
+    },
+    {
+      "id": "education",
+      "label": "Education",
+      "description": "Student IDs, grade level, course, score and completion status — school / LMS / assessment exports.",
+      "domain_file": "domains/education.json"
+    },
+    {
+      "id": "healthcare",
+      "label": "Healthcare and clinical",
+      "description": "Patient / encounter IDs, diagnosis codes, length of stay and claim amounts — clinical, claims and EHR exports. Sensitivity-marked (secret/financial).",
+      "domain_file": "domains/healthcare.json"
+    },
+    {
+      "id": "public-sector",
+      "label": "Public sector and demographics",
+      "description": "Country/year indicator panels, tiers/ranks, population, households, median income, unemployment rate, and age bands — census, civic, and open-data aggregates.",
+      "domain_file": "domains/public-sector.json"
+    },
+    {
+      "id": "scientific",
+      "label": "Scientific and measurements",
+      "description": "Sensor IDs, temperature, humidity, pressure and measurement units — IoT / environmental / lab sensor exports.",
+      "domain_file": "domains/scientific.json"
+    },
+    {
+      "id": "risk-fraud",
+      "label": "Risk, fraud and security",
+      "description": "Fraud flags, risk scores, authorization results, device IDs and card-last-4 — fraud / payments-risk / security exports. Sensitivity-marked.",
+      "domain_file": "domains/risk-fraud.json"
+    },
+    {
+      "id": "banking",
+      "label": "Banking, payments and lending",
+      "description": "Transaction amounts/fees, debit-credit indicator, interest rate and loan principal — payments, banking and lending exports.",
+      "domain_file": "domains/banking.json"
+    },
+    {
+      "id": "insurance",
+      "label": "Insurance",
+      "description": "Policy IDs, premium, sum insured, claim status and line of business — insurance policy / claims book exports.",
+      "domain_file": "domains/insurance.json"
+    },
+    {
+      "id": "customer-support",
+      "label": "Customer support and success",
+      "description": "Ticket IDs/status, priority, first-response time and CSAT — helpdesk / support / success exports.",
+      "domain_file": "domains/customer-support.json"
+    },
+    {
+      "id": "supply-chain",
+      "label": "Supply chain and procurement",
+      "description": "Purchase orders, warehouses, inventory, lead time and unit cost — procurement / inventory / logistics exports.",
+      "domain_file": "domains/supply-chain.json"
+    },
+    {
+      "id": "energy",
+      "label": "Energy and utilities",
+      "description": "Meter IDs, kWh usage, kW demand, tariff codes and outage minutes — utility metering / grid / energy exports.",
+      "domain_file": "domains/energy.json"
+    },
+    {
+      "id": "manufacturing",
+      "label": "Manufacturing and quality",
+      "description": "Work orders, produced quantity, defect counts, yield rate and quality result — manufacturing / production / QC exports.",
+      "domain_file": "domains/manufacturing.json"
+    },
+    {
+      "id": "legal",
+      "label": "Legal, contracts and compliance",
+      "description": "Contract IDs/types/values, renewal and compliance status — legal / contract-management / GRC exports.",
+      "domain_file": "domains/legal.json"
+    },
+    {
+      "id": "nonprofit",
+      "label": "Nonprofit and fundraising",
+      "description": "Donor IDs, donation amounts, campaigns, funds and recurring flags — nonprofit / fundraising / CRM exports.",
+      "domain_file": "domains/nonprofit.json"
+    },
+    {
+      "id": "research",
+      "label": "Research and scholarly",
+      "description": "Paper IDs/titles, publication year, citation counts and venues — scholarly / bibliometric / knowledge-graph exports.",
+      "domain_file": "domains/research.json"
+    },
+    {
+      "id": "government",
+      "label": "Government operations",
+      "description": "Agencies, programs, application status, processing time and benefit amounts — public-service / benefits / civic exports.",
+      "domain_file": "domains/government.json"
+    },
+    {
+      "id": "agriculture",
+      "label": "Agriculture and food systems",
+      "description": "Farm IDs, crop type, yield, acreage and market price — agriculture / food-systems exports.",
+      "domain_file": "domains/agriculture.json"
+    },
+    {
+      "id": "sports",
+      "label": "Sports and events",
+      "description": "Match IDs, teams, scores, attendance and results — sports / events / fixtures exports.",
+      "domain_file": "domains/sports.json"
+    }
+  ],
+  "types_file": "types.jsonl",
+  "relationships_file": "relationships.json",
+  "universal_file": "universal/universal-terms.jsonl",
+  "crosswalk_file": "universal/crosswalk.jsonl",
+  "packs": [
+    {
+      "id": "otel-semconv",
+      "label": "OpenTelemetry semantic conventions (stable)",
+      "types_file": "packs/otel-semconv.jsonl",
+      "aliases_file": "packs/otel-semconv.aliases.json",
+      "crosswalk_file": "packs/otel-semconv.crosswalk.jsonl",
+      "domain_file": "domains/otel-semconv.json",
+      "default_enabled": true
+    },
+    {
+      "id": "ecs",
+      "label": "Elastic Common Schema (core)",
+      "types_file": "packs/ecs.jsonl",
+      "aliases_file": "packs/ecs.aliases.json",
+      "crosswalk_file": "packs/ecs.crosswalk.jsonl",
+      "domain_file": "domains/ecs.json",
+      "default_enabled": true
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "domain": "education",
+  "label": "Education",
+  "types": [
+    "student_id",
+    "grade_level",
+    "course_name",
+    "score_percent",
+    "completion_status"
+  ],
+  "report_templates": ["education_performance"]
+}

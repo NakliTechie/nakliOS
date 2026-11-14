@@ -1,0 +1,19 @@
+{
+  "domain": "sensitive-data",
+  "label": "Sensitive data (PII / secrets)",
+  "types": [
+    "credential_secret",
+    "api_key",
+    "jwt",
+    "private_key_pem",
+    "aws_access_key_id",
+    "credit_card_number",
+    "ssn",
+    "date_of_birth",
+    "passport_number",
+    "national_id",
+    "mac_address",
+    "crypto_wallet_address"
+  ],
+  "report_templates": []
+}

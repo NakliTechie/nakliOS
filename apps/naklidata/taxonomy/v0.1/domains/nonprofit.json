@@ -1,0 +1,14 @@
+{
+  "domain": "nonprofit",
+  "label": "Nonprofit and fundraising",
+  "types": [
+    "donor_id",
+    "donation_amount",
+    "campaign_name",
+    "fund_name",
+    "recurring_flag"
+  ],
+  "report_templates": [
+    "nonprofit_giving"
+  ]
+}

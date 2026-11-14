@@ -1,0 +1,18 @@
+{
+  "version": "v0.27.7",
+  "generated": "2026-07-05T07:59:16.335Z",
+  "files": {
+    "pyodide.mjs": "sha384-z8L8kZDaddEtk+VNtmPcXLY83XSVlBjlabpCtT6GghMW3jSyzOEzNsL9BiKsfjcL",
+    "pyodide.asm.js": "sha384-J3SxzZJh4tkb2bgoUc72zArF45FJ+ngsbiqNsmxqkkecNVpZ/bUHAM0JMp+YPVpx",
+    "pyodide.asm.wasm": "sha384-wDap6JvXxf3C8g5beY3kd1xMIjAtw/oTKjTqGltdxc+B9VXnYyYBoM7hveNKilxM",
+    "python_stdlib.zip": "sha384-VLeJs79hxVEBNt1hRU5Wo7VmBcyb4sdW564EJAvEWDin3Aa3QXLHm3E5mOg2GiFH",
+    "pyodide-lock.json": "sha384-1cFE0bj3+mm1a83kcqiWxoaBhrf6jPPJJORlx1TComnZ0WaHwE4znlohwPXL5tUL",
+    "numpy-2.0.2-cp312-cp312-pyodide_2024_0_wasm32.whl": "sha384-dHE8urlDbpPTmz9Oor+RCbm41QlAXdVKUNmdPHTJegzfJnuDuq/XVFaDHQ7OjD6u",
+    "pandas-2.2.3-cp312-cp312-pyodide_2024_0_wasm32.whl": "sha384-lHcubG1qXTUtv++DW+aiS66Rz3FSbh8GgGyIR1Fw3gll3CDptMnBSwTuTI1GNX40",
+    "pyarrow-18.1.0-cp312-cp312-pyodide_2024_0_wasm32.whl": "sha384-HINbYZhdpxpMgbDEq/JTuTa8X+tmCeZsZdApQu3uYHIvDWi4vejCVxrXwxSuDs6L",
+    "pyodide_unix_timezones-1.0.0-py3-none-any.whl": "sha384-e0AYwpSzGS2bS2K9ScuDzqy9xRQ9C/1jDO5zvL/MlHPDzTbSE75Ewtue3FjwI0mY",
+    "python_dateutil-2.9.0.post0-py2.py3-none-any.whl": "sha384-fq/mg29zAF9pfW+iT7vSKpoq2XdO4riXKo01b9LrLQHazdmJUkP4xIbRJ5SEE1Dd",
+    "pytz-2024.1-py2.py3-none-any.whl": "sha384-rTn1etpfCmLaq6WrAA1xFlscv+Uygtxi/AT71SkDJDpDTPH4BfYQGabnYYZlpl4f",
+    "six-1.16.0-py2.py3-none-any.whl": "sha384-ZT4HbmON9i2ShLiJW8+Q1flEP8X5l7Zyc5ivl1GOOd4QZfAc+xmTnvTumKv9kwAf"
+  }
+}

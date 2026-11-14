@@ -1,0 +1,14 @@
+{
+  "domain": "legal",
+  "label": "Legal, contracts and compliance",
+  "types": [
+    "contract_id",
+    "contract_type",
+    "contract_value",
+    "renewal_status",
+    "compliance_status"
+  ],
+  "report_templates": [
+    "contract_pipeline"
+  ]
+}

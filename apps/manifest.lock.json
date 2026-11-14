@@ -424,6 +424,1760 @@
       ]
     },
     {
+      "id": "naklidata",
+      "repo": "NakliTechie/NakliData",
+      "requestedRef": "naklios-dist",
+      "resolvedCommit": "59eb5941da3d0b3b5c3c356ec76bcd7f3a260a63",
+      "files": [
+        {
+          "source": "chunks/_demo.js",
+          "destination": "chunks/_demo.js",
+          "sha256": "8257d6d1901954387a8f931d99f987957fb226d3e2fb27b36e65eee7c0c72f3b",
+          "bytes": 126
+        },
+        {
+          "source": "chunks/agent-surface.js",
+          "destination": "chunks/agent-surface.js",
+          "sha256": "34ccd0a3f4fc100d171a9d065f55f6d342e46093a5de664c2bc53b68b25554fa",
+          "bytes": 87738
+        },
+        {
+          "source": "chunks/arrow-reader.js",
+          "destination": "chunks/arrow-reader.js",
+          "sha256": "6baa3b81e03e9759596e4646d724c70ede88c4209c3a1e011cb1cd5bc48ffd4f",
+          "bytes": 196399
+        },
+        {
+          "source": "chunks/bridge-client.js",
+          "destination": "chunks/bridge-client.js",
+          "sha256": "484a3cf476ad9aae4bb316d442610f9069bec59d0bb97d25e5629884a87808dc",
+          "bytes": 14846
+        },
+        {
+          "source": "chunks/cleaning.js",
+          "destination": "chunks/cleaning.js",
+          "sha256": "8b6d9def32213fa27ea7c673706ccacc47d83066983b0b3f06fa0d3575e393ef",
+          "bytes": 11623
+        },
+        {
+          "source": "chunks/codemirror.js",
+          "destination": "chunks/codemirror.js",
+          "sha256": "b66ffbbdf26a2ed44f465207b8e7f6013a428b367971aa2fe6266d4a9be8614b",
+          "bytes": 433278
+        },
+        {
+          "source": "chunks/compare-tables.js",
+          "destination": "chunks/compare-tables.js",
+          "sha256": "de954cc314c718f8e815c2bdb295fb56bd05d6de71fcfcf28f343d655d2dea37",
+          "bytes": 26836
+        },
+        {
+          "source": "chunks/contract-export.js",
+          "destination": "chunks/contract-export.js",
+          "sha256": "2d80cadce2def777cbdd60fbb52b25d24f2c4a45cf98a88eb6329842ee0910ce",
+          "bytes": 5655
+        },
+        {
+          "source": "chunks/cytoscape-graph.js",
+          "destination": "chunks/cytoscape-graph.js",
+          "sha256": "0a123a501aef2d0c4c2728666fa298cea9dc2f80df138bd8aa4a3f4116862ef9",
+          "bytes": 443699
+        },
+        {
+          "source": "chunks/data-quality.js",
+          "destination": "chunks/data-quality.js",
+          "sha256": "1210259c29f373ad1cdcf8e778ef3a860d4b5b01a9763502dbebe7d4b52cc50d",
+          "bytes": 23925
+        },
+        {
+          "source": "chunks/deckgl.js",
+          "destination": "chunks/deckgl.js",
+          "sha256": "5ed759a5f7813bcfcd29cd3950623ec17f52b730a3f387506fdc50cb27806e36",
+          "bytes": 831548
+        },
+        {
+          "source": "chunks/demo-workbook.js",
+          "destination": "chunks/demo-workbook.js",
+          "sha256": "c0aedc2bd7148b7294d5f21dc298b1a86ab3a9c1768a8411fc08e506b5b897c6",
+          "bytes": 1771
+        },
+        {
+          "source": "chunks/facet-charts.js",
+          "destination": "chunks/facet-charts.js",
+          "sha256": "f2901eb8f5438257cd1fb0813f50ecabef84c4fb8661e02aaf8a0a878c75bc2c",
+          "bytes": 8366
+        },
+        {
+          "source": "chunks/facet-network.js",
+          "destination": "chunks/facet-network.js",
+          "sha256": "518855d91509bc6451e8f0ed2118f59195b78444cd5ea8d53e75fee104c3c71a",
+          "bytes": 12044
+        },
+        {
+          "source": "chunks/iceberg-catalog-mount.js",
+          "destination": "chunks/iceberg-catalog-mount.js",
+          "sha256": "3cdc11c2cd957c90cbb4cbe7c7adc64d5bb63caf31e103a83c9b2c0be73f4c29",
+          "bytes": 5446
+        },
+        {
+          "source": "chunks/iceberg-modals.js",
+          "destination": "chunks/iceberg-modals.js",
+          "sha256": "f42643f3f1b21ccc06301e2be8003ee1fdcce5b43638be574419495d09a8bd55",
+          "bytes": 20661
+        },
+        {
+          "source": "chunks/iceberg-rest-client.js",
+          "destination": "chunks/iceberg-rest-client.js",
+          "sha256": "111cec80f3eff30945f7cbb7e94333820c59b3d8419e3318dba82c293ad633f6",
+          "bytes": 23122
+        },
+        {
+          "source": "chunks/link-paths.js",
+          "destination": "chunks/link-paths.js",
+          "sha256": "f32a641bae8e97c6652869d6e633df09eb8b7bde4c333b16104ab855fead7af8",
+          "bytes": 31143
+        },
+        {
+          "source": "chunks/map-data.js",
+          "destination": "chunks/map-data.js",
+          "sha256": "f4dc79c009b4484815556b38a6f7aed491f101d876721691f6cbfe3ecd67973f",
+          "bytes": 5161
+        },
+        {
+          "source": "chunks/maplibre-gl-worker.js",
+          "destination": "chunks/maplibre-gl-worker.js",
+          "sha256": "5d756feb400ffa086e44b2b654ac9430a0c3452487b12c034c13c9b747cac9f0",
+          "bytes": 509662
+        },
+        {
+          "source": "chunks/maplibre-map.js",
+          "destination": "chunks/maplibre-map.js",
+          "sha256": "13607b63cb0774bd824f9659a56326c7614a1c35ed84e8e33d3151bde98db190",
+          "bytes": 1021436
+        },
+        {
+          "source": "chunks/observable-plot.js",
+          "destination": "chunks/observable-plot.js",
+          "sha256": "78968998518195a55eaa294138016e9958973d2a286c4321e7882c216b96f55a",
+          "bytes": 280425
+        },
+        {
+          "source": "chunks/onboarding-tour.js",
+          "destination": "chunks/onboarding-tour.js",
+          "sha256": "7f93f4f09f8c2607488b64163c0f0440c2f7313de8dc1411896d6371202a6ea1",
+          "bytes": 7849
+        },
+        {
+          "source": "chunks/persistence-validation.js",
+          "destination": "chunks/persistence-validation.js",
+          "sha256": "043d31ae7f447080093ddf23f00dfe505ea24bfe37ce399cefe23d94f13ee00a",
+          "bytes": 20930
+        },
+        {
+          "source": "chunks/pyodide-runtime.js",
+          "destination": "chunks/pyodide-runtime.js",
+          "sha256": "22f2d42a3f71cf316a29b92a3f7d1b91a5adc67a77618435fd783bdf482cc954",
+          "bytes": 2803
+        },
+        {
+          "source": "chunks/query-builder.js",
+          "destination": "chunks/query-builder.js",
+          "sha256": "0546ab3392aa709ac57bc061f51642710b201467b581b3943b3186cc348271a2",
+          "bytes": 25746
+        },
+        {
+          "source": "chunks/readstat-reader.js",
+          "destination": "chunks/readstat-reader.js",
+          "sha256": "3169fecf2706ca6c7ad4353b19c7ebefb3c1a17d3057751b98d675273466196d",
+          "bytes": 41582
+        },
+        {
+          "source": "chunks/reference-enrich.js",
+          "destination": "chunks/reference-enrich.js",
+          "sha256": "a86f406aae84018468550592055fad1424a4971c4d775df7f69533b42debb2b7",
+          "bytes": 2371
+        },
+        {
+          "source": "chunks/remote-delimited.js",
+          "destination": "chunks/remote-delimited.js",
+          "sha256": "81988b4c1a5d9b5f943403df557d2646884364a36dec494d5d75daaa45b258cb",
+          "bytes": 990
+        },
+        {
+          "source": "chunks/report-templates.js",
+          "destination": "chunks/report-templates.js",
+          "sha256": "5471df8307d12d7c938b376d43e1cc1942a28b33038cb67fc62dc6088b3472b0",
+          "bytes": 46696
+        },
+        {
+          "source": "chunks/result-facets.js",
+          "destination": "chunks/result-facets.js",
+          "sha256": "73f023b8a50a0044d74caa82ccc93584cc9505da26a371f9062783db06498e0a",
+          "bytes": 2377
+        },
+        {
+          "source": "chunks/review-tray.js",
+          "destination": "chunks/review-tray.js",
+          "sha256": "e37f79554357d3429bc3b2f1895cbf166278dc80eb165bc53f7f85b1636de088",
+          "bytes": 8905
+        },
+        {
+          "source": "chunks/schema-override.js",
+          "destination": "chunks/schema-override.js",
+          "sha256": "35d42e2c2cc6fd61fbfbb786397e6c87f7f573791f995deae6b347924b65aeb5",
+          "bytes": 3862
+        },
+        {
+          "source": "chunks/selection-explain.js",
+          "destination": "chunks/selection-explain.js",
+          "sha256": "b05e4fcc299d4e5502537a98cc94defcf04873795689215549f563fb05994d63",
+          "bytes": 10617
+        },
+        {
+          "source": "chunks/semantic-classifier.js",
+          "destination": "chunks/semantic-classifier.js",
+          "sha256": "4d6f9c6382b472680de8f09a74542b912abd7b16f9085a2815a288d0673cf93c",
+          "bytes": 4488
+        },
+        {
+          "source": "chunks/semantic-model.js",
+          "destination": "chunks/semantic-model.js",
+          "sha256": "4964b2bd1d1941ae6808c7305bbbca979b1851a83a0846c450925094af7cd849",
+          "bytes": 57505
+        },
+        {
+          "source": "chunks/sheetjs.js",
+          "destination": "chunks/sheetjs.js",
+          "sha256": "57700da62de6ad5384f93e07ba37204adce81ab65bf050bd7468b282be1da442",
+          "bytes": 370904
+        },
+        {
+          "source": "chunks/sidecar-ontology.js",
+          "destination": "chunks/sidecar-ontology.js",
+          "sha256": "d16c7af906f3f113ab5a293b36d97d462b92fadc52e20025a824f66e17e0bea1",
+          "bytes": 35377
+        },
+        {
+          "source": "chunks/sink-execution.js",
+          "destination": "chunks/sink-execution.js",
+          "sha256": "ac740182cf63cf4da01f859e862dc834a5fd9c144476f197fdd0952aa7a4e41a",
+          "bytes": 30103
+        },
+        {
+          "source": "chunks/sqlite-reader.js",
+          "destination": "chunks/sqlite-reader.js",
+          "sha256": "01700c11d32be0b3edd74fbb8d2a33eeb42e19fa3f0c39cb10201d933171cb38",
+          "bytes": 45406
+        },
+        {
+          "source": "chunks/standards-interchange.js",
+          "destination": "chunks/standards-interchange.js",
+          "sha256": "bc38860c01697eea704e0461645553405cf41798a0ce90e243aa3eaa6f52c6d2",
+          "bytes": 11846
+        },
+        {
+          "source": "chunks/standards-owl.js",
+          "destination": "chunks/standards-owl.js",
+          "sha256": "953c7550d6830551085f4c838aec786be1689915b4bd68b884e721fd4148238f",
+          "bytes": 196166
+        },
+        {
+          "source": "chunks/standards-prov.js",
+          "destination": "chunks/standards-prov.js",
+          "sha256": "3e906417b019a35eeed02bd49203718e64b508a745da46403c8ce3dd663ce5a0",
+          "bytes": 197669
+        },
+        {
+          "source": "chunks/standards-reasoning.js",
+          "destination": "chunks/standards-reasoning.js",
+          "sha256": "bfaea3344e60763080ff25d7a80abe4b70a4480ff0033dd4ebaddc8fa002957f",
+          "bytes": 4595
+        },
+        {
+          "source": "chunks/standards-shacl.js",
+          "destination": "chunks/standards-shacl.js",
+          "sha256": "cbcbfa50f8d8209d8a5877a403745e6746ff02f8b6038dc5074f919ce2a5bc10",
+          "bytes": 198435
+        },
+        {
+          "source": "chunks/standards-skos.js",
+          "destination": "chunks/standards-skos.js",
+          "sha256": "1c14c997012083d0368604c0c1fdf9a95de2b8a1e32d414bb97d558fb2a3f713",
+          "bytes": 97756
+        },
+        {
+          "source": "chunks/standards-workbench.js",
+          "destination": "chunks/standards-workbench.js",
+          "sha256": "3eb2648021cf1a7d3adef2d5c9bc9b469c8980faa3bc1bbb286e664042a5e6f4",
+          "bytes": 241998
+        },
+        {
+          "source": "chunks/standards-workbook.js",
+          "destination": "chunks/standards-workbook.js",
+          "sha256": "53b439e7f87b1198e1e3daca81bfd1c210372c054b062a7ba61e9c5a533c822c",
+          "bytes": 27987
+        },
+        {
+          "source": "chunks/static-export.js",
+          "destination": "chunks/static-export.js",
+          "sha256": "c232cbc15e5abb8eaf69086c1cac64be648f34a5f3ad744e88aefa711e95b9b9",
+          "bytes": 14218
+        },
+        {
+          "source": "chunks/transformers.js",
+          "destination": "chunks/transformers.js",
+          "sha256": "02f2cb3489cd0212b2b83b787a133b601494d3896a46511ed60574898faf1daf",
+          "bytes": 528995
+        },
+        {
+          "source": "chunks/type-proposals.js",
+          "destination": "chunks/type-proposals.js",
+          "sha256": "31d2e288daaf482a3a2856141c053ad1e6cf11ddb87fd484877b690442f8f610",
+          "bytes": 9670
+        },
+        {
+          "source": "chunks/webr-runtime.js",
+          "destination": "chunks/webr-runtime.js",
+          "sha256": "240a4272b9131fa0d7438b64c953c69974ed7b5cdf23c82d365983d20ebb284b",
+          "bytes": 3034
+        },
+        {
+          "source": "chunks/xlsx-export.js",
+          "destination": "chunks/xlsx-export.js",
+          "sha256": "da9c1354234bae57639ba08e444d283e980ae34738a36b24d890230342e33e27",
+          "bytes": 49638
+        },
+        {
+          "source": "examples/events/events.jsonl",
+          "destination": "examples/events/events.jsonl",
+          "sha256": "5097a9db20bda9506a0fcd70736300dfa6702f5fecbd17e947b31c906a2d1234",
+          "bytes": 270241
+        },
+        {
+          "source": "examples/finance/invoices.csv",
+          "destination": "examples/finance/invoices.csv",
+          "sha256": "a2af10021962c8af1fa417f35aae6b972d64c0e4c588269866f84e1af384144d",
+          "bytes": 9239
+        },
+        {
+          "source": "examples/finance/payments.csv",
+          "destination": "examples/finance/payments.csv",
+          "sha256": "6b0f96ebf791bd1683cba4c8fff4323f57c1c34e74632263f36f730a0ac205d5",
+          "bytes": 4341
+        },
+        {
+          "source": "examples/finance/vendors.csv",
+          "destination": "examples/finance/vendors.csv",
+          "sha256": "a6dc9509c83e33f86ad9e9390e0667c5155e297b3a5b8c36f01aec713e60c75a",
+          "bytes": 2755
+        },
+        {
+          "source": "examples/logs/access.jsonl",
+          "destination": "examples/logs/access.jsonl",
+          "sha256": "6e5770f7a61a3a9e071b204b10e1c790d2da06935b54890831e01ab9a4f4d55a",
+          "bytes": 37215
+        },
+        {
+          "source": "examples/manifest.json",
+          "destination": "examples/manifest.json",
+          "sha256": "e735440e49248817a647e44dc938f5865c47842083de8cec9103cdbb98bf23fc",
+          "bytes": 1252
+        },
+        {
+          "source": "graph-metrics.worker.js",
+          "destination": "graph-metrics.worker.js",
+          "sha256": "4b854030dc9ebbfc9690c96a0580e3641ff165d110a9534e70c1ef9bcf035395",
+          "bytes": 4221
+        },
+        {
+          "source": "guide/index.html",
+          "destination": "guide/index.html",
+          "sha256": "09a3ca249a79bc8afd26824f803c6ee63162e69a8e3c233987290b5f58ede8f8",
+          "bytes": 50404
+        },
+        {
+          "source": "guide/screenshots/ai-sidecar/01-settings-byok.png",
+          "destination": "guide/screenshots/ai-sidecar/01-settings-byok.png",
+          "sha256": "5e4927e00eef551029f2a2094748c37116e8fea93d5c78145eb05ac17ca0bc7e",
+          "bytes": 579549
+        },
+        {
+          "source": "guide/screenshots/ai-sidecar/02-result-ai-chips.png",
+          "destination": "guide/screenshots/ai-sidecar/02-result-ai-chips.png",
+          "sha256": "d603eb8f53f50469f9649208ce9b93afab595323390016e91de69d099ebc639e",
+          "bytes": 585450
+        },
+        {
+          "source": "guide/screenshots/ai-sidecar/03-nl-to-sql.png",
+          "destination": "guide/screenshots/ai-sidecar/03-nl-to-sql.png",
+          "sha256": "50afd36bdad8acee9ee5e44d68a7c5e4471f5c820f8c80e5150642a15c8d50eb",
+          "bytes": 329449
+        },
+        {
+          "source": "guide/screenshots/data-and-schema/01-sources-mounted.png",
+          "destination": "guide/screenshots/data-and-schema/01-sources-mounted.png",
+          "sha256": "96c5e212abc738d088d1be31793d47565a92dd9ad23c51d07bc7cddc152d0096",
+          "bytes": 440675
+        },
+        {
+          "source": "guide/screenshots/data-and-schema/02-schema-panel.png",
+          "destination": "guide/screenshots/data-and-schema/02-schema-panel.png",
+          "sha256": "e9296e592666a02a42e199c00fc5ce1f6ba513c4345f3555dbe690ea40147942",
+          "bytes": 137997
+        },
+        {
+          "source": "guide/screenshots/data-and-schema/03-type-override.png",
+          "destination": "guide/screenshots/data-and-schema/03-type-override.png",
+          "sha256": "5d242676dbe1083f28aed9c579125a23545d501121492b092d545feee9142e66",
+          "bytes": 150342
+        },
+        {
+          "source": "guide/screenshots/facet/01-embedding-map.png",
+          "destination": "guide/screenshots/facet/01-embedding-map.png",
+          "sha256": "4407d56c8b87009f63a3ec6a9990f51b08b5f07289607db86129e4378be74a6f",
+          "bytes": 433189
+        },
+        {
+          "source": "guide/screenshots/facet/02-network-graph.png",
+          "destination": "guide/screenshots/facet/02-network-graph.png",
+          "sha256": "0954947ad8b35b4544d4e6c15b243868631caed9186499f0567e25d53ef36ad4",
+          "bytes": 538907
+        },
+        {
+          "source": "guide/screenshots/facet/03-knowledge-graph.png",
+          "destination": "guide/screenshots/facet/03-knowledge-graph.png",
+          "sha256": "eb9112569a4c14fce533d6b286913813c06dc65e717558346d62a48f539f13e9",
+          "bytes": 587657
+        },
+        {
+          "source": "guide/screenshots/facet/04-temporal-timeline.png",
+          "destination": "guide/screenshots/facet/04-temporal-timeline.png",
+          "sha256": "22bddd11e9f192415872df997eeffd41b8d3d47b1c931af3eea5fdb318ca0332",
+          "bytes": 377599
+        },
+        {
+          "source": "guide/screenshots/facet/05-distribution.png",
+          "destination": "guide/screenshots/facet/05-distribution.png",
+          "sha256": "4a047c69de3abf6660cba2c128e58cddfb797a5ad07bb366edd44a72b671703d",
+          "bytes": 343901
+        },
+        {
+          "source": "guide/screenshots/getting-started/00-welcome.png",
+          "destination": "guide/screenshots/getting-started/00-welcome.png",
+          "sha256": "691f0791364b381d053b1d33f2b6e1947e069ed30bbe55bc1d294fc2af908d87",
+          "bytes": 414043
+        },
+        {
+          "source": "guide/screenshots/getting-started/01-empty-state.png",
+          "destination": "guide/screenshots/getting-started/01-empty-state.png",
+          "sha256": "fab7ed48d9155ca768699429f232390de845bece5912290246e51ad2b2a76c80",
+          "bytes": 249526
+        },
+        {
+          "source": "guide/screenshots/getting-started/02-mount-url.png",
+          "destination": "guide/screenshots/getting-started/02-mount-url.png",
+          "sha256": "dca248bcc75cfed3b9b5c515114080a63a849ec183aa4a9315528552ccf82a97",
+          "bytes": 235884
+        },
+        {
+          "source": "guide/screenshots/getting-started/03-mount-s3.png",
+          "destination": "guide/screenshots/getting-started/03-mount-s3.png",
+          "sha256": "036d7dec07a1bbf3817ffbe63a34ef2c4b73b5abe96cb052378436274b3d71ce",
+          "bytes": 209866
+        },
+        {
+          "source": "guide/screenshots/lineage/01-lineage-panel.png",
+          "destination": "guide/screenshots/lineage/01-lineage-panel.png",
+          "sha256": "bea7a1a16100714b2357ae768a9c2eaf58b557fb6d9edcff02f4568a78cfc76b",
+          "bytes": 429623
+        },
+        {
+          "source": "guide/screenshots/manifest.json",
+          "destination": "guide/screenshots/manifest.json",
+          "sha256": "abb7a60b42ab282876212000938661ae82db8351168d64f5cb95cf2079d07bda",
+          "bytes": 6049
+        },
+        {
+          "source": "guide/screenshots/more-cells/01-input-cell.png",
+          "destination": "guide/screenshots/more-cells/01-input-cell.png",
+          "sha256": "7c05692f9dc732031f87c54aaa760dccb50c71fa2f19cb14eb6461f176305662",
+          "bytes": 511550
+        },
+        {
+          "source": "guide/screenshots/more-cells/02-dashboard-cell.png",
+          "destination": "guide/screenshots/more-cells/02-dashboard-cell.png",
+          "sha256": "29c4145497eb635bd35365b000567006c3ba9242198681577c938871644673a2",
+          "bytes": 491688
+        },
+        {
+          "source": "guide/screenshots/more-cells/03-stats-cell.png",
+          "destination": "guide/screenshots/more-cells/03-stats-cell.png",
+          "sha256": "9b182eb3c52b078f1acb33cc5255cfc8a0def7eeee95a7b240a5c4ff98b35c3f",
+          "bytes": 493402
+        },
+        {
+          "source": "guide/screenshots/more-cells/04-report-cell.png",
+          "destination": "guide/screenshots/more-cells/04-report-cell.png",
+          "sha256": "2b91c21cf4164c7246587d246a9dbd9108775a74f6df31890caee396342e6239",
+          "bytes": 424858
+        },
+        {
+          "source": "guide/screenshots/more-cells/05-assertion-cell.png",
+          "destination": "guide/screenshots/more-cells/05-assertion-cell.png",
+          "sha256": "31a7e262af96df5010b3c6568305fd99adcf5743d671bea0b1685e4a90115565",
+          "bytes": 467996
+        },
+        {
+          "source": "guide/screenshots/more-cells/06-cohort-cell.png",
+          "destination": "guide/screenshots/more-cells/06-cohort-cell.png",
+          "sha256": "0bf526e0b64683ba4356593376d7c3ffc222b96c935bb3d923e0bcc5e5abef3c",
+          "bytes": 508246
+        },
+        {
+          "source": "guide/screenshots/notebook/01-templates.png",
+          "destination": "guide/screenshots/notebook/01-templates.png",
+          "sha256": "c0d044c458964e05884cfebb87614be0e2406a1ea7e6a521010f78ad373e2353",
+          "bytes": 451711
+        },
+        {
+          "source": "guide/screenshots/notebook/02-sql-cell-result.png",
+          "destination": "guide/screenshots/notebook/02-sql-cell-result.png",
+          "sha256": "efda0ccb59067ae7937f60700b03dedcae2f163e4f8877bdf1740a4563ca3988",
+          "bytes": 435298
+        },
+        {
+          "source": "guide/screenshots/notebook/03-chart-cell.png",
+          "destination": "guide/screenshots/notebook/03-chart-cell.png",
+          "sha256": "d7bdab4d4dc35c981bfb5c55928ec1be5678809a6399d2a1e0124587dc473580",
+          "bytes": 448497
+        },
+        {
+          "source": "guide/screenshots/notebook/04-add-cell-row.png",
+          "destination": "guide/screenshots/notebook/04-add-cell-row.png",
+          "sha256": "38b5c16c56718fd6c0c33540c3124a6c685be5b7c4aaf96ebe7ea1717bfc997d",
+          "bytes": 429640
+        },
+        {
+          "source": "guide/screenshots/notebook/05-excel-export.png",
+          "destination": "guide/screenshots/notebook/05-excel-export.png",
+          "sha256": "38c2332a98d58f4db7451a46e51b23ac7a320a8220a2e54817fdc49b4f47ae0d",
+          "bytes": 453986
+        },
+        {
+          "source": "guide/screenshots/reports/01-superstore-region-margin.png",
+          "destination": "guide/screenshots/reports/01-superstore-region-margin.png",
+          "sha256": "4ab5447dd561a5878c48a908e8892a75cda834970cb692b7809ddb724ae8c4ab",
+          "bytes": 105779
+        },
+        {
+          "source": "guide/screenshots/reports/02-financial-segment-margin.png",
+          "destination": "guide/screenshots/reports/02-financial-segment-margin.png",
+          "sha256": "3b5fc140bb1f97c3bedad1fc1d7ede9eba97840028aafc8eb26919b7425c6aa8",
+          "bytes": 123435
+        },
+        {
+          "source": "guide/screenshots/reports/03-chinook-revenue-country.png",
+          "destination": "guide/screenshots/reports/03-chinook-revenue-country.png",
+          "sha256": "72af3fd3ed8c07eba6e38d2bba929366d6493d049d7da47b5bca9ac189067dd6",
+          "bytes": 120611
+        },
+        {
+          "source": "guide/screenshots/resolve/01-cluster-modal.png",
+          "destination": "guide/screenshots/resolve/01-cluster-modal.png",
+          "sha256": "64c95c40f27d2d20014e202fb6a75dedae316f291e945ba31614266c0efd7318",
+          "bytes": 483476
+        },
+        {
+          "source": "guide/screenshots/resolve/02-semantic-panel.png",
+          "destination": "guide/screenshots/resolve/02-semantic-panel.png",
+          "sha256": "0d632c1bbac3ee582dfa0fa7268a46db0221e822ae98f7abda7ed2ad16ce3b0b",
+          "bytes": 399074
+        },
+        {
+          "source": "guide/screenshots/resolve/03-golden-table.png",
+          "destination": "guide/screenshots/resolve/03-golden-table.png",
+          "sha256": "8725f3cbc202ff3e91da02a339e8988aa3c9abff03c1597af2b7d61f5f3f4d8c",
+          "bytes": 497708
+        },
+        {
+          "source": "icon.svg",
+          "destination": "icon.svg",
+          "sha256": "fa4f8ec105b1847766f5cd325623b4a15a3a230f41a050176e5b01c3b9e9abfd",
+          "bytes": 350
+        },
+        {
+          "source": "index.html",
+          "destination": "index.html",
+          "sha256": "1f8d639302e4e1227bbd4604ee4b39d43cf025e4bac895606adf5c910b53450a",
+          "bytes": 930718
+        },
+        {
+          "source": "manifest.webmanifest",
+          "destination": "manifest.webmanifest",
+          "sha256": "fec7bd2655dd2be3ac0b443539fefc7e537c1aad459d2d373872197dd46677fa",
+          "bytes": 438
+        },
+        {
+          "source": "pyodide/integrity.json",
+          "destination": "pyodide/integrity.json",
+          "sha256": "e2230ad43be721d097277123d2e975a2b70dce1fb3fc43e51ec85cc3bb50972e",
+          "bytes": 1464
+        },
+        {
+          "source": "pyodide/numpy-2.0.2-cp312-cp312-pyodide_2024_0_wasm32.whl",
+          "destination": "pyodide/numpy-2.0.2-cp312-cp312-pyodide_2024_0_wasm32.whl",
+          "sha256": "ebb61241d962b98b21597d7ce43b67668a6d5bab3acec4fbe958657320d7cd08",
+          "bytes": 3061133
+        },
+        {
+          "source": "pyodide/pandas-2.2.3-cp312-cp312-pyodide_2024_0_wasm32.whl",
+          "destination": "pyodide/pandas-2.2.3-cp312-cp312-pyodide_2024_0_wasm32.whl",
+          "sha256": "5502f0f94f93a482b851d0b8ca43be692c1b8d20215a168313656847ff74d63a",
+          "bytes": 5707178
+        },
+        {
+          "source": "pyodide/pyarrow-18.1.0-cp312-cp312-pyodide_2024_0_wasm32.whl",
+          "destination": "pyodide/pyarrow-18.1.0-cp312-cp312-pyodide_2024_0_wasm32.whl",
+          "sha256": "72c3d9bc1ba0dc807828548c03de885624341efc102846b75f6225bece3f02a6",
+          "bytes": 10850526
+        },
+        {
+          "source": "pyodide/pyodide-lock.json",
+          "destination": "pyodide/pyodide-lock.json",
+          "sha256": "9c45b916001a750f4102fc287494f3eab215909c7535c626a20db80fd6333e2c",
+          "bytes": 112205
+        },
+        {
+          "source": "pyodide/pyodide.asm.js",
+          "destination": "pyodide/pyodide.asm.js",
+          "sha256": "6b4c90de5b7172873f04f21884d0e9d2274e305fe32116558fe3e4fbe3618d51",
+          "bytes": 1255688
+        },
+        {
+          "source": "pyodide/pyodide.asm.wasm",
+          "destination": "pyodide/pyodide.asm.wasm",
+          "sha256": "a50dd1843f805a0b7c45b61037ee0d7b26dfe85efe0e18ef95a34ad24e401f5f",
+          "bytes": 10105545
+        },
+        {
+          "source": "pyodide/pyodide.mjs",
+          "destination": "pyodide/pyodide.mjs",
+          "sha256": "04c052c815abb0bf2981fa38c2dfa58e3120ee5288c956df2b2a15e301782c5f",
+          "bytes": 13931
+        },
+        {
+          "source": "pyodide/pyodide_unix_timezones-1.0.0-py3-none-any.whl",
+          "destination": "pyodide/pyodide_unix_timezones-1.0.0-py3-none-any.whl",
+          "sha256": "3f13dc510527a6496b777593b7e95c4ade6f0c0d7105647f495fe9520b77097c",
+          "bytes": 2168
+        },
+        {
+          "source": "pyodide/python_dateutil-2.9.0.post0-py2.py3-none-any.whl",
+          "destination": "pyodide/python_dateutil-2.9.0.post0-py2.py3-none-any.whl",
+          "sha256": "02811ea3714f6697d639c07dc5ec63f5774dc7a688e4e1cbbe9beb2f33c3e6c9",
+          "bytes": 229892
+        },
+        {
+          "source": "pyodide/python_stdlib.zip",
+          "destination": "pyodide/python_stdlib.zip",
+          "sha256": "16611534726e5d8ac2bd8f926410b2dcb8d6f49aa24913463533b457a2115c16",
+          "bytes": 2360737
+        },
+        {
+          "source": "pyodide/pytz-2024.1-py2.py3-none-any.whl",
+          "destination": "pyodide/pytz-2024.1-py2.py3-none-any.whl",
+          "sha256": "fcfc168155da8d19057b17bee735fef71dc3a39f1dccd83514e16ecc6abaddc4",
+          "bytes": 505474
+        },
+        {
+          "source": "pyodide/six-1.16.0-py2.py3-none-any.whl",
+          "destination": "pyodide/six-1.16.0-py2.py3-none-any.whl",
+          "sha256": "f61235bc3a15086f0369585e5071ae9ba0bd244a111d12b37f683862e6850c0a",
+          "bytes": 11053
+        },
+        {
+          "source": "readstat-wasm/readstat.wasm",
+          "destination": "readstat-wasm/readstat.wasm",
+          "sha256": "66e7b245fbdc2d4960af4e51b4ee113a47f89c9ef00de784bdb7171b55bf00e2",
+          "bytes": 279750
+        },
+        {
+          "source": "reference/gst-state-codes.json",
+          "destination": "reference/gst-state-codes.json",
+          "sha256": "5e68df03ce93ab4be3f87657c8f544a9a118581fb7f8df326c6966ccadaa2852",
+          "bytes": 1064
+        },
+        {
+          "source": "reference/hsn-chapters.json",
+          "destination": "reference/hsn-chapters.json",
+          "sha256": "5dffbee37da8d8bb4f2908255e762d62120c197e041d28fa0c353d072ecaa67f",
+          "bytes": 7765
+        },
+        {
+          "source": "reference/iso-4217.json",
+          "destination": "reference/iso-4217.json",
+          "sha256": "a7585f330d0ce6ab29ce470fe39c990f4aa5b41fad834156da05f0fa998e2e81",
+          "bytes": 4847
+        },
+        {
+          "source": "reference/manifest.json",
+          "destination": "reference/manifest.json",
+          "sha256": "757c17d6c65cc9c22449516416e13066151b8cfdf6edc57e33a76c19c7df2b15",
+          "bytes": 3976
+        },
+        {
+          "source": "social.png",
+          "destination": "social.png",
+          "sha256": "508f13aad7a6b06592d1da0352a8467956bed79bed5cefc0df3ba9c53243e016",
+          "bytes": 58551
+        },
+        {
+          "source": "sqlite-wasm/sql-wasm.wasm",
+          "destination": "sqlite-wasm/sql-wasm.wasm",
+          "sha256": "083460b3e9d428ebbbbaa03918ba55da33d810e0fb3470d4b5d8677b462b2c2b",
+          "bytes": 652953
+        },
+        {
+          "source": "standards-reasoning.worker.js",
+          "destination": "standards-reasoning.worker.js",
+          "sha256": "2314ca823f1cd26296d3dc15e00c9b6aacc89eddca54e6e5d5d6b8406b20002b",
+          "bytes": 9605
+        },
+        {
+          "source": "sw.js",
+          "destination": "sw.js",
+          "sha256": "ecab0b56b4678b9a161e893e658ac51803cc0772c0a3d383aab18e643d04950b",
+          "bytes": 13014
+        },
+        {
+          "source": "taxonomy.worker.js",
+          "destination": "taxonomy.worker.js",
+          "sha256": "679eb7d314c55bd90711d6beb994768c57eb4646258564e4ac931d31d09b41ca",
+          "bytes": 12795
+        },
+        {
+          "source": "taxonomy/MIGRATIONS.md",
+          "destination": "taxonomy/MIGRATIONS.md",
+          "sha256": "c414e7abe2a478bcf35901f015bee2a2c6a2fc7daad06279eba656066ee3c7e1",
+          "bytes": 2618
+        },
+        {
+          "source": "taxonomy/README.md",
+          "destination": "taxonomy/README.md",
+          "sha256": "921be7d3b996db5d8365ee9a4030497112bf3e55ba110eb8fe9258695c58f1b5",
+          "bytes": 8955
+        },
+        {
+          "source": "taxonomy/candidates/README.md",
+          "destination": "taxonomy/candidates/README.md",
+          "sha256": "a7fadd8fbc78b7cccc09d86a19ad846268135f835ab5042dad00346ff76f6850",
+          "bytes": 1126
+        },
+        {
+          "source": "taxonomy/candidates/dataset-wave2-2026-09-27.json",
+          "destination": "taxonomy/candidates/dataset-wave2-2026-09-27.json",
+          "sha256": "3b2b0e4d00ed3d28eeaaddd2b4909a8220fb1a774551411dd1ea3c8aa2272214",
+          "bytes": 20297
+        },
+        {
+          "source": "taxonomy/candidates/dataset-wave2-independent-review.json",
+          "destination": "taxonomy/candidates/dataset-wave2-independent-review.json",
+          "sha256": "e2b868d4693a88c779ab9a92e73e8589887b014756911d88a22ab342a933cf9d",
+          "bytes": 69978
+        },
+        {
+          "source": "taxonomy/packs/ecs/manifest.json",
+          "destination": "taxonomy/packs/ecs/manifest.json",
+          "sha256": "2cba50662e5b3b1a2c1c185668ad7253665ca88aa52d887f4698417f8adc9a00",
+          "bytes": 735
+        },
+        {
+          "source": "taxonomy/packs/ecs/registry.json",
+          "destination": "taxonomy/packs/ecs/registry.json",
+          "sha256": "0417bd0b285370e635bee1943a4e8bc9855d8f2372372ad2b3661783084d2244",
+          "bytes": 51958
+        },
+        {
+          "source": "taxonomy/packs/otel-semconv/manifest.json",
+          "destination": "taxonomy/packs/otel-semconv/manifest.json",
+          "sha256": "9185270c1226dc6b48f01346b8ab138efc7cc847863d1c88fbbc2c93c4b4fb91",
+          "bytes": 807
+        },
+        {
+          "source": "taxonomy/packs/otel-semconv/registry.json",
+          "destination": "taxonomy/packs/otel-semconv/registry.json",
+          "sha256": "9849378cb055d5daf52acf07c4ce19b5c4d8994de2c08e095038fe238e825285",
+          "bytes": 28966
+        },
+        {
+          "source": "taxonomy/v0.1/domains/agriculture.json",
+          "destination": "taxonomy/v0.1/domains/agriculture.json",
+          "sha256": "ffb09efd2603a7b43e4463ffbc37f70f0b3d3ab577e51f9f2af9436e9ff7aa95",
+          "bytes": 223
+        },
+        {
+          "source": "taxonomy/v0.1/domains/banking.json",
+          "destination": "taxonomy/v0.1/domains/banking.json",
+          "sha256": "7dc53c77f3cce4bbc88cfbde120be1aacfe713336bbe1aefeb75c9e1a08adbc6",
+          "bytes": 250
+        },
+        {
+          "source": "taxonomy/v0.1/domains/customer-support.json",
+          "destination": "taxonomy/v0.1/domains/customer-support.json",
+          "sha256": "329e8699b75ada708b7aa747dd0ca5d4fc86c86ff42becbe74a16c60777a19ea",
+          "bytes": 314
+        },
+        {
+          "source": "taxonomy/v0.1/domains/ecs.json",
+          "destination": "taxonomy/v0.1/domains/ecs.json",
+          "sha256": "f3fed2d7d41107bb78c5405ce9ca8e0b3192b9a593b6d1bb9c877398866f3b84",
+          "bytes": 12129
+        },
+        {
+          "source": "taxonomy/v0.1/domains/education.json",
+          "destination": "taxonomy/v0.1/domains/education.json",
+          "sha256": "c0ef30bc8005372aaab72df64023920b6584189a87832bc5feb3faede9162944",
+          "bytes": 220
+        },
+        {
+          "source": "taxonomy/v0.1/domains/energy.json",
+          "destination": "taxonomy/v0.1/domains/energy.json",
+          "sha256": "5739e87f5e4c2ae628cbc56dabc21a4ad6ac038b203316b55981bf0409f423a1",
+          "bytes": 223
+        },
+        {
+          "source": "taxonomy/v0.1/domains/generic-finance.json",
+          "destination": "taxonomy/v0.1/domains/generic-finance.json",
+          "sha256": "eda85e87208f690319faf9326238288ef878230b6e2222cda192eb93a668d7e3",
+          "bytes": 350
+        },
+        {
+          "source": "taxonomy/v0.1/domains/generic-logs.json",
+          "destination": "taxonomy/v0.1/domains/generic-logs.json",
+          "sha256": "ee29071c883a7ab2db97ca9ef060ae3b2df0a6006196068f37b9f0ccc0af046c",
+          "bytes": 405
+        },
+        {
+          "source": "taxonomy/v0.1/domains/geography.json",
+          "destination": "taxonomy/v0.1/domains/geography.json",
+          "sha256": "c366c3db39141354afeab750d2aa770c34e8c5a5b5e949d0f2a467ff11bfc61a",
+          "bytes": 288
+        },
+        {
+          "source": "taxonomy/v0.1/domains/government.json",
+          "destination": "taxonomy/v0.1/domains/government.json",
+          "sha256": "1342223d121ed18a812747503d2f19683eedc066e6eb862f7e7a00371cb2a502",
+          "bytes": 240
+        },
+        {
+          "source": "taxonomy/v0.1/domains/healthcare.json",
+          "destination": "taxonomy/v0.1/domains/healthcare.json",
+          "sha256": "fa60a431d5e17e533c00028b85a98f63aabfa0ada5bab47d60f2a83aef4e74c4",
+          "bytes": 306
+        },
+        {
+          "source": "taxonomy/v0.1/domains/hr-people.json",
+          "destination": "taxonomy/v0.1/domains/hr-people.json",
+          "sha256": "4e07e3f95d36729f39ab588d48d8258fa8d92e35c3359beba2bfa2b6230390e0",
+          "bytes": 574
+        },
+        {
+          "source": "taxonomy/v0.1/domains/india-smb-finance.json",
+          "destination": "taxonomy/v0.1/domains/india-smb-finance.json",
+          "sha256": "7848b76c4580b1987538019cd2616d6d725a7f416e433fdb0334674e0a38156a",
+          "bytes": 413
+        },
+        {
+          "source": "taxonomy/v0.1/domains/insurance.json",
+          "destination": "taxonomy/v0.1/domains/insurance.json",
+          "sha256": "d3275b72924194ea73dcd5fd503dab6ff553febfd8ad7cb59d76855ae814d673",
+          "bytes": 245
+        },
+        {
+          "source": "taxonomy/v0.1/domains/legal.json",
+          "destination": "taxonomy/v0.1/domains/legal.json",
+          "sha256": "c37f4d7b6e8f03a304565e76d1488a990f0ac504e4236aed43102acd851b751a",
+          "bytes": 249
+        },
+        {
+          "source": "taxonomy/v0.1/domains/manufacturing.json",
+          "destination": "taxonomy/v0.1/domains/manufacturing.json",
+          "sha256": "c38b70917f37889a01a0e35970fbe8bce8ff8fcc9b482c801e516a0c39e0c739",
+          "bytes": 249
+        },
+        {
+          "source": "taxonomy/v0.1/domains/marketplace.json",
+          "destination": "taxonomy/v0.1/domains/marketplace.json",
+          "sha256": "19eb0fc9f4ab3cab21be6f0547756f5e7ebbc9ba455cc9f00b8e765d59e3cdb2",
+          "bytes": 334
+        },
+        {
+          "source": "taxonomy/v0.1/domains/media.json",
+          "destination": "taxonomy/v0.1/domains/media.json",
+          "sha256": "40b623691af4b3cd0db589517ae784b7a9a4fd6c5fb2c7f2c21875de7ea10a5f",
+          "bytes": 241
+        },
+        {
+          "source": "taxonomy/v0.1/domains/nonprofit.json",
+          "destination": "taxonomy/v0.1/domains/nonprofit.json",
+          "sha256": "ff5a62a60af9c3b7df11e9210a303c8ad652581b763bfbf7150f3dc515967a97",
+          "bytes": 236
+        },
+        {
+          "source": "taxonomy/v0.1/domains/otel-semconv.json",
+          "destination": "taxonomy/v0.1/domains/otel-semconv.json",
+          "sha256": "956c33b00771051dc06be5f8101e1f067e30683ce780f4e0ff0f8b094bbadfbe",
+          "bytes": 4071
+        },
+        {
+          "source": "taxonomy/v0.1/domains/product-analytics.json",
+          "destination": "taxonomy/v0.1/domains/product-analytics.json",
+          "sha256": "a8c23848a4940417ce081a156150b46792efcf6d00ce28efb2d7103b9566dd1e",
+          "bytes": 331
+        },
+        {
+          "source": "taxonomy/v0.1/domains/public-sector.json",
+          "destination": "taxonomy/v0.1/domains/public-sector.json",
+          "sha256": "910bb8939295d9835047072221175fdfa49bef31dc1924eec1894959aeda7f69",
+          "bytes": 406
+        },
+        {
+          "source": "taxonomy/v0.1/domains/real-estate.json",
+          "destination": "taxonomy/v0.1/domains/real-estate.json",
+          "sha256": "076d8a5100ddf4cb62597866011f38727d9bd78cf50bbf4757e229c8c706527a",
+          "bytes": 213
+        },
+        {
+          "source": "taxonomy/v0.1/domains/research.json",
+          "destination": "taxonomy/v0.1/domains/research.json",
+          "sha256": "5e37a95ae82a5187649a66a0fe6eaf9166808d0b55cd6f08a9a2d05e45abf53f",
+          "bytes": 231
+        },
+        {
+          "source": "taxonomy/v0.1/domains/retail.json",
+          "destination": "taxonomy/v0.1/domains/retail.json",
+          "sha256": "a558a4d12584057264ffaeb846c913c363e91571f3d00ac2fa70b50886f20a04",
+          "bytes": 522
+        },
+        {
+          "source": "taxonomy/v0.1/domains/risk-fraud.json",
+          "destination": "taxonomy/v0.1/domains/risk-fraud.json",
+          "sha256": "11b46150a781c7f4969e976c9c68e092ac252902dc0f24dc0f7f879e9283145a",
+          "bytes": 223
+        },
+        {
+          "source": "taxonomy/v0.1/domains/sample-datasets.json",
+          "destination": "taxonomy/v0.1/domains/sample-datasets.json",
+          "sha256": "c55fd3255a6baa4685ef2938f40a6d69fe543eafee91769af12bbf046e9ee246",
+          "bytes": 303
+        },
+        {
+          "source": "taxonomy/v0.1/domains/scientific.json",
+          "destination": "taxonomy/v0.1/domains/scientific.json",
+          "sha256": "0da3613f656033984ea69210ad9b17772270fcf1d2c7466c3184fccaac9b3464",
+          "bytes": 231
+        },
+        {
+          "source": "taxonomy/v0.1/domains/sensitive-data.json",
+          "destination": "taxonomy/v0.1/domains/sensitive-data.json",
+          "sha256": "f5d1106ef963a7c34c0765cea72d664152593c25a337cb7f0f27485dd6e5d4c0",
+          "bytes": 368
+        },
+        {
+          "source": "taxonomy/v0.1/domains/sports.json",
+          "destination": "taxonomy/v0.1/domains/sports.json",
+          "sha256": "a7f64b0b2b5d459da3d6a34aa6a8d6f30bc5ad87895e09c217cbe479c35d480e",
+          "bytes": 221
+        },
+        {
+          "source": "taxonomy/v0.1/domains/supply-chain.json",
+          "destination": "taxonomy/v0.1/domains/supply-chain.json",
+          "sha256": "f5f5fefccce09e762e0926baf5e3054a7b43a9495136dc43f887ddd55f149931",
+          "bytes": 270
+        },
+        {
+          "source": "taxonomy/v0.1/index.json",
+          "destination": "taxonomy/v0.1/index.json",
+          "sha256": "6a3c0b6f299f64689b6b07c8b9d1e53191f5fae91d1593530099cc9e5e1c9dfb",
+          "bytes": 9167
+        },
+        {
+          "source": "taxonomy/v0.1/packs/ecs.aliases.json",
+          "destination": "taxonomy/v0.1/packs/ecs.aliases.json",
+          "sha256": "a745ab910a606a622172cb137b7267e1c5a6526cdfc4f2b7fd202f66b1254a40",
+          "bytes": 1609
+        },
+        {
+          "source": "taxonomy/v0.1/packs/ecs.crosswalk.jsonl",
+          "destination": "taxonomy/v0.1/packs/ecs.crosswalk.jsonl",
+          "sha256": "d72ce7c7e5333e14a6690c6fc11b67c90763b1b2e8410aebd3b1a41724f17250",
+          "bytes": 23473
+        },
+        {
+          "source": "taxonomy/v0.1/packs/ecs.jsonl",
+          "destination": "taxonomy/v0.1/packs/ecs.jsonl",
+          "sha256": "8959c71f1da7b17ccf926d4ecf175cfa5f536451969f573babccf8b6ce1ae24f",
+          "bytes": 153415
+        },
+        {
+          "source": "taxonomy/v0.1/packs/otel-semconv.aliases.json",
+          "destination": "taxonomy/v0.1/packs/otel-semconv.aliases.json",
+          "sha256": "76ab23a63e233f6ec8c14b8d70f70d9b6273a345eab6ece30d1f4750c8203b56",
+          "bytes": 1038
+        },
+        {
+          "source": "taxonomy/v0.1/packs/otel-semconv.crosswalk.jsonl",
+          "destination": "taxonomy/v0.1/packs/otel-semconv.crosswalk.jsonl",
+          "sha256": "5ce439fd15a0925fd762a0ea75d60c488d6655e711b9f90b24e8a50c465040e0",
+          "bytes": 7615
+        },
+        {
+          "source": "taxonomy/v0.1/packs/otel-semconv.jsonl",
+          "destination": "taxonomy/v0.1/packs/otel-semconv.jsonl",
+          "sha256": "0eafd9aa30e372a35f4b1e733fc0f7f527922683480f63cc4857acebeafdadaa",
+          "bytes": 57915
+        },
+        {
+          "source": "taxonomy/v0.1/relationships.json",
+          "destination": "taxonomy/v0.1/relationships.json",
+          "sha256": "86a82d7dec8192bc2a442eaac62df12b5853a3efe40e5ef5be36baaf9a13dcbc",
+          "bytes": 13783
+        },
+        {
+          "source": "taxonomy/v0.1/semantic-vectors.json",
+          "destination": "taxonomy/v0.1/semantic-vectors.json",
+          "sha256": "6af855790701903a7a8b3bc181896d05d60fd46cd9c05f35f8cc416609944d0d",
+          "bytes": 929443
+        },
+        {
+          "source": "taxonomy/v0.1/types.jsonl",
+          "destination": "taxonomy/v0.1/types.jsonl",
+          "sha256": "3a463504f9d49fa2b6d56ac49ca78ac64f00cc97eb52af849ca22717c3121186",
+          "bytes": 127936
+        },
+        {
+          "source": "taxonomy/v0.1/universal/crosswalk.jsonl",
+          "destination": "taxonomy/v0.1/universal/crosswalk.jsonl",
+          "sha256": "10dae50505134d802423cfe7723e0249b5b07634b5b589732b8f76bc2a189656",
+          "bytes": 15054
+        },
+        {
+          "source": "taxonomy/v0.1/universal/universal-terms.jsonl",
+          "destination": "taxonomy/v0.1/universal/universal-terms.jsonl",
+          "sha256": "78a21f20a50fe0c80a862b23d9882d1deae0d9ae84dae1a556d0e3cc55099288",
+          "bytes": 11246
+        },
+        {
+          "source": "taxonomy/v0.x/proposed/README.md",
+          "destination": "taxonomy/v0.x/proposed/README.md",
+          "sha256": "451130b6b00f25594778a92b54d11b878b99e058d1cbbd68637502872da6f58d",
+          "bytes": 1283
+        },
+        {
+          "source": "webr/LICENSE.md",
+          "destination": "webr/LICENSE.md",
+          "sha256": "0ac1bff20e1329e244669e318269e6b40f327aecc78c3f18376ac59e923dde23",
+          "bytes": 37609
+        },
+        {
+          "source": "webr/R.js",
+          "destination": "webr/R.js",
+          "sha256": "162adb529111d739b37ef1b9f889eb7afbe4fb3288f8a58166cd6d0b04fd7376",
+          "bytes": 785875
+        },
+        {
+          "source": "webr/R.wasm",
+          "destination": "webr/R.wasm",
+          "sha256": "5df459fb222d332e358cf08e4019c0e114398579ed8c62242bfcceeda81222ba",
+          "bytes": 18062845
+        },
+        {
+          "source": "webr/libRblas.so",
+          "destination": "webr/libRblas.so",
+          "sha256": "d831496cc1d1e2748519439a0ea509ba966b56db10d13132db52331a270aac74",
+          "bytes": 198205
+        },
+        {
+          "source": "webr/libRlapack.so",
+          "destination": "webr/libRlapack.so",
+          "sha256": "df8ca333754f0dd95715df437f6e6d633e4ffbff0176bcb11c15fe3e5dd4e387",
+          "bytes": 1769888
+        },
+        {
+          "source": "webr/naklidata-runtime.json",
+          "destination": "webr/naklidata-runtime.json",
+          "sha256": "f4eda99e45a9d35526e21c9acb4f46de5b1a907986e6aaba988013897f8faf06",
+          "bytes": 46
+        },
+        {
+          "source": "webr/vfs/etc/fonts/fonts.conf",
+          "destination": "webr/vfs/etc/fonts/fonts.conf",
+          "sha256": "a93efbf9eec83d72a463f1d52f54043a8afa6ae7cc05609deda73232525e7bc0",
+          "bytes": 1089
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/doc.data.gz",
+          "destination": "webr/vfs/usr/lib/R/doc.data.gz",
+          "sha256": "03ad1b51acd51665a5ad8e4b1a3ffa570434ca0f2a51d432b294e4b5500ea90f",
+          "bytes": 4000106
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/doc.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/doc.js.metadata",
+          "sha256": "fa7537b51ccab64e17407933e926211d706f7e87ecc7db018e44e663c07d93a2",
+          "bytes": 8701
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/base/demo.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/base/demo.data.gz",
+          "sha256": "5dc1fc84cb1d61e4d5311b8e01458014dab1c434c2b6d93deca3eaa9b50752e2",
+          "bytes": 4460
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/base/demo.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/base/demo.js.metadata",
+          "sha256": "bfc597e88f9b97b8eec9fd36227ef0d079fdf1c32e8bea84c3b1e77fb7a6b05c",
+          "bytes": 263
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/base/help.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/base/help.data.gz",
+          "sha256": "7c5dec2357f9e36fa4d348a8fef8477994cd56089009247e5908d918a6fb1a09",
+          "bytes": 2633853
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/base/help.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/base/help.js.metadata",
+          "sha256": "a4cc3075fc1bd2bdd4826ee04efa616d569cd7e07886b8c98531a23406fc0a25",
+          "bytes": 318
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/base/html.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/base/html.data.gz",
+          "sha256": "1f4e82a2633bf1cc134d3dbc6222003492de2fe207ddecccd6e3ab5d4f46f30c",
+          "bytes": 20906
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/base/html.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/base/html.js.metadata",
+          "sha256": "4826bdd7ba15568d7ab5226c92b1d742bcd3f4ce853300f55bf205a5f8e22d02",
+          "bytes": 155
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/compiler/help.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/compiler/help.data.gz",
+          "sha256": "c8e850b5b5e1a04aaf29ef42d50f805473f56c988abcf60ffcb375195f7bcddc",
+          "bytes": 10128
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/compiler/help.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/compiler/help.js.metadata",
+          "sha256": "1afd086c4166f184ec0db0943352c4c5885a33e1b8fb70e537241da712288534",
+          "bytes": 304
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/compiler/html.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/compiler/html.data.gz",
+          "sha256": "6d157ac6c76a2f2b15a989ffdbc8c1a465b91811a654aa6fb1573d783109e30c",
+          "bytes": 1227
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/compiler/html.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/compiler/html.js.metadata",
+          "sha256": "98d18997c393881d285172dcb2414da928192520af6aba215667f0a93b0da54d",
+          "bytes": 147
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/datasets/help.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/datasets/help.data.gz",
+          "sha256": "de58c6303b01b5fe83fca73a5d205e7448ffa16a56cf0a1086d776fdc60bb4dd",
+          "bytes": 277806
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/datasets/help.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/datasets/help.js.metadata",
+          "sha256": "a5cb9f65838dad1ad72e662675d28dafb75b8769c02d9537fac7569a295b7c16",
+          "bytes": 316
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/datasets/html.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/datasets/html.data.gz",
+          "sha256": "6f1eb6811cd3432e9764e75b0d418e3ed2455835a58f725ba18d0b2b8e1ed94d",
+          "bytes": 4458
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/datasets/html.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/datasets/html.js.metadata",
+          "sha256": "c9c5e5bafee1c03be04d2867f44923e0fa74791bbc51ccbb8d3ff5579bb5e211",
+          "bytes": 151
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grDevices/afm.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/grDevices/afm.data.gz",
+          "sha256": "bb0d88c8492ba397470152d6d90d82e055092dad73e1e864fe6b2ebf0b2bd52a",
+          "bytes": 953823
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grDevices/afm.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/grDevices/afm.js.metadata",
+          "sha256": "3e88061dfecc14c6cd1386be85d4fef59fe1f964312db41903e471ed74e7cf02",
+          "bytes": 6816
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grDevices/demo.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/grDevices/demo.data.gz",
+          "sha256": "89433796693b081e65e8ae3214f4b8823c564a2fe8bf0f900956adf55fb16f2c",
+          "bytes": 2513
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grDevices/demo.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/grDevices/demo.js.metadata",
+          "sha256": "2a51924eaee18cbe41bfe8f11ae70f083748d97ef5cbbb77bd3c3a133eaad471",
+          "bytes": 149
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grDevices/enc.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/grDevices/enc.data.gz",
+          "sha256": "73fcd21310a54e033f151f6c887001c55d348ff26e2e4d32a0be0ad48c3a4fd7",
+          "bytes": 4263
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grDevices/enc.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/grDevices/enc.js.metadata",
+          "sha256": "fd6fb479b499da19fe442318ac147bdda2557a087ff19acda5a220fbe6686617",
+          "bytes": 960
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grDevices/fonts.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/grDevices/fonts.data.gz",
+          "sha256": "4dca57d1a4a8b8ab530fa67b019193e6b3457d4066506a67284179f58bb50a72",
+          "bytes": 273155
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grDevices/fonts.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/grDevices/fonts.js.metadata",
+          "sha256": "a59f1e81fa5a21f6b6fb91b6a51ad9944cff3283d5891c9427a3702573b6d65c",
+          "bytes": 352
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grDevices/help.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/grDevices/help.data.gz",
+          "sha256": "cd5bb1d9e3da614ecfd34d493b5370c98e3e3e93dd625fac1f753c6c6a67d3a0",
+          "bytes": 447385
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grDevices/help.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/grDevices/help.js.metadata",
+          "sha256": "c639cb7c72cac13497dc29f0147f311a5206c9dc249885b0e2d11daa44e00106",
+          "bytes": 318
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grDevices/html.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/grDevices/html.data.gz",
+          "sha256": "de1205804774e7d7db07966467a2d0ea66734550583ad4549935d4356cffd9bb",
+          "bytes": 4188
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grDevices/html.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/grDevices/html.js.metadata",
+          "sha256": "3a2b36bad1509df1912e194322e133c7f362ae7cade8c178e9fbfe88da0a0c83",
+          "bytes": 151
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grDevices/libs.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/grDevices/libs.data.gz",
+          "sha256": "558a09f14c830848510b6279c1141802d392fe2d0aaf66eca174faa03dc7bb1d",
+          "bytes": 1643930
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grDevices/libs.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/grDevices/libs.js.metadata",
+          "sha256": "f4b2da4dd2f93011eaa259f8dddc23c63dd144fecc8322fab7885341952e2b7b",
+          "bytes": 103
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/graphics/demo.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/graphics/demo.data.gz",
+          "sha256": "3e60f0210cb48d0c40a8c56436af980e2a71f0016ea66b7d95f1932ffea24762",
+          "bytes": 13086
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/graphics/demo.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/graphics/demo.js.metadata",
+          "sha256": "1128fef779f40452d0dd2b27b3974175fb4a341c3418d953d8b33540575117fd",
+          "bytes": 359
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/graphics/help.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/graphics/help.data.gz",
+          "sha256": "8522582e2b3a3577c24f174bcccc7d75bebb9128131157d7b3712d28255baf71",
+          "bytes": 562908
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/graphics/help.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/graphics/help.js.metadata",
+          "sha256": "f389834ad81b4db9bb4e8e89c254bb8c886da36b5c458cd661a1a4d5710809f1",
+          "bytes": 720
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/graphics/html.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/graphics/html.data.gz",
+          "sha256": "99d1c6a3224b704237d427057549a1a9b863033bbf2e8c086fc6e200553621bb",
+          "bytes": 2982
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/graphics/html.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/graphics/html.js.metadata",
+          "sha256": "bb82dd2024e800abf3d390c3f21f44e189ebe3df567a0de974e95206f7edef7d",
+          "bytes": 151
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grid/doc.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/grid/doc.data.gz",
+          "sha256": "c40b85e70ad49170e7aca3041bd518a1f7ce5c5510f5f46b49807a4c4715d869",
+          "bytes": 584214
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grid/doc.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/grid/doc.js.metadata",
+          "sha256": "14924ac9389ed973b16d0f3e5cb30e49b6629db3f2f4c8e0ab36908bec1bac0b",
+          "bytes": 896
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grid/help.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/grid/help.data.gz",
+          "sha256": "3d8a87877c069f47a6ffc590043975e26d26b112addd7bcabdcab576f7a9c74e",
+          "bytes": 341560
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grid/help.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/grid/help.js.metadata",
+          "sha256": "66a56f27efa45f11c3fe20b63215761527a18014531159bc7d1af159d9bf0a87",
+          "bytes": 308
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grid/html.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/grid/html.data.gz",
+          "sha256": "8ab236a697ca624dd74b1fce1eab0852e8d6fcab4e441ec09fe57e56849b77d1",
+          "bytes": 4928
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/grid/html.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/grid/html.js.metadata",
+          "sha256": "3d28487a22ea049d3c6329a9cebb0d310e3d4206647a517cb40ab21bc5662e1d",
+          "bytes": 151
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/methods/help.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/methods/help.data.gz",
+          "sha256": "d727dc6b7422dedf18caf153144c78b6e2966d7a5a42c4c9f6f6cf16a8a0683e",
+          "bytes": 559755
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/methods/help.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/methods/help.js.metadata",
+          "sha256": "f8803bd5a9ceffbdf2857cba27d965f380a97801f97b51d300ac39ee239c5056",
+          "bytes": 318
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/methods/html.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/methods/html.data.gz",
+          "sha256": "12cbbb4eb9d878d130a0713e1ad24a4a5a1dbe5b623347a838c4d9d7f334b0bd",
+          "bytes": 5267
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/methods/html.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/methods/html.js.metadata",
+          "sha256": "a63e96038c66042226f488d3ac8f54cbea74bda22febf593965e2bede552c73a",
+          "bytes": 151
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/parallel.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/parallel.data.gz",
+          "sha256": "25256757440bb6dd77b2cbdd5668b85aed5d2b8ebae58d039408f1d8b4fe5b95",
+          "bytes": 349042
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/parallel.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/parallel.js.metadata",
+          "sha256": "82f79a072159d48f4c9d2b984ee7660c7c15327d14534d9e89b3271268b0a768",
+          "bytes": 1238
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/splines/help.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/splines/help.data.gz",
+          "sha256": "019301cba92c42cb85448f37a081e09f13684a2d62bc28122b6d2832a8666da5",
+          "bytes": 44264
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/splines/help.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/splines/help.js.metadata",
+          "sha256": "6c6e828305347cb9bc7c1cba42a2d4a60509f95f4375919b8d7143b602b4e862",
+          "bytes": 302
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/splines/html.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/splines/html.data.gz",
+          "sha256": "1f35815050129826f06bb9c71377ef98745648e028702ed326d56dee2288c2df",
+          "bytes": 1550
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/splines/html.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/splines/html.js.metadata",
+          "sha256": "55921a910bdb3d7cb2d2db24dff9e57ddbe4d5670fc54c3ce0c70da6112d6cef",
+          "bytes": 147
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/stats/demo.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/stats/demo.data.gz",
+          "sha256": "761adcd4b49ca859057e1a96774308a5fd3b6f35e00d2dac6d17731ee91f5050",
+          "bytes": 4061
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/stats/demo.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/stats/demo.js.metadata",
+          "sha256": "7e537450a6855a02f5491cf22f48abed526bb1d4d2fd15d3e34725ab3667db5f",
+          "bytes": 241
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/stats/doc.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/stats/doc.data.gz",
+          "sha256": "d24e1da1a4da7cf531f9d963a5fbfb42fab39270ef182283c23d88d666a607cf",
+          "bytes": 50057
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/stats/doc.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/stats/doc.js.metadata",
+          "sha256": "671b514c960e5f91023a8003a690918ae84ac97a4c3bc123f391e51b582c0c66",
+          "bytes": 102
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/stats/help.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/stats/help.data.gz",
+          "sha256": "8fa48d1e3803dd508e24bde959313a24fa91ebe73f779272c6aca31ed6134a33",
+          "bytes": 1843548
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/stats/help.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/stats/help.js.metadata",
+          "sha256": "84619108c7ab023343c1e5e95d5979fccf426e43080c7fd90672f44ab3653ea0",
+          "bytes": 316
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/stats/html.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/stats/html.data.gz",
+          "sha256": "4e14ef0067001e22cb25167c7f51cf665ce89f16fe6d80c1c4121075bff5520a",
+          "bytes": 11358
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/stats/html.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/stats/html.js.metadata",
+          "sha256": "9ea60d805483f4ebfb197957da1c7c360a00c92d4b33fcc7fda42f9ee626cd7d",
+          "bytes": 151
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/stats4/help.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/stats4/help.data.gz",
+          "sha256": "8a18b51cbfe3991f3f33be831bc7a7b2676f62c4a012bff73450afde182b159f",
+          "bytes": 37560
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/stats4/help.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/stats4/help.js.metadata",
+          "sha256": "a03f6116d3f6703f88f9209864709946362e51cbf328c14d3c9c7e3d39a40d4e",
+          "bytes": 304
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/stats4/html.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/stats4/html.data.gz",
+          "sha256": "eab7a939a8d57c5792e98a13b94222d29b43f2fbc4e0b4d449e6fad96f401da5",
+          "bytes": 1522
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/stats4/html.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/stats4/html.js.metadata",
+          "sha256": "c34ccf9f0de1ad19d6aea15b3f56e6f65c8967bd8c9a9e39461788daa5c1d15e",
+          "bytes": 147
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/tcltk.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/tcltk.data.gz",
+          "sha256": "fd62d4cf44534ca784cbc0ab26e65eb1c6f882269709fced5a1ac459f8550026",
+          "bytes": 132160
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/tcltk.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/tcltk.js.metadata",
+          "sha256": "785dc003a43233094a6845f5804fa097fb680ccae0c0aad6fd0784e9582f0ab9",
+          "bytes": 2019
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/tools/help.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/tools/help.data.gz",
+          "sha256": "4ad0e607507c22a91860857865192a7b560270168f3be8c75d9394c5689364d8",
+          "bytes": 324132
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/tools/help.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/tools/help.js.metadata",
+          "sha256": "761f3e2cd8ecc194410a039da7fa7565a68b17c8b271306e927c0f8b4d0eef27",
+          "bytes": 306
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/tools/html.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/tools/html.data.gz",
+          "sha256": "13242d7e18ab7412609925428c651e07615146a78137e1bc7f117d1add62e47f",
+          "bytes": 4307
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/tools/html.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/tools/html.js.metadata",
+          "sha256": "d93471df33f8c83582f3c217fdaad9c0947996bc87c19e2261828e01bcb668c3",
+          "bytes": 151
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/tools/misc.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/tools/misc.data.gz",
+          "sha256": "7042f04844026fbc281f4789abf8ac5bf0751d1ce70bb602a8db8d60f2ac68cf",
+          "bytes": 3724
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/tools/misc.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/tools/misc.js.metadata",
+          "sha256": "5c6bd36201d2f620052f3ba437224496ea98919a8a05dcee6b44aa99547eb5a6",
+          "bytes": 142
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/translations.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/translations.data.gz",
+          "sha256": "c8cac5071b8691cb1c960389b370b5007c5b8df752d98a5860bce505c234b9c2",
+          "bytes": 3061528
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/translations.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/translations.js.metadata",
+          "sha256": "f62b1fa37f7cdff9aa0c9b7046366254411b7df6bb35d2017cbb531fd6ee3d4a",
+          "bytes": 35184
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/translations/DESCRIPTION",
+          "destination": "webr/vfs/usr/lib/R/library/translations/DESCRIPTION",
+          "sha256": "ba7da3ac60466f5f466c4f706f50bcafbb924f94b0888d333bb410451b41afd2",
+          "bytes": 238
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/utils/doc.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/utils/doc.data.gz",
+          "sha256": "4018e722537fa83c70d5f031d4aa391ed68dc00b63a9888aef565899c789caf9",
+          "bytes": 216941
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/utils/doc.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/utils/doc.js.metadata",
+          "sha256": "189fd98b3cda5d4a11c7da6780649ddecce9a5fd5b9d472a075f49909a6956c3",
+          "bytes": 103
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/utils/help.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/utils/help.data.gz",
+          "sha256": "be06c8a1d69d4b0b82b09afc24ade14fe0afd68053c19f87af1f6d17d9842cbf",
+          "bytes": 894372
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/utils/help.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/utils/help.js.metadata",
+          "sha256": "7bbdaa8dd24135fa73ec05ef1120e94f50bca25fcef31244a3ba3d51dd0c4478",
+          "bytes": 310
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/utils/html.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/utils/html.data.gz",
+          "sha256": "33f6fe57dad92319af190f3ea06ee79104e850c86043cc45c11c7513de9cc066",
+          "bytes": 7240
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/utils/html.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/utils/html.js.metadata",
+          "sha256": "9237b38d0bb9cd04c6f305f9b69b7d06b2dcaf982050e3d3e374e6cdfe0706a1",
+          "bytes": 151
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/utils/misc.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/utils/misc.data.gz",
+          "sha256": "33ddc6d1a7b594c7d0824dc12aa15cfce859b66b9d7134c228ee349b48027b56",
+          "bytes": 161
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/utils/misc.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/utils/misc.js.metadata",
+          "sha256": "7e248a6c0ce276772fe22eb83d49128393be9e674e322ab0ce57905e83e6709b",
+          "bytes": 142
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/webr/help.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/webr/help.data.gz",
+          "sha256": "13f814b4ca4b8ad4ae07f43a5e09ed90274233d8758a3c5ec0e6dac3ba56799c",
+          "bytes": 57381
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/webr/help.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/webr/help.js.metadata",
+          "sha256": "bbec147dbb13908d360940507e158e7507cda52f169f365821dcdc3414513794",
+          "bytes": 357
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/webr/html.data.gz",
+          "destination": "webr/vfs/usr/lib/R/library/webr/html.data.gz",
+          "sha256": "e16b557a8417ec2bfb11c3a03ab8b28638464217877ad6bdd26f45263a14cb79",
+          "bytes": 1696
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/library/webr/html.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/library/webr/html.js.metadata",
+          "sha256": "820fc44428d2f719881725341ba13650436e989c53191e2d6da1f2493f7ea131",
+          "bytes": 147
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/share.data.gz",
+          "destination": "webr/vfs/usr/lib/R/share.data.gz",
+          "sha256": "79258e504395be06aefa3d9ed482bcd9c26efb27791a243f851ead183ac28d41",
+          "bytes": 380353
+        },
+        {
+          "source": "webr/vfs/usr/lib/R/share.js.metadata",
+          "destination": "webr/vfs/usr/lib/R/share.js.metadata",
+          "sha256": "3ccaab3b787ae8e377bb56fad19764772e6f1ddf90d47f10fbaef58921c7e9e2",
+          "bytes": 46073
+        },
+        {
+          "source": "webr/vfs/usr/share/fonts/NotoSans-Bold.ttf",
+          "destination": "webr/vfs/usr/share/fonts/NotoSans-Bold.ttf",
+          "sha256": "87cb2d84472a7d66da659ee47b6cdb9552326e8c128245231f191b6ac72529d9",
+          "bytes": 432376
+        },
+        {
+          "source": "webr/vfs/usr/share/fonts/NotoSans-BoldItalic.ttf",
+          "destination": "webr/vfs/usr/share/fonts/NotoSans-BoldItalic.ttf",
+          "sha256": "3d367743f371f28671d2764e911a53d7c20ec9b6aa8791d059e7090389fc52a5",
+          "bytes": 441936
+        },
+        {
+          "source": "webr/vfs/usr/share/fonts/NotoSans-Italic.ttf",
+          "destination": "webr/vfs/usr/share/fonts/NotoSans-Italic.ttf",
+          "sha256": "678288f868807d4d64a6f3b51466871d117d915780381ce9d0ed4b3bcbd06d37",
+          "bytes": 446880
+        },
+        {
+          "source": "webr/vfs/usr/share/fonts/NotoSans-Regular.ttf",
+          "destination": "webr/vfs/usr/share/fonts/NotoSans-Regular.ttf",
+          "sha256": "f3961a9cde016d41a4879aecda1474d3a36d6bf54fa0e4643de029cc2248b0e8",
+          "bytes": 431364
+        },
+        {
+          "source": "webr/vfs/usr/share/fonts/NotoSansMono-Bold.ttf",
+          "destination": "webr/vfs/usr/share/fonts/NotoSansMono-Bold.ttf",
+          "sha256": "1100772b2f79c102402a1011df5e2226517d0f40ac553a25fb12fdbad8c11b85",
+          "bytes": 387484
+        },
+        {
+          "source": "webr/vfs/usr/share/fonts/NotoSansMono-Regular.ttf",
+          "destination": "webr/vfs/usr/share/fonts/NotoSansMono-Regular.ttf",
+          "sha256": "87f8ce0522a6c99b743ee5fc75b4073cfdd575639119672828b7b9944b65b4f4",
+          "bytes": 388660
+        },
+        {
+          "source": "webr/vfs/usr/share/fonts/NotoSerif-Bold.ttf",
+          "destination": "webr/vfs/usr/share/fonts/NotoSerif-Bold.ttf",
+          "sha256": "24ad531e6b05ddad8c3d89572d2c93eb86a6b74e652ce7ee3c3e171de68e84c3",
+          "bytes": 481892
+        },
+        {
+          "source": "webr/vfs/usr/share/fonts/NotoSerif-BoldItalic.ttf",
+          "destination": "webr/vfs/usr/share/fonts/NotoSerif-BoldItalic.ttf",
+          "sha256": "1bc4f86502eaa368718f6192bee022ea9a703d5af1c18b7d291212657b63074a",
+          "bytes": 513280
+        },
+        {
+          "source": "webr/vfs/usr/share/fonts/NotoSerif-Italic.ttf",
+          "destination": "webr/vfs/usr/share/fonts/NotoSerif-Italic.ttf",
+          "sha256": "c4b3c971741ecdb40f5a443bce754e8fe91efe761b6ea10c92be7c3597cdadc4",
+          "bytes": 513428
+        },
+        {
+          "source": "webr/vfs/usr/share/fonts/NotoSerif-Regular.ttf",
+          "destination": "webr/vfs/usr/share/fonts/NotoSerif-Regular.ttf",
+          "sha256": "a15cfbbc1539d707115111d672d590a3d70d4f74b4c0a315956da20ae19a14e1",
+          "bytes": 482540
+        },
+        {
+          "source": "webr/vfs/usr/share/gdal.data.gz",
+          "destination": "webr/vfs/usr/share/gdal.data.gz",
+          "sha256": "8adcaf12f15dabb964cb3363defa02bdc9e730a17b10460946944885bcf699af",
+          "bytes": 348461
+        },
+        {
+          "source": "webr/vfs/usr/share/gdal.js.metadata",
+          "destination": "webr/vfs/usr/share/gdal.js.metadata",
+          "sha256": "de403ded38013ab57931a862d14bcdc33b09997c70de1587ec6719f94360ab25",
+          "bytes": 10206
+        },
+        {
+          "source": "webr/vfs/usr/share/proj.data.gz",
+          "destination": "webr/vfs/usr/share/proj.data.gz",
+          "sha256": "14e3893991c408324d43605abbe6c4cae18607fe27655e78654bec4565799e13",
+          "bytes": 1705325
+        },
+        {
+          "source": "webr/vfs/usr/share/proj.js.metadata",
+          "destination": "webr/vfs/usr/share/proj.js.metadata",
+          "sha256": "adc4c33a8c963b5059402a2132c59811016cc9c48286b6bd43e68b347a5f4c0c",
+          "bytes": 857
+        },
+        {
+          "source": "webr/vfs/usr/share/udunits.data.gz",
+          "destination": "webr/vfs/usr/share/udunits.data.gz",
+          "sha256": "fc1de0c9cb5c827fef22ed148ffc28eab70a99d3cc9aa9990e37aaf38e5c1757",
+          "bytes": 16775
+        },
+        {
+          "source": "webr/vfs/usr/share/udunits.js.metadata",
+          "destination": "webr/vfs/usr/share/udunits.js.metadata",
+          "sha256": "9f8ac349f1d68c23e4d2a4790e328ab3ecc38cd84ef993592170b7d19ef1b6a6",
+          "bytes": 424
+        },
+        {
+          "source": "webr/vfs/var/cache/fontconfig/3830d5c3ddfd5cd38a049b759396e72e-le32d8.cache-9",
+          "destination": "webr/vfs/var/cache/fontconfig/3830d5c3ddfd5cd38a049b759396e72e-le32d8.cache-9",
+          "sha256": "48cd35d8c3d7a4456f05bbf3c10bac83de082d354b2ec02c8a80e325ac3f0839",
+          "bytes": 16008
+        },
+        {
+          "source": "webr/vfs/var/cache/fontconfig/CACHEDIR.TAG",
+          "destination": "webr/vfs/var/cache/fontconfig/CACHEDIR.TAG",
+          "sha256": "05e7633fb31bf1f6f8d89020c16b9f24587fdf7638e951c9745b192f5fc3b682",
+          "bytes": 200
+        },
+        {
+          "source": "webr/webr-worker.js",
+          "destination": "webr/webr-worker.js",
+          "sha256": "c64282f5e15b51ef473e26548203313f868208c8988b2c7bdfc22c5730de418b",
+          "bytes": 134029
+        },
+        {
+          "source": "webr/webr.js",
+          "destination": "webr/webr.js",
+          "sha256": "4c04d3240de6cd3e7f59e081756168faa8566f8a8b97251400770939815c344a",
+          "bytes": 66672
+        },
+        {
+          "source": "LICENSE",
+          "destination": "LICENSE",
+          "sha256": "605e510d14e21b7519f4b970c483bf033c3b0654a13b974eb16f4536aff3e40d",
+          "bytes": 1068
+        }
+      ]
+    },
+    {
       "id": "nakliposter",
       "repo": "NakliTechie/NakliPoster",
       "requestedRef": "main",

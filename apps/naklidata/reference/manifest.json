@@ -1,0 +1,118 @@
+{
+  "format": "naklidata-reference-packs",
+  "version": 1,
+  "packs": [
+    {
+      "id": "gst-state-codes",
+      "label": "GST state codes",
+      "file": "reference/gst-state-codes.json",
+      "joinTypes": [
+        "gst_state_code"
+      ],
+      "keyColumn": "code",
+      "keyType": "VARCHAR",
+      "columns": [
+        "code",
+        "state_name"
+      ],
+      "rows": 40,
+      "source": "CBIC GST state code list (GSTIN first two digits), https://www.gst.gov.in/",
+      "license": "public standard; the codes are facts, no copyright asserted",
+      "version": "2026-09-12 (includes 26 merged UT, 97 Other Territory, 99 Centre)",
+      "sha384": "sha384-2c36ed21f5f2c323b1390435150846edac7e1e328543260322f96190343921586fa585d904dff4c2c5eff4d55fd92f73",
+      "shipped": true
+    },
+    {
+      "id": "iso-4217",
+      "label": "ISO 4217 currency codes",
+      "file": "reference/iso-4217.json",
+      "joinTypes": [
+        "currency_iso"
+      ],
+      "keyColumn": "code",
+      "keyType": "VARCHAR",
+      "columns": [
+        "code",
+        "currency_name"
+      ],
+      "rows": 156,
+      "source": "ISO 4217 current currency list as published by SIX (https://www.six-group.com/en/products-services/financial-information/data-standards.html)",
+      "license": "public standard; codes and names are facts, no copyright asserted",
+      "version": "2026-09-12 (national currencies only: List One minus fund, metal and supranational codes; ZWG/XCG/VED current, ZWL/ANG withdrawn)",
+      "sha384": "sha384-6f81d6deb32aa816a9abf8c6c7b62922022afbc9f2c06a7586de10b0e939e7d0e65d7fff60841f09f7dc1bef57a28ca8",
+      "shipped": true
+    },
+    {
+      "id": "hsn-chapters",
+      "label": "HSN chapters",
+      "file": "reference/hsn-chapters.json",
+      "joinTypes": [
+        "hsn_code"
+      ],
+      "keyColumn": "chapter",
+      "keyType": "VARCHAR",
+      "keyExpression": "left(lpad({col}::VARCHAR, 2, '0'), 2)",
+      "columns": [
+        "chapter",
+        "chapter_heading"
+      ],
+      "rows": 98,
+      "source": "WCO Harmonized System chapter headings (2022 edition) + CBIC India chapters 98/99",
+      "license": "public standard; chapter headings are facts, no copyright asserted",
+      "version": "HS 2022 / 2026-09-12",
+      "sha384": "sha384-dcb5b6df33d360ebbea242b24e71fefc19d568b76cc608bd78401ec984970334811384209d6c856af79898de2bb90589",
+      "shipped": true,
+      "note": "sac_code deliberately not joined: every SAC maps to chapter 99, which adds nothing."
+    },
+    {
+      "id": "airports",
+      "label": "Airports (IATA/ICAO)",
+      "file": null,
+      "joinTypes": [
+        "airport_code"
+      ],
+      "keyColumn": "iata_code",
+      "keyType": "VARCHAR",
+      "columns": [
+        "iata_code",
+        "icao_code",
+        "name",
+        "municipality",
+        "iso_country"
+      ],
+      "rows": "~9,000 (airports.csv, large airports + medium)",
+      "source": "OurAirports https://ourairports.com/data/",
+      "license": "public domain (OurAirports releases its data into the public domain)",
+      "version": "—",
+      "sha384": null,
+      "shipped": false,
+      "fetchOnDemand": true,
+      "note": "~1.2 MB CSV; not vendored. The on-demand fetch is a remote read from a user-typed host and belongs to a later decision. No airport_code house type exists yet either."
+    },
+    {
+      "id": "ifsc",
+      "label": "IFSC → bank and branch",
+      "file": null,
+      "joinTypes": [
+        "ifsc"
+      ],
+      "keyColumn": "IFSC",
+      "keyType": "VARCHAR",
+      "columns": [
+        "IFSC",
+        "BANK",
+        "BRANCH",
+        "CITY",
+        "STATE"
+      ],
+      "rows": "~170,000",
+      "source": "Razorpay ifsc dataset https://github.com/razorpay/ifsc (releases/IFSC.csv)",
+      "license": "MIT",
+      "version": "—",
+      "sha384": null,
+      "shipped": false,
+      "fetchOnDemand": true,
+      "note": "~25 MB CSV; not vendored. Same on-demand decision as airports."
+    }
+  ]
+}

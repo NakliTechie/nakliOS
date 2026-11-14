@@ -1,0 +1,16 @@
+{
+  "id": "ecs",
+  "label": "Elastic Common Schema",
+  "source": "https://github.com/elastic/ecs@2179e785ff1fa42b32997954878eca3adaaa239e",
+  "schema_version": "main@2179e78 (9.6.0-dev)",
+  "snapshot": "2026-09-12",
+  "license": "Apache-2.0",
+  "license_url": "https://github.com/elastic/ecs/blob/main/LICENSE.txt",
+  "registry_file": "registry.json",
+  "registry_sha384": "sha384-e631dc83124d140f484b620723cefbc4b7f6c56a92130c91ee0b5fb70261fdbd38c5d378db67d71f28a4cbf6598df95f",
+  "entries": 347,
+  "edition": "core",
+  "excluded": "2269 of 2616 entries outside the core edition \u2014 generatable, unshipped",
+  "upstream_commit": "2179e785ff1fa42b32997954878eca3adaaa239e",
+  "extraction": "scripts/pin-taxonomy-pack-registry.py"
+}
