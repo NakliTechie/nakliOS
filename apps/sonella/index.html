@@ -11434,7 +11434,7 @@ ${text}`;
     if (isUi7(source) && !p.targets) {
       const v = await formDialog("Export to loudness targets", [
         ...LOUDNESS_PRESETS.map((q) => ({ key: q.id, label: `${q.name} (${q.lufs} LUFS, ${q.peak} dBTP)`, type: "checkbox", value: q.id === "spotify" || q.id === "apple-podcasts" })),
-        { key: "format", label: "Format", type: "select", value: "mp3", options: [["wav", "WAV"], ["mp3", "MP3"], ["flac", "FLAC"], ["m4a", "M4A (AAC)"], ["opus", "Opus (Ogg)"]] }
+        { key: "format", label: "Format", type: "select", value: "mp3", options: [["wav", "WAV"], ["mp3", "MP3"], ["flac", "FLAC"], ["m4a", "M4A (AAC)"], ["opus", "Opus (Ogg)"], ["vorbis", "Ogg Vorbis"]] }
       ], { confirmLabel: "Export", intro: "One file per target, each turned to its loudness, with a limiter holding the true peak under the ceiling." });
       if (!v) return null;
       p = { ...p, format: v.format, targets: LOUDNESS_PRESETS.filter((q) => v[q.id]).map((q) => q.id) };

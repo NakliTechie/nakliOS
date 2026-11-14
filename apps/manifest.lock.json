@@ -4725,14 +4725,14 @@
       "id": "sonella",
       "repo": "NakliTechie/sonella",
       "requestedRef": "main",
-      "resolvedCommit": "230827504b69723245e266baff73d76ad164c1bd",
+      "resolvedCommit": "2d25c2b0be841075b6bfa2be8f824ec228d9f8f5",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "2c764a096086672512da17e3c9b65a3fae3258be75591960c38388b828ea12b8",
-          "bytes": 2940226,
-          "originalSourceSha256": "4228aafda3880469690cdfd0a5cf500b665d73c77bafdd8c8baa8f98021947c2",
+          "sha256": "f5893bb5f14f0532d45d51bf20d4aa5e37b4e5f4104118f36f2e215cbe22844d",
+          "bytes": 2940252,
+          "originalSourceSha256": "8f1b3f452e176c255d7c27662a6fe8c5035de52c00cf4bd9f96168f6722ec888",
           "sdkSha256": "8fc03960ebc00b1f0fc958d7fdadd0960bfb98e48ebff91dfeda387ed6294b10"
         },
         {
