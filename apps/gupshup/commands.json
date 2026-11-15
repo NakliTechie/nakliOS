@@ -1,0 +1,121 @@
+{
+  "commands": [
+    {
+      "name": "chat.list",
+      "description": "List the conversations, newest first, with id, title and last update.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "chat.new",
+      "description": "Open a new, empty conversation.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "chat.open",
+      "description": "Open one conversation.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Conversation id, from chat.list"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    {
+      "name": "chat.send",
+      "description": "Send a message in the open conversation (a new one when none is open). The reply streams in the window.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "The message",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "chat.stop",
+      "description": "Stop the reply that is running in the open conversation.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "chat.rename",
+      "description": "Rename a conversation.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Conversation id, from chat.list"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ]
+      }
+    },
+    {
+      "name": "chat.delete",
+      "description": "Delete a conversation and the attachments no other conversation uses.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Conversation id, from chat.list"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    {
+      "name": "settings.set",
+      "description": "Switch deep thinking or smart search on or off for the next messages.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "thinking": {
+            "type": "boolean"
+          },
+          "search": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  ]
+}

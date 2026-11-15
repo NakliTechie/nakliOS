@@ -4379,6 +4379,674 @@
           "destination": "vendor/pdfjs-6.2.108/NOTICE.md"
         }
       ]
+    },
+    {
+      "id": "gupshup",
+      "repo": "NakliTechie/gupshup",
+      "ref": "main",
+      "files": [
+        {
+          "source": "dist/index.html",
+          "destination": "index.html",
+          "managedSdk": "inline"
+        },
+        {
+          "source": "commands.json",
+          "destination": "commands.json"
+        },
+        {
+          "source": "dist/LICENSE",
+          "destination": "LICENSE"
+        },
+        {
+          "source": "dist/static/css/async/4959.css",
+          "destination": "static/css/async/4959.css"
+        },
+        {
+          "source": "dist/static/css/async/93.css",
+          "destination": "static/css/async/93.css"
+        },
+        {
+          "source": "dist/static/css/main.css",
+          "destination": "static/css/main.css"
+        },
+        {
+          "source": "dist/static/js/async/1031.js",
+          "destination": "static/js/async/1031.js"
+        },
+        {
+          "source": "dist/static/js/async/1085.js",
+          "destination": "static/js/async/1085.js"
+        },
+        {
+          "source": "dist/static/js/async/1086.js",
+          "destination": "static/js/async/1086.js"
+        },
+        {
+          "source": "dist/static/js/async/1097.js",
+          "destination": "static/js/async/1097.js"
+        },
+        {
+          "source": "dist/static/js/async/1299.js",
+          "destination": "static/js/async/1299.js"
+        },
+        {
+          "source": "dist/static/js/async/1393.js",
+          "destination": "static/js/async/1393.js"
+        },
+        {
+          "source": "dist/static/js/async/1401.js",
+          "destination": "static/js/async/1401.js"
+        },
+        {
+          "source": "dist/static/js/async/1505.js",
+          "destination": "static/js/async/1505.js"
+        },
+        {
+          "source": "dist/static/js/async/1531.js",
+          "destination": "static/js/async/1531.js"
+        },
+        {
+          "source": "dist/static/js/async/160.js",
+          "destination": "static/js/async/160.js"
+        },
+        {
+          "source": "dist/static/js/async/1679.js",
+          "destination": "static/js/async/1679.js"
+        },
+        {
+          "source": "dist/static/js/async/1690.js",
+          "destination": "static/js/async/1690.js"
+        },
+        {
+          "source": "dist/static/js/async/2110.js",
+          "destination": "static/js/async/2110.js"
+        },
+        {
+          "source": "dist/static/js/async/2152.js",
+          "destination": "static/js/async/2152.js"
+        },
+        {
+          "source": "dist/static/js/async/2168.js",
+          "destination": "static/js/async/2168.js"
+        },
+        {
+          "source": "dist/static/js/async/2312.js",
+          "destination": "static/js/async/2312.js"
+        },
+        {
+          "source": "dist/static/js/async/2348.js",
+          "destination": "static/js/async/2348.js"
+        },
+        {
+          "source": "dist/static/js/async/2356.js",
+          "destination": "static/js/async/2356.js"
+        },
+        {
+          "source": "dist/static/js/async/2415.js",
+          "destination": "static/js/async/2415.js"
+        },
+        {
+          "source": "dist/static/js/async/2461.js",
+          "destination": "static/js/async/2461.js"
+        },
+        {
+          "source": "dist/static/js/async/2514.js",
+          "destination": "static/js/async/2514.js"
+        },
+        {
+          "source": "dist/static/js/async/2541.js",
+          "destination": "static/js/async/2541.js"
+        },
+        {
+          "source": "dist/static/js/async/2607.js",
+          "destination": "static/js/async/2607.js"
+        },
+        {
+          "source": "dist/static/js/async/265.js",
+          "destination": "static/js/async/265.js"
+        },
+        {
+          "source": "dist/static/js/async/2696.js",
+          "destination": "static/js/async/2696.js"
+        },
+        {
+          "source": "dist/static/js/async/3014.js",
+          "destination": "static/js/async/3014.js"
+        },
+        {
+          "source": "dist/static/js/async/3111.js",
+          "destination": "static/js/async/3111.js"
+        },
+        {
+          "source": "dist/static/js/async/3251.js",
+          "destination": "static/js/async/3251.js"
+        },
+        {
+          "source": "dist/static/js/async/3339.js",
+          "destination": "static/js/async/3339.js"
+        },
+        {
+          "source": "dist/static/js/async/3376.js",
+          "destination": "static/js/async/3376.js"
+        },
+        {
+          "source": "dist/static/js/async/3465.js",
+          "destination": "static/js/async/3465.js"
+        },
+        {
+          "source": "dist/static/js/async/3477.js",
+          "destination": "static/js/async/3477.js"
+        },
+        {
+          "source": "dist/static/js/async/3594.js",
+          "destination": "static/js/async/3594.js"
+        },
+        {
+          "source": "dist/static/js/async/3806.js",
+          "destination": "static/js/async/3806.js"
+        },
+        {
+          "source": "dist/static/js/async/3909.js",
+          "destination": "static/js/async/3909.js"
+        },
+        {
+          "source": "dist/static/js/async/4001.js",
+          "destination": "static/js/async/4001.js"
+        },
+        {
+          "source": "dist/static/js/async/410.js",
+          "destination": "static/js/async/410.js"
+        },
+        {
+          "source": "dist/static/js/async/4138.js",
+          "destination": "static/js/async/4138.js"
+        },
+        {
+          "source": "dist/static/js/async/426.js",
+          "destination": "static/js/async/426.js"
+        },
+        {
+          "source": "dist/static/js/async/4387.js",
+          "destination": "static/js/async/4387.js"
+        },
+        {
+          "source": "dist/static/js/async/4468.js",
+          "destination": "static/js/async/4468.js"
+        },
+        {
+          "source": "dist/static/js/async/4471.js",
+          "destination": "static/js/async/4471.js"
+        },
+        {
+          "source": "dist/static/js/async/4568.js",
+          "destination": "static/js/async/4568.js"
+        },
+        {
+          "source": "dist/static/js/async/4580.js",
+          "destination": "static/js/async/4580.js"
+        },
+        {
+          "source": "dist/static/js/async/4695.js",
+          "destination": "static/js/async/4695.js"
+        },
+        {
+          "source": "dist/static/js/async/4833.js",
+          "destination": "static/js/async/4833.js"
+        },
+        {
+          "source": "dist/static/js/async/4849.js",
+          "destination": "static/js/async/4849.js"
+        },
+        {
+          "source": "dist/static/js/async/4959.js",
+          "destination": "static/js/async/4959.js"
+        },
+        {
+          "source": "dist/static/js/async/509.js",
+          "destination": "static/js/async/509.js"
+        },
+        {
+          "source": "dist/static/js/async/5172.js",
+          "destination": "static/js/async/5172.js"
+        },
+        {
+          "source": "dist/static/js/async/535.js",
+          "destination": "static/js/async/535.js"
+        },
+        {
+          "source": "dist/static/js/async/5546.js",
+          "destination": "static/js/async/5546.js"
+        },
+        {
+          "source": "dist/static/js/async/5597.js",
+          "destination": "static/js/async/5597.js"
+        },
+        {
+          "source": "dist/static/js/async/5636.js",
+          "destination": "static/js/async/5636.js"
+        },
+        {
+          "source": "dist/static/js/async/5638.js",
+          "destination": "static/js/async/5638.js"
+        },
+        {
+          "source": "dist/static/js/async/5706.js",
+          "destination": "static/js/async/5706.js"
+        },
+        {
+          "source": "dist/static/js/async/5856.js",
+          "destination": "static/js/async/5856.js"
+        },
+        {
+          "source": "dist/static/js/async/6152.js",
+          "destination": "static/js/async/6152.js"
+        },
+        {
+          "source": "dist/static/js/async/6297.js",
+          "destination": "static/js/async/6297.js"
+        },
+        {
+          "source": "dist/static/js/async/6325.js",
+          "destination": "static/js/async/6325.js"
+        },
+        {
+          "source": "dist/static/js/async/6332.js",
+          "destination": "static/js/async/6332.js"
+        },
+        {
+          "source": "dist/static/js/async/6349.js",
+          "destination": "static/js/async/6349.js"
+        },
+        {
+          "source": "dist/static/js/async/6389.js",
+          "destination": "static/js/async/6389.js"
+        },
+        {
+          "source": "dist/static/js/async/6443.js",
+          "destination": "static/js/async/6443.js"
+        },
+        {
+          "source": "dist/static/js/async/6526.js",
+          "destination": "static/js/async/6526.js"
+        },
+        {
+          "source": "dist/static/js/async/6600.js",
+          "destination": "static/js/async/6600.js"
+        },
+        {
+          "source": "dist/static/js/async/6689.js",
+          "destination": "static/js/async/6689.js"
+        },
+        {
+          "source": "dist/static/js/async/6751.js",
+          "destination": "static/js/async/6751.js"
+        },
+        {
+          "source": "dist/static/js/async/680.js",
+          "destination": "static/js/async/680.js"
+        },
+        {
+          "source": "dist/static/js/async/6948.js",
+          "destination": "static/js/async/6948.js"
+        },
+        {
+          "source": "dist/static/js/async/7262.js",
+          "destination": "static/js/async/7262.js"
+        },
+        {
+          "source": "dist/static/js/async/7515.js",
+          "destination": "static/js/async/7515.js"
+        },
+        {
+          "source": "dist/static/js/async/7536.js",
+          "destination": "static/js/async/7536.js"
+        },
+        {
+          "source": "dist/static/js/async/7630.js",
+          "destination": "static/js/async/7630.js"
+        },
+        {
+          "source": "dist/static/js/async/7853.js",
+          "destination": "static/js/async/7853.js"
+        },
+        {
+          "source": "dist/static/js/async/7987.js",
+          "destination": "static/js/async/7987.js"
+        },
+        {
+          "source": "dist/static/js/async/8180.js",
+          "destination": "static/js/async/8180.js"
+        },
+        {
+          "source": "dist/static/js/async/828.js",
+          "destination": "static/js/async/828.js"
+        },
+        {
+          "source": "dist/static/js/async/8379.js",
+          "destination": "static/js/async/8379.js"
+        },
+        {
+          "source": "dist/static/js/async/8389.js",
+          "destination": "static/js/async/8389.js"
+        },
+        {
+          "source": "dist/static/js/async/8538.js",
+          "destination": "static/js/async/8538.js"
+        },
+        {
+          "source": "dist/static/js/async/8560.js",
+          "destination": "static/js/async/8560.js"
+        },
+        {
+          "source": "dist/static/js/async/8794.js",
+          "destination": "static/js/async/8794.js"
+        },
+        {
+          "source": "dist/static/js/async/8821.js",
+          "destination": "static/js/async/8821.js"
+        },
+        {
+          "source": "dist/static/js/async/925.js",
+          "destination": "static/js/async/925.js"
+        },
+        {
+          "source": "dist/static/js/async/9252.js",
+          "destination": "static/js/async/9252.js"
+        },
+        {
+          "source": "dist/static/js/async/9261.js",
+          "destination": "static/js/async/9261.js"
+        },
+        {
+          "source": "dist/static/js/async/93.js",
+          "destination": "static/js/async/93.js"
+        },
+        {
+          "source": "dist/static/js/async/9324.js",
+          "destination": "static/js/async/9324.js"
+        },
+        {
+          "source": "dist/static/js/async/9354.js",
+          "destination": "static/js/async/9354.js"
+        },
+        {
+          "source": "dist/static/js/async/9396.js",
+          "destination": "static/js/async/9396.js"
+        },
+        {
+          "source": "dist/static/js/async/9501.js",
+          "destination": "static/js/async/9501.js"
+        },
+        {
+          "source": "dist/static/js/async/9560.js",
+          "destination": "static/js/async/9560.js"
+        },
+        {
+          "source": "dist/static/js/async/9640.js",
+          "destination": "static/js/async/9640.js"
+        },
+        {
+          "source": "dist/static/js/async/9765.js",
+          "destination": "static/js/async/9765.js"
+        },
+        {
+          "source": "dist/static/js/async/9821.js",
+          "destination": "static/js/async/9821.js"
+        },
+        {
+          "source": "dist/static/js/async/9956.js",
+          "destination": "static/js/async/9956.js"
+        },
+        {
+          "source": "dist/static/js/main.js",
+          "destination": "static/js/main.js"
+        },
+        {
+          "source": "dist/static/media/KaTeX_AMS-Regular.ttf",
+          "destination": "static/media/KaTeX_AMS-Regular.ttf"
+        },
+        {
+          "source": "dist/static/media/KaTeX_AMS-Regular.woff",
+          "destination": "static/media/KaTeX_AMS-Regular.woff"
+        },
+        {
+          "source": "dist/static/media/KaTeX_AMS-Regular.woff2",
+          "destination": "static/media/KaTeX_AMS-Regular.woff2"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Caligraphic-Bold.ttf",
+          "destination": "static/media/KaTeX_Caligraphic-Bold.ttf"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Caligraphic-Bold.woff",
+          "destination": "static/media/KaTeX_Caligraphic-Bold.woff"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Caligraphic-Bold.woff2",
+          "destination": "static/media/KaTeX_Caligraphic-Bold.woff2"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Caligraphic-Regular.ttf",
+          "destination": "static/media/KaTeX_Caligraphic-Regular.ttf"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Caligraphic-Regular.woff",
+          "destination": "static/media/KaTeX_Caligraphic-Regular.woff"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Caligraphic-Regular.woff2",
+          "destination": "static/media/KaTeX_Caligraphic-Regular.woff2"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Fraktur-Bold.ttf",
+          "destination": "static/media/KaTeX_Fraktur-Bold.ttf"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Fraktur-Bold.woff",
+          "destination": "static/media/KaTeX_Fraktur-Bold.woff"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Fraktur-Bold.woff2",
+          "destination": "static/media/KaTeX_Fraktur-Bold.woff2"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Fraktur-Regular.ttf",
+          "destination": "static/media/KaTeX_Fraktur-Regular.ttf"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Fraktur-Regular.woff",
+          "destination": "static/media/KaTeX_Fraktur-Regular.woff"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Fraktur-Regular.woff2",
+          "destination": "static/media/KaTeX_Fraktur-Regular.woff2"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Main-Bold.ttf",
+          "destination": "static/media/KaTeX_Main-Bold.ttf"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Main-Bold.woff",
+          "destination": "static/media/KaTeX_Main-Bold.woff"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Main-Bold.woff2",
+          "destination": "static/media/KaTeX_Main-Bold.woff2"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Main-BoldItalic.ttf",
+          "destination": "static/media/KaTeX_Main-BoldItalic.ttf"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Main-BoldItalic.woff",
+          "destination": "static/media/KaTeX_Main-BoldItalic.woff"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Main-BoldItalic.woff2",
+          "destination": "static/media/KaTeX_Main-BoldItalic.woff2"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Main-Italic.ttf",
+          "destination": "static/media/KaTeX_Main-Italic.ttf"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Main-Italic.woff",
+          "destination": "static/media/KaTeX_Main-Italic.woff"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Main-Italic.woff2",
+          "destination": "static/media/KaTeX_Main-Italic.woff2"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Main-Regular.ttf",
+          "destination": "static/media/KaTeX_Main-Regular.ttf"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Main-Regular.woff",
+          "destination": "static/media/KaTeX_Main-Regular.woff"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Main-Regular.woff2",
+          "destination": "static/media/KaTeX_Main-Regular.woff2"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Math-BoldItalic.ttf",
+          "destination": "static/media/KaTeX_Math-BoldItalic.ttf"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Math-BoldItalic.woff",
+          "destination": "static/media/KaTeX_Math-BoldItalic.woff"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Math-BoldItalic.woff2",
+          "destination": "static/media/KaTeX_Math-BoldItalic.woff2"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Math-Italic.ttf",
+          "destination": "static/media/KaTeX_Math-Italic.ttf"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Math-Italic.woff",
+          "destination": "static/media/KaTeX_Math-Italic.woff"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Math-Italic.woff2",
+          "destination": "static/media/KaTeX_Math-Italic.woff2"
+        },
+        {
+          "source": "dist/static/media/KaTeX_SansSerif-Bold.ttf",
+          "destination": "static/media/KaTeX_SansSerif-Bold.ttf"
+        },
+        {
+          "source": "dist/static/media/KaTeX_SansSerif-Bold.woff",
+          "destination": "static/media/KaTeX_SansSerif-Bold.woff"
+        },
+        {
+          "source": "dist/static/media/KaTeX_SansSerif-Bold.woff2",
+          "destination": "static/media/KaTeX_SansSerif-Bold.woff2"
+        },
+        {
+          "source": "dist/static/media/KaTeX_SansSerif-Italic.ttf",
+          "destination": "static/media/KaTeX_SansSerif-Italic.ttf"
+        },
+        {
+          "source": "dist/static/media/KaTeX_SansSerif-Italic.woff",
+          "destination": "static/media/KaTeX_SansSerif-Italic.woff"
+        },
+        {
+          "source": "dist/static/media/KaTeX_SansSerif-Italic.woff2",
+          "destination": "static/media/KaTeX_SansSerif-Italic.woff2"
+        },
+        {
+          "source": "dist/static/media/KaTeX_SansSerif-Regular.ttf",
+          "destination": "static/media/KaTeX_SansSerif-Regular.ttf"
+        },
+        {
+          "source": "dist/static/media/KaTeX_SansSerif-Regular.woff",
+          "destination": "static/media/KaTeX_SansSerif-Regular.woff"
+        },
+        {
+          "source": "dist/static/media/KaTeX_SansSerif-Regular.woff2",
+          "destination": "static/media/KaTeX_SansSerif-Regular.woff2"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Script-Regular.ttf",
+          "destination": "static/media/KaTeX_Script-Regular.ttf"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Script-Regular.woff",
+          "destination": "static/media/KaTeX_Script-Regular.woff"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Script-Regular.woff2",
+          "destination": "static/media/KaTeX_Script-Regular.woff2"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Size1-Regular.ttf",
+          "destination": "static/media/KaTeX_Size1-Regular.ttf"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Size1-Regular.woff",
+          "destination": "static/media/KaTeX_Size1-Regular.woff"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Size1-Regular.woff2",
+          "destination": "static/media/KaTeX_Size1-Regular.woff2"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Size2-Regular.ttf",
+          "destination": "static/media/KaTeX_Size2-Regular.ttf"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Size2-Regular.woff",
+          "destination": "static/media/KaTeX_Size2-Regular.woff"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Size2-Regular.woff2",
+          "destination": "static/media/KaTeX_Size2-Regular.woff2"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Size3-Regular.ttf",
+          "destination": "static/media/KaTeX_Size3-Regular.ttf"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Size3-Regular.woff",
+          "destination": "static/media/KaTeX_Size3-Regular.woff"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Size3-Regular.woff2",
+          "destination": "static/media/KaTeX_Size3-Regular.woff2"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Size4-Regular.ttf",
+          "destination": "static/media/KaTeX_Size4-Regular.ttf"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Size4-Regular.woff",
+          "destination": "static/media/KaTeX_Size4-Regular.woff"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Size4-Regular.woff2",
+          "destination": "static/media/KaTeX_Size4-Regular.woff2"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Typewriter-Regular.ttf",
+          "destination": "static/media/KaTeX_Typewriter-Regular.ttf"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Typewriter-Regular.woff",
+          "destination": "static/media/KaTeX_Typewriter-Regular.woff"
+        },
+        {
+          "source": "dist/static/media/KaTeX_Typewriter-Regular.woff2",
+          "destination": "static/media/KaTeX_Typewriter-Regular.woff2"
+        },
+        {
+          "source": "dist/static/media/pdf.worker.min.mjs",
+          "destination": "static/media/pdf.worker.min.mjs"
+        }
+      ]
     }
   ]
 }
