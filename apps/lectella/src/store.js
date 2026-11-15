@@ -221,7 +221,10 @@ export class Library {
     await this.saveIndex();
     // Bodies go after the index stops naming them, so a failure leaves stray files, never broken records.
     await this.serial(async () => {
-      for (const n of notes) await this.rm(`notes/${id}/${n.id}.md`);
+      for (const n of notes) {
+        await this.rm(`notes/${id}/${n.id}.md`);
+        await this.rm(`audio/${n.id}.wav`);
+      }
       await this.rm(`chats/${id}.json`);
       for (const s of orphans) await this.dropSourceFiles(s);
     });
@@ -456,6 +459,13 @@ export class Library {
     return n;
   }
 
+  /** Keep a note's rendered audio as a WAV file beside it, replacing an older one. @param {string} id @param {Uint8Array} wav */
+  async saveAudio(id, wav) {
+    this.note(id);
+    await this.serial(() => this.fs.write(`audio/${id}.wav`, wav));
+    return `audio/${id}.wav`;
+  }
+
   /** @param {string} id */
   async deleteNote(id) {
     const n = this.note(id);
@@ -464,7 +474,10 @@ export class Library {
     nb.off = nb.off.filter((x) => x !== id);
     this.data.notes = this.data.notes.filter((x) => x.id !== id);
     await this.saveIndex();
-    await this.serial(() => this.rm(`notes/${n.notebook}/${id}.md`));
+    await this.serial(async () => {
+      await this.rm(`notes/${n.notebook}/${id}.md`);
+      await this.rm(`audio/${id}.wav`);
+    });
     this.textCache.delete(id);
   }
 

@@ -4505,6 +4505,18 @@
         {
           "source": "vendor/phonon-tts-0.7.1/NOTICE.md",
           "destination": "vendor/phonon-tts-0.7.1/NOTICE.md"
+        },
+        {
+          "source": "vendor/mediabunny-1.62.1/mediabunny.min.mjs",
+          "destination": "vendor/mediabunny-1.62.1/mediabunny.min.mjs"
+        },
+        {
+          "source": "vendor/mediabunny-1.62.1/LICENSE-MPL-2.0.txt",
+          "destination": "vendor/mediabunny-1.62.1/LICENSE-MPL-2.0.txt"
+        },
+        {
+          "source": "vendor/mediabunny-1.62.1/NOTICE.md",
+          "destination": "vendor/mediabunny-1.62.1/NOTICE.md"
         }
       ]
     },

@@ -153,11 +153,12 @@ export function playLines(tts, lines, { onLine } = {}) {
 }
 
 /**
- * Render lines into one 16-bit WAV file, each in its speaker's voice, with a short pause between lines.
- * @param {any} tts @param {{ speaker: string, text: string }[]} lines @param {{ onLine?: (i: number) => void }} [opts]
+ * Render lines into one mono track at the model's rate, each in its speaker's voice, with the same pauses and
+ * overlaps as playback.
+ * @param {any} tts @param {{ speaker: string, text: string, voice?: string, segment?: number }[]} lines
+ * @param {{ onLine?: (i: number) => void }} [opts] @returns {Promise<{ pcm: Float32Array, rate: number }>}
  */
-export async function renderWav(tts, lines, { onLine } = {}) {
-  const { encodeWav } = await import(new URL('index.js', BASE).href);
+export async function renderPcm(tts, lines, { onLine } = {}) {
   await ensureVoices(tts, lines.map((l) => l.voice ?? voiceOf(l.speaker)));
   const rate = tts.sampleRate;
   /** @type {{ at: number, pcm: Float32Array }[]} */
@@ -173,5 +174,40 @@ export async function renderWav(tts, lines, { onLine } = {}) {
   // Mix, so an overlapping reaction adds to the end of the line before it.
   const out = new Float32Array(Math.max(1, ...placed.map((p) => p.at + p.pcm.length)));
   for (const p of placed) for (let k = 0; k < p.pcm.length; k++) out[p.at + k] = Math.max(-1, Math.min(1, out[p.at + k] + p.pcm[k]));
-  return encodeWav(out, rate);
+  return { pcm: out, rate };
+}
+
+/** A 16-bit WAV file of a track. @param {Float32Array} pcm @param {number} rate */
+export async function wavOf(pcm, rate) {
+  const { encodeWav } = await import(new URL('index.js', BASE).href);
+  return /** @type {Blob} */ (encodeWav(pcm, rate));
+}
+
+/** Opus at 32 kbps suits speech: about 4 MB for 16 minutes. */
+export const OPUS_BITRATE = 32000;
+
+/**
+ * An Ogg file holding the track as Opus, encoded by the browser's own encoder (WebCodecs) and packed by Mediabunny
+ * (MPL-2.0, vendored unmodified in vendor/mediabunny-1.62.1).
+ * @param {Float32Array} pcm @param {number} rate
+ */
+export async function oggOpusOf(pcm, rate) {
+  const mb = await import(new URL('../vendor/mediabunny-1.62.1/mediabunny.min.mjs', import.meta.url).href);
+  if (!(await mb.canEncodeAudio('opus', { numberOfChannels: 1, sampleRate: rate, bitrate: OPUS_BITRATE }))) {
+    throw new Error('This browser cannot encode Opus. Use Edit in Sonella to export another format.');
+  }
+  const output = new mb.Output({ format: new mb.OggOutputFormat(), target: new mb.BufferTarget() });
+  // A plain bitrate: `new Quality(n)` is a quality level, not bits per second, and asked the encoder for Infinity bps.
+  const source = new mb.AudioSampleSource({ codec: 'opus', bitrate: OPUS_BITRATE });
+  output.addAudioTrack(source);
+  await output.start();
+  // One second at a time, so a long episode never makes one huge sample.
+  for (let i = 0; i < pcm.length; i += rate) {
+    const sample = new mb.AudioSample({ data: pcm.slice(i, i + rate), format: 'f32', numberOfChannels: 1, sampleRate: rate, timestamp: i / rate });
+    await source.add(sample);
+    sample.close();
+  }
+  source.close();
+  await output.finalize();
+  return new Blob([/** @type {ArrayBuffer} */ (output.target.buffer)], { type: 'audio/ogg' });
 }

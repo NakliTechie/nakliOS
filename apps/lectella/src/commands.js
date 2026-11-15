@@ -287,11 +287,19 @@ export const COMMANDS = [
   },
   {
     name: 'note.save-audio',
-    description: 'Render an audio overview note as a WAV file and save it.',
+    description: 'Render an audio overview note as a small Ogg (Opus) file and save it.',
     scope: 'read',
     ui: 'The "Save audio" button in an audio overview note.',
     input: none(),
     personOnly: 'Saving a file to your disk is your act.',
+  },
+  {
+    name: 'note.edit-sonella',
+    description: 'Keep an audio overview as a WAV file in Lectella storage and send a copy to Sonella to trim, level or export as MP3 or Ogg.',
+    scope: 'write',
+    ui: 'The "Edit in Sonella" button in an audio overview note.',
+    input: none(),
+    personOnly: 'Sending a file to another app is your act; NakliOS asks you first.',
   },
   {
     name: 'storage.choose',

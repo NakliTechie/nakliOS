@@ -3,7 +3,7 @@
 
 import { PODCAST_LENGTHS, splitReactions, spokenMinutes, beforeSources, buildChat, parseEpisode, parsePlan, podcastPlanRequest, podcastSegmentRequest, citedRefs, esc, estimateTokens, mindmapSvg, parseOutline, parseScript, parseSlides, renderMarkdown, scriptMarkdown, studioRequest, summaryRequest, titleFrom } from './core.js';
 import { pdfText } from './pdf.js';
-import { DOWNLOAD_LABEL, VOICES, currentVoices, loadSpeech, playLines, previewVoice, renderWav, setVoice } from './speech.js';
+import { DOWNLOAD_LABEL, VOICES, currentVoices, loadSpeech, oggOpusOf, playLines, previewVoice, renderPcm, setVoice, wavOf } from './speech.js';
 import { citeLabel, lorewellReachable, openInLorewell, readLorewell, searchLorewell } from './lorewell.js';
 import { Library, hostFs, opfsFs } from './store.js';
 import { COMMANDS, railCommands, run, searchNotebook } from './commands.js';
@@ -751,30 +751,73 @@ async function listen() {
   p.done.catch((e) => banner(`Playback stopped: ${e?.message ?? e}`, { error: true })).finally(() => playing === p && stopPlaying());
 }
 
-/** Render the open audio overview as a WAV file and hand it to the browser to save. */
-async function saveAudio() {
+/** The open note's title, cleaned for a file name. */
+function noteFileName() {
+  const title = /** @type {HTMLInputElement} */ (/** @type {HTMLFormElement} */ (dlg('dlg-note').querySelector('form')).elements.namedItem('title')).value;
+  return title.replace(/[^\p{L}\p{N} _-]+/gu, '').trim() || 'audio-overview';
+}
+
+/** Render the open audio overview to one track, with progress on the note. Answers null when cancelled or failed. */
+async function renderOpenEpisode() {
   const lines = noteLines();
-  if (!lines.length) return;
+  if (!lines.length) return null;
   let tts;
   try {
     tts = await speechReady();
   } catch (e) {
-    return banner(`The voices could not load: ${/** @type {any} */ (e)?.message ?? e}`, { error: true });
+    banner(`The voices could not load: ${/** @type {any} */ (e)?.message ?? e}`, { error: true });
+    return null;
   }
-  if (!tts) return;
+  if (!tts) return null;
+  return renderPcm(tts, lines, { onLine: (i) => ($('note-saved').textContent = `Rendering line ${i + 1} of ${lines.length}…`) });
+}
+
+/** Save the open audio overview as a small Ogg (Opus) file. */
+async function saveAudio() {
   const btn = $('note-save-audio');
   btn.disabled = true;
   try {
-    const wav = await renderWav(tts, lines, { onLine: (i) => ($('note-saved').textContent = `Rendering line ${i + 1} of ${lines.length}…`) });
+    const track = await renderOpenEpisode();
+    if (!track) return;
+    $('note-saved').textContent = 'Encoding…';
+    const ogg = await oggOpusOf(track.pcm, track.rate);
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(wav);
-    const title = /** @type {HTMLInputElement} */ (/** @type {HTMLFormElement} */ (dlg('dlg-note').querySelector('form')).elements.namedItem('title')).value;
-    a.download = `${title.replace(/[^\p{L}\p{N} _-]+/gu, '').trim() || 'audio-overview'}.wav`;
+    a.href = URL.createObjectURL(ogg);
+    a.download = `${noteFileName()}.ogg`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 60000);
-    $('note-saved').textContent = `Saved ${a.download}`;
+    $('note-saved').textContent = `Saved ${a.download} (${(ogg.size / 1048576).toFixed(1)} MB)`;
   } catch (e) {
-    banner(`The audio could not be rendered: ${/** @type {any} */ (e)?.message ?? e}`, { error: true });
+    banner(`The audio could not be saved: ${/** @type {any} */ (e)?.message ?? e}`, { error: true });
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/**
+ * Keep the open audio overview as a WAV file in Lectella's storage and send a copy to Sonella, where it can be
+ * trimmed, levelled and exported as MP3, Ogg or another format. NakliOS asks the person before it sends.
+ */
+async function editInSonella() {
+  if (!openNoteId) return;
+  if (where === 'browser') return banner('Edit in Sonella needs your NakliOS Folder or Crate: choose one in the "Library in" menu, then try again.', { error: true });
+  const btn = $('note-sonella');
+  btn.disabled = true;
+  try {
+    const path = `audio/${openNoteId}.wav`;
+    const targets = await naklios.files.experimental_targets(path).catch(() => []);
+    if (!targets.some((/** @type {any} */ t) => t.appId === 'sonella' && t.action === 'import')) throw new Error('Sonella is not available to take this file in this NakliOS.');
+    const track = await renderOpenEpisode();
+    if (!track) return;
+    $('note-saved').textContent = 'Saving the audio…';
+    const wav = new Uint8Array(await (await wavOf(track.pcm, track.rate)).arrayBuffer());
+    if (wav.length > 64 * 1048576) throw new Error(`This episode is ${(wav.length / 1048576).toFixed(0)} MB, over the 64 MB NakliOS sends between apps. Choose Short or Standard, or use Save audio.`);
+    await lib.saveAudio(openNoteId, wav);
+    $('note-saved').textContent = 'Sending to Sonella…';
+    const sent = await naklios.files.experimental_sendTo('sonella', [path]);
+    $('note-saved').textContent = sent === false ? 'Not sent' : 'Sent to Sonella';
+  } catch (e) {
+    banner(`Could not send it to Sonella: ${/** @type {any} */ (e)?.message ?? e}`, { error: true });
   } finally {
     btn.disabled = false;
   }
@@ -845,6 +888,7 @@ function drawNoteRead() {
   };
   $('note-present').hidden = openNoteFormat !== 'slides';
   $('note-save-audio').hidden = openNoteFormat !== 'audio';
+  $('note-sonella').hidden = openNoteFormat !== 'audio' || !caps().hosted;
   if (openNoteFormat === 'mindmap') {
     box.innerHTML = `<div class="mindmap">${mindmapSvg(parseOutline(body))}</div>${sourcesHtml(body)}`;
   } else if (openNoteFormat === 'slides') {
@@ -1257,6 +1301,7 @@ const UI = {
   'notebook.slides': () => studio('slides'),
   'note.listen': () => listen(),
   'note.save-audio': () => saveAudio(),
+  'note.edit-sonella': () => editInSonella(),
   'notebook.voices': () => chooseVoices(),
   'note.present': () => {
     const deck = document.getElementById('deck');

@@ -6449,14 +6449,14 @@
       "id": "lectella",
       "repo": "NakliTechie/lectella",
       "requestedRef": "main",
-      "resolvedCommit": "d8232e59c79b0048b73a8c41ccd270014250605f",
+      "resolvedCommit": "5562f0f81e589a2df7c81daddb216f881b8acc89",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "1d8e28698319e362d7ad09060e2ed3741cf1bda8c93b5d9b2e7fbaf8fc280c0c",
-          "bytes": 85707,
-          "originalSourceSha256": "50508a97976915f60999b68abbe84b1864b91524e76129bbbabdab3fbd8f927a",
+          "sha256": "2b98c02fccfd34fdd80e2f1307fbf17a07565fb6e3d391abb1c3191dd5fc0a2c",
+          "bytes": 85922,
+          "originalSourceSha256": "e9748c22e568308307ffe5ccf9a67225848ec2175832f82ff25340ad6012edbb",
           "sdkSha256": "410f8613ad003755ecb06f20a23b6d36b3d980fe88a3ab86fe16ff73b11a5b4c"
         },
         {
@@ -6474,8 +6474,8 @@
         {
           "source": "src/app.js",
           "destination": "src/app.js",
-          "sha256": "39eee35cac15c5091b5642a0b0162eed9bfc2c142d4ebe0e4c2f3027d98899fe",
-          "bytes": 65932
+          "sha256": "e307f64c2d202852573f51b0454aa5e16238b711cd337961f22597e34d7e7865",
+          "bytes": 68194
         },
         {
           "source": "src/core.js",
@@ -6486,14 +6486,14 @@
         {
           "source": "src/store.js",
           "destination": "src/store.js",
-          "sha256": "f99319658b94d4a0a03a80bd26de55e27e58cd9cec5923398ffb8658c6d9bf33",
-          "bytes": 22490
+          "sha256": "9954dd3806daec5718dea67b3b03169bac79c8c29bebd80d9f78c47ce80790e9",
+          "bytes": 22900
         },
         {
           "source": "src/commands.js",
           "destination": "src/commands.js",
-          "sha256": "c0a4f9daadf540b8ffed5f1e9eb96556994190ea81e8acce92740b0876fe1764",
-          "bytes": 17489
+          "sha256": "840e6c218e1da15172556212ca6ab0afd0d70188707f8e879c434657d8acf650",
+          "bytes": 17878
         },
         {
           "source": "src/pdf.js",
@@ -6534,8 +6534,8 @@
         {
           "source": "src/speech.js",
           "destination": "src/speech.js",
-          "sha256": "dcd1c34a86ba750e8103f870e9d9c7134636de419faedb2d7ec7dcc9126f5d49",
-          "bytes": 9502
+          "sha256": "069b9931d9f02878864d6a70b4efa82aeb36a260b3f6055c02a7b744dffb70b3",
+          "bytes": 11340
         },
         {
           "source": "vendor/phonon-tts-0.7.1/LICENSE-APACHE",
@@ -6704,6 +6704,24 @@
           "destination": "vendor/phonon-tts-0.7.1/NOTICE.md",
           "sha256": "fb6c010f4c14350a3cd3e01e23b6d71f2cf0f918ed811cf74b4ecf7814b0ae26",
           "bytes": 2531
+        },
+        {
+          "source": "vendor/mediabunny-1.62.1/mediabunny.min.mjs",
+          "destination": "vendor/mediabunny-1.62.1/mediabunny.min.mjs",
+          "sha256": "b365395e7cd4b130553a1203fc23c52c035aedf6d1e07d6fedb4663745b5c790",
+          "bytes": 703759
+        },
+        {
+          "source": "vendor/mediabunny-1.62.1/LICENSE-MPL-2.0.txt",
+          "destination": "vendor/mediabunny-1.62.1/LICENSE-MPL-2.0.txt",
+          "sha256": "3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d04",
+          "bytes": 16726
+        },
+        {
+          "source": "vendor/mediabunny-1.62.1/NOTICE.md",
+          "destination": "vendor/mediabunny-1.62.1/NOTICE.md",
+          "sha256": "d13204f34348f68b2d334ef7f61add58e5a209543683802adaf983a94e993b9e",
+          "bytes": 236
         }
       ]
     },
