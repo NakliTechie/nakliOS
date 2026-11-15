@@ -19,7 +19,7 @@ function hostHarness({confirm=()=>true,backend='browser',clock=Date}={}){
     openWindows:{editor:{querySelector:()=>({contentWindow:source})},anvil:{querySelector:()=>({contentWindow:target})}},
     BACKENDS:{fsa:{isConnected:()=>true,readBinary:async()=>new TextEncoder().encode(req.before)}},
     Date:clock,TextDecoder,FILE_GRANT_MAX_CHARS:2*1024*1024,rangeModule,source,target,sent,fsSafePath:(app,path)=>`apps/${app}/${path}`,
-    _dlgEscape:String,nakliosConfirm:confirm,newFileGrantToken:()=>`token-${sent.length}-${Math.random()}`,
+    _dlgEscape:String,nakliosConfirm:confirm,rpcPromptOpens:()=>{},newFileGrantToken:()=>`token-${sent.length}-${Math.random()}`,
     openApp:()=>{},deliverPendingFileGrants:()=>{for(const g of ctx.fileGrants.values())g.targetSource=target}};
   const names=['fileGrantBackendIdentity','revokeFileGrant','assertRangeEditGrant','fileHostEditInAnvil','fileHostProposeEdit','fileHostEditAck','finishRangeEditAck','recheckRangeEditSource','fileHostHandle'];
   const code=names.map(n=>extractFunction(host,n)).join('\n')

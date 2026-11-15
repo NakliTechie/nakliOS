@@ -77,7 +77,8 @@ async function driveNet(id,origin='https://naklios.dev',expected=origin,type='na
   const iframe={contentWindow:source,closest:()=>win};
   const scope={window:{addEventListener:(_,fn)=>{listener=fn;}},knownIframes:new Set([source]),
     document:{querySelectorAll:()=>[iframe]},aiAppOwnsEgress:gate,egressConfigured:()=>true,
-    egressBackendLabel:()=> 'worker',netHostFetch:async()=>{calls++;return {status:200};}};
+    egressBackendLabel:()=> 'worker',netHostFetch:async()=>{calls++;return {status:200};},
+    rpcHold:()=>()=>{},fsWaitNotice:()=>null};
   new Function(...Object.keys(scope),host.slice(begin,end+4))(...Object.values(scope));
   await listener({source,origin,data:{type,requestId:'request',url:'https://example.com'}});
   return {calls,sent};

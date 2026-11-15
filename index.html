@@ -5147,6 +5147,22 @@ function fsWaitNotice(source, requestId, replyTo){
   if (!requestId) return null;
   return () => { try { source.postMessage({ type: 'naklios:rpc:waiting', requestId }, replyTo); } catch(_){} };
 }
+// Every host prompt an app's call can open (Send to, Open with, network access, on-device helpers,
+// semantic search) tells that app's calls in flight to stop their 30 s clock: the call stays open while
+// the person decides. A call registers its notice for its lifetime (rpcHold); a prompt for the app
+// calls rpcPromptOpens(appId) just before it shows. Lorewell's Send to Lectella timed out after 30 s
+// while the prompt was still open, and Lectella received a file Lorewell reported as unsent (2026-11-15).
+const rpcWaiters = new Map(); // appId → Set<() => void>
+function rpcHold(appId, notice){
+  if (!appId || typeof notice !== 'function') return () => {};
+  let set = rpcWaiters.get(appId);
+  if (!set) { set = new Set(); rpcWaiters.set(appId, set); }
+  set.add(notice);
+  return () => { set.delete(notice); if (!set.size && rpcWaiters.get(appId) === set) rpcWaiters.delete(appId); };
+}
+function rpcPromptOpens(appId){
+  for (const notice of [...(rpcWaiters.get(appId) || [])]) { try { notice(); } catch(_){} }
+}
 async function fsEnsurePermissionOnce(appId, entry = { waiters: new Set() }){
   const app = APPS.find(a => a.id === appId);
   if (app?.thirdParty && !(app.permissions || []).includes('storage')) return null;
@@ -5643,6 +5659,7 @@ async function fileHostSendTo(source, msg, sourceAppId){
   if (total > FILE_SEND_MAX_TOTAL_BYTES) throw new Error(`Send at most ${FILE_SEND_MAX_TOTAL_BYTES / 1048576} MB at once`);
   const sourceName = APPS.find(app => app.id === sourceAppId)?.name || sourceAppId;
   const list = files.map(file => `<code>${_dlgEscape(file.sourcePath)}</code>`).join(', ');
+  rpcPromptOpens(sourceAppId);
   const allowed = await nakliosConfirm(`Send ${list} from <strong>${_dlgEscape(sourceName)}</strong> on ${_dlgEscape(backend.label)} to ${_dlgEscape(target.name)}?\n\n` +
     `${_dlgEscape(target.name)} receives a copy and cannot change the original.`,
     { title:`Send to ${target.name}?`, okLabel:'Send', cancelLabel:'Cancel', allowHtmlBody:true });
@@ -5684,6 +5701,7 @@ async function fileHostOpenWith(source, msg, sourceAppId){
   }
   const sourceName = APPS.find(app => app.id === sourceAppId)?.name || sourceAppId;
   const name = sourcePath.split('/').filter(Boolean).at(-1) || 'Untitled';
+  rpcPromptOpens(sourceAppId);
   const allowed = await nakliosConfirm(
     `Open <code>${_dlgEscape(name)}</code> from <strong>${_dlgEscape(sourceName)}</strong> in Editor?\n\n` +
     `Editor receives access to this file only. Saving writes back to the same ${_dlgEscape(backend.label)} file while the Editor window remains open.`,
@@ -5807,6 +5825,7 @@ async function fileHostEditInAnvil(source, msg, sourceAppId){
     const current = new TextDecoder('utf-8', { fatal:true,ignoreBOM:true }).decode(bytes);
     if (current !== request.before) throw new Error('Source changed before the handoff');
   }
+  rpcPromptOpens('editor');
   const approved = await nakliosConfirm(
     `Send lines ${request.selection.start}–${request.selection.end} of <code>${_dlgEscape(request.path)}</code> to Anvil?\n\n`
       + `Anvil receives a bounded snapshot of this file only. Editor reviews the proposal before applying it.`,
@@ -8003,6 +8022,7 @@ async function ragEnsurePermission(appLabel){
   const where = bid === 'crate'
     ? 'encrypted Crate'
     : 'NakliOS Folder';
+  if (appLabel) rpcPromptOpens(appLabel);
   const ok = await nakliosConfirm(
     `Let NakliOS build a private semantic search index of your ${where}?\n\n` +
     `Text is split into chunks and embedded entirely on this device with a small local model (~25&nbsp;MB one-time download; ~45&nbsp;MB when the browser runs it on the Neural Engine). Nothing leaves the browser. The index itself lives inside your ${where} at <code>${_dlgEscape(RAG_INDEX_PATH)}</code>.`,
@@ -8506,9 +8526,10 @@ async function netEnsureGrant(appId, host, how){
   if (have && have.denied) return null;
   if (have && have.identifier) return have;
   const key = appId + '\0' + slot;
-  if (netPrompts.has(key)) return netPrompts.get(key);
+  if (netPrompts.has(key)) { rpcPromptOpens(appId); return netPrompts.get(key); }
   const p = (async () => {
     const app = APPS.find(a => a.id === appId); const name = app?.name || appId;
+    rpcPromptOpens(appId);
     const ok = await nakliosConfirm(how
       ? `${name} wants to ${how} ${host}.\n\nRequests leave this device for ${host}. ` +
         `NakliOS records each request's host and status in History, never the page address or its contents.`
@@ -9429,11 +9450,13 @@ window.addEventListener('message', async e => {
     try { e.source.postMessage(reply, replyTo); } catch(_){}
   } else if (typeof msg.type === 'string' && msg.type.startsWith('naklios:file:')){
     const reply = { type:'naklios:file:reply', requestId:msg.requestId };
+    let releaseHold = () => {};
     try {
       const appId = getAppId();
       if (!appId) throw new Error('Unknown app');
       const op = msg.type.slice('naklios:file:'.length);
       Object.defineProperty(msg, '_onWait', { value: fsWaitNotice(e.source, msg.requestId, replyTo) });
+      releaseHold = rpcHold(appId, msg._onWait);
       if (op === 'openWith') reply.result = await fileHostOpenWith(e.source, msg, appId);
       else if (op === 'targets') reply.result = await fileHostTargets(String(msg.path || ''), appId);
       else if (op === 'sendTo') reply.result = await fileHostSendTo(e.source, msg, appId);
@@ -9448,7 +9471,7 @@ window.addEventListener('message', async e => {
       } else throw new Error('Unknown file handoff operation');
     } catch (err){
       reply.error = String(err?.message || err);
-    }
+    } finally { releaseHold(); }
     if (msg.requestId) {
       try { e.source.postMessage(reply, replyTo); } catch(_){}
     }
@@ -9461,8 +9484,9 @@ window.addEventListener('message', async e => {
       if (!aiManifestAllows(appId)) throw new Error('This app did not declare the inference permission');
       if (aiLocalBusy.has(appId)) throw new Error('This app already has an on-device request running');
       aiLocalBusy.add(appId);
+      const releaseHold = rpcHold(appId, fsWaitNotice(source, msg.requestId, replyTo));
       try { reply.result = await (msg.type === 'naklios:ai:embed' ? aiHostEmbed : msg.type === 'naklios:ai:transcribe' ? aiHostTranscribe : aiHostSpeak)(msg, appId); }
-      finally { aiLocalBusy.delete(appId); }
+      finally { aiLocalBusy.delete(appId); releaseHold(); }
     } catch (error){ reply.error = String(error?.message || error); }
     if (frame?._loadCount === loaded) { try { source.postMessage(reply, replyTo); } catch(_){} }
   } else if (msg.type === 'naklios:ai:chat'){
@@ -9485,7 +9509,9 @@ window.addEventListener('message', async e => {
       if (!appId) throw new Error('Unknown app');
       if (!aiAppOwnsEgress(appId)) throw new Error('Egress is available to same-origin system apps only');
       if (!egressConfigured()) { const er = new Error('No egress backend configured'); er.code = 'ENOEGRESS'; throw er; }
-      reply.result = await netHostFetch(appId, msg); // S1: Grant-gated, History-logged
+      const releaseHold = rpcHold(appId, fsWaitNotice(e.source, msg.requestId, replyTo));
+      try { reply.result = await netHostFetch(appId, msg); } // S1: Grant-gated, History-logged
+      finally { releaseHold(); }
     } catch(err){ reply.error = String(err?.message || err); }
     if (msg.requestId) { try { e.source.postMessage(reply, replyTo); } catch(_){} }
   } else if (msg.type === 'naklios:web:search' || msg.type === 'naklios:web:fetch'){
@@ -9494,7 +9520,9 @@ window.addEventListener('message', async e => {
       const appId = getAppId();
       if (!appId) throw new Error('Unknown app');
       const web = await webService(appId);
-      reply.result = msg.type === 'naklios:web:search' ? await web.search(msg.query, { maxResults: msg.maxResults }) : await web.fetch(msg.url);
+      const releaseHold = rpcHold(appId, fsWaitNotice(e.source, msg.requestId, replyTo));
+      try { reply.result = msg.type === 'naklios:web:search' ? await web.search(msg.query, { maxResults: msg.maxResults }) : await web.fetch(msg.url); }
+      finally { releaseHold(); }
     } catch(err){ reply.error = String(err?.message || err); if (err?.code) reply.code = err.code; }
     if (msg.requestId) { try { e.source.postMessage(reply, replyTo); } catch(_){} }
   } else if (typeof msg.type === 'string' && msg.type.startsWith('naklios:fs:')){
@@ -9578,7 +9606,10 @@ window.addEventListener('message', async e => {
       const appId = getAppId();
       if (!appId) throw new Error('Unknown app');
       const op = msg.type.slice('naklios:rag:'.length);
-      if (op === 'search') reply.result = await ragHostSearch(e.source, msg, appId);
+      if (op === 'search') {
+        const releaseHold = rpcHold(appId, fsWaitNotice(e.source, msg.requestId, replyTo));
+        try { reply.result = await ragHostSearch(e.source, msg, appId); } finally { releaseHold(); }
+      }
       else if (op === 'status') reply.result = ragIndexStats();
       else throw new Error('Unknown semantic search operation');
     } catch (err){
@@ -14231,6 +14262,7 @@ async function aiAskLocal(appId, what){
   const key = `${appId}:${what}`;
   if (aiLocalConsent.has(key)) return;
   const name = APPS.find(a => a.id === appId)?.name || appId;
+  rpcPromptOpens(appId);
   if (!(await nakliosConfirm(`Let ${name} use ${what}? It runs in this browser and nothing leaves this device. It asks again on your next visit.`, { title:'Allow this?', okLabel:'Allow' })))
     throw new Error('The person did not allow this');
   aiLocalConsent.add(key);
