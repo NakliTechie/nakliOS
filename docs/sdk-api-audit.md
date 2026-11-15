@@ -56,6 +56,7 @@ prefix today.
 | `capabilities.experimental_tex` | field | experimental | As `experimental_tex`. | The app may compile LaTeX projects in its own storage. |
 | `capabilities.experimental_web` | field | experimental | As `experimental_web`. | The app may search the web and read pages through the host. |
 | `capabilities.experimental_aiReasoning` | field | experimental | A second app shows reasoning from it, and the browser models report their thinking too, or say they cannot. | The selected chat model is an endpoint, so chunks carry `delta.reasoning_content` and the `experimental_thinking` request option switches thinking. |
+| `capabilities.experimental_aiVision` | field | experimental | A second app sends images, and the host learns per model whether it reads them instead of reporting every endpoint. | Agent requests may carry user `image_url` parts (base64 PNG, JPEG, WebP or GIF; 8 MB each, 16 and 24 MB per request); the selected model is an endpoint. |
 | `capabilities.net` | field | stable | — | Sovereign egress (`naklios.net.fetch`) granted. |
 | `capabilities.netBackend` | field | stable | — | Which egress backend the host is configured with: `worker` (the default) · `bridge`; null when none. Never a package name. |
 | `capabilities.review` | field | stable | — | The host can stage native diffs from this app and return source-bound review decisions. Enabled for Reckon, Draft, and KanZen. |
