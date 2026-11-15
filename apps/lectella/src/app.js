@@ -202,6 +202,8 @@ function onRemoteChange() {
   clearTimeout(reloadTimer);
   reloadTimer = /** @type {any} */ (setTimeout(async () => {
     try {
+      // A new, empty library has no index yet; a watch event can arrive before the first write.
+      if (!(await lib.fs.exists('library.json'))) return;
       const text = await lib.fs.read('library.json');
       if (text === lastIndexWrite) return; // our own write, seen by the folder poll
       if (noteSaver?.dirty) {
