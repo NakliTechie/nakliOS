@@ -15,8 +15,22 @@ export async function loadLibrarySkills(sdk) {
     try { skill = await lib.read(item.name); } catch (_) {}
     if (!skill?.body) continue;
     const text = `---\nname: ${skill.name}\ndescription: ${String(skill.description || '').replace(/\s+/g, ' ').trim()}\n---\n${skill.body}\n`;
-    out.push({ path: `${LIBRARY_SKILLS_DIR}/${skill.name}`, directory: true, mode: 0o755 });
-    out.push({ path: `${LIBRARY_SKILLS_DIR}/${skill.name}/SKILL.md`, bytes: Array.from(enc.encode(text)), mode: 0o444 });
+    const root = `${LIBRARY_SKILLS_DIR}/${skill.name}`;
+    out.push({ path: root, directory: true, mode: 0o755 });
+    out.push({ path: `${root}/SKILL.md`, bytes: Array.from(enc.encode(text)), mode: 0o444 });
+    // Support files (references, scripts) beside SKILL.md, read-only; the host already scanned the folder.
+    const dirs = new Set();
+    for (const f of skill.files || []) {
+      const rel = String(f?.path || '');
+      if (!rel || rel.split('/').some((seg) => !seg || seg === '.' || seg === '..')) continue;
+      const parts = rel.split('/');
+      for (let i = 1; i < parts.length; i++) {
+        const d = `${root}/${parts.slice(0, i).join('/')}`;
+        if (!dirs.has(d)) { dirs.add(d); out.push({ path: d, directory: true, mode: 0o755 }); }
+      }
+      const script = /\.(sh|py|mjs|js)$/.test(rel) || /^bin\//.test(rel);
+      out.push({ path: `${root}/${rel}`, bytes: Array.from(enc.encode(String(f.content ?? ''))), mode: script ? 0o555 : 0o444 });
+    }
   }
   return out.length > 2 ? out : [];
 }

@@ -895,7 +895,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 |---|---|---|
 | `experimental_skills` | namespace · **experimental** | The user's one skills library, `skills/<name>/SKILL.md` on their Folder or Crate (`sys/ai/skill-library.mjs`; plan `plan/2026-10-29-shared-skills-plan.md`). System apps only. |
 | `experimental_skills.list` | function · **experimental** | The skills an agent may use (Sentinel-clean, active or stale), as `{ name, description, status }` without bodies. Standalone: `[]`. |
-| `experimental_skills.read` | function · **experimental** | One usable skill with its body, or `null`. |
+| `experimental_skills.read` | function · **experimental** | One usable skill as `{ name, description, status, body, files }`, where `files` is `[{ path, content }]` for the skill folder's text support files (path relative to the folder; at most 64 files, 128 KB each, 512 KB in all). The folder is scanned by Sentinel as one unit; a skill whose files fail returns `{ name, blocked }` with the reason. `null` when no usable skill has that name. |
 | `experimental_skills.propose` | function · **experimental** | Write a skill as STAGED (never active); refused if Sentinel refuses it or the name exists. Binds only after a person activates it. |
 
 ### `net` (namespace)

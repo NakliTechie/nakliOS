@@ -49,7 +49,7 @@ export async function openPi({ fs, shell, callBroker, skills = null, prune = und
   models.setProvider(createBrokerProvider(callBroker));
   const registry = createRegistry();
   registry.install(createCodingTools());
-  if (skills) registry.install(createSkillsExtension(skills));
+  if (skills) registry.install(createSkillsExtension(skills, { fs }));
   // Superseded reads and empty results shrink in what each request sends (sys/ai/supersede-prune.mjs).
   registry.install(createPruneExtension(prune));
   const env = createNakliosEnv({ fs, shell, cwd });

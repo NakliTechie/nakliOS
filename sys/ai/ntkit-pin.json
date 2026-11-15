@@ -1,0 +1,708 @@
+{
+ "id": "ntkit",
+ "repo": "NakliTechie/ntkit",
+ "tag": "v2.11.1",
+ "commit": "05ec2707ea7ae7b3ef96db047a5c4158a7ddb769",
+ "license": "MIT",
+ "leftOut": {
+  "package-nt": "promo video pipeline: about 1 MB of media, and a hidden .gitignore Sentinel refuses"
+ },
+ "skills": {
+  "autopilot-nt": [
+   {
+    "path": "skills/autopilot-nt/SKILL.md",
+    "sha256": "2bcae38868d57640c043dd742740b2cedd0980ce9b5284a8f911dbd57adc2a70",
+    "bytes": 8156
+   },
+   {
+    "path": "skills/autopilot-nt/references/launch.md",
+    "sha256": "9e145f6c2a0d8112462828fa3a0970a4be3d19558cbf6de678b5e9b0eb1513ca",
+    "bytes": 2609
+   },
+   {
+    "path": "skills/autopilot-nt/references/loop.md",
+    "sha256": "faba456dad95d37bb077e3e6cae004e5c234a84eb1461af9b02cd6957a0bfa76",
+    "bytes": 8246
+   },
+   {
+    "path": "skills/autopilot-nt/references/report.md",
+    "sha256": "b0dc041bd4d78d74c9628aa32324460666968ad1dc801c28d68ae32ab2198569",
+    "bytes": 2307
+   },
+   {
+    "path": "skills/autopilot-nt/references/ship.md",
+    "sha256": "fce70c53627cfe628116849fc7943af501a0c239205e887d7fa20f101679d60b",
+    "bytes": 1489
+   },
+   {
+    "path": "LICENSE",
+    "as": "LICENSE-ntkit",
+    "sha256": "ec22b41a8cf03aa0c1fc3e2b1d5337d297deffc405b3747942bdc0b4e1930297",
+    "bytes": 1071
+   }
+  ],
+  "decide-nt": [
+   {
+    "path": "skills/decide-nt/SKILL.md",
+    "sha256": "2732de39653f96b53ae20a8caeb04224c6852fed9ec1dd2af012546efe372651",
+    "bytes": 1387
+   },
+   {
+    "path": "LICENSE",
+    "as": "LICENSE-ntkit",
+    "sha256": "ec22b41a8cf03aa0c1fc3e2b1d5337d297deffc405b3747942bdc0b4e1930297",
+    "bytes": 1071
+   }
+  ],
+  "demo-nt": [
+   {
+    "path": "skills/demo-nt/SKILL.md",
+    "sha256": "36a77654be38d2516e6164e0386d50ae8a64b0ca1718be99dbeb5215270be099",
+    "bytes": 6278
+   },
+   {
+    "path": "skills/demo-nt/references/boot.md",
+    "sha256": "8ce0a4e55f45384d8ae241369070600fdc5e6276ac956af5af58d868a6ce7a6c",
+    "bytes": 1144
+   },
+   {
+    "path": "skills/demo-nt/references/explorer.md",
+    "sha256": "f07b43d50d0d128f189950e0cc19e55e0bd4922e4fcdd39ec5dd783a2af01844",
+    "bytes": 1735
+   },
+   {
+    "path": "skills/demo-nt/references/host.md",
+    "sha256": "80a4a81795f735b9cca2fad235aec96fd184c22c5b9e0859de0915606c9f2785",
+    "bytes": 4353
+   },
+   {
+    "path": "skills/demo-nt/references/personas.md",
+    "sha256": "631f3691442e0c2f84b3185a15c4937e7b6760f89f2e97782b1e5a210f4ab1b4",
+    "bytes": 1980
+   },
+   {
+    "path": "skills/demo-nt/references/probe.md",
+    "sha256": "f02d43d9864d146d9bb0b2f75dac3b8faccb17a20d18ac34875182b7eca89ebf",
+    "bytes": 2198
+   },
+   {
+    "path": "skills/demo-nt/references/protocol.md",
+    "sha256": "a30ee16fb9e65811ce85aa076232d9ff58935728e88a9c7951b4188ce17cc55c",
+    "bytes": 2990
+   },
+   {
+    "path": "skills/demo-nt/references/seed.md",
+    "sha256": "a17d22a1f7fa4504a654b45d363888444d598bd825833f7b44546d539b8f65d5",
+    "bytes": 2855
+   },
+   {
+    "path": "LICENSE",
+    "as": "LICENSE-ntkit",
+    "sha256": "ec22b41a8cf03aa0c1fc3e2b1d5337d297deffc405b3747942bdc0b4e1930297",
+    "bytes": 1071
+   }
+  ],
+  "forward-pass-nt": [
+   {
+    "path": "skills/forward-pass-nt/SKILL.md",
+    "sha256": "676dafda224010687f74f4a859cf92bd493643ca305c2c7757dfafc40b13edc5",
+    "bytes": 4291
+   },
+   {
+    "path": "skills/forward-pass-nt/bin/cite-check.py",
+    "sha256": "e4dbc2731ed0568e4d0ff21fac0931a0f8b8a79c98844f4d97807691a5fe76d6",
+    "bytes": 4933
+   },
+   {
+    "path": "skills/forward-pass-nt/references/diff-review.md",
+    "sha256": "cfac421fe3523f985529f4c739b59713fce918d647e5345653025e8de83d80cf",
+    "bytes": 3805
+   },
+   {
+    "path": "skills/forward-pass-nt/references/lenses.md",
+    "sha256": "48abe91fa6f10108e7ec50119ef27a5b19177ad52114e70cd7d1fa626cf1c7fc",
+    "bytes": 17270
+   },
+   {
+    "path": "skills/forward-pass-nt/references/other-families.md",
+    "sha256": "9229677803b50c5ca043033983a1bf4660f48bd24aac05b5a511938252dd8d35",
+    "bytes": 2966
+   },
+   {
+    "path": "skills/forward-pass-nt/references/ranking-and-workplan.md",
+    "sha256": "1208f2f3cd4c4edb84acd7014930b7897e92b0c0f72a67de8d4be38443cb4b77",
+    "bytes": 9582
+   },
+   {
+    "path": "skills/forward-pass-nt/references/report.md",
+    "sha256": "f14c72915a10a8569691b0202b0bb850d5d5cadcdc9c8cf39f664f730c3ccc09",
+    "bytes": 3755
+   },
+   {
+    "path": "skills/forward-pass-nt/references/security-classes.md",
+    "sha256": "6fdb51e17ab80d6205a0d84da233d6fa19e8ea7d43155263206b4276589f2e6b",
+    "bytes": 12516
+   },
+   {
+    "path": "skills/forward-pass-nt/references/test-value.md",
+    "sha256": "f3333997dfa87a5d5b3d8405506022bd1d580b281e8ff473a8ab6eb6c5433f18",
+    "bytes": 4217
+   },
+   {
+    "path": "LICENSE",
+    "as": "LICENSE-ntkit",
+    "sha256": "ec22b41a8cf03aa0c1fc3e2b1d5337d297deffc405b3747942bdc0b4e1930297",
+    "bytes": 1071
+   }
+  ],
+  "guide-nt": [
+   {
+    "path": "skills/guide-nt/SKILL.md",
+    "sha256": "f3224d1b95827ba14b6e56df1e631cc79910c191b5cdc734a971d50291a5efea",
+    "bytes": 3722
+   },
+   {
+    "path": "skills/guide-nt/bin/statecheck.py",
+    "sha256": "bd1cf532f92d00c93a9cecd02e51be6741e7b7d50fe7b9b338d8bf0ae24bbe46",
+    "bytes": 6198
+   },
+   {
+    "path": "skills/guide-nt/references/build.md",
+    "sha256": "dbf5f4d71a5abac6547eefc88ed290c3449df8316be615d85685842cfa5eda6e",
+    "bytes": 2721
+   },
+   {
+    "path": "skills/guide-nt/references/capture.md",
+    "sha256": "eca93812e0f994a3471db38a7cb173823f4766f4089b3dd70483cc57d39cc345",
+    "bytes": 3534
+   },
+   {
+    "path": "skills/guide-nt/references/charts.md",
+    "sha256": "186dff652bd61839b7d2cef9e8ba38ad87e6431198eb9bfb8cba2d8e3bb1b794",
+    "bytes": 1109
+   },
+   {
+    "path": "skills/guide-nt/references/generator.md",
+    "sha256": "a103323299a9f1ca7a1ab7129bfabcd6c347f352be100cc4a8e541a265fb3bcf",
+    "bytes": 1122
+   },
+   {
+    "path": "skills/guide-nt/references/rules-panel.md",
+    "sha256": "77eade787b470efc4e2a5b0b698fbd26e2b9ef224bfb1a65c146787e13fc5131",
+    "bytes": 2301
+   },
+   {
+    "path": "skills/guide-nt/references/surfaces-and-routes.md",
+    "sha256": "6d9b7f23fbe1ff1e64b2f639c0d80ca25aa42081e769426dfe2e8d3c1e7fc788",
+    "bytes": 1451
+   },
+   {
+    "path": "skills/guide-nt/references/verify.md",
+    "sha256": "6603b79525fa5c3dfd2d0077e876a7654052106ff2680b14ff7d51d9d23e8111",
+    "bytes": 788
+   },
+   {
+    "path": "LICENSE",
+    "as": "LICENSE-ntkit",
+    "sha256": "ec22b41a8cf03aa0c1fc3e2b1d5337d297deffc405b3747942bdc0b4e1930297",
+    "bytes": 1071
+   }
+  ],
+  "harden-nt": [
+   {
+    "path": "skills/harden-nt/SKILL.md",
+    "sha256": "74c76b1edd91e72c905f9b1baa1afd8abee589c53cec7fcbe7ee12ec176b3587",
+    "bytes": 6783
+   },
+   {
+    "path": "skills/harden-nt/references/harden.md",
+    "sha256": "7d72775925aa8fd3c358241339f181e8e9b86e7338ff3fa3c01452cd1b717b17",
+    "bytes": 1832
+   },
+   {
+    "path": "skills/harden-nt/references/report.md",
+    "sha256": "d2f9d7fcb722a1e36e5d37de98f706b2d82ac171564d08f77b7fc94947af067f",
+    "bytes": 1507
+   },
+   {
+    "path": "skills/harden-nt/references/rounds.md",
+    "sha256": "c9de25096fb46523ad586da0974efabd25fa2de803f73a15b8c800e5cc867c65",
+    "bytes": 3018
+   },
+   {
+    "path": "LICENSE",
+    "as": "LICENSE-ntkit",
+    "sha256": "ec22b41a8cf03aa0c1fc3e2b1d5337d297deffc405b3747942bdc0b4e1930297",
+    "bytes": 1071
+   }
+  ],
+  "lab-nt": [
+   {
+    "path": "skills/lab-nt/SKILL.md",
+    "sha256": "76b404d61b5698db4c059448183254bc235c00448a912f70193350c7c71f97a8",
+    "bytes": 5531
+   },
+   {
+    "path": "skills/lab-nt/bin/lab.py",
+    "sha256": "eb8c31732e54b4b9a1012b8f5c1bea8290c031e98cadc738510069ddf20710cf",
+    "bytes": 41123
+   },
+   {
+    "path": "skills/lab-nt/references/contract.md",
+    "sha256": "b95d02c9b3c599eeeaf68cff157265dbc750af5eea3c51f96ea0d4ef415cbc14",
+    "bytes": 7972
+   },
+   {
+    "path": "skills/lab-nt/references/ending.md",
+    "sha256": "8c776c6e1417a49f1b3753fee8f3f3b224afcdbb845c6c5f7aa88e8471882b29",
+    "bytes": 7297
+   },
+   {
+    "path": "skills/lab-nt/references/loop.md",
+    "sha256": "9c76e26050d621f2444545be7377b0308e8c4c5704548fa9b30cbbbaeafd5ff5",
+    "bytes": 8101
+   },
+   {
+    "path": "skills/lab-nt/references/recursion.md",
+    "sha256": "62571fca3ec71c29a1d7ed9a6aaedd70bcdc0bc8be19385cb073674ff1426b9f",
+    "bytes": 3455
+   },
+   {
+    "path": "LICENSE",
+    "as": "LICENSE-ntkit",
+    "sha256": "ec22b41a8cf03aa0c1fc3e2b1d5337d297deffc405b3747942bdc0b4e1930297",
+    "bytes": 1071
+   }
+  ],
+  "live-check-nt": [
+   {
+    "path": "skills/live-check-nt/SKILL.md",
+    "sha256": "39960d434e1ea3241575601a8d3a440b31d93e6fed7f2c7a438a8b7b4faccfe1",
+    "bytes": 7507
+   },
+   {
+    "path": "LICENSE",
+    "as": "LICENSE-ntkit",
+    "sha256": "ec22b41a8cf03aa0c1fc3e2b1d5337d297deffc405b3747942bdc0b4e1930297",
+    "bytes": 1071
+   }
+  ],
+  "notify-nt": [
+   {
+    "path": "skills/notify-nt/SKILL.md",
+    "sha256": "f469247c0638831831a71103223bed03fe94802e7746732c0108656937ea2568",
+    "bytes": 1814
+   },
+   {
+    "path": "LICENSE",
+    "as": "LICENSE-ntkit",
+    "sha256": "ec22b41a8cf03aa0c1fc3e2b1d5337d297deffc405b3747942bdc0b4e1930297",
+    "bytes": 1071
+   }
+  ],
+  "prefs-nt": [
+   {
+    "path": "skills/prefs-nt/SKILL.md",
+    "sha256": "8643f8859ce3f75464ff776c361ad1dc26999030577c36afefb4d8e196fda008",
+    "bytes": 5435
+   },
+   {
+    "path": "skills/prefs-nt/bin/prefs_sync.py",
+    "sha256": "4ab65d29cd4eabf69e9bc7ccef298135d03b9ed12b19380b364c970e4b9633ba",
+    "bytes": 16705
+   },
+   {
+    "path": "skills/prefs-nt/references/fold.md",
+    "sha256": "3a8cda000b9cf9c92eb39b1c8148b54b309c6cccef7c4e7ebd96ea9e41df4e64",
+    "bytes": 1625
+   },
+   {
+    "path": "skills/prefs-nt/references/init.md",
+    "sha256": "356666ad7e97bbd595c603f6c76a5605e2a772e1e72e157bee53693e2a780a32",
+    "bytes": 2860
+   },
+   {
+    "path": "skills/prefs-nt/references/schedule.md",
+    "sha256": "77410da3f33cfdd9eef8763fd1dc45889f37f42f773605f185c946bbab98455a",
+    "bytes": 2145
+   },
+   {
+    "path": "skills/prefs-nt/references/template/agents/claude.md",
+    "sha256": "3c894a2983a199b17d1eabf64d31af5719bde19829fe1d23a70bfe6f857c3ee7",
+    "bytes": 171
+   },
+   {
+    "path": "skills/prefs-nt/references/template/core/01-about.md",
+    "sha256": "eb8a6dafd4d6f221491346628194c7fbb92d3721da6a1edff45bea3f707444c6",
+    "bytes": 213
+   },
+   {
+    "path": "skills/prefs-nt/references/template/core/02-working-style.md",
+    "sha256": "685fa490c5904890a12d6e20f7d4f8beb293adf539399cd6d881aca27525f095",
+    "bytes": 226
+   },
+   {
+    "path": "skills/prefs-nt/references/template/core/03-writing.md",
+    "sha256": "285a21d7830fc373d27d315992daee861413bcf2a2fd70bb501b7d719a7796bc",
+    "bytes": 200
+   },
+   {
+    "path": "skills/prefs-nt/references/template/core/04-engineering.md",
+    "sha256": "a0e42e14a5f512a19e628c498ff251b4db8bc7ca420ce012c97f178cbbc7c00f",
+    "bytes": 212
+   },
+   {
+    "path": "skills/prefs-nt/references/template/core/05-machine.md",
+    "sha256": "938f4e6b2164755ba9ebcb3ed456b2adeeb5fdea3e63b0b5c13484b3f5a3f790",
+    "bytes": 196
+   },
+   {
+    "path": "skills/prefs-nt/references/template/core/99-writeback.md",
+    "sha256": "1ce65db88129926bbcb3fbe6ed3ff123d5ea36576db1e71db82ac7a4fa276a6e",
+    "bytes": 731
+   },
+   {
+    "path": "skills/prefs-nt/references/template/gitignore",
+    "sha256": "298f44c0ef2808da229bb7253e7b213bc7b80b15ba530141bda45d41ff6433d9",
+    "bytes": 8
+   },
+   {
+    "path": "skills/prefs-nt/references/template/inbox.md",
+    "sha256": "efaa8f499269c413f4bdccfcfb1a0c4e694f1b2219a8fecb3e8b52a2a642e851",
+    "bytes": 56
+   },
+   {
+    "path": "skills/prefs-nt/references/template/targets.tsv",
+    "sha256": "9b4670e184f072a624816caff2a3c511d2b8e5a05aaf8f38f7b7530bfe1fb7a9",
+    "bytes": 311
+   },
+   {
+    "path": "LICENSE",
+    "as": "LICENSE-ntkit",
+    "sha256": "ec22b41a8cf03aa0c1fc3e2b1d5337d297deffc405b3747942bdc0b4e1930297",
+    "bytes": 1071
+   }
+  ],
+  "reclaim-nt": [
+   {
+    "path": "skills/reclaim-nt/SKILL.md",
+    "sha256": "e9128bc67aa6575d536593530fd4f895160587217b30a36ace52ed000953ef3d",
+    "bytes": 7300
+   },
+   {
+    "path": "skills/reclaim-nt/references/find-fallback.md",
+    "sha256": "e541df4de95dd876bfbbf0fa4735e9ed5e62d5c680a95d7deabc787a2f136313",
+    "bytes": 742
+   },
+   {
+    "path": "LICENSE",
+    "as": "LICENSE-ntkit",
+    "sha256": "ec22b41a8cf03aa0c1fc3e2b1d5337d297deffc405b3747942bdc0b4e1930297",
+    "bytes": 1071
+   }
+  ],
+  "release-nt": [
+   {
+    "path": "skills/release-nt/SKILL.md",
+    "sha256": "79358adee01df53439073705c344a750dea3e2185a58c66833b8626f9ae103aa",
+    "bytes": 3981
+   },
+   {
+    "path": "LICENSE",
+    "as": "LICENSE-ntkit",
+    "sha256": "ec22b41a8cf03aa0c1fc3e2b1d5337d297deffc405b3747942bdc0b4e1930297",
+    "bytes": 1071
+   }
+  ],
+  "replan-nt": [
+   {
+    "path": "skills/replan-nt/SKILL.md",
+    "sha256": "a156a1647d4f8b3bddb9f2077b6c15e768210853dfcfb1af469e6ce1063e3d28",
+    "bytes": 9896
+   },
+   {
+    "path": "skills/replan-nt/bin/plancheck.py",
+    "sha256": "482b3442c9b4d5698984ccca704aea52f9f328685977249c69375dad43000e6b",
+    "bytes": 17341
+   },
+   {
+    "path": "LICENSE",
+    "as": "LICENSE-ntkit",
+    "sha256": "ec22b41a8cf03aa0c1fc3e2b1d5337d297deffc405b3747942bdc0b4e1930297",
+    "bytes": 1071
+   }
+  ],
+  "research-nt": [
+   {
+    "path": "skills/research-nt/SKILL.md",
+    "sha256": "3560d171840aaf4b66e057d6d488e52d3d73f2934ed79cfd74ad1d8d2612dae2",
+    "bytes": 6817
+   },
+   {
+    "path": "skills/research-nt/bin/check.py",
+    "sha256": "cb8c0a8c4d1c25e884912c889e19339ff4e0aa77dedbf57f1c43386837e9e45a",
+    "bytes": 40165
+   },
+   {
+    "path": "skills/research-nt/bin/fetch.py",
+    "sha256": "8f591e12d4a418414e1c7bbd73fbcbb493d25e1345ef18d239c222b17de2bf91",
+    "bytes": 16447
+   },
+   {
+    "path": "skills/research-nt/references/LICENSE-longcat",
+    "sha256": "eb09fa9ea85b06d066fda22108d72d3acb0e08c71cb0f414abc08160e697bd56",
+    "bytes": 1064
+   },
+   {
+    "path": "skills/research-nt/references/edit.md",
+    "sha256": "7b8a84e4a10ffd59f25525079f3a7cc3776161dfff2fc94f0eeb514f0ea8ae9f",
+    "bytes": 2609
+   },
+   {
+    "path": "skills/research-nt/references/plan.md",
+    "sha256": "d29b05e02424a0bf249c302057eb9cfe6dde5fe96634aea0e5fb95788f708311",
+    "bytes": 8013
+   },
+   {
+    "path": "skills/research-nt/references/report.md",
+    "sha256": "2424d016ab0c22b956bc1d04721a0da981a33a2bd426594a51104357aeca2054",
+    "bytes": 3352
+   },
+   {
+    "path": "skills/research-nt/references/research.md",
+    "sha256": "96e784fdeab931ac4d9f316153778ab79592a38ec21dcea7bb25ad1dcb5ac576",
+    "bytes": 4631
+   },
+   {
+    "path": "skills/research-nt/references/verify.md",
+    "sha256": "fb4f619684a010e02dcddf0846863421acaaf8f2a10bdb88362b2fc9c399f90c",
+    "bytes": 4790
+   },
+   {
+    "path": "LICENSE",
+    "as": "LICENSE-ntkit",
+    "sha256": "ec22b41a8cf03aa0c1fc3e2b1d5337d297deffc405b3747942bdc0b4e1930297",
+    "bytes": 1071
+   }
+  ],
+  "resume-nt": [
+   {
+    "path": "skills/resume-nt/SKILL.md",
+    "sha256": "1773f0faf4cdc4996c465d308db635ebfcc29a52af283a914ebedff5033d66ae",
+    "bytes": 9115
+   },
+   {
+    "path": "LICENSE",
+    "as": "LICENSE-ntkit",
+    "sha256": "ec22b41a8cf03aa0c1fc3e2b1d5337d297deffc405b3747942bdc0b4e1930297",
+    "bytes": 1071
+   }
+  ],
+  "scaffold-nt": [
+   {
+    "path": "skills/scaffold-nt/SKILL.md",
+    "sha256": "74e0117159633633c4eb5f887d9edf523af0734ca3624f18d4662edbc74707c7",
+    "bytes": 7718
+   },
+   {
+    "path": "LICENSE",
+    "as": "LICENSE-ntkit",
+    "sha256": "ec22b41a8cf03aa0c1fc3e2b1d5337d297deffc405b3747942bdc0b4e1930297",
+    "bytes": 1071
+   }
+  ],
+  "soc-nt": [
+   {
+    "path": "skills/soc-nt/SKILL.md",
+    "sha256": "c199053fccba3b8f6a0106e3d5cd3b18e629952915a4d9587ed5406031bca9d0",
+    "bytes": 1784
+   },
+   {
+    "path": "LICENSE",
+    "as": "LICENSE-ntkit",
+    "sha256": "ec22b41a8cf03aa0c1fc3e2b1d5337d297deffc405b3747942bdc0b4e1930297",
+    "bytes": 1071
+   }
+  ],
+  "tidy-nt": [
+   {
+    "path": "skills/tidy-nt/SKILL.md",
+    "sha256": "96eac21e621ad2c36def1eb4c2c64ef80bbbc8356b198f0fccf402ee78682918",
+    "bytes": 4145
+   },
+   {
+    "path": "LICENSE",
+    "as": "LICENSE-ntkit",
+    "sha256": "ec22b41a8cf03aa0c1fc3e2b1d5337d297deffc405b3747942bdc0b4e1930297",
+    "bytes": 1071
+   }
+  ],
+  "traces-nt": [
+   {
+    "path": "skills/traces-nt/SKILL.md",
+    "sha256": "2f848d95bd72dd07c10fa2d6f80a17a8a085cfe95beab54656e462a1056c34e8",
+    "bytes": 5528
+   },
+   {
+    "path": "skills/traces-nt/bin/cite_check.py",
+    "sha256": "54a6c8d46afe7c1be1f2736321a183d616e0eb6a19e8a1512aa34102b7099368",
+    "bytes": 3561
+   },
+   {
+    "path": "skills/traces-nt/references/queries.md",
+    "sha256": "77adb44cafb58acc52bd1f5e076ad319c0b99ec155ebe9572f145cf4f069ee8a",
+    "bytes": 4743
+   },
+   {
+    "path": "LICENSE",
+    "as": "LICENSE-ntkit",
+    "sha256": "ec22b41a8cf03aa0c1fc3e2b1d5337d297deffc405b3747942bdc0b4e1930297",
+    "bytes": 1071
+   }
+  ],
+  "ux-review-nt": [
+   {
+    "path": "skills/ux-review-nt/SKILL.md",
+    "sha256": "0c3ef8eae6b5ecd3eaf18fdcae8e0544b3e75bd9d46471755ee8b516620501cd",
+    "bytes": 5365
+   },
+   {
+    "path": "skills/ux-review-nt/references/audit.md",
+    "sha256": "1f6e9c6dacaceec290bc4f4ec49439c6c745d8dab6676eb7d0746f7283d7e2d3",
+    "bytes": 2677
+   },
+   {
+    "path": "skills/ux-review-nt/references/cold-start.md",
+    "sha256": "aefd12707d03fd732eb39e7a1cd3c723003c0749ccd65b5ce23988f235c21527",
+    "bytes": 4911
+   },
+   {
+    "path": "skills/ux-review-nt/references/flail.md",
+    "sha256": "0455c6131069a3efb70b54d187cd7e41e33545cc527f3032990b0e948d6eae52",
+    "bytes": 1439
+   },
+   {
+    "path": "skills/ux-review-nt/references/report.md",
+    "sha256": "e45dcac1f265bf5723b70ba3dd17df94645f376d816dbcc7a15593443cf638ef",
+    "bytes": 3530
+   },
+   {
+    "path": "skills/ux-review-nt/references/walk.md",
+    "sha256": "fad920f944abb0467a48d25ca763b3817209e5c542f9a36135f7057cd3a8afce",
+    "bytes": 1352
+   },
+   {
+    "path": "LICENSE",
+    "as": "LICENSE-ntkit",
+    "sha256": "ec22b41a8cf03aa0c1fc3e2b1d5337d297deffc405b3747942bdc0b4e1930297",
+    "bytes": 1071
+   }
+  ],
+  "walkthrough-nt": [
+   {
+    "path": "skills/walkthrough-nt/SKILL.md",
+    "sha256": "c02382a5788ffea2748758481a1712a22faf46956963c193e2d6ee6bff5f52bd",
+    "bytes": 6914
+   },
+   {
+    "path": "skills/walkthrough-nt/references/boot.md",
+    "sha256": "4dad3817ff87ee5c4a9a693381483b29aed0d47318f9312e00caace58d75b875",
+    "bytes": 4920
+   },
+   {
+    "path": "skills/walkthrough-nt/references/chaos.md",
+    "sha256": "7cde0cb1a06900c9a0762a13202e8d0d57fe2b3dc12a32fac92528e189607d7d",
+    "bytes": 2481
+   },
+   {
+    "path": "skills/walkthrough-nt/references/harness-and-feature-map.md",
+    "sha256": "59d2469141d6bb7be7d610f337bcc365346addf4c49bc291c9eeb079d18ed2f1",
+    "bytes": 4374
+   },
+   {
+    "path": "skills/walkthrough-nt/references/map-mode.md",
+    "sha256": "3f65b4ec8c3445973d4d255386081125ebbb67370cee81418feee4266a53f1d8",
+    "bytes": 5563
+   },
+   {
+    "path": "skills/walkthrough-nt/references/report.md",
+    "sha256": "a313bffe7b6d7015291b75a31d7c2171908199f96a4999a0496b19f9c093caf1",
+    "bytes": 2284
+   },
+   {
+    "path": "skills/walkthrough-nt/references/roles-and-journeys.md",
+    "sha256": "4f31400dcb39f972f13e7266460fc5717b50b808a3d83e461ac38980e8fd17aa",
+    "bytes": 1356
+   },
+   {
+    "path": "skills/walkthrough-nt/references/terminal-and-service.md",
+    "sha256": "998cdd47d0bcb225a098472ba1abfd9598aa98e898fc9bc0ae43d652c2ef230d",
+    "bytes": 6374
+   },
+   {
+    "path": "skills/walkthrough-nt/references/walk-and-fix.md",
+    "sha256": "91436063a3769237d8cf1bf17245a10eba45af7871d08d922c1730316e5b2494",
+    "bytes": 2676
+   },
+   {
+    "path": "LICENSE",
+    "as": "LICENSE-ntkit",
+    "sha256": "ec22b41a8cf03aa0c1fc3e2b1d5337d297deffc405b3747942bdc0b4e1930297",
+    "bytes": 1071
+   }
+  ],
+  "windup-nt": [
+   {
+    "path": "skills/windup-nt/SKILL.md",
+    "sha256": "8d60b5a8a4e7e6e5ee7c17dae3302f7205ec2b1dff082edefa787d21af194e75",
+    "bytes": 6362
+   },
+   {
+    "path": "skills/windup-nt/bin/branches.sh",
+    "sha256": "4fc0eb7bb287b4db7d3343a47302b6bdd1c075b7d7ff84a5fb25378b19a4a3b1",
+    "bytes": 4133
+   },
+   {
+    "path": "skills/windup-nt/bin/marketing.sh",
+    "sha256": "db3ebfb9b7b9479ea6d41b0a7e5ab1d252712fd9214f1ecbf855f0a6c1479547",
+    "bytes": 2314
+   },
+   {
+    "path": "skills/windup-nt/bin/review-media.sh",
+    "sha256": "84d845135d6ee52a7980f2fd0de7b7bfc192f815019eb8e40e7f6d3f759c41b7",
+    "bytes": 2172
+   },
+   {
+    "path": "skills/windup-nt/bin/scratch.sh",
+    "sha256": "3a69cbaa401852153339fb3edfe6549a481c215388e329f98493e197d076c5d4",
+    "bytes": 3244
+   },
+   {
+    "path": "skills/windup-nt/references/replan-trigger.md",
+    "sha256": "9bba42595efb07beb4d3c86db74574aad929cb33d69cb3550c13c63265cbf071",
+    "bytes": 340
+   },
+   {
+    "path": "skills/windup-nt/references/ship.md",
+    "sha256": "f390f1667b4d4f6797d817cf06e1cf31e85681697b4e3ec20db57e5f72d8205b",
+    "bytes": 6717
+   },
+   {
+    "path": "skills/windup-nt/references/summary-and-pending.md",
+    "sha256": "bc443a92ac12cc232640e62c297c25fa49ce2b148a54b0a38fa92a187c524ac8",
+    "bytes": 2405
+   },
+   {
+    "path": "skills/windup-nt/references/workplan.md",
+    "sha256": "00ef313f8c0ae6c1eb6211baed56843ed45e554ba121670029cd9ca769b9005b",
+    "bytes": 1185
+   },
+   {
+    "path": "LICENSE",
+    "as": "LICENSE-ntkit",
+    "sha256": "ec22b41a8cf03aa0c1fc3e2b1d5337d297deffc405b3747942bdc0b4e1930297",
+    "bytes": 1071
+   }
+  ]
+ }
+}

@@ -41,7 +41,7 @@ function fixture({ hooksCfg = { preTool: [], postTool: [] }, permissionRules = {
   const base = buildRigRegistry({ fs, git });
   const registry = stageWrites ? createRegistry(base.commands.map((command) =>
     command.name === 'fs.write' ? { ...command, destructive: true } : command)) : base;
-  const appGrant = evaluate(`${grantSource}\nagentGrant(scopes);`, { createGrant, SKILLS_DIR, GATE_DIR, HOOKS_FILE, scopes });
+  const appGrant = evaluate(`${grantSource}\nagentGrant(scopes);`, { createGrant, SKILLS_DIR, LIBRARY_SKILLS_DIR: '.anvil/library-skills', GATE_DIR, HOOKS_FILE, scopes });
   const grant = prefixes ? createGrant({ ...appGrant.describe(), prefixes }) : appGrant;
   const face = createAgentFace({ registry, grant,
     opLog: createOpLog({ fs: createFileops({ backend: new MemoryBackend() }) }), actor: 'b12-independent-verifier' });
@@ -193,7 +193,7 @@ test('B12 Anvil pre-hooks block supported edits and post-hooks read the actual e
 
 test('B12 Anvil actual grant fences protect skills, gate criteria, and the search index from newly supported writes', async () => {
   const ctx = fixture();
-  const targets = [`${SKILLS_DIR}/sample/SKILL.md`, `${GATE_DIR}/criterion`, '.anvil/search-index.json'];
+  const targets = [`${SKILLS_DIR}/sample/SKILL.md`, '.anvil/library-skills/kit/bin/go.sh', `${GATE_DIR}/criterion`, '.anvil/search-index.json'];
   for (const path of targets) {
     await seed(ctx, path, 'old\n');
     const output = await ctx.run(`sed -i s/old/new/ ${path}`);

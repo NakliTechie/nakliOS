@@ -148,6 +148,13 @@
   #composer{flex:0 0 auto;border-top:1px solid var(--rule);background:var(--bg-1);padding:10px 20px 12px}
   #composer .cwrap{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:6px}
   #composer .crow{display:flex;gap:8px;align-items:flex-end}
+  #composer .cwrap{position:relative}
+  .slashmenu{position:absolute;left:0;bottom:calc(100% + 4px);z-index:20;min-width:300px;max-width:100%;max-height:300px;overflow:auto;background:var(--bg-1);border:1px solid var(--rule);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.18);padding:4px}
+  .slashmenu[hidden]{display:none}
+  .slashmenu div{padding:5px 8px;border-radius:5px;cursor:pointer;font-size:12.5px;display:flex;gap:8px}
+  .slashmenu div.sel,.slashmenu div:hover{background:var(--bg-2, rgba(127,127,127,.12))}
+  .slashmenu code{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;white-space:nowrap}
+  .slashmenu span{color:var(--ink-3, #888);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #prompt{flex:1;resize:none;min-height:38px;max-height:180px;background:var(--bg-0);color:var(--fg-0);border:1px solid var(--rule);border-radius:8px;padding:9px 11px;font-family:var(--ui);font-size:13px;line-height:1.45;outline:0}
   #prompt:focus{border-color:var(--accent-dim)}
   #send{background:var(--accent);color:#161009;border:0;font-weight:600;padding:9px 16px;border-radius:8px}
@@ -318,13 +325,14 @@
     <div id="log"></div>
     <div id="composer">
       <div class="cwrap">
+        <div id="slash-menu" class="slashmenu" hidden role="listbox" aria-label="Commands and skills"></div>
         <div class="crow">
           <textarea id="prompt" rows="1" enterkeyhint="send" inputmode="text" autocapitalize="sentences" autocorrect="off" spellcheck="true" placeholder="Describe what you want the agent to do…"></textarea>
           <button id="send">Send</button>
         </div>
         <div class="hint">
           <button class="mode" id="mode-btn" title="Switch mode — code (edits files) · plan (read-only, proposes a plan) · ask (answers only)">Mode: code ▾</button>
-          <span>↵ send · ⇧↵ newline · queues while running</span>
+          <span>↵ send · ⇧↵ newline · / commands and skills · queues while running</span>
         </div>
       </div>
     </div>
@@ -454,6 +462,8 @@
   import { codingToolset, makeToolExecutor, makeShellVerifier, parseApplyPatch } from '../../sys/ai/agent-tools.mjs';
   import { buildProjectContext, rememberTool, primeListTool, primeRememberTool, createPrimeReadEvidence, readPrimeSourceVersion } from '../../sys/ai/project-context.mjs';
   import { SKILLS_DIR, parseSkill, buildSkillsIndex, INJECTED_STATUSES, explainSkillsRefusal } from '../../sys/ai/skills.mjs';
+  // Support files of NakliOS library skills, written here when a skill loads (read-only to the agent).
+  const LIBRARY_SKILLS_DIR = '.anvil/library-skills';
   import { GATE_DIR, explainGateRefusal, GATE_AUTHORING_HINT, planGate } from '../../sys/ai/gate.mjs';
   // Med1: the trigram index is DERIVED from the workspace, so an agent that can write it can make
   // search lie about the workspace it was built from — a poisoned index answers questions about
@@ -541,7 +551,7 @@
   // narrowed grant — is built here, so the fences (skills, gate, search index) cannot drift between
   // sites. A child passes the parent's scopes (B5): a read-only project gains no write by dispatch.
   const AGENT_SCOPES = ['fs:read','fs:write','fs:remove','git:read','git:write','git:remote'];
-  const agentGrant = (scopes=AGENT_SCOPES) => createGrant({ prefixes:[''], readOnlyPrefixes:[SKILLS_DIR, GATE_DIR, SEARCH_INDEX_PATH, HOOKS_FILE], scopes:[...(typeof nativeGateSession==='object' && nativeGateSession ? scopes.filter(s=>!['git:write','git:remote','git:push'].includes(s)) : scopes),  ...(scopes===AGENT_SCOPES && typeof nativeGateSession==='object' && nativeGateSession ? ['native:gate'] : [])],  ...(typeof nativeGateSession==='object' && nativeGateSession ? {writePaths:[nativeGateSession.mutable]} : {}),  ...(activeRangeEdit ? {prefixes:[activeRangeEdit.request.path],scopes:scopes.filter(s=>s==='fs:read'||s==='fs:write')} : {}) });
+  const agentGrant = (scopes=AGENT_SCOPES) => createGrant({ prefixes:[''], readOnlyPrefixes:[SKILLS_DIR, LIBRARY_SKILLS_DIR, GATE_DIR, SEARCH_INDEX_PATH, HOOKS_FILE], scopes:[...(typeof nativeGateSession==='object' && nativeGateSession ? scopes.filter(s=>!['git:write','git:remote','git:push'].includes(s)) : scopes),  ...(scopes===AGENT_SCOPES && typeof nativeGateSession==='object' && nativeGateSession ? ['native:gate'] : [])],  ...(typeof nativeGateSession==='object' && nativeGateSession ? {writePaths:[nativeGateSession.mutable]} : {}),  ...(activeRangeEdit ? {prefixes:[activeRangeEdit.request.path],scopes:scopes.filter(s=>s==='fs:read'||s==='fs:write')} : {}) });
   // The agent's own shell over the current face and Kiln (boot and the test door's rebind).
   const agentShell = () => createShell({ registry, face, beforeCommand: guardCriticalShellInvocation, kiln: kilnRef, kilnIsolate:true, js: jsHost, ...(activeRangeEdit ? {js:null} : {}), signal: ()=>abortController ? abortController.signal : null }); // Stop cuts a `sleep`
   let workspaceLabel = 'memory · scratch';
@@ -1740,7 +1750,7 @@
     if(!name) return;
     const r=scaffoldSkill({ name:String(name).trim(), now:Date.now() });
     if(!r.ok){ pushSystem('skill not created — '+r.error); return; }
-    try{ const w=await fs.write(r.path, r.text); if(!(w&&w.ok!==false)) throw new Error((w&&w.error)||'write failed'); }
+    try{ const w=await fs.write(r.path, r.text); if(!(w&&w.ok!==false)) throw new Error((w&&(w.message||w.code))||'write failed'); }
     catch(e){ pushSystem('skill not created — '+String(e&&e.message||e)); return; }
     pushSystem('skill scaffolded at '+r.path+' — fill in When / Steps / Check');
     await updateSkillsChip(); openSkill(String(name).trim());
@@ -3108,7 +3118,16 @@
     const t=activeTask(); if(!t) return false;
     if(t.rangeEdit){pushSystem('Start a fresh selection from Editor; snapshot tasks do not accept follow-ups.');return false;}
     if(priming){ pushSystem('Stop project learning before sending a task.'); return false; }
-    const text=$('prompt').value.trim(); if(!text) return false;
+    let text=$('prompt').value.trim(); if(!text) return false;
+    // Slash commands: /code /plan /ask switch the mode, /help lists them, /<skill> [task] asks the agent to
+    // load that skill and follow it. Anything else starting with / is refused, never sent to the model.
+    // (typeof guards: tests lift submit() out on its own, without the menu helpers.)
+    if(text.startsWith('/') && typeof resolveSlash==='function'){
+      const sl=resolveSlash(text);
+      if(sl.prompt===undefined){ $('prompt').value=''; autoGrow(); hideSlashMenu(); if(sl.note) pushSystem(sl.note); return false; }
+      text=sl.prompt;
+    }
+    if(typeof hideSlashMenu==='function') hideSlashMenu();
     $('prompt').value=''; autoGrow();
     if(running){ t.queued=qEnqueue(t.queued, text).queue; save(); renderLog(); return true; }
     // AC-8a: admission, not a fuse. The queue has held on a bad ending since AC-4; a fresh Send
@@ -3810,11 +3829,23 @@
         // stale); it is re-scanned here too, at the point of use, as every served skill is (NAF-01).
         if(!skillMap[name] && librarySkills.has(name)){
           try{ const s = await nak.experimental_skills.read(name);
+            if(s && s.blocked) return 'Skill "'+name+'" from your NakliOS skills library did not pass the safety scan ('+s.blocked+') and will not bind.';
             if(s && s.body){
-              const lguard = scanSkill({ name: s.name||name, description: s.description||'', body: s.body });
+              const lfiles=(s.files||[]).filter(f=>f&&f.path&&!String(f.path).split('/').some(seg=>!seg||seg==='.'||seg==='..'));
+              const lguard = scanSkill({ name: s.name||name, description: s.description||'', body: s.body, files: lfiles.map(f=>({ path:f.path, content:String(f.content??'') })) });
               if(lguard.state==='refused' || lguard.state==='quarantined')
                 return 'Skill "'+name+'" from your NakliOS skills library did not pass the sentinel ('+sentinelLine(lguard)+') and will not bind.';
-              skillSession.noteRead(name); return 'Skill: '+(s.name||name)+' (from your NakliOS skills library)\n\n'+s.body; } }catch(_){}
+              // Support files land in a read-only folder of the workspace (LIBRARY_SKILLS_DIR, fenced in
+              // agentGrant), rewritten on each load so the copy matches what the host's gate passed.
+              let where='';
+              if(lfiles.length){
+                const root=LIBRARY_SKILLS_DIR+'/'+(s.name||name);
+                try{
+                  for(const f of lfiles){ const w=await fs.write(root+'/'+f.path, String(f.content??''), { createParents:true }); if(!w||!w.ok) throw new Error((w&&(w.message||w.code))||'write failed'); }
+                  where='\n\nSkill folder: '+root+' (its files: '+lfiles.map(f=>f.path).join(', ')+'). Where the skill says $SKILL or "this skill\'s directory", use '+root+'; read its files from there.';
+                }catch(_){ where='\n\n(The skill\'s '+lfiles.length+' support files could not be written to '+root+'.)'; }
+              }
+              skillSession.noteRead(name); return 'Skill: '+(s.name||name)+' (from your NakliOS skills library)'+where+'\n\n'+s.body; } }catch(_){}
           return 'Skill "'+name+'" is no longer available in your NakliOS skills library.';
         }
         const names=Object.keys(skillMap).filter(n=>INJECTED_STATUSES.includes(skillStatus[n]||'active'));
@@ -4515,14 +4546,78 @@
   function setSend(){ $('send').textContent = priming ? 'Learning…' : running ? 'Queue' : 'Send'; $('send').disabled=priming; const s=$('stop'); if(s) s.hidden=!(running||priming); renderSwitcher(); }
   function stopRun(){ if(activeRangeEdit) activeRangeEdit.cancelled=true; const controller=priming ? primeAbortController : abortController; if(controller && !controller.signal.aborted){ controller.abort(); pushSystem('Stopping…'); } }
 
+  // ── Slash commands ──
+  const SLASH_CMDS=[
+    { name:'/help', args:'', about:'List commands and skills' },
+    { name:'/code', args:'', about:'Mode: code (edits files)' },
+    { name:'/plan', args:'', about:'Mode: plan (read-only, proposes a plan)' },
+    { name:'/ask', args:'', about:'Mode: ask (answers only)' },
+  ];
+  let slashSkills=[], slashSel=0, slashMatches=[], slashLoadedAt=0;
+  // Project skills (.anvil/skills) and NakliOS library skills, refreshed at most every 10 s while typing.
+  async function loadSlashSkills(){
+    if(Date.now()-slashLoadedAt<10000) return;
+    slashLoadedAt=Date.now();
+    const out=new Map();
+    try{
+      const dir=fs ? await fs.list(SKILLS_DIR,{recursive:false}) : null;
+      for(const e of ((dir&&dir.ok&&dir.entries)||[])){
+        if(e.type!=='dir') continue;
+        const name=String(e.path).split('/').pop();
+        try{ const r=await fs.read(SKILLS_DIR+'/'+name+'/SKILL.md',{encoding:'utf-8'}); if(r&&r.ok){ const sk=parseSkill(r.data); if(INJECTED_STATUSES.includes(sk.status)) out.set(name,{ skill:name, about:sk.description||'Project skill' }); } }catch(_){}
+      }
+    }catch(_){}
+    try{ if(nak&&nak.experimental_skills){ for(const x of (await nak.experimental_skills.list())||[]) if(x&&x.name&&!out.has(x.name)) out.set(x.name,{ skill:x.name, about:x.description||'Library skill' }); } }catch(_){}
+    slashSkills=[...out.values()].sort((a,b)=>a.skill.localeCompare(b.skill)).map(x=>({ name:'/'+x.skill, args:'[task]', about:String(x.about).slice(0,90), skill:x.skill }));
+  }
+  function resolveSlash(text){
+    const m=/^\/(\S+)\s*([\s\S]*)$/.exec(text); const word=(m&&m[1]||'').toLowerCase(), arg=(m&&m[2]||'').trim();
+    if(word==='help'||word==='?') return { note:'Commands: '+SLASH_CMDS.map(c=>c.name+' — '+c.about).join(' · ')+(slashSkills.length?'\nSkills (/<name> [task]): '+slashSkills.map(c=>c.skill).join(', '):'\nNo skills yet: add .anvil/skills/<name>/SKILL.md, or install some in NakliOS Settings → Skills.') };
+    if(MODES.includes(word)){ const t=activeTask(); if(!t) return { note:'Open a task first.' }; t.mode=word; setModeBtn(word); save(); return { note:'Mode: '+word+'.' }; }
+    const hit=slashSkills.find(c=>c.skill===word);
+    if(hit) return { prompt:'Load the "'+hit.skill+'" skill with the skill tool and follow it.'+(arg?' Task: '+arg:'') };
+    return { note:'Unknown command /'+word+'. Type /help for commands and skills.' };
+  }
+  function hideSlashMenu(){ const el=$('slash-menu'); if(el) el.hidden=true; slashMatches=[]; }
+  async function updateSlashMenu(){
+    const v=ta.value, el=$('slash-menu');
+    if(!/^\/\S*$/.test(v)){ hideSlashMenu(); return; }
+    await loadSlashSkills();
+    if(ta.value!==v) return;
+    slashMatches=[...SLASH_CMDS,...slashSkills].filter(c=>c.name.startsWith(v.toLowerCase())).slice(0,14);
+    if(!slashMatches.length){ hideSlashMenu(); return; }
+    slashSel=Math.min(slashSel,slashMatches.length-1);
+    el.textContent='';
+    slashMatches.forEach((c,i)=>{
+      const d=document.createElement('div'); d.setAttribute('role','option'); if(i===slashSel){ d.className='sel'; d.setAttribute('aria-selected','true'); }
+      d.append(Object.assign(document.createElement('code'),{textContent:c.name+(c.args?' '+c.args:'')}),Object.assign(document.createElement('span'),{textContent:c.about}));
+      d.addEventListener('mousedown',(e)=>{ e.preventDefault(); pickSlash(c); });
+      el.appendChild(d);
+    });
+    el.hidden=false;
+  }
+  function pickSlash(c){ ta.value=c.name+(c.args?' ':''); hideSlashMenu(); ta.focus(); autoGrow(); if(!c.args) submit(); }
+  // Arrow keys, Tab and Enter work the menu while it is open; returns true when it took the key.
+  function slashKey(e){
+    const el=$('slash-menu'); if(!el||el.hidden||!slashMatches.length) return false;
+    if(e.key==='ArrowDown'){ e.preventDefault(); slashSel=(slashSel+1)%slashMatches.length; void updateSlashMenu(); return true; }
+    if(e.key==='ArrowUp'){ e.preventDefault(); slashSel=(slashSel-1+slashMatches.length)%slashMatches.length; void updateSlashMenu(); return true; }
+    if(e.key==='Escape'){ hideSlashMenu(); return true; }
+    if(e.key==='Tab'||(e.key==='Enter'&&!e.shiftKey&&ta.value.toLowerCase()!==slashMatches[slashSel].name)){ e.preventDefault(); pickSlash(slashMatches[slashSel]); return true; }
+    return false;
+  }
+
   // ── Composer wiring ──
   const ta=$('prompt');
   function autoGrow(){ ta.style.height='auto'; ta.style.height=Math.min(ta.scrollHeight,180)+'px'; }
   ta.addEventListener('input', autoGrow);
   ta.addEventListener('keydown',(e)=>{
+    if(slashKey(e)) return;
     // Enter sends (or queues); Shift+Enter inserts a newline. Guard IME composition.
     if(e.key==='Enter' && !e.shiftKey && !e.isComposing){ e.preventDefault(); submit(); }
   });
+  ta.addEventListener('input', ()=>{ slashSel=0; void updateSlashMenu(); });
+  ta.addEventListener('blur', ()=>setTimeout(hideSlashMenu,120));
   $('send').onclick=submit;
   $('stop').onclick=stopRun;
   $('refresh-files').onclick=renderFiles;
