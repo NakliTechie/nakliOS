@@ -1,9 +1,9 @@
 // The page: draws the library, wires every control to the command manifest, runs chat through the NakliOS
 // model, and picks where the library lives (NakliOS Folder or Crate when connected, else this browser).
 
-import { beforeSources, buildChat, citedRefs, esc, estimateTokens, mindmapSvg, parseOutline, parseScript, parseSlides, renderMarkdown, scriptMarkdown, studioRequest, summaryRequest, titleFrom } from './core.js';
+import { PODCAST_LENGTHS, splitReactions, spokenMinutes, beforeSources, buildChat, parseEpisode, parsePlan, podcastPlanRequest, podcastSegmentRequest, citedRefs, esc, estimateTokens, mindmapSvg, parseOutline, parseScript, parseSlides, renderMarkdown, scriptMarkdown, studioRequest, summaryRequest, titleFrom } from './core.js';
 import { pdfText } from './pdf.js';
-import { DOWNLOAD_LABEL, loadSpeech, playLines, renderWav } from './speech.js';
+import { DOWNLOAD_LABEL, VOICES, currentVoices, loadSpeech, playLines, previewVoice, renderWav, setVoice } from './speech.js';
 import { citeLabel, lorewellReachable, openInLorewell, readLorewell, searchLorewell } from './lorewell.js';
 import { Library, hostFs, opfsFs } from './store.js';
 import { COMMANDS, railCommands, run, searchNotebook } from './commands.js';
@@ -609,14 +609,17 @@ async function studio(kind) {
       if (req.cut) cut++;
       parts.push({ n: i + 1, title: src.title, summary: await complete(req.messages, ctl.signal, 500) });
     }
-    banner(`${spec.label}: writing it…`, { actions: [stop] });
-    let text = await complete(studioRequest(kind, nb, parts), ctl.signal, spec.tokens);
+    let text = '';
+    if (kind === 'audio') {
+      text = await writeEpisode(nb, parts, ctl, stop);
+    } else {
+      banner(`${spec.label}: writing it…`, { actions: [stop] });
+      text = await complete(studioRequest(kind, nb, parts), ctl.signal, spec.tokens);
+    }
     if (!text) throw new Error(`The model returned an empty ${spec.noun}`);
     // Check the shape before saving, so a malformed answer is reported instead of saved.
     if (kind === 'audio') {
-      const lines = parseScript(text);
-      if (lines.length < 4) throw new Error('The model did not write a two-voice script. Try again, or choose a larger model in NakliOS.');
-      text = scriptMarkdown(lines);
+      // checked in writeEpisode
     } else if (kind === 'mindmap' && !parseOutline(text).children.length) {
       throw new Error('The model did not write an outline for the mind map. Try again, or choose a larger model in NakliOS.');
     } else if (kind === 'slides' && parseSlides(text).length < 2) {
@@ -639,6 +642,32 @@ async function studio(kind) {
   }
 }
 
+/**
+ * Write a podcast episode in stages: a plan of segments, then each segment's dialogue with the end of the previous
+ * one in view. Answers the note's Markdown, with "### " headings between segments.
+ * @param {{ name: string, description?: string }} nb @param {{ n: number, title: string, summary: string }[]} parts
+ * @param {AbortController} ctl @param {{ label: string, run: () => void }} stop
+ */
+async function writeEpisode(nb, parts, ctl, stop) {
+  const length = /** @type {keyof typeof PODCAST_LENGTHS} */ (/** @type {HTMLSelectElement} */ ($('audio-length')).value in PODCAST_LENGTHS ? /** @type {HTMLSelectElement} */ ($('audio-length')).value : 'standard');
+  banner('Audio overview: planning the episode…', { actions: [stop] });
+  let plan = parsePlan(await complete(podcastPlanRequest(nb, parts, length), ctl.signal, 600));
+  // A model that writes no usable plan still gets an episode: one segment per source.
+  if (plan.length < 2) plan = parts.map((p) => ({ title: p.title, points: '', sources: [p.n] })).slice(0, PODCAST_LENGTHS[length].segments);
+  /** @type {{ speaker: string, text: string }[]} */
+  const all = [];
+  const blocks = [];
+  for (const [i, seg] of plan.entries()) {
+    banner(`Audio overview: writing segment ${i + 1} of ${plan.length}, “${seg.title}”…`, { actions: [stop] });
+    const lines = splitReactions(parseScript(await complete(podcastSegmentRequest(nb, parts, plan, i, all, length), ctl.signal, 1100)));
+    if (!lines.length) continue;
+    all.push(...lines);
+    blocks.push(`### ${seg.title}\n\n${scriptMarkdown(lines)}`);
+  }
+  if (all.length < 6) throw new Error('The model did not write a two-voice script. Try again, or choose a larger model in NakliOS.');
+  return blocks.join('\n\n');
+}
+
 /** The note's text as lines to speak: an audio overview by speaker, any other note as one reader. */
 function noteLines() {
   const form = /** @type {HTMLFormElement} */ (dlg('dlg-note').querySelector('form'));
@@ -650,7 +679,7 @@ function noteLines() {
       .replace(/[#*_`>]/g, '')
       .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
       .trim();
-  if (openNoteFormat === 'audio') return parseScript(body).map((l) => ({ speaker: l.speaker, text: clean(l.text) })).filter((l) => l.text);
+  if (openNoteFormat === 'audio') return parseEpisode(body).map((l) => ({ ...l, text: clean(l.text) })).filter((l) => l.text);
   // A plain note is read paragraph by paragraph, so long notes stream in steps.
   const paras = `${form.elements.namedItem('title').value}.\n\n${beforeSources(body)}`.split(/\n\s*\n/).map(clean).filter(Boolean);
   return paras.map((text) => ({ speaker: '', text }));
@@ -828,8 +857,9 @@ function drawNoteRead() {
       : '<p class="empty">No slides in this note.</p>';
     box.querySelectorAll('[data-slide]').forEach((b) => ((/** @type {HTMLElement} */ (b)).onclick = () => moveSlide(Number(/** @type {HTMLElement} */ (b).dataset.slide))));
   } else if (openNoteFormat === 'audio') {
-    const lines = parseScript(body);
-    box.innerHTML = `<ol class="script">${lines.map((l) => `<li data-line><b>${esc(l.speaker)}</b> ${esc(l.text)}</li>`).join('')}</ol>${sourcesHtml(body)}`;
+    const lines = parseEpisode(body);
+    const titles = [...beforeSources(body).matchAll(/^###\s+(.+)$/gm)].map((m) => m[1].trim());
+    box.innerHTML = `<ol class="script">${lines.map((l, i) => `${titles[l.segment] && (i === 0 || lines[i - 1].segment !== l.segment) ? `<li class="seg">${esc(titles[l.segment])}</li>` : ''}<li data-line><b>${esc(l.speaker)}</b> ${esc(l.text)}</li>`).join('')}</ol>${sourcesHtml(body)}`;
   } else {
     box.innerHTML = renderMarkdown(body, { cite: true });
   }
@@ -871,7 +901,7 @@ async function openNote(id) {
   titleEl.value = n.title;
   bodyEl.value = body;
   $('note-dlg-title').textContent = n.title;
-  $('note-meta').textContent = `${n.kind === 'ai' ? 'Made by the model' : 'Written'} · edited ${ago(n.updated)}`;
+  $('note-meta').textContent = `${n.kind === 'ai' ? 'Made by the model' : 'Written'} · edited ${ago(n.updated)}${openNoteFormat === 'audio' ? ` · about ${spokenMinutes(parseEpisode(body))} minutes spoken` : ''}`;
   $('note-saved').textContent = '';
   const listenBtn = $('note-listen');
   listenBtn.dataset.idle = openNoteFormat === 'audio' ? 'Play' : 'Listen';
@@ -1145,6 +1175,58 @@ async function openLorewellPassage(r) {
   }
 }
 
+// ── Voices: the person picks each host's voice; the choice is kept in this browser ────────────────────
+
+function loadVoiceChoice() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('lectella:voice-choice') || '{}');
+    for (const [host, name] of Object.entries(saved)) setVoice(host, String(name));
+  } catch {
+    // the default voices stand
+  }
+}
+
+async function chooseVoices() {
+  const d = dlg('dlg-voices');
+  const now = currentVoices();
+  for (const host of Object.keys(now)) {
+    const sel = /** @type {HTMLSelectElement} */ ($(`voice-${host}`));
+    sel.innerHTML = VOICES.map((v) => `<option value="${v.name}">${esc(v.label)}</option>`).join('');
+    sel.value = now[host];
+  }
+  d.showModal();
+  const rv = await closed(d);
+  stopPlaying();
+  if (rv !== 'ok') return;
+  const choice = {};
+  for (const host of Object.keys(now)) {
+    const name = /** @type {HTMLSelectElement} */ ($(`voice-${host}`)).value;
+    setVoice(host, name);
+    choice[host] = name;
+  }
+  try {
+    localStorage.setItem('lectella:voice-choice', JSON.stringify(choice));
+  } catch {
+    // a per-viewer convenience only
+  }
+  banner(`Voices set: Asha speaks as ${choice.Asha}, Ravi as ${choice.Ravi}.`);
+}
+
+/** Play a sentence in the voice picked for a host, from the Voices dialog. @param {string} host */
+async function previewHost(host) {
+  if (playing) stopPlaying();
+  let tts;
+  try {
+    tts = await speechReady();
+  } catch (e) {
+    return banner(`The voices could not load: ${/** @type {any} */ (e)?.message ?? e}`, { error: true });
+  }
+  if (!tts) return;
+  playing = await previewVoice(tts, /** @type {HTMLSelectElement} */ ($(`voice-${host}`)).value);
+  const p = playing;
+  p.done.finally(() => playing === p && (playing = null));
+}
+
 // ── Wiring ───────────────────────────────────────────────────────────────────────────────────────────
 
 /** @type {Record<string, () => any>} */
@@ -1175,6 +1257,7 @@ const UI = {
   'notebook.slides': () => studio('slides'),
   'note.listen': () => listen(),
   'note.save-audio': () => saveAudio(),
+  'notebook.voices': () => chooseVoices(),
   'note.present': () => {
     const deck = document.getElementById('deck');
     if (deck && !document.fullscreenElement) deck.requestFullscreen?.().then(() => deck.focus()).catch(fail);
@@ -1236,6 +1319,8 @@ $('question').addEventListener('keydown', (e) => {
   }
 });
 $('stop').onclick = () => abort?.abort();
+document.querySelectorAll('[data-preview]').forEach((b) => b.addEventListener('click', (e) => (e.preventDefault(), previewHost(/** @type {string} */ (/** @type {HTMLElement} */ (b).dataset.preview)).catch(fail))));
+loadVoiceChoice();
 $('lw-go').onclick = () => lorewellSearch().catch(fail);
 $('lw-query').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') (e.preventDefault(), lorewellSearch().catch(fail));

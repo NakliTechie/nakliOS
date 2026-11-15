@@ -239,7 +239,7 @@ export const COMMANDS = [
   },
   {
     name: 'notebook.audio',
-    description: 'Write a two-voice audio overview script from the sources switched on for chat, saved as a note you can play.',
+    description: 'Write a two-host podcast episode (short, standard or long) from the sources switched on for chat, saved as a note you can play.',
     scope: 'write',
     ui: 'The "Audio overview" button above the notes list.',
     input: none(),
@@ -276,6 +276,14 @@ export const COMMANDS = [
     ui: 'The "Listen" button in the note editor.',
     input: none(),
     personOnly: 'Playback is something you start and stop in the page.',
+  },
+  {
+    name: 'notebook.voices',
+    description: 'Choose the voice each audio overview host speaks with, from 24 on-device Phonon voices.',
+    scope: 'write',
+    ui: 'The "Voices" button above the notes list.',
+    input: none(),
+    personOnly: 'Which voices you like is your choice, made by listening.',
   },
   {
     name: 'note.save-audio',

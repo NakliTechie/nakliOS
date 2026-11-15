@@ -491,3 +491,126 @@ export function mindmapSvg(root) {
   }
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="Mind map: ${esc(root.text)}">${parts.join('')}</svg>`;
 }
+
+// ── Podcast: a longer, conversational audio overview ────────────────────────────────────────────────
+// Written in stages so a small model keeps up: a plan of segments, then each segment's dialogue with the end of the
+// previous one in view. The two hosts react to each other in short lines of their own, which playback can overlap.
+
+/** Segments, and turns per segment, for each length. The episode's own length shows on its note, from its word count. */
+export const PODCAST_LENGTHS = /** @type {const} */ ({
+  short: { label: 'Short', segments: 3, turns: 9 },
+  standard: { label: 'Standard', segments: 5, turns: 11 },
+  long: { label: 'Long', segments: 7, turns: 13 },
+});
+
+const HOSTS = `${SPEAKERS[0]} is the curious host who asks, reacts and sums up; ${SPEAKERS[1]} knows the material and explains it with examples.`;
+
+/**
+ * The request for a podcast plan: numbered segments, each with a title, two or three points and its source numbers.
+ * @param {{ name: string, description?: string }} notebook @param {{ n: number, title: string, summary: string }[]} parts
+ * @param {keyof typeof PODCAST_LENGTHS} length
+ */
+export function podcastPlanRequest(notebook, parts, length) {
+  const { segments } = PODCAST_LENGTHS[length];
+  const body = parts.map((p) => `[${p.n}] ${p.title}\n${p.summary}`).join('\n\n');
+  return [
+    {
+      role: 'system',
+      content: `You plan a two-host podcast episode about the topic below, from the numbered source notes. ${HOSTS} Plan exactly ${segments} segments that flow from an opening hook to a closing takeaway. Answer with one line per segment and nothing else, in this form:\n1. Segment title | point one; point two; point three | sources: 1, 3\nUse only facts from the notes.`,
+    },
+    { role: 'user', content: `Topic: ${notebook.description || notebook.name}\n\n${body}` },
+  ];
+}
+
+/**
+ * Segments from a plan: "1. Title | points | sources: 1, 3". Lines that do not fit are skipped.
+ * @param {string} text @returns {{ title: string, points: string, sources: number[] }[]}
+ */
+export function parsePlan(text) {
+  const out = [];
+  for (const raw of String(text ?? '').split('\n')) {
+    const m = /^\s*(?:\d+[.)]|[-*])\s*(.+)$/.exec(raw);
+    if (!m) continue;
+    const [title, points = '', src = ''] = m[1].split('|').map((s) => s.replace(/\*\*/g, '').trim());
+    if (!title) continue;
+    const sources = [...src.matchAll(/\d+/g)].map((x) => Number(x[0]));
+    out.push({ title, points, sources });
+  }
+  return out;
+}
+
+/**
+ * The request for one segment's dialogue.
+ * @param {{ name: string, description?: string }} notebook @param {{ n: number, title: string, summary: string }[]} parts
+ * @param {{ title: string, points: string, sources: number[] }[]} plan @param {number} i which segment
+ * @param {{ speaker: string, text: string }[]} before the dialogue so far
+ * @param {keyof typeof PODCAST_LENGTHS} length
+ */
+export function podcastSegmentRequest(notebook, parts, plan, i, before, length) {
+  const { turns } = PODCAST_LENGTHS[length];
+  const seg = plan[i];
+  const chosen = parts.filter((p) => seg.sources.includes(p.n));
+  const notes = (chosen.length ? chosen : parts).map((p) => `[${p.n}] ${p.title}\n${p.summary}`).join('\n\n');
+  const position = i === 0 ? 'This is the opening segment: start with a hook, not a greeting speech.' : i === plan.length - 1 ? 'This is the last segment: end with a short takeaway and a natural sign-off.' : 'Carry on from the dialogue so far without greeting again.';
+  const outline = plan.map((s, k) => `${k + 1}. ${s.title}${k === i ? '  ← this segment' : ''}`).join('\n');
+  const recent = before.slice(-4).map((l) => `${l.speaker}: ${l.text}`).join('\n');
+  return [
+    {
+      role: 'system',
+      content: [
+        `You write one segment of a lively two-host podcast about the topic below. ${HOSTS}`,
+        `Write about ${turns} turns for this segment. ${position}`,
+        'Make it sound like two people talking, not reading: contractions, short sentences, questions, a vivid example or comparison.',
+        `About one turn in four is a short reaction on its own line, of one to four words, such as "Right.", "Wait, really?", "Huh.", "Exactly." or "Mm, go on." A reaction never repeats a number or a fact; facts are said once, exactly as the notes give them.`,
+        `Every line starts with the speaker's name and a colon, like "${SPEAKERS[0]}: …". No stage directions, no sound effects, no Markdown, no citation numbers, no mention of notes or this task.`,
+        'Use only facts from the notes. Do not repeat what was already said.',
+      ].join(' '),
+    },
+    {
+      role: 'user',
+      content: `Topic: ${notebook.description || notebook.name}\n\nEpisode plan:\n${outline}\n\nThis segment: ${seg.title}. Cover: ${seg.points || seg.title}.\n\nNotes:\n${notes}${recent ? `\n\nThe dialogue so far ended with:\n${recent}` : ''}`,
+    },
+  ];
+}
+
+/** A short reaction line ("Right.", "Wait, really?"), which playback may start before the last line ends. @param {string} text */
+export const isReaction = (text) => {
+  const words = String(text ?? '').trim().split(/\s+/).filter(Boolean);
+  return words.length > 0 && words.length <= 4 && String(text).length <= 30;
+};
+
+/**
+ * A podcast note's lines, each with its segment: "### Segment title" headings separate segments.
+ * @param {string} md @returns {{ speaker: string, text: string, segment: number }[]}
+ */
+export function parseEpisode(md) {
+  const out = [];
+  let segment = 0;
+  let seen = false;
+  for (const block of beforeSources(md).split(/^###\s+/m)) {
+    if (!block.trim()) continue;
+    const lines = parseScript(block);
+    if (seen && lines.length) segment++;
+    if (lines.length) seen = true;
+    for (const l of lines) out.push({ ...l, segment });
+  }
+  return out;
+}
+
+/**
+ * Split a short reaction that opens a longer line ("Wait, really? It burst in 1919.") into a line of its own, so
+ * playback can start it over the end of the line before. Models tend to glue the two together.
+ * @param {{ speaker: string, text: string }[]} lines
+ */
+export function splitReactions(lines) {
+  const out = [];
+  for (const l of lines) {
+    const m = /^((?:[^\s.!?]+[\s,]+){0,3}[^\s.!?]+[.!?]+)\s+(\S.*)$/u.exec(l.text);
+    if (m && isReaction(m[1]) && m[2].trim().split(/\s+/).length >= 3) out.push({ ...l, text: m[1] }, { ...l, text: m[2] });
+    else out.push(l);
+  }
+  return out;
+}
+
+/** Spoken minutes for a script, at about 150 words a minute. @param {{ text: string }[]} lines */
+export const spokenMinutes = (lines) => Math.max(1, Math.round(lines.reduce((n, l) => n + l.text.split(/\s+/).filter(Boolean).length, 0) / 150));

@@ -115,6 +115,8 @@
   ol.script li b { display: block; font-size: .78rem; color: var(--accent); }
   ol.script li:nth-child(even) b { color: var(--ok); }
   ol.script li.speaking { outline: 2px solid var(--accent); }
+  ol.script li.seg { background: none; padding: .6rem 0 0; font-weight: 600; font-size: .9rem; color: var(--mute); }
+  .studio select { font-size: .85rem; padding: .2rem .3rem; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
   .deck { outline: none; }
   .slide { width: min(100%, calc(52vh * 16 / 9)); margin: 0 auto; aspect-ratio: 16 / 9; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 6% 7%; display: flex; flex-direction: column; justify-content: center; overflow: hidden; box-shadow: 0 1px 3px rgb(0 0 0 / .06); }
   .slide h3 { margin: 0 0 .8em; font-size: clamp(1.1rem, 3.2vw, 2rem); line-height: 1.2; }
@@ -209,6 +211,9 @@
             <span class="muted small">Make from ticked sources</span>
             <button data-command="notebook.briefing">Briefing</button>
             <button data-command="notebook.audio">Audio overview</button>
+            <label class="sr" for="audio-length">Audio overview length</label>
+            <select id="audio-length" title="How long the audio overview is: 3, 5 or 7 segments"><option value="short">Short</option><option value="standard" selected>Standard</option><option value="long">Long</option></select>
+            <button data-command="notebook.voices" title="Choose the two hosts' voices">Voices</button>
             <button data-command="notebook.mindmap">Mind map</button>
             <button data-command="notebook.slides">Slides</button>
           </div>
@@ -299,6 +304,21 @@
       <ul class="lw-results" id="lw-results"></ul>
     </div>
     <div class="d-foot"><button class="primary" value="close">Done</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-voices">
+  <form method="dialog">
+    <div class="d-head"><h2>Voices</h2></div>
+    <div class="d-body">
+      <p class="muted small" style="margin:0">Listen and Audio overview speak with Phonon voices that run on this device. Pick a voice for each host. The choice is kept in this browser.</p>
+      <label>Asha, the host who asks <span class="row-flex"><select id="voice-Asha"></select><button type="button" data-preview="Asha">Preview</button></span></label>
+      <label>Ravi, the host who explains <span class="row-flex"><select id="voice-Ravi"></select><button type="button" data-preview="Ravi">Preview</button></span></label>
+    </div>
+    <div class="d-foot">
+      <button class="primary" value="ok">Save</button>
+      <button value="cancel" formnovalidate>Cancel</button>
+    </div>
   </form>
 </dialog>
 

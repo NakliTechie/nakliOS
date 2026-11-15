@@ -6449,14 +6449,14 @@
       "id": "lectella",
       "repo": "NakliTechie/lectella",
       "requestedRef": "main",
-      "resolvedCommit": "9f634d794a45023757aae297b06a8e8e281a7790",
+      "resolvedCommit": "d8232e59c79b0048b73a8c41ccd270014250605f",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "6cec42ba2dfb809559ebffe602cee8cb47e215ebd1d79424d2d55ebb8c6ebddc",
-          "bytes": 84208,
-          "originalSourceSha256": "5b0e5037462e2d1e344f0b9045072fa6a6564e9a781b389b42d866879a369957",
+          "sha256": "1d8e28698319e362d7ad09060e2ed3741cf1bda8c93b5d9b2e7fbaf8fc280c0c",
+          "bytes": 85707,
+          "originalSourceSha256": "50508a97976915f60999b68abbe84b1864b91524e76129bbbabdab3fbd8f927a",
           "sdkSha256": "410f8613ad003755ecb06f20a23b6d36b3d980fe88a3ab86fe16ff73b11a5b4c"
         },
         {
@@ -6474,14 +6474,14 @@
         {
           "source": "src/app.js",
           "destination": "src/app.js",
-          "sha256": "c91838ac82d8f06e964a32dcf8ed0207894f847cf81efe1154c10a6cce5edc81",
-          "bytes": 61690
+          "sha256": "39eee35cac15c5091b5642a0b0162eed9bfc2c142d4ebe0e4c2f3027d98899fe",
+          "bytes": 65932
         },
         {
           "source": "src/core.js",
           "destination": "src/core.js",
-          "sha256": "e51981780baaf10dcef5aabe3559855f4feb441976c77db656885a3b57eeec69",
-          "bytes": 25797
+          "sha256": "aa417b423705c563ac0cb2509fd2fae1f2cbddc4998604e75ddd29833334ed08",
+          "bytes": 32523
         },
         {
           "source": "src/store.js",
@@ -6492,8 +6492,8 @@
         {
           "source": "src/commands.js",
           "destination": "src/commands.js",
-          "sha256": "b176bc4a55091ee50361c9096ff46c7f6f8d867241306171ffbfb15adc0c482d",
-          "bytes": 17156
+          "sha256": "c0a4f9daadf540b8ffed5f1e9eb96556994190ea81e8acce92740b0876fe1764",
+          "bytes": 17489
         },
         {
           "source": "src/pdf.js",
@@ -6534,8 +6534,8 @@
         {
           "source": "src/speech.js",
           "destination": "src/speech.js",
-          "sha256": "5ebce56ecf01f69df163baf446d67a8c7e6dac3a581ab643d4ceabe7ca3a4a6f",
-          "bytes": 4641
+          "sha256": "dcd1c34a86ba750e8103f870e9d9c7134636de419faedb2d7ec7dcc9126f5d49",
+          "bytes": 9502
         },
         {
           "source": "vendor/phonon-tts-0.7.1/LICENSE-APACHE",
