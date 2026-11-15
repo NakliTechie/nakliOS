@@ -463,7 +463,7 @@ naklios.experimental_tex.cancel(job.id);                   // the compile reject
 ## Web
 
 `naklios.experimental_web` searches the web and reads pages for agent apps. A browser Worker has no DNS and meets CORS
-on most sites, so the host reads for it. System apps only; `capabilities.experimental_web` says whether the app may call it.
+on most sites, so the host reads for it. System apps, and same-origin mirrors whose catalog entry lists `hostServices:['web']`; `capabilities.experimental_web` says whether the app may call it. `hostServices` grants that one service and nothing else `kind:'system'` carries: no whole-store filesystem, no `naklios.net`. `hostServices:['skills']` does the same for `experimental_skills`.
 
 ```js
 const { provider, results } = await naklios.experimental_web.search('wasm tex engine', { maxResults: 5 });
@@ -844,7 +844,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 
 | member | kind | what it is |
 |---|---|---|
-| `experimental_web` | namespace · **experimental** | Web search and page reading for agents whose Worker has no DNS and meets CORS (`docs/app-contract.md`, "Web"). System apps only. |
+| `experimental_web` | namespace · **experimental** | Web search and page reading for agents whose Worker has no DNS and meets CORS (`docs/app-contract.md`, "Web"). System apps, and same-origin mirrors listed with `hostServices:['web']`. |
 | `experimental_web.search` | function · **experimental** | Search with the person's provider from the assistant panel (Brave, Tavily or SearXNG), else DeepSeek when its key is saved, else Wikipedia. Answers `{ provider, results }`. |
 | `experimental_web.fetch` | function · **experimental** | Read one http(s) page directly, through the person's web relay, or through Jina Reader. Answers `{ url, status, kind, content, truncated, via }`. |
 
@@ -920,7 +920,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 
 | member | kind | what it is |
 |---|---|---|
-| `experimental_skills` | namespace · **experimental** | The user's one skills library, `skills/<name>/SKILL.md` on their Folder or Crate (`sys/ai/skill-library.mjs`; plan `plan/2026-10-29-shared-skills-plan.md`). System apps only. |
+| `experimental_skills` | namespace · **experimental** | The user's one skills library, `skills/<name>/SKILL.md` on their Folder or Crate (`sys/ai/skill-library.mjs`; plan `plan/2026-10-29-shared-skills-plan.md`). System apps, and same-origin mirrors listed with `hostServices:['skills']`. |
 | `experimental_skills.list` | function · **experimental** | The skills an agent may use (Sentinel-clean, active or stale), as `{ name, description, status }` without bodies. Standalone: `[]`. |
 | `experimental_skills.read` | function · **experimental** | One usable skill as `{ name, description, status, body, files }`, where `files` is `[{ path, content }]` for the skill folder's text support files (path relative to the folder; at most 64 files, 128 KB each, 512 KB in all). The folder is scanned by Sentinel as one unit; a skill whose files fail returns `{ name, blocked }` with the reason. `null` when no usable skill has that name. |
 | `experimental_skills.propose` | function · **experimental** | Write a skill as STAGED (never active); refused if Sentinel refuses it or the name exists. Binds only after a person activates it. |
