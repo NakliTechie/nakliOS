@@ -204,7 +204,7 @@
     },
     {
       "name": "clip.set",
-      "description": "Change clip properties: volume (0–2), fadeIn, fadeOut, speed (0.25–4), opacity, scale, x, y, rotation, fit (fit|fill|blur), look (none|vivid|warm|cool|mono|fade|noir|sunset), filters {brightness, contrast, saturation, temperature} each -1..1, transitionIn {type: crossfade|fade, duration} or null, text, style, muted.",
+      "description": "Change clip properties: volume (0–2), fadeIn, fadeOut, speed (0.25–4), opacity, scale, x, y, rotation, fit (fit|fill|blur), look (none|vivid|warm|cool|mono|fade|noir|sunset), filters {brightness, contrast, saturation, temperature} each -1..1, transitionIn {type: crossfade|fade|wipe|slide, duration, dir: right|left for wipe and slide} or null, text, style, muted.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -477,6 +477,112 @@
       }
     },
     {
+      "name": "assist.duck",
+      "description": "Lower the music under the speech on the video tracks, as volume keyframes. clipIds: music clips to duck (default: every clip on an audio track). depth: the volume under speech as a fraction (default 0.25, about -12 dB).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "clipIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Music clip ids"
+          },
+          "depth": {
+            "type": "number",
+            "description": "Volume under speech, 0-1"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "track.mix",
+      "description": "Set a track's gain (0-2, 1 is unchanged) and pan (-1 left to 1 right).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "trackId": {
+            "type": "string",
+            "description": "Track id"
+          },
+          "gain": {
+            "type": "number",
+            "description": "Gain 0-2"
+          },
+          "pan": {
+            "type": "number",
+            "description": "Pan -1 to 1"
+          }
+        },
+        "required": [
+          "trackId"
+        ]
+      }
+    },
+    {
+      "name": "captions.vtt",
+      "description": "Read the Captions track as WebVTT text.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "clip.freeze",
+      "description": "Freeze a video clip on the frame at a timeline time for a number of seconds; the clip splits there and later clips move along.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "clipId": {
+            "type": "string",
+            "description": "Video clip id"
+          },
+          "at": {
+            "type": "number",
+            "description": "Timeline time of the frame, seconds"
+          },
+          "length": {
+            "type": "number",
+            "description": "How long to hold it, seconds (default 2)"
+          }
+        },
+        "required": [
+          "clipId",
+          "at"
+        ]
+      }
+    },
+    {
+      "name": "assist.slideshow",
+      "description": "Turn the photos on the main track into a slideshow: each lasts `length` seconds, joined by a transition, with a slow zoom.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "length": {
+            "type": "number",
+            "description": "Seconds per photo (default 3)"
+          },
+          "transition": {
+            "type": "string",
+            "description": "crossfade, fade, wipe or slide (default crossfade)"
+          },
+          "zoom": {
+            "type": "number",
+            "description": "End scale of the slow zoom, 1 for none (default 1.08)"
+          }
+        },
+        "required": []
+      }
+    },
+    {
       "name": "clip.duplicate",
       "description": "Copy a clip and paste the copy at a time (seconds), on its own track or another of the same kind. On the main track the copy is inserted and the track closes up.",
       "scope": "write",
@@ -529,7 +635,7 @@
     },
     {
       "name": "export.video",
-      "description": "Export the timeline to a video file in the person's storage. preset: mp4-1080, mp4-720, mp4-4k or webm-1080.",
+      "description": "Export the timeline to a file in the person's storage. preset: mp4-1080, mp4-720, mp4-4k, webm-1080, or m4a / wav for the sound alone.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -541,12 +647,18 @@
               "mp4-1080",
               "mp4-720",
               "mp4-4k",
-              "webm-1080"
+              "webm-1080",
+              "m4a",
+              "wav"
             ]
           },
           "range": {
             "type": "boolean",
             "description": "Render only the marked range (range.mark)"
+          },
+          "loudness": {
+            "type": "number",
+            "description": "Normalise the sound to this many LUFS (for example -14), true peak under -1 dBTP"
           }
         },
         "required": []
