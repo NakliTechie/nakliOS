@@ -70,6 +70,13 @@ export function toAnthropicRequest({ messages, maxTokens, tools, toolChoice, rep
     } else if (m.role === 'assistant') {
       const saved = replay.get(replayKey({ content: m.content, toolCalls: m.tool_calls }));
       turns.push({ role: 'assistant', content: saved ? structuredClone(saved) : assistantBlocks(m), saved: !!saved });
+    } else if (Array.isArray(m.content)) {
+      // OpenAI parts → Anthropic blocks: text stays text, a data-URL image becomes a base64 image.
+      pushUser(turns, m.content.map((p) => {
+        if (p?.type !== 'image_url') return { type: 'text', text: String(p?.text ?? '') };
+        const [, mediaType, data] = /^data:([^;]+);base64,(.*)$/s.exec(p.image_url?.url || '') || [];
+        return { type: 'image', source: { type: 'base64', media_type: mediaType, data } };
+      }));
     } else {
       pushUser(turns, [{ type: 'text', text: String(m.content ?? '') }]);
     }

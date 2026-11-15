@@ -7611,6 +7611,10 @@ async function aiHostSubmit(source, msg, appId){
       if (!aiAppIsSystem(appId) && (messages.length > AI_MAX_MESSAGES || JSON.stringify(messages).length > AI_MAX_INPUT_CHARS)) throw new Error('Local AI input is too large');
       tools = proto.normaliseTools(msg.tools);
       toolChoice = proto.normaliseToolChoice(msg.toolChoice ?? msg.tool_choice);
+      // Image parts go to endpoints only; the browser models read text.
+      if (proto.messagesHaveImages(messages) && model.runtime !== 'endpoint'){
+        throw new Error(`${model.label} cannot read images. Choose an OpenAI- or Anthropic-compatible endpoint with a vision model in Settings → AI`);
+      }
       maxTokens = aiAppIsSystem(appId) ? proto.clampAgentMaxTokens(msg.maxTokens) : Math.min(AI_MAX_OUTPUT_TOKENS, proto.clampAgentMaxTokens(msg.maxTokens));
       if (tools && tools.length && model.runtime !== 'endpoint' && !AI_LOCAL_TOOL_MODELS.has(model.key)){
         throw new Error(`${model.label} cannot call tools. Choose LFM3 1.7B, LFM2.5 24B-A2B + Pi adapter, or an OpenAI- or Anthropic-compatible endpoint in Settings → AI`);
@@ -8824,6 +8828,8 @@ function capabilitySnapshot(appId){
     // Endpoints stream reasoning (OpenAI reasoning_content, Anthropic thinking); the browser
     // models do not report it separately.
     experimental_aiReasoning:aiModel.runtime === 'endpoint',
+    // Image parts reach endpoints; whether the model reads them is the provider's answer.
+    experimental_aiVision:aiModel.runtime === 'endpoint',
     // Egress: a system app may reach blocked cross-origin hosts when the user has
     // configured a backend. Third-party apps never get it (isSystem gate).
     net: aiAppOwnsEgress(appId) && egressConfigured(),

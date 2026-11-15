@@ -93,6 +93,8 @@ jobs:
         run: node scripts/test-local-ai.mjs
       - name: AI reasoning rail (reasoning_content stream, thinking switch)
         run: node scripts/test-ai-reasoning.mjs
+      - name: AI image-input rail (image_url parts, Anthropic image blocks)
+        run: node scripts/test-ai-image-inputs.mjs
 
       - name: Verify SDK-vendoring canonical invariants and splicer round-trip
         run: node scripts/test-vendored-sdk.mjs

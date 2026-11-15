@@ -31,6 +31,63 @@ export const AGENT_LIMITS = Object.freeze({
 
 const CHAT_ROLES = new Set(['system', 'developer', 'user', 'assistant', 'tool']);
 
+// Image inputs (2026-11-15, for Gupshup): a user turn's content may be an OpenAI parts array of
+// `text` and `image_url` parts, the image as a base64 data URL. Images are counted in bytes,
+// apart from the character cap, because one photo is larger than a whole text transcript.
+export const IMAGE_LIMITS = Object.freeze({
+  maxImages: 16,                      // per request, across every turn
+  maxImageBytes: 8 * 1024 * 1024,     // one decoded image
+  maxTotalImageBytes: 24 * 1024 * 1024,
+  mimeTypes: Object.freeze(['image/png', 'image/jpeg', 'image/webp', 'image/gif']),
+});
+const DATA_URL_RE = /^data:(image\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/]+={0,2})$/;
+
+// Parse one image part's data URL into { mediaType, data, bytes }, or throw with the reason.
+export function parseImageDataUrl(url, where = 'image') {
+  const m = typeof url === 'string' ? DATA_URL_RE.exec(url) : null;
+  if (!m) throw new Error(`${where}: image_url.url must be a base64 data: URL`);
+  const mediaType = m[1].toLowerCase();
+  if (!IMAGE_LIMITS.mimeTypes.includes(mediaType)) {
+    throw new Error(`${where}: ${mediaType} is not accepted; send PNG, JPEG, WebP or GIF`);
+  }
+  const pad = m[2].endsWith('==') ? 2 : m[2].endsWith('=') ? 1 : 0;
+  const bytes = Math.floor((m[2].length * 3) / 4) - pad;
+  if (bytes > IMAGE_LIMITS.maxImageBytes) {
+    throw new Error(`${where}: an image may be at most ${IMAGE_LIMITS.maxImageBytes / 1024 / 1024} MB`);
+  }
+  return { mediaType, data: m[2], bytes };
+}
+
+// True when any message carries an image part.
+export function messagesHaveImages(messages) {
+  return (Array.isArray(messages) ? messages : []).some((m) => Array.isArray(m?.content)
+    && m.content.some((p) => p?.type === 'image_url'));
+}
+
+function normaliseUserParts(parts, where, budget) {
+  if (!parts.length) throw new Error(`${where}: content parts must not be empty`);
+  return parts.map((part, j) => {
+    const at = `${where}.content[${j}]`;
+    if (part?.type === 'text') {
+      if (typeof part.text !== 'string') throw new Error(`${at}: text part requires text`);
+      budget.chars += part.text.length;
+      return { type: 'text', text: part.text };
+    }
+    if (part?.type === 'image_url') {
+      const url = part.image_url?.url;
+      const { bytes } = parseImageDataUrl(url, at);
+      budget.images += 1;
+      budget.imageBytes += bytes;
+      if (budget.images > IMAGE_LIMITS.maxImages) throw new Error(`A request may carry at most ${IMAGE_LIMITS.maxImages} images`);
+      if (budget.imageBytes > IMAGE_LIMITS.maxTotalImageBytes) throw new Error(`A request may carry at most ${IMAGE_LIMITS.maxTotalImageBytes / 1024 / 1024} MB of images`);
+      const out = { type: 'image_url', image_url: { url } };
+      if (['low', 'high', 'auto'].includes(part.image_url?.detail)) out.image_url.detail = part.image_url.detail;
+      return out;
+    }
+    throw new Error(`${at}: part type must be text or image_url`);
+  });
+}
+
 // One assistant tool-call entry: { id, type:'function', function:{ name, arguments } }.
 // `arguments` is a JSON *string* on the wire (OpenAI contract), never a parsed object.
 function normaliseToolCall(call, where) {
@@ -61,9 +118,18 @@ export function normaliseAgentMessages(messages, limits = AGENT_LIMITS) {
     throw new Error(`Agent inference allows at most ${limits.maxMessages} messages`);
   }
   let total = 0;
+  const budget = { chars: 0, images: 0, imageBytes: 0 };
   return messages.map((message, i) => {
     const where = `message[${i}]`;
     const role = CHAT_ROLES.has(message?.role) ? message.role : 'user';
+
+    if (role === 'user' && Array.isArray(message?.content)) {
+      budget.chars = 0;
+      const content = normaliseUserParts(message.content, where, budget);
+      total += budget.chars;
+      if (total > limits.maxInputChars) throw new Error('Agent inference input is too large');
+      return { role, content };
+    }
 
     if (role === 'tool') {
       if (typeof message?.tool_call_id !== 'string' || !message.tool_call_id) {

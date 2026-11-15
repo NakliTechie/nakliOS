@@ -265,6 +265,21 @@ manifest. Prompts are request-scoped; an app that wants chat history must own
 and display that history itself. Use `aiModel`, `aiModelLabel`, `aiProvider`,
 and `aiLocal` only for honest status copy; model choice remains a host setting.
 
+**Image inputs (experimental).** When `naklios.capabilities.experimental_aiVision` is true, an
+`agent:true` request may give a user turn an OpenAI parts array:
+
+```js
+{ role: "user", content: [
+  { type: "text", text: "What does this chart show?" },
+  { type: "image_url", image_url: { url: "data:image/png;base64,…" } }
+] }
+```
+
+The host accepts PNG, JPEG, WebP and GIF as base64 data URLs only, never a remote URL, at most
+8 MB each, 16 images and 24 MB per request. OpenAI-compatible endpoints receive the parts as sent;
+Anthropic endpoints receive base64 `image` blocks. The browser models refuse a request with images and
+say so. Whether the endpoint's model reads images is the provider's answer, so show its error.
+
 Image generation is a separate capability and consent decision:
 
 ```js
@@ -677,7 +692,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 
 <!-- sdk-reference:begin — rendered by `node scripts/sdk-reference.mjs --write` from docs/sdk-api-audit.md; do not edit by hand -->
 
-124 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
+125 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
 
 ### `version`
 
@@ -717,6 +732,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 | `capabilities.experimental_tex` | field · **experimental** | The app may compile LaTeX projects in its own storage. |
 | `capabilities.experimental_web` | field · **experimental** | The app may search the web and read pages through the host. |
 | `capabilities.experimental_aiReasoning` | field · **experimental** | The selected chat model is an endpoint, so chunks carry `delta.reasoning_content` and the `experimental_thinking` request option switches thinking. |
+| `capabilities.experimental_aiVision` | field · **experimental** | Agent requests may carry user `image_url` parts (base64 PNG, JPEG, WebP or GIF; 8 MB each, 16 and 24 MB per request); the selected model is an endpoint. |
 | `capabilities.net` | field | Sovereign egress (`naklios.net.fetch`) granted. |
 | `capabilities.netBackend` | field | Which egress backend the host is configured with: `worker` (the default) · `bridge`; null when none. Never a package name. |
 | `capabilities.review` | field | The host can stage native diffs from this app and return source-bound review decisions. Enabled for Reckon, Draft, and KanZen. |
