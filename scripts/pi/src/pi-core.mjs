@@ -72,6 +72,13 @@ export async function openPi({ fs, shell, callBroker, skills = null, prune = und
   if (!index.active || !index.conversations.some((c) => c.id === index.active)) index.active = root.id;
   let active = (await harness.conversation(index.active, context)) || root;
   index.active = active.id;
+  // A conversation from before the index (or one never named) takes its first saved message as its name.
+  for (const c of index.conversations) {
+    if (c.title) continue;
+    const conv = c.id === root.id ? root : await harness.conversation(c.id, context);
+    const first = conv && (await conv.context(context)).entries.find((e) => e.kind === 'pi.user' && userText(e));
+    if (first) c.title = titleFrom(userText(first));
+  }
   await writeIndex(fs, index);
   const row = (id) => index.conversations.find((c) => c.id === id);
   const touch = async (id, patch = {}) => { Object.assign(row(id), patch, { updatedAt: Date.now() }); await writeIndex(fs, index); };

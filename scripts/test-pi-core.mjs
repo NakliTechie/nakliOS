@@ -57,7 +57,13 @@ const compacted = await pi.compact();
 assert.equal(compacted.status, 'completed', `compact on a short conversation ends cleanly: ${JSON.stringify(compacted)}`);
 await pi.switchTo({ id: fresh.id });
 await pi.close();
+// An index from before naming (titles blank) is named from each conversation's first message on open.
+const idx = JSON.parse((await fs.read('.pi/conversations.json', { encoding: 'utf-8' })).data);
+idx.conversations.forEach((c) => { c.title = ''; });
+await fs.write('.pi/conversations.json', JSON.stringify(idx));
 const again = await openPi({ fs, shell, callBroker });
+assert.equal(again.list().find((c) => c.id === rootId).title, 'Write PI_NAKLIOS_OK to note.txt, then cat it back.', 'an unnamed conversation is named from its first message');
+assert.equal(again.list().find((c) => c.id === fresh.id).title, 'New conversation', 'an empty one keeps the placeholder');
 assert.equal(again.list().length, 3, 'the index survives a reopen');
 assert.equal(again.active.id, fresh.id, 'the active conversation survives a reopen');
 await again.switchTo({ id: rootId });
