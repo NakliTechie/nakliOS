@@ -27,6 +27,7 @@ const WORKFLOW = 'test.yml';
 // path -> why it is not in the gate. Keep this empty if you can.
 const EXCLUDED = Object.freeze({
   // 'sys/foo/test/needs-webgpu.test.mjs': 'requires navigator.gpu; covered by /live-check-nt',
+  'scripts/test-pi-env-conformance.mjs': 'needs Pi\'s pinned npm packages (pi-durable\'s own conformance cases); .github/workflows/pi.yml runs it on every push and PR',
   'scripts/test-pi-persist.mjs': 'needs Pi\'s pinned npm packages; .github/workflows/pi.yml runs it on every push and PR',
   'scripts/test-pi-skills.mjs': 'needs Pi\'s pinned npm packages; .github/workflows/pi.yml runs it on every push and PR',
   'scripts/test-pi-prune.mjs': 'needs Pi\'s pinned npm packages (npm ci --prefix scripts/pi), as test-pi-core does; .github/workflows/pi.yml runs it on every push and PR',
