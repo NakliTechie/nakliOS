@@ -4264,6 +4264,7 @@ import {
   makeSourceGroundedIdeas,
   searchIdeaRecords,
 } from './idea-graph.js';
+import { createLibraryCommands } from './app-commands.js';
 import {
   applyEchoCurationToReaderConnections,
   applyEchoRelationClassifications,
@@ -16056,6 +16057,99 @@ function applyHostTheme(theme) {
   if (c.line)  s.setProperty('--line',  c.line);
 }
 
+// ── Read commands for other apps (app-commands.js) ──
+// The host opens Lorewell minimized to answer a call, so a handler may run before the library is listed.
+let commandLibraryListed = false;
+let commandLibraryLoad = null;
+
+function waitForStorageCapability(timeoutMs) {
+  if (naklios.capabilities.fs) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    let stop = () => {};
+    const timer = setTimeout(() => { stop(); resolve(!!naklios.capabilities.fs); }, timeoutMs);
+    stop = naklios.onCapabilitiesChange((caps) => {
+      if (!caps.fs) return;
+      clearTimeout(timer);
+      queueMicrotask(() => stop());
+      resolve(true);
+    });
+  });
+}
+
+async function ensureCommandLibrary() {
+  if (commandLibraryListed && semanticCatalog) return;
+  if (!(await waitForStorageCapability(10000))) {
+    throw new Error('Lorewell has no storage library connected. Open Lorewell and choose a library first.');
+  }
+  if (!commandLibraryLoad) {
+    commandLibraryLoad = listLibrary().finally(() => { commandLibraryLoad = null; });
+  }
+  await commandLibraryLoad;
+  commandLibraryListed = true;
+}
+
+async function commandWorks() {
+  await ensureCommandLibrary();
+  const present = new Set(libraryCache.map((entry) => entry.filename));
+  return (semanticCatalog?.works || [])
+    .map((work) => ({ work, filenames:(work.sourceFilenames || []).filter((name) => present.has(name)) }))
+    .filter(({ filenames }) => filenames.length)
+    .map(({ work, filenames }) => ({
+      workId:work.workId,
+      title:work.title || filenames[0].replace(/\.[a-z0-9]+$/i, ''),
+      authors:(work.authors || []).map((entry) => entry?.name || entry).filter(Boolean),
+      formats:Array.from(new Set(filenames.map(extOf))).filter(Boolean).sort(),
+    }));
+}
+
+// Meaning search over ideas and typed units, the same records the library search uses. Empty until the
+// on-device encoder is loaded; the command then answers by keyword alone.
+async function commandSemanticHits(query, { works, limit, signal }) {
+  if (!semanticEncoder.ready) return [];
+  const rows = [];
+  const vectors = new Map();
+  for (const work of works) {
+    if (signal?.aborted) return [];
+    const [ideaRecord, embeddingRecord, unitRecord, unitEmbeddingRecord] = await Promise.all([
+      readJsonRecord(ideaRecordsPath(work.workId)),
+      readJsonRecord(ideaEmbeddingsPath(work.workId)),
+      readJsonRecord(semanticUnitsPath(work.workId)),
+      readJsonRecord(semanticUnitEmbeddingsPath(work.workId)),
+    ]);
+    if (ideaRecord?.ideas && embeddingRecord?.model === DEFAULT_SEMANTIC_EMBEDDING_MODEL.model) {
+      rows.push(...ideaRecord.ideas);
+      for (const [id, vector] of await readIdeaVectorMap(embeddingRecord)) vectors.set(id, vector);
+    }
+    if (unitRecord?.units && unitEmbeddingRecord?.model === DEFAULT_SEMANTIC_EMBEDDING_MODEL.model) {
+      rows.push(...unitRecord.units.map((unit) => ({ ...unit, ideaId:unit.unitId, semanticUnit:true })));
+      for (const [id, vector] of await readSemanticUnitVectorMap(unitEmbeddingRecord)) vectors.set(id, vector);
+    }
+  }
+  if (!rows.length || signal?.aborted) return [];
+  const [queryVector] = await semanticEncoder.embed([query]);
+  return searchIdeaRecords({ ideas:rows, vectors, queryVector, query, limit })
+    .map((result) => ({
+      workId:result.idea.workId,
+      passageId:result.idea.evidence?.[0]?.passageId,
+      score:result.score,
+      label:result.idea.label || null,
+    }))
+    .filter((hit) => hit.passageId);
+}
+
+function registerLibraryCommands() {
+  const commands = createLibraryCommands({
+    listWorks:commandWorks,
+    readPassages:(workId) => readJsonRecord(passagesPath(workId)),
+    readLexicalIndex:(workId) => readJsonRecord(workLexicalIndexPath(workId)),
+    readAnnotations:(workId) => readJsonRecord(semanticAnnotationsPath(workId)),
+    semanticSearch:commandSemanticHits,
+  });
+  return naklios.experimental_commands.register(commands).catch((error) => {
+    console.warn('Lorewell: command registration failed', error);
+  });
+}
+
 // ============================================================
 // Boot
 // ============================================================
@@ -16063,6 +16157,9 @@ function applyHostTheme(theme) {
 function boot() {
   naklios.ready();
   naklios.title('Lorewell');
+  // Registered before any UI work: a caller's host waits 20 s for the set. The SDK queues it until the
+  // host is verified. Standalone there is no caller.
+  if (naklios.capabilities.hosted) void registerLibraryCommands();
 
   if (!naklios.capabilities.hosted) {
     updateStorageButton();
