@@ -364,6 +364,37 @@
       }
     },
     {
+      "name": "assist.captions",
+      "description": "Write captions from the speech in a clip onto the Captions track, on this device (Whisper tiny). Works only after the person has downloaded the speech model.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "clipId": {
+            "type": "string",
+            "description": "Clip id"
+          },
+          "language": {
+            "type": "string",
+            "description": "Spoken language code, e.g. en, hi, fr"
+          }
+        },
+        "required": [
+          "clipId"
+        ]
+      }
+    },
+    {
+      "name": "captions.srt",
+      "description": "Read the Captions track as SubRip (.srt) text.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
       "name": "export.video",
       "description": "Export the timeline to a video file in the person's storage. preset: mp4-1080, mp4-720, mp4-4k or webm-1080.",
       "scope": "write",
