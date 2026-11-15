@@ -7729,21 +7729,21 @@
       "id": "montella",
       "repo": "NakliTechie/montella",
       "requestedRef": "main",
-      "resolvedCommit": "009b29522a0d42fb70b9d8e80cd1cf16daf78e64",
+      "resolvedCommit": "86288db016c943d5890c18414a714812f778335b",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "1f8a5048c21fe3f26453d9d6d9d5a31f0dfaab1d95329130fd57179e7765e6fc",
-          "bytes": 743411,
-          "originalSourceSha256": "bb105681e32612066b586048865ae179fb25139643878a471416850e3ab00c51",
+          "sha256": "7103e51fe6eddd024855c221611b2f5b359d9046d5d0d258c17b6806951b8a5b",
+          "bytes": 761560,
+          "originalSourceSha256": "269a6a73ea70b80c19d56ede1851393a8159dcbb889c22e10e87bba5123e447a",
           "sdkSha256": "410f8613ad003755ecb06f20a23b6d36b3d980fe88a3ab86fe16ff73b11a5b4c"
         },
         {
           "source": "commands.json",
           "destination": "commands.json",
-          "sha256": "703b6cfbf03d650afd96d3ee25abbc66b2160e032ebae23cf01d8ad600fd9b3c",
-          "bytes": 11876
+          "sha256": "fbab17dc7ab03822c266f1dfd83aff3d04da8fa80fe7ec77ca44ad49b3e63dd2",
+          "bytes": 14106
         },
         {
           "source": "LICENSE",
