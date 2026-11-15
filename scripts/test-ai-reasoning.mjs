@@ -1,4 +1,4 @@
-// The reasoning rail (2026-11-15, for Loquella): a model's reasoning reaches the app as
+// The reasoning rail (2026-11-15, for Gupshup): a model's reasoning reaches the app as
 // delta.reasoning_content, apart from the reply, and experimental_thinking switches it.
 //
 // Before this rail the host read DeepSeek's reasoning_content and Anthropic's thinking
