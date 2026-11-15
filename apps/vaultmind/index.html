@@ -5556,24 +5556,41 @@ self.addEventListener('message', async ({ data: { type, modelId, dtype, modelTyp
 
 // ── Embedding worker (RAG) ────────────────────────────────────────────────────
 const EMBED_WORKER_SRC = `
-import { env, pipeline } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4/+esm';
+import * as transformers from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4/+esm';
+const { env, pipeline } = transformers;
 env.allowLocalModels = false; env.allowRemoteModels = true;
+const MODEL = 'Xenova/all-MiniLM-L6-v2';
+const progress = p => self.postMessage({ type: 'progress', data: p });
 let embedder = null;
-self.addEventListener('message', async ({ data: { type, texts, id } }) => {
+// The CPU path (WASM), as before the Neural Engine option.
+async function loadCpu() {
+  const extractor = await pipeline('feature-extraction', MODEL, { device: 'wasm', progress_callback: progress });
+  return async (texts) => {
+    const results = [];
+    for (const text of texts) results.push((await extractor(text, { pooling: 'mean', normalize: true })).data);
+    return results;
+  };
+}
+self.addEventListener('message', async ({ data: { type, texts, id, aneUrl } }) => {
   try {
     if (type === 'load') {
-      embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2', {
-        device: 'wasm',
-        progress_callback: p => self.postMessage({ type: 'progress', data: p }),
-      });
-      self.postMessage({ type: 'ready' });
-    } else if (type === 'embed') {
-      const results = [];
-      for (const text of texts) {
-        const out = await embedder(text, { pooling: 'mean', normalize: true });
-        results.push(Array.from(out.data));
+      // The Neural Engine through WebNN (naklios sdk/ane-embed.js) when the page passes its URL; the CPU otherwise
+      // or when its import or load check fails.
+      let createEmbedder = null, note = '';
+      if (aneUrl) {
+        try { ({ createEmbedder } = await import(aneUrl)); }
+        catch (err) { note = 'the Neural Engine module did not load: ' + String(err?.message || err).slice(0, 160) + '.'; }
       }
-      self.postMessage({ type: 'embeddings', vectors: results, id });
+      embedder = createEmbedder
+        ? await createEmbedder(transformers, MODEL, {
+            loadCpu, progress,
+            onBackend: (backend, why) => { if (embedder) self.postMessage({ type: 'backend', backend, note: why }); },
+          })
+        : { backend: 'cpu', note, embed: await loadCpu() };
+      self.postMessage({ type: 'ready', backend: embedder.backend, note: embedder.note });
+    } else if (type === 'embed') {
+      const vectors = await embedder.embed(texts);
+      self.postMessage({ type: 'embeddings', vectors: vectors.map(v => Array.from(v)), id });
     }
   } catch (err) {
     self.postMessage({ type: 'error', data: err.message, id });
@@ -5735,7 +5752,7 @@ async function ragIndexVault(forceRebuild = false) {
     // Full cache hit — no embedding needed
     rag.chunks   = keepChunks;
     rag.indexing = false;
-    ragEl.textContent = `RAG ready — ${rag.chunks.length} chunks (cached ✓)`;
+    ragEl.textContent = `RAG ready — ${rag.chunks.length} chunks (cached ✓)${ragBackendLabel()}`;
     clearBtn.style.display = '';
     return;
   }
@@ -5765,7 +5782,7 @@ async function ragIndexVault(forceRebuild = false) {
   const newChunks = rawChunks.map((c, i) => ({ ...c, embedding: newVecs[i] }));
   rag.chunks   = [...keepChunks, ...newChunks];
   rag.indexing = false;
-  ragEl.textContent = `RAG ready — ${rag.chunks.length} chunks`;
+  ragEl.textContent = `RAG ready — ${rag.chunks.length} chunks${ragBackendLabel()}`;
   clearBtn.style.display = '';
 
   // Merge fingerprints: update changed notes, drop deleted ones
@@ -5813,14 +5830,30 @@ async function ragSearchLocal(query, nodeId, topK = 5) {
     .slice(0, topK);
 }
 
+// The shared Neural Engine embedder (naklios sdk/ane-embed.js). localStorage 'naklios.aneEmbed': 'off' turns it off;
+// a URL loads that copy instead (local testing). Without WebNN the worker runs WASM as before.
+function aneEmbedUrl() {
+  try {
+    const v = localStorage.getItem('naklios.aneEmbed');
+    if (v === 'off') return null;
+    if (v) return v;
+  } catch (_) {}
+  return 'https://naklios.dev/sdk/ane-embed.js';
+}
+const ragBackendLabel = () => rag.backend === 'webnn-npu' ? ' · Neural Engine' : '';
+
 function startEmbedWorker() {
   if (rag.worker) return;
   rag.worker = makeWorker(EMBED_WORKER_SRC);
   rag.worker.addEventListener('error', e => console.warn('Embed worker:', e.message));
   rag.worker.addEventListener('message', ({ data }) => {
+    if (data.type === 'ready' || data.type === 'backend') {
+      rag.backend = data.backend;
+      if (data.note) console.info('VaultMind embeddings run on the CPU:', data.note);
+    }
     if (data.type === 'ready') { rag.ready = true; ragIndexVault(); }
   });
-  rag.worker.postMessage({ type: 'load' });
+  rag.worker.postMessage({ type: 'load', aneUrl: aneEmbedUrl() });
   const ragEl = document.getElementById('chat-rag-status');
   ragEl.style.display = '';
   ragEl.textContent = 'Loading embedding model…';
