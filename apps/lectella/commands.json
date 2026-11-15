@@ -104,7 +104,7 @@
     },
     {
       "name": "source.add",
-      "description": "Add a text source (pasted text or Markdown) to a notebook.",
+      "description": "Add a text source (pasted text or Markdown) to a notebook. The same text twice is not added again: status is added, present (already there) or linked (taken from another notebook).",
       "scope": "write",
       "input": {
         "type": "object",

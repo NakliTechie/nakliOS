@@ -478,7 +478,7 @@ async function editNotebook(/** @type {boolean} */ isNew) {
 /**
  * Add one file's bytes as a source. PDF, Markdown and text; anything else is refused with a message.
  * @param {string} nbId @param {string} name @param {Uint8Array} bytes @param {string} [from] where it came from
- * @returns {Promise<boolean>}
+ * @returns {Promise<'added' | 'linked' | false>}
  */
 async function importBytes(nbId, name, bytes, from = 'file') {
   const isPdf = /\.pdf$/i.test(name);
@@ -490,6 +490,15 @@ async function importBytes(nbId, name, bytes, from = 'file') {
     banner(`${name} is larger than 50 MB, so it was not added.`, { error: true });
     return false;
   }
+  const nbName = lib.notebook(nbId).name;
+  // The same file sent or picked again is not read or stored twice.
+  const known = await lib.hasFile(nbId, bytes);
+  if (known) {
+    banner(`${name} is already in “${nbName}” as “${known.title}”.`);
+    return false;
+  }
+  /** @type {{ title: string, text: string, kind: string, origin: string }} */
+  let input;
   if (isPdf) {
     banner(`Reading ${name}…`);
     let out;
@@ -499,11 +508,17 @@ async function importBytes(nbId, name, bytes, from = 'file') {
       banner(`${name}: ${/** @type {any} */ (e)?.message ?? e}`, { error: true });
       return false;
     }
-    await lib.addSource(nbId, { title: out.title || name.replace(/\.pdf$/i, ''), text: out.text, kind: 'pdf', origin: `${from} · ${out.pages} page${out.pages === 1 ? '' : 's'}`, original: { name, bytes } });
+    input = { title: out.title || name.replace(/\.pdf$/i, ''), text: out.text, kind: 'pdf', origin: `${from} · ${out.pages} page${out.pages === 1 ? '' : 's'}` };
   } else {
-    await lib.addSource(nbId, { title: name.replace(/\.(md|markdown|txt)$/i, ''), text: new TextDecoder().decode(bytes), kind: /\.(md|markdown)$/i.test(name) ? 'markdown' : 'text', origin: from, original: { name, bytes } });
+    input = { title: name.replace(/\.(md|markdown|txt)$/i, ''), text: new TextDecoder().decode(bytes), kind: /\.(md|markdown)$/i.test(name) ? 'markdown' : 'text', origin: from };
   }
-  return true;
+  const { source, status } = await lib.importSource(nbId, { ...input, original: { name, bytes } });
+  if (status === 'present') {
+    banner(`${name} is already in “${nbName}” as “${source.title}”.`);
+    return false;
+  }
+  if (status === 'linked') banner(`${name} was already in another notebook, so “${nbName}” now links that copy.`);
+  return status;
 }
 
 /** @param {File[]} files */
@@ -513,7 +528,7 @@ async function importFiles(files) {
   let added = 0;
   for (const f of files) {
     const name = f.type === 'application/pdf' && !/\.pdf$/i.test(f.name) ? `${f.name}.pdf` : f.name;
-    if (await importBytes(nbId, name, new Uint8Array(await f.arrayBuffer()))) added++;
+    if ((await importBytes(nbId, name, new Uint8Array(await f.arrayBuffer()))) === 'added') added++;
   }
   draw();
   if (added) banner(`Added ${added} source${added === 1 ? '' : 's'}.`);
@@ -540,7 +555,7 @@ async function onSent(grant) {
     const bytes = raw instanceof Uint8Array ? raw : typeof raw === 'string' ? new TextEncoder().encode(raw) : new Uint8Array(raw);
     const app = file.sourceAppId === 'books' ? 'Lorewell' : file.sourceAppId || 'another app';
     const nbId = await inboxNotebook();
-    if (await importBytes(nbId, file.name || grant.name, bytes, `sent from ${app}`)) banner(`Added ${file.name || grant.name} from ${app} to “${lib.notebook(nbId).name}”.`);
+    if ((await importBytes(nbId, file.name || grant.name, bytes, `sent from ${app}`)) === 'added') banner(`Added ${file.name || grant.name} from ${app} to “${lib.notebook(nbId).name}”.`);
     draw();
   } finally {
     naklios.files.release(grant.token);

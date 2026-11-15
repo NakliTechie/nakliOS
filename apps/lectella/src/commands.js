@@ -75,13 +75,13 @@ export const COMMANDS = [
   },
   {
     name: 'source.add',
-    description: 'Add a text source (pasted text or Markdown) to a notebook.',
+    description: 'Add a text source (pasted text or Markdown) to a notebook. The same text twice is not added again: status is added, present (already there) or linked (taken from another notebook).',
     scope: 'write',
     ui: 'The "Add source" button, Paste text tab.',
     input: { type: 'object', properties: { notebook: str('Notebook name or id'), title: str('Source title'), text: str('The source text', { minLength: 1 }) }, required: ['notebook', 'text'] },
     run: async (lib, a) => {
-      const s = await lib.addSource(nbOf(lib, a?.notebook).id, { title: a?.title, text: a?.text, origin: 'command' });
-      return { id: s.id, title: s.title, chars: s.chars };
+      const { source: s, status } = await lib.importSource(nbOf(lib, a?.notebook).id, { title: a?.title, text: a?.text, origin: 'command' });
+      return { id: s.id, title: s.title, chars: s.chars, status };
     },
   },
   {

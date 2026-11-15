@@ -14,11 +14,21 @@ import { uid, chunkText } from './core.js';
 
 /** @typedef {{ read(p: string): Promise<string>, readBinary?(p: string): Promise<Uint8Array>, write(p: string, d: string | Uint8Array): Promise<void>, exists(p: string): Promise<boolean>, delete(p: string): Promise<void> }} Fs */
 /** @typedef {{ id: string, name: string, description: string, created: number, updated: number, sources: string[], notes: string[], off: string[] }} Notebook */
-/** @typedef {{ id: string, title: string, kind: string, origin: string, added: number, chars: number, original?: string }} Source */
+/** @typedef {{ id: string, title: string, kind: string, origin: string, added: number, chars: number, original?: string, hash?: string, fileHash?: string }} Source */
 /** @typedef {{ id: string, notebook: string, title: string, kind: 'human' | 'ai', created: number, updated: number, refs?: any[], format?: string }} Note */
 /** @typedef {{ role: 'user' | 'assistant', content: string, refs?: any[], mode?: string, at: number }} Turn */
 
 export const LIBRARY_VERSION = 1;
+
+/** SHA-256 of text or bytes, as hex. @param {string | Uint8Array} data */
+export async function sha256(data) {
+  const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : data;
+  const digest = await crypto.subtle.digest('SHA-256', /** @type {BufferSource} */ (bytes));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** The text a source's hash is taken over: line endings unified, ends trimmed. @param {string} text */
+const normal = (text) => String(text ?? '').replace(/\r\n?/g, '\n').trim();
 
 /** @returns {Fs & { files: Map<string, string | Uint8Array> }} */
 export function memoryFs() {
@@ -237,12 +247,42 @@ export class Library {
    * @param {{ title: string, text: string, kind?: string, origin?: string, original?: { name: string, bytes: Uint8Array } }} input
    */
   async addSource(nbId, { title, text, kind = 'text', origin = 'pasted', original }) {
+    return (await this.importSource(nbId, { title, text, kind, origin, original })).source;
+  }
+
+  /**
+   * The source with this content: matched by the original file's hash, or by the text's hash.
+   * @param {{ fileHash?: string, hash?: string }} key
+   */
+  findSource({ fileHash, hash }) {
+    return this.data.sources.find((s) => (fileHash && s.fileHash === fileHash) || (hash && s.hash === hash)) ?? null;
+  }
+
+  /**
+   * Add a source unless the notebook already has the same content. Status 'present': already in this notebook,
+   * nothing written. 'linked': another notebook holds it, so this notebook links that source. 'added': new.
+   * @param {string} nbId
+   * @param {{ title: string, text: string, kind?: string, origin?: string, original?: { name: string, bytes: Uint8Array } }} input
+   * @returns {Promise<{ source: Source, status: 'added' | 'present' | 'linked' }>}
+   */
+  async importSource(nbId, { title, text, kind = 'text', origin = 'pasted', original }) {
     const nb = this.notebook(nbId);
-    const body = String(text ?? '').replace(/\r\n?/g, '\n').trim();
+    const body = normal(text);
     if (!body) throw new Error('A source needs some text');
+    const hash = await sha256(body);
+    const fileHash = original ? await sha256(original.bytes) : undefined;
+    const same = this.findSource({ fileHash, hash });
+    if (same) {
+      if (nb.sources.includes(same.id)) return { source: same, status: 'present' };
+      nb.sources.push(same.id);
+      nb.updated = Date.now();
+      await this.saveIndex();
+      return { source: same, status: 'linked' };
+    }
     const id = uid('src');
     /** @type {Source} */
-    const src = { id, title: String(title ?? '').trim() || 'Untitled source', kind, origin, added: Date.now(), chars: body.length };
+    const src = { id, title: String(title ?? '').trim() || 'Untitled source', kind, origin, added: Date.now(), chars: body.length, hash };
+    if (fileHash) src.fileHash = fileHash;
     await this.serial(async () => {
       await this.fs.write(`sources/${id}/text.md`, body);
       if (original) {
@@ -256,7 +296,13 @@ export class Library {
     nb.updated = Date.now();
     this.textCache.set(id, body);
     await this.saveIndex();
-    return src;
+    return { source: src, status: 'added' };
+  }
+
+  /** Whether this notebook already holds a file with these exact bytes. @param {string} nbId @param {Uint8Array} bytes */
+  async hasFile(nbId, bytes) {
+    const same = this.findSource({ fileHash: await sha256(bytes) });
+    return same && this.notebook(nbId).sources.includes(same.id) ? same : null;
   }
 
   /** @param {string} id */
