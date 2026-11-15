@@ -199,6 +199,12 @@
       "kind": "file",
       "detail": ".anvil/hooks.json"
     },
+    "file:.anvil/library-skills": {
+      "owner": "workspace-files.md",
+      "fingerprint": "c07488382333",
+      "kind": "file",
+      "detail": ".anvil/library-skills"
+    },
     "file:.anvil/memory": {
       "owner": "workspace-files.md",
       "fingerprint": "6b04e15cd473",

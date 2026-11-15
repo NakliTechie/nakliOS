@@ -10,7 +10,18 @@ import { obj, str } from '@earendil-works/pi-schema';
 import { defineExtension, defineTool, section } from '@earendil-works/pi-durable';
 import { buildSkillsIndex } from '../../../sys/ai/skills.mjs';
 
-export function createSkillsExtension({ list, read }) {
+// Where a loaded skill's folder is written in Pi's storage, so its references and scripts can be read
+// and run. Rewritten on every load, so the copy always matches what the host's gate passed.
+export const SKILL_FOLDER_ROOT = '.pi/skills';
+
+export function createSkillsExtension({ list, read }, { fs = null } = {}) {
+  async function writeFolder(skill) {
+    const root = `${SKILL_FOLDER_ROOT}/${skill.name}`;
+    const files = (skill.files || []).filter((f) => f && f.path && !String(f.path).split('/').some((seg) => !seg || seg === '.' || seg === '..'));
+    await fs.write(`${root}/SKILL.md`, `---\nname: ${skill.name}\ndescription: ${String(skill.description || '').replace(/\s+/g, ' ').trim()}\n---\n${skill.body}\n`, { createParents: true });
+    for (const f of files) await fs.write(`${root}/${f.path}`, String(f.content ?? ''), { createParents: true });
+    return { folder: '/' + root, paths: files.map((f) => f.path) };
+  }
   const skillTool = defineTool({
     name: 'skill',
     description: 'Load the full instructions of one skill from the NakliOS skills library, by its exact name from the Skills list. Call it before doing a task that a listed skill covers.',
@@ -18,7 +29,13 @@ export function createSkillsExtension({ list, read }) {
     execute: async (args) => {
       const skill = await read(String(args.name || ''));
       if (!skill) throw new Error(`No usable skill named "${args.name}". Use a name from the Skills list.`);
-      return { output: [{ type: 'text', text: `# Skill: ${skill.name}\n\n${skill.body}` }] };
+      if (skill.blocked) throw new Error(`Skill "${skill.name}" did not pass the safety scan and will not load: ${skill.blocked}`);
+      let head = `# Skill: ${skill.name}`;
+      if (fs && skill.files && skill.files.length) {
+        const { folder, paths } = await writeFolder(skill);
+        head += `\n\nSkill folder: ${folder} (its files: ${paths.join(', ')}). Where the skill says $SKILL or "this skill's directory", use ${folder}; read its files from there.`;
+      }
+      return { output: [{ type: 'text', text: `${head}\n\n${skill.body}` }] };
     },
   });
   return defineExtension({

@@ -5375,6 +5375,7 @@ function skillLibraryStore(){
     list: (prefix) => b.list(prefix),
     read: async (path) => ((await b.exists(path)) ? await b.read(path) : null),
     write: (path, text) => b.write(path, text),
+    delete: (path) => b.delete(path),
   };
 }
 // Durable tasks (sys/durable/tasks.mjs): the host keeps each app's task ledger in IndexedDB and runs its
@@ -5438,7 +5439,8 @@ async function skillsHostHandle(op, msg, appId){
   }
   const library = store ? await _skillLibMod.loadLibrary(store) : [];
   if (op === 'list') return _skillLibMod.agentCatalog(library);
-  if (op === 'read') return _skillLibMod.agentSkill(library, String(msg.name || ''));
+  // A skill arrives with its support files (references, scripts), scanned with its body as one folder.
+  if (op === 'read') return store ? await _skillLibMod.agentSkillWithFiles(store, library, String(msg.name || '')) : null;
   throw new Error('Unknown skills operation: ' + op);
 }
 
@@ -5450,7 +5452,8 @@ async function paintSkillsSettings(el){
   if (!store){ el.textContent = 'Connect a Folder or Crate above to keep a skills library.'; return; }
   if (!_skillLibMod) _skillLibMod = await import('./sys/ai/skill-library.mjs');
   let library = [];
-  try { library = await _skillLibMod.loadLibrary(store); }
+  void paintSkillPacks(document.getElementById('skills-packs'));
+  try { library = await _skillLibMod.loadLibraryWithFiles(store); }
   catch (err){ el.textContent = 'Could not read the skills library: ' + String(err?.message || err); return; }
   if (!library.length){
     el.textContent = 'No skills yet. Add skills/<name>/SKILL.md to your storage, or let an agent propose one.';
@@ -5462,7 +5465,8 @@ async function paintSkillsSettings(el){
       : s.status === 'active' ? `<button class="nw-fs-btn-secondary" type="button" data-skill="${_dlgEscape(s.dir || s.name)}" data-status="archived">Archive</button>`
         : `<button class="nw-fs-btn-secondary" type="button" data-skill="${_dlgEscape(s.dir || s.name)}" data-status="active">Activate</button>`;
     const note = s.sentinel && s.sentinel !== 'clean' ? `<div class="nw-skill-note">${_dlgEscape(s.sentinelLine || '')}</div>` : '';
-    return `<div class="nw-skill"><div><b>${_dlgEscape(s.name)}</b> <span class="nw-skill-status">${_dlgEscape(s.status)}</span>` +
+    const filesNote = s.fileCount ? ` <span class="nw-skill-status">+${s.fileCount} file${s.fileCount === 1 ? '' : 's'}</span>` : '';
+    return `<div class="nw-skill"><div><b>${_dlgEscape(s.name)}</b> <span class="nw-skill-status">${_dlgEscape(s.status)}</span>${filesNote}` +
       `<div class="nw-skill-desc">${_dlgEscape(s.description || '')}</div>${note}</div>${action}</div>`;
   }).join('');
   el.querySelectorAll('button[data-skill]').forEach(btn => btn.addEventListener('click', async () => {
@@ -5471,6 +5475,57 @@ async function paintSkillsSettings(el){
     if (!r.ok) await nakliosAlert(r.message || 'Could not change the skill', { title: 'Skills' });
     await paintSkillsSettings(el);
   }));
+}
+
+// Settings → Skills → skill packs: install a pinned release of ntkit (NakliTechie/ntkit, MIT) into the
+// library. The pin (sys/ai/ntkit-pin.json, written by scripts/pin-ntkit.mjs) names the commit and each
+// file's SHA-256; files come from raw.githubusercontent.com at that commit and any mismatch is refused.
+// Nothing downloads until the person confirms.
+let _skillPackLastResult = '';
+async function paintSkillPacks(el){
+  if (!el) return;
+  const store = skillLibraryStore();
+  if (!store){ el.textContent = ''; return; }
+  if (!_skillLibMod) _skillLibMod = await import('./sys/ai/skill-library.mjs');
+  let pin;
+  try { pin = await (await fetch('./sys/ai/ntkit-pin.json', { cache:'no-cache' })).json(); }
+  catch (_){ el.textContent = ''; return; }
+  const rec = await _skillLibMod.readPackRecord(store, pin);
+  const n = Object.keys(pin.skills).length;
+  const files = Object.values(pin.skills).reduce((a, f) => a + f.length, 0);
+  const state = !rec ? `Not installed.` : rec.commit === pin.commit ? `Installed ${_dlgEscape(rec.tag)} on ${_dlgEscape(String(rec.installedAt || '').slice(0, 10))}.` : `Installed ${_dlgEscape(rec.tag)}; ${_dlgEscape(pin.tag)} is available.`;
+  const label = !rec ? `Install ntkit ${pin.tag}` : rec.commit === pin.commit ? 'Reinstall' : `Update to ${pin.tag}`;
+  el.innerHTML = `<div class="nw-skill"><div><b>ntkit</b> <span class="nw-skill-status">${_dlgEscape(pin.tag)} · ${n} skills · MIT</span>` +
+    `<div class="nw-skill-desc">Planning, review and release skills from <a href="https://github.com/${_dlgEscape(pin.repo)}" target="_blank" rel="noopener">${_dlgEscape(pin.repo)}</a>. ${state}</div>` +
+    `<div class="nw-skill-note" id="skills-pack-result"${_skillPackLastResult ? '' : ' hidden'}>${_dlgEscape(_skillPackLastResult)}</div></div>` +
+    `<button class="nw-fs-btn-secondary" type="button" id="skills-pack-install">${_dlgEscape(label)}</button></div>`;
+  const out = el.querySelector('#skills-pack-result');
+  const btn = el.querySelector('#skills-pack-install');
+  btn.addEventListener('click', async () => {
+    const ok = await nakliosConfirm(
+      `Download ${files} files for ${n} ntkit skills from github.com (${pin.repo} at ${pin.tag}) and save them under skills/ in your ${BACKENDS[store.id].label}?\n\n` +
+      'Each file is checked against its pinned SHA-256 and each skill against Sentinel before it is saved. A skill of your own with the same name is left alone.',
+      { title:'Install ntkit?', okLabel:'Download and install' });
+    if (!ok) return;
+    btn.disabled = true;
+    out.hidden = false;
+    try {
+      const fetchText = async (path) => {
+        const r = await fetch(`https://raw.githubusercontent.com/${pin.repo}/${pin.commit}/${path}`, { cache:'no-store', credentials:'omit' });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return await r.text();
+      };
+      const report = await _skillLibMod.installSkillPack(store, pin, fetchText, {
+        onProgress: (p) => { out.textContent = p.name ? `Installing ${p.name} (${p.done + 1} of ${p.total})…` : 'Finishing…'; },
+      });
+      _skillPackLastResult = `Installed ${report.installed.length} skills (${report.files} files).` +
+        (report.skipped.length ? ' Skipped: ' + report.skipped.map(x => `${x.name} (${x.reason})`).join('; ') + '.' : '') +
+        (report.removed.length ? ` Removed ${report.removed.length} files this version no longer has.` : '');
+    } catch (err){
+      _skillPackLastResult = 'Install stopped: ' + String(err?.message || err);
+    }
+    await paintSkillsSettings(document.getElementById('skills-library'));
+  });
 }
 
 async function fsHostSysList(msg, appId){
@@ -10834,6 +10889,7 @@ function openSettings(section){
     <div class="nw-wp-grid" id="theme-grid">${themeHTML}</div>
     <h4 id="settings-skills-heading" tabindex="-1">Skills</h4>
     <div id="skills-library" class="nw-skills">Loading skills…</div>
+    <div id="skills-packs" class="nw-skills" style="margin-top:6px"></div>
     <div class="nw-fs-blurb">
       One library for Anvil, Dish and Pi: <code>skills/&lt;name&gt;/SKILL.md</code> in your storage. Agents see a skill only when it is active and passes the safety scan; a skill an agent proposes waits here until you activate it.
     </div>

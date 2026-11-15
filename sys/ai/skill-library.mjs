@@ -102,3 +102,156 @@ export async function proposeSkill(store, { name, description, body }, { now = n
   await store.write(path, text);
   return { ok: true, path, status, sentinel: sentinelLine(scan) };
 }
+
+// ---- Support files ----
+// A skill folder may hold more than SKILL.md: reference notes, scripts, templates. Agents get them so a
+// skill that says "read references/x.md" or "run bin/y.py" works. Text files only, under caps, and every
+// file goes through Sentinel with the body (path, prompt-injection and shell checks), so a clean
+// SKILL.md cannot carry a bad script past the gate.
+export const SUPPORT_FILE_MAX_BYTES = 128 * 1024;
+export const SUPPORT_TOTAL_MAX_BYTES = 512 * 1024;
+export const SUPPORT_MAX_FILES = 64;
+const utf8Len = (s) => new TextEncoder().encode(String(s)).length;
+
+// Every file path under `dir`, from either listing style (Folder: one level, directories end in "/";
+// Crate: flat keys at any depth).
+export async function listTree(store, dir, { maxEntries = 500 } = {}) {
+  const out = new Set();
+  const queue = [dir];
+  const seen = new Set();
+  while (queue.length && out.size < maxEntries) {
+    const d = queue.shift();
+    if (seen.has(d)) continue;
+    seen.add(d);
+    let entries = [];
+    try { entries = await store.list(d); } catch (_) { entries = []; }
+    for (const e of entries || []) {
+      const p = String(typeof e === 'string' ? e : e?.path || '').replace(/^\/+/, '');
+      if (!p.startsWith(dir + '/')) continue;
+      if (p.endsWith('/')) queue.push(p.slice(0, -1));
+      else out.add(p);
+    }
+  }
+  return [...out].sort();
+}
+
+// The support files of skills/<dir>/ (everything but SKILL.md), as [{path, content}] with paths
+// relative to the skill folder. Over a cap, or an unreadable file, returns { error }.
+export async function readSkillFiles(store, dir) {
+  const root = `${SKILL_LIBRARY_DIR}/${dir}`;
+  const paths = (await listTree(store, root)).filter((p) => p !== `${root}/SKILL.md`);
+  if (paths.length > SUPPORT_MAX_FILES) return { files: [], error: `${paths.length} support files > ${SUPPORT_MAX_FILES}` };
+  const files = [];
+  let total = 0;
+  for (const p of paths) {
+    let content;
+    try { content = await store.read(p); } catch (e) { return { files: [], error: `cannot read ${p}: ${e?.message || e}` }; }
+    if (content == null) continue;
+    content = String(content);
+    const n = utf8Len(content);
+    if (n > SUPPORT_FILE_MAX_BYTES) return { files: [], error: `${p.slice(root.length + 1)} is ${n} bytes > ${SUPPORT_FILE_MAX_BYTES}` };
+    total += n;
+    if (total > SUPPORT_TOTAL_MAX_BYTES) return { files: [], error: `support files exceed ${SUPPORT_TOTAL_MAX_BYTES} bytes` };
+    files.push({ path: p.slice(root.length + 1), content });
+  }
+  return { files };
+}
+
+// One usable skill for an agent with its support files, re-scanned as a whole folder at the point of
+// use. Returns null when the skill is not usable, and { blocked } when its files do not pass.
+export async function agentSkillWithFiles(store, library, name) {
+  const s = agentSkill(library, name);
+  if (!s) return null;
+  const entry = library.find((x) => x.name === name);
+  const { files, error } = await readSkillFiles(store, entry.dir || name);
+  if (error) return { name, blocked: `Support files refused: ${error}` };
+  const scan = scanSkill({ name, description: s.description, body: s.body, files });
+  if (scan.state === 'refused' || scan.state === 'quarantined') return { name, blocked: sentinelLine(scan) };
+  return { ...s, files };
+}
+
+// Settings view: the library with each folder's files counted and scanned too.
+export async function loadLibraryWithFiles(store) {
+  const lib = await loadLibrary(store);
+  for (const s of lib) {
+    if (s.status === 'unreadable') continue;
+    const { files, error } = await readSkillFiles(store, s.dir);
+    s.fileCount = files.length;
+    if (error) { s.sentinel = 'refused'; s.sentinelLine = `Support files refused: ${error}`; s.usable = false; continue; }
+    if (!files.length) continue;
+    const scan = scanSkill({ name: s.name, description: s.description, body: s.body, files });
+    s.sentinel = scan.state; s.sentinelLine = sentinelLine(scan);
+    if (scan.state === 'refused' || scan.state === 'quarantined') s.usable = false;
+  }
+  return lib;
+}
+
+// ---- Installing a pinned skill pack (ntkit) ----
+// `pack` is a pin file (sys/ai/ntkit-pin.json): { id, repo, tag, commit, license, skills: { name: [{ path,
+// sha256, bytes }] } }, paths relative to the repository root. `fetchText(path)` returns a file's text at the
+// pinned commit. Every file must match its pinned SHA-256, and each skill passes Sentinel as a whole folder,
+// before anything is written. A folder the person made themselves (not in the pack's install record) is
+// never overwritten. The record lives at skills/.<id>-install.json (a dot name, so it is not a skill).
+export async function sha256Hex(text) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+export function packRecordPath(pack) { return `${SKILL_LIBRARY_DIR}/.${pack.id}-install.json`; }
+
+export async function readPackRecord(store, pack) {
+  try { const t = await store.read(packRecordPath(pack)); return t == null ? null : JSON.parse(String(t)); } catch (_) { return null; }
+}
+
+export async function installSkillPack(store, pack, fetchText, { onProgress = () => {}, now = new Date() } = {}) {
+  const before = await readPackRecord(store, pack);
+  const owned = new Set(Object.keys(before?.skills || {}));
+  const report = { installed: [], skipped: [], removed: [], files: 0, tag: pack.tag };
+  const record = { id: pack.id, repo: pack.repo, tag: pack.tag, commit: pack.commit, installedAt: now.toISOString(), skills: {} };
+  const names = Object.keys(pack.skills).sort();
+  let done = 0;
+  // A skill this pack installed before keeps its record entry when it is skipped now, so a failed
+  // update never turns it into "your own skill" on the next run.
+  const skip = (name, reason) => { report.skipped.push({ name, reason }); if (owned.has(name)) record.skills[name] = before.skills[name]; };
+  for (const name of names) {
+    onProgress({ name, done, total: names.length });
+    done++;
+    if (!validSkillName(name)) { skip(name, 'not a skill name'); continue; }
+    const dir = `${SKILL_LIBRARY_DIR}/${name}`;
+    let exists = false;
+    try { exists = (await store.read(`${dir}/SKILL.md`)) != null; } catch (_) {}
+    if (exists && !owned.has(name)) { report.skipped.push({ name, reason: 'you already have your own skill with this name' }); continue; }
+    // Fetch and verify every file before writing any of this skill.
+    // The files of one skill download together; every one must arrive and match its hash.
+    const got = [];
+    let bad = null;
+    const results = await Promise.all(pack.skills[name].map(async (f) => {
+      let text;
+      try { text = await fetchText(f.path); } catch (e) { return { error: `download failed for ${f.path}: ${e?.message || e}` }; }
+      if ((await sha256Hex(text)) !== f.sha256) return { error: `${f.path} does not match its pinned SHA-256` };
+      return { rel: f.as || f.path.slice(f.path.indexOf(`/${name}/`) + name.length + 2), text };
+    }));
+    for (const r of results) { if (r.error) { bad = r.error; break; } got.push(r); }
+    if (bad) { skip(name, bad); continue; }
+    const main = got.find((g) => g.rel === 'SKILL.md');
+    if (!main) { skip(name, 'no SKILL.md in the pack'); continue; }
+    const parsed = parseSkill(main.text);
+    const scan = scanSkill({ name, description: parsed.description, body: parsed.body, files: got.filter((g) => g !== main).map((g) => ({ path: g.rel, content: g.text })) });
+    if (scan.state === 'refused' || scan.state === 'quarantined') { skip(name, sentinelLine(scan)); continue; }
+    for (const g of got) await store.write(`${dir}/${g.rel}`, g.text);
+    // Files an earlier install wrote that this version no longer has are removed, each by name.
+    const kept = new Set(got.map((g) => g.rel));
+    for (const rel of before?.skills?.[name] || []) {
+      if (!kept.has(rel) && store.delete) { try { await store.delete(`${dir}/${rel}`); report.removed.push(`${name}/${rel}`); } catch (_) {} }
+    }
+    record.skills[name] = [...kept].sort();
+    report.installed.push(name);
+    report.files += got.length;
+  }
+  // Skills the old version had and this one dropped stay on disk; they are listed, never deleted.
+  report.dropped = [...owned].filter((n) => !pack.skills[n]);
+  for (const n of report.dropped) record.skills[n] = before.skills[n];
+  await store.write(packRecordPath(pack), JSON.stringify(record, null, 1));
+  onProgress({ done: names.length, total: names.length });
+  return report;
+}

@@ -52,6 +52,14 @@ Shared prerequisites: the launch in `../README.md`; `__anvil.test.fs` to seed an
 - **Observable success:** the context message lists only the active skill; the reader shows both with statuses and lint notes; a fresh browser project is seeded with `working-in-anvil`.
 - **Gotchas:** the folder's support files are scanned by the sentinel at load; a failing one quarantines the skill.
 
+### file:.anvil/library-skills
+- **Goal:** a NakliOS library skill's support files (references, scripts) are on disk when the agent loads it, read-only to the agent.
+- **Source:** the `skill` tool's library branch in `apps/anvil/index.html` (`LIBRARY_SKILLS_DIR`), fed by `naklios.experimental_skills.read` (`sys/ai/skill-library.mjs` `agentSkillWithFiles`); the grant's `readOnlyPrefixes`.
+- **Prerequisites:** launch inside NakliOS with a Folder or Crate holding `skills/kit/SKILL.md` and `skills/kit/references/steps.md`; no project skill named `kit`.
+- **Reach and drive:** prompt "Load the kit skill, then show me references/steps.md from its folder." Then prompt "Edit .anvil/library-skills/kit/references/steps.md to say x".
+- **Observable success:** the `skill` result names `Skill folder: .anvil/library-skills/kit (its files: references/steps.md)` and the agent reads the file; the edit is refused `read-only under this grant` and the file is unchanged.
+- **Gotchas:** the folder is rewritten on every load from what the host's gate passed; a skill whose files fail Sentinel returns `blocked` and writes nothing.
+
 ### file:.anvil/oplog.jsonl
 - **Goal:** the app's OWN state writes, chained (CRIB-D D3, 2026-09-13) — every write of `state.json` and every refused stale write is one hash-chained NDJSON line: the state's lineage, replayable; a torn or tampered log is caught at the line and never extended.
 - **Source:** `sys/history/state-oplog.mjs` (`createStateOplog`, `replayStateLog`, over the ledger's `appendEvent`/`verifyChain`); `apps/anvil/index.html` `writeRemoteState` appends under the same Web Lock that serialises the write, tagged with a per-page-load `TAB_ID`.

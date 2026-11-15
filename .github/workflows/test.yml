@@ -136,6 +136,8 @@ jobs:
 
       - name: Verify the shared skills library gate (Sentinel, status, staged proposals)
         run: node sys/ai/test/skill-library.test.mjs
+      - name: Dish library skills mount with their support files
+        run: node scripts/test-dish-library-skills.mjs
 
       - name: Verify the voice assistant's tools, voice-activity detector and tool loop (stub model)
         run: node sys/voice/test/voice.test.mjs

@@ -51,4 +51,27 @@ const bare = await openPi({ fs, shell: createShell({ registry, face }), storage:
 await bare.ask('hi');
 await bare.close();
 assert.doesNotMatch(requests.at(-1).messages.map(text).join('\n'), /# Skills/, 'an empty library adds no section');
-console.log('pi-skills: the Skills section reaches the model, the skill tool loads bodies, unknown names are error results');
+// A skill with support files: its folder is written to Pi's storage and the tool result names it; a
+// skill the host's scan blocked is an error result naming the reason.
+{
+  const kitLib = {
+    kit: { name: 'kit', description: 'Has helpers', status: 'active', body: 'Read $SKILL/references/steps.md.', files: [{ path: 'references/steps.md', content: 'Step one.\n' }, { path: 'bin/go.sh', content: 'echo hi\n' }] },
+    bad: { name: 'bad', blocked: 'Sentinel: quarantined — shell-injection×1' },
+  };
+  const reqs = [];
+  const steps = [
+    { choices: [{ message: { content: '', tool_calls: [call('k1', 'skill', { name: 'kit' }), call('k2', 'skill', { name: 'bad' })] }, finish_reason: 'tool_calls' }] },
+    { choices: [{ message: { content: 'done' }, finish_reason: 'stop' }] },
+  ];
+  const kp = await openPi({ fs, shell: createShell({ registry, face }), storage: 'memory',
+    skills: { list: async () => [{ name: 'kit', description: 'Has helpers', status: 'active' }], read: async (n) => kitLib[n] || null },
+    callBroker: async (req) => { reqs.push(req); return steps[reqs.length - 1]; } });
+  await kp.ask('Use the kit skill.');
+  await kp.close();
+  const out = reqs[1].messages.filter((m) => m.role === 'tool').map(text).join('\n');
+  assert.match(out, /Skill folder: \/\.pi\/skills\/kit \(its files: references\/steps\.md, bin\/go\.sh\)/, 'the tool result names the skill folder and its files');
+  assert.equal((await fs.read('.pi/skills/kit/references/steps.md', { encoding: 'utf-8' })).data, 'Step one.\n', 'the support file is in Pi storage');
+  assert.match((await fs.read('.pi/skills/kit/SKILL.md', { encoding: 'utf-8' })).data, /Read \$SKILL\/references\/steps\.md\./, 'SKILL.md sits beside its files');
+  assert.match(out, /did not pass the safety scan[\s\S]*shell-injection/, 'a blocked skill is an error result with the reason');
+}
+console.log('pi-skills: the Skills section reaches the model, the skill tool loads bodies and writes their folders, unknown and blocked skills are error results');
