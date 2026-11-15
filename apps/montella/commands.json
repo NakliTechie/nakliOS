@@ -318,6 +318,52 @@
       }
     },
     {
+      "name": "assist.silences",
+      "description": "Cut quiet stretches out of a clip (on this device). threshold in dBFS (default -40), minSilence seconds (default 0.6).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "clipId": {
+            "type": "string",
+            "description": "Clip id"
+          },
+          "threshold": {
+            "type": "number",
+            "description": "dBFS below which is silence"
+          },
+          "minSilence": {
+            "type": "number",
+            "description": "Shortest silence to cut, seconds"
+          }
+        },
+        "required": [
+          "clipId"
+        ]
+      }
+    },
+    {
+      "name": "assist.scenes",
+      "description": "Split a video clip where the picture changes sharply (on this device).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "clipId": {
+            "type": "string",
+            "description": "Clip id"
+          },
+          "threshold": {
+            "type": "number",
+            "description": "Change needed for a cut, 0-255 (default 30)"
+          }
+        },
+        "required": [
+          "clipId"
+        ]
+      }
+    },
+    {
       "name": "export.video",
       "description": "Export the timeline to a video file in the person's storage. preset: mp4-1080, mp4-720, mp4-4k or webm-1080.",
       "scope": "write",
