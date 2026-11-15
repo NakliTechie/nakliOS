@@ -204,7 +204,7 @@
     },
     {
       "name": "clip.set",
-      "description": "Change clip properties: volume (0–2), fadeIn, fadeOut, speed (0.25–4), opacity, scale, x, y, rotation, fit (fit|fill|blur), look (none|vivid|warm|cool|mono|fade|noir|sunset), filters {brightness, contrast, saturation, temperature} each -1..1, transitionIn {type: crossfade|fade|wipe|slide, duration, dir: right|left for wipe and slide} or null, text, style, muted.",
+      "description": "Change clip properties: volume (0–2), fadeIn, fadeOut, speed (0.25–4), opacity, scale, x, y, rotation, fit (fit|fill|blur), look (none|vivid|warm|cool|mono|fade|noir|sunset), blend (normal|multiply|screen|overlay|darken|lighten|difference|color-dodge|soft-light), filters {brightness, contrast, saturation, temperature} each -1..1, transitionIn {type: crossfade|fade|wipe|slide, duration, dir: right|left for wipe and slide} or null, text, style, muted.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -583,6 +583,45 @@
       }
     },
     {
+      "name": "clip.detach_audio",
+      "description": "Give a video clip's sound its own clip on an audio track and mute the video clip, so the two can be edited apart.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "clipId": {
+            "type": "string",
+            "description": "Video clip id"
+          }
+        },
+        "required": [
+          "clipId"
+        ]
+      }
+    },
+    {
+      "name": "clip.slide",
+      "description": "Slide a clip between its neighbours by `by` seconds (positive is later); the neighbours give and take, the clip's content and the track length stay the same.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "clipId": {
+            "type": "string",
+            "description": "Clip id"
+          },
+          "by": {
+            "type": "number",
+            "description": "Seconds to slide"
+          }
+        },
+        "required": [
+          "clipId",
+          "by"
+        ]
+      }
+    },
+    {
       "name": "clip.duplicate",
       "description": "Copy a clip and paste the copy at a time (seconds), on its own track or another of the same kind. On the main track the copy is inserted and the track closes up.",
       "scope": "write",
@@ -635,7 +674,7 @@
     },
     {
       "name": "export.video",
-      "description": "Export the timeline to a file in the person's storage. preset: mp4-1080, mp4-720, mp4-4k, webm-1080, or m4a / wav for the sound alone.",
+      "description": "Export the timeline to a file in the person's storage. preset: mp4-1080, mp4-720, mp4-4k, webm-1080, m4a / wav for the sound alone, or lossless to copy one untouched clip without re-encoding.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -649,7 +688,8 @@
               "mp4-4k",
               "webm-1080",
               "m4a",
-              "wav"
+              "wav",
+              "lossless"
             ]
           },
           "range": {
