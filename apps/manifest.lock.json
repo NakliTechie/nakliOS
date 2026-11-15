@@ -7729,14 +7729,14 @@
       "id": "montella",
       "repo": "NakliTechie/montella",
       "requestedRef": "main",
-      "resolvedCommit": "7d69c16f88ffe7aa49010db573c4ae5c00dbe9e8",
+      "resolvedCommit": "e8da9a80cab1023416ff8e5c80e0206e4697b3d2",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "14dc19e82de2b9f1aed0b11f0e6eaaada4a000781ab37b345c8c34a8c216a8a0",
-          "bytes": 857773,
-          "originalSourceSha256": "f00a68e72379b67d63a863d6d5389ed39db07a92e2403a7a4bc6f65414644fbc",
+          "sha256": "be8c2fa3ba5440fbda5b7a3977424508f3bcb54fb6069595664ca335508d627f",
+          "bytes": 858335,
+          "originalSourceSha256": "196bdc9966a29d5e9cc808144cf582e4138257d0772024747c57ede8bdfd5af6",
           "sdkSha256": "410f8613ad003755ecb06f20a23b6d36b3d980fe88a3ab86fe16ff73b11a5b4c"
         },
         {
