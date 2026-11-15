@@ -7939,7 +7939,8 @@ const ragHost = {
   state:'idle',            // idle | loading | ready | error
   error:null,
   worker:null,
-  device:null,
+  device:null,             // webnn-npu | webgpu | wasm, as the worker reports it
+  deviceNote:'',           // why the CPU/GPU runs when the Neural Engine was tried
   loadPromise:null,
   embedChain:Promise.resolve(),
   embedCounter:0,
@@ -7966,7 +7967,7 @@ async function ragEnsurePermission(appLabel){
     : 'NakliOS Folder';
   const ok = await nakliosConfirm(
     `Let NakliOS build a private semantic search index of your ${where}?\n\n` +
-    `Text is split into chunks and embedded entirely on this device with a small local model (~25&nbsp;MB one-time download). Nothing leaves the browser. The index itself lives inside your ${where} at <code>${_dlgEscape(RAG_INDEX_PATH)}</code>.`,
+    `Text is split into chunks and embedded entirely on this device with a small local model (~25&nbsp;MB one-time download; ~45&nbsp;MB when the browser runs it on the Neural Engine). Nothing leaves the browser. The index itself lives inside your ${where} at <code>${_dlgEscape(RAG_INDEX_PATH)}</code>.`,
     {
       title:'Enable semantic search?',
       okLabel:'Build index',
@@ -7993,6 +7994,13 @@ function ragSetState(next, error = null){
   try { broadcastCapabilities(); } catch(_){}
 }
 
+// The embedding worker tries the Neural Engine (WebNN, sdk/ane-embed.js) unless
+// localStorage 'naklios.aneEmbed' is 'off'. Without WebNN it runs WebGPU/WASM as before.
+function aneEmbedEnabled(){
+  try { return localStorage.getItem('naklios.aneEmbed') !== 'off'; }
+  catch(_){ return true; }
+}
+
 function ragLoadWorker(){
   if (ragHost.loadPromise) return ragHost.loadPromise;
   ragSetState('loading');
@@ -8004,10 +8012,16 @@ function ragLoadWorker(){
     let settled = false;
     worker.addEventListener('message', event => {
       const msg = event.data || {};
-      if (msg.type === 'ready' && !settled){
+      if (msg.type === 'backend'){
+        // A Neural Engine run failed mid-session; the worker moved to its CPU path.
+        ragHost.device = msg.backend || device;
+        ragHost.deviceNote = msg.note || '';
+        try { broadcastCapabilities(); } catch(_){}
+      } else if (msg.type === 'ready' && !settled){
         settled = true;
         ragHost.worker = worker;
-        ragHost.device = device;
+        ragHost.device = msg.backend || device;
+        ragHost.deviceNote = msg.note || '';
         resolve(worker);
       } else if (msg.type === 'error' && !settled){
         settled = true;
@@ -8021,7 +8035,7 @@ function ragLoadWorker(){
       try { worker.terminate(); } catch(_){}
       reject(new Error(event.message || 'Embedding worker crashed'));
     });
-    worker.postMessage({ type:'load', device });
+    worker.postMessage({ type:'load', device, ane:aneEmbedEnabled() });
   });
   ragHost.loadPromise = attempt(navigator.gpu ? 'webgpu' : 'wasm')
     .catch(err => navigator.gpu ? attempt('wasm') : Promise.reject(err))
@@ -8293,6 +8307,7 @@ function ragIndexStats(){
     chunks,
     indexing:ragHost.indexing,
     device:ragHost.device,
+    deviceNote:ragHost.deviceNote || '',
   };
 }
 
