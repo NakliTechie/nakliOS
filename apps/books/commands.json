@@ -88,6 +88,29 @@
       }
     },
     {
+      "name": "reader.open",
+      "description": "Open one passage in Lorewell's reader and bring Lorewell to the front, so the person can read it in place.",
+      "scope": "read",
+      "shows": true,
+      "input": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "Work id from library.list or library.search"
+          },
+          "passageId": {
+            "type": "string",
+            "description": "Passage id from library.search"
+          }
+        },
+        "required": [
+          "workId",
+          "passageId"
+        ]
+      }
+    },
+    {
       "name": "annotation.list",
       "description": "List the highlights, notes and bookmarks the person made in one work, or in every work, with the quoted text and location.",
       "scope": "read",

@@ -54,6 +54,21 @@ export const COMMAND_DEFINITIONS = [
     },
   },
   {
+    name:'reader.open',
+    description:'Open one passage in Lorewell\'s reader and bring Lorewell to the front, so the person can read it in place.',
+    scope:'read',
+    // The host brings Lorewell's window forward when this call succeeds (nakliOS commands.json field `shows`).
+    shows:true,
+    input:{
+      type:'object',
+      properties:{
+        workId:{ type:'string', description:'Work id from library.list or library.search' },
+        passageId:{ type:'string', description:'Passage id from library.search' },
+      },
+      required:['workId', 'passageId'],
+    },
+  },
+  {
     name:'annotation.list',
     description:'List the highlights, notes and bookmarks the person made in one work, or in every work, with the quoted text and location.',
     scope:'read',
@@ -135,6 +150,7 @@ function workSummary(work) {
 //   readPassages(workId): Promise<{ passages: [...] } | null>
 //   readLexicalIndex(workId): Promise<index | null>
 //   readAnnotations(workId): Promise<{ annotations: [...] } | null>
+//   openPassage({ work, passage, passageCount, signal }) (optional): opens the reader at the passage; resolves when shown.
 //   semanticSearch(query, { works, limit, signal }) (optional):
 //     Promise<[{ workId, passageId, score, label?, kind? }]>; returns [] when the encoder is not loaded.
 export function createLibraryCommands(deps) {
@@ -320,11 +336,32 @@ export function createLibraryCommands(deps) {
     return fitToBudget({ total:rows.length, annotations:rows.slice(0, limit) }, 'annotations');
   }
 
+  async function readerOpen(args = {}, { signal } = {}) {
+    if (!deps.openPassage) throw new Error('The reader is unavailable here.');
+    const workId = String(args.workId || '');
+    const passageId = String(args.passageId || '');
+    if (!workId || !passageId) throw new Error('reader.open needs workId and passageId.');
+    const work = (await worksById()).get(workId);
+    if (!work) throw new Error('No work with id ' + workId + '.');
+    const passages = (await deps.readPassages(workId))?.passages || [];
+    const target = passages.find((candidate) => candidate.passageId === passageId);
+    if (!target) throw new Error('No passage ' + passageId + ' in ' + work.title + '.');
+    abortIfNeeded(signal);
+    await deps.openPassage({ work, passage:target, passageCount:passages.length, signal });
+    return {
+      opened:true,
+      workId,
+      title:work.title,
+      location:passageLocation(target, passages.length),
+    };
+  }
+
   const handlers = {
     'library.list':list,
     'library.search':search,
     'passage.get':passage,
     'annotation.list':annotations,
+    'reader.open':readerOpen,
   };
   return COMMAND_DEFINITIONS.map((definition) => ({
     ...definition,
