@@ -102,8 +102,9 @@ built-in **Gemini Nano** on-device model whenever Chrome exposes it (zero setup,
 nothing downloaded, nothing leaves the device), and fall back to a LocalMind
 runtime or a configured endpoint otherwise. The **agent tier** — the coding
 agents below, or any `agent:true` request from a system app — is separate: it
-always uses the configured OpenAI-compatible endpoint and never a
-general-purpose on-device model, because coding needs reliable tool-calling.
+uses LFM3 1.7B in the browser or a configured OpenAI-compatible or
+Anthropic-compatible endpoint, and never Gemini Nano, because coding needs
+reliable tool-calling.
 There is no silent weak-model fallback; with no coding endpoint set, the agent
 tier degrades honestly rather than answering with a weak model.
 
