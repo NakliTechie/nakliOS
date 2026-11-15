@@ -1,0 +1,342 @@
+{
+  "accepts": [
+    {
+      "action": "import",
+      "label": "Open in Montella",
+      "extensions": [
+        ".mp4",
+        ".m4v",
+        ".mov",
+        ".webm",
+        ".mkv",
+        ".mp3",
+        ".wav",
+        ".m4a",
+        ".ogg",
+        ".opus",
+        ".flac",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".webp"
+      ]
+    }
+  ],
+  "commands": [
+    {
+      "name": "project.read",
+      "description": "Read the project: size, aspect, media, tracks and clips with their timeline times (seconds).",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "project.aspect",
+      "description": "Set the canvas aspect: 16:9, 9:16, 1:1 or 4:5.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "aspect": {
+            "type": "string",
+            "description": "Aspect",
+            "enum": [
+              "16:9",
+              "9:16",
+              "1:1",
+              "4:5"
+            ]
+          }
+        },
+        "required": [
+          "aspect"
+        ]
+      }
+    },
+    {
+      "name": "project.mode",
+      "description": "Switch between quick mode (CapCut-style) and pro mode (multitrack). Both edit the same project.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "description": "quick or pro",
+            "enum": [
+              "quick",
+              "pro"
+            ]
+          }
+        },
+        "required": [
+          "mode"
+        ]
+      }
+    },
+    {
+      "name": "clip.add",
+      "description": "Put an imported media item on the timeline. With no start it goes at the end of the track (quick mode).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "mediaId": {
+            "type": "string",
+            "description": "Media id from project.read"
+          },
+          "trackId": {
+            "type": "string",
+            "description": "Track id (optional)"
+          },
+          "start": {
+            "type": "number",
+            "description": "Timeline seconds (optional)"
+          }
+        },
+        "required": [
+          "mediaId"
+        ]
+      }
+    },
+    {
+      "name": "clip.split",
+      "description": "Split a clip at a timeline time (seconds).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "clipId": {
+            "type": "string",
+            "description": "Clip id"
+          },
+          "at": {
+            "type": "number",
+            "description": "Timeline seconds inside the clip"
+          }
+        },
+        "required": [
+          "clipId",
+          "at"
+        ]
+      }
+    },
+    {
+      "name": "clip.trim",
+      "description": "Move a clip edge. edge \"start\" or \"end\"; to is the new timeline time in seconds.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "clipId": {
+            "type": "string",
+            "description": "Clip id"
+          },
+          "edge": {
+            "type": "string",
+            "description": "start or end",
+            "enum": [
+              "start",
+              "end"
+            ]
+          },
+          "to": {
+            "type": "number",
+            "description": "Timeline seconds"
+          }
+        },
+        "required": [
+          "clipId",
+          "edge",
+          "to"
+        ]
+      }
+    },
+    {
+      "name": "clip.remove",
+      "description": "Delete a clip. On the main track later clips close the gap.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "clipId": {
+            "type": "string",
+            "description": "Clip id"
+          },
+          "ripple": {
+            "type": "boolean",
+            "description": "Close the gap (default: the track decides)"
+          }
+        },
+        "required": [
+          "clipId"
+        ]
+      }
+    },
+    {
+      "name": "clip.move",
+      "description": "Move a clip to a new start time and optionally another track of the same kind.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "clipId": {
+            "type": "string",
+            "description": "Clip id"
+          },
+          "start": {
+            "type": "number",
+            "description": "Timeline seconds"
+          },
+          "trackId": {
+            "type": "string",
+            "description": "Track id (optional)"
+          }
+        },
+        "required": [
+          "clipId",
+          "start"
+        ]
+      }
+    },
+    {
+      "name": "clip.set",
+      "description": "Change clip properties: volume (0–2), fadeIn, fadeOut, speed (0.25–4), opacity, scale, x, y, rotation, fit (fit|fill|blur), look (none|vivid|warm|cool|mono|fade|noir|sunset), filters {brightness, contrast, saturation, temperature} each -1..1, transitionIn {type: crossfade|fade, duration} or null, text, style, muted.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "clipId": {
+            "type": "string",
+            "description": "Clip id"
+          },
+          "patch": {
+            "type": "object",
+            "description": "Fields to change"
+          }
+        },
+        "required": [
+          "clipId",
+          "patch"
+        ]
+      }
+    },
+    {
+      "name": "text.add",
+      "description": "Add a text overlay on the text track.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "The words"
+          },
+          "start": {
+            "type": "number",
+            "description": "Timeline seconds"
+          },
+          "length": {
+            "type": "number",
+            "description": "Seconds on screen"
+          },
+          "anim": {
+            "type": "string",
+            "description": "none|fade|slide|pop",
+            "enum": [
+              "none",
+              "fade",
+              "slide",
+              "pop"
+            ]
+          }
+        },
+        "required": [
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "marker.add",
+      "description": "Add a marker at a timeline time.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "number",
+            "description": "Timeline seconds"
+          },
+          "label": {
+            "type": "string",
+            "description": "Label"
+          }
+        },
+        "required": [
+          "at"
+        ]
+      }
+    },
+    {
+      "name": "playhead.seek",
+      "description": "Move the playhead to a timeline time.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "number",
+            "description": "Timeline seconds"
+          }
+        },
+        "required": [
+          "at"
+        ]
+      }
+    },
+    {
+      "name": "edit.undo",
+      "description": "Undo the last edit.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "edit.redo",
+      "description": "Redo the last undone edit.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "export.video",
+      "description": "Export the timeline to a video file in the person's storage. preset: mp4-1080, mp4-720, mp4-4k or webm-1080.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "preset": {
+            "type": "string",
+            "description": "Export preset",
+            "enum": [
+              "mp4-1080",
+              "mp4-720",
+              "mp4-4k",
+              "webm-1080"
+            ]
+          }
+        },
+        "required": []
+      }
+    }
+  ]
+}
