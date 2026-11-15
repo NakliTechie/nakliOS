@@ -18,7 +18,7 @@ export function createSkillsExtension({ list, read }, { fs = null } = {}) {
   async function writeFolder(skill) {
     const root = `${SKILL_FOLDER_ROOT}/${skill.name}`;
     const files = (skill.files || []).filter((f) => f && f.path && !String(f.path).split('/').some((seg) => !seg || seg === '.' || seg === '..'));
-    await fs.write(`${root}/SKILL.md`, `---\nname: ${skill.name}\ndescription: ${String(skill.description || '').replace(/\s+/g, ' ').trim()}\n---\n${skill.body}\n`, { createParents: true });
+    await fs.write(`${root}/SKILL.md`, `---\nname: ${skill.name}\ndescription: ${JSON.stringify(String(skill.description || '').replace(/\s+/g, ' ').trim())}\n---\n${skill.body}\n`, { createParents: true });
     for (const f of files) await fs.write(`${root}/${f.path}`, String(f.content ?? ''), { createParents: true });
     return { folder: '/' + root, paths: files.map((f) => f.path) };
   }
