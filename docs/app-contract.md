@@ -584,7 +584,7 @@ file saves successfully or the user explicitly discards it.
 
 ## Common rail — protocol v3 (proposed)
 
-**Status: proposed 2026-11-03; steps 1 and 2 built 2026-11-03; step 3 built 2026-11-05 (Reckon, Draft, Sheaf and KanZen declare commands; Anvil calls them through `experimental_commands.search` and `.call`, which only system apps may use; the voice assistant reaches every app beyond its tuned tools through two fixed tools, so its tool list does not grow with the catalog; the desktop's sticky-note commands are `stickies.*`; a destructive command asks the person every time, in a dialog that shows what it would do; a handler's second argument is `{ caller, signal }`, and `signal` aborts when the caller stops waiting; a result over 256 KB is refused; step 3b built 2026-11-05: `commands.json` may declare `widgets` `{ id, title, display }` with display `list`, `agenda` or `value`, the app publishes through `experimental_widgets.update`, and the desktop draws text-only cards that open the app on a tap and keep the last snapshot in this browser, except snapshots marked `persist: false`, which go when Crate locks; step 4 built 2026-11-05: `accepts` in `commands.json`, `files.experimental_targets` and `files.experimental_sendTo`, see `docs/file-handoff-v1.md`; step 5 built 2026-11-05: an installed app with the `tools` permission, which needs `inference`, may send `tools` at the normal token caps, and `ai.experimental_embeddings`, `ai.experimental_transcribe` and `ai.experimental_speak` run on this device after one Allow per app per visit; speech needs the assistant's model, whose download stays the person's click; step 6 built 2026-11-05: `commands.json` carries `parity`, which maps every control in Notes and Calendar to its command, to `view`, or to `person: <reason>`, and `scripts/check-command-parity.mjs` fails CI on a control with no entry; mirrored apps are held to manifest and handler checks only, because their controls are drawn at run time).** Built: `naklios.experimental_commands.register`; the desktop catalog (`sys/host/catalog.mjs`), reachable through the developer agent door; app manifests (`apps/<id>/commands.json`) that list an app's commands while it is closed, where a call opens the app minimized and waits for it to register; Notes and Calendar commands; and the voice assistant calling them on its own face (`app:read`, `app:write`), asking once per app per visit before a change. Everything else in this section is not built yet. It is the plan for SDK v3, recorded here so
+**Status: proposed 2026-11-03; steps 1 and 2 built 2026-11-03; step 3 built 2026-11-05 (Reckon, Draft, Sheaf and KanZen declare commands; Anvil calls them through `experimental_commands.search` and `.call`, which system apps may use freely and, since 2026-11-15, any other app may use after the person gives it an app Grant ("Grants on the rail", below); the voice assistant reaches every app beyond its tuned tools through two fixed tools, so its tool list does not grow with the catalog; the desktop's sticky-note commands are `stickies.*`; a destructive command asks the person every time, in a dialog that shows what it would do; a handler's second argument is `{ caller, signal }`, and `signal` aborts when the caller stops waiting; a result over 256 KB is refused; step 3b built 2026-11-05: `commands.json` may declare `widgets` `{ id, title, display }` with display `list`, `agenda` or `value`, the app publishes through `experimental_widgets.update`, and the desktop draws text-only cards that open the app on a tap and keep the last snapshot in this browser, except snapshots marked `persist: false`, which go when Crate locks; step 4 built 2026-11-05: `accepts` in `commands.json`, `files.experimental_targets` and `files.experimental_sendTo`, see `docs/file-handoff-v1.md`; step 5 built 2026-11-05: an installed app with the `tools` permission, which needs `inference`, may send `tools` at the normal token caps, and `ai.experimental_embeddings`, `ai.experimental_transcribe` and `ai.experimental_speak` run on this device after one Allow per app per visit; speech needs the assistant's model, whose download stays the person's click; step 6 built 2026-11-05: `commands.json` carries `parity`, which maps every control in Notes and Calendar to its command, to `view`, or to `person: <reason>`, and `scripts/check-command-parity.mjs` fails CI on a control with no entry; mirrored apps are held to manifest and handler checks only, because their controls are drawn at run time).** Built: `naklios.experimental_commands.register`; the desktop catalog (`sys/host/catalog.mjs`), reachable through the developer agent door; app manifests (`apps/<id>/commands.json`) that list an app's commands while it is closed, where a call opens the app minimized and waits for it to register; Notes and Calendar commands; and the voice assistant calling them on its own face (`app:read`, `app:write`), asking once per app per visit before a change. Everything else in this section is not built yet. It is the plan for SDK v3, recorded here so
 the contract stays one document. Members it names ship as `experimental_<name>` with a ledger line, per the rule in
 [`sdk-api-audit.md`](sdk-api-audit.md), and move into the Reference when they exist. Plan and build order:
 `plan/2026-11-03-common-rail-spec-plan.md`.
@@ -672,7 +672,32 @@ A subscriber needs a Grant for the topic.
 | The app's own UI | its own commands | yes | yes | through review |
 | Voice assistant, Anvil | every registered command | yes | after the person allows it once per app per session | through review |
 | Outside agent (`window.nakliOS.tools()`) | when the person turns the door on for the tab | yes | after the person allows it | through review |
-| Another app | only commands it holds a Grant for | with a Grant | with a Grant | through review |
+| Another app | its own, and those of apps it holds an app Grant for | with a Grant | with a Grant, after the person allows it once per visit | with a Grant, through review |
+
+**App Grants (built 2026-11-15).** An app that is not a system app reaches another app's commands through
+`experimental_commands.search` and `.call` once it holds an app Grant for that app. The design matches the
+network door's `web.read` and `net.fetch` Grants:
+
+- **One Grant per caller app and target app.** Its caveats are principal `app:<caller>`, tools `[app.commands]` and
+  scope `app:<target>`. The host verifies it at every call against its root key and its revocation list. A Grant
+  runs one way: Lectella holding one for Lorewell gives Lorewell nothing.
+- **Asked once.** The first `call` to a target the caller has no decision for opens a host dialog
+  ("Let Lectella use Lorewell?"). Calls that arrive while it is open share it. **Not now** is remembered until the
+  person forgets it in Settings, so a refused app cannot ask again and again. An Allow that comes after the
+  caller stopped waiting (240 s) keeps the Grant and runs nothing.
+- **Then by scope.** `read` commands run. `write` commands ask once per caller, per target, per visit.
+  `destructive` commands always go through review, which shows what the command would do. A caller's own
+  commands need no Grant.
+- **Search shows only what the caller may use.** Before a Grant, `search` lists only the caller's own commands,
+  so a caller that knows the command name (`books.passage`) calls it to start the Grant dialog.
+- **Revocable in Settings → AI.** Each pair has a row with **Revoke** (or **Forget** for a decline). Revoking puts
+  the Grant's identifier on the revocation list, so a stale copy fails verification, and the next call asks again.
+- **History.** Every call, refusals included, is one hash-chained event (door `call`) in OPFS
+  `naklios/history/apps.ndjson`: caller, target, command, Grant id and outcome code. The arguments and the result
+  are committed by hash only.
+
+Code: `sys/host/app-grants.mjs`, tested by `sys/host/test/app-grants.test.mjs`; the host wiring is the
+`naklios:commands:search` and `naklios:commands:call` branch of `index.html`.
 
 Cross-origin catalog apps may register commands; the same checks apply, because the rail already carries their `fs`
 and `ai` calls.
@@ -854,8 +879,8 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 |---|---|---|
 | `experimental_commands` | namespace · **experimental** | The app's commands on the common rail (`docs/app-contract.md`, "Common rail"); the desktop lists them as `<app-id>.<name>` in `sys/host/catalog.mjs`, checks each caller's grant and stages `destructive` ones. |
 | `experimental_commands.register` | function · **experimental** | Declare the app's commands `{ name, description, input, scope, handler }`; replaces the whole set. Standalone: keeps the handlers and sends nothing. |
-| `experimental_commands.search` | function · **experimental** | System apps: find other apps' commands by words, with the input each one takes. Standalone: `[]`. |
-| `experimental_commands.call` | function · **experimental** | System apps: call another app's command; the host applies the caller's grant and asks the person before a change. Standalone: rejects. |
+| `experimental_commands.search` | function · **experimental** | Find app commands by words, with the input each one takes and the app that owns it. A system app sees every app's; any other app sees its own and those of apps it holds an app Grant for. Standalone: `[]`. |
+| `experimental_commands.call` | function · **experimental** | Call another app's command. A system app runs on its own face; any other app first needs an app Grant, which the person gives once per caller and target app and can revoke in Settings → AI. After it, `read` runs, `write` asks once per visit, `destructive` goes through review, and every call is one History event. Standalone: rejects. |
 
 ### `experimental_widgets` (namespace)
 
