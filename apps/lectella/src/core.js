@@ -104,9 +104,12 @@ export function search(index, query, k = 8) {
 }
 
 /**
- * @typedef {{ kind: 'source' | 'note', id: string, title: string, text: string }} ContextItem
- * @typedef {{ n: number, kind: 'source' | 'note', id: string, title: string, chunk?: number }} Ref
+ * @typedef {{ kind: 'source' | 'note' | 'lorewell', id: string, title: string, text: string, work?: string, location?: string }} ContextItem
+ * @typedef {{ n: number, kind: 'source' | 'note' | 'lorewell', id: string, title: string, chunk?: number, work?: string, location?: string }} Ref
  */
+
+/** How each kind of context item is named to the model. @type {Record<string, string>} */
+const KIND_LABEL = { source: 'Source', note: 'Note', lorewell: 'Book passage' };
 
 export const SYSTEM_PROMPT = [
   'You are a research assistant working inside one notebook.',
@@ -137,14 +140,15 @@ export function buildChat({ notebook, items, history = [], question, budget, chu
   if (items.length && fixed + full <= budget) {
     mode = 'full';
     items.forEach((it, idx) => {
-      refs.push({ n: idx + 1, kind: it.kind, id: it.id, title: it.title });
-      blocks.push(`[${idx + 1}] ${it.kind === 'note' ? 'Note' : 'Source'}: ${it.title}\n${it.text}`);
+      refs.push({ n: idx + 1, kind: it.kind, id: it.id, title: it.title, ...(it.work ? { work: it.work, location: it.location } : {}) });
+      blocks.push(`[${idx + 1}] ${KIND_LABEL[it.kind] ?? 'Source'}: ${it.title}\n${it.text}`);
     });
   } else if (items.length) {
     mode = 'passages';
     let room = budget - fixed;
     const docs = items.map((it) => ({ id: it.id, title: it.title, chunks: chunks?.get(it.id) ?? chunkText(it.text) }));
     const kindOf = new Map(items.map((it) => [it.id, it.kind]));
+    const itemOf = new Map(items.map((it) => [it.id, it]));
     let hits = search(buildIndex(docs), [question, ...past.filter((m) => m.role === 'user').map((m) => m.content)].join(' '), 40);
     // A question with no matching words (say, "summarise this") still gets the opening of each item.
     if (!hits.length) hits = docs.flatMap((d) => d.chunks.slice(0, 2).map((c) => ({ docId: d.id, title: d.title, chunk: c.i, text: c.text, score: 0 })));
@@ -153,8 +157,9 @@ export function buildChat({ notebook, items, history = [], question, budget, chu
       if (cost > room) continue;
       room -= cost;
       const n = refs.length + 1;
-      refs.push({ n, kind: /** @type {'source' | 'note'} */ (kindOf.get(h.docId)), id: h.docId, title: h.title, chunk: h.chunk });
-      blocks.push(`[${n}] ${kindOf.get(h.docId) === 'note' ? 'Note' : 'Source'}: ${h.title} (passage ${h.chunk + 1})\n${h.text}`);
+      const it = itemOf.get(h.docId);
+      refs.push({ n, kind: /** @type {any} */ (kindOf.get(h.docId)), id: h.docId, title: h.title, chunk: h.chunk, ...(it?.work ? { work: it.work, location: it.location } : {}) });
+      blocks.push(`[${n}] ${KIND_LABEL[/** @type {string} */ (kindOf.get(h.docId))] ?? 'Source'}: ${h.title} (passage ${h.chunk + 1})\n${h.text}`);
     }
   }
   const context = blocks.length ? `Context items:\n\n${blocks.join('\n\n---\n\n')}` : 'There are no context items: no source or note is switched on for chat.';

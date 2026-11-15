@@ -14,7 +14,7 @@ import { uid, chunkText } from './core.js';
 
 /** @typedef {{ read(p: string): Promise<string>, readBinary?(p: string): Promise<Uint8Array>, write(p: string, d: string | Uint8Array): Promise<void>, exists(p: string): Promise<boolean>, delete(p: string): Promise<void> }} Fs */
 /** @typedef {{ id: string, name: string, description: string, created: number, updated: number, sources: string[], notes: string[], off: string[] }} Notebook */
-/** @typedef {{ id: string, title: string, kind: string, origin: string, added: number, chars: number, original?: string, hash?: string, fileHash?: string }} Source */
+/** @typedef {{ id: string, title: string, kind: string, origin: string, added: number, chars: number, original?: string, hash?: string, fileHash?: string, ref?: { app: string, work: string, location: string, label?: string, author?: string } }} Source */
 /** @typedef {{ id: string, notebook: string, title: string, kind: 'human' | 'ai', created: number, updated: number, refs?: any[], format?: string }} Note */
 /** @typedef {{ role: 'user' | 'assistant', content: string, refs?: any[], mode?: string, at: number }} Turn */
 
@@ -127,6 +127,16 @@ export class Library {
     this.chunkCache = new Map();
     /** Serialises writes so the index never races a body write. @type {Promise<any>} */
     this.queue = Promise.resolve();
+    /**
+     * Reads a reference source's text from the app that holds it (Lorewell). Set by the page; the text is never
+     * written to this library.
+     * @type {(src: Source) => Promise<string>}
+     */
+    this.resolveRef = async () => {
+      throw new Error('This source lives in another app, which is not reachable here.');
+    };
+    /** Titles of reference sources that could not be read for the last chat context. @type {string[]} */
+    this.unavailable = [];
   }
 
   /** @template T @param {() => Promise<T>} job @returns {Promise<T>} */
@@ -305,8 +315,48 @@ export class Library {
     return same && this.notebook(nbId).sources.includes(same.id) ? same : null;
   }
 
+  /**
+   * Add a reference to a passage another app holds (Lorewell): only its ids and labels are stored here. The same
+   * work and location twice is reported as present, or linked from another notebook.
+   * @param {string} nbId
+   * @param {{ app: string, work: string, location: string, title: string, author?: string, label?: string, chars?: number }} ref
+   * @returns {Promise<{ source: Source, status: 'added' | 'present' | 'linked' }>}
+   */
+  async addReference(nbId, { app, work, location, title, author, label, chars = 0 }) {
+    const nb = this.notebook(nbId);
+    if (!work || !location) throw new Error('A reference needs a work id and a location');
+    const same = this.data.sources.find((s) => s.ref && s.ref.app === app && s.ref.work === work && s.ref.location === location);
+    if (same) {
+      if (nb.sources.includes(same.id)) return { source: same, status: 'present' };
+      nb.sources.push(same.id);
+      nb.updated = Date.now();
+      await this.saveIndex();
+      return { source: same, status: 'linked' };
+    }
+    /** @type {Source} */
+    const src = {
+      id: uid('src'),
+      title: [String(title ?? '').trim() || 'Untitled book', label].filter(Boolean).join(' · '),
+      kind: 'lorewell',
+      origin: 'reference in Lorewell',
+      added: Date.now(),
+      chars,
+      ref: { app, work, location, ...(label ? { label } : {}), ...(author ? { author } : {}) },
+    };
+    this.data.sources.push(src);
+    nb.sources.push(src.id);
+    nb.updated = Date.now();
+    await this.saveIndex();
+    return { source: src, status: 'added' };
+  }
+
   /** @param {string} id */
   async sourceText(id) {
+    const ref = this.data.sources.find((s) => s.id === id && s.ref);
+    if (ref) {
+      if (!this.textCache.has(id)) this.textCache.set(id, await this.resolveRef(ref));
+      return /** @type {string} */ (this.textCache.get(id));
+    }
     if (!this.textCache.has(id)) this.textCache.set(id, await this.fs.read(`sources/${id}/text.md`));
     return /** @type {string} */ (this.textCache.get(id));
   }
@@ -436,7 +486,17 @@ export class Library {
   async contextItems(nbId) {
     const nb = this.notebook(nbId);
     const items = [];
-    for (const s of this.sourcesOf(nbId)) if (!nb.off.includes(s.id)) items.push({ kind: /** @type {const} */ ('source'), id: s.id, title: s.title, text: await this.sourceText(s.id) });
+    this.unavailable = [];
+    for (const s of this.sourcesOf(nbId)) {
+      if (nb.off.includes(s.id)) continue;
+      try {
+        items.push({ kind: /** @type {const} */ ('source'), id: s.id, title: s.title, text: await this.sourceText(s.id) });
+      } catch (e) {
+        // A reference whose app cannot answer is left out, and the page says so; it never fails the whole chat.
+        if (!s.ref) throw e;
+        this.unavailable.push(s.title);
+      }
+    }
     for (const n of this.notesOf(nbId)) if (!nb.off.includes(n.id)) items.push({ kind: /** @type {const} */ ('note'), id: n.id, title: n.title, text: await this.noteBody(n.id) });
     return items;
   }

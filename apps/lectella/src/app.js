@@ -3,6 +3,7 @@
 
 import { SPEAKERS, beforeSources, buildChat, citedRefs, esc, estimateTokens, mindmapSvg, parseOutline, parseScript, parseSlides, renderMarkdown, scriptMarkdown, studioRequest, summaryRequest, titleFrom } from './core.js';
 import { pdfText } from './pdf.js';
+import { citeLabel, lorewellReachable, readLorewell, searchLorewell } from './lorewell.js';
 import { Library, hostFs, opfsFs } from './store.js';
 import { COMMANDS, railCommands, run, searchNotebook } from './commands.js';
 
@@ -177,6 +178,7 @@ async function openLibrary(next) {
   if (noteSaver?.dirty) await noteSaver.flush().catch(fail);
   const fs = next === 'browser' ? opfsFs() : hostFs(naklios);
   const fresh = new Library(guarded(fs));
+  fresh.resolveRef = readReference;
   await fresh.load();
   const before = where;
   lib = fresh;
@@ -246,6 +248,9 @@ const aiOn = () => !!(caps().hosted && caps().ai);
 const budget = () => (caps().aiLocal ? 2400 : 24000);
 
 function drawAi() {
+  const reach = lorewellReachable(naklios);
+  $('lorewell-btn').hidden = !reach;
+  $('lorewell-chat-row').hidden = !reach || !aiOn();
   const s = $('ai-status');
   const c = caps();
   if (aiOn()) {
@@ -700,7 +705,7 @@ async function openSource(id, chunk) {
   const text = await lib.sourceText(id);
   openSourceId = id;
   $('src-title').textContent = s.title;
-  $('src-meta').textContent = `${s.chars.toLocaleString()} characters · added ${ago(s.added)}`;
+  $('src-meta').textContent = s.ref ? `Passage in Lorewell · cited ${ago(s.added)}` : `${s.chars.toLocaleString()} characters · added ${ago(s.added)}`;
   const box = $('src-text');
   if (chunk !== undefined) {
     const c = (await lib.sourceChunks(id))[chunk];
@@ -849,6 +854,7 @@ async function newNote() {
 
 /** @param {{ kind: string, id: string, chunk?: number }} r */
 async function openRef(r) {
+  if (r.kind === 'lorewell') return openLorewellPassage(/** @type {any} */ (r));
   const exists = r.kind === 'note' ? lib.data.notes.some((n) => n.id === r.id) : lib.data.sources.some((s) => s.id === r.id);
   if (!exists) return banner('That item has been removed from this library since the answer was written.', { error: true });
   if (r.kind === 'note') return openNote(r.id);
@@ -875,7 +881,22 @@ async function send() {
   if (!aiOn()) return banner('Chat needs a model. Choose one in NakliOS Settings → AI.', { error: true });
   const nbId = current;
   const nb = lib.notebook(nbId);
+  /** @type {import('./core.js').ContextItem[]} */
   const items = await lib.contextItems(nbId);
+  const notes = [];
+  if (lib.unavailable.length) notes.push(`Left out ${lib.unavailable.length} Lorewell passage${lib.unavailable.length === 1 ? '' : 's'} that could not be read: ${lib.unavailable.join(', ')}.`);
+  if (/** @type {HTMLInputElement} */ ($('lorewell-chat')).checked && lorewellReachable(naklios)) {
+    banner('Searching Lorewell for this question…');
+    try {
+      const found = await lorewellItems(question);
+      items.push(...found);
+      notes.push(found.length ? `Added ${found.length} passage${found.length === 1 ? '' : 's'} from Lorewell.` : 'Lorewell had no passage for this question.');
+    } catch (e) {
+      notes.push(`Lorewell was not searched: ${/** @type {any} */ (e)?.message ?? e}`);
+    }
+  }
+  if (notes.length) banner(notes.join(' '));
+  else $('banner').hidden = true;
   const chunks = await lib.chunksFor(items);
   const history = turns.filter((t) => t.content).map((t) => ({ role: t.role, content: t.content }));
   const req = buildChat({ notebook: nb, items, history, question, budget: budget(), chunks });
@@ -945,6 +966,97 @@ async function runSearch() {
   }
 }
 
+// ── Lorewell: cite passages from the person's book library without copying the books ──────────────────
+
+/** Read a Lorewell reference's passage text (never stored here). @param {import('./store.js').Source} src */
+async function readReference(src) {
+  const r = /** @type {NonNullable<typeof src.ref>} */ (src.ref);
+  return (await readLorewell(naklios, r.work, r.location, { chars: 6000, context: 1 })).text;
+}
+
+/** Lorewell passages that match a question, as chat context items (best 3, about 1,500 characters each). @param {string} q */
+async function lorewellItems(q) {
+  const hits = await searchLorewell(naklios, q, 3);
+  const items = [];
+  for (const h of hits) {
+    let text = h.excerpt;
+    try {
+      text = (await readLorewell(naklios, h.work, h.location, { chars: 1500 })).text || text;
+    } catch {
+      // the excerpt stands in for the passage
+    }
+    if (text.trim()) items.push({ kind: /** @type {const} */ ('lorewell'), id: `lw:${h.work}#${h.location}`, title: citeLabel(h), text, work: h.work, location: h.location });
+  }
+  return items;
+}
+
+/** Search Lorewell from the dialog and list results with Add and Read. */
+async function lorewellSearch() {
+  const q = /** @type {HTMLInputElement} */ ($('lw-query')).value.trim();
+  const list = $('lw-results');
+  if (!q) return;
+  $('lw-status').textContent = 'Searching Lorewell… (the first time, NakliOS asks you to allow it)';
+  list.innerHTML = '';
+  let results;
+  try {
+    results = await searchLorewell(naklios, q, 12);
+  } catch (e) {
+    $('lw-status').textContent = String(/** @type {any} */ (e)?.message ?? e);
+    return;
+  }
+  $('lw-status').textContent = results.length ? `${results.length} passage${results.length === 1 ? '' : 's'} in Lorewell` : 'No passage in Lorewell matches that.';
+  for (const h of results) {
+    const li = document.createElement('li');
+    li.innerHTML = `<div class="lw-head"><b>${esc(citeLabel(h))}</b><button type="button" data-command="source.add-reference">Add</button><button type="button" class="lw-read">Read</button></div><p>${esc(h.excerpt ?? '')}</p>`;
+    const add = /** @type {HTMLButtonElement} */ (li.querySelector('[data-command]'));
+    add.onclick = async (e) => {
+      e.preventDefault();
+      if (!current) return;
+      try {
+        const out = await act('source.add-reference', { notebook: current, work: h.work, location: h.location, title: h.title, author: h.author, label: h.label });
+        add.textContent = out.status === 'present' ? 'Already in' : 'Added';
+        add.disabled = true;
+      } catch (err) {
+        fail(err);
+      }
+    };
+    /** @type {HTMLButtonElement} */ (li.querySelector('.lw-read')).onclick = async (e) => {
+      e.preventDefault();
+      const open = li.querySelector('.lw-text');
+      if (open) return open.remove();
+      const box = document.createElement('div');
+      box.className = 'lw-text';
+      box.textContent = 'Reading…';
+      li.append(box);
+      try {
+        box.textContent = (await readLorewell(naklios, h.work, h.location, { chars: 4000, context: 1 })).text;
+      } catch (err) {
+        box.textContent = String(/** @type {any} */ (err)?.message ?? err);
+      }
+    };
+    list.append(li);
+  }
+}
+
+/** Show one Lorewell passage, as a cited chat answer points to it. @param {{ work?: string, location?: string, title: string }} r */
+async function openLorewellPassage(r) {
+  $('src-title').textContent = r.title;
+  $('src-meta').textContent = 'Passage in Lorewell';
+  $('src-text').textContent = 'Reading from Lorewell…';
+  openSourceId = null;
+  const d = dlg('dlg-source');
+  d.querySelectorAll('[data-command]').forEach((b) => (/** @type {HTMLElement} */ (b).hidden = true));
+  d.showModal();
+  closed(d).then(() => d.querySelectorAll('[data-command]').forEach((b) => (/** @type {HTMLElement} */ (b).hidden = false)));
+  try {
+    const p = await readLorewell(naklios, String(r.work), String(r.location), { chars: 6000, context: 1 });
+    $('src-text').textContent = p.text;
+    $('src-meta').textContent = `Passage in Lorewell${p.label ? ` · ${p.label}` : ''}`;
+  } catch (e) {
+    $('src-text').textContent = String(/** @type {any} */ (e)?.message ?? e);
+  }
+}
+
 // ── Wiring ───────────────────────────────────────────────────────────────────────────────────────────
 
 /** @type {Record<string, () => any>} */
@@ -954,6 +1066,11 @@ const UI = {
   'source.add': () => addSource(),
   'source.import': () => /** @type {HTMLInputElement} */ ($('file')).click(),
   'note.add': () => newNote(),
+  'source.find-lorewell': () => {
+    const d = dlg('dlg-lorewell');
+    d.showModal();
+    /** @type {HTMLInputElement} */ ($('lw-query')).focus();
+  },
   'notebook.briefing': () => studio('briefing'),
   'notebook.audio': () => studio('audio'),
   'notebook.mindmap': () => studio('mindmap'),
@@ -1020,6 +1137,10 @@ $('question').addEventListener('keydown', (e) => {
   }
 });
 $('stop').onclick = () => abort?.abort();
+$('lw-go').onclick = () => lorewellSearch().catch(fail);
+$('lw-query').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') (e.preventDefault(), lorewellSearch().catch(fail));
+});
 document.querySelectorAll('[data-note-view]').forEach((b) => b.addEventListener('click', () => noteView(/** @type {any} */ (/** @type {HTMLElement} */ (b).dataset.noteView))));
 $('note-read').addEventListener('keydown', (e) => {
   if (openNoteFormat !== 'slides') return;

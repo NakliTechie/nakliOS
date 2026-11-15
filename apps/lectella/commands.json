@@ -130,6 +130,46 @@
       }
     },
     {
+      "name": "source.add-reference",
+      "description": "Cite a passage from a Lorewell book in a notebook without copying the book: Lectella keeps the work id and location and reads the passage from Lorewell when it needs it.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "notebook": {
+            "type": "string",
+            "description": "Notebook name or id"
+          },
+          "work": {
+            "type": "string",
+            "description": "Lorewell workId, from books.library.search"
+          },
+          "location": {
+            "type": "string",
+            "description": "Lorewell passageId, from location.passageId in books.library.search"
+          },
+          "title": {
+            "type": "string",
+            "description": "Book title"
+          },
+          "author": {
+            "type": "string",
+            "description": "Book author"
+          },
+          "label": {
+            "type": "string",
+            "description": "Where in the book, such as \"Chapter 3\""
+          }
+        },
+        "required": [
+          "notebook",
+          "work",
+          "location",
+          "title"
+        ]
+      }
+    },
+    {
       "name": "source.read",
       "description": "Read a source's full text.",
       "scope": "read",

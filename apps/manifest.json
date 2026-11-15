@@ -4385,6 +4385,10 @@
         {
           "source": "vendor/pdfjs-6.2.108/NOTICE.md",
           "destination": "vendor/pdfjs-6.2.108/NOTICE.md"
+        },
+        {
+          "source": "src/lorewell.js",
+          "destination": "src/lorewell.js"
         }
       ]
     },

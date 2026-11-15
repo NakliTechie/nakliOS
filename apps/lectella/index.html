@@ -124,6 +124,14 @@
   .deck-nav { display: flex; justify-content: center; align-items: center; gap: .8rem; margin-top: .5rem; color: var(--mute); }
   .deck:fullscreen { background: #fff; display: flex; flex-direction: column; justify-content: center; padding: 3vw; }
   .deck:fullscreen .slide { border: 0; box-shadow: none; width: min(100%, calc(86vh * 16 / 9)); }
+  .row-flex { display: flex; gap: .5rem; }
+  .row-flex input { flex: 1; }
+  ul.lw-results { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .5rem; }
+  ul.lw-results li { border: 1px solid var(--line); border-radius: 8px; padding: .5rem .65rem; background: var(--bg); }
+  ul.lw-results .lw-head { display: flex; gap: .5rem; align-items: baseline; flex-wrap: wrap; }
+  ul.lw-results .lw-head b { flex: 1; min-width: 10rem; }
+  ul.lw-results p { margin: .3rem 0 0; font-size: .9rem; }
+  ul.lw-results .lw-text { white-space: pre-wrap; max-height: 16rem; overflow: auto; border-top: 1px solid var(--line); margin-top: .4rem; padding-top: .4rem; }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   @media (max-width: 1100px) {
     .tabs { display: flex; }
@@ -172,7 +180,7 @@
       </div>
       <div class="cols" id="cols" hidden>
         <section class="col" data-col="sources" aria-label="Sources">
-          <h3><span class="grow">Sources</span><button data-command="source.add">Add source</button></h3>
+          <h3><span class="grow">Sources</span><button data-command="source.find-lorewell" id="lorewell-btn" hidden title="Search your Lorewell library and cite passages without copying the books">From Lorewell</button><button data-command="source.add">Add source</button></h3>
           <div class="scroll" id="sources-drop">
             <label class="sr" for="search">Search this notebook</label>
             <input type="search" id="search" data-command="notebook.search" placeholder="Search sources and notes">
@@ -188,6 +196,7 @@
             <label class="sr" for="question">Ask a question about this notebook</label>
             <textarea id="question" placeholder="Ask a question about your sources" rows="2"></textarea>
             <div class="row">
+              <label class="small" id="lorewell-chat-row" hidden><input type="checkbox" id="lorewell-chat" data-command="chat.lorewell"> Also search Lorewell</label>
               <span class="grow muted small" id="chat-hint">Enter sends · Shift+Enter adds a line</span>
               <button id="stop" hidden>Stop</button>
               <button class="primary" id="send" data-command="chat.ask">Send</button>
@@ -275,6 +284,19 @@
       <button type="button" id="note-present" data-command="note.present" hidden>Present</button>
       <span class="muted small" id="note-saved"></span>
     </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-lorewell" class="wide">
+  <form method="dialog">
+    <div class="d-head"><h2>From Lorewell</h2></div>
+    <div class="d-body">
+      <p class="muted small" style="margin:0">Search the books in your Lorewell library. <b>Add</b> cites a passage in this notebook; the book stays in Lorewell, and Lectella reads the passage from it when it needs it. The first search asks you once to let Lectella use Lorewell.</p>
+      <div class="row-flex"><label class="sr" for="lw-query">Search Lorewell</label><input type="search" id="lw-query" placeholder="Words or a question"><button type="button" class="primary" id="lw-go">Search</button></div>
+      <p class="muted small" id="lw-status" style="margin:0"></p>
+      <ul class="lw-results" id="lw-results"></ul>
+    </div>
+    <div class="d-foot"><button class="primary" value="close">Done</button></div>
   </form>
 </dialog>
 

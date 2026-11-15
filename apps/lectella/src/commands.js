@@ -85,6 +85,36 @@ export const COMMANDS = [
     },
   },
   {
+    name: 'source.add-reference',
+    description: 'Cite a passage from a Lorewell book in a notebook without copying the book: Lectella keeps the work id and location and reads the passage from Lorewell when it needs it.',
+    scope: 'write',
+    ui: 'The "Add" button on a result in the "From Lorewell" dialog.',
+    input: {
+      type: 'object',
+      properties: {
+        notebook: str('Notebook name or id'),
+        work: str('Lorewell workId, from books.library.search'),
+        location: str('Lorewell passageId, from location.passageId in books.library.search'),
+        title: str('Book title'),
+        author: str('Book author'),
+        label: str('Where in the book, such as "Chapter 3"'),
+      },
+      required: ['notebook', 'work', 'location', 'title'],
+    },
+    run: async (lib, a) => {
+      const { source: s, status } = await lib.addReference(nbOf(lib, a?.notebook).id, { app: 'books', work: String(a?.work ?? ''), location: String(a?.location ?? ''), title: a?.title, author: a?.author, label: a?.label });
+      return { id: s.id, title: s.title, status };
+    },
+  },
+  {
+    name: 'source.find-lorewell',
+    description: 'Search the person\'s Lorewell library for passages to cite. Agents call books.library.search directly.',
+    scope: 'read',
+    ui: 'The "From Lorewell" button in the Sources column.',
+    input: none(),
+    personOnly: 'The first search asks you to let Lectella use Lorewell; you start it.',
+  },
+  {
     name: 'source.import',
     description: 'Add a PDF, Markdown or text file from your disk as a source. A PDF needs a text layer.',
     scope: 'write',
@@ -255,6 +285,14 @@ export const COMMANDS = [
     personOnly: 'A chat question sends your sources to the model you chose in NakliOS; you start it, so you see what is sent.',
   },
   {
+    name: 'chat.lorewell',
+    description: 'Also search the Lorewell library for each chat question and answer from the best passages, cited like sources.',
+    scope: 'read',
+    ui: 'The "Also search Lorewell" box under the chat.',
+    input: none(),
+    personOnly: 'It sends Lorewell passages to the model you chose; you switch it on.',
+  },
+  {
     name: 'chat.save-note',
     description: 'Save a chat answer as an AI note, with its citations.',
     scope: 'write',
@@ -267,7 +305,14 @@ export const COMMANDS = [
 /** Search every source and note in a notebook (switched on or not). @param {Library} lib @param {string} nbId @param {string} query @param {number} limit */
 export async function searchNotebook(lib, nbId, query, limit = 8) {
   const docs = [];
-  for (const s of lib.sourcesOf(nbId)) docs.push({ id: s.id, title: s.title, chunks: await lib.sourceChunks(s.id) });
+  for (const s of lib.sourcesOf(nbId)) {
+    try {
+      docs.push({ id: s.id, title: s.title, chunks: await lib.sourceChunks(s.id) });
+    } catch (e) {
+      // A Lorewell reference that cannot be read now is left out of the search, not fatal to it.
+      if (!s.ref) throw e;
+    }
+  }
   const notes = lib.notesOf(nbId);
   const chunks = await lib.chunksFor(await Promise.all(notes.map(async (n) => ({ id: n.id, kind: 'note', text: await lib.noteBody(n.id) }))));
   for (const n of notes) docs.push({ id: n.id, title: n.title, chunks: chunks.get(n.id) ?? [] });
