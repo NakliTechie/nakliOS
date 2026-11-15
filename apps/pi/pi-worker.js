@@ -169,7 +169,7 @@ These named skills are available for THIS project. When a task matches one, call
 `)+`
 `:""}var IV=".pi/skills";function FL({list:t,read:e},{fs:n=null}={}){async function r(s){let o=`${IV}/${s.name}`,a=(s.files||[]).filter(c=>c&&c.path&&!String(c.path).split("/").some(u=>!u||u==="."||u===".."));await n.write(`${o}/SKILL.md`,`---
 name: ${s.name}
-description: ${String(s.description||"").replace(/\s+/g," ").trim()}
+description: ${JSON.stringify(String(s.description||"").replace(/\s+/g," ").trim())}
 ---
 ${s.body}
 `,{createParents:!0});for(let c of a)await n.write(`${o}/${c.path}`,String(c.content??""),{createParents:!0});return{folder:"/"+o,paths:a.map(c=>c.path)}}let i={name:"skill",description:"Load the full instructions of one skill from the NakliOS skills library, by its exact name from the Skills list. Call it before doing a task that a listed skill covers.",parameters:ur({name:dn({description:"The skill name exactly as listed"})}),execute:async s=>{let o=await e(String(s.name||""));if(!o)throw new Error(`No usable skill named "${s.name}". Use a name from the Skills list.`);if(o.blocked)throw new Error(`Skill "${o.name}" did not pass the safety scan and will not load: ${o.blocked}`);let a=`# Skill: ${o.name}`;if(n&&o.files&&o.files.length){let{folder:c,paths:u}=await r(o);a+=`

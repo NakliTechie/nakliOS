@@ -14,7 +14,8 @@ export async function loadLibrarySkills(sdk) {
     let skill = null;
     try { skill = await lib.read(item.name); } catch (_) {}
     if (!skill?.body) continue;
-    const text = `---\nname: ${skill.name}\ndescription: ${String(skill.description || '').replace(/\s+/g, ' ').trim()}\n---\n${skill.body}\n`;
+    // The description is quoted (JSON is valid YAML), so one with a colon still parses ("Cut a release: semver…").
+    const text = `---\nname: ${skill.name}\ndescription: ${JSON.stringify(String(skill.description || '').replace(/\s+/g, ' ').trim())}\n---\n${skill.body}\n`;
     const root = `${LIBRARY_SKILLS_DIR}/${skill.name}`;
     out.push({ path: root, directory: true, mode: 0o755 });
     out.push({ path: `${root}/SKILL.md`, bytes: Array.from(enc.encode(text)), mode: 0o444 });
