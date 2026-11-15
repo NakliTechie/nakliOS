@@ -136,6 +136,11 @@ export class Library {
     return this;
   }
 
+  /** Delete a file if it is there. A NakliOS Folder throws on a missing file; a missing file is already gone. @param {string} p */
+  async rm(p) {
+    if (await this.fs.exists(p)) await this.fs.delete(p);
+  }
+
   saveIndex() {
     return this.serial(() => this.fs.write('library.json', JSON.stringify(this.data, null, 1)));
   }
@@ -196,8 +201,8 @@ export class Library {
     await this.saveIndex();
     // Bodies go after the index stops naming them, so a failure leaves stray files, never broken records.
     await this.serial(async () => {
-      for (const n of notes) await this.fs.delete(`notes/${id}/${n.id}.md`);
-      await this.fs.delete(`chats/${id}.json`);
+      for (const n of notes) await this.rm(`notes/${id}/${n.id}.md`);
+      await this.rm(`chats/${id}.json`);
       for (const s of orphans) await this.dropSourceFiles(s);
     });
     return { notes: notes.length, sources: orphans.length };
@@ -291,8 +296,8 @@ export class Library {
 
   /** @param {Source} src */
   async dropSourceFiles(src) {
-    await this.fs.delete(`sources/${src.id}/text.md`);
-    if (src.original) await this.fs.delete(src.original);
+    await this.rm(`sources/${src.id}/text.md`);
+    if (src.original) await this.rm(src.original);
     this.textCache.delete(src.id);
     this.chunkCache.delete(src.id);
   }
@@ -358,7 +363,7 @@ export class Library {
     nb.off = nb.off.filter((x) => x !== id);
     this.data.notes = this.data.notes.filter((x) => x.id !== id);
     await this.saveIndex();
-    await this.serial(() => this.fs.delete(`notes/${n.notebook}/${id}.md`));
+    await this.serial(() => this.rm(`notes/${n.notebook}/${id}.md`));
     this.textCache.delete(id);
   }
 
