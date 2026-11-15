@@ -92,6 +92,12 @@ export function normaliseAgentMessages(messages, limits = AGENT_LIMITS) {
       if (content === '') out.content = null; // OpenAI: assistant tool-call turns have null content
     }
     if (role === 'assistant' && typeof message?.name === 'string' && message.name) out.name = message.name;
+    // DeepSeek asks for earlier turns' reasoning back when the request carries tools.
+    if (role === 'assistant' && typeof message?.reasoning_content === 'string' && message.reasoning_content) {
+      total += message.reasoning_content.length;
+      if (total > limits.maxInputChars) throw new Error('Agent inference input is too large');
+      out.reasoning_content = message.reasoning_content;
+    }
     return out;
   });
 }

@@ -55,6 +55,7 @@ prefix today.
 | `capabilities.aiSearch` | field | stable | — | Semantic (local, embedding) search over the app's own namespace granted — not web search. |
 | `capabilities.experimental_tex` | field | experimental | As `experimental_tex`. | The app may compile LaTeX projects in its own storage. |
 | `capabilities.experimental_web` | field | experimental | As `experimental_web`. | The app may search the web and read pages through the host. |
+| `capabilities.experimental_aiReasoning` | field | experimental | A second app shows reasoning from it, and the browser models report their thinking too, or say they cannot. | The selected chat model is an endpoint, so chunks carry `delta.reasoning_content` and the `experimental_thinking` request option switches thinking. |
 | `capabilities.net` | field | stable | — | Sovereign egress (`naklios.net.fetch`) granted. |
 | `capabilities.netBackend` | field | stable | — | Which egress backend the host is configured with: `worker` (the default) · `bridge`; null when none. Never a package name. |
 | `capabilities.review` | field | stable | — | The host can stage native diffs from this app and return source-bound review decisions. Enabled for Reckon, Draft, and KanZen. |
