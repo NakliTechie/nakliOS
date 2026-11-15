@@ -39,6 +39,7 @@ function load({ answers = [] } = {}) {
     aiAppOwnsEgress: id => id === 'anvil',
     APPS: [{ id: 'anvil', name: 'Anvil' }],
     nakliosConfirm: async (msg) => { prompts.push(msg); return answers.length ? answers.shift() : true; },
+    rpcPromptOpens: () => {},
     navigator: { storage: { getDirectory: async () => dir } },
     egressFetch: async (req) => { fetched.push(req); return { status: 200, statusText: 'OK', headers: {}, body: 'x'.repeat(42) }; },
     console,

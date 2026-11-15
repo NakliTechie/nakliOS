@@ -384,6 +384,8 @@ jobs:
 
       - name: Verify the NakliOS dialog promise always settles (no wedged consent)
         run: node scripts/test-host-dialog-settles.mjs
+      - name: Host prompts stop the calling app's 30 s clock
+        run: node scripts/test-host-rpc-wait.mjs
 
       - name: Verify a locked Crate keeps an app's storage binding (unlock / move / cancel)
         run: node scripts/test-host-locked-crate-binding.mjs
