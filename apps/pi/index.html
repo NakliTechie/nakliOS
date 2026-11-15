@@ -26,12 +26,38 @@
   .tool .state { color:var(--muted); margin-left:6px; }
   .tool pre { margin:0; padding:6px 10px; border-top:1px solid var(--line); white-space:pre-wrap; word-break:break-word; font:11px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; max-height:220px; overflow:auto; }
   .working { color:var(--muted); font-size:12px; }
+  header { align-items:center; }
+  header .grow { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ghost { background:transparent; color:var(--ink); border:1px solid var(--line); padding:4px 10px; font-size:13px; height:30px; }
+  .ghost:hover { background:#f1efe9; }
+  #list { flex:1; overflow:auto; padding:16px; display:flex; flex-direction:column; gap:8px; }
+  #list[hidden], #log[hidden], #f[hidden], header button[hidden] { display:none; }
+  .conv { max-width:760px; width:100%; text-align:left; background:var(--panel); color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:10px 12px; display:flex; gap:10px; align-items:baseline; }
+  .conv:hover { border-color:var(--brand); }
+  .conv .n { color:var(--muted); font-size:12px; min-width:1.5em; }
+  .conv .t { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .conv .when { color:var(--muted); font-size:12px; white-space:nowrap; }
+  .conv.on { border-color:#d0d9ff; background:#eef2ff; }
+  .hint { color:var(--muted); font-size:12px; max-width:760px; }
+  body { position:relative; }
+  #cmds { position:absolute; left:16px; bottom:76px; background:var(--panel); border:1px solid var(--line); border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,.08); min-width:300px; max-width:calc(100% - 32px); padding:4px; }
+  #cmds[hidden] { display:none; }
+  #cmds div { padding:5px 8px; border-radius:5px; cursor:pointer; font-size:13px; }
+  #cmds div.sel, #cmds div:hover { background:#eef2ff; }
+  #cmds code { font:12px ui-monospace, SFMono-Regular, Menlo, monospace; margin-right:8px; }
+  #cmds span { color:var(--muted); }
 </style>
 </head>
 <body>
-<header><b>Pi</b><span>pi-durable 1.5.2 in a Worker · model calls go through NakliOS AI</span></header>
+<header>
+  <button id="back" class="ghost" type="button" title="All conversations (/resume)" hidden>← Conversations</button>
+  <b>Pi</b><span class="grow" id="title">pi-durable 1.5.2 in a Worker · model calls go through NakliOS AI</span>
+  <button id="newbtn" class="ghost" type="button" title="Start a new conversation (/new)">+ New</button>
+</header>
+<div id="list" hidden></div>
 <div id="log"></div>
-<form id="f"><textarea id="q" placeholder="Ask Pi to do something in /workspace"></textarea><button id="send">Send</button></form>
+<div id="cmds" hidden></div>
+<form id="f"><textarea id="q" placeholder="Ask Pi to do something in /workspace · type / for commands"></textarea><button id="send">Send</button></form>
 <script type="module">
 import { CrateBackend } from '../../sys/rig/fileops/crate-backend.mjs';
 import { createOpfsBackend, opfsAvailable } from '../../sys/rig/fileops/opfs.mjs';
@@ -127,10 +153,11 @@ worker.postMessage({ type: 'init', backend: describeBackend(storage.backend) });
 worker.onmessage = async (event) => {
   const msg = event.data || {};
   if (msg.type === 'ready') {
-    // Redraw the saved conversation after a reload, above the ready line.
-    for (const row of msg.transcript || []) log.insertBefore(Object.assign(document.createElement('div'), { className: 'msg ' + (row.role === 'assistant' ? '' : row.role), textContent: row.text }), status);
-    status.textContent = `Pi is ready. Files and conversations are saved in ${storage.label}.`;
-    log.scrollTop = log.scrollHeight;
+    status.textContent = `Pi is ready. Files and conversations are saved in ${storage.label}. Type / for commands.`;
+    setConversations(msg.conversations, msg.active);
+    drawTranscript(msg.transcript);
+    // With more than one conversation Pi opens on the list, so you choose where to continue.
+    if ((msg.conversations || []).length > 1) showList(); else showChat();
     return;
   }
   if (msg.type === 'fs') { worker.postMessage({ type: 'fs-reply', id: msg.id, result: await serveStorage(msg.method, msg.args) }); return; }
@@ -173,7 +200,7 @@ worker.onmessage = async (event) => {
           if (choice?.delta?.tool_calls) toolCalls = choice.delta.tool_calls;
           if (choice?.finish_reason) finishReason = choice.finish_reason;
           if (chunk.usage) usage = chunk.usage;
-          if (chunk.model) model = chunk.model;
+          if (chunk.model) { model = chunk.model; lastModel = chunk.model; }
         }
       } finally { clearInterval(tick); working.remove(); }
       const message = { role: 'assistant', content };
@@ -207,17 +234,166 @@ async function ask(text) {
   else add('err', 'Pi did not answer: ' + JSON.stringify(s).slice(0, 400));
   return r;
 }
-// Test seam for live checks; read-only besides ask.
-window.__pi = { ask, read: (path) => request({ type: 'read', path }), trace, storage: storage.label };
+// ---- Conversations: the list screen, the header, and switching ----
+const listEl = document.getElementById('list');
+const backBtn = document.getElementById('back');
+const titleEl = document.getElementById('title');
+const form = document.getElementById('f');
+const cmdsEl = document.getElementById('cmds');
+let conversations = [], activeConv = null, busy = false, lastModel = null;
 
-document.getElementById('f').addEventListener('submit', async (e) => {
+function setConversations(list, active) {
+  conversations = list || conversations;
+  activeConv = active || activeConv;
+  if (listEl.hidden) titleEl.textContent = activeConv ? (activeConv.title || 'New conversation') : 'Pi';
+  else drawList();
+}
+// Redraw the chat window from a transcript: the saved rows, then the status line.
+function drawTranscript(rows) {
+  log.textContent = '';
+  for (const row of rows || []) log.appendChild(Object.assign(document.createElement('div'), { className: 'msg ' + (row.role === 'assistant' ? '' : row.role), textContent: row.text }));
+  status.className = 'msg sys';
+  log.appendChild(status);
+  log.scrollTop = log.scrollHeight;
+}
+function ago(t) {
+  const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.round(s / 60) + ' min ago';
+  if (s < 86400) return Math.round(s / 3600) + ' h ago';
+  return new Date(t).toLocaleDateString();
+}
+function drawList() {
+  listEl.textContent = '';
+  const n = conversations.length;
+  listEl.appendChild(Object.assign(document.createElement('div'), { className: 'hint', textContent: `${n} conversation${n === 1 ? '' : 's'}, newest first. Choose one to continue it, or press + New.` }));
+  conversations.forEach((c, i) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'conv' + (c.active ? ' on' : '');
+    b.append(Object.assign(document.createElement('span'), { className: 'n', textContent: String(i + 1) }),
+      Object.assign(document.createElement('span'), { className: 't', textContent: c.title + (c.forkOf ? '  (fork)' : '') }),
+      Object.assign(document.createElement('span'), { className: 'when', textContent: ago(c.updatedAt) }));
+    b.addEventListener('click', () => command('switch', { id: c.id }));
+    listEl.appendChild(b);
+  });
+}
+function showList() {
+  listEl.hidden = false; log.hidden = true; form.hidden = true; cmdsEl.hidden = true;
+  backBtn.hidden = true; titleEl.textContent = 'Conversations';
+  drawList();
+}
+function showChat() {
+  listEl.hidden = true; log.hidden = false; form.hidden = false;
+  backBtn.hidden = false; titleEl.textContent = activeConv ? (activeConv.title || 'New conversation') : 'Pi';
+  log.scrollTop = log.scrollHeight; q.focus();
+}
+// Run one conversation command in the Worker and redraw from its reply.
+async function command(op, arg) {
+  if (busy) { showChat(); add('sys', 'Pi is still working. Wait for the answer, then try again.'); return null; }
+  busy = true; send.disabled = true;
+  const note = op === 'compact' ? add('sys working', 'Compacting older messages…') : null;
+  try {
+    const r = await request({ type: 'cmd', op, arg });
+    note?.remove();
+    if (r.error) { showChat(); add('err', r.error); return r; }
+    setConversations(r.conversations, r.active);
+    if (r.transcript) drawTranscript(r.transcript);
+    showChat();
+    return r;
+  } finally { busy = false; send.disabled = false; }
+}
+backBtn.addEventListener('click', () => showList());
+document.getElementById('newbtn').addEventListener('click', () => command('new', ''));
+
+// ---- Slash commands ----
+const COMMANDS = [
+  { name: '/help', args: '', about: 'List these commands' },
+  { name: '/new', args: '[name]', about: 'Start a new conversation' },
+  { name: '/resume', args: '[number or name]', about: 'Open the conversation list, or continue one' },
+  { name: '/fork', args: '[name]', about: 'Copy this conversation and continue in the copy' },
+  { name: '/name', args: '<name>', about: 'Rename this conversation' },
+  { name: '/compact', args: '[instructions]', about: 'Summarise older messages to free context' },
+  { name: '/model', args: '', about: 'Show which model answered last' },
+];
+async function runSlash(text) {
+  const [head, ...rest] = text.split(/\s+/);
+  const arg = rest.join(' ').trim();
+  const name = head.toLowerCase();
+  if (name === '/help' || name === '/?') {
+    add('sys', 'Commands:\n' + COMMANDS.map((c) => `${c.name}${c.args ? ' ' + c.args : ''} — ${c.about}`).join('\n') + '\n\n← Conversations at the top left opens the list.');
+    return;
+  }
+  if (name === '/new') { const r = await command('new', arg); if (r && !r.error) add('sys', 'New conversation started.'); return; }
+  if (name === '/resume' || name === '/sessions') { if (!arg) { showList(); return; } await command('switch', arg); return; }
+  if (name === '/fork') { const r = await command('fork', arg); if (r && !r.error) add('sys', `Forked. You are now in "${r.active.title}"; the original is unchanged.`); return; }
+  if (name === '/name' || name === '/rename') { const r = await command('rename', arg); if (r && !r.error) add('sys', `Renamed to "${r.active.title}".`); return; }
+  if (name === '/compact') {
+    const r = await command('compact', arg);
+    if (r && !r.error) {
+      const c = r.result || {};
+      add(c.status === 'completed' ? 'sys' : 'err', c.status === 'completed'
+        ? (c.compacted ? 'Compacted: older messages are now one summary.' : 'Nothing to compact yet: the conversation is short.')
+        : `Compaction ${c.status || 'ended'}${c.error ? ': ' + c.error : ''}.`);
+    }
+    return;
+  }
+  if (name === '/model') {
+    add('sys', (lastModel ? `The last answer came from ${lastModel}.` : 'No answer yet in this window, so the model is not known.') + ' Pi uses the model chosen in NakliOS Settings → AI; change it there.');
+    return;
+  }
+  add('err', `Unknown command ${head}. Type /help for the list.`);
+}
+
+// The suggestion menu: shown while the box holds only a command word.
+let cmdSel = 0, cmdMatches = [];
+function updateMenu() {
+  const v = q.value;
+  if (!/^\/\S*$/.test(v)) { cmdsEl.hidden = true; cmdMatches = []; return; }
+  cmdMatches = COMMANDS.filter((c) => c.name.startsWith(v.toLowerCase()));
+  if (!cmdMatches.length) { cmdsEl.hidden = true; return; }
+  cmdSel = Math.min(cmdSel, cmdMatches.length - 1);
+  cmdsEl.textContent = '';
+  cmdMatches.forEach((c, i) => {
+    const d = document.createElement('div');
+    if (i === cmdSel) d.className = 'sel';
+    d.append(Object.assign(document.createElement('code'), { textContent: c.name + (c.args ? ' ' + c.args : '') }), Object.assign(document.createElement('span'), { textContent: c.about }));
+    d.addEventListener('mousedown', (e) => { e.preventDefault(); pickCommand(c); });
+    cmdsEl.appendChild(d);
+  });
+  cmdsEl.hidden = false;
+}
+function pickCommand(c) {
+  q.value = c.name + (c.args ? ' ' : '');
+  cmdsEl.hidden = true; cmdMatches = []; q.focus();
+  if (!c.args) form.requestSubmit();
+}
+q.addEventListener('input', () => { cmdSel = 0; updateMenu(); });
+q.addEventListener('blur', () => setTimeout(() => { cmdsEl.hidden = true; }, 100));
+
+// Test seam for live checks; read-only besides ask and the conversation commands.
+window.__pi = { ask, read: (path) => request({ type: 'read', path }), trace, storage: storage.label, slash: runSlash, command, state: () => ({ conversations, active: activeConv, list: !listEl.hidden }) };
+
+form.addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = q.value.trim();
   if (!text) return;
-  q.value = ''; send.disabled = true;
-  try { await ask(text); } finally { send.disabled = false; q.focus(); }
+  if (text.startsWith('/')) { q.value = ''; cmdsEl.hidden = true; await runSlash(text); return; }
+  if (busy) return;
+  q.value = ''; send.disabled = true; busy = true;
+  try { await ask(text); } finally { busy = false; send.disabled = false; q.focus(); }
+  // The first message names the conversation; refresh the header and list from the Worker.
+  const r = await request({ type: 'cmd', op: 'list' });
+  if (!r.error) setConversations(r.conversations, r.active);
 });
-q.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); document.getElementById('f').requestSubmit(); } });
+q.addEventListener('keydown', (e) => {
+  if (cmdMatches.length && !cmdsEl.hidden) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); cmdSel = (cmdSel + 1) % cmdMatches.length; updateMenu(); return; }
+    if (e.key === 'ArrowUp') { e.preventDefault(); cmdSel = (cmdSel - 1 + cmdMatches.length) % cmdMatches.length; updateMenu(); return; }
+    if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey && q.value.toLowerCase() !== cmdMatches[cmdSel].name)) { e.preventDefault(); pickCommand(cmdMatches[cmdSel]); return; }
+    if (e.key === 'Escape') { cmdsEl.hidden = true; return; }
+  }
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); }
+});
 </script>
 </body>
 </html>

@@ -58,7 +58,7 @@ self.onmessage = async (event) => {
     ready.then(async ({ pi }) => {
       let transcript = [];
       try { transcript = await pi.transcript(); } catch (_) { /* the session still works; the window just starts empty */ }
-      self.postMessage({ type: 'ready', transcript });
+      self.postMessage({ type: 'ready', transcript, conversations: pi.list(), active: pi.active });
     }, (e) => self.postMessage({ type: 'fatal', error: String(e?.stack || e) }));
     return;
   }
@@ -70,6 +70,27 @@ self.onmessage = async (event) => {
       self.postMessage({ type: 'answer', id: msg.id, settled: JSON.parse(JSON.stringify(settled)), answer });
     } catch (e) {
       self.postMessage({ type: 'answer', id: msg.id, error: String(e?.stack || e?.message || e) });
+    }
+    return;
+  }
+  // Conversation commands from the page's list and its slash commands. Each answers with the list,
+  // the active conversation and, after a switch, its transcript, so the page redraws from one reply.
+  if (msg.type === 'cmd') {
+    try {
+      const { pi } = await ready;
+      let result = null, switched = false;
+      if (msg.op === 'list') result = null;
+      else if (msg.op === 'new') { result = await pi.newConversation(msg.arg); switched = true; }
+      else if (msg.op === 'switch') { result = await pi.switchTo(msg.arg); switched = true; }
+      else if (msg.op === 'fork') { result = await pi.fork(msg.arg); switched = true; }
+      else if (msg.op === 'rename') result = await pi.rename(msg.arg);
+      else if (msg.op === 'compact') { result = await pi.compact(msg.arg); switched = true; }
+      else throw new Error('Unknown command ' + msg.op);
+      const reply = { type: 'answer', id: msg.id, result, conversations: pi.list(), active: pi.active };
+      if (switched) reply.transcript = await pi.transcript();
+      self.postMessage(reply);
+    } catch (e) {
+      self.postMessage({ type: 'answer', id: msg.id, error: String(e?.message || e) });
     }
     return;
   }

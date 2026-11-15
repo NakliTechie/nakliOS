@@ -35,7 +35,34 @@ assert.ok(sse.endsWith('data: [DONE]\n\n'));
 
 const pi = await openPi({ fs, shell, callBroker });
 const { settled, answer } = await pi.ask('Write PI_NAKLIOS_OK to note.txt, then cat it back.');
+
+// Conversations: the first message names the root; new, fork, rename and switch keep separate
+// transcripts; the index and the active conversation survive closing and reopening the session.
+assert.equal(pi.list().length, 1);
+assert.equal(pi.active.title, 'Write PI_NAKLIOS_OK to note.txt, then cat it back.', 'the first message names the conversation');
+const rootId = pi.active.id;
+const forked = await pi.fork();
+assert.notEqual(forked.id, rootId);
+assert.match(forked.title, /^Fork of Write PI_NAKLIOS_OK/);
+assert.ok((await pi.transcript()).some((r) => r.text === 'The file says PI_NAKLIOS_OK.'), 'the fork carries the history');
+await pi.rename('Forked copy');
+const fresh = await pi.newConversation('Empty one');
+assert.equal((await pi.transcript()).length, 0, 'a new conversation starts empty');
+assert.deepEqual(pi.list().map((c) => c.title).sort(), ['Empty one', 'Forked copy', 'Write PI_NAKLIOS_OK to note.txt, then cat it back.']);
+await pi.switchTo('forked');
+assert.equal(pi.active.title, 'Forked copy', 'switch by part of the name');
+await assert.rejects(pi.switchTo('no such thing'), /No conversation matches/);
+await assert.rejects(pi.rename('  '), /Give a name/);
+const compacted = await pi.compact();
+assert.equal(compacted.status, 'completed', `compact on a short conversation ends cleanly: ${JSON.stringify(compacted)}`);
+await pi.switchTo({ id: fresh.id });
 await pi.close();
+const again = await openPi({ fs, shell, callBroker });
+assert.equal(again.list().length, 3, 'the index survives a reopen');
+assert.equal(again.active.id, fresh.id, 'the active conversation survives a reopen');
+await again.switchTo({ id: rootId });
+assert.ok((await again.transcript()).some((r) => r.role === 'you'), 'the root transcript is intact after reopen');
+await again.close();
 assert.equal(answer, 'The file says PI_NAKLIOS_OK.', 'the answer text is read back from its transcript entry');
 
 assert.equal(settled.status, 'done', `run settled ${settled.status}: ${JSON.stringify(settled).slice(0, 300)}`);
@@ -51,4 +78,4 @@ assert.ok(toolMsgs.some((m) => String(typeof m.content === 'string' ? m.content 
   'the rig shell output reached the model');
 assert.ok(requests[0].messages.some((m) => /NakliOS/.test(typeof m.content === 'string' ? m.content : JSON.stringify(m.content))),
   'Pi is told it runs in NakliOS with the rig shell');
-console.log('pi-core: Pi wrote and read a file through rig fileops and the rig shell, 3 broker calls');
+console.log('pi-core: Pi wrote and read a file through rig fileops and the rig shell, 3 broker calls; new, fork, rename, switch and reopen of conversations');
