@@ -722,6 +722,21 @@
       }
     },
     {
+      "name": "assist.autocut",
+      "description": "Find the beat of the music on the audio track and cut the main-track clips so each ends on a beat. every: cut every 1, 2 or 4 beats (default 2).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "every": {
+            "type": "number",
+            "description": "Beats per cut: 1, 2 or 4"
+          }
+        },
+        "required": []
+      }
+    },
+    {
       "name": "clip.duplicate",
       "description": "Copy a clip and paste the copy at a time (seconds), on its own track or another of the same kind. On the main track the copy is inserted and the track closes up.",
       "scope": "write",
