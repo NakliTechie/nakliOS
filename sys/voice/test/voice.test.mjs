@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { createStubModel, tone, INPUT_SAMPLE_RATE } from '../adapter.mjs';
 import { createToolRegistry, createTimers, builtinTools } from '../tools.mjs';
 import { createVoiceSession } from '../session.mjs';
-import { createVad, createTurnRecorder, concatFloat32, createSpeechFallback } from '../audio.mjs';
+import { createVad, createTurnRecorder, concatFloat32, createSpeechFallback, createPlayer, DRAIN_MARGIN_MS, SPEECH_CHARS_PER_SEC } from '../audio.mjs';
 
 let pass = 0;
 const test = async (name, fn) => { await fn(); pass++; console.log('ok', name); };
@@ -162,6 +162,50 @@ await test('speech fallback speaks whole sentences with an on-device voice only'
   const none = createSpeechFallback({ synth: fakeSynth({ local: false }), Utterance: FakeUtterance });
   assert.equal(none.available, false);
   assert.equal(none.push('Nothing leaves the machine. '), false);
+});
+
+// A reply must never hang the assistant in "speaking": with no audio device (or headless Chrome) onended / onend never
+// fire, so drained() settles after the queued audio's own length plus a margin (voice battery follow-up, 2026-11-10).
+function fakeClock() {
+  const timers = new Map(); let id = 0;
+  return { set: (fn, ms) => { timers.set(++id, { fn, ms }); return id; }, clear: (t) => timers.delete(t),
+    fire() { const all = [...timers.values()]; timers.clear(); all.forEach((t) => t.fn()); return all.map((t) => t.ms); }, timers };
+}
+function fakeAudioCtx(state) {
+  return class { constructor() { this.state = state; this.currentTime = 0; this.destination = {}; }
+    resume() { return Promise.resolve(); }
+    createBuffer(_c, len, rate) { return { duration: len / rate, copyToChannel() {} }; }
+    createBufferSource() { return { connect() {}, start() {}, stop() {}, onended: null }; } };
+}
+await test('drained() settles when no audio device plays, after the queued length plus a margin', async () => {
+  const clock = fakeClock();
+  const player = createPlayer({ sampleRate: 1000, AudioContextClass: fakeAudioCtx('suspended'), setTimeoutFn: clock.set, clearTimeoutFn: clock.clear });
+  player.enqueue(new Float32Array(3000)); // 3 s that never plays
+  let done = false; const p = player.drained().then(() => { done = true; });
+  await Promise.resolve();
+  assert.equal(done, false, 'still waiting before the deadline');
+  assert.deepEqual(clock.fire(), [3000 + DRAIN_MARGIN_MS], 'deadline = queued audio + margin');
+  await p;
+  assert.equal(done, true); assert.equal(player.playing, false, 'the stuck audio is stopped');
+  // Running context: the deadline is the time left to play, and a normal end clears the watchdog.
+  const clock2 = fakeClock();
+  const Running = fakeAudioCtx('running');
+  const p2 = createPlayer({ sampleRate: 1000, AudioContextClass: Running, setTimeoutFn: clock2.set, clearTimeoutFn: clock2.clear });
+  p2.enqueue(new Float32Array(2000));
+  const d2 = p2.drained();
+  assert.equal([...clock2.timers.values()][0].ms, Math.round((0.02 + 2) * 1000) + DRAIN_MARGIN_MS);
+  p2.stop(); await d2;
+  assert.equal(clock2.timers.size, 0, 'a normal end clears the watchdog');
+});
+await test('the speech fallback settles when the voice never reports an end', async () => {
+  const clock = fakeClock();
+  const synth = fakeSynth();
+  const sp = createSpeechFallback({ synth, Utterance: FakeUtterance, setTimeoutFn: clock.set, clearTimeoutFn: clock.clear });
+  sp.push('Sixteen chars ok. '); // "Sixteen chars ok." is 17 characters
+  let done = false; const d = sp.drained().then(() => { done = true; });
+  assert.deepEqual(clock.fire(), [(17 / SPEECH_CHARS_PER_SEC) * 1000 + DRAIN_MARGIN_MS]);
+  await d;
+  assert.equal(done, true); assert.equal(sp.busy, false); assert.ok(synth.cancelled >= 1, 'the stuck voice is cancelled');
 });
 
 await test('a text-only model is spoken by the fallback and interrupt cancels it', async () => {
@@ -567,6 +611,17 @@ await test('a repeated tool call ends the tool rounds, and web search is hidden 
   assert.equal((await reg.run('web_search', { query: 'x' })).error, 'unknown tool web_search');
   const withKey = createToolRegistry(moreTools({ ...st.deps, search: () => ({ provider: 'brave', key: 'k' }) }));
   assert.equal(withKey.list().some((t) => t.name === 'web_search'), true);
+  // No panel provider: the host's search (DeepSeek's native web search with a saved key) stands in, offered only
+  // when that real engine is there.
+  const asked = [];
+  const hostSearch = async (q) => { asked.push(q); return { provider: 'deepseek', results: [{ title: 'IPL final', url: 'https://x', snippet: 's' }] }; };
+  const noKey = createToolRegistry(moreTools({ ...st.deps, search: () => null, webSearch: hostSearch, webSearchReady: () => false }));
+  assert.equal(noKey.list().some((t) => t.name === 'web_search'), false, 'no DeepSeek key: no second Wikipedia tool');
+  const viaHost = createToolRegistry(moreTools({ ...st.deps, search: () => null, webSearch: hostSearch, webSearchReady: () => true }));
+  assert.equal(viaHost.list().some((t) => t.name === 'web_search'), true);
+  const got = await viaHost.run('web_search', { query: 'who won the IPL' });
+  assert.equal(got.result.provider, 'deepseek');
+  assert.deepEqual(asked, ['who won the IPL']);
   const offered = []; let n = 0;
   const loopy = { id: 'loopy', async generate({ tools }) { offered.push(tools.length); n++;
     return tools.length && n <= 3 ? { text: '', toolCalls: [{ name: 'list_memories', arguments: {} }], stopReason: 'tool_calls' } : { text: 'I do not know.', toolCalls: [], stopReason: 'stop' }; } };
@@ -619,6 +674,12 @@ await test('set_reminder, list_reminders and cancel_reminder through the registr
   assert.equal((await reg.run('cancel_reminder', { message: 'mum' })).result.cancelled, 'call Mum');
   assert.equal(saved.length, 0);
   assert.match((await reg.run('set_reminder', { at: 'later' })).error, /clock time/);
+  // "Call Dad.": a first call with at "now" must send the model back to the person, not to a time it picks.
+  const noTime = (await reg.run('set_reminder', { at: 'now', message: 'call Dad' })).error;
+  assert.match(noTime, /no clock time was named/);
+  assert.match(noTime, /Do not choose a time: ask the person/);
+  assert.equal(saved.length, 0, 'no reminder is set when no time was named');
+  assert.match(reg.list().find((t) => t.name === 'set_reminder').description, /never choose a time[\s\S]*call, text or message someone is not a reminder/);
 });
 
 // ── music and Notes ──

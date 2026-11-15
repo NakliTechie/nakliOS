@@ -106,7 +106,9 @@ export function parseReminderTime(text, nowDate = new Date()) {
     return d.getTime();
   }
   m = /^(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?$/.exec(s);
-  if (!m) throw new Error('at must be a clock time such as "17:00" or "5 pm", or a local date-time such as "2026-11-02T17:00"');
+  // No time named ("now", "later", empty): the model must ask, never pick one. "Call Dad." became a 17:00 reminder
+  // after a first call with at "now" failed and the retry chose a time (2026-10-30 promo recording).
+  if (!m) throw new Error(`no clock time was named (${JSON.stringify(String(text ?? ''))} is not one). Do not choose a time: ask the person when to remind them, or answer without a reminder`);
   let h = +m[1]; const min = m[2] ? +m[2] : 0; const ap = m[3]?.[0];
   if (ap && (h < 1 || h > 12)) throw new Error(`${text} is not a clock time`);
   if (ap === 'p' && h < 12) h += 12;
@@ -121,7 +123,7 @@ function reminderTools(reminders, now) {
   return [
     {
       name: 'set_reminder',
-      description: 'Remind the person at a clock time, e.g. "remind me at 5 pm to call Mum" or "wake me at 7". For a length of time ("in 10 minutes") use set_timer.',
+      description: 'Remind the person at a clock time they named, e.g. "remind me at 5 pm to call Mum" or "wake me at 7". Only when they ask to be reminded. If they named no time, ask for one; never choose a time. A request to call, text or message someone is not a reminder. For a length of time ("in 10 minutes") use set_timer.',
       parameters: { type: 'object', properties: {
         at: { type: 'string', description: 'Clock time ("17:00", "5 pm") or local date-time ("2026-11-02T17:00")' },
         message: { type: 'string', description: 'What to remind them of' },

@@ -77,10 +77,21 @@ export function createTurnRecorder({ sampleRate = INPUT_SAMPLE_RATE, maxSeconds 
 }
 
 // Plays 24 kHz chunks back to back. stop() silences everything queued; drained() resolves when idle.
-export function createPlayer({ sampleRate = OUTPUT_SAMPLE_RATE, onLevel = () => {} } = {}) {
-  let ctx = null, at = 0, sources = new Set(), waiters = [];
-  const settle = () => { if (!sources.size) { waiters.splice(0).forEach((r) => r()); onLevel(0); } };
-  return {
+// A spoken reply must never hang the assistant: with no audio device, no user gesture, or a headless browser the
+// context never runs, onended never fires, and drained() used to wait forever (voice battery, 2026-11-10). drained()
+// now also settles after the queued audio's own length plus DRAIN_MARGIN_MS, measured on the wall clock, and stops
+// whatever is still queued. While audio really plays, the deadline is the time left to play, so it never cuts speech.
+export const DRAIN_MARGIN_MS = 2000;
+export function createPlayer({ sampleRate = OUTPUT_SAMPLE_RATE, onLevel = () => {}, AudioContextClass = globalThis.AudioContext, setTimeoutFn = setTimeout, clearTimeoutFn = clearTimeout } = {}) {
+  let ctx = null, at = 0, sources = new Set(), waiters = [], queuedSec = 0, watchdog = null;
+  const settle = () => {
+    if (sources.size) return;
+    queuedSec = 0;
+    if (watchdog) { clearTimeoutFn(watchdog); watchdog = null; }
+    waiters.splice(0).forEach((r) => r()); onLevel(0);
+  };
+  const AudioContext = AudioContextClass;
+  const player = {
     // Call from a user gesture first, so the context is allowed to start.
     unlock() { ctx ||= new AudioContext({ sampleRate }); return ctx.resume(); },
     get playing() { return sources.size > 0; },
@@ -94,6 +105,7 @@ export function createPlayer({ sampleRate = OUTPUT_SAMPLE_RATE, onLevel = () => 
       at = Math.max(at, ctx.currentTime + 0.02);
       src.start(at);
       at += buf.duration;
+      queuedSec += buf.duration;
       sources.add(src);
       onLevel(Math.min(1, rms(chunk) * 6));
       src.onended = () => { sources.delete(src); settle(); };
@@ -102,28 +114,46 @@ export function createPlayer({ sampleRate = OUTPUT_SAMPLE_RATE, onLevel = () => 
       for (const s of sources) { s.onended = null; try { s.stop(); } catch {} }
       sources.clear(); at = 0; settle();
     },
-    drained() { return sources.size ? new Promise((r) => waiters.push(r)) : Promise.resolve(); },
+    drained() {
+      if (!sources.size) return Promise.resolve();
+      return new Promise((r) => {
+        waiters.push(r);
+        if (watchdog) return;
+        const left = ctx && ctx.state === 'running' ? Math.max(0, at - ctx.currentTime) : queuedSec;
+        watchdog = setTimeoutFn(() => { watchdog = null; if (sources.size) player.stop(); }, left * 1000 + DRAIN_MARGIN_MS);
+      });
+    },
   };
+  return player;
 }
 
 // Speaks streamed text with the browser's own voices while a model has no speech out (model.audioOut
 // === false). Only on-device voices (localService) are used, so no text leaves the machine; with none,
 // the reply stays text-only. push(delta) speaks each finished sentence; flush() speaks the rest.
-export function createSpeechFallback({ synth = globalThis.speechSynthesis, Utterance = globalThis.SpeechSynthesisUtterance, lang = 'en' } = {}) {
-  let buffer = '', pending = 0, waiters = [], voice;
+// Same guarantee as the player: a voice that never fires onend (no audio device, headless) cannot hang drained().
+// The deadline is a slow speaking rate for the queued text (SPEECH_CHARS_PER_SEC) plus DRAIN_MARGIN_MS.
+export const SPEECH_CHARS_PER_SEC = 8;
+export function createSpeechFallback({ synth = globalThis.speechSynthesis, Utterance = globalThis.SpeechSynthesisUtterance, lang = 'en', setTimeoutFn = setTimeout, clearTimeoutFn = clearTimeout } = {}) {
+  let buffer = '', pending = 0, waiters = [], voice, queuedChars = 0, watchdog = null;
   const pickVoice = () => {
     if (voice !== undefined) return voice;
     const local = (synth?.getVoices?.() || []).filter((v) => v.localService);
     voice = local.find((v) => v.lang?.startsWith(lang) && v.default) || local.find((v) => v.lang?.startsWith(lang)) || local[0] || null;
     return voice;
   };
-  const settle = () => { if (!pending) waiters.splice(0).forEach((r) => r()); };
+  const settle = () => {
+    if (pending) return;
+    queuedChars = 0;
+    if (watchdog) { clearTimeoutFn(watchdog); watchdog = null; }
+    waiters.splice(0).forEach((r) => r());
+  };
   function say(text) {
     const v = pickVoice();
     if (!text.trim() || !v || !Utterance) return false;
     const u = new Utterance(text.trim());
     u.voice = v;
     pending++;
+    queuedChars += text.trim().length;
     u.onend = u.onerror = () => { pending = Math.max(0, pending - 1); settle(); };
     synth.speak(u);
     return true;
@@ -140,6 +170,13 @@ export function createSpeechFallback({ synth = globalThis.speechSynthesis, Utter
     },
     flush() { const spoke = say(buffer); buffer = ''; return spoke; },
     stop() { buffer = ''; if (pending) synth?.cancel(); pending = 0; settle(); },
-    drained() { return pending ? new Promise((r) => waiters.push(r)) : Promise.resolve(); },
+    drained() {
+      if (!pending) return Promise.resolve();
+      return new Promise((r) => {
+        waiters.push(r);
+        if (watchdog) return;
+        watchdog = setTimeoutFn(() => { watchdog = null; if (pending) { try { synth?.cancel(); } catch (_) {} pending = 0; settle(); } }, (queuedChars / SPEECH_CHARS_PER_SEC) * 1000 + DRAIN_MARGIN_MS);
+      });
+    },
   };
 }

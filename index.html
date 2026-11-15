@@ -14375,6 +14375,29 @@ function voiceAssistantDeps(apps){
     const r = await fetch(`https://r.jina.ai/${url}`, { headers:{ 'X-Return-Format':'text' }, signal:AbortSignal.timeout(15000) });
     return { status:r.status, text:await r.text(), via:'Jina Reader', plain:true };
   }
+  // Web search without a panel provider: the host's web service, with DeepSeek's native search when a DeepSeek key
+  // is saved in Settings → AI (the provider Dish and Gupshup use). Each site asks once in the panel. Offered only
+  // when that real search engine is there, so the assistant does not gain a second Wikipedia tool.
+  const deepseekKey = () => aiEndpointApiKey(AI_ENDPOINT_PRESETS?.deepseek?.baseUrl || 'https://api.deepseek.com/v1');
+  let assistantWeb = null;
+  async function webSearch(query){
+    if (!assistantWeb){
+      const [{ createWebService }, { searchWeb }] = await Promise.all([import('./sys/host/web.mjs'), import('./sys/voice/more-tools.mjs')]);
+      assistantWeb = createWebService({
+        async authorize(host, how){
+          if (!(await voiceAssistant.consent(`web:${host}`, `Let the assistant ${how} ${host}? Your search words leave this device for ${host}.`)))
+            throw Object.assign(new Error(`the person did not allow ${host}`), { code:'ENOGRANT' });
+          return 'voice-assistant';
+        },
+        record:(host, grantId, output) => netHistoryAppend({ appId:'voice-assistant', host, method:'GET', grantId, output }),
+        searchConfig:() => { try { return JSON.parse(localStorage.getItem('nakli.voice.search') || 'null'); } catch (_) { return null; } },
+        searchWith:searchWeb,
+        egress:url => egressConfigured() ? egressFetch({ url, gitAuth:false }) : null,
+        deepseekKey,
+      });
+    }
+    return assistantWeb.search(query, { maxResults:5 });
+  }
   let kiln = null;
   async function python(){
     if (kiln) return kiln;
@@ -14393,7 +14416,7 @@ function voiceAssistantDeps(apps){
     if (!_skillLibMod) _skillLibMod = await import('./sys/ai/skill-library.mjs');
     return _skillLibMod.proposeSkill(store, skill);
   } };
-  return { memory, apps, musicFiles, fetchText, python, skills };
+  return { memory, apps, musicFiles, fetchText, python, skills, webSearch, webSearchReady:() => !!deepseekKey() };
 }
 const openAssistant = async () => (await voiceAssistantReady()).open();
 // A saved reminder needs the assistant running to fire, so a page that has one loads it (the panel stays closed).
