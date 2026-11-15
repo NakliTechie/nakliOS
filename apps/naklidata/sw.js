@@ -20,21 +20,32 @@
 // app keeps booting (engine boot will then either use the CDN if back
 // online, or surface its own error). See DECISIONS 2026-05-17 11:50.
 
-const CACHE_VERSION = 'bsxCirCOj3KhS';
+const CACHE_VERSION = 'bcsBNu7gIMLMr';
 // Policy version deliberately rotates the cache when eligibility rules change,
 // even if the inlined application hash stays the same.
 const CACHE_POLICY_VERSION = 'p3';
 const CACHE_NAME = `naklidata-shell-${CACHE_VERSION}-${CACHE_POLICY_VERSION}`;
 
-// Bump ONLY when the vendored runtime bytes (public/pyodide, public/webr,
-// public/readstat-wasm, public/duckdb-extensions) are re-vendored.
-const RUNTIME_VERSION = 'v1';
+// Bump ONLY when the vendored runtime bytes (public/opendta, public/pyodide, public/webr,
+// public/webr-repo, public/readstat-wasm, public/duckdb-extensions) are
+// re-vendored. v2: statistics wheels + patched pyodide-lock.json and the R
+// statistics pack (Batch 24, DECISIONS KJ). v3: the stripped statsmodels
+// wheel and its lockfile hash, re-derived with a time-zone-free zip time
+// (DECISIONS KS), the OpenDTA engine and matplotlib wheels (KT).
+const RUNTIME_VERSION = 'v3';
 const RUNTIME_CACHE = `naklidata-runtime-${RUNTIME_VERSION}`;
 
 const SCOPE_PATH = new URL(self.registration.scope).pathname.replace(/\/$/, '');
 
 // Path segments whose assets are large + immutable-per-runtime-version.
-const RUNTIME_PREFIXES = ['/pyodide/', '/webr/', '/readstat-wasm/', '/duckdb-extensions/'];
+const RUNTIME_PREFIXES = [
+  '/opendta/',
+  '/pyodide/',
+  '/webr/',
+  '/webr-repo/',
+  '/readstat-wasm/',
+  '/duckdb-extensions/',
+];
 const STATIC_PREFIXES = [
   '/chunks/',
   '/duckdb-fallback/',
@@ -142,7 +153,7 @@ function responseCanBeCached(res) {
 // files, so a first visit leaves the app usable offline. `./index.html` is not
 // listed: the origin may answer it with a redirect, and Chrome refuses to use a
 // redirected response for a page navigation. The shell is stored under `./`.
-const PRECACHE_EXTRA = ["./chunks/agent-surface.js","./chunks/bridge-client.js","./chunks/cleaning.js","./chunks/compare-tables.js","./chunks/contract-export.js","./chunks/data-quality.js","./chunks/demo-workbook.js","./chunks/facet-charts.js","./chunks/facet-network.js","./chunks/iceberg-catalog-mount.js","./chunks/iceberg-modals.js","./chunks/iceberg-rest-client.js","./chunks/link-paths.js","./chunks/map-data.js","./chunks/observable-plot.js","./chunks/onboarding-tour.js","./chunks/persistence-validation.js","./chunks/pyodide-runtime.js","./chunks/query-builder.js","./chunks/readstat-reader.js","./chunks/reference-enrich.js","./chunks/remote-delimited.js","./chunks/report-templates.js","./chunks/result-facets.js","./chunks/review-tray.js","./chunks/schema-override.js","./chunks/selection-explain.js","./chunks/semantic-classifier.js","./chunks/semantic-model.js","./chunks/sidecar-ontology.js","./chunks/sink-execution.js","./chunks/sqlite-reader.js","./chunks/standards-interchange.js","./chunks/standards-reasoning.js","./chunks/standards-skos.js","./chunks/standards-workbook.js","./chunks/static-export.js","./chunks/type-proposals.js","./chunks/webr-runtime.js","./chunks/xlsx-export.js","./reference/gst-state-codes.json","./reference/hsn-chapters.json","./reference/iso-4217.json","./reference/manifest.json"];
+const PRECACHE_EXTRA = ["./chunks/agent-surface.js","./chunks/analysis.js","./chunks/bridge-client.js","./chunks/cleaning.js","./chunks/compare-tables.js","./chunks/contract-export.js","./chunks/data-quality.js","./chunks/demo-workbook.js","./chunks/facet-charts.js","./chunks/facet-network.js","./chunks/iceberg-catalog-mount.js","./chunks/iceberg-modals.js","./chunks/iceberg-rest-client.js","./chunks/link-paths.js","./chunks/map-data.js","./chunks/observable-plot.js","./chunks/onboarding-tour.js","./chunks/persistence-validation.js","./chunks/pyodide-runtime.js","./chunks/query-builder.js","./chunks/readstat-reader.js","./chunks/reference-enrich.js","./chunks/remote-delimited.js","./chunks/report-templates.js","./chunks/result-facets.js","./chunks/review-tray.js","./chunks/schema-override.js","./chunks/selection-explain.js","./chunks/semantic-classifier.js","./chunks/semantic-model.js","./chunks/sidecar-ontology.js","./chunks/sink-execution.js","./chunks/sqlite-reader.js","./chunks/standards-interchange.js","./chunks/standards-reasoning.js","./chunks/standards-skos.js","./chunks/standards-workbook.js","./chunks/static-export.js","./chunks/type-proposals.js","./chunks/webr-runtime.js","./chunks/xlsx-export.js","./reference/gst-state-codes.json","./reference/hsn-chapters.json","./reference/iso-4217.json","./reference/manifest.json"];
 
 const PRECACHE_PATHS = [
   './',

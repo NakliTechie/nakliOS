@@ -492,7 +492,7 @@ details[open] > .rail-popover:is(:empty, :not([data-placed])) { visibility: hidd
   font-variant-numeric: tabular-nums;
   color: var(--text-muted);
 }
-`;var h=null,b=null,w=null;function T(a,t,n,e,l){let o=$(t.id,n.id,""),c=$(e.id,l.id,""),d=new Map,s=new Map;for(let[u,g]of Object.entries(a)){if(!g.assigned.typeId)continue;let r=g.assigned.typeId,y=g.candidates.find(f=>f.typeId===r)?.displayName??r;u.startsWith(o)&&!d.has(r)&&d.set(r,{columnName:g.columnName,displayName:y}),u.startsWith(c)&&!s.has(r)&&s.set(r,{columnName:g.columnName,displayName:y})}let m=[];for(let[u,g]of d){let r=s.get(u);r&&m.push({typeId:u,typeLabel:g.displayName,columnA:g.columnName,columnB:r.columnName})}return m}function A(a){if(h&&document.body.contains(h))return;w=document.activeElement??null,q();let t=document.createElement("div");t.className="compare-tables-overlay",t.setAttribute("role","dialog"),t.setAttribute("aria-modal","true"),t.setAttribute("aria-label","Compare tables"),t.innerHTML=`
+`;var h=null,b=null,w=null;function T(a,t,n,e,l){let o=$(t.id,n.id,""),c=$(e.id,l.id,""),d=new Map,s=new Map;for(let[u,g]of Object.entries(a)){if(!g.assigned.typeId)continue;let r=g.assigned.typeId,y=g.candidates.find(f=>f.typeId===r)?.displayName??r;u.startsWith(o)&&!d.has(r)&&d.set(r,{columnName:g.columnName,displayName:y}),u.startsWith(c)&&!s.has(r)&&s.set(r,{columnName:g.columnName,displayName:y})}let m=[];for(let[u,g]of d){let r=s.get(u);r&&m.push({typeId:u,typeLabel:g.displayName,columnA:g.columnName,columnB:r.columnName})}return m}function A(a){if(h&&document.body.contains(h))return;w=document.activeElement??null,z();let t=document.createElement("div");t.className="compare-tables-overlay",t.setAttribute("role","dialog"),t.setAttribute("aria-modal","true"),t.setAttribute("aria-label","Compare tables"),t.innerHTML=`
     <div class="compare-tables-modal" data-region="compare-tables-modal">
       <div class="compare-tables-header">
         <strong>Compare tables</strong>
@@ -557,7 +557,7 @@ details[open] > .rail-popover:is(:empty, :not([data-placed])) { visibility: hidd
       </div>
     </div>
     ${l}
-  `}function p(a){return a.replace(/[&<>"']/g,t=>{switch(t){case"&":return"&amp;";case"<":return"&lt;";case">":return"&gt;";case'"':return"&quot;";default:return"&#39;"}})}var C=!1;function q(){if(C)return;C=!0;let a=document.createElement("style");a.textContent=z,document.head.appendChild(a)}var z=`
+  `}function p(a){return a.replace(/[&<>"']/g,t=>{switch(t){case"&":return"&amp;";case"<":return"&lt;";case">":return"&gt;";case'"':return"&quot;";default:return"&#39;"}})}var C=!1;function z(){if(C)return;C=!0;let a=document.createElement("style");a.textContent=q,document.head.appendChild(a)}var q=`
 .compare-tables-overlay {
   position: fixed; inset: 0;
   background: var(--overlay-scrim);

@@ -1,6 +1,6 @@
 {
   "version": "v0.27.7",
-  "generated": "2026-07-05T07:59:16.335Z",
+  "generated": "2026-11-15T11:41:47.292Z",
   "files": {
     "pyodide.mjs": "sha384-z8L8kZDaddEtk+VNtmPcXLY83XSVlBjlabpCtT6GghMW3jSyzOEzNsL9BiKsfjcL",
     "pyodide.asm.js": "sha384-J3SxzZJh4tkb2bgoUc72zArF45FJ+ngsbiqNsmxqkkecNVpZ/bUHAM0JMp+YPVpx",
@@ -13,6 +13,23 @@
     "pyodide_unix_timezones-1.0.0-py3-none-any.whl": "sha384-e0AYwpSzGS2bS2K9ScuDzqy9xRQ9C/1jDO5zvL/MlHPDzTbSE75Ewtue3FjwI0mY",
     "python_dateutil-2.9.0.post0-py2.py3-none-any.whl": "sha384-fq/mg29zAF9pfW+iT7vSKpoq2XdO4riXKo01b9LrLQHazdmJUkP4xIbRJ5SEE1Dd",
     "pytz-2024.1-py2.py3-none-any.whl": "sha384-rTn1etpfCmLaq6WrAA1xFlscv+Uygtxi/AT71SkDJDpDTPH4BfYQGabnYYZlpl4f",
-    "six-1.16.0-py2.py3-none-any.whl": "sha384-ZT4HbmON9i2ShLiJW8+Q1flEP8X5l7Zyc5ivl1GOOd4QZfAc+xmTnvTumKv9kwAf"
+    "six-1.16.0-py2.py3-none-any.whl": "sha384-ZT4HbmON9i2ShLiJW8+Q1flEP8X5l7Zyc5ivl1GOOd4QZfAc+xmTnvTumKv9kwAf",
+    "statsmodels-0.14.4-cp312-cp312-pyodide_2024_0_wasm32.whl": "sha384-kdJmzEhY6d/yl/CbWYVjrG5KZ8OOeZNFAI/kg3av8CdBSCyu5+XzxCaIHcJMzKon",
+    "scipy-1.14.1-cp312-cp312-pyodide_2024_0_wasm32.whl": "sha384-cgbZtni6PLEHyzQeTSmi4UAnLKy1NsR0h9glzNcz90bblMbq+dgiBzHKNRJwfLx3",
+    "openblas-0.3.26.zip": "sha384-g/qOUFfNGZlftUWVP+9wTFGfZ6cN8FRS6EW6ybIqgIaHQYt2Uy6EBI6p3MYg0Bdw",
+    "patsy-0.5.6-py2.py3-none-any.whl": "sha384-bRxUk2VRK0pc66yzilJc0LsuzetosISS9QleH1hdw2zja/oRCPlW6ZSzPc+FqYYC",
+    "packaging-24.2-py3-none-any.whl": "sha384-d1ST9u4zJ1ngyJb87x0Pu49rQhu4MXXvQxTU37lHb09bVSwb8ZCQtKo3V7n935rK",
+    "matplotlib-3.8.4-cp312-cp312-pyodide_2024_0_wasm32.whl": "sha384-4e7Na3Uda3zankeiEGN21TB5pf03/xyisxl39mGZuTdTr2oz4I92qM0EMomHKgCC",
+    "matplotlib_pyodide-0.2.3-py3-none-any.whl": "sha384-KcjSW/FQVD+88E18pRRBHVJSn3/U/Tgke2RYFs7XFmRbVPAzDsY0a7qvrKWcyFN1",
+    "contourpy-1.3.0-cp312-cp312-pyodide_2024_0_wasm32.whl": "sha384-xvaO+62pHcYl540LfXlmlr2mWXTORivztJ5cVQ5kJyKRDlAKlaQeyRNvEyGVmXaB",
+    "cycler-0.12.1-py3-none-any.whl": "sha384-lz4T/gDw+OesSBtWCSs6IGYBHATGNTdYSBjrjUGnGj3mkL/tJiBM4byKwkjU+Xqy",
+    "fonttools-4.51.0-py3-none-any.whl": "sha384-SFQ+LFQ0bFR/HmfiDqlMHVnNUpBRYOCpCWWAfgi5GyMwoPDn1woXOLuqx6xpRvC5",
+    "kiwisolver-1.4.5-cp312-cp312-pyodide_2024_0_wasm32.whl": "sha384-HJ7YKWgUZ+y5Lb6Z9fbZtcV/KVkuU7fxXvlY11ZwXya9X825eGx5NoBKE5Fk4RqP",
+    "pillow-10.2.0-cp312-cp312-pyodide_2024_0_wasm32.whl": "sha384-H0f14GOs3ZezZuPs9MwB3GMH/EJXRZ27EdL9rcUQ8qpS2mBcnehj88g7wEsdvMqL",
+    "pyparsing-3.1.2-py3-none-any.whl": "sha384-FB+1MIiJ37Cm7QQz+VNj3fZ3whfLahGHXaEmppJm9NONEpSB4vvYXuocfFDF443F"
+  },
+  "derived": {
+    "statsmodels-0.14.4-cp312-cp312-pyodide_2024_0_wasm32.whl": "sha384-V4wJnypU2+Pyy1yUFzw5eUofAzIpvby4KDhWsvs2x82wZB709kwJ0eE5Z+hZTBGo",
+    "pyodide-lock.json": "sha384-lh8SHedADLpRQa0UEczY2nWm7kX7r/19o18g/hvMOnk6YibmZeZta6jvV43eae/b"
   }
 }
