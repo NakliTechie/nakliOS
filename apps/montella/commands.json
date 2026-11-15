@@ -103,6 +103,40 @@
       }
     },
     {
+      "name": "clip.insert",
+      "description": "Insert a source range of a media file at a timeline time: a clip under that time splits and later clips move along (on the main track). in and out are source seconds.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "mediaId": {
+            "type": "string",
+            "description": "Media id"
+          },
+          "at": {
+            "type": "number",
+            "description": "Timeline time, seconds"
+          },
+          "in": {
+            "type": "number",
+            "description": "Source in, seconds"
+          },
+          "out": {
+            "type": "number",
+            "description": "Source out, seconds"
+          },
+          "trackId": {
+            "type": "string",
+            "description": "Track (default: main or the first audio track)"
+          }
+        },
+        "required": [
+          "mediaId",
+          "at"
+        ]
+      }
+    },
+    {
       "name": "clip.split",
       "description": "Split a clip at a timeline time (seconds).",
       "scope": "write",
