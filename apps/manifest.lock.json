@@ -6432,6 +6432,58 @@
           "bytes": 139512
         }
       ]
+    },
+    {
+      "id": "lectella",
+      "repo": "NakliTechie/lectella",
+      "requestedRef": "main",
+      "resolvedCommit": "9d8bce7892d1756ebf6d5067795c1926868a1a3f",
+      "files": [
+        {
+          "source": "index.html",
+          "destination": "index.html",
+          "sha256": "43e759229944e3bb296d155278324cd63d3fd34ff0ae05d97207539782e989c2",
+          "bytes": 77088,
+          "originalSourceSha256": "c1d9040fbdb1e72c17db8a9184a38c75159b12dab23806a2ed09fe33d2b2bcfd",
+          "sdkSha256": "c15c789021fa5047968ce887f6f99c5be733056e19ffe3333d53c89bb5e033ec"
+        },
+        {
+          "source": "commands.json",
+          "destination": "commands.json",
+          "sha256": "b162799a22e0fb82daf8ad39dd74d693fd6a8885820e8278442b10eb9cd66a9e",
+          "bytes": 8221
+        },
+        {
+          "source": "LICENSE",
+          "destination": "LICENSE",
+          "sha256": "bf28226d38739f9e44b49af4c9365109c2d0c360e4a40de9dc2b1ca591b46276",
+          "bytes": 1138
+        },
+        {
+          "source": "src/app.js",
+          "destination": "src/app.js",
+          "sha256": "88c36fae33f9eb2e0c936964ec8eb9e45e4ed4c91b102b8e66480bbb95ab199f",
+          "bytes": 34973
+        },
+        {
+          "source": "src/core.js",
+          "destination": "src/core.js",
+          "sha256": "12da954ac1d852d53733d2f56ca9977a7e0496a5661ece05b6ccccbb19006734",
+          "bytes": 11777
+        },
+        {
+          "source": "src/store.js",
+          "destination": "src/store.js",
+          "sha256": "824b3ddb6c6ff34869ab32685b0738450953ea4b569604e4815935d3b131a862",
+          "bytes": 16783
+        },
+        {
+          "source": "src/commands.js",
+          "destination": "src/commands.js",
+          "sha256": "8c7c69cf4c6991e8a3d6142d5141d34b7cb154bbe998cf144e0783797d7d3a68",
+          "bytes": 11663
+        }
+      ]
     }
   ]
 }

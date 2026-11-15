@@ -4323,6 +4323,42 @@
           "destination": "vendor/pdfjs-dist-5.7.284/standard_fonts/LiberationSans-Regular.ttf"
         }
       ]
+    },
+    {
+      "id": "lectella",
+      "repo": "NakliTechie/lectella",
+      "ref": "main",
+      "files": [
+        {
+          "source": "index.html",
+          "destination": "index.html",
+          "managedSdk": "inline"
+        },
+        {
+          "source": "commands.json",
+          "destination": "commands.json"
+        },
+        {
+          "source": "LICENSE",
+          "destination": "LICENSE"
+        },
+        {
+          "source": "src/app.js",
+          "destination": "src/app.js"
+        },
+        {
+          "source": "src/core.js",
+          "destination": "src/core.js"
+        },
+        {
+          "source": "src/store.js",
+          "destination": "src/store.js"
+        },
+        {
+          "source": "src/commands.js",
+          "destination": "src/commands.js"
+        }
+      ]
     }
   ]
 }

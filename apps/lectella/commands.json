@@ -1,0 +1,345 @@
+{
+  "commands": [
+    {
+      "name": "notebook.list",
+      "description": "List the notebooks in Lectella, newest first, with how many sources and notes each holds.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "notebook.create",
+      "description": "Create a notebook for one research topic.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Notebook name",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string",
+            "description": "What the notebook is about; the model reads it in chat"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      }
+    },
+    {
+      "name": "notebook.update",
+      "description": "Rename a notebook or change its description.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "notebook": {
+            "type": "string",
+            "description": "Notebook name or id"
+          },
+          "name": {
+            "type": "string",
+            "description": "New name"
+          },
+          "description": {
+            "type": "string",
+            "description": "New description"
+          }
+        },
+        "required": [
+          "notebook"
+        ]
+      }
+    },
+    {
+      "name": "notebook.delete",
+      "description": "Delete a notebook with its notes and chat. Sources that no other notebook uses are deleted too.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "notebook": {
+            "type": "string",
+            "description": "Notebook name or id"
+          }
+        },
+        "required": [
+          "notebook"
+        ]
+      }
+    },
+    {
+      "name": "source.list",
+      "description": "List the sources in a notebook, with whether each is switched on for chat.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "notebook": {
+            "type": "string",
+            "description": "Notebook name or id"
+          }
+        },
+        "required": [
+          "notebook"
+        ]
+      }
+    },
+    {
+      "name": "source.add",
+      "description": "Add a text source (pasted text or Markdown) to a notebook.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "notebook": {
+            "type": "string",
+            "description": "Notebook name or id"
+          },
+          "title": {
+            "type": "string",
+            "description": "Source title"
+          },
+          "text": {
+            "type": "string",
+            "description": "The source text",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "notebook",
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "source.read",
+      "description": "Read a source's full text.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "Source id from source.list"
+          }
+        },
+        "required": [
+          "source"
+        ]
+      }
+    },
+    {
+      "name": "source.rename",
+      "description": "Change a source's title.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "notebook": {
+            "type": "string",
+            "description": "Notebook name or id"
+          },
+          "source": {
+            "type": "string",
+            "description": "Source id"
+          },
+          "title": {
+            "type": "string",
+            "description": "New title",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "notebook",
+          "source",
+          "title"
+        ]
+      }
+    },
+    {
+      "name": "source.remove",
+      "description": "Remove a source from a notebook. Its files are deleted when no other notebook uses it.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "notebook": {
+            "type": "string",
+            "description": "Notebook name or id"
+          },
+          "source": {
+            "type": "string",
+            "description": "Source id"
+          }
+        },
+        "required": [
+          "notebook",
+          "source"
+        ]
+      }
+    },
+    {
+      "name": "context.set",
+      "description": "Switch a source or note in or out of the notebook's chat context.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "notebook": {
+            "type": "string",
+            "description": "Notebook name or id"
+          },
+          "item": {
+            "type": "string",
+            "description": "Source or note id"
+          },
+          "on": {
+            "type": "boolean",
+            "description": "true to include it in chat"
+          }
+        },
+        "required": [
+          "notebook",
+          "item",
+          "on"
+        ]
+      }
+    },
+    {
+      "name": "note.list",
+      "description": "List the notes in a notebook, newest first.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "notebook": {
+            "type": "string",
+            "description": "Notebook name or id"
+          }
+        },
+        "required": [
+          "notebook"
+        ]
+      }
+    },
+    {
+      "name": "note.read",
+      "description": "Read a note's Markdown.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string",
+            "description": "Note id from note.list"
+          }
+        },
+        "required": [
+          "note"
+        ]
+      }
+    },
+    {
+      "name": "note.add",
+      "description": "Write a new note in a notebook.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "notebook": {
+            "type": "string",
+            "description": "Notebook name or id"
+          },
+          "title": {
+            "type": "string",
+            "description": "Note title"
+          },
+          "body": {
+            "type": "string",
+            "description": "Markdown text"
+          }
+        },
+        "required": [
+          "notebook",
+          "body"
+        ]
+      }
+    },
+    {
+      "name": "note.update",
+      "description": "Change a note's title or Markdown.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string",
+            "description": "Note id"
+          },
+          "title": {
+            "type": "string",
+            "description": "New title"
+          },
+          "body": {
+            "type": "string",
+            "description": "New Markdown text"
+          }
+        },
+        "required": [
+          "note"
+        ]
+      }
+    },
+    {
+      "name": "note.delete",
+      "description": "Delete a note.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string",
+            "description": "Note id"
+          }
+        },
+        "required": [
+          "note"
+        ]
+      }
+    },
+    {
+      "name": "notebook.search",
+      "description": "Keyword search over a notebook's sources and notes; returns the best-matching passages. Works without AI.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "notebook": {
+            "type": "string",
+            "description": "Notebook name or id"
+          },
+          "query": {
+            "type": "string",
+            "description": "Words to look for",
+            "minLength": 1
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20
+          }
+        },
+        "required": [
+          "notebook",
+          "query"
+        ]
+      }
+    }
+  ]
+}
