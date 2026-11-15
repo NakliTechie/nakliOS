@@ -1613,7 +1613,7 @@ mark{background:transparent;color:var(--accent);font-weight:600}
 <script>
 'use strict';
 
-/* naklios-sdk:begin ver=2 sha256=c15c789021fa5047968ce887f6f99c5be733056e19ffe3333d53c89bb5e033ec */
+/* naklios-sdk:begin ver=2 sha256=16b7184ea18c4017022f1e324fbc0f2c19c77c54afcc8f517210a03dd75a52ee */
 /*!
  * naklios.js — cooperative SDK for apps hosted inside NakliOS (Immersive mode)
  *
@@ -1779,6 +1779,9 @@ mark{background:transparent;color:var(--accent);font-weight:600}
     experimental_tex: false,
     // experimental_web: this app may search the web and read pages through the host.
     experimental_web: false,
+    // experimental_aiReasoning: the selected model streams its reasoning beside the reply
+    // (chunks carry delta.reasoning_content), and experimental_thinking may switch it.
+    experimental_aiReasoning: false,
     // net: a sovereign egress backend (the user's own Worker or local bridge) is
     // configured + permitted, so naklios.net.fetch can reach cross-origin hosts the
     // browser blocks. Stays false until a host advertises one — the SDK seam.
@@ -2067,6 +2070,11 @@ mark{background:transparent;color:var(--accent);font-weight:600}
     if (options.agent === true) chatMsg.agent = true;
     if (options.tools != null) chatMsg.tools = options.tools;
     if (options.tool_choice != null) chatMsg.tool_choice = options.tool_choice;
+    // experimental_thinking: true or false asks the model to think before it answers, or not.
+    // Omitted leaves the provider's default. The reasoning streams as delta.reasoning_content.
+    if (options.experimental_thinking === true || options.experimental_thinking === false) {
+      chatMsg.thinking = options.experimental_thinking;
+    }
     // Models by role: 'build' or 'review' runs the request on that role's model (Settings → AI).
     // The host refuses an unknown role; omitted means the selected model.
     if (typeof options.agentRole === 'string') chatMsg.agentRole = options.agentRole;
@@ -2083,6 +2091,7 @@ mark{background:transparent;color:var(--accent);font-weight:600}
     var stream = makeAiStream(options);
     if (options.stream === true) return stream;
     var content = '';
+    var reasoning = '';
     var finishReason = 'stop';
     var toolCalls = null;
     var usage = null;
@@ -2092,6 +2101,7 @@ mark{background:transparent;color:var(--accent);font-weight:600}
       if (typeof chunk.naklios_truncate_at === 'number') truncateAt = chunk.naklios_truncate_at;
       var choice = chunk.choices && chunk.choices[0];
       if (choice && choice.delta && choice.delta.content) content += choice.delta.content;
+      if (choice && choice.delta && choice.delta.reasoning_content) reasoning += choice.delta.reasoning_content;
       if (choice && choice.delta && choice.delta.tool_calls) toolCalls = choice.delta.tool_calls;
       if (choice && choice.finish_reason) finishReason = choice.finish_reason;
       if (chunk.usage) usage = chunk.usage;
@@ -2100,6 +2110,7 @@ mark{background:transparent;color:var(--accent);font-weight:600}
     }
     if (truncateAt != null && content.length > truncateAt) content = content.slice(0, truncateAt);
     var message = { role: 'assistant', content: content };
+    if (reasoning) message.reasoning_content = reasoning;
     if (toolCalls) message.tool_calls = toolCalls;
     return {
       id: 'naklios-local',
@@ -2218,6 +2229,7 @@ mark{background:transparent;color:var(--accent);font-weight:600}
       capabilities.aiSearch = msg.aiSearch === true;
       capabilities.experimental_tex = msg.experimental_tex === true;
       capabilities.experimental_web = msg.experimental_web === true;
+      capabilities.experimental_aiReasoning = msg.experimental_aiReasoning === true;
       capabilities.net = msg.net === true;
       capabilities.netBackend = typeof msg.netBackend === 'string' ? msg.netBackend : null;
       capabilities.review = msg.review === true;
@@ -2249,6 +2261,17 @@ mark{background:transparent;color:var(--accent);font-weight:600}
           choices: [{
             index: 0,
             delta: { content: String(msg.token || '') },
+            finish_reason: null,
+          }],
+        });
+      } else if (msg.event === 'reasoning') {
+        aiRequest.deliver({
+          id: msg.requestId,
+          object: 'chat.completion.chunk',
+          model: msg.model || capabilities.aiModel || 'localmind',
+          choices: [{
+            index: 0,
+            delta: { content: '', reasoning_content: String(msg.token || '') },
             finish_reason: null,
           }],
         });

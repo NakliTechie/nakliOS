@@ -29,8 +29,9 @@ assert.match(host, /const wantsUsage = body\.stream === true;/,
 // reported the retry missing when it was still there.
 assert.match(host, /\w+\.status === 400 \|\| \w+\.status === 422/,
   'a rejected stream_options is retried without it');
-assert.match(host, /const \{ stream_options, \.\.\.withoutUsage \} = \w+;/,
-  'the retry drops exactly that field and keeps the rest of the body');
+// The thinking switch (test-ai-reasoning.mjs) rides on the same retry: both optional fields go.
+assert.match(host, /const \{ stream_options, thinking, \.\.\.withoutOptional \} = \w+;/,
+  'the retry drops exactly the optional fields and keeps the rest of the body');
 
 // ── seam 2: the host READS it, in both response shapes ──
 assert.match(host, /if \(data\?\.usage\) request\.usage = data\.usage;\n    return data\?\.choices\?\.\[0\]\?\.finish_reason/,
