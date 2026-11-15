@@ -395,6 +395,88 @@
       }
     },
     {
+      "name": "transcript.make",
+      "description": "Transcribe a clip's media into words on this device (Whisper tiny), so it can be edited by its words. Works only after the person has downloaded the speech model.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "clipId": {
+            "type": "string",
+            "description": "Clip id"
+          },
+          "language": {
+            "type": "string",
+            "description": "Spoken language code, e.g. en, hi, fr"
+          }
+        },
+        "required": [
+          "clipId"
+        ]
+      }
+    },
+    {
+      "name": "transcript.read",
+      "description": "Read a clip's transcript as words [index, text, timeline seconds or null when the word is cut out]. Word times are estimates.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "clipId": {
+            "type": "string",
+            "description": "Clip id"
+          }
+        },
+        "required": [
+          "clipId"
+        ]
+      }
+    },
+    {
+      "name": "transcript.cut",
+      "description": "Cut the words from index `from` to index `to` (inclusive, from transcript.read) out of the video; later clips close up.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "clipId": {
+            "type": "string",
+            "description": "A clip of the transcribed media"
+          },
+          "from": {
+            "type": "number",
+            "description": "First word index"
+          },
+          "to": {
+            "type": "number",
+            "description": "Last word index"
+          }
+        },
+        "required": [
+          "clipId",
+          "from",
+          "to"
+        ]
+      }
+    },
+    {
+      "name": "assist.fillers",
+      "description": "Cut every filler word (um, uh, er, hmm) from a transcribed clip.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "clipId": {
+            "type": "string",
+            "description": "A clip of the transcribed media"
+          }
+        },
+        "required": [
+          "clipId"
+        ]
+      }
+    },
+    {
       "name": "clip.duplicate",
       "description": "Copy a clip and paste the copy at a time (seconds), on its own track or another of the same kind. On the main track the copy is inserted and the track closes up.",
       "scope": "write",
