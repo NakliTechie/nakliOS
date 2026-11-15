@@ -95,6 +95,8 @@ jobs:
         run: node scripts/test-ai-reasoning.mjs
       - name: AI image-input rail (image_url parts, Anthropic image blocks)
         run: node scripts/test-ai-image-inputs.mjs
+      - name: Narrow host services for named mirrors (web, skills)
+        run: node scripts/test-app-host-services.mjs
 
       - name: Verify SDK-vendoring canonical invariants and splicer round-trip
         run: node scripts/test-vendored-sdk.mjs

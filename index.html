@@ -5433,7 +5433,7 @@ async function durableTick(){
 setTimeout(() => durableSchedule(0), 3000);
 
 async function skillsHostHandle(op, msg, appId){
-  if (!aiAppOwnsSystemFs(appId)) throw new Error('The skills library is available to same-origin system apps only');
+  if (!aiAppOwnsSystemFs(appId) && !appHasHostService(appId, 'skills')) throw new Error('The skills library is available to same-origin system apps and mirrors granted skills');
   if (!_skillLibMod) _skillLibMod = await import('./sys/ai/skill-library.mjs');
   const store = skillLibraryStore();
   if (op === 'propose'){
@@ -6927,6 +6927,17 @@ function aiAppOwnsSystemFs(appId){
 }
 
 // Egress can attach host-held credentials. Catalog membership is not authority.
+// One narrow host service for a same-origin mirror the catalog names (`hostServices:['web']`),
+// without kind:'system', which would also open the whole store and naklios.net. Added 2026-11-15
+// for Gupshup (web search, skills); Lectella has the same need for URL sources.
+const APP_HOST_SERVICES = new Set(['web', 'skills']);
+function appHasHostService(appId, service){
+  if (!APP_HOST_SERVICES.has(service)) return false;
+  const app = APPS.find(item => item.id === appId);
+  return !!app && !app.thirdParty && Array.isArray(app.hostServices) && app.hostServices.includes(service)
+    && appExpectedOrigin(app) === location.origin;
+}
+
 function aiAppOwnsEgress(appId){
   const app = APPS.find(item => item.id === appId);
   return !!app && !app.thirdParty && app.kind === 'system' && appExpectedOrigin(app) === location.origin;
@@ -8549,7 +8560,7 @@ function netHistoryAppend({ appId, host, method, grantId, output }){
 // one-time consent per app (the same network Grant as naklios.net), and every request lands in History.
 const webServices = new Map();
 async function webService(appId){
-  if (!aiAppOwnsEgress(appId)) throw new Error('Web search and page reading are available to same-origin system apps only');
+  if (!aiAppOwnsEgress(appId) && !appHasHostService(appId, 'web')) throw new Error('Web search and page reading are available to same-origin system apps and mirrors granted web');
   if (webServices.has(appId)) return webServices.get(appId);
   const [{ createWebService }, { searchWeb }] = await Promise.all([import('./sys/host/web.mjs'), import('./sys/voice/more-tools.mjs')]);
   const service = createWebService({
@@ -8824,7 +8835,7 @@ function capabilitySnapshot(appId){
     aiSearch: ragCapabilityForApp(appId),
     aiSearchState:ragHost.state,
     experimental_tex:texCapabilityForApp(appId),
-    experimental_web:aiAppOwnsEgress(appId),
+    experimental_web:aiAppOwnsEgress(appId) || appHasHostService(appId, 'web'),
     // Endpoints stream reasoning (OpenAI reasoning_content, Anthropic thinking); the browser
     // models do not report it separately.
     experimental_aiReasoning:aiModel.runtime === 'endpoint',
