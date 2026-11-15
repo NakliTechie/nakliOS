@@ -24,7 +24,9 @@ const installation = installationManifest(source);
 // plugins.json is the allow-list: npm plugins pinned by integrity (fetch-plugins.mjs verifies them into the source tree)
 // and DeepSeek's official bundles, which ship switched off on the Plugins page.
 const allowList = JSON.parse(fs.readFileSync(new URL('./plugins.json', import.meta.url), 'utf8'));
-const bundles = appBoot.PROFILE_TEMPLATES[PROFILE].bundles;
+// dsh-v0.2.2 moved the profile templates from app-boot to the official-bundles package.
+const { PROFILE_TEMPLATES } = await lib('packages/util/official-bundles');
+const bundles = PROFILE_TEMPLATES[PROFILE].bundles;
 // DeepSeek's own experimental bundles ship in the image but outside the boot composition: the Worker composes only the
 // template's bundles and the home patch, so these stay off until the person switches them on in the Plugins page.
 const officialBundles = allowList.official.map(bundle => bundle.name);
@@ -142,6 +144,10 @@ const files = { ...result.files };
 const excludedAsset = name => [...removedPackages].some(pkg => !retainedPackages.has(pkg) && name.startsWith(`node_modules/${pkg}/`));
 const removedClientBundles = result.pageBundles.filter(excludedAsset);
 for (const name of removedClientBundles) delete files[name];
+// Page assets of excluded packages (dsh-v0.2.2 ships account onboarding images, about 2.4 MB) go too; their
+// rows are disabled, so nothing in the profile loads them. Host modules and licences stay.
+const removedAssets = Object.keys(files).filter(name => excludedAsset(name) && /\/lib\/assets\//.test(name));
+for (const name of removedAssets) delete files[name];
 const lazyArchives = result.lazyArchives.filter(archive => !archive.files.every(excludedAsset));
 const removedLazyChunks = result.lazyArchives.filter(archive => !lazyArchives.includes(archive)).flatMap(archive => archive.files);
 const manifest = JSON.parse(new TextDecoder().decode(files[MANIFEST_PATH]));
@@ -153,6 +159,7 @@ files[MANIFEST_PATH] = new TextEncoder().encode(`${JSON.stringify(manifest, null
 // Lazy chunks stay verbatim: the manifest records their sizes and digests.
 const clientBundles = result.pageBundles.filter(name => !removedClientBundles.includes(name));
 let inputBytes = 0, outputBytes = 0;
+const verbatimBundles = [];
 for (const name of clientBundles) {
   const original = new TextDecoder().decode(files[name]);
   const debuggerName = original.match(/\/\/# sourceURL=([^\r\n]+)\s*$/)?.[1];
@@ -163,7 +170,11 @@ for (const name of clientBundles) {
     minifyIdentifiers: false, keepNames: true, legalComments: 'eof',
     target: 'esnext', sourcefile: name,
   });
-  files[name] = new TextEncoder().encode(`${code}\n//# sourceURL=${debuggerName}\n`);
+  const minified = new TextEncoder().encode(`${code}\n//# sourceURL=${debuggerName}\n`);
+  // keepNames wraps every function in __name(); on a bundle that arrives already compact (dsh-v0.2.2 page
+  // bundles) that only adds bytes, so the smaller of the two ships.
+  if (minified.byteLength < result.files[name].byteLength) files[name] = minified;
+  else verbatimBundles.push(name);
   inputBytes += result.files[name].byteLength;
   outputBytes += files[name].byteLength;
 }
@@ -179,7 +190,7 @@ fs.writeFileSync(path.join(output, 'profile.yml'), dump(appBoot.composeEntries([
 fs.writeFileSync(path.join(output, 'build-metrics.json'), JSON.stringify({
   clientMinifier: `esbuild ${esbuild.version}`, plugins: pluginBundles.map(plugin => plugin.name), official: officialBundles, roster, disabledIds, clientBundles, removedClientBundles,
   lazyChunks: lazyArchives.flatMap(archive => archive.files), removedLazyChunks,
-  clientInputBytes: inputBytes, clientOutputBytes: outputBytes, imageBytes: image.byteLength,
+  clientInputBytes: inputBytes, clientOutputBytes: outputBytes, verbatimClientBundles: verbatimBundles.length, removedAssetBytes: removedAssets.reduce((n, name) => n + result.files[name].byteLength, 0), imageBytes: image.byteLength,
   lazyBytes: lazyArchives.reduce((sum, archive) => sum + archive.image.byteLength, 0),
 }, null, 2)+'\n');
 console.log(`Dish image: ${image.byteLength} compressed bytes; ${lazyArchives.length} lazy archives; client bundles ${inputBytes} → ${outputBytes} bytes`);

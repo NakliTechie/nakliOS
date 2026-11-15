@@ -31,7 +31,8 @@ The upstream shell provides browser commands, pipelines, substitutions, and redi
 It does not provide git, Node programs, native tools, shell loops, or job control.
 Plugins are selected during packaging; installation inside the Worker is unavailable.
 `scripts/dish/plugins.json` is the allow-list.
-DeepSeek's own experimental bundles that run in the Worker ship switched off on the Plugins page: Agent Teams, Auto Authorization Review, conversation-following titles, the badge skill, Ralph loops, session search and voice input.
+DeepSeek's own experimental bundles that run in the Worker ship switched off on the Plugins page: Auto Authorization Review, conversation-following titles, the badge skill, Ralph loops, session search and voice input.
+Agent Teams is part of dsh's standard bundles since dsh-v0.2.1-rc.2 and is on, as upstream ships it.
 Session search runs dsh's own engine on SQLite's WebAssembly build (`scripts/dish/sqlite.ts`, files in `vendor/sqlite/`), loaded a few seconds after boot; the index lives in memory and is rebuilt from the session logs.
 Voice input sends recordings to NakliOS, which transcribes on the voice assistant's on-device model once the assistant is on (`scripts/dish/speech.mjs`).
 Terminals are held: a stand-in over the Worker's shell exists (`scripts/dish/node-pty.ts`, built only with `DISH_TERMINAL=1`), but a live terminal froze the tab on 2026-11-09.
