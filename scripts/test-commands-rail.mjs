@@ -247,4 +247,25 @@ assert.match(host, /msg\.type === 'naklios:commands:register'[\s\S]*?catalog\.re
 assert.match(host, /msg\.type === 'naklios:commands:result'[\s\S]*?catalog\.settle\(getAppId\(\), e\.source/);
 assert.match(host, /function finalizeCloseWindow[\s\S]*?catalog\.unregister\(id, closedSource\)/);
 
+// ── `shows: true` in a declaration marks a command that brings its app's window forward on success ──
+{
+  const catalog = createCatalog({ base: base() });
+  assert.equal(catalog.declare('reader', [
+    { name: 'open', description: 'Open a passage', scope: 'read', shows: true },
+    { name: 'list', description: 'List books', scope: 'read' },
+  ], () => {}).ok, true);
+  assert.equal(catalog.describeCommand('reader.open').annotations.showsWindow, true);
+  assert.equal(catalog.describeCommand('reader.list').annotations.showsWindow, false);
+  // The registered command keeps the manifest's promise, and a registration cannot add it on its own.
+  catalog.register('reader', { window: 'reader' }, [
+    { name: 'open', description: 'Open a passage', scope: 'read' },
+    { name: 'list', description: 'List books', scope: 'read', shows: true },
+  ], () => {});
+  assert.equal(catalog.describeCommand('reader.open').annotations.showsWindow, true);
+  assert.equal(catalog.describeCommand('reader.list').annotations.showsWindow, false);
+  assert.match(catalog.declare('bad', [{ name: 'x', description: 'y', scope: 'read', shows: 'yes' }], () => {}).error, /shows must be true or false/);
+}
+assert.match(host, /if \(!out\?\.staged && out\?\.ok !== false && command\.annotations\?\.showsWindow && openWindows\[target\]\) focusWindow\(openWindows\[target\]\);/,
+  'a command declared with shows: true brings its window forward after it succeeds');
+
 console.log('common rail step 1 — commands catalog, agent face, SDK and host wiring: PASS');

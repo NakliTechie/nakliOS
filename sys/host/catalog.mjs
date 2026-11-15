@@ -80,7 +80,7 @@ export function createCatalog({ base, timeoutMs = COMMAND_TIMEOUT_MS, launchTime
     return null;
   }
 
-  // One parser for declarations and registrations: a Map(fullName -> { name, description, scope, input }).
+  // One parser for declarations and registrations: a Map(fullName -> { name, description, scope, input, shows }).
   function parse(appId, defs) {
     if (typeof appId !== 'string' || !APP_ID.test(appId)) return { error: 'invalid app id' };
     if (!Array.isArray(defs)) return { error: 'commands must be a list' };
@@ -97,7 +97,10 @@ export function createCatalog({ base, timeoutMs = COMMAND_TIMEOUT_MS, launchTime
       const full = `${appId}.${name}`;
       if (base.describeCommand(full)) return { error: `${full} is a desktop command` };
       if (out.has(full)) return { error: `duplicate command: ${full}` };
-      out.set(full, { name, description: description.trim(), scope, input });
+      if (raw.shows !== undefined && typeof raw.shows !== 'boolean') return { error: `${name}: shows must be true or false` };
+      // `shows: true`: when the call succeeds the desktop brings the app's window to the front. Only the app's own
+      // declaration sets it, so a caller cannot raise windows with a command that does not promise to.
+      out.set(full, { name, description: description.trim(), scope, input, shows: raw.shows === true });
     }
     return { defs: out };
   }
@@ -125,7 +128,7 @@ export function createCatalog({ base, timeoutMs = COMMAND_TIMEOUT_MS, launchTime
       name, summary: def.description, description: def.description,
       scope: APP_SCOPES[def.scope], destructive: def.scope === 'destructive',
       inputSchema: def.input, returnSchema: { type: 'object' },
-      annotations: { readOnlyHint: def.scope === 'read', app: appId, opensApp: true },
+      annotations: { readOnlyHint: def.scope === 'read', app: appId, opensApp: true, showsWindow: def.shows === true },
       async run(input, ctx) {
         const problem = validateInput(def.input, input);
         if (problem) return { ok: false, code: 'EINVAL', message: problem };
@@ -157,7 +160,7 @@ export function createCatalog({ base, timeoutMs = COMMAND_TIMEOUT_MS, launchTime
       destructive: def.scope === 'destructive',
       inputSchema,
       returnSchema: { type: 'object' },
-      annotations: { readOnlyHint: def.scope === 'read', app: appId },
+      annotations: { readOnlyHint: def.scope === 'read', app: appId, showsWindow: def.shows === true },
       run(input, ctx) {
         const problem = validateInput(inputSchema, input);
         if (problem) return Promise.resolve({ ok: false, code: 'EINVAL', message: problem });

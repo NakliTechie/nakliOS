@@ -642,12 +642,18 @@ Model choice, endpoints and keys stay host settings; apps receive results only.
 | `input` | JSON Schema for the arguments a caller passes |
 | `scope` | `read`, `write`, or `destructive` |
 | `handler` | `async (args, context) → result`, run inside the app |
+| `shows` | optional, in `commands.json` only: `true` brings the app's window to the front once the call succeeds (built 2026-11-15) |
 
 The host keeps one catalog: the desktop's own commands (`sys/host/agent.mjs`) and every running app's. A caller lists
 and invokes through the host, never the app directly. The host checks the caller's Grant for that command and scope,
 records the call and its outcome in History, and sends a `destructive` command through `naklios.review` for the
 person to accept. The app's handler runs only after those checks. Person-only operations (credentials, storage
 connection, model choice, review decisions) are never commands.
+
+A call to a closed app opens it minimized. A command that exists to show something, such as Lorewell's
+`books.reader.open`, declares `"shows": true` in the app's `commands.json`; when its call succeeds the desktop brings
+that window forward. Only the declaration sets it, so a registration or a caller cannot raise a window with a command
+that does not promise to.
 
 The app's own buttons call the same commands, so a command is the one path to a change whether a person, the
 assistant, Anvil or a test asks for it (doctrine rule 6, "two doors, one core"). Reckon's, Sheaf's and Draft's
