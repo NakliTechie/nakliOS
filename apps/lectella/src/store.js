@@ -394,6 +394,9 @@ export class Library {
   async dropSourceFiles(src) {
     await this.rm(`sources/${src.id}/text.md`);
     if (src.original) await this.rm(src.original);
+    // The emptied folder goes too, so a deleted notebook leaves nothing behind on a Folder. Crate has no folders
+    // of its own, so a refusal there is ignored.
+    if (!src.ref) await this.rm(`sources/${src.id}`).catch(() => {});
     this.textCache.delete(src.id);
     this.chunkCache.delete(src.id);
   }
