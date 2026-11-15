@@ -3,10 +3,6 @@
   "plugins": [],
   "official": [
     {
-      "name": "@deepseek-ai/dsh-experimental-agent-team-profile",
-      "why": "teammates with direct messages and a shared task board inside one session"
-    },
-    {
       "name": "@deepseek-ai/dsh-experimental-auto-review",
       "why": "per-tool model review for the Auto permission preset"
     },

@@ -10,12 +10,15 @@ node "$ROOT/scripts/dish/verify-source.mjs" "$SOURCE"
 # The allow-listed third-party plugins (scripts/dish/plugins.json), each verified by its npm integrity hash.
 node "$ROOT/scripts/dish/fetch-plugins.mjs" "$SOURCE"
 cd "$SOURCE"
-# Upstream's own build:lib:host script gives the host type build 4 GB; on this build it ran out of memory at 4 GB
-# (2026-10-31), so it gets 8 GB.
-node --max-old-space-size=8192 node_modules/typescript/bin/tsc -b tsconfig.host.json
-node node_modules/tsdown/dist/run.mjs --config-loader native --env.DSH_BUILD_FACE host
-node node_modules/typescript/bin/tsc -b tsconfig.client.json
+# Upstream's own step runner (dsh-v0.2.2+): Typert declarations from source, then the host compiler and bundle,
+# then the client compiler. The Typert pass writes the `@deepseek-ai/*/remote` declarations the client needs;
+# a bare `tsc -b` misses them. The host type build ran out of memory at 4 GB (2026-10-31), so every step gets 8 GB.
+# Dish skips the Desktop bundle (no Electron app here).
+export NODE_OPTIONS="--max-old-space-size=8192"
+node --import tsx/esm scripts/compile-referenced-projects.ts host-libraries
+node --import tsx/esm scripts/compile-referenced-projects.ts client
 node node_modules/tsdown/dist/run.mjs --config-loader native --env.DSH_BUILD_FACE client
+unset NODE_OPTIONS
 python3 "$ROOT/scripts/dish/prepare.py" "$SOURCE"
 cd packages/experimental/webworker-runtime
 node ../../../node_modules/typescript/bin/tsc -p tsconfig.json --noEmit
