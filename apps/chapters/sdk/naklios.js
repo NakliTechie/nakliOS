@@ -166,6 +166,8 @@
     // experimental_aiReasoning: the selected model streams its reasoning beside the reply
     // (chunks carry delta.reasoning_content), and experimental_thinking may switch it.
     experimental_aiReasoning: false,
+    // experimental_aiVision: agent requests may carry image parts (OpenAI image_url, data URL).
+    experimental_aiVision: false,
     // net: a sovereign egress backend (the user's own Worker or local bridge) is
     // configured + permitted, so naklios.net.fetch can reach cross-origin hosts the
     // browser blocks. Stays false until a host advertises one — the SDK seam.
@@ -614,6 +616,7 @@
       capabilities.experimental_tex = msg.experimental_tex === true;
       capabilities.experimental_web = msg.experimental_web === true;
       capabilities.experimental_aiReasoning = msg.experimental_aiReasoning === true;
+      capabilities.experimental_aiVision = msg.experimental_aiVision === true;
       capabilities.net = msg.net === true;
       capabilities.netBackend = typeof msg.netBackend === 'string' ? msg.netBackend : null;
       capabilities.review = msg.review === true;
