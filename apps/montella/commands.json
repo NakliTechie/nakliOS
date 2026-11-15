@@ -622,6 +622,106 @@
       }
     },
     {
+      "name": "clip.grade",
+      "description": "Colour-grade a video clip: lift, gamma and gain as [r, g, b] (lift -0.3..0.3, default 0; gamma and gain 0.5..2, default 1) and curve [shadows, midtones, highlights] output levels 0..1 (default [0.25, 0.5, 0.75]). Pass only what changes.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "clipId": {
+            "type": "string",
+            "description": "Clip id"
+          },
+          "lift": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "gamma": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "gain": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "curve": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "clipId"
+        ]
+      }
+    },
+    {
+      "name": "clip.key",
+      "description": "Chroma key a clip (green screen): on, color (#rrggbb, default #00ff00), similarity 0..0.6, smoothness 0..0.4, spill 0..1.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "clipId": {
+            "type": "string",
+            "description": "Clip id"
+          },
+          "on": {
+            "type": "boolean"
+          },
+          "color": {
+            "type": "string",
+            "description": "Key colour #rrggbb"
+          },
+          "similarity": {
+            "type": "number",
+            "description": "How close a colour must be to vanish"
+          },
+          "smoothness": {
+            "type": "number",
+            "description": "Edge softness"
+          },
+          "spill": {
+            "type": "number",
+            "description": "How much key colour to remove from edges"
+          }
+        },
+        "required": [
+          "clipId"
+        ]
+      }
+    },
+    {
+      "name": "captions.style",
+      "description": "Restyle every caption: clean, boxed, bold, pop.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "preset": {
+            "type": "string",
+            "description": "Caption look",
+            "enum": [
+              "clean",
+              "boxed",
+              "bold",
+              "pop"
+            ]
+          }
+        },
+        "required": [
+          "preset"
+        ]
+      }
+    },
+    {
       "name": "clip.duplicate",
       "description": "Copy a clip and paste the copy at a time (seconds), on its own track or another of the same kind. On the main track the copy is inserted and the track closes up.",
       "scope": "write",
