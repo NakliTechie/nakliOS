@@ -6437,21 +6437,21 @@
       "id": "lectella",
       "repo": "NakliTechie/lectella",
       "requestedRef": "main",
-      "resolvedCommit": "3def64c6e86806c859e1d9427aaafd14cdd2fb34",
+      "resolvedCommit": "fecbb7f5613a935de36ac8ce22504d9582c4f726",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "8a01b5e0ca85007b2424f4742d33fc3d7e21724bae6a939706548384c96a8ce2",
-          "bytes": 77669,
-          "originalSourceSha256": "f704ab32622d27abcf0d9117b5dd4f2cc8ff4c0c775dabbe16145abcd0450d75",
+          "sha256": "7f24bc2d0cb4a2c13696fcf9cb7e485d4bfd6fa1e226fd37f2d46a81eb67a2c9",
+          "bytes": 80638,
+          "originalSourceSha256": "fd408ade24195ee837389c9cac6c9c98608c595f027a4dfb2f920eda700fa95c",
           "sdkSha256": "c15c789021fa5047968ce887f6f99c5be733056e19ffe3333d53c89bb5e033ec"
         },
         {
           "source": "commands.json",
           "destination": "commands.json",
-          "sha256": "b162799a22e0fb82daf8ad39dd74d693fd6a8885820e8278442b10eb9cd66a9e",
-          "bytes": 8221
+          "sha256": "6f090ba00fc0a262e339a178f87bff3b8be3dc611b3d6f33cc496310c5903f6b",
+          "bytes": 8410
         },
         {
           "source": "LICENSE",
@@ -6462,26 +6462,26 @@
         {
           "source": "src/app.js",
           "destination": "src/app.js",
-          "sha256": "cff8d55e2016df8b53832aa68a0237e713d0549d9b20a7251ffb6a97b5a0a136",
-          "bytes": 41602
+          "sha256": "3d062ce5b5faa3d60cdda7564994b5d5a894fe9de5d718a20677c838d8ec981b",
+          "bytes": 50944
         },
         {
           "source": "src/core.js",
           "destination": "src/core.js",
-          "sha256": "08718b61fef3356e6221c79b8afb7c6753fdf9b4cacf42a73f85987d46c1889f",
-          "bytes": 13981
+          "sha256": "96bfe927dcefc9e50c1baa179adaea1babf5393d22d15d80843a2c796c60377b",
+          "bytes": 22282
         },
         {
           "source": "src/store.js",
           "destination": "src/store.js",
-          "sha256": "958790e24bf79acaddbf041b6fd96a5c40d1a18407cf64bba2a1027905c57fa0",
-          "bytes": 16959
+          "sha256": "be1cbb1e359b2794d1d7048f257cb9fa8b29caae9a67e6b2c69e7a8ef94331ee",
+          "bytes": 17039
         },
         {
           "source": "src/commands.js",
           "destination": "src/commands.js",
-          "sha256": "87e63e7bb1bc6ef00a4904af8971ecad24380ccbf3a4e3161144ecb3fd0f85a4",
-          "bytes": 12725
+          "sha256": "9d19a5dc38829ccd945e042f9ee2bf19d0d6d48337b3652789941e496de0e3eb",
+          "bytes": 14252
         },
         {
           "source": "src/pdf.js",

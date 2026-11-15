@@ -194,13 +194,45 @@ export const COMMANDS = [
     name: 'notebook.briefing',
     description: 'Summarise each source switched on for chat, then combine the summaries into one briefing note that cites them.',
     scope: 'write',
-    ui: 'The "Briefing" button above the Notes column.',
+    ui: 'The "Briefing" button above the notes list.',
     input: none(),
     personOnly: 'A briefing sends your sources to the model you chose in NakliOS; you start it, so you see what is sent.',
   },
   {
+    name: 'notebook.audio',
+    description: 'Write a two-voice audio overview script from the sources switched on for chat, saved as a note you can play.',
+    scope: 'write',
+    ui: 'The "Audio overview" button above the notes list.',
+    input: none(),
+    personOnly: 'It sends your sources to the model you chose in NakliOS; you start it, so you see what is sent.',
+  },
+  {
+    name: 'notebook.mindmap',
+    description: 'Make a mind map of the sources switched on for chat, saved as a note that draws it.',
+    scope: 'write',
+    ui: 'The "Mind map" button above the notes list.',
+    input: none(),
+    personOnly: 'It sends your sources to the model you chose in NakliOS; you start it, so you see what is sent.',
+  },
+  {
+    name: 'notebook.slides',
+    description: 'Make a slide deck from the sources switched on for chat, saved as a note you can present.',
+    scope: 'write',
+    ui: 'The "Slides" button above the notes list.',
+    input: none(),
+    personOnly: 'It sends your sources to the model you chose in NakliOS; you start it, so you see what is sent.',
+  },
+  {
+    name: 'note.present',
+    description: 'Show a slide deck note full screen.',
+    scope: 'read',
+    ui: 'The "Present" button in a slides note.',
+    input: none(),
+    personOnly: 'Full screen needs your click; a browser refuses it otherwise.',
+  },
+  {
     name: 'note.listen',
-    description: 'Read the open note aloud with this device\'s voices.',
+    description: 'Read the open note aloud with this device\'s voices; an audio overview plays in two voices.',
     scope: 'read',
     ui: 'The "Listen" button in the note editor.',
     input: none(),
@@ -247,8 +279,10 @@ export async function searchNotebook(lib, nbId, query, limit = 8) {
 export const railCommands = () => COMMANDS.filter((c) => c.run && !c.personOnly);
 
 /** The commands.json manifest the host reads while the app is closed. */
+export const ACCEPTS = [{ action: 'import', label: 'Add to Lectella', extensions: ['.pdf', '.md', '.markdown', '.txt'] }];
+
 export function manifest() {
-  return { commands: railCommands().map(({ name, description, scope, input }) => ({ name, description, scope, input })) };
+  return { accepts: ACCEPTS, commands: railCommands().map(({ name, description, scope, input }) => ({ name, description, scope, input })) };
 }
 
 /** @param {Library} lib @param {string} name @param {any} args */

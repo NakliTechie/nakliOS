@@ -273,18 +273,163 @@ export function summaryRequest(item, budget) {
   };
 }
 
+export const SPEAKERS = ['Asha', 'Ravi'];
+
+/** The part of a studio note before its trailing "**Sources**" list. @param {string} md */
+export const beforeSources = (md) => String(md ?? '').split(/\n\s*\*\*Sources\*\*\s*\n/)[0];
+
+const STUDIO = {
+  briefing:
+    'You write a briefing document from numbered source summaries. Use these Markdown sections: "## Overview" (one paragraph), "## Key points" (bullets), "## Where sources differ" (bullets, or "None found"), and "## Open questions" (bullets). Cite every claim with the source number in square brackets, like [1]. Use only the summaries.',
+  audio: `You write the script of a short two-person audio overview about the topic named below, using the facts from its sources below. ${SPEAKERS[0]} is the curious host and ${SPEAKERS[1]} explains. Talk about the topic itself, as two people who find it interesting: never mention notes, summaries, sources lists, numbers in brackets or this task. Write 12 to 18 turns. Every line starts with the speaker's name and a colon, like "${SPEAKERS[0]}: …". Spoken English, short sentences, no stage directions, no Markdown. When it helps, say which source a fact comes from by its title. Use only the notes.`,
+  mindmap:
+    'You turn numbered source summaries into a mind map. Answer with a Markdown outline only: a first line "# <central topic>" (at most 5 words), then nested "- " bullets indented by two spaces, 3 to 6 main branches, at most 3 levels deep, each item at most 8 words. End a leaf with the source number in square brackets, like [2], when it comes from one source.',
+  slides:
+    'You turn numbered source summaries into a slide deck of 6 to 9 slides. Answer in Markdown only. Start each slide with "## <slide title>", then 2 to 5 short "- " bullets. The first slide\'s heading is the deck\'s own title (never the words "Title slide"), followed by one plain subtitle line instead of bullets. Cite claims with the source number in square brackets, like [1]. Use only the summaries.',
+};
+
 /**
- * The request that combines per-source summaries into one briefing, with [n] citing source n.
+ * The request that combines per-source summaries into one studio output: a briefing, an audio script, a mind map
+ * outline or a slide deck. [n] cites source n.
+ * @param {'briefing' | 'audio' | 'mindmap' | 'slides'} kind
  * @param {{ name: string, description?: string }} notebook @param {{ n: number, title: string, summary: string }[]} parts
  */
-export function briefingRequest(notebook, parts) {
+export function studioRequest(kind, notebook, parts) {
   const body = parts.map((p) => `[${p.n}] ${p.title}\n${p.summary}`).join('\n\n');
   return [
-    {
-      role: 'system',
-      content:
-        'You write a briefing document from numbered source summaries. Use these Markdown sections: "## Overview" (one paragraph), "## Key points" (bullets), "## Where sources differ" (bullets, or "None found"), and "## Open questions" (bullets). Cite every claim with the source number in square brackets, like [1]. Use only the summaries.',
-    },
-    { role: 'user', content: `Notebook: ${notebook.name}${notebook.description ? ` (${notebook.description})` : ''}\n\n${body}` },
+    { role: 'system', content: STUDIO[kind] },
+    { role: 'user', content: `Topic: ${notebook.description || notebook.name}\nNotebook: ${notebook.name}\n\n${body}` },
   ];
+}
+
+/** @param {{ name: string, description?: string }} notebook @param {{ n: number, title: string, summary: string }[]} parts */
+export const briefingRequest = (notebook, parts) => studioRequest('briefing', notebook, parts);
+
+/**
+ * Speaker lines from a script: "Asha: text" or "**Asha:** text". Lines from no known speaker join the line before.
+ * @param {string} text @returns {{ speaker: string, text: string }[]}
+ */
+export function parseScript(text) {
+  /** @type {{ speaker: string, text: string }[]} */
+  const out = [];
+  for (const raw of beforeSources(text).split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    const m = /^\**\s*([\p{L}][\p{L} .'-]{0,30}?)\s*\**\s*:\s*\**\s*(.+)$/u.exec(line);
+    if (m && SPEAKERS.some((sp) => sp.toLowerCase() === m[1].trim().toLowerCase())) {
+      const speaker = SPEAKERS.find((sp) => sp.toLowerCase() === m[1].trim().toLowerCase());
+      out.push({ speaker: /** @type {string} */ (speaker), text: m[2].replace(/\*+/g, '').trim() });
+    } else if (out.length && !/^#/.test(line)) out[out.length - 1].text += ` ${line.replace(/\*+/g, '')}`;
+  }
+  return out.filter((l) => l.text);
+}
+
+/** @param {{ speaker: string, text: string }[]} lines */
+export const scriptMarkdown = (lines) => lines.map((l) => `**${l.speaker}:** ${l.text}`).join('\n\n');
+
+/**
+ * A mind map tree from a Markdown outline: "# root" then nested "- " bullets (any consistent indent).
+ * @param {string} md @returns {{ text: string, children: any[] }}
+ */
+export function parseOutline(md) {
+  const lines = beforeSources(String(md ?? '').replace(/\r/g, '')).split('\n');
+  const head = lines.find((l) => /^#\s+/.test(l.trim()));
+  const root = { text: head ? head.trim().replace(/^#+\s+/, '') : 'Notebook', children: /** @type {any[]} */ ([]) };
+  /** @type {{ indent: number, node: any }[]} */
+  const stack = [{ indent: -1, node: root }];
+  for (const l of lines) {
+    const m = /^(\s*)(?:[-*+]|\d+[.)])\s+(.+)$/.exec(l);
+    if (!m) continue;
+    const indent = m[1].replace(/\t/g, '  ').length;
+    const node = { text: m[2].replace(/\*\*/g, '').trim(), children: [] };
+    while (stack.length > 1 && stack[stack.length - 1].indent >= indent) stack.pop();
+    stack[stack.length - 1].node.children.push(node);
+    stack.push({ indent, node });
+  }
+  return root;
+}
+
+/**
+ * Slides from Markdown: each "## title" starts a slide; "- " lines are bullets, other lines a subtitle.
+ * @param {string} md @returns {{ title: string, bullets: string[], subtitle: string }[]}
+ */
+export function parseSlides(md) {
+  /** @type {{ title: string, bullets: string[], subtitle: string }[]} */
+  const slides = [];
+  for (const raw of beforeSources(String(md ?? '').replace(/\r/g, '')).split('\n')) {
+    const line = raw.trim();
+    const h = /^#{1,3}\s+(.+)$/.exec(line);
+    if (h) {
+      slides.push({ title: h[1].trim(), bullets: [], subtitle: '' });
+      continue;
+    }
+    if (!slides.length || !line || /^\*\*Sources\*\*$/.test(line)) continue;
+    const b = /^(?:[-*+]|\d+[.)])\s+(.+)$/.exec(line);
+    const cur = slides[slides.length - 1];
+    if (b) cur.bullets.push(b[1].trim());
+    else if (!cur.bullets.length) cur.subtitle = cur.subtitle ? `${cur.subtitle} ${line}` : line;
+  }
+  // Small models often head the first slide "Title slide" and put the real title in bold underneath.
+  const first = slides[0];
+  if (first && /^title( slide)?$/i.test(first.title.replace(/[*_]/g, '').trim())) {
+    const m = /^\*\*(.+?)\*\*\s*(.*)$/.exec(first.subtitle);
+    if (m) {
+      first.title = m[1].trim();
+      first.subtitle = m[2].trim();
+    } else if (first.subtitle) {
+      first.title = first.subtitle;
+      first.subtitle = '';
+    }
+  }
+  for (const sl of slides) sl.subtitle = sl.subtitle.replace(/^[*_]+|[*_]+$/g, '').trim();
+  return slides;
+}
+
+/**
+ * Draw a mind map tree as an SVG string: the root on the left, branches to the right, one row per leaf.
+ * Text is escaped; long items are cut with an ellipsis and keep their full text in a <title>.
+ * @param {{ text: string, children: any[] }} root
+ */
+export function mindmapSvg(root) {
+  const COL = 230;
+  const ROW = 34;
+  const MAX = 30;
+  const PALETTE = ['#2e5bb8', '#3f6b2a', '#a2541a', '#7a3fa0', '#1f7a7a', '#a03f5c'];
+  /** @type {{ x: number, y: number, text: string, depth: number, branch: number }[]} */
+  const nodes = [];
+  /** @type {{ from: any, to: any }[]} */
+  const links = [];
+  let leaf = 0;
+  /** @param {any} n @param {number} depth @param {number} branch */
+  const place = (n, depth, branch) => {
+    const kids = (n.children ?? []).map((/** @type {any} */ c, /** @type {number} */ i) => place(c, depth + 1, depth === 0 ? i : branch));
+    const y = kids.length ? (kids[0].y + kids[kids.length - 1].y) / 2 : leaf++ * ROW;
+    const node = { x: depth * COL, y, text: String(n.text ?? ''), depth, branch };
+    nodes.push(node);
+    for (const k of kids) links.push({ from: node, to: k });
+    return node;
+  };
+  place(root, 0, 0);
+  const width = (Math.max(...nodes.map((n) => n.depth)) + 1) * COL + 20;
+  const height = Math.max(1, leaf) * ROW + 20;
+  const cut = (/** @type {string} */ t) => (t.length > MAX ? `${t.slice(0, MAX - 1).trimEnd()}…` : t);
+  const boxW = (/** @type {string} */ t) => Math.min(COL - 24, cut(t).length * 7 + 18);
+  const parts = links.map(({ from, to }) => {
+    const x1 = from.x + boxW(from.text) + 10;
+    const y1 = from.y + 10 + ROW / 2 - 7;
+    const x2 = to.x + 10;
+    const y2 = to.y + 10 + ROW / 2 - 7;
+    const mid = (x1 + x2) / 2;
+    return `<path d="M${x1} ${y1}C${mid} ${y1} ${mid} ${y2} ${x2} ${y2}" fill="none" stroke="${PALETTE[to.branch % PALETTE.length]}" stroke-opacity=".55" stroke-width="1.6"/>`;
+  });
+  for (const n of nodes) {
+    const color = n.depth === 0 ? '#1d1c19' : PALETTE[n.branch % PALETTE.length];
+    const w = boxW(n.text);
+    const y = n.y + 10;
+    parts.push(
+      `<g><title>${esc(n.text)}</title><rect x="${n.x + 10}" y="${y}" width="${w}" height="${ROW - 10}" rx="7" fill="${n.depth === 0 ? '#1d1c19' : '#fff'}" stroke="${color}" stroke-width="${n.depth === 1 ? 1.8 : 1}"/>` +
+        `<text x="${n.x + 19}" y="${y + ROW / 2 - 1}" font-size="12.5" font-family="system-ui, sans-serif" fill="${n.depth === 0 ? '#fff' : '#1d1c19'}" font-weight="${n.depth <= 1 ? 600 : 400}">${esc(cut(n.text))}</text></g>`,
+    );
+  }
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="Mind map: ${esc(root.text)}">${parts.join('')}</svg>`;
 }

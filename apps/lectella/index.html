@@ -99,6 +99,31 @@
   .source-text mark { background: var(--mark); color: inherit; border-radius: 2px; }
   .drop { border: 1.5px dashed var(--line); border-radius: 8px; padding: .7rem; text-align: center; color: var(--mute); font-size: .9rem; }
   .drop.over { border-color: var(--accent); background: var(--tint); }
+  dialog.wide { width: min(64rem, calc(100vw - 2rem)); }
+  .viewtabs { display: flex; gap: .25rem; }
+  .viewtabs button { padding: .2rem .65rem; font-size: .85rem; }
+  .viewtabs button[aria-selected="true"] { background: var(--tint); border-color: var(--accent); }
+  .note-read { min-height: 12rem; }
+  .note-read h4 { margin: 1rem 0 .3rem; font-size: .9rem; color: var(--mute); }
+  .studio { display: flex; flex-wrap: wrap; gap: .3rem; align-items: center; padding: .5rem .75rem; border-bottom: 1px solid var(--line); }
+  .studio span { flex-basis: 100%; }
+  .studio button { font-size: .85rem; padding: .25rem .6rem; }
+  .mindmap { overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: #fbfaf6; padding: .25rem; max-height: 60vh; }
+  .mindmap svg { display: block; }
+  ol.script { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: .45rem; }
+  ol.script li { padding: .35rem .6rem; border-radius: 8px; background: var(--bg); }
+  ol.script li b { display: block; font-size: .78rem; color: var(--accent); }
+  ol.script li:nth-child(even) b { color: var(--ok); }
+  ol.script li.speaking { outline: 2px solid var(--accent); }
+  .deck { outline: none; }
+  .slide { width: min(100%, calc(52vh * 16 / 9)); margin: 0 auto; aspect-ratio: 16 / 9; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 6% 7%; display: flex; flex-direction: column; justify-content: center; overflow: hidden; box-shadow: 0 1px 3px rgb(0 0 0 / .06); }
+  .slide h3 { margin: 0 0 .8em; font-size: clamp(1.1rem, 3.2vw, 2rem); line-height: 1.2; }
+  .slide.first h3 { font-size: clamp(1.4rem, 4.2vw, 2.8rem); }
+  .slide .sub { color: var(--mute); font-size: clamp(.9rem, 1.8vw, 1.25rem); margin: 0; }
+  .slide ul { margin: 0; padding-left: 1.2em; font-size: clamp(.85rem, 1.8vw, 1.3rem); line-height: 1.5; }
+  .deck-nav { display: flex; justify-content: center; align-items: center; gap: .8rem; margin-top: .5rem; color: var(--mute); }
+  .deck:fullscreen { background: #fff; display: flex; flex-direction: column; justify-content: center; padding: 3vw; }
+  .deck:fullscreen .slide { border: 0; box-shadow: none; width: min(100%, calc(86vh * 16 / 9)); }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   @media (max-width: 1100px) {
     .tabs { display: flex; }
@@ -170,7 +195,14 @@
           </div>
         </section>
         <section class="col" data-col="notes" aria-label="Notes">
-          <h3><span class="grow">Notes</span><button data-command="notebook.briefing" title="Summarise the sources ticked for chat into one briefing note">Briefing</button><button data-command="note.add">New note</button></h3>
+          <h3><span class="grow">Notes</span><button data-command="note.add">New note</button></h3>
+          <div class="studio" aria-label="Make from the sources ticked for chat">
+            <span class="muted small">Make from ticked sources</span>
+            <button data-command="notebook.briefing">Briefing</button>
+            <button data-command="notebook.audio">Audio overview</button>
+            <button data-command="notebook.mindmap">Mind map</button>
+            <button data-command="notebook.slides">Slides</button>
+          </div>
           <div class="scroll"><ul class="items" id="note-list"></ul></div>
         </section>
       </div>
@@ -223,17 +255,24 @@
   </form>
 </dialog>
 
-<dialog id="dlg-note">
+<dialog id="dlg-note" class="wide">
   <form method="dialog">
-    <div class="d-head"><h2 id="note-dlg-title">Note</h2><span class="muted small" id="note-meta"></span></div>
+    <div class="d-head"><h2 id="note-dlg-title">Note</h2>
+      <span class="viewtabs" role="tablist"><button type="button" role="tab" data-note-view="read">Read</button><button type="button" role="tab" data-note-view="edit">Edit</button></span>
+    </div>
     <div class="d-body">
-      <label>Title <input type="text" name="title" maxlength="200"></label>
-      <label>Note <span class="muted small">Markdown</span><textarea name="body" rows="14"></textarea></label>
+      <p class="muted small" id="note-meta" style="margin:0"></p>
+      <div id="note-read" class="md note-read" tabindex="-1"></div>
+      <div id="note-edit" hidden>
+        <label>Title <input type="text" name="title" maxlength="200"></label>
+        <label>Note <span class="muted small">Markdown</span><textarea name="body" rows="16"></textarea></label>
+      </div>
     </div>
     <div class="d-foot">
       <button class="primary" value="close" data-command="note.update">Done</button>
       <button type="button" class="danger left" data-command="note.delete">Delete</button>
       <button type="button" id="note-listen" data-command="note.listen">Listen</button>
+      <button type="button" id="note-present" data-command="note.present" hidden>Present</button>
       <span class="muted small" id="note-saved"></span>
     </div>
   </form>

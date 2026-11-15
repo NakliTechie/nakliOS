@@ -1,4 +1,16 @@
 {
+  "accepts": [
+    {
+      "action": "import",
+      "label": "Add to Lectella",
+      "extensions": [
+        ".pdf",
+        ".md",
+        ".markdown",
+        ".txt"
+      ]
+    }
+  ],
   "commands": [
     {
       "name": "notebook.list",

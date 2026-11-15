@@ -15,7 +15,7 @@ import { uid, chunkText } from './core.js';
 /** @typedef {{ read(p: string): Promise<string>, readBinary?(p: string): Promise<Uint8Array>, write(p: string, d: string | Uint8Array): Promise<void>, exists(p: string): Promise<boolean>, delete(p: string): Promise<void> }} Fs */
 /** @typedef {{ id: string, name: string, description: string, created: number, updated: number, sources: string[], notes: string[], off: string[] }} Notebook */
 /** @typedef {{ id: string, title: string, kind: string, origin: string, added: number, chars: number, original?: string }} Source */
-/** @typedef {{ id: string, notebook: string, title: string, kind: 'human' | 'ai', created: number, updated: number, refs?: any[] }} Note */
+/** @typedef {{ id: string, notebook: string, title: string, kind: 'human' | 'ai', created: number, updated: number, refs?: any[], format?: string }} Note */
 /** @typedef {{ role: 'user' | 'assistant', content: string, refs?: any[], mode?: string, at: number }} Turn */
 
 export const LIBRARY_VERSION = 1;
@@ -316,13 +316,14 @@ export class Library {
     return n;
   }
 
-  /** @param {string} nbId @param {{ title: string, body: string, kind?: 'human' | 'ai', refs?: any[] }} input */
-  async addNote(nbId, { title, body, kind = 'human', refs }) {
+  /** @param {string} nbId @param {{ title: string, body: string, kind?: 'human' | 'ai', refs?: any[], format?: string }} input */
+  async addNote(nbId, { title, body, kind = 'human', refs, format }) {
     const nb = this.notebook(nbId);
     const now = Date.now();
     /** @type {Note} */
     const note = { id: uid('note'), notebook: nbId, title: String(title ?? '').trim() || 'Untitled note', kind, created: now, updated: now };
     if (refs?.length) note.refs = refs;
+    if (format) note.format = format;
     await this.serial(() => this.fs.write(`notes/${nbId}/${note.id}.md`, String(body ?? '')));
     this.textCache.set(note.id, String(body ?? ''));
     this.data.notes.push(note);

@@ -1,7 +1,7 @@
 // The page: draws the library, wires every control to the command manifest, runs chat through the NakliOS
 // model, and picks where the library lives (NakliOS Folder or Crate when connected, else this browser).
 
-import { briefingRequest, buildChat, citedRefs, esc, estimateTokens, renderMarkdown, summaryRequest, titleFrom } from './core.js';
+import { SPEAKERS, beforeSources, buildChat, citedRefs, esc, estimateTokens, mindmapSvg, parseOutline, parseScript, parseSlides, renderMarkdown, scriptMarkdown, studioRequest, summaryRequest, titleFrom } from './core.js';
 import { pdfText } from './pdf.js';
 import { Library, hostFs, opfsFs } from './store.js';
 import { COMMANDS, railCommands, run, searchNotebook } from './commands.js';
@@ -475,41 +475,76 @@ async function editNotebook(/** @type {boolean} */ isNew) {
   }
 }
 
+/**
+ * Add one file's bytes as a source. PDF, Markdown and text; anything else is refused with a message.
+ * @param {string} nbId @param {string} name @param {Uint8Array} bytes @param {string} [from] where it came from
+ * @returns {Promise<boolean>}
+ */
+async function importBytes(nbId, name, bytes, from = 'file') {
+  const isPdf = /\.pdf$/i.test(name);
+  if (!isPdf && !/\.(md|markdown|txt)$/i.test(name)) {
+    banner(`${name} is not a PDF, text or Markdown file. Web pages and audio come in a later version.`, { error: true });
+    return false;
+  }
+  if (bytes.length > 50 * 1024 * 1024) {
+    banner(`${name} is larger than 50 MB, so it was not added.`, { error: true });
+    return false;
+  }
+  if (isPdf) {
+    banner(`Reading ${name}…`);
+    let out;
+    try {
+      out = await pdfText(bytes, { onPage: (n, total) => banner(`Reading ${name}: page ${n} of ${total}…`) });
+    } catch (e) {
+      banner(`${name}: ${/** @type {any} */ (e)?.message ?? e}`, { error: true });
+      return false;
+    }
+    await lib.addSource(nbId, { title: out.title || name.replace(/\.pdf$/i, ''), text: out.text, kind: 'pdf', origin: `${from} · ${out.pages} page${out.pages === 1 ? '' : 's'}`, original: { name, bytes } });
+  } else {
+    await lib.addSource(nbId, { title: name.replace(/\.(md|markdown|txt)$/i, ''), text: new TextDecoder().decode(bytes), kind: /\.(md|markdown)$/i.test(name) ? 'markdown' : 'text', origin: from, original: { name, bytes } });
+  }
+  return true;
+}
+
 /** @param {File[]} files */
 async function importFiles(files) {
   if (!current) throw new Error('Create a notebook first');
   const nbId = current;
   let added = 0;
   for (const f of files) {
-    const isPdf = /\.pdf$/i.test(f.name) || f.type === 'application/pdf';
-    if (!isPdf && !/\.(md|markdown|txt)$/i.test(f.name) && !/^text\//.test(f.type)) {
-      banner(`${f.name} is not a PDF, text or Markdown file. Web pages and audio come in a later version.`, { error: true });
-      continue;
-    }
-    if (f.size > 50 * 1024 * 1024) {
-      banner(`${f.name} is larger than 50 MB, so it was not added.`, { error: true });
-      continue;
-    }
-    const bytes = new Uint8Array(await f.arrayBuffer());
-    if (isPdf) {
-      banner(`Reading ${f.name}…`);
-      let out;
-      try {
-        out = await pdfText(bytes, { onPage: (n, total) => banner(`Reading ${f.name}: page ${n} of ${total}…`) });
-      } catch (e) {
-        banner(`${f.name}: ${/** @type {any} */ (e)?.message ?? e}`, { error: true });
-        continue;
-      }
-      const title = out.title || f.name.replace(/\.pdf$/i, '');
-      await lib.addSource(nbId, { title, text: out.text, kind: 'pdf', origin: `file · ${out.pages} page${out.pages === 1 ? '' : 's'}`, original: { name: f.name, bytes } });
-    } else {
-      const text = new TextDecoder().decode(bytes);
-      await lib.addSource(nbId, { title: f.name.replace(/\.(md|markdown|txt)$/i, ''), text, kind: /\.(md|markdown)$/i.test(f.name) ? 'markdown' : 'text', origin: 'file', original: { name: f.name, bytes } });
-    }
-    added++;
+    const name = f.type === 'application/pdf' && !/\.pdf$/i.test(f.name) ? `${f.name}.pdf` : f.name;
+    if (await importBytes(nbId, name, new Uint8Array(await f.arrayBuffer()))) added++;
   }
   draw();
   if (added) banner(`Added ${added} source${added === 1 ? '' : 's'}.`);
+}
+
+/** The notebook a file sent from another app lands in: the open one, else a new "Inbox". */
+async function inboxNotebook() {
+  if (current && lib.findNotebook(current)) return current;
+  const nb = lib.findNotebook('Inbox') ?? (await lib.createNotebook({ name: 'Inbox', description: 'Files sent to Lectella from other apps' }));
+  current = nb.id;
+  turns = await lib.chat(nb.id);
+  return nb.id;
+}
+
+/** A file another NakliOS app sent with "Send to": a read-only copy, added as a source. @param {any} grant */
+async function onSent(grant) {
+  if (grant.kind !== 'send') return;
+  await started;
+  // Wait for the first capability report, so the file lands in the Folder or Crate library, not the start-up one.
+  for (let i = 0; i < 50 && !settled; i++) await new Promise((r) => setTimeout(r, 100));
+  try {
+    const file = await naklios.files.read(grant.token);
+    const raw = file.bytes ?? file.data;
+    const bytes = raw instanceof Uint8Array ? raw : typeof raw === 'string' ? new TextEncoder().encode(raw) : new Uint8Array(raw);
+    const app = file.sourceAppId === 'books' ? 'Lorewell' : file.sourceAppId || 'another app';
+    const nbId = await inboxNotebook();
+    if (await importBytes(nbId, file.name || grant.name, bytes, `sent from ${app}`)) banner(`Added ${file.name || grant.name} from ${app} to “${lib.notebook(nbId).name}”.`);
+    draw();
+  } finally {
+    naklios.files.release(grant.token);
+  }
 }
 
 /** Model call without streaming; answers the text. @param {{ role: string, content: string }[]} messages @param {AbortSignal} signal */
@@ -518,15 +553,27 @@ async function complete(messages, signal, max_tokens = 700) {
   return String(res?.choices?.[0]?.message?.content ?? '').trim();
 }
 
-/** Summarise each source switched on for chat, then combine them into one briefing note with citations. */
-async function makeBriefing() {
+const STUDIO_KINDS = {
+  briefing: { label: 'Briefing', title: 'Briefing', noun: 'briefing', tokens: 1200 },
+  audio: { label: 'Audio overview', title: 'Audio overview', noun: 'audio overview', tokens: 1600 },
+  mindmap: { label: 'Mind map', title: 'Mind map', noun: 'mind map', tokens: 700 },
+  slides: { label: 'Slides', title: 'Slides', noun: 'slide deck', tokens: 1400 },
+};
+
+/**
+ * Summarise each source switched on for chat, then combine the summaries into one studio note: a briefing, an
+ * audio overview script, a mind map or a slide deck. Two steps, so a small in-browser model can do it.
+ * @param {'briefing' | 'audio' | 'mindmap' | 'slides'} kind
+ */
+async function studio(kind) {
+  const spec = STUDIO_KINDS[kind];
   if (!current) return;
-  if (!aiOn()) return banner('A briefing needs a model. Choose one in NakliOS Settings → AI.', { error: true });
+  if (!aiOn()) return banner(`${spec.label} needs a model. Choose one in NakliOS Settings → AI.`, { error: true });
   if (busy) return banner('Wait for the current answer to finish.', { error: true });
   const nbId = current;
   const nb = lib.notebook(nbId);
   const sources = (await lib.contextItems(nbId)).filter((i) => i.kind === 'source');
-  if (!sources.length) return banner('Tick at least one source for chat, then make the briefing.', { error: true });
+  if (!sources.length) return banner(`Tick at least one source for chat, then make the ${spec.noun}.`, { error: true });
   busy = true;
   drawAi();
   const ctl = new AbortController();
@@ -536,23 +583,33 @@ async function makeBriefing() {
     const parts = [];
     let cut = 0;
     for (const [i, src] of sources.entries()) {
-      banner(`Briefing: summarising source ${i + 1} of ${sources.length}, “${src.title}”…`, { actions: [stop] });
+      banner(`${spec.label}: summarising source ${i + 1} of ${sources.length}, “${src.title}”…`, { actions: [stop] });
       const req = summaryRequest(src, budget());
       if (req.cut) cut++;
       parts.push({ n: i + 1, title: src.title, summary: await complete(req.messages, ctl.signal, 500) });
     }
-    banner('Briefing: writing the document…', { actions: [stop] });
-    const text = await complete(briefingRequest(nb, parts), ctl.signal, 1200);
-    if (!text) throw new Error('The model returned an empty briefing');
+    banner(`${spec.label}: writing it…`, { actions: [stop] });
+    let text = await complete(studioRequest(kind, nb, parts), ctl.signal, spec.tokens);
+    if (!text) throw new Error(`The model returned an empty ${spec.noun}`);
+    // Check the shape before saving, so a malformed answer is reported instead of saved.
+    if (kind === 'audio') {
+      const lines = parseScript(text);
+      if (lines.length < 4) throw new Error('The model did not write a two-voice script. Try again, or choose a larger model in NakliOS.');
+      text = scriptMarkdown(lines);
+    } else if (kind === 'mindmap' && !parseOutline(text).children.length) {
+      throw new Error('The model did not write an outline for the mind map. Try again, or choose a larger model in NakliOS.');
+    } else if (kind === 'slides' && parseSlides(text).length < 2) {
+      throw new Error('The model did not write slides. Try again, or choose a larger model in NakliOS.');
+    }
     const refs = parts.map((p) => ({ n: p.n, kind: 'source', id: sources[p.n - 1].id, title: p.title }));
     const list = parts.map((p) => `${p.n}. ${p.title}`).join('\n');
     const note = cut ? `\n\n_${cut} long source${cut === 1 ? ' was' : 's were'} cut to fit the model before summarising._` : '';
-    const n = await lib.addNote(nbId, { title: `Briefing: ${nb.name}`, body: `${text}\n\n**Sources**\n\n${list}${note}`, kind: 'ai', refs });
-    banner('The briefing is saved as a note.');
+    const n = await lib.addNote(nbId, { title: `${spec.title}: ${nb.name}`, body: `${text}\n\n**Sources**\n\n${list}${note}`, kind: 'ai', refs, format: kind === 'briefing' ? undefined : kind });
+    banner(`The ${spec.noun} is saved as a note.`);
     draw();
     await openNote(n.id);
   } catch (e) {
-    if (ctl.signal.aborted) banner('Briefing stopped. Nothing was saved.');
+    if (ctl.signal.aborted) banner(`${spec.label} stopped. Nothing was saved.`);
     else throw e;
   } finally {
     busy = false;
@@ -561,25 +618,48 @@ async function makeBriefing() {
   }
 }
 
-/** Read a note aloud with the voices this device has; a second press stops. */
+/** English voices on this device, distinct ones first, for the two speakers. */
+function voicesFor() {
+  const all = speechSynthesis.getVoices();
+  const en = all.filter((v) => /^en/i.test(v.lang));
+  const pool = en.length ? en : all;
+  const local = pool.filter((v) => v.localService);
+  const pick = local.length >= 2 ? local : pool;
+  return [pick[0] ?? null, pick.find((v) => v !== pick[0] && v.name.split(' ')[0] !== pick[0]?.name.split(' ')[0]) ?? pick[1] ?? pick[0] ?? null];
+}
+
+/** Read the open note aloud with this device's voices: an audio overview in two voices. A second press stops. */
 function listen() {
   if (!('speechSynthesis' in window)) return banner('This browser has no speech voices.', { error: true });
   const btn = $('note-listen');
-  if (speechSynthesis.speaking) {
+  if (speechSynthesis.speaking || speechSynthesis.pending) {
     speechSynthesis.cancel();
-    btn.textContent = 'Listen';
+    btn.textContent = btn.dataset.idle ?? 'Listen';
     return;
   }
   const form = /** @type {HTMLFormElement} */ (dlg('dlg-note').querySelector('form'));
-  const plain = String(form.elements.namedItem('body').value)
-    .replace(/```[^]*?```/g, ' ')
-    .replace(/\[(\d+(?:\s*,\s*\d+)*)\]/g, '')
-    .replace(/[#*_`>]/g, '')
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
-  const u = new SpeechSynthesisUtterance(`${form.elements.namedItem('title').value}. ${plain}`);
-  u.onend = u.onerror = () => (btn.textContent = 'Listen');
+  const body = String(form.elements.namedItem('body').value);
+  const clean = (/** @type {string} */ t) =>
+    t
+      .replace(/```[^]*?```/g, ' ')
+      .replace(/\[(\d+(?:\s*,\s*\d+)*)\]/g, '')
+      .replace(/[#*_`>]/g, '')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+  const lines = openNoteFormat === 'audio' ? parseScript(body) : [{ speaker: '', text: `${form.elements.namedItem('title').value}. ${clean(beforeSources(body))}` }];
+  const [a, b] = voicesFor();
+  const rows = [...$('note-read').querySelectorAll('[data-line]')];
+  lines.forEach((l, i) => {
+    const u = new SpeechSynthesisUtterance(clean(l.text));
+    const second = l.speaker === SPEAKERS[1];
+    const voice = second ? b : a;
+    if (voice) u.voice = voice;
+    // With a single voice on the device, the second speaker still sounds different.
+    if (second && a === b) u.pitch = 0.8;
+    u.onstart = () => rows.forEach((r, j) => r.classList.toggle('speaking', j === i));
+    if (i === lines.length - 1) u.onend = u.onerror = () => ((btn.textContent = btn.dataset.idle ?? 'Listen'), rows.forEach((r) => r.classList.remove('speaking')));
+    speechSynthesis.speak(u);
+  });
   btn.textContent = 'Stop';
-  speechSynthesis.speak(u);
 }
 
 async function addSource() {
@@ -621,23 +701,86 @@ let noteSaver = null;
 /** @type {string | null} */
 let openNoteId = null;
 
+/** The open note's format: '' (Markdown), 'audio', 'mindmap' or 'slides'. */
+let openNoteFormat = '';
+let slideAt = 0;
+
+/** Draw the open note's Read view from the editor's current text. */
+function drawNoteRead() {
+  const form = /** @type {HTMLFormElement} */ (dlg('dlg-note').querySelector('form'));
+  const body = String(form.elements.namedItem('body').value);
+  const box = $('note-read');
+  const note = openNoteId ? lib.data.notes.find((n) => n.id === openNoteId) : null;
+  const refs = note?.refs ?? [];
+  const sourcesHtml = (/** @type {string} */ md) => {
+    const tail = md.split(/\n\s*\*\*Sources\*\*\s*\n/)[1];
+    return tail ? `<h4>Sources</h4>${renderMarkdown(tail)}` : '';
+  };
+  $('note-present').hidden = openNoteFormat !== 'slides';
+  if (openNoteFormat === 'mindmap') {
+    box.innerHTML = `<div class="mindmap">${mindmapSvg(parseOutline(body))}</div>${sourcesHtml(body)}`;
+  } else if (openNoteFormat === 'slides') {
+    const slides = parseSlides(body);
+    slideAt = Math.min(slideAt, Math.max(0, slides.length - 1));
+    const sl = slides[slideAt];
+    box.innerHTML = sl
+      ? `<div class="deck" id="deck" tabindex="0"><div class="slide${slideAt === 0 ? ' first' : ''}"><h3>${renderMarkdown(sl.title, { cite: true }).replace(/^<p>|<\/p>$/g, '')}</h3>${sl.subtitle ? `<p class="sub">${renderMarkdown(sl.subtitle).replace(/^<p>|<\/p>$/g, '')}</p>` : ''}${sl.bullets.length ? `<ul>${sl.bullets.map((b) => `<li>${renderMarkdown(b, { cite: true }).replace(/^<p>|<\/p>$/g, '')}</li>`).join('')}</ul>` : ''}</div>` +
+        `<div class="deck-nav"><button type="button" data-slide="-1" aria-label="Previous slide">‹</button><span>${slideAt + 1} / ${slides.length}</span><button type="button" data-slide="1" aria-label="Next slide">›</button></div></div>${sourcesHtml(body)}`
+      : '<p class="empty">No slides in this note.</p>';
+    box.querySelectorAll('[data-slide]').forEach((b) => ((/** @type {HTMLElement} */ (b)).onclick = () => moveSlide(Number(/** @type {HTMLElement} */ (b).dataset.slide))));
+  } else if (openNoteFormat === 'audio') {
+    const lines = parseScript(body);
+    box.innerHTML = `<ol class="script">${lines.map((l) => `<li data-line><b>${esc(l.speaker)}</b> ${esc(l.text)}</li>`).join('')}</ol>${sourcesHtml(body)}`;
+  } else {
+    box.innerHTML = renderMarkdown(body, { cite: true });
+  }
+  box.querySelectorAll('button.cite').forEach((b) => {
+    const r = refs.find((/** @type {any} */ x) => x.n === Number(/** @type {HTMLElement} */ (b).dataset.cite));
+    if (r) (/** @type {HTMLElement} */ (b)).onclick = (e) => (e.preventDefault(), openRef(r).catch(fail));
+    else /** @type {HTMLButtonElement} */ (b).disabled = true;
+  });
+}
+
+/** @param {number} step */
+function moveSlide(step) {
+  const form = /** @type {HTMLFormElement} */ (dlg('dlg-note').querySelector('form'));
+  const count = parseSlides(String(form.elements.namedItem('body').value)).length;
+  slideAt = Math.max(0, Math.min(count - 1, slideAt + step));
+  drawNoteRead();
+  document.getElementById('deck')?.focus();
+}
+
+/** Show the note's Read or Edit view. @param {'read' | 'edit'} view */
+function noteView(view) {
+  $('note-read').hidden = view !== 'read';
+  $('note-edit').hidden = view !== 'edit';
+  for (const b of document.querySelectorAll('[data-note-view]')) b.setAttribute('aria-selected', String(/** @type {HTMLElement} */ (b).dataset.noteView === view));
+  if (view === 'read') drawNoteRead();
+}
+
 /** @param {string} id */
 async function openNote(id) {
   const n = lib.note(id);
   const body = await lib.noteBody(id);
   openNoteId = id;
+  openNoteFormat = n.format ?? '';
+  slideAt = 0;
   const d = dlg('dlg-note');
   const form = /** @type {HTMLFormElement} */ (d.querySelector('form'));
   const titleEl = /** @type {HTMLInputElement} */ (form.elements.namedItem('title'));
   const bodyEl = /** @type {HTMLTextAreaElement} */ (form.elements.namedItem('body'));
   titleEl.value = n.title;
   bodyEl.value = body;
-  $('note-dlg-title').textContent = n.kind === 'ai' ? 'Note from chat' : 'Note';
-  $('note-meta').textContent = `Edited ${ago(n.updated)}`;
+  $('note-dlg-title').textContent = n.title;
+  $('note-meta').textContent = `${n.kind === 'ai' ? 'Made by the model' : 'Written'} · edited ${ago(n.updated)}`;
   $('note-saved').textContent = '';
+  const listenBtn = $('note-listen');
+  listenBtn.dataset.idle = openNoteFormat === 'audio' ? 'Play' : 'Listen';
+  listenBtn.textContent = listenBtn.dataset.idle;
   const save = async () => {
     await run(lib, 'note.update', { note: id, title: titleEl.value, body: bodyEl.value });
     $('note-saved').textContent = 'Saved';
+    $('note-dlg-title').textContent = titleEl.value;
   };
   noteSaver?.dispose?.();
   noteSaver = naklios?.fs?.autosave
@@ -646,11 +789,13 @@ async function openNote(id) {
   const mark = () => (($('note-saved').textContent = 'Editing…'), noteSaver?.markDirty());
   titleEl.oninput = mark;
   bodyEl.oninput = mark;
+  // A note someone writes opens for editing; a note the model made opens for reading.
+  noteView(n.kind === 'ai' || openNoteFormat ? 'read' : 'edit');
   d.showModal();
-  bodyEl.focus();
+  if (!$('note-edit').hidden) bodyEl.focus();
   closed(d).then(async () => {
     if ('speechSynthesis' in window) speechSynthesis.cancel();
-    $('note-listen').textContent = 'Listen';
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     try {
       await noteSaver?.flush();
     } catch (e) {
@@ -794,8 +939,15 @@ const UI = {
   'source.add': () => addSource(),
   'source.import': () => /** @type {HTMLInputElement} */ ($('file')).click(),
   'note.add': () => newNote(),
-  'notebook.briefing': () => makeBriefing(),
+  'notebook.briefing': () => studio('briefing'),
+  'notebook.audio': () => studio('audio'),
+  'notebook.mindmap': () => studio('mindmap'),
+  'notebook.slides': () => studio('slides'),
   'note.listen': () => listen(),
+  'note.present': () => {
+    const deck = document.getElementById('deck');
+    if (deck && !document.fullscreenElement) deck.requestFullscreen?.().then(() => deck.focus()).catch(fail);
+  },
   'chat.ask': () => send(),
   'source.rename': async () => {
     if (!openSourceId || !current) return;
@@ -853,6 +1005,12 @@ $('question').addEventListener('keydown', (e) => {
   }
 });
 $('stop').onclick = () => abort?.abort();
+document.querySelectorAll('[data-note-view]').forEach((b) => b.addEventListener('click', () => noteView(/** @type {any} */ (/** @type {HTMLElement} */ (b).dataset.noteView))));
+$('note-read').addEventListener('keydown', (e) => {
+  if (openNoteFormat !== 'slides') return;
+  if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') (e.preventDefault(), moveSlide(1));
+  if (e.key === 'ArrowLeft' || e.key === 'PageUp') (e.preventDefault(), moveSlide(-1));
+});
 $('where').addEventListener('change', (e) => chooseStorage(/** @type {HTMLSelectElement} */ (e.target).value).catch(fail));
 $('clear-chat').onclick = async () => {
   if (!current || !turns.length) return;
@@ -942,7 +1100,7 @@ function applyHostTheme(theme) {
 // ── Start ────────────────────────────────────────────────────────────────────────────────────────────
 
 where = 'init';
-openLibrary('browser')
+const started = openLibrary('browser')
   .catch((e) => {
     where = 'browser';
     fail(new Error(`Could not open the library in this browser: ${e?.message ?? e}`));
@@ -951,6 +1109,7 @@ openLibrary('browser')
   .finally(() => {
     naklios?.theme?.onChange?.(applyHostTheme);
     naklios?.onCapabilitiesChange?.(() => onCaps().catch(fail));
+    naklios?.files?.onOpen?.((/** @type {any} */ g) => onSent(g).catch(fail));
     naklios?.ready?.();
     naklios?.theme?.request?.();
     naklios?.requestCapabilities?.();
