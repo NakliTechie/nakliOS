@@ -1,4 +1,4 @@
-// The image-input rail (2026-11-15, for Loquella): an agent request's user turn may carry
+// The image-input rail (2026-11-15, for Gupshup): an agent request's user turn may carry
 // OpenAI image_url parts with a base64 data URL. Endpoints receive them as sent (OpenAI shape)
 // or as Anthropic base64 image blocks; the browser models refuse them with the reason.
 //

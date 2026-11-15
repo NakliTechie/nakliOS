@@ -31,7 +31,7 @@ export const AGENT_LIMITS = Object.freeze({
 
 const CHAT_ROLES = new Set(['system', 'developer', 'user', 'assistant', 'tool']);
 
-// Image inputs (2026-11-15, for Loquella): a user turn's content may be an OpenAI parts array of
+// Image inputs (2026-11-15, for Gupshup): a user turn's content may be an OpenAI parts array of
 // `text` and `image_url` parts, the image as a base64 data URL. Images are counted in bytes,
 // apart from the character cap, because one photo is larger than a whole text transcript.
 export const IMAGE_LIMITS = Object.freeze({
