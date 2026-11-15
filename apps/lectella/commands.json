@@ -159,6 +159,10 @@
           "label": {
             "type": "string",
             "description": "Where in the book, such as \"Chapter 3\""
+          },
+          "excerpt": {
+            "type": "string",
+            "description": "The excerpt from books.library.search, kept in case the passage id changes later"
           }
         },
         "required": [

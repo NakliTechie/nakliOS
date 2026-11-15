@@ -98,11 +98,12 @@ export const COMMANDS = [
         title: str('Book title'),
         author: str('Book author'),
         label: str('Where in the book, such as "Chapter 3"'),
+        excerpt: str('The excerpt from books.library.search, kept in case the passage id changes later'),
       },
       required: ['notebook', 'work', 'location', 'title'],
     },
     run: async (lib, a) => {
-      const { source: s, status } = await lib.addReference(nbOf(lib, a?.notebook).id, { app: 'books', work: String(a?.work ?? ''), location: String(a?.location ?? ''), title: a?.title, author: a?.author, label: a?.label });
+      const { source: s, status } = await lib.addReference(nbOf(lib, a?.notebook).id, { app: 'books', work: String(a?.work ?? ''), location: String(a?.location ?? ''), title: a?.title, author: a?.author, label: a?.label, excerpt: a?.excerpt });
       return { id: s.id, title: s.title, status };
     },
   },

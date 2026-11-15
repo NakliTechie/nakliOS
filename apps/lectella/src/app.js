@@ -971,7 +971,13 @@ async function runSearch() {
 /** Read a Lorewell reference's passage text (never stored here). @param {import('./store.js').Source} src */
 async function readReference(src) {
   const r = /** @type {NonNullable<typeof src.ref>} */ (src.ref);
-  return (await readLorewell(naklios, r.work, r.location, { chars: 6000, context: 1 })).text;
+  try {
+    return (await readLorewell(naklios, r.work, r.location, { chars: 6000, context: 1 })).text;
+  } catch (e) {
+    // A passage id changes when the book file or Lorewell's passage extractor changes; the saved excerpt stands in.
+    if (/** @type {any} */ (e)?.code === 'ENOTFOUND' && r.excerpt) return `${r.excerpt}\n\n[Lorewell no longer finds this passage at the cited place, so this is the excerpt saved when it was cited.]`;
+    throw e;
+  }
 }
 
 /** Lorewell passages that match a question, as chat context items (best 3, about 1,500 characters each). @param {string} q */
@@ -1013,7 +1019,7 @@ async function lorewellSearch() {
       e.preventDefault();
       if (!current) return;
       try {
-        const out = await act('source.add-reference', { notebook: current, work: h.work, location: h.location, title: h.title, author: h.author, label: h.label });
+        const out = await act('source.add-reference', { notebook: current, work: h.work, location: h.location, title: h.title, author: h.author, label: h.label, excerpt: h.excerpt });
         add.textContent = out.status === 'present' ? 'Already in' : 'Added';
         add.disabled = true;
       } catch (err) {

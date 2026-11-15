@@ -6449,7 +6449,7 @@
       "id": "lectella",
       "repo": "NakliTechie/lectella",
       "requestedRef": "main",
-      "resolvedCommit": "41f07793751ad556fb526b1ccedd4c2376aaa33f",
+      "resolvedCommit": "0de807be5af9aa81767d65f2ee076529dd9aaab4",
       "files": [
         {
           "source": "index.html",
@@ -6462,8 +6462,8 @@
         {
           "source": "commands.json",
           "destination": "commands.json",
-          "sha256": "9e2a57309d65f6f181af44c7bb94a3001a4ed63ce996ea870a10a499b7a417ca",
-          "bytes": 9757
+          "sha256": "8f4b0ce8606d584d500a277b1526b081d9adec9121c84bd0ab758b5aaacedab5",
+          "bytes": 9933
         },
         {
           "source": "LICENSE",
@@ -6474,8 +6474,8 @@
         {
           "source": "src/app.js",
           "destination": "src/app.js",
-          "sha256": "caef6e93295d5a37e484f704fdecb9822b8339d2aa79647b3f6d4726fe0e1735",
-          "bytes": 57440
+          "sha256": "91c7b6e96dbe95deac78ab186b09d23812427c2946e9eb74f47f82cb3ff94c51",
+          "bytes": 57821
         },
         {
           "source": "src/core.js",
@@ -6486,14 +6486,14 @@
         {
           "source": "src/store.js",
           "destination": "src/store.js",
-          "sha256": "25d56993e278e6bff7d3ee4c51ea0c01749b903c5adc381305c929af92bc0ded",
-          "bytes": 22274
+          "sha256": "f99319658b94d4a0a03a80bd26de55e27e58cd9cec5923398ffb8658c6d9bf33",
+          "bytes": 22490
         },
         {
           "source": "src/commands.js",
           "destination": "src/commands.js",
-          "sha256": "9d9850b3eb1ad69aee9772c75110640f02ee171df6b31a908ce3f55bd0385101",
-          "bytes": 16383
+          "sha256": "b60ac6a8acc5e186f85d4beeeb44bb56773e99d4549f528110a74117b88cdc0f",
+          "bytes": 16510
         },
         {
           "source": "src/pdf.js",

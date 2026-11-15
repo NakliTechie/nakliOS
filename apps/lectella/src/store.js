@@ -14,7 +14,7 @@ import { uid, chunkText } from './core.js';
 
 /** @typedef {{ read(p: string): Promise<string>, readBinary?(p: string): Promise<Uint8Array>, write(p: string, d: string | Uint8Array): Promise<void>, exists(p: string): Promise<boolean>, delete(p: string): Promise<void> }} Fs */
 /** @typedef {{ id: string, name: string, description: string, created: number, updated: number, sources: string[], notes: string[], off: string[] }} Notebook */
-/** @typedef {{ id: string, title: string, kind: string, origin: string, added: number, chars: number, original?: string, hash?: string, fileHash?: string, ref?: { app: string, work: string, location: string, label?: string, author?: string } }} Source */
+/** @typedef {{ id: string, title: string, kind: string, origin: string, added: number, chars: number, original?: string, hash?: string, fileHash?: string, ref?: { app: string, work: string, location: string, label?: string, author?: string, excerpt?: string } }} Source */
 /** @typedef {{ id: string, notebook: string, title: string, kind: 'human' | 'ai', created: number, updated: number, refs?: any[], format?: string }} Note */
 /** @typedef {{ role: 'user' | 'assistant', content: string, refs?: any[], mode?: string, at: number }} Turn */
 
@@ -319,10 +319,10 @@ export class Library {
    * Add a reference to a passage another app holds (Lorewell): only its ids and labels are stored here. The same
    * work and location twice is reported as present, or linked from another notebook.
    * @param {string} nbId
-   * @param {{ app: string, work: string, location: string, title: string, author?: string, label?: string, chars?: number }} ref
+   * @param {{ app: string, work: string, location: string, title: string, author?: string, label?: string, excerpt?: string, chars?: number }} ref
    * @returns {Promise<{ source: Source, status: 'added' | 'present' | 'linked' }>}
    */
-  async addReference(nbId, { app, work, location, title, author, label, chars = 0 }) {
+  async addReference(nbId, { app, work, location, title, author, label, excerpt, chars = 0 }) {
     const nb = this.notebook(nbId);
     if (!work || !location) throw new Error('A reference needs a work id and a location');
     const same = this.data.sources.find((s) => s.ref && s.ref.app === app && s.ref.work === work && s.ref.location === location);
@@ -341,7 +341,8 @@ export class Library {
       origin: 'reference in Lorewell',
       added: Date.now(),
       chars,
-      ref: { app, work, location, ...(label ? { label } : {}), ...(author ? { author } : {}) },
+      // The short excerpt is kept so the citation still shows something if the book's passage ids change.
+      ref: { app, work, location, ...(label ? { label } : {}), ...(author ? { author } : {}), ...(excerpt ? { excerpt: String(excerpt).slice(0, 400) } : {}) },
     };
     this.data.sources.push(src);
     nb.sources.push(src.id);
