@@ -251,3 +251,40 @@ export function renderMarkdown(md, { cite = false } = {}) {
   }
   return html.join('');
 }
+
+// ── Briefing ─────────────────────────────────────────────────────────────────────────────────────────
+// A briefing runs in two steps so it works on a small in-browser model: each source is summarised on its own
+// (cut to fit the budget), then the summaries are combined into one briefing that cites each source by number.
+
+/**
+ * The request that summarises one source. A source longer than the budget is cut, and the prompt says so.
+ * @param {{ title: string, text: string }} item @param {number} budget
+ */
+export function summaryRequest(item, budget) {
+  const room = Math.max(400, budget - 400) * 4;
+  const cut = item.text.length > room;
+  const text = cut ? `${item.text.slice(0, room)}\n\n[The rest of this source was cut to fit the model.]` : item.text;
+  return {
+    cut,
+    messages: [
+      { role: 'system', content: 'You summarise one source for a research briefing. Write 5 to 8 short bullet points with the main claims, numbers, names and dates in the source. Use only what the source says. No introduction.' },
+      { role: 'user', content: `Source: ${item.title}\n\n${text}` },
+    ],
+  };
+}
+
+/**
+ * The request that combines per-source summaries into one briefing, with [n] citing source n.
+ * @param {{ name: string, description?: string }} notebook @param {{ n: number, title: string, summary: string }[]} parts
+ */
+export function briefingRequest(notebook, parts) {
+  const body = parts.map((p) => `[${p.n}] ${p.title}\n${p.summary}`).join('\n\n');
+  return [
+    {
+      role: 'system',
+      content:
+        'You write a briefing document from numbered source summaries. Use these Markdown sections: "## Overview" (one paragraph), "## Key points" (bullets), "## Where sources differ" (bullets, or "None found"), and "## Open questions" (bullets). Cite every claim with the source number in square brackets, like [1]. Use only the summaries.',
+    },
+    { role: 'user', content: `Notebook: ${notebook.name}${notebook.description ? ` (${notebook.description})` : ''}\n\n${body}` },
+  ];
+}

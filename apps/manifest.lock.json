@@ -6437,14 +6437,14 @@
       "id": "lectella",
       "repo": "NakliTechie/lectella",
       "requestedRef": "main",
-      "resolvedCommit": "9d8bce7892d1756ebf6d5067795c1926868a1a3f",
+      "resolvedCommit": "c1bd8593fc534e4a95365053beabdc3f9d960dc6",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "43e759229944e3bb296d155278324cd63d3fd34ff0ae05d97207539782e989c2",
-          "bytes": 77088,
-          "originalSourceSha256": "c1d9040fbdb1e72c17db8a9184a38c75159b12dab23806a2ed09fe33d2b2bcfd",
+          "sha256": "8a01b5e0ca85007b2424f4742d33fc3d7e21724bae6a939706548384c96a8ce2",
+          "bytes": 77669,
+          "originalSourceSha256": "f704ab32622d27abcf0d9117b5dd4f2cc8ff4c0c775dabbe16145abcd0450d75",
           "sdkSha256": "c15c789021fa5047968ce887f6f99c5be733056e19ffe3333d53c89bb5e033ec"
         },
         {
@@ -6462,14 +6462,14 @@
         {
           "source": "src/app.js",
           "destination": "src/app.js",
-          "sha256": "88c36fae33f9eb2e0c936964ec8eb9e45e4ed4c91b102b8e66480bbb95ab199f",
-          "bytes": 34973
+          "sha256": "b70cae5b90b4a045f0fa6e6c975c76b4e73b013c479e40617caeea881deeae45",
+          "bytes": 41447
         },
         {
           "source": "src/core.js",
           "destination": "src/core.js",
-          "sha256": "12da954ac1d852d53733d2f56ca9977a7e0496a5661ece05b6ccccbb19006734",
-          "bytes": 11777
+          "sha256": "08718b61fef3356e6221c79b8afb7c6753fdf9b4cacf42a73f85987d46c1889f",
+          "bytes": 13981
         },
         {
           "source": "src/store.js",
@@ -6480,8 +6480,38 @@
         {
           "source": "src/commands.js",
           "destination": "src/commands.js",
-          "sha256": "8c7c69cf4c6991e8a3d6142d5141d34b7cb154bbe998cf144e0783797d7d3a68",
-          "bytes": 11663
+          "sha256": "87e63e7bb1bc6ef00a4904af8971ecad24380ccbf3a4e3161144ecb3fd0f85a4",
+          "bytes": 12725
+        },
+        {
+          "source": "src/pdf.js",
+          "destination": "src/pdf.js",
+          "sha256": "4ee263f7a27f22385987f70bbcf4490726874a5ac8876addb88795b83858d254",
+          "bytes": 2214
+        },
+        {
+          "source": "vendor/pdfjs-6.2.108/pdf.min.mjs",
+          "destination": "vendor/pdfjs-6.2.108/pdf.min.mjs",
+          "sha256": "e0be3863c23c8af2305b16548febd58e7f8874a460253317d7771cddbc1c0f6d",
+          "bytes": 454669
+        },
+        {
+          "source": "vendor/pdfjs-6.2.108/pdf.worker.min.mjs",
+          "destination": "vendor/pdfjs-6.2.108/pdf.worker.min.mjs",
+          "sha256": "0613f41490dd6aaceed7a93fbbd38c85e6d6aa60474b6588c6e7709cfbe18cb3",
+          "bytes": 1262398
+        },
+        {
+          "source": "vendor/pdfjs-6.2.108/LICENSE",
+          "destination": "vendor/pdfjs-6.2.108/LICENSE",
+          "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
+          "bytes": 10174
+        },
+        {
+          "source": "vendor/pdfjs-6.2.108/NOTICE.md",
+          "destination": "vendor/pdfjs-6.2.108/NOTICE.md",
+          "sha256": "2451975310f3d96644a5e345bd1b366fcec07391e21a8b2ae5b79884ec139a50",
+          "bytes": 299
         }
       ]
     }

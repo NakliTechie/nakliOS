@@ -30,6 +30,8 @@
   header.top h1 { font-size: 1.1rem; margin: 0; letter-spacing: .01em; }
   .status { color: var(--mute); font-size: .85rem; display: flex; gap: .9rem; flex-wrap: wrap; margin-left: auto; align-items: center; }
   .status .err { color: var(--err); }
+  .status select { font-size: .85rem; padding: .1rem .3rem; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); }
+  .status select.err { border-color: var(--err); color: var(--err); }
   #banner { padding: .4rem 1rem; background: var(--tint); border-bottom: 1px solid var(--line); font-size: .9rem; display: flex; gap: .6rem; align-items: center; }
   #banner.error { background: #fdecea; color: var(--err); }
   #banner[hidden] { display: none; }
@@ -116,7 +118,7 @@
   <header class="top">
     <h1>Lectella</h1>
     <div class="status">
-      <span id="store-status">Opening your library…</span>
+      <label class="small">Library in <select id="where" data-command="storage.choose"><option>This browser</option></select></label>
       <span id="ai-status"></span>
     </div>
   </header>
@@ -129,7 +131,7 @@
     <main class="nb" id="nb-view">
       <div class="welcome" id="welcome">
         <h2>A notebook for each thing you are researching</h2>
-        <p>Add your sources: paste text, or open a Markdown or text file. Write notes beside them. Ask a question and the answer comes from your sources, with numbered citations you can click to read the passage.</p>
+        <p>Add your sources: paste text, or open a PDF, Markdown or text file. Write notes beside them. Ask a question and the answer comes from your sources, with numbered citations you can click to read the passage.</p>
         <p class="muted small">Everything is kept as plain files: on your NakliOS Folder or Crate when one is connected, or in this browser's private storage. Nothing is uploaded. Chat uses the model you pick in NakliOS; search works without any model.</p>
         <p><button class="primary" data-command="notebook.create">Create your first notebook</button></p>
       </div>
@@ -168,7 +170,7 @@
           </div>
         </section>
         <section class="col" data-col="notes" aria-label="Notes">
-          <h3><span class="grow">Notes</span><button data-command="note.add">New note</button></h3>
+          <h3><span class="grow">Notes</span><button data-command="notebook.briefing" title="Summarise the sources ticked for chat into one briefing note">Briefing</button><button data-command="note.add">New note</button></h3>
           <div class="scroll"><ul class="items" id="note-list"></ul></div>
         </section>
       </div>
@@ -196,11 +198,11 @@
   <form method="dialog">
     <div class="d-head"><h2>Add a source</h2></div>
     <div class="d-body">
-      <div class="drop" id="add-drop">Drop a .md or .txt file here, or <button type="button" class="link" data-command="source.import">choose a file</button>
-        <input type="file" id="file" accept=".md,.markdown,.txt,text/plain,text/markdown" multiple hidden></div>
+      <div class="drop" id="add-drop">Drop a PDF, .md or .txt file here, or <button type="button" class="link" data-command="source.import">choose a file</button>
+        <input type="file" id="file" accept=".pdf,.md,.markdown,.txt,application/pdf,text/plain,text/markdown" multiple hidden></div>
       <label>Title <input type="text" name="title" maxlength="200" placeholder="Taken from the first line if left empty"></label>
       <label>Text <textarea name="text" rows="12" placeholder="Paste the text of an article, a paper, a transcript…"></textarea></label>
-      <p class="muted small" style="margin:0">PDF, web pages and audio come in a later version. For now, paste their text.</p>
+      <p class="muted small" style="margin:0">PDFs need a text layer; scanned pages cannot be read yet. Web pages and audio come in a later version: for now, paste their text.</p>
     </div>
     <div class="d-foot">
       <button class="primary" value="ok">Add source</button>
@@ -231,6 +233,7 @@
     <div class="d-foot">
       <button class="primary" value="close" data-command="note.update">Done</button>
       <button type="button" class="danger left" data-command="note.delete">Delete</button>
+      <button type="button" id="note-listen" data-command="note.listen">Listen</button>
       <span class="muted small" id="note-saved"></span>
     </div>
   </form>

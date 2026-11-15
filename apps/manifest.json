@@ -4357,6 +4357,26 @@
         {
           "source": "src/commands.js",
           "destination": "src/commands.js"
+        },
+        {
+          "source": "src/pdf.js",
+          "destination": "src/pdf.js"
+        },
+        {
+          "source": "vendor/pdfjs-6.2.108/pdf.min.mjs",
+          "destination": "vendor/pdfjs-6.2.108/pdf.min.mjs"
+        },
+        {
+          "source": "vendor/pdfjs-6.2.108/pdf.worker.min.mjs",
+          "destination": "vendor/pdfjs-6.2.108/pdf.worker.min.mjs"
+        },
+        {
+          "source": "vendor/pdfjs-6.2.108/LICENSE",
+          "destination": "vendor/pdfjs-6.2.108/LICENSE"
+        },
+        {
+          "source": "vendor/pdfjs-6.2.108/NOTICE.md",
+          "destination": "vendor/pdfjs-6.2.108/NOTICE.md"
         }
       ]
     }

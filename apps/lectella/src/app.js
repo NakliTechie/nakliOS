@@ -1,7 +1,8 @@
 // The page: draws the library, wires every control to the command manifest, runs chat through the NakliOS
 // model, and picks where the library lives (NakliOS Folder or Crate when connected, else this browser).
 
-import { buildChat, citedRefs, esc, estimateTokens, renderMarkdown, titleFrom } from './core.js';
+import { briefingRequest, buildChat, citedRefs, esc, estimateTokens, renderMarkdown, summaryRequest, titleFrom } from './core.js';
+import { pdfText } from './pdf.js';
 import { Library, hostFs, opfsFs } from './store.js';
 import { COMMANDS, railCommands, run, searchNotebook } from './commands.js';
 
@@ -13,16 +14,16 @@ const dlg = (/** @type {string} */ id) => /** @type {HTMLDialogElement} */ ($(id
 
 // ── Errors and messages ──────────────────────────────────────────────────────────────────────────────
 
-/** @param {string} msg @param {{ error?: boolean, action?: { label: string, run: () => void } }} [opts] */
-function banner(msg, { error = false, action } = {}) {
+/** @param {string} msg @param {{ error?: boolean, action?: { label: string, run: () => void }, actions?: { label: string, run: () => void }[] }} [opts] */
+function banner(msg, { error = false, action, actions = action ? [action] : [] } = {}) {
   const b = $('banner');
   b.hidden = !msg;
   b.classList.toggle('error', error);
   b.innerHTML = `<span>${esc(msg)}</span>`;
-  if (action) {
+  for (const a of actions) {
     const btn = document.createElement('button');
-    btn.textContent = action.label;
-    btn.onclick = action.run;
+    btn.textContent = a.label;
+    btn.onclick = a.run;
     b.append(btn);
   }
   if (msg) {
@@ -123,11 +124,49 @@ function guarded(fs) {
 
 const label = (/** @type {string} */ w) => (w === 'browser' ? 'this browser' : (caps().fsBackends ?? []).find((/** @type {any} */ b) => b.id === w)?.label ?? w);
 
+/** The person chose this browser's library over NakliOS storage (a per-viewer setting). */
+let preferBrowser = false;
+try {
+  preferBrowser = localStorage.getItem('lectella:where') === 'browser';
+} catch {
+  // storage blocked: follow NakliOS storage
+}
+let askedStorage = false;
+
 function drawStore() {
-  const s = $('store-status');
-  s.className = disconnected ? 'err' : '';
-  s.textContent = disconnected ? `Storage disconnected: ${label(where)}` : `Saved in ${where === 'browser' ? 'this browser' : `your ${label(where)}`}`;
-  s.title = where === 'browser' ? 'Kept in this browser\'s private storage. Connect a Folder or Crate in NakliOS to keep it on your own disk.' : 'Kept as plain files under apps/lectella/ in your NakliOS storage.';
+  const sel = /** @type {HTMLSelectElement} */ ($('where'));
+  const c = caps();
+  const backends = c.hosted && c.fs ? c.fsBackends ?? [] : [];
+  sel.innerHTML = '';
+  for (const [id, text] of [['browser', 'This browser'], ...backends.map((/** @type {any} */ b) => [b.id, `${b.label}${b.name ? ` (${b.name})` : ''}`])]) {
+    const o = document.createElement('option');
+    o.value = id;
+    o.textContent = text;
+    sel.append(o);
+  }
+  sel.value = where === 'init' ? 'browser' : where;
+  sel.disabled = backends.length === 0;
+  sel.classList.toggle('err', disconnected);
+  sel.title = disconnected
+    ? `Your ${label(where)} is disconnected; changes are refused until it is back.`
+    : where === 'browser'
+      ? 'Kept in this browser\'s private storage. In NakliOS, pick your Folder or Crate to keep it on your own disk.'
+      : 'Kept as plain files under apps/lectella/ in your NakliOS storage.';
+}
+
+/** Keep the library in this browser, or on a NakliOS backend ('fsa' or 'crate'). Each is a separate library. @param {string} id */
+async function chooseStorage(id) {
+  preferBrowser = id === 'browser';
+  try {
+    localStorage.setItem('lectella:where', preferBrowser ? 'browser' : 'host');
+  } catch {
+    // a per-viewer convenience only
+  }
+  $('banner').hidden = true;
+  if (preferBrowser) return openLibrary('browser');
+  if (caps().fsBackend === id) return openLibrary(id);
+  // NakliOS binds the backend and re-sends capabilities; onCaps then opens the library there.
+  await naklios.fs.useBackend(id);
 }
 
 /** @type {null | (() => void)} */
@@ -180,13 +219,20 @@ function onRemoteChange() {
 async function onCaps() {
   const c = caps();
   drawAi();
-  if (c.hosted && c.fs && c.fsBackend) {
+  if (c.hosted && c.fs && c.fsBackend && !preferBrowser) {
     if (where !== c.fsBackend || disconnected) await openLibrary(c.fsBackend);
-  } else if (where !== 'browser' && !disconnected) {
+  } else if (c.hosted && c.fs && !c.fsBackend && !preferBrowser) {
+    // Connected storage, but no backend chosen for Lectella yet: NakliOS leaves that choice to the person.
+    if (!askedStorage) {
+      askedStorage = true;
+      const opts = (c.fsBackends ?? []).map((/** @type {any} */ b) => ({ label: `Use my ${b.label}`, run: () => chooseStorage(b.id).catch(fail) }));
+      banner('Where should Lectella keep its library? Until you choose, it stays in this browser.', { actions: [...opts, { label: 'Keep in this browser', run: () => chooseStorage('browser').catch(fail) }] });
+    }
+  } else if (where !== 'browser' && !preferBrowser && !disconnected) {
     disconnected = true;
-    drawStore();
     banner(`Your ${label(where)} is disconnected. You can read what is open; changes are refused until it is back.`, { error: true });
   }
+  drawStore();
   settled = true;
   registerCommands();
 }
@@ -430,23 +476,108 @@ async function editNotebook(/** @type {boolean} */ isNew) {
 /** @param {File[]} files */
 async function importFiles(files) {
   if (!current) throw new Error('Create a notebook first');
+  const nbId = current;
   let added = 0;
   for (const f of files) {
-    if (!/\.(md|markdown|txt)$/i.test(f.name) && !/^text\//.test(f.type)) {
-      banner(`${f.name} is not a text or Markdown file. PDF, web pages and audio come in a later version.`, { error: true });
+    const isPdf = /\.pdf$/i.test(f.name) || f.type === 'application/pdf';
+    if (!isPdf && !/\.(md|markdown|txt)$/i.test(f.name) && !/^text\//.test(f.type)) {
+      banner(`${f.name} is not a PDF, text or Markdown file. Web pages and audio come in a later version.`, { error: true });
       continue;
     }
-    if (f.size > 20 * 1024 * 1024) {
-      banner(`${f.name} is larger than 20 MB, so it was not added.`, { error: true });
+    if (f.size > 50 * 1024 * 1024) {
+      banner(`${f.name} is larger than 50 MB, so it was not added.`, { error: true });
       continue;
     }
     const bytes = new Uint8Array(await f.arrayBuffer());
-    const text = new TextDecoder().decode(bytes);
-    await lib.addSource(current, { title: f.name.replace(/\.(md|markdown|txt)$/i, ''), text, kind: /\.(md|markdown)$/i.test(f.name) ? 'markdown' : 'text', origin: 'file', original: { name: f.name, bytes } });
+    if (isPdf) {
+      banner(`Reading ${f.name}…`);
+      let out;
+      try {
+        out = await pdfText(bytes, { onPage: (n, total) => banner(`Reading ${f.name}: page ${n} of ${total}…`) });
+      } catch (e) {
+        banner(`${f.name}: ${/** @type {any} */ (e)?.message ?? e}`, { error: true });
+        continue;
+      }
+      const title = out.title || f.name.replace(/\.pdf$/i, '');
+      await lib.addSource(nbId, { title, text: out.text, kind: 'pdf', origin: `file · ${out.pages} page${out.pages === 1 ? '' : 's'}`, original: { name: f.name, bytes } });
+    } else {
+      const text = new TextDecoder().decode(bytes);
+      await lib.addSource(nbId, { title: f.name.replace(/\.(md|markdown|txt)$/i, ''), text, kind: /\.(md|markdown)$/i.test(f.name) ? 'markdown' : 'text', origin: 'file', original: { name: f.name, bytes } });
+    }
     added++;
   }
   draw();
   if (added) banner(`Added ${added} source${added === 1 ? '' : 's'}.`);
+}
+
+/** Model call without streaming; answers the text. @param {{ role: string, content: string }[]} messages @param {AbortSignal} signal */
+async function complete(messages, signal, max_tokens = 700) {
+  const res = await naklios.ai.chat.completions.create({ messages, max_tokens, signal });
+  return String(res?.choices?.[0]?.message?.content ?? '').trim();
+}
+
+/** Summarise each source switched on for chat, then combine them into one briefing note with citations. */
+async function makeBriefing() {
+  if (!current) return;
+  if (!aiOn()) return banner('A briefing needs a model. Choose one in NakliOS Settings → AI.', { error: true });
+  if (busy) return banner('Wait for the current answer to finish.', { error: true });
+  const nbId = current;
+  const nb = lib.notebook(nbId);
+  const sources = (await lib.contextItems(nbId)).filter((i) => i.kind === 'source');
+  if (!sources.length) return banner('Tick at least one source for chat, then make the briefing.', { error: true });
+  busy = true;
+  drawAi();
+  const ctl = new AbortController();
+  abort = ctl;
+  const stop = { label: 'Stop', run: () => ctl.abort() };
+  try {
+    const parts = [];
+    let cut = 0;
+    for (const [i, src] of sources.entries()) {
+      banner(`Briefing: summarising source ${i + 1} of ${sources.length}, “${src.title}”…`, { actions: [stop] });
+      const req = summaryRequest(src, budget());
+      if (req.cut) cut++;
+      parts.push({ n: i + 1, title: src.title, summary: await complete(req.messages, ctl.signal, 500) });
+    }
+    banner('Briefing: writing the document…', { actions: [stop] });
+    const text = await complete(briefingRequest(nb, parts), ctl.signal, 1200);
+    if (!text) throw new Error('The model returned an empty briefing');
+    const refs = parts.map((p) => ({ n: p.n, kind: 'source', id: sources[p.n - 1].id, title: p.title }));
+    const list = parts.map((p) => `${p.n}. ${p.title}`).join('\n');
+    const note = cut ? `\n\n_${cut} long source${cut === 1 ? ' was' : 's were'} cut to fit the model before summarising._` : '';
+    const n = await lib.addNote(nbId, { title: `Briefing: ${nb.name}`, body: `${text}\n\n**Sources**\n\n${list}${note}`, kind: 'ai', refs });
+    banner('The briefing is saved as a note.');
+    draw();
+    await openNote(n.id);
+  } catch (e) {
+    if (ctl.signal.aborted) banner('Briefing stopped. Nothing was saved.');
+    else throw e;
+  } finally {
+    busy = false;
+    abort = null;
+    drawAi();
+  }
+}
+
+/** Read a note aloud with the voices this device has; a second press stops. */
+function listen() {
+  if (!('speechSynthesis' in window)) return banner('This browser has no speech voices.', { error: true });
+  const btn = $('note-listen');
+  if (speechSynthesis.speaking) {
+    speechSynthesis.cancel();
+    btn.textContent = 'Listen';
+    return;
+  }
+  const form = /** @type {HTMLFormElement} */ (dlg('dlg-note').querySelector('form'));
+  const plain = String(form.elements.namedItem('body').value)
+    .replace(/```[^]*?```/g, ' ')
+    .replace(/\[(\d+(?:\s*,\s*\d+)*)\]/g, '')
+    .replace(/[#*_`>]/g, '')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+  const u = new SpeechSynthesisUtterance(`${form.elements.namedItem('title').value}. ${plain}`);
+  u.onend = u.onerror = () => (btn.textContent = 'Listen');
+  btn.textContent = 'Stop';
+  speechSynthesis.speak(u);
 }
 
 async function addSource() {
@@ -516,6 +647,8 @@ async function openNote(id) {
   d.showModal();
   bodyEl.focus();
   closed(d).then(async () => {
+    if ('speechSynthesis' in window) speechSynthesis.cancel();
+    $('note-listen').textContent = 'Listen';
     try {
       await noteSaver?.flush();
     } catch (e) {
@@ -659,6 +792,8 @@ const UI = {
   'source.add': () => addSource(),
   'source.import': () => /** @type {HTMLInputElement} */ ($('file')).click(),
   'note.add': () => newNote(),
+  'notebook.briefing': () => makeBriefing(),
+  'note.listen': () => listen(),
   'chat.ask': () => send(),
   'source.rename': async () => {
     if (!openSourceId || !current) return;
@@ -716,6 +851,7 @@ $('question').addEventListener('keydown', (e) => {
   }
 });
 $('stop').onclick = () => abort?.abort();
+$('where').addEventListener('change', (e) => chooseStorage(/** @type {HTMLSelectElement} */ (e.target).value).catch(fail));
 $('clear-chat').onclick = async () => {
   if (!current || !turns.length) return;
   const okay = await ask({ title: 'Clear this chat?', text: 'The questions and answers in this notebook\'s chat are deleted. Notes you saved stay.', ok: 'Clear', danger: true });
