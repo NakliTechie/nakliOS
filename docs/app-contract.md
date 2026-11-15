@@ -667,7 +667,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 
 <!-- sdk-reference:begin — rendered by `node scripts/sdk-reference.mjs --write` from docs/sdk-api-audit.md; do not edit by hand -->
 
-115 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
+123 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
 
 ### `version`
 
@@ -875,6 +875,19 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 | `ai.search` | function | Semantic search over the app's OWN files on the connected backend — a local embedding index, no network. Behind the "Enable semantic search?" consent. |
 | `ai.searchStatus` | function | State of the local semantic-search rung. No app consumer yet (`scripts/test-net-seam.mjs` only). |
 | `ai.cancelAll` | function | Cancel in-flight chat and image calls (searches are not cancelled). No app consumer yet (`scripts/test-net-seam.mjs` only). |
+
+### `experimental_tasks` (namespace)
+
+| member | kind | what it is |
+|---|---|---|
+| `experimental_tasks` | namespace · **experimental** | Durable tasks: the host's per-app ledger in IndexedDB and its clock (`sys/durable/tasks.mjs`; ideas from pi-durable, MIT). Every reply comes after the record is stored. Standalone: rejects. |
+| `experimental_tasks.submit` | function · **experimental** | Create a task `{ kind, requestId?, input?, label?, until?, notify? }`; the same `requestId` returns the first task. A future `until` sleeps from the start. |
+| `experimental_tasks.claim` | function · **experimental** | Lease this app's due tasks (pending, woken, or whose last lease ran out, which counts a restart). Past 5 restarts a task ends `failed` with `restart_limit`. |
+| `experimental_tasks.commit` | function · **experimental** | Store the next state of a claimed task: `{ checkpoint }`, `{ checkpoint?, sleepUntil }`, `{ done, result? }` or `{ failed, error? }`. A stale lease is refused. |
+| `experimental_tasks.get` | function · **experimental** | One of this app's tasks. |
+| `experimental_tasks.list` | function · **experimental** | This app's tasks, optionally by state. |
+| `experimental_tasks.cancel` | function · **experimental** | End a task `cancelled`. |
+| `experimental_tasks.onDue` | function · **experimental** | Called with `[{ id, kind, label }]` when the host's clock finds due tasks while a window of this app is open; returns an unsubscribe function. Standalone: never fires. |
 
 ### `experimental_skills` (namespace)
 

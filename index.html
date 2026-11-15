@@ -5377,6 +5377,57 @@ function skillLibraryStore(){
     write: (path, text) => b.write(path, text),
   };
 }
+// Durable tasks (sys/durable/tasks.mjs): the host keeps each app's task ledger in IndexedDB and runs its
+// clock. An app claims its due tasks, runs a step, and commits the next state; every reply is sent only
+// after the record is stored. When a task falls due the host tells the app's open windows
+// (naklios:tasks:due); an app with no open window gets a desktop notification for tasks that asked for one.
+let _durableLedger = null, _durableTimer = null;
+const _durableNotified = new Set();
+async function durableLedger(){
+  if (!_durableLedger){
+    const m = await import('./sys/durable/tasks.mjs');
+    _durableLedger = m.createTaskLedger({ store: m.createIdbTaskStore(indexedDB) });
+  }
+  return _durableLedger;
+}
+async function tasksHostHandle(op, msg, appId){
+  const L = await durableLedger();
+  let out;
+  if (op === 'submit') out = await L.submit(appId, { kind: msg.kind, requestId: msg.taskRequestId, input: msg.input, label: msg.label, until: msg.until, notify: msg.notify });
+  else if (op === 'claim') out = await L.claim(appId, { max: msg.max, kinds: msg.kinds });
+  else if (op === 'commit') out = await L.commit(appId, msg.id, msg.lease, msg.outcome || {});
+  else if (op === 'get') out = await L.get(appId, msg.id);
+  else if (op === 'list') out = await L.list(appId, { state: msg.state });
+  else if (op === 'cancel') out = await L.cancel(appId, msg.id);
+  else throw new Error('Unknown tasks operation: ' + op);
+  durableSchedule(0);
+  return out;
+}
+function durableSchedule(ms){
+  clearTimeout(_durableTimer);
+  _durableTimer = setTimeout(() => { durableTick().catch(() => durableSchedule(60_000)); }, Math.max(0, ms));
+}
+async function durableTick(){
+  const L = await durableLedger();
+  const { due, nextAt } = await L.wake();
+  for (const [appId, tasks] of due){
+    const frames = [...document.querySelectorAll('.nw-window iframe')].filter(f => f.closest('.nw-window')?.dataset.id === appId);
+    if (frames.length){
+      frames.forEach(f => { try { f.contentWindow.postMessage({ type:'naklios:tasks:due', tasks: tasks.map(t => ({ id: t.id, kind: t.kind, label: t.label })) }, '*'); } catch(_){} });
+      continue;
+    }
+    for (const t of tasks){
+      if (!t.notify || _durableNotified.has(t.id)) continue;
+      _durableNotified.add(t.id);
+      const app = (typeof APPS !== 'undefined' ? APPS : []).find(a => a.id === appId);
+      try { if (globalThis.Notification?.permission === 'granted') new Notification((app?.name || appId) + ' — due', { body: t.notify }); } catch(_){}
+    }
+  }
+  // Re-check at the next sleep's end or lease expiry, and at least once a minute.
+  durableSchedule(nextAt === null ? 60_000 : Math.min(60_000, Math.max(250, nextAt - Date.now())));
+}
+setTimeout(() => durableSchedule(0), 3000);
+
 async function skillsHostHandle(op, msg, appId){
   if (!aiAppOwnsSystemFs(appId)) throw new Error('The skills library is available to same-origin system apps only');
   if (!_skillLibMod) _skillLibMod = await import('./sys/ai/skill-library.mjs');
@@ -9363,6 +9414,19 @@ window.addEventListener('message', async e => {
       else reply.result = await fsHostSysHandle(msg, op, appId);
     } catch (err){
       reply.error = String(err?.message || err);
+    }
+    if (msg.requestId) {
+      try { e.source.postMessage(reply, replyTo); } catch(_){}
+    }
+  } else if (typeof msg.type === 'string' && msg.type.startsWith('naklios:tasks:')){
+    const reply = { type: 'naklios:tasks:reply', requestId: msg.requestId };
+    try {
+      const appId = getAppId();
+      if (!appId) throw new Error('Unknown app');
+      reply.result = await tasksHostHandle(msg.type.slice('naklios:tasks:'.length), msg, appId);
+    } catch (err){
+      reply.error = String(err?.message || err);
+      if (err?.code) reply.code = err.code;
     }
     if (msg.requestId) {
       try { e.source.postMessage(reply, replyTo); } catch(_){}

@@ -54,4 +54,22 @@ assert.equal(toolCards.size, 0);
 assert.match(mod[1], /ai\.chat\.completions\.create\(\{ \.\.\.msg\.request, agent: true, stream: true \}\)/, 'Pi asks for a stream');
 assert.match(mod[1], /worker\.postMessage\(\{ type: 'broker-reply', id: msg\.id, completion \}\)/, 'the Worker still gets one completion');
 assert.match(mod[1], /if \(lastLive\) \{ lastLive\.textContent = r\.answer \|\| lastLive\.textContent/, 'a streamed final reply takes the answer text and is not added twice');
-console.log('pi-ui: the module parses; tool cards fill with results; replies stream once');
+// Slash commands: each word reaches the right conversation command, /resume alone opens the list,
+// and an unknown word is an error line, never a message to the model.
+const s0 = mod[1].indexOf('// ---- Slash commands ----');
+const s1 = mod[1].indexOf('// The suggestion menu');
+assert.ok(s0 > 0 && s1 > s0, 'the slash-command block is found');
+const calls = [], lines = [];
+let listShown = 0;
+const { runSlash, COMMANDS } = new Function('command', 'add', 'showList', 'lastModel',
+  `${mod[1].slice(s0, s1)}; return { runSlash, COMMANDS };`)(
+  async (op, arg) => { calls.push([op, arg]); return { active: { title: arg || 'T' }, result: op === 'compact' ? { status: 'completed', compacted: true } : null }; },
+  (cls, text) => lines.push([cls, text]), () => { listShown++; }, null);
+for (const c of ['/new Plan', '/resume', '/resume 2', '/fork', '/name Better', '/compact keep the file list', '/model', '/help', '/nope']) await runSlash(c);
+assert.deepEqual(calls, [['new', 'Plan'], ['switch', '2'], ['fork', ''], ['rename', 'Better'], ['compact', 'keep the file list']]);
+assert.equal(listShown, 1, '/resume alone opens the list');
+assert.ok(lines.some(([, t]) => /Settings → AI/.test(t)), '/model says where the model is chosen');
+assert.ok(lines.some(([, t]) => COMMANDS.every((c) => t.includes(c.name))), '/help lists every command');
+assert.deepEqual(lines.at(-1), ['err', 'Unknown command /nope. Type /help for the list.']);
+assert.match(mod[1], /if \(text\.startsWith\('\/'\)\) \{ q\.value = ''; cmdsEl\.hidden = true; await runSlash\(text\); return; \}/, 'a slash line never goes to the model');
+console.log('pi-ui: the module parses; tool cards fill with results; replies stream once; slash commands route to conversation commands');
