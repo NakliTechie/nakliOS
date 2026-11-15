@@ -3282,8 +3282,16 @@
       "ref": "main",
       "files": [
         {
+          "source": "app-commands.js",
+          "destination": "app-commands.js"
+        },
+        {
           "source": "apple-touch-icon.png",
           "destination": "apple-touch-icon.png"
+        },
+        {
+          "source": "commands.json",
+          "destination": "commands.json"
         },
         {
           "source": "echo-review.js",

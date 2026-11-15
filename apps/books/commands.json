@@ -1,0 +1,111 @@
+{
+  "commands": [
+    {
+      "name": "library.list",
+      "description": "List the works in the Lorewell library with work id, title, authors and formats, sorted by title, paged.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Works to skip; default 0"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200,
+            "description": "Works to return; default 50"
+          },
+          "query": {
+            "type": "string",
+            "description": "Optional filter on title or author"
+          }
+        }
+      }
+    },
+    {
+      "name": "library.search",
+      "description": "Search the passages of every indexed book by keyword, plus meaning when the on-device encoder is loaded. Returns passage hits with work id, passage id, location and a short excerpt.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "minLength": 2,
+            "description": "Words or a question to search for"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50,
+            "description": "Hits to return; default 10"
+          },
+          "workId": {
+            "type": "string",
+            "description": "Optional: search one work only"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    {
+      "name": "passage.get",
+      "description": "Return the text of one passage, with neighbouring passages if asked, bounded in length, plus the citation fields: title, authors, chapter or page.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "Work id from library.list or library.search"
+          },
+          "passageId": {
+            "type": "string",
+            "description": "Passage id from library.search"
+          },
+          "context": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3,
+            "description": "Passages to add on each side; default 0"
+          },
+          "maxChars": {
+            "type": "integer",
+            "minimum": 200,
+            "maximum": 12000,
+            "description": "Text length cap; default 4000"
+          }
+        },
+        "required": [
+          "workId",
+          "passageId"
+        ]
+      }
+    },
+    {
+      "name": "annotation.list",
+      "description": "List the highlights, notes and bookmarks the person made in one work, or in every work, with the quoted text and location.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "workId": {
+            "type": "string",
+            "description": "Optional: one work only"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200,
+            "description": "Annotations to return; default 50"
+          }
+        }
+      }
+    }
+  ]
+}
