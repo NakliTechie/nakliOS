@@ -127,7 +127,9 @@ export function pageText(html, { cap = 3000, parse = (h) => new DOMParser().pars
   return { title: String(doc.title || '').trim(), text: text.length > cap ? text.slice(0, cap) + ' …' : text };
 }
 
-export function moreTools({ memory, apps, fetchText, search, python, skills, webOn = () => true, now = () => new Date(), parseHtml } = {}) {
+// webSearch(query) → { provider, results }: the host's search (DeepSeek's native web search with a saved key), used
+// when no panel provider is set; webSearchReady() says whether that host search has a real engine behind it.
+export function moreTools({ memory, apps, fetchText, search, python, skills, webSearch = null, webSearchReady = () => false, webOn = () => true, now = () => new Date(), parseHtml } = {}) {
   const needWeb = () => { if (!webOn()) throw new Error('web lookups are switched off in the assistant panel'); };
   return [
     {
@@ -181,14 +183,17 @@ export function moreTools({ memory, apps, fetchText, search, python, skills, web
     {
       name: 'web_search',
       description: 'Search the web for current information, such as news or facts you do not know.',
-      // Offered only once the person has set a provider in the panel's settings, as in LocalMind.
-      available: () => { const cfg = search(); return !!(webOn() && cfg && PROVIDERS[cfg.provider] && (cfg.key || cfg.url)); },
+      // Offered once a real search engine is there: a provider set in the panel's settings (as in LocalMind), or the
+      // host's DeepSeek web search when a DeepSeek key is saved in Settings → AI.
+      available: () => { const cfg = search(); return !!(webOn() && ((cfg && PROVIDERS[cfg.provider] && (cfg.key || cfg.url)) || (webSearch && webSearchReady()))); },
       parameters: { type: 'object', properties: { query: { type: 'string', description: 'Search words, 3 to 8' } }, required: ['query'] },
       async run({ query }) {
         needWeb();
         const cfg = search();
-        if (!cfg || !PROVIDERS[cfg.provider] || !(cfg.key || cfg.url)) throw new Error('no search provider is set; the person can add one in the assistant settings (⚙)');
-        return { provider: cfg.provider, results: await PROVIDERS[cfg.provider](String(query).slice(0, 200), cfg) };
+        const q = String(query).slice(0, 200);
+        if (cfg && PROVIDERS[cfg.provider] && (cfg.key || cfg.url)) return { provider: cfg.provider, results: await PROVIDERS[cfg.provider](q, cfg) };
+        if (webSearch && webSearchReady()) { const out = await webSearch(q); return { provider: out.provider, results: out.results }; }
+        throw new Error('no search provider is set; the person can add one in the assistant settings (⚙), or save a DeepSeek key in Settings → AI');
       },
     },
     {
