@@ -6,7 +6,7 @@
 // full instructions on demand. The library and its gate (Sentinel-clean, active or stale) are the
 // host's; `list` and `read` come from naklios.experimental_skills through the page.
 
-import { Type } from '@earendil-works/pi-ai';
+import { obj, str } from '@earendil-works/pi-schema';
 import { defineExtension, defineTool, section } from '@earendil-works/pi-durable';
 import { buildSkillsIndex } from '../../../sys/ai/skills.mjs';
 
@@ -14,7 +14,7 @@ export function createSkillsExtension({ list, read }) {
   const skillTool = defineTool({
     name: 'skill',
     description: 'Load the full instructions of one skill from the NakliOS skills library, by its exact name from the Skills list. Call it before doing a task that a listed skill covers.',
-    parameters: Type.Object({ name: Type.String({ description: 'The skill name exactly as listed' }) }),
+    parameters: obj({ name: str({ description: 'The skill name exactly as listed' }) }),
     execute: async (args) => {
       const skill = await read(String(args.name || ''));
       if (!skill) throw new Error(`No usable skill named "${args.name}". Use a name from the Skills list.`);

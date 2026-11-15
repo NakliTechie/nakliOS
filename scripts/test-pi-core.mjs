@@ -1,4 +1,4 @@
-// test-pi-core.mjs — Pi (pi-durable 1.4.0) on NakliOS seams, driven by a scripted stand-in broker.
+// test-pi-core.mjs — Pi (pi-durable 1.5.2) on NakliOS seams, driven by a scripted stand-in broker.
 //
 // Real: pi-durable's Harness and coding tools, pi-ai's OpenAI translation, rig fileops over a
 // memory backend, and the rig shell. Stand-in: the model. The broker answers three turns —

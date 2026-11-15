@@ -16,6 +16,10 @@ const dec = new TextDecoder();
 const CODE_MAP = { ENOENT: 'not_found', EISDIR: 'is_directory', ENOTDIR: 'not_directory',
   EACCES: 'permission_denied', EPERM: 'permission_denied', EINVAL: 'invalid', ENOTSUP: 'not_supported' };
 
+const isAborted = (context) => !!context?.abortSignal?.aborted;
+const abortedErr = (path) => err(new FileError('aborted', 'the operation was cancelled', path));
+const invalidErr = (path, why) => err(new FileError('invalid', why, path));
+
 function fileErr(r, path) {
   return err(new FileError(CODE_MAP[r?.code] || 'unknown', r?.message || String(r?.code || 'error'), path));
 }
@@ -75,29 +79,51 @@ export function createNakliosEnv({ fs, shell, cwd = '/workspace', id = 'naklios'
       return ok(options?.maxLines ? lines.slice(0, options.maxLines) : lines);
     },
     async openTextLineReader(path) { return notSupported('line readers', abs(path)); },
-    // Whole-file reader: rig reads are whole-file today, so ranges slice a buffered copy.
-    async openBinaryReader(path) {
-      const r = await readBytes(path);
+    // Whole-file reader: rig reads are whole-file today, so the bytes are read once at open (which also
+    // keeps the opened file after a rename) and ranges slice that copy. pi-durable 1.5's contract:
+    // 0-based lines, decoded sizes, `invalid` for bad arguments or use after close, `aborted` on a
+    // cancelled context.
+    async openBinaryReader(path, _options, context) {
+      if (isAborted(context)) return abortedErr(path);
+      const p = abs(path);
+      const st = await info(p);
+      if (!st.ok) return st;
+      if (st.value.kind === 'directory') return err(new FileError('is_directory', `${p} is a directory`, p));
+      const r = await readBytes(p);
       if (!r.ok) return r;
       const bytes = r.value;
-      const p = abs(path);
+      const opened = st.value;
+      // Byte offsets of every newline; line k runs from lineStart(k) to lineEnd(k).
+      const nl = [];
+      for (let i = 0; i < bytes.length; i++) if (bytes[i] === 10) nl.push(i);
+      const lineStart = (k) => (k === 0 ? 0 : k <= nl.length ? nl[k - 1] + 1 : bytes.length);
+      const lineEnd = (k) => (k < nl.length ? nl[k] : bytes.length);
+      const decodedBytes = (from, to) => enc.encode(new TextDecoder('utf-8', { ignoreBOM: from > 0 }).decode(bytes.subarray(from, to))).length;
+      let closed = false;
+      const guard = (ctx) => (closed ? invalidErr(p, 'the reader is closed') : isAborted(ctx) ? abortedErr(p) : null);
       return ok({
-        async info() { return info(p); },
-        async read(offset, length) { return ok(bytes.subarray(offset, Math.min(bytes.length, offset + length))); },
-        async scanLines({ startLine, endLine }) {
-          // Line indexes are 1-based; offsets cover [start, end) of the selected lines.
-          const starts = [0];
-          for (let i = 0; i < bytes.length; i++) if (bytes[i] === 10) starts.push(i + 1);
-          const newlines = starts.length - 1;
-          const lineStart = (n) => starts[Math.min(Math.max(n, 1), starts.length) - 1] ?? bytes.length;
-          const start = lineStart(startLine);
-          const end = endLine ? lineStart(endLine + 1) : bytes.length;
-          const firstLineEnd = (starts.find((s) => s > start) ?? bytes.length + 1) - 1;
-          return ok({ newlines, start, end: Math.max(start, end), firstLineEnd: Math.min(firstLineEnd, bytes.length),
-            lastLineStart: starts[starts.length - 1], selectedBytes: Math.max(0, end - start),
-            firstLineBytes: Math.max(0, Math.min(firstLineEnd, bytes.length) - start) });
+        async info(ctx) { return guard(ctx) || ok({ ...opened, size: bytes.length }); },
+        async read(offset, length, ctx) {
+          const g = guard(ctx); if (g) return g;
+          if (!Number.isInteger(offset) || offset < 0 || !Number.isInteger(length) || length < 0) return invalidErr(p, 'offset and length must be whole numbers, 0 or more');
+          return ok(bytes.slice(Math.min(offset, bytes.length), Math.min(bytes.length, offset + length)));
         },
-        async close() {},
+        async scanLines({ startLine, endLine } = {}, ctx) {
+          const g = guard(ctx); if (g) return g;
+          if (!Number.isInteger(startLine) || startLine < 0 || (endLine !== undefined && (!Number.isInteger(endLine) || endLine <= startLine))) {
+            return invalidErr(p, 'startLine must be 0 or more and endLine greater than startLine');
+          }
+          const lines = nl.length + 1;
+          if (startLine >= lines) {
+            const n = bytes.length;
+            return ok({ newlines: nl.length, start: n, end: n, firstLineEnd: n, lastLineStart: n, selectedBytes: 0, firstLineBytes: 0 });
+          }
+          const last = Math.min(endLine ?? lines, lines) - 1;
+          const start = lineStart(startLine), end = lineEnd(last), firstLineEnd = lineEnd(startLine);
+          return ok({ newlines: nl.length, start, end, firstLineEnd, lastLineStart: lineStart(last),
+            selectedBytes: decodedBytes(start, end), firstLineBytes: decodedBytes(start, firstLineEnd) });
+        },
+        async close() { closed = true; },
       });
     },
     async writeFile(path, content) {
@@ -139,13 +165,30 @@ export function createNakliosEnv({ fs, shell, cwd = '/workspace', id = 'naklios'
       }
       return ok(out);
     },
-    async openDirReader(path) {
-      const r = await env.listDir(path);
-      if (!r.ok) return r;
-      let i = 0;
+    // Names are listed at open; each page reads their metadata and skips entries removed since.
+    async openDirReader(path, context) {
+      if (isAborted(context)) return abortedErr(path);
+      const p = abs(path);
+      const st = await info(p);
+      if (!st.ok) return st;
+      if (st.value.kind !== 'directory') return err(new FileError('not_directory', `${p} is not a directory`, p));
+      const r = await fs.list(rel(p));
+      if (!r.ok) return fileErr(r, p);
+      const names = r.entries.map((e) => e.name);
+      let i = 0, closed = false;
       return ok({
-        async next(max) { const entries = r.value.slice(i, i + max); i += entries.length; return ok({ entries, done: i >= r.value.length }); },
-        async close() {},
+        async next(max, ctx) {
+          if (closed) return invalidErr(p, 'the reader is closed');
+          if (isAborted(ctx)) return abortedErr(p);
+          if (!Number.isInteger(max) || max < 1) return invalidErr(p, 'maxEntries must be 1 or more');
+          const entries = [];
+          while (i < names.length && entries.length < max) {
+            const child = await info(normalizePosix(`${p}/${names[i++]}`));
+            if (child.ok && (child.value.kind === 'file' || child.value.kind === 'directory')) entries.push(child.value);
+          }
+          return ok({ entries, done: i >= names.length });
+        },
+        async close() { closed = true; },
       });
     },
     async watch(_targets, _onChange) { return notSupported('watching files'); },

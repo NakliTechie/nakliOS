@@ -34,5 +34,8 @@ jobs:
       - name: Verify Pi reads the NakliOS skills library (section and skill tool)
         run: node scripts/test-pi-skills.mjs
 
+      - name: Pi env conformance (pi-durable's own cases)
+        run: node scripts/test-pi-env-conformance.mjs
+
       - name: Verify Pi's Worker bundle matches its sources
         run: node scripts/build-pi.mjs && git diff --exit-code apps/pi/pi-worker.js apps/pi/build.json

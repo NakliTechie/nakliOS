@@ -1,9 +1,10 @@
 {
-  "bytes": 1362695,
-  "sha256": "0e55dfd098263b4ae63ba1ad71aa97269a5622471b6d78e23d49f5882f5d4eca",
+  "bytes": 1291076,
+  "sha256": "ac0165b7ca44e149146d3a5babb6e066b0ea08669bc21c9075c078e2e3e64bc2",
   "packages": {
-    "@earendil-works/chord": "1.4.0",
-    "@earendil-works/pi-ai": "1.4.0",
-    "@earendil-works/pi-durable": "1.4.0"
+    "@earendil-works/chord": "1.5.2",
+    "@earendil-works/pi-ai": "1.5.2",
+    "@earendil-works/pi-durable": "1.5.2",
+    "@earendil-works/pi-schema": "1.5.2"
   }
 }

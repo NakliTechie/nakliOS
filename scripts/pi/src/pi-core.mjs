@@ -79,22 +79,21 @@ export async function openPi({ fs, shell, callBroker, skills = null, prune = und
   // The conversation so far, as the page draws it, so a reload shows what was said before
   // (the session itself always survived; only the window forgot it).
   async function transcript() {
-    const view = await root.viewState(context);
-    try {
-      const rows = [];
-      for (const entry of view.value?.entries || []) {
-        if (entry.kind === 'pi.user') {
-          const text = userText(entry);
-          if (text) rows.push({ role: 'you', text });
-        } else if (entry.kind === 'pi.assistant') {
-          const calls = toolCallNames(entry);
-          if (calls.length) rows.push({ role: 'sys', text: 'Tool call: ' + calls.join(', ') });
-          const text = answerText(entry);
-          if (text) rows.push({ role: 'assistant', text });
-        }
+    // pi-durable 1.5 removed viewState(); context() gives the raw active entries the model sees.
+    const view = await root.context(context);
+    const rows = [];
+    for (const entry of view.entries || []) {
+      if (entry.kind === 'pi.user') {
+        const text = userText(entry);
+        if (text) rows.push({ role: 'you', text });
+      } else if (entry.kind === 'pi.assistant') {
+        const calls = toolCallNames(entry);
+        if (calls.length) rows.push({ role: 'sys', text: 'Tool call: ' + calls.join(', ') });
+        const text = answerText(entry);
+        if (text) rows.push({ role: 'assistant', text });
       }
-      return rows;
-    } finally { view.dispose?.(); }
+    }
+    return rows;
   }
 
   return { harness, root, env, ask, transcript, close: () => harness.close(context) };
