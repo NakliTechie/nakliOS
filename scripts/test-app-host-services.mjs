@@ -1,4 +1,4 @@
-// Narrow host services for named mirrors (2026-11-15, for Loquella; Lectella has the same need).
+// Narrow host services for named mirrors (2026-11-15, for Gupshup; Lectella has the same need).
 // A same-origin mirror listed with hostServices:['web'] or ['skills'] gets that one service, and
 // nothing kind:'system' would add (the whole store, naklios.net egress).
 //
@@ -14,7 +14,7 @@ const src = ['appExpectedOrigin', 'appHasHostService', 'aiAppOwnsEgress', 'aiApp
 const servicesLine = html.match(/const APP_HOST_SERVICES = new Set\([^)]*\);/)[0];
 
 const APPS = [
-  { id: 'loquella', url: './apps/loquella/', embedUrl: './apps/loquella/', hostServices: ['web', 'skills'] },
+  { id: 'gupshup', url: './apps/gupshup/', embedUrl: './apps/gupshup/', hostServices: ['web', 'skills'] },
   { id: 'lectella', url: './apps/lectella/', embedUrl: './apps/lectella/' },
   { id: 'remote', url: 'https://remote.example/', hostServices: ['web'] },
   { id: 'third', url: './apps/third/', thirdParty: true, hostServices: ['web'] },
@@ -25,10 +25,10 @@ const fns = evaluate(`${servicesLine}\n${src}\n;({ appHasHostService, aiAppOwnsE
   APPS, URL, location: { href: 'https://naklios.dev/', origin: 'https://naklios.dev' },
 });
 
-assert.equal(fns.appHasHostService('loquella', 'web'), true, 'a named same-origin mirror gets web');
-assert.equal(fns.appHasHostService('loquella', 'skills'), true, 'and skills');
-assert.equal(fns.aiAppOwnsEgress('loquella'), false, 'but not naklios.net egress');
-assert.equal(fns.aiAppOwnsSystemFs('loquella'), false, 'and not the whole store');
+assert.equal(fns.appHasHostService('gupshup', 'web'), true, 'a named same-origin mirror gets web');
+assert.equal(fns.appHasHostService('gupshup', 'skills'), true, 'and skills');
+assert.equal(fns.aiAppOwnsEgress('gupshup'), false, 'but not naklios.net egress');
+assert.equal(fns.aiAppOwnsSystemFs('gupshup'), false, 'and not the whole store');
 assert.equal(fns.appHasHostService('lectella', 'web'), false, 'an unlisted mirror gets nothing');
 assert.equal(fns.appHasHostService('remote', 'web'), false, 'a cross-origin app is refused even when listed');
 assert.equal(fns.appHasHostService('third', 'web'), false, 'a third-party app is refused even when listed');

@@ -6929,7 +6929,7 @@ function aiAppOwnsSystemFs(appId){
 // Egress can attach host-held credentials. Catalog membership is not authority.
 // One narrow host service for a same-origin mirror the catalog names (`hostServices:['web']`),
 // without kind:'system', which would also open the whole store and naklios.net. Added 2026-11-15
-// for Loquella (web search, skills); Lectella has the same need for URL sources.
+// for Gupshup (web search, skills); Lectella has the same need for URL sources.
 const APP_HOST_SERVICES = new Set(['web', 'skills']);
 function appHasHostService(appId, service){
   if (!APP_HOST_SERVICES.has(service)) return false;
