@@ -6514,6 +6514,1006 @@
           "bytes": 299
         }
       ]
+    },
+    {
+      "id": "gupshup",
+      "repo": "NakliTechie/gupshup",
+      "requestedRef": "main",
+      "resolvedCommit": "32cc0eee37d05f6eca4556b340baf16ca802c28b",
+      "files": [
+        {
+          "source": "dist/index.html",
+          "destination": "index.html",
+          "sha256": "8842fc4d92fa3c1bd8be5a06566c6ccc5f4254bfc1e40294c711784df6ef7806",
+          "bytes": 63143,
+          "originalSourceSha256": "383e6508892f102cfee084953ca8b8c86ea71e27a4104a18ab9977f844582d4d",
+          "sdkSha256": "410f8613ad003755ecb06f20a23b6d36b3d980fe88a3ab86fe16ff73b11a5b4c"
+        },
+        {
+          "source": "commands.json",
+          "destination": "commands.json",
+          "sha256": "57b60b889ab21f12185c49122be4246a141f8a953c3583abb464810dbd7b2a12",
+          "bytes": 2768
+        },
+        {
+          "source": "dist/LICENSE",
+          "destination": "LICENSE",
+          "sha256": "d37afd097f1bc8aeeb093761df0d5345fb530b047fcce8be3d487dc35bbd938c",
+          "bytes": 1135
+        },
+        {
+          "source": "dist/static/css/async/4959.css",
+          "destination": "static/css/async/4959.css",
+          "sha256": "8142014273c721382c7042957f2f262ba6723c981176d10e1754371421ae8294",
+          "bytes": 23925
+        },
+        {
+          "source": "dist/static/css/async/93.css",
+          "destination": "static/css/async/93.css",
+          "sha256": "db8d7caa4a61e62cc16a1089e6d8f7e7f860c0fc0661294c96a1c6e249236baf",
+          "bytes": 77308
+        },
+        {
+          "source": "dist/static/css/main.css",
+          "destination": "static/css/main.css",
+          "sha256": "64dbedd59af8561ca144db808d2968bd358ea3d90b9c677b14f7d64b700d8dbc",
+          "bytes": 11463
+        },
+        {
+          "source": "dist/static/js/async/1031.js",
+          "destination": "static/js/async/1031.js",
+          "sha256": "5c324c5501967865d37e642c5530058fc42b7b854fa4babc1d4ae48629085380",
+          "bytes": 2863
+        },
+        {
+          "source": "dist/static/js/async/1085.js",
+          "destination": "static/js/async/1085.js",
+          "sha256": "124beecc0af64751f05368b4447312717420834a0e6675d946db59daf8874a4c",
+          "bytes": 176
+        },
+        {
+          "source": "dist/static/js/async/1086.js",
+          "destination": "static/js/async/1086.js",
+          "sha256": "ed3a2b5e5b14da55d02c2c621a4ce926f98acd1cab1d263dc93b4b8f02886a25",
+          "bytes": 6275
+        },
+        {
+          "source": "dist/static/js/async/1097.js",
+          "destination": "static/js/async/1097.js",
+          "sha256": "884f3cc70d58f0e8cdd85f8789a7bc47e6ca9ca093a78f7c508e23af52ed6023",
+          "bytes": 89893
+        },
+        {
+          "source": "dist/static/js/async/1299.js",
+          "destination": "static/js/async/1299.js",
+          "sha256": "7b097f0731446eadce54f232161b106379d34f66009bfedc20d60d983283b1d8",
+          "bytes": 1436
+        },
+        {
+          "source": "dist/static/js/async/1393.js",
+          "destination": "static/js/async/1393.js",
+          "sha256": "2dffba0555cb0afb50621506dd71bd360b9b6bf0cb9f67d793d5d7debd2746c9",
+          "bytes": 2213
+        },
+        {
+          "source": "dist/static/js/async/1401.js",
+          "destination": "static/js/async/1401.js",
+          "sha256": "6c40c601e59f4b6190183acf889dd6fd1717c5607bab0b0d96e388517c7af1a0",
+          "bytes": 6243
+        },
+        {
+          "source": "dist/static/js/async/1505.js",
+          "destination": "static/js/async/1505.js",
+          "sha256": "d2564b167a0942d928041d7228f111ca887856b7df8efda5393f0da5e4ffea3a",
+          "bytes": 3361
+        },
+        {
+          "source": "dist/static/js/async/1531.js",
+          "destination": "static/js/async/1531.js",
+          "sha256": "ca97e44dbb96239d588c01a2ad57f38710b102705534d56935f66bb013848284",
+          "bytes": 107716
+        },
+        {
+          "source": "dist/static/js/async/160.js",
+          "destination": "static/js/async/160.js",
+          "sha256": "890f7af8f7a94ca5b36ce87b3ac5e63063d76bf207d19efa154a221d525b32f9",
+          "bytes": 25547
+        },
+        {
+          "source": "dist/static/js/async/1679.js",
+          "destination": "static/js/async/1679.js",
+          "sha256": "9db14a7b2f3218dabc2d41793ce369986af28949e28170f284b368e1471e54b1",
+          "bytes": 707
+        },
+        {
+          "source": "dist/static/js/async/1690.js",
+          "destination": "static/js/async/1690.js",
+          "sha256": "8790fb0b691ccae3d34f94eabd53f5c3e2e22c9ca0e2b390d9b897929ff58b8f",
+          "bytes": 692
+        },
+        {
+          "source": "dist/static/js/async/2110.js",
+          "destination": "static/js/async/2110.js",
+          "sha256": "c2f632efe725fbe4bf88d3c5e95b846d81a596fb953bb15533463341626d5218",
+          "bytes": 36014
+        },
+        {
+          "source": "dist/static/js/async/2152.js",
+          "destination": "static/js/async/2152.js",
+          "sha256": "ce96a3e6fc72086d93878b0980ad9876eaf06e2a3ce25be423ede5c42a86fdb7",
+          "bytes": 532
+        },
+        {
+          "source": "dist/static/js/async/2168.js",
+          "destination": "static/js/async/2168.js",
+          "sha256": "26635aaf1293d11c4e7e6663726281bd07fedb919d57b4b8b50d72ce2e85f2c7",
+          "bytes": 2012
+        },
+        {
+          "source": "dist/static/js/async/2312.js",
+          "destination": "static/js/async/2312.js",
+          "sha256": "c2c3ebda2d06fced2b6029f5716ccfefb7a04f01a1680537bde665751586f94f",
+          "bytes": 179
+        },
+        {
+          "source": "dist/static/js/async/2348.js",
+          "destination": "static/js/async/2348.js",
+          "sha256": "019d853a19ecace4a94349cc6c3b972fc695864ab8cbb26e987fac9e753d64e2",
+          "bytes": 24781
+        },
+        {
+          "source": "dist/static/js/async/2356.js",
+          "destination": "static/js/async/2356.js",
+          "sha256": "61cd5cc5a9b1b21c6a0dd2dafcc9e61affc2271793f9ab9c7d3d529e2f5e5253",
+          "bytes": 1729
+        },
+        {
+          "source": "dist/static/js/async/2415.js",
+          "destination": "static/js/async/2415.js",
+          "sha256": "699c690f01e2fe44ed1610a6fbad7a2eadc98517c07bc0d1568bfbc03d061edf",
+          "bytes": 626
+        },
+        {
+          "source": "dist/static/js/async/2461.js",
+          "destination": "static/js/async/2461.js",
+          "sha256": "5e2eeb7275d3d29b2d522dfa3893ffef4bc707d107b22c53b3285b0dab1c5b9e",
+          "bytes": 549
+        },
+        {
+          "source": "dist/static/js/async/2514.js",
+          "destination": "static/js/async/2514.js",
+          "sha256": "c1b5b3b3f4f72dc7e69d71c83907c91d32b6f70d6e78213cae162f55f1ca6262",
+          "bytes": 90799
+        },
+        {
+          "source": "dist/static/js/async/2541.js",
+          "destination": "static/js/async/2541.js",
+          "sha256": "001b0b0723d28ca4d00f73fcc631c0bea4db5ce38809cbc2c960db0c951caee8",
+          "bytes": 6420
+        },
+        {
+          "source": "dist/static/js/async/2607.js",
+          "destination": "static/js/async/2607.js",
+          "sha256": "73d589629d371b2199408bdaaeb6443dee719f769d622c5de20aebdeb133d572",
+          "bytes": 419
+        },
+        {
+          "source": "dist/static/js/async/265.js",
+          "destination": "static/js/async/265.js",
+          "sha256": "c76564bac1e8c94024d51aa0a8e4ef9632bba42482d6e50355befdd5ebad7d56",
+          "bytes": 1113
+        },
+        {
+          "source": "dist/static/js/async/2696.js",
+          "destination": "static/js/async/2696.js",
+          "sha256": "3c14001733e8a5b13bcc6c984f8d738618489fe6b6781254e100d6cfeba52276",
+          "bytes": 2180
+        },
+        {
+          "source": "dist/static/js/async/3014.js",
+          "destination": "static/js/async/3014.js",
+          "sha256": "bf788bb17a600a2a8a1bf7267c9dbd90db71fde1860d3c18ec25582c7cfcef3a",
+          "bytes": 2602
+        },
+        {
+          "source": "dist/static/js/async/3111.js",
+          "destination": "static/js/async/3111.js",
+          "sha256": "b8e79d370d8a752376cb42b81e1f088b062615d04cd010a2e9cf95efeab48584",
+          "bytes": 3637
+        },
+        {
+          "source": "dist/static/js/async/3251.js",
+          "destination": "static/js/async/3251.js",
+          "sha256": "7d65a43839cabdbec4ac15c77d2afeb707ac88d61dbbccc5f80b44509b249822",
+          "bytes": 176
+        },
+        {
+          "source": "dist/static/js/async/3339.js",
+          "destination": "static/js/async/3339.js",
+          "sha256": "3c8dcad0bc94204e1d06dedce2db4566b09bd7f28533f65548d96a68347cc0c6",
+          "bytes": 1039
+        },
+        {
+          "source": "dist/static/js/async/3376.js",
+          "destination": "static/js/async/3376.js",
+          "sha256": "7f9c71bf16968e13614d7de2db2ae384c7a198d6ede257ad0c0bec03047bf738",
+          "bytes": 20205
+        },
+        {
+          "source": "dist/static/js/async/3465.js",
+          "destination": "static/js/async/3465.js",
+          "sha256": "280fdb8ee83615a121e49bf3c27dd8255626eb469078112365a4a440a9625860",
+          "bytes": 2555
+        },
+        {
+          "source": "dist/static/js/async/3477.js",
+          "destination": "static/js/async/3477.js",
+          "sha256": "3b9ef01143b55127867e1bad31b29b8acce12850ec82609271aa4efa3a43681a",
+          "bytes": 70576
+        },
+        {
+          "source": "dist/static/js/async/3594.js",
+          "destination": "static/js/async/3594.js",
+          "sha256": "f7ab9ad781deccadd4e0254fcc4cb9bf635ea85b77888b6a4df6e56c62af7537",
+          "bytes": 1072
+        },
+        {
+          "source": "dist/static/js/async/3806.js",
+          "destination": "static/js/async/3806.js",
+          "sha256": "75431b3ee831905ef7d9cef5d63337f7322f55fe976873aea705e6c1ec5be461",
+          "bytes": 32965
+        },
+        {
+          "source": "dist/static/js/async/3909.js",
+          "destination": "static/js/async/3909.js",
+          "sha256": "22757a1b862a7a0a56b4f24b1868e532296c2a41e04082d9a0cc23b18b281831",
+          "bytes": 430253
+        },
+        {
+          "source": "dist/static/js/async/4001.js",
+          "destination": "static/js/async/4001.js",
+          "sha256": "334ace93e0e2ab4c6e52c143486a451b26e611025552aa46bcd0d36d79915fa2",
+          "bytes": 410255
+        },
+        {
+          "source": "dist/static/js/async/410.js",
+          "destination": "static/js/async/410.js",
+          "sha256": "821d6993a8333d4bb352705ea0730bb54e14705c11c0a923181e65af9655659f",
+          "bytes": 16400
+        },
+        {
+          "source": "dist/static/js/async/4138.js",
+          "destination": "static/js/async/4138.js",
+          "sha256": "6eb79e78d791fb48f295115e7e56393c4204f39d380a904589b1c840bd8dcef2",
+          "bytes": 11285
+        },
+        {
+          "source": "dist/static/js/async/426.js",
+          "destination": "static/js/async/426.js",
+          "sha256": "6b445605fb1b14365442e67a8dfed698b81026f31df84016b0d37be60d54abd8",
+          "bytes": 1990
+        },
+        {
+          "source": "dist/static/js/async/4387.js",
+          "destination": "static/js/async/4387.js",
+          "sha256": "c10667e45e285b8dcc18f667f876198bb7009a2281ce96717b2e81978f5f0825",
+          "bytes": 1468
+        },
+        {
+          "source": "dist/static/js/async/4468.js",
+          "destination": "static/js/async/4468.js",
+          "sha256": "c1f44a51e0e7163983fb3d62ccce7dbd7ebf6b7ebfc01bcbb091106b78b46e51",
+          "bytes": 38682
+        },
+        {
+          "source": "dist/static/js/async/4471.js",
+          "destination": "static/js/async/4471.js",
+          "sha256": "d21a983f847a16924d09d7898af325e86a0394e9970870ef4fc4c8a1231ed8ab",
+          "bytes": 469358
+        },
+        {
+          "source": "dist/static/js/async/4568.js",
+          "destination": "static/js/async/4568.js",
+          "sha256": "d56bb2d4055d04dc1586f20f37be296c724c45f42fa214f22fec3abbdb16a26a",
+          "bytes": 5204
+        },
+        {
+          "source": "dist/static/js/async/4580.js",
+          "destination": "static/js/async/4580.js",
+          "sha256": "3bfa56bc9c431d80d7dc88f88a5e0503fe1c5363b1df1ce385fcb4988543e933",
+          "bytes": 71132
+        },
+        {
+          "source": "dist/static/js/async/4695.js",
+          "destination": "static/js/async/4695.js",
+          "sha256": "bdb6d1b7f8907a9fdf52098d683c8af9ee01d7cbf207356a724417889dddb0be",
+          "bytes": 698
+        },
+        {
+          "source": "dist/static/js/async/4833.js",
+          "destination": "static/js/async/4833.js",
+          "sha256": "9f3539cbeaf2f12f723484d4e85388abf3ad86b3834d25cd139efef4796d69e8",
+          "bytes": 186
+        },
+        {
+          "source": "dist/static/js/async/4849.js",
+          "destination": "static/js/async/4849.js",
+          "sha256": "2b6c59850ddf04b32855552a6a39f7a755fa3814efce94ab79d8d10960ff977e",
+          "bytes": 2706
+        },
+        {
+          "source": "dist/static/js/async/4959.js",
+          "destination": "static/js/async/4959.js",
+          "sha256": "65a0ef441333438f3d87e905b18bf95fc52feb288d14047f93ea7c2948ecb437",
+          "bytes": 136
+        },
+        {
+          "source": "dist/static/js/async/509.js",
+          "destination": "static/js/async/509.js",
+          "sha256": "de009e4655755634d509c272793c917f8a12219d96a511634c95d0606ea9daf4",
+          "bytes": 30587
+        },
+        {
+          "source": "dist/static/js/async/5172.js",
+          "destination": "static/js/async/5172.js",
+          "sha256": "dd3b62a11b78c774c17db379e4f6bbe6f6a8d4bca8d756b360685bbf56e1a021",
+          "bytes": 6058
+        },
+        {
+          "source": "dist/static/js/async/535.js",
+          "destination": "static/js/async/535.js",
+          "sha256": "9f97bf61a61fb90e03edd807d0ed1aca0b71b39a7aa0d8ad8e017022d9b89e03",
+          "bytes": 264595
+        },
+        {
+          "source": "dist/static/js/async/5546.js",
+          "destination": "static/js/async/5546.js",
+          "sha256": "2c837ddd45773f04b9c3f3ec49e2673bc0e5bd138095d4fac5176fcb8cda5478",
+          "bytes": 16512
+        },
+        {
+          "source": "dist/static/js/async/5597.js",
+          "destination": "static/js/async/5597.js",
+          "sha256": "39c45dae8120b5c6910214422fa4f0b16090932fa4bdc447a86c2915c5fe4c9b",
+          "bytes": 145169
+        },
+        {
+          "source": "dist/static/js/async/5636.js",
+          "destination": "static/js/async/5636.js",
+          "sha256": "97cdb384326b6d30270645be6d6ac15d556a8236df7ea94cc2a73285b57599e1",
+          "bytes": 45771
+        },
+        {
+          "source": "dist/static/js/async/5638.js",
+          "destination": "static/js/async/5638.js",
+          "sha256": "8263eff5ab58ab8c9118241bb90911d97c05fd6ff8677f067341a8e2d7f1668c",
+          "bytes": 44429
+        },
+        {
+          "source": "dist/static/js/async/5706.js",
+          "destination": "static/js/async/5706.js",
+          "sha256": "d00eccf4d16ef0398ae2bdeebd9b06139365b829a6a7d8f97e2bed46c4b7bc41",
+          "bytes": 2683
+        },
+        {
+          "source": "dist/static/js/async/5856.js",
+          "destination": "static/js/async/5856.js",
+          "sha256": "e155777a786d8371a1a282ae9b0b03a3c28579c83827d64939291c5accfc5364",
+          "bytes": 6251
+        },
+        {
+          "source": "dist/static/js/async/6152.js",
+          "destination": "static/js/async/6152.js",
+          "sha256": "56ef6d22cd83ab55e04d8e0d0ebe700bdba1fd84e2462080728548fe5687e0b5",
+          "bytes": 636
+        },
+        {
+          "source": "dist/static/js/async/6297.js",
+          "destination": "static/js/async/6297.js",
+          "sha256": "cb37eb60ed90daf1887f77dc596829942da6ea983e6dfc9a1ac4b4fc2139519e",
+          "bytes": 812
+        },
+        {
+          "source": "dist/static/js/async/6325.js",
+          "destination": "static/js/async/6325.js",
+          "sha256": "49cc1e90d7caf66343ac6ad73098f7a646cf096ca316a40b76fdfd1d21635c2e",
+          "bytes": 10912
+        },
+        {
+          "source": "dist/static/js/async/6332.js",
+          "destination": "static/js/async/6332.js",
+          "sha256": "7b070f1565d32a1436c9c70e1843f32a79eb0c9aa931f2cf3b69896f17538816",
+          "bytes": 177
+        },
+        {
+          "source": "dist/static/js/async/6349.js",
+          "destination": "static/js/async/6349.js",
+          "sha256": "bd3656c81a90bcf32ed5391df84770068dfc43653ec24504cb1fc401087e9608",
+          "bytes": 21653
+        },
+        {
+          "source": "dist/static/js/async/6389.js",
+          "destination": "static/js/async/6389.js",
+          "sha256": "83de72aa77cee9587bea5ac4ab73fb8ab0c7e6e3cecfe3105a68cd1b83685df8",
+          "bytes": 3075
+        },
+        {
+          "source": "dist/static/js/async/6443.js",
+          "destination": "static/js/async/6443.js",
+          "sha256": "6591eb2f07973bbe3f09b6aa7b8d350b285ea2ec6b9d921eb1bebc931e08c78e",
+          "bytes": 785
+        },
+        {
+          "source": "dist/static/js/async/6526.js",
+          "destination": "static/js/async/6526.js",
+          "sha256": "5c01ef644c09a6bc9154f966fbcad978cb8f0eb5a015677843a00720519bc68e",
+          "bytes": 1385
+        },
+        {
+          "source": "dist/static/js/async/6600.js",
+          "destination": "static/js/async/6600.js",
+          "sha256": "c46b7d292963888edd1d0a8b995faf52224f00d59231be3393bc2acd8da721c1",
+          "bytes": 3033
+        },
+        {
+          "source": "dist/static/js/async/6689.js",
+          "destination": "static/js/async/6689.js",
+          "sha256": "941ee1e50db69fa7db861bc001e25cfb7b9e2e1434c8286e1186605a13321a4f",
+          "bytes": 44688
+        },
+        {
+          "source": "dist/static/js/async/6751.js",
+          "destination": "static/js/async/6751.js",
+          "sha256": "8887570ffb036af940ae412ebe24c1e7d337248b1a13cf1f37134d1613cbe395",
+          "bytes": 1616
+        },
+        {
+          "source": "dist/static/js/async/680.js",
+          "destination": "static/js/async/680.js",
+          "sha256": "448fae4218754773c5c1878f2e9521c3bc868f9159f2ec26ac77b9cb4b15982f",
+          "bytes": 2226
+        },
+        {
+          "source": "dist/static/js/async/6948.js",
+          "destination": "static/js/async/6948.js",
+          "sha256": "96a656187f0095de9f9b2e60bc6355cbb1d2af54cc4d1446b30a3ac1efd4e693",
+          "bytes": 180
+        },
+        {
+          "source": "dist/static/js/async/7262.js",
+          "destination": "static/js/async/7262.js",
+          "sha256": "b670ec3ebc76643f53e6b3284abd927d7424c9d8491172b32863106f7ae3c53d",
+          "bytes": 100379
+        },
+        {
+          "source": "dist/static/js/async/7515.js",
+          "destination": "static/js/async/7515.js",
+          "sha256": "1f7d4f402766f504d20395ec6f5a6ad36ccb4088afb6e72f071ab265acd54e5f",
+          "bytes": 1033
+        },
+        {
+          "source": "dist/static/js/async/7536.js",
+          "destination": "static/js/async/7536.js",
+          "sha256": "b27a48d3623b071f215a8827a5d9ee27897629c71109d6d0b1723d08af8fc6fb",
+          "bytes": 33647
+        },
+        {
+          "source": "dist/static/js/async/7630.js",
+          "destination": "static/js/async/7630.js",
+          "sha256": "bd95efd3213a78dd97f51383cd75f2b1e8d01ea6fecaf43a6be7af0e68ab001d",
+          "bytes": 2038
+        },
+        {
+          "source": "dist/static/js/async/7853.js",
+          "destination": "static/js/async/7853.js",
+          "sha256": "f4a8f972bf6e2a7752c9d4843e5861bf029a01c3419e689fcb69af2142ecaa1c",
+          "bytes": 424
+        },
+        {
+          "source": "dist/static/js/async/7987.js",
+          "destination": "static/js/async/7987.js",
+          "sha256": "dfeb6bc994a32e3423ea3726f98a9c9c8b390db333d5d30377204ee7b2c55ab2",
+          "bytes": 386
+        },
+        {
+          "source": "dist/static/js/async/8180.js",
+          "destination": "static/js/async/8180.js",
+          "sha256": "d14e9d6bdac5ae353bb2763bba64884bd39ffc9deec47d1f1cf1670e8d4a1cec",
+          "bytes": 29963
+        },
+        {
+          "source": "dist/static/js/async/828.js",
+          "destination": "static/js/async/828.js",
+          "sha256": "43f597844a54d1bf3788ad44d1c20cb928409446d9f271648070a512dbcee059",
+          "bytes": 9440
+        },
+        {
+          "source": "dist/static/js/async/8379.js",
+          "destination": "static/js/async/8379.js",
+          "sha256": "507dc685db3f70f6293ae35f2144c1de133e1788006967bc4c86fbea12bc7131",
+          "bytes": 1151
+        },
+        {
+          "source": "dist/static/js/async/8389.js",
+          "destination": "static/js/async/8389.js",
+          "sha256": "565798ab3b2c24a4f6deeeedb305a2d783ad6121cb561c4ed45c5ace0454dcd4",
+          "bytes": 1070
+        },
+        {
+          "source": "dist/static/js/async/8538.js",
+          "destination": "static/js/async/8538.js",
+          "sha256": "51398d22917b4b26ad75346bee12651b6d0855f18a8251b0c5302a2d1b1015cc",
+          "bytes": 4387
+        },
+        {
+          "source": "dist/static/js/async/8560.js",
+          "destination": "static/js/async/8560.js",
+          "sha256": "49e70c658a336fbbf6704d5ceb9068b073a674a2130da73cc75febeb2a0cfbdc",
+          "bytes": 394
+        },
+        {
+          "source": "dist/static/js/async/8794.js",
+          "destination": "static/js/async/8794.js",
+          "sha256": "e4152de3248e89bcc5b36acf9b0de6310cd5227af4363cc52b71c195d8bd8aa3",
+          "bytes": 347135
+        },
+        {
+          "source": "dist/static/js/async/8821.js",
+          "destination": "static/js/async/8821.js",
+          "sha256": "8e7b83cac6aec5342d3340d706e278ffa3f0beeca5b1d0f74ab0a38de6ee447e",
+          "bytes": 4034
+        },
+        {
+          "source": "dist/static/js/async/925.js",
+          "destination": "static/js/async/925.js",
+          "sha256": "50dcf9ae1dea03db5b8f39e5e7a1f681e7b19661b4bf00da0da372b74834e396",
+          "bytes": 14027
+        },
+        {
+          "source": "dist/static/js/async/9252.js",
+          "destination": "static/js/async/9252.js",
+          "sha256": "8ee315a49b498a4cb5a7f29eb15072fb5b8aa9c76e596a9d73b8731a66b46001",
+          "bytes": 2252
+        },
+        {
+          "source": "dist/static/js/async/9261.js",
+          "destination": "static/js/async/9261.js",
+          "sha256": "59f1416e3f14765cffb0f26f4670c9f95e47dceb141bfdff3b2b79fade185d1e",
+          "bytes": 184
+        },
+        {
+          "source": "dist/static/js/async/93.js",
+          "destination": "static/js/async/93.js",
+          "sha256": "0f7c3a332270eb015edf52c0b27e6a0e4322c49c8a27e601e95c45af8d89b2bf",
+          "bytes": 151459
+        },
+        {
+          "source": "dist/static/js/async/9324.js",
+          "destination": "static/js/async/9324.js",
+          "sha256": "d1bd74c42ac92984d84a531ee6399a769f5e7248e97b7592300ab5c5f285efec",
+          "bytes": 424
+        },
+        {
+          "source": "dist/static/js/async/9354.js",
+          "destination": "static/js/async/9354.js",
+          "sha256": "b08780db6b4b2a4cc34d0bcfdce0afe2ebc48be96f7737e664f7f99d198e2272",
+          "bytes": 2478
+        },
+        {
+          "source": "dist/static/js/async/9396.js",
+          "destination": "static/js/async/9396.js",
+          "sha256": "b2903c343083e1c9e2f6a72418e00818023505aef072f7838c5e876d5cf4b677",
+          "bytes": 132654
+        },
+        {
+          "source": "dist/static/js/async/9501.js",
+          "destination": "static/js/async/9501.js",
+          "sha256": "d039d63b2055da7cdf2ddd47daa355fbd1f9a5b6abd36ef3790417bae8f9f08b",
+          "bytes": 38206
+        },
+        {
+          "source": "dist/static/js/async/9560.js",
+          "destination": "static/js/async/9560.js",
+          "sha256": "3cfb9da262da7664c278874c481198b5c0d5f4900f262142b13bfe7b20e5aff9",
+          "bytes": 60505
+        },
+        {
+          "source": "dist/static/js/async/9640.js",
+          "destination": "static/js/async/9640.js",
+          "sha256": "a4f5e731ceb5820399fa3b8e04ab30469c5372ab37556cac5b3b41cc07dd92b8",
+          "bytes": 175
+        },
+        {
+          "source": "dist/static/js/async/9765.js",
+          "destination": "static/js/async/9765.js",
+          "sha256": "56cbac0c184eef89d6e341e98089ea60e57fb096e5009eeb7a6717e905dd81a5",
+          "bytes": 10402
+        },
+        {
+          "source": "dist/static/js/async/9821.js",
+          "destination": "static/js/async/9821.js",
+          "sha256": "d900dd979aeed2da8c747419048c3d358aea142f82fd06d9aa1b498f1ad8609d",
+          "bytes": 24379
+        },
+        {
+          "source": "dist/static/js/async/9956.js",
+          "destination": "static/js/async/9956.js",
+          "sha256": "bafd8a0d0c8e2bb6b460a54ab1015a38362e3ed621d6d56d2d1ace56ac8bbfc5",
+          "bytes": 15847
+        },
+        {
+          "source": "dist/static/js/main.js",
+          "destination": "static/js/main.js",
+          "sha256": "4b9c10d38ad5f9929edeba8891c3ffd090d45b0bdde7444cef3ec135d65f324c",
+          "bytes": 13042
+        },
+        {
+          "source": "dist/static/media/KaTeX_AMS-Regular.ttf",
+          "destination": "static/media/KaTeX_AMS-Regular.ttf",
+          "sha256": "68534840bcfdd2bffb6f0e8deb48684dd01e7f04ea2813267577afb906de1d13",
+          "bytes": 63632
+        },
+        {
+          "source": "dist/static/media/KaTeX_AMS-Regular.woff",
+          "destination": "static/media/KaTeX_AMS-Regular.woff",
+          "sha256": "30da91e84c893f875e252689faebdc590b2871145e8adc7f9a9d4dbd8ce0b251",
+          "bytes": 33516
+        },
+        {
+          "source": "dist/static/media/KaTeX_AMS-Regular.woff2",
+          "destination": "static/media/KaTeX_AMS-Regular.woff2",
+          "sha256": "0cdd387c9590a1a9f9794560022dbb59654a7d86f187aa0c81495ad42d3a7308",
+          "bytes": 28076
+        },
+        {
+          "source": "dist/static/media/KaTeX_Caligraphic-Bold.ttf",
+          "destination": "static/media/KaTeX_Caligraphic-Bold.ttf",
+          "sha256": "07d8e303ce4fc12b4bb54f1004170dd190a1f3db45d400fe68060df3e0897268",
+          "bytes": 12368
+        },
+        {
+          "source": "dist/static/media/KaTeX_Caligraphic-Bold.woff",
+          "destination": "static/media/KaTeX_Caligraphic-Bold.woff",
+          "sha256": "1ae6bd7475590e97e7f145a89e09ccde322f7a6bc0b91607b1c8b8ee28290fed",
+          "bytes": 7716
+        },
+        {
+          "source": "dist/static/media/KaTeX_Caligraphic-Bold.woff2",
+          "destination": "static/media/KaTeX_Caligraphic-Bold.woff2",
+          "sha256": "de7701e42cf1f4cf0b766c03fb27977207eee2f4fd5d76fa82188406da43ea4c",
+          "bytes": 6912
+        },
+        {
+          "source": "dist/static/media/KaTeX_Caligraphic-Regular.ttf",
+          "destination": "static/media/KaTeX_Caligraphic-Regular.ttf",
+          "sha256": "ed0b74372feefcbb9c0666b2e210da37b7e49fa7fbbf3eeb11db5f693dacfbb7",
+          "bytes": 12344
+        },
+        {
+          "source": "dist/static/media/KaTeX_Caligraphic-Regular.woff",
+          "destination": "static/media/KaTeX_Caligraphic-Regular.woff",
+          "sha256": "3398dd02302557a793f2863f88e02d96ce10df2abffa07c8e9fa90775116e65c",
+          "bytes": 7656
+        },
+        {
+          "source": "dist/static/media/KaTeX_Caligraphic-Regular.woff2",
+          "destination": "static/media/KaTeX_Caligraphic-Regular.woff2",
+          "sha256": "5d53e70ad607c2352162dec9e0923fb54ecdafaccbf604cd8dcf7d00facb989b",
+          "bytes": 6908
+        },
+        {
+          "source": "dist/static/media/KaTeX_Fraktur-Bold.ttf",
+          "destination": "static/media/KaTeX_Fraktur-Bold.ttf",
+          "sha256": "9163df9c7122432e6495b4229fa9071cf9ae86a758ae5efc4924ec2e1a6dbce1",
+          "bytes": 19584
+        },
+        {
+          "source": "dist/static/media/KaTeX_Fraktur-Bold.woff",
+          "destination": "static/media/KaTeX_Fraktur-Bold.woff",
+          "sha256": "9be7ceb88004ab8ad124082246fbfcca4091e36385d4ec6ed1df67375dad50fb",
+          "bytes": 13296
+        },
+        {
+          "source": "dist/static/media/KaTeX_Fraktur-Bold.woff2",
+          "destination": "static/media/KaTeX_Fraktur-Bold.woff2",
+          "sha256": "74444efd593c005e3f4573b44524704c0af0a937fe911cca9e94068d0d140d3f",
+          "bytes": 11348
+        },
+        {
+          "source": "dist/static/media/KaTeX_Fraktur-Regular.ttf",
+          "destination": "static/media/KaTeX_Fraktur-Regular.ttf",
+          "sha256": "1e6f9579e90e2cac37f8f60a597c436e075c114385652b7cbeb0dec0421291b3",
+          "bytes": 19572
+        },
+        {
+          "source": "dist/static/media/KaTeX_Fraktur-Regular.woff",
+          "destination": "static/media/KaTeX_Fraktur-Regular.woff",
+          "sha256": "5e28753be717dac97f559f49bc10be9cf3c124ddcabda6659d11cb68febc6463",
+          "bytes": 13208
+        },
+        {
+          "source": "dist/static/media/KaTeX_Fraktur-Regular.woff2",
+          "destination": "static/media/KaTeX_Fraktur-Regular.woff2",
+          "sha256": "51814d270d06ff0255dba0799994fa4d8c84d11f09951d47595f4abb1f3602dc",
+          "bytes": 11316
+        },
+        {
+          "source": "dist/static/media/KaTeX_Main-Bold.ttf",
+          "destination": "static/media/KaTeX_Main-Bold.ttf",
+          "sha256": "138ac28d1663b3037e9c5f52371fa5c63d8324f4a38d22cd573e6ea3a3fd0cf8",
+          "bytes": 51336
+        },
+        {
+          "source": "dist/static/media/KaTeX_Main-Bold.woff",
+          "destination": "static/media/KaTeX_Main-Bold.woff",
+          "sha256": "c76c5d696297d51b9cb1639c7da4334f0e7dec81b42b11213b5e25ef671bb822",
+          "bytes": 29912
+        },
+        {
+          "source": "dist/static/media/KaTeX_Main-Bold.woff2",
+          "destination": "static/media/KaTeX_Main-Bold.woff2",
+          "sha256": "0f60d1b897938ec918c8ce073092411baf9438f6739465693ff18b0f9d20b021",
+          "bytes": 25324
+        },
+        {
+          "source": "dist/static/media/KaTeX_Main-BoldItalic.ttf",
+          "destination": "static/media/KaTeX_Main-BoldItalic.ttf",
+          "sha256": "70ee1f64a20f2048c21940ef46d0144fd215baa953ca69afd1e31e98544f708f",
+          "bytes": 32968
+        },
+        {
+          "source": "dist/static/media/KaTeX_Main-BoldItalic.woff",
+          "destination": "static/media/KaTeX_Main-BoldItalic.woff",
+          "sha256": "a6f7ec0d846ac7ad975adb8959c37ed49b94acbc4ae436db9ce9e20287e4a64c",
+          "bytes": 19412
+        },
+        {
+          "source": "dist/static/media/KaTeX_Main-BoldItalic.woff2",
+          "destination": "static/media/KaTeX_Main-BoldItalic.woff2",
+          "sha256": "99cd42a3c072d918f2f44984a807cf7aa16e13545fd0875fc07c6c65f99e715b",
+          "bytes": 16780
+        },
+        {
+          "source": "dist/static/media/KaTeX_Main-Italic.ttf",
+          "destination": "static/media/KaTeX_Main-Italic.ttf",
+          "sha256": "0d85ae7cc30f23790a7f1a58c4a112fdca8aae769b6ba11429af1d98b1b6cb3a",
+          "bytes": 33580
+        },
+        {
+          "source": "dist/static/media/KaTeX_Main-Italic.woff",
+          "destination": "static/media/KaTeX_Main-Italic.woff",
+          "sha256": "f1d6ef86f3b11a528bd5185199bd2443ecb2b0dead96d88674b5a2c12be24bdf",
+          "bytes": 19676
+        },
+        {
+          "source": "dist/static/media/KaTeX_Main-Italic.woff2",
+          "destination": "static/media/KaTeX_Main-Italic.woff2",
+          "sha256": "97479ca6cce906abc961ecac96faa5f9ca2e61b8e7670d475826bcdee9a7c267",
+          "bytes": 16988
+        },
+        {
+          "source": "dist/static/media/KaTeX_Main-Regular.ttf",
+          "destination": "static/media/KaTeX_Main-Regular.ttf",
+          "sha256": "d0332f52868370fd83ae7fa46470f90c8f2eab2fcf12bc4f88080b340c95a830",
+          "bytes": 53580
+        },
+        {
+          "source": "dist/static/media/KaTeX_Main-Regular.woff",
+          "destination": "static/media/KaTeX_Main-Regular.woff",
+          "sha256": "c6368d87e8a1a3a5d337623d83d8dc4b868f242a9ad476237d6f8d1e0f168cdc",
+          "bytes": 30772
+        },
+        {
+          "source": "dist/static/media/KaTeX_Main-Regular.woff2",
+          "destination": "static/media/KaTeX_Main-Regular.woff2",
+          "sha256": "c2342cd8b869e01752a9321dc17213fc40d4d04c79688c1d43f2cf316abd7866",
+          "bytes": 26272
+        },
+        {
+          "source": "dist/static/media/KaTeX_Math-BoldItalic.ttf",
+          "destination": "static/media/KaTeX_Math-BoldItalic.ttf",
+          "sha256": "f9377ab0271cda59af24bcffbd46a4d0c8a3572ffafdbb38de2ad5ea7b0d5ee5",
+          "bytes": 31196
+        },
+        {
+          "source": "dist/static/media/KaTeX_Math-BoldItalic.woff",
+          "destination": "static/media/KaTeX_Math-BoldItalic.woff",
+          "sha256": "850c0af5c2238497febaf5e461d880bf458c341f42f4f330f1b1ab5698b1998e",
+          "bytes": 18668
+        },
+        {
+          "source": "dist/static/media/KaTeX_Math-BoldItalic.woff2",
+          "destination": "static/media/KaTeX_Math-BoldItalic.woff2",
+          "sha256": "dc47344dbb6cb5b655c8460d561f4df5f501b90c804ad3c6cec65fe322351ab1",
+          "bytes": 16400
+        },
+        {
+          "source": "dist/static/media/KaTeX_Math-Italic.ttf",
+          "destination": "static/media/KaTeX_Math-Italic.ttf",
+          "sha256": "08ce98e51b04d58945a301e639e02b6998af29fdfd61a7b8afdd07bbfc479d4a",
+          "bytes": 31308
+        },
+        {
+          "source": "dist/static/media/KaTeX_Math-Italic.woff",
+          "destination": "static/media/KaTeX_Math-Italic.woff",
+          "sha256": "8a8d244581371912b8f3f5a23e2437cb2a59cd9bcaebb0346e722c05737a2571",
+          "bytes": 18748
+        },
+        {
+          "source": "dist/static/media/KaTeX_Math-Italic.woff2",
+          "destination": "static/media/KaTeX_Math-Italic.woff2",
+          "sha256": "7af58c5ec8f132a2ddde9027c6d7814decce4d3b822a11192a42a20e2e973264",
+          "bytes": 16440
+        },
+        {
+          "source": "dist/static/media/KaTeX_SansSerif-Bold.ttf",
+          "destination": "static/media/KaTeX_SansSerif-Bold.ttf",
+          "sha256": "1ece03f79f95277d57dc7f6b435a74e1379b0d46104a8530286b60ff49369ea0",
+          "bytes": 24504
+        },
+        {
+          "source": "dist/static/media/KaTeX_SansSerif-Bold.woff",
+          "destination": "static/media/KaTeX_SansSerif-Bold.woff",
+          "sha256": "ece03cfd83e22c212cdef66feb8442d25a083beb988db3f1883f3f9738d750ba",
+          "bytes": 14408
+        },
+        {
+          "source": "dist/static/media/KaTeX_SansSerif-Bold.woff2",
+          "destination": "static/media/KaTeX_SansSerif-Bold.woff2",
+          "sha256": "e99ae51144bf1232efcc1bfe5add36262c6866b0faab24fa75740e1b98577a62",
+          "bytes": 12216
+        },
+        {
+          "source": "dist/static/media/KaTeX_SansSerif-Italic.ttf",
+          "destination": "static/media/KaTeX_SansSerif-Italic.ttf",
+          "sha256": "3931dd81faed86ba021bb2bbdc36f5bed9a38d6b4f4077aca59b265aa1b02083",
+          "bytes": 22364
+        },
+        {
+          "source": "dist/static/media/KaTeX_SansSerif-Italic.woff",
+          "destination": "static/media/KaTeX_SansSerif-Italic.woff",
+          "sha256": "91ee67500cc0129aa0ace3ac5c61ff1692102f0f31d02b69347fba35dcb75bf2",
+          "bytes": 14112
+        },
+        {
+          "source": "dist/static/media/KaTeX_SansSerif-Italic.woff2",
+          "destination": "static/media/KaTeX_SansSerif-Italic.woff2",
+          "sha256": "00b26ac825e2095056396e0553b8ac26d3f8ad158c3826e28b4c45b385c4714a",
+          "bytes": 12028
+        },
+        {
+          "source": "dist/static/media/KaTeX_SansSerif-Regular.ttf",
+          "destination": "static/media/KaTeX_SansSerif-Regular.ttf",
+          "sha256": "f36ea897e19f4a2e571d1e900e4e3710e438deb05a842486045ba0a3e616a4ad",
+          "bytes": 19436
+        },
+        {
+          "source": "dist/static/media/KaTeX_SansSerif-Regular.woff",
+          "destination": "static/media/KaTeX_SansSerif-Regular.woff",
+          "sha256": "11e4dc8a6471ff6d6ee561d53d10fde8f7489e798257ff449c5d37c197435605",
+          "bytes": 12316
+        },
+        {
+          "source": "dist/static/media/KaTeX_SansSerif-Regular.woff2",
+          "destination": "static/media/KaTeX_SansSerif-Regular.woff2",
+          "sha256": "68e8c73ef42afd3ccec58bf0fba302cce448938e7fc020a5e31f8a952eee1342",
+          "bytes": 10344
+        },
+        {
+          "source": "dist/static/media/KaTeX_Script-Regular.ttf",
+          "destination": "static/media/KaTeX_Script-Regular.ttf",
+          "sha256": "1c67f068fea8bb09bf099c088b1cf64bd27516a6e07f4684344873564bb66a67",
+          "bytes": 16648
+        },
+        {
+          "source": "dist/static/media/KaTeX_Script-Regular.woff",
+          "destination": "static/media/KaTeX_Script-Regular.woff",
+          "sha256": "d96cdf2b3bdd4d64a8fd5f74a4c467f123a8a73931cd435889f08ffaf9bf947a",
+          "bytes": 10588
+        },
+        {
+          "source": "dist/static/media/KaTeX_Script-Regular.woff2",
+          "destination": "static/media/KaTeX_Script-Regular.woff2",
+          "sha256": "036d4e95149b69ff9bcc0cd55771efeb25ffa3947293e69acd78d5ac328c684b",
+          "bytes": 9644
+        },
+        {
+          "source": "dist/static/media/KaTeX_Size1-Regular.ttf",
+          "destination": "static/media/KaTeX_Size1-Regular.ttf",
+          "sha256": "95b6d2f1a50173bfedb8c63e1d1c99b10427d0a4df4201cb44513b226951a22b",
+          "bytes": 12228
+        },
+        {
+          "source": "dist/static/media/KaTeX_Size1-Regular.woff",
+          "destination": "static/media/KaTeX_Size1-Regular.woff",
+          "sha256": "c943cc986384f59e86bea5fd7dc50a9c4dfe567a7c05eb40d6790720dead97c9",
+          "bytes": 6496
+        },
+        {
+          "source": "dist/static/media/KaTeX_Size1-Regular.woff2",
+          "destination": "static/media/KaTeX_Size1-Regular.woff2",
+          "sha256": "6b47c40166b6dbe21a5dfca7718413f2147fd2399be1ba605d8ad39cedf25dfe",
+          "bytes": 5468
+        },
+        {
+          "source": "dist/static/media/KaTeX_Size2-Regular.ttf",
+          "destination": "static/media/KaTeX_Size2-Regular.ttf",
+          "sha256": "a6b2099fb555c60e3a0db3a08842ebf1d732c6eb4e4bf44913613bed4fc4e39b",
+          "bytes": 11508
+        },
+        {
+          "source": "dist/static/media/KaTeX_Size2-Regular.woff",
+          "destination": "static/media/KaTeX_Size2-Regular.woff",
+          "sha256": "2014c523c3210bcc166648c4d4cc57f05b747df07a24277bf71c51e67dc79e3d",
+          "bytes": 6188
+        },
+        {
+          "source": "dist/static/media/KaTeX_Size2-Regular.woff2",
+          "destination": "static/media/KaTeX_Size2-Regular.woff2",
+          "sha256": "d04c54219f9eaec6d4d4fd42dfb28785975a4794d6b2fc71e566b9cd6db842dd",
+          "bytes": 5208
+        },
+        {
+          "source": "dist/static/media/KaTeX_Size3-Regular.ttf",
+          "destination": "static/media/KaTeX_Size3-Regular.ttf",
+          "sha256": "500e04d54f0d51666332c9d2089aa803be22aa878eca539e59fa53c6e522b082",
+          "bytes": 7588
+        },
+        {
+          "source": "dist/static/media/KaTeX_Size3-Regular.woff",
+          "destination": "static/media/KaTeX_Size3-Regular.woff",
+          "sha256": "6ab6b62e9b62dae2c00dd90f791bd10950be0ecc3490d7d6045f51c2e8fe0949",
+          "bytes": 4420
+        },
+        {
+          "source": "dist/static/media/KaTeX_Size3-Regular.woff2",
+          "destination": "static/media/KaTeX_Size3-Regular.woff2",
+          "sha256": "73d591271b1604960cb10bb90fee021670af7297017e0e98480b332d11f51995",
+          "bytes": 3624
+        },
+        {
+          "source": "dist/static/media/KaTeX_Size4-Regular.ttf",
+          "destination": "static/media/KaTeX_Size4-Regular.ttf",
+          "sha256": "c647367d1dd4e162468717d020e1fc0f1dc5c26ebfdffbe55261713bf88c5877",
+          "bytes": 10364
+        },
+        {
+          "source": "dist/static/media/KaTeX_Size4-Regular.woff",
+          "destination": "static/media/KaTeX_Size4-Regular.woff",
+          "sha256": "99f9c6750b489c9462bf04900bd3f939df9b829339daaaaa99ef5495cdddea58",
+          "bytes": 5980
+        },
+        {
+          "source": "dist/static/media/KaTeX_Size4-Regular.woff2",
+          "destination": "static/media/KaTeX_Size4-Regular.woff2",
+          "sha256": "a4af7d414440a1c1790825cfb700cf9cf43b0f2c4b04f0ebc523011ad9853ec0",
+          "bytes": 4928
+        },
+        {
+          "source": "dist/static/media/KaTeX_Typewriter-Regular.ttf",
+          "destination": "static/media/KaTeX_Typewriter-Regular.ttf",
+          "sha256": "f01f3e87d9c6a61c0c081ceb577abd864eb00a612f7ac1620dd6915fad2ef5aa",
+          "bytes": 27556
+        },
+        {
+          "source": "dist/static/media/KaTeX_Typewriter-Regular.woff",
+          "destination": "static/media/KaTeX_Typewriter-Regular.woff",
+          "sha256": "e14fed02b1aba7ce9f5afd5844b5d0321b22351febc720e0de8b8723527609f7",
+          "bytes": 16028
+        },
+        {
+          "source": "dist/static/media/KaTeX_Typewriter-Regular.woff2",
+          "destination": "static/media/KaTeX_Typewriter-Regular.woff2",
+          "sha256": "71d517d67827787cfabdf186914cc3358eda539e37931941f2b2fd4a21f68c0b",
+          "bytes": 13568
+        },
+        {
+          "source": "dist/static/media/pdf.worker.min.mjs",
+          "destination": "static/media/pdf.worker.min.mjs",
+          "sha256": "31cb0e37cce7b2fc3bbdb4b52f8d28c69bd4832ce8da2bc2264585f468260a24",
+          "bytes": 1153905
+        }
+      ]
     }
   ]
 }
