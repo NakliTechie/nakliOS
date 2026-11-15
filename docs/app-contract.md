@@ -242,6 +242,16 @@ for await (const chunk of stream) {
 }
 ```
 
+**Reasoning (experimental).** When `naklios.capabilities.experimental_aiReasoning` is true, the
+selected model is an endpoint and its reasoning streams beside the reply: a chunk with
+`delta.reasoning_content` carries thinking, and `delta.content` is empty in it. A non-streamed
+completion returns it as `message.reasoning_content`. Pass `experimental_thinking: true` or `false` to
+switch thinking on or off; omit it to keep the provider's default. OpenAI-compatible endpoints receive
+DeepSeek's `thinking: {type}` field, and a server that rejects it gets the request again without it.
+Anthropic endpoints stream their thinking blocks as reasoning; the switch does not reach them. Agent
+requests may carry an assistant turn's `reasoning_content` back, because DeepSeek asks for it when the
+request has tools.
+
 Omit `stream:true` for an OpenAI-shaped final response. An `AbortSignal` may be
 passed as `signal`, or call `stream.cancel()`. The host serializes generation
 and applies per-app queue limits. Consent is scoped to the selected destination:
@@ -667,7 +677,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 
 <!-- sdk-reference:begin — rendered by `node scripts/sdk-reference.mjs --write` from docs/sdk-api-audit.md; do not edit by hand -->
 
-123 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
+124 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
 
 ### `version`
 
@@ -706,6 +716,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 | `capabilities.aiSearch` | field | Semantic (local, embedding) search over the app's own namespace granted — not web search. |
 | `capabilities.experimental_tex` | field · **experimental** | The app may compile LaTeX projects in its own storage. |
 | `capabilities.experimental_web` | field · **experimental** | The app may search the web and read pages through the host. |
+| `capabilities.experimental_aiReasoning` | field · **experimental** | The selected chat model is an endpoint, so chunks carry `delta.reasoning_content` and the `experimental_thinking` request option switches thinking. |
 | `capabilities.net` | field | Sovereign egress (`naklios.net.fetch`) granted. |
 | `capabilities.netBackend` | field | Which egress backend the host is configured with: `worker` (the default) · `bridge`; null when none. Never a package name. |
 | `capabilities.review` | field | The host can stage native diffs from this app and return source-bound review decisions. Enabled for Reckon, Draft, and KanZen. |

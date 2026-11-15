@@ -7269,7 +7269,11 @@ async function aiGenerateAnthropic(request){
       aiEmit(request, { event:'token', token:delta });
       aiGuardDelta(request, delta);
     });
-    stream.on('thinking', (delta) => { if (delta) aiGuardDelta(request, delta, true); });
+    stream.on('thinking', (delta) => {
+      if (!delta) return;
+      if (!request.repeatStopped) aiEmit(request, { event:'reasoning', token:delta });
+      aiGuardDelta(request, delta, true);
+    });
     return stream.finalMessage();
   };
   const agentProto = await aiAgentProto();
@@ -7326,6 +7330,10 @@ async function aiGenerateEndpoint(request){
   // into a broken one.
   const wantsUsage = body.stream === true;
   if (wantsUsage) body.stream_options = { include_usage:true };
+  // The thinking switch in DeepSeek's OpenAI-format shape, `thinking:{type}`. A server that
+  // rejects the field gets the request again without it, as stream_options does below.
+  const wantsThinking = typeof request.thinking === 'boolean';
+  if (wantsThinking) body.thinking = { type:request.thinking ? 'enabled' : 'disabled' };
   const post = (b) => fetch(aiEndpointChatUrl(request.model.baseUrl), {
     method:'POST',
     headers:aiEndpointHeaders(request.model),
@@ -7344,9 +7352,9 @@ async function aiGenerateEndpoint(request){
   const attemptOn = async (modelId) => {
     const withModel = { ...body, model:modelId };
     let res = await post(withModel);
-    if (!res.ok && wantsUsage && (res.status === 400 || res.status === 422)) {
-      const { stream_options, ...withoutUsage } = withModel;
-      res = await post(withoutUsage);
+    if (!res.ok && (wantsUsage || wantsThinking) && (res.status === 400 || res.status === 422)) {
+      const { stream_options, thinking, ...withoutOptional } = withModel;
+      res = await post(withoutOptional);
     }
     // The ladder decides by status, so the status has to travel with the error.
     if (!res.ok) throw Object.assign(new Error(await aiReadEndpointError(res)), { status:res.status });
@@ -7372,6 +7380,8 @@ async function aiGenerateEndpoint(request){
     if (typeof text !== 'string' && !(toolAcc && message?.tool_calls)) {
       throw new Error('AI endpoint returned no assistant message');
     }
+    const thought = message?.reasoning_content ?? message?.reasoning;
+    if (typeof thought === 'string' && thought) aiEmit(request, { event:'reasoning', token:thought });
     if (typeof text === 'string' && text) aiEmit(request, { event:'token', token:text });
     if (toolAcc) request.toolCalls = toolAcc.finalize();
     if (data?.usage) request.usage = data.usage;
@@ -7404,7 +7414,10 @@ async function aiGenerateEndpoint(request){
       }
       // DeepSeek-style reasoning streams beside the reply; a loop there is guarded too.
       const thought = choice?.delta?.reasoning_content ?? choice?.delta?.reasoning;
-      if (typeof thought === 'string' && thought) aiGuardDelta(request, thought, true);
+      if (typeof thought === 'string' && thought) {
+        if (!request.repeatStopped) aiEmit(request, { event:'reasoning', token:thought });
+        aiGuardDelta(request, thought, true);
+      }
       if (toolAcc) toolAcc.absorbDelta(choice?.delta);
       if (choice?.finish_reason) finishReason = choice.finish_reason;
       // the usage chunk carries no choice at all — read it off the frame, not off `choice`
@@ -7632,6 +7645,8 @@ async function aiHostSubmit(source, msg, appId){
       agent:wantsAgent,
       tools,
       toolChoice,
+      // experimental_thinking: true/false switches the model's thinking; undefined keeps the default.
+      thinking:msg.thinking === true || msg.thinking === false ? msg.thinking : undefined,
       cancelled:false,
     };
     aiHost.queue.push(request);
@@ -8806,6 +8821,9 @@ function capabilitySnapshot(appId){
     aiSearchState:ragHost.state,
     experimental_tex:texCapabilityForApp(appId),
     experimental_web:aiAppOwnsEgress(appId),
+    // Endpoints stream reasoning (OpenAI reasoning_content, Anthropic thinking); the browser
+    // models do not report it separately.
+    experimental_aiReasoning:aiModel.runtime === 'endpoint',
     // Egress: a system app may reach blocked cross-origin hosts when the user has
     // configured a backend. Third-party apps never get it (isSystem gate).
     net: aiAppOwnsEgress(appId) && egressConfigured(),
