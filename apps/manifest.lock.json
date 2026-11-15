@@ -6449,14 +6449,14 @@
       "id": "lectella",
       "repo": "NakliTechie/lectella",
       "requestedRef": "main",
-      "resolvedCommit": "90127884cbfead252109be2a091f7fe527da51ef",
+      "resolvedCommit": "9f634d794a45023757aae297b06a8e8e281a7790",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "4e0dc7397e67d79e13e392227540f581a703e12497236b5b1538da75108532fa",
-          "bytes": 84101,
-          "originalSourceSha256": "ba3163744eb010b745b7c12cce1bc6bac409de6f63e9fc4e64682e13a3b5dc4d",
+          "sha256": "6cec42ba2dfb809559ebffe602cee8cb47e215ebd1d79424d2d55ebb8c6ebddc",
+          "bytes": 84208,
+          "originalSourceSha256": "5b0e5037462e2d1e344f0b9045072fa6a6564e9a781b389b42d866879a369957",
           "sdkSha256": "410f8613ad003755ecb06f20a23b6d36b3d980fe88a3ab86fe16ff73b11a5b4c"
         },
         {
@@ -6474,8 +6474,8 @@
         {
           "source": "src/app.js",
           "destination": "src/app.js",
-          "sha256": "0dc6d09b2a23351a0380f20d0299e67c278d98186107f14c33b6bad1f6d5b272",
-          "bytes": 59078
+          "sha256": "c91838ac82d8f06e964a32dcf8ed0207894f847cf81efe1154c10a6cce5edc81",
+          "bytes": 61690
         },
         {
           "source": "src/core.js",
@@ -6492,8 +6492,8 @@
         {
           "source": "src/commands.js",
           "destination": "src/commands.js",
-          "sha256": "7834ab33bb4120ca63dcfb4b672382b531e5f3278a2f4158280afb60f33bc6a8",
-          "bytes": 16868
+          "sha256": "b176bc4a55091ee50361c9096ff46c7f6f8d867241306171ffbfb15adc0c482d",
+          "bytes": 17156
         },
         {
           "source": "src/pdf.js",
@@ -6530,6 +6530,180 @@
           "destination": "src/lorewell.js",
           "sha256": "402447756da2c188cceeb4685089bb2856148a48281d682a76afeaad3401b398",
           "bytes": 5348
+        },
+        {
+          "source": "src/speech.js",
+          "destination": "src/speech.js",
+          "sha256": "5ebce56ecf01f69df163baf446d67a8c7e6dac3a581ab643d4ceabe7ca3a4a6f",
+          "bytes": 4641
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/LICENSE-APACHE",
+          "destination": "vendor/phonon-tts-0.7.1/LICENSE-APACHE",
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+          "bytes": 11357
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/LICENSE-MIT",
+          "destination": "vendor/phonon-tts-0.7.1/LICENSE-MIT",
+          "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+          "bytes": 1023
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/THIRD_PARTY_LICENSES.md",
+          "destination": "vendor/phonon-tts-0.7.1/THIRD_PARTY_LICENSES.md",
+          "sha256": "6d6e665751adeaecd0209a397037f69c6f745cdfbef0b2747948de4f969252a9",
+          "bytes": 199457
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/device.js",
+          "destination": "vendor/phonon-tts-0.7.1/device.js",
+          "sha256": "db390629ec99f1ac53c4fa03a69f687adb11e0c4c53373184387f331e3b4ec38",
+          "bytes": 3251
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/fetch.js",
+          "destination": "vendor/phonon-tts-0.7.1/fetch.js",
+          "sha256": "fe28ae73b476a1b014098843335141efad3a943c98939a72d2d907ee4596582c",
+          "bytes": 4622
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/gpu/codec.js",
+          "destination": "vendor/phonon-tts-0.7.1/gpu/codec.js",
+          "sha256": "d35817d3e31a16c4b48999b1e8499155742f6decdfe407ded94264e1e8524252",
+          "bytes": 8227
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/gpu/dispatch.js",
+          "destination": "vendor/phonon-tts-0.7.1/gpu/dispatch.js",
+          "sha256": "40eb25be815281defcd79e57e25379d382f8cf7df971578dd9dae6f86605a2c4",
+          "bytes": 4609
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/gpu/engine.js",
+          "destination": "vendor/phonon-tts-0.7.1/gpu/engine.js",
+          "sha256": "5c191e0b7f3ed20e3ca793d1605cdb688d54fad5e72c67d98f7250e393d29f0f",
+          "bytes": 18400
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/gpu/gguf.js",
+          "destination": "vendor/phonon-tts-0.7.1/gpu/gguf.js",
+          "sha256": "bd3f277d0357c0b7ba1e16edae38a5d6fba43980293ef1ae0e2986160046f126",
+          "bytes": 4048
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/gpu/kernels.js",
+          "destination": "vendor/phonon-tts-0.7.1/gpu/kernels.js",
+          "sha256": "cd2b5c534fb84021ac4e7567782ee64619de3feb1c0a40b815b7fb01740d0e49",
+          "bytes": 48371
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/gpu/lm.js",
+          "destination": "vendor/phonon-tts-0.7.1/gpu/lm.js",
+          "sha256": "7fddcd2b848c963161c8e62c0dd88f912d3377b1c1190947f19811c0b9570145",
+          "bytes": 8782
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/gpu/support.js",
+          "destination": "vendor/phonon-tts-0.7.1/gpu/support.js",
+          "sha256": "411844132da76bfb9b3418b1b8513b2bca484e1a803dcb4ca47a1fc6483f2840",
+          "bytes": 5751
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/gpu/weights.js",
+          "destination": "vendor/phonon-tts-0.7.1/gpu/weights.js",
+          "sha256": "4d43f102d7650ec5bcffcd0887b714c5461b7f8c547b2e9e77d3e4461fdbf7a6",
+          "bytes": 11577
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/hub.js",
+          "destination": "vendor/phonon-tts-0.7.1/hub.js",
+          "sha256": "3997007fceecd7e7c48df3b7181873cc6a1648c00553b3c4299ec9aa7583f1a5",
+          "bytes": 5366
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/index.js",
+          "destination": "vendor/phonon-tts-0.7.1/index.js",
+          "sha256": "9a682b5d248222d2d6dcf010c0089390e419b83942b35fc2d6e5f149df14b448",
+          "bytes": 17020
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/package.json",
+          "destination": "vendor/phonon-tts-0.7.1/package.json",
+          "sha256": "e69151804cca5f30310e387fdd2b288fec2f2026df181e4daf81503bb4299063",
+          "bytes": 1973
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/simd.js",
+          "destination": "vendor/phonon-tts-0.7.1/simd.js",
+          "sha256": "002ae86d173038fe83449b623510c2e697f3837e3a9f39c2c7445525efd9fb3b",
+          "bytes": 894
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/threads.js",
+          "destination": "vendor/phonon-tts-0.7.1/threads.js",
+          "sha256": "19782737d03b71e028b7924d80cd5d14820f23e28ca352e65975c1a0dfccea0f",
+          "bytes": 1664
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/wasm-threads/phonon_tts.js",
+          "destination": "vendor/phonon-tts-0.7.1/wasm-threads/phonon_tts.js",
+          "sha256": "fcc6f4bd42359ce123fbc7c0ba8938a9b585b1ddc26e6938a8d9e3ab3ef60b95",
+          "bytes": 41376
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/wasm-threads/phonon_tts_bg.wasm",
+          "destination": "vendor/phonon-tts-0.7.1/wasm-threads/phonon_tts_bg.wasm",
+          "sha256": "d10693a221144f68d463c593aa61e3b1eda385550545dc01fdcb6e1b0e53d69f",
+          "bytes": 4019870
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/wasm-threads/phonon_tts_simd_bg.wasm",
+          "destination": "vendor/phonon-tts-0.7.1/wasm-threads/phonon_tts_simd_bg.wasm",
+          "sha256": "21fb0e94d9cd2f52c3523ed91ba35f594879488bdd56c20cf9df6f34e4455fde",
+          "bytes": 4000593
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/wasm-threads/snippets/wasm-bindgen-rayon-38edf6e439f6d70d/src/workerHelpers.js",
+          "destination": "vendor/phonon-tts-0.7.1/wasm-threads/snippets/wasm-bindgen-rayon-38edf6e439f6d70d/src/workerHelpers.js",
+          "sha256": "cbdef38f2155f8f5b243bb6bf113706c1a26c911833b19de4bc85b9cccbab94f",
+          "bytes": 4560
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/wasm/phonon_tts.js",
+          "destination": "vendor/phonon-tts-0.7.1/wasm/phonon_tts.js",
+          "sha256": "0851d5d9e9d7609b58b33e304c48c94bb95b828ef1562cc5f35fb3de105b9ac9",
+          "bytes": 32081
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/wasm/phonon_tts_bg.wasm",
+          "destination": "vendor/phonon-tts-0.7.1/wasm/phonon_tts_bg.wasm",
+          "sha256": "9b84c449dc4bf6d22598079d8fb95e7d5658d2ba0f477d92363b9885782af46f",
+          "bytes": 3980653
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/wasm/phonon_tts_simd_bg.wasm",
+          "destination": "vendor/phonon-tts-0.7.1/wasm/phonon_tts_simd_bg.wasm",
+          "sha256": "09fa835fe0d46f195b21f0bc18e49a9fdbe29471438f70eac997f677fcb8208b",
+          "bytes": 3961684
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/wav.js",
+          "destination": "vendor/phonon-tts-0.7.1/wav.js",
+          "sha256": "ffe180a940387cf3e5259e68b0a052934b9860034d2f9c82527c986e132d9ce1",
+          "bytes": 1519
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/worker.js",
+          "destination": "vendor/phonon-tts-0.7.1/worker.js",
+          "sha256": "8e37f203d4b733d4829b104f03b2985f9a5a46955b526fbac8bd2537c59f9231",
+          "bytes": 17980
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/NOTICE.md",
+          "destination": "vendor/phonon-tts-0.7.1/NOTICE.md",
+          "sha256": "fb6c010f4c14350a3cd3e01e23b6d71f2cf0f918ed811cf74b4ecf7814b0ae26",
+          "bytes": 2531
         }
       ]
     },

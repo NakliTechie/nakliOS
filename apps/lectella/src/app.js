@@ -1,8 +1,9 @@
 // The page: draws the library, wires every control to the command manifest, runs chat through the NakliOS
 // model, and picks where the library lives (NakliOS Folder or Crate when connected, else this browser).
 
-import { SPEAKERS, beforeSources, buildChat, citedRefs, esc, estimateTokens, mindmapSvg, parseOutline, parseScript, parseSlides, renderMarkdown, scriptMarkdown, studioRequest, summaryRequest, titleFrom } from './core.js';
+import { beforeSources, buildChat, citedRefs, esc, estimateTokens, mindmapSvg, parseOutline, parseScript, parseSlides, renderMarkdown, scriptMarkdown, studioRequest, summaryRequest, titleFrom } from './core.js';
 import { pdfText } from './pdf.js';
+import { DOWNLOAD_LABEL, loadSpeech, playLines, renderWav } from './speech.js';
 import { citeLabel, lorewellReachable, openInLorewell, readLorewell, searchLorewell } from './lorewell.js';
 import { Library, hostFs, opfsFs } from './store.js';
 import { COMMANDS, railCommands, run, searchNotebook } from './commands.js';
@@ -638,25 +639,8 @@ async function studio(kind) {
   }
 }
 
-/** English voices on this device, distinct ones first, for the two speakers. */
-function voicesFor() {
-  const all = speechSynthesis.getVoices();
-  const en = all.filter((v) => /^en/i.test(v.lang));
-  const pool = en.length ? en : all;
-  const local = pool.filter((v) => v.localService);
-  const pick = local.length >= 2 ? local : pool;
-  return [pick[0] ?? null, pick.find((v) => v !== pick[0] && v.name.split(' ')[0] !== pick[0]?.name.split(' ')[0]) ?? pick[1] ?? pick[0] ?? null];
-}
-
-/** Read the open note aloud with this device's voices: an audio overview in two voices. A second press stops. */
-function listen() {
-  if (!('speechSynthesis' in window)) return banner('This browser has no speech voices.', { error: true });
-  const btn = $('note-listen');
-  if (speechSynthesis.speaking || speechSynthesis.pending) {
-    speechSynthesis.cancel();
-    btn.textContent = btn.dataset.idle ?? 'Listen';
-    return;
-  }
+/** The note's text as lines to speak: an audio overview by speaker, any other note as one reader. */
+function noteLines() {
   const form = /** @type {HTMLFormElement} */ (dlg('dlg-note').querySelector('form'));
   const body = String(form.elements.namedItem('body').value);
   const clean = (/** @type {string} */ t) =>
@@ -664,22 +648,107 @@ function listen() {
       .replace(/```[^]*?```/g, ' ')
       .replace(/\[(\d+(?:\s*,\s*\d+)*)\]/g, '')
       .replace(/[#*_`>]/g, '')
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
-  const lines = openNoteFormat === 'audio' ? parseScript(body) : [{ speaker: '', text: `${form.elements.namedItem('title').value}. ${clean(beforeSources(body))}` }];
-  const [a, b] = voicesFor();
-  const rows = [...$('note-read').querySelectorAll('[data-line]')];
-  lines.forEach((l, i) => {
-    const u = new SpeechSynthesisUtterance(clean(l.text));
-    const second = l.speaker === SPEAKERS[1];
-    const voice = second ? b : a;
-    if (voice) u.voice = voice;
-    // With a single voice on the device, the second speaker still sounds different.
-    if (second && a === b) u.pitch = 0.8;
-    u.onstart = () => rows.forEach((r, j) => r.classList.toggle('speaking', j === i));
-    if (i === lines.length - 1) u.onend = u.onerror = () => ((btn.textContent = btn.dataset.idle ?? 'Listen'), rows.forEach((r) => r.classList.remove('speaking')));
-    speechSynthesis.speak(u);
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .trim();
+  if (openNoteFormat === 'audio') return parseScript(body).map((l) => ({ speaker: l.speaker, text: clean(l.text) })).filter((l) => l.text);
+  // A plain note is read paragraph by paragraph, so long notes stream in steps.
+  const paras = `${form.elements.namedItem('title').value}.\n\n${beforeSources(body)}`.split(/\n\s*\n/).map(clean).filter(Boolean);
+  return paras.map((text) => ({ speaker: '', text }));
+}
+
+/** Load the voices, asking once in this browser before the first download. Answers the engine, or null if declined. */
+async function speechReady() {
+  let asked = false;
+  try {
+    asked = localStorage.getItem('lectella:voices') === 'ok';
+  } catch {
+    // ask again next time
+  }
+  if (!asked) {
+    const ok = await ask({
+      title: 'Download the voices?',
+      text: `Listen and Audio overview speak with Phonon voices that run on this device, not in a cloud. The first time, this browser downloads ${DOWNLOAD_LABEL} from Hugging Face and keeps it. Nothing you play is sent anywhere.`,
+      ok: 'Download',
+    });
+    if (!ok) return null;
+    try {
+      localStorage.setItem('lectella:voices', 'ok');
+    } catch {
+      // a per-viewer convenience only
+    }
+  }
+  const sizes = new Map();
+  return loadSpeech({
+    onProgress: (p) => {
+      if (p.cached) return;
+      sizes.set(p.file, [p.loaded, p.total]);
+      const [loaded, total] = [...sizes.values()].reduce((acc, [l, t]) => [acc[0] + l, acc[1] + (t || 0)], [0, 0]);
+      if (total) $('note-saved').textContent = `Loading voices: ${Math.round((loaded / total) * 100)}%`;
+    },
   });
+}
+
+/** @type {null | { done: Promise<void>, stop(): void }} */
+let playing = null;
+
+function stopPlaying() {
+  playing?.stop();
+  playing = null;
+  const btn = $('note-listen');
+  btn.textContent = btn.dataset.idle ?? 'Listen';
+  $('note-read').querySelectorAll('.speaking').forEach((r) => r.classList.remove('speaking'));
+}
+
+/** Read the open note aloud on this device: an audio overview in its two hosts' voices. A second press stops. */
+async function listen() {
+  if (playing) return stopPlaying();
+  const lines = noteLines();
+  if (!lines.length) return banner('This note has nothing to read aloud.', { error: true });
+  const btn = $('note-listen');
   btn.textContent = 'Stop';
+  let tts;
+  try {
+    tts = await speechReady();
+  } catch (e) {
+    btn.textContent = btn.dataset.idle ?? 'Listen';
+    $('note-saved').textContent = '';
+    return banner(`The voices could not load: ${/** @type {any} */ (e)?.message ?? e}`, { error: true });
+  }
+  $('note-saved').textContent = '';
+  if (!tts || btn.textContent !== 'Stop') return stopPlaying();
+  const rows = [...$('note-read').querySelectorAll('[data-line]')];
+  const p = playLines(tts, lines, { onLine: (i) => rows.forEach((r, j) => r.classList.toggle('speaking', j === i)) });
+  playing = p;
+  p.done.catch((e) => banner(`Playback stopped: ${e?.message ?? e}`, { error: true })).finally(() => playing === p && stopPlaying());
+}
+
+/** Render the open audio overview as a WAV file and hand it to the browser to save. */
+async function saveAudio() {
+  const lines = noteLines();
+  if (!lines.length) return;
+  let tts;
+  try {
+    tts = await speechReady();
+  } catch (e) {
+    return banner(`The voices could not load: ${/** @type {any} */ (e)?.message ?? e}`, { error: true });
+  }
+  if (!tts) return;
+  const btn = $('note-save-audio');
+  btn.disabled = true;
+  try {
+    const wav = await renderWav(tts, lines, { onLine: (i) => ($('note-saved').textContent = `Rendering line ${i + 1} of ${lines.length}…`) });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(wav);
+    const title = /** @type {HTMLInputElement} */ (/** @type {HTMLFormElement} */ (dlg('dlg-note').querySelector('form')).elements.namedItem('title')).value;
+    a.download = `${title.replace(/[^\p{L}\p{N} _-]+/gu, '').trim() || 'audio-overview'}.wav`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+    $('note-saved').textContent = `Saved ${a.download}`;
+  } catch (e) {
+    banner(`The audio could not be rendered: ${/** @type {any} */ (e)?.message ?? e}`, { error: true });
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 async function addSource() {
@@ -746,6 +815,7 @@ function drawNoteRead() {
     return tail ? `<h4>Sources</h4>${renderMarkdown(tail)}` : '';
   };
   $('note-present').hidden = openNoteFormat !== 'slides';
+  $('note-save-audio').hidden = openNoteFormat !== 'audio';
   if (openNoteFormat === 'mindmap') {
     box.innerHTML = `<div class="mindmap">${mindmapSvg(parseOutline(body))}</div>${sourcesHtml(body)}`;
   } else if (openNoteFormat === 'slides') {
@@ -823,7 +893,7 @@ async function openNote(id) {
   d.showModal();
   if (!$('note-edit').hidden) bodyEl.focus();
   closed(d).then(async () => {
-    if ('speechSynthesis' in window) speechSynthesis.cancel();
+    stopPlaying();
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     try {
       await noteSaver?.flush();
@@ -1104,6 +1174,7 @@ const UI = {
   'notebook.mindmap': () => studio('mindmap'),
   'notebook.slides': () => studio('slides'),
   'note.listen': () => listen(),
+  'note.save-audio': () => saveAudio(),
   'note.present': () => {
     const deck = document.getElementById('deck');
     if (deck && !document.fullscreenElement) deck.requestFullscreen?.().then(() => deck.focus()).catch(fail);

@@ -1,0 +1,29 @@
+phonon-tts 0.7.1 (npm, MIT OR Apache-2.0, gradium-ai/xn-ptts), vendored unmodified without its README, .d.ts files. Model and voices are fetched from Hugging Face at pinned commits (see src/speech.js).
+
+c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4  ./LICENSE-APACHE
+23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3  ./LICENSE-MIT
+6d6e665751adeaecd0209a397037f69c6f745cdfbef0b2747948de4f969252a9  ./THIRD_PARTY_LICENSES.md
+db390629ec99f1ac53c4fa03a69f687adb11e0c4c53373184387f331e3b4ec38  ./device.js
+fe28ae73b476a1b014098843335141efad3a943c98939a72d2d907ee4596582c  ./fetch.js
+d35817d3e31a16c4b48999b1e8499155742f6decdfe407ded94264e1e8524252  ./gpu/codec.js
+40eb25be815281defcd79e57e25379d382f8cf7df971578dd9dae6f86605a2c4  ./gpu/dispatch.js
+5c191e0b7f3ed20e3ca793d1605cdb688d54fad5e72c67d98f7250e393d29f0f  ./gpu/engine.js
+bd3f277d0357c0b7ba1e16edae38a5d6fba43980293ef1ae0e2986160046f126  ./gpu/gguf.js
+cd2b5c534fb84021ac4e7567782ee64619de3feb1c0a40b815b7fb01740d0e49  ./gpu/kernels.js
+7fddcd2b848c963161c8e62c0dd88f912d3377b1c1190947f19811c0b9570145  ./gpu/lm.js
+411844132da76bfb9b3418b1b8513b2bca484e1a803dcb4ca47a1fc6483f2840  ./gpu/support.js
+4d43f102d7650ec5bcffcd0887b714c5461b7f8c547b2e9e77d3e4461fdbf7a6  ./gpu/weights.js
+3997007fceecd7e7c48df3b7181873cc6a1648c00553b3c4299ec9aa7583f1a5  ./hub.js
+9a682b5d248222d2d6dcf010c0089390e419b83942b35fc2d6e5f149df14b448  ./index.js
+e69151804cca5f30310e387fdd2b288fec2f2026df181e4daf81503bb4299063  ./package.json
+002ae86d173038fe83449b623510c2e697f3837e3a9f39c2c7445525efd9fb3b  ./simd.js
+19782737d03b71e028b7924d80cd5d14820f23e28ca352e65975c1a0dfccea0f  ./threads.js
+fcc6f4bd42359ce123fbc7c0ba8938a9b585b1ddc26e6938a8d9e3ab3ef60b95  ./wasm-threads/phonon_tts.js
+d10693a221144f68d463c593aa61e3b1eda385550545dc01fdcb6e1b0e53d69f  ./wasm-threads/phonon_tts_bg.wasm
+21fb0e94d9cd2f52c3523ed91ba35f594879488bdd56c20cf9df6f34e4455fde  ./wasm-threads/phonon_tts_simd_bg.wasm
+cbdef38f2155f8f5b243bb6bf113706c1a26c911833b19de4bc85b9cccbab94f  ./wasm-threads/snippets/wasm-bindgen-rayon-38edf6e439f6d70d/src/workerHelpers.js
+0851d5d9e9d7609b58b33e304c48c94bb95b828ef1562cc5f35fb3de105b9ac9  ./wasm/phonon_tts.js
+9b84c449dc4bf6d22598079d8fb95e7d5658d2ba0f477d92363b9885782af46f  ./wasm/phonon_tts_bg.wasm
+09fa835fe0d46f195b21f0bc18e49a9fdbe29471438f70eac997f677fcb8208b  ./wasm/phonon_tts_simd_bg.wasm
+ffe180a940387cf3e5259e68b0a052934b9860034d2f9c82527c986e132d9ce1  ./wav.js
+8e37f203d4b733d4829b104f03b2985f9a5a46955b526fbac8bd2537c59f9231  ./worker.js

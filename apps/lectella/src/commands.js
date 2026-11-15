@@ -271,11 +271,19 @@ export const COMMANDS = [
   },
   {
     name: 'note.listen',
-    description: 'Read the open note aloud with this device\'s voices; an audio overview plays in two voices.',
+    description: 'Read the open note aloud with on-device Phonon voices; an audio overview plays in its two hosts\' voices.',
     scope: 'read',
     ui: 'The "Listen" button in the note editor.',
     input: none(),
     personOnly: 'Playback is something you start and stop in the page.',
+  },
+  {
+    name: 'note.save-audio',
+    description: 'Render an audio overview note as a WAV file and save it.',
+    scope: 'read',
+    ui: 'The "Save audio" button in an audio overview note.',
+    input: none(),
+    personOnly: 'Saving a file to your disk is your act.',
   },
   {
     name: 'storage.choose',

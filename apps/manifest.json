@@ -4389,6 +4389,122 @@
         {
           "source": "src/lorewell.js",
           "destination": "src/lorewell.js"
+        },
+        {
+          "source": "src/speech.js",
+          "destination": "src/speech.js"
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/LICENSE-APACHE",
+          "destination": "vendor/phonon-tts-0.7.1/LICENSE-APACHE"
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/LICENSE-MIT",
+          "destination": "vendor/phonon-tts-0.7.1/LICENSE-MIT"
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/THIRD_PARTY_LICENSES.md",
+          "destination": "vendor/phonon-tts-0.7.1/THIRD_PARTY_LICENSES.md"
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/device.js",
+          "destination": "vendor/phonon-tts-0.7.1/device.js"
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/fetch.js",
+          "destination": "vendor/phonon-tts-0.7.1/fetch.js"
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/gpu/codec.js",
+          "destination": "vendor/phonon-tts-0.7.1/gpu/codec.js"
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/gpu/dispatch.js",
+          "destination": "vendor/phonon-tts-0.7.1/gpu/dispatch.js"
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/gpu/engine.js",
+          "destination": "vendor/phonon-tts-0.7.1/gpu/engine.js"
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/gpu/gguf.js",
+          "destination": "vendor/phonon-tts-0.7.1/gpu/gguf.js"
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/gpu/kernels.js",
+          "destination": "vendor/phonon-tts-0.7.1/gpu/kernels.js"
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/gpu/lm.js",
+          "destination": "vendor/phonon-tts-0.7.1/gpu/lm.js"
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/gpu/support.js",
+          "destination": "vendor/phonon-tts-0.7.1/gpu/support.js"
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/gpu/weights.js",
+          "destination": "vendor/phonon-tts-0.7.1/gpu/weights.js"
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/hub.js",
+          "destination": "vendor/phonon-tts-0.7.1/hub.js"
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/index.js",
+          "destination": "vendor/phonon-tts-0.7.1/index.js"
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/package.json",
+          "destination": "vendor/phonon-tts-0.7.1/package.json"
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/simd.js",
+          "destination": "vendor/phonon-tts-0.7.1/simd.js"
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/threads.js",
+          "destination": "vendor/phonon-tts-0.7.1/threads.js"
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/wasm-threads/phonon_tts.js",
+          "destination": "vendor/phonon-tts-0.7.1/wasm-threads/phonon_tts.js"
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/wasm-threads/phonon_tts_bg.wasm",
+          "destination": "vendor/phonon-tts-0.7.1/wasm-threads/phonon_tts_bg.wasm"
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/wasm-threads/phonon_tts_simd_bg.wasm",
+          "destination": "vendor/phonon-tts-0.7.1/wasm-threads/phonon_tts_simd_bg.wasm"
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/wasm-threads/snippets/wasm-bindgen-rayon-38edf6e439f6d70d/src/workerHelpers.js",
+          "destination": "vendor/phonon-tts-0.7.1/wasm-threads/snippets/wasm-bindgen-rayon-38edf6e439f6d70d/src/workerHelpers.js"
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/wasm/phonon_tts.js",
+          "destination": "vendor/phonon-tts-0.7.1/wasm/phonon_tts.js"
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/wasm/phonon_tts_bg.wasm",
+          "destination": "vendor/phonon-tts-0.7.1/wasm/phonon_tts_bg.wasm"
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/wasm/phonon_tts_simd_bg.wasm",
+          "destination": "vendor/phonon-tts-0.7.1/wasm/phonon_tts_simd_bg.wasm"
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/wav.js",
+          "destination": "vendor/phonon-tts-0.7.1/wav.js"
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/worker.js",
+          "destination": "vendor/phonon-tts-0.7.1/worker.js"
+        },
+        {
+          "source": "vendor/phonon-tts-0.7.1/NOTICE.md",
+          "destination": "vendor/phonon-tts-0.7.1/NOTICE.md"
         }
       ]
     },
