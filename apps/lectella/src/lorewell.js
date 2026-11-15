@@ -81,3 +81,9 @@ export async function readLorewell(naklios, work, location, { chars = 4000, cont
   const text = [...(p?.before ?? []).map((/** @type {any} */ r) => r.text), String(p?.text ?? ''), ...(p?.after ?? []).map((/** @type {any} */ r) => r.text)].filter(Boolean).join('\n\n');
   return { text, title: String(p?.citation?.title ?? p?.title ?? ''), author: (p?.citation?.authors ?? p?.authors ?? []).join(', '), label: whereIn(p?.citation ?? p?.location) };
 }
+
+/**
+ * Open Lorewell's reader at a passage. NakliOS brings Lorewell's window forward (the command declares "shows").
+ * @param {any} naklios @param {string} work @param {string} location
+ */
+export const openInLorewell = (naklios, work, location) => callLorewell(naklios, 'reader.open', { workId: work, passageId: location });

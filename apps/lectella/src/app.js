@@ -3,7 +3,7 @@
 
 import { SPEAKERS, beforeSources, buildChat, citedRefs, esc, estimateTokens, mindmapSvg, parseOutline, parseScript, parseSlides, renderMarkdown, scriptMarkdown, studioRequest, summaryRequest, titleFrom } from './core.js';
 import { pdfText } from './pdf.js';
-import { citeLabel, lorewellReachable, readLorewell, searchLorewell } from './lorewell.js';
+import { citeLabel, lorewellReachable, openInLorewell, readLorewell, searchLorewell } from './lorewell.js';
 import { Library, hostFs, opfsFs } from './store.js';
 import { COMMANDS, railCommands, run, searchNotebook } from './commands.js';
 
@@ -698,12 +698,21 @@ async function addSource() {
 
 /** @type {string | null} */
 let openSourceId = null;
+/** The Lorewell passage the source viewer shows, for "Open in Lorewell". @type {{ work: string, location: string } | null} */
+let viewerLorewell = null;
+
+/** @param {{ work: string, location: string } | null} at */
+function setViewerLorewell(at) {
+  viewerLorewell = at;
+  $('src-lorewell').hidden = !at || !lorewellReachable(naklios);
+}
 
 /** @param {string} id @param {number} [chunk] */
 async function openSource(id, chunk) {
   const s = lib.source(id);
   const text = await lib.sourceText(id);
   openSourceId = id;
+  setViewerLorewell(s.ref ? { work: s.ref.work, location: s.ref.location } : null);
   $('src-title').textContent = s.title;
   $('src-meta').textContent = s.ref ? `Passage in Lorewell · cited ${ago(s.added)}` : `${s.chars.toLocaleString()} characters · added ${ago(s.added)}`;
   const box = $('src-text');
@@ -1050,10 +1059,13 @@ async function openLorewellPassage(r) {
   $('src-meta').textContent = 'Passage in Lorewell';
   $('src-text').textContent = 'Reading from Lorewell…';
   openSourceId = null;
+  setViewerLorewell({ work: String(r.work), location: String(r.location) });
   const d = dlg('dlg-source');
-  d.querySelectorAll('[data-command]').forEach((b) => (/** @type {HTMLElement} */ (b).hidden = true));
+  // A passage cited in chat is not a source of this notebook, so it has nothing to rename or remove.
+  const own = d.querySelectorAll('[data-command="source.remove"], [data-command="source.rename"]');
+  own.forEach((b) => (/** @type {HTMLElement} */ (b).hidden = true));
   d.showModal();
-  closed(d).then(() => d.querySelectorAll('[data-command]').forEach((b) => (/** @type {HTMLElement} */ (b).hidden = false)));
+  closed(d).then(() => own.forEach((b) => (/** @type {HTMLElement} */ (b).hidden = false)));
   try {
     const p = await readLorewell(naklios, String(r.work), String(r.location), { chars: 6000, context: 1 });
     $('src-text').textContent = p.text;
@@ -1072,6 +1084,16 @@ const UI = {
   'source.add': () => addSource(),
   'source.import': () => /** @type {HTMLInputElement} */ ($('file')).click(),
   'note.add': () => newNote(),
+  'source.open-lorewell': async () => {
+    if (!viewerLorewell) return;
+    try {
+      const out = await openInLorewell(naklios, viewerLorewell.work, viewerLorewell.location);
+      banner(`Opened “${out?.title ?? 'the book'}” in Lorewell at the cited passage.`);
+    } catch (e) {
+      // The passage stays readable here; only the jump into Lorewell failed.
+      banner(`Lorewell could not open it: ${/** @type {any} */ (e)?.message ?? e} The passage is shown here instead.`, { error: true });
+    }
+  },
   'source.find-lorewell': () => {
     const d = dlg('dlg-lorewell');
     d.showModal();

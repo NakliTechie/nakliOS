@@ -116,6 +116,14 @@ export const COMMANDS = [
     personOnly: 'The first search asks you to let Lectella use Lorewell; you start it.',
   },
   {
+    name: 'source.open-lorewell',
+    description: 'Open the cited Lorewell passage in Lorewell\'s own reader. Agents call books.reader.open directly.',
+    scope: 'read',
+    ui: 'The "Open in Lorewell" button in the passage viewer of a Lorewell citation.',
+    input: none(),
+    personOnly: 'Bringing another app\'s window forward is your act.',
+  },
+  {
     name: 'source.import',
     description: 'Add a PDF, Markdown or text file from your disk as a source. A PDF needs a text layer.',
     scope: 'write',

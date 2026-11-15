@@ -6449,14 +6449,14 @@
       "id": "lectella",
       "repo": "NakliTechie/lectella",
       "requestedRef": "main",
-      "resolvedCommit": "1d5b18224b5b1cc4ea9da84af610936b5b97281c",
+      "resolvedCommit": "90127884cbfead252109be2a091f7fe527da51ef",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "fa4fc42dcbd96efc1114a360f3f7d990ae98a7b3a810690b188c05f3a22aa065",
-          "bytes": 83986,
-          "originalSourceSha256": "91ed12e9b483d9ce121cd67e7679008563e4bcae638f6e067ff8d55afe55dcf8",
+          "sha256": "4e0dc7397e67d79e13e392227540f581a703e12497236b5b1538da75108532fa",
+          "bytes": 84101,
+          "originalSourceSha256": "ba3163744eb010b745b7c12cce1bc6bac409de6f63e9fc4e64682e13a3b5dc4d",
           "sdkSha256": "410f8613ad003755ecb06f20a23b6d36b3d980fe88a3ab86fe16ff73b11a5b4c"
         },
         {
@@ -6474,8 +6474,8 @@
         {
           "source": "src/app.js",
           "destination": "src/app.js",
-          "sha256": "9bcfbc44d7259cd972ea1977c999282e3c8c114acc687f82d753aa6c1723313b",
-          "bytes": 57912
+          "sha256": "0dc6d09b2a23351a0380f20d0299e67c278d98186107f14c33b6bad1f6d5b272",
+          "bytes": 59078
         },
         {
           "source": "src/core.js",
@@ -6492,8 +6492,8 @@
         {
           "source": "src/commands.js",
           "destination": "src/commands.js",
-          "sha256": "b60ac6a8acc5e186f85d4beeeb44bb56773e99d4549f528110a74117b88cdc0f",
-          "bytes": 16510
+          "sha256": "7834ab33bb4120ca63dcfb4b672382b531e5f3278a2f4158280afb60f33bc6a8",
+          "bytes": 16868
         },
         {
           "source": "src/pdf.js",
@@ -6528,8 +6528,8 @@
         {
           "source": "src/lorewell.js",
           "destination": "src/lorewell.js",
-          "sha256": "bca7052c2cf81447d8aa071a66654ac40fee9df043f27782541f9ba540d4bf2f",
-          "bytes": 5020
+          "sha256": "402447756da2c188cceeb4685089bb2856148a48281d682a76afeaad3401b398",
+          "bytes": 5348
         }
       ]
     },
