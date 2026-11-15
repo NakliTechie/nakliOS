@@ -689,6 +689,8 @@ jobs:
         run: node sys/host/test/file-targets.test.mjs
       - name: Desktop widgets
         run: node sys/host/test/widgets.test.mjs
+      - name: App-to-app command Grants
+        run: node sys/host/test/app-grants.test.mjs
       - name: Anvil app command tool
         run: node sys/ai/test/app-command-tool.test.mjs
 
