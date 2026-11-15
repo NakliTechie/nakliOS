@@ -8502,6 +8502,20 @@ function netGrants(){ try { return JSON.parse(localStorage.getItem(NET_GRANTS_KE
 function saveNetGrants(v){ try { localStorage.setItem(NET_GRANTS_KEY, JSON.stringify(v)); } catch(_) {} }
 function netRevoked(){ try { return new Set(JSON.parse(localStorage.getItem(NET_REVOKED_KEY) || '[]')); } catch(_) { return new Set(); } }
 // grants AND remembered declines — what the Settings reset forgets
+// Settings → AI: one row per app that may use (or was refused) another app's commands, each with its own Revoke.
+function appGrantRowsHTML(){
+  let rows = [];
+  try { rows = Object.entries(JSON.parse(localStorage.getItem('nakliOS.appGrants.v1') || '{}') || {})
+    .flatMap(([caller, targets]) => Object.entries(targets || {}).map(([target, v]) => ({ caller, target, allowed:!!v?.identifier }))); } catch(_) {}
+  if (!rows.length) return '';
+  const name = id => _dlgEscape(APPS.find(a => a.id === id)?.name || id);
+  return `<div class="nw-fs-blurb" style="margin-top:10px;">Apps that use other apps' commands</div>
+    <div class="nw-app-grants">${rows.map(r => `
+      <div class="nw-app-grant-row" style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+        <span style="flex:1;min-width:0;">${name(r.caller)} → ${name(r.target)} · ${r.allowed ? 'allowed' : 'declined'}</span>
+        <button class="nw-fs-btn-secondary" type="button" data-app-grant-revoke="${_dlgEscape(r.caller + ' ' + r.target)}">${r.allowed ? 'Revoke' : 'Forget'}</button>
+      </div>`).join('')}</div>`;
+}
 function netGrantCount(){ return Object.values(netGrants()).reduce((n, hosts) => n + Object.keys(hosts || {}).length, 0); }
 async function netRootKey(){
   const { g, c } = await netMods();
@@ -9388,12 +9402,15 @@ window.addEventListener('message', async e => {
     // A memory-only snapshot that lands after Crate locked must not bring the card back.
     if (state.widgetsOn && (keep || !state.crateLocked)) (await widgetBoard).update(getAppId(), msg.id, msg.data, { persist:keep });
   } else if (msg.type === 'naklios:commands:search' || msg.type === 'naklios:commands:call'){
-    // A system app (Anvil) reaching other apps' commands: its own face, its own name in History.
+    // A system app (Anvil) reaches every app's commands on its own face. Any other app reaches another app's
+    // commands only through an app Grant the person gives once (sys/host/app-grants.mjs), and each call is in History.
     const appId = getAppId(); const source = e.source;
     const reply = { type:'naklios:commands:reply', requestId:msg.requestId };
     try {
-      if (!aiAppOwnsEgress(appId)) throw new Error('Only system apps may call app commands');
-      reply.result = msg.type === 'naklios:commands:search' ? await searchAppCommands(msg.query) : await callAppCommand(appId, source, msg.name, msg.input);
+      if (!appId) throw new Error('Unknown app');
+      const search = msg.type === 'naklios:commands:search';
+      if (aiAppOwnsEgress(appId)) reply.result = search ? await searchAppCommands(msg.query) : await callAppCommand(appId, source, msg.name, msg.input);
+      else reply.result = search ? await appToAppSearch(appId, msg.query) : await appToAppCall(appId, source, msg.name, msg.input);
     } catch (error){ reply.error = String(error?.message || error); }
     try { source.postMessage(reply, replyTo); } catch(_){}
   } else if (msg.type === 'naklios:commands:result' && typeof msg.invokeId === 'string'){
@@ -10945,6 +10962,7 @@ function openSettings(section){
           Reset network decisions${netGrantCount() ? ` (${netGrantCount()})` : ''}
         </button>
       </div>
+      ${appGrantRowsHTML()}
       <div class="nw-ai-result" id="ai-settings-result" role="status"></div>
     </div>
   `;
@@ -11581,6 +11599,13 @@ function openSettings(section){
     }
   });
 
+  wrap.querySelectorAll('[data-app-grant-revoke]').forEach(button => button.addEventListener('click', async (event) => {
+    const row = event.currentTarget; const [caller, target] = row.dataset.appGrantRevoke.split(' ');
+    (await appGrants()).revoke(caller, target);
+    row.closest('.nw-app-grant-row')?.remove();
+    const name = id => APPS.find(a => a.id === id)?.name || id;
+    aiSettingsResult.textContent = `${name(caller)} no longer uses ${name(target)}; it asks again before its next call.`;
+  }));
   wrap.querySelector('#net-revoke-grants')?.addEventListener('click', (event) => {
     revokeNetGrants();
     event.currentTarget.disabled = true;
@@ -14428,7 +14453,7 @@ function launchAppForCommand(appId){
 async function searchAppCommands(query){
   const [{ catalog }] = await Promise.all([hostAgentReady, appCommandsDeclared]);
   return catalog.searchCommands(query).filter(c => c.annotations?.app).slice(0, 20)
-    .map(({ name, description, inputSchema, destructive }) => ({ name, description, input:inputSchema, destructive }));
+    .map(({ name, description, inputSchema, destructive, annotations }) => ({ name, description, input:inputSchema, destructive, app:annotations.app }));
 }
 // One path for every caller of app commands, on the caller's own face. A change asks the person once per caller, per
 // app, per visit; a destructive command asks every time, showing what it would do. A refusal is written to History.
@@ -14468,6 +14493,57 @@ function callAppCommand(callerId, source, name, input){
     const caller = APPS.find(a => a.id === callerId)?.name || callerId;
     return nakliosConfirm(`Let ${caller} change ${label}? It asks again on your next visit.`, { title:'Allow this change?', okLabel:'Allow' });
   }, () => openWindows[callerId]?.querySelector('iframe')?.contentWindow === source);
+}
+// App-to-app commands (common rail, "Grants on the rail", row "Another app"). The Grant is per caller and target, asked
+// once in a host dialog, revocable in Settings → AI; read commands run after it, a change asks once per visit and a
+// destructive command goes through review (runAppCommandFor). Every call is one event in naklios/history/apps.ndjson.
+let appGrantsPromise = null;
+function appGrants(){
+  return appGrantsPromise ||= Promise.all([import('./sys/host/app-grants.mjs'), netMods(), hostAgentReady, appCommandsDeclared]).then(([{ createAppGrants }, { g }, { catalog }]) => createAppGrants({
+    storage:localStorage, grantLib:g, rootKey:netRootKey,
+    confirm:(caller, target) => {
+      const name = id => APPS.find(a => a.id === id)?.name || id;
+      return nakliosConfirm(`${name(caller)} wants to use ${name(target)}'s commands, for example to find and read what ${name(target)} holds.\n\n` +
+        `Reading starts at once. A change asks you first on each visit, and anything hard to undo asks every time. ` +
+        `NakliOS records each call in History, and you can take this back in Settings → AI.`,
+        { title:`Let ${name(caller)} use ${name(target)}?`, okLabel:'Allow', cancelLabel:'Not now' });
+    },
+    describe:name => catalog.describeCommand(name),
+    searchAll:searchAppCommands,
+    run:(caller, name, input, stillWanted) => runAppCommandFor(caller, name, input, (appId, label) => {
+      const who = APPS.find(a => a.id === caller)?.name || caller;
+      return nakliosConfirm(`Let ${who} change ${label}? It asks again on your next visit.`, { title:'Allow this change?', okLabel:'Allow' });
+    }, stillWanted),
+    record:appCommandHistoryAppend,
+  }));
+}
+async function appToAppSearch(callerId, query){ return (await appGrants()).search(callerId, query); }
+async function appToAppCall(callerId, source, name, input){
+  return (await appGrants()).call(callerId, name, input, () => openWindows[callerId]?.querySelector('iframe')?.contentWindow === source);
+}
+// History: one hash-chained event (door 'call') per app-to-app call. It names the caller, the target, the command and
+// the outcome code; the arguments and the result are committed by hash only.
+let appCommandHistoryTail = Promise.resolve();
+function appCommandHistoryAppend({ caller, target, command, grantId, output }){
+  const append = async () => {
+    const ledger = await import('./sys/history/ledger.mjs');
+    const root = await navigator.storage.getDirectory();
+    const dir = await (await root.getDirectoryHandle('naklios', { create:true })).getDirectoryHandle('history', { create:true });
+    const handle = await dir.getFileHandle('apps.ndjson', { create:true });
+    const file = await handle.getFile();
+    const lines = (await file.text()).split('\n').filter(Boolean);
+    const prev = lines.length ? await ledger.eventHash(JSON.parse(lines[lines.length - 1])) : null;
+    const input = { target, command };
+    const { event } = await ledger.appendEvent(prev, { ts:Date.now(), principal:'app:' + caller, door:'call', tool:command, app:target, input, output, grant_id:grantId });
+    const writer = await handle.createWritable({ keepExistingData:true });
+    try {
+      await writer.write({ type:'write', position:file.size, data:JSON.stringify({ ...event, input, output }) + '\n' });
+      await writer.close();
+    } catch (error) { await writer.abort().catch(() => {}); throw error; }
+  };
+  const run = appCommandHistoryTail.then(() => navigator.locks?.request ? navigator.locks.request('naklios-apps-history', append) : append());
+  appCommandHistoryTail = run.catch(error => console.error('[naklios] app command History append failed', error));
+  return appCommandHistoryTail;
 }
 const appManifests = new Map();
 const appCommandsDeclared = hostAgentReady.then(({ catalog }) => Promise.all(APPS.filter(app => app.commands).map(async app => {
