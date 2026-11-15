@@ -53,8 +53,38 @@ const STOP = new Set(
 
 /** Lower-case word tokens, letters and digits in any script, stop words removed. @param {string} text */
 export function tokenize(text) {
-  return (String(text ?? '').toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).filter((w) => w.length > 1 && !STOP.has(w));
+  return (String(text ?? '').toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).filter((w) => w.length > 1 && !STOP.has(w)).map(stem);
 }
+
+/**
+ * A light English stem, so "named" meets "name" and "launched" meets "launch". Latin-script words of four or more
+ * letters lose a plural or verb ending and a final "e"; short words and other scripts stay as they are.
+ * @param {string} w
+ */
+export function stem(w) {
+  if (w.length < 4 || !/^[a-z]+$/.test(w)) return w;
+  let base = w;
+  for (const end of ['ies', 'ing', 'ed', 'es', 's']) {
+    if (!w.endsWith(end) || w.length - end.length < 3) continue;
+    if (end === 's' && /(ss|us|is)$/.test(w)) break;
+    base = end === 'ies' ? `${w.slice(0, -3)}y` : w.slice(0, -end.length);
+    // A doubled final consonant is undone ("stopped" → "stop"), except ll, ss and zz.
+    if ((end === 'ed' || end === 'ing') && /([b-df-hj-np-tv-z])\1$/.test(base) && !/(ll|ss|zz)$/.test(base)) base = base.slice(0, -1);
+    break;
+  }
+  return base.length >= 4 ? base.replace(/e$/, '') : base;
+}
+
+/**
+ * Footnote and reference markers copied from web pages and PDFs ("[ 25 ]", "[12]", "[a]", "[citation needed]").
+ * They are dropped from text sent to the model, so it cannot mistake them for this notebook's citation numbers.
+ * @param {string} text
+ */
+export const stripMarkers = (text) =>
+  String(text ?? '')
+    .replace(/\[\s*(?:\d{1,4}|[a-z]|note\s*\d+|citation needed|clarification needed|when\?|who\?)\s*\](?!\()/gi, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/[ \t]+([.,;:])/g, '$1');
 
 /**
  * Build a BM25 index over chunks.
@@ -114,7 +144,8 @@ const KIND_LABEL = { source: 'Source', note: 'Note', lorewell: 'Book passage' };
 export const SYSTEM_PROMPT = [
   'You are a research assistant working inside one notebook.',
   'Answer from the numbered context items below. Cite each claim with the item number in square brackets, like [1] or [2][3].',
-  'If the context does not hold the answer, say so plainly and do not invent one.',
+  'Cite an item only when that item itself states the fact. When a claim needs two items, cite each for its own part.',
+  'If the context does not hold the answer, say so plainly and do not invent one or answer from memory.',
   'Write in plain, short paragraphs. Use Markdown lists only when they help.',
 ].join(' ');
 
@@ -141,7 +172,7 @@ export function buildChat({ notebook, items, history = [], question, budget, chu
     mode = 'full';
     items.forEach((it, idx) => {
       refs.push({ n: idx + 1, kind: it.kind, id: it.id, title: it.title, ...(it.work ? { work: it.work, location: it.location } : {}) });
-      blocks.push(`[${idx + 1}] ${KIND_LABEL[it.kind] ?? 'Source'}: ${it.title}\n${it.text}`);
+      blocks.push(`[${idx + 1}] ${KIND_LABEL[it.kind] ?? 'Source'}: ${it.title}\n${stripMarkers(it.text)}`);
     });
   } else if (items.length) {
     mode = 'passages';
@@ -149,17 +180,38 @@ export function buildChat({ notebook, items, history = [], question, budget, chu
     const docs = items.map((it) => ({ id: it.id, title: it.title, chunks: chunks?.get(it.id) ?? chunkText(it.text) }));
     const kindOf = new Map(items.map((it) => [it.id, it.kind]));
     const itemOf = new Map(items.map((it) => [it.id, it]));
-    let hits = search(buildIndex(docs), [question, ...past.filter((m) => m.role === 'user').map((m) => m.content)].join(' '), 40);
+    // Search on the question alone. A short follow-up ("and why?") borrows the previous question's words, but
+    // never the whole history, which pulled in passages for earlier topics.
+    const lastUser = past.filter((m) => m.role === 'user').at(-1)?.content ?? '';
+    const query = tokenize(question).length < 3 && lastUser ? `${question} ${lastUser}` : question;
+    let hits = search(buildIndex(docs), query, 40);
+    // Each document that matches well puts its best passage first, so a question that spans two sources gets both.
+    // "Well" is at least half the top score; weaker documents would only spend the budget on stray words.
+    const firsts = [];
+    const seen = new Set();
+    const top = hits[0]?.score ?? 0;
+    for (const h of hits) if (!seen.has(h.docId) && h.score >= top / 2) (seen.add(h.docId), firsts.push(h));
+    // Then the opening passage of each of those documents, where an article states its key facts (dates, names),
+    // which a question about two topics rarely ranks high.
+    const openings = [];
+    for (const id of seen) {
+      if (firsts.some((h) => h.docId === id && h.chunk === 0)) continue;
+      const doc = docs.find((dd) => dd.id === id);
+      const c = doc?.chunks[0];
+      if (doc && c) openings.push(hits.find((h) => h.docId === id && h.chunk === 0) ?? { docId: id, title: doc.title, chunk: 0, text: c.text, score: 0 });
+    }
+    const lead = [...firsts, ...openings];
+    hits = [...lead, ...hits.filter((h) => !lead.some((l) => l.docId === h.docId && l.chunk === h.chunk))];
     // A question with no matching words (say, "summarise this") still gets the opening of each item.
     if (!hits.length) hits = docs.flatMap((d) => d.chunks.slice(0, 2).map((c) => ({ docId: d.id, title: d.title, chunk: c.i, text: c.text, score: 0 })));
     for (const h of hits) {
-      const cost = estimateTokens(h.text) + 12;
+      const cost = estimateTokens(stripMarkers(h.text)) + 12;
       if (cost > room) continue;
       room -= cost;
       const n = refs.length + 1;
       const it = itemOf.get(h.docId);
       refs.push({ n, kind: /** @type {any} */ (kindOf.get(h.docId)), id: h.docId, title: h.title, chunk: h.chunk, ...(it?.work ? { work: it.work, location: it.location } : {}) });
-      blocks.push(`[${n}] ${KIND_LABEL[/** @type {string} */ (kindOf.get(h.docId))] ?? 'Source'}: ${h.title} (passage ${h.chunk + 1})\n${h.text}`);
+      blocks.push(`[${n}] ${KIND_LABEL[/** @type {string} */ (kindOf.get(h.docId))] ?? 'Source'}: ${h.title} (passage ${h.chunk + 1})\n${stripMarkers(h.text)}`);
     }
   }
   const context = blocks.length ? `Context items:\n\n${blocks.join('\n\n---\n\n')}` : 'There are no context items: no source or note is switched on for chat.';
@@ -267,8 +319,9 @@ export function renderMarkdown(md, { cite = false } = {}) {
  */
 export function summaryRequest(item, budget) {
   const room = Math.max(400, budget - 400) * 4;
-  const cut = item.text.length > room;
-  const text = cut ? `${item.text.slice(0, room)}\n\n[The rest of this source was cut to fit the model.]` : item.text;
+  const clean = stripMarkers(item.text);
+  const cut = clean.length > room;
+  const text = cut ? `${clean.slice(0, room)}\n\n[The rest of this source was cut to fit the model.]` : clean;
   return {
     cut,
     messages: [

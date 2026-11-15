@@ -403,7 +403,7 @@ function turnEl(t, idx) {
     if (r) {
       /** @type {HTMLElement} */ (b).title = r.title;
       /** @type {HTMLElement} */ (b).onclick = (e) => (e.preventDefault(), openRef(r).catch(fail));
-    } else /** @type {HTMLButtonElement} */ (b).disabled = true;
+    } else b.replaceWith(`[${/** @type {HTMLElement} */ (b).dataset.cite}]`); // a number this answer never defined, such as a copied footnote
   });
   if (t.content && !(busy && idx === turns.length - 1)) {
     const meta = document.createElement('div');
@@ -757,7 +757,7 @@ function drawNoteRead() {
   box.querySelectorAll('button.cite').forEach((b) => {
     const r = refs.find((/** @type {any} */ x) => x.n === Number(/** @type {HTMLElement} */ (b).dataset.cite));
     if (r) (/** @type {HTMLElement} */ (b)).onclick = (e) => (e.preventDefault(), openRef(r).catch(fail));
-    else /** @type {HTMLButtonElement} */ (b).disabled = true;
+    else b.replaceWith(`[${/** @type {HTMLElement} */ (b).dataset.cite}]`);
   });
 }
 
