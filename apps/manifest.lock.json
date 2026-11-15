@@ -4867,13 +4867,13 @@
       "id": "books",
       "repo": "NakliTechie/Books",
       "requestedRef": "main",
-      "resolvedCommit": "4e02f2e68f700e9d5d1b8cc0a3689050c8775cd9",
+      "resolvedCommit": "9870c069ab1fd97bb32f9da5ace6059914e3a7a8",
       "files": [
         {
           "source": "app-commands.js",
           "destination": "app-commands.js",
-          "sha256": "9958f6454a13b61559950e964108f2d0ba710fc05d1dc91300be1cbfef49ad48",
-          "bytes": 13804
+          "sha256": "7393a1a1b04687c939fc826234f1347a988e32280f3c2ad39662ffbe50ae1be6",
+          "bytes": 15494
         },
         {
           "source": "apple-touch-icon.png",
@@ -4884,8 +4884,8 @@
         {
           "source": "commands.json",
           "destination": "commands.json",
-          "sha256": "63362eba66ad9ee3984483589701de93101cc5f4faacde610348e44922ea5a2e",
-          "bytes": 3249
+          "sha256": "a9a505bfe8631ced492d3a8d40abf7b0860b15c76f1736cce9d825cd50591dda",
+          "bytes": 3891
         },
         {
           "source": "echo-review.js",
@@ -5070,9 +5070,9 @@
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "3a2f4e91e11dd85d4cae6db1abcfc918ed15f86c0f1e7db0c89b5dcf218e55df",
-          "bytes": 645499,
-          "originalSourceSha256": "c10c1cac608b345df7bb53816d14bd25489c48a3e05f548d67648367110732c5",
+          "sha256": "93c4e12a6e4f9e75ade09e606c721eae0022e3b3c1147476d167718daa5ea699",
+          "bytes": 646519,
+          "originalSourceSha256": "c23e1cae2413cac8baae2e322b197032ff6eabd1ec1602d8065165d5e7e5691e",
           "sdkSha256": "410f8613ad003755ecb06f20a23b6d36b3d980fe88a3ab86fe16ff73b11a5b4c"
         },
         {

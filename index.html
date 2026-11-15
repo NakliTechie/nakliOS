@@ -14505,6 +14505,9 @@ async function runAppCommandFor(callerId, name, input, ask, stillWanted = () => 
   if (!appCommandFaces.has(callerId)) appCommandFaces.set(callerId, faceFor(callerId, ['app:read', 'app:write']));
   const face = appCommandFaces.get(callerId);
   const out = await face.invoke(name, input);
+  // A command its app declares with `shows: true` (for example opening a passage in a reader) brings that app's window
+  // forward once it succeeds; the host opened the window minimized to answer the call.
+  if (!out?.staged && out?.ok !== false && command.annotations?.showsWindow && openWindows[target]) focusWindow(openWindows[target]);
   if (!out?.staged) return out;
   const detail = JSON.stringify(input ?? {}).slice(0, 300);
   if (await answered(() => nakliosConfirm(`${label(callerId)} wants to run this in ${label(target)}: ${command.description} ${detail}`, { title:'This change is hard to undo', okLabel:'Allow once', danger:true })))

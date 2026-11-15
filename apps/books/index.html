@@ -9931,26 +9931,26 @@ async function runSemanticLibrarySearch(query) {
   ).join('');
 }
 
+// Moves the open reader to a passage from passages.json, by the anchor its format recorded.
+async function jumpReaderToPassage(passage, passageCount) {
+  const anchor = passage.anchor?.engine || {};
+  const fraction = passage.order / Math.max(1, passageCount);
+  if (anchor.kind === 'pdf-page') {
+    await activeEngine.jumpTo({ page: anchor.page, scrollY: 0 });
+  } else if (anchor.kind === 'foliate-section') {
+    await activeEngine.jumpTo({ cfi: anchor.cfi, sectionIndex: anchor.sectionIndex, fraction });
+  } else {
+    await activeEngine.jumpTo({ fraction });
+  }
+}
+
 async function openSemanticSearchResult(key) {
   const result = semanticSearchResults.get(key);
   if (!result) return;
   await openBookFromLibrary(result.filename);
   if (!activeEngine) return;
-  const anchor = result.passage.anchor?.engine || {};
   try {
-    if (anchor.kind === 'pdf-page') {
-      await activeEngine.jumpTo({ page: anchor.page, scrollY: 0 });
-    } else if (anchor.kind === 'foliate-section') {
-      await activeEngine.jumpTo({
-        cfi: anchor.cfi,
-        sectionIndex: anchor.sectionIndex,
-        fraction: result.passage.order / Math.max(1, result.passageCount),
-      });
-    } else {
-      await activeEngine.jumpTo({
-        fraction: result.passage.order / Math.max(1, result.passageCount),
-      });
-    }
+    await jumpReaderToPassage(result.passage, result.passageCount);
     readerStatus.textContent = 'Search result · ' +
       (result.passage.structure?.label || 'passage');
   } catch (error) {
@@ -16137,6 +16137,20 @@ async function commandSemanticHits(query, { works, limit, signal }) {
     .filter((hit) => hit.passageId);
 }
 
+// reader.open: the host opened Lorewell for the call and brings it forward when this resolves.
+async function commandOpenPassage({ work, passage, passageCount, signal }) {
+  const filename = libraryCache.find((entry) => entry.work?.workId === work.workId)?.filename;
+  if (!filename) throw new Error('The file for ' + work.title + ' is not in this library.');
+  for (const dialog of document.querySelectorAll('dialog[open]')) dialog.close();
+  await openBookFromLibrary(filename);
+  if (signal?.aborted) throw new Error('The caller stopped waiting.');
+  if (!activeEngine || activeSourceFilename !== filename) {
+    throw new Error('Lorewell could not open ' + work.title + '. Another book may still be opening; try again.');
+  }
+  await jumpReaderToPassage(passage, passageCount);
+  readerStatus.textContent = 'Cited passage · ' + (passage.structure?.label || work.title);
+}
+
 function registerLibraryCommands() {
   const commands = createLibraryCommands({
     listWorks:commandWorks,
@@ -16144,6 +16158,7 @@ function registerLibraryCommands() {
     readLexicalIndex:(workId) => readJsonRecord(workLexicalIndexPath(workId)),
     readAnnotations:(workId) => readJsonRecord(semanticAnnotationsPath(workId)),
     semanticSearch:commandSemanticHits,
+    openPassage:commandOpenPassage,
   });
   return naklios.experimental_commands.register(commands).catch((error) => {
     console.warn('Lorewell: command registration failed', error);
