@@ -4,7 +4,8 @@
  * from the repository by scripts/build-commands.mjs (source: scripts/served-files.mjs); verify-delivery
  * fails when they are stale.
  *
- *   PRECACHE  the page and its module graph, stored at install. Served cache first.
+ *   PRECACHE  the page and its module graph, stored at install. Modules are served cache first; the
+ *             page (a navigation) is served network first, from the cache only when offline.
  *   LAZY      other app code and data (decoders, wasm, fonts). Stored the first time the page fetches
  *             each one, so a consent-gated download is never fetched ahead of the person's yes.
  *             Served cache first after that.
@@ -73,7 +74,11 @@ const LAZY = [
 // END GENERATED
 
 const PREFIX = 'reel-app-';
-const CACHE = `${PREFIX}${VERSION}`;
+/* SCHEMA changes when the caching rules change, so activate drops every cache an older worker filled.
+   2 (2026-11-17, review V1): earlier workers stored the host's 307-redirected index.html, which a
+   navigation cannot use; every second visit to naklios.dev/apps/reel/ failed with ERR_FAILED. */
+const SCHEMA = 2;
+const CACHE = `${PREFIX}${SCHEMA}-${VERSION}`;
 const scopeUrl = () => new URL(self.registration.scope);
 const pathIn = (url, list) => {
   const base = scopeUrl().pathname;
@@ -82,14 +87,43 @@ const pathIn = (url, list) => {
   return list.includes(rel);
 };
 
+/* Only a plain 200 from this origin, reached without a redirect, may be stored or served from the
+   cache. A redirected or opaque-redirect response cannot answer a navigation (review V1). */
+function storable(response) {
+  // 'basic' is a same-origin network answer; 'default' is a Response built in script, never a redirect.
+  return !!response && response.status === 200 && (response.type === 'basic' || response.type === 'default') && !response.redirected;
+}
+
+/* Fetch the page by the URL people open ('./'), then 'index.html', and keep the first clean answer.
+   A host that redirects one to the other (naklios.dev sends index.html to ./ with a 307) then never
+   puts a redirect into the cache. */
+async function fetchPage(base) {
+  for (const path of ['./', 'index.html']) {
+    try {
+      const response = await fetch(new URL(path, base).href, { cache: 'no-cache' });
+      if (storable(response)) return response;
+    } catch (_) { /* try the next form */ }
+  }
+  return null;
+}
+
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);
     const base = scopeUrl();
-    // './' is the URL people open; store the page under it as well as under index.html.
-    await cache.addAll(PRECACHE.map(path => new URL(path, base).href));
-    const page = await cache.match(new URL('index.html', base).href);
-    if (page) await cache.put(base.href, page);
+    const page = await fetchPage(base);
+    if (page) {
+      await cache.put(new URL('index.html', base).href, page.clone());
+      await cache.put(base.href, page);
+    }
+    // Store each module only when it arrives clean; a missing or redirected file is fetched later.
+    await Promise.all(PRECACHE.filter(path => path !== 'index.html').map(async path => {
+      const href = new URL(path, base).href;
+      try {
+        const response = await fetch(href, { cache: 'no-cache' });
+        if (storable(response)) await cache.put(href, response);
+      } catch (_) { /* offline at install: served from the network later */ }
+    }));
     await self.skipWaiting();
   })());
 });
@@ -101,6 +135,15 @@ self.addEventListener('activate', event => {
     await self.clients.claim();
   })());
 });
+
+/* A cached answer is used only if it is itself storable; anything else is dropped and refetched. */
+async function cachedClean(cache, key) {
+  const hit = await cache.match(key);
+  if (!hit) return null;
+  if (storable(hit)) return hit;
+  await cache.delete(key);
+  return null;
+}
 
 self.addEventListener('fetch', event => {
   const request = event.request;
@@ -114,12 +157,26 @@ self.addEventListener('fetch', event => {
   if (!precached && !lazy) return;
   event.respondWith((async () => {
     const cache = await caches.open(CACHE);
-    // The page is stored without its query (?dev=1 and similar change nothing in the file).
-    const key = isPage ? new URL('index.html', base).href : `${url.origin}${url.pathname}`;
-    const hit = await cache.match(key);
+    if (isPage) {
+      // Navigations: network first, so the host's redirects and updates always apply; the cached
+      // copy answers only when the network fails, and only if it is a clean 200 for the page.
+      const key = new URL('index.html', base).href;
+      try {
+        const response = await fetch(request);
+        if (storable(response)) await cache.put(key, response.clone());
+        return response;
+      } catch (error) {
+        const hit = await cachedClean(cache, key);
+        if (hit) return hit;
+        throw error;
+      }
+    }
+    // App files: cache first, stored without the query.
+    const key = `${url.origin}${url.pathname}`;
+    const hit = await cachedClean(cache, key);
     if (hit) return hit;
     const response = await fetch(request);
-    if (response.ok && response.type === 'basic') await cache.put(key, response.clone());
+    if (storable(response)) await cache.put(key, response.clone());
     return response;
   })());
 });
