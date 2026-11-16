@@ -8587,14 +8587,14 @@
       "id": "rivulina",
       "repo": "NakliTechie/rivulina",
       "requestedRef": "main",
-      "resolvedCommit": "630df967ee6814fd6c436b4b4a27cf85c32b5cc2",
+      "resolvedCommit": "5a51a4e319ad3cce9ccdd97b668c62f6f6119ba2",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "ad943944f51edc537a61cd6e1ae27e2ab87b8a3eb837abc462e868083f3ca8a7",
-          "bytes": 438888,
-          "originalSourceSha256": "6721b512211e1ee4ab591059ca85473efe75a5417eef23566a654ec7c1a8a4c0",
+          "sha256": "5971fc92f938923e7db9c469e1d1276efc7c30f73c619de4affb38d3608f5544",
+          "bytes": 439046,
+          "originalSourceSha256": "93f09077f285e60476011bc1a8047901e6251fddbeaca6d9d5c680c04fb08baf",
           "sdkSha256": "ec78ab7bd0e82a108847216f33bc6600366f68199f9416959411e5db254405ed"
         },
         {
