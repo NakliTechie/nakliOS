@@ -97,8 +97,20 @@ assert.doesNotMatch(
 );
 assert.match(
   html,
-  /The shared \$\{image \? AI_IMAGE_MODEL_LABEL : AI_MODEL_LABEL\} model runs in this browser[\s\S]*?\$\{contentName\} stay in this tab/,
+  /The shared \$\{name\} model runs in this browser[\s\S]*?\$\{contentName\} stay in this tab/,
   'first use explains the model download and prompt boundary',
+);
+// The dialog names the model that will answer, not the selected one: a general request runs on Gemini Nano while
+// the selection is an endpoint, and the dialog once read "DeepSeek … runs in this browser … downloads undefined".
+assert.match(
+  html,
+  /const name = model\.id === selectedId \? \(image \? AI_IMAGE_MODEL_LABEL : AI_MODEL_LABEL\) : model\.label;/,
+  'the consent dialog names the answering model',
+);
+assert.match(
+  html,
+  /model\.runtime === 'ondevice' \? 'It is built into this browser, so nothing is downloaded\. '/,
+  'a built-in model is not described as a download',
 );
 assert.match(
   html,

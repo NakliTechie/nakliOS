@@ -6587,9 +6587,17 @@ async function aiEnsurePermission(appId, capability = 'chat', onWait = null, for
     // selected model's label (review 2026-11-14).
     let boundary;
     if (model.scope === 'device'){
+      // Name the model that will answer. General requests go to Gemini Nano when Chrome has it, while the global
+      // label names the selected model (an endpoint, say), so the dialog read "DeepSeek … runs in this browser …
+      // downloads undefined" for a request that ran on Nano (Lectella, 2026-11-16).
+      const selectedId = image ? AI_IMAGE_MODEL_ID : AI_MODEL_ID;
+      const name = model.id === selectedId ? (image ? AI_IMAGE_MODEL_LABEL : AI_MODEL_LABEL) : model.label;
+      const download = model.size
+        ? `Its first use downloads ${model.size} and caches it on this device. `
+        : model.runtime === 'ondevice' ? 'It is built into this browser, so nothing is downloaded. ' : '';
       boundary =
-        `The shared ${image ? AI_IMAGE_MODEL_LABEL : AI_MODEL_LABEL} model runs in this browser. ` +
-        `Its first use downloads ${model.size} and caches it on this device. ` +
+        `The shared ${name} model runs in this browser. ` +
+        download +
         `${contentName} stay in this tab and are not shared with other apps.`;
     } else if (model.scope === 'local-endpoint'){
       boundary =
