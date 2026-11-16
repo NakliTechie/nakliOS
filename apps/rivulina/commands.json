@@ -1,0 +1,1349 @@
+{
+  "accepts": [
+    {
+      "action": "import",
+      "label": "Import into Rivulina",
+      "extensions": [
+        ".opml",
+        ".xml"
+      ]
+    }
+  ],
+  "commands": [
+    {
+      "name": "feeds.subscribe",
+      "label": "Subscribe",
+      "description": "Subscribe to a feed or podcast by its address. A website address is searched for its feed. A feed the browser cannot read is not subscribed, and the error names why.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Feed or website address"
+          },
+          "folder": {
+            "type": "string",
+            "description": "Folder to put it in (optional)"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "feeds.check",
+      "label": "Check a feed address",
+      "description": "Fetch an address once and say whether the browser can read it as a feed, without subscribing. Blocked feeds are named: cors, network, mixed, http, parse or not-feed, with the words to show.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Feed or website address"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "feeds.unsubscribe",
+      "label": "Unsubscribe",
+      "description": "Remove a subscription and its stored items. Starred items are kept unless keepStarred is false.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "feedId": {
+            "type": "string",
+            "description": "Subscription id (from feeds.list)"
+          },
+          "keepStarred": {
+            "type": "boolean",
+            "description": "Keep starred items (default true)"
+          }
+        },
+        "required": [
+          "feedId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "feeds.refresh",
+      "label": "Refresh this feed",
+      "description": "Fetch one subscription now and store any new items. Items already stored keep their read, starred and played state.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "feedId": {
+            "type": "string",
+            "description": "Subscription id (from feeds.list)"
+          }
+        },
+        "required": [
+          "feedId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "feeds.refresh_all",
+      "label": "Refresh all feeds",
+      "description": "Fetch every subscription (at most 2 at a time per host, 6 in all). With force false, feeds fetched within their ttl or still backing off after errors are skipped.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "force": {
+            "type": "boolean",
+            "description": "Fetch every feed even if it was fetched recently (default true)"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "shortcut": "r"
+    },
+    {
+      "name": "feeds.list",
+      "label": "List subscriptions",
+      "description": "List every subscription with its id, title, kind (podcast or text), folder, last fetch status and settings. Private addresses are hidden.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "folder": {
+            "type": "string",
+            "description": "Only this folder (optional)"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "feeds.set_folder",
+      "label": "Move to folder",
+      "description": "Put a subscription in a folder (one level). An empty folder name takes it out of any folder.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "feedId": {
+            "type": "string",
+            "description": "Subscription id (from feeds.list)"
+          },
+          "folder": {
+            "type": "string",
+            "description": "Folder name; empty for none"
+          }
+        },
+        "required": [
+          "feedId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "feeds.rename_folder",
+      "label": "Rename folder",
+      "description": "Rename a folder. Renaming onto an existing folder merges the two.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "Current folder name"
+          },
+          "to": {
+            "type": "string",
+            "description": "New folder name"
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "feeds.settings",
+      "label": "Feed settings",
+      "description": "Read or change one subscription's settings: autoDownload (newest n episodes), speed (0.5 to 3, null for global), skipIntro and skipOutro (seconds), limit (episodes, null for none), refreshMinutes (null for global). Pass no settings to read them.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "feedId": {
+            "type": "string",
+            "description": "Subscription id (from feeds.list)"
+          },
+          "autoDownload": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 50,
+            "description": "Download the newest n unplayed episodes"
+          },
+          "speed": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "minimum": 0.5,
+            "maximum": 3,
+            "description": "Playback speed for this podcast"
+          },
+          "skipIntro": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 600,
+            "description": "Seconds to skip at the start"
+          },
+          "skipOutro": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 600,
+            "description": "Seconds to skip at the end"
+          },
+          "limit": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1,
+            "description": "Episodes to show"
+          },
+          "refreshMinutes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 5,
+            "maximum": 10080,
+            "description": "Refresh interval for this feed"
+          }
+        },
+        "required": [
+          "feedId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "items.list",
+      "label": "List items",
+      "description": "List the items of a view, newest first: inbox (all unread), today, starred, podcasts, a feed, a folder or a search. Defaults to the current view.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "view": {
+            "type": "string",
+            "description": "One of inbox, today, starred, podcasts, feed, folder, search (default: the current view)",
+            "enum": [
+              "inbox",
+              "today",
+              "starred",
+              "podcasts",
+              "feed",
+              "folder",
+              "search"
+            ]
+          },
+          "feedId": {
+            "type": "string",
+            "description": "Feed id, for the feed view"
+          },
+          "folder": {
+            "type": "string",
+            "description": "Folder name, for the folder view"
+          },
+          "query": {
+            "type": "string",
+            "description": "Words to find, for the search view"
+          },
+          "limit": {
+            "type": "number",
+            "description": "Most items to return (default 50, at most 500)"
+          },
+          "offset": {
+            "type": "number",
+            "description": "Items to skip"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "items.list_unread",
+      "label": "List unread items",
+      "description": "List unread items across every feed, or in one feed or folder, newest first.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "feedId": {
+            "type": "string",
+            "description": "Feed id, for the feed view"
+          },
+          "folder": {
+            "type": "string",
+            "description": "Folder name, for the folder view"
+          },
+          "limit": {
+            "type": "number",
+            "description": "Most items to return (default 50, at most 500)"
+          },
+          "offset": {
+            "type": "number",
+            "description": "Items to skip"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "items.open",
+      "label": "Open item",
+      "description": "Show one item in the reading view and mark it read.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "description": "Item id"
+          }
+        },
+        "required": [
+          "itemId"
+        ]
+      }
+    },
+    {
+      "name": "items.mark_read",
+      "label": "Mark read",
+      "description": "Mark items read (default: the open item).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Item ids (default: the open item)"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "items.mark_unread",
+      "label": "Mark unread",
+      "description": "Mark items unread (default: the open item).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Item ids (default: the open item)"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "items.toggle_read",
+      "label": "Toggle read",
+      "description": "Mark the open item unread if it is read, or read if it is unread.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Item ids (default: the open item)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": "m"
+    },
+    {
+      "name": "items.mark_all_read",
+      "label": "Mark all read",
+      "description": "Mark every unread item in a view read (default: the current view). olderThanDays leaves newer items unread.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "view": {
+            "type": "string",
+            "description": "One of inbox, today, starred, podcasts, feed, folder, search (default: the current view)",
+            "enum": [
+              "inbox",
+              "today",
+              "starred",
+              "podcasts",
+              "feed",
+              "folder",
+              "search"
+            ]
+          },
+          "feedId": {
+            "type": "string",
+            "description": "Feed id, for the feed view"
+          },
+          "folder": {
+            "type": "string",
+            "description": "Folder name, for the folder view"
+          },
+          "query": {
+            "type": "string",
+            "description": "Words to find, for the search view"
+          },
+          "olderThanDays": {
+            "type": "number",
+            "description": "Only items older than this many days (0 or missing: all)"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "items.star",
+      "label": "Star",
+      "description": "Star items (default: the open item). Starred items are kept even after you unsubscribe.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Item ids (default: the open item)"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "items.unstar",
+      "label": "Remove star",
+      "description": "Remove the star from items (default: the open item).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Item ids (default: the open item)"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "items.toggle_star",
+      "label": "Toggle star",
+      "description": "Star the open item, or remove its star.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Item ids (default: the open item)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": "s"
+    },
+    {
+      "name": "items.search",
+      "label": "Search items",
+      "description": "Find stored items whose title, author, summary or text contains every word of the query, newest first.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Words to find"
+          },
+          "limit": {
+            "type": "number",
+            "description": "Most items to return (default 50, at most 500)"
+          },
+          "offset": {
+            "type": "number",
+            "description": "Items to skip"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    {
+      "name": "view.open",
+      "label": "Open view",
+      "description": "Show a view in the item list: inbox, today, starred, podcasts, a feed (feedId), a folder (folder) or a search (query).",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "view": {
+            "type": "string",
+            "description": "One of inbox, today, starred, podcasts, feed, folder, search (default: the current view)",
+            "enum": [
+              "inbox",
+              "today",
+              "starred",
+              "podcasts",
+              "feed",
+              "folder",
+              "search"
+            ]
+          },
+          "feedId": {
+            "type": "string",
+            "description": "Feed id, for the feed view"
+          },
+          "folder": {
+            "type": "string",
+            "description": "Folder name, for the folder view"
+          },
+          "query": {
+            "type": "string",
+            "description": "Words to find, for the search view"
+          }
+        },
+        "required": [
+          "view"
+        ]
+      }
+    },
+    {
+      "name": "items.next",
+      "label": "Next item",
+      "description": "Open the next item in the current view and mark it read.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "j"
+    },
+    {
+      "name": "items.previous",
+      "label": "Previous item",
+      "description": "Open the previous item in the current view and mark it read.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "k"
+    },
+    {
+      "name": "items.open_original",
+      "label": "Open original",
+      "description": "Open the item's own web page in a new tab (default: the open item).",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "description": "Item id (default: the open item)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": "o"
+    },
+    {
+      "name": "reader.set_prefs",
+      "label": "Reading settings",
+      "description": "Change the reading settings: font (sans or serif), text size (14 to 24), line width (narrow, medium or wide), images (load remote images in articles and show notes) and reading theme (light or dark). Send no fields to read the current settings. Returns the full settings.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "font": {
+            "type": "string",
+            "enum": [
+              "sans",
+              "serif"
+            ],
+            "description": "Typeface for articles and show notes"
+          },
+          "size": {
+            "type": "number",
+            "minimum": 14,
+            "maximum": 24,
+            "description": "Text size in pixels"
+          },
+          "width": {
+            "type": "string",
+            "enum": [
+              "narrow",
+              "medium",
+              "wide"
+            ],
+            "description": "Line width of the reading column"
+          },
+          "images": {
+            "type": "boolean",
+            "description": "Load remote images (off: each image waits behind a \"Show image\" button)"
+          },
+          "theme": {
+            "type": "string",
+            "enum": [
+              "light",
+              "dark"
+            ],
+            "description": "Colours of the reading pane"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "reader.show_images",
+      "label": "Show images",
+      "description": "Load the remote images in the open article or show notes. With always set, also turn images on for every item from now on.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "always": {
+            "type": "boolean",
+            "description": "Also keep images on for every item"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "player.play",
+      "label": "Play",
+      "description": "Play an episode (by itemId), or resume the current one, or start the first in Up Next. Optional `at` starts at that many seconds.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "description": "Episode id (default: the current episode, else the first in Up Next)"
+          },
+          "at": {
+            "type": "number",
+            "description": "Start position in seconds"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "player.pause",
+      "label": "Pause",
+      "description": "Pause playback and save the position.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "player.toggle",
+      "label": "Play or pause",
+      "description": "Play if paused, pause if playing.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Space"
+    },
+    {
+      "name": "player.seek",
+      "label": "Go to position",
+      "description": "Move the playing episode to a position in seconds.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "seconds": {
+            "type": "number",
+            "description": "Position in seconds",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "seconds"
+        ]
+      }
+    },
+    {
+      "name": "player.skip_back",
+      "label": "Skip back",
+      "description": "Skip back by the given seconds (default: the skip-back setting, 15 s).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "seconds": {
+            "type": "number",
+            "description": "Seconds to skip back",
+            "minimum": 1
+          }
+        },
+        "required": []
+      },
+      "shortcut": "ArrowLeft"
+    },
+    {
+      "name": "player.skip_forward",
+      "label": "Skip forward",
+      "description": "Skip forward by the given seconds (default: the skip-forward setting, 30 s).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "seconds": {
+            "type": "number",
+            "description": "Seconds to skip forward",
+            "minimum": 1
+          }
+        },
+        "required": []
+      },
+      "shortcut": "ArrowRight"
+    },
+    {
+      "name": "player.next",
+      "label": "Play next in Up Next",
+      "description": "Stop the current episode and play the first episode in Up Next.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "player.set_speed",
+      "label": "Set playback speed",
+      "description": "Set the playback speed, 0.5 to 3, with pitch kept. scope \"feed\" stores it for this podcast only, \"global\" for every podcast without its own speed. Without scope it updates the podcast's own speed when it has one, else the global speed.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "rate": {
+            "type": "number",
+            "description": "Speed, 0.5 to 3",
+            "minimum": 0.5,
+            "maximum": 3
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "feed",
+              "global"
+            ],
+            "description": "Where to store the speed"
+          }
+        },
+        "required": [
+          "rate"
+        ]
+      }
+    },
+    {
+      "name": "player.speed_up",
+      "label": "Faster",
+      "description": "Raise the playback speed one step.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Shift+>"
+    },
+    {
+      "name": "player.speed_down",
+      "label": "Slower",
+      "description": "Lower the playback speed one step.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Shift+<"
+    },
+    {
+      "name": "player.sleep_timer",
+      "label": "Sleep timer",
+      "description": "Pause after a number of minutes, or stop at the end of the current episode.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "minutes": {
+            "type": "number",
+            "description": "Minutes until playback pauses",
+            "minimum": 1,
+            "maximum": 1440
+          },
+          "endOfEpisode": {
+            "type": "boolean",
+            "description": "Stop at the end of this episode instead"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "player.cancel_sleep",
+      "label": "Turn off sleep timer",
+      "description": "Turn off the sleep timer.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "player.next_chapter",
+      "label": "Next chapter",
+      "description": "Go to the start of the next chapter.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "player.previous_chapter",
+      "label": "Previous chapter",
+      "description": "Go to the start of this chapter, or the previous one when within 3 s of its start.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "player.chapters",
+      "label": "List chapters",
+      "description": "The chapters of an episode (default: the current one) as start seconds and titles.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "description": "Episode id (default: the current episode)"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "player.state",
+      "label": "Player state",
+      "description": "What is playing: episode, position, duration, speed, sleep timer, chapters and Up Next ids.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "queue.add",
+      "label": "Add to Up Next",
+      "description": "Add episodes to the end of Up Next.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Episode ids (default: the selected item)"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "queue.play_next",
+      "label": "Play next",
+      "description": "Put episodes at the front of Up Next, to play after the current one.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Episode ids (default: the selected item)"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "queue.remove",
+      "label": "Remove from Up Next",
+      "description": "Take one episode out of Up Next.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Episode id"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    {
+      "name": "queue.move",
+      "label": "Move in Up Next",
+      "description": "Move one episode to a position in Up Next (0 is first).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Episode id"
+          },
+          "index": {
+            "type": "number",
+            "description": "New position, 0 is first",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "id",
+          "index"
+        ]
+      }
+    },
+    {
+      "name": "queue.clear",
+      "label": "Clear Up Next",
+      "description": "Remove every episode from Up Next. The episodes stay in the library.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "queue.list",
+      "label": "List Up Next",
+      "description": "The episodes in Up Next, in order, with titles.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "episodes.mark_played",
+      "label": "Mark played",
+      "description": "Mark episodes played: clears the saved position and takes them out of Up Next.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Episode ids (default: the selected item)"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "episodes.mark_unplayed",
+      "label": "Mark unplayed",
+      "description": "Mark episodes not played.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Episode ids (default: the selected item)"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "downloads.download",
+      "label": "Download episode",
+      "description": "Download an episode file into this browser's private storage for offline play. Refuses with the blocking host named when the file is stream only.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "description": "Episode id (default: the selected item)"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "downloads.cancel",
+      "label": "Cancel download",
+      "description": "Stop a running or queued episode download and discard the partial file.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "description": "Episode id (default: the selected item)"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "downloads.remove",
+      "label": "Delete download",
+      "description": "Delete a downloaded episode file. The episode stays in the list and can still be streamed.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "description": "Episode id (default: the selected item)"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "downloads.list",
+      "label": "List downloads",
+      "description": "List downloaded, running, queued and failed episode downloads with title, size and status.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "downloads.usage",
+      "label": "Storage usage",
+      "description": "Report storage used and available, whether the browser keeps it persistently, and the count and size of downloaded episodes.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "downloads.persist",
+      "label": "Keep storage",
+      "description": "Ask the browser to keep this app's storage (subscriptions and downloads) instead of clearing it when space runs low.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "downloads.open_panel",
+      "label": "Storage",
+      "description": "Open the storage panel: usage, persistence, downloaded episodes and their sizes.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "downloads.remove_played",
+      "label": "Delete played downloads",
+      "description": "Delete the downloaded files of every episode marked played. The episodes stay in the list.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "search.podcasts",
+      "label": "Search podcasts",
+      "description": "Search Apple's podcast directory by name. Returns title, author, feed address, artwork address, genre and Apple id for each podcast with a public feed. Limited to about 20 directory calls a minute.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "term": {
+            "type": "string",
+            "description": "Podcast name or words to search for"
+          },
+          "country": {
+            "type": "string",
+            "description": "Two-letter country code for the Apple store, such as us, gb or in (default: the last one used, else this browser's region)",
+            "pattern": "^[A-Za-z]{2}$"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Most results to return (1 to 200, default 25)",
+            "minimum": 1,
+            "maximum": 200
+          }
+        },
+        "required": [
+          "term"
+        ]
+      }
+    },
+    {
+      "name": "search.charts",
+      "label": "Top podcast charts",
+      "description": "List Apple's top podcasts for a country, in chart order, with feed addresses from one batched lookup. A row whose feedUrl is null has no public feed. Uses two directory calls.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "country": {
+            "type": "string",
+            "description": "Two-letter country code for the Apple store, such as us, gb or in (default: the last one used, else this browser's region)",
+            "pattern": "^[A-Za-z]{2}$"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "How many chart places (1 to 200, default 50)",
+            "minimum": 1,
+            "maximum": 200
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "opml.import",
+      "label": "Import OPML",
+      "description": "Import subscriptions from OPML 2.0 text. Nested outlines become one folder level; outlines without a feed address are skipped and counted. Every feed is checked for reachability (4 at a time) first; only reachable, new feeds are subscribed, and blocked feeds are listed with the reason. Set checkOnly to list without subscribing. Without text, opens the Import tab of the Add dialog.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "The OPML file contents"
+          },
+          "checkOnly": {
+            "type": "boolean",
+            "description": "Check and list the feeds without subscribing (default false)"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "opml.export",
+      "label": "Export OPML",
+      "description": "Save every subscription, with folders, as rivulina-subscriptions.opml (into NakliOS storage when hosted, else the save picker or a download). Private feeds, whose addresses carry a token, are left out unless includePrivate is true. Returns the number of feeds saved and left out.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "includePrivate": {
+            "type": "boolean",
+            "description": "Include private feeds whose addresses carry a token (default false)"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "add.open",
+      "label": "Add podcast or feed",
+      "description": "Open the Add dialog on one tab: search (Search podcasts), charts (Top charts), address (Feed address) or import (Import OPML). Optional term or url fills the field.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "tab": {
+            "type": "string",
+            "description": "Which tab to open (default search)",
+            "enum": [
+              "search",
+              "charts",
+              "address",
+              "import"
+            ]
+          },
+          "term": {
+            "type": "string",
+            "description": "Search words to fill in and run"
+          },
+          "url": {
+            "type": "string",
+            "description": "Feed address to fill in"
+          }
+        },
+        "required": []
+      },
+      "shortcut": "a"
+    },
+    {
+      "name": "transcripts.get",
+      "label": "Show transcript",
+      "description": "Load the published transcript of an episode (Podcasting 2.0 podcast:transcript: WebVTT, SRT, JSON, HTML or plain text) and return it as text with times and speakers, plus the timed cues.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "description": "Episode id (default: the selected item)"
+          }
+        }
+      }
+    },
+    {
+      "name": "transcripts.search",
+      "label": "Search transcript",
+      "description": "Find the lines of an episode transcript that contain a word or phrase (case-insensitive), with the time each is spoken, so the player can seek there.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "description": "Episode id (default: the selected item)"
+          },
+          "query": {
+            "type": "string",
+            "description": "Word or phrase to find"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    {
+      "name": "ui.help",
+      "label": "Keyboard shortcuts",
+      "description": "Open the help sheet that lists every keyboard shortcut and command. Returns the shortcuts as a list.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "shortcut": "?"
+    },
+    {
+      "name": "ui.palette",
+      "label": "Command palette",
+      "description": "Open the command palette: type to filter every command, then press Enter to run one.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "shortcut": "Mod+K"
+    },
+    {
+      "name": "ui.focus_search",
+      "label": "Search items",
+      "description": "Move the keyboard focus to the search box in the top bar.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "shortcut": "/"
+    },
+    {
+      "name": "ui.back",
+      "label": "Back",
+      "description": "On a narrow window, go back one pane: from the reading view to the list, or from the list to the subscriptions.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    }
+  ]
+}

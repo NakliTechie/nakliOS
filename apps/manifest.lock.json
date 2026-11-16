@@ -7870,6 +7870,40 @@
           "bytes": 34523
         }
       ]
+    },
+    {
+      "id": "rivulina",
+      "repo": "NakliTechie/rivulina",
+      "requestedRef": "main",
+      "resolvedCommit": "7388e886bed2831813b4f965da4cab3c49edf825",
+      "files": [
+        {
+          "source": "index.html",
+          "destination": "index.html",
+          "sha256": "a44275e21d22d4b07eec454f027a78190dcdbda2e83a282158b75ed26895ea24",
+          "bytes": 276899,
+          "originalSourceSha256": "52efaf1d57f29edfac1680df1a6d1339b05033815950cdb9b8bb77361f8fca2a",
+          "sdkSha256": "ec78ab7bd0e82a108847216f33bc6600366f68199f9416959411e5db254405ed"
+        },
+        {
+          "source": "commands.json",
+          "destination": "commands.json",
+          "sha256": "8c892a32173608addf8f5c9920f90e11f084024d96899ebcecdf076ff57a452d",
+          "bytes": 38727
+        },
+        {
+          "source": "sw.js",
+          "destination": "sw.js",
+          "sha256": "5408a96452a7b843c3c59840e0402588cb032c8cbb43909184735b36511b565e",
+          "bytes": 1348
+        },
+        {
+          "source": "LICENSE",
+          "destination": "LICENSE",
+          "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+          "bytes": 34523
+        }
+      ]
     }
   ]
 }

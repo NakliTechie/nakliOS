@@ -5286,6 +5286,30 @@
           "destination": "LICENSE"
         }
       ]
+    },
+    {
+      "id": "rivulina",
+      "repo": "NakliTechie/rivulina",
+      "ref": "main",
+      "files": [
+        {
+          "source": "index.html",
+          "destination": "index.html",
+          "managedSdk": "inline"
+        },
+        {
+          "source": "commands.json",
+          "destination": "commands.json"
+        },
+        {
+          "source": "sw.js",
+          "destination": "sw.js"
+        },
+        {
+          "source": "LICENSE",
+          "destination": "LICENSE"
+        }
+      ]
     }
   ]
 }
