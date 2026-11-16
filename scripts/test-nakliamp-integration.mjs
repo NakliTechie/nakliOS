@@ -74,7 +74,14 @@ assert.ok(
   `the visible label matches the meta version (${metaVersion[1]})`,
 );
 assert.match(mirror, /connect-src 'self'/, 'NakliAmp mirror limits connections to its own origin');
-assert.doesNotMatch(mirror, /connect-src[^;]*https?:/, 'NakliAmp mirror does not allow remote HTTP connections');
+// Since 777e21a the CSP names NakliAmp's opt-in services (each off until the person turns it on; the
+// default profile makes zero requests, which NakliAmp's own network gate checks). Allow exactly that list.
+const OPT_IN = new Set(['https://musicbrainz.org', 'https://coverartarchive.org', 'https://archive.org',
+  'https://*.archive.org', 'https://lrclib.net', 'https://api.listenbrainz.org']);
+const connectSrc = (mirror.match(/connect-src([^;"]*)/) || [, ''])[1].trim().split(/\s+/);
+const remote = connectSrc.filter(s => /^https?:/.test(s));
+assert.deepEqual(remote.filter(s => !OPT_IN.has(s)), [], `NakliAmp connect-src allows only its opt-in services (got ${remote.join(' ')})`);
+assert.ok(!connectSrc.includes('*') && !connectSrc.includes('https:') && !connectSrc.includes('http:'), 'NakliAmp connect-src has no wildcard scheme');
 assert.match(vendor, /Corresponding Mediabunny source is available/, 'NakliAmp mirror includes the source-availability notice');
 // libav arrived with 0.3.0-m2 and is LGPL, so its licence text is a shipping requirement, not
 // an optional extra: declare it or the mirror redistributes LGPL code without its notice.
