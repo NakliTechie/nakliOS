@@ -62,7 +62,7 @@ export function queueRows(snapshot, getTrack) {
 // ------------------------------------------------------------------- DOM ----
 
 const CSS = `
-.nq{display:flex;flex-direction:column;gap:10px;width:100%;max-width:1080px;margin:auto;min-width:0;color:var(--ink,var(--text))}
+.nq{display:flex;flex-direction:column;gap:10px;width:100%;max-width:1080px;margin:auto;min-width:0;flex:1 1 auto;color:var(--ink,var(--text))}
 .nq-head{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .nq-head h2{margin:0 auto 0 0;font:600 18px var(--display,var(--body));letter-spacing:-.02em}
 .nq button{font:inherit;color:inherit}
@@ -74,7 +74,7 @@ const CSS = `
 .nq-save[hidden]{display:none}
 .nq-save input{flex:1 1 160px;min-width:0;min-height:36px;padding:6px 10px;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--ink,var(--text));font:12px var(--body)}
 .nq-note{font-size:12px;color:var(--faint,var(--muted));margin:0}
-.nq-scroll{position:relative;overflow-y:auto;overflow-x:hidden;height:var(--nakliamp-queue-height,max(300px,calc(100dvh - 300px)));border:1px solid var(--line);border-radius:var(--radius,14px);background:var(--panel);outline:none}
+.nq-scroll{position:relative;overflow-y:auto;overflow-x:hidden;flex:1 1 auto;min-height:var(--nakliamp-queue-min,0px);height:var(--nakliamp-queue-height,max(300px,calc(100dvh - 300px)));border:1px solid var(--line);border-radius:var(--radius,14px);background:var(--panel);outline:none}
 .nq-scroll:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .nq-spacer{position:relative;width:100%}
 .nq-window{position:absolute;left:0;right:0;top:0}
@@ -315,6 +315,12 @@ export function mountQueuePanel(root, ctx) {
 
   // ---- list: click, double-click, keyboard ----
   scroller.addEventListener('scroll', scheduleRender, { passive: true });
+  // The list fills the space the shell gives it, so its height follows the window.
+  if (typeof ResizeObserver === 'function') {
+    const resizeObserver = new ResizeObserver(() => scheduleRender());
+    resizeObserver.observe(scroller);
+    cleanups.push(() => resizeObserver.disconnect());
+  }
   scroller.addEventListener('click', event => {
     const node = event.target.closest('[data-index]');
     if (!node) return;

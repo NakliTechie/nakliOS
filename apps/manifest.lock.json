@@ -289,14 +289,14 @@
       "id": "nakliamp",
       "repo": "NakliTechie/nakliamp",
       "requestedRef": "main",
-      "resolvedCommit": "dfa373c7eca10075c5f6bf99b78e64d5795589fb",
+      "resolvedCommit": "0f7fde9961120c57c35813734d4e6ccb6e2d45cd",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "68ea418be6231de3b08daa3cc51765ed6df2f61b2525974213fdbf3547c01e98",
-          "bytes": 274247,
-          "originalSourceSha256": "8c8d030dd8f567f4f452b0df8d72abf26e1e51520e0dfaddf4eb687898f02380",
+          "sha256": "614bc87088ce7d7825201872204b471b20eb0b2d5361d8602f96f1ad96441a85",
+          "bytes": 276136,
+          "originalSourceSha256": "6816755229e4e4f0c08e50173504e62443a35cafe19c810e33b52e98cb685842",
           "sdkSha256": "5ff86458102ce080ccf993e4c2bb74c3ef5c8336babe5e5d79906f0f04fae4d2"
         },
         {
@@ -506,8 +506,8 @@
         {
           "source": "app/library/store.mjs",
           "destination": "app/library/store.mjs",
-          "sha256": "3488b83b7a04d0f389df10fabbe23ebe50105011e7bc08fa47719abb7f6865ef",
-          "bytes": 25549
+          "sha256": "237d3647113198814943e61f9fa5834b67eac2ba61d06dd10c85dd5b87a36a6a",
+          "bytes": 26214
         },
         {
           "source": "app/library/views.mjs",
@@ -620,14 +620,14 @@
         {
           "source": "app/ui/ai-dialog.mjs",
           "destination": "app/ui/ai-dialog.mjs",
-          "sha256": "3bf74f1f3366efed395d0a9e0e4df8370416abd757e98ecf2d9ce087303c9eb8",
-          "bytes": 14027
+          "sha256": "42630c905aca60994ace2d0d54a54ba89da7977fcdbe2f768a6a49c426859dc7",
+          "bytes": 14328
         },
         {
           "source": "app/ui/browse.mjs",
           "destination": "app/ui/browse.mjs",
-          "sha256": "aa11d39cb6ce3f6939a8204e4f58f94ebc3679550dc5fdf26f87774606b8aaa4",
-          "bytes": 53856
+          "sha256": "ce2bd16315f6a9734f13a2c2b1b567a7e51c265e04310f19d492207f725de167",
+          "bytes": 54560
         },
         {
           "source": "app/ui/dialog.mjs",
@@ -662,8 +662,8 @@
         {
           "source": "app/ui/queue-panel.mjs",
           "destination": "app/ui/queue-panel.mjs",
-          "sha256": "5aa1e843fecccaf39d4084a3ed6b99267f2050ed862929a4eb1d86e9bfc28106",
-          "bytes": 20263
+          "sha256": "f316790dedff344f9becaa40583944b2c3d601957b80a21770d4176111a5ee70",
+          "bytes": 20629
         },
         {
           "source": "app/ui/select.mjs",
@@ -734,8 +734,8 @@
         {
           "source": "app/ui/v1x-network.mjs",
           "destination": "app/ui/v1x-network.mjs",
-          "sha256": "c582fefd33f39756b808100e8b114c65e57ae9e4deb9388aff9dd912560d51ee",
-          "bytes": 24786
+          "sha256": "276a81d335de797b0bbdde31b4d3bee0be8bbf163192ebf352b3fb9e87fe8e77",
+          "bytes": 25395
         },
         {
           "source": "app/ui/v1x-timers.mjs",

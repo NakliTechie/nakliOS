@@ -113,7 +113,10 @@ export function playlistName(title, description) {
 
 const CSS = `
 .nk-ai,.nk-ai *{box-sizing:border-box}
-.nk-ai{--c-ink:var(--ink,var(--text));color:var(--c-ink);display:grid;gap:12px;min-width:0}
+/* Only the preview list scrolls; the body scrolls only in a window too short for the controls. */
+.nk-dlg-body:has(> .nk-ai){display:flex;flex-direction:column}
+.nk-ai{--c-ink:var(--ink,var(--text));color:var(--c-ink);display:flex;flex-direction:column;gap:12px;min-width:0;min-height:0;flex:1 1 auto}
+.nk-ai > *{flex:none}
 .nk-ai label{font-size:12px;color:var(--muted)}
 .nk-ai textarea,.nk-ai select,.nk-ai input[type=text]{width:100%;min-height:36px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel-2);color:var(--c-ink);font:inherit;min-width:0}
 .nk-ai textarea{min-height:70px;resize:vertical}
@@ -122,7 +125,8 @@ const CSS = `
 .nk-ai .row > .f.grow{flex:1;min-width:160px}
 .nk-ai .status{margin:0;color:var(--muted);line-height:1.5}
 .nk-ai .status.err{color:var(--refuse,#c0392b)}
-.nk-ai ol{margin:0;padding:0;list-style:none;display:grid;gap:4px;max-height:min(46vh,420px);overflow:auto}
+.nk-ai > ol{margin:0;padding:0 2px 0 0;list-style:none;display:grid;align-content:start;gap:4px;flex:0 1 auto;min-height:72px;overflow:auto}
+.nk-ai > ol:empty{display:none}
 .nk-ai li{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:var(--panel-2);min-width:0}
 .nk-ai li .n{font:10px var(--mono,monospace);color:var(--faint,var(--muted));min-width:22px;text-align:right}
 .nk-ai li .t{min-width:0;overflow-wrap:anywhere}
@@ -130,7 +134,7 @@ const CSS = `
 .nk-ai li button{min-width:34px;min-height:34px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:inherit;cursor:pointer}
 .nk-ai li button:hover{border-color:var(--refuse,var(--accent))}
 .nk-ai .actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
-.nk-ai > .nk-btn{justify-self:start}
+.nk-ai > .nk-btn{align-self:flex-start}
 `;
 
 // ------------------------------------------------------------------- UI ----
