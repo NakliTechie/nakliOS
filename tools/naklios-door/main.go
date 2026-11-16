@@ -5,6 +5,7 @@
 //	naklios-door search [--client c] <words>      find app commands
 //	naklios-door describe [--client c] <name>     one command's input
 //	naklios-door call [--client c] [--ask] <name> [json-input]
+//	naklios-door version
 //
 // Every answer is printed as JSON. The exit status is 1 when the answer has "ok": false.
 package main
@@ -33,6 +34,9 @@ import (
 
 const defaultPort = 7461
 
+// version is set at release build time: -ldflags "-X main.version=0.1.0".
+var version = "dev"
+
 var clientName = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
 
 func usage() {
@@ -41,7 +45,8 @@ func usage() {
   naklios-door pair <client>
   naklios-door search [--client cli] <words…>
   naklios-door describe [--client cli] <command>
-  naklios-door call [--client cli] [--ask] <command> [json-input]`)
+  naklios-door call [--client cli] [--ask] <command> [json-input]
+  naklios-door version`)
 	os.Exit(2)
 }
 
@@ -58,6 +63,8 @@ func main() {
 	fs.Parse(args)
 	rest := fs.Args()
 	switch cmd {
+	case "version", "--version":
+		fmt.Println("naklios-door " + version)
 	case "serve":
 		serve(*port, *dev)
 	case "pair":

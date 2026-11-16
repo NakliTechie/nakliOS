@@ -5,6 +5,17 @@ Anvil scripts use. The door is optional: NakliOS works the same without it.
 
 ## Install
 
+Download the binary for your machine from the
+[naklios-door releases](https://github.com/NakliTechie/nakliOS/releases?q=naklios-door), check it against
+`SHA256SUMS`, and put it on your PATH:
+
+```bash
+curl -fLO https://github.com/NakliTechie/nakliOS/releases/download/naklios-door-v0.1.0/naklios-door-darwin-arm64
+chmod +x naklios-door-darwin-arm64 && mv naklios-door-darwin-arm64 ~/bin/naklios-door
+```
+
+Builds: macOS, Linux and Windows, each for arm64 and x86_64. Or build from source with Go:
+
 ```bash
 cd tools/naklios-door && go build -o ~/bin/naklios-door .
 ```
