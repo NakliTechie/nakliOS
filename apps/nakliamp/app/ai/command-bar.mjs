@@ -41,8 +41,9 @@ export function commandMenu(commands = COMMANDS) {
 }
 
 // Compact schema text for the prompt: property names with type, enum and required mark.
+// `if_revision` is an agent's guard against stale queue edits; a typed request never needs it.
 function schemaLine(schema) {
-  const props = schema?.properties ?? {};
+  const { if_revision: _guard, ...props } = schema?.properties ?? {};
   const req = new Set(schema?.required ?? []);
   const parts = Object.entries(props).map(([k, p]) => {
     const type = p.enum ? p.enum.map(v => JSON.stringify(v)).join('|') : p.type === 'array' ? `${p.items?.type ?? 'any'}[]` : p.type;

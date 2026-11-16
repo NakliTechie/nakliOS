@@ -248,6 +248,20 @@
       }
     },
     {
+      "name": "player.snapshot",
+      "label": "Runtime snapshot",
+      "description": "The whole runtime state in one record, shaped after cliamp's IPC v2 snapshot: state, track (id and display fields, no path), position, duration, volume in dB, mute, speed, mono, shuffle, repeat, queue length, index and revision, the name of the saved playlist the queue was loaded from, EQ preset, visualiser mode, the DSP route, and a revision that moves when any of these change.",
+      "scope": "read",
+      "approval": "read",
+      "group": "player",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "queue.read",
       "label": "Read queue",
       "description": "A page of the play queue: each entry's position, track id, title, artist, album and duration, plus the current position, shuffle and repeat.",
@@ -299,6 +313,11 @@
           "play": {
             "type": "boolean",
             "description": "Start playing (default true)"
+          },
+          "if_revision": {
+            "type": "integer",
+            "description": "The queue revision this edit expects (player.snapshot queue.revision, or queue.read revision). A stale one is refused with [conflict].",
+            "minimum": 0
           }
         },
         "required": [
@@ -324,6 +343,11 @@
               "minLength": 1
             },
             "description": "Track ids. Omitted: the selected tracks, or the playing track"
+          },
+          "if_revision": {
+            "type": "integer",
+            "description": "The queue revision this edit expects (player.snapshot queue.revision, or queue.read revision). A stale one is refused with [conflict].",
+            "minimum": 0
           }
         },
         "required": [],
@@ -350,6 +374,11 @@
               "minLength": 1
             },
             "description": "Track ids. Omitted: the selected tracks, or the playing track"
+          },
+          "if_revision": {
+            "type": "integer",
+            "description": "The queue revision this edit expects (player.snapshot queue.revision, or queue.read revision). A stale one is refused with [conflict].",
+            "minimum": 0
           }
         },
         "required": [],
@@ -378,6 +407,11 @@
             "type": "integer",
             "description": "New position",
             "minimum": 0
+          },
+          "if_revision": {
+            "type": "integer",
+            "description": "The queue revision this edit expects (player.snapshot queue.revision, or queue.read revision). A stale one is refused with [conflict].",
+            "minimum": 0
           }
         },
         "required": [
@@ -404,6 +438,11 @@
               "minimum": 0
             },
             "description": "Positions to remove"
+          },
+          "if_revision": {
+            "type": "integer",
+            "description": "The queue revision this edit expects (player.snapshot queue.revision, or queue.read revision). A stale one is refused with [conflict].",
+            "minimum": 0
           }
         },
         "required": [],
@@ -422,7 +461,13 @@
       "group": "queue",
       "input": {
         "type": "object",
-        "properties": {},
+        "properties": {
+          "if_revision": {
+            "type": "integer",
+            "description": "The queue revision this edit expects (player.snapshot queue.revision, or queue.read revision). A stale one is refused with [conflict].",
+            "minimum": 0
+          }
+        },
         "required": [],
         "additionalProperties": false
       }
@@ -445,6 +490,11 @@
               "albums"
             ],
             "description": "Shuffle mode"
+          },
+          "if_revision": {
+            "type": "integer",
+            "description": "The queue revision this edit expects (player.snapshot queue.revision, or queue.read revision). A stale one is refused with [conflict].",
+            "minimum": 0
           }
         },
         "required": [],
@@ -480,6 +530,40 @@
       "shortcut": [
         "R"
       ]
+    },
+    {
+      "name": "queue.play",
+      "label": "Play queue entry",
+      "description": "Jump to a queue entry and play it: by position (`index`, 0-based, from queue.read) or by track id (`id`, the first entry holding that track). Give one of the two. The queue itself is unchanged.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "queue",
+      "input": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "integer",
+            "description": "Queue position",
+            "minimum": 0
+          },
+          "id": {
+            "type": "string",
+            "description": "Track id of a queued entry",
+            "minLength": 1
+          },
+          "play": {
+            "type": "boolean",
+            "description": "Start playing (default true)"
+          },
+          "if_revision": {
+            "type": "integer",
+            "description": "The queue revision this edit expects (player.snapshot queue.revision, or queue.read revision). A stale one is refused with [conflict].",
+            "minimum": 0
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
     },
     {
       "name": "queue.undo",
@@ -771,6 +855,12 @@
             },
             "required": [],
             "additionalProperties": false
+          },
+          "coverFrom": {
+            "type": "string",
+            "description": "A MusicBrainz release id: its Cover Art Archive front cover is written as the cover art (needs the Cover Art Archive turned on)",
+            "minLength": 36,
+            "maxLength": 36
           }
         },
         "required": [
@@ -783,13 +873,19 @@
     {
       "name": "playlist.list",
       "label": "List playlists",
-      "description": "The playlists in the music folder (M3U, M3U8, PLS, XSPF, JSPF and smart playlists): name, kind and track count.",
+      "description": "The playlists in the music folder (M3U, M3U8, PLS, XSPF, JSPF and smart playlists): name, kind and track count. With `name`, that playlist's entries instead: position, track id (null when the file is not in the library), title and artist.",
       "scope": "read",
       "approval": "read",
       "group": "playlist",
       "input": {
         "type": "object",
-        "properties": {},
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Playlist name",
+            "minLength": 1
+          }
+        },
         "required": [],
         "additionalProperties": false
       }
@@ -873,6 +969,63 @@
         },
         "required": [
           "name"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "playlist.rename",
+      "label": "Rename playlist",
+      "description": "Rename an M3U or M3U8 playlist: writes it under the new file name in the same folder and removes the old file. Refuses when the new name is taken. Undo (queue.undo) puts the old file back.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "playlist",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Current playlist name",
+            "minLength": 1
+          },
+          "to": {
+            "type": "string",
+            "description": "New name",
+            "minLength": 1,
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "name",
+          "to"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "playlist.remove",
+      "label": "Remove from playlist",
+      "description": "Remove one entry from an M3U or M3U8 playlist by position (from playlist.list with `name`). Rewrites only the playlist file; the audio file is never touched. Shows the entry and waits for approval.",
+      "scope": "destructive",
+      "approval": "destructive",
+      "group": "playlist",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Playlist name",
+            "minLength": 1
+          },
+          "index": {
+            "type": "integer",
+            "description": "Entry position, 0-based",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "name",
+          "index"
         ],
         "additionalProperties": false
       }
@@ -1224,6 +1377,68 @@
       ]
     },
     {
+      "name": "visualiser.picker",
+      "label": "Visualiser picker",
+      "description": "Open the visualiser picker, where every mode draws live in a small tile, or close it. Without `open` it toggles.",
+      "scope": "read",
+      "approval": "read",
+      "group": "visualiser",
+      "input": {
+        "type": "object",
+        "properties": {
+          "open": {
+            "type": "boolean",
+            "description": "true opens, false closes"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "shortcut": [
+        "Alt+V"
+      ]
+    },
+    {
+      "name": "spectrum.get",
+      "label": "Spectrum",
+      "description": "The current spectrum as `bands` log-spaced levels from 0 to 1 (default 32, 20 Hz to 20 kHz), read from the same analyser the visualiser draws. Empty when nothing plays. One frame per call, as cliamp's spectrum.get.",
+      "scope": "read",
+      "approval": "read",
+      "group": "visualiser",
+      "input": {
+        "type": "object",
+        "properties": {
+          "bands": {
+            "type": "integer",
+            "description": "Number of bands (default 32)",
+            "minimum": 4,
+            "maximum": 128
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "visualiser.link_volume",
+      "label": "Link visualiser to volume",
+      "description": "Scale the visualiser's input by the current volume, so a quiet player draws a quiet picture. Without `on` it toggles. Milkdrop reads the audio graph itself and is not scaled.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "visualiser",
+      "input": {
+        "type": "object",
+        "properties": {
+          "on": {
+            "type": "boolean",
+            "description": "true links, false unlinks"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "view.open",
       "label": "Open view",
       "description": "Open a view: the library, a browse view, the queue, playlists, search, lyrics, the track inspector, the equaliser, settings or the AI playlist dialog.",
@@ -1250,7 +1465,16 @@
               "inspector",
               "eq",
               "settings",
-              "ai"
+              "ai",
+              "network",
+              "music-folders",
+              "duplicates",
+              "rename",
+              "sleep",
+              "commands",
+              "similar",
+              "genre-fill",
+              "skins"
             ],
             "description": "View"
           }
@@ -1264,7 +1488,8 @@
         "L",
         "/",
         "Y",
-        "I"
+        "I",
+        "U"
       ]
     },
     {
@@ -1350,6 +1575,25 @@
       ]
     },
     {
+      "name": "ui.pop_out",
+      "label": "Pop out the mini player",
+      "description": "Move the mini player into a small always-on-top window (Document Picture-in-Picture, Chromium only) or bring it back. Without `on` it toggles. Opening needs a click in the page, so an agent call that is not part of one refuses with [unavailable].",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "view",
+      "input": {
+        "type": "object",
+        "properties": {
+          "on": {
+            "type": "boolean",
+            "description": "true pops out, false brings it back"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
       "name": "ai.playlist",
       "label": "Playlist from a description",
       "description": "Make a playlist from a description using only tracks in the library. Returns track ids and a title as a preview; nothing is saved until playlist.create. Without a host model it filters by tags and search.",
@@ -1377,6 +1621,732 @@
         ],
         "additionalProperties": false
       }
+    },
+    {
+      "name": "player.speed",
+      "label": "Playback speed",
+      "description": "Set the playback speed from 0.5 to 2, or step it up or down. Pitch is kept where the route supports it.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "player",
+      "input": {
+        "type": "object",
+        "properties": {
+          "rate": {
+            "type": "number",
+            "description": "Speed, 1 is normal",
+            "minimum": 0.5,
+            "maximum": 2
+          },
+          "step": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down"
+            ],
+            "description": "Step up or down"
+          }
+        },
+        "required": [],
+        "additionalProperties": false,
+        "minProperties": 1,
+        "maxProperties": 1
+      },
+      "shortcut": [
+        "]",
+        "["
+      ]
+    },
+    {
+      "name": "player.stop_after_current",
+      "label": "Stop after this track",
+      "description": "Stop when the playing track ends. Without `on` it toggles.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "player",
+      "input": {
+        "type": "object",
+        "properties": {
+          "on": {
+            "type": "boolean",
+            "description": "true arms it, false disarms it"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "shortcut": [
+        "Shift+S"
+      ]
+    },
+    {
+      "name": "player.sleep_timer",
+      "label": "Sleep timer",
+      "description": "Pause after a number of minutes (the last 10 seconds fade out), at the end of this track, or at the end of the queue. Mode off cancels it.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "player",
+      "input": {
+        "type": "object",
+        "properties": {
+          "minutes": {
+            "type": "number",
+            "description": "Minutes from now",
+            "minimum": 1,
+            "maximum": 1440
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "end-of-track",
+              "end-of-queue",
+              "off"
+            ],
+            "description": "When to stop instead of minutes"
+          }
+        },
+        "required": [],
+        "additionalProperties": false,
+        "minProperties": 1,
+        "maxProperties": 1
+      }
+    },
+    {
+      "name": "player.volume_db",
+      "label": "Volume in dB",
+      "description": "Set the volume in dB (0 is full, the floor setting is the quietest audible step), or change it by a number of dB. Give one of the two.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "player",
+      "input": {
+        "type": "object",
+        "properties": {
+          "db": {
+            "type": "number",
+            "description": "Volume in dB",
+            "minimum": -90,
+            "maximum": 0
+          },
+          "step": {
+            "type": "number",
+            "description": "Change in dB",
+            "minimum": -90,
+            "maximum": 90
+          }
+        },
+        "required": [],
+        "additionalProperties": false,
+        "minProperties": 1,
+        "maxProperties": 1
+      }
+    },
+    {
+      "name": "sound.mono",
+      "label": "Mono",
+      "description": "Mix left and right into one channel on both speakers. Without `on` it toggles.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "sound",
+      "input": {
+        "type": "object",
+        "properties": {
+          "on": {
+            "type": "boolean",
+            "description": "true mixes to mono"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "sound.volume_floor",
+      "label": "Volume floor",
+      "description": "The quietest audible step of the volume slider, from -90 to -1 dB (default -50).",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "sound",
+      "input": {
+        "type": "object",
+        "properties": {
+          "db": {
+            "type": "number",
+            "description": "Floor in dB",
+            "minimum": -90,
+            "maximum": -1
+          }
+        },
+        "required": [
+          "db"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "sound.devices",
+      "label": "Output devices",
+      "description": "The audio outputs this browser offers (id and label) and the one in use. Empty where the browser cannot pick an output.",
+      "scope": "read",
+      "approval": "read",
+      "group": "sound",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "sound.output",
+      "label": "Output device",
+      "description": "Play through another audio output by its id from sound.devices; an empty id is the system default.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "sound",
+      "input": {
+        "type": "object",
+        "properties": {
+          "deviceId": {
+            "type": "string",
+            "description": "Device id",
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "deviceId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "eq.import_eqf",
+      "label": "Import Winamp EQ",
+      "description": "Load a Winamp .eqf preset file chosen by the person into the custom equaliser curve. `presetIndex` picks one preset from a library file (default 0).",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "sound",
+      "input": {
+        "type": "object",
+        "properties": {
+          "presetIndex": {
+            "type": "integer",
+            "description": "Preset in the file",
+            "minimum": 0,
+            "maximum": 1000
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "eq.export_eqf",
+      "label": "Export Winamp EQ",
+      "description": "Save the current equaliser curve as a Winamp .eqf file.",
+      "scope": "read",
+      "approval": "read",
+      "group": "sound",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Preset name",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "history.clear",
+      "label": "Clear listening history",
+      "description": "Reset every track's play count and last-played time, which empties the recently played and most played lists. Ratings and favourites stay. Shows how many tracks change and waits for approval; it cannot be undone.",
+      "scope": "destructive",
+      "approval": "destructive",
+      "group": "library",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "library.duplicates",
+      "label": "Duplicates",
+      "description": "Groups of tracks that look like the same recording: exact (same size and length) or likely (same artist and title within 2 seconds), with the suggested keeper. Nothing is deleted.",
+      "scope": "read",
+      "approval": "read",
+      "group": "library",
+      "input": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "exact",
+              "likely"
+            ],
+            "description": "Only this kind"
+          },
+          "offset": {
+            "type": "integer",
+            "description": "First result to return (default 0)",
+            "minimum": 0
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Results per page (default 20)",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "library.folders",
+      "label": "Music folders",
+      "description": "The music folders in the library: id, name, whether it is the primary folder, and whether the read grant is live.",
+      "scope": "read",
+      "approval": "read",
+      "group": "library",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "library.add_folder",
+      "label": "Add a music folder",
+      "description": "Ask the person for another music folder and index it. Removing it again is library.forget_folder.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "library",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "library.forget_folder",
+      "label": "Remove a music folder",
+      "description": "Remove a folder and its tracks and playlists from the library index. The files on disk are untouched.",
+      "scope": "destructive",
+      "approval": "destructive",
+      "group": "library",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Folder id from library.folders",
+            "minLength": 1,
+            "maxLength": 16
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "library.rescan_folder",
+      "label": "Rescan",
+      "description": "Rescan one folder by id, or every folder when `id` is absent.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "library",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Folder id",
+            "minLength": 1,
+            "maxLength": 16
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "tags.rename_files",
+      "label": "Rename files from tags",
+      "description": "Rename audio files from a pattern of tags, such as \"%track% - %title%\". Shows every old and new name and waits for approval. Chromium only.",
+      "scope": "destructive",
+      "approval": "destructive",
+      "group": "library",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Tracks to rename"
+          },
+          "pattern": {
+            "type": "string",
+            "description": "Pattern with %artist% %album% %albumartist% %title% %track% %disc% %year% %genre%",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": [
+          "pattern"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "tags.find_replace",
+      "label": "Find and replace in tags",
+      "description": "Replace text in title, artist, album, album artist or genre tags. Shows every change and waits for approval.",
+      "scope": "destructive",
+      "approval": "destructive",
+      "group": "library",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Tracks to change"
+          },
+          "find": {
+            "type": "string",
+            "description": "Text or pattern to find",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "replace": {
+            "type": "string",
+            "description": "Replacement",
+            "maxLength": 200
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "title",
+                "artist",
+                "album",
+                "albumArtist",
+                "genre"
+              ],
+              "description": "Field"
+            },
+            "minItems": 1,
+            "description": "Fields to change (default all five)"
+          },
+          "regex": {
+            "type": "boolean",
+            "description": "Treat `find` as a regular expression"
+          },
+          "caseSensitive": {
+            "type": "boolean",
+            "description": "Match case"
+          }
+        },
+        "required": [
+          "find"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "tags.lookup_musicbrainz",
+      "label": "Look up on MusicBrainz",
+      "description": "Search MusicBrainz for the album of these tracks (or the album and artist given) and return releases and per-track tag changes as a preview. Needs MusicBrainz turned on.",
+      "scope": "read",
+      "approval": "read",
+      "group": "library",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Track ids. Omitted: the selected tracks, or the playing track"
+          },
+          "album": {
+            "type": "string",
+            "description": "Album name",
+            "maxLength": 200
+          },
+          "artist": {
+            "type": "string",
+            "description": "Artist name",
+            "maxLength": 200
+          },
+          "mbid": {
+            "type": "string",
+            "description": "A release id to fetch tag changes for",
+            "minLength": 36,
+            "maxLength": 36
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "tags.fetch_cover",
+      "label": "Preview a cover",
+      "description": "Fetch a release's front cover from the Cover Art Archive as a preview. Writing it goes through track.edit_tags with coverFrom.",
+      "scope": "read",
+      "approval": "read",
+      "group": "library",
+      "input": {
+        "type": "object",
+        "properties": {
+          "mbid": {
+            "type": "string",
+            "description": "MusicBrainz release id",
+            "minLength": 36,
+            "maxLength": 36
+          }
+        },
+        "required": [
+          "mbid"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "lyrics.fetch",
+      "label": "Find lyrics online",
+      "description": "Look up lyrics on LRCLIB for a track (default: the playing track) and show them. Nothing is saved. Needs LRCLIB turned on.",
+      "scope": "read",
+      "approval": "read",
+      "group": "library",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Track id",
+            "minLength": 1
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "lyrics.save_sidecar",
+      "label": "Save lyrics beside the track",
+      "description": "Fetch lyrics from LRCLIB and write them as a .lrc file beside the track. Undo removes the new file.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "library",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Track id",
+            "minLength": 1
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "queue.more_like_this",
+      "label": "More like this",
+      "description": "Add tracks like the playing one to the end of the queue: by shared tags, reranked by the host model when there is one.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "queue",
+      "input": {
+        "type": "object",
+        "properties": {
+          "length": {
+            "type": "integer",
+            "description": "Tracks to add (default 10)",
+            "minimum": 1,
+            "maximum": 50
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ai.suggest_genres",
+      "label": "Suggest missing genres",
+      "description": "Ask the host model for a genre for each album that has none. Returns suggestions only; each approved album is written with track.edit_tags.",
+      "scope": "read",
+      "approval": "read",
+      "group": "ai",
+      "input": {
+        "type": "object",
+        "properties": {
+          "maxAlbums": {
+            "type": "integer",
+            "description": "Most albums to ask about (default 200)",
+            "minimum": 1,
+            "maximum": 200
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ui.command_bar",
+      "label": "Command bar",
+      "description": "Open the command bar: type a request in words and it runs one command. Destructive commands are never run from it.",
+      "scope": "read",
+      "approval": "read",
+      "group": "view",
+      "input": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Request to fill in",
+            "maxLength": 300
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "shortcut": [
+        "Mod+K"
+      ]
+    },
+    {
+      "name": "view.skins",
+      "label": "Classic skin face",
+      "description": "Open the classic skin face: pick a .wsz skin file from disk and control playback through it. The sound still comes from NakliAmp.",
+      "scope": "read",
+      "approval": "read",
+      "group": "view",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "network.list",
+      "label": "Network services",
+      "description": "The online services NakliAmp can use, what each one receives, and whether the person turned it on. All are off by default.",
+      "scope": "read",
+      "approval": "read",
+      "group": "network",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "network.grant",
+      "label": "Turn a service on",
+      "description": "Allow NakliAmp to contact one service. Nothing is sent to it until this is on.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "network",
+      "input": {
+        "type": "object",
+        "properties": {
+          "origin": {
+            "type": "string",
+            "enum": [
+              "https://musicbrainz.org",
+              "https://coverartarchive.org",
+              "https://lrclib.net",
+              "https://api.listenbrainz.org"
+            ],
+            "description": "Service origin"
+          }
+        },
+        "required": [
+          "origin"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "network.revoke",
+      "label": "Turn a service off",
+      "description": "Stop NakliAmp contacting one service.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "network",
+      "input": {
+        "type": "object",
+        "properties": {
+          "origin": {
+            "type": "string",
+            "enum": [
+              "https://musicbrainz.org",
+              "https://coverartarchive.org",
+              "https://lrclib.net",
+              "https://api.listenbrainz.org"
+            ],
+            "description": "Service origin"
+          }
+        },
+        "required": [
+          "origin"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "scrobble.status",
+      "label": "Scrobbling status",
+      "description": "ListenBrainz scrobbling: whether it is on, whether a token is set (never the token), listens waiting, listens refused, and the next send time.",
+      "scope": "read",
+      "approval": "read",
+      "group": "network",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "scrobble.flush",
+      "label": "Send listens now",
+      "description": "Send waiting listens to ListenBrainz now.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "network",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
     }
   ],
   "errorCodes": [
@@ -1391,6 +2361,10 @@
     {
       "code": "declined",
       "meaning": "The person did not approve a destructive command."
+    },
+    {
+      "code": "conflict",
+      "meaning": "The queue changed since the `if_revision` the command carried."
     },
     {
       "code": "unavailable",

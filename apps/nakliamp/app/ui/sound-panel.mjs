@@ -97,7 +97,14 @@ const CSS = `
 .nk-sound .switch{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
 .nk-eq{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:4px;align-items:end;margin-top:6px}
 .nk-eq .band{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0}
-.nk-eq input[type=range]{writing-mode:vertical-lr;direction:rtl;width:28px;height:140px;margin:0;padding:0}
+/* Each band fills from the 0 dB centre line up or down (polish 1), on a 44 px
+   wide hit area for touch (polish 2); the drawn track stays 6 px. */
+.nk-eq input[type=range]{-webkit-appearance:none;appearance:none;writing-mode:vertical-lr;direction:rtl;width:44px;max-width:100%;height:140px;margin:0;padding:0;background:transparent;cursor:pointer;--lo:50%;--hi:50%}
+.nk-eq input[type=range]::-webkit-slider-runnable-track{width:6px;border-radius:3px;background:linear-gradient(to top,var(--line) 0 calc(var(--lo) - 1px),var(--accent) calc(var(--lo) - 1px) calc(var(--hi) + 1px),var(--line) calc(var(--hi) + 1px) 100%)}
+.nk-eq input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:18px;height:18px;margin-left:-6px;border-radius:50%;background:var(--panel);border:2px solid var(--accent)}
+.nk-eq input[type=range]::-moz-range-track{width:6px;border-radius:3px;background:linear-gradient(to top,var(--line) 0 calc(var(--lo) - 1px),var(--accent) calc(var(--lo) - 1px) calc(var(--hi) + 1px),var(--line) calc(var(--hi) + 1px) 100%)}
+.nk-eq input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--panel);border:2px solid var(--accent)}
+.nk-eq input[type=range]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .nk-eq .val{font:10px var(--mono,monospace);color:var(--muted);white-space:nowrap}
 .nk-eq .hz{font:10px var(--mono,monospace);color:var(--c-ink);white-space:nowrap}
 .nk-eq.off input[type=range]{opacity:.55}
@@ -106,10 +113,23 @@ const CSS = `
 .nk-sound .live{font:11px var(--mono,monospace);color:var(--muted);overflow-wrap:anywhere}
 .nk-sound fieldset{border:0;margin:0;padding:0;display:flex;gap:4px 12px;flex-wrap:wrap}
 .nk-sound legend{padding:0;margin-bottom:4px;color:var(--muted);font-size:12px}
-@media(max-width:420px){.nk-eq input[type=range]{height:120px;width:22px}.nk-eq .val{font-size:9px}.nk-eq .hz{font-size:9px}}
+@media(max-width:420px){.nk-eq{gap:0}.nk-eq input[type=range]{height:130px}.nk-eq .val{font-size:9px}.nk-eq .hz{font-size:9px}}
 `;
 
 // ------------------------------------------------------------------- UI ----
+
+/** The filled part of a band, from 0 dB to its value, as percentages of the track. */
+export function fillSpan(db) {
+  const at = ((Number(db) || 0) - EQ_MIN_DB) / (EQ_MAX_DB - EQ_MIN_DB) * 100;
+  const clamped = Math.max(0, Math.min(100, at));
+  return { lo: Math.min(50, clamped), hi: Math.max(50, clamped) };
+}
+
+function paintFill(input, db) {
+  const { lo, hi } = fillSpan(db);
+  input.style.setProperty('--lo', `${lo}%`);
+  input.style.setProperty('--hi', `${hi}%`);
+}
 
 function liveText(dsp) {
   const parts = [`Sound chain ${dsp.chain === 'on' ? 'on' : 'off'}`];
@@ -151,6 +171,7 @@ export function mountSoundPanel(root, ctx) {
     input.addEventListener('input', () => {
       const db = sliderToDb(input.value);
       value.textContent = shortDb(db);
+      paintFill(input, db);
       input.setAttribute('aria-valuetext', formatDb(db));
       pendingEq = editBand(pendingEq ?? settings.eq, index, db);
       presetSelect.value = 'custom';
@@ -182,10 +203,24 @@ export function mountSoundPanel(root, ctx) {
     'aria-label': 'Reset the equaliser to flat', onclick: () => act('eq.preset', { preset: 'flat' }, { eq: { preset: 'flat' } }),
   });
 
+  // Winamp .eqf import and export (S7), through eq.import_eqf and eq.export_eqf.
+  const eqfInput = h('input', { type: 'file', accept: '.eqf,.q1', hidden: true, 'aria-label': 'Winamp EQ file' });
+  eqfInput.addEventListener('change', async () => {
+    const file = eqfInput.files?.[0];
+    eqfInput.value = '';
+    if (!file || typeof ctx.run !== 'function') return;
+    try { await ctx.run('eq.import_eqf', {}, { context: { file } }); } catch (error) { ctx.toast?.(String(error?.message ?? error).replace(/^\[[a-z-]+\] /, '')); }
+  });
+  const eqfImport = h('button', { type: 'button', className: 'nk-btn', textContent: 'Import .eqf', 'aria-label': 'Import a Winamp EQ preset file', onclick: () => eqfInput.click() });
+  const eqfExport = h('button', {
+    type: 'button', className: 'nk-btn', textContent: 'Export .eqf', 'aria-label': 'Save the current curve as a Winamp EQ file',
+    onclick: () => ctx.run?.('eq.export_eqf', {}).catch(error => ctx.toast?.(String(error?.message ?? error))),
+  });
+
   const eqSection = h('section', { 'aria-labelledby': `${id}-eq-h` },
     h('h3', { id: `${id}-eq-h` }, 'Equaliser',
       h('label', { className: 'switch', htmlFor: `${id}-eq-on` }, eqOn, 'On')),
-    h('div', { className: 'row' }, h('label', { htmlFor: `${id}-preset`, textContent: 'Preset' }), presetSelect, resetButton),
+    h('div', { className: 'row' }, h('label', { htmlFor: `${id}-preset`, textContent: 'Preset' }), presetSelect, resetButton, eqfImport, eqfExport, eqfInput),
     eqGrid,
     h('p', { className: 'hint', textContent: 'Bands in hertz (k = kHz), gains in dB. Moving a band saves your curve as Custom. Arrow keys move a band by 0.5 dB; Page Up and Page Down move it further.' }));
 
@@ -260,6 +295,7 @@ export function mountSoundPanel(root, ctx) {
     bands.forEach((band, index) => {
       if (document.activeElement !== band.input || !pendingEq) band.input.value = String(curve[index]);
       band.value.textContent = shortDb(curve[index]);
+      paintFill(band.input, sliderToDb(band.input.value));
       band.input.setAttribute('aria-valuetext', formatDb(curve[index]));
     });
     for (const r of rgRadios) r.input.checked = s.replayGain.mode === r.value;

@@ -20,6 +20,58 @@ const WIDENED = Object.freeze({
 
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
+/**
+ * Split a filter-only result into the direct matches and the widened rest (M6).
+ * makePlaylist lists the direct matches first and `matched` counts them, so the
+ * tracks after them came from widening. A model result is the model's choice and
+ * is not split. Returns `{ shown, extra }` as track ids.
+ */
+export function splitMatches(result) {
+  const { trackIds = [], path, widened = [], matched } = result ?? {};
+  const ids = [...trackIds];
+  const count = Number(matched) || 0;
+  const filterOnly = path === PATHS.filter || path === PATHS.failed;
+  const splits = filterOnly && widened.length > 0 && count > 0 && count < ids.length;
+  return splits ? { shown: ids.slice(0, count), extra: ids.slice(count) } : { shown: ids, extra: [] };
+}
+
+/**
+ * Name where widened tracks come from, truthfully: "your most-played tracks" only
+ * when some of them have been played. `getTrack(id)` reads a library record.
+ */
+export function widenedSource(extraIds, widened, getTrack) {
+  const played = extraIds.some(id => (Number(getTrack(id)?.playCount) || 0) > 0);
+  const names = (widened ?? []).map(step => {
+    if (step === 'genre-neighbours') return 'neighbouring genres';
+    return played ? 'your most-played tracks' : 'the rest of your library';
+  });
+  return [...new Set(names)].join(' and ') || 'the rest of your library';
+}
+
+/**
+ * Preview titles that are unique: when two rows share a title (untagged files
+ * named after their stem), each gets its file extension, then its folder (polish 5).
+ */
+export function disambiguate(rows, getTrack) {
+  const count = new Map();
+  for (const row of rows) count.set(row.title, (count.get(row.title) ?? 0) + 1);
+  return rows.map(row => {
+    if (count.get(row.title) < 2) return row;
+    const path = String(getTrack(row.id)?.path ?? '');
+    const file = path.split('/').pop() ?? '';
+    const ext = file.includes('.') ? file.split('.').pop() : '';
+    const folder = path.split('/').slice(0, -1).join('/');
+    const detail = [ext && `.${ext}`, folder].filter(Boolean).join(' in ');
+    return detail ? { ...row, title: `${row.title} (${detail})` } : row;
+  });
+}
+
+/** `widenedText`, when given, names the source from the tracks themselves (see widenedSource). */
+function widenedNames(result) {
+  if (result.widenedText) return [result.widenedText];
+  return (result.widened ?? []).map(w => WIDENED[w] ?? w);
+}
+
 /** Plain words for which path makePlaylist took. */
 export function pathWording(result) {
   if (!result) return '';
@@ -36,7 +88,7 @@ export function pathWording(result) {
           ? 'Matched by tags and search.'
           : 'No model here: matched by tags and search.';
   }
-  const widened = (result.widened ?? []).map(w => WIDENED[w] ?? w);
+  const widened = widenedNames(result);
   if (widened.length && result.candidateCount) text += ` Few tracks matched, so the search widened to ${widened.join(' and ')}.`;
   return text;
 }
@@ -78,6 +130,7 @@ const CSS = `
 .nk-ai li button{min-width:34px;min-height:34px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:inherit;cursor:pointer}
 .nk-ai li button:hover{border-color:var(--refuse,var(--accent))}
 .nk-ai .actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.nk-ai > .nk-btn{justify-self:start}
 `;
 
 // ------------------------------------------------------------------- UI ----
@@ -101,16 +154,20 @@ export function mountAiDialog(root, ctx) {
     ? 'NakliAmp filters your library, then the NakliOS model picks from the matches. Only track ids, titles, artists, albums, genres and years go to the model.'
     : 'No model here, so NakliAmp matches by tags and search. Inside NakliOS with a model chosen in Settings, the model picks from the matches.';
 
+  const modelNoteEl = h('p', { className: 'status', textContent: modelNote });
+  const widen = h('button', { type: 'button', className: 'nk-btn', hidden: true, textContent: 'Add more tracks' });
   const container = h('div', { className: 'nk-ai' },
     h('div', { className: 'f' }, h('label', { htmlFor: `${id}-desc`, textContent: 'Describe a playlist' }), description),
     h('div', { className: 'row' },
       h('div', { className: 'f' }, h('label', { htmlFor: `${id}-len`, textContent: 'Length' }), length),
-      h('div', { className: 'f grow' }, h('p', { className: 'status', textContent: modelNote })),
+      h('div', { className: 'f grow' }, modelNoteEl),
       generate, stop),
-    status, nameField, list, h('div', { className: 'actions' }, save, play));
+    status, widen, nameField, list, h('div', { className: 'actions' }, save, play));
   root.append(container);
 
   let rows = [];
+  let extra = [];
+  let extraSource = '';
   let controller = null;
   let lastDescription = '';
   let pathText = '';
@@ -128,7 +185,12 @@ export function mountAiDialog(root, ctx) {
           (next ?? description).focus();
         },
       }))));
-    if (pathText) status.textContent = `${pathText} ${rows.length ? `${plural(rows.length, 'track')} in the preview.` : 'The preview is empty.'}`;
+    if (pathText) {
+      const short = extra.length ? ` ${plural(rows.length, 'track')} ${rows.length === 1 ? 'matches' : 'match'}, fewer than the length you asked for.` : '';
+      status.textContent = `${pathText}${short} ${rows.length ? `${plural(rows.length, 'track')} in the preview.` : 'The preview is empty.'}`;
+    }
+    widen.hidden = extra.length === 0;
+    widen.textContent = `Add ${plural(extra.length, 'more track')} from ${extraSource}`;
     save.disabled = play.disabled = rows.length === 0;
     nameField.hidden = rows.length === 0;
   }
@@ -152,11 +214,7 @@ export function mountAiDialog(root, ctx) {
         length: Number(length.value),
         signal: controller.signal,
       });
-      lastDescription = text;
-      rows = previewRows(result.trackIds, i => ctx.library.getTrack(i));
-      name.value = playlistName(result.title, text);
-      pathText = pathWording({ ...result, hadModel });
-      renderRows();
+      showResult(result, text, hadModel);
     } catch (error) {
       if (controller.signal.aborted) status.textContent = 'Stopped.';
       else { status.className = 'status err'; status.textContent = String(error?.message ?? error); }
@@ -166,6 +224,36 @@ export function mountAiDialog(root, ctx) {
     }
   }
 
+  /** Without a model, only the tracks that match are shown; the widened rest waits behind a button that names its source (M6). */
+  function showResult(result, text, hadModel) {
+    lastDescription = text;
+    const getTrack = i => ctx.library.getTrack(i);
+    const { shown, extra: more } = splitMatches(result);
+    const widenedSteps = result.widened ?? [];
+    extra = more;
+    extraSource = widenedSource(more, widenedSteps, getTrack);
+    rows = disambiguate(previewRows(shown, getTrack), getTrack);
+    name.value = playlistName(result.title, text);
+    const sayWidened = !more.length && widenedSteps.length > 0;
+    pathText = pathWording({
+      ...result, hadModel,
+      widened: sayWidened ? widenedSteps : [],
+      widenedText: sayWidened ? widenedSource(result.trackIds ?? [], widenedSteps, getTrack) : null,
+    });
+    // The status now says which path ran, so the note above it would repeat it.
+    modelNoteEl.hidden = true;
+    renderRows();
+  }
+
+  widen.addEventListener('click', () => {
+    const getTrack = i => ctx.library.getTrack(i);
+    const have = new Set(rows.map(row => row.id));
+    rows = disambiguate([...rows, ...previewRows(extra.filter(i => !have.has(i)), getTrack)], getTrack);
+    pathText = `${pathText} Widened to ${extraSource}.`;
+    extra = [];
+    renderRows();
+    list.querySelector('li:last-child button')?.focus();
+  });
   generate.addEventListener('click', run);
   description.addEventListener('keydown', event => {
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); run(); }

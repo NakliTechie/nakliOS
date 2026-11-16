@@ -16,6 +16,7 @@ const PALETTE = Object.freeze({
   muted: '#9d9180',
   dim: 'rgba(157,145,128,0.18)',
   text: '#efe8da',
+  petal: '#e9a6b4',
 });
 
 /**
@@ -38,6 +39,12 @@ export function createVisualiser({
   milkdropFactory = createMilkdrop,
   milkdropSupport = checkSupport,
   now = () => performance.now(),
+  // Seeds the modes' random streams; modes never call Math.random, so a fixed
+  // seed and the same audio give the same pictures.
+  seed = 0x5eed1e55,
+  // 0..1, read each frame: "link to volume" passes the volume gain here so a
+  // quiet player draws a quiet picture. 1 leaves the analyser data untouched.
+  inputScale = () => 1,
 }) {
   const context = canvas.getContext('2d');
   let mode = MODES[0];
@@ -139,6 +146,9 @@ export function createVisualiser({
     analyser.getByteFrequencyData(freq);
     analyser.getByteTimeDomainData(wave);
     sampleChannels();
+    const scale = inputScale();
+    scaleInput(freq, wave, scale);
+    if (freqLeft !== freq) { scaleInput(freqLeft, null, scale); scaleInput(freqRight, null, scale); }
   }
 
   /**
@@ -175,7 +185,8 @@ export function createVisualiser({
       sampleAnalysers();
       resize();
       drawFrame(mode, {
-        context, freq, wave, freqLeft, freqRight, palette, memory,
+        context, freq, wave, freqLeft, freqRight, palette, memory, seed,
+        reduced: reducedMotion(),
         width: canvas.width, height: canvas.height,
       });
     } catch (error) {
@@ -272,3 +283,137 @@ export function createVisualiser({
 }
 
 export { PALETTE };
+
+/**
+ * Scale analyser data in place by `scale` (0..1): spectrum bytes toward 0, waveform
+ * bytes toward the 128 centre line. A scale of 1, or anything not a number, is a no-op.
+ */
+export function scaleInput(freq, wave, scale) {
+  if (!(typeof scale === 'number' && Number.isFinite(scale)) || scale >= 1) return;
+  const k = Math.max(0, scale);
+  if (freq) for (let index = 0; index < freq.length; index += 1) freq[index] = Math.round(freq[index] * k);
+  if (wave) for (let index = 0; index < wave.length; index += 1) wave[index] = Math.round(128 + (wave[index] - 128) * k);
+}
+
+// ------------------------------------------------------------ picker tiles ----
+//
+// The picker shows every mode drawing live in a small tile, from the same
+// analyser as the main canvas. Tiles run at a few frames per second, never on
+// the animation frame, and only while the picker is open. When drawing every
+// tile costs more than the frame budget, each tick draws the next slice of
+// tiles and the others keep their last picture.
+
+export const PREVIEW_FPS = 6;
+export const PREVIEW_REDUCED_DELAY_MS = 1000;
+export const PREVIEW_BUDGET_MS = 6;
+
+/** Milliseconds between preview ticks: `fps` frames a second, one a second under reduced motion. */
+export function previewDelayMs({ fps = PREVIEW_FPS, reduced = false } = {}) {
+  if (reduced) return PREVIEW_REDUCED_DELAY_MS;
+  const rate = Math.min(30, Math.max(1, Number(fps) || PREVIEW_FPS));
+  return Math.round(1000 / rate);
+}
+
+/**
+ * Which tiles to draw this tick. `perTileMs` is the measured cost of one tile (0 before
+ * the first measurement). Returns `{ indices, cursor }`: every tile while they fit the
+ * budget, else `floor(budgetMs / perTileMs)` tiles (at least one) from `cursor` on,
+ * wrapping, with the cursor for the next tick.
+ */
+export function planPreviewTick({ count, cursor = 0, perTileMs = 0, budgetMs = PREVIEW_BUDGET_MS }) {
+  if (!Number.isInteger(count) || count <= 0) return { indices: [], cursor: 0 };
+  const start = ((cursor % count) + count) % count;
+  const fits = perTileMs > 0 ? Math.floor(budgetMs / perTileMs) : count;
+  const take = Math.max(1, Math.min(count, fits));
+  const indices = Array.from({ length: take }, (_, i) => (start + i) % count);
+  return { indices, cursor: (start + take) % count };
+}
+
+/**
+ * Drive the picker tiles. `tiles` is `[{ canvas, modeId }]`; a tile whose mode does not
+ * draw in 2D (Milkdrop, None) is left to the caller's label. `start()` and `stop()` are
+ * the picker's open and close; `drawn()` counts tile frames, for the gate.
+ */
+export function createPreviewGrid({
+  tiles,
+  getAnalyser,
+  palette = PALETTE,
+  reducedMotion = () => false,
+  inputScale = () => 1,
+  fps = PREVIEW_FPS,
+  budgetMs = PREVIEW_BUDGET_MS,
+  now = () => performance.now(),
+  hidden = () => globalThis.document?.hidden === true,
+  timers = globalThis,
+  seed = 0x5eed1e55,
+}) {
+  const live = tiles
+    .map(tile => ({ ...tile, mode: modeById(tile.modeId), memory: {}, context: tile.canvas.getContext('2d') }))
+    .filter(tile => tile.mode.id === tile.modeId && typeof tile.mode.draw === 'function' && tile.context);
+  let freq = new Uint8Array(0);
+  let wave = new Uint8Array(0);
+  let timer = null;
+  let running = false;
+  let cursor = 0;
+  let perTileMs = 0;
+  let drawn = 0;
+
+  function sample() {
+    const analyser = getAnalyser();
+    if (!analyser) {
+      for (let index = 0; index < freq.length; index += 1) freq[index] = Math.max(0, freq[index] - 24);
+      wave.fill(128);
+      return;
+    }
+    if (freq.length !== analyser.frequencyBinCount) {
+      freq = new Uint8Array(analyser.frequencyBinCount);
+      wave = new Uint8Array(analyser.fftSize);
+    }
+    analyser.getByteFrequencyData(freq);
+    analyser.getByteTimeDomainData(wave);
+    scaleInput(freq, wave, inputScale());
+  }
+
+  function tick() {
+    timer = null;
+    if (!running) return;
+    if (!hidden() && live.length) {
+      sample();
+      const plan = planPreviewTick({ count: live.length, cursor, perTileMs, budgetMs });
+      cursor = plan.cursor;
+      const reduced = reducedMotion();
+      const began = now();
+      for (const index of plan.indices) {
+        const tile = live[index];
+        try {
+          drawFrame(tile.mode, {
+            context: tile.context, freq, wave, freqLeft: freq, freqRight: freq, palette, memory: tile.memory, seed,
+            reduced, width: tile.canvas.width, height: tile.canvas.height,
+          });
+          drawn += 1;
+        } catch {
+          tile.mode = modeById('none'); // a failing tile goes blank; the picker stays open
+        }
+      }
+      const cost = (now() - began) / Math.max(1, plan.indices.length);
+      perTileMs = perTileMs ? perTileMs * 0.7 + cost * 0.3 : cost;
+    }
+    timer = timers.setTimeout(tick, previewDelayMs({ fps, reduced: reducedMotion() }));
+  }
+
+  return {
+    start() {
+      if (running) return;
+      running = true;
+      tick();
+    },
+    stop() {
+      running = false;
+      if (timer !== null) timers.clearTimeout(timer);
+      timer = null;
+    },
+    get running() { return running; },
+    drawn: () => drawn,
+    tiles: () => live.map(tile => tile.modeId),
+  };
+}

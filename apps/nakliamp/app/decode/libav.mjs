@@ -12,6 +12,8 @@
 // Loading is lazy and happens once: the module is only instantiated when a file
 // actually needs it, so a library of MP3s never pays for it.
 
+import { createStreamOpener, shouldStream } from './libav-stream.mjs';
+
 const VENDOR_DIR = '../../vendor/libav/';
 const LOADER_FILE = 'libav-6.10.9.0-nakliamp.loader.mjs';
 const FACTORY_FILE = 'libav-6.10.9.0-nakliamp.wasm.mjs';
@@ -219,8 +221,13 @@ let decodeSequence = 0;
  * Whole-file decode matches the in-house tier's contract and suits the sizes
  * involved: these are music tracks, not streams. Interleaved output is
  * deinterleaved here so the caller sees one shape from every R3 decoder.
+ *
+ * `readLimit` is the byte budget of one demuxer batch. The default reads a
+ * whole track in one batch; the gates pass a small one so that a batch can
+ * hold only another stream's packets, which is the case that once truncated
+ * a track with cover art.
  */
-export async function decodeLibav(data) {
+export async function decodeLibav(data, { readLimit = READ_LIMIT } = {}) {
   const container = acceptInput(data);
   const instance = await startLibav();
 
@@ -239,7 +246,7 @@ export async function decodeLibav(data) {
 
     [, handles.context, handles.packet, handles.frame] = await instance.ff_init_decoder(audio.codec_id, audio.codecpar);
 
-    const frames = await readAllFrames(instance, handles, audio.index);
+    const frames = await readAllFrames(instance, handles, audio.index, readLimit);
     if (!frames.length) throw decodeError('ERR_NAKLIAMP_LIBAV_EMPTY', 'The software decoder produced no audio.');
 
     return collect(frames);
@@ -280,11 +287,11 @@ async function startLibav() {
  * ff_read_frame_multi returns a batch and a status; one call yields a single
  * batch, which decodes to a few milliseconds.
  */
-async function readAllFrames(instance, { format, context, packet, frame }, streamIndex) {
+async function readAllFrames(instance, { format, context, packet, frame }, streamIndex, readLimit) {
   const frames = [];
   let emptyBatches = 0;
   for (let guard = 0; guard < 100_000; guard += 1) {
-    const [status, batch] = await instance.ff_read_frame_multi(format, packet, { limit: READ_LIMIT });
+    const [status, batch] = await instance.ff_read_frame_multi(format, packet, { limit: readLimit });
     const stream = batch[streamIndex] ?? [];
     const done = status === instance.AVERROR_EOF;
     if (stream.length || done) {
@@ -369,9 +376,35 @@ function toFloat(samples) {
   return out;
 }
 
-/** The decoder entry the engine's `softwareDecoders` list expects. */
+/**
+ * The shared libav instance, started on first use.
+ * Exported for the gates, which read the wasm heap's allocated byte count
+ * (`mallinfo_uordblks`) before and after a run of decodes to prove every
+ * handle is freed. The app itself never calls it.
+ */
+export function libavInstance() {
+  return startLibav();
+}
+
+/**
+ * Open a file for streamed decode: DSD always, other containers above 64 MB.
+ *
+ * The whole-file path above holds the input, its copy in the wasm filesystem
+ * and the decoded output at once, which a long DSD track cannot afford. This
+ * one reads the file a slice at a time and resamples inside libav; see
+ * libav-stream.mjs. Its input has no size bound, because nothing is read whole.
+ */
+export const streamLibav = createStreamOpener({ instance: startLibav, error: decodeError });
+
+/**
+ * The decoder entry the engine's `softwareDecoders` list expects.
+ * `streams` and `stream` are optional for a decoder; the engine uses them for
+ * the files `streams(container, size)` claims and decodes the rest whole.
+ */
 export const libavDecoder = Object.freeze({
   name: 'libav wasm',
   sniff: sniffLibav,
   decode: decodeLibav,
+  streams: shouldStream,
+  stream: streamLibav,
 });

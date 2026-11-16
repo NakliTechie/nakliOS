@@ -6,7 +6,7 @@
 <meta name="nakliamp-version" content="0.3.0-m2">
 <meta name="description" content="Play music files privately in your browser. Your audio stays on your device.">
 <meta name="theme-color" content="#f6f2ea">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; media-src 'self' blob:; connect-src 'self'; img-src 'self' data: blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; media-src 'self' blob:; connect-src 'self' blob: https://musicbrainz.org https://coverartarchive.org https://archive.org https://*.archive.org https://lrclib.net https://api.listenbrainz.org; img-src 'self' data: blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
 <title>NakliAmp — local music player</title>
 <script>
 // Theme before first paint (V4). Light unless the person chose dark; inside NakliOS
@@ -50,50 +50,83 @@ button{color:inherit}
 button:focus-visible,input:focus-visible,select:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .shell{min-height:100vh;display:grid;grid-template-rows:auto 1fr auto auto auto}
-.topbar{min-height:62px;padding:8px clamp(14px,4vw,54px);display:flex;align-items:center;gap:12px;flex-wrap:wrap;border-bottom:1px solid var(--line);background:var(--glass);backdrop-filter:blur(18px)}
+.topbar{min-height:58px;padding:8px clamp(14px,4vw,54px);display:flex;align-items:center;gap:14px;flex-wrap:wrap;border-bottom:1px solid var(--line);background:var(--panel)}
 .brand{font-family:var(--display);font-size:20px;font-weight:900;letter-spacing:-.04em}.brand em{font-style:normal;color:var(--accent)}
-.version{font:10px var(--mono);color:var(--faint);border:1px solid var(--line);padding:3px 7px;border-radius:999px}
-.path-chip{font:10px var(--mono);letter-spacing:.04em;color:var(--good);border:1px solid color-mix(in srgb,var(--good) 36%,var(--line));padding:5px 9px;border-radius:999px}
+.version{font:inherit;color:inherit}
+.path-chip{display:inline-block;font:11px var(--mono);letter-spacing:.02em;color:var(--good);margin:0 0 8px}
 .path-chip:empty{display:none}
-.top-actions{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
-.chip-btn{min-height:32px;padding:4px 11px;border:1px solid var(--line);border-radius:999px;background:var(--panel);cursor:pointer;font:11px var(--mono);color:var(--muted)}
+.top-actions{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.chip-btn{min-height:34px;padding:5px 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel);cursor:pointer;font:500 13px/1.2 var(--body);color:var(--muted)}
 .chip-btn:hover{border-color:var(--accent);color:var(--text)}
 .chip-btn[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}
 .chip-btn[hidden]{display:none}
+.narrow-only{display:none}
+/* Tools menu: a button and a list of commands, not a native select */
+.menu-wrap{position:relative}
+.menu{position:absolute;right:0;top:calc(100% + 6px);z-index:70;min-width:230px;max-height:min(70vh,520px);overflow-y:auto;padding:5px;border:1px solid var(--line);border-radius:11px;background:var(--panel);box-shadow:0 18px 50px var(--shadow)}
+.menu[hidden]{display:none}
+.menu [role=menuitem]{display:block;width:100%;min-height:36px;text-align:left;padding:7px 11px;border:0;border-radius:7px;background:none;cursor:pointer;font:14px var(--body);color:var(--text)}
+.menu [role=menuitem]:hover,.menu [role=menuitem]:focus-visible{background:var(--panel-2);outline:none}
+.menu hr{border:0;border-top:1px solid var(--line);margin:4px 0}
+.menu .narrow-only{display:none}
 main{min-height:0;display:grid;place-items:center;padding:clamp(18px,5vw,64px)}
 .view{display:none;width:100%}.view.on{display:block}
-.empty{max-width:720px;margin:auto;text-align:center}
+#empty{max-width:720px;margin:auto;text-align:center}
 .record-mark{width:92px;height:92px;margin:0 auto 25px;border-radius:50%;position:relative;border:1px solid #55442f;background:
   radial-gradient(circle,#161310 0 8%,#e0a24a 9% 14%,#17130f 15% 20%,#35291e 21% 23%,#17130f 24% 36%,#2f251c 37% 39%,#17130f 40% 55%,#2f251c 56% 58%,#17130f 59% 100%);
   box-shadow:0 22px 60px var(--shadow)}
-.empty h1{font-family:var(--display);font-size:clamp(32px,6vw,58px);line-height:1;letter-spacing:-.055em;margin:0 0 13px}
-.empty .lede{max-width:520px;margin:0 auto;color:var(--muted);font-size:16px;line-height:1.6}
+#empty h1{font-family:var(--display);font-size:clamp(32px,6vw,58px);line-height:1;letter-spacing:-.055em;margin:0 0 13px}
+#empty .lede{max-width:520px;margin:0 auto;color:var(--muted);font-size:16px;line-height:1.6}
 .drop{max-width:640px;margin:34px auto 0;padding:28px;border:1px dashed var(--line);border-radius:18px;background:var(--panel);transition:border-color .18s,background .18s,transform .18s}
 .drop.drag{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--panel));transform:translateY(-2px)}
 .drop p{margin:0 0 18px;color:var(--muted)}
-.actions{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
+.drop .actions,.lib-welcome .actions{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
 .btn{min-height:42px;border:1px solid var(--line);border-radius:10px;padding:9px 16px;background:var(--panel-2);cursor:pointer;color:var(--text)}
 .btn:hover{border-color:color-mix(in srgb,var(--accent) 50%,var(--line))}.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:750}
 .btn[hidden]{display:none}
 .fine{margin-top:18px;color:var(--faint);font:10px/1.7 var(--mono);letter-spacing:.02em}
-.now{max-width:1040px;margin:auto}
-.player-grid{display:grid;grid-template-columns:minmax(220px,390px) minmax(0,1fr);gap:clamp(24px,6vw,86px);align-items:center}
-.art{aspect-ratio:1;border:1px solid var(--line);border-radius:24px;position:relative;overflow:hidden;background:
-  linear-gradient(145deg,rgba(245,190,100,.86),rgba(140,75,34,.95) 45%,rgba(42,28,19,.98));box-shadow:0 35px 90px -38px rgba(224,162,74,.58)}
-.art:before{content:"";position:absolute;width:72%;height:72%;border-radius:50%;left:14%;top:14%;background:repeating-radial-gradient(circle,#15120f 0 3px,#282019 4px 6px);box-shadow:0 12px 40px rgba(0,0,0,.42)}
-.art:after{content:"";position:absolute;width:14%;height:14%;border-radius:50%;left:43%;top:43%;background:#e0a24a;border:7px solid #1b1612}
+.now{max-width:1120px;margin:0 auto}
+.player-grid{display:grid;grid-template-columns:minmax(260px,480px) minmax(0,1fr);gap:clamp(24px,5vw,64px);align-items:start}
+/* The stage: the cover or the visualiser, one click apart (Now playing's main surface) */
+.stage-col{display:grid;gap:10px;min-width:0}
+.stage{position:relative;aspect-ratio:1;border-radius:18px;overflow:hidden;border:1px solid var(--line);background:#100d0a}
+.cover-art{position:absolute;inset:0;overflow:hidden;background:
+  linear-gradient(145deg,rgba(245,190,100,.86),rgba(140,75,34,.95) 45%,rgba(42,28,19,.98))}
+.cover-art:before{content:"";position:absolute;width:72%;height:72%;border-radius:50%;left:14%;top:14%;background:repeating-radial-gradient(circle,#15120f 0 3px,#282019 4px 6px);box-shadow:0 12px 40px rgba(0,0,0,.42)}
+.cover-art:after{content:"";position:absolute;width:14%;height:14%;border-radius:50%;left:43%;top:43%;background:#e0a24a;border:7px solid #1b1612}
+.vis-slot-now{position:absolute;inset:0;display:none}
+.stage[data-show="vis"]:not(.idle) .vis-slot-now{display:block}
+.stage[data-show="vis"]:not(.idle) .cover-art{visibility:hidden}
+.stage-bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--panel)}
+.seg button{min-height:34px;padding:5px 12px;border:0;background:none;cursor:pointer;font:500 13px var(--body);color:var(--muted)}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--panel-2);color:var(--accent)}
+.stage-bar .vis-pick{max-width:150px}
+.stage-bar .chip-btn[hidden],.stage-bar .vis-pick[hidden]{display:none}
 #art-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:2}
 #art-img[hidden],#pb-img[hidden]{display:none}
 #pb-img{width:100%;height:100%;object-fit:cover;border-radius:8px}
 .pb-art:has(#pb-img:not([hidden])) #pb-letter{display:none}
-.art:has(#art-img:not([hidden])) .art-letter{display:none}
+.cover-art:has(#art-img:not([hidden])) .art-letter{display:none}
 .art-letter{position:absolute;inset:auto 20px 18px;z-index:1;font-family:var(--display);font-weight:900;font-size:clamp(34px,6vw,70px);line-height:.8;color:rgba(255,245,225,.92);text-shadow:0 3px 22px #2d180c}
 .eyebrow{font:10px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:12px}
 .track-name{font-family:var(--display);font-size:clamp(27px,4vw,45px);line-height:1.05;letter-spacing:-.045em;margin:0;overflow-wrap:anywhere}
 .track-meta{color:var(--muted);margin:11px 0 20px;font-size:14px}
-.honesty{display:flex;gap:7px;align-items:center;flex-wrap:wrap;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--panel-2);font:10px var(--mono);color:var(--muted)}
+.honesty{display:flex;gap:7px;align-items:center;flex-wrap:wrap;font:11px/1.6 var(--mono);color:var(--muted)}
 .honesty .arrow{color:var(--faint)}.honesty .active{color:var(--good)}.honesty .warning{color:var(--warn)}
-.now-tools{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+/* Playback details: the honesty strip, one click away rather than the main content */
+.now-details{margin-top:18px;border-top:1px solid var(--line);padding-top:10px}
+.now-details summary{cursor:pointer;min-height:32px;display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px;list-style:none}
+.now-details summary::-webkit-details-marker{display:none}
+.now-details summary:before{content:"▸";color:var(--faint);transition:transform .15s}
+.now-details[open] summary:before{transform:rotate(90deg)}
+.now-details summary:hover{color:var(--text)}
+.details-route{font:11px var(--mono);color:var(--faint)}
+.details-route:not(:empty):before{content:"· "}
+.now-details .detail-body{padding:8px 0 2px}
+.now-details .detail-note{margin:8px 0 0;font-size:12px;color:var(--faint)}
+.now-tools{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
 .now-tools .btn{min-height:36px;padding:6px 12px;font-size:13px}
 .now-tools .btn[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}
 .lyrics-pane{margin-top:28px;border-top:1px solid var(--line);padding-top:18px;min-height:0}
@@ -104,13 +137,15 @@ input[type=range]{width:100%;accent-color:var(--accent);cursor:pointer}
 .round:disabled{opacity:.45;cursor:default}
 .volume-wrap{display:flex;align-items:center;gap:8px;flex:1;max-width:170px;color:var(--muted)}
 footer{min-height:44px;border-top:1px solid var(--line);display:flex;align-items:center;justify-content:center;padding:10px 20px;text-align:center;color:var(--faint);font:10px/1.5 var(--mono)}
-.toast{position:fixed;right:22px;bottom:84px;max-width:min(390px,calc(100vw - 32px));padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel);box-shadow:0 18px 50px var(--shadow);color:var(--text);font-size:13px;z-index:60}
+.toast{position:fixed;right:22px;bottom:var(--toast-bottom,84px);max-width:min(390px,calc(100vw - 32px));padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel);box-shadow:0 18px 50px var(--shadow);color:var(--text);font-size:13px;z-index:60}
 .toast[hidden]{display:none}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important}}
+main:has(> .library.on),main:has(> .queue-view.on),main:has(> .now.on){place-items:start center}
 
 /* Library */
-.library{max-width:1080px;margin:auto}
+.library{max-width:1080px;margin:0 auto}
 .lib-tabs{display:flex;gap:6px;margin:0 0 14px;flex-wrap:wrap}
+.lib-tabs[hidden]{display:none}
 .lib-tabs button{min-height:34px;padding:5px 14px;border:1px solid var(--line);border-radius:999px;background:transparent;cursor:pointer;font-size:13px;color:var(--muted)}
 .lib-tabs button[aria-selected="true"]{background:var(--panel-2);border-color:var(--accent);color:var(--accent)}
 .lib-pane[hidden]{display:none}
@@ -119,7 +154,7 @@ footer{min-height:44px;border-top:1px solid var(--line);display:flex;align-items
 .lib-search{flex:1;min-width:min(190px,100%);min-height:42px;padding:9px 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--text);max-width:100%}
 .lib-search::placeholder{color:var(--faint)}
 .lib-count{font:10px var(--mono);color:var(--faint);border:1px solid var(--line);padding:5px 9px;border-radius:999px;white-space:nowrap}
-.lib-scan,.loud-line{margin:0 0 14px;font:11px var(--mono);color:var(--muted);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.lib-scan,.loud-line{margin:0 0 14px;font:12px var(--body);color:var(--muted);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .lib-scan[hidden],.loud-line[hidden]{display:none}
 .loud-line button{min-height:28px;padding:2px 10px;border:1px solid var(--line);border-radius:7px;background:var(--panel);cursor:pointer;font:11px var(--mono)}
 .lib-list{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--panel)}
@@ -127,6 +162,15 @@ footer{min-height:44px;border-top:1px solid var(--line);display:flex;align-items
 .lib-list>.lib-group:first-child{border-top:0}
 .lib-row{display:flex;align-items:center;gap:12px;width:100%;padding:9px 16px;border:0;border-top:1px solid color-mix(in srgb,var(--line) 60%,transparent);background:none;text-align:left;cursor:pointer;min-width:0}
 .lib-row:hover{background:var(--panel-2)}
+.lib-row.selected,.lib-row:focus-visible{background:color-mix(in srgb,var(--accent) 16%,transparent)}
+.lib-row:focus-visible{outline-offset:-2px}
+.lib-welcome{max-width:560px;margin:8vh auto 0;padding:28px;border:1px dashed var(--line);border-radius:18px;background:var(--panel);text-align:center}
+.lib-welcome[hidden]{display:none}
+.lib-welcome h2{font-family:var(--display);font-size:26px;letter-spacing:-.03em;margin:0 0 8px}
+.lib-welcome p{margin:0 0 18px;color:var(--muted);line-height:1.55}
+.lib-scan progress{width:min(260px,100%);height:8px;accent-color:var(--accent)}
+.lib-scan progress[hidden]{display:none}
+.lib-scan.busy{font:13px var(--body);color:var(--text)}
 .lib-row[aria-current="true"]{background:color-mix(in srgb,var(--accent) 12%,transparent)}
 .lib-row .no{width:26px;text-align:right;font:11px var(--mono);color:var(--faint);flex:none}
 .lib-row .cover{width:34px;height:34px;border-radius:7px;flex:none;object-fit:cover;background:var(--panel-2);border:1px solid var(--line)}
@@ -139,42 +183,61 @@ footer{min-height:44px;border-top:1px solid var(--line);display:flex;align-items
 .row-tools button:hover{border-color:var(--accent);color:var(--accent)}
 .lib-empty{padding:28px 16px;text-align:center;color:var(--muted)}
 .lib-note{margin:14px 0 0;font-size:12px;color:var(--faint)}
-.queue-view{max-width:1080px;margin:auto}
+.queue-view{max-width:1080px;margin:0 auto}
 #lib-browse,#queue-root{width:100%;--nakliamp-list-height:max(320px,calc(100dvh - 300px));--nakliamp-queue-height:max(320px,calc(100dvh - 280px))}
-.queue-view h2{font-family:var(--display);font-size:22px;margin:0 0 14px;letter-spacing:-.03em}
 
-/* Visualiser */
-.vis-wrap{position:relative;flex:0 1 150px;min-width:90px;height:40px;border:1px solid var(--line);border-radius:8px;background:var(--panel);overflow:hidden}
+
+/* Visualiser. One canvas (#vis in #vis-wrap) moves between three places: the
+   player bar strip, the Now playing stage and the full-window layer. A dark
+   screen in both themes, because the modes draw light on dark. */
+.vis-wrap{position:relative;width:100%;height:100%;background:#100d0a;overflow:hidden}
 .vis-wrap[hidden]{display:none}
 #vis{display:block;width:100%;height:100%}
-.vis-wrap.full{position:fixed;inset:0;z-index:50;flex:none;height:100vh;border-radius:0;border:0;background:#100d0a}
-.vis-wrap.full ~ #vis-full{position:fixed;z-index:51;right:18px;top:18px;background:var(--panel);border-color:var(--accent)}
-.vis-wrap.full #vis{height:100vh}
-.vis-pick{min-height:34px;max-width:120px;padding:4px 7px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--text);font:10px var(--mono)}
+.vis-slot-bar{flex:0 1 100px;min-width:72px;height:42px;border:1px solid var(--line);border-radius:8px;overflow:hidden;cursor:pointer;background:#100d0a}
+.vis-slot-bar:empty{display:none}
+.vis-full-layer{position:fixed;inset:0;z-index:90;background:#100d0a}
+.vis-full-layer[hidden]{display:none}
+.vis-slot-full{position:absolute;inset:0}
+#vis-exit{position:absolute;z-index:1;right:18px;top:18px;min-height:40px;padding:8px 14px;border:1px solid #6b5a44;border-radius:9px;background:rgba(26,22,18,.86);color:#efe8da;font:500 14px var(--body);cursor:pointer}
+#vis-exit:hover,#vis-exit:focus-visible{border-color:#e0a24a}
+html.vis-full{overflow:hidden}
+.vis-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:8px;margin:0 0 12px}
+.vis-tile{display:flex;flex-direction:column;gap:4px;padding:5px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--text);font:10px var(--mono);cursor:pointer;text-align:left}
+.vis-tile:hover,.vis-tile:focus-visible{border-color:var(--accent)}
+.vis-tile[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);background:var(--panel-2)}
+.vis-tile canvas{display:block;width:100%;height:auto;aspect-ratio:2/1;border-radius:5px;background:#100d0a}
+.vis-tile .vis-tile-still{display:block;width:100%;height:auto;aspect-ratio:2/1;object-fit:cover;border-radius:5px;background:#100d0a}
+.vis-tile .vis-tile-note{display:grid;place-items:center;aspect-ratio:2/1;border-radius:5px;background:#100d0a;color:#9d9180}
+.vis-link{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--muted)}
+.vis-pick{min-height:34px;max-width:120px;padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--text);font:13px var(--body)}
 
 /* View tabs */
 .views{display:flex;gap:6px;flex-wrap:wrap}
-.view-tab{min-height:32px;padding:5px 13px;border:1px solid var(--line);border-radius:999px;background:transparent;cursor:pointer;font:11px var(--mono);letter-spacing:.03em;color:var(--muted)}
+.view-tab{min-height:34px;padding:5px 14px;border:1px solid transparent;border-radius:9px;background:transparent;cursor:pointer;font:500 14px var(--body);color:var(--muted)}
 .view-tab:hover{border-color:var(--accent);color:var(--text)}
 .view-tab.on{background:var(--panel-2);border-color:var(--accent);color:var(--accent)}
 .view-tab[hidden]{display:none}
 
 /* The persistent player bar */
-.playerbar{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:10px clamp(12px,3vw,28px);border-top:1px solid var(--line);background:var(--glass);backdrop-filter:blur(18px);position:sticky;bottom:0;z-index:20}
+.playerbar{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:10px clamp(12px,3vw,28px);border-top:1px solid var(--line);background:var(--panel);position:sticky;bottom:0;z-index:20}
 .playerbar[hidden]{display:none}
 .pb-art{width:46px;height:46px;flex:none;border-radius:9px;border:1px solid var(--line);cursor:pointer;display:grid;place-items:center;padding:0;
   background:linear-gradient(145deg,rgba(245,190,100,.8),rgba(140,75,34,.92) 50%,rgba(42,28,19,.98));
   font-family:var(--display);font-weight:900;font-size:19px;color:rgba(255,245,225,.94)}
 .pb-art:hover{border-color:var(--accent)}
-.pb-track{min-width:0;flex:1 1 150px;max-width:290px}
+.pb-track{min-width:0;flex:1 1 130px;max-width:290px}
 .pb-track b{display:block;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pb-track span{display:block;font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pb-transport{display:flex;align-items:center;gap:6px;flex:none}
 .pb-transport .round{width:36px;height:36px;font-size:12px}
 .pb-transport .round.play{width:46px;height:46px;font-size:16px}
-.pb-modes{display:flex;gap:4px;flex:none}
+.pb-modes{display:flex;gap:4px;flex:none;flex-wrap:wrap;align-items:center}
+.pb-modes .vis-pick{max-width:76px}
+#output-device{max-width:130px}
+.volume-db{font:10px var(--mono);color:var(--muted);min-width:52px;text-align:right;white-space:nowrap}
+.timer-chip[hidden]{display:none}
 .pb-modes .chip-btn{min-height:30px;padding:3px 9px}
-.pb-time{display:grid;grid-template-columns:42px 1fr 42px;gap:9px;align-items:center;flex:1 1 200px;color:var(--faint);font:10px var(--mono)}
+.pb-time{display:grid;grid-template-columns:42px 1fr 42px;gap:9px;align-items:center;flex:1 1 120px;color:var(--faint);font:10px var(--mono)}
 .playerbar .volume-wrap{margin-left:0;flex:0 1 130px}
 
 /* A refusal is a banner about one file, not a screen that replaces everything */
@@ -187,54 +250,108 @@ footer{min-height:44px;border-top:1px solid var(--line);display:flex;align-items
 .refusal-body p{margin:3px 0 0;color:var(--muted);font-size:13px}
 .refusal-promise{display:block;margin-top:3px;font:10px var(--mono);color:var(--faint)}
 @media(max-width:760px){
-  .player-grid{grid-template-columns:1fr}.art{max-width:310px;width:74vw;margin:auto}.track{text-align:center}
-  .honesty,.now-tools{justify-content:center}
-  main{padding:22px 14px 40px}
+  .player-grid{grid-template-columns:1fr;gap:18px}
+  .stage-col{width:min(100%,440px);margin:0 auto}
+  .stage{max-height:52dvh;aspect-ratio:auto;height:min(calc(100vw - 28px),52dvh,440px)}
+  main{padding:18px 14px 28px}
   .playerbar{gap:8px}
-  .vis-wrap,.vis-pick{display:none}
   .pb-time{order:5;flex-basis:100%}
   .playerbar .volume-wrap{flex-basis:100px}
-  #open-another{display:none}
 }
-@media(max-width:420px){
-  .topbar{padding:8px 12px;gap:8px}
-  .top-actions{margin-left:0}
-  .pb-track{flex-basis:100%;max-width:none;order:-1}
-  .pb-art{display:none}
+/* Phones: one header row, the views in a bottom tab bar, a one-row player bar
+   that expands in Now playing, and everything else in the Menu. */
+@media(max-width:600px){
+  .topbar{min-height:52px;padding:6px 12px;gap:8px;flex-wrap:nowrap}
+  .wide-only{display:none}
+  .narrow-only{display:inline}
+  .menu [role=menuitem].narrow-only,.menu hr.narrow-only{display:block}
+  .tools-label{display:none}
+  .views{position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;gap:0;padding:4px 6px calc(4px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:var(--panel)}
+  .view-tab{flex:1;min-height:48px;border-radius:9px}
+  .view-tab.on{border-color:transparent}
+  .shell{padding-bottom:calc(58px + env(safe-area-inset-bottom))}
+  .playerbar{bottom:calc(58px + env(safe-area-inset-bottom));flex-wrap:nowrap;padding:8px 12px;gap:10px}
+  .pb-art{width:44px;height:44px}
+  .pb-track{flex:1 1 auto;max-width:none}
+  .pb-transport{gap:4px}
+  #prev,#back,#forward,.pb-time,.pb-modes,.volume-wrap,#output-device,.vis-slot-bar{display:none}
+  html[data-view="now"] .playerbar{flex-wrap:wrap}
+  html[data-view="now"] .pb-art,html[data-view="now"] .pb-track{display:none}
+  /* Small enough that the title, which the bar no longer repeats, shows above the controls. */
+  .stage{height:clamp(170px,calc(100dvh - 500px),calc(100vw - 28px))}
+  .stage-bar .vis-pick{max-width:120px}
+  html[data-view="now"] .pb-transport{flex:1 1 100%;justify-content:center;gap:8px}
+  html[data-view="now"] #prev,html[data-view="now"] #back,html[data-view="now"] #forward{display:grid}
+  html[data-view="now"] .pb-time{display:grid;flex-basis:100%}
+  html[data-view="now"] .pb-modes{display:flex;flex:1 1 100%;justify-content:center}
+  .lib-head h2{display:none}
+  .lib-head{gap:8px;margin-bottom:12px}
+  .lib-head .btn{min-height:38px;padding:7px 12px}
+  #lib-browse,#queue-root{--nakliamp-list-height:max(260px,calc(100dvh - 400px));--nakliamp-queue-height:max(260px,calc(100dvh - 330px))}
   .lib-row{padding:9px 10px;gap:8px}
   .lib-row .cover{display:none}
+  .menu{position:fixed;left:8px;right:8px;top:56px;min-width:0;max-height:calc(100dvh - 140px)}
+  footer{min-height:36px;padding:6px 12px}
 }
+@media(max-width:600px) and (pointer:fine){html[data-view="now"] .volume-wrap{display:flex;flex:1 1 100%;max-width:none}}
 
 /* Mini player (V6): art, title, transport and seek in a small window */
 html.mini .topbar,html.mini main,html.mini footer{display:none}
-html.mini .shell{grid-template-rows:1fr auto auto}
-html.mini .playerbar{position:static;display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-areas:"art track" "transport transport" "time time" "exit exit";gap:10px;padding:14px;border-top:0;max-width:420px;margin:0 auto;width:100%}
+html.mini .shell{min-height:0;grid-template-rows:auto;align-content:start;padding-bottom:0}
+html.mini .playerbar{position:static;display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-areas:"art track" "vis vis" "transport transport" "time time" "exit exit" "pop pop";gap:10px;padding:14px;border:1px solid var(--line);border-radius:14px;max-width:420px;margin:14px auto 0;width:calc(100% - 28px);align-self:start}
 html.mini .playerbar .pb-art{display:grid;grid-area:art;width:64px;height:64px}
-html.mini .pb-track{grid-area:track;max-width:none;align-self:center}
+html.mini .pb-track{grid-area:track;max-width:none;align-self:center;text-align:left}
 html.mini .pb-transport{grid-area:transport;justify-content:center}
-html.mini .pb-time{grid-area:time}
-html.mini .volume-wrap,html.mini .vis-wrap,html.mini .vis-pick,html.mini #vis-full,html.mini #open-another,html.mini .pb-modes{display:none}
+html.mini #prev,html.mini #back,html.mini #forward{display:grid}
+html.mini .pb-time{display:grid;grid-area:time}
+html.mini .vis-slot-bar{display:block;grid-area:vis;width:100%;height:96px;flex:none}
+html.mini .vis-slot-bar:empty{display:none}
+html.mini .volume-wrap,html.mini .vis-pick,html.mini #output-device,html.mini .pb-modes{display:none}
 html.mini #mini-exit{display:inline-flex;grid-area:exit;justify-self:center}
 #mini-exit{display:none}
+#mini-pop{display:none}
+html.mini #mini-pop:not([hidden]){display:inline-flex;grid-area:pop;justify-self:center}
+.pip-note{display:none}
+html.pip-out .pip-note{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;padding:10px 14px;border-top:1px solid var(--line);background:var(--panel);color:var(--muted);position:sticky;bottom:0;z-index:20}
 </style>
 </head>
 <body>
 <div class="shell">
   <header class="topbar">
     <div class="brand">Nakli<em>Amp</em></div>
-    <span class="version">v0.3.0-m2</span>
     <nav class="views" aria-label="Views">
       <button class="view-tab on" id="tab-library" type="button" data-view="library" aria-current="page">Library</button>
       <button class="view-tab" id="tab-queue" type="button" data-view="queue">Queue</button>
       <button class="view-tab" id="tab-now" type="button" data-view="now" hidden>Now playing</button>
     </nav>
-    <span class="path-chip" id="path-chip"></span>
     <div class="top-actions">
-      <button class="chip-btn" id="open-sound" type="button" aria-label="Sound: equaliser, ReplayGain, crossfade and gapless">Sound</button>
-      <button class="chip-btn" id="open-ai" type="button" aria-label="Make a playlist from a description">AI playlist</button>
-      <button class="chip-btn" id="theme-toggle" type="button" aria-label="Theme">Theme: light</button>
-      <button class="chip-btn" id="mini-toggle" type="button" aria-label="Mini player" aria-pressed="false">Mini</button>
-      <button class="chip-btn" id="open-keymap" type="button" aria-label="Keyboard shortcuts">?</button>
+      <button class="chip-btn wide-only" id="open-sound" type="button" aria-label="Sound: equaliser, ReplayGain, crossfade and gapless">Sound</button>
+      <button class="chip-btn wide-only" id="open-ai" type="button" aria-label="Make a playlist from a description">AI playlist</button>
+      <div class="menu-wrap">
+        <button class="chip-btn" id="tools-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="tools-menu" aria-label="Tools and settings menu"><span class="tools-label">Tools</span><span class="narrow-only">Menu</span> ▾</button>
+        <div class="menu" id="tools-menu" role="menu" aria-label="Tools and settings" hidden>
+          <button type="button" role="menuitem" class="narrow-only" data-view="sound">Sound: equaliser and gain</button>
+          <button type="button" role="menuitem" class="narrow-only" data-view="ai">AI playlist</button>
+          <hr class="narrow-only">
+          <button type="button" role="menuitem" data-act="file" id="open-another">Open an audio file</button>
+          <button type="button" role="menuitem" data-view="commands">Command bar (Ctrl+K)</button>
+          <button type="button" role="menuitem" data-view="music-folders">Music folders</button>
+          <button type="button" role="menuitem" data-view="duplicates">Duplicates</button>
+          <button type="button" role="menuitem" data-view="rename">Rename and replace</button>
+          <button type="button" role="menuitem" data-view="sleep">Sleep timer</button>
+          <button type="button" role="menuitem" data-view="similar">More like this</button>
+          <button type="button" role="menuitem" data-view="genre-fill">Fill missing genres</button>
+          <button type="button" role="menuitem" data-view="network">Network (off by default)</button>
+          <button type="button" role="menuitem" data-view="skins">Classic skin (.wsz)</button>
+          <hr class="narrow-only">
+          <button type="button" role="menuitem" class="narrow-only" data-act="theme" id="theme-item">Theme: light</button>
+          <button type="button" role="menuitem" class="narrow-only" data-act="mini">Mini player</button>
+          <button type="button" role="menuitem" class="narrow-only" data-view="keymap">Keyboard shortcuts</button>
+        </div>
+      </div>
+      <button class="chip-btn wide-only" id="theme-toggle" type="button" aria-label="Theme">Theme: light</button>
+      <button class="chip-btn wide-only" id="mini-toggle" type="button" aria-label="Mini player" aria-pressed="false">Mini</button>
+      <button class="chip-btn wide-only" id="open-keymap" type="button" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)">?</button>
     </div>
   </header>
 
@@ -256,13 +373,21 @@ html.mini #mini-exit{display:inline-flex;grid-area:exit;justify-self:center}
 
     <!-- The library. The default view once a folder exists; browsing never stops playback. -->
     <section class="view library" id="library" aria-labelledby="library-title">
-      <div class="lib-tabs" role="tablist" aria-label="Library views">
-        <button type="button" role="tab" id="lib-tab-tracks" aria-selected="true" aria-controls="lib-tracks">Tracks</button>
-        <button type="button" role="tab" id="lib-tab-browse" aria-selected="false" aria-controls="lib-browse" tabindex="-1">Browse</button>
+      <div class="lib-welcome" id="lib-welcome" hidden>
+        <h2>Add your music</h2>
+        <p>Choose the folder that holds your music. NakliAmp reads it on this device and lists it here by album, artist and genre.</p>
+        <div class="actions">
+          <button class="btn primary" id="welcome-folder" type="button">Open a music folder</button>
+          <button class="btn" id="welcome-file" type="button">Open a single file</button>
+        </div>
       </div>
-      <p class="lib-scan" id="lib-scan" role="status" hidden></p>
+      <div class="lib-tabs" role="tablist" aria-label="Library views">
+        <button type="button" role="tab" id="lib-tab-browse" aria-selected="true" aria-controls="lib-browse">Browse</button>
+        <button type="button" role="tab" id="lib-tab-tracks" aria-selected="false" aria-controls="lib-tracks" tabindex="-1">Files</button>
+      </div>
+      <p class="lib-scan" id="lib-scan" role="status" hidden><span id="lib-scan-text"></span><progress id="lib-scan-bar" aria-label="Indexing your music folder" hidden></progress></p>
       <p class="loud-line" id="loud-line" hidden><span id="loud-text"></span><button type="button" id="loud-toggle">Pause</button></p>
-      <div class="lib-pane" id="lib-tracks" role="tabpanel" aria-labelledby="lib-tab-tracks">
+      <div class="lib-pane" id="lib-tracks" role="tabpanel" aria-labelledby="lib-tab-tracks" hidden>
         <div class="lib-head">
           <h2 id="library-title">Library</h2>
           <input class="lib-search" id="lib-search" type="search" placeholder="Search your library" aria-label="Search your library" autocomplete="off">
@@ -274,34 +399,56 @@ html.mini #mini-exit{display:inline-flex;grid-area:exit;justify-self:center}
           <button class="btn" id="lib-rename" type="button" hidden>Rename</button>
           <button class="btn" id="lib-delete" type="button" hidden>Delete</button>
           <button class="btn" id="lib-rescan" type="button">Rescan</button>
+          <button class="btn" id="lib-folders" type="button">Folders</button>
           <button class="btn" id="lib-forget" type="button">Forget folder</button>
         </div>
         <ul class="lib-list" id="lib-list" aria-label="Tracks"></ul>
       </div>
-      <div class="lib-pane" id="lib-browse" role="tabpanel" aria-labelledby="lib-tab-browse" hidden></div>
+      <div class="lib-pane" id="lib-browse" role="tabpanel" aria-labelledby="lib-tab-browse"></div>
       <p class="lib-note">Your folder is read on your device. Nothing is uploaded, and the index never leaves this browser.</p>
     </section>
 
     <!-- The play queue, separate from whatever the library shows (P5). -->
     <section class="view queue-view" id="queue" aria-labelledby="queue-title">
-      <h2 id="queue-title">Queue</h2>
+      <h2 id="queue-title" class="sr-only">Queue</h2>
       <div id="queue-root"></div>
     </section>
 
     <!-- Now playing. A place you choose to go, not where you are dumped. -->
     <section class="view now" id="now" aria-labelledby="track-name">
       <div class="player-grid">
-        <div class="art" aria-hidden="true"><img id="art-img" alt="" hidden><span class="art-letter" id="art-letter">N</span></div>
+        <div class="stage-col">
+          <div class="stage" id="stage" data-show="vis">
+            <div class="cover-art" aria-hidden="true"><img id="art-img" alt="" hidden><span class="art-letter" id="art-letter">N</span></div>
+            <div class="vis-slot-now" id="vis-slot-now"></div>
+          </div>
+          <div class="stage-bar" role="group" aria-label="Cover and visualiser">
+            <div class="seg" role="group" aria-label="Show">
+              <button type="button" id="stage-cover" aria-pressed="false">Cover</button>
+              <button type="button" id="stage-vis" aria-pressed="true">Visualiser</button>
+            </div>
+            <select id="vis-mode" class="vis-pick" aria-label="Visualiser mode"></select>
+            <button class="chip-btn" id="vis-picker" type="button" title="Every visualiser with a live preview (Alt+V)">Visualisers</button>
+            <button class="chip-btn" id="vis-full" type="button" aria-pressed="false" aria-label="Full-window visualiser" title="Full window (Shift+V)">Full window</button>
+          </div>
+        </div>
         <div class="track">
           <div class="eyebrow" data-t="player.now">Now playing locally</div>
           <h1 class="track-name" id="track-name">Untitled track</h1>
           <p class="track-meta" id="track-meta">—</p>
-          <div class="honesty" id="honesty" aria-label="Playback path"></div>
           <div class="now-tools">
             <button class="btn" id="now-fav" type="button" aria-pressed="false">Favourite</button>
             <button class="btn" id="now-inspect" type="button">Track details</button>
             <button class="btn" id="now-tags" type="button">Edit tags</button>
           </div>
+          <details class="now-details" id="now-details">
+            <summary>Playback details <span class="details-route" id="details-route"></span></summary>
+            <div class="detail-body">
+              <span class="path-chip" id="path-chip"></span>
+              <div class="honesty" id="honesty" aria-label="Playback path"></div>
+              <p class="detail-note">How this track plays: container, codec, decoder, output and sound processing, as the engine reports them.</p>
+            </div>
+          </details>
         </div>
       </div>
       <div class="lyrics-pane" id="lyrics-root" aria-label="Lyrics"></div>
@@ -331,15 +478,18 @@ html.mini #mini-exit{display:inline-flex;grid-area:exit;justify-self:center}
     <div class="pb-modes">
       <button class="chip-btn" id="shuffle" type="button" aria-label="Shuffle: off" title="Shuffle (S)">Shuffle</button>
       <button class="chip-btn" id="repeat" type="button" aria-label="Repeat: off" title="Repeat (R)">Repeat</button>
+      <select class="vis-pick" id="speed" aria-label="Playback speed" title="Speed ([ and ])"></select>
+      <button class="chip-btn timer-chip" id="timer-chip" type="button" hidden></button>
     </div>
-    <label class="volume-wrap"><span aria-hidden="true">◖</span><input id="volume" type="range" min="0" max="1" step="0.01" value="0.8" aria-label="Volume"></label>
-    <div class="vis-wrap" id="vis-wrap">
-      <canvas id="vis" aria-label="Spectrum visualiser" role="img"></canvas>
-    </div>
-    <select id="vis-mode" class="vis-pick" aria-label="Visualiser mode"></select>
-    <button class="btn" id="vis-full" type="button" title="Full window (Shift+V)" aria-label="Full-window visualiser">⤢</button>
-    <button class="btn" id="open-another" type="button" data-t="action.another">Open another</button>
+    <label class="volume-wrap"><span aria-hidden="true">◖</span><input id="volume" type="range" min="0" max="1" step="any" value="0.8" aria-label="Volume"><span class="volume-db" id="volume-db" aria-hidden="true"></span></label>
+    <select class="vis-pick" id="output-device" aria-label="Output device" hidden></select>
+    <div class="vis-slot-bar" id="vis-slot-bar" title="Visualiser: click to see it large in Now playing"><div class="vis-wrap" id="vis-wrap"><canvas id="vis" aria-label="Spectrum visualiser" role="img"></canvas></div></div>
     <button class="chip-btn" id="mini-exit" type="button">Full player</button>
+    <button class="chip-btn" id="mini-pop" type="button" hidden title="Keep the mini player on top of other windows">Pop out</button>
+  </div>
+  <div class="pip-note" id="pip-note" role="status">
+    <span>The player is in a pop-out window.</span>
+    <button class="chip-btn" id="pip-return" type="button">Bring it back</button>
   </div>
 
   <!-- A refusal is about one file. It must not destroy the library or stop playback. -->
@@ -354,7 +504,14 @@ html.mini #mini-exit{display:inline-flex;grid-area:exit;justify-self:center}
     <button class="btn" id="refusal-dismiss" type="button" aria-label="Dismiss">Dismiss</button>
   </div>
 
-  <footer data-t="privacy">Local playback only · no account · no cookies · no analytics</footer>
+  <footer><span data-t="privacy">Local playback only · no account · no cookies · no analytics</span>&nbsp;·&nbsp;<span class="version">v0.3.0-m2</span></footer>
+</div>
+
+<!-- The full-window visualiser. Outside the shell, so nothing in the page can
+     become its containing block (B1: a backdrop filter on the player bar did). -->
+<div class="vis-full-layer" id="vis-full-layer" role="dialog" aria-label="Full-window visualiser" hidden>
+  <div class="vis-slot-full" id="vis-slot-full"></div>
+  <button id="vis-exit" type="button" title="Exit full window (Shift+V or Esc)">Exit full window</button>
 </div>
 
 <input id="file-input" type="file" accept="audio/*,.mp3,.flac,.m4a,.aac,.ogg,.opus,.wav,.mka,.aiff,.aif,.caf,.au,.wma,.ape" hidden aria-label="Choose an audio file">
@@ -1627,10 +1784,11 @@ html.mini #mini-exit{display:inline-flex;grid-area:exit;justify-self:center}
 <script type="module">
 import { createNakliAmpEngine } from './engine/nakliamp-engine.mjs';
 import { decodePcm, sniffPcm } from './app/decode/pcm.mjs';
-import { createVisualiser } from './app/visualiser/driver.mjs';
+import { createVisualiser, createPreviewGrid } from './app/visualiser/driver.mjs';
+import { MILKDROP_STILL_URL } from './app/visualiser/milkdrop-still.mjs';
 import {
   allTracks, getArt, updateTrackState, compareAlbumOrder, clearLibrary, allPlaylists, allSmartPlaylists,
-  setRating, setFavourite, getLoudness, putLoudness, loudnessKey,
+  setRating, setFavourite, getLoudness, putLoudness, loudnessKey, setMeta,
 } from './app/library/store.mjs';
 import { searchTracks } from './app/library/search.mjs';
 import { toM3u8, safePlaylistFileName, appendToPlaylist, mergeEntry, PlaylistFormatError } from './app/library/playlist.mjs';
@@ -1638,9 +1796,32 @@ import { browse, folderOf, GROUP_VIEWS } from './app/library/views.mjs';
 import { evaluateSmart, serialiseSmart, smartFileName } from './app/library/smart.mjs';
 import { createWatcher } from './app/library/watch.mjs';
 import {
-  supportsFolderGrant, requestFolder, storedFolder, storedFolderName, grantState,
-  reclaimFolder, forgetFolder, startScan, adoptFolder, directoryFromDrop, persistStorage,
+  supportsFolderGrant, grantState, reclaimFolder, forgetFolder, startScan, adoptFolder, directoryFromDrop, persistStorage,
 } from './app/library/scan.mjs';
+import { createFolderLibrary, splitLibraryPath } from './app/library/folders.mjs';
+import { playbackSpan, reachedSpanEnd, continuesInFile, isVirtual } from './app/library/cue.mjs';
+import { findDuplicates } from './app/library/duplicates.mjs';
+import { planRename, planFindReplace, canRenameOnDisk, renameOnDisk } from './app/library/rename.mjs';
+import { saveTagsToHandle } from './app/tags/save.mjs';
+import { createPlaybackTimers, clampSpeed, stepSpeed, formatSpeed, formatRemaining, SPEED_STEPS } from './app/player/timers.mjs';
+import { createTransientStore, receiveFiles, isTransientId } from './app/player/transient.mjs';
+import { positionToDb, dbToPosition, positionToGain, stepDb, formatDb, clampFloor } from './app/audio/volume.mjs';
+import { parseEqf, eqfToSettings, exportCurrentEq } from './app/audio/eqf.mjs';
+import { createConsent } from './app/net/consent.mjs';
+import { createMusicBrainz, isMbid } from './app/net/musicbrainz.mjs';
+import { createLrclib, sidecarPlan } from './app/net/lrclib.mjs';
+import { createListenBrainz, createPlayTracker, LB_ORIGIN } from './app/net/listenbrainz.mjs';
+import { moreLikeThis } from './app/ai/similar.mjs';
+import { suggestGenres } from './app/ai/genres.mjs';
+import { registerWebMcpTools } from './app/agent/webmcp.mjs';
+import { CHANNEL_NAME, buildSnapshot, createEventPublisher, createChannelBridge, instanceId } from './app/agent/events.mjs';
+import { readSpectrum, DEFAULT_BANDS } from './app/agent/spectrum.mjs';
+import { mountNetworkPanel } from './app/ui/v1x-network.mjs';
+import { mountDuplicates, mountRename, mountFolders } from './app/ui/v1x-library-tools.mjs';
+import { mountSleepTimer } from './app/ui/v1x-timers.mjs';
+import { mountCommandBar } from './app/ui/v1x-command-bar.mjs';
+import { mountSimilar, mountGenreFill } from './app/ui/v1x-ai-tools.mjs';
+import { mountWebampFace } from './app/ui/webamp-face.mjs';
 import { createLoudnessScanner } from './app/audio/loudness.mjs';
 import { createQueue } from './app/player/queue.mjs';
 import { loadSettings, saveSettings, onSettings } from './app/settings.mjs';
@@ -1664,6 +1845,7 @@ import {
 } from './app/ui/shell/format.mjs';
 import { applyTheme } from './app/ui/shell/theme.mjs';
 import { createMediaSession } from './app/ui/shell/media-session.mjs';
+import { createPopOut } from './app/ui/shell/pip.mjs';
 
 const STRINGS = Object.freeze({
   en: Object.freeze({
@@ -1694,7 +1876,45 @@ const locale = 'en';
 const t = key => STRINGS[locale]?.[key] ?? STRINGS.en[key] ?? key;
 document.querySelectorAll('[data-t]').forEach(element => { element.textContent = t(element.dataset.t); });
 
-const $ = selector => document.querySelector(selector);
+// The player bar's own elements by id, taken once. The bar can move into a Document
+// Picture-in-Picture window (app/ui/shell/pip.mjs), where document.querySelector no
+// longer finds it; these references keep every control reachable in either document.
+const playerParts = new Map([document.querySelector('#playerbar'), ...document.querySelectorAll('#playerbar [id]')]
+  .map(element => [`#${element.id}`, element]));
+const $ = selector => playerParts.get(selector) ?? document.querySelector(selector);
+
+// The mini player in a Document Picture-in-Picture window (UX review minor 5). Popping
+// out leaves the tab in the full layout with a note, and closing the window brings the
+// bar back and restores the mini layout if it was on.
+let miniBeforePopOut = false;
+const popOut = createPopOut({
+  element: $('#playerbar'),
+  title: 'NakliAmp mini player',
+  onKeydown: event => onShortcutKey(event),
+  onOpen: () => paintPopOut(),
+  onClose: () => {
+    paintPopOut();
+    if (miniBeforePopOut && !settings.miniPlayer) saveSettings({ miniPlayer: true });
+    placeVisualiser();
+  },
+});
+
+/** Open the pop-out from a click: the window first (it needs the click), then the layout. */
+async function openPopOut() {
+  if (popOut.isOpen()) return;
+  miniBeforePopOut = settings.miniPlayer;
+  revealPlayer();
+  await popOut.open();
+  if (settings.miniPlayer) saveSettings({ miniPlayer: false });
+  placeVisualiser();
+}
+
+function paintPopOut() {
+  const out = popOut.isOpen();
+  document.documentElement.classList.toggle('pip-out', out);
+  $('#mini-pop').hidden = !popOut.supported;
+  $('#mini-exit').textContent = out ? 'Back to the tab' : 'Full player';
+}
 // Set inside the harness block at the end of this script, which the release
 // build cuts out, so a released file never reads the query flag. Every use
 // below runs after an await, by which time the block has run.
@@ -1707,6 +1927,8 @@ const SOFTWARE_DECODERS = [
   { name: 'in-house PCM', sniff: sniffPcm, decode: decodePcm },
 ];
 const engine = createNakliAmpEngine({ version: VERSION, softwareDecoders: SOFTWARE_DECODERS });
+// Stop after this track and the sleep timer (P10). Pure state; renderClock drives it.
+const timers = createPlaybackTimers();
 let uiLoadId = 0;
 let toastTimer = 0;
 let seeking = false;
@@ -1717,24 +1939,35 @@ let settings = loadSettings();
 let hostTheme = null;
 
 function dspPatch(s) {
-  return { eq: s.eq, replayGain: s.replayGain, crossfadeS: s.crossfadeS, gapless: s.gapless };
+  return { eq: s.eq, replayGain: s.replayGain, crossfadeS: s.crossfadeS, gapless: s.gapless, mono: s.mono };
 }
 // The chain switches on here; until this call the engine routes exactly as before.
 engine.setDsp(dspPatch(settings));
+engine.setRate(settings.speed);
 
 function paintTheme() {
   const applied = applyTheme(document.documentElement, settings.theme, { hosted: host.hosted(), host: hostTheme });
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.content = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || (applied === 'dark' ? '#161310' : '#f6f2ea');
-  const label = { system: host.hosted() ? 'NakliOS' : 'light', light: 'light', dark: 'dark' }[settings.theme];
-  $('#theme-toggle').textContent = `Theme: ${label}`;
-  $('#theme-toggle').setAttribute('aria-label', `Theme: ${label}. Change theme`);
+  // Outside NakliOS 'system' is light, so it is labelled by what shows (minor 1).
+  const label = settings.theme === 'system' && host.hosted() ? 'NakliOS' : applied;
+  for (const id of ['#theme-toggle', '#theme-item']) {
+    $(id).textContent = `Theme: ${label}`;
+    $(id).setAttribute('aria-label', `Theme: ${label}. Change theme`);
+  }
+}
+
+/** The next theme a click gives: light and dark standalone, plus the host theme inside NakliOS. */
+function nextTheme() {
+  if (host.hosted()) return cycle(['light', 'dark', 'system'], settings.theme);
+  return document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
 }
 
 function paintMini() {
   document.documentElement.classList.toggle('mini', settings.miniPlayer);
   $('#mini-toggle').setAttribute('aria-pressed', String(settings.miniPlayer));
   if (settings.miniPlayer) revealPlayer();
+  placeVisualiser();
 }
 
 onSettings((next, before) => {
@@ -1746,6 +1979,8 @@ onSettings((next, before) => {
   if (next.repeat !== before.repeat && queue.snapshot().repeat !== next.repeat) queue.setRepeat(next.repeat);
   if (next.loudnessScan !== before.loudnessScan) applyLoudnessSetting();
   if (next.seekStepS !== before.seekStepS) paintSeekButtons();
+  if (next.speed !== before.speed) { engine.setRate(next.speed); paintSpeed(); }
+  if (next.volumeFloorDb !== before.volumeFloorDb) applyVolume();
   paintHonesty();
   preloadNext();
 });
@@ -1758,6 +1993,7 @@ onSettings((next, before) => {
  */
 function show(view) {
   for (const name of VIEWS) $(`#${name}`).classList.toggle('on', name === view);
+  document.documentElement.dataset.view = view;
   for (const tab of document.querySelectorAll('.view-tab')) {
     const on = tab.dataset.view === view;
     tab.classList.toggle('on', on);
@@ -1765,6 +2001,8 @@ function show(view) {
   }
   if (view === 'queue') ensureQueuePanel();
   if (view === 'now') ensureLyricsPanel();
+  if (view === 'library') showLibraryPane(libraryPane);
+  placeVisualiser();
 }
 
 function currentView() {
@@ -1784,7 +2022,10 @@ for (const tab of document.querySelectorAll('.view-tab')) {
   });
 }
 
-let libraryPane = 'tracks';
+// Browse is the library's main list (M4); Files is the folder index with
+// playlist-file editing. Both follow one click rule: a click selects, a double
+// click or Enter plays.
+let libraryPane = 'browse';
 function showLibraryPane(pane) {
   libraryPane = pane;
   const tracks = pane === 'tracks';
@@ -1795,6 +2036,7 @@ function showLibraryPane(pane) {
     $(id).tabIndex = on ? 0 : -1;
   }
   if (!tracks) ensureBrowsePanel();
+  paintWelcome();
 }
 $('#lib-tab-tracks').addEventListener('click', () => showLibraryPane('tracks'));
 $('#lib-tab-browse').addEventListener('click', () => showLibraryPane('browse'));
@@ -1810,6 +2052,13 @@ document.querySelector('.lib-tabs').addEventListener('keydown', event => {
 
 function toast(message, timeoutMs = 2600) {
   clearTimeout(toastTimer);
+  // Above the player bar (and the phone tab bar), never over its controls (minor 7).
+  const tops = [innerHeight];
+  if (!$('#playerbar').hidden) tops.push($('#playerbar').getBoundingClientRect().top);
+  const tabs = document.querySelector('.views');
+  if (getComputedStyle(tabs).position === 'fixed') tops.push(tabs.getBoundingClientRect().top);
+  const covered = Math.max(0, innerHeight - Math.min(...tops));
+  $('#toast').style.setProperty('--toast-bottom', `${Math.round(covered + 14)}px`);
   $('#toast').textContent = message;
   $('#toast').hidden = false;
   toastTimer = setTimeout(() => { $('#toast').hidden = true; }, timeoutMs);
@@ -1817,7 +2066,7 @@ function toast(message, timeoutMs = 2600) {
 
 // ------------------------------------------------------ now playing ----
 
-const PATH_CHIP = { r1: 'R1 · REEL ENGINE', r2: 'R2 · NATIVE PASSTHROUGH', r3: 'R3 · SOFTWARE DECODE', lane: 'GAPLESS LANE' };
+const PATH_CHIP = { r1: 'R1 · NakliAmp engine', r2: 'R2 · browser native audio', r3: 'R3 · software decode', lane: 'Gapless lane' };
 
 function honestyMarkup(state) {
   const parts = [
@@ -1922,9 +2171,11 @@ function renderTrack(state) {
   $('#track-name').textContent = title;
   $('#art-letter').textContent = initialFor(name);
   $('#track-meta').textContent = trackMetaText(state);
-  $('#duration').textContent = formatTime(state.media.duration);
-  $('#seek').max = String(Math.max(0.01, state.media.duration || 0.01));
+  const length = trackDuration(state);
+  $('#duration').textContent = formatTime(length);
+  $('#seek').max = String(Math.max(0.01, length || 0.01));
   $('#path-chip').textContent = PATH_CHIP[state.path] ?? PATH_CHIP.r2;
+  $('#details-route').textContent = PATH_CHIP[state.path] ?? PATH_CHIP.r2;
   honestyKey = '';
   paintHonesty();
 
@@ -1950,17 +2201,33 @@ function paintNowTools() {
 /** A track that has reached its duration is finished, whatever the clock says. */
 function hasEnded(state) {
   const { positionS } = state.clock;
+  // A cue-sheet track ends at its own end time, inside the parent file (P12).
+  if (isVirtual(playingTrack) && playbackSpan(playingTrack).endS !== null) return reachedSpanEnd(playingTrack, positionS);
   const { duration } = state.media;
   return Boolean(duration) && Number.isFinite(duration) && positionS >= duration - 0.05;
 }
+
+// Track time: a cue-sheet track shows and seeks from its own start (P12).
+const spanStart = track => (isVirtual(track) ? playbackSpan(track).startS : 0);
+function spanLength(track, state) {
+  if (!isVirtual(track)) return state.media.duration;
+  const span = playbackSpan(track);
+  const end = span.endS ?? state.media.duration;
+  return Number.isFinite(end) ? Math.max(0, end - span.startS) : null;
+}
+function trackPosition(state) { return Math.max(0, (Number(state.clock.positionS) || 0) - spanStart(playingTrack)); }
+function trackDuration(state) { return playingTrack ? spanLength(playingTrack, state) : state.media.duration; }
+/** Seek to a position in track time. */
+function seekTrack(seconds) { return engine.seek(spanStart(playingTrack) + Math.max(0, Number(seconds) || 0)); }
 
 let lastPlaying = null;
 /** The transport row: clock, seek position, play/pause glyph, prev/next availability. */
 function paintTransport(state) {
   const ended = hasEnded(state);
   const playing = state.clock.playing && !ended;
-  $('#elapsed').textContent = formatTime(state.clock.positionS);
-  if (!seeking) $('#seek').value = String(state.clock.positionS || 0);
+  const position = trackPosition(state);
+  $('#elapsed').textContent = formatTime(position);
+  if (!seeking) $('#seek').value = String(position || 0);
   $('#play').textContent = playing ? 'Ⅱ' : '▶';
   $('#play').setAttribute('aria-label', playing ? 'Pause' : 'Play');
   const snap = queue.snapshot();
@@ -1968,7 +2235,7 @@ function paintTransport(state) {
   $('#prev').disabled = !inQueue || (snap.index <= 0 && snap.repeat === 'off');
   $('#next').disabled = !inQueue || queue.peekNext() === null;
   if (playing !== lastPlaying) { lastPlaying = playing; mediaSession.setPlaying(playing); }
-  mediaSession.setPosition({ duration: state.media.duration, position: state.clock.positionS });
+  mediaSession.setPosition({ duration: trackDuration(state), position });
 }
 
 /**
@@ -1980,7 +2247,7 @@ function paintTransport(state) {
  */
 function maybeAdvance(state) {
   if (!state.path || !hasEnded(state) || state.status !== 'playing') return;
-  if (state.dsp?.next === 'gapless' || state.dsp?.next === 'crossfade') return;
+  if (!isVirtual(playingTrack) && (state.dsp?.next === 'gapless' || state.dsp?.next === 'crossfade')) return;
   if (advancing || endedTrackKey === currentTrackKey()) return;
   endedTrackKey = currentTrackKey();
   advancing = true;
@@ -1989,11 +2256,12 @@ function maybeAdvance(state) {
 
 function renderClock() {
   const state = engine.state();
-  if (state.path) { paintTransport(state); paintHonesty(); }
+  if (state.path) { paintTransport(state); paintHonesty(); tickTimers(state); }
   const idle = !state.path || !state.clock.playing || hasEnded(state);
   if (!idle && !visualiser.running) visualiser.start();
   // Nothing is moving, so nothing needs repainting.
   if (idle && visualiser.running) visualiser.stop();
+  paintStageIdle();
   maybeAdvance(state);
   requestAnimationFrame(renderClock);
 }
@@ -2032,7 +2300,7 @@ async function openMedia(input, { autoplay = true, meta = null } = {}) {
   try {
     await engine.load(input, meta);
     if (loadId !== uiLoadId) return null;
-    engine.setVolume(Number($('#volume').value));
+    applyVolume();
     renderTrack(engine.state());
     toast(t('toast.ready'));
     if (autoplay) await playAfterLoad();
@@ -2078,7 +2346,7 @@ async function togglePlay() {
   try {
     if (state.clock.playing && !hasEnded(state)) engine.pause();
     else {
-      if (hasEnded(state)) await engine.seek(0);
+      if (hasEnded(state)) await seekTrack(0);
       await engine.play();
     }
   } catch (error) {
@@ -2086,12 +2354,32 @@ async function togglePlay() {
   }
 }
 
-function setUiVolume(value) {
-  // Keep the five-percent keyboard increments representable by the slider.
-  const next = steppedVolume(value);
-  $('#volume').value = String(next);
-  engine.setVolume(Number($('#volume').value));
-  try { localStorage.setItem('nakliamp:volume', $('#volume').value); } catch { /* blocked storage */ }
+// Volume (S5): the slider is a position 0..1 that maps linearly to dB between the
+// floor setting and 0 dB, so every step is the same change in loudness. The engine
+// gets the linear gain, times the sleep timer's fade (P10).
+let volumePosition = Number($('#volume').value);
+let timerFade = 1;
+
+function volumeDb() { return positionToDb(volumePosition, settings.volumeFloorDb); }
+
+/** Push the slider position and the fade to the engine and the label. */
+function applyVolume() {
+  engine.setVolume(Math.max(0, Math.min(1, positionToGain(volumePosition, settings.volumeFloorDb) * timerFade)));
+  const text = formatDb(volumeDb());
+  $('#volume-db').textContent = text;
+  $('#volume').setAttribute('aria-valuetext', text);
+}
+
+function setUiVolume(position) {
+  volumePosition = Math.max(0, Math.min(1, Number(position) || 0));
+  $('#volume').value = String(volumePosition);
+  applyVolume();
+  try { localStorage.setItem('nakliamp:volume', String(volumePosition)); } catch { /* blocked storage */ }
+}
+
+/** Step the volume in dB (keys step 2 dB); stepping down past the floor mutes. */
+function stepVolumeDb(deltaDb) {
+  setUiVolume(dbToPosition(stepDb(volumeDb(), deltaDb, settings.volumeFloorDb), settings.volumeFloorDb));
 }
 
 // `getItem` returns null when nothing is stored, and `Number(null)` is 0: absence
@@ -2101,7 +2389,7 @@ function setUiVolume(value) {
   try { storedVolume = localStorage.getItem('nakliamp:volume'); } catch { storedVolume = null; }
   if (storedVolume !== null) {
     const savedVolume = Number(storedVolume);
-    if (Number.isFinite(savedVolume) && savedVolume >= 0 && savedVolume <= 1) $('#volume').value = String(savedVolume);
+    if (Number.isFinite(savedVolume) && savedVolume >= 0 && savedVolume <= 1) { volumePosition = savedVolume; $('#volume').value = String(savedVolume); }
   }
 }
 
@@ -2127,9 +2415,22 @@ function notifyLibrary() {
   for (const fn of libraryListeners) { try { fn(); } catch (error) { console.warn('[nakliamp] library listener failed', error); } }
 }
 
-function releaseArt() {
-  for (const url of artUrls.values()) URL.revokeObjectURL(url);
-  artUrls.clear();
+/**
+ * Revoke only the cover URLs whose art key left the library. Revoking every URL
+ * on each refresh broke covers that visible rows (and Browse's cache) still
+ * showed, which flashed broken-image icons (minor 10).
+ */
+function releaseArt(liveTracks = []) {
+  const live = new Set();
+  for (const track of liveTracks) {
+    if (track.artKey) live.add(track.artKey);
+    if (track.dirArtKey) live.add(track.dirArtKey);
+  }
+  for (const [key, url] of artUrls) {
+    if (live.has(key)) continue;
+    URL.revokeObjectURL(url);
+    artUrls.delete(key);
+  }
 }
 
 /** Embedded art first, then the folder image beside the file (T3). */
@@ -2150,7 +2451,7 @@ function albumHeading(track) {
 
 /** Which tracks the list should show: the playlist's, or the whole folder, filtered. */
 function visibleTracks(query, playlist) {
-  let source = libraryTracks;
+  let source = libraryVisible();
   let missing = 0;
   if (playlist) ({ found: source, missing } = tracksForPlaylist(playlist));
   const visible = searchTracks(source, query);
@@ -2166,8 +2467,20 @@ function appendEmptyRow(list) {
   const empty = document.createElement('li');
   empty.className = 'lib-empty';
   empty.textContent = libraryTracks.length ? t('library.empty') : t('library.none');
-  if (!libraryTracks.length) reportScan('');
   list.append(empty);
+}
+
+/**
+ * With no music indexed, the library is one welcome card (minors 2 and 13): no
+ * empty tabs, no second copy of the same sentence in the status line.
+ */
+function paintWelcome() {
+  const empty = libraryTracks.length === 0 && !scanning;
+  $('#lib-welcome').hidden = !empty;
+  document.querySelector('.lib-tabs').hidden = empty;
+  $('#lib-tracks').hidden = empty || libraryPane !== 'tracks';
+  $('#lib-browse').hidden = empty || libraryPane !== 'browse';
+  if (empty && $('#lib-scan-text').textContent === t('library.none')) reportScan('');
 }
 
 function paintLibraryHead({ query, visible, source, playlist, missing }) {
@@ -2183,6 +2496,7 @@ function paintLibraryHead({ query, visible, source, playlist, missing }) {
   if (playlist && missing) {
     reportScan(`${playlist.name}: ${missing} of ${playlist.entries.length} entries are not in this folder.`);
   }
+  paintWelcome();
 }
 
 function libraryRow(track, index, playingId, playlist) {
@@ -2280,130 +2594,212 @@ function markPlaying() {
 }
 
 async function refreshLibrary() {
-  releaseArt();
   libraryTracks = await allTracks();
+  releaseArt(libraryTracks);
   byId = new Map(libraryTracks.map(track => [track.id, track]));
   if (playingTrack) playingTrack = byId.get(playingTrack.id) ?? playingTrack;
-  try { folderHandleCache = await storedFolder(); } catch { folderHandleCache = null; }
+  await refreshFolders();
   await refreshPlaylists();
   await renderLibrary();
   notifyLibrary();
 }
 
-function reportScan(message) {
-  const line = $('#lib-scan');
-  line.hidden = !message;
-  line.textContent = message || '';
+/**
+ * The status line above the library. While a scan runs it carries a progress
+ * bar (minor 6). The bar is indeterminate because the scanner does not count
+ * a folder's files before it reads them, so there is no total to divide by.
+ */
+function reportScan(message, { busy = false } = {}) {
+  // The welcome card already says there is no folder; the line would repeat it.
+  const repeat = message === t('library.none') && !$('#lib-welcome').hidden;
+  const text = repeat ? '' : (message || '');
+  $('#lib-scan').hidden = !text;
+  $('#lib-scan-text').textContent = text;
+  $('#lib-scan-bar').hidden = !busy;
+  $('#lib-scan').classList.toggle('busy', busy);
+}
+
+// ------------------------------------------------------ music folders (L13) ----
+
+// Each granted folder keeps its own handle; the first is primary and keeps plain
+// paths, every other one has paths under `//<id>/` (app/library/folders.mjs).
+const folderLibrary = createFolderLibrary();
+let folderRows = [];
+const folderListeners = new Set();
+
+async function refreshFolders() {
+  try { folderRows = await folderLibrary.load(); } catch { folderRows = []; }
+  folderHandleCache = primaryRow()?.handle ?? null;
+  for (const fn of folderListeners) { try { fn(folderRows); } catch (error) { console.warn('[nakliamp] folder listener failed', error); } }
+  return folderRows;
+}
+
+function primaryRow() { return folderRows.find(row => row.primary) ?? null; }
+function folderRowById(id) { return folderRows.find(row => row.id === id) ?? null; }
+function rowForPath(path) {
+  const { folderId } = splitLibraryPath(path);
+  return folderRows.find(row => (folderId === null ? row.primary : row.id === folderId)) ?? null;
+}
+
+/** The handle with a live grant, or a CommandError that says what to do. */
+async function ensureGrant(row, { write = false } = {}) {
+  // A lapsed grant and a deleted file fail identically at getFile(), so the
+  // permission is checked first.
+  if (await grantState(row.handle) !== 'granted' && await reclaimFolder(row.handle) !== 'granted') {
+    $('#lib-reopen').hidden = false;
+    throw new CommandError('unavailable', write
+      ? `Saving needs write access to ${row.name || 'your folder'}. Use Reopen folder.`
+      : `NakliAmp needs permission to read ${row.name || 'your folder'} again. Use Reopen folder.`);
+  }
+  return row.handle;
+}
+
+/** The owning folder's handle and the path inside it, for a library path. */
+async function locate(path, { write = false } = {}) {
+  const { folderId, relativePath } = splitLibraryPath(path);
+  const row = rowForPath(path);
+  if (!row) {
+    throw new CommandError('unavailable', folderId === null ? 'Open your music folder first.' : 'The folder holding this file is no longer in the library.');
+  }
+  return { row, handle: await ensureGrant(row, { write }), relativePath };
+}
+
+async function pickFolder() {
+  if (!supportsFolderGrant()) throw new CommandError('unavailable', t('library.nogrant'));
+  try {
+    return await showDirectoryPicker({ id: 'nakliamp-library', mode: 'readwrite' });
+  } catch (error) {
+    if (error?.name === 'AbortError') return null;
+    throw error;
+  }
+}
+
+/** Add a granted folder to the library (the first becomes primary) and scan it. */
+async function addFolder(handle) {
+  const { folder, added } = await folderLibrary.add(handle);
+  await persistStorage();
+  await refreshFolders();
+  return { folder, added };
 }
 
 /**
  * Scans are serialised, and a request made while one runs is queued rather
- * than dropped (one waiting scan is enough: it reads the folder as it stands).
+ * than dropped (one waiting scan per folder is enough: it reads the folder as it stands).
  */
 let scanChain = Promise.resolve();
-let scansWaiting = 0;
+const scansWaiting = new Set();
 
-function runScan(handle) {
-  if (scansWaiting > 0) return scanChain;
-  if (scanning) scansWaiting += 1;
+function runScan(row) {
+  if (!row?.handle) return scanChain;
+  if (scansWaiting.has(row.id)) return scanChain;
+  scansWaiting.add(row.id);
   scanChain = scanChain.then(async () => {
-    if (scansWaiting > 0) scansWaiting -= 1;
-    await performScan(handle);
+    scansWaiting.delete(row.id);
+    await performScan(row);
   });
   return scanChain;
 }
+
+/** Rescan every folder whose grant is live. */
+async function rescanAll() {
+  for (const row of folderRows) {
+    if (await grantState(row.handle) === 'granted') await runScan(row);
+  }
+}
+
+/** Rescan the folder a library path belongs to. */
+function rescanPath(path) { return runScan(rowForPath(path) ?? primaryRow()); }
 
 function cancelScan() {
   scanning?.cancel();
 }
 
-async function performScan(handle) {
-  reportScan('Scanning your folder...');
+async function performScan(row) {
+  const label = folderRows.length > 1 ? `${row.name || 'folder'}: ` : '';
+  reportScan(`${label}Indexing your music folder...`, { busy: true });
   try {
-    scanning = startScan(handle, {
-      onProgress: ({ scanned, updated }) => reportScan(`Scanned ${scanned} files, indexed ${updated}.`),
+    scanning = startScan(row.handle, {
+      folderId: row.primary ? null : row.id,
+      onProgress: ({ scanned, updated }) => reportScan(
+        `${label}Indexing your music: ${scanned.toLocaleString()} files read, ${updated.toLocaleString()} added or updated.`,
+        { busy: true },
+      ),
       onFileError: () => {},
     });
+    paintWelcome();
     const summary = await scanning.done;
     reportScan(
-      `${summary.tracks} tracks indexed in ${(summary.durationMs / 1000).toFixed(1)}s`
+      `${label}${summary.tracks} tracks indexed in ${(summary.durationMs / 1000).toFixed(1)}s`
       + (summary.playlists ? `, ${summary.playlists} playlist${summary.playlists === 1 ? '' : 's'}` : '')
       + (summary.failed ? `, ${summary.failed} unreadable` : '') + '.',
     );
     await refreshLibrary();
-    watcher?.markScanned();
-    startWatching(handle);
+    watchers.get(row.id)?.watcher.markScanned();
+    startWatching(row);
     scheduleLoudness();
   } catch (error) {
     reportScan(`Scan stopped: ${error.message}`);
   } finally {
     scanning = null;
+    paintWelcome();
   }
 }
 
-// Folder watching (L11): rescan on focus after an interval, and on FileSystemObserver events.
-let watcher = null;
-let watchedHandle = null;
-function startWatching(handle) {
-  if (HARNESS || watchedHandle === handle) return;
-  watcher?.stop();
-  watchedHandle = handle;
-  watcher = createWatcher({
-    handle,
+// Folder watching (L11): one watcher per folder, rescanning on focus after an
+// interval and on FileSystemObserver events.
+const watchers = new Map(); // folder id -> { handle, watcher }
+function startWatching(row) {
+  if (HARNESS || watchers.get(row.id)?.handle === row.handle) return;
+  watchers.get(row.id)?.watcher.stop();
+  const watcher = createWatcher({
+    handle: row.handle,
     rescan: async () => {
-      if (await grantState(handle) !== 'granted') return;
-      await runScan(handle);
+      if (await grantState(row.handle) !== 'granted') return;
+      await runScan(row);
     },
     onError: () => {},
   });
+  watchers.set(row.id, { handle: row.handle, watcher });
   watcher.start().catch(() => {});
 }
-function stopWatching() {
-  watcher?.stop();
-  watcher = null;
-  watchedHandle = null;
+function stopWatching(id = null) {
+  for (const [key, entry] of watchers) {
+    if (id !== null && key !== id) continue;
+    entry.watcher.stop();
+    watchers.delete(key);
+  }
 }
 
-async function usableFolder(prompt) {
-  const stored = await storedFolder();
-  if (stored) {
-    if (await grantState(stored) === 'granted') return stored;
-    if (!prompt) { reportScan('Reopen the folder to rescan. Your indexed tracks are still listed.'); return null; }
-    if (await reclaimFolder(stored) !== 'granted') { reportScan('The folder grant was not restored.'); return null; }
-    return stored;
-  }
-  if (!prompt) { reportScan(t('library.none')); return null; }
+/** The first folder, picked by the person (a click on Open a music folder). */
+async function openFirstFolder() {
   let picked = null;
-  try {
-    picked = await requestFolder();
-  } catch (error) {
-    if (error?.name === 'GrantError') { reportScan(error.message); return null; }
-    throw error;
-  }
-  if (!picked) { reportScan(t('library.none')); return null; }
-  return picked;
+  try { picked = await pickFolder(); } catch (error) { reportScan(String(error?.message ?? error).replace(/^\[[a-z-]+\] /, '')); return; }
+  if (!picked) { reportScan(t('library.none')); return; }
+  const { folder } = await addFolder(picked);
+  await runScan(folder);
 }
 
 async function openLibrary({ prompt = false } = {}) {
   show('library');
   await refreshLibrary();
   if (!supportsFolderGrant()) { reportScan(t('library.nogrant')); return; }
-  const handle = await usableFolder(prompt);
-  if (handle) await runScan(handle);
+  if (!folderRows.length) {
+    if (prompt) await openFirstFolder(); else reportScan(t('library.none'));
+    return;
+  }
+  let blocked = 0;
+  for (const row of folderRows) {
+    const live = await grantState(row.handle) === 'granted' || (prompt && await reclaimFolder(row.handle) === 'granted');
+    if (live) await runScan(row); else blocked += 1;
+  }
+  if (blocked) reportScan(prompt ? 'The folder grant was not restored.' : 'Reopen the folder to rescan. Your indexed tracks are still listed.');
 }
 
-/** The folder handle with read access, or an Error that says what to do. */
+/** The primary folder's handle with access, or a CommandError that says what to do. */
 async function grantedFolder({ write = false } = {}) {
-  const handle = await storedFolder();
-  if (!handle) throw new CommandError('unavailable', 'Open your music folder first.');
-  // A lapsed grant and a deleted file fail identically at getFile(), so the
-  // permission is checked first.
-  if (await grantState(handle) !== 'granted' && await reclaimFolder(handle) !== 'granted') {
-    $('#lib-reopen').hidden = false;
-    throw new CommandError('unavailable', write
-      ? 'Saving needs write access to your folder. Use Reopen folder.'
-      : 'NakliAmp needs permission to read your folder again. Use Reopen folder.');
-  }
+  const row = primaryRow();
+  if (!row) throw new CommandError('unavailable', 'Open your music folder first.');
+  const handle = await ensureGrant(row, { write });
   folderHandleCache = handle;
   return handle;
 }
@@ -2428,15 +2824,28 @@ async function fileFromPath(rootHandle, path) {
   }
 }
 
+/** The file handle for a library path, through the folder that owns it. */
+async function libraryFileHandle(path, options) {
+  const { handle, relativePath } = await locate(path, options);
+  return fileHandleAt(handle, relativePath);
+}
+
+/**
+ * The File to play for a track. A cue-sheet track resolves to its parent image
+ * (P12); a file NakliOS handed over is held in memory (transient).
+ */
 async function fileFor(track) {
-  const handle = await grantedFolder();
-  const file = await fileFromPath(handle, track.path);
-  if (!file) throw new CommandError('not-found', `${track.path} is no longer in the folder. Rescan to update the library.`);
+  if (track?.transient) return track.file;
+  const path = playbackSpan(track).path;
+  const { handle, relativePath } = await locate(path);
+  const file = await fileFromPath(handle, relativePath);
+  if (!file) throw new CommandError('not-found', `${path} is no longer in the folder. Rescan to update the library.`);
   return file;
 }
 
 async function handleFor(track) {
-  try { return await fileHandleAt(await grantedFolder(), track.path); } catch { return null; }
+  if (!track || track.transient) return null;
+  try { return await libraryFileHandle(playbackSpan(track).path); } catch { return null; }
 }
 
 /** Update a track's mutable state on disk *and* in the loaded index. */
@@ -2444,6 +2853,7 @@ async function patchTrack(id, patch) {
   const local = byId.get(id);
   if (local) Object.assign(local, patch);
   if (playingTrack && playingTrack.id === id && playingTrack !== local) Object.assign(playingTrack, patch);
+  if (isTransientId(id)) return;
   await updateTrackState(id, patch);
 }
 
@@ -2472,7 +2882,7 @@ let rescanTimer = 0;
 function scheduleRescan() {
   clearTimeout(rescanTimer);
   rescanTimer = setTimeout(async () => {
-    try { await runScan(await grantedFolder()); } catch (error) { reportScan(String(error?.message ?? error).replace(/^\[[a-z-]+\] /, '')); }
+    try { await rescanAll(); } catch (error) { reportScan(String(error?.message ?? error).replace(/^\[[a-z-]+\] /, '')); }
   }, 800);
 }
 async function patchLocal(id, patch) {
@@ -2485,8 +2895,8 @@ let positionWrites = 0;
 
 async function rememberPosition() {
   const track = playingTrack;
-  if (!track) return;
-  const position = engine.state().clock.positionS;
+  if (!track || track.transient) return;
+  const position = trackPosition(engine.state());
   if (!Number.isFinite(position)) return;
   positionWrites += 1;
   await patchTrack(track.id, { resumePositionS: position }).catch(() => {});
@@ -2494,7 +2904,11 @@ async function rememberPosition() {
 
 // ------------------------------------------------------------ queue ----
 
-const queue = createQueue({ albumOf: id => byId.get(id)?.albumKey ?? '' });
+// Files NakliOS hands over play from the queue without joining the library.
+const transients = createTransientStore();
+/** A queue id to its record: a library track, or a transient file. */
+const trackFor = id => byId.get(id) ?? transients.get(id);
+const queue = createQueue({ albumOf: id => trackFor(id)?.albumKey ?? '', isTransient: isTransientId });
 
 const EDIT_REASONS = new Set(['set', 'playNext', 'add', 'move', 'remove', 'clear', 'shuffle']);
 /** One undo log for queue edits and playlist file writes (Y5), newest last. */
@@ -2502,6 +2916,15 @@ const editLog = [];
 let autoplayNext = true;
 let engineAdvancing = false;
 let pendingLoad = Promise.resolve();
+
+// The saved playlist the queue was loaded from (cliamp's snapshot `playlist`). A queue
+// replaced from anywhere else, or cleared, has none; adding to it or reordering keeps it.
+let queuePlaylist = null;
+let incomingPlaylist = null;
+queue.onChange((snap, { reason }) => {
+  if (reason === 'set' || reason === 'clear') queuePlaylist = reason === 'set' ? incomingPlaylist : null;
+  incomingPlaylist = null;
+});
 
 queue.onChange((snap, { reason, currentChanged }) => {
   if (EDIT_REASONS.has(reason)) { editLog.push({ kind: 'queue' }); if (editLog.length > 200) editLog.shift(); }
@@ -2536,11 +2959,51 @@ async function stopPlayback() {
 }
 
 async function loudnessFor(track) {
+  if (track?.transient) return null;
   try { return await getLoudness(loudnessKey(track)); } catch { return null; }
 }
 
+/** Where a track starts playing: its cue offset plus a remembered position, in track time. */
+function resumeAt(track) {
+  // The engine's duration, not the index's: the scanner leaves `durationS` null
+  // for containers it cannot measure cheaply.
+  const length = spanLength(track, engine.state());
+  const nearTheEnd = Number.isFinite(length) ? length - 2 : Infinity;
+  return track.resumePositionS > 1 && track.resumePositionS < nearTheEnd ? track.resumePositionS : 0;
+}
+
+async function seekToStart(track) {
+  const startS = playbackSpan(track).startS;
+  const at = startS + resumeAt(track);
+  if (at > 0) await engine.seek(at);
+  if (startS > 0) renderTrack(engine.state());
+}
+
+/**
+ * The next cue-sheet track in the same file plays on from the loaded file (P12):
+ * no reload, only a seek to its start when it does not follow on directly.
+ */
+async function moveWithinFile(track, { autoplay }) {
+  const span = playbackSpan(track);
+  await rememberPosition();
+  playingTrack = track;
+  endedTrackKey = null;
+  await engine.seek(span.startS + resumeAt(track));
+  if (autoplay) await playAfterLoad();
+  renderTrack(engine.state());
+  if (autoplay) await patchTrack(track.id, { playCount: (track.playCount || 0) + 1, lastPlayedAt: Date.now() }).catch(() => {});
+  startTracking(track);
+  markPlaying();
+  preloadNext();
+  return engine.state();
+}
+
 /** Load and (by default) play a library track, remembering where the outgoing one stopped. */
+const sameFileLoaded = track => isVirtual(track) && Boolean(playingTrack) && Boolean(engine.state().path)
+  && playbackSpan(playingTrack).path === playbackSpan(track).path;
+
 async function loadTrack(track, { autoplay = true } = {}) {
+  if (sameFileLoaded(track)) return moveWithinFile(track, { autoplay });
   let file;
   try {
     file = await fileFor(track);
@@ -2558,14 +3021,9 @@ async function loadTrack(track, { autoplay = true } = {}) {
   // `openMedia` returns null when a newer selection superseded this one.
   const opened = await openMedia(file, { meta, autoplay });
   if (!opened) return null;
-  // The engine's duration, not the index's: the scanner leaves `durationS` null
-  // for containers it cannot measure cheaply.
-  const duration = engine.state().media.duration;
-  const nearTheEnd = Number.isFinite(duration) ? duration - 2 : Infinity;
-  if (track.resumePositionS > 1 && track.resumePositionS < nearTheEnd) {
-    await engine.seek(track.resumePositionS);
-  }
+  await seekToStart(track);
   if (autoplay) await patchTrack(track.id, { playCount: (track.playCount || 0) + 1, lastPlayedAt: Date.now() }).catch(() => {});
+  startTracking(track);
   markPlaying();
   preloadNext();
   return opened;
@@ -2573,7 +3031,7 @@ async function loadTrack(track, { autoplay = true } = {}) {
 
 async function loadCurrent({ autoplay = true } = {}) {
   const id = queue.current();
-  const track = id ? byId.get(id) : null;
+  const track = id ? trackFor(id) : null;
   if (!track) {
     if (id) toast('That queue entry is not in the library any more. Rescan, or remove it from the queue.', 5000);
     return null;
@@ -2582,21 +3040,64 @@ async function loadCurrent({ autoplay = true } = {}) {
 }
 
 /** The track ended on its own: follow repeat, or stop at the end of the queue. */
+/** Stop after this track, or the sleep timer ran out at a track or queue end (P10). */
+async function stopForTimer() {
+  engine.pause();
+  timerFade = 1;
+  applyVolume();
+  await rememberPosition();
+  toast('Stopped, as the timer asked.');
+}
+
+/** The next cue-sheet track starts where this one ends: the file plays on (gapless, P12). */
+async function continueInFile(nextTrack) {
+  const outgoing = playingTrack;
+  engineAdvancing = true;
+  try { queue.next({ auto: true }); } finally { engineAdvancing = false; }
+  await patchTrack(outgoing.id, { resumePositionS: 0 }).catch(() => {});
+  playingTrack = nextTrack;
+  endedTrackKey = null;
+  await patchTrack(nextTrack.id, { playCount: (nextTrack.playCount || 0) + 1, lastPlayedAt: Date.now() }).catch(() => {});
+  renderTrack(engine.state());
+  startTracking(nextTrack);
+  markPlaying();
+  preloadNext();
+}
+
 async function advanceAfterEnd() {
+  stopTracking();
+  if (timers.trackEnded({ isLast: queue.peekNext({ auto: true }) === null }) === 'stop') { await stopForTimer(); return; }
   if (!playingTrack || queue.current() !== playingTrack.id) { await rememberPosition(); return; }
   const before = queue.snapshot();
+  const nextId = queue.peekNext({ auto: true });
+  const nextTrack = nextId ? trackFor(nextId) : null;
+  if (nextTrack && continuesInFile(playingTrack, nextTrack)) { await continueInFile(nextTrack); return; }
+  // A cue-sheet track that ends before its file does stops the file first.
+  if (isVirtual(playingTrack) && !nextTrack) engine.pause();
   const id = queue.next({ auto: true });
   if (!id) { await rememberPosition(); return; }
   const after = queue.snapshot();
   // Repeat one, or repeat all over a one-entry queue: the same entry plays again.
   if (after.keys[after.index] === before.keys[before.index]) {
     endedTrackKey = null;
-    await engine.seek(0);
+    await engine.seek(playbackSpan(playingTrack).startS);
     await engine.play().catch(error => showRefusal(error));
+    startTracking(playingTrack);
     await patchTrack(playingTrack.id, { playCount: (playingTrack.playCount || 0) + 1, lastPlayedAt: Date.now() }).catch(() => {});
     return;
   }
   await pendingLoad;
+}
+
+/**
+ * No engine-led join when the shell must act at the track end: a cue-sheet track
+ * (its end is not the file's end), or a timer that stops after this track (P10, P12).
+ */
+function shellOwnsTrackEnd(next) {
+  if (isVirtual(playingTrack) || isVirtual(next)) return true;
+  const timer = timers.status();
+  if (timer.stopAfterCurrent || timer.sleep?.mode === 'end-of-track') return true;
+  return timer.sleep?.mode === 'end-of-queue' && queue.peekNext({ auto: true }) === null;
 }
 
 let preloadToken = 0;
@@ -2604,7 +3105,8 @@ let preloadToken = 0;
 async function preloadNext() {
   const token = ++preloadToken;
   const id = playingTrack && queue.current() === playingTrack.id ? queue.peekNext({ auto: true }) : null;
-  const track = id ? byId.get(id) : null;
+  let track = id ? trackFor(id) : null;
+  if (shellOwnsTrackEnd(track)) track = null;
   if (!track) { engine.preload(null).catch(() => {}); return; }
   let file = null;
   try { file = await fileFor(track); } catch { file = null; }
@@ -2620,20 +3122,24 @@ engine.on('track-advanced', () => {
   engineAdvancing = true;
   let id = null;
   try { id = queue.next({ auto: true }); } finally { engineAdvancing = false; }
-  const track = id ? byId.get(id) : null;
+  const track = id ? trackFor(id) : null;
   if (outgoing) patchTrack(outgoing.id, { resumePositionS: 0 }).catch(() => {});
   playingTrack = track ?? playingTrack;
   endedTrackKey = null;
   if (track) patchTrack(track.id, { playCount: (track.playCount || 0) + 1, lastPlayedAt: Date.now() }).catch(() => {});
+  if (timers.trackEnded({ isLast: false }) === 'stop') engine.pause();
+  startTracking(playingTrack);
   renderTrack(engine.state());
   markPlaying();
   preloadNext();
 });
 
-function playTracks(ids, startIndex = 0) {
-  const known = (ids ?? []).filter(id => byId.has(id));
+/** `playlist` names the saved playlist the ids came from, for the snapshot's `playlist`. */
+function playTracks(ids, startIndex = 0, { playlist = null } = {}) {
+  const known = (ids ?? []).filter(id => Boolean(trackFor(id)));
   if (!known.length) return Promise.resolve(null);
   autoplayNext = true;
+  incomingPlaylist = playlist;
   queue.set(known, Math.max(0, Math.min(known.length - 1, startIndex | 0)));
   return pendingLoad;
 }
@@ -2646,17 +3152,19 @@ async function undoLast() {
     throw new CommandError('refused', 'There is nothing to undo.');
   }
   if (entry.kind === 'queue') { queue.undo(); toast('Undid the last queue edit.'); return 'queue'; }
-  const handle = await grantedFolder({ write: true });
-  if (entry.before === null) await removeFolderFile(handle, entry.path);
-  else await writeFolderText(handle, entry.path, entry.before);
+  if (entry.before === null) await removeLibraryFile(entry.path);
+  else await writeLibraryText(entry.path, entry.before);
   toast(`Undid the last change to ${entry.path.split('/').pop()}.`);
-  await runScan(handle);
+  await rescanPath(entry.path);
   return 'file';
 }
 
 // -------------------------------------------------- loudness scanning ----
 
 let loudnessTotal = 0;
+// The scanner's counts run for the life of the page; each pass counts from here,
+// so a rescan does not report "52 of 26 measured" (minor 8).
+let loudnessBase = 0;
 const loudnessScanner = createLoudnessScanner({
   keyOf: loudnessKey,
   getLoudness: key => getLoudness(key).catch(() => null),
@@ -2686,7 +3194,7 @@ function loudnessStatus() {
   const s = loudnessScanner.status();
   const state = settings.loudnessScan === 'off' ? 'off'
     : s.running ? (s.paused ? 'paused' : 'running') : (loudnessTotal && !s.queued ? 'done' : 'idle');
-  return { ...s, state, total: loudnessTotal, done: s.done + s.skipped };
+  return { ...s, state, total: loudnessTotal, done: Math.min(loudnessTotal, Math.max(0, s.done + s.skipped - loudnessBase)) };
 }
 
 function paintLoudness() {
@@ -2707,8 +3215,11 @@ function scheduleLoudness() {
   clearTimeout(loudnessTimer);
   if (settings.loudnessScan !== 'idle' || HARNESS) return;
   loudnessTimer = setTimeout(() => {
-    const untagged = libraryTracks.filter(track => !Number.isFinite(track.replayGain?.trackGainDb) && !Number.isFinite(track.replayGain?.albumGainDb));
+    // Cue-sheet tracks and their hidden parents are skipped: a gain per part of an image is not measured.
+    const untagged = libraryTracks.filter(track => !track.virtual && !track.hidden && !Number.isFinite(track.replayGain?.trackGainDb) && !Number.isFinite(track.replayGain?.albumGainDb));
     loudnessTotal = untagged.length;
+    const before = loudnessScanner.status();
+    loudnessBase = before.done + before.skipped;
     loudnessScanner.enqueue(untagged);
     paintLoudness();
   }, 4000);
@@ -2725,6 +3236,138 @@ $('#loud-toggle').addEventListener('click', () => {
   paintLoudness();
 });
 
+// ----------------------------------------- timers and speed (P9, P10) ----
+
+function timerLabel(status) {
+  if (status.sleep?.mode === 'minutes') return `Sleep ${formatRemaining(status.sleep.remainingS)}`;
+  if (status.sleep?.mode === 'end-of-track') return 'Sleep: end of track';
+  if (status.sleep?.mode === 'end-of-queue') return 'Sleep: end of queue';
+  return status.stopAfterCurrent ? 'Stops after this track' : '';
+}
+
+let timerChipText = null;
+function paintTimerChip() {
+  const text = timerLabel(timers.status());
+  if (text === timerChipText) return;
+  timerChipText = text;
+  $('#timer-chip').hidden = !text;
+  $('#timer-chip').textContent = text;
+  $('#timer-chip').setAttribute('aria-label', text ? `${text}. Change the sleep timer` : 'Sleep timer');
+}
+
+/** Called every frame while something is loaded: fade, stop, scrobble position. */
+function tickTimers(state) {
+  const { volume, action } = timers.tick({ positionS: trackPosition(state), durationS: trackDuration(state), isLast: queue.peekNext({ auto: true }) === null });
+  if (action === 'stop') {
+    engine.pause();
+    timerFade = 1;
+    applyVolume();
+    toast('The sleep timer paused playback.');
+  } else {
+    const fade = state.clock.playing ? volume : 1;
+    if (Math.abs(fade - timerFade) > 0.001) { timerFade = fade; applyVolume(); }
+  }
+  if (state.clock.playing) {
+    // Scrobbling turned on (origin granted, token saved) while this track was loaded: count it from here.
+    if (!playTracker.active() && playingTrack && !playingTrack.transient && scrobbleOn()) startTracking(playingTrack);
+    playTracker.position(trackPosition(state));
+  }
+  paintTimerChip();
+}
+
+timers.onChange(status => {
+  if (!status.sleep && timerFade !== 1) { timerFade = 1; applyVolume(); }
+  paintTimerChip();
+  preloadNext();
+});
+
+for (const step of SPEED_STEPS) $('#speed').append(new Option(formatSpeed(step), String(step)));
+function paintSpeed() {
+  const value = String(settings.speed);
+  if (![...$('#speed').options].some(option => option.value === value)) $('#speed').append(new Option(formatSpeed(settings.speed), value));
+  $('#speed').value = value;
+}
+
+// ---------------------------------------------- output device (S6) ----
+
+const outputSupported = () => typeof AudioContext === 'function'
+  && typeof AudioContext.prototype.setSinkId === 'function'
+  && typeof navigator.mediaDevices?.enumerateDevices === 'function';
+/** A host page can block output selection in its iframe (permissions policy). */
+function outputBlocked() {
+  try { return document.featurePolicy?.allowsFeature?.('speaker-selection') === false; } catch { return false; }
+}
+
+async function outputDevices() {
+  if (!outputSupported() || outputBlocked()) return [];
+  const list = await navigator.mediaDevices.enumerateDevices();
+  return list.filter(device => device.kind === 'audiooutput' && device.deviceId && device.deviceId !== 'default')
+    .map((device, index) => ({ id: device.deviceId, label: device.label || `Output ${index + 1}` }));
+}
+
+async function paintOutputDevices() {
+  const select = $('#output-device');
+  select.hidden = !outputSupported();
+  if (select.hidden) return;
+  if (outputBlocked()) {
+    select.disabled = true;
+    select.title = 'The page around NakliAmp does not allow choosing an output device here.';
+    select.replaceChildren(new Option('Output: blocked by the host page', ''));
+    return;
+  }
+  // The host page can lift its block; the control then works again.
+  select.disabled = false;
+  select.removeAttribute('title');
+  let devices = [];
+  try { devices = await outputDevices(); } catch { devices = []; }
+  select.replaceChildren(new Option('Output: system default', ''), ...devices.map(device => new Option(device.label, device.id)));
+  select.value = settings.outputDeviceId;
+  if (select.value !== settings.outputDeviceId) select.value = '';
+}
+
+async function applyOutputDevice() {
+  if (!outputSupported()) return { applied: false, supported: false, error: null };
+  if (outputBlocked()) return { applied: false, supported: true, error: { name: 'NotAllowedError', message: 'The page around NakliAmp does not allow choosing an output device here.' } };
+  const result = await engine.setSinkId(settings.outputDeviceId);
+  if (result.error) toast(`The output device was refused: ${result.error.message}`, 5000);
+  return result;
+}
+
+$('#output-device').addEventListener('change', event => run('sound.output', { deviceId: event.target.value }).catch(reportCommandError));
+navigator.mediaDevices?.addEventListener?.('devicechange', () => { paintOutputDevices(); });
+
+// ------------------------------------------ opt-in network (T8, T9, I1) ----
+
+// Nothing here sends anything until the person turns an origin on: every module
+// checks consent before each request, and the default profile has no grants.
+const consent = createConsent();
+// The only fetch the page hands out, and only to app/net modules (each checks consent first).
+// It looks window.fetch up on each call, so a test that stubs window.fetch sees every request.
+const netFetch = (url, init) => window.fetch.call(window, url, init);
+const musicbrainz = createMusicBrainz({ fetch: netFetch, consent });
+const lrclib = createLrclib({ fetch: netFetch, consent });
+const listenbrainz = createListenBrainz({ fetch: netFetch, consent, clientVersion: VERSION });
+const scrobbleOn = () => consent.isAllowed(LB_ORIGIN) && Boolean(listenbrainz.token());
+const playTracker = createPlayTracker({
+  onScrobble: listen => { if (scrobbleOn()) listenbrainz.scrobble(listen).catch(() => {}); },
+  clientVersion: VERSION,
+});
+
+/** Follow one play of a track for the half-or-4-minute rule (I1). */
+function startTracking(track) {
+  if (!track || track.transient || !scrobbleOn()) { playTracker.stop(); return; }
+  const length = spanLength(track, engine.state());
+  playTracker.start({ ...track, durationS: Number.isFinite(length) ? length : track.durationS }, { positionS: trackPosition(engine.state()) });
+}
+function stopTracking() { playTracker.stop(); }
+
+function flushScrobbles() {
+  if (!scrobbleOn() || !listenbrainz.queued().length) return;
+  listenbrainz.flush().catch(() => {});
+}
+setInterval(flushScrobbles, 60_000);
+addEventListener('online', flushScrobbles);
+
 // -------------------------------------------------------- visualiser ----
 
 const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -2734,10 +3377,12 @@ const visualiser = createVisualiser({
   getAnalyser: () => engine.analyser(),
   getChannelAnalysers: () => engine.analysers(),
   reducedMotion,
+  inputScale: () => visualiserInputScale(),
   onError: error => {
     // A failing mode is not a reason to lose the player: the driver fell back to None.
     $('#vis-mode').value = visualiser.mode();
     persistVisualiser(visualiser.mode());
+    placeVisualiser();
     toast(`Visualiser stopped: ${error.message}`, 4000);
   },
 });
@@ -2759,7 +3404,55 @@ function applyVisualiserMode(id, { persist = true } = {}) {
   $('#vis-mode').value = applied;
   $('#vis-wrap').hidden = false;
   if (persist) persistVisualiser(applied);
+  placeVisualiser();
   return applied;
+}
+
+// ---- where the one visualiser canvas lives (B1, M1) ----
+//
+// The driver draws into one canvas and sizes it from its box every frame, so the
+// canvas moves between places rather than being copied: the full-window layer
+// (outside the shell), the Now playing stage, or the player bar strip (which the
+// mini player shows larger). Moving the element keeps the driver and Milkdrop.
+
+/** 'vis' or 'cover': what the Now playing stage shows. A per-viewer convenience. */
+let nowStage = 'vis';
+try { if (localStorage.getItem('nakliamp:now-stage') === 'cover') nowStage = 'cover'; } catch { /* blocked storage */ }
+
+const stageShowsVisualiser = () => nowStage === 'vis' && visualiser.mode() !== 'none';
+
+function visualiserHost() {
+  if (isFullVisualiser()) return $('#vis-slot-full');
+  if (popOut.isOpen()) return $('#vis-slot-bar');
+  if (!settings.miniPlayer && currentView() === 'now' && stageShowsVisualiser()) return $('#vis-slot-now');
+  return $('#vis-slot-bar');
+}
+
+function placeVisualiser() {
+  const wrap = $('#vis-wrap');
+  const host = visualiserHost();
+  if (wrap.parentElement !== host) host.append(wrap);
+  $('#stage').dataset.show = stageShowsVisualiser() ? 'vis' : 'cover';
+  $('#stage-vis').setAttribute('aria-pressed', String(nowStage === 'vis'));
+  $('#stage-cover').setAttribute('aria-pressed', String(nowStage === 'cover'));
+  $('#vis-mode').hidden = nowStage !== 'vis';
+}
+
+function setNowStage(next) {
+  nowStage = next === 'cover' ? 'cover' : 'vis';
+  try { localStorage.setItem('nakliamp:now-stage', nowStage); } catch { /* blocked storage */ }
+  // Choosing the visualiser while the mode is None picks a mode that draws.
+  if (nowStage === 'vis' && visualiser.mode() === 'none') applyVisualiserMode('bars');
+  placeVisualiser();
+}
+
+/** The stage shows the cover while nothing moves (paused, stopped), the visualiser while it runs. */
+let stageIdle = null;
+function paintStageIdle() {
+  const idle = !visualiser.running;
+  if (idle === stageIdle) return;
+  stageIdle = idle;
+  $('#stage').classList.toggle('idle', idle);
 }
 
 {
@@ -2770,14 +3463,129 @@ function applyVisualiserMode(id, { persist = true } = {}) {
 
 $('#vis-mode').addEventListener('change', event => applyVisualiserMode(event.target.value));
 $('#vis-full').addEventListener('click', () => toggleFullVisualiser());
+$('#vis-exit').addEventListener('click', () => toggleFullVisualiser(false));
+$('#vis-picker').addEventListener('click', () => toggleVisualiserPicker());
+$('#stage-vis').addEventListener('click', () => setNowStage('vis'));
+$('#stage-cover').addEventListener('click', () => setNowStage('cover'));
+// The strip in the player bar is a pointer shortcut to the large view; the
+// keyboard path is the Now playing tab and Shift+V.
+$('#vis-slot-bar').addEventListener('click', () => {
+  if (settings.miniPlayer) return;
+  if (nowStage !== 'vis') setNowStage('vis');
+  show('now');
+});
+
+/** "Link to volume": the gain the person hears, 0 when muted; 1 when unlinked. */
+function visualiserInputScale() {
+  if (!settings.visualiserLinkVolume) return 1;
+  if (engine.state().clock.muted) return 0;
+  return Math.max(0, Math.min(1, positionToGain(volumePosition, settings.volumeFloorDb) * timerFade));
+}
+
+// The picker (cliamp's `v` list with live preview): one tile per mode, each drawing
+// from the same analyser a few times a second, only while the picker is open.
+const PREVIEW_TILE = { width: 160, height: 80 };
+let visualiserPreview = null;
+function mountVisualiserPicker(root) {
+  const grid = document.createElement('div');
+  grid.className = 'vis-tiles';
+  grid.setAttribute('role', 'group');
+  grid.setAttribute('aria-label', 'Visualiser modes');
+  const tiles = [];
+  const buttons = new Map();
+  for (const { id, label } of visualiser.modes()) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'vis-tile';
+    button.dataset.mode = id;
+    if (id === 'milkdrop') {
+      // Milkdrop runs on WebGL only once chosen, so its tile shows a still frame.
+      const still = document.createElement('img');
+      still.className = 'vis-tile-still';
+      still.src = MILKDROP_STILL_URL;
+      still.alt = '';
+      still.width = PREVIEW_TILE.width;
+      still.height = PREVIEW_TILE.height;
+      button.title = 'A still frame. Choose Milkdrop to see it move.';
+      button.append(still);
+    } else if (id === 'none') {
+      const note = document.createElement('span');
+      note.className = 'vis-tile-note';
+      note.textContent = 'Off: show the cover';
+      button.append(note);
+    } else {
+      const canvas = document.createElement('canvas');
+      canvas.width = PREVIEW_TILE.width;
+      canvas.height = PREVIEW_TILE.height;
+      canvas.setAttribute('aria-hidden', 'true');
+      button.append(canvas);
+      tiles.push({ canvas, modeId: id });
+    }
+    button.append(label);
+    button.addEventListener('click', () => { applyVisualiserMode(id); paintPressed(); });
+    buttons.set(id, button);
+    grid.append(button);
+  }
+  const link = document.createElement('label');
+  link.className = 'vis-link';
+  const box = document.createElement('input');
+  box.type = 'checkbox';
+  box.id = 'vis-link-volume';
+  box.checked = settings.visualiserLinkVolume;
+  box.addEventListener('change', () => run('visualiser.link_volume', { on: box.checked }).catch(reportCommandError));
+  link.append(box, 'Link to volume: a quieter player draws a quieter picture (not Milkdrop)');
+  root.append(grid, link);
+  function paintPressed() {
+    for (const [id, button] of buttons) button.setAttribute('aria-pressed', String(id === visualiser.mode()));
+  }
+  paintPressed();
+  const preview = createPreviewGrid({
+    tiles,
+    getAnalyser: () => engine.analyser(),
+    reducedMotion,
+    inputScale: () => visualiserInputScale(),
+  });
+  visualiserPreview = preview;
+  preview.start();
+  const stopListening = onSettings(next => { box.checked = next.visualiserLinkVolume; paintPressed(); });
+  buttons.get(visualiser.mode())?.focus();
+  return {
+    update: paintPressed,
+    destroy() { preview.stop(); stopListening(); if (visualiserPreview === preview) visualiserPreview = null; },
+  };
+}
+
+function toggleVisualiserPicker(wantOpen) {
+  const isOpen = dialog?.name === 'visualisers';
+  const want = wantOpen === undefined ? !isOpen : wantOpen;
+  if (want && !isOpen) openDialogView('visualisers');
+  if (!want && isOpen) closeDialog();
+  return want;
+}
 
 function isFullVisualiser() { return $('#vis-wrap').classList.contains('full'); }
+let fullReturnFocus = null;
+/**
+ * The full-window visualiser (B1). The canvas moves into a layer outside the
+ * shell, so it fills the window whatever the page's own boxes do, and the shell
+ * goes inert underneath it; Esc, Shift+V or the Exit button bring it back.
+ */
 function toggleFullVisualiser(on) {
-  const full = $('#vis-wrap').classList.toggle('full', on === undefined ? !isFullVisualiser() : on);
-  $('#vis-full').textContent = full ? 'Exit' : '⤢';
-  $('#vis-full').setAttribute('aria-label', full ? 'Exit full-window visualiser' : 'Full-window visualiser');
-  $('#vis-full').title = full ? 'Exit full window (Shift+V or Esc)' : 'Full window (Shift+V)';
-  return full;
+  const want = on === undefined ? !isFullVisualiser() : Boolean(on);
+  if (want === isFullVisualiser()) return want;
+  if (want) fullReturnFocus = document.activeElement;
+  $('#vis-wrap').classList.toggle('full', want);
+  $('#vis-full-layer').hidden = !want;
+  document.documentElement.classList.toggle('vis-full', want);
+  document.querySelector('.shell').inert = want;
+  $('#vis-full').setAttribute('aria-pressed', String(want));
+  placeVisualiser();
+  if (want) $('#vis-exit').focus();
+  else {
+    if (fullReturnFocus?.isConnected && typeof fullReturnFocus.focus === 'function') fullReturnFocus.focus();
+    fullReturnFocus = null;
+  }
+  return want;
 }
 
 // ------------------------------------------------------- playlists ----
@@ -2835,38 +3643,41 @@ function assertWritable(playlist) {
   }
 }
 
-async function readFolderText(handle, path) {
-  try { return await (await (await fileHandleAt(handle, path)).getFile()).text(); } catch { return null; }
+// Every helper below takes a library path; the folder that owns it does the I/O.
+async function readLibraryText(path) {
+  try { return await (await (await libraryFileHandle(path)).getFile()).text(); } catch { return null; }
 }
 
-async function writeFolderText(handle, path, text) {
-  const segments = path.split('/');
+async function writeLibraryText(path, data) {
+  const { handle, relativePath } = await locate(path, { write: true });
+  const segments = relativePath.split('/');
   const fileName = segments.pop();
   const directory = await directoryFor(handle, segments);
   const file = await directory.getFileHandle(fileName, { create: true });
   const writable = await file.createWritable();
-  await writable.write(text);
+  await writable.write(data);
   await writable.close();
 }
 
-async function removeFolderFile(handle, path) {
-  const segments = path.split('/');
+async function removeLibraryFile(path) {
+  const { handle, relativePath } = await locate(path, { write: true });
+  const segments = relativePath.split('/');
   const fileName = segments.pop();
   await (await directoryFor(handle, segments)).removeEntry(fileName);
 }
 
-/** Write a file in the folder and log its previous text for undo. */
-async function writeLogged(handle, path, text) {
-  const before = await readFolderText(handle, path);
-  await writeFolderText(handle, path, text);
+/** Write a file in a folder and log its previous text for undo. */
+async function writeLogged(path, text) {
+  const before = await readLibraryText(path);
+  await writeLibraryText(path, text);
   editLog.push({ kind: 'file', path, before });
   if (editLog.length > 200) editLog.shift();
 }
 
 async function playlistFileExists(path) {
-  const handle = await storedFolder();
-  if (!handle) return false;
-  try { await fileHandleAt(handle, path); return true; } catch { return false; }
+  const row = rowForPath(path);
+  if (!row) return false;
+  try { await fileHandleAt(row.handle, splitLibraryPath(path).relativePath); return true; } catch { return false; }
 }
 
 /** Save the visible list (the library head's "Save as playlist"). */
@@ -2879,10 +3690,10 @@ async function saveListAsPlaylist() {
   if (await playlistFileExists(fileName)
     && !confirm(`${fileName} already exists in your music folder. Replace it?`)) return;
   try {
-    const handle = await grantedFolder({ write: true });
-    await writeLogged(handle, fileName, toM3u8(visibleRows, { name }));
+    await grantedFolder({ write: true });
+    await writeLogged(fileName, toM3u8(visibleRows, { name }));
     reportScan(`Saved ${fileName} into your music folder.`);
-    await runScan(handle);
+    await rescanPath(fileName);
   } catch (error) {
     reportScan(`Could not save the playlist: ${error.message}`);
   }
@@ -2892,11 +3703,33 @@ async function saveListAsPlaylist() {
 async function createPlaylist(name, ids) {
   const fileName = `${safePlaylistFileName(name)}.m3u8`;
   if (await playlistFileExists(fileName)) throw new CommandError('refused', `${fileName} already exists in your music folder. Pick another name.`);
-  const handle = await grantedFolder({ write: true });
+  await grantedFolder({ write: true });
   const tracks = (ids ?? []).map(id => byId.get(id)).filter(Boolean);
-  await writeLogged(handle, fileName, toM3u8(tracks, { name }));
-  await runScan(handle);
+  await writeLogged(fileName, toM3u8(tracks, { name }));
+  await rescanPath(fileName);
   return { name, file: fileName, tracks: tracks.length };
+}
+
+/** `playlist.list { name }`: one playlist's entries, with library ids where the file is indexed. */
+function playlistEntriesFor(name) {
+  const playlist = findPlaylist(name);
+  if (!playlist) throw new CommandError('not-found', `No playlist named ${name}.`);
+  const byPath = new Map(libraryTracks.map(track => [track.path, track]));
+  const entries = playlist.entries.map((entry, position) => {
+    const track = entry.path ? byPath.get(entry.path) : null;
+    return { position, id: track?.id ?? null, title: entry.title ?? track?.title ?? null, artist: entry.artist ?? track?.artist ?? null };
+  });
+  return { name: playlist.name, kind: String(playlist.format ?? 'm3u').toLowerCase(), entries };
+}
+
+/** How a confirm step names one playlist entry: its title, else its file name. */
+function entryLabel(entry) {
+  return entry?.title || String(entry?.path ?? entry?.target ?? '').split('/').pop() || 'Untitled entry';
+}
+
+/** Library tracks with any listening history (history.clear). */
+function historyTracks() {
+  return libraryTracks.filter(track => (track.playCount || 0) > 0 || (track.lastPlayedAt || 0) > 0);
 }
 
 function findPlaylist(name) {
@@ -2913,12 +3746,15 @@ $('#lib-playlist').addEventListener('change', async event => {
 });
 $('#lib-save').addEventListener('click', () => saveListAsPlaylist());
 $('#lib-reopen').addEventListener('click', async () => {
-  const handle = await storedFolder();
-  if (!handle) { await openLibrary({ prompt: true }); return; }
-  if (await reclaimFolder(handle) !== 'granted') { reportScan('The folder grant was not restored.'); return; }
-  $('#lib-reopen').hidden = true;
+  await refreshFolders();
+  if (!folderRows.length) { await openLibrary({ prompt: true }); return; }
+  let restored = 0;
+  for (const row of folderRows) {
+    if (await reclaimFolder(row.handle) === 'granted') { restored += 1; await runScan(row); }
+  }
+  if (!restored) { reportScan('The folder grant was not restored.'); return; }
+  $('#lib-reopen').hidden = restored === folderRows.length;
   await persistStorage();
-  await runScan(handle);
 });
 
 async function removeFromPlaylist(entryIndex) {
@@ -2945,14 +3781,41 @@ async function movePlaylistTrack(entryIndex, step) {
 async function persistPlaylist(playlist, entries, message) {
   try {
     assertWritable(playlist);
-    const handle = await grantedFolder({ write: true });
     const base = playlist.path.split('/').slice(0, -1).join('/');
-    await writeLogged(handle, playlist.path, toM3u8(playlistLines(entries), { name: playlist.name, base }));
+    await writeLogged(playlist.path, toM3u8(playlistLines(entries), { name: playlist.name, base }));
     if (message) reportScan(message);
-    await runScan(handle);
+    await rescanPath(playlist.path);
   } catch (error) {
     reportScan(`Could not update ${playlist.name}: ${error.message}`);
   }
+}
+
+/** Where a playlist renamed to `name` would be written: same folder, M3U8. */
+function renamedPlaylistPath(playlist, name) {
+  const directory = playlist.path.split('/').slice(0, -1).join('/');
+  const file = `${safePlaylistFileName(name)}.m3u8`;
+  return { directory, file, path: `${directory ? `${directory}/` : ''}${file}` };
+}
+
+/**
+ * Rename a playlist through its folder handle: write it under the new name (with the new
+ * #PLAYLIST title), then remove the old file. Both writes go in the undo log, so undo
+ * puts the old file back. Two names can sanitise to one file name; then it rewrites in place.
+ */
+async function renamePlaylistFile(playlist, name) {
+  assertWritable(playlist);
+  const { directory, file, path: nextPath } = renamedPlaylistPath(playlist, name);
+  const renamingFile = nextPath !== playlist.path;
+  const oldText = renamingFile ? await readLibraryText(playlist.path) : null;
+  await writeLogged(nextPath, toM3u8(playlistLines(playlist.entries), { name, base: directory }));
+  if (renamingFile) {
+    await removeLibraryFile(playlist.path);
+    editLog.push({ kind: 'file', path: playlist.path, before: oldText });
+  }
+  if (activePlaylist === playlist.path) activePlaylist = nextPath;
+  if (queuePlaylist === playlist.name) { queuePlaylist = name; agentEvents.poke(); }
+  await rescanPath(nextPath);
+  return { file, path: nextPath };
 }
 
 async function renamePlaylist() {
@@ -2961,26 +3824,12 @@ async function renamePlaylist() {
   try { assertWritable(playlist); } catch (error) { reportScan(error.message); return; }
   const name = prompt('Rename playlist', playlist.name);
   if (!name || name === playlist.name) return;
-
-  const directory = playlist.path.split('/').slice(0, -1).join('/');
-  const safe = safePlaylistFileName(name);
-  const nextPath = `${directory ? `${directory}/` : ''}${safe}.m3u8`;
-  const lines = playlistLines(playlist.entries);
-  // Two names can sanitise to one file name; then the rename is a rewrite in place.
-  const renamingFile = nextPath !== playlist.path;
-  if (renamingFile && await playlistFileExists(nextPath)
+  const { path: nextPath } = renamedPlaylistPath(playlist, name);
+  if (nextPath !== playlist.path && await playlistFileExists(nextPath)
     && !confirm(`${nextPath} already exists. Replace it?`)) return;
   try {
-    const handle = await grantedFolder({ write: true });
-    const oldText = renamingFile ? await readFolderText(handle, playlist.path) : null;
-    await writeLogged(handle, nextPath, toM3u8(lines, { name, base: directory }));
-    if (renamingFile) {
-      await removeFolderFile(handle, playlist.path);
-      editLog.push({ kind: 'file', path: playlist.path, before: oldText });
-    }
-    activePlaylist = nextPath;
-    reportScan(`Renamed to ${safe}.m3u8.`);
-    await runScan(handle);
+    const { file } = await renamePlaylistFile(playlist, name);
+    reportScan(`Renamed to ${file}.`);
   } catch (error) {
     reportScan(`Could not rename: ${error.message}`);
   }
@@ -3002,9 +3851,28 @@ $('#lib-list').addEventListener('click', event => {
     return;
   }
   const row = event.target.closest('.lib-row');
-  // Starting a track queues the whole list from that track (P5).
-  if (row) playTracks(visibleRows.map(track => track.id), Number(row.dataset.index)).catch(error => toast(error.message, 5000));
+  if (!row) return;
+  // One click rule with Browse (M4): a mouse click selects the row; Enter or
+  // Space (a click with no pointer, detail 0) and a double click play it.
+  if (event.detail === 0) playLibraryRow(row);
+  else selectLibraryRow(row);
 });
+$('#lib-list').addEventListener('dblclick', event => {
+  if (event.target.closest('.row-tools')) return;
+  const row = event.target.closest('.lib-row');
+  if (row) playLibraryRow(row);
+});
+function selectLibraryRow(row) {
+  for (const other of document.querySelectorAll('#lib-list .lib-row.selected')) other.classList.remove('selected');
+  row.classList.add('selected');
+  row.focus({ preventScroll: true });
+}
+/** Starting a track queues the whole list from that track (P5). */
+function playLibraryRow(row) {
+  selectLibraryRow(row);
+  const playlist = activePlaylist && !$('#lib-search').value.trim() ? playlistRows.find(item => item.path === activePlaylist)?.name ?? null : null;
+  playTracks(visibleRows.map(track => track.id), Number(row.dataset.index), { playlist }).catch(error => toast(error.message, 5000));
+}
 // Arrow keys move between rows of the Tracks list (K4).
 $('#lib-list').addEventListener('keydown', event => {
   if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
@@ -3017,6 +3885,9 @@ $('#lib-list').addEventListener('keydown', event => {
 });
 $('#lib-search').addEventListener('input', () => { renderLibrary(); });
 $('#lib-rescan').addEventListener('click', () => openLibrary({ prompt: true }));
+$('#welcome-folder').addEventListener('click', () => openLibrary({ prompt: true }));
+$('#welcome-file').addEventListener('click', () => chooseFile());
+$('#lib-folders').addEventListener('click', () => open('music-folders'));
 
 $('#lib-forget').addEventListener('click', async () => {
   // Stop reading a folder the moment it stops being ours to read.
@@ -3024,6 +3895,8 @@ $('#lib-forget').addEventListener('click', async () => {
   stopWatching();
   loudnessScanner.pause();
   loudnessTotal = 0;
+  // Every folder goes: the list, the legacy single grant, and the index.
+  await setMeta('folders', null);
   await forgetFolder();
   await clearLibrary();
   queue.clear();
@@ -3083,7 +3956,20 @@ const DIALOGS = {
   smart: { title: 'Smart playlist', mount: mountSmartEditor, state: arg => ({ rule: arg ? (arg.rule ?? arg) : null }) },
   ai: { title: 'Playlist from a description', mount: mountAiDialog, state: arg => (arg ? { description: String(arg) } : {}) },
   keymap: { title: 'Keyboard shortcuts', mount: mountKeymap, state: () => ({}) },
+  // v1.x panels (app/ui/v1x-*.mjs)
+  network: { title: 'Network', mount: mountNetworkPanel, state: () => ({}) },
+  'music-folders': { title: 'Music folders', mount: mountFolders, state: () => ({}) },
+  duplicates: { title: 'Duplicates', mount: mountDuplicates, state: () => ({}) },
+  rename: { title: 'Rename and replace', mount: mountRename, state: arg => ({ ids: arg ? [].concat(arg) : selectedIds() }) },
+  sleep: { title: 'Sleep timer', mount: mountSleepTimer, state: () => ({}) },
+  commands: { title: 'Command bar', mount: mountCommandBar, state: arg => (arg ? { text: String(arg) } : {}) },
+  similar: { title: 'More like this', mount: mountSimilar, state: () => ({ trackId: playingTrack?.id ?? null }) },
+  'genre-fill': { title: 'Fill missing genres', mount: mountGenreFill, state: () => ({}) },
+  // V5: a classic skin (.wsz) the person picks; Webamp loads lazily, only then.
+  skins: { title: 'Classic skin (.wsz)', mount: mountWebampFace, state: () => ({}) },
+  visualisers: { title: 'Visualisers', mount: root => mountVisualiserPicker(root), state: () => undefined },
 };
+const V1X_DIALOGS = ['network', 'music-folders', 'duplicates', 'rename', 'sleep', 'commands', 'similar', 'genre-fill', 'skins'];
 
 function openDialogView(name, arg) {
   const spec = DIALOGS[name];
@@ -3123,6 +4009,7 @@ function openSearch() {
   show('library');
   if (libraryPane === 'browse' && browsePanel?.focusSearch) browsePanel.focusSearch();
   else { showLibraryPane('tracks'); $('#lib-search').focus(); }
+  paintWelcome();
 }
 
 function openBrowseView(view, arg) {
@@ -3136,7 +4023,7 @@ function openBrowseView(view, arg) {
 function viewOpeners() {
   const dialogView = name => arg => openDialogView(name, arg);
   return new Map([
-    ['library', () => { show('library'); showLibraryPane('tracks'); }],
+    ['library', () => { show('library'); showLibraryPane(libraryPane); }],
     ['search', openSearch],
     ['queue', () => show('queue')],
     ['now', () => show('now')],
@@ -3147,6 +4034,7 @@ function viewOpeners() {
     ['ai', dialogView('ai')],
     ['keymap', dialogView('keymap')],
     ['smart', arg => openDialogView('smart', arg ?? null)],
+    ...V1X_DIALOGS.map(name => [name, dialogView(name)]),
   ]);
 }
 
@@ -3162,8 +4050,8 @@ function shellState() {
   const state = engine.state();
   return {
     playingId: playingTrack?.id ?? null,
-    positionS: state.clock.positionS,
-    durationS: state.media.duration,
+    positionS: trackPosition(state),
+    durationS: trackDuration(state),
     playing: state.clock.playing,
     queue: queue.snapshot(),
     loudnessScan: loudnessStatus(),
@@ -3175,10 +4063,12 @@ const ctx = {
   engine,
   queue,
   settings: { get: () => loadSettings(), set: patch => saveSettings(patch), on: fn => onSettings(fn) },
-  run: (name, input, options) => run(name, input, options),
+  run: (name, input, options) => run(name, input, options).catch(error => { throw plainError(error); }),
   library: {
-    tracks: () => libraryTracks,
-    getTrack: id => byId.get(id) ?? null,
+    // Listed tracks only: no cue-sheet parents, no tracks the person hid (L14).
+    tracks: () => libraryVisible(),
+    getTrack: id => trackFor(id) ?? null,
+    hide: ids => hideTracks(ids),
     onChange: fn => { libraryListeners.add(fn); return () => libraryListeners.delete(fn); },
     playlists: () => playlistRows,
     smartPlaylists: () => smartRows,
@@ -3188,7 +4078,7 @@ const ctx = {
     updateTrack,
     // An existing name for the same thing, kept for panels written against the batch-2 ctx line.
     updateTrackState: updateTrack,
-    rescan: async () => { const handle = await grantedFolder(); await runScan(handle); },
+    rescan: async () => { await grantedFolder(); await rescanAll(); },
   },
   host,
   artUrl: track => artUrlFor(track).catch(() => null),
@@ -3200,7 +4090,153 @@ const ctx = {
   // Shell extras (beyond the contract): what panels may read.
   state: shellState,
   selectedIds,
+  // v1.x (plan/v1-build/requests-v1x-shell.md)
+  net: { consent, musicbrainz, lrclib, listenbrainz },
+  timers,
+  folders: {
+    list: () => folderList(),
+    onChange: fn => { folderListeners.add(fn); return () => folderListeners.delete(fn); },
+  },
+  ai: { ready: () => host.aiReady(), chat: body => host.aiChat(body) },
+  download,
+  editTags: (items, options) => editTagsBatch(items, options),
 };
+
+// ------------------------------------------------------ v1.x helpers ----
+
+// Tracks the person hid from the library (the Duplicates "keep one" action).
+// The files are untouched; the ids are kept in this browser only.
+const HIDDEN_KEY = 'nakliamp:hidden';
+const hiddenIds = new Set((() => { try { return JSON.parse(localStorage.getItem(HIDDEN_KEY) ?? '[]'); } catch { return []; } })().filter(id => typeof id === 'string'));
+// Cue-sheet parents (`hidden`) are replaced by their virtual tracks (P12).
+function libraryVisible() { return libraryTracks.filter(track => !track.hidden && !hiddenIds.has(track.id)); }
+async function hideTracks(ids) {
+  const list = (ids ?? []).filter(id => typeof id === 'string');
+  for (const id of list) hiddenIds.add(id);
+  try { localStorage.setItem(HIDDEN_KEY, JSON.stringify([...hiddenIds])); } catch { /* blocked storage: hidden for this session */ }
+  await renderLibrary();
+  notifyLibrary();
+  return { hidden: list.length };
+}
+
+async function folderList() {
+  const rows = [];
+  for (const row of folderRows) {
+    let grant = 'prompt';
+    try { grant = await grantState(row.handle); } catch { grant = 'prompt'; }
+    rows.push({ id: row.id, name: row.name ?? null, primary: Boolean(row.primary), grant });
+  }
+  return rows;
+}
+
+/** Hand the person a file to save. */
+function download(name, data, mime = 'application/octet-stream') {
+  const blob = data instanceof Blob ? data : new Blob([data], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  link.hidden = true;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  return { file: name, bytes: blob.size };
+}
+
+const patchText = patch => Object.entries(patch ?? {}).filter(([key]) => key !== 'picture')
+  .map(([key, value]) => `${key} ${value === null || value === '' ? 'cleared' : `"${value}"`}`).join(', ');
+
+/**
+ * Write several tag patches with one approval: `items` is `[{ ids, patch, coverFrom? }]`.
+ * Resolves `{ written, refused, failed: [{ ids, error }] }`, counted in items.
+ */
+async function editTagsBatch(items, { title = 'Write tags' } = {}) {
+  const list = (items ?? []).filter(item => item?.ids?.length && (Object.keys(item.patch ?? {}).length || item.coverFrom));
+  if (!list.length) return { written: 0, refused: 0, failed: [] };
+  const lines = list.map(item => {
+    const names = item.ids.map(id => trackFor(id)?.title || String(id)).slice(0, 3).join(', ') + (item.ids.length > 3 ? ` and ${item.ids.length - 3} more` : '');
+    return `${names}: ${patchText(item.patch) || 'no text change'}${item.coverFrom ? ', cover from MusicBrainz' : ''}`;
+  });
+  const approved = await confirmCommand({
+    name: 'track.edit_tags',
+    label: title,
+    diff: {
+      title,
+      summary: 'NakliAmp writes these tags into the audio files. Each file is backed up until it reads back the same.',
+      lines,
+      approveLabel: 'Write tags',
+    },
+  });
+  if (!approved) return { written: 0, refused: list.length, failed: [] };
+  const out = { written: 0, refused: 0, failed: [] };
+  for (const item of list) {
+    const input = { ids: item.ids.map(String), patch: Object.fromEntries(Object.entries(item.patch ?? {}).filter(([key]) => key !== 'picture')) };
+    if (item.coverFrom) input.coverFrom = item.coverFrom;
+    try { await run('track.edit_tags', input, { approved: true }); out.written += 1; } catch (error) { out.failed.push({ ids: item.ids, error: String(error?.message ?? error) }); }
+  }
+  return out;
+}
+
+/** Network refusals as command refusals the agent face understands. */
+async function netCall(fn) {
+  try {
+    return await fn();
+  } catch (error) {
+    if (error?.name === 'NetworkConsentError' || error?.code === 'not-granted') throw new CommandError('unavailable', String(error.message).replace(/^\[[a-z-]+\] /, ''));
+    if (error instanceof CommandError) throw error;
+    throw new CommandError('refused', String(error?.message ?? error).replace(/^\[[a-z-]+\] /, ''));
+  }
+}
+
+function bytesToDataUrl(mime, bytes) {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return `data:${mime};base64,${btoa(binary)}`;
+}
+
+const hostChat = () => (host.aiReady() ? body => host.aiChat(body) : null);
+
+/** The track a lyrics or similar command acts on: by id, else the playing track. */
+function trackOrPlaying(id) {
+  const track = id ? trackFor(id) : playingTrack;
+  if (!track) throw new CommandError('not-found', id ? `No track ${id}.` : 'Play a track first, or give a track id.');
+  return track;
+}
+
+async function pickEqfFile() {
+  if ('showOpenFilePicker' in window) {
+    try {
+      const [handle] = await showOpenFilePicker({ multiple: false, types: [{ description: 'Winamp EQ', accept: { 'application/octet-stream': ['.eqf', '.q1'] } }] });
+      return handle ? handle.getFile() : null;
+    } catch (error) {
+      if (error?.name === 'AbortError') return null;
+      throw error;
+    }
+  }
+  return new Promise(resolve => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.eqf,.q1';
+    input.addEventListener('change', () => resolve(input.files?.[0] ?? null), { once: true });
+    input.click();
+  });
+}
+
+/** The tracks a rename or replace command acts on, without cue-sheet parts or transient files. */
+const tagTargets = input => idsOrSelection(input).map(id => byId.get(id)).filter(Boolean);
+
+function renamePlan(input) {
+  try { return planRename(tagTargets(input), input.pattern); } catch (error) { throw new CommandError('invalid-input', error.message); }
+}
+function replacePlan(input) {
+  const options = { find: input.find, replace: input.replace ?? '', regex: Boolean(input.regex), caseSensitive: Boolean(input.caseSensitive) };
+  if (input.fields) options.fields = input.fields;
+  const targets = tagTargets(input).filter(track => !isVirtual(track));
+  try { return planFindReplace(targets, options); } catch (error) { throw new CommandError('invalid-input', error.message); }
+}
+
+const RENAME_NOTES = { same: 'already named so', empty: 'no tags for this pattern', virtual: 'part of a cue sheet, not renamed', conflict: 'another file would get this name, not renamed' };
 
 // --------------------------------------------------------- commands ----
 
@@ -3209,11 +4245,14 @@ const statusOf = () => {
   const snap = queue.snapshot();
   return {
     track: trackSummary(playingTrack) ?? (state.media.name ? { id: null, title: stem(state.media.name), artist: null, album: null, year: null, durationS: state.media.duration ?? null } : null),
-    positionS: Number(state.clock.positionS) || 0,
-    durationS: Number.isFinite(state.media.duration) ? state.media.duration : null,
+    positionS: trackPosition(state),
+    durationS: Number.isFinite(trackDuration(state)) ? trackDuration(state) : null,
     playing: Boolean(state.clock.playing) && !hasEnded(state),
-    volume: state.clock.volume,
+    volume: volumePosition,
+    volumeDb: Number.isFinite(volumeDb()) ? volumeDb() : null,
     muted: state.clock.muted,
+    speed: settings.speed,
+    timer: timers.status(),
     shuffle: snap.shuffle,
     repeat: snap.repeat,
     route: state.path ?? null,
@@ -3231,9 +4270,10 @@ function needLoaded() {
 }
 
 /** Folder group keys are paths, so agents get the group's position instead (N2: no paths). */
+// Agents see what the person sees: no cue-sheet parents, no copies hidden with "keep one" (L14).
 function browseForAgent({ by, key, offset, limit }) {
   if (GROUP_VIEWS.includes(by)) {
-    const groups = browse(libraryTracks, { by });
+    const groups = browse(libraryVisible(), { by });
     if (key === undefined) {
       const rows = groups.map((row, index) => ({
         key: by === 'folders' ? String(index) : row.key,
@@ -3247,10 +4287,10 @@ function browseForAgent({ by, key, offset, limit }) {
     }
     const realKey = by === 'folders' ? groups[Number(key)]?.key : (groups.find(row => String(row.key) === key)?.key ?? key);
     if (realKey === undefined) throw new CommandError('not-found', `No ${by} group ${key}.`);
-    const tracks = browse(libraryTracks, { by, key: realKey }).map(trackSummary);
+    const tracks = browse(libraryVisible(), { by, key: realKey }).map(trackSummary);
     return { kind: 'tracks', by, key, ...page(tracks, { offset, limit }) };
   }
-  return { kind: 'tracks', by, ...page(browse(libraryTracks, { by }).map(trackSummary), { offset, limit }) };
+  return { kind: 'tracks', by, ...page(browse(libraryVisible(), { by }).map(trackSummary), { offset, limit }) };
 }
 
 const orNull = value => value ?? null;
@@ -3284,7 +4324,7 @@ const handlers = {
       await loadCurrent();
       return statusOf();
     }
-    if (hasEnded(engine.state())) await engine.seek(0);
+    if (hasEnded(engine.state())) await seekTrack(0);
     await engine.play();
     return statusOf();
   },
@@ -3298,33 +4338,39 @@ const handlers = {
   },
   'player.previous': async () => {
     const id = queue.prev();
-    if (!id) { if (engine.state().path) await engine.seek(0); return statusOf(); }
+    if (!id) { if (engine.state().path) await seekTrack(0); return statusOf(); }
     await pendingLoad;
     return statusOf();
   },
   'player.seek': async input => {
     needLoaded();
     const state = engine.state();
-    const target = seekTarget({ positionS: state.clock.positionS, duration: state.media.duration }, input);
+    const target = seekTarget({ positionS: trackPosition(state), duration: trackDuration(state) }, input);
     if (target === null) throw new CommandError('unavailable', 'This track has no known length, so a percentage seek cannot work.');
-    await engine.seek(target);
+    await seekTrack(target);
     return statusOf();
   },
   'player.seek_relative': async (input, context) => {
     const state = engine.state();
     if (!state.path) return statusOf();
     const delta = scaledSeek(input.seconds, settings.seekStepS, context?.from === 'key');
-    await engine.seek(seekTarget({ positionS: state.clock.positionS, duration: state.media.duration }, { delta }));
+    await seekTrack(seekTarget({ positionS: trackPosition(state), duration: trackDuration(state) }, { delta }));
     return statusOf();
   },
-  'player.volume': input => { setUiVolume(steppedVolume(Number($('#volume').value), input)); return statusOf(); },
+  // Keys step 2 dB (S5); an agent's `level` and `delta` are slider positions 0..1.
+  'player.volume': (input, context) => {
+    if (context?.from === 'key' && Number.isFinite(input.delta)) stepVolumeDb(Math.sign(input.delta) * 2);
+    else setUiVolume(steppedVolume(volumePosition, input));
+    return statusOf();
+  },
   'player.mute': input => { engine.setMuted(input.muted ?? !engine.state().clock.muted); return statusOf(); },
   'player.status': () => statusOf(),
+  'player.snapshot': () => agentEvents.snapshot(),
 
   'queue.read': input => {
     const snap = queue.snapshot();
     const entries = snap.ids.map((id, position) => ({ position, ...(trackSummary(byId.get(id)) ?? { id, title: null }) }));
-    return { index: snap.index, shuffle: snap.shuffle, repeat: snap.repeat, canUndo: snap.canUndo || editLog.length > 0, ...page(entries, input) };
+    return { index: snap.index, revision: snap.revision, shuffle: snap.shuffle, repeat: snap.repeat, canUndo: snap.canUndo || editLog.length > 0, ...page(entries, input) };
   },
   'queue.set': async input => {
     const ids = input.ids.filter(id => byId.has(id));
@@ -3369,10 +4415,26 @@ const handlers = {
     toast(`Repeat: ${mode}`);
     return { repeat: mode };
   },
+  // cliamp's queue.play: jump to an entry already in the queue; the queue is unchanged.
+  'queue.play': async input => {
+    if ((input.index === undefined) === (input.id === undefined)) throw new CommandError('invalid-input', 'queue.play: give one of index or id.');
+    const snap = queue.snapshot();
+    const index = input.index ?? snap.ids.indexOf(input.id);
+    if (index < 0) throw new CommandError('not-found', `Track ${input.id} is not in the queue.`);
+    if (index >= snap.length) throw new CommandError('not-found', `The queue has ${snap.length} entr${snap.length === 1 ? 'y' : 'ies'}; there is no position ${index}.`);
+    autoplayNext = input.play !== false;
+    if (index === snap.index) {
+      if (input.play !== false) { await seekTrack(0); engine.play(); }
+    } else {
+      queue.jump(index);
+    }
+    await pendingLoad;
+    return { index, id: snap.ids[index], revision: queue.revision() };
+  },
   'queue.undo': async () => ({ undone: await undoLast() }),
   'queue.save_playlist': input => createPlaylist(input.name, queue.snapshot().ids),
 
-  'library.search': input => ({ query: input.query, ...page(searchTracks(libraryTracks, input.query).map(trackSummary), input) }),
+  'library.search': input => ({ query: input.query, ...page(searchTracks(libraryVisible(), input.query).map(trackSummary), input) }),
   'library.browse': input => browseForAgent(input),
   'track.read': input => {
     const track = byId.get(input.id);
@@ -3393,9 +4455,10 @@ const handlers = {
     return { ids, favourite };
   },
   // Panel C's handler: per-file plan and diff for the confirm step, the safe save sequence, then updateTrack.
-  'track.edit_tags': createEditTagsHandler(ctx),
+  // `coverFrom` (a MusicBrainz release id) is resolved to the cover here and handed on as `context.picture`.
+  'track.edit_tags': withCoverFrom(createEditTagsHandler(ctx)),
 
-  'playlist.list': () => ({
+  'playlist.list': input => (input.name ? playlistEntriesFor(input.name) : {
     playlists: [
       ...playlistRows.map(row => ({ name: row.name, kind: String(row.format ?? 'm3u').toLowerCase(), tracks: tracksForPlaylist(row).found.length, entries: row.entries.length })),
       ...smartRows.map(row => ({ name: row.rule?.name ?? 'Smart playlist', kind: 'smart', tracks: safeSmartCount(row.rule) })),
@@ -3413,10 +4476,9 @@ const handlers = {
     } catch (error) {
       throw new CommandError('refused', error.message);
     }
-    const handle = await grantedFolder({ write: true });
-    await writeLogged(handle, playlist.path, text);
+    await writeLogged(playlist.path, text);
     toast(`Added ${tracks.length} track${tracks.length === 1 ? '' : 's'} to ${playlist.name}.`);
-    await runScan(handle);
+    await rescanPath(playlist.path);
     return { name: playlist.name, added: tracks.length };
   },
   'playlist.delete': {
@@ -3433,25 +4495,64 @@ const handlers = {
     run: async input => {
       const playlist = findPlaylist(input.name);
       if (!playlist) throw new CommandError('not-found', `No playlist named ${input.name}.`);
-      const handle = await grantedFolder({ write: true });
-      const before = await readFolderText(handle, playlist.path);
-      await removeFolderFile(handle, playlist.path);
+      const before = await readLibraryText(playlist.path);
+      await removeLibraryFile(playlist.path);
       editLog.push({ kind: 'file', path: playlist.path, before });
       if (activePlaylist === playlist.path) activePlaylist = null;
+      if (queuePlaylist === playlist.name) queuePlaylist = null;
       reportScan(`Deleted ${playlist.name}.`);
-      await runScan(handle);
+      await rescanPath(playlist.path);
       return { deleted: playlist.name };
+    },
+  },
+  'playlist.rename': async input => {
+    const playlist = findPlaylist(input.name);
+    if (!playlist) throw new CommandError('not-found', `No playlist named ${input.name}.`);
+    try { assertWritable(playlist); } catch (error) { throw new CommandError('refused', error.message); }
+    const { path: nextPath } = renamedPlaylistPath(playlist, input.to);
+    if (nextPath !== playlist.path && await playlistFileExists(nextPath)) {
+      throw new CommandError('refused', `${nextPath} already exists in your music folder. Pick another name.`);
+    }
+    const { file } = await renamePlaylistFile(playlist, input.to);
+    toast(`Renamed ${playlist.name} to ${input.to}.`);
+    return { name: input.to, file, from: playlist.name };
+  },
+  // cliamp's playlist.remove: one entry out of a saved playlist. Only the playlist file changes.
+  'playlist.remove': {
+    diff: input => {
+      const playlist = findPlaylist(input.name);
+      const entry = playlist?.entries[input.index];
+      if (!entry) return { lines: [playlist ? `${playlist.name} has no entry ${input.index}.` : `No playlist named ${input.name}.`], unchanged: true };
+      return {
+        title: `Remove from ${playlist.name}?`,
+        summary: 'This entry leaves the playlist file. The audio file stays where it is. Undo (Ctrl+Z) can write the playlist back during this session.',
+        lines: [`${input.index + 1}. ${entryLabel(entry)}`],
+        approveLabel: 'Remove entry',
+      };
+    },
+    run: async input => {
+      const playlist = findPlaylist(input.name);
+      if (!playlist) throw new CommandError('not-found', `No playlist named ${input.name}.`);
+      const entry = playlist.entries[input.index];
+      if (!entry) throw new CommandError('not-found', `${playlist.name} has ${playlist.entries.length} entries; there is no position ${input.index}.`);
+      try { assertWritable(playlist); } catch (error) { throw new CommandError('refused', error.message); }
+      const base = playlist.path.split('/').slice(0, -1).join('/');
+      const next = playlist.entries.filter((_, position) => position !== input.index);
+      await writeLogged(playlist.path, toM3u8(playlistLines(next), { name: playlist.name, base }));
+      await rescanPath(playlist.path);
+      return { name: playlist.name, removed: entryLabel(entry), entries: next.length };
     },
   },
   // Saving under an existing name overwrites that rule file (the smart editor edits this way).
   'smart.create': async input => {
     let text;
     try { text = serialiseSmart(input.rule); } catch (error) { throw new CommandError('invalid-input', error.message); }
-    const handle = await grantedFolder({ write: true });
+    // Smart playlists live in the primary folder only (L13).
+    await grantedFolder({ write: true });
     const fileName = smartFileName(input.rule.name);
-    await writeLogged(handle, fileName, text);
+    await writeLogged(fileName, text);
     toast(`Saved the smart playlist ${input.rule.name}.`);
-    await runScan(handle);
+    await rescanPath(fileName);
     return { name: input.rule.name, tracks: safeSmartCount(input.rule) };
   },
   'smart.list': () => ({
@@ -3478,9 +4579,14 @@ const handlers = {
     const applied = input.mode !== undefined ? applyVisualiserMode(input.mode) : visualiser.cycle(input.step);
     $('#vis-mode').value = applied;
     persistVisualiser(applied);
+    placeVisualiser();
     return { mode: applied };
   },
   'visualiser.full': input => ({ full: toggleFullVisualiser(input.on) }),
+  // cliamp's spectrum.get: one frame of bands from the visualiser's analyser.
+  'spectrum.get': input => readSpectrum(engine.analyser(), { count: input.bands ?? DEFAULT_BANDS, playing: statusOf().playing }),
+  'visualiser.picker': input => ({ open: toggleVisualiserPicker(input.open) }),
+  'visualiser.link_volume': input => ({ linkVolume: saveSettings({ visualiserLinkVolume: input.on ?? !settings.visualiserLinkVolume }).visualiserLinkVolume }),
 
   'view.open': input => { open(input.view); return { view: input.view }; },
   'view.close': () => {
@@ -3490,11 +4596,26 @@ const handlers = {
   },
   'view.keymap': () => { open('keymap'); return { view: 'keymap' }; },
   'ui.theme': input => ({ theme: saveSettings({ theme: input.theme }).theme }),
-  'ui.mini': input => ({ mini: saveSettings({ miniPlayer: input.on ?? !settings.miniPlayer }).miniPlayer }),
+  'ui.mini': input => {
+    // Leaving the mini player while it is popped out brings it back to the tab.
+    if (popOut.isOpen() && input.on !== true) { popOut.close(); return { mini: settings.miniPlayer, popOut: false }; }
+    return { mini: saveSettings({ miniPlayer: input.on ?? !settings.miniPlayer }).miniPlayer };
+  },
+  'ui.pop_out': async input => {
+    const on = input.on ?? !popOut.isOpen();
+    if (!on) { popOut.close(); return { popOut: false }; }
+    if (!popOut.supported) throw new CommandError('unavailable', 'This browser has no Document Picture-in-Picture; Chrome and Edge 116 or later have it.');
+    try {
+      await openPopOut();
+    } catch (error) {
+      throw new CommandError('unavailable', `The pop-out window did not open (${String(error?.message ?? error)}). It opens from a click on Pop out.`);
+    }
+    return { popOut: true };
+  },
 
   'ai.playlist': async input => {
     const chat = host.aiReady() ? body => host.aiChat(body) : null;
-    const result = await makePlaylist({ description: input.description, tracks: libraryTracks, chat, length: input.length ?? 25 });
+    const result = await makePlaylist({ description: input.description, tracks: libraryVisible(), chat, length: input.length ?? 25 });
     return {
       title: result.title,
       path: result.path,
@@ -3504,15 +4625,338 @@ const handlers = {
       error: result.error,
     };
   },
+
+  // ------------------------------------------------------------ v1.x ----
+  'player.speed': input => {
+    const speed = input.rate !== undefined ? clampSpeed(input.rate) : stepSpeed(settings.speed, input.step === 'up' ? 1 : -1);
+    saveSettings({ speed });
+    toast(`Speed ${formatSpeed(speed)}`);
+    return { speed, preservesPitch: engine.state().path === 'r2' };
+  },
+  'player.stop_after_current': input => {
+    const on = input.on ?? !timers.status().stopAfterCurrent;
+    timers.setStopAfterCurrent(on);
+    toast(on ? 'Playback stops after this track.' : 'Stop after this track is off.');
+    return timers.status();
+  },
+  'player.sleep_timer': input => {
+    if (input.mode === 'off') { timers.cancelSleep(); toast('Sleep timer off.'); return timers.status(); }
+    try {
+      timers.setSleep(input.minutes !== undefined ? { minutes: input.minutes } : { mode: input.mode });
+    } catch (error) { throw new CommandError('invalid-input', error.message); }
+    toast(timerLabel(timers.status()));
+    return timers.status();
+  },
+  'player.volume_db': input => {
+    if (input.db !== undefined) setUiVolume(dbToPosition(input.db, settings.volumeFloorDb));
+    else stepVolumeDb(input.step);
+    return statusOf();
+  },
+  'sound.mono': input => {
+    const mono = saveSettings({ mono: input.on ?? !settings.mono }).mono;
+    toast(mono ? 'Mono on.' : 'Mono off.');
+    return { mono, state: engine.state().dsp?.mono ?? null };
+  },
+  'sound.volume_floor': input => {
+    const floor = saveSettings({ volumeFloorDb: clampFloor(input.db) }).volumeFloorDb;
+    return { volumeFloorDb: floor, volumeDb: Number.isFinite(volumeDb()) ? volumeDb() : null };
+  },
+  'sound.devices': async () => ({
+    supported: outputSupported(),
+    blocked: outputSupported() && outputBlocked(),
+    current: settings.outputDeviceId,
+    devices: await outputDevices().catch(() => []),
+  }),
+  'sound.output': async input => {
+    if (!outputSupported()) throw new CommandError('unavailable', 'This browser cannot choose an audio output for web pages.');
+    if (outputBlocked()) throw new CommandError('unavailable', 'The page around NakliAmp does not allow choosing an output device here.');
+    if (input.deviceId && !(await outputDevices()).some(device => device.id === input.deviceId)) {
+      throw new CommandError('not-found', 'No output device with that id. sound.devices lists them.');
+    }
+    saveSettings({ outputDeviceId: input.deviceId });
+    const result = await applyOutputDevice();
+    $('#output-device').value = settings.outputDeviceId;
+    if (result.error) throw new CommandError('refused', result.error.message);
+    return { deviceId: settings.outputDeviceId, applied: result.applied };
+  },
+  // The file comes from a picker, or from the sound panel as `context.file`.
+  'eq.import_eqf': async (input, context) => {
+    const file = context?.file ?? await pickEqfFile();
+    if (!file) return null;
+    let presets;
+    try { presets = parseEqf(await file.arrayBuffer()); } catch (error) { throw new CommandError('invalid-input', error.message); }
+    const index = input.presetIndex ?? 0;
+    const preset = presets[index];
+    if (!preset) throw new CommandError('not-found', `${file.name} holds ${presets.length} preset${presets.length === 1 ? '' : 's'}; there is no number ${index}.`);
+    const { patch, preampDb } = eqfToSettings(preset);
+    const eq = saveSettings(patch).eq;
+    toast(`Loaded ${preset.name || file.name}${preampDb ? ` (its ${preampDb} dB preamp is not applied)` : ''}.`, 4000);
+    return { name: preset.name, presets: presets.length, eq, preampDb };
+  },
+  'eq.export_eqf': input => {
+    const name = input.name ?? 'NakliAmp';
+    const saved = download(`${name.replace(/[^\w .-]+/g, '_')}.eqf`, exportCurrentEq(settings.eq, { name }));
+    return saved;
+  },
+
+  'library.duplicates': input => {
+    const groups = findDuplicates(libraryVisible())
+      .filter(group => !input.kind || group.kind === input.kind)
+      .map(group => ({ kind: group.kind, keepId: group.keepId, tracks: group.ids.map(id => trackSummary(byId.get(id))).filter(Boolean) }));
+    return page(groups, input);
+  },
+  'library.folders': async () => ({ folders: await folderList() }),
+  'library.add_folder': async () => {
+    const picked = await pickFolder();
+    if (!picked) return null;
+    const { folder, added } = await addFolder(picked);
+    if (added) { show('library'); await runScan(folder); }
+    return { added, id: folder.id, name: folder.name ?? null, primary: Boolean(folder.primary) };
+  },
+  'library.forget_folder': {
+    diff: input => {
+      const row = folderRowById(input.id);
+      if (!row) return { lines: [`No folder with id ${input.id}.`], unchanged: true };
+      const count = libraryTracks.filter(track => rowForPath(track.path) === row).length;
+      return {
+        title: `Remove ${row.name || 'this folder'} from the library?`,
+        summary: 'Its tracks and playlists leave the index. The files on disk stay where they are; adding the folder again brings them back.',
+        lines: [`${row.name || row.id}: ${count} track${count === 1 ? '' : 's'}`],
+        approveLabel: 'Remove folder',
+      };
+    },
+    run: async input => {
+      if (!folderRowById(input.id)) throw new CommandError('not-found', `No folder with id ${input.id}.`);
+      stopWatching(input.id);
+      let result;
+      try { result = await folderLibrary.forget(input.id); } catch (error) { throw new CommandError('refused', error.message); }
+      await refreshLibrary();
+      return result;
+    },
+  },
+  'library.rescan_folder': async input => {
+    if (!input.id) { await rescanAll(); return { rescanned: folderRows.map(row => row.id) }; }
+    const row = folderRowById(input.id);
+    if (!row) throw new CommandError('not-found', `No folder with id ${input.id}.`);
+    await ensureGrant(row);
+    await runScan(row);
+    return { rescanned: [row.id] };
+  },
+  'tags.rename_files': {
+    diff: async input => {
+      const rows = renamePlan(input);
+      const renames = rows.filter(row => row.status === 'rename');
+      const first = renames.length ? await handleFor(byId.get(renames[0].id)) : null;
+      if (renames.length && first && !canRenameOnDisk(first)) {
+        return { lines: ['This browser cannot rename files. Renaming needs a Chromium browser, such as Chrome or Edge.'], unchanged: true };
+      }
+      return {
+        title: `Rename ${renames.length} file${renames.length === 1 ? '' : 's'}?`,
+        summary: 'The audio files are renamed in their folders, then the folder is rescanned.',
+        lines: rows.map(row => (row.status === 'rename' ? `${row.from} → ${row.to}` : `${row.from}: ${RENAME_NOTES[row.status] ?? row.status}`)),
+        approveLabel: 'Rename files',
+        unchanged: renames.length === 0,
+      };
+    },
+    run: async input => {
+      const rows = renamePlan(input).filter(row => row.status === 'rename');
+      const out = { renamed: 0, failed: [] };
+      const touched = new Set();
+      for (const row of rows) {
+        try {
+          const { handle, relativePath } = await locate(row.path, { write: true });
+          const segments = relativePath.split('/');
+          const name = segments.pop();
+          const parent = await directoryFor(handle, segments);
+          await renameOnDisk(await parent.getFileHandle(name), row.to, { parent });
+          out.renamed += 1;
+          touched.add(rowForPath(row.path));
+        } catch (error) {
+          out.failed.push({ id: row.id, from: row.from, error: String(error?.message ?? error) });
+        }
+      }
+      for (const folder of touched) await runScan(folder);
+      if (out.failed.length) toast(`${out.failed.length} file${out.failed.length === 1 ? '' : 's'} not renamed: ${out.failed[0].error}`, 6000);
+      return out;
+    },
+  },
+  'tags.find_replace': {
+    diff: input => {
+      const plans = replacePlan(input);
+      return {
+        title: `Change tags in ${plans.length} track${plans.length === 1 ? '' : 's'}?`,
+        summary: 'The new text is written into the audio files. Each file is backed up until it reads back the same.',
+        lines: plans.flatMap(plan => Object.keys(plan.patch).map(field =>
+          `${byId.get(plan.id)?.title || plan.id}: ${field} "${plan.before[field]}" → ${plan.patch[field] === null ? 'cleared' : `"${plan.patch[field]}"`}`)),
+        approveLabel: 'Write tags',
+        unchanged: plans.length === 0,
+      };
+    },
+    run: async input => {
+      const out = { written: 0, failed: [] };
+      for (const plan of replacePlan(input)) {
+        try {
+          const handle = await handleFor(byId.get(plan.id));
+          if (!handle) throw new CommandError('unavailable', 'NakliAmp cannot reach this file to write it.');
+          await saveTagsToHandle(handle, plan.patch);
+          await patchLocal(plan.id, plan.patch);
+          out.written += 1;
+        } catch (error) {
+          out.failed.push({ id: plan.id, error: String(error?.message ?? error) });
+        }
+      }
+      if (out.written) { scheduleRescan(); notifyLibrary(); }
+      return out;
+    },
+  },
+  'tags.lookup_musicbrainz': input => netCall(() => lookupMusicBrainz(input)),
+  'tags.fetch_cover': input => netCall(async () => {
+    if (!isMbid(input.mbid)) throw new CommandError('invalid-input', `${input.mbid} is not a MusicBrainz release id.`);
+    const cover = await musicbrainz.fetchFrontCover(input.mbid);
+    if (!cover) return null;
+    return { mbid: input.mbid, mime: cover.mime, bytes: cover.bytes.length, dataUrl: bytesToDataUrl(cover.mime, cover.bytes) };
+  }),
+  'lyrics.fetch': input => netCall(async () => {
+    const track = trackOrPlaying(input.id);
+    const length = playingTrack === track ? trackDuration(engine.state()) : track.durationS;
+    return lrclib.getLyrics({ title: track.title, artist: track.artist, album: track.album, durationS: Number.isFinite(length) ? length : track.durationS });
+  }),
+  'lyrics.save_sidecar': input => netCall(async () => {
+    const track = trackOrPlaying(input.id);
+    if (track.transient || isVirtual(track)) throw new CommandError('refused', 'Lyrics are saved beside a file in your library; this track is not one.');
+    const result = await lrclib.getLyrics({ title: track.title, artist: track.artist, album: track.album, durationS: track.durationS });
+    if (!result) throw new CommandError('not-found', 'LRCLIB has no lyrics for this track.');
+    const plan = sidecarPlan(track.path.split('/').pop(), result);
+    const directory = track.path.split('/').slice(0, -1).join('/');
+    const path = directory ? `${directory}/${plan.name}` : plan.name;
+    if (await playlistFileExists(path)) throw new CommandError('refused', `${plan.name} already exists beside the track.`);
+    await writeLogged(path, plan.text);
+    toast(`Saved ${plan.name}. Ctrl+Z removes it.`);
+    rescanPath(path);
+    return { file: plan.name, synced: Boolean(result.synced) };
+  }),
+
+  'history.clear': {
+    diff: () => {
+      const played = historyTracks();
+      return {
+        title: 'Clear listening history?',
+        summary: `Play counts and last-played times go back to zero for ${played.length} track${played.length === 1 ? '' : 's'}, so Recently played and Most played empty. Ratings and favourites stay. This cannot be undone.`,
+        lines: played.slice(0, 12).map(track => `${track.title || track.name} (${track.playCount || 0} play${track.playCount === 1 ? '' : 's'})`)
+          .concat(played.length > 12 ? [`and ${played.length - 12} more`] : []),
+        approveLabel: 'Clear history',
+        ...(played.length ? {} : { unchanged: true }),
+      };
+    },
+    run: async () => {
+      const played = historyTracks();
+      for (const track of played) await patchTrack(track.id, { playCount: 0, lastPlayedAt: 0 });
+      notifyLibrary();
+      toast(`Cleared the listening history of ${played.length} track${played.length === 1 ? '' : 's'}.`);
+      return { cleared: played.length };
+    },
+  },
+  'queue.more_like_this': async input => {
+    const seed = playingTrack && !playingTrack.transient ? playingTrack : null;
+    if (!seed) throw new CommandError('unavailable', 'Play a track from your library first: more like this starts from it.');
+    const result = await moreLikeThis({ seed, tracks: libraryVisible(), queuedIds: queue.snapshot().ids, chat: hostChat(), length: input.length ?? 10 });
+    if (result.trackIds.length) queue.add(result.trackIds);
+    toast(result.trackIds.length ? `Added ${result.trackIds.length} like ${seed.title || 'this'}.` : 'Nothing similar left to add.');
+    return { path: result.path, title: result.title, added: result.trackIds.length, ids: result.trackIds, error: result.error };
+  },
+  'ai.suggest_genres': async input => suggestGenres({ tracks: libraryVisible(), chat: hostChat(), maxAlbums: input.maxAlbums ?? 200 }),
+  'ui.command_bar': input => { open('commands', input.text); return { view: 'commands' }; },
+  'view.skins': () => { open('skins'); return { view: 'skins' }; },
+
+  'network.list': () => ({ origins: consent.list().map(({ origin, label, purpose, sends, granted, alsoContacts }) => ({ origin, label, purpose, sends, granted, alsoContacts: alsoContacts ?? [] })) }),
+  'network.grant': input => {
+    consent.grant(input.origin);
+    if (input.origin === LB_ORIGIN) flushScrobbles();
+    return { origin: input.origin, granted: true };
+  },
+  'network.revoke': input => {
+    consent.revoke(input.origin);
+    if (input.origin === LB_ORIGIN) stopTracking();
+    return { origin: input.origin, granted: false };
+  },
+  'scrobble.status': () => ({
+    on: consent.isAllowed(LB_ORIGIN),
+    tokenSet: Boolean(listenbrainz.token()),
+    queued: listenbrainz.queued().length,
+    rejected: listenbrainz.rejected().length,
+    nextAttemptAt: listenbrainz.nextAttemptAt() || null,
+  }),
+  'scrobble.flush': () => netCall(() => listenbrainz.flush({ force: true })),
 };
+
+/** Patches without cover bytes: previews carry text fields only. */
+const textPatches = rows => rows.map(({ trackId, patch, matched }) => {
+  const { picture: _picture, ...rest } = patch ?? {};
+  return { trackId, patch: rest, matched };
+});
+
+/** MusicBrainz releases for an album, and per-track tag changes as a preview (T8). */
+function lookupTracks(input) {
+  const useSelection = input.ids?.length || (!input.album && !input.mbid);
+  return (useSelection ? idsOrSelection(input) : []).map(id => byId.get(id)).filter(Boolean);
+}
+
+/** The album and artist to search for: the input's, else the first track's tags. */
+function lookupQuery(input, first = {}) {
+  const album = input.album ?? first.album;
+  if (!album) throw new CommandError('invalid-input', 'Give an album name, or pick tracks that have one.');
+  return { album, artist: input.artist ?? first.albumArtist ?? first.artist };
+}
+
+async function lookupMusicBrainz(input) {
+  const tracks = lookupTracks(input);
+  if (input.mbid) return { mbid: input.mbid, releases: [], patches: textPatches(await musicbrainz.patchesFor(input.mbid, tracks)) };
+  const releases = await musicbrainz.searchRelease(lookupQuery(input, tracks[0]));
+  const mbid = releases[0]?.mbid ?? null;
+  const patches = mbid && tracks.length ? textPatches(await musicbrainz.patchesFor(mbid, tracks)) : [];
+  return { mbid, releases, patches };
+}
+
+/** Wrap the tag edit handler so `coverFrom` fetches the MusicBrainz cover once per request. */
+function withCoverFrom(handler) {
+  const pictures = new WeakMap();
+  const pictureFor = input => {
+    if (!input.coverFrom) return Promise.resolve(null);
+    if (!pictures.has(input)) {
+      pictures.set(input, netCall(async () => {
+        const cover = await musicbrainz.fetchFrontCover(input.coverFrom);
+        if (!cover) throw new CommandError('not-found', 'The Cover Art Archive has no front cover for that release.');
+        return cover;
+      }));
+    }
+    return pictures.get(input);
+  };
+  const withPicture = async (input, context = {}) => {
+    const picture = await pictureFor(input);
+    return picture ? { ...context, picture } : context;
+  };
+  return {
+    diff: async (input, context) => handler.diff?.(input, await withPicture(input, context)),
+    run: async (input, context) => handler.run(input, await withPicture(input, context)),
+  };
+}
 
 function safeSmartCount(rule) {
   try { return evaluateSmart(rule, libraryTracks).length; } catch { return 0; }
 }
 
-const run = bindCommands(handlers, { confirm: request => confirmCommand(request) });
+const run = bindCommands(handlers, { confirm: request => confirmCommand(request), revision: () => queue.revision() });
+
+/** A browser error a person can act on (minor 9): a folder that is gone says so. */
+function plainError(error) {
+  if (error?.name === 'NotFoundError') {
+    return Object.assign(new Error('Your music folder is no longer there. Reopen it in Music folders, or open it again.'), { code: 'unavailable', cause: error });
+  }
+  return error;
+}
 
 function reportCommandError(error) {
+  error = plainError(error);
   const message = String(error?.message ?? error).replace(/^\[[a-z-]+\] /, '');
   if (error?.code === 'declined') return;
   toast(message, 5000);
@@ -3520,19 +4964,70 @@ function reportCommandError(error) {
 
 // Every key goes through the command list (K1 to K3). Text fields keep their keys.
 // Bubble phase on window, and events a panel already handled (Space on a list row) are skipped.
-addEventListener('keydown', event => {
+// The pop-out mini player's window sends its keys here too.
+function onShortcutKey(event) {
   if (event.defaultPrevented) return;
   const hit = matchShortcut(event);
   if (!hit) return;
   event.preventDefault();
   run(hit.name, hit.input, { context: { from: 'key' } }).catch(reportCommandError);
-});
+}
+addEventListener('keydown', onShortcutKey);
 
 // The agent face and the host (N1 to N4).
 host.registerCommands(hostCommandList(run));
 host.onTheme(theme => { hostTheme = theme; paintTheme(); });
-host.onFiles(async files => { if (files[0]) await openLooseFile(files[0]).catch(() => {}); });
+// A file NakliOS sends (Rivulina's hand-off) joins the queue as a transient entry and plays.
+host.onFiles(async files => {
+  autoplayNext = true;
+  const added = receiveFiles(files, { store: transients, queue });
+  if (added.length) { revealPlayer(); await pendingLoad; }
+});
 host.ready();
+// WebMCP (N5): the same commands for an in-browser agent, where the browser offers it.
+registerWebMcpTools({ run }).catch(error => console.warn('[nakliamp] WebMCP registration failed', error));
+
+// The agent face's snapshot and event stream (M3, after cliamp's IPC v2), and the
+// BroadcastChannel that carries them to other tabs and windows of this origin.
+// NakliOS's SDK has no app-to-host event call and WebMCP has no notifications, so
+// the channel is the one event sink (docs/agent-face.md).
+const agentInstance = instanceId();
+let lastPlayerError = null;
+queue.onChange(() => agentEvents.poke());
+function snapshotParts() {
+  const snap = queue.snapshot();
+  return {
+    status: statusOf(),
+    queue: { length: snap.length, index: snap.index, revision: snap.revision },
+    playlist: queuePlaylist,
+    eq: settings.eq,
+    visualiser: { mode: visualiser.mode(), linkVolume: settings.visualiserLinkVolume },
+    dsp: engine.state().dsp,
+    mono: settings.mono,
+    error: lastPlayerError,
+  };
+}
+let agentChannel = null;
+try { agentChannel = typeof BroadcastChannel === 'function' ? new BroadcastChannel(CHANNEL_NAME) : null; } catch { agentChannel = null; }
+const agentEvents = createEventPublisher({
+  getSnapshot: () => buildSnapshot(snapshotParts()),
+  sinks: agentChannel ? [message => agentChannel.postMessage(message)] : [],
+  instance: agentInstance,
+});
+const agentBridge = agentChannel ? createChannelBridge({ channel: agentChannel, run, publisher: agentEvents, instance: agentInstance }) : null;
+engine.on('*', entry => {
+  if (entry?.type === 'playback:refused') {
+    lastPlayerError = { code: entry.detail?.code ?? 'refused', message: entry.detail?.message ?? 'Playback refused.' };
+    agentEvents.error(lastPlayerError);
+  } else if (entry?.type === 'track:loaded') {
+    lastPlayerError = null;
+  }
+  agentEvents.poke();
+});
+onSettings(() => agentEvents.poke());
+$('#volume').addEventListener('input', () => agentEvents.poke());
+agentEvents.start();
+addEventListener('pagehide', () => { agentEvents.stop(); agentBridge?.close(); });
 
 // ----------------------------------------------------- controls ----
 
@@ -3545,7 +5040,6 @@ function paintSeekButtons() {
 }
 
 $('#open-file').addEventListener('click', chooseFile);
-$('#open-another').addEventListener('click', chooseFile);
 $('#refusal-open').addEventListener('click', () => { dismissRefusal(); chooseFile(); });
 $('#refusal-dismiss').addEventListener('click', dismissRefusal);
 $('#play').addEventListener('click', () => run('player.toggle').catch(reportCommandError));
@@ -3560,7 +5054,7 @@ $('#repeat').addEventListener('click', () => run('queue.repeat').catch(reportCom
 $('#seek').addEventListener('pointerdown', () => { seeking = true; });
 $('#seek').addEventListener('input', () => { $('#elapsed').textContent = formatTime(Number($('#seek').value)); });
 $('#seek').addEventListener('change', async () => {
-  await engine.seek(Number($('#seek').value));
+  await seekTrack(Number($('#seek').value));
   seeking = false;
 });
 $('#volume').addEventListener('input', () => setUiVolume(Number($('#volume').value)));
@@ -3572,9 +5066,63 @@ $('#file-input').addEventListener('change', async event => {
 $('#open-sound').addEventListener('click', () => open('sound'));
 $('#open-ai').addEventListener('click', () => open('ai'));
 $('#open-keymap').addEventListener('click', () => open('keymap'));
-$('#theme-toggle').addEventListener('click', () => run('ui.theme', { theme: cycle(['light', 'dark', 'system'], settings.theme) }).catch(reportCommandError));
+// The Tools menu (M2, M5): a menu button, keyboard operable (arrows, Home, End,
+// Escape, Tab), instead of a native select. On a phone it also holds the header
+// buttons that do not fit.
+const toolsButton = $('#tools-btn');
+const toolsMenu = $('#tools-menu');
+const menuItems = () => [...toolsMenu.querySelectorAll('[role=menuitem]')].filter(item => item.offsetParent !== null);
+function setToolsMenu(open, { focus = 'first' } = {}) {
+  toolsMenu.hidden = !open;
+  toolsButton.setAttribute('aria-expanded', String(open));
+  if (open) {
+    const items = menuItems();
+    (focus === 'last' ? items.at(-1) : items[0])?.focus();
+  }
+}
+function closeToolsMenu({ restore = true } = {}) {
+  if (toolsMenu.hidden) return;
+  setToolsMenu(false);
+  if (restore) toolsButton.focus();
+}
+toolsButton.addEventListener('click', () => setToolsMenu(toolsMenu.hidden));
+toolsButton.addEventListener('keydown', event => {
+  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+  event.preventDefault();
+  setToolsMenu(true, { focus: event.key === 'ArrowUp' ? 'last' : 'first' });
+});
+toolsMenu.addEventListener('keydown', event => {
+  const items = menuItems();
+  const at = items.indexOf(document.activeElement);
+  const step = { ArrowDown: 1, ArrowUp: -1 }[event.key];
+  if (step) items[(at + step + items.length) % items.length]?.focus();
+  else if (event.key === 'Home') items[0]?.focus();
+  else if (event.key === 'End') items.at(-1)?.focus();
+  else if (event.key === 'Escape') closeToolsMenu();
+  else if (event.key === 'Tab') { closeToolsMenu({ restore: false }); return; }
+  else return;
+  event.preventDefault();
+  event.stopPropagation();
+});
+toolsMenu.addEventListener('click', event => {
+  const item = event.target.closest('[role=menuitem]');
+  if (!item) return;
+  closeToolsMenu({ restore: false });
+  if (item.dataset.view) open(item.dataset.view);
+  else if (item.dataset.act === 'theme') run('ui.theme', { theme: nextTheme() }).catch(reportCommandError);
+  else if (item.dataset.act === 'mini') run('ui.mini').catch(reportCommandError);
+  else if (item.dataset.act === 'file') chooseFile();
+});
+document.addEventListener('pointerdown', event => {
+  if (!toolsMenu.hidden && !event.target.closest('.menu-wrap')) closeToolsMenu({ restore: false });
+}, true);
+$('#speed').addEventListener('change', event => run('player.speed', { rate: Number(event.target.value) }).catch(reportCommandError));
+$('#timer-chip').addEventListener('click', () => open('sleep'));
+$('#theme-toggle').addEventListener('click', () => run('ui.theme', { theme: nextTheme() }).catch(reportCommandError));
 $('#mini-toggle').addEventListener('click', () => run('ui.mini').catch(reportCommandError));
 $('#mini-exit').addEventListener('click', () => run('ui.mini', { on: false }).catch(reportCommandError));
+$('#mini-pop').addEventListener('click', () => run('ui.pop_out', { on: true }).catch(reportCommandError));
+$('#pip-return').addEventListener('click', () => run('ui.pop_out', { on: false }).catch(reportCommandError));
 $('#now-fav').addEventListener('click', () => { if (playingTrack) run('track.favourite', { ids: [playingTrack.id] }).catch(reportCommandError); });
 $('#now-inspect').addEventListener('click', () => open('inspector', playingTrack?.id ?? null));
 $('#now-tags').addEventListener('click', () => { if (playingTrack) open('tags', [playingTrack.id]); });
@@ -3588,10 +5136,11 @@ const drop = $('#drop');
 async function acceptDrop(dataTransfer) {
   const directory = await directoryFromDrop(dataTransfer);
   if (directory) {
-    await adoptFolder(directory);
+    // A dropped folder joins the library (L13); the first one is the primary folder.
+    const { folder } = await addFolder(directory);
     show('library');
     await refreshLibrary();
-    await runScan(directory);
+    await runScan(folder);
     return;
   }
   const [file] = dataTransfer.files;
@@ -3663,7 +5212,8 @@ if (HARNESS) {
     openLibrary: () => openLibrary(),
     // A real folder grant needs a user gesture no harness can give, so the gate
     // hands in an OPFS directory handle instead.
-    adoptFolder: handle => adoptFolder(handle),
+    // The handed-in folder becomes the only one, as a single legacy grant.
+    adoptFolder: async handle => { await setMeta('folders', null); await adoptFolder(handle); await refreshFolders(); },
     view: () => currentView(),
     queue: () => { const snap = queue.snapshot(); return { length: snap.length, index: snap.index }; },
     libraryTracks: () => libraryTracks.length,
@@ -3690,6 +5240,24 @@ if (HARNESS) {
     run: (name, input) => run(name, input, { approved: true }),
     commands: () => COMMANDS.map(command => command.name),
     settings: () => loadSettings(),
+    // v1.x gate (test/v1x-features.html): a second folder handed in without a picker,
+    // a sleep timer shorter than the command's one-minute minimum, and WebMCP
+    // registration against a stand-in model context.
+    addFolder: async handle => {
+      const { folder, added } = await addFolder(handle);
+      if (added) await runScan(folder);
+      return { added, id: folder.id, name: folder.name ?? null };
+    },
+    sleepSeconds: seconds => timers.setSleep({ minutes: seconds / 60 }),
+    timers: () => timers.status(),
+    registerWebMcp: env => registerWebMcpTools({ run, env }),
+    // Agent face gate (test/agent-face.html).
+    agentInstance: () => agentInstance,
+    pickerTilesDrawn: () => visualiserPreview?.drawn() ?? null,
+    visibleTracks: () => libraryVisible().map(track => ({ ...track })),
+    popOut: () => ({ supported: popOut.supported, open: popOut.isOpen(), barInPage: document.contains($('#playerbar')) }),
+    queuePlaylist: () => queuePlaylist,
+    milkdropPreset: () => visualiser.milkdrop()?.presetName() ?? null,
   });
 }
 // nakliamp:harness-end
@@ -3701,9 +5269,15 @@ if (HARNESS) {
     settings = saveSettings({ shuffle: snap.shuffle, repeat: snap.repeat });
   }
 }
-engine.setVolume(Number($('#volume').value));
+applyVolume();
+paintSpeed();
+paintTimerChip();
+paintOutputDevices();
+if (settings.outputDeviceId) applyOutputDevice();
+flushScrobbles();
 paintTheme();
 paintMini();
+paintPopOut();
 paintModes();
 paintSeekButtons();
 paintNowTools();
@@ -3721,25 +5295,27 @@ if (!HARNESS && 'serviceWorker' in navigator && /^https?:$/.test(location.protoc
  */
 async function restoreSession() {
   if (!supportsFolderGrant()) return;
-  let handle;
   try {
-    handle = await storedFolder();
+    await refreshFolders();
   } catch {
     return; // a browser with no usable IndexedDB is still a working player
   }
-  if (!handle) return;
+  if (!folderRows.length) return;
 
   await refreshLibrary();
   show('library');
-  const name = await storedFolderName();
-  const state = await grantState(handle);
-  if (state === 'granted') {
-    await persistStorage();
-    await runScan(handle);
-    return;
+  const closed = [];
+  for (const row of folderRows) {
+    if (await grantState(row.handle) === 'granted') {
+      await persistStorage();
+      await runScan(row);
+    } else {
+      closed.push(row.name || 'your folder');
+    }
   }
+  if (!closed.length) return;
   reportScan(
-    `${libraryTracks.length} tracks indexed from ${name || 'your folder'}. `
+    `${libraryTracks.length} tracks indexed from ${closed.join(', ')}. `
     + 'Reopen the folder to play from it.',
   );
   $('#lib-reopen').hidden = false;
