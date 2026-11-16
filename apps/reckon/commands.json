@@ -5,7 +5,8 @@
       "label": "Open in Reckon",
       "extensions": [
         ".csv",
-        ".xlsx"
+        ".xlsx",
+        ".ods"
       ]
     }
   ],
@@ -29,7 +30,7 @@
           "ref": {
             "type": "string",
             "minLength": 1,
-            "description": "Sheet name and A1 range of at most 2,000 cells, e.g. \"Sheet1!A1:C10\""
+            "description": "Sheet name and A1 range of at most 2,000 cells, e.g. \"Sheet1!A1:C10\", or a reckon:// address such as \"reckon://current/Sheet1/A1:C10\""
           }
         },
         "required": [
@@ -973,6 +974,17 @@
           "size": {
             "type": "object",
             "description": "Size in pixels, 40 to 4000, e.g. {\"width\": 480, \"height\": 300}"
+          },
+          "options": {
+            "type": "object",
+            "description": "Chart detail, every key optional: {\"xTitle\":\"Month\",\"yTitle\":\"Sales\",\"y2Title\":\"Margin %\",\"legend\":\"auto|top|bottom|left|right|none\",\"dataLabels\":\"none|value|percent\",\"stack\":\"none|stacked|percent\",\"yMin\":0,\"yMax\":100,\"yStep\":10,\"yFormat\":\"#,##0\",\"gridlines\":true}; on chart.update a key set to null goes back to its default"
+          },
+          "series": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "Per-series settings in data order, e.g. [{\"kind\":\"column\"},{\"kind\":\"line\",\"axis\":\"secondary\",\"trendline\":{\"type\":\"linear\",\"showEquation\":true,\"showR2\":true}}]; kind is column, line or area; trendline type is linear, exp or movingAvg (with \"period\": 2 to 100)"
           }
         },
         "required": [
@@ -983,7 +995,7 @@
     {
       "name": "chart.update",
       "label": "Chart settings",
-      "description": "Change the type, title, data range, orientation, label rows, position or size of a chart, e.g. \"make chart ch1 a bar chart\".",
+      "description": "Change the type, title, data range, orientation, label rows, position, size, axis titles, legend, data labels, stacking, axis bounds, secondary axis or trendlines of a chart, e.g. \"make chart ch1 a stacked bar chart with the legend on the right\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1042,6 +1054,17 @@
           "size": {
             "type": "object",
             "description": "Size in pixels, e.g. {\"width\": 480, \"height\": 300}"
+          },
+          "options": {
+            "type": "object",
+            "description": "Chart detail, every key optional: {\"xTitle\":\"Month\",\"yTitle\":\"Sales\",\"y2Title\":\"Margin %\",\"legend\":\"auto|top|bottom|left|right|none\",\"dataLabels\":\"none|value|percent\",\"stack\":\"none|stacked|percent\",\"yMin\":0,\"yMax\":100,\"yStep\":10,\"yFormat\":\"#,##0\",\"gridlines\":true}; on chart.update a key set to null goes back to its default"
+          },
+          "series": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "Per-series settings in data order, e.g. [{\"kind\":\"column\"},{\"kind\":\"line\",\"axis\":\"secondary\",\"trendline\":{\"type\":\"linear\",\"showEquation\":true,\"showR2\":true}}]; kind is column, line or area; trendline type is linear, exp or movingAvg (with \"period\": 2 to 100)"
           }
         },
         "required": [
@@ -1091,7 +1114,7 @@
             "items": {
               "type": "object"
             },
-            "description": "Rules in priority order; [] removes the rules on this range. Shapes: {\"type\":\"cellValue\",\"op\":\"gt\",\"v1\":100,\"format\":{\"bg\":\"#f8d7da\",\"fg\":\"#842029\",\"bold\":true}} (ops gt, lt, ge, le, eq, ne, between, notBetween with v2, contains, notContains, beginsWith, endsWith, duplicate, unique, top, bottom, aboveAvg, belowAvg, blank, notBlank); {\"type\":\"formula\",\"formula\":\"=$C2>$B2\",\"format\":{...}}; {\"type\":\"colorScale\",\"scale\":{\"min\":\"#ffffff\",\"max\":\"#8fb4dd\"}}; {\"type\":\"dataBar\",\"bar\":{\"color\":\"#1a5fb4\"}}"
+            "description": "Rules in priority order; [] removes the rules on this range. Shapes: {\"type\":\"cellValue\",\"op\":\"gt\",\"v1\":100,\"format\":{\"bg\":\"#f8d7da\",\"fg\":\"#842029\",\"bold\":true}} (ops gt, lt, ge, le, eq, ne, between, notBetween with v2, contains, notContains, beginsWith, endsWith, duplicate, unique, top, bottom (v1 = how many), topPct, bottomPct (v1 = percent), aboveAvg, belowAvg, aboveStd, belowStd (v1 = standard deviations, 1 to 3), blank, notBlank, error, noError, dateIs (v1 one of yesterday, today, tomorrow, last7, lastWeek, thisWeek, nextWeek, lastMonth, thisMonth, nextMonth)); {\"type\":\"formula\",\"formula\":\"=$C2>$B2\",\"format\":{...}}; {\"type\":\"colorScale\",\"scale\":{\"min\":\"#ffffff\",\"max\":\"#8fb4dd\"}}; {\"type\":\"dataBar\",\"bar\":{\"color\":\"#1a5fb4\"}}; {\"type\":\"iconSet\",\"icons\":{\"set\":\"traffic3\",\"thresholds\":[{\"kind\":\"percent\",\"value\":33},{\"kind\":\"percent\",\"value\":67}],\"reverse\":false,\"iconOnly\":false}} (sets arrows3, traffic3, flags3, ratings4, quarters5; one threshold fewer than icons, each the lower bound of the next band, kind percent, number or percentile; leave thresholds out for equal percent bands)"
           }
         },
         "required": [
@@ -1126,7 +1149,7 @@
     {
       "name": "pivot.set",
       "label": "Pivot table",
-      "description": "Add or replace a pivot table that summarises a table on the same sheet, e.g. \"pivot A1 to D200 to total Sales by Region\".",
+      "description": "Add or replace a pivot table that summarises a table on the same sheet, with calculated fields, date and number grouping, row sorting and values shown as percents or running totals, e.g. \"pivot A1 to D200 to total Sales by Region, largest first\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1155,7 +1178,7 @@
             "items": {
               "type": "object"
             },
-            "description": "What to total, e.g. [{\"field\":\"Sales\",\"agg\":\"sum\"}]; agg is sum, count, countUnique, average, min or max"
+            "description": "What to total, e.g. [{\"field\":\"Sales\",\"agg\":\"sum\"}]; agg is sum, count, countUnique, average, min or max; add \"showAs\": \"pctGrand\", \"pctRow\", \"pctCol\" or \"runningTotal\" to show a value as a percent of a total or as a running total; a calculated field from options.calcFields is named like any field"
           },
           "filters": {
             "type": "array",
@@ -1178,6 +1201,10 @@
             "type": "string",
             "minLength": 1,
             "description": "Id of an existing pivot to replace; a new pivot when left out"
+          },
+          "options": {
+            "type": "object",
+            "description": "Pivot detail, every key optional: {\"calcFields\":[{\"name\":\"Margin\",\"formula\":\"=Revenue-Cost\"}],\"groups\":{\"Date\":{\"by\":\"month\"},\"Price\":{\"by\":\"bins\",\"size\":100}},\"sort\":{\"by\":\"value\",\"dir\":\"desc\",\"value\":0}}; group by is year, quarter, month, day or bins; sort by is label or value"
           }
         },
         "required": [
@@ -1213,7 +1240,7 @@
     {
       "name": "workbook.export",
       "label": "Export",
-      "description": "Export the Reckon workbook as csv (one sheet), xlsx or the reckon json file and return the file in the result, e.g. \"give me Sheet1 as a csv file\".",
+      "description": "Export the Reckon workbook as csv (one sheet), xlsx, ods or the reckon json file and return the file in the result, with a list of anything the format could not hold, e.g. \"give me Sheet1 as a csv file\".",
       "scope": "read",
       "input": {
         "type": "object",
@@ -1223,14 +1250,19 @@
             "enum": [
               "csv",
               "xlsx",
+              "ods",
               "json"
             ],
-            "description": "File type (default json); xlsx comes back base64-encoded"
+            "description": "File type (default json); xlsx and ods come back base64-encoded"
           },
           "sheet": {
             "type": "string",
             "minLength": 1,
             "description": "Sheet to export as csv; the active sheet when left out"
+          },
+          "keepFormatting": {
+            "type": "boolean",
+            "description": "For xlsx: write fonts, fills, borders, alignment, conditional formatting and data validation (default: the Keep formatting setting, on unless turned off)"
           }
         }
       }
@@ -1276,6 +1308,747 @@
         },
         "required": [
           "steps"
+        ]
+      }
+    },
+    {
+      "name": "style.apply",
+      "label": "Apply cell style",
+      "description": "Apply a named cell style to a range (the built-in Normal, Title, Heading 1, Heading 2, Total, Good, Bad, Neutral, Input, Output, Calculation, Note, Currency and Percent, or a style saved in the workbook), e.g. \"make A1 a Heading 1\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name and A1 range, e.g. \"Sheet1!A1:D1\""
+          },
+          "style": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Style name, e.g. \"Heading 1\""
+          }
+        },
+        "required": [
+          "ref",
+          "style"
+        ]
+      }
+    },
+    {
+      "name": "style.save",
+      "label": "Save cell style",
+      "description": "Save one cell's format as a named style kept in the workbook, or remove a saved style, e.g. \"save the look of B2 as Highlight\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Style name, 1 to 64 characters, not a built-in style name"
+          },
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name and the one cell whose format becomes the style, e.g. \"Sheet1!B2\"; not needed with remove"
+          },
+          "remove": {
+            "type": "boolean",
+            "description": "true removes the saved style with this name"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      }
+    },
+    {
+      "name": "link.set",
+      "label": "Insert link",
+      "description": "Put an http, https or mailto link in a cell as a HYPERLINK formula, or remove the link and keep the text it shows, e.g. \"link A2 to our website as Website\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name and one cell, e.g. \"Sheet1!A2\""
+          },
+          "url": {
+            "description": "Web or email address (\"example.com\" gets https://, \"a@b.org\" gets mailto:); null removes the link"
+          },
+          "label": {
+            "description": "Text or number the cell shows; the URL shows when left out"
+          }
+        },
+        "required": [
+          "ref",
+          "url"
+        ]
+      }
+    },
+    {
+      "name": "checkbox.insert",
+      "label": "Insert checkboxes",
+      "description": "Turn cells into checkboxes that show TRUE or FALSE as a tick box (blank cells become FALSE), or remove the checkbox look, e.g. \"add checkboxes to D2 to D20\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name and A1 range, e.g. \"Sheet1!D2:D20\""
+          },
+          "remove": {
+            "type": "boolean",
+            "description": "true removes the checkbox look and keeps the values"
+          }
+        },
+        "required": [
+          "ref"
+        ]
+      }
+    },
+    {
+      "name": "protect.set",
+      "label": "Protect sheet",
+      "description": "Protect a sheet from accidental edits (there is no password, so it guards against accidents, not people) or lift the protection, with optional ranges that stay editable, e.g. \"protect Sheet1 except B2 to B20\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "sheet": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name; the active sheet when left out"
+          },
+          "protected": {
+            "type": "boolean",
+            "description": "true protects the sheet, false lifts the protection"
+          },
+          "allowedRanges": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "A1 ranges that stay editable while protected, e.g. [\"B2:B20\"]; replaces the current list"
+          }
+        },
+        "required": [
+          "protected"
+        ]
+      }
+    },
+    {
+      "name": "fill.from_examples",
+      "label": "Fill from examples",
+      "shortcut": "Mod+E",
+      "description": "Fill a column from 1 to 3 examples typed at its top, using the columns beside it, as a formula where one fits and as values otherwise, e.g. \"fill column C with the first names from column A like the examples\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name and one-column A1 range holding the examples and the blank cells to fill, e.g. \"Sheet1!C2:C50\"; a first row that does not fit the pattern is treated as a header"
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Column letters to take the examples from, e.g. [\"A\", \"B\"]; when left out, the filled cells next to the first example"
+          }
+        },
+        "required": [
+          "ref"
+        ]
+      }
+    },
+    {
+      "name": "sheet.explain",
+      "label": "Explain sheet",
+      "description": "Describe the structure of the workbook or one sheet without a model: used ranges, header rows, formula patterns grouped by shape, links between sheets, named ranges, charts, pivot tables and a small sample, e.g. \"what does this spreadsheet do\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "sheet": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name; every sheet when left out"
+          }
+        }
+      }
+    },
+    {
+      "name": "table.create",
+      "label": "Format as table",
+      "description": "Turn a range whose first row holds the headers into a named table with banded rows, filter buttons and an optional total row, e.g. \"make A1 to D20 on Sales a table called Orders\".",
+      "scope": "write",
+      "shortcut": [
+        "Mod+T",
+        "Mod+Alt+T"
+      ],
+      "input": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name and A1 range, header row first, e.g. \"Sales!A1:D20\""
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Table name such as \"Orders\" (letters, digits, _ and .); Table1, Table2 and so on when left out"
+          },
+          "style": {
+            "type": "string",
+            "enum": [
+              "light",
+              "medium",
+              "dark",
+              "accent"
+            ],
+            "description": "Colour style (default medium)"
+          },
+          "totals": {
+            "type": "boolean",
+            "description": "Add a total row below the data with a label and a sum of the last column (default false)"
+          }
+        },
+        "required": [
+          "ref"
+        ]
+      }
+    },
+    {
+      "name": "table.update",
+      "label": "Table settings",
+      "description": "Change a table's name, style, total row, banding, filter buttons, column names or total-row aggregates, e.g. \"show the average of Price in the total row of Orders\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "table": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Table name, e.g. \"Orders\""
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "New table name; formulas that use the old name follow"
+          },
+          "style": {
+            "type": "string",
+            "enum": [
+              "light",
+              "medium",
+              "dark",
+              "accent"
+            ],
+            "description": "Colour style"
+          },
+          "totals": {
+            "type": "boolean",
+            "description": "Show or remove the total row"
+          },
+          "banded": {
+            "type": "boolean",
+            "description": "Shade every other data row"
+          },
+          "filter": {
+            "type": "boolean",
+            "description": "Show filter buttons in the header row"
+          },
+          "columns": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "Column changes, each {\"column\": current name, \"name\": new name, \"total\": one of sum, average, count, countNums, min, max, or null for none}"
+          }
+        },
+        "required": [
+          "table"
+        ]
+      }
+    },
+    {
+      "name": "table.delete",
+      "label": "Convert table to range",
+      "description": "Turn a table back into a plain range, keeping its cells and rewriting formulas that use its name to cell ranges, e.g. \"convert the Orders table to a normal range\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "table": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Table name, e.g. \"Orders\""
+          }
+        },
+        "required": [
+          "table"
+        ]
+      }
+    },
+    {
+      "name": "table.read",
+      "label": "List tables",
+      "description": "List the tables in the workbook with their sheets, ranges, columns, calculated-column formulas and total-row settings, e.g. \"what tables does this workbook have\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "table": {
+            "type": "string",
+            "minLength": 1,
+            "description": "One table name; every table when left out"
+          }
+        }
+      }
+    },
+    {
+      "name": "sparkline.set",
+      "label": "Sparklines",
+      "description": "Draw small line, column or win-loss charts inside cells from a range of numbers, one per row or column, e.g. \"add sparklines in F2 to F10 for B2 to E10\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name and the cells that draw: one cell, a column (one cell per source row) or a row (one cell per source column), e.g. \"Sheet1!F2:F10\""
+          },
+          "source": {
+            "type": "string",
+            "minLength": 1,
+            "description": "A1 range of the numbers on the same sheet, e.g. \"B2:E10\""
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "line",
+              "column",
+              "winloss"
+            ],
+            "description": "Sparkline type (default line)"
+          },
+          "color": {
+            "type": "string",
+            "description": "Line or bar colour as #rrggbb"
+          },
+          "negColor": {
+            "type": "string",
+            "description": "Colour of negative bars and low points as #rrggbb"
+          },
+          "markerColor": {
+            "type": "string",
+            "description": "Colour of marked points as #rrggbb"
+          },
+          "markers": {
+            "type": "object",
+            "description": "Points to mark, e.g. {\"high\":true,\"low\":true,\"first\":false,\"last\":true,\"negative\":true}"
+          },
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Id of a sparkline group to replace; a new group when left out"
+          }
+        },
+        "required": [
+          "ref",
+          "source"
+        ]
+      }
+    },
+    {
+      "name": "sparkline.delete",
+      "label": "Delete sparklines",
+      "description": "Remove sparklines by id, or every sparkline group drawn in a range, e.g. \"remove the sparklines in column F\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sparkline group id from sparkline.set"
+          },
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name and A1 range; groups that draw in it are removed, e.g. \"Sheet1!F2:F10\""
+          },
+          "sheet": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet to search for the id; all sheets when left out"
+          }
+        }
+      }
+    },
+    {
+      "name": "sql.run",
+      "label": "SQL query",
+      "description": "Run a read-only SQL query (DuckDB) over ranges registered as tables, first row as column names, and return up to 2,000 rows; optionally write the whole result to a new sheet or from a target cell as one change, e.g. \"join Orders and Customers and total sales by city\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "sql": {
+            "type": "string",
+            "minLength": 1,
+            "description": "One read-only statement, e.g. \"SELECT Region, SUM(Sales) AS total FROM sales GROUP BY Region ORDER BY total DESC\""
+          },
+          "tables": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "Tables to register, e.g. [{\"name\":\"sales\",\"ref\":\"Sheet1!A1:D200\"}]; the first row names the columns"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2000,
+            "description": "Rows to return (default 200); a write takes every row"
+          },
+          "write": {
+            "type": "object",
+            "description": "Where to write the result: {\"sheet\":\"Summary\"} for a new sheet, or {\"ref\":\"Sheet1!H1\"} from a cell; add \"header\": false to leave out the column names; left out, nothing is written"
+          }
+        },
+        "required": [
+          "sql",
+          "tables"
+        ]
+      }
+    },
+    {
+      "name": "goal.seek",
+      "label": "Goal seek",
+      "description": "Find the value of one input cell that makes a formula cell reach a target, searching on a private copy of the workbook, then write that value as one change, e.g. \"what price in B2 makes the profit in B9 equal 1000\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "setCell": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name and the formula cell to reach the target, e.g. \"Sheet1!B9\""
+          },
+          "to": {
+            "type": "number",
+            "description": "Target value for setCell"
+          },
+          "changingCell": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The value cell to change, on the same sheet, e.g. \"Sheet1!B2\""
+          },
+          "maxIterations": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000,
+            "description": "Search steps (default 100)"
+          },
+          "apply": {
+            "type": "boolean",
+            "description": "false only reports the value without writing it (default true)"
+          }
+        },
+        "required": [
+          "setCell",
+          "to",
+          "changingCell"
+        ]
+      }
+    },
+    {
+      "name": "outline.group",
+      "label": "Group rows or columns",
+      "description": "Group rows or columns into a collapsible outline, one level deeper (at most 7), e.g. \"group rows 5 to 9\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "sheet": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name, e.g. \"Sheet1\"; the active sheet when left out"
+          },
+          "row": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "First row number, from 1; give row or col"
+          },
+          "col": {
+            "type": "string",
+            "minLength": 1,
+            "description": "First column letter, e.g. \"C\"; give row or col"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000,
+            "description": "How many rows or columns from row or col (default 1)"
+          }
+        }
+      }
+    },
+    {
+      "name": "outline.ungroup",
+      "label": "Ungroup rows or columns",
+      "description": "Take rows or columns one outline level out of their group, e.g. \"ungroup rows 5 to 9\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "sheet": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name, e.g. \"Sheet1\"; the active sheet when left out"
+          },
+          "row": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "First row number, from 1; give row or col"
+          },
+          "col": {
+            "type": "string",
+            "minLength": 1,
+            "description": "First column letter, e.g. \"C\"; give row or col"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000,
+            "description": "How many rows or columns from row or col (default 1)"
+          }
+        }
+      }
+    },
+    {
+      "name": "outline.collapse",
+      "label": "Collapse group",
+      "description": "Collapse (hide) the outline group around a row or column, or show only the outline levels below a number, e.g. \"collapse the group around row 6\" or \"show outline level 1\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "sheet": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name, e.g. \"Sheet1\"; the active sheet when left out"
+          },
+          "row": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "A row inside the group, from 1"
+          },
+          "col": {
+            "type": "string",
+            "minLength": 1,
+            "description": "A column inside the group, e.g. \"C\""
+          },
+          "axis": {
+            "type": "string",
+            "enum": [
+              "rows",
+              "cols"
+            ],
+            "description": "rows or cols (default rows), when neither row nor col is given"
+          },
+          "level": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8,
+            "description": "With row or col: which enclosing group, by outline level (default the innermost). Without them: show only what is grouped less deeply than this level (1 shows only ungrouped rows), like the level buttons"
+          }
+        }
+      }
+    },
+    {
+      "name": "outline.expand",
+      "label": "Expand group",
+      "description": "Expand (show) the outline group around a row or column, or every group, e.g. \"expand all groups\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "sheet": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name, e.g. \"Sheet1\"; the active sheet when left out"
+          },
+          "row": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "A row inside the group, from 1"
+          },
+          "col": {
+            "type": "string",
+            "minLength": 1,
+            "description": "A column inside the group, e.g. \"C\""
+          },
+          "axis": {
+            "type": "string",
+            "enum": [
+              "rows",
+              "cols"
+            ],
+            "description": "rows or cols (default rows), when neither row nor col is given"
+          },
+          "level": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 7,
+            "description": "With row or col: which enclosing group, by outline level (default the innermost)"
+          },
+          "all": {
+            "type": "boolean",
+            "description": "Without row or col: true expands every group on the axis"
+          }
+        }
+      }
+    },
+    {
+      "name": "view.zoom",
+      "label": "Zoom",
+      "description": "Zoom the grid of a sheet from 50% to 200%, changing only the view, e.g. \"zoom to 150%\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "percent": {
+            "type": "integer",
+            "minimum": 50,
+            "maximum": 200,
+            "description": "Zoom percentage, 50 to 200 (100 is normal size)"
+          },
+          "sheet": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name, e.g. \"Sheet1\"; the active sheet when left out"
+          }
+        },
+        "required": [
+          "percent"
+        ]
+      }
+    },
+    {
+      "name": "version.list",
+      "label": "Version history",
+      "description": "List the saved versions of the workbook (newest first) with their names, times and sizes, e.g. \"what versions of this workbook are saved\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "version.save",
+      "label": "Save version",
+      "description": "Save a named version of the whole workbook that you can restore later, e.g. \"save a version called Before cleanup\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "description": "Version name, e.g. \"Before cleanup\""
+          }
+        },
+        "required": [
+          "name"
+        ]
+      }
+    },
+    {
+      "name": "version.restore",
+      "label": "Restore version",
+      "description": "Restore the workbook to a saved version as one change you can undo, e.g. \"go back to the version called Before cleanup\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Version id from version.list"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    {
+      "name": "version.delete",
+      "label": "Delete version",
+      "description": "Delete a saved version after the person confirms it in Reckon, e.g. \"delete the version called Draft\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Version id from version.list"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    {
+      "name": "range.subscribe",
+      "description": "Watch a range of the Reckon spreadsheet as a live source, so Reckon posts its new values on the reckon channel whenever a cell in it changes, e.g. \"keep me updated on A1 to C10 on Sheet1\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Sheet name and A1 range of at most 10,000 cells, e.g. \"Sheet1!A1:C10\", or a reckon:// address"
+          }
+        },
+        "required": [
+          "ref"
+        ]
+      }
+    },
+    {
+      "name": "range.unsubscribe",
+      "description": "Stop watching a live range you started watching, e.g. \"stop updating me on that range\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "Subscription id that the watch returned, e.g. \"live1\""
+          }
+        },
+        "required": [
+          "id"
         ]
       }
     }
