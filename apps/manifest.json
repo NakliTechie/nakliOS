@@ -141,7 +141,8 @@
       "files": [
         {
           "source": "draft.html",
-          "destination": "index.html"
+          "destination": "index.html",
+          "managedSdk": "inline"
         },
         {
           "source": "commands.json",
@@ -1486,7 +1487,8 @@
       "files": [
         {
           "source": "index.html",
-          "destination": "index.html"
+          "destination": "index.html",
+          "managedSdk": "inline"
         },
         {
           "source": "vendor/molstar/5.13.1/molstar.css",
@@ -1689,7 +1691,8 @@
       "files": [
         {
           "source": "reckon.html",
-          "destination": "index.html"
+          "destination": "index.html",
+          "managedSdk": "inline"
         },
         {
           "source": "commands.json",
@@ -1723,7 +1726,8 @@
       "files": [
         {
           "source": "index.html",
-          "destination": "index.html"
+          "destination": "index.html",
+          "managedSdk": "inline"
         },
         {
           "source": "engines/pdf-lib/2.9.1/pdf-lib.esm.js",
@@ -1766,7 +1770,8 @@
       "files": [
         {
           "source": "index.html",
-          "destination": "index.html"
+          "destination": "index.html",
+          "managedSdk": "inline"
         },
         {
           "source": "LICENSE",
@@ -1809,7 +1814,8 @@
       "files": [
         {
           "source": "index.html",
-          "destination": "index.html"
+          "destination": "index.html",
+          "managedSdk": "inline"
         },
         {
           "source": "LICENSE",
@@ -2112,7 +2118,8 @@
         },
         {
           "source": "index.html",
-          "destination": "index.html"
+          "destination": "index.html",
+          "managedSdk": "inline"
         },
         {
           "source": "src/agent.js",

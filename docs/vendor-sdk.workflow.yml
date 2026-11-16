@@ -23,7 +23,7 @@ on:
 # Committing directly removes the dependency on a repo setting that can be turned
 # off again. The transformation is deterministic and hash-verified — the splicer
 # refuses bespoke or minified variants rather than mangling them, and
-# check-vendored-sdk.mjs recomputes the region hash so a lying marker is caught —
+# sdk-survey.mjs recomputes the region hash so a lying marker is caught —
 # so the PR was review ceremony over a mechanical edit. The tradeoff accepted
 # here: a bad canonical SDK now propagates without a human gate, which is why the
 # verify step below fails the run rather than pushing a splice it cannot confirm.

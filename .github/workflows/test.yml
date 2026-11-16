@@ -744,6 +744,10 @@ jobs:
 
       - name: Verify mirror manifest and lock validation behavior
         run: node scripts/test-mirror-lock.mjs
+      - name: Managed SDK splice keeps CSP script hashes valid
+        run: node scripts/test-managed-sdk-csp.mjs
+      - name: Every SDK copy NakliOS serves is current
+        run: node scripts/sdk-survey.mjs
 
       - name: Verify catalog, mirror, lock, and on-disk inventory agree
         run: node scripts/audit-app-inventory.mjs

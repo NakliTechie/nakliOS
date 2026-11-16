@@ -346,7 +346,7 @@ and each app re-splices it from
 ([`scripts/vendor-naklios-sdk.mjs`](../scripts/vendor-naklios-sdk.mjs) plus a daily
 `vendor-sdk.yml` from [`docs/vendor-sdk.workflow.yml`](../docs/vendor-sdk.workflow.yml),
 opening a PR on change). The app pulls; NakliOS never pushes, so no cross-repo
-tokens. [`scripts/check-vendored-sdk.mjs`](../scripts/check-vendored-sdk.mjs) is the
+tokens. [`scripts/sdk-survey.mjs`](../scripts/sdk-survey.mjs) is the
 fleet drift report. This is the same "standalone source of truth, vendored
 snapshot" discipline as app mirroring, applied to the SDK itself; see "Vendoring
 the SDK" in the [app contract](../docs/app-contract.md).
