@@ -273,6 +273,10 @@
               "w",
               "h"
             ]
+          },
+          "page": {
+            "type": "string",
+            "description": "Page id (default: the page on screen)"
           }
         },
         "required": []
@@ -333,7 +337,7 @@
     {
       "name": "shape.add",
       "label": "Add shape",
-      "description": "Add a shape: kind is rect, ellipse, diamond, triangle, line, arrow, text, sticky, frame, image or ink. Fields: x, y, w, h (board units, 1 = 1 CSS px at 100%), rotation (radians), text, stroke, fill (#rrggbb or transparent), strokeWidth (0–64), dash (solid|dashed|dotted), opacity (0–1), radius (corner radius), sketch (true: hand-drawn look), font (hand|sans|mono), fontSize (px; presets s 16, m 20, l 28, xl 36), align (left|center|right). Kind fields: sticky color (yellow|orange|pink|purple|blue|teal|green|gray); frame name; text autoWidth; line/arrow/ink points [[x,y],…] in board coordinates; arrow route (straight|curved|elbow), bend (curved: -2..2), startHead/endHead (none|arrow|triangle|dot|bar); ink highlight; image fileId; path d (SVG path data), viewBox [w, h], stencil (its library name); table cells [[text]], colWidths, rowHeights, headerRow. Returns { id }.",
+      "description": "Add a shape: kind is rect, ellipse, diamond, triangle, line, arrow, text, sticky, frame, image or ink. Fields: x, y, w, h (board units, 1 = 1 CSS px at 100%), rotation (radians), text, stroke, fill (#rrggbb or transparent), strokeWidth (0–64), dash (solid|dashed|dotted), opacity (0–1), radius (corner radius), sketch (true: hand-drawn look), font (hand|sans|mono), fontSize (px; presets s 16, m 20, l 28, xl 36), align (left|center|right). Every shape has pageId (its page). Kind fields: sticky color (yellow|orange|pink|purple|blue|teal|green|gray); frame name and stack (null or { dir: row|column, gap, padding, align: start|center|end }); text autoWidth; line/arrow/ink points [[x,y],…] in board coordinates; arrow route (straight|curved|elbow), bend (curved: -2..2), startHead/endHead (none|arrow|triangle|dot|bar), tree (a mind-map link); ink highlight; image fileId; path d (SVG path data), viewBox [w, h], stencil (its library name); table cells [[text]], colWidths, rowHeights, headerRow. Returns { id }.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -370,7 +374,7 @@
     {
       "name": "shape.update",
       "label": "Change shapes",
-      "description": "Change fields on shapes (default: the selection). Fields: x, y, w, h (board units, 1 = 1 CSS px at 100%), rotation (radians), text, stroke, fill (#rrggbb or transparent), strokeWidth (0–64), dash (solid|dashed|dotted), opacity (0–1), radius (corner radius), sketch (true: hand-drawn look), font (hand|sans|mono), fontSize (px; presets s 16, m 20, l 28, xl 36), align (left|center|right). Kind fields: sticky color (yellow|orange|pink|purple|blue|teal|green|gray); frame name; text autoWidth; line/arrow/ink points [[x,y],…] in board coordinates; arrow route (straight|curved|elbow), bend (curved: -2..2), startHead/endHead (none|arrow|triangle|dot|bar); ink highlight; image fileId; path d (SVG path data), viewBox [w, h], stencil (its library name); table cells [[text]], colWidths, rowHeights, headerRow.",
+      "description": "Change fields on shapes (default: the selection). Fields: x, y, w, h (board units, 1 = 1 CSS px at 100%), rotation (radians), text, stroke, fill (#rrggbb or transparent), strokeWidth (0–64), dash (solid|dashed|dotted), opacity (0–1), radius (corner radius), sketch (true: hand-drawn look), font (hand|sans|mono), fontSize (px; presets s 16, m 20, l 28, xl 36), align (left|center|right). Every shape has pageId (its page). Kind fields: sticky color (yellow|orange|pink|purple|blue|teal|green|gray); frame name and stack (null or { dir: row|column, gap, padding, align: start|center|end }); text autoWidth; line/arrow/ink points [[x,y],…] in board coordinates; arrow route (straight|curved|elbow), bend (curved: -2..2), startHead/endHead (none|arrow|triangle|dot|bar), tree (a mind-map link); ink highlight; image fileId; path d (SVG path data), viewBox [w, h], stencil (its library name); table cells [[text]], colWidths, rowHeights, headerRow.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1557,7 +1561,7 @@
     {
       "name": "board.export",
       "label": "Export",
-      "description": "Export the board: format png, svg, excalidraw or chartella. For png and svg: scope board|selection|frame (frameId), scale 1–3, background (false: transparent), embed (true: the editable board rides inside the image, so Open brings it back). Returns { name, where }.",
+      "description": "Export the board: format png, svg, pdf, excalidraw or chartella. pdf opens the browser's print dialog with one page per frame (or the whole page when it has no frames); choose Save as PDF there. For png and svg: scope board|selection|frame (frameId), scale 1–3, background (false: transparent), embed (true: the editable board rides inside the image, so Open brings it back). Returns { name, where }.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1568,6 +1572,7 @@
             "enum": [
               "png",
               "svg",
+              "pdf",
               "excalidraw",
               "chartella"
             ]
@@ -1753,6 +1758,407 @@
       }
     },
     {
+      "name": "page.add",
+      "label": "Add page",
+      "description": "Add an empty page after the others (or at index `at`) and show it. Returns { id }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Page name"
+          },
+          "at": {
+            "type": "number",
+            "description": "Position, from 0"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "page.select",
+      "label": "Go to page",
+      "description": "Show a page: id, or step: 1 for the next page, -1 for the previous one.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Page id"
+          },
+          "step": {
+            "type": "number",
+            "description": "1 or -1"
+          }
+        },
+        "required": []
+      },
+      "shortcut": [
+        "Alt+PageDown",
+        "Alt+PageUp"
+      ]
+    },
+    {
+      "name": "page.rename",
+      "label": "Rename page",
+      "description": "Rename a page (default: the page on screen).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Page id"
+          },
+          "name": {
+            "type": "string",
+            "description": "New name"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      }
+    },
+    {
+      "name": "page.move",
+      "label": "Reorder page",
+      "description": "Move a page to position `index` (from 0).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Page id"
+          },
+          "index": {
+            "type": "number",
+            "description": "New position, from 0"
+          }
+        },
+        "required": [
+          "id",
+          "index"
+        ]
+      }
+    },
+    {
+      "name": "page.duplicate",
+      "label": "Duplicate page",
+      "description": "Copy a page with everything on it (default: the page on screen). Returns { id }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Page id"
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of the copy"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "page.delete",
+      "label": "Delete page",
+      "description": "Delete a page and everything on it (default: the page on screen). The last page cannot be deleted.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Page id"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "page.move_shapes",
+      "label": "Move to page",
+      "description": "Move shapes (default: the selection) to another page; arrows that would cross pages let go.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Shape ids (default: the selection)"
+          },
+          "pageId": {
+            "type": "string",
+            "description": "Target page id"
+          }
+        },
+        "required": [
+          "pageId"
+        ]
+      }
+    },
+    {
+      "name": "board.find",
+      "label": "Find text",
+      "description": "Find shapes whose text, frame name or table cells contain `query` (any case), on every page. Returns { matches: [{ id, pageId, kind, text }] }.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Text to find"
+          },
+          "limit": {
+            "type": "number",
+            "description": "At most this many (default 200)"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    {
+      "name": "ui.find",
+      "label": "Find on board",
+      "description": "Open the find bar.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Mod+F"
+    },
+    {
+      "name": "ui.layers",
+      "label": "Layers",
+      "description": "Show or hide the layers panel: frames and shapes on this page in drawing order.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Alt+L"
+    },
+    {
+      "name": "ui.minimap",
+      "label": "Minimap",
+      "description": "Show or hide the minimap.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Alt+M"
+    },
+    {
+      "name": "ui.palette",
+      "label": "Command palette",
+      "description": "Open the command palette: type to find any command and run it.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Mod+K"
+    },
+    {
+      "name": "mindmap.create",
+      "label": "New mind map",
+      "description": "Start a mind map: a rounded rectangle with `text` at x, y (default 0, 0) on the current page. Selects it. Grow it with mindmap.add_child and mindmap.add_sibling. Returns { id }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "The central idea"
+          },
+          "x": {
+            "type": "number",
+            "description": "Left"
+          },
+          "y": {
+            "type": "number",
+            "description": "Top"
+          }
+        },
+        "required": [
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "mindmap.add_child",
+      "label": "Add child node",
+      "description": "Add a mind-map child to a node (default: the selected shape): same kind, size and style, linked by a curved tree arrow, then lay out the tree again. Any box shape can start a mind map. Selects the new node. Returns { id }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The parent node (default: the selection)"
+          },
+          "text": {
+            "type": "string",
+            "description": "Text of the new node (default empty)"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "mindmap.add_sibling",
+      "label": "Add sibling node",
+      "description": "Add a mind-map node just after a node (default: the selected shape), under the same parent; on the root it adds a child. Lays out the tree again and selects the new node. Returns { id }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The node (default: the selection)"
+          },
+          "text": {
+            "type": "string",
+            "description": "Text of the new node (default empty)"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "layout.tree",
+      "label": "Tidy mind map",
+      "description": "Lay out the mind map holding a node (default: the selected shape) as a tidy tree from its root: dir right (default: the way it grows now) or down. The root stays put. Returns { root, moved }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Any node of the tree (default: the selection)"
+          },
+          "dir": {
+            "type": "string",
+            "description": "Growth direction",
+            "enum": [
+              "right",
+              "down"
+            ]
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "layout.graph",
+      "label": "Auto-layout graph",
+      "description": "Lay out shapes and the arrows between them as a layered graph (dagre): rankdir TB (top to bottom, default) or LR (left to right), nodesep and ranksep spacing. Default: the selection, or every shape on the current page when nothing is selected. The group keeps its top-left; elbow true turns straight arrows into elbow arrows. Returns { moved }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Shape ids (default: the selection, else the page)"
+          },
+          "rankdir": {
+            "type": "string",
+            "description": "Direction",
+            "enum": [
+              "TB",
+              "LR"
+            ]
+          },
+          "nodesep": {
+            "type": "number",
+            "description": "Gap between shapes in a rank (default 40)",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "ranksep": {
+            "type": "number",
+            "description": "Gap between ranks (default 70)",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "elbow": {
+            "type": "boolean",
+            "description": "Route straight arrows as elbows"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "frame.stack",
+      "label": "Stack frame contents",
+      "description": "Make a frame lay out its contents in a row or column (dir row|column; none turns it off), with gap between shapes, padding inside the frame and align (start|center|end) across. The frame fits itself to its contents and keeps them stacked after every edit. Returns { ok }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The frame (default: the selection)"
+          },
+          "dir": {
+            "type": "string",
+            "description": "Direction",
+            "enum": [
+              "row",
+              "column",
+              "none"
+            ]
+          },
+          "gap": {
+            "type": "number",
+            "description": "Gap between shapes (default 16)",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "padding": {
+            "type": "number",
+            "description": "Inner padding (default 24)",
+            "minimum": 0,
+            "maximum": 1000
+          },
+          "align": {
+            "type": "string",
+            "description": "Cross-axis alignment",
+            "enum": [
+              "start",
+              "center",
+              "end"
+            ]
+          }
+        },
+        "required": [
+          "dir"
+        ]
+      }
+    },
+    {
       "name": "stencil.list",
       "label": "List shapes and icons",
       "description": "List the shape libraries (flowchart, uml, devices, people, wireframe, icons) with each item's id, label and usage note. Pass `collection` for one library; the icons library is long, so prefer stencil.search for icons.",
@@ -1850,6 +2256,79 @@
         "required": [
           "id"
         ]
+      }
+    },
+    {
+      "name": "board.import_mermaid",
+      "label": "Import Mermaid",
+      "description": "Turn Mermaid text into editable shapes and bound arrows on this page: flowchart (graph TD/LR, node shapes [ ] ( ) { } [( )] (( )), edge labels, subgraphs as frames) and sequence diagrams (participants, messages). Our layout places it, at x, y or the view centre. Returns { ids }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Mermaid source"
+          },
+          "x": {
+            "type": "number",
+            "description": "Left"
+          },
+          "y": {
+            "type": "number",
+            "description": "Top"
+          }
+        },
+        "required": [
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "image.crop",
+      "label": "Crop image",
+      "description": "Crop an image (default: the selected one) to { x, y, w, h }, fractions (0..1) of the source image; null shows it whole. With no crop, opens the crop handles on the canvas.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Image id"
+          },
+          "crop": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "{ x, y, w, h } fractions, or null"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "image.insert_pdf_page",
+      "label": "Insert PDF page",
+      "description": "Place one page of a PDF as an image, rendered by the PDF engine Sheaf ships (available inside NakliOS). With no file, opens a picker. page counts from 1. Returns { id }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "description": "Page number, from 1"
+          },
+          "x": {
+            "type": "number",
+            "description": "Left"
+          },
+          "y": {
+            "type": "number",
+            "description": "Top"
+          }
+        },
+        "required": []
       }
     },
     {
