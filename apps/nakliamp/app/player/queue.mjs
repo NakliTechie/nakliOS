@@ -8,8 +8,16 @@
 // shuffle off puts the queue back the way the person built it. Album shuffle keeps the
 // track order inside each album and shuffles the albums (it needs `albumOf(id)`).
 //
+// Transient entries (a file NakliOS hands over, which is not in the library) queue and
+// play like any other entry, but `isTransient(id)` keeps them out of the stored copy:
+// their File does not survive a reload, so a restored queue never points at one.
+//
 // Every edit (set, playNext, add, move, remove, clear, setShuffle) pushes one undo step.
 // Moving through the queue (next, prev, jump) and the repeat mode are not edits.
+//
+// `revision` counts every change a listener hears about (edits, moves through the queue,
+// repeat, undo), as cliamp's `playlist_revision` does. An agent sends it back as
+// `if_revision`, and `revisionConflict` refuses the command when the queue moved since.
 
 export const QUEUE_STORAGE_KEY = 'nakliamp:queue';
 export const SHUFFLE_MODES = Object.freeze(['off', 'tracks', 'albums']);
@@ -63,13 +71,35 @@ function restoredIndex(stored, length) {
   return length ? 0 : -1;
 }
 
-export function createQueue({ storage = defaultStorage(), albumOf = () => '', random = Math.random, storageKey = QUEUE_STORAGE_KEY } = {}) {
+/** The stored form of a queue state without its transient entries. */
+export function persistableState(s, isTransient = () => false) {
+  const keep = s.entries.filter(e => { try { return !isTransient(e.id); } catch { return true; } });
+  if (keep.length === s.entries.length) return s;
+  const keys = new Set(keep.map(e => e.key));
+  const currentKey = s.index >= 0 ? s.entries[s.index]?.key : null;
+  let index = keep.findIndex(e => e.key === currentKey);
+  if (index < 0) index = keep.length ? Math.min(Math.max(0, s.index), keep.length - 1) : -1;
+  return { ...s, entries: keep, unshuffled: s.unshuffled.filter(k => keys.has(k)), index };
+}
+
+/**
+ * The `[conflict]` check for a queue-editing command: null when `expected` is absent or
+ * equals `current`, else the refusal message. Kept pure so the runner and tests share it.
+ */
+export function revisionConflict(expected, current) {
+  if (expected === undefined || expected === null) return null;
+  if (expected === current) return null;
+  return `The queue changed since revision ${expected}; it is now at revision ${current}. Read it again and resend.`;
+}
+
+export function createQueue({ storage = defaultStorage(), albumOf = () => '', random = Math.random, storageKey = QUEUE_STORAGE_KEY, isTransient = () => false } = {}) {
   let entries = [];          // [{ key, id }] in play order
   let unshuffled = [];       // keys in the order the person built, used while shuffle is on
   let index = -1;            // position in `entries` of the current entry, -1 when nothing is current
   let shuffle = 'off';
   let repeat = 'off';
   let nextKey = 1;
+  let revision = 0;          // moves on every change a listener hears about; not persisted
   const undoStack = [];
   const listeners = new Set();
 
@@ -110,10 +140,11 @@ export function createQueue({ storage = defaultStorage(), albumOf = () => '', ra
 
   function persist() {
     if (!storage) return;
-    try { storage.setItem(storageKey, JSON.stringify(state())); } catch { /* quota or blocked storage */ }
+    try { storage.setItem(storageKey, JSON.stringify(persistableState(state(), isTransient))); } catch { /* quota or blocked storage */ }
   }
 
   function emit(reason, before) {
+    revision += 1;
     persist();
     const snap = snapshot();
     const info = { reason, currentChanged: before !== currentKey() };
@@ -179,6 +210,7 @@ export function createQueue({ storage = defaultStorage(), albumOf = () => '', ra
       shuffle,
       repeat,
       canUndo: undoStack.length > 0,
+      revision,
     };
   }
 
@@ -326,6 +358,7 @@ export function createQueue({ storage = defaultStorage(), albumOf = () => '', ra
     },
 
     snapshot,
+    revision: () => revision,
     onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
   };
 }

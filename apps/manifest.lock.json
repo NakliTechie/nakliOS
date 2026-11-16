@@ -289,21 +289,21 @@
       "id": "nakliamp",
       "repo": "NakliTechie/nakliamp",
       "requestedRef": "main",
-      "resolvedCommit": "b93df3e922aa8ea1edb82f0a5fc7eb79eadb64b2",
+      "resolvedCommit": "777e21a574520a07bc3fd6a70db30895efc47a26",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "9bccfc3bcb207d7496083de04d92ed95cf1fd8e47b1756fa70c1096050b65d81",
-          "bytes": 177693,
-          "originalSourceSha256": "61cb4386c4a12011a4891378cc22ad3c013d415c392c4c6549b1c9e7612acacc",
+          "sha256": "204b3cb0905886c078c497f115bcfbac460d05cc92412f343cd495f9c003ebb4",
+          "bytes": 259971,
+          "originalSourceSha256": "5cdf0f7387c9fe5008ea6eba3dfc4741071f9e7c0fa23a3068a0c68e1d69c8ea",
           "sdkSha256": "ec78ab7bd0e82a108847216f33bc6600366f68199f9416959411e5db254405ed"
         },
         {
           "source": "commands.json",
           "destination": "commands.json",
-          "sha256": "8d4566c7eb032f1e0773d0dd20c0e5d85bcd7e1fddc40e8d2c91d1eb087ac610",
-          "bytes": 37250
+          "sha256": "32367863b1100f5d9a87be891a43b4cbf8c924c7e385425a9e3f758c05c7755c",
+          "bytes": 67246
         },
         {
           "source": "sw.js",
@@ -314,8 +314,26 @@
         {
           "source": "VENDOR.md",
           "destination": "VENDOR.md",
-          "sha256": "7655690faa1843b6fe187ae4d95c2b64c41ceae07439612fad7d4421ae45c273",
-          "bytes": 6562
+          "sha256": "de0bcff59a5054cf9a49d1d9b9a7b0985f9b67f5c10834bd28737a957d6d01b4",
+          "bytes": 10500
+        },
+        {
+          "source": "LICENSE",
+          "destination": "LICENSE",
+          "sha256": "2a207501f6a7346fd6d37bbd2394079ac2034c73354fe3ce17e7636826276591",
+          "bytes": 1085
+        },
+        {
+          "source": "app/agent/events.mjs",
+          "destination": "app/agent/events.mjs",
+          "sha256": "e86af2b21885263e23a84ac3214002673e6763d7c72723d730430f63265b2cda",
+          "bytes": 12083
+        },
+        {
+          "source": "app/agent/spectrum.mjs",
+          "destination": "app/agent/spectrum.mjs",
+          "sha256": "742a7499be62c90a1806907f6eede4b49648c3aadf8389fa0dbf88ba06d11a35",
+          "bytes": 3361
         },
         {
           "source": "app/agent/webmcp.mjs",
@@ -326,8 +344,8 @@
         {
           "source": "app/ai/command-bar.mjs",
           "destination": "app/ai/command-bar.mjs",
-          "sha256": "ab2f1157a794ea5a19225e412a2071a4d42401b6882a1b267738e0d84002a259",
-          "bytes": 11817
+          "sha256": "d90d1a91a48c444abfa5e400baff4d7d54a0f7f26a78722b2d1addf42380b8a7",
+          "bytes": 11941
         },
         {
           "source": "app/ai/genres.mjs",
@@ -368,8 +386,8 @@
         {
           "source": "app/audio/gapless.mjs",
           "destination": "app/audio/gapless.mjs",
-          "sha256": "6717c9e5e00a90471108f7355e4a9f8d27f3b607e545dba7e83f7a602dd87222",
-          "bytes": 12993
+          "sha256": "4e6be5cc36b7c4e10bd6e43fa5e3f327646d4921cd1dfce66b57e6cdc9f5f801",
+          "bytes": 13800
         },
         {
           "source": "app/audio/loudness.mjs",
@@ -392,20 +410,26 @@
         {
           "source": "app/commands/commands.mjs",
           "destination": "app/commands/commands.mjs",
-          "sha256": "eeee594273e7a8298fc44e3925e759b63557f7b8912bc76578b7e17a0d8adebf",
-          "bytes": 21159
+          "sha256": "f500ca90d6bd60f329a563c9b78b5f6c774aa6d8930a173272ce1dd77b155131",
+          "bytes": 36454
         },
         {
           "source": "app/commands/run.mjs",
           "destination": "app/commands/run.mjs",
-          "sha256": "33383741b76e17d96fdb637d2140312a06dcb3c4bcf4e0eecc88129723653d03",
-          "bytes": 11024
+          "sha256": "ae331daf6dff9eb59ac7f66cd23f59cd5af533fd4997b9b669148e24e1ced1dc",
+          "bytes": 11993
+        },
+        {
+          "source": "app/decode/libav-stream.mjs",
+          "destination": "app/decode/libav-stream.mjs",
+          "sha256": "c0ef1b6fb7c7181fe3acbb1d5263a0cf4fcda77636e06df5186f83b75b90167b",
+          "bytes": 15756
         },
         {
           "source": "app/decode/libav.mjs",
           "destination": "app/decode/libav.mjs",
-          "sha256": "7f5d3f349f9dff58a6c704740016f4d65445e746e2253eeb3a1c315063102daf",
-          "bytes": 16112
+          "sha256": "e8d6c35e908ed7ac0e2edf385c73386ce8191bd7c7c03aa34af1d8b8bafc02bc",
+          "bytes": 17515
         },
         {
           "source": "app/decode/pcm.mjs",
@@ -446,8 +470,8 @@
         {
           "source": "app/library/metadata.mjs",
           "destination": "app/library/metadata.mjs",
-          "sha256": "75f6b87726fa7743b1aa4088f417d09f4973d7dd1db8132afc04267e9035cbc1",
-          "bytes": 36225
+          "sha256": "afa67e6b84f42506ba568213fb3dcffef90843771d643d387c8121f9799e96fc",
+          "bytes": 41527
         },
         {
           "source": "app/library/playlist.mjs",
@@ -482,8 +506,8 @@
         {
           "source": "app/library/search.mjs",
           "destination": "app/library/search.mjs",
-          "sha256": "30b594082dfb755b2c65a663119ad555704ffe5c1b3b4ad21bfbb7fad399cc2a",
-          "bytes": 2918
+          "sha256": "122a78db092ad1abbfda0568586ccf994248b635ae0d286eb879ca464973d080",
+          "bytes": 3053
         },
         {
           "source": "app/library/smart.mjs",
@@ -500,8 +524,8 @@
         {
           "source": "app/library/views.mjs",
           "destination": "app/library/views.mjs",
-          "sha256": "7e63667e9eaa7e7012fa3a9db75bc2b8cc7f224e766528665bac9aa152c6bb20",
-          "bytes": 8569
+          "sha256": "e07427112756dd11f3155fa2158d95502a59b457250089016744c2b96668070d",
+          "bytes": 8736
         },
         {
           "source": "app/library/watch.mjs",
@@ -518,8 +542,8 @@
         {
           "source": "app/net/listenbrainz.mjs",
           "destination": "app/net/listenbrainz.mjs",
-          "sha256": "00a6704f4a5a532471f329498886fc5c53e34518e0354b93ea49201c0eb6de52",
-          "bytes": 13724
+          "sha256": "93ffd2455b726c8ec529c1c919435d11b315e4d455394a47a805dd95254d21f3",
+          "bytes": 13840
         },
         {
           "source": "app/net/lrclib.mjs",
@@ -536,8 +560,8 @@
         {
           "source": "app/player/queue.mjs",
           "destination": "app/player/queue.mjs",
-          "sha256": "e04a9870f6d25e4434eb60db6a2a1e9e280bb46a9233db60a1024a6f02a39870",
-          "bytes": 11965
+          "sha256": "f7cc9a772975a7b9d6cab0009dec96d400344aa6c01fac5c8fdf0b74d7fc0554",
+          "bytes": 13818
         },
         {
           "source": "app/player/timers.mjs",
@@ -546,10 +570,16 @@
           "bytes": 5595
         },
         {
+          "source": "app/player/transient.mjs",
+          "destination": "app/player/transient.mjs",
+          "sha256": "afdb18c4fd37f596918b02cbe3a2efb9cdb58538321c5d3054924f1be63a719a",
+          "bytes": 2272
+        },
+        {
           "source": "app/settings.mjs",
           "destination": "app/settings.mjs",
-          "sha256": "4226eca53cf90c29dbbc38b7e5e1d236c76a5c8483114e9bfae298caf85cdaae",
-          "bytes": 5350
+          "sha256": "d439bdf602daf37ac0b7b3278fa30306230315d0d8aefabba41a4d61e69201b8",
+          "bytes": 5935
         },
         {
           "source": "app/tags/diff.mjs",
@@ -578,14 +608,14 @@
         {
           "source": "app/ui/ai-dialog.mjs",
           "destination": "app/ui/ai-dialog.mjs",
-          "sha256": "9151b529960de58c33f4178156bd0d37162f30ef513d1c2f3b30bd3aac4cb57e",
-          "bytes": 9963
+          "sha256": "3bf74f1f3366efed395d0a9e0e4df8370416abd757e98ecf2d9ce087303c9eb8",
+          "bytes": 14027
         },
         {
           "source": "app/ui/browse.mjs",
           "destination": "app/ui/browse.mjs",
-          "sha256": "d0c6739d7d2b130b2bf4722c91bf256c95a4af798a1b5650558fcd69850c8fbe",
-          "bytes": 48571
+          "sha256": "aa11d39cb6ce3f6939a8204e4f58f94ebc3679550dc5fdf26f87774606b8aaa4",
+          "bytes": 53856
         },
         {
           "source": "app/ui/dialog.mjs",
@@ -614,8 +644,8 @@
         {
           "source": "app/ui/queue-panel.mjs",
           "destination": "app/ui/queue-panel.mjs",
-          "sha256": "74448cd053d473c4a709b75311d6f530f6e49f908693ea0757aa170658b9ba0b",
-          "bytes": 21387
+          "sha256": "5aa1e843fecccaf39d4084a3ed6b99267f2050ed862929a4eb1d86e9bfc28106",
+          "bytes": 20263
         },
         {
           "source": "app/ui/select.mjs",
@@ -636,6 +666,12 @@
           "bytes": 3198
         },
         {
+          "source": "app/ui/shell/pip.mjs",
+          "destination": "app/ui/shell/pip.mjs",
+          "sha256": "f2932318b6e94e29c08dd7331cd9c90d3d9f7e49ffa9d50249dd54498312b6fd",
+          "bytes": 6363
+        },
+        {
           "source": "app/ui/shell/theme.mjs",
           "destination": "app/ui/shell/theme.mjs",
           "sha256": "0a5f40657309594eed5585fdb0f8e1db9f9586087fedda8b6bbd062ce58c33bf",
@@ -650,20 +686,62 @@
         {
           "source": "app/ui/sound-panel.mjs",
           "destination": "app/ui/sound-panel.mjs",
-          "sha256": "4ba53e5ac8856ae0646700e0b6e2bfe3ec7efa3ca3eac48c8ffb902e242b5979",
-          "bytes": 15352
+          "sha256": "d86059512cc6726aa02177f99cddd5d8c3b9b82cf58a4d09abfee6729e88d35c",
+          "bytes": 18137
         },
         {
           "source": "app/ui/tag-editor.mjs",
           "destination": "app/ui/tag-editor.mjs",
-          "sha256": "ef880cdaa76d48f9ee3cfc132a43f7d139cbd5d8a429acc8241aee6840c0449e",
-          "bytes": 25271
+          "sha256": "dfab08c90161731ffe664504e2f6ee8847d36b4c168dd382401969874a60c1aa",
+          "bytes": 25425
+        },
+        {
+          "source": "app/ui/v1x-ai-tools.mjs",
+          "destination": "app/ui/v1x-ai-tools.mjs",
+          "sha256": "a4222222a1c99979953a4c7cd8c944d23a45b5dd87c5d78dd56659ac5615b9fb",
+          "bytes": 11689
+        },
+        {
+          "source": "app/ui/v1x-command-bar.mjs",
+          "destination": "app/ui/v1x-command-bar.mjs",
+          "sha256": "cdfe908762a07af2c3a558c66946355ce5af10b6f5eaf9bc7b12795518eb21fd",
+          "bytes": 8167
+        },
+        {
+          "source": "app/ui/v1x-library-tools.mjs",
+          "destination": "app/ui/v1x-library-tools.mjs",
+          "sha256": "85d52bce4274a0e4f1b5f818d61758a93f6e1dd8571857b399bc8b8bd3a90a6d",
+          "bytes": 32952
+        },
+        {
+          "source": "app/ui/v1x-network.mjs",
+          "destination": "app/ui/v1x-network.mjs",
+          "sha256": "9d792b35ea13fa056113973f7524fbba44924ed734487a6a86a8ac60783650f9",
+          "bytes": 23005
+        },
+        {
+          "source": "app/ui/v1x-timers.mjs",
+          "destination": "app/ui/v1x-timers.mjs",
+          "sha256": "f577ad5dec4741028d9015317ff53fe4f08ab74fb20e9bb5f6c100ac0ab93f04",
+          "bytes": 6504
+        },
+        {
+          "source": "app/ui/webamp-face.mjs",
+          "destination": "app/ui/webamp-face.mjs",
+          "sha256": "7b7371d22dea8fa846095b3a21eb930b079a85347e51eb5bc7336e527c3fde52",
+          "bytes": 24852
         },
         {
           "source": "app/visualiser/driver.mjs",
           "destination": "app/visualiser/driver.mjs",
-          "sha256": "b9a9f0db2617d7b1e331aefd8255d1e7ae0f44ac9c1b93367ea4b3d19a2375c4",
-          "bytes": 9208
+          "sha256": "ed5553d14ec59dd0f5824dbb3cf058674cad40adb370e90a8bdc2b28aab75ea2",
+          "bytes": 14909
+        },
+        {
+          "source": "app/visualiser/milkdrop-still.mjs",
+          "destination": "app/visualiser/milkdrop-still.mjs",
+          "sha256": "db19ef51cf66514d8ecb90b610d59cc59b3df5d22eae4968451be5fef7347720",
+          "bytes": 7412
         },
         {
           "source": "app/visualiser/milkdrop.mjs",
@@ -674,14 +752,14 @@
         {
           "source": "app/visualiser/modes.mjs",
           "destination": "app/visualiser/modes.mjs",
-          "sha256": "38ee554ad07a08f771e7e912db35efa6960b27b856d64d038667f1f4b593074c",
-          "bytes": 13516
+          "sha256": "5bd94bec1987feb170525265ab2239df7fe6cb06e929a38bd4aa9a78c0b5a408",
+          "bytes": 48298
         },
         {
           "source": "engine/nakliamp-engine.mjs",
           "destination": "engine/nakliamp-engine.mjs",
-          "sha256": "087084117deabbfc47c83a6ab6e15606e49cdb5d8946ec26c1b851d91a046fd3",
-          "bytes": 63456
+          "sha256": "f1742523e0ef51669fbd47871ac82a212e24d0e97b99cebf394808f715b7ef54",
+          "bytes": 81086
         },
         {
           "source": "engine/reel-engine.mjs",
@@ -766,6 +844,18 @@
           "destination": "vendor/music-metadata/music-metadata-12.5.0-write.min.mjs",
           "sha256": "3ad39ca1d79786792a249f4adf96092c1a4dec8c7bb5cfdbde7956ebe783d747",
           "bytes": 147361
+        },
+        {
+          "source": "vendor/webamp/LICENSE-MIT.txt",
+          "destination": "vendor/webamp/LICENSE-MIT.txt",
+          "sha256": "fc7f2696d3e70b5c04659de0a843c1d7defebbb14eb2a07a38808fead88d9279",
+          "bytes": 1086
+        },
+        {
+          "source": "vendor/webamp/webamp-2.3.1.bundle.min.mjs",
+          "destination": "vendor/webamp/webamp-2.3.1.bundle.min.mjs",
+          "sha256": "15915991ffc5334e57ec7011a92a75e811a5e701c6358db682e2d5c8d1a3d100",
+          "bytes": 839450
         }
       ]
     },

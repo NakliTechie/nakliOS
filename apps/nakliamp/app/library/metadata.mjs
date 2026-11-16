@@ -36,9 +36,9 @@ const EMPTY = Object.freeze({
  * The version of what this reader extracts. The scanner re-reads a file whose
  * stored `parserVersion` is older, even when its size and time are unchanged,
  * so a new field (ReplayGain and ratings arrived in 2, embedded cue sheets in
- * 3) reaches old rows.
+ * 3, MP3 and WAV durations in 4) reaches old rows.
  */
-export const PARSER_VERSION = 3;
+export const PARSER_VERSION = 4;
 
 // ------------------------------------------------- ReplayGain, rating ----
 
@@ -395,7 +395,7 @@ function id3ExtendedSkip(region, major, extended) {
 
 async function readId3(blob, tags) {
   const header = await bytes(blob, 0, 10);
-  if (header.length < 10 || ascii(header, 0, 3) !== 'ID3') return;
+  if (header.length < 10 || ascii(header, 0, 3) !== 'ID3') return 0;
   const major = header[3];
   const size = syncsafe(header, 6);
   const extended = (header[5] & 0x40) !== 0;
@@ -415,6 +415,70 @@ async function readId3(blob, tags) {
     applyId3Frame(tags, id, id3FrameBody(region, cursor, major, headerLength, frameSize));
     cursor += headerLength + frameSize;
   }
+  // Where the audio starts: after the tag, and after its footer when one is flagged.
+  return 10 + size + ((header[5] & 0x10) !== 0 ? 10 : 0);
+}
+
+// ------------------------------------------------------- MPEG duration ----
+
+// Bitrates in kbit/s by [version is MPEG-1][layer index 1..3][index]; layer index 3 is Layer I.
+const MPEG_BITRATES = {
+  true: { 1: [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320], 2: [0, 32, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384], 3: [0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448] },
+  false: { 1: [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160], 2: [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160], 3: [0, 32, 48, 56, 64, 80, 96, 112, 128, 144, 160, 176, 192, 224, 256] },
+};
+const MPEG_RATES = { 3: [44100, 48000, 32000], 2: [22050, 24000, 16000], 0: [11025, 12000, 8000] };
+const MPEG_SCAN_BYTES = 64 * 1024;         // how far past the tag to look for the first frame
+
+/** The MPEG audio frame header at `at`, or null. */
+function mpegHeader(buf, at) {
+  if (buf[at] !== 0xff || (buf[at + 1] & 0xe0) !== 0xe0) return null;
+  const version = (buf[at + 1] >> 3) & 3;       // 3 MPEG-1, 2 MPEG-2, 0 MPEG-2.5
+  const layer = (buf[at + 1] >> 1) & 3;         // 1 Layer III, 2 Layer II, 3 Layer I
+  const bitrateIndex = buf[at + 2] >> 4;
+  const rateIndex = (buf[at + 2] >> 2) & 3;
+  if (version === 1 || layer === 0 || bitrateIndex === 15 || rateIndex === 3) return null;
+  const mpeg1 = version === 3;
+  const sampleRate = MPEG_RATES[version][rateIndex];
+  const samples = layer === 3 ? 384 : layer === 2 || mpeg1 ? 1152 : 576;
+  const mono = (buf[at + 3] >> 6) === 3;
+  return { mpeg1, layer, sampleRate, samples, mono, bitrate: MPEG_BITRATES[mpeg1][layer][bitrateIndex] * 1000 };
+}
+
+/** The first frame header in `buf` and its offset, or null. */
+function firstMpegFrame(buf) {
+  for (let at = 0; at + 4 <= buf.length; at += 1) {
+    const head = mpegHeader(buf, at);
+    if (head) return { at, head };
+  }
+  return null;
+}
+
+/** The frame count from a Xing, Info or VBRI header after the frame at `at`, or 0. */
+function vbrFrameCount(buf, at, head) {
+  const side = head.mpeg1 ? (head.mono ? 17 : 32) : (head.mono ? 9 : 17);
+  const xing = at + 4 + side;
+  if (['Xing', 'Info'].includes(ascii(buf, xing, 4)) && (u32be(buf, xing + 4) & 1)) return u32be(buf, xing + 8);
+  if (ascii(buf, at + 36, 4) === 'VBRI') return u32be(buf, at + 36 + 14);
+  return 0;
+}
+
+/**
+ * Duration of an MP3 from its first frame: the frame count in a Xing, Info or
+ * VBRI header when there is one, else the audio bytes at the first frame's bitrate.
+ */
+async function readMpegDuration(blob, audioStart, tags) {
+  const buf = await bytes(blob, audioStart, MPEG_SCAN_BYTES);
+  const found = firstMpegFrame(buf);
+  if (!found) return;
+  const { at, head } = found;
+  tags.sampleRate ??= head.sampleRate;
+  tags.channels ??= head.mono ? 1 : 2;
+  const frames = vbrFrameCount(buf, at, head);
+  if (frames > 0) { tags.durationS = (frames * head.samples) / head.sampleRate; return; }
+  if (!head.bitrate) return;
+  const tail = blob.size >= 128 && ascii(await bytes(blob, blob.size - 128, 3), 0, 3) === 'TAG' ? 128 : 0;
+  const audioBytes = blob.size - audioStart - at - tail;
+  if (audioBytes > 0) tags.durationS = (audioBytes * 8) / head.bitrate;
 }
 
 // ------------------------------------------------------- Vorbis comments ----
@@ -742,6 +806,25 @@ async function readMvhd(blob, bodyStart, tags) {
   if (timescale > 0 && duration > 0) tags.durationS ??= duration / timescale;
 }
 
+/** Atom types that can open a `meta` box's child list. */
+const MP4_META_CHILDREN = new Set(['hdlr', 'ilst', 'keys', 'free', 'xml ', 'bxml', 'dinf', 'pitm', 'iloc', 'iinf', 'iprp']);
+
+/**
+ * Where the children of a `meta` atom start.
+ * ISO BMFF makes `meta` a full box, so four bytes of version and flags come
+ * before its children. QuickTime writes it as a plain box with the children
+ * straight after the header. Skipping four bytes there landed mid-header and
+ * lost every tag, so the first eight bytes are read: a child header (a size,
+ * then a known type such as `hdlr`) means a plain box.
+ */
+async function metaChildrenStart(blob, bodyStart, bodyEnd) {
+  if (bodyEnd - bodyStart < 8) return bodyStart + 4;
+  const head = await bytes(blob, bodyStart, 8);
+  const size = u32be(head, 0);
+  const plain = size >= 8 && size <= bodyEnd - bodyStart && MP4_META_CHILDREN.has(ascii(head, 4, 4));
+  return plain ? bodyStart : bodyStart + 4;
+}
+
 async function readMp4(blob, tags) {
   const visitIlst = async (type, bodyStart, bodyEnd) => {
     if (type === '----') await readMp4Freeform(blob, bodyStart, bodyEnd, tags);
@@ -752,8 +835,7 @@ async function readMp4(blob, tags) {
     if (type === 'ilst') {
       await mp4Walk(blob, bodyStart, bodyEnd, visitIlst, depth + 1);
     } else if (type === 'meta') {
-      // `meta` is a full box: skip its version and flags before its children.
-      await mp4Walk(blob, bodyStart + 4, bodyEnd, descend, depth + 1);
+      await mp4Walk(blob, await metaChildrenStart(blob, bodyStart, bodyEnd), bodyEnd, descend, depth + 1);
     } else if (MP4_CONTAINERS.has(type)) {
       await mp4Walk(blob, bodyStart, bodyEnd, descend, depth + 1);
     } else if (type === 'mvhd') {
@@ -793,21 +875,39 @@ function applyWavChunk(id, body, tags) {
   if (id === 'fmt ' && body.length >= 16) {
     tags.channels = (body[2] | (body[3] << 8)) || null;
     tags.sampleRate = u32le(body, 4) || null;
+    tags.byteRate = u32le(body, 8) || null;
   } else if (id === 'LIST' && ascii(body, 0, 4) === 'INFO') {
     readWavInfo(body, tags);
   }
 }
 
+const MAX_WAV_CHUNKS = 256;                 // chunk headers walked before giving up
+const MAX_WAV_CHUNK_BODY = 64 * 1024;      // the most read of one fmt or LIST body
+
+/**
+ * Walk the RIFF chunk list by seeking from header to header.
+ * Only `fmt ` and `LIST` bodies are read, each up to 64 KB. Every other chunk,
+ * the audio in `data` above all, is stepped over by its declared size without
+ * being read. The walk used to read one 64 KB window from the start, so a
+ * `LIST INFO` written after a large `data` chunk was never reached.
+ */
 async function readWav(blob, tags) {
-  const region = await bytes(blob, 12, Math.min(blob.size - 12, 64 * 1024));
-  let cursor = 0;
-  while (cursor + 8 <= region.length) {
-    const id = ascii(region, cursor, 4);
-    const size = u32le(region, cursor + 4);
-    applyWavChunk(id, region.subarray(cursor + 8, cursor + 8 + size), tags);
+  let cursor = 12;
+  for (let chunk = 0; chunk < MAX_WAV_CHUNKS && cursor + 8 <= blob.size; chunk += 1) {
+    const header = await bytes(blob, cursor, 8);
+    if (header.length < 8) break;
+    const id = ascii(header, 0, 4);
+    const size = u32le(header, 4);
+    if (id === 'fmt ' || id === 'LIST') {
+      applyWavChunk(id, await bytes(blob, cursor + 8, Math.min(size, MAX_WAV_CHUNK_BODY)), tags);
+    }
+    // The data chunk's size over the byte rate is the length; a streamed file may
+    // declare more than it holds, so the bytes actually present cap it.
+    if (id === 'data' && tags.byteRate) tags.durationS = Math.min(size, blob.size - cursor - 8) / tags.byteRate;
     if (size <= 0) break;
     cursor += 8 + size + (size % 2);
   }
+  delete tags.byteRate;
 }
 
 // ---------------------------------------------------------- dispatch ----
@@ -840,7 +940,7 @@ export async function readTags(blob) {
     const head = await bytes(blob, 0, 16);
     const container = sniff(head);
     tags.container = container;
-    if (container === 'mp3') await readId3(blob, tags);
+    if (container === 'mp3') await readMpegDuration(blob, await readId3(blob, tags), tags);
     else if (container === 'flac') await readFlac(blob, tags);
     else if (container === 'ogg') await readOgg(blob, tags);
     else if (container === 'mp4') await readMp4(blob, tags);

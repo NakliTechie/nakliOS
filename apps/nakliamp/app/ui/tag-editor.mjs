@@ -283,8 +283,9 @@ const CSS = `
 .nk-tags input[type=text],.nk-tags input[type=number],.nk-tags select{min-height:36px;width:100%;padding:5px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel-2);color:var(--c-ink);font:inherit;min-width:0}
 .nk-tags input::placeholder{color:var(--faint,var(--muted));font-style:italic}
 .nk-tags .f.touched input,.nk-tags .f.touched select{border-color:var(--accent)}
-.nk-tags .art{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.nk-tags .art img{width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+/* te-art, not art: the shell's .art class painted the Now playing record over this box (M3). */
+.nk-tags .te-art{display:flex;align-items:center;gap:10px;flex-wrap:wrap;max-width:100%}
+.nk-tags .te-art img{width:64px;height:64px;max-width:120px;max-height:120px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
 .nk-tags .note{font-size:12px;line-height:1.5;color:var(--warn,var(--muted));margin:0}
 .nk-tags .err{color:var(--refuse,#c0392b);font-size:12px;margin:0}
 .nk-tags ul.res{list-style:none;margin:0;padding:0;display:grid;gap:6px}
@@ -414,7 +415,7 @@ export function mountTagEditor(root, ctx) {
       }).catch(() => {});
     }
     const art = h('div', { className: 'f span4' }, h('label', { htmlFor: `${id}-art`, textContent: 'Cover art' }),
-      h('div', { className: 'art' }, artPreview, artText, artPick, artClear, artInput), artErr);
+      h('div', { className: 'te-art' }, artPreview, artText, artPick, artClear, artInput), artErr);
 
     const formatNote = h('p', { className: 'note', role: 'status' });
     const errors = h('p', { className: 'err', role: 'alert' });

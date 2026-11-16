@@ -106,3 +106,52 @@ also obtain the source from `https://github.com/Vanilagy/mediabunny/tree/v1.51.0
 | `vendor/butterchurn/presets-3.0.0-beta.4.mjs` | `a500b2b85493c37a4001033544294bdb288d0607cc591ec438562149adce4b5e` |
 | `vendor/butterchurn/LICENSE-MIT.txt` | `e5c204814d7119c939d9f111691e0c2008607d09c2f4679691e6dc5a10f24b98` |
 | `vendor/butterchurn/LICENSE-presets-MIT.txt` | `e5c204814d7119c939d9f111691e0c2008607d09c2f4679691e6dc5a10f24b98` |
+
+## Webamp: classic skin face (since v1.x)
+
+- `webamp` 2.3.1, MIT, Jordan Eldredge, `https://github.com/captbaritone/webamp`. Source: npm tarball
+  `webamp-2.3.1.tgz` (integrity
+  `sha512-u2NpSKYsUfDKltcvteF3vDbAzp+kDiymr5Sn0Vgfl+Uk9Kvd4GmuaF3stOxKNLbDH+RkJ2YZfus7O3W2axq4Qg==`, tarball
+  SHA-256 `d45a3d46cbd3e4bdd39a9b71656d87341ddac48b4a4c4a61356ec065a6bba7c0`), file `built/webamp.bundle.min.mjs`,
+  upstream SHA-256 `41817e47fdb1f969a74e0202135e72d080d73236f5f0a7709f17b696784e0035`.
+- NakliAmp drives it through Webamp's `__customMediaClass` option, so NakliAmp's engine plays every sound and
+  Webamp only draws the skin. Loaded only when the person picks a `.wsz` file; not inlined in the single-file
+  builds.
+- Patched art (Chirag's decision, 2026-11-17: "Patch the webamp bundle."). Upstream compiles Nullsoft's base
+  2.91 skin into the bundle as the fallback for sheets a user skin lacks. `scripts/patch-webamp-skin.mjs`
+  replaces all of it with neutral art drawn in that script (flat greys, plain transport shapes, its own pixel
+  font, the title "NAKLIAMP", no Nullsoft or Winamp artwork or branding), at the same sprite sizes as Webamp's
+  sprite map, so layout and hit areas are unchanged. Webamp's code is unchanged. What changes:
+  - 350 `background-image` data URLs in the built-in skin CSS (319 sprites across MAIN, TITLEBAR, CBUTTONS,
+    NUMBERS, NUMS_EX, TEXT, POSBAR, VOLUME, BALANCE, SHUFREP, MONOSTER, PLAYPAUS, PLEDIT, EQMAIN, EQ_EX, GEN
+    including its 52 letter sprites);
+  - 18 cursor data URLs (6 distinct upstream cursors) become two drawn cursors, an arrow and a resize arrow;
+  - the 52 GEN letter width rules, to fit the new letters;
+  - the default skin object: `EQ_PREAMP_LINE` and `EQ_GRAPH_LINE_COLORS` images, the 24 visualiser colours
+    (VISCOLOR) and the playlist style (PLEDIT.TXT) become neutral greys;
+  - five user-visible strings (coordinator request 2026-11-17, spec row V5: the face is never named Winamp):
+    `"Winamp Menu"` (options button tooltip and accessible name) becomes `"Menu"`; `"Winamp 2.91"` (marquee text
+    when nothing else shows) becomes `"NakliAmp"`; `"WINAMP"` (heading of the exported playlist page) becomes
+    `"NakliAmp"`; `<title>Winamp Generated PlayList</title>` becomes `<title>NakliAmp playlist</title>`;
+    `"Winamp Playlist.html"` (its download name) becomes `"NakliAmp playlist.html"`;
+  - the last line, the `sourceMappingURL` comment, is removed so the browser requests no map file.
+  Kept on purpose, because they are code, not wording: the Redux action types `CLOSE_WINAMP`, `OPEN_WINAMP`,
+  `MINIMIZE_WINAMP`; the CSS classes `winamp-active`, `winamp-button`; and the `.eqf` file signature
+  `Winamp EQ library file v1.1`, which every `.eqf` reader checks (NakliAmp's `app/audio/eqf.mjs` too). The
+  bundle contains no "Nullsoft" text. The bundle has no GENEX, VIDEO, AVS, MB or REGION art and no animated
+  cursors; Webamp's built-in GENEX colour values are unchanged. `test/webamp-patch.test.mjs` checks that none of
+  the 311 distinct upstream asset payloads (stored there as SHA-256 only) remain, that the vendored file is the
+  script's fixed point, and that the bundle parses as a module.
+- With that fallback, NakliAmp loads any `.wsz` that contains at least `MAIN.BMP`. The Winamp name and interface
+  are Nullsoft's (Webamp README); NakliAmp says "classic skins".
+- Command (output bytes depend on Node's zlib build; made with Node v22.23.4, zlib 1.3.1-e00f703):
+
+  ```sh
+  cd "$(mktemp -d)" && npm pack webamp@2.3.1 && mkdir pkg && tar xzf webamp-2.3.1.tgz -C pkg
+  node /Users/chiragpatnaik/Code/nakliamp/scripts/patch-webamp-skin.mjs pkg/package/built/webamp.bundle.min.mjs
+  ```
+
+| Path | SHA-256 |
+|---|---|
+| `vendor/webamp/webamp-2.3.1.bundle.min.mjs` | `15915991ffc5334e57ec7011a92a75e811a5e701c6358db682e2d5c8d1a3d100` |
+| `vendor/webamp/LICENSE-MIT.txt` | `fc7f2696d3e70b5c04659de0a843c1d7defebbb14eb2a07a38808fead88d9279` |

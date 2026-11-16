@@ -144,10 +144,19 @@ function viewState({
   return { view, drill, text: String(query ?? '').trim(), sort, playlists, smartPlaylists, now };
 }
 
+/** Views whose untagged group ("Unknown album", "No genre") sorts last, not first. */
+const UNKNOWN_LAST = new Set(['albums', 'artists', 'albumArtists', 'genres']);
+
+/** A stable copy with the groups that have no label moved to the end. */
+export function unknownLast(rows) {
+  return [...rows.filter(row => row.label != null), ...rows.filter(row => row.label == null)];
+}
+
 function groupLevelView(tracks, { view, text, playlists, smartPlaylists, now }) {
-  const groups = view === 'playlists'
+  let groups = view === 'playlists'
     ? playlistGroups(tracks, playlists, smartPlaylists, now)
     : browse(tracks, { by: view });
+  if (UNKNOWN_LAST.has(view)) groups = unknownLast(groups);
   const rows = text ? searchGroups(groups, text, view) : groups;
   return { kind: 'groups', rows, keys: rows.map(row => `g:${row.key}`), missing: 0, ordered: false };
 }
@@ -216,20 +225,32 @@ export function formatDuration(seconds) {
 const CSS = `
 .nb{display:flex;flex-direction:column;gap:10px;width:100%;max-width:1080px;margin:auto;min-width:0;color:var(--ink,var(--text))}
 .nb-head{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-.nb-head label{display:flex;align-items:center;gap:6px;font:10px var(--mono);color:var(--faint,var(--muted));letter-spacing:.04em}
+.nb-head label{display:flex;align-items:center;gap:6px;font:12px var(--body);color:var(--muted)}
 .nb select,.nb input[type=search],.nb input[type=text]{min-height:36px;padding:6px 10px;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--ink,var(--text));font:12px var(--body);max-width:100%}
 .nb input[type=search]{flex:1 1 180px;min-width:0}
 .nb button{font:inherit;color:inherit}
-.nb-btn{min-height:34px;padding:5px 11px;border:1px solid var(--line);border-radius:9px;background:var(--panel-2);cursor:pointer;font:11px var(--mono)!important;white-space:nowrap}
+.nb-btn{min-height:34px;padding:5px 11px;border:1px solid var(--line);border-radius:9px;background:var(--panel-2);cursor:pointer;font:500 13px var(--body)!important;white-space:nowrap}
 .nb-btn:hover{border-color:var(--accent)}
 .nb-btn[disabled]{opacity:.45;cursor:default}
 .nb-btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink,var(--bg))}
 .nb-crumb{display:flex;align-items:center;gap:8px;min-width:0}
 .nb-crumb[hidden]{display:none}
 .nb-crumb h3{margin:0;font:600 15px var(--body);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-.nb-count{font:10px var(--mono);color:var(--faint,var(--muted))}
-.nb-bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 8px;border:1px solid var(--line);border-radius:10px;background:var(--panel-2)}
+.nb-count{font:12px var(--body);color:var(--faint,var(--muted))}
+.nb-bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-height:48px;padding:6px 8px;border:1px solid var(--line);border-radius:10px;background:var(--panel-2)}
 .nb-bar[hidden]{display:none}
+.nb-bar.idle{background:transparent;border-style:dashed}
+.nb-bar.idle [data-act]{display:none}
+.nb-hint{font-size:12px;color:var(--faint,var(--muted))}
+.nb-hint[hidden]{display:none}
+.nb-album{display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px;align-items:end}
+.nb-album[hidden]{display:none}
+.nb-album .nb-album-art{width:132px;height:132px;border-radius:12px;object-fit:cover;border:1px solid var(--line);background:linear-gradient(145deg,color-mix(in srgb,var(--accent) 55%,var(--panel-2)),var(--panel-2))}
+.nb-album h3{margin:0 0 4px;font:700 22px/1.15 var(--display,var(--body));letter-spacing:-.02em;overflow-wrap:anywhere}
+.nb-album .nb-album-meta{margin:0 0 12px;color:var(--muted);font-size:13px}
+.nb-album .nb-album-actions{display:flex;gap:8px;flex-wrap:wrap}
+.nb-album .nb-album-actions .nb-btn{min-height:38px;padding:7px 16px;font:600 13px var(--body)!important}
+.nb-no{width:24px;flex:none;text-align:right;font:11px var(--mono);color:var(--faint,var(--muted))}
 .nb-bar .nb-count{margin-right:auto}
 .nb-scroll{position:relative;overflow-y:auto;overflow-x:hidden;height:var(--nakliamp-list-height,max(320px,calc(100dvh - 330px)));border:1px solid var(--line);border-radius:var(--radius,14px);background:var(--panel);outline:none}
 .nb-scroll:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -266,8 +287,8 @@ const CSS = `
 .nb-menu hr{border:0;border-top:1px solid var(--line);margin:4px 0}
 .nb-menu form{display:flex;gap:6px;padding:6px}
 .nb-menu form input{flex:1;min-width:0}
-.nb-menu .nb-menu-title{padding:5px 10px;font:10px var(--mono);color:var(--faint,var(--muted))}
-@media(max-width:560px){.nb-stars,.nb-dur{display:none}.nb-row{gap:8px;padding:0 8px}}
+.nb-menu .nb-menu-title{padding:5px 10px;font:12px var(--body);color:var(--faint,var(--muted))}
+@media(max-width:560px){.nb-stars,.nb-dur{display:none}.nb-row{gap:8px;padding:0 8px}.nb-bar.idle{display:none}.nb-album .nb-album-art{width:88px;height:88px}.nb-album h3{font-size:18px}}
 `;
 
 let instance = 0;
@@ -341,8 +362,20 @@ export function mountBrowse(root, ctx) {
   const editSmartButton = el('button', { type: 'button', class: 'nb-btn', hidden: true }, 'Edit rules');
   const crumb = el('div', { class: 'nb-crumb', hidden: true }, backButton, crumbTitle, editSmartButton);
 
+  // The album page header (M4): cover, title, artist, year, count, length, Play and Shuffle.
+  const albumArt = el('img', { class: 'nb-album-art', alt: '' });
+  const albumTitle = el('h3', {});
+  const albumMeta = el('p', { class: 'nb-album-meta' });
+  const albumPlay = el('button', { type: 'button', class: 'nb-btn primary' }, 'Play');
+  const albumShuffle = el('button', { type: 'button', class: 'nb-btn' }, 'Shuffle');
+  const albumHead = el('div', { class: 'nb-album', hidden: true }, albumArt,
+    el('div', {}, albumTitle, albumMeta, el('div', { class: 'nb-album-actions' }, albumPlay, albumShuffle)));
+
   const selectedCount = el('span', { class: 'nb-count', 'aria-live': 'polite' });
-  const bar = el('div', { class: 'nb-bar', role: 'toolbar', 'aria-label': 'Selection actions', hidden: true }, selectedCount,
+  // The bar keeps its place when nothing is selected, so selecting a row does
+  // not push the list down (M4); it then says how the list works.
+  const hint = el('span', { class: 'nb-hint' }, 'Click to select, double-click or Enter to play, right-click for more.');
+  const bar = el('div', { class: 'nb-bar idle', role: 'toolbar', 'aria-label': 'Selection actions' }, hint, selectedCount,
     el('button', { type: 'button', class: 'nb-btn primary', 'data-act': 'play' }, 'Play'),
     el('button', { type: 'button', class: 'nb-btn', 'data-act': 'next' }, 'Play next'),
     el('button', { type: 'button', class: 'nb-btn', 'data-act': 'queue' }, 'Add to queue'),
@@ -358,7 +391,7 @@ export function mountBrowse(root, ctx) {
     class: 'nb-scroll', tabindex: '0', role: 'listbox', 'aria-multiselectable': 'true', 'aria-label': 'Library',
   }, spacer);
   const menu = el('div', { class: 'nb-menu', role: 'menu', hidden: true, 'aria-label': 'Track actions' });
-  const panel = el('section', { class: 'nb', 'aria-label': 'Library browser' }, head, crumb, bar, summary, scroller, menu);
+  const panel = el('section', { class: 'nb', 'aria-label': 'Library browser' }, head, crumb, albumHead, bar, summary, scroller, menu);
   root.replaceChildren(panel);
 
   // ---- data ----
@@ -417,6 +450,41 @@ export function mountBrowse(root, ctx) {
     editSmartButton.hidden = !(state.drill?.kind === 'smart');
     const label = VIEWS.find(view => view.id === state.view)?.label ?? 'Library';
     scroller.setAttribute('aria-label', state.drill ? `${label}: ${state.drill.label}` : label);
+    paintAlbumHead();
+  }
+
+  function isAlbumPage() {
+    return state.view === 'albums' && Boolean(state.drill) && data.kind === 'tracks';
+  }
+
+  function albumMetaText(row) {
+    const total = data.rows.reduce((sum, track) => sum + (Number.isFinite(track.durationS) ? track.durationS : 0), 0);
+    const count = data.rows.length;
+    return [row.albumArtist, row.year ? String(row.year) : null, `${count} track${count === 1 ? '' : 's'}`, total ? formatDuration(total) : null]
+      .filter(Boolean).join(' · ');
+  }
+
+  function paintAlbumArt(row) {
+    const key = artKeyOf(row) ?? '';
+    if (albumArt.dataset.art !== key) albumArt.removeAttribute('src');
+    albumArt.dataset.art = key;
+    if (!key) return;
+    const lookup = row.id ? row : { artKey: row.artKey ?? null, dirArtKey: row.dirArtKey ?? null };
+    Promise.resolve(ctx.artUrl?.(lookup) ?? null)
+      .catch(() => null)
+      .then(url => { if (url && albumArt.dataset.art === key) albumArt.src = url; });
+  }
+
+  function paintAlbumHead() {
+    const album = isAlbumPage();
+    albumHead.hidden = !album;
+    if (!album) return;
+    const row = state.drill.row ?? {};
+    albumTitle.textContent = state.drill.label;
+    albumMeta.textContent = albumMetaText(row);
+    paintAlbumArt(row);
+    albumPlay.setAttribute('aria-label', `Play ${state.drill.label}`);
+    albumShuffle.setAttribute('aria-label', `Shuffle ${state.drill.label}`);
   }
 
   function summaryText(groups) {
@@ -438,7 +506,8 @@ export function mountBrowse(root, ctx) {
 
   function paintBar() {
     const size = selection.size;
-    bar.hidden = size === 0;
+    bar.classList.toggle('idle', size === 0);
+    hint.hidden = size !== 0;
     selectedCount.textContent = size ? `${size.toLocaleString()} selected` : '';
     const trackLevel = data.kind === 'tracks';
     for (const button of bar.querySelectorAll('[data-act=inspector]')) button.disabled = !(trackLevel && size === 1);
@@ -468,6 +537,8 @@ export function mountBrowse(root, ctx) {
 
   function coverImage(row, className, alt) {
     const image = el('img', { class: className, alt, loading: 'lazy', decoding: 'async' });
+    // A cover URL that no longer loads shows the plain tile, never a broken-image icon (minor 10).
+    image.addEventListener('error', () => { image.removeAttribute('src'); art.delete(image.dataset.art); }, { once: true });
     const key = artKeyOf(row);
     if (!key) return image;
     const known = art.get(key);
@@ -507,6 +578,12 @@ export function mountBrowse(root, ctx) {
     }, { root: scroller, rootMargin: '200px' })
     : null;
 
+  /** A track number on an album page (M4), the cover everywhere else. */
+  function leadCell(track, albumPage) {
+    if (!albumPage) return coverImage(track, 'nb-cover', '');
+    return el('span', { class: 'nb-no', 'aria-hidden': 'true', text: Number.isFinite(track.trackNo) ? String(track.trackNo) : '' });
+  }
+
   function trackRow(track, index) {
     const key = data.keys[index];
     const selected = selection.has(key);
@@ -520,13 +597,14 @@ export function mountBrowse(root, ctx) {
         title: `${stars} star${stars === 1 ? '' : 's'}`,
       }, stars <= rating ? '★' : '☆')));
     const favourite = Boolean(track.bookmarked);
+    const albumPage = isAlbumPage();
     const row = el('div', {
       class: `nb-row${index === selection.cursor ? ' cursor' : ''}${track.id === state.playingId ? ' playing' : ''}`,
       role: 'option', id: `${uid}-r${index}`, 'aria-selected': String(selected), 'data-index': String(index),
       'aria-posinset': String(index + 1), 'aria-setsize': String(data.rows.length),
       'aria-current': track.id === state.playingId ? 'true' : null,
     },
-    coverImage(track, 'nb-cover', ''),
+    leadCell(track, albumPage),
     el('span', { class: 'nb-who' }, el('span', { class: 'nb-title', text: title }), el('span', { class: 'nb-sub', text: sub })),
     stars,
     el('button', {
@@ -668,13 +746,21 @@ export function mountBrowse(root, ctx) {
     }
   }
 
+  // The saved playlist a play starts from, so the snapshot can name it (smart playlists too).
+  function sourcePlaylist(index) {
+    if (state.view !== 'playlists') return {};
+    if (state.drill) return { playlist: state.drill.label };
+    const row = data.rows[index];
+    return row ? { playlist: displayLabel(row) } : {};
+  }
+
   function playFrom(index) {
     if (data.kind === 'tracks') {
       const ids = data.rows.map(track => track.id);
-      ctx.playTracks?.(ids, Math.max(0, index));
+      ctx.playTracks?.(ids, Math.max(0, index), sourcePlaylist(index));
     } else {
       const ids = rowTracks(index).map(track => track.id);
-      if (ids.length) ctx.playTracks?.(ids, 0);
+      if (ids.length) ctx.playTracks?.(ids, 0, sourcePlaylist(index));
     }
   }
 
@@ -837,7 +923,7 @@ export function mountBrowse(root, ctx) {
   function drillInto(index) {
     const row = data.rows[index];
     if (!row || data.kind !== 'groups') return;
-    state.drill = { key: row.key, label: displayLabel(row), kind: row.kind ?? 'group', rule: row.rule ?? null, returnIndex: index, returnScroll: scroller.scrollTop };
+    state.drill = { key: row.key, label: displayLabel(row), kind: row.kind ?? 'group', rule: row.rule ?? null, row, returnIndex: index, returnScroll: scroller.scrollTop };
     state.query = '';
     search.value = '';
     selection.clear();
@@ -890,6 +976,18 @@ export function mountBrowse(root, ctx) {
   newSmartButton.addEventListener('click', () => ctx.open?.('smart', null));
   editSmartButton.addEventListener('click', () => ctx.open?.('smart', state.drill?.rule ?? null));
   backButton.addEventListener('click', back);
+  albumPlay.addEventListener('click', () => {
+    const ids = data.rows.map(track => track.id);
+    if (ids.length) ctx.playTracks?.(ids, 0);
+  });
+  albumShuffle.addEventListener('click', () => {
+    const ids = data.rows.map(track => track.id);
+    for (let index = ids.length - 1; index > 0; index--) {
+      const other = Math.floor(Math.random() * (index + 1));
+      [ids[index], ids[other]] = [ids[other], ids[index]];
+    }
+    if (ids.length) ctx.playTracks?.(ids, 0);
+  });
   bar.addEventListener('click', event => {
     const button = event.target.closest('button[data-act]');
     if (!button || button.disabled) return;

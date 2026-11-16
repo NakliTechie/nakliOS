@@ -8,11 +8,15 @@
 //      prompt when someone else already asked the person (the NakliOS host stages
 //      destructive commands itself before it calls the handler).
 // A handler is a function `(input, context) => result`, or `{ run, diff? }`.
+// A queue-editing command (`ifRevision: true` in COMMANDS) may carry `if_revision`; when
+// `revision()` has moved past it the command refuses with `[conflict]` before it runs,
+// as cliamp's IPC v2 does. The handler never sees `if_revision`.
 //
 // Also here: the keyboard. `matchShortcut(event)` turns a KeyboardEvent-like object into
 // `{ name, input }` and `keymapRows()` builds the keymap overlay from the same list.
 
 import { COMMANDS, commandByName, railScope } from './commands.mjs';
+import { revisionConflict } from '../player/queue.mjs';
 
 export class CommandError extends Error {
   constructor(code, message) {
@@ -95,17 +99,30 @@ function propertyCountErrors(schema, count, names, path) {
 
 /**
  * @param {Record<string, Function | { run: Function, diff?: Function }>} handlers
- * @param {{ confirm?: (request: { name, label, input, diff }) => boolean|Promise<boolean> }} [options]
+ * @param {{ confirm?: (request: { name, label, input, diff }) => boolean|Promise<boolean>,
+ *           revision?: () => number }} [options]
  */
-export function bindCommands(handlers = {}, { confirm = null } = {}) {
+export function bindCommands(handlers = {}, { confirm = null, revision = null } = {}) {
   return async function run(name, input = {}, { approved = false, context = {} } = {}) {
     const { command, handler, runFn } = resolveHandler(handlers, name);
-    const args = input ?? {};
-    const errors = validate(command.input, args);
+    const given = input ?? {};
+    const errors = validate(command.input, given);
     if (errors.length) throw new CommandError('invalid-input', `${name}: ${errors.join('; ')}.`);
+    const args = command.ifRevision ? withoutRevision(given, revision) : given;
     if (command.scope === 'destructive' && !approved) await askApproval({ name, command, handler, args, context, confirm });
     return runFn(args, context);
   };
+}
+
+// Refuse a stale `if_revision` with `[conflict]`; return the input without it.
+function withoutRevision(input, revision) {
+  const { if_revision: expected, ...rest } = input;
+  if (expected !== undefined) {
+    const current = typeof revision === 'function' ? revision() : null;
+    const conflict = current === null ? null : revisionConflict(expected, current);
+    if (conflict) throw new CommandError('conflict', conflict);
+  }
+  return rest;
 }
 
 // The command and its run function, or a `[not-found]` refusal.
@@ -230,9 +247,10 @@ export function keymapRows({ mac = false, groupLabels = {} } = {}) {
   return [...groups.values()];
 }
 
-// One row per key, or one collapsed "first to last" row past four keys.
+// One row per key, or one collapsed "first to last" row for a long run such as
+// the digits 0 to 9. A command with a handful of named keys stays listed.
 function commandRows(c, mac) {
-  if (c.keys.length > 4) {
+  if (c.keys.length > 5) {
     const first = displayKey(c.keys[0].key, { mac });
     const last = displayKey(c.keys[c.keys.length - 1].key, { mac });
     return [{ name: c.name, keys: [`${first} to ${last}`], label: c.keymapLabel ?? c.label }];

@@ -7,6 +7,7 @@
 // Headless by contract: no DOM, no network, no IndexedDB.
 
 import { compareAlbumOrder, groupKey } from './store.mjs';
+import { visibleTracks } from './cue.mjs';
 
 /** Views that fold tracks into groups; pass `key` to drill into one group. */
 export const GROUP_VIEWS = Object.freeze(['albums', 'artists', 'albumArtists', 'genres', 'years', 'folders']);
@@ -153,7 +154,9 @@ function groupMembers(tracks, by, key) {
   return members.sort(compareShelf);
 }
 
-export function browse(tracks, { by, key = undefined, limit = undefined } = {}) {
+export function browse(allTracks, { by, key = undefined, limit = undefined } = {}) {
+  // Cue-sheet parents (`hidden`) are replaced by their virtual tracks (P12).
+  const tracks = visibleTracks(allTracks);
   if (!BROWSE_VIEWS.includes(by)) throw new BrowseError(`Unknown browse view: ${String(by)}`);
   if (limit !== undefined && !(Number.isInteger(limit) && limit > 0)) throw new BrowseError('limit is not a positive whole number.');
   const cap = list => (limit ? list.slice(0, limit) : list);

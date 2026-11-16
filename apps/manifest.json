@@ -221,6 +221,18 @@
           "destination": "VENDOR.md"
         },
         {
+          "source": "LICENSE",
+          "destination": "LICENSE"
+        },
+        {
+          "source": "app/agent/events.mjs",
+          "destination": "app/agent/events.mjs"
+        },
+        {
+          "source": "app/agent/spectrum.mjs",
+          "destination": "app/agent/spectrum.mjs"
+        },
+        {
           "source": "app/agent/webmcp.mjs",
           "destination": "app/agent/webmcp.mjs"
         },
@@ -275,6 +287,10 @@
         {
           "source": "app/commands/run.mjs",
           "destination": "app/commands/run.mjs"
+        },
+        {
+          "source": "app/decode/libav-stream.mjs",
+          "destination": "app/decode/libav-stream.mjs"
         },
         {
           "source": "app/decode/libav.mjs",
@@ -373,6 +389,10 @@
           "destination": "app/player/timers.mjs"
         },
         {
+          "source": "app/player/transient.mjs",
+          "destination": "app/player/transient.mjs"
+        },
+        {
           "source": "app/settings.mjs",
           "destination": "app/settings.mjs"
         },
@@ -433,6 +453,10 @@
           "destination": "app/ui/shell/media-session.mjs"
         },
         {
+          "source": "app/ui/shell/pip.mjs",
+          "destination": "app/ui/shell/pip.mjs"
+        },
+        {
           "source": "app/ui/shell/theme.mjs",
           "destination": "app/ui/shell/theme.mjs"
         },
@@ -449,8 +473,36 @@
           "destination": "app/ui/tag-editor.mjs"
         },
         {
+          "source": "app/ui/v1x-ai-tools.mjs",
+          "destination": "app/ui/v1x-ai-tools.mjs"
+        },
+        {
+          "source": "app/ui/v1x-command-bar.mjs",
+          "destination": "app/ui/v1x-command-bar.mjs"
+        },
+        {
+          "source": "app/ui/v1x-library-tools.mjs",
+          "destination": "app/ui/v1x-library-tools.mjs"
+        },
+        {
+          "source": "app/ui/v1x-network.mjs",
+          "destination": "app/ui/v1x-network.mjs"
+        },
+        {
+          "source": "app/ui/v1x-timers.mjs",
+          "destination": "app/ui/v1x-timers.mjs"
+        },
+        {
+          "source": "app/ui/webamp-face.mjs",
+          "destination": "app/ui/webamp-face.mjs"
+        },
+        {
           "source": "app/visualiser/driver.mjs",
           "destination": "app/visualiser/driver.mjs"
+        },
+        {
+          "source": "app/visualiser/milkdrop-still.mjs",
+          "destination": "app/visualiser/milkdrop-still.mjs"
         },
         {
           "source": "app/visualiser/milkdrop.mjs",
@@ -519,6 +571,14 @@
         {
           "source": "vendor/music-metadata/music-metadata-12.5.0-write.min.mjs",
           "destination": "vendor/music-metadata/music-metadata-12.5.0-write.min.mjs"
+        },
+        {
+          "source": "vendor/webamp/LICENSE-MIT.txt",
+          "destination": "vendor/webamp/LICENSE-MIT.txt"
+        },
+        {
+          "source": "vendor/webamp/webamp-2.3.1.bundle.min.mjs",
+          "destination": "vendor/webamp/webamp-2.3.1.bundle.min.mjs"
         }
       ]
     },

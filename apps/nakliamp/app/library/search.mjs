@@ -67,9 +67,11 @@ const FIELDS = Object.freeze([
  * An empty query returns everything in its incoming order, which is what makes
  * the search box safe to leave empty.
  */
-export function searchTracks(tracks, query) {
+export function searchTracks(allTracks, query) {
+  // A cue-sheet parent (`hidden`) never shows; its virtual tracks do (P12).
+  const tracks = allTracks.filter(track => !track?.hidden);
   const needle = String(query ?? '').trim();
-  if (!needle) return [...tracks];
+  if (!needle) return tracks;
 
   const scored = [];
   for (const track of tracks) {

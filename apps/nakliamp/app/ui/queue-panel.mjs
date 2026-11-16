@@ -2,7 +2,7 @@
 //
 // The queue list with the playing entry marked, drag to reorder (pointer events),
 // Alt+Up and Alt+Down to move the focused entry from the keyboard, remove, clear,
-// undo, shuffle and repeat, and save as playlist. Every edit goes through a
+// undo, and save as playlist (shuffle and repeat are the player bar's). Every edit goes through a
 // `queue.*` command, so the agent face and the panel share one path.
 //
 // Pure helpers (`dropSlot`, `moveTarget`, `nextMode`, `queueRows`) are exported for
@@ -13,8 +13,6 @@ import { createSelection } from './select.mjs';
 
 export const SHUFFLE_ORDER = Object.freeze(['off', 'tracks', 'albums']);
 export const REPEAT_ORDER = Object.freeze(['off', 'all', 'one']);
-const SHUFFLE_LABEL = Object.freeze({ off: 'Shuffle: off', tracks: 'Shuffle: tracks', albums: 'Shuffle: albums' });
-const REPEAT_LABEL = Object.freeze({ off: 'Repeat: off', all: 'Repeat: all', one: 'Repeat: one' });
 
 /** The mode after `mode` in `order`, wrapping. */
 export function nextMode(order, mode) {
@@ -68,7 +66,7 @@ const CSS = `
 .nq-head{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .nq-head h2{margin:0 auto 0 0;font:600 18px var(--display,var(--body));letter-spacing:-.02em}
 .nq button{font:inherit;color:inherit}
-.nq-btn{min-height:34px;padding:5px 11px;border:1px solid var(--line);border-radius:9px;background:var(--panel-2);cursor:pointer;font:11px var(--mono)!important;white-space:nowrap}
+.nq-btn{min-height:34px;padding:5px 11px;border:1px solid var(--line);border-radius:9px;background:var(--panel-2);cursor:pointer;font:500 13px var(--body)!important;white-space:nowrap}
 .nq-btn:hover{border-color:var(--accent)}
 .nq-btn[disabled]{opacity:.45;cursor:default}
 .nq-btn[aria-pressed=true]{border-color:var(--accent);color:var(--accent)}
@@ -156,8 +154,6 @@ export function mountQueuePanel(root, ctx) {
   let drag = null;
   const cleanups = [];
 
-  const shuffleButton = el('button', { type: 'button', class: 'nq-btn' });
-  const repeatButton = el('button', { type: 'button', class: 'nq-btn' });
   const undoButton = el('button', { type: 'button', class: 'nq-btn', 'aria-label': 'Undo the last queue edit' }, 'Undo');
   const removeButton = el('button', { type: 'button', class: 'nq-btn' }, 'Remove selected');
   const clearButton = el('button', { type: 'button', class: 'nq-btn' }, 'Clear');
@@ -169,7 +165,8 @@ export function mountQueuePanel(root, ctx) {
     el('button', { type: 'button', class: 'nq-btn', 'data-cancel': '1' }, 'Cancel'));
   const note = el('p', { class: 'nq-note', 'aria-live': 'polite' });
   const head = el('div', { class: 'nq-head', role: 'toolbar', 'aria-label': 'Queue actions' },
-    el('h2', { id: `${uid}-title`, text: 'Queue' }), shuffleButton, repeatButton, undoButton, removeButton, clearButton, saveToggle);
+    // Shuffle and repeat live in the player bar only, with their state (minor 3).
+    el('h2', { id: `${uid}-title`, text: 'Queue' }), undoButton, removeButton, clearButton, saveToggle);
   const windowEl = el('div', { class: 'nq-window', role: 'presentation' });
   const dropLine = el('div', { class: 'nq-drop', hidden: true, role: 'presentation' });
   const spacer = el('div', { class: 'nq-spacer', role: 'presentation' }, windowEl, dropLine);
@@ -187,12 +184,6 @@ export function mountQueuePanel(root, ctx) {
   }
 
   function paintChrome() {
-    shuffleButton.textContent = SHUFFLE_LABEL[snapshot.shuffle] ?? 'Shuffle';
-    shuffleButton.setAttribute('aria-pressed', String(snapshot.shuffle !== 'off'));
-    shuffleButton.setAttribute('aria-label', `${SHUFFLE_LABEL[snapshot.shuffle]}. Press for ${nextMode(SHUFFLE_ORDER, snapshot.shuffle)}.`);
-    repeatButton.textContent = REPEAT_LABEL[snapshot.repeat] ?? 'Repeat';
-    repeatButton.setAttribute('aria-pressed', String(snapshot.repeat !== 'off'));
-    repeatButton.setAttribute('aria-label', `${REPEAT_LABEL[snapshot.repeat]}. Press for ${nextMode(REPEAT_ORDER, snapshot.repeat)}.`);
     undoButton.disabled = !snapshot.canUndo;
     clearButton.disabled = !rows.length;
     saveToggle.disabled = !rows.length;
@@ -287,8 +278,6 @@ export function mountQueuePanel(root, ctx) {
   }
 
   // ---- toolbar ----
-  shuffleButton.addEventListener('click', () => act('queue.shuffle', { mode: nextMode(SHUFFLE_ORDER, snapshot.shuffle) }));
-  repeatButton.addEventListener('click', () => act('queue.repeat', { mode: nextMode(REPEAT_ORDER, snapshot.repeat) }));
   undoButton.addEventListener('click', () => act('queue.undo', {}));
   clearButton.addEventListener('click', () => act('queue.clear', {}, 'Queue cleared. Undo brings it back.'));
   removeButton.addEventListener('click', () => removeIndices(selection.selectedIndices()));

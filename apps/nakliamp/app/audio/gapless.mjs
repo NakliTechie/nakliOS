@@ -156,6 +156,7 @@ export function createGaplessLane({
   let offsetAtStart = 0;
   let pausedOffset = 0;
   let timer = null;
+  let speed = 1; // playback rate (P9): buffer seconds per context second
   const now = () => context.currentTime;
   const rate = () => context.sampleRate || 48000;
 
@@ -168,6 +169,7 @@ export function createGaplessLane({
   function startSource(item, gain, when, offsetS) {
     const source = context.createBufferSource();
     source.buffer = item.buffer;
+    if (source.playbackRate) source.playbackRate.value = speed;
     source.connect(gain);
     const remaining = Math.max(0, item.lengthS - offsetS);
     source.start(when, item.startS + offsetS, remaining);
@@ -205,9 +207,10 @@ export function createGaplessLane({
     if (!playing || !current || !next || next.source) return;
     const plan = scheduleTransition({
       currentStartAt: startAt,
-      offsetS: offsetAtStart,
-      lengthS: current.item.lengthS,
-      nextLengthS: next.item.lengthS,
+      // Join times are context seconds, so buffer lengths are divided by the rate.
+      offsetS: offsetAtStart / speed,
+      lengthS: current.item.lengthS / speed,
+      nextLengthS: next.item.lengthS / speed,
       mode: next.mode,
       crossfadeS: next.fadeS,
       now: now(),
@@ -258,7 +261,7 @@ export function createGaplessLane({
     if (!current) return 0;
     if (!playing) return pausedOffset;
     checkAdvance();
-    return Math.min(current.item.lengthS, Math.max(0, offsetAtStart + (now() - startAt)));
+    return Math.min(current.item.lengthS, Math.max(0, offsetAtStart + (now() - startAt) * speed));
   }
 
   function stopAll() {
@@ -302,6 +305,21 @@ export function createGaplessLane({
       pausedOffset = Math.max(0, Math.min(current.item.lengthS, alignToFrame(Number(positionS) || 0, current.item.buffer.sampleRate)));
       if (wasPlaying) this.play();
     },
+    /**
+     * Change the playback rate (0.5..2). A playing lane restarts its sources at
+     * the current position, so the next join is rescheduled at the new rate.
+     */
+    setRate(value) {
+      const next = Number(value);
+      const rateValue = Number.isFinite(next) && next > 0 ? Math.max(0.5, Math.min(2, next)) : 1;
+      if (rateValue === speed) return speed;
+      const wasPlaying = playing;
+      if (wasPlaying) this.pause();
+      speed = rateValue;
+      if (wasPlaying) this.play();
+      return speed;
+    },
+    rate: () => speed,
     /** Queue the item that follows, joined by 'gapless' or 'crossfade'. */
     queue(item, { mode = 'gapless', fadeS = 0 } = {}) {
       unscheduleNext();

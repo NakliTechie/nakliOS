@@ -301,6 +301,8 @@ export function createPlayTracker({ onScrobble, now = () => Date.now(), maxStepS
       return false;
     },
     stop() { track = null; last = null; },
+    /** True while a play is being followed (including one already scrobbled). */
+    active: () => track !== null,
     playedS: () => played,
     scrobbled: () => done,
   };
