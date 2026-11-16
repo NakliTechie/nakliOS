@@ -1,0 +1,987 @@
+{
+  "accepts": [
+    {
+      "action": "import",
+      "label": "Play in Reel",
+      "extensions": [
+        ".ass",
+        ".m4v",
+        ".mkv",
+        ".mov",
+        ".mp4",
+        ".srt",
+        ".ssa",
+        ".ts",
+        ".vtt",
+        ".webm"
+      ]
+    }
+  ],
+  "commands": [
+    {
+      "name": "playback.toggle",
+      "description": "Play if paused, pause if playing.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "label": "Play or pause",
+      "shortcuts": [
+        {
+          "key": "space"
+        }
+      ],
+      "readTwin": "state.read"
+    },
+    {
+      "name": "playback.play",
+      "description": "Start or resume playback.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "label": "Play",
+      "readTwin": "state.read"
+    },
+    {
+      "name": "playback.pause",
+      "description": "Pause playback.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "label": "Pause",
+      "readTwin": "state.read"
+    },
+    {
+      "name": "playback.seek",
+      "description": "Seek to a position in seconds from the start.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "positionS": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Seconds"
+          }
+        },
+        "required": [
+          "positionS"
+        ]
+      },
+      "label": "Seek",
+      "readTwin": "state.read"
+    },
+    {
+      "name": "playback.skip",
+      "description": "Move the position forward or back by a number of seconds.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "seconds": {
+            "type": "number",
+            "description": "Negative goes back"
+          }
+        },
+        "required": [
+          "seconds"
+        ]
+      },
+      "label": "Skip",
+      "shortcuts": [
+        {
+          "key": "arrowleft",
+          "input": {
+            "seconds": -10
+          }
+        },
+        {
+          "key": "arrowright",
+          "input": {
+            "seconds": 10
+          }
+        },
+        {
+          "key": "shift+arrowleft",
+          "input": {
+            "seconds": -3
+          }
+        },
+        {
+          "key": "shift+arrowright",
+          "input": {
+            "seconds": 3
+          }
+        }
+      ],
+      "readTwin": "state.read"
+    },
+    {
+      "name": "playback.rate",
+      "description": "Set the playback speed from 0.25 to 4, or step it by a delta.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "rate": {
+            "type": "number",
+            "minimum": 0.25,
+            "maximum": 4
+          },
+          "delta": {
+            "type": "number",
+            "description": "Change from the current speed"
+          }
+        },
+        "required": []
+      },
+      "label": "Speed",
+      "shortcuts": [
+        {
+          "key": "[",
+          "input": {
+            "delta": -0.25
+          }
+        },
+        {
+          "key": "]",
+          "input": {
+            "delta": 0.25
+          }
+        },
+        {
+          "key": "z",
+          "input": {
+            "rate": 1
+          }
+        }
+      ],
+      "readTwin": "state.read"
+    },
+    {
+      "name": "audio.volume",
+      "description": "Set the volume from 0 to 1, or step it by a delta.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "volume": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "delta": {
+            "type": "number"
+          }
+        },
+        "required": []
+      },
+      "label": "Volume",
+      "shortcuts": [
+        {
+          "key": "arrowup",
+          "input": {
+            "delta": 0.05
+          }
+        },
+        {
+          "key": "arrowdown",
+          "input": {
+            "delta": -0.05
+          }
+        }
+      ],
+      "readTwin": "state.read"
+    },
+    {
+      "name": "audio.mute",
+      "description": "Mute or unmute; with no input it toggles.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "muted": {
+            "type": "boolean"
+          }
+        },
+        "required": []
+      },
+      "label": "Mute",
+      "shortcuts": [
+        {
+          "key": "m"
+        }
+      ],
+      "readTwin": "state.read"
+    },
+    {
+      "name": "view.fullscreen",
+      "description": "Enter or leave fullscreen; with no input it toggles.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "on": {
+            "type": "boolean"
+          }
+        },
+        "required": []
+      },
+      "label": "Fullscreen",
+      "shortcuts": [
+        {
+          "key": "f"
+        }
+      ],
+      "readTwin": "state.read"
+    },
+    {
+      "name": "media.open",
+      "description": "Ask the person to pick a video file and play it.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "label": "Open file",
+      "readTwin": "state.read"
+    },
+    {
+      "name": "media.close",
+      "description": "Stop the current video and return to the start screen.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "label": "Close video",
+      "readTwin": "state.read"
+    },
+    {
+      "name": "state.read",
+      "description": "Read the player state: media, tracks, clock (position, playing, rate, volume, muted) and playback.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "label": "Player state"
+    },
+    {
+      "name": "caps.read",
+      "description": "Read what this browser can do: WebCodecs, File System Access and codec support.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "label": "Capabilities"
+    },
+    {
+      "name": "subtitle.track",
+      "description": "Choose the subtitle track by list index (-1 turns subtitles off) or id, or step to the next one, Off included.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "integer",
+            "minimum": -1,
+            "description": "Position in subtitle.read tracks; -1 is Off"
+          },
+          "id": {
+            "type": "string",
+            "description": "Track id from subtitle.read"
+          },
+          "next": {
+            "type": "boolean",
+            "description": "Step to the next track, wrapping through Off"
+          }
+        },
+        "required": []
+      },
+      "label": "Subtitle track",
+      "shortcuts": [
+        {
+          "key": "s",
+          "input": {
+            "next": true
+          }
+        }
+      ],
+      "readTwin": "subtitle.read"
+    },
+    {
+      "name": "subtitle.delay",
+      "description": "Set the subtitle delay in seconds (positive shows subtitles later), or change it by a delta. It resets for each file.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "delayS": {
+            "type": "number",
+            "minimum": -60,
+            "maximum": 60
+          },
+          "deltaS": {
+            "type": "number",
+            "description": "Change from the current delay"
+          }
+        },
+        "required": []
+      },
+      "label": "Subtitle delay",
+      "shortcuts": [
+        {
+          "key": "g",
+          "input": {
+            "deltaS": -0.05
+          }
+        },
+        {
+          "key": "h",
+          "input": {
+            "deltaS": 0.05
+          }
+        }
+      ],
+      "readTwin": "subtitle.read"
+    },
+    {
+      "name": "subtitle.style",
+      "description": "Set caption size, text colour, background opacity and vertical position; the settings persist on this device.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "size": {
+            "type": "number",
+            "minimum": 0.5,
+            "maximum": 2.5,
+            "description": "Scale; 1 is the default"
+          },
+          "color": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{6}$",
+            "description": "Text colour as #rrggbb"
+          },
+          "backgroundOpacity": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "position": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 40,
+            "description": "Distance from the bottom of the picture, in percent"
+          },
+          "reset": {
+            "type": "boolean",
+            "description": "Restore the default style first"
+          }
+        },
+        "required": []
+      },
+      "label": "Subtitle style",
+      "readTwin": "subtitle.read"
+    },
+    {
+      "name": "subtitle.load-file",
+      "description": "Load an SRT, WebVTT, ASS or SSA subtitle file for the current video. With no input it asks the person to pick a file; agents pass name and text.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "File name, used for the format and the track label"
+          },
+          "text": {
+            "type": "string",
+            "description": "The subtitle file contents"
+          }
+        },
+        "required": []
+      },
+      "label": "Load subtitles…",
+      "readTwin": "subtitle.read"
+    },
+    {
+      "name": "subtitle.read",
+      "description": "Read the subtitle tracks, the selected track, the delay, the caption style and the text on screen.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "label": "Subtitle state"
+    },
+    {
+      "name": "subtitle.save",
+      "description": "Save the selected subtitle track as an SRT or WebVTT file, with the current delay applied. download false returns the text instead.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "srt",
+              "vtt"
+            ]
+          },
+          "download": {
+            "type": "boolean",
+            "description": "Defaults to true"
+          }
+        },
+        "required": []
+      },
+      "label": "Save subtitles",
+      "readTwin": "subtitle.read"
+    },
+    {
+      "name": "frame.step",
+      "description": "Show the next (direction 1) or previous (direction -1) frame while paused; if playing, the first step pauses.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "direction": {
+            "type": "integer",
+            "enum": [
+              -1,
+              1
+            ]
+          }
+        },
+        "required": [
+          "direction"
+        ]
+      },
+      "label": "Step one frame",
+      "shortcuts": [
+        {
+          "key": ".",
+          "input": {
+            "direction": 1
+          }
+        },
+        {
+          "key": ",",
+          "input": {
+            "direction": -1
+          }
+        }
+      ],
+      "readTwin": "state.read"
+    },
+    {
+      "name": "loop.set",
+      "description": "Set or clear the A-B loop. \"cycle\" sets A, then B, then clears, at the current position; \"set\" takes aS and bS; \"a\" and \"b\" set one point; \"clear\" removes the loop.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "cycle",
+              "a",
+              "b",
+              "set",
+              "clear"
+            ],
+            "description": "Defaults to cycle"
+          },
+          "aS": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Loop start in seconds (set, a)"
+          },
+          "bS": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Loop end in seconds (set, b); must be after A"
+          }
+        },
+        "required": []
+      },
+      "label": "A-B loop",
+      "shortcuts": [
+        {
+          "key": "l",
+          "input": {
+            "action": "cycle"
+          }
+        }
+      ],
+      "readTwin": "loop.read"
+    },
+    {
+      "name": "loop.read",
+      "description": "Read the A-B loop: phase (off, a, ab), aS and bS in seconds, and what the engine is looping.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "label": "Loop state"
+    },
+    {
+      "name": "chapter.next",
+      "description": "Seek to the start of the next chapter.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "label": "Next chapter",
+      "shortcuts": [
+        {
+          "key": "pagedown"
+        }
+      ],
+      "readTwin": "chapter.list"
+    },
+    {
+      "name": "chapter.previous",
+      "description": "Seek to the start of the current chapter when more than 3 s into it, otherwise to the previous chapter.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "label": "Previous chapter",
+      "shortcuts": [
+        {
+          "key": "pageup"
+        }
+      ],
+      "readTwin": "chapter.list"
+    },
+    {
+      "name": "chapter.go",
+      "description": "Seek to the start of the chapter at a zero-based index.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "index"
+        ]
+      },
+      "label": "Go to chapter",
+      "readTwin": "chapter.list"
+    },
+    {
+      "name": "chapter.list",
+      "description": "List the chapters (title, startS, endS) and the current chapter index; panel opens or closes the chapters panel.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "panel": {
+            "type": "boolean",
+            "description": "true opens the panel, false closes it"
+          }
+        },
+        "required": []
+      },
+      "label": "Chapters"
+    },
+    {
+      "name": "playback.jump-to",
+      "description": "Seek to a typed time such as \"1:23:45\", \"83:20\", \"90\" (seconds) or \"45%\"; with no time it opens the jump-to-time box.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "time": {
+            "type": [
+              "string",
+              "number"
+            ],
+            "description": "h:mm:ss, m:ss, seconds, or a percentage like \"45%\""
+          }
+        },
+        "required": []
+      },
+      "label": "Jump to time",
+      "shortcuts": [
+        {
+          "key": "t"
+        }
+      ],
+      "readTwin": "state.read"
+    },
+    {
+      "name": "audio.track",
+      "description": "Switch to the audio track at a zero-based index, or step through the tracks by delta; with no input it moves to the next track.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "delta": {
+            "type": "integer",
+            "description": "Tracks to move; negative goes back"
+          }
+        },
+        "required": []
+      },
+      "label": "Audio track",
+      "shortcuts": [
+        {
+          "key": "v"
+        }
+      ],
+      "readTwin": "audio.read"
+    },
+    {
+      "name": "audio.delay",
+      "description": "Offset the audio against the video from -10 to 10 seconds (positive plays audio later): set delayS, step by deltaS, or reset to 0.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "delayS": {
+            "type": "number",
+            "minimum": -10,
+            "maximum": 10
+          },
+          "deltaS": {
+            "type": "number",
+            "description": "Change from the current delay in seconds"
+          },
+          "reset": {
+            "type": "boolean"
+          }
+        },
+        "required": []
+      },
+      "label": "Audio delay",
+      "shortcuts": [
+        {
+          "key": "j",
+          "input": {
+            "deltaS": -0.05
+          }
+        },
+        {
+          "key": "k",
+          "input": {
+            "deltaS": 0.05
+          }
+        }
+      ],
+      "readTwin": "audio.read"
+    },
+    {
+      "name": "audio.read",
+      "description": "List the audio tracks (title, language, codec, channels), the selected index and the audio delay; panel opens or closes the audio panel.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "panel": {
+            "type": "boolean",
+            "description": "true opens the panel, false closes it"
+          }
+        },
+        "required": []
+      },
+      "label": "Audio tracks"
+    },
+    {
+      "name": "view.snapshot",
+      "description": "Save the current video frame as a PNG at the size the video is drawn; with save false, return it as a data URL instead.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "save": {
+            "type": "boolean",
+            "description": "false returns the PNG as a data URL and saves nothing; default true"
+          }
+        },
+        "required": []
+      },
+      "label": "Snapshot",
+      "shortcuts": [
+        {
+          "key": "shift+s"
+        }
+      ],
+      "readTwin": "view.read"
+    },
+    {
+      "name": "view.aspect",
+      "description": "Set the display aspect ratio (auto, 16:9, 4:3, 2.35:1 or 1:1); with no input it moves to the next one.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "16:9",
+              "4:3",
+              "2.35:1",
+              "1:1"
+            ]
+          }
+        },
+        "required": []
+      },
+      "label": "Aspect ratio",
+      "shortcuts": [
+        {
+          "key": "a"
+        }
+      ],
+      "readTwin": "view.read"
+    },
+    {
+      "name": "view.crop",
+      "description": "Set the crop (none, pillarbox removes the side bars of 4:3 inside 16:9, letterbox removes the bars of 2.35:1 inside 16:9); with no input it moves to the next one.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "none",
+              "pillarbox",
+              "letterbox"
+            ]
+          }
+        },
+        "required": []
+      },
+      "label": "Crop",
+      "shortcuts": [
+        {
+          "key": "c"
+        }
+      ],
+      "readTwin": "view.read"
+    },
+    {
+      "name": "view.read",
+      "description": "Read the aspect and crop chosen, the view the engine applies, the last snapshot, and the Picture-in-Picture state.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "label": "Picture state"
+    },
+    {
+      "name": "view.pip",
+      "description": "Open or close Picture-in-Picture (a document window with the video and its controls where the browser offers one, else a video window); with no input it toggles.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "on": {
+            "type": "boolean"
+          }
+        },
+        "required": []
+      },
+      "label": "Picture-in-Picture",
+      "shortcuts": [
+        {
+          "key": "p"
+        }
+      ],
+      "readTwin": "view.read"
+    },
+    {
+      "name": "queue.open-folder",
+      "description": "Ask the person to pick a folder, queue its videos in natural sort order and play the first.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "label": "Open folder",
+      "readTwin": "queue.read"
+    },
+    {
+      "name": "queue.play",
+      "description": "Play the queue item at an index (natural folder order, starting at 0).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Item index from queue.read"
+          }
+        },
+        "required": [
+          "index"
+        ]
+      },
+      "label": "Play queue item",
+      "readTwin": "queue.read"
+    },
+    {
+      "name": "queue.next",
+      "description": "Play the next queue item, following shuffle and repeat-all.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "label": "Next in queue",
+      "shortcuts": [
+        {
+          "key": "n"
+        }
+      ],
+      "readTwin": "queue.read"
+    },
+    {
+      "name": "queue.previous",
+      "description": "Restart the current item if more than 3 seconds in, else play the previous queue item.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "label": "Previous in queue",
+      "shortcuts": [
+        {
+          "key": "shift+n"
+        }
+      ],
+      "readTwin": "queue.read"
+    },
+    {
+      "name": "queue.repeat",
+      "description": "Set repeat to off, all or one; with no input it cycles off, all, one.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "off",
+              "all",
+              "one"
+            ]
+          }
+        },
+        "required": []
+      },
+      "label": "Repeat",
+      "readTwin": "queue.read"
+    },
+    {
+      "name": "queue.shuffle",
+      "description": "Turn shuffle on or off; with no input it toggles. The current item stays current.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "on": {
+            "type": "boolean"
+          }
+        },
+        "required": []
+      },
+      "label": "Shuffle",
+      "readTwin": "queue.read"
+    },
+    {
+      "name": "queue.read",
+      "description": "Read the queue: items, current index, play order, repeat, shuffle, sibling subtitle names and whether the panel is open.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "label": "Queue"
+    },
+    {
+      "name": "queue.panel",
+      "description": "Open or close the queue panel; with no input it toggles.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "open": {
+            "type": "boolean"
+          }
+        },
+        "required": []
+      },
+      "label": "Queue panel",
+      "shortcuts": [
+        {
+          "key": "q"
+        }
+      ],
+      "readTwin": "queue.read"
+    },
+    {
+      "name": "help.show",
+      "description": "Open or close the keyboard help sheet; with no input it toggles. Returns whether the sheet is open and the shortcuts it lists.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "open": {
+            "type": "boolean",
+            "description": "true opens, false closes"
+          }
+        },
+        "required": []
+      },
+      "label": "Keyboard shortcuts",
+      "shortcuts": [
+        {
+          "key": "?"
+        }
+      ],
+      "readTwin": "state.read"
+    }
+  ]
+}

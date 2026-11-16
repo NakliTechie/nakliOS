@@ -2531,25 +2531,187 @@
       "id": "reel",
       "repo": "NakliTechie/reel",
       "requestedRef": "main",
-      "resolvedCommit": "545a8c540c7be4a241c724c0224c97f9b0a83cbb",
+      "resolvedCommit": "3259994dbd5f877fd78c9da2ac146a5f43b04358",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "b3020b620e419adb8c853b06b79456f424d10ab5aaedd08d870550c65317ea18",
-          "bytes": 51319
+          "sha256": "3904ba9e7609c107a4b13ae029266d0aa8c0d8c4613f12c908cef3e1417e7f02",
+          "bytes": 58666
         },
         {
-          "source": "vendor/mediabunny/mediabunny-1.51.0.min.mjs",
-          "destination": "vendor/mediabunny/mediabunny-1.51.0.min.mjs",
-          "sha256": "1cd761e442a173c461b1a63cba29cb0816383f3b93b78d64b6e44c6dbce85d2b",
-          "bytes": 627244
+          "source": "commands.json",
+          "destination": "commands.json",
+          "sha256": "7d66745ec04e18ac31083040501f5f79f75ac2471da5edb13ecb9336b921efb1",
+          "bytes": 24397
+        },
+        {
+          "source": "engine/reel-engine.mjs",
+          "destination": "engine/reel-engine.mjs",
+          "sha256": "8f81495ca8479b558bd8708a3ebf142311a0e93fb7666b6f8bf69211e376bd11",
+          "bytes": 114668
+        },
+        {
+          "source": "app/modules.mjs",
+          "destination": "app/modules.mjs",
+          "sha256": "7a21174d3767b35218bbd67a7beb63ffacd6605600df4605d6c3b80761370786",
+          "bytes": 971
+        },
+        {
+          "source": "app/core/commands.mjs",
+          "destination": "app/core/commands.mjs",
+          "sha256": "596560f8f50803ef3959fd19b9b642309262a4bc9e16ee0721ca72d01e53394c",
+          "bytes": 3725
+        },
+        {
+          "source": "app/core/registry.mjs",
+          "destination": "app/core/registry.mjs",
+          "sha256": "d15639c84004c28fcc963603855029b061a5e11ae431cddcaf04d5602fa18ab4",
+          "bytes": 4840
+        },
+        {
+          "source": "app/help/index.mjs",
+          "destination": "app/help/index.mjs",
+          "sha256": "0cab12efa6d764b8a44870f5d758dd5961a445cbddfec26ea387adc2ec9396f8",
+          "bytes": 11621
+        },
+        {
+          "source": "app/picture/index.mjs",
+          "destination": "app/picture/index.mjs",
+          "sha256": "0c8f3a5705d81f9da59829be32ac77a4b8b4f4433b26c81bfa70e8aebb6ee71c",
+          "bytes": 12875
+        },
+        {
+          "source": "app/platform/index.mjs",
+          "destination": "app/platform/index.mjs",
+          "sha256": "a9054fd9cab5612e057ba9c4c6b481956332efabd962e85d4928b971aeb3caf0",
+          "bytes": 19877
+        },
+        {
+          "source": "app/queue/index.mjs",
+          "destination": "app/queue/index.mjs",
+          "sha256": "04516c35d5c7217816a2abf386c22db909b24b733733f3df90db92cfee6578eb",
+          "bytes": 23343
+        },
+        {
+          "source": "app/queue/logic.mjs",
+          "destination": "app/queue/logic.mjs",
+          "sha256": "48c9712d75ab6c15f873c2ae7d0bf3f01e696a9bf480e01c192408dcce9a3806",
+          "bytes": 7742
+        },
+        {
+          "source": "app/rung/index.mjs",
+          "destination": "app/rung/index.mjs",
+          "sha256": "ede5ff318722705d9ed3dceae1ae28ee3cba04f66eab664cdc603a4c65507dfa",
+          "bytes": 5289
+        },
+        {
+          "source": "app/subtitles/captions.mjs",
+          "destination": "app/subtitles/captions.mjs",
+          "sha256": "1f65faf9e1d6218ae4c9fcf008630f3626c21d97cc7b1581f12627beca0d85f7",
+          "bytes": 6875
+        },
+        {
+          "source": "app/subtitles/cues.mjs",
+          "destination": "app/subtitles/cues.mjs",
+          "sha256": "a424fddef9395384f518ddda826c9223a6f3be70035bd29fff8e35e88c9ecb52",
+          "bytes": 1212
+        },
+        {
+          "source": "app/subtitles/decode.mjs",
+          "destination": "app/subtitles/decode.mjs",
+          "sha256": "542eebfa319884cb91d5aa34e50be7ec62859362dd17e83befd13cde0f44e1ef",
+          "bytes": 1116
+        },
+        {
+          "source": "app/subtitles/index.mjs",
+          "destination": "app/subtitles/index.mjs",
+          "sha256": "a61d8c32ef8b49d15b867d3052095db750d9df4c11b24ee0b2dafd1f8ea13513",
+          "bytes": 29429
+        },
+        {
+          "source": "app/subtitles/match.mjs",
+          "destination": "app/subtitles/match.mjs",
+          "sha256": "7b9bcb0ebc2ab1b166a8846cd5ee83ced9466291bf08cce1c292cf9919e426ac",
+          "bytes": 2729
+        },
+        {
+          "source": "app/subtitles/parse.mjs",
+          "destination": "app/subtitles/parse.mjs",
+          "sha256": "a15f9243cddcea0ce133b3030d80ac6747bf3901761ae7e78cec04a543146803",
+          "bytes": 11974
+        },
+        {
+          "source": "app/transport/index.mjs",
+          "destination": "app/transport/index.mjs",
+          "sha256": "6f9f84b277c01347b67518a68a42036ba7931ca4eb21a3cded995235225d3dd5",
+          "bytes": 32644
+        },
+        {
+          "source": "app/transport/logic.mjs",
+          "destination": "app/transport/logic.mjs",
+          "sha256": "f38bc9b1cf839f88fbffc0c41a29693492684143571ca69e982ca552c099cb51",
+          "bytes": 7465
+        },
+        {
+          "source": "vendor/mediabunny/mediabunny-1.66.0.min.mjs",
+          "destination": "vendor/mediabunny/mediabunny-1.66.0.min.mjs",
+          "sha256": "c26f218c23c3d2e97574c9399a75dccb91ceddcac3a6fd4593e9a390320b494a",
+          "bytes": 757382
         },
         {
           "source": "vendor/mediabunny/LICENSE-MPL-2.0.txt",
           "destination": "vendor/mediabunny/LICENSE-MPL-2.0.txt",
           "sha256": "3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d04",
           "bytes": 16726
+        },
+        {
+          "source": "vendor/mediabunny-ac3/mediabunny-ac3-1.66.0.min.mjs",
+          "destination": "vendor/mediabunny-ac3/mediabunny-ac3-1.66.0.min.mjs",
+          "sha256": "6a0befc4f1a4f8f0cfab40e027509da5a07f2dfd9c6b9c71905245ce9839e409",
+          "bytes": 1177625
+        },
+        {
+          "source": "vendor/mediabunny-ac3/LICENSE-MPL-2.0.txt",
+          "destination": "vendor/mediabunny-ac3/LICENSE-MPL-2.0.txt",
+          "sha256": "3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d04",
+          "bytes": 16726
+        },
+        {
+          "source": "vendor/mediabunny-ac3/licenses/ffmpeg/LICENSE.md",
+          "destination": "vendor/mediabunny-ac3/licenses/ffmpeg/LICENSE.md",
+          "sha256": "e6dc72d5665a1ebd6dcc841de59278dad4ca77ecc47b03f1064a55c3e9ea8bb8",
+          "bytes": 4352
+        },
+        {
+          "source": "vendor/mediabunny-ac3/licenses/ffmpeg/COPYING.LGPLv2.1",
+          "destination": "vendor/mediabunny-ac3/licenses/ffmpeg/COPYING.LGPLv2.1",
+          "sha256": "246041b6ecf9bc32d718a62c57877c78b5eb397b6467e74ed7ae2626ab189c30",
+          "bytes": 26517
+        },
+        {
+          "source": "vendor/mediabunny-dts/mediabunny-dts-1.66.0.min.mjs",
+          "destination": "vendor/mediabunny-dts/mediabunny-dts-1.66.0.min.mjs",
+          "sha256": "0d90039f92b802a65ce575803ca7fee35ba1a6623ce4a8d5a010d8d0a35a5293",
+          "bytes": 1655248
+        },
+        {
+          "source": "vendor/mediabunny-dts/LICENSE-MPL-2.0.txt",
+          "destination": "vendor/mediabunny-dts/LICENSE-MPL-2.0.txt",
+          "sha256": "3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d04",
+          "bytes": 16726
+        },
+        {
+          "source": "vendor/mediabunny-dts/licenses/ffmpeg/LICENSE.md",
+          "destination": "vendor/mediabunny-dts/licenses/ffmpeg/LICENSE.md",
+          "sha256": "e6dc72d5665a1ebd6dcc841de59278dad4ca77ecc47b03f1064a55c3e9ea8bb8",
+          "bytes": 4352
+        },
+        {
+          "source": "vendor/mediabunny-dts/licenses/ffmpeg/COPYING.LGPLv2.1",
+          "destination": "vendor/mediabunny-dts/licenses/ffmpeg/COPYING.LGPLv2.1",
+          "sha256": "246041b6ecf9bc32d718a62c57877c78b5eb397b6467e74ed7ae2626ab189c30",
+          "bytes": 26517
         }
       ]
     },

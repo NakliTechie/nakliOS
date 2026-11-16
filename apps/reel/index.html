@@ -4,12 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <!-- CSP: default-src 'self'. Inline style+script allowed for the no-build app shell;
-     NO 'unsafe-eval' (handoff §7: no eval outside wasm instantiation).
+     NO 'unsafe-eval' (handoff §7: no eval outside wasm instantiation); 'wasm-unsafe-eval' lets the
+     software audio rung (AC-3, E-AC-3, DTS) compile its WebAssembly, which is that one exception.
      CDN/wasm origins (jsdelivr/unpkg) get added to connect-src/script-src when the
      R2 rung + Whisper sidecar land. Tighten inline to sha256 hashes once the M1
      service-worker shim is in place. -->
 <!-- frame-ancestors must be delivered as an HTTP response header; browsers ignore it in meta CSP. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="reel-version" content="0.0.11-m0">
 <meta name="description" content="Play MKV, MP4, and WebM videos privately in your browser. Files stay on your device.">
 <meta name="theme-color" content="#000000">
@@ -97,6 +98,8 @@
   .player-honesty .local{margin-left:auto;color:var(--faint)}
   .player-honesty .local b{color:var(--dim);font-weight:500}
   .rung{display:flex;gap:6px;align-items:center}
+  .rung.sw .dot{background:var(--sw)}
+  .rung.refused .dot{background:var(--refused)}
   .dot{width:6px;height:6px;border-radius:50%;background:var(--hw)}
   #player-seek{display:block;width:100%;height:22px;margin:0;accent-color:var(--accent);cursor:pointer}
   .player-controls{display:flex;align-items:center;gap:5px}
@@ -108,6 +111,15 @@
   .player-controls .timecode b{color:var(--text);font-weight:500}
   .player-controls .spacer{flex:1}
   #player-volume{width:92px;accent-color:var(--accent)}
+  .mount-row{display:flex;justify-content:center;gap:10px;margin-top:14px}
+  .mount-row:empty{display:none}
+  .mount-stage{position:absolute;inset:0;pointer-events:none}
+  .seek-wrap{position:relative}
+  .mount-controls{display:contents}
+  #player{position:relative}
+  .mount-panels{position:absolute;top:70px;right:20px;bottom:20px;width:min(340px,90vw);overflow:auto;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius);padding:14px;z-index:5}
+  .mount-panels[hidden]{display:none}
+  .mount-panels h2{font-size:13px;font-weight:600;margin-bottom:10px}
   #player-details{color:var(--dim);font-size:12px;line-height:1.5}
   #player-details summary{width:max-content;cursor:pointer;color:var(--dim)}
   #player-details p{margin-top:8px;overflow-wrap:anywhere}
@@ -159,8 +171,9 @@
     <p class="product-summary" data-t="product.summary">A private video player for files on your device.</p>
     <div class="dropzone" id="drop" role="button" tabindex="0">
       <h1 data-t="drop.title">Drop a video, or click to open</h1>
-      <p data-t="drop.formats">MKV · MP4 · WebM</p>
+      <p data-t="drop.formats">MKV · MP4 · WebM · MOV · TS</p>
     </div>
+    <div class="mount-row" id="mount-empty-actions"></div>
     <p class="privacy-line" data-t-html="privacy">Plays entirely on this device. <em>No upload, no account, no telemetry.</em></p>
     <div class="metadata-sync" id="metadata-sync" hidden>
       <button id="metadata-sync-action" type="button"></button>
@@ -176,35 +189,41 @@
 <!-- primary playback surface -->
 <section class="screen" id="player">
   <header class="player-topbar">
-    <button id="player-back" data-t="action.back">← Back</button>
+    <button id="player-back" data-command="media.close" data-t="action.back">← Back</button>
     <div class="player-copy">
       <h1 id="player-title" tabindex="-1" data-t="player.untitled">Video</h1>
       <p id="player-status" role="status" aria-live="polite" data-t="player.loading">Reading this video on your device…</p>
     </div>
-    <button id="player-open" data-t="action.openAnother">Open another…</button>
+    <button id="player-open" data-command="media.open" data-t="action.openAnother">Open another…</button>
   </header>
   <div class="player-stage">
     <canvas id="engine-canvas" width="1" height="1" aria-labelledby="player-title"></canvas>
+    <div class="mount-stage" id="mount-stage"></div>
     <div class="player-capsule">
       <div class="player-honesty" id="player-honesty"></div>
-      <input id="player-seek" type="range" min="0" max="0" value="0" step="0.001" data-t-aria-label="control.seek">
+      <div class="seek-wrap" id="mount-seek">
+        <input id="player-seek" data-command="playback.seek" type="range" min="0" max="0" value="0" step="0.001" data-t-aria-label="control.seek">
+      </div>
       <div class="player-controls">
-        <button id="player-play" type="button" data-t-aria-label="control.play">▶</button>
-        <button id="player-back-ten" type="button" data-t-aria-label="control.backTen">↶ 10</button>
+        <button id="player-play" data-command="playback.toggle" type="button" data-t-aria-label="control.play">▶</button>
+        <button id="player-back-ten" data-command="playback.skip" type="button" data-t-aria-label="control.backTen">↶ 10</button>
         <span class="timecode"><b id="player-position">0:00</b> / <span id="player-duration">0:00</span></span>
+        <span class="mount-controls" id="mount-controls-left"></span>
         <span class="spacer"></span>
-        <select id="player-rate" data-t-aria-label="control.speed">
+        <select id="player-rate" data-command="playback.rate" data-t-aria-label="control.speed">
           <option value="0.25">0.25×</option><option value="0.5">0.5×</option>
           <option value="0.75">0.75×</option><option value="1" selected>1×</option>
           <option value="1.25">1.25×</option><option value="1.5">1.5×</option>
           <option value="2">2×</option><option value="3">3×</option><option value="4">4×</option>
         </select>
-        <button id="player-mute" type="button" data-t-aria-label="control.mute">🔊</button>
-        <input id="player-volume" type="range" min="0" max="1" value="1" step="0.05" data-t-aria-label="control.volume">
-        <button id="player-fullscreen" type="button" data-t-aria-label="control.fullscreen">⛶</button>
+        <button id="player-mute" data-command="audio.mute" type="button" data-t-aria-label="control.mute">🔊</button>
+        <input id="player-volume" data-command="audio.volume" type="range" min="0" max="1" value="1" step="0.05" data-t-aria-label="control.volume">
+        <span class="mount-controls" id="mount-controls-right"></span>
+        <button id="player-fullscreen" data-command="view.fullscreen" type="button" data-t-aria-label="control.fullscreen">⛶</button>
       </div>
     </div>
   </div>
+  <aside class="mount-panels" id="mount-panels" hidden></aside>
   <details id="player-details">
     <summary data-t="player.details">File details</summary>
     <p id="player-file"></p>
@@ -215,7 +234,7 @@
 <section class="screen" id="degraded">
   <div class="notice-card">
     <h2 data-t="degraded.title">This browser doesn't expose WebCodecs</h2>
-    <p data-t="degraded.body">Reel's engine needs WebCodecs (Chromium 120+ or Safari 17.4+). This browser doesn't expose it.</p>
+    <p data-t="degraded.body">Reel's engine needs WebCodecs video decoding (Chromium 120+, Safari 17.4+ or Firefox 130+ on desktop). This browser doesn't expose it.</p>
     <p data-t="degraded.fallback">You can still play MP4 and WebM with the browser's built-in player below.</p>
     <video id="degraded-video" controls playsinline hidden aria-label="Browser fallback player"></video>
     <button id="degraded-pick" data-t="action.openFile">Open MP4 / WebM…</button>
@@ -223,11 +242,15 @@
 </section>
 
 <div id="toast-host" aria-live="polite" aria-atomic="false"></div>
+<div id="mount-dialogs"></div>
 
 <input type="file" id="file-input" accept="video/mp4,video/webm,video/x-matroska,.mp4,.mkv,.webm" hidden>
 
 <script type="module">
 import { createReelEngine } from './engine/reel-engine.mjs';
+import { createRegistry, keySpec } from './app/core/registry.mjs';
+import { MODULES } from './app/modules.mjs';
+import { COMMANDS as CORE_COMMANDS } from './app/core/commands.mjs';
 
 /* ============================================================================
  * Reel — sovereign browser media player. M0 engine spine (Batch A).
@@ -268,7 +291,7 @@ const STRINGS = {
     'wordmark': 'Reel',
     'product.summary': 'A private video player for files on your device.',
     'drop.title': 'Drop a video, or click to open',
-    'drop.formats': 'MKV · MP4 · WebM',
+    'drop.formats': 'MKV · MP4 · WebM · MOV · TS',
     'action.openFile': 'Open file…',
     'action.openAnother': 'Open another…',
     'action.back': '← Back',
@@ -288,7 +311,7 @@ const STRINGS = {
     'player.trackCount.other': '{count} tracks',
     'player.details': 'File details',
     'degraded.title': "This browser doesn't expose WebCodecs",
-    'degraded.body': "Reel's engine needs WebCodecs (Chromium 120+ or Safari 17.4+). This browser doesn't expose it.",
+    'degraded.body': "Reel's engine needs WebCodecs video decoding (Chromium 120+, Safari 17.4+ or Firefox 130+ on desktop). This browser doesn't expose it.",
     'degraded.fallback': "You can still play MP4 and WebM with the browser's built-in player below.",
     'err.generic': 'Something went wrong',
     'err.open': "Can't open this video",
@@ -304,6 +327,8 @@ const STRINGS = {
     'control.volume': 'Volume',
     'control.fullscreen': 'Fullscreen',
     'honesty.webCodecs': 'WebCodecs R1',
+    'honesty.software': 'software decoder',
+    'honesty.refused': 'refused: {reason}',
     'honesty.local': 'all decoding on this device',
     'metadata.resumeUnavailable': 'Resume is unavailable for this file.',
     'metadata.browser': 'Watch history stays in this browser.',
@@ -721,9 +746,12 @@ let lastPlaybackError = null;
 let lastResumePositionS = 0;
 let lastResumeError = null;
 
+/* The engine declares what it can open (contract §Engine). The fallback is the M0 set. */
+const VIDEO_EXTENSIONS = Engine.supportedExtensions || ['.mp4', '.mkv', '.webm'];
 function supportsPlayback(file) {
-  return /\.(mkv|mp4|webm)$/i.test(file.name)
-    || ['video/mp4', 'video/webm', 'video/x-matroska'].includes(file.type);
+  const name = String(file.name || '').toLowerCase();
+  return VIDEO_EXTENSIONS.some(ext => name.endsWith(ext))
+    || ['video/mp4', 'video/webm', 'video/x-matroska', 'video/quicktime', 'video/mp2t'].includes(file.type);
 }
 
 function formatTime(seconds) {
@@ -797,6 +825,9 @@ function updatePlayerUi() {
     lastResumePositionS = state.clock.positionS;
     persistCurrentResume().catch(() => {});
   }
+  for (const fn of frameHooks) {
+    try { fn(state); } catch (error) { surface('module', error); }
+  }
   playerUiFrame = requestAnimationFrame(updatePlayerUi);
 }
 
@@ -825,7 +856,10 @@ function renderHonesty(metadata) {
   const local = document.createElement('span');
   local.className = 'local';
   local.textContent = t('honesty.local');
-  const items = [video && rung(video), audio && rung(audio)];
+  const selectedAudio = metadata.tracks.filter(track => track.type === 'audio')[store.tracks.selected.audio ?? 0] || audio;
+  const audioItem = selectedAudio && rung(selectedAudio);
+  if (audioItem) audioItem.dataset.audioBadge = '';
+  const items = [video && rung(video), audioItem];
   if (subtitles.length) {
     const text = document.createElement('span');
     text.className = 'rung';
@@ -834,6 +868,19 @@ function renderHonesty(metadata) {
   }
   host.replaceChildren(...items.filter(Boolean), local);
 }
+
+/* The audio badge names the decoder actually used (WebCodecs, the software rung, or a refusal). */
+function updateAudioBadge({ codec, route, message, name } = {}, refused = false) {
+  const item = $('#player-honesty [data-audio-badge]');
+  if (!item) return;
+  const label = refused ? t('honesty.refused', { reason: name || message || codec })
+    : route === 'software' ? t('honesty.software') : t('honesty.webCodecs');
+  item.lastChild.textContent = `${codec || ''} → ${label}`;
+  item.classList.toggle('sw', route === 'software' && !refused);
+  item.classList.toggle('refused', refused);
+}
+Events.on('playback:audio-route', event => updateAudioBadge(event.detail));
+Events.on('playback:audio-refused', event => updateAudioBadge(event.detail, true));
 
 function clearPlayerMedia() {
   persistCurrentResume().catch(() => {});
@@ -856,6 +903,7 @@ function clearPlayerMedia() {
 function returnToEmpty() {
   playerLoadId += 1;
   clearPlayerMedia();
+  Events.emit('ui:media-cleared', {});
   show('empty');
   renderRecent();
   globalThis.naklios?.title('Reel');
@@ -916,6 +964,7 @@ async function openFile(handle) {
     if (persistenceWarning) toast(t('metadata.resumeUnavailable'), 'err', persistenceWarning.message);
     globalThis.naklios?.title(`Reel — ${file.name}`);
     startPlayerUi();
+    Events.emit('ui:media-loaded', { name: file.name, metadata });
   } catch (error) {
     if (error?.code === 'ERR_ENGINE_LOAD_SUPERSEDED') return;
     if (requestId === playerLoadId) returnToEmpty();
@@ -943,11 +992,7 @@ async function pickFile() {
   if (caps.fsa) {
     try {
       const [handle] = await showOpenFilePicker({
-        types: [{ description: 'Video', accept: {
-          'video/mp4': ['.mp4'],
-          'video/webm': ['.webm'],
-          'video/x-matroska': ['.mkv'],
-        } }],
+        types: [{ description: 'Video', accept: { 'video/*': VIDEO_EXTENSIONS } }],
         excludeAcceptAllOption: true,
       });
       return openFile(handle);
@@ -1063,30 +1108,112 @@ function toggleFullscreen() {
   return $('#player').requestFullscreen();
 }
 
-const KEYMAP = Object.freeze({
-  ' ': () => togglePlayerPlayback(),
-  arrowleft: () => seekPlayerBy(-10),
-  'shift+arrowleft': () => seekPlayerBy(-3),
-  arrowright: () => seekPlayerBy(10),
-  'shift+arrowright': () => seekPlayerBy(3),
-  arrowup: () => setPlayerVolume(store.clock.volume + 0.05),
-  arrowdown: () => setPlayerVolume(store.clock.volume - 0.05),
-  m: () => Engine.setMuted(!store.clock.muted),
-  f: () => toggleFullscreen(),
-  '[': () => Engine.setRate(Math.max(0.25, store.clock.rate - 0.25)),
-  ']': () => Engine.setRate(Math.min(4, store.clock.rate + 0.25)),
-  z: () => Engine.setRate(1),
-});
+/* Commands and keys: one table (app/core/registry.mjs). Keys never use Ctrl or Cmd. */
+const registry = createRegistry();
+registry.define(CORE_COMMANDS);
+
+function bindCoreCommands() {
+  const h = registry.handle;
+  h('playback.toggle', () => togglePlayerPlayback());
+  h('playback.play', () => Engine.play());
+  h('playback.pause', () => Engine.pause());
+  h('playback.seek', ({ positionS }) => Engine.seek(Math.max(0, Math.min(store.media.duration || 0, positionS))));
+  h('playback.skip', ({ seconds }) => seekPlayerBy(seconds));
+  h('playback.rate', ({ rate, delta }) => {
+    const next = Number.isFinite(rate) ? rate : store.clock.rate + (Number(delta) || 0);
+    Engine.setRate(Math.max(0.25, Math.min(4, next)));
+  });
+  h('audio.volume', ({ volume, delta }) => setPlayerVolume(Number.isFinite(volume) ? volume : store.clock.volume + (Number(delta) || 0)));
+  h('audio.mute', ({ muted }) => Engine.setMuted(typeof muted === 'boolean' ? muted : !store.clock.muted));
+  h('view.fullscreen', ({ on }) => {
+    if (typeof on === 'boolean' && on === !!document.fullscreenElement) return;
+    return toggleFullscreen();
+  });
+  h('media.open', () => pickFile());
+  h('media.close', () => returnToEmpty());
+  h('state.read', () => Engine.state());
+  h('caps.read', () => Engine.caps());
+}
 
 function handlePlayerKeydown(event) {
-  if (store.ui.screen !== 'player' || event.ctrlKey || event.metaKey || event.altKey) return;
-  if (['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON'].includes(event.target.tagName)) return;
-  const key = event.key.toLowerCase();
-  const binding = event.shiftKey && ['arrowleft', 'arrowright'].includes(key) ? `shift+${key}` : key;
-  const action = KEYMAP[binding];
-  if (!action) return;
+  if (store.ui.screen !== 'player' || event.ctrlKey || event.metaKey) return;
+  if (['INPUT', 'SELECT', 'TEXTAREA'].includes(event.target.tagName) || event.target.isContentEditable) return;
+  // Buttons keep Space and Enter for activation; every other key reaches the table.
+  if (event.target.tagName === 'BUTTON' && (event.key === ' ' || event.key === 'Enter')) return;
+  const hit = registry.forShortcut(keySpec(event));
+  if (!hit) return;
   event.preventDefault();
-  Promise.resolve(action()).catch(error => surface('playback', error));
+  Promise.resolve(registry.run(hit.def.name, hit.input)).catch(error => surface('playback', error));
+}
+
+/* Feature modules (app/modules.mjs) receive this context; see docs/build/reel-v1-contract.md. */
+const frameHooks = new Set();
+const ctx = Object.freeze({
+  Engine, store, Events, Storage, MetadataSync, registry, CONFIG,
+  t, tn, applyI18n, toast, surface, formatTime, show, $,
+  canvas: () => $('#engine-canvas'),
+  openFile: handle => openFile(handle),
+  pickFile: () => pickFile(),
+  supportsPlayback: file => supportsPlayback(file),
+  videoExtensions: () => [...VIDEO_EXTENSIONS],
+  persistResume: () => persistCurrentResume(),
+  nakliosBridge: () => NakliOSRuntime.bridge(),
+  addStrings(table) { Object.assign(STRINGS.en, table); },
+  addStyle(css) {
+    const style = document.createElement('style');
+    style.textContent = css;
+    document.head.append(style);
+  },
+  onFrame(fn) { frameHooks.add(fn); return () => frameHooks.delete(fn); },
+  on: (type, fn) => Events.on(type, event => fn(event.detail)),
+  mounts: Object.freeze({
+    emptyActions: $('#mount-empty-actions'),
+    stage: $('#mount-stage'),
+    seek: $('#mount-seek'),
+    controlsLeft: $('#mount-controls-left'),
+    controlsRight: $('#mount-controls-right'),
+    dialogs: $('#mount-dialogs'),
+  }),
+  panels: (() => {
+    const host = $('#mount-panels');
+    const panels = new Map();
+    let openId = null;
+    function register(id, title) {
+      const section = document.createElement('section');
+      section.dataset.panel = id;
+      section.hidden = true;
+      const heading = document.createElement('h2');
+      heading.textContent = title;
+      const body = document.createElement('div');
+      section.append(heading, body);
+      host.append(section);
+      panels.set(id, section);
+      return body;
+    }
+    function open(id) {
+      for (const [key, section] of panels) section.hidden = key !== id;
+      host.hidden = false;
+      openId = id;
+      Events.emit('ui:panel', { id });
+    }
+    function close() {
+      host.hidden = true;
+      openId = null;
+      Events.emit('ui:panel', { id: null });
+    }
+    function toggle(id) { return openId === id ? close() : open(id); }
+    return Object.freeze({ register, open, close, toggle, current: () => openId });
+  })(),
+});
+
+function installModules() {
+  for (const { mod } of MODULES) {
+    registry.define(mod.COMMANDS || []);
+    Object.assign(STRINGS.en, mod.STRINGS || {});
+  }
+  for (const { id, mod } of MODULES) {
+    try { mod.install(ctx); } catch (error) { surface('module', new Error(`${id}: ${error.message}`)); }
+  }
 }
 
 function wireEmpty() {
@@ -1107,6 +1234,13 @@ function wireEmpty() {
     const opening = store.ui.screen === 'degraded' ? openDegradedFile(file) : openFile(file);
     Promise.resolve(opening).catch(error => surface('file-open', error));
     e.target.value = '';
+  });
+  // A video dropped on the player screen replaces the current one; subtitle files are the subtitles module's.
+  $('#player').addEventListener('dragover', e => { if (e.dataTransfer?.types?.includes('Files')) e.preventDefault(); });
+  $('#player').addEventListener('drop', e => {
+    const video = [...(e.dataTransfer?.files || [])].find(file => supportsPlayback(file));
+    e.preventDefault();
+    if (video) Promise.resolve(openFile(video)).catch(error => surface('file-open', error));
   });
   $('#player-back').addEventListener('click', returnToEmpty);
   $('#player-open').addEventListener('click', beginPick);
@@ -1150,6 +1284,13 @@ function installAgentFace() {
     setVolume: volume => Engine.setVolume(volume), setMuted: muted => Engine.setMuted(muted),
     state: () => Engine.state(), snapshot: () => Engine.snapshot(),
     subtitles: { export: options => Engine.subtitles.export(options) }, caps: () => Engine.caps(),
+    supportedExtensions: [...VIDEO_EXTENSIONS],
+    engine: Engine,
+    commands: Object.freeze({
+      list: () => registry.list(),
+      run: (name, input) => registry.run(name, input),
+      unbound: () => registry.unbound(),
+    }),
     debug: Object.freeze({
       vendorVersion: Demux.vendorVersion,
       probe(handle) {
@@ -1190,6 +1331,9 @@ function installAgentFace() {
       events() {
         return Events.snapshot();
       },
+      emit(type, detail) {
+        return Events.emit(type, detail);
+      },
       openFile(handle) {
         return openFile(handle);
       },
@@ -1213,6 +1357,8 @@ function installAgentFace() {
 
 /* ------------------------------------------------------------------ BOOT -- */
 function boot() {
+  bindCoreCommands();
+  installModules();
   applyI18n();
   Engine.attach($('#engine-canvas'));
   wireEmpty();
@@ -1229,7 +1375,7 @@ function boot() {
   if (params.get('dev') === '1') { store.ui.devAgentFace = true; installAgentFace(); }
   const caps = Engine.caps();
   const forceDegraded = store.ui.devAgentFace && params.get('force-degraded') === '1';
-  if (forceDegraded || !caps.webCodecs) { show('degraded'); return; } // handoff §2: offered path, not a dead end
+  if (forceDegraded || !caps.enginePlayback) { show('degraded'); return; } // handoff §2: offered path, not a dead end
   show('empty');
   renderRecent();
 }
