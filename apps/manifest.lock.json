@@ -3459,14 +3459,14 @@
       "id": "slate",
       "repo": "NakliTechie/slate",
       "requestedRef": "main",
-      "resolvedCommit": "82728eba71ebc2a1f4c7f53f75f132d031a9c864",
+      "resolvedCommit": "4e3deb902d5c8ee7ae0c9357ae154a6e3f420fdf",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "76664762c8e22a44e710c2b9bd7b83e7804feab4a1aec4e45bdafcbb7d330d78",
-          "bytes": 1209185,
-          "originalSourceSha256": "490362b23b723b43714f2fbde2fc5ddf985addd466d3561bc4f0966aacfcef71",
+          "sha256": "5cd2fe5e96527bab932f9779ef9873d84fb070b7c1ac4909cba86cfa711d6727",
+          "bytes": 1230519,
+          "originalSourceSha256": "4917324339ff22f6dce5575b4e801dc4a580c3f48112133e57fb57fb0ce81cbc",
           "sdkSha256": "5ff86458102ce080ccf993e4c2bb74c3ef5c8336babe5e5d79906f0f04fae4d2"
         },
         {

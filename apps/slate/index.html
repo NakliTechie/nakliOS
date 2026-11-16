@@ -3026,6 +3026,7 @@ kbd {
 .org-choice legend { padding: 0; margin-bottom: var(--space-1); }
 .org-radio { display: flex; align-items: center; gap: var(--space-2); color: var(--fg-0); }
 .org-warn { color: var(--warn, var(--fg-1)); }
+.org-hint { font-size: 12px; }
 
 
 /* ui/library/people.css */
@@ -3309,6 +3310,8 @@ dialog {
 }
 
 dialog::backdrop { background: var(--overlay-backdrop); }
+/* Adjust, Sharpen, Straighten: the photo behind the dialog stays undimmed (modals.js seeThrough). */
+dialog.modal-see-through::backdrop { background: transparent; }
 
 /* ── Utility classes ──────────────────────────────────────────────────────── */
 
@@ -8221,17 +8224,33 @@ const __m_library_jobs = (() => {
 //
 //   const q = new JobQueue({ concurrency: 4 });
 //   q.onProgress(p => ...);          // { kind, done, failed, total, running, paused, idle }
-//   q.add('thumbs', items, async (item, signal) => { ... });
+//   q.add('thumbs', items, async (item, signal) => { ... }, { lane: 'now' });
 //   q.pause(); q.resume(); q.cancel('thumbs'); await q.idle();
 //
 // A job function receives an AbortSignal that fires on cancel. A job that
 // throws counts as failed and the queue moves on; it never stops the queue.
+// A job whose file was trashed, moved or removed before it ran (it throws a
+// NotFoundError) is not a failure: it counts as done.
+//
+// Lanes: q.add(kind, items, fn, { lane: 'now' | 'background' }). Work the person waits
+// for (scan, thumbs, export, import, trash, restore) runs in 'now'; slow indexing
+// (ocr, clip, faces, dupes) runs in 'background'. Without a lane, a kind in
+// BACKGROUND_KINDS goes to 'background' and every other kind to 'now'. The pump
+// always takes 'now' work first, and starts background work only when 'now' is
+// empty. Background jobs also never fill the last slot (at most concurrency - 1 of
+// them run), so a 'now' job that arrives while OCR or CLIP is busy starts at once
+// instead of waiting seconds for a background job to end; a running job is never
+// stopped to make room.
+
+const BACKGROUND_KINDS = new Set(['ocr', 'clip', 'faces', 'dupes', 'rehash']);
+const isGone = (err) => err?.name === 'NotFoundError';
 
 class JobQueue {
   constructor({ concurrency = 4 } = {}) {
     this.concurrency = concurrency;
-    this.pending = [];             // [{ kind, item, fn }]
+    this.lanes = { now: [], background: [] }; // [{ kind, item, fn }] per lane
     this.running = 0;
+    this.runningBackground = 0;
     this.paused = false;
     this.counts = new Map();       // kind -> { done, failed, total }
     this.listeners = new Set();
@@ -8242,11 +8261,15 @@ class JobQueue {
 
   onProgress(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
 
-  add(kind, items, fn) {
+  // Every pending job, 'now' lane first (scan.js reads it to tell whether its items are left).
+  get pending() { return [...this.lanes.now, ...this.lanes.background]; }
+
+  add(kind, items, fn, { lane = BACKGROUND_KINDS.has(kind) ? 'background' : 'now' } = {}) {
+    if (!this.lanes[lane]) throw new Error(`no job lane ${lane}`);
     if (!this.counts.has(kind)) this.counts.set(kind, { done: 0, failed: 0, total: 0 });
     if (!this.controllers.has(kind)) this.controllers.set(kind, new AbortController());
-    const c = this.counts.get(kind);
-    for (const item of items) { this.pending.push({ kind, item, fn }); c.total++; }
+    const c = this.counts.get(kind), q = this.lanes[lane];
+    for (const item of items) { q.push({ kind, item, fn, lane }); c.total++; }
     this._emit(kind);
     this._pump();
   }
@@ -8256,12 +8279,14 @@ class JobQueue {
 
   // Drop every pending item of a kind (or all kinds) and abort the running ones.
   cancel(kind = null) {
-    const keep = [];
-    for (const j of this.pending) {
-      if (kind == null || j.kind === kind) this.counts.get(j.kind).total--;
-      else keep.push(j);
+    for (const lane of Object.keys(this.lanes)) {
+      const keep = [];
+      for (const j of this.lanes[lane]) {
+        if (kind == null || j.kind === kind) this.counts.get(j.kind).total--;
+        else keep.push(j);
+      }
+      this.lanes[lane] = keep;
     }
-    this.pending = keep;
     for (const [k, ctl] of this.controllers) {
       if (kind == null || k === kind) { ctl.abort(); this.controllers.delete(k); }
     }
@@ -8271,7 +8296,7 @@ class JobQueue {
 
   // Resolves when nothing is pending or running.
   idle() {
-    if (!this.pending.length && !this.running) return Promise.resolve();
+    if (!this.#queued() && !this.running) return Promise.resolve();
     return new Promise(r => this.idleWaiters.push(r));
   }
 
@@ -8279,20 +8304,32 @@ class JobQueue {
     const kinds = {};
     let done = 0, failed = 0, total = 0;
     for (const [k, c] of this.counts) { kinds[k] = { ...c }; done += c.done; failed += c.failed; total += c.total; }
-    return { done, failed, total, running: this.running, pending: this.pending.length, paused: this.paused, idle: !this.pending.length && !this.running, kinds };
+    const pending = this.#queued();
+    return { done, failed, total, running: this.running, pending, paused: this.paused, idle: !pending && !this.running, kinds };
   }
 
   // Forget finished counts (after the status bar has shown "done").
   reset() {
-    if (this.pending.length || this.running) return;
+    if (this.#queued() || this.running) return;
     this.counts.clear();
     this._emit(null);
   }
 
+  #queued() { return this.lanes.now.length + this.lanes.background.length; }
+
+  #next() {
+    if (this.lanes.now.length) return this.lanes.now.shift();
+    const room = Math.max(1, this.concurrency - 1);
+    if (this.lanes.background.length && this.runningBackground < room) return this.lanes.background.shift();
+    return null;
+  }
+
   _pump() {
-    while (!this.paused && this.running < this.concurrency && this.pending.length) {
-      const job = this.pending.shift();
+    while (!this.paused && this.running < this.concurrency) {
+      const job = this.#next();
+      if (!job) break;
       this.running++;
+      if (job.lane === 'background') this.runningBackground++;
       const ctl = this.controllers.get(job.kind) ?? new AbortController();
       this.controllers.set(job.kind, ctl);
       Promise.resolve()
@@ -8300,12 +8337,15 @@ class JobQueue {
         .then(() => { this.counts.get(job.kind).done++; },
           (err) => {
             if (ctl.signal.aborted) return;
-            this.counts.get(job.kind).failed++;
+            const c = this.counts.get(job.kind);
+            if (isGone(err)) { c.done++; return; }
+            c.failed++;
             this.errors.push({ kind: job.kind, item: job.item?.id ?? job.item?.path ?? String(job.item), message: err?.message ?? String(err) });
             if (this.errors.length > 50) this.errors.shift();
           })
         .finally(() => {
           this.running--;
+          if (job.lane === 'background') this.runningBackground--;
           this._emit(job.kind);
           this._pump();
           this._checkIdle();
@@ -8314,7 +8354,7 @@ class JobQueue {
   }
 
   _checkIdle() {
-    if (this.pending.length || this.running) return;
+    if (this.#queued() || this.running) return;
     const w = this.idleWaiters; this.idleWaiters = [];
     for (const r of w) r();
   }
@@ -8325,7 +8365,7 @@ class JobQueue {
   }
 }
 
-return { JobQueue };
+return { BACKGROUND_KINDS, JobQueue };
 })();
 
 const __m_library_schema = (() => {
@@ -9555,6 +9595,7 @@ const __m_library_library = (() => {
 //   'error'    { message }
 
 const JobQueue = __m_library_jobs.JobQueue;
+const LIBRARY_FILE = __m_library_schema.LIBRARY_FILE;
 const emptyChoice = __m_library_schema.emptyChoice;
 const makeId = __m_library_schema.makeId;
 const splitId = __m_library_schema.splitId;
@@ -9568,6 +9609,7 @@ const newRecord = __m_library_schema.newRecord;
 const instantToWallClock = __m_library_schema.instantToWallClock;
 const createMove = __m_library_move.createMove;
 const renderName = __m_library_move.renderName;
+const LIBRARY_META_FILE = __m_library_libfile.LIBRARY_META_FILE;
 const parseLibFile = __m_library_libfile.parseLibFile;
 const buildLibFile = __m_library_libfile.buildLibFile;
 const rematchMoved = __m_library_libfile.rematchMoved;
@@ -9588,6 +9630,18 @@ const UNDO_LIMIT = 200;
 const SAVE_DELAY_MS = 600;
 // Trash saves the trashed flags before it moves the files, in batches of this many (review S3).
 const TRASH_BATCH = 50;
+// How long a path Slate itself wrote, moved or renamed stays on the self-write list (watch.js).
+const SELF_WRITE_MS = 5000;
+
+// The key a path is matched by on the self-write list: its folder and its name up to the first
+// dot, lower-cased, so a photo's sidecars (IMG_1.jpg.xmp, IMG_1.xmp, its Takeout JSON) and its
+// Live Photo movie match the photo. A file another program adds under the same stem within
+// SELF_WRITE_MS is missed by the watcher; the next rescan finds it.
+function selfWriteKey(rootId, path) {
+  const i = path.lastIndexOf('/');
+  const name = path.slice(i + 1), dot = name.indexOf('.');
+  return `${rootId}\u0000${path.slice(0, i + 1)}${dot > 0 ? name.slice(0, dot) : name}`.toLowerCase();
+}
 
 // Run fn while holding a Web Lock, where the browser has them, so two tabs on one folder never
 // read and write its library file at the same time (review S2).
@@ -9617,7 +9671,8 @@ class Library {
     this.albumTombs = new Map();  // albumId -> ms it was deleted
     this.libLoaded = new Set();   // roots whose library file was read (or found absent) this session
     this.libExtra = new Map();    // rootId -> unknown top-level fields of its library file
-    this.again = new Map();       // rootId -> { full } a rescan asked for while that root was scanning
+    this.again = new Map();       // rootId -> { full, paths } a rescan asked for while that root was scanning
+    this.selfWrites = new Map();  // selfWriteKey -> ms: files Slate itself wrote, moved or renamed
     this.flushing = Promise.resolve();
     // A closing or hidden page writes what is pending (review S3).
     if (typeof globalThis.addEventListener === 'function') {
@@ -9764,28 +9819,35 @@ class Library {
   // file twice). It asks for one more scan when the running one ends, because the running walk
   // may have passed files that changed after it started (review S14); any number of such
   // requests give one more scan. The caller waits for both.
-  async rescan(rootId = null, { full = false } = {}) {
+  //
+  // paths (with a rootId): rescan only those relative paths (files, folders, or paths now gone),
+  // as the folder watcher asks; null rescans the whole root. A whole-root request waiting beside
+  // path requests wins.
+  async rescan(rootId = null, { full = false, paths = null } = {}) {
     const roots = rootId ? [this.roots.get(rootId)] : [...this.roots.values()];
+    if (!rootId) paths = null;
     this.scanning ??= new Map();
     for (const root of roots) {
       if (!root) throw new Error(`no root ${rootId}`);
       if (!this.services.scanRoot) throw new Error('scanning is not available');
       const running = this.scanning.get(root.id);
       if (running) {
-        this.again.set(root.id, { full: full || !!this.again.get(root.id)?.full });
+        const prev = this.again.get(root.id);
+        const merged = (prev && !prev.paths) || !paths ? null : new Set([...(prev?.paths ?? []), ...paths]);
+        this.again.set(root.id, { full: full || !!prev?.full, paths: merged });
         await running;
         continue;
       }
-      const p = this.#scanLoop(root, full);
+      const p = this.#scanLoop(root, full, paths ? new Set(paths) : null);
       this.scanning.set(root.id, p);
       try { await p; } finally { if (this.scanning.get(root.id) === p) this.scanning.delete(root.id); }
     }
   }
 
-  async #scanLoop(root, full) {
+  async #scanLoop(root, full, paths) {
     try {
       for (;;) {
-        await Promise.resolve().then(() => this.services.scanRoot(this, root, { full }));
+        await Promise.resolve().then(() => this.services.scanRoot(this, root, paths ? { full, paths: [...paths] } : { full }));
         // A scanner that does not read the library file itself (scan.js does, after its
         // permission step) still gets it read once the folder could be walked.
         if (!this.libLoaded.has(root.id)) await this.loadLibFile(root);
@@ -9793,14 +9855,17 @@ class Library {
         if (!next) return;
         this.again.delete(root.id);
         full = next.full;
+        paths = next.paths;
       }
     } finally { this.again.delete(root.id); }
   }
 
   // Called by scan.js with the result of walking one root.
   //   upserts: PhotoRecord[]  new or changed rows
-  //   seen:    Set<id>        every id found on disk this scan (null for a partial scan)
-  async applyScan(rootId, { upserts = [], seen = null } = {}) {
+  //   seen:    Set<id>        every id found on disk this scan (null when part of the walk failed)
+  //   scope:   path => bool   a scan of some paths only: `seen` covers just the records whose
+  //                           path it accepts, so only those can turn missing or found again
+  async applyScan(rootId, { upserts = [], seen = null, scope = null } = {}) {
     for (const r of upserts) this.records.set(r.id, r);
     if (upserts.length) await this.store.putPhotos(upserts);
     let missing = [];
@@ -9808,7 +9873,8 @@ class Library {
       // A MOV now paired with a Live Photo has no record of its own: drop it rather than mark it missing.
       const paired = new Set();
       for (const r of this.records.values()) if (r.rootId === rootId && r.liveVideo) paired.add(makeId(rootId, r.liveVideo));
-      const dropped = [...paired].filter(id => this.records.has(id) && !seen.has(id) && !this.choices.get(id)?.trashed);
+      const inScope = (id) => !scope || scope(splitId(id).path);
+      const dropped = [...paired].filter(id => this.records.has(id) && inScope(id) && !seen.has(id) && !this.choices.get(id)?.trashed);
       if (dropped.length) {
         for (const id of dropped) this.records.delete(id);
         await this.store.deletePhotos(dropped);
@@ -9816,13 +9882,13 @@ class Library {
         missing.push(...dropped.map(id => ({ id })));
       }
       for (const r of this.records.values()) {
-        if (r.rootId !== rootId) continue;
+        if (r.rootId !== rootId || (scope && !scope(r.path))) continue;
         const gone = !seen.has(r.id) && !this.choices.get(r.id)?.trashed;
         if (gone !== !!r.missing) { r.missing = gone; missing.push(r); }
       }
       if (missing.length) await this.store.putPhotos(missing);
       const root = this.roots.get(rootId);
-      if (root) { root.lastScan = Date.now(); await this.store.putRoot(stripRoot(root)); }
+      if (root && !scope) { root.lastScan = Date.now(); await this.store.putRoot(stripRoot(root)); }
       this.reconcile(rootId);
     }
     if (upserts.length || missing.length) this.emit('records', { ids: [...upserts, ...missing].map(r => r.id), reason: 'scan' });
@@ -9901,6 +9967,18 @@ class Library {
     let dir = root.handle;
     for (const p of parts) dir = await dir.getDirectoryHandle(p);
     return parent ? dir : dir.getFileHandle(name);
+  }
+
+  // Slate's own writes (the library and meta files, XMP sidecars, moves into and out of the
+  // trash, moves and renames): watch.js ignores a change to a path noted here in the last
+  // SELF_WRITE_MS, so Slate's writes never start a rescan.
+  noteSelfWrite(rootId, ...paths) {
+    const now = Date.now();
+    for (const p of paths) if (p) this.selfWrites.set(selfWriteKey(rootId, p), now);
+  }
+  isSelfWrite(rootId, path, now = Date.now()) {
+    for (const [k, t] of this.selfWrites) if (now - t > SELF_WRITE_MS) this.selfWrites.delete(k);
+    return this.selfWrites.has(selfWriteKey(rootId, path));
   }
 
   // The File for a record, from either kind of root. Throws when it is gone.
@@ -10037,6 +10115,7 @@ class Library {
       for (const p of planned) {
         const root = this.roots.get(p.rootId);
         try {
+          this.noteSelfWrite(p.rootId, p.path, p.live);
           if (!p.missing) this.#noteRenamed(await this.services.trash?.move(root, p.path), p.path);
         } catch (e) {
           this.emit('error', { message: `Could not move ${p.path} to the trash: ${e.message}` });
@@ -10079,6 +10158,7 @@ class Library {
       const rec = this.records.get(id), root = this.roots.get(rootId);
       try {
         if (oid !== id && this.records.get(oid) && !this.records.get(oid).missing) throw new Error(`${orig} already exists, so the trashed copy was left in the trash`);
+        this.noteSelfWrite(rootId, orig, rec?.liveVideo ? fromTrashPath(rec.liveVideo) : null);
         if (!rec?.missing) this.#noteRenamed(await this.services.trash?.restore(root, orig), orig);
       } catch (e) {
         this.emit('error', { message: `Could not restore ${orig}: ${e.message}` });
@@ -10353,7 +10433,10 @@ class Library {
     for (const m of plan) {
       let res;
       try {
-        res = await mover.move(this.roots.get(m.rootId), m.from, m.to, { liveVideo: this.records.get(m.id).liveVideo ?? null });
+        const live = this.records.get(m.id).liveVideo ?? null;
+        // The movie and sidecars move with the photo and keep its stem, so m.to's key covers them.
+        this.noteSelfWrite(m.rootId, m.from, m.to, live);
+        res = await mover.move(this.roots.get(m.rootId), m.from, m.to, { liveVideo: live });
       } catch (e) {
         failed.push({ id: m.id, reason: e.message });
         this.emit('error', { message: `Could not move ${m.from}: ${e.message}` });
@@ -10486,6 +10569,7 @@ class Library {
       this.libLoaded.add(root.id);
       if (file) this.mergeIn(root.id, file);
     } catch { /* not readable now: kv only */ }
+    this.noteSelfWrite(root.id, LIBRARY_FILE, LIBRARY_META_FILE);
     await this.services.persist.save(root, this.libFileFor(root.id), { disk: read && this.libLoaded.has(root.id) });
   }
 
@@ -10556,7 +10640,7 @@ function sameChoice(a, b) {
     && !!x.ratingSet === !!y.ratingSet && JSON.stringify(x.removedTags || []) === JSON.stringify(y.removedTags || []);
 }
 
-return { TRASH_BATCH, Library, relPathOf };
+return { TRASH_BATCH, SELF_WRITE_MS, selfWriteKey, Library, relPathOf };
 })();
 
 const __m_library_store = (() => {
@@ -12952,7 +13036,16 @@ return { instantToWallClock, matchSidecars, readTakeoutJson };
 const __m_library_scan = (() => {
 // Walks a root folder and feeds lib.applyScan. See docs/architecture.md "Scan".
 //
-//   scanRoot(lib, root, { full }) -> { added, changed, unchanged, missing, failed, takeout }
+//   scanRoot(lib, root, { full, paths }) -> { added, changed, unchanged, missing, failed, takeout }
+//
+// paths (fsa roots, from the folder watcher): rescan only these relative paths. A path that is a
+// folder is walked; a file is read with the other files of its folder at hand (for sidecars,
+// Takeout JSON and Live Photo pairs), and a sidecar, JSON or movie path rescans the photos with
+// its stem in that folder. A path that is gone turns its records missing. Without paths, or for a
+// browse-only root, the whole root is walked.
+//
+// A file that was trashed, moved or removed after the walk found it (a NotFoundError when it is
+// read) is not counted as failed; the job queue counts it as done.
 //
 // fsa roots are walked through their FileSystemDirectoryHandle; files roots
 // (browse-only) use root.files. Metadata and sidecar reads run on lib.jobs as
@@ -13010,7 +13103,14 @@ const LIVE_MAX_BYTES = 10 * 1024 * 1024;
 const LIVE_MAX_SECONDS = 3;
 const LIVE_SLACK_SECONDS = 0.25;
 
-async function scanRoot(lib, root, { full = false } = {}) {
+const stemKey = (path) => {
+  const i = path.lastIndexOf('/'), name = path.slice(i + 1), dot = name.indexOf('.');
+  return (path.slice(0, i + 1) + (dot > 0 ? name.slice(0, dot) : name)).toLowerCase();
+};
+const isGone = (e) => e?.name === 'NotFoundError';
+
+async function scanRoot(lib, root, { full = false, paths = null } = {}) {
+  if (!root.handle) paths = null;
   if (root.handle) {
     const asked = await ensurePermission(root.handle);
     if ((asked || !lib.libLoaded?.has(root.id)) && lib.loadLibFile) await lib.loadLibFile(root);
@@ -13021,7 +13121,10 @@ async function scanRoot(lib, root, { full = false } = {}) {
   const sidecars = new Map();     // folder -> Map(lower-case name -> open)
   const jsons = new Map();        // folder -> Map(name -> open), Takeout candidates
   const walk = { failed: 0 };
+  const listedPaths = new Set();  // a scan of some paths can list one folder twice
   const add = (path, open) => {
+    if (listedPaths.has(path)) return;
+    listedPaths.add(path);
     const name = path.slice(path.lastIndexOf('/') + 1);
     const ext = extOf(name);
     if (ext === SIDECAR_EXT || (ext === 'json' && !name.startsWith('.'))) {
@@ -13030,7 +13133,9 @@ async function scanRoot(lib, root, { full = false } = {}) {
       into.get(dir).set(ext === 'json' ? name : name.toLowerCase(), open);
     } else if (kindOf(name)) found.push({ path, open });
   };
-  if (root.handle) await walkDir(root.handle, '', add, walk);
+  let scope = null;
+  if (paths) scope = await walkPaths(root.handle, paths, add, walk);
+  else if (root.handle) await walkDir(root.handle, '', add, walk);
   else for (const f of root.files || []) {
     const path = relPathOf(f);
     if (folderOf(path).split('/').some(s => s && isSkippedDir(s))) continue;
@@ -13038,7 +13143,7 @@ async function scanRoot(lib, root, { full = false } = {}) {
   }
 
   const { live, movs } = await checkLivePairs(lib, root, pairLivePhotos(found.map(e => e.path)), new Map(found.map(e => [e.path, e.open])));
-  if (movs.size) found.splice(0, found.length, ...found.filter(e => !movs.has(e.path)));
+  if (movs.size || scope) found.splice(0, found.length, ...found.filter(e => !movs.has(e.path) && (!scope || scope(e.path))));
 
   const seen = new Set(found.map(e => makeId(root.id, e.path)));
   const takeout = { matched: 0, favourites: 0, hidden: 0, rejected: 0 };
@@ -13112,14 +13217,14 @@ async function scanRoot(lib, root, { full = false } = {}) {
 
   await runJobs(lib.jobs, 'scan', found, async (entry) => {
     try { await work(entry); }
-    catch (e) { res.failed++; throw e; }
+    catch (e) { if (!isGone(e)) res.failed++; throw e; }
   });
 
   // 3. Final call with `seen`, unless part of the folder could not be read.
-  await flush(walk.failed ? {} : { seen });
+  await flush(walk.failed ? {} : scope ? { seen, scope } : { seen });
   await applyTakeoutChoices(lib, fromTakeout, takeout);
-  if (root.handle && lib.recoverTrash) await recoverTrash(lib, root, walk.failed ? null : seen);
-  for (const r of lib.records.values()) if (r.rootId === root.id && r.missing) res.missing++;
+  if (root.handle && lib.recoverTrash && !scope) await recoverTrash(lib, root, walk.failed ? null : seen);
+  for (const r of lib.records.values()) if (r.rootId === root.id && r.missing && (!scope || scope(r.path))) res.missing++;
   return res;
 }
 
@@ -13296,17 +13401,44 @@ async function ensurePermission(handle) {
   return true;
 }
 
-async function walkDir(dir, prefix, add, walk) {
+async function walkDir(dir, prefix, add, walk, { recursive = true } = {}) {
   try {
     for await (const [name, h] of dir.entries()) {
       const path = prefix ? `${prefix}/${name}` : name;
-      if (h.kind === 'directory') { if (!isSkippedDir(name)) await walkDir(h, path, add, walk); }
+      if (h.kind === 'directory') { if (recursive && !isSkippedDir(name)) await walkDir(h, path, add, walk); }
       else add(path, () => h.getFile());
     }
   } catch (e) {
     console.warn('[slate library] could not read folder', prefix || dir.name, e);
     walk.failed++;
   }
+}
+
+// The walk for a scan of some paths: lists the folder of each path (not its subfolders), walks
+// each path that is a folder, and returns the scope: path => true for a file the scan covers.
+async function walkPaths(rootHandle, paths, add, walk) {
+  const exact = new Set(), dirs = [], stems = new Set(), listed = new Set();
+  const dirAt = async (rel) => {
+    let d = rootHandle;
+    for (const s of rel.split('/').filter(Boolean)) d = await d.getDirectoryHandle(s);
+    return d;
+  };
+  for (const raw of paths) {
+    const path = String(raw).split('/').filter(Boolean).join('/');
+    if (!path || path.split('/').some(s => isSkippedDir(s))) continue;
+    exact.add(path); stems.add(stemKey(path));
+    const folder = folderOf(path);
+    if (!listed.has(folder)) {
+      listed.add(folder);
+      let d = null;
+      try { d = await dirAt(folder); } catch (e) { if (!isGone(e)) { console.warn('[slate library] could not read folder', folder, e); walk.failed++; } }
+      if (d) await walkDir(d, folder, add, walk, { recursive: false });
+    }
+    let sub = null;
+    try { sub = await dirAt(path); } catch { /* a file, or gone */ }
+    if (sub) { dirs.push(path + '/'); await walkDir(sub, path, add, walk); }
+  }
+  return (p) => exact.has(p) || stems.has(stemKey(p)) || dirs.some(d => p.startsWith(d));
 }
 
 // Run fn over items on the shared queue and resolve when this batch is finished,
@@ -13330,7 +13462,7 @@ function runJobs(jobs, kind, items, fn) {
       inFlight++;
       try { await fn(item, signal); }
       finally { inFlight--; if (--left === 0) finish(); }
-    });
+    }, { lane: 'now' });
     const ctl = jobs.controllers?.get(kind);
     ctl?.signal?.addEventListener?.('abort', () => { cancelled = true; jobs._emit?.(kind); });
   });
@@ -13518,7 +13650,7 @@ function createThumbs(lib) {
       const list = records.filter(r => r && !queued.has(r.id));
       if (!list.length) return;
       for (const r of list) queued.add(r.id);
-      lib.jobs.add('thumbs', list, make);
+      lib.jobs.add('thumbs', list, make, { lane: 'now' });
     },
 
     url(id) {
@@ -14872,12 +15004,20 @@ const __m_library_xmpwrite = (() => {
 // An existing sidecar that buildXmp cannot merge into (no rdf:Description it can find, a
 // UTF-16 file, an `RDF:` prefix) is never replaced: the write is skipped and the file is
 // reported once through lib 'error' (review S11).
+//
+// Only changes XMP carries start a write: hiding a photo or making it a favourite does not
+// (XMP_SKIP_REASONS). A photo with no rating, reject, tags or face regions gets no new sidecar,
+// because the file would add nothing; an existing one is still updated, so a cleared rating or
+// tag leaves it. Each written path goes on the library's self-write list, so the folder watcher
+// does not rescan for it.
 
 const buildXmp = __m_library_xmp.buildXmp;
 const sidecarNames = __m_library_xmp.sidecarNames;
 
 const XMP_SETTING_KEY = 'setting:xmpWrite';
 const DELAY_MS = 1500;
+// Choice changes no XMP property carries.
+const XMP_SKIP_REASONS = new Set(['hide', 'favourite']);
 
 async function readText(dir, name) {
   try { return await (await (await dir.getFileHandle(name)).getFile()).text(); }
@@ -14892,9 +15032,9 @@ function initXmpWrite(lib, { delay = DELAY_MS } = {}) {
 
   const ready = Promise.resolve(lib.store?.getKv?.(XMP_SETTING_KEY)).then(v => { on = v === true; }).catch(() => {});
 
-  lib.on('choices', ({ ids } = {}) => {
+  lib.on('choices', ({ ids, reason } = {}) => {
     // ids is null for a library-file load or a moved-file rematch; those are not edits.
-    if (!on || !Array.isArray(ids) || !ids.length) return;
+    if (!on || !Array.isArray(ids) || !ids.length || XMP_SKIP_REASONS.has(reason)) return;
     for (const id of ids) pending.add(id);
     clearTimeout(timer);
     timer = setTimeout(() => { api.flush().catch(e => lib.emit('error', { message: `Could not write XMP sidecars: ${e.message}` })); }, delay);
@@ -14917,7 +15057,9 @@ function initXmpWrite(lib, { delay = DELAY_MS } = {}) {
     const own = await readText(dir, full);
     const seedName = own != null ? full : stem;
     const existing = own ?? (stem ? await readText(dir, stem) : null);
-    const text = buildXmp({ rating: lib.rating(id), flag: c.flag, tags: lib.tagsOf(id), existing, regions: lib.services.faces?.regionsFor?.(id) });
+    const rating = lib.rating(id), tags = lib.tagsOf(id), regions = lib.services.faces?.regionsFor?.(id);
+    if (own == null && !rating && c.flag !== 'reject' && !tags.length && !regions?.regions?.length) return false;
+    const text = buildXmp({ rating, flag: c.flag, tags, existing, regions });
     if (text == null) {
       const dirPath = r.path.slice(0, r.path.lastIndexOf('/') + 1);
       const path = dirPath + seedName;
@@ -14928,6 +15070,7 @@ function initXmpWrite(lib, { delay = DELAY_MS } = {}) {
       return false;
     }
     if (text === existing) return false;
+    lib.noteSelfWrite?.(root.id, r.path.slice(0, r.path.lastIndexOf('/') + 1) + full);
     const fh = await dir.getFileHandle(full, { create: true });
     const w = await fh.createWritable();
     await w.write(text);
@@ -14969,7 +15112,7 @@ function initXmpWrite(lib, { delay = DELAY_MS } = {}) {
   return api;
 }
 
-return { XMP_SETTING_KEY, initXmpWrite };
+return { XMP_SETTING_KEY, XMP_SKIP_REASONS, initXmpWrite };
 })();
 
 const __m_ui_library_storage = (() => {
@@ -15651,6 +15794,71 @@ const SLIDESHOW_MAX = 1000;
 const BROWSE_ONLY_NOTE = 'This browser cannot keep access to a folder, so the library is browse-only here: Slate reads the files for this visit and keeps your choices in the browser. Download the library file from Storage to keep them.';
 const icon = (id) => `<svg class="icon" aria-hidden="true"><use href="#icon-${id}"/></svg>`;
 
+// The empty-grid message. A locked Hidden view says it is locked whatever the job queue
+// is doing, because its photos stay out of the grid until the passphrase is entered.
+function emptyMessage({ view, busy = false, rankPending = false, ranked = null, searching = false, hiddenLocked = false }) {
+  if (view === 'hidden' && hiddenLocked) return 'Hidden photos are locked. Unlock them to see them.';
+  if (rankPending) return 'Searching by meaning.';
+  if (ranked) return ranked.kind === 'similar' ? 'No similar photos found.' : 'No photos match this meaning closely enough.';
+  if (busy) return 'Reading your folders. Photos appear here as they are found.';
+  if (searching) return 'No photos match this search.';
+  return { trash: 'The trash is empty.', hidden: 'No hidden photos.', favourites: 'No favourites yet.', videos: 'No videos.', album: 'This album is empty.' }[view] ?? 'No photos here.';
+}
+
+// The header count. A grid view counts its tiles. A view that draws its own panel shows
+// the text its countText() gives, or no count at all, because its grid list is empty.
+function headCountText({ panel = null, items = 0, selected = 0 }) {
+  if (panel) { try { return panel.countText?.() ?? ''; } catch { return ''; } }
+  const n = `${items.toLocaleString('en-GB')} item${items === 1 ? '' : 's'}`;
+  return selected ? `${n}, ${selected.toLocaleString('en-GB')} selected` : n;
+}
+
+// Stacks over ranked results (rows B9, Q2): the stacks come from the time-ordered list, so
+// bursts are found as in the timeline, and each stack's top becomes its best-scoring member,
+// so the tile shown for a stack is the closest match. Returns a new stackOf map.
+function rankedStackOf(stackOf, scores) {
+  const out = new Map(), done = new Map();
+  for (const [id, st] of stackOf) {
+    let copy = done.get(st);
+    if (!copy) {
+      let top = st.top, best = scores.get(st.top) ?? -Infinity;
+      for (const m of st.members) { const s = scores.get(m); if (s != null && s > best) { best = s; top = m; } }
+      copy = { ...st, top };
+      done.set(st, copy);
+    }
+    out.set(id, copy);
+  }
+  return out;
+}
+
+// The "Download … and turn on" button of the Search by meaning panel (row Q2). The panel
+// renders the button once and only changes its text when the weights check returns, so the
+// button never moves under the pointer. A click before the check returns is held and runs
+// when the check answers, so it is never lost.
+//   weights: a Promise of the dtype; enable(dtype): turns the feature on (handles its own errors);
+//   onChange(): redraw the button's text and state.
+function meaningSwitch({ weights, enable, onChange = () => {} }) {
+  let dtype = null, held = false, busy = false;
+  const run = async () => {
+    busy = true; onChange();
+    try { await enable(dtype); } catch (err) { console.error('[slate meaning] turn on', err); } finally { busy = false; onChange(); }
+  };
+  Promise.resolve(weights).then((d) => {
+    dtype = d; onChange();
+    if (held) { held = false; run(); }
+  });
+  return {
+    get dtype() { return dtype; },
+    get busy() { return busy || held; },
+    click() {
+      if (busy || held) return 'ignored';
+      if (!dtype) { held = true; onChange(); return 'held'; }
+      run();
+      return 'run';
+    },
+  };
+}
+
 function initLibraryView(lib) {
   const el = document.getElementById('library');
   if (!el) throw new Error('the #library container is missing from index.html');
@@ -15924,21 +16132,28 @@ function initLibraryView(lib) {
     dirty = false;
     const keep = scrollAnchor();
     const xdef = cur.view === 'x' ? extraViews.get(cur.xview) : null;
-    if (xdef?.render) { list = []; ids = []; indexOf = new Map(); renderHead(); return; }
+    if (xdef?.render) { list = []; ids = []; indexOf = new Map(); months = []; updateMonthLabel(); renderHead(); return; }
     list = lib.search(currentOpts());
     if (xdef?.ids) { const want = new Set(xdef.ids()); list = list.filter(r => want.has(r.id)); }
+    let timeOrder = list;
     if (ranked) {
       const sc = ranked.scores;
-      list = list.filter(r => sc.has(r.id)).sort((a, b) => sc.get(b.id) - sc.get(a.id));
-    } else if (rankPending) list = [];
+      timeOrder = list.filter(r => sc.has(r.id));
+      list = [...timeOrder].sort((a, b) => sc.get(b.id) - sc.get(a.id));
+    } else if (rankPending) list = timeOrder = [];
     renderRanked();
     stackMembers = new Map();
-    if (stacking && cur.view !== 'trash' && !ranked) ({ items: list, members: stackMembers } = collapseStacks(list, buildStacks(list).stackOf));
+    if (stacking && cur.view !== 'trash') {
+      let { stackOf } = buildStacks(timeOrder);
+      if (ranked) stackOf = rankedStackOf(stackOf, ranked.scores);
+      ({ items: list, members: stackMembers } = collapseStacks(list, stackOf));
+    }
     ids = list.map(r => r.id);
     indexOf = new Map(ids.map((id, i) => [id, i]));
     let pruned = false;
     for (const id of sel) if (!indexOf.has(id)) { sel.delete(id); pruned = true; }
     relayout(keep);
+    updateMonthLabel();
     renderHead();
     viewer.refresh();
     if (pruned) { announceSelection(); selectionChanged(); }
@@ -16134,8 +16349,9 @@ function initLibraryView(lib) {
   }
   function renderHead() {
     viewNameEl.textContent = viewTitle();
-    const n = list.length.toLocaleString('en-GB');
-    countEl.textContent = `${n} item${list.length === 1 ? '' : 's'}${sel.size ? `, ${sel.size.toLocaleString('en-GB')} selected` : ''}`;
+    const xdef = cur.view === 'x' ? extraViews.get(cur.xview) : null;
+    countEl.textContent = headCountText({ panel: xdef?.render ? xdef : null, items: list.length, selected: sel.size });
+    countEl.hidden = !countEl.textContent;
   }
   function announceSelection() { renderHead(); }
 
@@ -16150,14 +16366,10 @@ function initLibraryView(lib) {
       return;
     }
     if (list.length) { emptyEl.hidden = true; return; }
-    const busy = !lib.jobs.status().idle;
-    const msg = rankPending ? 'Searching by meaning.'
-      : ranked ? (ranked.kind === 'similar' ? 'No similar photos found.' : 'No photos match this meaning closely enough.')
-      : busy ? 'Reading your folders. Photos appear here as they are found.'
-      : q || Object.keys(filters).length ? 'No photos match this search.'
-        : { trash: 'The trash is empty.', hidden: lib.hiddenLocked?.() ? 'Hidden photos are locked. Unlock them to see them.' : 'No hidden photos.', favourites: 'No favourites yet.', videos: 'No videos.', album: 'This album is empty.' }[cur.view] ?? 'No photos here.';
+    const locked = cur.view === 'hidden' && !!lib.hiddenLocked?.();
+    const msg = emptyMessage({ view: cur.view, busy: !lib.jobs.status().idle, rankPending, ranked, searching: !!q || Object.keys(filters).length > 0, hiddenLocked: locked });
     emptyEl.hidden = false;
-    emptyEl.innerHTML = `<div class="lib-empty-inner"><p>${esc(msg)}</p></div>`;
+    emptyEl.innerHTML = `<div class="lib-empty-inner"><p>${esc(msg)}</p>${locked && ui.hooks.unlockHidden ? '<button type="button" class="btn btn-primary" data-act="unlock-hidden" aria-haspopup="dialog">Unlock…</button>' : ''}</div>`;
   }
 
   // ── sidebar ──────────────────────────────────────────────────────────────
@@ -16206,6 +16418,7 @@ function initLibraryView(lib) {
       ${viewBtn('trash', 'Trash', c.trashed)}
     </div>`;
     side.innerHTML = html;
+    if (cur.view === 'x' && extraViews.get(cur.xview)?.render) renderHead();
   }
 
   // Top-level folders of a root, plus the branch down to (and the children of) the current folder.
@@ -16271,6 +16484,7 @@ function initLibraryView(lib) {
 
   function switchView() {
     sel = new Set(); anchor = -1; focusId = null;
+    monthEl.textContent = ''; monthEl.hidden = true;
     if (ranked?.kind === 'similar') { ranked = null; rankSeq++; }
     viewer.close();
     mountPanel();
@@ -16297,6 +16511,7 @@ function initLibraryView(lib) {
     else if (a === 'storage') openStoragePanel(lib, storageDlg);
     else if (a === 'meaning') toggleMeaning();
     else if (a === 'clear-ranked') clearRanked();
+    else if (a === 'unlock-hidden') ui.hooks.unlockHidden?.();
   });
 
   function pickFiles() {
@@ -16457,61 +16672,89 @@ function initLibraryView(lib) {
   });
 
   // The "Search by meaning" view: what it downloads, the switch, and the vector store.
+  // Each state (off, on) renders its structure once; later changes update text in place,
+  // so no button is replaced while the pointer is on it (row Q2, promo finding 10).
   const mb = (b) => `${Math.round(b / 1e6).toLocaleString('en-GB')} MB`;
-  let weightsGuess = null;
+  let weightsGuess = null, weightsCheck = null;
+  const checkWeights = () => (weightsCheck ??= pickWeights().then(d => (weightsGuess = d)));
   ui.registerView({
     id: 'meaning',
     label: 'Search by meaning',
     count: () => (clip.enabled() ? clip.count() : null),
+    countText: () => (clip.enabled() ? `${clip.count().toLocaleString('en-GB')} photos with a vector` : ''),
     render(host) {
       const root = document.createElement('div');
       root.className = 'mng-root';
       host.appendChild(root);
-      let queued = false;
+      let queued = false, mode = '', actionsSig = '';
+      const sw = meaningSwitch({
+        weights: weightsGuess ?? checkWeights(),
+        enable: async (dtype) => { try { await clip.enable(dtype); } catch (err) { ui.toast(err?.message ?? String(err), 'error'); } },
+        onChange: () => queue(),
+      });
+      const drawOff = () => {
+        if (mode !== 'off') {
+          mode = 'off';
+          root.innerHTML = `<h2>Search by meaning</h2>
+            <p>Find photos by what they show, such as “dog on a beach” or “birthday cake”, and find photos that look like the one you are viewing. Duplicates can also use it to find near copies that fingerprints miss.</p>
+            <p>Turning this on downloads the ${esc(MODEL_ID)} model (OpenAI CLIP ViT-B/32, MIT licence) from Hugging Face, once<span class="mng-size"></span>. Slate then reads each photo’s 256 px thumbnail on this device to make a small vector for it. No photo and no search text leaves this device.</p>
+            <p class="mng-note"></p>
+            <button type="button" class="btn btn-primary" data-mng="on"></button>`;
+        }
+        const dtype = sw.dtype, w = dtype ? WEIGHTS[dtype] : null;
+        root.querySelector('.mng-size').innerHTML = w ? `: about <strong>${mb(w.bytes)}</strong>` : '';
+        root.querySelector('.mng-note').textContent = dtype ? (dtype === 'fp16' ? 'This browser will run the model on the graphics card (WebGPU, 16-bit weights).' : 'This browser will run the model on the processor (WebAssembly, 8-bit weights), which is slower.') : 'Checking this browser';
+        const btn = root.querySelector('[data-mng="on"]');
+        const label = sw.busy ? (dtype ? 'Turning on…' : 'Checking this browser…') : `Download ${w ? mb(w.bytes) + ' ' : ''}and turn on`;
+        if (btn.textContent !== label) btn.textContent = label;
+        btn.setAttribute('aria-disabled', String(sw.busy));
+      };
+      const drawOn = (s) => {
+        if (mode !== 'on') {
+          mode = 'on'; actionsSig = '';
+          root.innerHTML = `<h2>Search by meaning</h2>
+            <dl class="mng-facts">
+              <dt>Model</dt><dd class="mng-model"></dd>
+              <dt>Photos with a vector</dt><dd class="mng-count"></dd>
+              <dt>Vector store</dt><dd class="mng-bytes"></dd>
+            </dl>
+            <p>Press Meaning beside the search box, or type ~ before a search, then describe the photo. In the viewer, Find similar shows the photos closest to the one you are viewing.</p>
+            <div class="mng-actions"></div>`;
+        }
+        const job = lib.jobs.status().kinds.clip;
+        const left = job ? Math.max(0, job.total - job.done - job.failed) : 0;
+        root.querySelector('.mng-model').textContent = s.model === 'loading'
+          ? (s.progress ? `Downloading the model: ${mb(s.progress.loaded)} of ${mb(s.progress.total)}` : 'Loading the model')
+          : s.model === 'ready' ? `Model ready on ${s.device === 'webgpu' ? 'WebGPU' : 'WebAssembly'}`
+            : s.model === 'error' ? `The model did not load: ${s.error}` : 'The model loads when it is first needed';
+        root.querySelector('.mng-count').textContent = `${s.count.toLocaleString('en-GB')} of ${s.indexable.toLocaleString('en-GB')}${left ? `, ${left.toLocaleString('en-GB')} in the queue` : ''}`;
+        root.querySelector('.mng-bytes').textContent = `${mb(s.bytes)} in this browser`;
+        const sig = s.model === 'error' ? 'error' : 'ok';
+        if (sig !== actionsSig) {
+          actionsSig = sig;
+          root.querySelector('.mng-actions').innerHTML = `${sig === 'error' ? '<button type="button" class="btn" data-mng="retry">Try again</button>' : ''}
+            <button type="button" class="btn btn-danger" data-mng="off">Turn off and delete vectors</button>`;
+        }
+      };
       const draw = () => {
         queued = false;
         if (!root.isConnected) return;
         const s = clip.status();
-        if (!s.on) {
-          const dtype = weightsGuess;
-          const w = dtype ? WEIGHTS[dtype] : null;
-          root.innerHTML = `<h2>Search by meaning</h2>
-            <p>Find photos by what they show, such as “dog on a beach” or “birthday cake”, and find photos that look like the one you are viewing. Duplicates can also use it to find near copies that fingerprints miss.</p>
-            <p>Turning this on downloads the ${esc(MODEL_ID)} model (OpenAI CLIP ViT-B/32, MIT licence) from Hugging Face, once${w ? `: about <strong>${mb(w.bytes)}</strong>` : ''}. Slate then reads each photo’s 256 px thumbnail on this device to make a small vector for it. No photo and no search text leaves this device.</p>
-            <p class="mng-note">${dtype ? (dtype === 'fp16' ? 'This browser will run the model on the graphics card (WebGPU, 16-bit weights).' : 'This browser will run the model on the processor (WebAssembly, 8-bit weights), which is slower.') : 'Checking this browser'}</p>
-            <button type="button" class="btn btn-primary" data-mng="on" ${dtype ? '' : 'disabled'}>Download ${w ? mb(w.bytes) + ' ' : ''}and turn on</button>`;
-          return;
-        }
-        const job = lib.jobs.status().kinds.clip;
-        const left = job ? Math.max(0, job.total - job.done - job.failed) : 0;
-        const model = s.model === 'loading'
-          ? (s.progress ? `Downloading the model: ${mb(s.progress.loaded)} of ${mb(s.progress.total)}` : 'Loading the model')
-          : s.model === 'ready' ? `Model ready on ${s.device === 'webgpu' ? 'WebGPU' : 'WebAssembly'}`
-            : s.model === 'error' ? `The model did not load: ${esc(s.error)}` : 'The model loads when it is first needed';
-        root.innerHTML = `<h2>Search by meaning</h2>
-          <dl class="mng-facts">
-            <dt>Model</dt><dd>${model}</dd>
-            <dt>Photos with a vector</dt><dd>${s.count.toLocaleString('en-GB')} of ${s.indexable.toLocaleString('en-GB')}${left ? `, ${left.toLocaleString('en-GB')} in the queue` : ''}</dd>
-            <dt>Vector store</dt><dd>${mb(s.bytes)} in this browser</dd>
-          </dl>
-          <p>Press Meaning beside the search box, or type ~ before a search, then describe the photo. In the viewer, Find similar shows the photos closest to the one you are viewing.</p>
-          <div class="mng-actions">
-            ${s.model === 'error' ? '<button type="button" class="btn" data-mng="retry">Try again</button>' : ''}
-            <button type="button" class="btn btn-danger" data-mng="off">Turn off and delete vectors</button>
-          </div>`;
+        if (s.on) drawOn(s); else drawOff();
       };
       const queue = () => { if (!queued) { queued = true; requestAnimationFrame(draw); } };
-      if (!weightsGuess) pickWeights().then(d => { weightsGuess = d; queue(); });
       draw();
       root.addEventListener('click', async (e) => {
         const b = e.target.closest('[data-mng]');
         if (!b) return;
+        if (b.dataset.mng === 'on') { sw.click(); return; }
+        if (b.disabled) return;
         b.disabled = true;
         try {
-          if (b.dataset.mng === 'on') await clip.enable(weightsGuess);
-          else if (b.dataset.mng === 'off') { await clip.disable(); ui.toast('Search by meaning is off and its vectors are deleted.', 'ok'); }
+          if (b.dataset.mng === 'off') { await clip.disable(); ui.toast('Search by meaning is off and its vectors are deleted.', 'ok'); }
           else if (b.dataset.mng === 'retry') await clip.retry();
         } catch (err) { ui.toast(err?.message ?? String(err), 'error'); }
+        b.disabled = false;
         queue();
       });
       const offClip = clip.onChange(queue);
@@ -16734,8 +16977,10 @@ function initLibraryView(lib) {
     }
   }
   function updateMonthLabel() {
-    const m = monthAt(months, grid.scrollTop - PAD);
+    const panel = cur.view === 'x' && !!extraViews.get(cur.xview)?.render;
+    const m = panel || !list.length ? null : monthAt(months, grid.scrollTop - PAD);
     monthEl.textContent = m && layout.unit ? m.label : '';
+    monthEl.hidden = !monthEl.textContent;
   }
   function jumpTo(m) { if (m) { grid.scrollTop = m.top; render(); updateMonthLabel(); } }
   let scrubbing = false;
@@ -16909,7 +17154,7 @@ function initLibraryView(lib) {
   return ui;
 }
 
-return { initLibraryView };
+return { emptyMessage, headCountText, rankedStackOf, meaningSwitch, initLibraryView };
 })();
 
 const __m_library_export = (() => {
@@ -16936,8 +17181,18 @@ const __m_library_export = (() => {
 // zipFileName(label, date) -> "<label> YYYY-MM-DD.zip", with characters files cannot hold removed
 // pickZipSave(suggestedName) -> WritableStream, or null when cancelled; undefined when the
 //   browser has no showSaveFilePicker. Call it straight from a click.
+//
+// Remove location (on by default in the dialog): exportFiles and exportZip take
+// { removeLocation: true }. A JPEG then loses the GPS directory of its EXIF block
+// (exif.js sanitiseExifApp1 finds and zeroes it, and its entry leaves IFD0); every other
+// byte of the file, the orientation and the embedded thumbnail included, stays as it is.
+// A JPEG whose EXIF cannot be read loses its whole EXIF block instead, and the result
+// counts it as exifRemoved (a field the result has only when removeLocation is set). Other files (HEIC, PNG, RAW, videos) are copied as they are.
+//   removeGpsFromApp1(app1) -> Uint8Array copy without GPS, or null when unreadable
+//   withoutLocation(file) -> { file, change: 'none'|'gps'|'exif' }
 
 const makeId = __m_library_schema.makeId;
+const sanitiseExifApp1 = __m_exif.sanitiseExifApp1;
 
 function uniqueName(name, taken) {
   const lower = (s) => s.toLowerCase();
@@ -16983,6 +17238,70 @@ function albumExportIds(lib, albumId) {
   return [...al.items].filter(id => { const r = lib.get(id); return r && !r.missing && !lib.choice(id).trashed; });
 }
 
+// ── Remove location ─────────────────────────────────────────────────────────
+// sanitiseExifApp1 also drops the thumbnail and resets the orientation, which suit a
+// re-encoded export but not an original. So it runs twice, with and without GPS removal:
+// the bytes that differ outside IFD0's entry block are the zeroed GPS directory and its
+// values, and only those are taken. The GPS entry is then removed from the original IFD0.
+function removeGpsFromApp1(app1) {
+  const src = app1 instanceof Uint8Array ? app1 : new Uint8Array(app1);
+  const keep = sanitiseExifApp1(src, { removeLocation: false });
+  const drop = sanitiseExifApp1(src, { removeLocation: true });
+  if (!keep || !drop) return null;
+  const out = src.slice();
+  const T = 10;
+  const v = new DataView(out.buffer, out.byteOffset + T, out.byteLength - T);
+  const le = v.getUint16(0) === 0x4949;
+  const ifd0 = v.getUint32(4, le);
+  const n = v.getUint16(ifd0, le);
+  let g = -1;
+  for (let i = 0; i < n; i++) if (v.getUint16(ifd0 + 2 + i * 12, le) === 0x8825) { g = ifd0 + 2 + i * 12; break; }
+  if (g < 0) return out;
+  const blockStart = T + ifd0, blockEnd = T + ifd0 + 2 + n * 12 + 4;
+  for (let i = 0; i < out.length; i++) {
+    if (i >= blockStart && i < blockEnd) continue;
+    if (keep[i] !== drop[i]) out[i] = drop[i];
+  }
+  out.copyWithin(T + g, T + g + 12, blockEnd);
+  out.fill(0, blockEnd - 12, blockEnd);
+  v.setUint16(ifd0, n - 1, le);
+  return out;
+}
+
+// The EXIF APP1 segment of a JPEG head: { start, end } byte offsets, or null.
+function findExifApp1(head) {
+  const v = new DataView(head.buffer, head.byteOffset, head.byteLength);
+  if (head.length < 4 || v.getUint16(0) !== 0xFFD8) return null;
+  let off = 2;
+  while (off + 4 <= head.length) {
+    const marker = v.getUint16(off);
+    if (marker < 0xFF00 || marker === 0xFFDA || marker === 0xFFD9) return null;
+    const len = v.getUint16(off + 2);
+    if (marker === 0xFFE1 && off + 10 <= head.length && v.getUint32(off + 4) === 0x45786966 && v.getUint16(off + 8) === 0) {
+      return off + 2 + len <= head.length ? { start: off, end: off + 2 + len } : null;
+    }
+    off += 2 + len;
+  }
+  return null;
+}
+
+const HEAD_BYTES = 256 * 1024; // APP1 is at most 64 KB and sits at the start of the file
+
+async function withoutLocation(file) {
+  const head = new Uint8Array(await file.slice(0, Math.min(file.size, HEAD_BYTES)).arrayBuffer());
+  if (head.length < 2 || head[0] !== 0xFF || head[1] !== 0xD8) return { file, change: 'none' };
+  const seg = findExifApp1(head);
+  if (!seg) return { file, change: 'none' };
+  const app1 = head.slice(seg.start, seg.end);
+  const clean = removeGpsFromApp1(app1);
+  const parts = [file.slice(0, seg.start), ...(clean ? [clean] : []), file.slice(seg.end)];
+  const blob = new Blob(parts, { type: file.type || 'image/jpeg' });
+  const out = typeof File === 'function' ? new File([blob], file.name, { type: blob.type, lastModified: file.lastModified }) : blob;
+  if (!clean) return { file: out, change: 'exif' };
+  const same = clean.every((b, i) => b === app1[i]);
+  return { file: same ? file : out, change: same ? 'none' : 'gps' };
+}
+
 async function copyInto(file, dir, name) {
   const fh = await dir.getFileHandle(name, { create: true });
   const w = await fh.createWritable();
@@ -16996,8 +17315,18 @@ async function copyInto(file, dir, name) {
   }
 }
 
-async function exportFiles(lib, ids, destDir) {
-  if (!ids.some(id => lib.get(id))) return { copied: 0, failed: 0, total: 0 };
+async function readForExport(lib, fileId, removeLocation, counts) {
+  const file = await lib.getFile(fileId);
+  if (!removeLocation) return file;
+  const r = await withoutLocation(file);
+  if (r.change === 'exif') counts.exifRemoved++;
+  return r.file;
+}
+
+async function exportFiles(lib, ids, destDir, { removeLocation = false } = {}) {
+  const extra = () => (removeLocation ? { exifRemoved: counts.exifRemoved } : {});
+  const counts = { exifRemoved: 0 };
+  if (!ids.some(id => lib.get(id))) return { copied: 0, failed: 0, total: 0, ...extra() };
   // Names are reserved up front, so parallel copies never race for one name.
   const taken = new Set();
   for await (const [n] of destDir.entries()) taken.add(n.toLowerCase());
@@ -17006,12 +17335,12 @@ async function exportFiles(lib, ids, destDir) {
   let copied = 0, failed = 0;
   return new Promise((resolve) => {
     let finished = false;
-    const finish = () => { if (!finished) { finished = true; resolve({ copied, failed, total: items.length }); } };
+    const finish = () => { if (!finished) { finished = true; resolve({ copied, failed, total: items.length, ...extra() }); } };
     const tick = () => { if (copied + failed === items.length) finish(); };
     lib.jobs.add('export', items, async (item, signal) => {
       try {
         if (signal?.aborted) throw new Error('cancelled');
-        await copyInto(await lib.getFile(item.fileId), destDir, item.name);
+        await copyInto(await readForExport(lib, item.fileId, removeLocation, counts), destDir, item.name);
         copied++;
       } catch (e) { failed++; throw e; }
       finally { tick(); }
@@ -17051,7 +17380,8 @@ async function pickZipSave(suggestedName) {
   } catch (e) { if (e?.name === 'AbortError') return null; throw e; }
 }
 
-async function exportZip(lib, ids, { zipLib, writer } = {}) {
+async function exportZip(lib, ids, { zipLib, writer, removeLocation = false } = {}) {
+  const counts = { exifRemoved: 0 };
   const items = zipEntries(lib, ids);
   const bytes = items.reduce((n, it) => n + (it.fileId === it.id ? lib.get(it.id).size || 0 : 0), 0);
   const zip = new zipLib.ZipWriter(writer, { zip64: bytes > ZIP64_BYTES || items.length > 0xFFFF });
@@ -17067,7 +17397,7 @@ async function exportZip(lib, ids, { zipLib, writer } = {}) {
         const step = chain.then(async () => {
           if (signal?.aborted || fatal) throw new Error('cancelled');
           let file;
-          try { file = await lib.getFile(item.fileId); } catch (e) { failed++; throw e; }
+          try { file = await readForExport(lib, item.fileId, removeLocation, counts); } catch (e) { failed++; throw e; }
           try {
             const level = zipLevelFor(item.name);
             const opts = {};
@@ -17092,10 +17422,10 @@ async function exportZip(lib, ids, { zipLib, writer } = {}) {
     throw new Error(`The zip export stopped: ${fatal.message ?? fatal}`);
   }
   const result = await zip.close();
-  return { copied, failed, total: items.length, cancelled, result };
+  return { copied, failed, total: items.length, cancelled, result, ...(removeLocation ? { exifRemoved: counts.exifRemoved } : {}) };
 }
 
-return { uniqueName, pickExportFolder, albumExportIds, exportFiles, BLOB_WARN_BYTES, zipLevelFor, zipFileName, zipEntries, pickZipSave, exportZip };
+return { uniqueName, pickExportFolder, albumExportIds, removeGpsFromApp1, withoutLocation, exportFiles, BLOB_WARN_BYTES, zipLevelFor, zipFileName, zipEntries, pickZipSave, exportZip };
 })();
 
 const __m_ui_library_organise = (() => {
@@ -17623,6 +17953,8 @@ function initOrganise(lib, ui) {
           <label class="org-radio"><input type="radio" name="org-export" value="folder" checked autofocus> Folder of originals</label>
           <label class="org-radio"><input type="radio" name="org-export" value="zip"> One .zip file</label>
         </fieldset>
+        <label class="org-radio"><input type="checkbox" class="org-noloc" checked> Remove location</label>
+        <p class="org-text org-hint">Slate removes the GPS position from the EXIF data of JPEG files and leaves every other byte as it is. Other files, such as HEIC, RAW and videos, are copied with their location.</p>
         ${inMemory ? `<p class="modal-info org-warn" style="display:none">This browser cannot write the zip to disk as it goes, so it holds all ${(bytes / 1024 ** 3).toFixed(1)} GB in memory before the download. Use Chrome or Edge, or export a folder.</p>` : ''}
         <div class="modal-footer"><button type="button" class="btn" data-no>Cancel</button>
         <button type="button" class="btn btn-primary" data-go>Export</button></div>`;
@@ -17632,25 +17964,29 @@ function initOrganise(lib, ui) {
       body.querySelector('[data-no]').addEventListener('click', close);
       body.querySelector('[data-go]').addEventListener('click', () => {
         const m = mode();
+        const removeLocation = body.querySelector('.org-noloc').checked;
         close();
-        if (m === 'zip') exportToZip(ids, what, label); else exportToFolder(ids, what);
+        if (m === 'zip') exportToZip(ids, what, label, { removeLocation }); else exportToFolder(ids, what, { removeLocation });
       });
     });
   }
 
-  async function exportToFolder(ids, what) {
+  // A JPEG whose EXIF Slate cannot read loses its whole EXIF block, so its location still goes.
+  const locNote = (r) => (r.exifRemoved ? `; Slate could not read the EXIF of ${plural(r.exifRemoved, 'JPEG')}, so it removed all of their EXIF` : '');
+
+  async function exportToFolder(ids, what, opts = {}) {
     let dest;
     try { dest = await pickExportFolder(); } catch (e) { fail(e); return; }
     if (!dest) return;
     try {
       say(`Exporting ${plural(ids.length, 'file')} to ${dest.name}`);
-      const r = await exportFiles(lib, ids, dest);
-      const msg = `Exported ${plural(r.copied, 'file')}${what} to ${dest.name}`;
+      const r = await exportFiles(lib, ids, dest, opts);
+      const msg = `Exported ${plural(r.copied, 'file')}${what} to ${dest.name}${locNote(r)}`;
       say(r.failed ? `${msg}; ${r.failed} could not be copied` : msg, r.failed ? 'warn' : 'ok');
     } catch (e) { fail(e); }
   }
 
-  async function exportToZip(ids, what, label) {
+  async function exportToZip(ids, what, label, opts = {}) {
     const fileName = zipFileName(label);
     let writer;
     try { writer = await pickZipSave(fileName); } catch (e) { fail(e); return; }
@@ -17660,7 +17996,7 @@ function initOrganise(lib, ui) {
       const zipLib = await loadZip();
       if (download) writer = new zipLib.BlobWriter('application/zip');
       say(`Exporting ${plural(ids.length, 'file')} to ${fileName}`);
-      const r = await exportZip(lib, ids, { zipLib, writer });
+      const r = await exportZip(lib, ids, { zipLib, writer, ...opts });
       if (download) {
         const a = document.createElement('a');
         a.href = URL.createObjectURL(r.result);
@@ -17668,7 +18004,7 @@ function initOrganise(lib, ui) {
         document.body.appendChild(a); a.click(); a.remove();
         setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
       }
-      let msg = `Exported ${plural(r.copied, 'file')}${what} to ${fileName}`;
+      let msg = `Exported ${plural(r.copied, 'file')}${what} to ${fileName}${locNote(r)}`;
       if (r.cancelled) msg = `Export cancelled; ${fileName} holds ${plural(r.copied, 'file')}`;
       say(r.failed ? `${msg}; ${r.failed} could not be read` : msg, r.failed || r.cancelled ? 'warn' : 'ok');
     } catch (e) {
@@ -17781,6 +18117,9 @@ function initOrganise(lib, ui) {
         return null;
       });
   }
+
+  // The view's empty locked Hidden view offers Unlock… through this hook.
+  ui.hooks.unlockHidden = () => { if (lib.services.lock) unlock(); };
 
   // ── action bar ─────────────────────────────────────────────────────────
   if (!ui.actionsEl || typeof document === 'undefined') return;
@@ -18366,6 +18705,7 @@ function initDupes(lib, ui) {
     id: 'duplicates',
     label: 'Duplicates',
     count: () => (computed ? allGroups().length : null),
+    countText: () => { if (!computed) return ''; const n = allGroups().length; return `${n.toLocaleString('en-GB')} group${n === 1 ? '' : 's'}`; },
     render(el) {
       el.innerHTML = '<div class="dup-root"><div class="dup-head"></div><div class="dup-body"></div></div>';
       host = el.querySelector('.dup-root');
@@ -18390,10 +18730,13 @@ return { formatBytes, initDupes };
 
 const __m_library_watch = (() => {
 // Watch folders for changes (row L9). Where the browser has FileSystemObserver (experimental,
-// Chrome only today), each fsa root is observed recursively, and a change rescans only that root,
-// after a quiet spell of DEBOUNCE_MS. Where it does not, nothing happens and the rescan on open stays
-// the baseline. Changes inside dot-folders and to dot-files (the library file, .slate-trash) are
-// ignored, so Slate's own writes never trigger a rescan.
+// Chrome only today), each fsa root is observed recursively, and after a quiet spell of DEBOUNCE_MS
+// the changed paths of that root are rescanned (lib.rescan(rootId, { paths })). A record of type
+// 'unknown' or 'errored', or one without a path, rescans the whole root. Where the browser has no
+// observer, nothing happens and the rescan on open stays the baseline.
+// Ignored, so Slate's own writes never trigger a rescan: changes inside dot-folders and to
+// dot-files (the library file, .slate-trash), and paths on the library's self-write list
+// (lib.isSelfWrite: XMP sidecars, moves and renames Slate made in the last few seconds).
 //
 //   initWatch(lib, { Observer, delay }) -> { status() -> 'watching'|'unavailable', stop() }
 
@@ -18411,10 +18754,20 @@ function initWatch(lib, { Observer = globalThis.FileSystemObserver, delay = DEBO
   current = api;
   if (typeof Observer !== 'function') return api;
 
-  const relevant = (records) => records.some(r => {
-    const parts = r.relativePathComponents || [];
-    return !parts.some(p => isSkippedDir(p));
-  });
+  // Adds what the records ask for to w (w.whole, or paths in w.paths); true when anything did.
+  function collect(rootId, w, records) {
+    let any = false;
+    for (const r of records) {
+      if (r.type === 'unknown' || r.type === 'errored' || !r.relativePathComponents) { w.whole = true; any = true; continue; }
+      for (const parts of [r.relativePathComponents, r.relativePathMovedFrom]) {
+        if (!parts?.length || parts.some(p => isSkippedDir(p))) continue;
+        const path = parts.join('/');
+        if (lib.isSelfWrite?.(rootId, path)) continue;
+        w.paths.add(path); any = true;
+      }
+    }
+    return any;
+  }
 
   function schedule(rootId) {
     const w = watched.get(rootId);
@@ -18422,8 +18775,10 @@ function initWatch(lib, { Observer = globalThis.FileSystemObserver, delay = DEBO
     clearTimeout(w.timer);
     w.timer = setTimeout(() => {
       w.timer = null;
+      const paths = w.whole ? null : [...w.paths];
+      w.whole = false; w.paths = new Set();
       if (!lib.roots.has(rootId)) return;
-      Promise.resolve(lib.rescan(rootId)).catch(e => console.warn('[slate library] rescan after a change failed', e));
+      Promise.resolve(paths ? lib.rescan(rootId, { paths }) : lib.rescan(rootId)).catch(e => console.warn('[slate library] rescan after a change failed', e));
     }, delay);
   }
 
@@ -18434,8 +18789,9 @@ function initWatch(lib, { Observer = globalThis.FileSystemObserver, delay = DEBO
     }
     for (const root of lib.roots.values()) {
       if (!root.handle || watched.has(root.id)) continue;
-      const observer = new Observer((records) => { if (relevant(records)) schedule(root.id); });
-      watched.set(root.id, { observer, timer: null });
+      const w = { observer: null, timer: null, whole: false, paths: new Set() };
+      const observer = w.observer = new Observer((records) => { if (collect(root.id, w, records)) schedule(root.id); });
+      watched.set(root.id, w);
       try { await observer.observe(root.handle, { recursive: true }); }
       catch (e) {
         // No permission yet, or the folder is gone: try again when the roots change.
@@ -18695,6 +19051,7 @@ function initPlaces(lib, ui, { places = createPlaces() } = {}) {
     id: 'places',
     label: 'Places',
     count: () => (gpsCount ??= located().length),
+    countText: () => { const n = (gpsCount ??= located().length); return `${n.toLocaleString('en-GB')} photo${n === 1 ? '' : 's'} with a location`; },
     render(el) {
       el.innerHTML = `<div class="plc-root">
         <div class="plc-head">
@@ -19043,7 +19400,7 @@ function initTextIndex(lib, { recognise = (b) => extractText(b), loadImage = ocr
   function add(ids) {
     if (!ids.length) return;
     for (const id of ids) queued.add(id);
-    lib.jobs.add('ocr', ids.map(id => ({ id })), readOne);
+    lib.jobs.add('ocr', ids.map(id => ({ id })), readOne, { lane: 'background' });
   }
 
   function enqueueAll() { add([...lib.records.keys()].filter(needs)); }
@@ -19826,7 +20183,7 @@ function initFaces(lib, { faceStore = null, detector = null, readSidecar = null 
     recs = recs.filter(r => !queued.has(r.id));
     if (!on || paused || !recs.length) return;
     for (const r of recs) queued.add(r.id);
-    lib.jobs.add('faces', recs, processOne);
+    lib.jobs.add('faces', recs, processOne, { lane: 'background' });
   }
 
   // Face rows of photos that left the library: `ids` (or every row when null) whose record is
@@ -20243,6 +20600,7 @@ function initPeople(lib, ui) {
     id: 'people',
     label: 'People',
     count: () => (faces.enabled() ? faces.people().length : null),
+    countText: () => { if (!faces.enabled()) return ''; const n = faces.people().length; return `${n.toLocaleString('en-GB')} ${n === 1 ? 'person' : 'people'}`; },
     render(el) {
       host = el;
       el.addEventListener('click', act);
@@ -22955,6 +23313,10 @@ function getOrCreate(id) {
   return dlg;
 }
 
+// Dialogs whose result the person judges on the photo behind them: no dimmed backdrop
+// (theme.css dialog.modal-see-through), so the editor canvas shows as it is.
+function seeThrough(dlg) { dlg.classList.add('modal-see-through'); return dlg; }
+
 function slider(id, label, min, max, step, value, unit = '') {
   return `
     <div class="modal-field-row">
@@ -23045,7 +23407,7 @@ function showResize() {
 
 function showAdjust() {
   if (!state.image.working) return;
-  const dlg = getOrCreate('modal-adjust');
+  const dlg = seeThrough(getOrCreate('modal-adjust'));
 
   dlg.innerHTML = `
     <div class="modal-header"><h2>Adjust</h2></div>
@@ -23155,14 +23517,17 @@ async function showLensBlur() {
   const src = state.image.working;
   const dlg = getOrCreate('modal-lensblur');
   dlg.setAttribute('aria-label', 'Background blur');
+  // The preview scales down with the dialog, so it never needs a horizontal scrollbar.
+  dlg.style.maxWidth = `min(${LB_PREVIEW_W + 48}px, 95vw)`;
+  dlg.style.overflowX = 'hidden';
   const k = Math.min(1, LB_PREVIEW_W / src.width, LB_PREVIEW_H / src.height);
   const pw = Math.max(1, Math.round(src.width * k)), ph = Math.max(1, Math.round(src.height * k));
   dlg.innerHTML = `
     <div class="modal-header"><h2>Background blur</h2></div>
     <div class="modal-fields">
       <p class="modal-info" id="lb-status" role="status">Finding depth in this image…</p>
-      <div style="position:relative;width:${pw}px;height:${ph}px;margin:0 auto">
-        <canvas id="lb-preview" width="${pw}" height="${ph}" style="display:block;width:${pw}px;height:${ph}px;cursor:crosshair" aria-label="Preview. Click to set the focus point."></canvas>
+      <div style="position:relative;width:fit-content;max-width:100%;margin:0 auto">
+        <canvas id="lb-preview" width="${pw}" height="${ph}" style="display:block;width:auto;height:auto;max-width:100%;max-height:min(${ph}px, 50vh);cursor:crosshair" aria-label="Preview. Click to set the focus point."></canvas>
         <div id="lb-marker" aria-hidden="true" style="position:absolute;width:18px;height:18px;margin:-9px 0 0 -9px;border:2px solid #fff;border-radius:50%;box-shadow:0 0 0 1px #000;pointer-events:none;left:50%;top:50%"></div>
       </div>
       <p class="help-p" style="margin:4px 0 0">Click the preview to choose what stays sharp. Areas nearer or farther than that point get more blur.</p>
@@ -23269,7 +23634,7 @@ function showDescribe() {
 
 function showSharpen() {
   if (!state.image.working) return;
-  const dlg = getOrCreate('modal-sharpen');
+  const dlg = seeThrough(getOrCreate('modal-sharpen'));
 
   dlg.innerHTML = `
     <div class="modal-header"><h2>Sharpen</h2></div>
@@ -23293,7 +23658,7 @@ function showSharpen() {
 
 function showStraighten() {
   if (!state.image.working) return;
-  const dlg = getOrCreate('modal-straighten');
+  const dlg = seeThrough(getOrCreate('modal-straighten'));
 
   dlg.innerHTML = `
     <div class="modal-header"><h2>Straighten</h2></div>
