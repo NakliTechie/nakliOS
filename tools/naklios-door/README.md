@@ -39,6 +39,19 @@ Every answer is JSON on stdout; the exit status is 1 when it has `"ok": false`.
 
 Emacs: load `naklios.el`, pair it with `naklios-door pair emacs`, then `M-x naklios-call`.
 
+### MCP (Claude Code, Codex, any MCP client)
+
+`naklios-door mcp --client <name>` is an MCP server on stdin/stdout with three tools: `naklios_search`,
+`naklios_describe` and `naklios_call`. Pair the name first (`naklios-door pair agent`), then register it:
+
+```bash
+claude mcp add naklios -- naklios-door mcp --client agent
+codex mcp add naklios -- naklios-door mcp --client agent
+```
+
+It signs requests and checks answers exactly like the CLI. A refusal (`ECONSENT`, `EAUTH`) comes back as a tool
+error the model can read.
+
 ## What a program can do
 
 - Read app data at once after pairing.

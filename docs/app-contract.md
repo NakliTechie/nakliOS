@@ -671,6 +671,23 @@ app's files directly.
 grouped by topic; each subscriber keeps its own read position, and a `once` key stops the same work running twice.
 A subscriber needs a Grant for the topic.
 
+### Who can call an app's commands (2026-11-16)
+
+An app registers its commands once with `naklios.experimental_commands.register`. Every door below then reaches them
+through the same catalog, the same scopes and the same History; the app needs no code for any of them:
+
+| Caller | Door | In the SDK? |
+|---|---|---|
+| Another app | `experimental_commands.search` / `.call` (with an app Grant; system apps freely) | yes |
+| Anvil's agent | its `app_command` tool, over the same SDK calls | Anvil uses the SDK |
+| An Anvil codemode script | `rail_search`, `rail_describe`, `rail_call` (`call` with `ask:false`, `notAfter`, `token`; `abandon`) | the options and `abandon` are SDK members; the script runtime is Anvil's |
+| The voice assistant | the host's command path | host side, no SDK surface |
+| A browser-driving agent | `window.rig` (developer agent tools, off by default) | host side, no SDK surface |
+| A program on this computer, Emacs, an MCP client | `tools/naklios-door` (CLI, `naklios.el`, `naklios-door mcp`) | host side, no SDK surface |
+
+Not in the SDK yet: a `describe(name)` call (callers resolve it from `search`), rail events (an app cannot subscribe
+to another app's changes), and a way for an app other than Anvil to run a codemode script.
+
 ### Grants on the rail
 
 | Caller | May list | May invoke `read` | May invoke `write` | May invoke `destructive` |

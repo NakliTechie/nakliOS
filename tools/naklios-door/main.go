@@ -5,6 +5,7 @@
 //	naklios-door search [--client c] <words>      find app commands
 //	naklios-door describe [--client c] <name>     one command's input
 //	naklios-door call [--client c] [--ask] <name> [json-input]
+//	naklios-door mcp [--client c]                MCP server on stdin/stdout for an AI client (Claude Code, Codex, …)
 //	naklios-door version
 //
 // Every answer is printed as JSON. The exit status is 1 when the answer has "ok": false.
@@ -46,6 +47,7 @@ func usage() {
   naklios-door search [--client cli] <words…>
   naklios-door describe [--client cli] <command>
   naklios-door call [--client cli] [--ask] <command> [json-input]
+  naklios-door mcp [--client cli]
   naklios-door version`)
 	os.Exit(2)
 }
@@ -67,18 +69,20 @@ func main() {
 		fmt.Println("naklios-door " + version)
 	case "serve":
 		serve(*port, *dev)
+	case "mcp":
+		serveMCP(os.Stdin, os.Stdout, *port, *client)
 	case "pair":
 		if len(rest) != 1 || !clientName.MatchString(rest[0]) {
 			fatal("pair takes one client name: 1-32 lowercase letters, digits or hyphens, starting with a letter")
 		}
 		emit(pairProgram(*port, rest[0], os.Stdin))
 	case "search":
-		emit(signed(*port, "search", *client, map[string]any{"query": strings.Join(rest, " ")}))
+		emit(signed(*port, "search", *client, mustKey(*client), map[string]any{"query": strings.Join(rest, " ")}))
 	case "describe":
 		if len(rest) != 1 {
 			usage()
 		}
-		emit(signed(*port, "describe", *client, map[string]any{"name": rest[0]}))
+		emit(signed(*port, "describe", *client, mustKey(*client), map[string]any{"name": rest[0]}))
 	case "call":
 		if len(rest) < 1 || len(rest) > 2 {
 			usage()
@@ -89,7 +93,7 @@ func main() {
 				fatal("input must be a JSON object: " + err.Error())
 			}
 		}
-		emit(signed(*port, "call", *client, map[string]any{"name": rest[0], "input": input, "ask": *ask}))
+		emit(signed(*port, "call", *client, mustKey(*client), map[string]any{"name": rest[0], "input": input, "ask": *ask}))
 	default:
 		usage()
 	}
@@ -137,21 +141,30 @@ func saveKey(client, key string) (string, error) {
 	return path, os.Chmod(path, 0o600)
 }
 
-func loadKey(client string) []byte {
+// loadKey reads the program's key. It returns an error instead of exiting, so the MCP mode can answer with it.
+func loadKey(client string) ([]byte, error) {
 	if !clientName.MatchString(client) {
-		fatal("bad --client name")
+		return nil, fmt.Errorf("bad client name %q", client)
 	}
 	path, err := keyPath(client)
 	if err != nil {
-		fatal(err.Error())
+		return nil, err
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		fatal(fmt.Sprintf("no key for %q; run: naklios-door pair %s", client, client))
+		return nil, fmt.Errorf("no key for %q; run: naklios-door pair %s", client, client)
 	}
 	key, err := base64.RawURLEncoding.DecodeString(strings.TrimSpace(string(data)))
 	if err != nil || len(key) != 32 {
-		fatal("the key file " + path + " is damaged; revoke the program in Settings → AI and pair again")
+		return nil, fmt.Errorf("the key file %s is damaged; revoke the program in Settings → AI and pair again", path)
+	}
+	return key, nil
+}
+
+func mustKey(client string) []byte {
+	key, err := loadKey(client)
+	if err != nil {
+		fatal(err.Error())
 	}
 	return key
 }
@@ -268,8 +281,7 @@ func decode(payload string) map[string]any {
 
 // signed sends one authenticated request and accepts only an answer signed with the same key. An unsigned answer is
 // shown only when it is a refusal, marked unverified, because anything could have sent it.
-func signed(port int, op, client string, body any) map[string]any {
-	key := loadKey(client)
+func signed(port int, op, client string, key []byte, body any) map[string]any {
 	inner, _ := json.Marshal(body)
 	nb := make([]byte, 18)
 	rand.Read(nb)
