@@ -428,10 +428,26 @@ export async function tracksByIndex(indexName, key) {
   return request(index.getAll(key));
 }
 
-/** Sort within an album: disc, then track number, then title. */
+/**
+ * The track number to show and sort by: a positive integer, or null. A tag of 0 (some
+ * rippers write "0" on every file) means "no number", so it shows blank and sorts after
+ * the numbered tracks. The stored value stays as the tag says.
+ */
+export function trackNumber(value) {
+  const number = Number(value);
+  return value !== null && value !== '' && Number.isInteger(number) && number > 0 ? number : null;
+}
+
+/** The text of a track-number cell: the number, or '' when there is none. */
+export function trackNumberLabel(value) {
+  const number = trackNumber(value);
+  return number === null ? '' : String(number);
+}
+
+/** Sort within an album: disc, then track number (none last), then title. */
 export function compareAlbumOrder(left, right) {
   return (left.discNo ?? 1) - (right.discNo ?? 1)
-    || (left.trackNo ?? 1e9) - (right.trackNo ?? 1e9)
+    || (trackNumber(left.trackNo) ?? 1e9) - (trackNumber(right.trackNo) ?? 1e9)
     || String(left.title ?? left.name ?? '').localeCompare(String(right.title ?? right.name ?? ''));
 }
 

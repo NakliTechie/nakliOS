@@ -32,10 +32,22 @@ export function networkRows(list) {
   }));
 }
 
-/** "Sends: ..." line, with the extra origins a provider redirects to. */
+/** The host name of an origin (`https://lrclib.net` gives `lrclib.net`); wildcards kept. */
+export function hostOf(origin) {
+  return String(origin ?? '').replace(/^[a-z]+:\/\//i, '').replace(/\/.*$/, '');
+}
+
+/**
+ * The line beside a switch: what turning it on sends, and to which host, with the
+ * extra hosts a provider redirects to. Ticking the switch is the consent (no second
+ * prompt), so this line is what the person agrees to.
+ */
 export function sendsText(row) {
-  const also = row.also.length ? ` Also contacts ${row.also.join(' and ')}.` : '';
-  return `Sends: ${row.sends}${also}`;
+  const what = String(row.sends ?? '').trim();
+  const lead = /^[A-Z][a-z]/.test(what) ? what[0].toLowerCase() + what.slice(1) : what;
+  const host = hostOf(row.origin) || row.label;
+  const also = row.also.length ? ` Also contacts ${row.also.map(hostOf).join(' and ')}.` : '';
+  return `Turning this on sends ${host} ${lead || 'requests from NakliAmp.'}${also}`;
 }
 
 /**

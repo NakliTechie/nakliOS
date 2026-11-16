@@ -14,6 +14,7 @@
 import { browse, sortTracks, GROUP_VIEWS, LIST_VIEWS, SORT_KEYS } from '../library/views.mjs';
 import { searchTracks, fuzzyScore } from '../library/search.mjs';
 import { evaluateSmart } from '../library/smart.mjs';
+import { trackNumberLabel } from '../library/store.mjs';
 import { createSelection } from './select.mjs';
 
 // ------------------------------------------------------------------ pure ----
@@ -223,7 +224,7 @@ export function formatDuration(seconds) {
 // ------------------------------------------------------------------- DOM ----
 
 const CSS = `
-.nb{display:flex;flex-direction:column;gap:10px;width:100%;max-width:1080px;margin:auto;min-width:0;color:var(--ink,var(--text))}
+.nb{display:flex;flex-direction:column;gap:10px;width:100%;max-width:1080px;margin:auto;min-width:0;flex:1 1 auto;color:var(--ink,var(--text))}
 .nb-head{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .nb-head label{display:flex;align-items:center;gap:6px;font:12px var(--body);color:var(--muted)}
 .nb select,.nb input[type=search],.nb input[type=text]{min-height:36px;padding:6px 10px;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--ink,var(--text));font:12px var(--body);max-width:100%}
@@ -252,7 +253,7 @@ const CSS = `
 .nb-album .nb-album-actions .nb-btn{min-height:38px;padding:7px 16px;font:600 13px var(--body)!important}
 .nb-no{width:24px;flex:none;text-align:right;font:11px var(--mono);color:var(--faint,var(--muted))}
 .nb-bar .nb-count{margin-right:auto}
-.nb-scroll{position:relative;overflow-y:auto;overflow-x:hidden;height:var(--nakliamp-list-height,max(320px,calc(100dvh - 330px)));border:1px solid var(--line);border-radius:var(--radius,14px);background:var(--panel);outline:none}
+.nb-scroll{position:relative;overflow-y:auto;overflow-x:hidden;flex:1 1 auto;min-height:var(--nakliamp-list-min,0px);height:var(--nakliamp-list-height,max(320px,calc(100dvh - 330px)));border:1px solid var(--line);border-radius:var(--radius,14px);background:var(--panel);outline:none}
 .nb-scroll:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .nb-spacer{position:relative;width:100%}
 .nb-window{position:absolute;left:0;right:0;top:0}
@@ -581,7 +582,7 @@ export function mountBrowse(root, ctx) {
   /** A track number on an album page (M4), the cover everywhere else. */
   function leadCell(track, albumPage) {
     if (!albumPage) return coverImage(track, 'nb-cover', '');
-    return el('span', { class: 'nb-no', 'aria-hidden': 'true', text: Number.isFinite(track.trackNo) ? String(track.trackNo) : '' });
+    return el('span', { class: 'nb-no', 'aria-hidden': 'true', text: trackNumberLabel(track.trackNo) });
   }
 
   function trackRow(track, index) {
@@ -875,8 +876,15 @@ export function mountBrowse(root, ctx) {
     fillMenu(items ?? mainMenuItems(ids), label);
     const width = menu.offsetWidth || 220;
     const height = menu.offsetHeight || 300;
-    menu.style.left = `${Math.max(8, Math.min(x, innerWidth - width - 8))}px`;
-    menu.style.top = `${Math.max(8, Math.min(y, innerHeight - height - 8))}px`;
+    // x and y are viewport coordinates. A transformed or filtered ancestor becomes the
+    // containing block of a fixed element, so measure where (0, 0) lands and subtract it.
+    menu.style.left = '0px';
+    menu.style.top = '0px';
+    const origin = menu.getBoundingClientRect();
+    const left = Math.max(8, Math.min(x, innerWidth - width - 8));
+    const top = Math.max(8, Math.min(y, innerHeight - height - 8));
+    menu.style.left = `${left - origin.left}px`;
+    menu.style.top = `${top - origin.top}px`;
   }
 
   function openMenuAtCursor(items, label) {
@@ -1012,12 +1020,16 @@ export function mountBrowse(root, ctx) {
       runAction('favourite', { ids: [track.id], favourite: !track.bookmarked });
       return true;
     }
-    if (!event.target.closest('[data-more]')) return false;
+    const more = event.target.closest('[data-more]');
+    if (!more) return false;
+    // Measure the button before render(): render replaces the rows, which detaches it
+    // and would give a zero rectangle (the menu then opened at the window's top-left).
+    const box = more.getBoundingClientRect();
     if (!selection.has(data.keys[index])) selection.click(index);
     paintBar();
     render();
-    const box = event.target.getBoundingClientRect();
-    openMenu({ x: box.left - 180, y: box.bottom + 2, ids: idsForAction() });
+    const width = menu.offsetWidth || 220;
+    openMenu({ x: box.right - Math.max(width, 200), y: box.bottom + 2, ids: idsForAction() });
     return true;
   }
 
