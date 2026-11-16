@@ -94,7 +94,9 @@ export function renderReview(model, { doc, onCommit, onDiscard, onShowApp } = {}
   // The diff table. Tabular before/after IS a table — a11y gets scope'd headers
   // and a caption instead of a div grid.
   const table = el(doc, 'table', 'nk-rev-diff');
-  const caption = el(doc, 'caption', null, model.summary || `Changes from ${appName}`);
+  // The header already shows the summary; a second visible copy here read as a duplicate on the card
+  // (Reckon promo capture, 2026-11-17). Keep the caption for the table's accessible name, visually hidden.
+  const caption = el(doc, 'caption', 'nk-rev-sr', `Changes from ${appName}`);
   table.appendChild(caption);
   const thead = el(doc, 'thead');
   const hrow = el(doc, 'tr');
