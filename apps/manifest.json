@@ -1710,12 +1710,120 @@
           "destination": "index.html"
         },
         {
-          "source": "vendor/mediabunny/mediabunny-1.51.0.min.mjs",
-          "destination": "vendor/mediabunny/mediabunny-1.51.0.min.mjs"
+          "source": "commands.json",
+          "destination": "commands.json"
+        },
+        {
+          "source": "engine/reel-engine.mjs",
+          "destination": "engine/reel-engine.mjs"
+        },
+        {
+          "source": "app/modules.mjs",
+          "destination": "app/modules.mjs"
+        },
+        {
+          "source": "app/core/commands.mjs",
+          "destination": "app/core/commands.mjs"
+        },
+        {
+          "source": "app/core/registry.mjs",
+          "destination": "app/core/registry.mjs"
+        },
+        {
+          "source": "app/help/index.mjs",
+          "destination": "app/help/index.mjs"
+        },
+        {
+          "source": "app/picture/index.mjs",
+          "destination": "app/picture/index.mjs"
+        },
+        {
+          "source": "app/platform/index.mjs",
+          "destination": "app/platform/index.mjs"
+        },
+        {
+          "source": "app/queue/index.mjs",
+          "destination": "app/queue/index.mjs"
+        },
+        {
+          "source": "app/queue/logic.mjs",
+          "destination": "app/queue/logic.mjs"
+        },
+        {
+          "source": "app/rung/index.mjs",
+          "destination": "app/rung/index.mjs"
+        },
+        {
+          "source": "app/subtitles/captions.mjs",
+          "destination": "app/subtitles/captions.mjs"
+        },
+        {
+          "source": "app/subtitles/cues.mjs",
+          "destination": "app/subtitles/cues.mjs"
+        },
+        {
+          "source": "app/subtitles/decode.mjs",
+          "destination": "app/subtitles/decode.mjs"
+        },
+        {
+          "source": "app/subtitles/index.mjs",
+          "destination": "app/subtitles/index.mjs"
+        },
+        {
+          "source": "app/subtitles/match.mjs",
+          "destination": "app/subtitles/match.mjs"
+        },
+        {
+          "source": "app/subtitles/parse.mjs",
+          "destination": "app/subtitles/parse.mjs"
+        },
+        {
+          "source": "app/transport/index.mjs",
+          "destination": "app/transport/index.mjs"
+        },
+        {
+          "source": "app/transport/logic.mjs",
+          "destination": "app/transport/logic.mjs"
+        },
+        {
+          "source": "vendor/mediabunny/mediabunny-1.66.0.min.mjs",
+          "destination": "vendor/mediabunny/mediabunny-1.66.0.min.mjs"
         },
         {
           "source": "vendor/mediabunny/LICENSE-MPL-2.0.txt",
           "destination": "vendor/mediabunny/LICENSE-MPL-2.0.txt"
+        },
+        {
+          "source": "vendor/mediabunny-ac3/mediabunny-ac3-1.66.0.min.mjs",
+          "destination": "vendor/mediabunny-ac3/mediabunny-ac3-1.66.0.min.mjs"
+        },
+        {
+          "source": "vendor/mediabunny-ac3/LICENSE-MPL-2.0.txt",
+          "destination": "vendor/mediabunny-ac3/LICENSE-MPL-2.0.txt"
+        },
+        {
+          "source": "vendor/mediabunny-ac3/licenses/ffmpeg/LICENSE.md",
+          "destination": "vendor/mediabunny-ac3/licenses/ffmpeg/LICENSE.md"
+        },
+        {
+          "source": "vendor/mediabunny-ac3/licenses/ffmpeg/COPYING.LGPLv2.1",
+          "destination": "vendor/mediabunny-ac3/licenses/ffmpeg/COPYING.LGPLv2.1"
+        },
+        {
+          "source": "vendor/mediabunny-dts/mediabunny-dts-1.66.0.min.mjs",
+          "destination": "vendor/mediabunny-dts/mediabunny-dts-1.66.0.min.mjs"
+        },
+        {
+          "source": "vendor/mediabunny-dts/LICENSE-MPL-2.0.txt",
+          "destination": "vendor/mediabunny-dts/LICENSE-MPL-2.0.txt"
+        },
+        {
+          "source": "vendor/mediabunny-dts/licenses/ffmpeg/LICENSE.md",
+          "destination": "vendor/mediabunny-dts/licenses/ffmpeg/LICENSE.md"
+        },
+        {
+          "source": "vendor/mediabunny-dts/licenses/ffmpeg/COPYING.LGPLv2.1",
+          "destination": "vendor/mediabunny-dts/licenses/ffmpeg/COPYING.LGPLv2.1"
         }
       ]
     },
