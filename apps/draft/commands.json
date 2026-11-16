@@ -729,6 +729,10 @@
               "docx"
             ],
             "description": "The format. Word comes back as base64"
+          },
+          "history": {
+            "type": "boolean",
+            "description": "Draft JSON only: true to include saved versions and hidden comments. Default false"
           }
         },
         "required": [
