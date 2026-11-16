@@ -7769,21 +7769,21 @@
       "id": "chartella",
       "repo": "NakliTechie/chartella",
       "requestedRef": "main",
-      "resolvedCommit": "b4c57ac109cba6bd150f212c0e2717b0957ab98c",
+      "resolvedCommit": "a9ada9d8893c97904a6ca1277f8e05c311dcb1f0",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "f86a4e2ca63f0c691749007c77ca1f349e5471186f3a6a2e321c534ababcdebb",
-          "bytes": 678478,
-          "originalSourceSha256": "eba20816eba0b7576bd8134352ee86b9d11c42479d272fc562974f972559a01d",
+          "sha256": "daceee4a28dbe41dcd8137e2801922796a40d3ff91b14b1a63a71fa4356dd5af",
+          "bytes": 781522,
+          "originalSourceSha256": "59a36d94475349238e6e33b9c32c70d0d4d409bb924f700d14b27f35990fc777",
           "sdkSha256": "ec78ab7bd0e82a108847216f33bc6600366f68199f9416959411e5db254405ed"
         },
         {
           "source": "commands.json",
           "destination": "commands.json",
-          "sha256": "7d0a0be1fb46ed828b90fb3d804aef25381096919de3efafe5cd621c5e876866",
-          "bytes": 51109
+          "sha256": "0512153c4296e87446180004eeee27b105758d7e57ec53d7e5e79900a0ed3e43",
+          "bytes": 62803
         },
         {
           "source": "LICENSE",
@@ -7800,8 +7800,8 @@
         {
           "source": "board.schema.json",
           "destination": "board.schema.json",
-          "sha256": "5fc70f9f98cac99f3506b337ebde9795492d53cd4026b110c86fe73974c3bb7a",
-          "bytes": 12221
+          "sha256": "6878b8a3be5576106ca3464c23526702548433f8e76f434a2bf36aa2da32f945",
+          "bytes": 13658
         }
       ]
     }

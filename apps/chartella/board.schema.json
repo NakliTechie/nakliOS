@@ -397,6 +397,54 @@
      "headerRow": {
       "type": "boolean",
       "description": "Table: the first row is a header"
+     },
+     "tree": {
+      "type": "boolean",
+      "description": "Arrow: a mind-map link from parent (start) to child (end)"
+     },
+     "stack": {
+      "oneOf": [
+       {
+        "type": "null"
+       },
+       {
+        "type": "object",
+        "required": [
+         "dir"
+        ],
+        "properties": {
+         "dir": {
+          "enum": [
+           "row",
+           "column"
+          ]
+         },
+         "gap": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+         },
+         "padding": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+         },
+         "align": {
+          "enum": [
+           "start",
+           "center",
+           "end"
+          ]
+         }
+        }
+       }
+      ],
+      "description": "Frame: lay out its contents in a row or column"
+     },
+     "pageId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,64}$",
+      "description": "The page the shape is on (an id in pages)"
      }
     }
    },
@@ -464,6 +512,29 @@
     }
    },
    "description": "Arrow bindings by id"
+  },
+  "pages": {
+   "type": "array",
+   "minItems": 1,
+   "maxItems": 100,
+   "items": {
+    "type": "object",
+    "required": [
+     "id",
+     "name"
+    ],
+    "properties": {
+     "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,64}$"
+     },
+     "name": {
+      "type": "string",
+      "maxLength": 200
+     }
+    }
+   },
+   "description": "The pages in order; each shape names its page in pageId"
   },
   "files": {
    "type": "object",
