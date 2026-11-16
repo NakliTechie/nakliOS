@@ -221,6 +221,18 @@
       "shortcut": "F"
     },
     {
+      "name": "tool.table",
+      "label": "Table",
+      "description": "Pick the table tool: click for a 3 by 3 table, or drag to size one.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Shift+T"
+    },
+    {
       "name": "board.read",
       "label": "Read board",
       "description": "Read the board as a compact list: each shape's id, kind, bounds (x, y, w, h), text, frame and group, and for arrows the shape ids they join (from, to). Optional ids or region narrow it.",
@@ -321,7 +333,7 @@
     {
       "name": "shape.add",
       "label": "Add shape",
-      "description": "Add a shape: kind is rect, ellipse, diamond, triangle, line, arrow, text, sticky, frame, image or ink. Fields: x, y, w, h (board units, 1 = 1 CSS px at 100%), rotation (radians), text, stroke, fill (#rrggbb or transparent), strokeWidth (0–64), dash (solid|dashed|dotted), opacity (0–1), radius (corner radius), sketch (true: hand-drawn look), font (hand|sans|mono), fontSize (px; presets s 16, m 20, l 28, xl 36), align (left|center|right). Kind fields: sticky color (yellow|orange|pink|purple|blue|teal|green|gray); frame name; text autoWidth; line/arrow/ink points [[x,y],…] in board coordinates; arrow route (straight|curved|elbow), bend (curved: -2..2), startHead/endHead (none|arrow|triangle|dot|bar); ink highlight; image fileId. Returns { id }.",
+      "description": "Add a shape: kind is rect, ellipse, diamond, triangle, line, arrow, text, sticky, frame, image or ink. Fields: x, y, w, h (board units, 1 = 1 CSS px at 100%), rotation (radians), text, stroke, fill (#rrggbb or transparent), strokeWidth (0–64), dash (solid|dashed|dotted), opacity (0–1), radius (corner radius), sketch (true: hand-drawn look), font (hand|sans|mono), fontSize (px; presets s 16, m 20, l 28, xl 36), align (left|center|right). Kind fields: sticky color (yellow|orange|pink|purple|blue|teal|green|gray); frame name; text autoWidth; line/arrow/ink points [[x,y],…] in board coordinates; arrow route (straight|curved|elbow), bend (curved: -2..2), startHead/endHead (none|arrow|triangle|dot|bar); ink highlight; image fileId; path d (SVG path data), viewBox [w, h], stencil (its library name); table cells [[text]], colWidths, rowHeights, headerRow. Returns { id }.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -340,7 +352,9 @@
               "sticky",
               "frame",
               "image",
-              "ink"
+              "ink",
+              "path",
+              "table"
             ]
           },
           "props": {
@@ -356,7 +370,7 @@
     {
       "name": "shape.update",
       "label": "Change shapes",
-      "description": "Change fields on shapes (default: the selection). Fields: x, y, w, h (board units, 1 = 1 CSS px at 100%), rotation (radians), text, stroke, fill (#rrggbb or transparent), strokeWidth (0–64), dash (solid|dashed|dotted), opacity (0–1), radius (corner radius), sketch (true: hand-drawn look), font (hand|sans|mono), fontSize (px; presets s 16, m 20, l 28, xl 36), align (left|center|right). Kind fields: sticky color (yellow|orange|pink|purple|blue|teal|green|gray); frame name; text autoWidth; line/arrow/ink points [[x,y],…] in board coordinates; arrow route (straight|curved|elbow), bend (curved: -2..2), startHead/endHead (none|arrow|triangle|dot|bar); ink highlight; image fileId.",
+      "description": "Change fields on shapes (default: the selection). Fields: x, y, w, h (board units, 1 = 1 CSS px at 100%), rotation (radians), text, stroke, fill (#rrggbb or transparent), strokeWidth (0–64), dash (solid|dashed|dotted), opacity (0–1), radius (corner radius), sketch (true: hand-drawn look), font (hand|sans|mono), fontSize (px; presets s 16, m 20, l 28, xl 36), align (left|center|right). Kind fields: sticky color (yellow|orange|pink|purple|blue|teal|green|gray); frame name; text autoWidth; line/arrow/ink points [[x,y],…] in board coordinates; arrow route (straight|curved|elbow), bend (curved: -2..2), startHead/endHead (none|arrow|triangle|dot|bar); ink highlight; image fileId; path d (SVG path data), viewBox [w, h], stencil (its library name); table cells [[text]], colWidths, rowHeights, headerRow.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1598,6 +1612,245 @@
         ]
       },
       "shortcut": "Shift+Mod+E"
+    },
+    {
+      "name": "table.set_cell",
+      "label": "Set table cell",
+      "description": "Put text in one cell of a table: row and col count from 0. Add a table with shape.add kind table, props { cells: [[\"a\",\"b\"],[\"c\",\"d\"]], colWidths, rowHeights, headerRow }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Table id"
+          },
+          "row": {
+            "type": "number",
+            "description": "Row, from 0"
+          },
+          "col": {
+            "type": "number",
+            "description": "Column, from 0"
+          },
+          "text": {
+            "type": "string",
+            "description": "Cell text"
+          }
+        },
+        "required": [
+          "id",
+          "row",
+          "col",
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "table.insert_row",
+      "label": "Insert table row",
+      "description": "Insert an empty row before index `at` (default: at the end).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Table id"
+          },
+          "at": {
+            "type": "number",
+            "description": "Row index, from 0"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    {
+      "name": "table.insert_col",
+      "label": "Insert table column",
+      "description": "Insert an empty column before index `at` (default: at the end).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Table id"
+          },
+          "at": {
+            "type": "number",
+            "description": "Column index, from 0"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    {
+      "name": "table.delete_row",
+      "label": "Delete table row",
+      "description": "Delete the row at index `at`.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Table id"
+          },
+          "at": {
+            "type": "number",
+            "description": "Row index, from 0"
+          }
+        },
+        "required": [
+          "id",
+          "at"
+        ]
+      }
+    },
+    {
+      "name": "table.delete_col",
+      "label": "Delete table column",
+      "description": "Delete the column at index `at`.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Table id"
+          },
+          "at": {
+            "type": "number",
+            "description": "Column index, from 0"
+          }
+        },
+        "required": [
+          "id",
+          "at"
+        ]
+      }
+    },
+    {
+      "name": "ui.recognize",
+      "label": "Sketch to shapes",
+      "description": "When on, a pen stroke drawn as a circle, box, triangle, diamond, line or arrow becomes that clean shape. With no `on`, toggles.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "on": {
+            "type": "boolean",
+            "description": "On or off"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "stencil.list",
+      "label": "List shapes and icons",
+      "description": "List the shape libraries (flowchart, uml, devices, people, wireframe, icons) with each item's id, label and usage note. Pass `collection` for one library; the icons library is long, so prefer stencil.search for icons.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "collection": {
+            "type": "string",
+            "description": "One collection id",
+            "enum": [
+              "flowchart",
+              "uml",
+              "devices",
+              "people",
+              "wireframe",
+              "icons"
+            ]
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "stencil.search",
+      "label": "Search shapes and icons",
+      "description": "Find stencils and icons by name or keyword (\"database\", \"button\", \"star\"), best match first. Returns { matches: [{ id, label, usage, collection }] }; insert one with stencil.insert.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Words to look for"
+          },
+          "limit": {
+            "type": "number",
+            "description": "Most matches to return (default 20)",
+            "minimum": 1,
+            "maximum": 200
+          },
+          "collection": {
+            "type": "string",
+            "description": "Only this collection",
+            "enum": [
+              "flowchart",
+              "uml",
+              "devices",
+              "people",
+              "wireframe",
+              "icons"
+            ]
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    {
+      "name": "stencil.insert",
+      "label": "Insert shape or icon",
+      "description": "Insert a stencil or icon by id (from stencil.list or stencil.search) with its top-left at x, y, or centred in the view when x and y are left out. w and h change its size; style sets stroke, fill, strokeWidth, dash, opacity, sketch or font. Several shapes come grouped. Selects the result. Returns { ids, groupId }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Stencil id, such as \"flowchart:database\" or \"lucide:star\""
+          },
+          "x": {
+            "type": "number",
+            "description": "Left (default: view centre)"
+          },
+          "y": {
+            "type": "number",
+            "description": "Top (default: view centre)"
+          },
+          "w": {
+            "type": "number",
+            "description": "Width (default: the stencil's own)",
+            "exclusiveMinimum": 0
+          },
+          "h": {
+            "type": "number",
+            "description": "Height (default: the stencil's own)",
+            "exclusiveMinimum": 0
+          },
+          "style": {
+            "type": "object",
+            "description": "Style overrides: stroke, fill, strokeWidth, dash, opacity, sketch, font"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
     },
     {
       "name": "script.run",
