@@ -8528,6 +8528,22 @@ function appGrantRowsHTML(){
         <button class="nw-fs-btn-secondary" type="button" data-app-grant-revoke="${_dlgEscape(r.caller + ' ' + r.target)}">${r.allowed ? 'Revoke' : 'Forget'}</button>
       </div>`).join('')}</div>`;
 }
+// Settings → AI: the outside door switch and one row per paired program, each with its own Revoke.
+function doorSettingsHTML(){
+  let clients = [];
+  try { clients = Object.entries(JSON.parse(localStorage.getItem('nakliOS.doorClients.v3') || '{}') || {}).map(([client, v]) => ({ client, pairedAt: v?.pairedAt || 0 }))
+    .sort((a, b) => b.pairedAt - a.pairedAt); } catch(_) {}
+  return `<label class="nw-fs-blurb" style="display:flex; gap:6px; align-items:center; margin:12px 0 0;">
+      <input type="checkbox" id="door-on" style="width:auto;" ${doorEnabled() ? 'checked' : ''}>
+      <span>Let programs on this computer (a shell, Emacs, scripts) use NakliOS commands through naklios-door</span>
+    </label>
+    <div class="nw-fs-blurb" data-door-state style="margin-top:4px;">${_dlgEscape(doorStateText())}</div>
+    ${clients.length ? `<div class="nw-door-clients">${clients.map(c => `
+      <div class="nw-door-client-row" style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+        <span style="flex:1;min-width:0;">Program "${_dlgEscape(c.client)}" · allowed</span>
+        <button class="nw-fs-btn-secondary" type="button" data-door-revoke="${_dlgEscape(c.client)}">Revoke</button>
+      </div>`).join('')}</div>` : ''}`;
+}
 function netGrantCount(){ return Object.values(netGrants()).reduce((n, hosts) => n + Object.keys(hosts || {}).length, 0); }
 async function netRootKey(){
   const { g, c } = await netMods();
@@ -10987,6 +11003,7 @@ function openSettings(section){
         </button>
       </div>
       ${appGrantRowsHTML()}
+      ${doorSettingsHTML()}
       <div class="nw-ai-result" id="ai-settings-result" role="status"></div>
     </div>
   `;
@@ -11629,6 +11646,19 @@ function openSettings(section){
     row.closest('.nw-app-grant-row')?.remove();
     const name = id => APPS.find(a => a.id === id)?.name || id;
     aiSettingsResult.textContent = `${name(caller)} no longer uses ${name(target)}; it asks again before its next call.`;
+  }));
+  wrap.querySelector('#door-on')?.addEventListener('change', (event) => {
+    const on = event.currentTarget.checked;
+    try { localStorage.setItem('nakliOS.door.enabled', on ? '1' : '0'); } catch(_) {}
+    if (on) startDoor(); else stopDoor();
+    wrap.querySelectorAll('[data-door-state]').forEach(el => { el.textContent = doorStateText(); });
+    aiSettingsResult.textContent = on ? 'The outside door is on. Start it on this computer with: naklios-door serve' : 'The outside door is off; NakliOS no longer connects to 127.0.0.1.';
+  });
+  wrap.querySelectorAll('[data-door-revoke]').forEach(button => button.addEventListener('click', async (event) => {
+    const row = event.currentTarget; const client = row.dataset.doorRevoke;
+    (await hostDoor()).revoke(client);
+    row.closest('.nw-door-client-row')?.remove();
+    aiSettingsResult.textContent = `The program "${client}" can no longer use NakliOS; it must be allowed again.`;
   }));
   wrap.querySelector('#net-revoke-grants')?.addEventListener('click', (event) => {
     revokeNetGrants();
@@ -14521,7 +14551,7 @@ async function runAppCommandFor(callerId, name, input, ask, stillWanted = () => 
   const command = catalog.describeCommand(name);
   const target = command?.annotations?.app;
   if (!target) return { ok:false, code:'ENOENT', message:`no app command named ${name}` };
-  const label = id => APPS.find(a => a.id === id)?.name || id;
+  const label = id => APPS.find(a => a.id === id)?.name || (String(id).startsWith('door:') ? `the program "${String(id).slice(5)}"` : id);
   const refused = async () => {
     await opLog.append({ actor:callerId, caller:callerId, command:name, args:input, status:'EDENIED' });
     return { ok:false, code:'EDENIED', message:`the person did not allow changes to ${label(target)}` };
@@ -14529,10 +14559,13 @@ async function runAppCommandFor(callerId, name, input, ask, stillWanted = () => 
   // A late Allow, or one given after the caller's window closed, runs nothing.
   const answered = async question => { const asked = Date.now(); return (await question()) && Date.now() - asked < COMMAND_CONSENT_MS && stillWanted(); };
   const key = `${callerId}:${target}`;
-  if (noAsk && (command.destructive || (command.scope === 'app:write' && !appCommandWriteConsent.has(key)))){
+  // A program on this computer (door:<client>) never runs a command that is hard to undo; the person starts those in
+  // NakliOS. Checked here, on the command the catalog resolves now, and again below for anything that stages.
+  const door = String(callerId).startsWith('door:');
+  if ((noAsk || door) && (command.destructive || (noAsk && command.scope === 'app:write' && !appCommandWriteConsent.has(key)))){
     await opLog.append({ actor:callerId, caller:callerId, command:name, args:input, status:'ECONSENT' });
     return { ok:false, code:'ECONSENT', target, destructive:!!command.destructive,
-      message: command.destructive ? `${name} is hard to undo, so the person must approve it outside a script`
+      message: command.destructive ? `${name} is hard to undo, so the person must start it in NakliOS (not from a script or another program)`
         : `the person has not yet allowed changes to ${label(target)} on this visit` };
   }
   if (command.scope === 'app:write' && !command.destructive && !appCommandWriteConsent.has(key)){
@@ -14562,10 +14595,10 @@ async function runAppCommandFor(callerId, name, input, ask, stillWanted = () => 
   if (!out?.staged && out?.ok !== false && command.annotations?.showsWindow && openWindows[target]) focusWindow(openWindows[target]);
   if (!out?.staged) return out;
   // The early refusal reads the command before the call; an app that re-registered in between can still stage here.
-  if (noAsk){
+  if (noAsk || door){
     face.reject(out.proposalId);
     await opLog.append({ actor:callerId, caller:callerId, command:name, args:input, status:'ECONSENT' });
-    return { ok:false, code:'ECONSENT', target, destructive:true, message:`${name} is hard to undo, so the person must approve it outside a script` };
+    return { ok:false, code:'ECONSENT', target, destructive:true, message:`${name} is hard to undo, so the person must start it in NakliOS (not from a script or another program)` };
   }
   const detail = JSON.stringify(input ?? {}).slice(0, 300);
   if (await answered(() => nakliosConfirm(`${label(callerId)} wants to run this in ${label(target)}: ${command.description} ${detail}`, { title:'This change is hard to undo', okLabel:'Allow once', danger:true }))){
@@ -14607,6 +14640,65 @@ function appGrants(){
   }));
 }
 async function appToAppSearch(callerId, query){ return (await appGrants()).search(callerId, query); }
+// The outside door (sys/host/door.mjs; relay tools/naklios-door): programs on this computer use the app commands
+// under the caller name `door:<client>`, on the same path as Anvil. Off until the person turns it on in Settings → AI,
+// so no visitor's browser ever touches 127.0.0.1 or sees Chrome's local-network prompt.
+let doorModPromise = null, doorObj = null, doorLink = null, doorState = 'off', doorGeneration = 0;
+function doorMod(){ return doorModPromise ||= import('./sys/host/door.mjs'); }
+// Removes the dialog this call just opened when `signal` aborts (its watcher then settles it as Not now).
+function closeOnAbort(signal, shown){
+  const dlg = [...document.querySelectorAll('dialog.nw-dlg')].at(-1);
+  signal?.addEventListener('abort', () => dlg?.remove(), { once:true });
+  return shown;
+}
+async function hostDoor(){
+  if (doorObj) return doorObj;
+  const { createDoor, idbKeyStore } = await doorMod();
+  return doorObj ||= createDoor({
+    storage: localStorage, keys: idbKeyStore(),
+    confirmPair: (client, code, signal) => closeOnAbort(signal, nakliosConfirm(`A program on this computer, "${client}", wants to use NakliOS commands: find and read what your apps hold, and make changes you allow.\n\n` +
+      `Allow it only if the program shows the code ${code}.\n\n` +
+      `It connects through naklios-door on 127.0.0.1. Reading starts at once. A change asks you first on each visit, anything hard to undo is refused, ` +
+      `and NakliOS records each call in History. You can take this back in Settings → AI.`, { title:`Let "${client}" use NakliOS? Code ${code}`, okLabel:'Allow', cancelLabel:'Not now' })),
+    search: searchAppCommands,
+    // runAppCommandFor refuses every destructive command for a door: caller, even with --ask.
+    call: (client, name, input, { ask, cancelled }) => runAppCommandFor('door:' + client, name, input, (appId, label) =>
+      nakliosConfirm(`Let the program "${client}" change ${label}? It asks again on your next visit.`, { title:'Allow this change?', okLabel:'Allow' }),
+      () => !cancelled(), { noAsk: !ask, cancelled }),
+    record: ({ client, op, command, code }) => appCommandHistoryAppend({ caller:'door:' + client, target: command ? command.split('.')[0] : 'naklios',
+      command: command || 'door.' + op, grantId:null, output:{ ok: !code, code } }),
+    // A revoked program loses this visit's change consent too, so pairing again under the name asks again.
+    onRevoke: client => {
+      for (const key of [...appCommandWriteConsent]) if (key.startsWith('door:' + client + ':')) appCommandWriteConsent.delete(key);
+      appCommandFaces.delete('door:' + client);
+    },
+  });
+}
+// Start and stop may interleave (a quick on-off-on); the generation makes a stale start drop its own connection.
+async function startDoor(){
+  if (doorLink) return;
+  const mine = ++doorGeneration;
+  const [{ connectDoor }, door] = await Promise.all([doorMod(), hostDoor()]);
+  if (mine !== doorGeneration || doorLink || !doorEnabled()) return;
+  doorLink = connectDoor(door, { onState: s => { doorState = s; document.querySelectorAll('[data-door-state]').forEach(el => { el.textContent = doorStateText(); }); } });
+}
+function stopDoor(){ doorGeneration++; doorLink?.stop(); doorLink = null; doorState = 'off'; }
+function doorEnabled(){ try { return localStorage.getItem('nakliOS.door.enabled') === '1'; } catch(_) { return false; } }
+function doorStateText(){
+  return doorState === 'connected' ? 'Connected to naklios-door.'
+    : doorState === 'busy' ? 'Another NakliOS tab holds the door; this tab waits.'
+    : doorState === 'waiting' ? 'Waiting for naklios-door on 127.0.0.1:7461 (run: naklios-door serve).' : 'Off.';
+}
+if (doorEnabled()) startDoor();
+// Other tabs of this origin follow the switch and the list of programs: off in one tab is off in all, and a revoke or
+// a new pairing anywhere drops every door program's consent for this visit here too.
+window.addEventListener('storage', event => {
+  if (event.key === 'nakliOS.door.enabled') { if (event.newValue === '1') startDoor(); else stopDoor(); }
+  if (event.key === 'nakliOS.doorClients.v3' || event.key === null){
+    for (const key of [...appCommandWriteConsent]) if (key.startsWith('door:')) appCommandWriteConsent.delete(key);
+    for (const caller of [...appCommandFaces.keys()]) if (caller.startsWith('door:')) appCommandFaces.delete(caller);
+  }
+});
 async function appToAppCall(callerId, source, name, input, { noAsk = false, notAfter, cancelled } = {}){
   return (await appGrants()).call(callerId, name, input, () => openWindows[callerId]?.querySelector('iframe')?.contentWindow === source, { ask: !noAsk, notAfter, cancelled });
 }

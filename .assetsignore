@@ -20,3 +20,5 @@ wrangler.jsonc
 nakli-egress/
 worker/
 extension/
+# the outside door's Go relay is built locally, never served
+tools/
