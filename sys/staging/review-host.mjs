@@ -143,6 +143,29 @@ export function createReviewHost({
     return result;
   }
 
+  // The staging app takes back its own card (Reckon review B5): the change it proposed can no
+  // longer apply, for example because the person edited the same cells. Only the frame that
+  // staged the proposal may withdraw it, and never while its commit is applying. A withdrawal is
+  // the app's decision, not the person's rejection, so the diff is not poisoned.
+  async function withdraw({ source, proposal_id } = {}) {
+    const entry = queue.list().find((item) => item.proposal_id === proposal_id);
+    if (!entry) return { ok: false, reason: 'no such proposal' };
+    if (!source || sources.get(proposal_id) !== source) return { ok: false, reason: 'only the app that staged this change can withdraw it' };
+    if (applying.has(proposal_id)) return { ok: false, reason: 'the change is being applied' };
+    const result = queue.cancel(proposal_id);
+    if (!result.ok) return result;
+    sources.delete(proposal_id);
+    onChange(queue.envelopes());
+    try { await record('patch.withdrawn', { app: entry.app, proposal_id, tool: entry.tool }, { reason: 'withdrawn by the app' }); }
+    catch (error) { return { ok: true, historyError: String(error?.message || error) }; }
+    return { ok: true };
+  }
+
+  // The frame a pending proposal came from (the shell maps it to a window), or null.
+  function sourceFor(proposal_id) { return sources.get(proposal_id) || null; }
+  // Whether a frame has a proposal waiting for the person (the close guard asks this).
+  function hasPending(source) { return !!source && [...sources.values()].includes(source); }
+
   async function detach(source) {
     const ids = [...sources].filter(([, frame]) => frame === source).map(([id]) => id);
     for (const id of ids) {
@@ -163,5 +186,5 @@ export function createReviewHost({
     }
   }
 
-  return { stage, acknowledge, commit, discard, detach, envelopes: () => queue.envelopes(), size: () => queue.size() };
+  return { stage, acknowledge, commit, discard, withdraw, detach, sourceFor, hasPending, envelopes: () => queue.envelopes(), size: () => queue.size() };
 }

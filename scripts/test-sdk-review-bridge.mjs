@@ -65,4 +65,18 @@ app.fromHost({ type: 'naklios:review:discard', proposal_id: 'prop_demo' });
 await Promise.resolve();
 assert.equal(decisions, 2);
 
-console.log('SDK review bridge: standalone fallback, native stage RPC, trusted decisions, and replay-safe acknowledgement passed');
+// Reckon review B5: withdraw asks the host to take back this app's card.
+assert.deepEqual(JSON.parse(JSON.stringify(await standalone.window.naklios.review.withdraw('prop_demo'))),
+  { standalone: true, withdrawn: false });
+await assert.rejects(app.window.naklios.review.withdraw(''), /needs a proposal id/);
+const withdrawing = app.window.naklios.review.withdraw('prop_demo');
+const withdrawRequest = app.sent.at(-1);
+assert.equal(withdrawRequest.type, 'naklios:review:withdraw');
+assert.equal(withdrawRequest.proposal_id, 'prop_demo');
+app.fromHost({ type: 'naklios:review:reply', requestId: withdrawRequest.requestId, result: { ok: true } });
+assert.equal((await withdrawing).ok, true);
+const refused = app.window.naklios.review.withdraw('prop_other');
+app.fromHost({ type: 'naklios:review:reply', requestId: app.sent.at(-1).requestId, error: 'only the app that staged this change can withdraw it' });
+await assert.rejects(refused, /only the app that staged/);
+
+console.log('SDK review bridge: standalone fallback, native stage RPC, trusted decisions, replay-safe acknowledgement, and withdraw passed');

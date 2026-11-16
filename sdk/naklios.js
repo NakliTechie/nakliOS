@@ -876,6 +876,15 @@
           reversible: options.reversible === true,
         });
       },
+      // Take back a card this app staged, for example after the person's own edit made the
+      // proposal stale. The host removes it only for the frame that staged it. Standalone
+      // there is no card, so it resolves with a fallback marker.
+      withdraw: function (proposalId) {
+        if (!inNakliOS) return Promise.resolve({ standalone: true, withdrawn: false });
+        if (!capabilities.review) return Promise.reject(new Error('NakliOS review is unavailable'));
+        if (typeof proposalId !== 'string' || !proposalId) return Promise.reject(new Error('naklios.review.withdraw needs a proposal id'));
+        return rpc('naklios:review:withdraw', { proposal_id: proposalId });
+      },
       onDecision: function (cb) {
         if (typeof cb !== 'function') throw new Error('naklios.review.onDecision needs a callback');
         reviewDecisionHandler = cb;

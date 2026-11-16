@@ -13,7 +13,7 @@
 <meta property="og:image" content="https://naklios.dev/apps/rivulina/social.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://naklios.dev/apps/rivulina/social.png">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-72frOvu/WzeXmWy0Z+3oPMB3zz0GDPPjPWsc2DySQNw=' 'sha256-5IQIdjAgnRE86oSI+FxBdoiz6WeUpMlN6buwVR/v7uA=' 'sha256-7CM4ETlw8thZ9Zq3Bx/5edWMaRdLI8JFZMR1nJigqVI=' 'sha256-66iVKabMEJjzJJjPP6cesjZLofY10FJO1ib9GdPO7Co=' blob: https://cdn.jsdelivr.net/npm/@huggingface/ https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.0-dev.20260914-8d85527a0/ https://cdn.jsdelivr.net/npm/onnxruntime-common/ 'wasm-unsafe-eval'; base-uri 'none'; form-action 'none'; style-src 'unsafe-inline'; img-src https: data: blob:; media-src https: blob:; font-src data:; connect-src https: blob: data:; worker-src blob: 'self'; frame-src blob:">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-72frOvu/WzeXmWy0Z+3oPMB3zz0GDPPjPWsc2DySQNw=' 'sha256-5IQIdjAgnRE86oSI+FxBdoiz6WeUpMlN6buwVR/v7uA=' 'sha256-UHZZwARY6gNgEeVZjWNSk0sCAkHqfNibPLUZazpIBkU=' 'sha256-66iVKabMEJjzJJjPP6cesjZLofY10FJO1ib9GdPO7Co=' blob: https://cdn.jsdelivr.net/npm/@huggingface/ https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.0-dev.20260914-8d85527a0/ https://cdn.jsdelivr.net/npm/onnxruntime-common/ 'wasm-unsafe-eval'; base-uri 'none'; form-action 'none'; style-src 'unsafe-inline'; img-src https: data: blob:; media-src https: blob:; font-src data:; connect-src https: blob: data:; worker-src blob: 'self'; frame-src blob:">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23eef4f3'/%3E%3Cpath d='M6 11c5-3 8 3 13 0s7-2 7-2M6 17c5-3 8 3 13 0s7-2 7-2M6 23c5-3 8 3 13 0s7-2 7-2' fill='none' stroke='%230f766e' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E">
 <!--
 Rivulina, AGPL-3.0-or-later, (c) 2026 Chirag Patnaik. Source: https://github.com/NakliTechie/rivulina
@@ -530,7 +530,7 @@ addEventListener('error', (e) => { if (/ResizeObserver loop/.test(e.message || '
 addEventListener('unhandledrejection', (e) => report(e.reason?.message ?? e.reason));
 </script>
 <script>
-/* naklios-sdk:begin ver=2 sha256=ec78ab7bd0e82a108847216f33bc6600366f68199f9416959411e5db254405ed */
+/* naklios-sdk:begin ver=2 sha256=5ff86458102ce080ccf993e4c2bb74c3ef5c8336babe5e5d79906f0f04fae4d2 */
 /*!
  * naklios.js — cooperative SDK for apps hosted inside NakliOS (Immersive mode)
  *
@@ -1408,6 +1408,15 @@ addEventListener('unhandledrejection', (e) => report(e.reason?.message ?? e.reas
           tool: tool, diff: diff, expires: options.expires,
           reversible: options.reversible === true,
         });
+      },
+      // Take back a card this app staged, for example after the person's own edit made the
+      // proposal stale. The host removes it only for the frame that staged it. Standalone
+      // there is no card, so it resolves with a fallback marker.
+      withdraw: function (proposalId) {
+        if (!inNakliOS) return Promise.resolve({ standalone: true, withdrawn: false });
+        if (!capabilities.review) return Promise.reject(new Error('NakliOS review is unavailable'));
+        if (typeof proposalId !== 'string' || !proposalId) return Promise.reject(new Error('naklios.review.withdraw needs a proposal id'));
+        return rpc('naklios:review:withdraw', { proposal_id: proposalId });
       },
       onDecision: function (cb) {
         if (typeof cb !== 'function') throw new Error('naklios.review.onDecision needs a callback');

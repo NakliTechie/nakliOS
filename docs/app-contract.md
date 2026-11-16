@@ -740,7 +740,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 
 <!-- sdk-reference:begin — rendered by `node scripts/sdk-reference.mjs --write` from docs/sdk-api-audit.md; do not edit by hand -->
 
-126 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
+127 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
 
 ### `version`
 
@@ -842,6 +842,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 |---|---|---|
 | `review` | namespace | Host-owned staging queue and person review bridge. The P0 app contract names this stable namespace directly. |
 | `review.stage` | function | Send an agent-originated native diff for the person to review, without applying it. The app's own UI edits apply directly and are never staged. Returns a proposal ID; standalone returns a fallback marker. |
+| `review.withdraw` | function | Take back a card this app staged, for example after the person's own edit made the proposal stale. The host removes the card only for the frame that staged it, and never while its commit is applying; the diff is not marked as rejected, so the app can stage it again. Resolves `{ ok:true }`; rejects for an unknown proposal or another app's. Standalone resolves a fallback marker. |
 | `review.onDecision` | function | Register one app decision handler. The SDK acknowledges a successful commit once and re-acknowledges replays without reapplying. |
 
 ### `fs` (namespace)

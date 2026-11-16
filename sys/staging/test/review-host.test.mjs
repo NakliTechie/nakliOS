@@ -153,3 +153,52 @@ console.log('review-host: native previews, immutable staging, source ack, expiry
   console.log('review host: KanZen agent proposals stage, render, commit once, and leave card moves unchanged');
 }
 
+
+// Reckon review B5 (2026-11-17): the staging app withdraws its own card; nobody else can.
+{
+  const frame = { name: 'reckon frame' };
+  const other = { name: 'other frame' };
+  const rows = [];
+  const changes = [];
+  const sent = [];
+  const withdrawHost = createReviewHost({
+    storage: memoryStorage(), now: () => 1000,
+    record: async (tool, input, output) => rows.push({ tool, input, output }),
+    onChange: (envs) => changes.push(envs.length),
+    sendDecision(_target, message) { sent.push(message.type); },
+  });
+  const withdrawDiff = {
+    sheet: 's1', sheetName: 'Sheet1',
+    ops: [{ op: 'setCells', sheet: 's1', cells: { B13: { v: 1 } } }],
+    inverse: [{ op: 'setCells', sheet: 's1', cells: { B13: { v: 5 } } }],
+  };
+  const p = await withdrawHost.stage({ source: frame, app: 'reckon', tool: 'reckon.transaction', diff: withdrawDiff });
+  assert.equal(withdrawHost.hasPending(frame), true, 'the close guard sees the pending card');
+  assert.equal(withdrawHost.hasPending(other), false);
+  assert.equal(withdrawHost.sourceFor(p.proposal_id), frame);
+  assert.match((await withdrawHost.withdraw({ source: other, proposal_id: p.proposal_id })).reason, /only the app that staged/);
+  assert.equal(withdrawHost.size(), 1, 'another frame cannot withdraw');
+  assert.equal((await withdrawHost.withdraw({ source: frame, proposal_id: 'prop_nope' })).ok, false);
+  const out = await withdrawHost.withdraw({ source: frame, proposal_id: p.proposal_id });
+  assert.equal(out.ok, true);
+  assert.equal(withdrawHost.size(), 0, 'the card is gone from the queue');
+  assert.equal(changes.at(-1), 0, 'the reviewer is told to re-render');
+  assert.equal(rows.at(-1).tool, 'patch.withdrawn', 'History records the withdrawal');
+  assert.deepEqual(sent, [], 'no decision is sent to the app for its own withdrawal');
+  assert.equal(withdrawHost.hasPending(frame), false);
+  assert.equal((await withdrawHost.withdraw({ source: frame, proposal_id: p.proposal_id })).ok, false, 'a second withdraw finds nothing');
+  // not poisoned: the app may stage the same change again, and the frame is free to stage
+  const again = await withdrawHost.stage({ source: frame, app: 'reckon', tool: 'reckon.transaction', diff: withdrawDiff });
+  assert.notEqual(again.proposal_id, p.proposal_id);
+  // a commit in flight cannot be withdrawn
+  let release;
+  const slowHost = createReviewHost({ storage: memoryStorage(), now: () => 1000, record: async () => {},
+    sendDecision(_t, m) { if (m.type === 'naklios:review:commit') release = () => slowHost.acknowledge({ source: frame, proposal_id: m.proposal_id, ok: true }); } });
+  const q = await slowHost.stage({ source: frame, app: 'reckon', tool: 'reckon.transaction', diff: withdrawDiff });
+  const committing = slowHost.commit(q.proposal_id);
+  await Promise.resolve();
+  assert.match((await slowHost.withdraw({ source: frame, proposal_id: q.proposal_id })).reason, /being applied/);
+  release();
+  assert.equal((await committing).ok, true);
+  console.log('review host: an app withdraws only its own card, History records it, and an applying card stays');
+}

@@ -7,7 +7,7 @@
 // what is asserted is the STRUCTURE the reviewer emits, not how it looks.
 
 import { clearRegistry, makeEnvelope } from '../envelope.mjs';
-import { registerAppDiffTypes, normalizeCellRange, normalizeProsemirrorSteps, cellText, normalizeAnvilSkill } from '../diff-types.mjs';
+import { registerAppDiffTypes, normalizeCellRange, normalizeProsemirrorSteps, cellText, normalizeAnvilSkill, toolVerb } from '../diff-types.mjs';
 import { buildReviewModel, renderReview, renderReviewQueue } from '../reviewer.mjs';
 import { issueGrant, caveat, newRootKey } from '../../identity/grant.mjs';
 
@@ -106,9 +106,83 @@ await test('reckon repeated cell edits show the value before the whole transacti
 await test('a structural reckon op stays VISIBLE rather than being dropped', () => {
   const n = normalizeCellRange({ sheet: 's1', ops: [{ op: 'insertRows', sheet: 's1', at: 3, n: 2 }], inverse: [] });
   eq(n.rows.length, 1, 'structural op listed');
-  eq(n.rows[0].label, 'insertRows', 'names the op');
+  eq(n.rows[0].label, 'Insert rows', 'names the op in plain words');
   eq(n.summary, 's1 — 1 operation', 'structural work is not counted as a cell');
-  assert(n.rows[0].after.includes('"at":3'), 'the operation details are visible');
+  eq(n.rows[0].after, 'sheet s1, at 3, n 2', 'the operation details are visible as words');
+  assert(!n.rows[0].after.includes('{') && !n.rows[0].after.includes('"'), 'never raw JSON');
+});
+
+// Reckon review B7 + B20 (2026-11-17): Reckon sends a display diff in which every change is a
+// labelled setCells row (cell, before, after; a sentence for formats, rows and sheets), with the
+// same text in `lines` and its own `summary`. This is the shape reviewDiff() in Reckon's
+// ui/commands.mjs produces for format.set + rows.delete + sheet.add + a cell write.
+const RECKON_DISPLAY_DIFF = {
+  sheet: 's1', sheetName: 'Sheet1, asked by anvil', summary: '1 cell, 3 other changes',
+  lines: [
+    'Format of C12:C13 on Sheet1: no format -> bold',
+    'Delete rows 12 to 13 on Sheet1: rows 12 to 13 and their contents -> -',
+    'Add a sheet named Summary: - -> Summary',
+    'B10: - -> 111',
+  ],
+  ops: [
+    { op: 'setCells', sheet: 's1', cells: { 'Format of C12:C13 on Sheet1': { v: 'bold' } } },
+    { op: 'setCells', sheet: 's1', cells: { 'Delete rows 12 to 13 on Sheet1': null } },
+    { op: 'setCells', sheet: 's1', cells: { 'Add a sheet named Summary': { v: 'Summary' } } },
+    { op: 'setCells', sheet: 's1', cells: { B10: { v: '111' } } },
+  ],
+  inverse: [
+    { op: 'setCells', sheet: 's1', cells: { 'Format of C12:C13 on Sheet1': { v: 'no format' } } },
+    { op: 'setCells', sheet: 's1', cells: { 'Delete rows 12 to 13 on Sheet1': { v: 'rows 12 to 13 and their contents' } } },
+    { op: 'setCells', sheet: 's1', cells: { 'Add a sheet named Summary': null } },
+    { op: 'setCells', sheet: 's1', cells: { B10: null } },
+  ],
+};
+
+await test('B7: a Reckon display diff renders as readable rows, with the app summary and no JSON or tool id', () => {
+  const env = makeEnvelope({ app: 'reckon', tool: 'reckon.transaction', diff: RECKON_DISPLAY_DIFF });
+  const model = buildReviewModel(env, { actor: 'person', now: 0, appName: 'Reckon' });
+  eq(model.summary, 'Sheet1, asked by anvil — 1 cell, 3 other changes', 'the app summary is used');
+  eq(model.rows.length, 4, 'one row per change');
+  eq(model.rows[0].label, 'Format of C12:C13 on Sheet1', 'format row label');
+  eq(model.rows[0].before, 'no format', 'format before'); eq(model.rows[0].after, 'bold', 'format after');
+  eq(model.rows[1].label, 'Delete rows 12 to 13 on Sheet1', 'delete rows label');
+  eq(model.rows[1].change, 'remove', 'a delete reads as a removal');
+  eq(model.rows[2].change, 'add', 'a new sheet reads as an add');
+  eq(model.rows[3].label, 'B10', 'cell row'); eq(model.rows[3].after, '111', 'cell after');
+  const card = renderReview(model, { doc: fakeDoc() });
+  const shown = text(card);
+  assert(!shown.includes('reckon.transaction'), `no tool id on the card: ${shown}`);
+  assert(!shown.includes('cell-range'), 'no renderer key on the card');
+  assert(!/[{}]/.test(shown) && !shown.includes('"op"'), 'no raw JSON on the card');
+  eq(byClass(card, 'nk-rev-app')[0].textContent, 'Reckon', 'the heading names the app by its catalog name');
+  eq(byClass(card, 'nk-rev-verb')[0].textContent, 'wants to change the spreadsheet', 'and a plain verb');
+  eq(byClass(card, 'nk-rev-tool').length, 0, 'the tool id element is gone');
+  eq(card.attrs['aria-label'], 'Reckon wants to change the spreadsheet', 'assistive tech hears the same words');
+});
+
+await test('B7: plain change lines alone (no ops) render as rows', () => {
+  const n = normalizeCellRange({ sheet: 's1', sheetName: 'Sheet1', lines: ['B10: - -> 111', 'Delete the sheet Data and everything on it: Data -> -', 'A free sentence'] });
+  eq(n.rows.length, 3, 'one row per line');
+  eq(n.rows[0].label, 'B10', 'label'); eq(n.rows[0].before, '', 'a dash is empty'); eq(n.rows[0].after, '111', 'after');
+  eq(n.rows[1].change, 'remove', 'removal');
+  eq(n.rows[2].after, 'A free sentence', 'a line without the arrow shows whole');
+});
+
+await test('B20: every staging tool reads as a plain verb, and an unknown one falls back', () => {
+  for (const [tool, verb] of [['draft.transaction', 'wants to edit the document'], ['kanzen.agent', 'wants to change the board'], ['kanzen.card-move', 'wants to move a card'], ['x.y', 'wants to make a change']]) {
+    eq(toolVerb(tool), verb, tool);
+  }
+});
+
+await test('B22: a card offers Show <app> while the app is open and Open <app> when it is closed', () => {
+  const env = makeEnvelope({ app: 'reckon', tool: 'reckon.transaction', diff: RECKON_DIFF });
+  let shown = null;
+  const open = renderReview(buildReviewModel(env, { actor: 'person', appName: 'Reckon' }), { doc: fakeDoc(), onShowApp: (m) => { shown = m; } });
+  eq(byClass(open, 'nk-rev-show')[0].textContent, 'Show Reckon', 'open app');
+  const closed = renderReview(buildReviewModel(env, { actor: 'person', appName: 'Reckon', appOpen: false }), { doc: fakeDoc(), onShowApp: () => {} });
+  eq(byClass(closed, 'nk-rev-show')[0].textContent, 'Open Reckon', 'closed app');
+  eq(byClass(renderReview(buildReviewModel(env, { actor: 'person' }), { doc: fakeDoc() }), 'nk-rev-show').length, 0, 'no control without a handler');
+  eq(shown, null, 'nothing fires before a click');
 });
 
 await test('draft prosemirror-steps normalizes real hunks', () => {
