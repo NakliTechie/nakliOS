@@ -5579,7 +5579,7 @@ postMessage({ event: 'boot', payload: { ok: true } });
      fresh by .github/workflows/vendor-sdk.yml. Never edit it here; a change
      the app needs goes into sdk/naklios.js in NakliTechie/nakliOS. -->
 <script>
-/* naklios-sdk:begin ver=2 sha256=763a27e34efd56720b4af4fed7180794b99d48ab8bb3dae885d38609726c7cf0 — DO NOT EDIT until :end; run `node scripts/vendor-naklios-sdk.mjs` */
+/* naklios-sdk:begin ver=2 sha256=ec78ab7bd0e82a108847216f33bc6600366f68199f9416959411e5db254405ed */
 /*!
  * naklios.js — cooperative SDK for apps hosted inside NakliOS (Immersive mode)
  *
@@ -5745,6 +5745,11 @@ postMessage({ event: 'boot', payload: { ok: true } });
     experimental_tex: false,
     // experimental_web: this app may search the web and read pages through the host.
     experimental_web: false,
+    // experimental_aiReasoning: the selected model streams its reasoning beside the reply
+    // (chunks carry delta.reasoning_content), and experimental_thinking may switch it.
+    experimental_aiReasoning: false,
+    // experimental_aiVision: agent requests may carry image parts (OpenAI image_url, data URL).
+    experimental_aiVision: false,
     // net: a sovereign egress backend (the user's own Worker or local bridge) is
     // configured + permitted, so naklios.net.fetch can reach cross-origin hosts the
     // browser blocks. Stays false until a host advertises one — the SDK seam.
@@ -5814,6 +5819,7 @@ postMessage({ event: 'boot', payload: { ok: true } });
   var COMMAND_CALL_TIMEOUT_MS = 300000;
   var AI_LOCAL_TIMEOUT_MS = 300000;
 
+  var taskDueHandlers = new Set();
   function rpc(type, payload, timeoutMs) {
     if (!inNakliOS) return Promise.reject(new Error('Not hosted — naklios.* unavailable standalone'));
     return new Promise(function (resolve, reject) {
@@ -6032,6 +6038,11 @@ postMessage({ event: 'boot', payload: { ok: true } });
     if (options.agent === true) chatMsg.agent = true;
     if (options.tools != null) chatMsg.tools = options.tools;
     if (options.tool_choice != null) chatMsg.tool_choice = options.tool_choice;
+    // experimental_thinking: true or false asks the model to think before it answers, or not.
+    // Omitted leaves the provider's default. The reasoning streams as delta.reasoning_content.
+    if (options.experimental_thinking === true || options.experimental_thinking === false) {
+      chatMsg.thinking = options.experimental_thinking;
+    }
     // Models by role: 'build' or 'review' runs the request on that role's model (Settings → AI).
     // The host refuses an unknown role; omitted means the selected model.
     if (typeof options.agentRole === 'string') chatMsg.agentRole = options.agentRole;
@@ -6048,6 +6059,7 @@ postMessage({ event: 'boot', payload: { ok: true } });
     var stream = makeAiStream(options);
     if (options.stream === true) return stream;
     var content = '';
+    var reasoning = '';
     var finishReason = 'stop';
     var toolCalls = null;
     var usage = null;
@@ -6057,6 +6069,7 @@ postMessage({ event: 'boot', payload: { ok: true } });
       if (typeof chunk.naklios_truncate_at === 'number') truncateAt = chunk.naklios_truncate_at;
       var choice = chunk.choices && chunk.choices[0];
       if (choice && choice.delta && choice.delta.content) content += choice.delta.content;
+      if (choice && choice.delta && choice.delta.reasoning_content) reasoning += choice.delta.reasoning_content;
       if (choice && choice.delta && choice.delta.tool_calls) toolCalls = choice.delta.tool_calls;
       if (choice && choice.finish_reason) finishReason = choice.finish_reason;
       if (chunk.usage) usage = chunk.usage;
@@ -6065,6 +6078,7 @@ postMessage({ event: 'boot', payload: { ok: true } });
     }
     if (truncateAt != null && content.length > truncateAt) content = content.slice(0, truncateAt);
     var message = { role: 'assistant', content: content };
+    if (reasoning) message.reasoning_content = reasoning;
     if (toolCalls) message.tool_calls = toolCalls;
     return {
       id: 'naklios-local',
@@ -6183,6 +6197,8 @@ postMessage({ event: 'boot', payload: { ok: true } });
       capabilities.aiSearch = msg.aiSearch === true;
       capabilities.experimental_tex = msg.experimental_tex === true;
       capabilities.experimental_web = msg.experimental_web === true;
+      capabilities.experimental_aiReasoning = msg.experimental_aiReasoning === true;
+      capabilities.experimental_aiVision = msg.experimental_aiVision === true;
       capabilities.net = msg.net === true;
       capabilities.netBackend = typeof msg.netBackend === 'string' ? msg.netBackend : null;
       capabilities.review = msg.review === true;
@@ -6214,6 +6230,17 @@ postMessage({ event: 'boot', payload: { ok: true } });
           choices: [{
             index: 0,
             delta: { content: String(msg.token || '') },
+            finish_reason: null,
+          }],
+        });
+      } else if (msg.event === 'reasoning') {
+        aiRequest.deliver({
+          id: msg.requestId,
+          object: 'chat.completion.chunk',
+          model: msg.model || capabilities.aiModel || 'localmind',
+          choices: [{
+            index: 0,
+            delta: { content: '', reasoning_content: String(msg.token || '') },
             finish_reason: null,
           }],
         });
@@ -6353,6 +6380,7 @@ postMessage({ event: 'boot', payload: { ok: true } });
                 msg.type === 'naklios:rag:reply' || msg.type === 'naklios:net:reply' ||
                 msg.type === 'naklios:tex:reply' || msg.type === 'naklios:web:reply' ||
                 msg.type === 'naklios:skills:reply' || msg.type === 'naklios:ai:reply' ||
+                msg.type === 'naklios:tasks:reply' ||
                 msg.type === 'naklios:browser:reply') && msg.requestId) {
       var p = pendingRpc.get(msg.requestId);
       if (!p) return;
@@ -6360,6 +6388,9 @@ postMessage({ event: 'boot', payload: { ok: true } });
       if (p.timer) clearTimeout(p.timer);
       if (msg.error) p.reject(new Error(msg.error));
       else p.resolve(msg.result);
+    } else if (msg.type === 'naklios:tasks:due' && Array.isArray(msg.tasks)) {
+      // The host's clock found due tasks for this app; claim them with experimental_tasks.claim().
+      taskDueHandlers.forEach(function (fn) { try { fn(msg.tasks); } catch (_) {} });
     } else if (msg.type === 'naklios:rpc:waiting' && msg.requestId) {
       // The host holds this call until the person answers a prompt; the safety clock stops.
       var w = pendingRpc.get(msg.requestId);
@@ -6463,9 +6494,24 @@ postMessage({ event: 'boot', payload: { ok: true } });
         if (!inNakliOS) return Promise.resolve([]);
         return rpc('naklios:commands:search', { query: String(query || '') });
       },
-      call: function (name, input) {
+      // options.ask === false: the host opens no dialog. A call that would need the person's answer returns
+      // { ok:false, code:'ECONSENT' } instead (scripts use this; hosts without it ignore the field and may ask).
+      call: function (name, input, options) {
         if (!inNakliOS) return Promise.reject(new Error('Not hosted — app commands are unavailable standalone'));
-        return rpc('naklios:commands:call', { name: String(name || ''), input: input || {} }, COMMAND_CALL_TIMEOUT_MS);
+        var payload = { name: String(name || ''), input: input || {} };
+        if (options && options.ask === false) payload.ask = false;
+        // options.notAfter (epoch ms): the host starts the command only before this time, so a caller that has
+        // stopped waiting (a script past its limit) cannot have a change land later. Older hosts ignore it.
+        if (options && typeof options.notAfter === 'number' && isFinite(options.notAfter)) payload.notAfter = options.notAfter;
+        // options.token: a name for the caller's unit of work; abandon(token) later makes the host start nothing more for it.
+        if (options && typeof options.token === 'string' && options.token) payload.token = options.token.slice(0, 200);
+        return rpc('naklios:commands:call', payload, COMMAND_CALL_TIMEOUT_MS);
+      },
+      // The caller stopped waiting for every call it made with this token (a script ended): the host starts none of
+      // them that has not started yet. A call already running finishes. Standalone: does nothing.
+      abandon: function (token) {
+        if (!inNakliOS || typeof token !== 'string' || !token) return false;
+        return send('naklios:commands:abandon', { token: token.slice(0, 200) }) !== false;
       },
     },
     experimental_widgets: {
@@ -6474,6 +6520,25 @@ postMessage({ event: 'boot', payload: { ok: true } });
       update: function (id, data, options) {
         if (!inNakliOS) return false;
         return send('naklios:widgets:update', { id: String(id || ''), data: data === undefined ? null : data, persist: !options || options.persist !== false }) !== false;
+      },
+    },
+    // Durable tasks (sys/durable/tasks.mjs): the host stores each task before it answers, so work an app
+    // checkpoints survives a reload, a crash or a closed window. Claim due tasks, run one step, commit
+    // the next state. Scoped to the calling app. Standalone: rejects; onDue never fires.
+    experimental_tasks: {
+      submit: function (task) {
+        task = task || {};
+        return rpc('naklios:tasks:submit', { kind: task.kind, taskRequestId: task.requestId, input: task.input, label: task.label, until: task.until, notify: task.notify });
+      },
+      claim: function (options) { options = options || {}; return rpc('naklios:tasks:claim', { max: options.max, kinds: options.kinds }); },
+      commit: function (id, lease, outcome) { return rpc('naklios:tasks:commit', { id: id, lease: lease, outcome: outcome || {} }); },
+      get: function (id) { return rpc('naklios:tasks:get', { id: id }); },
+      list: function (options) { options = options || {}; return rpc('naklios:tasks:list', { state: options.state }); },
+      cancel: function (id) { return rpc('naklios:tasks:cancel', { id: id }); },
+      onDue: function (fn) {
+        if (typeof fn !== 'function') return function () {};
+        taskDueHandlers.add(fn);
+        return function () { taskDueHandlers.delete(fn); };
       },
     },
     experimental_skills: {

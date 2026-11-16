@@ -41,6 +41,13 @@ jobs:
       - name: Verify mirrored apps use only the canonical SDK
         run: node scripts/test-sdk-canonical-only.mjs
 
+      # What each app ships standalone (its repo's main, or its live page): a stale copy shows up the day it happens.
+      # Report only; it never blocks the sync or the pull request.
+      - name: Report standalone SDK copies
+        run: node scripts/sdk-survey.mjs --sources || echo "::warning::Some apps ship a stale naklios.js standalone (see this step's table)"
+        env:
+          GH_TOKEN: ${{ secrets.MIRROR_SYNC_TOKEN || github.token }}
+
       - name: Create pull request if anything changed
         uses: peter-evans/create-pull-request@v8
         with:
