@@ -2971,7 +2971,7 @@
       "id": "reel",
       "repo": "NakliTechie/reel",
       "requestedRef": "main",
-      "resolvedCommit": "84c43f5b1b913d5e77e7cfdb977691eafc90b840",
+      "resolvedCommit": "8e1ae00e3bf50f8d183a26cf73fa7f5a2b8bf27a",
       "files": [
         {
           "source": "app/ai/asr-worker.js",
@@ -3200,8 +3200,8 @@
         {
           "source": "sw.js",
           "destination": "sw.js",
-          "sha256": "0b3b83a3a75bce615c719c1c7e0f004a807a99c8091f2f6bb1069b9b83a6ae33",
-          "bytes": 4806
+          "sha256": "8fa12164f2cf953c1937afcf54d990530be6103a1f36444b8c1d6ddb53519ded",
+          "bytes": 7340
         },
         {
           "source": "vendor/jassub/COPYRIGHT",
