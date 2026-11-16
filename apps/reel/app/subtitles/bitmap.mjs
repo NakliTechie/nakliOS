@@ -7,9 +7,35 @@
  * finished pixel rectangles onto a canvas, which stays readable for the checks.
  *
  * A watchdog fails the renderer when the worker does not answer within WORKER_TIMEOUT_MS; a
- * failure after start calls onFailure(message), so the caller can tell the person. */
+ * failure after start calls onFailure(message), so the caller can tell the person.
+ *
+ * Control-bar clearance (defect 1): Reel draws each rectangle itself, so the bottom group of a
+ * display set moves up by the part of the bar that reaches its lowest drawn row (liftRects), at
+ * full size; top-anchored rectangles stay where the file put them. */
 
 import { indexAtTime } from './pgs-decode.mjs';
+import { liftBoxes } from './lift.mjs';
+import { containedRect } from './captions.mjs';
+
+/* The bar's top edge in PGS canvas pixels, for a canvas of canvasWidth x canvasHeight drawn with
+ * object-fit: contain in a layer rect { width, height, clearY } (CSS pixels). */
+export function canvasClearY(rect, canvasWidth, canvasHeight) {
+  if (!(rect?.width > 0 && rect?.height > 0) || !(canvasHeight > 0)) return Infinity;
+  const clearY = Number.isFinite(rect.clearY) ? rect.clearY : rect.height;
+  if (clearY >= rect.height) return Infinity;
+  const fit = containedRect(rect.width, rect.height, canvasWidth, canvasHeight);
+  const scale = fit.height / canvasHeight;
+  return scale > 0 ? (clearY - fit.top) / scale : Infinity;
+}
+
+/* Returns rects with the bottom group moved up so it ends above clearY (canvas pixels). */
+export function liftRects(rects, height, clearY) {
+  const list = rects || [];
+  const { lift, moved } = liftBoxes(list.map(rect => ({ y: rect.y, h: rect.height })), height, clearY);
+  if (!lift) return { lift: 0, rects: list };
+  const whole = Math.ceil(lift);
+  return { lift: whole, rects: list.map((rect, i) => (moved[i] ? { ...rect, y: rect.y - whole } : rect)) };
+}
 
 export const WORKER_TIMEOUT_MS = 8000;
 
@@ -18,6 +44,7 @@ const defaultCanvas = () => document.createElement('canvas');
 
 export function createBitmapRenderer({
   layer,
+  onLayout = () => () => {},
   onFailure = () => {},
   createWorker = defaultWorker,
   createCanvas = defaultCanvas,
@@ -33,6 +60,10 @@ export function createBitmapRenderer({
   let wanted = -2;
   let pending = null; // { index, since }
   let loading = null; // { since, reject }
+  let rect = null; // the caption layer rect, with clearY
+  let last = null; // the frame on the canvas, redrawn when the clearance changes
+  let lastLift = 0;
+  let unsubscribe = null;
 
   function fail(message) {
     stop();
@@ -41,15 +72,25 @@ export function createBitmapRenderer({
     onFailure(message);
   }
 
-  function draw({ width, height, rects }) {
+  function draw(data) {
     if (!canvas) return;
+    const { width, height } = data;
+    last = data;
     if (width > 0 && height > 0 && (canvas.width !== width || canvas.height !== height)) {
       canvas.width = width;
       canvas.height = height;
     }
     const context = canvas.getContext('2d');
     context.clearRect(0, 0, canvas.width, canvas.height);
-    for (const rect of rects || []) context.putImageData(new ImageData(rect.rgba, rect.width, rect.height), rect.x, rect.y);
+    const placed = liftRects(data.rects, canvas.height, canvasClearY(rect, canvas.width, canvas.height));
+    lastLift = placed.lift;
+    for (const item of placed.rects) context.putImageData(new ImageData(item.rgba, item.width, item.height), item.x, item.y);
+  }
+
+  function relayout(next) {
+    const before = rect ? `${rect.width},${rect.height},${rect.clearY}` : '';
+    rect = next;
+    if (last && canvas && before !== `${next?.width},${next?.height},${next?.clearY}`) draw(last);
   }
 
   function pump() {
@@ -102,6 +143,7 @@ export function createBitmapRenderer({
       canvas.setAttribute('aria-hidden', 'true');
       canvas.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;object-fit:contain';
       layer.prepend(canvas);
+      unsubscribe = onLayout(relayout);
       status = 'ready';
       return status;
     } catch (cause) {
@@ -131,8 +173,12 @@ export function createBitmapRenderer({
     loading = null;
     try { worker?.terminate(); } catch { /* already gone */ }
     worker = null;
+    unsubscribe?.();
+    unsubscribe = null;
     canvas?.remove();
     canvas = null;
+    last = null;
+    lastLift = 0;
     times = [];
     shown = -2;
     wanted = -2;
@@ -147,6 +193,7 @@ export function createBitmapRenderer({
     status: () => status,
     error: () => error,
     canvas: () => canvas,
+    lift: () => lastLift,
     reset() { stop(); status = 'idle'; error = null; },
   };
 }

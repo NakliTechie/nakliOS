@@ -170,6 +170,11 @@ export function install(ctx) {
         const probed = await Engine.probe(file);
         if (Number.isFinite(probed?.duration)) card.durationS = probed.duration;
       } catch (_) { /* an unreadable file keeps "length unknown" */ }
+      // The open file's own length stands in when the probe found none.
+      if (card.durationS == null && store.media?.fingerprint === card.fingerprint
+        && Number.isFinite(store.media.duration) && store.media.duration > 0) {
+        card.durationS = store.media.duration;
+      }
     } else if (store.media?.name === card.item.name) {
       card.fingerprint = store.media.fingerprint;
       card.durationS = Number.isFinite(store.media.duration) ? store.media.duration : null;

@@ -8,6 +8,9 @@ export const POSTER_DIR = 'reel-posters';
 export function watchState(entry, durationS = null) {
   const total = Number(entry?.durationS) > 0 ? Number(entry.durationS) : Number(durationS) || 0;
   const position = Math.max(0, Number(entry?.positionS) || 0);
+  // A film played to the end keeps its entry with `finished: true` and position 0 (capture
+  // defect 7): it is watched, with nothing left to resume.
+  if (entry?.finished === true) return { state: 'watched', fraction: 1, leftS: 0 };
   if (!entry || !(total > 0) || position <= 0) return { state: 'new', fraction: 0, leftS: total || null };
   const fraction = Math.min(1, position / total);
   if (fraction >= WATCHED_FRACTION) return { state: 'watched', fraction, leftS: Math.max(0, total - position) };

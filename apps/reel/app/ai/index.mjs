@@ -10,7 +10,7 @@
 
 import {
   WINDOW_S, OVERLAP_S, SAMPLE_RATE, LANGUAGES, languageName, languageCode,
-  planWindows, isSilent, assembleCues, formatSrt, parseSrt,
+  firstWindow, nextWindow, isSilent, assembleCues, formatSrt, parseSrt,
   mergeCuesIntoSentences, translationMessages, parseNumberedLines, applyTranslation, batches, stripExtension,
 } from './logic.mjs';
 import { SPEECH, speechStatus, downloadSpeech, transcribeLocal, stopSpeech, speechMB } from './speech.mjs';
@@ -77,6 +77,7 @@ export const STRINGS = {
   'ai.progress.window': 'Transcribing {done} of {total} windows',
   'ai.progress.translate': 'Translating {done} of {total} batches',
   'ai.progress.done': '{count} cues ready',
+  'ai.progress.doneOne': '1 cue ready',
   'ai.progress.cancelled': 'Cancelled',
   'ai.editor.label': 'Generated subtitles (SRT, editable)',
   'ai.editor.apply': 'Apply edits',
@@ -146,7 +147,7 @@ export function install(ctx) {
       route: { transcribe: transcribeRoute, translate: hostCanChat(host) ? 'host' : 'none' },
       translateBoundary: hostCanChat(host) ? translateBoundary(host.capabilities) : null,
       pcm: typeof ctx.Engine?.audioPcm === 'function' || Boolean(devHooks.pcm),
-      job: job ? { kind: job.kind, phase: job.phase, done: job.done, total: job.total, fraction: job.total ? job.done / job.total : 0, route: job.route, error: job.error || null } : null,
+      job: job ? { kind: job.kind, phase: job.phase, done: job.done, total: job.total, fraction: job.total ? job.done / job.total : 0, count: job.count ?? null, route: job.route, error: job.error || null } : null,
       generated: generated ? { name: generated.name, trackId: generated.trackId, cueCount: generated.cueCount, saved: generated.saved } : null,
       panelOpen: ctx.panels.current() === 'ai',
     };
@@ -207,18 +208,27 @@ export function install(ctx) {
         setJob({ phase: 'load', done: 0, total: 0 });
         recognise = pcm => transcribeLocal(pcm, { language });
       }
-      const windows = planWindows(toS - fromS, { windowS: WINDOW_S, overlapS: OVERLAP_S })
-        .map(w => ({ ...w, fromS: w.fromS + fromS, toS: w.toS + fromS, keepFromS: w.keepFromS + fromS, keepToS: w.keepToS + fromS }));
-      setJob({ phase: 'recognise', done: 0, total: windows.length });
+      // Windows are planned one at a time: a window that loops or ends mid-segment hands over at that
+      // segment, so the next window decodes it again (logic.mjs nextWindow). The total is an estimate.
+      const step = WINDOW_S - OVERLAP_S;
+      const estimate = (w, done) => done + Math.max(1, Math.ceil((toS - w.fromS - OVERLAP_S) / step));
       const results = [];
-      for (const w of windows) {
+      let retried = 0, handovers = 0;
+      let w = firstWindow(fromS, toS, { windowS: WINDOW_S });
+      if (!w) throw fail(t('ai.error.empty'), 'EMPTY');
+      setJob({ phase: 'recognise', done: 0, total: estimate(w, 0) });
+      while (w) {
         if (controller.signal.aborted) throw fail(t('ai.progress.cancelled'), 'CANCELLED');
         const pcm = await pcmFor(w.fromS, w.toS);
         if (controller.signal.aborted) throw fail(t('ai.progress.cancelled'), 'CANCELLED');
         const out = isSilent(pcm) ? { text: '', chunks: [] } : await recognise(pcm, w);
         if (controller.signal.aborted) throw fail(t('ai.progress.cancelled'), 'CANCELLED');
+        if (out.temperature > 0) retried++;
+        const next = nextWindow(w, out, toS, { windowS: WINDOW_S, overlapS: OVERLAP_S });
+        if (next && next.fromS < w.fromS + step - 1e-6) handovers++;
         results.push({ window: w, chunks: out.chunks, text: out.text });
-        setJob({ done: results.length });
+        setJob({ done: results.length, total: next ? estimate(next, results.length) : results.length });
+        w = next;
       }
       const cues = assembleCues(results, { overlapS: OVERLAP_S });
       if (!cues.length) throw fail(t('ai.error.empty'), 'EMPTY');
@@ -230,7 +240,7 @@ export function install(ctx) {
       editorBox.hidden = false;
       setJob({ phase: 'done', count: cues.length });
       ctx.toast(t('ai.toast.generated', { count: cues.length }));
-      return { route, windows: windows.length, cueCount: cues.length, trackName: name, trackId: generated.trackId, ...(input.export === true ? { text } : {}) };
+      return { route, windows: results.length, retriedWindows: retried, handovers, cueCount: cues.length, trackName: name, trackId: generated.trackId, ...(input.export === true ? { text } : {}) };
     } catch (error) {
       if (job.phase !== 'cancelled') setJob({ phase: error.code === 'CANCELLED' ? 'cancelled' : 'error', error: error.message });
       throw error;
@@ -391,7 +401,7 @@ export function install(ctx) {
       : job.phase === 'load' ? t('ai.progress.load')
       : job.phase === 'recognise' ? t('ai.progress.window', { done: job.done, total: job.total })
       : job.phase === 'translate' ? t('ai.progress.translate', { done: job.done, total: job.total })
-      : job.phase === 'done' ? t('ai.progress.done', { count: job.count ?? 0 })
+      : job.phase === 'done' ? t(job.count === 1 ? 'ai.progress.doneOne' : 'ai.progress.done', { count: job.count ?? 0 })
       : job.phase === 'cancelled' ? t('ai.progress.cancelled')
       : job.phase === 'error' ? job.error : '';
   }
@@ -417,25 +427,31 @@ export function install(ctx) {
     const { cues, errors } = parseSrt(editor.value);
     if (errors.length) throw fail(t('ai.editor.invalid', { count: errors.length, first: errors[0] }));
     if (!cues.length) throw fail(t('ai.error.noGenerated'));
-    return formatSrt(cues);
+    return { text: formatSrt(cues), count: cues.length };
+  }
+  // After an edit is applied or saved, the panel and ai.read count the cues that are now loaded.
+  function countApplied(count) {
+    if (job?.kind === 'transcribe' && !running()) setJob({ phase: 'done', count });
   }
   applyButton.addEventListener('click', async () => {
     try {
       if (!generated) throw fail(t('ai.error.noGenerated'));
-      const text = checkedText();
+      const { text, count } = checkedText();
       const loaded = await r.run('subtitle.load-file', { name: generated.name, text, replaceId: generated.trackId });
-      generated = { ...generated, text, trackId: loaded?.selectedId ?? generated.trackId };
+      generated = { ...generated, text, cueCount: count, trackId: loaded?.selectedId ?? generated.trackId };
+      countApplied(count);
     } catch (error) { report(error); }
   });
   saveButton.addEventListener('click', async () => {
     try {
       if (!generated) throw fail(t('ai.error.noGenerated'));
-      const text = checkedText();
+      const { text, count } = checkedText();
       // Saved: the track loses its "(generated)" mark, then subtitles saves the selected track as SRT.
       const name = `${stem()}.srt`;
       const loaded = await r.run('subtitle.load-file', { name, text, replaceId: generated.trackId });
       const result = await r.run('subtitle.save', { format: 'srt' });
-      generated = { ...generated, name, text, trackId: loaded?.selectedId ?? generated.trackId, saved: Boolean(result?.saved) };
+      generated = { ...generated, name, text, cueCount: count, trackId: loaded?.selectedId ?? generated.trackId, saved: Boolean(result?.saved) };
+      countApplied(count);
     } catch (error) { report(error); }
   });
 

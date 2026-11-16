@@ -2,6 +2,7 @@
  * readers announce each new cue. Created inside install(), never at module top level. */
 
 import { plainText } from './parse.mjs';
+import { insetOverlap, parseInset } from './lift.mjs';
 
 export const DEFAULT_STYLE = Object.freeze({ size: 1, color: '#ffffff', backgroundOpacity: 0.6, position: 6 });
 export const STYLE_LIMITS = Object.freeze({ size: [0.5, 2.5], backgroundOpacity: [0, 1], position: [0, 40] });
@@ -23,6 +24,8 @@ const CSS = `
 .reel-subs{position:absolute;pointer-events:none;overflow:hidden;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.25;text-align:center}
 .reel-subs-stack{position:absolute;left:5%;right:5%;display:flex;flex-direction:column;align-items:center;gap:.15em}
 .reel-subs-top{top:4%}
+.reel-subs-bottom{transform:translateY(calc(-1 * var(--reel-subs-lift, 0px)));transition:transform .2s ease-out}
+@media (prefers-reduced-motion: reduce){.reel-subs-bottom{transition:none}}
 .reel-subs-line{display:block;max-width:100%}
 .reel-subs-text{padding:.05em .35em;border-radius:.15em;-webkit-box-decoration-break:clone;box-decoration-break:clone;white-space:pre-wrap;text-shadow:0 0 .12em rgba(0,0,0,.9),0 .04em .08em rgba(0,0,0,.9)}
 .reel-subs-live{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
@@ -77,13 +80,26 @@ export function createCaptions(ctx) {
   let layoutKey = '';
   let fontPx = 16;
 
+  /* Control-bar clearance (defect 1). The shell keeps --reel-controls-inset on #player and emits
+   * ui:controls; both are read when present, so an older shell without them leaves the inset at 0. */
+  const player = stage.closest?.('#player') || document.getElementById('player');
+  let insetPx = 0;
+  let overlapPx = 0;
+  const readInset = () => (player ? parseInset(getComputedStyle(player).getPropertyValue('--reel-controls-inset')) : 0);
+  function setInset(next) {
+    const value = Math.max(0, Number(next) || 0);
+    if (value === insetPx) return;
+    insetPx = value;
+    layout(true);
+  }
+
   function layout(force = false) {
     const canvas = ctx.canvas();
     if (!canvas) return;
     const canvasBox = canvas.getBoundingClientRect();
     const stageBox = stage.getBoundingClientRect();
     const key = [canvas.width, canvas.height, canvasBox.left, canvasBox.top, canvasBox.width, canvasBox.height,
-      stageBox.left, stageBox.top, style.size, style.position].join(',');
+      stageBox.left, stageBox.top, stageBox.height, insetPx, style.size, style.position].join(',');
     if (!force && key === layoutKey) return;
     layoutKey = key;
     const rect = containedRect(canvasBox.width, canvasBox.height, canvas.width, canvas.height);
@@ -91,7 +107,12 @@ export function createCaptions(ctx) {
     layer.style.top = `${canvasBox.top - stageBox.top + rect.top}px`;
     layer.style.width = `${rect.width}px`;
     layer.style.height = `${rect.height}px`;
-    pictureRect = { width: rect.width, height: rect.height, pictureWidth: canvas.width, pictureHeight: canvas.height };
+    const layerTop = canvasBox.top - stageBox.top + rect.top;
+    overlapPx = insetOverlap(stageBox.height, layerTop, rect.height, insetPx);
+    layer.style.setProperty('--reel-subs-lift', `${overlapPx}px`);
+    // clearY: the top of the bar in layer pixels; subtitles end above it (rect.height when clear).
+    pictureRect = { width: rect.width, height: rect.height, pictureWidth: canvas.width, pictureHeight: canvas.height,
+      clearY: rect.height - overlapPx };
     for (const hook of canvasHooks) hook(pictureRect);
     fontPx = Math.max(11, rect.height * 0.05 * style.size);
     layer.style.fontSize = `${fontPx}px`;
@@ -162,6 +183,14 @@ export function createCaptions(ctx) {
     if (canvas) observer.observe(canvas);
   }
   addEventListener('resize', relayout);
+  ctx.on('ui:controls', ({ visible, insetPx: next } = {}) => {
+    if (visible === false) setInset(0);
+    else setInset(Number.isFinite(Number(next)) && next !== null && next !== '' ? Number(next) : readInset());
+  });
+  if (player && typeof MutationObserver === 'function') {
+    new MutationObserver(() => setInset(readInset())).observe(player, { attributes: true, attributeFilter: ['style', 'class'] });
+  }
+  insetPx = readInset();
   document.addEventListener('fullscreenchange', relayout);
   document.addEventListener('webkitfullscreenchange', relayout);
 
@@ -179,6 +208,8 @@ export function createCaptions(ctx) {
     /* Calls fn(rect) whenever the picture rect changes; returns an unsubscribe function. */
     onLayout(fn) { canvasHooks.add(fn); fn(pictureRect); return () => canvasHooks.delete(fn); },
     picture: () => ({ ...pictureRect }),
+    /* The control-bar inset in stage pixels and the part of it that covers the picture. */
+    clearance: () => ({ insetPx, overlapPx }),
     delay: () => delayS,
     setDelay(next) { delayS = next; refresh(); },
     refresh,

@@ -44,6 +44,10 @@ self.onmessage = async ({ data: m }) => {
       if (!pipe) throw new Error('the model is not loaded');
       const options = { task: 'transcribe', return_timestamps: true };
       if (m.language) options.language = m.language;
+      // Temperature fallback (speech.mjs): sampling at the given temperature. transformers.js 4.3.2 reads
+      // do_sample and temperature from the generation options; it has no compression-ratio, log-prob or
+      // no-speech thresholds, so speech.mjs and logic.mjs apply those rules outside the model.
+      if (m.temperature > 0) { options.do_sample = true; options.temperature = m.temperature; }
       const out = await pipe(m.audio, options);
       const chunks = (out?.chunks || []).map((c) => ({ start: c.timestamp?.[0] ?? 0, end: c.timestamp?.[1] ?? null, text: String(c.text || '').trim() }));
       reply({ id: m.id, ok: true, text: String(out?.text ?? '').trim(), chunks });

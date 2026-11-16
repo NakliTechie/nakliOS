@@ -2689,6 +2689,28 @@ const Libav = (() => {
     };
   }
 
+  /* Metadata for a file the rung opens, without activating it (the library's duration and
+     track list, capture defect 5). A background probe never asks the person: it opens the
+     rung only when its download is under the host's consent threshold, and returns null
+     otherwise or when the rung cannot read the file. The probe's own source closes here;
+     a source that playback holds on the same instance is not touched. */
+  async function probe(file) {
+    if (!file || !await sniff(file)) return null;
+    const module = await loadModule();
+    if (typeof module?.openLibavSource !== 'function') return null;
+    const threshold = CONFIG.askDownloadOverBytes ?? 5 * 1024 * 1024;
+    const source = await module.openLibavSource(file, {
+      requestDownload: async info => Number(info?.bytes) <= threshold,
+      log: (...parts) => emit('engine:libav-log', { message: parts.map(String).join(' ') }),
+    }).catch(() => null);
+    if (!source || !Array.isArray(source.tracks)) return null;
+    try {
+      return describe(source, file, `libav-probe-${nextSessionId++}`);
+    } finally {
+      try { await source.close(); } catch (_) {}
+    }
+  }
+
   function activate(source, file) {
     close();
     const sessionId = `libav-${nextSessionId++}`;
@@ -2753,6 +2775,7 @@ const Libav = (() => {
     openAudio,
     closeAudio,
     open,
+    probe,
     preferred,
     activate,
     iterate,
@@ -3624,9 +3647,12 @@ registerProcessor('${PROCESSOR}', ReelPcmRingProcessor);
 
   function setFailure(error, localSession) {
     if (localSession !== session || lastError) return;
+    // A decode or libav rung failure keeps its reason in the message, so the toast and
+    // state().playback.lastError name what stopped the sound (capture defect 11).
+    const reason = error?.message ? ` ${error.code ? `(${error.code}) ` : ''}${error.message}` : '';
     lastError = error instanceof PlaybackError
       ? error
-      : fail('AudioPlaybackError', 'ERR_AUDIO_PLAYBACK', 'Decoded audio playback failed.', error);
+      : fail('AudioPlaybackError', 'ERR_AUDIO_PLAYBACK', `Decoded audio playback failed.${reason}`, error);
     errorHandler?.(lastError);
   }
 
@@ -5292,7 +5318,24 @@ const Engine = {
       webgpu: 'gpu' in navigatorApi,
     };
   },
-  async probe(handle) { return Demux.probe(handle); },
+  /* Container metadata without loading. Files that Engine.load sends to the libav rung
+     (AVI, FLV, WMV, MPEG program streams) are probed there too, so their duration is
+     known before they open (capture defect 5). */
+  async probe(handle) {
+    const file = await mediaFileOf(handle).catch(() => null);
+    if (file && await Libav.preferred(file).catch(() => false)) {
+      const metadata = await Libav.probe(file).catch(() => null);
+      if (metadata) return metadata;
+    }
+    try {
+      return await Demux.probe(handle);
+    } catch (error) {
+      if (!file || !Demux.libavEligible(error)) throw error;
+      const metadata = await Libav.probe(file).catch(() => null);
+      if (!metadata) throw error;
+      return metadata;
+    }
+  },
   async load(handle) {
     const loadId = ++latestLoadId;
     const fileOf = () => mediaFileOf(handle);

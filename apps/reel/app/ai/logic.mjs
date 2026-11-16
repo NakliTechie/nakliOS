@@ -6,13 +6,29 @@
  * start inside its own share of the overlap, so a segment heard twice is kept once. The NakliOS host
  * speech model returns text without timestamps; for it, repeated words at the start of a window are
  * dropped by matching the end of the previous window's text, and cue times are spread over the window
- * by character count (approximate timing). */
+ * by character count (approximate timing).
+ *
+ * Whisper tiny with greedy decoding falls into repetition loops ("I'm not free." over and over, or a
+ * countdown repeated until the token limit). Reel answers the way Whisper's own transcribe() does:
+ * decodeWithFallback() decodes a window again at rising temperatures while the text's zlib compression
+ * ratio is above 2.4, and nextWindow() starts the next window where a loop or an unfinished segment
+ * began (Whisper's "seek"), so speech after the loop is heard again instead of lost. assembleCues()
+ * then removes what is left of a loop: repeats inside a segment, number-only and punctuation-only
+ * loops, and the same text repeated in consecutive segments. */
 
 export const WINDOW_S = 30;
 export const OVERLAP_S = 2;
 export const SAMPLE_RATE = 16000;
 export const MAX_CUE_CHARS = 84;
 export const MAX_LINE_CHARS = 42;
+/* Whisper's defaults (openai/whisper transcribe.py): a window whose text compresses better than 2.4
+ * is decoded again at the next temperature. */
+export const COMPRESSION_RATIO_MAX = 2.4;
+export const FALLBACK_TEMPERATURES = [0.2, 0.4, 0.6, 0.8, 1.0];
+/* The same text again within this many seconds of its last copy is a loop, not a new line. */
+export const REPEAT_GAP_S = 10;
+/* A window never moves on by less than this, so a loop at a window start cannot stall the job. */
+export const MIN_ADVANCE_S = 5;
 
 /* Languages offered for speech and translation. Codes are what Whisper and the prompt receive. */
 export const LANGUAGES = [
@@ -56,6 +72,116 @@ export function planWindows(durationS, { windowS = WINDOW_S, overlapS = OVERLAP_
   });
   return windows;
 }
+
+/* The window after w. A window whose segments loop, or end in a segment with no end time (cut by the
+ * window edge or by the token limit), hands over at that segment's start: the next window begins there
+ * and decodes it again. A handover moves on by at least minAdvanceS (5 s): a loop that starts sooner
+ * hands over at 5 s, and an unfinished segment that starts sooner uses the planned step. Otherwise windows step by windowS - overlapS and split the overlap at its
+ * middle, as planWindows() does. Sets w.keepToS. Returns null after the last window.
+ * w: { index, fromS, toS, keepFromS }; out: { chunks? } with chunk times in seconds from w.fromS. */
+export function firstWindow(fromS, endS, { windowS = WINDOW_S } = {}) {
+  const from = Math.max(0, Number(fromS) || 0);
+  if (!(endS > from)) return null;
+  return { index: 0, fromS: round3(from), toS: round3(Math.min(endS, from + windowS)), keepFromS: round3(from) };
+}
+
+export function nextWindow(w, out, endS, { windowS = WINDOW_S, overlapS = OVERLAP_S, minAdvanceS = MIN_ADVANCE_S } = {}) {
+  if (w.toS >= endS - 1e-6) { w.keepToS = Infinity; return null; }
+  const planned = w.fromS + windowS - overlapS;
+  const chunks = Array.isArray(out?.chunks) ? out.chunks.filter(c => cleanCueText(c.text)) : [];
+  let cut = null;
+  if (chunks.length) {
+    const loopAt = findLoopStart(chunks);
+    const last = chunks[chunks.length - 1];
+    if (loopAt >= 0) {
+      // A loop near the window start still moves on by minAdvanceS, so the audio after it is heard again.
+      const abs = Math.max(w.fromS + (Number(chunks[loopAt].start) || 0), w.fromS + minAdvanceS);
+      if (abs < planned) cut = round3(abs);
+    } else if (last.end == null) {
+      const abs = w.fromS + (Number(last.start) || 0);
+      if (abs >= w.fromS + minAdvanceS && abs < planned) cut = round3(abs);
+    }
+  }
+  const fromS = cut ?? round3(planned);
+  w.keepToS = cut ?? round3(planned + overlapS / 2);
+  return { index: w.index + 1, fromS, toS: round3(Math.min(endS, fromS + windowS)), keepFromS: w.keepToS };
+}
+
+/* Index of the first segment that starts or continues a loop: the same text as the segment before it,
+ * a repeat inside the segment, or a number-only loop. -1 when there is none. */
+export function findLoopStart(chunks) {
+  for (let i = 0; i < chunks.length; i++) {
+    const text = cleanCueText(chunks[i].text).replace(/\n/g, ' ');
+    if (i > 0 && sameText(text, cleanCueText(chunks[i - 1].text))) return i;
+    if (collapseRepeats(text) !== text || isNumberLoop(text)) return i;
+  }
+  return -1;
+}
+
+/* ---------- loop handling ---------- */
+
+/* zlib compression ratio of the UTF-8 text, the measure Whisper uses (bytes / compressed bytes). */
+export async function compressionRatio(text) {
+  const bytes = new TextEncoder().encode(String(text ?? ''));
+  if (!bytes.length) return 0;
+  const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream('deflate'));
+  const packed = await new Response(stream).arrayBuffer();
+  return bytes.length / packed.byteLength;
+}
+
+/* Whisper's temperature fallback. runOnce(temperature) returns { text, chunks }. The first attempt is
+ * greedy (temperature 0); while the text's compression ratio is above maxRatio the window is decoded
+ * again at the next temperature (sampling). Returns the first attempt within maxRatio, else the one with
+ * the lowest ratio, with { temperature, compressionRatio, looped, attempts }. */
+export async function decodeWithFallback(runOnce, { temperatures = FALLBACK_TEMPERATURES, maxRatio = COMPRESSION_RATIO_MAX } = {}) {
+  let best = null;
+  const attempts = [];
+  for (const temperature of [0, ...temperatures]) {
+    const r = await runOnce(temperature);
+    const text = String(r?.text ?? '') || (r?.chunks || []).map(c => c.text).join(' ');
+    const ratio = await compressionRatio(text);
+    attempts.push({ temperature, compressionRatio: round3(ratio) });
+    if (!best || ratio < best.ratio) best = { r, temperature, ratio };
+    if (ratio <= maxRatio) { best = { r, temperature, ratio }; break; }
+  }
+  return { ...best.r, temperature: best.temperature, compressionRatio: round3(best.ratio), looped: best.ratio > maxRatio, attempts };
+}
+
+/* Keeps one copy of a run of repeated words: a phrase of 3 or more words said twice or more in a row,
+ * any phrase said 4 or more times, or 3 times when the run covers at least 6 words. "No, no, no" stays. */
+export function collapseRepeats(text, { maxN = 16 } = {}) {
+  const raw = String(text ?? '').split(/\s+/).filter(Boolean);
+  const key = raw.map(norm);
+  const out = [];
+  for (let i = 0; i < raw.length;) {
+    let best = null;
+    for (let n = 1; n <= maxN && i + 2 * n <= raw.length; n++) {
+      if (key.slice(i, i + n).every(k => k === '')) continue;
+      let r = 1;
+      while (i + (r + 1) * n <= raw.length && key.slice(i + r * n, i + (r + 1) * n).every((k, j) => k === key[i + j])) r++;
+      const loop = r >= 2 && (n >= 3 || r >= 4 || (r >= 3 && n * r >= 6));
+      if (loop && (!best || n * r > best.n * best.r)) best = { n, r };
+    }
+    if (best) { out.push(...raw.slice(i, i + best.n)); i += best.n * best.r; } else { out.push(raw[i]); i++; }
+  }
+  const joined = out.join(' ');
+  return joined === raw.join(' ') ? String(text ?? '') : joined;
+}
+
+/* Text with no letters and no digits: punctuation, music signs, dashes. */
+export const isPunctuationOnly = text => !/[\p{L}\p{N}]/u.test(String(text ?? ''));
+/* Text made only of numbers and punctuation. */
+export const isNumberOnly = text => /\p{N}/u.test(String(text ?? '')) && !/\p{L}/u.test(String(text ?? ''));
+/* A number-only text whose numbers repeat ("1, 2, 1, 2"). "3, 2, 1" is not a loop. */
+export function isNumberLoop(text) {
+  if (!isNumberOnly(text)) return false;
+  const nums = String(text).match(/\p{N}+/gu) || [];
+  return nums.length >= 3 && new Set(nums).size < nums.length;
+}
+const sameText = (a, b) => {
+  const x = norm(String(a).replace(/\s+/g, '')), y = norm(String(b).replace(/\s+/g, ''));
+  return x !== '' && x === y;
+};
 
 /* True when the window's audio is below about -60 dBFS RMS, so Whisper is not asked to hear silence
  * (it tends to invent text there). */
@@ -166,17 +292,20 @@ export function assembleCues(results, { overlapS = OVERLAP_S } = {}) {
   let previousText = '';
   for (const { window: w, chunks, text } of results) {
     if (Array.isArray(chunks) && chunks.length) {
-      for (const chunk of chunks) {
-        const body = cleanCueText(chunk.text);
-        if (!body || NOISE.test(body)) continue;
+      const bodies = chunks.map(chunk => collapseRepeats(cleanCueText(chunk.text).replace(/\n/g, ' ')));
+      bodies.forEach((body, i) => {
+        const chunk = chunks[i];
+        if (!body || NOISE.test(body) || isPunctuationOnly(body) || isNumberLoop(body)) return;
+        // Number-only segments next to other number-only segments are a counting loop.
+        if (isNumberOnly(body) && (isNumberOnly(bodies[i - 1] ?? 'x') || isNumberOnly(bodies[i + 1] ?? 'x'))) return;
         const startS = w.fromS + (Number(chunk.start) || 0);
-        if (startS < w.keepFromS || startS >= w.keepToS) continue;
+        if (startS < w.keepFromS || startS >= w.keepToS) return;
         const endS = Number.isFinite(chunk.end) && chunk.end != null ? w.fromS + chunk.end : null;
         segments.push({ startS: round3(startS), endS: endS == null ? null : round3(endS), text: body });
-      }
+      });
       previousText = chunks.map(c => c.text).join(' ');
-    } else if (text && cleanCueText(text) && !NOISE.test(text)) {
-      const body = cleanCueText(text).replace(/\n/g, ' ');
+    } else if (text && cleanCueText(text) && !NOISE.test(text) && !isPunctuationOnly(text) && !isNumberLoop(cleanCueText(text))) {
+      const body = collapseRepeats(cleanCueText(text).replace(/\n/g, ' '));
       const fresh = w.index === 0 ? body : dropRepeatedPrefix(previousText, body);
       const fromS = w.index === 0 ? w.fromS : Math.min(w.toS, w.fromS + overlapS);
       segments.push(...spreadText(fresh, fromS, w.toS));
@@ -186,12 +315,18 @@ export function assembleCues(results, { overlapS = OVERLAP_S } = {}) {
     }
   }
   segments.sort((a, b) => a.startS - b.startS);
-  // Drop a segment that repeats the previous kept one within the overlap distance.
+  // Drop a segment that repeats the previous kept one: a copy heard twice across an overlap, or a loop
+  // of the same line (each copy within REPEAT_GAP_S of the one before it).
   const unique = [];
+  let runEndS = -Infinity;
   for (const seg of segments) {
     const last = unique[unique.length - 1];
-    if (last && norm(last.text.replace(/\s+/g, '')) === norm(seg.text.replace(/\s+/g, '')) && seg.startS - last.startS <= overlapS + 1) continue;
+    if (last && sameText(last.text, seg.text) && seg.startS - runEndS <= Math.max(REPEAT_GAP_S, overlapS + 1)) {
+      runEndS = Math.max(runEndS, seg.endS ?? seg.startS);
+      continue;
+    }
     unique.push(seg);
+    runEndS = seg.endS ?? seg.startS;
   }
   // Long segments become several cues; ends are clamped to the next start.
   const cues = [];
