@@ -2369,7 +2369,7 @@ dialog.books-dialog::backdrop { background:rgba(20,24,23,.48); backdrop-filter:b
   Canonical source: https://naklios.dev/sdk/naklios.js. License: MIT.
 -->
 <script>
-/* naklios-sdk:begin ver=2 sha256=ec78ab7bd0e82a108847216f33bc6600366f68199f9416959411e5db254405ed */
+/* naklios-sdk:begin ver=2 sha256=5ff86458102ce080ccf993e4c2bb74c3ef5c8336babe5e5d79906f0f04fae4d2 */
 /*!
  * naklios.js — cooperative SDK for apps hosted inside NakliOS (Immersive mode)
  *
@@ -3247,6 +3247,15 @@ dialog.books-dialog::backdrop { background:rgba(20,24,23,.48); backdrop-filter:b
           tool: tool, diff: diff, expires: options.expires,
           reversible: options.reversible === true,
         });
+      },
+      // Take back a card this app staged, for example after the person's own edit made the
+      // proposal stale. The host removes it only for the frame that staged it. Standalone
+      // there is no card, so it resolves with a fallback marker.
+      withdraw: function (proposalId) {
+        if (!inNakliOS) return Promise.resolve({ standalone: true, withdrawn: false });
+        if (!capabilities.review) return Promise.reject(new Error('NakliOS review is unavailable'));
+        if (typeof proposalId !== 'string' || !proposalId) return Promise.reject(new Error('naklios.review.withdraw needs a proposal id'));
+        return rpc('naklios:review:withdraw', { proposal_id: proposalId });
       },
       onDecision: function (cb) {
         if (typeof cb !== 'function') throw new Error('naklios.review.onDecision needs a callback');
