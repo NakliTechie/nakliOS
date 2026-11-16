@@ -832,7 +832,7 @@
     },
     {
       "name": "panel.open",
-      "description": "Open a panel in the Draft editor: documents, find, settings, writing help, format, insert, review, page setup, assistant or help, e.g. \"open the comments\".",
+      "description": "Open a panel in the Draft editor: documents, find, settings, writing help, format, insert, review, page setup, assistant, versions, the command palette or help, e.g. \"open the comments\".",
       "scope": "write",
       "input": {
         "type": "object",
@@ -849,7 +849,10 @@
               "review",
               "page",
               "assistant",
-              "help"
+              "help",
+              "versions",
+              "palette",
+              "science"
             ],
             "description": "Which panel"
           }
@@ -859,6 +862,706 @@
         ]
       },
       "shows": true
+    },
+    {
+      "name": "version.save",
+      "description": "Save a named version of the open document in the Draft editor, e.g. \"save a version called first draft\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Version name. Leave out for a dated name"
+          }
+        }
+      }
+    },
+    {
+      "name": "versions.list",
+      "description": "List the saved versions of the open document in the Draft editor, e.g. \"what versions are saved\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "version.restore",
+      "description": "Restore a saved version in the Draft editor; the current text is saved as a version first, e.g. \"go back to the first draft\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The version id, from versions.list"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    {
+      "name": "version.delete",
+      "description": "Delete a saved version in the Draft editor, e.g. \"delete the old version\".",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The version id"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    {
+      "name": "compare.version",
+      "description": "Compare the open document with a saved version in the Draft editor, e.g. \"what changed since the first draft\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The version id"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    {
+      "name": "compare.document",
+      "description": "Compare the open document with another document in the Draft editor, e.g. \"compare this with the old report\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The other document's name"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      }
+    },
+    {
+      "name": "compare.as-suggestions",
+      "description": "Show the difference from a saved version or another document as suggested changes in the Draft editor, e.g. \"show the changes as track changes\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string",
+            "description": "A version id"
+          },
+          "document": {
+            "type": "string",
+            "description": "Another document's name"
+          }
+        }
+      }
+    },
+    {
+      "name": "sidecar.preset",
+      "description": "Propose a shorter, longer, more formal or plain-English rewrite of a passage in the Draft editor; the person accepts it, e.g. \"make this paragraph shorter\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "enum": [
+              "shorter",
+              "longer",
+              "formal",
+              "plain"
+            ],
+            "description": "Which rewrite"
+          },
+          "from": {
+            "type": "integer",
+            "description": "Start of the passage. Leave out for the selection"
+          },
+          "to": {
+            "type": "integer",
+            "description": "End of the passage"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      }
+    },
+    {
+      "name": "sidecar.translate",
+      "description": "Propose a translation of a passage in the Draft editor; the person accepts it, e.g. \"translate this into Hindi\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "type": "string",
+            "minLength": 2,
+            "description": "Target language code, e.g. hi, fr"
+          },
+          "insertBelow": {
+            "type": "boolean",
+            "description": "True to add the translation below instead of replacing"
+          },
+          "from": {
+            "type": "integer",
+            "description": "Start of the passage. Leave out for the selection"
+          },
+          "to": {
+            "type": "integer",
+            "description": "End of the passage"
+          }
+        },
+        "required": [
+          "target"
+        ]
+      }
+    },
+    {
+      "name": "goal.set",
+      "description": "Set a word-count goal for the open document in the Draft editor, e.g. \"set a goal of 2000 words\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "words": {
+            "type": "integer",
+            "description": "The goal in words. 0 clears it"
+          }
+        },
+        "required": [
+          "words"
+        ]
+      }
+    },
+    {
+      "name": "goal.read",
+      "description": "Read the word-count goal of the open document in the Draft editor, e.g. \"how close am I to my word goal\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "format.spacing",
+      "description": "Set line spacing, space before and after, or the first-line indent in the Draft editor, for the selection or the whole document, e.g. \"double-space the document\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "lineHeight": {
+            "type": "number",
+            "description": "1, 1.15, 1.5 or 2; 0 for the default"
+          },
+          "before": {
+            "type": "integer",
+            "description": "Points before: 0, 6, 12, 18 or 24"
+          },
+          "after": {
+            "type": "integer",
+            "description": "Points after: 0, 6, 12, 18 or 24"
+          },
+          "indentFirst": {
+            "type": "integer",
+            "description": "First-line indent in points: 0, 18 or 36"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "selection",
+              "document"
+            ],
+            "description": "The selected paragraphs, or the document default"
+          },
+          "from": {
+            "type": "integer",
+            "description": "Start position"
+          },
+          "to": {
+            "type": "integer",
+            "description": "End position"
+          }
+        }
+      }
+    },
+    {
+      "name": "format.text",
+      "description": "Set the text colour or size in the Draft editor, e.g. \"make this red\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "color": {
+            "type": "string",
+            "enum": [
+              "gray",
+              "red",
+              "orange",
+              "green",
+              "teal",
+              "blue",
+              "purple",
+              "brown",
+              "none"
+            ],
+            "description": "Colour, or none"
+          },
+          "size": {
+            "type": "integer",
+            "description": "Points: 9, 10, 14, 18 or 24; 0 for the default"
+          },
+          "from": {
+            "type": "integer",
+            "description": "Start position"
+          },
+          "to": {
+            "type": "integer",
+            "description": "End position"
+          }
+        }
+      }
+    },
+    {
+      "name": "format.direction",
+      "description": "Set paragraphs to left-to-right, right-to-left or automatic in the Draft editor, e.g. \"this paragraph is Arabic, make it right to left\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "dir": {
+            "type": "string",
+            "enum": [
+              "ltr",
+              "rtl",
+              "auto"
+            ],
+            "description": "The direction"
+          },
+          "from": {
+            "type": "integer",
+            "description": "Start position"
+          },
+          "to": {
+            "type": "integer",
+            "description": "End position"
+          }
+        },
+        "required": [
+          "dir"
+        ]
+      }
+    },
+    {
+      "name": "list.style",
+      "description": "Change a numbered list's style or restart its numbering in the Draft editor, e.g. \"number this list with roman numerals\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "style": {
+            "type": "string",
+            "enum": [
+              "decimal",
+              "lower-alpha",
+              "lower-roman",
+              "upper-alpha",
+              "upper-roman"
+            ],
+            "description": "Numbering style"
+          },
+          "restart": {
+            "type": "boolean",
+            "description": "True to restart at 1, false to continue the previous list"
+          },
+          "at": {
+            "type": "integer",
+            "description": "A position inside the list"
+          }
+        },
+        "required": [
+          "at"
+        ]
+      }
+    },
+    {
+      "name": "symbol.insert",
+      "description": "Insert a special character in the Draft editor, e.g. \"insert the rupee sign\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The symbol, up to 8 characters"
+          },
+          "at": {
+            "type": "integer",
+            "description": "A document position. Leave out for the end or the selection"
+          }
+        },
+        "required": [
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "table.cell",
+      "description": "Shade table cells or show or hide their borders in the Draft editor, e.g. \"shade the header row grey\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "background": {
+            "type": "string",
+            "enum": [
+              "gray",
+              "blue",
+              "green",
+              "yellow",
+              "red",
+              "none"
+            ],
+            "description": "Shade, or none"
+          },
+          "borders": {
+            "type": "boolean",
+            "description": "Show or hide borders"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "cell",
+              "table"
+            ],
+            "description": "The cell at the position, or the whole table"
+          },
+          "at": {
+            "type": "integer",
+            "description": "A position inside the table cell"
+          }
+        },
+        "required": [
+          "at"
+        ]
+      }
+    },
+    {
+      "name": "endnote.insert",
+      "description": "Add an endnote in the Draft editor, e.g. \"add an endnote with the source\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The endnote text"
+          },
+          "at": {
+            "type": "integer",
+            "description": "A document position. Leave out for the end or the selection"
+          }
+        },
+        "required": [
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "xref.insert",
+      "description": "Insert a cross-reference to a heading in the Draft editor, e.g. \"refer to the methods section here\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The heading's bookmark id, from bookmarks.list"
+          },
+          "at": {
+            "type": "integer",
+            "description": "A document position. Leave out for the end or the selection"
+          }
+        },
+        "required": [
+          "target"
+        ]
+      }
+    },
+    {
+      "name": "bookmarks.list",
+      "description": "List the headings that cross-references can point to in the Draft editor, e.g. \"what sections can I refer to\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "page.preview",
+      "description": "Open the print preview with real page breaks in the Draft editor, e.g. \"show me the pages\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "page.guide",
+      "description": "Show or hide the approximate page guide while writing in the Draft editor, e.g. \"show where the pages break\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "on": {
+            "type": "boolean",
+            "description": "True to show it"
+          }
+        },
+        "required": [
+          "on"
+        ]
+      }
+    },
+    {
+      "name": "equation.insert",
+      "description": "Insert an equation written in LaTeX in the Draft editor, e.g. \"add the equation E = mc^2\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "latex": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The LaTeX source"
+          },
+          "display": {
+            "type": "boolean",
+            "description": "True for a display equation on its own line"
+          },
+          "at": {
+            "type": "integer",
+            "description": "A document position. Leave out for the end or the selection"
+          }
+        },
+        "required": [
+          "latex"
+        ]
+      }
+    },
+    {
+      "name": "equation.set",
+      "description": "Change an equation's LaTeX in the Draft editor, e.g. \"fix the exponent in that equation\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "integer",
+            "description": "The equation's position"
+          },
+          "latex": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The new LaTeX source"
+          }
+        },
+        "required": [
+          "at",
+          "latex"
+        ]
+      }
+    },
+    {
+      "name": "citations.import",
+      "description": "Import references from BibTeX or CSL-JSON text into the document's library in the Draft editor, e.g. \"add these references\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The BibTeX or CSL-JSON text"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "bibtex",
+              "csl-json"
+            ],
+            "description": "The format. Default auto"
+          }
+        },
+        "required": [
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "citation.insert",
+      "description": "Cite one or more references from the library in the Draft editor, e.g. \"cite Doe 2020 here\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Library ids, from citations.list"
+          },
+          "locator": {
+            "type": "string",
+            "description": "A page or section, e.g. p. 4"
+          },
+          "at": {
+            "type": "integer",
+            "description": "A document position. Leave out for the end or the selection"
+          }
+        },
+        "required": [
+          "ids"
+        ]
+      }
+    },
+    {
+      "name": "bibliography.insert",
+      "description": "Insert a bibliography of the cited works in the Draft editor, e.g. \"add the references list\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "integer",
+            "description": "A document position. Leave out for the end or the selection"
+          }
+        }
+      }
+    },
+    {
+      "name": "citations.style",
+      "description": "Set the citation style in the Draft editor: APA, Chicago author-date, IEEE or Harvard, e.g. \"use IEEE citations\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "style": {
+            "type": "string",
+            "enum": [
+              "apa",
+              "chicago-author-date",
+              "ieee",
+              "harvard"
+            ],
+            "description": "The style"
+          }
+        },
+        "required": [
+          "style"
+        ]
+      }
+    },
+    {
+      "name": "citations.list",
+      "description": "List the references in the document's library and where they are cited in the Draft editor, e.g. \"what references do I have\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "assistant.languagetool",
+      "description": "Turn on LanguageTool grammar checking through a server running on this computer, or turn it off, in the Draft editor, e.g. \"use my LanguageTool server\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "The server address on 127.0.0.1, e.g. http://127.0.0.1:8081. Empty turns it off"
+          }
+        }
+      }
+    },
+    {
+      "name": "assistant.languagetool-test",
+      "description": "Test the connection to a LanguageTool server on this computer from the Draft editor; sends no document text, e.g. \"is LanguageTool running\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "The server address. Leave out for the saved one"
+          }
+        }
+      }
+    },
+    {
+      "name": "assistant.vale-read",
+      "description": "Read the Vale house-style settings and rules in the Draft editor, e.g. \"what style rules do I have\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "assistant.vale-set",
+      "description": "Turn Vale house-style checking on or off, or add, change or remove a rule file, in the Draft editor, e.g. \"add a rule against the word utilise\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "True to check with Vale"
+          },
+          "ini": {
+            "type": "string",
+            "description": "The .vale.ini text"
+          },
+          "path": {
+            "type": "string",
+            "description": "A rule file path, e.g. styles/House/Words.yml"
+          },
+          "content": {
+            "type": "string",
+            "description": "The rule file's text"
+          },
+          "remove": {
+            "type": "boolean",
+            "description": "True to delete the rule file at path"
+          }
+        }
+      }
     }
   ]
 }
