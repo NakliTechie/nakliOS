@@ -370,7 +370,13 @@ export const briefingRequest = (notebook, parts) => studioRequest('briefing', no
 export function parseScript(text) {
   /** @type {{ speaker: string, text: string }[]} */
   const out = [];
-  for (const raw of beforeSources(text).split('\n')) {
+  // Small models often write several turns on one line ("Asha: … Ravi: …") and sometimes repeat a label
+  // ("Asha: Asha: …"), so every host label starts a line of its own, and a repeated label collapses to one.
+  const labels = SPEAKERS.map((sp) => sp.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  const split = beforeSources(text)
+    .replace(new RegExp(`(\\*\\*)?\\b(${labels})\\s*(\\*\\*)?\\s*:(\\*\\*)?\\s*(?:(\\*\\*)?\\b\\2\\s*(\\*\\*)?\\s*:(\\*\\*)?\\s*)+`, 'g'), '$2: ')
+    .replace(new RegExp(`\\s+(?=(\\*\\*)?\\b(${labels})\\s*(\\*\\*)?\\s*:)`, 'g'), '\n');
+  for (const raw of split.split('\n')) {
     const line = raw.trim();
     if (!line) continue;
     const m = /^\**\s*([\p{L}][\p{L} .'-]{0,30}?)\s*\**\s*:\s*\**\s*(.+)$/u.exec(line);
