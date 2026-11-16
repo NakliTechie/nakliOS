@@ -12,7 +12,7 @@
      re-pins the SDK hash when it re-splices the SDK. CDN scripts are limited to
      the pinned package paths. A meta CSP cannot carry frame-ancestors, so only
      the server (or the NakliOS host) can say who may frame Reckon. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-K6LMyqFvQ/2WebzBhGXcZQxw8Cd6hekC8lzzqlYp32o=' 'sha256-UHZZwARY6gNgEeVZjWNSk0sCAkHqfNibPLUZazpIBkU=' 'sha256-msYN23W+12txPFEeJuauJ4MFxF0oeGHTead5eUdzFeo=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/papaparse@5.4.1/ https://cdn.jsdelivr.net/npm/exceljs@4.4.0/ https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/ https://cdn.jsdelivr.net/npm/apache-arrow@17.0.0/ https://cdn.jsdelivr.net/npm/flatbuffers@24.3.25/ https://cdn.jsdelivr.net/npm/tslib@2.6.3/ https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2/ https://cdn.jsdelivr.net/npm/onnxruntime-common/+esm https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.0-dev.20260914-8d85527a0/ https://cdn.sheetjs.com/xlsx-0.20.3/; style-src 'self' 'unsafe-inline'; connect-src 'self' blob: http://127.0.0.1:* https://cdn.jsdelivr.net https://cdn.sheetjs.com https://huggingface.co https://*.hf.co https://api.openai.com https://api.anthropic.com https://openrouter.ai https://api.groq.com https://api.together.xyz https://api.mistral.ai https://generativelanguage.googleapis.com; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-K6LMyqFvQ/2WebzBhGXcZQxw8Cd6hekC8lzzqlYp32o=' 'sha256-UHZZwARY6gNgEeVZjWNSk0sCAkHqfNibPLUZazpIBkU=' 'sha256-YvDloquSwmp9L+MdyutaAqkhFSFkDQBvOBKCYn9aSP0=' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/papaparse@5.4.1/ https://cdn.jsdelivr.net/npm/exceljs@4.4.0/ https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/ https://cdn.jsdelivr.net/npm/apache-arrow@17.0.0/ https://cdn.jsdelivr.net/npm/flatbuffers@24.3.25/ https://cdn.jsdelivr.net/npm/tslib@2.6.3/ https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2/ https://cdn.jsdelivr.net/npm/onnxruntime-common/+esm https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.0-dev.20260914-8d85527a0/ https://cdn.sheetjs.com/xlsx-0.20.3/; style-src 'self' 'unsafe-inline'; connect-src 'self' blob: http://127.0.0.1:* https://cdn.jsdelivr.net https://cdn.sheetjs.com https://huggingface.co https://*.hf.co https://api.openai.com https://api.anthropic.com https://openrouter.ai https://api.groq.com https://api.together.xyz https://api.mistral.ai https://generativelanguage.googleapis.com; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Reckon</title>
 <link rel="icon" href="data:,">
 <style id="rk-tokens">
@@ -19870,6 +19870,7 @@ const STR = {
   'review.staged': { en: 'Spreadsheet change staged for review.', hi: 'स्प्रेडशीट का बदलाव समीक्षा के लिए रखा गया।' },
   // --- agent door review fixes (2026-11-17 review B5, B7, B13, B19, B20, B21) ---
   'review.abandoned': { en: 'An agent change was waiting for your review when Reckon closed, so it was not applied.', hi: 'Reckon बंद होते समय एक एजेंट का बदलाव आपकी समीक्षा के लिए रुका था, इसलिए वह लागू नहीं हुआ।' },
+  'review.sheetChangedWithdrawn': { en: "The sheet changed, so the agent's proposal was withdrawn. The agent can try again.", hi: 'शीट बदल गई, इसलिए एजेंट का प्रस्ताव वापस ले लिया गया। एजेंट फिर से कोशिश कर सकता है।' },
   'review.sheetChanged': { en: 'The sheet changed, so this proposal was dropped. Discard the card; the agent can try again.', hi: 'शीट बदल गई, इसलिए यह प्रस्ताव हटा दिया गया। कार्ड को छोड़ दें; एजेंट फिर से कोशिश कर सकता है।' },
   'review.unknown': { en: 'Reckon has no change waiting for this card. Discard the card.', hi: 'इस कार्ड के लिए Reckon में कोई बदलाव नहीं रुका है। कार्ड को छोड़ दें।' },
   'review.hostBusy': { en: 'NakliOS already shows a Reckon change waiting for review. Commit or discard that card first; this change was not applied.', hi: 'NakliOS में पहले से Reckon का एक बदलाव समीक्षा के लिए दिख रहा है। पहले उस कार्ड को लागू करें या छोड़ें; यह बदलाव लागू नहीं हुआ।' },
@@ -34361,6 +34362,7 @@ export function createApp({ client, params = new URLSearchParams() }) {
     discarded: 'The person discarded the change; nothing changed.',
     dropped: 'The sheet changed where the change would apply, so Reckon dropped it; nothing changed. Read the cells again before you retry.',
     abandoned: 'Reckon closed before the person decided, so the change was not applied.',
+    withdrawn: 'withdrawn: superseded by your edit. The sheet changed where the change would apply, so Reckon withdrew the card; nothing changed. Read the cells again before you retry.',
   };
   const reviewStatus = (proposal_id) => {
     if (pendingReview.has(proposal_id)) return { proposal_id, status: 'pending', message: REVIEW_STATUS_TEXT.pending };
@@ -34378,18 +34380,25 @@ export function createApp({ client, params = new URLSearchParams() }) {
       setTimeout(() => toast($t('review.abandoned', 'An agent change was waiting for your review when Reckon closed, so it was not applied.'), { kind: 'info', ms: 8000 }), 0);
     }
   } catch { /* no earlier record */ }
-  // The host draws the card and keeps it until the person decides. A host that
-  // can withdraw a card is asked to; this one cannot yet, so the card stays and
-  // Commit on it says why (docs/review-fixes/agentdoor.md, B5).
-  const withdrawCard = (proposal_id) => {
-    try { window.naklios?.review?.withdraw?.(proposal_id); } catch { /* older host */ }
+  // The host draws the card and keeps it until the person decides. A stale
+  // proposal is withdrawn from the host (naklios.review.withdraw, nakliOS PR
+  // 205), so no dead card is left; an older host without withdraw keeps the
+  // card, and Commit on it says why (review B5).
+  const withdrawCard = async (proposal_id) => {
+    const fn = window.naklios?.review?.withdraw;
+    if (typeof fn !== 'function') return false;
+    try { const r = await fn(proposal_id); return !!(r && r.withdrawn !== false && !r.standalone); } catch { return false; }
   };
   const SHEET_CHANGED = () => $t('review.sheetChanged', 'The sheet changed, so this proposal was dropped. Discard the card; the agent can try again.');
+  const SHEET_CHANGED_WITHDRAWN = () => $t('review.sheetChangedWithdrawn', 'The sheet changed, so the agent\'s proposal was withdrawn. The agent can try again.');
   const dropPending = (proposal_id, why = 'dropped') => {
     if (!pendingReview.delete(proposal_id)) return;
     recordOutcome(proposal_id, why);
-    withdrawCard(proposal_id);
-    if (why === 'dropped') toast(SHEET_CHANGED(), { kind: 'info', ms: 8000 });
+    if (why !== 'dropped') { void withdrawCard(proposal_id); return; }
+    withdrawCard(proposal_id).then((gone) => {
+      if (gone) recordOutcome(proposal_id, 'withdrawn');
+      toast(gone ? SHEET_CHANGED_WITHDRAWN() : SHEET_CHANGED(), { kind: 'info', ms: 8000 });
+    });
   };
   // B5: rebase. A person's edit makes the stored base stale, but the proposal
   // still holds when the same transaction, planned now, makes exactly the change
