@@ -43,6 +43,11 @@ export function createChunkCache(maxChunks = CACHE_CHUNKS) {
       return pending;
     },
     clear() { entries.clear(); },
+    /* Drops every chunk of one path (keys start with "<path>\0"). */
+    dropPath(path) {
+      const prefix = `${path}\0`;
+      for (const key of [...entries.keys()]) if (key.startsWith(prefix)) entries.delete(key);
+    },
     get size() { return entries.size; },
   };
 }
@@ -83,6 +88,11 @@ export function createChunkReader({ path, name, size, type = '', stamp = '', rea
   const reader = {
     path, name, size, type,
     async read(offset, length) {
+      // One read is at most the host's 16 MiB call cap, so a bad length cannot fan out into
+      // hundreds of concurrent host calls (V57).
+      if (!(length <= MAX_READ_BYTES)) {
+        throw Object.assign(new RangeError(`One read of ${name} is limited to ${MAX_READ_BYTES} bytes; ${length} were asked.`), { code: 'ERR_HOSTED_READ_TOO_LARGE' });
+      }
       const start = Math.max(0, Math.min(size, Math.floor(offset)));
       const end = Math.max(start, Math.min(size, start + Math.floor(length)));
       const out = new Uint8Array(end - start);

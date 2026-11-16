@@ -121,6 +121,270 @@ export class RangedFile {
   async arrayBuffer() { return (await this.bytes()).buffer; }
 }
 
+/* Embedded subtitle text (review V18): UTF-8 when it decodes cleanly, otherwise
+   Windows-1252 (older Matroska files hold Latin-1 SRT), so one bad byte costs one
+   cue's accents rather than the whole track. */
+const strictUtf8 = new TextDecoder('utf-8', { fatal: true });
+const legacyText = (() => {
+  try { return new TextDecoder('windows-1252'); } catch (_) { return new TextDecoder('utf-8'); }
+})();
+export function decodeSubtitleText(bytes) {
+  try {
+    return strictUtf8.decode(bytes);
+  } catch (_) {
+    return legacyText.decode(bytes);
+  }
+}
+
+/* A cue with no duration ends where the next cue starts, at most 5 s after its own
+   start (review V52), so a last cue without a duration does not stay to the end. */
+export const MAX_FILLED_CUE_S = 5;
+export function fillCueEnds(cues, mediaDuration) {
+  cues.sort((left, right) => left.startS - right.startS);
+  for (let index = 0; index < cues.length; index += 1) {
+    const cue = cues[index];
+    if (cue.endS === null || cue.endS === undefined) {
+      const nextStart = cues[index + 1]?.startS;
+      const limit = Number.isFinite(nextStart) ? nextStart : Math.max(cue.startS, mediaDuration);
+      cue.endS = Math.min(limit, cue.startS + MAX_FILLED_CUE_S);
+    }
+    cue.startS = Math.max(0, cue.startS);
+    cue.endS = Math.max(cue.startS, cue.endS);
+  }
+  return cues;
+}
+
+/* Bitmap tracks: FFmpeg writes one block per PGS segment, so blocks sharing a timestamp
+   form one display set. The parts are joined once per set (review V15: joining as each
+   block arrived copied the growing buffer every time), a set over `maxBytes` is dropped,
+   and each set ends where the next later set starts. */
+export function joinDisplaySets(blocks, mediaDuration, maxBytes = 8 * 1024 * 1024) {
+  blocks.sort((left, right) => left.startS - right.startS);
+  const groups = [];
+  for (const block of blocks) {
+    const last = groups.at(-1);
+    if (last && Math.abs(last.startS - block.startS) < 1e-6) {
+      last.parts.push(block.data);
+      last.bytes += block.data.byteLength;
+      if (block.endS !== null && block.endS !== undefined) last.endS = Math.max(last.endS ?? block.endS, block.endS);
+    } else {
+      groups.push({ startS: block.startS, endS: block.endS ?? null, parts: [block.data], bytes: block.data.byteLength });
+    }
+  }
+  const sets = [];
+  for (const group of groups) {
+    if (group.bytes > maxBytes) continue;
+    let data = group.parts[0];
+    if (group.parts.length > 1) {
+      data = new Uint8Array(group.bytes);
+      let at = 0;
+      for (const part of group.parts) {
+        data.set(part, at);
+        at += part.byteLength;
+      }
+    }
+    sets.push({ startS: group.startS, endS: group.endS, data });
+  }
+  for (let index = 0; index < sets.length; index += 1) {
+    const set = sets[index];
+    set.startS = Math.max(0, set.startS);
+    if (set.endS === null || set.endS <= set.startS) {
+      const next = sets[index + 1]?.startS;
+      set.endS = Number.isFinite(next) ? next : Math.max(set.startS, mediaDuration);
+    }
+  }
+  return sets;
+}
+
+/* Which Matroska attachments to read as fonts (review V17): font types only, by MIME type
+   or file extension; an oversize font or one past the count or total cap is skipped by
+   name, never thrown, so one large cover image no longer removes every font. */
+const FONT_MIME_TYPES = new Set([
+  'font/ttf', 'font/otf', 'font/sfnt', 'font/woff', 'font/woff2', 'font/collection',
+  'application/x-truetype-font', 'application/x-font-ttf', 'application/x-font-truetype',
+  'application/x-font-otf', 'application/x-font-opentype', 'application/vnd.ms-opentype',
+  'application/font-sfnt', 'application/font-woff', 'application/x-font',
+]);
+const FONT_EXTENSION = /\.(ttf|otf|ttc|otc|woff2?)$/i;
+export function isFontAttachment({ name = '', mimeType = '' } = {}) {
+  return FONT_MIME_TYPES.has(String(mimeType).toLowerCase()) || FONT_EXTENSION.test(String(name));
+}
+export function planFontAttachments(entries, {
+  maxFileBytes = 32 * 1024 * 1024,
+  maxTotalBytes = 64 * 1024 * 1024,
+  maxFiles = 64,
+} = {}) {
+  const fonts = [];
+  const skipped = [];
+  let total = 0;
+  for (const entry of entries) {
+    const summary = { name: entry.name, mimeType: entry.mimeType, bytes: entry.bytes };
+    if (!isFontAttachment(entry)) skipped.push({ ...summary, reason: 'not-font' });
+    else if (entry.bytes > maxFileBytes) skipped.push({ ...summary, reason: 'too-large' });
+    else if (fonts.length >= maxFiles) skipped.push({ ...summary, reason: 'too-many' });
+    else if (total + entry.bytes > maxTotalBytes) skipped.push({ ...summary, reason: 'total-too-large' });
+    else {
+      fonts.push(entry);
+      total += entry.bytes;
+    }
+  }
+  return { fonts, skipped };
+}
+
+/* Where a decoded audio sample goes on the ring's timeline (review V4, V43). `expectedS`
+   is the source time the next sample should start at; `timestampS` is where this one
+   does. A later sample leaves a gap, played as silence; an earlier one overlaps, and its
+   first `skip` frames are dropped. The first sample after a seek is placed to the frame,
+   so the packet at or before the target does not play whole; later samples move only
+   when they drift by more than `toleranceS`, so timestamp rounding never adds clicks. A
+   jump over `maxGapS` is a broken timestamp, not a pause, and plays on contiguously. */
+export function alignAudioSample({
+  expectedS,
+  timestampS,
+  frames,
+  rate,
+  first = false,
+  toleranceS = 0.02,
+  maxGapS = 30,
+}) {
+  const base = Number.isFinite(expectedS) ? expectedS : timestampS;
+  if (!Number.isFinite(timestampS) || !Number.isFinite(base)) {
+    return { gap: 0, skip: 0, nextExpectedS: (Number.isFinite(base) ? base : 0) + frames / rate };
+  }
+  const delta = timestampS - base;
+  const tolerance = first ? 0.5 / rate : toleranceS;
+  let gap = 0;
+  let skip = 0;
+  if (delta > tolerance && delta <= maxGapS) gap = Math.round(delta * rate);
+  else if (delta < -tolerance) skip = Math.min(frames, Math.round(-delta * rate));
+  return { gap, skip, nextExpectedS: base + (gap + frames - skip) / rate };
+}
+
+/* Pitch-preserving speed for the audio worklet (review V42): a time-domain stretch in the
+   WSOLA family, shaped like SoundTouch's TDStretch. Each step takes a 40 ms sequence of
+   input, finds within a 15 ms seek window the offset whose start best matches the tail
+   kept from the previous step (normalised cross-correlation over the 8 ms overlap),
+   cross-fades the two, and advances the input by (sequence - overlap) x tempo. Output
+   keeps the input's pitch at any tempo. The class is self-contained, because the worklet
+   source embeds it as text; Node tests import it from here. */
+export class ReelStretch {
+  constructor(channels, sampleRate, tempo = 1) {
+    this.channels = Math.max(1, channels | 0);
+    this.tempo = tempo > 0 ? tempo : 1;
+    this.sequence = Math.max(64, Math.round(sampleRate * 0.04));
+    this.overlap = Math.max(16, Math.round(sampleRate * 0.008));
+    this.seek = Math.max(16, Math.round(sampleRate * 0.015));
+    this.need = this.sequence + this.seek;
+    this.input = Array.from({ length: this.channels }, () => new Float32Array(this.need));
+    this.mid = Array.from({ length: this.channels }, () => new Float32Array(this.overlap));
+    this.out = Array.from({ length: this.channels }, () => new Float32Array(this.sequence));
+    this.inLength = 0;
+    this.haveMid = false;
+    this.outLength = 0;
+    this.outRead = 0;
+    this.skipCarry = 0;
+    this.skipPending = 0;
+  }
+
+  ready() {
+    return this.outRead < this.outLength;
+  }
+
+  /** Input samples taken but not yet heard (in input samples). */
+  pending() {
+    return Math.max(0, this.inLength + (this.outLength - this.outRead) * this.tempo - this.skipPending);
+  }
+
+  push(frame) {
+    if (this.skipPending > 0) {
+      this.skipPending -= 1;
+      return;
+    }
+    for (let channel = 0; channel < this.channels; channel += 1) {
+      this.input[channel][this.inLength] = frame[Math.min(channel, frame.length - 1)];
+    }
+    this.inLength += 1;
+    if (this.inLength >= this.need && !this.ready()) this.step();
+  }
+
+  read(output, index) {
+    for (let channel = 0; channel < output.length; channel += 1) {
+      output[channel][index] = this.out[Math.min(channel, this.channels - 1)][this.outRead];
+    }
+    this.outRead += 1;
+  }
+
+  score(offset) {
+    let dot = 0;
+    let energy = 0;
+    for (let index = 0; index < this.overlap; index += 1) {
+      let kept = 0;
+      let candidate = 0;
+      for (let channel = 0; channel < this.channels; channel += 1) {
+        kept += this.mid[channel][index];
+        candidate += this.input[channel][offset + index];
+      }
+      dot += kept * candidate;
+      energy += candidate * candidate;
+    }
+    return dot / Math.sqrt(energy + 1e-12);
+  }
+
+  bestOffset() {
+    if (!this.haveMid) return 0;
+    let best = 0;
+    let bestScore = -Infinity;
+    for (let offset = 0; offset < this.seek; offset += 4) {
+      const value = this.score(offset);
+      if (value > bestScore) {
+        bestScore = value;
+        best = offset;
+      }
+    }
+    const from = Math.max(0, best - 3);
+    const to = Math.min(this.seek - 1, best + 3);
+    for (let offset = from; offset <= to; offset += 1) {
+      const value = this.score(offset);
+      if (value > bestScore) {
+        bestScore = value;
+        best = offset;
+      }
+    }
+    return best;
+  }
+
+  step() {
+    const offset = this.bestOffset();
+    const overlap = this.overlap;
+    const sequence = this.sequence;
+    for (let channel = 0; channel < this.channels; channel += 1) {
+      const input = this.input[channel];
+      const out = this.out[channel];
+      const mid = this.mid[channel];
+      for (let index = 0; index < overlap; index += 1) {
+        const weight = index / overlap;
+        out[index] = this.haveMid
+          ? mid[index] * (1 - weight) + input[offset + index] * weight
+          : input[offset + index];
+      }
+      for (let index = overlap; index < sequence - overlap; index += 1) out[index] = input[offset + index];
+      for (let index = 0; index < overlap; index += 1) mid[index] = input[offset + sequence - overlap + index];
+    }
+    this.haveMid = true;
+    this.outLength = sequence - overlap;
+    this.outRead = 0;
+    this.skipCarry += (sequence - overlap) * this.tempo;
+    const skip = Math.floor(this.skipCarry);
+    this.skipCarry -= skip;
+    const drop = Math.min(skip, this.inLength);
+    for (let channel = 0; channel < this.channels; channel += 1) {
+      this.input[channel].copyWithin(0, drop, this.inLength);
+    }
+    this.inLength -= drop;
+    this.skipPending = skip - drop;
+  }
+}
+
 const rangedFiles = new WeakMap();
 
 /* One RangedFile per reader, so the engine's per-file caches see one identity. */
@@ -350,6 +614,8 @@ const Demux = (() => {
       CUE_TIME: 0xB3,
       CUE_TRACK_POSITIONS: 0xB7,
       CUE_TRACK: 0xF7,
+      CUE_CLUSTER_POSITION: 0xF1,
+      CUE_RELATIVE_POSITION: 0xF0,
       REFERENCE_BLOCK: 0xFB,
       ATTACHMENTS: 0x1941A469,
       ATTACHED_FILE: 0x61A7,
@@ -384,23 +650,29 @@ const Demux = (() => {
       ['S_HDMV/PGS', 'pgs'],
     ]);
     const subtitleCodec = codecId => TEXT_CODECS.get(codecId) || BITMAP_CODECS.get(codecId) || null;
+    // Fonts for ASS (review V17): only font attachments are read, each at most 32 MB
+    // and 64 MB and 64 files in all; anything else is listed as skipped, never read.
     const MAX_ATTACHMENT_BYTES = 32 * 1024 * 1024;
-    const MAX_ATTACHMENTS_TOTAL_BYTES = 128 * 1024 * 1024;
+    const MAX_ATTACHMENTS_TOTAL_BYTES = 64 * 1024 * 1024;
+    const MAX_ATTACHMENT_FILES = 64;
     const MAX_INDEX_CLUSTERS = 200_000;
     const INDEX_SCAN_TIMEOUT_MS = 15_000;
-    const decoder = new TextDecoder('utf-8', { fatal: true });
+    // One PGS display set is a few hundred kilobytes at 1080p; a larger set is dropped (V15).
+    const MAX_DISPLAY_SET_BYTES = 8 * 1024 * 1024;
 
     class Reader {
       constructor(file, {
         deadline = null,
         timeoutMs = CONFIG.demux.subtitleScanTimeoutMs,
         timeoutLabel = 'Matroska scan',
+        maxElements = CONFIG.demux.maxEbmlElements,
       } = {}) {
         this.file = file;
         this.size = file.size;
         this.deadline = deadline;
         this.timeoutMs = timeoutMs;
         this.timeoutLabel = timeoutLabel;
+        this.maxElements = maxElements;
         this.cacheStart = -1;
         this.cache = new Uint8Array();
         this.elementsRead = 0;
@@ -414,11 +686,11 @@ const Demux = (() => {
             `${this.timeoutLabel} exceeded ${this.timeoutMs} ms.`,
           );
         }
-        if (this.elementsRead > CONFIG.demux.maxEbmlElements) {
+        if (this.elementsRead > this.maxElements) {
           throw fail(
             'EbmlElementLimitError',
             'ERR_DEMUX_EBML_LIMIT',
-            `The Matroska scan exceeded ${CONFIG.demux.maxEbmlElements} elements.`,
+            `The Matroska scan exceeded ${this.maxElements} elements.`,
           );
         }
       }
@@ -528,11 +800,7 @@ const Demux = (() => {
       if (element.dataSize > limit) {
         throw fail('EbmlTextLimitError', 'ERR_DEMUX_EBML_TEXT_LIMIT', `An EBML text value exceeds ${limit} bytes.`);
       }
-      try {
-        return decoder.decode(await reader.bytes(element.dataOffset, element.dataSize)).replace(/\0+$/, '');
-      } catch (error) {
-        throw fail('MalformedSubtitleTextError', 'ERR_DEMUX_SUBTITLE_UTF8', 'Subtitle metadata is not valid UTF-8.', error);
-      }
+      return decodeSubtitleText(await reader.bytes(element.dataOffset, element.dataSize)).replace(/\0+$/, '');
     }
 
     async function binaryId(reader, element) {
@@ -843,14 +1111,9 @@ const Demux = (() => {
       }
       if (BITMAP_CODECS.has(targetTrack.codecId)) {
         const data = (await reader.bytes(payloadOffset, payloadSize)).slice();
-        return { relativeTimestamp, text: null, data, id: null, settings: '', payloadSize };
+        return { relativeTimestamp, text: null, data, id: null, settings: '', payloadSize, at: element.offset };
       }
-      let text;
-      try {
-        text = decoder.decode(await reader.bytes(payloadOffset, payloadSize)).replace(/\0+$/, '');
-      } catch (error) {
-        throw fail('MalformedSubtitleTextError', 'ERR_DEMUX_SUBTITLE_UTF8', 'A subtitle cue is not valid UTF-8.', error);
-      }
+      let text = decodeSubtitleText(await reader.bytes(payloadOffset, payloadSize)).replace(/\0+$/, '');
       let id = null;
       let settings = '';
       if (targetTrack.codecId === 'D_WEBVTT/SUBTITLES') {
@@ -867,7 +1130,7 @@ const Demux = (() => {
         settings = text.slice(firstBreak + 1, secondBreak).replace(/\r$/, '');
         text = text.slice(secondBreak + 1);
       }
-      return { relativeTimestamp, text, id, settings, payloadSize };
+      return { relativeTimestamp, text, id, settings, payloadSize, at: element.offset };
     }
 
     function timedCue(block, clusterTimestamp, blockDuration, track, timestampScale) {
@@ -884,6 +1147,7 @@ const Demux = (() => {
         data: block.data || null,
         id: block.id,
         settings: block.settings,
+        at: block.at,
       };
     }
 
@@ -955,74 +1219,137 @@ const Demux = (() => {
       return knownEnd ?? limit;
     }
 
-    function normalizeCueDurations(cues, mediaDuration) {
-      cues.sort((left, right) => left.startS - right.startS);
-      for (let index = 0; index < cues.length; index += 1) {
-        const cue = cues[index];
-        if (cue.endS === null) {
-          const nextStart = cues[index + 1]?.startS;
-          cue.endS = Number.isFinite(nextStart) ? nextStart : Math.max(cue.startS, mediaDuration);
+    /* The scan budget grows with the file (review V10): a three-hour film with several
+       audio tracks holds millions of blocks, each one EBML element. The deadline grows
+       with the duration, at least the configured subtitle scan timeout. */
+    function scanBudget(state, mediaDuration) {
+      const timeoutMs = Math.max(
+        CONFIG.demux.subtitleScanTimeoutMs,
+        Number.isFinite(mediaDuration) ? Math.ceil(mediaDuration * 20) : 0,
+      );
+      return {
+        deadline: performance.now() + timeoutMs,
+        timeoutMs,
+        maxElements: Math.max(CONFIG.demux.maxEbmlElements, Math.ceil(state.file.size / 64)),
+      };
+    }
+
+    /* Cue points of `trackNumber`: [{ cluster, relative }] absolute cluster offsets and the
+       block's offset inside the cluster's data (null when the muxer wrote none). */
+    async function trackCuePoints(reader, state, trackNumber) {
+      const points = [];
+      await children(reader, state.cuesElement, async point => {
+        if (point.id !== ID.CUE_POINT) return;
+        await children(reader, point, async field => {
+          if (field.id !== ID.CUE_TRACK_POSITIONS) return;
+          let track = null;
+          let cluster = null;
+          let relative = null;
+          await children(reader, field, async position => {
+            if (position.id === ID.CUE_TRACK) track = await unsigned(reader, position);
+            if (position.id === ID.CUE_CLUSTER_POSITION) cluster = await unsigned(reader, position);
+            if (position.id === ID.CUE_RELATIVE_POSITION) relative = await unsigned(reader, position);
+          });
+          if (track === trackNumber && cluster !== null) {
+            const absolute = state.segment.dataOffset + cluster;
+            if (absolute < state.segment.end) points.push({ cluster: absolute, relative });
+          }
+        });
+      });
+      return points;
+    }
+
+    /* Read only the blocks the Cues point at (review V10): the cluster's timestamp, then the
+       block at its relative position; a cluster without a usable relative position is
+       scanned whole. Returns null when the Cues hold no entry for this track. */
+    async function cuedScan(reader, state, track, scan) {
+      if (!state.cuesElement) return null;
+      const points = await trackCuePoints(reader, state, track.number);
+      if (!points.length) return null;
+      const scanned = new Set();
+      const seenBlocks = new Set();
+      for (const point of points) {
+        const cluster = await elementAt(reader, point.cluster, state.segment.end);
+        if (cluster.id !== ID.CLUSTER) return null;
+        const limit = cluster.end ?? state.segment.end;
+        let clusterTimestamp = null;
+        let child = cluster.dataOffset;
+        for (let guard = 0; child < limit && guard < 8 && clusterTimestamp === null; guard += 1) {
+          const field = await elementAt(reader, child, limit);
+          if (field.id === ID.CLUSTER_TIMESTAMP) clusterTimestamp = await unsigned(reader, field);
+          child = requireKnown(field, 'A Cluster child element');
         }
-        cue.startS = Math.max(0, cue.startS);
-        cue.endS = Math.max(cue.startS, cue.endS);
+        // PGS display sets span several blocks and the Cues name only the first, so
+        // bitmap tracks scan each cued cluster whole.
+        const blockOffset = point.relative === null || BITMAP_CODECS.has(track.codecId)
+          ? null
+          : cluster.dataOffset + point.relative;
+        if (clusterTimestamp !== null && blockOffset !== null && blockOffset < limit) {
+          if (seenBlocks.has(blockOffset)) continue;
+          const element = await elementAt(reader, blockOffset, limit);
+          if (element.id === ID.SIMPLE_BLOCK) {
+            const block = await blockData(reader, element, track);
+            if (block) {
+              seenBlocks.add(blockOffset);
+              appendCue(scan, timedCue(block, clusterTimestamp, null, track, state.timestampScale), block.payloadSize);
+              continue;
+            }
+          } else if (element.id === ID.BLOCK_GROUP) {
+            const before = scan.cues.length;
+            await parseBlockGroup(reader, element, clusterTimestamp, track, state.timestampScale, scan);
+            if (scan.cues.length > before) {
+              seenBlocks.add(blockOffset);
+              continue;
+            }
+          }
+        }
+        if (scanned.has(point.cluster)) continue;
+        scanned.add(point.cluster);
+        // Without a relative position, or when it does not lead to this track's block.
+        const before = scan.cues.length;
+        await parseCluster(reader, cluster, track, state.timestampScale, scan, state.segment.end);
+        if (scan.cues.length === before) return null;
       }
-      return cues;
+      return scan;
     }
 
     async function readCues(state, track, mediaDuration) {
-      const reader = new Reader(state.file, {
-        deadline: performance.now() + CONFIG.demux.subtitleScanTimeoutMs,
-        timeoutMs: CONFIG.demux.subtitleScanTimeoutMs,
-        timeoutLabel: 'Subtitle extraction',
-      });
-      const scan = { cues: [], textBytes: 0 };
-      let offset = state.segment.dataOffset;
-      while (offset < state.segment.end) {
-        const element = await elementAt(reader, offset, state.segment.end);
-        if (element.id === ID.CLUSTER) {
-          offset = await parseCluster(
-            reader,
-            element,
-            track,
-            state.timestampScale,
-            scan,
-            state.segment.end,
-          );
-        } else {
-          offset = requireKnown(element, 'A top-level Matroska element');
+      const budget = scanBudget(state, mediaDuration);
+      const readerFor = label => new Reader(state.file, { ...budget, timeoutLabel: label });
+      let scan = null;
+      try {
+        scan = await cuedScan(readerFor('Subtitle extraction'), state, track, { cues: [], textBytes: 0 });
+      } catch (error) {
+        if (error?.code === 'ERR_DEMUX_TIMEOUT') throw error;
+        scan = null;
+      }
+      if (scan) {
+        // A cluster scanned whole and a cued block can both yield one cue; keep one.
+        const unique = new Map();
+        for (const cue of scan.cues) unique.set(cue.at, cue);
+        scan.cues = [...unique.values()];
+      } else {
+        scan = { cues: [], textBytes: 0 };
+        const reader = readerFor('Subtitle extraction');
+        let offset = state.segment.dataOffset;
+        while (offset < state.segment.end) {
+          const element = await elementAt(reader, offset, state.segment.end);
+          if (element.id === ID.CLUSTER) {
+            offset = await parseCluster(
+              reader,
+              element,
+              track,
+              state.timestampScale,
+              scan,
+              state.segment.end,
+            );
+          } else {
+            offset = requireKnown(element, 'A top-level Matroska element');
+          }
         }
       }
-      if (BITMAP_CODECS.has(track.codecId)) return displaySets(scan.cues, mediaDuration);
-      return normalizeCueDurations(scan.cues, mediaDuration);
-    }
-
-    /* Bitmap tracks: FFmpeg writes one block per PGS segment, so blocks sharing a
-       timestamp form one display set. Join them, and end each set where the next
-       later set starts. */
-    function displaySets(blocks, mediaDuration) {
-      blocks.sort((left, right) => left.startS - right.startS);
-      const sets = [];
-      for (const block of blocks) {
-        const last = sets.at(-1);
-        if (last && Math.abs(last.startS - block.startS) < 1e-6) {
-          const joined = new Uint8Array(last.data.byteLength + block.data.byteLength);
-          joined.set(last.data, 0);
-          joined.set(block.data, last.data.byteLength);
-          last.data = joined;
-          if (block.endS !== null) last.endS = Math.max(last.endS ?? block.endS, block.endS);
-        } else {
-          sets.push({ startS: block.startS, endS: block.endS, data: block.data });
-        }
-      }
-      for (let index = 0; index < sets.length; index += 1) {
-        const set = sets[index];
-        set.startS = Math.max(0, set.startS);
-        if (set.endS === null || set.endS <= set.startS) {
-          const next = sets[index + 1]?.startS;
-          set.endS = Number.isFinite(next) ? next : Math.max(set.startS, mediaDuration);
-        }
-      }
-      return sets;
+      if (BITMAP_CODECS.has(track.codecId)) return joinDisplaySets(scan.cues, mediaDuration, MAX_DISPLAY_SET_BYTES);
+      return fillCueEnds(scan.cues, mediaDuration);
     }
 
     /* Key frame times for Matroska track `trackNumber`: from Cues when the file has
@@ -1125,44 +1452,64 @@ const Demux = (() => {
         const task = (state.cuesElement ? cueIndex(state, video.number) : clusterIndex(state, video.number))
           .then(times => [...new Set(times.map(time => Math.max(0, time)))].sort((left, right) => left - right));
         state.keyframeCache.set(video.number, task);
+        task.catch(() => {
+          if (state.keyframeCache.get(video.number) === task) state.keyframeCache.delete(video.number);
+        });
       }
       return state.keyframeCache.get(video.number);
     }
 
-    /** Matroska attachments (fonts for ASS): [{ name, mimeType, data }], bounded. */
-    function attachments(state) {
-      if (!state.attachmentsElement) return Promise.resolve([]);
+    /* Matroska attachments (fonts for ASS). The index (names, types, offsets) is cached;
+       the bytes are read on each call and never held by the engine, so the caller's copy
+       is the only one and goes when the caller drops it (review V17). */
+    function attachmentIndex(state) {
       state.attachmentCache ??= (async () => {
         const reader = new Reader(state.file, {
           deadline: performance.now() + INDEX_SCAN_TIMEOUT_MS,
           timeoutMs: INDEX_SCAN_TIMEOUT_MS,
           timeoutLabel: 'Matroska attachment read',
         });
-        const files = [];
-        let total = 0;
+        const entries = [];
         await children(reader, state.attachmentsElement, async entry => {
           if (entry.id !== ID.ATTACHED_FILE) return;
-          const file = { name: null, mimeType: null, data: null };
+          const item = { name: null, mimeType: null, dataOffset: null, bytes: 0 };
           await children(reader, entry, async field => {
-            if (field.id === ID.FILE_NAME) file.name = await textValue(reader, field);
-            if (field.id === ID.FILE_MIME_TYPE) file.mimeType = await textValue(reader, field);
+            if (field.id === ID.FILE_NAME) item.name = await textValue(reader, field);
+            if (field.id === ID.FILE_MIME_TYPE) item.mimeType = await textValue(reader, field);
             if (field.id === ID.FILE_DATA) {
-              if (field.dataSize > MAX_ATTACHMENT_BYTES || total + field.dataSize > MAX_ATTACHMENTS_TOTAL_BYTES) {
-                throw fail(
-                  'AttachmentLimitError',
-                  'ERR_DEMUX_ATTACHMENT_LIMIT',
-                  `Matroska attachments exceed ${MAX_ATTACHMENT_BYTES} bytes each or ${MAX_ATTACHMENTS_TOTAL_BYTES} in all.`,
-                );
-              }
-              total += field.dataSize;
-              file.data = new Uint8Array(await state.file.slice(field.dataOffset, field.end).arrayBuffer());
+              item.dataOffset = field.dataOffset;
+              item.bytes = field.dataSize;
             }
           });
-          if (file.data) files.push({ name: file.name || 'attachment', mimeType: file.mimeType || 'application/octet-stream', data: file.data });
+          if (item.dataOffset !== null) {
+            entries.push({
+              name: item.name || 'attachment',
+              mimeType: item.mimeType || 'application/octet-stream',
+              dataOffset: item.dataOffset,
+              bytes: item.bytes,
+            });
+          }
         });
-        return files;
+        return planFontAttachments(entries, {
+          maxFileBytes: MAX_ATTACHMENT_BYTES,
+          maxTotalBytes: MAX_ATTACHMENTS_TOTAL_BYTES,
+          maxFiles: MAX_ATTACHMENT_FILES,
+        });
       })();
+      state.attachmentCache.catch(() => { state.attachmentCache = null; });
       return state.attachmentCache;
+    }
+
+    /** Font attachments [{ name, mimeType, data }] with a `skipped` list [{ name, mimeType, bytes, reason }]. */
+    async function attachments(state) {
+      if (!state.attachmentsElement) return Object.assign([], { skipped: [] });
+      const plan = await attachmentIndex(state);
+      const files = [];
+      for (const item of plan.fonts) {
+        const data = new Uint8Array(await state.file.slice(item.dataOffset, item.dataOffset + item.bytes).arrayBuffer());
+        files.push({ name: item.name, mimeType: item.mimeType, data });
+      }
+      return Object.assign(files, { skipped: plan.skipped.map(item => ({ ...item })) });
     }
 
     function descriptor(track, sessionId, duration) {
@@ -1208,9 +1555,14 @@ const Demux = (() => {
       };
     }
 
+    /* A rejected scan is not kept (review V50), so the next request reads again. */
     function cues(state, track, mediaDuration) {
       if (!state.cueCache.has(track.number)) {
-        state.cueCache.set(track.number, readCues(state, track, mediaDuration));
+        const task = readCues(state, track, mediaDuration);
+        state.cueCache.set(track.number, task);
+        task.catch(() => {
+          if (state.cueCache.get(track.number) === task) state.cueCache.delete(track.number);
+        });
       }
       return state.cueCache.get(track.number);
     }
@@ -1291,9 +1643,30 @@ const Demux = (() => {
     }
 
     // QuickTime 'fiel': field count, then detail (1 and 14 top first; 6 and 9 bottom first).
+    /* A tkhd matrix with a negative determinant mirrors the picture (review V46). FFmpeg's
+       display_hflip negates the first column, a flip applied after the rotation, which
+       Mediabunny reports unchanged. */
+    function mirrored(view, trak) {
+      const tkhd = child(view, trak, 'tkhd');
+      if (!tkhd) return false;
+      const at = tkhd.start + (view.getUint8(tkhd.start) === 1 ? 52 : 40);
+      if (at + 20 > tkhd.end) return false;
+      const a = view.getInt32(at);
+      const b = view.getInt32(at + 4);
+      const c = view.getInt32(at + 12);
+      const d = view.getInt32(at + 16);
+      return (a * d) - (b * c) < 0;
+    }
+
     function videoInterlace(view, trak) {
       const handler = path(view, trak, ['mdia', 'hdlr']);
       if (!handler || fourcc(view, handler.start + 8) !== 'vide') return null;
+      const flip = mirrored(view, trak);
+      const plain = videoFields(view, trak);
+      return { ...plain, flip };
+    }
+
+    function videoFields(view, trak) {
       const stsd = path(view, trak, ['mdia', 'minf', 'stbl', 'stsd']);
       if (!stsd || view.getUint32(stsd.start + 4) < 1) return { interlaced: false, fieldOrder: null };
       const entryStart = stsd.start + 8;
@@ -1305,12 +1678,62 @@ const Demux = (() => {
       return { interlaced: true, fieldOrder: [1, 14].includes(detail) ? 'tff' : [6, 9].includes(detail) ? 'bff' : 'unknown' };
     }
 
-    function parseTrack(view, trak) {
+    function trackIdOf(view, trak) {
+      const tkhd = child(view, trak, 'tkhd');
+      if (!tkhd) return null;
+      return view.getUint32(tkhd.start + (view.getUint8(tkhd.start) === 1 ? 20 : 12));
+    }
+
+    /* Track ids named by any track's tref/chap: QuickTime chapter tracks (review V39). */
+    function chapterTrackIds(view, moov) {
+      const ids = new Set();
+      for (const box of boxes(view, moov.start, moov.end)) {
+        if (box.type !== 'trak') continue;
+        const chap = path(view, box, ['tref', 'chap']);
+        if (!chap) continue;
+        for (let at = chap.start; at + 4 <= chap.end; at += 4) ids.add(view.getUint32(at));
+      }
+      return ids;
+    }
+
+    /* Nero chapters, moov/udta/chpl: version, flags, (version 1: 4 reserved bytes), a count,
+       then per chapter a 64-bit start in 100 ns units and a length-prefixed UTF-8 title. */
+    function neroChapters(view, moov) {
+      const chpl = path(view, moov, ['udta', 'chpl']);
+      if (!chpl) return [];
+      let at = chpl.start + 4 + (view.getUint8(chpl.start) === 1 ? 4 : 0);
+      if (at >= chpl.end) return [];
+      const count = view.getUint8(at);
+      at += 1;
+      const chapters = [];
+      for (let index = 0; index < count && at + 9 <= chpl.end; index += 1) {
+        const startS = Number(view.getBigUint64(at)) / 10_000_000;
+        const length = view.getUint8(at + 8);
+        at += 9;
+        if (at + length > chpl.end) break;
+        const title = utf8.decode(new Uint8Array(view.buffer, view.byteOffset + at, length));
+        at += length;
+        chapters.push({ startS, endS: null, title, language: null, depth: 0 });
+      }
+      return chapters;
+    }
+
+    function endChapters(chapters, duration) {
+      chapters.sort((left, right) => left.startS - right.startS);
+      chapters.forEach((chapter, index) => {
+        if (chapter.endS === null) chapter.endS = chapters[index + 1]?.startS ?? (Number.isFinite(duration) ? duration : null);
+      });
+      return chapters;
+    }
+
+    function parseTrack(view, trak, { chapter = false } = {}) {
       const handler = path(view, trak, ['mdia', 'hdlr']);
       if (!handler || !['sbtl', 'text'].includes(fourcc(view, handler.start + 8))) return null;
       const stbl = path(view, trak, ['mdia', 'minf', 'stbl']);
       const stsd = stbl && child(view, stbl, 'stsd');
-      if (!stsd || view.getUint32(stsd.start + 4) < 1 || fourcc(view, stsd.start + 12) !== 'tx3g') return null;
+      const entry = stsd && view.getUint32(stsd.start + 4) >= 1 ? fourcc(view, stsd.start + 12) : null;
+      // Chapter tracks may be QuickTime 'text' as well as 'tx3g'; both store a 16-bit length and the text.
+      if (entry !== 'tx3g' && !(chapter && entry === 'text')) return null;
       const tkhd = child(view, trak, 'tkhd');
       const mdhd = path(view, trak, ['mdia', 'mdhd']);
       if (!tkhd || !mdhd) return null;
@@ -1370,14 +1793,26 @@ const Demux = (() => {
       const moov = { start: 8, end: view.byteLength };
       const tracks = [];
       const interlace = [];
+      const chapterIds = chapterTrackIds(view, moov);
+      let chapterTrack = null;
       for (const box of boxes(view, moov.start, moov.end)) {
         if (box.type !== 'trak') continue;
         const video = videoInterlace(view, box);
         if (video) interlace.push(video);
+        if (chapterIds.has(trackIdOf(view, box))) {
+          chapterTrack ??= parseTrack(view, box, { chapter: true });
+          continue;
+        }
         const track = parseTrack(view, box);
         if (track) tracks.push(track);
       }
-      if (!tracks.length && !interlace.some(item => item.interlaced)) return null;
+      let chapters = neroChapters(view, moov);
+      if (!chapters.length && chapterTrack) {
+        chapters = (await readCues(file, chapterTrack).catch(() => []))
+          .map(cue => ({ startS: cue.startS, endS: cue.endS, title: cue.text, language: chapterTrack.language, depth: 0 }));
+      }
+      chapters = endChapters(chapters, duration);
+      if (!tracks.length && !chapters.length && !interlace.some(item => item.interlaced || item.flip)) return null;
       const descriptors = tracks.map(track => ({
         id: `${sessionId}:subtitle:mp4-${track.trackId}`,
         sessionId,
@@ -1405,9 +1840,15 @@ const Demux = (() => {
         state: null,
         descriptors,
         trackById,
-        chapters: [],
+        chapters,
         cues: track => {
-          if (!cueCache.has(track.trackId)) cueCache.set(track.trackId, readCues(file, track));
+          if (!cueCache.has(track.trackId)) {
+            const task = readCues(file, track);
+            cueCache.set(track.trackId, task);
+            task.catch(() => {
+              if (cueCache.get(track.trackId) === task) cueCache.delete(track.trackId);
+            });
+          }
           return cueCache.get(track.trackId);
         },
         keyframes: null,
@@ -1417,12 +1858,21 @@ const Demux = (() => {
       };
     }
 
+    /* Sample sizes come from the file, so each is capped at the subtitle cue limit and the
+       whole read has the subtitle scan deadline (review V53). */
     async function readCues(file, track) {
       const count = track.offsets.length;
       if (!count) return [];
-      const low = Math.min(...track.offsets);
-      const high = Math.max(...track.offsets.map((offset, index) => offset + track.sizes[index]));
-      const span = high - low <= MAX_SAMPLE_SPAN_BYTES
+      const maxSample = CONFIG.demux.maxSubtitleCueBytes;
+      const deadline = performance.now() + CONFIG.demux.subtitleScanTimeoutMs;
+      let low = Infinity;
+      let high = 0;
+      for (let index = 0; index < count; index += 1) {
+        if (track.sizes[index] > maxSample) continue;
+        low = Math.min(low, track.offsets[index]);
+        high = Math.max(high, track.offsets[index] + track.sizes[index]);
+      }
+      const span = high > low && high - low <= MAX_SAMPLE_SPAN_BYTES && high <= file.size
         ? new Uint8Array(await file.slice(low, high).arrayBuffer())
         : null;
       const cues = [];
@@ -1432,7 +1882,10 @@ const Demux = (() => {
         const start = time / track.timescale;
         time += track.durations[index];
         const size = track.sizes[index];
-        if (size < 2) continue;
+        if (size < 2 || size > maxSample || track.offsets[index] + size > file.size) continue;
+        if (!span && performance.now() > deadline) {
+          throw fail('DemuxTimeoutError', 'ERR_DEMUX_TIMEOUT', `MP4 timed text read exceeded ${CONFIG.demux.subtitleScanTimeoutMs} ms.`);
+        }
         const bytes = span
           ? span.subarray(track.offsets[index] - low, track.offsets[index] - low + size)
           : new Uint8Array(await file.slice(track.offsets[index], track.offsets[index] + size).arrayBuffer());
@@ -1668,17 +2121,33 @@ const Demux = (() => {
     const mediaDuration = Math.max(0, duration - startOffsetS);
     const nativeById = new Map(nativeDescriptors.map((track, index) => [track.id, nativeTracks[index]]));
     let textInspection = null;
+    const warnings = [];
     if (sourceInfo.file && ['mkv', 'webm'].includes(container)) {
-      textInspection = await MatroskaText.inspect(sourceInfo.file, sessionId, duration);
+      // A damaged subtitle, chapter or attachment element must not refuse a file whose
+      // video and audio Mediabunny read (review V12): drop the text tracks and warn.
+      textInspection = await MatroskaText.inspect(sourceInfo.file, sessionId, duration).catch(error => {
+        warnings.push({
+          code: error?.code || 'ERR_DEMUX_TEXT_TRACKS',
+          message: `Subtitles, chapters and attachments were skipped: ${error?.message || error}`,
+        });
+        return null;
+      });
     } else if (sourceInfo.file && ['mp4', 'mov'].includes(container)) {
       // A damaged text track must not stop the video, so MP4 text errors drop the track list.
-      textInspection = await Mp4Text.inspect(sourceInfo.file, sessionId, duration).catch(() => null);
+      textInspection = await Mp4Text.inspect(sourceInfo.file, sessionId, duration).catch(error => {
+        warnings.push({
+          code: error?.code || 'ERR_DEMUX_TEXT_TRACKS',
+          message: `Timed text and chapters were skipped: ${error?.message || error}`,
+        });
+        return null;
+      });
     }
     // Mark interlaced video from the container (nth video track in file order).
     const interlace = textInspection?.videoInterlace || [];
     nativeDescriptors.filter(track => track.type === 'video').forEach((track, index) => {
       track.interlaced = !!interlace[index]?.interlaced;
       track.fieldOrder = interlace[index]?.fieldOrder || null;
+      if (interlace[index]?.flip) track.flip = true;
     });
     const textDescriptors = (textInspection?.descriptors || []).map(track => (
       startOffsetS > 0 ? { ...track, duration: mediaDuration } : track
@@ -1702,6 +2171,7 @@ const Demux = (() => {
         duration: mediaDuration,
         tracks,
         chapters: shiftTimes(textInspection?.chapters || [], startOffsetS),
+        warnings,
       },
       nativeById,
       textInspection,
@@ -1753,8 +2223,36 @@ const Demux = (() => {
     const previous = active;
     active = candidate.session;
     candidate.session = null;
-    if (previous) previous.input.dispose();
+    if (previous) previous.input?.dispose();
     return candidate.result;
+  }
+
+  /* A file the libav rung reopens (review V11) keeps what Mediabunny and Reel's own
+     readers found in the container: subtitle tracks, chapters, attachments, and track
+     names and languages. The Mediabunny input closes; the text readers stay active for
+     subtitles.cues(), packets() and attachments(). `startOffsetS` is the rung's own
+     timeline offset, so cue times match the frames it decodes. */
+  function activateText(candidate, { startOffsetS = null } = {}) {
+    if (!candidate?.session) return null;
+    const session = candidate.session;
+    candidate.session = null;
+    session.input.dispose();
+    const previous = active;
+    active = {
+      ...session,
+      input: null,
+      nativeById: new Map(),
+      startOffsetS: Number.isFinite(startOffsetS) ? Math.max(0, startOffsetS) : session.startOffsetS,
+    };
+    if (previous) previous.input?.dispose();
+    const shift = active.startOffsetS - (session.startOffsetS || 0);
+    const result = candidate.result;
+    return {
+      sessionId: active.sessionId,
+      chapters: shiftTimes(result.chapters || [], shift),
+      subtitles: result.tracks.filter(track => track.type === 'subtitle'),
+      named: result.tracks.filter(track => track.type === 'video' || track.type === 'audio'),
+    };
   }
 
   async function probe(handle) {
@@ -2060,13 +2558,14 @@ const Demux = (() => {
   })();
 
   function close() {
-    if (active) active.input.dispose();
+    if (active) active.input?.dispose();
     active = null;
   }
 
   return {
     prepare,
     activate,
+    activateText,
     discard,
     probe,
     packets,
@@ -2217,7 +2716,42 @@ const Libav = (() => {
     try { active?.source.setDeinterlace?.(!!on); } catch (_) {}
   }
 
+  /* Audio for a Mediabunny session in a browser without AudioDecoder (review V29), as in
+     Safari 17.4 to 18.x: the rung opens the same file a second time and decodes only the
+     audio track, while the video stays on WebCodecs. Its build holds AAC, MP3, AC-3 and
+     E-AC-3 decoders and the MP4/MOV (M4V reads as mp4), Matroska, MPEG-TS and MP3 demuxers
+     (vendor/libav/mkconfig-reel.json); where the browser also lacks AudioData it yields
+     plain f32-planar blocks, which copyAudioData reads the same way. */
+  const AUDIO_CODECS = new Set(['aac', 'mp3', 'ac3', 'eac3']);
+  const AUDIO_CONTAINERS = new Set(['mp4', 'mov', 'mkv', 'webm', 'ts', 'mp3']);
+  let audioSource = null;
+  function audioEligible(track, container) {
+    return AUDIO_CODECS.has(track?.codec) && AUDIO_CONTAINERS.has(container);
+  }
+  async function openAudio(file, sessionId) {
+    if (audioSource?.sessionId !== sessionId) {
+      closeAudio();
+      // A rung refusal (timeout, abort, declined download) is kept by name and not cached,
+      // so the next play asks the restarted rung again.
+      const pending = open(file, { sniff: false }).catch(error => {
+        if (error?.name !== 'LibavRungError') return null;
+        if (audioSource?.pending === pending) audioSource = null;
+        throw error;
+      });
+      audioSource = { sessionId, pending };
+    }
+    return audioSource.pending;
+  }
+  function closeAudio() {
+    const previous = audioSource;
+    audioSource = null;
+    previous?.pending.then(source => { try { source?.close(); } catch (_) {} }, () => {});
+  }
+
   return {
+    audioEligible,
+    openAudio,
+    closeAudio,
     open,
     preferred,
     activate,
@@ -2311,6 +2845,15 @@ const Decode = (() => {
     }
     if (await Demux.canDecodeAudio(track)) return { route: 'software', config: null, error: null };
     const label = track?.codecParameter || codec || 'This';
+    if (!globalThis.AudioDecoder && Libav.audioEligible(track, store.media.container)) {
+      let rungError = null;
+      const source = await libavAudioSource(track).catch(error => {
+        if (error?.name === 'LibavRungError') rungError = error;
+        return null;
+      });
+      if (source) return { route: 'libav', config: null, error: null };
+      if (rungError) return { route: null, config: null, error: rungError };
+    }
     if (!globalThis.AudioDecoder) {
       return {
         route: null,
@@ -2326,17 +2869,22 @@ const Decode = (() => {
     return { route: null, config: null, error: webCodecsError };
   }
 
+  const pause4 = () => new Promise(resolve => setTimeout(resolve, 4));
+
   /* The software audio route paces Mediabunny's decoded samples the way stream()
      paces WebCodecs packets. Sample timestamps are in seconds. */
   async function streamSoftwareAudio(track, fromS, onOutput, options = {}) {
     const shouldContinue = options.shouldContinue || (() => true);
     const currentTimeS = options.currentTimeS || (() => fromS);
     const decodeAheadS = Number.isFinite(options.decodeAheadS) ? Math.max(0, options.decodeAheadS) : 0.5;
+    const wait = options.wait || pause4;
     let sampleCount = 0;
     try {
       for await (const sample of Demux.audioSamples(track, fromS)) {
-        while (sample.timestamp > currentTimeS() + decodeAheadS && shouldContinue()) {
-          await new Promise(resolve => setTimeout(resolve, 4));
+        // The first sample always goes through, so audio that starts after the position
+        // can fill its lead silence before the clock runs (review V4).
+        while (sampleCount > 0 && sample.timestamp > currentTimeS() + decodeAheadS && shouldContinue()) {
+          await wait();
         }
         if (!shouldContinue()) {
           sample.close();
@@ -2362,8 +2910,52 @@ const Decode = (() => {
     }
   }
 
+  /* The rung's source for this session's file and its matching audio stream: the nth
+     audio track in Reel's list is the nth audio stream the rung found. */
+  async function libavAudioSource(track) {
+    const file = await mediaFileOf(store.media.handle);
+    if (!file) return null;
+    const source = await Libav.openAudio(file, track.sessionId);
+    const index = store.tracks.audio.indexOf(track);
+    const streams = (source?.tracks || []).filter(item => item.type === 'audio');
+    const stream = streams[index];
+    if (!stream || stream.codec !== track.codec && !(track.codec === 'aac' && /aac/.test(stream.codec))) return null;
+    return { source, trackId: stream.id };
+  }
+
+  async function streamLibavAudio(track, fromS, onOutput, options = {}) {
+    const found = await libavAudioSource(track);
+    if (!found) throw fail('DecodeFailureError', 'ERR_DECODE_FAILURE', `${track.codec} audio could not be opened by the libav rung.`);
+    const shouldContinue = options.shouldContinue || (() => true);
+    const currentTimeS = options.currentTimeS || (() => fromS);
+    const decodeAheadS = Number.isFinite(options.decodeAheadS) ? Math.max(0, options.decodeAheadS) : 0.5;
+    const wait = options.wait || pause4;
+    let count = 0;
+    try {
+      for await (const item of found.source.audioData(fromS, { trackId: found.trackId })) {
+        while (count > 0 && item.timestamp / 1_000_000 > currentTimeS() + decodeAheadS && shouldContinue()) await wait();
+        if (!shouldContinue()) {
+          item.close();
+          break;
+        }
+        try {
+          if (onOutput(item) === false) item.close();
+        } catch (error) {
+          item.close();
+          throw error;
+        }
+        count += 1;
+      }
+      return { packetCount: count };
+    } catch (error) {
+      if (error instanceof DecodeError || error?.name === 'LibavRungError') throw error;
+      throw fail('DecodeFailureError', 'ERR_DECODE_FAILURE', `${track.codec} libav audio decode failed.`, error);
+    }
+  }
+
   function streamAudio(track, route, fromS, onOutput, options = {}) {
     if (route === 'software') return streamSoftwareAudio(track, fromS, onOutput, options);
+    if (route === 'libav' && track?.backend !== 'libav') return streamLibavAudio(track, fromS, onOutput, options);
     return stream(track, fromS, onOutput, options);
   }
 
@@ -2373,11 +2965,12 @@ const Decode = (() => {
     const shouldContinue = options.shouldContinue || (() => true);
     const currentTimeS = options.currentTimeS || (() => fromS);
     const decodeAheadS = Number.isFinite(options.decodeAheadS) ? Math.max(0, options.decodeAheadS) : 0.5;
+    const wait = options.wait || pause4;
     let count = 0;
     try {
       for await (const item of Libav.iterate(track, fromS)) {
-        while (item.timestamp / 1_000_000 > currentTimeS() + decodeAheadS && shouldContinue()) {
-          await new Promise(resolve => setTimeout(resolve, 4));
+        while (count > 0 && item.timestamp / 1_000_000 > currentTimeS() + decodeAheadS && shouldContinue()) {
+          await wait();
         }
         if (!shouldContinue()) {
           item.close();
@@ -2394,7 +2987,8 @@ const Decode = (() => {
       }
       return { packetCount: count };
     } catch (error) {
-      if (error instanceof DecodeError) throw error;
+      // The rung's own refusals (ERR_LIBAV_TIMEOUT, ERR_LIBAV_ABORTED, ERR_LIBAV_FRAME_TOO_LARGE, ...) keep their name.
+      if (error instanceof DecodeError || error?.name === 'LibavRungError') throw error;
       throw fail('DecodeFailureError', 'ERR_DECODE_FAILURE', `${track.codec || 'libav'} ${track.type} decode failed.`, error);
     }
   }
@@ -2420,6 +3014,7 @@ const Decode = (() => {
         }
       } catch (error) {
         best?.close();
+        if (error?.name === 'LibavRungError') throw error;
         throw fail('DecodeFailureError', 'ERR_DECODE_FAILURE', `${track.codec || 'libav'} frame decode failed.`, error);
       }
       if (!shouldContinue()) {
@@ -2613,6 +3208,7 @@ const Decode = (() => {
     const decodeAheadS = Number.isFinite(options.decodeAheadS)
       ? Math.max(0, options.decodeAheadS)
       : CONFIG.sync.decodeAheadMs / 1000;
+    const wait = options.wait || pause4;
 
     try {
       decoder = new Decoder({
@@ -2640,8 +3236,8 @@ const Decode = (() => {
         if (outputFailure) throw outputFailure;
 
         const packetTimeS = packet.timestamp / 1_000_000;
-        while (packetTimeS > currentTimeS() + decodeAheadS && shouldContinue()) {
-          await new Promise(resolve => setTimeout(resolve, 4));
+        while (packetCount > 0 && packetTimeS > currentTimeS() + decodeAheadS && shouldContinue()) {
+          await wait();
           if (decoderFailure) throw decoderFailure;
           if (outputFailure) throw outputFailure;
         }
@@ -2681,6 +3277,7 @@ const Decode = (() => {
 const AudioOutput = (() => {
   const PROCESSOR = 'reel-pcm-ring';
   const WORKLET_SOURCE = String.raw`
+${ReelStretch.toString()}
 class ReelPcmRingProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
@@ -2692,10 +3289,17 @@ class ReelPcmRingProcessor extends AudioWorkletProcessor {
     this.consumedFrames = 0;
     this.droppedFrames = 0;
     this.underrunFrames = 0;
-    this.silenceFrames = 0;
+    // Silence runs: { at, frames } plays 'frames' of silence once every ring frame written
+    // before 'at' (an absolute count) has been read. Lead silence is a run at 0.
+    this.gaps = [];
+    this.writtenFrames = 0;
+    this.readFrames = 0;
     this.phase = 0;
     this.rate = 1;
     this.sourceRate = sampleRate;
+    this.preservePitch = true;
+    this.stretch = null;
+    this.frame = [];
     this.playing = false;
     this.reportCountdown = 0;
     this.port.onmessage = event => this.receive(event.data || {});
@@ -2714,10 +3318,16 @@ class ReelPcmRingProcessor extends AudioWorkletProcessor {
       this.consumedFrames = 0;
       this.droppedFrames = 0;
       this.underrunFrames = 0;
-      this.silenceFrames = Math.max(0, message.leadFrames | 0);
+      this.writtenFrames = 0;
+      this.readFrames = 0;
+      const lead = Math.max(0, message.leadFrames | 0);
+      this.gaps = lead > 0 ? [{ at: 0, frames: lead }] : [];
       this.phase = 0;
       this.rate = message.rate || 1;
       this.sourceRate = message.sourceRate || sampleRate;
+      this.preservePitch = message.preservePitch !== false;
+      this.frame = new Array(this.channels.length).fill(0);
+      this.resetStretch();
       this.playing = false;
       this.report();
       return;
@@ -2726,10 +3336,37 @@ class ReelPcmRingProcessor extends AudioWorkletProcessor {
       this.enqueue(message.planes || []);
       return;
     }
+    if (message.type === 'gap') {
+      const frames = Math.max(0, message.frames | 0);
+      const last = this.gaps[this.gaps.length - 1];
+      if (frames > 0 && last && last.at === this.writtenFrames) last.frames += frames;
+      else if (frames > 0) this.gaps.push({ at: this.writtenFrames, frames });
+      this.report();
+      return;
+    }
     if (message.type === 'play') this.playing = true;
     if (message.type === 'pause') this.playing = false;
-    if (message.type === 'rate') this.rate = message.rate || 1;
+    if (message.type === 'rate') {
+      this.rate = message.rate || 1;
+      this.resetStretch();
+    }
+    if (message.type === 'pitch') {
+      this.preservePitch = message.preservePitch !== false;
+      this.resetStretch();
+    }
     this.report();
+  }
+
+  stretching() {
+    return this.preservePitch && this.rate !== 1;
+  }
+
+  // Samples held inside the stretch stage are dropped on a mode change; their source frames
+  // were already counted, so the clock moves on by that much, as the sound does.
+  resetStretch() {
+    this.stretch = this.stretching() && this.channels.length
+      ? new ReelStretch(this.channels.length, sampleRate, this.rate)
+      : null;
   }
 
   enqueue(planes) {
@@ -2745,20 +3382,77 @@ class ReelPcmRingProcessor extends AudioWorkletProcessor {
     }
     this.writeIndex = (this.writeIndex + writable) % this.capacity;
     this.availableFrames += writable;
+    this.writtenFrames += writable;
     this.droppedFrames += frameCount - writable;
     this.report();
   }
 
+  silenceFrames() {
+    let total = 0;
+    for (const gap of this.gaps) total += gap.frames;
+    return total;
+  }
+
   report() {
+    // Source frames still inside the stretch stage have not been heard yet.
+    const held = this.stretch ? Math.round(this.stretch.pending() * (this.sourceRate / sampleRate)) : 0;
     this.port.postMessage({
       type: 'state',
-      availableFrames: this.availableFrames,
-      consumedFrames: this.consumedFrames,
+      availableFrames: this.availableFrames + held,
+      consumedFrames: Math.max(0, this.consumedFrames - held),
       droppedFrames: this.droppedFrames,
       underrunFrames: this.underrunFrames,
-      silenceFrames: this.silenceFrames,
+      silenceFrames: this.silenceFrames(),
       playing: this.playing,
     });
+  }
+
+  // One output-rate frame into this.frame from the silence runs or the ring, advancing by
+  // 'step' source frames with linear interpolation. False on underrun.
+  pull(step) {
+    const gap = this.gaps[0];
+    if (gap && gap.at <= this.readFrames) {
+      this.frame.fill(0);
+      this.phase += step;
+      const requested = Math.floor(this.phase);
+      if (requested > 0) {
+        const consumed = Math.min(requested, gap.frames);
+        gap.frames -= consumed;
+        this.phase -= consumed;
+        this.consumedFrames += consumed;
+        if (gap.frames <= 0) this.gaps.shift();
+      }
+      return true;
+    }
+    if (this.availableFrames <= 0) {
+      this.underrunFrames += 1;
+      this.phase = 0;
+      return false;
+    }
+    const nextIndex = this.availableFrames > 1
+      ? (this.readIndex + 1) % this.capacity
+      : this.readIndex;
+    for (let channel = 0; channel < this.frame.length; channel += 1) {
+      const source = this.channels[channel];
+      const first = source[this.readIndex];
+      this.frame[channel] = first + (source[nextIndex] - first) * this.phase;
+    }
+    this.phase += step;
+    let requested = Math.floor(this.phase);
+    // Stop at the next silence run so it starts on time.
+    const next = this.gaps[0];
+    if (next) requested = Math.min(requested, Math.max(0, next.at - this.readFrames));
+    if (requested > 0) {
+      const consumed = Math.min(requested, this.availableFrames);
+      this.phase -= consumed;
+      this.readIndex = (this.readIndex + consumed) % this.capacity;
+      this.availableFrames -= consumed;
+      this.consumedFrames += consumed;
+      this.readFrames += consumed;
+    } else if (next && next.at <= this.readFrames) {
+      this.phase = 0;
+    }
+    return true;
   }
 
   process(_inputs, outputs) {
@@ -2772,41 +3466,23 @@ class ReelPcmRingProcessor extends AudioWorkletProcessor {
       return true;
     }
 
-    const step = (this.sourceRate / sampleRate) * this.rate;
+    const resample = this.sourceRate / sampleRate;
+    const stretch = this.stretch;
     for (let outputFrame = 0; outputFrame < output[0].length; outputFrame += 1) {
-      if (this.silenceFrames > 0) {
-        // Lead silence for a positive audio delay: counts as consumed source time.
-        this.phase += step;
-        const requested = Math.floor(this.phase);
-        if (requested > 0) {
-          const consumed = Math.min(requested, this.silenceFrames);
-          this.silenceFrames -= consumed;
-          this.phase -= consumed;
-          this.consumedFrames += consumed;
+      if (stretch) {
+        // Pitch-preserving speed: resample at 1x into the stretch stage, which changes
+        // the tempo by overlapping matched segments (WSOLA), then play its output.
+        while (!stretch.ready()) {
+          if (!this.pull(resample)) break;
+          stretch.push(this.frame);
         }
+        if (!stretch.ready()) continue;
+        stretch.read(output, outputFrame);
         continue;
       }
-      if (this.availableFrames <= 0) {
-        this.underrunFrames += 1;
-        this.phase = 0;
-        continue;
-      }
-      const nextIndex = this.availableFrames > 1
-        ? (this.readIndex + 1) % this.capacity
-        : this.readIndex;
+      if (!this.pull(resample * this.rate)) continue;
       for (let channel = 0; channel < output.length; channel += 1) {
-        const source = this.channels[Math.min(channel, this.channels.length - 1)];
-        const first = source[this.readIndex];
-        output[channel][outputFrame] = first + (source[nextIndex] - first) * this.phase;
-      }
-      this.phase += step;
-      const requested = Math.floor(this.phase);
-      if (requested > 0) {
-        const consumed = Math.min(requested, this.availableFrames);
-        this.phase -= consumed;
-        this.readIndex = (this.readIndex + consumed) % this.capacity;
-        this.availableFrames -= consumed;
-        this.consumedFrames += consumed;
+        output[channel][outputFrame] = this.frame[Math.min(channel, this.frame.length - 1)];
       }
     }
     if (--this.reportCountdown <= 0) {
@@ -2831,12 +3507,20 @@ registerProcessor('${PROCESSOR}', ReelPcmRingProcessor);
   let startPositionS = 0;
   let sourceRate = 48_000;
   let rate = 1;
+  let preservePitch = true;
   let active = false;
   let stateAtContextS = 0;
   let prepareCount = 0;
   let route = null;
   let downmix = false;
   let drainedAt = null;
+  // Where the next decoded sample belongs on the source timeline (seconds), and whether
+  // it is the first sample since prepare: see alignAudioSample (review V4, V43).
+  let expectedS = null;
+  let firstSample = true;
+  let gapFrames = 0;
+  let trimmedFrames = 0;
+  const progressWaiters = new Set();
   // PCM frames posted to the worklet in this prepare, counted on the main thread. The
   // worklet's own `state` report can arrive after the decoder has finished (Firefox),
   // so the prebuffer check reads this count instead. Port messages keep their order, so
@@ -2886,6 +3570,10 @@ registerProcessor('${PROCESSOR}', ReelPcmRingProcessor);
     }
   }
 
+  function wakeWaiters() {
+    for (const wake of [...progressWaiters]) wake();
+  }
+
   function stopNode() {
     session += 1;
     active = false;
@@ -2903,6 +3591,23 @@ registerProcessor('${PROCESSOR}', ReelPcmRingProcessor);
     decoderTask = null;
     errorHandler = null;
     drainedAt = null;
+    wakeWaiters();
+  }
+
+  /* Pacing waits for the worklet's next state report (about every 11 ms while it plays),
+     with a timer as the fallback. Port messages are not throttled in a hidden tab, where
+     timers run once a second, so the decoder keeps the ring fed there (review V2). */
+  function waitForProgress(maxMs = 50) {
+    return new Promise(resolve => {
+      let timer = 0;
+      const wake = () => {
+        clearTimeout(timer);
+        progressWaiters.delete(wake);
+        resolve();
+      };
+      progressWaiters.add(wake);
+      timer = setTimeout(wake, maxMs);
+    });
   }
 
   function current() {
@@ -2960,8 +3665,14 @@ registerProcessor('${PROCESSOR}', ReelPcmRingProcessor);
   }
 
   /* Works for WebCodecs AudioData and Mediabunny AudioSample alike: both expose
-     numberOfChannels, numberOfFrames, copyTo(f32-planar) and close(). */
+     numberOfChannels, numberOfFrames, copyTo(f32-planar) and close(). AudioData times are
+     microseconds; Mediabunny samples (which carry microsecondTimestamp) are seconds. The
+     sample is placed by its timestamp: a gap before it becomes silence and an overlap is
+     trimmed, so sound stays on the picture's timeline (review V4, V43). */
   function copyAudioData(audioData, localNode) {
+    const timestampS = 'microsecondTimestamp' in audioData
+      ? audioData.timestamp
+      : audioData.timestamp / 1_000_000;
     let planes = [];
     for (let channel = 0; channel < audioData.numberOfChannels; channel += 1) {
       const plane = new Float32Array(audioData.numberOfFrames);
@@ -2969,9 +3680,29 @@ registerProcessor('${PROCESSOR}', ReelPcmRingProcessor);
       planes.push(plane);
     }
     audioData.close();
+    if (localNode !== node) return true;
     if (downmix && planes.length > 2) planes = stereoFold(planes);
     if (!planes.length || !planes[0].length) return true;
-    if (localNode === node) enqueuedFrames += planes[0].length;
+    const plan = alignAudioSample({
+      expectedS,
+      timestampS,
+      frames: planes[0].length,
+      rate: sourceRate,
+      first: firstSample,
+    });
+    firstSample = false;
+    expectedS = plan.nextExpectedS;
+    if (plan.gap > 0) {
+      gapFrames += plan.gap;
+      enqueuedFrames += plan.gap;
+      localNode.port.postMessage({ type: 'gap', frames: plan.gap });
+    }
+    if (plan.skip > 0) {
+      trimmedFrames += plan.skip;
+      if (plan.skip >= planes[0].length) return true;
+      planes = planes.map(plane => plane.slice(plan.skip));
+    }
+    enqueuedFrames += planes[0].length;
     localNode.port.postMessage({ type: 'enqueue', planes }, planes.map(plane => plane.buffer));
     return true;
   }
@@ -3001,6 +3732,10 @@ registerProcessor('${PROCESSOR}', ReelPcmRingProcessor);
     stateAtContextS = context.currentTime;
     stats = { bufferedFrames: 0, consumedFrames: 0, droppedFrames: 0, underrunFrames: 0 };
     enqueuedFrames = 0;
+    expectedS = decodeFromS;
+    firstSample = true;
+    gapFrames = 0;
+    trimmedFrames = 0;
     drainedAt = null;
     lastError = null;
     errorHandler = onError;
@@ -3034,12 +3769,14 @@ registerProcessor('${PROCESSOR}', ReelPcmRingProcessor);
       if (stats.droppedFrames > 0) {
         setFailure(fail('AudioBufferOverflowError', 'ERR_AUDIO_BUFFER_OVERFLOW', 'The PCM ring buffer overflowed.'), localSession);
       }
+      wakeWaiters();
     };
     localNode.port.postMessage({
       type: 'configure',
       channels,
       sourceRate,
       rate,
+      preservePitch,
       capacityFrames: Math.ceil(sourceRate * CONFIG.sync.audioRingSeconds),
       leadFrames,
     });
@@ -3049,6 +3786,7 @@ registerProcessor('${PROCESSOR}', ReelPcmRingProcessor);
       shouldContinue: () => localSession === session && shouldContinue(),
       currentTimeS: current,
       decodeAheadS: CONFIG.sync.audioRingSeconds * 0.75,
+      wait: () => waitForProgress(),
     });
     decoderTask = task;
     task.catch(error => setFailure(error, localSession)).finally(() => {
@@ -3058,16 +3796,27 @@ registerProcessor('${PROCESSOR}', ReelPcmRingProcessor);
 
     const prebufferFrames = Math.min(Math.ceil(sourceRate * 0.08), Math.ceil(sourceRate * CONFIG.sync.audioRingSeconds));
     const deadline = performance.now() + 5_000;
-    // Lead silence (a positive audio delay) counts as buffered, as the worklet reports it.
+    // Lead silence (a positive audio delay) and silence before a late first sample count
+    // as buffered, as the worklet reports them.
     const bufferedFrames = () => enqueuedFrames + leadFrames;
-    while (bufferedFrames() < prebufferFrames && decoderActive && !lastError && performance.now() < deadline) {
+    while (localSession === session && bufferedFrames() < prebufferFrames && decoderActive && !lastError
+      && performance.now() < deadline) {
       await new Promise(resolve => setTimeout(resolve, 5));
+    }
+    // A newer prepare (a seek or play that superseded this one) owns the node and the
+    // counters now; stopping here would silence it.
+    if (localSession !== session) {
+      throw fail('AudioPrepareSupersededError', 'ERR_AUDIO_SUPERSEDED', 'A newer audio start replaced this one.');
     }
     if (lastError) {
       const error = lastError;
       stopNode();
       throw error;
     }
+    // Every decoded sample lay before the position (a seek into the last packet of the
+    // track): the audio has ended there, which is not a decode failure. The clock then
+    // runs on the audio context, as it does after the track drains.
+    if (bufferedFrames() === 0 && !decoderActive && trimmedFrames > 0) return;
     if (bufferedFrames() === 0) {
       stopNode();
       throw fail('AudioPrebufferError', 'ERR_AUDIO_PREBUFFER', 'The audio decoder produced no playable PCM data.');
@@ -3092,8 +3841,30 @@ registerProcessor('${PROCESSOR}', ReelPcmRingProcessor);
     node?.port.postMessage({ type: 'rate', rate: value });
   }
 
+  function setPreservePitch(value) {
+    preservePitch = !!value;
+    node?.port.postMessage({ type: 'pitch', preservePitch });
+  }
+
   function setVolume(volume, muted = false) {
     if (gain && context) gain.gain.setValueAtTime(muted ? 0 : volume, context.currentTime);
+  }
+
+  /* The start screen holds no sound, so the context stops pulling the audio thread
+     (review V44); the next play() resumes it. */
+  function suspend() {
+    stopNode();
+    if (context && context.state === 'running') context.suspend().catch(() => {});
+  }
+
+  /* Page hide: close the context so no audio thread outlives the page; the next play()
+     makes a new one. */
+  function close() {
+    stopNode();
+    const closing = context;
+    context = null;
+    moduleReady = null;
+    if (closing && closing.state !== 'closed') closing.close().catch(() => {});
   }
 
   function state() {
@@ -3102,10 +3873,13 @@ registerProcessor('${PROCESSOR}', ReelPcmRingProcessor);
       contextState: context?.state || 'uninitialized',
       sourceRate,
       rate,
+      preservePitch,
       route,
       downmix,
       prepareCount,
       ...stats,
+      gapFrames,
+      trimmedFrames,
       decoderActive,
       lastError: lastError ? { name: lastError.name, code: lastError.code, message: lastError.message } : null,
     };
@@ -3116,7 +3890,10 @@ registerProcessor('${PROCESSOR}', ReelPcmRingProcessor);
     return context && gain ? { context, output: gain } : null;
   }
 
-  return { unlock, prepare, play, stop, current, setRate, setVolume, state, audioGraph };
+  return {
+    unlock, prepare, play, stop, current, setRate, setPreservePitch, setVolume, suspend, close, state, audioGraph,
+    waitForProgress,
+  };
 })();
 
 /* Layer 5 — monotonic clock with optional audio master. */
@@ -3189,9 +3966,13 @@ const Renderer = (() => {
    */
   function geometry(frameWidth, frameHeight, view) {
     const rotation = [90, 180, 270].includes(view.rotation) ? view.rotation : 0;
-    const crop = view.crop === 'none' || !view.crop
+    const flip = view.flip === true;
+    const shown = view.crop === 'none' || !view.crop
       ? { top: 0, right: 0, bottom: 0, left: 0 }
       : view.crop;
+    // A mirrored track (review V46) is rotated, then flipped left to right, so the
+    // displayed left edge is the rotated picture's right edge.
+    const crop = flip ? { top: shown.top, bottom: shown.bottom, left: shown.right, right: shown.left } : shown;
     // Map the displayed edges back onto the frame's own edges.
     const frameCrop = rotation === 90
       ? { left: crop.top, top: crop.left, right: crop.bottom, bottom: crop.right }
@@ -3221,6 +4002,7 @@ const Renderer = (() => {
       drawWidth: quarterTurn ? outputHeight : outputWidth,
       drawHeight: quarterTurn ? outputWidth : outputHeight,
       radians: (rotation * Math.PI) / 180,
+      flip,
     };
   }
 
@@ -3242,7 +4024,7 @@ const Renderer = (() => {
    * `gpu` is a renderer from engine/gpu-renderer.mjs, or null for Canvas2D. A canvas
    * holds one kind of context for life, so the caller chooses before attaching.
    */
-  function attach(canvas, gpu = null) {
+  function attach(canvas, gpu = null, { onLost = null } = {}) {
     if (!canvas || typeof canvas.getContext !== 'function') {
       throw new TypeError('Renderer.attach requires a canvas.');
     }
@@ -3268,14 +4050,39 @@ const Renderer = (() => {
       tonemap: 'auto',
     };
     let output = { width: null, height: null };
+    let lastTickMs = performance.now();
+    let lost = false;
+    const MAX_QUEUE = 64;
+
+    /* A lost GPU device (review V26) draws nothing again. The renderer says so once; the
+       host gives the engine a fresh canvas through attach(), because a canvas keeps one
+       context kind for life and Canvas2D cannot take over this one. */
+    function markLost(reason) {
+      if (lost) return;
+      lost = true;
+      closeQueue();
+      try { onLost?.({ reason: reason || 'device-lost' }); } catch (_) {}
+    }
+    if (gpu) {
+      try {
+        if (typeof gpu.onLost === 'function') gpu.onLost(info => markLost(info?.reason || info?.message));
+        else gpu.addEventListener?.('lost', event => markLost(event?.detail?.reason));
+      } catch (_) {}
+    }
 
     function closeQueue() {
       while (queue.length) queue.shift().close();
     }
     function paintGpu(frame, g) {
+      if (lost) return;
       if (output.width !== g.outputWidth || output.height !== g.outputHeight) gpu.size(g.outputWidth, g.outputHeight);
       output = { width: g.outputWidth, height: g.outputHeight };
-      gpu.draw(frame, { ...view });
+      const drawn = gpu.draw(frame, { ...view });
+      if (drawn === false) {
+        let state = null;
+        try { state = gpu.state?.(); } catch (_) {}
+        if (state?.lost) markLost('device-lost');
+      }
     }
     function paint(frame) {
       const g = geometry(frame.displayWidth, frame.displayHeight, view);
@@ -3290,7 +4097,7 @@ const Renderer = (() => {
       output = { width: g.outputWidth, height: g.outputHeight };
       const zoom = view.zoom || NO_ZOOM;
       const filter = cssFilter(view.adjust || NEUTRAL_ADJUST);
-      if (g.radians === 0 && zoom.scale === 1 && filter === 'none') {
+      if (g.radians === 0 && zoom.scale === 1 && filter === 'none' && !g.flip) {
         context.drawImage(frame, g.sx, g.sy, g.sw, g.sh, 0, 0, g.drawWidth, g.drawHeight);
         return;
       }
@@ -3304,6 +4111,7 @@ const Renderer = (() => {
       context.translate(g.outputWidth / 2, g.outputHeight / 2);
       context.scale(zoom.scale, zoom.scale);
       context.translate(-(zoom.x - 0.5) * g.outputWidth, -(zoom.y - 0.5) * g.outputHeight);
+      if (g.flip) context.scale(-1, 1);
       context.rotate(g.radians);
       context.drawImage(frame, g.sx, g.sy, g.sw, g.sh, -g.drawWidth / 2, -g.drawHeight / 2, g.drawWidth, g.drawHeight);
       context.restore();
@@ -3317,6 +4125,7 @@ const Renderer = (() => {
     }
     function tick() {
       animationFrame = 0;
+      lastTickMs = performance.now();
       if (!clock || !clock.playing) return;
       const nowUs = Math.round(clock.current() * 1_000_000);
       let candidate = null;
@@ -3330,14 +4139,25 @@ const Renderer = (() => {
       if (candidate) draw(candidate);
       animationFrame = requestAnimationFrame(tick);
     }
-    function enqueue(frame, currentTimeS = 0, { key = false } = {}) {
-      if (!(frame instanceof VideoFrame)) return false;
-      const lateByUs = Math.round(currentTimeS * 1_000_000) - frame.timestamp;
-      if (lateByUs > CONFIG.sync.videoDropGraceMs * 1000 && !key) {
+    /* A frame is dropped when its whole display time has passed, key frames included
+       (review V40: a late key frame drawn after a seek showed the old picture under the
+       new sound). The queue keeps at most one frame at or before the clock and at most
+       MAX_QUEUE frames, so it stays bounded when animation frames stop in a hidden tab
+       (review V2). */
+    function enqueue(frame, currentTimeS = 0) {
+      if (!(frame instanceof VideoFrame) || lost) return false;
+      const nowUs = Math.round(currentTimeS * 1_000_000);
+      const lateByUs = nowUs - frame.timestamp;
+      const endUs = frame.duration ? frame.timestamp + frame.duration : frame.timestamp;
+      if (lateByUs > CONFIG.sync.videoDropGraceMs * 1000 && endUs <= nowUs) {
         droppedFrames += 1;
         return false;
       }
       queue.push(frame);
+      while (queue.length > 1 && (queue[1].timestamp <= nowUs || queue.length > MAX_QUEUE)) {
+        queue.shift().close();
+        droppedFrames += 1;
+      }
       return true;
     }
     /** Draw one frame now (frame step, paused seek). The renderer takes ownership. */
@@ -3351,7 +4171,12 @@ const Renderer = (() => {
     }
     function start(mediaClock) {
       clock = mediaClock;
+      lastTickMs = performance.now();
       if (!animationFrame) animationFrame = requestAnimationFrame(tick);
+    }
+    /** Milliseconds since the last animation frame while started (hidden tabs stop them). */
+    function idleMs() {
+      return animationFrame ? performance.now() - lastTickMs : 0;
     }
     function stop({ clear = true } = {}) {
       if (animationFrame) cancelAnimationFrame(animationFrame);
@@ -3390,6 +4215,7 @@ const Renderer = (() => {
       return {
         renderedFrames,
         droppedFrames,
+        lost,
         queuedFrames: queue.length,
         lastTimestamp,
         queuedUntilUs: queue.length ? queue[queue.length - 1].timestamp : null,
@@ -3406,7 +4232,10 @@ const Renderer = (() => {
         try { gpu.destroy(); } catch (_) {}
       }
     }
-    return { backend, enqueue, show, setView, start, stop, clear, snapshot, snapshotBlob, stats, outputSize, rendererState, destroy };
+    return {
+      backend, enqueue, show, setView, start, stop, clear, snapshot, snapshotBlob, stats, outputSize, rendererState, destroy,
+      idleMs, isLost: () => lost, flush: closeQueue,
+    };
   }
 
   /* engine/gpu-renderer.mjs (gpu area), imported lazily and guarded: a missing file,
@@ -3452,6 +4281,17 @@ const Playback = (() => {
   let attachToken = 0;
   let keyframeTimes = [];
   let thumbnailToken = 0;
+  // The person's (or a command's) wish to play, set by play() and cleared only by
+  // pause(), the end of the file or an error. seek() restarts from it, not from the clock,
+  // which runs only after the audio prebuffer (review V3).
+  let intendsToPlay = false;
+  let playGeneration = -1;
+  // The video decode stream's own token: bumping it stops that stream alone (hidden tab,
+  // renderer swap) while the audio plays on.
+  let videoToken = 0;
+  let videoSuspended = false;
+  let monitorTimer = 0;
+  let rendererLosses = 0;
   const MAX_VOLUME = 2;
   const MAX_PCM_SECONDS = 3600;
   const MAX_AUDIO_DELAY_S = 10;
@@ -3459,6 +4299,8 @@ const Playback = (() => {
 
   store.clock.audioDelayS ??= 0;
   store.clock.loop ??= null;
+  store.clock.preservePitch ??= true;
+  AudioOutput.setPreservePitch(store.clock.preservePitch);
 
   function publish() {
     store.clock.positionS = clock.current();
@@ -3468,11 +4310,15 @@ const Playback = (() => {
   function stopMonitor() {
     if (monitorFrame) cancelAnimationFrame(monitorFrame);
     monitorFrame = 0;
+    if (monitorTimer) clearInterval(monitorTimer);
+    monitorTimer = 0;
   }
-  function monitor() {
-    monitorFrame = 0;
+  /* End of file and the A-B loop are checked on every animation frame for precision and
+     on a 250 ms timer, which still runs in a hidden tab where animation frames stop
+     (review V2). Returns whether playback goes on. */
+  function checkPosition() {
     publish();
-    if (!clock.playing) return;
+    if (!clock.playing) return false;
     const now = clock.current();
     const loop = store.clock.loop;
     if (loop && now >= loop.bS) {
@@ -3482,16 +4328,45 @@ const Playback = (() => {
           .catch(error => { lastError = error; })
           .finally(() => { loopWrapping = false; });
       }
-      return;
+      return false;
     }
     if (Number.isFinite(clock.duration) && now >= clock.duration) {
       pause();
       clock.seek(clock.duration);
       publish();
       emit('playback:ended', { positionS: clock.current() });
-      return;
+      return false;
     }
-    monitorFrame = requestAnimationFrame(monitor);
+    return true;
+  }
+  function monitor() {
+    monitorFrame = 0;
+    if (checkPosition()) monitorFrame = requestAnimationFrame(monitor);
+  }
+  /* A hidden tab stops animation frames, so nothing draws: stop the video decode there
+     and restart it at the clock when frames come back. Sound plays on. A Picture-in-
+     Picture window keeps animation frames running, so it keeps its picture. */
+  function backgroundVideo() {
+    const videoTrack = selectedVideoTrack();
+    if (!clock.playing || !videoTrack || !renderer || renderer.isLost()) return;
+    const idle = renderer.idleMs();
+    if (!videoSuspended && idle > 1000) {
+      videoSuspended = true;
+      videoToken += 1;
+      renderer.flush();
+      emit('playback:video-suspended', { positionS: clock.current() });
+    } else if (videoSuspended && idle < 500) {
+      startVideoStream(generation, videoTrack);
+      emit('playback:video-resumed', { positionS: clock.current() });
+    }
+  }
+  function startMonitor() {
+    if (!monitorFrame) monitorFrame = requestAnimationFrame(monitor);
+    if (!monitorTimer) {
+      monitorTimer = setInterval(() => {
+        if (checkPosition()) backgroundVideo();
+      }, 250);
+    }
   }
   function selectedVideoTrack() {
     return store.tracks.video[store.tracks.selected.video ?? 0] || null;
@@ -3508,6 +4383,7 @@ const Playback = (() => {
     renderer?.setView({
       ...view,
       rotation: track?.rotation || 0,
+      flip: track?.flip === true,
       field: track?.fieldOrder === 'bff' ? 'bottom' : 'top',
       deinterlace: decoderDeinterlace() ? 'off' : view.deinterlace,
     });
@@ -3518,6 +4394,9 @@ const Playback = (() => {
   }
   function load(nextMetadata) {
     generation += 1;
+    videoToken += 1;
+    intendsToPlay = false;
+    videoSuspended = false;
     stopMonitor();
     clock.pause();
     AudioOutput.stop();
@@ -3551,21 +4430,47 @@ const Playback = (() => {
   }
   /* The renderer is chosen asynchronously (WebGPU when engine/gpu-renderer.mjs gives
      one, else Canvas2D); everything that draws waits for `rendererReady`. */
-  function attach(canvas) {
+  /* After a lost GPU device (event playback:renderer-lost) the host passes a new canvas
+     here: the engine tries a new WebGPU device once, and uses Canvas2D after a second
+     loss or when `{ renderer: 'canvas2d' }` is passed. Playback continues on the new
+     canvas at the clock; a paused file shows its frame again. */
+  function attach(canvas, { renderer: kind = 'auto' } = {}) {
     const token = ++attachToken;
-    renderer?.destroy();
+    const previous = renderer;
     renderer = null;
+    videoToken += 1;
+    previous?.destroy();
+    const canvasOnly = kind === 'canvas2d' || rendererLosses >= 2;
     rendererReady = (async () => {
-      const gpu = await Renderer.createGpu(canvas);
+      const gpu = canvasOnly ? null : await Renderer.createGpu(canvas);
       if (token !== attachToken) {
         try { gpu?.destroy(); } catch (_) {}
         return;
       }
-      renderer = Renderer.attach(canvas, gpu);
+      renderer = Renderer.attach(canvas, gpu, { onLost: info => rendererLost(token, info) });
       applyRotation();
       emit('playback:renderer', { backend: renderer.backend });
+      const videoTrack = selectedVideoTrack();
+      if (metadata && videoTrack && clock.playing) {
+        renderer.start(clock);
+        startVideoStream(generation, videoTrack);
+      } else if (metadata && videoTrack && !playTask) {
+        present().catch(() => {});
+      }
     })();
     return rendererReady;
+  }
+  function rendererLost(token, info) {
+    if (token !== attachToken) return;
+    rendererLosses += 1;
+    videoToken += 1;
+    emit('playback:renderer-lost', {
+      reason: info?.reason || 'device-lost',
+      backend: renderer?.backend || 'webgpu',
+      positionS: clock.current(),
+      playing: clock.playing,
+      next: rendererLosses >= 2 ? 'canvas2d' : 'webgpu',
+    });
   }
   /** The audio master shifted by the audio delay: the clock reads picture time. */
   function audioMaster() {
@@ -3600,6 +4505,39 @@ const Playback = (() => {
       emit('playback:audio-refused', { ...audioRefusal });
     }
   }
+  function startVideoStream(localGeneration, videoTrack) {
+    const token = ++videoToken;
+    videoSuspended = false;
+    const task = Decode.stream(
+      videoTrack,
+      clock.current(),
+      (frame, frameInfo) => (renderer ? renderer.enqueue(frame, clock.current(), frameInfo) : false),
+      {
+        shouldContinue: () => localGeneration === generation && token === videoToken,
+        currentTimeS: () => clock.current(),
+        decodeAheadS: CONFIG.sync.decodeAheadMs / 1000,
+      },
+    );
+    streamTask = task;
+    task.catch(error => {
+      if (localGeneration !== generation || token !== videoToken) return;
+      lastError = error;
+      pause();
+    }).finally(() => {
+      if (streamTask === task) streamTask = null;
+    });
+    return task;
+  }
+  /* Before the clock runs, wait (at most 1.5 s) until the first frame at or after the
+     position is queued, so sound does not start under an old key frame (review V40). */
+  async function firstFrameQueued(localGeneration) {
+    const deadline = performance.now() + 1_500;
+    while (localGeneration === generation && performance.now() < deadline) {
+      if (!renderer || renderer.isLost() || !streamTask) return;
+      if (renderer.stats().queuedFrames > 0) return;
+      await new Promise(resolve => setTimeout(resolve, 8));
+    }
+  }
   async function beginPlay() {
     if (!metadata) throw new Error('Load media before playback.');
     if (clock.playing) return;
@@ -3622,6 +4560,8 @@ const Playback = (() => {
     if (audioTrack && !audioRoute.route && !videoTrack) throw audioRoute.error;
     if (audioTrack) reportAudioRoute(audioTrack, audioRoute);
     lastError = null;
+    if (videoTrack && !renderer.isLost()) startVideoStream(localGeneration, videoTrack);
+    let audioReady = false;
     if (audioTrack && audioRoute.route) {
       const delayS = store.clock.audioDelayS;
       try {
@@ -3637,11 +4577,18 @@ const Playback = (() => {
             pause();
           },
         );
+        audioReady = true;
       } catch (error) {
         if (localGeneration !== generation) return;
-        throw error;
+        // A file with video plays on without sound and names the refusal (review V4).
+        if (!videoTrack) throw error;
+        reportAudioRoute(audioTrack, { route: null, error });
       }
       if (localGeneration !== generation) return;
+    }
+    if (videoTrack) await firstFrameQueued(localGeneration);
+    if (localGeneration !== generation) return;
+    if (audioReady) {
       clock.bind(audioMaster());
       AudioOutput.play();
     } else {
@@ -3651,66 +4598,64 @@ const Playback = (() => {
     renderer?.start(clock);
     publish();
     emit('playback:play', { positionS: clock.current(), rate: clock.rate });
-    if (!monitorFrame) monitorFrame = requestAnimationFrame(monitor);
-
-    if (!videoTrack) {
-      streamTask = null;
-      return;
-    }
-    const task = Decode.stream(
-      videoTrack,
-      clock.current(),
-      (frame, frameInfo) => renderer.enqueue(frame, clock.current(), frameInfo),
-      {
-      shouldContinue: () => localGeneration === generation && clock.playing,
-      currentTimeS: () => clock.current(),
-      decodeAheadS: CONFIG.sync.decodeAheadMs / 1000,
-      },
-    );
-    streamTask = task;
-    task.catch(error => {
-      if (localGeneration !== generation) return;
-      lastError = error;
-      pause();
-    }).finally(() => {
-      if (streamTask === task) streamTask = null;
-    });
+    startMonitor();
+    if (!videoTrack) streamTask = null;
   }
   function play() {
+    intendsToPlay = true;
     if (clock.playing) return Promise.resolve();
-    if (playTask) return playTask;
+    if (playTask && playGeneration === generation) return playTask;
     const task = beginPlay();
+    playGeneration = generation;
     playTask = task;
-    return task.finally(() => {
+    return task.catch(error => {
+      if (playTask === task) intendsToPlay = false;
+      throw error;
+    }).finally(() => {
       if (playTask === task) playTask = null;
     });
   }
-  function pause() {
+  /* Stop every pipeline; the play intent stays as it was. */
+  function halt() {
     generation += 1;
+    videoToken += 1;
+    videoSuspended = false;
     clock.pause();
     AudioOutput.stop();
     clock.bind(null);
     renderer?.stop();
     stopMonitor();
     publish();
+  }
+  function pause() {
+    intendsToPlay = false;
+    halt();
     emit('playback:pause', { positionS: clock.current() });
   }
   /* Pause and blank the picture: the renderer closes its queued frames, the frame on
      screen, and the WebGPU renderer's snapshot clone, so no VideoFrame stays open while
-     the host shows its start screen. The file stays loaded; the next load replaces it. */
+     the host shows its start screen. The file stays loaded; the next load replaces it.
+     The audio context is suspended until the next play (review V44). */
   function clearPicture() {
     pause();
     renderer?.clear();
+    AudioOutput.suspend();
+  }
+  /* Page hide (close, navigation, back-forward cache): stop and close the audio context. */
+  function pageHidden() {
+    if (clock.playing || intendsToPlay) pause();
+    AudioOutput.close();
   }
   async function seek(positionS) {
     if (!metadata) throw new Error('Load media before seeking.');
     if (!Number.isFinite(positionS)) throw new TypeError('Seek time must be finite.');
-    const wasPlaying = clock.playing;
-    pause();
+    const resume = intendsToPlay || clock.playing;
+    halt();
+    if (!resume) emit('playback:pause', { positionS: clock.current() });
     clock.seek(positionS);
     renderer?.clear();
     publish();
-    if (wasPlaying) await play();
+    if (resume) await play();
     else await present();
     emit('playback:seek', { positionS: clock.current() });
     return clock.current();
@@ -3750,7 +4695,7 @@ const Playback = (() => {
   /** Rebuild the running pipelines at the current position (track or delay change). */
   async function restartIfPlaying() {
     if (playTask) await playTask.catch(() => {});
-    if (!clock.playing) return;
+    if (!clock.playing && !intendsToPlay) return;
     await seek(clock.current());
   }
   async function selectAudioTrack(index) {
@@ -3907,7 +4852,8 @@ const Playback = (() => {
   async function thumbnail(timeS, { maxWidth = 160 } = {}) {
     const token = ++thumbnailToken;
     const track = selectedVideoTrack();
-    if (!metadata || !track || track.backend === 'libav' || typeof globalThis.OffscreenCanvas !== 'function') return null;
+    // libav sessions decode thumbnails through the rung too (review V63); they share its worker.
+    if (!metadata || !track || typeof globalThis.OffscreenCanvas !== 'function') return null;
     if (!Number.isFinite(timeS)) throw new RangeError('Thumbnail time must be finite.');
     if (!Number.isFinite(maxWidth) || maxWidth < 1) throw new RangeError('maxWidth must be a positive number.');
     const end = Number.isFinite(clock.duration) ? clock.duration : timeS;
@@ -3929,7 +4875,7 @@ const Playback = (() => {
     if (!frame) return null;
     try {
       if (!live()) return null;
-      const g = Renderer.geometry(frame.displayWidth, frame.displayHeight, { rotation: track.rotation || 0, aspect: 'auto', crop: 'none' });
+      const g = Renderer.geometry(frame.displayWidth, frame.displayHeight, { rotation: track.rotation || 0, flip: track.flip === true, aspect: 'auto', crop: 'none' });
       const scale = Math.min(1, maxWidth / g.outputWidth);
       const width = Math.max(1, Math.round(g.outputWidth * scale));
       const height = Math.max(1, Math.round(g.outputHeight * scale));
@@ -3939,6 +4885,7 @@ const Playback = (() => {
       const drawWidth = quarterTurn ? height : width;
       const drawHeight = quarterTurn ? width : height;
       context.translate(width / 2, height / 2);
+      if (g.flip) context.scale(-1, 1);
       context.rotate(g.radians);
       context.drawImage(frame, g.sx, g.sy, g.sw, g.sh, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
       return canvas.transferToImageBitmap();
@@ -4098,6 +5045,13 @@ const Playback = (() => {
     publish();
     emit('playback:rate', { rate: clock.rate });
   }
+  /* Speed changes keep the pitch by default, as VLC, mpv and QuickTime do (review V42). */
+  function setPreservePitch(value) {
+    store.clock.preservePitch = value !== false;
+    AudioOutput.setPreservePitch(store.clock.preservePitch);
+    emit('playback:pitch', { preservePitch: store.clock.preservePitch });
+    return store.clock.preservePitch;
+  }
   function setVolume(volume) {
     if (!Number.isFinite(volume) || volume < 0 || volume > MAX_VOLUME) {
       throw new RangeError(`Volume must be between 0 and ${MAX_VOLUME}.`);
@@ -4122,6 +5076,9 @@ const Playback = (() => {
       audio: AudioOutput.state(),
       audioRefusal: audioRefusal ? { ...audioRefusal } : null,
       renderer: renderer?.stats() || null,
+      intendsToPlay,
+      videoSuspended,
+      rendererLosses,
     };
   }
   function snapshot() {
@@ -4142,6 +5099,8 @@ const Playback = (() => {
     play,
     pause,
     clearPicture,
+    pageHidden,
+    setPreservePitch,
     seek,
     setRate,
     setVolume,
@@ -4235,7 +5194,8 @@ async function subtitleCueList(trackIndex) {
   refuseBitmap(track);
   const cues = [];
   for await (const cue of Demux.subtitleCues(track)) {
-    cues.push({ startS: cue.startS, endS: cue.endS, text: cue.text });
+    // WebVTT cue settings (line, position, align) and identifiers come through (review V48).
+    cues.push({ startS: cue.startS, endS: cue.endS, text: cue.text, id: cue.id ?? null, settings: cue.settings || '' });
   }
   return cues;
 }
@@ -4284,14 +5244,40 @@ async function exportSubtitles({ trackId = null, trackIndex = null, format = nul
   };
 }
 
+/* Names, languages and dispositions of the container's video and audio tracks go onto
+   the rung's tracks of the same type and order when both list the same count; subtitle
+   tracks and chapters come over whole (review V11). */
+function mergeContainerText(metadata, kept) {
+  const tracks = metadata.tracks.map(track => ({ ...track }));
+  for (const type of ['video', 'audio']) {
+    const ours = tracks.filter(track => track.type === type);
+    const theirs = kept.named.filter(track => track.type === type);
+    if (ours.length !== theirs.length) continue;
+    ours.forEach((track, index) => {
+      const source = theirs[index];
+      if (source.name) track.name = source.name;
+      if (source.language && source.language !== 'und') track.language = source.language;
+      if (source.disposition) track.disposition = { ...source.disposition };
+    });
+  }
+  return {
+    ...metadata,
+    tracks: tracks.concat(kept.subtitles),
+    chapters: metadata.chapters?.length ? metadata.chapters : kept.chapters,
+  };
+}
+
+globalThis.addEventListener?.('pagehide', () => Playback.pageHidden());
+
 const Engine = {
   version: CONFIG.version,
   /** Lowercase extensions the engine opens; each passes the golden gate. */
   supportedExtensions: [...SUPPORTED_EXTENSIONS],
   caps() {
     const navigatorApi = globalThis.navigator || {};
-    const videoDecoder = 'VideoDecoder' in globalThis;
-    const audioDecoder = 'AudioDecoder' in globalThis;
+    // A constructor, not just a name: playback tests the same (review V29).
+    const videoDecoder = typeof globalThis.VideoDecoder === 'function';
+    const audioDecoder = typeof globalThis.AudioDecoder === 'function';
     return {
       webCodecs: videoDecoder && audioDecoder,
       videoDecoder,
@@ -4336,14 +5322,16 @@ const Engine = {
         if (!libavSource) throw error;
       }
     }
+    let textCandidate = null;
     if (candidate && Demux.needsLibavVideo(candidate)) {
-      // Video WebCodecs cannot configure (MPEG-2, MPEG-4 Part 2, VC-1): reopen through libav.
+      // Video WebCodecs cannot configure (MPEG-2, MPEG-4 Part 2, VC-1): reopen through libav,
+      // keeping the container's text tracks, chapters and track languages (review V11).
       const source = await tryLibav({ sniff: false }).catch(error => {
         Demux.discard(candidate);
         throw error;
       });
       if (source) {
-        Demux.discard(candidate);
+        textCandidate = candidate;
         candidate = null;
         libavSource = source;
       }
@@ -4358,6 +5346,7 @@ const Engine = {
     }
     if (loadId !== latestLoadId) {
       Demux.discard(candidate);
+      Demux.discard(textCandidate);
       try { libavSource?.close(); } catch (_) {}
       throw new PlaybackError(
         'SupersededLoadError',
@@ -4366,13 +5355,16 @@ const Engine = {
       );
     }
     fingerprintError = nextFingerprintError;
+    Libav.closeAudio();
     let metadata;
     if (candidate) {
       Libav.close();
       metadata = Demux.activate(candidate);
     } else {
-      Demux.close();
+      const kept = Demux.activateText(textCandidate, { startOffsetS: libavSource.startOffsetS });
+      if (!kept) Demux.close();
       metadata = Libav.activate(libavSource, await fileOf());
+      if (kept) metadata = mergeContainerText(metadata, kept);
     }
     store.media = {
       handle,
@@ -4400,13 +5392,16 @@ const Engine = {
     });
     return metadata;
   },
-  attach(canvas) { return Playback.attach(canvas); },
+  /** Attach (or, after `playback:renderer-lost`, replace) the canvas; `{ renderer: 'canvas2d' }` skips WebGPU. */
+  attach(canvas, options) { return Playback.attach(canvas, options); },
   play() { return Playback.play(); },
   pause() { Playback.pause(); },
   /** Pause and blank the picture, closing every VideoFrame the engine holds (call on "close file"). */
   clearPicture() { Playback.clearPicture(); },
   seek(s) { return Playback.seek(s); },
   setRate(rate) { Playback.setRate(rate); },
+  /** Keep the pitch when the speed changes (default true). */
+  setPreservePitch(value) { return Playback.setPreservePitch(value); },
   /** 0 to 2; above 1 the gain stage boosts (200% at 2). */
   setVolume(volume) { Playback.setVolume(volume); },
   setMuted(muted) { Playback.setMuted(muted); },

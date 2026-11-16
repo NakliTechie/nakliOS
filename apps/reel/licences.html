@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline'; script-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'">
+<title>Reel: licences and source</title>
+<style>
+  :root{--bg:#fbfbf9;--text:#1d1d20;--dim:#55555c;--line:#dcdcd6;--link:#1f5fae}
+  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+  main{max-width:760px;margin:0 auto;padding:28px 18px 60px}
+  h1{font-size:22px;margin:0 0 6px} h2{font-size:17px;margin:30px 0 8px;padding-top:14px;border-top:1px solid var(--line)}
+  p,li{color:var(--text)} .dim{color:var(--dim)} a{color:var(--link)}
+  code{font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;background:#efefea;padding:1px 4px;border-radius:4px;word-break:break-all}
+  table{border-collapse:collapse;width:100%;font-size:14px} th,td{text-align:left;vertical-align:top;padding:7px 8px;border-bottom:1px solid var(--line)}
+</style>
+</head>
+<body>
+<main>
+<h1>Licences and source</h1>
+<p class="dim">Reel plays video files on your device. It ships the third-party software below, each under its own licence. The licence texts are files in this app; the links open them.</p>
+
+<h2>Reel</h2>
+<p>Reel's own code (the page, <code>app/</code>, <code>engine/reel-engine.mjs</code>, <code>engine/gpu-renderer.mjs</code>, <code>engine/libav-rung.mjs</code>) is by NakliTechie. Its licence is not yet published; it will be stated here and in the repository.</p>
+
+<h2>Third-party software in this app</h2>
+<table>
+<thead><tr><th>Component</th><th>Licence</th><th>Licence text and notices</th></tr></thead>
+<tbody>
+<tr><td>Mediabunny 1.66.0 (demuxing and WebCodecs plumbing)</td><td>MPL-2.0</td><td><a href="vendor/mediabunny/LICENSE-MPL-2.0.txt">LICENSE-MPL-2.0.txt</a></td></tr>
+<tr><td>@mediabunny/ac3 1.66.0 (AC-3 and E-AC-3 audio)</td><td>MPL-2.0; its embedded FFmpeg WebAssembly is LGPL-2.1-or-later</td><td><a href="vendor/mediabunny-ac3/LICENSE-MPL-2.0.txt">MPL-2.0</a>, <a href="vendor/mediabunny-ac3/licenses/ffmpeg/LICENSE.md">FFmpeg LICENSE.md</a>, <a href="vendor/mediabunny-ac3/licenses/ffmpeg/COPYING.LGPLv2.1">LGPL-2.1</a></td></tr>
+<tr><td>@mediabunny/dts 1.66.0 (DTS audio)</td><td>MPL-2.0; its embedded FFmpeg WebAssembly is LGPL-2.1-or-later</td><td><a href="vendor/mediabunny-dts/LICENSE-MPL-2.0.txt">MPL-2.0</a>, <a href="vendor/mediabunny-dts/licenses/ffmpeg/LICENSE.md">FFmpeg LICENSE.md</a>, <a href="vendor/mediabunny-dts/licenses/ffmpeg/COPYING.LGPLv2.1">LGPL-2.1</a></td></tr>
+<tr><td>libav.js 6.10.9.0 with FFmpeg 9.0, Reel build (legacy containers and codecs)</td><td>LGPL-2.1 (built without GPL, version-3 or nonfree parts)</td><td><a href="vendor/libav/LICENSE-LGPL-2.1.txt">LGPL-2.1</a>; per-component headers at the top of <code>vendor/libav/libav-6.10.9.0-reel.wasm.mjs</code></td></tr>
+<tr><td>JASSUB 1.8.8 (styled ASS/SSA subtitles), bundling libass (ISC), FreeType (FTL), HarfBuzz and fontconfig (MIT-style), FriBidi (LGPL-2.1-or-later)</td><td>MIT and the bundled licences</td><td><a href="vendor/jassub/LICENSE">LICENSE</a>, <a href="vendor/jassub/COPYRIGHT">COPYRIGHT</a> (every bundled notice)</td></tr>
+<tr><td>Liberation Sans 2.00.5 (default subtitle font)</td><td>SIL Open Font License 1.1; reserved font name "Liberation"</td><td><a href="vendor/jassub/LICENSE-default-font-OFL-1.1.txt">OFL-1.1</a></td></tr>
+<tr><td>NakliOS SDK (inlined in the page)</td><td>NakliTechie</td><td>the block between the <code>naklios-sdk</code> markers in the page source</td></tr>
+</tbody>
+</table>
+<p><strong>FreeType:</strong> Portions of this software are copyright © 2021 The FreeType Project (www.freetype.org). All rights reserved.</p>
+<p class="dim">The optional speech model for "Generate subtitles" is not part of this app: inside NakliOS it is fetched from Sonella's folder on the same site, with Whisper tiny (MIT), transformers.js (Apache-2.0) and ONNX Runtime Web (MIT) under their own licences.</p>
+
+<h2>Corresponding source for the LGPL parts</h2>
+<p>You may replace the LGPL libraries: they are separate files. For the FFmpeg build in <code>vendor/libav/</code>, the corresponding source is:</p>
+<ul>
+<li>libav.js, tag <code>v6.10.9.0</code>, commit <code>c80e885c3461f7bb7ea565c9631b34243ae0dbf1</code>, including its FFmpeg patches in <code>patches/ffmpeg/</code>: <a href="https://github.com/Yahweasel/libav.js/tree/v6.10.9.0">github.com/Yahweasel/libav.js</a>. Reel adds no patch of its own.</li>
+<li>FFmpeg 9.0: <a href="https://ffmpeg.org/releases/ffmpeg-9.0.tar.xz">ffmpeg.org/releases/ffmpeg-9.0.tar.xz</a>, SHA-256 <code>7f607a00dd0d28a729d5a4811205812eef01cf6ef6155025febb6f36a9062d52</code>.</li>
+<li>The build configuration: <a href="vendor/libav/mkconfig-reel.json">mkconfig-reel.json</a> (the parts list given to libav.js <code>configs/mkconfig.js</code> as variant <code>reel</code>), built with <code>make dist/libav-6.10.9.0-reel.mjs dist/libav-6.10.9.0-reel.wasm.mjs</code> in the container <code>emscripten/emsdk@sha256:6bd7aef93408b10bf7b36642cb7c91119b302f720b9ec2d20439f73cf07fe894</code>.</li>
+<li>The FFmpeg WebAssembly inside <code>@mediabunny/ac3</code> and <code>@mediabunny/dts</code>: <a href="https://github.com/Vanilagy/mediabunny/tree/v1.66.0/packages">github.com/Vanilagy/mediabunny, tag v1.66.0, packages/ac3 and packages/dts</a>.</li>
+<li>FriBidi inside JASSUB 1.8.8: <a href="https://github.com/ThaUnknown/jassub/tree/1.8.8">github.com/ThaUnknown/jassub at 1.8.8</a> and its build scripts.</li>
+</ul>
+<p class="dim">This page reports what the app contains and where its source is. It is not legal advice.</p>
+</main>
+</body>
+</html>

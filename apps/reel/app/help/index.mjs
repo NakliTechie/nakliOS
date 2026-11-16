@@ -19,6 +19,7 @@ export const STRINGS = {
   'help.button': 'Keyboard shortcuts',
   'help.close': 'Close',
   'help.empty': 'No keyboard shortcuts are registered.',
+  'help.licences': 'Licences and source',
   'help.footer': 'Every action here is also a command in commands.json, so agents see the same list.',
   'help.group.playback': 'Playback',
   'help.group.frame': 'Frame',
@@ -137,7 +138,9 @@ export function install(ctx) {
     .help-sheet kbd{display:inline-block;min-width:22px;text-align:center;font:12px/1.6 ui-monospace,monospace;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:0 6px;background:var(--surface-2)}
     .help-sheet kbd + kbd{margin-left:4px}
     .help-sheet .help-input{color:var(--dim);margin-left:6px}
-    .help-sheet footer{padding:0 20px 16px;font-size:12px;color:var(--faint)}
+    .help-sheet footer{padding:0 20px 16px;font-size:12px;color:var(--faint);display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline}
+    .help-sheet footer p{margin:0;flex:1 1 240px}
+    .help-sheet footer a{color:var(--dim)}
     .help-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
     .help-button{font-size:13px;font-weight:600;min-width:28px;height:28px;border-radius:8px;color:var(--dim)}
   `);
@@ -218,7 +221,15 @@ export function install(ctx) {
     const body = document.createElement('div');
     body.className = 'help-body';
     const footer = document.createElement('footer');
-    footer.textContent = t('help.footer');
+    const footerText = document.createElement('p');
+    footerText.textContent = t('help.footer');
+    const licences = document.createElement('a');
+    licences.href = 'licences.html';
+    licences.target = '_blank';
+    licences.rel = 'noopener';
+    licences.dataset.help = 'licences';
+    licences.textContent = t('help.licences');
+    footer.append(footerText, licences);
     el.append(header, body, footer);
 
     // Esc fires "cancel" on a modal dialog; route it through the command so state stays in one place.

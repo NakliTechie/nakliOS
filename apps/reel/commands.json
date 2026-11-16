@@ -665,19 +665,31 @@
     },
     {
       "name": "chapter.list",
-      "description": "List the chapters (title, startS, endS) and the current chapter index; panel opens or closes the chapters panel.",
+      "description": "List the chapters (title, startS, endS), the current chapter index and whether the chapters panel is open.",
       "scope": "read",
       "input": {
         "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "label": "Chapters"
+    },
+    {
+      "name": "chapter.panel",
+      "description": "Open or close the chapters panel; with no input it toggles.",
+      "scope": "write",
+      "input": {
+        "type": "object",
         "properties": {
-          "panel": {
+          "open": {
             "type": "boolean",
             "description": "true opens the panel, false closes it"
           }
         },
         "required": []
       },
-      "label": "Chapters"
+      "label": "Chapters panel",
+      "readTwin": "chapter.list"
     },
     {
       "name": "playback.jump-to",
@@ -771,19 +783,31 @@
     },
     {
       "name": "audio.read",
-      "description": "List the audio tracks (title, language, codec, channels), the selected index and the audio delay; panel opens or closes the audio panel.",
+      "description": "List the audio tracks (title, language, codec, channels), the selected index, the audio delay and whether the audio panel is open.",
       "scope": "read",
       "input": {
         "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "label": "Audio tracks"
+    },
+    {
+      "name": "audio.panel",
+      "description": "Open or close the audio panel (tracks and delay); with no input it toggles.",
+      "scope": "write",
+      "input": {
+        "type": "object",
         "properties": {
-          "panel": {
+          "open": {
             "type": "boolean",
             "description": "true opens the panel, false closes it"
           }
         },
         "required": []
       },
-      "label": "Audio tracks"
+      "label": "Audio panel",
+      "readTwin": "audio.read"
     },
     {
       "name": "bookmark.add",
@@ -817,19 +841,31 @@
     },
     {
       "name": "bookmark.list",
-      "description": "List this file's bookmarks (id, timeS, name) sorted by time; panel opens or closes the bookmarks panel.",
+      "description": "List this file's bookmarks (id, timeS, name) sorted by time, whether they are stored, how many files have stored bookmarks, and whether the bookmarks panel is open.",
       "scope": "read",
       "input": {
         "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "label": "Bookmarks"
+    },
+    {
+      "name": "bookmark.panel",
+      "description": "Open or close the bookmarks panel; with no input it toggles.",
+      "scope": "write",
+      "input": {
+        "type": "object",
         "properties": {
-          "panel": {
+          "open": {
             "type": "boolean",
             "description": "true opens the panel, false closes it"
           }
         },
         "required": []
       },
-      "label": "Bookmarks"
+      "label": "Bookmarks panel",
+      "readTwin": "bookmark.list"
     },
     {
       "name": "bookmark.go",
@@ -855,8 +891,8 @@
     },
     {
       "name": "bookmark.remove",
-      "description": "Remove a bookmark, chosen by id or by index.",
-      "scope": "write",
+      "description": "Delete a stored bookmark, chosen by id or by index. It cannot be undone.",
+      "scope": "destructive",
       "input": {
         "type": "object",
         "properties": {
@@ -876,15 +912,27 @@
       "readTwin": "bookmark.list"
     },
     {
+      "name": "bookmark.clear-all",
+      "description": "Delete the stored bookmarks of every file in this browser. It cannot be undone. Returns how many files had bookmarks.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "label": "Clear all bookmarks",
+      "readTwin": "bookmark.list"
+    },
+    {
       "name": "view.snapshot",
-      "description": "Save the current video frame as a PNG at the size the video is drawn; with save false, return it as a data URL instead.",
+      "description": "Save the current video frame as a PNG at the size the video is drawn, and return its name and size (never the image). save false is the explicit export request: it saves nothing and returns the PNG as a data URL.",
       "scope": "write",
       "input": {
         "type": "object",
         "properties": {
           "save": {
             "type": "boolean",
-            "description": "false returns the PNG as a data URL and saves nothing; default true"
+            "description": "false exports the PNG as a data URL and saves nothing; default true returns only the name and size"
           }
         },
         "required": []
@@ -1097,7 +1145,7 @@
     },
     {
       "name": "view.read",
-      "description": "Read the aspect, crop, zoom, adjustments, deinterlacing and tone mapping chosen, the view the engine applies, the last snapshot, and the Picture-in-Picture state.",
+      "description": "Read the aspect, crop, zoom, adjustments, deinterlacing and tone mapping chosen, the view the engine applies, which path maps HDR now (hdrPath: shader is Reel's tone curve, browser is the browser's own conversion, extended, off or none), the last snapshot, and the Picture-in-Picture state.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -1253,6 +1301,18 @@
       "readTwin": "queue.read"
     },
     {
+      "name": "queue.forget-folder",
+      "description": "Delete the remembered folder (the stored folder handle behind \"Reopen last folder\"). It cannot be undone; picking the folder again remembers it again.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "label": "Forget folder",
+      "readTwin": "queue.read"
+    },
+    {
       "name": "queue.read",
       "description": "Read the queue: items, current index, play order, repeat, shuffle, sibling subtitle names, whether the panel is open and the stored last folder.",
       "scope": "read",
@@ -1360,7 +1420,7 @@
     },
     {
       "name": "library.read",
-      "description": "Read the library: each video with its duration, fingerprint, poster state (cached, placeholder or pending) and watch state (new, partial or watched, from the resume history).",
+      "description": "Read the library: each video with its duration, fingerprint, poster state (cached, placeholder or pending) and watch state (new, partial or watched, from the resume history), and what Reel stores (history entries, files with bookmarks, posters, remembered folder). Cards are described only while the library is open.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -1368,6 +1428,46 @@
         "required": []
       },
       "label": "Library contents"
+    },
+    {
+      "name": "library.stored-data",
+      "description": "Open or close the Stored data dialog, which lists what Reel keeps in this browser and deletes it; with no input it toggles.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "open": {
+            "type": "boolean"
+          }
+        },
+        "required": []
+      },
+      "label": "Stored data",
+      "readTwin": "library.read"
+    },
+    {
+      "name": "library.clear-history",
+      "description": "Delete the watch history: every resume position and the Continue watching list, in this browser and in the Crate when Crate watch history is on. It cannot be undone. Returns how many entries it deleted.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "label": "Clear watch history",
+      "readTwin": "library.read"
+    },
+    {
+      "name": "library.clear-posters",
+      "description": "Delete every library poster Reel saved in this browser (OPFS reel-posters). They are made again when each video plays. Returns how many it deleted.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "label": "Clear posters",
+      "readTwin": "library.read"
     },
     {
       "name": "ai.transcribe",
@@ -1399,6 +1499,10 @@
             "minimum": 0,
             "description": "End of the range; defaults to the end of the video"
           },
+          "export": {
+            "type": "boolean",
+            "description": "true also returns the SRT text; by default only counts and ids come back"
+          },
           "cancel": {
             "type": "boolean",
             "description": "Cancel the running job"
@@ -1411,7 +1515,7 @@
     },
     {
       "name": "ai.translate",
-      "description": "Translate the selected subtitle track into a language with the NakliOS host model, keeping cue times, and load it as a new track named \"(translated)\". Outside NakliOS there is no translation model and it refuses. cancel stops a running job.",
+      "description": "Translate the selected subtitle track into a language with the NakliOS host chat model, keeping cue times, and load it as a new track named \"(translated)\". The subtitle text goes to that model, which may be an outside service (ai.read reports where it runs). Outside NakliOS there is no translation model and it refuses. cancel stops a running job.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1425,6 +1529,10 @@
             "minimum": 0,
             "description": "Subtitle track position from subtitle.read; defaults to the selected track"
           },
+          "export": {
+            "type": "boolean",
+            "description": "true also returns the SRT text; by default only counts and ids come back"
+          },
           "cancel": {
             "type": "boolean",
             "description": "Cancel the running job"
@@ -1437,19 +1545,31 @@
     },
     {
       "name": "ai.read",
-      "description": "Read the local speech model state (absent, cached, loading, loaded), the route for transcription and translation (host, local or none), the running job and its progress, and the last generated track. panel opens or closes the AI panel.",
+      "description": "Read the local speech model state (absent, cached, loading, loaded), the route for transcription and translation (host, local or none), where translation runs (device, remote or unknown, with the model and provider), the running job and its progress, the last generated track and whether the AI panel is open.",
       "scope": "read",
       "input": {
         "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "label": "AI state"
+    },
+    {
+      "name": "ai.panel",
+      "description": "Open or close the AI panel (subtitles from speech and translation); with no input it toggles.",
+      "scope": "write",
+      "input": {
+        "type": "object",
         "properties": {
-          "panel": {
+          "open": {
             "type": "boolean",
             "description": "true opens the AI panel, false closes it"
           }
         },
         "required": []
       },
-      "label": "AI state"
+      "label": "AI panel",
+      "readTwin": "ai.read"
     },
     {
       "name": "help.show",

@@ -39,6 +39,12 @@ export function containedRect(boxWidth, boxHeight, pictureWidth, pictureHeight) 
   return { left: (boxWidth - width) / 2, top: (boxHeight - height) / 2, width, height };
 }
 
+export function sameIndices(a, b) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) if (a[i] !== b[i]) return false;
+  return true;
+}
+
 export function createCaptions(ctx) {
   ctx.addStyle(CSS);
   const stage = ctx.mounts.stage;
@@ -64,7 +70,9 @@ export function createCaptions(ctx) {
   let pictureRect = { width: 0, height: 0 };
   const canvasHooks = new Set();
   let style = { ...DEFAULT_STYLE };
-  let shownKey = '';
+  let shownFirst = [];
+  let shownSecond = [];
+  let shownAny = false;
   let shownText = '';
   let layoutKey = '';
   let fontPx = 16;
@@ -121,10 +129,12 @@ export function createCaptions(ctx) {
 
   /* active: indices into the primary index; second: indices into the secondary index.
    * The secondary track always sits at the top of the picture. */
-  function render(active, second = []) {
-    const key = `${active.join(',')}|${second.join(',')}`;
-    if (key === shownKey) return;
-    shownKey = key;
+  function render(active, second = [], force = false) {
+    // Index arrays are compared directly, not joined into a string each frame (V13).
+    if (!force && sameIndices(active, shownFirst) && sameIndices(second, shownSecond)) return;
+    shownFirst = active;
+    shownSecond = second;
+    shownAny = active.length > 0 || second.length > 0;
     const cues = active.map(i => index.cues[i]);
     const extra = second.map(i => secondary.cues[i]);
     top.replaceChildren(...extra.map(cueNode), ...cues.filter(cue => cue.placement === 'top').map(cueNode));
@@ -140,7 +150,7 @@ export function createCaptions(ctx) {
     const t = positionS - delayS;
     const first = index && !primaryHidden ? index.activeAt(t) : [];
     const second = secondary ? secondary.activeAt(t) : [];
-    if (!first.length && !second.length && !shownKey) return;
+    if (!first.length && !second.length && !shownAny) return;
     render(first, second);
   }
 
@@ -162,8 +172,8 @@ export function createCaptions(ctx) {
   }
 
   return {
-    setIndex(next) { index = next; shownKey = '\0'; render([]); shownKey = ''; refresh(); },
-    setSecondary(next) { secondary = next; shownKey = '\0'; render([]); shownKey = ''; refresh(); },
+    setIndex(next) { index = next; render([], [], true); refresh(); },
+    setSecondary(next) { secondary = next; render([], [], true); refresh(); },
     /* Hides the primary text while a canvas renderer (styled ASS, PGS) draws it instead. */
     setPrimaryHidden(hidden) { primaryHidden = !!hidden; refresh(); },
     /* Calls fn(rect) whenever the picture rect changes; returns an unsubscribe function. */
@@ -173,7 +183,7 @@ export function createCaptions(ctx) {
     setDelay(next) { delayS = next; refresh(); },
     refresh,
     setStyle(next) { style = { ...next }; layout(true); paintColours(); },
-    clear() { index = null; secondary = null; primaryHidden = false; shownKey = '\0'; render([]); shownKey = ''; live.textContent = ''; },
+    clear() { index = null; secondary = null; primaryHidden = false; render([], [], true); live.textContent = ''; },
     frame,
     text: () => shownText,
     layer,

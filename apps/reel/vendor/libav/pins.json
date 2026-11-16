@@ -1,0 +1,28 @@
+{
+  "note": "SHA-256 pins for the libav.js files that engine/libav-rung.mjs loads. To run a rebuilt or replacement libav.js, replace the files and edit this list (VENDOR.md, section libav.js).",
+  "version": "6.10.9.0",
+  "variant": "reel",
+  "files": [
+    {
+      "key": "loader",
+      "name": "libav-6.10.9.0-reel.mjs",
+      "bytes": 28408,
+      "type": "text/javascript",
+      "sha256": "3b3de436145b875715c394d47946d62f38b7c90cea167bb016ee513ff37808ec"
+    },
+    {
+      "key": "factory",
+      "name": "libav-6.10.9.0-reel.wasm.mjs",
+      "bytes": 251298,
+      "type": "text/javascript",
+      "sha256": "184a2b0c9d623233b8e0d9801db99399937d37530c5a3d84a22e147fd8cdeb8b"
+    },
+    {
+      "key": "wasm",
+      "name": "libav-6.10.9.0-reel.wasm.wasm",
+      "bytes": 3755039,
+      "type": "application/wasm",
+      "sha256": "136650173e1b76c27ae590789c0ec21ece8ac619cb6e542495d9f7f7d0d0dbb3"
+    }
+  ]
+}

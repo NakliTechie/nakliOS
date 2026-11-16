@@ -6,6 +6,13 @@
  *   placement  'top' when the file asks for the top of the picture ({\an8}, VTT line:0), else null
  * Text is never treated as HTML: the renderer builds text nodes from runs. */
 
+/* Input limits (review findings V6, V7, V13). Cue text past MAX_CUE_CHARS is cut before
+ * tokenising; a file stops at MAX_CUES cues; an ASS Format line with more than
+ * MAX_ASS_FIELDS fields is malformed, and Dialogue lines under it are skipped. */
+export const MAX_CUE_CHARS = 64 * 1024;
+export const MAX_CUES = 100_000;
+export const MAX_ASS_FIELDS = 64;
+
 const TIME = String.raw`(?:(\d+):)?(\d{1,2}):(\d{1,2})(?:[,.](\d{1,3}))?`;
 const TIMING_RE = new RegExp(`^\\s*${TIME}\\s*-->\\s*${TIME}(.*)$`);
 
@@ -33,11 +40,15 @@ export function detectFormat(text, name = '') {
   return 'srt';
 }
 
-/* Parses a whole file. Returns cues sorted by start time. */
+/* Parses a whole file. Returns cues sorted by start time; at most MAX_CUES, and the array's
+ * `truncated` property is true when the file held more. */
 export function parseSubtitles(text, format = detectFormat(text)) {
   const clean = String(text).replace(/^﻿/, '').replace(/\r\n?/g, '\n');
   const cues = format === 'ass' ? parseAss(clean) : parseTimedText(clean, format === 'vtt' ? 'vtt' : 'srt');
-  return finishCues(cues);
+  const truncated = cues.length >= MAX_CUES && cues.more === true;
+  const out = finishCues(cues);
+  out.truncated = truncated;
+  return out;
 }
 
 /* SRT and VTT share one line-based reader, so a missing blank line between cues or at the end
@@ -48,6 +59,7 @@ function parseTimedText(text, format) {
   const cues = [];
   for (let i = 0; i < lines.length; i += 1) {
     const timing = TIMING_RE.exec(lines[i]);
+    if (timing && cues.length >= MAX_CUES) { cues.more = true; break; }
     if (!timing) continue;
     const startS = timeFrom(timing, 1);
     const endS = timeFrom(timing, 5);
@@ -91,11 +103,16 @@ function decodeEntities(text) {
 /* Inline markup of an SRT or VTT cue payload: <i> <b> <u> become styles; other tags
  * (<font>, <c.x>, <v Name>, <ruby>, timestamps) are dropped; SSA-style {\an8} sets placement
  * and other {\...} blocks are dropped. */
-export function parseInline(payload, format = 'srt') {
+export function parseInline(input, format = 'srt') {
   const style = { i: false, b: false, u: false };
   const lines = [[]];
   let placement = null;
-  const token = /<(\/?)([a-zA-Z][a-zA-Z0-9]*|\d[\d:.]*)(?:[.\s][^<>]*)?>|\{\\[^{}]*\}|\n/g;
+  const payload = String(input).slice(0, MAX_CUE_CHARS);
+  // Linear in the payload (V6): the tag name and its attribute tail match disjoint characters
+  // and the tail is bounded, so a '<' with no '>' costs at most a few hundred steps. Only VTT
+  // has inline timestamps, and only in their strict form; in SRT "<3" stays text.
+  const token = format === 'vtt' ? TOKEN_VTT : TOKEN_SRT;
+  token.lastIndex = 0;
   let last = 0;
   const push = raw => {
     if (!raw) return;
@@ -112,12 +129,19 @@ export function parseInline(payload, format = 'srt') {
       if (align && isTopAlign(whole, Number(align[1]))) placement = 'top';
       continue;
     }
+    if (!match[2]) continue; // a VTT timestamp
     const tag = match[2].toLowerCase();
     if (tag === 'i' || tag === 'b' || tag === 'u') style[tag] = !match[1];
   }
   push(payload.slice(last));
   return { lines: trimLines(lines), placement };
 }
+
+const TAG = String.raw`<(\/?)([a-zA-Z][a-zA-Z0-9]{0,31})(?:[.\s][^<>]{0,200})?>`;
+const SSA_BLOCK = String.raw`\{\\[^{}]{0,4096}\}`;
+const VTT_TIMESTAMP = String.raw`<\d{1,2}:\d{2}(?::\d{2})?\.\d{3}>`;
+const TOKEN_SRT = new RegExp(`${TAG}|${SSA_BLOCK}|\n`, 'g');
+const TOKEN_VTT = new RegExp(`${TAG}|${VTT_TIMESTAMP}|${SSA_BLOCK}|\n`, 'g');
 
 function isTopAlign(block, n) {
   // \anN uses numpad layout (7-9 top); legacy \aN uses 5-7 for top (5, 6, 7) and 9-11 for middle.
@@ -148,33 +172,59 @@ function parseAss(text) {
     const kind = line.slice(0, colon).trim().toLowerCase();
     const rest = line.slice(colon + 1).trimStart();
     if (kind === 'format') {
-      format = rest.split(',').map(field => field.trim().toLowerCase());
+      format = readAssFormat(rest);
       continue;
     }
-    if (kind !== 'dialogue') continue;
-    const fields = format || ['layer', 'start', 'end', 'style', 'name', 'marginl', 'marginr', 'marginv', 'effect', 'text'];
-    const values = splitFields(rest, fields.length);
-    const get = name => values[fields.indexOf(name)];
-    const startS = parseAssTime(get('start'));
-    const endS = parseAssTime(get('end'));
+    if (kind !== 'dialogue' || format === MALFORMED) continue;
+    if (cues.length >= MAX_CUES) { cues.more = true; break; }
+    const { count, start, end, text: textAt } = format || DEFAULT_ASS_FORMAT;
+    const values = splitFields(rest, count);
+    const startS = parseAssTime(values[start]);
+    const endS = parseAssTime(values[end]);
     if (startS === null || endS === null) continue;
-    const parsed = assTextToLines(get('text') ?? '');
+    const parsed = assTextToLines(values[textAt] ?? '');
     if (!parsed.lines.length) continue;
     cues.push({ startS, endS, lines: parsed.lines, placement: parsed.placement });
   }
   return cues;
 }
 
+const MALFORMED = Symbol('malformed ASS Format line');
+const DEFAULT_ASS_FORMAT = Object.freeze({ count: 10, start: 1, end: 2, text: 9 });
+
+/* Reads an [Events] Format line once into field positions. More than MAX_ASS_FIELDS fields,
+ * or no Start, End or Text field, makes it MALFORMED. Counting stops at the cap, so a line of
+ * 200,000 commas costs one pass. */
+export function readAssFormat(rest) {
+  let count = 1;
+  for (let at = rest.indexOf(','); at >= 0; at = rest.indexOf(',', at + 1)) {
+    count += 1;
+    if (count > MAX_ASS_FIELDS) return MALFORMED;
+  }
+  const fields = rest.split(',').map(field => field.trim().toLowerCase());
+  const start = fields.indexOf('start');
+  const end = fields.indexOf('end');
+  const text = fields.indexOf('text');
+  if (start < 0 || end < 0 || text < 0) return MALFORMED;
+  return { count, start, end, text };
+}
+
+/* Splits at the first count - 1 commas; the last field keeps any further commas (ASS text).
+ * Stops searching when the line runs out; missing fields are empty strings. */
 function splitFields(text, count) {
   const out = [];
-  let rest = text;
+  let from = 0;
   for (let k = 0; k < count - 1; k += 1) {
-    const comma = rest.indexOf(',');
-    if (comma < 0) { out.push(rest); rest = ''; continue; }
-    out.push(rest.slice(0, comma).trim());
-    rest = rest.slice(comma + 1);
+    const comma = from < 0 ? -1 : text.indexOf(',', from);
+    if (comma < 0) {
+      out.push(from < 0 ? '' : text.slice(from));
+      from = -1;
+      continue;
+    }
+    out.push(text.slice(from, comma).trim());
+    from = comma + 1;
   }
-  out.push(rest);
+  out.push(from < 0 ? '' : text.slice(from));
   return out;
 }
 
@@ -188,7 +238,8 @@ function parseAssTime(text) {
 /* ASS dialogue text to plain styled lines: override blocks {\...} are read for \i \b \u,
  * \an placement and \p drawing mode, then dropped; drawing commands (\p1 until \p0) are
  * removed; \N and \n break lines; \h is a non-breaking space. */
-export function assTextToLines(text) {
+export function assTextToLines(input) {
+  const text = String(input).slice(0, MAX_CUE_CHARS);
   const style = { i: false, b: false, u: false };
   const lines = [[]];
   let placement = null;
@@ -236,7 +287,7 @@ export function cuesFromEngine(rawCues, codec = 'srt') {
   const cues = rawCues.map(cue => {
     const parsed = kind === 'ass' || kind === 'ssa'
       ? assPayloadToLines(cue.text)
-      : parseInline(String(cue.text ?? '').replace(/\r\n?/g, '\n'), kind === 'webvtt' || kind === 'vtt' ? 'vtt' : 'srt');
+      : parseInline(String(cue.text ?? '').slice(0, MAX_CUE_CHARS).replace(/\r\n?/g, '\n'), kind === 'webvtt' || kind === 'vtt' ? 'vtt' : 'srt');
     const placement = parsed.placement || (cue.settings ? vttPlacement(cue.settings) : null);
     return { startS: Number(cue.startS), endS: cue.endS == null ? null : Number(cue.endS), lines: parsed.lines, placement };
   });

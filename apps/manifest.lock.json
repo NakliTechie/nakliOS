@@ -2983,7 +2983,7 @@
       "id": "reel",
       "repo": "NakliTechie/reel",
       "requestedRef": "main",
-      "resolvedCommit": "8e1ae00e3bf50f8d183a26cf73fa7f5a2b8bf27a",
+      "resolvedCommit": "b791ae8dab8298878ddc9883ff5285103f5443b6",
       "files": [
         {
           "source": "app/ai/asr-worker.js",
@@ -2994,8 +2994,8 @@
         {
           "source": "app/ai/index.mjs",
           "destination": "app/ai/index.mjs",
-          "sha256": "6c195ad4531aae6e0f222fe4e1fa3e1eb873b42fff69483554403301234899c0",
-          "bytes": 27791
+          "sha256": "a74350b20b777e0b3a704e794df8ca08f685323b6c11bacfeb8346bbcad22abf",
+          "bytes": 30045
         },
         {
           "source": "app/ai/logic.mjs",
@@ -3006,56 +3006,62 @@
         {
           "source": "app/ai/speech.mjs",
           "destination": "app/ai/speech.mjs",
-          "sha256": "583f61a8a5505270dbcbb1f64ab5869de6255a668ffe417b68d401587ff40634",
-          "bytes": 9041
+          "sha256": "eb5aad43a5f9ea8d6039e00a62f065bb6b0a2ca395a3651f227418bef7d1b1cf",
+          "bytes": 9853
         },
         {
           "source": "app/core/commands.mjs",
           "destination": "app/core/commands.mjs",
-          "sha256": "1fc3336a40a1e9e8d7515d3b6c3c9734430b3cb0c15bcd8ccd0f8d7076cf6f54",
-          "bytes": 3753
+          "sha256": "ca6723ce41acab96b9cfe487cd9f97bae6bf056be0f9fc2817e3868377fd5a34",
+          "bytes": 3851
         },
         {
           "source": "app/core/registry.mjs",
           "destination": "app/core/registry.mjs",
-          "sha256": "71fbaf4264fb6f5611088df2d950193d5177222e26f9a389cdbc3b64991ea9dc",
-          "bytes": 5107
+          "sha256": "afb0b992de4666f95b87179cbb7deda1c36a5340df270b7948aba3a850239749",
+          "bytes": 8685
         },
         {
           "source": "app/door/index.mjs",
           "destination": "app/door/index.mjs",
-          "sha256": "922ff1e7d07788bc2314b88049fb46bbe4ff6df9b3eb39cc6fa13e1e77336a0a",
-          "bytes": 7712
+          "sha256": "68ec736466d73c1706722b7cc5f37cd0a7712e583fbbbe2f8f430d459acf8b2a",
+          "bytes": 8110
         },
         {
           "source": "app/help/index.mjs",
           "destination": "app/help/index.mjs",
-          "sha256": "0cab12efa6d764b8a44870f5d758dd5961a445cbddfec26ea387adc2ec9396f8",
-          "bytes": 11621
+          "sha256": "784222170be7a56b4fb95080ff51c9aaff0fc92686504bbe222863cfc5ed1813",
+          "bytes": 12152
         },
         {
           "source": "app/hosted/index.mjs",
           "destination": "app/hosted/index.mjs",
-          "sha256": "6b1dbac5d019987c9797f8a6000e1cb73cfa2caa9a21f4f029b4169199c5c8b4",
-          "bytes": 20559
+          "sha256": "773ed33d9251270aab389e5dacc0d8cef090f0a96633d7fa677dbc469464c8da",
+          "bytes": 21190
         },
         {
           "source": "app/hosted/logic.mjs",
           "destination": "app/hosted/logic.mjs",
-          "sha256": "b3249e22420cc4040e4641a9771e1e93bb61ab4cfba26a70baee330051483412",
-          "bytes": 7792
+          "sha256": "17f64e3b40d6eba5d16495131ba28430fd3156cd0e74f1edc093496b54ded942",
+          "bytes": 8378
+        },
+        {
+          "source": "app/library/forget.mjs",
+          "destination": "app/library/forget.mjs",
+          "sha256": "d8f9f7e4d2ad11bac0afeb4e03d6832baf21e0840788415c30458b4ed0949428",
+          "bytes": 3559
         },
         {
           "source": "app/library/index.mjs",
           "destination": "app/library/index.mjs",
-          "sha256": "3f2a3f21ca77d4171fb69d9dfbabd7d43642ca1d6e8214fa864c0d70c7b509e9",
-          "bytes": 16877
+          "sha256": "dff8895aaf2f59f0461ece2126cfa48589dae0a37839bc91e5235e564f49cd43",
+          "bytes": 29780
         },
         {
           "source": "app/library/logic.mjs",
           "destination": "app/library/logic.mjs",
-          "sha256": "5da05b8306523e101168495e19856f9695e05e66997a3a2455201ff44f87cc5f",
-          "bytes": 2055
+          "sha256": "f08534d2422603be66669ad3b8504826129d9b0aff8ca604fef5913798319ce1",
+          "bytes": 3447
         },
         {
           "source": "app/modules.mjs",
@@ -3066,20 +3072,20 @@
         {
           "source": "app/picture/index.mjs",
           "destination": "app/picture/index.mjs",
-          "sha256": "60a9ed49c894bd2e93c9790529a04cf6fd8c2db31dc4ed4834fba893df7a9039",
-          "bytes": 27240
+          "sha256": "427c13013f5a1f54c225da583b136d3c85e85ce99e5dcb8ec6a5994bae57322b",
+          "bytes": 29529
         },
         {
           "source": "app/platform/index.mjs",
           "destination": "app/platform/index.mjs",
-          "sha256": "048944ed5d196b78b311de303a46705f5c55f2023781e4b78dac8a98cd5540e8",
-          "bytes": 28772
+          "sha256": "c4b092d5b0d0cd7291098980a965cedb659fc7daec291eb4310fc992189b72ed",
+          "bytes": 33283
         },
         {
           "source": "app/queue/index.mjs",
           "destination": "app/queue/index.mjs",
-          "sha256": "c00c60dee89d8a5136b8d78f58d8cec1ab317c376c9e22aea2fb3f27d904685d",
-          "bytes": 29376
+          "sha256": "231bc2340507fac040e724d8ec040aad4cf6a6e9c5174ddf4acba09b7fb72521",
+          "bytes": 29958
         },
         {
           "source": "app/queue/logic.mjs",
@@ -3096,38 +3102,38 @@
         {
           "source": "app/rung/index.mjs",
           "destination": "app/rung/index.mjs",
-          "sha256": "ede5ff318722705d9ed3dceae1ae28ee3cba04f66eab664cdc603a4c65507dfa",
-          "bytes": 5289
+          "sha256": "1ac8e9e8d20aa8d457bf5b1ad417a5e66334388a09b3bd1f3c94d9c48aeeb2d4",
+          "bytes": 5809
         },
         {
           "source": "app/subtitles/bitmap.mjs",
           "destination": "app/subtitles/bitmap.mjs",
-          "sha256": "bd2dbf505386dd6416ec9580b7b3e14d9e06463fe2962fa9862223edf3b57401",
-          "bytes": 2268
+          "sha256": "f632e684cd72eada95767d0f3fde9b5bf8ab1df56190e10805dc684e1f7c6d1e",
+          "bytes": 5288
         },
         {
           "source": "app/subtitles/captions.mjs",
           "destination": "app/subtitles/captions.mjs",
-          "sha256": "1d3f5d7a9f0d6fdff5089a844810f1242fc89bd759c1a1976ac3e8596f809820",
-          "bytes": 8175
+          "sha256": "8cca858f0618b3a209bce211a9b4453800c2ad0a31ce6d89dcc15a95d481b097",
+          "bytes": 8518
         },
         {
           "source": "app/subtitles/cues.mjs",
           "destination": "app/subtitles/cues.mjs",
-          "sha256": "a424fddef9395384f518ddda826c9223a6f3be70035bd29fff8e35e88c9ecb52",
-          "bytes": 1212
+          "sha256": "6df92accf453b8e1b6a54b9f060365bf3803175b92cfd7051b44fa9f610b6819",
+          "bytes": 1443
         },
         {
           "source": "app/subtitles/decode.mjs",
           "destination": "app/subtitles/decode.mjs",
-          "sha256": "542eebfa319884cb91d5aa34e50be7ec62859362dd17e83befd13cde0f44e1ef",
-          "bytes": 1116
+          "sha256": "bafcfd0919eab5811b569e801af23e32a908986021579c0fd45749e6b7b37b86",
+          "bytes": 2910
         },
         {
           "source": "app/subtitles/index.mjs",
           "destination": "app/subtitles/index.mjs",
-          "sha256": "62858623231b6a7b3936459a395a9a9d2956c7a880a6c853256af0c5cbc11235",
-          "bytes": 42157
+          "sha256": "a5904cdc6f548308311ce5cbf85aa76dbde479fb9a3d9c0012c672a522cb0219",
+          "bytes": 44561
         },
         {
           "source": "app/subtitles/match.mjs",
@@ -3138,32 +3144,44 @@
         {
           "source": "app/subtitles/parse.mjs",
           "destination": "app/subtitles/parse.mjs",
-          "sha256": "595849a8050ca7c3e19e7c3931e870a19f9cd192fae9fddc36347e1e07067b72",
-          "bytes": 13672
+          "sha256": "1bd8eb001d510ccfe0a0ce88bf67d25cbaf63757aac35dca221789fa3fa9fe23",
+          "bytes": 16162
+        },
+        {
+          "source": "app/subtitles/pgs-decode.mjs",
+          "destination": "app/subtitles/pgs-decode.mjs",
+          "sha256": "d17f64d46c1c5f9f11cfe950ceba920dbcb27e797dd996eb4f83c6736c1782e1",
+          "bytes": 10732
+        },
+        {
+          "source": "app/subtitles/pgs-worker.mjs",
+          "destination": "app/subtitles/pgs-worker.mjs",
+          "sha256": "b93178109155557ad7e7b594b92efd2f109eb469b82e8d25fbf80709cb25028d",
+          "bytes": 1143
         },
         {
           "source": "app/subtitles/pgs.mjs",
           "destination": "app/subtitles/pgs.mjs",
-          "sha256": "3e4f022031d1d2c89e1906e4e85c0d9214fdc6d409ed832e56f62fabcd736cfb",
-          "bytes": 1442
+          "sha256": "f1e1bb5cd5d5165b1446b01363aead76cc9edbc35ac2014919b05acf24518d80",
+          "bytes": 1654
         },
         {
           "source": "app/subtitles/styled.mjs",
           "destination": "app/subtitles/styled.mjs",
-          "sha256": "34e5ba6d480b5d4b201b2c954df57b6cb5ce89478ad49c4b7569e41ccaf3d992",
-          "bytes": 4466
+          "sha256": "acd49768bae0b765e2d42182247eb594f9cc5c10d1db879a7b32ff68338b9c1d",
+          "bytes": 7086
         },
         {
           "source": "app/transport/bookmarks.mjs",
           "destination": "app/transport/bookmarks.mjs",
-          "sha256": "8cf08941deb36dbe037413c175afbd07b055beb23ecaefb1d46692fe4914b82d",
-          "bytes": 11680
+          "sha256": "63dd9f3a47900c7b43770053a625d1ab7355809f5f41577b160266834994130c",
+          "bytes": 13401
         },
         {
           "source": "app/transport/index.mjs",
           "destination": "app/transport/index.mjs",
-          "sha256": "d7bfbaa7be9e9d052fdfcda0e54079fba897770b1ca8e3dfe9d60588fd6f2ad7",
-          "bytes": 33204
+          "sha256": "41d14ff50b26cbe68d9c3873306184fb8f72e4f95517a5624c8bd9292a6340b0",
+          "bytes": 33804
         },
         {
           "source": "app/transport/logic.mjs",
@@ -3180,40 +3198,46 @@
         {
           "source": "commands.json",
           "destination": "commands.json",
-          "sha256": "80caa4c4f5913e23a431af322f7420c60fb4c11a7e2ead1bac751f1b9cbc589c",
-          "bytes": 39650
+          "sha256": "8ca15f69134bbb4011f9b4b11e46f10c8d3e07f8bcf1d8830c2d3b6e1ab48392",
+          "bytes": 44121
         },
         {
           "source": "engine/gpu-renderer.mjs",
           "destination": "engine/gpu-renderer.mjs",
-          "sha256": "a0782a4ba42300db9a23d883dfdf7d31ebd138de7e291836a54fb4fb3876982e",
-          "bytes": 22845
+          "sha256": "cb5a9750ce82783e13a9dc3ef9a95f9cf289ba12332ab961a472b938c57e9846",
+          "bytes": 26096
         },
         {
           "source": "engine/libav-rung.mjs",
           "destination": "engine/libav-rung.mjs",
-          "sha256": "4adf21c18dfc8b8f4f3eef907de3b646a5ec88bd666cd7a7d32d3cb66c379695",
-          "bytes": 34085
+          "sha256": "51670748408bdc6f52b3c744c59b1669cd6679de0e677cdb1784a5a2c0a52c9b",
+          "bytes": 47557
         },
         {
           "source": "engine/reel-engine.mjs",
           "destination": "engine/reel-engine.mjs",
-          "sha256": "1eb15f0d735ceea5202519dd4aa6b4715d46be2a6f4fb234e87fa2848a21e2a9",
-          "bytes": 176061
+          "sha256": "296ae7ac954e860b1591a206c3d03d2b573c5dfcfaa9232a5f1ce12884ac60c2",
+          "bytes": 219321
         },
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "cb143f03a48c7e81a82faacaedce3c926b30a4ad0dcefe2d2a3581e9729fc1eb",
-          "bytes": 124523,
-          "originalSourceSha256": "332be51099695f25be85b081cf12e9f0088d788014b187c8bbad0027f053f71a",
+          "sha256": "115753051ee043d8e68891779e71deee4954f5d70416cb7fae8b69569aa60d3b",
+          "bytes": 136610,
+          "originalSourceSha256": "e2bdaead33ccf2bc78472c794364020185cc5270710e7a8bb69e8f41e61b9a5e",
           "sdkSha256": "5ff86458102ce080ccf993e4c2bb74c3ef5c8336babe5e5d79906f0f04fae4d2"
+        },
+        {
+          "source": "licences.html",
+          "destination": "licences.html",
+          "sha256": "8e4571e0424b184ef8c56f66b2b1789b5fe26f75ead73284fac9db80bf401367",
+          "bytes": 5781
         },
         {
           "source": "sw.js",
           "destination": "sw.js",
-          "sha256": "8fa12164f2cf953c1937afcf54d990530be6103a1f36444b8c1d6ddb53519ded",
-          "bytes": 7340
+          "sha256": "a64a792eea75fd0ebd132e5cc6bdb699fc4fe6bc0c86916706bf1a479e353f71",
+          "bytes": 7593
         },
         {
           "source": "vendor/jassub/COPYRIGHT",
@@ -3278,32 +3302,32 @@
         {
           "source": "vendor/libav/libav-6.10.9.0-reel.wasm.mjs",
           "destination": "vendor/libav/libav-6.10.9.0-reel.wasm.mjs",
-          "sha256": "75eadd3ab9614c3b99099c33cca2fe6c43db59f7f5643adb58c1a245c9d11d55",
+          "sha256": "184a2b0c9d623233b8e0d9801db99399937d37530c5a3d84a22e147fd8cdeb8b",
           "bytes": 251298
         },
         {
           "source": "vendor/libav/libav-6.10.9.0-reel.wasm.wasm",
           "destination": "vendor/libav/libav-6.10.9.0-reel.wasm.wasm",
-          "sha256": "505bbd5a65fa85990a6539f22b735b770d7807ad86c07e3cb080e6e25ed79304",
-          "bytes": 3516872
+          "sha256": "136650173e1b76c27ae590789c0ec21ece8ac619cb6e542495d9f7f7d0d0dbb3",
+          "bytes": 3755039
         },
         {
           "source": "vendor/libav/mkconfig-reel.json",
           "destination": "vendor/libav/mkconfig-reel.json",
-          "sha256": "68dda1d424efa2a081dc5b89332d3aae0bd6e5f6fc7b904bea894dc00998073f",
-          "bytes": 955
+          "sha256": "97418033ecf22616556755ec1cf8198b73262697114906b95cdde6eb6450074e",
+          "bytes": 968
+        },
+        {
+          "source": "vendor/libav/pins.json",
+          "destination": "vendor/libav/pins.json",
+          "sha256": "ce53d3b9a96dcfcb50bfc3da0e9642484d0d82dd7ed9d0859558f6c337e63072",
+          "bytes": 918
         },
         {
           "source": "vendor/libpgs/LICENSE",
           "destination": "vendor/libpgs/LICENSE",
           "sha256": "028b81baca58d9e15f519c76353282a6d4ab120a1653f64344dd322672df5fd5",
           "bytes": 1070
-        },
-        {
-          "source": "vendor/libpgs/libpgs.js",
-          "destination": "vendor/libpgs/libpgs.js",
-          "sha256": "4eed3112dae7d3bfc766edada40fe5d13de07c2925db099f84b06b707f2f6d5b",
-          "bytes": 70282
         },
         {
           "source": "vendor/mediabunny-ac3/LICENSE-MPL-2.0.txt",

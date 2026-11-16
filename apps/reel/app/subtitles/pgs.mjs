@@ -15,7 +15,10 @@ export function pgsPacketsToSup(packets) {
     const pts = Math.max(0, Math.round(Number(packet.startS || 0) * 90_000)) >>> 0;
     for (let at = 0; at + 3 <= data.length;) {
       const size = (data[at + 1] << 8) | data[at + 2];
-      const end = Math.min(data.length, at + 3 + size);
+      // A segment whose declared size runs past the packet is truncated: drop it and the rest
+      // of the packet, rather than write a header that claims bytes it does not carry (V51).
+      if (at + 3 + size > data.length) break;
+      const end = at + 3 + size;
       const header = new Uint8Array(10);
       header[0] = 0x50; header[1] = 0x47;
       new DataView(header.buffer).setUint32(2, pts);

@@ -39,6 +39,12 @@ export const SPEECH_BYTES = speechFiles().reduce((s, f) => s + f.bytes, 0);
 export const speechMB = () => (SPEECH_BYTES / 1048576).toFixed(0);
 
 const hex = buf => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+/* Whether bytes match a speechFiles() entry's pinned size and SHA-256. Exported for tests. */
+export async function matchesPin(bytes, file) {
+  const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  if (view.byteLength !== file.bytes) return false;
+  return hex(await crypto.subtle.digest('SHA-256', view)) === file.sha256;
+}
 const open = () => caches.open(SPEECH.cache);
 // Cache keys live under one made-up origin-absolute path shared with Sonella and Montella.
 const key = path => new URL(`/__sonella-speech/${path}`, location.href).href;
@@ -120,7 +126,14 @@ function load() {
     for (const f of speechFiles()) {
       const r = await c?.match(key(f.path));
       if (!r) throw fail('REFUSED', `The speech model is not downloaded (about ${speechMB()} MB); the person must choose Generate subtitles and agree to the download.`);
-      bytes[f.path] = await r.arrayBuffer();
+      const body = await r.arrayBuffer();
+      // The cache is shared with other apps on this origin, so each file is checked again before it
+      // runs; a file that no longer matches its pinned hash is deleted (V54).
+      if (!(await matchesPin(body, f))) {
+        await c.delete(key(f.path)).catch(() => {});
+        throw fail('REFUSED', `The kept speech model file ${f.path} no longer matches its pinned checksum, so Reel deleted it; download the model again.`);
+      }
+      bytes[f.path] = body;
     }
     if (my !== gen) throw fail('CANCELLED', 'The speech model was stopped while it was loading');
     const w = new Worker(new URL('./asr-worker.js', import.meta.url));
