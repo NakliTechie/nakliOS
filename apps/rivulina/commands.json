@@ -54,7 +54,7 @@
     {
       "name": "routes.set",
       "label": "Turn fetch routes on or off",
-      "description": "Turn fetch routes for blocked feeds on or off. egress: your own egress Worker in NakliOS. web: NakliOS page reading. jina: accept pages NakliOS page reading got through Jina Reader, a third party that sees each address. Each starts off. Private feeds never use web or jina.",
+      "description": "Turn fetch routes for blocked feeds on or off. egress: your own egress Worker in NakliOS. web: NakliOS page reading. jina: accept pages NakliOS page reading got through Jina Reader, a third party that sees each address; only the person can turn jina on, in the settings dialog, but this command can turn it off. Each starts off. Private feeds never use web or jina.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -70,31 +70,6 @@
           "jina": {
             "type": "boolean",
             "description": "Accept pages read by Jina Reader"
-          }
-        },
-        "required": [],
-        "additionalProperties": false
-      }
-    },
-    {
-      "name": "settings.podcast_index",
-      "label": "Podcast Index key",
-      "description": "Save your Podcast Index API key and secret (from api.podcastindex.org/signup), kept in this browser only, or remove them with clear. The secret is never returned.",
-      "scope": "write",
-      "input": {
-        "type": "object",
-        "properties": {
-          "key": {
-            "type": "string",
-            "description": "API key"
-          },
-          "secret": {
-            "type": "string",
-            "description": "API secret"
-          },
-          "clear": {
-            "type": "boolean",
-            "description": "Remove the saved key and secret"
           }
         },
         "required": [],
@@ -394,7 +369,8 @@
             "description": "Items to skip"
           }
         },
-        "required": []
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
@@ -422,14 +398,15 @@
             "description": "Items to skip"
           }
         },
-        "required": []
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
       "name": "items.open",
       "label": "Open item",
       "description": "Show one item in the reading view and mark it read.",
-      "scope": "read",
+      "scope": "write",
       "input": {
         "type": "object",
         "properties": {
@@ -440,8 +417,10 @@
         },
         "required": [
           "itemId"
-        ]
-      }
+        ],
+        "additionalProperties": false
+      },
+      "shows": true
     },
     {
       "name": "items.mark_read",
@@ -459,7 +438,8 @@
             "description": "Item ids (default: the open item)"
           }
         },
-        "required": []
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
@@ -478,7 +458,8 @@
             "description": "Item ids (default: the open item)"
           }
         },
-        "required": []
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
@@ -497,15 +478,16 @@
             "description": "Item ids (default: the open item)"
           }
         },
-        "required": []
+        "required": [],
+        "additionalProperties": false
       },
       "shortcut": "m"
     },
     {
       "name": "items.mark_all_read",
       "label": "Mark all read",
-      "description": "Mark every unread item in a view read (default: the current view). olderThanDays leaves newer items unread.",
-      "scope": "write",
+      "description": "Mark every unread item in a view read (default: the current view). olderThanDays leaves newer items unread. There is no undo: the items cannot be told apart from ones you read.",
+      "scope": "destructive",
       "input": {
         "type": "object",
         "properties": {
@@ -540,7 +522,8 @@
             "description": "Only items older than this many days (0 or missing: all)"
           }
         },
-        "required": []
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
@@ -559,7 +542,8 @@
             "description": "Item ids (default: the open item)"
           }
         },
-        "required": []
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
@@ -578,7 +562,8 @@
             "description": "Item ids (default: the open item)"
           }
         },
-        "required": []
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
@@ -597,7 +582,8 @@
             "description": "Item ids (default: the open item)"
           }
         },
-        "required": []
+        "required": [],
+        "additionalProperties": false
       },
       "shortcut": "s"
     },
@@ -624,7 +610,8 @@
         },
         "required": [
           "query"
-        ]
+        ],
+        "additionalProperties": false
       }
     },
     {
@@ -664,18 +651,21 @@
         },
         "required": [
           "view"
-        ]
-      }
+        ],
+        "additionalProperties": false
+      },
+      "shows": true
     },
     {
       "name": "items.next",
       "label": "Next item",
       "description": "Open the next item in the current view and mark it read.",
-      "scope": "read",
+      "scope": "write",
       "input": {
         "type": "object",
         "properties": {},
-        "required": []
+        "required": [],
+        "additionalProperties": false
       },
       "shortcut": "j"
     },
@@ -683,11 +673,12 @@
       "name": "items.previous",
       "label": "Previous item",
       "description": "Open the previous item in the current view and mark it read.",
-      "scope": "read",
+      "scope": "write",
       "input": {
         "type": "object",
         "properties": {},
-        "required": []
+        "required": [],
+        "additionalProperties": false
       },
       "shortcut": "k"
     },
@@ -695,7 +686,7 @@
       "name": "items.open_original",
       "label": "Open original",
       "description": "Open the item's own web page in a new tab (default: the open item).",
-      "scope": "read",
+      "scope": "write",
       "input": {
         "type": "object",
         "properties": {
@@ -704,7 +695,8 @@
             "description": "Item id (default: the open item)"
           }
         },
-        "required": []
+        "required": [],
+        "additionalProperties": false
       },
       "shortcut": "o"
     },
@@ -724,7 +716,8 @@
             "description": "Item ids (default: the open item)"
           }
         },
-        "required": []
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
@@ -735,7 +728,8 @@
       "input": {
         "type": "object",
         "properties": {},
-        "required": []
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
@@ -775,7 +769,8 @@
             },
             "required": [
               "contains"
-            ]
+            ],
+            "additionalProperties": false
           },
           "feedId": {
             "type": "string",
@@ -785,14 +780,15 @@
         "required": [
           "action",
           "match"
-        ]
+        ],
+        "additionalProperties": false
       }
     },
     {
       "name": "rules.remove",
       "label": "Remove rule",
-      "description": "Remove one rule by its id. Items it already changed stay as they are.",
-      "scope": "write",
+      "description": "Remove one rule by its id. Items it already changed stay as they are. There is no undo: add the rule again to get it back.",
+      "scope": "destructive",
       "input": {
         "type": "object",
         "properties": {
@@ -803,7 +799,8 @@
         },
         "required": [
           "id"
-        ]
+        ],
+        "additionalProperties": false
       }
     },
     {
@@ -813,6 +810,7 @@
       "scope": "write",
       "input": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "font": {
             "type": "string",
@@ -857,9 +855,10 @@
       "name": "reader.show_images",
       "label": "Show images",
       "description": "Load the remote images in the open article or show notes. With always set, also turn images on for every item from now on.",
-      "scope": "read",
+      "scope": "write",
       "input": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "always": {
             "type": "boolean",
@@ -876,6 +875,7 @@
       "scope": "write",
       "input": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "itemId": {
             "type": "string",
@@ -892,6 +892,7 @@
       "scope": "write",
       "input": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "target": {
             "type": "string",
@@ -923,12 +924,17 @@
             "type": "string",
             "description": "Episode id (default: the current episode, else the first in Up Next)"
           },
+          "id": {
+            "type": "string",
+            "description": "Episode id (same as itemId)"
+          },
           "at": {
             "type": "number",
             "description": "Start position in seconds"
           }
         },
-        "required": []
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
@@ -939,7 +945,8 @@
       "input": {
         "type": "object",
         "properties": {},
-        "required": []
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
@@ -950,7 +957,8 @@
       "input": {
         "type": "object",
         "properties": {},
-        "required": []
+        "required": [],
+        "additionalProperties": false
       },
       "shortcut": "Space"
     },
@@ -970,7 +978,8 @@
         },
         "required": [
           "seconds"
-        ]
+        ],
+        "additionalProperties": false
       }
     },
     {
@@ -987,7 +996,8 @@
             "minimum": 1
           }
         },
-        "required": []
+        "required": [],
+        "additionalProperties": false
       },
       "shortcut": "ArrowLeft"
     },
@@ -1005,9 +1015,35 @@
             "minimum": 1
           }
         },
-        "required": []
+        "required": [],
+        "additionalProperties": false
       },
       "shortcut": "ArrowRight"
+    },
+    {
+      "name": "player.set_skips",
+      "label": "Set skip seconds",
+      "description": "Set how many seconds Back and Forward skip, 1 to 300 each. Give back, forward or both.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "back": {
+            "type": "number",
+            "description": "Seconds the Back button skips",
+            "minimum": 1,
+            "maximum": 300
+          },
+          "forward": {
+            "type": "number",
+            "description": "Seconds the Forward button skips",
+            "minimum": 1,
+            "maximum": 300
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
     },
     {
       "name": "player.next",
@@ -1017,7 +1053,8 @@
       "input": {
         "type": "object",
         "properties": {},
-        "required": []
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
@@ -1045,7 +1082,8 @@
         },
         "required": [
           "rate"
-        ]
+        ],
+        "additionalProperties": false
       }
     },
     {
@@ -1056,7 +1094,8 @@
       "input": {
         "type": "object",
         "properties": {},
-        "required": []
+        "required": [],
+        "additionalProperties": false
       },
       "shortcut": "Shift+>"
     },
@@ -1068,7 +1107,8 @@
       "input": {
         "type": "object",
         "properties": {},
-        "required": []
+        "required": [],
+        "additionalProperties": false
       },
       "shortcut": "Shift+<"
     },
@@ -1093,7 +1133,8 @@
             "description": "Where to keep the setting"
           }
         },
-        "required": []
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
@@ -1117,7 +1158,8 @@
             "description": "Where to keep the setting"
           }
         },
-        "required": []
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
@@ -1139,7 +1181,8 @@
             "description": "Stop at the end of this episode instead"
           }
         },
-        "required": []
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
@@ -1150,7 +1193,8 @@
       "input": {
         "type": "object",
         "properties": {},
-        "required": []
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
@@ -1161,7 +1205,8 @@
       "input": {
         "type": "object",
         "properties": {},
-        "required": []
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
@@ -1172,7 +1217,8 @@
       "input": {
         "type": "object",
         "properties": {},
-        "required": []
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
@@ -1186,9 +1232,14 @@
           "itemId": {
             "type": "string",
             "description": "Episode id (default: the current episode)"
+          },
+          "id": {
+            "type": "string",
+            "description": "Episode id (same as itemId)"
           }
         },
-        "required": []
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
@@ -1199,13 +1250,14 @@
       "input": {
         "type": "object",
         "properties": {},
-        "required": []
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
       "name": "queue.add",
       "label": "Add to Up Next",
-      "description": "Add episodes to the end of Up Next.",
+      "description": "Add episodes to the end of Up Next. The episode playing now is never added.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1216,15 +1268,24 @@
               "type": "string"
             },
             "description": "Episode ids (default: the selected item)"
+          },
+          "id": {
+            "type": "string",
+            "description": "One episode id (instead of ids)"
+          },
+          "itemId": {
+            "type": "string",
+            "description": "One episode id (instead of ids)"
           }
         },
-        "required": []
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
       "name": "queue.play_next",
       "label": "Play next",
-      "description": "Put episodes at the front of Up Next, to play after the current one.",
+      "description": "Put episodes at the front of Up Next, to play after the current one. The episode playing now is never added.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1235,9 +1296,18 @@
               "type": "string"
             },
             "description": "Episode ids (default: the selected item)"
+          },
+          "id": {
+            "type": "string",
+            "description": "One episode id (instead of ids)"
+          },
+          "itemId": {
+            "type": "string",
+            "description": "One episode id (instead of ids)"
           }
         },
-        "required": []
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
@@ -1251,11 +1321,16 @@
           "id": {
             "type": "string",
             "description": "Episode id"
+          },
+          "itemId": {
+            "type": "string",
+            "description": "Episode id (same as id)"
           }
         },
         "required": [
           "id"
-        ]
+        ],
+        "additionalProperties": false
       }
     },
     {
@@ -1270,6 +1345,10 @@
             "type": "string",
             "description": "Episode id"
           },
+          "itemId": {
+            "type": "string",
+            "description": "Episode id (same as id)"
+          },
           "index": {
             "type": "number",
             "description": "New position, 0 is first",
@@ -1279,7 +1358,8 @@
         "required": [
           "id",
           "index"
-        ]
+        ],
+        "additionalProperties": false
       }
     },
     {
@@ -1290,7 +1370,8 @@
       "input": {
         "type": "object",
         "properties": {},
-        "required": []
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
@@ -1301,7 +1382,8 @@
       "input": {
         "type": "object",
         "properties": {},
-        "required": []
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
@@ -1318,9 +1400,18 @@
               "type": "string"
             },
             "description": "Episode ids (default: the selected item)"
+          },
+          "id": {
+            "type": "string",
+            "description": "One episode id (instead of ids)"
+          },
+          "itemId": {
+            "type": "string",
+            "description": "One episode id (instead of ids)"
           }
         },
-        "required": []
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
@@ -1337,9 +1428,18 @@
               "type": "string"
             },
             "description": "Episode ids (default: the selected item)"
+          },
+          "id": {
+            "type": "string",
+            "description": "One episode id (instead of ids)"
+          },
+          "itemId": {
+            "type": "string",
+            "description": "One episode id (instead of ids)"
           }
         },
-        "required": []
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
@@ -1355,7 +1455,8 @@
             "description": "Episode id (default: the selected item)"
           }
         },
-        "required": []
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
@@ -1371,7 +1472,8 @@
             "description": "Episode id (default: the selected item)"
           }
         },
-        "required": []
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
@@ -1387,7 +1489,8 @@
             "description": "Episode id (default: the selected item)"
           }
         },
-        "required": []
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
@@ -1398,7 +1501,8 @@
       "input": {
         "type": "object",
         "properties": {},
-        "required": []
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
@@ -1409,7 +1513,8 @@
       "input": {
         "type": "object",
         "properties": {},
-        "required": []
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
@@ -1420,7 +1525,8 @@
       "input": {
         "type": "object",
         "properties": {},
-        "required": []
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
@@ -1431,8 +1537,10 @@
       "input": {
         "type": "object",
         "properties": {},
-        "required": []
-      }
+        "required": [],
+        "additionalProperties": false
+      },
+      "shows": true
     },
     {
       "name": "downloads.send_to_nakliamp",
@@ -1447,7 +1555,8 @@
             "description": "Episode id (default: the selected item)"
           }
         },
-        "required": []
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
@@ -1458,7 +1567,8 @@
       "input": {
         "type": "object",
         "properties": {},
-        "required": []
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
@@ -1487,7 +1597,8 @@
         },
         "required": [
           "term"
-        ]
+        ],
+        "additionalProperties": false
       }
     },
     {
@@ -1510,7 +1621,8 @@
             "maximum": 200
           }
         },
-        "required": []
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
@@ -1534,7 +1646,8 @@
         },
         "required": [
           "term"
-        ]
+        ],
+        "additionalProperties": false
       }
     },
     {
@@ -1554,23 +1667,20 @@
             "description": "Check and list the feeds without subscribing (default false)"
           }
         },
-        "required": []
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
       "name": "opml.export",
       "label": "Export OPML",
-      "description": "Save every subscription, with folders, as rivulina-subscriptions.opml (into NakliOS storage when hosted, else the save picker or a download). Private feeds, whose addresses carry a token, are left out unless includePrivate is true. Returns the number of feeds saved and left out.",
+      "description": "Save every subscription, with folders, as rivulina-subscriptions.opml (into NakliOS storage when hosted, else the save picker or a download). Private feeds, whose addresses carry a token, are always left out here; only the person can include them, with the checkbox in the Add dialog. Returns the number of feeds saved and left out.",
       "scope": "write",
       "input": {
         "type": "object",
-        "properties": {
-          "includePrivate": {
-            "type": "boolean",
-            "description": "Include private feeds whose addresses carry a token (default false)"
-          }
-        },
-        "required": []
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
       }
     },
     {
@@ -1601,7 +1711,8 @@
             "description": "Feed address to fill in"
           }
         },
-        "required": []
+        "required": [],
+        "additionalProperties": false
       },
       "shortcut": "a"
     },
@@ -1612,6 +1723,7 @@
       "scope": "read",
       "input": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "itemId": {
             "type": "string",
@@ -1627,6 +1739,7 @@
       "scope": "read",
       "input": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "itemId": {
             "type": "string",
@@ -1649,6 +1762,7 @@
       "scope": "write",
       "input": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "itemId": {
             "type": "string",
@@ -1677,6 +1791,7 @@
       "scope": "write",
       "input": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "itemId": {
             "type": "string",
@@ -1712,6 +1827,7 @@
       "scope": "write",
       "input": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "itemId": {
             "type": "string",
@@ -1727,6 +1843,7 @@
       "scope": "read",
       "input": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "itemId": {
             "type": "string",
@@ -1742,6 +1859,7 @@
       "scope": "read",
       "input": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {}
       }
     },
@@ -1752,6 +1870,7 @@
       "scope": "read",
       "input": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {}
       }
     },
@@ -1762,6 +1881,7 @@
       "scope": "read",
       "input": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "itemId": {
             "type": "string",
@@ -1784,6 +1904,7 @@
       "scope": "write",
       "input": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "whisperModel": {
             "type": "string",
@@ -1814,6 +1935,7 @@
         "properties": {},
         "additionalProperties": false
       },
+      "shows": true,
       "shortcut": "?"
     },
     {
@@ -1826,6 +1948,7 @@
         "properties": {},
         "additionalProperties": false
       },
+      "shows": true,
       "shortcut": "Mod+K"
     },
     {
@@ -1838,6 +1961,7 @@
         "properties": {},
         "additionalProperties": false
       },
+      "shows": true,
       "shortcut": "/"
     },
     {
@@ -1849,7 +1973,8 @@
         "type": "object",
         "properties": {},
         "additionalProperties": false
-      }
+      },
+      "shows": true
     }
   ]
 }
