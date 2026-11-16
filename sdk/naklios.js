@@ -912,9 +912,13 @@
         if (!inNakliOS) return Promise.resolve([]);
         return rpc('naklios:commands:search', { query: String(query || '') });
       },
-      call: function (name, input) {
+      // options.ask === false: the host opens no dialog. A call that would need the person's answer returns
+      // { ok:false, code:'ECONSENT' } instead (scripts use this; hosts without it ignore the field and may ask).
+      call: function (name, input, options) {
         if (!inNakliOS) return Promise.reject(new Error('Not hosted — app commands are unavailable standalone'));
-        return rpc('naklios:commands:call', { name: String(name || ''), input: input || {} }, COMMAND_CALL_TIMEOUT_MS);
+        var payload = { name: String(name || ''), input: input || {} };
+        if (options && options.ask === false) payload.ask = false;
+        return rpc('naklios:commands:call', payload, COMMAND_CALL_TIMEOUT_MS);
       },
     },
     experimental_widgets: {
