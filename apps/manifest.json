@@ -1774,6 +1774,14 @@
           "managedSdk": "inline"
         },
         {
+          "source": "commands.json",
+          "destination": "commands.json"
+        },
+        {
+          "source": "guide/index.html",
+          "destination": "guide/index.html"
+        },
+        {
           "source": "LICENSE",
           "destination": "LICENSE"
         }

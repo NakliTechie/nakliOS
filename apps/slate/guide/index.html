@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Slate — Guide</title>
+  <meta name="description" content="How to use Slate — a single-file image editor that runs entirely in your browser.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Crect%20width%3D%2232%22%20height%3D%2232%22%20rx%3D%227%22%20fill%3D%22%2318181b%22%2F%3E%3Crect%20x%3D%226%22%20y%3D%226%22%20width%3D%2220%22%20height%3D%2220%22%20rx%3D%222%22%20fill%3D%22none%22%20stroke%3D%22%233b82f6%22%20stroke-width%3D%222%22%2F%3E%3Cline%20x1%3D%226%22%20y1%3D%2212%22%20x2%3D%2226%22%20y2%3D%2212%22%20stroke%3D%22%233b82f6%22%20stroke-width%3D%221.5%22%20stroke-dasharray%3D%222%202%22%2F%3E%3Cline%20x1%3D%2212%22%20y1%3D%226%22%20x2%3D%2212%22%20y2%3D%2226%22%20stroke%3D%22%233b82f6%22%20stroke-width%3D%221.5%22%20stroke-dasharray%3D%222%202%22%2F%3E%3C%2Fsvg%3E" type="image/svg+xml">
+  <style>
+    :root {
+      --bg-0: #111113;
+      --bg-1: #18181b;
+      --bg-2: #27272a;
+      --bg-3: #3f3f46;
+      --fg-0: #fafafa;
+      --fg-1: #a1a1aa;
+      --fg-2: #71717a;
+      --accent: #3b82f6;
+      --warn: #f59e0b;
+      --font-sys: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: var(--bg-0);
+      color: var(--fg-0);
+      font-family: var(--font-sys);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+    .wrap {
+      max-width: 780px;
+      margin: 0 auto;
+      padding: 48px 24px 96px;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 48px;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-mark {
+      width: 32px; height: 32px;
+      border-radius: 7px;
+      background: var(--bg-1);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .brand h1 {
+      font-size: 20px;
+      font-weight: 700;
+      margin: 0;
+      letter-spacing: -0.01em;
+    }
+    .brand h1 .muted { color: var(--fg-2); font-weight: 400; }
+    .back {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 13px;
+      padding: 6px 12px;
+      border: 1px solid var(--bg-3);
+      border-radius: 6px;
+    }
+    .back:hover { background: var(--bg-1); }
+
+    h2 {
+      font-size: 22px;
+      font-weight: 700;
+      margin: 56px 0 8px;
+      letter-spacing: -0.01em;
+      scroll-margin-top: 24px;
+    }
+    h2:first-of-type { margin-top: 0; }
+    h3 {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 32px 0 10px;
+      color: var(--fg-0);
+    }
+    .lede {
+      color: var(--fg-1);
+      margin: 0 0 24px;
+      font-size: 16px;
+    }
+    p, li { color: var(--fg-0); }
+    p { margin: 12px 0; }
+    ul, ol { padding-left: 22px; margin: 12px 0; }
+    li { margin: 6px 0; color: var(--fg-1); }
+    li strong { color: var(--fg-0); }
+    strong { color: var(--fg-0); font-weight: 600; }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    kbd {
+      display: inline-block;
+      padding: 1px 6px;
+      font-size: 12px;
+      font-family: var(--font-mono);
+      background: var(--bg-2);
+      border: 1px solid var(--bg-3);
+      border-radius: 3px;
+      white-space: nowrap;
+    }
+
+    .screenshot {
+      margin: 20px 0 28px;
+      background: var(--bg-1);
+      border: 1px solid var(--bg-2);
+      border-radius: 10px;
+      padding: 16px;
+      overflow: hidden;
+    }
+    .screenshot svg { display: block; width: 100%; height: auto; max-width: 640px; margin: 0 auto; }
+    .caption {
+      color: var(--fg-2);
+      font-size: 12px;
+      text-align: center;
+      margin-top: 10px;
+    }
+
+    .toc {
+      background: var(--bg-1);
+      border: 1px solid var(--bg-2);
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin-bottom: 40px;
+    }
+    .toc-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--fg-2);
+      margin-bottom: 8px;
+    }
+    .toc ol { margin: 0; padding-left: 20px; }
+    .toc li { margin: 3px 0; }
+    .toc a { color: var(--fg-0); }
+
+    .callout {
+      background: rgba(59,130,246,0.08);
+      border-left: 3px solid var(--accent);
+      padding: 12px 16px;
+      border-radius: 6px;
+      margin: 20px 0;
+      font-size: 14px;
+    }
+    .callout strong { color: var(--accent); }
+    .callout.warn {
+      background: rgba(245,158,11,0.08);
+      border-left-color: var(--warn);
+    }
+    .callout.warn strong { color: var(--warn); }
+
+    footer {
+      margin-top: 80px;
+      padding-top: 24px;
+      border-top: 1px solid var(--bg-2);
+      color: var(--fg-2);
+      font-size: 12px;
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    footer a { color: var(--fg-1); }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <div class="brand-mark">
+        <svg width="20" height="20" viewBox="0 0 32 32" aria-hidden="true">
+          <rect x="6" y="6" width="20" height="20" rx="2" fill="none" stroke="#3b82f6" stroke-width="2"/>
+          <line x1="6" y1="12" x2="26" y2="12" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="2 2"/>
+          <line x1="12" y1="6" x2="12" y2="26" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="2 2"/>
+        </svg>
+      </div>
+      <h1>Slate <span class="muted">— Guide</span></h1>
+    </div>
+    <a class="back" href="../">← Back to app</a>
+  </header>
+
+  <h2 id="welcome">Welcome to Slate</h2>
+  <p class="lede">Slate is an image editor that runs entirely in your browser. No install. No upload. Nothing leaves your device.</p>
+
+  <p>It's one HTML file (~200&nbsp;KB). You can use it online, or download it and open <code>index.html</code> directly from your disk — same app, fully offline.</p>
+
+  <div class="screenshot">
+    <svg viewBox="0 0 640 360" role="img" aria-label="Slate main interface">
+      <rect width="640" height="360" fill="#111113"/>
+      <!-- Left toolbar -->
+      <rect x="0" y="0" width="56" height="360" fill="#18181b"/>
+      <g fill="#3f3f46">
+        <rect x="10" y="10" width="16" height="16" rx="3"/><rect x="30" y="10" width="16" height="16" rx="3"/>
+        <rect x="10" y="30" width="16" height="16" rx="3"/><rect x="30" y="30" width="16" height="16" rx="3"/>
+        <rect x="10" y="56" width="16" height="16" rx="3"/><rect x="30" y="56" width="16" height="16" rx="3"/>
+      </g>
+      <g fill="#3b82f6"><rect x="10" y="90" width="16" height="16" rx="3"/></g>
+      <g fill="#3f3f46">
+        <rect x="30" y="90" width="16" height="16" rx="3"/>
+        <rect x="10" y="110" width="16" height="16" rx="3"/><rect x="30" y="110" width="16" height="16" rx="3"/>
+        <rect x="10" y="130" width="16" height="16" rx="3"/><rect x="30" y="130" width="16" height="16" rx="3"/>
+        <rect x="10" y="150" width="16" height="16" rx="3"/><rect x="30" y="150" width="16" height="16" rx="3"/>
+        <rect x="10" y="170" width="16" height="16" rx="3"/><rect x="30" y="170" width="16" height="16" rx="3"/>
+        <rect x="10" y="200" width="16" height="16" rx="3"/><rect x="30" y="200" width="16" height="16" rx="3"/>
+        <rect x="10" y="220" width="16" height="16" rx="3"/><rect x="30" y="220" width="16" height="16" rx="3"/>
+        <rect x="10" y="250" width="16" height="16" rx="3"/><rect x="30" y="250" width="16" height="16" rx="3"/>
+        <rect x="10" y="320" width="16" height="16" rx="3"/><rect x="30" y="320" width="16" height="16" rx="3"/>
+      </g>
+      <!-- Canvas area with image -->
+      <rect x="72" y="16" width="520" height="300" fill="#0a0a0a" stroke="#27272a"/>
+      <rect x="150" y="50" width="364" height="232" fill="#3f3f46"/>
+      <!-- fake image content -->
+      <circle cx="260" cy="130" r="40" fill="#71717a"/>
+      <polygon points="340,260 440,180 514,260" fill="#52525b"/>
+      <rect x="150" y="260" width="364" height="22" fill="#27272a"/>
+      <!-- Right sidebar -->
+      <rect x="600" y="16" width="40" height="300" fill="#18181b"/>
+      <rect x="610" y="28" width="20" height="20" rx="3" fill="#3b82f6" opacity="0.3"/>
+      <!-- Status bar -->
+      <rect x="0" y="330" width="640" height="30" fill="#18181b"/>
+      <text x="72" y="350" font-family="ui-monospace, monospace" font-size="11" fill="#a1a1aa">1920 × 1080 px · 100% · photo.jpg</text>
+    </svg>
+    <div class="caption">Slate's main interface — left toolbar, canvas, right sidebar for recent and favourite tools.</div>
+  </div>
+
+  <div class="toc">
+    <div class="toc-label">On this page</div>
+    <ol>
+      <li><a href="#opening">Opening images</a></li>
+      <li><a href="#tools">Selection tools — Crop, Redact, Blur, Pixelate</a></li>
+      <li><a href="#annotate">Annotation — Text, Arrow, Freehand, Shapes</a></li>
+      <li><a href="#adjust">Adjustments and transforms</a></li>
+      <li><a href="#saving">Saving your work</a></li>
+      <li><a href="#folder-tools">Folder tools — Slideshow, Batch, Gallery, Lossless rotate</a></li>
+      <li><a href="#formats">Format support</a></li>
+      <li><a href="#privacy">Privacy, EXIF, and GPS</a></li>
+      <li><a href="#shortcuts">Keyboard shortcuts</a></li>
+    </ol>
+  </div>
+
+  <h2 id="opening">Opening images</h2>
+  <p>There are four ways to open an image:</p>
+  <ul>
+    <li><strong>File picker</strong> — <kbd>Ctrl+O</kbd> or the <em>Open File</em> button.</li>
+    <li><strong>Folder</strong> — <kbd>Ctrl+Shift+O</kbd> opens a whole folder as an album. Chrome/Edge only. Arrow keys or the thumbnail strip navigate between images.</li>
+    <li><strong>Drag and drop</strong> — drop a file (or whole folder) anywhere on the window.</li>
+    <li><strong>Paste</strong> — <kbd>Ctrl+V</kbd> pastes a screenshot or copied image.</li>
+  </ul>
+
+  <h3>Workspace folder</h3>
+  <p>After opening an image via drag, paste, or fallback file picker, Slate suggests picking a <strong>workspace folder</strong>. This is a single folder on your disk where edited images will be saved as sidecar files. Once set, <kbd>Ctrl+S</kbd> saves there directly with no dialog.</p>
+
+  <div class="screenshot">
+    <svg viewBox="0 0 640 120" role="img" aria-label="Workspace folder nudge banner">
+      <rect width="640" height="120" fill="#111113"/>
+      <rect x="90" y="30" width="460" height="56" rx="10" fill="#18181b" stroke="#27272a"/>
+      <circle cx="120" cy="58" r="8" fill="none" stroke="#a1a1aa" stroke-width="1.5"/>
+      <path d="M115 54 L120 59 L125 52" stroke="#a1a1aa" stroke-width="1.5" fill="none"/>
+      <text x="140" y="62" font-family="-apple-system, sans-serif" font-size="12" fill="#fafafa">Pick a save folder to preserve your work across sessions.</text>
+      <rect x="430" y="46" width="92" height="24" rx="5" fill="#3b82f6"/>
+      <text x="476" y="62" text-anchor="middle" font-family="-apple-system, sans-serif" font-size="11" fill="#fff" font-weight="600">Choose Folder</text>
+      <text x="534" y="62" font-family="-apple-system, sans-serif" font-size="14" fill="#71717a">×</text>
+    </svg>
+    <div class="caption">The workspace folder nudge. Click <em>Choose Folder</em> once — Slate remembers it for the session.</div>
+  </div>
+
+  <h2 id="tools">Selection tools — Crop, Redact, Blur, Pixelate</h2>
+  <p>Selection tools all work the same way: draw a rectangle on the canvas, adjust it, then apply. Hold <kbd>Shift</kbd> while dragging to lock to a square. Nudge with arrow keys (<kbd>Shift</kbd> + arrow for 10 px).</p>
+
+  <ul>
+    <li><kbd>C</kbd> <strong>Crop</strong> — trims the image to the selection.</li>
+    <li><kbd>R</kbd> <strong>Redact</strong> — fills the selection with a solid black box. Great for hiding sensitive info in screenshots.</li>
+    <li><kbd>B</kbd> <strong>Blur</strong> — blurs the selection. A strength slider appears in the context bar (2–40 px).</li>
+    <li><kbd>X</kbd> <strong>Pixelate</strong> — mosaics the selection into average-coloured blocks (2–60 px). Different visual signature from blur — useful when "this is intentionally hidden" should read clearly.</li>
+  </ul>
+
+  <p>Commit with <kbd>Enter</kbd> or the floating <em>Apply</em> button. Cancel with <kbd>Esc</kbd>.</p>
+
+  <div class="screenshot">
+    <svg viewBox="0 0 640 360" role="img" aria-label="Crop tool with selection">
+      <rect width="640" height="360" fill="#111113"/>
+      <rect x="0" y="0" width="56" height="360" fill="#18181b"/>
+      <rect x="10" y="90" width="16" height="16" rx="3" fill="#3b82f6"/>
+      <rect x="72" y="16" width="520" height="260" fill="#0a0a0a"/>
+      <!-- Image -->
+      <rect x="120" y="50" width="440" height="200" fill="#3f3f46"/>
+      <!-- Selection rectangle with dashed border + handles -->
+      <rect x="200" y="90" width="280" height="130" fill="rgba(59,130,246,0.12)" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="4 3"/>
+      <g fill="#3b82f6">
+        <rect x="196" y="86" width="8" height="8"/>
+        <rect x="476" y="86" width="8" height="8"/>
+        <rect x="196" y="216" width="8" height="8"/>
+        <rect x="476" y="216" width="8" height="8"/>
+        <rect x="336" y="86" width="8" height="8"/>
+        <rect x="336" y="216" width="8" height="8"/>
+        <rect x="196" y="151" width="8" height="8"/>
+        <rect x="476" y="151" width="8" height="8"/>
+      </g>
+      <!-- Context bar -->
+      <rect x="200" y="296" width="290" height="40" rx="8" fill="#18181b" stroke="#3f3f46"/>
+      <rect x="212" y="306" width="70" height="22" rx="4" fill="#3b82f6"/>
+      <text x="247" y="321" text-anchor="middle" font-family="-apple-system, sans-serif" font-size="11" fill="#fff" font-weight="600">✓ Crop</text>
+      <rect x="290" y="306" width="70" height="22" rx="4" fill="none" stroke="#3f3f46"/>
+      <text x="325" y="321" text-anchor="middle" font-family="-apple-system, sans-serif" font-size="11" fill="#a1a1aa">Cancel</text>
+      <text x="380" y="321" font-family="-apple-system, sans-serif" font-size="10" fill="#71717a">Enter · Esc</text>
+    </svg>
+    <div class="caption">Crop in progress. The floating bar below the canvas appears whenever a selection is active.</div>
+  </div>
+
+  <div class="callout">
+    <strong>Tip:</strong> after drawing a selection you can fine-tune exact coordinates in the small numeric panel that appears alongside the canvas.
+  </div>
+
+  <h2 id="annotate">Annotation — Text, Arrow, Freehand, Shapes</h2>
+  <p>Each annotation lives as an <strong>editable layer</strong>. A floating Layers panel at the top-right of the canvas lists every layer with move-up/down, show/hide and delete controls. Layers flatten into the image automatically on Save or when you apply a transform (crop, rotate, flip, resize, sharpen, adjust). Undo and redo work across both layer changes <em>and</em> destructive transforms — pre-flatten layer state is recovered correctly.</p>
+
+  <ul>
+    <li><kbd>Shift+T</kbd> <strong>Text</strong> — click anywhere on the image. A small dialog opens where you pick content, font, size, colour, bold, italic.</li>
+    <li><kbd>A</kbd> <strong>Arrow</strong> — drag on the canvas to draw an arrow. Live preview while dragging; commits on release.</li>
+    <li><kbd>P</kbd> <strong>Freehand</strong> — drag to draw a smoothed pencil stroke. Quadratic-Bezier interpolation between sample points keeps the trace clean even from a noisy mouse.</li>
+    <li><kbd>S</kbd> <strong>Shapes</strong> — drag to draw a rectangle, oval, or line. The mode picker, colour, thickness, and a fill toggle live in the floating bar so you can switch shape style without leaving the tool.</li>
+  </ul>
+
+  <h3>Brush settings + recent colours</h3>
+  <p>Whenever a drawing tool (pencil, arrow, shape) is active, the floating bar shows that tool's settings — colour picker, thickness slider, and tool-specific extras. Each colour you use is remembered as a small <strong>recent-swatch</strong> shown next to every colour picker (drawing tools' bar and the text modal). The list keeps the last 8 colours and persists across reloads; click any swatch to apply that colour instantly.</p>
+
+  <h3>Eyedropper — pick colour from the canvas</h3>
+  <p><kbd>I</kbd> activates the eyedropper. Click any pixel on the image to capture its colour. The hex value goes to your clipboard and is applied to all four annotation tools' colour settings (pencil, arrow, shape, text). The eyedropper then returns to whichever drawing tool you came from, so the new colour appears in the bar immediately and you can keep working without re-clicking the tool.</p>
+
+  <h2 id="adjust">Adjustments and transforms</h2>
+  <p>Non-selection operations that affect the whole image:</p>
+
+  <ul>
+    <li><strong>Rotate</strong> 90° CW or CCW</li>
+    <li><strong>Flip</strong> horizontal or vertical</li>
+    <li><strong>Straighten</strong> — fine rotation (−45° to +45°); canvas expands to prevent cropping</li>
+    <li><strong>Brightness / Contrast / Saturation</strong> — three sliders in one dialog. On capable browsers (WebGPU available, image larger than 1 megapixel) a compute-shader path runs the pixel transform on the GPU — about 5× faster than the JS pixel loop on a 12 MP image. Falls back transparently to CPU if WebGPU isn't available.</li>
+    <li><strong>Sharpen</strong> — unsharp-mask from 0.1× to 5×</li>
+    <li><strong>Resize</strong> — set exact output dimensions with optional aspect lock</li>
+  </ul>
+
+  <div class="screenshot">
+    <svg viewBox="0 0 640 360" role="img" aria-label="Adjust dialog with three sliders">
+      <rect width="640" height="360" fill="#111113" opacity="0.6"/>
+      <rect x="130" y="50" width="380" height="260" rx="10" fill="#18181b" stroke="#27272a"/>
+      <rect x="130" y="50" width="380" height="44" rx="10" fill="#18181b"/>
+      <text x="156" y="78" font-family="-apple-system, sans-serif" font-size="15" font-weight="600" fill="#fafafa">Adjust</text>
+      <g font-family="-apple-system, sans-serif" font-size="12" fill="#a1a1aa">
+        <text x="156" y="130">Brightness</text>
+        <rect x="260" y="122" width="200" height="4" rx="2" fill="#27272a"/>
+        <rect x="260" y="122" width="100" height="4" rx="2" fill="#3b82f6"/>
+        <circle cx="360" cy="124" r="7" fill="#3b82f6" stroke="#fff" stroke-width="1.5"/>
+        <text x="474" y="130" fill="#71717a" font-size="11">+12</text>
+
+        <text x="156" y="180">Contrast</text>
+        <rect x="260" y="172" width="200" height="4" rx="2" fill="#27272a"/>
+        <rect x="260" y="172" width="130" height="4" rx="2" fill="#3b82f6"/>
+        <circle cx="390" cy="174" r="7" fill="#3b82f6" stroke="#fff" stroke-width="1.5"/>
+        <text x="474" y="180" fill="#71717a" font-size="11">+30</text>
+
+        <text x="156" y="230">Saturation</text>
+        <rect x="260" y="222" width="200" height="4" rx="2" fill="#27272a"/>
+        <rect x="260" y="222" width="70" height="4" rx="2" fill="#3b82f6"/>
+        <circle cx="330" cy="224" r="7" fill="#3b82f6" stroke="#fff" stroke-width="1.5"/>
+        <text x="474" y="230" fill="#71717a" font-size="11">−10</text>
+      </g>
+      <rect x="340" y="270" width="70" height="28" rx="5" fill="none" stroke="#3f3f46"/>
+      <text x="375" y="288" text-anchor="middle" font-family="-apple-system, sans-serif" font-size="12" fill="#a1a1aa">Cancel</text>
+      <rect x="420" y="270" width="70" height="28" rx="5" fill="#3b82f6"/>
+      <text x="455" y="288" text-anchor="middle" font-family="-apple-system, sans-serif" font-size="12" fill="#fff" font-weight="600">✓ Apply</text>
+    </svg>
+    <div class="caption">Brightness / Contrast / Saturation adjustment dialog.</div>
+  </div>
+
+  <h3>Undo and redo</h3>
+  <p>History goes back 50 steps. <kbd>Ctrl+Z</kbd> to undo, <kbd>Ctrl+Shift+Z</kbd> to redo. The history resets when you open a new image.</p>
+
+  <h2 id="saving">Saving your work</h2>
+  <p>Slate gives you three ways to save, and a smart default:</p>
+
+  <ul>
+    <li><kbd>Ctrl+S</kbd> <strong>Smart save</strong> — uses the best available destination. If a workspace folder is set, it saves there. If the file was opened via file picker, it overwrites the original (with confirmation). Otherwise, it opens the export dialog.</li>
+    <li><kbd>Ctrl+Shift+S</kbd> always opens the export dialog for picking format and destination.</li>
+  </ul>
+
+  <div class="screenshot">
+    <svg viewBox="0 0 640 400" role="img" aria-label="Export dialog">
+      <rect width="640" height="400" fill="#111113" opacity="0.6"/>
+      <rect x="140" y="30" width="360" height="340" rx="10" fill="#18181b" stroke="#27272a"/>
+      <text x="166" y="62" font-family="-apple-system, sans-serif" font-size="15" font-weight="600" fill="#fafafa">Export</text>
+      <!-- Format row -->
+      <text x="166" y="100" font-family="-apple-system, sans-serif" font-size="12" fill="#a1a1aa">Format</text>
+      <g font-family="-apple-system, sans-serif" font-size="11" fill="#fafafa">
+        <circle cx="266" cy="96" r="6" fill="none" stroke="#3b82f6" stroke-width="1.5"/>
+        <circle cx="266" cy="96" r="3" fill="#3b82f6"/>
+        <text x="280" y="100">PNG</text>
+        <circle cx="326" cy="96" r="6" fill="none" stroke="#3f3f46" stroke-width="1.5"/>
+        <text x="340" y="100">JPEG</text>
+        <circle cx="390" cy="96" r="6" fill="none" stroke="#3f3f46" stroke-width="1.5"/>
+        <text x="404" y="100">WebP</text>
+      </g>
+      <!-- Save to row -->
+      <text x="166" y="150" font-family="-apple-system, sans-serif" font-size="12" fill="#a1a1aa">Save to</text>
+      <g font-family="-apple-system, sans-serif" font-size="11" fill="#fafafa">
+        <circle cx="266" cy="146" r="6" fill="none" stroke="#3f3f46" stroke-width="1.5"/>
+        <text x="280" y="150">Download to device</text>
+        <circle cx="266" cy="176" r="6" fill="none" stroke="#3b82f6" stroke-width="1.5"/>
+        <circle cx="266" cy="176" r="3" fill="#3b82f6"/>
+        <text x="280" y="180">Save to workspace folder</text>
+      </g>
+      <!-- Strip EXIF row -->
+      <rect x="260" y="216" width="13" height="13" rx="2" fill="#3b82f6"/>
+      <path d="M263 222 L266 225 L271 220" stroke="#fff" stroke-width="1.5" fill="none"/>
+      <text x="280" y="227" font-family="-apple-system, sans-serif" font-size="11" fill="#fafafa">Strip EXIF metadata</text>
+      <!-- Filename preview -->
+      <text x="166" y="272" font-family="-apple-system, sans-serif" font-size="11" fill="#71717a" font-style="italic">1920 × 1080 px — photo-260424143005.png</text>
+      <!-- Footer -->
+      <rect x="320" y="320" width="70" height="30" rx="5" fill="none" stroke="#3f3f46"/>
+      <text x="355" y="339" text-anchor="middle" font-family="-apple-system, sans-serif" font-size="12" fill="#a1a1aa">Cancel</text>
+      <rect x="400" y="320" width="86" height="30" rx="5" fill="#3b82f6"/>
+      <text x="443" y="339" text-anchor="middle" font-family="-apple-system, sans-serif" font-size="12" fill="#fff" font-weight="600">⇩ Save</text>
+    </svg>
+    <div class="caption">The export dialog — format, save destination, EXIF toggle, and a live filename preview.</div>
+  </div>
+
+  <h3>Filenames</h3>
+  <p>Saved files are timestamped with <code>yymmddhhmmss</code>, e.g. <code>photo-260424143005.jpg</code>. This means successive saves always get unique names and you can trace each file back to its vintage.</p>
+
+  <h3>Session restore</h3>
+  <p>Slate remembers your last open file and edits. If you refresh the page or come back later, it offers to resume where you left off. The original file contents are stored locally in IndexedDB — never uploaded. Layers (text, arrows, pencil, shapes) also survive a reload — the resume dialog brings back both the image and the editable layer stack you had.</p>
+
+  <h2 id="folder-tools">Folder tools — Slideshow, Batch, Gallery, Lossless rotate</h2>
+
+  <p>The four buttons at the bottom of the toolbar (above Help) operate on a folder of images, not a single open file. They light up once you've opened a folder via <kbd>Ctrl+Shift+O</kbd> or set a workspace folder.</p>
+
+  <h3>Slideshow</h3>
+  <p>Plays the current album as a fullscreen slideshow.</p>
+  <ul>
+    <li><strong>Interval</strong>: 2 / 3 / 5 / 10 / 30 seconds (default 5s)</li>
+    <li><strong>Transition</strong>: none / fade / slide</li>
+    <li><strong>Shuffle</strong>: random order with the current image pinned first so you don't lose your place</li>
+    <li><strong>Loop at end</strong>: optional</li>
+    <li>Controls: <kbd>Space</kbd> pauses, arrows navigate, <kbd>Esc</kbd> exits. A small HUD with file name and position appears on mouse move.</li>
+  </ul>
+
+  <h3>Batch operations</h3>
+  <p>Apply one or more transforms to every image in a folder. Tools → Batch.</p>
+  <ul>
+    <li><strong>Source</strong>: current album, or pick a different folder</li>
+    <li><strong>Operations</strong> (combinable, applied in order): convert (PNG / JPEG / WebP, with quality + EXIF strip toggle), resize (px or %, lock-aspect), rotate (90° / 180°), flip (H / V), rename via a template (<code>{original}</code>, <code>{index}</code>, <code>{counter:04}</code>, <code>{date}</code>, <code>{camera}</code>, <code>{w}</code>, <code>{h}</code>)</li>
+    <li><strong>Destination</strong>: new <code>batch-output/</code> subfolder, a different folder, or overwrite-in-place (with confirmation)</li>
+    <li><strong>Dry run</strong>: see the first 20 from / to filenames + estimated sizes + warnings (e.g. missing EXIF dates) before committing</li>
+    <li><strong>Execute</strong>: parallel processing across a Web Worker pool sized to your CPU. Live progress bar, cancel button, summary report on completion.</li>
+  </ul>
+
+  <h3>Contact sheet / Gallery export</h3>
+  <p>Tools → Contact sheet / gallery turns the current album into one of two artifacts:</p>
+  <ul>
+    <li><strong>Gallery page (HTML)</strong> — a single <code>gallery.html</code> file with thumbnails as data URLs, click-to-zoom lightbox with arrow-key navigation. Self-contained — share it, host it, open offline. Optional embed of the full-size images so the gallery page travels with the originals.</li>
+    <li><strong>Contact sheet (image)</strong> — one PNG or JPEG with thumbnails laid out in a grid. Configurable columns, thumb size, optional file-name labels, background colour with auto-readable label colour.</li>
+  </ul>
+
+  <h3>Lossless JPEG rotate</h3>
+  <p>Tools → Lossless JPEG rotate. For a JPEG file open in Slate, this rotates the file by 90° / 180° / 90° CCW <em>without re-encoding</em> — only the EXIF orientation tag is flipped. The pixel bytes stay untouched, so quality loss is exactly zero. Any modern viewer (browser, photo app, OS thumbnail) honours the orientation tag and renders the image rotated.</p>
+
+  <h2 id="formats">Format support</h2>
+
+  <p><strong>Read</strong>: JPG, PNG, WebP, GIF (first frame), AVIF, SVG, BMP — natively. <strong>HEIC / HEIF</strong> via Safari's built-in decoder when available, falling back to a tiny WASM library lazy-loaded the first time you open one. <strong>TIFF, JPEG-XL, PSD</strong> via the same lazy-load pattern. <strong>TGA</strong> and <strong>DDS</strong> are bundled into the page (the libraries are small enough). <strong>RAW</strong> files (CR2, NEF, ARW, DNG, RAF, ORF) are read by extracting the embedded full-resolution JPEG preview that every TIFF-based RAW container carries — no full sensor demosaicing, but enough to view, crop, and re-export.</p>
+
+  <p><strong>Write</strong>: PNG, JPEG, WebP, TIFF. Tools → Lossless JPEG rotate also writes JPEGs that have only their EXIF orientation tag flipped — pixel bytes untouched, zero quality loss.</p>
+
+  <p>The first time you open a format that needs a CDN-loaded decoder, you'll see a "Loading X decoder…" toast for a moment. After that, the browser caches it.</p>
+
+  <div class="callout">
+    <strong>Supply-chain note:</strong> the tiny libraries (TGA, DDS) are vendored — every byte is hashed in the repo's <a href="https://github.com/NakliTechie/slate/blob/main/SECURITY.md">SECURITY.md</a>. The bigger ones (HEIC, JPEG-XL, PSD, TIFF) are exact-version-pinned on esm.sh, so a malicious upstream patch can't reach you without a code change.
+  </div>
+
+  <h2 id="privacy">Privacy, EXIF, and GPS</h2>
+  <p>Slate runs entirely in your browser. No network connection is needed after the page loads — the HTML file has no external dependencies.</p>
+
+  <ul>
+    <li><strong>No server</strong> — there's nothing to upload to. Slate has no backend.</li>
+    <li><strong>No account</strong> — no sign-up, no tracking.</li>
+    <li><strong>Local processing</strong> — every pixel operation happens inside your browser's canvas sandbox.</li>
+  </ul>
+
+  <h3>EXIF metadata</h3>
+  <p>When you open a JPEG, Slate parses its EXIF metadata and shows basic fields (camera, date, ISO) in the image info panel. When exporting, EXIF is stripped by default — the canvas re-encode naturally removes it. Uncheck <em>Strip EXIF</em> in the export dialog to re-embed the original EXIF into JPEG exports.</p>
+
+  <div class="callout warn">
+    <strong>GPS warning:</strong> if a photo contains GPS coordinates, Slate shows a warning in the image info panel. This is a reminder — the EXIF data is still in the <em>original</em> file. When you export, the default (<em>Strip EXIF</em>) removes it.
+  </div>
+
+  <div class="screenshot">
+    <svg viewBox="0 0 640 280" role="img" aria-label="Image info panel with GPS warning">
+      <rect width="640" height="280" fill="#111113"/>
+      <rect x="180" y="30" width="280" height="220" rx="8" fill="#18181b" stroke="#27272a"/>
+      <text x="200" y="60" font-family="-apple-system, sans-serif" font-size="12" font-weight="600" fill="#fafafa">Image Info</text>
+      <g font-family="-apple-system, sans-serif" font-size="11">
+        <text x="200" y="90" fill="#71717a">Dimensions</text>
+        <text x="440" y="90" text-anchor="end" fill="#fafafa">4032 × 3024 px</text>
+        <text x="200" y="110" fill="#71717a">Format</text>
+        <text x="440" y="110" text-anchor="end" fill="#fafafa">JPEG</text>
+        <text x="200" y="130" fill="#71717a">File size</text>
+        <text x="440" y="130" text-anchor="end" fill="#fafafa">2.8 MB</text>
+        <text x="200" y="150" fill="#71717a">Camera</text>
+        <text x="440" y="150" text-anchor="end" fill="#fafafa">Apple iPhone 15</text>
+        <text x="200" y="170" fill="#71717a">Date</text>
+        <text x="440" y="170" text-anchor="end" fill="#fafafa">2026:04:24 14:30:05</text>
+        <text x="200" y="190" fill="#71717a">ISO</text>
+        <text x="440" y="190" text-anchor="end" fill="#fafafa">100</text>
+      </g>
+      <rect x="200" y="210" width="240" height="28" rx="4" fill="rgba(245,158,11,0.1)"/>
+      <g transform="translate(210, 216)">
+        <path d="M8 1 L15 14 L1 14 Z" fill="none" stroke="#f59e0b" stroke-width="1.5" stroke-linejoin="round"/>
+        <line x1="8" y1="6" x2="8" y2="10" stroke="#f59e0b" stroke-width="1.5"/>
+        <circle cx="8" cy="12" r="0.5" fill="#f59e0b"/>
+      </g>
+      <text x="232" y="227" font-family="-apple-system, sans-serif" font-size="11" fill="#f59e0b">This image contains GPS location data.</text>
+    </svg>
+    <div class="caption">Image info panel showing EXIF fields and a GPS-data warning.</div>
+  </div>
+
+  <h2 id="shortcuts">Keyboard shortcuts</h2>
+  <p>A condensed reference. Full list available in the in-app help (<kbd>?</kbd>).</p>
+
+  <table style="width:100%; border-collapse: collapse; margin: 16px 0; font-size: 13px;">
+    <tbody>
+      <tr><td style="padding:6px 12px 6px 0; color:#71717a">Open file</td><td><kbd>Ctrl+O</kbd></td></tr>
+      <tr><td style="padding:6px 12px 6px 0; color:#71717a">Open folder</td><td><kbd>Ctrl+Shift+O</kbd></td></tr>
+      <tr><td style="padding:6px 12px 6px 0; color:#71717a">Paste</td><td><kbd>Ctrl+V</kbd></td></tr>
+      <tr><td style="padding:6px 12px 6px 0; color:#71717a">Smart save</td><td><kbd>Ctrl+S</kbd></td></tr>
+      <tr><td style="padding:6px 12px 6px 0; color:#71717a">Export dialog</td><td><kbd>Ctrl+Shift+S</kbd></td></tr>
+      <tr><td style="padding:6px 12px 6px 0; color:#71717a">Undo / Redo</td><td><kbd>Ctrl+Z</kbd> · <kbd>Ctrl+Shift+Z</kbd></td></tr>
+      <tr><td style="padding:6px 12px 6px 0; color:#71717a">Fit to window</td><td><kbd>Ctrl+0</kbd> or double-click</td></tr>
+      <tr><td style="padding:6px 12px 6px 0; color:#71717a">Crop / Redact / Blur / Pixelate</td><td><kbd>C</kbd> · <kbd>R</kbd> · <kbd>B</kbd> · <kbd>X</kbd></td></tr>
+      <tr><td style="padding:6px 12px 6px 0; color:#71717a">Text / Arrow / Freehand / Shapes</td><td><kbd>Shift+T</kbd> · <kbd>A</kbd> · <kbd>P</kbd> · <kbd>S</kbd></td></tr>
+      <tr><td style="padding:6px 12px 6px 0; color:#71717a">Eyedropper</td><td><kbd>I</kbd></td></tr>
+      <tr><td style="padding:6px 12px 6px 0; color:#71717a">Prev / next image</td><td><kbd>←</kbd> · <kbd>→</kbd></td></tr>
+      <tr><td style="padding:6px 12px 6px 0; color:#71717a">Fullscreen</td><td><kbd>F</kbd></td></tr>
+      <tr><td style="padding:6px 12px 6px 0; color:#71717a">Help</td><td><kbd>?</kbd></td></tr>
+    </tbody>
+  </table>
+
+  <footer>
+    <span>Slate — a single-file image editor.</span>
+    <a href="../">← Back to app</a>
+  </footer>
+
+</div>
+</body>
+</html>
