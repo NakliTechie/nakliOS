@@ -1443,7 +1443,7 @@ body.is-mobile .nw-dock{display:none;}
 #nw-review-list{max-height:calc(82vh - 100px); overflow:auto; padding:0 20px 20px;}
 .nk-rev{margin:10px 0; padding:12px; border:1px solid var(--line); border-radius:8px; background:var(--row);}
 .nk-rev-head{display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:10px;}
-.nk-rev-app{font-weight:700; text-transform:capitalize;}
+.nk-rev-app{font-weight:700;}
 .nk-rev-summary{color:var(--muted);}
 .nk-rev-diff{width:100%; border-collapse:collapse; table-layout:fixed;}
 .nk-rev-diff caption{text-align:left; color:var(--muted); padding-bottom:6px;}
@@ -4487,7 +4487,7 @@ function makeWindow(opts){
   openWindows[id] = win;
   win.addEventListener('pointerdown', () => focusWindow(win));
   win.querySelector('.nw-close').addEventListener('click', e => {
-    e.stopPropagation(); closeWindow(win);
+    e.stopPropagation(); void closeWindowAsked(win);
   });
   win.querySelector('.nw-info-btn').addEventListener('click', e => {
     e.stopPropagation(); showAppInfo(win);
@@ -4758,6 +4758,37 @@ function minimizeWindow(win){
   if (fullscreenWin === win) toggleFullscreen(win);
   win.classList.add('is-minimized');
   updateDock();
+}
+
+// The person's close (title bar button, Cmd/Ctrl+W) asks first when the window has a change
+// waiting for review or reports unsaved state through the SDK autosave dirty flag (Reckon review
+// B21, 2026-11-17). The answer is a plain "Keep open" or "Close anyway"; nothing blocks silently.
+// "Close anyway" continues into the normal closeWindow flow, beforeclose ack included. An app's own
+// naklios:close and the automation API close without asking.
+function windowPendingWork(win){
+  const iframe = win?.querySelector('iframe');
+  const review = !!(iframe && reviewHostSync?.hasPending(iframe.contentWindow));
+  return { review, dirty:win?._appDirty === true };
+}
+async function closeWindowAsked(win){
+  if (!win || win._closing || win._closeAsking) return;
+  const { review, dirty } = windowPendingWork(win);
+  if (review || dirty){
+    const name = APPS.find(a => a.id === win.dataset.id)?.name || win.querySelector('.nw-title')?.textContent || 'This app';
+    const lines = [];
+    if (review) lines.push(`${name} has a change waiting for your review. Closing ${name} drops that change.`);
+    if (dirty) lines.push(`${name} has changes it has not saved yet.`);
+    win._closeAsking = true;
+    let choice = 'keep';
+    try {
+      choice = await _nakliosDialog({
+        title:`Close ${name}?`, body:lines.join(' '),
+        buttons:[{ value:'keep', label:'Keep open', primary:true }, { value:'close', label:'Close anyway', danger:true }],
+      });
+    } finally { win._closeAsking = false; }
+    if (choice !== 'close' || !win.isConnected) return;
+  }
+  closeWindow(win);
 }
 
 function closeWindow(win){
@@ -9306,6 +9337,8 @@ function bindTopbarChips(){
 }
 
 let reviewHostPromise = null;
+let reviewHostSync = null;      // the resolved host, for synchronous checks (the close guard)
+let reviewReturnSource = null;  // the app frame that gets focus back when the review dialog closes
 let reviewRendererPromise = null;
 let reviewHistoryTail = Promise.resolve();
 const reviewDecisionPending = new Set();
@@ -9348,9 +9381,36 @@ function reviewHost(){
       sendDecision:sendReviewDecision,
       onChange:() => { void renderReviewPanel(false); },
       record:reviewHistoryAppend,
-    }));
+    })).then(host => { reviewHostSync = host; return host; });
   }
   return reviewHostPromise;
+}
+
+// The window whose iframe is this frame, or null when the app is closed.
+function reviewWindowFor(source){
+  if (!source) return null;
+  const iframe = Array.from(document.querySelectorAll('.nw-window iframe')).find(f => f.contentWindow === source);
+  return iframe?.closest('.nw-window') || null;
+}
+function reviewAppName(appId){
+  return APPS.find(a => a.id === appId)?.name || appId || 'The app';
+}
+// Raise a window and put keyboard focus inside its app frame.
+function focusAppFrame(win){
+  if (!win?.isConnected) return;
+  focusWindow(win);
+  const iframe = win.querySelector('iframe');
+  if (!iframe) return;
+  try { iframe.focus({ preventScroll:true }); } catch(_){}
+  try { iframe.contentWindow?.focus(); } catch(_){}
+}
+// An app that stages a change while its window is minimised or under another window comes
+// forward with the card, so the person sees what the change is about (Reckon review B22).
+function revealStagingWindow(win){
+  if (!win?.isConnected) return;
+  const top = Object.values(openWindows).filter(w => w && !w.classList.contains('is-minimized'))
+    .reduce((a, b) => (!a || (+b.style.zIndex || 0) > (+a.style.zIndex || 0)) ? b : a, null);
+  if (win.classList.contains('is-minimized') || top !== win) focusWindow(win);
 }
 
 function reviewStatus(message){
@@ -9375,10 +9435,27 @@ async function renderReviewPanel(open = false){
     list.textContent = 'No staged changes.';
     return;
   }
-  const { element } = renderReviewQueue(envelopes, { actor:'person', now:Date.now() }, {
+  const now = Date.now();
+  const { element } = renderReviewQueue(envelopes, env => ({
+    actor:'person', now, appName:reviewAppName(env.app), appOpen:!!reviewWindowFor(host.sourceFor(env.proposal_id)),
+  }), {
     doc:document,
     onCommit:model => { void decideReview('commit', model.proposalId); },
     onDiscard:model => { void decideReview('discard', model.proposalId); },
+    onShowApp:model => {
+      const win = reviewWindowFor(host.sourceFor(model.proposalId)) || openWindows[model.app] || null;
+      if (win){
+        reviewReturnSource = win.querySelector('iframe')?.contentWindow || null;
+        document.getElementById('nw-review-dialog').close();
+        focusAppFrame(win);
+        return;
+      }
+      const app = APPS.find(a => a.id === model.app);
+      if (!app) { reviewStatus(`${model.appName} is not installed.`); return; }
+      reviewReturnSource = null;
+      document.getElementById('nw-review-dialog').close();
+      openApp(app);
+    },
   });
   list.appendChild(element);
 }
@@ -9388,10 +9465,15 @@ async function decideReview(action, proposalId){
   reviewDecisionPending.add(proposalId);
   try {
     const host = await reviewHost();
-    reviewStatus(action === 'commit' ? 'Applying in the app…' : 'Discarding…');
+    const source = host.sourceFor(proposalId);
+    if (source) reviewReturnSource = source;
+    const appName = reviewAppName(host.envelopes().find(env => env.proposal_id === proposalId)?.app);
+    reviewStatus(action === 'commit' ? `Applying the change in ${appName}…` : 'Discarding the change…');
     const result = action === 'commit' ? await host.commit(proposalId) : await host.discard(proposalId, 'person discarded');
+    const reason = String(result.reason || '').replace(/^apply failed: /, '');
     reviewStatus(result.historyError ? `Decision saved; History failed: ${result.historyError}` :
-      result.ok ? (action === 'commit' ? 'Change committed.' : 'Change discarded.') : `Decision refused: ${result.reason}`);
+      result.ok ? (action === 'commit' ? `${appName} applied the change.` : 'Change discarded.')
+        : (action === 'commit' ? `${appName} did not apply the change: ${reason}` : `The change was not discarded: ${reason}`));
     await renderReviewPanel();
     if (result.ok && !result.historyError && host.size() === 0) document.getElementById('nw-review-dialog').close();
   } catch (error) {
@@ -9401,6 +9483,12 @@ async function decideReview(action, proposalId){
 
 document.getElementById('review-btn').addEventListener('click', () => { void renderReviewPanel(true); });
 document.getElementById('nw-review-close').addEventListener('click', () => document.getElementById('nw-review-dialog').close());
+// The dialog's close puts focus back on the host page; hand it to the app frame whose card it
+// was instead, so typing lands in the app again (Reckon review B15).
+document.getElementById('nw-review-dialog').addEventListener('close', () => {
+  const win = reviewWindowFor(reviewReturnSource);
+  if (win && !win.classList.contains('is-minimized')) focusAppFrame(win);
+});
 
 window.addEventListener('message', async e => {
   if (!knownIframes.has(e.source)) return;
@@ -9512,7 +9600,30 @@ window.addEventListener('message', async e => {
       if (reply.result.historyError) reviewStatus(`History failed: ${reply.result.historyError}`);
     } catch (err){ reply.error = String(err?.message || err); }
     if (msg.requestId) { try { e.source.postMessage(reply, replyTo); } catch(_){} }
-    if (reply.result?.proposal_id) setTimeout(() => { void renderReviewPanel(true); }, 0);
+    if (reply.result?.proposal_id){
+      reviewReturnSource = e.source;
+      revealStagingWindow(findWin());
+      setTimeout(() => { void renderReviewPanel(true); }, 0);
+    }
+  } else if (msg.type === 'naklios:review:withdraw'){
+    // The staging app takes back its own card (Reckon review B5). review-host checks that this
+    // frame staged the proposal; another app's id is refused.
+    const reply = { type:'naklios:review:reply', requestId:msg.requestId };
+    try {
+      const appId = getAppId();
+      if (!appId || !capabilitySnapshot(appId).review) throw new Error('Review is unavailable for this app');
+      if (typeof msg.proposal_id !== 'string' || !msg.proposal_id) throw new Error('withdraw needs a proposal id');
+      const result = await (await reviewHost()).withdraw({ source:e.source, proposal_id:msg.proposal_id });
+      if (!result.ok) throw new Error(result.reason);
+      reply.result = result;
+      if (result.historyError) reviewStatus(`History failed: ${result.historyError}`);
+    } catch (err){ reply.error = String(err?.message || err); }
+    if (msg.requestId) { try { e.source.postMessage(reply, replyTo); } catch(_){} }
+    const host = reviewHostSync;
+    if (reply.result?.ok && host && host.size() === 0){
+      const dialog = document.getElementById('nw-review-dialog');
+      if (dialog.open){ reviewReturnSource = e.source; dialog.close(); }
+    }
   } else if (msg.type === 'naklios:review:applied'){
     if (reviewHostPromise) (await reviewHostPromise).acknowledge({
       source:e.source, proposal_id:msg.proposal_id, ok:msg.ok, error:msg.error,
@@ -14307,7 +14418,7 @@ async function init(){
       const wins = Object.values(openWindows).filter(w => !w.classList.contains('is-minimized'));
       if (wins.length){
         const top = wins.reduce((a, b) => (+a.style.zIndex||0) > (+b.style.zIndex||0) ? a : b);
-        if (top){ e.preventDefault(); closeWindow(top); }
+        if (top){ e.preventDefault(); void closeWindowAsked(top); }
       }
     }
     if ((e.metaKey || e.ctrlKey) && e.key === '.'){
