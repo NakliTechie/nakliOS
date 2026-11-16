@@ -1,0 +1,1686 @@
+{
+  "accepts": [
+    {
+      "action": "import",
+      "label": "Open in Chartella",
+      "extensions": [
+        ".chartella.json",
+        ".excalidraw",
+        ".json",
+        ".png",
+        ".svg",
+        ".jpg",
+        ".jpeg",
+        ".webp",
+        ".gif"
+      ]
+    }
+  ],
+  "commands": [
+    {
+      "name": "tool.select",
+      "label": "Select",
+      "description": "Pick the select tool.",
+      "scope": "ui",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": [
+        "V",
+        "1"
+      ]
+    },
+    {
+      "name": "tool.hand",
+      "label": "Hand",
+      "description": "Pick the hand tool: drag to pan the board.",
+      "scope": "ui",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "H"
+    },
+    {
+      "name": "tool.rect",
+      "label": "Rectangle",
+      "description": "Pick the rectangle tool.",
+      "scope": "ui",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": [
+        "R",
+        "2"
+      ]
+    },
+    {
+      "name": "tool.ellipse",
+      "label": "Ellipse",
+      "description": "Pick the ellipse tool.",
+      "scope": "ui",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": [
+        "O",
+        "3"
+      ]
+    },
+    {
+      "name": "tool.diamond",
+      "label": "Diamond",
+      "description": "Pick the diamond tool.",
+      "scope": "ui",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": [
+        "D",
+        "4"
+      ]
+    },
+    {
+      "name": "tool.triangle",
+      "label": "Triangle",
+      "description": "Pick the triangle tool.",
+      "scope": "ui",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "5"
+    },
+    {
+      "name": "tool.arrow",
+      "label": "Arrow",
+      "description": "Pick the arrow tool: drag from one shape to another to connect them.",
+      "scope": "ui",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": [
+        "A",
+        "6"
+      ]
+    },
+    {
+      "name": "tool.line",
+      "label": "Line",
+      "description": "Pick the line tool.",
+      "scope": "ui",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": [
+        "L",
+        "7"
+      ]
+    },
+    {
+      "name": "tool.pen",
+      "label": "Pen",
+      "description": "Pick the pen: freehand ink with pressure.",
+      "scope": "ui",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": [
+        "P",
+        "8"
+      ]
+    },
+    {
+      "name": "tool.highlighter",
+      "label": "Highlighter",
+      "description": "Pick the highlighter: wide translucent ink under the shapes.",
+      "scope": "ui",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Shift+P"
+    },
+    {
+      "name": "tool.eraser",
+      "label": "Eraser",
+      "description": "Pick the eraser: drag across strokes and shapes to delete them.",
+      "scope": "ui",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": [
+        "E",
+        "0"
+      ]
+    },
+    {
+      "name": "tool.lasso",
+      "label": "Lasso",
+      "description": "Pick the lasso: draw round shapes to select them.",
+      "scope": "ui",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Shift+L"
+    },
+    {
+      "name": "tool.text",
+      "label": "Text",
+      "description": "Pick the text tool.",
+      "scope": "ui",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "T"
+    },
+    {
+      "name": "tool.sticky",
+      "label": "Sticky note",
+      "description": "Pick the sticky note tool.",
+      "scope": "ui",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "S"
+    },
+    {
+      "name": "tool.frame",
+      "label": "Frame",
+      "description": "Pick the frame tool: drag out a named area that holds what is inside it.",
+      "scope": "ui",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "F"
+    },
+    {
+      "name": "board.read",
+      "label": "Read board",
+      "description": "Read the board as a compact list: each shape's id, kind, bounds (x, y, w, h), text, frame and group, and for arrows the shape ids they join (from, to). Optional ids or region narrow it.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Only these shapes"
+          },
+          "region": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "number",
+                "description": "Left"
+              },
+              "y": {
+                "type": "number",
+                "description": "Top"
+              },
+              "w": {
+                "type": "number",
+                "description": "Width"
+              },
+              "h": {
+                "type": "number",
+                "description": "Height"
+              }
+            },
+            "required": [
+              "x",
+              "y",
+              "w",
+              "h"
+            ]
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "board.snapshot",
+      "label": "Snapshot",
+      "description": "A PNG of part of the board, for an agent to look at: the shapes `ids`, or a `region` box, or the whole board. maxSize caps the long edge in pixels (default 1024). Returns { dataUrl, width, height, region }.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Frame these shapes"
+          },
+          "region": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "number",
+                "description": "Left"
+              },
+              "y": {
+                "type": "number",
+                "description": "Top"
+              },
+              "w": {
+                "type": "number",
+                "description": "Width"
+              },
+              "h": {
+                "type": "number",
+                "description": "Height"
+              }
+            },
+            "required": [
+              "x",
+              "y",
+              "w",
+              "h"
+            ]
+          },
+          "maxSize": {
+            "type": "number",
+            "description": "Longest edge in px (default 1024)",
+            "minimum": 32,
+            "maximum": 4096
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "shape.add",
+      "label": "Add shape",
+      "description": "Add a shape: kind is rect, ellipse, diamond, triangle, line, arrow, text, sticky, frame, image or ink. Fields: x, y, w, h (board units, 1 = 1 CSS px at 100%), rotation (radians), text, stroke, fill (#rrggbb or transparent), strokeWidth (0–64), dash (solid|dashed|dotted), opacity (0–1), radius (corner radius), sketch (true: hand-drawn look), font (hand|sans|mono), fontSize (px; presets s 16, m 20, l 28, xl 36), align (left|center|right). Kind fields: sticky color (yellow|orange|pink|purple|blue|teal|green|gray); frame name; text autoWidth; line/arrow/ink points [[x,y],…] in board coordinates; arrow route (straight|curved|elbow), bend (curved: -2..2), startHead/endHead (none|arrow|triangle|dot|bar); ink highlight; image fileId. Returns { id }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "Kind",
+            "enum": [
+              "rect",
+              "ellipse",
+              "diamond",
+              "triangle",
+              "line",
+              "arrow",
+              "text",
+              "sticky",
+              "frame",
+              "image",
+              "ink"
+            ]
+          },
+          "props": {
+            "type": "object",
+            "description": "Fields (see the description)"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      }
+    },
+    {
+      "name": "shape.update",
+      "label": "Change shapes",
+      "description": "Change fields on shapes (default: the selection). Fields: x, y, w, h (board units, 1 = 1 CSS px at 100%), rotation (radians), text, stroke, fill (#rrggbb or transparent), strokeWidth (0–64), dash (solid|dashed|dotted), opacity (0–1), radius (corner radius), sketch (true: hand-drawn look), font (hand|sans|mono), fontSize (px; presets s 16, m 20, l 28, xl 36), align (left|center|right). Kind fields: sticky color (yellow|orange|pink|purple|blue|teal|green|gray); frame name; text autoWidth; line/arrow/ink points [[x,y],…] in board coordinates; arrow route (straight|curved|elbow), bend (curved: -2..2), startHead/endHead (none|arrow|triangle|dot|bar); ink highlight; image fileId.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Shape ids (default: the selection)"
+          },
+          "patch": {
+            "type": "object",
+            "description": "Fields to change"
+          }
+        },
+        "required": [
+          "patch"
+        ]
+      }
+    },
+    {
+      "name": "shape.delete",
+      "label": "Delete",
+      "description": "Delete shapes (default: the selection). A frame takes its contents; arrows bound to a deleted shape stay where they were drawn.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Shape ids (default: the selection)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": [
+        "Delete",
+        "Backspace"
+      ]
+    },
+    {
+      "name": "shape.move",
+      "label": "Move",
+      "description": "Move shapes by dx, dy board units. A frame carries its contents; arrows bound to the shapes follow.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Shape ids (default: the selection)"
+          },
+          "dx": {
+            "type": "number",
+            "description": "Across"
+          },
+          "dy": {
+            "type": "number",
+            "description": "Down"
+          }
+        },
+        "required": [
+          "dx",
+          "dy"
+        ]
+      }
+    },
+    {
+      "name": "shape.nudgeLeft",
+      "label": "Nudge left",
+      "description": "Move the selection left by `by` units (default 1; the keyboard uses 10 with Shift).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Shape ids (default: the selection)"
+          },
+          "by": {
+            "type": "number",
+            "description": "Distance in board units (default 1)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": [
+        "ArrowLeft",
+        "Shift+ArrowLeft"
+      ]
+    },
+    {
+      "name": "shape.nudgeRight",
+      "label": "Nudge right",
+      "description": "Move the selection right by `by` units (default 1; the keyboard uses 10 with Shift).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Shape ids (default: the selection)"
+          },
+          "by": {
+            "type": "number",
+            "description": "Distance in board units (default 1)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": [
+        "ArrowRight",
+        "Shift+ArrowRight"
+      ]
+    },
+    {
+      "name": "shape.nudgeUp",
+      "label": "Nudge up",
+      "description": "Move the selection up by `by` units (default 1; the keyboard uses 10 with Shift).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Shape ids (default: the selection)"
+          },
+          "by": {
+            "type": "number",
+            "description": "Distance in board units (default 1)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": [
+        "ArrowUp",
+        "Shift+ArrowUp"
+      ]
+    },
+    {
+      "name": "shape.nudgeDown",
+      "label": "Nudge down",
+      "description": "Move the selection down by `by` units (default 1; the keyboard uses 10 with Shift).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Shape ids (default: the selection)"
+          },
+          "by": {
+            "type": "number",
+            "description": "Distance in board units (default 1)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": [
+        "ArrowDown",
+        "Shift+ArrowDown"
+      ]
+    },
+    {
+      "name": "shape.resize",
+      "label": "Resize",
+      "description": "Scale shapes so their combined bounds become the box `to` (from defaults to their current bounds). A negative w or h mirrors.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Shape ids (default: the selection)"
+          },
+          "to": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "number",
+                "description": "Left"
+              },
+              "y": {
+                "type": "number",
+                "description": "Top"
+              },
+              "w": {
+                "type": "number",
+                "description": "Width"
+              },
+              "h": {
+                "type": "number",
+                "description": "Height"
+              }
+            },
+            "required": [
+              "x",
+              "y",
+              "w",
+              "h"
+            ]
+          },
+          "from": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "number",
+                "description": "Left"
+              },
+              "y": {
+                "type": "number",
+                "description": "Top"
+              },
+              "w": {
+                "type": "number",
+                "description": "Width"
+              },
+              "h": {
+                "type": "number",
+                "description": "Height"
+              }
+            },
+            "required": [
+              "x",
+              "y",
+              "w",
+              "h"
+            ]
+          }
+        },
+        "required": [
+          "to"
+        ]
+      }
+    },
+    {
+      "name": "shape.rotate",
+      "label": "Rotate",
+      "description": "Rotate shapes by `degrees` (clockwise) about their combined centre or a pivot [x, y].",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Shape ids (default: the selection)"
+          },
+          "degrees": {
+            "type": "number",
+            "description": "Degrees, clockwise"
+          },
+          "pivot": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "description": "[x, y]"
+          }
+        },
+        "required": [
+          "degrees"
+        ]
+      }
+    },
+    {
+      "name": "shape.flipX",
+      "label": "Flip horizontal",
+      "description": "Mirror shapes left to right about their combined centre.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Shape ids (default: the selection)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": "Shift+H"
+    },
+    {
+      "name": "shape.flipY",
+      "label": "Flip vertical",
+      "description": "Mirror shapes top to bottom about their combined centre.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Shape ids (default: the selection)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": "Shift+V"
+    },
+    {
+      "name": "shape.duplicate",
+      "label": "Duplicate",
+      "description": "Copy shapes (with their arrows between them) 16 units down and right. Returns { ids }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Shape ids (default: the selection)"
+          },
+          "dx": {
+            "type": "number",
+            "description": "Offset across (default 16)"
+          },
+          "dy": {
+            "type": "number",
+            "description": "Offset down (default 16)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": "Mod+D"
+    },
+    {
+      "name": "shape.lock",
+      "label": "Lock or unlock",
+      "description": "Lock shapes (they cannot be selected on the canvas, moved or changed) or unlock them. With no `locked`, toggles.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Shape ids (default: the selection)"
+          },
+          "locked": {
+            "type": "boolean",
+            "description": "true locks, false unlocks"
+          }
+        },
+        "required": []
+      },
+      "shortcut": "Shift+Mod+L"
+    },
+    {
+      "name": "shape.align",
+      "label": "Align",
+      "description": "Align shapes to the edges or centre of their combined bounds: how is left, centerX, right, top, centerY or bottom.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Shape ids (default: the selection)"
+          },
+          "how": {
+            "type": "string",
+            "description": "How",
+            "enum": [
+              "left",
+              "centerX",
+              "right",
+              "top",
+              "centerY",
+              "bottom"
+            ]
+          }
+        },
+        "required": [
+          "how"
+        ]
+      }
+    },
+    {
+      "name": "shape.distribute",
+      "label": "Distribute",
+      "description": "Space three or more shapes evenly across (axis x) or down (axis y).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Shape ids (default: the selection)"
+          },
+          "axis": {
+            "type": "string",
+            "description": "x or y",
+            "enum": [
+              "x",
+              "y"
+            ]
+          }
+        },
+        "required": [
+          "axis"
+        ]
+      }
+    },
+    {
+      "name": "order.forward",
+      "label": "Bring forward",
+      "description": "Bring forward: change the drawing order of shapes.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Shape ids (default: the selection)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": "Mod+]"
+    },
+    {
+      "name": "order.backward",
+      "label": "Send backward",
+      "description": "Send backward: change the drawing order of shapes.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Shape ids (default: the selection)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": "Mod+["
+    },
+    {
+      "name": "order.front",
+      "label": "Bring to front",
+      "description": "Bring to front: change the drawing order of shapes.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Shape ids (default: the selection)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": "Shift+Mod+]"
+    },
+    {
+      "name": "order.back",
+      "label": "Send to back",
+      "description": "Send to back: change the drawing order of shapes.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Shape ids (default: the selection)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": "Shift+Mod+["
+    },
+    {
+      "name": "group.create",
+      "label": "Group",
+      "description": "Group two or more shapes so they select and move together. Returns { id } (the group id).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Shape ids (default: the selection)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": "Mod+G"
+    },
+    {
+      "name": "group.remove",
+      "label": "Ungroup",
+      "description": "Take shapes out of their outermost group.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Shape ids (default: the selection)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": "Shift+Mod+G"
+    },
+    {
+      "name": "arrow.connect",
+      "label": "Connect",
+      "description": "Draw an arrow from shape `from` to shape `to`, bound at both ends, so it follows them when they move, resize or undo. Optional: route (straight|curved|elbow), startHead/endHead (none|arrow|triangle|dot|bar), text (a label), startAnchor/endAnchor ([ax, ay], fractions of the shape box, to pin an end to a fixed point). Returns { id }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "Shape id"
+          },
+          "to": {
+            "type": "string",
+            "description": "Shape id"
+          },
+          "route": {
+            "type": "string",
+            "description": "Route",
+            "enum": [
+              "straight",
+              "curved",
+              "elbow"
+            ]
+          },
+          "startHead": {
+            "type": "string",
+            "description": "Head",
+            "enum": [
+              "none",
+              "arrow",
+              "triangle",
+              "dot",
+              "bar"
+            ]
+          },
+          "endHead": {
+            "type": "string",
+            "description": "Head",
+            "enum": [
+              "none",
+              "arrow",
+              "triangle",
+              "dot",
+              "bar"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "description": "Label"
+          },
+          "startAnchor": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "description": "[x, y]"
+          },
+          "endAnchor": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "description": "[x, y]"
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ]
+      }
+    },
+    {
+      "name": "arrow.bind",
+      "label": "Attach arrow end",
+      "description": "Bind one end (start or end) of an arrow to a shape. mode edge (default) meets the outline; mode fixed pins it to anchor [ax, ay] (fractions of the shape box).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "arrowId": {
+            "type": "string",
+            "description": "Arrow id"
+          },
+          "end": {
+            "type": "string",
+            "description": "start or end",
+            "enum": [
+              "start",
+              "end"
+            ]
+          },
+          "targetId": {
+            "type": "string",
+            "description": "Shape id"
+          },
+          "mode": {
+            "type": "string",
+            "description": "edge or fixed",
+            "enum": [
+              "edge",
+              "fixed"
+            ]
+          },
+          "anchor": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "description": "[x, y]"
+          }
+        },
+        "required": [
+          "arrowId",
+          "end",
+          "targetId"
+        ]
+      }
+    },
+    {
+      "name": "arrow.unbind",
+      "label": "Detach arrow end",
+      "description": "Let go of one end of an arrow; it stays where it is drawn.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "arrowId": {
+            "type": "string",
+            "description": "Arrow id"
+          },
+          "end": {
+            "type": "string",
+            "description": "start or end",
+            "enum": [
+              "start",
+              "end"
+            ]
+          }
+        },
+        "required": [
+          "arrowId",
+          "end"
+        ]
+      }
+    },
+    {
+      "name": "arrow.setEnd",
+      "label": "Move arrow end",
+      "description": "Put one end of an arrow or line at a board point, releasing any binding on that end.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "arrowId": {
+            "type": "string",
+            "description": "Arrow or line id"
+          },
+          "end": {
+            "type": "string",
+            "description": "start or end",
+            "enum": [
+              "start",
+              "end"
+            ]
+          },
+          "x": {
+            "type": "number",
+            "description": "x"
+          },
+          "y": {
+            "type": "number",
+            "description": "y"
+          }
+        },
+        "required": [
+          "arrowId",
+          "end",
+          "x",
+          "y"
+        ]
+      }
+    },
+    {
+      "name": "frame.create",
+      "label": "Frame selection",
+      "description": "Make a named frame around shapes (default: the selection), holding them; or, with a box and no shapes, an empty frame. Returns { id }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Shapes to frame"
+          },
+          "name": {
+            "type": "string",
+            "description": "Frame name"
+          },
+          "box": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "number",
+                "description": "Left"
+              },
+              "y": {
+                "type": "number",
+                "description": "Top"
+              },
+              "w": {
+                "type": "number",
+                "description": "Width"
+              },
+              "h": {
+                "type": "number",
+                "description": "Height"
+              }
+            },
+            "required": [
+              "x",
+              "y",
+              "w",
+              "h"
+            ]
+          }
+        },
+        "required": []
+      },
+      "shortcut": "Mod+Alt+F"
+    },
+    {
+      "name": "edit.undo",
+      "label": "Undo",
+      "description": "Undo the last edit (a whole drag or script is one step).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Mod+Z"
+    },
+    {
+      "name": "edit.redo",
+      "label": "Redo",
+      "description": "Redo the last undone edit.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": [
+        "Shift+Mod+Z",
+        "Mod+Y"
+      ]
+    },
+    {
+      "name": "edit.copy",
+      "label": "Copy",
+      "description": "Copy the selection (also as Excalidraw-compatible JSON).",
+      "scope": "ui",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Shape ids (default: the selection)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": "Mod+C"
+    },
+    {
+      "name": "edit.cut",
+      "label": "Cut",
+      "description": "Copy the selection, then delete it.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Shape ids (default: the selection)"
+          }
+        },
+        "required": []
+      },
+      "shortcut": "Mod+X"
+    },
+    {
+      "name": "edit.paste",
+      "label": "Paste",
+      "description": "Paste shapes (Chartella or Excalidraw clipboard), an image or text at the pointer.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Mod+V"
+    },
+    {
+      "name": "edit.pasteInPlace",
+      "label": "Paste in place",
+      "description": "Paste shapes at the place they were copied from.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Shift+Mod+V"
+    },
+    {
+      "name": "edit.selectAll",
+      "label": "Select all",
+      "description": "Select every unlocked shape.",
+      "scope": "ui",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Mod+A"
+    },
+    {
+      "name": "edit.select",
+      "label": "Select shapes",
+      "description": "Select shapes by id (an empty list clears the selection).",
+      "scope": "ui",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Shape ids"
+          }
+        },
+        "required": [
+          "ids"
+        ]
+      }
+    },
+    {
+      "name": "image.insert",
+      "label": "Insert image",
+      "description": "Place an image: from a data URL (PNG, JPEG, WebP, GIF, SVG), or with no dataUrl open a file picker. It is downscaled to 2048 px on the long edge and stored once by content hash. Returns { id }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "dataUrl": {
+            "type": "string",
+            "description": "data:image/...;base64,..."
+          },
+          "x": {
+            "type": "number",
+            "description": "Left (default: view centre)"
+          },
+          "y": {
+            "type": "number",
+            "description": "Top"
+          }
+        },
+        "required": []
+      },
+      "shortcut": "I"
+    },
+    {
+      "name": "board.set",
+      "label": "Board settings",
+      "description": "Change the board: name, theme (light|dark), background (#rrggbb), grid (none|dot|line), gridSize (4–200), snap (snap to grid).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name"
+          },
+          "theme": {
+            "type": "string",
+            "description": "Theme",
+            "enum": [
+              "light",
+              "dark"
+            ]
+          },
+          "background": {
+            "type": "string",
+            "description": "Background colour"
+          },
+          "grid": {
+            "type": "string",
+            "description": "Grid",
+            "enum": [
+              "none",
+              "dot",
+              "line"
+            ]
+          },
+          "gridSize": {
+            "type": "number",
+            "description": "Grid spacing"
+          },
+          "snap": {
+            "type": "boolean",
+            "description": "Snap to grid"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "view.grid",
+      "label": "Toggle grid",
+      "description": "Turn the dot grid and snapping on or off.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Mod+'"
+    },
+    {
+      "name": "view.theme",
+      "label": "Toggle dark board",
+      "description": "Switch the board between light and dark.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Shift+Alt+D"
+    },
+    {
+      "name": "view.zoomIn",
+      "label": "Zoom in",
+      "description": "Zoom in about the centre.",
+      "scope": "ui",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": [
+        "Mod+=",
+        "Mod++"
+      ]
+    },
+    {
+      "name": "view.zoomOut",
+      "label": "Zoom out",
+      "description": "Zoom out about the centre.",
+      "scope": "ui",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Mod+-"
+    },
+    {
+      "name": "view.zoomReset",
+      "label": "Zoom to 100%",
+      "description": "Zoom to 100%.",
+      "scope": "ui",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Shift+0"
+    },
+    {
+      "name": "view.zoomFit",
+      "label": "Zoom to fit all",
+      "description": "Zoom to show every shape.",
+      "scope": "ui",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Shift+1"
+    },
+    {
+      "name": "view.zoomSelection",
+      "label": "Zoom to selection",
+      "description": "Zoom to the selected shapes.",
+      "scope": "ui",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Shift+2"
+    },
+    {
+      "name": "view.set",
+      "label": "Set view",
+      "description": "Scroll and zoom the view: x, y (the board point at the top-left of the canvas) and zoom (0.1–30).",
+      "scope": "ui",
+      "input": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number",
+            "description": "Board x at the left edge"
+          },
+          "y": {
+            "type": "number",
+            "description": "Board y at the top edge"
+          },
+          "zoom": {
+            "type": "number",
+            "description": "Zoom, 1 = 100%",
+            "minimum": 0.1,
+            "maximum": 30
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "ui.penOnly",
+      "label": "Pen-only mode",
+      "description": "In pen-only mode a stylus draws and touch only pans and zooms (I6). With no `on`, toggles.",
+      "scope": "ui",
+      "input": {
+        "type": "object",
+        "properties": {
+          "on": {
+            "type": "boolean",
+            "description": "On or off"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "ui.help",
+      "label": "Keyboard shortcuts",
+      "description": "Show the keyboard shortcut sheet.",
+      "scope": "ui",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": [
+        "?",
+        "Shift+/"
+      ]
+    },
+    {
+      "name": "board.new",
+      "label": "New board",
+      "description": "Start a new empty board (the current one stays in its file and its recovery copy).",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "board.open",
+      "label": "Open",
+      "description": "Open a board: .chartella.json, .excalidraw, or a PNG or SVG with a board inside.",
+      "scope": "ui",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Mod+O"
+    },
+    {
+      "name": "board.save",
+      "label": "Save",
+      "description": "Save the board as a .chartella.json file (NakliOS storage when hosted, else a file you pick).",
+      "scope": "ui",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Mod+S"
+    },
+    {
+      "name": "board.export",
+      "label": "Export",
+      "description": "Export the board: format png, svg, excalidraw or chartella. For png and svg: scope board|selection|frame (frameId), scale 1–3, background (false: transparent), embed (true: the editable board rides inside the image, so Open brings it back). Returns { name, where }.",
+      "scope": "ui",
+      "input": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "description": "Format",
+            "enum": [
+              "png",
+              "svg",
+              "excalidraw",
+              "chartella"
+            ]
+          },
+          "scope": {
+            "type": "string",
+            "description": "What",
+            "enum": [
+              "board",
+              "selection",
+              "frame"
+            ]
+          },
+          "frameId": {
+            "type": "string",
+            "description": "Frame id when scope is frame"
+          },
+          "scale": {
+            "type": "number",
+            "description": "1, 2 or 3",
+            "minimum": 1,
+            "maximum": 3
+          },
+          "background": {
+            "type": "boolean",
+            "description": "Paint the background (default true)"
+          },
+          "embed": {
+            "type": "boolean",
+            "description": "Embed the editable board (default true)"
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Shape ids (default: the selection)"
+          }
+        },
+        "required": [
+          "format"
+        ]
+      },
+      "shortcut": "Shift+Mod+E"
+    },
+    {
+      "name": "script.run",
+      "label": "Run script",
+      "description": "Run a list of commands as one undo step: steps is [{ command, input }]. A string \"$N.key\" in an input is replaced by step N's result key (1-based), e.g. \"$1.id\". If a step fails, nothing changes. Returns { steps, results }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "description": "Command name"
+                },
+                "input": {
+                  "type": "object"
+                }
+              },
+              "required": [
+                "command"
+              ]
+            }
+          },
+          "label": {
+            "type": "string",
+            "description": "Undo label"
+          }
+        },
+        "required": [
+          "steps"
+        ]
+      }
+    }
+  ],
+  "errorCodes": [
+    {
+      "code": "not-found",
+      "meaning": "The shape, frame, file, binding or command named does not exist."
+    },
+    {
+      "code": "locked",
+      "meaning": "The shape is locked; unlock it first."
+    },
+    {
+      "code": "empty",
+      "meaning": "There is nothing to act on."
+    },
+    {
+      "code": "needs-setup",
+      "meaning": "Something must be selected or made first."
+    },
+    {
+      "code": "wrong-kind",
+      "meaning": "The operation does not apply to this kind of shape."
+    },
+    {
+      "code": "bad-file",
+      "meaning": "The file is not a board Chartella can read."
+    },
+    {
+      "code": "unsupported",
+      "meaning": "This browser cannot do it (an API is missing)."
+    },
+    {
+      "code": "bad-colour",
+      "meaning": "A colour is not in a form Chartella accepts (#rrggbb, #rgb, #rrggbbaa or transparent)."
+    },
+    {
+      "code": "out-of-range",
+      "meaning": "A number is outside its allowed range."
+    },
+    {
+      "code": "bad-value",
+      "meaning": "A value is not one of the allowed choices or has the wrong form."
+    },
+    {
+      "code": "refused",
+      "meaning": "Any other refusal."
+    }
+  ]
+}

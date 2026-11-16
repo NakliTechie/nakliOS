@@ -5215,6 +5215,34 @@
           "destination": "project.schema.json"
         }
       ]
+    },
+    {
+      "id": "chartella",
+      "repo": "NakliTechie/chartella",
+      "ref": "main",
+      "files": [
+        {
+          "source": "index.html",
+          "destination": "index.html",
+          "managedSdk": "inline"
+        },
+        {
+          "source": "commands.json",
+          "destination": "commands.json"
+        },
+        {
+          "source": "LICENSE",
+          "destination": "LICENSE"
+        },
+        {
+          "source": "sw.js",
+          "destination": "sw.js"
+        },
+        {
+          "source": "board.schema.json",
+          "destination": "board.schema.json"
+        }
+      ]
     }
   ]
 }

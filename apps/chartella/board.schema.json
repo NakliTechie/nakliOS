@@ -1,0 +1,483 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://naklios.dev/apps/chartella/board.schema.json",
+ "title": "Chartella board",
+ "description": "A Chartella whiteboard: shapes, arrows with bindings, sticky notes, frames, images and ink, plus the undo steps.",
+ "type": "object",
+ "required": [
+  "format",
+  "version",
+  "shapes"
+ ],
+ "properties": {
+  "$schema": {
+   "type": "string",
+   "description": "This schema's URL"
+  },
+  "format": {
+   "const": "chartella"
+  },
+  "version": {
+   "type": "integer",
+   "minimum": 1,
+   "maximum": 1
+  },
+  "name": {
+   "type": "string",
+   "description": "Board name",
+   "maxLength": 200
+  },
+  "theme": {
+   "type": "string",
+   "description": "Board theme",
+   "enum": [
+    "light",
+    "dark"
+   ]
+  },
+  "background": {
+   "type": "string",
+   "description": "A colour: #rgb, #rgba, #rrggbb, #rrggbbaa or transparent",
+   "pattern": "^(transparent|#[0-9a-fA-F]{3}|#[0-9a-fA-F]{4}|#[0-9a-fA-F]{6}|#[0-9a-fA-F]{8})$"
+  },
+  "grid": {
+   "type": "string",
+   "description": "Grid",
+   "enum": [
+    "none",
+    "dot",
+    "line"
+   ]
+  },
+  "gridSize": {
+   "type": "number",
+   "description": "Grid spacing",
+   "minimum": 4,
+   "maximum": 200
+  },
+  "snap": {
+   "type": "boolean",
+   "description": "Snap to grid"
+  },
+  "shapes": {
+   "type": "object",
+   "additionalProperties": {
+    "type": "object",
+    "required": [
+     "id",
+     "kind",
+     "x",
+     "y",
+     "w",
+     "h",
+     "z"
+    ],
+    "description": "A shape. Point kinds (line, arrow, ink) store points relative to (x, y), their box is the points' extent and rotation is 0. A bound arrow end is derived from its binding when drawn.",
+    "properties": {
+     "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,64}$"
+     },
+     "kind": {
+      "type": "string",
+      "description": "What the shape is",
+      "enum": [
+       "rect",
+       "ellipse",
+       "diamond",
+       "triangle",
+       "line",
+       "arrow",
+       "text",
+       "sticky",
+       "frame",
+       "image",
+       "ink"
+      ]
+     },
+     "x": {
+      "type": "number",
+      "description": "Box left, board units"
+     },
+     "y": {
+      "type": "number",
+      "description": "Box top, board units"
+     },
+     "w": {
+      "type": "number",
+      "description": "Box width",
+      "minimum": 0
+     },
+     "h": {
+      "type": "number",
+      "description": "Box height",
+      "minimum": 0
+     },
+     "rotation": {
+      "type": "number",
+      "description": "Radians about the box centre",
+      "minimum": -100,
+      "maximum": 100
+     },
+     "flipX": {
+      "type": "boolean",
+      "description": "Mirrored left to right"
+     },
+     "flipY": {
+      "type": "boolean",
+      "description": "Mirrored top to bottom"
+     },
+     "z": {
+      "type": "string",
+      "description": "Fractional z-order key; shapes draw in plain string order",
+      "pattern": "^[A-Za-z0-9]+$"
+     },
+     "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Bumped on every edit of this shape"
+     },
+     "groupIds": {
+      "type": "array",
+      "items": {
+       "type": "string",
+       "pattern": "^[A-Za-z0-9_-]{1,64}$"
+      },
+      "description": "Groups, innermost first"
+     },
+     "frameId": {
+      "oneOf": [
+       {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_-]{1,64}$"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "The frame that holds this shape"
+     },
+     "locked": {
+      "type": "boolean",
+      "description": "Locked shapes do not move or change"
+     },
+     "stroke": {
+      "type": "string",
+      "description": "A colour: #rgb, #rgba, #rrggbb, #rrggbbaa or transparent",
+      "pattern": "^(transparent|#[0-9a-fA-F]{3}|#[0-9a-fA-F]{4}|#[0-9a-fA-F]{6}|#[0-9a-fA-F]{8})$"
+     },
+     "fill": {
+      "type": "string",
+      "description": "A colour: #rgb, #rgba, #rrggbb, #rrggbbaa or transparent",
+      "pattern": "^(transparent|#[0-9a-fA-F]{3}|#[0-9a-fA-F]{4}|#[0-9a-fA-F]{6}|#[0-9a-fA-F]{8})$"
+     },
+     "strokeWidth": {
+      "type": "number",
+      "description": "Stroke width",
+      "minimum": 0,
+      "maximum": 64
+     },
+     "dash": {
+      "type": "string",
+      "description": "Stroke pattern",
+      "enum": [
+       "solid",
+       "dashed",
+       "dotted"
+      ]
+     },
+     "opacity": {
+      "type": "number",
+      "description": "Opacity",
+      "minimum": 0,
+      "maximum": 1
+     },
+     "radius": {
+      "type": "number",
+      "description": "Corner radius",
+      "minimum": 0,
+      "maximum": 1000
+     },
+     "sketch": {
+      "type": "boolean",
+      "description": "Hand-drawn (rough.js) style; false: clean lines"
+     },
+     "seed": {
+      "type": "integer",
+      "description": "Fixed random seed of the sketch wobble"
+     },
+     "font": {
+      "type": "string",
+      "description": "Font family",
+      "enum": [
+       "hand",
+       "sans",
+       "mono"
+      ]
+     },
+     "fontSize": {
+      "type": "number",
+      "description": "Font size, px",
+      "minimum": 4,
+      "maximum": 400
+     },
+     "align": {
+      "type": "string",
+      "description": "Text alignment",
+      "enum": [
+       "left",
+       "center",
+       "right"
+      ]
+     },
+     "text": {
+      "type": "string",
+      "description": "The text, or the label of a shape or arrow",
+      "maxLength": 20000
+     },
+     "points": {
+      "type": "array",
+      "items": {
+       "type": "array",
+       "items": {
+        "type": "number"
+       },
+       "minItems": 2,
+       "maxItems": 3,
+       "description": "[x, y] relative to the shape box corner; ink adds pressure (0..1)"
+      },
+      "minItems": 1,
+      "maxItems": 20000
+     },
+     "route": {
+      "type": "string",
+      "description": "Arrow route",
+      "enum": [
+       "straight",
+       "curved",
+       "elbow"
+      ]
+     },
+     "bend": {
+      "type": "number",
+      "description": "Curved arrow bend, a fraction of its length",
+      "minimum": -2,
+      "maximum": 2
+     },
+     "startHead": {
+      "type": "string",
+      "description": "Arrowhead at the start",
+      "enum": [
+       "none",
+       "arrow",
+       "triangle",
+       "dot",
+       "bar"
+      ]
+     },
+     "endHead": {
+      "type": "string",
+      "description": "Arrowhead at the end",
+      "enum": [
+       "none",
+       "arrow",
+       "triangle",
+       "dot",
+       "bar"
+      ]
+     },
+     "autoWidth": {
+      "type": "boolean",
+      "description": "Text: the box grows with the text; false: fixed width, wrapping"
+     },
+     "color": {
+      "description": "Sticky note colour: a name or a colour",
+      "oneOf": [
+       {
+        "type": "string",
+        "description": "Named colour",
+        "enum": [
+         "yellow",
+         "orange",
+         "pink",
+         "purple",
+         "blue",
+         "teal",
+         "green",
+         "gray"
+        ]
+       },
+       {
+        "type": "string",
+        "description": "A colour: #rgb, #rgba, #rrggbb, #rrggbbaa or transparent",
+        "pattern": "^(transparent|#[0-9a-fA-F]{3}|#[0-9a-fA-F]{4}|#[0-9a-fA-F]{6}|#[0-9a-fA-F]{8})$"
+       }
+      ]
+     },
+     "name": {
+      "type": "string",
+      "description": "Frame name",
+      "maxLength": 20000
+     },
+     "fileId": {
+      "oneOf": [
+       {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_-]{1,64}$"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "Image: the content hash of its file"
+     },
+     "highlight": {
+      "type": "boolean",
+      "description": "Ink: a translucent highlighter stroke"
+     },
+     "simulatePressure": {
+      "type": "boolean",
+      "description": "Ink: pressure simulated from speed (mouse input)"
+     }
+    }
+   },
+   "description": "Shapes by id"
+  },
+  "bindings": {
+   "type": "object",
+   "additionalProperties": {
+    "type": "object",
+    "required": [
+     "id",
+     "arrowId",
+     "end",
+     "targetId",
+     "mode"
+    ],
+    "description": "One end of an arrow attached to a shape. It follows the shape on move, resize and undo.",
+    "properties": {
+     "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,64}$"
+     },
+     "arrowId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,64}$"
+     },
+     "targetId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,64}$"
+     },
+     "end": {
+      "type": "string",
+      "description": "Which end",
+      "enum": [
+       "start",
+       "end"
+      ]
+     },
+     "mode": {
+      "type": "string",
+      "description": "edge: meets the outline facing the other end; fixed: pinned at anchor",
+      "enum": [
+       "edge",
+       "fixed"
+      ]
+     },
+     "anchor": {
+      "oneOf": [
+       {
+        "type": "array",
+        "items": {
+         "type": "number",
+         "minimum": 0,
+         "maximum": 1
+        },
+        "minItems": 2,
+        "maxItems": 2
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "Fixed anchor as fractions of the target box [ax, ay]"
+     }
+    }
+   },
+   "description": "Arrow bindings by id"
+  },
+  "files": {
+   "type": "object",
+   "additionalProperties": {
+    "type": "object",
+    "required": [
+     "id",
+     "mime",
+     "width",
+     "height"
+    ],
+    "description": "An image file. The bytes live in the image store under the same id; exported files carry them as dataURL.",
+    "properties": {
+     "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,64}$"
+     },
+     "mime": {
+      "type": "string",
+      "description": "Image type",
+      "enum": [
+       "image/png",
+       "image/jpeg",
+       "image/webp",
+       "image/gif",
+       "image/svg+xml"
+      ]
+     },
+     "width": {
+      "type": "number",
+      "description": "Pixels",
+      "exclusiveMinimum": 0
+     },
+     "height": {
+      "type": "number",
+      "description": "Pixels",
+      "exclusiveMinimum": 0
+     },
+     "dataURL": {
+      "type": "string",
+      "description": "The image as a data URL (only inside images with an embedded board)",
+      "pattern": "^data:"
+     }
+    }
+   },
+   "description": "Image files by content hash"
+  },
+  "history": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "undo"
+    ],
+    "properties": {
+     "label": {
+      "type": "string",
+      "description": "The undo label"
+     },
+     "by": {
+      "type": "string",
+      "description": "Who made the edit",
+      "enum": [
+       "person",
+       "api"
+      ]
+     },
+     "undo": {
+      "description": "A structural patch that turns the board after this step back into the board before it"
+     }
+    }
+   },
+   "description": "Undo steps, oldest first"
+  }
+ }
+}
