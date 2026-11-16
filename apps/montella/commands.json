@@ -238,7 +238,7 @@
     },
     {
       "name": "clip.set",
-      "description": "Change clip properties: volume (0–2), fadeIn, fadeOut, speed (0.25–4), opacity, scale, x, y, rotation, fit (fit|fill|blur), look (none|vivid|warm|cool|mono|fade|noir|sunset), blend (normal|multiply|screen|overlay|darken|lighten|difference|color-dodge|soft-light), filters {brightness, contrast, saturation, temperature} each -1..1, reverse (true plays the clip backwards), transitionIn {type: crossfade|fade|wipe|slide, duration, dir: right|left for wipe and slide} or null, text, style, muted.",
+      "description": "Change clip properties: volume (0–2), fadeIn, fadeOut, speed (0.25–4), opacity, scale, x, y, rotation, fit (fit|fill|blur), look (none|vivid|warm|cool|mono|fade|noir|sunset), blend (normal|multiply|screen|overlay|darken|lighten|difference|color-dodge|soft-light), filters {brightness, contrast, saturation, temperature} each -1..1, reverse (true plays the clip backwards), transitionIn {type: crossfade|fade|wipe|slide|zoom|push|iris|whip, duration, dir: right|left for wipe and slide} or null, text, style, muted.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -889,6 +889,329 @@
         },
         "required": [
           "clipId"
+        ]
+      }
+    },
+    {
+      "name": "script.run",
+      "description": "Run a list of Montella commands as one edit: steps [{command, input}]. A string \"$N.key\" in an input is the value `key` from step N's result (1-based), for example \"$1.clipId\". The whole script is one undo step; if any step fails, nothing changes and the error names the step.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "steps": {
+            "type": "array",
+            "description": "Steps in order",
+            "items": {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "description": "Command name, e.g. clip.add"
+                },
+                "input": {
+                  "type": "object",
+                  "description": "That command's input"
+                }
+              },
+              "required": [
+                "command"
+              ]
+            }
+          },
+          "label": {
+            "type": "string",
+            "description": "Name for the undo step (optional)"
+          }
+        },
+        "required": [
+          "steps"
+        ]
+      }
+    },
+    {
+      "name": "project.set",
+      "description": "Set project fields: name, fps (24, 25, 30, 50, 60), background (#rrggbb), mode (quick or pro).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Project name"
+          },
+          "fps": {
+            "type": "number",
+            "description": "Frame rate"
+          },
+          "background": {
+            "type": "string",
+            "description": "Background colour #rrggbb"
+          },
+          "mode": {
+            "type": "string",
+            "description": "quick or pro",
+            "enum": [
+              "quick",
+              "pro"
+            ]
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "track.add",
+      "description": "Add a track of a kind (video, audio or text), optionally named. Returns its id.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "Track kind",
+            "enum": [
+              "video",
+              "audio",
+              "text"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "description": "Track name (optional)"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      }
+    },
+    {
+      "name": "clip.keyframe",
+      "description": "Key a clip property at a timeline time. prop: x, y, scale, rotation, opacity, volume. ease (how the value moves to the next key): linear, in, out, inOut, expoIn, expoOut, hold.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "clipId": {
+            "type": "string",
+            "description": "Clip id"
+          },
+          "prop": {
+            "type": "string",
+            "description": "Property",
+            "enum": [
+              "x",
+              "y",
+              "scale",
+              "rotation",
+              "opacity",
+              "volume"
+            ]
+          },
+          "at": {
+            "type": "number",
+            "description": "Timeline time, seconds"
+          },
+          "value": {
+            "type": "number",
+            "description": "Value at that time"
+          },
+          "ease": {
+            "type": "string",
+            "description": "Ease to the next key",
+            "enum": [
+              "linear",
+              "in",
+              "out",
+              "inOut",
+              "expoIn",
+              "expoOut",
+              "hold"
+            ]
+          }
+        },
+        "required": [
+          "clipId",
+          "prop",
+          "at",
+          "value"
+        ]
+      }
+    },
+    {
+      "name": "audio.beats",
+      "description": "Find the beat of a music clip: tempo (BPM) and beat times on the timeline, for placing cuts or titles on beats.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "clipId": {
+            "type": "string",
+            "description": "Music clip id"
+          }
+        },
+        "required": [
+          "clipId"
+        ]
+      }
+    },
+    {
+      "name": "frame.snapshot",
+      "description": "Render the frame at a timeline time as a small JPEG data URL (default 480 px wide), to look at the result.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "number",
+            "description": "Timeline time, seconds"
+          },
+          "width": {
+            "type": "number",
+            "description": "Width in pixels (default 480)"
+          }
+        },
+        "required": [
+          "at"
+        ]
+      }
+    },
+    {
+      "name": "media.import",
+      "description": "Import a media file from Montella's NakliOS storage (for example \"media/clip.mp4\"); in quick mode it also goes on the main track. Returns the media id.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Path in Montella's storage"
+          }
+        },
+        "required": [
+          "path"
+        ]
+      }
+    },
+    {
+      "name": "project.check",
+      "description": "Find problems a person would see: text off the frame or outside title-safe, text too short to read, gaps on the main track, clips past their file, missing files, captions under vertical apps' buttons, long silent projects. Returns [{level, code, message, fix, clipId?, at?}].",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "captions.words",
+      "description": "Replace the Captions track with short captions of up to maxWords words from a transcribed clip, in the karaoke look that lights each word as it is spoken (word times are estimates).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "clipId": {
+            "type": "string",
+            "description": "A transcribed clip"
+          },
+          "maxWords": {
+            "type": "number",
+            "description": "Words per caption, 2-6 (default 4)"
+          }
+        },
+        "required": [
+          "clipId"
+        ]
+      }
+    },
+    {
+      "name": "graphic.add",
+      "description": "Add a graphic on a text track: shape rect, line, bar (progress), counter (from, to, prefix, suffix, decimals) or chart (values, labels). w and h are fractions of the canvas; x and y place its centre (0-1).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "shape": {
+            "type": "string",
+            "description": "Shape",
+            "enum": [
+              "rect",
+              "line",
+              "bar",
+              "counter",
+              "chart"
+            ]
+          },
+          "start": {
+            "type": "number",
+            "description": "Start, seconds"
+          },
+          "length": {
+            "type": "number",
+            "description": "Length, seconds (default 3)"
+          },
+          "x": {
+            "type": "number",
+            "description": "Centre across, 0-1"
+          },
+          "y": {
+            "type": "number",
+            "description": "Centre down, 0-1"
+          },
+          "trackId": {
+            "type": "string",
+            "description": "Text track (default t1)"
+          },
+          "graphic": {
+            "type": "object",
+            "description": "Shape settings: color, w, h, radius, from, to, prefix, suffix, decimals, values, labels, value (bar fill 0-1)"
+          }
+        },
+        "required": [
+          "shape"
+        ]
+      }
+    },
+    {
+      "name": "template.list",
+      "description": "List the templates and their variables.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "template.apply",
+      "description": "Add a template at a time with values for its variables: title-card, lower-third, quote-card, stat-card, end-card. It goes on a new text track.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Template",
+            "enum": [
+              "title-card",
+              "lower-third",
+              "quote-card",
+              "stat-card",
+              "end-card"
+            ]
+          },
+          "at": {
+            "type": "number",
+            "description": "Start, seconds"
+          },
+          "values": {
+            "type": "object",
+            "description": "Variable values by key (see template.list)"
+          }
+        },
+        "required": [
+          "name"
         ]
       }
     },
