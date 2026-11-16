@@ -52,7 +52,7 @@ program asks the person to confirm it in the terminal. The key never crosses the
 non-extractable CryptoKey in IndexedDB. Every request and answer is signed with HMAC-SHA256 (30-second window,
 single-use nonce kept across tabs). Calls run
 as caller `door:<name>` on the same path as Anvil (reads run; a change needs this visit's consent or returns
-`ECONSENT`; a destructive command always returns `ECONSENT`). The first desktop tab keeps the relay. Each pairing and call is one event in `naklios/history/apps.ndjson`. The relay refuses program requests
+`ECONSENT`; a destructive command always returns `ECONSENT`). The first desktop tab keeps the relay. `naklios-door mcp` serves the same three verbs as MCP tools on stdin/stdout for AI clients. Each pairing and call is one event in `naklios/history/apps.ndjson`. The relay refuses program requests
 that carry an `Origin` header or a foreign `Host` header, and accepts the desktop side only from `https://naklios.dev`
 (loopback origins with `--dev`).
 
