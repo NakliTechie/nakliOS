@@ -1,16 +1,33 @@
 {
+  "accepts": [
+    {
+      "action": "import",
+      "label": "Open in Draft",
+      "extensions": [
+        ".md",
+        ".txt",
+        ".docx"
+      ]
+    }
+  ],
   "commands": [
     {
       "name": "documents.list",
       "description": "List the documents in the Draft editor, e.g. \"what documents do I have\".",
       "scope": "read",
-      "input": { "type": "object", "properties": {} }
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
     },
     {
       "name": "document.active",
       "description": "Say which document is open in the Draft editor, e.g. \"which document am I working on\".",
       "scope": "read",
-      "input": { "type": "object", "properties": {} }
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
     },
     {
       "name": "document.open",
@@ -19,9 +36,15 @@
       "input": {
         "type": "object",
         "properties": {
-          "name": { "type": "string", "minLength": 1, "description": "Document name, e.g. \"budget\"" }
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Document name, e.g. \"budget\""
+          }
         },
-        "required": ["name"]
+        "required": [
+          "name"
+        ]
       }
     },
     {
@@ -31,8 +54,14 @@
       "input": {
         "type": "object",
         "properties": {
-          "from": { "type": "integer", "description": "Start position, to read only part. Leave out to start at the beginning" },
-          "to": { "type": "integer", "description": "End position, to read only part. Leave out to read to the end" }
+          "from": {
+            "type": "integer",
+            "description": "Start position, to read only part. Leave out to start at the beginning"
+          },
+          "to": {
+            "type": "integer",
+            "description": "End position, to read only part. Leave out to read to the end"
+          }
         }
       }
     },
@@ -40,7 +69,10 @@
       "name": "outline.read",
       "description": "List the headings of the open document in the Draft editor, e.g. \"what are the sections of this document\".",
       "scope": "read",
-      "input": { "type": "object", "properties": {} }
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
     },
     {
       "name": "text.find",
@@ -49,10 +81,19 @@
       "input": {
         "type": "object",
         "properties": {
-          "query": { "type": "string", "minLength": 1, "description": "The words to look for" },
-          "caseSensitive": { "type": "boolean", "description": "True to match capital letters exactly. Leave out to ignore case" }
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The words to look for"
+          },
+          "caseSensitive": {
+            "type": "boolean",
+            "description": "True to match capital letters exactly. Leave out to ignore case"
+          }
         },
-        "required": ["query"]
+        "required": [
+          "query"
+        ]
       }
     },
     {
@@ -62,13 +103,762 @@
       "input": {
         "type": "object",
         "properties": {
-          "find": { "type": "string", "minLength": 1, "description": "The words to replace" },
-          "replace": { "type": "string", "description": "The new words. Empty text deletes the words" },
-          "occurrence": { "type": "integer", "description": "Which match to change, counting from 1. Needed when the words appear more than once" },
-          "caseSensitive": { "type": "boolean", "description": "True to match capital letters exactly. Leave out to ignore case" }
+          "find": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The words to replace"
+          },
+          "replace": {
+            "type": "string",
+            "description": "The new words. Empty text deletes the words"
+          },
+          "occurrence": {
+            "type": "integer",
+            "description": "Which match to change, counting from 1. Needed when the words appear more than once"
+          },
+          "caseSensitive": {
+            "type": "boolean",
+            "description": "True to match capital letters exactly. Leave out to ignore case"
+          }
         },
-        "required": ["find", "replace"]
+        "required": [
+          "find",
+          "replace"
+        ]
       }
+    },
+    {
+      "name": "text.insert",
+      "description": "Insert text into the open document in the Draft editor, e.g. \"add a sentence at the end\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "The text to insert"
+          },
+          "at": {
+            "type": "integer",
+            "description": "Where to insert. Leave out to add at the end"
+          }
+        },
+        "required": [
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "format.mark",
+      "description": "Make text bold, italic, underlined, struck through, code, superscript, subscript or highlighted in the Draft editor, e.g. \"make the title bold\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "integer",
+            "description": "Start position. Leave out to use the current selection"
+          },
+          "to": {
+            "type": "integer",
+            "description": "End position. Leave out to use the current selection"
+          },
+          "mark": {
+            "type": "string",
+            "enum": [
+              "bold",
+              "italic",
+              "underline",
+              "strike",
+              "code",
+              "superscript",
+              "subscript",
+              "highlight"
+            ],
+            "description": "Which format to toggle"
+          }
+        },
+        "required": [
+          "mark"
+        ]
+      }
+    },
+    {
+      "name": "format.style",
+      "description": "Set the paragraph style in the Draft editor: body, title, subtitle or a heading level, e.g. \"make this a heading\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "integer",
+            "description": "Start position. Leave out to use the current selection"
+          },
+          "to": {
+            "type": "integer",
+            "description": "End position. Leave out to use the current selection"
+          },
+          "style": {
+            "type": "string",
+            "enum": [
+              "body",
+              "title",
+              "subtitle",
+              "h1",
+              "h2",
+              "h3",
+              "h4",
+              "h5",
+              "h6"
+            ],
+            "description": "The style"
+          }
+        },
+        "required": [
+          "style"
+        ]
+      }
+    },
+    {
+      "name": "format.align",
+      "description": "Align paragraphs left, centre, right or justified in the Draft editor, e.g. \"centre the title\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "integer",
+            "description": "Start position. Leave out to use the current selection"
+          },
+          "to": {
+            "type": "integer",
+            "description": "End position. Leave out to use the current selection"
+          },
+          "align": {
+            "type": "string",
+            "enum": [
+              "left",
+              "center",
+              "right",
+              "justify"
+            ],
+            "description": "The alignment"
+          }
+        },
+        "required": [
+          "align"
+        ]
+      }
+    },
+    {
+      "name": "format.link",
+      "description": "Add, change or remove a link on text in the Draft editor, e.g. \"link this to the report\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "integer",
+            "description": "Start position. Leave out to use the current selection"
+          },
+          "to": {
+            "type": "integer",
+            "description": "End position. Leave out to use the current selection"
+          },
+          "href": {
+            "type": "string",
+            "description": "The web address. Empty text removes the link"
+          }
+        },
+        "required": [
+          "href"
+        ]
+      }
+    },
+    {
+      "name": "format.list",
+      "description": "Turn paragraphs into a bulleted or numbered list in the Draft editor, or back, e.g. \"make these a numbered list\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "integer",
+            "description": "Start position. Leave out to use the current selection"
+          },
+          "to": {
+            "type": "integer",
+            "description": "End position. Leave out to use the current selection"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "bullet",
+              "ordered"
+            ],
+            "description": "Bulleted or numbered"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      }
+    },
+    {
+      "name": "footnote.insert",
+      "description": "Add a footnote in the Draft editor, e.g. \"add a footnote citing the source\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The footnote text"
+          },
+          "at": {
+            "type": "integer",
+            "description": "Where the note mark goes. Leave out to add it at the end"
+          }
+        },
+        "required": [
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "table.insert",
+      "description": "Insert a table in the Draft editor, e.g. \"add a table with three columns\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "rows": {
+            "type": "integer",
+            "description": "Rows, 1 to 50. Default 3"
+          },
+          "cols": {
+            "type": "integer",
+            "description": "Columns, 1 to 20. Default 3"
+          },
+          "header": {
+            "type": "boolean",
+            "description": "True for a header row. Default true"
+          },
+          "at": {
+            "type": "integer",
+            "description": "Where to insert. Leave out to add at the end"
+          }
+        }
+      }
+    },
+    {
+      "name": "table.edit",
+      "description": "Change a table in the Draft editor: add or delete a row or column, toggle the header row, merge or split cells, or delete the table, e.g. \"add a row to the table\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "addRow",
+              "addColumn",
+              "deleteRow",
+              "deleteColumn",
+              "toggleHeaderRow",
+              "merge",
+              "split",
+              "delete"
+            ],
+            "description": "What to do"
+          },
+          "at": {
+            "type": "integer",
+            "description": "A position inside the table cell to act on"
+          }
+        },
+        "required": [
+          "action",
+          "at"
+        ]
+      }
+    },
+    {
+      "name": "image.set",
+      "description": "Set a picture's alt text, caption, position or width in the Draft editor, e.g. \"describe the picture for screen readers\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "integer",
+            "description": "The picture's position"
+          },
+          "alt": {
+            "type": "string",
+            "description": "Alt text for screen readers"
+          },
+          "caption": {
+            "type": "string",
+            "description": "Caption shown under the picture"
+          },
+          "align": {
+            "type": "string",
+            "enum": [
+              "left",
+              "center",
+              "right",
+              "none"
+            ],
+            "description": "Position. none for the default"
+          },
+          "width": {
+            "type": "integer",
+            "description": "Width as a percentage of the text column, 1 to 100. 0 for natural size"
+          }
+        },
+        "required": [
+          "at"
+        ]
+      }
+    },
+    {
+      "name": "insert.page-break",
+      "description": "Insert a page break in the Draft editor, e.g. \"start a new page here\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "integer",
+            "description": "Where to break. Leave out to add at the end"
+          }
+        }
+      }
+    },
+    {
+      "name": "insert.contents",
+      "description": "Insert a table of contents built from the headings in the Draft editor, e.g. \"add a table of contents\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "maxLevel": {
+            "type": "integer",
+            "description": "Deepest heading level listed, 1 to 6. Default 3"
+          },
+          "at": {
+            "type": "integer",
+            "description": "Where to insert. Leave out to add at the end"
+          }
+        }
+      }
+    },
+    {
+      "name": "history.undo",
+      "description": "Undo the last change in the Draft editor, e.g. \"undo that\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "history.redo",
+      "description": "Redo the change just undone in the Draft editor, e.g. \"redo that\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "comments.list",
+      "description": "List the comments in the open document in the Draft editor, e.g. \"what comments are there\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "comment.add",
+      "description": "Add a comment on some text in the Draft editor, e.g. \"comment that this figure needs a source\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The comment"
+          },
+          "from": {
+            "type": "integer",
+            "description": "Start of the text to comment on"
+          },
+          "to": {
+            "type": "integer",
+            "description": "End of the text to comment on"
+          }
+        },
+        "required": [
+          "text",
+          "from",
+          "to"
+        ]
+      }
+    },
+    {
+      "name": "comment.reply",
+      "description": "Reply to a comment in the Draft editor, e.g. \"reply that the source is added\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The comment id, from comments.list"
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The reply"
+          }
+        },
+        "required": [
+          "id",
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "comment.resolve",
+      "description": "Resolve or reopen a comment in the Draft editor, e.g. \"mark that comment as done\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The comment id"
+          },
+          "resolved": {
+            "type": "boolean",
+            "description": "False reopens it. Default true"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    {
+      "name": "comment.delete",
+      "description": "Delete a comment in the Draft editor, e.g. \"remove that comment\".",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The comment id"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    {
+      "name": "changes.list",
+      "description": "List the suggested changes (tracked changes) in the open document in the Draft editor, e.g. \"what changes are suggested\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "change.accept",
+      "description": "Accept one suggested change, or all of them, in the Draft editor, e.g. \"accept all the changes\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The change id, from changes.list"
+          },
+          "all": {
+            "type": "boolean",
+            "description": "True to accept every change"
+          }
+        }
+      }
+    },
+    {
+      "name": "change.reject",
+      "description": "Reject one suggested change, or all of them, in the Draft editor, e.g. \"reject that change\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The change id, from changes.list"
+          },
+          "all": {
+            "type": "boolean",
+            "description": "True to reject every change"
+          }
+        }
+      }
+    },
+    {
+      "name": "suggesting.set",
+      "description": "Turn suggesting mode (track changes) on or off in the Draft editor, e.g. \"track my changes\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "on": {
+            "type": "boolean",
+            "description": "True to track edits as suggestions"
+          }
+        },
+        "required": [
+          "on"
+        ]
+      }
+    },
+    {
+      "name": "page.read",
+      "description": "Read the page setup of the open document in the Draft editor, e.g. \"what paper size is this\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "page.set",
+      "description": "Change the page setup in the Draft editor: paper size, orientation, margins, header, footer, page numbers, e.g. \"use landscape pages\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "size": {
+            "type": "string",
+            "enum": [
+              "A4",
+              "Letter",
+              "Legal"
+            ],
+            "description": "Paper size"
+          },
+          "orientation": {
+            "type": "string",
+            "enum": [
+              "portrait",
+              "landscape"
+            ],
+            "description": "Orientation"
+          },
+          "margins": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 4,
+            "maxItems": 4,
+            "description": "Top, right, bottom, left in millimetres"
+          },
+          "header": {
+            "type": "string",
+            "description": "Header text; {page} and {pages} become numbers"
+          },
+          "footer": {
+            "type": "string",
+            "description": "Footer text; {page} and {pages} become numbers"
+          },
+          "pageNumbers": {
+            "type": "string",
+            "enum": [
+              "none",
+              "footer-center",
+              "footer-right",
+              "header-right"
+            ],
+            "description": "Where page numbers go"
+          },
+          "differentFirst": {
+            "type": "boolean",
+            "description": "True for no header, footer or number on the first page"
+          }
+        }
+      }
+    },
+    {
+      "name": "document.print",
+      "description": "Print the open document, or save it as PDF, from the Draft editor, e.g. \"print this\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {}
+      },
+      "shows": true
+    },
+    {
+      "name": "document.export",
+      "description": "Export the open document from the Draft editor as Markdown, HTML, Draft JSON or Word, e.g. \"give me this as markdown\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "md",
+              "html",
+              "json",
+              "docx"
+            ],
+            "description": "The format. Word comes back as base64"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      }
+    },
+    {
+      "name": "document.new",
+      "description": "Start a new document in the Draft editor, blank or from a template, e.g. \"start a new letter\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Document name. Leave out for untitled"
+          },
+          "template": {
+            "type": "string",
+            "description": "Template id from templates.list, e.g. letter"
+          }
+        }
+      }
+    },
+    {
+      "name": "document.delete",
+      "description": "Delete a document in the Draft editor permanently, e.g. \"delete my old draft\".",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Document name"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      }
+    },
+    {
+      "name": "templates.list",
+      "description": "List the document templates in the Draft editor, e.g. \"what templates are there\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "template.save",
+      "description": "Save the open document as a template in the Draft editor, e.g. \"save this as a template called report\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Template name"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      }
+    },
+    {
+      "name": "assistant.check",
+      "description": "Check the open document for spelling, grammar, style and accessibility issues in the Draft editor, e.g. \"proofread my document\".",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "assistant.apply",
+      "description": "Apply a fix the writing assistant found in the Draft editor, e.g. \"fix that spelling\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The finding id, from assistant.check"
+          },
+          "replacement": {
+            "type": "string",
+            "description": "Which suggested replacement to use. Leave out for the first"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    {
+      "name": "panel.open",
+      "description": "Open a panel in the Draft editor: documents, find, settings, writing help, format, insert, review, page setup, assistant or help, e.g. \"open the comments\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "panel": {
+            "type": "string",
+            "enum": [
+              "documents",
+              "find",
+              "settings",
+              "sidecar",
+              "format",
+              "insert",
+              "review",
+              "page",
+              "assistant",
+              "help"
+            ],
+            "description": "Which panel"
+          }
+        },
+        "required": [
+          "panel"
+        ]
+      },
+      "shows": true
     }
   ]
 }
