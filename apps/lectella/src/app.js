@@ -1,7 +1,7 @@
 // The page: draws the library, wires every control to the command manifest, runs chat through the NakliOS
 // model, and picks where the library lives (NakliOS Folder or Crate when connected, else this browser).
 
-import { PODCAST_LENGTHS, splitReactions, spokenMinutes, beforeSources, buildChat, parseEpisode, parsePlan, podcastPlanRequest, podcastSegmentRequest, citedRefs, esc, estimateTokens, mindmapSvg, parseOutline, parseScript, parseSlides, renderMarkdown, scriptMarkdown, studioRequest, summaryRequest, titleFrom } from './core.js';
+import { PODCAST_LENGTHS, addBackchannels, dropTeasers, fitPlan, splitReactions, spokenMinutes, beforeSources, buildChat, parseEpisode, parsePlan, podcastPlanRequest, podcastSegmentRequest, citedRefs, esc, estimateTokens, mindmapSvg, parseOutline, parseScript, parseSlides, renderMarkdown, scriptMarkdown, studioRequest, summaryRequest, titleFrom } from './core.js';
 import { pdfText } from './pdf.js';
 import { DOWNLOAD_LABEL, VOICES, currentVoices, loadSpeech, oggOpusOf, playLines, previewVoice, renderPcm, setVoice, wavOf } from './speech.js';
 import { citeLabel, lorewellReachable, openInLorewell, readLorewell, searchLorewell } from './lorewell.js';
@@ -650,16 +650,30 @@ async function studio(kind) {
  */
 async function writeEpisode(nb, parts, ctl, stop) {
   const length = /** @type {keyof typeof PODCAST_LENGTHS} */ (/** @type {HTMLSelectElement} */ ($('audio-length')).value in PODCAST_LENGTHS ? /** @type {HTMLSelectElement} */ ($('audio-length')).value : 'standard');
+  const target = PODCAST_LENGTHS[length].segments;
   banner('Audio overview: planning the episode…', { actions: [stop] });
   let plan = parsePlan(await complete(podcastPlanRequest(nb, parts, length), ctl.signal, 600));
+  // A plan with the wrong number of segments is asked for once more, then fitted.
+  if (plan.length !== target) {
+    banner('Audio overview: planning the episode again…', { actions: [stop] });
+    const again = parsePlan(await complete(podcastPlanRequest(nb, parts, length), ctl.signal, 600));
+    if (Math.abs(again.length - target) < Math.abs(plan.length - target)) plan = again;
+  }
+  plan = fitPlan(plan, target);
   // A model that writes no usable plan still gets an episode: one segment per source.
-  if (plan.length < 2) plan = parts.map((p) => ({ title: p.title, points: '', sources: [p.n] })).slice(0, PODCAST_LENGTHS[length].segments);
+  if (plan.length < 2) plan = parts.map((p) => ({ title: p.title, points: '', sources: [p.n] })).slice(0, target);
   /** @type {{ speaker: string, text: string }[]} */
   const all = [];
   const blocks = [];
+  const write = async (/** @type {number} */ i) => {
+    const raw = parseScript(await complete(podcastSegmentRequest(nb, parts, plan, i, all, length), ctl.signal, 1100));
+    return addBackchannels(splitReactions(dropTeasers(raw)), ['Asha', 'Ravi']);
+  };
   for (const [i, seg] of plan.entries()) {
     banner(`Audio overview: writing segment ${i + 1} of ${plan.length}, “${seg.title}”…`, { actions: [stop] });
-    const lines = splitReactions(parseScript(await complete(podcastSegmentRequest(nb, parts, plan, i, all, length), ctl.signal, 1100)));
+    let lines = await write(i);
+    // An empty answer is asked for once more; the closing segment above all, so the episode never stops mid-way.
+    if (lines.length < 2) lines = await write(i);
     if (!lines.length) continue;
     all.push(...lines);
     blocks.push(`### ${seg.title}\n\n${scriptMarkdown(lines)}`);

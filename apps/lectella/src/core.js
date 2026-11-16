@@ -552,6 +552,7 @@ export function podcastSegmentRequest(notebook, parts, plan, i, before, length) 
   const chosen = parts.filter((p) => seg.sources.includes(p.n));
   const notes = (chosen.length ? chosen : parts).map((p) => `[${p.n}] ${p.title}\n${p.summary}`).join('\n\n');
   const position = i === 0 ? 'This is the opening segment: start with a hook, not a greeting speech.' : i === plan.length - 1 ? 'This is the last segment: end with a short takeaway and a natural sign-off.' : 'Carry on from the dialogue so far without greeting again.';
+  const ending = i === plan.length - 1 ? '' : ' Never announce, tease or name the next segment; end on a line about this segment\'s subject.';
   const outline = plan.map((s, k) => `${k + 1}. ${s.title}${k === i ? '  ← this segment' : ''}`).join('\n');
   const recent = before.slice(-4).map((l) => `${l.speaker}: ${l.text}`).join('\n');
   return [
@@ -559,7 +560,7 @@ export function podcastSegmentRequest(notebook, parts, plan, i, before, length) 
       role: 'system',
       content: [
         `You write one segment of a lively two-host podcast about the topic below. ${HOSTS}`,
-        `Write about ${turns} turns for this segment. ${position}`,
+        `Write about ${turns} turns for this segment. ${position}${ending}`,
         'Make it sound like two people talking, not reading: contractions, short sentences, questions, a vivid example or comparison.',
         `About one turn in four is a short reaction on its own line, of one to four words, such as "Right.", "Wait, really?", "Huh.", "Exactly." or "Mm, go on." A reaction never repeats a number or a fact; facts are said once, exactly as the notes give them.`,
         `Every line starts with the speaker's name and a colon, like "${SPEAKERS[0]}: …". No stage directions, no sound effects, no Markdown, no citation numbers, no mention of notes or this task.`,
@@ -614,3 +615,54 @@ export function splitReactions(lines) {
 
 /** Spoken minutes for a script, at about 150 words a minute. @param {{ text: string }[]} lines */
 export const spokenMinutes = (lines) => Math.max(1, Math.round(lines.reduce((n, l) => n + l.text.split(/\s+/).filter(Boolean).length, 0) / 150));
+
+/** A line that announces what comes next ("For our next segment…", "Coming up…"), which must not end a segment. */
+const TEASER = /\b(next segment|next part|coming up|after the break|stay tuned|in our next|up next|let'?s move on to|moving on to|we'?ll (look at|talk about|turn to|get to)|we'?re (going|about) to (look at|talk about|turn to))\b/i;
+
+/** Drop teaser lines from the end of a segment. @param {{ speaker: string, text: string }[]} lines */
+export function dropTeasers(lines) {
+  const out = [...lines];
+  while (out.length > 1 && TEASER.test(out[out.length - 1].text)) out.pop();
+  return out;
+}
+
+/**
+ * Fit a plan to the length asked for: too many segments keep the first ones and the closing one; too few stay as
+ * they are (the caller asks once more first).
+ * @param {{ title: string, points: string, sources: number[] }[]} plan @param {number} target
+ */
+export function fitPlan(plan, target) {
+  if (plan.length <= target) return plan;
+  return [...plan.slice(0, target - 1), plan[plan.length - 1]];
+}
+
+const BACKCHANNELS = ['Right.', 'Mm-hm.', 'Okay.', 'I see.', 'Huh.'];
+
+/**
+ * Give a long explanation a listener: split a line of 30 or more words at the sentence break nearest its middle,
+ * and put a short reaction from the other host between the halves. At most every third line gets one, and the
+ * reactions rotate, so they never repeat back to back.
+ * @param {{ speaker: string, text: string }[]} lines @param {string[]} hosts the two speaker names
+ */
+export function addBackchannels(lines, hosts) {
+  const out = [];
+  let since = 3;
+  let k = 0;
+  for (const l of lines) {
+    since++;
+    const words = l.text.split(/\s+/).filter(Boolean);
+    const other = hosts.find((h) => h !== l.speaker);
+    if (since >= 3 && other && words.length >= 30) {
+      const breaks = [...l.text.matchAll(/[.!?]["”’)]?\s+(?=[A-Z0-9“"‘(])/g)].map((m) => /** @type {number} */ (m.index) + m[0].length);
+      const mid = l.text.length / 2;
+      const cut = breaks.sort((a, b) => Math.abs(a - mid) - Math.abs(b - mid))[0];
+      if (cut && cut > 40 && l.text.length - cut > 40) {
+        out.push({ ...l, text: l.text.slice(0, cut).trim() }, { ...l, speaker: other, text: BACKCHANNELS[k++ % BACKCHANNELS.length] }, { ...l, text: l.text.slice(cut).trim() });
+        since = 0;
+        continue;
+      }
+    }
+    out.push(l);
+  }
+  return out;
+}
