@@ -81,7 +81,7 @@ export function createAppGrants({ storage, grantLib, rootKey, confirm, describe,
   }
 
   // `ask: false` (a script, which cannot wait for a dialog): a caller without a Grant gets ECONSENT and no dialog.
-  async function call(caller, name, input, stillWanted = () => true, { ask = true } = {}) {
+  async function call(caller, name, input, stillWanted = () => true, { ask = true, notAfter, cancelled } = {}) {
     const command = describe(name);
     const target = command?.annotations?.app;
     if (!target) return { ok: false, code: 'ENOENT', message: `no app command named ${name}` };
@@ -106,7 +106,10 @@ export function createAppGrants({ storage, grantLib, rootKey, confirm, describe,
       }
     }
     let out;
-    try { out = await run(caller, name, input, stillWanted, { ask }); }
+    const runOptions = { ask };
+    if (notAfter !== undefined) runOptions.notAfter = notAfter;
+    if (cancelled) runOptions.cancelled = cancelled;
+    try { out = await run(caller, name, input, stillWanted, runOptions); }
     catch (error) { out = { ok: false, code: 'EFAIL', message: String(error?.message || error) }; }
     await record({ caller, target, command: name, grantId, output: { ok: out?.ok !== false, code: out?.code || null } });
     return out;

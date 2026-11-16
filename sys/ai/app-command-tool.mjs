@@ -49,8 +49,10 @@ export async function runAppCommand(args, commands) {
 export const RAIL_SEARCH_MAX = 20; // the host's own cap for one search (index.html, searchAppCommands)
 const brief = c => ({ name: c.name, description: c.description, scope: c.scope ?? null, destructive: !!c.destructive, app: c.app ?? null });
 
-/** @param {'rail_search'|'rail_describe'|'rail_call'} tool @param {any} args @param {{ search: Function, call: Function }} commands */
-export async function runRailScriptTool(tool, args, commands) {
+/** @param {'rail_search'|'rail_describe'|'rail_call'} tool @param {any} args @param {{ search: Function, call: Function }} commands
+ *  @param {{ notAfter?: number, token?: string }} [options] notAfter: the script's end (epoch ms); token: the script's
+ *  name, which the caller abandons when the script ends early. The host starts no call after either. */
+export async function runRailScriptTool(tool, args, commands, { notAfter, token } = {}) {
   if (!commands || typeof commands.call !== 'function' || typeof commands.search !== 'function')
     return { ok: false, code: 'ENOHOST', message: 'app commands need Anvil to run inside NakliOS' };
   const a = args && typeof args === 'object' && !Array.isArray(args) ? args : {};
@@ -68,7 +70,10 @@ export async function runRailScriptTool(tool, args, commands) {
     }
     if (tool === 'rail_call') {
       if (a.input !== undefined && (typeof a.input !== 'object' || a.input === null || Array.isArray(a.input))) return { ok: false, code: 'EINVAL', message: 'input must be an object' };
-      const out = await commands.call(a.name, a.input || {}, { ask: false });
+      const options = { ask: false };
+      if (Number.isFinite(notAfter)) options.notAfter = notAfter;
+      if (typeof token === 'string' && token) options.token = token;
+      const out = await commands.call(a.name, a.input || {}, options);
       // A host that predates `ask:false` may still stage; the script must not report a staged change as done.
       if (out?.staged) return { ok: false, code: 'ESTAGED', message: 'staged for the person to review; it has not happened' };
       if (!out || typeof out !== 'object') return { ok: false, code: 'EFAIL', message: a.name + ' did not answer' };

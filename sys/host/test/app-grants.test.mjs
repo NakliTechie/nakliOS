@@ -151,6 +151,9 @@ function setup({ answers = [], clock = { t: 1000 }, consentMs } = {}) {
   assert.equal(after.ok, true, 'with a Grant held, a script call runs');
   assert.deepEqual(t.runOptions.at(-1), { ask: false }, 'and the host checks get ask:false');
   assert.deepEqual(t.runOptions[0], { ask: true }, 'an ordinary call passes ask:true');
+  const gone = () => true;
+  await t.grants.call('lectella', 'books.tag', { id: 'b4' }, () => true, { ask: false, notAfter: 5, cancelled: gone });
+  assert.deepEqual(t.runOptions.at(-1), { ask: false, notAfter: 5, cancelled: gone }, 'the end time and the abandon check reach the host checks');
   const own = await t.grants.call('books', 'books.passage', {}, () => true, { ask: false });
   assert.equal(own.ok, true, 'an app calling its own command needs no Grant');
 }

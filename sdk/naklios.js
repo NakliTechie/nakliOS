@@ -918,7 +918,18 @@
         if (!inNakliOS) return Promise.reject(new Error('Not hosted — app commands are unavailable standalone'));
         var payload = { name: String(name || ''), input: input || {} };
         if (options && options.ask === false) payload.ask = false;
+        // options.notAfter (epoch ms): the host starts the command only before this time, so a caller that has
+        // stopped waiting (a script past its limit) cannot have a change land later. Older hosts ignore it.
+        if (options && typeof options.notAfter === 'number' && isFinite(options.notAfter)) payload.notAfter = options.notAfter;
+        // options.token: a name for the caller's unit of work; abandon(token) later makes the host start nothing more for it.
+        if (options && typeof options.token === 'string' && options.token) payload.token = options.token.slice(0, 200);
         return rpc('naklios:commands:call', payload, COMMAND_CALL_TIMEOUT_MS);
+      },
+      // The caller stopped waiting for every call it made with this token (a script ended): the host starts none of
+      // them that has not started yet. A call already running finishes. Standalone: does nothing.
+      abandon: function (token) {
+        if (!inNakliOS || typeof token !== 'string' || !token) return false;
+        return send('naklios:commands:abandon', { token: token.slice(0, 200) }) !== false;
       },
     },
     experimental_widgets: {

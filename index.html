@@ -9421,11 +9421,22 @@ window.addEventListener('message', async e => {
     try {
       if (!appId) throw new Error('Unknown app');
       const search = msg.type === 'naklios:commands:search';
-      const options = { noAsk: msg.ask === false };
+      const token = typeof msg.token === 'string' && msg.token ? msg.token.slice(0, 200) : null;
+      const options = { noAsk: msg.ask === false, notAfter: Number.isFinite(msg.notAfter) ? msg.notAfter : undefined,
+        ...(token ? { cancelled: () => !!cancelledCommandTokens.get(appId)?.has(token) } : {}) };
       if (aiAppOwnsEgress(appId)) reply.result = search ? await searchAppCommands(msg.query) : await callAppCommand(appId, source, msg.name, msg.input, options);
       else reply.result = search ? await appToAppSearch(appId, msg.query) : await appToAppCall(appId, source, msg.name, msg.input, options);
     } catch (error){ reply.error = String(error?.message || error); }
     try { source.postMessage(reply, replyTo); } catch(_){}
+  } else if (msg.type === 'naklios:commands:abandon' && typeof msg.token === 'string' && msg.token){
+    // The app stopped waiting for its calls with this token: none of them that has not started will start.
+    const appId = getAppId();
+    if (appId){
+      // Per app, so one app's abandons cannot push out another's.
+      const mine = cancelledCommandTokens.get(appId) || new Set();
+      mine.add(msg.token.slice(0, 200)); cancelledCommandTokens.set(appId, mine);
+      while (mine.size > 512) mine.delete(mine.values().next().value);
+    }
   } else if (msg.type === 'naklios:commands:result' && typeof msg.invokeId === 'string'){
     const { catalog } = await hostAgentReady;
     catalog.settle(getAppId(), e.source, msg.invokeId, { result:msg.result, error:typeof msg.error === 'string' ? msg.error : undefined });
@@ -14498,12 +14509,14 @@ async function searchAppCommands(query){
 // One path for every caller of app commands, on the caller's own face. A change asks the person once per caller, per
 // app, per visit; a destructive command asks every time, showing what it would do. A refusal is written to History.
 const appCommandWriteConsent = new Set();
+// Tokens each app abandoned (naklios:commands:abandon): app id → its newest 512 tokens.
+const cancelledCommandTokens = new Map();
 const appCommandFaces = new Map();
 // The SDK's call waits 300 s and the app may take 50 s more to open and answer, so a later Allow must not run the call.
 const COMMAND_CONSENT_MS = 240000;
 // `noAsk` (a script, which cannot wait for a dialog): any step that would ask the person returns ECONSENT instead, and
 // a destructive command is refused before it is staged, so no approval can land after the script has ended.
-async function runAppCommandFor(callerId, name, input, ask, stillWanted = () => true, { noAsk = false } = {}){
+async function runAppCommandFor(callerId, name, input, ask, stillWanted = () => true, { noAsk = false, notAfter, cancelled = null } = {}){
   const [{ catalog, faceFor, opLog }] = await Promise.all([hostAgentReady, appCommandsDeclared]);
   const command = catalog.describeCommand(name);
   const target = command?.annotations?.app;
@@ -14526,6 +14539,21 @@ async function runAppCommandFor(callerId, name, input, ask, stillWanted = () => 
     if (!(await answered(() => ask(target, label(target))))) return refused();
     appCommandWriteConsent.add(key);
   }
+  // `notAfter` (a script's end): open the target first, then start the command only if the caller still waits. Opening
+  // can take 20 s and the SDK call cannot be cancelled, so without this a write could land after the script ended.
+  const bounded = Number.isFinite(notAfter);
+  const over = () => (bounded && Date.now() >= notAfter) || !!cancelled?.();
+  const late = async () => { await opLog.append({ actor:callerId, caller:callerId, command:name, args:input, status:'ETIMEOUT' });
+    return { ok:false, code:'ETIMEOUT', target, message:`the caller stopped waiting before ${label(target)} could run ${name}; nothing ran` }; };
+  // A call with an end time or a token opens its target first, so the check runs after the slow part.
+  if (bounded || cancelled){
+    if (over()) return late();
+    if (!(await catalog.open(target))){
+      await opLog.append({ actor:callerId, caller:callerId, command:name, args:input, status:'ELAUNCH' });
+      return { ok:false, code:'ELAUNCH', target, message:`${label(target)} did not open` };
+    }
+    if (over()) return late();
+  }
   if (!appCommandFaces.has(callerId)) appCommandFaces.set(callerId, faceFor(callerId, ['app:read', 'app:write']));
   const face = appCommandFaces.get(callerId);
   const out = await face.invoke(name, input);
@@ -14540,8 +14568,12 @@ async function runAppCommandFor(callerId, name, input, ask, stillWanted = () => 
     return { ok:false, code:'ECONSENT', target, destructive:true, message:`${name} is hard to undo, so the person must approve it outside a script` };
   }
   const detail = JSON.stringify(input ?? {}).slice(0, 300);
-  if (await answered(() => nakliosConfirm(`${label(callerId)} wants to run this in ${label(target)}: ${command.description} ${detail}`, { title:'This change is hard to undo', okLabel:'Allow once', danger:true })))
-    return face.accept(out.proposalId);
+  if (await answered(() => nakliosConfirm(`${label(callerId)} wants to run this in ${label(target)}: ${command.description} ${detail}`, { title:'This change is hard to undo', okLabel:'Allow once', danger:true }))){
+    // An approval that lands after the caller stopped waiting runs nothing.
+    if (!over()) return face.accept(out.proposalId);
+    face.reject(out.proposalId);
+    return late();
+  }
   face.reject(out.proposalId);
   return refused();
 }
@@ -14567,16 +14599,16 @@ function appGrants(){
     },
     describe:name => catalog.describeCommand(name),
     searchAll:searchAppCommands,
-    run:(caller, name, input, stillWanted, { ask = true } = {}) => runAppCommandFor(caller, name, input, (appId, label) => {
+    run:(caller, name, input, stillWanted, { ask = true, notAfter, cancelled } = {}) => runAppCommandFor(caller, name, input, (appId, label) => {
       const who = APPS.find(a => a.id === caller)?.name || caller;
       return nakliosConfirm(`Let ${who} change ${label}? It asks again on your next visit.`, { title:'Allow this change?', okLabel:'Allow' });
-    }, stillWanted, { noAsk: !ask }),
+    }, stillWanted, { noAsk: !ask, notAfter, cancelled }),
     record:appCommandHistoryAppend,
   }));
 }
 async function appToAppSearch(callerId, query){ return (await appGrants()).search(callerId, query); }
-async function appToAppCall(callerId, source, name, input, { noAsk = false } = {}){
-  return (await appGrants()).call(callerId, name, input, () => openWindows[callerId]?.querySelector('iframe')?.contentWindow === source, { ask: !noAsk });
+async function appToAppCall(callerId, source, name, input, { noAsk = false, notAfter, cancelled } = {}){
+  return (await appGrants()).call(callerId, name, input, () => openWindows[callerId]?.querySelector('iframe')?.contentWindow === source, { ask: !noAsk, notAfter, cancelled });
 }
 // History: one hash-chained event (door 'call') per app-to-app call. It names the caller, the target, the command and
 // the outcome code; the arguments and the result are committed by hash only.

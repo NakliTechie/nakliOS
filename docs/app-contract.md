@@ -723,7 +723,7 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 
 <!-- sdk-reference:begin — rendered by `node scripts/sdk-reference.mjs --write` from docs/sdk-api-audit.md; do not edit by hand -->
 
-125 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
+126 public members. Kinds: getter · function · namespace · field. Status and stabilization criteria live in the ledger (`docs/sdk-api-audit.md`); an `experimental_` member is named here like any other and marked so.
 
 ### `version`
 
@@ -886,7 +886,8 @@ rendered from the member ledger and checked in the gate, so a member cannot exis
 | `experimental_commands` | namespace · **experimental** | The app's commands on the common rail (`docs/app-contract.md`, "Common rail"); the desktop lists them as `<app-id>.<name>` in `sys/host/catalog.mjs`, checks each caller's grant and stages `destructive` ones. |
 | `experimental_commands.register` | function · **experimental** | Declare the app's commands `{ name, description, input, scope, handler }`; replaces the whole set. Standalone: keeps the handlers and sends nothing. |
 | `experimental_commands.search` | function · **experimental** | Find app commands by words, with the input each one takes and the app that owns it. A system app sees every app's; any other app sees its own and those of apps it holds an app Grant for. Standalone: `[]`. |
-| `experimental_commands.call` | function · **experimental** | Call another app's command. A system app runs on its own face; any other app first needs an app Grant, which the person gives once per caller and target app and can revoke in Settings → AI. After it, `read` runs, `write` asks once per visit, `destructive` goes through review, and every call is one History event. `call(name, input, { ask:false })` opens no dialog: a call that would need the person's answer returns `{ ok:false, code:'ECONSENT' }` (Anvil scripts use it, 2026-11-16). Standalone: rejects. |
+| `experimental_commands.call` | function · **experimental** | Call another app's command. A system app runs on its own face; any other app first needs an app Grant, which the person gives once per caller and target app and can revoke in Settings → AI. After it, `read` runs, `write` asks once per visit, `destructive` goes through review, and every call is one History event. `call(name, input, { ask:false })` opens no dialog: a call that would need the person's answer returns `{ ok:false, code:'ECONSENT' }` (Anvil scripts use it, 2026-11-16). `notAfter` (epoch ms) in the same options: the host starts the command (or accepts a staged one) only before that time, else `ETIMEOUT` with nothing run. `token` names the caller's unit of work for `abandon`. Standalone: rejects. |
+| `experimental_commands.abandon` | function · **experimental** | `abandon(token)`: the caller stopped waiting for every call it made with that token; the host starts none that has not started (`ETIMEOUT`), and a call already running finishes. Standalone: does nothing. |
 
 ### `experimental_widgets` (namespace)
 

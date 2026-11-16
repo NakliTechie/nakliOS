@@ -3716,7 +3716,7 @@
           if(byRule.decision==='deny') return {ok:false,code:'EDENIED',message:byRule.why};
           if(byRule.decision==='ask') return {ok:false,code:'ECONSENT',message:byRule.why+'; ask outside the script with app_command'};
         }
-        return runRailScriptTool(nm, ar, nak && nak.experimental_commands);
+        return runRailScriptTool(nm, ar, nak && nak.experimental_commands, { notAfter: nestedOptions.notAfter, token: nestedOptions.railToken });
       }
       // AC-7: a typed verdict on THIS action, before it happens. Authorization is read only from
       // the owner's own turns — `[coordination]` messages are the loop talking to itself and can
@@ -3782,14 +3782,18 @@
       // Skills (progressive disclosure): load one skill's full body on demand.
       if(nm==='codemode'){
         if(!t.codemodeEnabled||mode!=='code'||rangeRun||!runCtx?.captureExecute)return 'Refused: JavaScript scripts are not enabled for this task';
-        const ownContext=runCtx,ownRec=runCtx.rec,ownCapture=runCtx.captureExecute,invocation=String(callObj?.id||'');if(!invocation)return 'Error: script invocation lacks a recorded ID';
+        const ownContext=runCtx,ownRec=runCtx.rec,ownCapture=runCtx.captureExecute,invocation=String(callObj?.id||'');let railToken=null;if(!invocation)return 'Error: script invocation lacks a recorded ID';
         try{
           const store=await loadCodemodeState(t,ownRec);
           const allowed=codemodeScriptTools(runToolset(mode,{verify:!!verify,scopes:grant.scopes,simple:false}).map(tool=>tool.function.name),{rail:railHosted()});
           await ownRec.codemodeStarted({invocation,code:ar?.code,tools:allowed,initialStore:store});
           let nestedQueue=Promise.resolve();
-          const outcome=await runCodemode({code:ar?.code,tools:allowed,store,signal:callSignal,deadlineMs:Math.max(0,(ownContext.deadlineAt||Date.now()+10000)-Date.now()),
-            execute:(name,args,{id,signal})=>{const next=nestedQueue.then(()=>runCtx===ownContext&&!signal.aborted?ownCapture(name,args,{id:invocation+':'+id},{nested:true,signal}):Promise.reject(Error('Owning run ended')));nestedQueue=next.catch(()=>{});return next;},
+          // The runtime stops the script at min(10 s, run deadline); a rail call carries that end time so the host starts nothing after it.
+          const scriptDeadlineMs=Math.max(0,(ownContext.deadlineAt||Date.now()+10000)-Date.now()),scriptNotAfter=Date.now()+Math.min(10000,scriptDeadlineMs);
+          // Unique per script run: tool-call ids repeat across tasks (call_<step>_<i>) and replays, and an abandoned token stays abandoned.
+          railToken='codemode:'+invocation.slice(0,120)+':'+crypto.randomUUID();
+          const outcome=await runCodemode({code:ar?.code,tools:allowed,store,signal:callSignal,deadlineMs:scriptDeadlineMs,
+            execute:(name,args,{id,signal})=>{const next=nestedQueue.then(()=>runCtx===ownContext&&!signal.aborted?ownCapture(name,args,{id:invocation+':'+id},{nested:true,signal,notAfter:scriptNotAfter,railToken}):Promise.reject(Error('Owning run ended')));nestedQueue=next.catch(()=>{});return next;},
             onCall:async({id,name,args})=>{await ownRec.codemodeCalled({invocation,id,name,args});},
             onSettled:async({id,name,result,error,cancelled,late})=>{
               if(late){const audit=createRunRecorder({app:'anvil-codemode-late',principal:'anvil:'+runProject});await audit.start({messages:[],tools:[],model:null});await audit.codemodeCalled({invocation,id,name,args:{sourceRecord:inFlightRecordName}});await audit.codemodeSettled({invocation,id,name,result,error,cancelled,late:true});await audit.finish({stop:error?'error':'done'});await audit.settled();await saveRunRecord(t,audit,{project:runProject,browserOnly:true});}
@@ -3799,6 +3803,8 @@
           await ownRec.codemodeStoreProposed({invocation,values:outcome.store});
           return 'Codemode completed\n'+outcome.output+(outcome.pending.length?'\nCancelled unawaited calls: '+outcome.pending.join(','):'');
         }catch(error){return 'Error: codemode '+String(error?.message||error).slice(0,2000);}
+        // However the script ended (finished, failed, stopped, left calls unawaited), the host starts nothing more for it.
+        finally{try{if(railToken)nak?.experimental_commands?.abandon?.(railToken);}catch(_){}}
       }
       if(nm==='skill'){
         const name=String((ar&&ar.name)||'').trim();

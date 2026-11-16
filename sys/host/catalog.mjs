@@ -248,6 +248,8 @@ export function createCatalog({ base, timeoutMs = COMMAND_TIMEOUT_MS, launchTime
 
   return {
     declare, register, unregister, settle,
+    // Opens a declared app and waits for it to register (true), or false after the launch timeout.
+    open: appId => ensureOpen(appId),
     apps: () => [...apps.keys()],
     get commands() { return Object.freeze([...base.commands, ...appCommands()]); },
     list: () => [...base.list(), ...appCommands().map(project)],
