@@ -7764,6 +7764,46 @@
           "bytes": 40278
         }
       ]
+    },
+    {
+      "id": "chartella",
+      "repo": "NakliTechie/chartella",
+      "requestedRef": "main",
+      "resolvedCommit": "b9f16afa0c3237e3dbb7a13fa4844872ed5c7948",
+      "files": [
+        {
+          "source": "index.html",
+          "destination": "index.html",
+          "sha256": "799a0957127676ee0ee233b67f9a95e607a7617ab6b71774fa69337ff238e9ab",
+          "bytes": 433698,
+          "originalSourceSha256": "405acd070e3c3c4099698c7b85cc435c9e64577b2cefcb060ec833028884d25f",
+          "sdkSha256": "ec78ab7bd0e82a108847216f33bc6600366f68199f9416959411e5db254405ed"
+        },
+        {
+          "source": "commands.json",
+          "destination": "commands.json",
+          "sha256": "d3223e43966c7ca6d175647695b06e93e2a3dd9da9e34de3bbaab993319fc890",
+          "bytes": 43769
+        },
+        {
+          "source": "LICENSE",
+          "destination": "LICENSE",
+          "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+          "bytes": 34523
+        },
+        {
+          "source": "sw.js",
+          "destination": "sw.js",
+          "sha256": "bd1e1fb8a9bcc72d6a812ddb5629dcfe0d993626bda1765dec663d02401ecc54",
+          "bytes": 1402
+        },
+        {
+          "source": "board.schema.json",
+          "destination": "board.schema.json",
+          "sha256": "a3f3ce3d1e9ef9e672fb9496f4073abc4b4c52ea9d190db1986bf4e5c27b506d",
+          "bytes": 10765
+        }
+      ]
     }
   ]
 }
