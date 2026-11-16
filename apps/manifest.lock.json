@@ -199,14 +199,14 @@
       "id": "draft",
       "repo": "NakliTechie/draft",
       "requestedRef": "main",
-      "resolvedCommit": "049be08a8815bec6a969d85e8c2d5a1e28321ecf",
+      "resolvedCommit": "3771b91039d57d1bb53bd966ba39a011d19ab641",
       "files": [
         {
           "source": "draft.html",
           "destination": "index.html",
-          "sha256": "bd60b10719c33e4e372e36024f3d1512d7e045612967416681ad0ecd4f9d8d34",
-          "bytes": 1559484,
-          "originalSourceSha256": "3c389cb4fb09b27e17f2e69059b7c7063da8844eb29bad910fdcdad49b06a3dc",
+          "sha256": "f1e9bc4edb6bf98f0a3887b694ad094e4f179291a9c4bba218b74eb98efb55ed",
+          "bytes": 1606619,
+          "originalSourceSha256": "c542e280f516dce5f2d9e5e9f20cd52a2a610c7b2417ea506968287c55d22e38",
           "sdkSha256": "ec78ab7bd0e82a108847216f33bc6600366f68199f9416959411e5db254405ed"
         },
         {
