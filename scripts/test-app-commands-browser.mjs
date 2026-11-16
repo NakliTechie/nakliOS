@@ -99,6 +99,10 @@ const SCRIPT = `(async () => {
   out.dialogOpen = !!document.querySelector('dialog.nw-dlg');
   appCommandWriteConsent.add('rail-test:notes');
   out.scriptWriteAfter = await runRailScriptTool('rail_call', { name: 'notes.list.add', input: { list: 'shopping', things: 'jam' } }, rail);
+  // A call whose script already ended starts nothing.
+  out.late = await runAppCommandFor('rail-test', 'notes.list.add', { list: 'shopping', things: 'late' }, () => Promise.resolve(true), () => true, { noAsk: true, notAfter: Date.now() - 1 });
+  out.abandoned = await runAppCommandFor('rail-test', 'notes.list.add', { list: 'shopping', things: 'abandoned' }, () => Promise.resolve(true), () => true, { noAsk: true, cancelled: () => true });
+  out.afterLate = await runRailScriptTool('rail_call', { name: 'notes.list.read', input: { list: 'shopping' } }, rail);
   out.guest = await runCodemode({ tools: ['rail_search', 'rail_describe', 'rail_call'], execute: (name, args) => runRailScriptTool(name, args, rail),
     code: "const found=await tools.rail_search({query:'notes list'});const r=await tools.rail_call({name:'notes.list.read',input:{list:'shopping'}});return JSON.stringify({names:found.results.map(c=>c.name),items:r.result.items});" });
   return out;
@@ -164,6 +168,10 @@ try {
   assert.equal(r.scriptAsked, 0, 'no script call asked the person');
   assert.equal(r.dialogOpen, false, 'and no dialog is open');
   assert.equal(r.scriptWriteAfter.ok, true, JSON.stringify(r.scriptWriteAfter));
+  assert.equal(r.late.code, 'ETIMEOUT', 'a call after the script ended returns ETIMEOUT');
+  assert.equal(r.afterLate.result.items.includes('late'), false, 'and adds nothing');
+  assert.equal(r.abandoned.code, 'ETIMEOUT', 'a call whose token the caller abandoned starts nothing');
+  assert.equal(r.afterLate.result.items.includes('abandoned'), false);
   assert.equal(r.guest.ok, true, JSON.stringify(r.guest));
   const guest = JSON.parse(r.guest.output);
   assert.ok(guest.names.includes('notes.list.read'), 'the guest found the command through rail_search');
