@@ -6449,7 +6449,7 @@
       "id": "lectella",
       "repo": "NakliTechie/lectella",
       "requestedRef": "main",
-      "resolvedCommit": "de5ad7b42f0b693022af7e32b97d47ece11b3db0",
+      "resolvedCommit": "f234b122b2632c1457186bf12aee665fa266101a",
       "files": [
         {
           "source": "index.html",
@@ -6480,8 +6480,8 @@
         {
           "source": "src/core.js",
           "destination": "src/core.js",
-          "sha256": "26fdaa9158edc78cb2342c9359ce471c8167bef668ab320c5a37cdaf72ef3535",
-          "bytes": 35619
+          "sha256": "6f59314587458ddd3da0a5c2506f5d5a4d45988c94f4391e4e211e6c8278652b",
+          "bytes": 36219
         },
         {
           "source": "src/store.js",

@@ -537,9 +537,18 @@ export function parsePlan(text) {
   for (const raw of String(text ?? '').split('\n')) {
     const m = /^\s*(?:\d+[.)]|[-*])\s*(.+)$/.exec(raw);
     if (!m) continue;
-    const [title, points = '', src = ''] = m[1].split('|').map((s) => s.replace(/\*\*/g, '').trim());
+    const body = m[1].replace(/\*\*/g, '').trim();
+    // The source list may sit anywhere ("…; sources: 1, 3"), with or without the "|" separators.
+    const srcMatch = /[;|,(]?\s*sources?\s*:\s*([\d,\s and]+)\)?\s*$/i.exec(body);
+    const sources = srcMatch ? [...srcMatch[1].matchAll(/\d+/g)].map((x) => Number(x[0])) : [];
+    const rest = (srcMatch ? body.slice(0, srcMatch.index) : body).replace(/[|;,\s]+$/, '');
+    let [title, points = ''] = rest.split('|').map((x) => x.trim());
+    // Without separators, a short title before a colon or dash is the title and the rest are the points.
+    if (!rest.includes('|')) {
+      const cut = /^(.{3,60}?)\s*(?::|\s[-–—]\s)\s*(.+)$/.exec(rest);
+      if (cut) [title, points] = [cut[1].trim(), cut[2].trim()];
+    }
     if (!title) continue;
-    const sources = [...src.matchAll(/\d+/g)].map((x) => Number(x[0]));
     out.push({ title, points, sources });
   }
   return out;
