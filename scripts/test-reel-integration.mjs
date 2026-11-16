@@ -11,7 +11,17 @@ const [host, mirror, manifest, harness] = await Promise.all([
 const declared = manifest.apps.find(app => app.id === 'reel');
 assert.ok(declared, 'Reel mirror is declared');
 assert.equal(declared.repo, 'NakliTechie/reel', 'Reel mirror points to its authoritative repository');
-assert.equal(declared.files.length, 3, 'Reel mirror declares the app, decoder runtime, and decoder license');
+// Reel v1 (2026-11-16) ships as modules: the page, its commands, the engine, the app modules and the
+// vendored Mediabunny runtimes, each with its licence. Check the load-bearing ones by name.
+const declaredPaths = declared.files.map(f => f.destination);
+for (const need of ['index.html', 'commands.json', 'engine/reel-engine.mjs', 'app/modules.mjs']) {
+  assert.ok(declaredPaths.includes(need), `Reel mirror declares ${need}`);
+}
+for (const runtime of declaredPaths.filter(p => /^vendor\/[^/]+\/[^/]+\.min\.mjs$/.test(p))) {
+  const dir = runtime.split('/').slice(0, 2).join('/');
+  assert.ok(declaredPaths.some(p => p.startsWith(dir + '/') && /LICENSE/i.test(p)), `Reel mirror ships a licence beside ${runtime}`);
+}
+assert.ok(declaredPaths.some(p => /^vendor\/mediabunny\/mediabunny-[\d.]+\.min\.mjs$/.test(p)), 'Reel mirror declares the decoder runtime');
 // Same-origin embed, either spelling: `./apps/<id>/` and `https://naklios.dev/apps/<id>/` both
 // resolve to /apps/<id>/. Relative is the house default because it is what makes a mirrored app
 // verifiable on a LOCAL serve before deploy (plan/history.md 2026-09-09, 2026-09-10).
