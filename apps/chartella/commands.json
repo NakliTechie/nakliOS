@@ -2562,7 +2562,7 @@
     {
       "name": "ai.cluster",
       "label": "Cluster stickies",
-      "description": "Group sticky notes (default: the selection, else every sticky on this page) by meaning: similar notes gather into coloured, named frames. Grouping runs on this device; the host model names the groups (keywords name them without one). Returns { groups: [{ name, ids }] }.",
+      "description": "Group sticky notes (default: the selection, else every sticky on this page) by meaning: similar notes gather into coloured, named frames. With a host model, the model sorts the notes by meaning (checked JSON, every note once); without one, grouping runs on this device by shared words and keywords name the groups. Returns { groups: [{ name, ids }] }.",
       "scope": "write",
       "input": {
         "type": "object",
