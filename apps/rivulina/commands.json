@@ -9,7 +9,119 @@
       ]
     }
   ],
+  "widgets": [
+    {
+      "id": "unread",
+      "title": "Unread",
+      "display": "value"
+    },
+    {
+      "id": "upnext",
+      "title": "Up Next",
+      "display": "list"
+    }
+  ],
   "commands": [
+    {
+      "name": "settings.open",
+      "label": "Settings",
+      "description": "Open the settings dialog: fetch routes for blocked feeds, the Podcast Index key, the refresh interval, and the sections other parts of Rivulina add. Optional section scrolls to one part.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "section": {
+            "type": "string",
+            "description": "Section to show first, such as routes, podcastindex or refresh"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "routes.status",
+      "label": "Fetch routes status",
+      "description": "Say which fetch routes for blocked feeds NakliOS offers (your egress Worker, NakliOS page reading) and which ones are turned on, including Jina Reader.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "routes.set",
+      "label": "Turn fetch routes on or off",
+      "description": "Turn fetch routes for blocked feeds on or off. egress: your own egress Worker in NakliOS. web: NakliOS page reading. jina: accept pages NakliOS page reading got through Jina Reader, a third party that sees each address. Each starts off. Private feeds never use web or jina.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "egress": {
+            "type": "boolean",
+            "description": "Use your egress Worker"
+          },
+          "web": {
+            "type": "boolean",
+            "description": "Use NakliOS page reading"
+          },
+          "jina": {
+            "type": "boolean",
+            "description": "Accept pages read by Jina Reader"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "settings.podcast_index",
+      "label": "Podcast Index key",
+      "description": "Save your Podcast Index API key and secret (from api.podcastindex.org/signup), kept in this browser only, or remove them with clear. The secret is never returned.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "API key"
+          },
+          "secret": {
+            "type": "string",
+            "description": "API secret"
+          },
+          "clear": {
+            "type": "boolean",
+            "description": "Remove the saved key and secret"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "settings.refresh_interval",
+      "label": "Refresh interval",
+      "description": "Set how often Rivulina checks every feed while it is open, in minutes (5 to 1440). A feed's own interval and ttl still apply.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "minutes": {
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 1440,
+            "description": "Minutes between refreshes"
+          }
+        },
+        "required": [
+          "minutes"
+        ],
+        "additionalProperties": false
+      }
+    },
     {
       "name": "feeds.subscribe",
       "label": "Subscribe",
@@ -249,12 +361,13 @@
         "properties": {
           "view": {
             "type": "string",
-            "description": "One of inbox, today, starred, podcasts, feed, folder, search (default: the current view)",
+            "description": "One of inbox, today, starred, podcasts, muted, feed, folder, search (default: the current view)",
             "enum": [
               "inbox",
               "today",
               "starred",
               "podcasts",
+              "muted",
               "feed",
               "folder",
               "search"
@@ -398,12 +511,13 @@
         "properties": {
           "view": {
             "type": "string",
-            "description": "One of inbox, today, starred, podcasts, feed, folder, search (default: the current view)",
+            "description": "One of inbox, today, starred, podcasts, muted, feed, folder, search (default: the current view)",
             "enum": [
               "inbox",
               "today",
               "starred",
               "podcasts",
+              "muted",
               "feed",
               "folder",
               "search"
@@ -516,19 +630,20 @@
     {
       "name": "view.open",
       "label": "Open view",
-      "description": "Show a view in the item list: inbox, today, starred, podcasts, a feed (feedId), a folder (folder) or a search (query).",
+      "description": "Show a view in the item list: inbox, today, starred, podcasts, muted (items a rule muted), a feed (feedId), a folder (folder) or a search (query).",
       "scope": "read",
       "input": {
         "type": "object",
         "properties": {
           "view": {
             "type": "string",
-            "description": "One of inbox, today, starred, podcasts, feed, folder, search (default: the current view)",
+            "description": "One of inbox, today, starred, podcasts, muted, feed, folder, search (default: the current view)",
             "enum": [
               "inbox",
               "today",
               "starred",
               "podcasts",
+              "muted",
               "feed",
               "folder",
               "search"
@@ -594,6 +709,104 @@
       "shortcut": "o"
     },
     {
+      "name": "items.unmute",
+      "label": "Unmute",
+      "description": "Bring items a rule muted back into the normal views (default: the open item).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Item ids (default: the open item)"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "rules.list",
+      "label": "List rules",
+      "description": "List the rules that mute, star or mark read new items whose title, author or text contains some words.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "rules.add",
+      "label": "Add rule",
+      "description": "Add a rule for new items: when the title, author or any text contains the words (any case), mute, star or mark the item read. Optionally only in one feed. Rules never change items the person already opened, starred or played.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "What to do with a matching item",
+            "enum": [
+              "mute",
+              "star",
+              "read"
+            ]
+          },
+          "match": {
+            "type": "object",
+            "properties": {
+              "field": {
+                "type": "string",
+                "description": "Where to look (default any)",
+                "enum": [
+                  "title",
+                  "author",
+                  "any"
+                ]
+              },
+              "contains": {
+                "type": "string",
+                "description": "Words to look for",
+                "maxLength": 200
+              }
+            },
+            "required": [
+              "contains"
+            ]
+          },
+          "feedId": {
+            "type": "string",
+            "description": "Only items of this feed (default: every feed)"
+          }
+        },
+        "required": [
+          "action",
+          "match"
+        ]
+      }
+    },
+    {
+      "name": "rules.remove",
+      "label": "Remove rule",
+      "description": "Remove one rule by its id. Items it already changed stay as they are.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Rule id (from rules.list)"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    {
       "name": "reader.set_prefs",
       "label": "Reading settings",
       "description": "Change the reading settings: font (sans or serif), text size (14 to 24), line width (narrow, medium or wide), images (load remote images in articles and show notes) and reading theme (light or dark). Send no fields to read the current settings. Returns the full settings.",
@@ -654,6 +867,48 @@
           }
         },
         "required": []
+      }
+    },
+    {
+      "name": "reader.full_article",
+      "label": "Load full article",
+      "description": "Fetch the item's web page, pick out the article and keep it with the item, for feeds that send only a summary (default: the open item). The page goes through the fetch routes, so a site that blocks browsers needs a route turned on in Settings. Returns the article as plain text.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "description": "Item id (default: the open item)"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "reader.send_to",
+      "label": "Send to Draft or Lorewell",
+      "description": "Send an item to Draft (to write about it) or to Lorewell (to read it later) as a Markdown file with its title, link and text (default: the open item). NakliOS asks the person first. Works inside NakliOS only.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "lorewell"
+            ],
+            "description": "The app to send to"
+          },
+          "itemId": {
+            "type": "string",
+            "description": "Item id (default: the open item)"
+          }
+        },
+        "required": [
+          "target"
+        ]
       }
     },
     {
@@ -816,6 +1071,54 @@
         "required": []
       },
       "shortcut": "Shift+<"
+    },
+    {
+      "name": "player.skip_silence",
+      "label": "Skip silence",
+      "description": "Turn skip silence on or off: quiet runs play at up to 4x, then the chosen speed returns. Works on downloaded episodes and on streams whose host lets the browser read the audio; on others the setting is kept and the result says why it is not active. Without `on` it switches. scope \"feed\" keeps it for this podcast only, \"global\" for every podcast without its own setting.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "on": {
+            "type": "boolean",
+            "description": "On or off (default: switch)"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "feed",
+              "global"
+            ],
+            "description": "Where to keep the setting"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "player.voice_boost",
+      "label": "Voice boost",
+      "description": "Turn voice boost on or off: evens out quiet and loud voices and raises the level. Works on downloaded episodes and on streams whose host lets the browser read the audio; on others the setting is kept and the result says why it is not active. Without `on` it switches. scope \"feed\" keeps it for this podcast only, \"global\" for every podcast without its own setting.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "on": {
+            "type": "boolean",
+            "description": "On or off (default: switch)"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "feed",
+              "global"
+            ],
+            "description": "Where to keep the setting"
+          }
+        },
+        "required": []
+      }
     },
     {
       "name": "player.sleep_timer",
@@ -1132,6 +1435,22 @@
       }
     },
     {
+      "name": "downloads.send_to_nakliamp",
+      "label": "Open in NakliAmp",
+      "description": "Hand a downloaded episode to NakliAmp inside NakliOS. NakliOS asks the person first; NakliAmp gets a read-only copy. Needs NakliOS, a downloaded episode and a file of at most 64 MB.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "description": "Episode id (default: the selected item)"
+          }
+        },
+        "required": []
+      }
+    },
+    {
       "name": "downloads.remove_played",
       "label": "Delete played downloads",
       "description": "Delete the downloaded files of every episode marked played. The episodes stay in the list.",
@@ -1195,6 +1514,30 @@
       }
     },
     {
+      "name": "search.podcast_index",
+      "label": "Search Podcast Index",
+      "description": "Search the Podcast Index directory with the key and secret saved in Rivulina settings. Each call is signed on this device and sent through your egress Worker, because Podcast Index refuses direct browser calls. Returns title, author, feed address, artwork address, genre and ids.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "term": {
+            "type": "string",
+            "description": "Podcast name or words to search for"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Most results to return (1 to 100, default 25)",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "required": [
+          "term"
+        ]
+      }
+    },
+    {
       "name": "opml.import",
       "label": "Import OPML",
       "description": "Import subscriptions from OPML 2.0 text. Nested outlines become one folder level; outlines without a feed address are skipped and counted. Every feed is checked for reachability (4 at a time) first; only reachable, new feeds are subscribed, and blocked feeds are listed with the reason. Set checkOnly to list without subscribing. Without text, opens the Import tab of the Add dialog.",
@@ -1233,7 +1576,7 @@
     {
       "name": "add.open",
       "label": "Add podcast or feed",
-      "description": "Open the Add dialog on one tab: search (Search podcasts), charts (Top charts), address (Feed address) or import (Import OPML). Optional term or url fills the field.",
+      "description": "Open the Add dialog on one tab: search (Search podcasts), podcastindex (Podcast Index, shown when a key is saved), charts (Top charts), address (Feed address) or import (Import OPML). Optional term or url fills the field.",
       "scope": "read",
       "input": {
         "type": "object",
@@ -1243,6 +1586,7 @@
             "description": "Which tab to open (default search)",
             "enum": [
               "search",
+              "podcastindex",
               "charts",
               "address",
               "import"
@@ -1296,6 +1640,168 @@
         "required": [
           "query"
         ]
+      }
+    },
+    {
+      "name": "ai.summarize",
+      "label": "Summarise with AI",
+      "description": "Summarise an article, or an episode's transcript or show notes, with the host model. Returns { summary, key_points, topics } and keeps it on the item; a cached summary is returned unless force is true.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "description": "Item id (default: the selected item)"
+          },
+          "force": {
+            "type": "boolean",
+            "description": "Ask the model again even when a summary is saved"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "text",
+              "transcript"
+            ],
+            "description": "What to summarise: auto (transcript when an episode has one, else the text), text, or transcript"
+          }
+        }
+      }
+    },
+    {
+      "name": "ai.transcribe",
+      "label": "Transcribe episode on this device",
+      "description": "Transcribe a downloaded or browser-readable episode with Whisper on this device, 30 s at a time. Progress is saved after each part, so a stopped run carries on where it stopped. The result becomes the episode's transcript.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "description": "Episode id (default: the selected item)"
+          },
+          "model": {
+            "type": "string",
+            "enum": [
+              "tiny",
+              "base"
+            ],
+            "description": "Whisper model (default: the AI setting)"
+          },
+          "device": {
+            "type": "string",
+            "enum": [
+              "wasm",
+              "webgpu"
+            ],
+            "description": "Where it runs (default: the AI setting)"
+          },
+          "force": {
+            "type": "boolean",
+            "description": "Start again from the beginning"
+          }
+        }
+      }
+    },
+    {
+      "name": "ai.cancel_transcribe",
+      "label": "Cancel transcription",
+      "description": "Stop the running transcription. The parts already done are kept, so transcribing again carries on from there.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "description": "Episode id (default: the running one)"
+          }
+        }
+      }
+    },
+    {
+      "name": "ai.transcription_status",
+      "label": "Transcription progress",
+      "description": "How far the transcription of an episode has got: phase (none, running phases, cancelled, failed, done) and parts done of the total.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "description": "Episode id (default: the selected item)"
+          }
+        }
+      }
+    },
+    {
+      "name": "ai.digest",
+      "label": "Make today's digest",
+      "description": "Group the unread items from the last 24 hours by topic with the host model. Returns groups of items (id, title, feed).",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "ai.open_digest",
+      "label": "Open today's digest",
+      "description": "Open the digest of today's unread items, grouped by topic.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "ai.ask",
+      "label": "Ask about this episode",
+      "description": "Answer a question about an episode from its transcript (published or made on this device) with the host model. Returns the answer and the transcript lines it rests on, with their times.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "description": "Episode id (default: the selected item)"
+          },
+          "question": {
+            "type": "string",
+            "description": "The question"
+          }
+        },
+        "required": [
+          "question"
+        ]
+      }
+    },
+    {
+      "name": "ai.settings",
+      "label": "AI settings",
+      "description": "Choose the transcription model (tiny: English only, faster; base: many languages, more accurate) and where it runs (wasm or webgpu).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "whisperModel": {
+            "type": "string",
+            "enum": [
+              "tiny",
+              "base"
+            ],
+            "description": "Whisper model"
+          },
+          "device": {
+            "type": "string",
+            "enum": [
+              "wasm",
+              "webgpu"
+            ],
+            "description": "wasm (processor) or webgpu (graphics card)"
+          }
+        }
       }
     },
     {

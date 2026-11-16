@@ -2509,21 +2509,27 @@
       "id": "reckon",
       "repo": "NakliTechie/reckon",
       "requestedRef": "main",
-      "resolvedCommit": "767403ff484cc4104cbcfcd6e816bc4852136c28",
+      "resolvedCommit": "8091f640b18bd0e52295cfe5357f6f5863eaa94d",
       "files": [
         {
           "source": "reckon.html",
           "destination": "index.html",
-          "sha256": "4583e2d5dcbc3ed454552f945b3c2abde6a310137069f028b1c160d6512abba3",
-          "bytes": 1017633,
-          "originalSourceSha256": "47f0e4eda2421a4baec7c4c2c275de9f5ce1aede15ca90f9af52ddd15d748d94",
+          "sha256": "2898fca5bc82633f585f7eff5996795b3be97576be7e316b1b1f2f33793e0286",
+          "bytes": 1433460,
+          "originalSourceSha256": "61e5f40ce677c4fe2b4cb31b51ae6de3d85f1463d9f3258d7100abfa016ba557",
           "sdkSha256": "ec78ab7bd0e82a108847216f33bc6600366f68199f9416959411e5db254405ed"
         },
         {
           "source": "commands.json",
           "destination": "commands.json",
-          "sha256": "4378852059ad9d25c854da70d409b2453b114e63c849d89ac9f37df0b273e786",
-          "bytes": 2274
+          "sha256": "b238400ad2afe71703dbcc83e43684239bdb9c97fb54918d45540619505b3cc0",
+          "bytes": 39437
+        },
+        {
+          "source": "sw.js",
+          "destination": "sw.js",
+          "sha256": "2ca434a4f5eff36152ae7ce46088bb52f47d0381c97ac94134fdb8ce0e85aaf5",
+          "bytes": 4665
         }
       ]
     },
@@ -8037,21 +8043,21 @@
       "id": "rivulina",
       "repo": "NakliTechie/rivulina",
       "requestedRef": "main",
-      "resolvedCommit": "7388e886bed2831813b4f965da4cab3c49edf825",
+      "resolvedCommit": "2eeb39b1442b1a728b20990ff44c2d5e2c9a6220",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "a44275e21d22d4b07eec454f027a78190dcdbda2e83a282158b75ed26895ea24",
-          "bytes": 276899,
-          "originalSourceSha256": "52efaf1d57f29edfac1680df1a6d1339b05033815950cdb9b8bb77361f8fca2a",
+          "sha256": "56241659886ef258df263456d20c2a809a07891190bc6d69e2c5deadad413ec2",
+          "bytes": 418728,
+          "originalSourceSha256": "e23b368a4d0762cd65f08aafff4dbe2a46c3313c88c509604a49dcde3d4ea2f2",
           "sdkSha256": "ec78ab7bd0e82a108847216f33bc6600366f68199f9416959411e5db254405ed"
         },
         {
           "source": "commands.json",
           "destination": "commands.json",
-          "sha256": "8c892a32173608addf8f5c9920f90e11f084024d96899ebcecdf076ff57a452d",
-          "bytes": 38727
+          "sha256": "e7a2b8481659de869523646e2fe77d804669e1c85c69a71351939f3fcdb2942b",
+          "bytes": 55034
         },
         {
           "source": "sw.js",
@@ -8064,6 +8070,18 @@
           "destination": "LICENSE",
           "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
           "bytes": 34523
+        },
+        {
+          "source": "LICENSE-readability.md",
+          "destination": "LICENSE-readability.md",
+          "sha256": "a5b1e8181751ce05b85b7bfaa832b785e87086250a5148e679d17ca9bdcfa958",
+          "bytes": 553
+        },
+        {
+          "source": "social.png",
+          "destination": "social.png",
+          "sha256": "dce2ee8beb6838b3376de4eecaf9b3338c644ad1918041b18a4a9546ac9ae251",
+          "bytes": 46938
         }
       ]
     }

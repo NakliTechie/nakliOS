@@ -1697,6 +1697,10 @@
         {
           "source": "commands.json",
           "destination": "commands.json"
+        },
+        {
+          "source": "sw.js",
+          "destination": "sw.js"
         }
       ]
     },
@@ -5416,6 +5420,14 @@
         {
           "source": "LICENSE",
           "destination": "LICENSE"
+        },
+        {
+          "source": "LICENSE-readability.md",
+          "destination": "LICENSE-readability.md"
+        },
+        {
+          "source": "social.png",
+          "destination": "social.png"
         }
       ]
     }
