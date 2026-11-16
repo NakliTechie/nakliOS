@@ -45,7 +45,7 @@
         "properties": {
           "q": {
             "type": "string",
-            "description": "words to match in file name, folder, tags, album names, camera; a year (2024) or month name (March) matches capture dates"
+            "description": "words to match in file name, folder, tags, album names, camera, captions and text read from photos; a year (2024) or month name (March) matches capture dates"
           },
           "from": {
             "type": "string",
@@ -159,8 +159,25 @@
     {
       "name": "library.undo",
       "label": "Undo",
-      "description": "Undo one earlier library change, by the undo token that change returned.",
+      "description": "Undo one earlier change to favourites, ratings, flags, tags, hidden photos or albums, by the undo token that change returned. A change that moved files (trash, restore, move, rename) is undone with library.undo_files.",
       "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ]
+      }
+    },
+    {
+      "name": "library.undo_files",
+      "label": "Undo a file change",
+      "description": "Undo one earlier trash, restore, move or rename, by the undo token that change returned. Files on disk move back, so NakliOS asks the person first.",
+      "scope": "destructive",
       "input": {
         "type": "object",
         "properties": {
@@ -182,6 +199,28 @@
         "type": "object",
         "properties": {},
         "required": []
+      }
+    },
+    {
+      "name": "library.search_meaning",
+      "label": "Search by meaning",
+      "description": "Find photos by what they show, for example \"a dog on a beach at sunset\", using the CLIP vectors made on this device. Needs Search by meaning turned on in the Library.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200
+          }
+        },
+        "required": [
+          "text"
+        ]
       }
     },
     {
@@ -211,6 +250,28 @@
         "properties": {
           "id": {
             "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    {
+      "name": "photo.similar",
+      "label": "Find similar",
+      "description": "The photos that look most like one photo, by their CLIP vectors. Needs Search by meaning turned on.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
           }
         },
         "required": [
@@ -426,8 +487,8 @@
     {
       "name": "photo.restore",
       "label": "Restore from trash",
-      "description": "Move trashed photos back to where they were.",
-      "scope": "write",
+      "description": "Move trashed photos back to where they were. NakliOS asks the person first, because files on disk change. Refuses to overwrite.",
+      "scope": "destructive",
       "input": {
         "type": "object",
         "properties": {
@@ -546,6 +607,77 @@
         "required": [
           "op",
           "ids"
+        ]
+      }
+    },
+    {
+      "name": "photo.move",
+      "label": "Move to folder",
+      "description": "Move photos to another folder inside the same library folder; XMP sidecars move with them. NakliOS asks the person first, because files on disk change. Refuses to overwrite.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "moves": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "toPath": {
+                  "type": "string",
+                  "description": "new path inside the same root, e.g. \"2024/Goa/IMG_1.jpg\""
+                }
+              },
+              "required": [
+                "id",
+                "toPath"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 5000
+          },
+          "dryRun": {
+            "type": "boolean",
+            "description": "report what would change and change nothing"
+          }
+        },
+        "required": [
+          "moves"
+        ]
+      }
+    },
+    {
+      "name": "photo.rename",
+      "label": "Rename",
+      "description": "Rename photos in place from a template with {name}, {date}, {time}, {n} and {camera}. NakliOS asks the person first, because files on disk change. Refuses to overwrite.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 5000,
+            "description": "photo ids from library.search (at most 5000)"
+          },
+          "template": {
+            "type": "string",
+            "description": "e.g. \"{date} Goa {n}\"; the extension is kept"
+          },
+          "dryRun": {
+            "type": "boolean",
+            "description": "report what would change and change nothing"
+          }
+        },
+        "required": [
+          "ids",
+          "template"
         ]
       }
     },
@@ -746,6 +878,310 @@
         "required": [
           "album"
         ]
+      }
+    },
+    {
+      "name": "image.info",
+      "label": "Image info",
+      "description": "Describe the image open in the editor: file name, width and height in pixels, format, and how many edits are in its history.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "image.open",
+      "label": "Edit photo",
+      "description": "Open one library photo (an id from library.search) in the editor, so the image commands work on it.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "shows": true
+    },
+    {
+      "name": "image.crop",
+      "label": "Crop",
+      "description": "Crop the open image to a rectangle, in pixels from its top-left corner. Undo with image.undo.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number",
+            "minimum": 0,
+            "description": "left edge"
+          },
+          "y": {
+            "type": "number",
+            "minimum": 0,
+            "description": "top edge"
+          },
+          "w": {
+            "type": "number",
+            "minimum": 1,
+            "description": "width"
+          },
+          "h": {
+            "type": "number",
+            "minimum": 1,
+            "description": "height"
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "w",
+          "h"
+        ]
+      }
+    },
+    {
+      "name": "image.rotate",
+      "label": "Rotate",
+      "description": "Rotate the open image by 90 degrees clockwise (90), anticlockwise (-90), or 180.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "deg": {
+            "type": "integer",
+            "enum": [
+              90,
+              -90,
+              180
+            ]
+          }
+        },
+        "required": [
+          "deg"
+        ]
+      }
+    },
+    {
+      "name": "image.flip",
+      "label": "Flip",
+      "description": "Flip the open image horizontally (h, a mirror image) or vertically (v).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "axis": {
+            "type": "string",
+            "enum": [
+              "h",
+              "v"
+            ]
+          }
+        },
+        "required": [
+          "axis"
+        ]
+      }
+    },
+    {
+      "name": "image.resize",
+      "label": "Resize",
+      "description": "Resize the open image to a width and height in pixels (at most 16384 each).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "w": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 16384
+          },
+          "h": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 16384
+          }
+        },
+        "required": [
+          "w",
+          "h"
+        ]
+      }
+    },
+    {
+      "name": "image.adjust",
+      "label": "Adjust",
+      "description": "Change exposure (-100 to 100, about 2 stops at the ends), contrast (-100 to 100) and saturation (-100 to 200) of the open image. 0 leaves a setting as it is.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "exposure": {
+            "type": "number",
+            "minimum": -100,
+            "maximum": 100,
+            "description": "-100 to 100"
+          },
+          "contrast": {
+            "type": "number",
+            "minimum": -100,
+            "maximum": 100,
+            "description": "-100 to 100"
+          },
+          "saturation": {
+            "type": "number",
+            "minimum": -100,
+            "maximum": 200,
+            "description": "-100 to 200"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "image.sharpen",
+      "label": "Sharpen",
+      "description": "Sharpen the open image. Amount 0.1 to 5; 1 is typical.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number",
+            "minimum": 0.1,
+            "maximum": 5,
+            "description": "0.1 to 5"
+          }
+        },
+        "required": [
+          "amount"
+        ]
+      }
+    },
+    {
+      "name": "image.straighten",
+      "label": "Straighten",
+      "description": "Rotate the open image by a small angle in degrees (-45 to 45, positive is clockwise). The canvas grows to fit.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "angle": {
+            "type": "number",
+            "minimum": -45,
+            "maximum": 45,
+            "description": "degrees, -45 to 45"
+          }
+        },
+        "required": [
+          "angle"
+        ]
+      }
+    },
+    {
+      "name": "image.undo",
+      "label": "Undo edit",
+      "description": "Undo the last edit to the open image.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "image.export",
+      "label": "Export image",
+      "description": "Save the edited image as a new file: beside the original when the editor has a save folder, otherwise as a download. The original file is never replaced. Returns the file name.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "png",
+              "jpeg",
+              "webp"
+            ],
+            "description": "default png"
+          },
+          "quality": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "jpeg and webp only, default 90"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "image.extract_text",
+      "label": "Extract text",
+      "description": "Read printed English text from the open image on this device. Downloads Tesseract.js (about 5 MB, from esm.sh and jsDelivr) the first time: ask the person, then pass allowDownload: true. Returns the text and a confidence from 0 to 100.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "allowDownload": {
+            "type": "boolean",
+            "description": "set true, after the person agreed, to allow the first-time download"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "image.lens_blur",
+      "label": "Background blur",
+      "description": "Blur the background by depth, keeping the subject at a focus point sharp. x and y are 0 to 1 across the image. Downloads the depth model (about 27 to 50 MB, from Hugging Face) the first time: ask the person, then pass allowDownload: true. Undo with image.undo.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "y": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "strength": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "default 50"
+          },
+          "allowDownload": {
+            "type": "boolean",
+            "description": "set true, after the person agreed, to allow the first-time download"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ]
+      }
+    },
+    {
+      "name": "image.snapshot",
+      "label": "Snapshot",
+      "description": "A small JPEG data URL of the open image as it looks now (at most 512 px on the long edge), for looking at it.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
       }
     }
   ]

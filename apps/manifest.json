@@ -2316,6 +2316,14 @@
           "destination": "guide/index.html"
         },
         {
+          "source": "assets/places/cities.bin",
+          "destination": "assets/places/cities.bin"
+        },
+        {
+          "source": "assets/places/countries.json",
+          "destination": "assets/places/countries.json"
+        },
+        {
           "source": "LICENSE",
           "destination": "LICENSE"
         }

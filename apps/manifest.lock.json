@@ -3423,27 +3423,39 @@
       "id": "slate",
       "repo": "NakliTechie/slate",
       "requestedRef": "main",
-      "resolvedCommit": "5a2715a3b788955a42facc76674a692f55bde2ca",
+      "resolvedCommit": "82728eba71ebc2a1f4c7f53f75f132d031a9c864",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "0d3db09bb64a04291e830bd3671874512ed85e4d1b05ea4780f4325090ef1743",
-          "bytes": 744373,
-          "originalSourceSha256": "3e8a91e36180347687158dfa1b4267064a442e39b18f7b967c1bf38415e63108",
+          "sha256": "76664762c8e22a44e710c2b9bd7b83e7804feab4a1aec4e45bdafcbb7d330d78",
+          "bytes": 1209185,
+          "originalSourceSha256": "490362b23b723b43714f2fbde2fc5ddf985addd466d3561bc4f0966aacfcef71",
           "sdkSha256": "5ff86458102ce080ccf993e4c2bb74c3ef5c8336babe5e5d79906f0f04fae4d2"
         },
         {
           "source": "commands.json",
           "destination": "commands.json",
-          "sha256": "a96ed145ba8adaf9431430083181c965d869a1f2d634ed0ff7a42872dac75db9",
-          "bytes": 19110
+          "sha256": "5701842295529a0299c24f74fc13ff5a14295a77c3dece6ea3e0ed8cdd97ad13",
+          "bytes": 31308
         },
         {
           "source": "guide/index.html",
           "destination": "guide/index.html",
           "sha256": "7fbc8d3444a89999c84c49bc3430058f8ec2e7647180b518292863447ac00700",
           "bytes": 33617
+        },
+        {
+          "source": "assets/places/cities.bin",
+          "destination": "assets/places/cities.bin",
+          "sha256": "ca3ad54094137371d3c34382d73db7e51265f97189859e29aeff5eb805cae564",
+          "bytes": 1271121
+        },
+        {
+          "source": "assets/places/countries.json",
+          "destination": "assets/places/countries.json",
+          "sha256": "02fc0784529c7bfd4a4684a2382b1066266e65ceb23d6815649c3456ea5086de",
+          "bytes": 143059
         },
         {
           "source": "LICENSE",
