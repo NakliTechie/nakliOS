@@ -5209,22 +5209,6 @@
         {
           "source": "sw.js",
           "destination": "sw.js"
-        },
-        {
-          "source": "ai/modnet-fa2fa54/config.json",
-          "destination": "ai/modnet-fa2fa54/config.json"
-        },
-        {
-          "source": "ai/modnet-fa2fa54/preprocessor_config.json",
-          "destination": "ai/modnet-fa2fa54/preprocessor_config.json"
-        },
-        {
-          "source": "ai/modnet-fa2fa54/onnx/model_quantized.onnx",
-          "destination": "ai/modnet-fa2fa54/onnx/model_quantized.onnx"
-        },
-        {
-          "source": "ai/modnet-fa2fa54/NOTICE.md",
-          "destination": "ai/modnet-fa2fa54/NOTICE.md"
         }
       ]
     }
