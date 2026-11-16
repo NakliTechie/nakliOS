@@ -6351,6 +6351,12 @@ const HF_OPTS = {
   licenseKey: 'gpl-v3',
   useArrayArithmetic: true,
   smartRounding: true,
+  // 14 significant digits (15 lets float noise such as 0.1+0.2 show as
+  // 0.3000000000000001); HyperFormula's default of 10
+  // turned 123456789012 into 123456789010 (review A1). Known limit: with smart
+  // rounding, a difference below about 1e-14 of its operands rounds to 0
+  // (123456789012345-123456789012340 gives 0; Excel gives 5).
+  precisionRounding: 14,
   evaluateNullToZero: true, // Excel parity: empty-cell reference evaluates to 0
   // Reckon keeps its own history (core/transaction.mjs inverses); HyperFormula's
   // undo stack is never used, and inside a large batch its bookkeeping grows
@@ -7397,6 +7403,36 @@ export function createEngine(HF, { hfOptions = HF_OPTS } = {}) {
   // keeps its own history, and HF's batch record is rescanned on every
   // setCellContents call, so a 300,000-cell import grew quadratically (over 5
   // minutes). Suspending evaluation alone keeps the single recompute.
+  // One cell write that cannot leave HyperFormula broken (review A2, A3).
+  // HF 3.5.0 throws when it replaces a formula that names a sheet that does
+  // not exist ("There's no sheet with id"); clearing the cell first and writing
+  // again succeeds. It also keeps a stale array vertex when an array formula is
+  // cleared or replaced, so such a write is followed by a full engine rebuild.
+  const writeCellSafe = (sheet, a1, raw, anchors) => {
+    const at = addr(sheet, a1);
+    try { if (hf.isCellPartOfArray(at) && /^=/.test(String(hf.getCellFormula(at) ?? ''))) anchors.hit = true; } catch { /* not an array */ }
+    const content = encodeCell(raw, sheet, a1);
+    // a current formula naming a sheet that does not exist is cleared first:
+    // replacing it in one step throws inside HF 3.5.0, and the failed attempt
+    // leaves the cell so even a clear then throws
+    try {
+      const cur = hf.getCellFormula(at);
+      if (cur) {
+        const known = new Set(hf.getSheetNames().map((n) => n.toUpperCase()));
+        for (const m of String(cur).matchAll(/(?:'((?:[^']|'')+)'|([A-Za-z_][\w.]*))!/g)) {
+          const name = (m[1] ?? m[2]).replace(/''/g, "'").toUpperCase();
+          if (!known.has(name)) { hf.setCellContents(at, [[null]]); break; }
+        }
+      }
+    } catch { /* fall through to the plain write */ }
+    try { return hf.setCellContents(at, [[content]]); }
+    catch (first) {
+      try { hf.setCellContents(at, [[null]]); } catch { /* the clear may throw too */ }
+      try { return hf.setCellContents(at, [[content]]); }
+      catch { throw first; }
+    }
+  };
+  const rebuildAfterArrayWrite = () => { markFull(); hf.rebuildAndRecalculate(); registerBooleanLiterals(); };
   const evalOnce = (fn) => {
     hf.suspendEvaluation();
     try { fn(); } catch (e) { hf.resumeEvaluation(); throw e; }
@@ -7600,19 +7636,24 @@ export function createEngine(HF, { hfOptions = HF_OPTS } = {}) {
     renameSheet(oldName, newName) { markFull(); hf.renameSheet(sheetId(oldName), newName); afterMutate({ rescan: true }); },
 
     setCell(sheet, a1, raw) {
-      collect(hf.setCellContents(addr(sheet, a1), [[encodeCell(raw, sheet, a1)]]));
+      const anchors = { hit: false };
+      const out = writeCellSafe(sheet, a1, raw, anchors);
+      if (anchors.hit) rebuildAfterArrayWrite(); else collect(out);
       trackIndirect(sheet, a1, raw);
       afterMutate();
     },
     setCells(sheet, entries) { // entries: [{key, raw}]
+      const anchors = { hit: false };
       if (entries.length > 1 && typeof hf.batch === 'function') {
-        // one recompute for the whole batch; batch() returns the exported changes
-        collect(evalOnce(() => {
-          for (const { key, raw } of entries) hf.setCellContents(addr(sheet, key), [[encodeCell(raw, sheet, key)]]);
-        }));
+        // one recompute for the whole batch
+        const out = evalOnce(() => {
+          for (const { key, raw } of entries) writeCellSafe(sheet, key, raw, anchors);
+        });
+        if (!anchors.hit) collect(out);
       } else {
-        for (const { key, raw } of entries) collect(hf.setCellContents(addr(sheet, key), [[encodeCell(raw, sheet, key)]]));
+        for (const { key, raw } of entries) { const out = writeCellSafe(sheet, key, raw, anchors); if (!anchors.hit) collect(out); }
       }
+      if (anchors.hit) rebuildAfterArrayWrite();
       for (const { key, raw } of entries) trackIndirect(sheet, key, raw);
       afterMutate();
     },
@@ -7658,6 +7699,19 @@ export function createEngine(HF, { hfOptions = HF_OPTS } = {}) {
         { sheet: sid, col: to.col, row: to.row },
       );
       afterMutate({ rescan: true });
+    },
+
+    // the engine's CURRENT expression for a defined name (review A4): HF moves
+    // a name's references on inserts, deletes, moves and sheet renames, so
+    // saving reads them back from here rather than the original text
+    nameExpr(name) {
+      const key = String(name).toUpperCase();
+      if (lambdaNames.has(key)) return lambdaNames.get(key);
+      try {
+        const f = hf.getNamedExpressionFormula(name);
+        if (typeof f !== 'string') return null;
+        return decodeRaw(f);
+      } catch { return null; }
     },
 
     // parity v1.x (F7): a named LAMBDA must not shadow a built-in function,
@@ -8058,6 +8112,13 @@ export function createSession({ engine, baseline, now = () => new Date().toISOSt
   const log = [];
   let head = 0; // number of applied entries
   let txSeq = 0;
+  // Rebuild engine and document from the baseline and the first `upto`
+  // committed entries (default: all applied ones). Used when an op fails
+  // inside the engine, so a half-applied change is never kept or saved.
+  const restoreCommitted = (upto = head) => {
+    loadBaseline();
+    for (let i = 0; i < upto; i += 1) for (const op of log[i].ops) applyOp(op);
+  };
 
   const metaById = (id) => {
     const m = doc.sheetMeta.find((s) => s.id === id);
@@ -8568,7 +8629,7 @@ export function createSession({ engine, baseline, now = () => new Date().toISOSt
   };
 
   // ---- inverse computation (against current state, before the op applies) ----
-  const computeInverse = (op) => {
+  const computeInverseBase = (op) => {
     switch (op.op) {
       case 'setCells': {
         const meta = metaById(op.sheet);
@@ -8792,11 +8853,29 @@ export function createSession({ engine, baseline, now = () => new Date().toISOSt
         return [{ op: 'sheetRename', sheet: op.sheet, name: meta.name }];
       }
       case 'nameSet':
-        return [{ op: 'nameSet', name: op.name, ref: doc.names[op.name] ?? null }];
+        return [{ op: 'nameSet', name: op.name, ref: op.name in doc.names ? nameRef(op.name) : null }];
       case 'styleSet':
         return [{ op: 'styleSet', name: op.name, fmt: doc.styles[op.name] ?? null }];
       default: throw new Error(`no inverse for op "${op.op}"`);
     }
+  };
+
+  // A defined name's current expression, from the engine when it knows it
+  // (structural ops move names inside the engine), else the stored text.
+  const nameRef = (n) => {
+    const e = engine.nameExpr ? engine.nameExpr(n) : null;
+    if (typeof e !== 'string' || !e) return doc.names[n];
+    const bare = e.replace(/^=/, '');
+    return String(doc.names[n] ?? '').startsWith('=') ? `=${bare}` : bare; // keep the stored form
+  };
+  // Structural ops move named ranges inside the engine but no inverse knew the
+  // names' prior text, so Undo left #REF! names (review A4). Their inverses now
+  // end with a nameSet per name, restoring each name's expression as it was.
+  const NAME_MOVING_OPS = new Set(['insertRows', 'deleteRows', 'insertCols', 'deleteCols', 'moveRange', 'sheetRename', 'sheetDelete']);
+  const computeInverse = (op) => {
+    const inv = computeInverseBase(op);
+    if (NAME_MOVING_OPS.has(op.op)) for (const n of Object.keys(doc.names)) inv.push({ op: 'nameSet', name: n, ref: nameRef(n) });
+    return inv;
   };
 
   // ---- executor (shared by forward apply, undo, redo, replay) ----
@@ -9176,8 +9255,11 @@ export function createSession({ engine, baseline, now = () => new Date().toISOSt
           inverse.unshift(...inv); // prepend group (keeps group-internal order); undo runs latest-first
         }
       } catch (err) {
-        // roll back the partial transaction with the inverses gathered so far
-        for (const inv of inverse) applyOp(inv);
+        // Atomic (review A3): an op that throws halfway can leave a partial
+        // engine change that no inverse knows about. Rebuild the engine and the
+        // document from the baseline plus the committed history, so the
+        // workbook is exactly as it was before this transaction.
+        restoreCommitted();
         throw err;
       }
       txSeq += 1;
@@ -9195,7 +9277,15 @@ export function createSession({ engine, baseline, now = () => new Date().toISOSt
     undo() {
       if (head === 0) return false;
       const entry = log[head - 1];
-      for (const op of entry.inverse) applyOp(op);
+      try { for (const op of entry.inverse) applyOp(op); }
+      catch (err) {
+        // the inverse failed in the engine: replay the history up to the step
+        // before this one, which is the state undo promises (review A2)
+        restoreCommitted(head - 1);
+        head -= 1;
+        fire('transaction', { type: 'undo', entry });
+        return true;
+      }
       head -= 1;
       fire('transaction', { type: 'undo', entry });
       return true;
@@ -9203,7 +9293,8 @@ export function createSession({ engine, baseline, now = () => new Date().toISOSt
     redo() {
       if (head === log.length) return false;
       const entry = log[head];
-      for (const op of entry.ops) applyOp(op);
+      try { for (const op of entry.ops) applyOp(op); }
+      catch (err) { restoreCommitted(); throw err; }
       head += 1;
       fire('transaction', { type: 'redo', entry });
       return true;
@@ -9247,7 +9338,7 @@ export function createSession({ engine, baseline, now = () => new Date().toISOSt
       return {
         reckon: { ...clone(doc.reckon), modified: now() },
         sheets,
-        names: clone(doc.names),
+        names: Object.fromEntries(Object.keys(doc.names).map((n) => [n, nameRef(n)])), // current expressions (review A4)
         // the formats catalog is DERIVED from the ids the cells reference
         // (core/formats.mjs doctrine): only referenced ids are emitted (orphans
         // left by undo are pruned, keeping log-replay snapshots exact), and each
@@ -9278,7 +9369,7 @@ export function createSession({ engine, baseline, now = () => new Date().toISOSt
     getValue: (sheetName, a1) => engine.getValue(sheetName, a1),
     getFormula: (sheetName, a1) => engine.getFormula(sheetName, a1),
     sheetNames: () => doc.sheetMeta.map((s) => ({ id: s.id, name: s.name, color: s.color, hidden: s.hidden, protected: s.protected })),
-    getNames: () => clone(doc.names),
+    getNames: () => Object.fromEntries(Object.keys(doc.names).map((n) => [n, nameRef(n)])),
     // Batch D: format resolution for the display feed + the cell's fmt id
     fmtDefFor,
     fmtIdFor: (sheetName, a1) => {
@@ -12767,7 +12858,7 @@ export async function createCrateFacade({ backends } = {}) {
 // ---------- autosave ----------
 // Debounce 500ms after the last transaction; serialize() is called at fire
 // time so the save always captures the latest state.
-export function createAutosave({ session, facade, serialize, debounceMs = 500 } = {}) {
+export function createAutosave({ session, facade, serialize, debounceMs = 500, onError = null } = {}) {
   if (!session || !facade) throw new Error('createAutosave needs session + facade');
   const ser = serialize ?? (() => new TextEncoder().encode(JSON.stringify(session.serialize())));
   let timer = null;
@@ -12783,7 +12874,11 @@ export function createAutosave({ session, facade, serialize, debounceMs = 500 } 
     if (timer !== null) { clearTimeout(timer); timer = null; }
     const wasDirty = dirty;
     dirty = false;
-    const bytes = await ser(); // ser may be async (e.g. serialize over the worker RPC)
+    let bytes;
+    // a workbook that cannot serialise is never written: the stored copy stays
+    // as it was, and the app is told so it can show it (review A2)
+    try { bytes = await ser(); } // ser may be async (e.g. serialize over the worker RPC)
+    catch (e) { dirty = true; try { onError?.(e); } catch { /* the hook never breaks saving */ } throw e; }
     try { lastResult = await facade.save(bytes); }
     catch (e) { dirty = dirty || wasDirty; throw e; }
     if (lastResult && lastResult.ok === false) dirty = dirty || wasDirty;
@@ -18138,6 +18233,7 @@ const STR = {
   'store.fileInvalid': { en: '{file} failed validation: {msg}', hi: '{file} जाँच में विफल: {msg}' },
   'store.opened': { en: 'Opened {file}', hi: '{file} खोली गई' },
   'store.openFailed': { en: 'Could not open: {msg}', hi: 'खोला नहीं जा सका: {msg}' },
+  'store.saveFailed': { en: 'Reckon could not save: {msg}. The last saved copy is kept; undo the last change or export the workbook.', hi: 'Reckon सहेज नहीं सका: {msg}। आख़िरी सहेजी गई प्रति सुरक्षित है; पिछला बदलाव पूर्ववत करें या वर्कबुक निर्यात करें।' },
   'store.notLoadedTitle': { en: 'The stored workbook did not open', hi: 'सहेजी गई वर्कबुक नहीं खुली' },
   'store.notLoadedBody': { en: 'Reckon could not open the workbook stored in this browser ({from}): {problem}. It has not changed it.', hi: 'Reckon इस ब्राउज़र में सहेजी गई वर्कबुक ({from}) नहीं खोल सका: {problem}। उसे बदला नहीं गया है।' },
   'store.keptAs': { en: 'A copy is kept as {name} in {where}. Reckon writes nothing until you edit the new, empty workbook.', hi: 'एक प्रति {name} नाम से {where} में रखी गई है। जब तक आप नई, खाली वर्कबुक में बदलाव नहीं करते, Reckon कुछ नहीं लिखता।' },
@@ -20141,17 +20237,26 @@ export function createGridView({ mount, hooks = {}, defaults = {} }) {
 
   // ---------- fill handle seam ----------
   const origHideAutofill = sheet.selector.hideAutofill.bind(sheet.selector);
+  // The vendored grid calls hideAutofill on EVERY mouse-up and never clears
+  // arange after a fill, so later clicks re-ran the old fill over the cells
+  // (review B1). arange is consumed here: one drag, one fill.
+  let fillBusy = false;
   sheet.selector.hideAutofill = () => {
     const arange = sheet.selector.arange;
+    sheet.selector.arange = null;
     const srange = { ...sheet.selector.range };
     origHideAutofill();
-    if (arange && hooks.onFill) {
+    if (arange && hooks.onFill && !fillBusy) {
       const target = { sri: arange.sri, sci: arange.sci, eri: arange.eri, eci: arange.eci };
       if (target.sri !== srange.sri || target.sci !== srange.sci || target.eri !== srange.eri || target.eci !== srange.eci) {
-        hooks.onFill(srange, target);
+        fillBusy = true;
+        Promise.resolve(hooks.onFill(srange, target)).finally(() => { fillBusy = false; });
       }
     }
   };
+  // a cancelled pointer (touch interrupted) never reaches the mouse-up above,
+  // so it drops the pending fill here; a normal lift is consumed above
+  window.addEventListener('pointercancel', () => { if (!fillBusy) sheet.selector.arange = null; }, true);
 
   // ---------- scroll hook (editor/outline reposition) ----------
   for (const key of ['verticalScrollbar', 'horizontalScrollbar']) {
@@ -34003,12 +34108,19 @@ export function createApp({ client, params = new URLSearchParams() }) {
     setSaveStatus(describeStorage());
   };
 
+  let lastSaveErrorToast = 0;
   const buildAutosave = () => {
     autosave?.dispose();
     autosave = RK.createAutosave({
       session: client,
       facade,
       serialize: async () => enc(JSON.stringify(await client.serialize())),
+      onError: (e) => {
+        const nowMs = Date.now();
+        if (nowMs - lastSaveErrorToast < 10000) return;
+        lastSaveErrorToast = nowMs;
+        toast($t('store.saveFailed', 'Reckon could not save: {msg}. The last saved copy is kept; undo the last change or export the workbook.', { msg: String(e?.message ?? e) }), { kind: 'error', ms: 10000 });
+      },
     });
   };
 
