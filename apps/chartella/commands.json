@@ -1562,7 +1562,7 @@
     {
       "name": "board.export",
       "label": "Export",
-      "description": "Export the board: format png, svg, pdf, excalidraw or chartella. pdf opens the browser's print dialog with one page per frame (or the whole page when it has no frames); choose Save as PDF there. For png and svg: scope board|selection|frame (frameId), scale 1–3, background (false: transparent), embed (true: the editable board rides inside the image, so Open brings it back). Returns { name, where }.",
+      "description": "Export the board: format png, svg, pdf, excalidraw or chartella. pdf opens the browser's print dialog with one page per frame (or the whole page when it has no frames); choose Save as PDF there. For png and svg: scope board|selection|frame (frameId), scale 1–3, background (false: transparent), embed (true: the editable board rides inside the image, so Open brings it back). Returns { name, where, bytes } and, when returned, { mime, dataUrl }; it never opens a save picker without a click from the person.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1611,6 +1611,14 @@
               "type": "string"
             },
             "description": "Shape ids (default: the selection)"
+          },
+          "to": {
+            "type": "string",
+            "description": "Where the file goes: save (NakliOS storage, or a picker or download) or return (the bytes as a data URL in the result). An agent with no click from the person gets NakliOS storage when hosted, else return",
+            "enum": [
+              "save",
+              "return"
+            ]
           }
         },
         "required": [
