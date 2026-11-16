@@ -238,7 +238,7 @@
     },
     {
       "name": "clip.set",
-      "description": "Change clip properties: volume (0–2), fadeIn, fadeOut, speed (0.25–4), opacity, scale, x, y, rotation, fit (fit|fill|blur), look (none|vivid|warm|cool|mono|fade|noir|sunset), blend (normal|multiply|screen|overlay|darken|lighten|difference|color-dodge|soft-light), filters {brightness, contrast, saturation, temperature} each -1..1, reverse (true plays the clip backwards), transitionIn {type: crossfade|fade|wipe|slide|zoom|push|iris|whip, duration, dir: right|left for wipe and slide} or null, text, style, muted.",
+      "description": "Change clip properties: volume (0–2), fadeIn, fadeOut, speed (0.25–4), opacity, scale, x, y, rotation, fit (fit|fill|blur), look (none|vivid|warm|cool|mono|fade|noir|sunset), blend (normal|multiply|screen|overlay|darken|lighten|difference|color-dodge|soft-light), filters {brightness, contrast, saturation, temperature} each -1..1, reverse (true plays the clip backwards), transitionIn {type: crossfade|fade|wipe|slide|zoom|push|iris|whip, duration, dir: right|left for wipe and slide} or null, text, style, muted; on a camera clip, camera {preset, intensity, shake, freq, seed} (see camera.add).",
       "scope": "write",
       "input": {
         "type": "object",
@@ -947,7 +947,7 @@
     },
     {
       "name": "project.set",
-      "description": "Set project fields: name, fps (24, 25, 30, 50, 60), background (#rrggbb), mode (quick or pro).",
+      "description": "Set project fields: name, fps (24, 25, 30, 50, 60), background (#rrggbb), mode (quick or pro), motionBlur {samples 1-16, shutter 0-1} or null. Motion blur applies to exports only: each exported frame averages `samples` renders spread over `shutter` of the frame interval (0.5 is a 180 degree shutter), so keyed moves, cameras and text and graphic animation streak; motion inside the footage is not blurred again. samples 1 or null turns it off; 8 samples at shutter 0.5 is a good start and makes the export about 8 times slower.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -971,6 +971,23 @@
               "quick",
               "pro"
             ]
+          },
+          "motionBlur": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "Export motion blur {samples: 1-16, shutter: 0-1 (default 0.5)}, or null for off",
+            "properties": {
+              "samples": {
+                "type": "number",
+                "description": "Renders averaged per frame, 1-16"
+              },
+              "shutter": {
+                "type": "number",
+                "description": "Fraction of the frame interval, 0-1"
+              }
+            }
           }
         },
         "required": []
@@ -1219,6 +1236,49 @@
       }
     },
     {
+      "name": "camera.add",
+      "description": "Add a camera move. A camera is a clip on a video track that pans, zooms, turns and shakes the picture of every track below it as one frame, while it lasts; text and graphic tracks above it do not move. With no trackId it goes on a camera track just above the video tracks. preset: pushIn (slow zoom in), pullOut (zoom out), panLeft, panRight, kenBurns (slow zoom with a drift), shake (handheld shake), whipPan (a fast pan that streaks off and back in, 0.5 s by default: centre it on a cut and turn on motion blur), none (a still camera to key by hand). intensity scales the move (0.1-3, default 1). Its x, y (pan, fractions of the frame), scale (zoom about the centre) and rotation (degrees) key with clip.keyframe; clip.set {camera: {preset, intensity}} rewrites the move, and {camera: {shake: 0-0.2, freq: 0.1-30 Hz, seed}} sets the shake.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "preset": {
+            "type": "string",
+            "description": "Camera move",
+            "enum": [
+              "pushIn",
+              "pullOut",
+              "panLeft",
+              "panRight",
+              "kenBurns",
+              "shake",
+              "whipPan",
+              "none"
+            ]
+          },
+          "start": {
+            "type": "number",
+            "description": "Start, seconds (default: the playhead)"
+          },
+          "length": {
+            "type": "number",
+            "description": "Length, seconds (default 3; whipPan 0.5)"
+          },
+          "intensity": {
+            "type": "number",
+            "description": "Strength, 0.1-3 (default 1)"
+          },
+          "trackId": {
+            "type": "string",
+            "description": "Video track (optional; not the main track)"
+          }
+        },
+        "required": [
+          "preset"
+        ]
+      }
+    },
+    {
       "name": "template.list",
       "description": "List the templates and their variables.",
       "scope": "read",
@@ -1230,7 +1290,7 @@
     },
     {
       "name": "template.apply",
-      "description": "Add a template at a time with values for its variables: title-card, lower-third, quote-card, stat-card, end-card. It goes on a new text track.",
+      "description": "Add a template at a time with values for its variables: hook-opener, countdown-321, list-three, versus-labels, question-card, series-badge, follow-card, news-strip, chapter-title, bullet-list, steps, compare, bar-chart, definition, testimonial, location-tag, title-card, lower-third, quote-card, stat-card, end-card. It goes on a new text track.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1239,6 +1299,22 @@
             "type": "string",
             "description": "Template",
             "enum": [
+              "hook-opener",
+              "countdown-321",
+              "list-three",
+              "versus-labels",
+              "question-card",
+              "series-badge",
+              "follow-card",
+              "news-strip",
+              "chapter-title",
+              "bullet-list",
+              "steps",
+              "compare",
+              "bar-chart",
+              "definition",
+              "testimonial",
+              "location-tag",
               "title-card",
               "lower-third",
               "quote-card",
