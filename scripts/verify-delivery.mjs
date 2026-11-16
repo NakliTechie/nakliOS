@@ -54,8 +54,10 @@ const expectedRules = [
   'nakli-egress/',
   'worker/',
   'extension/',
+  'tools/',
 ];
-const rules = assetsIgnore.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+// .assetsignore uses gitignore syntax, so a line starting with # is a comment, not a rule.
+const rules = assetsIgnore.split(/\r?\n/).map(line => line.trim()).filter(line => line && !line.startsWith('#'));
 assert(JSON.stringify(rules) === JSON.stringify(expectedRules), `Unexpected asset exclusions: ${rules.join(', ')}`);
 // Forge now ships its terminal (apps/forge/index.html); only its planning
 // docs (*.md) and the mockup stay excluded from delivery.
