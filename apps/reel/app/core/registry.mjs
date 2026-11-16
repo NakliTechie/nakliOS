@@ -18,7 +18,10 @@
  */
 
 export function keySpec(event) {
-  const key = event.key === ' ' ? 'space' : event.key.toLowerCase();
+  let key = event.key === ' ' ? 'space' : event.key.toLowerCase();
+  // On macOS, Option changes the character (Option+S types "ß"), so with Alt held a letter or digit
+  // shortcut is read from the physical key instead.
+  if (event.altKey && /^(Key[A-Z]|Digit[0-9])$/.test(event.code || '')) key = event.code.slice(-1).toLowerCase();
   const mods = [];
   if (event.altKey) mods.push('alt');
   // Shift is meaningful only for keys whose character does not already encode it.

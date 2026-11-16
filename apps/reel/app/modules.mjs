@@ -7,6 +7,10 @@ import * as picture from './picture/index.mjs';
 import * as platform from './platform/index.mjs';
 import * as queue from './queue/index.mjs';
 import * as help from './help/index.mjs';
+import * as library from './library/index.mjs';
+import * as ai from './ai/index.mjs';
+import * as door from './door/index.mjs';
+import * as hosted from './hosted/index.mjs';
 import { COMMANDS as CORE_COMMANDS } from './core/commands.mjs';
 
 export const MODULES = [
@@ -16,7 +20,11 @@ export const MODULES = [
   { id: 'picture', mod: picture },
   { id: 'platform', mod: platform },
   { id: 'queue', mod: queue },
+  { id: 'hosted', mod: hosted },
+  { id: 'library', mod: library },
+  { id: 'ai', mod: ai },
   { id: 'help', mod: help },
+  { id: 'door', mod: door },
 ];
 
 export function allCommandDefinitions() {

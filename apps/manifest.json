@@ -1939,20 +1939,20 @@
       "ref": "main",
       "files": [
         {
-          "source": "index.html",
-          "destination": "index.html"
+          "source": "app/ai/asr-worker.js",
+          "destination": "app/ai/asr-worker.js"
         },
         {
-          "source": "commands.json",
-          "destination": "commands.json"
+          "source": "app/ai/index.mjs",
+          "destination": "app/ai/index.mjs"
         },
         {
-          "source": "engine/reel-engine.mjs",
-          "destination": "engine/reel-engine.mjs"
+          "source": "app/ai/logic.mjs",
+          "destination": "app/ai/logic.mjs"
         },
         {
-          "source": "app/modules.mjs",
-          "destination": "app/modules.mjs"
+          "source": "app/ai/speech.mjs",
+          "destination": "app/ai/speech.mjs"
         },
         {
           "source": "app/core/commands.mjs",
@@ -1963,8 +1963,32 @@
           "destination": "app/core/registry.mjs"
         },
         {
+          "source": "app/door/index.mjs",
+          "destination": "app/door/index.mjs"
+        },
+        {
           "source": "app/help/index.mjs",
           "destination": "app/help/index.mjs"
+        },
+        {
+          "source": "app/hosted/index.mjs",
+          "destination": "app/hosted/index.mjs"
+        },
+        {
+          "source": "app/hosted/logic.mjs",
+          "destination": "app/hosted/logic.mjs"
+        },
+        {
+          "source": "app/library/index.mjs",
+          "destination": "app/library/index.mjs"
+        },
+        {
+          "source": "app/library/logic.mjs",
+          "destination": "app/library/logic.mjs"
+        },
+        {
+          "source": "app/modules.mjs",
+          "destination": "app/modules.mjs"
         },
         {
           "source": "app/picture/index.mjs",
@@ -1983,8 +2007,16 @@
           "destination": "app/queue/logic.mjs"
         },
         {
+          "source": "app/queue/shared.mjs",
+          "destination": "app/queue/shared.mjs"
+        },
+        {
           "source": "app/rung/index.mjs",
           "destination": "app/rung/index.mjs"
+        },
+        {
+          "source": "app/subtitles/bitmap.mjs",
+          "destination": "app/subtitles/bitmap.mjs"
         },
         {
           "source": "app/subtitles/captions.mjs",
@@ -2011,6 +2043,18 @@
           "destination": "app/subtitles/parse.mjs"
         },
         {
+          "source": "app/subtitles/pgs.mjs",
+          "destination": "app/subtitles/pgs.mjs"
+        },
+        {
+          "source": "app/subtitles/styled.mjs",
+          "destination": "app/subtitles/styled.mjs"
+        },
+        {
+          "source": "app/transport/bookmarks.mjs",
+          "destination": "app/transport/bookmarks.mjs"
+        },
+        {
           "source": "app/transport/index.mjs",
           "destination": "app/transport/index.mjs"
         },
@@ -2019,44 +2063,133 @@
           "destination": "app/transport/logic.mjs"
         },
         {
-          "source": "vendor/mediabunny/mediabunny-1.66.0.min.mjs",
-          "destination": "vendor/mediabunny/mediabunny-1.66.0.min.mjs"
+          "source": "app/transport/seekbar.mjs",
+          "destination": "app/transport/seekbar.mjs"
         },
         {
-          "source": "vendor/mediabunny/LICENSE-MPL-2.0.txt",
-          "destination": "vendor/mediabunny/LICENSE-MPL-2.0.txt"
+          "source": "commands.json",
+          "destination": "commands.json"
         },
         {
-          "source": "vendor/mediabunny-ac3/mediabunny-ac3-1.66.0.min.mjs",
-          "destination": "vendor/mediabunny-ac3/mediabunny-ac3-1.66.0.min.mjs"
+          "source": "engine/gpu-renderer.mjs",
+          "destination": "engine/gpu-renderer.mjs"
+        },
+        {
+          "source": "engine/libav-rung.mjs",
+          "destination": "engine/libav-rung.mjs"
+        },
+        {
+          "source": "engine/reel-engine.mjs",
+          "destination": "engine/reel-engine.mjs"
+        },
+        {
+          "source": "index.html",
+          "destination": "index.html",
+          "managedSdk": "inline"
+        },
+        {
+          "source": "sw.js",
+          "destination": "sw.js"
+        },
+        {
+          "source": "vendor/jassub/COPYRIGHT",
+          "destination": "vendor/jassub/COPYRIGHT"
+        },
+        {
+          "source": "vendor/jassub/LICENSE",
+          "destination": "vendor/jassub/LICENSE"
+        },
+        {
+          "source": "vendor/jassub/LICENSE-default-font-OFL-1.1.txt",
+          "destination": "vendor/jassub/LICENSE-default-font-OFL-1.1.txt"
+        },
+        {
+          "source": "vendor/jassub/default.woff2",
+          "destination": "vendor/jassub/default.woff2"
+        },
+        {
+          "source": "vendor/jassub/jassub-worker-modern.wasm",
+          "destination": "vendor/jassub/jassub-worker-modern.wasm"
+        },
+        {
+          "source": "vendor/jassub/jassub-worker.js",
+          "destination": "vendor/jassub/jassub-worker.js"
+        },
+        {
+          "source": "vendor/jassub/jassub-worker.wasm",
+          "destination": "vendor/jassub/jassub-worker.wasm"
+        },
+        {
+          "source": "vendor/jassub/jassub.es.js",
+          "destination": "vendor/jassub/jassub.es.js"
+        },
+        {
+          "source": "vendor/libav/LICENSE-LGPL-2.1.txt",
+          "destination": "vendor/libav/LICENSE-LGPL-2.1.txt"
+        },
+        {
+          "source": "vendor/libav/libav-6.10.9.0-reel.mjs",
+          "destination": "vendor/libav/libav-6.10.9.0-reel.mjs"
+        },
+        {
+          "source": "vendor/libav/libav-6.10.9.0-reel.wasm.mjs",
+          "destination": "vendor/libav/libav-6.10.9.0-reel.wasm.mjs"
+        },
+        {
+          "source": "vendor/libav/libav-6.10.9.0-reel.wasm.wasm",
+          "destination": "vendor/libav/libav-6.10.9.0-reel.wasm.wasm"
+        },
+        {
+          "source": "vendor/libav/mkconfig-reel.json",
+          "destination": "vendor/libav/mkconfig-reel.json"
+        },
+        {
+          "source": "vendor/libpgs/LICENSE",
+          "destination": "vendor/libpgs/LICENSE"
+        },
+        {
+          "source": "vendor/libpgs/libpgs.js",
+          "destination": "vendor/libpgs/libpgs.js"
         },
         {
           "source": "vendor/mediabunny-ac3/LICENSE-MPL-2.0.txt",
           "destination": "vendor/mediabunny-ac3/LICENSE-MPL-2.0.txt"
         },
         {
-          "source": "vendor/mediabunny-ac3/licenses/ffmpeg/LICENSE.md",
-          "destination": "vendor/mediabunny-ac3/licenses/ffmpeg/LICENSE.md"
-        },
-        {
           "source": "vendor/mediabunny-ac3/licenses/ffmpeg/COPYING.LGPLv2.1",
           "destination": "vendor/mediabunny-ac3/licenses/ffmpeg/COPYING.LGPLv2.1"
         },
         {
-          "source": "vendor/mediabunny-dts/mediabunny-dts-1.66.0.min.mjs",
-          "destination": "vendor/mediabunny-dts/mediabunny-dts-1.66.0.min.mjs"
+          "source": "vendor/mediabunny-ac3/licenses/ffmpeg/LICENSE.md",
+          "destination": "vendor/mediabunny-ac3/licenses/ffmpeg/LICENSE.md"
+        },
+        {
+          "source": "vendor/mediabunny-ac3/mediabunny-ac3-1.66.0.min.mjs",
+          "destination": "vendor/mediabunny-ac3/mediabunny-ac3-1.66.0.min.mjs"
         },
         {
           "source": "vendor/mediabunny-dts/LICENSE-MPL-2.0.txt",
           "destination": "vendor/mediabunny-dts/LICENSE-MPL-2.0.txt"
         },
         {
+          "source": "vendor/mediabunny-dts/licenses/ffmpeg/COPYING.LGPLv2.1",
+          "destination": "vendor/mediabunny-dts/licenses/ffmpeg/COPYING.LGPLv2.1"
+        },
+        {
           "source": "vendor/mediabunny-dts/licenses/ffmpeg/LICENSE.md",
           "destination": "vendor/mediabunny-dts/licenses/ffmpeg/LICENSE.md"
         },
         {
-          "source": "vendor/mediabunny-dts/licenses/ffmpeg/COPYING.LGPLv2.1",
-          "destination": "vendor/mediabunny-dts/licenses/ffmpeg/COPYING.LGPLv2.1"
+          "source": "vendor/mediabunny-dts/mediabunny-dts-1.66.0.min.mjs",
+          "destination": "vendor/mediabunny-dts/mediabunny-dts-1.66.0.min.mjs"
+        },
+        {
+          "source": "vendor/mediabunny/LICENSE-MPL-2.0.txt",
+          "destination": "vendor/mediabunny/LICENSE-MPL-2.0.txt"
+        },
+        {
+          "source": "vendor/mediabunny/mediabunny-1.66.0.min.mjs",
+          "destination": "vendor/mediabunny/mediabunny-1.66.0.min.mjs"
         }
       ]
     },

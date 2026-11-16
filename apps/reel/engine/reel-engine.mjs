@@ -10,6 +10,7 @@ import {
   MPEG_TS,
   OGG,
   QTFF,
+  StreamSource,
   WAVE,
   WEBM,
 } from '../vendor/mediabunny/mediabunny-1.66.0.min.mjs';
@@ -42,7 +43,104 @@ const SOFTWARE_AUDIO_PACKAGES = Object.freeze([
 ]);
 
 /** File extensions the engine opens; each one passes the golden gate. */
-const SUPPORTED_EXTENSIONS = Object.freeze(['.mp4', '.m4v', '.mov', '.mkv', '.webm', '.ts']);
+const SUPPORTED_EXTENSIONS = Object.freeze([
+  '.mp4', '.m4v', '.mov', '.mkv', '.webm', '.ts',
+  // Opened through engine/libav-rung.mjs (rows O7, E7); refused by name without it.
+  '.avi', '.flv', '.wmv', '.asf', '.mpg', '.mpeg', '.vob',
+]);
+
+/* Ranged readers (batch 3, additive): `load`, `probe`, thumbnails and audioPcm also accept
+   `{ name, size, type?, read(offset, length) -> Promise<Uint8Array | ArrayBuffer> }`, for hosts
+   that serve bytes on request (NakliOS `naklios.fs.readBinary` with an offset). The engine never
+   asks a reader for more than RANGED_READ_LIMIT bytes in one call and never holds the whole file. */
+export const RANGED_READ_LIMIT = 16 * 1024 * 1024;
+
+export function isRangedReader(value) {
+  return !!value && typeof value === 'object'
+    && !(typeof Blob === 'function' && value instanceof Blob)
+    && !(value instanceof RangedFile)
+    && typeof value.getFile !== 'function'
+    && typeof value.read === 'function'
+    && Number.isSafeInteger(value.size) && value.size >= 0;
+}
+
+/* Exactly `length` bytes from `offset` (clamped to the reader's size), in calls of at most
+   RANGED_READ_LIMIT bytes. A reader that returns the wrong length is a read error, not EOF. */
+export async function readRanged(reader, offset, length) {
+  const start = Math.max(0, Math.min(reader.size, Math.floor(offset)));
+  const end = Math.max(start, Math.min(reader.size, start + Math.max(0, Math.floor(length))));
+  const out = new Uint8Array(end - start);
+  let at = start;
+  while (at < end) {
+    const want = Math.min(RANGED_READ_LIMIT, end - at);
+    let bytes = await reader.read(at, want);
+    if (bytes instanceof ArrayBuffer) bytes = new Uint8Array(bytes);
+    else if (ArrayBuffer.isView(bytes) && !(bytes instanceof Uint8Array)) {
+      bytes = new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    }
+    if (!(bytes instanceof Uint8Array) || bytes.byteLength !== want) {
+      throw new DemuxError(
+        'RangedReadError',
+        'ERR_DEMUX_RANGED_READ',
+        `Reading ${reader.name || 'the file'} at byte ${at} returned ${bytes?.byteLength ?? 'nothing'} of ${want} bytes.`,
+      );
+    }
+    out.set(bytes, at - start);
+    at += want;
+  }
+  return out;
+}
+
+/* A Blob-shaped view over a ranged reader: `slice(a, b)` and `arrayBuffer()` as Blob has them,
+   so the engine's scanners (Matroska cues, MP4 text, fingerprint) read it like a File. It is
+   not a Blob: code that must post bytes to a worker (the libav rung) refuses it by name. */
+export class RangedFile {
+  constructor(reader, start = 0, end = reader.size, type = reader.type || '') {
+    this.reader = reader;
+    this.start = start;
+    this.end = end;
+    this.type = type;
+  }
+
+  get name() { return this.reader.name || 'untitled'; }
+
+  get size() { return this.end - this.start; }
+
+  slice(start = 0, end = this.size, contentType = this.type) {
+    const relative = (value, fallback) => {
+      const n = Number.isFinite(value) ? Math.trunc(value) : fallback;
+      return n < 0 ? Math.max(this.size + n, 0) : Math.min(n, this.size);
+    };
+    const from = relative(start, 0);
+    const to = Math.max(from, relative(end, this.size));
+    return new RangedFile(this.reader, this.start + from, this.start + to, contentType);
+  }
+
+  async bytes() { return readRanged(this.reader, this.start, this.size); }
+
+  async arrayBuffer() { return (await this.bytes()).buffer; }
+}
+
+const rangedFiles = new WeakMap();
+
+/* One RangedFile per reader, so the engine's per-file caches see one identity. */
+export function rangedFileFor(reader) {
+  let file = rangedFiles.get(reader);
+  if (!file) {
+    file = new RangedFile(reader);
+    rangedFiles.set(reader, file);
+  }
+  return file;
+}
+
+/* File, Blob or RangedFile for a media input, or null; a FileSystemFileHandle opens its File. */
+async function mediaFileOf(handle) {
+  if (handle instanceof RangedFile) return handle;
+  if (typeof Blob === 'function' && handle instanceof Blob) return handle;
+  if (isRangedReader(handle)) return rangedFileFor(handle);
+  if (handle && typeof handle.getFile === 'function') return handle.getFile();
+  return null;
+}
 
 /**
  * Create Reel's vendorable layers 2–5 engine and its playback coordinator.
@@ -85,6 +183,16 @@ export function createReelEngine({
     throw new TypeError('createReelEngine requires config, store, storage, and metadataSync.');
   }
   const emit = (type, detail = {}) => Events?.emit?.(type, detail);
+
+  /* Ask before any download over the host's threshold (5 MB by default). The hook is
+     read at call time, because the host may install it after creating the engine. */
+  async function askDownload(info) {
+    const threshold = CONFIG.askDownloadOverBytes ?? 5 * 1024 * 1024;
+    if (Number(info?.bytes) <= threshold) return true;
+    const request = CONFIG.requestDownload;
+    if (typeof request !== 'function') return false;
+    return (await request({ name: info.name, bytes: info.bytes, licence: info.licence })) === true;
+  }
 
 /* Layer 2 — Demux. This is the ONLY Mediabunny ingress in Reel.
    The vendored module stays unmodified; see VENDOR.md. */
@@ -149,7 +257,31 @@ const Demux = (() => {
       && signature.every((byte, index) => bytes[index] === byte);
   }
 
-  function refuseDetectedFormat(bytes) {
+  // ASF_Video_Media stream type GUID (BC19EFC0-5B4D-11CF-A8FD-00805F5C442B) as stored.
+  const ASF_VIDEO_MEDIA = Uint8Array.from([
+    0xC0, 0xEF, 0x19, 0xBC, 0x4D, 0x5B, 0xCF, 0x11,
+    0xA8, 0xFD, 0x00, 0x80, 0x5F, 0x5C, 0x44, 0x2B,
+  ]);
+
+  function containsBytes(haystack, needle) {
+    outer: for (let index = 0; index + needle.byteLength <= haystack.byteLength; index += 1) {
+      for (let offset = 0; offset < needle.byteLength; offset += 1) {
+        if (haystack[index + offset] !== needle[offset]) continue outer;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  function refuseDetectedFormat(bytes, header = bytes) {
+    if (startsWith(bytes, ASF_SIGNATURE) && containsBytes(header, ASF_VIDEO_MEDIA)) {
+      // WMV and other ASF video: Mediabunny cannot read it; the libav rung may.
+      throw fail(
+        'UnsupportedContainerError',
+        'ERR_DEMUX_ASF_VIDEO',
+        'ASF/WMV video needs the libav software decoder.',
+      );
+    }
     if (startsWith(bytes, ASF_SIGNATURE)) {
       throw fail(
         'UnsupportedCodecError',
@@ -213,7 +345,23 @@ const Demux = (() => {
       CHAPTER_STRING: 0x85,
       CHAPTER_LANGUAGE: 0x437C,
       CHAPTER_LANGUAGE_BCP47: 0x437D,
+      CUES: 0x1C53BB6B,
+      CUE_POINT: 0xBB,
+      CUE_TIME: 0xB3,
+      CUE_TRACK_POSITIONS: 0xB7,
+      CUE_TRACK: 0xF7,
+      REFERENCE_BLOCK: 0xFB,
+      ATTACHMENTS: 0x1941A469,
+      ATTACHED_FILE: 0x61A7,
+      FILE_NAME: 0x466E,
+      FILE_MIME_TYPE: 0x4660,
+      FILE_DATA: 0x465C,
+      VIDEO: 0xE0,
+      FLAG_INTERLACED: 0x9A,
+      FIELD_ORDER: 0x9D,
     });
+    // Matroska FieldOrder: 1 and 14 put the top field first, 6 and 9 the bottom field.
+    const FIELD_ORDERS = new Map([[1, 'tff'], [14, 'tff'], [6, 'bff'], [9, 'bff']]);
     const TOP_LEVEL_IDS = new Set([
       ID.SEEK_HEAD,
       ID.INFO,
@@ -231,6 +379,15 @@ const Demux = (() => {
       ['S_TEXT/ASS', 'ass'],
       ['S_TEXT/SSA', 'ssa'],
     ]);
+    // Bitmap subtitle codecs: blocks are returned as raw bytes, never decoded as text.
+    const BITMAP_CODECS = new Map([
+      ['S_HDMV/PGS', 'pgs'],
+    ]);
+    const subtitleCodec = codecId => TEXT_CODECS.get(codecId) || BITMAP_CODECS.get(codecId) || null;
+    const MAX_ATTACHMENT_BYTES = 32 * 1024 * 1024;
+    const MAX_ATTACHMENTS_TOTAL_BYTES = 128 * 1024 * 1024;
+    const MAX_INDEX_CLUSTERS = 200_000;
+    const INDEX_SCAN_TIMEOUT_MS = 15_000;
     const decoder = new TextDecoder('utf-8', { fatal: true });
 
     class Reader {
@@ -480,10 +637,26 @@ const Demux = (() => {
           case ID.FLAG_DESCRIPTIONS: entry.disposition.descriptions = !!await unsigned(reader, child); break;
           case ID.FLAG_ORIGINAL: entry.disposition.original = !!await unsigned(reader, child); break;
           case ID.FLAG_COMMENTARY: entry.disposition.commentary = !!await unsigned(reader, child); break;
+          case ID.VIDEO:
+            await children(reader, child, async field => {
+              if (field.id === ID.FLAG_INTERLACED) entry.flagInterlaced = await unsigned(reader, field);
+              if (field.id === ID.FIELD_ORDER) entry.fieldOrder = await unsigned(reader, field);
+            });
+            break;
           default: break;
         }
       });
-      if (entry.type !== 17 || !TEXT_CODECS.has(entry.codecId)) return null;
+      if (entry.type !== 17 || !subtitleCodec(entry.codecId)) {
+        if (!Number.isSafeInteger(entry.number)) return null;
+        const interlaced = entry.flagInterlaced === 1;
+        return {
+          number: entry.number,
+          type: entry.type,
+          media: true,
+          interlaced,
+          fieldOrder: interlaced ? FIELD_ORDERS.get(entry.fieldOrder) || 'unknown' : null,
+        };
+      }
       if (!Number.isSafeInteger(entry.number) || entry.number <= 0) {
         throw fail('MalformedEbmlError', 'ERR_DEMUX_SUBTITLE_TRACK', 'A subtitle track number is invalid.');
       }
@@ -499,12 +672,14 @@ const Demux = (() => {
 
     async function parseTracks(reader, element) {
       const tracks = [];
+      const mediaTracks = [];
       await children(reader, element, async child => {
         if (child.id !== ID.TRACK_ENTRY) return;
         const track = await parseTrackEntry(reader, child);
-        if (track) tracks.push(track);
+        if (track?.media) mediaTracks.push(track);
+        else if (track) tracks.push(track);
       });
-      return tracks;
+      return { tracks, mediaTracks };
     }
 
     async function parseChapterDisplay(reader, element) {
@@ -580,11 +755,11 @@ const Demux = (() => {
         if (element.id === ID.SEEK_HEAD) {
           for (const [id, position] of await parseSeekHead(reader, element, segment)) positions.set(id, position);
         }
-        if ([ID.INFO, ID.TRACKS, ID.CHAPTERS].includes(element.id)) found.set(element.id, element);
+        if ([ID.INFO, ID.TRACKS, ID.CHAPTERS, ID.CUES, ID.ATTACHMENTS].includes(element.id)) found.set(element.id, element);
         offset = requireKnown(element, 'A top-level Matroska element');
       }
 
-      for (const id of [ID.INFO, ID.TRACKS, ID.CHAPTERS]) {
+      for (const id of [ID.INFO, ID.TRACKS, ID.CHAPTERS, ID.CUES, ID.ATTACHMENTS]) {
         if (!found.has(id)) {
           const element = await soughtElement(reader, segment, positions, id);
           if (element) found.set(id, element);
@@ -613,9 +788,21 @@ const Demux = (() => {
       }
 
       const timestampScale = found.has(ID.INFO) ? await parseInfo(reader, found.get(ID.INFO)) : 1_000_000;
-      const tracks = found.has(ID.TRACKS) ? await parseTracks(reader, found.get(ID.TRACKS)) : [];
+      const parsed = found.has(ID.TRACKS) ? await parseTracks(reader, found.get(ID.TRACKS)) : { tracks: [], mediaTracks: [] };
       const chapters = found.has(ID.CHAPTERS) ? await parseChapters(reader, found.get(ID.CHAPTERS)) : [];
-      return { file, segment, timestampScale, tracks, chapters, cueCache: new Map() };
+      return {
+        file,
+        segment,
+        timestampScale,
+        tracks: parsed.tracks,
+        mediaTracks: parsed.mediaTracks,
+        chapters,
+        cuesElement: found.get(ID.CUES) || null,
+        attachmentsElement: found.get(ID.ATTACHMENTS) || null,
+        cueCache: new Map(),
+        keyframeCache: new Map(),
+        attachmentCache: null,
+      };
     }
 
     async function blockData(reader, element, targetTrack) {
@@ -654,6 +841,10 @@ const Demux = (() => {
           `A subtitle cue exceeds ${CONFIG.demux.maxSubtitleCueBytes} bytes.`,
         );
       }
+      if (BITMAP_CODECS.has(targetTrack.codecId)) {
+        const data = (await reader.bytes(payloadOffset, payloadSize)).slice();
+        return { relativeTimestamp, text: null, data, id: null, settings: '', payloadSize };
+      }
       let text;
       try {
         text = decoder.decode(await reader.bytes(payloadOffset, payloadSize)).replace(/\0+$/, '');
@@ -690,6 +881,7 @@ const Demux = (() => {
         startS,
         endS: durationNs === null ? null : startS + (durationNs / 1e9),
         text: block.text,
+        data: block.data || null,
         id: block.id,
         settings: block.settings,
       };
@@ -800,11 +992,181 @@ const Demux = (() => {
           offset = requireKnown(element, 'A top-level Matroska element');
         }
       }
+      if (BITMAP_CODECS.has(track.codecId)) return displaySets(scan.cues, mediaDuration);
       return normalizeCueDurations(scan.cues, mediaDuration);
     }
 
+    /* Bitmap tracks: FFmpeg writes one block per PGS segment, so blocks sharing a
+       timestamp form one display set. Join them, and end each set where the next
+       later set starts. */
+    function displaySets(blocks, mediaDuration) {
+      blocks.sort((left, right) => left.startS - right.startS);
+      const sets = [];
+      for (const block of blocks) {
+        const last = sets.at(-1);
+        if (last && Math.abs(last.startS - block.startS) < 1e-6) {
+          const joined = new Uint8Array(last.data.byteLength + block.data.byteLength);
+          joined.set(last.data, 0);
+          joined.set(block.data, last.data.byteLength);
+          last.data = joined;
+          if (block.endS !== null) last.endS = Math.max(last.endS ?? block.endS, block.endS);
+        } else {
+          sets.push({ startS: block.startS, endS: block.endS, data: block.data });
+        }
+      }
+      for (let index = 0; index < sets.length; index += 1) {
+        const set = sets[index];
+        set.startS = Math.max(0, set.startS);
+        if (set.endS === null || set.endS <= set.startS) {
+          const next = sets[index + 1]?.startS;
+          set.endS = Number.isFinite(next) ? next : Math.max(set.startS, mediaDuration);
+        }
+      }
+      return sets;
+    }
+
+    /* Key frame times for Matroska track `trackNumber`: from Cues when the file has
+       them, otherwise from a bounded scan that reads each Cluster's timestamp and its
+       first block of that track (row E8's cluster index). Cached per file and track. */
+    async function cueIndex(state, trackNumber) {
+      const reader = new Reader(state.file, {
+        deadline: performance.now() + INDEX_SCAN_TIMEOUT_MS,
+        timeoutMs: INDEX_SCAN_TIMEOUT_MS,
+        timeoutLabel: 'Matroska Cues read',
+      });
+      const times = [];
+      await children(reader, state.cuesElement, async point => {
+        if (point.id !== ID.CUE_POINT) return;
+        let time = null;
+        let matches = false;
+        await children(reader, point, async field => {
+          if (field.id === ID.CUE_TIME) time = await unsigned(reader, field);
+          if (field.id === ID.CUE_TRACK_POSITIONS) {
+            await children(reader, field, async position => {
+              if (position.id === ID.CUE_TRACK && await unsigned(reader, position) === trackNumber) matches = true;
+            });
+          }
+        });
+        if (matches && time !== null) times.push((time * state.timestampScale) / 1e9);
+      });
+      return times;
+    }
+
+    async function clusterIndex(state, trackNumber) {
+      const reader = new Reader(state.file, {
+        deadline: performance.now() + INDEX_SCAN_TIMEOUT_MS,
+        timeoutMs: INDEX_SCAN_TIMEOUT_MS,
+        timeoutLabel: 'Matroska cluster scan',
+      });
+      const times = [];
+      let clusters = 0;
+      let offset = state.segment.dataOffset;
+      while (offset < state.segment.end && clusters < MAX_INDEX_CLUSTERS) {
+        const element = await elementAt(reader, offset, state.segment.end);
+        if (element.id !== ID.CLUSTER) {
+          offset = requireKnown(element, 'A top-level Matroska element');
+          continue;
+        }
+        clusters += 1;
+        const limit = element.end ?? state.segment.end;
+        let child = element.dataOffset;
+        let clusterTimestamp = null;
+        let decided = false;
+        while (child < limit) {
+          const field = await elementAt(reader, child, limit);
+          if (element.end === null && TOP_LEVEL_IDS.has(field.id)) break;
+          if (field.id === ID.CLUSTER_TIMESTAMP) clusterTimestamp = await unsigned(reader, field);
+          if (!decided && clusterTimestamp !== null && (field.id === ID.SIMPLE_BLOCK || field.id === ID.BLOCK_GROUP)) {
+            const key = await blockKey(reader, field, trackNumber);
+            if (key !== null) {
+              decided = true;
+              if (key.key) times.push(((clusterTimestamp + key.relativeTimestamp) * state.timestampScale) / 1e9);
+              if (element.end !== null) break;
+            }
+          }
+          child = requireKnown(field, 'A Cluster child element');
+        }
+        offset = element.end ?? child;
+      }
+      return times;
+    }
+
+    /* For a SimpleBlock or BlockGroup of `trackNumber`: its relative time and whether
+       it is a key frame. Null for another track. */
+    async function blockKey(reader, element, trackNumber) {
+      let blockElement = element;
+      let referenced = false;
+      if (element.id === ID.BLOCK_GROUP) {
+        blockElement = null;
+        await children(reader, element, async child => {
+          if (child.id === ID.BLOCK) blockElement = child;
+          if (child.id === ID.REFERENCE_BLOCK) referenced = true;
+        });
+        if (!blockElement) return null;
+      }
+      const prefix = await reader.bytes(blockElement.dataOffset, Math.min(blockElement.dataSize, 12));
+      if (!prefix.length) return null;
+      const trackVint = vintLength(prefix[0], 8, 'Block track number');
+      if (trackVint.length + 3 > prefix.length) return null;
+      let number = prefix[0] & (trackVint.marker - 1);
+      for (let index = 1; index < trackVint.length; index += 1) number = (number * 256) + prefix[index];
+      if (number !== trackNumber) return null;
+      const raw = (prefix[trackVint.length] << 8) | prefix[trackVint.length + 1];
+      const relativeTimestamp = raw & 0x8000 ? raw - 0x10000 : raw;
+      const key = element.id === ID.SIMPLE_BLOCK ? (prefix[trackVint.length + 2] & 0x80) !== 0 : !referenced;
+      return { relativeTimestamp, key };
+    }
+
+    /** Key frame times for the nth video track (1-based, in file order). */
+    function keyframes(state, videoNumber) {
+      const video = state.mediaTracks.filter(track => track.type === 1)[videoNumber - 1];
+      if (!video) return Promise.resolve([]);
+      if (!state.keyframeCache.has(video.number)) {
+        const task = (state.cuesElement ? cueIndex(state, video.number) : clusterIndex(state, video.number))
+          .then(times => [...new Set(times.map(time => Math.max(0, time)))].sort((left, right) => left - right));
+        state.keyframeCache.set(video.number, task);
+      }
+      return state.keyframeCache.get(video.number);
+    }
+
+    /** Matroska attachments (fonts for ASS): [{ name, mimeType, data }], bounded. */
+    function attachments(state) {
+      if (!state.attachmentsElement) return Promise.resolve([]);
+      state.attachmentCache ??= (async () => {
+        const reader = new Reader(state.file, {
+          deadline: performance.now() + INDEX_SCAN_TIMEOUT_MS,
+          timeoutMs: INDEX_SCAN_TIMEOUT_MS,
+          timeoutLabel: 'Matroska attachment read',
+        });
+        const files = [];
+        let total = 0;
+        await children(reader, state.attachmentsElement, async entry => {
+          if (entry.id !== ID.ATTACHED_FILE) return;
+          const file = { name: null, mimeType: null, data: null };
+          await children(reader, entry, async field => {
+            if (field.id === ID.FILE_NAME) file.name = await textValue(reader, field);
+            if (field.id === ID.FILE_MIME_TYPE) file.mimeType = await textValue(reader, field);
+            if (field.id === ID.FILE_DATA) {
+              if (field.dataSize > MAX_ATTACHMENT_BYTES || total + field.dataSize > MAX_ATTACHMENTS_TOTAL_BYTES) {
+                throw fail(
+                  'AttachmentLimitError',
+                  'ERR_DEMUX_ATTACHMENT_LIMIT',
+                  `Matroska attachments exceed ${MAX_ATTACHMENT_BYTES} bytes each or ${MAX_ATTACHMENTS_TOTAL_BYTES} in all.`,
+                );
+              }
+              total += field.dataSize;
+              file.data = new Uint8Array(await state.file.slice(field.dataOffset, field.end).arrayBuffer());
+            }
+          });
+          if (file.data) files.push({ name: file.name || 'attachment', mimeType: file.mimeType || 'application/octet-stream', data: file.data });
+        });
+        return files;
+      })();
+      return state.attachmentCache;
+    }
+
     function descriptor(track, sessionId, duration) {
-      const codec = TEXT_CODECS.get(track.codecId);
+      const codec = subtitleCodec(track.codecId);
       return {
         id: `${sessionId}:subtitle:${track.number}`,
         sessionId,
@@ -824,6 +1186,7 @@ const Demux = (() => {
         decoderConfig: null,
         initialization: track.codecPrivate,
         embedded: true,
+        bitmap: BITMAP_CODECS.has(track.codecId),
       };
     }
 
@@ -831,7 +1194,18 @@ const Demux = (() => {
       const state = await metadata(file);
       const descriptors = state.tracks.map(track => descriptor(track, sessionId, duration));
       const trackById = new Map(descriptors.map((item, index) => [item.id, state.tracks[index]]));
-      return { state, descriptors, trackById, chapters: state.chapters };
+      return {
+        state,
+        descriptors,
+        trackById,
+        chapters: state.chapters,
+        cues: (track, mediaDuration) => cues(state, track, mediaDuration),
+        keyframes: videoNumber => keyframes(state, videoNumber),
+        attachments: () => attachments(state),
+        videoTrackCount: state.mediaTracks.filter(track => track.type === 1).length,
+        videoInterlace: state.mediaTracks.filter(track => track.type === 1)
+          .map(track => ({ interlaced: track.interlaced, fieldOrder: track.fieldOrder })),
+      };
     }
 
     function cues(state, track, mediaDuration) {
@@ -842,6 +1216,240 @@ const Demux = (() => {
     }
 
     return { inspect, cues };
+  })();
+
+  /* Mediabunny does not expose MP4 timed-text tracks (tx3g, FFmpeg's mov_text). This
+     reader finds them in the moov box and reads their samples with ranged reads:
+     each sample is a 16-bit length and the text (UTF-8, or UTF-16 with a BOM). */
+  const Mp4Text = (() => {
+    const MAX_MOOV_BYTES = 64 * 1024 * 1024;
+    const MAX_SAMPLE_SPAN_BYTES = 16 * 1024 * 1024;
+    const utf8 = new TextDecoder('utf-8');
+    const utf16 = new TextDecoder('utf-16be');
+
+    function fourcc(view, offset) {
+      return String.fromCharCode(view.getUint8(offset), view.getUint8(offset + 1), view.getUint8(offset + 2), view.getUint8(offset + 3));
+    }
+
+    function* boxes(view, start, end) {
+      let offset = start;
+      while (offset + 8 <= end) {
+        let size = view.getUint32(offset);
+        const type = fourcc(view, offset + 4);
+        let header = 8;
+        if (size === 1) {
+          if (offset + 16 > end) return;
+          size = Number(view.getBigUint64(offset + 8));
+          header = 16;
+        } else if (size === 0) {
+          size = end - offset;
+        }
+        if (size < header || offset + size > end) return;
+        yield { type, start: offset + header, end: offset + size };
+        offset += size;
+      }
+    }
+
+    function child(view, box, type) {
+      for (const item of boxes(view, box.start, box.end)) if (item.type === type) return item;
+      return null;
+    }
+
+    function path(view, box, types) {
+      let current = box;
+      for (const type of types) {
+        current = current && child(view, current, type);
+      }
+      return current;
+    }
+
+    async function readMoov(file) {
+      let offset = 0;
+      for (let guard = 0; guard < 10_000 && offset + 8 <= file.size; guard += 1) {
+        const head = new DataView(await file.slice(offset, Math.min(file.size, offset + 16)).arrayBuffer());
+        let size = head.getUint32(0);
+        const type = fourcc(head, 4);
+        if (size === 1 && head.byteLength >= 16) size = Number(head.getBigUint64(8));
+        else if (size === 0) size = file.size - offset;
+        if (size < 8) return null;
+        if (type === 'moov') {
+          if (size > MAX_MOOV_BYTES) {
+            throw fail('Mp4TextLimitError', 'ERR_DEMUX_MP4_MOOV_LIMIT', `The MP4 moov box exceeds ${MAX_MOOV_BYTES} bytes.`);
+          }
+          return new DataView(await file.slice(offset, offset + size).arrayBuffer());
+        }
+        offset += size;
+      }
+      return null;
+    }
+
+    function language(code) {
+      if (!code) return null;
+      const chars = [(code >> 10) & 31, (code >> 5) & 31, code & 31].map(value => String.fromCharCode(value + 0x60));
+      const text = chars.join('');
+      return /^[a-z]{3}$/.test(text) && text !== 'und' ? text : null;
+    }
+
+    // QuickTime 'fiel': field count, then detail (1 and 14 top first; 6 and 9 bottom first).
+    function videoInterlace(view, trak) {
+      const handler = path(view, trak, ['mdia', 'hdlr']);
+      if (!handler || fourcc(view, handler.start + 8) !== 'vide') return null;
+      const stsd = path(view, trak, ['mdia', 'minf', 'stbl', 'stsd']);
+      if (!stsd || view.getUint32(stsd.start + 4) < 1) return { interlaced: false, fieldOrder: null };
+      const entryStart = stsd.start + 8;
+      const entrySize = view.getUint32(entryStart);
+      const entry = { start: entryStart + 8 + 78, end: Math.min(stsd.end, entryStart + entrySize) };
+      const fiel = entry.start < entry.end ? child(view, entry, 'fiel') : null;
+      if (!fiel || fiel.end - fiel.start < 2 || view.getUint8(fiel.start) !== 2) return { interlaced: false, fieldOrder: null };
+      const detail = view.getUint8(fiel.start + 1);
+      return { interlaced: true, fieldOrder: [1, 14].includes(detail) ? 'tff' : [6, 9].includes(detail) ? 'bff' : 'unknown' };
+    }
+
+    function parseTrack(view, trak) {
+      const handler = path(view, trak, ['mdia', 'hdlr']);
+      if (!handler || !['sbtl', 'text'].includes(fourcc(view, handler.start + 8))) return null;
+      const stbl = path(view, trak, ['mdia', 'minf', 'stbl']);
+      const stsd = stbl && child(view, stbl, 'stsd');
+      if (!stsd || view.getUint32(stsd.start + 4) < 1 || fourcc(view, stsd.start + 12) !== 'tx3g') return null;
+      const tkhd = child(view, trak, 'tkhd');
+      const mdhd = path(view, trak, ['mdia', 'mdhd']);
+      if (!tkhd || !mdhd) return null;
+      const tkhdVersion = view.getUint8(tkhd.start);
+      const trackId = view.getUint32(tkhd.start + (tkhdVersion === 1 ? 20 : 12));
+      const mdhdVersion = view.getUint8(mdhd.start);
+      const timescale = view.getUint32(mdhd.start + (mdhdVersion === 1 ? 20 : 12));
+      const lang = view.getUint16(mdhd.start + (mdhdVersion === 1 ? 32 : 20));
+      if (!timescale) return null;
+
+      const stts = child(view, stbl, 'stts');
+      const stsc = child(view, stbl, 'stsc');
+      const stsz = child(view, stbl, 'stsz');
+      const stco = child(view, stbl, 'stco');
+      const co64 = child(view, stbl, 'co64');
+      if (!stts || !stsc || !stsz || (!stco && !co64)) return null;
+
+      const durations = [];
+      for (let index = 0, count = view.getUint32(stts.start + 4); index < count; index += 1) {
+        const entry = stts.start + 8 + (index * 8);
+        const samples = view.getUint32(entry);
+        const delta = view.getUint32(entry + 4);
+        for (let sample = 0; sample < samples && durations.length < CONFIG.demux.maxSubtitleCues; sample += 1) durations.push(delta);
+      }
+      const uniformSize = view.getUint32(stsz.start + 4);
+      const sampleCount = Math.min(view.getUint32(stsz.start + 8), durations.length);
+      const sizes = Array.from({ length: sampleCount }, (_, index) => (
+        uniformSize || view.getUint32(stsz.start + 12 + (index * 4))
+      ));
+      const chunkBox = co64 || stco;
+      const chunkCount = view.getUint32(chunkBox.start + 4);
+      const chunkOffsets = Array.from({ length: chunkCount }, (_, index) => (co64
+        ? Number(view.getBigUint64(chunkBox.start + 8 + (index * 8)))
+        : view.getUint32(chunkBox.start + 8 + (index * 4))));
+      const runs = [];
+      for (let index = 0, count = view.getUint32(stsc.start + 4); index < count; index += 1) {
+        const entry = stsc.start + 8 + (index * 12);
+        runs.push({ firstChunk: view.getUint32(entry), perChunk: view.getUint32(entry + 4) });
+      }
+      const offsets = [];
+      for (let run = 0; run < runs.length && offsets.length < sampleCount; run += 1) {
+        const lastChunk = (runs[run + 1]?.firstChunk ?? chunkCount + 1) - 1;
+        for (let chunk = runs[run].firstChunk; chunk <= lastChunk && offsets.length < sampleCount; chunk += 1) {
+          let position = chunkOffsets[chunk - 1];
+          for (let sample = 0; sample < runs[run].perChunk && offsets.length < sampleCount; sample += 1) {
+            offsets.push(position);
+            position += sizes[offsets.length - 1];
+          }
+        }
+      }
+      return { trackId, timescale, language: language(lang), durations, sizes, offsets };
+    }
+
+    async function inspect(file, sessionId, duration) {
+      const view = await readMoov(file);
+      if (!view) return null;
+      const moov = { start: 8, end: view.byteLength };
+      const tracks = [];
+      const interlace = [];
+      for (const box of boxes(view, moov.start, moov.end)) {
+        if (box.type !== 'trak') continue;
+        const video = videoInterlace(view, box);
+        if (video) interlace.push(video);
+        const track = parseTrack(view, box);
+        if (track) tracks.push(track);
+      }
+      if (!tracks.length && !interlace.some(item => item.interlaced)) return null;
+      const descriptors = tracks.map(track => ({
+        id: `${sessionId}:subtitle:mp4-${track.trackId}`,
+        sessionId,
+        sourceId: track.trackId,
+        number: track.trackId,
+        type: 'subtitle',
+        codec: 'tx3g',
+        codecParameter: 'tx3g',
+        internalCodecId: 'tx3g',
+        name: null,
+        language: track.language,
+        disposition: { default: false, forced: false, hearingImpaired: false, visualImpaired: false, descriptions: false, original: false, commentary: false },
+        bitrate: null,
+        averageBitrate: null,
+        duration,
+        startTimestamp: null,
+        decoderConfig: null,
+        initialization: null,
+        embedded: true,
+        bitmap: false,
+      }));
+      const trackById = new Map(descriptors.map((item, index) => [item.id, tracks[index]]));
+      const cueCache = new Map();
+      return {
+        state: null,
+        descriptors,
+        trackById,
+        chapters: [],
+        cues: track => {
+          if (!cueCache.has(track.trackId)) cueCache.set(track.trackId, readCues(file, track));
+          return cueCache.get(track.trackId);
+        },
+        keyframes: null,
+        attachments: () => Promise.resolve([]),
+        videoTrackCount: null,
+        videoInterlace: interlace,
+      };
+    }
+
+    async function readCues(file, track) {
+      const count = track.offsets.length;
+      if (!count) return [];
+      const low = Math.min(...track.offsets);
+      const high = Math.max(...track.offsets.map((offset, index) => offset + track.sizes[index]));
+      const span = high - low <= MAX_SAMPLE_SPAN_BYTES
+        ? new Uint8Array(await file.slice(low, high).arrayBuffer())
+        : null;
+      const cues = [];
+      let textBytes = 0;
+      let time = 0;
+      for (let index = 0; index < count; index += 1) {
+        const start = time / track.timescale;
+        time += track.durations[index];
+        const size = track.sizes[index];
+        if (size < 2) continue;
+        const bytes = span
+          ? span.subarray(track.offsets[index] - low, track.offsets[index] - low + size)
+          : new Uint8Array(await file.slice(track.offsets[index], track.offsets[index] + size).arrayBuffer());
+        const length = Math.min((bytes[0] << 8) | bytes[1], bytes.byteLength - 2);
+        if (length <= 0) continue;
+        textBytes += length;
+        if (textBytes > CONFIG.demux.maxSubtitleTextBytes) {
+          throw fail('SubtitleTextLimitError', 'ERR_DEMUX_SUBTITLE_TEXT_LIMIT', `A subtitle track exceeds ${CONFIG.demux.maxSubtitleTextBytes} text bytes.`);
+        }
+        const body = bytes.subarray(2, 2 + length);
+        const text = body[0] === 0xFE && body[1] === 0xFF ? utf16.decode(body.subarray(2)) : utf8.decode(body);
+        cues.push({ startS: start, endS: time / track.timescale, text: text.replace(/\r\n?/g, '\n'), data: null, id: null, settings: '' });
+      }
+      return cues;
+    }
+
+    return { inspect };
   })();
 
   async function sourceFor(handle) {
@@ -855,13 +1463,12 @@ const Demux = (() => {
       );
     }
 
-    let file = handle;
-    if (handle && typeof handle.getFile === 'function') file = await handle.getFile();
-    if (!(file instanceof Blob)) {
+    const file = await mediaFileOf(handle);
+    if (!(file instanceof Blob) && !(file instanceof RangedFile)) {
       throw fail(
         'InvalidMediaHandleError',
         'ERR_DEMUX_HANDLE',
-        'Expected a File, Blob, or file handle.',
+        'Expected a File, Blob, file handle, or ranged reader.',
       );
     }
     if (file.size === 0) {
@@ -869,9 +1476,18 @@ const Demux = (() => {
     }
     const name = file.name || 'untitled';
     const signature = new Uint8Array(await file.slice(0, ASF_SIGNATURE.byteLength).arrayBuffer());
-    refuseDetectedFormat(signature);
+    const header = startsWith(signature, ASF_SIGNATURE)
+      ? new Uint8Array(await file.slice(0, Math.min(file.size, 64 * 1024)).arrayBuffer())
+      : signature;
+    refuseDetectedFormat(signature, header);
     return {
-      source: new BlobSource(file),
+      source: file instanceof RangedFile
+        ? new StreamSource({
+          getSize: () => file.size,
+          read: (start, end) => readRanged(file.reader, file.start + start, end - start),
+          prefetchProfile: 'fileSystem',
+        })
+        : new BlobSource(file),
       name,
       size: file.size,
       file,
@@ -1027,9 +1643,19 @@ const Demux = (() => {
     if (container === 'ogg' && sourceInfo.file) await refuseOggVideo(sourceInfo.file);
     const nativeDescriptors = await Promise.all(nativeTracks.map(track => describeTrack(track, sessionId)));
     const nativeById = new Map(nativeDescriptors.map((track, index) => [track.id, nativeTracks[index]]));
-    const textInspection = sourceInfo.file && ['mkv', 'webm'].includes(container)
-      ? await MatroskaText.inspect(sourceInfo.file, sessionId, duration)
-      : null;
+    let textInspection = null;
+    if (sourceInfo.file && ['mkv', 'webm'].includes(container)) {
+      textInspection = await MatroskaText.inspect(sourceInfo.file, sessionId, duration);
+    } else if (sourceInfo.file && ['mp4', 'mov'].includes(container)) {
+      // A damaged text track must not stop the video, so MP4 text errors drop the track list.
+      textInspection = await Mp4Text.inspect(sourceInfo.file, sessionId, duration).catch(() => null);
+    }
+    // Mark interlaced video from the container (nth video track in file order).
+    const interlace = textInspection?.videoInterlace || [];
+    nativeDescriptors.filter(track => track.type === 'video').forEach((track, index) => {
+      track.interlaced = !!interlace[index]?.interlaced;
+      track.fieldOrder = interlace[index]?.fieldOrder || null;
+    });
     const tracks = nativeDescriptors.concat(textInspection?.descriptors || []);
     if (tracks.length > CONFIG.demux.maxTrackCount) {
       throw fail(
@@ -1071,6 +1697,7 @@ const Demux = (() => {
         nativeById: inspected.nativeById,
         textInspection: inspected.textInspection,
         sessionId,
+        container: inspected.result.container,
         duration: inspected.result.duration,
         },
       };
@@ -1178,7 +1805,7 @@ const Demux = (() => {
       throw fail('UnknownTrackError', 'ERR_DEMUX_TRACK', 'The requested embedded text track was not found.');
     }
     try {
-      const cues = await MatroskaText.cues(active.textInspection.state, textTrack, active.duration);
+      const cues = await active.textInspection.cues(textTrack, active.duration);
       for (const cue of cues) {
         if (cue.endS >= fromPts) yield { ...cue };
       }
@@ -1215,6 +1842,56 @@ const Demux = (() => {
     } finally {
       if (iterator) Promise.resolve(iterator.return?.()).catch(() => {});
     }
+  }
+
+  /**
+   * Key frame times in seconds for `track` (a video track of the active session):
+   * Matroska Cues or a bounded cluster scan; the MP4/MOV sample table through
+   * Mediabunny's metadata-only key packet walk. Empty when no cheap index exists.
+   */
+  async function keyframes(track) {
+    if (!active || !track || track.sessionId !== active.sessionId || track.type !== 'video') return [];
+    if (active.textInspection?.keyframes && active.container !== 'mp4' && active.container !== 'mov') {
+      return active.textInspection.keyframes(track.number);
+    }
+    if (!['mp4', 'mov'].includes(active.container)) return [];
+    const nativeTrack = active.nativeById.get(track.id);
+    if (!nativeTrack) return [];
+    const sink = new EncodedPacketSink(nativeTrack);
+    const deadline = performance.now() + 5_000;
+    const times = [];
+    let packet = await sink.getFirstKeyPacket({ metadataOnly: true });
+    while (packet && times.length < 100_000 && performance.now() < deadline) {
+      times.push(packet.timestamp);
+      packet = await sink.getNextKeyPacket(packet, { metadataOnly: true });
+    }
+    return times;
+  }
+
+  function attachments() {
+    return active?.textInspection?.attachments ? active.textInspection.attachments() : Promise.resolve([]);
+  }
+
+  /** Whether the Matroska track list holds more video tracks than Mediabunny reads. */
+  function hiddenVideo(candidate) {
+    const inspection = candidate?.session?.textInspection;
+    const read = candidate?.result?.tracks.filter(track => track.type === 'video').length ?? 0;
+    return Number.isInteger(inspection?.videoTrackCount) && inspection.videoTrackCount > read;
+  }
+
+  /** Whether a prepare() failure is one the libav rung may open instead. */
+  function libavEligible(error) {
+    return ['ERR_DEMUX_UNSUPPORTED_CONTAINER', 'ERR_DEMUX_ASF_VIDEO'].includes(error?.code);
+  }
+
+  /* Whether a readable file's video needs the libav rung: a video codec Mediabunny
+     does not know (MPEG-2, MPEG-4 Part 2, VC-1), Matroska video tracks Mediabunny
+     skipped, or an MPEG-TS with no readable video. Known WebCodecs codecs stay here. */
+  function needsLibavVideo(candidate) {
+    const tracks = candidate?.result?.tracks || [];
+    if (tracks.some(track => track.type === 'video' && (!track.codec || !track.decoderConfig))) return true;
+    if (hiddenVideo(candidate)) return true;
+    return candidate?.result?.container === 'ts' && !tracks.some(track => track.type === 'video');
   }
 
   /** Whether Mediabunny can decode this audio track with what is registered now. */
@@ -1259,13 +1936,8 @@ const Demux = (() => {
       return [...new Uint8Array(buffer)].map(byte => byte.toString(16).padStart(2, '0')).join('');
     }
 
-    async function consent(item) {
-      const threshold = CONFIG.askDownloadOverBytes ?? 5 * 1024 * 1024;
-      if (item.bytes <= threshold) return true;
-      // Read at call time: the host may install the hook after creating the engine.
-      const request = CONFIG.requestDownload;
-      if (typeof request !== 'function') return false;
-      return (await request({ name: item.name, bytes: item.bytes, licence: item.licence })) === true;
+    function consent(item) {
+      return askDownload(item);
     }
 
     async function load(item) {
@@ -1361,6 +2033,11 @@ const Demux = (() => {
     probe,
     packets,
     audioSamples,
+    keyframes,
+    attachments,
+    hiddenVideo,
+    libavEligible,
+    needsLibavVideo,
     canDecodeAudio,
     softwareAudio: SoftwareAudio,
     subtitleCues,
@@ -1368,6 +2045,159 @@ const Demux = (() => {
     vendorVersion: MEDIABUNNY_VERSION,
   };
 })();
+/* Legacy containers and video codecs through engine/libav-rung.mjs (libav area).
+   A separate ingress from Mediabunny: it opens whole files Mediabunny cannot, and
+   yields decoded VideoFrame and AudioData. Imported lazily and guarded, so the
+   engine still runs when a host does not ship that file. */
+const Libav = (() => {
+  let modulePromise = null;
+  let active = null;
+  let nextSessionId = 1;
+
+  function loadModule() {
+    modulePromise ??= import('./libav-rung.mjs').catch(() => null);
+    return modulePromise;
+  }
+
+  /* Only files that start like a format the rung opens go there, so an unknown file
+     is refused at once instead of triggering a download (and its consent prompt). */
+  async function sniff(file) {
+    const head = new Uint8Array(await file.slice(0, Math.min(file.size, 192)).arrayBuffer());
+    const at = (offset, ...bytes) => bytes.every((byte, index) => head[offset + index] === byte);
+    if (at(0, 0x52, 0x49, 0x46, 0x46) && at(8, 0x41, 0x56, 0x49, 0x20)) return true; // RIFF AVI
+    if (at(0, 0x46, 0x4C, 0x56, 0x01)) return true; // FLV
+    if (at(0, 0x30, 0x26, 0xB2, 0x75, 0x8E, 0x66, 0xCF, 0x11)) return true; // ASF (video checked earlier)
+    if (at(0, 0x00, 0x00, 0x01, 0xBA) || at(0, 0x00, 0x00, 0x01, 0xB3)) return true; // MPEG-PS, MPEG video
+    if (head[0] === 0x47 && head.byteLength >= 189 && head[188] === 0x47) return true; // MPEG-TS
+    return false;
+  }
+
+  /* MPEG program streams (.mpg, .mpeg, .vob) go to the rung first: Mediabunny reads
+     their MPEG audio as a bare MP3 stream and the picture would be lost. */
+  async function preferred(file) {
+    const head = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+    const programStream = head[0] === 0x00 && head[1] === 0x00 && head[2] === 0x01 && (head[3] === 0xBA || head[3] === 0xB3);
+    return programStream || /\.(mpg|mpeg|vob)$/i.test(file.name || '');
+  }
+
+  /**
+   * Open `file` through the rung, or null when it cannot. `sniff` (default true)
+   * first requires a signature the rung reads; callers that already know the file
+   * holds video Mediabunny cannot decode pass false. LibavRungError (declined,
+   * unavailable, integrity) propagates so the load names it.
+   */
+  async function open(file, { sniff: checkSignature = true } = {}) {
+    if (checkSignature && !await sniff(file)) return null;
+    if (file instanceof RangedFile) {
+      // libav.js reads through a worker that needs a real Blob; a ranged reader cannot cross it.
+      // Named here, before any rung download or consent prompt.
+      const error = new Error(`${file.name} needs the legacy-format decoder, which reads only local files, not ranged reads.`);
+      error.name = 'LibavRungError';
+      error.code = 'ERR_LIBAV_RANGED_READER';
+      throw error;
+    }
+    const module = await loadModule();
+    if (typeof module?.openLibavSource !== 'function') return null;
+    const source = await module.openLibavSource(file, {
+      requestDownload: info => askDownload(info),
+      log: (...parts) => emit('engine:libav-log', { message: parts.map(String).join(' ') }),
+    });
+    return source && Array.isArray(source.tracks) ? source : null;
+  }
+
+  function describe(source, file, sessionId) {
+    const counts = { video: 0, audio: 0 };
+    const tracks = source.tracks
+      .filter(track => track.type === 'video' || track.type === 'audio')
+      .map(track => {
+        counts[track.type] += 1;
+        const base = {
+          id: `${sessionId}:${track.type}:${track.id}`,
+          sessionId,
+          sourceId: track.id,
+          number: counts[track.type],
+          type: track.type,
+          codec: track.codec || null,
+          codecParameter: track.codec || null,
+          internalCodecId: track.codec || null,
+          name: null,
+          language: null,
+          disposition: { default: true, forced: false, hearingImpaired: false, visualImpaired: false, descriptions: false, original: false, commentary: false },
+          bitrate: null,
+          averageBitrate: null,
+          duration: Number.isFinite(track.durationS) ? track.durationS : source.duration,
+          startTimestamp: 0,
+          decoderConfig: null,
+          backend: 'libav',
+        };
+        return track.type === 'video'
+          ? {
+            ...base,
+            codedWidth: track.width,
+            codedHeight: track.height,
+            displayWidth: track.width,
+            displayHeight: track.height,
+            rotation: 0,
+            interlaced: !!track.interlaced,
+            fieldOrder: ['tff', 'bff'].includes(track.fieldOrder) ? track.fieldOrder : (track.interlaced ? 'unknown' : null),
+          }
+          : { ...base, channels: track.channels, sampleRate: track.sampleRate };
+      });
+    const name = file.name || 'untitled';
+    const extension = /\.([a-z0-9]{1,8})$/i.exec(name)?.[1]?.toLowerCase() || 'libav';
+    return {
+      sessionId,
+      name,
+      size: file.size,
+      container: extension,
+      format: 'libav',
+      mimeType: null,
+      duration: Number.isFinite(source.duration) ? source.duration : 0,
+      tracks,
+      chapters: [],
+      backend: 'libav',
+    };
+  }
+
+  function activate(source, file) {
+    close();
+    const sessionId = `libav-${nextSessionId++}`;
+    active = { source, sessionId };
+    return describe(source, file, sessionId);
+  }
+
+  /** Decoded VideoFrame (video) or AudioData (audio) from `fromS`; the caller closes each. */
+  function iterate(track, fromS) {
+    if (!active || track?.sessionId !== active.sessionId) {
+      throw new DemuxError('StaleTrackError', 'ERR_DEMUX_STALE_TRACK', 'The track does not belong to the active media session.');
+    }
+    const options = { trackId: track.sourceId };
+    return track.type === 'video' ? active.source.videoFrames(fromS, options) : active.source.audioData(fromS, options);
+  }
+
+  function close() {
+    if (active) {
+      try { active.source.close(); } catch (_) {}
+    }
+    active = null;
+  }
+
+  function setDeinterlace(on) {
+    try { active?.source.setDeinterlace?.(!!on); } catch (_) {}
+  }
+
+  return {
+    open,
+    preferred,
+    activate,
+    iterate,
+    close,
+    setDeinterlace,
+    isActive: () => !!active,
+    available: async () => typeof (await loadModule())?.openLibavSource === 'function',
+  };
+})();
+
 /* Layer 3 — Decode graph (WebCodecs; interface admits R2 wasm later). */
 const Decode = (() => {
   function fail(name, code, message, cause) {
@@ -1392,6 +2222,7 @@ const Decode = (() => {
   }
 
   async function supportedConfig(track) {
+    if (track?.backend === 'libav') return {};
     validateTrack(track);
     const Decoder = decoderClass(track);
     if (!Decoder || typeof Decoder.isConfigSupported !== 'function') {
@@ -1431,6 +2262,7 @@ const Decode = (() => {
    * returned, not thrown, so the caller can still play the video.
    */
   async function audioRoute(track) {
+    if (track?.backend === 'libav') return { route: 'libav', config: null, error: null };
     let webCodecsError = null;
     try {
       const config = await supportedConfig(track);
@@ -1504,12 +2336,67 @@ const Decode = (() => {
     return stream(track, fromS, onOutput, options);
   }
 
+  /* The libav rung yields decoded frames and audio already; pace them like packets.
+     Timestamps are microseconds, as WebCodecs uses. */
+  async function streamLibav(track, fromS, onOutput, options = {}) {
+    const shouldContinue = options.shouldContinue || (() => true);
+    const currentTimeS = options.currentTimeS || (() => fromS);
+    const decodeAheadS = Number.isFinite(options.decodeAheadS) ? Math.max(0, options.decodeAheadS) : 0.5;
+    let count = 0;
+    try {
+      for await (const item of Libav.iterate(track, fromS)) {
+        while (item.timestamp / 1_000_000 > currentTimeS() + decodeAheadS && shouldContinue()) {
+          await new Promise(resolve => setTimeout(resolve, 4));
+        }
+        if (!shouldContinue()) {
+          item.close();
+          break;
+        }
+        try {
+          const key = count === 0;
+          if (onOutput(item, { key, packetType: key ? 'key' : 'delta' }) === false) item.close();
+        } catch (error) {
+          item.close();
+          throw error;
+        }
+        count += 1;
+      }
+      return { packetCount: count };
+    } catch (error) {
+      if (error instanceof DecodeError) throw error;
+      throw fail('DecodeFailureError', 'ERR_DECODE_FAILURE', `${track.codec || 'libav'} ${track.type} decode failed.`, error);
+    }
+  }
+
   /**
    * Decode video from the key frame at or before `fromS` until a packet reaches
    * `stopUs`, and keep the one frame `better(candidate, best)` prefers. The caller
    * owns the returned VideoFrame; every other frame is closed here.
    */
-  async function pickFrame(track, fromS, stopUs, better) {
+  async function pickFrame(track, fromS, stopUs, better, { shouldContinue = () => true } = {}) {
+    if (track?.backend === 'libav') {
+      let best = null;
+      try {
+        for await (const frame of Libav.iterate(track, fromS)) {
+          const timestamp = frame.timestamp;
+          if (better(frame, best)) {
+            best?.close();
+            best = frame;
+          } else {
+            frame.close();
+          }
+          if (timestamp >= stopUs || !shouldContinue()) break;
+        }
+      } catch (error) {
+        best?.close();
+        throw fail('DecodeFailureError', 'ERR_DECODE_FAILURE', `${track.codec || 'libav'} frame decode failed.`, error);
+      }
+      if (!shouldContinue()) {
+        best?.close();
+        return null;
+      }
+      return best;
+    }
     const config = await supportedConfig(track);
     let best = null;
     let decoderFailure = null;
@@ -1536,7 +2423,7 @@ const Decode = (() => {
           await new Promise(resolve => setTimeout(resolve, 0));
           if (decoderFailure) throw decoderFailure;
         }
-        if (packet.timestamp >= stopUs) break;
+        if (packet.timestamp >= stopUs || !shouldContinue()) break;
         if (packetCount >= CONFIG.decode.maxPacketsPerSample) {
           throw fail(
             'DecodePacketLimitError',
@@ -1544,6 +2431,11 @@ const Decode = (() => {
             `A frame step exceeded ${CONFIG.decode.maxPacketsPerSample} packets.`,
           );
         }
+      }
+      if (!shouldContinue()) {
+        best?.close();
+        best = null;
+        return null;
       }
       await decoder.flush();
       if (decoderFailure) throw decoderFailure;
@@ -1670,6 +2562,7 @@ const Decode = (() => {
   }
 
   async function stream(track, fromS, onOutput, options = {}) {
+    if (track?.backend === 'libav') return streamLibav(track, fromS, onOutput, options);
     if (!Number.isFinite(fromS) || fromS < 0) {
       throw fail('InvalidDecodeTimestampError', 'ERR_DECODE_TIMESTAMP', 'Decode time must be a finite non-negative number.');
     }
@@ -2291,12 +3184,31 @@ const Renderer = (() => {
     };
   }
 
-  function attach(canvas) {
+  const NEUTRAL_ADJUST = Object.freeze({ brightness: 0, contrast: 1, saturation: 1, gamma: 1 });
+  const NO_ZOOM = Object.freeze({ scale: 1, x: 0.5, y: 0.5 });
+
+  /* Canvas2D has no gamma filter; contrast and saturation map to CSS filters, and the
+     additive brightness (-1 to 1) maps to CSS brightness(1 + b), an approximation of
+     the GPU renderer's offset. Neutral values give 'none', so the default path is unchanged. */
+  function cssFilter(adjust) {
+    const parts = [];
+    if (adjust.brightness !== 0) parts.push(`brightness(${Math.max(0, 1 + adjust.brightness)})`);
+    if (adjust.contrast !== 1) parts.push(`contrast(${adjust.contrast})`);
+    if (adjust.saturation !== 1) parts.push(`saturate(${adjust.saturation})`);
+    return parts.length ? parts.join(' ') : 'none';
+  }
+
+  /**
+   * `gpu` is a renderer from engine/gpu-renderer.mjs, or null for Canvas2D. A canvas
+   * holds one kind of context for life, so the caller chooses before attaching.
+   */
+  function attach(canvas, gpu = null) {
     if (!canvas || typeof canvas.getContext !== 'function') {
       throw new TypeError('Renderer.attach requires a canvas.');
     }
-    const context = canvas.getContext('2d', { alpha: false, desynchronized: true });
-    if (!context) throw new Error('The browser could not create a 2D rendering context.');
+    const context = gpu ? null : canvas.getContext('2d', { alpha: false, desynchronized: true });
+    if (!gpu && !context) throw new Error('The browser could not create a 2D rendering context.');
+    const backend = gpu ? 'webgpu' : 'canvas2d';
 
     const queue = [];
     let animationFrame = 0;
@@ -2306,25 +3218,52 @@ const Renderer = (() => {
     let lastTimestamp = null;
     // The frame on screen stays open so a view change can redraw it while paused.
     let shownFrame = null;
-    let view = { rotation: 0, aspect: 'auto', crop: 'none' };
+    let view = {
+      rotation: 0,
+      aspect: 'auto',
+      crop: 'none',
+      zoom: NO_ZOOM,
+      adjust: NEUTRAL_ADJUST,
+      deinterlace: 'off',
+      tonemap: 'auto',
+    };
     let output = { width: null, height: null };
 
     function closeQueue() {
       while (queue.length) queue.shift().close();
     }
+    function paintGpu(frame, g) {
+      if (output.width !== g.outputWidth || output.height !== g.outputHeight) gpu.size(g.outputWidth, g.outputHeight);
+      output = { width: g.outputWidth, height: g.outputHeight };
+      gpu.draw(frame, { ...view });
+    }
     function paint(frame) {
       const g = geometry(frame.displayWidth, frame.displayHeight, view);
+      if (gpu) {
+        paintGpu(frame, g);
+        return;
+      }
       if (canvas.width !== g.outputWidth || canvas.height !== g.outputHeight) {
         canvas.width = g.outputWidth;
         canvas.height = g.outputHeight;
       }
       output = { width: g.outputWidth, height: g.outputHeight };
-      if (g.radians === 0) {
+      const zoom = view.zoom || NO_ZOOM;
+      const filter = cssFilter(view.adjust || NEUTRAL_ADJUST);
+      if (g.radians === 0 && zoom.scale === 1 && filter === 'none') {
         context.drawImage(frame, g.sx, g.sy, g.sw, g.sh, 0, 0, g.drawWidth, g.drawHeight);
         return;
       }
       context.save();
+      if (zoom.scale !== 1) {
+        context.fillStyle = '#000';
+        context.fillRect(0, 0, g.outputWidth, g.outputHeight);
+      }
+      if (filter !== 'none' && 'filter' in context) context.filter = filter;
+      // Put picture point (x, y), in 0 to 1 of the cropped picture, at the view centre.
       context.translate(g.outputWidth / 2, g.outputHeight / 2);
+      context.scale(zoom.scale, zoom.scale);
+      context.translate(-(zoom.x - 0.5) * g.outputWidth, -(zoom.y - 0.5) * g.outputHeight);
       context.rotate(g.radians);
       context.drawImage(frame, g.sx, g.sy, g.sw, g.sh, -g.drawWidth / 2, -g.drawHeight / 2, g.drawWidth, g.drawHeight);
       context.restore();
@@ -2361,7 +3300,7 @@ const Renderer = (() => {
       queue.push(frame);
       return true;
     }
-    /** Draw one frame now (frame step). The renderer takes ownership. */
+    /** Draw one frame now (frame step, paused seek). The renderer takes ownership. */
     function show(frame) {
       closeQueue();
       draw(frame);
@@ -2383,14 +3322,38 @@ const Renderer = (() => {
       closeQueue();
       shownFrame?.close();
       shownFrame = null;
-      context.clearRect(0, 0, canvas.width, canvas.height);
+      if (gpu) {
+        try { gpu.clear?.(); } catch (_) {}
+      } else {
+        context.clearRect(0, 0, canvas.width, canvas.height);
+      }
       lastTimestamp = null;
     }
+    function rendererState() {
+      if (!gpu || typeof gpu.state !== 'function') return null;
+      try { return gpu.state(); } catch (_) { return null; }
+    }
+    /* A WebGPU canvas keeps its image readable only until the frame is presented, so
+       redraw the shown frame and read it in the same task. */
     function snapshot() {
+      if (gpu && shownFrame) paintGpu(shownFrame, geometry(shownFrame.displayWidth, shownFrame.displayHeight, view));
       return canvas.toDataURL('image/png');
     }
+    function snapshotBlob() {
+      if (gpu) return gpu.snapshot();
+      if (typeof canvas.convertToBlob === 'function') return canvas.convertToBlob({ type: 'image/png' });
+      return new Promise((resolve, reject) => {
+        canvas.toBlob(blob => (blob ? resolve(blob) : reject(new Error('The canvas produced no image.'))), 'image/png');
+      });
+    }
     function stats() {
-      return { renderedFrames, droppedFrames, queuedFrames: queue.length, lastTimestamp };
+      return {
+        renderedFrames,
+        droppedFrames,
+        queuedFrames: queue.length,
+        lastTimestamp,
+        queuedUntilUs: queue.length ? queue[queue.length - 1].timestamp : null,
+      };
     }
     function outputSize() {
       return { ...output };
@@ -2399,10 +3362,29 @@ const Renderer = (() => {
       stop();
       clear();
       clock = null;
+      if (gpu) {
+        try { gpu.destroy(); } catch (_) {}
+      }
     }
-    return { enqueue, show, setView, start, stop, clear, snapshot, stats, outputSize, destroy };
+    return { backend, enqueue, show, setView, start, stop, clear, snapshot, snapshotBlob, stats, outputSize, rendererState, destroy };
   }
-  return { attach, geometry };
+
+  /* engine/gpu-renderer.mjs (gpu area), imported lazily and guarded: a missing file,
+     no WebGPU, or a failed device all give null, and the caller uses Canvas2D. */
+  let gpuModule = null;
+  async function createGpu(canvas) {
+    if (!globalThis.navigator?.gpu) return null;
+    gpuModule ??= import('./gpu-renderer.mjs').catch(() => null);
+    const module = await gpuModule;
+    if (typeof module?.createGpuRenderer !== 'function') return null;
+    try {
+      return (await module.createGpuRenderer(canvas)) || null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  return { attach, geometry, createGpu };
 })();
 
 /* Layer 7 — playback coordinator over decode, audio, clock, and renderer. */
@@ -2418,7 +3400,20 @@ const Playback = (() => {
   let loopWrapping = false;
   let audioRefusal = null;
   let lastAudioRouteKey = null;
-  let view = { aspect: 'auto', crop: 'none' };
+  let view = {
+    aspect: 'auto',
+    crop: 'none',
+    zoom: { scale: 1, x: 0.5, y: 0.5 },
+    adjust: { brightness: 0, contrast: 1, saturation: 1, gamma: 1 },
+    deinterlace: 'off',
+    tonemap: 'auto',
+  };
+  let rendererReady = Promise.resolve();
+  let attachToken = 0;
+  let keyframeTimes = [];
+  let thumbnailToken = 0;
+  const MAX_VOLUME = 2;
+  const MAX_PCM_SECONDS = 3600;
   const MAX_AUDIO_DELAY_S = 10;
   const MAX_CROP = 0.45;
 
@@ -2461,8 +3456,25 @@ const Playback = (() => {
   function selectedVideoTrack() {
     return store.tracks.video[store.tracks.selected.video ?? 0] || null;
   }
+  /* Deinterlacing runs in the GPU renderer when there is one. A libav session on
+     Canvas2D deinterlaces in the decoder (yadif) instead, since Canvas2D cannot. */
+  function decoderDeinterlace() {
+    return selectedVideoTrack()?.backend === 'libav'
+      && view.deinterlace !== 'off'
+      && !!renderer && renderer.backend !== 'webgpu';
+  }
   function applyRotation() {
-    renderer?.setView({ ...view, rotation: selectedVideoTrack()?.rotation || 0 });
+    const track = selectedVideoTrack();
+    renderer?.setView({
+      ...view,
+      rotation: track?.rotation || 0,
+      field: track?.fieldOrder === 'bff' ? 'bottom' : 'top',
+      deinterlace: decoderDeinterlace() ? 'off' : view.deinterlace,
+    });
+  }
+  async function readyRenderer() {
+    await rendererReady.catch(() => {});
+    return renderer;
   }
   function load(nextMetadata) {
     generation += 1;
@@ -2479,17 +3491,41 @@ const Playback = (() => {
     lastAudioRouteKey = null;
     store.clock.loop = null;
     store.clock.audioDelayS = 0;
+    keyframeTimes = [];
     applyRotation();
+    if (decoderDeinterlace()) Libav.setDeinterlace(true);
     publish();
+    const loadedMetadata = metadata;
+    const videoTrack = selectedVideoTrack();
+    if (videoTrack && videoTrack.backend !== 'libav') {
+      Demux.keyframes(videoTrack).then(times => {
+        if (metadata !== loadedMetadata) return;
+        keyframeTimes = times;
+        emit('playback:keyframes', { count: times.length });
+      }).catch(() => {});
+    }
     emit('playback:loaded', {
       name: nextMetadata?.name || null,
       duration: nextMetadata?.duration ?? null,
     });
   }
+  /* The renderer is chosen asynchronously (WebGPU when engine/gpu-renderer.mjs gives
+     one, else Canvas2D); everything that draws waits for `rendererReady`. */
   function attach(canvas) {
+    const token = ++attachToken;
     renderer?.destroy();
-    renderer = Renderer.attach(canvas);
-    applyRotation();
+    renderer = null;
+    rendererReady = (async () => {
+      const gpu = await Renderer.createGpu(canvas);
+      if (token !== attachToken) {
+        try { gpu?.destroy(); } catch (_) {}
+        return;
+      }
+      renderer = Renderer.attach(canvas, gpu);
+      applyRotation();
+      emit('playback:renderer', { backend: renderer.backend });
+    })();
+    return rendererReady;
   }
   /** The audio master shifted by the audio delay: the clock reads picture time. */
   function audioMaster() {
@@ -2531,6 +3567,8 @@ const Playback = (() => {
     const videoTrack = selectedVideoTrack();
     const audioTrack = store.tracks.audio[store.tracks.selected.audio ?? 0];
     if (!videoTrack && !audioTrack) throw new Error('The selected media has no playable audio or video track.');
+    if (videoTrack) await readyRenderer();
+    if (localGeneration !== generation) return;
     if (videoTrack && !renderer) throw new Error('Attach a renderer before video playback.');
 
     const audioUnlock = audioTrack ? AudioOutput.unlock() : Promise.resolve();
@@ -2638,8 +3676,9 @@ const Playback = (() => {
    */
   async function present() {
     const videoTrack = selectedVideoTrack();
-    if (!metadata || !videoTrack || !renderer || clock.playing) return false;
     const localGeneration = generation;
+    if (videoTrack) await readyRenderer();
+    if (!metadata || !videoTrack || !renderer || clock.playing || localGeneration !== generation) return false;
     const targetUs = Math.round(clock.current() * 1_000_000);
     const toleranceUs = 500;
     const fits = frame => frame.timestamp <= targetUs + toleranceUs;
@@ -2731,21 +3770,221 @@ const Playback = (() => {
       else throw new RangeError("Aspect must be 'auto' or a width ÷ height ratio from 0.1 to 10.");
     }
     if ('crop' in next) updated.crop = normalizeCrop(next.crop);
+    if ('zoom' in next) updated.zoom = normalizeZoom(next.zoom, updated.zoom);
+    if ('adjust' in next) updated.adjust = normalizeAdjust(next.adjust, updated.adjust);
+    if ('deinterlace' in next) {
+      if (!['off', 'blend', 'bob'].includes(next.deinterlace)) throw new RangeError("Deinterlace must be 'off', 'blend' or 'bob'.");
+      updated.deinterlace = next.deinterlace;
+    }
+    if ('tonemap' in next) {
+      if (!['auto', 'off'].includes(next.tonemap)) throw new RangeError("Tone mapping must be 'auto' or 'off'.");
+      updated.tonemap = next.tonemap;
+    }
+    const before = decoderDeinterlace();
     view = updated;
     applyRotation();
+    const after = decoderDeinterlace();
+    if (before !== after) {
+      // The rung applies the change to the next videoFrames() call, so restart it.
+      Libav.setDeinterlace(after);
+      restartIfPlaying().catch(error => { lastError = error; });
+    }
     const current = viewState();
     emit('playback:view', current);
     return current;
   }
+  /* The GPU renderer's conventions (engine/gpu-renderer.mjs): zoom.scale 1 to 16; x and
+     y are the centre of the view in the cropped picture, 0 to 1 (0.5 is centred),
+     clamped here so the zoomed view stays inside the picture. */
+  function normalizeZoom(next, current) {
+    if (next === null || next === 'reset') return { scale: 1, x: 0.5, y: 0.5 };
+    const merged = { ...current, ...next };
+    const scale = Number(merged.scale);
+    if (!Number.isFinite(scale) || scale < 1 || scale > 16) throw new RangeError('Zoom scale must be from 1 to 16.');
+    const low = 0.5 / scale;
+    const clampCentre = value => {
+      const number = Number(value);
+      if (!Number.isFinite(number)) throw new RangeError('Zoom centre must be a finite fraction from 0 to 1.');
+      return Math.max(low, Math.min(1 - low, number));
+    };
+    return { scale, x: clampCentre(merged.x ?? 0.5), y: clampCentre(merged.y ?? 0.5) };
+  }
+  // brightness is an offset (0 unchanged); the others are factors (1 unchanged).
+  const ADJUST_RANGES = {
+    brightness: [-1, 1, 0],
+    contrast: [0, 2, 1],
+    saturation: [0, 2, 1],
+    gamma: [0.2, 5, 1],
+  };
+  function normalizeAdjust(next, current) {
+    if (next === null || next === 'reset') return { brightness: 0, contrast: 1, saturation: 1, gamma: 1 };
+    const merged = { ...current, ...next };
+    const output = {};
+    for (const [key, [low, high, neutral]] of Object.entries(ADJUST_RANGES)) {
+      const value = Number(merged[key] ?? neutral);
+      if (!Number.isFinite(value) || value < low || value > high) {
+        throw new RangeError(`${key} must be from ${low} to ${high} (${neutral} is unchanged).`);
+      }
+      output[key] = value;
+    }
+    return output;
+  }
   function viewState() {
     const output = renderer?.outputSize() || { width: null, height: null };
+    const backend = renderer?.backend || null;
+    const gpu = backend === 'webgpu';
     return {
       aspect: view.aspect,
       crop: view.crop === 'none' ? 'none' : { ...view.crop },
       rotation: selectedVideoTrack()?.rotation || 0,
+      zoom: { ...view.zoom },
+      adjust: { ...view.adjust },
+      // Canvas2D cannot deinterlace or tone map; it reports that instead of the request.
+      deinterlace: gpu || decoderDeinterlace() || view.deinterlace === 'off' && selectedVideoTrack()?.backend === 'libav'
+        ? view.deinterlace
+        : 'unsupported',
+      tonemap: gpu ? view.tonemap : 'unsupported',
+      backend,
+      unsupported: gpu || !backend ? [] : ['deinterlace', 'tonemap', 'gamma'],
+      interlaced: !!selectedVideoTrack()?.interlaced,
+      fieldOrder: selectedVideoTrack()?.fieldOrder || null,
+      renderer: renderer?.rendererState() || null,
       width: output.width,
       height: output.height,
     };
+  }
+  /**
+   * The frame nearest `timeS` as an upright ImageBitmap at most `maxWidth` wide, from
+   * its own decoder; a newer request cancels an older one, which resolves to null.
+   */
+  async function thumbnail(timeS, { maxWidth = 160 } = {}) {
+    const token = ++thumbnailToken;
+    const track = selectedVideoTrack();
+    if (!metadata || !track || track.backend === 'libav' || typeof globalThis.OffscreenCanvas !== 'function') return null;
+    if (!Number.isFinite(timeS)) throw new RangeError('Thumbnail time must be finite.');
+    if (!Number.isFinite(maxWidth) || maxWidth < 1) throw new RangeError('maxWidth must be a positive number.');
+    const end = Number.isFinite(clock.duration) ? clock.duration : timeS;
+    const targetUs = Math.round(Math.max(0, Math.min(end, timeS)) * 1_000_000);
+    const live = () => token === thumbnailToken;
+    let frame = null;
+    try {
+      frame = await Decode.pickFrame(
+        track,
+        targetUs / 1_000_000,
+        targetUs + 250_000,
+        (candidate, best) => !best
+          || Math.abs(candidate.timestamp - targetUs) < Math.abs(best.timestamp - targetUs),
+        { shouldContinue: live },
+      );
+    } catch (_) {
+      return null;
+    }
+    if (!frame) return null;
+    try {
+      if (!live()) return null;
+      const g = Renderer.geometry(frame.displayWidth, frame.displayHeight, { rotation: track.rotation || 0, aspect: 'auto', crop: 'none' });
+      const scale = Math.min(1, maxWidth / g.outputWidth);
+      const width = Math.max(1, Math.round(g.outputWidth * scale));
+      const height = Math.max(1, Math.round(g.outputHeight * scale));
+      const canvas = new OffscreenCanvas(width, height);
+      const context = canvas.getContext('2d');
+      const quarterTurn = g.drawWidth !== g.outputWidth;
+      const drawWidth = quarterTurn ? height : width;
+      const drawHeight = quarterTurn ? width : height;
+      context.translate(width / 2, height / 2);
+      context.rotate(g.radians);
+      context.drawImage(frame, g.sx, g.sy, g.sw, g.sh, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+      return canvas.transferToImageBitmap();
+    } finally {
+      frame.close();
+    }
+  }
+  function keyframes() {
+    return [...keyframeTimes];
+  }
+  /** Decoded-ahead range: from the clock to the newest queued frame or buffered audio. */
+  function buffered() {
+    if (!metadata || !clock.playing) return [];
+    const now = clock.current();
+    let end = now;
+    const queuedUntilUs = renderer?.stats().queuedUntilUs;
+    if (Number.isFinite(queuedUntilUs)) end = Math.max(end, queuedUntilUs / 1_000_000);
+    const audio = AudioOutput.state();
+    if (audio.active && audio.sourceRate) end = Math.max(end, now + (audio.bufferedFrames / audio.sourceRate));
+    if (Number.isFinite(clock.duration)) end = Math.min(end, clock.duration);
+    return [{ startS: now, endS: end }];
+  }
+  /**
+   * Mono PCM of the selected audio track from `fromS` to `toS` at `sampleRate`,
+   * decoded by its own decoder (playback continues untouched). At most an hour a call.
+   */
+  async function audioPcm({ fromS = 0, toS = null, sampleRate = 16000 } = {}) {
+    if (!metadata) throw new Error('Load media before reading audio.');
+    const track = store.tracks.audio[store.tracks.selected.audio ?? 0];
+    if (!track) throw new PlaybackError('AudioPcmNoAudioError', 'ERR_AUDIO_PCM_NO_AUDIO', 'This media has no audio track.');
+    const duration = Number.isFinite(clock.duration) ? clock.duration : Infinity;
+    const endS = Math.min(toS ?? duration, duration);
+    if (!Number.isFinite(fromS) || fromS < 0 || !Number.isFinite(endS) || endS <= fromS) {
+      throw new RangeError('audioPcm needs 0 <= fromS < toS within the media.');
+    }
+    if (endS - fromS > MAX_PCM_SECONDS) throw new RangeError(`audioPcm reads at most ${MAX_PCM_SECONDS} s a call.`);
+    if (!Number.isInteger(sampleRate) || sampleRate < 3000 || sampleRate > 192000) {
+      throw new RangeError('sampleRate must be an integer from 3000 to 192000.');
+    }
+    const route = await Decode.audioRoute(track);
+    if (!route.route) throw route.error;
+    const pieces = [];
+    let sourceRate = track.sampleRate || 48000;
+    let done = false;
+    await Decode.streamAudio(track, route.route, fromS, data => {
+      const startS = 'microsecondTimestamp' in data ? data.timestamp : data.timestamp / 1_000_000;
+      sourceRate = data.sampleRate || sourceRate;
+      if (startS > endS + 0.5) {
+        done = true;
+        data.close();
+        return true;
+      }
+      const frames = data.numberOfFrames;
+      const mono = new Float32Array(frames);
+      const plane = new Float32Array(frames);
+      for (let channel = 0; channel < data.numberOfChannels; channel += 1) {
+        data.copyTo(plane, { planeIndex: channel, format: 'f32-planar' });
+        for (let index = 0; index < frames; index += 1) mono[index] += plane[index] / data.numberOfChannels;
+      }
+      data.close();
+      pieces.push({ startS, mono });
+      return true;
+    }, { shouldContinue: () => !done, currentTimeS: () => Infinity, decodeAheadS: 0 });
+    const length = Math.max(1, Math.round((endS - fromS) * sourceRate));
+    const source = new Float32Array(length);
+    for (const piece of pieces) {
+      const offset = Math.round((piece.startS - fromS) * sourceRate);
+      const from = Math.max(0, -offset);
+      const to = Math.min(piece.mono.length, length - offset);
+      if (to > from) source.set(piece.mono.subarray(from, to), offset + from);
+    }
+    if (sourceRate === sampleRate) return source;
+    const outputLength = Math.max(1, Math.round((endS - fromS) * sampleRate));
+    const Offline = globalThis.OfflineAudioContext;
+    if (typeof Offline === 'function') {
+      const offline = new Offline(1, outputLength, sampleRate);
+      const buffer = offline.createBuffer(1, source.length, sourceRate);
+      buffer.copyToChannel(source, 0);
+      const node = offline.createBufferSource();
+      node.buffer = buffer;
+      node.connect(offline.destination);
+      node.start();
+      return (await offline.startRendering()).getChannelData(0);
+    }
+    const output = new Float32Array(outputLength);
+    const ratio = sourceRate / sampleRate;
+    for (let index = 0; index < outputLength; index += 1) {
+      const position = index * ratio;
+      const left = Math.floor(position);
+      const right = Math.min(source.length - 1, left + 1);
+      output[index] = source[left] + ((source[right] - source[left]) * (position - left));
+    }
+    return output;
   }
   async function stepFrame(direction) {
     if (direction !== 1 && direction !== -1) throw new RangeError('Frame step direction must be 1 or -1.');
@@ -2757,8 +3996,10 @@ const Playback = (() => {
     if (!videoTrack) {
       throw new PlaybackError('FrameStepNoVideoError', 'ERR_FRAME_STEP_NO_VIDEO', 'This media has no video frames to step through.');
     }
-    if (!renderer) throw new Error('Attach a renderer before stepping frames.');
     const localGeneration = ++generation;
+    await readyRenderer();
+    if (localGeneration !== generation) return clock.current();
+    if (!renderer) throw new Error('Attach a renderer before stepping frames.');
     const toleranceUs = 500;
     const clockUs = Math.round(clock.current() * 1_000_000);
     // Step from the frame on screen when it belongs to the clock position; when it is
@@ -2811,8 +4052,8 @@ const Playback = (() => {
     emit('playback:rate', { rate: clock.rate });
   }
   function setVolume(volume) {
-    if (!Number.isFinite(volume) || volume < 0 || volume > 1) {
-      throw new RangeError('Volume must be between 0 and 1.');
+    if (!Number.isFinite(volume) || volume < 0 || volume > MAX_VOLUME) {
+      throw new RangeError(`Volume must be between 0 and ${MAX_VOLUME}.`);
     }
     store.clock.volume = volume;
     if (volume > 0) store.clock.muted = false;
@@ -2840,6 +4081,10 @@ const Playback = (() => {
     if (!renderer) throw new Error('Attach a renderer before taking a snapshot.');
     return renderer.snapshot();
   }
+  async function snapshotBlob() {
+    if (!await readyRenderer()) throw new Error('Attach a renderer before taking a snapshot.');
+    return renderer.snapshotBlob();
+  }
   function audioGraph() {
     return AudioOutput.audioGraph();
   }
@@ -2861,8 +4106,13 @@ const Playback = (() => {
     stepFrame,
     present,
     chapters,
+    thumbnail,
+    keyframes,
+    buffered,
+    audioPcm,
     state,
     snapshot,
+    snapshotBlob,
     audioGraph,
   };
 })();
@@ -2905,8 +4155,36 @@ function subtitleTrackAt(trackIndex) {
 }
 
 /** Cues for embedded subtitle track `trackIndex`: [{ startS, endS, text }] sorted by start. */
+function refuseBitmap(track) {
+  if (track.bitmap) {
+    throw new PlaybackError(
+      'SubtitleBitmapTrackError',
+      'ERR_SUBTITLE_BITMAP',
+      `Subtitle track ${track.number} is a ${String(track.codec).toUpperCase()} bitmap track; read it with subtitles.packets().`,
+    );
+  }
+}
+
+/** Raw packets of bitmap track `trackIndex` (PGS display sets): [{ startS, endS, data }]. */
+async function subtitlePacketList(trackIndex) {
+  const track = subtitleTrackAt(trackIndex);
+  if (!track.bitmap) {
+    throw new PlaybackError(
+      'SubtitleTextTrackError',
+      'ERR_SUBTITLE_NOT_BITMAP',
+      `Subtitle track ${track.number} is text; read it with subtitles.cues().`,
+    );
+  }
+  const packets = [];
+  for await (const cue of Demux.subtitleCues(track)) {
+    packets.push({ startS: cue.startS, endS: cue.endS, data: cue.data });
+  }
+  return packets;
+}
+
 async function subtitleCueList(trackIndex) {
   const track = subtitleTrackAt(trackIndex);
+  refuseBitmap(track);
   const cues = [];
   for await (const cue of Demux.subtitleCues(track)) {
     cues.push({ startS: cue.startS, endS: cue.endS, text: cue.text });
@@ -2927,6 +4205,7 @@ async function exportSubtitles({ trackId = null, trackIndex = null, format = nul
       'No subtitle track is available for export.',
     );
   }
+  refuseBitmap(track);
   const outputFormat = format || (track.codec === 'webvtt' ? 'vtt' : 'srt');
   if (!['srt', 'vtt'].includes(outputFormat)) {
     throw new PlaybackError(
@@ -2973,6 +4252,7 @@ const Engine = {
       // software rung where it covers the codec, or is refused by name.
       enginePlayback: videoDecoder && 'AudioWorkletNode' in globalThis,
       softwareAudio: Demux.softwareAudio.state(),
+      maxVolume: 2,
       fsa: 'showOpenFilePicker' in globalThis,
       opfs: !!(navigatorApi.storage && navigatorApi.storage.getDirectory),
       webgpu: 'gpu' in navigatorApi,
@@ -2981,19 +4261,56 @@ const Engine = {
   async probe(handle) { return Demux.probe(handle); },
   async load(handle) {
     const loadId = ++latestLoadId;
-    const candidate = await Demux.prepare(handle);
+    const fileOf = () => mediaFileOf(handle);
+    let candidate = null;
+    let libavSource = null;
+    // The rung's own failures (declined, unavailable, integrity) name the load error;
+    // anything else means the rung cannot open this file.
+    const tryLibav = async (options) => {
+      const file = await fileOf().catch(() => null);
+      if (!file) return null;
+      try {
+        return await Libav.open(file, options);
+      } catch (error) {
+        if (error?.name === 'LibavRungError') throw error;
+        return null;
+      }
+    };
+    const preferLibav = await fileOf().then(file => (file ? Libav.preferred(file) : false)).catch(() => false);
+    if (preferLibav) libavSource = await tryLibav({ sniff: false });
+    if (!libavSource) {
+      try {
+        candidate = await Demux.prepare(handle);
+      } catch (error) {
+        // Containers Mediabunny cannot read (AVI, FLV, ASF/WMV video) go to the libav rung.
+        if (!Demux.libavEligible(error)) throw error;
+        libavSource = await tryLibav();
+        if (!libavSource) throw error;
+      }
+    }
+    if (candidate && Demux.needsLibavVideo(candidate)) {
+      // Video WebCodecs cannot configure (MPEG-2, MPEG-4 Part 2, VC-1): reopen through libav.
+      const source = await tryLibav({ sniff: false }).catch(error => {
+        Demux.discard(candidate);
+        throw error;
+      });
+      if (source) {
+        Demux.discard(candidate);
+        candidate = null;
+        libavSource = source;
+      }
+    }
     let fingerprint = null;
     let nextFingerprintError = null;
     try {
-      const file = handle instanceof Blob
-        ? handle
-        : handle && typeof handle.getFile === 'function' ? await handle.getFile() : null;
+      const file = await mediaFileOf(handle);
       if (file) fingerprint = await Storage.fingerprint(file);
     } catch (error) {
       nextFingerprintError = error;
     }
     if (loadId !== latestLoadId) {
       Demux.discard(candidate);
+      try { libavSource?.close(); } catch (_) {}
       throw new PlaybackError(
         'SupersededLoadError',
         'ERR_ENGINE_LOAD_SUPERSEDED',
@@ -3001,7 +4318,14 @@ const Engine = {
       );
     }
     fingerprintError = nextFingerprintError;
-    const metadata = Demux.activate(candidate);
+    let metadata;
+    if (candidate) {
+      Libav.close();
+      metadata = Demux.activate(candidate);
+    } else {
+      Demux.close();
+      metadata = Libav.activate(libavSource, await fileOf());
+    }
     store.media = {
       handle,
       name: metadata.name,
@@ -3010,6 +4334,7 @@ const Engine = {
       size: metadata.size,
       container: metadata.container,
       mimeType: metadata.mimeType,
+      backend: metadata.backend || 'mediabunny',
     };
     store.tracks.video = metadata.tracks.filter(track => track.type === 'video');
     store.tracks.audio = metadata.tracks.filter(track => track.type === 'audio');
@@ -3027,11 +4352,12 @@ const Engine = {
     });
     return metadata;
   },
-  attach(canvas) { Playback.attach(canvas); },
+  attach(canvas) { return Playback.attach(canvas); },
   play() { return Playback.play(); },
   pause() { Playback.pause(); },
   seek(s) { return Playback.seek(s); },
   setRate(rate) { Playback.setRate(rate); },
+  /** 0 to 2; above 1 the gain stage boosts (200% at 2). */
   setVolume(volume) { Playback.setVolume(volume); },
   setMuted(muted) { Playback.setMuted(muted); },
   /** Switch to audio track `index` in store.tracks.audio, keeping position and play state. */
@@ -3045,6 +4371,18 @@ const Engine = {
   /** aspect: 'auto' or width ÷ height; crop: 'none' or { top, right, bottom, left } fractions to 0.45. */
   setView(options) { return Playback.setView(options); },
   chapters() { return Playback.chapters(); },
+  /** The frame nearest timeS as an ImageBitmap, from its own decoder; null when unavailable or superseded. */
+  thumbnail(timeS, options) { return Playback.thumbnail(timeS, options); },
+  /** Key frame times in seconds from the container index (empty until read, or when unknown). */
+  keyframes() { return Playback.keyframes(); },
+  /** Decoded-ahead ranges [{ startS, endS }]. */
+  buffered() { return Playback.buffered(); },
+  /** Matroska attachments [{ name, mimeType, data }]; empty for other containers. */
+  attachments() { return Demux.attachments(); },
+  /** Mono Float32Array PCM of the selected audio track, decoded independently of playback. */
+  audioPcm(options) { return Playback.audioPcm(options); },
+  /** PNG Blob of the shown frame (WebGPU or Canvas2D). */
+  snapshotBlob() { return Playback.snapshotBlob(); },
   state() {
     const { handle: _handle, ...media } = store.media;
     return structuredClone({
@@ -3073,7 +4411,7 @@ const Engine = {
    */
   audioGraph() { return Playback.audioGraph(); },
   snapshot() { return Playback.snapshot(); },
-  subtitles: { export: exportSubtitles, cues: subtitleCueList },
+  subtitles: { export: exportSubtitles, cues: subtitleCueList, packets: subtitlePacketList },
   _internals: { Storage, Demux, Decode, AudioOutput, Clock, Renderer, Playback, CONFIG }, // for the harness
 };
 

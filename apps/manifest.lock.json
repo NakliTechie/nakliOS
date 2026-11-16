@@ -2881,43 +2881,49 @@
       "id": "reel",
       "repo": "NakliTechie/reel",
       "requestedRef": "main",
-      "resolvedCommit": "3259994dbd5f877fd78c9da2ac146a5f43b04358",
+      "resolvedCommit": "2c9a65a3f09d35de468a4dcebfc37e6df48486fc",
       "files": [
         {
-          "source": "index.html",
-          "destination": "index.html",
-          "sha256": "3904ba9e7609c107a4b13ae029266d0aa8c0d8c4613f12c908cef3e1417e7f02",
-          "bytes": 58666
+          "source": "app/ai/asr-worker.js",
+          "destination": "app/ai/asr-worker.js",
+          "sha256": "f471e9b4fab6854d49a48a63c267c52189dce423e7582a6dc80a80ddff3ed833",
+          "bytes": 2724
         },
         {
-          "source": "commands.json",
-          "destination": "commands.json",
-          "sha256": "7d66745ec04e18ac31083040501f5f79f75ac2471da5edb13ecb9336b921efb1",
-          "bytes": 24397
+          "source": "app/ai/index.mjs",
+          "destination": "app/ai/index.mjs",
+          "sha256": "6c195ad4531aae6e0f222fe4e1fa3e1eb873b42fff69483554403301234899c0",
+          "bytes": 27791
         },
         {
-          "source": "engine/reel-engine.mjs",
-          "destination": "engine/reel-engine.mjs",
-          "sha256": "8f81495ca8479b558bd8708a3ebf142311a0e93fb7666b6f8bf69211e376bd11",
-          "bytes": 114668
+          "source": "app/ai/logic.mjs",
+          "destination": "app/ai/logic.mjs",
+          "sha256": "476fbe5f3ffbfa10070d1b63a5759e69ad4fce5d90b5b681936aa4d8aebb7ed9",
+          "bytes": 17202
         },
         {
-          "source": "app/modules.mjs",
-          "destination": "app/modules.mjs",
-          "sha256": "7a21174d3767b35218bbd67a7beb63ffacd6605600df4605d6c3b80761370786",
-          "bytes": 971
+          "source": "app/ai/speech.mjs",
+          "destination": "app/ai/speech.mjs",
+          "sha256": "583f61a8a5505270dbcbb1f64ab5869de6255a668ffe417b68d401587ff40634",
+          "bytes": 9041
         },
         {
           "source": "app/core/commands.mjs",
           "destination": "app/core/commands.mjs",
-          "sha256": "596560f8f50803ef3959fd19b9b642309262a4bc9e16ee0721ca72d01e53394c",
-          "bytes": 3725
+          "sha256": "1fc3336a40a1e9e8d7515d3b6c3c9734430b3cb0c15bcd8ccd0f8d7076cf6f54",
+          "bytes": 3753
         },
         {
           "source": "app/core/registry.mjs",
           "destination": "app/core/registry.mjs",
-          "sha256": "d15639c84004c28fcc963603855029b061a5e11ae431cddcaf04d5602fa18ab4",
-          "bytes": 4840
+          "sha256": "71fbaf4264fb6f5611088df2d950193d5177222e26f9a389cdbc3b64991ea9dc",
+          "bytes": 5107
+        },
+        {
+          "source": "app/door/index.mjs",
+          "destination": "app/door/index.mjs",
+          "sha256": "922ff1e7d07788bc2314b88049fb46bbe4ff6df9b3eb39cc6fa13e1e77336a0a",
+          "bytes": 7712
         },
         {
           "source": "app/help/index.mjs",
@@ -2926,22 +2932,52 @@
           "bytes": 11621
         },
         {
+          "source": "app/hosted/index.mjs",
+          "destination": "app/hosted/index.mjs",
+          "sha256": "6b1dbac5d019987c9797f8a6000e1cb73cfa2caa9a21f4f029b4169199c5c8b4",
+          "bytes": 20559
+        },
+        {
+          "source": "app/hosted/logic.mjs",
+          "destination": "app/hosted/logic.mjs",
+          "sha256": "b3249e22420cc4040e4641a9771e1e93bb61ab4cfba26a70baee330051483412",
+          "bytes": 7792
+        },
+        {
+          "source": "app/library/index.mjs",
+          "destination": "app/library/index.mjs",
+          "sha256": "3f2a3f21ca77d4171fb69d9dfbabd7d43642ca1d6e8214fa864c0d70c7b509e9",
+          "bytes": 16877
+        },
+        {
+          "source": "app/library/logic.mjs",
+          "destination": "app/library/logic.mjs",
+          "sha256": "5da05b8306523e101168495e19856f9695e05e66997a3a2455201ff44f87cc5f",
+          "bytes": 2055
+        },
+        {
+          "source": "app/modules.mjs",
+          "destination": "app/modules.mjs",
+          "sha256": "797424116232320fc2e9b8c9fa0ace6bf7972f3b3f541c52cc4dfdea7a854aaa",
+          "bytes": 1267
+        },
+        {
           "source": "app/picture/index.mjs",
           "destination": "app/picture/index.mjs",
-          "sha256": "0c8f3a5705d81f9da59829be32ac77a4b8b4f4433b26c81bfa70e8aebb6ee71c",
-          "bytes": 12875
+          "sha256": "60a9ed49c894bd2e93c9790529a04cf6fd8c2db31dc4ed4834fba893df7a9039",
+          "bytes": 27240
         },
         {
           "source": "app/platform/index.mjs",
           "destination": "app/platform/index.mjs",
-          "sha256": "a9054fd9cab5612e057ba9c4c6b481956332efabd962e85d4928b971aeb3caf0",
-          "bytes": 19877
+          "sha256": "048944ed5d196b78b311de303a46705f5c55f2023781e4b78dac8a98cd5540e8",
+          "bytes": 28772
         },
         {
           "source": "app/queue/index.mjs",
           "destination": "app/queue/index.mjs",
-          "sha256": "04516c35d5c7217816a2abf386c22db909b24b733733f3df90db92cfee6578eb",
-          "bytes": 23343
+          "sha256": "9abe1ecfcfff4d508f6e0103f09a2711eee3e34ff05ca1a3e7a6007150044c3e",
+          "bytes": 29126
         },
         {
           "source": "app/queue/logic.mjs",
@@ -2950,16 +2986,28 @@
           "bytes": 7742
         },
         {
+          "source": "app/queue/shared.mjs",
+          "destination": "app/queue/shared.mjs",
+          "sha256": "921bfeb628059ed315137300f0e0b1666877d12f912ba03003226cf2d19fad2b",
+          "bytes": 2278
+        },
+        {
           "source": "app/rung/index.mjs",
           "destination": "app/rung/index.mjs",
           "sha256": "ede5ff318722705d9ed3dceae1ae28ee3cba04f66eab664cdc603a4c65507dfa",
           "bytes": 5289
         },
         {
+          "source": "app/subtitles/bitmap.mjs",
+          "destination": "app/subtitles/bitmap.mjs",
+          "sha256": "bd2dbf505386dd6416ec9580b7b3e14d9e06463fe2962fa9862223edf3b57401",
+          "bytes": 2268
+        },
+        {
           "source": "app/subtitles/captions.mjs",
           "destination": "app/subtitles/captions.mjs",
-          "sha256": "1f65faf9e1d6218ae4c9fcf008630f3626c21d97cc7b1581f12627beca0d85f7",
-          "bytes": 6875
+          "sha256": "1d3f5d7a9f0d6fdff5089a844810f1242fc89bd759c1a1976ac3e8596f809820",
+          "bytes": 8175
         },
         {
           "source": "app/subtitles/cues.mjs",
@@ -2976,50 +3024,184 @@
         {
           "source": "app/subtitles/index.mjs",
           "destination": "app/subtitles/index.mjs",
-          "sha256": "a61d8c32ef8b49d15b867d3052095db750d9df4c11b24ee0b2dafd1f8ea13513",
-          "bytes": 29429
+          "sha256": "62858623231b6a7b3936459a395a9a9d2956c7a880a6c853256af0c5cbc11235",
+          "bytes": 42157
         },
         {
           "source": "app/subtitles/match.mjs",
           "destination": "app/subtitles/match.mjs",
-          "sha256": "7b9bcb0ebc2ab1b166a8846cd5ee83ced9466291bf08cce1c292cf9919e426ac",
-          "bytes": 2729
+          "sha256": "1d99b7bd57a7db90b839f63b2c1c726e032fafdbfb5c803b826180317ea9ed93",
+          "bytes": 2737
         },
         {
           "source": "app/subtitles/parse.mjs",
           "destination": "app/subtitles/parse.mjs",
-          "sha256": "a15f9243cddcea0ce133b3030d80ac6747bf3901761ae7e78cec04a543146803",
-          "bytes": 11974
+          "sha256": "595849a8050ca7c3e19e7c3931e870a19f9cd192fae9fddc36347e1e07067b72",
+          "bytes": 13672
+        },
+        {
+          "source": "app/subtitles/pgs.mjs",
+          "destination": "app/subtitles/pgs.mjs",
+          "sha256": "3e4f022031d1d2c89e1906e4e85c0d9214fdc6d409ed832e56f62fabcd736cfb",
+          "bytes": 1442
+        },
+        {
+          "source": "app/subtitles/styled.mjs",
+          "destination": "app/subtitles/styled.mjs",
+          "sha256": "34e5ba6d480b5d4b201b2c954df57b6cb5ce89478ad49c4b7569e41ccaf3d992",
+          "bytes": 4466
+        },
+        {
+          "source": "app/transport/bookmarks.mjs",
+          "destination": "app/transport/bookmarks.mjs",
+          "sha256": "8cf08941deb36dbe037413c175afbd07b055beb23ecaefb1d46692fe4914b82d",
+          "bytes": 11680
         },
         {
           "source": "app/transport/index.mjs",
           "destination": "app/transport/index.mjs",
-          "sha256": "6f9f84b277c01347b67518a68a42036ba7931ca4eb21a3cded995235225d3dd5",
-          "bytes": 32644
+          "sha256": "d7bfbaa7be9e9d052fdfcda0e54079fba897770b1ca8e3dfe9d60588fd6f2ad7",
+          "bytes": 33204
         },
         {
           "source": "app/transport/logic.mjs",
           "destination": "app/transport/logic.mjs",
-          "sha256": "f38bc9b1cf839f88fbffc0c41a29693492684143571ca69e982ca552c099cb51",
-          "bytes": 7465
+          "sha256": "bbc9c057171cbbc5b502df1ab743c61010d4d6466d57b9ba5e93a6154db05fc6",
+          "bytes": 12564
         },
         {
-          "source": "vendor/mediabunny/mediabunny-1.66.0.min.mjs",
-          "destination": "vendor/mediabunny/mediabunny-1.66.0.min.mjs",
-          "sha256": "c26f218c23c3d2e97574c9399a75dccb91ceddcac3a6fd4593e9a390320b494a",
-          "bytes": 757382
+          "source": "app/transport/seekbar.mjs",
+          "destination": "app/transport/seekbar.mjs",
+          "sha256": "d9ac77738cd049ed16da33243946fe38783a10b17c324efdf3daee3e817b698a",
+          "bytes": 9832
         },
         {
-          "source": "vendor/mediabunny/LICENSE-MPL-2.0.txt",
-          "destination": "vendor/mediabunny/LICENSE-MPL-2.0.txt",
-          "sha256": "3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d04",
-          "bytes": 16726
+          "source": "commands.json",
+          "destination": "commands.json",
+          "sha256": "80caa4c4f5913e23a431af322f7420c60fb4c11a7e2ead1bac751f1b9cbc589c",
+          "bytes": 39650
         },
         {
-          "source": "vendor/mediabunny-ac3/mediabunny-ac3-1.66.0.min.mjs",
-          "destination": "vendor/mediabunny-ac3/mediabunny-ac3-1.66.0.min.mjs",
-          "sha256": "6a0befc4f1a4f8f0cfab40e027509da5a07f2dfd9c6b9c71905245ce9839e409",
-          "bytes": 1177625
+          "source": "engine/gpu-renderer.mjs",
+          "destination": "engine/gpu-renderer.mjs",
+          "sha256": "a0782a4ba42300db9a23d883dfdf7d31ebd138de7e291836a54fb4fb3876982e",
+          "bytes": 22845
+        },
+        {
+          "source": "engine/libav-rung.mjs",
+          "destination": "engine/libav-rung.mjs",
+          "sha256": "0dd20becce4c2c3847c6f7754506bcdfed5bc68dd0c5f4ac3a98655afa17ce43",
+          "bytes": 30842
+        },
+        {
+          "source": "engine/reel-engine.mjs",
+          "destination": "engine/reel-engine.mjs",
+          "sha256": "c095f42d8504ed46800cd9d08629ded34042c16ad286a0f3bb58f2ec50b09da2",
+          "bytes": 173101
+        },
+        {
+          "source": "index.html",
+          "destination": "index.html",
+          "sha256": "395767d8889f48cf6a24a0879cc5b85831e740c46fa6f9079d113d5b9d763730",
+          "bytes": 122089,
+          "originalSourceSha256": "b030ea459e7335bd057ba8e4064401bdd2dde9bf904f9e0513f55b156a031170",
+          "sdkSha256": "ec78ab7bd0e82a108847216f33bc6600366f68199f9416959411e5db254405ed"
+        },
+        {
+          "source": "sw.js",
+          "destination": "sw.js",
+          "sha256": "003d6c181dff930282556393ca5a239ff22c95fedc66d1737dd98a9026d757b2",
+          "bytes": 4806
+        },
+        {
+          "source": "vendor/jassub/COPYRIGHT",
+          "destination": "vendor/jassub/COPYRIGHT",
+          "sha256": "420f27cc7703563bb12842b10244f4a4951dc8bbcc5456050e696db96533edfb",
+          "bytes": 70157
+        },
+        {
+          "source": "vendor/jassub/LICENSE",
+          "destination": "vendor/jassub/LICENSE",
+          "sha256": "f300758600ecf59b736407f80f6dc8338a9879a062c6bcb16cc739d14814ec75",
+          "bytes": 1167
+        },
+        {
+          "source": "vendor/jassub/LICENSE-default-font-OFL-1.1.txt",
+          "destination": "vendor/jassub/LICENSE-default-font-OFL-1.1.txt",
+          "sha256": "93fed46019c38bbe566b479d22148e2e8a1e85ada614accb0211c37b2c61c19b",
+          "bytes": 4414
+        },
+        {
+          "source": "vendor/jassub/default.woff2",
+          "destination": "vendor/jassub/default.woff2",
+          "sha256": "886929903707c5bb28b07cd2eed69921b3d5ef5c49c73a0dd1e187ebf6546a4c",
+          "bytes": 145972
+        },
+        {
+          "source": "vendor/jassub/jassub-worker-modern.wasm",
+          "destination": "vendor/jassub/jassub-worker-modern.wasm",
+          "sha256": "465401b1b406e4f010dd2494a9cee47d78a1725b8adc3f381437fd32f0c1e9c2",
+          "bytes": 2037220
+        },
+        {
+          "source": "vendor/jassub/jassub-worker.js",
+          "destination": "vendor/jassub/jassub-worker.js",
+          "sha256": "0fb9a83f96fc39426e733a94f3e7fe4e37099324c08328450ba032b653e85707",
+          "bytes": 31069
+        },
+        {
+          "source": "vendor/jassub/jassub-worker.wasm",
+          "destination": "vendor/jassub/jassub-worker.wasm",
+          "sha256": "b6e9d3b1a6318ecfb9728c03a763b1e60796ca59d454820913deec62eebb8927",
+          "bytes": 1969177
+        },
+        {
+          "source": "vendor/jassub/jassub.es.js",
+          "destination": "vendor/jassub/jassub.es.js",
+          "sha256": "dd25d6534ccf4c7701477518064effcf81af27f1f32bc00aa18a9cf2ff102c62",
+          "bytes": 32803
+        },
+        {
+          "source": "vendor/libav/LICENSE-LGPL-2.1.txt",
+          "destination": "vendor/libav/LICENSE-LGPL-2.1.txt",
+          "sha256": "20e50fe7aae3e56378ebf0417d9de904f55a0e61e4df315333e632a4d3555d95",
+          "bytes": 26419
+        },
+        {
+          "source": "vendor/libav/libav-6.10.9.0-reel.mjs",
+          "destination": "vendor/libav/libav-6.10.9.0-reel.mjs",
+          "sha256": "3b3de436145b875715c394d47946d62f38b7c90cea167bb016ee513ff37808ec",
+          "bytes": 28408
+        },
+        {
+          "source": "vendor/libav/libav-6.10.9.0-reel.wasm.mjs",
+          "destination": "vendor/libav/libav-6.10.9.0-reel.wasm.mjs",
+          "sha256": "75eadd3ab9614c3b99099c33cca2fe6c43db59f7f5643adb58c1a245c9d11d55",
+          "bytes": 251298
+        },
+        {
+          "source": "vendor/libav/libav-6.10.9.0-reel.wasm.wasm",
+          "destination": "vendor/libav/libav-6.10.9.0-reel.wasm.wasm",
+          "sha256": "505bbd5a65fa85990a6539f22b735b770d7807ad86c07e3cb080e6e25ed79304",
+          "bytes": 3516872
+        },
+        {
+          "source": "vendor/libav/mkconfig-reel.json",
+          "destination": "vendor/libav/mkconfig-reel.json",
+          "sha256": "68dda1d424efa2a081dc5b89332d3aae0bd6e5f6fc7b904bea894dc00998073f",
+          "bytes": 955
+        },
+        {
+          "source": "vendor/libpgs/LICENSE",
+          "destination": "vendor/libpgs/LICENSE",
+          "sha256": "028b81baca58d9e15f519c76353282a6d4ab120a1653f64344dd322672df5fd5",
+          "bytes": 1070
+        },
+        {
+          "source": "vendor/libpgs/libpgs.js",
+          "destination": "vendor/libpgs/libpgs.js",
+          "sha256": "4eed3112dae7d3bfc766edada40fe5d13de07c2925db099f84b06b707f2f6d5b",
+          "bytes": 70282
         },
         {
           "source": "vendor/mediabunny-ac3/LICENSE-MPL-2.0.txt",
@@ -3028,22 +3210,22 @@
           "bytes": 16726
         },
         {
-          "source": "vendor/mediabunny-ac3/licenses/ffmpeg/LICENSE.md",
-          "destination": "vendor/mediabunny-ac3/licenses/ffmpeg/LICENSE.md",
-          "sha256": "e6dc72d5665a1ebd6dcc841de59278dad4ca77ecc47b03f1064a55c3e9ea8bb8",
-          "bytes": 4352
-        },
-        {
           "source": "vendor/mediabunny-ac3/licenses/ffmpeg/COPYING.LGPLv2.1",
           "destination": "vendor/mediabunny-ac3/licenses/ffmpeg/COPYING.LGPLv2.1",
           "sha256": "246041b6ecf9bc32d718a62c57877c78b5eb397b6467e74ed7ae2626ab189c30",
           "bytes": 26517
         },
         {
-          "source": "vendor/mediabunny-dts/mediabunny-dts-1.66.0.min.mjs",
-          "destination": "vendor/mediabunny-dts/mediabunny-dts-1.66.0.min.mjs",
-          "sha256": "0d90039f92b802a65ce575803ca7fee35ba1a6623ce4a8d5a010d8d0a35a5293",
-          "bytes": 1655248
+          "source": "vendor/mediabunny-ac3/licenses/ffmpeg/LICENSE.md",
+          "destination": "vendor/mediabunny-ac3/licenses/ffmpeg/LICENSE.md",
+          "sha256": "e6dc72d5665a1ebd6dcc841de59278dad4ca77ecc47b03f1064a55c3e9ea8bb8",
+          "bytes": 4352
+        },
+        {
+          "source": "vendor/mediabunny-ac3/mediabunny-ac3-1.66.0.min.mjs",
+          "destination": "vendor/mediabunny-ac3/mediabunny-ac3-1.66.0.min.mjs",
+          "sha256": "6a0befc4f1a4f8f0cfab40e027509da5a07f2dfd9c6b9c71905245ce9839e409",
+          "bytes": 1177625
         },
         {
           "source": "vendor/mediabunny-dts/LICENSE-MPL-2.0.txt",
@@ -3052,16 +3234,34 @@
           "bytes": 16726
         },
         {
+          "source": "vendor/mediabunny-dts/licenses/ffmpeg/COPYING.LGPLv2.1",
+          "destination": "vendor/mediabunny-dts/licenses/ffmpeg/COPYING.LGPLv2.1",
+          "sha256": "246041b6ecf9bc32d718a62c57877c78b5eb397b6467e74ed7ae2626ab189c30",
+          "bytes": 26517
+        },
+        {
           "source": "vendor/mediabunny-dts/licenses/ffmpeg/LICENSE.md",
           "destination": "vendor/mediabunny-dts/licenses/ffmpeg/LICENSE.md",
           "sha256": "e6dc72d5665a1ebd6dcc841de59278dad4ca77ecc47b03f1064a55c3e9ea8bb8",
           "bytes": 4352
         },
         {
-          "source": "vendor/mediabunny-dts/licenses/ffmpeg/COPYING.LGPLv2.1",
-          "destination": "vendor/mediabunny-dts/licenses/ffmpeg/COPYING.LGPLv2.1",
-          "sha256": "246041b6ecf9bc32d718a62c57877c78b5eb397b6467e74ed7ae2626ab189c30",
-          "bytes": 26517
+          "source": "vendor/mediabunny-dts/mediabunny-dts-1.66.0.min.mjs",
+          "destination": "vendor/mediabunny-dts/mediabunny-dts-1.66.0.min.mjs",
+          "sha256": "0d90039f92b802a65ce575803ca7fee35ba1a6623ce4a8d5a010d8d0a35a5293",
+          "bytes": 1655248
+        },
+        {
+          "source": "vendor/mediabunny/LICENSE-MPL-2.0.txt",
+          "destination": "vendor/mediabunny/LICENSE-MPL-2.0.txt",
+          "sha256": "3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d04",
+          "bytes": 16726
+        },
+        {
+          "source": "vendor/mediabunny/mediabunny-1.66.0.min.mjs",
+          "destination": "vendor/mediabunny/mediabunny-1.66.0.min.mjs",
+          "sha256": "c26f218c23c3d2e97574c9399a75dccb91ceddcac3a6fd4593e9a390320b494a",
+          "bytes": 757382
         }
       ]
     },

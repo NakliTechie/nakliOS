@@ -1,14 +1,19 @@
-/* Reel feature module: subtitles (parity rows T3 to T7, plus a save control for T2).
+/* Reel feature module: subtitles (parity rows T3 to T11, plus a save control for T2).
  * Contract: docs/build/reel-v1-contract.md.
  * No DOM access at module top level, so Node can import COMMANDS for commands.json. */
 
 import { decodeSubtitleBytes } from './decode.mjs';
-import { parseSubtitles, detectFormat, cuesFromEngine, serialiseSubtitles } from './parse.mjs';
+import { parseSubtitles, detectFormat, cuesFromEngine, serialiseSubtitles, buildAssDocument } from './parse.mjs';
+import { pgsPacketsToSup, isBitmapCodec } from './pgs.mjs';
+import { createStyledRenderer } from './styled.mjs';
+import { createBitmapRenderer } from './bitmap.mjs';
 import { CueIndex } from './cues.mjs';
 import { matchSidecars, isSubtitleName, stripExtension, describeSidecar, SUBTITLE_EXTENSIONS } from './match.mjs';
 import { createCaptions, normaliseStyle, DEFAULT_STYLE, STYLE_LIMITS } from './captions.mjs';
 
 const STYLE_KEY = 'subtitles:style';
+const RENDERER_KEY = 'subtitles:renderer';
+const FONT_RE = /\.(ttf|otf|ttc|woff2?)$/i;
 const DELAY_STEP_S = 0.05;
 const DELAY_LIMIT_S = 60;
 const MAX_SIDECAR_BYTES = 20 * 1024 * 1024;
@@ -38,10 +43,22 @@ export const COMMANDS = [
       reset: { type: 'boolean', description: 'Restore the default style first' } }, required: [] },
   },
   { name: 'subtitle.load-file', label: 'Load subtitles…', scope: 'write', readTwin: 'subtitle.read',
-    description: 'Load an SRT, WebVTT, ASS or SSA subtitle file for the current video. With no input it asks the person to pick a file; agents pass name and text.',
+    description: 'Load an SRT, WebVTT, ASS, SSA or PGS (.sup) subtitle file for the current video. With no input it asks the person to pick a file; agents pass name and text (text formats only).',
     input: { type: 'object', properties: {
       name: { type: 'string', description: 'File name, used for the format and the track label' },
-      text: { type: 'string', description: 'The subtitle file contents' } }, required: [] } },
+      text: { type: 'string', description: 'The subtitle file contents' },
+      replaceId: { type: 'string', description: 'Id of a loaded subtitle file track to replace in place (same id, still selected); an unknown id adds a new track' } }, required: [] } },
+  { name: 'subtitle.secondary', label: 'Second subtitle track', scope: 'write', readTwin: 'subtitle.read',
+    description: 'Show a second text subtitle track at the top of the picture, by list index (-1 turns it off) or id, or step to the next one, Off included.',
+    input: { type: 'object', properties: {
+      index: { type: 'integer', minimum: -1, description: 'Position in subtitle.read tracks; -1 is Off' },
+      id: { type: 'string', description: 'Track id from subtitle.read' },
+      next: { type: 'boolean', description: 'Step to the next text track, wrapping through Off' } }, required: [] },
+    shortcuts: [{ key: 'alt+s', input: { next: true } }] },
+  { name: 'subtitle.renderer', label: 'ASS renderer', scope: 'write', readTwin: 'subtitle.read',
+    description: 'Read or set how ASS/SSA subtitles draw: styled (fonts, colours and positions through libass) or plain text. With no input it reports the mode and the renderer in use.',
+    input: { type: 'object', properties: {
+      mode: { type: 'string', enum: ['styled', 'plain'] } }, required: [] } },
   { name: 'subtitle.read', label: 'Subtitle state', scope: 'read', input: { type: 'object', properties: {}, required: [] },
     description: 'Read the subtitle tracks, the selected track, the delay, the caption style and the text on screen.' },
   { name: 'subtitle.save', label: 'Save subtitles', scope: 'write', readTwin: 'subtitle.read',
@@ -93,7 +110,18 @@ export const STRINGS = {
   'subtitles.error.unknownTrack': 'There is no subtitle track with that index or id.',
   'subtitles.error.empty': 'No subtitles were found in {name}.',
   'subtitles.error.tooLarge': '{name} is larger than 20 MB, so Reel does not read it as subtitles.',
-  'subtitles.error.notSubtitle': '{name} is not an SRT, WebVTT, ASS or SSA file.',
+  'subtitles.error.notSubtitle': '{name} is not an SRT, WebVTT, ASS, SSA or PGS (.sup) file.',
+  'subtitles.error.replace': 'replaceId must name a loaded text subtitle file, not an embedded or bitmap track.',
+  'subtitles.error.bitmapSave': 'A bitmap (PGS) track has no text to save.',
+  'subtitles.error.bitmapSecondary': 'Only text tracks can show as the second track.',
+  'subtitles.error.bitmapText': 'Send PGS files as a file, not as text.',
+  'subtitles.error.styled': 'Styled subtitles could not start, so Reel shows them as plain text',
+  'subtitles.error.bitmap': 'Bitmap subtitles could not be shown',
+  'subtitles.menu.secondary': 'Second track (top)',
+  'subtitles.menu.styled': 'Styled ASS (fonts, colours, positions)',
+  'subtitles.track.bitmap': 'image',
+  'subtitles.toast.secondary': 'Second subtitles: {label}',
+  'subtitles.toast.secondaryOff': 'Second subtitles off',
   'subtitles.error.load': 'Subtitles could not be read',
 };
 
@@ -110,9 +138,18 @@ export function install(ctx) {
     pendingSiblings: null,
     seenSidecars: new Set(),
     sidecarCount: 0,
+    secondaryId: null,
+    rendererMode: 'styled',
+    active: null,
   };
   const captions = createCaptions(ctx);
   captions.setStyle(S.style);
+  const styled = createStyledRenderer({ layer: captions.layer, onLayout: fn => captions.onLayout(fn) });
+  const bitmap = createBitmapRenderer({ layer: captions.layer });
+
+  Promise.resolve(ctx.Storage?.get?.(RENDERER_KEY)).then(saved => {
+    if (saved === 'plain' || saved === 'styled') { S.rendererMode = saved; publish(); }
+  }).catch(() => {});
 
   Promise.resolve(ctx.Storage?.get?.(STYLE_KEY)).then(saved => {
     if (saved && typeof saved === 'object') {
@@ -137,6 +174,10 @@ export function install(ctx) {
       label: embeddedLabel(track, index),
       language: track.language && track.language !== 'und' ? track.language : null,
       codec: String(track.codec || 'srt').toLowerCase(),
+      bitmap: isBitmapCodec(track.codec) || isBitmapCodec(track.codecParameter),
+      header: typeof track.initialization === 'string'
+        ? track.initialization
+        : track.initialization ? decodeSubtitleBytes(track.initialization).text : '',
       forced: !!track.disposition?.forced,
       isDefault: !!track.disposition?.default,
       index: null,
@@ -148,6 +189,7 @@ export function install(ctx) {
     const parts = [track.name || t('subtitles.track.embedded', { n: index + 1 })];
     if (track.language && track.language !== 'und' && track.language !== track.name) parts.push(track.language);
     if (track.disposition?.forced) parts.push(t('subtitles.track.forced'));
+    if (isBitmapCodec(track.codec) || isBitmapCodec(track.codecParameter)) parts.push(t('subtitles.track.bitmap'));
     return parts.length > 1 ? `${parts[0]} (${parts.slice(1).join(', ')})` : parts[0];
   }
 
@@ -160,7 +202,8 @@ export function install(ctx) {
         const engineSubs = ctx.Engine.subtitles || {};
         let cues;
         if (typeof engineSubs.cues === 'function') {
-          cues = cuesFromEngine(await engineSubs.cues(track.embeddedIndex), track.codec);
+          track.rawCues = await engineSubs.cues(track.embeddedIndex);
+          cues = cuesFromEngine(track.rawCues, track.codec);
         } else {
           // Older engine: the export path returns the whole track as SRT or VTT text.
           const format = track.codec === 'webvtt' ? 'vtt' : 'srt';
@@ -180,6 +223,7 @@ export function install(ctx) {
     if (byUser) S.userChose = true;
     if (id === null) {
       S.selectedId = null;
+      stopRenderers();
       captions.setIndex(null);
       if (ctx.store.tracks?.selected) ctx.store.tracks.selected.subtitle = -1;
       if (announce) ctx.toast(t('subtitles.toast.off'));
@@ -189,12 +233,112 @@ export function install(ctx) {
     const track = S.tracks.find(candidate => candidate.id === id);
     if (!track) throw new RangeError(t('subtitles.error.unknownTrack'));
     S.selectedId = id;
+    stopRenderers();
     publish();
+    if (track.bitmap) {
+      captions.setIndex(null);
+      if (ctx.store.tracks?.selected) ctx.store.tracks.selected.subtitle = track.kind === 'embedded' ? track.embeddedIndex : -1;
+      if (announce) ctx.toast(t('subtitles.toast.track', { label: track.label }));
+      await startBitmap(track, gen);
+      return;
+    }
     const index = await ensureCues(track);
     if (gen !== S.gen || S.selectedId !== id) return;
     captions.setIndex(index);
     if (ctx.store.tracks?.selected) ctx.store.tracks.selected.subtitle = track.kind === 'embedded' ? track.embeddedIndex : -1;
     if (announce) ctx.toast(t('subtitles.toast.track', { label: track.label }));
+    publish();
+    if (isAss(track) && S.rendererMode === 'styled') startStyled(track, gen);
+  }
+
+  /* ---------- canvas renderers: styled ASS (T9) and PGS bitmaps (T11) ---------- */
+
+  function isAss(track) { return track && (track.codec === 'ass' || track.codec === 'ssa'); }
+
+  function stopRenderers() {
+    styled.reset();
+    bitmap.reset();
+    S.active = null;
+    captions.setPrimaryHidden(false);
+  }
+
+  async function attachedFonts() {
+    if (typeof ctx.Engine.attachments !== 'function') return [];
+    try {
+      const list = await ctx.Engine.attachments();
+      return (list || [])
+        .filter(item => item?.data && (/font|truetype|opentype|woff/i.test(item.mimeType || '') || FONT_RE.test(item.name || '')))
+        .map(item => (item.data instanceof Uint8Array ? item.data : new Uint8Array(item.data)));
+    } catch {
+      return [];
+    }
+  }
+
+  async function startStyled(track, gen) {
+    try {
+      const content = track.rawText ?? buildAssDocument(track.header, track.rawCues || []);
+      const fonts = track.kind === 'embedded' ? await attachedFonts() : [];
+      if (gen !== S.gen || S.selectedId !== track.id) return;
+      S.active = 'styled';
+      publish();
+      await styled.start({ content, fonts });
+      if (gen !== S.gen || S.selectedId !== track.id) return;
+      captions.setPrimaryHidden(true);
+      publish();
+    } catch (error) {
+      if (gen !== S.gen || S.selectedId !== track.id) return;
+      S.active = null;
+      captions.setPrimaryHidden(false);
+      ctx.toast(t('subtitles.error.styled'), 'err', error?.message || String(error));
+      publish();
+    }
+  }
+
+  async function bitmapBytes(track) {
+    if (track.bytes) return track.bytes;
+    const engineSubs = ctx.Engine.subtitles || {};
+    if (typeof engineSubs.packets !== 'function') throw new Error('This engine does not expose bitmap subtitle packets.');
+    track.bytes = pgsPacketsToSup(await engineSubs.packets(track.embeddedIndex));
+    return track.bytes;
+  }
+
+  async function startBitmap(track, gen) {
+    try {
+      const bytes = await bitmapBytes(track);
+      if (gen !== S.gen || S.selectedId !== track.id) return;
+      S.active = 'bitmap';
+      publish();
+      await bitmap.start(bytes);
+      publish();
+    } catch (error) {
+      if (gen !== S.gen || S.selectedId !== track.id) return;
+      S.active = null;
+      ctx.toast(t('subtitles.error.bitmap'), 'err', error?.message || String(error));
+      publish();
+      throw error;
+    }
+  }
+
+  /* ---------- second track (T10) ---------- */
+
+  async function selectSecondary(id, { announce = true } = {}) {
+    const gen = S.gen;
+    if (id === null) {
+      S.secondaryId = null;
+      captions.setSecondary(null);
+      if (announce) ctx.toast(t('subtitles.toast.secondaryOff'));
+      publish();
+      return;
+    }
+    const track = S.tracks.find(candidate => candidate.id === id);
+    if (!track) throw new RangeError(t('subtitles.error.unknownTrack'));
+    if (track.bitmap) throw new TypeError(t('subtitles.error.bitmapSecondary'));
+    S.secondaryId = id;
+    publish();
+    const index = await ensureCues(track);
+    if (gen !== S.gen || S.secondaryId !== id) return;
+    captions.setSecondary(index);
+    if (announce) ctx.toast(t('subtitles.toast.secondary', { label: track.label }));
     publish();
   }
 
@@ -214,19 +358,20 @@ export function install(ctx) {
     const key = `${name}\0${blob.size}\0${blob.lastModified || 0}`;
     const existing = S.tracks.find(track => track.key === key);
     if (existing) return existing;
+    if (/\.sup$/i.test(name)) return addSidecarBitmap(name, new Uint8Array(await blob.arrayBuffer()), { key, origin });
     const { text, encoding } = decodeSubtitleBytes(await blob.arrayBuffer());
     return addSidecarText(name, text, { key, encoding, origin });
   }
 
-  function addSidecarText(name, text, { key = `${name}\0text\0${text.length}`, encoding = 'utf-8', origin = 'user' } = {}) {
+  function addSidecarText(name, text, { key = `${name}\0text\0${text.length}`, encoding = 'utf-8', origin = 'user', replace = null } = {}) {
     if (!S.name) throw new Error(t('subtitles.error.noMedia'));
     const format = detectFormat(text, name);
     const cues = parseSubtitles(text, format);
     if (!cues.length) throw new Error(t('subtitles.error.empty', { name }));
     const info = describeSidecar(S.name, name);
-    S.sidecarCount += 1;
+    if (!replace) S.sidecarCount += 1;
     const track = {
-      id: `file:${S.sidecarCount}`,
+      id: replace ? replace.id : `file:${S.sidecarCount}`,
       key,
       kind: 'sidecar',
       label: `${name} (${t('subtitles.track.file')})`,
@@ -237,7 +382,46 @@ export function install(ctx) {
       origin,
       forced: !!info?.forced,
       isDefault: false,
+      bitmap: false,
+      rawText: format === 'ass' ? text : null,
       index: new CueIndex(cues),
+      loading: null,
+    };
+    if (replace) S.tracks[S.tracks.indexOf(replace)] = track;
+    else S.tracks.push(track);
+    publish();
+    return track;
+  }
+
+  /* The loaded file track that replaceId names, or null when the id is unknown (for example a
+   * track from a previous video), so the caller adds a new track instead. */
+  function replaceTarget(replaceId) {
+    if (typeof replaceId !== 'string') return null;
+    const target = S.tracks.find(track => track.id === replaceId);
+    if (!target) return null;
+    if (target.kind !== 'sidecar' || target.bitmap) throw new TypeError(t('subtitles.error.replace'));
+    return target;
+  }
+
+  function addSidecarBitmap(name, bytes, { key, origin }) {
+    if (bytes.length < 13 || bytes[0] !== 0x50 || bytes[1] !== 0x47) throw new Error(t('subtitles.error.empty', { name }));
+    const info = describeSidecar(S.name, name);
+    S.sidecarCount += 1;
+    const track = {
+      id: `file:${S.sidecarCount}`,
+      key,
+      kind: 'sidecar',
+      label: `${name} (${t('subtitles.track.file')}, ${t('subtitles.track.bitmap')})`,
+      fileName: name,
+      language: info?.language || null,
+      codec: 'pgs',
+      encoding: null,
+      origin,
+      forced: !!info?.forced,
+      isDefault: false,
+      bitmap: true,
+      bytes,
+      index: null,
       loading: null,
     };
     S.tracks.push(track);
@@ -314,6 +498,8 @@ export function install(ctx) {
     S.userChose = false;
     S.seenSidecars = new Set();
     S.sidecarCount = 0;
+    S.secondaryId = null;
+    stopRenderers();
     captions.clear();
     captions.setDelay(0);
   }
@@ -334,7 +520,13 @@ export function install(ctx) {
 
   ctx.on('ui:media-cleared', () => { reset(); S.pendingSiblings = null; publish(); });
   ctx.on('queue:siblings', detail => { applySiblings(detail, { live: true }).catch(() => {}); });
-  ctx.onFrame(state => captions.frame(state));
+  ctx.onFrame(state => {
+    captions.frame(state);
+    if (!S.active) return;
+    const timeS = (Number(state?.clock?.positionS) || 0) - S.delayS;
+    if (S.active === 'styled') styled.frame(timeS, { paused: !state?.clock?.playing, rate: state?.clock?.rate || 1 });
+    else if (S.active === 'bitmap') bitmap.frame(timeS);
+  });
   ctx.on('playback:seek', () => captions.refresh());
 
   /* ---------- reading state ---------- */
@@ -351,14 +543,33 @@ export function install(ctx) {
         codec: track.codec,
         forced: track.forced,
         default: track.isDefault,
+        bitmap: !!track.bitmap,
         ...(track.kind === 'embedded' ? { embeddedIndex: track.embeddedIndex } : { fileName: track.fileName, encoding: track.encoding }),
       })),
       selected: current ? S.tracks.indexOf(current) : -1,
       selectedId: S.selectedId,
+      secondary: S.secondaryId ? S.tracks.findIndex(track => track.id === S.secondaryId) : -1,
+      secondaryId: S.secondaryId,
+      renderer: rendererState(),
       cueCount: current?.index ? current.index.length : null,
       delayS: S.delayS,
       style: { ...S.style },
       text: captions.text(),
+    };
+  }
+
+  function rendererState() {
+    const current = selected();
+    const active = S.active === 'styled'
+      ? (styled.status() === 'ready' ? 'styled' : 'plain')
+      : S.active === 'bitmap' || current?.bitmap ? 'bitmap' : current ? 'plain' : null;
+    return {
+      mode: S.rendererMode,
+      active,
+      styledStatus: styled.status(),
+      styledError: styled.error(),
+      bitmapStatus: bitmap.status(),
+      bitmapError: bitmap.error(),
     };
   }
 
@@ -406,29 +617,75 @@ export function install(ctx) {
     return { style: { ...S.style } };
   });
 
-  r.handle('subtitle.load-file', async ({ name, text, file } = {}) => {
+  r.handle('subtitle.load-file', async ({ name, text, file, replaceId } = {}) => {
     if (!S.name) throw new Error(t('subtitles.error.noMedia'));
+    const replace = replaceTarget(replaceId);
     let track;
-    if (file && typeof file.arrayBuffer === 'function') {
+    if (file && typeof file.arrayBuffer === 'function' && replace) {
+      const fileName = file.name || name || 'subtitles.srt';
+      if (/\.sup$/i.test(fileName)) throw new TypeError(t('subtitles.error.replace'));
+      const { text: decoded, encoding } = decodeSubtitleBytes(await file.arrayBuffer());
+      track = addSidecarText(fileName, decoded, { encoding, origin: replace.origin, replace });
+    } else if (file && typeof file.arrayBuffer === 'function') {
       track = await addSidecar(file);
     } else if (typeof text === 'string') {
-      const fileName = name || 'subtitles.srt';
+      const fileName = name || replace?.fileName || 'subtitles.srt';
       if (!isSubtitleName(fileName)) throw new TypeError(t('subtitles.error.notSubtitle', { name: fileName }));
-      track = addSidecarText(fileName, text, { origin: 'agent' });
+      if (/\.sup$/i.test(fileName)) throw new TypeError(t('subtitles.error.bitmapText'));
+      track = addSidecarText(fileName, text, { origin: replace ? replace.origin : 'agent', replace });
     } else {
       fileInput.click();
       return { picker: true, ...read() };
     }
     await select(track.id, { announce: false });
+    if (replace && S.secondaryId === track.id) {
+      // The replaced track is now the primary; showing it twice would duplicate every line.
+      S.secondaryId = null;
+      captions.setSecondary(null);
+      publish();
+    }
     ctx.toast(t('subtitles.toast.loaded', { name: track.fileName }));
-    return read();
+    return { trackId: track.id, replaced: !!replace, ...read() };
   });
 
   r.handle('subtitle.read', () => read());
 
+  r.handle('subtitle.secondary', async ({ index, id, next } = {}) => {
+    if (next) {
+      const order = [null, ...S.tracks.filter(track => !track.bitmap && track.id !== S.selectedId).map(track => track.id)];
+      const at = order.indexOf(S.secondaryId);
+      await selectSecondary(order[(at + 1) % order.length]);
+    } else if (typeof id === 'string') {
+      await selectSecondary(id);
+    } else if (Number.isInteger(index)) {
+      if (index === -1) await selectSecondary(null);
+      else if (S.tracks[index]) await selectSecondary(S.tracks[index].id);
+      else throw new RangeError(t('subtitles.error.unknownTrack'));
+    } else {
+      throw new TypeError(t('subtitles.error.unknownTrack'));
+    }
+    return read();
+  });
+
+  r.handle('subtitle.renderer', async ({ mode } = {}) => {
+    if (mode === 'styled' || mode === 'plain') {
+      const changed = mode !== S.rendererMode;
+      S.rendererMode = mode;
+      ctx.Storage?.set?.(RENDERER_KEY, mode)?.catch?.(() => {});
+      const track = selected();
+      if (changed && isAss(track)) {
+        stopRenderers();
+        if (mode === 'styled') await startStyled(track, S.gen);
+      }
+      publish();
+    }
+    return rendererState();
+  });
+
   r.handle('subtitle.save', async ({ format, download = true } = {}) => {
     const track = selected();
     if (!track) throw new Error(t('subtitles.error.noTrack'));
+    if (track.bitmap) throw new TypeError(t('subtitles.error.bitmapSave'));
     const index = await ensureCues(track);
     const outFormat = format || (track.codec === 'webvtt' || track.codec === 'vtt' ? 'vtt' : 'srt');
     const text = serialiseSubtitles(index.cues, outFormat, S.delayS);
@@ -524,6 +781,19 @@ export function install(ctx) {
   trackList.setAttribute('aria-label', t('subtitles.menu.tracks'));
   trackSet.append(trackList);
 
+  const secondarySet = fieldset(t('subtitles.menu.secondary'));
+  const secondaryList = document.createElement('div');
+  secondaryList.setAttribute('role', 'radiogroup');
+  secondaryList.setAttribute('aria-label', t('subtitles.menu.secondary'));
+  secondarySet.append(secondaryList);
+
+  const rendererLabel = document.createElement('label');
+  const rendererToggle = document.createElement('input');
+  rendererToggle.type = 'checkbox';
+  rendererToggle.dataset.command = 'subtitle.renderer';
+  rendererToggle.addEventListener('change', () => run('subtitle.renderer', { mode: rendererToggle.checked ? 'styled' : 'plain' }));
+  rendererLabel.append(rendererToggle, document.createTextNode(t('subtitles.menu.styled')));
+
   const delaySet = fieldset(t('subtitles.menu.delay'));
   const delayRow = row();
   const earlier = actionButton(t('subtitles.menu.earlierShort'), t('subtitles.menu.delayEarlier'), 'subtitle.delay', () => run('subtitle.delay', { deltaS: -DELAY_STEP_S }));
@@ -551,7 +821,7 @@ export function install(ctx) {
   colour.addEventListener('change', () => run('subtitle.style', { color: colour.value }));
   colourLabel.append(colour);
   const styleReset = actionButton(t('subtitles.menu.styleReset'), null, 'subtitle.style', () => run('subtitle.style', { reset: true }));
-  styleSet.append(size.label, colourLabel, background.label, position.label, styleReset);
+  styleSet.append(size.label, colourLabel, background.label, position.label, rendererLabel, styleReset);
 
   const fileRow = row();
   const load = actionButton(t('subtitles.menu.load'), null, 'subtitle.load-file', () => run('subtitle.load-file', {}));
@@ -559,7 +829,7 @@ export function install(ctx) {
   const saveVtt = actionButton(t('subtitles.menu.saveVtt'), null, 'subtitle.save', () => run('subtitle.save', { format: 'vtt' }));
   fileRow.append(load, saveSrt, saveVtt);
 
-  panel.append(trackSet, delaySet, styleSet, fileRow);
+  panel.append(trackSet, secondarySet, delaySet, styleSet, fileRow);
 
   function fieldset(title) {
     const set = document.createElement('fieldset');
@@ -610,24 +880,32 @@ export function install(ctx) {
     }
   }
 
-  function renderPanel() {
-    const options = [{ id: null, label: t('subtitles.menu.off') }, ...S.tracks];
-    const focusedId = trackList.contains(document.activeElement) ? document.activeElement.value : null;
-    trackList.replaceChildren(...options.map(option => {
+  function radios(list, name, command, options, currentId) {
+    const focusedId = list.contains(document.activeElement) ? document.activeElement.value : null;
+    list.replaceChildren(...options.map(option => {
       const label = document.createElement('label');
       const input = document.createElement('input');
       input.type = 'radio';
-      input.name = 'reel-subs-track';
-      input.dataset.command = 'subtitle.track';
+      input.name = name;
+      input.dataset.command = command;
       input.value = option.id ?? '';
-      input.checked = option.id === S.selectedId;
+      input.checked = option.id === currentId;
       input.addEventListener('change', () => {
-        if (input.checked) run('subtitle.track', option.id === null ? { index: -1 } : { id: option.id });
+        if (input.checked) run(command, option.id === null ? { index: -1 } : { id: option.id });
       });
       label.append(input, document.createTextNode(option.label));
       return label;
     }));
-    if (focusedId !== null) trackList.querySelector(`input[value="${CSS.escape(focusedId)}"]`)?.focus();
+    if (focusedId !== null) list.querySelector(`input[value="${CSS.escape(focusedId)}"]`)?.focus();
+  }
+
+  function renderPanel() {
+    const off = { id: null, label: t('subtitles.menu.off') };
+    radios(trackList, 'reel-subs-track', 'subtitle.track', [off, ...S.tracks], S.selectedId);
+    const textTracks = S.tracks.filter(track => !track.bitmap);
+    radios(secondaryList, 'reel-subs-secondary', 'subtitle.secondary', [off, ...textTracks], S.secondaryId);
+    secondarySet.hidden = textTracks.length < 2 && !S.secondaryId;
+    rendererToggle.checked = S.rendererMode === 'styled';
     if (!S.tracks.length) {
       const note = document.createElement('p');
       note.className = 'reel-subs-note';
@@ -638,8 +916,9 @@ export function install(ctx) {
     delayValue.textContent = t('subtitles.menu.delayValue', { value: (S.delayS > 0 ? '+' : '') + S.delayS.toFixed(2) });
     delayValue.dataset.ms = String(ms);
     const hasTrack = !!S.selectedId;
-    saveSrt.disabled = !hasTrack;
-    saveVtt.disabled = !hasTrack;
+    const textTrack = hasTrack && !selected()?.bitmap;
+    saveSrt.disabled = !textTrack;
+    saveVtt.disabled = !textTrack;
     load.disabled = !S.name;
   }
 
