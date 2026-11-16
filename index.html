@@ -1716,6 +1716,8 @@ const APPS = [
     description:'A whiteboard in one file: shapes, sticky notes, ink and arrows that stay attached on an infinite canvas, saved on your own disk. Nothing is uploaded.', tags:['whiteboard','diagram','tool','draw'],
     svg:`<rect x="3" y="4" width="8" height="6" rx="1"/><circle cx="17" cy="17" r="3.5"/><path d="M11 7c5 0 6 2 6 6.5"/>` },
   { id:'rivulina', name:'Rivulina', url:'./apps/rivulina/', embedUrl:'./apps/rivulina/', commands:'./apps/rivulina/commands.json', glyph:'🎧', bg:'ok',
+    // Page reading for feeds that block the browser (spec rows F6, T4); not naklios.net egress, which stays system-only.
+    hostServices:['web'],
     description:'Podcasts and feeds in one file: subscribe, listen at any speed, read articles, and keep your subscriptions and downloads on your own device. No account.', tags:['podcast','rss','feeds','media','reader'],
     svg:`<path d="M5 19a2 2 0 1 0 0-.01M5 12a7 7 0 0 1 7 7M5 5a14 14 0 0 1 14 14"/>` },
   { id:'pellucia', name:'Pellucia', url:'./apps/pellucia/', embedUrl:'./apps/pellucia/', commands:'./apps/pellucia/commands.json', glyph:'🖼', bg:'act',
