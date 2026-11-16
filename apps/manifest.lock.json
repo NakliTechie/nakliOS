@@ -7729,27 +7729,57 @@
       "id": "montella",
       "repo": "NakliTechie/montella",
       "requestedRef": "main",
-      "resolvedCommit": "e8da9a80cab1023416ff8e5c80e0206e4697b3d2",
+      "resolvedCommit": "36d6eb2e4676cc2e201e25e5cb359b0719de4318",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "be8c2fa3ba5440fbda5b7a3977424508f3bcb54fb6069595664ca335508d627f",
-          "bytes": 858335,
-          "originalSourceSha256": "196bdc9966a29d5e9cc808144cf582e4138257d0772024747c57ede8bdfd5af6",
+          "sha256": "7af4bf96c8a36613d6eb2ee149d4bd62f4f12e8aac6946371d146ff7991b18a3",
+          "bytes": 889590,
+          "originalSourceSha256": "042093ed20b46cd7ecbc42d59aac1eeb94f9a881bc66c338a8d75e68c5bebbc7",
           "sdkSha256": "410f8613ad003755ecb06f20a23b6d36b3d980fe88a3ab86fe16ff73b11a5b4c"
         },
         {
           "source": "commands.json",
           "destination": "commands.json",
-          "sha256": "9f4d70f6526968f59d0b667288e8ea379a37298755d23603d8fafe79618a9009",
-          "bytes": 22712
+          "sha256": "8f690f2dc44a89fb6e3d1d842466d0e16bcde8ae2f8de4fe475a4dee0624f72e",
+          "bytes": 26147
         },
         {
           "source": "LICENSE",
           "destination": "LICENSE",
           "sha256": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
           "bytes": 34523
+        },
+        {
+          "source": "sw.js",
+          "destination": "sw.js",
+          "sha256": "cbc0fbd34bbc496c458cd9c91228bddc83e8d5b88b2c5d75e2b0a1c04062c748",
+          "bytes": 1326
+        },
+        {
+          "source": "ai/modnet-fa2fa54/config.json",
+          "destination": "ai/modnet-fa2fa54/config.json",
+          "sha256": "e144d8af9b1f09649785c77f592a76bbc69504ae02e43700663b2a9f00d9c8a2",
+          "bytes": 83
+        },
+        {
+          "source": "ai/modnet-fa2fa54/preprocessor_config.json",
+          "destination": "ai/modnet-fa2fa54/preprocessor_config.json",
+          "sha256": "07d83634b1fdd20142ca6e3fe55ab92b558f56d1b0f005ff3a7926f1c9e1165d",
+          "bytes": 365
+        },
+        {
+          "source": "ai/modnet-fa2fa54/onnx/model_quantized.onnx",
+          "destination": "ai/modnet-fa2fa54/onnx/model_quantized.onnx",
+          "sha256": "92e49898c3e05a6d7a944fc67a8cb87c4aad754ffb6ebd949528c7d1105fee3a",
+          "bytes": 6632188
+        },
+        {
+          "source": "ai/modnet-fa2fa54/NOTICE.md",
+          "destination": "ai/modnet-fa2fa54/NOTICE.md",
+          "sha256": "70b27f4958afc5a8c50d37803dcb845bade65766ac84bb9442e0df9ba129b376",
+          "bytes": 332
         }
       ]
     }
