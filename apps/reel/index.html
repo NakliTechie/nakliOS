@@ -94,7 +94,7 @@
   .player-stage{position:relative;display:grid;place-items:center;min-height:360px;flex:1;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
   #engine-canvas{display:block;width:100%;height:100%;max-height:calc(100vh - 190px);background:#000;object-fit:contain}
   .player-capsule{position:absolute;left:18px;right:18px;bottom:16px;padding:11px 14px 12px;background:rgba(11,11,14,.8);border:1px solid rgba(255,255,255,.1);border-radius:var(--capsule-radius);backdrop-filter:blur(20px) saturate(1.3)}
-  .player-honesty{display:flex;gap:14px;align-items:center;padding:0 3px 9px;margin-bottom:7px;border-bottom:1px solid rgba(255,255,255,.07);color:var(--dim);font-size:10.5px}
+  .player-honesty{pointer-events:none;display:flex;gap:14px;align-items:center;padding:0 3px 9px;margin-bottom:7px;border-bottom:1px solid rgba(255,255,255,.07);color:var(--dim);font-size:10.5px}
   .player-honesty .local{margin-left:auto;color:var(--faint)}
   .player-honesty .local b{color:var(--dim);font-weight:500}
   .rung{display:flex;gap:6px;align-items:center}
@@ -2129,7 +2129,8 @@ Events.on('playback:audio-refused', event => updateAudioBadge(event.detail, true
 
 function clearPlayerMedia() {
   persistCurrentResume().catch(() => {});
-  Engine.pause();
+  // clearPicture pauses and closes every held frame (queued, on screen, the WebGPU snapshot clone): release D5.
+  if (typeof Engine.clearPicture === 'function') Engine.clearPicture(); else Engine.pause();
   stopPlayerUi();
   lastPlaybackError = null;
   lastResumePositionS = 0;
@@ -2435,17 +2436,32 @@ const ctx = Object.freeze({
       panels.set(id, section);
       return body;
     }
+    let opener = null;
     function open(id) {
       for (const [key, section] of panels) section.hidden = key !== id;
       host.hidden = false;
       openId = id;
+      const active = document.activeElement;
+      if (active && active !== document.body && !host.contains(active)) opener = active;
       Events.emit('ui:panel', { id });
     }
     function close() {
+      const focusWasInside = host.contains(document.activeElement);
       host.hidden = true;
       openId = null;
       Events.emit('ui:panel', { id: null });
+      // Return focus to the control that opened the panel, as dialogs do.
+      if (focusWasInside && opener?.isConnected) opener.focus({ preventScroll: true });
+      opener = null;
     }
+    // Escape closes the open panel when focus is in it or on the control that opened it (release D4).
+    document.addEventListener('keydown', event => {
+      if (event.key !== 'Escape' || !openId || event.defaultPrevented) return;
+      const active = document.activeElement;
+      if (!host.contains(active) && active !== opener && active !== document.body) return;
+      event.preventDefault();
+      close();
+    }, true);
     function toggle(id) { return openId === id ? close() : open(id); }
     return Object.freeze({ register, open, close, toggle, current: () => openId });
   })(),
@@ -2514,6 +2530,20 @@ function wireEmpty() {
   $('#degraded-pick').addEventListener('click', () => $('#file-input').click());
 }
 
+/* Keep the stored resume position current before the person leaves (release D3): save on pause and
+   after a seek, and start the write when the tab hides, which fires early enough to commit on reload.
+   pagehide stays as a last attempt. */
+Events.on('playback:pause', () => { persistCurrentResume().catch(() => {}); });
+{
+  let seekSaveTimer = 0;
+  Events.on('playback:seek', () => {
+    clearTimeout(seekSaveTimer);
+    seekSaveTimer = setTimeout(() => { if (!store.clock.playing) persistCurrentResume().catch(() => {}); }, 300);
+  });
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') persistCurrentResume().catch(() => {});
+});
 addEventListener('pagehide', () => {
   persistCurrentResume().catch(() => {});
   Engine.pause();

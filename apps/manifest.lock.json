@@ -2971,7 +2971,7 @@
       "id": "reel",
       "repo": "NakliTechie/reel",
       "requestedRef": "main",
-      "resolvedCommit": "2c9a65a3f09d35de468a4dcebfc37e6df48486fc",
+      "resolvedCommit": "84c43f5b1b913d5e77e7cfdb977691eafc90b840",
       "files": [
         {
           "source": "app/ai/asr-worker.js",
@@ -3066,8 +3066,8 @@
         {
           "source": "app/queue/index.mjs",
           "destination": "app/queue/index.mjs",
-          "sha256": "9abe1ecfcfff4d508f6e0103f09a2711eee3e34ff05ca1a3e7a6007150044c3e",
-          "bytes": 29126
+          "sha256": "c00c60dee89d8a5136b8d78f58d8cec1ab317c376c9e22aea2fb3f27d904685d",
+          "bytes": 29376
         },
         {
           "source": "app/queue/logic.mjs",
@@ -3180,27 +3180,27 @@
         {
           "source": "engine/libav-rung.mjs",
           "destination": "engine/libav-rung.mjs",
-          "sha256": "0dd20becce4c2c3847c6f7754506bcdfed5bc68dd0c5f4ac3a98655afa17ce43",
-          "bytes": 30842
+          "sha256": "4adf21c18dfc8b8f4f3eef907de3b646a5ec88bd666cd7a7d32d3cb66c379695",
+          "bytes": 34085
         },
         {
           "source": "engine/reel-engine.mjs",
           "destination": "engine/reel-engine.mjs",
-          "sha256": "c095f42d8504ed46800cd9d08629ded34042c16ad286a0f3bb58f2ec50b09da2",
-          "bytes": 173101
+          "sha256": "1eb15f0d735ceea5202519dd4aa6b4715d46be2a6f4fb234e87fa2848a21e2a9",
+          "bytes": 176061
         },
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "395767d8889f48cf6a24a0879cc5b85831e740c46fa6f9079d113d5b9d763730",
-          "bytes": 122089,
-          "originalSourceSha256": "b030ea459e7335bd057ba8e4064401bdd2dde9bf904f9e0513f55b156a031170",
+          "sha256": "6294bc5c7c67bc20f97730d7abee02a3c4d6a66511054005e409834850a16b59",
+          "bytes": 123820,
+          "originalSourceSha256": "332be51099695f25be85b081cf12e9f0088d788014b187c8bbad0027f053f71a",
           "sdkSha256": "ec78ab7bd0e82a108847216f33bc6600366f68199f9416959411e5db254405ed"
         },
         {
           "source": "sw.js",
           "destination": "sw.js",
-          "sha256": "003d6c181dff930282556393ca5a239ff22c95fedc66d1737dd98a9026d757b2",
+          "sha256": "0b3b83a3a75bce615c719c1c7e0f004a807a99c8091f2f6bb1069b9b83a6ae33",
           "bytes": 4806
         },
         {

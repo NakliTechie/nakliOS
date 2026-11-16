@@ -11,12 +11,16 @@
 // no COOP/COEP inside the NakliOS iframe. H.264 goes to WebCodecs when the browser accepts
 // the configuration, because hardware decode is far faster than wasm; wasm is the fallback.
 //
-// Reading: the File is never read whole. Each demuxer opens a libav.js "readahead file"
-// (mkreadaheadfile), a block device whose reads become File.slice(pos, pos + len) calls,
-// with one block of read-ahead. A multi-GB file costs only the blocks in flight.
+// Reading: the input is never read whole. Each demuxer opens a libav.js block reader device
+// (mkblockreaderdev). Its block requests arrive in `onblockread` on this thread and are
+// answered from the input: File/Blob slices, or `read(offset, length)` on a ranged reader
+// (NakliOS-hosted media). Each answer is at least 1 MiB and at most 16 MiB, and the next
+// block is prefetched, so a multi-GB input costs only the blocks in flight.
 //
 // Contract (docs/build/reel-v1-contract.md, "libav rung interface"):
-//   openLibavSource(file, { requestDownload, log }) -> source, or null when libav cannot
+//   openLibavSource(input, { requestDownload, log }) -> source, or null when libav cannot
+//   (input: File, Blob, a Blob-shaped view with slice(), or a ranged reader
+//   { name, size, read(offset, length) -> Promise<Uint8Array | ArrayBuffer> });
 //   open the file or finds no decodable track. Loading failures throw a LibavRungError
 //   with a code (ERR_LIBAV_DECLINED, ERR_LIBAV_UNAVAILABLE, ERR_LIBAV_INTEGRITY).
 //   source.tracks, source.duration, source.videoFrames(fromS), source.audioData(fromS),
@@ -59,6 +63,8 @@ const VIDEO_READ_BYTES = 128 * 1024; // demux batch: a few frames, so the lock i
 const AUDIO_READ_BYTES = 32 * 1024;
 const KEY_WAIT_FRAMES = 300; // after a seek, frames dropped while waiting for a key frame
 const WEBCODECS_QUEUE = 8;
+const BLOCK_BYTES = 1024 * 1024; // smallest answer to a block request
+const MAX_READ_BYTES = 16 * 1024 * 1024; // largest single read from the input (hosts cap here)
 // How far before the target to retry when a seek lands after it; the last step is the start.
 const SEEK_BACKOFF_S = Object.freeze([0.5, 1, 2, 4, Infinity]);
 
@@ -142,7 +148,15 @@ async function createInstance(requestDownload, log) {
     mode = 'direct';
   }
   await lib.av_log_set_level(AV_LOG_QUIET);
-  return { lib, mode, run: serialiser(), sequence: 0 };
+  const devices = new Map(); // device name -> { read, size, ahead }
+  // Block requests come back to this thread in both modes. They are answered directly, never
+  // through the call queue: the call that asked is suspended inside libav until the answer lands.
+  lib.onblockread = (name, position, length) => {
+    const device = devices.get(name);
+    if (!device) return lib.ff_block_reader_dev_send(name, position, null, { errorCode: 5 /* EIO */ });
+    return serveBlock(lib, device, name, position, length);
+  };
+  return { lib, mode, run: serialiser(), sequence: 0, devices };
 }
 
 async function instance(requestDownload, log) {
@@ -151,6 +165,55 @@ async function instance(requestDownload, log) {
     throw error;
   });
   return instancePromise;
+}
+
+/* ---------------------------------------------------------------- input reading */
+
+/** One `read(offset, length) -> Uint8Array` over any supported input, or null. */
+function readerFor(input) {
+  if (!input || !Number.isFinite(input.size) || input.size < 0) return null;
+  if (typeof input.read === 'function') {
+    return async (offset, length) => {
+      const value = await input.read(offset, length);
+      return value instanceof Uint8Array ? value : new Uint8Array(value);
+    };
+  }
+  if (typeof input.slice === 'function') {
+    return async (offset, length) => {
+      const part = input.slice(offset, offset + length);
+      return typeof part.bytes === 'function' ? new Uint8Array(await part.bytes()) : new Uint8Array(await part.arrayBuffer());
+    };
+  }
+  return null;
+}
+
+async function readExactly(device, offset) {
+  const length = Math.min(MAX_READ_BYTES, Math.max(0, device.size - offset), Math.max(BLOCK_BYTES, device.want));
+  if (length <= 0) return new Uint8Array(0);
+  const data = await device.read(offset, length);
+  if (data.length < length) throw new Error(`short read at ${offset}: ${data.length} of ${length} bytes`);
+  return data.length > length ? data.subarray(0, length) : data;
+}
+
+async function serveBlock(lib, device, name, position, length) {
+  device.want = length;
+  try {
+    let data = null;
+    if (device.ahead && device.ahead.offset === position) data = await device.ahead.promise.catch(() => null);
+    data ??= await readExactly(device, position);
+    await lib.ff_block_reader_dev_send(name, position, data);
+    const next = position + data.length;
+    if (data.length && next < device.size) {
+      const promise = readExactly(device, next);
+      promise.catch(() => {}); // a failed prefetch is retried on demand
+      device.ahead = { offset: next, promise };
+    } else {
+      device.ahead = null;
+    }
+  } catch (error) {
+    device.ahead = null;
+    await lib.ff_block_reader_dev_send(name, position, null, { error });
+  }
 }
 
 /* ---------------------------------------------------------------- helpers */
@@ -227,9 +290,15 @@ function avcCodecString(extradata, firstPacket) {
  * interlaced; `source.setDeinterlace(on)` changes it for the next videoFrames() call.
  */
 export async function openLibavSource(file, { requestDownload, log, deinterlace = false } = {}) {
+  const read = readerFor(file);
+  if (!read) return null;
   const say = message => { try { log?.(message); } catch { /* the host's logger failed; keep decoding */ } };
   const host = await instance(requestDownload, say);
   const { lib, run } = host;
+  const makeDevice = async name => {
+    host.devices.set(name, { read, size: file.size, want: BLOCK_BYTES, ahead: null });
+    await lib.mkblockreaderdev(name, file.size);
+  };
   const extension = extensionOf(file?.name);
   const devices = new Set();
   const idle = new Map(); // stream index -> sessions ready for reuse
@@ -243,7 +312,8 @@ export async function openLibavSource(file, { requestDownload, log, deinterlace 
   };
   const dropDevice = async name => {
     devices.delete(name);
-    try { await lib.unlinkreadaheadfile(name); } catch { /* already gone */ }
+    host.devices.delete(name);
+    try { await lib.unlink(name); } catch { /* already gone */ }
   };
 
   // Probe: open once, read stream information, close.
@@ -251,7 +321,7 @@ export async function openLibavSource(file, { requestDownload, log, deinterlace 
   const probeName = deviceName();
   try {
     probe = await run(async () => {
-      await lib.mkreadaheadfile(probeName, file);
+      await makeDevice(probeName);
       const [fmt, streams] = await lib.ff_init_demuxer_file(probeName);
       try {
         const startLo = await lib.AVFormatContext_start_time(fmt);
@@ -312,7 +382,7 @@ export async function openLibavSource(file, { requestDownload, log, deinterlace 
 
   async function openSession(track) {
     const name = deviceName();
-    await lib.mkreadaheadfile(name, file);
+    await makeDevice(name);
     const [fmt, streams] = await lib.ff_init_demuxer_file(name);
     const stream = streams[track.id];
     for (const other of streams) {
