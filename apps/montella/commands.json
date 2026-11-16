@@ -260,7 +260,7 @@
     },
     {
       "name": "text.add",
-      "description": "Add a text overlay on the text track.",
+      "description": "Add a text overlay on the text track. x and y place its centre (fractions of the frame, default 0.5, 0.82). style may set: font, size (fraction of the height, default 0.06), weight, color, stroke, strokeWidth, box, boxColor, align (center|left|right), letterSpacing (fraction of the size, -0.1..0.5), lineHeight (0.8..2.5, default 1.18), shadow (a colour, or false), shadowBlur and shadowOffset (fractions of the size), gradient [top colour, bottom colour], maxLines (shrink the text until it wraps to at most this many lines; 0 for no limit), highlight (karaoke colour). Text always shrinks when one word is wider than the title-safe width.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -279,13 +279,29 @@
           },
           "anim": {
             "type": "string",
-            "description": "none|fade|slide|pop",
+            "description": "Animation",
             "enum": [
               "none",
               "fade",
               "slide",
-              "pop"
+              "pop",
+              "typewriter",
+              "wordPop",
+              "wordRise",
+              "karaoke"
             ]
+          },
+          "x": {
+            "type": "number",
+            "description": "Centre across, 0..1"
+          },
+          "y": {
+            "type": "number",
+            "description": "Centre down, 0..1"
+          },
+          "style": {
+            "type": "object",
+            "description": "Text style fields (see the description)"
           }
         },
         "required": [
@@ -1057,6 +1073,35 @@
       }
     },
     {
+      "name": "audio.loudness",
+      "description": "Measure the loudness of the mix as it would be exported (EBU R128): integrated LUFS, loudness range, true and sample peak in dBTP, maximum momentary and short-term loudness. target: also report what normalising to this many LUFS (true peak under -1 dBTP) gives, the same as the export does; reached is false, with a note, when the peak ceiling stops it short. range: only the marked range.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "target": {
+            "type": "number",
+            "description": "Normalise to this many LUFS first (for example -14)"
+          },
+          "range": {
+            "type": "boolean",
+            "description": "Measure only the marked range"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "edit.history",
+      "description": "The undo history, oldest first: [{id, label, by}] where by is person or api. It is saved with the project, so it survives closing the tab.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
       "name": "frame.snapshot",
       "description": "Render the frame at a timeline time as a small JPEG data URL (default 480 px wide), to look at the result.",
       "scope": "read",
@@ -1096,7 +1141,7 @@
     },
     {
       "name": "project.check",
-      "description": "Find problems a person would see: text off the frame or outside title-safe, text too short to read, gaps on the main track, clips past their file, missing files, captions under vertical apps' buttons, long silent projects. Returns [{level, code, message, fix, clipId?, at?}].",
+      "description": "Find problems a person would see: text off the frame or outside title-safe, text too short to read, gaps on the main track, clips past their file, missing files, captions under vertical apps' buttons, long silent projects, and text with too little contrast against the picture behind it (WCAG: 3:1 for large text, 4.5:1 for small; it suggests a colour). Returns [{level, code, message, fix, clipId?, at?}].",
       "scope": "read",
       "input": {
         "type": "object",
@@ -1268,7 +1313,7 @@
     },
     {
       "name": "export.video",
-      "description": "Export the timeline to a file in the person's storage. preset: mp4-1080, mp4-720, mp4-4k, webm-1080, m4a / wav for the sound alone, or lossless to copy one untouched clip without re-encoding.",
+      "description": "Export the timeline to a file in the person's storage. preset: mp4-1080, mp4-720, mp4-4k, webm-1080, webm-alpha (transparent where no clip covers the frame, for overlays), gif (480 px, 15 fps, no sound), png-zip (a PNG for every frame in a zip, transparent background, at most 900 frames), m4a / wav for the sound alone, or lossless to copy one untouched clip without re-encoding.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -1281,6 +1326,9 @@
               "mp4-720",
               "mp4-4k",
               "webm-1080",
+              "webm-alpha",
+              "gif",
+              "png-zip",
               "m4a",
               "wav",
               "lossless"
@@ -1297,6 +1345,56 @@
         },
         "required": []
       }
+    }
+  ],
+  "errorCodes": [
+    {
+      "code": "not-found",
+      "meaning": "The clip, media, track, LUT or nest named does not exist."
+    },
+    {
+      "code": "locked",
+      "meaning": "The track is locked."
+    },
+    {
+      "code": "not-loaded",
+      "meaning": "The media file is not loaded; relink it."
+    },
+    {
+      "code": "empty",
+      "meaning": "The timeline or range is empty, or nothing makes sound."
+    },
+    {
+      "code": "wrong-kind",
+      "meaning": "The operation does not apply to this kind of clip or track."
+    },
+    {
+      "code": "needs-setup",
+      "meaning": "Something must be placed or chosen first."
+    },
+    {
+      "code": "unsupported",
+      "meaning": "This browser cannot do it (codec, API or model missing)."
+    },
+    {
+      "code": "bad-project",
+      "meaning": "The file is not a valid Montella project."
+    },
+    {
+      "code": "bad-colour",
+      "meaning": "A colour is not in a form Montella accepts (#rrggbb or rgb())."
+    },
+    {
+      "code": "out-of-range",
+      "meaning": "A number is outside its allowed range, or a time falls outside the clip or media."
+    },
+    {
+      "code": "bad-value",
+      "meaning": "A value is not one of the allowed choices."
+    },
+    {
+      "code": "refused",
+      "meaning": "Any other refusal."
     }
   ]
 }

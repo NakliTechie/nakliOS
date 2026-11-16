@@ -1,0 +1,1519 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://naklios.dev/apps/montella/project.schema.json",
+ "title": "Montella project file",
+ "description": "What Save writes: the project document, plus its undo history. Edit it by hand or generate it; Montella checks it when it opens.",
+ "type": "object",
+ "required": [
+  "project"
+ ],
+ "properties": {
+  "$schema": {
+   "type": "string",
+   "description": "This schema"
+  },
+  "app": {
+   "const": "montella"
+  },
+  "saved": {
+   "type": "string",
+   "description": "When it was saved (ISO 8601)"
+  },
+  "project": {
+   "type": "object",
+   "required": [
+    "version",
+    "width",
+    "height",
+    "fps",
+    "media",
+    "tracks",
+    "clips"
+   ],
+   "properties": {
+    "version": {
+     "const": 1
+    },
+    "name": {
+     "type": "string",
+     "description": "Name"
+    },
+    "aspect": {
+     "type": "string",
+     "description": "Aspect",
+     "enum": [
+      "16:9",
+      "9:16",
+      "1:1",
+      "4:5"
+     ]
+    },
+    "width": {
+     "type": "number",
+     "description": "Pixels"
+    },
+    "height": {
+     "type": "number",
+     "description": "Pixels"
+    },
+    "fps": {
+     "enum": [
+      24,
+      25,
+      30,
+      50,
+      60
+     ]
+    },
+    "mode": {
+     "type": "string",
+     "description": "Editing mode",
+     "enum": [
+      "quick",
+      "pro"
+     ]
+    },
+    "background": {
+     "type": "string",
+     "description": "A colour: #rgb, #rrggbb, #rrggbbaa, rgb(…) or rgba(…)",
+     "pattern": "^(#[0-9a-fA-F]{3,8}|rgba?\\(.*\\))$"
+    },
+    "inMark": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "outMark": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "media": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "object",
+      "required": [
+       "id",
+       "kind"
+      ],
+      "description": "A media item. The file itself is not stored; Montella relinks it by name.",
+      "properties": {
+       "id": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_-]{1,64}$"
+       },
+       "kind": {
+        "type": "string",
+        "description": "Media kind",
+        "enum": [
+         "video",
+         "audio",
+         "image"
+        ]
+       },
+       "name": {
+        "type": "string",
+        "description": "File name"
+       },
+       "size": {
+        "type": "number",
+        "description": "Bytes"
+       },
+       "lastModified": {
+        "type": "number",
+        "description": "File time, ms"
+       },
+       "duration": {
+        "type": "number",
+        "description": "Seconds"
+       },
+       "width": {
+        "type": "number",
+        "description": "Pixels"
+       },
+       "height": {
+        "type": "number",
+        "description": "Pixels"
+       },
+       "hasAudio": {
+        "type": "boolean",
+        "description": "Has sound"
+       },
+       "nested": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_-]{1,64}$",
+        "description": "A nest: the sequence id it shows"
+       },
+       "transcript": {
+        "type": "object",
+        "description": "Words from transcript.make"
+       }
+      }
+     }
+    },
+    "tracks": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "required": [
+       "id",
+       "kind"
+      ],
+      "properties": {
+       "id": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_-]{1,64}$"
+       },
+       "kind": {
+        "type": "string",
+        "description": "Track kind",
+        "enum": [
+         "video",
+         "audio",
+         "text"
+        ]
+       },
+       "name": {
+        "type": "string",
+        "description": "Name"
+       },
+       "ripple": {
+        "type": "boolean",
+        "description": "Edits close gaps"
+       },
+       "muted": {
+        "type": "boolean",
+        "description": "Muted"
+       },
+       "locked": {
+        "type": "boolean",
+        "description": "Locked"
+       },
+       "hidden": {
+        "type": "boolean",
+        "description": "Hidden"
+       },
+       "gain": {
+        "type": "number",
+        "description": "Gain",
+        "minimum": 0,
+        "maximum": 2
+       },
+       "pan": {
+        "type": "number",
+        "description": "Pan",
+        "minimum": -1,
+        "maximum": 1
+       }
+      }
+     }
+    },
+    "clips": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "required": [
+       "id",
+       "kind",
+       "trackId",
+       "start"
+      ],
+      "properties": {
+       "id": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_-]{1,64}$"
+       },
+       "kind": {
+        "type": "string",
+        "description": "What the clip is",
+        "enum": [
+         "media",
+         "text",
+         "graphic"
+        ]
+       },
+       "trackId": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_-]{1,64}$"
+       },
+       "mediaId": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_-]{1,64}$"
+       },
+       "origin": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_-]{1,64}$"
+       },
+       "start": {
+        "type": "number",
+        "description": "Timeline start, seconds",
+        "minimum": 0
+       },
+       "in": {
+        "type": "number",
+        "description": "Seconds",
+        "minimum": 0
+       },
+       "out": {
+        "type": "number",
+        "description": "Seconds",
+        "minimum": 0
+       },
+       "length": {
+        "type": "number",
+        "description": "Text and graphic length, seconds",
+        "minimum": 0
+       },
+       "speed": {
+        "type": "number",
+        "description": "Playback speed",
+        "minimum": 0.25,
+        "maximum": 4
+       },
+       "reverse": {
+        "type": "boolean",
+        "description": "Plays backwards"
+       },
+       "freeze": {
+        "type": "boolean",
+        "description": "A held frame"
+       },
+       "audioOnly": {
+        "type": "boolean",
+        "description": "Detached sound"
+       },
+       "muted": {
+        "type": "boolean",
+        "description": "Muted"
+       },
+       "volume": {
+        "type": "number",
+        "description": "Gain",
+        "minimum": 0,
+        "maximum": 2
+       },
+       "fadeIn": {
+        "type": "number",
+        "description": "Seconds",
+        "minimum": 0
+       },
+       "fadeOut": {
+        "type": "number",
+        "description": "Seconds",
+        "minimum": 0
+       },
+       "fit": {
+        "type": "string",
+        "description": "How media fills the frame",
+        "enum": [
+         "fit",
+         "fill",
+         "blur"
+        ]
+       },
+       "x": {
+        "type": "number",
+        "description": "Position: media offset (fraction) or text and graphic centre (0..1)"
+       },
+       "y": {
+        "type": "number",
+        "description": "Position, down"
+       },
+       "scale": {
+        "type": "number",
+        "description": "Scale"
+       },
+       "rotation": {
+        "type": "number",
+        "description": "Degrees"
+       },
+       "opacity": {
+        "type": "number",
+        "description": "Opacity",
+        "minimum": 0,
+        "maximum": 1
+       },
+       "filters": {
+        "type": "object",
+        "properties": {
+         "brightness": {
+          "type": "number",
+          "description": "brightness",
+          "minimum": -1,
+          "maximum": 1
+         },
+         "contrast": {
+          "type": "number",
+          "description": "contrast",
+          "minimum": -1,
+          "maximum": 1
+         },
+         "saturation": {
+          "type": "number",
+          "description": "saturation",
+          "minimum": -1,
+          "maximum": 1
+         },
+         "temperature": {
+          "type": "number",
+          "description": "temperature",
+          "minimum": -1,
+          "maximum": 1
+         }
+        }
+       },
+       "look": {
+        "type": "string",
+        "description": "Look preset",
+        "enum": [
+         "none",
+         "vivid",
+         "warm",
+         "cool",
+         "mono",
+         "fade",
+         "noir",
+         "sunset"
+        ]
+       },
+       "blend": {
+        "type": "string",
+        "description": "Blend mode",
+        "enum": [
+         "normal",
+         "multiply",
+         "screen",
+         "overlay",
+         "darken",
+         "lighten",
+         "difference",
+         "color-dodge",
+         "soft-light"
+        ]
+       },
+       "transitionIn": {
+        "oneOf": [
+         {
+          "type": "null"
+         },
+         {
+          "type": "object",
+          "required": [
+           "type",
+           "duration"
+          ],
+          "properties": {
+           "type": {
+            "type": "string",
+            "description": "Transition",
+            "enum": [
+             "crossfade",
+             "fade",
+             "wipe",
+             "slide",
+             "zoom",
+             "push",
+             "iris",
+             "whip"
+            ]
+           },
+           "duration": {
+            "type": "number",
+            "description": "Seconds",
+            "exclusiveMinimum": 0
+           },
+           "dir": {
+            "type": "string",
+            "description": "Direction",
+            "enum": [
+             "left",
+             "right"
+            ]
+           }
+          }
+         }
+        ]
+       },
+       "keyframes": {
+        "type": "object",
+        "description": "Keyframes per property, clip-local seconds",
+        "propertyNames": {
+         "enum": [
+          "x",
+          "y",
+          "scale",
+          "rotation",
+          "opacity",
+          "volume"
+         ]
+        },
+        "additionalProperties": {
+         "type": "array",
+         "items": {
+          "type": "object",
+          "required": [
+           "t",
+           "v"
+          ],
+          "properties": {
+           "t": {
+            "type": "number",
+            "description": "Clip-local seconds"
+           },
+           "v": {
+            "type": "number",
+            "description": "Value"
+           },
+           "ease": {
+            "type": "string",
+            "description": "Ease into the next key",
+            "enum": [
+             "linear",
+             "in",
+             "out",
+             "inOut",
+             "expoIn",
+             "expoOut",
+             "hold"
+            ]
+           }
+          }
+         }
+        }
+       },
+       "text": {
+        "type": "string",
+        "description": "The words"
+       },
+       "style": {
+        "type": "object",
+        "description": "Text style. Sizes are fractions of the canvas height (size) or of the text size (the rest).",
+        "properties": {
+         "font": {
+          "type": "string",
+          "description": "A CSS font family list"
+         },
+         "weight": {
+          "type": [
+           "number",
+           "string"
+          ],
+          "description": "Font weight, 100 to 900"
+         },
+         "color": {
+          "type": "string",
+          "description": "A colour: #rgb, #rrggbb, #rrggbbaa, rgb(…) or rgba(…)",
+          "pattern": "^(#[0-9a-fA-F]{3,8}|rgba?\\(.*\\))$"
+         },
+         "stroke": {
+          "type": "string",
+          "description": "A colour: #rgb, #rrggbb, #rrggbbaa, rgb(…) or rgba(…)",
+          "pattern": "^(#[0-9a-fA-F]{3,8}|rgba?\\(.*\\))$"
+         },
+         "boxColor": {
+          "type": "string",
+          "description": "A colour: #rgb, #rrggbb, #rrggbbaa, rgb(…) or rgba(…)",
+          "pattern": "^(#[0-9a-fA-F]{3,8}|rgba?\\(.*\\))$"
+         },
+         "highlight": {
+          "type": "string",
+          "description": "The karaoke colour of the word being spoken",
+          "pattern": "^(#[0-9a-fA-F]{3,8}|rgba?\\(.*\\))$"
+         },
+         "box": {
+          "type": "boolean",
+          "description": "A rounded box behind the text"
+         },
+         "align": {
+          "type": "string",
+          "description": "Alignment",
+          "enum": [
+           "center",
+           "left",
+           "right"
+          ]
+         },
+         "anim": {
+          "type": "string",
+          "description": "Animation",
+          "enum": [
+           "none",
+           "fade",
+           "slide",
+           "pop",
+           "typewriter",
+           "wordPop",
+           "wordRise",
+           "karaoke"
+          ]
+         },
+         "letterSpacing": {
+          "type": "number",
+          "description": "letterSpacing",
+          "minimum": -0.1,
+          "maximum": 0.5
+         },
+         "lineHeight": {
+          "type": "number",
+          "description": "lineHeight",
+          "minimum": 0.8,
+          "maximum": 2.5
+         },
+         "shadowBlur": {
+          "type": "number",
+          "description": "shadowBlur",
+          "minimum": 0,
+          "maximum": 1
+         },
+         "shadowOffset": {
+          "type": "number",
+          "description": "shadowOffset",
+          "minimum": 0,
+          "maximum": 0.5
+         },
+         "size": {
+          "type": "number",
+          "description": "size",
+          "minimum": 0.01,
+          "maximum": 0.5
+         },
+         "strokeWidth": {
+          "type": "number",
+          "description": "strokeWidth",
+          "minimum": 0,
+          "maximum": 0.5
+         },
+         "shadow": {
+          "oneOf": [
+           {
+            "type": "string",
+            "description": "A colour: #rgb, #rrggbb, #rrggbbaa, rgb(…) or rgba(…)",
+            "pattern": "^(#[0-9a-fA-F]{3,8}|rgba?\\(.*\\))$"
+           },
+           {
+            "const": false
+           }
+          ],
+          "description": "Drop shadow colour, or false"
+         },
+         "gradient": {
+          "oneOf": [
+           {
+            "type": "array",
+            "items": {
+             "type": "string",
+             "description": "A colour: #rgb, #rrggbb, #rrggbbaa, rgb(…) or rgba(…)",
+             "pattern": "^(#[0-9a-fA-F]{3,8}|rgba?\\(.*\\))$"
+            },
+            "minItems": 2,
+            "maxItems": 2
+           },
+           {
+            "const": false
+           }
+          ],
+          "description": "Top and bottom fill colours"
+         },
+         "maxLines": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 8,
+          "description": "Shrink until the text wraps to at most this many lines (0: no limit)"
+         }
+        }
+       },
+       "words": {
+        "type": "array",
+        "description": "Word timing for karaoke and word animations",
+        "items": {
+         "type": "object",
+         "properties": {
+          "t": {
+           "type": "number",
+           "description": "Clip-local seconds"
+          },
+          "text": {
+           "type": "string",
+           "description": "Word"
+          }
+         }
+        }
+       },
+       "graphic": {
+        "type": "object",
+        "required": [
+         "shape"
+        ],
+        "properties": {
+         "shape": {
+          "type": "string",
+          "description": "Shape",
+          "enum": [
+           "rect",
+           "line",
+           "bar",
+           "counter",
+           "chart"
+          ]
+         },
+         "color": {
+          "type": "string",
+          "description": "A colour: #rgb, #rrggbb, #rrggbbaa, rgb(…) or rgba(…)",
+          "pattern": "^(#[0-9a-fA-F]{3,8}|rgba?\\(.*\\))$"
+         },
+         "w": {
+          "type": "number",
+          "description": "Width fraction",
+          "minimum": 0,
+          "maximum": 2
+         },
+         "h": {
+          "type": "number",
+          "description": "Height fraction",
+          "minimum": 0,
+          "maximum": 2
+         },
+         "anim": {
+          "type": "string",
+          "description": "Entrance",
+          "enum": [
+           "none",
+           "fade",
+           "pop",
+           "wipe"
+          ]
+         },
+         "values": {
+          "type": "array",
+          "items": {
+           "type": "number"
+          },
+          "maxItems": 50
+         }
+        }
+       },
+       "grade": {
+        "type": "object",
+        "properties": {
+         "lift": {
+          "type": "array",
+          "items": {
+           "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+         },
+         "gamma": {
+          "type": "array",
+          "items": {
+           "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+         },
+         "gain": {
+          "type": "array",
+          "items": {
+           "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+         },
+         "curve": {
+          "type": "array",
+          "items": {
+           "type": "number"
+          },
+          "minItems": 3,
+          "maxItems": 3
+         }
+        }
+       },
+       "key": {
+        "type": "object",
+        "description": "Chroma key",
+        "properties": {
+         "color": {
+          "type": "string",
+          "description": "A colour: #rgb, #rrggbb, #rrggbbaa, rgb(…) or rgba(…)",
+          "pattern": "^(#[0-9a-fA-F]{3,8}|rgba?\\(.*\\))$"
+         },
+         "similarity": {
+          "type": "number",
+          "description": "0..1"
+         },
+         "smoothness": {
+          "type": "number",
+          "description": "0..1"
+         }
+        }
+       },
+       "lutId": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_-]{1,64}$"
+       },
+       "lutMix": {
+        "type": "number",
+        "description": "LUT strength",
+        "minimum": 0,
+        "maximum": 1
+       },
+       "matte": {
+        "oneOf": [
+         {
+          "type": "null"
+         },
+         {
+          "type": "object",
+          "required": [
+           "mediaId",
+           "offset"
+          ],
+          "properties": {
+           "mediaId": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,64}$"
+           },
+           "offset": {
+            "type": "number",
+            "description": "Seconds"
+           }
+          }
+         }
+        ]
+       }
+      }
+     }
+    },
+    "markers": {
+     "type": "array",
+     "items": {
+      "type": "object",
+      "required": [
+       "t"
+      ],
+      "properties": {
+       "id": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_-]{1,64}$"
+       },
+       "t": {
+        "type": "number",
+        "description": "Seconds"
+       },
+       "label": {
+        "type": "string",
+        "description": "Label"
+       }
+      }
+     }
+    },
+    "luts": {
+     "type": "object",
+     "additionalProperties": {
+      "type": "object",
+      "required": [
+       "id",
+       "data"
+      ],
+      "properties": {
+       "id": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_-]{1,64}$"
+       },
+       "name": {
+        "type": "string",
+        "description": "Name"
+       },
+       "size": {
+        "type": "number",
+        "description": "Cube size"
+       },
+       "data": {
+        "type": "array"
+       }
+      }
+     }
+    },
+    "sequences": {
+     "type": "object",
+     "description": "Nests: inner timelines",
+     "additionalProperties": {
+      "type": "object",
+      "required": [
+       "id",
+       "tracks",
+       "clips"
+      ],
+      "properties": {
+       "id": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_-]{1,64}$"
+       },
+       "tracks": {
+        "type": "array",
+        "items": {
+         "type": "object",
+         "required": [
+          "id",
+          "kind"
+         ],
+         "properties": {
+          "id": {
+           "type": "string",
+           "pattern": "^[A-Za-z0-9_-]{1,64}$"
+          },
+          "kind": {
+           "type": "string",
+           "description": "Track kind",
+           "enum": [
+            "video",
+            "audio",
+            "text"
+           ]
+          },
+          "name": {
+           "type": "string",
+           "description": "Name"
+          },
+          "ripple": {
+           "type": "boolean",
+           "description": "Edits close gaps"
+          },
+          "muted": {
+           "type": "boolean",
+           "description": "Muted"
+          },
+          "locked": {
+           "type": "boolean",
+           "description": "Locked"
+          },
+          "hidden": {
+           "type": "boolean",
+           "description": "Hidden"
+          },
+          "gain": {
+           "type": "number",
+           "description": "Gain",
+           "minimum": 0,
+           "maximum": 2
+          },
+          "pan": {
+           "type": "number",
+           "description": "Pan",
+           "minimum": -1,
+           "maximum": 1
+          }
+         }
+        }
+       },
+       "clips": {
+        "type": "array",
+        "items": {
+         "type": "object",
+         "required": [
+          "id",
+          "kind",
+          "trackId",
+          "start"
+         ],
+         "properties": {
+          "id": {
+           "type": "string",
+           "pattern": "^[A-Za-z0-9_-]{1,64}$"
+          },
+          "kind": {
+           "type": "string",
+           "description": "What the clip is",
+           "enum": [
+            "media",
+            "text",
+            "graphic"
+           ]
+          },
+          "trackId": {
+           "type": "string",
+           "pattern": "^[A-Za-z0-9_-]{1,64}$"
+          },
+          "mediaId": {
+           "type": "string",
+           "pattern": "^[A-Za-z0-9_-]{1,64}$"
+          },
+          "origin": {
+           "type": "string",
+           "pattern": "^[A-Za-z0-9_-]{1,64}$"
+          },
+          "start": {
+           "type": "number",
+           "description": "Timeline start, seconds",
+           "minimum": 0
+          },
+          "in": {
+           "type": "number",
+           "description": "Seconds",
+           "minimum": 0
+          },
+          "out": {
+           "type": "number",
+           "description": "Seconds",
+           "minimum": 0
+          },
+          "length": {
+           "type": "number",
+           "description": "Text and graphic length, seconds",
+           "minimum": 0
+          },
+          "speed": {
+           "type": "number",
+           "description": "Playback speed",
+           "minimum": 0.25,
+           "maximum": 4
+          },
+          "reverse": {
+           "type": "boolean",
+           "description": "Plays backwards"
+          },
+          "freeze": {
+           "type": "boolean",
+           "description": "A held frame"
+          },
+          "audioOnly": {
+           "type": "boolean",
+           "description": "Detached sound"
+          },
+          "muted": {
+           "type": "boolean",
+           "description": "Muted"
+          },
+          "volume": {
+           "type": "number",
+           "description": "Gain",
+           "minimum": 0,
+           "maximum": 2
+          },
+          "fadeIn": {
+           "type": "number",
+           "description": "Seconds",
+           "minimum": 0
+          },
+          "fadeOut": {
+           "type": "number",
+           "description": "Seconds",
+           "minimum": 0
+          },
+          "fit": {
+           "type": "string",
+           "description": "How media fills the frame",
+           "enum": [
+            "fit",
+            "fill",
+            "blur"
+           ]
+          },
+          "x": {
+           "type": "number",
+           "description": "Position: media offset (fraction) or text and graphic centre (0..1)"
+          },
+          "y": {
+           "type": "number",
+           "description": "Position, down"
+          },
+          "scale": {
+           "type": "number",
+           "description": "Scale"
+          },
+          "rotation": {
+           "type": "number",
+           "description": "Degrees"
+          },
+          "opacity": {
+           "type": "number",
+           "description": "Opacity",
+           "minimum": 0,
+           "maximum": 1
+          },
+          "filters": {
+           "type": "object",
+           "properties": {
+            "brightness": {
+             "type": "number",
+             "description": "brightness",
+             "minimum": -1,
+             "maximum": 1
+            },
+            "contrast": {
+             "type": "number",
+             "description": "contrast",
+             "minimum": -1,
+             "maximum": 1
+            },
+            "saturation": {
+             "type": "number",
+             "description": "saturation",
+             "minimum": -1,
+             "maximum": 1
+            },
+            "temperature": {
+             "type": "number",
+             "description": "temperature",
+             "minimum": -1,
+             "maximum": 1
+            }
+           }
+          },
+          "look": {
+           "type": "string",
+           "description": "Look preset",
+           "enum": [
+            "none",
+            "vivid",
+            "warm",
+            "cool",
+            "mono",
+            "fade",
+            "noir",
+            "sunset"
+           ]
+          },
+          "blend": {
+           "type": "string",
+           "description": "Blend mode",
+           "enum": [
+            "normal",
+            "multiply",
+            "screen",
+            "overlay",
+            "darken",
+            "lighten",
+            "difference",
+            "color-dodge",
+            "soft-light"
+           ]
+          },
+          "transitionIn": {
+           "oneOf": [
+            {
+             "type": "null"
+            },
+            {
+             "type": "object",
+             "required": [
+              "type",
+              "duration"
+             ],
+             "properties": {
+              "type": {
+               "type": "string",
+               "description": "Transition",
+               "enum": [
+                "crossfade",
+                "fade",
+                "wipe",
+                "slide",
+                "zoom",
+                "push",
+                "iris",
+                "whip"
+               ]
+              },
+              "duration": {
+               "type": "number",
+               "description": "Seconds",
+               "exclusiveMinimum": 0
+              },
+              "dir": {
+               "type": "string",
+               "description": "Direction",
+               "enum": [
+                "left",
+                "right"
+               ]
+              }
+             }
+            }
+           ]
+          },
+          "keyframes": {
+           "type": "object",
+           "description": "Keyframes per property, clip-local seconds",
+           "propertyNames": {
+            "enum": [
+             "x",
+             "y",
+             "scale",
+             "rotation",
+             "opacity",
+             "volume"
+            ]
+           },
+           "additionalProperties": {
+            "type": "array",
+            "items": {
+             "type": "object",
+             "required": [
+              "t",
+              "v"
+             ],
+             "properties": {
+              "t": {
+               "type": "number",
+               "description": "Clip-local seconds"
+              },
+              "v": {
+               "type": "number",
+               "description": "Value"
+              },
+              "ease": {
+               "type": "string",
+               "description": "Ease into the next key",
+               "enum": [
+                "linear",
+                "in",
+                "out",
+                "inOut",
+                "expoIn",
+                "expoOut",
+                "hold"
+               ]
+              }
+             }
+            }
+           }
+          },
+          "text": {
+           "type": "string",
+           "description": "The words"
+          },
+          "style": {
+           "type": "object",
+           "description": "Text style. Sizes are fractions of the canvas height (size) or of the text size (the rest).",
+           "properties": {
+            "font": {
+             "type": "string",
+             "description": "A CSS font family list"
+            },
+            "weight": {
+             "type": [
+              "number",
+              "string"
+             ],
+             "description": "Font weight, 100 to 900"
+            },
+            "color": {
+             "type": "string",
+             "description": "A colour: #rgb, #rrggbb, #rrggbbaa, rgb(…) or rgba(…)",
+             "pattern": "^(#[0-9a-fA-F]{3,8}|rgba?\\(.*\\))$"
+            },
+            "stroke": {
+             "type": "string",
+             "description": "A colour: #rgb, #rrggbb, #rrggbbaa, rgb(…) or rgba(…)",
+             "pattern": "^(#[0-9a-fA-F]{3,8}|rgba?\\(.*\\))$"
+            },
+            "boxColor": {
+             "type": "string",
+             "description": "A colour: #rgb, #rrggbb, #rrggbbaa, rgb(…) or rgba(…)",
+             "pattern": "^(#[0-9a-fA-F]{3,8}|rgba?\\(.*\\))$"
+            },
+            "highlight": {
+             "type": "string",
+             "description": "The karaoke colour of the word being spoken",
+             "pattern": "^(#[0-9a-fA-F]{3,8}|rgba?\\(.*\\))$"
+            },
+            "box": {
+             "type": "boolean",
+             "description": "A rounded box behind the text"
+            },
+            "align": {
+             "type": "string",
+             "description": "Alignment",
+             "enum": [
+              "center",
+              "left",
+              "right"
+             ]
+            },
+            "anim": {
+             "type": "string",
+             "description": "Animation",
+             "enum": [
+              "none",
+              "fade",
+              "slide",
+              "pop",
+              "typewriter",
+              "wordPop",
+              "wordRise",
+              "karaoke"
+             ]
+            },
+            "letterSpacing": {
+             "type": "number",
+             "description": "letterSpacing",
+             "minimum": -0.1,
+             "maximum": 0.5
+            },
+            "lineHeight": {
+             "type": "number",
+             "description": "lineHeight",
+             "minimum": 0.8,
+             "maximum": 2.5
+            },
+            "shadowBlur": {
+             "type": "number",
+             "description": "shadowBlur",
+             "minimum": 0,
+             "maximum": 1
+            },
+            "shadowOffset": {
+             "type": "number",
+             "description": "shadowOffset",
+             "minimum": 0,
+             "maximum": 0.5
+            },
+            "size": {
+             "type": "number",
+             "description": "size",
+             "minimum": 0.01,
+             "maximum": 0.5
+            },
+            "strokeWidth": {
+             "type": "number",
+             "description": "strokeWidth",
+             "minimum": 0,
+             "maximum": 0.5
+            },
+            "shadow": {
+             "oneOf": [
+              {
+               "type": "string",
+               "description": "A colour: #rgb, #rrggbb, #rrggbbaa, rgb(…) or rgba(…)",
+               "pattern": "^(#[0-9a-fA-F]{3,8}|rgba?\\(.*\\))$"
+              },
+              {
+               "const": false
+              }
+             ],
+             "description": "Drop shadow colour, or false"
+            },
+            "gradient": {
+             "oneOf": [
+              {
+               "type": "array",
+               "items": {
+                "type": "string",
+                "description": "A colour: #rgb, #rrggbb, #rrggbbaa, rgb(…) or rgba(…)",
+                "pattern": "^(#[0-9a-fA-F]{3,8}|rgba?\\(.*\\))$"
+               },
+               "minItems": 2,
+               "maxItems": 2
+              },
+              {
+               "const": false
+              }
+             ],
+             "description": "Top and bottom fill colours"
+            },
+            "maxLines": {
+             "type": "integer",
+             "minimum": 0,
+             "maximum": 8,
+             "description": "Shrink until the text wraps to at most this many lines (0: no limit)"
+            }
+           }
+          },
+          "words": {
+           "type": "array",
+           "description": "Word timing for karaoke and word animations",
+           "items": {
+            "type": "object",
+            "properties": {
+             "t": {
+              "type": "number",
+              "description": "Clip-local seconds"
+             },
+             "text": {
+              "type": "string",
+              "description": "Word"
+             }
+            }
+           }
+          },
+          "graphic": {
+           "type": "object",
+           "required": [
+            "shape"
+           ],
+           "properties": {
+            "shape": {
+             "type": "string",
+             "description": "Shape",
+             "enum": [
+              "rect",
+              "line",
+              "bar",
+              "counter",
+              "chart"
+             ]
+            },
+            "color": {
+             "type": "string",
+             "description": "A colour: #rgb, #rrggbb, #rrggbbaa, rgb(…) or rgba(…)",
+             "pattern": "^(#[0-9a-fA-F]{3,8}|rgba?\\(.*\\))$"
+            },
+            "w": {
+             "type": "number",
+             "description": "Width fraction",
+             "minimum": 0,
+             "maximum": 2
+            },
+            "h": {
+             "type": "number",
+             "description": "Height fraction",
+             "minimum": 0,
+             "maximum": 2
+            },
+            "anim": {
+             "type": "string",
+             "description": "Entrance",
+             "enum": [
+              "none",
+              "fade",
+              "pop",
+              "wipe"
+             ]
+            },
+            "values": {
+             "type": "array",
+             "items": {
+              "type": "number"
+             },
+             "maxItems": 50
+            }
+           }
+          },
+          "grade": {
+           "type": "object",
+           "properties": {
+            "lift": {
+             "type": "array",
+             "items": {
+              "type": "number"
+             },
+             "minItems": 3,
+             "maxItems": 3
+            },
+            "gamma": {
+             "type": "array",
+             "items": {
+              "type": "number"
+             },
+             "minItems": 3,
+             "maxItems": 3
+            },
+            "gain": {
+             "type": "array",
+             "items": {
+              "type": "number"
+             },
+             "minItems": 3,
+             "maxItems": 3
+            },
+            "curve": {
+             "type": "array",
+             "items": {
+              "type": "number"
+             },
+             "minItems": 3,
+             "maxItems": 3
+            }
+           }
+          },
+          "key": {
+           "type": "object",
+           "description": "Chroma key",
+           "properties": {
+            "color": {
+             "type": "string",
+             "description": "A colour: #rgb, #rrggbb, #rrggbbaa, rgb(…) or rgba(…)",
+             "pattern": "^(#[0-9a-fA-F]{3,8}|rgba?\\(.*\\))$"
+            },
+            "similarity": {
+             "type": "number",
+             "description": "0..1"
+            },
+            "smoothness": {
+             "type": "number",
+             "description": "0..1"
+            }
+           }
+          },
+          "lutId": {
+           "type": "string",
+           "pattern": "^[A-Za-z0-9_-]{1,64}$"
+          },
+          "lutMix": {
+           "type": "number",
+           "description": "LUT strength",
+           "minimum": 0,
+           "maximum": 1
+          },
+          "matte": {
+           "oneOf": [
+            {
+             "type": "null"
+            },
+            {
+             "type": "object",
+             "required": [
+              "mediaId",
+              "offset"
+             ],
+             "properties": {
+              "mediaId": {
+               "type": "string",
+               "pattern": "^[A-Za-z0-9_-]{1,64}$"
+              },
+              "offset": {
+               "type": "number",
+               "description": "Seconds"
+              }
+             }
+            }
+           ]
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "history": {
+   "type": "array",
+   "description": "The undo history, oldest first. Each undo is a patch from the document after the step to the one before.",
+   "items": {
+    "type": "object",
+    "properties": {
+     "label": {
+      "type": "string",
+      "description": "What the edit was"
+     },
+     "by": {
+      "type": "string",
+      "description": "Who made it",
+      "enum": [
+       "person",
+       "api"
+      ]
+     },
+     "undo": {
+      "description": "A patch: {s} set, {o, d} object, {a, o} array"
+     }
+    }
+   }
+  }
+ }
+}
