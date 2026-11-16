@@ -90,6 +90,28 @@
       "null"
      ]
     },
+    "motionBlur": {
+     "type": "object",
+     "required": [
+      "samples",
+      "shutter"
+     ],
+     "description": "Export motion blur: each exported frame averages this many renders across the shutter (absent: off)",
+     "properties": {
+      "samples": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 16,
+       "description": "Renders averaged per frame"
+      },
+      "shutter": {
+       "type": "number",
+       "description": "Fraction of the frame interval the shutter is open (0.5 is 180 degrees)",
+       "minimum": 0,
+       "maximum": 1
+      }
+     }
+    },
     "media": {
      "type": "object",
      "additionalProperties": {
@@ -231,7 +253,8 @@
         "enum": [
          "media",
          "text",
-         "graphic"
+         "graphic",
+         "camera"
         ]
        },
        "trackId": {
@@ -263,7 +286,7 @@
        },
        "length": {
         "type": "number",
-        "description": "Text and graphic length, seconds",
+        "description": "Text, graphic and camera length, seconds",
         "minimum": 0
        },
        "speed": {
@@ -315,7 +338,7 @@
        },
        "x": {
         "type": "number",
-        "description": "Position: media offset (fraction) or text and graphic centre (0..1)"
+        "description": "Position: media offset (fraction), text and graphic centre (0..1), or a camera's pan (fraction of the frame, positive moves the picture right)"
        },
        "y": {
         "type": "number",
@@ -323,7 +346,7 @@
        },
        "scale": {
         "type": "number",
-        "description": "Scale"
+        "description": "Scale (a camera zooms about the frame centre)"
        },
        "rotation": {
         "type": "number",
@@ -694,6 +717,53 @@
          }
         }
        },
+       "camera": {
+        "type": "object",
+        "required": [
+         "preset"
+        ],
+        "description": "A camera clip moves the picture of every track below it, as one frame, by its x, y, scale and rotation (keyable) plus a shake",
+        "properties": {
+         "preset": {
+          "type": "string",
+          "description": "The move its keys came from (none: keyed by hand)",
+          "enum": [
+           "pushIn",
+           "pullOut",
+           "panLeft",
+           "panRight",
+           "kenBurns",
+           "shake",
+           "whipPan",
+           "none"
+          ]
+         },
+         "intensity": {
+          "type": "number",
+          "description": "Strength of the preset move",
+          "minimum": 0.1,
+          "maximum": 3
+         },
+         "shake": {
+          "type": "number",
+          "description": "Shake amplitude, a fraction of the frame",
+          "minimum": 0,
+          "maximum": 0.2
+         },
+         "freq": {
+          "type": "number",
+          "description": "Shake speed, Hz",
+          "minimum": 0.1,
+          "maximum": 30
+         },
+         "seed": {
+          "type": "number",
+          "description": "Shake pattern (a whole number); the same seed shakes the same way",
+          "minimum": 0,
+          "maximum": 999999
+         }
+        }
+       },
        "grade": {
         "type": "object",
         "properties": {
@@ -930,7 +1000,8 @@
            "enum": [
             "media",
             "text",
-            "graphic"
+            "graphic",
+            "camera"
            ]
           },
           "trackId": {
@@ -962,7 +1033,7 @@
           },
           "length": {
            "type": "number",
-           "description": "Text and graphic length, seconds",
+           "description": "Text, graphic and camera length, seconds",
            "minimum": 0
           },
           "speed": {
@@ -1014,7 +1085,7 @@
           },
           "x": {
            "type": "number",
-           "description": "Position: media offset (fraction) or text and graphic centre (0..1)"
+           "description": "Position: media offset (fraction), text and graphic centre (0..1), or a camera's pan (fraction of the frame, positive moves the picture right)"
           },
           "y": {
            "type": "number",
@@ -1022,7 +1093,7 @@
           },
           "scale": {
            "type": "number",
-           "description": "Scale"
+           "description": "Scale (a camera zooms about the frame centre)"
           },
           "rotation": {
            "type": "number",
@@ -1390,6 +1461,53 @@
               "type": "number"
              },
              "maxItems": 50
+            }
+           }
+          },
+          "camera": {
+           "type": "object",
+           "required": [
+            "preset"
+           ],
+           "description": "A camera clip moves the picture of every track below it, as one frame, by its x, y, scale and rotation (keyable) plus a shake",
+           "properties": {
+            "preset": {
+             "type": "string",
+             "description": "The move its keys came from (none: keyed by hand)",
+             "enum": [
+              "pushIn",
+              "pullOut",
+              "panLeft",
+              "panRight",
+              "kenBurns",
+              "shake",
+              "whipPan",
+              "none"
+             ]
+            },
+            "intensity": {
+             "type": "number",
+             "description": "Strength of the preset move",
+             "minimum": 0.1,
+             "maximum": 3
+            },
+            "shake": {
+             "type": "number",
+             "description": "Shake amplitude, a fraction of the frame",
+             "minimum": 0,
+             "maximum": 0.2
+            },
+            "freq": {
+             "type": "number",
+             "description": "Shake speed, Hz",
+             "minimum": 0.1,
+             "maximum": 30
+            },
+            "seed": {
+             "type": "number",
+             "description": "Shake pattern (a whole number); the same seed shakes the same way",
+             "minimum": 0,
+             "maximum": 999999
             }
            }
           },
