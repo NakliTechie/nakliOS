@@ -1820,8 +1820,8 @@
     },
     {
       "name": "eq.import_eqf",
-      "label": "Import Winamp EQ",
-      "description": "Load a Winamp .eqf preset file chosen by the person into the custom equaliser curve. `presetIndex` picks one preset from a library file (default 0).",
+      "label": "Import EQF preset",
+      "description": "Load an .eqf equaliser preset file chosen by the person into the custom equaliser curve. `presetIndex` picks one preset from a library file (default 0).",
       "scope": "write",
       "approval": "reversible",
       "group": "sound",
@@ -1841,8 +1841,8 @@
     },
     {
       "name": "eq.export_eqf",
-      "label": "Export Winamp EQ",
-      "description": "Save the current equaliser curve as a Winamp .eqf file.",
+      "label": "Export EQF preset",
+      "description": "Save the current equaliser curve as an .eqf preset file.",
       "scope": "read",
       "approval": "read",
       "group": "sound",
@@ -2269,9 +2269,9 @@
     {
       "name": "network.grant",
       "label": "Turn a service on",
-      "description": "Allow NakliAmp to contact one service. Nothing is sent to it until this is on.",
+      "description": "Allow NakliAmp to contact one service. Nothing is sent to it until this is on. NakliAmp shows what the service receives and asks the person every time, whoever calls.",
       "scope": "write",
-      "approval": "reversible",
+      "approval": "consent",
       "group": "network",
       "input": {
         "type": "object",

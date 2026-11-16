@@ -203,17 +203,17 @@ export function mountSoundPanel(root, ctx) {
     'aria-label': 'Reset the equaliser to flat', onclick: () => act('eq.preset', { preset: 'flat' }, { eq: { preset: 'flat' } }),
   });
 
-  // Winamp .eqf import and export (S7), through eq.import_eqf and eq.export_eqf.
-  const eqfInput = h('input', { type: 'file', accept: '.eqf,.q1', hidden: true, 'aria-label': 'Winamp EQ file' });
+  // EQF preset (.eqf) import and export (S7), through eq.import_eqf and eq.export_eqf.
+  const eqfInput = h('input', { type: 'file', accept: '.eqf,.q1', hidden: true, 'aria-label': 'EQF preset file (.eqf)' });
   eqfInput.addEventListener('change', async () => {
     const file = eqfInput.files?.[0];
     eqfInput.value = '';
     if (!file || typeof ctx.run !== 'function') return;
     try { await ctx.run('eq.import_eqf', {}, { context: { file } }); } catch (error) { ctx.toast?.(String(error?.message ?? error).replace(/^\[[a-z-]+\] /, '')); }
   });
-  const eqfImport = h('button', { type: 'button', className: 'nk-btn', textContent: 'Import .eqf', 'aria-label': 'Import a Winamp EQ preset file', onclick: () => eqfInput.click() });
+  const eqfImport = h('button', { type: 'button', className: 'nk-btn', textContent: 'Import .eqf', 'aria-label': 'Import an EQF preset (.eqf)', onclick: () => eqfInput.click() });
   const eqfExport = h('button', {
-    type: 'button', className: 'nk-btn', textContent: 'Export .eqf', 'aria-label': 'Save the current curve as a Winamp EQ file',
+    type: 'button', className: 'nk-btn', textContent: 'Export .eqf', 'aria-label': 'Save the current curve as an EQF preset (.eqf)',
     onclick: () => ctx.run?.('eq.export_eqf', {}).catch(error => ctx.toast?.(String(error?.message ?? error))),
   });
 

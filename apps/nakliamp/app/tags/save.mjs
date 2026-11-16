@@ -7,16 +7,26 @@
 //   4. re-check lastModified, so a change made meanwhile is not overwritten;
 //   5. write through createWritable and close (the browser commits on close);
 //   6. re-parse the written file with readTags and compare every field the
-//      reader supports; delete the backup only when they match.
-// When step 6 fails the backup stays and restoreTagBackup puts it back.
+//      reader supports, and for MP3 check that every ID3 frame the patch did
+//      not replace is still there byte for byte.
+// The backup stays after the write either way, with a small record beside it
+// (track path, file name, time, outcome), so the tag editor can list it and
+// put the original back: that is the undo for a tag write. Backups of good
+// writes are pruned oldest first once they pass a size limit; a backup of a
+// failed write is never pruned automatically.
 //
 // Every browser API arrives through the handle or `options`, so tests run in
 // Node with fakes.
 
 import { readTags as defaultReadTags } from '../library/metadata.mjs';
-import { normalisePatch, writeTagsDetailed } from './write.mjs';
+import { normalisePatch, writeTagsDetailed, missingId3Frames } from './write.mjs';
+import { readId3Header } from './id3.mjs';
 
 export const BACKUP_DIRECTORY = 'nakliamp-tag-backup';
+/** Records beside each backup live here, one `<backup>.json` per backup. */
+export const BACKUP_INDEX_DIRECTORY = 'index';
+/** Backups of good writes are pruned, oldest first, beyond this many bytes. */
+export const DEFAULT_BACKUP_LIMIT_BYTES = 2 * 1024 * 1024 * 1024;
 
 export class TagSaveError extends Error {
   /**
@@ -133,7 +143,7 @@ async function keepBackup(fileHandle, originalBlob, originalLength, backupRoot) 
     await writeBlob(backupHandle, originalBlob);
     const check = await backupHandle.getFile();
     if (check.size !== originalLength) throw new Error(`backup holds ${check.size} of ${originalLength} bytes`);
-    return { backupDirectory, backup };
+    return { backupDirectory, backup, size: check.size };
   } catch (error) {
     if (error instanceof TagSaveError) throw error;
     throw new TagSaveError('backup-failed', `NakliAmp could not keep a backup copy of ${fileHandle.name}, so it did not write: ${error?.message ?? error}`, {}, { cause: error });
@@ -147,53 +157,175 @@ async function keepBackup(fileHandle, originalBlob, originalLength, backupRoot) 
  *   expectedLastModified  the lastModified the library recorded; a mismatch refuses the write
  *   backupRoot            async () => FileSystemDirectoryHandle (default: OPFS root)
  *   readTags              reader used to verify (default: app/library/metadata.mjs readTags)
+ *   path                  the track's library path, recorded beside the backup
+ *   backupLimitBytes      prune backups of good writes beyond this (default 2 GiB)
  *
- * Returns `{ before, after, notes, skipped, lastModified, size }`.
+ * Returns `{ before, after, notes, skipped, lastModified, size, backup }`.
  */
 export async function saveTagsToHandle(fileHandle, patch, options = {}) {
   const readTags = options.readTags ?? defaultReadTags;
   const clean = normalisePatch(patch);
   await ensurePermission(fileHandle);
-
-  const original = await fileHandle.getFile();
-  refuseIfChangedSinceScan(fileHandle, original, options.expectedLastModified);
-  const originalBytes = new Uint8Array(await original.arrayBuffer());
-  const originalBlob = new Blob([originalBytes], { type: original.type || '' });
-  const before = await readTags(originalBlob);
-
-  let written;
-  try {
-    written = await writeTagsDetailed(originalBlob, clean);
-  } catch (error) {
-    throw new TagSaveError(error.code ?? 'write-failed', error.message, {}, { cause: error });
-  }
+  const { original, originalBytes, originalBlob, before, written } = await prepareWrite(fileHandle, clean, options, readTags);
 
   // Backup first: nothing touches the user's file until a full copy exists.
-  const { backupDirectory, backup } = await keepBackup(fileHandle, originalBlob, originalBytes.length, options.backupRoot);
-
+  const { backupDirectory, backup, size: backupSize } = await keepBackup(fileHandle, originalBlob, originalBytes.length, options.backupRoot);
   await refuseIfChangedDuringPrepare(fileHandle, original, backupDirectory, backup);
+  const record = { backup, path: options.path ?? null, name: fileHandle.name, savedAt: (options.now ?? Date.now)(), size: backupSize, patch: describePatch(clean) };
 
   try {
     await writeBlob(fileHandle, written.blob);
   } catch (error) {
+    await writeRecord(backupDirectory, { ...record, status: 'failed' });
     throw new TagSaveError('write-failed', `Writing ${fileHandle.name} failed: ${error?.message ?? error}. A backup is in ${BACKUP_DIRECTORY}/${backup}.`, { backup }, { cause: error });
   }
 
-  const result = await fileHandle.getFile();
-  const after = await readTags(result);
-  const mismatched = result.size === written.blob.size ? verifyWrittenTags(after, clean, written.skipped) : ['size'];
+  const { result, after, mismatched } = await verifyOnDisk(fileHandle, written, clean, readTags);
   if (mismatched.length) {
+    await writeRecord(backupDirectory, { ...record, status: 'failed' });
     throw new TagSaveError(
       'verify-failed',
       `${fileHandle.name} did not read back as written (${mismatched.join(', ')}). The original is kept in ${BACKUP_DIRECTORY}/${backup}; restore it from the tag editor.`,
       { backup, mismatched, after },
     );
   }
-  await backupDirectory.removeEntry(backup);
-  return { before, after, notes: written.notes, skipped: written.skipped, lastModified: result.lastModified, size: result.size };
+  await writeRecord(backupDirectory, { ...record, status: 'written', writtenLastModified: result.lastModified, writtenSize: result.size });
+  await pruneTagBackups({ backupRoot: options.backupRoot, maxBytes: options.backupLimitBytes ?? DEFAULT_BACKUP_LIMIT_BYTES, keep: backup });
+  return { before, after, notes: written.notes, skipped: written.skipped, lastModified: result.lastModified, size: result.size, backup };
 }
 
-/** Put a kept backup back over the user's file, then delete the backup. */
+/** Read the file, check it is the one the library knew, and build the new bytes in memory. */
+async function prepareWrite(fileHandle, clean, options, readTags) {
+  const original = await fileHandle.getFile();
+  refuseIfChangedSinceScan(fileHandle, original, options.expectedLastModified);
+  const originalBytes = new Uint8Array(await original.arrayBuffer());
+  const originalBlob = new Blob([originalBytes], { type: original.type || '' });
+  const before = await readTags(originalBlob);
+  try {
+    return { original, originalBytes, originalBlob, before, written: await writeTagsDetailed(originalBlob, clean) };
+  } catch (error) {
+    throw new TagSaveError(error.code ?? 'write-failed', error.message, {}, { cause: error });
+  }
+}
+
+/** Re-read the written file: every field the reader supports, and every ID3 frame that must survive. */
+async function verifyOnDisk(fileHandle, written, clean, readTags) {
+  const result = await fileHandle.getFile();
+  const after = await readTags(result);
+  const mismatched = result.size === written.blob.size ? verifyWrittenTags(after, clean, written.skipped) : ['size'];
+  if (!mismatched.length && written.expectFrames?.length) {
+    const missing = missingId3Frames(await writtenId3(result), written.expectFrames);
+    if (missing.length) mismatched.push(`frames ${missing.join(', ')}`);
+  }
+  return { result, after, mismatched };
+}
+
+/** The leading ID3v2 tag of a written file, read again from disk. */
+async function writtenId3(file) {
+  const head = new Uint8Array(await file.slice(0, 10).arrayBuffer());
+  const header = readId3Header(head);
+  return header ? new Uint8Array(await file.slice(0, header.totalSize).arrayBuffer()) : head;
+}
+
+/** The patch as plain JSON for the backup record: picture bytes become a size. */
+function describePatch(clean) {
+  const out = {};
+  for (const [field, value] of Object.entries(clean)) {
+    out[field] = field === 'picture' && value ? { mime: value.mime, bytes: value.bytes.length } : value;
+  }
+  return out;
+}
+
+async function indexDirectory(backupDirectory, create) {
+  return backupDirectory.getDirectoryHandle(BACKUP_INDEX_DIRECTORY, { create });
+}
+
+async function writeRecord(backupDirectory, record) {
+  try {
+    const index = await indexDirectory(backupDirectory, true);
+    const handle = await index.getFileHandle(`${record.backup}.json`, { create: true });
+    await writeBlob(handle, new Blob([JSON.stringify(record)], { type: 'application/json' }));
+  } catch (error) {
+    // The backup itself is safe; only the list entry is missing, and listTagBackups still shows the file.
+    console.warn('[nakliamp] could not record the tag backup', error);
+  }
+}
+
+async function readRecord(index, backup) {
+  try {
+    const file = await (await index.getFileHandle(`${backup}.json`)).getFile();
+    return JSON.parse(await file.text());
+  } catch {
+    return null;
+  }
+}
+
+async function backupDirectoryOf(backupRoot) {
+  const root = await (backupRoot ?? defaultBackupRoot)();
+  try { return await root.getDirectoryHandle(BACKUP_DIRECTORY); } catch { return null; }
+}
+
+/**
+ * Every kept tag backup, newest first: `{ backup, path, name, savedAt, size,
+ * status }`. `status` is `written` (the write succeeded; restoring undoes it),
+ * `failed` (the write did not read back; the original is only here) or
+ * `unknown` (a backup with no record, from an older NakliAmp or a crash).
+ */
+export async function listTagBackups(options = {}) {
+  const directory = await backupDirectoryOf(options.backupRoot);
+  if (!directory) return [];
+  let index = null;
+  try { index = await indexDirectory(directory, false); } catch { index = null; }
+  const out = [];
+  for await (const [name, handle] of directory.entries()) {
+    if (handle.kind === 'file') out.push(await backupEntry(name, handle, index));
+  }
+  return out.sort((left, right) => (right.savedAt ?? 0) - (left.savedAt ?? 0));
+}
+
+/** One listed backup: its record, or what the file alone says. */
+async function backupEntry(name, handle, index) {
+  const record = (index ? await readRecord(index, name) : null) ?? {};
+  let size = record.size ?? null;
+  if (size === null) { try { size = (await handle.getFile()).size; } catch { size = null; } }
+  return {
+    backup: name,
+    path: record.path ?? null,
+    name: record.name ?? name.replace(/ \(\d+\)$/, ''),
+    savedAt: record.savedAt ?? null,
+    size,
+    status: record.status ?? 'unknown',
+    patch: record.patch ?? null,
+  };
+}
+
+/** Delete one kept backup and its record. */
+export async function deleteTagBackup(backup, options = {}) {
+  const directory = await backupDirectoryOf(options.backupRoot);
+  if (!directory) return;
+  await directory.removeEntry(backup);
+  try { await (await indexDirectory(directory, false)).removeEntry(`${backup}.json`); } catch { /* no record */ }
+}
+
+/**
+ * Remove backups of good writes, oldest first, until the kept backups fit in
+ * `maxBytes`. Backups of failed writes and backups with no record are never
+ * removed here, and neither is `keep`. Returns the names removed.
+ */
+export async function pruneTagBackups({ backupRoot, maxBytes = DEFAULT_BACKUP_LIMIT_BYTES, keep = null } = {}) {
+  let backups;
+  try { backups = await listTagBackups({ backupRoot }); } catch { return []; }
+  let total = backups.reduce((sum, item) => sum + (item.size ?? 0), 0);
+  const removed = [];
+  for (const item of [...backups].reverse()) {
+    if (total <= maxBytes) break;
+    if (item.status !== 'written' || item.backup === keep) continue;
+    try { await deleteTagBackup(item.backup, { backupRoot }); removed.push(item.backup); total -= item.size ?? 0; } catch { /* try the next */ }
+  }
+  return removed;
+}
+
+/** Put a kept backup back over the user's file, then delete the backup and its record. */
 export async function restoreTagBackup(fileHandle, backup, options = {}) {
   await ensurePermission(fileHandle);
   const root = await (options.backupRoot ?? defaultBackupRoot)();
@@ -205,5 +337,6 @@ export async function restoreTagBackup(fileHandle, backup, options = {}) {
     throw new TagSaveError('write-failed', `Restoring ${fileHandle.name} wrote ${restored.size} of ${source.size} bytes; the backup is kept.`, { backup });
   }
   await directory.removeEntry(backup);
+  try { await (await indexDirectory(directory, false)).removeEntry(`${backup}.json`); } catch { /* no record */ }
   return { lastModified: restored.lastModified, size: restored.size };
 }

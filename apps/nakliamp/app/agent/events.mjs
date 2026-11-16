@@ -15,10 +15,17 @@
 //   createChannelBridge(...)    answers `{ type: 'command', name, input, id }` messages on a
 //                               BroadcastChannel with `{ type: 'result', id, ok, value|error }`.
 //
-// The channel is same-origin only. On naklios.dev every NakliOS app shares one origin, and so
-// already shares NakliAmp's IndexedDB; the channel adds control, not data access. It accepts
-// read and reversible commands. Destructive commands are refused on it, because the person
-// cannot see who asked, and so is turning on a network service, which is the person's consent.
+// The channel is same-origin only, and on naklios.dev every NakliOS app shares one origin, so
+// any of them can post to it (N9). It is therefore off until the person turns it on for this
+// tab (the shell opens no BroadcastChannel before that), and once on:
+//   - read commands run for any caller;
+//   - reversible commands run only with `auth`, an HMAC-SHA256 of the command made with this
+//     tab's pairing code (`channelAuth`), which the person copies from NakliAmp into the
+//     other tab. The code itself never crosses the channel, so a page listening on it cannot
+//     learn it; a command must name this tab in `target`, and an id is accepted once, so a
+//     signed command cannot be replayed;
+//   - destructive commands, and turning on a network service (the person's consent), are
+//     refused whatever the pairing, because the person cannot see who asked.
 
 import { COMMANDS, commandByName } from '../commands/commands.mjs';
 
@@ -208,20 +215,61 @@ export function createEventPublisher({
   };
 }
 
-/** Why the channel will not run `name`, as `{ code, message }`, or null when it will. */
-export function channelRefusal(name, commands = commandByName) {
+/**
+ * Why the channel will not run `name`, as `{ code, message }`, or null when it will.
+ * `paired` is true when the command carried a valid pairing signature.
+ */
+export function channelRefusal(name, { paired = false } = {}, commands = commandByName) {
   const command = commands.get(name);
   if (!command) return { code: 'not-found', message: `No command named ${String(name)}.` };
   if (command.scope === 'destructive') {
     return { code: 'refused', message: `${name} is destructive, and the channel accepts read and reversible commands only. Run it in NakliAmp, where you approve the change.` };
   }
-  if (CHANNEL_REFUSALS[name]) return { code: 'refused', message: `${name} is not accepted on the channel: ${CHANNEL_REFUSALS[name]}.` };
+  if (CHANNEL_REFUSALS[name] || command.askEveryTime) {
+    return { code: 'refused', message: `${name} is not accepted on the channel: ${CHANNEL_REFUSALS[name] ?? 'it needs the person\'s consent in the app'}.` };
+  }
+  if (command.scope !== 'read' && !paired) {
+    return { code: 'refused', message: `${name} changes the player, so the channel runs it only when it is signed with this tab's pairing code. Copy the code from NakliAmp (Tools, Agent channel).` };
+  }
   return null;
 }
 
-/** The names the channel accepts. */
-export const channelCommandNames = (commands = COMMANDS) =>
-  commands.filter(c => !channelRefusal(c.name)).map(c => c.name);
+/** The names the channel accepts: read ones from anyone, and with `paired` the reversible ones too. */
+export const channelCommandNames = (commands = COMMANDS, { paired = false } = {}) =>
+  commands.filter(c => !channelRefusal(c.name, { paired })).map(c => c.name);
+
+const PAIRING_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+
+/** A fresh pairing code: 20 characters (about 99 bits) in groups of five, easy to read aloud. */
+export function newPairingCode(random = globalThis.crypto) {
+  const bytes = random.getRandomValues(new Uint8Array(20));
+  const chars = [...bytes].map(b => PAIRING_ALPHABET[b % PAIRING_ALPHABET.length]).join('');
+  return chars.match(/.{5}/g).join('-');
+}
+
+/** The exact text a pairing signature covers. */
+export const channelAuthText = ({ target, id, name, input }) =>
+  ['nakliamp-channel-v1', String(target ?? ''), String(id ?? ''), String(name ?? ''), JSON.stringify(input ?? {})].join('\n');
+
+const b64url = bytes => btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+/**
+ * The `auth` a caller puts on a command: base64url HMAC-SHA256 of channelAuthText, keyed
+ * with the pairing code as typed (dashes and case ignored). Both sides use this function.
+ */
+export async function channelAuth({ code, target, id, name, input }, subtle = globalThis.crypto.subtle) {
+  const raw = new TextEncoder().encode(String(code ?? '').replace(/[^0-9A-Za-z]/g, '').toUpperCase());
+  const key = await subtle.importKey('raw', raw, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return b64url(await subtle.sign('HMAC', key, new TextEncoder().encode(channelAuthText({ target, id, name, input }))));
+}
+
+// Constant-time comparison of two strings of the same length.
+function sameText(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
 
 // Results cross a structured-clone boundary; JSON keeps them to plain data.
 function plain(value) {
@@ -236,8 +284,11 @@ const validId = id => typeof id === 'string' || (typeof id === 'number' && Numbe
  * addEventListener). `run(name, input, options)` is the bound command runner. Messages that
  * are not commands, or that name another `target` instance, are ignored. After each command
  * the publisher checks, so the events a command caused follow its result.
+ * `pairingCode()` returns this tab's current pairing code, or null when none is set; a
+ * reversible command runs only with a valid `auth` for that code, a `target` naming this
+ * tab, and an id this bridge has not seen.
  */
-export function createChannelBridge({ channel, run, publisher = null, instance = '' } = {}) {
+export function createChannelBridge({ channel, run, publisher = null, instance = '', pairingCode = () => null, subtle = globalThis.crypto?.subtle } = {}) {
   if (!channel || typeof channel.postMessage !== 'function') throw new TypeError('createChannelBridge needs a channel');
   if (typeof run !== 'function') throw new TypeError('createChannelBridge needs the bound command runner');
 
@@ -251,8 +302,24 @@ export function createChannelBridge({ channel, run, publisher = null, instance =
   const notForUs = message => !message || typeof message !== 'object'
     || (message.target !== undefined && message.target !== instance);
 
-  async function runCommand({ id, name, input }) {
-    const refusal = channelRefusal(name);
+  const seen = new Set();
+  // True when the message is signed with this tab's pairing code, names this tab, and its id is new.
+  async function isPaired({ id, name, input, target, auth }) {
+    const code = pairingCode();
+    if (!code || typeof auth !== 'string' || target !== instance || !validId(id) || seen.has(String(id)) || !subtle) return false;
+    let expected;
+    try { expected = await channelAuth({ code, target, id, name, input }, subtle); } catch { return false; }
+    if (!sameText(auth, expected)) return false;
+    seen.add(String(id));
+    if (seen.size > 10_000) seen.delete(seen.values().next().value);
+    return true;
+  }
+
+  async function runCommand(message) {
+    const { id, name, input } = message;
+    const needsPairing = commandByName.get(name)?.scope === 'reversible';
+    const paired = needsPairing ? await isPaired(message) : false;
+    const refusal = channelRefusal(name, { paired });
     if (refusal) return reply(id, { ok: false, error: refusal });
     try {
       const value = await run(name, input && typeof input === 'object' ? input : {}, { context: { from: 'channel' } });
@@ -269,7 +336,14 @@ export function createChannelBridge({ channel, run, publisher = null, instance =
   async function handle(message) {
     if (notForUs(message)) return null;
     // cliamp's `capabilities`: the command names this channel accepts.
-    if (message.type === 'capabilities') return reply(message.id, { ok: true, value: { channel: CHANNEL_NAME, commands: channelCommandNames() } });
+    if (message.type === 'capabilities') {
+      return reply(message.id, { ok: true, value: {
+        channel: CHANNEL_NAME,
+        commands: channelCommandNames(),
+        paired: channelCommandNames(COMMANDS, { paired: true }),
+        pairing: { auth: 'HMAC-SHA256, base64url', covers: 'nakliamp-channel-v1, target, id, name, JSON input; one per line', available: Boolean(pairingCode()) },
+      } });
+    }
     if (message.type === 'command') return runCommand(message);
     return null;
   }

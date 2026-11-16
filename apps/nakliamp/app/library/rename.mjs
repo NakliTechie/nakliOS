@@ -7,6 +7,8 @@
 //
 // Pure except `renameOnDisk`, which calls the File System Access API.
 
+import { relativeTo, playlistBase, mergeEntry, toM3u8, pickEntryPath } from './playlist.mjs';
+
 export const RENAME_TOKENS = Object.freeze(['artist', 'album', 'albumartist', 'title', 'track', 'disc', 'year', 'genre']);
 
 /** Tag fields find-and-replace may change: the text fields the tag writer accepts. */
@@ -188,6 +190,17 @@ export function planFindReplace(records, { find, replace = '', fields = REPLACE_
   return plans;
 }
 
+/** Refuse when `parent` is missing or already holds `newName` (a case-only rename is allowed). */
+async function assertNameFree(handle, newName, parent) {
+  if (!parent || typeof parent.getFileHandle !== 'function') {
+    throw new RenameError('ERR_NAKLIAMP_RENAME_UNCHECKED', `NakliAmp cannot check whether ${newName} is free in that folder, so it did not rename ${handle.name}.`);
+  }
+  if (handle.name?.toLowerCase() === newName.toLowerCase()) return;
+  let exists = false;
+  try { await parent.getFileHandle(newName); exists = true; } catch { exists = false; }
+  if (exists) throw new RenameError('ERR_NAKLIAMP_RENAME_EXISTS', `A file named ${newName} is already in that folder.`);
+}
+
 /** True when this browser can rename a file through its handle. */
 export function canRenameOnDisk(handle) {
   return typeof handle?.move === 'function';
@@ -198,8 +211,10 @@ export function canRenameOnDisk(handle) {
  * `handle.move(newName)` (Chromium only). Refuses, by name:
  * - a browser without `move` (`ERR_NAKLIAMP_RENAME_UNSUPPORTED`);
  * - a name that is not already safe (`ERR_NAKLIAMP_RENAME_INVALID`);
- * - a name another file in `parent` already has, when `parent` (the file's
- *   directory handle) is given (`ERR_NAKLIAMP_RENAME_EXISTS`).
+ * - a call with no `parent` (the file's directory handle), because without
+ *   it NakliAmp cannot check that the new name is free, and `move` may
+ *   replace another file (`ERR_NAKLIAMP_RENAME_UNCHECKED`);
+ * - a name another file in `parent` already has (`ERR_NAKLIAMP_RENAME_EXISTS`).
  * Returns the new name. The caller rescans, so the index follows the file.
  */
 export async function renameOnDisk(handle, newName, { parent = null } = {}) {
@@ -211,11 +226,97 @@ export async function renameOnDisk(handle, newName, { parent = null } = {}) {
     throw new RenameError('ERR_NAKLIAMP_RENAME_INVALID', `Not a safe file name: ${newName}`);
   }
   if (handle.name === newName) return newName;
-  if (parent && handle.name?.toLowerCase() !== newName.toLowerCase()) {
-    let exists = false;
-    try { await parent.getFileHandle(newName); exists = true; } catch { exists = false; }
-    if (exists) throw new RenameError('ERR_NAKLIAMP_RENAME_EXISTS', `A file named ${newName} is already in that folder.`);
-  }
+  await assertNameFree(handle, newName, parent);
   await handle.move(newName);
   return newName;
+}
+
+// ------------------------------------------------ after a rename (N23) ----
+
+const WRITABLE_PLAYLISTS = new Set(['m3u', 'm3u8']);
+
+/** `{ oldPath: newPath }` for the rows of a rename plan that rename. */
+export function renameMap(rows) {
+  const map = new Map();
+  for (const row of rows ?? []) {
+    if (row.status !== 'rename') continue;
+    const directory = dirOf(row.path);
+    map.set(row.path, `${directory ? `${directory}/` : ''}${row.to}`);
+  }
+  return map;
+}
+
+/**
+ * Plan the playlist rewrites a batch rename needs, so entries follow the
+ * renamed files. `rows` is a planRename result (only `rename` rows count);
+ * `playlists` are parsed playlists from the index.
+ *
+ * Returns `{ updates, refused, lines }`:
+ * - `updates`: `[{ playlist, entries, text, changed }]` for each M3U/M3U8
+ *   playlist that names a renamed file; `text` is the M3U8 to write over
+ *   `playlist.path` (header, trailer and every other entry kept verbatim);
+ * - `refused`: PLS, XSPF and JSPF playlists that name a renamed file, which
+ *   NakliAmp does not rewrite, so the person can fix them by hand;
+ * - `lines`: confirm-dialog lines naming both.
+ */
+export function planPlaylistRenames(rows, playlists) {
+  const moved = renameMap(rows);
+  const updates = [];
+  const refused = [];
+  if (!moved.size) return { updates, refused, lines: [] };
+  for (const playlist of playlists ?? []) {
+    const base = playlistBase(playlist.path);
+    let changed = 0;
+    const entries = (playlist.entries ?? []).map(entry => {
+      const from = pickEntryPath(entry, candidate => moved.has(candidate));
+      const to = from ? moved.get(from) : undefined;
+      if (!to) return mergeEntry(entry);
+      changed += 1;
+      return { ...mergeEntry(entry), target: relativeTo(base, to), path: to, candidates: undefined };
+    });
+    if (!changed) continue;
+    const format = String(playlist.format ?? 'm3u').toLowerCase();
+    if (!WRITABLE_PLAYLISTS.has(format)) { refused.push({ playlist, changed }); continue; }
+    const clean = entries.map(({ candidates, ...rest }) => (candidates === undefined ? rest : { ...rest, candidates }));
+    updates.push({
+      playlist,
+      entries: clean,
+      changed,
+      text: toM3u8(clean, { name: playlist.name ?? null, base, header: playlist.header, trailer: playlist.trailer }),
+    });
+  }
+  const plural = count => `${count} entr${count === 1 ? 'y' : 'ies'}`;
+  const lines = [
+    ...updates.map(update => `Playlist ${update.playlist.path}: ${plural(update.changed)} updated to the new names.`),
+    ...refused.map(item => `Playlist ${item.playlist.path} (${String(item.playlist.format).toUpperCase()}): ${plural(item.changed)} ${item.changed === 1 ? 'names' : 'name'} an old file; NakliAmp does not rewrite this format, so fix it by hand.`),
+  ];
+  return { updates, refused, lines };
+}
+
+/**
+ * The sidecar files that follow an audio file through a rename: a `.lrc`
+ * lyrics file with the same name stem is renamed with it. A `.cue` sheet with
+ * the same stem names the audio file inside it, so it is reported, not renamed.
+ * `siblingNames` are the names in the file's folder.
+ * Returns `{ renames: [{ from, to }], cueSheets: [name] }`.
+ */
+export function sidecarRenames(row, siblingNames) {
+  const renames = [];
+  const cueSheets = [];
+  if (row?.status !== 'rename') return { renames, cueSheets };
+  const stem = name => name.replace(/\.[^.]+$/, '');
+  const fromStem = stem(row.from).toLowerCase();
+  const toStem = stem(row.to);
+  const names = new Set((siblingNames ?? []).map(name => name.toLowerCase()));
+  for (const name of siblingNames ?? []) {
+    if (stem(name).toLowerCase() !== fromStem || name === row.from) continue;
+    const extension = extensionOf(name);
+    if (/^\.lrc$/i.test(extension)) {
+      const to = sanitiseFileName(`${toStem}${extension}`);
+      if (!names.has(to.toLowerCase())) renames.push({ from: name, to });
+    } else if (/^\.cue$/i.test(extension)) {
+      cueSheets.push(name);
+    }
+  }
+  return { renames, cueSheets };
 }

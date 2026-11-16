@@ -7,8 +7,10 @@
 //
 // MusicBrainz asks clients for a descriptive User-Agent and at most one request per
 // second. A browser cannot set User-Agent, so every request asks for `fmt=json` and goes
-// through one queue that starts requests at least `intervalMs` apart. A 503 (the rate
-// limiter's answer) is reported as `rate-limited`.
+// through one queue that starts requests at least `intervalMs` apart. The queue holds a
+// Web Lock while a request and its interval run, so two NakliAmp tabs share one rate. A
+// 503 or 429 (the rate limiter's answer) is reported as `rate-limited` and pauses the
+// queue for the server's Retry-After, or `MB_PAUSE_MS` when it sends none.
 //
 // The output is a patch in the shape app/tags/write.mjs takes; the UI shows it as a
 // destructive, approved edit through `track.edit_tags`. Headless: no DOM.
@@ -18,6 +20,9 @@ import { consentedFetch } from './consent.mjs';
 export const MB_ORIGIN = 'https://musicbrainz.org';
 export const CAA_ORIGIN = 'https://coverartarchive.org';
 export const MB_INTERVAL_MS = 1000;
+export const MB_PAUSE_MS = 5000;
+export const MB_MAX_PAUSE_MS = 60_000;
+export const MB_LOCK_NAME = 'nakliamp:musicbrainz';
 export const MAX_COVER_BYTES = 8 * 1024 * 1024;
 
 const MBID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -35,21 +40,97 @@ export class MusicBrainzError extends Error {
 
 /**
  * A queue that starts each task at least `intervalMs` after the previous one started,
- * one at a time, in order. `sleep` and `now` are injectable for tests.
+ * one at a time, in order. `enqueue.pause(ms)` holds every later start for `ms`.
+ *
+ * With `locks` (the Web Locks API; `navigator.locks` by default) each task runs inside the
+ * lock `lockName`, and the lock is released only when the interval, and any pause, has
+ * passed. Every page on the origin that uses the same lock name then shares one rate.
+ * The task's result is returned as soon as the task settles. `sleep`, `now` and `locks`
+ * are injectable for tests.
  */
-export function createRateQueue({ intervalMs = MB_INTERVAL_MS, now = () => Date.now(), sleep = ms => new Promise(r => setTimeout(r, ms)) } = {}) {
+export function createRateQueue({
+  intervalMs = MB_INTERVAL_MS, now = () => Date.now(), sleep = ms => new Promise(r => setTimeout(r, ms)),
+  locks = globalThis.navigator?.locks ?? null, lockName = MB_LOCK_NAME,
+} = {}) {
   let tail = Promise.resolve();
   let lastStart = -Infinity;
-  return function enqueue(task) {
-    const run = tail.then(async () => {
-      const wait = lastStart + intervalMs - now();
-      if (wait > 0) await sleep(wait);
-      lastStart = now();
-      return task();
+  let pausedUntil = -Infinity;
+  const readyAt = () => Math.max(lastStart + intervalMs, pausedUntil);
+
+  async function start(task) {
+    const wait = readyAt() - now();
+    if (wait > 0) await sleep(wait);
+    lastStart = now();
+    return task();
+  }
+
+  // Run inside the shared lock; settle the caller on the task, release after the interval.
+  function locked(task) {
+    return new Promise((resolve, reject) => {
+      locks.request(lockName, async () => {
+        const run = start(task);
+        run.then(resolve, reject);
+        await run.catch(() => {});
+        const rest = readyAt() - now();
+        if (rest > 0) await sleep(rest);
+      }).catch(reject);
     });
+  }
+
+  function enqueue(task) {
+    const run = tail.then(() => (locks && typeof locks.request === 'function' ? locked(task) : start(task)));
     tail = run.catch(() => {});
     return run;
-  };
+  }
+  enqueue.pause = ms => { pausedUntil = Math.max(pausedUntil, now() + Math.max(0, Number(ms) || 0)); };
+  return enqueue;
+}
+
+/** How long to pause after a 503 or 429: the Retry-After seconds, capped, or the default. */
+export function retryAfterMs(res) {
+  const seconds = Number(String(res?.headers?.get?.('retry-after') ?? '').trim());
+  if (Number.isFinite(seconds) && seconds > 0) return Math.min(MB_MAX_PAUSE_MS, seconds * 1000);
+  return MB_PAUSE_MS;
+}
+
+// Discard a body NakliAmp will not use; a failed cancel changes nothing.
+async function discard(target) {
+  try { await target?.cancel?.(); } catch { /* the body is discarded either way */ }
+}
+
+// Concatenate the chunks read from a body.
+function joined(chunks, total) {
+  const bytes = new Uint8Array(total);
+  let at = 0;
+  for (const c of chunks) { bytes.set(c, at); at += c.byteLength; }
+  return bytes;
+}
+
+// Read a body stream, stopping as soon as it passes `max`.
+async function readStreamCapped(reader, max, tooLarge) {
+  const chunks = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) return joined(chunks, total);
+    total += value.byteLength;
+    if (total > max) { await discard(reader); throw tooLarge(); }
+    chunks.push(value);
+  }
+}
+
+/**
+ * The response body as bytes, refusing past `max`: by `content-length` before reading,
+ * and by a running count while reading, so an oversized body is never held whole.
+ */
+export async function readCapped(res, max, tooLarge) {
+  const declared = Number(res.headers?.get?.('content-length'));
+  if (Number.isFinite(declared) && declared > max) { await discard(res.body); throw tooLarge(); }
+  const reader = res.body?.getReader?.();
+  if (reader) return readStreamCapped(reader, max, tooLarge);
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (bytes.length > max) throw tooLarge();
+  return bytes;
 }
 
 // Lucene query term: quoted phrase with quotes and backslashes escaped.
@@ -156,19 +237,23 @@ function trackPatch({ medium, t }, albumArtist, trackNo) {
 const coverMime = res => String(res.headers?.get?.('content-type') ?? '').split(';')[0].trim() || 'image/jpeg';
 
 /**
- * `createMusicBrainz({ fetch, consent, sleep, now, intervalMs })`.
+ * `createMusicBrainz({ fetch, consent, sleep, now, locks, intervalMs })`.
  * `fetch` is injected (window.fetch in the page, a stub in tests).
  */
-export function createMusicBrainz({ fetch: fetchFn, consent, sleep, now, intervalMs = MB_INTERVAL_MS } = {}) {
+export function createMusicBrainz({ fetch: fetchFn, consent, sleep, now, locks, intervalMs = MB_INTERVAL_MS } = {}) {
   const get = consentedFetch(fetchFn, consent);
-  const queue = createRateQueue({ intervalMs, sleep, now });
+  const queue = createRateQueue({ intervalMs, sleep, now, ...(locks === undefined ? {} : { locks }) });
 
   async function getJson(path, params) {
     const url = new URL(path, MB_ORIGIN);
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
     url.searchParams.set('fmt', 'json');
     consent.assertAllowed(url); // refuse before queueing, so a refusal never waits a second
-    const res = await queue(() => get(url, { headers: { Accept: 'application/json' } }));
+    const res = await queue(async () => {
+      const answer = await get(url, { headers: { Accept: 'application/json' } });
+      if (answer.status === 503 || answer.status === 429) queue.pause(retryAfterMs(answer));
+      return answer;
+    });
     if (res.status === 404) throw new MusicBrainzError('not-found', 'MusicBrainz has no such release.', 404);
     if (res.status === 503 || res.status === 429) throw new MusicBrainzError('rate-limited', 'MusicBrainz asked NakliAmp to slow down. Try again in a few seconds.', res.status);
     if (!res.ok) throw new MusicBrainzError('http', `MusicBrainz answered ${res.status}.`, res.status);
@@ -207,8 +292,7 @@ export function createMusicBrainz({ fetch: fetchFn, consent, sleep, now, interva
       if (!res.ok) throw new MusicBrainzError('http', `The Cover Art Archive answered ${res.status}.`, res.status);
       const mime = coverMime(res);
       if (!/^image\/(jpeg|png|webp|gif)$/.test(mime)) throw new MusicBrainzError('bad-reply', `The cover is ${mime}, not an image NakliAmp writes into tags.`);
-      const bytes = new Uint8Array(await res.arrayBuffer());
-      if (bytes.length > MAX_COVER_BYTES) throw new MusicBrainzError('too-large', 'The cover is larger than 8 MB.');
+      const bytes = await readCapped(res, MAX_COVER_BYTES, () => new MusicBrainzError('too-large', 'The cover is larger than 8 MB.'));
       return { mime, bytes };
     },
   };

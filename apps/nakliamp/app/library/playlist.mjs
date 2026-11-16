@@ -48,6 +48,32 @@ export function resolveEntry(base, target) {
   return joinSegments(segments);
 }
 
+/**
+ * Every path inside the granted folder an entry could mean, most literal
+ * first. A bare entry with `%` in it may be percent-encoded (`Track%20One.mp3`
+ * from a player that writes URLs) or may be a file literally named that way;
+ * both readings are listed, raw text first. Others have one reading.
+ */
+export function entryCandidates(base, target) {
+  const raw = String(target ?? '').trim();
+  if (!raw || isRemote(raw)) return [];
+  const decoded = resolveEntry(base, raw);
+  if (raw.startsWith('file:') || !raw.includes('%')) return decoded ? [decoded] : [];
+  const cleaned = raw.replace(/\\/g, '/');
+  const literal = joinSegments((cleaned.startsWith('/') ? cleaned.slice(1) : `${base ? `${base}/` : ''}${cleaned}`).split('/'));
+  return [...new Set([literal, decoded].filter(Boolean))];
+}
+
+/**
+ * The library path an entry names, given `has(path)` (is that file in the
+ * index?): the raw reading first, the percent-decoded one second, else the
+ * entry's own `path`.
+ */
+export function pickEntryPath(entry, has) {
+  for (const candidate of entry?.candidates ?? []) if (has(candidate)) return candidate;
+  return entry?.path ?? null;
+}
+
 /** Decode a `file:` URL or percent-escaped entry; null for a malformed URL. */
 function decodeEntryText(cleaned) {
   if (cleaned.startsWith('file:')) {
@@ -76,32 +102,75 @@ function joinSegments(segments) {
 
 // ------------------------------------------------------------- M3U ----
 
-function parseM3u(text, base) {
-  const entries = [];
-  let pending = null;
-  let name = null;
+/**
+ * Split an EXTINF line into duration, attributes and title. Attributes sit
+ * between the duration and the first comma outside quotes, as in
+ * `#EXTINF:10 tvg-name="a,b",Song`.
+ */
+function parseExtinf(line) {
+  const head = /^#EXTINF:\s*(-?\d+(?:\.\d+)?)/i.exec(line);
+  if (!head) return null;
+  let quoted = false;
+  let comma = -1;
+  for (let index = head[0].length; index < line.length; index += 1) {
+    if (line[index] === '"') quoted = !quoted;
+    else if (line[index] === ',' && !quoted) { comma = index; break; }
+  }
+  const attrs = (comma < 0 ? line.slice(head[0].length) : line.slice(head[0].length, comma)).trim();
+  const title = comma < 0 ? '' : line.slice(comma + 1);
+  const durationS = Number(head[1]);
+  return {
+    durationS: Number.isFinite(durationS) && durationS > 0 ? durationS : null,
+    ...splitArtistTitle(title),
+    ...(attrs ? { extinfAttrs: attrs } : {}),
+  };
+}
 
+/**
+ * Read M3U and M3U8. Every comment and directive NakliAmp does not use is
+ * kept, so a rewrite puts it back: lines before the first entry go in
+ * `header`, lines after the last in `trailer`, and lines around an entry stay
+ * with that entry (`linesBefore` its EXTINF, `linesAfter` it).
+ */
+function parseM3u(text, base) {
+  const state = { entries: [], header: [], pending: null, name: null, loose: [] };
   for (const rawLine of text.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line) continue;
-    if (line.startsWith('#')) {
-      const extinf = /^#EXTINF:\s*(-?\d+(?:\.\d+)?)\s*,\s*(.*)$/i.exec(line);
-      if (extinf) {
-        const durationS = Number(extinf[1]);
-        pending = {
-          durationS: Number.isFinite(durationS) && durationS > 0 ? durationS : null,
-          ...splitArtistTitle(extinf[2]),
-        };
-        continue;
-      }
-      const playlistName = /^#PLAYLIST:\s*(.+)$/i.exec(line);
-      if (playlistName) name = playlistName[1].trim();
-      continue;
-    }
-    entries.push({ ...(pending ?? { durationS: null, artist: null, title: null }), target: line, path: resolveEntry(base, line) });
-    pending = null;
+    if (line.startsWith('#')) m3uComment(state, line);
+    else m3uLocation(state, line, base);
   }
-  return { name, entries };
+  const { pending, loose } = state;
+  const trailer = [...(pending ? [...(pending.linesBefore ?? []), pending.extinfLine] : []), ...loose];
+  return { name: state.name, entries: state.entries, header: state.header, trailer };
+}
+
+/** True before the first EXTINF or location line. */
+const atStart = state => !state.entries.length && !state.pending;
+
+function m3uComment(state, line) {
+  if (/^#EXTM3U\b/i.test(line) && atStart(state) && !state.header.length) return;
+  const extinf = parseExtinf(line);
+  if (extinf) {
+    // An EXTINF with no location after it is kept as a plain line.
+    const { pending, loose } = state;
+    const before = pending ? [...(pending.linesBefore ?? []), pending.extinfLine, ...loose] : loose;
+    state.pending = { ...extinf, extinfLine: line, ...(before.length ? { linesBefore: before } : {}) };
+    state.loose = [];
+    return;
+  }
+  const playlistName = /^#PLAYLIST:\s*(.+)$/i.exec(line);
+  if (playlistName && state.name === null) { state.name = playlistName[1].trim(); return; }
+  (atStart(state) ? state.header : state.loose).push(line);
+}
+
+function m3uLocation(state, line, base) {
+  const { extinfLine: _line, ...info } = state.pending ?? { durationS: null, artist: null, title: null };
+  if (state.loose.length) info[state.pending ? 'linesAfter' : 'linesBefore'] = state.loose;
+  const candidates = entryCandidates(base, line);
+  state.entries.push({ ...info, target: line, path: resolveEntry(base, line), ...(candidates.length > 1 ? { candidates } : {}) });
+  state.pending = null;
+  state.loose = [];
 }
 
 /** EXTINF titles are conventionally "Artist - Title"; the split is best effort. */
@@ -225,21 +294,65 @@ export function isPlaylistPath(path) {
   return PLAYLIST_PATTERN.test(String(path ?? ''));
 }
 
+const UTF8_STRICT = new TextDecoder('utf-8', { fatal: true });
+const WINDOWS_1252 = new TextDecoder('windows-1252');
+
+/**
+ * Decode playlist bytes: strict UTF-8 first (a BOM is dropped), then
+ * Windows-1252, the code page old Winamp playlists were written in, as
+ * cue.mjs does for cue sheets. Returns `{ text, encoding }`.
+ */
+export function decodePlaylistBytes(bytes) {
+  const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  const body = view[0] === 0xef && view[1] === 0xbb && view[2] === 0xbf ? view.subarray(3) : view;
+  try {
+    return { text: UTF8_STRICT.decode(body), encoding: 'utf-8' };
+  } catch {
+    return { text: WINDOWS_1252.decode(body), encoding: 'windows-1252' };
+  }
+}
+
+let cp1252Table = null;
+
+/**
+ * Encode playlist text for writing in `encoding` (`utf-8` or
+ * `windows-1252`), so a legacy `.m3u` keeps the code page other players read
+ * it in. Throws PlaylistFormatError for a character Windows-1252 cannot hold.
+ */
+export function encodePlaylistText(text, encoding = 'utf-8') {
+  if (encoding !== 'windows-1252') return new TextEncoder().encode(text);
+  if (!cp1252Table) {
+    cp1252Table = new Map();
+    const all = WINDOWS_1252.decode(Uint8Array.from({ length: 256 }, (_, index) => index));
+    for (let index = 0; index < 256; index += 1) cp1252Table.set(all[index], index);
+  }
+  const out = new Uint8Array(text.length);
+  for (let index = 0; index < text.length; index += 1) {
+    const byte = cp1252Table.get(text[index]);
+    if (byte === undefined) throw new PlaylistFormatError(`"${text[index]}" cannot be stored in this Windows-1252 playlist. Save it as a new .m3u8 playlist instead.`);
+    out[index] = byte;
+  }
+  return out;
+}
+
 /**
  * Parse a playlist.
- * `path` is the playlist's own path relative to the granted folder, which is
- * what makes its relative entries resolvable.
+ * `source` is the text, or the file's bytes (decoded by decodePlaylistBytes,
+ * which also records `encoding`). `path` is the playlist's own path relative
+ * to the granted folder, which is what makes its relative entries resolvable.
+ * `options.lastModified` and `options.size` are recorded for the
+ * changed-on-disk check before a rewrite.
  * Never throws: an unreadable playlist yields no entries rather than stopping
  * a scan that is walking a thousand files.
  */
-export function parsePlaylist(text, path = '') {
-  const source = String(text ?? '');
+export function parsePlaylist(source, path = '', options = {}) {
+  const { text, encoding } = playlistText(source);
   const base = String(path).split('/').slice(0, -1).join('/');
   const extension = /\.([a-z0-9]+)$/i.exec(path)?.[1]?.toLowerCase();
 
   let parsed;
   try {
-    parsed = parserFor(extension, source)(source, base);
+    parsed = parserFor(extension, text)(text, base);
   } catch {
     parsed = { name: null, entries: [] };
   }
@@ -252,7 +365,24 @@ export function parsePlaylist(text, path = '') {
     // Entries that name a remote stream or climb outside the granted folder are
     // kept in `entries` with a null path, and counted here rather than hidden.
     unresolved: parsed.entries.filter(entry => entry.path === null).length,
+    encoding,
+    ...playlistExtras(parsed, options),
   };
+}
+
+function playlistText(source) {
+  if (source instanceof Uint8Array || source instanceof ArrayBuffer) return decodePlaylistBytes(source);
+  return { text: String(source ?? '').replace(/^\ufeff/, ''), encoding: 'utf-8' };
+}
+
+/** The kept header and trailer lines, and the file's lastModified and size when given. */
+function playlistExtras(parsed, options) {
+  const out = {};
+  if (parsed.header?.length) out.header = parsed.header;
+  if (parsed.trailer?.length) out.trailer = parsed.trailer;
+  if (Number.isFinite(options.lastModified)) out.lastModified = options.lastModified;
+  if (Number.isFinite(options.size)) out.size = options.size;
+  return out;
 }
 
 /** Pick the parser by extension first, then by what the text looks like. */
@@ -306,6 +436,43 @@ export function relativeTo(base, path) {
   return [...Array.from({ length: from.length - shared }, () => '..'), ...to.slice(shared)].join('/');
 }
 
+// oxlint-disable-next-line no-control-regex -- C0 controls and DEL are matched on purpose: a newline in a label adds lines to the file
+const CONTROLS = /[\u0000-\u001f\u007f]+/g;
+
+/** Text for one M3U line: control characters (newlines above all) become one space. */
+function oneLine(text) {
+  return String(text ?? '').replace(CONTROLS, ' ').trim();
+}
+
+/** Refuse to write text that was decoded wrongly: U+FFFD stands where the real characters were. */
+function assertDecoded(text) {
+  if (String(text).includes('\ufffd')) {
+    throw new PlaylistFormatError('This playlist holds characters NakliAmp could not read (shown as \ufffd), so rewriting it would damage those entries. Nothing was written.');
+  }
+}
+
+/** A kept comment or directive line, checked before it is written back. */
+function keptLine(line) {
+  const text = String(line ?? '');
+  assertDecoded(text);
+  // A kept line came from one line of the file; anything else is not written.
+  return text.startsWith('#') && !/[\r\n]/.test(text) ? [text] : [];
+}
+
+/**
+ * The location line for one item. A location that starts with `#` would read
+ * back as a comment, and one that starts with a space would be trimmed, so
+ * both get `./` in front; that names the same file.
+ */
+function locationLine(item, directory) {
+  const location = typeof item.target === 'string' && item.target
+    ? item.target
+    : relativeTo(directory, String(item.path ?? ''));
+  assertDecoded(location);
+  if (/[\r\n]/.test(location)) throw new PlaylistFormatError(`A file name with a line break cannot be written into an M3U playlist: ${JSON.stringify(location)}.`);
+  return /^[#\s]/.test(location) ? `./${location}` : location;
+}
+
 /**
  * Serialise playlist items as M3U8, with paths relative to `base`.
  *
@@ -315,26 +482,38 @@ export function relativeTo(base, path) {
  * it. Entries keep their original text verbatim. That is what lets a remote
  * stream, a not-yet-scanned file, and anything else this folder cannot resolve
  * survive an edit: the alternative, writing back only the entries that matched
- * the index, deletes the rest from the user's file.
+ * the index, deletes the rest from the user's file. Comments and directives
+ * NakliAmp does not use come back too: `header` and `trailer` (from
+ * parsePlaylist) and each entry's own `linesBefore`, `linesAfter` and EXTINF
+ * attributes.
  *
- * Byte-stable for the same input, so an export and a re-import round-trip.
+ * Throws PlaylistFormatError rather than write text that was decoded wrongly
+ * or a location with a line break. Byte-stable for the same input, so an
+ * export and a re-import round-trip.
  */
-export function toM3u8(items, { name = null, base = '' } = {}) {
+export function toM3u8(items, { name = null, base = '', header = [], trailer = [] } = {}) {
   const directory = String(base ?? '').replace(/\/+$/, '');
-  const lines = ['#EXTM3U'];
-  if (name) lines.push(`#PLAYLIST:${name}`);
-  for (const item of items) lines.push(...m3uItemLines(item, directory));
-  return `${lines.join('\n')}\n`;
+  const title = oneLine(name);
+  return `${[
+    '#EXTM3U',
+    ...(title ? [`#PLAYLIST:${title}`] : []),
+    ...(header ?? []).flatMap(keptLine),
+    ...items.flatMap(item => m3uItemLines(item, directory)),
+    ...(trailer ?? []).flatMap(keptLine),
+  ].join('\n')}\n`;
 }
 
-/** The EXTINF line and the location line for one item. */
+/** The kept lines, the EXTINF line and the location line for one item. */
 function m3uItemLines(item, directory) {
   const duration = Number.isFinite(item.durationS) && item.durationS > 0 ? Math.round(item.durationS) : -1;
-  const label = [item.artist, item.title || item.name].filter(Boolean).join(' - ');
-  const location = typeof item.target === 'string' && item.target
-    ? item.target
-    : relativeTo(directory, String(item.path ?? ''));
-  return [`#EXTINF:${duration},${label}`, location];
+  const label = oneLine([item.artist, item.title || item.name].filter(Boolean).join(' - '));
+  const attrs = item.extinfAttrs ? ` ${oneLine(item.extinfAttrs)}` : '';
+  return [
+    ...(item.linesBefore ?? []).flatMap(keptLine),
+    `#EXTINF:${duration}${attrs},${label}`,
+    ...(item.linesAfter ?? []).flatMap(keptLine),
+    locationLine(item, directory),
+  ];
 }
 
 /** The directory part of a playlist's own path, which its entries are relative to. */
@@ -348,13 +527,18 @@ export function playlistBase(path) {
  * losing what it had. The entry's `target` text is kept verbatim.
  */
 export function mergeEntry(entry, track = null) {
-  return {
+  const out = {
     target: entry.target,
     path: firstPresent(entry.path),
     durationS: firstPresent(entry.durationS, track?.durationS),
     artist: firstPresent(entry.artist, track?.artist),
     title: firstPresent(entry.title, track?.title, track?.name),
   };
+  // Comments, directives and EXTINF attributes travel with their entry.
+  for (const key of ['linesBefore', 'linesAfter', 'extinfAttrs', 'candidates']) {
+    if (entry[key] !== undefined) out[key] = entry[key];
+  }
+  return out;
 }
 
 /** The first value that is neither null nor undefined, else null. */
@@ -363,11 +547,39 @@ function firstPresent(...values) {
 }
 
 export class PlaylistFormatError extends Error {
-  constructor(message) {
+  constructor(message, code = 'ERR_NAKLIAMP_PLAYLIST_FORMAT') {
     super(message);
     this.name = 'PlaylistFormatError';
-    this.code = 'ERR_NAKLIAMP_PLAYLIST_FORMAT';
+    this.code = code;
   }
+}
+
+/** What a rewrite would put back: every location and every kept line, in order. */
+function playlistSignature(playlist) {
+  const entries = (playlist.entries ?? []).map(entry => [entry.target, entry.linesBefore ?? [], entry.linesAfter ?? [], entry.extinfAttrs ?? '']);
+  return JSON.stringify([playlist.name ?? null, playlist.header ?? [], playlist.trailer ?? [], entries]);
+}
+
+/**
+ * Refuse a rewrite when the playlist file changed since NakliAmp read it, so
+ * tracks another player or another tab added are not overwritten by a
+ * rewrite from the cached entries. `disk` is the file as it is now: a File
+ * (its lastModified and size are compared when the cached playlist recorded
+ * them), its bytes, or its text. Throws PlaylistFormatError with code
+ * `ERR_NAKLIAMP_PLAYLIST_CHANGED`; the caller rescans and asks the person to
+ * try again.
+ */
+export async function assertPlaylistUnchanged(playlist, disk) {
+  const changed = () => new PlaylistFormatError(`${playlist.name ?? 'This playlist'} changed on disk since NakliAmp read it. NakliAmp rescanned it; make the change again.`, 'ERR_NAKLIAMP_PLAYLIST_CHANGED');
+  if (disk === null || disk === undefined) return;
+  let source = disk;
+  if (typeof Blob !== 'undefined' && disk instanceof Blob) {
+    if (Number.isFinite(playlist.lastModified) && Number.isFinite(disk.lastModified)
+      && (disk.lastModified !== playlist.lastModified || (Number.isFinite(playlist.size) && disk.size !== playlist.size))) throw changed();
+    source = new Uint8Array(await disk.arrayBuffer());
+  }
+  const fresh = parsePlaylist(source, playlist.path ?? '');
+  if (playlistSignature(fresh) !== playlistSignature(playlist)) throw changed();
 }
 
 /**
@@ -393,7 +605,10 @@ export function appendToPlaylist(playlist, tracks, { lookup = null } = {}) {
   }
   const base = playlistBase(playlist.path);
   const find = typeof lookup === 'function' ? lookup : () => null;
-  const kept = playlist.entries.map(entry => mergeEntry(entry, entry.path ? find(entry.path) : null));
+  const kept = playlist.entries.map(entry => {
+    const path = pickEntryPath(entry, candidate => Boolean(find(candidate)));
+    return mergeEntry(entry, path ? find(path) : null);
+  });
   const added = (tracks ?? []).filter(track => track && typeof track.path === 'string' && track.path).map(track => ({
     target: relativeTo(base, track.path),
     path: track.path,
@@ -402,5 +617,5 @@ export function appendToPlaylist(playlist, tracks, { lookup = null } = {}) {
     title: track.title ?? track.name ?? null,
   }));
   const entries = [...kept, ...added];
-  return { entries, text: toM3u8(entries, { name: playlist.name ?? null, base }) };
+  return { entries, text: toM3u8(entries, { name: playlist.name ?? null, base, header: playlist.header, trailer: playlist.trailer }) };
 }

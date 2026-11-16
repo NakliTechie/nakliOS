@@ -1,0 +1,16 @@
+Licence notice for engine/reel-engine.mjs
+
+Source: https://github.com/NakliTechie/reel, commit 292b0916d7f139f6f27fe14661772a7dee43da7d,
+file engine/reel-engine.mjs, copied without modification (SHA-256
+791a691fd8d0d95c9cf7fd27adf3bad2469c918f15e30ed9e57f05d0dad4c175).
+
+Author and copyright holder: Chirag Patnaik (NakliTechie), the same holder as NakliAmp.
+Every commit to that file in the Reel repository up to the pinned commit is his.
+
+Licence: none yet. The Reel repository has no LICENSE file at the pinned commit, and
+its README says "Reel's own code has no licence file yet." NakliAmp's MIT licence
+(LICENSE) covers NakliAmp's own code; it does not by itself grant a licence for this
+file. When Reel publishes a licence, this notice will be replaced with that text.
+
+Reel's own vendored dependencies are not part of this file. NakliAmp vendors
+Mediabunny separately under MPL-2.0 (vendor/mediabunny/LICENSE-MPL-2.0.txt).

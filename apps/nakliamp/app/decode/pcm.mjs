@@ -13,6 +13,13 @@
 //
 // Headless by contract: no DOM, no network, no Web Audio. Returns plain arrays
 // so the caller decides what to build from them.
+//
+// Size (review finding N20): a whole decode holds the file plus four bytes of
+// Float32 per sample. A one-hour CD-quality AIFF is 635 MB in and about
+// 1.27 GB out, before the caller copies it into an AudioBuffer. So files above
+// PCM_STREAM_MIN_BYTES play streamed (`streamPcm`, half a second per read,
+// never read whole), and `decodePcm` refuses, from the header and before any
+// allocation, a decode larger than PCM_MAX_DECODED_BYTES.
 
 const encodingError = (code, message) => {
   const error = new Error(message);
@@ -32,6 +39,26 @@ const encodingError = (code, message) => {
  * second kills it — so both are rejected as malformed before any allocation.
  */
 const MAX_CHANNELS = 64;
+
+/**
+ * Sample rates an AudioBuffer accepts in Chrome, Firefox and Safari. A header
+ * outside this range decodes to samples nothing can play (review finding N40).
+ */
+export const PCM_MIN_RATE = 3000;
+export const PCM_MAX_RATE = 768000;
+
+/** Files above this size play streamed; the same bound the libav tier uses. */
+export const PCM_STREAM_MIN_BYTES = 64 * 1024 * 1024;
+
+/** The largest whole decode, in bytes of Float32 output. */
+export const PCM_MAX_DECODED_BYTES = 512 * 1024 * 1024;
+
+/** Seconds of PCM one streamed `read()` returns. */
+const STREAM_CHUNK_S = 0.5;
+
+/** Head bytes read to find the format and the data chunk; grown up to the cap when chunks before the audio are large. */
+const STREAM_HEAD_BYTES = 256 * 1024;
+const STREAM_HEAD_MAX_BYTES = 16 * 1024 * 1024;
 
 /** True when `length` bytes actually exist at `offset`. */
 function has(view, offset, length) {
@@ -124,9 +151,11 @@ function sampleReader(format) {
   }
 }
 
-/** Deinterleave into one Float32Array per channel. */
-function toChannels(view, dataOffset, dataLength, format) {
-  // Before anything is allocated or any loop is entered.
+/**
+ * Check a format before anything is allocated or any loop is entered, and
+ * return the sample reader and frame stride for it.
+ */
+function readerFor(format) {
   if (!Number.isInteger(format.channels) || format.channels < 1 || format.channels > MAX_CHANNELS) {
     throw encodingError(
       'ERR_NAKLIAMP_PCM_MALFORMED',
@@ -136,18 +165,23 @@ function toChannels(view, dataOffset, dataLength, format) {
   if (!Number.isFinite(format.sampleRate) || format.sampleRate <= 0) {
     throw encodingError('ERR_NAKLIAMP_PCM_MALFORMED', 'This file declares an impossible sample rate.');
   }
+  if (format.sampleRate < PCM_MIN_RATE || format.sampleRate > PCM_MAX_RATE) {
+    throw encodingError(
+      'ERR_NAKLIAMP_PCM_UNSUPPORTED',
+      `This file declares a sample rate of ${format.sampleRate} Hz; ${PCM_MIN_RATE} to ${PCM_MAX_RATE} Hz is playable.`,
+    );
+  }
 
   const read = sampleReader(format);
   const bytesPerSample = Math.ceil(format.bits / 8);
   if (!(bytesPerSample >= 1)) {
     throw encodingError('ERR_NAKLIAMP_PCM_MALFORMED', `This file declares ${format.bits}-bit samples.`);
   }
-  const stride = bytesPerSample * format.channels;
-  // `dataLength` is declared, so it is clamped to what the file actually holds:
-  // this is the bound that keeps the allocation below proportional to the file.
-  const available = Math.min(dataLength, view.byteLength - dataOffset);
-  const frames = Math.max(0, Math.floor(available / stride));
+  return { read, bytesPerSample, stride: bytesPerSample * format.channels };
+}
 
+/** Deinterleave `frames` frames starting at `dataOffset` into one Float32Array per channel. */
+function deinterleave(view, dataOffset, frames, format, { read, bytesPerSample, stride }) {
   const channels = Array.from({ length: format.channels }, () => new Float32Array(frames));
   for (let frame = 0; frame < frames; frame += 1) {
     const base = dataOffset + frame * stride;
@@ -155,7 +189,18 @@ function toChannels(view, dataOffset, dataLength, format) {
       channels[channel][frame] = read(view, base + channel * bytesPerSample);
     }
   }
-  return { channels, frames };
+  return channels;
+}
+
+/**
+ * Frames a layout holds: the declared data length clamped to the bytes that
+ * exist (`totalBytes`), then to the declared frame count when there is one.
+ * This is the bound that keeps every allocation proportional to the file.
+ */
+function layoutFrames(layout, stride, totalBytes) {
+  const available = Math.max(0, Math.min(layout.dataLength, totalBytes - layout.dataOffset));
+  const frames = Math.floor(available / stride);
+  return layout.maxFrames ? Math.min(frames, layout.maxFrames) : frames;
 }
 
 // -------------------------------------------------------------- AIFF ----
@@ -197,7 +242,7 @@ function parseAiffComm(view, body, size, isAifc) {
   return { format, declaredFrames };
 }
 
-function decodeAiff(view) {
+function aiffLayout(view) {
   const isAifc = ascii(view, 8, 4) === 'AIFC';
   let format = null;
   let dataOffset = 0;
@@ -225,13 +270,12 @@ function decodeAiff(view) {
   if (!format) throw encodingError('ERR_NAKLIAMP_PCM_MALFORMED', 'This AIFF file has no COMM chunk.');
   if (!dataLength) throw encodingError('ERR_NAKLIAMP_PCM_MALFORMED', 'This AIFF file has no sound data.');
 
-  const { channels, frames } = toChannels(view, dataOffset, dataLength, format);
-  return { sampleRate: format.sampleRate, channels, frames: Math.min(frames, declaredFrames || frames), container: isAifc ? 'aifc' : 'aiff' };
+  return { format, dataOffset, dataLength, maxFrames: declaredFrames || 0, container: isAifc ? 'aifc' : 'aiff' };
 }
 
 // --------------------------------------------------------------- CAF ----
 
-function decodeCaf(view) {
+function cafLayout(view, totalBytes) {
   let format = null;
   let dataOffset = 0;
   let dataLength = 0;
@@ -270,7 +314,7 @@ function decodeCaf(view) {
     } else if (id === 'data') {
       // The data chunk opens with a four-byte edit count.
       dataOffset = body + 4;
-      dataLength = size === -1 ? view.byteLength - dataOffset : size - 4;
+      dataLength = size === -1 ? totalBytes - dataOffset : size - 4;
     }
 
     if (size === -1) break;
@@ -280,8 +324,7 @@ function decodeCaf(view) {
   if (!format) throw encodingError('ERR_NAKLIAMP_PCM_MALFORMED', 'This CAF file has no description chunk.');
   if (!dataLength) throw encodingError('ERR_NAKLIAMP_PCM_MALFORMED', 'This CAF file has no audio data.');
 
-  const { channels, frames } = toChannels(view, dataOffset, dataLength, format);
-  return { sampleRate: format.sampleRate, channels, frames, container: 'caf' };
+  return { format, dataOffset, dataLength, maxFrames: 0, container: 'caf' };
 }
 
 // ---------------------------------------------------------------- AU ----
@@ -298,7 +341,7 @@ const AU_ENCODINGS = new Map([
   [27, { bits: 8, companding: 'alaw' }],
 ]);
 
-function decodeAu(view) {
+function auLayout(view, totalBytes) {
   // The AU header is 24 bytes; sniffing only proved the first 12 exist.
   requireBytes(view, 0, 24, 'an AU header');
   const dataOffset = view.getUint32(4);
@@ -309,7 +352,7 @@ function decodeAu(view) {
 
   const variant = AU_ENCODINGS.get(encoding);
   if (!variant) throw encodingError('ERR_NAKLIAMP_PCM_UNSUPPORTED', `AU encoding ${encoding} is not supported.`);
-  if (dataOffset < 24 || dataOffset > view.byteLength) {
+  if (dataOffset < 24 || dataOffset > totalBytes) {
     throw encodingError('ERR_NAKLIAMP_PCM_MALFORMED', 'This AU file has an impossible data offset.');
   }
 
@@ -320,10 +363,9 @@ function decodeAu(view) {
     float: false, companding: null, ...variant,
   };
   // 0xFFFFFFFF means the writer did not know the length.
-  const dataLength = declaredLength === 0xffffffff ? view.byteLength - dataOffset : declaredLength;
+  const dataLength = declaredLength === 0xffffffff ? totalBytes - dataOffset : declaredLength;
 
-  const { channels: decoded, frames } = toChannels(view, dataOffset, dataLength, format);
-  return { sampleRate, channels: decoded, frames, container: 'au' };
+  return { format, dataOffset, dataLength, maxFrames: 0, container: 'au' };
 }
 
 // ----------------------------------------------------------- dispatch ----
@@ -354,21 +396,123 @@ export function sniffPcm(bytes) {
  * work is a copy rather than a decode, and the caller wants one buffer anyway.
  * Throws a named error rather than returning null, so a refusal stays specific.
  */
-export function decodePcm(bytes) {
+/**
+ * Where the audio is and how it is encoded, from the bytes given. `totalBytes`
+ * is the whole file's size when `bytes` is only its head (streamed reads), so
+ * "to end of file" lengths resolve against the file, not the head.
+ */
+function pcmLayout(bytes, totalBytes = bytes.byteLength ?? bytes.length) {
   const view = new DataView(bytes.buffer ?? bytes, bytes.byteOffset ?? 0, bytes.byteLength ?? bytes.length);
   const container = sniffPcm(bytes);
   if (!container) throw encodingError('ERR_NAKLIAMP_PCM_UNKNOWN', 'This file is not a PCM container NakliAmp reads.');
+  const layout = container === 'caf' ? cafLayout(view, totalBytes) : container === 'au' ? auLayout(view, totalBytes) : aiffLayout(view);
+  const reader = readerFor(layout.format);
+  const frames = layoutFrames(layout, reader.stride, totalBytes);
+  if (!frames) throw encodingError('ERR_NAKLIAMP_PCM_MALFORMED', 'This file decoded to no audio.');
+  return { ...layout, view, reader, frames };
+}
 
-  const decoded = container === 'caf' ? decodeCaf(view) : container === 'au' ? decodeAu(view) : decodeAiff(view);
-  if (!decoded.frames) throw encodingError('ERR_NAKLIAMP_PCM_MALFORMED', 'This file decoded to no audio.');
-  // `> 0` alone lets Infinity through, and an infinite rate makes duration 0.
-  if (!Number.isFinite(decoded.sampleRate) || decoded.sampleRate <= 0) {
-    throw encodingError('ERR_NAKLIAMP_PCM_MALFORMED', 'This file declares no usable sample rate.');
+/** Whether a PCM file of this size plays streamed rather than decoded whole. */
+export function streamsPcm(container, size) {
+  return PCM_CONTAINERS.includes(container) && Number(size) > PCM_STREAM_MIN_BYTES;
+}
+
+/**
+ * Decode a whole PCM file into per-channel Float32Arrays.
+ *
+ * `maxDecodedBytes` bounds the Float32 output; a file over it is refused from
+ * its header, before anything is allocated (callers stream such files).
+ */
+export function decodePcm(bytes, { maxDecodedBytes = PCM_MAX_DECODED_BYTES } = {}) {
+  const { format, dataOffset, view, reader, frames, container } = pcmLayout(bytes);
+  const decodedBytes = frames * format.channels * 4;
+  if (decodedBytes > maxDecodedBytes) {
+    throw encodingError(
+      'ERR_NAKLIAMP_PCM_TOO_LARGE',
+      `This file decodes to ${Math.round(decodedBytes / 1024 / 1024)} MB of audio; NakliAmp decodes up to ${Math.round(maxDecodedBytes / 1024 / 1024)} MB whole and streams larger files.`,
+    );
   }
-
+  const channels = deinterleave(view, dataOffset, frames, format, reader);
   return {
-    ...decoded,
-    durationS: decoded.frames / decoded.sampleRate,
-    channelCount: decoded.channels.length,
+    sampleRate: format.sampleRate,
+    channels,
+    frames,
+    container,
+    durationS: frames / format.sampleRate,
+    channelCount: channels.length,
   };
 }
+
+/** The layout of a Blob read from its head, growing the head when large chunks sit before the audio. */
+async function blobLayout(blob) {
+  let headBytes = Math.min(blob.size, STREAM_HEAD_BYTES);
+  for (;;) {
+    const head = new Uint8Array(await blob.slice(0, headBytes).arrayBuffer());
+    try {
+      return pcmLayout(head, blob.size);
+    } catch (error) {
+      const grow = error?.code === 'ERR_NAKLIAMP_PCM_MALFORMED' && headBytes < blob.size && headBytes < STREAM_HEAD_MAX_BYTES;
+      if (!grow) throw error;
+      headBytes = Math.min(blob.size, STREAM_HEAD_MAX_BYTES, headBytes * 4);
+    }
+  }
+}
+
+/**
+ * Open a PCM file for streamed decode. The file is never read whole: each
+ * `read()` reads one half-second slice of the Blob and converts it.
+ *
+ * Returns `{ sampleRate, channelCount, durationS, container, read(), seek(s), close() }`,
+ * the contract the engine's streamed software route uses (see libav-stream.mjs).
+ * `read()` resolves to `{ channels: Float32Array[], frames, startS }` or null at
+ * the end. Samples stay at the file's own rate; an AudioBuffer at that rate
+ * plays on a context at any other.
+ */
+export async function streamPcm(blob, { container = null } = {}) {
+  const layout = await blobLayout(blob);
+  if (container && container !== layout.container) {
+    throw encodingError('ERR_NAKLIAMP_PCM_UNKNOWN', `This file is ${layout.container}, not ${container}.`);
+  }
+  const { format, dataOffset, reader, frames } = layout;
+  const rate = format.sampleRate;
+  const chunkFrames = Math.max(1, Math.round(STREAM_CHUNK_S * rate));
+  let cursor = 0;
+  let closed = false;
+  return {
+    sampleRate: rate,
+    channelCount: format.channels,
+    durationS: frames / rate,
+    container: layout.container,
+    async read() {
+      if (closed || cursor >= frames) return null;
+      const count = Math.min(chunkFrames, frames - cursor);
+      const start = dataOffset + cursor * reader.stride;
+      const bytes = new Uint8Array(await blob.slice(start, start + count * reader.stride).arrayBuffer());
+      if (closed) return null;
+      const got = Math.floor(bytes.byteLength / reader.stride);
+      if (!got) { cursor = frames; return null; }
+      const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      const startS = cursor / rate;
+      cursor += got;
+      return { channels: deinterleave(view, 0, got, format, reader), frames: got, startS };
+    },
+    async seek(seconds) {
+      cursor = Math.max(0, Math.min(frames, Math.round((Number(seconds) || 0) * rate)));
+    },
+    async close() {
+      closed = true;
+    },
+  };
+}
+
+/**
+ * The decoder entry the engine's `softwareDecoders` list expects: whole
+ * decode for files up to PCM_STREAM_MIN_BYTES, streamed above it.
+ */
+export const pcmDecoder = Object.freeze({
+  name: 'in-house PCM',
+  sniff: sniffPcm,
+  decode: decodePcm,
+  streams: streamsPcm,
+  stream: streamPcm,
+});

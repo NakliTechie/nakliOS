@@ -5,6 +5,12 @@ NakliAmp vendors Reel's public engine boundary without modification.
 - Upstream repository: `https://github.com/NakliTechie/reel`
 - Reel commit: `292b0916d7f139f6f27fe14661772a7dee43da7d`
 - Reel engine: `engine/reel-engine.mjs`
+- Reel licence: none. The Reel repository has no LICENSE file at the pinned commit, and its README says
+  Reel's own code has no licence file yet. The engine's author and copyright holder is Chirag Patnaik
+  (NakliTechie), who also holds NakliAmp's copyright; NakliAmp's MIT `LICENSE` covers NakliAmp's own code
+  and does not by itself grant a licence for this file. `engine/LICENSE-reel.txt` records this beside the
+  file, and both single-file builds carry it (block id `reel-licence`). A licence for Reel is the Reel
+  owner's decision.
 - Mediabunny release: `1.51.0`
 - Mediabunny license: MPL-2.0
 - libav.js release: `6.10.9.0`, variant `nakliamp`
@@ -15,13 +21,14 @@ NakliAmp vendors Reel's public engine boundary without modification.
 | Path | SHA-256 |
 |---|---|
 | `engine/reel-engine.mjs` | `791a691fd8d0d95c9cf7fd27adf3bad2469c918f15e30ed9e57f05d0dad4c175` |
+| `engine/LICENSE-reel.txt` | `e0450e0052c411fb725bcdb18ffbd71423279eca716938d74817061e19368d31` |
 | `vendor/mediabunny/mediabunny-1.51.0.min.mjs` | `1cd761e442a173c461b1a63cba29cb0816383f3b93b78d64b6e44c6dbce85d2b` |
 | `vendor/mediabunny/LICENSE-MPL-2.0.txt` | `3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d04` |
 | `vendor/libav/libav-6.10.9.0-nakliamp.wasm.wasm` | `cdc5ce039f8e584f01a22d94e5026a17caa61d870978920a29c898ac39b46cd3` |
 | `vendor/libav/libav-6.10.9.0-nakliamp.wasm.mjs` | `6248df5db8d7d91f30ce4b678c851fe6030747496407a2e6deabb16ad0cf6b1a` |
 | `vendor/libav/libav-6.10.9.0-nakliamp.loader.mjs` | `272cef7c32705b2e70290cf4698350e2c888b00b789f11a97386195aa5d0b691` |
 | `vendor/libav/LICENSE-LGPL-2.1.txt` | `20e50fe7aae3e56378ebf0417d9de904f55a0e61e4df315333e632a4d3555d95` |
-| `vendor/libav/LICENSE-LGPL-NOTICE.md` | `afb8d248e345d343a45f74a5666f850d1920fb5a0006621a5a45e570687933bf` |
+| `vendor/libav/LICENSE-LGPL-NOTICE.md` | `a433962c03da35a986364c456529354d682b9bd596f0a0396174526b1376f463` |
 
 Keep the three paths together. NakliAmp imports only `engine/reel-engine.mjs`.
 The engine remains the sole Mediabunny ingress. Engine changes land upstream in
@@ -29,7 +36,7 @@ Reel, pass Reel's gate, then arrive here as a new exact commit and hash set.
 
 ## libav.js — the R3 software decoder
 
-Built from `https://github.com/Yahweasel/libav.js` at tag `v6.10.9.0` with a
+Built from `https://github.com/Yahweasel/libav.js` at tag `v6.10.9.0` (FFmpeg 9.0) with a
 custom variant, because no prebuilt variant carries these codecs:
 
 ```sh
@@ -62,13 +69,20 @@ about where it actually is:
   separate copy above plus the build recipe: the configuration given here and
   the tagged upstream reproduce this exact binary, and rebuilding the artifact
   with a replacement `.wasm` in `vendor/libav/` is a single command.
-- **The hosted build and the lean artifact do not contain it at all.** They
-  register only the in-house PCM decoder, so there is no library to replace.
+- **The hosted page and the lean artifact never load it.** `index.html`
+  imports no libav module and registers only the in-house PCM decoder; only
+  the full build adds `libavDecoder`. A host that mirrors the repository may
+  still copy the three libav files (the NakliOS mirror at
+  `naklios.dev/apps/nakliamp/` did on 2026-11-17); a copy that includes them
+  must include `LICENSE-LGPL-2.1.txt` and `LICENSE-LGPL-NOTICE.md` beside them.
   An earlier version of this file claimed the hosted build shipped a swappable
-  `.wasm`; it never did.
+  `.wasm`; the page never loaded one.
 
 Corresponding source is `https://github.com/Yahweasel/libav.js` at tag
-`v6.10.9.0` plus the configuration above. Do not substitute a build configured
+`v6.10.9.0` plus the configuration above. `vendor/libav/LICENSE-LGPL-NOTICE.md`
+states the same facts (tag, FFmpeg version, component configuration, build
+command, toolchain digest and this repository's URL) and travels inside
+`dist/nakliamp-full.html` as block `libav-lgpl-notice`. Do not substitute a build configured
 with `--enable-gpl`: that would relicense NakliAmp itself.
 
 Corresponding Mediabunny source is available from the upstream release and
@@ -142,6 +156,23 @@ also obtain the source from `https://github.com/Vanilagy/mediabunny/tree/v1.51.0
   cursors; Webamp's built-in GENEX colour values are unchanged. `test/webamp-patch.test.mjs` checks that none of
   the 311 distinct upstream asset payloads (stored there as SHA-256 only) remain, that the vendored file is the
   script's fixed point, and that the bundle parses as a module.
+- Bundled third-party code: the bundle contains 38 package versions besides Webamp's own code: 34 that the
+  source map in the same tarball (`built/webamp.bundle.min.mjs.map`) names under `node_modules`, ani-cursor
+  and winamp-eqf from Webamp's own repository, and pako and setimmediate inside JSZip's prebuilt file. `vendor/webamp/LICENSES-bundled.txt`
+  holds each one's licence text from its npm tarball at the bundled version. All are MIT except ieee754 1.2.1
+  (BSD-3-Clause), tinyqueue 3.0.0 and winamp-eqf 2.3.1 (ISC), pako 1.0.11 (MIT, with zlib's licence for its
+  zlib port) and jszip 3.10.1 (MIT or GPL-3.0-or-later; NakliAmp uses it under MIT). React 19.1.0,
+  react-dom 19.1.0, scheduler 0.26.0, react-is 16.13.1 and 18.3.1, use-sync-external-store 1.2.2, redux 5.0.1,
+  react-redux 8.1.3, redux-thunk 3.1.0, reselect 3.0.1, lodash 4.17.21, classnames 2.5.1, invariant 2.2.4,
+  jszip 3.10.1 (whose prebuilt file carries pako, setimmediate 1.0.5, lie 3.3.0 and immediate 3.0.6),
+  music-metadata 11.6.0 and its readers (strtok3 10.3.1, token-types 6.0.3, file-type 21.0.0,
+  @tokenizer/inflate 0.2.7, uint8array-extras 1.4.0, content-type 1.0.5, media-typer 1.1.0, debug 4.4.1,
+  ms 2.1.3, ieee754 1.2.1), the RIFF readers (riff-file 1.0.3, byte-data 18.1.1, endianness 8.0.2,
+  ieee754-buffer 2.0.0, utf8-buffer 1.0.0), fflate 0.8.2, tinyqueue 3.0.0, and Webamp's own packages
+  ani-cursor 2.3.1 and winamp-eqf 2.3.1, which ship no licence file (their package.json declares the licence
+  and author; the notice uses that). JSZip 3.10.1 does not record the exact pako 1.0.x it bundled; the text is
+  pako 1.0.11's. The bundle is not inlined in the single-file builds, so this file travels only with the
+  repository and any mirror that copies the bundle.
 - With that fallback, NakliAmp loads any `.wsz` that contains at least `MAIN.BMP`. The Winamp name and interface
   are Nullsoft's (Webamp README); NakliAmp says "classic skins".
 - Command (output bytes depend on Node's zlib build; made with Node v22.23.4, zlib 1.3.1-e00f703):
@@ -155,3 +186,4 @@ also obtain the source from `https://github.com/Vanilagy/mediabunny/tree/v1.51.0
 |---|---|
 | `vendor/webamp/webamp-2.3.1.bundle.min.mjs` | `15915991ffc5334e57ec7011a92a75e811a5e701c6358db682e2d5c8d1a3d100` |
 | `vendor/webamp/LICENSE-MIT.txt` | `fc7f2696d3e70b5c04659de0a843c1d7defebbb14eb2a07a38808fead88d9279` |
+| `vendor/webamp/LICENSES-bundled.txt` | `e129f54a59cc33a73737886ec2e2f40e6401bca7757976f82cdc844d85061365` |
