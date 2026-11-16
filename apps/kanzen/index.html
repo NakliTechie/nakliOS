@@ -9913,7 +9913,6 @@ function openMovePopover(cardId, x, y){
 function closeMovePopover(){
   $('move-popover').classList.remove('open');
 }
-const pendingCardMoves = new Map();
 function applyCardMove(cardId, toColId, toIndex, ctx){
   const b = currentBoard(); if(!b) return;
   const fromCol = findColumnByCard(b, cardId);
@@ -9936,46 +9935,12 @@ function applyCardMove(cardId, toColId, toIndex, ctx){
   closeMovePopover();
   renderBoard();
 }
-async function stageCardMove(cardId, toColId, toIndex=null){
-  const b = currentBoard(); if(!b) return;
-  const fromCol = findColumnByCard(b, cardId);
-  const toCol = b.columns.find(c => c.id === toColId);
-  const card = b.cards[cardId];
-  if(!fromCol || !toCol || !card) return;
-  if(naklios.capabilities.review !== true){ applyCardMove(cardId, toColId, toIndex); return; }
-  const base = boardRevisionSignature(b);
-  const diff = {
-    boardId:b.id, card:cardId, cardTitle:card.title,
-    from:fromCol.id, fromName:fromCol.name, fromIndex:fromCol.cardIds.indexOf(cardId),
-    to:toCol.id, toName:toCol.name,
-    toIndex:Number.isInteger(toIndex) ? toIndex : toCol.cardIds.filter(id=>id!==cardId).length,
-  };
-  try{
-    const staged = await naklios.review.stage('kanzen.card-move', diff, { reversible:true });
-    pendingCardMoves.set(staged.proposal_id, { base, diff });
-    closeMovePopover();
-    toast('Card move staged for review');
-  }catch(error){ toast('Could not stage card move: '+String(error?.message||error)); }
-}
+// NakliOS review holds agent proposals only (kzPumpHostReview stages them as kanzen.agent). The person's own
+// edits, card moves included, apply at once with the normal undo, per the NakliOS app contract.
 naklios.review?.onDecision?.(({type,proposal_id})=>{
-  // Agent proposals staged with NakliOS (see kzHostDecision); undefined when not one of them.
   const agentDecision = typeof kzHostDecision === 'function' ? kzHostDecision(type, proposal_id) : undefined;
   if(agentDecision !== undefined) return agentDecision;
-  const pending = pendingCardMoves.get(proposal_id);
-  if(!pending) throw new Error('KanZen has no pending card move for this proposal');
-  if(type==='discard'){
-    pendingCardMoves.delete(proposal_id);
-    toast('Card move discarded');
-    return;
-  }
-  if(type!=='commit') throw new Error('Unknown review decision');
-  const b = S.boards[pending.diff.boardId];
-  if(!b || boardRevisionSignature(b)!==pending.base) throw new Error('Board changed after review staging');
-  if(currentBoard()?.id!==b.id) throw new Error('Open the staged board before committing its card move');
-  applyCardMove(pending.diff.card, pending.diff.to, pending.diff.toIndex);
-  pendingCardMoves.delete(proposal_id);
-  toast('Card move committed');
-  return {ok:true};
+  throw new Error('KanZen has no pending change for this proposal');
 });
 function moveCardTo(cardId, toColId, toIndex){
   const input = { card_id: cardId, column_id: toColId };
@@ -12518,11 +12483,6 @@ async function cmdMoveCard(input, ctx){
   kzCard(b, input.card_id);
   kzColumn(b, input.column_id);
   const position = Number.isInteger(input.position) ? input.position : null;
-  // A person's own move inside NakliOS stages for the host's review (see stageCardMove).
-  if(ctx.actor === 'person'){
-    await stageCardMove(input.card_id, input.column_id, position);
-    return { card_id: input.card_id, column_id: input.column_id };
-  }
   applyCardMove(input.card_id, input.column_id, position, ctx);
   return { card_id: input.card_id, column_id: input.column_id, position: kzColumn(b, input.column_id).cardIds.indexOf(input.card_id) };
 }
@@ -13586,7 +13546,7 @@ async function kzPumpHostReview(){
   if(!KZ_AGENT.hostActive) kzPumpHostReview();
 }
 // NakliOS decided: commit applies the proposal through the same path as an in-app approval.
-// Returns undefined for a proposal this module did not stage, so card moves pass through.
+// Returns undefined for a proposal this module did not stage.
 function kzHostDecision(type, hostId){
   const active = KZ_AGENT.hostActive;
   if(!active || active.hostId !== hostId) return undefined;
