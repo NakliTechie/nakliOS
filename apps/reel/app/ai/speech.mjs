@@ -9,6 +9,8 @@
  * Removing the model leaves every other feature as it was.
  * No DOM or location access at module top level: build-commands.mjs imports this in Node. */
 
+import { decodeWithFallback } from './logic.mjs';
+
 const fail = (code, message) => Object.assign(new Error(message), { code });
 const SONELLA_BASE = () => new URL('../sonella/', location.href).href;
 const MODEL_DIR = 'ai/whisper-tiny-ff41770/';
@@ -155,9 +157,14 @@ function load() {
   return p;
 }
 
-/* 16 kHz mono, at most 30 s, in; text and segment chunks (seconds from the window start) out. */
+/* 16 kHz mono, at most 30 s, in; text and segment chunks (seconds from the window start) out.
+ * A window whose text loops (zlib compression ratio above 2.4) is decoded again at rising temperatures,
+ * as Whisper's transcribe() does; the result says which temperature won and whether it still loops. */
 export async function transcribeLocal(audio, { language } = {}) {
   await load();
-  const r = await ask({ type: 'run', audio, language: language || null });
-  return { text: r.text, chunks: r.chunks || [] };
+  const out = await decodeWithFallback(async temperature => {
+    const r = await ask({ type: 'run', audio, language: language || null, temperature });
+    return { text: r.text, chunks: r.chunks || [] };
+  });
+  return { text: out.text, chunks: out.chunks, temperature: out.temperature, compressionRatio: out.compressionRatio, looped: out.looped, attempts: out.attempts };
 }

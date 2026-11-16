@@ -146,7 +146,8 @@ export function install(ctx) {
       #mount-panels{position:fixed;left:0;right:0;top:auto;bottom:0;width:auto;max-height:60vh;border-radius:16px 16px 0 0;
         padding:14px 20px max(14px,env(safe-area-inset-bottom));z-index:20}
     }
-    .platform-pip-placeholder{display:grid;place-items:center;gap:10px;min-height:200px;color:var(--dim);font-size:13px;text-align:center}
+    .platform-pip-placeholder{display:grid;place-content:center;justify-items:center;gap:10px;min-height:200px;color:var(--dim);font-size:13px;text-align:center;
+      align-self:stretch;justify-self:stretch;box-sizing:border-box;padding:12px 12px calc(var(--reel-controls-inset,0px) + 12px)}
     .platform-pip-placeholder button{color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 12px;background:transparent;font:inherit;cursor:pointer}
     .player-capsule{transition:opacity .25s}
     .platform-idle .player-capsule{opacity:0;pointer-events:none}
@@ -187,6 +188,8 @@ export function install(ctx) {
     state.pip.active = active;
     state.pip.mode = active ? mode : null;
     pipButton.setAttribute('aria-pressed', String(active));
+    // The bar stays shown during PiP, and the placeholder pads itself by the bar's height (defect 4).
+    showControls();
   }
 
   function inIframe() {
@@ -595,7 +598,7 @@ export function install(ctx) {
     el.addEventListener('animationend', () => el.remove());
     setTimeout(() => el.remove(), 900); // reduced motion turns the animation off
   }
-  function toggleTouchControls() { stageBox.classList.toggle('platform-touch-hide'); }
+  let toggleTouchControls = () => {}; // set with the control bar visibility code below
   function endGesture() { gesture = null; }
 
   hit.addEventListener('pointerdown', event => {
@@ -673,33 +676,111 @@ export function install(ctx) {
   ctx.on('ui:media-cleared', () => {
     stageBox.classList.remove('platform-touch-hide');
     preview.hidden = true;
+    showControls();
   });
 
-  /* Controls hide after 3 s without pointer movement while playing in fullscreen. */
+  /* ---------------------------------------------------------- control bar visibility
+   * Batch 6 defect 1: one owner for hiding the bar. While playing, the bar hides after 3 s without
+   * pointer movement, in a window and in fullscreen, wherever it lies over the picture. Pointer
+   * movement, focus, any key and pause show it again. It stays while a panel or dialog is open, while
+   * keyboard focus or the pointer is on it, and during Picture-in-Picture. Where the bar sits below
+   * the picture (the phone layout) it hides only in fullscreen.
+   * Contract with app/subtitles: `--reel-controls-inset` on #player is the height in px of the stage
+   * the bar covers (0px while hidden; on the phone layout the bar's band, which stays out of the
+   * picture), and `ui:controls` {visible, insetPx} is emitted whenever either changes. */
+  const player = stageBox.closest('#player') || document.getElementById('player');
+  const capsule = stageBox.querySelector('.player-capsule');
+  const controls = state.controls = { visible: true, insetPx: 0 };
   let idleTimer = 0;
-  function showControls() {
-    clearTimeout(idleTimer);
-    idleTimer = 0;
-    stageBox.classList.remove('platform-idle');
+  let pointerOnBar = false;
+
+  const barOverlaysPicture = () => !!capsule && getComputedStyle(capsule).position === 'absolute';
+  function measureInset(visible) {
+    if (!capsule) return 0;
+    const stage = stageBox.getBoundingClientRect();
+    const bar = capsule.getBoundingClientRect();
+    if (!(stage.height > 0) || !(bar.height > 0)) return 0;
+    const band = Math.max(0, Math.min(Math.round(stage.height), Math.round(stage.bottom - bar.top)));
+    if (!barOverlaysPicture()) return band;
+    return visible ? band : 0;
   }
-  document.addEventListener('keydown', () => stageBox.classList.remove('platform-touch-hide'));
+  function publish() {
+    const visible = !stageBox.classList.contains('platform-idle') && !stageBox.classList.contains('platform-touch-hide');
+    const insetPx = measureInset(visible);
+    player?.style.setProperty('--reel-controls-inset', `${insetPx}px`);
+    if (visible === controls.visible && insetPx === controls.insetPx) return;
+    controls.visible = visible;
+    controls.insetPx = insetPx;
+    ctx.Events.emit('ui:controls', { visible, insetPx });
+  }
   function keyboardFocusInStage() {
     const active = document.activeElement;
     if (!active || !stageBox.contains(active)) return false;
     try { return active.matches(':focus-visible'); } catch { return true; }
   }
+  function holdsControls() {
+    return !!ctx.panels?.current?.()
+      || !!document.querySelector('dialog[open]')
+      || keyboardFocusInStage()
+      || pointerOnBar
+      || state.pip.active;
+  }
+  function mayHide() {
+    return store.ui.screen === 'player' && !!store.clock?.playing
+      && (!!document.fullscreenElement || barOverlaysPicture()) && !holdsControls();
+  }
+  function showControls() {
+    clearTimeout(idleTimer);
+    idleTimer = 0;
+    stageBox.classList.remove('platform-idle');
+    publish();
+  }
   function armIdle() {
     showControls();
-    if (!document.fullscreenElement || !store.clock?.playing) return;
+    if (!store.clock?.playing) return;
     idleTimer = setTimeout(() => {
-      if (document.fullscreenElement && store.clock?.playing && !keyboardFocusInStage()) {
-        stageBox.classList.add('platform-idle');
-      }
+      idleTimer = 0;
+      if (mayHide()) stageBox.classList.add('platform-idle');
+      publish();
     }, IDLE_MS);
   }
-  document.addEventListener('pointermove', armIdle);
-  document.addEventListener('pointerdown', armIdle);
-  document.addEventListener('keydown', armIdle);
-  document.addEventListener('focusin', showControls);
+  toggleTouchControls = () => {
+    if (controls.visible) {
+      clearTimeout(idleTimer);
+      idleTimer = 0;
+      stageBox.classList.add('platform-touch-hide');
+      publish();
+    } else {
+      stageBox.classList.remove('platform-touch-hide');
+      armIdle();
+    }
+  };
+  // A touch on the picture is a gesture (tap toggles the bar), so only touches on the bar re-arm it.
+  const onPointer = event => {
+    if (event.pointerType === 'touch' && !capsule?.contains(event.target)) return;
+    armIdle();
+  };
+  document.addEventListener('pointermove', onPointer);
+  document.addEventListener('pointerdown', onPointer);
+  document.addEventListener('keydown', () => {
+    stageBox.classList.remove('platform-touch-hide');
+    armIdle();
+  });
+  document.addEventListener('focusin', () => {
+    stageBox.classList.remove('platform-touch-hide');
+    armIdle();
+  });
   document.addEventListener('fullscreenchange', armIdle);
+  capsule?.addEventListener('pointerenter', event => { if (event.pointerType !== 'touch') pointerOnBar = true; });
+  capsule?.addEventListener('pointerleave', () => { pointerOnBar = false; armIdle(); });
+  ctx.on('ui:panel', armIdle);
+  if (typeof ResizeObserver === 'function') {
+    const observer = new ResizeObserver(() => publish());
+    observer.observe(stageBox);
+    if (capsule) observer.observe(capsule);
+  }
+  publish();
+  if (new URLSearchParams(location.search).get('dev') === '1') {
+    globalThis.__reelControls = Object.freeze({ state: () => ({ ...controls }), idleMs: IDLE_MS });
+  }
 }

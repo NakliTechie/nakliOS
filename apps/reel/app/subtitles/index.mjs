@@ -154,7 +154,7 @@ export function install(ctx) {
     onLayout: fn => captions.onLayout(fn),
     onFailure: message => rendererStopped('styled', message),
   });
-  const bitmap = createBitmapRenderer({ layer: captions.layer, onFailure: message => rendererStopped('bitmap', message) });
+  const bitmap = createBitmapRenderer({ layer: captions.layer, onLayout: fn => captions.onLayout(fn), onFailure: message => rendererStopped('bitmap', message) });
 
   /* A canvas renderer failed after it started (a worker error or a watchdog): show plain text
    * again where there is any, and tell the person. */
@@ -604,6 +604,9 @@ export function install(ctx) {
       styledError: styled.error(),
       bitmapStatus: bitmap.status(),
       bitmapError: bitmap.error(),
+      // Control-bar clearance in CSS pixels: the bar's inset on the stage, and how much of it covers the picture.
+      // styledLiftPx and bitmapLiftPx: how far each canvas renderer moved its bottom lines, in canvas pixels.
+      clearance: { ...captions.clearance(), styledLiftPx: styled.lift(), bitmapLiftPx: bitmap.lift() },
     };
   }
 

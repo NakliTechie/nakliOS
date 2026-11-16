@@ -2031,6 +2031,10 @@
           "destination": "app/core/registry.mjs"
         },
         {
+          "source": "app/core/shell-logic.mjs",
+          "destination": "app/core/shell-logic.mjs"
+        },
+        {
           "source": "app/door/index.mjs",
           "destination": "app/door/index.mjs"
         },
@@ -2105,6 +2109,10 @@
         {
           "source": "app/subtitles/index.mjs",
           "destination": "app/subtitles/index.mjs"
+        },
+        {
+          "source": "app/subtitles/lift.mjs",
+          "destination": "app/subtitles/lift.mjs"
         },
         {
           "source": "app/subtitles/match.mjs",

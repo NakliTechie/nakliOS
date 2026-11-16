@@ -10,7 +10,7 @@
      wasm instantiation); 'wasm-unsafe-eval' lets the software audio rung (AC-3, E-AC-3, DTS) compile
      its WebAssembly, which is that one exception. -->
 <!-- frame-ancestors must be delivered as an HTTP response header; browsers ignore it in meta CSP. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-33MgyLU1H2Cr/GM152Dr9LzgAbTjKrASVIFq7rzssPY=' 'sha256-apOTInHoqp+IhnuNDmFtHp6x0heKs439I6Lp4Di1J9w=' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-33MgyLU1H2Cr/GM152Dr9LzgAbTjKrASVIFq7rzssPY=' 'sha256-qV1cEoiB7ufgNOuszjTmY4sx7zqHWAqCgzUDEezGsZY=' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="reel-version" content="0.0.11-m0">
 <meta name="description" content="Play MKV, MP4, and WebM videos privately in your browser. Files stay on your device.">
 <meta name="theme-color" content="#000000">
@@ -76,7 +76,11 @@
     overflow:hidden;text-align:left;transition:border-color .2s,transform .15s
   }
   .card:hover{border-color:var(--dim);transform:translateY(-2px)}
-  .thumb{height:86px;position:relative;background:var(--surface-2)}
+  .thumb{height:86px;position:relative;background:var(--surface-2);overflow:hidden}
+  .thumb img{display:block;width:100%;height:100%;object-fit:cover}
+  .thumb.placeholder{background:linear-gradient(135deg,var(--surface-2),var(--surface))}
+  .thumb.placeholder::after{content:'';position:absolute;left:50%;top:50%;width:0;height:0;margin:-9px 0 0 -6px;
+    border-style:solid;border-width:9px 0 9px 14px;border-color:transparent transparent transparent var(--line)}
   .progress{position:absolute;left:0;bottom:0;height:2px;background:var(--accent)}
   .card .meta{padding:10px 12px}
   .card .name{font-size:12.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -102,6 +106,7 @@
   .rung{display:flex;gap:6px;align-items:center}
   .rung.sw .dot{background:var(--sw)}
   .rung.refused .dot{background:var(--refused)}
+  .rung.pending .dot{background:transparent;border:1px solid var(--dim)}
   .dot{width:6px;height:6px;border-radius:50%;background:var(--hw)}
   #player-seek{display:block;width:100%;height:22px;margin:0;accent-color:var(--accent);cursor:pointer}
   .player-controls{display:flex;align-items:center;gap:5px}
@@ -112,6 +117,24 @@
   .player-controls .timecode{font-variant-numeric:tabular-nums;font-size:12px;color:var(--dim);margin-left:5px}
   .player-controls .timecode b{color:var(--text);font-weight:500}
   .player-controls .spacer{flex:1}
+  /* Batch 6 defect 10: the row stays one line at 980 px (a NakliOS window). Controls never shrink or
+     break mid-label; only the chapter name and the spacer give way. Under 1120 px of capsule the gaps
+     and padding tighten and the volume slider leaves (mute, arrow keys and the wheel still set volume);
+     narrower still, whole controls wrap onto a second line, so the fullscreen button stays in view. */
+  .player-capsule{container-type:inline-size}
+  .player-controls > :not(.spacer):not(.mount-controls), .player-controls .mount-controls > *{flex-shrink:0}
+  .player-controls .transport-chapter{flex-shrink:1;min-width:0}
+  .player-controls button, .player-controls .timecode{white-space:nowrap}
+  @container (max-width:1120px){
+    .player-controls{gap:2px}
+    .player-controls button{padding:0 6px}
+    .player-controls select{padding:0 4px}
+    .player-controls .timecode{margin-left:3px;margin-right:3px}
+    #player-volume{display:none}
+  }
+  @container (max-width:860px){
+    .player-controls{flex-wrap:wrap;row-gap:4px}
+  }
   #player-volume{width:92px;accent-color:var(--accent)}
   .mount-row{display:flex;justify-content:center;gap:10px;margin-top:14px}
   .mount-row:empty{display:none}
@@ -1536,6 +1559,8 @@ import { createReelEngine } from './engine/reel-engine.mjs';
 import { createRegistry, keySpec } from './app/core/registry.mjs';
 import { MODULES } from './app/modules.mjs';
 import { COMMANDS as CORE_COMMANDS } from './app/core/commands.mjs';
+import { subtitleSummary, decoderKey, isFinished, markFinished, timeLeft } from './app/core/shell-logic.mjs';
+import { POSTER_DIR, posterName } from './app/library/logic.mjs';
 
 /* ============================================================================
  * Reel — sovereign browser media player. M0 engine spine (Batch A).
@@ -1583,6 +1608,8 @@ const STRINGS = {
     'privacy': 'Plays entirely on this device. <em>No upload, no account, no telemetry.</em>',
     'recent.title': 'Continue watching',
     'recent.minutesLeft': '{minutes} min left',
+    'recent.secondsLeft': '{seconds} s left',
+    'recent.unknownLeft': 'Length unknown',
     'recent.open': 'Open {name} to continue',
     'player.untitled': 'Video',
     'player.loading': 'Reading this video on your device…',
@@ -1618,6 +1645,8 @@ const STRINGS = {
     'control.fullscreen': 'Fullscreen',
     'honesty.webCodecs': 'WebCodecs R1',
     'honesty.software': 'software decoder',
+    'honesty.libav': 'libav software decoder',
+    'honesty.pending': 'decoder chosen at play',
     'honesty.refused': 'refused: {reason}',
     'honesty.local': 'all decoding on this device',
     'metadata.resumeUnavailable': 'Resume is unavailable for this file.',
@@ -1802,6 +1831,8 @@ const MetadataSync = (() => {
       durationS: Number.isFinite(Number(item.durationS)) ? Math.max(0, Number(item.durationS)) : 0,
       container: typeof item.container === 'string' ? item.container.slice(0, 32) : null,
       updatedAt: Number.isFinite(Number(item.updatedAt)) ? Number(item.updatedAt) : 0,
+      // Batch 6 defect 7 (spec row L4): a film played to its end keeps its entry, marked finished.
+      ...(item.finished === true ? { finished: true } : {}),
     };
   }
 
@@ -2106,7 +2137,9 @@ async function persistCurrentResume() {
   const entry = currentResumeEntry();
   if (!entry) return null;
   try {
-    const result = await MetadataSync.upsertResume(entry);
+    // A film in its last 5 s or 5% is saved as finished at 0 (batch 6 defect 7); any other position
+    // is a normal save, which also clears an earlier finished mark.
+    const result = await MetadataSync.upsertResume(isFinished(entry.positionS, entry.durationS) ? markFinished(entry) : entry);
     lastResumeError = null;
     return result;
   } catch (error) {
@@ -2125,6 +2158,13 @@ async function restoreCurrentResume() {
   const entry = entries.find(item => item.fingerprint === state.media.fingerprint);
   if (!entry) return 0;
   const positionS = Math.max(0, Math.min(state.media.duration, Number(entry.positionS) || 0));
+  // A finished film starts at 0 with no resume notice; an end position saved before defect 7's fix
+  // is marked finished now.
+  if (entry.finished) return 0;
+  if (isFinished(positionS, state.media.duration)) {
+    await MetadataSync.upsertResume(markFinished(entry)).catch(() => {});
+    return 0;
+  }
   if (positionS > 0) await Engine.seek(positionS);
   return positionS;
 }
@@ -2186,50 +2226,70 @@ function stopPlayerUi() {
   playerUiFrame = 0;
 }
 
+/* The route the engine reported for this load's audio (playback:audio-route), so a route that arrives
+   before the chips render is not lost. Cleared in clearPlayerMedia, before the next Engine.load. */
+let audioRouteSeen = null;
+
+/* Decoder chips (batch 6 defect 3): each names the path actually used. Video is known from the
+   track (libav backend or WebCodecs); audio reads "decoder chosen at play" until the engine reports
+   its route, because the route is picked when playback starts. */
+function decoderChip(track, key) {
+  const item = document.createElement('span');
+  item.className = 'rung';
+  const dot = document.createElement('span');
+  dot.className = 'dot';
+  item.append(dot, document.createTextNode(`${track.codecParameter || track.codec} → ${t(key)}`));
+  item.dataset.decoder = key.slice('honesty.'.length);
+  item.classList.toggle('sw', key === 'honesty.libav' || key === 'honesty.software');
+  item.classList.toggle('pending', key === 'honesty.pending');
+  return item;
+}
+
 function renderHonesty(metadata) {
   const host = $('#player-honesty');
   const video = metadata.tracks.find(track => track.type === 'video');
-  const audio = metadata.tracks.find(track => track.type === 'audio');
+  const audioTracks = metadata.tracks.filter(track => track.type === 'audio');
   const subtitles = metadata.tracks.filter(track => track.type === 'subtitle');
-  const rung = track => {
-    const item = document.createElement('span');
-    item.className = 'rung';
-    const dot = document.createElement('span');
-    dot.className = 'dot';
-    item.append(dot, document.createTextNode(`${track.codecParameter || track.codec} → ${t('honesty.webCodecs')}`));
-    return item;
-  };
   const local = document.createElement('span');
   local.className = 'local';
   local.textContent = t('honesty.local');
-  const selectedAudio = metadata.tracks.filter(track => track.type === 'audio')[store.tracks.selected.audio ?? 0] || audio;
-  const audioItem = selectedAudio && rung(selectedAudio);
+  const selectedAudio = audioTracks[store.tracks.selected.audio ?? 0] || audioTracks[0];
+  const audioItem = selectedAudio && decoderChip(selectedAudio, decoderKey(selectedAudio, audioRouteSeen?.route));
   if (audioItem) audioItem.dataset.audioBadge = '';
-  const items = [video && rung(video), audioItem];
+  const items = [video && decoderChip(video, decoderKey(video)), audioItem];
   if (subtitles.length) {
+    // Defect 2: every codec by name, with a count when one repeats ("SRT ×2 · PGS").
     const text = document.createElement('span');
     text.className = 'rung';
-    text.textContent = `${subtitles[0].codec.toUpperCase()} ×${subtitles.length}`;
+    text.dataset.subtitleSummary = '';
+    text.textContent = subtitleSummary(subtitles);
     items.push(text);
   }
   host.replaceChildren(...items.filter(Boolean), local);
+  if (audioRouteSeen?.refused) updateAudioBadge(audioRouteSeen.detail, true);
 }
 
-/* The audio badge names the decoder actually used (WebCodecs, the software rung, or a refusal). */
+/* The audio badge names the decoder actually used (WebCodecs, the software rung, libav, or a refusal). */
 function updateAudioBadge({ codec, route, message, name } = {}, refused = false) {
+  audioRouteSeen = refused ? { refused: true, detail: { codec, route, message, name } } : { route, codec };
   const item = $('#player-honesty [data-audio-badge]');
   if (!item) return;
-  const label = refused ? t('honesty.refused', { reason: name || message || codec })
-    : route === 'software' ? t('honesty.software') : t('honesty.webCodecs');
+  const key = refused ? null : decoderKey({ type: 'audio' }, route);
+  const label = refused ? t('honesty.refused', { reason: name || message || codec }) : t(key);
   item.lastChild.textContent = `${codec || ''} → ${label}`;
-  item.classList.toggle('sw', route === 'software' && !refused);
+  item.dataset.decoder = refused ? 'refused' : key.slice('honesty.'.length);
+  item.classList.toggle('sw', !refused && (route === 'software' || route === 'libav'));
+  item.classList.toggle('pending', !refused && key === 'honesty.pending');
   item.classList.toggle('refused', refused);
 }
 Events.on('playback:audio-route', event => updateAudioBadge(event.detail));
 Events.on('playback:audio-refused', event => updateAudioBadge(event.detail, true));
 
 function clearPlayerMedia() {
-  persistCurrentResume().catch(() => {});
+  // Save only while the player shows its file. After Back the position is already saved, and saving
+  // the engine's still-held file again on the next open could overwrite a newer position that Crate
+  // synced from another device (found in the batch 6 capture fixes).
+  if (store.ui.screen === 'player') persistCurrentResume().catch(() => {});
   // clearPicture pauses and closes every held frame (queued, on screen, the WebGPU snapshot clone): release D5.
   if (typeof Engine.clearPicture === 'function') Engine.clearPicture(); else Engine.pause();
   stopPlayerUi();
@@ -2238,6 +2298,7 @@ function clearPlayerMedia() {
   $('#player-title').textContent = t('player.untitled');
   $('#player-status').textContent = t('player.loading');
   $('#player-honesty').replaceChildren();
+  audioRouteSeen = null;
   $('#player-seek').max = '0';
   $('#player-seek').value = '0';
   seekDragging = false;
@@ -2389,23 +2450,53 @@ async function toggleMetadataSync() {
   await renderRecent();
 }
 
+/* The poster the library view cached for a fingerprint (app/library: OPFS reel-posters/<name>.webp),
+   as an object URL, or null when there is none or no OPFS. */
+async function recentPoster(fingerprint) {
+  try {
+    const root = await navigator.storage.getDirectory();
+    const directory = await root.getDirectoryHandle(POSTER_DIR);
+    const handle = await directory.getFileHandle(posterName(fingerprint));
+    return URL.createObjectURL(await handle.getFile());
+  } catch (_) {
+    return null;
+  }
+}
+
+let recentGeneration = 0;
 async function renderRecent() {
+  const generation = ++recentGeneration;
   let list = [];
   try { list = await MetadataSync.listResume(); } catch (_) {}
+  if (generation !== recentGeneration) return;
+  list = list.filter(item => !item.finished); // finished films are watched, not in progress
   const wrap = $('#recent'), row = $('#recent-row');
   if (!list.length) { wrap.hidden = true; return; } // no fabricated cards on first run
-  row.replaceChildren();
+  const cards = [];
   for (const item of list.slice(0, 3)) {
     const duration = Number(item.durationS);
     const position = Number(item.positionS);
     const hasDuration = Number.isFinite(duration) && duration > 0;
     const safePosition = Number.isFinite(position) ? Math.max(0, position) : 0;
     const pct = hasDuration ? Math.min(100, Math.round((safePosition / duration) * 100)) : 0;
-    const left = hasDuration ? Math.max(0, Math.round((duration - safePosition) / 60)) : '?';
+    const left = timeLeft(safePosition, duration);
     const b = document.createElement('button');
     b.className = 'card';
     const thumb = document.createElement('div');
     thumb.className = 'thumb';
+    // Batch 6 defect 6: the library's cached poster when it has one; the neutral tile otherwise.
+    const posterUrl = await recentPoster(item.fingerprint);
+    if (generation !== recentGeneration) { if (posterUrl) URL.revokeObjectURL(posterUrl); return; }
+    if (posterUrl) {
+      const img = document.createElement('img');
+      img.alt = '';
+      img.src = posterUrl;
+      img.addEventListener('load', () => URL.revokeObjectURL(posterUrl), { once: true });
+      img.addEventListener('error', () => { URL.revokeObjectURL(posterUrl); img.remove(); }, { once: true });
+      thumb.appendChild(img);
+    } else {
+      thumb.classList.add('placeholder');
+    }
     const progress = document.createElement('div');
     progress.className = 'progress';
     progress.style.width = `${pct}%`;
@@ -2417,7 +2508,7 @@ async function renderRecent() {
     name.textContent = String(item.name || t('player.untitled'));
     const sub = document.createElement('div');
     sub.className = 'sub';
-    sub.textContent = t('recent.minutesLeft', { minutes: left });
+    sub.textContent = left ? t(left.key, left) : t('recent.unknownLeft');
     meta.append(name, sub);
     b.append(thumb, meta);
     b.type = 'button';
@@ -2426,8 +2517,9 @@ async function renderRecent() {
     b.addEventListener('click', () => {
       Promise.resolve(pickFile()).catch(error => surface('file-open', error));
     });
-    row.appendChild(b);
+    cards.push(b);
   }
+  row.replaceChildren(...cards);
   wrap.hidden = false;
 }
 
@@ -2702,6 +2794,12 @@ function wireEmpty() {
    after a seek, and start the write when the tab hides, which fires early enough to commit on reload.
    pagehide stays as a last attempt. */
 Events.on('playback:pause', () => { persistCurrentResume().catch(() => {}); });
+/* Played to the end (batch 6 defect 7): the entry is kept, marked finished at 0, so the library
+   counts it watched and Continue watching skips it. */
+Events.on('playback:ended', () => {
+  const entry = currentResumeEntry();
+  if (entry) MetadataSync.upsertResume(markFinished(entry)).catch(() => {});
+});
 {
   let seekSaveTimer = 0;
   Events.on('playback:seek', () => {

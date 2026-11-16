@@ -11,7 +11,32 @@
  * Failure after start (review finding V19): an error listener stays on the JASSUB instance for
  * the worker's life, and a watchdog fails the renderer when a render stays busy for longer than
  * BUSY_TIMEOUT_MS. Either calls onFailure(message), so the caller shows plain text again.
- * libass caches are capped through libassMemoryLimit and libassGlyphLimit (MiB). */
+ * libass caches are capped through libassMemoryLimit and libassGlyphLimit (MiB).
+ *
+ * Control-bar clearance (defect 1): Reel passes its own canvas, so JASSUB draws on the page
+ * thread in _render({ images: [{ x, y, w, h, image }], width, height }). The wrapper moves the
+ * bottom group of those images up before JASSUB draws them (liftImages, lift.mjs), so lines
+ * anchored low clear the bar and keep their size; top-anchored lines are not moved. */
+
+/* Moves the bottom group of a JASSUB render message's images up so they end above clearY
+ * (layer CSS pixels, from rect). Changes message.images in place; returns the lift in canvas px. */
+export function liftImages(message, rect) {
+  const images = message?.images;
+  const height = Number(message?.height);
+  if (!Array.isArray(images) || !images.length || !(height > 0) || !(rect?.height > 0)) return 0;
+  const clearY = Number.isFinite(rect.clearY) ? rect.clearY : rect.height;
+  if (clearY >= rect.height) return 0;
+  // An image without a size (JASSUB's whole-canvas hybrid mode) cannot be placed; leave all as drawn.
+  if (images.some(image => !(Number(image?.h) >= 0) || !Number.isFinite(Number(image?.y)))) return 0;
+  const scale = height / rect.height;
+  const { lift, moved } = liftBoxes(images.map(image => ({ y: Number(image.y), h: Number(image.h) })), height, clearY * scale);
+  if (!lift) return 0;
+  const whole = Math.ceil(lift);
+  for (let i = 0; i < images.length; i += 1) if (moved[i]) images[i].y -= whole;
+  return whole;
+}
+
+import { liftBoxes } from './lift.mjs';
 
 const VENDOR = '../../vendor/jassub/';
 const READY_TIMEOUT_MS = 20_000;
@@ -64,19 +89,30 @@ export function createStyledRenderer({
   let lastSize = '';
   let unsubscribe = null;
   let token = 0;
+  let rect = null;
+  let lastClear = NaN;
+  let lastLift = 0;
+  let canvasSize = null; // [width, height] last sent to JASSUB
+  let redraw = false;
 
-  function size(rect) {
-    if (!jassub || !rect?.width || !rect?.height) return;
+  function size(next) {
+    rect = next;
+    const clear = Number.isFinite(next?.clearY) ? next.clearY : next?.height;
+    // A new clearance redraws the current frame, so lines move when the bar shows or hides. libass
+    // reports "no change" for the same time, so a forced redraw goes through resize (see frame).
+    if (clear !== lastClear) { lastClear = clear; redraw = true; }
+    if (!jassub || !next?.width || !next?.height) return;
     const dpr = globalThis.devicePixelRatio || 1;
-    const width = Math.max(1, Math.round(rect.width * dpr));
-    const height = Math.max(1, Math.round(rect.height * dpr));
-    const videoWidth = rect.pictureWidth || width;
-    const videoHeight = rect.pictureHeight || height;
+    const width = Math.max(1, Math.round(next.width * dpr));
+    const height = Math.max(1, Math.round(next.height * dpr));
+    const videoWidth = next.pictureWidth || width;
+    const videoHeight = next.pictureHeight || height;
     const key = `${width}x${height}:${videoWidth}x${videoHeight}`;
     if (key === lastSize) return;
     lastSize = key;
     jassub._videoWidth = videoWidth;
     jassub._videoHeight = videoHeight;
+    canvasSize = [width, height];
     jassub.resize(width, height, 0, 0);
     lastTime = NaN;
   }
@@ -115,6 +151,13 @@ export function createStyledRenderer({
       });
       if (mine !== token) return status;
       const instance = jassub;
+      if (typeof instance._render === 'function') {
+        const draw = instance._render.bind(instance);
+        instance._render = message => {
+          try { lastLift = liftImages(message, rect); } catch { lastLift = 0; }
+          return draw(message);
+        };
+      }
       instance.addEventListener('error', event => {
         if (mine !== token || jassub !== instance) return;
         fail(event?.error?.message || event?.message || 'JASSUB failed.');
@@ -151,6 +194,12 @@ export function createStyledRenderer({
     } else {
       busySince = null;
     }
+    if (redraw && canvasSize && !jassub.busy) {
+      redraw = false;
+      // resize with force: the worker re-renders its current time even though libass sees no change.
+      jassub.resize(canvasSize[0], canvasSize[1], 0, 0, true);
+      return;
+    }
     if (jassub._onDemandRender) {
       if (timeS === lastTime || jassub.busy) return;
       lastTime = timeS;
@@ -173,6 +222,10 @@ export function createStyledRenderer({
     canvas = null;
     lastTime = NaN;
     lastSize = '';
+    lastClear = NaN;
+    lastLift = 0;
+    canvasSize = null;
+    redraw = false;
     busySince = null;
     if (status !== 'failed') status = 'idle';
   }
@@ -184,6 +237,7 @@ export function createStyledRenderer({
     status: () => status,
     error: () => error,
     canvas: () => canvas,
+    lift: () => lastLift,
     reset() { stop(); status = 'idle'; error = null; },
   };
 }
