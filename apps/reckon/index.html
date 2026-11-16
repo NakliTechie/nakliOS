@@ -7410,7 +7410,14 @@ export function createEngine(HF, { hfOptions = HF_OPTS } = {}) {
   // cleared or replaced, so such a write is followed by a full engine rebuild.
   const writeCellSafe = (sheet, a1, raw, anchors) => {
     const at = addr(sheet, a1);
-    try { if (hf.isCellPartOfArray(at) && /^=/.test(String(hf.getCellFormula(at) ?? ''))) anchors.hit = true; } catch { /* not an array */ }
+    try {
+      if (hf.isCellPartOfArray(at) && /^=/.test(String(hf.getCellFormula(at) ?? ''))) {
+        anchors.hit = true;
+        // clear the old array first: written over in one step, a larger array
+        // meets its own old cells and shows #SPILL! in the anchor
+        hf.setCellContents(at, [[null]]);
+      }
+    } catch { /* not an array */ }
     const content = encodeCell(raw, sheet, a1);
     // a current formula naming a sheet that does not exist is cleared first:
     // replacing it in one step throws inside HF 3.5.0, and the failed attempt
@@ -7432,7 +7439,11 @@ export function createEngine(HF, { hfOptions = HF_OPTS } = {}) {
       catch { throw first; }
     }
   };
-  const rebuildAfterArrayWrite = () => { markFull(); hf.rebuildAndRecalculate(); registerBooleanLiterals(); };
+  // HF's own rebuildAndRecalculate turns every array's output cells into plain
+  // values (other arrays then show #SPILL!), so the adapter only flags the
+  // write; the session reloads the engine from its serialised workbook
+  let reloadRequested = false;
+  const rebuildAfterArrayWrite = () => { reloadRequested = true; };
   const evalOnce = (fn) => {
     hf.suspendEvaluation();
     try { fn(); } catch (e) { hf.resumeEvaluation(); throw e; }
@@ -7704,6 +7715,8 @@ export function createEngine(HF, { hfOptions = HF_OPTS } = {}) {
     // the engine's CURRENT expression for a defined name (review A4): HF moves
     // a name's references on inserts, deletes, moves and sheet renames, so
     // saving reads them back from here rather than the original text
+    takeReloadRequest() { const r = reloadRequested; reloadRequested = false; return r; },
+
     nameExpr(name) {
       const key = String(name).toUpperCase();
       if (lambdaNames.has(key)) return lambdaNames.get(key);
@@ -8904,6 +8917,10 @@ export function createSession({ engine, baseline, now = () => new Date().toISOSt
           }
         }
         engine.setCells(meta.name, entries);
+        // a write over an array formula leaves HF 3.5.0 with a stale array
+        // vertex (review A3); reload the engine from this session's own
+        // workbook, which holds array formulas without their output cells
+        if (engine.takeReloadRequest && engine.takeReloadRequest()) engine.load(session.serialize());
         break;
       }
       case 'setFormat': {
