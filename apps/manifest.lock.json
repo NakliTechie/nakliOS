@@ -7783,14 +7783,14 @@
       "id": "chartella",
       "repo": "NakliTechie/chartella",
       "requestedRef": "main",
-      "resolvedCommit": "6ddd4e281897b57c3f530df1b9468c1471eaa391",
+      "resolvedCommit": "af4623e75185da33d91865357c9c31f1854a8b38",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "46eee5ab3fdbad8f69640d1b06604452450ba318d22e43ab952c7c052f31b62a",
-          "bytes": 915367,
-          "originalSourceSha256": "df74033862bf9d766ac20d6b17d2dd00a17159b2534b414db0b5ed75ad76089a",
+          "sha256": "4eb74f30b249bbf097d0ebc9439b4a3a4700acca197691e94c7f139590f1467d",
+          "bytes": 915564,
+          "originalSourceSha256": "b56c37640b1704988af9f0e149eac4a8785d5257b0de6ef245350fc05a52e124",
           "sdkSha256": "ec78ab7bd0e82a108847216f33bc6600366f68199f9416959411e5db254405ed"
         },
         {
