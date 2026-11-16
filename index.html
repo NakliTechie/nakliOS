@@ -4415,6 +4415,26 @@ function showAppInfo(win){
   void renderAppInfo(win);
 }
 
+// A window never opens or stays larger than the viewport, so its titlebar buttons stay reachable on a small
+// screen (Reckon review B6, 2026-11-17: a 978 px window ran off a 768 px desktop).
+function clampWindowToViewport(win){
+  if (!win || win.classList.contains('is-fullscreen') || win.classList.contains('is-mobile-window')) return;
+  const margin = 8;
+  const maxW = Math.max(240, innerWidth - margin * 2);
+  const maxH = Math.max(180, innerHeight - margin * 2);
+  const w = Math.min(parseFloat(win.style.width) || win.offsetWidth || maxW, maxW);
+  const h = Math.min(parseFloat(win.style.height) || win.offsetHeight || maxH, maxH);
+  win.style.width = w + 'px';
+  win.style.height = h + 'px';
+  const x = Math.min(Math.max(margin, parseFloat(win.style.left) || 0), Math.max(margin, innerWidth - w - margin));
+  const y = Math.min(Math.max(margin, parseFloat(win.style.top) || 0), Math.max(margin, innerHeight - h - margin));
+  win.style.left = x + 'px';
+  win.style.top = y + 'px';
+}
+window.addEventListener('resize', () => {
+  for (const win of Object.values(openWindows)) if (win && !win.classList.contains('is-minimized')) clampWindowToViewport(win);
+});
+
 function makeWindow(opts){
   const { id, title, width=520, height=420, badge, sandboxed, app } = opts;
   if (openWindows[id]) { focusWindow(openWindows[id]); return openWindows[id]; }
@@ -4444,6 +4464,7 @@ function makeWindow(opts){
   }
   win.style.left = px + 'px';
   win.style.top = py + 'px';
+  clampWindowToViewport(win);
   win.innerHTML = `
     <div class="nw-titlebar">
       ${sandboxed ? `<span class="nw-title-sandbox" title="Runs in an isolated origin. NakliOS can't read its data, and it can't reach back into NakliOS.">🔒 sandboxed</span>` : ''}
