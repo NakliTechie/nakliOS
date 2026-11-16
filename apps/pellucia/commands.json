@@ -1611,7 +1611,7 @@
       "name": "edit.copy",
       "label": "Copy",
       "description": "Copy elements to the clipboard.",
-      "scope": "read",
+      "scope": "write",
       "input": {
         "type": "object",
         "properties": {
@@ -2755,7 +2755,7 @@
       "name": "ai.chat",
       "label": "Chat",
       "description": "Open the chat pane: ask the NakliOS model to change the deck; it uses these commands (or a JSON plan on models without tools), and each turn is one undo step.",
-      "scope": "read",
+      "scope": "write",
       "input": {
         "type": "object",
         "properties": {},
@@ -2852,7 +2852,7 @@
     {
       "name": "a11y.check",
       "label": "Check accessibility",
-      "description": "Check the deck: pictures without alt text, slides without a title, duplicate titles, low-contrast text, empty placeholders, and reading order (the order a screen reader takes, which is drawing order). Returns [{ slide, element?, rule, message }].",
+      "description": "Check the deck: pictures without alt text, slides without a title, duplicate titles, low-contrast text, empty placeholders, and reading order (the order a screen reader takes: the slide reading order, else drawing order). Returns [{ slide, element?, rule, message }].",
       "scope": "read",
       "input": {
         "type": "object",
@@ -2871,7 +2871,7 @@
     {
       "name": "element.reading_order",
       "label": "Reading order",
-      "description": "Set the reading order of a slide's elements (the order screen readers take, which is also the drawing order): ids from first read to last.",
+      "description": "Set the reading order of a slide's elements (the order screen readers take), first read first; elements not listed follow in drawing order. Drawing order does not change (review P34). An empty list clears it.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -2882,6 +2882,10 @@
               "type": "string"
             },
             "description": "Element ids in reading order"
+          },
+          "slide": {
+            "type": "string",
+            "description": "Slide id (default: the slide of the first id, or the current slide)"
           }
         },
         "required": [
