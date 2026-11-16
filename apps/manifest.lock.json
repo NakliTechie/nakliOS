@@ -2853,14 +2853,14 @@
       "id": "reckon",
       "repo": "NakliTechie/reckon",
       "requestedRef": "main",
-      "resolvedCommit": "8ff797bb0d105d34335031d08c515ea0c31c2365",
+      "resolvedCommit": "65d773c13b8145210e83969f23e06cbedbed4bdd",
       "files": [
         {
           "source": "reckon.html",
           "destination": "index.html",
-          "sha256": "f7062efdc87a84b94d93d3ba8e78be19d6c85f53dccc67d733633a5d816583b6",
-          "bytes": 2162685,
-          "originalSourceSha256": "49423ea2d726cfed00ee49d8d88a8be9cc2084de431284c93be7c452df66e7cd",
+          "sha256": "1c4a23725be54ca60406edfa5c80cefc0a74f789a4d85c655429dbce154d4dd0",
+          "bytes": 2172903,
+          "originalSourceSha256": "743c082c4033f1e57e6343cc2bdff973b5edb1cc3ee8c4f5149c9167a6788835",
           "sdkSha256": "ec78ab7bd0e82a108847216f33bc6600366f68199f9416959411e5db254405ed"
         },
         {
