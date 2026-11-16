@@ -65,7 +65,7 @@ never a hand-edit:
    opens a PR when the canonical changed. The app **pulls**; naklios never pushes, so
    no cross-repo tokens — freshness lands within a day, not on the same push.
 
-The nakliOS repo runs `scripts/check-vendored-sdk.mjs` as a fleet drift report across
+The nakliOS repo runs `scripts/sdk-survey.mjs` as a fleet drift report across
 every vendoring app.
 
 **Rule: one SDK, the canonical one.** An app reaches the host only through

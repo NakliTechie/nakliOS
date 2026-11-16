@@ -37,10 +37,28 @@ export function prepareManagedSdk(bytes, mode, sdk) {
     const version=sdkText.match(/@naklios-sdk-version\s+(\d+)/)?.[1];
     if(!version)throw new Error('Canonical SDK version is missing');
     const block=`/* naklios-sdk:begin ver=${version} sha256=${sha256(sdk)} */\n${sdkText.replace(/<\/script/gi,'<\\/script')}\n/* naklios-sdk:end */`;
-    output=Buffer.from(text.slice(0,begins[0].index)+block+text.slice(ends[0].index+ends[0][0].length));
+    let spliced=text.slice(0,begins[0].index)+block+text.slice(ends[0].index+ends[0][0].length);
+    // A page whose Content-Security-Policy pins its inline scripts by hash ('sha256-…', as Draft does) would block the
+    // rewritten script: the browser runs it only if its hash is listed. Re-pin the one script this splice changed.
+    const before=inlineScriptAround(text,begins[0].index), after=inlineScriptAround(spliced,begins[0].index);
+    if(before&&after){
+      const oldPin=`'sha256-${cspHash(before)}'`, newPin=`'sha256-${cspHash(after)}'`;
+      if(oldPin!==newPin&&spliced.includes(oldPin))spliced=spliced.split(oldPin).join(newPin);
+    }
+    output=Buffer.from(spliced);
   }
   return {bytes:output,sha256:sha256(output),originalSourceSha256:sha256(bytes),sdkSha256:sha256(sdk)};
 }
+
+// The text content of the inline <script> element that contains `index`, or null.
+function inlineScriptAround(html,index){
+  const open=html.lastIndexOf('<script',index);if(open<0)return null;
+  const start=html.indexOf('>',open);const close=html.indexOf('</script',index);
+  if(start<0||close<0||start>index||html.slice(open,start).includes(' src='))return null;
+  return html.slice(start+1,close);
+}
+// The value CSP uses for a script hash: base64 SHA-256 of the script text as UTF-8.
+function cspHash(scriptText){return createHash('sha256').update(Buffer.from(scriptText,'utf8')).digest('base64');}
 
 export function normalizeManifest(manifest) {
   if (!manifest || !Array.isArray(manifest.apps)) {

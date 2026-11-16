@@ -204,8 +204,10 @@
         {
           "source": "draft.html",
           "destination": "index.html",
-          "sha256": "8b40540296b8aca93f8c724b7fd7141f8cea64b332d6a8a0b4769a2daa13870d",
-          "bytes": 677919
+          "sha256": "642adfb0068c30160d4446510137fbc4a838092fc690b8b028948c3b0161a9a2",
+          "bytes": 682324,
+          "originalSourceSha256": "8b40540296b8aca93f8c724b7fd7141f8cea64b332d6a8a0b4769a2daa13870d",
+          "sdkSha256": "ec78ab7bd0e82a108847216f33bc6600366f68199f9416959411e5db254405ed"
         },
         {
           "source": "commands.json",
@@ -2208,8 +2210,10 @@
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "285fef0e0e9c2fccd0fc9df69692ae0c52d2ca2f7cc5884cd9885787c96d749e",
-          "bytes": 75818
+          "sha256": "da243d44c663da339ca32b6e30cdb00f951f2dc1613b788763abd4bc70ce42aa",
+          "bytes": 80223,
+          "originalSourceSha256": "285fef0e0e9c2fccd0fc9df69692ae0c52d2ca2f7cc5884cd9885787c96d749e",
+          "sdkSha256": "ec78ab7bd0e82a108847216f33bc6600366f68199f9416959411e5db254405ed"
         },
         {
           "source": "vendor/molstar/5.13.1/molstar.css",
@@ -2510,8 +2514,10 @@
         {
           "source": "reckon.html",
           "destination": "index.html",
-          "sha256": "47f0e4eda2421a4baec7c4c2c275de9f5ce1aede15ca90f9af52ddd15d748d94",
-          "bytes": 1013228
+          "sha256": "4583e2d5dcbc3ed454552f945b3c2abde6a310137069f028b1c160d6512abba3",
+          "bytes": 1017633,
+          "originalSourceSha256": "47f0e4eda2421a4baec7c4c2c275de9f5ce1aede15ca90f9af52ddd15d748d94",
+          "sdkSha256": "ec78ab7bd0e82a108847216f33bc6600366f68199f9416959411e5db254405ed"
         },
         {
           "source": "commands.json",
@@ -2556,8 +2562,10 @@
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "e31034e03a73521242dc6bcfb9c4a38f876c9b0a3cf3916971401eb48abf392d",
-          "bytes": 393063
+          "sha256": "82d3ab4b352b9090143ff2310e38401617b5c828ef51edc55911da0a6d19fd56",
+          "bytes": 397468,
+          "originalSourceSha256": "e31034e03a73521242dc6bcfb9c4a38f876c9b0a3cf3916971401eb48abf392d",
+          "sdkSha256": "ec78ab7bd0e82a108847216f33bc6600366f68199f9416959411e5db254405ed"
         },
         {
           "source": "engines/pdf-lib/2.9.1/pdf-lib.esm.js",
@@ -2618,8 +2626,10 @@
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "c8008706fb988ae58471cd723878477f2a2d55ec8510fd13ea3d653400d8e5f9",
-          "bytes": 416071
+          "sha256": "b00ac3c19198c98071b98e2eff65b30362184ba3f1c49d7ef5f7f94cab380525",
+          "bytes": 420476,
+          "originalSourceSha256": "c8008706fb988ae58471cd723878477f2a2d55ec8510fd13ea3d653400d8e5f9",
+          "sdkSha256": "ec78ab7bd0e82a108847216f33bc6600366f68199f9416959411e5db254405ed"
         },
         {
           "source": "LICENSE",
@@ -2676,8 +2686,10 @@
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "50417d4b6a1ac0951bead6ec97869582fa06d537b037b5f21c13c7a660d7b554",
-          "bytes": 69658
+          "sha256": "d3bdeda2cdf98f1391ac86a25f9180a8a7bf19363dd04c51ddd9398a467ee0d9",
+          "bytes": 74063,
+          "originalSourceSha256": "50417d4b6a1ac0951bead6ec97869582fa06d537b037b5f21c13c7a660d7b554",
+          "sdkSha256": "ec78ab7bd0e82a108847216f33bc6600366f68199f9416959411e5db254405ed"
         },
         {
           "source": "LICENSE",
@@ -3128,8 +3140,10 @@
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "b37d52b65c5edec561e72d27e8172400de15c5f77aa1dbbcea6c4c0fdda06343",
-          "bytes": 82597
+          "sha256": "a0d4390f7094b176bfdd0d12f5cfc9d0d00bbf1b1f156c5228cc8d5f9461fee9",
+          "bytes": 87002,
+          "originalSourceSha256": "b37d52b65c5edec561e72d27e8172400de15c5f77aa1dbbcea6c4c0fdda06343",
+          "sdkSha256": "ec78ab7bd0e82a108847216f33bc6600366f68199f9416959411e5db254405ed"
         },
         {
           "source": "src/agent.js",
