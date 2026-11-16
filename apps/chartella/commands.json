@@ -337,7 +337,7 @@
     {
       "name": "shape.add",
       "label": "Add shape",
-      "description": "Add a shape: kind is rect, ellipse, diamond, triangle, line, arrow, text, sticky, frame, image or ink. Fields: x, y, w, h (board units, 1 = 1 CSS px at 100%), rotation (radians), text, stroke, fill (#rrggbb or transparent), strokeWidth (0–64), dash (solid|dashed|dotted), opacity (0–1), radius (corner radius), sketch (true: hand-drawn look), font (hand|sans|mono), fontSize (px; presets s 16, m 20, l 28, xl 36), align (left|center|right). Every shape has pageId (its page). Kind fields: sticky color (yellow|orange|pink|purple|blue|teal|green|gray); frame name and stack (null or { dir: row|column, gap, padding, align: start|center|end }); text autoWidth; line/arrow/ink points [[x,y],…] in board coordinates; arrow route (straight|curved|elbow), bend (curved: -2..2), startHead/endHead (none|arrow|triangle|dot|bar), tree (a mind-map link); ink highlight; image fileId; path d (SVG path data), viewBox [w, h], stencil (its library name); table cells [[text]], colWidths, rowHeights, headerRow. Returns { id }.",
+      "description": "Add a shape: kind is rect, ellipse, diamond, triangle, line, arrow, text, sticky, frame, image or ink. Fields: x, y, w, h (board units, 1 = 1 CSS px at 100%), rotation (radians), text, stroke, fill (#rrggbb or transparent), strokeWidth (0–64), dash (solid|dashed|dotted), opacity (0–1), radius (corner radius), sketch (true: hand-drawn look), font (hand|sans|mono), fontSize (px; presets s 16, m 20, l 28, xl 36), align (left|center|right). Every shape has pageId (its page) and link (null or a frame id to jump to). Kind fields: sticky color (yellow|orange|pink|purple|blue|teal|green|gray); frame name and stack (null or { dir: row|column, gap, padding, align: start|center|end }); text autoWidth; line/arrow/ink points [[x,y],…] in board coordinates; arrow route (straight|curved|elbow), bend (curved: -2..2), startHead/endHead (none|arrow|triangle|dot|bar), tree (a mind-map link); ink highlight; image fileId and crop; stamp emoji; path d (SVG path data), viewBox [w, h], stencil (its library name); table cells [[text]], colWidths, rowHeights, headerRow. Returns { id }.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -358,7 +358,8 @@
               "image",
               "ink",
               "path",
-              "table"
+              "table",
+              "stamp"
             ]
           },
           "props": {
@@ -374,7 +375,7 @@
     {
       "name": "shape.update",
       "label": "Change shapes",
-      "description": "Change fields on shapes (default: the selection). Fields: x, y, w, h (board units, 1 = 1 CSS px at 100%), rotation (radians), text, stroke, fill (#rrggbb or transparent), strokeWidth (0–64), dash (solid|dashed|dotted), opacity (0–1), radius (corner radius), sketch (true: hand-drawn look), font (hand|sans|mono), fontSize (px; presets s 16, m 20, l 28, xl 36), align (left|center|right). Every shape has pageId (its page). Kind fields: sticky color (yellow|orange|pink|purple|blue|teal|green|gray); frame name and stack (null or { dir: row|column, gap, padding, align: start|center|end }); text autoWidth; line/arrow/ink points [[x,y],…] in board coordinates; arrow route (straight|curved|elbow), bend (curved: -2..2), startHead/endHead (none|arrow|triangle|dot|bar), tree (a mind-map link); ink highlight; image fileId; path d (SVG path data), viewBox [w, h], stencil (its library name); table cells [[text]], colWidths, rowHeights, headerRow.",
+      "description": "Change fields on shapes (default: the selection). Fields: x, y, w, h (board units, 1 = 1 CSS px at 100%), rotation (radians), text, stroke, fill (#rrggbb or transparent), strokeWidth (0–64), dash (solid|dashed|dotted), opacity (0–1), radius (corner radius), sketch (true: hand-drawn look), font (hand|sans|mono), fontSize (px; presets s 16, m 20, l 28, xl 36), align (left|center|right). Every shape has pageId (its page) and link (null or a frame id to jump to). Kind fields: sticky color (yellow|orange|pink|purple|blue|teal|green|gray); frame name and stack (null or { dir: row|column, gap, padding, align: start|center|end }); text autoWidth; line/arrow/ink points [[x,y],…] in board coordinates; arrow route (straight|curved|elbow), bend (curved: -2..2), startHead/endHead (none|arrow|triangle|dot|bar), tree (a mind-map link); ink highlight; image fileId and crop; stamp emoji; path d (SVG path data), viewBox [w, h], stencil (its library name); table cells [[text]], colWidths, rowHeights, headerRow.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -2329,6 +2330,189 @@
           }
         },
         "required": []
+      }
+    },
+    {
+      "name": "present.start",
+      "label": "Present",
+      "description": "Present the frames of this page one after another, full screen: arrow keys, Space and Page Down move on, Escape stops. A shape with a link jumps to its frame. Starts at frameId or the first frame.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "frameId": {
+            "type": "string",
+            "description": "Frame to start on"
+          }
+        },
+        "required": []
+      },
+      "shortcut": "Alt+P"
+    },
+    {
+      "name": "present.stop",
+      "label": "Stop presenting",
+      "description": "Leave presenting.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "link.set",
+      "label": "Link to frame",
+      "description": "Link shapes (default: the selection) to a frame, so a click while presenting (or Cmd/Ctrl+click while editing) goes to it; frameId null removes the link.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Shape ids (default: the selection)"
+          },
+          "frameId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Frame id, or null"
+          }
+        },
+        "required": [
+          "frameId"
+        ]
+      }
+    },
+    {
+      "name": "link.follow",
+      "label": "Follow link",
+      "description": "Go to the frame a shape links to (default: the selected shape).",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Shape id"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "stamp.add",
+      "label": "Add stamp",
+      "description": "Put a stamp or emoji reaction on the board at x, y (default: the view centre): emoji such as 👍 ❤️ ⭐ ✅ ❓ 🎉 🔥 👀 or any single emoji. Returns { id }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "emoji": {
+            "type": "string",
+            "description": "One emoji"
+          },
+          "x": {
+            "type": "number",
+            "description": "Centre x"
+          },
+          "y": {
+            "type": "number",
+            "description": "Centre y"
+          },
+          "size": {
+            "type": "number",
+            "description": "Size in board units (default 48)"
+          }
+        },
+        "required": [
+          "emoji"
+        ]
+      }
+    },
+    {
+      "name": "timer.start",
+      "label": "Start timer",
+      "description": "Start a countdown timer on screen (minutes and seconds); it chimes at zero. Starting again restarts it.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "minutes": {
+            "type": "number",
+            "description": "Minutes",
+            "minimum": 0,
+            "maximum": 180
+          },
+          "seconds": {
+            "type": "number",
+            "description": "Seconds",
+            "minimum": 0,
+            "maximum": 59
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "timer.stop",
+      "label": "Stop timer",
+      "description": "Stop and hide the timer.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "template.list",
+      "label": "List templates",
+      "description": "List the board templates (kanban, retrospective, SWOT, flowchart, mind map, user journey, weekly plan) with each one's id, label, description and usage note. Insert one with template.insert.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "template.insert",
+      "label": "Insert template",
+      "description": "Insert a template by id (from template.list) with its top-left at x, y, or centred in the view when x and y are left out, on the current page. The template comes in frames named after it, so presenting walks it. Selects the result. Returns { ids }.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Template id",
+            "enum": [
+              "kanban",
+              "retrospective",
+              "swot",
+              "flowchart",
+              "mind-map",
+              "user-journey",
+              "weekly-plan"
+            ]
+          },
+          "x": {
+            "type": "number",
+            "description": "Left (default: centred in the view)"
+          },
+          "y": {
+            "type": "number",
+            "description": "Top (default: centred in the view)"
+          }
+        },
+        "required": [
+          "id"
+        ]
       }
     },
     {
