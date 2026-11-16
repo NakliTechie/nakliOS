@@ -219,21 +219,21 @@
       "id": "kanzen",
       "repo": "NakliTechie/KanZen",
       "requestedRef": "main",
-      "resolvedCommit": "35757894adf399a9c1e67b13f256e4b296d0656f",
+      "resolvedCommit": "6bcbac592e49722a7c7ed96b127feaeed4f75a4b",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "51f72d315bf3413f8dda278a9dcdbd41b8e6e457dc6c5687ccb0e764773ed37d",
-          "bytes": 450349,
-          "originalSourceSha256": "4762ef64547d05d06921a438dd417bf9d49e9edf637aaaba5ca1ba69e5a49a87",
+          "sha256": "f1b9e35b1471a44ec6afccdfc733d988281d3e00d9121be932fc42fabddac112",
+          "bytes": 922145,
+          "originalSourceSha256": "6881dcfe623241759122f9d6a4577ec473a53308b1550d5de080dc780ccedc85",
           "sdkSha256": "ec78ab7bd0e82a108847216f33bc6600366f68199f9416959411e5db254405ed"
         },
         {
           "source": "commands.json",
           "destination": "commands.json",
-          "sha256": "078da6bf06a1794f09fa4d12c01bf422805886d28bd4921e476c444c4f69ec06",
-          "bytes": 3668
+          "sha256": "df5fbd3a2a5f9875eafc812ce0667f24566b3954917e1e8f88ec9e0e3f42277a",
+          "bytes": 10267
         }
       ]
     },
