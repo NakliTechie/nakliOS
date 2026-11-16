@@ -2531,7 +2531,7 @@
       "id": "reel",
       "repo": "NakliTechie/reel",
       "requestedRef": "main",
-      "resolvedCommit": "313dda0e0098192bd527aa0ac2000a41a30d1bdb",
+      "resolvedCommit": "3259994dbd5f877fd78c9da2ac146a5f43b04358",
       "files": [
         {
           "source": "index.html",
@@ -2542,8 +2542,8 @@
         {
           "source": "commands.json",
           "destination": "commands.json",
-          "sha256": "6a233f046c15a95cf5274b4f1018f016d0dcd8475cab9960dc18e5d2da0f2976",
-          "bytes": 24394
+          "sha256": "7d66745ec04e18ac31083040501f5f79f75ac2471da5edb13ecb9336b921efb1",
+          "bytes": 24397
         },
         {
           "source": "engine/reel-engine.mjs",
@@ -2566,8 +2566,8 @@
         {
           "source": "app/core/registry.mjs",
           "destination": "app/core/registry.mjs",
-          "sha256": "4aa75812066d4c969552d6a8243f569ffed32eb8628dc24f5312438fdb10492f",
-          "bytes": 4706
+          "sha256": "d15639c84004c28fcc963603855029b061a5e11ae431cddcaf04d5602fa18ab4",
+          "bytes": 4840
         },
         {
           "source": "app/help/index.mjs",
@@ -2590,8 +2590,8 @@
         {
           "source": "app/queue/index.mjs",
           "destination": "app/queue/index.mjs",
-          "sha256": "c9a3ed01b47d27e45f81cfd228bc6e6d398bf733683c8316534effe561fc8f8a",
-          "bytes": 23334
+          "sha256": "04516c35d5c7217816a2abf386c22db909b24b733733f3df90db92cfee6578eb",
+          "bytes": 23343
         },
         {
           "source": "app/queue/logic.mjs",
@@ -2626,8 +2626,8 @@
         {
           "source": "app/subtitles/index.mjs",
           "destination": "app/subtitles/index.mjs",
-          "sha256": "468a0fcb04b01d43c918db115107fe935387c4fbaff04956132af026d980d143",
-          "bytes": 29425
+          "sha256": "a61d8c32ef8b49d15b867d3052095db750d9df4c11b24ee0b2dafd1f8ea13513",
+          "bytes": 29429
         },
         {
           "source": "app/subtitles/match.mjs",
@@ -2644,8 +2644,8 @@
         {
           "source": "app/transport/index.mjs",
           "destination": "app/transport/index.mjs",
-          "sha256": "37c4635a03703d7ab47ddab9359a3d72744a9a9fa0d848e0fb25d1c89c2102ef",
-          "bytes": 32640
+          "sha256": "6f9f84b277c01347b67518a68a42036ba7931ca4eb21a3cded995235225d3dd5",
+          "bytes": 32644
         },
         {
           "source": "app/transport/logic.mjs",

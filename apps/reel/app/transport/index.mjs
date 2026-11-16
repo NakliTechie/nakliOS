@@ -37,7 +37,7 @@ export const COMMANDS = [
   { name: 'chapter.list', label: 'Chapters', scope: 'read',
     description: 'List the chapters (title, startS, endS) and the current chapter index; panel opens or closes the chapters panel.',
     input: { type: 'object', properties: { panel: panelFlag }, required: [] } },
-  { name: 'playback.jumpTo', label: 'Jump to time', scope: 'write', readTwin: 'state.read',
+  { name: 'playback.jump-to', label: 'Jump to time', scope: 'write', readTwin: 'state.read',
     description: 'Seek to a typed time such as "1:23:45", "83:20", "90" (seconds) or "45%"; with no time it opens the jump-to-time box.',
     input: { type: 'object', properties: {
       time: { type: ['string', 'number'], description: 'h:mm:ss, m:ss, seconds, or a percentage like "45%"' } }, required: [] },
@@ -227,7 +227,7 @@ export function install(ctx) {
     jumpError,
     el('div', { class: 'transport-actions' },
       el('button', { type: 'button', text: t('transport.jump.cancel'), onclick: () => jumpDialog.close() }),
-      el('button', { type: 'submit', 'data-command': 'playback.jumpTo', text: t('transport.jump.go') })));
+      el('button', { type: 'submit', 'data-command': 'playback.jump-to', text: t('transport.jump.go') })));
   const jumpDialog = el('dialog', { class: 'transport-jump', 'aria-labelledby': 'transport-jump-title' }, jumpForm);
   ctx.mounts.dialogs.append(jumpDialog);
   let jumpReturnFocus = null;
@@ -238,7 +238,7 @@ export function install(ctx) {
   jumpForm.addEventListener('submit', async event => {
     event.preventDefault();
     try {
-      await registry.run('playback.jumpTo', { time: jumpInput.value });
+      await registry.run('playback.jump-to', { time: jumpInput.value });
       jumpDialog.close();
     } catch (error) {
       jumpError.textContent = error.code === 'ERR_COMMAND_INPUT' ? error.message : t('transport.jump.format');
@@ -502,7 +502,7 @@ export function install(ctx) {
     return chapterRead();
   });
 
-  registry.handle('playback.jumpTo', async ({ time }) => {
+  registry.handle('playback.jump-to', async ({ time }) => {
     if (time === undefined || time === null) {
       openJumpBox();
       return { dialog: true };

@@ -15,7 +15,7 @@ import {
 const none = { type: 'object', properties: {}, required: [] };
 
 export const COMMANDS = [
-  { name: 'queue.openFolder', label: 'Open folder', scope: 'write', input: none, readTwin: 'queue.read',
+  { name: 'queue.open-folder', label: 'Open folder', scope: 'write', input: none, readTwin: 'queue.read',
     description: 'Ask the person to pick a folder, queue its videos in natural sort order and play the first.' },
   { name: 'queue.play', label: 'Play queue item', scope: 'write', readTwin: 'queue.read',
     description: 'Play the queue item at an index (natural folder order, starting at 0).',
@@ -39,7 +39,7 @@ export const COMMANDS = [
 ];
 
 export const STRINGS = {
-  'queue.openFolder': 'Open folder…',
+  'queue.open-folder': 'Open folder…',
   'queue.button': 'Queue',
   'queue.panel.title': 'Queue',
   'queue.panel.empty': 'The queue is empty. Open a folder, or drop several videos on the start screen.',
@@ -358,8 +358,8 @@ export function install(ctx) {
   const emptyButton = document.createElement('button');
   emptyButton.type = 'button';
   emptyButton.dataset.queue = 'open-folder';
-  emptyButton.dataset.command = 'queue.openFolder';
-  emptyButton.addEventListener('click', () => run('queue.openFolder'));
+  emptyButton.dataset.command = 'queue.open-folder';
+  emptyButton.addEventListener('click', () => run('queue.open-folder'));
   ctx.mounts.emptyActions.append(emptyButton);
 
   const controlButton = document.createElement('button');
@@ -377,8 +377,8 @@ export function install(ctx) {
   tools.className = 'queue-tools';
   const panelOpenButton = document.createElement('button');
   panelOpenButton.type = 'button';
-  panelOpenButton.dataset.command = 'queue.openFolder';
-  panelOpenButton.addEventListener('click', () => run('queue.openFolder'));
+  panelOpenButton.dataset.command = 'queue.open-folder';
+  panelOpenButton.addEventListener('click', () => run('queue.open-folder'));
   const repeatButton = document.createElement('button');
   repeatButton.type = 'button';
   repeatButton.dataset.queue = 'repeat';
@@ -399,8 +399,8 @@ export function install(ctx) {
   body.append(tools, status, list);
 
   function render() {
-    emptyButton.textContent = t('queue.openFolder');
-    panelOpenButton.textContent = t('queue.openFolder');
+    emptyButton.textContent = t('queue.open-folder');
+    panelOpenButton.textContent = t('queue.open-folder');
     controlButton.setAttribute('aria-label', t('queue.button'));
     controlButton.title = t('queue.button');
     repeatButton.textContent = t(`queue.repeat.${order.repeat}`);
@@ -471,7 +471,7 @@ export function install(ctx) {
 
   /* ---------- commands ---------- */
 
-  registry.handle('queue.openFolder', () => openFolder());
+  registry.handle('queue.open-folder', () => openFolder());
   registry.handle('queue.play', async ({ index }) => {
     if (!Number.isInteger(index) || index < 0 || index >= items.length) {
       throw Object.assign(new RangeError(`queue.play needs an index from 0 to ${items.length - 1}.`), { code: 'ERR_COMMAND_INPUT' });

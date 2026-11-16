@@ -399,7 +399,7 @@
       "readTwin": "subtitle.read"
     },
     {
-      "name": "subtitle.loadFile",
+      "name": "subtitle.load-file",
       "description": "Load an SRT, WebVTT, ASS or SSA subtitle file for the current video. With no input it asks the person to pick a file; agents pass name and text.",
       "scope": "write",
       "input": {
@@ -613,7 +613,7 @@
       "label": "Chapters"
     },
     {
-      "name": "playback.jumpTo",
+      "name": "playback.jump-to",
       "description": "Seek to a typed time such as \"1:23:45\", \"83:20\", \"90\" (seconds) or \"45%\"; with no time it opens the jump-to-time box.",
       "scope": "write",
       "input": {
@@ -827,7 +827,7 @@
       "readTwin": "view.read"
     },
     {
-      "name": "queue.openFolder",
+      "name": "queue.open-folder",
       "description": "Ask the person to pick a folder, queue its videos in natural sort order and play the first.",
       "scope": "write",
       "input": {

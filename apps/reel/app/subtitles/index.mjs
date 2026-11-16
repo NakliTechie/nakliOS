@@ -37,7 +37,7 @@ export const COMMANDS = [
       position: { type: 'number', minimum: STYLE_LIMITS.position[0], maximum: STYLE_LIMITS.position[1], description: 'Distance from the bottom of the picture, in percent' },
       reset: { type: 'boolean', description: 'Restore the default style first' } }, required: [] },
   },
-  { name: 'subtitle.loadFile', label: 'Load subtitles…', scope: 'write', readTwin: 'subtitle.read',
+  { name: 'subtitle.load-file', label: 'Load subtitles…', scope: 'write', readTwin: 'subtitle.read',
     description: 'Load an SRT, WebVTT, ASS or SSA subtitle file for the current video. With no input it asks the person to pick a file; agents pass name and text.',
     input: { type: 'object', properties: {
       name: { type: 'string', description: 'File name, used for the format and the track label' },
@@ -406,7 +406,7 @@ export function install(ctx) {
     return { style: { ...S.style } };
   });
 
-  r.handle('subtitle.loadFile', async ({ name, text, file } = {}) => {
+  r.handle('subtitle.load-file', async ({ name, text, file } = {}) => {
     if (!S.name) throw new Error(t('subtitles.error.noMedia'));
     let track;
     if (file && typeof file.arrayBuffer === 'function') {
@@ -554,7 +554,7 @@ export function install(ctx) {
   styleSet.append(size.label, colourLabel, background.label, position.label, styleReset);
 
   const fileRow = row();
-  const load = actionButton(t('subtitles.menu.load'), null, 'subtitle.loadFile', () => run('subtitle.loadFile', {}));
+  const load = actionButton(t('subtitles.menu.load'), null, 'subtitle.load-file', () => run('subtitle.load-file', {}));
   const saveSrt = actionButton(t('subtitles.menu.saveSrt'), null, 'subtitle.save', () => run('subtitle.save', { format: 'srt' }));
   const saveVtt = actionButton(t('subtitles.menu.saveVtt'), null, 'subtitle.save', () => run('subtitle.save', { format: 'vtt' }));
   fileRow.append(load, saveSrt, saveVtt);

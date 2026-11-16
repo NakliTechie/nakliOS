@@ -6,7 +6,7 @@
  * ctx.registry.handle(name, fn). A definition with no handler is a parity failure.
  *
  * Definition fields:
- *   name         dotted id, e.g. "playback.seek"
+ *   name         lower-case dotted id, e.g. "playback.seek" or "subtitle.load-file" (no camelCase)
  *   description  one sentence for agents and the help sheet
  *   scope        "read" or "write"
  *   input        JSON schema object ({ type: "object", properties, required })
@@ -28,7 +28,8 @@ export function keySpec(event) {
 
 function validateDefinition(def) {
   const problems = [];
-  if (!/^[a-z][a-zA-Z0-9]*(\.[a-z][a-zA-Z0-9]*)+$/.test(def?.name || '')) problems.push('name');
+  // The NakliOS rail rule (lower case, no camelCase), with a namespace required.
+  if (!/^[a-z][a-z0-9_-]*(\.[a-z][a-z0-9_-]*){1,3}$/.test(def?.name || '')) problems.push('name');
   if (!def.description) problems.push('description');
   if (!['read', 'write'].includes(def.scope)) problems.push('scope');
   if (!def.input || def.input.type !== 'object' || !Array.isArray(def.input.required)) problems.push('input');
