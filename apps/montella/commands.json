@@ -238,7 +238,7 @@
     },
     {
       "name": "clip.set",
-      "description": "Change clip properties: volume (0–2), fadeIn, fadeOut, speed (0.25–4), opacity, scale, x, y, rotation, fit (fit|fill|blur), look (none|vivid|warm|cool|mono|fade|noir|sunset), blend (normal|multiply|screen|overlay|darken|lighten|difference|color-dodge|soft-light), filters {brightness, contrast, saturation, temperature} each -1..1, transitionIn {type: crossfade|fade|wipe|slide, duration, dir: right|left for wipe and slide} or null, text, style, muted.",
+      "description": "Change clip properties: volume (0–2), fadeIn, fadeOut, speed (0.25–4), opacity, scale, x, y, rotation, fit (fit|fill|blur), look (none|vivid|warm|cool|mono|fade|noir|sunset), blend (normal|multiply|screen|overlay|darken|lighten|difference|color-dodge|soft-light), filters {brightness, contrast, saturation, temperature} each -1..1, reverse (true plays the clip backwards), transitionIn {type: crossfade|fade|wipe|slide, duration, dir: right|left for wipe and slide} or null, text, style, muted.",
       "scope": "write",
       "input": {
         "type": "object",
@@ -768,6 +768,128 @@
           }
         },
         "required": []
+      }
+    },
+    {
+      "name": "clip.nest",
+      "description": "Put clips into a nest: one clip that plays them together, and a new item in the media bin. clipIds: the clips to nest.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "clipIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Clip ids"
+          },
+          "name": {
+            "type": "string",
+            "description": "Name for the nest (optional)"
+          }
+        },
+        "required": [
+          "clipIds"
+        ]
+      }
+    },
+    {
+      "name": "clip.unnest",
+      "description": "Put a full-length nest clip's clips back on the timeline.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "clipId": {
+            "type": "string",
+            "description": "Nest clip id"
+          }
+        },
+        "required": [
+          "clipId"
+        ]
+      }
+    },
+    {
+      "name": "assist.clean",
+      "description": "Remove background noise from a clip's voice with RNNoise on this device; the clip's sound switches to a cleaned copy (a video clip's sound is detached first). Works only after the person has downloaded the noise model.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "clipId": {
+            "type": "string",
+            "description": "Clip id"
+          }
+        },
+        "required": [
+          "clipId"
+        ]
+      }
+    },
+    {
+      "name": "assist.reframe",
+      "description": "Make the canvas 9:16 (or the aspect given) and pan a wide video clip to follow its subject, as x keyframes.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "clipId": {
+            "type": "string",
+            "description": "Video clip id"
+          },
+          "aspect": {
+            "type": "string",
+            "description": "Target aspect (default 9:16)",
+            "enum": [
+              "9:16",
+              "1:1",
+              "4:5"
+            ]
+          }
+        },
+        "required": [
+          "clipId"
+        ]
+      }
+    },
+    {
+      "name": "assist.highlights",
+      "description": "Pick up to three highlights of about `seconds` from a transcribed clip with the NakliOS model, mark each, and set the I/O range to the best for a range export.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "clipId": {
+            "type": "string",
+            "description": "A transcribed clip"
+          },
+          "seconds": {
+            "type": "number",
+            "description": "Target length (default 30)"
+          }
+        },
+        "required": [
+          "clipId"
+        ]
+      }
+    },
+    {
+      "name": "assist.remove_background",
+      "description": "Cut the person out of a video or photo clip (MODNet on this device); put a background under it on a lower track. Works only after the person has downloaded the model.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "clipId": {
+            "type": "string",
+            "description": "Video or photo clip id"
+          }
+        },
+        "required": [
+          "clipId"
+        ]
       }
     },
     {
