@@ -7729,14 +7729,14 @@
       "id": "montella",
       "repo": "NakliTechie/montella",
       "requestedRef": "main",
-      "resolvedCommit": "36d6eb2e4676cc2e201e25e5cb359b0719de4318",
+      "resolvedCommit": "d5a358200b1e5671533ee27be3780a45e0440694",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "7af4bf96c8a36613d6eb2ee149d4bd62f4f12e8aac6946371d146ff7991b18a3",
-          "bytes": 889590,
-          "originalSourceSha256": "042093ed20b46cd7ecbc42d59aac1eeb94f9a881bc66c338a8d75e68c5bebbc7",
+          "sha256": "cb1ec045b0c4ff26eea101b049ba6ae84d712cfd22399c052d6c40cc675bddb7",
+          "bytes": 889694,
+          "originalSourceSha256": "dad02e7f14b0fa0f8e974c6064f7e092faead96c859e75676e79fd909c8aadbf",
           "sdkSha256": "410f8613ad003755ecb06f20a23b6d36b3d980fe88a3ab86fe16ff73b11a5b4c"
         },
         {
@@ -7756,30 +7756,6 @@
           "destination": "sw.js",
           "sha256": "cbc0fbd34bbc496c458cd9c91228bddc83e8d5b88b2c5d75e2b0a1c04062c748",
           "bytes": 1326
-        },
-        {
-          "source": "ai/modnet-fa2fa54/config.json",
-          "destination": "ai/modnet-fa2fa54/config.json",
-          "sha256": "e144d8af9b1f09649785c77f592a76bbc69504ae02e43700663b2a9f00d9c8a2",
-          "bytes": 83
-        },
-        {
-          "source": "ai/modnet-fa2fa54/preprocessor_config.json",
-          "destination": "ai/modnet-fa2fa54/preprocessor_config.json",
-          "sha256": "07d83634b1fdd20142ca6e3fe55ab92b558f56d1b0f005ff3a7926f1c9e1165d",
-          "bytes": 365
-        },
-        {
-          "source": "ai/modnet-fa2fa54/onnx/model_quantized.onnx",
-          "destination": "ai/modnet-fa2fa54/onnx/model_quantized.onnx",
-          "sha256": "92e49898c3e05a6d7a944fc67a8cb87c4aad754ffb6ebd949528c7d1105fee3a",
-          "bytes": 6632188
-        },
-        {
-          "source": "ai/modnet-fa2fa54/NOTICE.md",
-          "destination": "ai/modnet-fa2fa54/NOTICE.md",
-          "sha256": "70b27f4958afc5a8c50d37803dcb845bade65766ac84bb9442e0df9ba129b376",
-          "bytes": 332
         }
       ]
     }
