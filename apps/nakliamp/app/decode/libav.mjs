@@ -1,8 +1,9 @@
 // R3 software decode, wasm tier: the compressed formats no browser decodes.
 //
 // WMA (v1, v2, Pro, Lossless), WavPack, Monkey's Audio, Musepack (SV7 and SV8),
-// TTA and DSD, through a custom libav.js build carrying exactly those decoders
-// and their demuxers — 1.2 MB of wasm, not a general-purpose ffmpeg. See
+// TTA, DSD and Apple Lossless (ALAC in MP4/M4A), through a custom libav.js
+// build carrying exactly those decoders and their demuxers, not a
+// general-purpose ffmpeg. See
 // VENDOR.md for the build and its LGPL terms.
 //
 // This tier is separate from the in-house PCM tier because it costs a download.
@@ -54,10 +55,80 @@ function startsWith(data, signature) {
   return signature.every((byte, index) => data[index] === byte);
 }
 
+const fourcc = (data, at) => String.fromCharCode(data[at], data[at + 1], data[at + 2], data[at + 3]);
+const u32 = (data, at) => ((data[at] << 24) | (data[at + 1] << 16) | (data[at + 2] << 8) | data[at + 3]) >>> 0;
+
+// The boxes on the path from the top of an MP4 to its sample descriptions.
+const MP4_PATH = new Set(['moov', 'trak', 'mdia', 'minf', 'stbl']);
+const MP4_MAX_BOXES = 4096;
+
+/**
+ * True when an MP4/M4A carries an Apple Lossless track.
+ *
+ * Only ALAC is claimed, so an AAC M4A stays with the faster rungs: the engine
+ * and the native element play AAC, and neither plays ALAC everywhere. The test
+ * is the 'alac' sample entry inside stsd, not the 'M4A ' brand, which iTunes
+ * writes for AAC and ALAC alike. The walk follows box sizes, so a moov written
+ * after the media data is found too, and it is bounded by a box count.
+ */
+function mp4HasAlac(data) {
+  if (data.length < 16 || fourcc(data, 4) !== 'ftyp') return false;
+  return mp4WalkHasAlac(data, 0, data.length, { left: MP4_MAX_BOXES });
+}
+
+/** Read one box header at `at`: its size, header length and type, or null when it does not fit. */
+function mp4Box(data, at, end) {
+  let size = u32(data, at);
+  const type = fourcc(data, at + 4);
+  let header = 8;
+  if (size === 1) {
+    // 64-bit size; anything beyond 2^53 is not a file this tier reads.
+    if (at + 16 > end) return null;
+    size = u32(data, at + 8) * 2 ** 32 + u32(data, at + 12);
+    header = 16;
+  } else if (size === 0) {
+    size = end - at;
+  }
+  if (size < header || at + size > end) return null;
+  return { size, type, header };
+}
+
+/** True when an stsd box lists an 'alac' sample entry. */
+function stsdHasAlac(data, at, box, end) {
+  // Version and flags (4), entry count (4), then sample entries.
+  const count = at + box.header + 8 <= end ? u32(data, at + box.header + 4) : 0;
+  let entry = at + box.header + 8;
+  for (let index = 0; index < count && entry + 8 <= at + box.size; index += 1) {
+    if (fourcc(data, entry + 4) === 'alac') return true;
+    const entrySize = u32(data, entry);
+    if (entrySize < 8) break;
+    entry += entrySize;
+  }
+  return false;
+}
+
+/** Walk the boxes in [start, end), descending along MP4_PATH, within the shared box budget. */
+function mp4WalkHasAlac(data, start, end, budget) {
+  let at = start;
+  while (at + 8 <= end && budget.left-- > 0) {
+    const box = mp4Box(data, at, end);
+    if (!box) return false;
+    if (box.type === 'stsd') {
+      if (stsdHasAlac(data, at, box, end)) return true;
+    } else if (MP4_PATH.has(box.type) && mp4WalkHasAlac(data, at + box.header, at + box.size, budget)) {
+      return true;
+    }
+    at += box.size;
+  }
+  return false;
+}
+
 /** Returns the container name this tier can decode, or null. */
 export function sniffLibav(data) {
   if (!data || data.length < 8) return null;
-  return SIGNATURES.find(entry => startsWith(data, entry.bytes))?.container ?? null;
+  const signed = SIGNATURES.find(entry => startsWith(data, entry.bytes))?.container ?? null;
+  if (signed) return signed;
+  return mp4HasAlac(data) ? 'alac' : null;
 }
 
 let modulePromise = null;
@@ -150,6 +221,38 @@ let decodeSequence = 0;
  * deinterleaved here so the caller sees one shape from every R3 decoder.
  */
 export async function decodeLibav(data) {
+  const container = acceptInput(data);
+  const instance = await startLibav();
+
+  decodeSequence += 1;
+  const name = `input-${decodeSequence}.${container}`;
+  // Every handle below is freed in the finally. They used to be freed only on
+  // the success path, so each refused file left a decoder context, a packet, a
+  // frame and an open demuxer inside the wasm heap for the life of the tab.
+  const handles = { format: null, context: null, packet: null, frame: null };
+  try {
+    await instance.writeFile(name, data);
+    let streams;
+    [handles.format, streams] = await instance.ff_init_demuxer_file(name);
+    const audio = streams.find(stream => stream.codec_type === instance.AVMEDIA_TYPE_AUDIO);
+    if (!audio) throw decodeError('ERR_NAKLIAMP_LIBAV_NO_AUDIO', 'This file has no audio stream.');
+
+    [, handles.context, handles.packet, handles.frame] = await instance.ff_init_decoder(audio.codec_id, audio.codecpar);
+
+    const frames = await readAllFrames(instance, handles, audio.index);
+    if (!frames.length) throw decodeError('ERR_NAKLIAMP_LIBAV_EMPTY', 'The software decoder produced no audio.');
+
+    return collect(frames);
+  } catch (error) {
+    if (error?.code?.startsWith?.('ERR_NAKLIAMP_')) throw error;
+    throw decodeError('ERR_NAKLIAMP_LIBAV_FAILED', `The software decoder could not read this file: ${error?.message ?? error}`, error);
+  } finally {
+    await releaseDecode(instance, name, handles);
+  }
+}
+
+/** Refuse a file this tier cannot read or should not take in; returns its container name. */
+function acceptInput(data) {
   const container = sniffLibav(data);
   if (!container) {
     throw decodeError('ERR_NAKLIAMP_LIBAV_UNKNOWN', 'This file is not a container the wasm decoder reads.');
@@ -160,64 +263,49 @@ export async function decodeLibav(data) {
       `This file is ${Math.round(data.length / 1024 / 1024)} MB; the software decoder reads up to ${MAX_INPUT_BYTES / 1024 / 1024} MB.`,
     );
   }
+  return container;
+}
 
-  let instance;
+/** The shared libav instance, or a decode error when it cannot start. */
+async function startLibav() {
   try {
-    instance = await libav();
+    return await libav();
   } catch (error) {
     throw decodeError('ERR_NAKLIAMP_LIBAV_UNAVAILABLE', 'The software decoder could not start.', error);
   }
+}
 
-  decodeSequence += 1;
-  const name = `input-${decodeSequence}.${container}`;
-  // Every handle below is freed in the finally. They used to be freed only on
-  // the success path, so each refused file left a decoder context, a packet, a
-  // frame and an open demuxer inside the wasm heap for the life of the tab.
-  let format = null;
-  let context = null;
-  let packet = null;
-  let frame = null;
-  try {
-    await instance.writeFile(name, data);
-    let streams;
-    [format, streams] = await instance.ff_init_demuxer_file(name);
-    const audio = streams.find(stream => stream.codec_type === instance.AVMEDIA_TYPE_AUDIO);
-    if (!audio) throw decodeError('ERR_NAKLIAMP_LIBAV_NO_AUDIO', 'This file has no audio stream.');
-
-    [, context, packet, frame] = await instance.ff_init_decoder(audio.codec_id, audio.codecpar);
-
-    // Read to end of file. ff_read_frame_multi returns a batch and a status;
-    // one call yields a single batch, which decodes to a few milliseconds.
-    const frames = [];
-    let emptyBatches = 0;
-    for (let guard = 0; guard < 100_000; guard += 1) {
-      const [status, batch] = await instance.ff_read_frame_multi(format, packet, { limit: READ_LIMIT });
-      const stream = batch[audio.index] ?? [];
-      const done = status === instance.AVERROR_EOF;
-      if (stream.length) {
-        frames.push(...await instance.ff_decode_multi(context, packet, frame, stream, done));
-      } else if (done) {
-        frames.push(...await instance.ff_decode_multi(context, packet, frame, [], true));
-      }
-      if (done) break;
-      // A batch carrying packets for other streams only is ordinary in a file
-      // with cover art or a video stream; ending the read there truncated the
-      // track. What must end the read is a demuxer that has stopped advancing,
-      // which is a batch with no packets for any stream at all.
-      if (Object.values(batch).some(list => list.length)) emptyBatches = 0;
-      else if ((emptyBatches += 1) >= 3) break;
+/**
+ * Read to end of file and decode every packet of one stream.
+ * ff_read_frame_multi returns a batch and a status; one call yields a single
+ * batch, which decodes to a few milliseconds.
+ */
+async function readAllFrames(instance, { format, context, packet, frame }, streamIndex) {
+  const frames = [];
+  let emptyBatches = 0;
+  for (let guard = 0; guard < 100_000; guard += 1) {
+    const [status, batch] = await instance.ff_read_frame_multi(format, packet, { limit: READ_LIMIT });
+    const stream = batch[streamIndex] ?? [];
+    const done = status === instance.AVERROR_EOF;
+    if (stream.length || done) {
+      frames.push(...await instance.ff_decode_multi(context, packet, frame, stream, done));
     }
-    if (!frames.length) throw decodeError('ERR_NAKLIAMP_LIBAV_EMPTY', 'The software decoder produced no audio.');
-
-    return collect(frames);
-  } catch (error) {
-    if (error?.code?.startsWith?.('ERR_NAKLIAMP_')) throw error;
-    throw decodeError('ERR_NAKLIAMP_LIBAV_FAILED', `The software decoder could not read this file: ${error?.message ?? error}`, error);
-  } finally {
-    if (context) { try { await instance.ff_free_decoder(context, packet, frame); } catch { /* already gone */ } }
-    if (format) { try { await instance.avformat_close_input_js(format); } catch { /* already gone */ } }
-    try { await instance.unlink(name); } catch { /* the file may never have been written */ }
+    if (done) break;
+    // A batch carrying packets for other streams only is ordinary in a file
+    // with cover art or a video stream; ending the read there truncated the
+    // track. What must end the read is a demuxer that has stopped advancing,
+    // which is a batch with no packets for any stream at all.
+    if (Object.values(batch).some(list => list.length)) emptyBatches = 0;
+    else if ((emptyBatches += 1) >= 3) break;
   }
+  return frames;
+}
+
+/** Free the decoder, close the demuxer and remove the input file; each may already be gone. */
+async function releaseDecode(instance, name, { format, context, packet, frame }) {
+  if (context) { try { await instance.ff_free_decoder(context, packet, frame); } catch { /* already gone */ } }
+  if (format) { try { await instance.avformat_close_input_js(format); } catch { /* already gone */ } }
+  try { await instance.unlink(name); } catch { /* the file may never have been written */ }
 }
 
 /** libav frames arrive planar or packed depending on the codec; normalise both. */
@@ -238,25 +326,33 @@ function collect(frames) {
   const channels = Array.from({ length: channelCount }, () => new Float32Array(total));
   let offset = 0;
   for (const frame of frames) {
-    if (planar) {
-      const length = frame.data[0].length;
-      for (let channel = 0; channel < channelCount; channel += 1) {
-        channels[channel].set(toFloat(frame.data[channel] ?? frame.data[0]), offset);
-      }
-      offset += length;
-    } else {
-      const interleaved = toFloat(frame.data);
-      const length = interleaved.length / channelCount;
-      for (let index = 0; index < length; index += 1) {
-        for (let channel = 0; channel < channelCount; channel += 1) {
-          channels[channel][offset + index] = interleaved[index * channelCount + channel];
-        }
-      }
-      offset += length;
-    }
+    offset += planar
+      ? copyPlanar(channels, frame, offset)
+      : copyInterleaved(channels, frame, offset);
   }
 
   return { sampleRate, channels, frames: total };
+}
+
+/** Copy one planar frame into the channel buffers at `offset`; returns its sample count. */
+function copyPlanar(channels, frame, offset) {
+  for (let channel = 0; channel < channels.length; channel += 1) {
+    channels[channel].set(toFloat(frame.data[channel] ?? frame.data[0]), offset);
+  }
+  return frame.data[0].length;
+}
+
+/** Deinterleave one packed frame into the channel buffers at `offset`; returns its sample count. */
+function copyInterleaved(channels, frame, offset) {
+  const channelCount = channels.length;
+  const interleaved = toFloat(frame.data);
+  const length = interleaved.length / channelCount;
+  for (let index = 0; index < length; index += 1) {
+    for (let channel = 0; channel < channelCount; channel += 1) {
+      channels[channel][offset + index] = interleaved[index * channelCount + channel];
+    }
+  }
+  return length;
 }
 
 /** Integer sample formats arrive as typed integer arrays; scale them to [-1, 1]. */

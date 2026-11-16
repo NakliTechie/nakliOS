@@ -1,0 +1,1404 @@
+{
+  "accepts": [
+    {
+      "action": "import",
+      "label": "Open in NakliAmp",
+      "extensions": [
+        ".mp3",
+        ".flac",
+        ".m4a",
+        ".aac",
+        ".ogg",
+        ".opus",
+        ".oga",
+        ".wav",
+        ".mka",
+        ".webm",
+        ".aiff",
+        ".aif",
+        ".aifc",
+        ".caf",
+        ".au",
+        ".wma",
+        ".ape",
+        ".wv",
+        ".mpc",
+        ".tta",
+        ".dsf",
+        ".dff"
+      ]
+    }
+  ],
+  "commands": [
+    {
+      "name": "player.play",
+      "label": "Play",
+      "description": "Start or resume playback of the current queue entry.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "player",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "player.pause",
+      "label": "Pause",
+      "description": "Pause playback.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "player",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "player.toggle",
+      "label": "Play or pause",
+      "description": "Play when paused, pause when playing.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "player",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "shortcut": [
+        "Space"
+      ]
+    },
+    {
+      "name": "player.next",
+      "label": "Next track",
+      "description": "Move to the next queue entry, following shuffle and repeat.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "player",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "shortcut": [
+        "N"
+      ]
+    },
+    {
+      "name": "player.previous",
+      "label": "Previous track",
+      "description": "Move to the previous queue entry.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "player",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "shortcut": [
+        "P"
+      ]
+    },
+    {
+      "name": "player.seek",
+      "label": "Seek",
+      "description": "Seek to a position in the playing track, in seconds or as a percentage of its length. Give one of the two.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "player",
+      "input": {
+        "type": "object",
+        "properties": {
+          "seconds": {
+            "type": "number",
+            "description": "Position in seconds",
+            "minimum": 0
+          },
+          "percent": {
+            "type": "number",
+            "description": "Position as a percentage",
+            "minimum": 0,
+            "maximum": 100
+          }
+        },
+        "required": [],
+        "additionalProperties": false,
+        "minProperties": 1,
+        "maxProperties": 1
+      },
+      "shortcut": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9"
+      ]
+    },
+    {
+      "name": "player.seek_relative",
+      "label": "Seek by",
+      "description": "Seek forward (positive) or back (negative) by a number of seconds.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "player",
+      "input": {
+        "type": "object",
+        "properties": {
+          "seconds": {
+            "type": "number",
+            "description": "Seconds to move; negative moves back",
+            "minimum": -3600,
+            "maximum": 3600
+          }
+        },
+        "required": [
+          "seconds"
+        ],
+        "additionalProperties": false
+      },
+      "shortcut": [
+        "ArrowLeft",
+        "ArrowRight",
+        "Shift+ArrowLeft",
+        "Shift+ArrowRight"
+      ]
+    },
+    {
+      "name": "player.volume",
+      "label": "Volume",
+      "description": "Set the volume (0 to 1) or change it by a step (-1 to 1). Give one of the two.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "player",
+      "input": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "number",
+            "description": "Volume from 0 (silent) to 1 (full)",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "delta": {
+            "type": "number",
+            "description": "Change in volume",
+            "minimum": -1,
+            "maximum": 1
+          }
+        },
+        "required": [],
+        "additionalProperties": false,
+        "minProperties": 1,
+        "maxProperties": 1
+      },
+      "shortcut": [
+        "ArrowUp",
+        "ArrowDown"
+      ]
+    },
+    {
+      "name": "player.mute",
+      "label": "Mute",
+      "description": "Mute or unmute. Without `muted` it toggles.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "player",
+      "input": {
+        "type": "object",
+        "properties": {
+          "muted": {
+            "type": "boolean",
+            "description": "true mutes, false unmutes"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "shortcut": [
+        "M"
+      ]
+    },
+    {
+      "name": "player.status",
+      "label": "Player status",
+      "description": "What is playing: track id, title, artist, album, position and duration in seconds, playing or paused, volume, muted, shuffle, repeat, and the decoder route.",
+      "scope": "read",
+      "approval": "read",
+      "group": "player",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "queue.read",
+      "label": "Read queue",
+      "description": "A page of the play queue: each entry's position, track id, title, artist, album and duration, plus the current position, shuffle and repeat.",
+      "scope": "read",
+      "approval": "read",
+      "group": "queue",
+      "input": {
+        "type": "object",
+        "properties": {
+          "offset": {
+            "type": "integer",
+            "description": "First result to return (default 0)",
+            "minimum": 0
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Results per page (default 20)",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "queue.set",
+      "label": "Replace queue",
+      "description": "Replace the queue with these tracks and start at `startIndex` (default 0). Undo restores the previous queue.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "queue",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Track ids in play order"
+          },
+          "startIndex": {
+            "type": "integer",
+            "description": "Entry to start at",
+            "minimum": 0
+          },
+          "play": {
+            "type": "boolean",
+            "description": "Start playing (default true)"
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "queue.add",
+      "label": "Add to queue",
+      "description": "Add tracks to the end of the queue.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "queue",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Track ids. Omitted: the selected tracks, or the playing track"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "shortcut": [
+        "Q"
+      ]
+    },
+    {
+      "name": "queue.play_next",
+      "label": "Play next",
+      "description": "Insert tracks right after the playing entry.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "queue",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Track ids. Omitted: the selected tracks, or the playing track"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "shortcut": [
+        "Shift+Q"
+      ]
+    },
+    {
+      "name": "queue.move",
+      "label": "Move in queue",
+      "description": "Move the entry at position `from` to position `to` (0-based).",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "queue",
+      "input": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "integer",
+            "description": "Current position",
+            "minimum": 0
+          },
+          "to": {
+            "type": "integer",
+            "description": "New position",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "queue.remove",
+      "label": "Remove from queue",
+      "description": "Remove entries by position (0-based). Omitted: the selected queue entries.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "queue",
+      "input": {
+        "type": "object",
+        "properties": {
+          "indices": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "Positions to remove"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "shortcut": [
+        "Delete"
+      ]
+    },
+    {
+      "name": "queue.clear",
+      "label": "Clear queue",
+      "description": "Empty the queue. Undo brings it back.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "queue",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "queue.shuffle",
+      "label": "Shuffle",
+      "description": "Set shuffle to off, tracks or albums (albums keeps track order inside each album). Without `mode` it moves to the next mode.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "queue",
+      "input": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "off",
+              "tracks",
+              "albums"
+            ],
+            "description": "Shuffle mode"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "shortcut": [
+        "S"
+      ]
+    },
+    {
+      "name": "queue.repeat",
+      "label": "Repeat",
+      "description": "Set repeat to off, all or one. Without `mode` it moves to the next mode.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "queue",
+      "input": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "off",
+              "all",
+              "one"
+            ],
+            "description": "Repeat mode"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "shortcut": [
+        "R"
+      ]
+    },
+    {
+      "name": "queue.undo",
+      "label": "Undo queue edit",
+      "description": "Undo the last queue or playlist edit.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "queue",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "shortcut": [
+        "Mod+Z"
+      ]
+    },
+    {
+      "name": "queue.save_playlist",
+      "label": "Save queue as playlist",
+      "description": "Save the queue as an M3U8 playlist file in the music folder. Refuses when a playlist with that name exists.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "queue",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Playlist name",
+            "minLength": 1,
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "library.search",
+      "label": "Search library",
+      "description": "Fuzzy search over title, artist, album, album artist, file name and genre. Returns a page of tracks (id, title, artist, album, year, duration) and the total.",
+      "scope": "read",
+      "approval": "read",
+      "group": "library",
+      "input": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Search text",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "offset": {
+            "type": "integer",
+            "description": "First result to return (default 0)",
+            "minimum": 0
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Results per page (default 20)",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "library.browse",
+      "label": "Browse library",
+      "description": "List groups (albums, artists, genres, years, folders) or, with `key`, the tracks in one group; or the recently added, recently played, most played, favourite and rated lists. Pages by 20.",
+      "scope": "read",
+      "approval": "read",
+      "group": "library",
+      "input": {
+        "type": "object",
+        "properties": {
+          "by": {
+            "type": "string",
+            "enum": [
+              "albums",
+              "artists",
+              "albumArtists",
+              "genres",
+              "years",
+              "folders",
+              "recentlyAdded",
+              "recentlyPlayed",
+              "mostPlayed",
+              "favourites",
+              "rated"
+            ],
+            "description": "What to browse"
+          },
+          "key": {
+            "type": "string",
+            "description": "Group key from a previous browse"
+          },
+          "offset": {
+            "type": "integer",
+            "description": "First result to return (default 0)",
+            "minimum": 0
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Results per page (default 20)",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "required": [
+          "by"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "track.read",
+      "label": "Read track",
+      "description": "One track's tags and state: title, artist, album, album artist, track and disc, year, genre, duration, codec, rating, favourite, play count, last played, ReplayGain values.",
+      "scope": "read",
+      "approval": "read",
+      "group": "library",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Track id",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "track.rate",
+      "label": "Rate",
+      "description": "Rate tracks from 0 (no rating) to 5 stars. Stored in the index, not the file.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "library",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Track ids. Omitted: the selected tracks, or the playing track"
+          },
+          "rating": {
+            "type": "integer",
+            "description": "Stars",
+            "minimum": 0,
+            "maximum": 5
+          }
+        },
+        "required": [
+          "rating"
+        ],
+        "additionalProperties": false
+      },
+      "shortcut": [
+        "Alt+0",
+        "Alt+1",
+        "Alt+2",
+        "Alt+3",
+        "Alt+4",
+        "Alt+5"
+      ]
+    },
+    {
+      "name": "track.favourite",
+      "label": "Favourite",
+      "description": "Mark or unmark tracks as favourites. Without `favourite` it toggles.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "library",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Track ids. Omitted: the selected tracks, or the playing track"
+          },
+          "favourite": {
+            "type": "boolean",
+            "description": "true marks, false unmarks"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "shortcut": [
+        "F"
+      ]
+    },
+    {
+      "name": "track.edit_tags",
+      "label": "Edit tags",
+      "description": "Write tags into the audio files (Chromium only). Shows the change and waits for approval; keeps a backup until the rewritten file reads back the same.",
+      "scope": "destructive",
+      "approval": "destructive",
+      "group": "library",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Tracks to edit"
+          },
+          "patch": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string",
+                "description": "Title"
+              },
+              "artist": {
+                "type": "string",
+                "description": "Artist"
+              },
+              "album": {
+                "type": "string",
+                "description": "Album"
+              },
+              "albumArtist": {
+                "type": "string",
+                "description": "Album artist"
+              },
+              "trackNo": {
+                "type": "integer",
+                "description": "Track number",
+                "minimum": 0
+              },
+              "trackTotal": {
+                "type": "integer",
+                "description": "Track total",
+                "minimum": 0
+              },
+              "discNo": {
+                "type": "integer",
+                "description": "Disc number",
+                "minimum": 0
+              },
+              "discTotal": {
+                "type": "integer",
+                "description": "Disc total",
+                "minimum": 0
+              },
+              "year": {
+                "type": "integer",
+                "description": "Year",
+                "minimum": 0,
+                "maximum": 9999
+              },
+              "genre": {
+                "type": "string",
+                "description": "Genre"
+              },
+              "rating": {
+                "type": "integer",
+                "description": "Stars",
+                "minimum": 0,
+                "maximum": 5
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "ids",
+          "patch"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "playlist.list",
+      "label": "List playlists",
+      "description": "The playlists in the music folder (M3U, M3U8, PLS, XSPF, JSPF and smart playlists): name, kind and track count.",
+      "scope": "read",
+      "approval": "read",
+      "group": "playlist",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "playlist.create",
+      "label": "New playlist",
+      "description": "Create an M3U8 playlist in the music folder, optionally with tracks.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "playlist",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Playlist name",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Tracks to put in it"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "playlist.add",
+      "label": "Add to playlist",
+      "description": "Append tracks to a playlist. Omitted ids: the selected tracks, or the playing track.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "playlist",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Playlist name",
+            "minLength": 1
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Track ids. Omitted: the selected tracks, or the playing track"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "playlist.delete",
+      "label": "Delete playlist",
+      "description": "Delete a playlist file from the music folder. Shows what goes and waits for approval.",
+      "scope": "destructive",
+      "approval": "destructive",
+      "group": "playlist",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Playlist name",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "smart.create",
+      "label": "New smart playlist",
+      "description": "Save a smart playlist rule as <name>.nakliamp-smart.json in the music folder. Rules match all or any; each is { field, op, value }.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "playlist",
+      "input": {
+        "type": "object",
+        "properties": {
+          "rule": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Name",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "match": {
+                "type": "string",
+                "enum": [
+                  "all",
+                  "any"
+                ],
+                "description": "Match all rules or any rule"
+              },
+              "rules": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "field": {
+                      "type": "string",
+                      "enum": [
+                        "genre",
+                        "artist",
+                        "albumArtist",
+                        "album",
+                        "title",
+                        "year",
+                        "rating",
+                        "playCount",
+                        "lastPlayedAt",
+                        "addedAt",
+                        "durationS",
+                        "path",
+                        "favourite"
+                      ],
+                      "description": "Field"
+                    },
+                    "op": {
+                      "type": "string",
+                      "enum": [
+                        "is",
+                        "is-not",
+                        "contains",
+                        "not-contains",
+                        "gt",
+                        "lt",
+                        "between",
+                        "in-last-days",
+                        "not-in-last-days"
+                      ],
+                      "description": "Operator"
+                    },
+                    "value": {
+                      "description": "Value: text, number, or [low, high] for between"
+                    }
+                  },
+                  "required": [
+                    "field",
+                    "op"
+                  ],
+                  "additionalProperties": false
+                },
+                "description": "Rules"
+              },
+              "limit": {
+                "type": "integer",
+                "description": "Most tracks to include",
+                "minimum": 1,
+                "maximum": 10000
+              },
+              "sort": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string",
+                    "enum": [
+                      "title",
+                      "artist",
+                      "album",
+                      "year",
+                      "addedAt",
+                      "playCount",
+                      "lastPlayedAt",
+                      "rating",
+                      "durationS"
+                    ],
+                    "description": "Sort key"
+                  },
+                  "direction": {
+                    "type": "string",
+                    "enum": [
+                      "asc",
+                      "desc"
+                    ],
+                    "description": "Direction"
+                  }
+                },
+                "required": [],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "name",
+              "match",
+              "rules"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "rule"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "smart.list",
+      "label": "List smart playlists",
+      "description": "The smart playlists in the music folder, with their rules and current track counts.",
+      "scope": "read",
+      "approval": "read",
+      "group": "playlist",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "eq.preset",
+      "label": "EQ preset",
+      "description": "Pick an equaliser preset, or set the custom curve (10 bands, -12 to 12 dB).",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "sound",
+      "input": {
+        "type": "object",
+        "properties": {
+          "preset": {
+            "type": "string",
+            "enum": [
+              "flat",
+              "rock",
+              "pop",
+              "jazz",
+              "classical",
+              "bass-boost",
+              "treble-boost",
+              "vocal",
+              "electronic",
+              "acoustic",
+              "custom"
+            ],
+            "description": "Preset"
+          },
+          "custom": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": -12,
+              "maximum": 12
+            },
+            "minItems": 10,
+            "maxItems": 10,
+            "description": "Custom gains in dB, 70 Hz to 16 kHz"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "eq.enable",
+      "label": "Equaliser on or off",
+      "description": "Turn the equaliser on or off. Without `enabled` it toggles.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "sound",
+      "input": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "true turns it on"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "shortcut": [
+        "E"
+      ]
+    },
+    {
+      "name": "sound.replaygain",
+      "label": "ReplayGain",
+      "description": "Set ReplayGain: off, track, album or auto (album gain inside an album run, track gain otherwise), the preamp in dB, and clipping prevention.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "sound",
+      "input": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "off",
+              "track",
+              "album",
+              "auto"
+            ],
+            "description": "Mode"
+          },
+          "preampDb": {
+            "type": "number",
+            "description": "Preamp in dB",
+            "minimum": -15,
+            "maximum": 15
+          },
+          "preventClipping": {
+            "type": "boolean",
+            "description": "Lower the gain when the peak would clip"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "sound.crossfade",
+      "label": "Crossfade",
+      "description": "Crossfade length in seconds, 0 (off) to 12. Never applied between tracks of one album when gapless applies.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "sound",
+      "input": {
+        "type": "object",
+        "properties": {
+          "seconds": {
+            "type": "number",
+            "description": "Seconds",
+            "minimum": 0,
+            "maximum": 12
+          }
+        },
+        "required": [
+          "seconds"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "sound.gapless",
+      "label": "Gapless",
+      "description": "Gapless playback: off, albums (within one album) or always.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "sound",
+      "input": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "off",
+              "albums",
+              "always"
+            ],
+            "description": "Mode"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "visualiser.mode",
+      "label": "Visualiser",
+      "description": "Pick a visualiser mode by id, or move through the modes by `step`.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "visualiser",
+      "input": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "description": "Mode id",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "step": {
+            "type": "integer",
+            "description": "Modes to move by",
+            "minimum": -20,
+            "maximum": 20
+          }
+        },
+        "required": [],
+        "additionalProperties": false,
+        "minProperties": 1,
+        "maxProperties": 1
+      },
+      "shortcut": [
+        "V"
+      ]
+    },
+    {
+      "name": "visualiser.full",
+      "label": "Full-window visualiser",
+      "description": "Show the visualiser over the whole window, or leave it. Without `on` it toggles.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "visualiser",
+      "input": {
+        "type": "object",
+        "properties": {
+          "on": {
+            "type": "boolean",
+            "description": "true enters full window"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "shortcut": [
+        "Shift+V"
+      ]
+    },
+    {
+      "name": "view.open",
+      "label": "Open view",
+      "description": "Open a view: the library, a browse view, the queue, playlists, search, lyrics, the track inspector, the equaliser, settings or the AI playlist dialog.",
+      "scope": "read",
+      "approval": "read",
+      "group": "view",
+      "input": {
+        "type": "object",
+        "properties": {
+          "view": {
+            "type": "string",
+            "enum": [
+              "library",
+              "albums",
+              "artists",
+              "albumArtists",
+              "genres",
+              "years",
+              "folders",
+              "queue",
+              "playlists",
+              "search",
+              "lyrics",
+              "inspector",
+              "eq",
+              "settings",
+              "ai"
+            ],
+            "description": "View"
+          }
+        },
+        "required": [
+          "view"
+        ],
+        "additionalProperties": false
+      },
+      "shortcut": [
+        "L",
+        "/",
+        "Y",
+        "I"
+      ]
+    },
+    {
+      "name": "view.close",
+      "label": "Close",
+      "description": "Leave the full-window visualiser, or close the open overlay or dialog.",
+      "scope": "read",
+      "approval": "read",
+      "group": "view",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "shortcut": [
+        "Escape"
+      ]
+    },
+    {
+      "name": "view.keymap",
+      "label": "Keyboard shortcuts",
+      "description": "Show the keyboard map.",
+      "scope": "read",
+      "approval": "read",
+      "group": "view",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "shortcut": [
+        "?"
+      ]
+    },
+    {
+      "name": "ui.theme",
+      "label": "Theme",
+      "description": "Light, dark, or system (inside NakliOS: the host theme).",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "view",
+      "input": {
+        "type": "object",
+        "properties": {
+          "theme": {
+            "type": "string",
+            "enum": [
+              "system",
+              "light",
+              "dark"
+            ],
+            "description": "Theme"
+          }
+        },
+        "required": [
+          "theme"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "ui.mini",
+      "label": "Mini player",
+      "description": "Switch to the compact mini player or back. Without `on` it toggles.",
+      "scope": "write",
+      "approval": "reversible",
+      "group": "view",
+      "input": {
+        "type": "object",
+        "properties": {
+          "on": {
+            "type": "boolean",
+            "description": "true shows the mini player"
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "shortcut": [
+        "Shift+M"
+      ]
+    },
+    {
+      "name": "ai.playlist",
+      "label": "Playlist from a description",
+      "description": "Make a playlist from a description using only tracks in the library. Returns track ids and a title as a preview; nothing is saved until playlist.create. Without a host model it filters by tags and search.",
+      "scope": "read",
+      "approval": "read",
+      "group": "ai",
+      "input": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "What to play",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "length": {
+            "type": "integer",
+            "description": "Tracks wanted (default 25)",
+            "minimum": 1,
+            "maximum": 200
+          }
+        },
+        "required": [
+          "description"
+        ],
+        "additionalProperties": false
+      }
+    }
+  ],
+  "errorCodes": [
+    {
+      "code": "not-found",
+      "meaning": "No command, track, playlist or handler by that name."
+    },
+    {
+      "code": "invalid-input",
+      "meaning": "The input does not match the command's JSON Schema."
+    },
+    {
+      "code": "declined",
+      "meaning": "The person did not approve a destructive command."
+    },
+    {
+      "code": "unavailable",
+      "meaning": "The command cannot run here (no music folder, no tag writing in this browser, no host model)."
+    },
+    {
+      "code": "refused",
+      "meaning": "Any other refusal."
+    }
+  ]
+}

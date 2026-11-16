@@ -29,7 +29,112 @@ const EMPTY = Object.freeze({
   trackNo: null, trackTotal: null, discNo: null, discTotal: null,
   year: null, genre: null, durationS: null, sampleRate: null, channels: null,
   lyrics: null, picture: null, container: null,
+  replayGain: null, rating: null, cuesheet: null,
 });
+
+/**
+ * The version of what this reader extracts. The scanner re-reads a file whose
+ * stored `parserVersion` is older, even when its size and time are unchanged,
+ * so a new field (ReplayGain and ratings arrived in 2, embedded cue sheets in
+ * 3) reaches old rows.
+ */
+export const PARSER_VERSION = 3;
+
+// ------------------------------------------------- ReplayGain, rating ----
+
+const REPLAY_GAIN_KEYS = new Map([
+  ['REPLAYGAIN_TRACK_GAIN', 'trackGainDb'], ['REPLAYGAIN_TRACK_PEAK', 'trackPeak'],
+  ['REPLAYGAIN_ALBUM_GAIN', 'albumGainDb'], ['REPLAYGAIN_ALBUM_PEAK', 'albumPeak'],
+]);
+
+/** "-6.50 dB" to -6.5. A gain outside +-60 dB is not a real gain and is dropped. */
+function parseGainDb(text) {
+  const match = /^\s*([+-]?\d+(?:[.,]\d+)?)/.exec(String(text ?? ''));
+  if (!match) return null;
+  const value = Number(match[1].replace(',', '.'));
+  return Number.isFinite(value) && Math.abs(value) <= 60 ? value : null;
+}
+
+/** A linear sample peak. Float sources can exceed 1; past 100 it is junk. */
+function parsePeak(text) {
+  const match = /^\s*(\d+(?:[.,]\d+)?)/.exec(String(text ?? ''));
+  if (!match) return null;
+  const value = Number(match[1].replace(',', '.'));
+  return Number.isFinite(value) && value >= 0 && value <= 100 ? value : null;
+}
+
+/** Record one REPLAYGAIN_* value. Returns true when `key` was a ReplayGain key. */
+function assignReplayGain(tags, key, value) {
+  const field = REPLAY_GAIN_KEYS.get(String(key).toUpperCase());
+  if (!field) return false;
+  const number = field.endsWith('Db') ? parseGainDb(value) : parsePeak(value);
+  if (number === null) return true;
+  tags.replayGain ??= { trackGainDb: null, trackPeak: null, albumGainDb: null, albumPeak: null };
+  tags.replayGain[field] ??= number;
+  return true;
+}
+
+/** Opus R128_*_GAIN: a Q7.8 integer, -32768..32767. */
+function assignR128(tags, key, value) {
+  const upper = String(key).toUpperCase();
+  if (upper !== 'R128_TRACK_GAIN' && upper !== 'R128_ALBUM_GAIN') return false;
+  const text = String(value ?? '').trim();
+  if (!/^[+-]?\d{1,5}$/.test(text)) return true;
+  const q78 = Number(text);
+  if (q78 < -32768 || q78 > 32767) return true;
+  tags.r128 ??= { track: null, album: null };
+  tags.r128[upper === 'R128_TRACK_GAIN' ? 'track' : 'album'] ??= q78;
+  return true;
+}
+
+/**
+ * Fold Opus R128 gains into the ReplayGain record where no REPLAYGAIN_* value
+ * exists. R128 is relative to -23 LUFS; adding 5 dB puts it on the ReplayGain
+ * 2.0 reference of -18 LUFS, which is what the engine expects.
+ */
+function finishR128(tags) {
+  if (!tags.r128) return;
+  const { track, album } = tags.r128;
+  delete tags.r128;
+  const toDb = q78 => Math.round((q78 / 256 + 5) * 10000) / 10000;
+  if (track === null && album === null) return;
+  tags.replayGain ??= { trackGainDb: null, trackPeak: null, albumGainDb: null, albumPeak: null };
+  if (track !== null) tags.replayGain.trackGainDb ??= toDb(track);
+  if (album !== null) tags.replayGain.albumGainDb ??= toDb(album);
+}
+
+/** ID3 POPM rating byte to 0..5 stars, on the Windows Media Player scale. */
+export function popmStars(byte) {
+  if (!Number.isInteger(byte) || byte <= 0) return 0;
+  if (byte < 64) return 1;
+  if (byte < 128) return 2;
+  if (byte < 196) return 3;
+  if (byte < 255) return 4;
+  return 5;
+}
+
+/**
+ * A text rating to 0..5 stars. FMPS_RATING is a fraction 0..1. RATING has no
+ * single standard: a decimal up to 1 is a fraction, a whole number up to 5 is
+ * stars, and anything up to 100 is a percentage.
+ */
+export function ratingFromText(value, fraction = false) {
+  const text = String(value ?? '').trim();
+  if (!/^\d+(?:\.\d+)?$/.test(text)) return null;
+  const number = Number(text);
+  if (fraction || (number <= 1 && text.includes('.'))) return number <= 1 ? Math.round(number * 5) : null;
+  if (number <= 5 && Number.isInteger(number)) return number;
+  if (number <= 100) return Math.round(number / 20);
+  return null;
+}
+
+function assignRating(tags, key, value) {
+  const upper = String(key).toUpperCase();
+  if (upper !== 'RATING' && upper !== 'FMPS_RATING') return false;
+  const stars = ratingFromText(value, upper === 'FMPS_RATING');
+  if (stars !== null) tags.rating ??= stars;
+  return true;
+}
 
 /** Read `length` bytes from `blob` at `offset`. */
 async function bytes(blob, offset, length) {
@@ -151,10 +256,142 @@ function id3Lyrics(body, synced) {
   return text ? { synced, text } : null;
 }
 
+/** Skip one encoding-aware NUL-terminated string from `cursor`; returns the next index. */
+function skipId3String(body, cursor, encoding) {
+  if (encoding === 1 || encoding === 2) {
+    while (cursor + 1 < body.length && !(body[cursor] === 0 && body[cursor + 1] === 0)) cursor += 2;
+    return cursor + 2;
+  }
+  const end = body.indexOf(0, cursor);
+  return end < 0 ? body.length : end + 1;
+}
+
+/** Decode `bytes` in an ID3 encoding by prefixing the encoding byte. */
+function id3Decode(encoding, bytes) {
+  const framed = new Uint8Array(bytes.length + 1);
+  framed[0] = encoding;
+  framed.set(bytes, 1);
+  return id3Text(framed);
+}
+
+/** TXXX: encoding · description NUL · value. */
+function id3UserText(body) {
+  if (body.length < 2) return null;
+  const encoding = body[0];
+  const end = skipId3String(body, 1, encoding);
+  const terminator = encoding === 1 || encoding === 2 ? 2 : 1;
+  const description = id3Decode(encoding, body.subarray(1, Math.max(1, end - terminator)));
+  const value = id3Decode(encoding, body.subarray(Math.min(end, body.length)));
+  return description ? { description, value } : null;
+}
+
+/** POPM: email NUL · rating byte · optional play counter. */
+function id3Popularimeter(body) {
+  const end = body.indexOf(0);
+  if (end < 0 || end + 1 >= body.length) return null;
+  return popmStars(body[end + 1]);
+}
+
+/**
+ * SYLT: encoding · language(3) · timestamp format · content type · descriptor
+ * NUL · then repeated (text NUL · 4-byte time). Rendered as LRC text so one
+ * lyrics parser serves every source. Only millisecond stamps (format 2) can be
+ * placed in time; anything else returns null and the caller falls back.
+ */
+const MAX_SYLT_LINES = 5000;
+function id3SyncedLyrics(body) {
+  if (body.length < 8) return null;
+  const encoding = body[0];
+  if (encoding > 3 || body[4] !== 2) return null;
+  let cursor = skipId3String(body, 6, encoding);
+  const lines = [];
+  const terminator = encoding === 1 || encoding === 2 ? 2 : 1;
+  while (cursor < body.length && lines.length < MAX_SYLT_LINES) {
+    const end = skipId3String(body, cursor, encoding);
+    if (end + 4 > body.length) break;
+    const text = id3Decode(encoding, body.subarray(cursor, end - terminator)) ?? '';
+    const ms = u32be(body, end);
+    const minutes = Math.floor(ms / 60000);
+    const seconds = ((ms % 60000) / 1000).toFixed(2).padStart(5, '0');
+    lines.push(`[${String(minutes).padStart(2, '0')}:${seconds}]${text.replace(/^\n/, '')}`);
+    cursor = end + 4;
+  }
+  return lines.length ? { synced: true, text: lines.join('\n') } : null;
+}
+
 const ID3_TEXT_FRAMES = new Map([
   ['TIT2', 'title'], ['TPE1', 'artist'], ['TALB', 'album'], ['TPE2', 'albumArtist'],
   ['TCON', 'genre'], ['TT2', 'title'], ['TP1', 'artist'], ['TAL', 'album'], ['TP2', 'albumArtist'],
 ]);
+
+/** Apply a frame's value with `??=`, so the first frame of a kind wins. */
+const id3Once = (field, read) => (tags, body) => { tags[field] ??= read(body); };
+
+/** SYLT: synced lyrics win over unsynced ones, whichever frame came first. */
+function applySyncedLyricsFrame(tags, body) {
+  if (!tags.lyrics?.synced) tags.lyrics = id3SyncedLyrics(body) ?? tags.lyrics ?? id3Lyrics(body, true);
+}
+
+function applyUserTextFrame(tags, body) {
+  const pair = id3UserText(body);
+  if (pair && !assignReplayGain(tags, pair.description, pair.value)) assignRating(tags, pair.description, pair.value);
+}
+
+function applyPopularimeterFrame(tags, body) {
+  const stars = id3Popularimeter(body);
+  if (stars !== null) tags.rating ??= stars;
+}
+
+const applyTrackFrame = (tags, body) => assignPair(tags, 'trackNo', 'trackTotal', id3Text(body));
+const applyDiscFrame = (tags, body) => assignPair(tags, 'discNo', 'discTotal', id3Text(body));
+const applyYearFrame = id3Once('year', body => year(id3Text(body)));
+const applyPictureFrame = id3Once('picture', id3Picture);
+const applyLyricsFrame = id3Once('lyrics', body => id3Lyrics(body, false));
+
+/** Non-text ID3 frames by id, v2.2 three-letter ids alongside v2.3/v2.4 ones. */
+const ID3_FRAME_READERS = new Map([
+  ['TRCK', applyTrackFrame], ['TRK', applyTrackFrame],
+  ['TPOS', applyDiscFrame], ['TPA', applyDiscFrame],
+  ['TDRC', applyYearFrame], ['TYER', applyYearFrame], ['TYE', applyYearFrame],
+  ['APIC', applyPictureFrame], ['PIC', applyPictureFrame],
+  ['USLT', applyLyricsFrame], ['ULT', applyLyricsFrame],
+  ['SYLT', applySyncedLyricsFrame],
+  ['TXXX', applyUserTextFrame], ['TXX', applyUserTextFrame],
+  ['POPM', applyPopularimeterFrame], ['POP', applyPopularimeterFrame],
+]);
+
+function applyId3Frame(tags, id, body) {
+  const textField = ID3_TEXT_FRAMES.get(id);
+  if (textField) tags[textField] ??= id3Text(body);
+  else ID3_FRAME_READERS.get(id)?.(tags, body);
+}
+
+/** A frame's declared size: 24-bit in v2.2, syncsafe in v2.4, plain 32-bit in v2.3. */
+function id3FrameSize(region, cursor, major) {
+  if (major === 2) return u24be(region, cursor + 3);
+  return major === 4 ? syncsafe(region, cursor + 4) : u32be(region, cursor + 4);
+}
+
+/**
+ * A frame's body. ID3v2.4 frame flag 0x01 prefixes the body with a 4-byte
+ * syncsafe length. Decoding without skipping it puts four junk bytes at the
+ * front of the text.
+ */
+function id3FrameBody(region, cursor, major, headerLength, frameSize) {
+  let bodyStart = cursor + headerLength;
+  let bodyLength = frameSize;
+  if (major === 4 && (region[cursor + 9] & 0x01) !== 0 && bodyLength > 4) {
+    bodyStart += 4;
+    bodyLength -= 4;
+  }
+  return region.subarray(bodyStart, bodyStart + bodyLength);
+}
+
+/** Bytes to skip for an extended header (v2.3 and v2.4 only). */
+function id3ExtendedSkip(region, major, extended) {
+  if (!extended || major < 3) return 0;
+  return major === 4 ? syncsafe(region, 0) : u32be(region, 0) + 4;
+}
 
 async function readId3(blob, tags) {
   const header = await bytes(blob, 0, 10);
@@ -168,35 +405,14 @@ async function readId3(blob, tags) {
   const region = await bytes(blob, 10, Math.min(size, MAX_ID3_BYTES));
   const idLength = major === 2 ? 3 : 4;
   const headerLength = major === 2 ? 6 : 10;
-  let cursor = 0;
-  if (extended && major >= 3) cursor += major === 4 ? syncsafe(region, 0) : u32be(region, 0) + 4;
+  let cursor = id3ExtendedSkip(region, major, extended);
 
   while (cursor + headerLength <= region.length) {
     const id = ascii(region, cursor, idLength);
     if (!/^[A-Z0-9]+$/.test(id)) break;
-    const frameSize = major === 2
-      ? u24be(region, cursor + 3)
-      : (major === 4 ? syncsafe(region, cursor + 4) : u32be(region, cursor + 4));
+    const frameSize = id3FrameSize(region, cursor, major);
     if (frameSize <= 0 || cursor + headerLength + frameSize > region.length) break;
-    let bodyStart = cursor + headerLength;
-    let bodyLength = frameSize;
-    // ID3v2.4 frame flag 0x01 prefixes the body with a 4-byte syncsafe length.
-    // Decoding without skipping it puts four junk bytes at the front of the text.
-    if (major === 4 && (region[cursor + 9] & 0x01) !== 0 && bodyLength > 4) {
-      bodyStart += 4;
-      bodyLength -= 4;
-    }
-    const body = region.subarray(bodyStart, bodyStart + bodyLength);
-
-    const textField = ID3_TEXT_FRAMES.get(id);
-    if (textField) tags[textField] ??= id3Text(body);
-    else if (id === 'TRCK' || id === 'TRK') assignPair(tags, 'trackNo', 'trackTotal', id3Text(body));
-    else if (id === 'TPOS' || id === 'TPA') assignPair(tags, 'discNo', 'discTotal', id3Text(body));
-    else if (id === 'TDRC' || id === 'TYER' || id === 'TYE') tags.year ??= year(id3Text(body));
-    else if (id === 'APIC' || id === 'PIC') tags.picture ??= id3Picture(body);
-    else if (id === 'USLT' || id === 'ULT') tags.lyrics ??= id3Lyrics(body, false);
-    else if (id === 'SYLT') tags.lyrics ??= id3Lyrics(body, true);
-
+    applyId3Frame(tags, id, id3FrameBody(region, cursor, major, headerLength, frameSize));
     cursor += headerLength + frameSize;
   }
 }
@@ -208,6 +424,40 @@ const VORBIS_FIELDS = new Map([
   ['ALBUMARTIST', 'albumArtist'], ['ALBUM ARTIST', 'albumArtist'],
   ['GENRE', 'genre'],
 ]);
+
+const vorbisOnce = (field, read) => (tags, value) => { tags[field] ??= read(value); };
+const firstOfPair = value => splitPair(value)[0];
+const applyVorbisTrackTotal = vorbisOnce('trackTotal', firstOfPair);
+const applyVorbisDiscTotal = vorbisOnce('discTotal', firstOfPair);
+const applyVorbisYear = vorbisOnce('year', year);
+const applyVorbisLyrics = vorbisOnce('lyrics', value => ({ synced: /^\s*\[\d+:\d+/.test(value), text: trimNul(value) }));
+
+/** Keys checked before the ReplayGain, R128 and rating helpers. */
+const VORBIS_EARLY_KEYS = new Map([
+  ['TRACKNUMBER', (tags, value) => assignPair(tags, 'trackNo', 'trackTotal', value)],
+  ['TRACKTOTAL', applyVorbisTrackTotal], ['TOTALTRACKS', applyVorbisTrackTotal],
+  ['DISCNUMBER', (tags, value) => assignPair(tags, 'discNo', 'discTotal', value)],
+  ['DISCTOTAL', applyVorbisDiscTotal], ['TOTALDISCS', applyVorbisDiscTotal],
+  ['DATE', applyVorbisYear], ['YEAR', applyVorbisYear],
+  ['METADATA_BLOCK_PICTURE', vorbisOnce('pictureBase64', value => value)],
+]);
+
+/** Keys checked after those helpers. */
+const VORBIS_LATE_KEYS = new Map([
+  ['CUESHEET', vorbisOnce('cuesheet', trimNul)],
+  ['LYRICS', applyVorbisLyrics], ['UNSYNCEDLYRICS', applyVorbisLyrics],
+]);
+
+/** Record one `KEY=value` comment on `tags`. */
+function applyVorbisEntry(tags, key, value) {
+  const field = VORBIS_FIELDS.get(key);
+  if (field) { tags[field] ??= trimNul(value); return; }
+  const early = VORBIS_EARLY_KEYS.get(key);
+  if (early) { early(tags, value); return; }
+  // The helpers record the value themselves when the key is theirs.
+  if (assignReplayGain(tags, key, value) || assignR128(tags, key, value) || assignRating(tags, key, value)) return;
+  VORBIS_LATE_KEYS.get(key)?.(tags, value);
+}
 
 /** A Vorbis comment block: vendor string, then count, then `KEY=value` entries. */
 function readVorbisComment(block, tags) {
@@ -224,20 +474,7 @@ function readVorbisComment(block, tags) {
     cursor += length;
     const split = entry.indexOf('=');
     if (split < 0) continue;
-    const key = entry.slice(0, split).toUpperCase();
-    const value = entry.slice(split + 1);
-
-    const field = VORBIS_FIELDS.get(key);
-    if (field) tags[field] ??= trimNul(value);
-    else if (key === 'TRACKNUMBER') assignPair(tags, 'trackNo', 'trackTotal', value);
-    else if (key === 'TRACKTOTAL' || key === 'TOTALTRACKS') tags.trackTotal ??= splitPair(value)[0];
-    else if (key === 'DISCNUMBER') assignPair(tags, 'discNo', 'discTotal', value);
-    else if (key === 'DISCTOTAL' || key === 'TOTALDISCS') tags.discTotal ??= splitPair(value)[0];
-    else if (key === 'DATE' || key === 'YEAR') tags.year ??= year(value);
-    else if (key === 'METADATA_BLOCK_PICTURE') tags.pictureBase64 ??= value;
-    else if (key === 'LYRICS' || key === 'UNSYNCEDLYRICS') {
-      tags.lyrics ??= { synced: /^\s*\[\d+:\d+/.test(value), text: trimNul(value) };
-    }
+    applyVorbisEntry(tags, entry.slice(0, split).toUpperCase(), entry.slice(split + 1));
   }
 }
 
@@ -265,35 +502,44 @@ function readFlacPicture(block) {
   return { mime, bytes: block.slice(cursor, cursor + dataLength) };
 }
 
+/** STREAMINFO: a 20-bit sample rate, 3-bit channel count, then 36 bits of total samples. */
+function readFlacStreamInfo(body, tags) {
+  tags.sampleRate = ((body[10] << 12) | (body[11] << 4) | (body[12] >> 4)) || null;
+  tags.channels = (((body[12] >> 1) & 0x07) + 1) || null;
+  const totalSamples = ((body[13] & 0x0f) * 2 ** 32) + u32be(body, 14);
+  if (tags.sampleRate && totalSamples > 0) tags.durationS = totalSamples / tags.sampleRate;
+}
+
+function applyFlacBlock(type, body, tags) {
+  if (type === 0 && body.length >= 18) readFlacStreamInfo(body, tags);
+  else if (type === 4) readVorbisComment(body, tags);
+  else if (type === 6) tags.picture ??= readFlacPicture(body);
+}
+
+/**
+ * A file may carry its art as a base64 comment rather than a picture block.
+ * The comment reader captures it; decoding it here is what makes the two
+ * carriers equivalent.
+ */
+function finishPictureComment(tags) {
+  if (!tags.pictureBase64) return;
+  tags.picture ??= decodePictureComment(tags.pictureBase64);
+  delete tags.pictureBase64;
+}
+
 async function readFlac(blob, tags) {
   let cursor = 4;
   for (let guard = 0; guard < 128; guard += 1) {
     const header = await bytes(blob, cursor, 4);
     if (header.length < 4) return;
     const last = (header[0] & 0x80) !== 0;
-    const type = header[0] & 0x7f;
     const length = u24be(header, 1);
     const body = length > 0 ? await bytes(blob, cursor + 4, length) : new Uint8Array(0);
-
-    if (type === 0 && body.length >= 18) {
-      // STREAMINFO: a 20-bit sample rate, 3-bit channel count, then 36 bits of total samples.
-      tags.sampleRate = ((body[10] << 12) | (body[11] << 4) | (body[12] >> 4)) || null;
-      tags.channels = (((body[12] >> 1) & 0x07) + 1) || null;
-      const totalSamples = ((body[13] & 0x0f) * 2 ** 32) + u32be(body, 14);
-      if (tags.sampleRate && totalSamples > 0) tags.durationS = totalSamples / tags.sampleRate;
-    } else if (type === 4) readVorbisComment(body, tags);
-    else if (type === 6) tags.picture ??= readFlacPicture(body);
-
+    applyFlacBlock(header[0] & 0x7f, body, tags);
     cursor += 4 + length;
     if (last) break;
   }
-  // A FLAC file may carry its art as a base64 comment rather than a picture
-  // block. The comment reader captures it; decoding it here is what makes the
-  // two carriers equivalent.
-  if (tags.pictureBase64) {
-    tags.picture ??= decodePictureComment(tags.pictureBase64);
-    delete tags.pictureBase64;
-  }
+  finishPictureComment(tags);
 }
 
 // -------------------------------------------------------------- Ogg ----
@@ -321,66 +567,86 @@ function decodePictureComment(base64) {
  * Pages are read one at a time rather than in one large slab, so a tagged Ogg
  * costs a few kilobytes of reads regardless of how large the file is.
  */
+const OGG_PAGE_HEADER = 27;
+
+/** One Ogg page's segment table and payload, or null when the page is not readable. */
+async function readOggPage(blob, offset) {
+  const header = await bytes(blob, offset, OGG_PAGE_HEADER);
+  if (header.length < OGG_PAGE_HEADER || ascii(header, 0, 4) !== 'OggS') return null;
+  const segmentCount = header[26];
+  const table = await bytes(blob, offset + OGG_PAGE_HEADER, segmentCount);
+  if (table.length < segmentCount) return null;
+
+  let payloadLength = 0;
+  for (const size of table) payloadLength += size;
+  const payload = await bytes(blob, offset + OGG_PAGE_HEADER + segmentCount, payloadLength);
+  return { table, payload, next: offset + OGG_PAGE_HEADER + segmentCount + payloadLength };
+}
+
+function joinParts(parts, length) {
+  const complete = new Uint8Array(length);
+  let written = 0;
+  for (const part of parts) { complete.set(part, written); written += part.length; }
+  return complete;
+}
+
+/** Feed one page's segments into the packet being built; read each packet that completes. */
+function feedOggPage({ table, payload }, state, tags) {
+  let cursor = 0;
+  for (const size of table) {
+    state.packet.push(payload.subarray(cursor, cursor + size));
+    state.packetBytes += size;
+    cursor += size;
+    // A segment shorter than 255 terminates the packet; 255 means it continues.
+    if (size === 255) continue;
+    const complete = joinParts(state.packet, state.packetBytes);
+    state.packet = [];
+    state.packetBytes = 0;
+    readOggPacket(complete, tags);
+    state.emitted += 1;
+    if (state.emitted >= 2) break;
+  }
+}
+
 async function readOgg(blob, tags) {
-  const PAGE_HEADER = 27;
   let offset = 0;
-  let packet = [];
-  let packetBytes = 0;
-  let emitted = 0;
+  const state = { packet: [], packetBytes: 0, emitted: 0 };
 
   // Two header packets carry everything: identification, then comments.
   // Bounded by pages as well as by packets: a page declaring no segments
   // advances the cursor by its header alone, so an unbounded loop is one read
   // per twenty-seven bytes of the whole file.
-  for (let page = 0; page < MAX_OGG_PAGES && emitted < 2 && offset + PAGE_HEADER <= blob.size; page += 1) {
-    const header = await bytes(blob, offset, PAGE_HEADER);
-    if (header.length < PAGE_HEADER || ascii(header, 0, 4) !== 'OggS') return;
-    const segmentCount = header[26];
-    const table = await bytes(blob, offset + PAGE_HEADER, segmentCount);
-    if (table.length < segmentCount) return;
-
-    let payloadLength = 0;
-    for (const size of table) payloadLength += size;
-    const payload = await bytes(blob, offset + PAGE_HEADER + segmentCount, payloadLength);
-    offset += PAGE_HEADER + segmentCount + payloadLength;
-
-    let cursor = 0;
-    for (const size of table) {
-      packet.push(payload.subarray(cursor, cursor + size));
-      packetBytes += size;
-      cursor += size;
-      // A segment shorter than 255 terminates the packet; 255 means it continues.
-      if (size === 255) continue;
-      const complete = new Uint8Array(packetBytes);
-      let written = 0;
-      for (const part of packet) { complete.set(part, written); written += part.length; }
-      packet = [];
-      packetBytes = 0;
-      readOggPacket(complete, tags);
-      emitted += 1;
-      if (emitted >= 2) break;
-    }
+  for (let page = 0; page < MAX_OGG_PAGES && state.emitted < 2 && offset + OGG_PAGE_HEADER <= blob.size; page += 1) {
+    const read = await readOggPage(blob, offset);
+    if (!read) return;
+    offset = read.next;
+    feedOggPage(read, state, tags);
   }
 
-  if (tags.pictureBase64) {
-    tags.picture ??= decodePictureComment(tags.pictureBase64);
-    delete tags.pictureBase64;
-  }
+  finishPictureComment(tags);
 }
+
+const isOpusTags = packet => packet.length > 8 && ascii(packet, 0, 8) === 'OpusTags';
+const isVorbisPacket = (packet, type, minLength) => packet.length > minLength && packet[0] === type && ascii(packet, 1, 6) === 'vorbis';
+const isOpusHead = packet => packet.length > 16 && ascii(packet, 0, 8) === 'OpusHead';
+
+/** Header packet kinds, each with its test and its reader, in the order they are tried. */
+const OGG_PACKETS = [
+  [isOpusTags, (packet, tags) => readVorbisComment(packet.subarray(8), tags)],
+  [packet => isVorbisPacket(packet, 3, 7), (packet, tags) => readVorbisComment(packet.subarray(7), tags)],
+  [packet => isVorbisPacket(packet, 1, 16), (packet, tags) => {
+    tags.channels = packet[11] || null;
+    tags.sampleRate = u32le(packet, 12) || null;
+  }],
+  [isOpusHead, (packet, tags) => {
+    tags.channels = packet[9] || null;
+    tags.sampleRate = u32le(packet, 12) || 48000;
+  }],
+];
 
 /** Dispatch one reassembled Ogg packet to the right reader. */
 function readOggPacket(packet, tags) {
-  if (packet.length > 8 && ascii(packet, 0, 8) === 'OpusTags') {
-    readVorbisComment(packet.subarray(8), tags);
-  } else if (packet.length > 7 && packet[0] === 3 && ascii(packet, 1, 6) === 'vorbis') {
-    readVorbisComment(packet.subarray(7), tags);
-  } else if (packet.length > 16 && packet[0] === 1 && ascii(packet, 1, 6) === 'vorbis') {
-    tags.channels = packet[11] || null;
-    tags.sampleRate = u32le(packet, 12) || null;
-  } else if (packet.length > 16 && ascii(packet, 0, 8) === 'OpusHead') {
-    tags.channels = packet[9] || null;
-    tags.sampleRate = u32le(packet, 12) || 48000;
-  }
+  OGG_PACKETS.find(([test]) => test(packet))?.[1](packet, tags);
 }
 
 // -------------------------------------------------------------- MP4 ----
@@ -416,34 +682,70 @@ async function mp4Walk(blob, start, end, visit, depth = 0) {
   }
 }
 
+const MP4_FREEFORM_PARTS = new Set(['mean', 'name', 'data']);
+const MP4_CONTAINERS = new Set(['moov', 'udta', 'trak', 'mdia']);
+
+/** iTunes freeform atom: mean (namespace) · name (key) · data (value). */
+async function readMp4Freeform(blob, bodyStart, bodyEnd, tags) {
+  const parts = {};
+  await mp4Walk(blob, bodyStart, bodyEnd, async (partType, partStart, partEnd) => {
+    if (!MP4_FREEFORM_PARTS.has(partType) || partEnd - partStart > 4096) return;
+    const skip = partType === 'data' ? 8 : 4;
+    if (partEnd - partStart <= skip) return;
+    parts[partType] ??= trimNul(UTF8.decode(await bytes(blob, partStart + skip, partEnd - partStart - skip)));
+  });
+  if (parts.mean !== 'com.apple.iTunes' || !parts.name || parts.data === undefined) return;
+  if (!assignReplayGain(tags, parts.name, parts.data)) assignRating(tags, parts.name, parts.data);
+}
+
+/** trkn/disk payload: reserved u16, number u16, total u16. */
+function applyMp4Numeric(tags, type, payload) {
+  const number = (payload[2] << 8) | payload[3];
+  const total = (payload[4] << 8) | payload[5];
+  // A zero here means "absent" only when the whole payload is empty, so
+  // keep 0 rather than folding it to null as `|| null` would.
+  if (type === 'trkn') { tags.trackNo ??= number; tags.trackTotal ??= total || null; }
+  else { tags.discNo ??= number; tags.discTotal ??= total || null; }
+}
+
+function applyMp4Text(tags, type, field, text) {
+  if (type === MP4_DAY) tags.year ??= year(text);
+  else if (type === MP4_LYRICS) tags.lyrics ??= text ? { synced: /^\s*\[\d+:\d+/.test(text), text } : null;
+  else if (field) tags[field] ??= text;
+}
+
+/** Whether an ilst item is one this reader records. */
+function isWantedIlstItem(type, field, isNumeric) {
+  return Boolean(field) || isNumeric || type === MP4_DAY || type === 'covr' || type === MP4_LYRICS;
+}
+
+/** Read the `data` atoms of one ilst item into `tags`. */
+async function readIlstItem(blob, type, bodyStart, bodyEnd, tags) {
+  const field = MP4_FIELDS.get(type);
+  const isNumeric = type === 'trkn' || type === 'disk';
+  if (!isWantedIlstItem(type, field, isNumeric)) return;
+  await mp4Walk(blob, bodyStart, bodyEnd, async (dataType, dataStart, dataEnd) => {
+    if (dataType !== 'data' || dataEnd - dataStart <= 8) return;
+    const flags = u24be(await bytes(blob, dataStart + 1, 3), 0);
+    const payload = await bytes(blob, dataStart + 8, dataEnd - dataStart - 8);
+    if (isNumeric) applyMp4Numeric(tags, type, payload);
+    else if (type === 'covr') tags.picture ??= { mime: flags === 14 ? 'image/png' : 'image/jpeg', bytes: payload };
+    else applyMp4Text(tags, type, field, trimNul(UTF8.decode(payload)));
+  });
+}
+
+async function readMvhd(blob, bodyStart, tags) {
+  const body = await bytes(blob, bodyStart, 24);
+  if (body.length < 20 || body[0] !== 0) return;
+  const timescale = u32be(body, 12);
+  const duration = u32be(body, 16);
+  if (timescale > 0 && duration > 0) tags.durationS ??= duration / timescale;
+}
+
 async function readMp4(blob, tags) {
   const visitIlst = async (type, bodyStart, bodyEnd) => {
-    const field = MP4_FIELDS.get(type);
-    const isNumeric = type === 'trkn' || type === 'disk';
-    if (!field && !isNumeric && type !== MP4_DAY && type !== 'covr' && type !== MP4_LYRICS) return;
-    await mp4Walk(blob, bodyStart, bodyEnd, async (dataType, dataStart, dataEnd) => {
-      if (dataType !== 'data' || dataEnd - dataStart <= 8) return;
-      const flags = u24be(await bytes(blob, dataStart + 1, 3), 0);
-      const payload = await bytes(blob, dataStart + 8, dataEnd - dataStart - 8);
-      if (isNumeric) {
-        // trkn/disk payload: reserved u16, number u16, total u16.
-        const number = (payload[2] << 8) | payload[3];
-        const total = (payload[4] << 8) | payload[5];
-        // A zero here means "absent" only when the whole payload is empty, so
-        // keep 0 rather than folding it to null as `|| null` would.
-        if (type === 'trkn') { tags.trackNo ??= number; tags.trackTotal ??= total || null; }
-        else { tags.discNo ??= number; tags.discTotal ??= total || null; }
-        return;
-      }
-      if (type === 'covr') {
-        tags.picture ??= { mime: flags === 14 ? 'image/png' : 'image/jpeg', bytes: payload };
-        return;
-      }
-      const text = trimNul(UTF8.decode(payload));
-      if (type === MP4_DAY) tags.year ??= year(text);
-      else if (type === MP4_LYRICS) tags.lyrics ??= text ? { synced: /^\s*\[\d+:\d+/.test(text), text } : null;
-      else if (field) tags[field] ??= text;
-    });
+    if (type === '----') await readMp4Freeform(blob, bodyStart, bodyEnd, tags);
+    else await readIlstItem(blob, type, bodyStart, bodyEnd, tags);
   };
 
   await mp4Walk(blob, 0, blob.size, async function descend(type, bodyStart, bodyEnd, depth) {
@@ -452,20 +754,49 @@ async function readMp4(blob, tags) {
     } else if (type === 'meta') {
       // `meta` is a full box: skip its version and flags before its children.
       await mp4Walk(blob, bodyStart + 4, bodyEnd, descend, depth + 1);
-    } else if (type === 'moov' || type === 'udta' || type === 'trak' || type === 'mdia') {
+    } else if (MP4_CONTAINERS.has(type)) {
       await mp4Walk(blob, bodyStart, bodyEnd, descend, depth + 1);
     } else if (type === 'mvhd') {
-      const body = await bytes(blob, bodyStart, 24);
-      if (body.length >= 20 && body[0] === 0) {
-        const timescale = u32be(body, 12);
-        const duration = u32be(body, 16);
-        if (timescale > 0 && duration > 0) tags.durationS ??= duration / timescale;
-      }
+      await readMvhd(blob, bodyStart, tags);
     }
   });
 }
 
 // ------------------------------------------------------------ WAV ----
+
+const WAV_INFO_FIELDS = new Map([['INAM', 'title'], ['IART', 'artist'], ['IPRD', 'album'], ['IGNR', 'genre']]);
+
+function applyWavInfo(tags, key, value) {
+  const field = WAV_INFO_FIELDS.get(key);
+  if (field) tags[field] ??= value;
+  else if (key === 'ICRD') tags.year ??= year(value);
+}
+
+/** A LIST/INFO chunk: four-byte keys, each with a length and a Latin-1 value. */
+function readWavInfo(body, tags) {
+  let inner = 4;
+  while (inner + 8 <= body.length) {
+    const key = ascii(body, inner, 4);
+    // A field declaring more length than its chunk holds used to read
+    // straight through the fields after it — their four-byte binary length
+    // words included — into the library index, which is where the user
+    // then read it as a title. Nothing after such a field can be located,
+    // so the walk stops rather than guessing.
+    const declared = u32le(body, inner + 4);
+    if (declared <= 0 || declared > body.length - (inner + 8)) break;
+    applyWavInfo(tags, key, trimNul(LATIN1.decode(body.subarray(inner + 8, inner + 8 + declared))));
+    inner += 8 + declared + (declared % 2);
+  }
+}
+
+function applyWavChunk(id, body, tags) {
+  if (id === 'fmt ' && body.length >= 16) {
+    tags.channels = (body[2] | (body[3] << 8)) || null;
+    tags.sampleRate = u32le(body, 4) || null;
+  } else if (id === 'LIST' && ascii(body, 0, 4) === 'INFO') {
+    readWavInfo(body, tags);
+  }
+}
 
 async function readWav(blob, tags) {
   const region = await bytes(blob, 12, Math.min(blob.size - 12, 64 * 1024));
@@ -473,30 +804,7 @@ async function readWav(blob, tags) {
   while (cursor + 8 <= region.length) {
     const id = ascii(region, cursor, 4);
     const size = u32le(region, cursor + 4);
-    const body = region.subarray(cursor + 8, cursor + 8 + size);
-    if (id === 'fmt ' && body.length >= 16) {
-      tags.channels = (body[2] | (body[3] << 8)) || null;
-      tags.sampleRate = u32le(body, 4) || null;
-    } else if (id === 'LIST' && ascii(body, 0, 4) === 'INFO') {
-      let inner = 4;
-      while (inner + 8 <= body.length) {
-        const key = ascii(body, inner, 4);
-        // A field declaring more length than its chunk holds used to read
-        // straight through the fields after it — their four-byte binary length
-        // words included — into the library index, which is where the user
-        // then read it as a title. Nothing after such a field can be located,
-        // so the walk stops rather than guessing.
-        const declared = u32le(body, inner + 4);
-        if (declared <= 0 || declared > body.length - (inner + 8)) break;
-        const value = trimNul(LATIN1.decode(body.subarray(inner + 8, inner + 8 + declared)));
-        if (key === 'INAM') tags.title ??= value;
-        else if (key === 'IART') tags.artist ??= value;
-        else if (key === 'IPRD') tags.album ??= value;
-        else if (key === 'IGNR') tags.genre ??= value;
-        else if (key === 'ICRD') tags.year ??= year(value);
-        inner += 8 + declared + (declared % 2);
-      }
-    }
+    applyWavChunk(id, region.subarray(cursor + 8, cursor + 8 + size), tags);
     if (size <= 0) break;
     cursor += 8 + size + (size % 2);
   }
@@ -504,16 +812,21 @@ async function readWav(blob, tags) {
 
 // ---------------------------------------------------------- dispatch ----
 
+/** Magic-byte tests, each with the header length it needs, in the order they are tried. */
+const CONTAINER_MAGIC = [
+  [4, head => ascii(head, 0, 4) === 'fLaC', 'flac'],
+  [4, head => ascii(head, 0, 4) === 'OggS', 'ogg'],
+  [4, head => ascii(head, 0, 4) === 'RIFF', 'wav'],
+  [8, head => ascii(head, 4, 4) === 'ftyp', 'mp4'],
+  [4, head => u32be(head, 0) === 0x1a45dfa3, 'matroska'],
+  [3, head => ascii(head, 0, 3) === 'ID3', 'mp3'],
+  [2, head => head[0] === 0xff && (head[1] & 0xe0) === 0xe0, 'mp3'],
+];
+
 /** Sniff the container from magic bytes rather than trusting the file name. */
 function sniff(head) {
-  if (head.length >= 4 && ascii(head, 0, 4) === 'fLaC') return 'flac';
-  if (head.length >= 4 && ascii(head, 0, 4) === 'OggS') return 'ogg';
-  if (head.length >= 4 && ascii(head, 0, 4) === 'RIFF') return 'wav';
-  if (head.length >= 8 && ascii(head, 4, 4) === 'ftyp') return 'mp4';
-  if (head.length >= 4 && u32be(head, 0) === 0x1a45dfa3) return 'matroska';
-  if (head.length >= 3 && ascii(head, 0, 3) === 'ID3') return 'mp3';
-  if (head.length >= 2 && head[0] === 0xff && (head[1] & 0xe0) === 0xe0) return 'mp3';
-  return null;
+  const match = CONTAINER_MAGIC.find(([minLength, test]) => head.length >= minLength && test(head));
+  return match ? match[2] : null;
 }
 
 /**
@@ -538,7 +851,19 @@ export async function readTags(blob) {
     // Deliberately swallowed: see the doc comment. The caller gets nulls.
   }
   delete tags.pictureBase64;
+  finishR128(tags);
   return tags;
+}
+
+/**
+ * The embedded lyrics of an audio Blob, read on demand: USLT, SYLT (rendered
+ * as LRC lines), Vorbis LYRICS or UNSYNCEDLYRICS, MP4 lyr. The scanner keeps
+ * only a flag, so the text costs one tag read when the lyrics view opens.
+ * Returns text or null; never throws.
+ */
+export async function readLyricsText(blob) {
+  const tags = await readTags(blob);
+  return tags.lyrics?.text ?? null;
 }
 
 /** Strip the extension so a tagless file still has a readable title. */

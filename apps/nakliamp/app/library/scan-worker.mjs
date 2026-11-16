@@ -8,7 +8,7 @@ import { scanFolder } from './scan-core.mjs';
 let cancelled = false;
 
 self.addEventListener('message', async event => {
-  const { type, rootHandle } = event.data ?? {};
+  const { type, rootHandle, folderId = null } = event.data ?? {};
   if (type === 'cancel') { cancelled = true; return; }
   if (type !== 'scan') return;
   cancelled = false;
@@ -16,6 +16,7 @@ self.addEventListener('message', async event => {
     await scanFolder(rootHandle, {
       post: message => self.postMessage(message),
       isCancelled: () => cancelled,
+      folderId,
     });
   } catch (error) {
     self.postMessage({

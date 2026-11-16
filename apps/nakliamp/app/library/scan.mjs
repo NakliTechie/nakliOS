@@ -126,7 +126,7 @@ export async function directoryFromDrop(dataTransfer) {
  * Run a scan. Returns a controller with a `done` promise and a `cancel()`.
  * `onProgress` is called with the worker's own progress messages.
  */
-export function startScan(rootHandle, { onProgress = () => {}, onFileError = () => {} } = {}) {
+export function startScan(rootHandle, { onProgress = () => {}, onFileError = () => {}, folderId = null } = {}) {
   const worker = new Worker(new URL('./scan-worker.mjs', import.meta.url), { type: 'module' });
   let settle;
   let fail;
@@ -151,7 +151,9 @@ export function startScan(rootHandle, { onProgress = () => {}, onFileError = () 
     fail(error);
   });
 
-  worker.postMessage({ type: 'scan', rootHandle });
+  // `folderId` (L13) is null for the primary folder; another folder's id
+  // makes the scan write `//<id>/` paths and touch only that folder's rows.
+  worker.postMessage({ type: 'scan', rootHandle, folderId });
 
   return {
     done,

@@ -174,6 +174,29 @@ const AIFC_FORMATS = new Map([
   ['ALAW', { companding: 'alaw', bits: 8 }],
 ]);
 
+/** Read an AIFF or AIFC COMM chunk into a PCM format and its declared frame count. */
+function parseAiffComm(view, body, size, isAifc) {
+  requireBytes(view, body, 18, 'a COMM chunk');
+  const channels = view.getUint16(body);
+  const declaredFrames = view.getUint32(body + 2);
+  const bits = view.getUint16(body + 6);
+  const sampleRate = extendedFloat(view, body + 8);
+  let variant = {};
+  if (isAifc && size >= 22) {
+    requireBytes(view, body + 18, 4, 'an AIFC compression type');
+    const compression = ascii(view, body + 18, 4);
+    variant = AIFC_FORMATS.get(compression);
+    if (!variant) {
+      throw encodingError('ERR_NAKLIAMP_PCM_UNSUPPORTED', `AIFC compression ${compression} is not supported.`);
+    }
+  }
+  const format = {
+    channels, sampleRate, bits, signed: true, littleEndian: false,
+    float: false, companding: null, ...variant,
+  };
+  return { format, declaredFrames };
+}
+
 function decodeAiff(view) {
   const isAifc = ascii(view, 8, 4) === 'AIFC';
   let format = null;
@@ -188,24 +211,7 @@ function decodeAiff(view) {
     const body = cursor + 8;
 
     if (id === 'COMM' && size >= 18) {
-      requireBytes(view, body, 18, 'a COMM chunk');
-      const channels = view.getUint16(body);
-      declaredFrames = view.getUint32(body + 2);
-      const bits = view.getUint16(body + 6);
-      const sampleRate = extendedFloat(view, body + 8);
-      let variant = {};
-      if (isAifc && size >= 22) {
-        requireBytes(view, body + 18, 4, 'an AIFC compression type');
-        const compression = ascii(view, body + 18, 4);
-        variant = AIFC_FORMATS.get(compression);
-        if (!variant) {
-          throw encodingError('ERR_NAKLIAMP_PCM_UNSUPPORTED', `AIFC compression ${compression} is not supported.`);
-        }
-      }
-      format = {
-        channels, sampleRate, bits, signed: true, littleEndian: false,
-        float: false, companding: null, ...variant,
-      };
+      ({ format, declaredFrames } = parseAiffComm(view, body, size, isAifc));
     } else if (id === 'SSND' && size >= 8) {
       // SSND begins with an offset and a block size before the samples.
       requireBytes(view, body, 8, 'an SSND chunk');

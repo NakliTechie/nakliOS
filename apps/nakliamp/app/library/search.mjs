@@ -7,6 +7,13 @@
 //
 // Headless by contract: no DOM, no network.
 
+/** Bonus for a hit at the start of the text (10) or of a word (6). */
+function startBonus(haystack, index) {
+  if (index === 0) return 10;
+  const previous = haystack[index - 1];
+  return previous === ' ' || previous === '-' || previous === '_' ? 6 : 0;
+}
+
 /**
  * Score `query` against `text`.
  * Returns null when the query is not a subsequence of the text, otherwise a
@@ -34,10 +41,7 @@ export function fuzzyScore(query, text) {
       score += 8 + run * 4;
     } else {
       run = 0;
-      score += 1;
-      const previous = index === 0 ? ' ' : haystack[index - 1];
-      if (index === 0) score += 10;
-      else if (previous === ' ' || previous === '-' || previous === '_') score += 6;
+      score += 1 + startBonus(haystack, index);
     }
     // Earlier matches rank higher, but never enough to overturn a real run.
     score += Math.max(0, 4 - Math.floor(index / 8));

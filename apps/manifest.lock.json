@@ -289,97 +289,429 @@
       "id": "nakliamp",
       "repo": "NakliTechie/nakliamp",
       "requestedRef": "main",
-      "resolvedCommit": "f039b68095973121c09a9a9f0559ecc9d8a3cfa6",
+      "resolvedCommit": "b93df3e922aa8ea1edb82f0a5fc7eb79eadb64b2",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "7c0ba3a7d5186cf1025240b2e9633f04ae9dd1a1b82eecd5edef962cfeadf227",
-          "bytes": 69238
+          "sha256": "9bccfc3bcb207d7496083de04d92ed95cf1fd8e47b1756fa70c1096050b65d81",
+          "bytes": 177693,
+          "originalSourceSha256": "61cb4386c4a12011a4891378cc22ad3c013d415c392c4c6549b1c9e7612acacc",
+          "sdkSha256": "ec78ab7bd0e82a108847216f33bc6600366f68199f9416959411e5db254405ed"
+        },
+        {
+          "source": "commands.json",
+          "destination": "commands.json",
+          "sha256": "8d4566c7eb032f1e0773d0dd20c0e5d85bcd7e1fddc40e8d2c91d1eb087ac610",
+          "bytes": 37250
+        },
+        {
+          "source": "sw.js",
+          "destination": "sw.js",
+          "sha256": "929c76ebbd9070e9c2cb71d77480a3062e22b21fc61f387d32d8f7c1f5dfd743",
+          "bytes": 1832
         },
         {
           "source": "VENDOR.md",
           "destination": "VENDOR.md",
-          "sha256": "5e7790bf7d0f4b01fbb04035e5ed80ef757c7ab6b6f9db5ddb65ca09e97d48f0",
-          "bytes": 4131
+          "sha256": "7655690faa1843b6fe187ae4d95c2b64c41ceae07439612fad7d4421ae45c273",
+          "bytes": 6562
+        },
+        {
+          "source": "app/agent/webmcp.mjs",
+          "destination": "app/agent/webmcp.mjs",
+          "sha256": "707c44e0c48767bb00e63cae507d52edb4f1cda8fbf5d448b61fabc5e7222bc9",
+          "bytes": 4442
+        },
+        {
+          "source": "app/ai/command-bar.mjs",
+          "destination": "app/ai/command-bar.mjs",
+          "sha256": "ab2f1157a794ea5a19225e412a2071a4d42401b6882a1b267738e0d84002a259",
+          "bytes": 11817
+        },
+        {
+          "source": "app/ai/genres.mjs",
+          "destination": "app/ai/genres.mjs",
+          "sha256": "00d60409a3cccfe777d607c30e8e86b7ecda7aaeeb512c41a524ab898ff339d3",
+          "bytes": 9426
+        },
+        {
+          "source": "app/ai/playlist.mjs",
+          "destination": "app/ai/playlist.mjs",
+          "sha256": "526019616f4786c7e1f97e51b54c8629464c357abbe860a262869bc6856b32fc",
+          "bytes": 24603
+        },
+        {
+          "source": "app/ai/similar.mjs",
+          "destination": "app/ai/similar.mjs",
+          "sha256": "3b6d24589d5f63aa20e5b33f61404f2e7d9a90b1ab33056b6c3b1c730d7d2855",
+          "bytes": 8191
+        },
+        {
+          "source": "app/audio/chain.mjs",
+          "destination": "app/audio/chain.mjs",
+          "sha256": "854967b8a22bc2c981387395ab8f96d4d7987bf844a6a040ffaada214bd500f8",
+          "bytes": 5708
+        },
+        {
+          "source": "app/audio/eq-presets.mjs",
+          "destination": "app/audio/eq-presets.mjs",
+          "sha256": "df0387a5261fc75e51a48726f60a63d392799348f8760702aa7b359ebd2fca30",
+          "bytes": 2825
+        },
+        {
+          "source": "app/audio/eqf.mjs",
+          "destination": "app/audio/eqf.mjs",
+          "sha256": "e454026983bcf1f33969553963aa2351e47847cd6c264fed3cf9b20b347c775a",
+          "bytes": 5035
+        },
+        {
+          "source": "app/audio/gapless.mjs",
+          "destination": "app/audio/gapless.mjs",
+          "sha256": "6717c9e5e00a90471108f7355e4a9f8d27f3b607e545dba7e83f7a602dd87222",
+          "bytes": 12993
+        },
+        {
+          "source": "app/audio/loudness.mjs",
+          "destination": "app/audio/loudness.mjs",
+          "sha256": "6966a685022f093884f69723497d7f325ba17c23ee1e57e9ad1bff32659bd5d4",
+          "bytes": 15109
+        },
+        {
+          "source": "app/audio/trim.mjs",
+          "destination": "app/audio/trim.mjs",
+          "sha256": "eb028557fdd64d13133987ee37f19ff55834e0eebec63340b20c38360f524716",
+          "bytes": 13110
+        },
+        {
+          "source": "app/audio/volume.mjs",
+          "destination": "app/audio/volume.mjs",
+          "sha256": "1e7ca9795902b44e3aa1f743742d1a3846a5029683696e3ac38f42c41966bd4c",
+          "bytes": 5287
+        },
+        {
+          "source": "app/commands/commands.mjs",
+          "destination": "app/commands/commands.mjs",
+          "sha256": "eeee594273e7a8298fc44e3925e759b63557f7b8912bc76578b7e17a0d8adebf",
+          "bytes": 21159
+        },
+        {
+          "source": "app/commands/run.mjs",
+          "destination": "app/commands/run.mjs",
+          "sha256": "33383741b76e17d96fdb637d2140312a06dcb3c4bcf4e0eecc88129723653d03",
+          "bytes": 11024
         },
         {
           "source": "app/decode/libav.mjs",
           "destination": "app/decode/libav.mjs",
-          "sha256": "05b717b2c8a2d870e4f602274fa9a1eed9a7316ab8640c55e273910abca93347",
-          "bytes": 12375
+          "sha256": "7f5d3f349f9dff58a6c704740016f4d65445e746e2253eeb3a1c315063102daf",
+          "bytes": 16112
         },
         {
           "source": "app/decode/pcm.mjs",
           "destination": "app/decode/pcm.mjs",
-          "sha256": "bb8f7d2f9a28aec65d93812656288e4a338a453b4cf7eba625f87adc73fcb0d0",
-          "bytes": 15460
+          "sha256": "9ba378347e322b0cead5d7515aeb6d7b4695fd073267a9b07a2cba9218369603",
+          "bytes": 15656
+        },
+        {
+          "source": "app/host.mjs",
+          "destination": "app/host.mjs",
+          "sha256": "a03aabac1120f232416da3a8dd1cd9ad437968ea846180f3999cd19856fbc49c",
+          "bytes": 2740
+        },
+        {
+          "source": "app/library/cue.mjs",
+          "destination": "app/library/cue.mjs",
+          "sha256": "40244370ce01c8a545f8dd2755890c24254a8bef343a37619fdaec57ec0fbc40",
+          "bytes": 15772
+        },
+        {
+          "source": "app/library/duplicates.mjs",
+          "destination": "app/library/duplicates.mjs",
+          "sha256": "6e310f8d80e25c823f26367ce83020f1ed4eb4ae7afda9d879a5a364223726f7",
+          "bytes": 4893
+        },
+        {
+          "source": "app/library/folders.mjs",
+          "destination": "app/library/folders.mjs",
+          "sha256": "e8498f24b5922ed3ae5f75b40f47f1bd7a1a82e585fa63517e833ce17b4a6399",
+          "bytes": 8125
+        },
+        {
+          "source": "app/library/lyrics.mjs",
+          "destination": "app/library/lyrics.mjs",
+          "sha256": "e18b3804fd56f7cde99db3e46e999140fe273fa25ed7c1df5a20d544995d5d4a",
+          "bytes": 5570
         },
         {
           "source": "app/library/metadata.mjs",
           "destination": "app/library/metadata.mjs",
-          "sha256": "49c3e5e7055b550dd6fe0b0f106999f6905c70c62bb406807fae88bca75ee15c",
-          "bytes": 23588
+          "sha256": "75f6b87726fa7743b1aa4088f417d09f4973d7dd1db8132afc04267e9035cbc1",
+          "bytes": 36225
         },
         {
           "source": "app/library/playlist.mjs",
           "destination": "app/library/playlist.mjs",
-          "sha256": "3585d150139e09123c474815a6796e049e912c78b46ee85d707b12a5ddcac74f",
-          "bytes": 12006
+          "sha256": "6f710782fed7cfdcf2409853b064418f8d9533a818f52ea92d9c0d6b5b4784ec",
+          "bytes": 15919
+        },
+        {
+          "source": "app/library/rename.mjs",
+          "destination": "app/library/rename.mjs",
+          "sha256": "0aaf957f7d7f1ccd2b5db76bfa5891f59b7bedf019bd9c1ca06ae3282d8378e3",
+          "bytes": 10079
         },
         {
           "source": "app/library/scan-core.mjs",
           "destination": "app/library/scan-core.mjs",
-          "sha256": "65bbdbfa074892274dd4e4b2277e31530271ba398ff73018009f3c37e2b4a287",
-          "bytes": 6955
+          "sha256": "80702fbfdd62144ab2f12f77cfb6824429d02db4690eeaf1f5e3c0355694acd8",
+          "bytes": 17613
         },
         {
           "source": "app/library/scan-worker.mjs",
           "destination": "app/library/scan-worker.mjs",
-          "sha256": "ad2febfb7cd3179eba23652db182bb5e15014d276c409d8be26ed127efc27ecd",
-          "bytes": 800
+          "sha256": "b2126f532969c9a9415c270a3745a7209c1227aad28f1ed24513e397628d0f70",
+          "bytes": 833
         },
         {
           "source": "app/library/scan.mjs",
           "destination": "app/library/scan.mjs",
-          "sha256": "f6d3d41c0c5a672066b6e39aaec4b6ef30bac1e6caa8281ffd6497cca2cc2234",
-          "bytes": 5422
+          "sha256": "59825ec0a63a4b97f40686dad4a9fef001a555b184fac6620747094c15306410",
+          "bytes": 5600
         },
         {
           "source": "app/library/search.mjs",
           "destination": "app/library/search.mjs",
-          "sha256": "5dbf3ad92e575d5f7566345afb6f1954971f00516b33d2d78c0a9a4705e8d4e9",
-          "bytes": 2815
+          "sha256": "30b594082dfb755b2c65a663119ad555704ffe5c1b3b4ad21bfbb7fad399cc2a",
+          "bytes": 2918
+        },
+        {
+          "source": "app/library/smart.mjs",
+          "destination": "app/library/smart.mjs",
+          "sha256": "0f85cd377ca2456b1ba91ec19ec5ce34773bf471cfc8eeaf7ff790f93048fa03",
+          "bytes": 10705
         },
         {
           "source": "app/library/store.mjs",
           "destination": "app/library/store.mjs",
-          "sha256": "9cdc40e017ef37043e553a06151ff0524f936ab51964cd5add63455c17ee7c4a",
-          "bytes": 16055
+          "sha256": "3488b83b7a04d0f389df10fabbe23ebe50105011e7bc08fa47719abb7f6865ef",
+          "bytes": 25549
+        },
+        {
+          "source": "app/library/views.mjs",
+          "destination": "app/library/views.mjs",
+          "sha256": "7e63667e9eaa7e7012fa3a9db75bc2b8cc7f224e766528665bac9aa152c6bb20",
+          "bytes": 8569
+        },
+        {
+          "source": "app/library/watch.mjs",
+          "destination": "app/library/watch.mjs",
+          "sha256": "10b52c0fa217980d3a97509eaccf0353dbe9045f2b1f0f4483e2494668666a8f",
+          "bytes": 4874
+        },
+        {
+          "source": "app/net/consent.mjs",
+          "destination": "app/net/consent.mjs",
+          "sha256": "e43e75646c531132c4b64ebd7f7e2ef9aaba8bc306f41cee740dbc12c3c0eaf3",
+          "bytes": 6536
+        },
+        {
+          "source": "app/net/listenbrainz.mjs",
+          "destination": "app/net/listenbrainz.mjs",
+          "sha256": "00a6704f4a5a532471f329498886fc5c53e34518e0354b93ea49201c0eb6de52",
+          "bytes": 13724
+        },
+        {
+          "source": "app/net/lrclib.mjs",
+          "destination": "app/net/lrclib.mjs",
+          "sha256": "0c697d675a15f4b349e438b59343b68732530212bd60f2337a1834d9ef028d79",
+          "bytes": 4307
+        },
+        {
+          "source": "app/net/musicbrainz.mjs",
+          "destination": "app/net/musicbrainz.mjs",
+          "sha256": "da29ca50f323ea88bf04468c474cee6d32e5913b0c0802763c099e068b89cb27",
+          "bytes": 10728
+        },
+        {
+          "source": "app/player/queue.mjs",
+          "destination": "app/player/queue.mjs",
+          "sha256": "e04a9870f6d25e4434eb60db6a2a1e9e280bb46a9233db60a1024a6f02a39870",
+          "bytes": 11965
+        },
+        {
+          "source": "app/player/timers.mjs",
+          "destination": "app/player/timers.mjs",
+          "sha256": "3e7329883d57229307b7b4dd737be676db82032aa1cec6f4627a4692e89ec92d",
+          "bytes": 5595
+        },
+        {
+          "source": "app/settings.mjs",
+          "destination": "app/settings.mjs",
+          "sha256": "4226eca53cf90c29dbbc38b7e5e1d236c76a5c8483114e9bfae298caf85cdaae",
+          "bytes": 5350
+        },
+        {
+          "source": "app/tags/diff.mjs",
+          "destination": "app/tags/diff.mjs",
+          "sha256": "8704ec357175fc079db9f9eae52639a02f43abfe107d068d5c4e5a2623cafbeb",
+          "bytes": 3809
+        },
+        {
+          "source": "app/tags/id3.mjs",
+          "destination": "app/tags/id3.mjs",
+          "sha256": "9908edce3b98f34619c2b4b15c688c36630dac8b5c330128a19a3b546f9a5ae7",
+          "bytes": 10563
+        },
+        {
+          "source": "app/tags/save.mjs",
+          "destination": "app/tags/save.mjs",
+          "sha256": "1ee3488532af1b2b2cb1895aaa3b7a612f43985dbe1051c7e4d31863f9dec61e",
+          "bytes": 9194
+        },
+        {
+          "source": "app/tags/write.mjs",
+          "destination": "app/tags/write.mjs",
+          "sha256": "dde9ac2aaec442a4f0f2c842e722c338936209306f4f5897f9ea155cb03eedc3",
+          "bytes": 12493
+        },
+        {
+          "source": "app/ui/ai-dialog.mjs",
+          "destination": "app/ui/ai-dialog.mjs",
+          "sha256": "9151b529960de58c33f4178156bd0d37162f30ef513d1c2f3b30bd3aac4cb57e",
+          "bytes": 9963
+        },
+        {
+          "source": "app/ui/browse.mjs",
+          "destination": "app/ui/browse.mjs",
+          "sha256": "d0c6739d7d2b130b2bf4722c91bf256c95a4af798a1b5650558fcd69850c8fbe",
+          "bytes": 48571
+        },
+        {
+          "source": "app/ui/dialog.mjs",
+          "destination": "app/ui/dialog.mjs",
+          "sha256": "576137db45d237a6973faa812dc7c47dd096d4e45f2f2bb187cd87c78afdd9e0",
+          "bytes": 11652
+        },
+        {
+          "source": "app/ui/inspector.mjs",
+          "destination": "app/ui/inspector.mjs",
+          "sha256": "92549a985d7459fcbeb6f544c3cecc146a39d81b57c48bfe0886973161272c5d",
+          "bytes": 9539
+        },
+        {
+          "source": "app/ui/keymap.mjs",
+          "destination": "app/ui/keymap.mjs",
+          "sha256": "31eee64e6b9ecd4dc02cc5c82b50e57417b955a294baa6b5a4a43c281e5a7511",
+          "bytes": 4257
+        },
+        {
+          "source": "app/ui/lyrics.mjs",
+          "destination": "app/ui/lyrics.mjs",
+          "sha256": "ba9a1db7a6d5a57d4cf563fad6afaf34a9b7de511544e0806e13da6a251cfbe0",
+          "bytes": 7787
+        },
+        {
+          "source": "app/ui/queue-panel.mjs",
+          "destination": "app/ui/queue-panel.mjs",
+          "sha256": "74448cd053d473c4a709b75311d6f530f6e49f908693ea0757aa170658b9ba0b",
+          "bytes": 21387
+        },
+        {
+          "source": "app/ui/select.mjs",
+          "destination": "app/ui/select.mjs",
+          "sha256": "681fb30bff5e718e3830c635c7a73e1aacb6c3ceefb872efe4528609bbe5e496",
+          "bytes": 4832
+        },
+        {
+          "source": "app/ui/shell/format.mjs",
+          "destination": "app/ui/shell/format.mjs",
+          "sha256": "325b796963bc39ebefabe70d07f76126878462043a58913e45b006ef7e81fcca",
+          "bytes": 5308
+        },
+        {
+          "source": "app/ui/shell/media-session.mjs",
+          "destination": "app/ui/shell/media-session.mjs",
+          "sha256": "15a9bf9f71d2054d8937bfaf8a3cee2746beebd5455d4b6ea088cf031c97110c",
+          "bytes": 3198
+        },
+        {
+          "source": "app/ui/shell/theme.mjs",
+          "destination": "app/ui/shell/theme.mjs",
+          "sha256": "0a5f40657309594eed5585fdb0f8e1db9f9586087fedda8b6bbd062ce58c33bf",
+          "bytes": 2546
+        },
+        {
+          "source": "app/ui/smart-editor.mjs",
+          "destination": "app/ui/smart-editor.mjs",
+          "sha256": "661ce8cc1109d5e265392b689181b65d8c5dcd64cf80dca687ce9fac76a88c31",
+          "bytes": 24882
+        },
+        {
+          "source": "app/ui/sound-panel.mjs",
+          "destination": "app/ui/sound-panel.mjs",
+          "sha256": "4ba53e5ac8856ae0646700e0b6e2bfe3ec7efa3ca3eac48c8ffb902e242b5979",
+          "bytes": 15352
+        },
+        {
+          "source": "app/ui/tag-editor.mjs",
+          "destination": "app/ui/tag-editor.mjs",
+          "sha256": "ef880cdaa76d48f9ee3cfc132a43f7d139cbd5d8a429acc8241aee6840c0449e",
+          "bytes": 25271
         },
         {
           "source": "app/visualiser/driver.mjs",
           "destination": "app/visualiser/driver.mjs",
-          "sha256": "dae89438001892b4aa790ed2d1376a5cdb5655ac0286d7e9c5bb484a2c915cf7",
-          "bytes": 5757
+          "sha256": "b9a9f0db2617d7b1e331aefd8255d1e7ae0f44ac9c1b93367ea4b3d19a2375c4",
+          "bytes": 9208
+        },
+        {
+          "source": "app/visualiser/milkdrop.mjs",
+          "destination": "app/visualiser/milkdrop.mjs",
+          "sha256": "3ef356ff1fd29061a7d2265e7f6bd7fd5b535ca7f1ad93c5a5c937b027a576ee",
+          "bytes": 10198
         },
         {
           "source": "app/visualiser/modes.mjs",
           "destination": "app/visualiser/modes.mjs",
-          "sha256": "27a7af90f235323876050da3f48722591c96267a1620f2715f4f21d45d5de7d9",
-          "bytes": 13128
+          "sha256": "38ee554ad07a08f771e7e912db35efa6960b27b856d64d038667f1f4b593074c",
+          "bytes": 13516
         },
         {
           "source": "engine/nakliamp-engine.mjs",
           "destination": "engine/nakliamp-engine.mjs",
-          "sha256": "883274935eb58152c1e95a4a4661eab9028352d17dc8a1a9e8abc780d25fdd75",
-          "bytes": 36920
+          "sha256": "087084117deabbfc47c83a6ab6e15606e49cdb5d8946ec26c1b851d91a046fd3",
+          "bytes": 63456
         },
         {
           "source": "engine/reel-engine.mjs",
           "destination": "engine/reel-engine.mjs",
           "sha256": "791a691fd8d0d95c9cf7fd27adf3bad2469c918f15e30ed9e57f05d0dad4c175",
           "bytes": 79536
+        },
+        {
+          "source": "vendor/butterchurn/LICENSE-MIT.txt",
+          "destination": "vendor/butterchurn/LICENSE-MIT.txt",
+          "sha256": "e5c204814d7119c939d9f111691e0c2008607d09c2f4679691e6dc5a10f24b98",
+          "bytes": 1073
+        },
+        {
+          "source": "vendor/butterchurn/LICENSE-presets-MIT.txt",
+          "destination": "vendor/butterchurn/LICENSE-presets-MIT.txt",
+          "sha256": "e5c204814d7119c939d9f111691e0c2008607d09c2f4679691e6dc5a10f24b98",
+          "bytes": 1073
+        },
+        {
+          "source": "vendor/butterchurn/butterchurn-3.0.0-beta.5.min.mjs",
+          "destination": "vendor/butterchurn/butterchurn-3.0.0-beta.5.min.mjs",
+          "sha256": "b5353af542b95cb5264069a0a4f52a23174e45745b58c48e245a3557d229b640",
+          "bytes": 243799
+        },
+        {
+          "source": "vendor/butterchurn/presets-3.0.0-beta.4.mjs",
+          "destination": "vendor/butterchurn/presets-3.0.0-beta.4.mjs",
+          "sha256": "a500b2b85493c37a4001033544294bdb288d0607cc591ec438562149adce4b5e",
+          "bytes": 38380
         },
         {
           "source": "vendor/libav/LICENSE-LGPL-2.1.txt",
@@ -402,14 +734,20 @@
         {
           "source": "vendor/libav/libav-6.10.9.0-nakliamp.wasm.mjs",
           "destination": "vendor/libav/libav-6.10.9.0-nakliamp.wasm.mjs",
-          "sha256": "4c679eab179d5f9307611fb349edca62cf264a511ebbf66aaa94ea795a6cd4b6",
-          "bytes": 282075
+          "sha256": "6248df5db8d7d91f30ce4b678c851fe6030747496407a2e6deabb16ad0cf6b1a",
+          "bytes": 248832
         },
         {
           "source": "vendor/libav/libav-6.10.9.0-nakliamp.wasm.wasm",
           "destination": "vendor/libav/libav-6.10.9.0-nakliamp.wasm.wasm",
-          "sha256": "e2a952132a942ee59f7d7624378e4f60568d120157e428e82a59e06b5ead7829",
-          "bytes": 1275128
+          "sha256": "cdc5ce039f8e584f01a22d94e5026a17caa61d870978920a29c898ac39b46cd3",
+          "bytes": 1537400
+        },
+        {
+          "source": "vendor/mediabunny/LICENSE-MPL-2.0.txt",
+          "destination": "vendor/mediabunny/LICENSE-MPL-2.0.txt",
+          "sha256": "3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d04",
+          "bytes": 16726
         },
         {
           "source": "vendor/mediabunny/mediabunny-1.51.0.min.mjs",
@@ -418,10 +756,16 @@
           "bytes": 627244
         },
         {
-          "source": "vendor/mediabunny/LICENSE-MPL-2.0.txt",
-          "destination": "vendor/mediabunny/LICENSE-MPL-2.0.txt",
-          "sha256": "3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d04",
-          "bytes": 16726
+          "source": "vendor/music-metadata/LICENSES.txt",
+          "destination": "vendor/music-metadata/LICENSES.txt",
+          "sha256": "20ecb284b32a4d5e911b4694d1c97ee0400637990f06e84edd75d77fa07d6d48",
+          "bytes": 12910
+        },
+        {
+          "source": "vendor/music-metadata/music-metadata-12.5.0-write.min.mjs",
+          "destination": "vendor/music-metadata/music-metadata-12.5.0-write.min.mjs",
+          "sha256": "3ad39ca1d79786792a249f4adf96092c1a4dec8c7bb5cfdbde7956ebe783d747",
+          "bytes": 147361
         }
       ]
     },
