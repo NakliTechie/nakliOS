@@ -2621,15 +2621,27 @@
       "id": "slate",
       "repo": "NakliTechie/slate",
       "requestedRef": "main",
-      "resolvedCommit": "51a61df76cc361c288bea32a4661e32e4ae990cd",
+      "resolvedCommit": "5a2715a3b788955a42facc76674a692f55bde2ca",
       "files": [
         {
           "source": "index.html",
           "destination": "index.html",
-          "sha256": "b00ac3c19198c98071b98e2eff65b30362184ba3f1c49d7ef5f7f94cab380525",
-          "bytes": 420476,
-          "originalSourceSha256": "c8008706fb988ae58471cd723878477f2a2d55ec8510fd13ea3d653400d8e5f9",
+          "sha256": "5172fbf8cbc16ed69985303e3bb5cb4e2e2d973f8987417b7baedf7b33437e40",
+          "bytes": 743670,
+          "originalSourceSha256": "3e8a91e36180347687158dfa1b4267064a442e39b18f7b967c1bf38415e63108",
           "sdkSha256": "ec78ab7bd0e82a108847216f33bc6600366f68199f9416959411e5db254405ed"
+        },
+        {
+          "source": "commands.json",
+          "destination": "commands.json",
+          "sha256": "a96ed145ba8adaf9431430083181c965d869a1f2d634ed0ff7a42872dac75db9",
+          "bytes": 19110
+        },
+        {
+          "source": "guide/index.html",
+          "destination": "guide/index.html",
+          "sha256": "7fbc8d3444a89999c84c49bc3430058f8ec2e7647180b518292863447ac00700",
+          "bytes": 33617
         },
         {
           "source": "LICENSE",

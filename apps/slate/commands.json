@@ -1,0 +1,752 @@
+{
+  "commands": [
+    {
+      "name": "library.open",
+      "label": "Open Library",
+      "description": "Show the photo library (the grid of every photo in the added folders).",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "shortcut": "Ctrl+L",
+      "shows": true
+    },
+    {
+      "name": "library.stats",
+      "label": "Library stats",
+      "description": "Count photos, videos, favourites, hidden, trashed, albums and folders in the library, and report background job progress.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "library.roots",
+      "label": "Library folders",
+      "description": "List the folders added to the library, with their ids and photo counts.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "library.search",
+      "label": "Search photos",
+      "description": "Find photos by words, date range, album, folder, camera, tag, favourite, rating or flag. Returns ids and short details, a page at a time.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "q": {
+            "type": "string",
+            "description": "words to match in file name, folder, tags, album names, camera; a year (2024) or month name (March) matches capture dates"
+          },
+          "from": {
+            "type": "string",
+            "description": "capture date on or after, YYYY-MM-DD"
+          },
+          "to": {
+            "type": "string",
+            "description": "capture date before, YYYY-MM-DD"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "photo",
+              "video"
+            ]
+          },
+          "album": {
+            "type": "string",
+            "description": "album id from album.list"
+          },
+          "folder": {
+            "type": "string",
+            "description": "folder path inside its root, e.g. \"2024/Goa\""
+          },
+          "root": {
+            "type": "string",
+            "description": "root id from library.roots"
+          },
+          "camera": {
+            "type": "string"
+          },
+          "tag": {
+            "type": "string",
+            "description": "a tag; a parent tag matches its children"
+          },
+          "fav": {
+            "type": "boolean",
+            "description": "only favourites"
+          },
+          "minRating": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5
+          },
+          "flag": {
+            "type": "string",
+            "enum": [
+              "pick",
+              "reject",
+              "none"
+            ]
+          },
+          "hidden": {
+            "type": "string",
+            "enum": [
+              "exclude",
+              "only",
+              "include"
+            ],
+            "description": "default exclude"
+          },
+          "trashed": {
+            "type": "string",
+            "enum": [
+              "exclude",
+              "only",
+              "include"
+            ],
+            "description": "default exclude"
+          },
+          "sort": {
+            "type": "string",
+            "enum": [
+              "time-desc",
+              "time-asc",
+              "name",
+              "size"
+            ]
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 500,
+            "description": "default 50, at most 500"
+          },
+          "cursor": {
+            "type": "string",
+            "description": "from a previous result, to get the next page"
+          }
+        },
+        "required": []
+      },
+      "shortcut": "/"
+    },
+    {
+      "name": "library.rescan",
+      "label": "Rescan folders",
+      "description": "Look for new, changed and missing files in one added folder, or all of them.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "root": {
+            "type": "string",
+            "description": "root id; omit for all"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "library.undo",
+      "label": "Undo",
+      "description": "Undo one earlier library change, by the undo token that change returned.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ]
+      }
+    },
+    {
+      "name": "library.tags",
+      "label": "List tags",
+      "description": "List every tag in the library with how many photos carry it.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "photo.get",
+      "label": "Photo details",
+      "description": "Full details of one photo: dates, size, camera, place, tags, albums, rating and flag.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    {
+      "name": "photo.thumb",
+      "label": "Thumbnail",
+      "description": "A small JPEG or WebP data URL of one photo, for looking at it. About 20 KB.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      }
+    },
+    {
+      "name": "photo.open",
+      "label": "Open in editor",
+      "description": "Open one photo in Slate's editor.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "shortcut": "E",
+      "shows": true
+    },
+    {
+      "name": "photo.favourite",
+      "label": "Favourite",
+      "description": "Mark photos as favourites, or unmark them.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 200,
+            "description": "photo ids from library.search (at most 200)"
+          },
+          "value": {
+            "type": "boolean",
+            "description": "default true"
+          },
+          "dryRun": {
+            "type": "boolean",
+            "description": "report what would change and change nothing"
+          }
+        },
+        "required": [
+          "ids"
+        ]
+      },
+      "shortcut": "F"
+    },
+    {
+      "name": "photo.rate",
+      "label": "Rate",
+      "description": "Give photos a star rating from 0 (none) to 5.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 200,
+            "description": "photo ids from library.search (at most 200)"
+          },
+          "rating": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5
+          },
+          "dryRun": {
+            "type": "boolean",
+            "description": "report what would change and change nothing"
+          }
+        },
+        "required": [
+          "ids",
+          "rating"
+        ]
+      },
+      "shortcut": [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ]
+    },
+    {
+      "name": "photo.flag",
+      "label": "Pick or reject",
+      "description": "Flag photos as pick or reject, or clear the flag (none).",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 200,
+            "description": "photo ids from library.search (at most 200)"
+          },
+          "flag": {
+            "type": "string",
+            "enum": [
+              "pick",
+              "reject",
+              "none"
+            ]
+          },
+          "dryRun": {
+            "type": "boolean",
+            "description": "report what would change and change nothing"
+          }
+        },
+        "required": [
+          "ids",
+          "flag"
+        ]
+      },
+      "shortcut": [
+        "P",
+        "X",
+        "U"
+      ]
+    },
+    {
+      "name": "photo.tag",
+      "label": "Tag",
+      "description": "Add or remove tags on photos. Use \"/\" for nested tags, e.g. \"trips/goa\".",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 200,
+            "description": "photo ids from library.search (at most 200)"
+          },
+          "add": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "remove": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "dryRun": {
+            "type": "boolean",
+            "description": "report what would change and change nothing"
+          }
+        },
+        "required": [
+          "ids"
+        ]
+      },
+      "shortcut": "T"
+    },
+    {
+      "name": "photo.hide",
+      "label": "Hide",
+      "description": "Hide photos from the timeline and search, or show them again. Hidden photos stay in the Hidden view.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 200,
+            "description": "photo ids from library.search (at most 200)"
+          },
+          "value": {
+            "type": "boolean",
+            "description": "default true"
+          },
+          "dryRun": {
+            "type": "boolean",
+            "description": "report what would change and change nothing"
+          }
+        },
+        "required": [
+          "ids"
+        ]
+      },
+      "shortcut": "H"
+    },
+    {
+      "name": "photo.restore",
+      "label": "Restore from trash",
+      "description": "Move trashed photos back to where they were.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 200,
+            "description": "photo ids from library.search (at most 200)"
+          },
+          "dryRun": {
+            "type": "boolean",
+            "description": "report what would change and change nothing"
+          }
+        },
+        "required": [
+          "ids"
+        ]
+      }
+    },
+    {
+      "name": "photo.trash",
+      "label": "Move to trash",
+      "description": "Move photos into the trash folder (.slate-trash) inside their library folder. They can be restored until the trash is emptied.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 5000,
+            "description": "photo ids from library.search (at most 5000)"
+          },
+          "dryRun": {
+            "type": "boolean",
+            "description": "report what would change and change nothing"
+          }
+        },
+        "required": [
+          "ids"
+        ]
+      },
+      "shortcut": "Delete"
+    },
+    {
+      "name": "photo.bulk",
+      "label": "Change many photos",
+      "description": "Apply one change (favourite, rate, flag, tag, hide, album add or remove) to more than 200 photos at once. NakliOS asks the person first, because the change reaches many photos.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "favourite",
+              "rate",
+              "flag",
+              "tag",
+              "hide",
+              "album_add",
+              "album_remove"
+            ]
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 100000,
+            "description": "photo ids from library.search (at most 100000)"
+          },
+          "value": {
+            "type": "boolean"
+          },
+          "rating": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5
+          },
+          "flag": {
+            "type": "string",
+            "enum": [
+              "pick",
+              "reject",
+              "none"
+            ]
+          },
+          "add": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "remove": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "album": {
+            "type": "string"
+          },
+          "dryRun": {
+            "type": "boolean",
+            "description": "report what would change and change nothing"
+          }
+        },
+        "required": [
+          "op",
+          "ids"
+        ]
+      }
+    },
+    {
+      "name": "trash.empty",
+      "label": "Empty trash",
+      "description": "Permanently delete the files in the trash (all of them, or the given ids). This cannot be undone.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 100000,
+            "description": "photo ids from library.search (at most 100000)"
+          },
+          "dryRun": {
+            "type": "boolean",
+            "description": "report what would change and change nothing"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "album.list",
+      "label": "List albums",
+      "description": "List albums with their ids, names and photo counts.",
+      "scope": "read",
+      "input": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    },
+    {
+      "name": "album.create",
+      "label": "New album",
+      "description": "Create an album, optionally with photos in it. Albums hold references; no file moves.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 0,
+            "maxItems": 200,
+            "description": "photo ids from library.search (at most 200)"
+          },
+          "dryRun": {
+            "type": "boolean",
+            "description": "report what would change and change nothing"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      }
+    },
+    {
+      "name": "album.rename",
+      "label": "Rename album",
+      "description": "Rename an album.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "album": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "dryRun": {
+            "type": "boolean",
+            "description": "report what would change and change nothing"
+          }
+        },
+        "required": [
+          "album",
+          "name"
+        ]
+      }
+    },
+    {
+      "name": "album.add",
+      "label": "Add to album",
+      "description": "Add photos to an album.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "album": {
+            "type": "string"
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 200,
+            "description": "photo ids from library.search (at most 200)"
+          },
+          "dryRun": {
+            "type": "boolean",
+            "description": "report what would change and change nothing"
+          }
+        },
+        "required": [
+          "album",
+          "ids"
+        ]
+      }
+    },
+    {
+      "name": "album.remove",
+      "label": "Remove from album",
+      "description": "Take photos out of an album. The photos themselves stay.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "album": {
+            "type": "string"
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 200,
+            "description": "photo ids from library.search (at most 200)"
+          },
+          "dryRun": {
+            "type": "boolean",
+            "description": "report what would change and change nothing"
+          }
+        },
+        "required": [
+          "album",
+          "ids"
+        ]
+      }
+    },
+    {
+      "name": "album.cover",
+      "label": "Set album cover",
+      "description": "Choose which photo in an album shows as its cover.",
+      "scope": "write",
+      "input": {
+        "type": "object",
+        "properties": {
+          "album": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "dryRun": {
+            "type": "boolean",
+            "description": "report what would change and change nothing"
+          }
+        },
+        "required": [
+          "album",
+          "id"
+        ]
+      }
+    },
+    {
+      "name": "album.delete",
+      "label": "Delete album",
+      "description": "Delete an album. Its photos stay in the library.",
+      "scope": "destructive",
+      "input": {
+        "type": "object",
+        "properties": {
+          "album": {
+            "type": "string"
+          },
+          "dryRun": {
+            "type": "boolean",
+            "description": "report what would change and change nothing"
+          }
+        },
+        "required": [
+          "album"
+        ]
+      }
+    }
+  ]
+}
