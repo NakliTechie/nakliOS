@@ -1,4 +1,7 @@
 import { createReelEngine } from './reel-engine.mjs';
+import { createChain, resolveTrackGain } from '../app/audio/chain.mjs';
+import { createGaplessLane, laneItem, laneJoin, wantsLane, LANE_MAX_S } from '../app/audio/gapless.mjs';
+import { parseTrim, reconcileTrim } from '../app/audio/trim.mjs';
 
 export class NakliAmpError extends Error {
   constructor(name, code, message, cause = null) {
@@ -92,12 +95,12 @@ function eventHub(externalEvents) {
     history.push(entry);
     if (history.length > 100) history.shift();
     for (const listener of listeners.get(type) || []) {
-      try { listener(structuredClone(entry.detail)); } catch (_) {}
+      try { listener(structuredClone(entry.detail)); } catch {}
     }
     for (const listener of listeners.get('*') || []) {
-      try { listener(structuredClone(entry)); } catch (_) {}
+      try { listener(structuredClone(entry)); } catch {}
     }
-    try { externalEvents?.emit?.(type, structuredClone(entry.detail)); } catch (_) {}
+    try { externalEvents?.emit?.(type, structuredClone(entry.detail)); } catch {}
   }
   function on(type, listener) {
     if (!listeners.has(type)) listeners.set(type, new Set());
@@ -149,7 +152,7 @@ function canPlayNatively(mime) {
   if (typeof Audio !== 'function') return true;
   try {
     return Boolean(new Audio().canPlayType(mime));
-  } catch (_) {
+  } catch {
     return true;
   }
 }
@@ -227,6 +230,67 @@ function unprobedMetadata(file) {
   };
 }
 
+/** The browser's AudioContext constructor, or undefined where there is none. */
+function audioContextClass() {
+  return globalThis.AudioContext || globalThis.webkitAudioContext;
+}
+
+/** A lane track's container: the probe's, then the trim parser's format, then the extension. */
+function laneContainer(file, probe, decoded) {
+  return probe?.container ?? decoded.trimInfo.format ?? (extensionOf(file.name) || null);
+}
+
+/** A lane track's codec: the probe's audio track codec, then the trim parser's format. */
+function laneCodec(probe, decoded) {
+  const audioTrack = probe?.tracks?.find?.(track => track.type === 'audio') ?? null;
+  return audioTrack?.codec ?? decoded.trimInfo.format ?? null;
+}
+
+/** A preload entry waiting for its decode. */
+function pendingEntry(input, meta, token) {
+  return { input, meta: meta ? { ...meta } : null, token, item: null, join: null, state: 'pending' };
+}
+
+/** Refuse a track the probe says is too long for the lane. */
+function refuseLongProbe(probe) {
+  if (Number.isFinite(probe?.duration) && probe.duration >= LANE_MAX_S) {
+    throw new NakliAmpError('LaneTooLongError', 'ERR_NAKLIAMP_LANE_TOO_LONG', 'Tracks of 20 minutes or more play on the normal route.');
+  }
+}
+
+/** Merge a setDsp patch into the DSP settings; the chain goes on unless `chain: false` is given. */
+function mergeDspPatch(dsp, patch) {
+  if (patch.eq && typeof patch.eq === 'object') dsp.eq = { ...dsp.eq, ...patch.eq };
+  if (patch.replayGain && typeof patch.replayGain === 'object') dsp.replayGain = { ...dsp.replayGain, ...patch.replayGain };
+  if (patch.crossfadeS !== undefined) dsp.crossfadeS = Math.max(0, Math.min(12, Number(patch.crossfadeS) || 0));
+  if (patch.gapless !== undefined && ['off', 'albums', 'always'].includes(patch.gapless)) dsp.gapless = patch.gapless;
+  dsp.chain = patch.chain === undefined ? true : Boolean(patch.chain);
+}
+
+/** The refusal for a codec the browser's native audio path cannot play. */
+function nativeUnsupportedError(track, file) {
+  return new NakliAmpError(
+    'NativeCodecUnsupportedError',
+    'ERR_NAKLIAMP_NATIVE_UNSUPPORTED',
+    `The browser native audio path does not support ${track.codec || extensionOf(file.name) || 'this codec'}.`,
+  );
+}
+
+/** Refuse a factory result that is not audio-like, or that says it cannot play this MIME type. */
+function checkNativeCandidate(candidateAudio, mime, track, file) {
+  if (!candidateAudio || typeof candidateAudio.play !== 'function') {
+    throw new TypeError('nativeAudioFactory must return an audio-like playback object.');
+  }
+  if (mime && typeof candidateAudio.canPlayType === 'function' && !candidateAudio.canPlayType(mime)) {
+    throw nativeUnsupportedError(track, file);
+  }
+}
+
+/** When no software decoder claimed the file, the native refusal says more than the software one. */
+function preferNativeRefusal(softwareError, nativeError) {
+  return softwareError?.code === 'ERR_NAKLIAMP_SOFTWARE_UNSUPPORTED' ? nativeError : softwareError;
+}
+
 /**
  * Software decoders for the R3 rung.
  *
@@ -283,6 +347,30 @@ export function createNakliAmpEngine({
   let splitter = null;
   let channelAnalysers = null;
 
+  // DSP state. The chain stays off until the app calls setDsp, so a caller
+  // that never asks for EQ, ReplayGain or gapless (the browser harnesses)
+  // gets the routing it always had.
+  const dsp = {
+    chain: false,
+    eq: { enabled: false, preset: 'flat', custom: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+    replayGain: { mode: 'off', preampDb: 0, preventClipping: true },
+    crossfadeS: 0,
+    gapless: 'off',
+  };
+  const chains = new Map(); // AudioContext -> chain
+  let r1Spliced = null; // the Reel gain node currently routed into the chain
+  let currentMeta = null; // { albumKey, trackNo, discNo, replayGain, loudness } of the loaded track
+  let previousMeta = null;
+  let trackValues = { replayGain: null, loudness: null, albumContext: null };
+  let trackGain = { gainDb: 0, source: 'off', peak: null, clipLimited: false };
+  let lane = null; // { context, volume, lane, chainOn }
+  let laneMedia = null;
+  let laneSkipped = null; // why the last load did not use the lane, for the strip
+  let pendingNext = null; // { input, meta, token, item, join, state }
+  let preloadToken = 0;
+  let laneVolumeValue = 1;
+  let laneMutedFlag = false;
+
   function preferredMode() {
     if (forcePath === 'r1') return 'r1';
     if (forcePath === 'r2') return 'r2';
@@ -319,7 +407,7 @@ export function createNakliAmpEngine({
       analyser = next;
       analyserOwner = graph.output;
       return analyser;
-    } catch (_) {
+    } catch {
       return null;
     }
   }
@@ -362,46 +450,515 @@ export function createNakliAmpEngine({
       splitter = split;
       channelAnalysers = taps;
       return taps;
-    } catch (_) {
+    } catch {
       return null;
     }
   }
 
+  /**
+   * Where the analysers tap. With the DSP chain on, that is the chain's output
+   * (after EQ and gain, so the picture matches what is heard); without it, the
+   * rung's own output as before.
+   */
   function rungGraph() {
+    const graph = rawRungGraph();
+    if (!graph) return null;
+    const chain = routeChained() ? chains.get(graph.context) : null;
+    return chain ? { context: graph.context, output: chain.output } : graph;
+  }
+
+  function rawRungGraph() {
+    if (mode === 'lane' && lane) return { context: lane.context, output: lane.volume };
     if (mode === 'r3' && software) return { context: software.context, output: software.gain };
-    if (mode === 'r1') return reel.audioGraph?.() ?? null;
-    if (mode === 'r2' && nativeAudio) {
-      if (!nativeGraph) {
-        // createMediaElementSource reroutes the element through Web Audio, so
-        // the destination has to be reconnected or playback goes silent.
-        const AudioContextClass = globalThis.AudioContext || globalThis.webkitAudioContext;
-        if (!AudioContextClass || typeof nativeAudio.play !== 'function') return null;
-        const context = new AudioContextClass();
-        // Hazard worth naming: createMediaElementSource permanently reroutes
-        // the element through Web Audio and cannot be undone. If the context
-        // is suspended by autoplay policy, that means silence. So the graph is
-        // only built once the context is actually running, and until then the
-        // caller gets null and shows no visualiser rather than risking audio.
-        if (context.state === 'suspended') {
-          context.resume().catch(() => {});
-          try { context.close(); } catch (_) {}
-          return null;
-        }
-        const source = context.createMediaElementSource(nativeAudio);
-        const output = context.createGain();
-        source.connect(output);
-        output.connect(context.destination);
-        nativeGraph = { context, output };
-      }
-      return nativeGraph;
+    if (mode === 'r1') {
+      spliceR1();
+      return reel.audioGraph?.() ?? null;
     }
+    if (mode === 'r2' && nativeAudio) return nativeGraph ?? tapNativeOnRunningContext();
     return null;
   }
 
+  /**
+   * Build the R2 graph for a tap, only on a context that is already running.
+   *
+   * Hazard worth naming: createMediaElementSource permanently reroutes the
+   * element through Web Audio and cannot be undone. If the context is
+   * suspended by autoplay policy, that means silence. So the graph is only
+   * built once the context is actually running, and until then the caller
+   * gets null and shows no visualiser rather than risking audio.
+   */
+  function tapNativeOnRunningContext() {
+    const AudioContextClass = audioContextClass();
+    if (!AudioContextClass || typeof nativeAudio.play !== 'function') return null;
+    const context = new AudioContextClass();
+    if (context.state === 'suspended') {
+      context.resume().catch(() => {});
+      try { context.close(); } catch {}
+      return null;
+    }
+    return buildNativeGraph(context);
+  }
+
+  /**
+   * Route the native element through Web Audio on a running context.
+   * createMediaElementSource reroutes the element, so the output has to be
+   * connected onward (to the chain or the destination) or playback goes silent.
+   */
+  function buildNativeGraph(context) {
+    const source = context.createMediaElementSource(nativeAudio);
+    const output = context.createGain();
+    source.connect(output);
+    const chained = connectOutput(context, output);
+    nativeGraph = { context, output, chained };
+    applyTrackGain();
+    return nativeGraph;
+  }
+
+  /**
+   * With the chain on, R2 must play through Web Audio, so the graph is built
+   * when playback starts (normally inside the click that started it). The
+   * suspended-context safety stays: if the context will not run, the element
+   * plays directly and the strip reports the chain as off for this track.
+   */
+  async function ensureNativeChain() {
+    if (!dsp.chain || nativeGraph || !nativeAudio) return;
+    const AudioContextClass = audioContextClass();
+    if (!AudioContextClass) return;
+    let context;
+    try {
+      context = new AudioContextClass();
+      await buildNativeGraphWhenRunning(context);
+    } catch {
+      try { context?.close?.(); } catch {}
+    }
+  }
+
+  /** Build the R2 graph once the context runs; close the context when it will not. */
+  async function buildNativeGraphWhenRunning(context) {
+    if (context.state === 'suspended') {
+      // resume() can stay pending until a user gesture; do not wait for it forever.
+      await Promise.race([context.resume().catch(() => {}), new Promise(resolve => setTimeout(resolve, 300))]);
+    }
+    if (context.state !== 'running') {
+      try { context.close(); } catch {}
+      return;
+    }
+    buildNativeGraph(context);
+  }
+
+  // ---- DSP chain plumbing ----------------------------------------------
+
+  function chainFor(context) {
+    let chain = chains.get(context);
+    if (!chain) {
+      chain = createChain(context);
+      chain.setEq(dsp.eq);
+      chain.setGainDb(lane && context === lane.context ? 0 : trackGain.gainDb);
+      chains.set(context, chain);
+    }
+    return chain;
+  }
+
+  function dropChain(context) {
+    const chain = context ? chains.get(context) : null;
+    if (!chain) return;
+    if (analyserOwner === chain.output) disposeAnalyser();
+    chain.dispose();
+    chains.delete(context);
+  }
+
+  /** Connect a route's output to the chain when it is on, else the destination. Returns whether it is chained. */
+  function connectOutput(context, node) {
+    if (dsp.chain) {
+      try {
+        node.connect(chainFor(context).input);
+        return true;
+      } catch {}
+    }
+    node.connect(context.destination);
+    return false;
+  }
+
+  /** Reel builds a fresh gain node for every track and seek, so it is re-spliced each time. */
+  function spliceR1() {
+    if (!dsp.chain || mode !== 'r1') return;
+    const graph = reel.audioGraph?.();
+    if (!graph || graph.output === r1Spliced) return;
+    try {
+      graph.output.disconnect(graph.context.destination);
+    } catch {
+      try { graph.output.disconnect(); } catch {}
+    }
+    try {
+      graph.output.connect(chainFor(graph.context).input);
+      r1Spliced = graph.output;
+    } catch {
+      try { graph.output.connect(graph.context.destination); } catch {}
+      r1Spliced = null;
+    }
+    applyTrackGain();
+  }
+
+  function routeChained() {
+    if (mode === 'r1') return Boolean(r1Spliced) && r1Spliced === reel.audioGraph?.()?.output;
+    if (mode === 'r2') return Boolean(nativeGraph?.chained);
+    if (mode === 'r3') return Boolean(software?.chained);
+    if (mode === 'lane') return Boolean(lane?.chained);
+    return false;
+  }
+
+  /** The live route's holder for the current rung: anything with a `context`, or null. */
+  function currentRoute() {
+    if (mode === 'r1') return reel.audioGraph?.() ?? null;
+    if (mode === 'r2') return nativeGraph;
+    if (mode === 'r3') return software;
+    if (mode === 'lane') return lane;
+    return null;
+  }
+
+  function currentContext() {
+    return currentRoute()?.context ?? null;
+  }
+
+  /** Re-connect the live route after the chain was switched on or off. */
+  function reroute() {
+    disposeAnalyser();
+    if (mode === 'r1') {
+      if (dsp.chain) spliceR1();
+      else unspliceR1();
+    }
+    if (software?.gain) reconnectRoute(software, software.gain);
+    if (nativeGraph) reconnectRoute(nativeGraph, nativeGraph.output);
+    if (lane) reconnectRoute(lane, lane.volume);
+  }
+
+  /** Take Reel's output off the chain and back onto the destination. */
+  function unspliceR1() {
+    if (!r1Spliced) return;
+    const graph = reel.audioGraph?.();
+    try { r1Spliced.disconnect(); } catch {}
+    if (graph?.output === r1Spliced) { try { r1Spliced.connect(graph.context.destination); } catch {} }
+    r1Spliced = null;
+  }
+
+  /** Disconnect a route's output node and connect it again to the chain or the destination. */
+  function reconnectRoute(route, node) {
+    try { node.disconnect(); } catch {}
+    route.chained = connectOutput(route.context, node);
+  }
+
+  /** Whether a queue neighbour (previous or next) shares the current track's album. */
+  function albumNeighbour() {
+    const key = currentMeta?.albumKey;
+    if (!key) return false;
+    return previousMeta?.albumKey === key || pendingNext?.meta?.albumKey === key;
+  }
+
+  /** Recompute the current track's gain and apply it to its route. */
+  function applyTrackGain() {
+    const albumContext = trackValues.albumContext ?? albumNeighbour();
+    trackGain = resolveTrackGain(dsp.replayGain, trackValues, { albumContext });
+    if (mode === 'lane' && lane) {
+      lane.lane.setCurrentGainDb(trackGain.gainDb);
+      return;
+    }
+    const context = currentContext();
+    const chain = context ? chains.get(context) : null;
+    chain?.setGainDb(trackGain.gainDb);
+  }
+
+  function adoptMeta(meta) {
+    previousMeta = currentMeta;
+    currentMeta = meta && typeof meta === 'object' ? { ...meta } : null;
+    trackValues = {
+      replayGain: currentMeta?.replayGain ?? null,
+      loudness: currentMeta?.loudness ?? null,
+      albumContext: null,
+    };
+  }
+
+  // ---- Gapless lane ------------------------------------------------------
+
+  function ensureLane() {
+    if (lane) return lane;
+    const context = openLaneContext();
+    const volume = context.createGain();
+    volume.gain.value = laneMutedFlag ? 0 : laneVolumeValue;
+    const instance = createGaplessLane({ context, destination: volume, onAdvance: laneAdvanced });
+    lane = { context, volume, lane: instance, chained: false };
+    lane.chained = connectOutput(context, volume);
+    if (lane.chained) chains.get(context)?.setGainDb(0);
+    return lane;
+  }
+
+  /** A context that can decode whole files and play buffers, or a LaneUnavailableError. */
+  function openLaneContext() {
+    const context = audioContextFactory();
+    if (typeof context?.decodeAudioData !== 'function' || typeof context.createBufferSource !== 'function') {
+      try { context?.close?.()?.catch?.(() => {}); } catch {}
+      throw new NakliAmpError('LaneUnavailableError', 'ERR_NAKLIAMP_LANE_UNAVAILABLE', 'This browser cannot decode audio in full for the gapless lane.');
+    }
+    return context;
+  }
+
+  function stopLane() {
+    if (!lane) return;
+    lane.lane.dispose();
+    laneMedia = null;
+    // An idle running context still costs an audio thread; play() resumes it.
+    try { lane.context.suspend?.()?.catch?.(() => {}); } catch {}
+  }
+
+  function releaseLane() {
+    if (!lane) return;
+    lane.lane.dispose();
+    try { lane.volume.disconnect(); } catch {}
+    dropChain(lane.context);
+    try { lane.context.close?.()?.catch?.(() => {}); } catch {}
+    lane = null;
+    laneMedia = null;
+  }
+
+  async function probeDuration(file) {
+    try {
+      return await reel.probe(file);
+    } catch {
+      return null;
+    }
+  }
+
+  /** Decode a whole file for the lane: browser first, NakliAmp's own decoders second. */
+  async function laneDecode(file, context) {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    let buffer = null;
+    let decoderName = null;
+    try {
+      // decodeAudioData detaches what it is given, so it gets a copy.
+      buffer = await context.decodeAudioData(bytes.slice().buffer);
+      decoderName = 'browser';
+    } catch {
+      buffer = null;
+    }
+    if (!buffer) {
+      for (const decoder of softwareDecoders) {
+        let container = null;
+        try { container = await decoder.sniff(bytes); } catch { container = null; }
+        if (!container) continue;
+        try {
+          const decoded = await decoder.decode(bytes);
+          const made = context.createBuffer(decoded.channels.length, decoded.frames, decoded.sampleRate);
+          for (const [index, channel] of decoded.channels.entries()) made.copyToChannel(channel.subarray(0, decoded.frames), index);
+          buffer = made;
+          decoderName = decoder.name;
+          break;
+        } catch {}
+      }
+    }
+    if (!buffer) {
+      throw new NakliAmpError('LaneDecodeError', 'ERR_NAKLIAMP_LANE_DECODE', 'Neither the browser nor a NakliAmp decoder could decode this file in full.');
+    }
+    if (buffer.duration > LANE_MAX_S) {
+      throw new NakliAmpError('LaneTooLongError', 'ERR_NAKLIAMP_LANE_TOO_LONG', 'Tracks of 20 minutes or more play on the normal route.');
+    }
+    const trimInfo = parseTrim(bytes);
+    const trim = reconcileTrim(trimInfo, buffer.length, buffer.sampleRate);
+    return { buffer, decoderName, trim, trimInfo };
+  }
+
+  function laneMediaFor(file, probe, decoded, item) {
+    return {
+      name: file.name || probe?.name || 'Untitled track',
+      size: file.size,
+      container: laneContainer(file, probe, decoded),
+      mimeType: probe?.mimeType ?? (file.type || null),
+      codec: laneCodec(probe, decoded),
+      duration: item.lengthS,
+      decoderName: decoded.decoderName,
+      sampleRate: decoded.buffer.sampleRate,
+      channels: decoded.buffer.numberOfChannels,
+      trim: decoded.trim,
+    };
+  }
+
+  async function loadLane(input, meta, loadId) {
+    const file = await localFile(input);
+    const probe = await probeDuration(file);
+    refuseLongProbe(probe);
+    const laneState = ensureLane();
+    const decoded = await laneDecode(file, laneState.context);
+    if (loadId !== latestLoadId) {
+      throw new NakliAmpError('SupersededLoadError', 'ERR_NAKLIAMP_LOAD_SUPERSEDED', 'A newer track selection replaced this request.');
+    }
+    reel.pause();
+    disposeNative();
+    releaseSoftware();
+    pendingNext = null;
+    adoptMeta(meta);
+    const gainInfo = resolveTrackGain(dsp.replayGain, trackValues, { albumContext: albumNeighbour() });
+    const item = laneItem(decoded.buffer, decoded.trim, { gainDb: gainInfo.gainDb, meta: currentMeta });
+    item.media = laneMediaFor(file, probe, decoded, item);
+    laneState.lane.load(item);
+    laneMedia = item.media;
+    trackGain = gainInfo;
+    mode = 'lane';
+    status = 'ready';
+    lastError = null;
+    fellBackFrom = null;
+    laneSkipped = null;
+    events.emit('track:loaded', { name: laneMedia.name, container: laneMedia.container, codec: laneMedia.codec, path: mode });
+    return structuredClone({
+      name: laneMedia.name,
+      size: laneMedia.size,
+      duration: laneMedia.duration,
+      container: laneMedia.container,
+      tracks: [{ type: 'audio', codec: laneMedia.codec, sampleRate: laneMedia.sampleRate, channels: laneMedia.channels }],
+      path: mode,
+      trim: laneMedia.trim.reason,
+    });
+  }
+
+  function laneAdvanced(item, { mode: join }) {
+    previousMeta = currentMeta;
+    currentMeta = item.meta ? { ...item.meta } : null;
+    trackValues = { replayGain: currentMeta?.replayGain ?? null, loudness: currentMeta?.loudness ?? null, albumContext: null };
+    trackGain = item.gainInfo ?? trackGain;
+    laneMedia = item.media;
+    pendingNext = null;
+    events.emit('track-advanced', { name: laneMedia?.name ?? null, path: 'lane', join, duration: laneMedia?.duration ?? null });
+  }
+
+  /**
+   * Hand the engine the next queue item. When the settings join the two
+   * tracks and the current one is on the lane, the next is decoded now and
+   * scheduled to start on the frame the current one ends (or crossfaded).
+   * Otherwise nothing is scheduled and the app advances as before.
+   * Returns { joined, mode?, reason? }. `preload(null)` clears it.
+   */
+  async function preload(nextInput, nextMeta = null) {
+    const token = ++preloadToken;
+    if (lane) lane.lane.clearNext();
+    pendingNext = nextInput ? pendingEntry(nextInput, nextMeta, token) : null;
+    applyTrackGain();
+    if (!pendingNext) return { joined: false, reason: 'no next track' };
+    const refusal = joinRefusal(pendingNext.meta);
+    if (refusal) {
+      pendingNext.state = 'not-joined';
+      return { joined: false, reason: refusal };
+    }
+    const entry = pendingNext;
+    try {
+      return await prepareNext(entry, token);
+    } catch (error) {
+      if (pendingNext === entry) entry.state = 'failed';
+      return { joined: false, reason: error?.message || String(error) };
+    }
+  }
+
+  /** Why the next track cannot join the current one on the lane, or null when it can. */
+  function joinRefusal(nextMeta) {
+    if (!laneJoin(dsp, currentMeta, nextMeta)) return 'the settings do not join these two tracks';
+    if (mode !== 'lane' || !lane) return 'the current track is not on the gapless lane';
+    return null;
+  }
+
+  /** Decode the next track for the lane and schedule it, unless a newer track or preload took over meanwhile. */
+  async function prepareNext(entry, token) {
+    const forTrack = laneMedia;
+    const file = await localFile(entry.input);
+    const probe = await probeDuration(file);
+    refuseLongProbe(probe);
+    const decoded = await laneDecode(file, lane.context);
+    if (token !== preloadToken || mode !== 'lane' || laneMedia !== forTrack || !lane) {
+      return { joined: false, reason: 'superseded by a newer track or preload' };
+    }
+    const albumContext = Boolean(currentMeta?.albumKey) && currentMeta.albumKey === entry.meta?.albumKey;
+    const gainInfo = resolveTrackGain(dsp.replayGain, entry.meta ?? {}, { albumContext });
+    const item = laneItem(decoded.buffer, decoded.trim, { gainDb: gainInfo.gainDb, gainInfo, meta: entry.meta });
+    item.media = laneMediaFor(file, probe, decoded, item);
+    entry.item = item;
+    return queuePending(entry);
+  }
+
+  /** (Re)schedule a decoded next item under the current settings. */
+  function queuePending(entry) {
+    if (!lane || mode !== 'lane' || !entry?.item || pendingNext !== entry) return { joined: false, reason: 'nothing to schedule' };
+    const join = laneJoin(dsp, currentMeta, entry.meta);
+    entry.join = join;
+    if (!join) {
+      lane.lane.clearNext();
+      entry.state = 'not-joined';
+      return { joined: false, reason: 'the settings do not join these two tracks' };
+    }
+    lane.lane.queue(entry.item, { mode: join, fadeS: Number(dsp.crossfadeS) || 0 });
+    entry.state = 'queued';
+    return { joined: true, mode: join };
+  }
+
+  /**
+   * Apply DSP settings live. Any subset of { eq, replayGain, crossfadeS,
+   * gapless, chain } may be passed; calling it at all switches the chain on
+   * unless `chain: false` is given.
+   */
+  function setDsp(patch = {}) {
+    const wasChained = dsp.chain;
+    mergeDspPatch(dsp, patch);
+    if (wasChained !== dsp.chain) reroute();
+    for (const chain of chains.values()) chain.setEq(dsp.eq);
+    applyTrackGain();
+    refreshPending();
+    return dspState();
+  }
+
+  /** Reschedule a decoded next item, or retry a preload the old settings would not join. */
+  function refreshPending() {
+    if (pendingNext?.item) queuePending(pendingNext);
+    else if (pendingNext && pendingNext.state === 'not-joined' && mode === 'lane') {
+      preload(pendingNext.input, pendingNext.meta).catch(() => {});
+    }
+  }
+
+  /** Gain values for the loaded track; the engine picks track or album per mode. */
+  function setTrackGain({ replayGain = null, loudness = null, albumContext = null } = {}) {
+    trackValues = { replayGain, loudness, albumContext: typeof albumContext === 'boolean' ? albumContext : null };
+    applyTrackGain();
+    return { ...trackGain };
+  }
+
+  /** The lane's part of the DSP state; all off when the current track is not on the lane. */
+  function laneDspState() {
+    if (mode !== 'lane') return { scheduled: null, lane: 'normal', gapless: false, crossfading: false, trim: null };
+    const scheduled = lane?.lane.nextScheduled();
+    return {
+      scheduled,
+      lane: 'gapless',
+      gapless: scheduled?.mode === 'gapless',
+      crossfading: Boolean(lane?.lane.crossfading()),
+      trim: laneMedia?.trim?.reason ?? null,
+    };
+  }
+
+  function dspState() {
+    const { scheduled, ...laneState } = laneDspState();
+    return {
+      chain: routeChained() ? 'on' : 'off',
+      lane: laneState.lane,
+      gapless: laneState.gapless,
+      crossfading: laneState.crossfading,
+      gainDb: trackGain.gainDb,
+      gainSource: trackGain.source,
+      clipLimited: trackGain.clipLimited,
+      eq: { enabled: Boolean(dsp.eq.enabled), preset: dsp.eq.preset },
+      next: scheduled ? scheduled.mode : (pendingNext?.state ?? 'none'),
+      trim: laneState.trim,
+      laneSkipped,
+      settings: { gapless: dsp.gapless, crossfadeS: dsp.crossfadeS, replayGain: { ...dsp.replayGain } },
+    };
+  }
+
   function disposeAnalyser() {
-    try { analyser?.disconnect(); } catch (_) {}
-    try { splitter?.disconnect(); } catch (_) {}
-    for (const node of channelAnalysers ?? []) { try { node.disconnect(); } catch (_) {} }
+    try { analyser?.disconnect(); } catch {}
+    try { splitter?.disconnect(); } catch {}
+    for (const node of channelAnalysers ?? []) { try { node.disconnect(); } catch {} }
     analyser = null;
     splitter = null;
     channelAnalysers = null;
@@ -414,8 +971,8 @@ export function createNakliAmpEngine({
    * build another against the same context, buffer and gain.
    */
   function stopSoftwareSource() {
-    try { software?.source?.stop(); } catch (_) {}
-    try { software?.source?.disconnect(); } catch (_) {}
+    try { software?.source?.stop(); } catch {}
+    try { software?.source?.disconnect(); } catch {}
     if (software) software.source = null;
   }
 
@@ -431,10 +988,11 @@ export function createNakliAmpEngine({
    */
   function releaseSoftware() {
     stopSoftwareSource();
-    try { software?.gain?.disconnect(); } catch (_) {}
+    try { software?.gain?.disconnect(); } catch {}
+    if (software?.context) dropChain(software.context);
     // `close()` is async and nothing waits for it: this is teardown, and a
     // context that refuses to close is not a reason to fail the next load.
-    try { software?.context?.close?.()?.catch?.(() => {}); } catch (_) {}
+    try { software?.context?.close?.()?.catch?.(() => {}); } catch {}
     software = null;
   }
 
@@ -451,9 +1009,9 @@ export function createNakliAmpEngine({
       buffer.copyToChannel(channel.subarray(0, decoded.frames), index);
     }
     const gain = context.createGain();
-    gain.connect(context.destination);
+    const chained = connectOutput(context, gain);
     return {
-      context, buffer, gain,
+      context, buffer, gain, chained,
       source: null,
       name, size, container,
       decoderName: decoded.decoderName,
@@ -475,19 +1033,30 @@ export function createNakliAmpEngine({
   }
 
   function disposeNative() {
-    try { nativeAudio?.pause(); } catch (_) {}
-    try { nativeAudio?.removeAttribute?.('src'); } catch (_) {}
-    try { nativeAudio?.load(); } catch (_) {}
+    stopNativeElement();
     if (nativeUrl) URL.revokeObjectURL(nativeUrl);
-    try { nativeGraph?.output?.disconnect(); } catch (_) {}
-    try { nativeGraph?.context?.close?.(); } catch (_) {}
+    releaseNativeGraph();
     nativeGraph = null;
     nativeAudio = null;
     nativeUrl = null;
   }
 
+  /** Stop the native element and detach its source. */
+  function stopNativeElement() {
+    try { nativeAudio?.pause(); } catch {}
+    try { nativeAudio?.removeAttribute?.('src'); } catch {}
+    try { nativeAudio?.load(); } catch {}
+  }
+
+  /** Disconnect the R2 graph, drop its chain and close its context. */
+  function releaseNativeGraph() {
+    try { nativeGraph?.output?.disconnect(); } catch {}
+    if (nativeGraph?.context) dropChain(nativeGraph.context);
+    try { nativeGraph?.context?.close?.(); } catch {}
+  }
+
   function disposeNativeCandidate(audio, url) {
-    try { audio?.pause?.(); } catch (_) {}
+    try { audio?.pause?.(); } catch {}
     URL.revokeObjectURL(url);
   }
 
@@ -511,6 +1080,22 @@ export function createNakliAmpEngine({
       );
     }
     const track = selectAudioTrack(metadata);
+    // The demuxer can describe a codec WebCodecs has no configuration for
+    // (ALAC in MP4 is the case that found this). Loading on R1 anyway left a
+    // track that failed only at play. Refusing here lets the ladder move on to
+    // the native and software rungs while the person is still on this track.
+    const config = track.decoderConfig;
+    let configUsable = Boolean(config && typeof config.codec === 'string');
+    if (configUsable && typeof globalThis.AudioDecoder?.isConfigSupported === 'function') {
+      try { configUsable = Boolean((await globalThis.AudioDecoder.isConfigSupported(config))?.supported); } catch { configUsable = false; }
+    }
+    if (!configUsable) {
+      throw new NakliAmpError(
+        'MissingDecoderConfigError',
+        'ERR_NAKLIAMP_R1_NO_DECODER',
+        `The engine cannot decode ${track.codec || 'this codec'} with WebCodecs here.`,
+      );
+    }
     releaseSoftware();
     if (hasVideoTrack(metadata)) {
       throw new NakliAmpError(
@@ -520,6 +1105,8 @@ export function createNakliAmpEngine({
       );
     }
     disposeNative();
+    stopLane();
+    r1Spliced = null;
     mode = 'r1';
     status = 'ready';
     nativeMetadata = null;
@@ -536,18 +1123,7 @@ export function createNakliAmpEngine({
 
   async function loadR2(input, loadId) {
     const file = await localFile(input);
-    // The native path must not depend on the engine understanding the file.
-    // If it did, any container the engine has never heard of would be a dead
-    // end even when the browser can play it perfectly well.
-    let metadata;
-    let probeFailure = null;
-    try {
-      metadata = await reel.probe(file);
-    } catch (error) {
-      if (FALLBACK_BLOCKED.has(error?.code)) throw error;
-      probeFailure = error;
-      metadata = unprobedMetadata(file);
-    }
+    const { metadata, probeFailure } = await probeForNative(file);
     const track = selectAudioTrack(metadata);
     const videoIgnored = hasVideoTrack(metadata);
     const mime = nativeMime(file);
@@ -560,11 +1136,7 @@ export function createNakliAmpEngine({
     // authority on what it can accept, and its own `canPlayType` is consulted
     // below; probing the browser instead would overrule the injection.
     if (mime && nativeAudioFactory === defaultNativeAudioFactory && !canPlayNatively(mime)) {
-      throw new NakliAmpError(
-        'NativeCodecUnsupportedError',
-        'ERR_NAKLIAMP_NATIVE_UNSUPPORTED',
-        `The browser native audio path does not support ${track.codec || extensionOf(file.name) || 'this codec'}.`,
-      );
+      throw nativeUnsupportedError(track, file);
     }
 
     const candidateUrl = URL.createObjectURL(file);
@@ -572,16 +1144,7 @@ export function createNakliAmpEngine({
     let adopted = false;
     try {
       candidateAudio = nativeAudioFactory({ url: candidateUrl, file, metadata });
-      if (!candidateAudio || typeof candidateAudio.play !== 'function') {
-        throw new TypeError('nativeAudioFactory must return an audio-like playback object.');
-      }
-      if (mime && typeof candidateAudio.canPlayType === 'function' && !candidateAudio.canPlayType(mime)) {
-        throw new NakliAmpError(
-          'NativeCodecUnsupportedError',
-          'ERR_NAKLIAMP_NATIVE_UNSUPPORTED',
-          `The browser native audio path does not support ${track.codec || extensionOf(file.name) || 'this codec'}.`,
-        );
-      }
+      checkNativeCandidate(candidateAudio, mime, track, file);
       await waitForNativeMetadata(candidateAudio, DEFAULT_CONFIG.demux.probeTimeoutMs);
       const nextFingerprint = await fingerprint(file);
       if (loadId !== latestLoadId) {
@@ -591,23 +1154,7 @@ export function createNakliAmpEngine({
           'A newer track selection replaced this request.',
         );
       }
-      reel.pause();
-      disposeNative();
-      disposeAnalyser();
-      releaseSoftware();
-      nativeAudio = candidateAudio;
-      nativeUrl = candidateUrl;
-      nativeMetadata = {
-        ...metadata,
-        videoIgnored,
-        name: file.name || metadata.name,
-        duration: Number.isFinite(candidateAudio.duration) ? candidateAudio.duration : metadata.duration,
-        unprobed: Boolean(probeFailure),
-      };
-      nativeFingerprint = nextFingerprint;
-      mode = 'r2';
-      status = 'ready';
-      lastError = null;
+      adoptNative({ candidateAudio, candidateUrl, file, metadata, probeFailure, videoIgnored, nextFingerprint });
       adopted = true;
       events.emit('track:loaded', {
         name: nativeMetadata.name,
@@ -620,6 +1167,43 @@ export function createNakliAmpEngine({
       if (!adopted) disposeNativeCandidate(candidateAudio, candidateUrl);
       throw error;
     }
+  }
+
+  /**
+   * Probe a file for the native rung.
+   * The native path must not depend on the engine understanding the file.
+   * If it did, any container the engine has never heard of would be a dead
+   * end even when the browser can play it perfectly well.
+   */
+  async function probeForNative(file) {
+    try {
+      return { metadata: await reel.probe(file), probeFailure: null };
+    } catch (error) {
+      if (FALLBACK_BLOCKED.has(error?.code)) throw error;
+      return { metadata: unprobedMetadata(file), probeFailure: error };
+    }
+  }
+
+  /** Stop every other rung and make the candidate element the playing R2 track. */
+  function adoptNative({ candidateAudio, candidateUrl, file, metadata, probeFailure, videoIgnored, nextFingerprint }) {
+    reel.pause();
+    disposeNative();
+    disposeAnalyser();
+    releaseSoftware();
+    stopLane();
+    nativeAudio = candidateAudio;
+    nativeUrl = candidateUrl;
+    nativeMetadata = {
+      ...metadata,
+      videoIgnored,
+      name: file.name || metadata.name,
+      duration: Number.isFinite(candidateAudio.duration) ? candidateAudio.duration : metadata.duration,
+      unprobed: Boolean(probeFailure),
+    };
+    nativeFingerprint = nextFingerprint;
+    mode = 'r2';
+    status = 'ready';
+    lastError = null;
   }
 
   /**
@@ -644,7 +1228,7 @@ export function createNakliAmpEngine({
       let container = null;
       try {
         container = await decoder.sniff(bytes);
-      } catch (_) {
+      } catch {
         container = null;
       }
       if (!container) continue;
@@ -679,6 +1263,7 @@ export function createNakliAmpEngine({
     disposeNative();
     disposeAnalyser();
     releaseSoftware();
+    stopLane();
     software = softwarePlayback(decoded, file.name, file.size, decoded.container);
     mode = 'r3';
     status = 'ready';
@@ -699,114 +1284,144 @@ export function createNakliAmpEngine({
     });
   }
 
-  async function load(input) {
+  /**
+   * Load a track. `meta` is optional (`{ albumKey, trackNo, discNo,
+   * replayGain, loudness }`): with it, the engine can apply the track's gain
+   * and put the track on the gapless lane when the settings may join it to
+   * the next one. Without it, loading behaves exactly as before.
+   */
+  async function load(input, meta = null) {
     const loadId = ++latestLoadId;
     status = 'loading';
     fellBackFrom = null;
+    laneSkipped = null;
+    if (forcePath === 'auto' && wantsLane(dsp, meta)) {
+      try {
+        return await loadLane(input, meta, loadId);
+      } catch (error) {
+        if (loadId !== latestLoadId) throw error;
+        // Not an error for the person: the normal ladder plays the file.
+        laneSkipped = error?.code ?? 'ERR_NAKLIAMP_LANE_FAILED';
+        status = 'loading';
+      }
+    }
+    const loaded = await loadNormal(input, loadId);
+    pendingNext = null;
+    adoptMeta(meta);
+    applyTrackGain();
+    return loaded;
+  }
+
+  async function loadNormal(input, loadId) {
     const nextMode = preferredMode();
     try {
       return nextMode === 'r1' ? await loadR1(input, loadId) : await loadR2(input, loadId);
     } catch (error) {
-      // R1 to R2 fallback. Without it, anything the engine cannot demux is a
-      // dead end even when the browser itself could play the file — the single
-      // largest gap between "an engine proof" and "throw anything at it".
-      // A named codec refusal skips the native rung and goes straight to
-      // software, which is the only rung that could ever play it.
-      if (nextMode === 'r1'
-        && forcePath === 'auto'
-        && loadId === latestLoadId
-        && softwareDecoders.length
-        && SOFTWARE_ONLY_REFUSALS.has(error?.code)) {
-        try {
-          const loaded = await loadR3(input, loadId);
-          fellBackFrom = error.code;
-          events.emit('playback:fallback', { from: 'r1', to: 'r3', code: error.code });
-          return { ...loaded, fellBackFrom };
-        } catch (softwareError) {
-          if (loadId !== latestLoadId) throw softwareError;
-          // No decoder in this build claimed it, so the original named refusal
-          // is still the truest thing we can say.
-          recordError(error);
-          throw error;
-        }
-      }
-
-      if (nextMode === 'r1'
-        && forcePath === 'auto'
-        && loadId === latestLoadId
-        && !FALLBACK_BLOCKED.has(error?.code)
-        && !SOFTWARE_ONLY_REFUSALS.has(error?.code)) {
-        try {
-          const loaded = await loadR2(input, loadId);
-          fellBackFrom = error?.code ?? 'ERR_NAKLIAMP_R1_FAILED';
-          events.emit('playback:fallback', { from: 'r1', to: 'r2', code: fellBackFrom });
-          return { ...loaded, fellBackFrom };
-        } catch (fallbackError) {
-          if (loadId !== latestLoadId) throw fallbackError;
-          // R3: the browser refused too, so try decoding it ourselves.
-          if (softwareDecoders.length && !FALLBACK_BLOCKED.has(fallbackError?.code)) {
-            try {
-              const loaded = await loadR3(input, loadId);
-              fellBackFrom = error?.code ?? 'ERR_NAKLIAMP_R1_FAILED';
-              events.emit('playback:fallback', { from: 'r2', to: 'r3', code: fallbackError?.code });
-              return { ...loaded, fellBackFrom };
-            } catch (softwareError) {
-              if (loadId !== latestLoadId) throw softwareError;
-              // Report the native refusal, not the software one: the browser's
-              // reason is the more useful of the two for a file it knows.
-              if (softwareError?.code === 'ERR_NAKLIAMP_SOFTWARE_UNSUPPORTED') {
-                recordError(fallbackError);
-                throw fallbackError;
-              }
-              recordError(softwareError);
-              throw softwareError;
-            }
-          }
-          recordError(fallbackError);
-          throw fallbackError;
-        }
-      }
-      // R2 to R3, when the browser was the *first* rung rather than the
-      // second. Both blocks above are gated on having started at R1, so on a
-      // browser without WebCodecs `AudioDecoder` the software rung was
-      // unreachable and AIFF, CAF and AU were refused outright — on exactly
-      // the browsers most likely to need it. "Tries every rung before it gives
-      // up" has to mean every rung it actually has.
-      if (nextMode === 'r2'
-        && forcePath === 'auto'
-        && loadId === latestLoadId
-        && softwareDecoders.length
-        && !FALLBACK_BLOCKED.has(error?.code)) {
-        try {
-          const loaded = await loadR3(input, loadId);
-          fellBackFrom = error?.code ?? 'ERR_NAKLIAMP_R2_FAILED';
-          events.emit('playback:fallback', { from: 'r2', to: 'r3', code: error?.code });
-          return { ...loaded, fellBackFrom };
-        } catch (softwareError) {
-          if (loadId !== latestLoadId) throw softwareError;
-          // The browser's reason for refusing a file it recognises is more
-          // useful than "no decoder claimed it".
-          if (softwareError?.code === 'ERR_NAKLIAMP_SOFTWARE_UNSUPPORTED') {
-            recordError(error);
-            throw error;
-          }
-          recordError(softwareError);
-          throw softwareError;
-        }
-      }
-
-      if (loadId !== latestLoadId) {
-        throw new NakliAmpError(
-          'SupersededLoadError',
-          'ERR_NAKLIAMP_LOAD_SUPERSEDED',
-          'A newer track selection replaced this request.',
-          error,
-        );
-      }
-      if (error?.code !== 'ERR_NAKLIAMP_LOAD_SUPERSEDED' && error?.code !== 'ERR_ENGINE_LOAD_SUPERSEDED') recordError(error);
-      throw error;
+      return fallBack(nextMode, error, input, loadId);
     }
   }
+
+  /**
+   * Which fallback a failed first rung takes: 'r1-r3', 'r1-r2', 'r2-r3' or null.
+   *
+   * R1 to R2: without it, anything the engine cannot demux is a dead end even
+   * when the browser itself could play the file — the single largest gap
+   * between "an engine proof" and "throw anything at it". A named codec
+   * refusal skips the native rung and goes straight to software, which is the
+   * only rung that could ever play it.
+   *
+   * R2 to R3, when the browser was the *first* rung rather than the second.
+   * The R1 routes are gated on having started at R1, so on a browser without
+   * WebCodecs `AudioDecoder` the software rung was unreachable and AIFF, CAF
+   * and AU were refused outright — on exactly the browsers most likely to
+   * need it. "Tries every rung before it gives up" has to mean every rung it
+   * actually has.
+   */
+  function fallbackRoute(nextMode, code, loadId) {
+    if (forcePath !== 'auto' || loadId !== latestLoadId) return null;
+    const hasSoftware = softwareDecoders.length > 0;
+    if (nextMode === 'r1' && hasSoftware && SOFTWARE_ONLY_REFUSALS.has(code)) return 'r1-r3';
+    if (nextMode === 'r1' && !FALLBACK_BLOCKED.has(code) && !SOFTWARE_ONLY_REFUSALS.has(code)) return 'r1-r2';
+    if (nextMode === 'r2' && hasSoftware && !FALLBACK_BLOCKED.has(code)) return 'r2-r3';
+    return null;
+  }
+
+  /** Try the next rung after the first one failed, or record and rethrow the refusal. */
+  async function fallBack(nextMode, error, input, loadId) {
+    const route = fallbackRoute(nextMode, error?.code, loadId);
+    if (route === 'r1-r3') {
+      // When no decoder in this build claims it, the original named refusal
+      // is still the truest thing we can say.
+      return fallToR3(input, loadId, { from: 'r1', fellBack: error.code, code: error.code, refusal: () => error });
+    }
+    if (route === 'r1-r2') return fallToR2(error, input, loadId);
+    if (route === 'r2-r3') {
+      // The browser's reason for refusing a file it recognises is more
+      // useful than "no decoder claimed it".
+      return fallToR3(input, loadId, {
+        from: 'r2',
+        fellBack: error?.code ?? 'ERR_NAKLIAMP_R2_FAILED',
+        code: error?.code,
+        refusal: softwareError => preferNativeRefusal(softwareError, error),
+      });
+    }
+    return refuseLoad(error, loadId);
+  }
+
+  /** R1 failed: try the browser, and when it refuses too, try decoding it ourselves. */
+  async function fallToR2(error, input, loadId) {
+    const fellBack = error?.code ?? 'ERR_NAKLIAMP_R1_FAILED';
+    try {
+      const loaded = await loadR2(input, loadId);
+      fellBackFrom = fellBack;
+      events.emit('playback:fallback', { from: 'r1', to: 'r2', code: fellBackFrom });
+      return { ...loaded, fellBackFrom };
+    } catch (fallbackError) {
+      if (loadId !== latestLoadId) throw fallbackError;
+      if (softwareDecoders.length && !FALLBACK_BLOCKED.has(fallbackError?.code)) {
+        // Report the native refusal, not the software one: the browser's
+        // reason is the more useful of the two for a file it knows.
+        return fallToR3(input, loadId, {
+          from: 'r2',
+          fellBack,
+          code: fallbackError?.code,
+          refusal: softwareError => preferNativeRefusal(softwareError, fallbackError),
+        });
+      }
+      recordError(fallbackError);
+      throw fallbackError;
+    }
+  }
+
+  /** Try the software rung; on failure, record and throw the error `refusal` picks. */
+  async function fallToR3(input, loadId, { from, fellBack, code, refusal }) {
+    try {
+      const loaded = await loadR3(input, loadId);
+      fellBackFrom = fellBack;
+      events.emit('playback:fallback', { from, to: 'r3', code });
+      return { ...loaded, fellBackFrom };
+    } catch (softwareError) {
+      if (loadId !== latestLoadId) throw softwareError;
+      const reported = refusal(softwareError);
+      recordError(reported);
+      throw reported;
+    }
+  }
+
+  /** No fallback applies: report a superseded load as such, record anything else, and throw. */
+  function refuseLoad(error, loadId) {
+    if (loadId !== latestLoadId) {
+      throw new NakliAmpError(
+        'SupersededLoadError',
+        'ERR_NAKLIAMP_LOAD_SUPERSEDED',
+        'A newer track selection replaced this request.',
+        error,
+      );
+    }
+    if (error?.code !== 'ERR_NAKLIAMP_LOAD_SUPERSEDED' && error?.code !== 'ERR_ENGINE_LOAD_SUPERSEDED') recordError(error);
+    throw error;
+  }
+
 
   async function play() {
     if (mode === 'r3' && software) {
@@ -820,9 +1435,16 @@ export function createNakliAmpEngine({
       software.source = source;
       software.startedAt = software.context.currentTime;
       software.playing = true;
-    } else if (mode === 'r1') await reel.play();
-    else if (mode === 'r2' && nativeAudio) await nativeAudio.play();
-    else throw new NakliAmpError('NoTrackError', 'ERR_NAKLIAMP_NO_TRACK', 'Open an audio file before playing.');
+    } else if (mode === 'lane' && lane) {
+      if (lane.context.state === 'suspended') await lane.context.resume();
+      lane.lane.play();
+    } else if (mode === 'r1') {
+      await reel.play();
+      spliceR1();
+    } else if (mode === 'r2' && nativeAudio) {
+      await ensureNativeChain();
+      await nativeAudio.play();
+    } else throw new NakliAmpError('NoTrackError', 'ERR_NAKLIAMP_NO_TRACK', 'Open an audio file before playing.');
     status = 'playing';
     events.emit('transport:play', { positionS: state().clock.positionS, path: mode });
   }
@@ -833,6 +1455,7 @@ export function createNakliAmpEngine({
       software.playing = false;
       stopSoftwareSource();
     }
+    if (mode === 'lane') lane?.lane.pause();
     if (mode === 'r1') reel.pause();
     if (mode === 'r2') nativeAudio?.pause();
     if (mode) status = 'paused';
@@ -848,8 +1471,11 @@ export function createNakliAmpEngine({
       software.offsetS = next;
       software.playing = false;
       if (wasPlaying) await play();
-    } else if (mode === 'r1') await reel.seek(next);
-    else if (mode === 'r2' && nativeAudio) nativeAudio.currentTime = next;
+    } else if (mode === 'lane' && lane) lane.lane.seek(next);
+    else if (mode === 'r1') {
+      await reel.seek(next);
+      spliceR1();
+    } else if (mode === 'r2' && nativeAudio) nativeAudio.currentTime = next;
     else throw new NakliAmpError('NoTrackError', 'ERR_NAKLIAMP_NO_TRACK', 'Open an audio file before seeking.');
     events.emit('transport:seek', { positionS: next, path: mode });
   }
@@ -863,6 +1489,14 @@ export function createNakliAmpEngine({
     if (mode === 'r1') reel.setVolume(next);
     if (nativeAudio) nativeAudio.volume = next;
     if (software) { software.volume = next; applySoftwareGain(); }
+    laneVolumeValue = next;
+    applyLaneVolume();
+  }
+
+  function applyLaneVolume() {
+    if (!lane) return;
+    const value = laneMutedFlag ? 0 : laneVolumeValue;
+    try { lane.volume.gain.setTargetAtTime(value, lane.context.currentTime, 0.01); } catch { lane.volume.gain.value = value; }
   }
 
   function setMuted(value) {
@@ -870,110 +1504,180 @@ export function createNakliAmpEngine({
     if (mode === 'r1') reel.setMuted(next);
     if (nativeAudio) nativeAudio.muted = next;
     if (software) { software.muted = next; applySoftwareGain(); }
+    laneMutedFlag = next;
+    applyLaneVolume();
   }
 
   function state() {
-    if (mode === 'r1') {
-      const upstream = reel.state();
-      const track = upstream.tracks.audio[upstream.tracks.selected.audio] || null;
-      return structuredClone({
-        version,
-        status,
-        path: mode,
-        media: upstream.media,
-        track,
-        clock: upstream.clock,
-        honesty: {
-          container: upstream.media.container,
-          codec: track?.codec || null,
-          decode: 'AudioDecoder',
-          output: 'AudioWorklet · Web Audio',
-          gapless: null,
-          localOnly: true,
-          fellBackFrom: null,
-          videoIgnored: false,
-        },
-        diagnostics: {
-          consumedFrames: upstream.playback.audio.consumedFrames,
-          droppedFrames: upstream.playback.audio.droppedFrames,
-          lastError: upstream.playback.lastError,
-        },
-        error: lastError,
-      });
+    if (mode === 'lane' && lane) {
+      const onLane = laneState();
+      if (onLane) return onLane;
     }
-    if (mode === 'r3' && software) {
-      return structuredClone({
-        version,
-        status: software.playing ? 'playing' : status === 'ready' ? 'ready' : 'paused',
-        path: mode,
-        media: {
-          name: software.name,
-          fingerprint: null,
-          duration: software.durationS,
-          size: software.size,
-          container: software.container,
-          mimeType: null,
-        },
-        track: { type: 'audio', codec: 'pcm', sampleRate: software.sampleRate, channels: software.channels },
-        clock: {
-          positionS: softwarePosition(),
-          playing: software.playing,
-          rate: 1,
-          volume: software.volume,
-          muted: software.muted,
-        },
-        honesty: {
-          container: software.container,
-          codec: 'pcm',
-          decode: `software decode (${software.decoderName})`,
-          output: 'Web Audio',
-          gapless: false,
-          localOnly: true,
-          fellBackFrom,
-          videoIgnored: false,
-        },
-        diagnostics: { consumedFrames: null, droppedFrames: null, lastError: null },
-        error: lastError,
-      });
-    }
-    if (mode === 'r2' && nativeAudio && nativeMetadata) {
-      const track = nativeMetadata.tracks.find(candidate => candidate.type === 'audio') || null;
-      return structuredClone({
-        version,
-        status: nativeAudio.paused ? (status === 'ready' ? 'ready' : 'paused') : 'playing',
-        path: mode,
-        media: {
-          name: nativeMetadata.name,
-          fingerprint: nativeFingerprint,
-          duration: nativeMetadata.duration,
-          size: nativeMetadata.size,
-          container: nativeMetadata.container,
-          mimeType: nativeMetadata.mimeType,
-        },
-        track,
-        clock: {
-          positionS: Number(nativeAudio.currentTime) || 0,
-          playing: !nativeAudio.paused,
-          rate: Number(nativeAudio.playbackRate) || 1,
-          volume: Number(nativeAudio.volume) || 0,
-          muted: !!nativeAudio.muted,
-        },
-        honesty: {
-          container: nativeMetadata.container,
-          codec: track?.codec || null,
-          decode: nativeMetadata.unprobed ? 'browser native audio (container unrecognised)' : 'browser native audio',
-          output: 'native audio element',
-          gapless: false,
-          localOnly: true,
-          // Both facts the strip must state rather than hide: why this file is
-          // not on the engine path, and that a video track went unplayed.
-          fellBackFrom,
-          videoIgnored: Boolean(nativeMetadata.videoIgnored),
-        },
-        diagnostics: { consumedFrames: null, droppedFrames: null, lastError: null },
-        error: lastError,
-      });
-    }
+    if (mode === 'r1') return r1State();
+    if (mode === 'r3' && software) return r3State();
+    if (mode === 'r2' && nativeAudio && nativeMetadata) return r2State();
+    return idleState();
+  }
+
+  /** State on the gapless lane, or null when the lane holds no track. */
+  function laneState() {
+    // position() first: it is where the lane notices it has moved on, which
+    // replaces laneMedia with the next track's.
+    const positionS = lane.lane.position();
+    const media = laneMedia;
+    if (!media) return null;
+    const decode = media.decoderName === 'browser'
+      ? 'gapless lane: decoded in full by the browser'
+      : `gapless lane: decoded in full by ${media.decoderName}`;
+    return structuredClone({
+      version,
+      status,
+      path: mode,
+      media: {
+        name: media.name,
+        fingerprint: null,
+        duration: media.duration,
+        size: media.size,
+        container: media.container,
+        mimeType: media.mimeType,
+      },
+      track: { type: 'audio', codec: media.codec, sampleRate: media.sampleRate, channels: media.channels },
+      clock: {
+        positionS,
+        playing: lane.lane.playing(),
+        rate: 1,
+        volume: laneVolumeValue,
+        muted: laneMutedFlag,
+      },
+      honesty: {
+        container: media.container,
+        codec: media.codec,
+        decode,
+        output: 'Web Audio',
+        gapless: true,
+        trim: media.trim?.reason ?? null,
+        localOnly: true,
+        fellBackFrom: null,
+        videoIgnored: false,
+      },
+      diagnostics: { consumedFrames: null, droppedFrames: null, lastError: null },
+      error: lastError,
+      dsp: dspState(),
+    });
+  }
+
+  /** State on R1, read through Reel. */
+  function r1State() {
+    const upstream = reel.state();
+    const track = upstream.tracks.audio[upstream.tracks.selected.audio] || null;
+    return structuredClone({
+      version,
+      status,
+      path: mode,
+      media: upstream.media,
+      track,
+      clock: upstream.clock,
+      honesty: {
+        container: upstream.media.container,
+        codec: track?.codec || null,
+        decode: 'AudioDecoder',
+        output: 'AudioWorklet · Web Audio',
+        gapless: null,
+        localOnly: true,
+        fellBackFrom: null,
+        videoIgnored: false,
+      },
+      diagnostics: {
+        consumedFrames: upstream.playback.audio.consumedFrames,
+        droppedFrames: upstream.playback.audio.droppedFrames,
+        lastError: upstream.playback.lastError,
+      },
+      error: lastError,
+      dsp: dspState(),
+    });
+  }
+
+  /** State on R3, the software rung. */
+  function r3State() {
+    return structuredClone({
+      version,
+      status: software.playing ? 'playing' : status === 'ready' ? 'ready' : 'paused',
+      path: mode,
+      media: {
+        name: software.name,
+        fingerprint: null,
+        duration: software.durationS,
+        size: software.size,
+        container: software.container,
+        mimeType: null,
+      },
+      track: { type: 'audio', codec: 'pcm', sampleRate: software.sampleRate, channels: software.channels },
+      clock: {
+        positionS: softwarePosition(),
+        playing: software.playing,
+        rate: 1,
+        volume: software.volume,
+        muted: software.muted,
+      },
+      honesty: {
+        container: software.container,
+        codec: 'pcm',
+        decode: `software decode (${software.decoderName})`,
+        output: 'Web Audio',
+        gapless: false,
+        localOnly: true,
+        fellBackFrom,
+        videoIgnored: false,
+      },
+      diagnostics: { consumedFrames: null, droppedFrames: null, lastError: null },
+      error: lastError,
+      dsp: dspState(),
+    });
+  }
+
+  /** State on R2, the native element. */
+  function r2State() {
+    const track = nativeMetadata.tracks.find(candidate => candidate.type === 'audio') || null;
+    return structuredClone({
+      version,
+      status: nativeAudio.paused ? (status === 'ready' ? 'ready' : 'paused') : 'playing',
+      path: mode,
+      media: {
+        name: nativeMetadata.name,
+        fingerprint: nativeFingerprint,
+        duration: nativeMetadata.duration,
+        size: nativeMetadata.size,
+        container: nativeMetadata.container,
+        mimeType: nativeMetadata.mimeType,
+      },
+      track,
+      clock: {
+        positionS: Number(nativeAudio.currentTime) || 0,
+        playing: !nativeAudio.paused,
+        rate: Number(nativeAudio.playbackRate) || 1,
+        volume: Number(nativeAudio.volume) || 0,
+        muted: !!nativeAudio.muted,
+      },
+      honesty: {
+        container: nativeMetadata.container,
+        codec: track?.codec || null,
+        decode: nativeMetadata.unprobed ? 'browser native audio (container unrecognised)' : 'browser native audio',
+        output: 'native audio element',
+        gapless: false,
+        localOnly: true,
+        // Both facts the strip must state rather than hide: why this file is
+        // not on the engine path, and that a video track went unplayed.
+        fellBackFrom,
+        videoIgnored: Boolean(nativeMetadata.videoIgnored),
+      },
+      diagnostics: { consumedFrames: null, droppedFrames: null, lastError: null },
+      error: lastError,
+      dsp: dspState(),
+    });
+  }
+
+  /** State with no track loaded. */
+  function idleState() {
     return structuredClone({
       version,
       status,
@@ -984,6 +1688,7 @@ export function createNakliAmpEngine({
       honesty: null,
       diagnostics: { consumedFrames: null, droppedFrames: null, lastError: null },
       error: lastError,
+      dsp: dspState(),
     });
   }
 
@@ -1003,6 +1708,9 @@ export function createNakliAmpEngine({
     // destroyed engine left a live audio thread and a decoded track behind.
     disposeAnalyser();
     releaseSoftware();
+    releaseLane();
+    for (const context of chains.keys()) dropChain(context);
+    pendingNext = null;
     mode = null;
     status = 'idle';
   }
@@ -1019,6 +1727,9 @@ export function createNakliAmpEngine({
     state,
     analyser: audioAnalyser,
     analysers: audioChannelAnalysers,
+    setDsp,
+    setTrackGain,
+    preload,
     on: events.on,
     eventHistory: events.history,
     destroy,

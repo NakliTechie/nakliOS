@@ -205,11 +205,76 @@
       "files": [
         {
           "source": "index.html",
-          "destination": "index.html"
+          "destination": "index.html",
+          "managedSdk": "inline"
+        },
+        {
+          "source": "commands.json",
+          "destination": "commands.json"
+        },
+        {
+          "source": "sw.js",
+          "destination": "sw.js"
         },
         {
           "source": "VENDOR.md",
           "destination": "VENDOR.md"
+        },
+        {
+          "source": "app/agent/webmcp.mjs",
+          "destination": "app/agent/webmcp.mjs"
+        },
+        {
+          "source": "app/ai/command-bar.mjs",
+          "destination": "app/ai/command-bar.mjs"
+        },
+        {
+          "source": "app/ai/genres.mjs",
+          "destination": "app/ai/genres.mjs"
+        },
+        {
+          "source": "app/ai/playlist.mjs",
+          "destination": "app/ai/playlist.mjs"
+        },
+        {
+          "source": "app/ai/similar.mjs",
+          "destination": "app/ai/similar.mjs"
+        },
+        {
+          "source": "app/audio/chain.mjs",
+          "destination": "app/audio/chain.mjs"
+        },
+        {
+          "source": "app/audio/eq-presets.mjs",
+          "destination": "app/audio/eq-presets.mjs"
+        },
+        {
+          "source": "app/audio/eqf.mjs",
+          "destination": "app/audio/eqf.mjs"
+        },
+        {
+          "source": "app/audio/gapless.mjs",
+          "destination": "app/audio/gapless.mjs"
+        },
+        {
+          "source": "app/audio/loudness.mjs",
+          "destination": "app/audio/loudness.mjs"
+        },
+        {
+          "source": "app/audio/trim.mjs",
+          "destination": "app/audio/trim.mjs"
+        },
+        {
+          "source": "app/audio/volume.mjs",
+          "destination": "app/audio/volume.mjs"
+        },
+        {
+          "source": "app/commands/commands.mjs",
+          "destination": "app/commands/commands.mjs"
+        },
+        {
+          "source": "app/commands/run.mjs",
+          "destination": "app/commands/run.mjs"
         },
         {
           "source": "app/decode/libav.mjs",
@@ -220,12 +285,36 @@
           "destination": "app/decode/pcm.mjs"
         },
         {
+          "source": "app/host.mjs",
+          "destination": "app/host.mjs"
+        },
+        {
+          "source": "app/library/cue.mjs",
+          "destination": "app/library/cue.mjs"
+        },
+        {
+          "source": "app/library/duplicates.mjs",
+          "destination": "app/library/duplicates.mjs"
+        },
+        {
+          "source": "app/library/folders.mjs",
+          "destination": "app/library/folders.mjs"
+        },
+        {
+          "source": "app/library/lyrics.mjs",
+          "destination": "app/library/lyrics.mjs"
+        },
+        {
           "source": "app/library/metadata.mjs",
           "destination": "app/library/metadata.mjs"
         },
         {
           "source": "app/library/playlist.mjs",
           "destination": "app/library/playlist.mjs"
+        },
+        {
+          "source": "app/library/rename.mjs",
+          "destination": "app/library/rename.mjs"
         },
         {
           "source": "app/library/scan-core.mjs",
@@ -244,12 +333,128 @@
           "destination": "app/library/search.mjs"
         },
         {
+          "source": "app/library/smart.mjs",
+          "destination": "app/library/smart.mjs"
+        },
+        {
           "source": "app/library/store.mjs",
           "destination": "app/library/store.mjs"
         },
         {
+          "source": "app/library/views.mjs",
+          "destination": "app/library/views.mjs"
+        },
+        {
+          "source": "app/library/watch.mjs",
+          "destination": "app/library/watch.mjs"
+        },
+        {
+          "source": "app/net/consent.mjs",
+          "destination": "app/net/consent.mjs"
+        },
+        {
+          "source": "app/net/listenbrainz.mjs",
+          "destination": "app/net/listenbrainz.mjs"
+        },
+        {
+          "source": "app/net/lrclib.mjs",
+          "destination": "app/net/lrclib.mjs"
+        },
+        {
+          "source": "app/net/musicbrainz.mjs",
+          "destination": "app/net/musicbrainz.mjs"
+        },
+        {
+          "source": "app/player/queue.mjs",
+          "destination": "app/player/queue.mjs"
+        },
+        {
+          "source": "app/player/timers.mjs",
+          "destination": "app/player/timers.mjs"
+        },
+        {
+          "source": "app/settings.mjs",
+          "destination": "app/settings.mjs"
+        },
+        {
+          "source": "app/tags/diff.mjs",
+          "destination": "app/tags/diff.mjs"
+        },
+        {
+          "source": "app/tags/id3.mjs",
+          "destination": "app/tags/id3.mjs"
+        },
+        {
+          "source": "app/tags/save.mjs",
+          "destination": "app/tags/save.mjs"
+        },
+        {
+          "source": "app/tags/write.mjs",
+          "destination": "app/tags/write.mjs"
+        },
+        {
+          "source": "app/ui/ai-dialog.mjs",
+          "destination": "app/ui/ai-dialog.mjs"
+        },
+        {
+          "source": "app/ui/browse.mjs",
+          "destination": "app/ui/browse.mjs"
+        },
+        {
+          "source": "app/ui/dialog.mjs",
+          "destination": "app/ui/dialog.mjs"
+        },
+        {
+          "source": "app/ui/inspector.mjs",
+          "destination": "app/ui/inspector.mjs"
+        },
+        {
+          "source": "app/ui/keymap.mjs",
+          "destination": "app/ui/keymap.mjs"
+        },
+        {
+          "source": "app/ui/lyrics.mjs",
+          "destination": "app/ui/lyrics.mjs"
+        },
+        {
+          "source": "app/ui/queue-panel.mjs",
+          "destination": "app/ui/queue-panel.mjs"
+        },
+        {
+          "source": "app/ui/select.mjs",
+          "destination": "app/ui/select.mjs"
+        },
+        {
+          "source": "app/ui/shell/format.mjs",
+          "destination": "app/ui/shell/format.mjs"
+        },
+        {
+          "source": "app/ui/shell/media-session.mjs",
+          "destination": "app/ui/shell/media-session.mjs"
+        },
+        {
+          "source": "app/ui/shell/theme.mjs",
+          "destination": "app/ui/shell/theme.mjs"
+        },
+        {
+          "source": "app/ui/smart-editor.mjs",
+          "destination": "app/ui/smart-editor.mjs"
+        },
+        {
+          "source": "app/ui/sound-panel.mjs",
+          "destination": "app/ui/sound-panel.mjs"
+        },
+        {
+          "source": "app/ui/tag-editor.mjs",
+          "destination": "app/ui/tag-editor.mjs"
+        },
+        {
           "source": "app/visualiser/driver.mjs",
           "destination": "app/visualiser/driver.mjs"
+        },
+        {
+          "source": "app/visualiser/milkdrop.mjs",
+          "destination": "app/visualiser/milkdrop.mjs"
         },
         {
           "source": "app/visualiser/modes.mjs",
@@ -262,6 +467,22 @@
         {
           "source": "engine/reel-engine.mjs",
           "destination": "engine/reel-engine.mjs"
+        },
+        {
+          "source": "vendor/butterchurn/LICENSE-MIT.txt",
+          "destination": "vendor/butterchurn/LICENSE-MIT.txt"
+        },
+        {
+          "source": "vendor/butterchurn/LICENSE-presets-MIT.txt",
+          "destination": "vendor/butterchurn/LICENSE-presets-MIT.txt"
+        },
+        {
+          "source": "vendor/butterchurn/butterchurn-3.0.0-beta.5.min.mjs",
+          "destination": "vendor/butterchurn/butterchurn-3.0.0-beta.5.min.mjs"
+        },
+        {
+          "source": "vendor/butterchurn/presets-3.0.0-beta.4.mjs",
+          "destination": "vendor/butterchurn/presets-3.0.0-beta.4.mjs"
         },
         {
           "source": "vendor/libav/LICENSE-LGPL-2.1.txt",
@@ -284,12 +505,20 @@
           "destination": "vendor/libav/libav-6.10.9.0-nakliamp.wasm.wasm"
         },
         {
+          "source": "vendor/mediabunny/LICENSE-MPL-2.0.txt",
+          "destination": "vendor/mediabunny/LICENSE-MPL-2.0.txt"
+        },
+        {
           "source": "vendor/mediabunny/mediabunny-1.51.0.min.mjs",
           "destination": "vendor/mediabunny/mediabunny-1.51.0.min.mjs"
         },
         {
-          "source": "vendor/mediabunny/LICENSE-MPL-2.0.txt",
-          "destination": "vendor/mediabunny/LICENSE-MPL-2.0.txt"
+          "source": "vendor/music-metadata/LICENSES.txt",
+          "destination": "vendor/music-metadata/LICENSES.txt"
+        },
+        {
+          "source": "vendor/music-metadata/music-metadata-12.5.0-write.min.mjs",
+          "destination": "vendor/music-metadata/music-metadata-12.5.0-write.min.mjs"
         }
       ]
     },

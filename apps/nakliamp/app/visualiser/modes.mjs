@@ -304,10 +304,18 @@ export const MODES = Object.freeze([
   { id: 'scatter', label: 'Scatter', draw: drawScatter },
   { id: 'flame', label: 'Flame', draw: drawFlame },
   { id: 'matrix', label: 'Matrix', draw: drawMatrix },
+  // Milkdrop is not a pure draw function: Butterchurn owns WebGL state, so the
+  // driver runs it through `milkdrop.mjs` instead of `drawFrame`.
+  { id: 'milkdrop', label: 'Milkdrop', draw: null, external: 'milkdrop' },
   { id: 'none', label: 'None', draw: null },
 ]);
 
 export const MODE_IDS = Object.freeze(MODES.map(mode => mode.id));
+
+/** True for every mode that animates: the drawn ones and the external ones. */
+export function isAnimated(mode) {
+  return Boolean(mode?.draw || mode?.external);
+}
 
 export function modeById(id) {
   return MODES.find(mode => mode.id === id) ?? MODES[0];
